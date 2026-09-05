@@ -674,7 +674,9 @@ export const useFeedStore = create<FeedState>()(
       loadFeed: async (options) => {
         const requestId = ++feedLoadSeq;
         const advanceHistory = options?.advanceHistory === true;
-        const lanes = options?.lanes ?? ["papers", "events", "jobs"];
+        // Papers only by default. Events and jobs are no longer product surfaces;
+        // their lanes stay callable for now but nothing asks for them.
+        const lanes = options?.lanes ?? ["papers"];
         const wantsPapers = lanes.includes("papers");
         const wantsEvents = lanes.includes("events");
         const wantsJobs = lanes.includes("jobs");

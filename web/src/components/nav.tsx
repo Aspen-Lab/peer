@@ -72,44 +72,6 @@ function IconSearch({ active = false }: { active?: boolean }) {
   );
 }
 
-function IconEvents({ active = false }: { active?: boolean }) {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill={active ? "currentColor" : "none"}
-      stroke="currentColor"
-      strokeWidth={active ? 2 : 1.8}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <rect x="3" y="5" width="18" height="16" rx="2" />
-      <path d="M3 10h18M8 3v4M16 3v4" />
-    </svg>
-  );
-}
-
-function IconJobs({ active = false }: { active?: boolean }) {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill={active ? "currentColor" : "none"}
-      stroke="currentColor"
-      strokeWidth={active ? 2 : 1.8}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <rect x="2" y="7" width="20" height="14" rx="2" />
-      <path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
-    </svg>
-  );
-}
-
 function IconProfile({ active = false }: { active?: boolean }) {
   return (
     <svg
@@ -138,26 +100,16 @@ const tabs: Tab[] = [
   { href: "/", label: "Feed", shortcut: "g h" },
   { href: "/search", label: "Search", shortcut: "g /" },
   { href: "/saved", label: "Saved", shortcut: "g s" },
-  { href: "/events", label: "Events", shortcut: "g e" },
-  { href: "/jobs", label: "Jobs", shortcut: "g j" },
   { href: "/profile", label: "Profile", shortcut: "g p" },
 ];
 
-// The sidebar groups these by how often a researcher reaches for them. Feed
-// is not in a group — it is the Today block at the top. Events and Jobs get a
-// label and a quieter weight; a once-a-year need should not look like a daily
-// one. The mobile bar still renders `tabs` flat, where there is no room for
-// hierarchy anyway.
+// Feed is not in a group — it is the Today block at the top. The mobile bar
+// still renders `tabs` flat.
 const NAV_GROUPS: { key: string; label: string | null; items: Tab[] }[] = [
   {
     key: "reading",
     label: null,
     items: tabs.filter((t) => t.href === "/search" || t.href === "/saved"),
-  },
-  {
-    key: "occasional",
-    label: "Occasional",
-    items: tabs.filter((t) => t.href === "/events" || t.href === "/jobs"),
   },
   {
     key: "account",
@@ -170,8 +122,6 @@ function iconFor(href: string, active: boolean): React.ReactNode {
   if (href === "/") return <IconFeed active={active} />;
   if (href === "/search") return <IconSearch active={active} />;
   if (href === "/saved") return <IconSaved active={active} />;
-  if (href === "/events") return <IconEvents active={active} />;
-  if (href === "/jobs") return <IconJobs active={active} />;
   return <IconProfile active={active} />;
 }
 
@@ -195,10 +145,7 @@ export function Nav() {
     );
   }, [sidebarOpen, pathname]);
 
-  const savedCount =
-    useFeedStore((s) => s.savedPapers.length) +
-    useFeedStore((s) => s.savedEvents.length) +
-    useFeedStore((s) => s.savedJobs.length);
+  const savedCount = useFeedStore((s) => s.savedPapers.length);
 
   const papers = useFeedStore((s) => s.papers);
   const readItems = useFeedStore((s) => s.readItems);
@@ -411,11 +358,7 @@ export function Nav() {
             <div
               key={group.key}
               className={
-                group.key === "occasional"
-                  ? "mt-5"
-                  : group.key === "account"
-                    ? "mt-auto pt-5"
-                    : undefined
+                group.key === "account" ? "mt-auto pt-5" : undefined
               }
             >
               {group.label && (
@@ -436,9 +379,7 @@ export function Nav() {
                       className={`group flex items-center justify-between gap-2 rounded-lg px-3 py-[7px] text-body-sm transition-colors duration-150 ease-out active:scale-[0.99] ${
                         active
                           ? "text-heading"
-                          : group.key === "occasional"
-                            ? "text-text-faint/80 hover:text-text-muted"
-                            : "text-text-muted hover:text-heading"
+                          : "text-text-muted hover:text-heading"
                       }`}
                     >
                       <span className="flex items-center gap-2.5 min-w-0">

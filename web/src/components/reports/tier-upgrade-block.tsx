@@ -1,7 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { REPORT_LABEL_STEP } from "./report-section";
+
+// Was imported from report-section.tsx, the shared kit for the event and job
+// reports. Those reports are gone; this is the one piece the paper report used.
+const REPORT_LABEL_STEP =
+  "text-caption font-semibold uppercase tracking-[0.18em]";
 
 export interface TierUpgradeItem {
   title: string;

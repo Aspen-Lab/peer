@@ -14,11 +14,10 @@ import { useUIStore } from "@/store/ui";
 import { careerStages, industryPreferences, themeAccentOptions, themeModeOptions, type ColorTheme, type ThemeAccent, type ThemeMode } from "@/types";
 import { SchoolAutocomplete } from "@/components/profile/school-autocomplete";
 import { AdvisorField } from "@/components/profile/advisor-field";
-import { CountryMultiSelect } from "@/components/profile/country-multi-select";
 import { summarizePreferenceLedger } from "@/lib/preferences/ledger";
 import { apiFetch } from "@/lib/api";
 import { SURFACE_TOPIC_DESCRIPTIONS } from "@/lib/profile/topic-copy";
-import { IconBook, IconBuilding, IconCheck, IconPin } from "@/components/icons";
+import { IconBook, IconBuilding, IconCheck } from "@/components/icons";
 import { PageContainer } from "@/components/ui/page-container";
 import { AiKeyFields } from "@/components/profile/ai-setup";
 import { ConnectorPanel } from "@/components/profile/connector-panel";
@@ -98,15 +97,9 @@ export default function ProfilePage() {
     updateDisplayName,
     updateTopics,
     updateSoftTopics,
-    updateEventTopics,
-    updateEventSoftTopics,
-    updateJobTopics,
-    updateJobSoftTopics,
     updatePreferredJournals,
     updateCareerStage,
     updateIndustryPreference,
-    updateLocations,
-    updateAuthorisedCountries,
     updateSchool,
     updateCurrentProject,
     updateCurrentChallenges,
@@ -140,7 +133,6 @@ export default function ProfilePage() {
   const signals = [
     profile.researchTopics.length > 0,
     (profile.softTopics ?? []).length > 0,
-    profile.locationPreferences.length > 0,
   ];
   const doneCount = signals.filter(Boolean).length;
   const total = signals.length;
@@ -238,10 +230,6 @@ export default function ProfilePage() {
           setName={setName}
           updateTopics={updateTopics}
           updateSoftTopics={updateSoftTopics}
-          updateEventTopics={updateEventTopics}
-          updateEventSoftTopics={updateEventSoftTopics}
-          updateJobTopics={updateJobTopics}
-          updateJobSoftTopics={updateJobSoftTopics}
           updatePreferredJournals={updatePreferredJournals}
           updateSchool={updateSchool}
           updateCurrentProject={updateCurrentProject}
@@ -260,8 +248,6 @@ export default function ProfilePage() {
           clearAdvisorAuthor={clearAdvisorAuthor}
           updateCareerStage={updateCareerStage}
           updateIndustryPreference={updateIndustryPreference}
-          updateLocations={updateLocations}
-          updateAuthorisedCountries={updateAuthorisedCountries}
         />
       )}
 
@@ -418,8 +404,6 @@ function DashboardView({
           <SignalRow tone="accent" icon={<IconHash />} label="Required" items={profile.researchTopics} />
           <SignalRow tone="tag" icon={<IconHash />} label="Explore" items={profile.softTopics ?? []} />
           <SignalRow tone="link" icon={<IconBook size={13} strokeWidth={1.9} />} label="Journals" items={profile.preferredJournals ?? []} />
-          <SignalRow tone="tag" icon={<IconPin size={13} strokeWidth={1.9} />} label="Locations" items={profile.locationPreferences} />
-          <SignalRow tone="tag" icon={<IconCareer />} label="Work rights" items={profile.authorisedCountries} />
         </div>
       </div>
 
@@ -1496,10 +1480,6 @@ function EditView({
   setName,
   updateTopics,
   updateSoftTopics,
-  updateEventTopics,
-  updateEventSoftTopics,
-  updateJobTopics,
-  updateJobSoftTopics,
   updatePreferredJournals,
   updateSchool,
   updateCurrentProject,
@@ -1518,18 +1498,12 @@ function EditView({
   clearAdvisorAuthor,
   updateCareerStage,
   updateIndustryPreference,
-  updateLocations,
-  updateAuthorisedCountries,
 }: {
   profile: ReturnType<typeof useProfileStore.getState>["profile"];
   name: string;
   setName: (s: string) => void;
   updateTopics: (v: string[]) => void;
   updateSoftTopics: (v: string[]) => void;
-  updateEventTopics: (v: string[]) => void;
-  updateEventSoftTopics: (v: string[]) => void;
-  updateJobTopics: (v: string[]) => void;
-  updateJobSoftTopics: (v: string[]) => void;
   updatePreferredJournals: (v: string[]) => void;
   updateSchool: (s: string) => void;
   updateCurrentProject: (s: string) => void;
@@ -1548,8 +1522,6 @@ function EditView({
   clearAdvisorAuthor: () => void;
   updateCareerStage: (s: typeof profile.careerStage) => void;
   updateIndustryPreference: (s: typeof profile.industryVsAcademia) => void;
-  updateLocations: (v: string[]) => void;
-  updateAuthorisedCountries: (v: string[]) => void;
 }) {
   // Pulled straight from the store rather than threaded through this
   // component's already-long prop list.
@@ -1577,8 +1549,7 @@ function EditView({
       <EditRow icon={<IconHash />} tone="accent" label="Topics">
         <div className="space-y-6">
           <div>
-            <p className="text-meta font-semibold text-heading">Papers</p>
-            <p className="mb-3 mt-1 text-caption text-text-faint">
+            <p className="mb-3 text-caption text-text-faint">
               {SURFACE_TOPIC_DESCRIPTIONS.papers}
             </p>
             <TopicsField
@@ -1586,30 +1557,6 @@ function EditView({
               soft={profile.softTopics ?? []}
               onChangeRequired={updateTopics}
               onChangeSoft={updateSoftTopics}
-            />
-          </div>
-          <div>
-            <p className="text-meta font-semibold text-heading">Events</p>
-            <p className="mb-3 mt-1 text-caption text-text-faint">
-              {SURFACE_TOPIC_DESCRIPTIONS.events}
-            </p>
-            <TopicsField
-              required={profile.eventRequiredTopics}
-              soft={profile.eventExploreTopics}
-              onChangeRequired={updateEventTopics}
-              onChangeSoft={updateEventSoftTopics}
-            />
-          </div>
-          <div>
-            <p className="text-meta font-semibold text-heading">Jobs</p>
-            <p className="mb-3 mt-1 text-caption text-text-faint">
-              {SURFACE_TOPIC_DESCRIPTIONS.jobs}
-            </p>
-            <TopicsField
-              required={profile.jobRequiredTopics}
-              soft={profile.jobExploreTopics}
-              onChangeRequired={updateJobTopics}
-              onChangeSoft={updateJobSoftTopics}
             />
           </div>
         </div>
@@ -1667,26 +1614,6 @@ function EditView({
         />
         <p className="text-caption text-text-faint/75 mt-1.5 px-1 leading-relaxed">
           The unknowns you wish someone would solve for you. Highest-leverage signal — papers that mention these will rise to the top.
-        </p>
-      </EditRow>
-
-      <EditRow icon={<IconPin size={13} strokeWidth={1.9} />} tone="tag" label="Locations">
-        <ChipInput
-          values={profile.locationPreferences}
-          onChange={updateLocations}
-          placeholder="Add a location or Remote, press Enter"
-          tone="tag"
-        />
-      </EditRow>
-
-      <EditRow icon={<IconCareer />} tone="tag" label="Work rights">
-        <CountryMultiSelect
-          values={profile.authorisedCountries}
-          onChange={updateAuthorisedCountries}
-        />
-        <p className="mt-1.5 px-1 text-caption leading-relaxed text-text-faint/75">
-          Countries where you can already work without employer sponsorship.
-          Leave this empty to keep every visa label visible.
         </p>
       </EditRow>
 

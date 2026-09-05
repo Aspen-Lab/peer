@@ -2,6 +2,56 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.10.0 — 2026-09-05
+
+Peer is a paper briefing. Events and jobs are gone from the product.
+
+The founders' verdict, verbatim: "先拿掉 event 和 job 我们 focus 在 paper". This
+release removes every user-facing surface for the two once-a-year verticals.
+The library code underneath (`lib/events`, `lib/jobs`, `lib/opportunities`)
+stays for one more release — see the last paragraph.
+
+**Removed.** The `/events` and `/jobs` routes and their detail pages; the
+`/api/events/*`, `/api/jobs/feed` and `/api/jobs/report` routes; the Events and
+Jobs entries in the sidebar and mobile bar; the Events and Jobs topic lists on
+the profile page and in onboarding; the Locations and Work rights profile
+fields (both existed to filter jobs); the onboarding "Work rights" step — the
+wizard is seven steps, not eight, and no longer asks for visa status before
+research topics; the Adzuna and USAJobs connectors, which existed only to
+widen job coverage. Tavily stays, described as what it now is: optional web
+discovery for papers.
+
+**Saved is a shelf.** It carried Papers / Events / Jobs segments and a To-do /
+Done rail for applications and registrations; its own comment admitted papers
+"have no completion action" and sat in To-do forever. It is a list of saved
+papers now.
+
+**The daily surface never asks for the other lanes.** `loadFeed` defaults to
+`["papers"]`. The feed tile and the report page's "Related from your feed"
+list are paper-only, which severs the last paper-side import of
+`lib/opportunities/facets` from a rendered surface.
+
+**Dead code swept.** Deleting the consumers orphaned the event/job report kit
+(`ReportSection`, `WhyPeerSentThis`, timeline, fact tiles, badges), five UI
+primitives that only the event and job cards used, the dashboard and deadlines
+board, the visa country picker, the surface-topics composer, the feed "more"
+tile, the onboarding tour, and the decorative logo halftone. Seventeen test
+files went with their subjects, including the 1,725-line typography test that
+asserted Georgia point sizes for the job and event reports. 66 files, −16,801
+lines.
+
+**Kept on purpose.** `/api/jobs/dispatch-digests` — "jobs" as in cron jobs.
+It is the daily email entry point, its URL is pinned in
+`.github/workflows/digest-cron.yml`, and renaming a production cron endpoint
+has no product benefit.
+
+**Still to do — the library.** `lib/events`, `lib/jobs` and `lib/opportunities`
+are now unreferenced by any product surface but cannot be deleted wholesale:
+the paper pipeline imports five files from `lib/opportunities` (`shared`,
+`pool-cache`, `pool-cache-runtime`, `page-fetch`, `facets`), and the event/job
+fields remain on `UserProfile`, in the feed store, in `/api/profile`'s column
+map and in the Supabase schema. That is a separate, deliberate extraction.
+
 ## v0.9.4 — 2026-09-05
 
 The feed card is a cover card.

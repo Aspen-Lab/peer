@@ -195,7 +195,9 @@ describe("feed lane loading", () => {
     const eventsResponse = enqueue("/api/events/feed");
     const jobsResponse = enqueue("/api/jobs/feed");
 
-    const load = useFeedStore.getState().loadFeed();
+    // The daily surface asks for papers alone now, so the three-lane
+    // coordination this test covers has to be requested explicitly.
+    const load = useFeedStore.getState().loadFeed({ lanes: ["papers", "events", "jobs"] });
 
     await vi.waitFor(() => {
       expect(fetchMock).toHaveBeenCalledTimes(3);
@@ -334,8 +336,8 @@ describe("feed lane loading", () => {
     const firstJobs = enqueue("/api/jobs/feed");
     const secondJobs = enqueue("/api/jobs/feed");
 
-    const firstLoad = useFeedStore.getState().loadFeed();
-    const secondLoad = useFeedStore.getState().loadFeed();
+    const firstLoad = useFeedStore.getState().loadFeed({ lanes: ["papers", "events", "jobs"] });
+    const secondLoad = useFeedStore.getState().loadFeed({ lanes: ["papers", "events", "jobs"] });
 
     firstPapers.resolve(jsonResponse(paperFeedResponse("paper-stale")));
     firstEvents.resolve(jsonResponse(eventsFeedResponse("event-stale")));

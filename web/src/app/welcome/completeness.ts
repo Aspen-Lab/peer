@@ -8,7 +8,6 @@ import { defaultProfile } from "@/types";
 
 export type StepKey =
   | "basics"
-  | "visa"
   | "topics"
   | "work"
   | "radar"
@@ -18,7 +17,6 @@ export type StepKey =
 
 export const STEP_META: { key: StepKey; label: string }[] = [
   { key: "basics", label: "Basics" },
-  { key: "visa", label: "Work rights" },
   { key: "topics", label: "Topics" },
   { key: "work", label: "Work" },
   { key: "radar", label: "Radar" },
@@ -51,13 +49,9 @@ const RADAR_FIELDS = [
   "feedAvoidBroadSurveys",
 ] as const;
 
-/** How many of the three data connectors are fully configured. */
+/** Whether the one remaining data connector (Tavily) is configured. */
 export function connectorCount(profile: UserProfile): number {
-  let n = 0;
-  if (profile.tavilyEnabled && profile.tavilyApiKey?.trim()) n++;
-  if (profile.adzunaAppId?.trim() && profile.adzunaAppKey?.trim()) n++;
-  if (profile.usajobsApiKey?.trim() && profile.usajobsUserAgent?.trim()) n++;
-  return n;
+  return profile.tavilyEnabled && profile.tavilyApiKey?.trim() ? 1 : 0;
 }
 
 export function isStepDone(
@@ -75,8 +69,6 @@ export function isStepDone(
         profile.careerStage !== defaultProfile.careerStage ||
         profile.industryVsAcademia !== defaultProfile.industryVsAcademia
       );
-    case "visa":
-      return profile.authorisedCountries.length > 0;
     case "topics":
       return profile.researchTopics.length > 0;
     case "work":

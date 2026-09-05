@@ -1,60 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import type { Paper, Event, Job } from "@/types";
+import type { Paper } from "@/types";
 import { Relevance } from "@/components/ui";
-import { formatDate } from "@/lib/format";
 import { useFeedStore } from "@/store/feed";
-import { isOnlineOnly } from "@/lib/opportunities/facets";
 
-export type QuickHitItem =
-  | { kind: "paper"; data: Paper }
-  | { kind: "event"; data: Event }
-  | { kind: "job"; data: Job };
-
-const KIND_LABEL: Record<QuickHitItem["kind"], string> = {
-  paper: "Paper",
-  event: "Event",
-  job: "Role",
-};
+export type QuickHitItem = { kind: "paper"; data: Paper };
 
 export function BriefingQuickHit({ item }: { item: QuickHitItem }) {
   const isRead = useFeedStore((s) => !!s.readItems[item.data.id]);
-
-  const detail =
-    item.kind === "paper"
-      ? `/papers/${item.data.id}`
-      : item.kind === "event"
-        ? `/events/${item.data.id}`
-        : `/jobs/${item.data.id}`;
-
-  const title =
-    item.kind === "paper"
-      ? item.data.title
-      : item.kind === "event"
-        ? item.data.name
-        : item.data.roleTitle;
-
-  const score =
-    item.kind === "paper"
-      ? item.data.relevanceScore
-      : item.kind === "event"
-        ? item.data.relevanceScore
-        : item.data.relevanceScore;
-
-  const meta =
-    item.kind === "paper"
-      ? item.data.venue
-      : item.kind === "event"
-        ? // B20-01, render site 6 of 6.
-          `${formatDate(item.data.date, "short")} · ${isOnlineOnly(item.data) ? "Online" : item.data.location}`
-        : [item.data.companyOrLab, item.data.isRemote ? "Remote" : undefined]
-            .filter(Boolean)
-            .join(" · ");
+  const paper = item.data;
 
   return (
     <Link
-      href={detail}
+      href={`/papers/${paper.id}`}
       data-read={isRead || undefined}
       className="group flex items-center gap-3 py-3.5 px-2 -mx-2 rounded-lg transition-colors hover:bg-surface/70 active:bg-surface"
     >
@@ -71,21 +30,13 @@ export function BriefingQuickHit({ item }: { item: QuickHitItem }) {
       </span>
 
       <span
-        className={`shrink-0 text-micro font-semibold uppercase tracking-[0.14em] w-[46px] ${
-          isRead ? "text-text-faint/60" : "text-text-faint"
-        }`}
-      >
-        {KIND_LABEL[item.kind]}
-      </span>
-
-      <span
         className={`flex-1 min-w-0 text-body-lg truncate transition-colors ${
           isRead
             ? "text-text-faint group-hover:text-text-muted"
             : "text-heading group-hover:text-accent"
         }`}
       >
-        {title}
+        {paper.title}
       </span>
 
       <span
@@ -93,10 +44,10 @@ export function BriefingQuickHit({ item }: { item: QuickHitItem }) {
           isRead ? "text-text-faint/60" : "text-text-faint"
         }`}
       >
-        {meta}
+        {paper.venue}
       </span>
 
-      <Relevance score={score} />
+      <Relevance score={paper.relevanceScore} />
     </Link>
   );
 }

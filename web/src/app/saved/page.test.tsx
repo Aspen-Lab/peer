@@ -1,15 +1,14 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import type { Event, Job, Paper } from "@/types";
+import { describe, expect, it, vi } from "vitest";
+import type { Paper } from "@/types";
 
 const storeState = vi.hoisted(() => ({
-  saveJob: vi.fn(),
-  unsaveJob: vi.fn(),
-  notInterestedJob: vi.fn(),
-  saveEvent: vi.fn(),
-  unsaveEvent: vi.fn(),
-  notInterestedEvent: vi.fn(),
+  savePaper: vi.fn(),
+  moreLikePaper: vi.fn(),
+  notInterestedPaper: vi.fn(),
+  readItems: {} as Record<string, boolean>,
+  paperSummaries: {} as Record<string, string>,
 }));
 
 vi.mock("@/store/feed", () => ({
@@ -33,62 +32,27 @@ const paper: Paper = {
   isSaved: true,
 };
 
-const job: Job = {
-  id: "job:applied",
-  roleTitle: "Battery Research Scientist",
-  companyOrLab: "Example Energy",
-  location: "Chicago, IL",
-  isRemote: false,
-  keyRequirements: [],
-  matchReason: "Matches your battery research.",
-  isSaved: true,
-};
-
-const event: Event = {
-  id: "event:registered",
-  name: "Battery Interfaces Summit",
-  type: "conference",
-  date: "2026-09-10",
-  location: "Chicago, IL",
-  isOnline: false,
-  deadline: "2026-08-02",
-  shortDescription: "A focused research summit.",
-  relevanceReason: "Matches your battery research.",
-  isSaved: true,
-};
-
-afterEach(() => {
-  vi.useRealTimers();
-});
-
 describe("SavedPageView", () => {
-  it("segments saved kinds and renders registered or applied items as done", () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-07-30T12:00:00Z"));
+  it("renders the shelf with its count", () => {
+    // The page used to carry Papers / Events / Jobs segments and a To-do /
+    // Done rail for applications and registrations. Events and jobs are no
+    // longer product surfaces; papers had no completion state to begin with.
     const html = renderToStaticMarkup(
-      createElement(SavedPageView, {
-        savedPapers: [paper],
-        savedEvents: [event],
-        savedJobs: [job],
-        appliedAt: { [job.id]: "2026-07-30T15:00:00.000Z" },
-        registeredAt: { [event.id]: "2026-07-30T16:00:00.000Z" },
-        submittedAt: {},
-        onJobApplied: () => undefined,
-        onEventRegistered: () => undefined,
-        onEventSubmitted: () => undefined,
-        initialStatus: "done",
-      }),
+      createElement(SavedPageView, { savedPapers: [paper] }),
     );
 
-    for (const label of ["All", "Papers", "Events", "Jobs", "To-do", "Done"]) {
-      expect(html).toContain(`>${label}<`);
+    expect(html).toContain("A saved paper");
+    expect(html).toContain("1 paper on your shelf");
+    for (const gone of [">Events<", ">Jobs<", ">To-do<", ">Done<"]) {
+      expect(html).not.toContain(gone);
     }
-    expect(html.match(/data-completion-state="done"/g)).toHaveLength(2);
-    expect(html).toContain(">Applied<");
-    expect(html).toContain(">Registered<");
-    expect(html).toContain(">Submitted<");
-    expect(html).not.toContain("A saved paper");
-    expect(html).toContain("CFP closes in 3 days");
-    expect(html).toContain("text-red");
+  });
+
+  it("shows the empty shelf when nothing is saved", () => {
+    const html = renderToStaticMarkup(
+      createElement(SavedPageView, { savedPapers: [] }),
+    );
+
+    expect(html).toContain("Nothing saved yet.");
   });
 });
