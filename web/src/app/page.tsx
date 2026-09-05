@@ -152,10 +152,16 @@ function DailyBriefingPage() {
         // either ragged-edges every row or reserves dead space on the six cards
         // with no image. CSS columns let each card be its own height.
         <div className="mt-8 columns-1 sm:columns-2 lg:columns-3 gap-4 [column-fill:_balance]">
-          {papers.map((paper) => (
+          {papers.map((paper, index) => (
             <div
               key={paper.id}
               id={`paper-${paper.id}`}
+              // Today's papers arrive as a stack dealt in reading order. All
+              // ten used to fade up on the identical frame, which reads as the
+              // page reflowing rather than as a delivery. globals.css already
+              // carried the plumbing — `[style*="--i"]` at :375 — and the feed
+              // had never used it. Capped at 9 so the tail never exceeds 360ms.
+              style={{ "--i": Math.min(index, 9) } as React.CSSProperties}
               className="mb-4 break-inside-avoid rounded-3xl transition-shadow"
             >
               <FeedTile item={{ kind: "paper", data: paper }} />

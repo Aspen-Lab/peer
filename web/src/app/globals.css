@@ -60,12 +60,35 @@
      The --nm-* colors are set per theme family (light defaults in the
      :root block below; dark themes override) so these tokens stay
      correct in all 10 themes. */
-  --shadow-card: 0 1px 2px rgba(43, 24, 10, 0.03),
-                 -6px -6px 14px var(--nm-highlight),
-                 6px 6px 16px var(--nm-shade);
-  --shadow-card-hover: 0 2px 4px rgba(43, 24, 10, 0.04),
-                       -8px -8px 20px var(--nm-highlight),
-                       10px 12px 26px var(--nm-shade-deep);
+  /* Elevation, replacing the soft-UI pair.
+     Neumorphism only reads as extrusion when the object and its ground are the
+     same material and the ground is a mid-tone that can travel in BOTH
+     directions. The dark families have no such ground — bg and surface sit
+     about four points of L* apart — so there the highlight was cut to 4% and
+     the pair degenerated into one 16px black smudge with no contact edge.
+     Hover made it worse: blur 16 -> 26px and 45% -> 60% black, so a card went
+     softer under the pointer instead of lifting.
+
+     Three jobs, three mechanisms. A 1px RIM does separation, and because its
+     contrast is fixed against the surface it stops depending on how dark the
+     ground is. A short-offset CONTACT layer does the "sitting on something"
+     read at a blur where the colour still has something to bite on. A wide
+     AMBIENT layer with heavy NEGATIVE SPREAD does distance without haze — the
+     spread is what keeps a 26px blur from becoming fog.
+
+     Every colour is a nested var(): Tailwind v4 inlines the token's value into
+     the .shadow-card utility at build time, so per-theme overrides must happen
+     on these inner variables, never on --shadow-card itself. */
+  --shadow-card: 0 0 0 1px var(--nm-rim),
+                 0 1px 1.5px -0.5px var(--nm-key),
+                 0 4px 8px -4px var(--nm-key),
+                 0 12px 26px -14px var(--nm-ambient),
+                 inset 0 1px 0 var(--nm-bevel);
+  --shadow-card-hover: 0 0 0 1px var(--nm-rim-hi),
+                       0 1px 1.5px -0.5px var(--nm-key),
+                       0 8px 16px -8px var(--nm-key),
+                       0 26px 50px -22px var(--nm-ambient),
+                       inset 0 1px 0 var(--nm-bevel);
   /* Pressed / input wells — gently carved into the surface */
   --shadow-well: inset 2px 2px 6px var(--nm-shade),
                  inset -2px -2px 5px var(--nm-highlight);
@@ -153,6 +176,11 @@ html[data-accent="violet"]   { --seed: #7a3fd9; --seed-dark: #a078f0; --done-lig
   --nm-highlight: rgba(255, 253, 246, 0.85);
   --nm-shade: color-mix(in srgb, var(--color-heading) 12%, transparent);
   --nm-shade-deep: color-mix(in srgb, var(--color-heading) 18%, transparent);
+  --nm-rim: color-mix(in srgb, var(--color-heading) 6%, transparent);
+  --nm-rim-hi: color-mix(in srgb, var(--color-heading) 10%, transparent);
+  --nm-key: color-mix(in srgb, var(--color-heading) 13%, transparent);
+  --nm-ambient: color-mix(in srgb, var(--color-heading) 16%, transparent);
+  --nm-bevel: rgba(255, 253, 247, 0.75);
   --glass-edge: rgba(255, 255, 255, 0.45);
 }
 
@@ -187,6 +215,11 @@ html[data-mode="dark"] {
   --nm-highlight: rgba(255, 244, 230, 0.04);
   --nm-shade: rgba(0, 0, 0, 0.45);
   --nm-shade-deep: rgba(0, 0, 0, 0.6);
+  --nm-rim: rgba(255, 244, 230, 0.09);
+  --nm-rim-hi: rgba(255, 244, 230, 0.15);
+  --nm-key: rgba(0, 0, 0, 0.55);
+  --nm-ambient: rgba(0, 0, 0, 0.45);
+  --nm-bevel: rgba(255, 244, 230, 0.06);
   --glass-edge: rgba(255, 255, 255, 0.07);
 }
 
@@ -223,6 +256,11 @@ html[data-mode="dark"] {
   --nm-highlight: rgba(255, 244, 230, 0.04);
   --nm-shade: rgba(0, 0, 0, 0.45);
   --nm-shade-deep: rgba(0, 0, 0, 0.6);
+  --nm-rim: rgba(255, 244, 230, 0.09);
+  --nm-rim-hi: rgba(255, 244, 230, 0.15);
+  --nm-key: rgba(0, 0, 0, 0.55);
+  --nm-ambient: rgba(0, 0, 0, 0.45);
+  --nm-bevel: rgba(255, 244, 230, 0.06);
   --glass-edge: rgba(255, 255, 255, 0.07);
   }
 }
@@ -373,6 +411,28 @@ body {
 
 /* Tiny stagger: set --stagger on parent, N*i on children via style={{ "--i": i }}. */
 [style*="--i"] { animation-delay: calc(var(--i) * 40ms); }
+
+/* A read paper still has to be readable. `tile-read` recedes the COVER and the
+   chrome and leaves the title and the summary at full strength; the old
+   blanket opacity-70 on the whole card faded the words too. */
+.tile-read .tile-cover { opacity: 0.45; transition: opacity 300ms var(--ease-snap); }
+.tile-read:hover .tile-cover { opacity: 1; }
+.tile-read .tile-chrome { opacity: 0.6; }
+
+/* Ten cards put thirty icon buttons on screen at rest — a large share of the
+   "tiring to look at" verdict. The row keeps its footprint (opacity only, never
+   `hidden`, so nothing shifts and the buttons stay focusable) and appears for
+   the card under the pointer. Always visible where there is no hover, and on a
+   card whose state is already on. The 60ms reveal delay stops the row
+   strobing as the cursor crosses the masonry. */
+.tile-actions {
+  opacity: 0;
+  transition: opacity 140ms ease-out 60ms;
+}
+.group\/tile:hover .tile-actions,
+.group\/tile:focus-within .tile-actions { opacity: 1; transition-delay: 0ms; }
+@media (hover: none) { .tile-actions { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .tile-actions { opacity: 1; } }
 
 @media (prefers-reduced-motion: reduce) {
   .animate-fade-in-up,

@@ -4,6 +4,7 @@
 // One component that switches on item kind. Rendered in a 1/2/3/4-col
 // grid; designed for ~280–340px wide cards.
 
+import { useState } from "react";
 import Link from "next/link";
 import type { Paper, Event, Job } from "@/types";
 import { useFeedStore } from "@/store/feed";
@@ -31,8 +32,14 @@ interface RelevanceScored {
 function tileShellClass(isRead: boolean) {
   return cn(
     cardShell({ radius: "xl", padding: "sm" }),
-    "group/tile relative hover:-translate-y-[1px]",
-    isRead && "opacity-70 hover:opacity-100",
+    // cardShell's interactive variant already lifts 2px; the old
+    // `hover:-translate-y-[1px]` here silently halved it.
+    "group/tile relative",
+    // A read paper still has to be readable. This used to be a blanket
+    // opacity-70 on the whole card, which faded the title and the summary too
+    // and, on a dark theme, dragged the card toward the background. Only the
+    // cover recedes now — see `tile-read` in globals.css.
+    isRead && "tile-read",
   );
 }
 
@@ -357,20 +364,42 @@ function PaperThumb({ paper }: { paper: Paper }) {
     doi: paper.doi,
     paperTitle: paper.title,
   });
+  // Finding a figure URL is not the same as being able to show it. Some hosts
+  // refuse hotlinked images — biorxiv answers 401 for every figure the
+  // extractor resolves — and without this the card kept a reserved 16:9 box
+  // that never filled, which looks more broken than having no image at all.
+  // Keyed on the URL rather than a boolean + effect, so a new figure resolving
+  // for the same card clears the failure by itself.
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  const src = figure.imageUrl;
 
-  if (!figure.imageUrl || figure.hideFigure) return null;
+  if (!src || figure.hideFigure || failedSrc === src) return null;
 
   return (
-    <div className="mb-3 -mx-1 overflow-hidden rounded-xl bg-bg-secondary/40 aspect-[16/9]">
+    <div className="tile-cover mb-3 -mx-1 overflow-hidden rounded-xl bg-bg-secondary/40 aspect-[16/9]">
       {/* Unoptimised: these are arbitrary third-party hosts, and the file is
           already a modest figure render rather than a photo. */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src={figure.imageUrl}
+        src={src}
         alt={figure.caption ?? ""}
         loading="lazy"
         decoding="async"
-        className="h-full w-full object-cover transition-transform duration-500 ease-out group-hover/tile:scale-[1.03]"
+        referrerPolicy="no-referrer"
+        // A cached image fires `load` before React attaches a handler, so the
+        // ref checks `complete` too — an onLoad-only version left every
+        // warm-cache figure stuck at zero opacity.
+        ref={(node) => {
+          if (node?.complete && node.naturalWidth > 0) {
+            node.classList.remove("opacity-0");
+          }
+        }}
+        onLoad={(event) => event.currentTarget.classList.remove("opacity-0")}
+        onError={() => setFailedSrc(src)}
+        // No hover zoom. A 500ms Ken Burns on a scientific figure reads as an
+        // advertisement, and it scales axis labels. The card rises as one
+        // object; its contents ride along.
+        className="h-full w-full object-cover opacity-0 transition-opacity duration-[320ms] ease-snap"
       />
     </div>
   );
@@ -433,11 +462,12 @@ function PaperTile({ paper, isRead, selected }: { paper: Paper; isRead: boolean;
       >
         {summary}
       </p>
-      <div className="mt-3.5 pt-2.5 border-t border-border/60 flex items-center gap-1 min-w-0">
+      <div className="tile-chrome mt-3.5 pt-2.5 border-t border-border/60 flex items-center gap-1 min-w-0">
         <span className="text-caption text-text-faint truncate mr-1">
           {authorLine}
         </span>
         <span className="flex-1" aria-hidden />
+        <span className="tile-actions flex items-center gap-1">
 
         {/* Like */}
         <button
@@ -475,6 +505,7 @@ function PaperTile({ paper, isRead, selected }: { paper: Paper; isRead: boolean;
           isSaved={!!paper.isSaved}
           onSave={() => savePaper(paper)}
         />
+        </span>
       </div>
     </Link>
   );

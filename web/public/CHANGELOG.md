@@ -2,6 +2,44 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.9.1 — 2026-09-05
+
+Elevation and motion.
+
+**The shadows were soft-UI, and soft-UI cannot work here.** Neumorphism reads
+as extrusion only when the object and its ground are the same material and the
+ground is a mid-tone that can travel both ways. The dark families have no such
+ground — bg and surface sit about four points of L* apart — so the highlight
+had been cut to 4% opacity and the pair had degenerated into one 16px black
+smudge with no contact edge. Hover made it worse: blur went 16px to 26px and
+black 45% to 60%, so a card went *softer* under the pointer instead of lifting.
+
+Replaced with three layers doing three jobs: a 1px rim for separation, whose
+contrast is anchored to the surface so it stops depending on how dark the
+ground is; a short-offset contact layer; and a wide ambient layer with heavy
+negative spread, which is what keeps a 26px blur from becoming fog.
+
+**Motion.** Cards now arrive staggered in reading order — the plumbing had been
+in globals.css all along and the feed had never used it, so all ten faded up on
+one frame, which reads as the page reflowing rather than as a delivery.
+Figures cross-fade in instead of being inserted. The 500ms hover zoom on
+figures is gone; a Ken Burns on a scientific plot reads as an advertisement and
+scales the axis labels.
+
+**Thirty icon buttons at rest.** Ten cards each showed three. The action row
+keeps its footprint but appears for the card under the pointer, and stays
+permanently visible on touch, on keyboard focus, and on a card whose state is
+already on.
+
+**A read paper stays readable.** The read state was a blanket 70% opacity over
+the whole card, which faded the title and the summary and, on dark, dragged the
+card toward the background. Only the cover recedes now.
+
+**Figures that cannot be shown no longer leave a hole.** Finding a figure URL
+is not the same as being able to display it — biorxiv answered 401 for every
+one. Sending no referrer fixes those, and anything still failing drops its
+cover rather than reserving an empty 16:9 box.
+
 ## v0.9.0 — 2026-09-05
 
 The briefing has pictures, and ten different papers in it.
