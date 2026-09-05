@@ -16,7 +16,6 @@ import {
   OpportunityRelevanceBar,
   opportunityRelevanceCardProps,
 } from "@/components/opportunities/opportunity-relevance-card";
-import { ScrambleText } from "@/components/scramble-text";
 
 type FeedItem =
   | { kind: "paper"; data: Paper }
@@ -372,7 +371,7 @@ function PaperTile({ paper, isRead, selected }: { paper: Paper; isRead: boolean;
         <ScoreChip scored={paper} />
       </div>
       <h3 className="text-body-lg font-semibold text-heading leading-[1.3] tracking-[-0.005em] line-clamp-2 min-h-[40px]">
-        <ScrambleText text={paper.title} />
+        {paper.title}
       </h3>
       <div className="text-caption text-text-faint mt-2 flex items-center gap-1 min-w-0">
         <MetaItem icon={AuthorMini}>{authorLine}</MetaItem>
@@ -380,7 +379,7 @@ function PaperTile({ paper, isRead, selected }: { paper: Paper; isRead: boolean;
       <p
         className="text-body-sm sm:text-meta text-text-muted mt-2.5 leading-[1.6] sm:leading-[1.55] line-clamp-3 font-reading"
       >
-        <ScrambleText text={summary} />
+        {summary}
       </p>
       {matchedTopics && (
         <p className="mt-2 text-caption font-semibold text-accent line-clamp-2">

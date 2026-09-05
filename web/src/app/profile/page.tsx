@@ -555,9 +555,9 @@ function ReadingCard({
           <span className="text-micro font-semibold uppercase tracking-[0.18em] text-text-faint">
             Continuous reading
           </span>
-          <StreakBadge activity={stats.saved + stats.read} cells={realCells ?? undefined} />
+          <StreakBadge cells={realCells ?? undefined} />
         </div>
-        <ReadingCalendar activity={stats.saved + stats.read} cells={realCells ?? undefined} />
+        <ReadingCalendar cells={realCells ?? undefined} />
       </div>
 
       {/* ── Sticky topics (keyword weighted cloud) ── */}
@@ -765,9 +765,8 @@ function VenueGrid({
 
 // ── Calendar (GitHub-style contribution grid) ──────────────────
 //
-// We don't yet timestamp individual reads/saves in the store, so the intensity
-// per cell is derived from total activity via a stable hash. When real
-// timestamps land, swap `synthesizeActivity` for the real per-day counts.
+// Real per-day counts only, from /api/read?aggregate=daily. When the API has
+// nothing to return the grid says so rather than drawing something.
 
 const CAL_WEEKS = 18;
 const CAL_DAYS = 7;
@@ -814,32 +813,6 @@ function useDailyActivityCells(): number[] | null {
   return cells;
 }
 
-function synthesizeActivity(totalActivity: number): number[] {
-  // Returns CAL_WEEKS * CAL_DAYS cells. Biases activity toward recent weeks.
-  const cells = CAL_WEEKS * CAL_DAYS;
-  const out = new Array<number>(cells).fill(0);
-  if (totalActivity <= 0) return out;
-
-  // Deterministic pseudo-random — stable for a given activity count.
-  let seed = totalActivity * 9301 + 49297;
-  const rand = () => {
-    seed = (seed * 9301 + 49297) % 233280;
-    return seed / 233280;
-  };
-
-  // Distribute up to ~2.5x total activity across cells, recent-weighted
-  const points = Math.min(cells, Math.max(totalActivity, Math.round(totalActivity * 1.3)));
-  for (let p = 0; p < points; p++) {
-    // Bias toward recent (higher week index)
-    const weekBias = rand();
-    const w = Math.floor(Math.pow(weekBias, 0.55) * CAL_WEEKS);
-    const d = Math.floor(rand() * CAL_DAYS);
-    const idx = w * CAL_DAYS + d;
-    out[idx] += 1;
-  }
-  return out;
-}
-
 function streakFromCells(cells: number[]): number {
   // Count consecutive active cells working backward from the last column.
   let streak = 0;
@@ -857,9 +830,13 @@ function streakFromCells(cells: number[]): number {
   return streak;
 }
 
-function StreakBadge({ activity, cells: realCells }: { activity: number; cells?: number[] }) {
-  const cells = realCells ?? synthesizeActivity(activity);
-  const weeks = streakFromCells(cells);
+function StreakBadge({ cells: realCells }: { cells?: number[] }) {
+  // No fabrication. This used to fall back to synthesizeActivity() — a seeded
+  // pseudo-random grid derived from the total activity count — whenever the
+  // real per-day API was unavailable, which is every signed-out visitor. The
+  // streak was then counted off those invented weeks and shown as fact.
+  if (!realCells) return null;
+  const weeks = streakFromCells(realCells);
   if (weeks === 0) {
     return (
       <span className="text-micro text-text-faint/60 uppercase tracking-[0.14em]">
@@ -880,8 +857,10 @@ function StreakBadge({ activity, cells: realCells }: { activity: number; cells?:
   );
 }
 
-function ReadingCalendar({ activity, cells: realCells }: { activity: number; cells?: number[] }) {
-  const cells = realCells ?? synthesizeActivity(activity);
+function ReadingCalendar({ cells: realCells }: { cells?: number[] }) {
+  // The "no data" branch lives below the hooks, not above them — an early
+  // return here would call useMemo conditionally.
+  const cells = realCells ?? [];
   const maxActivity = Math.max(1, ...cells);
 
   const intensity = (v: number): number => {
@@ -927,6 +906,13 @@ function ReadingCalendar({ activity, cells: realCells }: { activity: number; cel
     return labels;
   }, []);
 
+  if (!realCells) {
+    return (
+      <p className="text-micro text-text-faint/70">
+        Your reading history appears here once you have opened a few papers.
+      </p>
+    );
+  }
   return (
     <div>
       <div className="flex gap-2">

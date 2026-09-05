@@ -558,7 +558,7 @@ export default function WelcomePage() {
                 <StepFrame
                   kicker="One more thing"
                   title="Want Peer to learn your reading style?"
-                  subtitle="An optional 2-minute quiz that maps how you tend to work across five axes. It helps shape your feed — but you can absolutely skip it and just explore."
+                  subtitle="An optional 2-minute quiz that maps how you tend to work across five axes. It does not affect your feed — it is just a portrait of how you read."
                 >
                   <div className={cn(cardShell({ interactive: false, entrance: "none", padding: "none" }), "p-6 flex items-start gap-4")}>
                     <span className="inline-flex items-center justify-center w-11 h-11 rounded-full bg-accent-dim text-accent shrink-0">

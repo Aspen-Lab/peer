@@ -2,6 +2,39 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.8.1 — 2026-09-04
+
+Removing things that were not true.
+
+**The contribution calendar was inventing data.** When the real per-day reading
+API returned nothing — which is every signed-out visitor, and any fetch error —
+the grid fell back to `synthesizeActivity()`, a seeded pseudo-random fill
+derived from the total activity count, and gave each invented cell a tooltip
+reading "N interactions". The streak badge counted those invented weeks. For a
+demo shown to signed-out visitors this presented fabricated numbers as the
+user's own history. The function is deleted; with no real data the panel now
+says so.
+
+**The persona quiz no longer claims to shape your feed.** Onboarding said "It
+helps shape your feed". Its stored result has exactly two readers — the quiz's
+own hydration and an onboarding checkmark — and reaches neither the feed,
+scoring, nor reports. The copy now says what is true.
+
+**The onboarding tour no longer has a step that cannot fire.** Step 3
+spotlighted `[data-tour="highlights"]`, an attribute no element carries, so it
+was silently skipped and the counter jumped 2/4 to 4/4.
+
+**`/api/test-digest` is development-only.** It runs the full feed pipeline and
+sends an email while bypassing digest_enabled, frequency and time-of-day, and
+was reachable by any signed-in caller on a deployed instance.
+
+**Paper titles are legible immediately.** The feed card wrapped every title and
+summary in a ~600ms character-scramble reveal — a delay applied to the exact
+text the reader came for.
+
+**Dead code.** The unused `DailyDigest` panel and its loading progress bar are
+gone; only the headless `PaperDigestLoader` was ever mounted.
+
 ## v0.8.0 — 2026-09-04
 
 The daily surface is papers, and only papers.

@@ -39,13 +39,6 @@ const STEPS: TourStep[] = [
     body: "These switches control how hard the AI works: turn on AI search, plug in your own key, enable Deep report, or add Tavily web scouting — all to sharpen the briefing.",
   },
   {
-    key: "highlights",
-    sel: '[data-tour="highlights"]',
-    title: "Today's highlights",
-    body: "A two-to-three sentence read on each paper Peer picked. Click any line to jump straight to that paper.",
-    minHeight: 12,
-  },
-  {
     key: "paper-card",
     sel: '[data-tour="paper-card"]',
     title: "Your papers",
