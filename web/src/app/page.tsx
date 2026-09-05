@@ -25,6 +25,7 @@ import { useProfileStore } from "@/store/profile";
 import { FeedTile } from "@/components/cards/feed-tile";
 import { PaperDigestLoader } from "@/components/digest/daily-digest";
 import { EmptyState, LoadingSkeleton } from "@/components/ui";
+import { allocatePlateTerms } from "@/lib/papers/plate-terms";
 
 export default function DailyBriefingPageWrapper() {
   return (
@@ -93,6 +94,14 @@ function DailyBriefingPage() {
       profile.currentProject,
       profile.researchTopics,
     ],
+  );
+
+  // Allocated once across the whole briefing, not per card: the source field is
+  // `matchedKeywords ∪ tags`, so per-card selection would put the reader's own
+  // query on all ten plates and let one concept headline half of them.
+  const plateTerms = useMemo(
+    () => allocatePlateTerms(papers, profile.researchTopics),
+    [papers, profile.researchTopics],
   );
 
   const unreadCount = papers.filter((p) => !readItems[p.id]).length;
@@ -164,7 +173,10 @@ function DailyBriefingPage() {
               style={{ "--i": Math.min(index, 9) } as React.CSSProperties}
               className="mb-4 break-inside-avoid rounded-3xl transition-shadow"
             >
-              <FeedTile item={{ kind: "paper", data: paper }} />
+              <FeedTile
+                item={{ kind: "paper", data: paper }}
+                plateTerms={plateTerms[paper.id]}
+              />
             </div>
           ))}
         </div>

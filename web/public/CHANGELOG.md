@@ -2,6 +2,35 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.9.2 — 2026-09-05
+
+Every card has a plate.
+
+**The window is universal.** Roughly four papers in ten yield an extractable
+figure, and "some have an image and some don't" was the loudest thing wrong
+with the feed. There is now one 16:9 window on every card, at the same offset,
+always filled. When the extractor finds the paper's own figure, the figure
+fills it. When it does not, the window holds the paper's own terms set in the
+display serif over a numbered grid, closed by a rule. Two fills, one slot.
+
+**The terms are the paper's, and they are checked.** The source field is
+`matchedKeywords ∪ tags`, which is hostile in two directions: `matchedKeywords`
+ARE the reader's required topics, so unfiltered they would put the reader's own
+query on all ten plates; `tags` are OpenAlex concepts, which mis-disambiguate
+often enough to matter — a live protein-structure briefing carried "Generative
+grammar" and "Representation (politics)". Allocation now runs once across the
+whole briefing and a term must survive four gates: it is not the reader's own
+topic (or a substring of one), it is not an arXiv filing code, it is long
+enough to set at display size, and **it appears somewhere in the paper's own
+title or abstract**. That last gate is what removes mis-disambiguations: a
+concept the paper never mentions is not a concept the paper is about. No term
+may headline more than two cards.
+
+**Figures are matted, not bled.** `object-contain` on a mat rather than
+`object-cover`, because cropping a scientific figure destroys its axis labels.
+On dark themes the mat is off-white, so a white-ground chart reads as paper
+instead of glaring like a lightbox, and a colour figure keeps its colours.
+
 ## v0.9.1 — 2026-09-05
 
 Elevation and motion.

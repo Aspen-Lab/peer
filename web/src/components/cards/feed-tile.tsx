@@ -10,6 +10,7 @@ import type { Paper, Event, Job } from "@/types";
 import { useFeedStore } from "@/store/feed";
 import { formatDayAge, formatDate, formatMatchPct } from "@/lib/format";
 import { pickSkimSentence } from "@/lib/papers/skim";
+import { sourceLabel } from "@/lib/papers/plate-terms";
 import { useResolvedFigure } from "@/components/paper-figure";
 import { cardShell } from "@/components/ui/card-shell";
 import { cn } from "@/lib/cn";
@@ -357,55 +358,115 @@ export function resolvePaperTileSummary(
  * Renders nothing at all until an image resolves, so a paper without figures
  * keeps the plain card rather than showing a grey placeholder.
  */
-function PaperThumb({ paper }: { paper: Paper }) {
+const PLATE_TERM_CLASS = [
+  "text-[clamp(21px,7.6cqw,30px)] text-heading",
+  "text-[clamp(17px,5.8cqw,23px)] italic text-text-muted",
+  "text-[clamp(14px,4.6cqw,18px)] text-text-faint",
+];
+
+/**
+ * The plate — the card's visual element, present on every card at the same
+ * offset and the same 16:9 ratio.
+ *
+ * When the extractor finds the paper's own figure, the figure fills it, matted
+ * rather than bled: `object-contain` on a mat, because cropping a scientific
+ * figure destroys its axis labels. When it does not, the window holds the
+ * paper's own terms set in the display serif — a composition, not a picture, so
+ * the card gains a visual without gaining ornament, and nothing on it is
+ * invented. `terms` is allocated across the whole briefing by
+ * `allocatePlateTerms` so the field's two failure modes (the reader's own query
+ * echoed on all ten cards; the same concept headlining half of them) cannot
+ * reach the page.
+ */
+function PaperPlate({ paper, terms }: { paper: Paper; terms: string[] }) {
   const figure = useResolvedFigure({
     itemId: paper.id,
     url: paper.linkPaper ?? paper.linkArxiv,
     doi: paper.doi,
     paperTitle: paper.title,
   });
-  // Finding a figure URL is not the same as being able to show it. Some hosts
-  // refuse hotlinked images — biorxiv answers 401 for every figure the
-  // extractor resolves — and without this the card kept a reserved 16:9 box
-  // that never filled, which looks more broken than having no image at all.
   // Keyed on the URL rather than a boolean + effect, so a new figure resolving
-  // for the same card clears the failure by itself.
+  // for the same card clears the failure by itself. Finding a figure URL is not
+  // the same as being able to show it — biorxiv answers 401 for every one.
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
   const src = figure.imageUrl;
+  const showFigure = Boolean(src) && !figure.hideFigure && failedSrc !== src;
 
-  if (!src || figure.hideFigure || failedSrc === src) return null;
+  const year = paper.publishedDate?.slice(0, 4);
+  const fallbackVenue = shortVenue(paper.venue) ?? sourceLabel(paper.id);
 
   return (
-    <div className="tile-cover mb-3 -mx-1 overflow-hidden rounded-xl bg-bg-secondary/40 aspect-[16/9]">
-      {/* Unoptimised: these are arbitrary third-party hosts, and the file is
-          already a modest figure render rather than a photo. */}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={src}
-        alt={figure.caption ?? ""}
-        loading="lazy"
-        decoding="async"
-        referrerPolicy="no-referrer"
-        // A cached image fires `load` before React attaches a handler, so the
-        // ref checks `complete` too — an onLoad-only version left every
-        // warm-cache figure stuck at zero opacity.
-        ref={(node) => {
-          if (node?.complete && node.naturalWidth > 0) {
-            node.classList.remove("opacity-0");
-          }
-        }}
-        onLoad={(event) => event.currentTarget.classList.remove("opacity-0")}
-        onError={() => setFailedSrc(src)}
-        // No hover zoom. A 500ms Ken Burns on a scientific figure reads as an
-        // advertisement, and it scales axis labels. The card rises as one
-        // object; its contents ride along.
-        className="h-full w-full object-cover opacity-0 transition-opacity duration-[320ms] ease-snap"
-      />
+    <div className="tile-cover mb-3 -mx-1 overflow-hidden rounded-xl aspect-[16/9] @container">
+      {showFigure ? (
+        <>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={src as string}
+            alt={figure.caption ?? ""}
+            loading="lazy"
+            decoding="async"
+            referrerPolicy="no-referrer"
+            // A cached image fires `load` before React attaches a handler, so
+            // the ref checks `complete` too.
+            ref={(node) => {
+              if (node?.complete && node.naturalWidth > 0) {
+                node.classList.remove("opacity-0");
+              }
+            }}
+            onLoad={(event) => event.currentTarget.classList.remove("opacity-0")}
+            onError={() => setFailedSrc(src)}
+            className="h-full w-full object-contain opacity-0 transition-opacity duration-[320ms] ease-snap"
+          />
+        </>
+      ) : (
+        <div className="flex h-full w-full flex-col justify-center px-[7%] py-3">
+          {terms.length > 0 ? (
+            <>
+              <div className="flex gap-[5%]">
+                <div className="flex flex-col gap-[0.28em] pt-[0.34em] font-mono text-micro tabular-nums tracking-[0.1em] text-text-faint/60">
+                  {terms.map((term, index) => (
+                    <span key={term} className="leading-[1.5]">
+                      {String(index + 1).padStart(2, "0")}
+                    </span>
+                  ))}
+                </div>
+                <div className="min-w-0 flex flex-col gap-[0.1em]">
+                  {terms.map((term, index) => (
+                    <span
+                      key={term}
+                      className={`font-display leading-[1.06] tracking-[-0.02em] truncate ${PLATE_TERM_CLASS[index]}`}
+                    >
+                      {term}
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <span
+                aria-hidden
+                className="mt-[0.7em] ml-[calc(5%+2.1em)] h-px w-[34%] bg-border-strong"
+              />
+            </>
+          ) : (
+            // Nothing usable to set. The venue is always available — every id
+            // carries a "<source>:" prefix — so the plate is never empty.
+            <div className="flex flex-col gap-[0.15em]">
+              <span className="font-display italic leading-[1.06] tracking-[-0.02em] truncate text-[clamp(21px,7.6cqw,30px)] text-heading">
+                {fallbackVenue}
+              </span>
+              {year && (
+                <span className="font-mono tabular-nums tracking-[0.2em] text-[clamp(14px,4.6cqw,18px)] text-text-faint">
+                  {year}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
 
-function PaperTile({ paper, isRead, selected }: { paper: Paper; isRead: boolean; selected?: boolean }) {
+function PaperTile({ paper, isRead, selected, plateTerms = [] }: { paper: Paper; isRead: boolean; selected?: boolean; plateTerms?: string[] }) {
   const savePaper = useFeedStore((s) => s.savePaper);
   const moreLikePaper = useFeedStore((s) => s.moreLikePaper);
   const notInterestedPaper = useFeedStore((s) => s.notInterestedPaper);
@@ -441,7 +502,7 @@ function PaperTile({ paper, isRead, selected }: { paper: Paper; isRead: boolean;
       }}
     >
       <KindStripe kind={kind} />
-      <PaperThumb paper={paper} />
+      <PaperPlate paper={paper} terms={plateTerms} />
       {/* Venue and age lead, because they are what differs between two cards in
           the same briefing. The kind badge appears only for a "discussion" —
           the exception worth flagging, so a forum thread is never mistaken for
@@ -648,9 +709,26 @@ function JobTile({ job, isRead }: { job: Job; isRead: boolean }) {
 
 // ── Public ────────────────────────────────────────────────────
 
-export function FeedTile({ item, selected }: { item: FeedItem; selected?: boolean }) {
+export function FeedTile({
+  item,
+  selected,
+  plateTerms,
+}: {
+  item: FeedItem;
+  selected?: boolean;
+  /** Allocated across the whole briefing — see lib/papers/plate-terms.ts. */
+  plateTerms?: string[];
+}) {
   const isRead = useFeedStore((s) => !!s.readItems[item.data.id]);
-  if (item.kind === "paper") return <PaperTile paper={item.data} isRead={isRead} selected={selected} />;
+  if (item.kind === "paper")
+    return (
+      <PaperTile
+        paper={item.data}
+        isRead={isRead}
+        selected={selected}
+        plateTerms={plateTerms}
+      />
+    );
   if (item.kind === "event") return <EventTile event={item.data} isRead={isRead} />;
   return <JobTile job={item.data} isRead={isRead} />;
 }

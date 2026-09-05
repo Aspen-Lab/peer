@@ -181,6 +181,7 @@ html[data-accent="violet"]   { --seed: #7a3fd9; --seed-dark: #a078f0; --done-lig
   --nm-key: color-mix(in srgb, var(--color-heading) 13%, transparent);
   --nm-ambient: color-mix(in srgb, var(--color-heading) 16%, transparent);
   --nm-bevel: rgba(255, 253, 247, 0.75);
+  --plate-mat: color-mix(in srgb, var(--color-heading) 4%, transparent);
   --glass-edge: rgba(255, 255, 255, 0.45);
 }
 
@@ -220,6 +221,7 @@ html[data-mode="dark"] {
   --nm-key: rgba(0, 0, 0, 0.55);
   --nm-ambient: rgba(0, 0, 0, 0.45);
   --nm-bevel: rgba(255, 244, 230, 0.06);
+  --plate-mat: #ece4d8;
   --glass-edge: rgba(255, 255, 255, 0.07);
 }
 
@@ -261,6 +263,7 @@ html[data-mode="dark"] {
   --nm-key: rgba(0, 0, 0, 0.55);
   --nm-ambient: rgba(0, 0, 0, 0.45);
   --nm-bevel: rgba(255, 244, 230, 0.06);
+  --plate-mat: #ece4d8;
   --glass-edge: rgba(255, 255, 255, 0.07);
   }
 }
@@ -415,6 +418,14 @@ body {
 /* A read paper still has to be readable. `tile-read` recedes the COVER and the
    chrome and leaves the title and the summary at full strength; the old
    blanket opacity-70 on the whole card faded the words too. */
+/* The plate's mat. A scientific figure is usually drawn on white; dropped
+   straight onto a dark card it glares like a lightbox. On dark the figure is
+   mounted on an off-white mat the way a real plate is, so a white-ground chart
+   reads as paper and a colour figure keeps its colours. On light the card is
+   already near-ivory, so the mat is the surface itself. The typographic plate
+   uses the same ground, which is what makes the two fills read as one slot. */
+.tile-cover { background: var(--plate-mat); }
+
 .tile-read .tile-cover { opacity: 0.45; transition: opacity 300ms var(--ease-snap); }
 .tile-read:hover .tile-cover { opacity: 1; }
 .tile-read .tile-chrome { opacity: 0.6; }
