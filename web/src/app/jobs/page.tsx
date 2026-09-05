@@ -78,8 +78,7 @@ export default function JobsPage() {
       <div className="mx-auto max-w-[820px]">
         <header className="mb-6">
           <h1 className="text-title font-medium text-heading tabular-nums">
-            {jobPool.length} job{jobPool.length === 1 ? "" : "s"} in today&apos;s
-            pool
+            {`${jobPool.length} job${jobPool.length === 1 ? "" : "s"} in today’s pool`}
           </h1>
           <p className="mt-1 text-meta text-text-faint">
             Roles matching your topics and work rights. Refreshed when you open

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import { APP_VERSION } from "@/lib/version";
 import Image from "next/image";
 import Link from "next/link";
@@ -143,6 +143,29 @@ const tabs: Tab[] = [
   { href: "/profile", label: "Profile", shortcut: "g p" },
 ];
 
+// The sidebar groups these by how often a researcher reaches for them. Feed
+// is not in a group — it is the Today block at the top. Events and Jobs get a
+// label and a quieter weight; a once-a-year need should not look like a daily
+// one. The mobile bar still renders `tabs` flat, where there is no room for
+// hierarchy anyway.
+const NAV_GROUPS: { key: string; label: string | null; items: Tab[] }[] = [
+  {
+    key: "reading",
+    label: null,
+    items: tabs.filter((t) => t.href === "/search" || t.href === "/saved"),
+  },
+  {
+    key: "occasional",
+    label: "Occasional",
+    items: tabs.filter((t) => t.href === "/events" || t.href === "/jobs"),
+  },
+  {
+    key: "account",
+    label: null,
+    items: tabs.filter((t) => t.href === "/profile"),
+  },
+];
+
 function iconFor(href: string, active: boolean): React.ReactNode {
   if (href === "/") return <IconFeed active={active} />;
   if (href === "/search") return <IconSearch active={active} />;
@@ -184,6 +207,28 @@ export function Nav() {
   // The Feed badge counts the daily lane only. It used to fold in events and
   // jobs, so a job posting could put an unread dot on the paper feed.
   const unreadCount = papers.filter((p) => !readItems[p.id]).length;
+
+  const todayLabel = new Date()
+    .toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })
+    .replace(",", " ·");
+
+  // The active rail. Measured from the DOM and written back as CSS variables
+  // on the nav — a DOM write, not React state, so moving it never re-renders
+  // the tree. Hidden when the active page is the Today block, which sits
+  // outside the nav and carries its own state.
+  const navRef = useRef<HTMLElement>(null);
+  useLayoutEffect(() => {
+    const nav = navRef.current;
+    if (!nav) return;
+    const el = nav.querySelector<HTMLElement>('[data-active="true"]');
+    if (!el) {
+      nav.style.setProperty("--rail-o", "0");
+      return;
+    }
+    nav.style.setProperty("--rail-y", `${el.offsetTop}px`);
+    nav.style.setProperty("--rail-h", `${el.offsetHeight}px`);
+    nav.style.setProperty("--rail-o", "1");
+  }, [pathname, sidebarOpen]);
 
   // The onboarding wizard is a focused, full-screen experience — no app chrome.
   if (pathname === "/welcome") return null;
@@ -267,126 +312,184 @@ export function Nav() {
         </div>
       </nav>
 
-      {/* Desktop: sidebar — translates off-screen when collapsed. */}
+      {/* Desktop: sidebar — translates off-screen when collapsed.
+
+          This is the spine of a daily ritual, not a list of pages. The one
+          thing that changes every day — today's date, how many papers came,
+          how many are unread — is the primary object at the top, and it IS the
+          Feed link. Search and Saved are reading tools. Events and Jobs are
+          once-a-year needs and sit under their own quiet label: the same
+          frequency hierarchy the home page encodes, carried into the nav.
+
+          The active state is a rail that travels, not a card. A nav item
+          borrowing the content cards' elevation put chrome and content on one
+          level; a 2px accent rail sliding to where you went says where you
+          are without competing with what you are reading. */}
       <aside
         className={`hidden lg:flex fixed inset-y-0 left-0 w-52 z-50 glass-bar flex-col transition-transform duration-[350ms] ease-[cubic-bezier(0.4,0,0.2,1)] will-change-transform ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
         aria-hidden={!sidebarOpen}
       >
-        <div className="relative px-6 pt-10 pb-10">
+        {/* Masthead */}
+        <div className="relative px-6 pt-8 pb-5">
           <Link
             href="/"
-            className="flex items-center gap-3 text-[28px] font-light text-heading tracking-[-0.02em] italic leading-none font-display"
+            className="inline-flex items-baseline text-[22px] font-light text-heading tracking-[-0.02em] italic leading-none font-display"
           >
             Peer
           </Link>
-
           <button
             type="button"
             onClick={() => setSidebarOpen(false)}
-            title="Collapse sidebar (\)"
+            title="Collapse sidebar (\\)"
             aria-label="Collapse sidebar"
-            className="absolute top-4 right-3 inline-flex items-center justify-center w-7 h-7 rounded-full text-text-faint hover:text-heading hover:bg-surface transition-colors active:scale-[0.92]"
+            className="absolute top-[26px] right-4 inline-flex items-center justify-center w-6 h-6 rounded-md text-text-faint/60 hover:text-heading hover:bg-surface/70 transition-colors active:scale-[0.92]"
           >
-            <svg
-              width="13"
-              height="13"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden
-            >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
               <path d="M15 18l-6-6 6-6" />
               <path d="M20 4v16" />
             </svg>
           </button>
         </div>
 
-        <nav
-          className="flex-1 px-3 space-y-0.5"
+        {/* Today — the ritual, and the Feed link */}
+        <Link
+          href="/"
+          tabIndex={sidebarOpen ? 0 : -1}
+          data-active={isActive("/") ? "true" : undefined}
+          className={`group/today relative mx-3 mb-3 rounded-xl px-3 pt-3 pb-3.5 transition-colors duration-200 ease-out ${
+            isActive("/") ? "bg-surface/70" : "hover:bg-surface/40"
+          }`}
         >
-          {tabs.map(({ href, label, shortcut }) => {
-            const active = isActive(href);
-            const n = countFor(href);
-            return (
-              <Link
-                key={href}
-                href={href}
-                tabIndex={sidebarOpen ? 0 : -1}
-                className={`group flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-body-sm transition-all duration-200 ease-out active:scale-[0.98] ${
-                  active
-                    ? "text-heading bg-surface shadow-card"
-                    : "text-text-faint hover:text-heading hover:bg-surface/50"
-                }`}
-              >
-                <span className="flex items-center gap-2.5 min-w-0">
-                  <span
-                    className={`inline-flex items-center justify-center w-4 h-4 shrink-0 transition-colors ${
-                      active ? "text-accent" : "text-text-faint group-hover:text-text-muted"
-                    }`}
-                  >
-                    {iconFor(href, active)}
-                  </span>
-                  <span className="truncate">{label}</span>
-                  {n > 0 && (
-                    <span className="inline-flex items-center gap-1 text-accent text-caption tabular-nums">
-                      {href === "/" && (
-                        <span
-                          className="block w-[5px] h-[5px] rounded-full bg-accent"
-                          aria-hidden
-                        />
-                      )}
-                      {n}
-                    </span>
-                  )}
+          <span className="block font-mono text-micro uppercase tracking-[0.16em] text-text-faint/70 tabular-nums">
+            {todayLabel}
+          </span>
+          <span className="mt-1.5 flex items-baseline gap-2">
+            <span
+              className={`font-display text-[26px] leading-none tracking-[-0.02em] transition-colors ${
+                isActive("/") ? "text-heading" : "text-text-muted group-hover/today:text-heading"
+              }`}
+            >
+              Today
+            </span>
+            {papers.length > 0 && (
+              <span className="font-mono text-caption tabular-nums text-text-faint">
+                {papers.length}
+              </span>
+            )}
+          </span>
+          <span className="mt-1.5 block text-caption text-text-faint tabular-nums">
+            {papers.length === 0 ? (
+              "no briefing yet"
+            ) : unreadCount === 0 ? (
+              "all read · back tomorrow"
+            ) : (
+              <>
+                <span className="text-accent font-medium">{unreadCount}</span>{" "}
+                unread
+              </>
+            )}
+          </span>
+        </Link>
+
+        <nav ref={navRef} className="relative flex-1 flex flex-col px-3 pb-2">
+          {/* The rail. Positioned from the active item's offset via CSS
+              variables written in a layout effect — a DOM write, not React
+              state, so it never re-renders the tree to move. */}
+          <span
+            aria-hidden
+            className="pointer-events-none absolute left-0 w-[2px] rounded-full bg-accent transition-[transform,height,opacity] duration-[260ms] ease-snap"
+            style={{
+              transform: "translateY(var(--rail-y, 0px))",
+              height: "var(--rail-h, 0px)",
+              opacity: "var(--rail-o, 0)",
+            }}
+          />
+
+          {NAV_GROUPS.map((group) => (
+            <div
+              key={group.key}
+              className={
+                group.key === "occasional"
+                  ? "mt-5"
+                  : group.key === "account"
+                    ? "mt-auto pt-5"
+                    : undefined
+              }
+            >
+              {group.label && (
+                <span className="block px-3 pb-1.5 font-mono text-micro uppercase tracking-[0.16em] text-text-faint/50">
+                  {group.label}
                 </span>
-                <NavShortcut value={shortcut} dimmed={!active} />
-              </Link>
-            );
-          })}
+              )}
+              <div className="space-y-px">
+                {group.items.map(({ href, label, shortcut }) => {
+                  const active = isActive(href);
+                  const n = countFor(href);
+                  return (
+                    <Link
+                      key={href}
+                      href={href}
+                      tabIndex={sidebarOpen ? 0 : -1}
+                      data-active={active ? "true" : undefined}
+                      className={`group flex items-center justify-between gap-2 rounded-lg px-3 py-[7px] text-body-sm transition-colors duration-150 ease-out active:scale-[0.99] ${
+                        active
+                          ? "text-heading"
+                          : group.key === "occasional"
+                            ? "text-text-faint/80 hover:text-text-muted"
+                            : "text-text-muted hover:text-heading"
+                      }`}
+                    >
+                      <span className="flex items-center gap-2.5 min-w-0">
+                        <span
+                          className={`inline-flex items-center justify-center w-4 h-4 shrink-0 transition-colors ${
+                            active ? "text-accent" : "text-text-faint/70 group-hover:text-text-muted"
+                          }`}
+                        >
+                          {iconFor(href, active)}
+                        </span>
+                        <span className="truncate">{label}</span>
+                        {n > 0 && (
+                          <span className="font-mono text-caption tabular-nums text-text-faint">
+                            {n}
+                          </span>
+                        )}
+                      </span>
+                      <NavShortcut value={shortcut} dimmed />
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </nav>
 
-        {/* ── Status + shortcuts footer ── */}
-        <div
-          className="px-4 py-4 border-t border-border flex flex-col gap-3"
-        >
-          <div className="flex items-center gap-2 text-caption text-text-faint">
-            <span
-              className={`block w-[6px] h-[6px] rounded-full shrink-0 ${
-                lastRefresh ? "bg-accent" : "bg-border-strong"
-              }`}
-              aria-hidden
-            />
-            <span className="truncate">
-              <span className="text-text-muted">Synced </span>
-              <span
-                className="text-heading tabular-nums font-medium"
-                suppressHydrationWarning
-              >
-                {formatSynced(lastRefresh)}
-              </span>
-            </span>
-          </div>
-
-          <div className="flex items-center justify-between">
-            <button
-              type="button"
-              onClick={openHelp}
-              tabIndex={sidebarOpen ? 0 : -1}
-              title="Keyboard shortcuts"
-              className="group inline-flex items-center gap-1.5 text-caption text-text-faint hover:text-heading transition-colors active:scale-[0.95]"
-            >
-              <NavKbd>?</NavKbd>
-              Shortcuts
-            </button>
-            <span className="text-micro text-text-faint/70 tracking-wider uppercase">
-              v{APP_VERSION}
-            </span>
-          </div>
+        {/* Footer — one line. Sync state as a dot, shortcuts as a single key,
+            version at the far end. Three unrelated things used to share a
+            bordered strip here. */}
+        <div className="px-6 py-4 flex items-center gap-3 text-micro text-text-faint/60">
+          <span
+            className={`block w-[5px] h-[5px] rounded-full shrink-0 ${
+              lastRefresh ? "bg-accent" : "bg-border-strong"
+            }`}
+            title={`Synced ${formatSynced(lastRefresh)}`}
+            aria-label={`Synced ${formatSynced(lastRefresh)}`}
+          />
+          <button
+            type="button"
+            onClick={openHelp}
+            tabIndex={sidebarOpen ? 0 : -1}
+            title="Keyboard shortcuts"
+            aria-label="Keyboard shortcuts"
+            className="inline-flex items-center hover:text-heading transition-colors active:scale-[0.95]"
+          >
+            <NavKbd>?</NavKbd>
+          </button>
+          <span className="flex-1" aria-hidden />
+          <span className="font-mono tracking-wider uppercase tabular-nums">
+            v{APP_VERSION}
+          </span>
         </div>
       </aside>
 
@@ -450,7 +553,7 @@ function NavShortcut({ value, dimmed }: { value: string; dimmed: boolean }) {
   return (
     <span
       className={`flex items-center gap-0.5 shrink-0 transition-opacity duration-200 ${
-        dimmed ? "opacity-0 group-hover:opacity-70" : "opacity-60"
+        dimmed ? "opacity-0 group-hover:opacity-70 group-focus-visible:opacity-70" : "opacity-60"
       }`}
       aria-hidden
     >

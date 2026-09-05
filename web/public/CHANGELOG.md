@@ -2,6 +2,35 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.9.3 — 2026-09-05
+
+The sidebar is the spine of a daily ritual, not a list of pages.
+
+**Today is the primary object.** The one thing that changes every day — the
+date, how many papers came, how many are unread — now sits at the top of the
+sidebar as a block, and that block is the Feed link. "SAT · SEP 5 / Today 10 /
+10 unread", and when everything is read, "all read · back tomorrow".
+
+**Frequency is visible.** Search and Saved are reading tools and sit as plain
+rows. Events and Jobs sit under their own quiet OCCASIONAL label at a lighter
+weight; a once-a-year need should not look like a daily one. This is the same
+hierarchy the home page encodes, carried into the nav. Profile is anchored to
+the bottom.
+
+**The active state is a rail that travels.** The active nav item used to be a
+card — `bg-surface shadow-card`, the same elevation as a content card — which
+put chrome and content on one level. It is now a 2px accent rail that slides
+to wherever you went, positioned from the DOM in a layout effect and written
+back as CSS variables, so moving it never re-renders anything.
+
+**Chrome is quieter.** Six keyboard-shortcut hints were permanently on screen;
+they now appear only for the row under the pointer or keyboard focus. The
+footer — three unrelated things in a bordered strip — is one line: a sync dot,
+a single ? key, the version.
+
+Also: the Events and Jobs page headers read "0 jobsin today's pool" — JSX
+swallowed the space after an expression. Template literals now.
+
 ## v0.9.2 — 2026-09-05
 
 Every card has a plate.

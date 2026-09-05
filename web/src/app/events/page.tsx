@@ -81,8 +81,7 @@ export default function EventsPage() {
       <div className="mx-auto max-w-[820px]">
         <header className="mb-6">
           <h1 className="text-title font-medium text-heading tabular-nums">
-            {eventPool.length} event{eventPool.length === 1 ? "" : "s"} in
-            today&apos;s pool
+            {`${eventPool.length} event${eventPool.length === 1 ? "" : "s"} in today’s pool`}
           </h1>
           <p className="mt-1 text-meta text-text-faint">
             Conferences, workshops and submission deadlines. Refreshed when you
