@@ -7,7 +7,7 @@
 import Link from "next/link";
 import type { Paper, Event, Job } from "@/types";
 import { useFeedStore } from "@/store/feed";
-import { formatDate, formatMatchPct } from "@/lib/format";
+import { formatDayAge, formatDate, formatMatchPct } from "@/lib/format";
 import { cardShell } from "@/components/ui/card-shell";
 import { cn } from "@/lib/cn";
 import { isOnlineOnly } from "@/lib/opportunities/facets";
@@ -41,6 +41,20 @@ type BadgeKind = "paper" | "event" | "job" | "discussion";
 // "Discussion" so users don't mistake a thread for a peer-reviewed work.
 // Allowlist by id prefix — strict on purpose.
 const ACADEMIC_ID_PREFIXES = ["arxiv:", "openalex:"];
+
+/**
+ * Card venue label. OpenAlex returns the repository plus its host institution —
+ * "Zenodo (CERN European Organization for Nuclear Research)", "HAL (Le Centre
+ * pour la Communication Scientifique Directe)". At card width the parenthetical
+ * ate the whole line and truncated mid-word, pushing the published date off the
+ * end. The name before the bracket is the part that identifies the venue.
+ */
+export function shortVenue(venue: string | null | undefined): string | null {
+  const raw = venue?.trim();
+  if (!raw) return null;
+  const withoutHost = raw.replace(/\s*\([^()]*\)\s*$/, "").trim();
+  return withoutHost.length > 0 ? withoutHost : raw;
+}
 
 function paperBadgeKind(paper: Paper): BadgeKind {
   const isAcademic = ACADEMIC_ID_PREFIXES.some((p) => paper.id.startsWith(p));
@@ -125,15 +139,6 @@ function BuildingMini() {
       <path d="M5 21V5a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v16" />
       <path d="M16 9h3a2 2 0 0 1 2 2v10" />
       <path d="M9 7h2M9 11h2M9 15h2" />
-    </svg>
-  );
-}
-
-function AuthorMini() {
-  return (
-    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <circle cx="12" cy="8" r="3.5" />
-      <path d="M5 21a7 7 0 0 1 14 0" />
     </svg>
   );
 }
@@ -334,15 +339,6 @@ function PaperTile({ paper, isRead, selected }: { paper: Paper; isRead: boolean;
 
   const isLiked = paper.feedback === "moreLikeThis" || paper.feedback === "liked";
   const summary = resolvePaperTileSummary(paper, storedSummary);
-  const matchedTopics = Array.from(
-    new Set(
-      paper.summaryExperimentKeywords
-        .map((topic) => topic.trim())
-        .filter(Boolean),
-    ),
-  )
-    .slice(0, 3)
-    .join(", ");
 
   const stop = (fn: () => void) => (e: React.MouseEvent) => {
     e.preventDefault();
@@ -353,8 +349,14 @@ function PaperTile({ paper, isRead, selected }: { paper: Paper; isRead: boolean;
   const kind = paperBadgeKind(paper);
   const authorLine =
     paper.authors.slice(0, 2).join(", ") +
-    (paper.authors.length > 2 ? ` +${paper.authors.length - 2}` : "") +
-    (paper.venue ? ` · ${paper.venue}` : "");
+    (paper.authors.length > 2 ? ` +${paper.authors.length - 2}` : "");
+  // The meta line carries what actually differs between two cards in the same
+  // briefing: where it was published and how old it is. `paper.source` used to
+  // own a slot here — a six-value enum ("arxiv" | four ML conferences |
+  // "other") that resolves to the literal string "other" for everything
+  // outside those venues, i.e. most of biology, chemistry and physics.
+  const age = formatDayAge(paper.publishedDate);
+  const metaBits = [shortVenue(paper.venue), age].filter(Boolean) as string[];
 
   return (
     <Link
@@ -365,30 +367,29 @@ function PaperTile({ paper, isRead, selected }: { paper: Paper; isRead: boolean;
       }}
     >
       <KindStripe kind={kind} />
-      <div className="flex items-center gap-2 mb-2.5">
-        <KindBadge kind={kind} />
-        <span className="flex-1" aria-hidden />
-        <ScoreChip scored={paper} />
+      {/* Venue and age lead, because they are what differs between two cards in
+          the same briefing. The kind badge appears only for a "discussion" —
+          the exception worth flagging, so a forum thread is never mistaken for
+          peer-reviewed work. A "Paper" badge on every card of a papers-only
+          feed said nothing, and it said it twice: `paper.source` repeated it
+          at the bottom. */}
+      <div className="flex items-baseline gap-2 mb-2 min-w-0">
+        {kind !== "paper" && <KindBadge kind={kind} />}
+        <span className="text-micro text-text-faint uppercase tracking-[0.13em] truncate">
+          {metaBits.join(" · ")}
+        </span>
       </div>
       <h3 className="text-body-lg font-semibold text-heading leading-[1.3] tracking-[-0.005em] line-clamp-2 min-h-[40px]">
         {paper.title}
       </h3>
-      <div className="text-caption text-text-faint mt-2 flex items-center gap-1 min-w-0">
-        <MetaItem icon={AuthorMini}>{authorLine}</MetaItem>
-      </div>
       <p
-        className="text-body-sm sm:text-meta text-text-muted mt-2.5 leading-[1.6] sm:leading-[1.55] line-clamp-3 font-reading"
+        className="text-body-sm sm:text-meta text-text-muted mt-2 leading-[1.6] sm:leading-[1.55] line-clamp-3 font-reading"
       >
         {summary}
       </p>
-      {matchedTopics && (
-        <p className="mt-2 text-caption font-semibold text-accent line-clamp-2">
-          Why you · {matchedTopics}
-        </p>
-      )}
-      <div className="mt-3.5 pt-2.5 border-t border-border/60 flex items-center gap-1">
-        <span className="text-micro text-text-faint uppercase tracking-[0.14em] truncate mr-1">
-          {paper.source}
+      <div className="mt-3.5 pt-2.5 border-t border-border/60 flex items-center gap-1 min-w-0">
+        <span className="text-caption text-text-faint truncate mr-1">
+          {authorLine}
         </span>
         <span className="flex-1" aria-hidden />
 

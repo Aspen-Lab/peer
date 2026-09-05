@@ -116,6 +116,7 @@ function DailyBriefingPage() {
           closed={briefingClosed}
           onRefresh={refreshFeed}
           isRefreshing={isLoading}
+          topics={profile.researchTopics}
         />
       </div>
 
@@ -173,6 +174,7 @@ function BriefingHeader({
   closed,
   onRefresh,
   isRefreshing,
+  topics,
 }: {
   total: number;
   unread: number;
@@ -180,6 +182,7 @@ function BriefingHeader({
   closed: boolean;
   onRefresh: () => void;
   isRefreshing: boolean;
+  topics: string[];
 }) {
   const today = new Date();
   const dateLine = today.toLocaleDateString(undefined, {
@@ -255,7 +258,19 @@ function BriefingHeader({
         )}
         {refreshBtn}
       </div>
+      {/* Why these papers are here. This is one statement about the whole
+          briefing, so it belongs at the level where it is true — it used to be
+          repeated on every card as "Why you · <your own topic>", which meant
+          the loudest element on all ten cards was the reader's own query read
+          back to them. */}
       <p className="mt-1 text-meta text-text-faint">
+        {topics.length > 0 && (
+          <>
+            matching{" "}
+            <span className="text-text-muted">{topics.join(", ")}</span>
+            <span className="mx-1.5 text-border-strong">·</span>
+          </>
+        )}
         synced {formatTimeAgo(lastRefresh) ?? "not synced yet"}
       </p>
     </header>

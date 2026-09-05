@@ -2,6 +2,38 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.8.2 — 2026-09-04
+
+Feed card: the hierarchy now encodes something.
+
+The three loudest slots on a card all held information that was identical
+across the whole briefing, while the one field that separated two papers was
+in the smallest, faintest, most truncated line.
+
+- **The "PAPER" badge is gone** — on a papers-only feed it said nothing, and it
+  said it twice: `paper.source` repeated it at the bottom of every card as the
+  literal string "other", which is what that six-value enum ("arxiv" | four ML
+  conferences | "other") returns for everything outside those venues.
+- **The match percentage is gone.** It spanned 59–64% across the ten cards and
+  occupied the top-right corner. Papers have no relevance floor, so it could
+  not be used to choose between them either.
+- **"Why you · <topics>" is gone from the card.** Its first entry was the
+  reader's own required topic echoed back, on every card; the remaining
+  entries were OpenAlex concept tags that frequently landed in the wrong
+  domain ("Representation (politics)" on a protein-structure paper). Its
+  deduplication was case-sensitive, so one card read "protein structure
+  prediction, Protein structure prediction, Protein structure". The statement
+  it was trying to make is true of the whole briefing, so it now appears once,
+  in the page header.
+- **Venue and age lead instead**, which is what actually differs: "Scientific
+  Reports · 8d ago" against "Zenodo · 6d ago". The published date was already
+  on every paper and had never been shown.
+- **Venue drops the host institution.** OpenAlex returns "Zenodo (CERN European
+  Organization for Nuclear Research)"; at card width that truncated mid-word
+  and pushed the date off the line entirely.
+- The kind badge still appears for a **Discussion**, so a forum thread is never
+  mistaken for peer-reviewed work. That was the badge's real job.
+
 ## v0.8.1 — 2026-09-04
 
 Removing things that were not true.
