@@ -2,6 +2,37 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.9.4 — 2026-09-05
+
+The feed card is a cover card.
+
+**The left stripe is gone.** The 3px accent rail on every card's left edge
+encoded paper / event / job on a mixed feed. On a papers-only feed it was the
+same mark on every card — decoration, and the same kind of chrome the rest of
+this series has been removing.
+
+**The plate bleeds.** It used to sit inset inside the card with padding around
+it and a radius of its own, which reads as "a box with an image in it". It now
+runs to the top edge and takes the card's own corners, and the text block
+below it has real air.
+
+**The title is set in the display serif.** It is the specimen's name, and it
+now shares a typeface with the terms on the plate above it — plate and title
+read as one typographic system. Sans is reserved for labels: the venue line
+and the authors. The footer hairline is gone; spacing separates.
+
+**The mat is under both fills, with its own ink.** The off-white mat from
+v0.9.2 had never actually reached the browser (see below), and once it did the
+typographic plate's near-white type vanished on it. The plate now has its own
+ink tokens, relative to the mat rather than the card: on dark, dark warm ink on
+off-white; on light, the ordinary text colours on a 4% tint. Figure and type
+sit on the same ground, which is what makes the two fills read as one slot.
+
+Infra note: Turbopack's persistent dev cache in `.next/dev` was serving a
+compile from before the latest `globals.css` edit, and a restart re-read the
+cache rather than the file — each restart was one edit behind. Clearing
+`.next/dev` fixed it.
+
 ## v0.9.3 — 2026-09-05
 
 The sidebar is the spine of a daily ritual, not a list of pages.

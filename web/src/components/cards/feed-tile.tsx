@@ -30,6 +30,21 @@ interface RelevanceScored {
   relevanceScore?: number;
 }
 
+/**
+ * The paper card is a cover card: the plate bleeds to the top edge and takes
+ * the card's own corners, and the text block sits below it with real air.
+ * No stripe — the 3px accent rail on the left edge encoded paper/event/job on a
+ * mixed feed, and on a papers-only feed it was the same mark on every card,
+ * i.e. decoration. No hairline in the footer: spacing separates.
+ */
+function paperShellClass(isRead: boolean) {
+  return cn(
+    cardShell({ radius: "2xl", padding: "none" }),
+    "group/tile relative overflow-hidden",
+    isRead && "tile-read",
+  );
+}
+
 function tileShellClass(isRead: boolean) {
   return cn(
     cardShell({ radius: "xl", padding: "sm" }),
@@ -358,10 +373,13 @@ export function resolvePaperTileSummary(
  * Renders nothing at all until an image resolves, so a paper without figures
  * keeps the plain card rather than showing a grey placeholder.
  */
+// Colours are the plate's own ink, relative to the mat — not the card's text
+// colours. On dark the mat is off-white, and the card's near-white heading
+// colour would vanish on it.
 const PLATE_TERM_CLASS = [
-  "text-[clamp(21px,7.6cqw,30px)] text-heading",
-  "text-[clamp(17px,5.8cqw,23px)] italic text-text-muted",
-  "text-[clamp(14px,4.6cqw,18px)] text-text-faint",
+  "text-[clamp(21px,7.6cqw,30px)] text-[var(--plate-ink)]",
+  "text-[clamp(17px,5.8cqw,23px)] italic text-[var(--plate-ink-muted)]",
+  "text-[clamp(14px,4.6cqw,18px)] text-[var(--plate-ink-faint)]",
 ];
 
 /**
@@ -396,7 +414,7 @@ function PaperPlate({ paper, terms }: { paper: Paper; terms: string[] }) {
   const fallbackVenue = shortVenue(paper.venue) ?? sourceLabel(paper.id);
 
   return (
-    <div className="tile-cover mb-3 -mx-1 overflow-hidden rounded-xl aspect-[16/9] @container">
+    <div className="tile-cover overflow-hidden aspect-[16/9] @container">
       {showFigure ? (
         <>
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -423,7 +441,7 @@ function PaperPlate({ paper, terms }: { paper: Paper; terms: string[] }) {
           {terms.length > 0 ? (
             <>
               <div className="flex gap-[5%]">
-                <div className="flex flex-col gap-[0.28em] pt-[0.34em] font-mono text-micro tabular-nums tracking-[0.1em] text-text-faint/60">
+                <div className="flex flex-col gap-[0.28em] pt-[0.34em] font-mono text-micro tabular-nums tracking-[0.1em] text-[var(--plate-ink-faint)]">
                   {terms.map((term, index) => (
                     <span key={term} className="leading-[1.5]">
                       {String(index + 1).padStart(2, "0")}
@@ -443,18 +461,18 @@ function PaperPlate({ paper, terms }: { paper: Paper; terms: string[] }) {
               </div>
               <span
                 aria-hidden
-                className="mt-[0.7em] ml-[calc(5%+2.1em)] h-px w-[34%] bg-border-strong"
+                className="mt-[0.7em] ml-[calc(5%+2.1em)] h-px w-[34%] bg-[var(--plate-ink-faint)]"
               />
             </>
           ) : (
             // Nothing usable to set. The venue is always available — every id
             // carries a "<source>:" prefix — so the plate is never empty.
             <div className="flex flex-col gap-[0.15em]">
-              <span className="font-display italic leading-[1.06] tracking-[-0.02em] truncate text-[clamp(21px,7.6cqw,30px)] text-heading">
+              <span className="font-display italic leading-[1.06] tracking-[-0.02em] truncate text-[clamp(21px,7.6cqw,30px)] text-[var(--plate-ink)]">
                 {fallbackVenue}
               </span>
               {year && (
-                <span className="font-mono tabular-nums tracking-[0.2em] text-[clamp(14px,4.6cqw,18px)] text-text-faint">
+                <span className="font-mono tabular-nums tracking-[0.2em] text-[clamp(14px,4.6cqw,18px)] text-[var(--plate-ink-faint)]">
                   {year}
                 </span>
               )}
@@ -496,13 +514,13 @@ function PaperTile({ paper, isRead, selected, plateTerms = [] }: { paper: Paper;
   return (
     <Link
       href={`/papers/${paper.id}`}
-      className={tileShellClass(isRead)}
+      className={paperShellClass(isRead)}
       style={{
         ...(selected ? { background: SELECTED_BG, transition: "background 0.3s" } : { transition: "background 0.3s" }),
       }}
     >
-      <KindStripe kind={kind} />
       <PaperPlate paper={paper} terms={plateTerms} />
+      <div className="px-5 pt-4 pb-4">
       {/* Venue and age lead, because they are what differs between two cards in
           the same briefing. The kind badge appears only for a "discussion" —
           the exception worth flagging, so a forum thread is never mistaken for
@@ -515,7 +533,7 @@ function PaperTile({ paper, isRead, selected, plateTerms = [] }: { paper: Paper;
           {metaBits.join(" · ")}
         </span>
       </div>
-      <h3 className="text-body-lg font-semibold text-heading leading-[1.3] tracking-[-0.005em] line-clamp-2 min-h-[40px]">
+      <h3 className="font-display text-[19px] font-normal text-heading leading-[1.2] tracking-[-0.015em] line-clamp-3">
         {paper.title}
       </h3>
       <p
@@ -523,7 +541,7 @@ function PaperTile({ paper, isRead, selected, plateTerms = [] }: { paper: Paper;
       >
         {summary}
       </p>
-      <div className="tile-chrome mt-3.5 pt-2.5 border-t border-border/60 flex items-center gap-1 min-w-0">
+      <div className="tile-chrome mt-4 flex items-center gap-1 min-w-0">
         <span className="text-caption text-text-faint truncate mr-1">
           {authorLine}
         </span>
@@ -567,6 +585,7 @@ function PaperTile({ paper, isRead, selected, plateTerms = [] }: { paper: Paper;
           onSave={() => savePaper(paper)}
         />
         </span>
+      </div>
       </div>
     </Link>
   );
