@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { APP_VERSION } from "@/lib/version";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -52,6 +53,63 @@ function IconSaved({ active = false }: { active?: boolean }) {
   );
 }
 
+function IconSearch({ active = false }: { active?: boolean }) {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={active ? 2.2 : 1.8}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <circle cx="11" cy="11" r="7" />
+      <path d="M20 20l-3.5-3.5" />
+    </svg>
+  );
+}
+
+function IconEvents({ active = false }: { active?: boolean }) {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill={active ? "currentColor" : "none"}
+      stroke="currentColor"
+      strokeWidth={active ? 2 : 1.8}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <rect x="3" y="5" width="18" height="16" rx="2" />
+      <path d="M3 10h18M8 3v4M16 3v4" />
+    </svg>
+  );
+}
+
+function IconJobs({ active = false }: { active?: boolean }) {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill={active ? "currentColor" : "none"}
+      stroke="currentColor"
+      strokeWidth={active ? 2 : 1.8}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <rect x="2" y="7" width="20" height="14" rx="2" />
+      <path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+    </svg>
+  );
+}
+
 function IconProfile({ active = false }: { active?: boolean }) {
   return (
     <svg
@@ -71,36 +129,26 @@ function IconProfile({ active = false }: { active?: boolean }) {
   );
 }
 
-function IconPersona({ active = false }: { active?: boolean }) {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={active ? 2 : 1.8}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <circle cx="12" cy="12" r="9" />
-      <path d="M12 3v18M3 12h18" />
-    </svg>
-  );
-}
-
+// Order encodes frequency. Feed is the daily read; Search is the weekly manual
+// hunt; Saved is weekly; Events and Jobs are the once-a-year needs that used to
+// sit on the home page as peers of the daily feed. Persona was a permanent slot
+// above Profile for a 15-question quiz whose result nothing consumes — it is
+// reachable from /profile now, not from the primary nav.
 const tabs: Tab[] = [
   { href: "/", label: "Feed", shortcut: "g h" },
+  { href: "/search", label: "Search", shortcut: "g /" },
   { href: "/saved", label: "Saved", shortcut: "g s" },
-  { href: "/persona", label: "Persona", shortcut: "g x" },
+  { href: "/events", label: "Events", shortcut: "g e" },
+  { href: "/jobs", label: "Jobs", shortcut: "g j" },
   { href: "/profile", label: "Profile", shortcut: "g p" },
 ];
 
 function iconFor(href: string, active: boolean): React.ReactNode {
   if (href === "/") return <IconFeed active={active} />;
+  if (href === "/search") return <IconSearch active={active} />;
   if (href === "/saved") return <IconSaved active={active} />;
-  if (href === "/persona") return <IconPersona active={active} />;
+  if (href === "/events") return <IconEvents active={active} />;
+  if (href === "/jobs") return <IconJobs active={active} />;
   return <IconProfile active={active} />;
 }
 
@@ -130,15 +178,12 @@ export function Nav() {
     useFeedStore((s) => s.savedJobs.length);
 
   const papers = useFeedStore((s) => s.papers);
-  const events = useFeedStore((s) => s.events);
-  const jobs = useFeedStore((s) => s.jobs);
   const readItems = useFeedStore((s) => s.readItems);
   const lastRefresh = useFeedStore((s) => s.lastRefresh);
 
-  const unreadCount =
-    papers.filter((p) => !readItems[p.id]).length +
-    events.filter((e) => !readItems[e.id]).length +
-    jobs.filter((j) => !readItems[j.id]).length;
+  // The Feed badge counts the daily lane only. It used to fold in events and
+  // jobs, so a job posting could put an unread dot on the paper feed.
+  const unreadCount = papers.filter((p) => !readItems[p.id]).length;
 
   // The onboarding wizard is a focused, full-screen experience — no app chrome.
   if (pathname === "/welcome") return null;
@@ -339,7 +384,7 @@ export function Nav() {
               Shortcuts
             </button>
             <span className="text-micro text-text-faint/70 tracking-wider uppercase">
-              v0.1.0
+              v{APP_VERSION}
             </span>
           </div>
         </div>

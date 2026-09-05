@@ -1,6 +1,41 @@
 # Changelog
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
+
+## v0.8.0 — 2026-09-04
+
+The daily surface is papers, and only papers.
+
+**The home page.** The default landing tab was `dashboard` — a metrics page
+containing zero items of content: four count tiles (Papers today / Events today
+/ Jobs today / You saved), a 14-day arrival-volume chart, a "what you're
+holding" tracker, a topic-coverage panel and a deadlines board. All removed.
+The home page is now the briefing: how many papers arrived, how many are
+unread, when it last synced, and the papers.
+
+**Papers, events and jobs are no longer peers.** They were concatenated into
+one list, sorted by relevance score alone, and written into one grid — so a
+job posting scoring 0.81 outranked a paper scoring 0.79 and occupied an
+identical cell. Events moved to `/events`, jobs to `/jobs`. They also no longer
+run on every home-page tick: `loadFeed` takes a `lanes` option and the daily
+surface asks for `["papers"]`. The progress bar labelled "Finding today's
+papers" was 30% driven by conference scrapers and job boards.
+
+**Manual controls left the automatic feed.** The feed route carried eleven
+composers exposing fourteen typeable fields. Typing two characters into the
+search box deleted the briefing outright. Search now lives at `/search`; the
+briefing is untouched by anything done there.
+
+**Credentials have a home.** The AI-provider key, deep-report toggle and
+Data-API keys had no section on `/profile` at all — they lived only in the
+one-time `/welcome` wizard and pinned permanently to the feed, which is why the
+feed page ended up doubling as the settings page. They are on `/profile` now.
+
+**Also.** Persona left the primary nav (its quiz result is read by nothing).
+The sidebar version string is read from one constant instead of being
+hardcoded in JSX, where it had drifted to v0.1.0 while this file reached
+v0.7.22.
+
 Versioning is `0.x.y` until v1; `y` for fixes/chore, `x` for features.
 
 ---

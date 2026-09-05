@@ -20,6 +20,10 @@ import { apiFetch } from "@/lib/api";
 import { SURFACE_TOPIC_DESCRIPTIONS } from "@/lib/profile/topic-copy";
 import { IconBook, IconBuilding, IconCheck, IconPin } from "@/components/icons";
 import { PageContainer } from "@/components/ui/page-container";
+import { AiKeyFields } from "@/components/profile/ai-setup";
+import { ConnectorPanel } from "@/components/profile/connector-panel";
+import { Toggle } from "@/components/ui/toggle";
+import { feedsUseAi } from "@/lib/feed/ai-tier";
 import {
   type Tone,
   toneBadge,
@@ -1561,6 +1565,14 @@ function EditView({
   updateLocations: (v: string[]) => void;
   updateAuthorisedCountries: (v: string[]) => void;
 }) {
+  // Pulled straight from the store rather than threaded through this
+  // component's already-long prop list.
+  const updateFeedAiProvider = useProfileStore((s) => s.updateFeedAiProvider);
+  const updateFeedAiApiKey = useProfileStore((s) => s.updateFeedAiApiKey);
+  const updateDeepReportEnabled = useProfileStore(
+    (s) => s.updateDeepReportEnabled,
+  );
+
   return (
     <div
       className="rounded-2xl bg-surface shadow-card divide-y divide-border/70 animate-fade-in-up"
@@ -1825,8 +1837,84 @@ function EditView({
         </div>
       </EditRow>
 
+      {/* Credentials and model settings. These had NO section on this page —
+          they lived only in the one-time /welcome wizard and permanently
+          pinned to the daily feed, which is why the feed ended up doing double
+          duty as the settings page. They have a home now. */}
+      <EditRow icon={<IconKey />} tone="neutral" label="AI provider">
+        <div className="space-y-3">
+          <p className="text-caption leading-relaxed text-text-muted">
+            Tier 0 uses no AI API and always works. To turn on Tier 2 reranking
+            and written relevance reasons, choose a provider and add your own
+            key. Peer sends model calls only to the key you enter here.
+          </p>
+          <AiKeyFields
+            provider={profile.feedAiProvider}
+            apiKey={profile.feedAiApiKey ?? ""}
+            onProviderChange={updateFeedAiProvider}
+            onApiKeyChange={updateFeedAiApiKey}
+            idPrefix="profile-ai"
+          />
+        </div>
+      </EditRow>
+
+      <EditRow icon={<IconBook size={13} strokeWidth={1.9} />} tone="link" label="Deep report">
+        <div className="space-y-3">
+          <div className="flex items-start justify-between gap-3">
+            <p className="text-caption leading-relaxed text-text-muted">
+              Read each paper&apos;s full text (HTML when available, PDF as
+              fallback) before writing the report. Costs more tokens per paper
+              and produces paper-grounded reports instead of a summary of the
+              abstract.
+            </p>
+            <Toggle
+              checked={profile.deepReportEnabled}
+              onChange={(next) => updateDeepReportEnabled(next)}
+              disabled={!feedsUseAi(profile)}
+              className="mt-0.5"
+              aria-label="Deep report"
+            />
+          </div>
+          {!feedsUseAi(profile) && (
+            <p className="text-micro leading-relaxed text-text-faint">
+              Add your own provider and key above first. Without one, Peer shows
+              the Tier 0 report and makes no AI model call.
+            </p>
+          )}
+        </div>
+      </EditRow>
+
+      <EditRow icon={<IconGlobe />} tone="tag" label="Data APIs">
+        <div className="space-y-3">
+          <p className="text-caption leading-relaxed text-text-muted">
+            Optional third-party keys that widen coverage. All of Peer works
+            without them.
+          </p>
+          <ConnectorPanel />
+        </div>
+      </EditRow>
+
+
 
     </div>
+  );
+}
+
+function IconKey() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <circle cx="8" cy="14" r="4" />
+      <path d="M11 11l7-7M16 6l3 3M14 8l3 3" />
+    </svg>
+  );
+}
+
+function IconGlobe() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" />
+    </svg>
   );
 }
 

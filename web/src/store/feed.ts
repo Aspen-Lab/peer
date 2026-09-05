@@ -531,12 +531,21 @@ function syncSavedState<
   });
 }
 
+export type FeedLane = "papers" | "events" | "jobs";
+
 export interface FeedLoadOptions {
   /**
    * Advance novelty only for an explicit refresh/load-more action. A plain
    * page open reads a feed without mutating the recently-shown clock.
    */
   advanceHistory?: boolean;
+  /**
+   * Which pipelines to run. The daily surface asks for `["papers"]` only:
+   * events and jobs are once-a-year needs and used to run on every home-page
+   * tick, taxing the latency of the one lane that is checked every morning.
+   * Omitted means all three, so existing callers keep their behaviour.
+   */
+  lanes?: FeedLane[];
 }
 
 interface FeedState {
@@ -665,11 +674,15 @@ export const useFeedStore = create<FeedState>()(
       loadFeed: async (options) => {
         const requestId = ++feedLoadSeq;
         const advanceHistory = options?.advanceHistory === true;
+        const lanes = options?.lanes ?? ["papers", "events", "jobs"];
+        const wantsPapers = lanes.includes("papers");
+        const wantsEvents = lanes.includes("events");
+        const wantsJobs = lanes.includes("jobs");
         set({
           isLoading: true,
-          papersLoading: true,
-          eventsLoading: true,
-          jobsLoading: true,
+          papersLoading: wantsPapers,
+          eventsLoading: wantsEvents,
+          jobsLoading: wantsJobs,
         });
         const {
           papers: displayedPapers,
@@ -714,6 +727,7 @@ export const useFeedStore = create<FeedState>()(
         // refresh lifecycle; it is not a render barrier. Each helper degrades
         // to an empty pool on failure so one surface never blanks the others.
         const papersLane = (async () => {
+          if (!wantsPapers) return;
           try {
             const realPapers = await fetchRealFeed(
               profile,
@@ -774,6 +788,7 @@ export const useFeedStore = create<FeedState>()(
         })();
 
         const eventsLane = (async () => {
+          if (!wantsEvents) return;
           try {
             const realEvents = await fetchRealEvents(profile, dismissedEventIds);
             if (requestId !== feedLoadSeq) return;
@@ -813,6 +828,7 @@ export const useFeedStore = create<FeedState>()(
         })();
 
         const jobsLane = (async () => {
+          if (!wantsJobs) return;
           try {
             const realJobs = await fetchRealJobs(profile, dismissedJobIds);
             if (requestId !== feedLoadSeq) return;
