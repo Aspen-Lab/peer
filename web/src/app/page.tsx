@@ -147,12 +147,16 @@ function DailyBriefingPage() {
       )}
 
       {papers.length > 0 && (
-        <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        // Masonry, not a fixed grid. Roughly four papers in ten carry an
+        // extractable figure, so card heights genuinely differ; a uniform grid
+        // either ragged-edges every row or reserves dead space on the six cards
+        // with no image. CSS columns let each card be its own height.
+        <div className="mt-8 columns-1 sm:columns-2 lg:columns-3 gap-4 [column-fill:_balance]">
           {papers.map((paper) => (
             <div
               key={paper.id}
               id={`paper-${paper.id}`}
-              className="rounded-3xl transition-shadow"
+              className="mb-4 break-inside-avoid rounded-3xl transition-shadow"
             >
               <FeedTile item={{ kind: "paper", data: paper }} />
             </div>

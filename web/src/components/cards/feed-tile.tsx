@@ -8,6 +8,8 @@ import Link from "next/link";
 import type { Paper, Event, Job } from "@/types";
 import { useFeedStore } from "@/store/feed";
 import { formatDayAge, formatDate, formatMatchPct } from "@/lib/format";
+import { pickSkimSentence } from "@/lib/papers/skim";
+import { useResolvedFigure } from "@/components/paper-figure";
 import { cardShell } from "@/components/ui/card-shell";
 import { cn } from "@/lib/cn";
 import { isOnlineOnly } from "@/lib/opportunities/facets";
@@ -29,7 +31,7 @@ interface RelevanceScored {
 function tileShellClass(isRead: boolean) {
   return cn(
     cardShell({ radius: "xl", padding: "sm" }),
-    "relative hover:-translate-y-[1px]",
+    "group/tile relative hover:-translate-y-[1px]",
     isRead && "opacity-70 hover:opacity-100",
   );
 }
@@ -313,22 +315,65 @@ function FeedbackButtons({
 const SELECTED_BG = "color-mix(in srgb, var(--color-accent) 15%, var(--color-surface))";
 
 export function resolvePaperTileSummary(
-  paper: Pick<Paper, "summaryIntro" | "relevanceReason">,
+  paper: Pick<
+    Paper,
+    "summaryIntro" | "summaryResultDiscussion" | "relevanceReason"
+  >,
   storedSummary?: string,
 ): string {
+  // A real digest sentence still wins when a key is configured.
   const digestSentence = storedSummary?.trim();
   if (digestSentence) return digestSentence;
 
-  const abstractSentences = paper.summaryIntro
-    .trim()
-    .split(/(?<=[.!?])\s+/)
-    .map((sentence) => sentence.trim())
-    .filter(Boolean)
-    .slice(0, 2)
-    .join(" ");
-  if (abstractSentences) return abstractSentences;
+  // Without one, read the whole abstract and pick the sentence that says what
+  // the paper did. This used to take `summaryIntro` — the first one or two
+  // sentences — which for an academic abstract is the motivation, and reads
+  // identically across every paper in a field.
+  const skim = pickSkimSentence(
+    paper.summaryIntro,
+    paper.summaryResultDiscussion,
+  );
+  if (skim) return skim;
 
   return paper.relevanceReason.trim() || "Open this paper for details.";
+}
+
+/**
+ * The paper's own figure, lazily resolved per card after the feed paints.
+ *
+ * Peer has had a rule-based figure extractor (`lib/figures/`) and a route built
+ * for exactly this — `/api/figure`'s own header reads "hit per-card after feed
+ * loads" — and no card had ever called it. The feed rendered ten identical
+ * blocks of text. Nothing here needs a model key, so figures appear on a
+ * deployment with no credentials configured.
+ *
+ * Renders nothing at all until an image resolves, so a paper without figures
+ * keeps the plain card rather than showing a grey placeholder.
+ */
+function PaperThumb({ paper }: { paper: Paper }) {
+  const figure = useResolvedFigure({
+    itemId: paper.id,
+    url: paper.linkPaper ?? paper.linkArxiv,
+    doi: paper.doi,
+    paperTitle: paper.title,
+  });
+
+  if (!figure.imageUrl || figure.hideFigure) return null;
+
+  return (
+    <div className="mb-3 -mx-1 overflow-hidden rounded-xl bg-bg-secondary/40 aspect-[16/9]">
+      {/* Unoptimised: these are arbitrary third-party hosts, and the file is
+          already a modest figure render rather than a photo. */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={figure.imageUrl}
+        alt={figure.caption ?? ""}
+        loading="lazy"
+        decoding="async"
+        className="h-full w-full object-cover transition-transform duration-500 ease-out group-hover/tile:scale-[1.03]"
+      />
+    </div>
+  );
 }
 
 function PaperTile({ paper, isRead, selected }: { paper: Paper; isRead: boolean; selected?: boolean }) {
@@ -367,6 +412,7 @@ function PaperTile({ paper, isRead, selected }: { paper: Paper; isRead: boolean;
       }}
     >
       <KindStripe kind={kind} />
+      <PaperThumb paper={paper} />
       {/* Venue and age lead, because they are what differs between two cards in
           the same briefing. The kind badge appears only for a "discussion" —
           the exception worth flagging, so a forum thread is never mistaken for

@@ -2,6 +2,48 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.9.0 — 2026-09-05
+
+The briefing has pictures, and ten different papers in it.
+
+**Papers show their own figures.** Peer has always had a rule-based figure
+extractor and a route built for exactly this — `/api/figure`'s own header reads
+"hit per-card after feed loads" — and no card had ever called it. The feed was
+ten identical blocks of text.
+
+It was also looking in the wrong place: the extractor asked ar5iv alone, and
+ar5iv now serves a stub for recent preprints. Measured across seven papers from
+one briefing, ar5iv returned "no figures" for every one while `arxiv.org/html`
+carried 26 `<figure>` elements for the same ids. arXiv's own rendering is tried
+first now, with ar5iv kept as the fallback for older papers it still covers.
+Extraction is pure scraping with no model call, so figures appear on a
+deployment with no credentials configured.
+
+**The grid is masonry.** Roughly four papers in ten carry an extractable
+figure, so card heights genuinely differ. A fixed grid either ragged-edged
+every row or reserved dead space on the six cards without an image.
+
+**One researcher can no longer take the whole briefing.** A live feed showed
+six of ten slots held by the same author, all from the same repository.
+`diversify` caps per topic, and its key is the first three title tokens —
+"Graph Neural Networks for Protein Structure Prediction" and "Quantum Machine
+Learning Protein Structure Prediction" hash differently, so the cap never
+fired. There is now a per-author cap of two.
+
+Worse, that pass had never run at all for most users: it sat behind
+`requestedTier >= 1` while the client only ever sends 0 or 2. It is
+deterministic local computation — no model, no network — so it now runs at
+every tier, which is where PRODUCT_DIRECTION's Tier 0 floor puts it.
+
+**Card text says what the paper found.** The skim line was `summaryIntro`, the
+first one or two sentences of the abstract, which in a paper is the motivation
+and reads identically across a field: three cards in one briefing opened with
+three ways of saying protein structure prediction is hard. Everything that
+distinguished them sat unread in `summaryResultDiscussion`. The line is now
+chosen from the whole abstract, preferring sentences that carry a claim or a
+quantity and avoiding both boilerplate openers and sentences whose reference
+dangles once lifted out of context.
+
 ## v0.8.2 — 2026-09-04
 
 Feed card: the hierarchy now encodes something.

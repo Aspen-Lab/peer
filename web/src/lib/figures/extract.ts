@@ -773,22 +773,47 @@ function isAr5ivErrorPage(html: string): boolean {
   );
 }
 
-async function tryAr5ivCandidates(arxivId: string): Promise<AttemptResult> {
-  const ar5ivUrl = `https://ar5iv.labs.arxiv.org/html/${encodeURIComponent(arxivId)}`;
-  const res = await timedFetch(ar5ivUrl);
+/**
+ * arXiv's own LaTeXML rendering, which is where a modern preprint's figures
+ * live. This used to try ar5iv alone, and ar5iv now serves a stub for recent
+ * papers — seven images, all site chrome. Measured across seven papers from one
+ * briefing, ar5iv returned "no figures" for every one while arxiv.org/html
+ * carried 26 `<figure>` elements for the same ids.
+ *
+ * ar5iv stays as the fallback: it still renders many older papers that the
+ * native endpoint does not cover.
+ */
+async function tryArxivHtmlCandidates(
+  htmlUrl: string,
+  source: FigureCandidate["source"],
+): Promise<AttemptResult> {
+  const res = await timedFetch(htmlUrl);
   if (!res || !res.ok) return { status: "source_unavailable", candidates: [] };
   const html = await readBoundedText(res);
   if (isAr5ivErrorPage(html)) {
     return {
       status: "source_unavailable",
       candidates: [],
-      reason: "ar5iv could not render this arXiv paper into a figure-readable HTML page.",
+      reason: "The arXiv HTML view could not render this paper into a figure-readable page.",
     };
   }
-  const candidates = htmlFigureCandidates(html, ar5ivUrl, "ar5iv");
+  const candidates = htmlFigureCandidates(html, htmlUrl, source);
   return candidates.length > 0
     ? { status: "candidates", candidates }
     : { status: "no_figures", candidates: [], reason: "The arXiv HTML view was reachable, but Peer did not find extractable figures." };
+}
+
+async function tryAr5ivCandidates(arxivId: string): Promise<AttemptResult> {
+  const id = encodeURIComponent(arxivId);
+  const native = await tryArxivHtmlCandidates(
+    `https://arxiv.org/html/${id}`,
+    "ar5iv",
+  );
+  if (native.status === "candidates") return native;
+  return tryArxivHtmlCandidates(
+    `https://ar5iv.labs.arxiv.org/html/${id}`,
+    "ar5iv",
+  );
 }
 
 function inferLinkKind(url: string): "html" | "pdf" {
