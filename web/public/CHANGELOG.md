@@ -2,6 +2,36 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.11.0 — 2026-09-06
+
+The keyboard drives the briefing.
+
+The designer's principle: on a PC the interface is the keyboard, on a phone it
+is the touchscreen; a product should not depend on small on-screen buttons.
+Peer did. The keyboard layer carried only global shortcuts — go-to chords,
+search, refresh, undo — and not one card-level action, so the only way to
+save, dismiss or like a paper on a desktop was the three hover-revealed icons.
+
+**Card-level keys, on the briefing:** `j` / `k` (or the arrow keys) move a
+focus ring between papers in reading order; `Enter` or `o` opens the focused
+paper; `s` saves or unsaves it; `x` marks it not interested (the existing `u`
+undoes); `l` asks for more like it. `Esc` clears the ring. The `?` help sheet
+lists them under a new Paper group.
+
+The ring is painted as a DOM attribute and the index kept in a ref, so moving
+between ten cards re-renders nothing; the card list is read from the DOM on
+each press, in document order — which in a CSS-columns masonry is the
+column-major reading order j/k should follow. The focused card shows its
+actions as if hovered. After `x` the ring stays in place and the next paper
+slides under it.
+
+Also: the `g x` chord still routed to the persona quiz, which left the nav in
+v0.8.0. Removed.
+
+Touch is the other half of the principle and is next: swipe right to save,
+swipe left to dismiss, with the buttons reduced to an assistive-technology
+fallback on touch devices.
+
 ## v0.10.1 — 2026-09-06
 
 The loading skeleton catches up with the card.

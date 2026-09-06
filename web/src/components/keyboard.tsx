@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useFeedStore } from "@/store/feed";
 import { useUIStore } from "@/store/ui";
+import { NONE, indexAfterRemoval, stepIndex } from "@/lib/navigation/card-focus";
 
 // ── Global keyboard shortcut registry ──
 
@@ -23,8 +24,18 @@ const GROUPS: { title: string; items: Shortcut[] }[] = [
     items: [
       { keys: "g h", label: "Go to briefing" },
       { keys: "g s", label: "Go to saved" },
-      { keys: "g x", label: "Go to persona" },
       { keys: "g p", label: "Go to profile" },
+    ],
+  },
+  {
+    title: "Paper",
+    items: [
+      { keys: "j", label: "Next paper" },
+      { keys: "k", label: "Previous paper" },
+      { keys: "Enter", label: "Open the focused paper" },
+      { keys: "s", label: "Save / unsave" },
+      { keys: "x", label: "Not interested" },
+      { keys: "l", label: "Like — more like this" },
     ],
   },
   {
@@ -57,6 +68,39 @@ export function KeyboardLayer() {
   const pendingDismissal = useFeedStore((s) => s.pendingDismissal);
   const toggleSidebar = useUIStore((s) => s.toggleSidebar);
 
+  // ── Card focus on the briefing ──
+  // The ring is a DOM attribute, the index a ref: no React state, so moving
+  // between ten cards re-renders nothing. The list is read from the DOM on
+  // each press, in document order — which, in a CSS-columns masonry, is the
+  // column-major reading order j/k should follow.
+  const focusedRef = useRef<number>(NONE);
+
+  const cardEls = () =>
+    Array.from(document.querySelectorAll<HTMLElement>("[data-paper-id]"));
+
+  const paintFocus = useCallback((index: number) => {
+    const els = cardEls();
+    els.forEach((el, i) => {
+      if (i === index) el.setAttribute("data-focused", "true");
+      else el.removeAttribute("data-focused");
+    });
+    focusedRef.current = index;
+    const el = els[index];
+    if (el) {
+      const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      el.scrollIntoView({ block: "nearest", behavior: reduce ? "auto" : "smooth" });
+    }
+  }, []);
+
+  // Stable like paintFocus: it reads a ref and the store getter, nothing
+  // from render scope.
+  const focusedPaper = useCallback(() => {
+    const el = cardEls()[focusedRef.current];
+    const id = el?.getAttribute("data-paper-id");
+    if (!id) return null;
+    return useFeedStore.getState().papers.find((p) => p.id === id) ?? null;
+  }, []);
+
   // Clear pending `g` chord after 1.5s
   useEffect(() => {
     if (!awaitingG) return;
@@ -78,6 +122,10 @@ export function KeyboardLayer() {
           active.blur();
           e.preventDefault();
           return;
+        }
+        if (focusedRef.current !== NONE) {
+          paintFocus(NONE);
+          e.preventDefault();
         }
         return;
       }
@@ -108,14 +156,55 @@ export function KeyboardLayer() {
           e.preventDefault();
           return;
         }
-        if (e.key === "x") {
-          router.push("/persona");
-          setAwaitingG(false);
+        setAwaitingG(false);
+        return;
+      }
+
+      // Card-level keys — the briefing only.
+      if (window.location.pathname === "/") {
+        const els = cardEls();
+        if (e.key === "j" || e.key === "ArrowDown") {
+          paintFocus(stepIndex(focusedRef.current, +1, els.length));
           e.preventDefault();
           return;
         }
-        setAwaitingG(false);
-        return;
+        if (e.key === "k" || e.key === "ArrowUp") {
+          paintFocus(stepIndex(focusedRef.current, -1, els.length));
+          e.preventDefault();
+          return;
+        }
+        if (focusedRef.current !== NONE) {
+          const paper = focusedPaper();
+          if (paper) {
+            if (e.key === "Enter" || e.key === "o") {
+              router.push(`/papers/${paper.id}`);
+              e.preventDefault();
+              return;
+            }
+            if (e.key === "s") {
+              const store = useFeedStore.getState();
+              if (paper.isSaved) store.unsavePaper(paper.id);
+              else store.savePaper(paper);
+              e.preventDefault();
+              return;
+            }
+            if (e.key === "l") {
+              useFeedStore.getState().moreLikePaper(paper);
+              e.preventDefault();
+              return;
+            }
+            if (e.key === "x") {
+              useFeedStore.getState().notInterestedPaper(paper);
+              // The card leaves the DOM on the next paint; keep the ring in
+              // place so the next paper slides under it.
+              window.requestAnimationFrame(() => {
+                paintFocus(indexAfterRemoval(focusedRef.current, cardEls().length));
+              });
+              e.preventDefault();
+              return;
+            }
+          }
+        }
       }
 
       switch (e.key) {
@@ -169,6 +258,8 @@ export function KeyboardLayer() {
       undoDismiss,
       pendingDismissal,
       toggleSidebar,
+      paintFocus,
+      focusedPaper,
     ],
   );
 

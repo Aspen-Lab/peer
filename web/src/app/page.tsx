@@ -161,6 +161,7 @@ function DailyBriefingPage() {
             <div
               key={paper.id}
               id={`paper-${paper.id}`}
+              data-paper-id={paper.id}
               // Today's papers arrive as a stack dealt in reading order. All
               // ten used to fade up on the identical frame, which reads as the
               // page reflowing rather than as a delivery. globals.css already

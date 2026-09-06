@@ -454,6 +454,18 @@ body {
 @media (hover: none) { .tile-actions { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .tile-actions { opacity: 1; } }
 
+/* Keyboard focus on a briefing card. j/k move it, Enter opens, s/x/l act on
+   it. Painted by the keyboard layer as a DOM attribute — no React state. The
+   double ring (ground, then accent) stays legible over any plate, and the
+   focused card's actions show as if hovered. */
+[data-paper-id][data-focused="true"] > a {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 3px;
+  box-shadow: var(--shadow-card-hover);
+  transform: translateY(-2px);
+}
+[data-paper-id][data-focused="true"] .tile-actions { opacity: 1; transition-delay: 0ms; }
+
 @media (prefers-reduced-motion: reduce) {
   .animate-fade-in-up,
   .animate-fade-in,
