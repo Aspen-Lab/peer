@@ -451,7 +451,22 @@ body {
 }
 .group\/tile:hover .tile-actions,
 .group\/tile:focus-within .tile-actions { opacity: 1; transition-delay: 0ms; }
-@media (hover: none) { .tile-actions { opacity: 1; } }
+/* On a touchscreen the card is swiped, not clicked: right saves, left
+   dismisses. The buttons stay in the DOM for assistive technology — VoiceOver
+   and switch users navigate by control, not by gesture — but leave the
+   visual. This used to force them permanently visible on touch, i.e. the
+   phone got the small-button interface the whole series has been removing. */
+@media (hover: none) {
+  .tile-actions {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    opacity: 1;
+  }
+}
 @media (prefers-reduced-motion: reduce) { .tile-actions { opacity: 1; } }
 
 /* Keyboard focus on a briefing card. j/k move it, Enter opens, s/x/l act on

@@ -2,6 +2,46 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.12.0 — 2026-09-06
+
+The touchscreen drives the briefing.
+
+The other half of the principle from v0.11.0: on a phone the interface is the
+finger, not a row of small buttons. Peer's only touch provision was a media
+query that forced the three icon buttons permanently visible — the phone got
+the small-button interface the whole series has been removing.
+
+**Swipe a card.** Right saves (or unsaves — the reveal says which); left marks
+it not interested and the card flies out, with the usual Undo toast. The
+reveal under the card fades in with progress, the card follows the finger and
+rubber-bands past the threshold, a short drag snaps back, and a completed drag
+swallows the click that follows it so a swipe never also opens the paper.
+Commit is 96px or a fast flick in the same direction; a flick back toward the
+origin cancels.
+
+**Only touch and pen.** A mouse has hover and the keyboard layer, and a
+mouse-drag on a link fights text selection. `touch-action: pan-y` leaves
+vertical scrolling to the browser; the card only takes a drag once it has
+locked to the horizontal axis, so a diagonal scroll never moves it.
+
+**The buttons are for assistive technology now.** On touch devices they stay
+in the DOM — VoiceOver and switch users navigate by control, not by gesture —
+but leave the visual.
+
+The gesture arithmetic (axis lock, resistance, commit) is a pure module with
+tests. The pointer-capture call is guarded: an inactive pointer id throws, and
+the drag works without capture.
+
+Also fixed on the way: the card's Save button called an idempotent save on
+every click, so its "Unsave" state re-saved. It toggles now, the same branch
+the keyboard's `s` and the swipe use.
+
+Verified with synthesised touch pointer events against the live handlers:
+right 160px saves and the header counts it, the click after a swipe does not
+navigate, 40px snaps back, left 160px removes the card and Undo restores it.
+A physical-finger pass is still owed — the preview pane was not compositing
+when the real drag was attempted.
+
 ## v0.11.0 — 2026-09-06
 
 The keyboard drives the briefing.
