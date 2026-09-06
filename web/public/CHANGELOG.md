@@ -2,6 +2,26 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.10.1 — 2026-09-06
+
+The loading skeleton catches up with the card.
+
+It still drew the card from three releases ago: a single 820px column, a kind
+badge and score chip up top, a 3px accent stripe, three body lines, and a
+hairline footer with three action buttons. Every one of those has since left
+the real card, so the load-in was a jump cut from one layout to another.
+
+It now mirrors what renders: a three-column masonry the width of the feed,
+each placeholder a cover card — a 16:9 plate on top (every real card carries
+one), then meta, a serif-height title of one to three lines, two or three skim
+lines, an author line. No buttons; the real ones are hidden at rest. Line
+counts vary per card so the masonry is a masonry before the data arrives, and
+the cards arrive with the same reading-order stagger the real ones use.
+
+The component is shared with search, which already prints its own
+"searching…" status; the "Brewing your daily briefing" header is a prop now
+and search passes none, so the two messages no longer stack.
+
 ## v0.10.0 — 2026-09-05
 
 Peer is a paper briefing. Events and jobs are gone from the product.

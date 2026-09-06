@@ -129,11 +129,7 @@ function DailyBriefingPage() {
         />
       </div>
 
-      {papersLoading && papers.length === 0 && (
-        <div className="mx-auto max-w-[820px]">
-          <LoadingSkeleton />
-        </div>
-      )}
+      {papersLoading && papers.length === 0 && <LoadingSkeleton />}
 
       {isEmpty && (
         <div className="mx-auto max-w-[820px]">

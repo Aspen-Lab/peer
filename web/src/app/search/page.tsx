@@ -230,8 +230,8 @@ function SearchPage() {
       </div>
 
       {isSearching && results.length === 0 && (
-        <div className="mx-auto max-w-[820px] mt-4">
-          <LoadingSkeleton />
+        <div className="mt-4">
+          <LoadingSkeleton count={4} label={null} />
         </div>
       )}
 
