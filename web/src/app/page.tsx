@@ -24,7 +24,9 @@ import { formatTimeAgo } from "@/lib/format";
 import { useProfileStore } from "@/store/profile";
 import { FeedTile } from "@/components/cards/feed-tile";
 import { PaperDigestLoader } from "@/components/digest/daily-digest";
-import { EmptyState, LoadingSkeleton } from "@/components/ui";
+import { LoadingSkeleton } from "@/components/ui";
+import { buttonVariants } from "@/components/ui/button";
+import { emptyReason } from "@/lib/feed/empty-reason";
 import { allocatePlateTerms } from "@/lib/papers/plate-terms";
 
 export default function DailyBriefingPageWrapper() {
@@ -43,6 +45,7 @@ function DailyBriefingPage() {
   const loadFeed = useFeedStore((s) => s.loadFeed);
   const readItems = useFeedStore((s) => s.readItems);
   const feedTopicsKey = useFeedStore((s) => s.feedTopicsKey);
+  const feedError = useFeedStore((s) => s.feedError);
   const profile = useProfileStore((s) => s.profile);
 
   // Papers only. Events and jobs used to run on every home-page tick — the
@@ -106,7 +109,12 @@ function DailyBriefingPage() {
 
   const unreadCount = papers.filter((p) => !readItems[p.id]).length;
   const briefingClosed = papers.length > 0 && unreadCount === 0;
-  const isEmpty = !isLoading && papers.length === 0;
+  const empty = emptyReason({
+    isLoading,
+    papersCount: papers.length,
+    topicsCount: profile.researchTopics.length,
+    feedError,
+  });
 
   return (
     <article className="mx-auto max-w-[1280px] px-6 py-16 lg:py-20">
@@ -126,27 +134,19 @@ function DailyBriefingPage() {
           onRefresh={refreshFeed}
           isRefreshing={isLoading}
           topics={profile.researchTopics}
+          failed={Boolean(feedError)}
         />
       </div>
 
       {papersLoading && papers.length === 0 && <LoadingSkeleton />}
 
-      {isEmpty && (
+      {empty && (
         <div className="mx-auto max-w-[820px]">
-          <EmptyState
-            title="Your briefing is still waking up."
-            description="Tell Peer what you're working on — topics, methods, venues — and tomorrow's briefing will be built around that. Peer keeps your settings in this browser only, so signing in is what carries them to another device."
-            action={
-              <Link
-                href="/profile"
-                className="group inline-flex items-center gap-1.5 text-body-sm text-accent hover:text-accent/80 underline decoration-accent/30 hover:decoration-accent/70 underline-offset-4 transition-all duration-200 ease-out active:scale-[0.97]"
-              >
-                Set up profile
-                <span className="text-caption opacity-70 transition-transform duration-200 ease-out group-hover:translate-x-[2px]">
-                  →
-                </span>
-              </Link>
-            }
+          <BriefingEmpty
+            reason={empty}
+            errorDetail={feedError}
+            onRetry={() => void loadFeed({ lanes: ["papers"] })}
+            onRefresh={refreshFeed}
           />
         </div>
       )}
@@ -194,6 +194,7 @@ function BriefingHeader({
   onRefresh,
   isRefreshing,
   topics,
+  failed = false,
 }: {
   total: number;
   unread: number;
@@ -202,6 +203,8 @@ function BriefingHeader({
   onRefresh: () => void;
   isRefreshing: boolean;
   topics: string[];
+  /** The last paper load failed; say so instead of a sync time. */
+  failed?: boolean;
 }) {
   const today = new Date();
   const dateLine = today.toLocaleDateString(undefined, {
@@ -290,8 +293,92 @@ function BriefingHeader({
             <span className="mx-1.5 text-border-strong">·</span>
           </>
         )}
-        synced {formatTimeAgo(lastRefresh) ?? "not synced yet"}
+        {failed ? (
+          <span className="text-red">sync failed</span>
+        ) : lastRefresh ? (
+          <>synced {formatTimeAgo(lastRefresh)}</>
+        ) : (
+          <>not synced yet</>
+        )}
       </p>
     </header>
+  );
+}
+
+// Nothing to show — and three different reasons for it, each with its own
+// answer. This replaces a single "Your briefing is still waking up… Set up
+// profile" that was shown for all three, including to a reader whose topics
+// were set and whose connection had simply dropped. Display serif, one line,
+// a real button; left-aligned in the header's column rather than floating in
+// the middle of an empty page.
+function BriefingEmpty({
+  reason,
+  errorDetail,
+  onRetry,
+  onRefresh,
+}: {
+  reason: "no-topics" | "error" | "empty";
+  errorDetail: string | null;
+  onRetry: () => void;
+  onRefresh: () => void;
+}) {
+  const copy = {
+    "no-topics": {
+      title: "What are you working on?",
+      line: "Peer builds tomorrow’s briefing from your topics.",
+    },
+    error: {
+      title: "Couldn’t reach the paper sources.",
+      line: "Check your connection, then try again.",
+    },
+    empty: {
+      title: "Nothing new for these topics today.",
+      line: "Peer only sends what is new and relevant. Refresh to look again, or widen your topics.",
+    },
+  }[reason];
+
+  return (
+    <section className="mt-16 max-w-[52ch]">
+      <h2 className="font-display text-[28px] font-normal leading-[1.15] tracking-[-0.015em] text-heading text-balance">
+        {copy.title}
+      </h2>
+      <p className="mt-3 text-body-sm text-text-muted leading-relaxed">{copy.line}</p>
+      <div className="mt-6 flex flex-wrap items-center gap-2.5">
+        {reason === "no-topics" && (
+          <Link href="/profile" className={buttonVariants({ tone: "primary", size: "lg" })}>
+            Set up profile
+          </Link>
+        )}
+        {reason === "error" && (
+          <>
+            <button
+              type="button"
+              onClick={onRetry}
+              title={errorDetail ?? undefined}
+              className={buttonVariants({ tone: "primary", size: "lg" })}
+            >
+              Try again
+            </button>
+            <Link href="/profile" className={buttonVariants({ tone: "ghost", size: "lg" })}>
+              Edit topics
+            </Link>
+          </>
+        )}
+        {reason === "empty" && (
+          <>
+            <button
+              type="button"
+              onClick={onRefresh}
+              className={buttonVariants({ tone: "primary", size: "lg" })}
+            >
+              Refresh
+            </button>
+            <Link href="/profile" className={buttonVariants({ tone: "ghost", size: "lg" })}>
+              Widen topics
+            </Link>
+          </>
+        )}
+      </div>
+    </section>
   );
 }

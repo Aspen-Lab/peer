@@ -2,6 +2,40 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.12.1 — 2026-09-06
+
+An empty briefing says why.
+
+The empty screen was one block of caption-size text — "Your briefing is
+still waking up… Set up profile" — shown for every reason the grid could be
+empty. The screenshot that prompted this was a dead dev server: the fetch
+failed, `fetchRealFeed` swallowed the failure into an empty list, and a reader
+with two topics configured was told to set up their profile under a header
+that read "synced just now".
+
+**Three reasons, three screens.** No topics: "What are you working on?" with a
+real Set up profile button. Sources unreachable: "Couldn't reach the paper
+sources." with Try again (the underlying error sits on the button's tooltip)
+and Edit topics, and the header reads "sync failed" in red instead of a sync
+time. Nothing new: "Nothing new for these topics today." with Refresh and
+Widen topics. Display serif at 28px, one line of body copy, buttons from the
+shared button primitive; no caption-size instructions. The block sits in the
+header's column rather than floating in the middle of the page.
+
+**The store records failure.** `feedError` is set when the papers lane throws
+and cleared at the start of the next load. A failed load no longer stamps
+`lastRefresh`, so the header cannot read "synced just now" over an error. The
+flag is transient — not persisted — so a reload starts clean. Which screen to
+show is a pure function (`emptyReason`) with tests.
+
+Also: before the first load the header read "synced not synced yet". It reads
+"not synced yet".
+
+Verified in the browser: no topics (cleared in storage), nothing new (ten `x`
+presses dismissed the whole briefing, no reload fired), sources unreachable
+(`/api/feed` rejected at the fetch layer, then `r`), and recovery — Try again
+with the network restored brought ten papers back and cleared the red header.
+
 ## v0.12.0 — 2026-09-06
 
 The touchscreen drives the briefing.

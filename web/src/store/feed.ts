@@ -348,7 +348,9 @@ async function fetchRealFeed(
     return data.items.map(scoredItemToPaper);
   } catch (err) {
     console.error("[feed] fetch failed:", err);
-    return [];
+    // Rethrow so the papers lane can record it. Returning [] here made a
+    // dead connection indistinguishable from "nothing new today".
+    throw err;
   }
 }
 
@@ -567,6 +569,14 @@ interface FeedState {
   eventsLoading: boolean;
   jobsLoading: boolean;
   lastRefresh: string | null;
+  /**
+   * Why the last paper load produced nothing, when it failed rather than
+   * came back empty. A network failure and a genuinely empty result used to
+   * be the same `[]` — the UI then told a user with a dead connection to
+   * "set up your profile", under a header reading "synced just now".
+   * Transient: not persisted.
+   */
+  feedError: string | null;
   /** The required-topics signature the current `papers` were built from. When
    *  it diverges from the profile's topics, the feed page reloads automatically. */
   feedTopicsKey: string | null;
@@ -667,6 +677,7 @@ export const useFeedStore = create<FeedState>()(
       paperSummaries: {},
       recentlyShownIds: {},
       pendingDismissal: null,
+      feedError: null,
       paperFeedback: {},
       eventFeedback: {},
       jobFeedback: {},
@@ -685,6 +696,7 @@ export const useFeedStore = create<FeedState>()(
           papersLoading: wantsPapers,
           eventsLoading: wantsEvents,
           jobsLoading: wantsJobs,
+          ...(wantsPapers ? { feedError: null } : {}),
         });
         const {
           papers: displayedPapers,
@@ -781,6 +793,12 @@ export const useFeedStore = create<FeedState>()(
               }
               return paperUpdate;
             });
+          } catch (err) {
+            if (requestId === feedLoadSeq) {
+              set({
+                feedError: err instanceof Error ? err.message : String(err),
+              });
+            }
           } finally {
             // Never let a stale lane clear a newer load's progress flag.
             if (requestId === feedLoadSeq && get().papersLoading) {
@@ -872,7 +890,9 @@ export const useFeedStore = create<FeedState>()(
           papersLoading: false,
           eventsLoading: false,
           jobsLoading: false,
-          lastRefresh: new Date().toISOString(),
+          // A failed paper load is not a sync; keep the previous stamp so the
+          // header cannot read "synced just now" over an error.
+          lastRefresh: get().feedError ? get().lastRefresh : new Date().toISOString(),
         });
       },
 
