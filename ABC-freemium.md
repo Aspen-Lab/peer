@@ -13610,3 +13610,240 @@ than failed** — the code is measurable and the storage is not.
 the 30. **R-QUOTA-1 is the one score that moved**, `PARTIAL` -> `MET`, and it moved on behaviour.
 
 **PART 1 BANKED.** Part 2 next: the personas, and round 7's four items verified by behaviour.
+
+#### PART 2 — THE PERSONAS, AND ROUND 7 VERIFIED BY BEHAVIOUR
+
+##### 2.1 — **R-QUOTA-1 RE-SCORED: `PARTIAL` -> `MET`. I FOLLOWED THE LINK.**
+
+**The whole reason this was `PARTIAL` is that for five rounds nobody followed the link** — every
+round asked *"does the prompt render?"* and scored it `MET`. So the first thing to say is **how**
+this was measured, because the method is the finding as much as the verdict is.
+
+**I never imported `UPGRADE_HREF` to check against.** A throwaway harness rendered each surface
+with `renderToStaticMarkup`, **pulled every `href` out of the rendered HTML with a regex**, and
+resolved each one against a route tree the harness **built itself** from disk. If the constant and
+the components had drifted apart, or if the constant were wrong, this would have caught it —
+asserting `href === UPGRADE_HREF` would not have.
+
+**Step 1 — the prompt renders, and its destination comes out of the HTML.**
+
+| reader | surface | `href` found in the rendered output | resolves? |
+|---|---|---|---|
+| **free**, at the monthly cap | `QuotaNotice` | `/welcome?step=ai` | **yes** |
+| **trial**, at the monthly cap | `QuotaNotice` | `/welcome?step=ai` | **yes** |
+| **free** | `PoolRefreshNotice` *"See what Pro adds"* | `/welcome?step=ai` | **yes** |
+| **free** | `TierUpgradeBlock` | `/welcome?step=ai` | **yes** |
+
+Rendered free/trial text, verbatim from the run: *"Deep reports — You've used this month's deep
+reports. Resets in N days. Peer Pro lifts the monthly limit. Add your own key to keep going now."*
+
+**Step 2 — the destination resolves.** `/welcome?step=ai` -> query stripped -> `/welcome` ->
+`src/app/welcome/page.tsx`, present in **both** my own enumeration and Next's generated list (2.5).
+
+**Step 3 — and this is the half Ruling 19 added: THE PAGE ANSWERS THE PROMISE.** I did not take
+this from C's source slice. I executed the real routing code:
+
+- `stepIndexFromKey("ai")` returns **5** — the real function from `welcome/completeness.ts`.
+- `STEP_META[5].key` is **`"ai"`** — so the query lands on the AI branch.
+- The same function returns **`null`** for an unknown key and for `null`, so it is capable of
+  *not* matching — the mapping is a real decision, not a constant.
+- `welcome/page.tsx` reads that query **before** the completeness fallback
+  (`stepIndexFromKey(requestedStep) ?? firstIncompleteStep(...)`), so **the query wins** and no
+  reader is skipped past the step. This is round-7 B's finding, re-confirmed in source.
+- `<ProPlanSummary />` sits at character 26443; the `key === "ai"` branch opens at 23155 and the
+  next branch (`key === "connectors"`) opens at 27668. **26443 is inside the AI branch** — measured,
+  not eyeballed.
+- It is rendered with **no props and no entitlement condition** (`conditionalOnEntitlement=false`),
+  which is Ruling 20 point 3's ruled behaviour: visible to everyone on that step.
+
+**And here is what the reader actually reads when they arrive** — the rendered text of the
+destination block, verbatim from the run:
+
+> Peer Pro · **Peer Pro is $12/month**, or $6 for students. · **Deep reports** — Peer Pro lifts the
+> monthly limit. · **Refresh now** — Refresh now is on the paid plan. Your jobs and events refresh
+> once a week. Peer Pro refreshes them whenever you ask.
+
+**It says what Pro COSTS** ($12/month, $6 students) **and what Pro ADDS** (lifts the monthly deep-report
+limit; refreshes the jobs and events pools on demand). All nine terms I scanned for were present.
+**The promise is answered.** `R-QUOTA-1` is **`MET`**.
+
+**Step 4 — D7 travelled with the copy, and I checked it the same way.** The rendered block contains
+**zero `href` attributes** (`A-DEST hrefs=[]`) and none of `checkout` / `Subscribe` / `stripe` /
+`billing`. **The plan block renders no anchor at all.** The upgrade path is honest end to end and
+then stops, exactly as D7 says it must.
+
+##### 2.2 — **RULING 8 STILL HOLDS: A PAID READER SEES NO PROMPT ANYWHERE**
+
+Same method — render, then read the hrefs out of the HTML. **Five entitlement states x three upsell
+surfaces**, driven live this round:
+
+| surface | free | trial | **paid** | anonymous | **not yet known** |
+|---|---|---|---|---|---|
+| `QuotaNotice` (at the cap) | prompt + link | prompt + link | **no link, no "Pro" line, no "own key" line — only the reset sentence** | (401 — unreachable) | **nothing** |
+| `PoolRefreshNotice` | prompt + *"See what Pro adds"* | **renders nothing** (they may refresh) | **renders nothing** | *"Sign in to refresh."*, **no link** | **renders nothing** |
+| `TierUpgradeBlock` | price + link | **renders nothing** (D5: trial reads as paid) | **renders nothing** | — | **renders nothing** |
+
+**Paid readers: 0 upsells, 0 links, on 3 of 3 surfaces.** **Unknown readers: 0 upsells on 3 of 3.**
+Both properties measured on the rendered output, not asserted on a prop.
+
+##### 2.3 — **IS `ProPlanSummary` A FOURTH UPSELL SURFACE? NO — AND I DECIDED IT ON EVIDENCE**
+
+The TODO asked me to decide this rather than assume it. Three facts, all measured:
+
+1. **It renders no control at all** — zero `href`s, no button, nothing to activate. An upsell that
+   cannot be acted on is not an upsell; it is a price list.
+2. **It takes no entitlement** — no prop, no store read, no condition. Every upsell surface in this
+   product takes the plan and gates on it; this one structurally cannot.
+3. **Its sentences are plan-neutral statements about the product** — *"Peer Pro is $12/month"*,
+   *"Refresh now is on the paid plan"* — true for every reader, including a paid one. Nothing in it
+   makes a claim about **the reader's own** entitlement, which is the thing Ruling 16 forbids
+   guessing at.
+
+**So the upsell-surface count stays THREE** (2.6 re-derives it), and `ProPlanSummary` is recorded
+as a **plan-information surface — a fourth *plan* surface that is not a fourth *upsell* surface.**
+That distinction matters for the next round: Ruling 8's "never upsell a paid reader" does **not**
+reach it, which is exactly why Ruling 20 point 3 could rule it visible to everyone.
+
+##### 2.4 — **THE CHIP (7-01): ALL SIX NEW CASES PROVED ABLE TO FAIL — FIVE PLANTS**
+
+C added six cases *because the fix reddened nothing* (Ruling 19 point 5). A case that exists but
+cannot fail is worth nothing, so I planted against **every one of them**. Each plant was applied
+with an **asserted substitution count**, and each revert asserted **both** the count **and an empty
+`git diff`** before the next run was read.
+
+| # | plant | what it restores | what reddened |
+|---|---|---|---|
+| 1 | `entitlement: grants` at `page.tsx:534` | the old call-site argument | **only** *"is given the RAW entitlement by the dashboard"* |
+| 2 | `planChipText` returns `"Free"` when unknown | the literal old behaviour | **both** *"returns null, not 'Free'"* and *"returns null on the default clock too"* |
+| 3 | JSX guard replaced by `false ? null :` | renders the span unconditionally | **only** *"renders NO plan span while the plan is unknown"* |
+| 4 | `ai` blanked when the plan is unknown | the **over**-fix | **only** *"moves ONLY the plan segment — the capability claims are untouched"* |
+| 5 | `planChipText` returns `null` for a known free reader | the **over**-fix | *"still answers for every KNOWN state, anonymous included"* **plus two older R-UI-1 cases** |
+
+**Five plants, five fired, six cases covered, no case carrying another's weight.** Plants 4 and 5
+are mine rather than C's and they matter: C proved the fix could be **undone**, but nobody had
+proved it could be **over-applied**. Those two cases are the guard against *"fix the chip"* quietly
+becoming *"blank the whole chip"*, and until this run nobody had shown they could fire at all.
+
+**Behaviour confirmed:** a paid reader never reads "Free" while the plan is unknown — the plan
+segment is **absent** (`aiChip.plan === null ? null : (...)`), not blank and not width-reserved,
+while `label`, `ai` and `title` are untouched and still fail closed.
+
+##### 2.5 — **THE ROUTE ENUMERATION, RE-DERIVED MY OWN WAY (Ruling 20 point 2)**
+
+C's scan had quietly lost `/` and would have agreed with itself for ever. So I did not read C's
+enumeration; **I wrote a different one, deliberately using a different algorithm.** C sliced the
+`/page.tsx` suffix off the path, which is what ate a character on the root. Mine splits the relative
+path into segments and **drops the last segment because it is the file** — so the root yields an
+empty segment list and becomes `/` with no string surgery at all, and C's bug is not merely absent
+but structurally impossible.
+
+| source | pages | handlers | total |
+|---|---|---|---|
+| **my enumeration** (independent algorithm) | **11** | **23** | **34** |
+| Next's generated `AppRoutes` (`.next/types/routes.d.ts`) | 11 | 23 | **34** |
+| **only in mine** | — | — | **`[]`** |
+| **only in the generated list** | — | — | **`[]`** |
+
+**The two agree exactly, as sets, and `/` is present in mine.** My page list, in full:
+`/`, `/auth/error`, `/changelog`, `/events/[id]`, `/jobs/[id]`, `/papers/[id]`,
+`/papers/[id]/surface`, `/persona`, `/profile`, `/saved`, `/welcome`.
+
+**One caveat I am recording rather than glossing:** the generated file is dated **2026-08-26**,
+before this loop began, so it is a *stale* independent source. It is still a valid cross-check for
+this round precisely because my live enumeration matches it exactly — no route was added or removed
+during seven rounds. If a future round adds a route, that file must be regenerated before its
+agreement means anything, and a silent match would then be the *wrong* answer.
+
+##### 2.6 — **THE DEAD-LINK SCAN: 0, NO ALLOWLIST — AND I HUNTED THE FIFTH SHAPE**
+
+**Tally: 0 dead internal links.** The gate suite passes 4 of 4, and my own enumeration agrees with
+the scan's (2.5). **No allowlist, no exceptions** — `/CHANGELOG.md` resolves because it is a real
+40 KB file in `public/`, which the suite asserts.
+
+**Proved able to fail — three plants, in shapes chosen because C did NOT use them.** C planted
+`href`, `router.push` and `<form action>`. I planted:
+
+| plant | shape | C planted this? | result |
+|---|---|---|---|
+| `router.replace("/nope-replace-does-not-exist")` in `first-run.tsx:95` | `[router]` | **no** — C used `.push` | reported, **0 -> 1** |
+| `action="/nope-form-does-not-exist"` in `user-menu.tsx:109` | `[action]` | yes, elsewhere — re-proved at the **live** site | reported, **-> 2** |
+| `redirect("/nope-redirect-does-not-exist")` in `first-run.tsx:95` | `[redirect]` | **no** — no live instance exists at all | reported, **0 -> 1** |
+
+Each was named with **file, line and shape**. Every revert asserted a substitution count of 1 and an
+**empty `git diff`** before the next run was read.
+
+**THE FIFTH SHAPE — I looked, and the answer is that there isn't one in this tree.** The TODO asked
+for this explicitly. I read the scan's four patterns and worked out what they cannot match, then
+checked whether any such thing is **live**:
+
+| candidate shape | covered by the scan? | live in the tree? |
+|---|---|---|
+| `<Link href>` | yes — same `href=` pattern | yes |
+| `window.location.href = "/…"` | **yes**, incidentally — the pattern tolerates the spaces | **no** |
+| `window.location.replace("/…")` | **yes**, incidentally — `.replace(` is in the router pattern | **no** |
+| `NextResponse.redirect("/…")` | **yes** — `\bredirect(` matches after the dot | 3 instances, **all absolute** (`${origin}${next}`), so correctly out of scope |
+| `formAction="/…"` | **yes**, incidentally — it ends in `action=` | **no** |
+| `permanentRedirect("/…")` | **NO** — the pattern is case-sensitive and misses the capital R | **no** |
+| `location.assign("/…")` | **NO** | **no** |
+| `<meta http-equiv="refresh">` | no | **no** |
+
+**So: no fifth shape exists live, and the four patterns cover every rendered internal destination in
+the tree today.** The two genuine blind spots — `permanentRedirect` and `location.assign` — have
+**zero instances**, so they are a **maintenance note, not a difference**: nothing is broken, and I
+am not going to inflate the count with a defect nobody can reach. Recorded here so the next round
+that introduces either one knows the scan will not see it.
+
+##### 2.7 — **ONE DESTINATION, ONE PLACE (7-02a): 0 SURVIVING LITERALS, PROVED ABLE TO FAIL**
+
+`UPGRADE_HREF` is declared **once**, in `src/lib/navigation/upgrade-destination.ts`, and imported by
+**all three** upsell surfaces (`pool-refresh-notice.tsx:5`, `quota-notice.tsx:6`,
+`tier-upgrade-block.tsx:5`). **Surviving literals outside the defining module: 0.**
+
+**Proved able to fail, in a file C did not use for this plant.** I retyped `href="/welcome?step=ai"`
+back into `quota-notice.tsx:154` (C planted into `pool-refresh-notice.tsx`). The survivor list went
+**0 -> 1** and named `src/components/reports/quota-notice.tsx:154` with the literal. Reverted with an
+asserted substitution count of 1 and an empty `git diff`.
+
+##### 2.8 — **THE PERSONAS, THROUGH THE REAL HANDLERS, PER PERSONA AND PER SURFACE**
+
+**NO REAL SUPABASE** (said once in 1.3 and it governs every row here): no URL and no service-role
+key, so every route ran on the in-memory fallback. **And no live model call was possible** (1.2), so
+every row below is the **route's** behaviour, never the model's — that is the R-KEY-1 / R-METER-1
+blocked half, not a separate gap.
+
+**43 route-level persona cases, all passing, across 7 route surfaces.** Reported per surface, never
+averaged:
+
+| surface | anonymous | free-no-key | free-byok-tavily | trial | paid |
+|---|---|---|---|---|---|
+| `POST /api/digest` | **401** | no operator search key | — | no operator search key | no operator search key |
+| `POST /api/papers/report` | **401** | no operator search key | — | no operator search key | no operator search key |
+| `POST /api/jobs/report` | **401** | no operator search key | — | no operator search key | no operator search key |
+| `POST /api/events/report` | **401** | no operator search key | — | no operator search key | no operator search key |
+| `POST /api/jobs/feed` | spends nothing | spends nothing | **own key only** | spends nothing (D2a) | spends nothing (D2a) |
+| `POST /api/events/feed` | spends nothing | spends nothing | **own key only** | spends nothing (D2a) | spends nothing (D2a) |
+| `POST /api/feed` | driven | driven | driven | driven | driven |
+
+Plus, on both feed routes: an **expired trial** spends nothing, and **the request body cannot
+elevate** the caller. On jobs: a free user's forced rebuild is refused and the route **still answers
+200**; a paid user's granted refresh is charged **exactly one**.
+
+**Signed-out readers resolve no provider on all four AI routes** — asserted directly, not inferred.
+
+##### 2.9 — WHAT I COULD NOT DO, NAMED RATHER THAN GLOSSED
+
+**Nobody has still rendered the whole wizard in-tree, and I tried.** My harness imported the real
+`WelcomePage` and called `renderToStaticMarkup` on it. It fails with **`invariant expected app
+router to be mounted`** — an app-router requirement, not the `zustand` problem C predicted. So the
+blocker is real but it is a *different* blocker than the one on file, and the fix C costed (adding
+`zustand` to `server.deps.inline`, blast radius 128 files) **would not have been enough**. Recorded
+so the next round does not pay that cost expecting it to work.
+
+**What I have instead is stronger than a source slice and weaker than a render:** the query -> step
+mapping is **executed real code**, and the component's position inside the AI branch is a measured
+character offset in the real file. The one thing still unproven by execution is that React actually
+commits that branch on a real page load — which needs a browser, and Ruling 2 point 5 forbids
+`next dev` in this loop.
+
+**PART 2 BANKED.** Part 3 next: the scans, the standing tallies, the ranked differences and the two
+numbers.
