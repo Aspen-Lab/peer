@@ -119,10 +119,17 @@ lock by rebasing onto the holder's head.
 
 ```
 HELD BY:          free
-ROUND:            4
-WHOSE TURN:       owner (see Ruling 11 — the loop waits; round 5 opens on the owner's word)
-STOPPED BECAUSE:  blocked: waiting on the owner — three migrations unapplied, no local keys
-STATUS:           CODE SIDE CLOSED at 0.0%, CONFIRMED BY THE MANAGER'S INDEPENDENT RE-MEASURE
+ROUND:            5
+WHOSE TURN:       B  (round 5; A is skipped at the front - Ruling 12 point 6)
+STOPPED BECAUSE:  finished the turn @ 2026-09-07 — the owner ruled; round 5 opened by the manager
+STATUS:           ROUND 5 OPENS ON A SPEC CHANGE, NOT A DEFECT. The owner removed operator-funded
+                  search entirely (D2a, Ruling 12, §1m): every user searches on their own Tavily
+                  key or not at all; the guard now BANS `TAVILY_API_KEY`. R-METER-2 becomes N/A,
+                  the denominator drops to 30, and the blocked list drops to 6. The owner also
+                  confirmed ZERO registered users, so the trial backfill is withdrawn. Code side
+                  was closed at 0.0% against the OLD spec — round 5 re-closes it against the new
+                  one. Round-4 A's summary follows.
+                  CODE SIDE CLOSED at 0.0%, CONFIRMED BY THE MANAGER'S INDEPENDENT RE-MEASURE
                   (Ruling 11, §1l): cold gate, five scans by hand, a compile probe, and a
                   hand-written wallet probe with all four operator providers armed. The gate
                   stays NOT MET on the seven owner-blocked halves. Round-4 A's summary follows.
@@ -184,8 +191,9 @@ A'S OWN FIXTURE FAULTS, recorded because each produced a plausible FALSE reading
                   regressions.** Also live: the **CRLF** trap (Ruling 10 point 2c) — a
                   multi-line plant literal with `\n` separators matched **0** times; the count
                   assertion caught it and a whitespace-tolerant regex matched 1.
-LAST DIFFERENCE:  0.0% code-side (0/31; exclusions: none; manager-confirmed) · BLOCKED on the
-                  owner: 7 — R-ENT-1, R-ENT-2, R-METER-1, R-METER-2, R-METER-3, R-KEY-1, R-QUOTA-2
+LAST DIFFERENCE:  0.0% code-side against the PRE-D2a spec (manager-confirmed, Ruling 11). Not yet
+                  measured against D2a — that is round 5's A. Blocked on the owner: 6 — R-ENT-1,
+                  R-ENT-2, R-METER-1, R-METER-3, R-KEY-1, R-QUOTA-2. N/A: R-METER-2. Denominator 30.
 GATE (0% unexplained, both measurements):  **NOT MET — and the code side is no longer why.**
            Code-side is 0% and the difference list is empty; seven items carry a blocked half
            that only the owner can close. `GATE: MET` needs both at zero.
@@ -200,27 +208,22 @@ DONE:      Round 1 A (three parts). Round 1 B, all seven units. Round 1 C: ALL 2
 GATE NOW:  tsc exit **0** · eslint **1 error** (the standing `quiz.tsx:46`, **0 warnings**) ·
            vitest **124 files passed | 1 skipped (125)** · **2859 tests passed | 1 skipped
            (2860)**, **0 failed**, 11.49 s.
-TODO:      NOTHING FOR AN AGENT UNTIL THE OWNER ACTS. When the owner says the migrations are
-           applied and/or the keys exist, the manager opens round 5: A measures the live
-           halves (Ruling 11 point 4) — locally via a standalone script if `.env.local`
-           carries the Supabase pair + the keys, else by writing the production checklist.
-           Resume clock: stand down on every tick while STOPPED BECAUSE says `blocked:`.
-PENDING USER ACTION: (1) The three migrations — apply when ready (safe, additive). (2) DECIDE
-           whether existing users get a backfilled 14-day trial (the migration gives them
-           `free`). (3) After applying, save a profile once in the app to confirm sync still
-           works — the column-level revoke has never met a real profile sync. (4) The Vercel
-           do-not-yet on TAVILY_API_KEY is LIFTED (Ruling 5 point 7): the four variables may
-           be set. (5) Local .env.local keys whenever ready — `GOOGLE_API_KEY` and
-           `TAVILY_API_KEY` are both absent (`grep -c` says 0 for each, this turn). **The two
-           causes split the seven items unevenly:** the keys alone unblock R-KEY-1 and half of
-           R-METER-1; the three migrations are what the other six need (R-ENT-1, R-ENT-2,
-           R-METER-1's persistence half, R-METER-2, R-METER-3, R-QUOTA-2). **Applying the
-           migrations is the larger of the two owner actions.** (6) Confirm ADZUNA_APP_ID/
-           APP_KEY, JSEARCH_API_KEY and USAJOBS_API_KEY are set on Vercel if the free jobs
-           surface is meant to have them — nobody in the loop can see the Vercel env.
-           **(7) THE BLOCKED LIST IS NOW THE WHOLE GATE.** Code-side is 0%. Seven named items,
-           two causes, both owner actions. No agent can close any of them.
-OPEN FOR MANAGER:  none — A's policy item ruled in §1l (Ruling 11 point 2).
+TODO:      B WRITES THE ROUND-5 GUIDE from Ruling 12 (§1m) and the six dated D2a amendments in the
+           spec: 5-01 remove the system branch from the search-key resolver and make operator
+           search availability unconditionally false; 5-02 hard-wire `systemSearchAllowed` false
+           in the entitlement with D2a named at the line; 5-03 the guard — `TAVILY_API_KEY` from
+           required to banned, required drops to three; 5-04 tests inside each, incl. the new
+           standing tallies (Ruling 12 point 7) as gate tests where they can be. Then C, then A
+           re-measures against the denominator of 30.
+PENDING USER ACTION: (1) Apply the three migrations under `web/supabase/migrations/20260904*`.
+           (2) After applying, save a profile once in the app. (3) Optionally fill
+           `GOOGLE_API_KEY` in `web/.env.local` (and the Supabase URL + service-role key) so A
+           can verify the live halves locally; otherwise A writes a production checklist.
+           (4) Vercel now needs THREE variables, not four: GOOGLE_API_KEY,
+           NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY — and must NOT carry
+           TAVILY_API_KEY (the build will refuse it after 5-03). Deploy only after round 5
+           reports green and the branch is merged. WITHDRAWN: the trial backfill (no users).
+OPEN FOR MANAGER:  none — the owner's decision is recorded as D2a / Ruling 12.
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
@@ -702,6 +705,50 @@ assert the counter and the breaker directly, with the shallow exemption still un
 5. **Deploy order for the owner, restated:** apply the three migrations → decide the
    existing-users trial backfill → save a profile once → set the four Vercel variables →
    merge `freemium-system-key` → deploy → run A's checklist. Nothing in this loop deploys.
+
+---
+
+## §1m. RULING 12 — the owner removes operator-funded search entirely; ROUND 5 OPENS (2026-09-07, BINDING)
+
+**The owner's decision, in their words:** *"把'付费/试用用户 tavily 被公司全包'这条删掉吧。从始至终
+不管是谁都还是用他们自己的 tavily。"* — the operator never pays for search, for anyone, on any plan.
+Recorded as **D2a**, which supersedes D2's first two sentences (spec amended, dated). The owner also
+confirmed **there are no registered users**, so the trial-backfill question of Ruling 4 point 5 is
+moot and withdrawn — the trigger gives every future sign-up its 14 days and nothing needs a backfill.
+
+1. **What changes.** `resolveSystemSearchKeys` loses its system branch and never reads
+   `process.env.TAVILY_API_KEY`; `operatorSearchAvailability` returns false for both providers
+   unconditionally; `systemSearchAllowed` is hard-wired `false` in the entitlement with **D2a named
+   at that line**. The guard moves `TAVILY_API_KEY` from **required** to **banned** — required on
+   Vercel drops to three names.
+2. **The gate stays; it becomes a gate nobody may pass.** The machinery built in rounds 1–3 (one
+   predicate, one 500/day breaker, one usage row) is **not deleted** — it is wired to a hard
+   `false`, the same shape Ruling 3 point 5 / Ruling 11 gave the papers surface. Reasons: deleting
+   touches a lot of independently verified code for no behavioural gain; a hard `false` plus a
+   build-time ban makes the path unreachable **by construction**; and reversing the decision later
+   is one constant. **Escape clause:** if C finds a call site where the hard `false` cannot be
+   threaded without widening a request type, stop and record — do not widen inline.
+3. **Scoring.** **R-METER-2 becomes `N/A`** (operator search rows are unreachable by construction)
+   and leaves the scored denominator — neither MET nor BLOCKED. **The denominator becomes 30.**
+   R-QUOTA-2 keeps the trial cap and the 200/day deep-report breaker and is no longer scored on the
+   500/day search breaker. A re-lists R-METER-2 by name every round with the word `N/A`, exactly as
+   it re-lists exclusions — an N/A that stops being mentioned quietly becomes permanent.
+4. **The blocked list drops from 7 to 6:** R-ENT-1, R-ENT-2, R-METER-1, R-METER-3, R-KEY-1,
+   R-QUOTA-2. Two causes unchanged, both the owner's: the three migrations, and no local
+   `GOOGLE_API_KEY`.
+5. **Consequence the owner accepted, recorded so nobody re-opens it as a defect:** jobs/events
+   long-tail web results are identical on every plan; the long tail is a bring-your-own-key feature,
+   not a paid one. Paid value is deep reports without a monthly cap, immediate pool refresh, and
+   immediate topic changes. R-POOL-2's "refresh now" survives and now spends **the reader's own**
+   Tavily quota — that is intended, not a defect.
+6. **Round 5 is a B → C → A round, and A is skipped at the front.** This is a spec change, not a
+   defect A discovered; the manager knows exactly what differs, so B writes the guide from this
+   ruling directly. A measures after C, under the new denominator of 30, and that measurement is
+   what re-confirms the code side.
+7. **Standing tallies carried into round 5** — everything in Ruling 11 point 7 and Ruling 10
+   point 4, plus: **`process.env.TAVILY_API_KEY` reads anywhere in non-test source (must be 0)**;
+   **`kind:"search"` usage rows produced (must be 0)**; **operator-key search requests for every
+   persona including paid (must be 0 on every surface)**; R-METER-2 re-listed by name as `N/A`.
 
 ## §2. ROLES — DO ONLY YOUR OWN JOB
 

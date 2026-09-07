@@ -25,10 +25,22 @@ hand-settable `plan` column stands in for it.
   existing `createGeminiApiProvider` path) is the default LLM for every signed-in user in every
   environment. A user-supplied LLM key (the existing BYOK override) takes precedence. No LLM at all
   only when neither exists — that is the existing tier-0 code path, which stays.
-- **D2 — Search.** Tavily. Free users: their own Tavily key (existing BYOK) or none → structured
-  sources only. Trial + paid users: the system `TAVILY_API_KEY`, spent only on their behalf. Brave
-  stays env-only and is **banned** on Vercel. Vertex AI Search and Gemini grounding: code stays,
-  never enabled in a deployment (the guard bans their env names).
+- **D2 — Search.** ~~Tavily. Free users: their own Tavily key (existing BYOK) or none → structured
+  sources only. Trial + paid users: the system `TAVILY_API_KEY`, spent only on their behalf.~~
+  **SUPERSEDED 2026-09-07 by D2a (Ruling 12).** Brave stays env-only and is **banned** on Vercel.
+  Vertex AI Search and Gemini grounding: code stays, never enabled in a deployment (the guard bans
+  their env names).
+- **D2a — Search, as the owner decided it (2026-09-07, replaces D2's first two sentences).**
+  **The operator never pays for search, for anyone, on any plan.** Every user — anonymous, free,
+  trial, paid — searches on **their own Tavily key** (the existing BYOK connector) or not at all;
+  with no key they get the free structured sources only. There is no system Tavily key: the server
+  never reads `TAVILY_API_KEY`, and the guard **bans** it on Vercel exactly as it bans Brave.
+  `systemSearchAllowed` is therefore permanently `false` for every plan — the gate, its breaker and
+  its usage row stay in the code, wired to a hard `false` with this decision named at the call site,
+  so that reversing it is one constant and re-enabling it by accident is impossible.
+  **Consequence, accepted by the owner:** jobs/events long-tail web results are identical on every
+  plan and are a bring-your-own-key feature, not a paid one. Paid value is deep reports without a
+  monthly cap, immediate pool refresh, and immediate topic changes.
 - **D3 — Pool cadence.** Jobs/events pools rebuild **weekly** (ISO week in the cache key) for
   everyone; papers stay daily (free sources, no paid search). Trial/paid users get a "refresh now"
   action that forces a rebuild. A free user without a Tavily key never triggers a paid search; a
@@ -87,6 +99,11 @@ route behaviour, or grep result). Requirements are grouped; numbering is stable 
   `model`. Never two rows for one provider request; never zero. An empty response is `ok: false`.
 - **R-METER-2.** Every system-Tavily search writes a `usage_events` row (`kind = search`,
   `surface`, `query_count`), attributed to the user whose request triggered the pool build.
+  **Amendment 2026-09-07 (Ruling 12, binding — D2a):** the operator funds no search, so this row
+  is **unreachable by construction** and R-METER-2 leaves the scored denominator (it is neither
+  MET nor BLOCKED — it is **N/A**, and A re-lists it by name every round with that word). The
+  writer stays in the code behind the same hard `false`. A owes a standing tally: **`kind:"search"`
+  rows produced — must be 0.**
 - **R-METER-3.** Per-user counters — `deep_reports_month`, `deep_reports_today`,
   `searches_today` — live in Supabase behind an atomic increment (RPC or single-row upsert). The
   module-scope `Map` in `web/src/lib/security/ai-request.ts` is replaced by this store; the
@@ -158,6 +175,11 @@ route behaviour, or grep result). Requirements are grouped; numbering is stable 
   preference: BYOK Tavily → system Tavily → (Brave / Vertex / Gemini, local-only) → none; an
   uncounted provider never outranks the gated, metered one. The guard bans `GOOGLE_VERTEX_` by
   **prefix**.
+  **Amendment 2026-09-07 (Ruling 12, binding — D2a):** the system branch is **removed**.
+  `resolveSystemSearchKeys` returns the request's BYOK Tavily key or `provenance: "none"`; it
+  never reads `process.env.TAVILY_API_KEY`. `operatorSearchAvailability` returns false for both
+  providers unconditionally. `systemSearchAllowed` is hard-wired `false` in the entitlement with
+  D2a named at that line. The single gate stays — it is now a gate nobody may pass.
 - **R-KEY-4.** `UserAiProvider` value `"default"` now means "Peer's AI (included)". Profile copy
   reflects it; `welcome/completeness.ts` no longer treats `"default"` as incomplete.
 
@@ -191,6 +213,10 @@ route behaviour, or grep result). Requirements are grouped; numbering is stable 
   writes the `[quota] store unavailable` error line and **no `usage_events` row** — a `breaker`
   row on an outage would record a cap that never tripped. Applies to the deep-report check and
   to the system-search check alike.
+  **Amendment 2026-09-07 (Ruling 12, binding — D2a):** the **500/day system-search breaker is
+  unreachable** and drops out of what R-QUOTA-2 is scored on; the trial cap of 20 and the paid
+  200/day deep-report breaker are unchanged and remain the whole of this requirement. The search
+  breaker's code stays behind the same hard `false`.
 - **R-QUOTA-3.** Shallow (abstract-only) paper reports, ranking, digest and query generation are
   **not** counted against the deep-report quota.
   **Amendment 2026-09-05 (Ruling 9, binding):** the exemption is a **depth**, never a
@@ -218,11 +244,15 @@ route behaviour, or grep result). Requirements are grouped; numbering is stable 
 ### R-GUARD — the build refuses to ship the wrong shape
 
 - **R-GUARD-1.** `web/scripts/assert-byok-production-env.mjs` is rewritten. On a Vercel build it
-  **requires** `GOOGLE_API_KEY`, `TAVILY_API_KEY`, `NEXT_PUBLIC_SUPABASE_URL`,
+  **requires** `GOOGLE_API_KEY`, ~~`TAVILY_API_KEY`,~~ `NEXT_PUBLIC_SUPABASE_URL`,
   `SUPABASE_SERVICE_ROLE_KEY`; it **bans** `GOOGLE_VERTEX_*`, `GOOGLE_APPLICATION_CREDENTIALS`,
   `PEER_DIGEST_PROVIDER`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `QWEN_API_KEY`, `DASHSCOPE_API_KEY`,
   `DEEPSEEK_API_KEY`, `BRAVE_SEARCH_API_KEY`, `PEER_DEV_ENTITLEMENT`, and `PEER_FEED_AI_TIER > 0`.
   It exits 1 with a message that names every missing and every forbidden variable.
+  **Amendment 2026-09-07 (Ruling 12, binding — D2a):** `TAVILY_API_KEY` moves from **required** to
+  **banned** — the operator funds no search, so a server Tavily key on a deployment is a spend risk
+  and the build must refuse it, exactly as it refuses Brave. Required on Vercel is now **three**
+  names: `GOOGLE_API_KEY`, `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`.
 - **R-GUARD-2.** The message never prints a value.
 
 ### R-TEST — the gate
