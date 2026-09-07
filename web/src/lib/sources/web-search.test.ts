@@ -143,11 +143,31 @@ describe("the papers web source spends nothing on an operator key", () => {
     fetchSpy.mockRestore();
   });
 
-  it("has the metering wired even though the gate makes it unreachable", async () => {
-    // A gate with no meter behind it is how the same defect returns wearing a
-    // new name. With the entitlement forced true — which the papers pipeline
-    // never does — the fan-out is charged and a row is written naming the
-    // provider that actually ran.
+  it("writes NO usage row and calls no adapter, even with the flag forced true", async () => {
+    // REWRITTEN, NOT DELETED — ABC-freemium 5-04 · D2a (Ruling 12).
+    //
+    // Was "has the metering wired even though the gate makes it unreachable".
+    // It forced `systemSearchAllowed: true` with a Vertex project configured and
+    // asserted the opposite of everything below:
+    //
+    //     expect(geminiSearchMock).toHaveBeenCalled();
+    //     expect(rows).toHaveLength(1);
+    //     expect(rows[0]).toMatchObject({
+    //       kind: "search", surface: "papers", provider: "gemini", byok: false,
+    //     });
+    //
+    // The old expectation is kept above rather than thrown away, because the
+    // row's SHAPE is knowledge 2-04 bought — the row names the `provider` that
+    // actually ran, never a hard-coded `"tavily"` — and it should not vanish
+    // from the file with the assertion.
+    //
+    // **What it proves now, and it is a sharper statement than before.** Forcing
+    // the entitlement flag `true` is the most generous input this surface can be
+    // given, and the answer is still nothing: `operatorSearchAvailability` is
+    // frozen `false`, so no provider resolves, no adapter is called, and no row
+    // is written. That makes it **standing tally 2 of Ruling 12 point 7** for
+    // the papers surface — `kind:"search"` rows produced must be 0 — measured
+    // rather than argued.
     vi.stubEnv("TAVILY_API_KEY", "");
     vi.stubEnv("BRAVE_SEARCH_API_KEY", "");
     vi.stubEnv("GOOGLE_VERTEX_PROJECT", "some-project");
@@ -162,13 +182,8 @@ describe("the papers web source spends nothing on an operator key", () => {
       },
     });
 
-    expect(geminiSearchMock).toHaveBeenCalled();
-    expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({
-      kind: "search",
-      surface: "papers",
-      provider: "gemini",
-      byok: false,
-    });
+    expect(geminiSearchMock).not.toHaveBeenCalled();
+    expect(rows).toHaveLength(0);
+    expect(rows.filter((row) => row.kind === "search")).toEqual([]);
   });
 });

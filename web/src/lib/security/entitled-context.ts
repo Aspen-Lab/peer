@@ -71,7 +71,7 @@ declare const entitledBrand: unique symbol;
 export type EntitledContext = {
   /** From the entitlement resolved by `requireEntitledAiRequest`. */
   readonly userId: string | null;
-  /** True when the call runs on the reader's own key (D2's BYOK path). */
+  /** True when the call runs on the reader's own key (D2a's only search path). */
   readonly byok: boolean;
   /** The route or helper doing the spending, for the usage row. */
   readonly path: string;

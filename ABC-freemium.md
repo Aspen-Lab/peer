@@ -118,11 +118,35 @@ lock by rebasing onto the holder's head.
 ## §1. CURRENT STATE — THE SOURCE OF TRUTH
 
 ```
-HELD BY:          C-round5 @ 2026-09-07 16:43 UTC
+HELD BY:          free
 ROUND:            5
-WHOSE TURN:       C  (round 5; A is skipped at the front - Ruling 12 point 6)
-STOPPED BECAUSE:  finished the turn @ 2026-09-07 16:38 UTC — B's guide is written, four items
-STATUS:           ROUND 5 — **B HAS WRITTEN THE GUIDE. FOUR ITEMS, 5-01 … 5-04**, one commit each,
+WHOSE TURN:       A  (round 5; the manager opens round 6)
+STOPPED BECAUSE:  finished the turn @ 2026-09-07 18:34 UTC — all four items landed, gate green
+STATUS:           ROUND 5 — **C HAS IMPLEMENTED. ALL FOUR ITEMS, 5-01 … 5-04**, one commit each,
+                  each pushed as it finished. **THE GATE IS GREEN**: tsc 0 · eslint 1 (standing) ·
+                  124 files / 2871 tests / **0 failed**. Every one of B's 28 cases was rewritten,
+                  **none deleted**; 12 tests were added. D2a is now in the code: the resolver has no
+                  system Tavily branch and never reads `TAVILY_API_KEY`; `operatorSearchAvailability`
+                  is frozen `false`; `systemSearchAllowed` is hard `false` with D2a named at the
+                  line; the build guard **bans** `TAVILY_API_KEY` and requires three names.
+                  **Ruling 12 point 2's escape clause was never reached** — no request type widened,
+                  tsc never left 0. Ruling 13 point 1's rename landed with 5-02:
+                  `FORCED_REBUILDS_PER_DAY` / `forced_rebuilds_today:<user>:<day>`, cap 500/day, no
+                  migration. Ruling 13 point 3's field is kept and now has its own protective test.
+                  **ONE FILING DEVIATION, logged in §4:** B's 5-04 is a census of all 28 cases; C
+                  filed each case with the item whose source change reddened it where B's own item
+                  entry already named it (`system-key.test.ts` in 5-01, `resolve.test.ts` in 5-02,
+                  the guard suite in 5-03) and did the other six files in 5-04. **Order unchanged,
+                  every case accounted for**; it only shortened the window where the tree was red.
+                  **THREE ITEMS FOR THE MANAGER, all in §4's close-out:** (1) `consumeSystemSearches`
+                  and `path: "system-search"` still say "search" — Ruling 13 named two symbols and C
+                  renamed exactly those two; (2) B's "13 guard cases pass falsely" is an
+                  overstatement, measured — they fail on their own subject's removal, because only
+                  the first of their two assertions was contaminated; (3) tally 3 is **vacuous** on
+                  the four AI report routes (they do not search) and must be sourced from the feed
+                  and adapter suites.
+                  ── Round-5 B's entry follows. ──
+                  ROUND 5 — **B HAS WRITTEN THE GUIDE. FOUR ITEMS, 5-01 … 5-04**, one commit each,
                   each pushed as it finished; no code changed and `git diff HEAD -- web/` is empty.
                   Classification: 5-01 carries **one `EXTRA`** (the system branch in the resolver)
                   **and one `WRONG DATA`** (`operatorSearchAvailability` returns true where D2a says
@@ -182,7 +206,12 @@ STATUS:           ROUND 5 — **B HAS WRITTEN THE GUIDE. FOUR ITEMS, 5-01 … 5-
                      6 of 6, one failure each, then deleted and re-run green.
                   5. **45 of 45 persona/route pairs**; the cross-cutting fault round-3 A
                      counted outside the 45 is gone, so there is no number outside it now.
-GATE THIS TURN:   Cold run after every throwaway was deleted: `tsc` exit **0** · `eslint`
+GATE THIS TURN:   **Round-5 C, cold, after every throwaway was deleted:** `tsc` exit **0** ·
+                  `eslint` **1 error, 0 warnings** (the standing `quiz.tsx:46`) · `vitest`
+                  **124 files passed | 1 skipped (125)** · **2871 tests passed | 1 skipped (2872)**,
+                  **0 failed**, 9.58 s. `src/lib/events/benchmark.test.ts` is the one skip, named.
+                  Test total 2860 → 2872: **+12 added, 0 deleted**. Round-4 A's figures follow.
+                  Cold run after every throwaway was deleted: `tsc` exit **0** · `eslint`
                   **1 error, 0 warnings** (the standing `quiz.tsx:46`) · `vitest` **124 files
                   passed | 1 skipped (125)** · **2859 tests passed | 1 skipped (2860)**,
                   **0 failed**, 11.49 s. `src/lib/events/benchmark.test.ts` is the one skip,
@@ -212,7 +241,10 @@ LAST DIFFERENCE:  0.0% code-side against the PRE-D2a spec (manager-confirmed, Ru
 GATE (0% unexplained, both measurements):  **NOT MET — and the code side is no longer why.**
            Code-side is 0% and the difference list is empty; seven items carry a blocked half
            that only the owner can close. `GATE: MET` needs both at zero.
-DONE:      Round 1 A (three parts). Round 1 B, all seven units. Round 1 C: ALL 28 ITEMS.
+DONE:      **Round 5 C: ALL FOUR ITEMS, 5-01 / 5-02 / 5-03 / 5-04**, one commit each, each
+           pushed; gate green; every new test proved by reverting the source (revert asserted by
+           substitution count first) and every new scan or guard proved by planting an offender.
+           Round 1 A (three parts). Round 1 B, all seven units. Round 1 C: ALL 28 ITEMS.
            Round 2 A: all three parts. Round 2 B: all six items plus one issued correction
            and a close-out; no code changed.
            Round 2 C: ALL SEVEN ITEMS, 2-01 … 2-07, one commit each, each pushed.
@@ -223,9 +255,59 @@ DONE:      Round 1 A (three parts). Round 1 B, all seven units. Round 1 C: ALL 2
            **Round 5 B: all four items**, 5-01 … 5-04, one commit each, each pushed; no code
            changed; the three-stage measurement plant reverted with an asserted empty diff.
 GATE NOW:  tsc exit **0** · eslint **1 error** (the standing `quiz.tsx:46`, **0 warnings**) ·
-           vitest **124 files passed | 1 skipped (125)** · **2859 tests passed | 1 skipped
-           (2860)**, **0 failed**, 11.49 s.
-TODO:      C WORKS THE ROUND-5 GUIDE 5-01 — 5-04, with Ruling 13 (§1n) folded in: the search
+           vitest **124 files passed | 1 skipped (125)** · **2871 tests passed | 1 skipped
+           (2872)**, **0 failed**, 9.58 s.
+TODO:      **ROUND-5 A RE-MEASURES AGAINST D2a.** The denominator is now **30**, not 31
+           (Ruling 12 point 3). **R-METER-2 is `N/A`** — re-list it by name, with that word, every
+           round; an N/A that stops being mentioned quietly becomes permanent. Blocked stays **6**:
+           R-ENT-1, R-ENT-2, R-METER-1, R-METER-3, R-KEY-1, R-QUOTA-2.
+
+           **Standing tallies A owes this round, every one by name.** From Ruling 12 point 7:
+           (a) `process.env.TAVILY_API_KEY` reads in non-test source — **must be 0**, and it is now
+           a gate test (`spend-scans` scan 3), so report the test's number, not a hand count;
+           (b) `kind:"search"` usage rows produced — **must be 0**, now proved behaviourally on all
+           three producers (`jobweb`, `eventweb`, `web-search`); (c) operator-key search requests for
+           **every** persona including paid, on every surface — **must be 0**, but see the warning
+           below about where that number may honestly come from. From Ruling 13 point 4:
+           (d) **"Ruling 75 option-building cases now asserting absence rather than content" = 4**
+           (three in `jobweb.test.ts`, one in `eventweb.test.ts`) — if grounding is ever re-enabled
+           for any plan, all four are restored to content assertions in the same round. Plus
+           everything already standing in Ruling 11 point 7 and Ruling 10 point 4: the five/six
+           scans each reported with its count even when zero, the accepted structured-source reads
+           (3), `resolveProvider` call sites without a context (0), figure matchers reachable with a
+           null-user context (0), and the papers-refusal degradation cost.
+
+           **Questions a fixture cannot settle — what C most wants checked:**
+           1. **Does a paid reader still get something they can tell apart from free?** D2a took
+              search away from every plan. On the jobs and events feeds the long tail is now
+              identical for everyone. Drive the five personas and say, per persona, what actually
+              differs — deep reports without a monthly cap, "refresh now", topic changes — and
+              whether any of it is visible in a response a user would notice. If the answer is
+              "nothing a reader can see", that is a finding for the owner, not a defect.
+           2. **Tally 3 has a vacuous half and A must not average over it.** The eight new persona
+              cases in `ai-route-personas.test.ts` pass with 5-01 and 5-02 reverted, because those
+              four routes never search. Measured, not assumed. Report tally 3 from the surfaces that
+              DO search (`jobs/feed`, `events/feed`, `jobweb`, `eventweb`, `web-search`) and say so.
+           3. **Is the forced-rebuild breaker genuinely reachable, end to end?** Ruling 13 point 1
+              says it is and a feed-route case now shows one increment for a granted refresh. Drive
+              it from a real request on both jobs and events, for trial and paid, and confirm the
+              counter moves and the key is `forced_rebuilds_today:<user>:<UTC day>`.
+           4. **Does a keyless reader still get a good answer?** Every rejection is supposed to
+              degrade to the free structured sources with HTTP 200 and no error branch. Check the
+              200 and check the payload is not empty — a "graceful" degradation to nothing is still
+              nothing.
+           5. **Would the build actually refuse a Vercel project carrying `TAVILY_API_KEY`?** C
+              proved it against the real script in a scrubbed environment. A should confirm the
+              deployment checklist says the variable must be REMOVED before the next deploy, and
+              that required is three names.
+           6. **Is `provenance: "system"` really unreachable, or only unreached?** It is kept
+              deliberately (Ruling 12 point 2). Look for any path that could still produce it.
+           7. **Do the four absence-asserting Ruling 75 cases leave a hole anyone can fall into?**
+              The deny-list, query-suffix and grounded-admission rules have no live coverage now.
+              Say whether any non-grounded path shares that code.
+
+           ── The previous TODO follows, superseded. ──
+           C WORKS THE ROUND-5 GUIDE 5-01 — 5-04, with Ruling 13 (§1n) folded in: the search
            breaker STAYS on the forced-rebuild path and its counter is RENAMED to
            `forced_rebuilds_today` / `FORCED_REBUILDS_PER_DAY` (point 1); keep
            `SystemSearchKeyInput.systemSearchAllowed` — it is the only Brave gate — and add the
@@ -9943,3 +10025,132 @@ Vercel **before** the next deploy, and required is now three names, not four.
 1 skipped (125)** · **20 failed | 2842 passed | 1 skipped (2863)**. B measured 5-03's marginal cost
 at **5 cases**; all five are fixed inside this commit, so the failure count is unchanged at 20 and
 every one of them belongs to 5-04. Test total 2862 → 2863 (the new contract case).
+
+---
+
+#### 5-04 — the tests · LANDED · **THE GATE IS GREEN AGAIN**
+
+**All 28 of B's cases are rewritten, none deleted, each commented with its item number and what
+changed.** 21 of them landed inside 5-01…5-03 (the filing choice recorded at the top of this entry);
+this commit carries the remaining **20 cases in 6 files**, plus the false greens, the three standing
+tallies and one gap B's census did not cover.
+
+##### What changed here
+
+**Group A — spend assertions inverted (6 in this commit).** The four feed-route sentinel cases
+(`jobs/feed` and `events/feed`, trial and paid) now end
+`expect(requestsCarrying(OPERATOR_SENTINEL)).toEqual([]);` — the identical assertion their anonymous
+and free siblings already make — and their names changed with them. The two "spends the operator's
+env Tavily key only when the request is entitled" cases in `jobweb`/`eventweb` now assert that the
+entitled half answers `null` too. **The sentinel stays armed everywhere**, which is what makes zero a
+statement about the gate rather than about an empty environment.
+
+**Group B — the ten Ruling 75 cases, split exactly as Ruling 13 point 4 directs.**
+
+- **Six rewritten in place to assert `null`** (three per surface: the explicit-`provider` case, the
+  gemini-on-auto case, the vertex-on-auto case). Same inputs, inverted answer. They are now the
+  proof that a configured Vertex project **plus** an explicit provider preference **plus** a forced
+  entitlement flag still reaches nothing — a stronger statement than the one they replaced.
+- **Four rewritten to assert the surface never calls the adapter**
+  (`jobweb`: deny list, query suffixing, grounded-row admission · `eventweb`: deny list). Each keeps
+  its **old assertion verbatim in a comment** and each carries the accepted coverage cost in its own
+  text. **A's new standing tally: "Ruling 75 option-building cases now asserting absence rather than
+  content" = 4.** Threshold written into all four: if grounding is re-enabled for any plan, all four
+  return to content assertions in the same round.
+
+**The false greens B named.**
+
+- `jobweb`'s "charges the 500/day breaker for a grounding fan-out" is rewritten to
+  **"refuses BEFORE the breaker is ever consulted, so nothing is charged"** and given the two
+  assertions that make it mean something again: **no `usage_events` row of any kind** (a consulted-
+  and-tripped breaker writes a `kind:"breaker"` row, so "no row" distinguishes refused-at-the-gate
+  from refused-at-the-breaker) and **the pre-loaded counter is unchanged**. It would no longer pass
+  with the breaker deleted, which is the whole point.
+- The four vacuous-but-correct feed-route cases ("spends nothing for an EXPIRED trial" ×2, "cannot
+  be elevated by the request body" ×2) are **kept and commented**: each says which half of its
+  subject D2a made non-distinguishing and which half it still genuinely guards.
+
+##### The three standing tallies of Ruling 12 point 7, as gate tests
+
+1. **`process.env.TAVILY_API_KEY` reads in non-test source = 0.** `spend-scans` scan 3's Tavily case
+   is tightened from `[GATE]` to `[]`, and the loop it lived in is **deliberately no longer uniform**
+   — `BRAVE_SEARCH_API_KEY` still expects `[GATE]`, because 5-01 keeps that read inside the gate.
+   **Proved by planting** a `process.env.TAVILY_API_KEY` read in `sources/web-search.ts`: exactly that
+   one case failed; plant removed, 12 passed.
+2. **`kind:"search"` usage rows produced = 0.** Behavioural, on all three producers, each driven with
+   the most generous input its surface accepts (operator keys armed, a configured Vertex project, an
+   explicit `provider`, a real `userId`, `systemSearchAllowed` forced `true`):
+   `jobweb.test.ts` (rewritten), `web-search.test.ts` (rewritten) and — **the gap B's census did not
+   cover** — `eventweb.test.ts`, which had **no row-capturing test at all**. Left as B wrote it, the
+   tally would have been proved on two of its three producers. A new section supplies the third.
+3. **Operator-key search requests = 0 for EVERY persona including paid, on every surface.**
+   `ai-route-personas.test.ts` covered `anonymous` and `free-no-key` only; **trial and paid are added
+   across all four routes** (8 new cases). Doing it needed a change B did not mention: the entitlement
+   resolver reads the stored plan through the **admin** client, which this file did not mock at all,
+   so a signed-in user always resolved `free` and the two personas could not be constructed. The mock
+   stubs **both `from` and `rpc`**, per round-4 A's recorded fixture fault. The superseded
+   `D2 — the system search key is for trial and paid only` comment is rewritten to D2a.
+
+**AND THE HONEST PART OF TALLY 3, measured rather than assumed.** With 5-01 and 5-02 reverted, the
+eight new persona cases **still pass**. These four routes are report and digest routes; they do not
+run the search fan-out, so on them zero is true but **not distinguishing**. That is written into the
+case itself, along with where the tally *is* genuinely proved — the two feed-route suites, `jobweb`,
+`eventweb` and `web-search`, all of which **do** go red under the same revert. They are kept because
+they take persona coverage on those routes from two to four and because they are what fires the day
+one of those routes starts searching. **A should not count them as evidence of the gate.**
+
+##### Four superseded `D2` statements in prose, corrected
+
+`feed/pipeline.ts` (the papers hard-`false`, which now says D2a and records that this shape is no
+longer papers-only), `security/entitled-context.ts` (`byok` is D2a's *only* search path now),
+`spend-scans.test.ts`'s header, and `ai-route-personas.test.ts`'s free-persona comment. Every other
+`D2` mention left in the tree was checked individually and is **history stated as history** ("this
+case used to be called … because D2 bans it on Vercel"), which is correct and stays.
+
+##### Proof
+
+**REVERT PROOF (Ruling 10 point 2a), the strongest available: all three of 5-01/5-02's source
+changes reverted at once** — the system Tavily branch restored, `operatorSearchAvailability` restored
+to reading the environment, and `systemSearchAllowed` restored to `effectivePlan !== "free"`. Each
+revert asserted by **substitution count** (exactly one match or the editor raises) before any run was
+read. Result across the three adapter suites: **16 failed | 970 passed**, and across the whole tree
+in the earlier two-revert pass: **10 failed in 7 files**. Every rewritten case in this commit is in
+those lists — including all three tally-2 cases and all four feed-route sentinel cases. Sources
+restored from backup; suites re-run green.
+
+**GATE AFTER 5-04 — GREEN.** `tsc` exit **0** · `eslint` **1 error, 0 warnings** (the standing
+`quiz.tsx:46`) · `vitest` **124 files passed | 1 skipped (125)** · **2871 tests passed | 1 skipped
+(2872)**, **0 failed**, 9.58 s. `src/lib/events/benchmark.test.ts` is the one skip, named.
+Test total **2860 → 2872**: **+12 added, 0 deleted** (2 in 5-01, 1 in 5-03, 9 here — 8 persona cases
+and the events row-capture case).
+
+**STANDING LOCKS RE-VERIFIED BY NAME, run as one command: 14 files, 165 tests, 0 failed.**
+`registry.test.ts` · `ai-tier.test.ts` · `ai-route-personas.test.ts` · `jobs/feed/route.test.ts` ·
+`events/feed/route.test.ts` · `test-digest/route.test.ts` · `figure/route.test.ts` ·
+`deep-report-quota.test.ts` · `counters.test.ts` · `assert-byok-production-env.test.ts` ·
+`spend-scans.test.ts` · `ui-vocabulary.test.ts` · `no-client-dev-flags.test.ts` ·
+`pool-refresh-gates.test.ts`. B was right that `test-digest` needed no change — it passed unchanged
+at every stage of this round, and `figure/route.test.ts` carries no operator-search sentinel, exactly
+as Ruling 13 point 2 corrected.
+
+---
+
+**Round-5 C close-out.** Four items, `5-01`…`5-04`, one commit each, each pushed as it finished.
+Gate green, at or above baseline on every figure. No test deleted anywhere in the round; **12 added,
+28 rewritten**. Every throwaway lived outside the repo and
+`git status --porcelain --untracked-files=all` shows only shipped files.
+
+**Three things for the manager, none of them C's to decide:**
+
+1. **`consumeSystemSearches`, `path: "system-search"`, `logStoreUnavailable("system-search", …)` and
+   the breaker's error line still say "search"** while the counter they drive is now
+   `forced_rebuilds_today`. Ruling 13 point 1 named two things and I renamed exactly those two.
+   Either the rest follow in round 6 for the same reason, or the ruling should say they stay.
+2. **B's "13 guard cases pass falsely" is an overstatement** — measured: they fail on their own
+   subject's removal, because the second of their two assertions (`output` names the variable) was
+   never contaminated. The contamination was real but was half of each case, not all of it. The fix
+   is unchanged; the number should not be re-used as measured.
+3. **Ruling 12 point 7's tally 3 cannot be proved on the four AI report routes** — they do not
+   search, so zero there is vacuous. It is proved on the five surfaces that do. If A is to report a
+   single number for tally 3, it should be sourced from the feed and adapter suites, not from
+   `ai-route-personas.test.ts`.

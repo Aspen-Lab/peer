@@ -121,9 +121,14 @@ async function buildPaperPool(
   // `webSearchOptions` returns `{ provider }` and never a `tavilyApiKey`, and
   // `store/feed.ts` sends no `searchConnectors` for papers at all, so a user's
   // own Tavily key cannot reach this surface. The only key it could ever spend
-  // is the operator's — for every plan, paid included. Combined with D2's Vercel
-  // bans on Brave and the Vertex/Gemini search names, the papers `web` source
-  // returns `[]` in production. That is D3 working as written.
+  // is the operator's — for every plan, paid included. Combined with **D2a**'s
+  // Vercel bans on Tavily, Brave and the Vertex/Gemini search names, the papers
+  // `web` source returns `[]` in production. That is D3 working as written.
+  //
+  // ABC-freemium 5-04 — under D2a this hard `false` is now the shape EVERY
+  // surface has, not a papers-only rule: the entitlement's `systemSearchAllowed`
+  // is permanently `false` too. This line stays because it is the surface's own
+  // statement of D3 and does not depend on the entitlement being false.
   const paperWebSearch = {
     ...webSearchOptions(req.searchConnectors),
     systemSearchAllowed: false,

@@ -173,7 +173,20 @@ describe("POST /api/events/feed — the operator's search key", () => {
     expect(requestsCarrying(USER_SENTINEL).length).toBeGreaterThan(0);
   });
 
-  it("sends the operator's key for a paid user", async () => {
+  it("spends NOTHING for a paid user — the operator funds no search (D2a)", async () => {
+    // REWRITTEN, NOT DELETED — ABC-freemium 5-04 · D2a (Ruling 12).
+    //
+    // Was "sends the operator's key for a paid user" and asserted
+    // `requestsCarrying(OPERATOR_SENTINEL).length` was GREATER than 0. The owner
+    // removed operator-funded search entirely, so the assertion is now the
+    // identical one its anonymous and free-user siblings make a few cases above:
+    // the operator's key reaches nothing, on any plan.
+    //
+    // **The sentinel stays armed on purpose.** `deployedRuntimeEnv` still sets
+    // `TAVILY_API_KEY` to `OPERATOR_SENTINEL`, so "zero" is a statement about the
+    // gate rather than about an empty environment — the harness comment at
+    // `route-harness.ts` says exactly this and it is why the case is worth
+    // keeping rather than deleting.
     // The first time this persona can be constructed at all — before 1-01 there
     // was no server-side input that could make a request behave as paid.
     mocks.getUser.mockResolvedValue(signedIn("paid-user"));
@@ -181,10 +194,14 @@ describe("POST /api/events/feed — the operator's search key", () => {
 
     await POST(request(BASE));
 
-    expect(requestsCarrying(OPERATOR_SENTINEL).length).toBeGreaterThan(0);
+    expect(requestsCarrying(OPERATOR_SENTINEL)).toEqual([]);
   });
 
-  it("sends the operator's key for a trial user", async () => {
+  it("spends NOTHING for a trial user either (D2a)", async () => {
+    // REWRITTEN, NOT DELETED — ABC-freemium 5-04 · D2a (Ruling 12). Was "sends
+    // the operator's key for a trial user". A live trial was the other half of
+    // what D2 bought; under D2a it buys deep reports and pool refresh, never
+    // search. The sentinel stays armed — see the paid case above.
     mocks.getUser.mockResolvedValue(signedIn("trial-user"));
     mocks.adminFrom.mockReturnValue({
       select: () => ({
@@ -206,12 +223,19 @@ describe("POST /api/events/feed — the operator's search key", () => {
 
     await POST(request(BASE));
 
-    expect(requestsCarrying(OPERATOR_SENTINEL).length).toBeGreaterThan(0);
+    expect(requestsCarrying(OPERATOR_SENTINEL)).toEqual([]);
   });
 
   it("spends nothing for an EXPIRED trial", async () => {
     // D5 — expiry is computed at read time, so the stored column still says
     // `trial` and the very next request behaves as free.
+    //
+    // ABC-freemium 5-04 · D2a — KEPT, and a reader should know what it now
+    // proves. Under D2a every plan spends nothing, so the search half of this
+    // case no longer distinguishes an expired trial from a live one. It is kept
+    // because it still guards the OTHER half of expiry (an expired trial loses
+    // `poolRefreshAllowed` too) and because a persona that stops being exercised
+    // is a persona nobody notices breaking.
     mocks.getUser.mockResolvedValue(signedIn("expired-user"));
     mocks.adminFrom.mockReturnValue({
       select: () => ({
@@ -238,6 +262,10 @@ describe("POST /api/events/feed — the operator's search key", () => {
     // R-SEC-3 — the body asks for tier 2 and claims the connector is on with an
     // empty key, which `parseSearchConnectors` drops. Neither can reach the
     // operator's key, because the flag comes from the entitlement alone.
+    //
+    // ABC-freemium 5-04 · D2a — KEPT, and now implied twice over: there is no
+    // operator key to elevate TO. The case still earns its place because it
+    // guards the tier-2 half of body elevation, which D2a did not touch.
     mocks.getUser.mockResolvedValue(signedOut());
 
     await POST(
