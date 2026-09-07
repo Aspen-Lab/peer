@@ -9176,3 +9176,117 @@ asserted by an empty diff and a `grep -c PLANT` of 0 before the run was read.
 **Handing to the manager, not to B.** Ruling 10 point 3: at 0% code-side the manager re-measures
 independently before anything is told to the owner. `WHOSE TURN: manager — independent re-measure`.
 The lock is released.
+
+---
+
+### Round 5 — Agent B
+
+**The round-5 fix guide, written from Ruling 12 (§1m) and the six dated D2a amendments in the
+spec. No A list this round — a spec change, not a defect (Ruling 12 point 6). No code changed;
+`git diff HEAD -- web/` is empty at every commit.**
+
+**HOW THE BLAST RADIUS WAS ESTABLISHED — by execution, not by reading.** Ruling 10 point 2b's
+method, applied forwards instead of backwards: rather than grep for tests that *look* affected, I
+**planted the finished D2a shape** in the working tree in three stages and read the failure list off
+the runner, then reverted and asserted an empty `git diff`. Each stage's marginal cost is therefore
+measured, not estimated. Cold baseline first: **124 files / 2859 tests / 0 failed**, identical to §1.
+
+| Stage planted | Tests failing | Marginal cost of that stage |
+|---|---|---|
+| baseline (nothing planted) | 0 | — |
+| + 5-01 (`system-key.ts`) | **21**, in 7 files | **21** |
+| + 5-02 (`resolve.ts` hard false) | **23**, in 8 files | **2** |
+| + 5-03 (guard lists) | **28**, in 9 files | **5** (+13 silent false greens) |
+
+Plant reverted; `git diff --stat` empty and `git status --porcelain --untracked-files=all` empty
+before this commit. `tsc` exit **0** and `eslint` **1 error (the standing `quiz.tsx:46`), 0 warnings**
+under the full plant, so **nothing Ruling 12 point 2 keeps stops compiling** — the escape clause was
+not reached.
+
+---
+
+#### 5-01 — the search-key resolver · `MISSING` gate is not the defect; the defect is `EXTRA` code
+
+**File:** `web/src/lib/search/system-key.ts`. Every line number below was re-grepped this turn.
+
+| What | Where (verified) |
+|---|---|
+| the two capability imports | `73–74` |
+| `SystemSearchKeyInput.systemSearchAllowed` | `79–83` |
+| `provenance` union incl. `"system"` | `100` |
+| the Brave env read, already gated | `113–115` |
+| the BYOK early return | `117–119` |
+| **the system branch to remove** | **`120–122`** |
+| the `"none"` return | `123` |
+| `operatorSearchAvailability` | `138–148` (the `true` half is `144–147`) |
+| `isOperatorFundedSearch` | `160–165` |
+
+**Classification: `EXTRA`** for lines 120–122 (a branch the spec now forbids), **`WRONG DATA`** for
+`operatorSearchAvailability` 144–147 (it returns `true` where D2a says the answer is always `false`).
+
+**Fix direction — the seam and the contract.** Delete **only** lines 120–122, so the function is
+BYOK-or-nothing; make `operatorSearchAvailability` return the frozen pair unconditionally. Name D2a
+at both sites. `provenance` keeps `"system"` in its union and `isOperatorFundedSearch` keeps its
+`=== "system"` test — both become unreachable and both still compile (verified: `tsc` 0 under the
+plant). That is Ruling 12 point 2's "wired to a hard `false`, not deleted", and it is what makes
+reversing the decision one constant.
+
+**THE ONE THING THAT MUST NOT HAPPEN, and it is the obvious tidy-up.** `SystemSearchKeyInput.
+systemSearchAllowed` looks dead once the system branch goes — it is not. It is the **only** gate on
+the Brave env read at `113–115`. Removing the field re-opens `BRAVE_SEARCH_API_KEY` as an
+unconditional operator-funded read on any self-host or developer machine, which is verbatim the hole
+2-04 closed and whose reasoning §1f Ruling 5 point 2 recorded ("a ban on Vercel is not a gate on a
+self-host"). **The field stays; the parameter stays; only the branch goes.**
+
+**What happens to Brave — asked and answered.** D2a says the operator funds no search, and Brave is
+operator-funded, so its *behaviour* must be off. It already is, by construction, the moment 5-02
+lands: `systemSearchAllowed` is never `true`, so `113–115` always yields `undefined`. **Recommend:
+keep the read and keep the gate; do not delete it.** Reasons: (a) Ruling 12 point 2's shape is
+"unreachable by construction", not "deleted"; (b) the guard has banned `BRAVE_SEARCH_API_KEY` since
+1-10 and still does, so Vercel is covered twice; (c) deleting it would strand
+`SystemSearchKeys.brave`, `braveKeyPresent` at three adapters and the `"brave"` arm of
+`resolveWebSearchProvider` — a much larger edit for no behavioural gain, against Ruling 12 point 2's
+own stated reasoning. Verified by execution: with the plant in, `spend-scans.test.ts` scan 3's
+`BRAVE_SEARCH_API_KEY` case **passed unchanged** — the Brave read stays inside the gate module and
+the scan stays honest.
+
+**What each of the three adapters sees afterwards** (call sites re-grepped):
+
+- `jobweb.ts` — `resolveKeys` at `2131–2135`, `operatorSearchAvailability` at `2157–2159`,
+  `if (!provider) return [];` at `2167`.
+- `eventweb.ts` — `resolveSystemSearchKeys` at `2740`, `operatorSearchAvailability` at `2762`.
+- `web-search.ts` — `resolveSystemSearchKeys` at `61`, `operatorSearchAvailability` at `85`, the
+  four-way early return at `88–95`.
+
+All three receive `{ tavily: undefined, brave: undefined, provenance: "none" }` and
+`{ geminiAvailable: false, vertexAvailable: false }`. Every arm of `resolveWebSearchProvider`
+(`gemini-search.ts:191–246`) then returns `null` — **including the explicit-`provider` branch**,
+which is the branch that matters: the jobs and events pipelines set `provider` from the server's own
+environment, so an ordering-only change would have closed nothing. Both branches read the same
+availability object, which is why gating that object closes both at once (the property 2-04 recorded
+as load-bearing, still load-bearing here).
+
+**What the field shows when every candidate is rejected — exactly today's honest "nothing".**
+`provenance: "none"` → `resolveSearchProvider` returns `null` → `fetchImpl` returns `[]` →
+the pipeline serves its structured sources → **HTTP 200, no error branch, no new shape**. This is
+not new plumbing; it is the path a keyless reader already takes, and R-POOL-3 already names it.
+Verified rather than argued: under the plant, `jobweb.test.ts`'s "spends nothing at all for an
+unentitled reader" and `web-search.test.ts`'s "returns [] with every operator credential set and no
+entitlement" both **passed unchanged**.
+
+**A compile constraint C will hit in the first minute.** Once `operatorSearchAvailability` stops
+calling them, `isGeminiSearchAvailable` / `isVertexSearchAvailable` at `73–74` are unused imports and
+`eslint` fails. **They must be deleted, not left.** Measured both ways: with the imports removed,
+`tsc` exit **0** and `eslint` **1 error (the standing one), 0 warnings**. This has a consequence in
+5-04 — see scan 3's third case.
+
+**Tests at risk, found by grepping callers and confirmed by the plant — 21 cases in 7 files.**
+Listed per file in 5-04.
+
+**Blast radius.** Larger than the ruling's citations imply, and in one direction the ruling does not
+mention: **eight of the twenty-one failures are `RULING 75` cases inherited from the earlier
+report-parity loop** (`jobweb.test.ts` and `eventweb.test.ts`), which are not about spend at all —
+they assert how the *gemini adapter is called* (deny lists, query suffixing, row admission). Making
+grounding unreachable makes those adapters unreachable through the surfaces, so their tests lose
+their subject. That is a real cost of D2a and it is recorded here so C does not discover it as a
+surprise and delete them. Recommended handling in 5-04.
