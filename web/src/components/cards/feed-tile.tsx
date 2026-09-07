@@ -230,7 +230,11 @@ function PaperTile({ paper, isRead, selected, plateTerms = [] }: { paper: Paper;
             at the bottom. */}
         <div className="flex items-baseline gap-2 mb-2 min-w-0">
           {kind !== "paper" && <KindBadge kind={kind} />}
-          <span className="text-micro text-text-faint uppercase tracking-[0.13em] truncate">
+          {/* Sentence case, in the mono the reading page uses for the same
+              fact. Set in tracked capitals this was the last small-caps label
+              in the product, and it shouted the one line on the card that is
+              pure filing. */}
+          <span className="font-mono text-caption text-text-faint truncate">
             {metaBits.join(" · ")}
           </span>
         </div>

@@ -1906,7 +1906,7 @@ function ColorThemePicker({
           Color
         </p>
         <p className="mb-3 text-meta text-text-muted">
-          One pick tunes the accent, secondaries, and the neutral cast together.
+          Everything else is grey; this is the one colour the interface has.
         </p>
         <div className="flex flex-wrap items-center gap-3">
           {themeAccentOptions.map((option) => {

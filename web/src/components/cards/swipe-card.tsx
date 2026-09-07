@@ -2,6 +2,9 @@
 
 // Swipe a card to act on it — the touchscreen half of "don't depend on
 // buttons". Right saves, left dismisses; the reveal layer under the card
+// says which by colour rather than by hue — keeping is the accent, letting
+// go is ink — since the palette has one colour and both reveals would
+// otherwise arrive in it.
 // shows which as the finger moves.
 //
 // Touch and pen pointers only. A mouse has hover and the keyboard layer, and
@@ -149,7 +152,7 @@ export function SwipeableCard({
       <div
         aria-hidden
         className={`absolute inset-0 flex items-center px-6 ${
-          towardRight ? "justify-start bg-accent text-bg" : "justify-end bg-red text-bg"
+          towardRight ? "justify-start bg-accent text-bg" : "justify-end bg-heading text-bg"
         }`}
         style={{ opacity: dx === 0 ? 0 : 0.25 + 0.75 * p }}
       >

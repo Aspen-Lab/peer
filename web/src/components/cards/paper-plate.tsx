@@ -110,10 +110,26 @@ export function PaperPlate({
 
   // Plain concatenation, not `cn`: the card passes no class, and its markup
   // must stay byte-for-byte what it was.
-  const base = "tile-cover overflow-hidden aspect-[16/9] @container";
+  // 16:9 is a picture's shape, and only the picture needs it. A title block
+  // sized by a photograph left two thirds of itself empty above the type; set
+  // to its own proportion it reads as composed rather than as unfilled.
+  const base = showFigure
+    ? "tile-cover overflow-hidden aspect-[16/9] @container"
+    : "tile-cover overflow-hidden aspect-[2.4/1] @container";
 
+  // A mat exists to hold a picture. With a figure the plate is a mat — light,
+  // because scientific figures are drawn on white and matting is what keeps a
+  // chart's axis labels from being cropped away. With no figure there is
+  // nothing to mat, and the mat became the brightest object on the page
+  // holding two words: a placeholder, not a composition. Set on the card's own
+  // surface instead, the same words read as a title block. `data-plate` also
+  // hands the ink over: on a mat the type is dark-on-light whatever the theme,
+  // on the card it is the card's own ink (globals.css).
   return (
-    <div className={className ? `${base} ${className}` : base}>
+    <div
+      data-plate={showFigure ? "figure" : "terms"}
+      className={className ? `${base} ${className}` : base}
+    >
       {showFigure ? (
         <>
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -136,17 +152,22 @@ export function PaperPlate({
           />
         </>
       ) : (
-        <div className="flex h-full w-full flex-col justify-center px-[7%] py-3">
+        <div className="flex h-full w-full flex-col justify-end px-[7%] pb-[7%] pt-3">
           {terms.length > 0 ? (
             <>
               <div className="flex gap-[5%]">
-                <div className="flex flex-col gap-[0.28em] pt-[0.34em] font-mono text-micro tabular-nums tracking-[0.1em] text-[var(--plate-ink-faint)]">
-                  {terms.map((term, index) => (
-                    <span key={term} className="leading-[1.5]">
-                      {String(index + 1).padStart(2, "0")}
-                    </span>
-                  ))}
-                </div>
+                {/* Numbering says "these are several, in an order". With one
+                    term there is no order to state, and "01" beside a lone
+                    word is decoration wearing a structure's clothes. */}
+                {terms.length > 1 && (
+                  <div className="flex flex-col gap-[0.28em] pt-[0.34em] font-mono text-micro tabular-nums tracking-[0.1em] text-[var(--plate-ink-faint)]">
+                    {terms.map((term, index) => (
+                      <span key={term} className="leading-[1.5]">
+                        {String(index + 1).padStart(2, "0")}
+                      </span>
+                    ))}
+                  </div>
+                )}
                 <div className="min-w-0 flex flex-col gap-[0.1em]">
                   {terms.map((term, index) => (
                     <span
@@ -160,7 +181,9 @@ export function PaperPlate({
               </div>
               <span
                 aria-hidden
-                className="mt-[0.7em] ml-[calc(5%+2.1em)] h-px w-[34%] bg-[var(--plate-ink-faint)]"
+                className={`mt-[0.7em] h-px w-[34%] bg-[var(--plate-ink-faint)] ${
+                  terms.length > 1 ? "ml-[calc(5%+2.1em)]" : ""
+                }`}
               />
             </>
           ) : (

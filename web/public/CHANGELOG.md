@@ -2,6 +2,42 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.16.0 — 2026-09-07
+
+Greyscale, and one hue.
+
+Peer was a warm ivory system: every neutral carried a little of the accent and
+a little more of a warm brown, and the interface answered in six or seven
+colours — burnt amber tags, peach chips, a green relevance ramp, a blue
+completion state, a red for failure. Now every neutral is a true grey and the
+accent is the only coloured thing on any screen, which is what lets it read as
+a signal instead of as decoration.
+
+**The greys are the old values.** Each one is the exact lightness of the warm
+colour it replaces, converted through OKLab with the chroma set to zero, so
+every contrast the layouts were built on is unchanged and only the hue is
+gone. Light is a #fafafa ground with white cards — sheets on a table, where
+before the cards sat darker than the page; dark is #111 with #1d1d1d cards.
+
+**What used to arrive in colour.** Tags and the profile's signal ramp step
+down through the greys instead of through amber and peach. Failure states,
+links and relevance take the accent — a monochrome interface that keeps a
+second alarm colour has two accents, and the louder one is the one the eye
+learns to ignore. The one place two states must stay apart is the swipe:
+keeping is the accent, letting go is ink.
+
+**The card.** A mat exists to hold a picture. Six cards in ten have no figure,
+and on those the mat was the brightest object on the page with two words in
+it — a placeholder wearing a composition's clothes, and worse once the warmth
+was gone. A figure is still matted, because scientific figures are drawn on
+white and matting is what stops a chart losing its axis labels to a crop.
+Type is not: it sits on the card's own surface, at its own proportion rather
+than a photograph's 16:9, and the numbering that reads "01" beside a lone
+term is gone — numbering says "several, in an order", and one term is
+neither. The venue and age line was the last small-caps label in the
+product; it is sentence case now, in the mono the reading page uses for the
+same fact.
+
 ## v0.15.0 — 2026-09-07
 
 The briefing ranks by relevance.
