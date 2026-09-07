@@ -118,10 +118,22 @@ lock by rebasing onto the holder's head.
 ## §1. CURRENT STATE — THE SOURCE OF TRUTH
 
 ```
-HELD BY:          A-round8 @ 2026-09-07T23:17Z
+HELD BY:          free
 ROUND:            8
-WHOSE TURN:       A  (round 8; C is finished — A re-measures, then the manager opens round 9)
-STOPPED BECAUSE:  finished the turn @ 2026-09-07T23:09Z — ALL THREE ITEMS LANDED (6-02, 8-01,
+WHOSE TURN:       manager — independent re-measure  (round 8 is measured; A is finished)
+STOPPED BECAUSE:  finished the turn @ 2026-09-07T23:38Z — ALL THREE PARTS, one commit each, each
+                  pushed as it finished, plus one extra commit removing a credential-grep false
+                  positive my own draft had introduced. **No production code changed**
+                  (`git diff --name-only -- web/` **0 files**, asserted before the closing gate run
+                  was read). **5 plants, 5 fired**, every one reverted with an asserted 0-line diff
+                  AND an asserted absence of the planted value before the next run was read; a 6th
+                  failed to apply and its own count assertion caught it (the CRLF trap, third round
+                  running). No throwaway left (`git status --porcelain --untracked-files=all`
+                  **0 lines**). `.env.local` was never `cat`-ed; the environment was measured by
+                  count and name only. **THE LIVE CHECK RAN ON MY OWN SANDBOX — Ruling 22 point 6's
+                  standing refusal is LIFTED** — and I proved it can fail with my own plant before
+                  trusting its pass.
+                  Previous line: finished the turn @ 2026-09-07T23:09Z — ALL THREE ITEMS LANDED (6-02, 8-01,
                   8-02) in the ruled order, one commit each, each pushed as it finished. Gate
                   green cold after every item. Eight plants, eight fired, every one reverted with
                   an asserted substitution count AND an asserted absence of the planted value
@@ -166,7 +178,64 @@ STOPPED BECAUSE:  finished the turn @ 2026-09-07T23:09Z — ALL THREE ITEMS LAND
                   probe script was written inside `web/`, run, and **deleted** before its commit
                   (`git status --porcelain --untracked-files=all` empty). `.env.local` was never
                   `cat`-ed and no key material appears anywhere in this repo.
-STATUS:           ROUND 8 — **C HAS IMPLEMENTED. ALL THREE ITEMS: 6-02, 8-01, 8-02**, in the ruled
+STATUS:           ROUND 8 — **A HAS MEASURED. CODE-SIDE IS 0.0% (0 of 30). THE DIFFERENCE LIST
+                  IS EMPTY.** Blocked on the owner: **5** — R-ENT-1, R-ENT-2, R-METER-1, R-METER-3,
+                  R-QUOTA-2 — down from 6, and **all five now share ONE cause**. **N/A: R-METER-2.**
+                  Exclusions: none. Gate cold and identical to C's: tsc 0 · eslint 1 (standing
+                  `quiz.tsx:46`) · vitest **128 files / 2934 passed / 1 skipped / 0 failed**.
+                  1. **I RAN THE LIVE CHECK MYSELF AND IT PASSES — and the sandbox refusal that
+                     blocked round-7 A is GONE.** `npm run check:providers` ->
+                     `gemini  gemini-3.1-flash-lite  small+large  PASS`, `in=412 out=9 742ms ok`,
+                     **exit 0**, four BYOK vendors `SKIP` naming the variable that would configure
+                     them, **no key material printed — checked, not assumed**. **Then I proved it
+                     can fail:** a retired id planted back on the `large` tier reproduces the
+                     outage — **404, "no longer available to new users", exit 1** — reverted with a
+                     0-line diff and the planted value asserted absent. **R-KEY-1 `BLOCKED` ->
+                     `MET`** on my own run, not on an inherited one; it is the only score that
+                     moved. **What a PASS does NOT mean, said plainly: it is a `testConnection()`
+                     ping, not a deep report.** It proves the product can make a model call again.
+                     No more than that, and C's refusal to generalise from a ping still stands.
+                  2. **THE OWNER HAS NOT ACTED, AND THAT IS THE ROUND'S OTHER HEADLINE.**
+                     `NEXT_PUBLIC_SUPABASE_URL` **0**, `SUPABASE_SERVICE_ROLE_KEY` **0** — measured
+                     by count, values never read. So no blocked half became measurable. **But the
+                     shape improved even though the count only fell by one:** last round the five
+                     remaining halves had two causes; now every one waits on the same single owner
+                     action.
+                  3. **6-02's GUARD IS REAL, AND I ISOLATED IT RATHER THAN TAKING THE WALK TEST ON
+                     TRUST.** Planting an unmeasured id into the **global fallback chain** — which
+                     the catalog test cannot see — reddens **exactly one** case, the chain walk, on
+                     `expected undefined to be defined`. So the walk does its own work and is not
+                     riding on a neighbour. **NEW STANDING TALLY: model ids the code can send with
+                     no verified thinking setting = 0** (3 sendable ids, 3 covered), evaluated by
+                     execution with an unmeasured control id proving the predicate is not vacuous.
+                     The shipping model sends the off-setting and gets **no** 4096 headroom,
+                     asserted in both directions.
+                  4. **BOTH 8-01 MONEY SWITCHES PROVED ABLE TO FAIL** by restoring the old
+                     behaviour — one case red each, and neither had any coverage before this round.
+                     **AND ONE FACT NEITHER B NOR C STATED, WHICH IS THE STRONGEST THING ABOUT
+                     8-01(b): `GOOGLE_VERTEX_SEARCH_FALLBACK` — the single variable that arms the
+                     $35/1,000 grounding backfill — IS ITSELF BANNED ON VERCEL BY THE
+                     `GOOGLE_VERTEX_` PREFIX.** Proved by running the real `auditVercelEnv` against
+                     planted environments, both directions. So on a deployment the backfill cannot
+                     be armed at all — not merely off by default. D2a re-confirmed, not inherited:
+                     `systemSearchAllowed: true` appears **0** times in non-test source.
+                  5. **THE RULING-75 TALLY IS SETTLED AT 4 — it does not need fixing or retiring.**
+                     Round-7 A measured **production** option-building sites and got 3 or 5. The
+                     tally counts the **four rewritten TEST CASES** of Ruling 13 point 4, and each
+                     carries an explicit "N of the 4" marker in its own comment — 3 in
+                     `jobweb.test.ts`, 1 in `eventweb.test.ts`. Reproducible, and the marker is why.
+                  6. **TWO CARRIED NUMBERS CORRECTED, neither a defect.** Regex shape-tests on a
+                     model id is **2, not 1** — C's count went stale by C's own edit (two named
+                     family constants in one function, better structure than the one anonymous
+                     inline regex it replaced). And scan 5 has **two** justified exemptions, not
+                     one; the scan result is unchanged at **0 unjustified**.
+                  7. **9-01 REPORTED AS QUEUED, NOT AS A FINDING** (Ruling 24 point 5). One
+                     maintenance note: this state file carries **5** lines matching the repo's
+                     standing credential grep, inherited from Ruling 22's own text and §3's ground
+                     rule. My part-2 draft briefly added a sixth and I removed it in its own commit —
+                     a permanent false positive turns a real signal into noise.
+                  ── Round-8 C's summary follows. ──
+                  ROUND 8 — **C HAS IMPLEMENTED. ALL THREE ITEMS: 6-02, 8-01, 8-02**, in the ruled
                   order (Ruling 23 point 7), one commit each, each pushed as it finished. **THE
                   GATE IS GREEN**: tsc 0 · eslint 1 (standing `quiz.tsx:46`) · vitest **128 files /
                   2934 passed / 1 skipped (2935) / 0 failed** (2924 -> 2934: **+10 added, 0
@@ -817,14 +886,25 @@ A'S OWN FIXTURE FAULTS, recorded because each produced a plausible FALSE reading
                   regressions.** Also live: the **CRLF** trap (Ruling 10 point 2c) — a
                   multi-line plant literal with `\n` separators matched **0** times; the count
                   assertion caught it and a whitespace-tolerant regex matched 1.
-LAST DIFFERENCE:  0.0% code-side (0/30; exclusions: none) — but see Ruling 22: the code is
-                  correct and the models it names are dead. BLOCKED on the owner: 5 — R-ENT-1,
-                  R-ENT-2, R-METER-1, R-METER-3, R-QUOTA-2 (all need the three migrations).
-                  R-METER-2: N/A. R-KEY-1: live half MEASURED and PASSING (Ruling 22 point 4).
-GATE (0% unexplained, both measurements):  **NOT MET — and this time the code side IS part of why.**
-           Code-side is **3.3%** with one named difference, and six items carry a blocked half that
-           only the owner can close. `GATE: MET` needs both at zero.
-DONE:      **Round 8 C: ALL THREE ITEMS, 6-02 / 8-01 / 8-02**, in the ruled order, one commit
+LAST DIFFERENCE:  0.0% code-side (0/30; exclusions: none) — and this time the code is correct AND
+                  the model it names answers, proved by a real billed call on A's own run.
+                  BLOCKED on the owner: 5 — R-ENT-1, R-ENT-2, R-METER-1, R-METER-3, R-QUOTA-2, all
+                  needing the three migrations plus the two Supabase names. R-METER-2: N/A.
+                  R-KEY-1: OFF the list, both halves MET, live half re-measured by A.
+GATE (0% unexplained, both measurements):  **NOT MET — and the code side is NOT why.**
+           Code-side is **0.0%** with an empty difference list. Five items carry a blocked half that
+           only the owner can close, and all five now wait on the same single action.
+           `GATE: MET` needs both at zero.
+DONE:      **Round 8 A: ALL THREE PARTS**, one commit each, each pushed as it finished, plus one
+           extra commit removing a credential-grep false positive my own draft had introduced. **No
+           production code changed** (`git diff --name-only -- web/` asserted **0 files**); every
+           plant reverted with an asserted 0-line diff AND an asserted absence of the planted value;
+           every throwaway deleted (`git status --porcelain --untracked-files=all` **0 lines**);
+           **5 plants, 5 fired**, plus a 6th that failed to apply and was caught by its own count
+           assertion, and **5 planted environments** run against the real build guard. **The live
+           provider check ran on A's own sandbox and was proved able to fail before its pass was
+           trusted.**
+           **Round 8 C: ALL THREE ITEMS, 6-02 / 8-01 / 8-02**, in the ruled order, one commit
            each, each pushed as it finished; gate green cold after every item; **8 plants, 8
            fired**, every one reverted with an asserted substitution count AND an asserted absence
            of the planted value before the run was read — plus a 9th that failed to apply and was
@@ -872,7 +952,19 @@ DONE:      **Round 8 C: ALL THREE ITEMS, 6-02 / 8-01 / 8-02**, in the ruled orde
            every throwaway deleted and every plant restored with an asserted empty diff.
            **Round 5 B: all four items**, 5-01 … 5-04, one commit each, each pushed; no code
            changed; the three-stage measurement plant reverted with an asserted empty diff.
-GATE NOW:  **Round-8 C, cold, after every plant was reverted and both throwaway probes were
+GATE NOW:  **Round-8 A, cold, after every plant was reverted and no throwaway remained
+           (`git status --porcelain --untracked-files=all` **0 lines** and
+           `git diff --name-only -- web/` **0 files**, both asserted before this run was read):**
+           `tsc` exit **0** · `eslint` **1 problem (1 error, 0 warnings)** — the standing
+           `quiz.tsx:46` · `vitest` **128 files passed | 1 skipped (129)** · **2934 tests passed |
+           1 skipped (2935)**, **0 failed**, 9.61 s. `src/lib/events/benchmark.test.ts` is the one
+           skip, named. **Identical to round-8 C's and to the manager's Ruling-24 re-run, as it
+           must be — A changed no code.** No test added or deleted this round.
+           **LIVE, ON A's OWN RUN (Ruling 24 point 7):** `npm run check:providers` ->
+           `gemini gemini-3.1-flash-lite small+large PASS`, in=412 out=9, 742 ms, exit 0,
+           2026-09-07 — and **proved able to fail** by planting a retired id (404, exit 1).
+           Round-8 C's figures follow.
+           **Round-8 C, cold, after every plant was reverted and both throwaway probes were
            deleted (`git status --porcelain --untracked-files=all` clean before each commit,
            asserted before the run was read):** `tsc` exit **0** · `eslint` **1 problem (1 error,
            0 warnings)** — the standing `quiz.tsx:46` · `vitest` **128 files passed | 1 skipped
@@ -932,61 +1024,33 @@ GATE NOW:  **Round-8 C, cold, after every plant was reverted and both throwaway 
            suite, `components/cards/pool-refresh-notice.test.tsx`.
            Round-5 A's figures follow: tsc **0** · eslint **1** · vitest **124 files passed | 1
            skipped (125)** · **2871 tests passed | 1 skipped (2872)**, **0 failed**, 9.50 s.
-TODO:      **ROUND-8 A RE-MEASURES. Denominator 30. R-METER-2 is `N/A`. Blocked is 5 — R-ENT-1,
-           R-ENT-2, R-METER-1, R-METER-3, R-QUOTA-2 — ALL of them waiting on the same three
-           unapplied migrations. R-KEY-1 came off the blocked list in Ruling 22 point 4 and must
-           not go back on without a stated reason.** Questions a fixture cannot settle:
-           1. **RUN THE LIVE MODEL CHECK YOURSELF. It is runnable now: `cd web && npm run
-              check:providers` (8-02).** Ruling 22 point 6 says round-8 A re-runs it and reports
-              its own numbers. **You are no longer blocked on writing a script and the sandbox
-              refusing it** — the script ships, it refuses to run inside vitest, and it prints no
-              key material. What does it print on your run? If your sandbox still refuses to make
-              an outbound call, record that as a standing environment limitation and cite C's run
-              (2026-09-07: `gemini-3.1-flash-lite small+large PASS`) with its date, exactly as
-              Ruling 22 point 6 prescribes. **Does a PASS here mean the product can complete a real
-              report, or only a ping?** C measured a `testConnection()` ping, not a deep report.
-           2. **6-02's deviation is the round's biggest open question and it is yours to check, not
-              to take on trust.** C claims a widened family regex would 400 the two global fallback
-              models and empty that chain in silence. **Re-derive it, or drive it:** with the
-              global fallback chain reachable, does every id in it get a control the model actually
-              accepts? Is `thinkingLevel: MINIMAL` genuinely equivalent to `thinkingBudget: 0` for
-              cost, or has C traded a 400 for a quieter overspend? C measured thoughts=0 on a ping
-              and explicitly did NOT claim that carries to a 60,000-character deep-report prompt.
-           3. **Does the onboarding copy still answer its own promise (Ruling 19 point 1)?** C
-              rewrote *"Why two models?"* into a conditional *"Why one model?"* for providers whose
-              tiers name one id. **That wording is C's own judgement and C flagged it as the one
-              thing in 6-02 that is not a measurement.** Render the Gemini panel and read what a
-              beginner actually sees: does the screen say the same thing the two cells show, and do
-              the four BYOK providers still read correctly?
-           4. **Is the Vertex/grounding separation real or only local?** C removed the fallback in
-              the runtime seam but **deliberately did not touch the two operational scripts**,
-              which still read `GOOGLE_VERTEX_SEARCH_PROJECT || GOOGLE_VERTEX_PROJECT`. So an
-              operator can run the setup script, watch it succeed, and end up with a Search App the
-              app will never query — **silently**. Is that a difference, a maintenance note, or a
-              fix for round 9? And does the build guard still refuse the surviving name on Vercel
-              (C says yes by prefix, unchanged — check it, do not inherit it)?
-           5. **CARRY EVERY STANDING TALLY BY NAME, and note the two that moved.** All five scans
-              **0** (grep them independently and say so). **Dead internal links 0, no allowlist.**
-              **Upsell surfaces 3.** **Paid upsells 0 on 3 of 3 surfaces; unknown-plan 0 of 3.**
-              **Personas 45 of 45.** **`kind:"search"` rows 0.** **`process.env.TAVILY_API_KEY`
-              reads in non-test source 0.** **Report routes answering an anonymous caller 401: 3 of
-              3 (4 of 4 with digest).** **`local-no-auth` ABSENT (503 x3).** **Structured-source
-              accepted reads 3.** **Ruling-75 absence cases: carried as 4 and round-7 A could not
-              reproduce it — measure it, name what you counted, and settle the number rather than
-              carrying it again.** **NEW this round and yours to source: regex shape-tests on a
-              model id in the tree — C measures 1.** **NEW: `.testConnection(` call sites in
-              non-test source — B measured 0 and 8-02 does not change it, because the script is not
-              `src/`. Say which number you mean.**
-           6. **Two things C could not settle and neither can a fixture.** Are the eight BYOK model
-              ids for `openai`, `qwen`, `anthropic` and `deepseek` still live? Nobody has a key for
-              any of them, and 8-02 reports `SKIP` rather than guessing — **the honest answer is
-              "unknown", and it should be recorded as unknown rather than assumed fine, because
-              that assumption is exactly what hid the Gemini outage for seven rounds.** And is the
-              +15% deep-report cost B measured still right after 6-02's thinking change, which
-              removes a real charge on the fallback path only?
-           7. **`metered.test.ts:330,352` name `"gemini-2.5-flash"`** — self-contained fixture
-              literals that do not import the constant, so they stay green while naming a model the
-              product cannot call. C left them deliberately (§2). Folklore risk or nothing?
+TODO:      **THE MANAGER RE-MEASURES ROUND 8 INDEPENDENTLY, then opens round 9.** A does not close
+           the gate alone (§2 exit condition, Ruling 8 point 4). Denominator **30**, `R-METER-2`
+           `N/A`, blocked **5** — R-ENT-1, R-ENT-2, R-METER-1, R-METER-3, R-QUOTA-2. **R-KEY-1 is
+           off the blocked list with a measured reason and must not go back on without a stated
+           one.** What the re-measure should check, in priority order:
+           1. **Re-run `npm run check:providers` yourself** — it is seconds, and it is the only
+              number no gate can produce. A got PASS / exit 0 and reproduced the outage on a plant.
+           2. **Rule on the two corrected tallies (§4, round-8 A part 3).** Ruling-75 absence cases:
+              A **settled** it at **4** and explains why round-7 A could not reproduce it (wrong
+              subject — production sites, not the four rewritten test cases). Round-7 A's
+              `POLICY — manager decides` can be closed. And the model-shape tally is **2, not 1**.
+           3. **A found something about 8-01(b) that neither B nor C stated, and it is good news:**
+              `GOOGLE_VERTEX_SEARCH_FALLBACK` is banned on Vercel by the `GOOGLE_VERTEX_` prefix, so
+              the grounding backfill cannot be armed on a deployment at all. Worth telling the owner,
+              because it moves the risk from "off by default" to "impossible in production".
+           4. **Decide 9-01** (two operator scripts still accept the old Vertex search setting
+              name). It is queued, not a finding; A did not report it as one.
+           5. **Two questions A could NOT settle and neither can a fixture.** Are the eight BYOK
+              model ids for `openai`, `qwen`, `anthropic` and `deepseek` still live? **Unknown, and
+              recorded as unknown** — nobody has a key and 8-02 reports `SKIP` rather than guessing,
+              which is the right shape. And does `thinkingLevel: MINIMAL` hold thinking at zero on a
+              60,000-character deep report? A's billed run printed **no** `think=` segment and the
+              logger prints one whenever the count is non-zero — so it is zero **on a ping**. A did
+              not extend that to deep-report scale, deliberately.
+           6. **The owner is the whole of what remains.** Five blocked halves, one action: apply the
+              three `20260904*` migrations and add `NEXT_PUBLIC_SUPABASE_URL` +
+              `SUPABASE_SERVICE_ROLE_KEY` to `web/.env.local`. Nothing in the loop can move them.
 PENDING USER ACTION: (1) **Apply the three migrations** under `web/supabase/migrations/20260904*`
            — this is now the ONLY thing blocking five of the six remaining halves. (2) Add
            `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` to `web/.env.local` so
@@ -996,9 +1060,11 @@ PENDING USER ACTION: (1) **Apply the three migrations** under `web/supabase/migr
            NOT carry `TAVILY_API_KEY`; deploy only after the branch is green and merged.
            DONE: the local `GOOGLE_API_KEY` is filled (Ruling 21 point 4). WITHDRAWN: the trial
            backfill (no users); the 2026-10-01 model escalation (the owner decided).
-OPEN FOR MANAGER:  none — C's flag becomes 9-01 (two operator scripts still accept the old
-           Vertex search setting name, so an index could be built that the app never queries).
-           The manager's own false absence claim is retracted in §1y (Ruling 24 point 1).
+OPEN FOR MANAGER:  **Round-7 A's one open `POLICY` is ANSWERED, not escalated** — the Ruling-75
+           absence tally is settled at 4 (§4, round-8 A part 3 §3.4), so the manager only has to
+           ratify it. Otherwise: none. 9-01 stays queued. One maintenance note, not a finding: this
+           state file carries 5 lines matching the repo's standing credential grep, inherited from
+           Ruling 22's text and §3's ground rule.
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
@@ -15159,6 +15225,7 @@ passed | 1 skipped (129) · 2934 passed | 1 skipped (2935), 0 failed**. **No tes
 by this item** — it ships a script, and the ruling forbids putting it in the suite.
 
 **8-02 LANDED. ROUND-8 C COMPLETE — three items, three commits, each pushed as it finished.**
+| **8 (A)** | **code-side 0.0% (0/30, exclusions: none)** · **blocked 5** — R-ENT-1, R-ENT-2, R-METER-1, R-METER-3, R-QUOTA-2 · **R-METER-2 is `N/A`** | **NOT MET — the code side is not why. THE DIFFERENCE LIST IS EMPTY.** **BLOCKED FELL 6 -> 5 AND THE REASON IS A MEASUREMENT, NOT AN ASSUMPTION: I RAN THE LIVE CHECK MYSELF.** `npm run check:providers` -> `gemini gemini-3.1-flash-lite small+large PASS`, `in=412 out=9 742ms ok`, exit **0**, four BYOK vendors `SKIP` naming the variable that would configure them, **no key material printed** (checked, not assumed). **The sandbox refusal recorded in Ruling 22 point 6 is LIFTED** — two rounds carried it. **PROVED ABLE TO FAIL WITH MY OWN PLANT:** a retired id back on the `large` tier reproduces the outage — **404, exit 1** — reverted with a 0-line diff and the planted value asserted absent. **R-KEY-1 `BLOCKED` -> `MET`** on that run, and it is the only score that moved. **What a PASS does NOT mean, stated because it matters: it is a `testConnection()` ping, not a deep report** — it proves the product can make a model call again, no more. **ALL FIVE REMAINING BLOCKED HALVES NOW SHARE ONE CAUSE** (the three unapplied migrations + the two Supabase names), where last round they had two — the count understates that. **THE OWNER HAS NOT ACTED: `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are still 0**, measured by count, the file never `cat`-ed. **6-02's GUARD IS REAL AND I ISOLATED IT:** planting an unmeasured id into the GLOBAL chain — which the catalog test cannot see — reddens **exactly one** case, the chain walk, on `expected undefined to be defined`; so the walk is not riding on another case. **NEW TALLY, 0:** model ids the code can send with no verified thinking setting (3 sendable, 3 covered, evaluated by execution with an unmeasured control id). **BOTH 8-01 MONEY SWITCHES PROVED ABLE TO FAIL** by restoring the old behaviour — one case each, and neither had any coverage before this round. **AND ONE FACT NEITHER B NOR C STATED, WHICH IS THE STRONGEST THING ABOUT 8-01(b): `GOOGLE_VERTEX_SEARCH_FALLBACK` — the one variable that arms the $35/1,000 backfill — IS ITSELF BANNED ON VERCEL BY THE `GOOGLE_VERTEX_` PREFIX**, proved by running the real audit function against planted environments; so on a deployment the backfill cannot be turned on at all, not merely off by default. **THE RULING-75 TALLY IS SETTLED AT 4, NOT UNRELIABLE** — round-7 A measured *production* option-building sites; the tally counts the **four rewritten TEST CASES** of Ruling 13 point 4, and each self-numbers "N of the 4" (3 in `jobweb.test.ts`, 1 in `eventweb.test.ts`). **TWO CARRIED NUMBERS CORRECTED:** regex shape-tests on a model id is **2, not 1** (C's number went stale by C's own edit — two named family constants in one function), and scan 5 has **two** justified exemptions, not one (result unchanged at 0 unjustified). **Upsell census re-derived three ways: 3.** Paid and unknown-plan readers: **0 upsells on 3 of 3**. All five scans **0**, my greps and the gate tests agreeing on every one. **Personas 46 route-level cases across 8 surfaces**; anonymous gets **401** on 4 of 4 AI routes; operator-key search requests **0** for every persona including paid, sourced from the five searching surfaces. **5 plants, 5 fired**, plus one that failed to apply and was caught by its own count assertion (the CRLF trap, third round running). **9-01 reported as QUEUED, not as a finding** (Ruling 24 point 5) |
 
 ### Round 8 — Agent A
 
