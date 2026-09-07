@@ -1,5 +1,17 @@
-import { afterEach, describe, expect, it } from "vitest";
-import { resolveWebSearchProvider } from "./gemini-search";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+// ABC-freemium 8-01(b). `searchGemini` is the ONLY thing the grounding
+// backfill can reach, so standing in for it is the only way to assert that a
+// configured Vertex Search App does not reach grounding. Everything else in
+// the module — `isGeminiSearchAvailable`, `resolveWebSearchProvider` — stays
+// real, because those are the subject of the other half of this item.
+const searchGeminiMock = vi.hoisted(() => vi.fn(async () => []));
+vi.mock("./gemini-search", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./gemini-search")>()),
+  searchGemini: searchGeminiMock,
+}));
+
+import { isGeminiSearchAvailable, resolveWebSearchProvider } from "./gemini-search";
 import {
   discoveryResultToWebResult,
   isVertexSearchAvailable,
@@ -83,7 +95,7 @@ function websiteResult(
 
 describe("isVertexSearchAvailable", () => {
   it("is false with a project but no search app — nothing switches provider", () => {
-    setEnv({ GOOGLE_VERTEX_PROJECT: "peer-dev" });
+    setEnv({ GOOGLE_VERTEX_SEARCH_PROJECT: "peer-dev" });
     expect(isVertexSearchAvailable()).toBe(false);
   });
 
@@ -94,7 +106,7 @@ describe("isVertexSearchAvailable", () => {
 
   it("is true once both are configured", () => {
     setEnv({
-      GOOGLE_VERTEX_PROJECT: "peer-dev",
+      GOOGLE_VERTEX_SEARCH_PROJECT: "peer-dev",
       GOOGLE_VERTEX_SEARCH_ENGINE_ID: "peer-web_123",
     });
     expect(isVertexSearchAvailable()).toBe(true);
@@ -102,7 +114,7 @@ describe("isVertexSearchAvailable", () => {
 
   it("accepts a data-store id in place of an engine id", () => {
     setEnv({
-      GOOGLE_VERTEX_PROJECT: "peer-dev",
+      GOOGLE_VERTEX_SEARCH_PROJECT: "peer-dev",
       GOOGLE_VERTEX_SEARCH_DATA_STORE_ID: "peer-sites_123",
     });
     expect(isVertexSearchAvailable()).toBe(true);
@@ -112,7 +124,7 @@ describe("isVertexSearchAvailable", () => {
 describe("searchEndpoint", () => {
   it("uses the un-prefixed host for the global location", () => {
     setEnv({
-      GOOGLE_VERTEX_PROJECT: "peer-dev",
+      GOOGLE_VERTEX_SEARCH_PROJECT: "peer-dev",
       GOOGLE_VERTEX_SEARCH_ENGINE_ID: "peer-web_123",
     });
     expect(searchEndpoint()).toBe(
@@ -124,7 +136,7 @@ describe("searchEndpoint", () => {
 
   it("prefixes the host for a regional location", () => {
     setEnv({
-      GOOGLE_VERTEX_PROJECT: "peer-dev",
+      GOOGLE_VERTEX_SEARCH_PROJECT: "peer-dev",
       GOOGLE_VERTEX_SEARCH_ENGINE_ID: "peer-web_123",
       GOOGLE_VERTEX_SEARCH_LOCATION: "us",
     });
@@ -134,7 +146,7 @@ describe("searchEndpoint", () => {
 
   it("addresses a data store by its own collection path", () => {
     setEnv({
-      GOOGLE_VERTEX_PROJECT: "peer-dev",
+      GOOGLE_VERTEX_SEARCH_PROJECT: "peer-dev",
       GOOGLE_VERTEX_SEARCH_DATA_STORE_ID: "peer-sites_123",
     });
     expect(searchEndpoint()).toContain("/dataStores/peer-sites_123/");
@@ -310,6 +322,121 @@ describe("searchVertex", () => {
   });
 });
 
+/**
+ * ABC-freemium 8-01 · Ruling 21 point 2 · Ruling 23 points 3-4.
+ *
+ * **Two things used to be one thing.** Vertex AI Search and Gemini grounding
+ * both came up off `GOOGLE_VERTEX_PROJECT`, so there was no configuration in
+ * which you could have the cheap site-scoped index without also arming the
+ * most expensive path in the product — and grounding then ran *inside* the
+ * Vertex call as an opt-out backfill, which is the same mechanism reached by
+ * fallback rather than by choice.
+ *
+ * Neither half had a test. Inverting the backfill default reddened **zero**
+ * tests before this block existed, because every existing backfill case
+ * injects `groundFallback` and so never reaches the switch that decides
+ * whether grounding is armed at all. **The switches that move money were the
+ * untested ones.**
+ *
+ * None of this makes anything reachable: `operatorSearchAvailability()` is
+ * frozen false for both capabilities (D2a), and `system-key.test.ts` is what
+ * holds that. This block is about which variable would answer on a day when
+ * the answer is allowed to be yes.
+ */
+describe("8-01 — Vertex AI Search and Gemini grounding are separate switches", () => {
+  it("brings Vertex search up on its OWN project name, with grounding still off", () => {
+    // The separation, stated as the pair it is: one signal true, the other
+    // false, from one configuration. Asserting only the first half would pass
+    // just as well before this item as after it.
+    setEnv({
+      GOOGLE_VERTEX_SEARCH_PROJECT: "peer-search-dev",
+      GOOGLE_VERTEX_SEARCH_ENGINE_ID: "peer-web_123",
+    });
+    expect(isVertexSearchAvailable()).toBe(true);
+    expect(isGeminiSearchAvailable()).toBe(false);
+  });
+
+  it("no longer brings Vertex search up off the Gemini model project", () => {
+    // The other direction, and the one that used to be impossible: a Vertex
+    // MODEL project plus a Search App used to be enough to switch the search
+    // provider. The app id is present here on purpose, so this fails if the
+    // dropped fallback ever comes back.
+    setEnv({
+      GOOGLE_VERTEX_PROJECT: "peer-dev",
+      GOOGLE_VERTEX_SEARCH_ENGINE_ID: "peer-web_123",
+    });
+    expect(isVertexSearchAvailable()).toBe(false);
+    expect(isGeminiSearchAvailable()).toBe(true);
+  });
+
+  it("does NOT reach grounding when a Search App is configured and nothing asked for it", async () => {
+    // The case that did not exist, and the one 8-01(b) is for. No injected
+    // `groundFallback`, so the real enable predicate decides — and the query
+    // comes back under the threshold, which is exactly when the backfill used
+    // to fire. Both project names are set, so this cannot pass merely because
+    // grounding was unconfigured.
+    searchGeminiMock.mockClear();
+    setEnv({
+      GOOGLE_VERTEX_SEARCH_PROJECT: "peer-search-dev",
+      GOOGLE_VERTEX_SEARCH_ENGINE_ID: "peer-web_123",
+      GOOGLE_VERTEX_PROJECT: "peer-dev",
+    });
+
+    const rows = await searchVertex("obscure new host", {
+      search: async () => [websiteResult()],
+      maxResults: 5,
+      fallbackMinResults: 3,
+    });
+
+    expect(searchGeminiMock).not.toHaveBeenCalled();
+    // The thin result is returned as it is. Fewer rows, no surprise bill.
+    expect(rows).toHaveLength(1);
+  });
+
+  it("still reaches grounding when somebody deliberately turns the backfill on", async () => {
+    // The capability is switched off, not deleted (Ruling 23 point 3). This is
+    // also what proves the case above can tell armed from unarmed, rather than
+    // passing because the backfill never runs any more.
+    searchGeminiMock.mockClear();
+    setEnv({
+      GOOGLE_VERTEX_SEARCH_PROJECT: "peer-search-dev",
+      GOOGLE_VERTEX_SEARCH_ENGINE_ID: "peer-web_123",
+      GOOGLE_VERTEX_PROJECT: "peer-dev",
+      GOOGLE_VERTEX_SEARCH_FALLBACK: "on",
+    });
+
+    await searchVertex("obscure new host", {
+      search: async () => [websiteResult()],
+      maxResults: 5,
+      fallbackMinResults: 3,
+    });
+
+    expect(searchGeminiMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("stays off when the backfill flag is on but the index already filled the query", async () => {
+    // The threshold is the tuning knob and it still works: armed plus
+    // well-served is still no grounding call, so "on" does not mean "always".
+    searchGeminiMock.mockClear();
+    setEnv({
+      GOOGLE_VERTEX_SEARCH_PROJECT: "peer-search-dev",
+      GOOGLE_VERTEX_SEARCH_ENGINE_ID: "peer-web_123",
+      GOOGLE_VERTEX_SEARCH_FALLBACK: "on",
+    });
+
+    await searchVertex("well covered", {
+      search: async () => [
+        websiteResult(),
+        websiteResult({ link: "https://example.edu/b", title: "B" }),
+        websiteResult({ link: "https://example.edu/c", title: "C" }),
+      ],
+      fallbackMinResults: 3,
+    });
+
+    expect(searchGeminiMock).not.toHaveBeenCalled();
+  });
+});
+
 describe("resolveWebSearchProvider with vertex", () => {
   const base = {
     geminiAvailable: true,
@@ -353,7 +480,7 @@ describe("resolveWebSearchProvider with vertex", () => {
 describe("webSearchOptions", () => {
   it("selects vertex when a Search App is configured", () => {
     setEnv({
-      GOOGLE_VERTEX_PROJECT: "peer-dev",
+      GOOGLE_VERTEX_SEARCH_PROJECT: "peer-dev",
       GOOGLE_VERTEX_SEARCH_ENGINE_ID: "peer-web_123",
     });
     expect(webSearchOptions(undefined)).toEqual({ provider: "vertex" });
@@ -366,8 +493,9 @@ describe("webSearchOptions", () => {
 
   it("honours the existing gemini opt-out for both engines", () => {
     setEnv({
-      GOOGLE_VERTEX_PROJECT: "peer-dev",
+      GOOGLE_VERTEX_SEARCH_PROJECT: "peer-search-dev",
       GOOGLE_VERTEX_SEARCH_ENGINE_ID: "peer-web_123",
+      GOOGLE_VERTEX_PROJECT: "peer-dev",
     });
     expect(webSearchOptions({ gemini: { enabled: false } })).toBeUndefined();
   });

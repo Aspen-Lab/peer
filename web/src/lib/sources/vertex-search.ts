@@ -110,6 +110,11 @@ const DEFAULT_PAGE_SIZE = 10;
  * site-scoped index and the grounding backfill runs for it. Raising it buys
  * coverage with grounding spend; lowering it does the reverse. Override with
  * `GOOGLE_VERTEX_SEARCH_MIN_RESULTS`.
+ *
+ * **This is the tuning knob, not the on/off switch** (ABC-freemium 8-01(b)).
+ * `fallbackEnabled()` below decides whether the backfill runs at all, and it
+ * is off unless turned on; this number only decides *how thin is thin* once it
+ * has been.
  */
 const DEFAULT_FALLBACK_MIN_RESULTS = 3;
 
@@ -170,12 +175,28 @@ export interface DiscoveryResult {
 // Availability
 // ───────────────────────────────────────────────────────────────────────────
 
+/**
+ * ABC-freemium 8-01(a) · Ruling 21 point 2 · Ruling 23 point 4.
+ *
+ * **`GOOGLE_VERTEX_SEARCH_PROJECT` is the SOLE signal for Vertex AI Search.**
+ * This used to fall back to `GOOGLE_VERTEX_PROJECT`, which is the same name
+ * `isGeminiSearchAvailable()` reads — so switching Vertex AI Search on switched
+ * Gemini grounding on with it, and there was no configuration in which you
+ * could have one without the other. Grounding is the most expensive path in
+ * the product and it was reachable by fallback, which is the shape the owner
+ * asked to be removed.
+ *
+ * With the fallback gone the two are genuinely independent: set
+ * `GOOGLE_VERTEX_SEARCH_PROJECT` plus an app id and Vertex AI Search comes up
+ * while `isGeminiSearchAvailable()` stays false. **No new variable was
+ * invented** — this name already existed, was already read first, is already
+ * in the build guard's explicit list, and both operational scripts already
+ * prefer it. The guard needs no edit either: its ban is on the whole
+ * `GOOGLE_VERTEX_` prefix, so this name is refused on Vercel exactly as the
+ * old one was.
+ */
 function vertexSearchProject(): string | undefined {
-  return (
-    process.env.GOOGLE_VERTEX_SEARCH_PROJECT?.trim() ||
-    process.env.GOOGLE_VERTEX_PROJECT?.trim() ||
-    undefined
-  );
+  return process.env.GOOGLE_VERTEX_SEARCH_PROJECT?.trim() || undefined;
 }
 
 function vertexSearchApp(): { kind: "engines" | "dataStores"; id: string } | null {
@@ -441,10 +462,31 @@ function fallbackMinResults(explicit: number | undefined): number {
   return DEFAULT_FALLBACK_MIN_RESULTS;
 }
 
+/**
+ * ABC-freemium 8-01(b) · Ruling 23 point 3. **THE GROUNDING BACKFILL IS OFF
+ * UNLESS SOMEBODY TURNS IT ON, and the reason is the credit, not a taste.**
+ *
+ * This used to be OPT-OUT and it used to return `isGeminiSearchAvailable()`,
+ * which is the other half of the coupling 8-01(a) removes: turning Vertex AI
+ * Search on turned open-web grounding on with it, as a backfill *inside* the
+ * very call the credit was paying for. Nobody chose that; it was a fallback.
+ *
+ * The credit that funds this path is restricted to Vertex AI Search and
+ * Conversation and **cannot** be applied to Gemini API endpoints, which is
+ * what grounding bills as. So left on by default it would spend real dollars
+ * outside the credit, by default, on exactly the queries the credit exists to
+ * cover.
+ *
+ * **Nothing is deleted and nothing is renamed.** The capability, its docblock,
+ * its threshold and its headroom guard all stay exactly where they are; the
+ * same variable that used to switch it off now switches it on, so anyone who
+ * later wants coverage-over-cost turns it back on deliberately — one switch,
+ * not two, so there is no half-set state. It also no longer reads the Gemini
+ * signal, so a Vertex Search App can never enable it as a side effect.
+ */
 function fallbackEnabled(): boolean {
   const flag = process.env.GOOGLE_VERTEX_SEARCH_FALLBACK?.trim().toLowerCase();
-  if (flag === "off" || flag === "false" || flag === "0") return false;
-  return isGeminiSearchAvailable();
+  return flag === "on" || flag === "true" || flag === "1";
 }
 
 /**

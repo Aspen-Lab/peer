@@ -121,7 +121,19 @@ lock by rebasing onto the holder's head.
 HELD BY:          C-round8 @ 2026-09-07T22:40Z
 ROUND:            8
 WHOSE TURN:       C  (round 8; order is 6-02 -> 8-01 -> 8-02)
-STOPPED BECAUSE:  IN PROGRESS — C-round8 holds the lock; 6-02 landed, 8-01 and 8-02 to come.
+STOPPED BECAUSE:  IN PROGRESS — C-round8 holds the lock; 6-02 and 8-01 landed, 8-02 to come.
+                  **SECOND DEVIATION, LOGGED PER GROUND RULE 6 (8-01b):** the brief and Ruling 23's
+                  verification note both say *"there is no on/off switch"* for the grounding
+                  backfill and tell C to flip the default through the THRESHOLD.
+                  **B's own §4 entry contradicts that and B is right** — `fallbackEnabled()`
+                  (`vertex-search.ts:444-448`) IS a switch, `GOOGLE_VERTEX_SEARCH_FALLBACK`; it was
+                  merely OPT-OUT. The manager read the call site, not the enable predicate — the
+                  same one-file-away miss that hid 6-02's thinking control. **I flipped THAT flag
+                  to opt-in and decoupled it from `isGeminiSearchAvailable()`, and left the
+                  threshold alone.** Turning the backfill off through both would take TWO variables
+                  to arm again, and `vertex-search.ts:206-209` rejects exactly that shape in its
+                  own words ("one switch instead of inventing a second one a caller could
+                  half-set"). Default is off, nothing deleted, one variable turns it back on.
                   **DEVIATION, LOGGED PER GROUND RULE 6 (6-02):** Ruling 23 point 1 and B both
                   prescribe ONE widened regex covering the Gemini 3 family. **I called the live
                   API for every id in both shipped chains and that fix would have caused a second
@@ -14749,3 +14761,111 @@ failed**. Test total 2924 to 2929: **+5 added, 0 deleted.** File count unchanged
 
 **6-02 LANDED. THE OUTAGE IS CLOSED IN THE TREE — and the live proof that it is closed in reality is
 8-02's job, below.**
+
+#### 8 · 8-01 — separating the Vertex AI Search signal from Gemini grounding. `DESIGN`. LANDED, both halves.
+
+**(a) `GOOGLE_VERTEX_SEARCH_PROJECT` IS NOW THE SOLE VERTEX-SEARCH SIGNAL.** The
+`|| GOOGLE_VERTEX_PROJECT` fallback in `vertexSearchProject()` is gone, so the two capabilities read
+two different names and the configuration "cheap site-scoped index, no open-web grounding" exists
+for the first time. **No new variable was invented**, exactly as B recommended and for B's reasons.
+**The build guard needed no edit and I confirmed that rather than assuming it:**
+`FORBIDDEN_PREFIXES_ON_VERCEL = ["GOOGLE_VERTEX_"]` is a blanket prefix, so the surviving name is
+refused on Vercel exactly as the dropped one was, and `assert-byok-production-env.test.ts` is green
+untouched.
+
+**COUPLING B FALLS OUT OF (a) FOR FREE, and it is worth saying so because B listed it as a separate
+coupling.** `webSearchOptions()` still falls through from `vertex` to `gemini` in the same function —
+but that fall-through is now a genuine choice rather than a coupling, because after (a) configuring
+Vertex AI Search cannot make `isGeminiSearchAvailable()` true. The line reads *"use grounding if you
+configured grounding"*, which is what it always said it meant. **No edit, and none needed.**
+
+**(b) THE GROUNDING BACKFILL IS OFF UNLESS SOMEBODY TURNS IT ON — and I used the switch that already
+existed rather than the one the brief named. LOGGED AS A DEVIATION.** Ruling 23's verification note
+says *"There is no on/off switch — only that threshold"*, and the brief follows it: flip the default
+by way of `GOOGLE_VERTEX_SEARCH_MIN_RESULTS`. **B's own §4 entry contradicts that and B is right:
+`fallbackEnabled()` at `:444-448` IS an on/off switch — `GOOGLE_VERTEX_SEARCH_FALLBACK` — it was
+merely OPT-OUT.** The manager read the call site (`:494-499`) and not the enable predicate, which is
+the same one-file-away miss that hid the thinking control in 6-02.
+
+**Why the existing flag is the better opt-in, and it is not a preference:** if I had turned the
+backfill off through the threshold *as well*, arming it again would take **two** variables — and
+`vertex-search.ts:206-209` explicitly rejects that shape in its own words, *"one switch instead of
+inventing a second one a caller could half-set"*. Using the flag keeps it at one switch, with no
+half-set state, and leaves the threshold doing the job its name describes. **So: the flag flips from
+opt-out to opt-in, and it stops calling `isGeminiSearchAvailable()`** — that second part is
+non-negotiable under Ruling 23 point 3's closing sentence and is the actual coupling 8-01 exists to
+remove. The threshold keeps its value of 3 and its meaning, with a docblock line saying it is the
+tuning knob and not the switch, so nobody has to read two functions to find out which is which.
+
+**NOTHING WAS DELETED.** `backfillWithGrounding`, its priced docblock, its 12-second headroom guard,
+the threshold, the threshold override and the flag are all exactly where they were. The only change
+is which way the flag's default points. **`GOOGLE_VERTEX_SEARCH_FALLBACK=on` restores the old
+behaviour in one step, and a test pins that it does** — the capability is switched off, not removed.
+
+**THE NAME, SINCE THE BRIEF ASKED. Proposed and deliberately NOT applied:
+`GOOGLE_VERTEX_SEARCH_GROUNDING_BACKFILL`.** *"FALLBACK"* says neither what it falls back **to** nor
+that the thing it arms bills outside the credit; the proposed name says both and matches the
+function's own docblock title. **Not renamed** because an operator may already have this variable
+set, a rename would silently un-set it, and nobody asked for one. `GOOGLE_VERTEX_SEARCH_MIN_RESULTS`
+needs no new name — it is accurate.
+
+**8-01 ENABLES NOTHING, re-confirmed rather than inherited.** `operatorSearchAvailability()` still
+returns a hard `{ geminiAvailable: false, vertexAvailable: false }` and still ignores its parameter,
+and I re-ran the protective test B identified — `system-key.test.ts` — together with the three files
+B measured it protects. **5 files / 1026 tests, all green:** `search/system-key.test.ts`,
+`sources/web-search.test.ts`, `events/sources/eventweb.test.ts`, `jobs/sources/jobweb.test.ts`,
+`scripts/assert-byok-production-env.test.ts`. **No second copy of that gate was added**, as B
+directed.
+
+**B's BLAST RADIUS WAS EXACT: 6 tests, 1 file, all fixtures.** The same six, in the same file, and
+nothing outside it moved. Every one rewritten to the new signal, none deleted. **Two of the rewrites
+are more than a find-and-replace and that is the interesting part:**
+- *"is false with a project but no search app"* would have gone on **passing while measuring
+  nothing** — after (a), `GOOGLE_VERTEX_PROJECT` is not read at all, so the case would have been
+  green because *neither* half was configured, not because a project without an app is refused. It
+  now sets the search project, so it still tests the thing its name claims. **This is the same
+  vacuous-assertion shape round-7 C found in `quota-notice.test.tsx`.**
+- *"honours the existing gemini opt-out for both engines"* claims **both** engines in its name and,
+  after (a), was configuring only one. It now sets both project names — with **different values**,
+  so the two signals cannot be confused for each other — and genuinely covers both.
+
+**FIVE NEW CASES, AND THE MONEY SWITCH IS THE ONE THAT MATTERS.** B proved inverting the backfill
+default reddened **zero** tests, because every existing backfill case injects `groundFallback` and
+therefore never reaches the predicate that decides whether grounding is armed at all. The new cases
+drive `searchVertex` with **no injected seam**, so the real predicate decides, and stand
+`searchGemini` in so "did grounding get called" is directly observable. They cover: the two signals
+independent in one configuration (both directions); a configured Search App returning a thin result
+**not** reaching grounding; the same configuration **reaching** it once the flag is on; and the
+threshold still working when the flag is on, so *"on"* does not silently mean *"always"*.
+
+**TWO PLANTS, TWO FIRED, each reverted with an asserted substitution count AND an asserted absence
+of the planted code before the next run was read.**
+- **Plant A — the dropped project fallback put back.** Exactly one case red: *"no longer brings
+  Vertex search up off the Gemini model project"*. The pair-independence case stayed green, which is
+  correct — it configures only the search project, so the fallback cannot reach it. The two cases
+  measure different things and neither is carrying the other.
+- **Plant B — the old opt-out predicate put back** (`GOOGLE_VERTEX_SEARCH_FALLBACK` off-only,
+  returning `isGeminiSearchAvailable()`). Exactly one case red: *"does NOT reach grounding when a
+  Search App is configured and nothing asked for it"* — **the money switch that had zero coverage in
+  seven rounds**. The "flag on" case stayed green, as it must: it is the control that proves the
+  first case can tell armed from unarmed.
+
+**ONE THING FOR THE MANAGER, FLAGGED AND NOT FIXED (§2 — C does not widen scope).**
+**The two operational scripts still carry the fallback (a) just removed** —
+`scripts/setup-vertex-search.mjs:14-15` and `scripts/probe-vertex-search-billing.mjs:18-19` both read
+`GOOGLE_VERTEX_SEARCH_PROJECT || GOOGLE_VERTEX_PROJECT`. **The hazard is silent, which is why it is
+worth a ruling rather than a shrug:** an operator who sets only `GOOGLE_VERTEX_PROJECT` can now run
+the setup script, watch it succeed, and end up with a Search App in the model project that the
+running app will never look at. Nothing errors. That is precisely the *"looks separated while it is
+not"* shape Ruling 23 point 4 warns about, moved from the runtime into the tooling. **Two lines to
+fix, and the failing direction after a fix is loud rather than silent** — but they are hand-run
+tools outside the item's stated seam, so I have changed nothing and recorded it here.
+
+**GATE, cold, after both plants were reverted (`git status --porcelain --untracked-files=all` shows
+only the two intended source edits, asserted before this run was read):** `tsc` exit **0** ·
+`eslint` **1 problem (1 error, 0 warnings)** — the standing `quiz.tsx:46` · `vitest` **128 files
+passed | 1 skipped (129) · 2934 passed | 1 skipped (2935), 0 failed**. Test total 2929 to 2934:
+**+5 added, 0 deleted.** File count unchanged at 128. **Standing locks re-verified by name, all
+green:** the five files above, plus `sources/vertex-search.test.ts` itself (36 tests, was 31).
+
+**8-01 LANDED, BOTH HALVES.**
