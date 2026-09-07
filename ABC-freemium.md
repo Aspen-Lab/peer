@@ -10341,3 +10341,165 @@ not happened. The code was right and my row was wrong. **For whoever writes an e
 next: a `trial` row without a future `trial_ends_at` is an EXPIRED trial, and it will read as
 `free` on every flag.** This is the same class as round-4 A's three admin-stub faults, and it is why
 Ruling 10 point 2's "assert the plant applied" has a sibling: assert the *persona* constructed.
+
+#### Part 2 — the five personas, and round 5 verified by behaviour
+
+**Persona/route pairs: 45 of 45.** Denominator **45** = 5 personas (`anonymous`, `free-no-key`,
+`free-byok-tavily`, `trial`, `paid`) × the **9** routes that carry `requireEntitledAiRequest`
+(`digest`, `events/feed`, `events/report`, `feed`, `figure`, `jobs/feed`, `jobs/report`,
+`papers/report`, `test-digest` — the count the gate's scan 5 also asserts). Sourced as: 25 pairs
+driven by my own probes this turn (both feed routes, `api/feed`, `api/figure`, `api/test-digest`),
+16 from the permanent `ai-route-personas.test.ts` (the four report routes × four personas), and the
+**4** remaining pairs — `free-byok-tavily` on the four report routes, which that suite omits —
+driven by my probe as well. Every one reported per persona; nothing averaged.
+
+**Every route in the matrix was driven with EVERY operator search credential armed at once**:
+`TAVILY_API_KEY` and `BRAVE_SEARCH_API_KEY` as distinct sentinels, plus a fully configured Vertex
+project (`GOOGLE_VERTEX_PROJECT`, `GOOGLE_VERTEX_SEARCH_PROJECT`, `GOOGLE_VERTEX_SEARCH_ENGINE_ID`,
+`GOOGLE_VERTEX_SEARCH_DATA_STORE_ID`, `GOOGLE_VERTEX_LOCATION`). Zero is therefore a statement about
+the gate, not about an empty environment.
+
+| Route | anonymous | free-no-key | free-byok-tavily | trial | paid |
+|---|---|---|---|---|---|
+| `POST /api/jobs/feed` | 200 · 0 | 200 · 0 | 200 · 0 operator, **2 on the reader's own key** | 200 · 0 | 200 · 0 |
+| `POST /api/events/feed` | 200 · 0 | 200 · 0 | 200 · 0 operator, **own key reaches Tavily** | 200 · 0 | 200 · 0 |
+| `POST /api/feed` (papers) | 200 · 0 | 200 · 0 | 200 · 0 | 200 · 0 | 200 · 0 |
+| `GET /api/figure` | **401** · 0 | 200 · 0 | 200 · 0 | 200 · 0 | 200 · 0 |
+| `POST /api/test-digest` | **401** · 0 | 400 · 0 | 400 · 0 | 400 · 0 | 400 · 0 |
+| `POST /api/digest` | **401** · 0 | 200 · 0 | 200 · 0 | 200 · 0 | 200 · 0 |
+| `POST /api/jobs/report` | **401** · 0 | 200 · 0 | 200 · 0 | 200 · 0 | 200 · 0 |
+| `POST /api/events/report` | **401** · 0 | 200 · 0 | 200 · 0 | 200 · 0 | 200 · 0 |
+| `POST /api/papers/report` | **401** · 0 | 200 · 0 | 200 · 0 | 200 · 0 | 200 · 0 |
+
+The number after `·` is **outgoing requests carrying either operator sentinel**, and it is **0 in
+all 45 cells**. Requests reaching any paid search host (`api.tavily.com`, `api.search.brave.com`,
+`discoveryengine.googleapis.com`, `generativelanguage.googleapis.com`) is likewise **0 in all 45**,
+except where the reader supplied their own key. The `400`s on `test-digest` are my probe's body
+shape, not a refusal of interest — the auth property that matters there is the anonymous **401**,
+and that route's own suite covers the rest.
+
+#### The six landing checks, each by behaviour
+
+**1. THE OPERATOR'S SEARCH KEY IS UNREACHABLE FOR EVERY PLAN, INCLUDING PAID — the round's headline.**
+Both feed routes and all three adapters, every operator credential armed, `paid` included:
+**0 outgoing requests carry either sentinel and 0 requests reach any search host.** Measured three
+ways so a single fixture cannot be the reason:
+
+- **At the route**, `paid` on jobs and events: 200, 0, 0. And **a paid caller who explicitly asks
+  for a forced rebuild** (`poolRefresh: true`) — the one paid search-adjacent action left — is also
+  0 and 0.
+- **At the adapter, on the real flag**: `jobweb`, `eventweb` and `web-search` each return **0 items
+  with 0 outgoing requests**, and **every explicit `provider` preference** (`tavily`, `brave`,
+  `gemini`, `vertex`) reaches nothing on all three.
+- **At the resolver, with the flag FORCED `true`** — an input no production path can produce:
+  `resolveSystemSearchKeys` still returns **no Tavily key** and `provenance: "none"`, and
+  `operatorSearchAvailability` still returns `{ geminiAvailable: false, vertexAvailable: false }`
+  **with a configured Vertex project present**.
+
+**2. THE BRAVE GATE SURVIVES, AND I PROVED THE PROTECTIVE TEST CAN FAIL.** `systemSearchAllowed:
+false` + `BRAVE_SEARCH_API_KEY` set -> no Brave key, confirmed. Then, per Ruling 10 point 2b, I
+planted the removal C's test exists to catch — the gate taken off the Brave env read, leaving
+`const brave = process.env.BRAVE_SEARCH_API_KEY || undefined;`. **Plant asserted present by grep and
+by a non-empty `git diff --stat` (1 insertion, 3 deletions) before the run was read.** Result:
+**3 failed | 6 passed** — C's new protective case plus the two 2-04 cases beside it, reproducing
+C's figures exactly. **Restored with `git checkout --` and the restore asserted by an EMPTY
+`git diff` (`git diff --quiet` -> clean)**; suite re-run **9 passed | 9**.
+
+**3. A USER'S OWN TAVILY KEY STILL WORKS, ON EVERY PLAN INCLUDING FREE.** D2a's positive half has
+not regressed. `free`, `trial` and `paid` on **both** feed routes — six cases — each send the
+reader's own key to Tavily (`requestsCarrying(USER_SENTINEL).length > 0`) while sending the
+operator's **0 times**. At the adapter, `jobweb` and `eventweb` each reach `api.tavily.com` on the
+reader's key with the operator's key armed and unspent. An **anonymous** caller with their own key
+also searches: 200, **2** outgoing requests on their own key, **0** on the operator's — their key,
+their money, which is D2a's shape.
+
+**4. THE REBUILD BREAKER IS REACHABLE AND STILL CAPS.** Ruling 13 point 1's central claim, confirmed
+end to end rather than by grep, and C's repaired fixture confirmed independently.
+
+- **Reachable, from a real request**: `trial` and `paid` × jobs and events — four combinations — a
+  granted `poolRefresh: true` produces **exactly one** extra increment, and the key is literally
+  `forced_rebuilds_today:<user>:2026-09-07`. A `free` user's forced rebuild is **refused, charges 0,
+  and still answers 200**.
+- **Still caps**: `FORCED_REBUILDS_PER_DAY` is **500**. 499 units -> allowed, **no** breaker row.
+  Crossing 500 -> **refused**, exactly **one** `kind:"breaker"` row, **zero** `kind:"search"` rows,
+  and the error line `[quota] system-search breaker tripped for paid-user (limit 500/day)`. A repeat
+  stays refused. **The next UTC day untrips it** — `forced_rebuilds_today:paid-user:2026-09-08` — so
+  "for the rest of the UTC day" is a property of the key, with no second source of truth.
+
+**5. THE BUILD GUARD REFUSES A CONFIG CARRYING `TAVILY_API_KEY`, AND REQUIRES EXACTLY THREE NAMES.**
+Proved by planting **both ways** against the **real script**, spawned as a child process in a
+scrubbed environment (only what each case names, plus `PATH`):
+
+- the three required names alone -> **exit 0**;
+- the same three **plus `TAVILY_API_KEY`** -> **exit 1**, `Remove these operator-funded AI settings
+  from Vercel: TAVILY_API_KEY.`, and **the sentinel value never appears in the output** (R-GUARD-2
+  holds on the new entry);
+- **each** required name dropped in turn -> **exit 1 naming that one**, three for three, so
+  "required is three" is proved by the ban *and* by the requirement;
+- a fourth name is not required — the exit-0 run is the run with no Tavily variable at all;
+- `BRAVE_SEARCH_API_KEY` -> exit 1, named, value not printed; `GOOGLE_VERTEX_ZZZ_INVENTED` -> exit 1,
+  named (the **prefix** ban, on a name nobody wrote down); `PEER_DEV_ENTITLEMENT` -> exit 1, named.
+
+**6. `kind:"search"` USAGE ROWS = 0 ON ALL THREE PRODUCERS.** Driven with the most generous input
+each accepts — every operator credential armed, `systemSearchAllowed` forced `true`, an explicit
+`provider: "tavily"`, and a real `userId` — `jobweb`, `eventweb` and `web-search` together produced
+**0 usage rows of any kind**, and **0** with `kind: "search"`.
+
+#### C's seven questions, answered
+
+1. **Does a paid reader still get something they can tell apart from free? — Yes, but only two
+   things, and one of them is invisible in the interface. `POLICY — manager decides`.**
+   Measured per persona. What actually differs: (a) **deep reports** — free 5/month, trial 20 over
+   14 days, paid unlimited behind the 200/day breaker; visible only when a free reader hits the cap
+   and sees the quota notice, which a paid reader never sees; (b) **"refresh now"** — free is
+   refused (0 charged, 200, the same pool), trial and paid are granted (exactly 1 charge). The long
+   tail is identical on every plan, which is Ruling 12 point 5 and accepted.
+   **The finding is (b)'s presentation, not its behaviour.** `poolRefreshAllowed` appears in **no
+   component** — I grepped every `.tsx` — and `app/page.tsx:180` calls the refresh action with no
+   plan test. So the button is rendered for everyone, a free reader clicks it, and the server
+   refuses by serving the pool that is already there: **no error, no message, nothing changes.** The
+   paid feature exists on the server and is invisible in the product. That is not a spec violation —
+   R-POOL-2 does not require hiding the control — so it is **not** on the difference list; it is a
+   product question for the owner, and it is the honest answer to "can a reader tell the plans
+   apart".
+2. **Tally 3's vacuous half — honoured, not averaged over.** Reported in Part 3 from the five
+   surfaces that actually search, with that source stated in the tally line, per Ruling 14 point 4.
+3. **Is the forced-rebuild breaker genuinely reachable end to end? — Yes.** See landing check 4:
+   both surfaces, both entitled plans, real requests, the literal key
+   `forced_rebuilds_today:<user>:<UTC day>`.
+4. **Does a keyless reader still get a good answer? — The envelope, yes; the contents I could not
+   prove, and I am saying so rather than claiming it.** `free-no-key` on `jobs/feed`: **HTTP 200**,
+   **no `error` key** (`Object.hasOwn` -> false), 324 bytes, and the payload's own keys are
+   `["items","pool","facetCounts","meta"]` — the real feed shape, not a stub of nothing. **Where I
+   looked and what I could not do:** my probe's `fetch` stub answers *every* outgoing request with
+   an empty result set, including the free structured sources, so "items is non-empty" cannot be
+   measured in this harness — it would be measuring my stub. The honest statement is: the
+   degradation produces the correct envelope with no error branch, and whether real structured
+   sources fill it is `BLOCKED: no key / no network` in this loop.
+5. **Would the build refuse a Vercel project carrying `TAVILY_API_KEY`? — Yes**, proved against the
+   real script (landing check 5). Required **is** three names. And §1 `PENDING USER ACTION` item (4)
+   already states that Vercel needs three variables and must **not** carry `TAVILY_API_KEY` — I
+   re-read it this turn; the checklist is correct and needs no change.
+6. **Is `provenance: "system"` really unreachable, or only unreached? — Unreachable, and I traced
+   every producer.** `resolveSystemSearchKeys` now has exactly two returns, `"byok"` and `"none"`;
+   nothing constructs `"system"`, and `isOperatorFundedSearch("tavily", …)` cannot answer `true` for
+   either surviving provenance. **The residual is Brave, not Tavily**, and it is worth stating
+   precisely: with the flag forced `true`, Brave *is* still handed out and does reach
+   `api.search.brave.com`. It cannot happen in production — I grepped all **33** non-test mentions
+   of `systemSearchAllowed` and every producer is either a hard `false`
+   (`entitlement/resolve.ts:134`, `types.ts:98`, `allowance.ts:157`, `feed/pipeline.ts:134`) or a
+   forwarder of the entitlement's hard `false`; **both feed routes take it from the entitlement and
+   the comment at each says "never parsed from the body", which I confirmed by reading the body
+   parsers.** So it is unreachable by construction and the reversal seam is one constant, which is
+   exactly the shape Ruling 12 point 2 asked for. Recorded as the residual, not as a defect.
+7. **Do the four absence-asserting Ruling-75 cases leave a hole anyone can fall into? — The hole is
+   real but NARROWER than it looks, and I measured why.** The deny-list and query-suffix rules are
+   **not** grounding-specific: `jobweb`'s fan-out builds one `jobQuery` and hands it to all four
+   providers, the **BYOK Tavily** path included. I proved that path is live and still applies the
+   rule by reading the outgoing body on a BYOK search — it carries
+   `"molten salt electrochemistry postdoc position opening apply"`, the suffix the retired assertion
+   used to pin. `eventweb`'s BYOK path likewise reaches Tavily. **What genuinely lost live coverage
+   is the grounded-row admission mapping**, which only `searchGeminiJobs` / `searchVertexJobs`
+   reach and which are dark on every plan. So: one rule of the three is uncovered, two are still
+   exercised by the path a real user takes. The tally of **4** stands and the restore threshold is
+   unchanged.
