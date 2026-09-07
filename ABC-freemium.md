@@ -225,15 +225,14 @@ DONE:      Round 1 A (three parts). Round 1 B, all seven units. Round 1 C: ALL 2
 GATE NOW:  tsc exit **0** · eslint **1 error** (the standing `quiz.tsx:46`, **0 warnings**) ·
            vitest **124 files passed | 1 skipped (125)** · **2859 tests passed | 1 skipped
            (2860)**, **0 failed**, 11.49 s.
-TODO:      C WORKS THE ROUND-5 GUIDE FROM 5-01, in order, one commit per item, pushed. The guide is
-           in §4 under `### Round 5 — Agent B`. 5-01 the search-key resolver (delete ONLY the system
-           branch — **keep `SystemSearchKeyInput.systemSearchAllowed`, it is the last gate on the
-           Brave env read**; delete the two now-unused capability imports or eslint fails); 5-02 one
-           line at `resolve.ts:128`, `poolRefreshAllowed` untouched; 5-03 the guard list move plus
-           four pieces of stale prose incl. the failure message itself; 5-04 the 28 test cases,
-           **rewritten never deleted**, plus the three Ruling 12 point 7 tallies as gate tests.
-           **Expect the tree RED between items** — 21 failures after 5-01 alone is the measured,
-           expected shape. Then A re-measures against the denominator of 30.
+TODO:      C WORKS THE ROUND-5 GUIDE 5-01 — 5-04, with Ruling 13 (§1n) folded in: the search
+           breaker STAYS on the forced-rebuild path and its counter is RENAMED to
+           `forced_rebuilds_today` / `FORCED_REBUILDS_PER_DAY` (point 1); keep
+           `SystemSearchKeyInput.systemSearchAllowed` — it is the only Brave gate — and add the
+           protective test (point 3); the ten Ruling 75 cases split 6 rewrite-in-place / 4
+           assert-never-called with the coverage cost recorded (point 4). B measured the blast
+           radius by planting the finished shape: 28 cases in 9 files, plus 13 false greens in
+           the guard suite. Then A re-measures against the denominator of 30.
 PENDING USER ACTION: (1) Apply the three migrations under `web/supabase/migrations/20260904*`.
            (2) After applying, save a profile once in the app. (3) Optionally fill
            `GOOGLE_API_KEY` in `web/.env.local` (and the Supabase URL + service-role key) so A
@@ -242,32 +241,7 @@ PENDING USER ACTION: (1) Apply the three migrations under `web/supabase/migratio
            NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY — and must NOT carry
            TAVILY_API_KEY (the build will refuse it after 5-03). Deploy only after round 5
            reports green and the branch is merged. WITHDRAWN: the trial backfill (no users).
-OPEN FOR MANAGER:  TWO, both raised by round-5 B, neither recommending a reversal (Ruling 1 point 1).
-           1. **A FINDING AGAINST RULING 12 — the 500/day system-search breaker does NOT become
-              unreachable** (§4, 5-04 vii). `consumeSystemSearches` has **two** callers and the
-              ruling accounts for one. The search fan-out does go dark; the **forced pool rebuild**
-              (`jobs/pipeline.ts:258`, `events/pipeline.ts:275`) charges the same breaker, gated on
-              `poolRefreshAllowed` — which Ruling 12 point 5 deliberately keeps alive for trial and
-              paid. The breaker's own docblock says "Two callers, one home" (`search-breaker.ts:6-8`).
-              So after D2a it still fires, still logs at error level and still writes a
-              `kind:"breaker"` row, for a reader who presses "refresh now" 500 times in a day.
-              Consequences to rule on: (a) **R-QUOTA-2's amendment is half right** — the search half
-              is unreachable *from search*, not unreachable, and as written A would mark a live
-              mechanism `N/A`; (b) the names `SYSTEM_SEARCHES_PER_DAY` / `systemSearchDayKey` /
-              `searches_today` / `path:"system-search"` now describe something only a pool rebuild
-              increments — renaming touches a migrated counter column so it is not C's call this
-              round. **Ruling 12 point 7's tally 2 is unaffected and stands as written**: the refresh
-              path writes a `breaker` row, never a `search` row.
-           2. **The RULING 75 collateral** (§4, 5-04 iii). Ten cases inherited from the earlier
-              report-parity loop are not about the freemium contract at all — they assert how the
-              gemini adapter is *called*. Six rewrite cleanly to `null`. The other four
-              (`jobweb.test.ts:3208`,`3228`,`3245` · `eventweb.test.ts:2711`) test option-building
-              inside a now-unreachable `fetchImpl`. B recommends **(a)** rewrite them to assert the
-              surface never calls the adapter, cost recorded: the deny-list, suffix and admission
-              rules lose live coverage. **(b)** extracting that option-building into a testable pure
-              function keeps the coverage but is a production refactor D2a did not ask for. B
-              recommends (a) on Ruling 12 point 2's own reasoning; it retires an earlier loop's
-              rulings, so it is the manager's call.
+OPEN FOR MANAGER:  none — B's two POLICY items ruled in §1n (Ruling 13 points 1 and 4).
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
@@ -793,6 +767,59 @@ moot and withdrawn — the trigger gives every future sign-up its 14 days and no
    point 4, plus: **`process.env.TAVILY_API_KEY` reads anywhere in non-test source (must be 0)**;
    **`kind:"search"` usage rows produced (must be 0)**; **operator-key search requests for every
    persona including paid (must be 0 on every surface)**; R-METER-2 re-listed by name as `N/A`.
+
+---
+
+## §1n. RULING 13 — after round-5 B; three manager errors corrected by execution (2026-09-07, BINDING)
+
+**B checked Ruling 12 against the source and found the manager wrong in three places. All three
+corrections are accepted; the first changes the design.** The manager re-read the code and confirms
+each: `consumeSystemSearches` has six call sites in five files, of which `jobs/pipeline.ts:258` and
+`events/pipeline.ts:275` are the forced-rebuild caller Ruling 12 never accounted for.
+
+1. **The search breaker does NOT become unreachable — and it must not.** Ruling 12 points 2–3 and
+   the first R-QUOTA-2 amendment were wrong. The fan-out caller (`jobweb` / `eventweb` /
+   `web-search`) does die under D2a; the **forced pool rebuild** caller lives, gated on
+   `poolRefreshAllowed`, and a forced rebuild still spends operator money — the query-generation
+   LLM call — so removing its cap turns the refresh button into an unbounded spend button (the
+   code's own docblock says exactly this). **The mechanism stays. Only its name was made false by
+   D2a, so the name changes:** the counter key and constant become `forced_rebuilds_today` /
+   `FORCED_REBUILDS_PER_DAY`, cap unchanged at 500/day. Renaming is free right now — the migrations
+   are unapplied and there are no users, so no stored counter is orphaned. R-QUOTA-2 is scored on
+   the trial cap, the 200/day deep-report breaker **and** this rebuild breaker (spec corrected,
+   dated). **R-METER-2 stays N/A** — this path writes `kind: "breaker"`, never `kind: "search"`,
+   which B verified.
+2. **The fourth sentinel route suite is `api/test-digest`, not `api/figure`** — an error in the
+   manager's brief, not in the build. `api/figure/route.test.ts` carries no operator-search
+   sentinel; `test-digest` already asserts zero and needs no change. No consequence beyond the
+   record.
+3. **`SystemSearchKeyInput.systemSearchAllowed` must NOT be removed**, and this is elevated to a
+   named trap for C. Once the system Tavily branch goes, the field *looks* dead — but it is the
+   only gate on the Brave env read, and deleting it re-opens precisely the hole item 2-04 closed.
+   **C keeps the field and adds a protective test**: with `systemSearchAllowed: false` and
+   `BRAVE_SEARCH_API_KEY` set, the resolver returns no Brave key. This is the loop's standing
+   lesson — a guard removed because it looks unused is how the same hole comes back.
+4. **POLICY on the Ruling 75 collateral — B's recommendation adopted, both halves.** Ten inherited
+   report-parity cases lose their subject when grounding becomes unreachable. **Six** are
+   surface-resolver unit tests: rewrite in place so the same inputs now assert `null` — they become
+   the proof that no plan reaches grounding, which is worth asserting. **Four** test option-building
+   inside a now-unreachable path: rewrite them to assert the surface never calls the adapter, and
+   **record the coverage cost** rather than extracting a production seam D2a did not ask for.
+   **Accepted cost, with machinery:** A tallies "Ruling 75 option-building cases now asserting
+   absence rather than content" (4) every round; **threshold** — if grounding is ever re-enabled for
+   any plan, those four are restored to content assertions in the same round, and the tally is how
+   anyone notices they are owed.
+5. **Round 5 stays B → C → A.** C works 5-01 … 5-04 with points 1, 3 and 4 folded in. The rename of
+   point 1 belongs to 5-02's item (the entitlement and its counter names travel together); C may
+   split it out and say so.
+6. **QUEUED FOR ROUND 6, NOT THIS ROUND — a dated deadline that must not be lost.** Both Gemini
+   models this product runs on (`gemini-2.5-flash-lite` as `small`, `gemini-2.5-flash` as `large`)
+   **retire on 2026-10-16**. The manager's recommendation to the owner, pending the owner's word:
+   point **both** tiers at `gemini-3.1-flash-lite` — it is the official successor, it is cheaper on
+   both axes than the `large` model in use today, it benchmarks well above it, and it is the
+   cheapest endpoint that survives the retirement. Estimated effect: a deep report 0.70¢ -> 0.86¢, a
+   free user $0.14 -> $0.32/month, break-even conversion 2.4% -> 2.7%. **Kept out of round 5 on
+   purpose** — mixing a model swap into a spend-policy change makes both unmeasurable.
 
 ## §2. ROLES — DO ONLY YOUR OWN JOB
 

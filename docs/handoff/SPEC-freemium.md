@@ -217,6 +217,16 @@ route behaviour, or grep result). Requirements are grouped; numbering is stable 
   unreachable** and drops out of what R-QUOTA-2 is scored on; the trial cap of 20 and the paid
   200/day deep-report breaker are unchanged and remain the whole of this requirement. The search
   breaker's code stays behind the same hard `false`.
+  **Correction 2026-09-07 (Ruling 13, binding — supersedes the sentence above).** Round-5 B proved
+  by execution that the breaker has **two** callers, and the manager's amendment accounted for one.
+  The search fan-out caller (`jobweb` / `eventweb` / `web-search`) does become unreachable under
+  D2a. The **forced pool rebuild** caller (`jobs/pipeline.ts`, `events/pipeline.ts`, gated on
+  `poolRefreshAllowed`) stays reachable and **must stay** — a forced rebuild still spends operator
+  money on the query-generation LLM call, so the refresh button without it is an unbounded spend
+  button. What changed is only what it guards, so the counter is **renamed to say so**:
+  `forced_rebuilds_today` / `FORCED_REBUILDS_PER_DAY`, cap unchanged at 500/day. R-QUOTA-2 is
+  scored on the trial cap, the 200/day deep-report breaker, **and** this rebuild breaker. A row
+  written by this path is `kind: "breaker"`, never `kind: "search"`, so R-METER-2 stays N/A.
 - **R-QUOTA-3.** Shallow (abstract-only) paper reports, ranking, digest and query generation are
   **not** counted against the deep-report quota.
   **Amendment 2026-09-05 (Ruling 9, binding):** the exemption is a **depth**, never a
