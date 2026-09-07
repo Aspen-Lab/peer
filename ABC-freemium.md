@@ -996,19 +996,9 @@ PENDING USER ACTION: (1) **Apply the three migrations** under `web/supabase/migr
            NOT carry `TAVILY_API_KEY`; deploy only after the branch is green and merged.
            DONE: the local `GOOGLE_API_KEY` is filled (Ruling 21 point 4). WITHDRAWN: the trial
            backfill (no users); the 2026-10-01 model escalation (the owner decided).
-OPEN FOR MANAGER:  **THREE, all from round-8 C, all recorded rather than acted on (§2).**
-           (1) **6-02's deviation needs ratifying or reversing.** Ruling 23 point 1 prescribes one
-           widened regex; C measured live that it would 400 the two global fallback models and
-           empty that chain in silence, and built a per-family control instead. The ruling's stated
-           goal is met; its stated mechanism is not. (2) **8-01(b) used the switch that already
-           existed** (`GOOGLE_VERTEX_SEARCH_FALLBACK`, flipped opt-out -> opt-in) rather than the
-           threshold the brief named, because Ruling 23's *"there is no on/off switch"* is
-           contradicted by B's own §4 entry. Same default, one variable instead of two.
-           (3) **The two operational Vertex scripts still carry the fallback 8-01(a) removed**, so
-           an operator can build a Search App the app never queries, with no error. Two lines;
-           outside the item's seam, so C did not touch them.
-           **RESOLVED:** B's grounding-backfill POLICY was ruled in §1x (Ruling 23 point 3) and is
-           implemented — default off, nothing deleted, one variable restores it.
+OPEN FOR MANAGER:  none — C's flag becomes 9-01 (two operator scripts still accept the old
+           Vertex search setting name, so an index could be built that the app never queries).
+           The manager's own false absence claim is retracted in §1y (Ruling 24 point 1).
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
@@ -2150,6 +2140,61 @@ of the loop.**
    places it is read.
 7. **Round-8 order: 6-02 (with the thinking fix) -> 8-01 (both halves) -> 8-02.**
 
+---
+
+## §1y. RULING 24 — the outage is closed; the manager made the very error it was ruling about (2026-09-07, BINDING)
+
+**Manager's independent verification, all three items:**
+- Gate cold: tsc 0 · eslint 1 (standing `quiz.tsx:46`) · vitest **128 files / 2934 passed / 1
+  skipped / 0 failed** — identical to C's, **+10 tests, none deleted**.
+- **8-02 run by the manager against the live key:** `gemini-3.1-flash-lite  small+large  PASS`,
+  a real billed call through the product's own provider (`in=412 out=9 746ms ok`), four other
+  vendors `SKIP  no key`, **no key material printed**. **The outage is closed and the closure is
+  proved by execution, not by a passing suite.**
+- `fallbackEnabled()` read in source at `vertex-search.ts:487`, reading
+  `GOOGLE_VERTEX_SEARCH_FALLBACK`. **It exists.**
+- `thinkingOffConfig(modelId)` now returns a per-family config and `disableThinking` derives from
+  it, so the code chooses **which** off-setting to send rather than **whether** to send one.
+
+1. **THE MANAGER'S OWN ERROR, recorded plainly because the loop's rules apply to me.** Ruling 23
+   point 3 stated as fact: *"there is no on/off switch — only that threshold."* **That is false.**
+   `fallbackEnabled()` sits **seven lines above** the call site I read. I grepped around the call
+   site and around the constants, found nothing, and **declared an absence without stating where I
+   had looked** — the exact standard this loop imposes on every agent ("any 'no honest source
+   exists' claim must say where you looked"), and the exact one-file-away miss I was ruling about
+   in the same breath. **The ruling's conclusion survives** — the default still flips to off, for
+   the credit reason, which is unaffected — but its stated mechanism was wrong and C used the
+   pre-existing flag instead of the threshold I named. **New standing rule (§3), binding on the
+   manager first:** *an absence claim by anyone, including the manager, states the search scope
+   that produced it — the exact greps run and the files read — or it is a guess wearing a fact's
+   clothes.*
+2. **C stopped B's prescribed fix from causing a second outage, and that is the escape clause
+   working exactly as designed.** B's guide said to widen the thinking pattern to cover the new
+   model. C called the live API for **every** model the code can reach first, and found **two of
+   them reject that setting with a 400** — while the provider swallows errors and moves on, so the
+   widened pattern would have **silently killed the fallback chain**. C stopped, traced, and built
+   a different shape: pick the setting per family; **an unknown model keeps thinking on**, because
+   an unmeasured model should cost money rather than break. **The lasting guard is a test that
+   walks every model id the code can send and fails the moment one has no verified setting** — no
+   pattern can cover a generation nobody has called. That is better than what was asked for.
+3. **B's "the design doc is stale" is WITHDRAWN**, on C's evidence: it is correct for two models
+   out of three, and B generalised from the single model it tested. **Recorded so it is not
+   inherited** — the doc stands.
+4. **C found its own first draft carrying B's exact bug** (assuming two model names differ), caught
+   it because the test failed, and fixed it. Recorded as evidence the per-item gate is doing work.
+5. **C's flagged item becomes 9-01.** Two operator scripts still accept the **old** setting name, so
+   someone could build a Vertex search index the app will never query — **silently, with no error**.
+   Two lines, correctly left outside 8-01's scope. It is a trap for the owner specifically, since
+   the owner is the one who would run those scripts if D2b is ever taken.
+6. **8-02 goes into the owner's acceptance checklist**, and it displaces the weakest check there:
+   `npm run check:providers` answers "does the AI actually work" in one command, live, in seconds —
+   which is what check 04 was trying to establish by driving the UI. **The manager updates the
+   checklist artifact this turn.**
+7. **Round 8 continues with A**, who re-measures against denominator **30**, **R-METER-2 `N/A`**,
+   blocked **5** (all needing the migrations). **A runs 8-02 itself** and reports its own output
+   rather than citing the manager's — Ruling 22 point 6's independence requirement, now that the
+   tool exists.
+
 ## §2. ROLES — DO ONLY YOUR OWN JOB
 
 ### Agent A — Reviewer
@@ -2305,6 +2350,10 @@ C does **not** judge whether something should be fixed.
   `startsWith`, `includes`, prefix comparison - not only for places it is read (Ruling 23
   point 6). Round-8 B found a model swap silently inverting a cost policy through
   `/gemini-2\.5-flash/.test(modelId)` in a different file, with no test covering it.
+- **An absence claim states the search scope that produced it** - the exact greps run and the
+  files read - or it is a guess wearing a fact's clothes (Ruling 24 point 1). **This binds the
+  manager first**: Ruling 23 declared a switch did not exist while it sat seven lines above the
+  call site the manager had read.
 - Commit messages: plain sentences in the repo's existing style
   (`feat(scope): …`, `fix(scope): …`, `refactor(scope): …`), ending with
   `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>`.
