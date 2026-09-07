@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { REPORT_LABEL_STEP } from "./report-section";
+import { UPGRADE_HREF } from "@/lib/navigation/upgrade-destination";
 import type { AiMode } from "@/lib/feed/ai-tier";
 import type { Plan } from "@/lib/entitlement/types";
 
@@ -111,8 +112,12 @@ export function TierUpgradeBlock({
           <span className="font-semibold text-heading">Peer Pro is $12/month</span>
           , or $6 for students.
         </p>
+        {/* 7-02(a) — the literal moved to `UPGRADE_HREF`. This surface already
+            pointed at the right page; the constant is what stops the next
+            surface pointing somewhere else, as `QuotaNotice` did for five
+            rounds. */}
         <Link
-          href="/welcome?step=ai"
+          href={UPGRADE_HREF}
           className="mt-2 inline-flex items-center gap-1.5 text-body-sm font-semibold text-accent transition-colors hover:text-heading"
         >
           Or use your own AI key

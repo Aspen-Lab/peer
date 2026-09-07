@@ -4,6 +4,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { QuotaNotice } from "./quota-notice";
+import { UPGRADE_HREF } from "@/lib/navigation/upgrade-destination";
 import type { QuotaSignal } from "@/lib/usage/deep-report-quota";
 import type { Plan } from "@/lib/entitlement/types";
 
@@ -85,7 +86,13 @@ describe("QuotaNotice", () => {
       "Deep reports are temporarily unavailable — your allowance is unchanged. Try again shortly.",
     );
     expect(html).not.toContain("Peer Pro");
-    expect(html).not.toContain("/settings");
+    // 7-02(a) — this line read `not.toContain("/settings")` while `/settings`
+    // was the CTA's destination. The route never existed, so after the fix that
+    // assertion would have passed on a string no component can emit any more:
+    // green, and measuring nothing. Rewritten to state what it always meant —
+    // no upgrade call to action renders here — through the shared constant, so
+    // it keeps meaning that when the destination next moves.
+    expect(html).not.toContain(UPGRADE_HREF);
     expect(html).toContain('data-quota-reason="unavailable"');
   });
 
@@ -142,7 +149,9 @@ describe("QuotaNotice at the daily breaker (3-01)", () => {
     // formatter renders "Resets in 1 day." here and fails on this line.
     expect(html).toContain("Resets in 1 hour.");
     expect(html).not.toContain("Peer Pro");
-    expect(html).not.toContain("/settings");
+    // 7-02(a) — see the note on the outage case: asserted through the shared
+    // constant, because `/settings` is a string nothing can render any more.
+    expect(html).not.toContain(UPGRADE_HREF);
     expect(html).not.toContain("Add your own key");
   });
 
@@ -222,7 +231,9 @@ describe("QuotaNotice before the entitlement is known (6-04)", () => {
 
     expect(html).not.toContain("Peer Pro");
     expect(html).not.toContain("Add your own key");
-    expect(html).not.toContain("/settings");
+    // 7-02(a) — see the note on the outage case: asserted through the shared
+    // constant, because `/settings` is a string nothing can render any more.
+    expect(html).not.toContain(UPGRADE_HREF);
   });
 
   it("upsells NOBODY at the daily breaker while the plan is unknown", () => {

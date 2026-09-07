@@ -2,6 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { TierUpgradeBlock } from "./tier-upgrade-block";
+import { UPGRADE_HREF } from "@/lib/navigation/upgrade-destination";
 import type { AiMode } from "@/lib/feed/ai-tier";
 import type { Plan } from "@/lib/entitlement/types";
 
@@ -52,7 +53,9 @@ describe("TierUpgradeBlock", () => {
 
     expect(html).toContain("$12/month");
     expect(html).toContain("$6 for students");
-    expect(html).toContain('href="/welcome?step=ai"');
+    // 7-02(a) — asserted through the shared constant, not a retyped literal, so
+    // the test and the code cannot drift apart the way the three surfaces did.
+    expect(html).toContain(`href="${UPGRADE_HREF}"`);
     expect(html).not.toMatch(/checkout|stripe|billing/i);
   });
 

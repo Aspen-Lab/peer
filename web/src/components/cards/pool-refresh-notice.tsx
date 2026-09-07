@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { REPORT_LABEL_STEP } from "@/components/reports/report-section";
+import { UPGRADE_HREF } from "@/lib/navigation/upgrade-destination";
 import type { ClientEntitlement } from "@/lib/entitlement/allowance";
 
 /**
@@ -121,8 +122,11 @@ export function PoolRefreshNotice({
         {signedOut ? null : (
           <p className="mt-3 text-caption leading-5 text-text-faint">
             Peer Pro refreshes them whenever you ask.{" "}
+            {/* 7-02(a) — the literal moved to `UPGRADE_HREF`. This CTA is the
+                one that makes a PLAN promise rather than a key promise, which
+                is why 7-02(b) put the plan copy on the destination. */}
             <Link
-              href="/welcome?step=ai"
+              href={UPGRADE_HREF}
               className="font-semibold text-accent underline-offset-2 hover:underline"
             >
               See what Pro adds

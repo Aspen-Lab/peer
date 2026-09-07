@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { REPORT_LABEL_STEP } from "./report-section";
 import { quotaMessage, type QuotaSignal } from "@/lib/usage/deep-report-quota";
+import { UPGRADE_HREF } from "@/lib/navigation/upgrade-destination";
 import type { Plan } from "@/lib/entitlement/types";
 
 /**
@@ -138,8 +139,12 @@ export function QuotaNotice({
         {showUpgradePrompt ? (
           <p className="mt-3 text-caption leading-5 text-text-faint">
             Peer Pro lifts the monthly limit.{" "}
+            {/* 7-02(a) — this said `/settings`, which is not a route and never
+                has been. The reader most likely to be about to pay was the one
+                reader sent to `not-found`. The destination now comes from the
+                single constant all three upsell surfaces share. */}
             <Link
-              href="/settings"
+              href={UPGRADE_HREF}
               className="font-semibold text-accent underline-offset-2 hover:underline"
             >
               Add your own key

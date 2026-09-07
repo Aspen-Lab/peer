@@ -12892,3 +12892,65 @@ function that computes its strings — which is the seam Ruling 68a created for 
 plus a `tsc` pass over the real JSX guard. The one thing that is therefore **named rather than
 claimed**: nobody has watched the span vanish in a browser, and C's new case should assert the
 rendered absence, not only the `null`.
+
+### Round 7 — Agent C
+
+**Turn lock claimed `C-round7 @ 2026-09-07T21:10:41Z`.** Gate confirmed green **cold, before the
+first edit**, on a clean tree: `tsc` exit 0 · `eslint` ✖ 1 problem (1 error, 0 warnings) — the
+standing `quiz.tsx:46` · `vitest` **Test Files 125 passed | 1 skipped (126) · Tests 2906 passed |
+1 skipped (2907) · 0 failed**. Identical to B's and to round-6 A's, as it must be.
+
+#### 7-02(a) — ONE DESTINATION, ONE PLACE. **LANDED.**
+
+**The dead link is gone.** `quota-notice.tsx` pointed at `/settings`, a route that has never
+existed on any branch; it now renders `UPGRADE_HREF`, the same constant the other two surfaces
+render.
+
+**The seam is B's, taken as written.** `src/lib/navigation/upgrade-destination.ts` exports the
+single constant `UPGRADE_HREF = "/welcome?step=ai"`, in the module that already holds
+`feed-history.ts` and `feed-tab.ts` and no UI. Its docblock says what the constant is for, what
+moves when D7's payment ships (**this line, and nothing else**), and — carrying B's 7-02.5 contract
+forward — that a future destination which does not exist yet must let the call to action be
+**omitted** rather than pointed at a placeholder. All three surfaces import it; each keeps a short
+JSX comment saying why the literal left.
+
+**ZERO SURVIVING LITERALS, ASSERTED BY A TEST RATHER THAN A GREP.**
+`src/lib/navigation/upgrade-destination.test.ts` scans every non-test `.ts`/`.tsx` under `src/`,
+skips comment lines with `ui-vocabulary.test.ts`'s own mechanical filter (unchanged, not widened),
+excludes only the module that defines the constant, and requires the survivor list to be empty.
+
+**PROVED ABLE TO FAIL.** A literal `href="/welcome?step=ai"` was retyped back into
+`pool-refresh-notice.tsx`; the survivor list went **0 → 1** and named the file and line. Reverted
+with an asserted substitution count of 1 and an asserted absence of the literal before the re-run
+was read; the list returned to **0** and all four affected suites passed.
+
+**A TEST I WROTE AND THEN REMOVED, RECORDED BECAUSE REMOVING IT WAS THE JUDGEMENT CALL.** A third
+case asserted "no reference left to `/settings`" anywhere in `src`. It failed — on **my own JSX
+comment in `quota-notice.tsx`**, the one that records the defect for the next reader. The only ways
+to make it pass were to stop naming the bug in the comment, or to widen the comment filter to JSX
+openers (`{/*`), which §3 forbids doing inline to make a guarded change pass. It was also
+**redundant**: 7-02(c)'s dead-link scan resolves *every* internal link against the real route tree
+with **no allowlist**, so it catches `/settings` and every other dead route generally instead of by
+name. The case is deleted and a comment in its place says all of this, so a later round does not
+re-add it and rediscover the same trap. **No pre-existing test was deleted.**
+
+**TESTS AT RISK — B's list was right and incomplete by one, and the miss is instructive.**
+`tier-upgrade-block.test.tsx:55` pinned the literal; it now asserts through `UPGRADE_HREF`, so the
+test and the code cannot drift. **B did not flag `quota-notice.test.tsx`'s three
+`expect(html).not.toContain("/settings")` lines, and they are the more interesting case:** they
+were negative assertions on a route that no component can emit any more, so after the fix all three
+would have stayed **green while measuring nothing** — a vacuous assertion is exactly the shape that
+let this defect live five rounds. **Rewritten, never deleted**, to state what they always meant —
+no upgrade call to action renders here — through the shared constant, with the reason recorded at
+the first of the three.
+
+**GATE AFTER 7-02(a), VERBATIM.**
+
+```
+tsc     exit 0
+eslint  ✖ 1 problem (1 error, 0 warnings)   — the standing quiz.tsx:46
+vitest  Test Files  126 passed | 1 skipped (127)
+        Tests  2908 passed | 1 skipped (2909)     0 failed
+```
+
+**+1 file, +2 tests. Nothing deleted.**
