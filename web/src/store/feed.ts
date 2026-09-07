@@ -343,7 +343,9 @@ async function fetchRealFeed(
     return data.items.map(scoredItemToPaper);
   } catch (err) {
     console.error("[feed] fetch failed:", err);
-    return [];
+    // Rethrow so the papers lane can record it. Returning [] here made a
+    // dead connection indistinguishable from "nothing new today".
+    throw err;
   }
 }
 
@@ -526,12 +528,21 @@ function syncSavedState<
   });
 }
 
+export type FeedLane = "papers" | "events" | "jobs";
+
 export interface FeedLoadOptions {
   /**
    * Advance novelty only for an explicit refresh/load-more action. A plain
    * page open reads a feed without mutating the recently-shown clock.
    */
   advanceHistory?: boolean;
+  /**
+   * Which pipelines to run. The daily surface asks for `["papers"]` only:
+   * events and jobs are once-a-year needs and used to run on every home-page
+   * tick, taxing the latency of the one lane that is checked every morning.
+   * Omitted means all three, so existing callers keep their behaviour.
+   */
+  lanes?: FeedLane[];
 }
 
 interface FeedState {
@@ -553,6 +564,14 @@ interface FeedState {
   eventsLoading: boolean;
   jobsLoading: boolean;
   lastRefresh: string | null;
+  /**
+   * Why the last paper load produced nothing, when it failed rather than
+   * came back empty. A network failure and a genuinely empty result used to
+   * be the same `[]` — the UI then told a user with a dead connection to
+   * "set up your profile", under a header reading "synced just now".
+   * Transient: not persisted.
+   */
+  feedError: string | null;
   /** The required-topics signature the current `papers` were built from. When
    *  it diverges from the profile's topics, the feed page reloads automatically. */
   feedTopicsKey: string | null;
@@ -653,6 +672,7 @@ export const useFeedStore = create<FeedState>()(
       paperSummaries: {},
       recentlyShownIds: {},
       pendingDismissal: null,
+      feedError: null,
       paperFeedback: {},
       eventFeedback: {},
       jobFeedback: {},
@@ -660,11 +680,18 @@ export const useFeedStore = create<FeedState>()(
       loadFeed: async (options) => {
         const requestId = ++feedLoadSeq;
         const advanceHistory = options?.advanceHistory === true;
+        // Papers only by default. Events and jobs are no longer product surfaces;
+        // their lanes stay callable for now but nothing asks for them.
+        const lanes = options?.lanes ?? ["papers"];
+        const wantsPapers = lanes.includes("papers");
+        const wantsEvents = lanes.includes("events");
+        const wantsJobs = lanes.includes("jobs");
         set({
           isLoading: true,
-          papersLoading: true,
-          eventsLoading: true,
-          jobsLoading: true,
+          papersLoading: wantsPapers,
+          eventsLoading: wantsEvents,
+          jobsLoading: wantsJobs,
+          ...(wantsPapers ? { feedError: null } : {}),
         });
         const {
           papers: displayedPapers,
@@ -722,6 +749,7 @@ export const useFeedStore = create<FeedState>()(
         // refresh lifecycle; it is not a render barrier. Each helper degrades
         // to an empty pool on failure so one surface never blanks the others.
         const papersLane = (async () => {
+          if (!wantsPapers) return;
           try {
             const realPapers = await fetchRealFeed(
               profile,
@@ -773,6 +801,12 @@ export const useFeedStore = create<FeedState>()(
               }
               return paperUpdate;
             });
+          } catch (err) {
+            if (requestId === feedLoadSeq) {
+              set({
+                feedError: err instanceof Error ? err.message : String(err),
+              });
+            }
           } finally {
             // Never let a stale lane clear a newer load's progress flag.
             if (requestId === feedLoadSeq && get().papersLoading) {
@@ -782,6 +816,7 @@ export const useFeedStore = create<FeedState>()(
         })();
 
         const eventsLane = (async () => {
+          if (!wantsEvents) return;
           try {
             const realEvents = await fetchRealEvents(profile, dismissedEventIds);
             if (requestId !== feedLoadSeq) return;
@@ -821,6 +856,7 @@ export const useFeedStore = create<FeedState>()(
         })();
 
         const jobsLane = (async () => {
+          if (!wantsJobs) return;
           try {
             const realJobs = await fetchRealJobs(profile, dismissedJobIds);
             if (requestId !== feedLoadSeq) return;
@@ -862,7 +898,9 @@ export const useFeedStore = create<FeedState>()(
           papersLoading: false,
           eventsLoading: false,
           jobsLoading: false,
-          lastRefresh: new Date().toISOString(),
+          // A failed paper load is not a sync; keep the previous stamp so the
+          // header cannot read "synced just now" over an error.
+          lastRefresh: get().feedError ? get().lastRefresh : new Date().toISOString(),
         });
       },
 

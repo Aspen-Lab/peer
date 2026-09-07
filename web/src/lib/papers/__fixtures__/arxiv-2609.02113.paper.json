@@ -1,0 +1,25 @@
+{
+ "id": "arxiv:2609.02113",
+ "title": "Logarithmic-scale variational quantum eigensolver for off-lattice protein structure prediction in continuous torsional angle space",
+ "authors": [
+  "Fabio Cumbo",
+  "Bryan Raubenolt",
+  "Varun Puram",
+  "Natalie Katzenmeyer",
+  "Jayadev Joshi",
+  "Daniel Blankenberg"
+ ],
+ "relevanceReason": "Pulled from your search. Summary below is the paper's own abstract.",
+ "venue": "arXiv",
+ "source": "arxiv",
+ "summaryIntro": "Classical and current quantum approaches to protein structure prediction (QPSP) face limitations, notably massive qubit requirements restricting near-term models to simplistic on-lattice simulations.",
+ "summaryExperimentKeywords": [
+  "quant-ph",
+  "physics.chem-ph"
+ ],
+ "summaryResultDiscussion": "We propose a logarithmic-scale variational quantum eigensolver (VQE) that reduces qubit requirements for N torsional degrees of freedom to O(log2N), enabling off-lattice, all-atom simulations. Our architecture extracts molecular torsions from relative phases in statevector simulations. On quantum hardware, a decoder maps the empirical cumulative distribution function (CDF) from basis-state probabilities to bounded torsional variables. These feed a classical algorithm to build heavy-atom coordinates. We use an EfficientSU2 ansatz and multi-stage relaxation to mitigate barren plateaus. Structures are evaluated via a custom hybrid quantum-classical Hamiltonian, alongside Rosetta and OpenMM benchmarks. Evaluation on chignolin and Trp-cage yielded native-like conformations. Chignolin reached a 0.623 Å Cα RMSD in retained snapshots and 1.199 Å in final models; Trp-cage achieved a 2.501 Å RMSD among snapshots (3.512 Å in final models). Execution on IBM processors (ibmcleveland, ibmmiami) successfully recovered native-like structures with a best RMSD of 1.758 Å. The custom energy function performed best overall, though energy-ranking imbalances persisted across sampled landscapes for all functions. This introduces the first all-atom, continuous-space quantum algorithm for QPSP. By converting physical qubit constraints into circuit depth constraints, it proves high-resolution prediction is feasible with exponentially fewer qubits. Despite current limits like computational overhead and energy function sensitivity, it establishes a scalable foundation for hybrid quantum biophysics.",
+ "linkPaper": "https://arxiv.org/abs/2609.02113v1",
+ "linkArxiv": "https://arxiv.org/abs/2609.02113v1",
+ "publishedDate": "2026-09-02T05:05:46Z",
+ "isSaved": false
+}

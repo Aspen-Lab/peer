@@ -9,6 +9,7 @@ export const pageContainer = cva("mx-auto w-full px-6", {
     width: {
       narrow: "max-w-[720px]",   // event detail, not-found
       detail: "max-w-[760px]",   // paper/job detail
+      spread: "max-w-[760px] xl:max-w-[1320px] 2xl:max-w-[1352px]", // paper reading: one column, a two-column spread from xl
       content: "max-w-[820px]",  // home column
       wide: "max-w-[920px]",     // saved grid (lg)
       board: "max-w-[1280px]",   // full-bleed feed board

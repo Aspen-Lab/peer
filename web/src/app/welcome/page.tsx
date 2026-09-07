@@ -45,7 +45,6 @@ import {
 } from "@/components/profile/ai-setup";
 import { SchoolAutocomplete } from "@/components/profile/school-autocomplete";
 import { AdvisorField } from "@/components/profile/advisor-field";
-import { CountryMultiSelect } from "@/components/profile/country-multi-select";
 import { ConnectorPanel } from "@/components/profile/connector-panel";
 import { useProfileSettled } from "@/components/first-run";
 import { Callout } from "@/components/ui";
@@ -282,28 +281,6 @@ export default function WelcomePage() {
                 </StepFrame>
               )}
 
-              {key === "visa" && (
-                <StepFrame
-                  kicker="Work rights"
-                  title="Where can you already work?"
-                  subtitle="Add countries where you can work without employer sponsorship. Peer uses this only to hide visa warnings that do not apply to you. You can skip this and keep every visa label visible."
-                >
-                  <Field label="Countries where you do not need sponsorship">
-                    <div data-enter-scope>
-                      <CountryMultiSelect
-                        values={profile.authorisedCountries}
-                        onChange={store.updateAuthorisedCountries}
-                        idPrefix="welcome-authorised-country"
-                      />
-                    </div>
-                  </Field>
-                  <p className="text-caption leading-relaxed text-text-faint">
-                    When you sign in, this setting follows you to your other
-                    devices.
-                  </p>
-                </StepFrame>
-              )}
-
               {key === "topics" && (
                 <StepFrame
                   kicker="The one that matters"
@@ -323,40 +300,6 @@ export default function WelcomePage() {
                         }
                         onChangeSoft={(topics) =>
                           topicMirroring().updatePaperExplore(topics)
-                        }
-                      />
-                    </div>
-                  </Field>
-                  <Field
-                    label="Events"
-                    hint={SURFACE_TOPIC_DESCRIPTIONS.events}
-                  >
-                    <div data-enter-scope>
-                      <TopicsField
-                        required={profile.eventRequiredTopics}
-                        soft={profile.eventExploreTopics}
-                        onChangeRequired={(topics) =>
-                          topicMirroring().updateEventRequired(topics)
-                        }
-                        onChangeSoft={(topics) =>
-                          topicMirroring().updateEventExplore(topics)
-                        }
-                      />
-                    </div>
-                  </Field>
-                  <Field
-                    label="Jobs"
-                    hint={SURFACE_TOPIC_DESCRIPTIONS.jobs}
-                  >
-                    <div data-enter-scope>
-                      <TopicsField
-                        required={profile.jobRequiredTopics}
-                        soft={profile.jobExploreTopics}
-                        onChangeRequired={(topics) =>
-                          topicMirroring().updateJobRequired(topics)
-                        }
-                        onChangeSoft={(topics) =>
-                          topicMirroring().updateJobExplore(topics)
                         }
                       />
                     </div>
@@ -523,24 +466,10 @@ export default function WelcomePage() {
                   <div className="space-y-2.5">
                     <ApiIntro
                       name="Tavily"
-                      tag="Events + academic jobs · all fields"
-                      why="Discovers conferences, CFPs, and postings on sites that have no API (HigherEdJobs, jobs.ac.uk, Nature Careers). This is the single biggest unlock for non-CS fields."
+                      tag="Web discovery · optional"
+                      why="Widens the daily paper search beyond the academic APIs. Peer works without it."
                       how="Free — 1,000 searches/month. Sign up, copy the key from your dashboard."
                       href="https://tavily.com"
-                    />
-                    <ApiIntro
-                      name="Adzuna"
-                      tag="Industry jobs · 19 countries"
-                      why="Aggregates company R&D and lab roles across major job boards — the best source of industry positions for researchers eyeing the private sector."
-                      how="Free tier. Register an app at developer.adzuna.com for an App ID + App Key."
-                      href="https://developer.adzuna.com"
-                    />
-                    <ApiIntro
-                      name="USAJobs"
-                      tag="US federal & national labs"
-                      why="Every US government research posting — NIH, NSF, and DOE national labs (Argonne, NREL, Berkeley Lab). Nowhere else lists these as cleanly."
-                      how="Free, instant. Request a key with your email at developer.usajobs.gov."
-                      href="https://developer.usajobs.gov/apirequest/"
                     />
                   </div>
 
@@ -558,7 +487,7 @@ export default function WelcomePage() {
                 <StepFrame
                   kicker="One more thing"
                   title="Want Peer to learn your reading style?"
-                  subtitle="An optional 2-minute quiz that maps how you tend to work across five axes. It helps shape your feed — but you can absolutely skip it and just explore."
+                  subtitle="An optional 2-minute quiz that maps how you tend to work across five axes. It does not affect your feed — it is just a portrait of how you read."
                 >
                   <div className={cn(cardShell({ interactive: false, entrance: "none", padding: "none" }), "p-6 flex items-start gap-4")}>
                     <span className="inline-flex items-center justify-center w-11 h-11 rounded-full bg-accent-dim text-accent shrink-0">
@@ -786,10 +715,6 @@ function summarizeStep(key: StepKey, profile: UserProfile): string {
         .filter(Boolean)
         .join(" · ");
     }
-    case "visa":
-      return profile.authorisedCountries.length > 0
-        ? profile.authorisedCountries.join(" · ")
-        : "Not set — all visa labels stay visible";
     case "topics": {
       const req = profile.researchTopics.length;
       const soft = profile.softTopics?.length ?? 0;

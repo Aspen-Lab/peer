@@ -58,6 +58,8 @@ export interface Paper {
   summaryIntro: string;
   summaryExperimentKeywords: string[];
   summaryResultDiscussion: string;
+  /** Semantic Scholar TLDR — machine-written, labelled as such on the reading page; never the abstract. */
+  tldr?: string;
   linkPaper?: string;
   linkArxiv?: string;
   linkScholar?: string;

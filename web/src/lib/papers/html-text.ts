@@ -3,7 +3,7 @@
 // pipeline can consume either source transparently.
 //
 // Host coverage (with dedicated parsers, in priority order):
-//   - ar5iv.labs.arxiv.org       (arXiv HTML rendering)
+//   - arxiv.org/html + ar5iv     (LaTeXML rendering)
 //   - pmc.ncbi.nlm.nih.gov       (PubMed Central)
 //   - biorxiv.org / medrxiv.org  (Highwire press templates)
 //   - generic                    (last-resort: <article>/<main> walker)
@@ -38,6 +38,8 @@ export interface ExtractedDocument {
   sections: ExtractedSection[];
   figureCaptions: ExtractedFigureCaption[];
   source: ExtractedSourceKind;
+  /** PDFs only: pages the extractor saw (capped at its page limit). */
+  pageCount?: number;
   reason?: string | null;
 }
 
@@ -71,20 +73,47 @@ function stripTags(html: string): string {
     .trim();
 }
 
-function canonicalizeHeading(heading: string): string {
-  const lower = heading.toLowerCase().replace(/^\d+\.?\s*/, "").trim();
-  if (/material.*method|experimental section|methodolog/.test(lower)) return "methods";
-  if (/method|approach|model|theory/.test(lower)) return "methods";
+/**
+ * Map a heading to the bucket the readers downstream understand.
+ *
+ * Numbering is stripped in every shape LaTeXML, JATS and PDF text produce
+ * ("4.4 Results", "IV. Method", "B.2 Ablations", "Appendix C Proofs") — the
+ * old `^\d+\.?` strip left "4.4 Results" as "4 results" → "body", which is
+ * how a paper's Results and Limitations sections were being dropped on the
+ * floor. The limitations bucket is new: it is the one section a reader most
+ * wants quoted verbatim, and no consumer could ask for it before.
+ */
+export function canonicalizeHeading(heading: string): string {
+  const lower = heading
+    .replace(/^(?:Appendix\s+)?(?:[A-Z]|[IVX]+|\d+)(?:\.\d+)*\.?\s+/, "")
+    .replace(/^\d+(?:\.\d+)*\.?\s*/, "")
+    .toLowerCase()
+    .trim();
+  if (/limitation|caveat|threats? to validity|failure (?:case|mode)s?|weakness/.test(lower)) {
+    return "limitations";
+  }
+  if (/material.*method|experimental (?:section|setup|design|details|procedure)|methodolog/.test(lower)) {
+    return "methods";
+  }
   if (/result.*discussion/.test(lower)) return "results";
-  if (/^result/.test(lower)) return "results";
+  if (/^result|^finding|^evaluation|^experiment|^empirical|^performance|^ablation/.test(lower)) {
+    return "results";
+  }
   if (/discussion/.test(lower)) return "discussion";
-  if (/introduction|background/.test(lower)) return "introduction";
-  if (/related work/.test(lower)) return "related_work";
+  if (/evaluation|experiment|benchmark/.test(lower)) return "results";
+  if (/method|approach|model|theory|framework|architecture|proposed|our solution|formulation|system design/.test(lower)) {
+    return "methods";
+  }
+  if (/introduction|background|motivation/.test(lower)) return "introduction";
+  if (/related work|prior work|literature/.test(lower)) return "related_work";
   if (/^abstract\b/.test(lower)) return "abstract";
-  if (/conclusion|summary/.test(lower)) return "conclusion";
-  if (/reference/.test(lower)) return "references";
-  if (/acknowledg/.test(lower)) return "acknowledgments";
-  if (/supplement|supporting/.test(lower)) return "supplementary";
+  if (/conclusion|summary|future work/.test(lower)) return "conclusion";
+  if (/\bresults?\b/.test(lower)) return "results";
+  if (/reference|bibliograph/.test(lower)) return "references";
+  if (/acknowledg|funding|author contribution|competing interest|conflict of interest|data availability|ethic/.test(lower)) {
+    return "acknowledgments";
+  }
+  if (/supplement|supporting|appendix/.test(lower)) return "supplementary";
   return "body";
 }
 
@@ -110,6 +139,39 @@ function trimToBudget(sections: ExtractedSection[]): ExtractedSection[] {
   return out;
 }
 
+/**
+ * One caption parser for every extractor. Labels used to come out as
+ * "Figure Figure1" (the capture already held the word), tables were labelled
+ * as figures, and LaTeXML subfigure fragments — "(a) Original image" — were
+ * emitted as captions of their own, three of every four on a typical page.
+ * Fragments carry nothing without their parent; they are dropped. Tables keep
+ * their own label so nothing downstream tries to bind them to an image.
+ */
+export function parseCaption(
+  raw: string,
+  ordinal: number,
+): ExtractedFigureCaption | null {
+  const text = raw.trim();
+  if (!text) return null;
+  if (/^\(?[a-z]\)\s/i.test(text)) return null;
+  const match = text.match(/^(fig(?:ure)?|tab(?:le)?)\.?\s*(S?\d+[a-z]?)\b[:.]?\s*(.*)$/i);
+  const kind = match && /^tab/i.test(match[1]) ? "Table" : "Figure";
+  const label = match ? `${kind} ${match[2]}` : `Figure ${ordinal + 1}`;
+  // LaTeXML puts the separator in the tag span AND at the start of the text
+  // ("Figure 1: " + ": A clinician…"); strip any leading punctuation.
+  const caption = (match ? match[3] : text).replace(/^[\s:.\-–—]+/, "").slice(0, 500);
+  return { ordinal, label, caption };
+}
+
+function collectCaptions(html: string, captionRe: RegExp): ExtractedFigureCaption[] {
+  const captions: ExtractedFigureCaption[] = [];
+  for (const match of html.matchAll(captionRe)) {
+    const parsed = parseCaption(stripTags(match[1]), captions.length);
+    if (parsed) captions.push(parsed);
+  }
+  return captions;
+}
+
 function extractTitleFromHtml(html: string): string | null {
   const og = html.match(
     /<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i,
@@ -127,48 +189,59 @@ function extractTitleFromHtml(html: string): string | null {
   return null;
 }
 
-// ── ar5iv (arXiv HTML rendering) ──────────────────────────────────────
-// ar5iv structures the paper as <section class="ltx_section"> with
-// <h2 class="ltx_title ltx_title_section"> headings.
+// ── LaTeXML (arxiv.org/html and ar5iv) ────────────────────────────────
+// arXiv's own HTML render and ar5iv both emit LaTeXML: <section class="ltx_section">
+// with <h2 class="ltx_title ltx_title_section">, nested <section class="ltx_subsection">
+// with <h3 …_subsection>, and so on. The previous parser matched whole
+// <section>…</section> blocks with a non-greedy regex, so a section holding
+// subsections ended at the first nested </section>: "4 Evaluation" kept its
+// preamble and lost 4.4 Results and 4.5 Limitations entirely. This walker
+// slices between consecutive headings of any level instead — each heading
+// owns the text up to the next one, a parent keeps only its own preamble,
+// and nothing is counted twice.
 
-function extractAr5iv(html: string): ExtractedDocument {
+const LATEXML_HEADING_RE =
+  /<h([1-6])\b[^>]*class=["'][^"']*\bltx_title_(?:section|subsection|subsubsection|appendix)\b[^"']*["'][^>]*>([\s\S]*?)<\/h\1>/gi;
+
+function extractLatexml(html: string): ExtractedDocument {
   const sections: ExtractedSection[] = [];
-  const sectionRe = /<section\b[^>]*class=["'][^"']*ltx_section[^"']*["'][^>]*>([\s\S]*?)<\/section>/gi;
-  for (const match of html.matchAll(sectionRe)) {
-    const inner = match[1];
-    const headingMatch = inner.match(
-      /<h2\b[^>]*class=["'][^"']*ltx_title[^"']*["'][^>]*>([\s\S]*?)<\/h2>/i,
+
+  const abstractMatch = html.match(
+    /<div\b[^>]*class=["'][^"']*\bltx_abstract\b[^"']*["'][^>]*>([\s\S]*?)<\/div>/i,
+  );
+  if (abstractMatch) {
+    const text = stripTags(
+      abstractMatch[1].replace(/<h[1-6]\b[^>]*>[\s\S]*?<\/h[1-6]>/i, " "),
     );
-    if (!headingMatch) continue;
-    const heading = stripTags(headingMatch[1]);
-    if (!heading) continue;
-    const bodyHtml = inner.replace(headingMatch[0], " ");
-    const text = stripTags(bodyHtml);
-    if (!text) continue;
-    const canonical = canonicalizeHeading(heading);
-    if (!shouldKeepSection(canonical)) continue;
-    sections.push({ heading, canonical, text: capSection(text) });
+    if (text) sections.push({ heading: "Abstract", canonical: "abstract", text: capSection(text) });
   }
 
-  // Captions: <figcaption class="ltx_caption">Figure 1: <span ...>text</span></figcaption>
-  const captionRe =
-    /<figcaption\b[^>]*class=["'][^"']*ltx_caption[^"']*["'][^>]*>([\s\S]*?)<\/figcaption>/gi;
-  const captions: ExtractedFigureCaption[] = [];
-  let ordinal = 0;
-  for (const match of html.matchAll(captionRe)) {
-    const raw = stripTags(match[1]);
-    if (!raw) continue;
-    const figMatch = raw.match(/^(fig(?:ure)?\.?\s*\d+[a-z]?)\b[:.]?\s*(.*)$/i);
-    const label = figMatch ? `Figure ${figMatch[1].replace(/[^0-9a-z]/gi, "")}` : `Figure ${ordinal + 1}`;
-    const tail = figMatch ? figMatch[2] : raw;
-    captions.push({ ordinal, label, caption: tail.slice(0, 500) });
-    ordinal += 1;
+  const bibIndex = html.search(/<section\b[^>]*class=["'][^"']*\bltx_bibliography\b/i);
+  const bodyEnd = bibIndex >= 0 ? bibIndex : html.length;
+  const heads: Array<{ index: number; end: number; heading: string }> = [];
+  for (const match of html.matchAll(LATEXML_HEADING_RE)) {
+    const index = match.index ?? 0;
+    if (index >= bodyEnd) break;
+    const heading = stripTags(match[2]);
+    if (!heading) continue;
+    heads.push({ index, end: index + match[0].length, heading });
+  }
+  for (let i = 0; i < heads.length; i++) {
+    const stop = i + 1 < heads.length ? heads[i + 1].index : bodyEnd;
+    const text = stripTags(html.slice(heads[i].end, stop));
+    if (!text) continue;
+    const canonical = canonicalizeHeading(heads[i].heading);
+    if (!shouldKeepSection(canonical)) continue;
+    sections.push({ heading: heads[i].heading, canonical, text: capSection(text) });
   }
 
   return {
     title: extractTitleFromHtml(html),
     sections: trimToBudget(sections),
-    figureCaptions: captions,
+    figureCaptions: collectCaptions(
+      html,
+      /<figcaption\b[^>]*class=["'][^"']*ltx_caption[^"']*["'][^>]*>([\s\S]*?)<\/figcaption>/gi,
+    ),
     source: "ar5iv",
   };
 }
@@ -202,24 +275,11 @@ function extractPmc(html: string): ExtractedDocument {
     sections.push({ heading, canonical, text: capSection(text) });
   }
 
-  // Figure captions: <figcaption> or <div class="caption"> containing <p>Fig N. text</p>
-  const captionRe = /<figcaption\b[^>]*>([\s\S]*?)<\/figcaption>/gi;
-  const captions: ExtractedFigureCaption[] = [];
-  let ordinal = 0;
-  for (const match of html.matchAll(captionRe)) {
-    const raw = stripTags(match[1]);
-    if (!raw) continue;
-    const figMatch = raw.match(/^(fig(?:ure)?\.?\s*\d+[a-z]?)\b[:.]?\s*(.*)$/i);
-    const label = figMatch ? `Figure ${figMatch[1].replace(/[^0-9a-z]/gi, "")}` : `Figure ${ordinal + 1}`;
-    const tail = figMatch ? figMatch[2] : raw;
-    captions.push({ ordinal, label, caption: tail.slice(0, 500) });
-    ordinal += 1;
-  }
-
   return {
     title: extractTitleFromHtml(html),
     sections: trimToBudget(sections),
-    figureCaptions: captions,
+    // <figcaption> or <div class="caption"> containing <p>Fig N. text</p>
+    figureCaptions: collectCaptions(html, /<figcaption\b[^>]*>([\s\S]*?)<\/figcaption>/gi),
     source: "pmc",
   };
 }
@@ -257,24 +317,13 @@ function extractBiorxiv(html: string): ExtractedDocument {
     sections.push(...walkHeadings(body));
   }
 
-  // Figures
-  const captions: ExtractedFigureCaption[] = [];
-  const figRe = /<div\b[^>]*class=["'][^"']*\bfig-caption\b[^"']*["'][^>]*>([\s\S]*?)<\/div>/gi;
-  let ordinal = 0;
-  for (const match of html.matchAll(figRe)) {
-    const raw = stripTags(match[1]);
-    if (!raw) continue;
-    const figMatch = raw.match(/^(fig(?:ure)?\.?\s*\d+[a-z]?)\b[:.]?\s*(.*)$/i);
-    const label = figMatch ? `Figure ${figMatch[1].replace(/[^0-9a-z]/gi, "")}` : `Figure ${ordinal + 1}`;
-    const tail = figMatch ? figMatch[2] : raw;
-    captions.push({ ordinal, label, caption: tail.slice(0, 500) });
-    ordinal += 1;
-  }
-
   return {
     title: extractTitleFromHtml(html),
     sections: trimToBudget(sections),
-    figureCaptions: captions,
+    figureCaptions: collectCaptions(
+      html,
+      /<div\b[^>]*class=["'][^"']*\bfig-caption\b[^"']*["'][^>]*>([\s\S]*?)<\/div>/gi,
+    ),
     source: "biorxiv",
   };
 }
@@ -329,22 +378,10 @@ function extractGeneric(html: string): ExtractedDocument {
   );
   const body = articleMatch ? articleMatch[1] || articleMatch[2] : html;
   const sections = walkHeadings(body);
-  const captions: ExtractedFigureCaption[] = [];
-  const figRe = /<figcaption\b[^>]*>([\s\S]*?)<\/figcaption>/gi;
-  let ordinal = 0;
-  for (const match of html.matchAll(figRe)) {
-    const raw = stripTags(match[1]);
-    if (!raw) continue;
-    const figMatch = raw.match(/^(fig(?:ure)?\.?\s*\d+[a-z]?)\b[:.]?\s*(.*)$/i);
-    const label = figMatch ? `Figure ${figMatch[1].replace(/[^0-9a-z]/gi, "")}` : `Figure ${ordinal + 1}`;
-    const tail = figMatch ? figMatch[2] : raw;
-    captions.push({ ordinal, label, caption: tail.slice(0, 500) });
-    ordinal += 1;
-  }
   return {
     title: extractTitleFromHtml(html),
     sections: trimToBudget(sections),
-    figureCaptions: captions,
+    figureCaptions: collectCaptions(html, /<figcaption\b[^>]*>([\s\S]*?)<\/figcaption>/gi),
     source: "generic-html",
   };
 }
@@ -354,7 +391,7 @@ function extractGeneric(html: string): ExtractedDocument {
 export function chooseHtmlExtractor(url: string): (html: string) => ExtractedDocument {
   try {
     const host = new URL(url).hostname.toLowerCase();
-    if (/(^|\.)ar5iv\.labs\.arxiv\.org$/.test(host)) return extractAr5iv;
+    if (/(^|\.)arxiv\.org$/.test(host)) return extractLatexml;
     if (/(^|\.)pmc\.ncbi\.nlm\.nih\.gov$/.test(host)) return extractPmc;
     if (/(^|\.)biorxiv\.org$/.test(host) || /(^|\.)medrxiv\.org$/.test(host)) {
       return extractBiorxiv;
@@ -365,16 +402,30 @@ export function chooseHtmlExtractor(url: string): (html: string) => ExtractedDoc
   return extractGeneric;
 }
 
+const PAPER_BODY_BUCKETS = new Set([
+  "introduction",
+  "methods",
+  "results",
+  "discussion",
+  "conclusion",
+  "related_work",
+  "limitations",
+]);
+
 /**
- * Returns true if the HTML body is too thin to plausibly be full-text — used
- * to detect publisher pages that render an abstract-only stub for
- * non-subscribers.
+ * Whether an extracted page plausibly holds the paper, not a stub around it.
+ *
+ * The old test — 2,500 chars total and one non-abstract section over 800 —
+ * was passed by a Zenodo record's landing page (a 1,445-char "Description"
+ * plus file listings, licence text and citation snippets), which then served
+ * as the paper's "full text". A paper has either a recognisable body section
+ * of real length or several long sections; a landing page has one.
  */
 export function looksLikeFullText(doc: ExtractedDocument, minBodyChars = 2500): boolean {
-  const total = doc.sections.reduce((sum, section) => sum + section.text.length, 0);
+  const body = doc.sections.filter((section) => section.canonical !== "abstract");
+  const total = body.reduce((sum, section) => sum + section.text.length, 0);
   if (total < minBodyChars) return false;
-  // Need at least one non-abstract body section.
-  return doc.sections.some(
-    (section) => section.canonical !== "abstract" && section.text.length >= 800,
-  );
+  const long = body.filter((section) => section.text.length >= 800);
+  if (long.some((section) => PAPER_BODY_BUCKETS.has(section.canonical))) return true;
+  return long.length >= 2;
 }

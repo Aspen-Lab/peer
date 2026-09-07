@@ -1,6 +1,7 @@
 import type { ScoredItem } from "@/lib/scoring/types";
 import { isReviewLike } from "@/lib/scoring/review-policy";
 import { tokenize } from "@/lib/scoring/tokenize";
+import { RERANK_DEFAULT_REASON } from "@/lib/reader/recommendation";
 import type { SearchBrief } from "./profile-compiler";
 
 function overlapScore(text: string, signals: string[]): number {
@@ -92,7 +93,7 @@ export function applyTier1Rerank(items: ScoredItem[], brief: SearchBrief): Score
           ...item.scoreBreakdown,
           combined,
         },
-        relevanceReason: item.relevanceReason || "Matched against your daily search plan.",
+        relevanceReason: item.relevanceReason || RERANK_DEFAULT_REASON,
       };
     })
     .sort((a, b) => b.score - a.score);
@@ -100,18 +101,38 @@ export function applyTier1Rerank(items: ScoredItem[], brief: SearchBrief): Score
   return diversify(scored, brief);
 }
 
+/**
+ * No single researcher should own the day's briefing. `topicKey` keys on the
+ * first three title tokens, which does not catch one author publishing six
+ * near-identical papers into the same repository — "Graph Neural Networks for
+ * Protein Structure Prediction", "Quantum Machine Learning Protein Structure
+ * Prediction", "Quantum Bioinformatics: Protein Structure Prediction..." all
+ * hash to different keys while being the same submission cluster.
+ */
+const MAX_PER_AUTHOR = 2;
+
+function firstAuthorKey(item: ScoredItem): string | null {
+  const first = item.authors?.[0]?.trim().toLocaleLowerCase();
+  return first && first.length > 0 ? first : null;
+}
+
 function diversify(items: ScoredItem[], brief: SearchBrief): ScoredItem[] {
   const maxPerTopic = brief.controls.discoveryMode === "core" ? 4 : 3;
-  const seen = new Map<string, number>();
+  const seenTopic = new Map<string, number>();
+  const seenAuthor = new Map<string, number>();
   const picked: ScoredItem[] = [];
   const deferred: ScoredItem[] = [];
 
   for (const item of items) {
-    const key = topicKey(item) || item.source;
-    const count = seen.get(key) ?? 0;
-    if (count < maxPerTopic) {
+    const topic = topicKey(item) || item.source;
+    const author = firstAuthorKey(item);
+    const topicCount = seenTopic.get(topic) ?? 0;
+    const authorCount = author ? (seenAuthor.get(author) ?? 0) : 0;
+
+    if (topicCount < maxPerTopic && authorCount < MAX_PER_AUTHOR) {
       picked.push(item);
-      seen.set(key, count + 1);
+      seenTopic.set(topic, topicCount + 1);
+      if (author) seenAuthor.set(author, authorCount + 1);
     } else {
       deferred.push(item);
     }

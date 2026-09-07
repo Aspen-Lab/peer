@@ -329,7 +329,15 @@ export async function runFeedPipeline(
   // a user's likes, dismissals and preferred journals move today's pool without
   // re-fetching a source or re-spending an LLM token.
   const scored = scorePaperCandidates(pool.items, req, brief, true);
-  const tier1Ranked = requestedTier >= 1 ? applyTier1Rerank(scored, brief) : scored;
+  // Runs at every tier, including 0. `applyTier1Rerank` is pure local
+  // computation — weighted boosts plus a per-topic/per-author diversify pass,
+  // no model call and no network — so it belongs to the floor that
+  // PRODUCT_DIRECTION requires to work without keys. It was gated behind
+  // `requestedTier >= 1`, and the client only ever sends 0 or 2
+  // (`store/feed.ts`: `hasUserLlmOverride ? 2 : 0`), so for every user without
+  // their own API key the diversify pass had never executed once and a single
+  // author could take six of the ten slots.
+  const tier1Ranked = applyTier1Rerank(scored, brief);
   // Replays the ranking the LLM produced when the pool was built. On a Tier-0
   // pool `aiOrder` is empty and this is a no-op.
   const aiRanked = applyRerankOrder(tier1Ranked, pool.aiOrder, pool.aiReasons);

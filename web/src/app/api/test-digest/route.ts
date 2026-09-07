@@ -10,6 +10,7 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { canUseLocalServerProvider } from "@/lib/llm/providers/registry";
 import { runFeedPipeline } from "@/lib/feed/pipeline";
 import type { FeedControls } from "@/lib/feed/profile-compiler";
 import { sendDigestEmail } from "@/lib/email/send-digest";
@@ -70,6 +71,15 @@ function feedControlsFromProfile(profile: TestProfileRow | null): FeedControls {
 }
 
 export async function POST(req: NextRequest) {
+  // Development only. This runs the full feed pipeline and sends an email,
+  // bypassing digest_enabled, frequency and time-of-day — so on a deployed
+  // instance any signed-in visitor could spend the operator's model and email
+  // budget at will. Its sibling diagnostic api/digest/test was already gated
+  // this way; this one was not.
+  if (!canUseLocalServerProvider()) {
+    return NextResponse.json({ error: "not found" }, { status: 404 });
+  }
+
   const supabase = await createClient();
   const {
     data: { user },

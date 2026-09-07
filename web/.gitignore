@@ -32,6 +32,8 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# …except the one that lists the names and no values
+!.env.example
 
 # vercel
 .vercel

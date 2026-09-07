@@ -1,0 +1,126 @@
+{
+ "id": "openalex:W7204479535",
+ "title": "A systematic evaluation of deep learning-based protein structure prediction for HIV-1 enzymes",
+ "authors": [
+  "Francisco Merca",
+  "Lennert Saerens",
+  "Filipa Tavares",
+  "Ana B. Abecasis",
+  "Pieter Libin"
+ ],
+ "relevanceReason": "Pulled from your search. Summary below is the paper's own abstract.",
+ "venue": "Scientific Reports",
+ "source": "other",
+ "summaryIntro": "Accurate protein structure prediction is a prerequisite for proactive, structure-based assessment of antiviral drug resistance.",
+ "summaryExperimentKeywords": [
+  "Enzyme",
+  "Protein structure",
+  "Protein structure prediction",
+  "Peptide sequence",
+  "Text mining",
+  "Machine Learning in Bioinformatics"
+ ],
+ "summaryResultDiscussion": "In this work, we systematically benchmark five state-of-the-art deep learning protein structure prediction models (i.e., AlphaFold2, AlphaFold3, ESMFold, Ember3D, and ESM3) on three HIV-1 enzymes central to antiretroviral therapy. We evaluate predictions against a curated dataset of high-resolution experimental structures deposited after the training cutoff dates of the evaluated models, ensuring an unbiased assessment on unseen data. Structural accuracy is quantified using global and per-residue root mean square deviation and TM-score, complemented by an analysis of model-reported confidence scores (pLDDT) and the correlation between the pLDDT and local structural accuracy. Our results show that AlphaFold-based models achieve strong overall performance, although model rankings are enzyme-dependent, with ESMFold being competitive for specific targets, at a lower computational cost. Performance degrades markedly for RT, which presents the greatest modeling challenge due to its large size and multidomain structure. Ember3D and ESM3-Open show poor structural agreement across all targets. Confidence scores correlate meaningfully with local structural deviation for AlphaFold-based models and ESMFold, supporting their use as proxies for prediction reliability in the absence of experimental reference structures. Extended all-atom, side-chain, and functional-site analyses further show that prediction quality is model- and enzyme-dependent at functionally relevant regions, with AlphaFold3 and ESMFold best preserving functional-site geometry. Finally, a docking analysis using protease inhibitor Darunavir indicates that AlphaFold3 most closely reproduces reference docking affinities for HIV-1 protease. These findings provide practical guidance for selecting structure prediction models in virology applications, and highlight the current limitations of state-of-the-art models.",
+ "linkPaper": "https://doi.org/10.1038/s41598-026-64923-9",
+ "doi": "10.1038/s41598-026-64923-9",
+ "publishedDate": "2026-08-27",
+ "isSaved": false,
+ "preferenceSignals": [
+  {
+   "key": "openalex_topic:t12254",
+   "label": "Machine Learning in Bioinformatics",
+   "source": "openalex_topic",
+   "confidence": 0.8064000010490417
+  },
+  {
+   "key": "openalex_topic:t10044",
+   "label": "Protein Structure and Dynamics",
+   "source": "openalex_topic",
+   "confidence": 0.10980000346899033
+  },
+  {
+   "key": "openalex_topic:t12576",
+   "label": "vaccines and immunoinformatics approaches",
+   "source": "openalex_topic",
+   "confidence": 0.0142000000923872
+  },
+  {
+   "key": "openalex_keyword:enzyme",
+   "label": "Enzyme",
+   "source": "openalex_keyword",
+   "confidence": 0.5297999978065491
+  },
+  {
+   "key": "openalex_keyword:protein-structure",
+   "label": "Protein structure",
+   "source": "openalex_keyword",
+   "confidence": 0.44699999690055847
+  },
+  {
+   "key": "openalex_keyword:protein-structure-prediction",
+   "label": "Protein structure prediction",
+   "source": "openalex_keyword",
+   "confidence": 0.3862999975681305
+  },
+  {
+   "key": "openalex_keyword:peptide-sequence",
+   "label": "Peptide sequence",
+   "source": "openalex_keyword",
+   "confidence": 0.2791000008583069
+  },
+  {
+   "key": "openalex_keyword:text-mining",
+   "label": "Text mining",
+   "source": "openalex_keyword",
+   "confidence": 0.2784999907016754
+  },
+  {
+   "key": "openalex_concept:c181199279",
+   "label": "Enzyme",
+   "source": "openalex_concept",
+   "confidence": 0.5297999978065491
+  },
+  {
+   "key": "openalex_concept:c70721500",
+   "label": "Computational biology",
+   "source": "openalex_concept",
+   "confidence": 0.5246999859809875
+  },
+  {
+   "key": "openalex_concept:c47701112",
+   "label": "Protein structure",
+   "source": "openalex_concept",
+   "confidence": 0.44699999690055847
+  },
+  {
+   "key": "openalex_concept:c18051474",
+   "label": "Protein structure prediction",
+   "source": "openalex_concept",
+   "confidence": 0.3862999975681305
+  },
+  {
+   "key": "openalex_concept:c55493867",
+   "label": "Biochemistry",
+   "source": "openalex_concept",
+   "confidence": 0.3833000063896179
+  },
+  {
+   "key": "openalex_concept:c60644358",
+   "label": "Bioinformatics",
+   "source": "openalex_concept",
+   "confidence": 0.3212999999523163
+  },
+  {
+   "key": "openalex_concept:c167625842",
+   "label": "Peptide sequence",
+   "source": "openalex_concept",
+   "confidence": 0.2791000008583069
+  },
+  {
+   "key": "openalex_concept:c71472368",
+   "label": "Text mining",
+   "source": "openalex_concept",
+   "confidence": 0.2784999907016754
+  }
+ ]
+}

@@ -2,13 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { resolveProvider } from "@/lib/llm/providers/registry";
 import type { ProviderOverrideConfig } from "@/lib/llm/providers/types";
 import {
-  buildFallbackPaperReport,
-  improvePaperReportFit,
-  isPaperReviewLike,
+  emptyReport,
   sanitizePaperReport,
+  withoutFigures,
   type PaperReport,
   type PaperReportRequest,
 } from "@/lib/papers/report";
+import { verifyReportEvidence } from "@/lib/papers/evidence";
 import { generateDeepReport, buildPaywalledFallback } from "@/lib/papers/deep-report";
 import { bindFiguresToReport } from "@/lib/papers/figure-binding";
 import { getFullText } from "@/lib/papers/full-text";
@@ -30,11 +30,18 @@ interface ExtendedRequest extends PaperReportRequest {
   llmOverride?: ProviderOverrideConfig;
   /** Opt into the NDJSON response when setting an Accept header is impractical. */
   stream?: boolean;
+  /**
+   * The reader's current project and challenges, joined by the client
+   * (`[currentProject, currentChallenges].filter(Boolean).join("\n")`). Only
+   * when non-empty is `relationToYourWork` asked for; with nothing to relate
+   * the paper to, the key is left out of the schema rather than invited.
+   */
+  project?: string;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
-function parseJsonObject(text: string): Partial<PaperReport> | null {
+function parseJsonObject(text: string): unknown {
   const candidates = [
     text.trim(),
     text.replace(/^```json\s*/i, "").replace(/```\s*$/g, "").trim(),
@@ -44,7 +51,7 @@ function parseJsonObject(text: string): Partial<PaperReport> | null {
 
   for (const candidate of candidates) {
     try {
-      return JSON.parse(candidate) as Partial<PaperReport>;
+      return JSON.parse(candidate) as unknown;
     } catch {
       // Try the next candidate.
     }
@@ -52,88 +59,115 @@ function parseJsonObject(text: string): Partial<PaperReport> | null {
   return null;
 }
 
-function buildShallowPrompt({ paper, contextHint }: PaperReportRequest): string {
-  const isReview = isPaperReviewLike(paper);
-  const secondSection = isReview
+/** The whole abstract as the mapper split it — the only text a Tier-1 claim may quote. */
+function fullAbstract(paper: PaperReportRequest["paper"]): string {
+  return [paper.summaryIntro, paper.summaryResultDiscussion].filter(Boolean).join(" ");
+}
+
+function projectText(body: ExtendedRequest): string {
+  return typeof body.project === "string" ? body.project.trim() : "";
+}
+
+/**
+ * The abstract-tier schema. No limitations and no next step — those need the
+ * full text and are Pass-2 fields. `relationToYourWork` only when the reader
+ * has a project. Every claim's `evidence` is one sentence of the abstract,
+ * and `verifyReportEvidence` drops what is not.
+ */
+function buildShallowPrompt(body: ExtendedRequest): string {
+  const { paper, contextHint } = body;
+  const project = projectText(body);
+  const evidenceRule =
+    "one sentence copied character-for-character from the abstract that supports `text`";
+
+  const relationSchema = project
     ? {
-        reviewContents: {
-          sections: [
+        relationToYourWork: {
+          basedOn: "the reader's project text, copied back",
+          items: [
             {
-              heading: "exact section title from the paper body",
-              summary: "1-2 sentences summarising the key point of that section",
+              text: "one sentence relating a specific finding or method of this paper to the reader's project (max 3 items)",
+              evidence: evidenceRule,
             },
           ],
-          _note: "List each major body section of this review/survey paper. Use the actual section headings where known; otherwise infer plausible section titles from the abstract. Aim for 4-8 sections. Do NOT include abstract or conclusion as separate sections.",
         },
       }
-    : {
-        resultsAndSignificance: {
-          summary: "2-3 sentences explaining the key result and why it matters, especially for the user's interests.",
-          keyResults: [
-            {
-              title: "short result label",
-              detail: "one concrete result sentence grounded in the abstract",
-              figureIndex: "integer from 1 to 5. Use 1 for the first result figure, 2 for the next.",
-            },
-          ],
-        },
-      };
+    : {};
 
   return JSON.stringify({
-    task: isReview
-      ? "Create a structured Peer paper report for a REVIEW or SURVEY paper. Do not invent numbers. Map the body sections of the review into reviewContents.sections with their headings and 1-2 sentence summaries. Never say that user context is missing."
-      : "Create a structured Peer paper report from the available paper metadata. Do not invent numbers. If the abstract does not contain a result, say what is known from the abstract. Never say that user context is missing; if userContext is sparse, infer a useful fit from the paper title, venue, abstract, and keywords.",
+    task:
+      "Create a structured Peer paper report from the paper's title and abstract. Every item carries an `evidence` sentence copied character-for-character from the abstract; omit any item you cannot support that way. Do not invent numbers.",
     userContext: contextHint || "",
+    ...(project ? { readerProject: project } : {}),
     paper: {
       id: paper.id,
       title: paper.title,
       authors: paper.authors,
       venue: paper.venue,
-      abstract: paper.summaryIntro,
-      resultDiscussion: paper.summaryResultDiscussion,
-      relevanceReason: paper.relevanceReason,
+      abstract: fullAbstract(paper),
       keywords: paper.summaryExperimentKeywords,
     },
     outputSchema: {
+      skim: [
+        {
+          text: "one plain sentence a reader uses to decide whether to open the paper — the finding, not the topic (max 3 items)",
+          evidence: evidenceRule,
+        },
+      ],
       whatItProposes: {
         summary: "2-3 plain-English sentences describing the paper's proposal or scope. Do not include the method list here.",
         methods: [
-          "Concrete method or experiment sentences from the abstract/result text. Name actual experiments, datasets, instruments, measurements, simulations, or evaluations when present. If the abstract does not specify the method, say that directly.",
-        ],
-        novelty: [
-          "exactly one concise sentence explaining what is new about this paper vs prior work, based only on the supplied metadata",
+          {
+            text: "one concrete method or experiment sentence naming the actual experiment, dataset, instrument, measurement, simulation, or evaluation the abstract states (max 4 items; empty when the abstract names none)",
+            evidence: evidenceRule,
+          },
         ],
       },
-      ...secondSection,
-      whyItFitsYou: {
-        reasons: [
-          "One specific reason per item, max 2 sentences. Mention the concrete method, topic, finding, or venue that ties to the user's context. Aim for 2-4 items. Never be vague ('this is relevant') — always name the specific link.",
+      resultsAndSignificance: {
+        summary: "2-3 sentences explaining the key result and why it matters.",
+        keyResults: [
+          {
+            title: "short result label",
+            detail: "one concrete result sentence grounded in the abstract",
+            evidence: evidenceRule,
+          },
         ],
-        keywords: ["keywords from paper that overlap with user interests"],
       },
+      ...relationSchema,
     },
+    rules: [
+      "Return ONLY valid JSON.",
+      "`evidence` is one sentence copied character-for-character from the abstract. Do not paraphrase it, shorten it, or merge sentences.",
+      "Omit any item you cannot support with such a sentence. An empty array is correct when nothing qualifies.",
+      "Produce no limitations and no next step.",
+      ...(project
+        ? ["`relationToYourWork.basedOn` is the reader's project text copied back."]
+        : []),
+    ],
   });
 }
 
 const SHALLOW_SYSTEM = [
   "You are Peer, a careful research assistant.",
-  "Write concise paper reports for researchers.",
-  "Use only the supplied title, abstract, result text, keywords, and user context.",
-  "Keep proposal, method, and novelty separate: proposal says what the paper tries to do; methods say what experiments or evaluations were actually used; novelty is exactly one concise sentence.",
+  "Write concise paper reports for researchers from the title and abstract alone.",
+  "Every claim carries an `evidence` sentence copied character-for-character from the abstract; a claim without one is omitted.",
+  "Keep proposal and method separate: proposal says what the paper tries to do; methods say what experiments or evaluations the abstract states were used.",
   "Do not fabricate experimental values, claims, or figures.",
-  "Do not mention missing user context, missing profile data, or that the paper was pulled from search.",
   "Return only valid JSON.",
 ].join(" ");
 
+/**
+ * The abstract-tier report: one model call, sanitized, then every claim held
+ * to a sentence of the abstract. Without a provider, on a model error or on
+ * unparseable output the result is `emptyReport` — no report is written in
+ * the model's place.
+ */
 async function generateShallowReport(
-  body: PaperReportRequest,
+  body: ExtendedRequest,
   override?: ProviderOverrideConfig,
 ): Promise<PaperReport> {
   const provider = resolveProvider(override ?? null);
-  const fallback = buildFallbackPaperReport(body.paper, body.contextHint);
-  if (!provider?.generateJsonText) {
-    return { ...fallback, depth: "fallback" };
-  }
+  if (!provider?.generateJsonText) return emptyReport("fallback");
   try {
     const raw = await provider.generateJsonText({
       systemPrompt: SHALLOW_SYSTEM,
@@ -141,15 +175,38 @@ async function generateShallowReport(
       maxTokens: 1800,
     });
     const parsed = parseJsonObject(raw);
-    if (!parsed) return { ...fallback, depth: "abstract" };
-    return improvePaperReportFit(
-      { ...sanitizePaperReport(parsed), depth: "abstract" },
-      body.paper,
-      body.contextHint,
-    );
+    if (!parsed) return emptyReport("fallback");
+
+    // Abstract-tier fields only: limitations and a next step need the full
+    // text, and the prompt says so; anything volunteered is not kept. No
+    // figure either — binding never runs here, so any figure field is a URL
+    // the model typed, not the paper's. The relation is kept only against a
+    // real project, and `basedOn` is the project text the server holds, not
+    // the model's echo of it.
+    const report = withoutFigures(sanitizePaperReport(parsed));
+    delete report.limitations;
+    delete report.nextStep;
+    const project = projectText(body);
+    if (!project) {
+      delete report.relationToYourWork;
+    } else if (report.relationToYourWork) {
+      report.relationToYourWork.basedOn = project.slice(0, 200);
+    }
+
+    const verified = verifyReportEvidence(report, { abstract: fullAbstract(body.paper) });
+    if (verified.dropped > 0) {
+      console.warn(
+        `[papers/report] ${body.paper.id}: dropped ${verified.dropped} claim(s) without verbatim support`,
+      );
+    }
+    return {
+      ...verified.report,
+      depth: "abstract",
+      provenance: { ...verified.report.provenance, basis: "model-abstract" },
+    };
   } catch (err) {
     console.error("[papers/report] shallow generation failed:", err);
-    return { ...fallback, depth: "fallback" };
+    return emptyReport("fallback");
   }
 }
 
@@ -248,19 +305,10 @@ function streamReport(body: ExtendedRequest): Response {
             pct: 75,
           });
           const shallow = await generateShallowReport(body, body.llmOverride);
-          const tagged: PaperReport = {
-            ...shallow,
-            paywallNotice: fullText.reason,
-            depth: shallow.depth ?? "abstract",
-          };
           finish(
             shallow.noLlm
-              ? buildPaywalledFallback(
-                  body.paper,
-                  body.contextHint,
-                  fullText.reason,
-                )
-              : tagged,
+              ? buildPaywalledFallback(fullText.reason)
+              : { ...shallow, paywallNotice: fullText.reason },
           );
           return;
         }
@@ -307,6 +355,7 @@ function streamReport(body: ExtendedRequest): Response {
         const deep = await generateDeepReport({
           paper: body.paper,
           contextHint: body.contextHint,
+          project: projectText(body) || undefined,
           doc: fullText.doc,
           provider,
         });
@@ -390,11 +439,11 @@ export async function POST(req: NextRequest) {
   // ── Deep path ────────────────────────────────────────────────────
   // Runs when the client asks for deep reading and a provider is available:
   // user BYOK in deployments, or the explicit developer provider in local dev.
-  // Without a provider, fall through to the deterministic shallow path.
+  // Without a provider, fall through to the shallow path (which returns the
+  // empty report).
   if (body.deepReport) {
     const provider = resolveProvider(body.llmOverride ?? null);
     if (!provider?.generateJsonText) {
-      // No user key (and no local developer provider): deterministic report.
       return NextResponse.json(await generateShallowReport(body, body.llmOverride));
     }
 
@@ -408,18 +457,13 @@ export async function POST(req: NextRequest) {
       });
 
       if (fullText.status === "paywalled" && fullText.reason) {
-        // Try the LLM-backed shallow path first; on LLM failure
-        // buildPaywalledFallback gives a deterministic abstract-only report.
+        // Try the LLM-backed shallow path first; when the model produced
+        // nothing, the empty report carries the paywall notice.
         const shallow = await generateShallowReport(body, body.llmOverride);
-        const tagged: PaperReport = {
-          ...shallow,
-          paywallNotice: fullText.reason,
-          depth: shallow.depth ?? "abstract",
-        };
         return NextResponse.json(
           shallow.noLlm
-            ? buildPaywalledFallback(body.paper, body.contextHint, fullText.reason)
-            : tagged,
+            ? buildPaywalledFallback(fullText.reason)
+            : { ...shallow, paywallNotice: fullText.reason },
         );
       }
 
@@ -442,6 +486,7 @@ export async function POST(req: NextRequest) {
         generateDeepReport({
           paper: body.paper,
           contextHint: body.contextHint,
+          project: projectText(body) || undefined,
           doc: fullText.doc,
           provider,
         }),

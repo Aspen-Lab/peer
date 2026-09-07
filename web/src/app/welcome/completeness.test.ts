@@ -15,7 +15,6 @@ function profileWith(patch: Partial<UserProfile>): UserProfile {
 describe("stepIndexFromKey", () => {
   it("resolves the direct walkthrough step and ignores invalid values", () => {
     expect(stepIndexFromKey("ai")).toBe(STEP_META.findIndex((m) => m.key === "ai"));
-    expect(stepIndexFromKey("visa")).toBe(STEP_META.findIndex((m) => m.key === "visa"));
     expect(stepIndexFromKey("unknown")).toBeNull();
     expect(stepIndexFromKey(null)).toBeNull();
   });
@@ -33,17 +32,6 @@ describe("isStepDone", () => {
     expect(isStepDone("basics", profileWith({ careerStage: "Postdoc" }), false)).toBe(true);
     expect(
       isStepDone("basics", profileWith({ industryVsAcademia: "academia" }), false),
-    ).toBe(true);
-  });
-
-  it("work rights: done only after at least one authorised country is set", () => {
-    expect(isStepDone("visa", defaultProfile, false)).toBe(false);
-    expect(
-      isStepDone(
-        "visa",
-        profileWith({ authorisedCountries: ["United States"] }),
-        false,
-      ),
     ).toBe(true);
   });
 
@@ -107,15 +95,16 @@ describe("isStepDone", () => {
     ).toBe(true);
   });
 
-  it("connectors: any fully-configured pair counts; halves don't", () => {
-    expect(isStepDone("connectors", profileWith({ adzunaAppId: "id" }), false)).toBe(false);
+  it("connectors: only Tavily counts, and only when fully configured", () => {
+    // Adzuna and USAJobs existed solely to widen JOB coverage; jobs are no
+    // longer a product surface, so their keys no longer make the step done.
     expect(
       isStepDone(
         "connectors",
         profileWith({ adzunaAppId: "id", adzunaAppKey: "key" }),
         false,
       ),
-    ).toBe(true);
+    ).toBe(false);
     expect(
       isStepDone(
         "connectors",
@@ -135,7 +124,7 @@ describe("isStepDone", () => {
 });
 
 describe("connectorCount", () => {
-  it("counts each fully-configured source once", () => {
+  it("counts Tavily once and ignores the retired job connectors", () => {
     expect(connectorCount(defaultProfile)).toBe(0);
     expect(
       connectorCount(
@@ -148,7 +137,7 @@ describe("connectorCount", () => {
           usajobsUserAgent: "e@x.com",
         }),
       ),
-    ).toBe(3);
+    ).toBe(1);
   });
 });
 
@@ -164,8 +153,9 @@ describe("firstIncompleteStep", () => {
       researchTopics: ["solid state battery"],
       currentProject: "electrolyte modelling",
     });
-    // basics, work rights, topics, work done → open on radar (index 4).
-    expect(firstIncompleteStep(p, false)).toBe(4);
+    // basics, topics, work done → open on radar (index 3). The work-rights
+    // step that used to sit between basics and topics is gone.
+    expect(firstIncompleteStep(p, false)).toBe(3);
   });
 
   it("a fully set-up profile lands on the last step, not past the end", () => {

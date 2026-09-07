@@ -18,7 +18,9 @@ const FETCH_TIMEOUT_MS = 8_000;
 export type SourceLinkKind = "html" | "pdf";
 
 export type SourceLinkLabel =
+  | "arxiv-html"
   | "ar5iv"
+  | "zenodo"
   | "pmc"
   | "biorxiv"
   | "publisher-html"
@@ -212,6 +214,30 @@ async function lookupEuropePmcLinks(doi: string): Promise<SourceLink[]> {
   }
 }
 
+interface ZenodoRecord {
+  files?: Array<{ key?: string | null; links?: { self?: string | null } | null }> | null;
+}
+
+/** Zenodo DOIs are `10.5281/zenodo.<record>`; the records API lists the files. */
+export async function lookupZenodoLinks(doi: string): Promise<SourceLink[]> {
+  const match = cleanDoi(doi).match(/^10\.5281\/zenodo\.(\d+)$/i);
+  if (!match) return [];
+  const res = await timedFetch(`https://zenodo.org/api/records/${match[1]}`, {
+    Accept: "application/json",
+  });
+  if (!res || !res.ok) return [];
+  try {
+    const data = (await res.json()) as ZenodoRecord;
+    const pdf = (data.files ?? []).find(
+      (file) => /\.pdf$/i.test(file.key ?? "") && file.links?.self,
+    );
+    if (!pdf?.links?.self) return [];
+    return [{ url: pdf.links.self, kind: "pdf", label: "zenodo", rank: 12 }];
+  } catch {
+    return [];
+  }
+}
+
 const OPEN_ACCESS_HOSTS = [
   "journals.plos.org",
   "www.frontiersin.org",
@@ -248,12 +274,21 @@ export async function collectSourceLinks(input: CollectInput): Promise<SourceLin
     if (!existing || link.rank < existing.rank) links.set(key, link);
   };
 
-  // ── 1. arXiv → ar5iv first (HTML), then arxiv PDF
+  // ── 1. arXiv → arxiv.org/html first, then ar5iv, then the PDF.
+  // arXiv has served its own LaTeXML render at /html/<id> since late 2023;
+  // ar5iv lags and now answers many recent ids with a redirect to the abstract
+  // stub, which is why it fell from first choice to second.
   const arxivId =
     input.arxivId ??
     (input.url ? arxivIdFromUrl(input.url) : null) ??
     (input.doi ? arxivIdFromDoi(input.doi) : null);
   if (arxivId) {
+    addLink({
+      url: `https://arxiv.org/html/${arxivId}`,
+      kind: "html",
+      label: "arxiv-html",
+      rank: 5,
+    });
     addLink({
       url: `https://ar5iv.labs.arxiv.org/html/${arxivId}`,
       kind: "html",
@@ -281,6 +316,13 @@ export async function collectSourceLinks(input: CollectInput): Promise<SourceLin
         });
       }
     }
+  }
+
+  // ── 2b. Zenodo record → the deposited PDF. A Zenodo DOI resolves to a
+  // landing page that reads as "full text" while holding only the record's
+  // description, so the file itself has to outrank every HTML fallback.
+  if (input.doi) {
+    for (const link of await lookupZenodoLinks(input.doi)) addLink(link);
   }
 
   // ── 3. EuropePMC and PMC (HTML pages get rank 20–25)

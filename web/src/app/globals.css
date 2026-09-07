@@ -60,12 +60,35 @@
      The --nm-* colors are set per theme family (light defaults in the
      :root block below; dark themes override) so these tokens stay
      correct in all 10 themes. */
-  --shadow-card: 0 1px 2px rgba(43, 24, 10, 0.03),
-                 -6px -6px 14px var(--nm-highlight),
-                 6px 6px 16px var(--nm-shade);
-  --shadow-card-hover: 0 2px 4px rgba(43, 24, 10, 0.04),
-                       -8px -8px 20px var(--nm-highlight),
-                       10px 12px 26px var(--nm-shade-deep);
+  /* Elevation, replacing the soft-UI pair.
+     Neumorphism only reads as extrusion when the object and its ground are the
+     same material and the ground is a mid-tone that can travel in BOTH
+     directions. The dark families have no such ground — bg and surface sit
+     about four points of L* apart — so there the highlight was cut to 4% and
+     the pair degenerated into one 16px black smudge with no contact edge.
+     Hover made it worse: blur 16 -> 26px and 45% -> 60% black, so a card went
+     softer under the pointer instead of lifting.
+
+     Three jobs, three mechanisms. A 1px RIM does separation, and because its
+     contrast is fixed against the surface it stops depending on how dark the
+     ground is. A short-offset CONTACT layer does the "sitting on something"
+     read at a blur where the colour still has something to bite on. A wide
+     AMBIENT layer with heavy NEGATIVE SPREAD does distance without haze — the
+     spread is what keeps a 26px blur from becoming fog.
+
+     Every colour is a nested var(): Tailwind v4 inlines the token's value into
+     the .shadow-card utility at build time, so per-theme overrides must happen
+     on these inner variables, never on --shadow-card itself. */
+  --shadow-card: 0 0 0 1px var(--nm-rim),
+                 0 1px 1.5px -0.5px var(--nm-key),
+                 0 4px 8px -4px var(--nm-key),
+                 0 12px 26px -14px var(--nm-ambient),
+                 inset 0 1px 0 var(--nm-bevel);
+  --shadow-card-hover: 0 0 0 1px var(--nm-rim-hi),
+                       0 1px 1.5px -0.5px var(--nm-key),
+                       0 8px 16px -8px var(--nm-key),
+                       0 26px 50px -22px var(--nm-ambient),
+                       inset 0 1px 0 var(--nm-bevel);
   /* Pressed / input wells — gently carved into the surface */
   --shadow-well: inset 2px 2px 6px var(--nm-shade),
                  inset -2px -2px 5px var(--nm-highlight);
@@ -153,6 +176,15 @@ html[data-accent="violet"]   { --seed: #7a3fd9; --seed-dark: #a078f0; --done-lig
   --nm-highlight: rgba(255, 253, 246, 0.85);
   --nm-shade: color-mix(in srgb, var(--color-heading) 12%, transparent);
   --nm-shade-deep: color-mix(in srgb, var(--color-heading) 18%, transparent);
+  --nm-rim: color-mix(in srgb, var(--color-heading) 6%, transparent);
+  --nm-rim-hi: color-mix(in srgb, var(--color-heading) 10%, transparent);
+  --nm-key: color-mix(in srgb, var(--color-heading) 13%, transparent);
+  --nm-ambient: color-mix(in srgb, var(--color-heading) 16%, transparent);
+  --nm-bevel: rgba(255, 253, 247, 0.75);
+  --plate-mat: color-mix(in srgb, var(--color-heading) 4%, transparent);
+  --plate-ink: var(--color-heading);
+  --plate-ink-muted: var(--color-text-muted);
+  --plate-ink-faint: var(--color-text-faint);
   --glass-edge: rgba(255, 255, 255, 0.45);
 }
 
@@ -187,6 +219,15 @@ html[data-mode="dark"] {
   --nm-highlight: rgba(255, 244, 230, 0.04);
   --nm-shade: rgba(0, 0, 0, 0.45);
   --nm-shade-deep: rgba(0, 0, 0, 0.6);
+  --nm-rim: rgba(255, 244, 230, 0.09);
+  --nm-rim-hi: rgba(255, 244, 230, 0.15);
+  --nm-key: rgba(0, 0, 0, 0.55);
+  --nm-ambient: rgba(0, 0, 0, 0.45);
+  --nm-bevel: rgba(255, 244, 230, 0.06);
+  --plate-mat: #ece4d8;
+  --plate-ink: #2a2118;
+  --plate-ink-muted: #6b5d50;
+  --plate-ink-faint: #a0927f;
   --glass-edge: rgba(255, 255, 255, 0.07);
 }
 
@@ -223,6 +264,15 @@ html[data-mode="dark"] {
   --nm-highlight: rgba(255, 244, 230, 0.04);
   --nm-shade: rgba(0, 0, 0, 0.45);
   --nm-shade-deep: rgba(0, 0, 0, 0.6);
+  --nm-rim: rgba(255, 244, 230, 0.09);
+  --nm-rim-hi: rgba(255, 244, 230, 0.15);
+  --nm-key: rgba(0, 0, 0, 0.55);
+  --nm-ambient: rgba(0, 0, 0, 0.45);
+  --nm-bevel: rgba(255, 244, 230, 0.06);
+  --plate-mat: #ece4d8;
+  --plate-ink: #2a2118;
+  --plate-ink-muted: #6b5d50;
+  --plate-ink-faint: #a0927f;
   --glass-edge: rgba(255, 255, 255, 0.07);
   }
 }
@@ -250,26 +300,29 @@ html[data-mode="dark"] {
   backdrop-filter: blur(18px) saturate(1.25);
 }
 
+/* The reading spread's left panel (≥ xl). Pinned by its top while it fits
+   under the chrome; when it is taller than the viewport it pins by its
+   bottom instead, so the plate scrolls away and the decision stays.
+   4rem = the article's xl top padding, so the stuck position is the
+   first-paint position and the panel never slides; the masthead is 48px
+   and never taller (its scrolled state changes background only), so it is
+   cleared with 16px to spare. 1.5rem keeps the
+   DOI line 24px above the viewport edge in bottom-stick mode. min(), not
+   max(): with max() a short panel would be pushed down at scroll 0.
+   --panel-h is written by a ResizeObserver; until it runs, 0px makes the
+   min() resolve to 4rem — a plain top-stick, never a broken first paint.
+   Desktop-only, so vh, no dvh. Any ancestor with an overflow other than
+   visible silently kills the sticky — main, the article and the grid
+   wrapper must keep it. */
+@utility reader-panel {
+  position: sticky;
+  top: min(4rem, calc(100vh - var(--panel-h, 0px) - 1.5rem));
+}
+
 /* Light is unconditional — no OS-preference dark mode. Dark mode would be a
    future explicit toggle on <html data-theme="dark">, not a reading-tool default. */
 
 html[data-scroll-behavior="smooth"] { scroll-behavior: smooth; }
-
-/* Sidebar width is a CSS variable so the collapse animation can slide the main
-   content in sync without a JS layout thrash. Mobile stays 0 (sidebar is the
-   top bar there). */
-:root { --sidebar-offset: 0px; }
-
-/* Sidebar offset — controlled by JS via --sidebar-offset.
-   The /welcome wizard zeroes the variable (in Nav's useEffect), so no
-   gap appears there even though the rule applies to the same <main>. */
-@media (min-width: 1024px) {
-  :root { --sidebar-offset: 13rem; }
-  main.peer-main-content {
-    padding-left: var(--sidebar-offset, 13rem);
-    transition: padding-left 350ms cubic-bezier(0.4, 0, 0.2, 1);
-  }
-}
 
 
 body {
@@ -373,6 +426,63 @@ body {
 
 /* Tiny stagger: set --stagger on parent, N*i on children via style={{ "--i": i }}. */
 [style*="--i"] { animation-delay: calc(var(--i) * 40ms); }
+
+/* The plate's mat. A scientific figure is usually drawn on white; dropped
+   straight onto a dark card it glares like a lightbox. On dark the figure is
+   mounted on an off-white mat the way a real plate is, so a white-ground chart
+   reads as paper and a colour figure keeps its colours. On light the card is
+   already near-ivory, so the mat is the surface itself. The typographic plate
+   uses the same ground, which is what makes the two fills read as one slot. */
+.tile-cover { background: var(--plate-mat); }
+
+/* A read paper still has to be readable. `tile-read` recedes the COVER and the
+   chrome and leaves the title and the summary at full strength; the old
+   blanket opacity-70 on the whole card faded the words too. */
+.tile-read .tile-cover { opacity: 0.45; transition: opacity 300ms var(--ease-snap); }
+.tile-read:hover .tile-cover { opacity: 1; }
+.tile-read .tile-chrome { opacity: 0.6; }
+
+/* Ten cards put thirty icon buttons on screen at rest — a large share of the
+   "tiring to look at" verdict. The row keeps its footprint (opacity only, never
+   `hidden`, so nothing shifts and the buttons stay focusable) and appears for
+   the card under the pointer. Always visible where there is no hover, and on a
+   card whose state is already on. The 60ms reveal delay stops the row
+   strobing as the cursor crosses the masonry. */
+.tile-actions {
+  opacity: 0;
+  transition: opacity 140ms ease-out 60ms;
+}
+.group\/tile:hover .tile-actions,
+.group\/tile:focus-within .tile-actions { opacity: 1; transition-delay: 0ms; }
+/* On a touchscreen the card is swiped, not clicked: right saves, left
+   dismisses. The buttons stay in the DOM for assistive technology — VoiceOver
+   and switch users navigate by control, not by gesture — but leave the
+   visual. This used to force them permanently visible on touch, i.e. the
+   phone got the small-button interface the whole series has been removing. */
+@media (hover: none) {
+  .tile-actions {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) { .tile-actions { opacity: 1; } }
+
+/* Keyboard focus on a briefing card. j/k move it, Enter opens, s/x/l act on
+   it. Painted by the keyboard layer as a DOM attribute — no React state. The
+   double ring (ground, then accent) stays legible over any plate, and the
+   focused card's actions show as if hovered. */
+[data-paper-id][data-focused="true"] > a {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 3px;
+  box-shadow: var(--shadow-card-hover);
+  transform: translateY(-2px);
+}
+[data-paper-id][data-focused="true"] .tile-actions { opacity: 1; transition-delay: 0ms; }
 
 @media (prefers-reduced-motion: reduce) {
   .animate-fade-in-up,

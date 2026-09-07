@@ -10,16 +10,20 @@ import { useRouter } from "next/navigation";
 import { useProfileStore } from "@/store/profile";
 import { formatTimeAgo } from "@/lib/format";
 import { useFeedStore } from "@/store/feed";
-import { useUIStore } from "@/store/ui";
 import { careerStages, industryPreferences, themeAccentOptions, themeModeOptions, type ColorTheme, type ThemeAccent, type ThemeMode } from "@/types";
 import { SchoolAutocomplete } from "@/components/profile/school-autocomplete";
 import { AdvisorField } from "@/components/profile/advisor-field";
-import { CountryMultiSelect } from "@/components/profile/country-multi-select";
 import { summarizePreferenceLedger } from "@/lib/preferences/ledger";
 import { apiFetch } from "@/lib/api";
 import { SURFACE_TOPIC_DESCRIPTIONS } from "@/lib/profile/topic-copy";
-import { IconBook, IconBuilding, IconCheck, IconPin } from "@/components/icons";
+import { IconBook, IconBuilding, IconCheck } from "@/components/icons";
 import { PageContainer } from "@/components/ui/page-container";
+import { AccountSection } from "@/components/account/account-section";
+import { VersionLine } from "@/components/shell/version-line";
+import { AiKeyFields } from "@/components/profile/ai-setup";
+import { ConnectorPanel } from "@/components/profile/connector-panel";
+import { Toggle } from "@/components/ui/toggle";
+import { feedsUseAi } from "@/lib/feed/ai-tier";
 import {
   type Tone,
   toneBadge,
@@ -94,15 +98,9 @@ export default function ProfilePage() {
     updateDisplayName,
     updateTopics,
     updateSoftTopics,
-    updateEventTopics,
-    updateEventSoftTopics,
-    updateJobTopics,
-    updateJobSoftTopics,
     updatePreferredJournals,
     updateCareerStage,
     updateIndustryPreference,
-    updateLocations,
-    updateAuthorisedCountries,
     updateSchool,
     updateCurrentProject,
     updateCurrentChallenges,
@@ -136,7 +134,6 @@ export default function ProfilePage() {
   const signals = [
     profile.researchTopics.length > 0,
     (profile.softTopics ?? []).length > 0,
-    profile.locationPreferences.length > 0,
   ];
   const doneCount = signals.filter(Boolean).length;
   const total = signals.length;
@@ -209,6 +206,10 @@ export default function ProfilePage() {
         </div>
       </header>
 
+      {/* ── Account — the app's only sign-in, so it is first, not 1700px
+          down under every settings block. Only when Supabase is configured. ── */}
+      <AccountSection className="mb-10 pb-8 border-b border-border" />
+
       {mode === "view" ? (
         <>
           <DashboardView
@@ -234,10 +235,6 @@ export default function ProfilePage() {
           setName={setName}
           updateTopics={updateTopics}
           updateSoftTopics={updateSoftTopics}
-          updateEventTopics={updateEventTopics}
-          updateEventSoftTopics={updateEventSoftTopics}
-          updateJobTopics={updateJobTopics}
-          updateJobSoftTopics={updateJobSoftTopics}
           updatePreferredJournals={updatePreferredJournals}
           updateSchool={updateSchool}
           updateCurrentProject={updateCurrentProject}
@@ -256,8 +253,6 @@ export default function ProfilePage() {
           clearAdvisorAuthor={clearAdvisorAuthor}
           updateCareerStage={updateCareerStage}
           updateIndustryPreference={updateIndustryPreference}
-          updateLocations={updateLocations}
-          updateAuthorisedCountries={updateAuthorisedCountries}
         />
       )}
 
@@ -315,6 +310,8 @@ export default function ProfilePage() {
           </div>
         )}
       </section>
+
+      <VersionLine className="mt-10" />
     </PageContainer>
   );
 }
@@ -414,8 +411,6 @@ function DashboardView({
           <SignalRow tone="accent" icon={<IconHash />} label="Required" items={profile.researchTopics} />
           <SignalRow tone="tag" icon={<IconHash />} label="Explore" items={profile.softTopics ?? []} />
           <SignalRow tone="link" icon={<IconBook size={13} strokeWidth={1.9} />} label="Journals" items={profile.preferredJournals ?? []} />
-          <SignalRow tone="tag" icon={<IconPin size={13} strokeWidth={1.9} />} label="Locations" items={profile.locationPreferences} />
-          <SignalRow tone="tag" icon={<IconCareer />} label="Work rights" items={profile.authorisedCountries} />
         </div>
       </div>
 
@@ -551,9 +546,9 @@ function ReadingCard({
           <span className="text-micro font-semibold uppercase tracking-[0.18em] text-text-faint">
             Continuous reading
           </span>
-          <StreakBadge activity={stats.saved + stats.read} cells={realCells ?? undefined} />
+          <StreakBadge cells={realCells ?? undefined} />
         </div>
-        <ReadingCalendar activity={stats.saved + stats.read} cells={realCells ?? undefined} />
+        <ReadingCalendar cells={realCells ?? undefined} />
       </div>
 
       {/* ── Sticky topics (keyword weighted cloud) ── */}
@@ -761,9 +756,8 @@ function VenueGrid({
 
 // ── Calendar (GitHub-style contribution grid) ──────────────────
 //
-// We don't yet timestamp individual reads/saves in the store, so the intensity
-// per cell is derived from total activity via a stable hash. When real
-// timestamps land, swap `synthesizeActivity` for the real per-day counts.
+// Real per-day counts only, from /api/read?aggregate=daily. When the API has
+// nothing to return the grid says so rather than drawing something.
 
 const CAL_WEEKS = 18;
 const CAL_DAYS = 7;
@@ -810,32 +804,6 @@ function useDailyActivityCells(): number[] | null {
   return cells;
 }
 
-function synthesizeActivity(totalActivity: number): number[] {
-  // Returns CAL_WEEKS * CAL_DAYS cells. Biases activity toward recent weeks.
-  const cells = CAL_WEEKS * CAL_DAYS;
-  const out = new Array<number>(cells).fill(0);
-  if (totalActivity <= 0) return out;
-
-  // Deterministic pseudo-random — stable for a given activity count.
-  let seed = totalActivity * 9301 + 49297;
-  const rand = () => {
-    seed = (seed * 9301 + 49297) % 233280;
-    return seed / 233280;
-  };
-
-  // Distribute up to ~2.5x total activity across cells, recent-weighted
-  const points = Math.min(cells, Math.max(totalActivity, Math.round(totalActivity * 1.3)));
-  for (let p = 0; p < points; p++) {
-    // Bias toward recent (higher week index)
-    const weekBias = rand();
-    const w = Math.floor(Math.pow(weekBias, 0.55) * CAL_WEEKS);
-    const d = Math.floor(rand() * CAL_DAYS);
-    const idx = w * CAL_DAYS + d;
-    out[idx] += 1;
-  }
-  return out;
-}
-
 function streakFromCells(cells: number[]): number {
   // Count consecutive active cells working backward from the last column.
   let streak = 0;
@@ -853,9 +821,13 @@ function streakFromCells(cells: number[]): number {
   return streak;
 }
 
-function StreakBadge({ activity, cells: realCells }: { activity: number; cells?: number[] }) {
-  const cells = realCells ?? synthesizeActivity(activity);
-  const weeks = streakFromCells(cells);
+function StreakBadge({ cells: realCells }: { cells?: number[] }) {
+  // No fabrication. This used to fall back to synthesizeActivity() — a seeded
+  // pseudo-random grid derived from the total activity count — whenever the
+  // real per-day API was unavailable, which is every signed-out visitor. The
+  // streak was then counted off those invented weeks and shown as fact.
+  if (!realCells) return null;
+  const weeks = streakFromCells(realCells);
   if (weeks === 0) {
     return (
       <span className="text-micro text-text-faint/60 uppercase tracking-[0.14em]">
@@ -876,8 +848,10 @@ function StreakBadge({ activity, cells: realCells }: { activity: number; cells?:
   );
 }
 
-function ReadingCalendar({ activity, cells: realCells }: { activity: number; cells?: number[] }) {
-  const cells = realCells ?? synthesizeActivity(activity);
+function ReadingCalendar({ cells: realCells }: { cells?: number[] }) {
+  // The "no data" branch lives below the hooks, not above them — an early
+  // return here would call useMemo conditionally.
+  const cells = realCells ?? [];
   const maxActivity = Math.max(1, ...cells);
 
   const intensity = (v: number): number => {
@@ -923,6 +897,13 @@ function ReadingCalendar({ activity, cells: realCells }: { activity: number; cel
     return labels;
   }, []);
 
+  if (!realCells) {
+    return (
+      <p className="text-micro text-text-faint/70">
+        Your reading history appears here once you have opened a few papers.
+      </p>
+    );
+  }
   return (
     <div>
       <div className="flex gap-2">
@@ -1506,10 +1487,6 @@ function EditView({
   setName,
   updateTopics,
   updateSoftTopics,
-  updateEventTopics,
-  updateEventSoftTopics,
-  updateJobTopics,
-  updateJobSoftTopics,
   updatePreferredJournals,
   updateSchool,
   updateCurrentProject,
@@ -1528,18 +1505,12 @@ function EditView({
   clearAdvisorAuthor,
   updateCareerStage,
   updateIndustryPreference,
-  updateLocations,
-  updateAuthorisedCountries,
 }: {
   profile: ReturnType<typeof useProfileStore.getState>["profile"];
   name: string;
   setName: (s: string) => void;
   updateTopics: (v: string[]) => void;
   updateSoftTopics: (v: string[]) => void;
-  updateEventTopics: (v: string[]) => void;
-  updateEventSoftTopics: (v: string[]) => void;
-  updateJobTopics: (v: string[]) => void;
-  updateJobSoftTopics: (v: string[]) => void;
   updatePreferredJournals: (v: string[]) => void;
   updateSchool: (s: string) => void;
   updateCurrentProject: (s: string) => void;
@@ -1558,9 +1529,15 @@ function EditView({
   clearAdvisorAuthor: () => void;
   updateCareerStage: (s: typeof profile.careerStage) => void;
   updateIndustryPreference: (s: typeof profile.industryVsAcademia) => void;
-  updateLocations: (v: string[]) => void;
-  updateAuthorisedCountries: (v: string[]) => void;
 }) {
+  // Pulled straight from the store rather than threaded through this
+  // component's already-long prop list.
+  const updateFeedAiProvider = useProfileStore((s) => s.updateFeedAiProvider);
+  const updateFeedAiApiKey = useProfileStore((s) => s.updateFeedAiApiKey);
+  const updateDeepReportEnabled = useProfileStore(
+    (s) => s.updateDeepReportEnabled,
+  );
+
   return (
     <div
       className="rounded-2xl bg-surface shadow-card divide-y divide-border/70 animate-fade-in-up"
@@ -1579,8 +1556,7 @@ function EditView({
       <EditRow icon={<IconHash />} tone="accent" label="Topics">
         <div className="space-y-6">
           <div>
-            <p className="text-meta font-semibold text-heading">Papers</p>
-            <p className="mb-3 mt-1 text-caption text-text-faint">
+            <p className="mb-3 text-caption text-text-faint">
               {SURFACE_TOPIC_DESCRIPTIONS.papers}
             </p>
             <TopicsField
@@ -1588,30 +1564,6 @@ function EditView({
               soft={profile.softTopics ?? []}
               onChangeRequired={updateTopics}
               onChangeSoft={updateSoftTopics}
-            />
-          </div>
-          <div>
-            <p className="text-meta font-semibold text-heading">Events</p>
-            <p className="mb-3 mt-1 text-caption text-text-faint">
-              {SURFACE_TOPIC_DESCRIPTIONS.events}
-            </p>
-            <TopicsField
-              required={profile.eventRequiredTopics}
-              soft={profile.eventExploreTopics}
-              onChangeRequired={updateEventTopics}
-              onChangeSoft={updateEventSoftTopics}
-            />
-          </div>
-          <div>
-            <p className="text-meta font-semibold text-heading">Jobs</p>
-            <p className="mb-3 mt-1 text-caption text-text-faint">
-              {SURFACE_TOPIC_DESCRIPTIONS.jobs}
-            </p>
-            <TopicsField
-              required={profile.jobRequiredTopics}
-              soft={profile.jobExploreTopics}
-              onChangeRequired={updateJobTopics}
-              onChangeSoft={updateJobSoftTopics}
             />
           </div>
         </div>
@@ -1669,26 +1621,6 @@ function EditView({
         />
         <p className="text-caption text-text-faint/75 mt-1.5 px-1 leading-relaxed">
           The unknowns you wish someone would solve for you. Highest-leverage signal — papers that mention these will rise to the top.
-        </p>
-      </EditRow>
-
-      <EditRow icon={<IconPin size={13} strokeWidth={1.9} />} tone="tag" label="Locations">
-        <ChipInput
-          values={profile.locationPreferences}
-          onChange={updateLocations}
-          placeholder="Add a location or Remote, press Enter"
-          tone="tag"
-        />
-      </EditRow>
-
-      <EditRow icon={<IconCareer />} tone="tag" label="Work rights">
-        <CountryMultiSelect
-          values={profile.authorisedCountries}
-          onChange={updateAuthorisedCountries}
-        />
-        <p className="mt-1.5 px-1 text-caption leading-relaxed text-text-faint/75">
-          Countries where you can already work without employer sponsorship.
-          Leave this empty to keep every visa label visible.
         </p>
       </EditRow>
 
@@ -1825,8 +1757,84 @@ function EditView({
         </div>
       </EditRow>
 
+      {/* Credentials and model settings. These had NO section on this page —
+          they lived only in the one-time /welcome wizard and permanently
+          pinned to the daily feed, which is why the feed ended up doing double
+          duty as the settings page. They have a home now. */}
+      <EditRow icon={<IconKey />} tone="neutral" label="AI provider">
+        <div className="space-y-3">
+          <p className="text-caption leading-relaxed text-text-muted">
+            Tier 0 uses no AI API and always works. To turn on Tier 2 reranking
+            and written relevance reasons, choose a provider and add your own
+            key. Peer sends model calls only to the key you enter here.
+          </p>
+          <AiKeyFields
+            provider={profile.feedAiProvider}
+            apiKey={profile.feedAiApiKey ?? ""}
+            onProviderChange={updateFeedAiProvider}
+            onApiKeyChange={updateFeedAiApiKey}
+            idPrefix="profile-ai"
+          />
+        </div>
+      </EditRow>
+
+      <EditRow icon={<IconBook size={13} strokeWidth={1.9} />} tone="link" label="Deep report">
+        <div className="space-y-3">
+          <div className="flex items-start justify-between gap-3">
+            <p className="text-caption leading-relaxed text-text-muted">
+              Read each paper&apos;s full text (HTML when available, PDF as
+              fallback) before writing the report. Costs more tokens per paper
+              and produces paper-grounded reports instead of a summary of the
+              abstract.
+            </p>
+            <Toggle
+              checked={profile.deepReportEnabled}
+              onChange={(next) => updateDeepReportEnabled(next)}
+              disabled={!feedsUseAi(profile)}
+              className="mt-0.5"
+              aria-label="Deep report"
+            />
+          </div>
+          {!feedsUseAi(profile) && (
+            <p className="text-micro leading-relaxed text-text-faint">
+              Add your own provider and key above first. Without one, Peer shows
+              the Tier 0 report and makes no AI model call.
+            </p>
+          )}
+        </div>
+      </EditRow>
+
+      <EditRow icon={<IconGlobe />} tone="tag" label="Data APIs">
+        <div className="space-y-3">
+          <p className="text-caption leading-relaxed text-text-muted">
+            Optional third-party keys that widen coverage. All of Peer works
+            without them.
+          </p>
+          <ConnectorPanel />
+        </div>
+      </EditRow>
+
+
 
     </div>
+  );
+}
+
+function IconKey() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <circle cx="8" cy="14" r="4" />
+      <path d="M11 11l7-7M16 6l3 3M14 8l3 3" />
+    </svg>
+  );
+}
+
+function IconGlobe() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" />
+    </svg>
   );
 }
 
@@ -1852,53 +1860,8 @@ function AppearanceCard({
       </div>
       <div className="px-7 pb-6">
         <ColorThemePicker value={colorTheme} onChange={onChange} />
-        <RevealMotionToggle />
       </div>
     </section>
-  );
-}
-
-/**
- * Opt back into the full decode animation when the operating system asks for
- * reduced motion. Off by default — the OS preference is respected unless the
- * reader deliberately turns this on.
- */
-function RevealMotionToggle() {
-  const revealMotion = useUIStore((s) => s.revealMotion);
-  const setRevealMotion = useUIStore((s) => s.setRevealMotion);
-  const forced = revealMotion === "full";
-
-  return (
-    <div className="mt-6 pt-5 border-t border-border/50">
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <p className="text-body-sm font-medium text-heading">
-            Always animate report text
-          </p>
-          <p className="mt-1 text-meta leading-relaxed text-text-muted">
-            Reports and briefings decode into place as they are written. Your
-            system currently asks apps to reduce motion, so Peer fades the text
-            in gently instead. Turn this on to always play the full effect.
-          </p>
-        </div>
-        <button
-          type="button"
-          role="switch"
-          aria-checked={forced}
-          aria-label="Always animate report text"
-          onClick={() => setRevealMotion(forced ? "auto" : "full")}
-          className={`relative mt-0.5 h-5 w-9 shrink-0 rounded-full transition-colors duration-200 ease-out ${
-            forced ? "bg-accent" : "bg-bg-secondary"
-          }`}
-        >
-          <span
-            className={`absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-bg shadow transition-transform duration-200 ease-out ${
-              forced ? "translate-x-4" : ""
-            }`}
-          />
-        </button>
-      </div>
-    </div>
   );
 }
 

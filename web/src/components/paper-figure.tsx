@@ -55,6 +55,126 @@ function initialFigureState(key = ""): FigureState {
   };
 }
 
+// ── One request per figure ──
+//
+// However many plates ask, a figure is fetched once. The card primes the
+// entry the page reuses, and on the page the plate (the image) and the
+// caption line resolve the same args; each hook instance used to issue its
+// own `/api/figure` request, and `no-store` meant the browser never collapsed
+// them. In flight, later askers join the same promise; settled, they read the
+// result synchronously. A request is aborted only when its last asker leaves,
+// so a card scrolling away does not cancel the page's figure.
+
+interface InFlight {
+  promise: Promise<FigureState>;
+  controller: AbortController;
+  askers: number;
+}
+
+const inFlight = new Map<string, InFlight>();
+const settled = new Map<string, FigureState>();
+/** Bounded by insertion order; a session's briefings are tens of papers, not thousands. */
+const SETTLED_MAX = 200;
+
+function remember(key: string, state: FigureState): void {
+  settled.set(key, state);
+  if (settled.size > SETTLED_MAX) {
+    const oldest = settled.keys().next().value;
+    if (oldest !== undefined) settled.delete(oldest);
+  }
+}
+
+/** The route's verdict for these args; throws on a transport failure. */
+async function fetchFigure(
+  key: string,
+  { itemId, url, doi, query, paperTitle, figureIndex = 0 }: ResolveFigureArgs,
+  signal: AbortSignal,
+): Promise<FigureState> {
+  const params = new URLSearchParams({ id: itemId, v: "11" });
+  if (url) params.set("url", url);
+  if (doi) params.set("doi", doi);
+  if (query?.trim()) params.set("query", query.trim());
+  if (paperTitle?.trim()) params.set("paperTitle", paperTitle.trim());
+  if (figureIndex > 0) params.set("idx", String(figureIndex));
+
+  const data = (await apiFetch(`/api/figure?${params.toString()}`, {
+    cache: "no-store",
+    signal,
+  })) as Omit<FigureState, "key"> & {
+    imageUrl: string | null;
+    caption?: string | null;
+    source?: string | null;
+    reason?: string | null;
+    hideFigure?: boolean;
+    matchedBy?: "keyword" | "semantic" | "vision" | "fallback" | null;
+    status: FigureStatus;
+  };
+  return {
+    key,
+    imageUrl: data.imageUrl,
+    caption: data.caption ?? null,
+    source: data.source ?? null,
+    status: data.status,
+    reason: data.reason ?? null,
+    hideFigure: Boolean(data.hideFigure),
+    matchedBy: data.matchedBy ?? null,
+  };
+}
+
+/** Join the request for `key`, starting it if nobody has. */
+function acquire(key: string, args: ResolveFigureArgs): InFlight {
+  let entry = inFlight.get(key);
+  if (!entry) {
+    const controller = new AbortController();
+    const created: InFlight = {
+      promise: Promise.resolve(initialFigureState(key)),
+      controller,
+      askers: 0,
+    };
+    // Only the route's answer is remembered: a transport failure is the
+    // session's, not the paper's, and the next asker may reach the route.
+    created.promise = fetchFigure(key, args, controller.signal)
+      .then((state) => {
+        remember(key, state);
+        return state;
+      })
+      .finally(() => {
+        if (inFlight.get(key) === created) inFlight.delete(key);
+      });
+    inFlight.set(key, created);
+    entry = created;
+  }
+  entry.askers += 1;
+  return entry;
+}
+
+/** Leave the request for `key`; the last asker out aborts it. */
+function release(key: string): void {
+  const entry = inFlight.get(key);
+  if (!entry) return;
+  entry.askers -= 1;
+  if (entry.askers <= 0) {
+    entry.controller.abort();
+    inFlight.delete(key);
+  }
+}
+
+function failureState(key: string, err: unknown): FigureState {
+  return {
+    key,
+    imageUrl: null,
+    caption: null,
+    source: null,
+    status: "source_unavailable",
+    reason:
+      err instanceof ApiError
+        ? "Peer could not load the figure service response."
+        : "Peer could not reach a usable figure source.",
+    hideFigure: false,
+    matchedBy: null,
+  };
+}
+
 export function useResolvedFigure({
   itemId,
   url,
@@ -73,69 +193,32 @@ export function useResolvedFigure({
   ].join("\u001f");
 
   const [figure, setFigure] = useState<FigureState>(initialFigureState());
-  const activeFigure = figure.key === requestKey ? figure : initialFigureState(requestKey);
+  // Derived, not set in an effect: a figure already settled for these args
+  // is on screen at first render, with no request and no idle frame.
+  const activeFigure =
+    figure.key === requestKey
+      ? figure
+      : (settled.get(requestKey) ?? initialFigureState(requestKey));
 
   useEffect(() => {
+    if (settled.has(requestKey)) return;
     let cancelled = false;
-    const controller = new AbortController();
-
-    (async () => {
-      try {
-        const params = new URLSearchParams({ id: itemId, v: "11" });
-        if (url) params.set("url", url);
-        if (doi) params.set("doi", doi);
-        if (query?.trim()) params.set("query", query.trim());
-        if (paperTitle?.trim()) params.set("paperTitle", paperTitle.trim());
-        if (figureIndex > 0) params.set("idx", String(figureIndex));
-
-        const data = (await apiFetch(`/api/figure?${params.toString()}`, {
-          cache: "no-store",
-          signal: controller.signal,
-        })) as Omit<FigureState, "key"> & {
-          imageUrl: string | null;
-          caption?: string | null;
-          source?: string | null;
-          reason?: string | null;
-          hideFigure?: boolean;
-          matchedBy?: "keyword" | "semantic" | "vision" | "fallback" | null;
-          status: FigureStatus;
-        };
-        if (cancelled) return;
-
-        setFigure({
-          key: requestKey,
-          imageUrl: data.imageUrl,
-          caption: data.caption ?? null,
-          source: data.source ?? null,
-          status: data.status,
-          reason: data.reason ?? null,
-          hideFigure: Boolean(data.hideFigure),
-          matchedBy: data.matchedBy ?? null,
-        });
-      } catch (err) {
-        if (!cancelled) {
-          setFigure({
-            key: requestKey,
-            imageUrl: null,
-            caption: null,
-            source: null,
-            status: "source_unavailable",
-            reason:
-              err instanceof ApiError
-                ? "Peer could not load the figure service response."
-                : "Peer could not reach a usable figure source.",
-            hideFigure: false,
-            matchedBy: null,
-          });
-        }
-      }
-    })();
+    const entry = acquire(requestKey, { itemId, url, doi, query, paperTitle, figureIndex });
+    entry.promise.then(
+      (state) => {
+        if (!cancelled) setFigure(state);
+      },
+      (err: unknown) => {
+        if (!cancelled) setFigure(failureState(requestKey, err));
+      },
+    );
 
     return () => {
       cancelled = true;
-      // Cancel the in-flight request when the figure is superseded/unmounted so
-      // an abandoned tab/scroll doesn't keep a figure request running.
-      controller.abort();
+      // Leave the request when the figure is superseded/unmounted; the last
+      // asker out cancels it, so an abandoned tab/scroll doesn't keep a
+      // figure request running.
+      release(requestKey);
     };
   }, [itemId, url, doi, query, paperTitle, figureIndex, requestKey]);
 

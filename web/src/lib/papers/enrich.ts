@@ -41,7 +41,19 @@ async function timedFetchText(url: string, headers: HeadersInit = {}): Promise<s
 
 // ── Strategy 1: Semantic Scholar ───────────────────────────────
 
-async function trySS(externalId: string): Promise<string | null> {
+/**
+ * What Semantic Scholar holds for a paper. The two fields are kept apart on
+ * purpose: `tldr` is machine-written, and it used to be returned in place of
+ * the abstract when S2 had none, which put a model's one-liner on the page as
+ * the authors' own words. A caller that wants the abstract takes `abstract`;
+ * the reading page shows `tldr` under its own label.
+ */
+export interface SemanticScholarText {
+  abstract: string | null;
+  tldr: string | null;
+}
+
+async function trySS(externalId: string): Promise<SemanticScholarText | null> {
   const url =
     `https://api.semanticscholar.org/graph/v1/paper/${encodeURIComponent(externalId)}` +
     `?fields=abstract,tldr`;
@@ -49,7 +61,10 @@ async function trySS(externalId: string): Promise<string | null> {
   if (!text) return null;
   try {
     const data = JSON.parse(text) as SSPaperData;
-    return cleanDisplayText(data.abstract || data.tldr?.text) || null;
+    return {
+      abstract: cleanDisplayText(data.abstract) || null,
+      tldr: cleanDisplayText(data.tldr?.text) || null,
+    };
   } catch {
     return null;
   }
@@ -119,17 +134,18 @@ export async function fetchAbstract(opts: {
   arxivId?: string;
   doi?: string;
 }): Promise<string | null> {
-  // 1. Semantic Scholar — try whichever ID we have
+  // 1. Semantic Scholar — try whichever ID we have. Only a real abstract
+  // counts here; the TLDR is not one.
   if (opts.arxivId) {
-    const a = await trySS(`arXiv:${opts.arxivId}`);
+    const a = (await trySS(`arXiv:${opts.arxivId}`))?.abstract;
     if (a) return a;
   }
   if (opts.openalexId) {
-    const a = await trySS(`OpenAlex:${opts.openalexId}`);
+    const a = (await trySS(`OpenAlex:${opts.openalexId}`))?.abstract;
     if (a) return a;
   }
   if (opts.doi) {
-    const a = await trySS(`DOI:${opts.doi.replace(/^https?:\/\/(?:dx\.)?doi\.org\//i, "")}`);
+    const a = (await trySS(`DOI:${opts.doi.replace(/^https?:\/\/(?:dx\.)?doi\.org\//i, "")}`))?.abstract;
     if (a) return a;
   }
 
@@ -148,7 +164,9 @@ export async function fetchAbstract(opts: {
   return null;
 }
 
-// Backwards-compat for any call site still using the old name.
-export async function fetchAbstractFromSS(externalId: string): Promise<string | null> {
+/** Semantic Scholar's abstract and TLDR for one external id, kept apart. */
+export async function fetchSemanticScholarText(
+  externalId: string,
+): Promise<SemanticScholarText | null> {
   return trySS(externalId);
 }

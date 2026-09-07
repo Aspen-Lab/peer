@@ -1,6 +1,702 @@
 # Changelog
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
+
+## v0.14.1 — 2026-09-07
+
+The briefing opens with a dateline.
+
+The page used to start with two lines of small print — the masthead's
+"Monday, September 7 · 10 papers · 9 unread" and a mono "matching diffusion
+models, protein structure prediction · synced 4m ago": a status bar where a
+front page should be. Now the date is the headline, in serif at display size,
+and everything those lines said is one sentence of reading type under it —
+"Ten papers on diffusion models and protein structure prediction — nine
+unread." — with the unread phrase in ink, the one part that changes as the
+day is read. When everything is read it says so: "all read, back tomorrow."
+While the day loads it names what it is looking for. The sync state and the
+refresh button are the only small item, at the right of the headline,
+because they are status; a failed load is still red there.
+
+The masthead's centre is empty on the briefing, so the day is stated once.
+On a phone the nameplate sits above the dateline; the mono day line is gone.
+
+## v0.14.0 — 2026-09-07
+
+The masthead.
+
+**One line of chrome.** The 208px sidebar, its floating toggle, the two
+top-right pills and the phone's row of tabs are replaced by a 48px masthead
+across the top of every page but the welcome wizard: the Peer wordmark at the
+left, the day's state on the window's centre line — "Sunday, September 7 ·
+10 papers · 9 unread" — and Search · Saved · Profile and a `?` keycap at the
+right. It is transparent at the top of the page and takes its glass once the
+page has scrolled; its height never changes, so nothing on the page moves.
+Content uses the whole window: the board and the reading spread centre in
+it, and no page slides sideways any more.
+
+**The rail is the masthead.** On a paper the centre reads "← Briefing · 3 of
+10 · k j", and the two keycaps are the previous and next buttons. The
+in-content rail is gone, so there is one position counter, and it is always
+on screen. A deep link shows the way back alone.
+
+**The day is stated once.** The briefing page's header — date, count, unread,
+rendered again 208px to the left in the sidebar — is now the masthead's. The
+page keeps one line under it: the topics it matched and when it synced, with
+the refresh button at the right; a failed load still says so in red. Before
+the day's fetch lands the masthead states only the date — the store does not
+know a count yet, and "0 papers" would have been a claim.
+
+**A thumb bar on the phone.** Below 768px the shell is a 56px bar at the
+bottom, in reach: Today, Search, Saved, You, each a 22px icon over a label
+and well over 44px tall; Saved carries its count when there is one. On a
+paper the bar is the rail — "← Briefing · 3 of 10 · Next →" — the first way
+to move on from a paper without judging it. The briefing's top is the
+wordmark and the day line, which scroll away; the reading page has no top
+chrome at all, so the plate is the first thing on screen. The page keeps a
+bottom padding the height of the bar, so the bar never covers the decision.
+
+**`/` is honest.** From any page it goes to Search and focuses the box; on
+Search it focuses in place (on a phone the box waits to be tapped, so the
+keyboard does not rise over the page). It used to look for a box that exists
+on one route. The dead "g /" the sidebar advertised, the `\` sidebar toggle and the
+help sheet's "View" group are gone; the help sheet's headings are sentence
+case — Anywhere, Navigate, Briefing, Reading — and its foot reads
+"Peer 0.14.0 · What's new", the first link to the changelog the app has had.
+
+**Account on the You page.** Sign in with GitHub, and Sign out, live in an
+Account section at the top of /profile, shown only when Supabase is
+configured; signed
+in, the masthead's "Profile" is the avatar. The GitHub star counter and its
+hourly fetch are deleted, with the floating pills, the sidebar's persisted
+open/closed state, the uppercase "SUN · SEP 7" and "V0.13.2", and the undo
+toast's uppercase label. The undo toast and the copy toast keep fixed corners
+and sit above the thumb bar on a phone.
+
+## v0.13.2 — 2026-09-06
+
+The reading spread.
+
+**A paper's page uses the width.** From 1280px the page is two columns: the
+plate, the title and the decision on the left, under the eye; the paper's
+words and Peer's additions on the right, in a column no wider than a line
+should be. The left panel stays put while the reader scrolls — when a
+reading or a model lands, it lands in the right column, and the decision
+does not move. The spread stops growing at 1352px; on a wider display it
+sits on the desk with ground either side. Read still means decided: on the
+spread the decision is on screen at open, so a paper is read when the end of
+its words has been on screen for a second, not the decision. Phones and
+tablets are unchanged.
+
+## v0.13.1 — 2026-09-06
+
+Keys, swipe, and read-means-decided.
+
+**Keys on a paper.** `j` `]` `→` and `k` `[` `←` move through today's
+briefing in its order; `s` saves, `x` skips to the next paper (the Undo toast
+and `u` restore it), `l` likes, `o` and Enter open the source, `c` copies the
+page as Markdown, Esc and Backspace return to the briefing. One table
+(`PAPER_KEYS`) drives the handler and the help sheet's new "Reading" group.
+The briefing's own keys are untouched. Arrows never take a live text
+selection — Shift+Arrow extends one, and a plain arrow on a selection is the
+reader adjusting it.
+
+**Swipe on the plate.** On a phone the plate is the card's swipe object: right
+saves, left marks not interested and advances. Touch and pen only, the same
+thresholds as the card, `pan-y` so the page still scrolls. A skip keeps the
+reader mounted through the fly-out — the dismissed paper is read from the
+pending dismissal until the route changes, so no loading mat flashes and no
+request fires for a paper just dismissed.
+
+**Read means decided.** Opening a paper no longer marks it read. It is read
+when the Decision block has been on screen for a second, or on any decision —
+save, skip, like, open, copy, next. A record-only page is therefore read on
+open; `u` un-reads.
+
+**Assistive technology.** The reading article takes focus after a client
+navigation, so `j`/`k` announce the new paper. The authors line keeps the
+names as its accessible name ("A. Jumper, B. Evans +9, Show 9 more") instead
+of replacing them. Keycap chips inside buttons are hidden from screen readers
+("Save", not "Saves"). The DOI line says it copies and has a 44px touch
+target; the copy toast's live region is always in the DOM so it is announced.
+The plate and its caption are a real `figure`/`figcaption`.
+
+## v0.13.0 — 2026-09-06
+
+The reading surface.
+
+`/papers/[id]` is rewritten as a reading sheet in a fixed order the reader
+learns once: rail · plate · title and meta · the paper's own words · the
+decision · Peer's additions · next in briefing. Nothing on it is invented.
+
+**The paper's words.** The abstract as written, in its two paragraphs, with
+the claim and the numbers set in ink; the rest muted. No heading is put over
+an abstract sentence. A paper with no abstract shows the record and, when
+Semantic Scholar has one, its TLDR labelled as machine-written.
+
+**One sentence about what Peer read.** "Abstract only. Method, caveats and
+what it means for your project need the full text and a key." — or the full
+text's source and page count, the paywall host, or the plain statement that
+the PDF is there and only a self-hosted Peer reads it. Every string comes
+from one table (`describeAvailability`); none is typed in JSX. The
+recommendation line under the authors is the briefing's own reason, never the
+deep-link placeholder a paper resolved by id carries, and never the
+reranker's generic fill-in.
+
+**Model blocks with receipts.** With a key, each block is prose whose every
+claim carries the paper's own sentence: an ink mark when the sentence is in
+the abstract, a quiet quote with its section heading when it is not. When
+the reader turned deep reports on and the model still read the abstract
+alone, the sentence names the wall (paywalled, unreadable here, unfound, or
+the deep step not finishing) instead of telling them to turn on a setting
+they already turned on. A model that was asked and could not finish says so.
+
+**Copy as Markdown.** Frontmatter with the basis the text was read from, the
+abstract with the marks in bold, every quote with its heading, a "Not on this
+page" list generated from the typed omissions, and a BibTeX block. A reader
+who ran the model is never told a block "needs a key".
+
+A PDF's section names arrive in capitals ("MATERIALS AND METHODS"); the
+attribution sets them in title case for display and export — the shouting is
+typesetting, not meaning, and the page has no other capitals.
+
+**Deleted.** The Surface route and its model, the six-pill action row and the
+Cite modal, the scroll progress bar, ScrambleText, the icon section titles,
+"At a glance", "Explore further", "More like this", keyword chips, the
+pull-quote of the scoring string, "Why it fits you", "Related from your
+feed", the skeletons and shimmer bars, the tier-upgrade block, and every
+fabricated-report path behind them. The plate figure is resolved once per
+paper for the card, the page and the caption line together.
+
+## v0.12.4 — 2026-09-06
+
+A reading per paper, and evidence-verified reports.
+
+**`GET /api/papers/[id]/reading`.** The deterministic reading, built server-
+side from the record and the full text with no profile and no key, so it is
+one document per paper for every reader and is cached for a day. A full-text
+attempt that times out answers `no-store` and is not kept.
+
+**Every claim carries a verbatim sentence.** The report prompts ask for an
+`evidence` sentence copied character-for-character from the abstract (Tier 1)
+or the full text (Tier 2), and `verifyReportEvidence` drops — never flags —
+any claim whose sentence is not in the text the model was given. Drops are
+counted and shown. The relation to the reader's project is asked for only
+when the profile has one. At the abstract tier no figure is kept: nothing
+bound it, so a URL the model emitted is not the paper's; the sanitizer keeps
+only https and PDF-rendered data images.
+
+**Vercel reads no PDFs, and says so.** The PDF text extractor is traced into
+the reading and report functions. Where no interpreter can be spawned, or
+the helper is missing, the extractor reports a machine reason (`no-python`,
+`no-extractor`) and the reading maps either to "the PDF is there, but only a
+self-hosted Peer reads PDFs" — never "no full text". The extractor also reports the document's real page
+count rather than the number of pages it read: a 50-page paper was being
+called "a 40-page PDF" because 40 is the reading cap.
+
+## v0.12.3 — 2026-09-06
+
+The deterministic reading.
+
+`reading.ts` builds the sheet the reading page shows before, and without, a
+model: the abstract split into sentences with `pickSkimMarks` choosing the
+claim and the numbers; up to three verbatim findings from the results
+section carrying a number or a comparison; two method sentences; the
+authors' own limitations, else the hedges in the discussion. Each quote
+carries the heading it came from. Absence is typed (`omitted`), never faked.
+
+**Provenance.** `ExtractedDocument.pageCount` reaches the reading; a
+Semantic Scholar TLDR is carried as `tldr`, labelled, and no longer becomes
+the abstract; `reviewPaperLabel` reads the title only. The old fallback
+report — "Main result", "Key result 2", "Overview / Section N", invented fit
+reasons — is deleted; the one report without a model is `emptyReport`.
+
+## v0.12.2 — 2026-09-06
+
+Full text reaches Peer again.
+
+Three of today's ten papers could not be read past their abstract for reasons
+that had nothing to do with access. Fixed on the way to the reading-surface
+work:
+
+**arXiv's own HTML.** arXiv has rendered LaTeX submissions at
+`arxiv.org/html/<id>` since late 2023, but Peer only knew ar5iv, which now
+answers recent ids with a redirect to the abstract stub. The native render is
+tried first (263 ms for a 38,000-character paper). The LaTeXML parser also
+stopped truncating any section that has subsections: it matched
+`<section>…</section>` non-greedily, so "4 Evaluation" ended at the first nested
+close and 4.4 Results and 4.5 Limitations were lost. It slices between
+consecutive headings of any level instead, and captures the abstract.
+
+**A `limitations` bucket.** Heading canonicalisation stripped one leading
+number, so "4.4 Results" became "body", and no bucket existed for the one
+section a reader most wants quoted. Numbering of every shape is stripped now,
+and Limitations / Threats to Validity / caveats have their own bucket. The
+Python PDF extractor mirrors it.
+
+**Zenodo.** A Zenodo DOI resolves to a landing page whose "Description" is long
+enough to pass the full-text check, so the record page was being read as the
+paper. The records API lists the deposited PDF; it is a source now, ranked
+above every HTML fallback, and the full-text check requires a recognisable
+body section or several long ones rather than one long block.
+
+**Macs.** The PDF extractor shelled out to `python`, then `py -3`. macOS ships
+neither — only `python3` — so every PDF on a Mac quietly yielded nothing.
+`python3` is tried first, after `PYTHON_BIN` when it is set.
+
+**Captions.** Labels read "Figure Figure1"; tables were labelled as figures;
+LaTeXML subfigure fragments — "(a) Original image", three of every four
+captions on a typical page — were emitted as captions of their own. One
+parser serves all four extractors.
+
+Verified live against real papers: arXiv 2609.02697 (HTML: 16 sections
+including Limitations, labelled captions), arXiv 2609.02113 (no HTML render;
+PDF via python3), and today's Zenodo preprint (deposited PDF: Abstract,
+Introduction, Related Work, Methodology, Results, Discussion, Conclusion).
+30 new tests.
+
+## v0.12.1 — 2026-09-06
+
+An empty briefing says why.
+
+The empty screen was one block of caption-size text — "Your briefing is
+still waking up… Set up profile" — shown for every reason the grid could be
+empty. The screenshot that prompted this was a dead dev server: the fetch
+failed, `fetchRealFeed` swallowed the failure into an empty list, and a reader
+with two topics configured was told to set up their profile under a header
+that read "synced just now".
+
+**Three reasons, three screens.** No topics: "What are you working on?" with a
+real Set up profile button. Sources unreachable: "Couldn't reach the paper
+sources." with Try again (the underlying error sits on the button's tooltip)
+and Edit topics, and the header reads "sync failed" in red instead of a sync
+time. Nothing new: "Nothing new for these topics today." with Refresh and
+Widen topics. Display serif at 28px, one line of body copy, buttons from the
+shared button primitive; no caption-size instructions. The block sits in the
+header's column rather than floating in the middle of the page.
+
+**The store records failure.** `feedError` is set when the papers lane throws
+and cleared at the start of the next load. A failed load no longer stamps
+`lastRefresh`, so the header cannot read "synced just now" over an error. The
+flag is transient — not persisted — so a reload starts clean. Which screen to
+show is a pure function (`emptyReason`) with tests.
+
+Also: before the first load the header read "synced not synced yet". It reads
+"not synced yet".
+
+Verified in the browser: no topics (cleared in storage), nothing new (ten `x`
+presses dismissed the whole briefing, no reload fired), sources unreachable
+(`/api/feed` rejected at the fetch layer, then `r`), and recovery — Try again
+with the network restored brought ten papers back and cleared the red header.
+
+## v0.12.0 — 2026-09-06
+
+The touchscreen drives the briefing.
+
+The other half of the principle from v0.11.0: on a phone the interface is the
+finger, not a row of small buttons. Peer's only touch provision was a media
+query that forced the three icon buttons permanently visible — the phone got
+the small-button interface the whole series has been removing.
+
+**Swipe a card.** Right saves (or unsaves — the reveal says which); left marks
+it not interested and the card flies out, with the usual Undo toast. The
+reveal under the card fades in with progress, the card follows the finger and
+rubber-bands past the threshold, a short drag snaps back, and a completed drag
+swallows the click that follows it so a swipe never also opens the paper.
+Commit is 96px or a fast flick in the same direction; a flick back toward the
+origin cancels.
+
+**Only touch and pen.** A mouse has hover and the keyboard layer, and a
+mouse-drag on a link fights text selection. `touch-action: pan-y` leaves
+vertical scrolling to the browser; the card only takes a drag once it has
+locked to the horizontal axis, so a diagonal scroll never moves it.
+
+**The buttons are for assistive technology now.** On touch devices they stay
+in the DOM — VoiceOver and switch users navigate by control, not by gesture —
+but leave the visual.
+
+The gesture arithmetic (axis lock, resistance, commit) is a pure module with
+tests. The pointer-capture call is guarded: an inactive pointer id throws, and
+the drag works without capture.
+
+Also fixed on the way: the card's Save button called an idempotent save on
+every click, so its "Unsave" state re-saved. It toggles now, the same branch
+the keyboard's `s` and the swipe use.
+
+Verified with synthesised touch pointer events against the live handlers:
+right 160px saves and the header counts it, the click after a swipe does not
+navigate, 40px snaps back, left 160px removes the card and Undo restores it.
+A physical-finger pass is still owed — the preview pane was not compositing
+when the real drag was attempted.
+
+## v0.11.0 — 2026-09-06
+
+The keyboard drives the briefing.
+
+The designer's principle: on a PC the interface is the keyboard, on a phone it
+is the touchscreen; a product should not depend on small on-screen buttons.
+Peer did. The keyboard layer carried only global shortcuts — go-to chords,
+search, refresh, undo — and not one card-level action, so the only way to
+save, dismiss or like a paper on a desktop was the three hover-revealed icons.
+
+**Card-level keys, on the briefing:** `j` / `k` (or the arrow keys) move a
+focus ring between papers in reading order; `Enter` or `o` opens the focused
+paper; `s` saves or unsaves it; `x` marks it not interested (the existing `u`
+undoes); `l` asks for more like it. `Esc` clears the ring. The `?` help sheet
+lists them under a new Paper group.
+
+The ring is painted as a DOM attribute and the index kept in a ref, so moving
+between ten cards re-renders nothing; the card list is read from the DOM on
+each press, in document order — which in a CSS-columns masonry is the
+column-major reading order j/k should follow. The focused card shows its
+actions as if hovered. After `x` the ring stays in place and the next paper
+slides under it.
+
+Also: the `g x` chord still routed to the persona quiz, which left the nav in
+v0.8.0. Removed.
+
+Touch is the other half of the principle and is next: swipe right to save,
+swipe left to dismiss, with the buttons reduced to an assistive-technology
+fallback on touch devices.
+
+## v0.10.1 — 2026-09-06
+
+The loading skeleton catches up with the card.
+
+It still drew the card from three releases ago: a single 820px column, a kind
+badge and score chip up top, a 3px accent stripe, three body lines, and a
+hairline footer with three action buttons. Every one of those has since left
+the real card, so the load-in was a jump cut from one layout to another.
+
+It now mirrors what renders: a three-column masonry the width of the feed,
+each placeholder a cover card — a 16:9 plate on top (every real card carries
+one), then meta, a serif-height title of one to three lines, two or three skim
+lines, an author line. No buttons; the real ones are hidden at rest. Line
+counts vary per card so the masonry is a masonry before the data arrives, and
+the cards arrive with the same reading-order stagger the real ones use.
+
+The component is shared with search, which already prints its own
+"searching…" status; the "Brewing your daily briefing" header is a prop now
+and search passes none, so the two messages no longer stack.
+
+## v0.10.0 — 2026-09-05
+
+Peer is a paper briefing. Events and jobs are gone from the product.
+
+The founders' verdict, verbatim: "先拿掉 event 和 job 我们 focus 在 paper". This
+release removes every user-facing surface for the two once-a-year verticals.
+The library code underneath (`lib/events`, `lib/jobs`, `lib/opportunities`)
+stays for one more release — see the last paragraph.
+
+**Removed.** The `/events` and `/jobs` routes and their detail pages; the
+`/api/events/*`, `/api/jobs/feed` and `/api/jobs/report` routes; the Events and
+Jobs entries in the sidebar and mobile bar; the Events and Jobs topic lists on
+the profile page and in onboarding; the Locations and Work rights profile
+fields (both existed to filter jobs); the onboarding "Work rights" step — the
+wizard is seven steps, not eight, and no longer asks for visa status before
+research topics; the Adzuna and USAJobs connectors, which existed only to
+widen job coverage. Tavily stays, described as what it now is: optional web
+discovery for papers.
+
+**Saved is a shelf.** It carried Papers / Events / Jobs segments and a To-do /
+Done rail for applications and registrations; its own comment admitted papers
+"have no completion action" and sat in To-do forever. It is a list of saved
+papers now.
+
+**The daily surface never asks for the other lanes.** `loadFeed` defaults to
+`["papers"]`. The feed tile and the report page's "Related from your feed"
+list are paper-only, which severs the last paper-side import of
+`lib/opportunities/facets` from a rendered surface.
+
+**Dead code swept.** Deleting the consumers orphaned the event/job report kit
+(`ReportSection`, `WhyPeerSentThis`, timeline, fact tiles, badges), five UI
+primitives that only the event and job cards used, the dashboard and deadlines
+board, the visa country picker, the surface-topics composer, the feed "more"
+tile, the onboarding tour, and the decorative logo halftone. Seventeen test
+files went with their subjects, including the 1,725-line typography test that
+asserted Georgia point sizes for the job and event reports. 66 files, −16,801
+lines.
+
+**Kept on purpose.** `/api/jobs/dispatch-digests` — "jobs" as in cron jobs.
+It is the daily email entry point, its URL is pinned in
+`.github/workflows/digest-cron.yml`, and renaming a production cron endpoint
+has no product benefit.
+
+**Still to do — the library.** `lib/events`, `lib/jobs` and `lib/opportunities`
+are now unreferenced by any product surface but cannot be deleted wholesale:
+the paper pipeline imports five files from `lib/opportunities` (`shared`,
+`pool-cache`, `pool-cache-runtime`, `page-fetch`, `facets`), and the event/job
+fields remain on `UserProfile`, in the feed store, in `/api/profile`'s column
+map and in the Supabase schema. That is a separate, deliberate extraction.
+
+## v0.9.4 — 2026-09-05
+
+The feed card is a cover card.
+
+**The left stripe is gone.** The 3px accent rail on every card's left edge
+encoded paper / event / job on a mixed feed. On a papers-only feed it was the
+same mark on every card — decoration, and the same kind of chrome the rest of
+this series has been removing.
+
+**The plate bleeds.** It used to sit inset inside the card with padding around
+it and a radius of its own, which reads as "a box with an image in it". It now
+runs to the top edge and takes the card's own corners, and the text block
+below it has real air.
+
+**The title is set in the display serif.** It is the specimen's name, and it
+now shares a typeface with the terms on the plate above it — plate and title
+read as one typographic system. Sans is reserved for labels: the venue line
+and the authors. The footer hairline is gone; spacing separates.
+
+**The mat is under both fills, with its own ink.** The off-white mat from
+v0.9.2 had never actually reached the browser (see below), and once it did the
+typographic plate's near-white type vanished on it. The plate now has its own
+ink tokens, relative to the mat rather than the card: on dark, dark warm ink on
+off-white; on light, the ordinary text colours on a 4% tint. Figure and type
+sit on the same ground, which is what makes the two fills read as one slot.
+
+Infra note: Turbopack's persistent dev cache in `.next/dev` was serving a
+compile from before the latest `globals.css` edit, and a restart re-read the
+cache rather than the file — each restart was one edit behind. Clearing
+`.next/dev` fixed it.
+
+## v0.9.3 — 2026-09-05
+
+The sidebar is the spine of a daily ritual, not a list of pages.
+
+**Today is the primary object.** The one thing that changes every day — the
+date, how many papers came, how many are unread — now sits at the top of the
+sidebar as a block, and that block is the Feed link. "SAT · SEP 5 / Today 10 /
+10 unread", and when everything is read, "all read · back tomorrow".
+
+**Frequency is visible.** Search and Saved are reading tools and sit as plain
+rows. Events and Jobs sit under their own quiet OCCASIONAL label at a lighter
+weight; a once-a-year need should not look like a daily one. This is the same
+hierarchy the home page encodes, carried into the nav. Profile is anchored to
+the bottom.
+
+**The active state is a rail that travels.** The active nav item used to be a
+card — `bg-surface shadow-card`, the same elevation as a content card — which
+put chrome and content on one level. It is now a 2px accent rail that slides
+to wherever you went, positioned from the DOM in a layout effect and written
+back as CSS variables, so moving it never re-renders anything.
+
+**Chrome is quieter.** Six keyboard-shortcut hints were permanently on screen;
+they now appear only for the row under the pointer or keyboard focus. The
+footer — three unrelated things in a bordered strip — is one line: a sync dot,
+a single ? key, the version.
+
+Also: the Events and Jobs page headers read "0 jobsin today's pool" — JSX
+swallowed the space after an expression. Template literals now.
+
+## v0.9.2 — 2026-09-05
+
+Every card has a plate.
+
+**The window is universal.** Roughly four papers in ten yield an extractable
+figure, and "some have an image and some don't" was the loudest thing wrong
+with the feed. There is now one 16:9 window on every card, at the same offset,
+always filled. When the extractor finds the paper's own figure, the figure
+fills it. When it does not, the window holds the paper's own terms set in the
+display serif over a numbered grid, closed by a rule. Two fills, one slot.
+
+**The terms are the paper's, and they are checked.** The source field is
+`matchedKeywords ∪ tags`, which is hostile in two directions: `matchedKeywords`
+ARE the reader's required topics, so unfiltered they would put the reader's own
+query on all ten plates; `tags` are OpenAlex concepts, which mis-disambiguate
+often enough to matter — a live protein-structure briefing carried "Generative
+grammar" and "Representation (politics)". Allocation now runs once across the
+whole briefing and a term must survive four gates: it is not the reader's own
+topic (or a substring of one), it is not an arXiv filing code, it is long
+enough to set at display size, and **it appears somewhere in the paper's own
+title or abstract**. That last gate is what removes mis-disambiguations: a
+concept the paper never mentions is not a concept the paper is about. No term
+may headline more than two cards.
+
+**Figures are matted, not bled.** `object-contain` on a mat rather than
+`object-cover`, because cropping a scientific figure destroys its axis labels.
+On dark themes the mat is off-white, so a white-ground chart reads as paper
+instead of glaring like a lightbox, and a colour figure keeps its colours.
+
+## v0.9.1 — 2026-09-05
+
+Elevation and motion.
+
+**The shadows were soft-UI, and soft-UI cannot work here.** Neumorphism reads
+as extrusion only when the object and its ground are the same material and the
+ground is a mid-tone that can travel both ways. The dark families have no such
+ground — bg and surface sit about four points of L* apart — so the highlight
+had been cut to 4% opacity and the pair had degenerated into one 16px black
+smudge with no contact edge. Hover made it worse: blur went 16px to 26px and
+black 45% to 60%, so a card went *softer* under the pointer instead of lifting.
+
+Replaced with three layers doing three jobs: a 1px rim for separation, whose
+contrast is anchored to the surface so it stops depending on how dark the
+ground is; a short-offset contact layer; and a wide ambient layer with heavy
+negative spread, which is what keeps a 26px blur from becoming fog.
+
+**Motion.** Cards now arrive staggered in reading order — the plumbing had been
+in globals.css all along and the feed had never used it, so all ten faded up on
+one frame, which reads as the page reflowing rather than as a delivery.
+Figures cross-fade in instead of being inserted. The 500ms hover zoom on
+figures is gone; a Ken Burns on a scientific plot reads as an advertisement and
+scales the axis labels.
+
+**Thirty icon buttons at rest.** Ten cards each showed three. The action row
+keeps its footprint but appears for the card under the pointer, and stays
+permanently visible on touch, on keyboard focus, and on a card whose state is
+already on.
+
+**A read paper stays readable.** The read state was a blanket 70% opacity over
+the whole card, which faded the title and the summary and, on dark, dragged the
+card toward the background. Only the cover recedes now.
+
+**Figures that cannot be shown no longer leave a hole.** Finding a figure URL
+is not the same as being able to display it — biorxiv answered 401 for every
+one. Sending no referrer fixes those, and anything still failing drops its
+cover rather than reserving an empty 16:9 box.
+
+## v0.9.0 — 2026-09-05
+
+The briefing has pictures, and ten different papers in it.
+
+**Papers show their own figures.** Peer has always had a rule-based figure
+extractor and a route built for exactly this — `/api/figure`'s own header reads
+"hit per-card after feed loads" — and no card had ever called it. The feed was
+ten identical blocks of text.
+
+It was also looking in the wrong place: the extractor asked ar5iv alone, and
+ar5iv now serves a stub for recent preprints. Measured across seven papers from
+one briefing, ar5iv returned "no figures" for every one while `arxiv.org/html`
+carried 26 `<figure>` elements for the same ids. arXiv's own rendering is tried
+first now, with ar5iv kept as the fallback for older papers it still covers.
+Extraction is pure scraping with no model call, so figures appear on a
+deployment with no credentials configured.
+
+**The grid is masonry.** Roughly four papers in ten carry an extractable
+figure, so card heights genuinely differ. A fixed grid either ragged-edged
+every row or reserved dead space on the six cards without an image.
+
+**One researcher can no longer take the whole briefing.** A live feed showed
+six of ten slots held by the same author, all from the same repository.
+`diversify` caps per topic, and its key is the first three title tokens —
+"Graph Neural Networks for Protein Structure Prediction" and "Quantum Machine
+Learning Protein Structure Prediction" hash differently, so the cap never
+fired. There is now a per-author cap of two.
+
+Worse, that pass had never run at all for most users: it sat behind
+`requestedTier >= 1` while the client only ever sends 0 or 2. It is
+deterministic local computation — no model, no network — so it now runs at
+every tier, which is where PRODUCT_DIRECTION's Tier 0 floor puts it.
+
+**Card text says what the paper found.** The skim line was `summaryIntro`, the
+first one or two sentences of the abstract, which in a paper is the motivation
+and reads identically across a field: three cards in one briefing opened with
+three ways of saying protein structure prediction is hard. Everything that
+distinguished them sat unread in `summaryResultDiscussion`. The line is now
+chosen from the whole abstract, preferring sentences that carry a claim or a
+quantity and avoiding both boilerplate openers and sentences whose reference
+dangles once lifted out of context.
+
+## v0.8.2 — 2026-09-04
+
+Feed card: the hierarchy now encodes something.
+
+The three loudest slots on a card all held information that was identical
+across the whole briefing, while the one field that separated two papers was
+in the smallest, faintest, most truncated line.
+
+- **The "PAPER" badge is gone** — on a papers-only feed it said nothing, and it
+  said it twice: `paper.source` repeated it at the bottom of every card as the
+  literal string "other", which is what that six-value enum ("arxiv" | four ML
+  conferences | "other") returns for everything outside those venues.
+- **The match percentage is gone.** It spanned 59–64% across the ten cards and
+  occupied the top-right corner. Papers have no relevance floor, so it could
+  not be used to choose between them either.
+- **"Why you · <topics>" is gone from the card.** Its first entry was the
+  reader's own required topic echoed back, on every card; the remaining
+  entries were OpenAlex concept tags that frequently landed in the wrong
+  domain ("Representation (politics)" on a protein-structure paper). Its
+  deduplication was case-sensitive, so one card read "protein structure
+  prediction, Protein structure prediction, Protein structure". The statement
+  it was trying to make is true of the whole briefing, so it now appears once,
+  in the page header.
+- **Venue and age lead instead**, which is what actually differs: "Scientific
+  Reports · 8d ago" against "Zenodo · 6d ago". The published date was already
+  on every paper and had never been shown.
+- **Venue drops the host institution.** OpenAlex returns "Zenodo (CERN European
+  Organization for Nuclear Research)"; at card width that truncated mid-word
+  and pushed the date off the line entirely.
+- The kind badge still appears for a **Discussion**, so a forum thread is never
+  mistaken for peer-reviewed work. That was the badge's real job.
+
+## v0.8.1 — 2026-09-04
+
+Removing things that were not true.
+
+**The contribution calendar was inventing data.** When the real per-day reading
+API returned nothing — which is every signed-out visitor, and any fetch error —
+the grid fell back to `synthesizeActivity()`, a seeded pseudo-random fill
+derived from the total activity count, and gave each invented cell a tooltip
+reading "N interactions". The streak badge counted those invented weeks. For a
+demo shown to signed-out visitors this presented fabricated numbers as the
+user's own history. The function is deleted; with no real data the panel now
+says so.
+
+**The persona quiz no longer claims to shape your feed.** Onboarding said "It
+helps shape your feed". Its stored result has exactly two readers — the quiz's
+own hydration and an onboarding checkmark — and reaches neither the feed,
+scoring, nor reports. The copy now says what is true.
+
+**The onboarding tour no longer has a step that cannot fire.** Step 3
+spotlighted `[data-tour="highlights"]`, an attribute no element carries, so it
+was silently skipped and the counter jumped 2/4 to 4/4.
+
+**`/api/test-digest` is development-only.** It runs the full feed pipeline and
+sends an email while bypassing digest_enabled, frequency and time-of-day, and
+was reachable by any signed-in caller on a deployed instance.
+
+**Paper titles are legible immediately.** The feed card wrapped every title and
+summary in a ~600ms character-scramble reveal — a delay applied to the exact
+text the reader came for.
+
+**Dead code.** The unused `DailyDigest` panel and its loading progress bar are
+gone; only the headless `PaperDigestLoader` was ever mounted.
+
+## v0.8.0 — 2026-09-04
+
+The daily surface is papers, and only papers.
+
+**The home page.** The default landing tab was `dashboard` — a metrics page
+containing zero items of content: four count tiles (Papers today / Events today
+/ Jobs today / You saved), a 14-day arrival-volume chart, a "what you're
+holding" tracker, a topic-coverage panel and a deadlines board. All removed.
+The home page is now the briefing: how many papers arrived, how many are
+unread, when it last synced, and the papers.
+
+**Papers, events and jobs are no longer peers.** They were concatenated into
+one list, sorted by relevance score alone, and written into one grid — so a
+job posting scoring 0.81 outranked a paper scoring 0.79 and occupied an
+identical cell. Events moved to `/events`, jobs to `/jobs`. They also no longer
+run on every home-page tick: `loadFeed` takes a `lanes` option and the daily
+surface asks for `["papers"]`. The progress bar labelled "Finding today's
+papers" was 30% driven by conference scrapers and job boards.
+
+**Manual controls left the automatic feed.** The feed route carried eleven
+composers exposing fourteen typeable fields. Typing two characters into the
+search box deleted the briefing outright. Search now lives at `/search`; the
+briefing is untouched by anything done there.
+
+**Credentials have a home.** The AI-provider key, deep-report toggle and
+Data-API keys had no section on `/profile` at all — they lived only in the
+one-time `/welcome` wizard and pinned permanently to the feed, which is why the
+feed page ended up doubling as the settings page. They are on `/profile` now.
+
+**Also.** Persona left the primary nav (its quiz result is read by nothing).
+The sidebar version string is read from one constant instead of being
+hardcoded in JSX, where it had drifted to v0.1.0 while this file reached
+v0.7.22.
+
 Versioning is `0.x.y` until v1; `y` for fixes/chore, `x` for features.
 
 ---

@@ -1,4 +1,5 @@
 import type { RawItem } from "@/lib/sources/types";
+import { SCORING_FALLBACK_REASON } from "@/lib/reader/recommendation";
 import type { ScoreBreakdown } from "./types";
 
 function formatRelativeDate(publishedAt: string, now = Date.now()): string {
@@ -48,7 +49,7 @@ export function generateReason(
   if (meta.length > 0) parts.push(`${meta.join(" · ")}.`);
 
   if (parts.length === 0) {
-    parts.push("Surfaced from your feed sources.");
+    parts.push(SCORING_FALLBACK_REASON);
   }
 
   return parts.join(" ");

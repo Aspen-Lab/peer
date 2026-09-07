@@ -22,9 +22,10 @@ export function ProgressBar({ pct, label, className }: ProgressBarProps) {
       aria-valuemax={100}
       aria-label={label}
       className={cn(
+        // Centred under the 48px masthead, above it in z; it used to hang off
+        // the sidebar's edge and follow it.
         "fixed inset-x-4 top-14 z-[60] mx-auto max-w-lg rounded-xl px-3 py-2.5",
         "glass shadow-card pointer-events-none",
-        "lg:left-[calc(var(--sidebar-offset)+1rem)] lg:top-4",
         className,
       )}
     >

@@ -92,12 +92,30 @@ async function downloadPdf(url: string): Promise<{ bytes: Buffer; finalUrl: stri
   }
 }
 
-async function runExtractor(pdfPath: string): Promise<ExtractorOutput | null> {
-  const helperScript = resolveHelperScript();
-  if (!helperScript) return null;
+/**
+ * Why the helper did not run. `no-python` and `no-script` are the two the
+ * reading page names: on Vercel no interpreter can be spawned, or the helper
+ * script is missing from a function bundle it was not traced into, and the
+ * page must say plainly that the PDF is there and this deployment cannot read
+ * it, rather than "no full text" as if the paper had none. Both reach the
+ * caller as a machine reason (`no-python` / `no-extractor`), never as prose.
+ */
+type ExtractorFailure = "no-python" | "no-script" | "failed";
 
+async function runExtractor(
+  pdfPath: string,
+): Promise<{ output: ExtractorOutput } | { failure: ExtractorFailure }> {
+  const helperScript = resolveHelperScript();
+  if (!helperScript) return { failure: "no-script" };
+
+  // macOS and most Linux images ship `python3` and no `python`; the old list
+  // tried `python` then `py -3`, so on a Mac every PDF quietly yielded null.
   const runners = [
-    { command: process.env.PYTHON_BIN || "python", args: [] as string[] },
+    ...(process.env.PYTHON_BIN
+      ? [{ command: process.env.PYTHON_BIN, args: [] as string[] }]
+      : []),
+    { command: "python3", args: [] as string[] },
+    { command: "python", args: [] as string[] },
     { command: "py", args: ["-3"] },
   ];
 
@@ -115,15 +133,15 @@ async function runExtractor(pdfPath: string): Promise<ExtractorOutput | null> {
         ],
         { timeout: 45_000, maxBuffer: MAX_STDIO_BYTES },
       );
-      return JSON.parse(stdout) as ExtractorOutput;
+      return { output: JSON.parse(stdout) as ExtractorOutput };
     } catch (err) {
       const message = String(err);
       if (/not recognized|ENOENT/i.test(message)) continue;
       console.warn("[papers/pdf-text] extractor failed:", err);
-      return null;
+      return { failure: "failed" };
     }
   }
-  return null;
+  return { failure: "no-python" };
 }
 
 function normalize(extractor: ExtractorOutput): ExtractedDocument {
@@ -148,6 +166,7 @@ function normalize(extractor: ExtractorOutput): ExtractedDocument {
     sections,
     figureCaptions,
     source: "pdf",
+    pageCount: typeof extractor.pageCount === "number" ? extractor.pageCount : undefined,
     reason: extractor.reason ?? null,
   };
 }
@@ -166,10 +185,19 @@ export async function tryExtractPdfText(url: string): Promise<PdfTextResult> {
 
   try {
     await writeFile(pdfPath, download.bytes);
-    const extractor = await runExtractor(pdfPath);
-    if (!extractor) {
-      return { ok: false, reason: "PDF text extractor unavailable on this server." };
+    const ran = await runExtractor(pdfPath);
+    if ("failure" in ran) {
+      return {
+        ok: false,
+        reason:
+          ran.failure === "no-python"
+            ? "no-python"
+            : ran.failure === "no-script"
+              ? "no-extractor"
+              : "PDF text extractor failed on this server.",
+      };
     }
+    const extractor = ran.output;
     if (extractor.reason && (!extractor.sections || extractor.sections.length === 0)) {
       return { ok: false, reason: extractor.reason };
     }

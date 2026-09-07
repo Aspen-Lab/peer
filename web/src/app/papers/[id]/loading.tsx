@@ -1,19 +1,17 @@
+import { PageContainer } from "@/components/ui/page-container";
+import { LoadingMat } from "@/components/reader/loading-mat";
+import { PAGE_CLASS, SPREAD_GRID } from "@/components/reader/spread";
+
+// The same container and grid as the page, so from xl the mat stands in the
+// panel column at the plate's width and the plate replaces it in place.
 export default function Loading() {
   return (
-    <article
-      className="mx-auto max-w-[760px] px-4 sm:px-6 py-10 sm:py-14"
-      aria-busy="true"
-      aria-label="Loading paper"
-    >
-      <div className="h-3 w-24 rounded-md skeleton-shimmer" />
-      <div className="mt-8 h-6 w-[86%] rounded-md skeleton-shimmer" />
-      <div className="mt-2.5 h-6 w-[58%] rounded-md skeleton-shimmer" />
-      <div className="mt-5 h-3 w-[44%] rounded-md skeleton-shimmer" />
-      <div className="mt-10 space-y-2.5">
-        <div className="h-3 w-full rounded-md skeleton-shimmer" />
-        <div className="h-3 w-[94%] rounded-md skeleton-shimmer" />
-        <div className="h-3 w-[72%] rounded-md skeleton-shimmer" />
+    <PageContainer width="spread" className={PAGE_CLASS}>
+      <div className={SPREAD_GRID}>
+        <div>
+          <LoadingMat />
+        </div>
       </div>
-    </article>
+    </PageContainer>
   );
 }

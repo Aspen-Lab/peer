@@ -1,18 +1,40 @@
+// The model report — what a reader's own key adds on top of the paper's words.
+//
+// Every claim on the wire is a `Claim`: one sentence of Peer's prose and one
+// sentence of the paper's, copied character-for-character, that supports it.
+// The sanitizer below only whitelists and caps; it fabricates nothing. A claim
+// the model could not back with an `evidence` sentence is dropped here, and
+// `evidence.ts` then drops every claim whose sentence is not actually in the
+// text the model was given. Nothing unverified reaches the client, and absence
+// is a typed omission the page names — never a placeholder sentence.
+//
+// The old fallback report ("Main result", "Key result 2", "Overview /
+// Section N", "Connects to your stated focus on …") is gone on purpose: it
+// relabelled abstract sentences as findings and invented fit reasons. The one
+// report a reader gets without a model is `emptyReport`, and the page treats
+// `noLlm` as "no model layer".
+
 import type { Paper } from "@/types";
 import { cleanDisplayText } from "@/lib/text/clean";
+
+/**
+ * One sentence of Peer's prose plus the verbatim sentence of the paper that
+ * supports it. `evidenceWhere` is set by `verifyReportEvidence`: `"abstract"`
+ * or the heading of the section the sentence was found in (numbering kept,
+ * e.g. `"4.4 Results"`), so the page can attribute the quote.
+ */
+export interface Claim {
+  text: string;
+  evidence: string;
+  evidenceWhere?: string;
+}
 
 export interface PaperReportKeyResult {
   title: string;
   detail: string;
-  figureIndex: number;
-  /**
-   * Deep-report only: paper-grounded evidence sentence pulled from the body
-   * (results/discussion). Used so the reader can see the receipts behind the
-   * `detail` claim.
-   */
-  evidence?: string;
-  /** Deep-report only: what makes this result novel vs prior work. */
-  novelty?: string;
+  /** Required: one verbatim sentence from the abstract or the full text. */
+  evidence: string;
+  evidenceWhere?: string;
   /**
    * Deep-report only: figure label this result should reference (e.g.
    * "Figure 3"), chosen by post-report figure binding. Null/absent when no
@@ -32,28 +54,34 @@ export interface PaperReportKeyResult {
   figureSource?: string | null;
 }
 
-export interface PaperReportReviewSection {
-  heading: string;
-  summary: string;
-}
-
 /** Report-generation depth used for the current response. */
 export type PaperReportDepth = "deep" | "abstract" | "fallback";
 
+/** What the model actually read: the abstract alone, or the full text. */
+export type PaperReportBasis = "model-abstract" | "model-fulltext";
+
+export interface PaperReportProvenance {
+  basis: PaperReportBasis;
+  /** Deep only: which extractor served the full text (`ExtractedDocument.source`). */
+  sourceKind?: string;
+  /** Deep only, PDFs only: pages the extractor saw. */
+  pageCount?: number;
+  /** Claims removed by `verifyReportEvidence` for lacking a verbatim sentence. */
+  droppedClaims: number;
+}
+
 export interface PaperReport {
+  /** ≤3 sentences: Peer's skim, each carrying a sentence of the paper. */
+  skim: Claim[];
   whatItProposes: {
+    /** Figure-binding query input only; the page never renders it. */
     summary: string;
+    /** ≤4 concrete methods, each with evidence. */
+    methods: Claim[];
     /**
-     * Concrete experimental / computational methods used by the paper.
-     * These should be more specific than topic tags.
-     */
-    methods: string[];
-    /** Deep-report only: one concise sentence naming the paper's novelty. */
-    novelty?: string[];
-    /**
-     * Deep-report only: figure label promoted to the proposal/novelty area.
-     * Used when a figure is reused by multiple result cards, or when the
-     * proposal itself has a strong figure match.
+     * Deep-report only: figure label promoted to the proposal area. Used when
+     * a figure is reused by multiple result cards, or when the proposal itself
+     * has a strong figure match.
      */
     figureLabel?: string | null;
     /** Deep-report only: directly bound image URL for the proposal section. */
@@ -62,18 +90,22 @@ export interface PaperReport {
     figureSource?: string | null;
   };
   resultsAndSignificance: {
+    /** Figure-binding query input only; the page never renders it. */
     summary: string;
+    /** ≤4 results, each with evidence. */
     keyResults: PaperReportKeyResult[];
   };
-  /** Populated instead of resultsAndSignificance for review/survey papers. */
-  reviewContents?: {
-    sections: PaperReportReviewSection[];
-  };
-  whyItFitsYou: {
-    /** Each item is one concise reason (≤2 sentences) why this paper was recommended. */
-    reasons: string[];
-    keywords: string[];
-  };
+  /** Deep only, ≤3: what the authors themselves state as limits. */
+  limitations?: Claim[];
+  /**
+   * Only when the profile has a project. `basedOn` is the reader's project
+   * text the relation was drawn against; ≤3 items, each with evidence.
+   */
+  relationToYourWork?: { basedOn: string; items: Claim[] };
+  /** Deep only: one concrete experiment or check the reader could run next. */
+  nextStep?: Claim | null;
+  provenance: PaperReportProvenance;
+  /** True when no model produced this report; the page shows no model layer. */
   noLlm?: boolean;
   /** Which depth was used to produce this report. */
   depth?: PaperReportDepth;
@@ -83,351 +115,265 @@ export interface PaperReport {
   sourceKind?: string;
 }
 
-const REVIEW_PATTERNS = [
-  /\breview\b/i,
-  /\bsurvey\b/i,
-  /\boverview\b/i,
-  /\btutorial\b/i,
-  /\bperspective\b/i,
-  /\broadmap\b/i,
-  /\bmeta-analysis\b/i,
-  /\bminireview\b/i,
-  /\bliterature review\b/i,
-  /\bsystematic review\b/i,
-  /\bstate[- ]of[- ]the[- ]art\b/i,
-];
-
-export function isPaperReviewLike(paper: Paper): boolean {
-  const haystack = [paper.title, paper.summaryIntro, ...paper.summaryExperimentKeywords]
-    .filter(Boolean)
-    .join(" ");
-  return REVIEW_PATTERNS.some((p) => p.test(haystack));
-}
-
-/** Returns the display label for a review/survey paper, or null for regular papers. */
-export function reviewPaperLabel(paper: Paper): "Review" | "Survey" | null {
-  if (!isPaperReviewLike(paper)) return null;
-  const haystack = [paper.title, paper.summaryIntro].filter(Boolean).join(" ");
-  return /\bsurvey\b/i.test(haystack) ? "Survey" : "Review";
-}
-
 export interface PaperReportRequest {
   paper: Paper;
   contextHint?: string;
 }
 
-function splitSentences(text: string, limit = 5): string[] {
-  return cleanDisplayText(text)
-    .split(/(?<=[.!?])\s+/)
-    .map((sentence) => sentence.trim())
-    .filter((sentence) => sentence.length > 20)
-    .slice(0, limit);
+// ── Caps ─────────────────────────────────────────────────────────────
+// Sizes the page lays out for; anything past them is cut, not summarised.
+
+export const REPORT_CAPS = {
+  skim: 3,
+  skimChars: 300,
+  methods: 4,
+  keyResults: 4,
+  limitations: 3,
+  relationItems: 3,
+  evidenceChars: 400,
+  basedOnChars: 200,
+  summaryChars: 600,
+  claimChars: 600,
+} as const;
+
+/**
+ * Returns the display label for a review/survey paper, or null for regular
+ * papers. Title only: the abstract and keywords of a normal paper say
+ * "review" and "state-of-the-art" all the time ("we review prior work",
+ * "state-of-the-art baselines"), and the old haystack test used to flip such
+ * papers into the review branch of the report prompt.
+ */
+export function reviewPaperLabel(paper: Paper): "Review" | "Survey" | null {
+  if (!/\b(review|survey|meta-analysis)\b/i.test(paper.title)) return null;
+  return /\bsurvey\b/i.test(paper.title) ? "Survey" : "Review";
 }
 
-function fallbackSummary(paper: Paper): string {
-  const sentences = splitSentences(
-    [paper.summaryIntro, paper.summaryResultDiscussion].join(" "),
-    3,
-  );
-  if (sentences.length > 0) return sentences.join(" ");
-  return `${paper.title} is an academic paper from ${paper.venue || "the literature"} that matched your Peer profile. Open the paper link for the full source text.`;
-}
-
-function fallbackMethods(paper: Paper): string[] {
-  const keywords = paper.summaryExperimentKeywords.filter(Boolean).slice(0, 4);
-  if (keywords.length > 0) return keywords;
-  return ["Method details are not explicit in the available abstract."];
-}
-
-function toOneSentence(text: string, maxLen = 220): string {
-  const cleaned = cleanDisplayText(text);
-  if (!cleaned) return "";
-  const sentence = cleaned.match(/^.*?[.!?](?:\s|$)/)?.[0]?.trim() ?? cleaned;
-  if (sentence.length <= maxLen) return sentence;
-  return `${sentence.slice(0, maxLen - 1).trim().replace(/[,:;.-]+$/, "")}.`;
-}
-
-function normalizeNovelty(
-  rawNovelty: unknown,
-  keyResults: PaperReportKeyResult[],
-): string[] | undefined {
-  const direct =
-    Array.isArray(rawNovelty)
-      ? rawNovelty
-      : typeof rawNovelty === "string"
-        ? [rawNovelty]
-        : [];
-  const fallbackFromResults = keyResults
-    .map((result) => result.novelty)
-    .filter((value): value is string => Boolean(value));
-  const novelty = [...direct, ...fallbackFromResults]
-    .map(cleanDisplayText)
-    .filter(Boolean)
-    .map((line) => toOneSentence(line))
-    .filter(Boolean)
-    .slice(0, 1);
-  return novelty.length > 0 ? novelty : undefined;
-}
-
-function fallbackKeywords(paper: Paper): string[] {
-  return Array.from(
-    new Set([
-      ...paper.summaryExperimentKeywords,
-      ...paper.title.split(/\s+/).filter((word) => word.length > 5).slice(0, 4),
-    ]),
-  ).slice(0, 8);
-}
-
-function isWeakReason(text?: string): boolean {
-  const value = cleanDisplayText(text).toLowerCase();
-  return (
-    !value ||
-    /no specific (user )?context/.test(value) ||
-    /context was not provided/.test(value) ||
-    /pulled from your search/.test(value) ||
-    /search query/.test(value) ||
-    /could not determine/.test(value)
-  );
-}
-
-function isWeakReasons(reasons: string[]): boolean {
-  return reasons.length === 0 || reasons.every(isWeakReason);
-}
-
-function summarizeContext(contextHint?: string): string {
-  return cleanDisplayText(contextHint)
-    .replace(/\s+/g, " ")
-    .slice(0, 160)
-    .replace(/[,:;]\s*$/, "");
-}
-
-function buildFitReasons(paper: Paper, contextHint?: string): string[] {
-  const keywords = fallbackKeywords(paper).slice(0, 3);
-  const keywordText = keywords.length > 0 ? keywords.join(", ") : paper.title;
-  const context = summarizeContext(contextHint);
-  const reasons: string[] = [];
-  if (context) {
-    reasons.push(`Connects to your stated focus on ${context}.`);
-  }
-  reasons.push(
-    `Centers on ${keywordText}${paper.venue ? `, published in ${paper.venue}` : ""}.`,
-  );
-  if (!context && paper.relevanceReason && !isWeakReason(paper.relevanceReason)) {
-    reasons.push(paper.relevanceReason.slice(0, 180).replace(/[,:;]\s*$/, "") + (paper.relevanceReason.length > 180 ? "…" : ""));
-  }
-  return reasons;
-}
-
-function fallbackKeyResults(paper: Paper): PaperReportKeyResult[] {
-  const sentences = splitSentences(
-    paper.summaryResultDiscussion || paper.summaryIntro || paper.relevanceReason,
-    3,
-  );
-  if (sentences.length === 0) {
-    return [
-      {
-        title: "Main result",
-        detail: "Peer could not extract a specific result sentence from the available metadata. Use the linked paper for the full results section.",
-        figureIndex: 1,
-      },
-    ];
-  }
-  return sentences.slice(0, 3).map((sentence, index) => ({
-    title: index === 0 ? "Main result" : `Key result ${index + 1}`,
-    detail: sentence,
-    figureIndex: index + 1,
-  }));
-}
-
-function fallbackReviewSections(paper: Paper): PaperReportReviewSection[] {
-  const sentences = splitSentences(
-    paper.summaryIntro || paper.summaryResultDiscussion || paper.relevanceReason,
-    5,
-  );
-  if (sentences.length === 0) {
-    return [
-      {
-        heading: "Overview",
-        summary: "Peer could not extract section-level details from the available metadata. Open the paper link for the full contents.",
-      },
-    ];
-  }
-  return sentences.slice(0, 5).map((sentence, index) => ({
-    heading: index === 0 ? "Overview" : `Section ${index + 1}`,
-    summary: sentence,
-  }));
-}
-
-export function buildFallbackPaperReport(
-  paper: Paper,
-  contextHint?: string,
-): PaperReport {
-  const summary = fallbackSummary(paper);
-  const keywords = fallbackKeywords(paper);
-  const fitReasons = isWeakReason(paper.relevanceReason)
-    ? buildFitReasons(paper, contextHint)
-    : [paper.relevanceReason];
-  const isReview = isPaperReviewLike(paper);
-
+/**
+ * The report a reader gets when no model ran: nothing, typed. `basis` is a
+ * required field of the wire shape and names the tier the empty report stands
+ * in for (nothing beyond the abstract was read); `noLlm` is the truth the page
+ * reads, and a `noLlm` report is neither cached nor rendered.
+ */
+export function emptyReport(depth: PaperReportDepth): PaperReport {
   return {
-    whatItProposes: {
-      summary,
-      methods: fallbackMethods(paper),
-    },
-    resultsAndSignificance: isReview
-      ? { summary: "", keyResults: [] }
-      : { summary: paper.relevanceReason || summary, keyResults: fallbackKeyResults(paper) },
-    reviewContents: isReview
-      ? { sections: fallbackReviewSections(paper) }
-      : undefined,
-    whyItFitsYou: {
-      reasons: fitReasons,
-      keywords,
-    },
+    skim: [],
+    whatItProposes: { summary: "", methods: [] },
+    resultsAndSignificance: { summary: "", keyResults: [] },
+    provenance: { basis: "model-abstract", droppedClaims: 0 },
     noLlm: true,
+    depth,
   };
 }
 
-export function improvePaperReportFit(
-  report: PaperReport,
-  paper: Paper,
-  contextHint?: string,
-): PaperReport {
-  if (!isWeakReasons(report.whyItFitsYou.reasons)) return report;
+// ── Sanitizer ────────────────────────────────────────────────────────
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** Cleaned display text, cut at `max` characters; "" when absent or not a string. */
+function text(value: unknown, max: number): string {
+  if (typeof value !== "string") return "";
+  const cleaned = cleanDisplayText(value);
+  return cleaned.length > max ? cleaned.slice(0, max).trim() : cleaned;
+}
+
+/**
+ * A claim survives only with both a sentence of prose and a non-empty
+ * evidence string. Missing evidence is not defaulted to "" and kept — the
+ * claim is dropped, before verification ever sees it.
+ */
+function claim(value: unknown, maxChars: number = REPORT_CAPS.claimChars): Claim | null {
+  if (!isRecord(value)) return null;
+  const body = text(value.text, maxChars);
+  const evidence = text(value.evidence, REPORT_CAPS.evidenceChars);
+  if (!body || !evidence) return null;
+  return { text: body, evidence };
+}
+
+function claims(value: unknown, max: number, maxChars: number = REPORT_CAPS.claimChars): Claim[] {
+  if (!Array.isArray(value)) return [];
+  const out: Claim[] = [];
+  for (const item of value) {
+    const c = claim(item, maxChars);
+    if (!c) continue;
+    out.push(c);
+    if (out.length >= max) break;
+  }
+  return out;
+}
+
+function keyResult(value: unknown): PaperReportKeyResult | null {
+  if (!isRecord(value)) return null;
+  const title = text(value.title, 120);
+  const detail = text(value.detail, REPORT_CAPS.claimChars);
+  const evidence = text(value.evidence, REPORT_CAPS.evidenceChars);
+  // No "Key result N" label is invented for a result the model left unnamed,
+  // and no result without its receipt survives.
+  if (!title || !detail || !evidence) return null;
+  return {
+    title,
+    detail,
+    evidence,
+    ...figureFields(value),
+  };
+}
+
+/** An image the page may show as the paper's own: served over TLS, or rendered from its PDF. */
+const FIGURE_URL = /^(https:\/\/\S+|data:image\/)/;
+
+/**
+ * Figure fields carry three states the UI distinguishes: a string (bound),
+ * `null` (binding ran and found nothing) and absent (binding never ran).
+ */
+function figureFields(value: Record<string, unknown>): {
+  figureLabel?: string | null;
+  figureImageUrl?: string | null;
+  figureCaption?: string | null;
+  figureSource?: string | null;
+} {
+  const out: ReturnType<typeof figureFields> = {};
+  if (typeof value.figureLabel === "string") {
+    out.figureLabel = cleanDisplayText(value.figureLabel) || null;
+  } else if (value.figureLabel === null) {
+    out.figureLabel = null;
+  }
+  // figureImageUrl is allowed to be a data: URL (potentially long), so don't
+  // run it through cleanDisplayText (which collapses whitespace and could
+  // mangle base64). Only the two shapes the binder produces are kept — an
+  // https URL from the pool or a PDF-rendered data image; anything else is a
+  // string the model typed, and it is dropped rather than rendered as the
+  // paper's figure.
+  if (typeof value.figureImageUrl === "string" && FIGURE_URL.test(value.figureImageUrl)) {
+    out.figureImageUrl = value.figureImageUrl;
+  } else if (value.figureImageUrl === null) {
+    out.figureImageUrl = null;
+  }
+  if (typeof value.figureCaption === "string") {
+    out.figureCaption = cleanDisplayText(value.figureCaption) || null;
+  } else if (value.figureCaption === null) {
+    out.figureCaption = null;
+  }
+  if (typeof value.figureSource === "string") {
+    out.figureSource = cleanDisplayText(value.figureSource) || null;
+  } else if (value.figureSource === null) {
+    out.figureSource = null;
+  }
+  return out;
+}
+
+/**
+ * The report with no figure on it. A figure is bound by `figure-binding.ts`
+ * from the paper's own caption pool, and only the deep path runs that; at
+ * the abstract tier the sanitizer still carries the fields through (models
+ * echo any key they have seen in a schema), so a URL the model typed would
+ * reach the plate as the paper's figure. The abstract tier strips them all —
+ * absent, the state that says binding never ran.
+ */
+export function withoutFigures(report: PaperReport): PaperReport {
+  const proposes = { ...report.whatItProposes };
+  delete proposes.figureLabel;
+  delete proposes.figureImageUrl;
+  delete proposes.figureCaption;
+  delete proposes.figureSource;
   return {
     ...report,
-    whyItFitsYou: {
-      ...report.whyItFitsYou,
-      reasons: buildFitReasons(paper, contextHint),
-      keywords:
-        report.whyItFitsYou.keywords.length > 0
-          ? report.whyItFitsYou.keywords
-          : fallbackKeywords(paper),
+    whatItProposes: proposes,
+    resultsAndSignificance: {
+      ...report.resultsAndSignificance,
+      keyResults: report.resultsAndSignificance.keyResults.map((result) => {
+        const bare = { ...result };
+        delete bare.figureLabel;
+        delete bare.figureImageUrl;
+        delete bare.figureCaption;
+        delete bare.figureSource;
+        return bare;
+      }),
     },
   };
 }
 
-export function sanitizePaperReport(report: Partial<PaperReport>): PaperReport {
-  const fallback = buildFallbackPaperReport({
-    id: "fallback",
-    title: "Untitled paper",
-    authors: [],
-    relevanceReason: "",
-    venue: "",
-    source: "other",
-    summaryIntro: "",
-    summaryExperimentKeywords: [],
-    summaryResultDiscussion: "",
-    isSaved: false,
-  });
+const DEPTHS: readonly PaperReportDepth[] = ["deep", "abstract", "fallback"];
+const BASES: readonly PaperReportBasis[] = ["model-abstract", "model-fulltext"];
 
-  const methods = Array.isArray(report.whatItProposes?.methods)
-    ? report.whatItProposes.methods.map(cleanDisplayText).filter(Boolean).slice(0, 6)
-    : fallback.whatItProposes.methods;
+/**
+ * Whitelist a raw model object (or an already-shaped report) into a
+ * `PaperReport`. Unknown keys are dropped, every string passes through
+ * `cleanDisplayText`, the caps in `REPORT_CAPS` apply, and any claim or key
+ * result without a non-empty `evidence` string is removed. No field is ever
+ * filled with a default sentence; empty arrays are the honest shape.
+ *
+ * Provenance is the caller's to set (`generateShallowReport` /
+ * `generateDeepReport` know what the model read); the sanitizer only carries
+ * a valid one through, and otherwise marks the abstract basis with zero drops
+ * so the shape is complete for `verifyReportEvidence` to count into.
+ */
+export function sanitizePaperReport(raw: unknown): PaperReport {
+  const r = isRecord(raw) ? raw : {};
+  const proposes = isRecord(r.whatItProposes) ? r.whatItProposes : {};
+  const results = isRecord(r.resultsAndSignificance) ? r.resultsAndSignificance : {};
+  const relation = isRecord(r.relationToYourWork) ? r.relationToYourWork : null;
+  const provenance = isRecord(r.provenance) ? r.provenance : {};
 
-  const keyResults = Array.isArray(report.resultsAndSignificance?.keyResults)
-    ? report.resultsAndSignificance.keyResults
-        .map((result, index) => ({
-          title: cleanDisplayText(result.title) || `Key result ${index + 1}`,
-          detail: cleanDisplayText(result.detail),
-          figureIndex: Number.isFinite(result.figureIndex)
-            ? Math.max(1, Math.min(5, Math.round(result.figureIndex)))
-            : index + 1,
-          evidence: result.evidence ? cleanDisplayText(result.evidence) : undefined,
-          novelty: result.novelty ? cleanDisplayText(result.novelty) : undefined,
-          figureLabel:
-            typeof result.figureLabel === "string"
-              ? cleanDisplayText(result.figureLabel) || null
-              : result.figureLabel === null
-                ? null
-                : undefined,
-          // figureImageUrl is allowed to be a data: URL (potentially long),
-          // so don't run it through cleanDisplayText (which collapses
-          // whitespace and could mangle base64).
-          figureImageUrl:
-            typeof result.figureImageUrl === "string" && result.figureImageUrl.trim()
-              ? result.figureImageUrl
-              : result.figureImageUrl === null
-                ? null
-                : undefined,
-          figureCaption: result.figureCaption
-            ? cleanDisplayText(result.figureCaption)
-            : undefined,
-          figureSource: result.figureSource
-            ? cleanDisplayText(result.figureSource)
-            : undefined,
-        }))
-        .filter((result) => result.detail)
-        .slice(0, 4)
-    : fallback.resultsAndSignificance.keyResults;
+  const keyResults: PaperReportKeyResult[] = [];
+  if (Array.isArray(results.keyResults)) {
+    for (const item of results.keyResults) {
+      const kr = keyResult(item);
+      if (!kr) continue;
+      keyResults.push(kr);
+      if (keyResults.length >= REPORT_CAPS.keyResults) break;
+    }
+  }
 
-  const reasons = Array.isArray(report.whyItFitsYou?.reasons)
-    ? report.whyItFitsYou.reasons.map(cleanDisplayText).filter(Boolean).slice(0, 6)
-    : fallback.whyItFitsYou.reasons;
+  const relationItems = relation ? claims(relation.items, REPORT_CAPS.relationItems) : [];
+  const basedOn = relation ? text(relation.basedOn, REPORT_CAPS.basedOnChars) : "";
 
-  const keywords = Array.isArray(report.whyItFitsYou?.keywords)
-    ? report.whyItFitsYou.keywords.map(cleanDisplayText).filter(Boolean).slice(0, 10)
-    : [];
+  const nextStep = claim(r.nextStep);
 
-  const reviewSections = Array.isArray(report.reviewContents?.sections)
-    ? report.reviewContents.sections
-        .map((s) => ({
-          heading: cleanDisplayText(s.heading),
-          summary: cleanDisplayText(s.summary),
-        }))
-        .filter((s) => s.heading && s.summary)
-        .slice(0, 10)
-    : undefined;
-
-  const novelty = normalizeNovelty(
-    (report.whatItProposes as { novelty?: unknown } | undefined)?.novelty,
-    keyResults,
-  );
-
-  const proposalFigureLabel =
-    typeof report.whatItProposes?.figureLabel === "string"
-      ? cleanDisplayText(report.whatItProposes.figureLabel) || null
-      : report.whatItProposes?.figureLabel === null
-        ? null
-        : undefined;
-  const proposalFigureImageUrl =
-    typeof report.whatItProposes?.figureImageUrl === "string" &&
-    report.whatItProposes.figureImageUrl.trim()
-      ? report.whatItProposes.figureImageUrl
-      : report.whatItProposes?.figureImageUrl === null
-        ? null
-        : undefined;
-
-  return {
+  const report: PaperReport = {
+    skim: claims(r.skim, REPORT_CAPS.skim, REPORT_CAPS.skimChars),
     whatItProposes: {
-      summary: cleanDisplayText(report.whatItProposes?.summary) || fallback.whatItProposes.summary,
-      methods,
-      novelty,
-      figureLabel: proposalFigureLabel,
-      figureImageUrl: proposalFigureImageUrl,
-      figureCaption: report.whatItProposes?.figureCaption
-        ? cleanDisplayText(report.whatItProposes.figureCaption)
-        : undefined,
-      figureSource: report.whatItProposes?.figureSource
-        ? cleanDisplayText(report.whatItProposes.figureSource)
-        : undefined,
+      summary: text(proposes.summary, REPORT_CAPS.summaryChars),
+      methods: claims(proposes.methods, REPORT_CAPS.methods),
+      ...figureFields(proposes),
     },
     resultsAndSignificance: {
-      summary: cleanDisplayText(report.resultsAndSignificance?.summary) || fallback.resultsAndSignificance.summary,
+      summary: text(results.summary, REPORT_CAPS.summaryChars),
       keyResults,
     },
-    reviewContents: reviewSections ? { sections: reviewSections } : undefined,
-    whyItFitsYou: {
-      reasons,
-      keywords,
+    provenance: {
+      basis: BASES.includes(provenance.basis as PaperReportBasis)
+        ? (provenance.basis as PaperReportBasis)
+        : "model-abstract",
+      ...(typeof provenance.sourceKind === "string" && provenance.sourceKind
+        ? { sourceKind: cleanDisplayText(provenance.sourceKind) }
+        : {}),
+      ...(typeof provenance.pageCount === "number" && Number.isFinite(provenance.pageCount)
+        ? { pageCount: Math.max(0, Math.round(provenance.pageCount)) }
+        : {}),
+      droppedClaims:
+        typeof provenance.droppedClaims === "number" && Number.isFinite(provenance.droppedClaims)
+          ? Math.max(0, Math.round(provenance.droppedClaims))
+          : 0,
     },
-    noLlm: report.noLlm,
-    depth: report.depth,
-    paywallNotice: report.paywallNotice
-      ? cleanDisplayText(report.paywallNotice)
-      : undefined,
-    sourceKind: report.sourceKind
-      ? cleanDisplayText(report.sourceKind)
-      : undefined,
   };
+
+  if (Array.isArray(r.limitations)) {
+    report.limitations = claims(r.limitations, REPORT_CAPS.limitations);
+  }
+  // A relation block with nothing to say is absent, not an empty heading.
+  if (relation && relationItems.length > 0) {
+    report.relationToYourWork = { basedOn, items: relationItems };
+  }
+  if (nextStep) report.nextStep = nextStep;
+  else if (r.nextStep === null) report.nextStep = null;
+
+  if (r.noLlm === true) report.noLlm = true;
+  if (DEPTHS.includes(r.depth as PaperReportDepth)) report.depth = r.depth as PaperReportDepth;
+  const paywallNotice = text(r.paywallNotice, REPORT_CAPS.summaryChars);
+  if (paywallNotice) report.paywallNotice = paywallNotice;
+  const sourceKind = text(r.sourceKind, 40);
+  if (sourceKind) report.sourceKind = sourceKind;
+
+  return report;
 }

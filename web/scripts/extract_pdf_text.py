@@ -30,6 +30,12 @@ import fitz
 SECTION_HEADINGS = [
     "Abstract",
     "Introduction",
+    "Limitations",
+    "Threats to Validity",
+    "Evaluation",
+    "Experiments",
+    "Experimental Setup",
+    "Future Work",
     "Background",
     "Related Work",
     "Materials and Methods",
@@ -92,6 +98,13 @@ def canonicalize(heading: str) -> str:
     Example: "Materials and Methods", "Methods", "Methodology" -> "methods".
     """
     lower = heading.lower().strip()
+    # Mirrors canonicalizeHeading in web/src/lib/papers/html-text.ts: the
+    # limitations bucket is the section a reader most wants quoted, and
+    # "Evaluation"/"Experiments" hold results, not method.
+    if any(key in lower for key in ("limitation", "caveat", "threats to validity")):
+        return "limitations"
+    if lower.startswith(("evaluation", "experiments")) and "setup" not in lower:
+        return "results"
     if any(key in lower for key in ("materials and method", "experimental", "methodolog")):
         return "methods"
     if "method" in lower:
@@ -290,7 +303,11 @@ def extract_title(doc: fitz.Document) -> str | None:
 def extract_text(pdf_path: str, max_pages: int) -> dict:
     doc = fitz.open(pdf_path)
     try:
-        page_count = min(len(doc), max_pages)
+        # Read at most max_pages, but report the document's real length:
+        # the reading page says "a 50-page PDF", and a cap disguised as a
+        # count would call every long paper a 40-page one.
+        total_pages = len(doc)
+        page_count = min(total_pages, max_pages)
         pages_lines = [extract_page_lines(doc[i]) for i in range(page_count)]
         hits = find_heading_hits(pages_lines)
         sections = segment_into_sections(pages_lines, hits)
@@ -314,7 +331,8 @@ def extract_text(pdf_path: str, max_pages: int) -> dict:
             "title": extract_title(doc),
             "sections": trimmed,
             "figureCaptions": captions,
-            "pageCount": page_count,
+            "pageCount": total_pages,
+            "pagesRead": page_count,
             "reason": None if trimmed else "PDF text extractor produced no sections.",
         }
     finally:
