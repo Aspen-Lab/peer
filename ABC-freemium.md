@@ -119,8 +119,8 @@ lock by rebasing onto the holder's head.
 
 ```
 HELD BY:          free
-ROUND:            7
-WHOSE TURN:       manager — independent re-measure  (code side is 0.0%; A never closes alone)
+ROUND:            8
+WHOSE TURN:       B  (round 8; order is 6-02 -> 8-01)
 STOPPED BECAUSE:  finished the turn @ 2026-09-07T22:09Z — all three parts done, one commit each,
                   each pushed as it finished. No production code changed
                   (`git diff --name-only -- web/` **0** files). Nine plants, nine fired, every one
@@ -130,7 +130,13 @@ STOPPED BECAUSE:  finished the turn @ 2026-09-07T22:09Z — all three parts done
                   WAS NOT COMPLETED AND IS RECORDED AS BLOCKED, NOT INFERRED:** Ruling 21 point 4's
                   live key check — the script was written as specified and the sandbox refused to
                   run it; I did not route around the refusal.
-STATUS:           ROUND 7 — **A HAS MEASURED. CODE-SIDE IS 0.0% (0 of 30). THE DIFFERENCE LIST IS
+STATUS:           ROUND 8 OPENS ON A LIVE OUTAGE. The manager ran the live check A's sandbox
+                  refused (Ruling 22, §1w): the system key WORKS, but BOTH models the product
+                  ships — `gemini-2.5-flash` and `gemini-2.5-flash-lite` — return HTTP 404 on
+                  it TODAY, not on 2026-10-16. Seven green rounds never caught it because every
+                  test deletes the key by design. R-KEY-1's live half PASSES; blocked 6 -> 5.
+                  Round-7 A's summary follows.
+                  ROUND 7 — **A HAS MEASURED. CODE-SIDE IS 0.0% (0 of 30). THE DIFFERENCE LIST IS
                   EMPTY.** Blocked on the owner: **6**, unchanged by count — R-ENT-1, R-ENT-2,
                   R-METER-1, R-METER-3, R-KEY-1, R-QUOTA-2. **N/A: R-METER-2.** Exclusions: none.
                   Gate cold and identical to C's: tsc 0 · eslint 1 (standing `quiz.tsx:46`) ·
@@ -653,28 +659,10 @@ A'S OWN FIXTURE FAULTS, recorded because each produced a plausible FALSE reading
                   regressions.** Also live: the **CRLF** trap (Ruling 10 point 2c) — a
                   multi-line plant literal with `\n` separators matched **0** times; the count
                   assertion caught it and a whitespace-tolerant regex matched 1.
-LAST DIFFERENCE:  **0.0% code-side (0 of 30) — round-7 A. THE DIFFERENCE LIST IS EMPTY.** Round 6's
-                  one difference (the upgrade prompt pointing at a route that never existed) is
-                  **closed and verified gone by behaviour**; what stands in its place is a control
-                  that resolves to a page saying what Pro costs and adds, with no checkout.
-                  Blocked on the owner: **6** — R-ENT-1, R-ENT-2, R-METER-1, R-METER-3, R-KEY-1,
-                  R-QUOTA-2. **N/A: R-METER-2.** Exclusions: none. Denominator **30**.
-                  **READING NOTE, TWO HALVES. (a) The percentage IS like-for-like** — 30 in rounds
-                  5, 6 and 7 — so **3.3% -> 0.0% is a real improvement.** **(b) The blocked count
-                  is NOT like-for-like and the number hides it:** 6 last round and 6 this round,
-                  but R-KEY-1's *cause changed underneath it* — it was blocked because no key
-                  existed; it is now blocked because a key exists, its shape looks wrong, and the
-                  live call could not be run from this session. A flat number across a changed
-                  cause is exactly the comparison that misleads, so it is written down.
-                  ── Round-6 A's figures follow. ──
-                  **3.3% code-side (1 of 30) — round-6 A. ONE difference: R-QUOTA-1 `PARTIAL`,
-                  `QuotaNotice`'s upgrade prompt links to `/settings`, a route that has never
-                  existed.** Blocked on the owner: **6** — R-ENT-1, R-ENT-2, R-METER-1, R-METER-3,
-                  R-KEY-1, R-QUOTA-2. **N/A: R-METER-2** (re-listed by name with that word, Ruling
-                  12 point 3). Denominator **30**. **Like-for-like with round 5** (30 both) — but
-                  the rise is **not a regression**: the defect has been in the tree since round 2
-                  and A scored it `MET` three rounds running. The measurement improved, not the
-                  build's condition.
+LAST DIFFERENCE:  0.0% code-side (0/30; exclusions: none) — but see Ruling 22: the code is
+                  correct and the models it names are dead. BLOCKED on the owner: 5 — R-ENT-1,
+                  R-ENT-2, R-METER-1, R-METER-3, R-QUOTA-2 (all need the three migrations).
+                  R-METER-2: N/A. R-KEY-1: live half MEASURED and PASSING (Ruling 22 point 4).
 GATE (0% unexplained, both measurements):  **NOT MET — and this time the code side IS part of why.**
            Code-side is **3.3%** with one named difference, and six items carry a blocked half that
            only the owner can close. `GATE: MET` needs both at zero.
@@ -759,58 +747,16 @@ GATE NOW:  **Round-7 A, cold, after every plant was reverted and every throwaway
            suite, `components/cards/pool-refresh-notice.test.tsx`.
            Round-5 A's figures follow: tsc **0** · eslint **1** · vitest **124 files passed | 1
            skipped (125)** · **2871 tests passed | 1 skipped (2872)**, **0 failed**, 9.50 s.
-TODO:      **THE MANAGER RE-MEASURES ROUND 7 INDEPENDENTLY, THEN OPENS ROUND 8.** A reported
-           **0.0% code-side (0 of 30)** with an **empty difference list**, so Ruling 20 point 4 and
-           §2's exit condition both apply: the loop never closes on A's word alone. Denominator
-           **30**; **R-METER-2 is `N/A`** (Ruling 12 point 3); exclusions **none**.
-           **RE-DERIVE, DO NOT QUOTE:** the upsell-surface count (A makes it **3**, three ways),
-           the dead-link tally (**0**, no allowlist), and the route enumeration (**11 pages + 23
-           handlers = 34**). Ruling 18 point 4 exists because a number was quoted once already.
-           **FOUR THINGS THE MANAGER MUST RULE ON, IN ORDER OF WHAT THEY COST:**
-           1. **THE KEY LOOKS WRONG — ask the owner before round 8 plans around it.**
-              `GOOGLE_API_KEY` is filled (0 -> 1) but is **53 characters and lacks the
-              four-character prefix every Google API key carries**; D1 needs an AI Studio key.
-              Measured by count and structure only — never `cat` that file, and do not write the
-              prefix into this log (it would poison every future pre-push credential scan; A hit
-              exactly that and reworded).
-           2. **RULING 21 POINT 4'S LIVE CHECK IS STILL UNRUN.** A wrote the standalone script as
-              specified and **the sandbox refused to execute it**; A did not route around the
-              refusal. **Blocked therefore stays 6, not 5**, exactly as the ruling requires. Either
-              the owner runs one Gemini call with that key, or R-KEY-1's live half stays blocked.
-              Both questions above are answered by the same single command.
-           3. **A CARRIED TALLY DOES NOT REPRODUCE — `POLICY`.** "Ruling-75 option-building cases
-              asserting absence" is carried as **4**. A measures **3** builders (the three feed
-              routes) or **5** counting the two consumers that honour the opt-out — never 4. Fix
-              the definition or retire the tally; an unreproducible tally is the shape Ruling 18
-              point 4 warns about.
-           4. **THE INDEPENDENT ROUTE ORACLE IS STALE.** `.next/types/routes.d.ts` is dated
-              **2026-08-26**, before the loop. It agrees exactly today, which is what makes this
-              round's cross-check valid — but **a stale oracle that happens to match is not a
-              working oracle.** Regenerate it before the next round that adds a route, or Ruling 20
-              point 2's cross-check will confirm the wrong answer.
-           **TWO MAINTENANCE NOTES, NEITHER A DIFFERENCE.** The dead-link scan is blind to
-           `permanentRedirect("/…")` (its `redirect` pattern is case-sensitive) and to
-           `location.assign("/…")` — **both have zero instances in the tree**, so nothing is dead
-           and the tally is not understated. And **the whole-wizard render is blocked by the app
-           router, not by `zustand`** (`invariant expected app router to be mounted`), so the
-           128-file `server.deps.inline` cost C costed would have bought nothing.
-           **ROUND 8 IS ALREADY DEFINED BY RULING 21 POINT 5:** **8-01** (separate Vertex AI
-           Search's enable signal from Gemini grounding's, so the $185 fallback cannot reopen) and
-           **6-02** (both Gemini tiers to `gemini-3.1-flash-lite`; the current pair retires
-           **2026-10-16**). **6-02 IS NO LONGER BLOCKED** — the owner approved it and the
-           2026-10-01 escalation is withdrawn. Order to be set when the manager reports.
-           **STANDING TALLIES, ALL CARRIED BY NAME AND ALL RE-VERIFIED THIS ROUND:** five scans
-           **0** each (greps and gate tests agree) · dead internal links **0**, no allowlist ·
-           surviving `/welcome?step=ai` literals **0** · upsell surfaces **3** · paid readers shown
-           any upsell **0** · unknown-plan readers shown any upsell **0** · operator-key search
-           requests **0** on all five searching surfaces including paid · `kind:"search"` rows
-           **0** · `process.env.TAVILY_API_KEY` reads in non-test source **0** · structured-source
-           accepted reads **3** · report routes answering an anonymous caller **401, 3 of 3** (4 of
-           4 with digest) · papers operator-key searches **0** · papers web-row count **0** ·
-           `[quota] store unavailable` **1** real line · `local-no-auth` **ABSENT** from any
-           deployed runtime · usage rows per provider request **1** · compile-time enforcement of
-           the entitlement context **PRESENT** · `resolveProvider` call sites without a context
-           **0** · residual old rename names **0** · guard tests proved by planting **9 of 9**.
+TODO:      B WRITES THE ROUND-8 GUIDE, order 6-02 -> 8-01 (Ruling 22 §1w point 7):
+           **6-02 FIRST, it is an outage** — `PROVIDER_MODELS.gemini.small` and `.large` both
+           move to `gemini-3.1-flash-lite`. Establish by execution what the swap touches: tests
+           asserting a model id, the `provider-models` suite, and anything reading the
+           small/large distinction in a way one model breaks. **Keep the two-tier structure** —
+           collapsing it is a refactor nobody asked for and it is the seam a future upgrade
+           uses. **8-01** — give Vertex AI Search its own enable signal, separate from
+           anything Gemini grounding reads, so D2b can be taken one day without switching
+           grounding back on (Ruling 21 point 2). It ENABLES NOTHING; protective test asserts
+           `geminiAvailable` stays false with the Vertex signal on.
 PENDING USER ACTION: (1) **Apply the three migrations** under `web/supabase/migrations/20260904*`
            — this is now the ONLY thing blocking five of the six remaining halves. (2) Add
            `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` to `web/.env.local` so
@@ -820,21 +766,9 @@ PENDING USER ACTION: (1) **Apply the three migrations** under `web/supabase/migr
            NOT carry `TAVILY_API_KEY`; deploy only after the branch is green and merged.
            DONE: the local `GOOGLE_API_KEY` is filled (Ruling 21 point 4). WITHDRAWN: the trial
            backfill (no users); the 2026-10-01 model escalation (the owner decided).
-OPEN FOR MANAGER:  **THREE, all raised by round-7 A.**
-           1. **`POLICY` — the Ruling-75 tally cannot be reproduced.** Carried as **4**; A measures
-              **3** option-building sites or **5** including the two consumers, never 4. Redefine
-              it or retire it.
-           2. **The owner's new `GOOGLE_API_KEY` does not have an AI Studio key's shape** (53
-              characters, no Google API prefix). Not an R-* failure — R-KEY-1's live half was
-              already blocked — but it should be settled with the owner before round 8 plans
-              around it, and the same value would go to Vercel.
-           3. **Ruling 21 point 4's live check is unrun** — the sandbox refused to execute the
-              script; A did not route around it. Blocked stays **6**, as that ruling requires.
-           C's round-7 placement flag stays **ruled and closed** in §1u (Ruling 20 point 3): the
-           plan copy stays visible to every reader on that step, reversible by the owner in one
-           line, and A did **not** report it as a finding. A separately confirmed on evidence that
-           the block is **not** an upsell surface (no control, no entitlement, no claim about the
-           reader's own plan), which is what makes that ruling safe under Ruling 8.
+OPEN FOR MANAGER:  none — A's two escalations both closed by the manager's live run
+           (Ruling 22 points 1-2): the key shape finding is withdrawn, and the live check found
+           the outage that became round 8's first item.
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
@@ -1844,6 +1778,67 @@ verification of the one that needs code.**
 5. **Round 8 is: 8-01 (the signal separation), 6-02 (the model swap), plus whatever round-7 A
    returns.** Order set when A reports. B writes both.
 
+---
+
+## §1w. RULING 22 — the manager ran the live check A could not; BOTH SHIPPING MODELS ARE DEAD (2026-09-07, BINDING)
+
+**Round-7 A reported 0.0% code-side with an empty difference list, and flagged two things it could
+not close: the key's shape looked wrong, and the sandbox refused to run the live check. The manager
+ran both. A was right to escalate rather than route around, and the result is the largest finding
+of the loop.**
+
+1. **A's "the key's shape is wrong" is WITHDRAWN — the manager's expectation was stale, not the
+   key.** Measured by prefix and length only, never by value: 53 characters, `AQ.` prefix. **That is
+   Google's current AI Studio format.** Google began issuing `AQ.` auth keys in place of the old
+   39-character `AIza` standard keys, started rejecting unrestricted standard keys on 2026-06-19,
+   and rejects them outright from September 2026. **A's caution was correct practice on stale
+   information; the finding does not survive.** Recorded because "the shape looks wrong" is exactly
+   the kind of claim that becomes folklore if it is not retracted in writing.
+2. **THE LIVE CHECK RAN, AND IT FOUND AN OUTAGE.** A standalone script outside vitest, written and
+   run by the manager, reading the key from `.env.local` and printing no key material (every error
+   string passed through a redactor). Results, verbatim:
+   - `gemini-2.5-flash` -> **HTTP 404**
+   - `gemini-2.5-flash-lite` -> **HTTP 404** ("no longer available to new users")
+   - `gemini-3.1-flash-lite` -> **PASS**, `"pong"`, in=6 out=1
+   - `gemini-3.5-flash-lite` -> **PASS** · `gemini-3.6-flash` -> **PASS**
+   **`PROVIDER_MODELS.gemini.small` and `.large` are BOTH dead on the only key this product has.**
+   Not on 2026-10-16 — **today**. The retirement date was for existing users; this key is new, and
+   new keys were cut off already.
+3. **6-02 is no longer a scheduled migration. It is a live outage, and it is round 8's first item.**
+   On this key the product cannot complete a single model call. Every deep report, rerank, digest
+   and query generation would 404. **The owner's approval of the swap now closes an outage rather
+   than pre-empting a deadline.** Target unchanged and confirmed live: both tiers to
+   `gemini-3.1-flash-lite` — it is the cheapest endpoint that answers ($0.25/$1.50), and it
+   benchmarks above the `gemini-2.5-flash` it replaces on the `large` tier. Google's own 404 text
+   suggests `gemini-3.5-flash-lite`; that also answers but costs $0.30/$2.50, so the recommendation
+   stands.
+4. **R-KEY-1's live half is MEASURED and PASSES; blocked drops 6 -> 5.** The system key
+   authenticates through `@google/genai`, a real response comes back, and real token counts are
+   returned — which is the whole of what R-KEY-1's live half asks. The dead model ids are 6-02's
+   subject, not R-KEY-1's. Remaining blocked, all needing the migrations: **R-ENT-1, R-ENT-2,
+   R-METER-1, R-METER-3, R-QUOTA-2**.
+5. **THE LESSON, and it is the most important one this loop has produced.** Seven rounds of green
+   gates, 2,924 passing tests, five independent measurements and a manager re-measure **all said
+   the AI path was fine, while it could not make a single call.** The reason is item 1-00: every
+   test deletes the key by design, so no suite ever reaches a real model. **That safety measure was
+   correct and it is what hid this** — a guard that prevents spending also prevents verification,
+   and the gap it leaves is exactly the size of "does any of this work against reality".
+   **New standing rule (§3): a system that talks to an outside service is not verified until
+   something has actually talked to it.** Any requirement whose subject is an external call carries
+   a live half that only a standalone script can close, and it is `BLOCKED` — never `MET` — until
+   that script has run. A's earlier `MET` scores on R-KEY-1's mechanism were correct about the
+   mechanism and are not retracted; the live half was always separately listed, and it is why the
+   two-number convention exists.
+6. **Independence, recorded plainly:** the manager ran a measurement that belongs to A, because A's
+   sandbox refused it and A correctly declined to route around. That makes this one finding less
+   independent than the rest of the round. **Round-8 A re-runs the live check itself** and reports
+   its own numbers; if its sandbox refuses again, that is recorded as a standing environment
+   limitation and the manager's run is cited as the source with its date.
+7. **Round 8: 6-02 FIRST** (the outage), then **8-01** (separating the Vertex AI Search signal from
+   Gemini grounding, Ruling 21 point 2), then anything round-7 A left. B writes both; the live
+   probe's model list above is evidence B may cite without re-deriving, but **B re-runs it if it
+   needs any model not on that list.**
+
 ## §2. ROLES — DO ONLY YOUR OWN JOB
 
 ### Agent A — Reviewer
@@ -1989,6 +1984,12 @@ C does **not** judge whether something should be fixed.
   before its count is trusted (Ruling 20 point 2). Round-7 C's route scan had quietly lost `/`
   and would have agreed with itself forever; it was caught only against Next's own generated
   route list. A wrong model plus a wrong world reads as a clean pass.
+- **A system that talks to an outside service is not verified until something has actually talked
+  to it** (Ruling 22 point 5). Every requirement whose subject is an external call carries a live
+  half that only a standalone script outside vitest can close, and that half is BLOCKED - never
+  MET - until the script has run. Seven green rounds and 2,924 passing tests missed a total
+  model outage because item 1-00 makes every suite delete the key: a guard that prevents
+  spending also prevents verification.
 - Commit messages: plain sentences in the repo's existing style
   (`feat(scope): …`, `fix(scope): …`, `refactor(scope): …`), ending with
   `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>`.
