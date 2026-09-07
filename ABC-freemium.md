@@ -794,30 +794,23 @@ GATE NOW:  **Round-7 A, cold, after every plant was reverted and every throwaway
            suite, `components/cards/pool-refresh-notice.test.tsx`.
            Round-5 A's figures follow: tsc **0** · eslint **1** · vitest **124 files passed | 1
            skipped (125)** · **2871 tests passed | 1 skipped (2872)**, **0 failed**, 9.50 s.
-TODO:      **C WORKS THE ROUND-8 GUIDE FROM 6-02**, in that order (Ruling 22 §1w point 7), one
-           commit each, pushed as each finishes. Both items are written up in full in §4 under
-           `### Round 8 — Agent B` with file, line and measured blast radius.
-           **6-02 FIRST, it is an outage.** Both `PROVIDER_MODELS.gemini` tiers to
-           `gemini-3.1-flash-lite`; **keep the two-tier structure** (proved harmless: tsc 0 with
-           both literals equal, and `chainForTier` keys on the tier field, not the id). Two tests
-           go red and **the second is not a string** — `providers/gemini.test.ts:112` asserts two
-           chain attempts name *different* models; rewrite it through `PROVIDER_MODELS`, never
-           delete it, and correct its line-111 comment in the same edit. Then decide the three
-           silent changes B measured, each of which reddens nothing: **`disableThinking()`**
-           (`providers/gemini.ts:70-72` — widening it is proved safe against the live API), the
-           **onboarding label map** (`ai-setup.tsx:237-251` — new id absent, and both cells then
-           show one model under *"Why two models?"*), and the **local diagnostic route**
-           (`api/digest/test/route.ts` — the second probe overwrites the first).
-           **8-01 SECOND, and it enables nothing.** Make `GOOGLE_VERTEX_SEARCH_PROJECT` the sole
-           project source for Vertex AI Search (drop the fallback at `sources/vertex-search.ts:176`;
-           6 fixtures in one file follow). **No new variable and no build-guard edit** — the
-           blanket `GOOGLE_VERTEX_` prefix ban already covers it. **Do not add a second copy of
-           the protective test at the gate**: `system-key.test.ts:155-175` already is it and B
-           proved it fires (21 tests, 4 files). The protection that is genuinely missing is at
-           the **grounding backfill**. **DO NOT change `fallbackEnabled()`'s default until the
-           manager rules** — see `OPEN FOR MANAGER` below; decoupling it from
-           `isGeminiSearchAvailable()` is 8-01's point, but flipping opt-out to opt-in reverses a
-           recorded design decision.
+TODO:      C WORKS ROUND 8 IN THIS ORDER (Ruling 23 §1x point 7):
+           **6-02** — both Gemini tiers to `gemini-3.1-flash-lite`, AND extend
+           `disableThinking` (`providers/gemini.ts:70`, today `/gemini-2\.5-flash/`) to cover
+           the new model, or the swap turns billed reasoning on for 100% of calls and widens
+           every output cap by 4096 tokens. No test covers it — write one, prove it by
+           reverting the predicate. B measured the swap itself: tsc 0, exactly 2 tests red in 2
+           files, one of which asserts two fallback attempts name DIFFERENT models — rewrite
+           it through the constant, do not bump a number.
+           **8-01, two halves, both required** — (a) `GOOGLE_VERTEX_SEARCH_PROJECT` becomes
+           the sole Vertex-search signal; drop the `GOOGLE_VERTEX_PROJECT` fallback; the build
+           guard needs NO edit. (b) the grounding backfill at `vertex-search.ts:494-499`
+           defaults **off**, threshold retained as the opt-in (Ruling 23 point 3 — the $1,000
+           credit does not cover grounding). Enables nothing; both availability answers stay
+           false. B proved inverting the default reddens zero tests — add coverage.
+           **8-02** — a runnable script in `web/scripts/` calling `testConnection()` for the
+           configured provider, printing pass/fail per model id, NEVER key material, and NEVER
+           inside vitest. It is the owner's "did the swap work" tool.
 PENDING USER ACTION: (1) **Apply the three migrations** under `web/supabase/migrations/20260904*`
            — this is now the ONLY thing blocking five of the six remaining halves. (2) Add
            `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` to `web/.env.local` so
@@ -827,29 +820,9 @@ PENDING USER ACTION: (1) **Apply the three migrations** under `web/supabase/migr
            NOT carry `TAVILY_API_KEY`; deploy only after the branch is green and merged.
            DONE: the local `GOOGLE_API_KEY` is filled (Ruling 21 point 4). WITHDRAWN: the trial
            backfill (no users); the 2026-10-01 model escalation (the owner decided).
-OPEN FOR MANAGER:  **ONE, from round-8 B, and C is blocked on it for half of 8-01.**
-           **`POLICY — manager decides`: should the bounded grounding backfill stay ON by
-           default?** `backfillWithGrounding` (`sources/vertex-search.ts:533-560`) is a
-           deliberate, documented, priced decision that predates D2a: when a site-scoped Vertex
-           index returns too few rows, it tops the results up with Gemini grounding. Its enable
-           predicate `fallbackEnabled()` (`:444-448`) is **opt-out** and returns
-           `isGeminiSearchAvailable()`, so **enabling Vertex AI Search enables grounding with
-           it** — the exact "nobody chose it; it was a fallback" mechanism of Ruling 21 point 2,
-           and the reason separating the environment variable alone is not enough. B measured
-           that inverting it to opt-in **reddens nothing (2924 tests still green)**.
-           **B did not write a fix and flags it rather than reversing a recorded decision (§2).**
-           For: the owner's stated position that grounding is the most expensive path and must
-           never be reached by fallback. Against: a site-scoped index cannot return a host it has
-           never crawled, so D2b's search quality may lean on it. **Reconcilable — an opt-in flag
-           keeps the capability and removes the accident — but the default is the owner's call.**
-           Either way, the predicate must stop calling `isGeminiSearchAvailable()`.
-           **TWO LEADS, not escalations, recorded for the owner and not acted on:**
-           (a) `testConnection()` is implemented by all five LLM providers and **invoked from
-           nowhere** (0 call sites) — the blind spot that hid the 6-02 outage, generalised;
-           (b) the four BYOK providers' eight model ids **cannot be tested from this machine** on
-           a Google key, and B makes no claim about whether they still exist.
-           A's two round-7 escalations both stay closed by the manager's live run (Ruling 22
-           points 1-2).
+OPEN FOR MANAGER:  none — B's grounding-backfill POLICY ruled in §1x (Ruling 23 point 3):
+           default flips to off, because the $1,000 credit funding D2b explicitly does not
+           cover grounding, so leaving it on would bill real dollars on the credit path.
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
@@ -1920,6 +1893,77 @@ of the loop.**
    probe's model list above is evidence B may cite without re-deriving, but **B re-runs it if it
    needs any model not on that list.**
 
+---
+
+## §1x. RULING 23 — after round-8 B; two untested money switches, and the credit does not cover one of them (2026-09-07, BINDING)
+
+**Manager's verification in source before ruling, both of B's money findings:**
+- `disableThinking(modelId)` in `providers/gemini.ts:70` is `/gemini-2\.5-flash/.test(modelId)`.
+  Both retiring models match it; **`gemini-3.1-flash-lite` does not.** `outputCap` on the next line
+  adds `THINKING_HEADROOM` (4096) whenever thinking is on. **Confirmed: the swap alone inverts a
+  cost policy on 100% of calls and widens every output cap by 4096 tokens.**
+- `vertex-search.ts:494-499` calls `backfillWithGrounding` whenever
+  `rows.length < fallbackMinResults(...)` (default **3**) and ≥12 s of headroom remain.
+  **There is no on/off switch** — only that threshold, overridable by
+  `GOOGLE_VERTEX_SEARCH_MIN_RESULTS`. **Confirmed: Vertex search reaches grounding by function
+  call, not only by shared variable. B's finding stands and Ruling 21 point 2's mechanism was
+  incomplete.**
+
+1. **6-02 absorbs the thinking control; it is not a separate item and not optional.** A model swap
+   that silently turns billed reasoning on for every call is not the swap the owner approved.
+   `disableThinking` must cover the new model — extend it to the family rather than pinning a
+   literal, so the next swap does not re-open this. B called the live API and confirmed
+   `gemini-3.1-flash-lite` accepts the same control, so the fix is verified, not assumed.
+   **No test in the tree covers this.** C writes one and proves it by reverting the predicate.
+2. **The cost direction is corrected in writing, because I have stated it two ways.** Ruling 22
+   point 3 said the `large` tier gets "cheaper and better" — true in isolation, and B measured the
+   whole report: **it gets dearer, ~15% by B's count (about $0.0100 -> $0.0116)**, because pass 1
+   carries 2.5× the input tokens of pass 2 and sits on the tier whose input price rose 2.5×. The
+   high-volume small-tier work (reranking, query building, figure matching) is 2.5× dearer on input
+   and 3.75× on output, and it runs per feed build rather than per report, so it moves the monthly
+   bill more than reports do. **This changes nothing about whether to swap** — the alternative is a
+   product that cannot complete one call — but the owner was told "0.7 -> 0.86 分钱" and the real
+   figure is B's; the round-8 report to the owner carries B's number, not mine.
+3. **B's POLICY on the grounding backfill — RULED OFF BY DEFAULT, and the reason is the credit, not
+   a preference.** The backfill is a deliberate, documented, priced decision that predates D2a, and
+   I would not reverse it on taste. But the owner's D2b exists to spend **the $1,000 "Trial credit
+   for GenAI App Builder"**, and that credit is restricted to **Vertex AI Search and Conversation** —
+   the owner's own console text says it **cannot** be applied to standard Vertex AI predictions or
+   Gemini API endpoints, which is what grounding bills as. **So under D2b the backfill would bill
+   real dollars outside the credit, by default, on exactly the queries the credit was meant to
+   cover.** That makes "on by default" wrong for the future path, not merely expensive.
+   **The fix:** the default flips to **off**; the existing threshold stays as the opt-in
+   (`GOOGLE_VERTEX_SEARCH_MIN_RESULTS`, and B may propose a clearer name). Nothing is deleted, and
+   anyone who later wants coverage-over-cost turns it back on deliberately. **It is unreachable
+   today** (D2a hard-wires `systemSearchAllowed` false), so flipping it costs nothing now — and B
+   proved inverting it reddens **zero** tests, which is itself the finding: a money switch with no
+   coverage.
+4. **8-01 therefore has two halves, and the second is the one that matters.** (a) Use
+   `GOOGLE_VERTEX_SEARCH_PROJECT` as the sole Vertex-search signal and drop the fallback to
+   `GOOGLE_VERTEX_PROJECT` that makes the coupling mandatory — B verified the guard needs **no**
+   edit because its prefix ban already covers the name. (b) The backfill default flips per point 3.
+   **Without (b), (a) would look separated while still handing the owner the $185 mechanism.**
+   **8-01 still enables nothing:** both availability answers stay false in every reachable
+   configuration, and the existing protective test (which B proved fires, 21 tests across 4 files)
+   keeps that true.
+5. **B's `testConnection()` finding becomes item 8-02, and it is the direct generalisation of
+   Ruling 22.** The method exists on all five providers and is **invoked nowhere** — that is the
+   shape of the blind spot that let both shipping models die unnoticed, extended to every vendor.
+   **Scope, deliberately narrow:** a **runnable script, not a gate test** (`web/scripts/`, invoked
+   by hand), that calls `testConnection()` for whichever provider the environment configures,
+   prints pass/fail per model id, and **never prints key material**. It must not run in vitest —
+   item 1-00 deletes the keys there by design and a live call from the suite is exactly what that
+   guard exists to prevent. **It is the owner's tool for "did the model swap actually work",** and
+   it belongs in the acceptance checklist.
+6. **Nothing in Ruling 22 was wrong** — B reproduced the 404s and the target exactly. What Ruling 22
+   *omitted* was the thinking control, which no reading would have caught: it is a regex on a model
+   name in a different file from the one being changed. **Recorded as a class:** a swap of an
+   identifier can silently change behaviour anywhere that identifier is **pattern-matched** rather
+   than compared. **New standing rule (§3):** before changing a constant's value, grep for every
+   place its *shape* is tested — regex, `startsWith`, `includes`, prefix comparison — not only for
+   places it is read.
+7. **Round-8 order: 6-02 (with the thinking fix) -> 8-01 (both halves) -> 8-02.**
+
 ## §2. ROLES — DO ONLY YOUR OWN JOB
 
 ### Agent A — Reviewer
@@ -2071,6 +2115,10 @@ C does **not** judge whether something should be fixed.
   MET - until the script has run. Seven green rounds and 2,924 passing tests missed a total
   model outage because item 1-00 makes every suite delete the key: a guard that prevents
   spending also prevents verification.
+- **Before changing a constant's VALUE, grep for every place its SHAPE is tested** - regex,
+  `startsWith`, `includes`, prefix comparison - not only for places it is read (Ruling 23
+  point 6). Round-8 B found a model swap silently inverting a cost policy through
+  `/gemini-2\.5-flash/.test(modelId)` in a different file, with no test covering it.
 - Commit messages: plain sentences in the repo's existing style
   (`feat(scope): …`, `fix(scope): …`, `refactor(scope): …`), ending with
   `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>`.
