@@ -389,23 +389,16 @@ DONE:      **Round 6 B: both items, 6-01 and 6-03**, one commit each, each pushe
 GATE NOW:  tsc exit **0** · eslint **1 problem (1 error, 0 warnings)** (the standing `quiz.tsx:46`) ·
            vitest **124 files passed | 1 skipped (125)** · **2871 tests passed | 1 skipped
            (2872)**, **0 failed**, 9.50 s.
-TODO:      **C WORKS THE ROUND-6 GUIDE FROM 6-01**, in §4 under `### Round 6 — Agent B`; one
-           commit per item, pushed as it finishes. **6-01** the rename, with the exact grep
-           surface, the two-stage measured blast radius and the four tests at risk already
-           enumerated — including the one assertion at `deep-report-quota.test.ts:238` that must
-           be UPDATED, never deleted, and the paragraph at `search-breaker.ts:46-58` that must be
-           DELETED because the rename makes it false rather than stale. The three unreachable
-           fan-out call sites are KEPT, and B has written what their docblocks must say, including
-           the point the ruling does not cover: after the rename, restoring operator-funded search
-           means splitting this counter again, not just flipping the flag.
-           **6-03** the refresh control. Use B's predicate, **not** the ruling's literal wording:
-           `!poolRefreshAllowed && source !== "anonymous" && activeType !== "papers"` — proved by
-           harness to be the only one of three candidates that upsells nobody the server serves.
-           Render it from `DiscoveryPage` (the entitlement is already in scope at `page.tsx:502`)
-           through a **sibling** component, NOT `QuotaNotice` and NOT a variant of it. Add the
-           mid-hydration no-upsell case and prove it by planting `effectivePlan !== "paid"` and
-           watching it fail. **Do NOT add a refusal flag to the feed response.**
-           **6-02** (the model swap) is NOT in scope until the owner answers.
+TODO:      C WORKS ROUND 6 IN THIS ORDER (Ruling 16 point 6): **6-04 FIRST** — the client
+           entitlement gains a third state, `null` until known, and every upsell surface
+           renders nothing while it is unknown (Ruling 16 points 2-3); an upsell requires
+           positive evidence of non-entitlement, never the absence of data. Protective test
+           proved by planting the old default. Then **6-01** finish the rename (Ruling 14
+           point 3; B measured the blast radius: 7 imports, 4 strings, ~14 docblocks, exactly
+           ONE test assertion at `deep-report-quota.test.ts:238`). Then **6-03** the refresh
+           message as a SIBLING component rendered from `DiscoveryPage` (Ruling 16 point 7),
+           keyed on `poolRefreshAllowed` — NOT on `effectivePlan` (point 1) — with the
+           signed-out branch saying "Sign in to refresh." (point 4).
 PENDING USER ACTION: (1) Apply the three migrations under `web/supabase/migrations/20260904*`.
            (2) After applying, save a profile once in the app. (3) Optionally fill
            `GOOGLE_API_KEY` in `web/.env.local` (and the Supabase URL + service-role key) so A
@@ -414,19 +407,8 @@ PENDING USER ACTION: (1) Apply the three migrations under `web/supabase/migratio
            NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY — and must NOT carry
            TAVILY_API_KEY (the build will refuse it after 5-03). Deploy only after round 5
            reports green and the branch is merged. WITHDRAWN: the trial backfill (no users).
-OPEN FOR MANAGER:  **ONE `POLICY — manager decides`, and C is NOT blocked by it: what a
-           signed-out reader is told when they click refresh.** The Ruling-8 hydration guard B
-           found (`source !== "anonymous"`) also silences the notice for a genuinely logged-out
-           reader, so their click stays the silent no-op 6-03 exists to remove. B recommends
-           accepting that for now — they cannot upgrade without an account, so an upgrade prompt
-           is the wrong sentence for them and silence is the status quo, not a new regression. The
-           better answer is a sign-in prompt instead of an upgrade prompt, which is new copy and
-           therefore the owner's.
-           **TWO CORRECTIONS TO EARLIER RULINGS, recorded not as reversals but as precision**
-           (details in §4 under `### Round 6 — Agent B`): Ruling 13's "six call sites in five
-           files" measures as **five** calls in five files plus the declaration; and Ruling 15
-           point 2(b)'s "key it on the plan" must mean `poolRefreshAllowed`, not `effectivePlan`,
-           or the notice upsells live trial readers who are entitled to refresh.
+OPEN FOR MANAGER:  none — B's POLICY ruled in §1q (Ruling 16 point 4), against B's recommendation
+           and with the reason recorded. R-UI-3 is PARTIAL until 6-04 lands.
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
@@ -1113,6 +1095,66 @@ wrote, not one A or C wrote:**
    is added to the same round if the owner answers before C reaches it, otherwise it becomes round
    7. The six blocked halves are unchanged and still the owner's: three unapplied migrations, no
    local Google key.
+
+---
+
+## §1q. RULING 16 — after round-6 B; a live Ruling 8 breach nobody had seen (2026-09-07, BINDING)
+
+**B checked Ruling 15 against the source and was right twice. The second finding is not a design
+risk in unbuilt work — it is a defect in code that landed in round 3 and that A scored `MET` twice.**
+The manager verified it in source before ruling: `store/profile.ts:354` initialises the client
+entitlement to `ANONYMOUS_CLIENT_ENTITLEMENT` and only `setEntitlement` replaces it; all three
+report pages pass `entitlement.effectivePlan` straight into `QuotaNotice`
+(`papers/[id]/page.tsx:1601`, `jobs/[id]/page.tsx:1543`, and the events twin).
+
+1. **Ruling 15 point 2(b) is CORRECTED, not reversed.** Its wording said "key it on the plan", which
+   reads as `effectivePlan !== "paid"` — and B's harness over seven client states measured that
+   predicate upselling a **live trial reader**, who is entitled to refresh. The intent was always
+   "ask the entitlement", so the predicate keys on the **capability**, `poolRefreshAllowed`, never
+   on the plan label. **General form, binding from here: gate a feature on the capability the
+   entitlement grants, not on the name of the plan.** Plan names accumulate; capabilities are what
+   the server actually decided.
+2. **THE HYDRATION BREACH — accepted, escalated, and it reopens a scored requirement.** Until the
+   profile fetch returns, the client entitlement is the frozen anonymous default, so **every reader
+   looks free on the client, including a paid one**, while the server still grants what they paid
+   for. A paid reader who meets the quota notice inside that window is **served and told to
+   upgrade** — exactly what Ruling 8 forbids, on the surface Ruling 8 was written for.
+   **R-UI-3 is `PARTIAL` from this round** until it is fixed; round-5 A's `MET` stands in the log as
+   history and is corrected here, not rewritten. This is **new item 6-04**, and it ranks **first**
+   in round 6 — it is wrong data shown to a paying customer, which outranks a rename and a missing
+   message by the standing rank rule.
+3. **The fix shape, so C is not left to invent it.** The client entitlement gets a third state:
+   **not yet known**, distinct from "known to be anonymous". `null` until `setEntitlement` runs is
+   the cheapest honest shape. Then, everywhere an upsell is decided:
+   - **not known** -> render **no** upsell, on any surface. Silence while ignorant is correct.
+   - **known + anonymous** -> the sign-in sentence (point 4), never an upgrade prompt.
+   - **known + free** -> the upgrade prompt.
+   - **known + trial** -> the upgrade prompt for deep reports; **no** refresh upsell (they may refresh).
+   - **known + paid** -> never any upsell.
+   **The rule this generalises to, binding: an upsell requires positive evidence that the reader is
+   not entitled. Absence of data is not evidence.** Same shape as every breaker in this build failing
+   closed. **Protective test:** render each upsell surface with the entitlement unhydrated and assert
+   nothing upsells; prove it can fail by planting the old default.
+4. **B's POLICY on the signed-out reader — ruled against B's recommendation, with the reason.** B
+   recommends leaving a signed-out reader's refresh click silent, because they cannot upgrade
+   without an account. The first half is right and the conclusion is not: **the reason a rendered
+   control may refuse silently was the whole defect of 6-03**, and it does not become acceptable
+   because the reader is signed out. They get the honest sentence for **their** situation, which is
+   not "upgrade" but *"Sign in to refresh."* It is six words, it uses the sign-in the product
+   already has, and it is the actual next step for that reader. Point 3's `known + anonymous`
+   branch carries it.
+5. **B's minor count correction accepted:** Ruling 13's "six call sites in five files" measures as
+   **five calls plus the declaration**. No design consequence; not to be re-quoted as measured.
+6. **Round 6 is now four items, in this order: 6-04 -> 6-01 -> 6-03.** 6-04 first (wrong data to a
+   paying reader), then the rename, then the refresh message — 6-03 depends on 6-04's third state,
+   so it must land after it. **6-02 (the model swap) is still out of scope until the owner answers**,
+   with the 2026-10-01 escalation date standing.
+7. **B's 6-03 seam recommendation is adopted:** a sibling component, not `QuotaNotice` and not a
+   variant of it. B showed three of `QuotaNotice`'s four visible strings are hard-wired to deep
+   reports and that `QuotaSignal` has no honest value for a refresh refusal; reusing it means
+   fabricating a signal and printing "Deep reports" over a refresh message. Widening it would undo
+   the required-prop design that makes it safe. Rendered from `DiscoveryPage`, where the entitlement
+   is already in scope, so no new prop travels.
 
 ## §2. ROLES — DO ONLY YOUR OWN JOB
 
