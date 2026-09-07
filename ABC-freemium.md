@@ -118,7 +118,7 @@ lock by rebasing onto the holder's head.
 ## §1. CURRENT STATE — THE SOURCE OF TRUTH
 
 ```
-HELD BY:          free
+HELD BY:          C-round6b @ 2026-09-07T19:32:27Z
 ROUND:            6
 WHOSE TURN:       C  (round 6: implement 6-01 then 6-03; 6-02 still awaits the owner)
 STOPPED BECAUSE:  blocked: round-6 C died before doing any work - API unreachable (ENOTFOUND),
