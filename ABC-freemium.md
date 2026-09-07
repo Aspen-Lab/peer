@@ -12954,3 +12954,78 @@ vitest  Test Files  126 passed | 1 skipped (127)
 ```
 
 **+1 file, +2 tests. Nothing deleted.**
+
+#### 7-02(b) — THE DESTINATION ANSWERS THE PROMISE. **LANDED.**
+
+**The page every upsell lands on now says what Pro costs and what it adds.** B measured that it
+said nothing: six entitlement states driven through the real page, nine plan and pricing terms
+scanned, **every one absent on every persona.** The link resolved and had nothing to do with
+paying.
+
+**NO NEW COPY, AND IT IS ASSERTED RATHER THAN PROMISED.** Every sentence is lifted verbatim and
+moved to `src/lib/entitlement/plan-copy.ts`; **the surfaces it came from now import it**, so
+nothing is duplicated. `PRO_PRICE_LEAD` / `PRO_PRICE_TAIL` (from `tier-upgrade-block.tsx`, split
+exactly as it renders them so the emphasis survives), `PRO_LIFTS_MONTHLY_LIMIT` and
+`DEEP_REPORTS_LABEL` (from `quota-notice.tsx`), `POOL_REFRESH_LABEL`, `POOL_REFRESH_IS_WEEKLY` and
+`PRO_REFRESHES_ON_DEMAND` (from `pool-refresh-notice.tsx`). **A test reads the component's own
+source and requires every JSX text node to be an interpolation** — typed prose fails it, which is
+the only mechanical way to hold "no new copy" after this turn ends.
+
+**THE TWO LABELS TRAVEL WITH THEIR SENTENCES, AND THAT IS NOT DECORATION.** Both borrowed
+sentences were written under a heading that supplied their referent. Standing alone, *"Peer Pro
+lifts the monthly limit"* has no subject — **which** monthly limit — and *"Peer Pro refreshes them
+whenever you ask"* has no antecedent for *"them"*. So `DEEP_REPORTS_LABEL` goes above the first and
+`POOL_REFRESH_IS_WEEKLY` (*"…your jobs and events refresh once a week"*) goes in front of the
+second. Both labels are existing rendered strings too; nothing was written.
+
+**D7 TRAVELLED WITH THE COPY, INCLUDING ITS REASON.** The no-checkout rule is now recorded in
+`plan-copy.ts` (where anyone rendering the strings reads it) and in the new component, **and it is
+asserted**: the block renders no anchor at all, `not.toContain("href")`, and no
+`checkout|stripe|billing|subscribe`. The rule was a property of `TierUpgradeBlock`; it is a
+property of the strings.
+
+**ONE STRING DELIBERATELY DID NOT TRAVEL.** `TierUpgradeBlock`'s heading *"Also in this report on
+Peer Pro"* is scoped to an open report by its own wording, so rendering it elsewhere would make it
+false. Recorded in `plan-copy.ts` with the reason; the benefit it names is carried by the
+deep-report pair.
+
+**A COMPONENT, NOT INLINE JSX, AND THE REASON IS THE DEFECT ITSELF.**
+`src/components/plan/pro-plan-summary.tsx`. `welcome/page.tsx` is a 970-line client component whose
+store graph a suite would have to fake wholesale — **which is exactly why nothing on that page was
+ever checked against what the CTAs promise.** A leaf component can be rendered and asserted for
+nothing.
+
+**PROVED ABLE TO FAIL — FOUR PLANTS, FOUR FIRED, EACH REVERTED WITH AN ASSERTED SUBSTITUTION
+COUNT before the re-run was read.**
+1. `<ProPlanSummary />` deleted from the AI step → *"is rendered by the AI step"* reddened.
+2. One benefit retyped as prose → *"writes no new copy"* reddened.
+3. `<a href="/checkout">Subscribe</a>` added → *"has NO checkout link"* reddened **and** the
+   no-new-copy case reddened with it, which is the cross-check working.
+4. `PRO_REFRESHES_ON_DEMAND` dropped from the render → *"says what Pro adds"* reddened.
+
+**A LINT REGRESSION I CAUSED AND FIXED, RECORDED BECAUSE THE GATE CAUGHT IT AND I DID NOT.** The
+first full run after this item read **✖ 2 problems (1 error, 1 warning)** — an unused
+`PRO_PRICE_TAIL` import in the new suite, because I had asserted the student price as a literal
+instead of through the constant. Fixed by asserting **both**: the constants pin *"the same sentence
+everywhere"*, the raw `$12/month` / `$6 for students` literals pin **D7's actual price**, so a
+rename that quietly changed the number fails. Baseline restored.
+
+**WHAT THIS SUITE CANNOT SETTLE, NAMED RATHER THAN GLOSSED.** Nobody rendered the whole wizard
+in-tree. B did, in a harness outside the repo, and warned how easily such a harness gives a false
+all-clear — patching one of two `useSyncExternalStore` export shapes made all six personas render
+byte-identical output and **the only tell was the identical byte count**. Reproducing that in-tree
+would mean adding `zustand` to `server.deps.inline` in the shared vitest config, whose blast radius
+is all 128 files. So: copy proved on the component, wiring proved by slicing the AI step's own
+source. **Whether the block is on screen at `/welcome?step=ai` for every entitlement state is A's
+to drive.**
+
+**GATE AFTER 7-02(b), VERBATIM.**
+
+```
+tsc     exit 0
+eslint  ✖ 1 problem (1 error, 0 warnings)   — the standing quiz.tsx:46
+vitest  Test Files  127 passed | 1 skipped (128)
+        Tests  2914 passed | 1 skipped (2915)     0 failed
+```
+
+**+1 file, +6 tests. Nothing deleted.**

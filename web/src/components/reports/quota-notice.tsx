@@ -4,6 +4,10 @@ import Link from "next/link";
 import { REPORT_LABEL_STEP } from "./report-section";
 import { quotaMessage, type QuotaSignal } from "@/lib/usage/deep-report-quota";
 import { UPGRADE_HREF } from "@/lib/navigation/upgrade-destination";
+import {
+  DEEP_REPORTS_LABEL,
+  PRO_LIFTS_MONTHLY_LIMIT,
+} from "@/lib/entitlement/plan-copy";
 import type { Plan } from "@/lib/entitlement/types";
 
 /**
@@ -131,14 +135,17 @@ export function QuotaNotice({
     >
       <div className="px-5 py-4 sm:px-6">
         <p className={`${REPORT_LABEL_STEP} text-accent`}>
-          {exhausted ? "Deep reports" : "Deep reports unavailable"}
+          {/* 7-02(b) — the exhausted heading is the shared label, because the
+              AI step names this benefit with the same word. The outage heading
+              stays a literal: it is a fault message, not plan copy. */}
+          {exhausted ? DEEP_REPORTS_LABEL : "Deep reports unavailable"}
         </p>
         <p className="mt-2 text-body-sm leading-6 text-text-muted">
           {quotaMessage(quota)}
         </p>
         {showUpgradePrompt ? (
           <p className="mt-3 text-caption leading-5 text-text-faint">
-            Peer Pro lifts the monthly limit.{" "}
+            {PRO_LIFTS_MONTHLY_LIMIT}{" "}
             {/* 7-02(a) — this said `/settings`, which is not a route and never
                 has been. The reader most likely to be about to pay was the one
                 reader sent to `not-found`. The destination now comes from the

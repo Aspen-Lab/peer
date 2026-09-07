@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { REPORT_LABEL_STEP } from "./report-section";
 import { UPGRADE_HREF } from "@/lib/navigation/upgrade-destination";
+import { PRO_PRICE_LEAD, PRO_PRICE_TAIL } from "@/lib/entitlement/plan-copy";
 import type { AiMode } from "@/lib/feed/ai-tier";
 import type { Plan } from "@/lib/entitlement/types";
 
@@ -107,10 +108,13 @@ export function TierUpgradeBlock({
       </div>
       <div className="border-t border-border px-5 py-4 sm:px-6">
         {/* D7 — display only. $12/month, $6 for students. No checkout link:
-            payment is out of scope, and a dead link is worse than none. */}
+            payment is out of scope, and a dead link is worse than none.
+            7-02(b) — the strings moved to `plan-copy.ts`, which carries this
+            same rule, so the AI step can render the identical sentence instead
+            of a second hand-typed copy of it. */}
         <p className="text-body-sm text-text-muted">
-          <span className="font-semibold text-heading">Peer Pro is $12/month</span>
-          , or $6 for students.
+          <span className="font-semibold text-heading">{PRO_PRICE_LEAD}</span>
+          {PRO_PRICE_TAIL}
         </p>
         {/* 7-02(a) — the literal moved to `UPGRADE_HREF`. This surface already
             pointed at the right page; the constant is what stops the next

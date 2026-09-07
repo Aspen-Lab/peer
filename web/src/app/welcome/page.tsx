@@ -56,6 +56,7 @@ import { sectionLabel } from "@/components/ui/section-label";
 import { cardShell } from "@/components/ui/card-shell";
 import { cn } from "@/lib/cn";
 import { SURFACE_TOPIC_DESCRIPTIONS } from "@/lib/profile/topic-copy";
+import { ProPlanSummary } from "@/components/plan/pro-plan-summary";
 import {
   STEP_META,
   type StepKey,
@@ -497,6 +498,41 @@ export default function WelcomePage() {
                     Jobs all run on it. Adding your own key sends those calls to
                     your own account instead, on whichever model you prefer.
                   </Callout>
+                  {/* ABC-freemium 7-02(b) · D7 · Ruling 19 points 1-2 — **this
+                      is the half of the fix that makes the link honest.**
+
+                      Every upsell call to action in the app now resolves here
+                      (`UPGRADE_HREF`), and one of them reads *"See what Pro
+                      adds"*. Round-7 B drove all six entitlement states through
+                      this page and found ZERO plan or pricing words on any of
+                      them: the link resolved, rendered, stayed put, and had
+                      nothing to do with paying. A control that resolves and
+                      does not answer its own promise is still a broken promise.
+
+                      **Every string below already shipped elsewhere and is
+                      imported from `plan-copy.ts`, not retyped** — Ruling 19
+                      point 2(b) requires the exact existing sentences, so no
+                      new copy is written here and no editorial call is being
+                      taken. The labels travel with their sentences on purpose:
+                      without "Deep reports" above it, *"the monthly limit"* has
+                      no referent, and without the weekly sentence before it,
+                      *"refreshes them"* has no antecedent.
+
+                      **D7 — display only. No checkout link, and do not add
+                      one:** payment is out of scope (spec §3) and a dead link
+                      is worse than none. That rule travelled with the copy.
+
+                      Placed directly under the intro and above the key fields
+                      because a reader who arrived from the upsell came for
+                      this; a reader who arrived from onboarding scrolls one
+                      block to reach the panel they came for.
+
+                      A component rather than inline JSX so it can be rendered
+                      and asserted on its own — this page is a 970-line client
+                      component with a store graph a suite would have to fake
+                      wholesale, and that cost is exactly why nothing here was
+                      ever checked against what the CTAs promise. */}
+                  <ProPlanSummary />
                   <div className="mt-4 space-y-3">
                     <ApiKeyHelp provider={profile.feedAiProvider} />
                     <AiProviderRecommendation />

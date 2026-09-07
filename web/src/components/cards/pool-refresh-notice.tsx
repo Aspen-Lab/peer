@@ -3,6 +3,11 @@
 import Link from "next/link";
 import { REPORT_LABEL_STEP } from "@/components/reports/report-section";
 import { UPGRADE_HREF } from "@/lib/navigation/upgrade-destination";
+import {
+  POOL_REFRESH_IS_WEEKLY,
+  POOL_REFRESH_LABEL,
+  PRO_REFRESHES_ON_DEMAND,
+} from "@/lib/entitlement/plan-copy";
 import type { ClientEntitlement } from "@/lib/entitlement/allowance";
 
 /**
@@ -113,15 +118,20 @@ export function PoolRefreshNotice({
       data-refresh-audience={signedOut ? "anonymous" : "free"}
     >
       <div className="px-5 py-4 sm:px-6">
-        <p className={`${REPORT_LABEL_STEP} text-accent`}>Refresh now</p>
+        {/* 7-02(b) — the heading and the two paid-plan sentences moved to
+            `plan-copy.ts` so the AI step this CTA lands on can render the
+            identical words. The signed-out sentence stays here: it is a
+            sign-in prompt, not plan copy, and Ruling 16 point 3 is explicit
+            that this reader gets no upgrade prompt at all. */}
+        <p className={`${REPORT_LABEL_STEP} text-accent`}>
+          {POOL_REFRESH_LABEL}
+        </p>
         <p className="mt-2 text-body-sm leading-6 text-text-muted">
-          {signedOut
-            ? "Sign in to refresh."
-            : "Refresh now is on the paid plan. Your jobs and events refresh once a week."}
+          {signedOut ? "Sign in to refresh." : POOL_REFRESH_IS_WEEKLY}
         </p>
         {signedOut ? null : (
           <p className="mt-3 text-caption leading-5 text-text-faint">
-            Peer Pro refreshes them whenever you ask.{" "}
+            {PRO_REFRESHES_ON_DEMAND}{" "}
             {/* 7-02(a) — the literal moved to `UPGRADE_HREF`. This CTA is the
                 one that makes a PLAN promise rather than a key promise, which
                 is why 7-02(b) put the plan copy on the destination. */}
