@@ -11,7 +11,7 @@ export default function PersonaPage() {
     <article className="mx-auto max-w-[640px] px-6 py-16 lg:py-20">
       <header className="mb-10">
         <h1
-          className="text-[34px] lg:text-[40px] font-light text-heading tracking-[-0.02em] leading-[1.05] font-display"
+          className="text-display lg:text-display-lg font-light text-heading tracking-[-0.02em] leading-[1.05] font-display"
         >
           Academic persona
         </h1>

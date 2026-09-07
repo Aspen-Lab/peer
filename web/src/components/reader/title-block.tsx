@@ -78,7 +78,7 @@ export function TitleBlock({
         <p className="font-mono text-meta text-text-muted mt-6">{meta.join(" · ")}</p>
       )}
       <h1
-        className={`font-display font-medium text-heading tracking-[-0.01em] leading-[1.15] text-[28px] max-w-[26ch] mt-2${long ? "" : " sm:text-[32px]"}`}
+        className={`font-display font-medium text-heading tracking-[-0.01em] leading-[1.15] text-display-sm measure-title mt-2${long ? "" : " sm:text-display"}`}
       >
         {paper.title}
       </h1>

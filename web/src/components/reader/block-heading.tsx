@@ -9,7 +9,7 @@ export type BlockName = Exclude<ReadingBlock, "skim">;
 
 export function BlockHeading({ block }: { block: BlockName }) {
   return (
-    <h2 className="font-display font-medium text-heading text-[22px] leading-[1.25] mt-12 mb-3">
+    <h2 className="font-display font-medium text-heading text-display-xs leading-[1.25] mt-12 mb-3">
       {BLOCK_HEADING[block]}
     </h2>
   );

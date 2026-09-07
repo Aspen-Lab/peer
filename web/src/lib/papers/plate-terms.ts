@@ -27,6 +27,11 @@ const CATEGORY_CODE = /^[a-z]+(?:[.-][a-z]{2,}){1,2}$/;
 
 /** A term this short carries nothing set large — "Graph", "Model". */
 const MIN_TERM_CHARS = 6;
+/** And a term this long cannot be set large: at card width the first line of
+ *  the plate holds about this many characters of the display serif, and past
+ *  it the composition truncates mid-word. Display type does not truncate, so
+ *  the term is dropped instead and the plate falls to its blank. */
+const MAX_TERM_CHARS = 24;
 
 /** Concepts whose disambiguation bracket marks them as out-of-domain noise. */
 const OFF_DOMAIN = /\((?:politics|linguistics|psychology|philosophy|music|law|sociology|geology|literature|mathematics education)\)/i;
@@ -104,6 +109,7 @@ export function allocatePlateTerms(
       if (OFF_DOMAIN.test(term)) continue;
       if (CATEGORY_CODE.test(key)) continue;
       if (key.length < MIN_TERM_CHARS) continue;
+      if (term.length > MAX_TERM_CHARS) continue;
       if (!isGrounded(term)) continue;
       if (subsumed(term, kept)) continue;
       if ((usage.get(key) ?? 0) >= MAX_CARDS_PER_TERM) continue;
@@ -115,24 +121,4 @@ export function allocatePlateTerms(
   }
 
   return out;
-}
-
-/**
- * Display name for a source, for the plate's last-resort line. Every id a
- * source adapter mints carries a "<source>:" prefix, so this is always
- * non-empty even when `paper.venue` is not.
- */
-export function sourceLabel(id: string): string {
-  const idx = id.indexOf(":");
-  const prefix = idx > 0 ? id.slice(0, idx) : "";
-  const MAP: Record<string, string> = {
-    arxiv: "arXiv",
-    openalex: "OpenAlex",
-    pubmed: "PubMed",
-    dblp: "DBLP",
-    semantic_scholar: "Semantic Scholar",
-    hn: "Hacker News",
-  };
-  if (MAP[prefix]) return MAP[prefix];
-  return prefix ? prefix[0].toUpperCase() + prefix.slice(1) : "Record";
 }

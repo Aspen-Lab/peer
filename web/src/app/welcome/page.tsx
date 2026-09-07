@@ -806,7 +806,7 @@ function StepFrame({
       <h1
         tabIndex={-1}
         data-step-heading
-        className="font-display font-light text-[30px] lg:text-[34px] tracking-[-0.015em] leading-[1.1] text-heading outline-none"
+        className="font-display font-light text-display-sm lg:text-display tracking-[-0.015em] leading-[1.1] text-heading outline-none"
       >
         {title}
       </h1>

@@ -18,7 +18,7 @@ export function SavedPageView({ savedPapers }: { savedPapers: Paper[] }) {
   return (
     <PageContainer width="wideResponsive" className="px-6 py-16 lg:py-20">
       <header className="mb-8">
-        <h1 className="text-[34px] font-semibold leading-[1.1] tracking-[-0.02em] text-heading lg:text-[38px]">
+        <h1 className="text-display font-semibold leading-[1.1] tracking-[-0.02em] text-heading lg:text-display-lg">
           Saved
         </h1>
         <p className="mt-3 text-lead leading-relaxed text-text-muted">

@@ -6,7 +6,7 @@ export default function NotFound() {
       <p className="text-caption font-semibold uppercase tracking-[0.16em] text-text-faint">
         404
       </p>
-      <h1 className="mt-3 text-[22px] font-semibold tracking-[-0.01em] text-heading">
+      <h1 className="mt-3 text-display-xs font-semibold tracking-[-0.01em] text-heading">
         Page not found.
       </h1>
       <p className="mt-2 text-body leading-[1.6] text-text-muted">

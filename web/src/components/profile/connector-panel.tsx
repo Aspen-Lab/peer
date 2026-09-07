@@ -60,17 +60,17 @@ export function ConnectorPanel() {
           className={`inline-block h-1.5 w-1.5 rounded-full ${on ? "bg-accent" : "bg-text-faint/40"}`}
           aria-hidden
         />
-        <span className="text-[12px] font-medium text-heading">Tavily</span>
+        <span className="text-meta font-medium text-heading">Tavily</span>
       </div>
 
-      <p className="text-[11.5px] leading-relaxed text-text-muted">
+      <p className="text-caption leading-relaxed text-text-muted">
         Web discovery that widens the paper search beyond the academic APIs.
         Optional — Peer works without it.
       </p>
 
       <div className="space-y-2">
         <div className="flex items-center justify-between gap-3">
-          <span className="text-[11px] text-text-faint">Enable Tavily web scouting</span>
+          <span className="text-caption text-text-faint">Enable Tavily web scouting</span>
           <button
             type="button"
             role="switch"
@@ -95,7 +95,7 @@ export function ConnectorPanel() {
       </div>
 
       <div className="space-y-2 pt-0.5">
-        <p className="text-[10.5px] leading-relaxed text-text-faint">
+        <p className="text-micro leading-relaxed text-text-faint">
           Sign up free (1,000 searches/mo), copy the key from your dashboard.
         </p>
         <a

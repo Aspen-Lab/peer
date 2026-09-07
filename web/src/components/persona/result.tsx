@@ -74,7 +74,7 @@ export function PersonaResult({
             Your academic persona
           </span>
           <h1
-            className="text-[40px] md:text-[52px] font-light text-heading leading-[1.02] tracking-[-0.018em] font-display"
+            className="text-display-lg md:text-display-xl font-light text-heading leading-[1.02] tracking-[-0.018em] font-display"
           >
             {persona.name}
           </h1>

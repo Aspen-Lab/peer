@@ -120,6 +120,31 @@
   --text-title-lg: 19.5px;   /* page-level subtitles */
   --text-title-lg--line-height: 1.3;
 
+  /* ── Display scale — 5 steps above the working range, ratio ~1.19.
+     Until now the scale stopped at 19.5px and every heading above it was
+     typed as a literal: thirteen sizes between 22px and 52px, at 2px
+     intervals, so no two pages agreed on how big a page title is (the
+     briefing said 40, saved said 38, the profile said 44, the changelog
+     said 44 with no small step at all). A continuum is not a scale. These
+     five are; the roles below them are fixed:
+       display-xs   section heading inside a page
+       display-sm   panel/sub-heading, and the paper's own title (mobile)
+       display      page title (mobile), paper title (desktop)
+       display-lg   page title (desktop)
+       display-xl   a cover statement — the persona result, the welcome hero
+     Line-heights tighten as the size grows, which is what display type
+     wants and what a single body leading cannot give it. */
+  --text-display-xs: 22px;
+  --text-display-xs--line-height: 1.25;
+  --text-display-sm: 26px;
+  --text-display-sm--line-height: 1.2;
+  --text-display: 31px;
+  --text-display--line-height: 1.15;
+  --text-display-lg: 38px;
+  --text-display-lg--line-height: 1.1;
+  --text-display-xl: 46px;
+  --text-display-xl--line-height: 1.05;
+
   /* ── Typography — Inter UI + Newsreader serif (Martina Plantijn's
         closest open relative), one serif family for display AND prose ── */
   --font-reading: var(--font-newsreader), "Iowan Old Style", Georgia, "Times New Roman", serif;
@@ -359,6 +384,34 @@ html[data-mode="dark"] { --nm-underside: rgba(0, 0, 0, 0.34); }
 @utility reader-panel {
   position: sticky;
   top: min(4rem, calc(100vh - var(--panel-h, 0px) - 1.5rem));
+}
+
+/* ── The measure ──────────────────────────────────────────────────────
+   A line of prose should run 60–75 characters. The reader asked for that
+   with `max-w-[66ch]` and did not get it: `ch` is the width of the digit
+   zero, and in Newsreader zero is 1.33x the average letter (0.567em against
+   0.427em; Inter is the same ratio). So `66ch` set an 87-character line, and
+   `60ch` a 79-character one — every measure in the reading surface ran a
+   third longer than the number in the class said.
+
+   These are in `em`, so they hold at any type size, and they are stated in
+   characters of the family they are for. Do not go back to `ch` for prose.
+   (`ch` is exact for the mono family, where zero IS the average.) */
+@utility measure {
+  /* 66 characters of Newsreader — the reading measure. */
+  max-width: 28em;
+}
+@utility measure-lede {
+  /* 56 characters. A lede is set narrower than the text it opens. */
+  max-width: 24em;
+}
+@utility measure-ui {
+  /* 60 characters of Inter — descriptions, help text, empty states. */
+  max-width: 28.5em;
+}
+@utility measure-title {
+  /* 34 characters of Newsreader. A title turns before the text does. */
+  max-width: 14.5em;
 }
 
 /* Light is unconditional — no OS-preference dark mode. Dark mode would be a

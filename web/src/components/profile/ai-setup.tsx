@@ -211,7 +211,7 @@ export function AiKeyFields({
             placeholder={providerKeyPlaceholder(provider)}
             className={
               emphasized
-                ? "w-full rounded-lg border border-accent/30 bg-bg py-2.5 pl-3 pr-10 text-[12.5px] text-text shadow-[0_3px_14px_color-mix(in_srgb,var(--color-accent)_10%,transparent)] placeholder:text-text-faint/65 focus:outline-none focus:ring-2 focus:ring-accent/35"
+                ? "w-full rounded-lg border border-accent/30 bg-bg py-2.5 pl-3 pr-10 text-meta text-text shadow-[0_3px_14px_color-mix(in_srgb,var(--color-accent)_10%,transparent)] placeholder:text-text-faint/65 focus:outline-none focus:ring-2 focus:ring-accent/35"
                 : undefined
             }
           />

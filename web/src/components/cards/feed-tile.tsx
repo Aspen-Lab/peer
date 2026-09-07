@@ -221,7 +221,10 @@ function PaperTile({ paper, isRead, selected, plateTerms = [] }: { paper: Paper;
         }}
       >
         <PaperPlate paper={paper} terms={plateTerms} />
-        <div className="px-5 pt-4 pb-4">
+        {/* `first:` — with no plate above it this block leads the card, and
+            the top padding has to be the card's own rather than the shoulder
+            under a picture. */}
+        <div className="px-5 pt-4 pb-4 first:pt-5">
         {/* Venue and age lead, because they are what differs between two cards in
             the same briefing. The kind badge appears only for a "discussion" —
             the exception worth flagging, so a forum thread is never mistaken for
@@ -238,7 +241,7 @@ function PaperTile({ paper, isRead, selected, plateTerms = [] }: { paper: Paper;
             {metaBits.join(" · ")}
           </span>
         </div>
-        <h3 className="font-display text-[19px] font-normal text-heading leading-[1.2] tracking-[-0.015em] line-clamp-3">
+        <h3 className="font-display text-title-lg font-normal text-heading leading-[1.2] tracking-[-0.015em] line-clamp-3">
           {paper.title}
         </h3>
         <p

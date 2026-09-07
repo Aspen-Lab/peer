@@ -150,7 +150,7 @@ export default function ProfilePage() {
         </p>
         <div className="flex items-start justify-between gap-6 flex-wrap">
           <h1
-            className="text-[36px] lg:text-[44px] font-semibold text-heading tracking-[-0.02em] leading-[1.05]"
+            className="text-display lg:text-display-lg font-semibold text-heading tracking-[-0.02em] leading-[1.05]"
           >
             {firstName ? (
               <>
@@ -350,7 +350,7 @@ function DashboardView({
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-accent-dim shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-accent)_28%,transparent)]">
             {avatarLetter ? (
               <span
-                className="text-accent text-[26px] font-medium italic leading-none font-reading"
+                className="text-accent text-display-sm font-medium italic leading-none font-reading"
               >
                 {avatarLetter}
               </span>
@@ -368,7 +368,7 @@ function DashboardView({
           <div className="min-w-0">
             {displayName ? (
               <p
-                className="text-[26px] italic font-medium text-heading tracking-tight leading-tight font-reading"
+                className="text-display-sm italic font-medium text-heading tracking-tight leading-tight font-reading"
               >
                 {displayName}
               </p>
@@ -476,7 +476,7 @@ function ReadingCard({
       {/* ── Hero line ── */}
       <div className="relative px-7 pb-5">
         <p
-          className="text-heading leading-[1.15] tracking-[-0.01em] text-[26px] lg:text-[30px] font-reading"
+          className="text-heading leading-[1.15] tracking-[-0.01em] text-display-sm lg:text-display font-reading"
         >
           You&apos;ve kept{" "}
           <span className="italic font-medium text-accent tabular-nums">
@@ -576,7 +576,7 @@ function ReadingCard({
             Reader archetype
           </p>
           <p
-            className="text-title-lg lg:text-[22px] italic text-heading leading-tight mt-0.5 tracking-tight font-reading"
+            className="text-title-lg lg:text-display-xs italic text-heading leading-tight mt-0.5 tracking-tight font-reading"
           >
             {archetype.label}
           </p>
@@ -618,7 +618,7 @@ function HeroStat({
         {label}
       </span>
       <span
-        className={`mt-2 text-[30px] lg:text-[34px] font-semibold tabular-nums leading-none ${accent}`}
+        className={`mt-2 text-display font-semibold tabular-nums leading-none ${accent}`}
       >
         {value}
       </span>
@@ -680,7 +680,7 @@ function TypeTiles({
                 : `${t.bg} ${t.ring}`
             }`}
           >
-            <div className={`text-[24px] font-semibold tabular-nums leading-none ${empty ? "" : t.color}`}>
+            <div className={`text-display-xs font-semibold tabular-nums leading-none ${empty ? "" : t.color}`}>
               {t.count}
             </div>
             <div className="mt-1.5 flex items-baseline justify-between text-micro uppercase tracking-[0.14em]">
@@ -914,7 +914,7 @@ function ReadingCalendar({ cells: realCells }: { cells?: number[] }) {
             return (
               <span
                 key={d}
-                className="text-[9px] text-text-faint/70 h-[11px] leading-[11px]"
+                className="text-micro text-text-faint/70 h-[11px] leading-[11px]"
               >
                 {visible ? dayLabels[Math.floor(d / 2)] : "\u00A0"}
               </span>
@@ -925,7 +925,7 @@ function ReadingCalendar({ cells: realCells }: { cells?: number[] }) {
         <div className="flex-1 min-w-0">
           {/* Month labels */}
           <div
-            className="grid mb-1 text-[9px] text-text-faint/70 uppercase tracking-[0.1em]"
+            className="grid mb-1 text-micro text-text-faint/70 uppercase tracking-[0.1em]"
             style={{ gridTemplateColumns: `repeat(${CAL_WEEKS}, minmax(0, 1fr))` }}
           >
             {Array.from({ length: CAL_WEEKS }).map((_, w) => {
@@ -1354,7 +1354,7 @@ function LearnedPreferences({
       </div>
       <div className="px-7 pb-6">
         {!hasAny ? (
-          <p className="text-body-sm text-text-faint/80 leading-relaxed max-w-[60ch]">
+          <p className="text-body-sm text-text-faint/80 leading-relaxed measure-ui">
             Nothing learned yet. As you like, save, or dismiss papers, Peer builds a private
             taste profile here — quietly boosting topics you favor and easing off ones you skip.
             Like and Save count equally; dismissing eases a topic down.

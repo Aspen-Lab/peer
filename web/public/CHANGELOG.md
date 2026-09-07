@@ -2,6 +2,52 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.17.0 — 2026-09-07
+
+The measure, and a scale that reaches the headlines.
+
+Greyscale and material settled how the interface is lit. This one is about
+type: how long a line runs, and how big a heading is allowed to be.
+
+**The measure was a third longer than it claimed.** Every prose block on the
+reading page asked for its measure in `ch` — `max-w-[66ch]` on the abstract,
+`60ch` on the decision. `ch` is the width of the digit zero, and in Newsreader
+zero is 1.33x the average letter (0.567em against 0.427em; Inter has the same
+ratio). So `66ch` set an eighty-eight character line and `60ch` a seventy-nine
+character one, in a range whose whole point is 60–75. The class said one thing
+and the page did another, and nobody could see it because the number looked
+right in the source. The measure is now stated in `em` and in characters of
+the family it is for — `measure` is 66 characters of Newsreader, at any size —
+and the abstract measures 66 characters on the page, counted.
+
+**The spread was built around the wrong column.** At its old width the reading
+column was 681px holding a 462px line, so a fifth of the page was empty gutter
+*inside* the column while the outer margins stayed thin. The spread is now
+sized by the measure rather than by the window: both columns fill, and the
+leftover has become the page's own margins.
+
+**The type scale stopped at 19.5px, and everything above it was improvised.**
+Thirteen sizes between 22px and 52px, typed as literals at 2px intervals, so
+no two pages agreed on how big a page title is — the briefing said 40, saved
+said 38, the profile said 44, the changelog said 44 with no small step at all.
+A continuum is not a scale. There are now five display steps on a ~1.19 ratio,
+with fixed roles: a section heading inside a page, a panel heading, a page
+title on a phone, a page title on a desktop, and a cover statement. Every
+heading in the product is one of them, every page title is now the same size,
+and the six stray sizes below 20px (9px, 11px, 12px, 18px, 19px) are back on
+the nine steps that were already there. Nothing types a font size any more.
+
+**The plate stops shouting the filing label.** When a paper has no figure and
+no term of its own, the plate used to set the venue and the year in display
+italic — "Zenodo / 2026", "arXiv / 2026", "Journal of Artificial Intellig…" —
+which is the meta row directly below it, repeated at three times the size, and
+truncated mid-word when it did not fit. Display type is the loudest thing on a
+card; it should not be the one line the reader has already read. Those papers
+now have no plate at all: the card opens on its own title, and the reading page
+with it. A quieter paper gets a quieter card. Terms longer than the plate's
+first line are dropped rather than truncated, so display type never breaks
+mid-word again.
+
 ## v0.16.3 — 2026-09-07
 
 The last two hues.

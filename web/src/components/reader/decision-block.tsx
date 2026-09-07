@@ -57,7 +57,7 @@ export function DecisionBlock({
 }) {
   return (
     <div ref={ref}>
-      <p className="font-reading text-lead text-text-muted max-w-[60ch] mt-12">
+      <p className="font-reading text-lead text-text-muted measure-lede mt-12">
         {sentences.join(" ")}
         {stage && <span className="text-text-faint">{progressSuffix(stage.label)}</span>}
         {showAddKey && (
@@ -85,7 +85,7 @@ export function DecisionBlock({
           aria-valuemin={0}
           aria-valuemax={100}
           aria-label={stage.label}
-          className="h-[2px] mt-3 max-w-[60ch] overflow-hidden rounded-full bg-bg-secondary"
+          className="h-[2px] mt-3 measure-lede overflow-hidden rounded-full bg-bg-secondary"
         >
           <div
             className="h-full rounded-full bg-accent transition-[width] duration-300 ease-snap motion-reduce:transition-none"

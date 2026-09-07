@@ -654,7 +654,7 @@ export function SecretInput({
         spellCheck={false}
         className={
           className ??
-          "w-full rounded-lg bg-bg-secondary/45 pl-3 pr-10 py-2 text-[12.5px] text-text placeholder:text-text-faint/65 focus:outline-none focus:ring-2 focus:ring-accent/20"
+          "w-full rounded-lg bg-bg-secondary/45 pl-3 pr-10 py-2 text-meta text-text placeholder:text-text-faint/65 focus:outline-none focus:ring-2 focus:ring-accent/20"
         }
       />
       <button

@@ -313,6 +313,15 @@ function Reader({
         ? resolvedFigure.caption
         : null,
   );
+  // A paper with neither a figure nor a term of its own has no plate at all
+  // (`PaperPlate` renders nothing for it), and the card shell that frames the
+  // plate must go with it — an empty swipeable card above the title reads as a
+  // picture that failed to load. The page then opens on the title, which is
+  // what the one-column phone layout has always done when the plate is short.
+  const hasPlate =
+    Boolean(boundFigure?.imageUrl) ||
+    Boolean(resolvedFigure.imageUrl) ||
+    plateTerms.length > 0;
 
   const abstractSentences = useMemo(() => reading?.abstract.sentences ?? [], [reading]);
   const marks = useMemo(() => {
@@ -508,6 +517,7 @@ function Reader({
       <ReaderLayout
         spread={spread}
         plate={
+          !hasPlate ? null : (
           // A real figure: the caption is the image's, read once, from the
           // figcaption. First on the page: the rail — position and the way
           // back — is the masthead's on desktop and the thumb bar's on a phone.
@@ -533,6 +543,7 @@ function Reader({
               </figcaption>
             )}
           </figure>
+          )
         }
         title={<TitleBlock paper={paper} recommendation={recommendation} now={now} />}
         words={

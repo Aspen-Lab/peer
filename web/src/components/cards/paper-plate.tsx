@@ -7,7 +7,6 @@
 
 import { useState } from "react";
 import type { Paper } from "@/types";
-import { sourceLabel } from "@/lib/papers/plate-terms";
 import { useResolvedFigure } from "@/components/paper-figure";
 
 /**
@@ -105,8 +104,14 @@ export function PaperPlate({
   const showFigure =
     Boolean(src) && (bound ? true : !resolved.hideFigure) && failedSrc !== src;
 
-  const year = paper.publishedDate?.slice(0, 4);
-  const fallbackVenue = shortVenue(paper.venue) ?? sourceLabel(paper.id);
+  // Nothing to show and nothing to set: no plate. A window is worth its space
+  // only when something is in it, and a paper with neither a figure nor a term
+  // of its own is a quieter paper — its card should be quieter too, opening on
+  // its own title, rather than carrying an empty window the height of a
+  // picture. (`src` and not `showFigure`: an image that was found and then
+  // failed to load still keeps the window, because the callers laid out for
+  // one and cannot see the failure.)
+  if (!src && terms.length === 0) return null;
 
   // Plain concatenation, not `cn`: the card passes no class, and its markup
   // must stay byte-for-byte what it was.
@@ -187,18 +192,17 @@ export function PaperPlate({
               />
             </>
           ) : (
-            // Nothing usable to set. The venue is always available — every id
-            // carries a "<source>:" prefix — so the plate is never empty.
-            <div className="flex flex-col gap-[0.15em]">
-              <span className="font-display italic leading-[1.06] tracking-[-0.02em] truncate text-[clamp(21px,7.6cqw,30px)] text-[var(--plate-ink)]">
-                {fallbackVenue}
-              </span>
-              {year && (
-                <span className="font-mono tabular-nums tracking-[0.2em] text-[clamp(14px,4.6cqw,18px)] text-[var(--plate-ink-faint)]">
-                  {year}
-                </span>
-              )}
-            </div>
+            // Nothing to set. The old last resort was the venue and the year
+            // in display italic — "Zenodo / 2026", "arXiv / 2026", "Journal of
+            // Artificial Intellig…" — which is the meta row directly below the
+            // plate, repeated at three times the size, and truncated when it
+            // did not fit. Display type is the loudest thing on the card; it
+            // must not be the only line the reader has already read, and it
+            // must never break mid-word. A paper with neither a figure nor a
+            // term of its own has nothing to show, and the honest composition
+            // for that is the empty window with its rule — less card, not a
+            // headline made out of the filing label.
+            <span aria-hidden className="h-px w-[34%] bg-[var(--plate-ink-faint)]" />
           )}
         </div>
       )}

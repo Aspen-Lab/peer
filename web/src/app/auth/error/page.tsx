@@ -10,7 +10,7 @@ export default function AuthErrorPage() {
         Sign-in hiccup
       </p>
       <h1
-        className="text-[28px] lg:text-[32px] font-semibold text-heading tracking-[-0.02em] leading-[1.1]"
+        className="text-display-sm lg:text-display font-semibold text-heading tracking-[-0.02em] leading-[1.1]"
       >
         That didn&rsquo;t go through.
       </h1>
