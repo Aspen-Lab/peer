@@ -118,9 +118,9 @@ lock by rebasing onto the holder's head.
 ## §1. CURRENT STATE — THE SOURCE OF TRUTH
 
 ```
-HELD BY:          free
+HELD BY:          C-round8 @ 2026-09-07T22:40Z
 ROUND:            8
-WHOSE TURN:       C  (round 8; order is 6-02 -> 8-01)
+WHOSE TURN:       C  (round 8; order is 6-02 -> 8-01 -> 8-02)
 STOPPED BECAUSE:  finished the turn @ 2026-09-07T22:34Z — both items written, one commit each,
                   each pushed as it finished. No production code changed
                   (`git diff -- web/` **empty**, asserted). Four plants, four measured, every one
