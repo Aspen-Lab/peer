@@ -118,7 +118,7 @@ lock by rebasing onto the holder's head.
 ## §1. CURRENT STATE — THE SOURCE OF TRUTH
 
 ```
-HELD BY:          free
+HELD BY:          B-round9 @ 2026-09-07T23:45Z
 ROUND:            9
 WHOSE TURN:       B  (round 9, the last agent round; order is 9-01 -> 9-03)
 STOPPED BECAUSE:  finished the turn @ 2026-09-07T23:38Z — ALL THREE PARTS, one commit each, each
