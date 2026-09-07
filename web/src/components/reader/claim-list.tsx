@@ -52,7 +52,8 @@ export function ClaimList({
       {anchor && (
         <p className="font-sans text-meta text-text-faint mb-3">{projectAnchor(anchor)}</p>
       )}
-      <div className="space-y-4">
+      {/* The abstract's measure (66ch), so the column has one right edge. */}
+      <div className="space-y-4 max-w-[66ch]">
         {claims.map((claim, i) => (
           // Keyed by position: a model can write the same sentence twice.
           <div key={`${i}:${claim.text}`}>
@@ -85,7 +86,7 @@ export function KeyResultList({
       style={{ "--i": stagger } as React.CSSProperties}
     >
       <BlockHeading block="findings" />
-      <div className="space-y-4">
+      <div className="space-y-4 max-w-[66ch]">
         {results.map((result, i) => {
           const figure =
             result.figureImageUrl && !seen.has(result.figureImageUrl)

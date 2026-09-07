@@ -22,7 +22,8 @@ export function QuoteList({
       style={{ "--i": stagger } as React.CSSProperties}
     >
       <BlockHeading block={block} />
-      <ul className="space-y-4 list-none">
+      {/* The abstract's measure (66ch), so the column has one right edge. */}
+      <ul className="space-y-4 list-none max-w-[66ch]">
         {quotes.map((quote) => (
           <li
             key={`${quote.from.heading}${quote.text}`}

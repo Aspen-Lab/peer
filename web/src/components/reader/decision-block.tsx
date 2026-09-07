@@ -94,7 +94,14 @@ export function DecisionBlock({
         </div>
       )}
 
-      <div className="flex flex-wrap gap-3 mt-5">
+      {/* From xl the block lives in the spread's 400–503px panel: the four
+          lg pills need ≈510px on one row and would wrap 3+1, so there they
+          are set two-up — [Open][Save] / [Skip][Copy], natural widths — the
+          arrangement a phone already gives them. `justify-items-start`
+          keeps the widths natural: grid items stretch to the track by
+          default, which would set Skip as wide as the primary. Inert below
+          xl. */}
+      <div className="flex flex-wrap gap-3 mt-5 xl:grid xl:grid-cols-[repeat(2,max-content)] xl:justify-items-start">
         {source && (
           <a
             href={source.url}
@@ -151,7 +158,12 @@ export function DecisionBlock({
           onClick={onCopyDoi}
           aria-label={DOI.copy(doi)}
           className={cn(
-            "flex font-mono text-meta text-text-muted mt-3 hover:text-heading transition-colors duration-150 ease-snap",
+            // `xl:wrap-anywhere`: a 60-char DOI is ≈450px of 12.5px mono and
+            // would overflow the spread's 400px panel; a phone has the full
+            // column and the DOI holds one line there as today. `text-left`:
+            // a button centres its text by default, so a wrapped DOI's
+            // second line would sit centred under a left-aligned first.
+            "flex text-left font-mono text-meta text-text-muted mt-3 hover:text-heading transition-colors duration-150 ease-snap xl:wrap-anywhere",
             TOUCH_LINE,
           )}
         >

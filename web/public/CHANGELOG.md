@@ -2,6 +2,21 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.13.2 — 2026-09-06
+
+The reading spread.
+
+**A paper's page uses the width.** From 1280px the page is two columns: the
+plate, the title and the decision on the left, under the eye; the paper's
+words and Peer's additions on the right, in a column no wider than a line
+should be. The left panel stays put while the reader scrolls — when a
+reading or a model lands, it lands in the right column, and the decision
+does not move. The spread stops growing at 1352px; on a wider display it
+sits on the desk with ground either side. Read still means decided: on the
+spread the decision is on screen at open, so a paper is read when the end of
+its words has been on screen for a second, not the decision. Phones and
+tablets are unchanged.
+
 ## v0.13.1 — 2026-09-06
 
 Keys, swipe, and read-means-decided.

@@ -48,6 +48,8 @@ import { ClaimList, KeyResultList } from "@/components/reader/claim-list";
 import { NextRow } from "@/components/reader/next-row";
 import { LoadingMat } from "@/components/reader/loading-mat";
 import { ReaderToast, useReaderToast } from "@/components/reader/reader-toast";
+import { ReaderLayout, useSpread } from "@/components/reader/reader-layout";
+import { PAGE_CLASS, SPREAD_GRID } from "@/components/reader/spread";
 import { useReading } from "@/components/reader/use-reading";
 import { useModelReport } from "@/components/reader/use-model-report";
 import {
@@ -58,8 +60,6 @@ import {
   plateCaption,
   sharedTermsLine,
 } from "@/components/reader/copy";
-
-const PAGE_CLASS = "px-5 sm:px-6 py-8 sm:py-12";
 
 /** The Decision block has been seen: this share of it, for this long. */
 const DECIDED_VISIBLE = 0.6;
@@ -184,20 +184,30 @@ export default function PaperReadingPage({
   if (!paper) {
     if (shouldFetchById) {
       return (
-        <PageContainer width="detail" className={PAGE_CLASS}>
-          <LoadingMat />
+        // The page's own container and grid, so from xl the mat stands in the
+        // panel column at the plate's width and the plate replaces it in place.
+        <PageContainer width="spread" className={PAGE_CLASS}>
+          <div className={SPREAD_GRID}>
+            <div>
+              <LoadingMat />
+            </div>
+          </div>
         </PageContainer>
       );
     }
     return (
-      <PageContainer width="detail" className={PAGE_CLASS}>
-        <p className="font-reading text-lead text-text-muted">{NOT_FOUND}</p>
-        <BackToFeedLink
-          onBack={() => router.back()}
-          className="font-sans text-meta text-text-faint hover:text-heading mt-3 inline-block"
-        >
-          {RAIL.back}
-        </BackToFeedLink>
+      <PageContainer width="spread" className={PAGE_CLASS}>
+        <div className={SPREAD_GRID}>
+          <div>
+            <p className="font-reading text-lead text-text-muted">{NOT_FOUND}</p>
+            <BackToFeedLink
+              onBack={() => router.back()}
+              className="font-sans text-meta text-text-faint hover:text-heading mt-3 inline-block"
+            >
+              {RAIL.back}
+            </BackToFeedLink>
+          </div>
+        </div>
       </PageContainer>
     );
   }
@@ -221,6 +231,9 @@ function Reader({
   const feedPapers = useFeedStore((s) => s.papers);
   const markRead = useFeedStore((s) => s.markRead);
   const [now] = useState(() => Date.now());
+  // ≥ xl: the spread. Owned here so the decided-read observer can follow the
+  // DecisionBlock when the structure switches and it remounts.
+  const spread = useSpread();
 
   const nav = useMemo(
     () => paperNav(feedPapers.map((p) => p.id), paper.id),
@@ -323,10 +336,17 @@ function Reader({
   // ── Decided-read ──
   // Read means decided: the Decision block seen, or a decision made. Not
   // "opened" — that marked a paper read before its title had been looked at.
+  // On the spread the decision is on screen at open, so seeing it says
+  // nothing; there "seen" is the end of the paper's words (the abstract's
+  // footer) on screen for the same second — the one-column rule
+  // re-expressed, since in one column the decision sits under the abstract.
+  // A page with no words (record only) falls back to the decision, which
+  // keeps it read on open, as v0.13.1 says.
   const decide = useCallback(() => markRead(paper.id), [markRead, paper.id]);
   const decisionRef = useRef<HTMLDivElement>(null);
+  const wordsEndRef = useRef<HTMLParagraphElement>(null);
   useEffect(() => {
-    const el = decisionRef.current;
+    const el = spread ? (wordsEndRef.current ?? decisionRef.current) : decisionRef.current;
     if (!el || typeof IntersectionObserver === "undefined") return;
     let timer: number | undefined;
     const observer = new IntersectionObserver(
@@ -345,7 +365,10 @@ function Reader({
       observer.disconnect();
       if (timer !== undefined) window.clearTimeout(timer);
     };
-  }, [decide]);
+    // `spread` chooses the target and re-runs the effect when the layout
+    // switches, so the observer attaches to the remounted block; `reading`
+    // re-attaches when the words (and their footer) arrive or change.
+  }, [decide, spread, reading]);
 
   // ── Actions ──
   // One set for the keys, the buttons and the swipe.
@@ -468,117 +491,138 @@ function Reader({
     // element after a client navigation, and an article that cannot take
     // focus makes that a no-op — j/k would change the paper without
     // assistive technology announcing anything.
-    <PageContainer width="detail" className={`${PAGE_CLASS} outline-none`} tabIndex={-1}>
-      <Rail nav={nav} onBack={() => router.back()} />
-
-      {/* A real figure: the caption is the image's, read once, from the figcaption. */}
-      <figure className="mt-4">
-        <SwipeableCard
-          onSwipeRight={save}
-          onSwipeLeft={skip}
-          rightLabel={paper.isSaved ? SWIPE.unsave : SWIPE.save}
-          leftLabel={SWIPE.notInterested}
-          rightActive={paper.isSaved}
-          className="shadow-card"
-        >
-          <PaperPlate
-            paper={paper}
-            terms={plateTerms}
-            figure={boundFigure}
-            imageAlt={caption ? "" : undefined}
+    <PageContainer width="spread" className={`${PAGE_CLASS} outline-none`} tabIndex={-1}>
+      {/* The blocks, in the spec's order; `ReaderLayout` places them — one
+          column below xl, the spread from it. Later-arriving content (the
+          server reading, a model report) is `additions`: on the spread it
+          lands only in the right column, so nothing can move the decision;
+          in one column it is below the decision, as before. */}
+      <ReaderLayout
+        spread={spread}
+        rail={<Rail nav={nav} onBack={() => router.back()} />}
+        plate={
+          // A real figure: the caption is the image's, read once, from the figcaption.
+          <figure className="mt-4">
+            <SwipeableCard
+              onSwipeRight={save}
+              onSwipeLeft={skip}
+              rightLabel={paper.isSaved ? SWIPE.unsave : SWIPE.save}
+              leftLabel={SWIPE.notInterested}
+              rightActive={paper.isSaved}
+              className="shadow-card"
+            >
+              <PaperPlate
+                paper={paper}
+                terms={plateTerms}
+                figure={boundFigure}
+                imageAlt={caption ? "" : undefined}
+              />
+            </SwipeableCard>
+            {caption && (
+              <figcaption className="font-sans text-meta text-text-muted mt-2">
+                {caption}
+              </figcaption>
+            )}
+          </figure>
+        }
+        title={<TitleBlock paper={paper} recommendation={recommendation} now={now} />}
+        words={
+          <PaperWords
+            endRef={wordsEndRef}
+            reading={reading}
+            marks={marks}
+            skim={report?.skim ?? []}
+            basis={report?.provenance.basis ?? null}
+            quotedSkim={quotedSkim}
           />
-        </SwipeableCard>
-        {caption && (
-          <figcaption className="font-sans text-meta text-text-muted mt-2">{caption}</figcaption>
-        )}
-      </figure>
+        }
+        decision={
+          <DecisionBlock
+            ref={decisionRef}
+            sentences={sentences}
+            stage={model.stage}
+            source={reading.source}
+            doi={paper.doi}
+            isSaved={paper.isSaved}
+            showAddKey={showAddKey}
+            onSave={save}
+            onSkip={skip}
+            onCopy={copy}
+            onOpen={decide}
+            onCopyDoi={copyDoi}
+          />
+        }
+        additions={
+          <>
+            {keyResults.length > 0 ? (
+              <KeyResultList
+                results={keyResults}
+                abstractSentences={abstractSentences}
+                stagger={stagger++}
+                shownFigures={shownFigures}
+              />
+            ) : (
+              fromServer && (
+                <QuoteList block="findings" quotes={reading.findings} stagger={stagger++} />
+              )
+            )}
 
-      <TitleBlock paper={paper} recommendation={recommendation} now={now} />
+            {methods.length > 0 ? (
+              <ClaimList
+                block="method"
+                claims={methods}
+                abstractSentences={abstractSentences}
+                stagger={stagger++}
+              />
+            ) : (
+              fromServer && (
+                <QuoteList block="method" quotes={reading.method} stagger={stagger++} />
+              )
+            )}
 
-      <PaperWords
-        reading={reading}
-        marks={marks}
-        skim={report?.skim ?? []}
-        basis={report?.provenance.basis ?? null}
-        quotedSkim={quotedSkim}
+            {limitations.length > 0 ? (
+              <ClaimList
+                block="caveats"
+                claims={limitations}
+                abstractSentences={abstractSentences}
+                stagger={stagger++}
+              />
+            ) : (
+              fromServer && (
+                <QuoteList block="caveats" quotes={reading.caveats} stagger={stagger++} />
+              )
+            )}
+
+            {relation && relation.items.length > 0 ? (
+              <ClaimList
+                block="forYou"
+                claims={relation.items}
+                abstractSentences={abstractSentences}
+                stagger={stagger++}
+                anchor={relation.basedOn}
+              />
+            ) : (
+              shared.length > 0 && (
+                <section>
+                  <p className="font-reading text-lead leading-[1.6] text-text mt-12">
+                    {sharedTermsLine(shared)}
+                  </p>
+                </section>
+              )
+            )}
+
+            {nextStep?.text && (
+              <ClaimList
+                block="nextStep"
+                claims={[nextStep]}
+                abstractSentences={abstractSentences}
+                stagger={stagger++}
+              />
+            )}
+          </>
+        }
+        next={<NextRow nav={nav} next={nextPaper} />}
       />
-
-      <DecisionBlock
-        ref={decisionRef}
-        sentences={sentences}
-        stage={model.stage}
-        source={reading.source}
-        doi={paper.doi}
-        isSaved={paper.isSaved}
-        showAddKey={showAddKey}
-        onSave={save}
-        onSkip={skip}
-        onCopy={copy}
-        onOpen={decide}
-        onCopyDoi={copyDoi}
-      />
-
-      {keyResults.length > 0 ? (
-        <KeyResultList
-          results={keyResults}
-          abstractSentences={abstractSentences}
-          stagger={stagger++}
-          shownFigures={shownFigures}
-        />
-      ) : (
-        fromServer && <QuoteList block="findings" quotes={reading.findings} stagger={stagger++} />
-      )}
-
-      {methods.length > 0 ? (
-        <ClaimList
-          block="method"
-          claims={methods}
-          abstractSentences={abstractSentences}
-          stagger={stagger++}
-        />
-      ) : (
-        fromServer && <QuoteList block="method" quotes={reading.method} stagger={stagger++} />
-      )}
-
-      {limitations.length > 0 ? (
-        <ClaimList
-          block="caveats"
-          claims={limitations}
-          abstractSentences={abstractSentences}
-          stagger={stagger++}
-        />
-      ) : (
-        fromServer && <QuoteList block="caveats" quotes={reading.caveats} stagger={stagger++} />
-      )}
-
-      {relation && relation.items.length > 0 ? (
-        <ClaimList
-          block="forYou"
-          claims={relation.items}
-          abstractSentences={abstractSentences}
-          stagger={stagger++}
-          anchor={relation.basedOn}
-        />
-      ) : (
-        shared.length > 0 && (
-          <section>
-            <p className="font-reading text-lead leading-[1.6] text-text mt-12">
-              {sharedTermsLine(shared)}
-            </p>
-          </section>
-        )
-      )}
-
-      {nextStep?.text && (
-        <ClaimList
-          block="nextStep"
-          claims={[nextStep]}
-          abstractSentences={abstractSentences}
-          stagger={stagger++}
-        />
-      )}
-
-      <NextRow nav={nav} next={nextPaper} />
       <ReaderToast toast={toast} />
     </PageContainer>
   );

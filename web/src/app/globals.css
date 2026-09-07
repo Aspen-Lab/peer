@@ -300,6 +300,24 @@ html[data-mode="dark"] {
   backdrop-filter: blur(18px) saturate(1.25);
 }
 
+/* The reading spread's left panel (≥ xl). Pinned by its top while it fits
+   under the chrome; when it is taller than the viewport it pins by its
+   bottom instead, so the plate scrolls away and the decision stays.
+   4rem = the article's xl top padding, so the stuck position is the
+   first-paint position and the panel never slides; the floating pills end
+   at 52px and the sidebar toggle at 56px, both cleared. 1.5rem keeps the
+   DOI line 24px above the viewport edge in bottom-stick mode. min(), not
+   max(): with max() a short panel would be pushed down at scroll 0.
+   --panel-h is written by a ResizeObserver; until it runs, 0px makes the
+   min() resolve to 4rem — a plain top-stick, never a broken first paint.
+   Desktop-only, so vh, no dvh. Any ancestor with an overflow other than
+   visible silently kills the sticky — main, the article and the grid
+   wrapper must keep it. */
+@utility reader-panel {
+  position: sticky;
+  top: min(4rem, calc(100vh - var(--panel-h, 0px) - 1.5rem));
+}
+
 /* Light is unconditional — no OS-preference dark mode. Dark mode would be a
    future explicit toggle on <html data-theme="dark">, not a reading-tool default. */
 

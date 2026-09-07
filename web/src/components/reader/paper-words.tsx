@@ -6,6 +6,7 @@
 // as a deck and the ink moves to the sentences that are its evidence, so the
 // abstract is never repeated under a claim.
 
+import type { Ref } from "react";
 import type { Claim, PaperReportBasis } from "@/lib/papers/report";
 import type { PaperReading } from "@/lib/papers/reading";
 import { ABSTRACT_FOOTER, TLDR_LINE, attribution, skimFooter } from "./copy";
@@ -83,12 +84,17 @@ function Deck({
 }
 
 export function PaperWords({
+  endRef,
   reading,
   marks,
   skim,
   basis,
   quotedSkim,
 }: {
+  /** The words' last line — the footer under the abstract (or the TL;DR).
+   *  On the spread the decided-read observer watches this, not the
+   *  decision, which is on screen at open there. */
+  endRef?: Ref<HTMLParagraphElement>;
   reading: PaperReading;
   /** Sentence indices set in ink — the reading's own, or the model's evidence. */
   marks: number[];
@@ -108,7 +114,9 @@ export function PaperWords({
         <p className="font-reading text-lead leading-[1.6] text-text-muted max-w-[66ch] mt-10">
           {tldr}
         </p>
-        <p className={FOOTER_CLASS}>{TLDR_LINE}</p>
+        <p ref={endRef} className={FOOTER_CLASS}>
+          {TLDR_LINE}
+        </p>
       </div>
     );
   }
@@ -122,7 +130,9 @@ export function PaperWords({
           <Paragraph sentences={sentences.slice(split)} from={split} inked={inked} />
         )}
       </div>
-      <p className={FOOTER_CLASS}>{ABSTRACT_FOOTER}</p>
+      <p ref={endRef} className={FOOTER_CLASS}>
+        {ABSTRACT_FOOTER}
+      </p>
     </>
   );
 }
