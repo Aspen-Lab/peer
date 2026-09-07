@@ -15287,7 +15287,11 @@ All 1 configured model id(s) answered.
 ```
 
 **No key material is printed, and I checked rather than assumed it:** the only path in the output
-is the `.env.local` location, and the whole output carries no `AIza`, no `AQ.`, no `tvly-`. The
+is the `.env.local` location, and I scanned the whole output for all three credential prefixes
+this repo's standing pre-commit grep looks for — Google's old and current forms and Tavily's —
+and it carries none of them. **The prefixes are deliberately NOT spelled out in this file**: doing
+so would make that standing grep fire on the state file forever, which is C's own reason for
+assembling them from parts inside the script. The
 four `SKIP` rows name the *variable that would configure them*, never a value.
 
 **PROVED ABLE TO FAIL — my own plant, not C's.** I put a retired id back on the `large` tier
