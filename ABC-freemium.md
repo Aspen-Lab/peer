@@ -15780,3 +15780,224 @@ an old finding.** The blocked list has **5** entries and every one of them is wa
 
 **`WHOSE TURN: manager — independent re-measure.`** Per §2's exit condition and Ruling 8 point 4,
 A does not close the gate alone.
+
+---
+
+### Round 9 — Agent B
+
+**Two items, 9-01 and 9-03. No production code changed. One commit per item, each pushed as it
+finished. Round 9 is the last agent round (Ruling 25 point 8).**
+
+---
+
+#### 9-01 — the two operator scripts that still accept the old name
+
+**Classification: `WRONG DATA` (an operator-facing configuration lie), silent.** Not `MISSING`:
+nothing is absent, the wrong value is accepted and acted on. It is the top rank under §2 ("a wrong
+field is a lie") and it is unauthenticated *spend* in the second-order sense — the probe script
+bills a real project.
+
+##### 1. Found by grep, and C's count is right about FILES and wrong about SITES
+
+**Search scope, per Ruling 24 point 1.** `grep -rn "GOOGLE_VERTEX_PROJECT" web/scripts/` (7 hits,
+3 files); `grep -rn "GOOGLE_VERTEX_SEARCH" web/ --include=*.ts --include=*.tsx --include=*.mjs
+--include=*.json --include=*.md` minus `node_modules` and `.next` (60+ hits); `grep -rn
+"process\.env\.GOOGLE_VERTEX_PROJECT" web/src web/scripts` filtered of `*.test.*` (7 hits);
+`ls web/scripts/` (8 entries, read in full); `Grep` over the whole repo for
+`setup-vertex-search|probe-vertex-search-billing` excluding `node_modules` (10 hits). Files read
+end to end or in the cited ranges: both operator scripts,
+`web/src/lib/sources/vertex-search.ts`, `web/scripts/assert-byok-production-env.mjs`,
+`web/src/lib/security/spend-scans.test.ts`, `docs/SETUP_vertex_ai_search.md`, `web/package.json`.
+
+**Two scripts — C's file count holds.** `web/scripts/` has 8 entries; only these two build or query
+the Search index. `assert-byok-production-env.mjs` also names the old variable three times
+(`:52`, `:55`, `:105`) but those are its **ban list and the comments explaining it** — correct as
+they stand, and **they must not be touched.**
+
+**But C wrote "two lines to fix", and it is five sites.** C counted the reads and stopped there:
+
+| # | File : line | What it is | Why it is the same defect |
+| --- | --- | --- | --- |
+| 1 | `web/scripts/setup-vertex-search.mjs:14-15` | `GOOGLE_VERTEX_SEARCH_PROJECT?.trim() \|\| GOOGLE_VERTEX_PROJECT?.trim()` | builds the index in the grounding project |
+| 2 | `web/scripts/setup-vertex-search.mjs:250` | `console.error("GOOGLE_VERTEX_PROJECT is not set. Nothing to do.")` | the error tells the operator to set the variable the app ignores |
+| 3 | **`web/scripts/setup-vertex-search.mjs:474-475`** | `"Done. Add this line to web/.env.local…"` then `GOOGLE_VERTEX_SEARCH_ENGINE_ID=${ENGINE_ID}` | **the success path hands out instructions that no longer work** |
+| 4 | `web/scripts/probe-vertex-search-billing.mjs:18-19` | the same fallback read | bills a real batch against the wrong project |
+| 5 | `web/scripts/probe-vertex-search-billing.mjs:33` | `console.error("GOOGLE_VERTEX_PROJECT is not set.")` | same as #2 |
+
+**Site 3 is the sharpest one and nobody has named it.** It is not an error path — it is what the
+operator sees **after the script succeeds**. It says add *one* line, the engine id. Since 8-01(a)
+one line is not enough: `isVertexSearchAvailable()` (`vertex-search.ts:219-221`) is
+`Boolean(vertexSearchProject() && vertexSearchApp())`, and `vertexSearchProject()`
+(`vertex-search.ts:198-200`) reads **only** `GOOGLE_VERTEX_SEARCH_PROJECT`. Follow the script's own
+closing instruction to the letter and the provider stays off.
+
+**One inherited sentence is now misleading and should be corrected in the same edit.**
+`vertex-search.ts:192-194` says *"both operational scripts already prefer it."* True and beside the
+point — they prefer it **and still fall back**, which is the defect. `POLICY — manager decides`
+is not needed; it is a comment, but a future reader will take it as clearance.
+
+##### 2. What each should accept, and whether to accept both
+
+**Accept `GOOGLE_VERTEX_SEARCH_PROJECT` only. Fail loudly on the old name. No transition period.**
+Reasons, in order of weight:
+
+- **A transition window cannot be made safe here.** The two names are not synonyms — they address
+  two different capabilities that 8-01(a) exists to separate. Accepting both is precisely the
+  coupling the owner asked to be removed (Ruling 21 point 2), reintroduced in the tooling.
+- **The failing direction is loud instead of silent**, which is the whole point. Today the bad
+  configuration succeeds; after the fix it exits 1 naming the variable to set.
+- **These are hand-run tools with no scheduler, no CI job and no npm alias** (`web/package.json`
+  scripts: `predev`, `kill-orphans`, `dev`, `prebuild`, `build`, `start`, `lint`, `test`,
+  `check:providers` — **neither script is aliased**; both are documented only as
+  `node --env-file=.env.local scripts/<name>.mjs`). A loud failure costs one person one line, once.
+
+**What breaks for someone holding an index built under the old name: nothing, and this is the
+answer that makes "fail loudly" cheap.** A Discovery Engine index is addressed by
+project + collection + engine id. It does not move and it is not rebuilt. If it was built in the
+grounding project, the operator sets `GOOGLE_VERTEX_SEARCH_PROJECT` to **that same project id** and
+the identical index is now reachable — the value they were already using, under the name the app
+reads. **No rebuild, no re-crawl, no data loss, no second $-cost.** The 50-pattern ceiling
+(`setup-vertex-search.mjs:18-27`) is untouched. The cost of failing loudly is one line in
+`.env.local`; the cost of staying silent is a Search App nobody queries.
+
+**The contract each site should carry:**
+
+- Sites 1 and 4 — read `process.env.GOOGLE_VERTEX_SEARCH_PROJECT?.trim()` and nothing else, so the
+  tools resolve the project through **the same single expression the app does**.
+- Sites 2 and 5 — name `GOOGLE_VERTEX_SEARCH_PROJECT`, and say in one clause that
+  `GOOGLE_VERTEX_PROJECT` is the *models* project and is deliberately not read here. An operator
+  who set the old name must be told why it was ignored, or they will set it again.
+- Site 3 — print **both** lines the app needs (`GOOGLE_VERTEX_SEARCH_PROJECT=${PROJECT}` and
+  `GOOGLE_VERTEX_SEARCH_ENGINE_ID=${ENGINE_ID}`), because `isVertexSearchAvailable()` needs both.
+  The script already holds both values; it is printing one of them.
+
+##### 3. Blast radius — the document is the bigger half, and it was not in the flag
+
+**`docs/SETUP_vertex_ai_search.md` is the one operator-facing instruction set, and Step 3 is now
+wrong in four places.** It is referenced from nowhere — `Grep` for `SETUP_vertex_ai_search` across
+the repo minus `node_modules` returns **0 hits** — and there is **no `.env.example`** in `web/`
+(`ls -a web/ | grep -i env` → `.env.local`, a `.bak`, `next-env.d.ts`,
+`vitest.env-allowlist.ts`). So this file **is** the documentation, found by browsing `docs/`.
+
+| Line | What it says | Why it is false today |
+| --- | --- | --- |
+| 228-232 | `GOOGLE_VERTEX_SEARCH_ENGINE_ID=…` — *"That single line switches all three surfaces over"* | needs the project name too; one line leaves the provider off |
+| 236 | *"**Setting this is what turns the provider on.**"* | it is one of two required signals, not the switch |
+| 238 | `GOOGLE_VERTEX_SEARCH_PROJECT` \| default `GOOGLE_VERTEX_PROJECT` \| *"Only needed if the Search App lives in a different project"* | **there is no default any more; it is always required** |
+| 243 | `GOOGLE_VERTEX_SEARCH_FALLBACK` \| default `on` \| *"Set to `off`…"* | **inverted by 8-01(b)** — `fallbackEnabled()` (`vertex-search.ts:487-490`) returns true only for `on`/`true`/`1`; the default is **off** and you set it to `on` to arm the $35/1,000 backfill |
+
+**Rows 228-232, 236 and 238 are the same silent defect as the scripts, in the file the operator
+reads first.** Fixing the scripts and leaving this is the defect moved, not closed — exactly the
+test §2 sets for blast radius. **Row 243 is separate and it is a money control reading backwards**;
+it belongs in the same edit because it is the same table.
+
+Lines 77-86 of that doc are **narrative and still true** ("`.env.local` currently sets
+`GOOGLE_VERTEX_PROJECT=<project-id>` … either link the project across or set
+`GOOGLE_VERTEX_SEARCH_PROJECT`"). They need no edit, and they are the sentence that makes the
+rename painless to explain.
+
+**Not in the radius, checked and named so C does not widen:** `assert-byok-production-env.mjs`
+(ban list — correct); the five production readers of `GOOGLE_VERTEX_PROJECT`
+(`llm/providers/gemini.ts:194,352`, `sources/gemini-search.ts:180,275`,
+`app/api/digest/test/route.ts:51`) — that name is the **models** project and is alive and correct;
+`docs/SETUP_gemini_vertex.md:69`, `docs/BLUEPRINT_byok_and_providers.md:157`,
+`docs/TODO_tomorrow.md:72` — all about the models project, all still true.
+
+##### 4. Tests at risk: **ZERO — and that is the finding, proved by planting**
+
+Grepping callers: **no test anywhere references either script.** `grep -rn
+"setup-vertex-search\|probe-vertex-search" web/src web/scripts` returns only the two scripts' own
+usage comments. So a fix moves no assertion.
+
+**Why they have no coverage is structural, and I measured it rather than inferred it.** Every
+spend scan runs through `productionFiles()` (`spend-scans.test.ts:29-52`), which walks **`src/`
+only** and keeps **`.tsx?` only**. `web/scripts/*.mjs` is outside all five scans.
+
+**PLANT 1 — the blind spot.** I put a real `process.env.TAVILY_API_KEY` read into
+`setup-vertex-search.mjs` — the exact thing standing tally 1 (Ruling 12 point 7) says must be
+**0** — and ran `spend-scans.test.ts`: **12 passed, 0 failed. The gate did not notice.**
+Reverted; planted value asserted absent; `git diff --stat` on the file empty.
+
+**PLANT 2 — the control, so this is a blind spot and not a broken scan.** The same read placed in
+`src/lib/sources/vertex-search.ts` instead: **exactly 1 case red**, `readers` expected `[]`, at
+`spend-scans.test.ts:134`. Reverted; planted value asserted absent;
+`git status --porcelain --untracked-files=all` **0 lines**; suite back to **12 passed**.
+
+So: the scan works, and it cannot see the tooling. **Two plants, two fired as designed.**
+
+##### 5. Fix direction — the seam, and the durable guard that already has a precedent
+
+**Seam: one expression, used by all three readers.** The tools should resolve the search project
+through the same single expression the app does. There is no importable module — the scripts are
+`.mjs`, the app is `.ts` — so the honest version is *identical literal text plus a test that pins
+it*, not a shared import invented for two call sites.
+
+**The durable guard has a working precedent in this repo, and C should copy it rather than design
+one.** `src/lib/scripts/assert-byok-production-env.test.ts` tests a `.mjs` in `scripts/` by
+**spawning it** and asserting exit code and stderr, and it says in its own header why it lives
+under `src/`: vitest's `include` is `src/**/*.test.{ts,tsx}`, so *"a test placed next to the script
+under `scripts/` would never run, and the requirement would be green by absence."* That is the
+same trap 9-01 sits in.
+
+**What the guard must assert — the failing direction, not the passing one:**
+1. old name only → **exit 1**, and stderr **names `GOOGLE_VERTEX_SEARCH_PROJECT`**;
+2. new name only → gets past the project check (it will then fail on credentials, which is fine and
+   is what proves it got past);
+3. the success message contains **both** lines, so site 3 cannot silently regress.
+
+Case 1 is the one that would have caught this. `--dry-run` exists on the setup script
+(`setup-vertex-search.mjs:29`) and case 1 exits before any network call
+(`setup-vertex-search.mjs:249-252`, ahead of the `GoogleAuth` construction at `:255`), so the guard
+costs no cloud call. **I did not run either script myself:** the setup script creates real
+resources when not dry-run, and `probe-vertex-search-billing.mjs` **deliberately spends about $4**
+(`:29-30`, `PRICE_PER_1000 = 4`, default 1000 queries). Neither belongs in an investigation.
+
+##### 6. What the field shows when every candidate is rejected
+
+**Nothing changes, and that is correct.** With `GOOGLE_VERTEX_SEARCH_PROJECT` unset,
+`isVertexSearchAvailable()` is already `false` today, and `vertex-search.ts:212-218` records the
+deliberate consequence: *"With no app id this returns false and NOTHING changes"* — no resolution
+order shifts, no surface switches provider. Papers, Jobs and Events keep the provider they have.
+**The fix cannot dark-launch a surface**; its only user-visible effect is that a misconfigured
+operator now gets an error instead of a working script and a dead index.
+
+##### 7. Proved by execution — the divergence, in a harness outside the repo
+
+Per §2 I adversarially tested the fix direction before recommending it. Harness in the scratchpad,
+**outside the repo**; it does not retype the expressions, it **extracts them verbatim from the two
+scripts and from `vertex-search.ts`** and evaluates them against planted environments, so it cannot
+drift from what ships. Verbatim, the three expressions it ran:
+
+```
+setup : process.env.GOOGLE_VERTEX_SEARCH_PROJECT?.trim() || process.env.GOOGLE_VERTEX_PROJECT?.trim();
+probe : process.env.GOOGLE_VERTEX_SEARCH_PROJECT?.trim() || process.env.GOOGLE_VERTEX_PROJECT?.trim();
+app   : return process.env.GOOGLE_VERTEX_SEARCH_PROJECT?.trim() || undefined;
+```
+
+**Divergent in 2 of 5 scenarios, and both divergent ones are the documented path:**
+
+- *doc Step 3 followed literally* (`GOOGLE_VERTEX_PROJECT` + engine id) → setup builds in
+  `grounding-proj`, probe bills `grounding-proj`, **the app queries nothing**,
+  `isVertexSearchAvailable()` **false**. No error anywhere.
+- *operator sets only the old name* → identical.
+- nothing set → all three refuse; agree.
+- correct new setup → all three agree on `search-proj`, available **true**.
+- both names set, different projects → all three agree on `search-proj` (the new name already wins
+  the `||`), available **true**. **So nobody who sets both is affected by the fix** — which is why
+  removing the fallback is safe rather than merely correct.
+
+**The two divergent rows are the defect, reproduced end to end, and they are what the doc tells an
+operator to do.**
+
+##### 8. Order for C, and one thing that is not C's to decide
+
+Work it as **one item, in this order**: the two scripts (5 sites), then the doc table (4 rows),
+then the spawn test. The doc must land in the same commit as the scripts — split them and the
+window where the instructions contradict the tools is exactly the defect.
+
+**`POLICY — manager decides`, one item, carried not re-derived:** Ruling 25 point 2's binding
+design note — when D2b is taken, the Vercel guard moves from a `GOOGLE_VERTEX_` **prefix ban** to an
+**explicit allow-list** with `GOOGLE_VERTEX_SEARCH_FALLBACK` staying banned. 9-01 touches the same
+family of names and a reader will be tempted to tidy the guard while they are there. **It is not in
+9-01's scope and I am not recommending it now** — I am flagging that the two meet, so the note is
+not lost when D2b is taken.
