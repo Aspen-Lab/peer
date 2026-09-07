@@ -13029,3 +13029,71 @@ vitest  Test Files  127 passed | 1 skipped (128)
 ```
 
 **+1 file, +6 tests. Nothing deleted.**
+
+#### 7-02(c) — THE DEAD-LINK GATE. **LANDED. TALLY: 0, NO ALLOWLIST.**
+
+`src/lib/navigation/dead-links.test.ts`. **Dead internal links: 0.** Every rendered internal
+destination in non-test `src/` is resolved against the real route tree **and** `public/` **and**
+`/_next/`, with **no allowlist and no exceptions** (Ruling 19 point 3).
+
+**B's SHAPE LIST WAS INCOMPLETE, AND THE TREE HAS A LIVE INSTANCE OF THE MISSING SHAPE.** B named
+three shapes: `href`, `router.push|replace|prefetch`, `redirect`. **A fourth exists:
+`<form action="/…">`** — `user-menu.tsx:109` posts sign-out to `/auth/signout`. It resolves today,
+so nothing is broken, **but a scan without that line would have reported a clean zero while a
+rendered control led nowhere** — which is the exact failure mode this gate exists to catch, one
+shape over. Added as a fourth pattern and proved by planting.
+
+**THE FOURTH SHAPE ALSO FORCED A CORRECTION TO WHAT COUNTS AS A ROUTE.** `/auth/signout` is a
+**route handler** (`route.ts`), not a page, so a page-only enumeration would have called a working
+form dead. The scan resolves against `page.tsx` **and** `route.ts`.
+
+**THE TEMPLATE-LITERAL RULE IS DELIBERATE, NOT LUCKY — B ASKED FOR THIS EXPLICITLY.** B's run got
+`/events/${event.id}` right by truncating at the interpolation and said so. This masks each `${…}`
+with a sentinel using a **brace-counting scan**, so `${encodeURIComponent(x)}` closes where it
+actually closes, and a masked segment matches both a literal and a dynamic route segment. Query and
+hash are stripped **before** masking, which is what makes `` `/?q=${…}` `` resolve to `/`.
+
+**CROSS-CHECKED AGAINST NEXT'S OWN ANSWER, AND IT AGREES EXACTLY.** `.next/types/routes.d.ts`
+declares `AppRoutes` with **11** routes; this file's enumeration of `src/app/**/page.tsx` — route
+groups `(name)` dropped, `[id]` one segment, `[...slug]`/`[[...slug]]` many, empty to `/` — is
+**identical**. The cross-check **skips when the file is missing** (it is generated and gitignored,
+so a fresh clone has none) and is informational by design.
+
+**ONE BUG THE CROSS-CHECK CAUGHT IN MY OWN CODE, WHICH IS WHY IT IS WORTH KEEPING.** The root
+`page.tsx` has no directory part, so slicing off `/page.tsx` ate a character of the filename and
+produced a route called `/page.ts`. The dead-link count was unaffected — but `/` had silently
+stopped being a route, and **every link to `/` would have been reported dead the moment anything
+else moved.** Nothing but the framework's own list would have found that.
+
+**PROVED ABLE TO FAIL — THREE PLANTS IN THREE DIFFERENT SHAPES, ALL FIRED, TALLY 0 → 3.**
+`href="/plans-does-not-exist"` (`tier-upgrade-block.tsx`), `router.push("/bookmarks-does-not-exist")`
+(`keyboard.tsx`), `action="/auth/nope-does-not-exist"` (`user-menu.tsx`). Each was reported **with
+file, line and shape**. All three reverted with an asserted substitution count of 1 and an asserted
+absence of the planted string; `git diff` on the two otherwise-untouched files was **empty**, and
+the tally returned to **0**.
+
+**TWO MORE CASES, BOTH GUARDING THE GATE RATHER THAN THE APP.**
+- **A non-vacuity floor.** A scan that quietly stopped finding links would report zero dead links
+  forever. The suite requires **more than 20 link sites** and **more than one shape** in the
+  denominator. Today it sees **34 sites**.
+- **`/CHANGELOG.md` is asserted to be a real file in `public/` and to still be linked**, so nobody
+  re-adds the allowlist entry Ruling 18 point 2 originally called for and Ruling 19 point 3
+  withdrew.
+
+**WHAT IT CANNOT SEE, WRITTEN INTO THE FILE RATHER THAN LEFT TO BE DISCOVERED.** A destination held
+in a variable (`href={someVar}`) is not statically resolvable and is not counted — `UPGRADE_HREF`
+is the one that matters and `upgrade-destination.test.ts` pins it. An interpolation is one wildcard
+segment, so a template whose interpolation contained a `/` would be under-checked; none does. A
+wildcard segment matches a literal, because a value that is not known cannot be proved wrong.
+**The scan reports links it can prove dead, never links it merely cannot prove alive.**
+
+**GATE AFTER 7-02(c), VERBATIM.**
+
+```
+tsc     exit 0
+eslint  ✖ 1 problem (1 error, 0 warnings)   — the standing quiz.tsx:46
+vitest  Test Files  128 passed | 1 skipped (129)
+        Tests  2918 passed | 1 skipped (2919)     0 failed
+```
+
+**+1 file, +4 tests. Nothing deleted. 7-02 IS COMPLETE — all three parts.**
