@@ -286,7 +286,7 @@ describe("POST /api/jobs/feed — the operator's search key", () => {
  * ABC-freemium 1-19 / 1-21 · R-POOL-2 — the entitlement gate, observed at the
  * route.
  *
- * A forced rebuild charges the daily system-search counter before it runs, so
+ * A forced rebuild charges the daily forced-rebuild counter before it runs, so
  * "did the route forward the refresh?" is answered by that counter moving.
  * Since 1-21 the ordinary fan-out charges the same counter too, so the
  * assertion is on the **difference** between the same request with and without

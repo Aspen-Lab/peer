@@ -6,8 +6,8 @@ import {
 } from "./deep-report-quota";
 import {
   FORCED_REBUILDS_PER_DAY,
-  consumeSystemSearches,
-} from "./search-breaker";
+  consumeForcedRebuild,
+} from "./rebuild-breaker";
 import { getCounterStore, resetCounterStoreForTests } from "./counters";
 import { setUsageEventsClientForTests, type UsageEventRow } from "./events";
 import { ANONYMOUS_ENTITLEMENT, type Entitlement } from "@/lib/entitlement/types";
@@ -223,27 +223,36 @@ describe("paid breaker (R-QUOTA-2, D4)", () => {
 // fan-out can no longer reach it, but the FORCED POOL REBUILD still can
 // (`jobs/pipeline.ts`, `events/pipeline.ts`, gated on `poolRefreshAllowed`), so
 // the cap stays and so do these cases. The counter it charges was renamed to
-// `FORCED_REBUILDS_PER_DAY` / `forced_rebuilds_today:<user>:<day>`. The function
-// name `consumeSystemSearches` and the row's `path: "system-search"` were NOT
-// renamed — Ruling 13 named two things and C does not widen a ruling; both are
-// flagged in the round-5 log for the manager.
-describe("the system-search breaker (R-QUOTA-2)", () => {
-  it("allows the day's searches and refuses the one past the cap", async () => {
+// `FORCED_REBUILDS_PER_DAY` / `forced_rebuilds_today:<user>:<day>` in 5-02.
+//
+// ABC-freemium 6-01 · Ruling 14 point 3 — the rest of the rename landed: the
+// function is `consumeForcedRebuild`, its home is `rebuild-breaker.ts`, and the
+// usage row carries `path: "forced-rebuild"`. The old note here recorded that
+// those three were deliberately left saying "search"; that record is now false
+// rather than merely stale, so it goes with the rename. The row is the audit
+// trail for a spend cap (D4) — a row naming the wrong cap is wrong data in the
+// one artefact built to say where the money went, which is why this is a
+// `WRONG DATA` item and not a tidy-up.
+describe("the forced-rebuild breaker (R-QUOTA-2)", () => {
+  it("allows the day's rebuild units and refuses the one past the cap", async () => {
     expect(
-      await consumeSystemSearches("user-1", FORCED_REBUILDS_PER_DAY, NOW),
+      await consumeForcedRebuild("user-1", FORCED_REBUILDS_PER_DAY, NOW),
     ).toBe(true);
 
-    expect(await consumeSystemSearches("user-1", 1, NOW)).toBe(false);
+    expect(await consumeForcedRebuild("user-1", 1, NOW)).toBe(false);
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ kind: "breaker", path: "system-search" });
+    // 6-01 — the recorded path follows the counter. REWRITTEN to the new
+    // contract, never deleted: this is the only fixture in the tree that
+    // asserts the value, so deleting it would leave the audit row unasserted.
+    expect(rows[0]).toMatchObject({ kind: "breaker", path: "forced-rebuild" });
   });
 
   it("charges the whole fan-out, not one per call", async () => {
     // A fan-out of twelve queries costs twelve, or the 500/day cap would mean
     // 500 fan-outs rather than 500 searches.
-    await consumeSystemSearches("user-1", FORCED_REBUILDS_PER_DAY - 5, NOW);
+    await consumeForcedRebuild("user-1", FORCED_REBUILDS_PER_DAY - 5, NOW);
 
-    expect(await consumeSystemSearches("user-1", 12, NOW)).toBe(false);
+    expect(await consumeForcedRebuild("user-1", 12, NOW)).toBe(false);
   });
 });
 
@@ -322,13 +331,13 @@ describe("the two failure directions", () => {
     expect(storeUnavailableLines()).toHaveLength(2);
   });
 
-  it("the system-search breaker does the same (2-02)", async () => {
-    // `consumeSystemSearches` had the identical shape: an outage fabricated a
-    // `kind:"breaker", path:"system-search"` row and an error line claiming the
+  it("the forced-rebuild breaker does the same (2-02)", async () => {
+    // `consumeForcedRebuild` had the identical shape: an outage fabricated a
+    // `kind:"breaker"` row and an error line claiming the
     // 500/day cap tripped. Same fix, same ruling.
     breakTheStore();
 
-    expect(await consumeSystemSearches("user-1", 3, NOW)).toBe(false);
+    expect(await consumeForcedRebuild("user-1", 3, NOW)).toBe(false);
 
     expect(rows).toHaveLength(0);
     expect(storeUnavailableLines()).toHaveLength(1);

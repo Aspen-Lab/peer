@@ -408,7 +408,7 @@ export function breakerTripped(
  * point 1).
  *
  * **This is the ONLY writer of this line, for every caller.** It lives here
- * rather than inside `deep-report-quota.ts` because `search-breaker.ts` needs
+ * rather than inside `deep-report-quota.ts` because `rebuild-breaker.ts` needs
  * the identical line and both modules already import this one — two private
  * copies is exactly how the prefix drifts, which is the drift the single-writer
  * rule exists to prevent.

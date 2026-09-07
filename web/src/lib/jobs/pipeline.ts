@@ -19,7 +19,7 @@ import {
   type PoolCache,
 } from "@/lib/opportunities/pool-cache";
 import { getDefaultOpportunityPoolCache } from "@/lib/opportunities/pool-cache-runtime";
-import { consumeSystemSearches } from "@/lib/usage/search-breaker";
+import { consumeForcedRebuild } from "@/lib/usage/rebuild-breaker";
 import {
   countOpportunityFacets,
   DEFAULT_OPPORTUNITY_TOP_N,
@@ -246,7 +246,7 @@ export async function buildDailyJobPool(
   // 1. `poolRefreshAllowed` is the entitlement's, resolved by the route. A free
   //    user's forced rebuild is REFUSED, not errored: `forceRebuild` stays
   //    false and they get the cached pool exactly as they would have.
-  // 2. It counts against the daily system-search breaker, and a tripped breaker
+  // 2. It counts against the daily forced-rebuild breaker, and a tripped breaker
   //    also serves the cache. Without this second gate the refresh button is an
   //    unbounded spend button for a paid user.
   //
@@ -255,7 +255,7 @@ export async function buildDailyJobPool(
   // costing the owner a fan-out.
   let forceRebuild = false;
   if ((options.poolRefresh ?? req.poolRefresh) && req.userId) {
-    forceRebuild = await consumeSystemSearches(req.userId, 1, now);
+    forceRebuild = await consumeForcedRebuild(req.userId, 1, now);
   }
 
   let fresh: BuiltJobPool | undefined;
@@ -280,7 +280,7 @@ export async function buildDailyJobPool(
       };
     },
     // ABC-freemium 1-18 · R-POOL-2 — the route decides this from the
-    // entitlement and the search breaker, never from the request body alone.
+    // entitlement and the forced-rebuild breaker, never from the request body alone.
     forceRebuild,
   );
 

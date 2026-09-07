@@ -23,7 +23,7 @@ import {
   resetCounterStoreForTests,
   forcedRebuildDayKey,
 } from "@/lib/usage/counters";
-import { FORCED_REBUILDS_PER_DAY } from "@/lib/usage/search-breaker";
+import { FORCED_REBUILDS_PER_DAY } from "@/lib/usage/rebuild-breaker";
 import {
   setUsageEventsClientForTests,
   type UsageEventRow,

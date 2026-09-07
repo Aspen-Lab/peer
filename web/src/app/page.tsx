@@ -173,7 +173,7 @@ function DiscoveryPage() {
    * and "Refresh now" would do nothing visible. It asks for a rebuild instead.
    *
    * Asking is all it does: the route forwards the request only when the reader's
-   * entitlement allows a forced rebuild and the daily search breaker has not
+   * entitlement allows a forced rebuild and the daily forced-rebuild breaker has not
    * tripped, and refuses by serving the pool that is already there — no error,
    * no empty surface. Papers keep the plain refresh: D3 keeps that pool daily.
    */

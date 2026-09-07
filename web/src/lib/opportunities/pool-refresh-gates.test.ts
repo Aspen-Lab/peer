@@ -12,7 +12,7 @@ import type { CachedPool, PoolCache } from "./pool-cache";
  * ABC-freemium 1-19 · R-POOL-2, R-QUOTA-2, R-TEST-1.
  *
  * The two gates on "refresh now", asserted where they live. R-POOL-2 requires
- * both: an entitlement gate, and a count against the daily search breaker —
+ * both: an entitlement gate, and a count against the daily forced-rebuild breaker —
  * "the only thing stopping a paid user's refresh button from being an unbounded
  * spend button".
  *
@@ -108,7 +108,7 @@ describe("forced pool rebuild — the two gates", () => {
     expect(cache.sets).toBe(1);
   });
 
-  it("serves the cached pool when the daily search breaker has tripped", async () => {
+  it("serves the cached pool when the daily forced-rebuild breaker has tripped", async () => {
     // R-QUOTA-2. Pre-spend the day's allowance, then ask for a refresh: the
     // pool that was already there comes back, with no error and no rebuild.
     const store = getCounterStore();

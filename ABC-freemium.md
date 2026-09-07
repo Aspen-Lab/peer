@@ -122,8 +122,9 @@ HELD BY:          C-round6b @ 2026-09-07T19:32:27Z
 ROUND:            6
 WHOSE TURN:       C  (round 6: implement 6-01 then 6-03; 6-02 still awaits the owner)
 STOPPED BECAUSE:  in progress: round-6 C (C-round6b) is working 6-04 -> 6-01 -> 6-03 in that order.
-                  6-04 LANDED and pushed. No deviation from the ruled order.
-STATUS:           ROUND 6 — **C IS IMPLEMENTING. 6-04 LANDED.** Gate green after it: tsc 0 ·
+                  6-04 and 6-01 LANDED and pushed. No deviation from the ruled order.
+STATUS:           ROUND 6 — **C IS IMPLEMENTING. 6-04 and 6-01 LANDED.** Gate green after each:
+                  tsc 0 ·
                   eslint 1 (standing `quiz.tsx:46`) · vitest 124 files / 2890 tests / **0 failed**
                   (2872 -> 2891: +19 added, 0 deleted). The client entitlement now has a third
                   state (`null` = not known); both upsell surfaces render nothing on it; the two
@@ -135,6 +136,13 @@ STATUS:           ROUND 6 — **C IS IMPLEMENTING. 6-04 LANDED.** Gate green aft
                   §4 (no ruled copy for `QuotaNotice`'s anonymous branch, unreachable in a deployed
                   runtime; and the mode chip tells a paid reader "Free" mid-hydration — a
                   capability display, not an upsell, currently ruled the other way).
+                  **6-01 finished the rename**: `consumeForcedRebuild` in `rebuild-breaker.ts`,
+                  the usage row's `path: "forced-rebuild"`, 7 imports, 14 docblocks, ONE
+                  assertion rewritten (never deleted) and proved by planting the old value.
+                  Residual old names in `src/`: **0**. The three unreachable fan-out sites are
+                  KEPT with the full chain in their docblocks plus B's warning that restoring
+                  operator search means SPLITTING this counter, not flipping a flag. Test
+                  count unchanged at 2891, which is correct — 6-01 adds no behaviour.
                   ── B's guide follows. ──
                   ROUND 6 — **B HAS WRITTEN THE GUIDE. TWO ITEMS, 6-01 and 6-03**, one commit each,
                   each pushed as it finished; no code changed and `git diff HEAD -- web/` is
@@ -11419,3 +11427,106 @@ have got wrong, is that **the third state has to be *closed* by something** — 
 if some code eventually replaces it, and for a signed-out reader nothing did. That is the
 `ProfileSync` half above. It is an addition to the ruling's shape, not a departure from it, so it is
 logged here rather than as a deviation in §1.
+
+---
+
+#### 6-01 — finish the rename · `WRONG DATA`
+
+**Landed.** `tsc` **0** · `eslint` **1 problem (1 error, 0 warnings)** (the standing
+`quiz.tsx:46`) · `vitest` **124 files passed | 1 skipped (125)** · **2890 passed | 1 skipped
+(2891)**, **0 failed**. Test count **unchanged**, which is the correct outcome: 6-01 adds no
+behaviour, so it adds no case — it rewrites one assertion and two names to the new contract.
+
+##### B's blast radius held exactly, and the rename landed in one commit
+
+Every figure B measured was confirmed by doing the work, not re-quoted:
+
+| B measured | Landed |
+|---|---|
+| 7 imports to repoint | **7** — 5 production, 2 test, all in this commit so the tree never stopped compiling |
+| 4 strings inside the breaker | **4** — the function name, `logStoreUnavailable("system-search")`, the `[quota] … breaker tripped` line, `path: "system-search"` |
+| ~14 docblock sites | **14** across 9 files |
+| exactly ONE test assertion | **1**, at what was `deep-report-quota.test.ts:238` |
+| 2 suite/case names | **2** |
+| 0 other tests | **0** |
+
+`src/lib/usage/search-breaker.ts` → `src/lib/usage/rebuild-breaker.ts` by `git mv` (history
+preserved); `consumeSystemSearches` → `consumeForcedRebuild`; the row's `path` →
+`"forced-rebuild"`; the log label and the error line → `forced-rebuild`, which now matches the
+sibling's house style at `deep-report-quota.ts:206` exactly. Signature, optional `surface`, cap and
+fail-closed direction all untouched. `FORCED_REBUILDS_PER_DAY` and `forcedRebuildDayKey` were
+already correct and were not touched; the `search-breaker.ts:44` re-export of the constant survives
+the move, which is what `jobweb.test.ts` imports through.
+
+**`search-breaker.ts:46-58` was DELETED, not reworded**, per B. It was the paragraph explaining that
+*"the name still says 'searches' on purpose"*. Once the rename lands that paragraph is not stale, it
+is **false**, and a false explanation is worse than none. The same is true of the note at what was
+`deep-report-quota.test.ts:227`, which recorded that the name and the path were deliberately *not*
+renamed in 5-02 — deleted for the same reason and replaced with what is now true.
+
+**Residual old names in `src/`: 0**, grepped for `consumeSystemSearches`, `search-breaker` and
+`system-search` after the change. The 16 remaining hits for "system search" prose are all about the
+**system search key** (D2a's subject — `resolveSystemSearchKeys`, `TAVILY_API_KEY`, the entitlement
+field), not about this breaker, and are correct as they stand. `counters.ts:137`'s
+`SYSTEM_SEARCHES_PER_DAY` mention is a dated "RENAMED in 5-02 — was …" history note, which is
+accurate history rather than a stale name.
+
+##### The three unreachable fan-out sites — KEPT, and their docblocks now say why
+
+Ruling 12 point 2 keeps them; Ruling 14 point 3 requires docblocks saying they are unreachable and
+why. `jobweb.ts`, `eventweb.ts` and `web-search.ts` each carry the full chain at the line:
+`systemSearchAllowed` is a hard `false` on every producer → `resolveSystemSearchKeys` returns no
+Brave key and Tavily can only be `"byok"`/`"none"` → `operatorSearchAvailability` is frozen false →
+the only selectable provider is Tavily with `provenance: "byok"` → `isOperatorFundedSearch` answers
+`false` for exactly that pair → `operatorFunded` is never `true`.
+
+**B's extra finding is written into all three, and into the module header** — it is the part of this
+item most likely to be lost, and it is not in the ruling. After the rename the reversal seam gets
+*more* expensive, not less: these sites are dead because no operator-funded provider can be
+**selected**, not because anything refuses them. `isOperatorFundedSearch` still returns `true` for
+Brave, Vertex and Gemini. So restoring D2 by flipping the flag would immediately start charging
+**search fan-outs** to a counter named `forced_rebuilds_today` — re-creating in reverse the exact
+false-audit defect 6-01 exists to fix. Each docblock says: **restoring operator-funded search means
+splitting this counter again, not just flipping the flag.** Four copies (three sites plus the module
+header) because a future reader may arrive at any of them first.
+
+**The escape clause of Ruling 12 point 2 was NOT reached.** Nothing kept stops compiling; `tsc` is
+0 under the full rename, as B predicted from the two-stage plant.
+
+##### The one assertion — rewritten to the new contract, proved able to fail
+
+`deep-report-quota.test.ts` is the only fixture in the tree that asserts the recorded path. It now
+reads `path: "forced-rebuild"`, with a comment naming 6-01 and saying why it was rewritten rather
+than deleted: it is the only assertion on the audit row, so deleting it would leave the row
+unasserted — which is how the wrong value survived a whole round in the first place.
+
+**Revert-proof, per Ruling 10 point 2a.** Planting `path: "system-search"` back into
+`rebuild-breaker.ts` (substitution count **1**, asserted before the run was read) failed exactly one
+case — *"the forced-rebuild breaker (R-QUOTA-2) > allows the day's rebuild units and refuses the one
+past the cap"* — 1 failed | 26 passed. Restored, and the suite is green again. The two suite/case
+names were renamed with it (`the system-search breaker` → `the forced-rebuild breaker`, and its
+outage twin), and B's finding that **no test asserts the error log line** held: `grep -rn "breaker
+tripped"` still returns only production sites, so that string renamed for free.
+
+##### No migration, and the database does not constrain it
+
+B verified `usage_events.path` is nullable plain `text` with no `CHECK` and no enum
+(`supabase/migrations/20260904000100_usage_events.sql:22`); I did not re-derive it, and I wrote no
+migration (brief: none this round). The migrations are still unapplied and there are no registered
+users, so no stored row is orphaned — the same reason Ruling 13 point 1 gave one layer up.
+
+##### Standing locks re-verified, by name
+
+Green in the same cold run: `deep-report-quota.test.ts` (the breaker's only home),
+`pool-refresh-gates.test.ts` (its `:111` case is the live path — the breaker-serves-cache case, and
+its prose was renamed with everything else), `api/jobs/feed/route.test.ts`, `jobweb.test.ts` (the
+constant import, repointed), the counters suites, `ai-route-personas.test.ts`, the four route
+suites, `spend-scans.test.ts`, `ui-vocabulary.test.ts`, `no-client-dev-flags.test.ts` and the guard
+suite. No suite deleted, renamed away, or skipped.
+
+##### One correction to Ruling 13's preamble, already accepted by Ruling 16 point 5
+
+Confirmed again by doing the work: **five calls in five files plus the declaration**, not six call
+sites. Two live (`jobs/pipeline.ts`, `events/pipeline.ts`), three unreachable (`jobweb.ts`,
+`eventweb.ts`, `web-search.ts`). No design consequence; recorded so "six" is not re-quoted as
+measured.

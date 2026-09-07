@@ -6,7 +6,7 @@ import {
 } from "@/lib/search/system-key";
 import { cleanDisplayText, cleanDisplayTextOrUndefined } from "@/lib/text/clean";
 import { recordUsageEvent } from "@/lib/usage/events";
-import { consumeSystemSearches } from "@/lib/usage/search-breaker";
+import { consumeForcedRebuild } from "@/lib/usage/rebuild-breaker";
 import {
   geminiSearchDeadline,
   resolveWebSearchProvider,
@@ -104,15 +104,34 @@ async function fetchImpl(query: SourceQuery): Promise<RawItem[]> {
   if (!provider) return [];
 
   // ABC-freemium 2-04 — the breaker and the R-METER-2 row, which this file had
-  // NEITHER of before (grepped: no `consumeSystemSearches`, no
+  // NEITHER of before (grepped: no `consumeForcedRebuild`, no
   // `recordUsageEvent` anywhere in it). Under Ruling 6 point 3 the gate above
   // makes `operatorFunded` unreachable today, and that is exactly why it is
   // here: **if this surface is ever un-gated, it is metered from the first
   // request rather than from the round after someone notices.** A gate without
   // metering behind it is how the same defect comes back wearing a new name.
+  //
+  // **ABC-freemium 6-01 · Ruling 14 point 3 — THIS CALL SITE IS UNREACHABLE,
+  // and it is KEPT on purpose (Ruling 12 point 2).** The chain, end to end:
+  // `systemSearchAllowed` is a hard `false` on every producer (D2a), so
+  // `resolveSystemSearchKeys` returns no Brave key and Tavily can only be
+  // `"byok"` or `"none"`; `operatorSearchAvailability` is frozen false for
+  // both providers; so the only provider selectable here is Tavily with
+  // `provenance: "byok"`, and `isOperatorFundedSearch` answers `false` for
+  // exactly that pair. `operatorFunded` is therefore never `true` and the
+  // breaker below never runs. Deleting it would remove the metering that has
+  // to exist BEFORE the gate is ever reopened, not the round after.
+  //
+  // **If operator-funded search is restored, this counter must be SPLIT — do
+  // not just flip the flag.** These sites are dead because no operator-funded
+  // provider can be *selected*, not because anything refuses them:
+  // `isOperatorFundedSearch` still returns `true` for Brave, Vertex and
+  // Gemini. Reopening the gate would start charging **search fan-outs** to a
+  // counter named `forced_rebuilds_today`, which re-creates the exact
+  // false-audit defect 6-01 exists to fix, in reverse.
   const operatorFunded = isOperatorFundedSearch(provider, keys);
   if (operatorFunded) {
-    const allowed = await consumeSystemSearches(
+    const allowed = await consumeForcedRebuild(
       query.webSearch?.userId ?? null,
       searchQueries.length,
       undefined,
