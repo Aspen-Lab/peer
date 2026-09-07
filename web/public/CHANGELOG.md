@@ -2,6 +2,20 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.16.2 — 2026-09-07
+
+Eleven colours the palette could not reach.
+
+The greyscale pass changed the tokens, and eleven rings and shadows on the
+profile and the AI-key panel were not written in tokens — they were typed as
+raw `rgba(185,28,28…)`, `rgba(194,99,14…)`, `rgba(217,122,48…)`: the old red,
+the old burnt amber, the old peach. They kept their hue while everything
+around them lost it, which is exactly the failure a token system exists to
+prevent, and it survived a release because the values are literals no palette
+grep would find — they turned up in the deployed stylesheet, not the source.
+Each is now the ring of the token its element already uses. Nothing hued is
+hard-coded in a component any more.
+
 ## v0.16.1 — 2026-09-07
 
 A little material.

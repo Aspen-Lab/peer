@@ -287,7 +287,7 @@ export default function ProfilePage() {
             Reset profile to defaults
           </button>
         ) : (
-          <div className="rounded-xl bg-red/[0.05] shadow-[inset_0_0_0_1px_rgba(185,28,28,0.15)] px-4 py-3 text-meta flex items-center flex-wrap gap-x-5 gap-y-2">
+          <div className="rounded-xl bg-red/[0.05] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-accent)_22%,transparent)] px-4 py-3 text-meta flex items-center flex-wrap gap-x-5 gap-y-2">
             <span className="text-text-muted">Reset all signals to defaults?</span>
             <div className="flex items-center gap-3 ml-auto">
               <button
@@ -650,7 +650,7 @@ function TypeTiles({
       count: breakdown.events,
       color: "text-tag",
       bg: "bg-tag-dim",
-      ring: "shadow-[inset_0_0_0_1px_rgba(194,99,14,0.20)]",
+      ring: "shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-tag)_22%,transparent)]",
     },
     {
       key: "jobs",
@@ -658,7 +658,7 @@ function TypeTiles({
       count: breakdown.jobs,
       color: "text-peach",
       bg: "bg-peach-dim",
-      ring: "shadow-[inset_0_0_0_1px_rgba(217,122,48,0.20)]",
+      ring: "shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-peach)_22%,transparent)]",
     },
   ];
 
@@ -727,12 +727,12 @@ function VenueGrid({
             ? {
                 text: "text-tag",
                 bg: "bg-tag-dim",
-                ring: "shadow-[inset_0_0_0_1px_rgba(194,99,14,0.20)]",
+                ring: "shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-tag)_22%,transparent)]",
               }
             : {
                 text: "text-peach",
                 bg: "bg-peach-dim",
-                ring: "shadow-[inset_0_0_0_1px_rgba(217,122,48,0.18)]",
+                ring: "shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-peach)_20%,transparent)]",
               };
         return (
           <div
@@ -991,8 +991,8 @@ function KeywordCloud({ items }: { items: { name: string; count: number }[] }) {
           tone === "accent"
             ? "bg-accent-dim text-accent shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-accent)_20%,transparent)]"
             : tone === "tag"
-            ? "bg-tag-dim text-tag shadow-[inset_0_0_0_1px_rgba(194,99,14,0.18)]"
-            : "bg-peach-dim text-peach shadow-[inset_0_0_0_1px_rgba(217,122,48,0.18)]";
+            ? "bg-tag-dim text-tag shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-tag)_20%,transparent)]"
+            : "bg-peach-dim text-peach shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-peach)_20%,transparent)]";
         return (
           <span
             key={k.name}
@@ -1285,7 +1285,7 @@ function PreferenceChip({
       : [
           "bg-bg-secondary/50 text-text-faint",
           "bg-bg-secondary/70 text-text-muted",
-          "bg-red/10 text-red/90 shadow-[inset_0_0_0_1px_rgba(185,28,28,0.15)]",
+          "bg-red/10 text-red/90 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-accent)_22%,transparent)]",
         ][tier];
   return (
     <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-meta ${cls}`}>
