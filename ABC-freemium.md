@@ -12544,3 +12544,159 @@ constant is cheap and why nobody noticed the link was dead for five rounds.
    invented. **If the manager rules this out of 7-02's scope, say so and leave the promise broken
    deliberately rather than silently** — but it is the half of Ruling 18 point 6 that survives
    contact with execution, and step 3's tally will not catch it, because the URL is valid.
+
+#### 7-01 — THE CHIP, AND THE CENSUS. Classification: `WRONG DATA` (a fact asserted before it is known, to a reader who is paying).
+
+##### 7-01.1 — THE UPSELL CENSUS, RE-DERIVED THREE WAYS AND NOT QUOTED (Ruling 18 point 4)
+
+I did not carry any number in from the brief or from Ruling 18. Three independent derivations:
+
+**(a) Upsell vocabulary.** `Peer Pro | upgrade | $12 | paid plan | See what Pro` over non-test
+`src/**`: 14 files match, and reading every hit, exactly **three render upsell copy to a reader** —
+`tier-upgrade-block.tsx` (*"Also in this report on Peer Pro"*, the price, *"Or use your own AI
+key"*), `quota-notice.tsx` (*"Peer Pro lifts the monthly limit."*), `pool-refresh-notice.tsx`
+(*"Refresh now is on the paid plan…"*, *"See what Pro adds"*). The other eleven are docblocks,
+imports, call sites, or unrelated words — `upgradeCandidateQuality` in the figure extractor,
+*"incremental upgrades"* in persona copy, `$95k` in the salary formatter.
+
+**(b) Consumers of the store's entitlement.** `useProfileStore(… .entitlement)` in non-test source
+returns **six** production sites: the three report pages (`papers/[id]:587`, `jobs/[id]:1598`,
+`events/[id]:2397`), the dashboard (`page.tsx:510`), the wizard (`welcome/page.tsx:94`) and the
+digest (`daily-digest.tsx:111`). Of the six, three pass the value down to the upsell surfaces of
+(a); `welcome` and `daily-digest` ask **capability** questions only (`aiAvailability`) and assert
+nothing about a plan; the dashboard is the chip.
+
+**(c) The chip's own reachability.** `planChipText` has **zero** importers outside its own module —
+only `aiModeChip` calls it — and `aiModeChip` has exactly **one** production caller,
+`src/app/page.tsx:516`. So the chip is one function, one call site, one span.
+
+**THE ANSWER: THREE upsell surfaces plus the chip.** No fourth. `PoolRefreshNotice` renders from
+`page.tsx:1315` on the dashboard, `QuotaNotice` and `TierUpgradeBlock` from all three report pages.
+
+##### 7-01.2 — THE DEFECT, BY EXECUTION, THROUGH THE PAGE'S OWN PATH
+
+Driven exactly as `page.tsx:510-520` drives it — `entitlementGrants(entitlement)` then
+`aiModeChip({ feedsUseAi, aiSearchActive, entitlement: grants })`:
+
+| store entitlement | chip `plan` | chip `ai` |
+|---|---|---|
+| **`null` — not known yet** | **"Free"** | "AI off" |
+| known + anonymous | "Free" | "AI off" |
+| known + free | "Free" | "AI on" |
+| known + trial | "Trial · 5 days left" | "AI on" |
+| known + paid | "Pro" | "AI on" |
+
+**A PAID reader reads `plan="Free"` until `GET /api/profile` answers, then "Pro".** Rows 1 and 2
+are indistinguishable on screen, which is the whole defect: the chip cannot tell *"you are on the
+free plan"* from *"nobody has looked yet"*, and it says the first.
+
+**RULING 17 POINT 5'S ESCAPE CLAUSE IS REACHED, and I am recording it as instructed.** The chip's
+contract **cannot** express absence today: `planChipText`'s parameter is
+`Pick<Entitlement, "effectivePlan" | "trialEndsAt">` with no nullable member, and its return is a
+bare `string` — measured, every reachable input returns a non-empty string, three distinct values.
+So **the caller must change too**; this is not contained inside `ai-tier.ts`. That does not block
+the fix — it is exactly the shape Ruling 17 point 1 prescribes (*if a caller may legitimately not
+know, the type says so*) — but the ruling asked to be told, so: **told.**
+
+##### 7-01.3 — THE SEAM, AND IT IS FOUR EDITS, NOT ONE
+
+1. `planChipText(entitlement: Pick<…> | null, now?): string | null` — `if (!entitlement) return null;`
+   ahead of every other branch. `null` in, `null` out.
+2. `aiModeChip`'s `entitlement` option becomes `| null`; its return type's `plan` becomes
+   `string | null`. `label`, `ai` and `title` are untouched — they read `feedsUseAi` and
+   `aiSearchActive`, never the plan.
+3. `page.tsx:519` passes the **raw** `entitlement`, not `grants`. **This is the actual fix.**
+   `entitlementGrants` is doing precisely what its own docblock forbids here: it turns *"we have not
+   asked yet"* into `"free"`, and the plan text is not a capability question.
+4. `page.tsx:864` renders the span only when `aiChip.plan !== null` — **absent**, never an empty
+   string and never a placeholder.
+
+**DO NOT "FIX" `ai: "AI off"` IN THE SAME BREATH.** It is a **capability** claim, and
+`allowance.ts:166-187` ratifies failing a capability closed while ignorant in as many words
+(*"refusing a capability while ignorant costs the reader a few hundred milliseconds; asserting a
+plan while ignorant puts a wrong claim on screen"*). The `title` string and the button's `disabled`
+state are the same case. **Only the plan segment asserts a fact, and only the plan segment moves.**
+
+**One honest consequence to name, because "no layout jump" is not quite right.** The chip is a
+`flex items-center gap-1.5` row, so dropping one span makes the **button itself** narrower for the
+few hundred milliseconds before the plan lands, then wider. The page does not reflow — the button
+is the last thing in its group — but the button does change width. The alternative, reserving the
+width with an invisible placeholder, is **blank-substitution**, which Ruling 17 point 5 forbids by
+name. Absent is still right; the width change is the price and it should be stated rather than
+discovered.
+
+##### 7-01.4 — BLAST RADIUS: **MEASURED BY PLANTING THE FINISHED FIX. IT IS ZERO — AND THAT IS THE FINDING.**
+
+All four edits applied to the real tree, the whole gate run cold, then reverted.
+
+```
+WITH THE FIX PLANTED:  tsc 0 · eslint 1 (standing quiz.tsx:46)
+                       vitest 125 files passed | 1 skipped (126)
+                              2906 passed | 1 skipped (2907)   0 failed
+```
+
+Identical to the baseline in all three figures. Reverted; `git diff -- web/` **0 lines** and
+`git status --porcelain --untracked-files=all` **empty**, both asserted.
+
+**Nothing reddened, and that is not reassurance — it is the gap.** Widening a parameter to `| null`
+breaks no caller that passes an object, and widening a return from `string` to `string | null`
+breaks no assertion that expects `"Free"`. `ai-tier.test.ts:164-179` pins the three plan strings on
+real entitlement objects and **never passes `null`**. So **the existing suite cannot tell the fixed
+chip from the broken one.** This is Ruling 10 point 2b and Ruling 17 point 3 for the third time in
+this loop: *a plant that does not redden may mean the test is missing, not that the change is
+redundant.*
+
+**Therefore C must add the cases and prove them able to fail** — render or drive the chip with
+`entitlement: null` and assert `plan === null` and that no plan span exists; then restore
+`entitlement: grants` at the call site and watch it redden. **The revert to plant is
+`entitlement: grants`, not the `| null` type** — the type change alone is silent, exactly as
+round-6 A found for `JobReport`'s default.
+
+##### 7-01.5 — TWO WRONG COMMENTS, NOT ONE. THE SECOND IS WORSE.
+
+Ruling 17 point 5 names `planChipText`'s docblock. There is a second, and it is the one that would
+mislead the next editor.
+
+**(i) `ai-tier.ts:133-138`.** *"A signed-out reader reads **"Free"**, not a blank — the anonymous
+entitlement is a real object, so the chip always has a value."* Precisely: the first clause stays
+**true** after the fix (signed-out is a *known* state whose `effectivePlan` is `"free"`, and it
+still reads "Free"). The false clause is **"so the chip always has a value"**, and the reasoning
+that caused the bug is *"the anonymous entitlement is a real object"* — it treats *anonymous* and
+*not yet known* as the same thing, which 6-04 spent a whole item separating. Correct the clause,
+keep the signed-out sentence.
+
+**(ii) `page.tsx:504-509` — the call site, and it explicitly ratifies the defect.** *"Both readings
+below are CAPABILITY questions (does the feed ask for tier 2, and what does the mode chip say), so
+they take the anonymous view while unknown: AI off and **the chip reading "Free", which is exactly
+what shipped before 6-04 and is the right direction to fail**."* The plan text is **not** a
+capability question, and "Free" is not a fail-closed direction — it is a claim. Anyone reading only
+this comment would put `grants` back.
+
+**And the same comment carries a stale falsehood: *"no upsell lives on this page."*** It was true
+when 6-04 wrote it and **6-03 made it false in the same round** — `PoolRefreshNotice` renders at
+`page.tsx:1315`, on this page, and correctly takes the **raw nullable** `entitlement`. No
+behavioural defect (the right value is already being passed), but the sentence is the kind that
+gets trusted instead of checked. Fix it in the same commit.
+
+##### 7-01.6 — WHAT THE FIELD SHOWS WHEN EVERY CANDIDATE IS REJECTED
+
+**Nothing — and that is the whole fix.** The plan segment is absent while the plan is unknown; the
+chip still shows `Auto` and `AI on/off`, so the control never renders empty or headless. There is
+no "no honest value" case to fall back on, because the honest answer to *"which plan?"* before the
+profile lands is silence, not a word.
+
+##### 7-01.7 — TESTS AT RISK, FOUND BY GREPPING CALLERS
+
+`src/lib/feed/ai-tier.test.ts` is the **only** suite that touches either function: eight
+`aiModeChip` calls, the three plan strings at `:164-179`, the papers-toggle independence check at
+`:212-230`, and an all-strings sweep at `:205`. **None passes `null`, so none reddens** — see
+7-01.4. No suite imports `planChipText`. `src/app/page.tsx` has no suite of its own. **Blast radius
+beyond `ai-tier.test.ts`: none**, and that is measured, not estimated.
+
+##### 7-01.8 — WHAT C SHOULD DO, IN ORDER
+
+1. `planChipText` and `aiModeChip` take `| null` and return `plan: string | null`.
+2. `page.tsx` passes the raw `entitlement` to the chip and guards the span on `!== null`.
+3. Correct **both** comments of 7-01.5, including the stale *"no upsell lives on this page"*.
+4. Add the `null` cases to `ai-tier.test.ts` **and prove them able to fail by restoring
+   `entitlement: grants` at the call site** — the type change alone reddens nothing.
