@@ -118,11 +118,74 @@ lock by rebasing onto the holder's head.
 ## §1. CURRENT STATE — THE SOURCE OF TRUTH
 
 ```
-HELD BY:          B-round6 @ 2026-09-07 17:51 UTC
+HELD BY:          free
 ROUND:            6
-WHOSE TURN:       B  (round 6: items 6-01 and 6-03; 6-02 awaits the owner)
-STOPPED BECAUSE:  finished the turn @ 2026-09-07 17:46 UTC — three parts, gate green, code side 0.0%
-STATUS:           ROUND 6 OPENS. The manager re-measured round 5 independently with its own probe
+WHOSE TURN:       C  (round 6: implement 6-01 then 6-03; 6-02 still awaits the owner)
+STOPPED BECAUSE:  finished the turn @ 2026-09-07 18:05 UTC — both items written, gate green, no code changed
+STATUS:           ROUND 6 — **B HAS WRITTEN THE GUIDE. TWO ITEMS, 6-01 and 6-03**, one commit each,
+                  each pushed as it finished; no code changed and `git diff HEAD -- web/` is
+                  **empty**, asserted, with `git status --porcelain --untracked-files=all` clean.
+                  Classification: **6-01 `WRONG DATA`** (the usage row is the audit trail for a
+                  spend cap and it records the wrong cap), **6-03 `MISSING`** (the server refuses
+                  correctly; nothing renders the outcome).
+                  1. **6-01's blast radius was MEASURED, not estimated** — the finished rename was
+                     planted in two stages and the failure list read off the runner, then reverted
+                     with an asserted empty diff. **Stage 1** (production only): `tsc` **2** errors,
+                     both `TS2307`, and **2 test files fail to LOAD**, taking **700 tests** with them
+                     — a number that would have been badly under-counted by stopping at stage 1.
+                     **Stage 2** (+ the two test import lines only): `tsc` **0**, `eslint` **1
+                     (standing)**, and **exactly ONE test fails** — the one asserting the old value.
+                     **The brief's question is answered by execution: exactly one test fixture
+                     asserts `path: "system-search"`**, at `deep-report-quota.test.ts:238`. No test
+                     asserts the error log line. **Ruling 12 point 2's escape clause is NOT
+                     reached.** Total cost: 7 imports, 4 strings in one file, ~14 docblock sites, 1
+                     assertion, 2 suite names, 0 other tests. **The database does not constrain it**
+                     — `usage_events.path` is nullable plain `text` with no `CHECK`.
+                  2. **Two corrections to the manager, both found by execution.**
+                     **(a) Ruling 13's "six call sites in five files" is FIVE calls in five files**
+                     plus the declaration — no design consequence, but do not re-quote "six" as
+                     measured. **(b) Ruling 15 point 2(b) has a trap in its wording.** "Key it on
+                     the plan" reads most naturally as `effectivePlan`, which is also the field
+                     `QuotaNotice` itself uses — and that predicate **upsells a live trial reader**,
+                     who IS entitled to refresh (`resolve.ts:139`, asserted at `resolve.test.ts:66`).
+                     Proved in a throwaway harness outside the repo, seven client states × three
+                     predicates: `effectivePlan !== "paid"` → **3 violations**; `!poolRefreshAllowed`
+                     → **2**; `!poolRefreshAllowed && source !== "anonymous"` → **0**. A correction
+                     to the ruling's wording, not a reversal of its intent.
+                  3. **A Ruling 8 breach nobody had spotted: the hydration window.**
+                     `store/profile.ts:354` initialises the client entitlement to the frozen
+                     anonymous default, so until `GET /api/profile` returns, **every reader looks
+                     free on the client — including a paid one — while the server still grants their
+                     refresh.** A paid reader clicking in that window would be served and told to
+                     upgrade at the same time. The guard is one clause: `source !== "anonymous"`.
+                  4. **6-03's seam already exists; nothing needs a new prop.** `page.tsx:502` already
+                     holds the entitlement in the SAME component that declares the refresh handler
+                     (`:179-181`) and renders the tile (`:1278-1287`). Round-5 A's grep is confirmed
+                     independently — `poolRefreshAllowed` is in **0** `.tsx` files — but it reaches
+                     the **page** already, which is a different claim and is the whole item.
+                  5. **Recommended component seam: a SIBLING, not `QuotaNotice` and not a variant.**
+                     Three of `QuotaNotice`'s four visible strings are hard-wired to deep reports
+                     (heading literal at `:108`, `quotaMessage` at `:111`, "monthly limit" at
+                     `:115`), and `QuotaSignal` has no honest value for `kind`, `remaining` or
+                     `resetsAt` on a refresh refusal. Reuse would mean fabricating a signal AND
+                     printing "Deep reports" over a refresh message.
+                  6. **Two traps recorded for C**: the tile serves papers too (`page.tsx:1281-1285`)
+                     and papers refresh is NOT a paid feature, so the notice needs
+                     `activeType !== "papers"`; and the tile's label is "Refresh now" only on its
+                     sparse branch (`feed-more-tile.tsx:64`) — the default branch says "Refresh",
+                     which the ruled sentence quotes.
+                  7. **The ruled copy was checked for truth, not just for tone.** "Your jobs and
+                     events refresh once a week" is **factually correct** — `pool-cache.ts:152-168`
+                     keys those pools by local ISO week. **The response cannot be keyed on and must
+                     not be made keyable**: refused and granted return the identical shape and a
+                     200, and `cacheHit` is computed but dropped at the boundary.
+                  **ONE `POLICY — manager decides`:** what a **signed-out** reader is told when they
+                  click refresh. The hydration guard also silences the notice for them, so their
+                  click stays a silent no-op. B recommends accepting that for now (they cannot
+                  upgrade without an account); the better answer is a sign-in prompt, which is new
+                  copy and the owner's call. **C is not blocked by it.**
+                  ── Round-5 A's summary and the manager's re-measure follow. ──
+                  ROUND 6 OPENED. The manager re-measured round 5 independently with its own probe
                   (Ruling 15, §1p) and CONFIRMS D2a in the build: across anonymous / free /
                   trial / paid, and paid with an explicit refresh, ZERO operator search keys
                   leave the process and ZERO search hosts are contacted, while a free reader's
@@ -253,7 +316,13 @@ STATUS:           ROUND 6 OPENS. The manager re-measured round 5 independently w
                      6 of 6, one failure each, then deleted and re-run green.
                   5. **45 of 45 persona/route pairs**; the cross-cutting fault round-3 A
                      counted outside the 45 is gone, so there is no number outside it now.
-GATE THIS TURN:   **Round-5 A, cold, after every throwaway was deleted and `git diff HEAD -- web/`
+GATE THIS TURN:   **Round-6 B, cold, after the two-stage plant was reverted, the harness deleted, and
+                  both `git diff HEAD -- web/` and `git status --porcelain --untracked-files=all`
+                  proved empty:** `tsc` exit **0** · `eslint` **1 problem (1 error, 0 warnings)** —
+                  the standing `quiz.tsx:46` · `vitest` **124 files passed | 1 skipped (125)** ·
+                  **2871 tests passed | 1 skipped (2872)**, **0 failed**, 10.00 s. Identical to the
+                  figures below, as it must be — B changed no code. Round-5 A's figures follow.
+                  **Round-5 A, cold, after every throwaway was deleted and `git diff HEAD -- web/`
                   proved empty:** `tsc` exit **0** · `eslint` **1 problem (1 error, 0 warnings)** —
                   the standing `quiz.tsx:46:7 react-hooks/set-state-in-effect` · `vitest`
                   **124 files passed | 1 skipped (125)** · **2871 tests passed | 1 skipped (2872)**,
@@ -297,7 +366,11 @@ LAST DIFFERENCE:  **0.0% code-side MEASURED AGAINST D2a (0 of 30) — round-5 A,
 GATE (0% unexplained, both measurements):  **NOT MET — and the code side is still not why.**
            Code-side is **0.0%** and the difference list is **empty**; six items carry a blocked
            half that only the owner can close. `GATE: MET` needs both at zero.
-DONE:      **Round 5 A: all three parts**, one commit each, each pushed; no code changed
+DONE:      **Round 6 B: both items, 6-01 and 6-03**, one commit each, each pushed as it
+           finished; no code changed (`git diff HEAD -- web/` asserted empty); the two-stage
+           measurement plant reverted with an asserted empty diff; the adversarial predicate
+           harness ran outside the repo and was deleted.
+           **Round 5 A: all three parts**, one commit each, each pushed; no code changed
            (`git diff HEAD -- web/` asserted empty); every throwaway deleted; every plant
            restored with an asserted empty diff; 9 plants fired 9 times.
            **Round 5 C: ALL FOUR ITEMS, 5-01 / 5-02 / 5-03 / 5-04**, one commit each, each
@@ -316,17 +389,23 @@ DONE:      **Round 5 A: all three parts**, one commit each, each pushed; no code
 GATE NOW:  tsc exit **0** · eslint **1 problem (1 error, 0 warnings)** (the standing `quiz.tsx:46`) ·
            vitest **124 files passed | 1 skipped (125)** · **2871 tests passed | 1 skipped
            (2872)**, **0 failed**, 9.50 s.
-TODO:      B WRITES THE ROUND-6 GUIDE for two items (Ruling 15 point 4): **6-01** finish the
-           half-done rename — `consumeSystemSearches` -> `consumeForcedRebuild`, usage-row
-           `path: "system-search"` -> `"forced-rebuild"`, `search-breaker.ts` ->
-           `rebuild-breaker.ts`, every stale docblock, and docblocks on the three unreachable
-           fan-out call sites saying they are unreachable and why (they are NOT deleted).
-           **6-03** the refresh control: it is rendered for everyone and a free reader's click
-           is refused silently — wire `poolRefreshAllowed` to the existing quota-notice
-           component and show "Refresh now is on the paid plan. Your jobs and events refresh
-           once a week." plus the upgrade prompt, keyed on the PLAN from the entitlement
-           summary and never on the refusal (Ruling 8 still binds: a paid reader is never
-           upsold). **6-02** (the model swap) is NOT in scope until the owner answers.
+TODO:      **C WORKS THE ROUND-6 GUIDE FROM 6-01**, in §4 under `### Round 6 — Agent B`; one
+           commit per item, pushed as it finishes. **6-01** the rename, with the exact grep
+           surface, the two-stage measured blast radius and the four tests at risk already
+           enumerated — including the one assertion at `deep-report-quota.test.ts:238` that must
+           be UPDATED, never deleted, and the paragraph at `search-breaker.ts:46-58` that must be
+           DELETED because the rename makes it false rather than stale. The three unreachable
+           fan-out call sites are KEPT, and B has written what their docblocks must say, including
+           the point the ruling does not cover: after the rename, restoring operator-funded search
+           means splitting this counter again, not just flipping the flag.
+           **6-03** the refresh control. Use B's predicate, **not** the ruling's literal wording:
+           `!poolRefreshAllowed && source !== "anonymous" && activeType !== "papers"` — proved by
+           harness to be the only one of three candidates that upsells nobody the server serves.
+           Render it from `DiscoveryPage` (the entitlement is already in scope at `page.tsx:502`)
+           through a **sibling** component, NOT `QuotaNotice` and NOT a variant of it. Add the
+           mid-hydration no-upsell case and prove it by planting `effectivePlan !== "paid"` and
+           watching it fail. **Do NOT add a refusal flag to the feed response.**
+           **6-02** (the model swap) is NOT in scope until the owner answers.
 PENDING USER ACTION: (1) Apply the three migrations under `web/supabase/migrations/20260904*`.
            (2) After applying, save a profile once in the app. (3) Optionally fill
            `GOOGLE_API_KEY` in `web/.env.local` (and the Supabase URL + service-role key) so A
@@ -335,8 +414,19 @@ PENDING USER ACTION: (1) Apply the three migrations under `web/supabase/migratio
            NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY — and must NOT carry
            TAVILY_API_KEY (the build will refuse it after 5-03). Deploy only after round 5
            reports green and the branch is merged. WITHDRAWN: the trial backfill (no users).
-OPEN FOR MANAGER:  none — A's POLICY item ruled in §1p (Ruling 15 point 2), split into a defect
-           (6-03) and a product call the owner may overturn in one line.
+OPEN FOR MANAGER:  **ONE `POLICY — manager decides`, and C is NOT blocked by it: what a
+           signed-out reader is told when they click refresh.** The Ruling-8 hydration guard B
+           found (`source !== "anonymous"`) also silences the notice for a genuinely logged-out
+           reader, so their click stays the silent no-op 6-03 exists to remove. B recommends
+           accepting that for now — they cannot upgrade without an account, so an upgrade prompt
+           is the wrong sentence for them and silence is the status quo, not a new regression. The
+           better answer is a sign-in prompt instead of an upgrade prompt, which is new copy and
+           therefore the owner's.
+           **TWO CORRECTIONS TO EARLIER RULINGS, recorded not as reversals but as precision**
+           (details in §4 under `### Round 6 — Agent B`): Ruling 13's "six call sites in five
+           files" measures as **five** calls in five files plus the declaration; and Ruling 15
+           point 2(b)'s "key it on the plan" must mean `poolRefreshAllowed`, not `effectivePlan`,
+           or the notice upsells live trial readers who are entitled to refresh.
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
