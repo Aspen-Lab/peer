@@ -118,15 +118,68 @@ lock by rebasing onto the holder's head.
 ## §1. CURRENT STATE — THE SOURCE OF TRUTH
 
 ```
-HELD BY:          A-round7 @ 2026-09-07T21:42Z
+HELD BY:          free
 ROUND:            7
-WHOSE TURN:       A  (round 7 — A re-measures; the MANAGER opens round 8)
-STOPPED BECAUSE:  finished the turn @ 2026-09-07T21:36:00Z — all four items landed, one commit
-                  each, each pushed as it finished. NO DEVIATION from the ruled order. Ten plants,
-                  ten fired, every one reverted with an asserted substitution count and an asserted
-                  absence before the re-run was read. No throwaway left in the tree
-                  (`git status --porcelain --untracked-files=all` empty). No migration.
-STATUS:           ROUND 7 — **C HAS IMPLEMENTED. ALL FOUR ITEMS: 7-02(a), 7-02(b), 7-02(c),
+WHOSE TURN:       manager — independent re-measure  (code side is 0.0%; A never closes alone)
+STOPPED BECAUSE:  finished the turn @ 2026-09-07T22:09Z — all three parts done, one commit each,
+                  each pushed as it finished. No production code changed
+                  (`git diff --name-only -- web/` **0** files). Nine plants, nine fired, every one
+                  reverted with an asserted substitution count AND an asserted empty diff before
+                  the next run was read. Every throwaway deleted
+                  (`git status --porcelain --untracked-files=all` empty). **ONE PART OF THE BRIEF
+                  WAS NOT COMPLETED AND IS RECORDED AS BLOCKED, NOT INFERRED:** Ruling 21 point 4's
+                  live key check — the script was written as specified and the sandbox refused to
+                  run it; I did not route around the refusal.
+STATUS:           ROUND 7 — **A HAS MEASURED. CODE-SIDE IS 0.0% (0 of 30). THE DIFFERENCE LIST IS
+                  EMPTY.** Blocked on the owner: **6**, unchanged by count — R-ENT-1, R-ENT-2,
+                  R-METER-1, R-METER-3, R-KEY-1, R-QUOTA-2. **N/A: R-METER-2.** Exclusions: none.
+                  Gate cold and identical to C's: tsc 0 · eslint 1 (standing `quiz.tsx:46`) ·
+                  vitest **128 files / 2924 tests / 0 failed**.
+                  1. **R-QUOTA-1 RE-SCORED `PARTIAL` -> `MET`, AND THE METHOD IS THE POINT.** I
+                     never imported `UPGRADE_HREF` to compare against — every `href` was pulled out
+                     of the **rendered HTML** and resolved against a route tree the harness built
+                     itself. Free and trial at the cap both emit `/welcome?step=ai`; it resolves;
+                     and the page answers the promise — executed real code shows
+                     `stepIndexFromKey("ai")` = 5, `STEP_META[5].key` = `"ai"`, the query is read
+                     **before** the completeness fallback so it cannot be skipped, and
+                     `<ProPlanSummary />` sits at character 26443, **inside** the `ai` branch
+                     (23155) and before `connectors` (27668). The reader arrives at *"Peer Pro is
+                     $12/month, or $6 for students"* plus what Pro adds, **with zero `href`s** —
+                     D7 travelled with the copy.
+                  2. **RULING 8 HOLDS EVERYWHERE. Paid: 0 upsells, 0 links, 3 of 3 surfaces.
+                     Unknown: 0 of 3.** Measured on rendered output, not on props.
+                  3. **`ProPlanSummary` IS NOT A FOURTH UPSELL SURFACE — decided on evidence, as
+                     the TODO asked.** It renders no control, takes no entitlement, and makes no
+                     claim about the reader's own plan. **The upsell census is THREE**, re-derived
+                     three independent ways and not quoted.
+                  4. **ALL SIX OF 7-01's CASES PROVED ABLE TO FAIL — five plants.** Two of them are
+                     mine and new: C proved the fix could be **undone**, nobody had proved it could
+                     be **over-applied**. Planting the over-fix (blank the capability claim; null a
+                     known reader) reddens the two cases that guard against *"fix the chip"*
+                     becoming *"blank the chip"*.
+                  5. **DEAD LINKS 0, NO ALLOWLIST — and my route enumeration is INDEPENDENT.** I
+                     wrote a different algorithm on purpose (segment-split, not suffix-slice), so
+                     C's `/page.ts` bug is structurally impossible in mine. **11 pages + 23
+                     handlers = 34, set-identical to Next's generated list, `/` present.** Proved
+                     able to fail in **two shapes C did not plant** (`router.replace`, `redirect`)
+                     plus the live `<form action>` site. **NO FIFTH SHAPE EXISTS LIVE** — I checked
+                     seven candidates; the two genuine blind spots (`permanentRedirect`,
+                     `location.assign`) have **zero instances**, so they are a maintenance note,
+                     not a difference.
+                  6. **THE OWNER'S NEW KEY LOOKS WRONG, AND THAT IS THE MOST VALUABLE LINE IN THIS
+                     REPORT.** `GOOGLE_API_KEY` is filled for the first time (0 -> 1, written
+                     21:39:24Z, three minutes before I took the lock). But it is **53 characters
+                     and does not carry the four-character prefix every Google API key has**, and
+                     D1 requires an AI Studio key. Measured by count and structure only; the file
+                     was never `cat`-ed and no character of the value is anywhere in this repo.
+                  7. **THREE THINGS FOR THE MANAGER.** A carried tally does not reproduce
+                     (Ruling-75 absence cases: carried as **4**, I measure **3** builders or **5**
+                     with consumers, never 4). The independent route oracle is **stale**
+                     (2026-08-26) and only *happens* to agree today. And the whole-wizard render is
+                     blocked by **the app router, not `zustand`** — so the 128-file cost C costed
+                     would have bought nothing.
+                  ── Round-7 C's summary follows. ──
+                  ROUND 7 — **C HAS IMPLEMENTED. ALL FOUR ITEMS: 7-02(a), 7-02(b), 7-02(c),
                   7-01**, in the ruled order (Ruling 19 point 6), one commit each, each pushed as
                   it finished. **NO DEVIATION** from the order or from B's guide. **THE GATE IS
                   GREEN**: tsc 0 · eslint 1 (standing `quiz.tsx:46`) · vitest **128 files / 2924
@@ -600,7 +653,21 @@ A'S OWN FIXTURE FAULTS, recorded because each produced a plausible FALSE reading
                   regressions.** Also live: the **CRLF** trap (Ruling 10 point 2c) — a
                   multi-line plant literal with `\n` separators matched **0** times; the count
                   assertion caught it and a whitespace-tolerant regex matched 1.
-LAST DIFFERENCE:  **3.3% code-side (1 of 30) — round-6 A. ONE difference: R-QUOTA-1 `PARTIAL`,
+LAST DIFFERENCE:  **0.0% code-side (0 of 30) — round-7 A. THE DIFFERENCE LIST IS EMPTY.** Round 6's
+                  one difference (the upgrade prompt pointing at a route that never existed) is
+                  **closed and verified gone by behaviour**; what stands in its place is a control
+                  that resolves to a page saying what Pro costs and adds, with no checkout.
+                  Blocked on the owner: **6** — R-ENT-1, R-ENT-2, R-METER-1, R-METER-3, R-KEY-1,
+                  R-QUOTA-2. **N/A: R-METER-2.** Exclusions: none. Denominator **30**.
+                  **READING NOTE, TWO HALVES. (a) The percentage IS like-for-like** — 30 in rounds
+                  5, 6 and 7 — so **3.3% -> 0.0% is a real improvement.** **(b) The blocked count
+                  is NOT like-for-like and the number hides it:** 6 last round and 6 this round,
+                  but R-KEY-1's *cause changed underneath it* — it was blocked because no key
+                  existed; it is now blocked because a key exists, its shape looks wrong, and the
+                  live call could not be run from this session. A flat number across a changed
+                  cause is exactly the comparison that misleads, so it is written down.
+                  ── Round-6 A's figures follow. ──
+                  **3.3% code-side (1 of 30) — round-6 A. ONE difference: R-QUOTA-1 `PARTIAL`,
                   `QuotaNotice`'s upgrade prompt links to `/settings`, a route that has never
                   existed.** Blocked on the owner: **6** — R-ENT-1, R-ENT-2, R-METER-1, R-METER-3,
                   R-KEY-1, R-QUOTA-2. **N/A: R-METER-2** (re-listed by name with that word, Ruling
@@ -650,7 +717,16 @@ DONE:      **Round 7 C: ALL FOUR ITEMS, 7-02(a) / 7-02(b) / 7-02(c) / 7-01**, in
            every throwaway deleted and every plant restored with an asserted empty diff.
            **Round 5 B: all four items**, 5-01 … 5-04, one commit each, each pushed; no code
            changed; the three-stage measurement plant reverted with an asserted empty diff.
-GATE NOW:  **Round-7 C, cold, after every plant was reverted and no throwaway remained
+GATE NOW:  **Round-7 A, cold, after every plant was reverted and every throwaway deleted
+           (`git status --porcelain --untracked-files=all` **empty** and
+           `git diff --name-only -- web/` **0** files, both asserted before this run was read):**
+           `tsc` exit **0** · `eslint` **1 problem (1 error, 0 warnings)** — the standing
+           `quiz.tsx:46` · `vitest` **128 files passed | 1 skipped (129)** · **2924 tests passed |
+           1 skipped (2925)**, **0 failed**, 9.57 s. `src/lib/events/benchmark.test.ts` is the one
+           skip, named. **Identical to round-7 C's and to the manager's Ruling-20 re-run, as it
+           must be — A changed no code.** No test added or deleted this round.
+           Round-7 C's figures follow.
+           **Round-7 C, cold, after every plant was reverted and no throwaway remained
            (`git status --porcelain --untracked-files=all` **empty**, asserted before this run was
            read):** `tsc` exit **0** · `eslint` **1 problem (1 error, 0 warnings)** — the standing
            `quiz.tsx:46` · `vitest` **128 files passed | 1 skipped (129)** · **2924 tests passed |
@@ -683,49 +759,58 @@ GATE NOW:  **Round-7 C, cold, after every plant was reverted and no throwaway re
            suite, `components/cards/pool-refresh-notice.test.tsx`.
            Round-5 A's figures follow: tsc **0** · eslint **1** · vitest **124 files passed | 1
            skipped (125)** · **2871 tests passed | 1 skipped (2872)**, **0 failed**, 9.50 s.
-TODO:      A RE-MEASURES ROUND 7. **Denominator is 30. R-METER-2 is `N/A`** (Ruling 12 point 3).
-           **R-QUOTA-1 is `PARTIAL` by Ruling 18 point 1 and is A's to RE-SCORE BY BEHAVIOUR** —
-           not by reading this entry, and not by grepping for the constant. Four items landed;
-           **every one of them was verified by C at a seam, and the questions below are the ones
-           a fixture cannot settle:**
-           1. **Does the reader who hits the monthly cap actually arrive somewhere useful?** Drive
-              the CTA, not the string: does it resolve, and does the page it reaches say what Pro
-              costs, for **every** entitlement state including signed-out and not-yet-known?
-              **Nobody has rendered the whole wizard in-tree.** B did it in a harness outside the
-              repo and warned how easily such a harness gives a false all-clear — patching one of
-              two `useSyncExternalStore` export shapes made all six personas render byte-identical
-              output and **the only tell was the identical byte count**. C proved the copy on the
-              component and the wiring by slicing the AI step's source. **The render is A's.**
-           2. **Does the plan segment actually vanish on screen?** C proved `null` at the seam and
-              the JSX guard in source. Nobody has watched the span disappear. Also worth driving:
-              the button gets narrower for a few hundred milliseconds and then wider — is that
-              acceptable, or does it read as a glitch? A judgement only a render answers.
-           3. **Is the plan copy right for a reader who did NOT come from an upsell?** The AI step
-              is onboarding. A first-run reader now meets a price block between the intro and the
-              key fields. **This is a placement question, not a correctness one**, and C is not the
-              one to rule on it — flagged rather than assumed. B also named a cost nobody had:
-              a reader dropped into the wizard mid-report can press Continue twice and be
-              re-onboarded to `/?tour=1`, losing their place. **Not 7-02's to fix; still true.**
-           4. **Is the dead-link scan complete?** C found a **fourth** link shape B did not list
-              (`<form action>`), live in the tree. **Look for a fifth.** The scan cannot see a
-              destination held in a variable, and treats an interpolation as one wildcard segment.
-              Re-derive the count independently; do not quote C's.
-           **STANDING TALLIES, ALL CARRIED BY NAME:** the five scans (**0** each) · `kind:"search"`
-           rows **0** · `process.env.TAVILY_API_KEY` reads in non-test source **0** · Ruling-75
-           absence cases **4** · structured-source accepted reads **3** · `local-no-auth`
-           **ABSENT** (503 ×3) · paid upsells **0** · report routes answering an anonymous caller
-           **401, 3 of 3** (4 of 4 with digest) · papers web-row count **0** · residual old
-           rename names in `src/` **0** · **DEAD INTERNAL LINKS — must be 0, and the tally carries
-           NO ALLOWLIST** (Ruling 19 point 3; `/CHANGELOG.md` is a real file in `public/`, not an
-           exception) · **THE UPSELL-SURFACE COUNT, which A RE-DERIVES EVERY ROUND AND NEVER
-           QUOTES** (Ruling 18 point 4 — the manager quoted a stale figure once already, and
-           7-02(b) has just added a plan surface that is **not** an upsell: decide on evidence
-           whether it counts).
-           **A NEW TALLY THIS ROUND, AND A MUST PROVE IT ABLE TO FAIL** (Ruling 14 point 5):
-           **surviving `/welcome?step=ai` literals outside `upgrade-destination.ts` — 0.**
-           **6-02** remains unanswered by the owner; `PENDING USER ACTION` re-read after a
-           `git pull` at the end of C's turn and the model swap is still not on it. The
-           **2026-10-01** escalation date stands.
+TODO:      **THE MANAGER RE-MEASURES ROUND 7 INDEPENDENTLY, THEN OPENS ROUND 8.** A reported
+           **0.0% code-side (0 of 30)** with an **empty difference list**, so Ruling 20 point 4 and
+           §2's exit condition both apply: the loop never closes on A's word alone. Denominator
+           **30**; **R-METER-2 is `N/A`** (Ruling 12 point 3); exclusions **none**.
+           **RE-DERIVE, DO NOT QUOTE:** the upsell-surface count (A makes it **3**, three ways),
+           the dead-link tally (**0**, no allowlist), and the route enumeration (**11 pages + 23
+           handlers = 34**). Ruling 18 point 4 exists because a number was quoted once already.
+           **FOUR THINGS THE MANAGER MUST RULE ON, IN ORDER OF WHAT THEY COST:**
+           1. **THE KEY LOOKS WRONG — ask the owner before round 8 plans around it.**
+              `GOOGLE_API_KEY` is filled (0 -> 1) but is **53 characters and lacks the
+              four-character prefix every Google API key carries**; D1 needs an AI Studio key.
+              Measured by count and structure only — never `cat` that file, and do not write the
+              prefix into this log (it would poison every future pre-push credential scan; A hit
+              exactly that and reworded).
+           2. **RULING 21 POINT 4'S LIVE CHECK IS STILL UNRUN.** A wrote the standalone script as
+              specified and **the sandbox refused to execute it**; A did not route around the
+              refusal. **Blocked therefore stays 6, not 5**, exactly as the ruling requires. Either
+              the owner runs one Gemini call with that key, or R-KEY-1's live half stays blocked.
+              Both questions above are answered by the same single command.
+           3. **A CARRIED TALLY DOES NOT REPRODUCE — `POLICY`.** "Ruling-75 option-building cases
+              asserting absence" is carried as **4**. A measures **3** builders (the three feed
+              routes) or **5** counting the two consumers that honour the opt-out — never 4. Fix
+              the definition or retire the tally; an unreproducible tally is the shape Ruling 18
+              point 4 warns about.
+           4. **THE INDEPENDENT ROUTE ORACLE IS STALE.** `.next/types/routes.d.ts` is dated
+              **2026-08-26**, before the loop. It agrees exactly today, which is what makes this
+              round's cross-check valid — but **a stale oracle that happens to match is not a
+              working oracle.** Regenerate it before the next round that adds a route, or Ruling 20
+              point 2's cross-check will confirm the wrong answer.
+           **TWO MAINTENANCE NOTES, NEITHER A DIFFERENCE.** The dead-link scan is blind to
+           `permanentRedirect("/…")` (its `redirect` pattern is case-sensitive) and to
+           `location.assign("/…")` — **both have zero instances in the tree**, so nothing is dead
+           and the tally is not understated. And **the whole-wizard render is blocked by the app
+           router, not by `zustand`** (`invariant expected app router to be mounted`), so the
+           128-file `server.deps.inline` cost C costed would have bought nothing.
+           **ROUND 8 IS ALREADY DEFINED BY RULING 21 POINT 5:** **8-01** (separate Vertex AI
+           Search's enable signal from Gemini grounding's, so the $185 fallback cannot reopen) and
+           **6-02** (both Gemini tiers to `gemini-3.1-flash-lite`; the current pair retires
+           **2026-10-16**). **6-02 IS NO LONGER BLOCKED** — the owner approved it and the
+           2026-10-01 escalation is withdrawn. Order to be set when the manager reports.
+           **STANDING TALLIES, ALL CARRIED BY NAME AND ALL RE-VERIFIED THIS ROUND:** five scans
+           **0** each (greps and gate tests agree) · dead internal links **0**, no allowlist ·
+           surviving `/welcome?step=ai` literals **0** · upsell surfaces **3** · paid readers shown
+           any upsell **0** · unknown-plan readers shown any upsell **0** · operator-key search
+           requests **0** on all five searching surfaces including paid · `kind:"search"` rows
+           **0** · `process.env.TAVILY_API_KEY` reads in non-test source **0** · structured-source
+           accepted reads **3** · report routes answering an anonymous caller **401, 3 of 3** (4 of
+           4 with digest) · papers operator-key searches **0** · papers web-row count **0** ·
+           `[quota] store unavailable` **1** real line · `local-no-auth` **ABSENT** from any
+           deployed runtime · usage rows per provider request **1** · compile-time enforcement of
+           the entitlement context **PRESENT** · `resolveProvider` call sites without a context
+           **0** · residual old rename names **0** · guard tests proved by planting **9 of 9**.
 PENDING USER ACTION: (1) **Apply the three migrations** under `web/supabase/migrations/20260904*`
            — this is now the ONLY thing blocking five of the six remaining halves. (2) Add
            `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` to `web/.env.local` so
@@ -735,9 +820,21 @@ PENDING USER ACTION: (1) **Apply the three migrations** under `web/supabase/migr
            NOT carry `TAVILY_API_KEY`; deploy only after the branch is green and merged.
            DONE: the local `GOOGLE_API_KEY` is filled (Ruling 21 point 4). WITHDRAWN: the trial
            backfill (no users); the 2026-10-01 model escalation (the owner decided).
-OPEN FOR MANAGER:  none — C's placement flag ruled in §1u (Ruling 20 point 3): the plan copy
-           stays visible to every reader on that step, reversible by the owner in one line,
-           and A does NOT report it as a finding.
+OPEN FOR MANAGER:  **THREE, all raised by round-7 A.**
+           1. **`POLICY` — the Ruling-75 tally cannot be reproduced.** Carried as **4**; A measures
+              **3** option-building sites or **5** including the two consumers, never 4. Redefine
+              it or retire it.
+           2. **The owner's new `GOOGLE_API_KEY` does not have an AI Studio key's shape** (53
+              characters, no Google API prefix). Not an R-* failure — R-KEY-1's live half was
+              already blocked — but it should be settled with the owner before round 8 plans
+              around it, and the same value would go to Vercel.
+           3. **Ruling 21 point 4's live check is unrun** — the sandbox refused to execute the
+              script; A did not route around it. Blocked stays **6**, as that ruling requires.
+           C's round-7 placement flag stays **ruled and closed** in §1u (Ruling 20 point 3): the
+           plan copy stays visible to every reader on that step, reversible by the owner in one
+           line, and A did **not** report it as a finding. A separately confirmed on evidence that
+           the block is **not** an upsell surface (no control, no entitlement, no claim about the
+           reader's own plan), which is what makes that ruling safe under Ruling 8.
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
@@ -754,6 +851,7 @@ part-way; a released lock looks identical in both cases.
 | **4 (A)** | **code-side 0.0% (0/31, exclusions: none)** · **blocked 7** — R-ENT-1, R-ENT-2, R-METER-1, R-METER-2, R-METER-3, R-KEY-1, R-QUOTA-2 | **NOT MET — but the code side is no longer why. The difference list is EMPTY.** Both round-3 differences closed by behaviour and each proved by planting the old defect back: a **paid** reader at the 200/day breaker renders the breaker sentence with **hours** and no upsell of any kind on either the breaker or the monthly path (trial keeps the prompt), and the branded entitlement context is enforced by the **compiler** — five bad shapes, five distinct errors (TS2345 / TS2554 / TS2554 / TS2322 / TS2353), including the `{ userId: null, byok: false }` figure context that used to compile. R-QUOTA-1 and R-QUOTA-3, `PARTIAL` on papers under Ruling 9, are `MET` on the **streamed** shape: streamed deep counts once, streamed shallow counts zero, `quota` precedes `mode`, the paid day-key is charged. Personas 45 of 45 with the cross-cutting fault gone. All five scans 0, grepped independently and agreeing with the gate tests, and **all six proved by planting an offender** (6 of 6, Ruling 10 point 4); `resolveProvider` call sites without a context **0 by construction**; figure matchers reachable with a null-user context **0 by the compiler**; `local-no-auth` ABSENT (503 ×3). **Blocked flat at 7** — two owner actions, three unapplied migrations and no local key, are now the entire gate |
 | **5 (A)** | **code-side 0.0% (0/30, exclusions: none)** · **blocked 6** — R-ENT-1, R-ENT-2, R-METER-1, R-METER-3, R-KEY-1, R-QUOTA-2 · **R-METER-2 is `N/A`** | **NOT MET — the code side is still not why; the difference list is EMPTY.** **NOT LIKE-FOR-LIKE WITH ROUND 4:** the denominator moved 31 -> 30 because Ruling 12 point 3 made R-METER-2 `N/A` and took it out of the scored set, so the two percentages are not a trend — what compares is that both rounds found **zero** code-side differences, and blocked fell 7 -> 6 **only** because R-METER-2 left the list, not because anything was unblocked. **D2a re-measured and MET:** the operator's search key is unreachable for every plan **including paid** — both feed routes and all three adapters, driven with `TAVILY_API_KEY` and `BRAVE_SEARCH_API_KEY` as distinct armed sentinels **and** a fully configured Vertex project, give **0 requests carrying either sentinel and 0 requests to any paid search host** across all five personas; a paid caller's explicit `poolRefresh: true` is 0 too. With the flag **forced `true`** — an input no production path can produce — the resolver still returns no Tavily key and `operatorSearchAvailability` is still frozen `false` with a Vertex project present; the residual is Brave only, behind a flag whose every producer is a hard `false` (all 33 non-test mentions traced). **BYOK survives on every plan, free included** (six route cases plus both adapters). **The rebuild breaker is reachable AND caps**, proved from real requests on both surfaces for trial and paid — exactly one increment on `forced_rebuilds_today:<user>:<UTC day>` — and 499 allowed / past-500 refused with one `kind:"breaker"` row, zero `kind:"search"` rows, and an untrip on the next UTC day. **The build guard proved both ways** against the real script: three required names each named when dropped, `TAVILY_API_KEY` refused and never printed. Personas **45 of 45**. All five scans **0**, grepped independently and agreeing with the gate tests (scan 3's Tavily case is now `[]`, deliberately non-uniform with Brave's `[GATE]`). **9 plants, 9 fired**; the Brave protective test proved able to fail (3 cases) and restored with an asserted empty diff. `kind:"search"` rows **0**; `process.env.TAVILY_API_KEY` reads in non-test source **0**; Ruling-75 absence cases **4**; structured-source accepted reads **3**; `local-no-auth` **ABSENT** (503 ×3); paid upsells **0**. **6-01's rename reported as QUEUED, not as a finding** (Ruling 14 point 3). One `POLICY — manager decides` for the owner: `poolRefreshAllowed` reaches no component, so the one paid feature a reader could notice is invisible in the interface |
 | **6 (A)** | **code-side 3.3% (1/30, exclusions: none)** · **blocked 6** — R-ENT-1, R-ENT-2, R-METER-1, R-METER-3, R-KEY-1, R-QUOTA-2 · **R-METER-2 is `N/A`** | **NOT MET — and this time the code side is part of why. ONE difference, and it is NOT a regression.** **R-UI-3 is re-scored `MET`** (Ruling 16 point 2's `PARTIAL` discharged): five entitlement states × three upsell surfaces plus both whole report trees, with the unknown state taken from the **real store** (a fresh `useProfileStore` holds `null`; `partialize` writes only `profile`) and the prop derived by the pages' own `entitlement?.effectivePlan ?? null` — nothing upsells while the plan is unknown, nothing upsells a paid reader at either limit, trial keeps the deep-report prompt and gets no refresh upsell, the signed-out reader gets *"Sign in to refresh."* with no "Pro". **9 source-level plants, 8 fired**; the 9th confirms **Ruling 17 point 3 independently** — restoring `JobReport`'s `= "free"` default reddens **nothing**, and the **compiler** is the only evidence that reaches it (`TS2769` on both omissions, positive control compiles); **the guard lives in the type annotation, not the destructuring default**. **THE ONE DIFFERENCE: `QuotaNotice`'s upgrade prompt links to `/settings`, which is not a route and never has been on any branch** — R-QUOTA-1 `PARTIAL`; a scan of every rendered internal `href` against the real route tree **and** `public/` returns **exactly one** dead link in the whole app (`/CHANGELOG.md` was a false positive). Dead since 2-07 in round 2; **A scored R-QUOTA-1 `MET` in rounds 3, 4 and 5** — A's miss, recorded as one, and it is also the answer to **Ruling 17 point 6**, which did not pass: the two pre-existing surfaces already disagreed, so 7-01 must unify on `/welcome?step=ai`. **Upsell surfaces are THREE, not two** — re-derived two ways, not inherited; a stale census (C counted during 6-04, 6-03 then added `PoolRefreshNotice`), not a defect. **The fourth state is live**, driven through `ProfileSync`'s four paths: no session → known+anonymous, a thrown `getUser()` and a failed profile fetch → stays not-known — both directions proved able to fail. **6-01 proved by behaviour** through the real jobs feed handler: one `{kind:"breaker", path:"forced-rebuild"}` row, route still 200, **0** rows saying `system-search`; residual old names **0**; all three unreachable fan-out sites still present with their docblocks. **NEW TALLY (Ruling 17 point 4): report routes answering an anonymous caller 401 = 3 of 3** (4 of 4 with digest), **proved able to fail**. All five scans **0**, grepped by hand and agreeing with the gate tests on the same named exclusions. Blocked flat at **6** — `grep -c "^GOOGLE_API_KEY=."` returned **0**; nothing unblocked. **READING NOTE: like-for-like with round 5 (30 both), so 0.0% → 3.3% is a real comparison — but nothing broke. Round 6's three items all landed clean; the number rose because the measurement reached somewhere it had never looked** |
+| **7 (A)** | **code-side 0.0% (0/30, exclusions: none)** · **blocked 6** — R-ENT-1, R-ENT-2, R-METER-1, R-METER-3, R-KEY-1, R-QUOTA-2 · **R-METER-2 is `N/A`** | **NOT MET — and the code side is not why. THE DIFFERENCE LIST IS EMPTY.** **R-QUOTA-1 re-scored `PARTIAL` -> `MET`, and the METHOD is the finding as much as the verdict:** the link was **followed, not asserted** — every `href` was pulled out of the **rendered HTML** and resolved against a route tree the harness **built itself**, never compared against the constant it was meant to equal. Free and trial at the cap both emit `/welcome?step=ai`; it resolves; and the destination **answers the promise**, proved by **executing real routing code** rather than slicing source — `stepIndexFromKey("ai")` = **5**, `STEP_META[5].key` = `"ai"`, the same function returns `null` for a bogus key so the mapping is a real decision, the query is read **before** the completeness fallback so nobody is skipped past it, and `<ProPlanSummary />` sits at character **26443**, inside the `ai` branch (23155) and before `connectors` (27668). The reader arrives at *"Peer Pro is $12/month, or $6 for students"* plus what Pro adds, with **zero `href`s** — **D7 travelled with the copy**. **Ruling 8 holds everywhere: paid readers get 0 upsells and 0 links on 3 of 3 surfaces; unknown-plan readers 0 of 3**, both measured on rendered output. **`ProPlanSummary` is NOT a fourth upsell surface — decided on evidence** (no control, no entitlement prop, no claim about the reader's own plan), so the census stays **THREE**, re-derived three independent ways and never quoted. **All six of 7-01's cases proved able to fail — five plants, and two are new:** C proved the fix could be **undone**; nobody had proved it could be **over-applied**, so planting the over-fix reddens the two cases guarding against *"fix the chip"* becoming *"blank the chip"*. **Dead links 0, no allowlist**, with the enumeration **independently re-derived using a different algorithm on purpose** (segment-split, not suffix-slice) so C's `/page.ts` bug is structurally impossible: **11 pages + 23 handlers = 34, set-identical to Next's generated list, `/` present**. Proved able to fail in **two shapes C did not plant** (`router.replace`, `redirect`) plus the live `<form action>`. **NO FIFTH SHAPE EXISTS LIVE** — seven candidates checked; the two real blind spots (`permanentRedirect`, `location.assign`) have **zero instances**, a maintenance note not a difference. **9 plants, 9 fired.** All five scans **0**, greps and gate tests agreeing. **THE ROUND'S BIGGEST NEWS AND IT IS NOT GOOD: `GOOGLE_API_KEY` is filled (0 -> 1, written 21:39:24Z) but is 53 characters WITHOUT the four-character prefix every Google API key carries**, and D1 needs an AI Studio key — measured by count and structure only, the file never `cat`-ed. **Blocked stays 6, NOT 5: Ruling 21 point 4's live check was written as specified and the SANDBOX REFUSED TO RUN IT, and I did not route around the refusal** — the ruling says blocked drops only once R-KEY-1 is *actually measured*. **READING NOTE, two halves: (a) the percentage IS like-for-like** (30 in rounds 5-7), so **3.3% -> 0.0% is a real improvement**; **(b) the blocked count is NOT** — flat at 6, but R-KEY-1's *cause changed underneath it*, from "no key exists" to "a key exists, looks wrong, and cannot be tested here". Three items for the manager: that key, the unrun live check, and a **carried tally that does not reproduce** (Ruling-75 absence cases: carried **4**, measured **3** or **5**, never 4) |
 
 ---
 
@@ -13847,3 +13945,176 @@ commits that branch on a real page load — which needs a browser, and Ruling 2 
 
 **PART 2 BANKED.** Part 3 next: the scans, the standing tallies, the ranked differences and the two
 numbers.
+
+#### PART 3 — SCANS, STANDING TALLIES, DIFFERENCES, AND THE TWO NUMBERS
+
+##### 3.1 — THE FIVE SCANS: my own greps **and** the gate tests, and whether they agree
+
+Every scan run twice — by hand and by the suite that guards it — because a gate test and a grep can
+be wrong in the same direction only by coincidence.
+
+| # | scan | **my grep** | the gate test | agree? |
+|---|---|---|---|---|
+| 1 | rendered strings matching `Tier 0/1/2 \| BYOK` | **0** — 4 raw hits, all comments or one server `console.warn`, none rendered | `ui-vocabulary.test.ts` (3 cases) | **yes** |
+| 2 | `NODE_ENV === "development"` deciding AI availability in browser code | **0** — 8 raw hits: 4 comments, 4 real reads, none of them client AI gating (`local-dev.ts:23`, two pool caches, `auth/callback`) | `no-client-dev-flags.test.ts` (2 cases, with an honest allow-list) | **yes** |
+| 3 | `process.env.TAVILY_API_KEY` reads outside the gated resolver | **0** — 4 raw hits: a docblock, two **commented-out** lines showing what D2a removed, and a `delete` in the test harness. **Zero reads.** | `spend-scans.test.ts` scan 3 (5 cases) | **yes** |
+| 4 | `resolveProvider()` with no override outside the entitlement-checked path | **0** — 3 raw hits, all comment lines naming the old defect. Every real call site passes both arguments. (`web-search.ts:341` declares an unrelated *local* `resolveProvider` for search providers — named so it is not mistaken for the LLM one.) | `spend-scans.test.ts` scan 4 | **yes** |
+| 5 | routes reachable without the guard that can spend an operator key | **0** — I classified all **21** API route handlers myself. 20 either carry the gate or cannot spend; the one exemption is `jobs/dispatch-digests`, whose justification I read in source rather than took on trust: `aiTier: 0` at `route.ts:223` with **D9 named at `:211-214`** | `spend-scans.test.ts` scan 5 (3 cases, incl. one that reports the guarded count so a **drop** is visible) | **yes** |
+
+**All five scans: 0. Greps and gate tests agree on every one.**
+
+##### 3.2 — STANDING TALLIES, EVERY ONE REPORTED EVEN AT ZERO
+
+| tally | value | source |
+|---|---|---|
+| **Dead internal links** | **0** — **NO allowlist, no exceptions** | `dead-links.test.ts`, 4 cases; my own enumeration agrees (2.5); proved able to fail in 3 shapes (2.6) |
+| **Surviving `/welcome?step=ai` literals** outside the defining module | **0** | `upgrade-destination.test.ts`; proved able to fail, 0 -> 1 (2.7) |
+| **Upsell surfaces — RE-DERIVED, NOT QUOTED** | **3** | three independent derivations, 3.3 |
+| **Plan surfaces that are not upsells** | **1** (`ProPlanSummary`) | decided on evidence, 2.3 |
+| **Paid readers shown any upsell** | **0** on 3 of 3 surfaces | rendered output, 2.2 |
+| **Readers shown an upsell while the plan is unknown** | **0** on 3 of 3 surfaces | rendered output, 2.2 |
+| **Operator-key search requests** from the five searching surfaces (`/api/jobs/feed`, `/api/events/feed`, `jobweb`, `eventweb`, `web-search`) | **0** for every persona **including paid** | feed suites + adapter suites, 995 + 19 tests green |
+| **`kind:"search"` usage rows produced** | **0** | 3 writer sites exist, all behind the hard `false`; `systemSearchAllowed: false` at `resolve.ts:134`, `operatorSearchAvailability` frozen false whatever the flag says |
+| **`process.env.TAVILY_API_KEY` reads in non-test source** | **0** | scan 3 |
+| **Structured-source key reads ACCEPTED outside the gate** | **3** | `spend-scans.test.ts` asserts `toHaveLength(3)` |
+| **Report routes answering an anonymous caller 401** | **3 of 3** (**4 of 4** with digest) | persona harness, driven through the real handlers |
+| **Papers operator-key searches** | **0** | `web-search.test.ts` — `[]` with every operator credential set, and `[]` even with the flag **forced true** |
+| **Papers web-row count** | **0** | same suite |
+| **Anonymous-BYOK feed requests** | anonymous spends **nothing** on both feeds; a **free-byok** caller sends **their own key and not the operator's** | jobs + events feed suites |
+| **`[quota] store unavailable` occurrences** | **1** real log line (`counters.ts:435`), prefix stable; 1 further mention is its docblock | grep + `counters.test.ts` |
+| **`local-no-auth` reachability** | **ABSENT from any deployed runtime** — stated explicitly. **1** declaration (`ai-request.ts:42`), reached only when `deployedRuntimeNeedsAuth()` is false; the persona harness drives all four AI routes anonymously and gets **401**, never this branch | `ai-request.ts:106-125` + persona harness |
+| **Usage rows per provider request** | **1** — never 2, never 0. A fallback chain is **2 rows for 2 requests**, which is the billing truth, not a double-count | `metered.test.ts`, incl. a case that covers **every** wrapped method so a fifth cannot be added unmetered |
+| **Compile-time enforcement of the entitlement context** | **PRESENT** | `spend-scans.test.ts` scan 6 — no optional entitled/provider context declared anywhere, the test-only escape hatch is out of production code, and no cast to the brand exists outside its owning module |
+| **`resolveProvider` call sites without a context** | **0, by construction** | scan 4 + scan 6 |
+| **Quota/breaker checks reachable on the app's real request shape** | **reachable and capping** | `deep-report-quota.test.ts` — paid breaker writes exactly one breaker row and one error line per trip and untrips next UTC day; the forced-rebuild breaker refuses past the cap and **charges the whole fan-out, not one per call** |
+| **Residual old rename names in `src/`** | **0** | grep for `system_search` / `searches_today`; `forced_rebuilds_today` is in place |
+| **Guard tests proved by planting** | **all of them this round — 9 plants, 9 fired** | 2.4, 2.6, 2.7 |
+| **R-METER-2** | **`N/A`** | re-listed by name with that word, Ruling 12 point 3 |
+
+**Nine plants, nine fired. Every plant asserted applied by substitution count before its run was
+read; every revert asserted by substitution count AND an empty `git diff` before the next run.**
+
+##### 3.3 — THE UPSELL CENSUS, RE-DERIVED THREE WAYS (Ruling 18 point 4 — never quoted)
+
+The manager quoted a stale figure once already, so I derived it from scratch, three ways, and took
+the intersection:
+
+- **(a) Upsell vocabulary** (`Peer Pro` / `upgrade`) across `src/components` + `src/app`: **8 files**.
+- **(b) Components that consume the entitlement** (`effectivePlan` / `ClientEntitlement`): **4** —
+  the three below plus `profile-sync.tsx`, which *writes* the entitlement and renders nothing.
+- **(c) Components rendering an upgrade call to action** (`UPGRADE_HREF`): **exactly 3**.
+
+**Intersection = 3: `TierUpgradeBlock`, `QuotaNotice`, `PoolRefreshNotice`. No fourth.**
+
+**The five files (a) turned up that are NOT upsell surfaces, each dismissed on evidence:** the three
+report pages only **import and host** `TierUpgradeBlock` (their matches are import lines, the helper
+name `buildEventTierUpgradeItems`, and comments); `report-section.tsx`'s single hit is the word
+"upgraded" **in a comment about a previous round's process**; and `pro-plan-summary.tsx` is the plan
+surface ruled on in 2.3.
+
+##### 3.4 — DIFFERENCES, RANKED BY WHAT A READER NOTICES FIRST
+
+**THE CODE-SIDE DIFFERENCE LIST IS EMPTY. Zero `NOT MET`, zero `PARTIAL`.**
+
+Round 6's single difference — the upgrade prompt pointing at a route that has never existed — is
+**closed and verified gone by behaviour**, and per §2 *"when a fix's target is confirmed gone, what
+stands in its place is the finding"*: what stands in its place is a control that resolves to a page
+which **says what Pro costs and what it adds, and offers no checkout**, which is exactly what D7 and
+Ruling 19 ask for. Nothing regressed to take its place.
+
+**What I found instead is not a scored difference, and I am not going to inflate the number by
+pretending otherwise. Ranked by what it costs the owner:**
+
+**1. `GOOGLE_API_KEY` IS FILLED AND ITS SHAPE IS NOT AN AI STUDIO KEY'S. — `POLICY / OWNER`, and it
+is the most valuable thing in this report.** 53 characters, without the four-character prefix every
+Google API key carries; D1 requires an AI Studio key. **This is not an R-* failure** — R-KEY-1's
+live half was already `BLOCKED` and stays there — but if the value is wrong then the *whole* point
+of registering it is unmet, and the same value is what would go into Vercel. **It costs one command
+to settle and it should be settled before the next round plans around it** (1.1, 1.2).
+
+**2. THE LIVE CHECK RULING 21 POINT 4 ASSIGNED TO ME COULD NOT BE RUN. — `BLOCKED`, recorded, not
+inferred.** The script was written exactly as specified and the sandbox refused to execute it. I did
+not route around the refusal. **Blocked therefore stays 6, not 5** — the ruling itself says it drops
+only *once R-KEY-1 is actually measured*.
+
+**3. A CARRIED TALLY DOES NOT REPRODUCE. — `POLICY — manager decides`.** "Ruling-75 option-building
+cases asserting absence" is carried as **4**. I measure **3** option-building sites (the three feed
+routes, each with the *"the gemini connector carries no key … only ever expresses an OPT-OUT"*
+comment) and **2** consumer sites that honour the opt-out (`gemini-search.ts:266-268`,
+`vertex-search.ts:212-214`) — so **3, or 5, but not 4** under any definition I can construct. I am
+**not** adopting either number silently. The manager should either fix the tally's definition or
+retire it; a tally nobody can reproduce is the shape Ruling 18 point 4 was written about.
+
+**4. THE INDEPENDENT ROUTE SOURCE IS STALE. — maintenance note.**
+`.next/types/routes.d.ts` is dated **2026-08-26**, before this loop began. It agrees with my live
+enumeration exactly today, which is what makes this round's cross-check valid — but **a stale
+oracle that happens to match is not a working oracle.** The moment a route is added, that file must
+be regenerated or the cross-check will confirm the wrong answer, which is precisely the failure mode
+Ruling 20 point 2 exists to prevent.
+
+**5. TWO LINK SHAPES ARE UNCOVERED, WITH ZERO LIVE INSTANCES. — maintenance note, not a difference.**
+`permanentRedirect("/…")` (the scan's `redirect` pattern is case-sensitive and misses the capital R)
+and `location.assign("/…")`. **Neither appears anywhere in the tree**, so nothing is dead and the
+tally is not understated. Recorded so the round that introduces either knows the scan is blind to it
+(2.6).
+
+**6. THE WHOLE-WIZARD RENDER IS BLOCKED BY THE APP ROUTER, NOT BY `zustand`. — corrects a cost
+estimate on file.** C recorded that rendering `WelcomePage` in-suite would need `zustand` in
+`server.deps.inline`, blast radius 128 files. I tried the render: it fails on **`invariant expected
+app router to be mounted`**. So that cost would have been paid for nothing. Worth knowing before
+anyone budgets it (2.9).
+
+**Not reported, deliberately:** the plan copy's **placement** on the onboarding step. Ruling 20
+point 3 ruled it a product choice, reversible by the owner in one line, and explicitly directs A not
+to report it. I confirmed the behaviour it describes (the block renders for every entitlement state)
+and left it at that.
+
+##### 3.5 — THE GATE, COLD, AFTER EVERY PLANT WAS REVERTED AND EVERY THROWAWAY DELETED
+
+`git status --porcelain --untracked-files=all` **empty** and `git diff --name-only -- web/` **0
+files**, both asserted **before** this run was read.
+
+```
+tsc     exit 0
+eslint  x 1 problem (1 error, 0 warnings)   — the standing quiz.tsx:46
+vitest  Test Files  128 passed | 1 skipped (129)
+        Tests  2924 passed | 1 skipped (2925)     0 failed     9.57s
+```
+
+**Identical to my opening run and to round-7 C's, as it must be — A changed no code.**
+`src/lib/events/benchmark.test.ts` is the one skip, named. No test was added or deleted this round.
+
+##### 3.6 — **THE TWO NUMBERS**
+
+**CODE-SIDE: 0.0% — (0 `NOT MET` + 0 `PARTIAL`) ÷ 30.**
+*Method:* every R-* requirement in spec §2 scored against behaviour, R-METER-2 removed as `N/A`
+under Ruling 12 point 3, no other exclusions, divided by the 30 that remain.
+
+**BLOCKED: 6, by name — R-ENT-1, R-ENT-2, R-METER-1, R-METER-3, R-KEY-1, R-QUOTA-2.**
+*Method:* counted one per requirement whose evidence needs something only the owner can supply —
+the three unapplied migrations (five of them) and a working live model call (R-KEY-1, and R-METER-1
+compounded).
+
+**EXCLUSIONS RE-LISTED BY NAME: NONE.** **`N/A` RE-LISTED BY NAME: R-METER-2.**
+
+**READING NOTE, and it matters twice.**
+**(a) The percentage is like-for-like.** The denominator has been **30** in rounds 5, 6 and 7, so
+**3.3% -> 0.0% is a real comparison and a real improvement**: round 6's one difference was the dead
+upgrade link, and it is closed and verified gone by behaviour rather than by commit message.
+**(b) The blocked count is NOT like-for-like, and the number hides it.** Blocked was 6 last round
+and is 6 this round — but **the reason changed underneath one of them.** R-KEY-1 was blocked because
+*no key existed*; it is now blocked because *a key exists, its shape looks wrong, and the live call
+could not be run from this session*. **A flat number across a changed cause is exactly the kind of
+comparison that misleads**, so it is written down rather than left to be inferred.
+
+##### 3.7 — GATE
+
+**`GATE: NOT MET`** — and the code side is not why. `GATE: MET` requires **both** 0.0% code-side
+**and an empty blocked list**; the code side is 0.0% and the blocked list has **6** entries, every
+one waiting on the owner.
+
+**The code side is 0.0%, said plainly and without rounding: there are no `NOT MET` items, no
+`PARTIAL` items, and no unexplained differences.** Per Ruling 20 point 4 and §2's exit condition,
+the next turn is the **manager's independent re-measure**, which never closes on A's word alone.
+
+**PART 3 BANKED. ROUND-7 A COMPLETE.**
