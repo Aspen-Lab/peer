@@ -9352,3 +9352,69 @@ second's *name* also has to change, since "and system search" is now false.
 **Blast radius: the smallest of the four items.** One line, two tests, no client change, no route
 change. The `poolRefreshAllowed` half is deliberately left alone and that is the whole reason the
 radius is small — the two flags were computed from one expression and the fix separates them.
+
+---
+
+#### 5-03 — the build guard · `WRONG DATA` (a name on the wrong list)
+
+**File:** `web/scripts/assert-byok-production-env.mjs`. Line numbers re-grepped this turn.
+
+- `REQUIRED_ON_VERCEL` — `22–27`; **`TAVILY_API_KEY` is line `24`**.
+- `FORBIDDEN_ON_VERCEL` — `39–56`; `BRAVE_SEARCH_API_KEY` is `54`, `PEER_DEV_ENTITLEMENT` is `55`.
+- `FORBIDDEN_PREFIXES_ON_VERCEL` — `97`. `auditVercelEnv` — `117–127`. `formatAuditMessage` — `129–146`.
+
+**Fix direction.** Move the single string from `24` into `FORBIDDEN_ON_VERCEL`, next to
+`BRAVE_SEARCH_API_KEY` at `54` — that adjacency is the point, since D2a makes them the same kind of
+risk for the same reason. Required drops to **three**: `GOOGLE_API_KEY`,
+`NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`. No other logic changes: `missingRequiredNames`,
+`configuredForbiddenNames`, the prefix ban, the de-duplication and R-GUARD-2's "names never values"
+property are all list-driven and all unaffected. Verified: with the move planted, every
+`GOOGLE_VERTEX_` prefix case and the R-GUARD-2 sentinel case still passed.
+
+**Four pieces of prose in this file now state the superseded decision and must move with the list**
+(they are the file's own explanation of itself, and a guard whose comment argues for the opposite of
+what it does is the next reader's trap):
+
+- `5–7` — "a deployment with none of the **four** necessary variables";
+- `19–20` — "Verbatim from R-GUARD-1. **Four names**, no more … what D1 and **D2** say it does";
+- `33` — "`BRAVE_SEARCH_API_KEY` … **D2** keeps Brave env-only and local" (D2a is now the reason, and
+  Tavily joins that sentence);
+- **`134` — the failure message itself**: *"Peer runs on an operator-funded model **and search key**,
+  and needs Supabase to know who a request is for."* This is user-facing build output and it is now
+  false. It must lose the search key. `MISSING`-class defect in the message, and the only one of the
+  four a deployer would ever read.
+
+**The guard's own test file — `web/src/scripts/assert-byok-production-env.test.ts`.**
+Measured, not predicted: planting the list move alone fails **5 of its 30 cases** and, worse, turns
+**13 more green for the wrong reason.**
+
+The cause is one line: `ALL_REQUIRED` (`31–36`) carries `TAVILY_API_KEY` at `33`, and it is
+**spread into every single case in the file**. So:
+
+*The 5 that fail —* `84` "passes a correctly configured Vercel build" (now exits 1);
+`103` the generated "fails the build when `TAVILY_API_KEY` is missing, and names it" (now exits 0);
+`114` "names EVERY missing variable, not just the first" (Tavily no longer named);
+`175` "does NOT fire on a near-miss that merely starts similarly" (expects 0, gets 1);
+`201` "no longer bans `GOOGLE_API_KEY` — D1 makes it required" (expects 0, gets 1).
+
+*The 13 that pass falsely —* every case in the `forbidden settings` loop (`125–136`) plus the
+`PEER_FEED_AI_TIER` case at `138`. Each expects exit **1** and gets exit **1** — but from
+`TAVILY_API_KEY` being both spread in and banned, **not** from the name under test. They would pass
+with their own subject removed from the ban list entirely. This is exactly Ruling 10 point 2b's class
+(a guard that passes is not a guard that works), and it is invisible unless someone runs it.
+
+**So the change to the test file is two lines and it fixes 18 cases at once:** delete
+`TAVILY_API_KEY` from `ALL_REQUIRED`, add `"TAVILY_API_KEY"` to `FORBIDDEN_NAMES` (`38–52`). Both
+loops are generated from those arrays, so the required loop drops to 3 cases and the forbidden loop
+rises to 14 **with no hand-written case added or deleted** — the file's own structure does the work.
+The two hand-written cases at `114` and `175` then pass unchanged; `84` and `201` pass unchanged.
+
+**C must prove the 13 are genuinely green again**, per Ruling 10 point 2b: after the fix, plant a
+removal of one banned name (say `BRAVE_SEARCH_API_KEY`) from the script's list and watch **only that
+case** fail. If more than one fails, the spread is still doing the work.
+
+**Blast radius.** Contained to these two files — the guard is imported by nothing (`package.json`'s
+`prebuild` runs it, and the test **spawns** it as a child process rather than importing it, `64–76`).
+No production code path reads either list. **Deployment consequence, already recorded in §1
+`PENDING USER ACTION` (4):** after this lands, a Vercel project that still carries `TAVILY_API_KEY`
+will **fail the build**, by design. The owner must remove that variable before deploying, not after.
