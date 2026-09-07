@@ -138,3 +138,58 @@ describe("active feed request inputs", () => {
     );
   });
 });
+
+/**
+ * ABC-freemium 6-03 — **the ask itself, which nothing had ever exercised.**
+ *
+ * B grepped this while writing 6-03's guide and found the gap: every existing
+ * call in this file uses the three-argument form, and `store/feed.test.ts` never
+ * calls `loadFeed` with `poolRefresh`, so `feed.ts`'s
+ * `poolRefresh: poolRefresh || undefined` had **never once been evaluated with
+ * `true`** in the whole suite. The refusal now has a message on screen, so the
+ * request that provokes it is worth pinning.
+ *
+ * The `|| undefined` is the part that matters and it is not tidiness: the route
+ * reads `body.poolRefresh === true`, so an explicit `false` on the wire would be
+ * a field that says something about a request that is not asking for anything.
+ * Absent means "not asking".
+ */
+describe("the forced-rebuild ask (6-03)", () => {
+  it("sends poolRefresh only when the reader actually asked", () => {
+    for (const surface of ["events", "jobs"] as const) {
+      const asked = opportunityRequestBody(
+        activeProfile,
+        surface,
+        [],
+        undefined,
+        true,
+      );
+      expect(asked.poolRefresh).toBe(true);
+    }
+  });
+
+  it("omits the field entirely on an ordinary load, never sending false", () => {
+    for (const surface of ["events", "jobs"] as const) {
+      const ordinary = opportunityRequestBody(activeProfile, surface, []);
+      expect(ordinary.poolRefresh).toBeUndefined();
+      // Not merely falsy — absent. The route tests `=== true`, and a `false` on
+      // the wire is a claim about a request that made no claim.
+      expect(Object.values(ordinary)).not.toContain(false);
+    }
+  });
+
+  it("is only an ASK — the client never decides whether it is granted", () => {
+    // The entitlement is the server's business (`feed.ts`'s own docblock says
+    // so). A free reader's request carries the same `poolRefresh: true` as a
+    // paid reader's; the route is what refuses. This is why 6-03's notice reads
+    // the entitlement rather than the response.
+    const asked = opportunityRequestBody(
+      activeProfile,
+      "jobs",
+      [],
+      { userId: null },
+      true,
+    );
+    expect(asked.poolRefresh).toBe(true);
+  });
+});

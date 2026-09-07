@@ -22,6 +22,7 @@ import { FeedTile } from "@/components/cards/feed-tile";
 import { EventCard } from "@/components/cards/event-card";
 import { JobCard } from "@/components/cards/job-card";
 import { FeedMoreTile } from "@/components/cards/feed-more-tile";
+import { PoolRefreshNotice } from "@/components/cards/pool-refresh-notice";
 import { PaperDigestLoader } from "@/components/digest/daily-digest";
 import { SectionHeading, EmptyState, LoadingSkeleton } from "@/components/ui";
 import { ConnectorPanel, connectedCount } from "@/components/profile/connector-panel";
@@ -1295,6 +1296,25 @@ function DiscoveryPage() {
                   />
                 ) : null}
               </div>
+
+              {/* ABC-freemium 6-03 · R-POOL-2 · Ruling 15 point 2 · Ruling 16
+                  point 7 — the refresh control used to refuse in silence. The
+                  notice is rendered HERE rather than inside the tile because
+                  the tile serves papers too, and papers refresh is a plain
+                  refetch on a daily pool (D3), not a paid feature; this
+                  component already holds `activeType`, so the surface gate
+                  costs nothing and no new prop travels. The entitlement is
+                  already in scope for the same reason — `poolRefreshAllowed`
+                  is a field on the object read at the top of this function.
+                  Same render condition as the tile, so the explanation appears
+                  exactly when the control it explains does. */}
+              {activeType !== "papers" &&
+              opportunityPage.remaining === 0 &&
+              !isSearchMode ? (
+                <div className="mx-auto mt-6 max-w-[820px]">
+                  <PoolRefreshNotice entitlement={entitlement} />
+                </div>
+              ) : null}
             </>
           )}
         </>

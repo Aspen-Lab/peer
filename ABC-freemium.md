@@ -118,31 +118,57 @@ lock by rebasing onto the holder's head.
 ## §1. CURRENT STATE — THE SOURCE OF TRUTH
 
 ```
-HELD BY:          C-round6b @ 2026-09-07T19:32:27Z
+HELD BY:          free
 ROUND:            6
-WHOSE TURN:       C  (round 6: implement 6-01 then 6-03; 6-02 still awaits the owner)
-STOPPED BECAUSE:  in progress: round-6 C (C-round6b) is working 6-04 -> 6-01 -> 6-03 in that order.
-                  6-04 and 6-01 LANDED and pushed. No deviation from the ruled order.
-STATUS:           ROUND 6 — **C IS IMPLEMENTING. 6-04 and 6-01 LANDED.** Gate green after each:
-                  tsc 0 ·
-                  eslint 1 (standing `quiz.tsx:46`) · vitest 124 files / 2890 tests / **0 failed**
-                  (2872 -> 2891: +19 added, 0 deleted). The client entitlement now has a third
-                  state (`null` = not known); both upsell surfaces render nothing on it; the two
-                  intermediate report views lost the `effectivePlan = "free"` default the dead C
-                  flagged — **that lead was REAL**. `ProfileSync` now *learns* anonymity and
-                  records it, which the ruling left implicit and without which a signed-out reader
-                  would never leave the unknown state. **Upsell surfaces: exactly TWO**, proved by
-                  three independent greps. Five plants, five fired. Two items for the manager in
-                  §4 (no ruled copy for `QuotaNotice`'s anonymous branch, unreachable in a deployed
-                  runtime; and the mode chip tells a paid reader "Free" mid-hydration — a
-                  capability display, not an upsell, currently ruled the other way).
-                  **6-01 finished the rename**: `consumeForcedRebuild` in `rebuild-breaker.ts`,
-                  the usage row's `path: "forced-rebuild"`, 7 imports, 14 docblocks, ONE
-                  assertion rewritten (never deleted) and proved by planting the old value.
-                  Residual old names in `src/`: **0**. The three unreachable fan-out sites are
-                  KEPT with the full chain in their docblocks plus B's warning that restoring
-                  operator search means SPLITTING this counter, not flipping a flag. Test
-                  count unchanged at 2891, which is correct — 6-01 adds no behaviour.
+WHOSE TURN:       A  (round 6: re-measure. The manager opens round 7.)
+STOPPED BECAUSE:  finished the turn @ 2026-09-07T20:03:40Z — all three items landed, one commit
+                  each, each pushed as it finished. 6-02 still awaits the owner.
+STATUS:           ROUND 6 — **C HAS IMPLEMENTED. ALL THREE ITEMS, 6-04 / 6-01 / 6-03**, in the
+                  ruled order (Ruling 16 point 6), one commit each, each pushed as it finished.
+                  **NO DEVIATION** from the order or from B's guide. **THE GATE IS GREEN**:
+                  tsc 0 · eslint 1 (standing `quiz.tsx:46`) · vitest **125 files / 2906 tests /
+                  0 failed** (2872 -> 2907: **+35 added, 0 deleted**). **Eleven plants, eleven
+                  fired.** No migration. No throwaway left in the tree.
+                  1. **6-04 — the client entitlement has a third state.** `null` = not known,
+                     distinct from known-to-be-anonymous. Both upsell surfaces render nothing on
+                     it. **The dead C's lead was REAL**: `JobReport` and `EventReport` both
+                     declared `effectivePlan?: Plan` with a **`= "free"` default**, handing back
+                     one file up the required-prop discipline that makes the two leaf components
+                     safe. Both defaults are gone. **`ProfileSync` now LEARNS anonymity and
+                     records it** — the ruling left that implicit, and without it a signed-out
+                     reader would sit at "not known" forever and 6-03's sign-in branch would be
+                     dead code. A failed profile fetch still leaves `null`, because nothing was
+                     learned. Capability questions take a named helper (`entitlementGrants`) whose
+                     docblock forbids its use for upsells.
+                  2. **UPSELL SURFACES: EXACTLY TWO**, proved three independent ways (plan-reading
+                     greps, upsell-vocabulary greps, and the nine store consumers the compiler
+                     enumerated). No third. `tsc` found all 24 production sites — the census was a
+                     compile-error list, not a grep.
+                  3. **6-01 — the rename is finished.** `consumeForcedRebuild` in
+                     `rebuild-breaker.ts` (`git mv`), the usage row's `path: "forced-rebuild"`,
+                     7 imports, 14 docblocks, **ONE** assertion rewritten (never deleted) and
+                     proved by planting the old value. **Residual old names in `src/`: 0.** The
+                     three unreachable fan-out sites are KEPT with the whole unreachability chain
+                     in their docblocks **plus B's warning the ruling does not carry**: restoring
+                     operator search means SPLITTING this counter, not flipping a flag. Test count
+                     unchanged, which is correct — 6-01 adds no behaviour.
+                  4. **6-03 — a sibling component, `PoolRefreshNotice`**, rendered from
+                     `DiscoveryPage`; **no new prop travels**. Keyed on `poolRefreshAllowed`,
+                     never `effectivePlan`; gated on `activeType !== "papers"`; five branches per
+                     Ruling 16 point 3, with *"Sign in to refresh."* for the signed-out reader.
+                     The response is NOT keyed on and no `refused` flag was added. Plant D is the
+                     one to note: collapsing the signed-out branch — **B's own recommendation,
+                     which Ruling 16 point 4 ruled against** — reddens a case, so the suite
+                     records the ruled decision rather than the convenient one.
+                  **THREE THINGS FOR THE MANAGER, all in §4:** (1) `QuotaNotice`'s
+                  `known + anonymous` branch has **no ruled copy** and I invented none — it is
+                  also unreachable in a deployed runtime (the report routes answer a stranger
+                  401), which I checked rather than assumed; (2) the dashboard's mode chip tells a
+                  **paid** reader "Free" / "AI off" mid-hydration — same family, but a capability
+                  display rather than an upsell, and currently ruled the other way at
+                  `ai-tier.ts:136`; (3) 6-03's upgrade **line** is the one string that was not
+                  ruled (the ruled sentence is used verbatim) — `QuotaNotice`'s could not be
+                  reused because it says "monthly" and refresh is weekly.
                   ── B's guide follows. ──
                   ROUND 6 — **B HAS WRITTEN THE GUIDE. TWO ITEMS, 6-01 and 6-03**, one commit each,
                   each pushed as it finished; no code changed and `git diff HEAD -- web/` is
@@ -388,7 +414,12 @@ LAST DIFFERENCE:  **0.0% code-side MEASURED AGAINST D2a (0 of 30) — round-5 A,
 GATE (0% unexplained, both measurements):  **NOT MET — and the code side is still not why.**
            Code-side is **0.0%** and the difference list is **empty**; six items carry a blocked
            half that only the owner can close. `GATE: MET` needs both at zero.
-DONE:      **Round 6 B: both items, 6-01 and 6-03**, one commit each, each pushed as it
+DONE:      **Round 6 C: ALL THREE ITEMS, 6-04 / 6-01 / 6-03**, in the ruled order, one commit
+           each, each pushed as it finished; gate green cold after each; every new test proved by
+           reverting the source or planting the old defect (substitution count asserted before the
+           run was read, every time) — **11 plants, 11 fired**; no test deleted; no migration; no
+           throwaway left in the tree; credential scan clean on every staged diff.
+           **Round 6 B: both items, 6-01 and 6-03**, one commit each, each pushed as it
            finished; no code changed (`git diff HEAD -- web/` asserted empty); the two-stage
            measurement plant reverted with an asserted empty diff; the adversarial predicate
            harness ran outside the repo and was deleted.
@@ -408,19 +439,60 @@ DONE:      **Round 6 B: both items, 6-01 and 6-03**, one commit each, each pushe
            every throwaway deleted and every plant restored with an asserted empty diff.
            **Round 5 B: all four items**, 5-01 … 5-04, one commit each, each pushed; no code
            changed; the three-stage measurement plant reverted with an asserted empty diff.
-GATE NOW:  tsc exit **0** · eslint **1 problem (1 error, 0 warnings)** (the standing `quiz.tsx:46`) ·
-           vitest **124 files passed | 1 skipped (125)** · **2871 tests passed | 1 skipped
-           (2872)**, **0 failed**, 9.50 s.
-TODO:      C WORKS ROUND 6 IN THIS ORDER (Ruling 16 point 6): **6-04 FIRST** — the client
-           entitlement gains a third state, `null` until known, and every upsell surface
-           renders nothing while it is unknown (Ruling 16 points 2-3); an upsell requires
-           positive evidence of non-entitlement, never the absence of data. Protective test
-           proved by planting the old default. Then **6-01** finish the rename (Ruling 14
-           point 3; B measured the blast radius: 7 imports, 4 strings, ~14 docblocks, exactly
-           ONE test assertion at `deep-report-quota.test.ts:238`). Then **6-03** the refresh
-           message as a SIBLING component rendered from `DiscoveryPage` (Ruling 16 point 7),
-           keyed on `poolRefreshAllowed` — NOT on `effectivePlan` (point 1) — with the
-           signed-out branch saying "Sign in to refresh." (point 4).
+GATE NOW:  **Round-6 C, cold, after every plant was reverted and no throwaway remained
+           (`git status --porcelain --untracked-files=all` shows only the two new source files):**
+           `tsc` exit **0** · `eslint` **1 problem (1 error, 0 warnings)** — the standing
+           `quiz.tsx:46` · `vitest` **125 files passed | 1 skipped (126)** · **2906 tests passed |
+           1 skipped (2907)**, **0 failed**. `src/lib/events/benchmark.test.ts` is the one skip,
+           named. Test total 2872 → 2907: **+35 added, 0 deleted** (6-04 +19, 6-01 **+0** — it
+           adds no behaviour so it adds no case — 6-03 +16). File count 125 → 126: the one new
+           suite, `components/cards/pool-refresh-notice.test.tsx`.
+           Round-5 A's figures follow: tsc **0** · eslint **1** · vitest **124 files passed | 1
+           skipped (125)** · **2871 tests passed | 1 skipped (2872)**, **0 failed**, 9.50 s.
+TODO:      **ROUND-6 A RE-MEASURES.** Denominator is **30**; **R-METER-2 is `N/A`** and must be
+           re-listed by name with that word every round (Ruling 12 point 3). **R-UI-3 was set
+           `PARTIAL` by Ruling 16 point 2 and is A's to re-score BY BEHAVIOUR** — not from this
+           log, and not from the commit message. Round-5 A's `MET` stands as history.
+           **Questions a fixture cannot settle — answer each by driving the thing, not by
+           reading it:**
+           1. **R-UI-3, the whole of it.** Render each upsell surface with the entitlement
+              genuinely unhydrated — not a hand-fed `null`, but the store as a cold page load
+              leaves it — and confirm a **paid** reader sees no upsell on either surface, at the
+              200/day breaker and on the monthly path. Then confirm the same reader is upsold
+              normally once the plan arrives. C's cases pass a `null` in directly; that proves the
+              component, not the page.
+           2. **Does anything still turn "not known" into "free" on the way to a screen?** C's
+              census says two upsell surfaces and no third, and the compiler enumerated 24
+              production reads — but a *new* consumer only has to call `entitlementGrants` and it
+              compiles. Grep for that helper's callers and ask of each: capability or upsell?
+           3. **The signed-out reader actually leaves the unknown state.** `ProfileSync` sets the
+              anonymous entitlement in two places (`!supabase`, and `onSession(false)`), and a
+              third path — a thrown `getUser()` — deliberately does not. Drive all three and say
+              which state the store ends in. If a real signed-out load never reaches either
+              setter, 6-03's sign-in sentence never renders and the item is only half landed.
+           4. **6-03 on screen, not in a string test.** Does the notice appear where the refresh
+              control is, on jobs and on events, and **not** on Papers? C recorded one placement
+              judgement to question: the notice is gated on the tile's render condition, not the
+              refresh **button's**, so on the `underTuned` branch it appears beside a tile that
+              has no refresh button. Look at it and rule.
+           5. **6-01 by behaviour.** Trip the rebuild breaker on a real request and read the row:
+              `kind: "breaker"`, `path: "forced-rebuild"`, and **zero** rows saying
+              `"system-search"` anywhere. Confirm the three fan-out sites are still **0** by
+              construction — kept, not deleted.
+           **CARRY EVERY STANDING TALLY BY NAME**, even at zero: paid readers shown any upsell
+           (0, by render — now **including a mid-hydration render**, which is new this round);
+           `poolRefreshAllowed` reaching a component (was 0; is now **1** — the count is no
+           longer the finding, so re-source it as "entitled readers shown a refresh upsell", which
+           must be 0 and must come from a **live-trial render** and a **mid-hydration render**,
+           never from the entitlement unit tests, which would be vacuous in exactly the way Ruling
+           14 point 4 retired); `process.env.TAVILY_API_KEY` reads in non-test source (0);
+           `kind:"search"` usage rows (0); operator-key search requests per persona (0, sourced
+           from the **five surfaces that actually search** — Ruling 14 point 4); Ruling-75
+           option-building cases asserting absence (4); `resolveProvider` call sites without a
+           context (0, by the compiler); figure matchers reachable with a null-user context (0);
+           quota/breaker reachability per route on the app's real request shape; guard tests
+           proved by planting; `local-no-auth` ABSENT; and **R-METER-2 `N/A`**.
+           **A new tally must be proved able to fail** (Ruling 14 point 5).
 PENDING USER ACTION: (1) Apply the three migrations under `web/supabase/migrations/20260904*`.
            (2) After applying, save a profile once in the app. (3) Optionally fill
            `GOOGLE_API_KEY` in `web/.env.local` (and the Supabase URL + service-role key) so A
@@ -429,8 +501,19 @@ PENDING USER ACTION: (1) Apply the three migrations under `web/supabase/migratio
            NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY — and must NOT carry
            TAVILY_API_KEY (the build will refuse it after 5-03). Deploy only after round 5
            reports green and the branch is merged. WITHDRAWN: the trial backfill (no users).
-OPEN FOR MANAGER:  none — B's POLICY ruled in §1q (Ruling 16 point 4), against B's recommendation
-           and with the reason recorded. R-UI-3 is PARTIAL until 6-04 lands.
+OPEN FOR MANAGER:  **three, all raised by round-6 C in §4, none blocking A.** (1) No ruled
+           copy exists for `QuotaNotice`'s `known + anonymous` branch, so C left it unchanged;
+           it is also unreachable in a deployed runtime (report routes answer a stranger 401),
+           checked in source. (2) The dashboard mode chip tells a **paid** reader "Free" /
+           "AI off" mid-hydration — the same "assert a fact you have not read yet" family, but
+           a capability display rather than an upsell, and ruled the other way today at
+           `ai-tier.ts:136`. The seam is one line if the manager wants it changed. (3) 6-03's
+           upgrade **line** ("Peer Pro refreshes them whenever you ask." + "See what Pro
+           adds") is the only string C wrote that was not ruled — the ruled sentence itself is
+           verbatim; `QuotaNotice`'s prompt could not be reused because it says "monthly" and
+           refresh is weekly. Overwritable in one edit.
+           **R-UI-3 stayed PARTIAL through Ruling 16 point 2; 6-04 has landed, and round-6 A
+           re-scores it by behaviour — C does not score.**
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
@@ -11530,3 +11613,132 @@ Confirmed again by doing the work: **five calls in five files plus the declarati
 sites. Two live (`jobs/pipeline.ts`, `events/pipeline.ts`), three unreachable (`jobweb.ts`,
 `eventweb.ts`, `web-search.ts`). No design consequence; recorded so "six" is not re-quoted as
 measured.
+
+---
+
+#### 6-03 — the refresh message · `MISSING`
+
+**Landed.** `tsc` **0** · `eslint` **1 problem (1 error, 0 warnings)** (the standing
+`quiz.tsx:46`) · `vitest` **125 files passed | 1 skipped (126)** · **2906 passed | 1 skipped
+(2907)**, **0 failed**. Tests 2891 → 2907: **+16 added, 0 deleted**; one new suite file.
+
+##### What landed — a sibling, as ruled, and no new prop travels
+
+`src/components/cards/pool-refresh-notice.tsx` — `PoolRefreshNotice`, one small client component
+beside `feed-more-tile.tsx`. It copies `QuotaNotice`'s **presentation** (the same `<aside>` shell and
+classes, the same `REPORT_LABEL_STEP` label, the same `data-testid` discipline) and **none** of its
+logic, exactly as Ruling 16 point 7 adopts from B. It takes one prop: the client entitlement, or
+`null`.
+
+Rendered from `DiscoveryPage` (`app/page.tsx`), immediately after the feed grid that holds the tile,
+under the tile's own render condition **plus** `activeType !== "papers"`. Both `entitlement` and
+`activeType` were already in that function body, so **no new prop travels anywhere** — which is the
+whole reason B recommended this placement over `FeedMoreTileProps`.
+
+##### The predicate — the capability, never the plan name
+
+`entitlement.poolRefreshAllowed`, never `effectivePlan`, per Ruling 16 point 1. B's harness measured
+`effectivePlan !== "paid"` at **3 violations** and `!poolRefreshAllowed` at **2**; the third clause
+is the hydration guard, which 6-04 turned from `source !== "anonymous"` into the stronger and
+simpler `entitlement !== null`. The five branches:
+
+| Reader | What renders |
+|---|---|
+| not known (`null`) | **nothing** — 6-04's third state; absence of data is not evidence |
+| known + anonymous | *"Sign in to refresh."*, **no** upgrade prompt |
+| known + free | *"Refresh now is on the paid plan. Your jobs and events refresh once a week."* + the prompt |
+| known + trial | **nothing** — they are granted; this is the case the plan predicate gets wrong |
+| known + paid | **nothing** — Ruling 8, absolute |
+
+`source === "anonymous"` is what separates the second row from the third: `effectivePlan` reads
+`"free"` for both, so the capability alone cannot tell them apart. That is the one place the
+component reads a field other than the capability, and the reason is at the line.
+
+##### The copy, and the comment that says nothing is broken
+
+The ruled sentence is used verbatim and asserted byte-for-byte. The component's docblock says
+explicitly, in the words the brief asked for, that **nothing is broken for the free reader**: after
+this renders they still have the complete pool that was already on screen — same items, same facets,
+a **200**, no error state — and it is not stale in any sense the product promises, because
+`pool-cache.ts` keys the jobs and events pools by local ISO week. The message **explains** the pool;
+it does not apologise for it. There is a test for that too — the free-reader render must not match
+`/sorry|error|failed|unavailable|stale|out of date/i` — so a later edit cannot quietly turn an
+explanation into a fault report.
+
+**The upgrade line is new copy and I flag it as such.** Ruling 15 point 2(b) ruled the *sentence*
+and "plus the upgrade prompt", without specifying the prompt's wording. `QuotaNotice`'s prompt could
+not be reused: it says *"lifts the **monthly** limit"* and refresh is **weekly**, so copying it would
+have been a false sentence. What renders is *"Peer Pro refreshes them whenever you ask."* with a
+**"See what Pro adds"** link to `/welcome?step=ai` — the same destination `TierUpgradeBlock` uses,
+and no checkout link, because D7 keeps the price display-only and a dead link is worse than none.
+**The manager may overwrite this line in one edit; it is the only string here that was not ruled.**
+
+##### B's two traps, both handled at the line
+
+- **The tile serves papers too** (`page.tsx`'s `onRefresh={activeType === "papers" ? refreshFeed :
+  refreshOpportunityPool}`), and papers refresh is a plain refetch on a **daily** pool (D3), not a
+  paid feature. A notice keyed on the tile alone would tell a free reader on the **Papers** tab that
+  refresh is paid, which is false. Gated on `activeType !== "papers"`, and there is a source test
+  that fails when the gate is removed.
+- **The tile's label is "Refresh now" only on its sparse branch**; the default branch says
+  "Refresh". The ruled sentence quotes "Refresh now", and I did not change the manager's copy. The
+  mismatch is recorded here so the manager can adjust one word if they want to. (The notice's own
+  label reads "Refresh now", which is the feature's name rather than a quote of the button.)
+
+##### What I did NOT do, deliberately
+
+- **No `refused` flag on the response.** B established that refused and granted return the identical
+  shape and the same 200, and that `cacheHit` is computed inside the pipeline and dropped at the
+  boundary. That is a good property: a flag would immediately become the thing a future component
+  keys on, which is the Ruling 8 hole this item closes. There is a source test asserting the notice
+  is not keyed on the response.
+- **No change to `FeedMoreTile`.** It is unchanged in this commit — no plan field, no new prop.
+- **No server change of any kind.** No route, no pipeline, no entitlement, no counter, no migration.
+  The server already refuses correctly; 6-03 adds a render.
+
+##### The gap B found and nobody had ever exercised
+
+B grepped and found that `feed.ts`'s `poolRefresh: poolRefresh || undefined` had **never been
+evaluated with `true`** anywhere in the suite: every `opportunityRequestBody` call used the
+three-argument form and `store/feed.test.ts` never passes `poolRefresh` to `loadFeed`. Three cases
+added in `feed-request-body.test.ts` — the ask is sent when asked for, the field is **absent** (not
+`false`) otherwise, and it is only an ask, since a caller with no user sends the identical `true`.
+The `|| undefined` is load-bearing: the route reads `body.poolRefresh === true`, so a `false` on the
+wire would be a claim about a request that made no claim.
+
+##### Five plants, five fired (Ruling 10 point 2b)
+
+Every substitution count asserted before the run was read; every revert asserted the same way.
+
+| # | Plant | Fired |
+|---|---|---|
+| A | the predicate keyed on the plan (`effectivePlan === "paid"`) — the trap Ruling 16 point 1 corrects | **2 failed** — the live-trial case **and** the source case pinning the capability |
+| B | the unhydrated guard removed, falling back to `ANONYMOUS_CLIENT_ENTITLEMENT` the way the pre-6-04 store did | **1 failed** — "says NOTHING while the entitlement is still unknown" |
+| C | the `activeType !== "papers"` gate removed at the call site | **1 failed** — "keeps it OFF the Papers tab" |
+| D | the signed-out branch collapsed, so an anonymous reader gets the upgrade prompt — **B's own recommendation, which Ruling 16 point 4 ruled against** | **1 failed** — "tells a SIGNED-OUT reader to sign in, and never to upgrade" |
+| E | `poolRefresh: poolRefresh \|\| undefined` → `poolRefresh` | **1 failed** — "omits the field entirely on an ordinary load" |
+
+Plant D is the one worth naming: it is the case that would have passed if I had followed B's
+recommendation instead of the ruling, so the suite records the ruled decision rather than the
+convenient one.
+
+##### Standing locks re-verified, by name
+
+Green in the same cold run: `quota-notice.test.tsx` (**not widened** — the sibling has its own paid
+and trial cases, per B), `tier-upgrade-block.test.tsx`, `pool-refresh-gates.test.ts` (its five gate
+cases are the server half and are untouched), `api/jobs/feed/route.test.ts` (free refused / still
+200, and paid charged exactly one), `store/feed.test.ts`, `deep-report-quota.test.ts`,
+`ai-route-personas.test.ts`, the four route suites, the counters and breaker suites,
+`spend-scans.test.ts`, `ui-vocabulary.test.ts`, `no-client-dev-flags.test.ts`, the guard suite and
+the report-page trees. No suite deleted, renamed away, or skipped.
+
+##### One placement judgement, recorded so A can question it
+
+The notice renders under the **tile's** condition (`opportunityPage.remaining === 0 &&
+!isSearchMode`), not the **refresh button's**. They differ on one branch: when the profile looks
+under-tuned, `FeedMoreTile` renders a link to `/profile` and **no refresh button at all**, and the
+notice would still appear beside it. I left it that way because the sentence is still true there — a
+free reader's jobs and events pool does rebuild weekly whatever the tile is showing — and because
+mirroring `looksUnderTuned` outside the tile would duplicate a predicate in two files, which is the
+class of thing this loop keeps finding as a defect. **A should decide by looking at it**, which is a
+question a fixture cannot settle.
