@@ -5,7 +5,7 @@ import {
   type OpenAlexWork,
 } from "@/lib/utils/openalex";
 import { cleanDisplayText, cleanDisplayTextOrUndefined } from "@/lib/text/clean";
-import { fetchAbstractFromSS } from "./enrich";
+import { fetchSemanticScholarText } from "./enrich";
 
 const MAILTO = process.env.OPENALEX_EMAIL ?? "peer@example.com";
 
@@ -21,18 +21,26 @@ async function fetchOpenAlexPaper(workId: string): Promise<RawItem | null> {
     const item = openAlexWorkToRawItem(work);
 
     // Publishers like Nature / Science don't license abstracts to OpenAlex.
-    // Fill in via Semantic Scholar — try OpenAlex ID first, then DOI.
+    // Fill in via Semantic Scholar — try OpenAlex ID first, then DOI. Only a
+    // real abstract becomes `item.abstract`; the machine TLDR, when that is
+    // all S2 has, travels separately as `item.tldr` so the page can label it.
     if (!item.abstract) {
-      const fromOA = await fetchAbstractFromSS(`OpenAlex:${workId}`);
-      if (fromOA) {
-        item.abstract = fromOA;
-      } else if (item.metadata.doi) {
+      const externalIds = [`OpenAlex:${workId}`];
+      if (item.metadata.doi) {
         const cleanedDoi = item.metadata.doi.replace(
           /^https?:\/\/(?:dx\.)?doi\.org\//i,
           "",
         );
-        const fromDoi = await fetchAbstractFromSS(`DOI:${cleanedDoi}`);
-        if (fromDoi) item.abstract = fromDoi;
+        externalIds.push(`DOI:${cleanedDoi}`);
+      }
+      for (const externalId of externalIds) {
+        const found = await fetchSemanticScholarText(externalId);
+        if (!found) continue;
+        if (found.tldr && !item.tldr) item.tldr = found.tldr;
+        if (found.abstract) {
+          item.abstract = found.abstract;
+          break;
+        }
       }
     }
     return item;

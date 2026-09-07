@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { useFeedStore } from "@/store/feed";
 import { useUIStore } from "@/store/ui";
 import { NONE, indexAfterRemoval, stepIndex } from "@/lib/navigation/card-focus";
+import { readerActions, readerHelpItems, resolvePaperKey } from "@/lib/reader/reader-keys";
+import { Kbd } from "@/components/ui/kbd";
 
 // ── Global keyboard shortcut registry ──
 
@@ -45,6 +47,9 @@ const GROUPS: { title: string; items: Shortcut[] }[] = [
       { keys: "u", label: "Undo last dismiss (within 4s)" },
     ],
   },
+  // The reading page's keys come from the table its handler reads, so the
+  // sheet cannot list a key the page does not answer to.
+  { title: "Reading", items: readerHelpItems() },
   {
     title: "View",
     items: [{ keys: "\\", label: "Toggle sidebar" }],
@@ -57,6 +62,32 @@ function isTypingTarget(el: EventTarget | null): boolean {
   if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
   if (el.isContentEditable) return true;
   return false;
+}
+
+// Enter on a focused button or link already activates it; the reading page's
+// `o`/Enter must not open the source on top of that.
+function isActivationTarget(el: Element | null): boolean {
+  if (!(el instanceof HTMLElement)) return false;
+  const tag = el.tagName;
+  return tag === "BUTTON" || tag === "A" || tag === "SUMMARY";
+}
+
+function onPaperPage(): boolean {
+  return window.location.pathname.startsWith("/papers/");
+}
+
+/**
+ * Runs the reading page's handler for `key` when the page registered one.
+ * Nothing registered — the page is not mounted, or a deep link left `next`
+ * out — and the key is inert here, free to fall through to the global keys.
+ */
+function runReaderKey(key: string, e: KeyboardEvent): boolean {
+  const action = resolvePaperKey(key);
+  const run = action ? readerActions()?.[action] : undefined;
+  if (!run) return false;
+  run();
+  e.preventDefault();
+  return true;
 }
 
 export function KeyboardLayer() {
@@ -123,6 +154,9 @@ export function KeyboardLayer() {
           e.preventDefault();
           return;
         }
+        // On a paper, Esc is "back to the briefing" — once the help sheet and
+        // any focused field have had their turn.
+        if (onPaperPage() && runReaderKey(e.key, e)) return;
         if (focusedRef.current !== NONE) {
           paintFocus(NONE);
           e.preventDefault();
@@ -205,6 +239,21 @@ export function KeyboardLayer() {
             }
           }
         }
+      } else if (onPaperPage()) {
+        // Paper-level keys — the reading page. No ring: every key acts on the
+        // one paper on screen, through the handlers the page registered.
+        // Backspace reaches here only past the typing guard above, so it
+        // never eats a character; a `u` with nothing registered falls
+        // through to the global undo below.
+        if (e.key === "Enter" && isActivationTarget(document.activeElement)) return;
+        // Arrows never take a live text selection: Shift+Arrow extends one,
+        // and a plain arrow on a selection is the reader adjusting it, not
+        // asking for the next paper. j/k and the brackets are unaffected.
+        if (e.key.startsWith("Arrow")) {
+          if (e.shiftKey) return;
+          if (!(window.getSelection()?.isCollapsed ?? true)) return;
+        }
+        if (runReaderKey(e.key, e)) return;
       }
 
       switch (e.key) {
@@ -394,15 +443,5 @@ function HelpOverlay({
         </p>
       </div>
     </div>
-  );
-}
-
-function Kbd({ children }: { children: React.ReactNode }) {
-  return (
-    <kbd
-      className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded-md bg-bg-secondary shadow-well text-caption text-heading font-medium tabular-nums font-mono"
-    >
-      {children}
-    </kbd>
   );
 }

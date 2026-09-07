@@ -65,17 +65,76 @@ const DANGLING_REFERENCE = [
 /** A concrete quantity is the strongest signal an abstract sentence carries. */
 const QUANTITY = /\d+(?:\.\d+)?\s*(?:%|percent|×|x\b|fold\b)|\b\d+(?:\.\d+)?\b/;
 
+/**
+ * A quantity with a unit or a comparison attached — the sentence that says how
+ * big. `QUANTITY` above accepts any bare number and is right for ranking a
+ * whole abstract (a year or a dataset size still marks the sentence that did
+ * something); this is the stricter test the reading page uses to pick the one
+ * sentence it sets in ink as "the number", and to keep a bare "CASP14" from
+ * counting as a result.
+ */
+export const QUANTITY_STRICT =
+  /\d[\d.,]*\s?(%|percent|×|x\b|-?fold\b|pp\b|points?\b|ms\b|s\b|min\b|h\b|nm\b|µm\b|mm\b|cm\b|kg\b|mg\b|dB\b|[GM]?Hz\b|K\b|°C\b|AUC\b|F1\b|BLEU\b|mAP\b)|\bp\s?[<=]\s?0?\.\d+|\d+(\.\d+)?\s?(vs\.?|versus)\s?\d/i;
+
+/**
+ * The sentence in the last stretch of an abstract that says why the result
+ * matters. Weaker than a claim, so it is only ever the third mark.
+ */
+const SIGNIFICANCE =
+  /\b(suggest|demonstrat|enabl|pave|implication|potential|provid|open|highlight|establish)\w*/i;
+
 const MIN_SENTENCE_CHARS = 40;
 const MAX_SKIM_CHARS = 260;
+/** Marks that cover more of the abstract than this are not marks any more. */
+const MAX_MARKED_FRACTION = 0.6;
 
-function splitSentences(text: string): string[] {
-  return text
+/**
+ * A period that ends an abbreviation, not a sentence. "Fig. 3 shows 0.5 mm."
+ * split at "Fig." used to yield a four-character fragment and a sentence that
+ * began "3 shows"; a single initial ("J. Smith") did the same to author names
+ * quoted in a results section. Decimals never split — the splitter needs
+ * whitespace after the period.
+ */
+const ABBREVIATION =
+  /(?:\b(?:et al|Figs?|Eqs?|vs|i\.e|e\.g|ca|approx|cf|resp|Refs?|Tab|No)|\b[A-Z])\.$/;
+
+/**
+ * Split running text into sentences.
+ *
+ * The OpenAlex reconstruction of an abstract often has no terminal period; it
+ * comes back as one sentence, which is what it is. A piece that starts in
+ * lower case continues the sentence before it — a period followed by a
+ * lower-case word is an abbreviation the list above does not know.
+ */
+export function splitSentences(text: string): string[] {
+  const pieces = text
     .split(/(?<=[.!?])\s+/)
     .map((sentence) => sentence.trim())
     .filter((sentence) => sentence.length > 0);
+  const out: string[] = [];
+  for (const piece of pieces) {
+    const previous = out[out.length - 1];
+    if (previous && (ABBREVIATION.test(previous) || /^[a-z]/.test(piece))) {
+      out[out.length - 1] = `${previous} ${piece}`;
+    } else {
+      out.push(piece);
+    }
+  }
+  return out;
 }
 
-function scoreSentence(sentence: string, index: number): number {
+/** Field-not-paper openers; exported so the reading never quotes one. */
+export function isBoilerplate(sentence: string): boolean {
+  return BOILERPLATE.some((re) => re.test(sentence));
+}
+
+/**
+ * How much a sentence says about the paper itself. Positive is a claim or a
+ * result; negative is the field, a dangling reference or a fragment. `index`
+ * is the sentence's position in its abstract — pass 0 when ranking sentences
+ * pulled from a whole section, where position carries no such signal.
+ */
+export function scoreSentence(sentence: string, index: number): number {
   let score = 0;
   if (CLAIM.some((re) => re.test(sentence))) score += 3;
   if (QUANTITY.test(sentence)) score += 2;
@@ -155,6 +214,78 @@ export function pickSkimSentence(
     out = `${out} ${follower}`;
   }
   return truncate(out);
+}
+
+/**
+ * Which sentences of an abstract to set in ink on the reading page: the claim,
+ * the number and, when the abstract is long enough to have one, the sentence
+ * that says why it matters. Returns indices in ascending order.
+ *
+ * Nothing is marked in a one- or two-sentence abstract — everything is the
+ * claim already. Marks are capped at 60% of the text because an abstract that
+ * is mostly ink has no ink; the lowest-scoring mark goes first.
+ */
+export function pickSkimMarks(sentences: string[]): number[] {
+  const n = sentences.length;
+  if (n <= 2) return [];
+
+  const scores = sentences.map((sentence, index) => scoreSentence(sentence, index));
+  const best = (indices: number[]): number | null => {
+    let winner: number | null = null;
+    for (const i of indices) {
+      if (winner === null || scores[i] > scores[winner]) winner = i;
+    }
+    return winner;
+  };
+
+  // The claim: the best sentence that is about the paper. A boilerplate opener
+  // never wins — when every sentence is about the field there is no claim to
+  // mark.
+  const claim = best(
+    sentences.map((_, i) => i).filter((i) => !isBoilerplate(sentences[i])),
+  );
+  if (claim === null) return [];
+  const marks = new Set<number>([claim]);
+
+  // The number: the strongest sentence with a unit or comparison attached.
+  const quantity = best(
+    sentences
+      .map((_, i) => i)
+      .filter(
+        (i) =>
+          i !== claim &&
+          scores[i] >= 0 &&
+          QUANTITY_STRICT.test(sentences[i]) &&
+          !isBoilerplate(sentences[i]),
+      ),
+  );
+  if (quantity !== null) marks.add(quantity);
+
+  // The significance: only from the last 40%, where abstracts put it.
+  const tailStart = Math.floor(n * 0.6);
+  const significance = best(
+    sentences
+      .map((_, i) => i)
+      .filter(
+        (i) =>
+          i >= tailStart &&
+          !marks.has(i) &&
+          scores[i] >= 0 &&
+          SIGNIFICANCE.test(sentences[i]) &&
+          !isBoilerplate(sentences[i]),
+      ),
+  );
+  if (significance !== null) marks.add(significance);
+
+  const total = sentences.reduce((sum, sentence) => sum + sentence.length, 0);
+  const marked = () =>
+    [...marks].reduce((sum, i) => sum + sentences[i].length, 0);
+  while (marks.size > 1 && marked() > total * MAX_MARKED_FRACTION) {
+    const lowest = [...marks].reduce((a, b) => (scores[b] < scores[a] ? b : a));
+    marks.delete(lowest);
+  }
+
+  return [...marks].sort((a, b) => a - b);
 }
 
 function truncate(text: string): string {

@@ -313,9 +313,8 @@ export async function bindFiguresToReport(
   }
 
   const proposalQuery = [
-    ...(report.whatItProposes.novelty ?? []),
     report.whatItProposes.summary,
-    ...report.whatItProposes.methods,
+    ...report.whatItProposes.methods.map((m) => m.text),
   ]
     .filter(Boolean)
     .join(" ");
@@ -436,7 +435,7 @@ async function bindOneResult(
   provider: DigestProvider | null,
   paperTitle?: string,
 ): Promise<PaperReportKeyResult> {
-  const queryText = [result.title, result.detail, result.evidence, result.novelty]
+  const queryText = [result.title, result.detail, result.evidence]
     .filter(Boolean)
     .join(" ");
   const figureLabel = await pickFigureLabelForQuery(

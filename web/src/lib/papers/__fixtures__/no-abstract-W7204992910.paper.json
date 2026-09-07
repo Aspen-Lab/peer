@@ -1,0 +1,124 @@
+{
+ "id": "openalex:W7204992910",
+ "title": "DiffKT: a diffusion model for fine-grained knowledge tracing",
+ "authors": [
+  "R.D. Liu",
+  "Yong Niu",
+  "Hu Li"
+ ],
+ "relevanceReason": "Pulled from your search. Summary below is the paper's own abstract.",
+ "venue": "Applied Intelligence",
+ "source": "other",
+ "summaryIntro": "",
+ "summaryExperimentKeywords": [
+  "Probabilistic logic",
+  "Tracing",
+  "Noise (video)",
+  "Representation (politics)",
+  "Statistical model",
+  "Point (geometry)"
+ ],
+ "summaryResultDiscussion": "",
+ "linkPaper": "https://doi.org/10.1007/s10489-026-07459-9",
+ "doi": "10.1007/s10489-026-07459-9",
+ "publishedDate": "2026-09-01",
+ "isSaved": false,
+ "preferenceSignals": [
+  {
+   "key": "openalex_topic:t11902",
+   "label": "Intelligent Tutoring Systems and Adaptive Learning",
+   "source": "openalex_topic",
+   "confidence": 0.9736999869346619
+  },
+  {
+   "key": "openalex_topic:t11122",
+   "label": "Online Learning and Analytics",
+   "source": "openalex_topic",
+   "confidence": 0.00419999985024333
+  },
+  {
+   "key": "openalex_topic:t10636",
+   "label": "Innovative Teaching and Learning Methods",
+   "source": "openalex_topic",
+   "confidence": 0.003599999938160181
+  },
+  {
+   "key": "openalex_keyword:probabilistic-logic",
+   "label": "Probabilistic logic",
+   "source": "openalex_keyword",
+   "confidence": 0.6470000147819519
+  },
+  {
+   "key": "openalex_keyword:tracing",
+   "label": "Tracing",
+   "source": "openalex_keyword",
+   "confidence": 0.6068000197410583
+  },
+  {
+   "key": "openalex_keyword:noise",
+   "label": "Noise (video)",
+   "source": "openalex_keyword",
+   "confidence": 0.4422999918460846
+  },
+  {
+   "key": "openalex_keyword:representation",
+   "label": "Representation (politics)",
+   "source": "openalex_keyword",
+   "confidence": 0.3779999911785126
+  },
+  {
+   "key": "openalex_keyword:statistical-model",
+   "label": "Statistical model",
+   "source": "openalex_keyword",
+   "confidence": 0.3594000041484833
+  },
+  {
+   "key": "openalex_keyword:point",
+   "label": "Point (geometry)",
+   "source": "openalex_keyword",
+   "confidence": 0.350600004196167
+  },
+  {
+   "key": "openalex_keyword:sequence",
+   "label": "Sequence (biology)",
+   "source": "openalex_keyword",
+   "confidence": 0.3382999897003174
+  },
+  {
+   "key": "openalex_concept:c49937458",
+   "label": "Probabilistic logic",
+   "source": "openalex_concept",
+   "confidence": 0.6470000147819519
+  },
+  {
+   "key": "openalex_concept:c138673069",
+   "label": "Tracing",
+   "source": "openalex_concept",
+   "confidence": 0.6068000197410583
+  },
+  {
+   "key": "openalex_concept:c154945302",
+   "label": "Artificial intelligence",
+   "source": "openalex_concept",
+   "confidence": 0.5666000247001648
+  },
+  {
+   "key": "openalex_concept:c119857082",
+   "label": "Machine learning",
+   "source": "openalex_concept",
+   "confidence": 0.516700029373169
+  },
+  {
+   "key": "openalex_concept:c99498987",
+   "label": "Noise (video)",
+   "source": "openalex_concept",
+   "confidence": 0.4422999918460846
+  },
+  {
+   "key": "openalex_concept:c2776359362",
+   "label": "Representation (politics)",
+   "source": "openalex_concept",
+   "confidence": 0.3779999911785126
+  }
+ ]
+}

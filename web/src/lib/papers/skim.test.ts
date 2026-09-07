@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { pickSkimSentence } from "./skim";
+import {
+  QUANTITY_STRICT,
+  pickSkimMarks,
+  pickSkimSentence,
+  scoreSentence,
+  splitSentences,
+} from "./skim";
 
 describe("pickSkimSentence", () => {
   it("skips the field-is-hard opener for the sentence that says what was done", () => {
@@ -90,5 +96,107 @@ describe("pickSkimSentence", () => {
     );
 
     expect(skim).toContain("lightweight scorer");
+  });
+});
+
+describe("splitSentences", () => {
+  it("keeps an abbreviation and a decimal inside one sentence", () => {
+    expect(splitSentences("Fig. 3 shows 0.5 mm. The rest is text.")).toEqual([
+      "Fig. 3 shows 0.5 mm.",
+      "The rest is text.",
+    ]);
+  });
+
+  it("keeps a citation, an initial and e.g. inside one sentence", () => {
+    expect(
+      splitSentences(
+        "As Smith et al. reported, J. Doe used two probes, e.g. a laser. We did not.",
+      ),
+    ).toEqual(["As Smith et al. reported, J. Doe used two probes, e.g. a laser.", "We did not."]);
+  });
+
+  it("treats an OpenAlex reconstruction with no terminal period as one sentence", () => {
+    const flat = "Predicting protein structure remains hard and we propose a graph method for it";
+
+    expect(splitSentences(flat)).toEqual([flat]);
+  });
+
+  it("joins a piece that starts in lower case onto the sentence before it", () => {
+    expect(splitSentences("We compare X-ray vs. cryo-EM maps. Then we stop.")).toEqual([
+      "We compare X-ray vs. cryo-EM maps.",
+      "Then we stop.",
+    ]);
+  });
+});
+
+describe("QUANTITY_STRICT", () => {
+  it("wants a unit or a comparison, not a bare number", () => {
+    expect(QUANTITY_STRICT.test("reaches 94% precision")).toBe(true);
+    expect(QUANTITY_STRICT.test("cuts time by 12x")).toBe(true);
+    expect(QUANTITY_STRICT.test("a 3-fold gain")).toBe(true);
+    expect(QUANTITY_STRICT.test("with p < 0.01")).toBe(true);
+    expect(QUANTITY_STRICT.test("scored 0.82 vs. 0.71")).toBe(true);
+    expect(QUANTITY_STRICT.test("on CASP14 targets")).toBe(false);
+    expect(QUANTITY_STRICT.test("between 2019 and 2024")).toBe(false);
+  });
+});
+
+describe("scoreSentence", () => {
+  it("ranks a claim above the field and penalises a fragment", () => {
+    expect(scoreSentence("We show that the decoder recovers side-chain angles.", 0)).toBeGreaterThan(
+      scoreSentence("Protein folding remains a grand challenge in biology.", 0),
+    );
+    expect(scoreSentence("Fig. 1.", 0)).toBeLessThan(
+      scoreSentence("We show that the decoder recovers side-chain angles.", 0),
+    );
+  });
+});
+
+describe("pickSkimMarks", () => {
+  const seven = [
+    "Protein structure prediction remains a grand challenge in computational biology.",
+    "Existing approaches depend on multiple sequence alignments that are slow to build.",
+    "We propose a graph neural network that predicts inter-residue contacts directly from sequence.",
+    "The model is trained on the full PDB with a contrastive objective.",
+    "It reaches 94% precision on CASP14 targets, outperforming the previous best by 7 points.",
+    "Ablations show that the contrastive objective accounts for most of the gain.",
+    "These results suggest that alignment-free prediction is within reach for orphan proteins.",
+  ];
+
+  it("marks two or three sentences of a seven-sentence abstract, including the number", () => {
+    const marks = pickSkimMarks(seven);
+
+    expect(marks.length).toBeGreaterThanOrEqual(2);
+    expect(marks.length).toBeLessThanOrEqual(3);
+    expect(marks).toContain(4);
+    expect(marks).toEqual([...marks].sort((a, b) => a - b));
+  });
+
+  it("never marks the boilerplate opener", () => {
+    expect(pickSkimMarks(seven)).not.toContain(0);
+  });
+
+  it("marks nothing in a two-sentence abstract", () => {
+    expect(pickSkimMarks(seven.slice(2, 4))).toEqual([]);
+  });
+
+  it("collapses a three-sentence abstract to one mark under the ink cap", () => {
+    const three = [
+      "We propose a compact predictor for backbone geometry.",
+      "It matches larger models on CASP15 with 40% fewer parameters.",
+      "This suggests that scale is not the only route to accuracy.",
+    ];
+
+    expect(pickSkimMarks(three)).toHaveLength(1);
+  });
+
+  it("marks nothing when every sentence is about the field", () => {
+    expect(
+      pickSkimMarks([
+        "Docking has attracted considerable attention in recent years.",
+        "It remains a grand challenge in computational chemistry.",
+        "Structure prediction plays a crucial role in drug discovery.",
+      ]),
+    ).toEqual([]);
   });
 });

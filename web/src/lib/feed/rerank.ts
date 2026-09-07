@@ -1,6 +1,7 @@
 import type { ScoredItem } from "@/lib/scoring/types";
 import { isReviewLike } from "@/lib/scoring/review-policy";
 import { tokenize } from "@/lib/scoring/tokenize";
+import { RERANK_DEFAULT_REASON } from "@/lib/reader/recommendation";
 import type { SearchBrief } from "./profile-compiler";
 
 function overlapScore(text: string, signals: string[]): number {
@@ -92,7 +93,7 @@ export function applyTier1Rerank(items: ScoredItem[], brief: SearchBrief): Score
           ...item.scoreBreakdown,
           combined,
         },
-        relevanceReason: item.relevanceReason || "Matched against your daily search plan.",
+        relevanceReason: item.relevanceReason || RERANK_DEFAULT_REASON,
       };
     })
     .sort((a, b) => b.score - a.score);

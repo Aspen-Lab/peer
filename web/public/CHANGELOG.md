@@ -2,6 +2,129 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.13.1 — 2026-09-06
+
+Keys, swipe, and read-means-decided.
+
+**Keys on a paper.** `j` `]` `→` and `k` `[` `←` move through today's
+briefing in its order; `s` saves, `x` skips to the next paper (the Undo toast
+and `u` restore it), `l` likes, `o` and Enter open the source, `c` copies the
+page as Markdown, Esc and Backspace return to the briefing. One table
+(`PAPER_KEYS`) drives the handler and the help sheet's new "Reading" group.
+The briefing's own keys are untouched. Arrows never take a live text
+selection — Shift+Arrow extends one, and a plain arrow on a selection is the
+reader adjusting it.
+
+**Swipe on the plate.** On a phone the plate is the card's swipe object: right
+saves, left marks not interested and advances. Touch and pen only, the same
+thresholds as the card, `pan-y` so the page still scrolls. A skip keeps the
+reader mounted through the fly-out — the dismissed paper is read from the
+pending dismissal until the route changes, so no loading mat flashes and no
+request fires for a paper just dismissed.
+
+**Read means decided.** Opening a paper no longer marks it read. It is read
+when the Decision block has been on screen for a second, or on any decision —
+save, skip, like, open, copy, next. A record-only page is therefore read on
+open; `u` un-reads.
+
+**Assistive technology.** The reading article takes focus after a client
+navigation, so `j`/`k` announce the new paper. The authors line keeps the
+names as its accessible name ("A. Jumper, B. Evans +9, Show 9 more") instead
+of replacing them. Keycap chips inside buttons are hidden from screen readers
+("Save", not "Saves"). The DOI line says it copies and has a 44px touch
+target; the copy toast's live region is always in the DOM so it is announced.
+The plate and its caption are a real `figure`/`figcaption`.
+
+## v0.13.0 — 2026-09-06
+
+The reading surface.
+
+`/papers/[id]` is rewritten as a reading sheet in a fixed order the reader
+learns once: rail · plate · title and meta · the paper's own words · the
+decision · Peer's additions · next in briefing. Nothing on it is invented.
+
+**The paper's words.** The abstract as written, in its two paragraphs, with
+the claim and the numbers set in ink; the rest muted. No heading is put over
+an abstract sentence. A paper with no abstract shows the record and, when
+Semantic Scholar has one, its TLDR labelled as machine-written.
+
+**One sentence about what Peer read.** "Abstract only. Method, caveats and
+what it means for your project need the full text and a key." — or the full
+text's source and page count, the paywall host, or the plain statement that
+the PDF is there and only a self-hosted Peer reads it. Every string comes
+from one table (`describeAvailability`); none is typed in JSX. The
+recommendation line under the authors is the briefing's own reason, never the
+deep-link placeholder a paper resolved by id carries, and never the
+reranker's generic fill-in.
+
+**Model blocks with receipts.** With a key, each block is prose whose every
+claim carries the paper's own sentence: an ink mark when the sentence is in
+the abstract, a quiet quote with its section heading when it is not. When
+the reader turned deep reports on and the model still read the abstract
+alone, the sentence names the wall (paywalled, unreadable here, unfound, or
+the deep step not finishing) instead of telling them to turn on a setting
+they already turned on. A model that was asked and could not finish says so.
+
+**Copy as Markdown.** Frontmatter with the basis the text was read from, the
+abstract with the marks in bold, every quote with its heading, a "Not on this
+page" list generated from the typed omissions, and a BibTeX block. A reader
+who ran the model is never told a block "needs a key".
+
+A PDF's section names arrive in capitals ("MATERIALS AND METHODS"); the
+attribution sets them in title case for display and export — the shouting is
+typesetting, not meaning, and the page has no other capitals.
+
+**Deleted.** The Surface route and its model, the six-pill action row and the
+Cite modal, the scroll progress bar, ScrambleText, the icon section titles,
+"At a glance", "Explore further", "More like this", keyword chips, the
+pull-quote of the scoring string, "Why it fits you", "Related from your
+feed", the skeletons and shimmer bars, the tier-upgrade block, and every
+fabricated-report path behind them. The plate figure is resolved once per
+paper for the card, the page and the caption line together.
+
+## v0.12.4 — 2026-09-06
+
+A reading per paper, and evidence-verified reports.
+
+**`GET /api/papers/[id]/reading`.** The deterministic reading, built server-
+side from the record and the full text with no profile and no key, so it is
+one document per paper for every reader and is cached for a day. A full-text
+attempt that times out answers `no-store` and is not kept.
+
+**Every claim carries a verbatim sentence.** The report prompts ask for an
+`evidence` sentence copied character-for-character from the abstract (Tier 1)
+or the full text (Tier 2), and `verifyReportEvidence` drops — never flags —
+any claim whose sentence is not in the text the model was given. Drops are
+counted and shown. The relation to the reader's project is asked for only
+when the profile has one. At the abstract tier no figure is kept: nothing
+bound it, so a URL the model emitted is not the paper's; the sanitizer keeps
+only https and PDF-rendered data images.
+
+**Vercel reads no PDFs, and says so.** The PDF text extractor is traced into
+the reading and report functions. Where no interpreter can be spawned, or
+the helper is missing, the extractor reports a machine reason (`no-python`,
+`no-extractor`) and the reading maps either to "the PDF is there, but only a
+self-hosted Peer reads PDFs" — never "no full text". The extractor also reports the document's real page
+count rather than the number of pages it read: a 50-page paper was being
+called "a 40-page PDF" because 40 is the reading cap.
+
+## v0.12.3 — 2026-09-06
+
+The deterministic reading.
+
+`reading.ts` builds the sheet the reading page shows before, and without, a
+model: the abstract split into sentences with `pickSkimMarks` choosing the
+claim and the numbers; up to three verbatim findings from the results
+section carrying a number or a comparison; two method sentences; the
+authors' own limitations, else the hedges in the discussion. Each quote
+carries the heading it came from. Absence is typed (`omitted`), never faked.
+
+**Provenance.** `ExtractedDocument.pageCount` reaches the reading; a
+Semantic Scholar TLDR is carried as `tldr`, labelled, and no longer becomes
+the abstract; `reviewPaperLabel` reads the title only. The old fallback
+report — "Main result", "Key result 2", "Overview / Section N", invented fit
+reasons — is deleted; the one report without a model is `emptyReport`.
+
 ## v0.12.2 — 2026-09-06
 
 Full text reaches Peer again.

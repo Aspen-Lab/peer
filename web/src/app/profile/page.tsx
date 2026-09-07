@@ -10,7 +10,6 @@ import { useRouter } from "next/navigation";
 import { useProfileStore } from "@/store/profile";
 import { formatTimeAgo } from "@/lib/format";
 import { useFeedStore } from "@/store/feed";
-import { useUIStore } from "@/store/ui";
 import { careerStages, industryPreferences, themeAccentOptions, themeModeOptions, type ColorTheme, type ThemeAccent, type ThemeMode } from "@/types";
 import { SchoolAutocomplete } from "@/components/profile/school-autocomplete";
 import { AdvisorField } from "@/components/profile/advisor-field";
@@ -1853,53 +1852,8 @@ function AppearanceCard({
       </div>
       <div className="px-7 pb-6">
         <ColorThemePicker value={colorTheme} onChange={onChange} />
-        <RevealMotionToggle />
       </div>
     </section>
-  );
-}
-
-/**
- * Opt back into the full decode animation when the operating system asks for
- * reduced motion. Off by default — the OS preference is respected unless the
- * reader deliberately turns this on.
- */
-function RevealMotionToggle() {
-  const revealMotion = useUIStore((s) => s.revealMotion);
-  const setRevealMotion = useUIStore((s) => s.setRevealMotion);
-  const forced = revealMotion === "full";
-
-  return (
-    <div className="mt-6 pt-5 border-t border-border/50">
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <p className="text-body-sm font-medium text-heading">
-            Always animate report text
-          </p>
-          <p className="mt-1 text-meta leading-relaxed text-text-muted">
-            Reports and briefings decode into place as they are written. Your
-            system currently asks apps to reduce motion, so Peer fades the text
-            in gently instead. Turn this on to always play the full effect.
-          </p>
-        </div>
-        <button
-          type="button"
-          role="switch"
-          aria-checked={forced}
-          aria-label="Always animate report text"
-          onClick={() => setRevealMotion(forced ? "auto" : "full")}
-          className={`relative mt-0.5 h-5 w-9 shrink-0 rounded-full transition-colors duration-200 ease-out ${
-            forced ? "bg-accent" : "bg-bg-secondary"
-          }`}
-        >
-          <span
-            className={`absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-bg shadow transition-transform duration-200 ease-out ${
-              forced ? "translate-x-4" : ""
-            }`}
-          />
-        </button>
-      </div>
-    </div>
   );
 }
 

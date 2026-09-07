@@ -38,6 +38,8 @@ export interface ExtractedDocument {
   sections: ExtractedSection[];
   figureCaptions: ExtractedFigureCaption[];
   source: ExtractedSourceKind;
+  /** PDFs only: pages the extractor saw (capped at its page limit). */
+  pageCount?: number;
   reason?: string | null;
 }
 

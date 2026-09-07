@@ -1,0 +1,122 @@
+{
+ "id": "openalex:W7208807247",
+ "title": "Graph Embeddings for Protein Structure Prediction",
+ "authors": [
+  "Jincheng Zhang"
+ ],
+ "relevanceReason": "Pulled from your search. Summary below is the paper's own abstract.",
+ "venue": "Zenodo (CERN European Organization for Nuclear Research)",
+ "source": "other",
+ "summaryIntro": "Predicting protein structure from its amino acid sequence remains a central challenge in computational biology.",
+ "summaryExperimentKeywords": [
+  "Embedding",
+  "Graph",
+  "Protein structure prediction",
+  "Protein structure",
+  "Protein function prediction",
+  "Threading (protein sequence)"
+ ],
+ "summaryResultDiscussion": "Traditional methods often rely on homology modeling and ab initio approaches, which can be computationally expensive and limited in their accuracy. This work explores the potential of graph embeddings to address this challenge. We propose a novel framework where proteins are represented as graphs, with amino acid residues as nodes and interactions as edges. Graph neural networks are then employed to learn embeddings for these nodes, capturing the intricate relationships between residues. These embeddings are subsequently used to predict the 3D structure of the protein. Our approach leverages the power of graph embedding techniques, which have demonstrated success in various domains, to tackle the complex problem of protein structure prediction. We demonstrate that graph embeddings can effectively capture the structural information encoded within protein sequences, leading to improved prediction accuracy. The core claim of this work is that graph embeddings can be utilized to predict protein structure accurately, capturing the complex relationships between residues. The core mechanism involves representing a protein as a graph, learning embeddings using graph neural networks, and then predicting the 3D structure. This novel approach offers a promising direction for future research in protein structure prediction.",
+ "linkPaper": "https://doi.org/10.5281/zenodo.22316532",
+ "doi": "10.5281/zenodo.22316532",
+ "publishedDate": "2026-09-05",
+ "isSaved": false,
+ "preferenceSignals": [
+  {
+   "key": "openalex_topic:t10044",
+   "label": "Protein Structure and Dynamics",
+   "source": "openalex_topic",
+   "confidence": 0.4918000102043152
+  },
+  {
+   "key": "openalex_topic:t12254",
+   "label": "Machine Learning in Bioinformatics",
+   "source": "openalex_topic",
+   "confidence": 0.155799999833107
+  },
+  {
+   "key": "openalex_topic:t11273",
+   "label": "Advanced Graph Neural Networks",
+   "source": "openalex_topic",
+   "confidence": 0.11739999800920486
+  },
+  {
+   "key": "openalex_keyword:embedding",
+   "label": "Embedding",
+   "source": "openalex_keyword",
+   "confidence": 0.5602999925613403
+  },
+  {
+   "key": "openalex_keyword:graph",
+   "label": "Graph",
+   "source": "openalex_keyword",
+   "confidence": 0.5504999756813049
+  },
+  {
+   "key": "openalex_keyword:protein-structure-prediction",
+   "label": "Protein structure prediction",
+   "source": "openalex_keyword",
+   "confidence": 0.5303000211715698
+  },
+  {
+   "key": "openalex_keyword:protein-structure",
+   "label": "Protein structure",
+   "source": "openalex_keyword",
+   "confidence": 0.45559999346733093
+  },
+  {
+   "key": "openalex_keyword:protein-function-prediction",
+   "label": "Protein function prediction",
+   "source": "openalex_keyword",
+   "confidence": 0.42660000920295715
+  },
+  {
+   "key": "openalex_keyword:threading",
+   "label": "Threading (protein sequence)",
+   "source": "openalex_keyword",
+   "confidence": 0.38760000467300415
+  },
+  {
+   "key": "openalex_keyword:graph-embedding",
+   "label": "Graph embedding",
+   "source": "openalex_keyword",
+   "confidence": 0.3513999879360199
+  },
+  {
+   "key": "openalex_keyword:core",
+   "label": "Core (optical fiber)",
+   "source": "openalex_keyword",
+   "confidence": 0.3458999991416931
+  },
+  {
+   "key": "openalex_concept:c41608201",
+   "label": "Embedding",
+   "source": "openalex_concept",
+   "confidence": 0.5602999925613403
+  },
+  {
+   "key": "openalex_concept:c132525143",
+   "label": "Graph",
+   "source": "openalex_concept",
+   "confidence": 0.5504999756813049
+  },
+  {
+   "key": "openalex_concept:c18051474",
+   "label": "Protein structure prediction",
+   "source": "openalex_concept",
+   "confidence": 0.5303000211715698
+  },
+  {
+   "key": "openalex_concept:c80444323",
+   "label": "Theoretical computer science",
+   "source": "openalex_concept",
+   "confidence": 0.5001999735832214
+  },
+  {
+   "key": "openalex_concept:c47701112",
+   "label": "Protein structure",
+   "source": "openalex_concept",
+   "confidence": 0.45559999346733093
+  }
+ ]
+}

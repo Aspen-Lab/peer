@@ -45,6 +45,8 @@ export interface RawItem {
   title: string;
   authors: string[];
   abstract?: string;
+  /** Semantic Scholar's machine-written one-liner. Never merged into `abstract`; shown labelled. */
+  tldr?: string;
   url: string;
   publishedAt: string;
   venue?: string;

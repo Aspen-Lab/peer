@@ -7,8 +7,12 @@
 //
 // Pass 2 (the selected provider's stronger model):
 //   EXTRACT — using the compressed signal + abstract + metadata, produce
-//   the structured PaperReport with grounded evidence and explicit novelty
-//   per result.
+//   the structured PaperReport: every claim with one sentence copied
+//   character-for-character from the supplied text.
+//
+// Then verification: every claim's evidence sentence is looked up in the
+// abstract and the extracted sections; a claim whose sentence is not there
+// is dropped and counted (`evidence.ts`). Nothing unverified leaves here.
 //
 // For short papers (< ~10k chars body), Pass 1 is skipped and the raw text
 // is sent directly to Pass 2 to save the extra round-trip.
@@ -16,13 +20,12 @@
 import type { Paper } from "@/types";
 import type { DigestProvider } from "@/lib/llm/providers/types";
 import {
-  buildFallbackPaperReport,
-  improvePaperReportFit,
-  isPaperReviewLike,
+  emptyReport,
   sanitizePaperReport,
   type PaperReport,
   type PaperReportDepth,
 } from "./report";
+import { verifyReportEvidence } from "./evidence";
 import type { ExtractedDocument } from "./html-text";
 
 const PASS1_TRIGGER_CHARS = 10_000;
@@ -39,6 +42,13 @@ interface CompressedSignal {
 interface BuildDeepReportArgs {
   paper: Paper;
   contextHint?: string;
+  /**
+   * The reader's current project and challenges, joined. Only when this is
+   * non-empty does Pass 2 ask for `relationToYourWork`; the page has nothing
+   * to relate the paper to otherwise, and a relation invented against an
+   * empty profile is exactly the fabrication the old prompt produced.
+   */
+  project?: string;
   doc: ExtractedDocument;
   provider: DigestProvider;
 }
@@ -53,6 +63,11 @@ function sectionsByCanonical(doc: ExtractedDocument): Record<string, string> {
     out[section.canonical] = (out[section.canonical] ?? "") + " " + section.text;
   }
   return out;
+}
+
+/** The whole abstract as the mapper split it — the corpus a Tier-1 claim must quote. */
+function fullAbstract(paper: Paper): string {
+  return [paper.summaryIntro, paper.summaryResultDiscussion].filter(Boolean).join(" ");
 }
 
 function safeJson(text: string): Record<string, unknown> | null {
@@ -169,14 +184,21 @@ async function runPass1(
   return parseCompressedSignal(raw);
 }
 
+/**
+ * The Pass-2 schema. `limitations` and `nextStep` exist only here — they need
+ * the full text. `relationToYourWork` is in the schema only when the reader
+ * has a project; otherwise the key is absent so the model is never invited
+ * to invent one. Every claim carries `evidence`, one sentence copied from the
+ * supplied text, and `verifyReportEvidence` holds it to that.
+ */
 function buildPass2Prompt(args: {
   paper: Paper;
   contextHint?: string;
+  project?: string;
   doc: ExtractedDocument;
   signal: CompressedSignal | null;
-  isReview: boolean;
 }): string {
-  const { paper, contextHint, doc, signal, isReview } = args;
+  const { paper, contextHint, project, doc, signal } = args;
   const buckets = sectionsByCanonical(doc);
 
   // Decide what body context to feed: compressed signal when available, else
@@ -200,95 +222,113 @@ function buildPass2Prompt(args: {
     caption: cap.caption.slice(0, 300),
   }));
 
-  const secondSection = isReview
+  const evidenceRule =
+    "one sentence copied character-for-character from the supplied text (or the abstract) that supports `text`";
+
+  const relationSchema = project
     ? {
-        reviewContents: {
-          sections: [
+        relationToYourWork: {
+          basedOn: "the reader's project text, copied back",
+          items: [
             {
-              heading: "exact section title from the paper body",
-              summary: "1-2 sentences summarising the key point of that section",
+              text: "one sentence relating a specific finding or method of this paper to the reader's project (max 3 items)",
+              evidence: evidenceRule,
             },
           ],
-          _note: "List 4-8 major body sections of this review/survey, using actual section names from the body when present.",
         },
       }
-    : {
-        resultsAndSignificance: {
-          summary: "2-3 sentences explaining the headline result and why it matters.",
-          keyResults: [
-            {
-              title: "short label",
-              detail: "one concrete result sentence grounded in the supplied body text",
-              evidence: "verbatim sentence (or close paraphrase) from the supplied body text that supports `detail`",
-              novelty: "one sentence explaining what specifically is new about THIS result vs prior work",
-              figureIndex: "integer 1-5 — leave 1 if uncertain; figure binding runs separately later",
-            },
-          ],
-        },
-      };
+    : {};
 
   return JSON.stringify({
-    task: isReview
-      ? "Create a structured Peer deep paper report for a REVIEW or SURVEY. List the body sections in reviewContents.sections, using actual section names from the paper. Do not invent."
-      : "Create a structured Peer DEEP paper report. Use the supplied paper body (or compressed signal). Every key result must include a verbatim `evidence` sentence and a `novelty` line explaining what is new about THIS result compared to prior approaches. Do not fabricate numbers; if a number is not in the supplied body, omit it.",
+    task:
+      "Create a structured Peer DEEP paper report from the supplied paper body (or compressed signal) and abstract. Every item carries an `evidence` sentence copied character-for-character from the supplied text; omit any item you cannot support that way. Do not fabricate numbers; if a number is not in the supplied text, omit it.",
     userContext: contextHint || "",
+    ...(project ? { readerProject: project } : {}),
     paper: {
       id: paper.id,
       title: paper.title,
       authors: paper.authors,
       venue: paper.venue,
-      abstract: paper.summaryIntro,
+      abstract: fullAbstract(paper),
     },
     body: bodyPayload,
     figureCaptions,
     outputSchema: {
+      skim: [
+        {
+          text: "one plain sentence a reader uses to decide whether to open the paper — the finding, not the topic (max 3 items)",
+          evidence: evidenceRule,
+        },
+      ],
       whatItProposes: {
         summary: "2-3 sentences describing the proposal/scope in plain English. Do not include the method list here.",
         methods: [
-          "3-6 concrete method sentences naming the actual experiment, instrument, dataset, control, ablation, measurement, simulation, or evaluation protocol used. Do not use generic topic tags.",
-        ],
-        novelty: [
-          "exactly one concise sentence explaining what is new about this paper vs prior work; do not repeat this in methods",
+          {
+            text: "one concrete method sentence naming the actual experiment, instrument, dataset, control, ablation, measurement, simulation, or evaluation protocol used (max 4 items)",
+            evidence: evidenceRule,
+          },
         ],
       },
-      ...secondSection,
-      whyItFitsYou: {
-        reasons: [
-          "One specific reason per item (max 2 sentences). Tie to user context where possible. Never vague.",
+      resultsAndSignificance: {
+        summary: "2-3 sentences explaining the headline result and why it matters.",
+        keyResults: [
+          {
+            title: "short label",
+            detail: "one concrete result sentence grounded in the supplied text",
+            evidence: evidenceRule,
+          },
         ],
-        keywords: ["paper keywords that overlap with user interests"],
       },
+      limitations: [
+        {
+          text: "one limitation the authors themselves state — only what the authors state, nothing inferred (max 3 items; omit the key if the authors state none)",
+          evidence: evidenceRule,
+        },
+      ],
+      nextStep: {
+        text: "one concrete experiment or check the reader could run next, tied to a sentence of the paper; omit the key if none",
+        evidence: evidenceRule,
+      },
+      ...relationSchema,
     },
+    rules: [
+      "Return ONLY valid JSON.",
+      "`evidence` is one sentence copied character-for-character from the supplied text (or the abstract). Do not paraphrase it, shorten it, or merge sentences.",
+      "Omit any item you cannot support with such a sentence. An empty array is correct when nothing qualifies.",
+      "`limitations` holds only what the authors state; do not infer weaknesses.",
+      ...(project
+        ? ["`relationToYourWork.basedOn` is the reader's project text copied back."]
+        : []),
+    ],
   });
 }
 
 const PASS2_SYSTEM = [
   "You are Peer, a careful research assistant.",
   "Write a structured deep paper report grounded in the supplied body text.",
-  "Every claim must be traceable to a supplied sentence — quote in `evidence` when present.",
+  "Every claim carries an `evidence` sentence copied character-for-character from the supplied text; a claim without one is omitted.",
   "Be specific: name the actual technique, finding, or comparison rather than generic phrases.",
-  "Keep proposal, method, and novelty separate: proposal says what the paper tries to do; methods say what experiments or evaluations were actually used; novelty is exactly one concise sentence.",
+  "Keep proposal and method separate: proposal says what the paper tries to do; methods say what experiments or evaluations were actually used.",
   "Do not fabricate numbers, citations, or experimental details.",
-  "Do not mention missing user context.",
   "Return only valid JSON.",
 ].join(" ");
 
 async function runPass2(args: {
   paper: Paper;
   contextHint?: string;
+  project?: string;
   doc: ExtractedDocument;
   signal: CompressedSignal | null;
   provider: DigestProvider;
 }): Promise<PaperReport | null> {
   if (!args.provider.generateJsonText) return null;
 
-  const isReview = isPaperReviewLike(args.paper);
   const prompt = buildPass2Prompt({
     paper: args.paper,
     contextHint: args.contextHint,
+    project: args.project,
     doc: args.doc,
     signal: args.signal,
-    isReview,
   });
   const clipped = prompt.length > PASS2_MAX_INPUT_CHARS
     ? prompt.slice(0, PASS2_MAX_INPUT_CHARS)
@@ -301,17 +341,18 @@ async function runPass2(args: {
   });
   const parsed = safeJson(raw);
   if (!parsed) return null;
-  return sanitizePaperReport(parsed as Partial<PaperReport>);
+  return sanitizePaperReport(parsed);
 }
 
 /**
- * Produce a deep, body-grounded paper report. Returns null on any LLM failure
- * so the caller can fall back to the abstract-only path.
+ * Produce a deep, body-grounded, evidence-verified paper report. Returns null
+ * on any LLM failure so the caller can fall back to the abstract-only path.
  */
 export async function generateDeepReport(
   args: BuildDeepReportArgs,
 ): Promise<PaperReport | null> {
   const { paper, contextHint, doc, provider } = args;
+  const project = args.project?.trim() || undefined;
   if (!provider.generateJsonText) return null;
   if (doc.sections.length === 0) return null;
 
@@ -325,17 +366,42 @@ export async function generateDeepReport(
     const report = await runPass2({
       paper,
       contextHint,
+      project,
       doc,
       signal,
       provider,
     });
     if (!report) return null;
 
-    const improved = improvePaperReportFit(report, paper, contextHint);
+    // The model was never asked for a relation without a project; should it
+    // volunteer one anyway, it is not kept. With a project, `basedOn` is the
+    // project text the server holds, not the model's echo of it.
+    if (!project) {
+      delete report.relationToYourWork;
+    } else if (report.relationToYourWork) {
+      report.relationToYourWork.basedOn = project.slice(0, 200);
+    }
+
+    const verified = verifyReportEvidence(report, {
+      abstract: fullAbstract(paper),
+      doc,
+    });
+    if (verified.dropped > 0) {
+      console.warn(
+        `[papers/deep-report] ${paper.id}: dropped ${verified.dropped} claim(s) without verbatim support`,
+      );
+    }
+
     return {
-      ...improved,
+      ...verified.report,
       depth: "deep" as PaperReportDepth,
       sourceKind: doc.source,
+      provenance: {
+        ...verified.report.provenance,
+        basis: "model-fulltext",
+        sourceKind: doc.source,
+        ...(typeof doc.pageCount === "number" ? { pageCount: doc.pageCount } : {}),
+      },
     };
   } catch (err) {
     console.error("[papers/deep-report] generation failed:", err);
@@ -348,16 +414,11 @@ export function isWithinDeepReportBudget(doc: ExtractedDocument): boolean {
   return totalBodyChars(doc) > 800;
 }
 
-/** Build a fallback report tagged with paywall notice for UI banner display. */
-export function buildPaywalledFallback(
-  paper: Paper,
-  contextHint: string | undefined,
-  notice: string,
-): PaperReport {
-  const base = buildFallbackPaperReport(paper, contextHint);
-  return {
-    ...base,
-    depth: "abstract" as PaperReportDepth,
-    paywallNotice: notice,
-  };
+/**
+ * The report for a paper whose full text the publisher blocked and whose
+ * abstract-tier model call also produced nothing: empty, with the notice the
+ * page turns into its availability sentence. Nothing is written in its place.
+ */
+export function buildPaywalledFallback(notice: string): PaperReport {
+  return { ...emptyReport("fallback"), paywallNotice: notice };
 }
