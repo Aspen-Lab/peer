@@ -5,8 +5,8 @@
 /**
  * A keycap means nothing where there is no keyboard. Any element that exists
  * only to name a key — a rail of `k` `j` `?`, the chip inside a button — takes
- * this class so a phone never shows it. The help sheet does not: it is opened
- * from the sidebar on a tablet too, and a shortcut list with no keys is empty.
+ * this class so a phone never shows it. The help sheet does not: the masthead's
+ * `?` chip opens it on a tablet too, and a shortcut list with no keys is empty.
  */
 export const POINTER_ONLY_CLASS = "[@media(hover:none)]:hidden";
 

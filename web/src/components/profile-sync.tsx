@@ -15,7 +15,7 @@
 //   • Hydrating from remote primes the diff baseline, so the pull itself
 //     never echoes a redundant PUT back at the server.
 //
-// Mount once, near the root, alongside <UserMenu />.
+// Mount once, near the root; the account controls live on /profile.
 
 import { useEffect, useRef } from "react";
 import { create } from "zustand";

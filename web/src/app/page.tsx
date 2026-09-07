@@ -117,7 +117,10 @@ function DailyBriefingPage() {
   });
 
   return (
-    <article className="mx-auto max-w-[1280px] px-6 py-16 lg:py-20">
+    // The board uses the whole window now that nothing pads <main>; on a
+    // 2000px display it sits 360px from both edges. The masthead above it
+    // states the day and the counts; the page starts with its own line.
+    <article className="mx-auto max-w-[1280px] px-6 pt-0 md:pt-5 pb-16 lg:pb-20">
       <PaperDigestLoader
         papers={papers}
         contextHint={digestContextHint}
@@ -125,18 +128,14 @@ function DailyBriefingPage() {
         llmOverride={digestLlmOverride}
       />
 
-      <div className="mx-auto max-w-[820px]">
-        <BriefingHeader
-          total={papers.length}
-          unread={unreadCount}
-          lastRefresh={lastRefresh}
-          closed={briefingClosed}
-          onRefresh={refreshFeed}
-          isRefreshing={isLoading}
-          topics={profile.researchTopics}
-          failed={Boolean(feedError)}
-        />
-      </div>
+      <BriefingLine
+        lastRefresh={lastRefresh}
+        closed={briefingClosed}
+        onRefresh={refreshFeed}
+        isRefreshing={isLoading}
+        topics={profile.researchTopics}
+        failed={Boolean(feedError)}
+      />
 
       {papersLoading && papers.length === 0 && <LoadingSkeleton />}
 
@@ -156,7 +155,7 @@ function DailyBriefingPage() {
         // extractable figure, so card heights genuinely differ; a uniform grid
         // either ragged-edges every row or reserves dead space on the six cards
         // with no image. CSS columns let each card be its own height.
-        <div className="mt-8 columns-1 sm:columns-2 lg:columns-3 gap-4 [column-fill:_balance]">
+        <div className="mt-5 columns-1 sm:columns-2 lg:columns-3 gap-4 [column-fill:_balance]">
           {papers.map((paper, index) => (
             <div
               key={paper.id}
@@ -182,13 +181,13 @@ function DailyBriefingPage() {
   );
 }
 
-// The briefing readout — how many papers arrived, how many are unopened, when
-// the fetch last ran. This was the only genuinely daily, genuinely changing
-// thing on the old page, and it was rendered at caption size buried inside the
-// search console. It is the page header now.
-function BriefingHeader({
-  total,
-  unread,
+// One line under the masthead: why these papers are here, and when they
+// came. The date, the count and the unread count are the masthead's — they
+// used to be rendered here as well, and a third time in the sidebar. What is
+// left is the one statement about the whole briefing that only this page can
+// make, and the refresh button at the right. A failed load says so, in red,
+// and never "synced just now" (feed.ts keeps the old lastRefresh on error).
+function BriefingLine({
   lastRefresh,
   closed,
   onRefresh,
@@ -196,9 +195,8 @@ function BriefingHeader({
   topics,
   failed = false,
 }: {
-  total: number;
-  unread: number;
   lastRefresh: string | null;
+  /** Every paper decided: said here, since the masthead's "0 unread" is a number, not a state. */
   closed: boolean;
   onRefresh: () => void;
   isRefreshing: boolean;
@@ -206,101 +204,72 @@ function BriefingHeader({
   /** The last paper load failed; say so instead of a sync time. */
   failed?: boolean;
 }) {
-  const today = new Date();
-  const dateLine = today.toLocaleDateString(undefined, {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-  });
-
-  const refreshBtn = (
-    <button
-      type="button"
-      onClick={onRefresh}
-      disabled={isRefreshing}
-      aria-label="Refresh briefing"
-      title="Refresh briefing"
-      className="ml-auto inline-flex h-9 w-9 items-center justify-center rounded-full text-text-faint hover:bg-bg-secondary/80 hover:text-text transition-[color,background-color,transform] duration-150 ease-snap active:scale-90 disabled:opacity-50 disabled:cursor-wait"
-    >
-      <svg
-        width="15"
-        height="15"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        aria-hidden
-        className={isRefreshing ? "animate-spin" : ""}
-      >
-        <path d="M21 12a9 9 0 1 1-3-6.7" />
-        <path d="M21 4v6h-6" />
-      </svg>
-    </button>
-  );
-
   return (
-    <header className="mb-2">
-      <p className="text-meta text-text-faint">{dateLine}</p>
-      <div className="mt-1.5 flex items-center gap-2.5">
-        {closed ? (
-          <>
-            <span
-              className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent"
-              aria-hidden
-            />
-            <h1 className="text-title font-medium text-heading">
-              Briefing closed
-            </h1>
-            <span className="text-border-strong hidden sm:inline">·</span>
-            <span className="text-body-sm text-text-muted hidden sm:inline">
-              {total} reviewed · back tomorrow
-            </span>
-          </>
-        ) : (
-          <>
-            <span className="relative h-1.5 w-1.5 shrink-0" aria-hidden>
-              <span className="absolute inset-0 rounded-full bg-accent" />
-              <span className="absolute inset-0 rounded-full bg-accent/40 motion-safe:animate-ping [animation-duration:2.4s]" />
-            </span>
-            <h1 className="text-title font-medium text-heading tabular-nums">
-              {total} paper{total === 1 ? "" : "s"} today
-            </h1>
-            {total > 0 && (
-              <>
-                <span className="text-border-strong">·</span>
-                <span className="text-body-sm text-text-muted tabular-nums">
-                  <span className="text-accent font-medium">{unread}</span>{" "}
-                  unread
-                </span>
-              </>
-            )}
-          </>
-        )}
-        {refreshBtn}
-      </div>
+    <header className="flex h-9 items-center gap-3">
+      <h1 className="sr-only">Today&apos;s briefing</h1>
       {/* Why these papers are here. This is one statement about the whole
           briefing, so it belongs at the level where it is true — it used to be
           repeated on every card as "Why you · <your own topic>", which meant
           the loudest element on all ten cards was the reader's own query read
           back to them. */}
-      <p className="mt-1 text-meta text-text-faint">
+      {/* Two spans, not one truncating line: the topics give way, the sync
+          state never does. On a phone the whole line is 545px in 279px, and
+          a single `truncate` cut the tail — which is where 'sync failed'
+          lives, the only place the page says so now that the masthead
+          states counts and never sync. */}
+      <p className="flex min-w-0 items-center font-mono text-meta text-text-faint">
         {topics.length > 0 && (
-          <>
-            matching{" "}
-            <span className="text-text-muted">{topics.join(", ")}</span>
-            <span className="mx-1.5 text-border-strong">·</span>
-          </>
+          <span className="min-w-0 truncate">
+            matching <span className="text-text-muted">{topics.join(", ")}</span>
+          </span>
         )}
-        {failed ? (
-          <span className="text-red">sync failed</span>
-        ) : lastRefresh ? (
-          <>synced {formatTimeAgo(lastRefresh)}</>
-        ) : (
-          <>not synced yet</>
-        )}
+        <span className="shrink-0 whitespace-nowrap">
+          {topics.length > 0 && (
+            <span className="mx-1.5" aria-hidden>
+              ·
+            </span>
+          )}
+          {closed && (
+            <>
+              briefing closed
+              <span className="mx-1.5" aria-hidden>
+                ·
+              </span>
+            </>
+          )}
+          {failed ? (
+            <span className="text-red">sync failed</span>
+          ) : lastRefresh ? (
+            <>synced {formatTimeAgo(lastRefresh)}</>
+          ) : (
+            <>not synced yet</>
+          )}
+        </span>
       </p>
+      <button
+        type="button"
+        onClick={onRefresh}
+        disabled={isRefreshing}
+        aria-label="Refresh briefing"
+        title="Refresh briefing (r)"
+        className="ml-auto inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-text-faint hover:bg-bg-secondary/80 hover:text-text transition-[color,background-color,transform] duration-150 ease-snap active:scale-90 disabled:opacity-50 disabled:cursor-wait"
+      >
+        <svg
+          width="15"
+          height="15"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden
+          className={isRefreshing ? "animate-spin" : ""}
+        >
+          <path d="M21 12a9 9 0 1 1-3-6.7" />
+          <path d="M21 4v6h-6" />
+        </svg>
+      </button>
     </header>
   );
 }

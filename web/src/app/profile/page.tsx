@@ -18,6 +18,8 @@ import { apiFetch } from "@/lib/api";
 import { SURFACE_TOPIC_DESCRIPTIONS } from "@/lib/profile/topic-copy";
 import { IconBook, IconBuilding, IconCheck } from "@/components/icons";
 import { PageContainer } from "@/components/ui/page-container";
+import { AccountSection } from "@/components/account/account-section";
+import { VersionLine } from "@/components/shell/version-line";
 import { AiKeyFields } from "@/components/profile/ai-setup";
 import { ConnectorPanel } from "@/components/profile/connector-panel";
 import { Toggle } from "@/components/ui/toggle";
@@ -204,6 +206,10 @@ export default function ProfilePage() {
         </div>
       </header>
 
+      {/* ── Account — the app's only sign-in, so it is first, not 1700px
+          down under every settings block. Only when Supabase is configured. ── */}
+      <AccountSection className="mb-10 pb-8 border-b border-border" />
+
       {mode === "view" ? (
         <>
           <DashboardView
@@ -304,6 +310,8 @@ export default function ProfilePage() {
           </div>
         )}
       </section>
+
+      <VersionLine className="mt-10" />
     </PageContainer>
   );
 }

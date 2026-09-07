@@ -2,6 +2,58 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.14.0 — 2026-09-07
+
+The masthead.
+
+**One line of chrome.** The 208px sidebar, its floating toggle, the two
+top-right pills and the phone's row of tabs are replaced by a 48px masthead
+across the top of every page but the welcome wizard: the Peer wordmark at the
+left, the day's state on the window's centre line — "Sunday, September 7 ·
+10 papers · 9 unread" — and Search · Saved · Profile and a `?` keycap at the
+right. It is transparent at the top of the page and takes its glass once the
+page has scrolled; its height never changes, so nothing on the page moves.
+Content uses the whole window: the board and the reading spread centre in
+it, and no page slides sideways any more.
+
+**The rail is the masthead.** On a paper the centre reads "← Briefing · 3 of
+10 · k j", and the two keycaps are the previous and next buttons. The
+in-content rail is gone, so there is one position counter, and it is always
+on screen. A deep link shows the way back alone.
+
+**The day is stated once.** The briefing page's header — date, count, unread,
+rendered again 208px to the left in the sidebar — is now the masthead's. The
+page keeps one line under it: the topics it matched and when it synced, with
+the refresh button at the right; a failed load still says so in red. Before
+the day's fetch lands the masthead states only the date — the store does not
+know a count yet, and "0 papers" would have been a claim.
+
+**A thumb bar on the phone.** Below 768px the shell is a 56px bar at the
+bottom, in reach: Today, Search, Saved, You, each a 22px icon over a label
+and well over 44px tall; Saved carries its count when there is one. On a
+paper the bar is the rail — "← Briefing · 3 of 10 · Next →" — the first way
+to move on from a paper without judging it. The briefing's top is the
+wordmark and the day line, which scroll away; the reading page has no top
+chrome at all, so the plate is the first thing on screen. The page keeps a
+bottom padding the height of the bar, so the bar never covers the decision.
+
+**`/` is honest.** From any page it goes to Search and focuses the box; on
+Search it focuses in place (on a phone the box waits to be tapped, so the
+keyboard does not rise over the page). It used to look for a box that exists
+on one route. The dead "g /" the sidebar advertised, the `\` sidebar toggle and the
+help sheet's "View" group are gone; the help sheet's headings are sentence
+case — Anywhere, Navigate, Briefing, Reading — and its foot reads
+"Peer 0.14.0 · What's new", the first link to the changelog the app has had.
+
+**Account on the You page.** Sign in with GitHub, and Sign out, live in an
+Account section at the top of /profile, shown only when Supabase is
+configured; signed
+in, the masthead's "Profile" is the avatar. The GitHub star counter and its
+hourly fetch are deleted, with the floating pills, the sidebar's persisted
+open/closed state, the uppercase "SUN · SEP 7" and "V0.13.2", and the undo
+toast's uppercase label. The undo toast and the copy toast keep fixed corners
+and sit above the thumb bar on a phone.
+
 ## v0.13.2 — 2026-09-06
 
 The reading spread.

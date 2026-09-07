@@ -6,15 +6,14 @@ import {
   Roboto_Mono,
 } from "next/font/google";
 import "./globals.css";
-import { Nav } from "@/components/nav";
+import { Masthead } from "@/components/shell/masthead";
+import { ThumbBar } from "@/components/shell/thumb-bar";
 import { UndoToast } from "@/components/undo-toast";
 import { KeyboardLayer } from "@/components/keyboard";
 import { ProfileSync } from "@/components/profile-sync";
 import { FeedSync } from "@/components/feed-sync";
 import { ThemeSync } from "@/components/theme-sync";
-import { GithubStars } from "@/components/github-stars";
-import { UserMenu } from "@/components/user-menu";
-import { FirstRunGate, DesktopAccountControls } from "@/components/first-run";
+import { FirstRunGate } from "@/components/first-run";
 import { StoreHydrator } from "@/components/store-hydrator";
 
 // Primary UI sans — Delphi-style interface text
@@ -50,9 +49,8 @@ const notoSansSC = Noto_Sans_SC({
 });
 
 export const metadata: Metadata = {
-  title: "Peer — AI News Agent",
-  description:
-    "A self-hosted AI agent that reads the internet for you and only tells you what matters.",
+  title: "Peer",
+  description: "Today's papers, chosen for your work.",
 };
 
 export default function RootLayout({
@@ -81,15 +79,13 @@ export default function RootLayout({
             __html: `(function(){try{var L={system:"system:ember",cream:"light:ember",white:"light:indigo",pink:"light:rose",blue:"light:indigo",sage:"light:sage",lavender:"light:violet",black:"dark:ember",slate:"dark:indigo",plum:"dark:violet"};var t=JSON.parse(localStorage.getItem("peer-profile")).state.profile.colorTheme;t=L[t]||t;var p=String(t).split(":");if(["system","light","dark"].indexOf(p[0])>=0&&["ember","rose","marigold","sage","indigo","violet"].indexOf(p[1])>=0){var r=document.documentElement;r.setAttribute("data-mode",p[0]);r.setAttribute("data-accent",p[1])}}catch(e){}})()`,
           }}
         />
-        <Nav />
+        {/* The shell: one masthead above the page on desktop, one thumb bar
+            under it on a phone; both are client components that return null
+            on /welcome. <main> carries no padding for either — the masthead
+            is in flow and sticky, the thumb bar leaves its own spacer. */}
+        <Masthead />
         <main className="flex-1 peer-main-content">{children}</main>
-        {/* Floating account + GitHub star — desktop only, hidden during the
-            onboarding wizard. Rendered here (server) and passed as children so
-            the async GithubStars stays a Server Component. */}
-        <DesktopAccountControls>
-          <UserMenu />
-          <GithubStars />
-        </DesktopAccountControls>
+        <ThumbBar />
         <UndoToast />
         <KeyboardLayer />
         <StoreHydrator />

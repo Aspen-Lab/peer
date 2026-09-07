@@ -39,7 +39,6 @@ import { reportProviderConfigured } from "@/components/reports/provider-configur
 import { PaperPlate } from "@/components/cards/paper-plate";
 import { SwipeableCard } from "@/components/cards/swipe-card";
 import { useResolvedFigure } from "@/components/paper-figure";
-import { Rail } from "@/components/reader/rail";
 import { TitleBlock } from "@/components/reader/title-block";
 import { PaperWords } from "@/components/reader/paper-words";
 import { DecisionBlock } from "@/components/reader/decision-block";
@@ -49,6 +48,7 @@ import { NextRow } from "@/components/reader/next-row";
 import { LoadingMat } from "@/components/reader/loading-mat";
 import { ReaderToast, useReaderToast } from "@/components/reader/reader-toast";
 import { ReaderLayout, useSpread } from "@/components/reader/reader-layout";
+import { THUMB_BAR_PX, THUMB_BAR_QUERY } from "@/components/shell/thumb-bar";
 import { PAGE_CLASS, SPREAD_GRID } from "@/components/reader/spread";
 import { useReading } from "@/components/reader/use-reading";
 import { useModelReport } from "@/components/reader/use-model-report";
@@ -358,7 +358,15 @@ function Reader({
           timer = undefined;
         }
       },
-      { threshold: [DECIDED_VISIBLE] },
+      {
+        threshold: [DECIDED_VISIBLE],
+        // The phone's thumb bar is fixed over the viewport's last 56px, and
+        // the observer's root is the viewport: without this the block
+        // counted as 60% seen while its lower part was under the glass.
+        rootMargin: window.matchMedia(THUMB_BAR_QUERY).matches
+          ? `0px 0px -${THUMB_BAR_PX}px 0px`
+          : "0px",
+      },
     );
     observer.observe(el);
     return () => {
@@ -499,10 +507,11 @@ function Reader({
           in one column it is below the decision, as before. */}
       <ReaderLayout
         spread={spread}
-        rail={<Rail nav={nav} onBack={() => router.back()} />}
         plate={
-          // A real figure: the caption is the image's, read once, from the figcaption.
-          <figure className="mt-4">
+          // A real figure: the caption is the image's, read once, from the
+          // figcaption. First on the page: the rail — position and the way
+          // back — is the masthead's on desktop and the thumb bar's on a phone.
+          <figure>
             <SwipeableCard
               onSwipeRight={save}
               onSwipeLeft={skip}

@@ -30,8 +30,7 @@ export function ReaderToast({ toast }: { toast: ToastMessage | null }) {
   // other confirmation for a screen-reader user.
   return (
     <div
-      className="fixed right-0 bottom-20 flex justify-center pointer-events-none z-[69] px-4"
-      style={{ left: "var(--sidebar-offset, 0px)" }}
+      className="fixed inset-x-0 bottom-[calc(3.5rem+env(safe-area-inset-bottom)+4.5rem)] md:bottom-20 flex justify-center pointer-events-none z-[69] px-4"
       role="status"
       aria-live="polite"
     >

@@ -45,9 +45,11 @@ export function UndoToast() {
   const shortTitle = title.length > 48 ? `${title.slice(0, 46)}…` : title;
 
   return (
+    // Bottom-right, a fixed corner: it used to centre itself in whatever the
+    // sidebar left of the window and slide when the sidebar did. On a phone
+    // it sits above the thumb bar, never under it.
     <div
-      className="fixed right-0 bottom-6 flex justify-center pointer-events-none z-[70] px-4 transition-[left] duration-[350ms] ease-out"
-      style={{ left: "var(--sidebar-offset, 0px)" }}
+      className="fixed inset-x-4 md:inset-x-auto md:right-6 bottom-[calc(3.5rem+env(safe-area-inset-bottom)+1rem)] md:bottom-6 flex justify-end pointer-events-none z-[70]"
       role="status"
       aria-live="polite"
     >
@@ -58,9 +60,7 @@ export function UndoToast() {
         } as React.CSSProperties}
       >
         <div className="flex items-center gap-3 pl-5 pr-3 py-2.5">
-          <span className="text-micro uppercase tracking-[0.16em] text-bg/55">
-            Dismissed
-          </span>
+          <span className="text-meta text-bg/55">Dismissed</span>
           <span className="text-body-sm max-w-[260px] truncate">
             {shortTitle}
           </span>

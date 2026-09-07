@@ -3,58 +3,19 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useFeedStore } from "@/store/feed";
-import { useUIStore } from "@/store/ui";
 import { NONE, indexAfterRemoval, stepIndex } from "@/lib/navigation/card-focus";
-import { readerActions, readerHelpItems, resolvePaperKey } from "@/lib/reader/reader-keys";
+import { readerActions, resolvePaperKey } from "@/lib/reader/reader-keys";
+import { helpGroups } from "@/lib/keys/help";
+import { searchKeyTarget } from "@/lib/shell/masthead";
 import { Kbd } from "@/components/ui/kbd";
+import { VersionLine } from "@/components/shell/version-line";
 
 // ── Global keyboard shortcut registry ──
-
-type Shortcut = { keys: string; label: string };
-
-const GROUPS: { title: string; items: Shortcut[] }[] = [
-  {
-    title: "Anywhere",
-    items: [
-      { keys: "/", label: "Focus search" },
-      { keys: "?", label: "Show this help" },
-      { keys: "Esc", label: "Close help / blur search" },
-    ],
-  },
-  {
-    title: "Navigate",
-    items: [
-      { keys: "g h", label: "Go to briefing" },
-      { keys: "g s", label: "Go to saved" },
-      { keys: "g p", label: "Go to profile" },
-    ],
-  },
-  {
-    title: "Paper",
-    items: [
-      { keys: "j", label: "Next paper" },
-      { keys: "k", label: "Previous paper" },
-      { keys: "Enter", label: "Open the focused paper" },
-      { keys: "s", label: "Save / unsave" },
-      { keys: "x", label: "Not interested" },
-      { keys: "l", label: "Like — more like this" },
-    ],
-  },
-  {
-    title: "Briefing",
-    items: [
-      { keys: "r", label: "Refresh briefing" },
-      { keys: "u", label: "Undo last dismiss (within 4s)" },
-    ],
-  },
-  // The reading page's keys come from the table its handler reads, so the
-  // sheet cannot list a key the page does not answer to.
-  { title: "Reading", items: readerHelpItems() },
-  {
-    title: "View",
-    items: [{ keys: "\\", label: "Toggle sidebar" }],
-  },
-];
+//
+// The help sheet's groups live in `lib/keys/help.ts`: the briefing's keys
+// written there, the reading page's from its own table, so the sheet cannot
+// list a key a page does not answer to.
+const GROUPS = helpGroups();
 
 function isTypingTarget(el: EventTarget | null): boolean {
   if (!(el instanceof HTMLElement)) return false;
@@ -97,7 +58,6 @@ export function KeyboardLayer() {
   const loadFeed = useFeedStore((s) => s.loadFeed);
   const undoDismiss = useFeedStore((s) => s.undoDismiss);
   const pendingDismissal = useFeedStore((s) => s.pendingDismissal);
-  const toggleSidebar = useUIStore((s) => s.toggleSidebar);
 
   // ── Card focus on the briefing ──
   // The ring is a DOM attribute, the index a ref: no React state, so moving
@@ -258,14 +218,21 @@ export function KeyboardLayer() {
 
       switch (e.key) {
         case "/": {
-          const input = document.getElementById(
-            "peer-search",
-          ) as HTMLInputElement | null;
-          if (input) {
+          // Global: from anywhere it goes to Search, whose box focuses
+          // itself on arrival; on Search it focuses in place. It used to
+          // look for the box and do nothing where there was none.
+          const input = document.getElementById("peer-search");
+          const target = searchKeyTarget(
+            window.location.pathname,
+            input instanceof HTMLInputElement,
+          );
+          if (target.action === "focus" && input instanceof HTMLInputElement) {
             input.focus();
             input.select();
-            e.preventDefault();
+          } else {
+            router.push("/search");
           }
+          e.preventDefault();
           return;
         }
         case "?": {
@@ -292,11 +259,6 @@ export function KeyboardLayer() {
           }
           return;
         }
-        case "\\": {
-          toggleSidebar();
-          e.preventDefault();
-          return;
-        }
       }
     },
     [
@@ -306,7 +268,6 @@ export function KeyboardLayer() {
       loadFeed,
       undoDismiss,
       pendingDismissal,
-      toggleSidebar,
       paintFocus,
       focusedPaper,
     ],
@@ -317,7 +278,7 @@ export function KeyboardLayer() {
     return () => window.removeEventListener("keydown", handler);
   }, [handler]);
 
-  // External trigger from UI (e.g. sidebar "?" button)
+  // External trigger from UI (the masthead's "?" chip)
   useEffect(() => {
     const toggle = () => setHelpOpen((v) => !v);
     window.addEventListener("peer:toggle-help", toggle);
@@ -378,14 +339,15 @@ function HelpOverlay({
         onClick={onClose}
       />
 
+      {/* `max-h-full overflow-y-auto`: four groups run to ~940px, taller
+          than a 800px laptop, and a centred sheet that cannot scroll cuts
+          both its title and its footer — the changelog's only route. */}
       <div
-        className="relative w-full max-w-[440px] rounded-2xl glass shadow-card-hover p-6 animate-fade-in-up"
+        className="relative w-full max-w-[440px] max-h-full overflow-y-auto rounded-2xl glass shadow-card-hover p-6 animate-fade-in-up"
         style={{ "--i": 0} as React.CSSProperties}
       >
         <div className="flex items-center justify-between mb-5">
-          <h2 className="text-body-sm font-semibold uppercase tracking-[0.18em] text-text-faint">
-            Keyboard shortcuts
-          </h2>
+          <h2 className="text-body-sm font-medium text-heading">Keyboard shortcuts</h2>
           <button
             type="button"
             onClick={onClose}
@@ -411,9 +373,7 @@ function HelpOverlay({
         <div className="space-y-5">
           {GROUPS.map((group) => (
             <section key={group.title}>
-              <h3 className="text-micro font-semibold uppercase tracking-[0.18em] text-text-faint/80 mb-2">
-                {group.title}
-              </h3>
+              <h3 className="text-meta text-text-faint mb-2">{group.title}</h3>
               <ul className="space-y-1.5">
                 {group.items.map((s) => (
                   <li
@@ -438,9 +398,9 @@ function HelpOverlay({
           ))}
         </div>
 
-        <p className="mt-5 pt-4 border-t border-border text-caption text-text-faint">
-          Press <Kbd>?</Kbd> anywhere to open this again.
-        </p>
+        {/* The version's only home. The `?` chip at the right of every
+            desktop page says how to come back. */}
+        <VersionLine onNavigate={onClose} className="mt-5 pt-4 border-t border-border" />
       </div>
     </div>
   );

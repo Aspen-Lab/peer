@@ -19,10 +19,11 @@
 
 export const SPREAD_QUERY = "(min-width: 80rem)";
 
-/** The article's padding. The xl top padding equals the panel's sticky top
- *  (4rem), so the stuck position is the first-paint position and the panel
- *  never slides. */
-export const PAGE_CLASS = "px-5 sm:px-6 py-8 sm:py-12 xl:pt-16";
+/** The article's padding. From xl the 48px masthead sits in flow above the
+ *  article, and 48 + 16 = the panel's sticky top (4rem), so the stuck position
+ *  is the first-paint position and the panel never slides. (It was pt-16 when
+ *  the shell was a fixed sidebar that took no height.) */
+export const PAGE_CLASS = "px-5 sm:px-6 py-8 sm:py-12 xl:pt-4";
 
 /** 5/7 columns; the 2xl container is 32px wider so the columns are identical
  *  from 1656px up and only the gutter and the margins grow. */

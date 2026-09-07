@@ -2,9 +2,10 @@
 
 // Arranges the reader's blocks — it renders none of them. Below xl the
 // children come back as a fragment in the spec's order, so the DOM is
-// today's; from xl they are placed on the spread: rail, plate, title and
-// decision in the panel, the words, the additions and the Next row in the
-// column. The block order, strings and type are untouched; only the place.
+// today's; from xl they are placed on the spread: plate, title and decision
+// in the panel, the words, the additions and the Next row in the column.
+// The block order, strings and type are untouched; only the place. The rail
+// is not a block any more: position and the way back live in the shell.
 //
 // The structure is chosen in JS rather than with `display: contents` and
 // `order`, because a CSS re-ordering would have a screen reader announce
@@ -18,7 +19,6 @@ import { COLUMN_CLASS, PANEL_CLASS, SPREAD_GRID, SPREAD_QUERY } from "./spread";
 interface ReaderLayoutProps {
   /** From `useSpread()`; the page owns it so its own effects can depend on it. */
   spread: boolean;
-  rail: ReactNode;
   plate: ReactNode;
   title: ReactNode;
   words: ReactNode;
@@ -68,7 +68,6 @@ export function ReaderLayout(p: ReaderLayoutProps) {
     // Today's DOM, byte for byte: no wrapper, spec order, fragments flatten.
     return (
       <>
-        {p.rail}
         {p.plate}
         {p.title}
         {p.words}
@@ -82,7 +81,6 @@ export function ReaderLayout(p: ReaderLayoutProps) {
   return (
     <div className={SPREAD_GRID}>
       <div ref={panelRef} className={PANEL_CLASS}>
-        {p.rail}
         {p.plate}
         {p.title}
         {p.decision}

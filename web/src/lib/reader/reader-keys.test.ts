@@ -27,8 +27,8 @@ describe("resolvePaperKey", () => {
   });
 
   it("keeps the briefing's other keys out of the table", () => {
-    // `/`, `?`, `g`, `r` and `\` stay global; `ArrowDown`/`ArrowUp` belong to
-    // the card ring, which the reading page has none of.
+    // `/`, `?`, `g` and `r` stay global; `ArrowDown`/`ArrowUp` belong to the
+    // card ring, which the reading page has none of.
     for (const key of ["/", "?", "g", "r", "\\", "ArrowDown", "ArrowUp", "a"]) {
       expect(resolvePaperKey(key)).toBeNull();
     }

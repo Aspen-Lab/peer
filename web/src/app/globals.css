@@ -304,8 +304,9 @@ html[data-mode="dark"] {
    under the chrome; when it is taller than the viewport it pins by its
    bottom instead, so the plate scrolls away and the decision stays.
    4rem = the article's xl top padding, so the stuck position is the
-   first-paint position and the panel never slides; the floating pills end
-   at 52px and the sidebar toggle at 56px, both cleared. 1.5rem keeps the
+   first-paint position and the panel never slides; the masthead is 48px
+   and never taller (its scrolled state changes background only), so it is
+   cleared with 16px to spare. 1.5rem keeps the
    DOI line 24px above the viewport edge in bottom-stick mode. min(), not
    max(): with max() a short panel would be pushed down at scroll 0.
    --panel-h is written by a ResizeObserver; until it runs, 0px makes the
@@ -322,22 +323,6 @@ html[data-mode="dark"] {
    future explicit toggle on <html data-theme="dark">, not a reading-tool default. */
 
 html[data-scroll-behavior="smooth"] { scroll-behavior: smooth; }
-
-/* Sidebar width is a CSS variable so the collapse animation can slide the main
-   content in sync without a JS layout thrash. Mobile stays 0 (sidebar is the
-   top bar there). */
-:root { --sidebar-offset: 0px; }
-
-/* Sidebar offset — controlled by JS via --sidebar-offset.
-   The /welcome wizard zeroes the variable (in Nav's useEffect), so no
-   gap appears there even though the rule applies to the same <main>. */
-@media (min-width: 1024px) {
-  :root { --sidebar-offset: 13rem; }
-  main.peer-main-content {
-    padding-left: var(--sidebar-offset, 13rem);
-    transition: padding-left 350ms cubic-bezier(0.4, 0, 0.2, 1);
-  }
-}
 
 
 body {

@@ -52,6 +52,20 @@ function SearchPage() {
   );
   // Monotonic token: a slow older response must never overwrite a newer one.
   const seqRef = useRef(0);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // The box takes focus on arrival — where there is a pointer. On a phone
+  // the arrival is a thumb-bar tap, and focusing would raise the keyboard
+  // over the page before the reader has chosen to type; there the box waits
+  // to be tapped. Done here rather than with `autoFocus` so the check can
+  // read the medium; and on the next frame, because after a client
+  // navigation — the global `/`, the masthead's link — Next's layout router
+  // focuses the new segment after the commit.
+  useEffect(() => {
+    if (window.matchMedia("(hover: none)").matches) return;
+    const frame = window.requestAnimationFrame(() => inputRef.current?.focus());
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
 
   const normalizedQuery = query.trim();
   const isActive = normalizedQuery.length >= 2;
@@ -167,10 +181,10 @@ function SearchPage() {
               <path d="M20 20l-3.5-3.5" />
             </svg>
             <input
+              ref={inputRef}
               id="peer-search"
               type="search"
               value={query}
-              autoFocus
               onChange={(event) => setQuery(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === "Enter") {
