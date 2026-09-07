@@ -734,9 +734,9 @@ PENDING USER ACTION: (1) Apply the three migrations under `web/supabase/migratio
            NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY — and must NOT carry
            TAVILY_API_KEY (the build will refuse it after 5-03). Deploy only after round 5
            reports green and the branch is merged. WITHDRAWN: the trial backfill (no users).
-OPEN FOR MANAGER:  none — B's two POLICY items ruled in §1t: the plan copy needs no editorial
-           decision because it reuses strings already ruled under D7 (point 2b), and
-           `typedRoutes` is rejected with a threshold (point 4).
+OPEN FOR MANAGER:  none — C's placement flag ruled in §1u (Ruling 20 point 3): the plan copy
+           stays visible to every reader on that step, reversible by the owner in one line,
+           and A does NOT report it as a finding.
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
@@ -1651,6 +1651,47 @@ D7's no-checkout rule.
    and honest, and it is now the visible end of the road. Whether that page should offer a way to
    register interest is the owner's call, not this loop's.
 
+---
+
+## §1u. RULING 20 — after round-7 C; the upgrade path resolves end to end (2026-09-07, BINDING)
+
+**Manager's independent check:** gate re-run cold — tsc 0 · eslint 1 (standing `quiz.tsx:46`) ·
+vitest **128/1 files, 2924/1 tests, 0 failed**, identical to C's, +18 tests, none deleted. The
+unification was read in source: `UPGRADE_HREF` is declared once
+(`lib/navigation/upgrade-destination.ts:41`) and imported by all three upsell surfaces;
+**zero `/settings` literals survive** in non-test source.
+
+1. **Round 7 accepted.** The upgrade path resolves end to end for the first time: a reader who hits
+   the cap sees the prompt, follows it to a page that exists, and that page now says what Pro costs
+   and what it adds — with D7's no-checkout rule carried across and asserted (the block renders no
+   anchor at all).
+2. **C caught four things, and the fourth is the one worth keeping.** C found **a bug in its own
+   route enumeration**: the app root produced a route named `/page.ts`, so `/` had quietly stopped
+   being a route in the scan — caught only by cross-checking against Next's own generated route
+   list. **A scan that builds its own model of reality can be wrong in the same direction as the
+   thing it is checking, and then it agrees with itself.** **New standing rule (§3): a scan that
+   enumerates the world cross-checks its enumeration against an independent source before its count
+   is trusted.** C's other three: B's link-shape list missed `<form action>` (a live instance exists
+   — sign-out), three `not.toContain("/settings")` assertions would have stayed green while
+   measuring nothing, and B's "the type change reddens nothing" stopped being true once the call
+   site changed.
+3. **The placement question C flagged — ruled, and reversible in one line.** The plan copy now sits
+   on an **onboarding** step, which is right for a reader arriving from an upsell and is a choice
+   for a first-run reader. **Ruling: keep it visible to everyone on that step.** Reasons: a reader
+   on a 14-day trial is entitled to know what happens on day 15, and Peer's free tier is deliberately
+   generous and permanent — saying so early is information, not a pitch. The block carries no
+   checkout and asks for nothing, so it cannot function as one. **The owner may reverse this in one
+   line** (show it only when the reader arrived from an upsell); it is recorded as a product choice,
+   not a defect, and **A does not report it as a finding**.
+4. **Round 8 opens with A**, who re-scores **R-QUOTA-1** by behaviour — it has been `PARTIAL` since
+   Ruling 18 point 1 and 7-02 has now landed — against denominator **30**, with **R-METER-2 `N/A`**.
+   A also re-derives the upsell-surface count rather than quoting it, and runs the dead-link tally
+   (**must be 0, no allowlist**), which is now a gate test.
+5. **6-02 remains the only item the owner blocks**, and it is the one with a deadline: both Gemini
+   models in `provider-models.ts` retire **2026-10-16**. The manager's recommendation on file is
+   both tiers to `gemini-3.1-flash-lite`. **Escalation date 2026-10-01 stands**, and it is now the
+   only thing between this branch and a merge.
+
 ## §2. ROLES — DO ONLY YOUR OWN JOB
 
 ### Agent A — Reviewer
@@ -1792,6 +1833,10 @@ C does **not** judge whether something should be fixed.
   the control working - the same gap hid a silent refresh button and an unreachable quota
   check. Standing tally: dead internal links, must be 0 (`/CHANGELOG.md` is a known false
   positive - it is a real static file).
+- **A scan that enumerates the world cross-checks its enumeration against an independent source**
+  before its count is trusted (Ruling 20 point 2). Round-7 C's route scan had quietly lost `/`
+  and would have agreed with itself forever; it was caught only against Next's own generated
+  route list. A wrong model plus a wrong world reads as a clean pass.
 - Commit messages: plain sentences in the repo's existing style
   (`feat(scope): …`, `fix(scope): …`, `refactor(scope): …`), ending with
   `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>`.
