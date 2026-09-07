@@ -34,7 +34,7 @@
  */
 import type { Entitlement } from "@/lib/entitlement/types";
 import {
-  SYSTEM_SEARCHES_PER_DAY,
+  FORCED_REBUILDS_PER_DAY,
   breakerTripped,
   deepReportDayKey,
   deepReportMonthKey,
@@ -49,7 +49,7 @@ import { recordUsageEventAwaited } from "./events";
 /** D4 — the paid breaker. Unlimited to the user, capped to protect the wallet. */
 export const PAID_DEEP_REPORTS_PER_DAY = 200;
 
-export { SYSTEM_SEARCHES_PER_DAY };
+export { FORCED_REBUILDS_PER_DAY };
 
 /**
  * The machine-readable signal R-QUOTA-1 requires. **Additive and optional** —

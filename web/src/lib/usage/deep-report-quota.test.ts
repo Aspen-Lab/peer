@@ -5,7 +5,7 @@ import {
   quotaMessage,
 } from "./deep-report-quota";
 import {
-  SYSTEM_SEARCHES_PER_DAY,
+  FORCED_REBUILDS_PER_DAY,
   consumeSystemSearches,
 } from "./search-breaker";
 import { getCounterStore, resetCounterStoreForTests } from "./counters";
@@ -218,10 +218,19 @@ describe("paid breaker (R-QUOTA-2, D4)", () => {
   });
 });
 
+// ABC-freemium 5-02 · Ruling 13 point 1 — THIS IS STILL LIVE COVERAGE, and it is
+// the only place the 500/day breaker is genuinely exercised. Under D2a the search
+// fan-out can no longer reach it, but the FORCED POOL REBUILD still can
+// (`jobs/pipeline.ts`, `events/pipeline.ts`, gated on `poolRefreshAllowed`), so
+// the cap stays and so do these cases. The counter it charges was renamed to
+// `FORCED_REBUILDS_PER_DAY` / `forced_rebuilds_today:<user>:<day>`. The function
+// name `consumeSystemSearches` and the row's `path: "system-search"` were NOT
+// renamed — Ruling 13 named two things and C does not widen a ruling; both are
+// flagged in the round-5 log for the manager.
 describe("the system-search breaker (R-QUOTA-2)", () => {
   it("allows the day's searches and refuses the one past the cap", async () => {
     expect(
-      await consumeSystemSearches("user-1", SYSTEM_SEARCHES_PER_DAY, NOW),
+      await consumeSystemSearches("user-1", FORCED_REBUILDS_PER_DAY, NOW),
     ).toBe(true);
 
     expect(await consumeSystemSearches("user-1", 1, NOW)).toBe(false);
@@ -232,7 +241,7 @@ describe("the system-search breaker (R-QUOTA-2)", () => {
   it("charges the whole fan-out, not one per call", async () => {
     // A fan-out of twelve queries costs twelve, or the 500/day cap would mean
     // 500 fan-outs rather than 500 searches.
-    await consumeSystemSearches("user-1", SYSTEM_SEARCHES_PER_DAY - 5, NOW);
+    await consumeSystemSearches("user-1", FORCED_REBUILDS_PER_DAY - 5, NOW);
 
     expect(await consumeSystemSearches("user-1", 12, NOW)).toBe(false);
   });

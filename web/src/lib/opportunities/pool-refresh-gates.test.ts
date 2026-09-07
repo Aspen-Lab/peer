@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildDailyJobPool } from "@/lib/jobs/pipeline";
 import {
-  SYSTEM_SEARCHES_PER_DAY,
+  FORCED_REBUILDS_PER_DAY,
   getCounterStore,
   resetCounterStoreForTests,
-  systemSearchDayKey,
+  forcedRebuildDayKey,
 } from "@/lib/usage/counters";
 import type { CachedPool, PoolCache } from "./pool-cache";
 
@@ -113,9 +113,9 @@ describe("forced pool rebuild — the two gates", () => {
     // pool that was already there comes back, with no error and no rebuild.
     const store = getCounterStore();
     await store.increment(
-      systemSearchDayKey(USER, NOW),
+      forcedRebuildDayKey(USER, NOW),
       null,
-      SYSTEM_SEARCHES_PER_DAY,
+      FORCED_REBUILDS_PER_DAY,
     );
     const cache = new SeededCache(seededPool());
 
@@ -134,9 +134,9 @@ describe("forced pool rebuild — the two gates", () => {
     // refuses.
     const store = getCounterStore();
     await store.increment(
-      systemSearchDayKey(USER, NOW),
+      forcedRebuildDayKey(USER, NOW),
       null,
-      SYSTEM_SEARCHES_PER_DAY - 2,
+      FORCED_REBUILDS_PER_DAY - 2,
     );
     const cache = new SeededCache(seededPool());
 

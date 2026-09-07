@@ -55,7 +55,13 @@ export interface Entitlement {
    * construction rather than by remembering.
    */
   deepReportsBudget: number;
-  /** D2: the system Tavily key is spent only for trial and paid users. */
+  /**
+   * **D2a (5-02): permanently `false` for every plan.** The operator never pays
+   * for search, for anyone — see `resolve.ts`. The field survives as the single
+   * constant that would reverse the decision (Ruling 12 point 2), and because it
+   * is still the gate on the `BRAVE_SEARCH_API_KEY` env read in
+   * `lib/search/system-key.ts` (Ruling 13 point 3 — do not delete it).
+   */
   systemSearchAllowed: boolean;
   /** D3: only entitled users may force a pool rebuild. */
   poolRefreshAllowed: boolean;

@@ -9,7 +9,11 @@
 -- **The period lives in the key, not in a column.** A key is
 -- `rate:<scope>:<user>:<YYYY-MM-DDTHH>`, `deep:<user>:<YYYY-MM>`,
 -- `deep:<user>:<YYYY-MM-DD>`, `deep:<user>:trial` or
--- `search:<user>:<YYYY-MM-DD>`, all in UTC (D4 says "the rest of the UTC day").
+-- `forced_rebuilds_today:<user>:<YYYY-MM-DD>`, all in UTC (D4 says "the rest of
+-- the UTC day"). The last one was `search:<user>:<YYYY-MM-DD>` until
+-- ABC-freemium 5-02 (Ruling 13 point 1) renamed it: under D2a the operator funds
+-- no search, and the only caller left is the forced pool rebuild. COMMENT ONLY —
+-- no DDL changed, and this migration is still unapplied.
 -- So a window rolls over because the key changes, and a tripped daily breaker
 -- untrips at UTC midnight with no second source of truth to keep in step.
 -- `window_ends_at` is stored for housekeeping only — nothing reads it to decide

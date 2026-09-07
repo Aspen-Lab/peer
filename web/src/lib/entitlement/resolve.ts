@@ -122,10 +122,20 @@ function fromStoredPlan(
     plan,
     effectivePlan,
     deepReportsBudget: deepReportBudget(effectivePlan),
-    // D2/D3: paid search and the forced pool rebuild are what a free user does
-    // not get. Both read `effectivePlan`, so an expired trial loses them the
-    // moment it expires.
-    systemSearchAllowed: effectivePlan !== "free",
+    // ABC-freemium 5-02 · **D2a (Ruling 12) — HARD FALSE FOR EVERY PLAN.**
+    // The owner removed operator-funded search entirely: the operator never pays
+    // for search, for anyone, on any plan. Every user searches on their own
+    // Tavily key (BYOK) or gets the free structured sources. This used to read
+    // `effectivePlan !== "free"`, and no plan may bring it back — the resolver
+    // it feeds has no system branch left to reach (`lib/search/system-key.ts`)
+    // and the build guard bans `TAVILY_API_KEY` on Vercel. It stays a field
+    // rather than becoming a literal at the call sites so that reversing D2a is
+    // this one constant (Ruling 12 point 2).
+    systemSearchAllowed: false,
+    // D3: the forced pool rebuild is what a free user does not get, and it is
+    // untouched by D2a (Ruling 12 point 5). It still reads `effectivePlan`, so
+    // an expired trial loses "refresh now" the moment it expires. What changed
+    // is only WHOSE key a granted rebuild spends — the reader's own, or none.
     poolRefreshAllowed: effectivePlan !== "free",
     trialEndsAt: effectivePlan === "trial" ? trialEndsAt : null,
     userId,

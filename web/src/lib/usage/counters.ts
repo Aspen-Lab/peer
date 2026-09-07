@@ -133,12 +133,24 @@ export function deepReportTrialKey(userId: string): string {
 /**
  * R-QUOTA-2 / D4 — the paid circuit breakers. Unlimited *to the user*, behind a
  * hard cap that protects the owner's wallet.
+ *
+ * **RENAMED in 5-02 · Ruling 13 point 1 — was `SYSTEM_SEARCHES_PER_DAY`, cap
+ * unchanged at 500/day.** Under D2a the operator funds no search, so the search
+ * fan-out no longer reaches this breaker at all. What still reaches it is the
+ * **forced pool rebuild** ("refresh now", gated on `poolRefreshAllowed`), which
+ * spends operator money on the query-generation LLM call — so the cap must stay
+ * or the refresh button becomes an unbounded spend button. Only the name was
+ * made false by D2a, so only the name changed.
  */
-export const SYSTEM_SEARCHES_PER_DAY = 500;
+export const FORCED_REBUILDS_PER_DAY = 500;
 
-/** R-QUOTA-2 — the 500/day system-search breaker. */
-export function systemSearchDayKey(userId: string, now: Date): string {
-  return `search:${userId}:${utcDaySegment(now)}`;
+/**
+ * R-QUOTA-2 — the 500/day forced-rebuild breaker (renamed from
+ * `systemSearchDayKey` in 5-02; the key string changed with it, which is free
+ * because the migrations are unapplied and there are no users).
+ */
+export function forcedRebuildDayKey(userId: string, now: Date): string {
+  return `forced_rebuilds_today:${userId}:${utcDaySegment(now)}`;
 }
 
 /** First instant of the next UTC hour — housekeeping only; nothing gates on it. */

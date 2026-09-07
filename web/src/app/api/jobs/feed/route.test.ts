@@ -9,6 +9,7 @@ import {
   signedOut,
   supabaseServerStub,
 } from "@/test-support/route-harness";
+import { forcedRebuildDayKey } from "@/lib/usage/counters";
 
 /**
  * ABC-freemium 1-09 · R-TEST-1, Ruling 2 point 7.
@@ -265,12 +266,25 @@ describe("POST /api/jobs/feed — the operator's search key", () => {
  * exactly one charge on top of whatever the fan-out already costs.
  */
 describe("POST /api/jobs/feed — refresh now (R-POOL-2)", () => {
-  function searchIncrements(): number {
+  /**
+   * ABC-freemium 5-02 · Ruling 13 point 1 — DERIVED, never hard-coded again.
+   *
+   * This filter used to test `startsWith("search:")`. Renaming the counter to
+   * `forced_rebuilds_today:` (the breaker no longer guards a search — it guards
+   * this very refresh) made the fixture match nothing, so both cases below went
+   * quietly to zero and one of them failed. B's plant could not have predicted
+   * it: the rename came from Ruling 13, after the blast radius was measured.
+   * Taking the prefix from the key builder means the next rename cannot repeat
+   * it.
+   */
+  const REBUILD_KEY_PREFIX = `${forcedRebuildDayKey("u", new Date()).split(":")[0]}:`;
+
+  function rebuildIncrements(): number {
     return mocks.rpc.mock.calls.filter(
       (call) =>
         call[0] === "increment_usage_counter" &&
         String((call[1] as { p_key?: string })?.p_key ?? "").startsWith(
-          "search:",
+          REBUILD_KEY_PREFIX,
         ),
     ).length;
   }
@@ -285,7 +299,7 @@ describe("POST /api/jobs/feed — refresh now (R-POOL-2)", () => {
     const response = await POST(request({ ...BASE, poolRefresh: true }));
 
     expect(response.status).toBe(200);
-    expect(searchIncrements()).toBe(0);
+    expect(rebuildIncrements()).toBe(0);
   });
 
   it("charges a paid user exactly one extra for a granted refresh", async () => {
@@ -293,11 +307,11 @@ describe("POST /api/jobs/feed — refresh now (R-POOL-2)", () => {
     mocks.adminFrom.mockReturnValue(planRow("paid"));
 
     await POST(request(BASE));
-    const withoutRefresh = searchIncrements();
+    const withoutRefresh = rebuildIncrements();
     mocks.rpc.mockClear();
 
     await POST(request({ ...BASE, poolRefresh: true }));
-    const withRefresh = searchIncrements();
+    const withRefresh = rebuildIncrements();
 
     expect(withRefresh).toBe(withoutRefresh + 1);
   });

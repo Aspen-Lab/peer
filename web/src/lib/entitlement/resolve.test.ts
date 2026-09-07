@@ -56,7 +56,13 @@ describe("resolveEntitlement", () => {
 
     expect(entitlement.plan).toBe("trial");
     expect(entitlement.effectivePlan).toBe("trial");
-    expect(entitlement.systemSearchAllowed).toBe(true);
+    // REWRITTEN, NOT DELETED — ABC-freemium 5-02 · D2a (Ruling 12). This line
+    // asserted `true`. The operator now funds no search for anyone, so a live
+    // trial gets `false` like every other plan. `poolRefreshAllowed` is the half
+    // that survives and is deliberately still asserted `true` right below: the
+    // two flags used to be one expression, and this pair is what proves they
+    // came apart correctly (Ruling 12 point 5).
+    expect(entitlement.systemSearchAllowed).toBe(false);
     expect(entitlement.poolRefreshAllowed).toBe(true);
     expect(entitlement.deepReportsBudget).toBe(20);
     expect(entitlement.trialEndsAt).toBe("2026-09-10T00:00:00.000Z");
@@ -80,13 +86,22 @@ describe("resolveEntitlement", () => {
     expect(entitlement.trialEndsAt).toBeNull();
   });
 
-  it("gives a paid user unbounded deep reports and system search", async () => {
+  it("gives a paid user unbounded deep reports but NO system search", async () => {
+    // REWRITTEN, NOT DELETED — ABC-freemium 5-02 · D2a (Ruling 12).
+    //
+    // Was "gives a paid user unbounded deep reports and system search" and
+    // asserted `systemSearchAllowed === true`. The name had to change with the
+    // assertion: paying no longer buys search, on any plan. What paying buys is
+    // deep reports without a monthly cap (asserted below), immediate pool
+    // refresh (`poolRefreshAllowed`, asserted here so the split is visible in
+    // the same case) and immediate topic changes.
     const entitlement = await resolveEntitlement("user-1", NOW, {
       client: clientReturning({ data: { plan: "paid" }, error: null }),
     });
 
     expect(entitlement.effectivePlan).toBe("paid");
-    expect(entitlement.systemSearchAllowed).toBe(true);
+    expect(entitlement.systemSearchAllowed).toBe(false);
+    expect(entitlement.poolRefreshAllowed).toBe(true);
     expect(entitlement.deepReportsBudget).toBe(Number.POSITIVE_INFINITY);
   });
 

@@ -21,9 +21,9 @@ import {
 import {
   getCounterStore,
   resetCounterStoreForTests,
-  systemSearchDayKey,
+  forcedRebuildDayKey,
 } from "@/lib/usage/counters";
-import { SYSTEM_SEARCHES_PER_DAY } from "@/lib/usage/search-breaker";
+import { FORCED_REBUILDS_PER_DAY } from "@/lib/usage/search-breaker";
 import {
   setUsageEventsClientForTests,
   type UsageEventRow,
@@ -3983,9 +3983,9 @@ describe("2-04 — every operator-funded provider is charged and metered", () =>
     vi.stubEnv("BRAVE_SEARCH_API_KEY", "");
     vi.stubEnv("GOOGLE_VERTEX_PROJECT", "some-project");
     await getCounterStore().increment(
-      systemSearchDayKey("user-1", new Date()),
+      forcedRebuildDayKey("user-1", new Date()),
       null,
-      SYSTEM_SEARCHES_PER_DAY,
+      FORCED_REBUILDS_PER_DAY,
     );
 
     const items = await jobweb.fetch(
@@ -4013,7 +4013,7 @@ describe("2-04 — every operator-funded provider is charged and metered", () =>
     vi.stubEnv("TAVILY_API_KEY", "");
     vi.stubEnv("BRAVE_SEARCH_API_KEY", "");
     const before = await getCounterStore().read(
-      systemSearchDayKey("user-1", new Date()),
+      forcedRebuildDayKey("user-1", new Date()),
     );
 
     await jobweb.fetch(
@@ -4028,7 +4028,7 @@ describe("2-04 — every operator-funded provider is charged and metered", () =>
 
     expect(rows).toHaveLength(0);
     expect(
-      (await getCounterStore().read(systemSearchDayKey("user-1", new Date())))
+      (await getCounterStore().read(forcedRebuildDayKey("user-1", new Date())))
         .value,
     ).toBe(before.value);
   });

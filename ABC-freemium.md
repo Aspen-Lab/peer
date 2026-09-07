@@ -9777,3 +9777,96 @@ Test total rises 2860 → 2862 (two added, none deleted).
 
 `git status --porcelain --untracked-files=all` shows only the two files above; the editing scaffold
 lives outside the repo.
+
+---
+
+#### 5-02 — the entitlement, and Ruling 13 point 1's rename · LANDED
+
+**Part 1 — the entitlement.** `web/src/lib/entitlement/resolve.ts` — the single line B identified
+(`systemSearchAllowed: effectivePlan !== "free"`) is now `systemSearchAllowed: false`, with **D2a
+named at that line** and the reasoning in the comment above it: no plan may bring it back, the
+resolver it feeds has no system branch left, and the build guard bans the key on Vercel. The shared
+comment that used to claim both flags read `effectivePlan` is **split in two**, so
+`poolRefreshAllowed` keeps its own reason (D3, Ruling 12 point 5) and nobody re-couples them later.
+`types.ts:59`'s one-line doc for the field is replaced by a paragraph naming D2a **and** Ruling 13
+point 3, since that is the second place a tidy-up would start. The two frozen anonymous constants
+(`types.ts:92`, `allowance.ts:157`) are untouched — they already say `false`, and a second way of
+saying `false` is how two producers drift.
+
+**Part 2 — the rename (Ruling 13 point 1), NOT split out.** It landed in this same commit, as the
+ruling's point 5 prefers, because the entitlement and the counter names are the same story.
+
+- `SYSTEM_SEARCHES_PER_DAY` → **`FORCED_REBUILDS_PER_DAY`**, cap unchanged at **500/day**.
+- `systemSearchDayKey` → **`forcedRebuildDayKey`**, and the key string it builds changes from
+  `search:<user>:<UTC date>` to **`forced_rebuilds_today:<user>:<UTC date>`** — the literal name the
+  ruling gives, in the existing `<counter>:<user>:<period>` shape.
+- **Grepped before and after, and the numbers match exactly.** Before: `SYSTEM_SEARCHES_PER_DAY`
+  **15** references, `systemSearchDayKey` **12**, new names **0**. After: **15** and **12** under the
+  new names, **0** live references to either old name (the only three surviving mentions are the
+  "was called X" notes in the renamed symbols' own docblocks). Seven files.
+- Docblocks rewritten so the name and the reason agree: `counters.ts` (both symbols),
+  `search-breaker.ts`'s file header and `consumeSystemSearches`'s docblock. The header now leads with
+  what the cap actually guards and says in plain terms why deleting it would be a regression — a
+  forced rebuild spends the query-generation LLM call, so without the cap "refresh now" is an
+  unbounded spend button — and records that this path writes `kind: "breaker"`, never
+  `kind: "search"`, which is why R-METER-2 stays N/A while this breaker stays live.
+- **No migration.** `usage_counters` stores the key as a `text` primary key; there is no
+  `searches_today` column anywhere in the tree (grepped `*.sql`, `*.ts`, `*.mjs`, `*.md`) — that name
+  exists only as R-METER-3's prose. The migration is unapplied and there are no users, so no stored
+  counter is orphaned. The migration file was touched **for its comment only** — it documents the set
+  of key shapes and would otherwise describe a key that no longer exists; **no DDL changed**, which
+  the comment itself says.
+
+**NOT renamed, deliberately, and flagged rather than decided (C does not judge — §2).** Ruling 13
+point 1 names exactly two things. `consumeSystemSearches` and the usage row's
+`path: "system-search"` (plus `logStoreUnavailable("system-search", …)` and the breaker's error
+line) still say "search". I left all of them and wrote the reason into the function's own docblock:
+the function genuinely still serves both callers, and `path` is a spec-visible string on an
+R-METER row. **For the manager: either these are renamed in round 6 for the same reason the counter
+was, or the ruling should say they stay.**
+
+**Tests — 2 rewritten, 1 fixture repaired, 1 comment added, 0 deleted.**
+
+- `resolve.test.ts` "keeps a live trial on trial terms" — `systemSearchAllowed` flips `true` →
+  `false`, and `poolRefreshAllowed: true` is deliberately kept on the next line so the pair proves
+  the two flags came apart correctly rather than both dying.
+- `resolve.test.ts` "gives a paid user unbounded deep reports **and** system search" → **"…but NO
+  system search"**. The name had to move with the assertion. `poolRefreshAllowed: true` is added to
+  the same case so the split is visible where a reader will look for it.
+- `deep-report-quota.test.ts` — a comment above the breaker's `describe` recording that these five
+  cases are **still live coverage** (the forced-rebuild caller reaches them), what was renamed, and
+  what was not.
+
+**A CASE B'S GUIDE COULD NOT HAVE LISTED, found by running rather than reading.**
+`jobs/feed/route.test.ts`'s "charges a paid user exactly one extra for a granted refresh" **failed on
+the rename** — B recorded it passing unchanged at every plant stage, and B was right: the rename came
+from Ruling 13, *after* the blast radius was measured. Its helper filtered counter increments with a
+hard-coded `startsWith("search:")`, so after the rename it matched nothing and both refresh cases
+silently counted **0** — one failed loudly, the other ("refuses a free user's forced rebuild") would
+have gone on passing while proving nothing, the exact false-green class Ruling 10 point 2b names.
+Repaired by **deriving** the prefix from `forcedRebuildDayKey` itself, so a future rename cannot
+repeat it, and renamed `searchIncrements` → `rebuildIncrements`.
+
+**That repair is also the round's first direct behavioural evidence for Ruling 13 point 1.** With
+D2a fully in place, a paid user's granted "refresh now" still produces **exactly one** increment on
+the breaker's counter. The breaker is reachable, as the ruling says, and Ruling 12's claim that it
+would go unreachable is disproved by a passing test rather than by grep.
+
+**GATE AFTER 5-02 — still red by design.** `tsc` exit **0** · `eslint` **1 error, 0 warnings** (the
+standing `quiz.tsx:46`) · `vitest` **6 files failed | 118 passed | 1 skipped (125)** · **20 failed |
+2841 passed | 1 skipped (2862)**. B measured 5-02's marginal cost at **exactly 2**, both in
+`resolve.test.ts`; both are fixed inside this commit, so the count is **unchanged at 20** and every
+remaining failure is 5-03's or 5-04's. **Ruling 12 point 2's escape clause was not reached** — the
+hard `false` threaded through every call site with no request type widened and `tsc` never moved off
+0.
+
+**REVERT PROOF (Ruling 10 point 2a), two independent reverts, each asserted by substitution count
+before the run** (the editor asserts exactly one match or raises, and reported a write for each):
+
+- `systemSearchAllowed: false` → `effectivePlan !== "free"`: **`resolve.test.ts`'s two rewritten
+  cases fail**, nothing else in the file does.
+- the key string `forced_rebuilds_today:` → `search:`: **`counters.test.ts`'s key case fails**, and
+  `jobs/feed`'s refresh case keeps passing — which is the derived prefix doing its job.
+
+Combined run with both reverts in: **5 failed | 28 passed**, the 2 + 1 above plus the 2 that belong
+to 5-04. Both sources restored from backup; the two suites re-run **24 passed | 24**.

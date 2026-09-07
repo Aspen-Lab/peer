@@ -12,7 +12,7 @@ import {
   getCounterStore,
   rateKey,
   resetCounterStoreForTests,
-  systemSearchDayKey,
+  forcedRebuildDayKey,
   underLimit,
   type CounterSupabaseClient,
 } from "./counters";
@@ -41,7 +41,12 @@ describe("counter keys", () => {
     );
     expect(deepReportMonthKey("u1", NOW)).toBe("deep:u1:2026-09");
     expect(deepReportDayKey("u1", NOW)).toBe("deep:u1:2026-09-04");
-    expect(systemSearchDayKey("u1", NOW)).toBe("search:u1:2026-09-04");
+    // 5-02 · Ruling 13 point 1 — was `systemSearchDayKey` and `search:u1:...`.
+    // The counter now guards the forced pool rebuild, not a search, so the key
+    // says so. Free to change: migrations unapplied, no users, nothing orphaned.
+    expect(forcedRebuildDayKey("u1", NOW)).toBe(
+      "forced_rebuilds_today:u1:2026-09-04",
+    );
   });
 
   it("gives the trial cap no period segment at all", () => {
