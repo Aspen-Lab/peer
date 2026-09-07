@@ -501,19 +501,9 @@ PENDING USER ACTION: (1) Apply the three migrations under `web/supabase/migratio
            NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY — and must NOT carry
            TAVILY_API_KEY (the build will refuse it after 5-03). Deploy only after round 5
            reports green and the branch is merged. WITHDRAWN: the trial backfill (no users).
-OPEN FOR MANAGER:  **three, all raised by round-6 C in §4, none blocking A.** (1) No ruled
-           copy exists for `QuotaNotice`'s `known + anonymous` branch, so C left it unchanged;
-           it is also unreachable in a deployed runtime (report routes answer a stranger 401),
-           checked in source. (2) The dashboard mode chip tells a **paid** reader "Free" /
-           "AI off" mid-hydration — the same "assert a fact you have not read yet" family, but
-           a capability display rather than an upsell, and ruled the other way today at
-           `ai-tier.ts:136`. The seam is one line if the manager wants it changed. (3) 6-03's
-           upgrade **line** ("Peer Pro refreshes them whenever you ask." + "See what Pro
-           adds") is the only string C wrote that was not ruled — the ruled sentence itself is
-           verbatim; `QuotaNotice`'s prompt could not be reused because it says "monthly" and
-           refresh is weekly. Overwritable in one edit.
-           **R-UI-3 stayed PARTIAL through Ruling 16 point 2; 6-04 has landed, and round-6 A
-           re-scores it by behaviour — C does not score.**
+OPEN FOR MANAGER:  none — C's three flags ruled in §1r (Ruling 17 points 4-6). The chip is
+           round-7 item 7-01; the anonymous quota copy is an accepted absence with a tally;
+           6-03's upgrade line is ratified. R-UI-3 is A's to re-score this turn.
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
@@ -1261,6 +1251,64 @@ report pages pass `entitlement.effectivePlan` straight into `QuotaNotice`
    the required-prop design that makes it safe. Rendered from `DiscoveryPage`, where the entitlement
    is already in scope, so no new prop travels.
 
+---
+
+## §1r. RULING 17 — after round-6 C; the fail-open class is closed, one sibling remains (2026-09-07, BINDING)
+
+**Manager's independent check:** gate re-run cold — tsc 0 · eslint 1 (standing `quiz.tsx:46`) ·
+vitest 125/1 files, **2906/1 tests, 0 failed** — identical to C's, +35 tests, none deleted. The two
+`= "free"` pass-through defaults the dead C spotted were read in the 6-04 diff and are gone. The
+chip's `planChipText` docblock was read in source and does say a missing plan reads `"Free"`.
+
+1. **Round 6 accepted.** 6-04, 6-01, 6-03 landed in the ruled order. **The dead C's dying lead was
+   real and it mattered:** `JobReport` and `EventReport` declared `effectivePlan?: Plan = "free"`,
+   which handed back the required-prop discipline that 3-01 and 3-02 built on purpose, one file
+   further from where anyone reads for it. **A default that supplies the unsafe value is a fail-open
+   wearing a type annotation** — and this is the second time in this loop a guard was undone by a
+   convenience default one layer up (the first was `FigureMatchContext`, 3-02). **New standing rule
+   (§3):** a prop or parameter that decides entitlement, spend or an upsell is **required, never
+   optional-with-a-default** — if a caller may legitimately not know, the type says so (`null`), it
+   does not guess.
+2. **C corrected the manager, and it is a real gap in Ruling 16 point 3.** `null` alone cannot
+   produce the `known + anonymous` branch: `ProfileSync` only calls `setEntitlement` when a profile
+   comes back, and a signed-out reader never gets one — so the store would sit at "not known"
+   forever for exactly the reader point 4 wrote the sign-in sentence for, and that branch would be
+   dead code. **Anonymity must be learned and recorded, not inferred from silence**, which is what
+   C built. Ruling 16 point 3 is amended accordingly: the third state is "not yet known", and
+   "known to be anonymous" is a **fourth** state that a successful signed-out check writes. A failed
+   fetch stays `null`.
+3. **C's self-correction is recorded as the round's evidence lesson.** C wrote that restoring the
+   `= "free"` default would redden the new cases; it does not, because a parameter default fires on
+   `undefined` and never on an explicit `null`. C found this by **planting, not by reasoning**, and
+   replaced the assertion with a source-level one. This is Ruling 10 point 2b earning its place
+   again: a revert that does not redden may mean the test is wrong, not that the fix is redundant.
+4. **Flag 1 — `QuotaNotice`'s anonymous branch: accepted with no copy, and the reason is recorded.**
+   The three report routes answer a stranger 401 (C checked in source; the persona suites assert
+   it), so the branch is unreachable in a deployed runtime. Inventing copy for an unreachable branch
+   is speculative work and a string nobody will ever proof-read. **Accepted absence.** The existing
+   401 assertions are its guard; **A tallies "report routes answering an anonymous caller 401"**
+   every round — if that number ever moves, this branch needs copy the same round.
+5. **Flag 2 — the chip is the same class and IS fixed. Round-7 item 7-01.** A dashboard chip that
+   reads **"Free"** to a paid reader mid-hydration is not an upsell, so Ruling 8 does not reach it —
+   but it asserts a fact the client has not read yet, which is the defect 6-04 exists to end, and
+   **it is shown to someone who is paying.** C enumerated the whole producing path (exactly two
+   upsell surfaces plus this one capability display), so closing this closes the class rather than
+   patching an instance. **Fix:** the plan segment renders only when the plan is known; while it is
+   not, that segment is **absent**, not blank-substituted and not defaulted. It is one text span
+   inside an existing row, so there is no layout jump. `planChipText`'s docblock, which today says a
+   missing plan reads `"Free"`, is corrected in the same commit — the comment is as wrong as the
+   code. **Escape clause:** if the chip's contract cannot express absence without a caller change,
+   stop and record.
+6. **Flag 3 — 6-03's upgrade line is ratified as written**, with one requirement. *"Peer Pro
+   refreshes them whenever you ask."* is accurate under D2a (refresh is one of exactly two things
+   paid buys) and plain. *"See what Pro adds"* stands. **Requirement:** its destination is the same
+   one the existing upgrade prompt uses, so that when D7's payment ships there is **one** place to
+   change, not two. If the two differ today, that is 7-01's commit to unify, and C says which.
+7. **Round 6 continues with A**, who re-scores **R-UI-3** by behaviour (it has been PARTIAL since
+   Ruling 16 point 2 and 6-04 has now landed) against denominator **30**, with **R-METER-2 `N/A`**.
+   Round 7 opens after: **7-01** the chip, and **6-02** the model swap **if the owner has answered**
+   — the 2026-10-01 escalation date stands.
+
 ## §2. ROLES — DO ONLY YOUR OWN JOB
 
 ### Agent A — Reviewer
@@ -1389,6 +1437,10 @@ C does **not** judge whether something should be fixed.
 - **A new tally must be proved able to fail** (Ruling 14 point 5): the round that adds it reverts
   the fix and watches the tally move. A tally that survives the revert is measuring the wrong
   surface - re-source or rename it in the same round; never report it as a pass.
+- **A prop or parameter that decides entitlement, spend or an upsell is REQUIRED, never
+  optional-with-a-default** (Ruling 17 point 1). A default that supplies the unsafe value is a
+  fail-open wearing a type annotation, and it has undone a guard twice in this loop. If a caller
+  may legitimately not know, the type says so (`null`); it never guesses.
 - Commit messages: plain sentences in the repo's existing style
   (`feat(scope): …`, `fix(scope): …`, `refactor(scope): …`), ending with
   `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>`.
