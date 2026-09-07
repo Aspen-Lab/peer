@@ -44,6 +44,30 @@ function clamp01(n: number): number {
   return Math.max(0, Math.min(1, n));
 }
 
+/**
+ * Each value's place among the others, 0…1 — the share of the pool it beats.
+ *
+ * Ties share a value (every paper with no overlap at all sits at 0 together),
+ * and one candidate is simply the most relevant one there is.
+ */
+export function poolPercentile(values: number[]): number[] {
+  const n = values.length;
+  if (n === 0) return [];
+  if (n === 1) return [1];
+  const sorted = [...values].sort((a, b) => a - b);
+  return values.map((v) => {
+    // Number of strictly smaller values, by binary search over the sorted copy.
+    let lo = 0;
+    let hi = n;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (sorted[mid] < v) lo = mid + 1;
+      else hi = mid;
+    }
+    return lo / (n - 1);
+  });
+}
+
 function topicMatchesItem(item: RawItem, topic: string): boolean {
   const needle = normalizePhrase(topic);
   if (!needle) return false;
@@ -103,14 +127,34 @@ export function scoreItems(
   const mustTopics = profile.topics;
   const softTopics = profile.softTopics ?? [];
 
-  const scored: ScoredItem[] = [];
+  // Pass 1: everything that can be judged from the paper alone.
+  const passed: {
+    item: RawItem;
+    kw: ReturnType<typeof scoreKeyword>;
+    softKw: ReturnType<typeof scoreKeyword>;
+    tf: number;
+  }[] = [];
   for (const item of items) {
-    const kw = scoreKeyword(item, mustTopics);
+    const kw = scoreKeyword(item, mustTopics, { grounded: true });
     // Hard gate: if required topics are set, the item must match at least one.
     if (mustTopics.length > 0 && kw.score === 0) continue;
+    passed.push({
+      item,
+      kw,
+      softKw: scoreKeyword(item, softTopics, { grounded: true }),
+      tf: clamp01(scoreTfidf(item.id, pText, index)),
+    });
+  }
 
-    const softKw = scoreKeyword(item, softTopics);
-    const tf = clamp01(scoreTfidf(item.id, pText, index));
+  // Pass 2: relevance is only meaningful against the rest of the day, so the
+  // pool has to be complete before anything can be ranked. The gate above
+  // decides the pool: a paper that matched no required topic is not a
+  // yardstick for the ones that did.
+  const topicality = poolPercentile(passed.map((p) => p.tf));
+
+  const scored: ScoredItem[] = [];
+  passed.forEach(({ item, kw, softKw, tf }, i) => {
+    const tp = topicality[i];
     const rc = clamp01(scoreRecency(item.publishedAt, now));
     const sr = clamp01(scoreSource(item.source, profile.sourceWeights));
     const policyPenalty = negativePenalty(item, profile.negativeTopics ?? []);
@@ -132,7 +176,7 @@ export function scoreItems(
     // Soft topics add up to +0.18 bonus so papers the user is curious about
     // float above equal-relevance papers that lack those terms.
     const softBonus = softTopics.length > 0 ? softKw.score * 0.18 : 0;
-    const base = w.keyword * kw.score + w.tfidf * tf + w.recency * rc + w.source * sr;
+    const base = w.keyword * kw.score + w.tfidf * tp + w.recency * rc + w.source * sr;
     const combined = clamp01(
       base * policyPenalty * legacyPenalty * preference.penalty +
         softBonus +
@@ -141,6 +185,7 @@ export function scoreItems(
     const breakdown: ScoreBreakdown = {
       keyword: kw.score,
       tfidf: tf,
+      topicality: tp,
       recency: rc,
       source: sr,
       combined,
@@ -152,7 +197,7 @@ export function scoreItems(
       matchedKeywords: kw.matched,
       relevanceReason: generateReason(item, kw.matched, breakdown),
     });
-  }
+  });
 
   return scored
     .filter((item) => shouldPushReviewPaper(item, profile.seedTexts))

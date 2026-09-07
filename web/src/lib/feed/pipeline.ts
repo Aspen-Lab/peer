@@ -7,6 +7,7 @@ import {
 } from "@/lib/sources/vertex-search";
 import { withSourceTimeout } from "@/lib/opportunities/shared";
 import { scoreItems } from "@/lib/scoring";
+import { dropStale } from "./freshness";
 import type { ScoredItem } from "@/lib/scoring/types";
 import { dedupItems } from "./dedup";
 import { applyTier1Rerank } from "./rerank";
@@ -226,12 +227,21 @@ async function buildPaperPool(
   const deduped = dedupItems(paperItems);
   const afterDedup = deduped.length;
 
+  // A daily briefing carries news. Two sources answer without regard to date —
+  // Semantic Scholar's search takes no date parameter at all — so the pool
+  // arrives with the field's classics in it: the 2000 PSIPRED paper and the
+  // 2020 AlphaFold paper both reached a pool built for today. They stayed out
+  // of the briefing only because the old ranking valued age over relevance,
+  // and that is no longer true, so the ceiling has to be stated rather than
+  // fallen into.
+  const fresh = dropStale(deduped, brief.timeWindow, now.getTime());
+
   // NEUTRAL SCORING, AND IT IS THE WHOLE REASON ONE POOL CAN SERVE A WHOLE DAY.
   // `preferenceLedger` is deliberately absent here and supplied at read time
   // instead: bake a user's likes into the stored scores and every later read
   // that day would be ranked by a snapshot of their taste taken this morning.
   // The jobs pool makes the same split for the same reason.
-  const scored = scorePaperCandidates(deduped, req, brief, false);
+  const scored = scorePaperCandidates(fresh, req, brief, false);
 
   const tier1Ranked = requestedTier >= 1 ? applyTier1Rerank(scored, brief) : scored;
   const tier2 = requestedTier >= 2
@@ -328,7 +338,14 @@ export async function runFeedPipeline(
   // ── READ-TIME RANKING. Everything below is local, deterministic and free, so
   // a user's likes, dismissals and preferred journals move today's pool without
   // re-fetching a source or re-spending an LLM token.
-  const scored = scorePaperCandidates(pool.items, req, brief, true);
+  //
+  // The ceiling is applied here too, not only where the pool is built. A pool
+  // is a day's work and outlives the request that built it: it can have been
+  // built before this rule existed, or built for a reader whose window was
+  // wider. Read time is the only place that can promise a briefing holds no
+  // old news, so it promises it here.
+  const inWindow = dropStale(pool.items, brief.timeWindow, now.getTime());
+  const scored = scorePaperCandidates(inWindow, req, brief, true);
   // Runs at every tier, including 0. `applyTier1Rerank` is pure local
   // computation — weighted boosts plus a per-topic/per-author diversify pass,
   // no model call and no network — so it belongs to the floor that

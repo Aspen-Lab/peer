@@ -2,6 +2,52 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.15.0 — 2026-09-07
+
+The briefing ranks by relevance.
+
+Today's ten opened with two protein-structure papers and then, from the fifth
+card on, an art installation about diffusion models, a paper on the C/O ratios
+of Uranus, 3D duet singing animation, and pitch-class steering for music
+generation. Every one of them had earned its place: they say "diffusion
+models", and the ranking could not tell them apart from the reader's own
+field. Measured against a labelled copy of the day's forty candidates —
+kept in `scoring/__fixtures__` so this stays measurable — twenty-four were
+strangers.
+
+**Relevance was outweighed by age.** The score was 0.35 keyword + 0.30 TF-IDF
++ 0.20 recency + 0.15 source, which reads as relevance-first and behaved as
+recency-first. The keyword term was the same 0.667 for twenty-eight of thirty
+papers — it counts how many of your topics a paper mentions, not how much it
+is about them. TF-IDF was the only term that discriminated, and the cosine of
+two short documents lives around 0.01–0.35, so weighted at 0.30 it could move
+a score by 0.1 while recency moved it by 0.17. Relevance is now scored
+against the rest of the day's pool, where the number means something, and
+leads: 0.55 topicality, 0.30 keyword, 0.10 recency, 0.05 source.
+
+**A mention is not a subject.** Two papers matched "protein structure
+prediction" on one sentence apiece — "generative modeling, which has
+transformed prediction in fields as diverse as weather forecasting and
+protein structure prediction, holds the potential to forecast earthquake
+aftershocks" — and that name-drop, counting as a full second topic match,
+ranked an earthquake paper with the day's real protein work. A match is now
+weighed by where it falls: title, tags, said repeatedly, or said once in
+passing. It still counts; it no longer counts the same.
+
+**A daily briefing carries news.** The reader's freshness window reaches the
+source queries, but Semantic Scholar's search takes no date parameter and
+answers with the field's classics: the 2000 PSIPRED paper and the 2020
+AlphaFold paper were both in a pool built for today. Nothing caught them
+afterwards — they stayed out of the briefing only because age outweighed
+relevance, so the moment relevance was allowed to lead, they led. There is a
+stated ceiling now, generous about the window (60 days for a reader on
+"week") and applied both where the pool is built and where it is read, since
+a pool outlives the request that built it.
+
+Today's briefing, after: six straight papers on protein structure
+prediction, then diffusion-model work, and the first stranger at card seven
+instead of card five. Nothing in it is older than three weeks.
+
 ## v0.14.1 — 2026-09-07
 
 The briefing opens with a dateline.
