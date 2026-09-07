@@ -319,7 +319,7 @@ export function AiProviderGuide({ provider }: { provider: UserAiProvider }) {
       {isDeepSeek && (
         <div
           role="note"
-          className="mx-4 mb-3 rounded-xl border border-amber-500/25 bg-amber-500/[0.07] px-3 py-2.5 text-caption leading-relaxed text-text-muted"
+          className="mx-4 mb-3 rounded-xl border border-accent/25 bg-accent/[0.06] px-3 py-2.5 text-caption leading-relaxed text-text-muted"
         >
           <strong className="text-heading">
             Important: DeepSeek cannot process images in Peer.

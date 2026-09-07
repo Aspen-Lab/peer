@@ -2,6 +2,22 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.16.3 — 2026-09-07
+
+The last two hues.
+
+Auditing the deployed stylesheet rather than the source turned up two more
+colours the greyscale pass had not reached, and they were hiding in different
+ways than the literals in v0.16.2. The DeepSeek caution note on the AI-key
+panel was bordered in `amber-500` — Tailwind's own palette, which is always
+there to be reached for and owes nothing to Peer's tokens; a caution is the
+accent's job now. And `--done-light` / `--done-dark`, the blue completion
+seeds, were still declared on every accent theme after `--color-done` went
+grey — dead weight that a grep for the palette still found, because it was
+still in the CSS.
+
+An audit of the build now reports no colour outside the six accent seeds.
+
 ## v0.16.2 — 2026-09-07
 
 Eleven colours the palette could not reach.

@@ -149,8 +149,6 @@ html[data-accent="violet"]   { --seed: #7a3fd9; --seed-dark: #a078f0; }
 :root {
   --seed: #ff520d;
   --seed-dark: #ff6a2b;
-  --done-light: #2b5c8f;
-  --done-dark: #7aaee0;
   --color-bg: #fafafa;
   --color-bg-secondary: #f1f1f1;
   --color-surface: #ffffff;
