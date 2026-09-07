@@ -118,11 +118,26 @@ lock by rebasing onto the holder's head.
 ## §1. CURRENT STATE — THE SOURCE OF TRUTH
 
 ```
-HELD BY:          B-round5 @ 2026-09-07 16:21 UTC
+HELD BY:          free
 ROUND:            5
-WHOSE TURN:       B  (round 5; A is skipped at the front - Ruling 12 point 6)
-STOPPED BECAUSE:  finished the turn @ 2026-09-07 — the owner ruled; round 5 opened by the manager
-STATUS:           ROUND 5 OPENS ON A SPEC CHANGE, NOT A DEFECT. The owner removed operator-funded
+WHOSE TURN:       C  (round 5; A is skipped at the front - Ruling 12 point 6)
+STOPPED BECAUSE:  finished the turn @ 2026-09-07 16:38 UTC — B's guide is written, four items
+STATUS:           ROUND 5 — **B HAS WRITTEN THE GUIDE. FOUR ITEMS, 5-01 … 5-04**, one commit each,
+                  each pushed as it finished; no code changed and `git diff HEAD -- web/` is empty.
+                  Classification: 5-01 carries **one `EXTRA`** (the system branch in the resolver)
+                  **and one `WRONG DATA`** (`operatorSearchAvailability` returns true where D2a says
+                  always false); 5-02 **`WRONG DATA`** (one line, `resolve.ts:128`); 5-03
+                  **`WRONG DATA`** (a name on the wrong guard list); 5-04 is the test contract.
+                  **The blast radius was MEASURED, not estimated** — B planted the finished D2a
+                  shape in three stages and read the failure list off the runner, then reverted with
+                  an asserted empty diff: 5-01 costs **21** failing cases in 7 files, 5-02 **2** more,
+                  5-03 **5** more **plus 13 that silently pass for the wrong reason**. Total **28
+                  cases in 9 files**. `tsc` **0** and `eslint` **1 (standing)** under the full plant,
+                  so Ruling 12 point 2's escape clause was NOT reached — nothing kept stops compiling.
+                  **TWO POLICY ITEMS FOR THE MANAGER, see OPEN FOR MANAGER below.** The larger one
+                  is a finding against Ruling 12 itself: the 500/day search breaker does **not**
+                  become unreachable.
+                  ROUND 5 OPENED ON A SPEC CHANGE, NOT A DEFECT. The owner removed operator-funded
                   search entirely (D2a, Ruling 12, §1m): every user searches on their own Tavily
                   key or not at all; the guard now BANS `TAVILY_API_KEY`. R-METER-2 becomes N/A,
                   the denominator drops to 30, and the blocked list drops to 6. The owner also
@@ -205,16 +220,20 @@ DONE:      Round 1 A (three parts). Round 1 B, all seven units. Round 1 C: ALL 2
            ITEMS, 3-01 / 3-02 / 3-03, every new test proved by reverting.
            **Round 4 A: all three parts**, one commit each, each pushed; no code changed;
            every throwaway deleted and every plant restored with an asserted empty diff.
+           **Round 5 B: all four items**, 5-01 … 5-04, one commit each, each pushed; no code
+           changed; the three-stage measurement plant reverted with an asserted empty diff.
 GATE NOW:  tsc exit **0** · eslint **1 error** (the standing `quiz.tsx:46`, **0 warnings**) ·
            vitest **124 files passed | 1 skipped (125)** · **2859 tests passed | 1 skipped
            (2860)**, **0 failed**, 11.49 s.
-TODO:      B WRITES THE ROUND-5 GUIDE from Ruling 12 (§1m) and the six dated D2a amendments in the
-           spec: 5-01 remove the system branch from the search-key resolver and make operator
-           search availability unconditionally false; 5-02 hard-wire `systemSearchAllowed` false
-           in the entitlement with D2a named at the line; 5-03 the guard — `TAVILY_API_KEY` from
-           required to banned, required drops to three; 5-04 tests inside each, incl. the new
-           standing tallies (Ruling 12 point 7) as gate tests where they can be. Then C, then A
-           re-measures against the denominator of 30.
+TODO:      C WORKS THE ROUND-5 GUIDE FROM 5-01, in order, one commit per item, pushed. The guide is
+           in §4 under `### Round 5 — Agent B`. 5-01 the search-key resolver (delete ONLY the system
+           branch — **keep `SystemSearchKeyInput.systemSearchAllowed`, it is the last gate on the
+           Brave env read**; delete the two now-unused capability imports or eslint fails); 5-02 one
+           line at `resolve.ts:128`, `poolRefreshAllowed` untouched; 5-03 the guard list move plus
+           four pieces of stale prose incl. the failure message itself; 5-04 the 28 test cases,
+           **rewritten never deleted**, plus the three Ruling 12 point 7 tallies as gate tests.
+           **Expect the tree RED between items** — 21 failures after 5-01 alone is the measured,
+           expected shape. Then A re-measures against the denominator of 30.
 PENDING USER ACTION: (1) Apply the three migrations under `web/supabase/migrations/20260904*`.
            (2) After applying, save a profile once in the app. (3) Optionally fill
            `GOOGLE_API_KEY` in `web/.env.local` (and the Supabase URL + service-role key) so A
@@ -223,7 +242,32 @@ PENDING USER ACTION: (1) Apply the three migrations under `web/supabase/migratio
            NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY — and must NOT carry
            TAVILY_API_KEY (the build will refuse it after 5-03). Deploy only after round 5
            reports green and the branch is merged. WITHDRAWN: the trial backfill (no users).
-OPEN FOR MANAGER:  none — the owner's decision is recorded as D2a / Ruling 12.
+OPEN FOR MANAGER:  TWO, both raised by round-5 B, neither recommending a reversal (Ruling 1 point 1).
+           1. **A FINDING AGAINST RULING 12 — the 500/day system-search breaker does NOT become
+              unreachable** (§4, 5-04 vii). `consumeSystemSearches` has **two** callers and the
+              ruling accounts for one. The search fan-out does go dark; the **forced pool rebuild**
+              (`jobs/pipeline.ts:258`, `events/pipeline.ts:275`) charges the same breaker, gated on
+              `poolRefreshAllowed` — which Ruling 12 point 5 deliberately keeps alive for trial and
+              paid. The breaker's own docblock says "Two callers, one home" (`search-breaker.ts:6-8`).
+              So after D2a it still fires, still logs at error level and still writes a
+              `kind:"breaker"` row, for a reader who presses "refresh now" 500 times in a day.
+              Consequences to rule on: (a) **R-QUOTA-2's amendment is half right** — the search half
+              is unreachable *from search*, not unreachable, and as written A would mark a live
+              mechanism `N/A`; (b) the names `SYSTEM_SEARCHES_PER_DAY` / `systemSearchDayKey` /
+              `searches_today` / `path:"system-search"` now describe something only a pool rebuild
+              increments — renaming touches a migrated counter column so it is not C's call this
+              round. **Ruling 12 point 7's tally 2 is unaffected and stands as written**: the refresh
+              path writes a `breaker` row, never a `search` row.
+           2. **The RULING 75 collateral** (§4, 5-04 iii). Ten cases inherited from the earlier
+              report-parity loop are not about the freemium contract at all — they assert how the
+              gemini adapter is *called*. Six rewrite cleanly to `null`. The other four
+              (`jobweb.test.ts:3208`,`3228`,`3245` · `eventweb.test.ts:2711`) test option-building
+              inside a now-unreachable `fetchImpl`. B recommends **(a)** rewrite them to assert the
+              surface never calls the adapter, cost recorded: the deny-list, suffix and admission
+              rules lose live coverage. **(b)** extracting that option-building into a testable pure
+              function keeps the coverage but is a production refactor D2a did not ask for. B
+              recommends (a) on Ruling 12 point 2's own reasoning; it retires an earlier loop's
+              rulings, so it is the manager's call.
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
