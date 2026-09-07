@@ -119,13 +119,17 @@ lock by rebasing onto the holder's head.
 
 ```
 HELD BY:          free
-ROUND:            6
-WHOSE TURN:       manager — **opens round 7.** A found a NEW defect (proposed **7-02**) that must be
-                  ranked against the already-queued 7-01 (the chip) and 6-02 (the model swap).
+ROUND:            7
+WHOSE TURN:       B  (round 7; order is 7-02 -> 7-01 -> 6-02)
 STOPPED BECAUSE:  finished the turn @ 2026-09-07T20:35:00Z — all three parts, one commit each, each
                   pushed as it finished. No production code changed; every plant reverted with an
                   asserted empty diff; every throwaway deleted.
-STATUS:           ROUND 6 — **A HAS MEASURED. CODE-SIDE IS 3.3% (1 of 30). ONE DIFFERENCE, AND IT IS
+STATUS:           ROUND 7 OPENS ON THE WORST DEFECT OF THE LOOP SO FAR: the upgrade prompt's only
+                  call to action links to `/settings`, which is not a route — verified by the
+                  manager against the real route tree. A reader trying to pay lands on
+                  not-found. In the tree since round 2; scored MET three rounds. R-QUOTA-1 is
+                  PARTIAL. Round-6 A's summary follows.
+                  ROUND 6 — **A HAS MEASURED. CODE-SIDE IS 3.3% (1 of 30). ONE DIFFERENCE, AND IT IS
                   NOT A REGRESSION.** Three parts, one commit each, each pushed as it finished; no
                   production code changed and `git diff --name-only -- web/` asserted **0** files.
                   1. **R-UI-3 IS RE-SCORED `MET`** (it was `PARTIAL` from Ruling 16 point 2). Scored
@@ -530,51 +534,15 @@ GATE NOW:  **Round-6 A, cold, after every plant was reverted and every throwaway
            suite, `components/cards/pool-refresh-notice.test.tsx`.
            Round-5 A's figures follow: tsc **0** · eslint **1** · vitest **124 files passed | 1
            skipped (125)** · **2871 tests passed | 1 skipped (2872)**, **0 failed**, 9.50 s.
-TODO:      **THE MANAGER OPENS ROUND 7.** Round 6 is measured and closed on A's side. Denominator
-           stays **30**; **R-METER-2 is `N/A`** and must be re-listed by name with that word every
-           round (Ruling 12 point 3). Exclusions: **none**, re-listed.
-           **Three items are now queued and the manager ranks them:**
-           1. **PROPOSED 7-02 — the dead upgrade link.** `quota-notice.tsx:142` renders
-              `href="/settings"`; there is no `/settings` route and there never has been on any
-              branch. The two sibling surfaces both point at `/welcome?step=ai`, which exists.
-              **This is the only item on A's difference list** and it is wrong data aimed at a
-              reader who has just been refused, so by the standing rank rule it outranks the two
-              below. It also SUBSUMES Ruling 17 point 6's unification requirement: 6-03 could not
-              match "the existing upgrade prompt" because the two pre-existing surfaces already
-              disagreed. **Unify on `/welcome?step=ai`.**
-           2. **7-01 — the dashboard chip** (Ruling 17 point 5), unchanged and still queued.
-              **Scope correction from A's census: the class is THREE upsell surfaces plus the chip,
-              not two plus the chip** — 6-03 added `PoolRefreshNotice` after C counted.
-           3. **6-02 — the Gemini model swap.** Still waiting on the owner; the **2026-10-01**
-              escalation date stands and the models retire **2026-10-16**.
-           **Also for the manager to rule, not a defect:** the `underTuned` placement — on
-           `FeedMoreTile`'s "Tune your signals" branch there is no refresh button, yet the notice
-           explaining refresh renders beside it. A's ruling: report, do not score. The sentence
-           stays true, no wrong value is shown, and mirroring `looksUnderTuned` outside the tile
-           would put one predicate in two files.
-           **CARRY EVERY STANDING TALLY BY NAME**, even at zero: paid readers shown any upsell
-           (0, by render, **including a mid-hydration render**); entitled readers shown a refresh
-           upsell (0, from a **live-trial render** and a **mid-hydration render**, never from the
-           entitlement unit tests — Ruling 14 point 4); `poolRefreshAllowed` reaching a component
-           (**1**, no longer the finding); `process.env.TAVILY_API_KEY` reads in non-test source
-           (0); `kind:"search"` usage rows produced (0, measured on a real request); operator-key
-           search requests per persona (0, sourced from the **five surfaces that actually search**
-           — Ruling 14 point 4); Ruling-75 option-building cases asserting absence (4);
-           structured-source accepted reads (3); `resolveProvider` call sites without a context
-           (0, by the compiler); figure matchers reachable with a null-user context (0, by the
-           compiler); quota/breaker reachability per route on the app's real request shape; shallow
-           calls on refused deep requests (1 per refused papers request, bucket-bounded);
-           `[quota] store unavailable` lines (>=1 in the outage cases, 0 on production paths);
-           usage rows per provider request (1, never 2, never 0); guard tests proved by planting;
-           `local-no-auth` **ABSENT** (503 from the shared guard — **now asserted once at the
-           chokepoint rather than three times per route; not a drop**); **report routes answering
-           an anonymous caller 401 (3 of 3; 4 of 4 with digest)** — Ruling 17 point 4, proved able
-           to fail this round; and **R-METER-2 `N/A`**.
-           **A new tally must be proved able to fail** (Ruling 14 point 5).
-           **NEW, EARNED THIS ROUND — a sixth scan is worth making permanent:** every rendered
-           internal `href` resolves to a real route segment or a `public/` asset. It found the only
-           defect on this round's list, and it is a handful of lines. **Manager's call**, since A
-           does not change code.
+TODO:      B WRITES THE ROUND-7 GUIDE, order 7-02 -> 7-01 -> 6-02 (Ruling 18 §1s):
+           **7-02 FIRST** — point `QuotaNotice`'s prompt at `/welcome?step=ai` (what the other
+           two upsell surfaces already use), and establish BY EXECUTION whether that page is
+           right for a signed-in reader who already has AI — the `ai` step's completeness rule
+           (1-15) may skip past it, and a prompt landing on a page that bounces the reader is
+           the same defect wearing a valid URL (point 6). Add the dead-internal-link scan as a
+           GATE TEST, proved by planting a dead link; `/CHANGELOG.md` is a known false
+           positive. **7-01** the chip, across THREE upsell surfaces plus the chip (point 4).
+           **6-02** the model swap only if the owner has answered.
 PENDING USER ACTION: (1) Apply the three migrations under `web/supabase/migrations/20260904*`.
            (2) After applying, save a profile once in the app. (3) Optionally fill
            `GOOGLE_API_KEY` in `web/.env.local` (and the Supabase URL + service-role key) so A
@@ -583,15 +551,7 @@ PENDING USER ACTION: (1) Apply the three migrations under `web/supabase/migratio
            NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY — and must NOT carry
            TAVILY_API_KEY (the build will refuse it after 5-03). Deploy only after round 5
            reports green and the branch is merged. WITHDRAWN: the trial backfill (no users).
-OPEN FOR MANAGER:  **ONE, and it is the round's difference.** `POLICY — manager decides` is not
-           claimed: the dead `/settings` link is a plain defect, not a judgement call, and A has
-           named the destination it should unify on. What the manager owes is the **ranking** of
-           proposed 7-02 against 7-01 and 6-02, and a ruling on the two things A reported without
-           scoring: the `underTuned` placement, and whether the internal-link scan becomes
-           permanent. **R-UI-3 is re-scored `MET`** — Ruling 16 point 2's `PARTIAL` is discharged,
-           and round-5 A's earlier `MET` still stands in the log as history.
-           C's three flags remain ruled in §1r; **Ruling 17 point 6's destination requirement is
-           now ANSWERED and it did not pass** — see proposed 7-02.
+OPEN FOR MANAGER:  none — A's proposed 7-02 is ruled in §1s and ranked first.
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
@@ -1398,6 +1358,59 @@ chip's `planChipText` docblock was read in source and does say a missing plan re
    Round 7 opens after: **7-01** the chip, and **6-02** the model swap **if the owner has answered**
    — the 2026-10-01 escalation date stands.
 
+---
+
+## §1s. RULING 18 — after round-6 A; the upgrade button leads nowhere; ROUND 7 OPENS (2026-09-07, BINDING)
+
+**Manager's independent check of A's headline:** the route tree was listed from `src/app`
+(`/`, `/auth/error`, `/changelog`, `/events/[id]`, `/jobs/[id]`, `/papers/[id]`,
+`/papers/[id]/surface`, `/persona`, `/profile`, `/saved`, `/welcome`) — **there is no `/settings`**.
+`quota-notice.tsx:142` links there; `tier-upgrade-block.tsx:115` and `pool-refresh-notice.tsx:125`
+both link to `/welcome?step=ai`, and `welcome/page.tsx:83` reads that `step` parameter. **A is
+right, and the fix target is the one the other two already use.**
+
+1. **THE FINDING, and it is the worst kind this loop has produced.** Every other defect in six
+   rounds cost money or told a reader something false. **This one silently blocks the only path a
+   reader has to become a paying customer.** A free or trial reader who hits the monthly cap is
+   shown the required upgrade prompt and its single call to action lands on `not-found`. It has
+   been in the tree since 2-07 in **round 2**, and A scored R-QUOTA-1 `MET` for three rounds
+   without following the link. **R-QUOTA-1 is `PARTIAL`.**
+2. **Why it survived, recorded because the lesson generalises.** Every round asked "does the prompt
+   render?" and none asked "does its button go anywhere?". Rendering a control is not the same as
+   the control working — the same gap that hid the silent refresh button in round 6 and the
+   unreachable streaming quota check in round 3. **New standing rule (§3): a rendered call to
+   action is verified by resolving its destination against the real route tree, not by asserting
+   the element exists.** A's link scan is the shape: every rendered internal link checked against
+   `src/app` and `public/`. **It becomes a standing tally: dead internal links (must be 0), with
+   `/CHANGELOG.md` recorded as a known false positive — it is a real static file.**
+3. **A corrected Ruling 17 point 1's reasoning, and the correction is worth keeping.** A planted
+   the `= "free"` default back and **nothing reddened**: the guard lives in the **type annotation**,
+   not the destructuring default, so with the type required, omitting the prop is a type error
+   whether or not a default sits beside it. **The ground rule stands, its reason is sharpened:** the
+   fail-open was the **optional `?`**, and the default is what made it *silent* rather than loud.
+   Both go together; neither alone is the whole guard. The compiler is the evidence that reaches
+   this, and it does — `TS2769` on both omissions, with a positive control that compiles.
+4. **A corrected the upsell census: there are THREE surfaces, not two** — `TierUpgradeBlock`,
+   `QuotaNotice`, `PoolRefreshNotice`. Not a defect, a stale count: C counted while implementing
+   6-04, 6-03 then added the third, and **Ruling 17 point 5 repeated the stale figure after both
+   had landed**. That is the manager quoting a number instead of re-deriving it. All three behave
+   correctly on all five states. **7-01's "close the class" is three surfaces plus the chip.**
+5. **Round 7 is three items. The ORDER is 7-02 -> 7-01 -> 6-02**, and the numbers are labels, not
+   the order — they are not renumbered, because earlier turns already read them.
+   - **7-02 (FIRST) — the dead destination.** `QuotaNotice`'s prompt points at `/welcome?step=ai`,
+     the destination the other two surfaces already use, so there is **one** place to change when
+     D7's payment ships. Add the link scan of point 2 as a **gate test**, proved by planting a dead
+     link.
+   - **7-01 — the chip** (Ruling 17 point 5), now across three surfaces plus the chip.
+   - **6-02 — the model swap**, only if the owner has answered; the 2026-10-01 escalation stands.
+6. **Round 7 runs B -> C -> A.** 7-02 looks like a one-line change and is not: B establishes by
+   execution whether `/welcome?step=ai` is the right destination for a reader who is **already**
+   signed in and already has AI (the step's own completeness rule, `1-15`, may mark it done and skip
+   past it), and what that reader should see instead. **A prompt that resolves to a page which
+   immediately bounces the reader is the same defect wearing a valid URL.**
+7. **Standing tallies for round 7** — everything carried, plus point 2's dead-internal-links tally,
+   and the upsell-surface count is **re-derived every round, never quoted** (point 4).
+
 ## §2. ROLES — DO ONLY YOUR OWN JOB
 
 ### Agent A — Reviewer
@@ -1530,6 +1543,11 @@ C does **not** judge whether something should be fixed.
   optional-with-a-default** (Ruling 17 point 1). A default that supplies the unsafe value is a
   fail-open wearing a type annotation, and it has undone a guard twice in this loop. If a caller
   may legitimately not know, the type says so (`null`); it never guesses.
+- **A rendered call to action is verified by RESOLVING ITS DESTINATION** against the real route
+  tree, never by asserting the element exists (Ruling 18 point 2). Rendering a control is not
+  the control working - the same gap hid a silent refresh button and an unreachable quota
+  check. Standing tally: dead internal links, must be 0 (`/CHANGELOG.md` is a known false
+  positive - it is a real static file).
 - Commit messages: plain sentences in the repo's existing style
   (`feat(scope): …`, `fix(scope): …`, `refactor(scope): …`), ending with
   `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>`.
