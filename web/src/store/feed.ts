@@ -20,6 +20,7 @@ import {
   ANONYMOUS_ENTITLEMENT,
   type Entitlement,
 } from "@/lib/entitlement/types";
+import { entitlementGrants } from "@/lib/entitlement/allowance";
 import { scoredItemToPaper } from "@/lib/feed/mapper";
 import {
   aiAvailability,
@@ -354,7 +355,12 @@ async function fetchRealFeed(
           advisorSeeds,
           aiPaperSearchEnabled,
           excludeIds,
-          useProfileStore.getState().entitlement,
+          // ABC-freemium 6-04 — the request builders ask a CAPABILITY
+          // question (which AI tier to ask for). While the plan is unknown the
+          // anonymous view is the honest answer and it asks for less, never
+          // more; the server re-resolves the entitlement anyway and is the
+          // authority. Never the place to decide an upsell.
+          entitlementGrants(useProfileStore.getState().entitlement),
         ),
       ),
     });
@@ -442,7 +448,12 @@ async function fetchRealEvents(
           profile,
           "events",
           excludeIds,
-          useProfileStore.getState().entitlement,
+          // ABC-freemium 6-04 — the request builders ask a CAPABILITY
+          // question (which AI tier to ask for). While the plan is unknown the
+          // anonymous view is the honest answer and it asks for less, never
+          // more; the server re-resolves the entitlement anyway and is the
+          // authority. Never the place to decide an upsell.
+          entitlementGrants(useProfileStore.getState().entitlement),
           poolRefresh,
         ),
       ),
@@ -480,7 +491,12 @@ async function fetchRealJobs(
           profile,
           "jobs",
           excludeIds,
-          useProfileStore.getState().entitlement,
+          // ABC-freemium 6-04 — the request builders ask a CAPABILITY
+          // question (which AI tier to ask for). While the plan is unknown the
+          // anonymous view is the honest answer and it asks for less, never
+          // more; the server re-resolves the entitlement anyway and is the
+          // authority. Never the place to decide an upsell.
+          entitlementGrants(useProfileStore.getState().entitlement),
           poolRefresh,
         ),
       ),

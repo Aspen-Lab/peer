@@ -8,6 +8,7 @@ import { ProgressBar } from "@/components/ui/progress-bar";
 import { useFeedStore } from "@/store/feed";
 import { useProfileStore } from "@/store/profile";
 import { aiAvailability } from "@/lib/feed/ai-tier";
+import { entitlementGrants } from "@/lib/entitlement/allowance";
 import {
   DIGEST_CACHE_STORAGE_KEY,
   digestCacheKey,
@@ -103,8 +104,11 @@ export function usePaperDigest(
   const [revealBullets, setRevealBullets] = useState(false);
   const setPaperSummaries = useFeedStore((state) => state.setPaperSummaries);
   // ABC-freemium 1-11 · R-UI-4 — which model, if any, produced a cached digest.
+  // ABC-freemium 6-04 — a capability question, so the anonymous view while the
+  // plan is unknown: `"none"`, which is the honest cache segment for a digest
+  // built before we knew whose model was available. Nothing here upsells.
   const aiMode = useProfileStore((state) =>
-    aiAvailability(state.profile, state.entitlement),
+    aiAvailability(state.profile, entitlementGrants(state.entitlement)),
   );
 
   // Order-insensitive (a pure re-shuffle of the same papers must still hit the

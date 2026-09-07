@@ -22,6 +22,7 @@ import { eventTypes } from "@/types";
 import { useFeedStore } from "@/store/feed";
 import { useProfileStore } from "@/store/profile";
 import { aiAvailability, type AiMode } from "@/lib/feed/ai-tier";
+import { entitlementGrants } from "@/lib/entitlement/allowance";
 import type { Plan } from "@/lib/entitlement/types";
 import {
   daysUntil,
@@ -1748,8 +1749,14 @@ export function EventReport({
   providerConfigured = false,
   // ABC-freemium 1-26 · R-UI-3 — the upsell is plan-aware now, so the view
   // needs the reader's plan as well as whether a model is reachable.
+  //
+  // ABC-freemium 6-04 · Ruling 16 points 2-3 — **`effectivePlan` lost its
+  // `= "free"` default and is now required.** See the twin note in
+  // `jobs/[id]/page.tsx`: a default on a pass-through hands back exactly the
+  // fail-open discipline the two leaf components' required props were built to
+  // enforce, one file further from where anyone would look for it.
   aiMode = "none",
-  effectivePlan = "free",
+  effectivePlan,
   // ABC-freemium 2-07 · R-QUOTA-1 — absent whenever the reader was served.
   quota,
   enrichmentLoading = false,
@@ -1782,7 +1789,8 @@ export function EventReport({
   nowMs: number;
   providerConfigured?: boolean;
   aiMode?: AiMode;
-  effectivePlan?: Plan;
+  /** 6-04 — required, and `null` means the plan is not known yet. */
+  effectivePlan: Plan | null;
   quota?: QuotaSignal;
   enrichmentLoading?: boolean;
   onToggleStar: (key: string) => void;
@@ -2382,7 +2390,12 @@ export default function EventDetailPage({
   const feedback = useFeedStore((state) => state.eventFeedback[id]);
   const profile = useProfileStore((state) => state.profile);
   // ABC-freemium 1-14 — what the server says this reader may use.
+  // ABC-freemium 6-04 — `null` until the profile fetch answers. `grants` is the
+  // capability view (anonymous while unknown, so AI and enrichment stay off);
+  // the raw `entitlement` is what the upsell props read, because they must be
+  // able to tell "free" from "we have not asked yet".
   const entitlement = useProfileStore((state) => state.entitlement);
+  const grants = entitlementGrants(entitlement);
   const [starredKeys, toggleStar] = useRosterStars();
   const [nowMs] = useState(Date.now);
   const [enrichmentResult, setEnrichmentResult] = useState<{
@@ -2521,7 +2534,7 @@ export default function EventDetailPage({
   const pageReadingReason = currentEnrichmentDone
     ? opportunityPageReadingReason(
         currentEnrichmentResult,
-        canAttemptOpportunityEnrichment(profile, entitlement),
+        canAttemptOpportunityEnrichment(profile, grants),
       )
     : undefined;
 
@@ -2533,10 +2546,10 @@ export default function EventDetailPage({
       rosterContext={rosterContext}
       enrichment={currentEnrichmentResult?.enrichment ?? null}
       pageReadingReason={pageReadingReason}
-      enrichmentLoading={!currentEnrichmentDone && canAttemptOpportunityEnrichment(profile, entitlement)}
-      providerConfigured={canAttemptOpportunityEnrichment(profile, entitlement)}
-      aiMode={aiAvailability(profile, entitlement)}
-      effectivePlan={entitlement.effectivePlan}
+      enrichmentLoading={!currentEnrichmentDone && canAttemptOpportunityEnrichment(profile, grants)}
+      providerConfigured={canAttemptOpportunityEnrichment(profile, grants)}
+      aiMode={aiAvailability(profile, grants)}
+      effectivePlan={entitlement?.effectivePlan ?? null}
       starredKeys={starredKeys}
       quota={quota}
       isSaved={isSaved}

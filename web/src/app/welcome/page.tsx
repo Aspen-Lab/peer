@@ -21,6 +21,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useProfileStore } from "@/store/profile";
 import type { Entitlement } from "@/lib/entitlement/types";
+import { entitlementGrants } from "@/lib/entitlement/allowance";
 import { careerStages, industryPreferences } from "@/types";
 import type { UserProfile } from "@/types";
 import {
@@ -86,7 +87,12 @@ export default function WelcomePage() {
   const router = useRouter();
   const profile = useProfileStore((s) => s.profile);
   // ABC-freemium 1-15 — the `ai` step is complete when the reader has AI at all.
-  const entitlement = useProfileStore((s) => s.entitlement);
+  // ABC-freemium 6-04 — a capability question, so the anonymous view while the
+  // plan is unknown: the step reads as not-yet-done rather than done, which is
+  // the direction that shows the reader the step instead of hiding it.
+  const entitlement = entitlementGrants(
+    useProfileStore((s) => s.entitlement),
+  );
   const store = useProfileStore();
   const topicMirroringRef = useRef<TopicMirroringController | null>(null);
   const completeOnboarding = useProfileStore((s) => s.completeOnboarding);

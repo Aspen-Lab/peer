@@ -121,11 +121,22 @@ lock by rebasing onto the holder's head.
 HELD BY:          C-round6b @ 2026-09-07T19:32:27Z
 ROUND:            6
 WHOSE TURN:       C  (round 6: implement 6-01 then 6-03; 6-02 still awaits the owner)
-STOPPED BECAUSE:  blocked: round-6 C died before doing any work - API unreachable (ENOTFOUND),
-                  not a credit limit. Lock claimed at 18:10 UTC, zero commits beyond the claim,
-                  working tree clean. Manager observed the death and released the lock rather
-                  than waiting out the 2-hour staleness window. C restarts from 6-04.
-STATUS:           ROUND 6 — **B HAS WRITTEN THE GUIDE. TWO ITEMS, 6-01 and 6-03**, one commit each,
+STOPPED BECAUSE:  in progress: round-6 C (C-round6b) is working 6-04 -> 6-01 -> 6-03 in that order.
+                  6-04 LANDED and pushed. No deviation from the ruled order.
+STATUS:           ROUND 6 — **C IS IMPLEMENTING. 6-04 LANDED.** Gate green after it: tsc 0 ·
+                  eslint 1 (standing `quiz.tsx:46`) · vitest 124 files / 2890 tests / **0 failed**
+                  (2872 -> 2891: +19 added, 0 deleted). The client entitlement now has a third
+                  state (`null` = not known); both upsell surfaces render nothing on it; the two
+                  intermediate report views lost the `effectivePlan = "free"` default the dead C
+                  flagged — **that lead was REAL**. `ProfileSync` now *learns* anonymity and
+                  records it, which the ruling left implicit and without which a signed-out reader
+                  would never leave the unknown state. **Upsell surfaces: exactly TWO**, proved by
+                  three independent greps. Five plants, five fired. Two items for the manager in
+                  §4 (no ruled copy for `QuotaNotice`'s anonymous branch, unreachable in a deployed
+                  runtime; and the mode chip tells a paid reader "Free" mid-hydration — a
+                  capability display, not an upsell, currently ruled the other way).
+                  ── B's guide follows. ──
+                  ROUND 6 — **B HAS WRITTEN THE GUIDE. TWO ITEMS, 6-01 and 6-03**, one commit each,
                   each pushed as it finished; no code changed and `git diff HEAD -- web/` is
                   **empty**, asserted, with `git status --porcelain --untracked-files=all` clean.
                   Classification: **6-01 `WRONG DATA`** (the usage row is the audit trail for a
@@ -11211,3 +11222,200 @@ commented-out notice: `poolRefreshAllowed` has **19 mentions in the tree and 0 i
 the only client-side mention anywhere is a docblock at `store/feed.ts:582` explaining that the field
 is the route's business, not the client's. `FeedMoreTileProps` has never carried a plan field. The
 work is genuinely new.
+
+---
+
+### Round 6 — Agent C
+
+Cold gate before the first edit, from `web/`, on a clean tree: `tsc` exit **0** · `eslint` **1
+problem (1 error, 0 warnings)** — the standing `quiz.tsx:46` · `vitest` **124 files passed | 1
+skipped (125)** · **2871 passed | 1 skipped (2872)**, **0 failed**, 11.04 s. Identical to §1's
+figures, so the baseline B measured is the baseline I built on.
+
+**Order worked: 6-04 → 6-01 → 6-03, exactly as Ruling 16 point 6 requires. No deviation.**
+
+---
+
+#### 6-04 — the hydration breach · `WRONG DATA` shown to a paying reader
+
+**Landed.** `tsc` **0** · `eslint` **1 problem (1 error, 0 warnings)** (the standing
+`quiz.tsx:46`) · `vitest` **124 files passed | 1 skipped (125)** · **2890 passed | 1 skipped
+(2891)**, **0 failed**. Tests 2872 → 2891: **+19 added, 0 deleted.**
+
+##### The shape that landed — `null` as a third state, and the compiler as the census
+
+`store/profile.ts` now declares `entitlement: ClientEntitlement | null` and opens on `null`. Ruling
+16 point 3 recommended that shape and I found nothing cheaper that stays honest, so there is no
+deviation to trace. What I *did* have to add is the other half of the ruling, which its wording
+leaves implicit and which the naive reading gets wrong:
+
+**`null` alone cannot produce the `known + anonymous` branch, and without a second change a
+signed-out reader would never reach it.** `ProfileSync` only ever called `setEntitlement` when the
+profile fetch returned an entitlement — and a signed-out reader never gets one (`GET /api/profile`
+answers `401`; `profile-sync.tsx`'s `onSession(false)` returns before any fetch). So a store that
+merely starts `null` would sit at "not known" **forever** for exactly the reader Ruling 16 point 4
+wrote the sign-in sentence for, and 6-03's anonymous branch would be dead code.
+
+The fix is that **anonymity is now learned and recorded, not assumed**. `ProfileSync` calls
+`setEntitlement(ANONYMOUS_CLIENT_ENTITLEMENT)` at the two places where "no session" is an
+established fact:
+
+| Where | Why it is a fact and not a guess |
+|---|---|
+| `profile-sync.tsx` — `if (!supabase)` | No auth is configured; nobody *can* sign in. Leaving `null` here would silence the sign-in sentence permanently in the one runtime that always needs it. |
+| `profile-sync.tsx` — `onSession(false)` | Supabase has answered and there is no user. Also fires on `SIGNED_OUT`, so logging out downgrades the client immediately instead of leaving a stale `paid` on screen. |
+
+And the two places where nothing was learned stay `null` **on purpose**: a thrown or failed
+`GET /api/profile` (`fetchRemote` returns `entitlement: null`, and there is deliberately no `else`
+writing the anonymous default), and a rejected `supabase.auth.getUser()`. A signed-in reader whose
+plan could not be read is not an anonymous reader, and writing the anonymous default there would be
+inventing the very answer we failed to get.
+
+##### Two kinds of consumer, and the asymmetry is deliberate
+
+`lib/entitlement/allowance.ts` gains **`entitlementGrants(entitlement)`** returning
+`ClientEntitlement`, which answers with the frozen anonymous default while the real one is unknown.
+Its docblock says in as many words that it must **never** decide an upsell, and names why: it
+manufactures precisely the evidence that is missing.
+
+- **Capability questions** take `entitlementGrants(...)` — they fail **closed** while ignorant, which
+  is the same direction every breaker in this build fails and is byte-for-byte the behaviour that
+  shipped before 6-04. Cost to the reader: a few hundred milliseconds of "AI off".
+- **Upsells** take the nullable value and render **nothing** on `null`. Cost of getting this wrong:
+  a wrong claim on a paying customer's screen.
+
+##### Every site the compiler found — 24 production, 10 test, nothing by memory
+
+Making the store field nullable turned the census into a compile-error list rather than a grep.
+**24 production sites**, all now explicit:
+
+| File | Sites | Reading |
+|---|---|---|
+| `app/events/[id]/page.tsx` | 5 | 4 capability (`grants`), 1 upsell prop (`entitlement?.effectivePlan ?? null`) |
+| `app/jobs/[id]/page.tsx` | 5 | same split |
+| `app/papers/[id]/page.tsx` | 3 | 1 capability, 2 upsell props (this page renders both surfaces directly) |
+| `app/page.tsx` | 2 | both capability — `feedsUseAi` and the mode chip |
+| `app/welcome/page.tsx` | 3 | capability — the `ai` step's done-tick |
+| `components/digest/daily-digest.tsx` | 1 | capability — the digest cache's AI-mode segment |
+| `store/feed.ts` | 3 | capability — the three request builders' `aiTier` |
+
+`tsc` went from 32 errors to 0 with no `as`, no `!`, and no widened type.
+
+##### THE UPSELL-SURFACE CENSUS: exactly TWO, and I proved it three ways rather than trusting the brief
+
+The brief names `QuotaNotice` and `TierUpgradeBlock` and asks whether there is a third. **There is
+not**, established by three independent greps over `src/`, none of them sampled:
+
+1. **By plan-reading**: every non-test `.tsx` mentioning `effectivePlan` / `poolRefreshAllowed` /
+   `unlimited` / `deepReportsRemaining` / `entitlement.` — 18 hits, all inside the two components
+   and the four pages that feed them.
+2. **By upsell vocabulary**: `Peer Pro` / `12/month` / `students` / `[Uu]pgrade` / `paid plan` —
+   every rendered hit is inside those two components. `page.tsx:999` and `:1026` say *"Sign in to
+   use Peer's AI"*, which is a **capability** hint keyed on `feedsUseAi`, not a plan upsell; the
+   `welcome` and `profile` "add your own key" strings are BYOK panels, which D7 makes the thing a
+   reader can actually act on and which are shown to paid readers on purpose.
+3. **By store consumer**: the nine `state.entitlement` reads the compiler enumerated, checked one by
+   one against what each renders.
+
+**THE DEAD C'S LEAD WAS REAL, and it is the most valuable thing in this item.** `JobReport`
+(`jobs/[id]/page.tsx`) and `EventReport` (`events/[id]/page.tsx`) both declared
+`effectivePlan?: Plan` with **`effectivePlan = "free"`** as a parameter default. Both leaf
+components take the plan as a **required** prop precisely so a caller cannot forget it and fail
+open — and these two intermediate views handed that discipline straight back, one file further from
+where anyone reads for it: a page that forgot the prop produced a confident `"free"` for a reader
+nobody had looked up. The required-prop rule was being satisfied by a guess. Both defaults are gone
+and the prop is now `effectivePlan: Plan | null`, required. `papers/[id]/page.tsx` was never
+affected — it reads the store in the same component and passes straight to the leaves.
+
+**One correction to the brief's framing, measured:** the intermediate defaults are not a *second*
+fail-open in the chain to the notice — they are the *same* fail-open, reachable by a different route
+(a forgotten prop rather than an unhydrated store). Fixing the store without fixing them would have
+left the tree one careless call site away from the same defect.
+
+##### Protective tests — 19 added, none deleted, and every one proved able to fail
+
+Ruling 16 point 3 asks for each upsell surface rendered unhydrated; Ruling 10 point 2b asks for the
+old default planted. **Five plants, five fired.** Every plant's substitution count was asserted
+before the run was read, and every revert was asserted the same way.
+
+| # | Plant | Fired |
+|---|---|---|
+| 1 | `store/profile.ts` initialiser back to `ANONYMOUS_CLIENT_ENTITLEMENT` | **1 failed** of 20 — `profile.test.ts` "starts as null" |
+| 2 | `QuotaNotice` predicate back to `exhausted && effectivePlan !== "paid"` | **2 failed** — both 6-04 unhydrated cases |
+| 3 | `TierUpgradeBlock` "simplified" to the sibling's `!== "paid"` | **2 failed** — the 6-04 unknown case **and** the pre-existing trial case, which is the tidy-up this predicate invites |
+| 4 | a literal `effectivePlan="free"` at the jobs call site | **2 failed** — the 3-01 placement case and the new 6-04 no-literal case |
+| 5 | `EventReport`'s `= "free"` pass-through default restored | **1 failed** — the new source case |
+
+**A negative result worth recording, because it corrects my own first draft.** Plant 5 initially did
+**nothing**: I had written that restoring the pass-through default would redden the new `EventReport`
+render cases, and it does not — **a parameter default fires on `undefined`, never on an explicit
+`null`**, so every case that passes `null` deliberately goes on passing. I found this by running the
+plant rather than by reasoning, rewrote the suite's docblock to say so, and added the case that
+*does* catch it: a source assertion in `quota-notice.test.tsx` that no page gives `effectivePlan` a
+default or makes it optional (`tsc` cannot object — a default makes the type legal). Recorded because
+a claim like the one I first wrote is exactly the kind Ruling 14 point 2 retired.
+
+Every new case has a **negative twin** that fails if the fix is implemented as a mute button:
+"resumes upselling once the plan is known to be free", "still renders once the plan is known to be
+free", "shows the same reader the upsell once the plan is known to be free", and "holds whatever the
+server sent once `setEntitlement` runs".
+
+##### Tests rewritten to the new contract, never deleted
+
+Ten render sites had to declare a plan once the prop became required. **All ten were re-pinned to
+`"free"`, which is byte-identical to the default they were silently getting**, so not one existing
+assertion changed meaning: `events/[id]/page.test.ts` (8 direct `createElement` sites plus the
+`renderReport` harness default, kept at `"free"` and commented as to why) and `job-cleanup.test.ts`
+(1). Moving the harness default to `null` was my first attempt and it **broke 4 cases** that assert
+the locked block *does* render — correctly, because those cases were written for a free reader, who
+is the only reader that block is for. Backed out; the unknown reader gets its own three cases
+instead, where that state is the subject rather than the backdrop.
+
+`quota-notice.test.tsx`'s 3-01 source assertion was **rewritten to the new call shapes, not
+deleted** — papers now passes `entitlement?.effectivePlan ?? null` across a line break, so the regex
+is whitespace-tolerant per Ruling 10 point 2c (this tree is CRLF on disk). A literal still fails it.
+
+##### Standing locks re-verified, by name
+
+Green in the same cold run: `quota-notice.test.tsx` (3-01's paid-reader suite intact, all five
+original cases unchanged), `tier-upgrade-block.test.tsx`, the report-page trees
+(`events/[id]/page.test.ts`, `job-cleanup.test.ts`), `ai-route-personas.test.ts`, the four route
+suites, `deep-report-quota.test.ts`, the counters and breaker suites, `spend-scans.test.ts`,
+`ui-vocabulary.test.ts`, `no-client-dev-flags.test.ts` and the guard suite. No suite was deleted,
+renamed or skipped. No migration was written (brief: none this round).
+
+##### TWO THINGS FOR THE MANAGER — I landed what was confirmed and did not widen
+
+**(a) `QuotaNotice`'s `known + anonymous` branch has no ruled copy, and I did not invent any.**
+Ruling 16 point 3 says `known + anonymous` gets "the sign-in sentence (point 4), never an upgrade
+prompt" — but point 4's sentence is *"Sign in to refresh."*, which is 6-03's surface, and point 4
+says point 3's anonymous branch "carries it", meaning the refresh control. There is no ruled
+sentence for a signed-out reader who hits the **deep-report** cap. So `QuotaNotice`'s anonymous
+branch is **unchanged**: it still shows the upgrade prompt, exactly as before 6-04.
+
+Reachability, checked rather than assumed: **a signed-out reader cannot reach this branch in a
+deployed runtime.** All three report routes go through `requireEntitledAiRequest`, which answers a
+stranger **401** (`security/ai-request.ts:136-137`) before any quota is consumed; the `!userId`
+branch in `consumeDeepReport` says so at the line and exists for the local no-sign-in runtime, where
+"add your own key" is in fact the reader's real next step. So the branch is unreachable where it
+would be wrong, and arguably right where it is reachable — but that is a product judgement and it is
+the manager's, not mine.
+
+**(b) A capability display tells a paid reader something false during hydration — same shape, not an
+upsell, not in 6-04's scope.** `app/page.tsx`'s mode chip reads *"Free"* and *"AI off"*, and its
+title reads *"Sign in to use Peer's AI"*, for **every** reader until the profile fetch answers —
+including a paid, signed-in one. This is unchanged by 6-04 (the capability path deliberately keeps
+the pre-6-04 behaviour) and it is a capability display rather than an upsell, so Ruling 16 point 3's
+five branches do not reach it. It is also *ruled the other way* today: `ai-tier.ts:136` says a
+signed-out reader reads "Free", not a blank, on purpose. Recorded because it is the same "assert a
+fact you have not read yet" family, and because if the manager wants it fixed the seam is now one
+line — the chip would take the nullable value instead of `grants`.
+
+##### One thing the ruling left implicit, for the record
+
+Ruling 16 point 3 calls `null` "the cheapest honest shape" and lists five branches "everywhere an
+upsell is decided". Both stand. What the point does not say, and what a literal implementation would
+have got wrong, is that **the third state has to be *closed* by something** — `null` is only honest
+if some code eventually replaces it, and for a signed-out reader nothing did. That is the
+`ProfileSync` half above. It is an addition to the ruling's shape, not a departure from it, so it is
+logged here rather than as a deviation in §1.

@@ -22,10 +22,7 @@ import type {
   FeedDiscoveryMode,
 } from "@/types";
 import { defaultProfile } from "@/types";
-import {
-  ANONYMOUS_CLIENT_ENTITLEMENT,
-  type ClientEntitlement,
-} from "@/lib/entitlement/allowance";
+import { type ClientEntitlement } from "@/lib/entitlement/allowance";
 import {
   applyOpportunityFacetPreferenceSignal,
   applyPreferenceSignal,
@@ -49,14 +46,35 @@ interface ProfileState {
    * its own plan from `trial_ends_at` would be a second source of truth that
    * drifts. `GET /api/profile` computes it; the client only displays it.
    *
-   * Defaults to the frozen anonymous entitlement, which is a real object rather
-   * than a null — so every consumer takes its degraded branch by ordinary logic
-   * and a forgotten null check cannot fail open.
+   * ── ABC-freemium 6-04 · Ruling 16 points 2-3 — **THREE STATES, NOT TWO** ──
+   *
+   * `null` means **not yet known**: nobody has asked the server, or the answer
+   * has not come back. It is distinct from "known to be signed out", which is a
+   * real `ANONYMOUS_CLIENT_ENTITLEMENT` object that `ProfileSync` sets once it
+   * has established there is no session.
+   *
+   * This field used to *default* to that anonymous object, on the reasoning
+   * that a real object with real zeroes meant no consumer needed a null branch
+   * and a forgotten one could not fail open. That reasoning was wrong in one
+   * direction and it shipped: **every reader looked free on the client until the
+   * profile fetch returned, including a paid one**, while the server went on
+   * granting what they had paid for. A paid reader who met the quota notice in
+   * that window was served *and* told to upgrade — the exact thing Ruling 8
+   * forbids, on the surface Ruling 8 was written for.
+   *
+   * `null` fails open for nobody, because the two kinds of consumer read it
+   * differently and the compiler makes both choose:
+   *  - a **capability** question takes `entitlementGrants(entitlement)`, which
+   *    answers with the anonymous default and so grants nothing while ignorant;
+   *  - an **upsell** takes the nullable value and renders **nothing** on `null`.
+   *    An upsell needs positive evidence the reader is not entitled; absence of
+   *    data is not evidence.
    *
    * **Deliberately NOT persisted** (see `partialize`): a `paid` entitlement
-   * cached in localStorage would survive a downgrade.
+   * cached in localStorage would survive a downgrade. That is also why `null`
+   * is the honest value on a cold load — the browser genuinely does not know.
    */
-  entitlement: ClientEntitlement;
+  entitlement: ClientEntitlement | null;
   setEntitlement: (entitlement: ClientEntitlement) => void;
   /** Replace the whole profile from an exported document. */
   importProfile: (document: unknown) => boolean;
@@ -351,7 +369,10 @@ export const useProfileStore = create<ProfileState>()(
   persist(
     (set) => ({
       profile: defaultProfile,
-      entitlement: ANONYMOUS_CLIENT_ENTITLEMENT,
+      // ABC-freemium 6-04 — not yet known. `ProfileSync` replaces it with the
+      // server's answer, or with `ANONYMOUS_CLIENT_ENTITLEMENT` once it has
+      // established there is no session to ask about.
+      entitlement: null,
 
       setEntitlement: (entitlement) => set({ entitlement }),
 

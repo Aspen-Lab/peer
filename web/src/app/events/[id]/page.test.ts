@@ -55,7 +55,14 @@ function renderReport(
   // every existing case that passed `true` keep asserting the same thing. A
   // case that wants a different plan passes it explicitly.
   aiMode: AiMode = providerConfigured ? "byok" : "none",
-  effectivePlan: Plan = "free",
+  // ABC-freemium 6-04 — the type gained `null` ("not known yet") because the
+  // production views dropped their `= "free"` default, which is what let a paid
+  // reader look free mid-hydration. The harness default stays `"free"`: these
+  // 38 cases were written for a free reader — the locked block only renders for
+  // one — and moving the default would silently change what every one of them
+  // asserts. The unknown reader is passed explicitly, by the 6-04 suite, where
+  // that state is the subject rather than the backdrop.
+  effectivePlan: Plan | null = "free",
 ): string {
   return renderToStaticMarkup(
     createElement(EventReport, {
@@ -96,6 +103,13 @@ function renderWithSector(
 ): string {
   return renderToStaticMarkup(
     createElement(EventReport, {
+      // ABC-freemium 6-04 — `effectivePlan` is REQUIRED now: the production
+      // views dropped their `= "free"` default, because a default on a
+      // pass-through handed a paid reader back to the upsell mid-hydration.
+      // These trees were always written for a free reader (the locked block is
+      // only theirs to see), so they now say so out loud instead of leaning on
+      // a default. The unknown state has its own cases below.
+      effectivePlan: "free",
       event,
       careerStage,
       sector,
@@ -199,6 +213,7 @@ describe("EventReport", () => {
     }));
     const html = renderToStaticMarkup(
       createElement(EventReport, {
+      effectivePlan: "free",
         event: baseEvent({ organisations }),
         careerStage: "PhD Year 3" as const,
         enrichment: null,
@@ -246,6 +261,7 @@ describe("EventReport", () => {
     // count must shrink with it, in the same render.
     const starredHtml = renderToStaticMarkup(
       createElement(EventReport, {
+      effectivePlan: "free",
         event: baseEvent({ organisations }),
         careerStage: "PhD Year 3" as const,
         enrichment: null,
@@ -818,6 +834,7 @@ describe("EventReport", () => {
     // this test is about the dash collision only.
     const html = renderToStaticMarkup(
       createElement(EventReport, {
+      effectivePlan: "free",
         event: baseEvent({
           activities: ["poster session — open call", "workshop"],
           matchedTerms: ["poster", "workshop"],
@@ -857,6 +874,7 @@ describe("EventReport", () => {
     // prop unset and exercise EventReport's own `careerStage?: CareerStage`.
     const html = renderToStaticMarkup(
       createElement(EventReport, {
+      effectivePlan: "free",
         event: baseEvent({
           activities: ["poster session"],
           matchedTerms: ["poster"],
@@ -1110,6 +1128,7 @@ describe("EventReport", () => {
     // feed.
     const html = renderToStaticMarkup(
       createElement(EventReport, {
+      effectivePlan: "free",
         event: baseEvent({ people: [{ name: "Ada Lovelace" }] }),
         careerStage: "PhD Year 3" as const,
         rosterContext: {
@@ -1140,6 +1159,7 @@ describe("EventReport", () => {
   it("falls back to a topic-match descriptor when the person has no papers in the feed", () => {
     const html = renderToStaticMarkup(
       createElement(EventReport, {
+      effectivePlan: "free",
         event: baseEvent({ people: [{ name: "Grace Hopper" }] }),
         careerStage: "PhD Year 3" as const,
         rosterContext: {
@@ -1174,6 +1194,7 @@ describe("EventReport", () => {
     // rather than merely that the fallback wasn't reachable.
     const html = renderToStaticMarkup(
       createElement(EventReport, {
+      effectivePlan: "free",
         event: baseEvent({
           people: [
             {
@@ -1876,5 +1897,99 @@ describe("Ruling 111c — the cn() tailwind-merge trap, general fix locks (event
       true ? "bg-accent/10 text-accent" : "text-text-faint hover:bg-accent/10 hover:text-accent",
     );
     expect(classes).toContain("text-title");
+  });
+});
+
+/**
+ * ABC-freemium 6-04 · R-UI-3 · Ruling 16 points 2-3 — **the report VIEW carries
+ * the unknown plan through, and upsells nobody with it.**
+ *
+ * The two component suites prove `QuotaNotice` and `TierUpgradeBlock` stay
+ * silent on `null`. This proves the layer between them and the page does too —
+ * which is where the fix could quietly be undone, because `EventReport` and its
+ * jobs twin used to declare `effectivePlan?: Plan` with a `= "free"` default.
+ * A page that forgot the prop therefore handed both components a confident
+ * `"free"` for a reader nobody had looked up yet: the required prop that makes
+ * the leaves safe was being satisfied one file away by a guess.
+ *
+ * **These cases do not catch the default coming back, and saying so matters.**
+ * A parameter default fires on `undefined`, never on an explicit `null`, so
+ * every case here would go on passing with `= "free"` restored — measured, not
+ * assumed. What catches it is the source case in `quota-notice.test.tsx`
+ * ("gives the plan no default anywhere on its way down"), which reads these two
+ * views directly. These cases prove the other half: that a `null` handed to the
+ * view reaches both leaves intact instead of being coerced on the way.
+ */
+describe("EventReport before the entitlement is known (6-04)", () => {
+  it("renders no upsell at all while the plan is unknown", () => {
+    const html = renderReport(
+      baseEvent({
+        organisations: [
+          { name: "Volta Lab" },
+          { name: "Amp Systems" },
+          { name: "Battery Org 1" },
+        ],
+      }),
+      "PhD Year 3",
+      { registered: false, submitted: false },
+      null,
+      false,
+      false,
+      undefined,
+      false,
+      "none",
+      null,
+    );
+
+    expect(html).not.toContain("Also in this report on Peer Pro");
+    expect(html).not.toContain("Peer Pro is $12/month");
+  });
+
+  it("still renders the report itself — silence is for the upsell only", () => {
+    // The reader has their complete deterministic report either way. Dropping
+    // the whole view while the plan loads would trade a wrong prompt for a
+    // blank screen, which is the worse of the two.
+    const html = renderReport(
+      baseEvent({
+        relevanceReason:
+          "Matches 3 required topics and the abstract deadline is 92 days out",
+      }),
+      "PhD Year 3",
+      { registered: false, submitted: false },
+      null,
+      false,
+      false,
+      undefined,
+      false,
+      "none",
+      null,
+    );
+
+    expect(html).toContain("Why Peer sent this to you");
+  });
+
+  it("shows the same reader the upsell once the plan is known to be free", () => {
+    // The negative twin: without it, a view that never rendered the block
+    // would pass the first case while removing the upsell for everyone.
+    const html = renderReport(
+      baseEvent({
+        organisations: [
+          { name: "Volta Lab" },
+          { name: "Amp Systems" },
+          { name: "Battery Org 1" },
+        ],
+      }),
+      "PhD Year 3",
+      { registered: false, submitted: false },
+      null,
+      false,
+      false,
+      undefined,
+      false,
+      "none",
+      "free",
+    );
+
+    expect(html).toContain("Also in this report on Peer Pro");
   });
 });

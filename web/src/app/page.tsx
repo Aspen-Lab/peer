@@ -12,6 +12,7 @@ import type {
 } from "@/types";
 import { activePaperTopicsKey, useFeedStore } from "@/store/feed";
 import { aiModeChip, feedsUseAi } from "@/lib/feed/ai-tier";
+import { entitlementGrants } from "@/lib/entitlement/allowance";
 import { apiFetch } from "@/lib/api";
 import { formatTimeAgo } from "@/lib/format";
 import { DotMatrixImage } from "@/components/dot-matrix-image";
@@ -499,15 +500,22 @@ function DiscoveryPage() {
   // expression, and a copy is exactly what let the chip and the feeds disagree.
   // Same value, one home — `lib/feed/ai-tier.ts` — so the chip's tier text and
   // the feeds' `aiTier` are now provably the same boolean.
+  // ABC-freemium 6-04 — `null` until the profile fetch answers. Both readings
+  // below are CAPABILITY questions (does the feed ask for tier 2, and what does
+  // the mode chip say), so they take the anonymous view while unknown: AI off
+  // and the chip reading "Free", which is exactly what shipped before 6-04 and
+  // is the right direction to fail. The raw nullable value is what an upsell
+  // would have to read, and no upsell lives on this page.
   const entitlement = useProfileStore((state) => state.entitlement);
-  const canUseAiTools = feedsUseAi(profile, entitlement);
+  const grants = entitlementGrants(entitlement);
+  const canUseAiTools = feedsUseAi(profile, grants);
   const aiSearchActive = aiPaperSearchEnabled && canUseAiTools;
   // RULING 68a. The chip's three strings are computed in `lib/feed/ai-tier.ts`
   // so they can be asserted; the JSX below only places them.
   const aiChip = aiModeChip({
     feedsUseAi: canUseAiTools,
     aiSearchActive,
-    entitlement,
+    entitlement: grants,
   });
   const shouldLoadPaperDigest =
     !isSearchMode &&

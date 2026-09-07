@@ -16,7 +16,11 @@ const items = [
   },
 ];
 
-function render(effectivePlan: Plan, aiMode: AiMode, rows = items): string {
+function render(
+  effectivePlan: Plan | null,
+  aiMode: AiMode,
+  rows = items,
+): string {
   return renderToStaticMarkup(
     createElement(TierUpgradeBlock, { items: rows, aiMode, effectivePlan }),
   );
@@ -80,5 +84,33 @@ describe("TierUpgradeBlock", () => {
 
   it("uses none of the tier vocabulary (R-UI-1)", () => {
     expect(render("free", "system")).not.toMatch(/Tier [012]|BYOK/);
+  });
+});
+
+/**
+ * ABC-freemium 6-04 · R-UI-3 · Ruling 16 points 2-3 — **nothing upsells while
+ * the plan is still unknown.**
+ *
+ * The client entitlement now has a third state, `null`, meaning the profile
+ * fetch has not answered. Before 6-04 it did not: every reader, paid included,
+ * carried the frozen anonymous default until the round trip finished, and this
+ * block's own `=== "free"` test read that default at face value.
+ *
+ * The predicate below already refuses `null` by the direction it happens to
+ * face. That is worth an assertion precisely *because* it is luck: the sibling
+ * `QuotaNotice` faced the other way (`!== "paid"`) and upsold everyone. These
+ * cases stop a future "simplification" flipping this one to match it.
+ */
+describe("TierUpgradeBlock before the entitlement is known (6-04)", () => {
+  it("renders nothing while the plan is unknown, on any AI mode", () => {
+    expect(render(null, "system")).toBe("");
+    expect(render(null, "none")).toBe("");
+    expect(render(null, "byok")).toBe("");
+  });
+
+  it("still renders once the plan is known to be free", () => {
+    // The negative twin: without it, returning `null` unconditionally would
+    // pass the case above while removing the block for the reader it is for.
+    expect(render("free", "system")).toContain("Also in this report on Peer Pro");
   });
 });

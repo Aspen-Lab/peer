@@ -55,6 +55,7 @@ import {
   paperReportCacheKey,
 } from "@/lib/papers/report-cache-key";
 import { aiAvailability } from "@/lib/feed/ai-tier";
+import { entitlementGrants } from "@/lib/entitlement/allowance";
 
 const WORDS_PER_MINUTE = 220;
 const PAPER_TIER_UPGRADE_ITEMS = [
@@ -579,7 +580,12 @@ export default function PaperDetailPage({
   const markRead = useFeedStore((s) => s.markRead);
   const { savePaper, unsavePaper, notInterestedPaper, moreLikePaper } = useFeedStore();
   const profile = useProfileStore((s) => s.profile);
+  // ABC-freemium 6-04 — `null` until the profile fetch answers. `grants` is the
+  // capability view (anonymous while unknown, so the deep-report gate stays
+  // shut); the raw `entitlement` is what the upsell props read, because they
+  // must be able to tell "free" from "we have not asked yet".
   const entitlement = useProfileStore((s) => s.entitlement);
+  const grants = entitlementGrants(entitlement);
 
   const [fetchResult, setFetchResult] = useState<{
     id: string;
@@ -697,7 +703,7 @@ export default function PaperDetailPage({
   // The deep-report gate's second half used to be a browser-side
   // `NODE_ENV === "development"` test. It now needs AI *from anywhere*: the
   // reader's own key, or Peer's.
-  const readerAiMode = aiAvailability(profile, entitlement);
+  const readerAiMode = aiAvailability(profile, grants);
   const userProviderConfigured = readerAiMode === "byok";
   const deepReportRequested =
     Boolean(profile.deepReportEnabled) && readerAiMode !== "none";
@@ -1598,14 +1604,17 @@ export default function PaperDetailPage({
         {/* ABC-freemium 3-01 · R-UI-3 — the plan comes from the same server
             entitlement the block below already reads, so a paid reader at the
             daily breaker is never upsold. */}
-        <QuotaNotice quota={quota} effectivePlan={entitlement.effectivePlan} />
+        <QuotaNotice
+          quota={quota}
+          effectivePlan={entitlement?.effectivePlan ?? null}
+        />
 
         <TierUpgradeBlock
           items={PAPER_TIER_UPGRADE_ITEMS}
           // ABC-freemium 1-26 · R-UI-3 — plan-aware. A paid or trial reader
           // never sees it, and neither does one running on their own key.
           aiMode={readerAiMode}
-          effectivePlan={entitlement.effectivePlan}
+          effectivePlan={entitlement?.effectivePlan ?? null}
         />
       </PageContainer>
     </>

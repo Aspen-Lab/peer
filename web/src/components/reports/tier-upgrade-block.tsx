@@ -32,6 +32,17 @@ export interface TierUpgradeItem {
  * **D7's price is display only.** No checkout link: spec §3 puts payment out of
  * scope, and a dead link is worse than no link. The CTA points at the existing
  * key panel, which is a real thing a reader can do today.
+ *
+ * ── ABC-freemium 6-04 · Ruling 16 points 2-3 ────────────────────────────────
+ *
+ * **`effectivePlan` may be `null`, meaning the plan is not known yet**, and
+ * then this block does not render. The `=== "free"` test below already refused
+ * an unknown plan the moment one could exist — but only by luck of which way
+ * the comparison happens to face, and the sibling `QuotaNotice` proved how
+ * easily that luck runs out (`!== "paid"` upsold everyone mid-hydration). The
+ * type now carries the third state so a future edit cannot lose it silently,
+ * and the reader who could actually be harmed is named: a **paid** reader
+ * scrolling to a locked-rows block before `GET /api/profile` answers.
  */
 export function TierUpgradeBlock({
   items,
@@ -41,9 +52,14 @@ export function TierUpgradeBlock({
   items: TierUpgradeItem[];
   /** `aiAvailability(profile, entitlement)` — whose model, if any. */
   aiMode: AiMode;
-  /** From the entitlement. `trial` reads as paid behaviour (D5). */
-  effectivePlan: Plan;
+  /**
+   * From the entitlement. `trial` reads as paid behaviour (D5). **`null` while
+   * the plan is still unknown** (6-04) — nothing renders on it.
+   */
+  effectivePlan: Plan | null;
 }) {
+  // 6-04 — an unknown plan is not a free plan. `=== "free"` says so already;
+  // the comment is here so nobody "simplifies" it to `!== "paid"`.
   const upgradeWouldHelp = effectivePlan === "free" && aiMode !== "byok";
   if (!upgradeWouldHelp || items.length === 0) return null;
 

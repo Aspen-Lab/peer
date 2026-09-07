@@ -48,7 +48,14 @@ const BREAKER: QuotaSignal = {
 // 3-01 — the plan is a REQUIRED prop, so the helper takes it. Defaulting it
 // here rather than in the component keeps the fail-open default out of
 // production while leaving the pre-existing cases readable.
-function render(quota?: QuotaSignal, effectivePlan: Plan = "free"): string {
+// 6-04 — the prop's type gained `null`, "not known yet". The helper default
+// stays `"free"` so the pre-existing cases keep asserting the reader they were
+// written for; the unhydrated reader is passed explicitly by the 6-04 suite,
+// because that state is the subject there rather than a backdrop.
+function render(
+  quota?: QuotaSignal,
+  effectivePlan: Plan | null = "free",
+): string {
   return renderToStaticMarkup(
     createElement(QuotaNotice, { quota, effectivePlan }),
   );
@@ -184,6 +191,71 @@ describe("QuotaNotice at the daily breaker (3-01)", () => {
 });
 
 /**
+ * ABC-freemium 6-04 · R-UI-3 · Ruling 16 points 2-3 — **nothing upsells while
+ * the plan is still unknown.**
+ *
+ * The defect this suite exists for was not a wrong predicate; it was a wrong
+ * *input*. The client entitlement began life as the frozen anonymous default,
+ * so `effectivePlan` arrived here as `"free"` for every reader — a **paid** one
+ * included — until `GET /api/profile` came back. 3-01's predicate then did
+ * exactly what it was written to do and upsold them.
+ *
+ * `null` is the third state. An upsell requires positive evidence that the
+ * reader is not entitled; absence of data is not evidence.
+ *
+ * These cases are the ones that fail if the old default is ever put back —
+ * anywhere in the chain, including the two report views that used to default
+ * the pass-through prop to `"free"` one layer above this component.
+ */
+describe("QuotaNotice before the entitlement is known (6-04)", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("upsells NOBODY on the monthly path while the plan is unknown", () => {
+    const html = render(EXHAUSTED, null);
+
+    expect(html).not.toContain("Peer Pro");
+    expect(html).not.toContain("Add your own key");
+    expect(html).not.toContain("/settings");
+  });
+
+  it("upsells NOBODY at the daily breaker while the plan is unknown", () => {
+    // The breaker is the reader most likely to be paid — D4's 200/day cap is a
+    // paid-only path — so this is the case the hydration window actually hurt.
+    const html = render(BREAKER, null);
+
+    expect(html).not.toContain("Peer Pro");
+    expect(html).not.toContain("Add your own key");
+  });
+
+  it("still tells the unknown reader what happened", () => {
+    // Silence is required of the *upsell*, not of the notice. The refusal is a
+    // fact about the server's answer and is true whoever is reading; dropping
+    // it would swap a wrong prompt for a blank panel, which is the failure mode
+    // this loop has rejected since round 1.
+    const html = render(EXHAUSTED, null);
+
+    expect(html).toContain("You&#x27;ve used this month&#x27;s deep reports.");
+    expect(html).toContain('data-quota-reason="exhausted"');
+  });
+
+  it("resumes upselling the same reader once the plan is known to be free", () => {
+    // The negative twin, and the reason this is a guard rather than a mute
+    // button: deleting the prompt outright would pass all three cases above.
+    const html = render(EXHAUSTED, "free");
+
+    expect(html).toContain("Peer Pro");
+    expect(html).toContain("Add your own key");
+  });
+});
+
+/**
  * ABC-freemium 2-07 — **the three report pages actually read and render it.**
  *
  * The component being correct is not the requirement; the requirement is that a
@@ -221,9 +293,42 @@ describe("the report pages render the notice (R-QUOTA-1's UI half)", () => {
     // is passed. What tsc cannot say is that it is the server's entitlement
     // rather than a literal: a fourth page could satisfy the type with
     // `effectivePlan="free"` and reintroduce the defect. This pins the source.
+    //
+    // 6-04 — the accepted shapes changed, so the assertion did too rather than
+    // being deleted. Papers reads the store in the same component and now
+    // passes `entitlement?.effectivePlan ?? null`; jobs and events pass a
+    // required `effectivePlan` prop down from the page. `[\s\S]` because the
+    // papers call spans lines and this tree is CRLF on disk (Ruling 10 point
+    // 2c). A literal still fails, which is the point of the case.
     expect(source(file)).toMatch(
-      /<QuotaNotice[^>]*effectivePlan=\{(entitlement\.)?effectivePlan\}/,
+      /<QuotaNotice[\s\S]{0,120}?effectivePlan=\{(entitlement\?\.effectivePlan \?\? null|effectivePlan)\}/,
     );
+  });
+
+  it.each(PAGES)(
+    "%s gives the plan no default anywhere on its way down (6-04)",
+    (file) => {
+      // The leaf components' props are required so a caller cannot forget them.
+      // `jobs` and `events` render their notice from an intermediate view, and
+      // that view used to declare `effectivePlan?: Plan` with a `= "free"`
+      // default — which satisfied the leaf's requirement with a guess and put
+      // the fail-open back one file above where anyone reads for it. `tsc`
+      // cannot object: a default makes the type legal. Only the source can say
+      // there isn't one.
+      const text = source(file);
+      expect(text).not.toMatch(/effectivePlan\s*=\s*["']/);
+      expect(text).not.toMatch(/effectivePlan\?\s*:/);
+    },
+  );
+
+  it.each(PAGES)("%s never hard-codes a plan into an upsell (6-04)", (file) => {
+    // The hydration defect was a wrong *value*, not a wrong predicate, and the
+    // cheapest way to reintroduce it is a literal at a call site — which `tsc`
+    // accepts happily. Both upsell components are covered, because a page that
+    // stopped rendering `QuotaNotice` would still have `TierUpgradeBlock`.
+    const text = source(file);
+    expect(text).not.toMatch(/<QuotaNotice[\s\S]{0,120}?effectivePlan="/);
+    expect(text).not.toMatch(/<TierUpgradeBlock[\s\S]{0,300}?effectivePlan="/);
   });
 
   it.each(PAGES)("%s keeps the signal OUT of the cached report object", (file) => {

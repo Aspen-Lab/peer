@@ -7,6 +7,7 @@ import type { JobSourceId } from "@/lib/jobs/types";
 import { useFeedStore } from "@/store/feed";
 import { useProfileStore } from "@/store/profile";
 import { aiAvailability, type AiMode } from "@/lib/feed/ai-tier";
+import { entitlementGrants } from "@/lib/entitlement/allowance";
 import type { Plan } from "@/lib/entitlement/types";
 import {
   daysUntil,
@@ -954,8 +955,17 @@ export function JobReport({
   providerConfigured = false,
   // ABC-freemium 1-26 · R-UI-3 — the upsell is plan-aware now, so the view
   // needs the reader's plan as well as whether a model is reachable.
+  //
+  // ABC-freemium 6-04 · Ruling 16 points 2-3 — **`effectivePlan` lost its
+  // `= "free"` default and is now required.** `QuotaNotice` and
+  // `TierUpgradeBlock` both take the plan as a required prop precisely so a
+  // caller cannot forget it and fail open — and this component sat between
+  // them and the page handing that discipline straight back, because a
+  // forgotten prop here arrived downstream as a confident `"free"`. A default
+  // on a pass-through is the same defect as a default on the leaf, one file
+  // further away from where anyone looks for it.
   aiMode = "none",
-  effectivePlan = "free",
+  effectivePlan,
   // ABC-freemium 2-07 · R-QUOTA-1 — absent whenever the reader was served.
   quota,
   enrichmentLoading = false,
@@ -975,7 +985,8 @@ export function JobReport({
   /** Legacy test seam: provider availability alone must not hide the locked block. */
   providerConfigured?: boolean;
   aiMode?: AiMode;
-  effectivePlan?: Plan;
+  /** 6-04 — required, and `null` means the plan is not known yet. */
+  effectivePlan: Plan | null;
   quota?: QuotaSignal;
   enrichmentLoading?: boolean;
   onToggleSave: () => void;
@@ -1580,7 +1591,12 @@ export default function JobDetailPage({
   const feedback = useFeedStore((state) => state.jobFeedback[id]);
   const profile = useProfileStore((state) => state.profile);
   // ABC-freemium 1-14 — what the server says this reader may use.
+  // ABC-freemium 6-04 — `null` until the profile fetch answers. `grants` is the
+  // capability view (anonymous while unknown, so AI and enrichment stay off);
+  // the raw `entitlement` is what the upsell props read, because they must be
+  // able to tell "free" from "we have not asked yet".
   const entitlement = useProfileStore((state) => state.entitlement);
+  const grants = entitlementGrants(entitlement);
   const [nowMs] = useState(Date.now);
   const [enrichmentResult, setEnrichmentResult] = useState<{
     key: string;
@@ -1692,7 +1708,7 @@ export default function JobDetailPage({
   const pageReadingReason = currentEnrichmentDone
     ? opportunityPageReadingReason(
         currentEnrichmentResult,
-        canAttemptOpportunityEnrichment(profile, entitlement),
+        canAttemptOpportunityEnrichment(profile, grants),
       )
     : undefined;
 
@@ -1708,10 +1724,10 @@ export default function JobDetailPage({
       nowMs={nowMs}
       enrichment={currentEnrichmentResult?.enrichment ?? null}
       pageReadingReason={pageReadingReason}
-      enrichmentLoading={!currentEnrichmentDone && canAttemptOpportunityEnrichment(profile, entitlement)}
-      providerConfigured={canAttemptOpportunityEnrichment(profile, entitlement)}
-      aiMode={aiAvailability(profile, entitlement)}
-      effectivePlan={entitlement.effectivePlan}
+      enrichmentLoading={!currentEnrichmentDone && canAttemptOpportunityEnrichment(profile, grants)}
+      providerConfigured={canAttemptOpportunityEnrichment(profile, grants)}
+      aiMode={aiAvailability(profile, grants)}
+      effectivePlan={entitlement?.effectivePlan ?? null}
       quota={quota}
       onToggleSave={() => (isSaved ? unsaveJob(job.id) : saveJob(job))}
       onAppliedChange={(next) => setJobApplied(job, next)}

@@ -162,3 +162,31 @@ export const ANONYMOUS_CLIENT_ENTITLEMENT: Readonly<ClientEntitlement> =
     unlimited: false,
     deepReportsRemaining: 0,
   } satisfies ClientEntitlement);
+
+/**
+ * ABC-freemium 6-04 · R-UI-3 · Ruling 16 points 2-3 — **the entitlement to
+ * answer a CAPABILITY question with while the real one is still unknown.**
+ *
+ * The client entitlement has three states now, not two: `null` until the
+ * profile fetch has answered, then a real object. A capability question ("may
+ * this reader use Peer's model?", "does this feed ask for tier 2?") still needs
+ * an answer during that window, and the honest one is the frozen anonymous
+ * default — it grants nothing, so a capability fails **closed** while we are
+ * ignorant. That is the same direction every breaker in this build fails, and
+ * it is exactly the behaviour that shipped before 6-04.
+ *
+ * **NEVER use this to decide an upsell.** An upsell requires positive evidence
+ * that the reader is *not* entitled, and this helper manufactures precisely the
+ * evidence that is missing: it turns "we have not asked yet" into "free", which
+ * is what told a **paid** reader mid-hydration to upgrade (Ruling 16 point 2).
+ * Upsell surfaces take the nullable value and render **nothing** on `null`.
+ *
+ * The asymmetry is the whole point and it is not an inconsistency to tidy up:
+ * refusing a capability while ignorant costs the reader a few hundred
+ * milliseconds; asserting a plan while ignorant puts a wrong claim on screen.
+ */
+export function entitlementGrants(
+  entitlement: ClientEntitlement | null,
+): ClientEntitlement {
+  return entitlement ?? ANONYMOUS_CLIENT_ENTITLEMENT;
+}

@@ -37,6 +37,13 @@ describe("measured job extraction artifacts", () => {
     const html = renderToStaticMarkup(
       createElement(JobReport, {
         job,
+        // ABC-freemium 6-04 — `effectivePlan` is REQUIRED now: `JobReport`
+        // dropped its `= "free"` default, because a default on a pass-through
+        // handed a paid reader back to the upsell mid-hydration. This case is
+        // about extraction artefacts in the copy, and it was always rendering
+        // the free reader's tree, so it says so out loud rather than leaning on
+        // a default that no longer exists.
+        effectivePlan: "free",
         isSaved: false,
         isApplied: false,
         nowMs: Date.parse("2026-07-31T12:00:00Z"),

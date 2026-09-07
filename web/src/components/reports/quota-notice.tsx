@@ -73,6 +73,25 @@ import type { Plan } from "@/lib/entitlement/types";
  * real hours count, and nothing else. The `<aside>` still renders — the
  * sentence is true information they need — but not an empty bordered panel and
  * not a third paragraph. Only the prompt is dropped.
+ *
+ * ── ABC-freemium 6-04 · R-UI-3 · Ruling 16 points 2-3 ───────────────────────
+ *
+ * **`null` is a third value, and it means "not known yet".** 3-01 made the prop
+ * required so no call site could forget it, and that was right — but the value
+ * a call site had to pass was itself a guess for the first moments of every
+ * page. The client entitlement started life as the frozen anonymous default, so
+ * `effectivePlan` arrived here as `"free"` for **every** reader, paid included,
+ * until `GET /api/profile` came back. The prompt below then told a paying
+ * customer to pay, which is the very thing Ruling 8 forbids.
+ *
+ * The prop is still required — a caller must still make a choice — but the
+ * choice now includes "I do not know", and that answer renders **no prompt**.
+ * **An upsell requires positive evidence that the reader is not entitled;
+ * absence of data is not evidence.**
+ *
+ * The heading and the sentence are unaffected. They are facts about the
+ * refusal the server sent, true whoever is reading, and suppressing them while
+ * the plan loads would replace a wrong prompt with a blank panel.
  */
 export function QuotaNotice({
   quota,
@@ -82,11 +101,12 @@ export function QuotaNotice({
   /** From the report response. Absent whenever the reader was served. */
   quota?: QuotaSignal;
   /**
-   * The reader's server-resolved plan. **Required on purpose** — see the note
-   * above; a `"free"` default would fail open on the property this prop exists
-   * to enforce.
+   * The reader's server-resolved plan, or **`null` while it is still unknown**
+   * (6-04). **Required on purpose** — see the note above; a `"free"` default
+   * would fail open on the property this prop exists to enforce, and so would
+   * an optional prop that arrived `undefined`.
    */
-  effectivePlan: Plan;
+  effectivePlan: Plan | null;
   className?: string;
 }) {
   if (!quota) return null;
@@ -95,7 +115,12 @@ export function QuotaNotice({
   // R-UI-3 — the upsell, and ONLY the upsell, is plan-aware. Keeping this a
   // second name rather than narrowing `exhausted` is what stops the heading
   // changing with it.
-  const showUpgradePrompt = exhausted && effectivePlan !== "paid";
+  //
+  // 6-04 — `effectivePlan !== null` is written out rather than folded into the
+  // comparison below, because `null !== "paid"` is `true` and the shorter form
+  // upsells exactly the reader whose plan we have not read yet.
+  const showUpgradePrompt =
+    exhausted && effectivePlan !== null && effectivePlan !== "paid";
 
   return (
     <aside
