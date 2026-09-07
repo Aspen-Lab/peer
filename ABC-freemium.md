@@ -119,10 +119,15 @@ lock by rebasing onto the holder's head.
 
 ```
 HELD BY:          free
-ROUND:            5
-WHOSE TURN:       manager — independent re-measure  (then the manager opens round 6)
+ROUND:            6
+WHOSE TURN:       B  (round 6: items 6-01 and 6-03; 6-02 awaits the owner)
 STOPPED BECAUSE:  finished the turn @ 2026-09-07 17:46 UTC — three parts, gate green, code side 0.0%
-STATUS:           ROUND 5 — **A HAS MEASURED. CODE-SIDE IS 0.0% (0 of 30). THE DIFFERENCE LIST IS
+STATUS:           ROUND 6 OPENS. The manager re-measured round 5 independently with its own probe
+                  (Ruling 15, §1p) and CONFIRMS D2a in the build: across anonymous / free /
+                  trial / paid, and paid with an explicit refresh, ZERO operator search keys
+                  leave the process and ZERO search hosts are contacted, while a free reader's
+                  own key still works. Code side 0.0% of 30. Round-5 A's summary follows.
+                  ROUND 5 — **A HAS MEASURED. CODE-SIDE IS 0.0% (0 of 30). THE DIFFERENCE LIST IS
                   EMPTY.** Three parts, one commit each, each pushed as it finished; no production
                   code changed and `git diff HEAD -- web/` is **empty**, asserted.
                   **Ruling 10 point 3 fires: A does NOT hand to B. The manager re-measures
@@ -311,89 +316,17 @@ DONE:      **Round 5 A: all three parts**, one commit each, each pushed; no code
 GATE NOW:  tsc exit **0** · eslint **1 problem (1 error, 0 warnings)** (the standing `quiz.tsx:46`) ·
            vitest **124 files passed | 1 skipped (125)** · **2871 tests passed | 1 skipped
            (2872)**, **0 failed**, 9.50 s.
-TODO:      **THE MANAGER RE-MEASURES INDEPENDENTLY (Ruling 10 point 3), then opens round 6.**
-           A's code side is **0.0% (0 of 30)** with an **empty** difference list, so nothing routes
-           to B. What the manager should re-run cold, in A's own words:
-           1. The gate, cold, from `web/`.
-           2. **The headline**: both feed routes and all three adapters with `TAVILY_API_KEY` and
-              `BRAVE_SEARCH_API_KEY` armed as **distinct** sentinels and a **configured Vertex
-              project**, `paid` included — expect **0** requests carrying either sentinel and **0**
-              to any paid search host. Arm Brave separately from Tavily; C's suites blank Brave, and
-              blanking it is what would hide the one residual.
-           3. **The forced-true residual**, which is the only thing left that can reach an operator
-              search host: `resolveSystemSearchKeys({ systemSearchAllowed: true })` still hands back
-              **Brave**. A traced all 33 non-test mentions and every producer is a hard `false`, so
-              it is unreachable — but it is the seam Ruling 12 point 2 deliberately left, and it is
-              worth one manager check that no producer has drifted.
-           4. **The rebuild breaker**, from a real request on both surfaces for trial and paid, and
-              the cap at 500 — this is Ruling 13 point 1's whole claim.
-           5. **The guard**, both ways, against the real script.
-           **A'S FIXTURE WARNING FOR WHOEVER MEASURES NEXT:** a `trial` row with **no
-           `trial_ends_at`** is an EXPIRED trial and reads as `free` on every flag — A's first pass
-           read a false "trial lost refresh now" from exactly that. Give the row a future end date.
-           **ROUND 6 CARRIES:** 6-01 (the rest of the rename — `consumeSystemSearches`,
-           `path: "system-search"`, `search-breaker.ts`, the stale docblocks) and 6-02 (the Gemini
-           retirement of 2026-10-16, **only** once the owner confirms the model choice; if the owner
-           has not answered by 2026-10-01 the manager escalates).
-           ── The previous TODO follows, superseded. ──
-           **ROUND-5 A RE-MEASURES AGAINST D2a.** The denominator is now **30**, not 31
-           (Ruling 12 point 3). **R-METER-2 is `N/A`** — re-list it by name, with that word, every
-           round; an N/A that stops being mentioned quietly becomes permanent. Blocked stays **6**:
-           R-ENT-1, R-ENT-2, R-METER-1, R-METER-3, R-KEY-1, R-QUOTA-2.
-
-           **Standing tallies A owes this round, every one by name.** From Ruling 12 point 7:
-           (a) `process.env.TAVILY_API_KEY` reads in non-test source — **must be 0**, and it is now
-           a gate test (`spend-scans` scan 3), so report the test's number, not a hand count;
-           (b) `kind:"search"` usage rows produced — **must be 0**, now proved behaviourally on all
-           three producers (`jobweb`, `eventweb`, `web-search`); (c) operator-key search requests for
-           **every** persona including paid, on every surface — **must be 0**, but see the warning
-           below about where that number may honestly come from. From Ruling 13 point 4:
-           (d) **"Ruling 75 option-building cases now asserting absence rather than content" = 4**
-           (three in `jobweb.test.ts`, one in `eventweb.test.ts`) — if grounding is ever re-enabled
-           for any plan, all four are restored to content assertions in the same round. Plus
-           everything already standing in Ruling 11 point 7 and Ruling 10 point 4: the five/six
-           scans each reported with its count even when zero, the accepted structured-source reads
-           (3), `resolveProvider` call sites without a context (0), figure matchers reachable with a
-           null-user context (0), and the papers-refusal degradation cost.
-
-           **Questions a fixture cannot settle — what C most wants checked:**
-           1. **Does a paid reader still get something they can tell apart from free?** D2a took
-              search away from every plan. On the jobs and events feeds the long tail is now
-              identical for everyone. Drive the five personas and say, per persona, what actually
-              differs — deep reports without a monthly cap, "refresh now", topic changes — and
-              whether any of it is visible in a response a user would notice. If the answer is
-              "nothing a reader can see", that is a finding for the owner, not a defect.
-           2. **Tally 3 has a vacuous half and A must not average over it.** The eight new persona
-              cases in `ai-route-personas.test.ts` pass with 5-01 and 5-02 reverted, because those
-              four routes never search. Measured, not assumed. Report tally 3 from the surfaces that
-              DO search (`jobs/feed`, `events/feed`, `jobweb`, `eventweb`, `web-search`) and say so.
-           3. **Is the forced-rebuild breaker genuinely reachable, end to end?** Ruling 13 point 1
-              says it is and a feed-route case now shows one increment for a granted refresh. Drive
-              it from a real request on both jobs and events, for trial and paid, and confirm the
-              counter moves and the key is `forced_rebuilds_today:<user>:<UTC day>`.
-           4. **Does a keyless reader still get a good answer?** Every rejection is supposed to
-              degrade to the free structured sources with HTTP 200 and no error branch. Check the
-              200 and check the payload is not empty — a "graceful" degradation to nothing is still
-              nothing.
-           5. **Would the build actually refuse a Vercel project carrying `TAVILY_API_KEY`?** C
-              proved it against the real script in a scrubbed environment. A should confirm the
-              deployment checklist says the variable must be REMOVED before the next deploy, and
-              that required is three names.
-           6. **Is `provenance: "system"` really unreachable, or only unreached?** It is kept
-              deliberately (Ruling 12 point 2). Look for any path that could still produce it.
-           7. **Do the four absence-asserting Ruling 75 cases leave a hole anyone can fall into?**
-              The deny-list, query-suffix and grounded-admission rules have no live coverage now.
-              Say whether any non-grounded path shares that code.
-
-           ── The previous TODO follows, superseded. ──
-           C WORKS THE ROUND-5 GUIDE 5-01 — 5-04, with Ruling 13 (§1n) folded in: the search
-           breaker STAYS on the forced-rebuild path and its counter is RENAMED to
-           `forced_rebuilds_today` / `FORCED_REBUILDS_PER_DAY` (point 1); keep
-           `SystemSearchKeyInput.systemSearchAllowed` — it is the only Brave gate — and add the
-           protective test (point 3); the ten Ruling 75 cases split 6 rewrite-in-place / 4
-           assert-never-called with the coverage cost recorded (point 4). B measured the blast
-           radius by planting the finished shape: 28 cases in 9 files, plus 13 false greens in
-           the guard suite. Then A re-measures against the denominator of 30.
+TODO:      B WRITES THE ROUND-6 GUIDE for two items (Ruling 15 point 4): **6-01** finish the
+           half-done rename — `consumeSystemSearches` -> `consumeForcedRebuild`, usage-row
+           `path: "system-search"` -> `"forced-rebuild"`, `search-breaker.ts` ->
+           `rebuild-breaker.ts`, every stale docblock, and docblocks on the three unreachable
+           fan-out call sites saying they are unreachable and why (they are NOT deleted).
+           **6-03** the refresh control: it is rendered for everyone and a free reader's click
+           is refused silently — wire `poolRefreshAllowed` to the existing quota-notice
+           component and show "Refresh now is on the paid plan. Your jobs and events refresh
+           once a week." plus the upgrade prompt, keyed on the PLAN from the entitlement
+           summary and never on the refusal (Ruling 8 still binds: a paid reader is never
+           upsold). **6-02** (the model swap) is NOT in scope until the owner answers.
 PENDING USER ACTION: (1) Apply the three migrations under `web/supabase/migrations/20260904*`.
            (2) After applying, save a profile once in the app. (3) Optionally fill
            `GOOGLE_API_KEY` in `web/.env.local` (and the Supabase URL + service-role key) so A
@@ -402,19 +335,8 @@ PENDING USER ACTION: (1) Apply the three migrations under `web/supabase/migratio
            NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY — and must NOT carry
            TAVILY_API_KEY (the build will refuse it after 5-03). Deploy only after round 5
            reports green and the branch is merged. WITHDRAWN: the trial backfill (no users).
-OPEN FOR MANAGER:  **ONE, and it is the owner's to answer, not a defect** — `POLICY — manager
-           decides`. Under D2a the jobs/events long tail is identical on every plan (Ruling 12
-           point 5, accepted), so "refresh now" and the deep-report allowance are the whole of what
-           a paid reader gets. The server half of "refresh now" is correct and A proved it. But
-           **`poolRefreshAllowed` reaches no component** — A grepped every `.tsx` — and
-           `app/page.tsx:180` fires the refresh with no plan test, so the button is rendered for
-           everyone and a **free** reader's click is refused by silently serving the pool that is
-           already there: no error, no message, nothing visibly changes. R-POOL-2 does not require
-           hiding the control, so this is **not** a spec violation and is **not** on the difference
-           list — but it means the one paid feature a reader could notice is invisible in the
-           product. The owner should say whether that is intended.
-           Otherwise none — C's three flags were ruled in §1o (Ruling 14 points 2-4); the
-           unfinished half of the rename is queued as round-6 item 6-01, not left to rot.
+OPEN FOR MANAGER:  none — A's POLICY item ruled in §1p (Ruling 15 point 2), split into a defect
+           (6-03) and a product call the owner may overturn in one line.
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
@@ -1040,6 +962,67 @@ closure; this ruling accepts the round, it does not close anything.
    **6-02** the Gemini model retirement of 2026-10-16 (Ruling 13 point 6) **once the owner
    confirms the model choice** — it is not started without that word. If the owner has not answered
    by 2026-10-01, the manager escalates: the current models stop existing on the 16th.
+
+---
+
+## §1p. RULING 15 — the manager re-measures round 5; D2a CONFIRMED; ROUND 6 OPENS (2026-09-07, BINDING)
+
+**Round-5 A reported 0.0% code-side of 30 with an empty difference list. Per the skill's "never
+close alone", the manager re-measured independently before accepting it — with a probe the manager
+wrote, not one A or C wrote:**
+
+- **Gate, cold:** tsc 0 · eslint 1 (standing `quiz.tsx:46`) · vitest 124/1 files, **2871/1 tests,
+  0 failed**. Identical to A's and C's.
+- **D2a's negative half, by the manager's own throwaway suite** on the real jobs feed route, with
+  the operator's Tavily and Brave keys armed as **distinct** sentinels **and** a fully configured
+  Vertex project, in a stubbed deployed runtime: `anonymous`, `free`, `trial`, `paid`, and
+  **`paid` with an explicit `poolRefresh: true`** — all five produced **zero** outgoing requests
+  carrying either sentinel and **zero** requests to any search host.
+- **D2a's positive half, same suite:** a `free` reader supplying their own Tavily key still spends
+  it, and the operator sentinel still never appears. The positive control proves the probe can see
+  spend at all.
+- **The guard, read in source:** `REQUIRED_ON_VERCEL` is exactly three names
+  (`GOOGLE_API_KEY`, `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`); `TAVILY_API_KEY` is
+  on the banned list.
+- **`process.env.TAVILY_API_KEY` reads in non-test source: 0.** The three grep hits are a docblock
+  and two commented-out lines of the removed branch.
+- Probe deleted; `git status --porcelain --untracked-files=all` clean of it.
+
+1. **Round 5 is accepted and D2a is confirmed in the build.** Code side: **0.0% (0 of 30)**,
+   exclusions none, R-METER-2 `N/A`. A's reading note stands and is repeated wherever the trend is
+   quoted: **round 4's 0/31 and round 5's 0/30 are not like-for-like**, and blocked fell 7 -> 6
+   **only** because R-METER-2 left the scored set. **Nothing was unblocked.**
+2. **A's POLICY item — split, because half of it is not a product question.**
+   **(a) The silent no-op is a defect and is fixed.** A control that is rendered, clicked, and then
+   refuses by quietly serving what was already there is a lie of omission, and this loop's own
+   standard has been "honest emptiness beats a wrong value" since round 1. A free reader must be
+   told. **Round-6 item 6-03.**
+   **(b) What the free reader is told is the product question, and the manager rules it** so C is
+   not blocked, with the owner free to overturn it in one line: **keep the control visible for every
+   plan** and, on a free reader's click, render the existing quota-notice component with *"Refresh
+   now is on the paid plan. Your jobs and events refresh once a week."* plus the upgrade prompt.
+   Reasons: hiding the control removes the only moment a free reader learns the paid plan exists;
+   the notice component and its plan-awareness already exist (3-01), so this is wiring, not new UI;
+   and Ruling 8's rule holds unchanged — **a paid reader is never upsold**, so the notice must key
+   on the plan from the entitlement summary, never on the refusal.
+3. **Why this matters more than it looks, recorded for the owner.** D2a made the long tail identical
+   on every plan. What a paid reader now buys is deep reports without a monthly cap **and** refresh
+   now. One of those two is invisible in the interface today. **If 6-03 is not done, the paid plan
+   has one visible feature.** That is a business consequence of D2a, not a defect D2a introduced.
+4. **Round 6 opens with three items; two need nothing from the owner.**
+   - **6-01** finish the rename (Ruling 14 point 3): `consumeSystemSearches` -> `consumeForcedRebuild`,
+     the usage row's `path: "system-search"` -> `"forced-rebuild"`, `search-breaker.ts` ->
+     `rebuild-breaker.ts`, and every stale docblock. The three unreachable fan-out call sites stay,
+     with docblocks saying they are unreachable and why.
+   - **6-03** the refresh control (point 2).
+   - **6-02** the Gemini model retirement of 2026-10-16 — **NOT started until the owner confirms**.
+     Manager's standing recommendation: both tiers to `gemini-3.1-flash-lite`. **If the owner has
+     not answered by 2026-10-01, the manager escalates** — the models in use stop existing on the
+     16th and the swap is not a same-day change.
+5. **The loop does not idle waiting on the owner this time.** Round 6 starts on 6-01 and 6-03; 6-02
+   is added to the same round if the owner answers before C reaches it, otherwise it becomes round
+   7. The six blocked halves are unchanged and still the owner's: three unapplied migrations, no
+   local Google key.
 
 ## §2. ROLES — DO ONLY YOUR OWN JOB
 
