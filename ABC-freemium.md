@@ -118,11 +118,53 @@ lock by rebasing onto the holder's head.
 ## §1. CURRENT STATE — THE SOURCE OF TRUTH
 
 ```
-HELD BY:          A-round5 @ 2026-09-07 17:25 UTC
+HELD BY:          free
 ROUND:            5
-WHOSE TURN:       A  (round 5; the manager opens round 6)
-STOPPED BECAUSE:  finished the turn @ 2026-09-07 18:34 UTC — all four items landed, gate green
-STATUS:           ROUND 5 — **C HAS IMPLEMENTED. ALL FOUR ITEMS, 5-01 … 5-04**, one commit each,
+WHOSE TURN:       manager — independent re-measure  (then the manager opens round 6)
+STOPPED BECAUSE:  finished the turn @ 2026-09-07 17:46 UTC — three parts, gate green, code side 0.0%
+STATUS:           ROUND 5 — **A HAS MEASURED. CODE-SIDE IS 0.0% (0 of 30). THE DIFFERENCE LIST IS
+                  EMPTY.** Three parts, one commit each, each pushed as it finished; no production
+                  code changed and `git diff HEAD -- web/` is **empty**, asserted.
+                  **Ruling 10 point 3 fires: A does NOT hand to B. The manager re-measures
+                  independently before anything is told to the owner.**
+                  **READING NOTE — round 4 and round 5 are NOT like-for-like.** The denominator moved
+                  **31 -> 30** because Ruling 12 point 3 made **R-METER-2 `N/A`** and took it out of
+                  the scored set. The two percentages are not a trend. What compares: both rounds
+                  found **zero** code-side differences, and blocked fell **7 -> 6 only because
+                  R-METER-2 left the list** — nothing was unblocked.
+                  1. **THE HEADLINE — the operator's search key is unreachable for EVERY plan,
+                     including paid.** Both feed routes and all three adapters, driven with
+                     `TAVILY_API_KEY` and `BRAVE_SEARCH_API_KEY` as **distinct armed sentinels** and
+                     a **fully configured Vertex project**: **0 requests carry either sentinel and 0
+                     requests reach any paid search host**, across all five personas. A paid
+                     caller's explicit `poolRefresh: true` is **0** too. With the flag **forced
+                     `true`** — an input no production path can produce — the resolver still returns
+                     no Tavily key and `operatorSearchAvailability` is still frozen `false` with a
+                     Vertex project present. The residual is **Brave only**, behind a flag whose
+                     every producer is a hard `false`; all **33** non-test mentions traced, and both
+                     feed routes take it from the entitlement, never from a body.
+                  2. **BYOK survives on every plan, free included** — six route cases plus both
+                     adapters send the reader's own key and the operator's zero times.
+                  3. **The rebuild breaker is REACHABLE and still CAPS** (Ruling 13 point 1
+                     confirmed by behaviour, not grep): trial and paid × jobs and events, a granted
+                     refresh adds **exactly one** increment on `forced_rebuilds_today:<user>:<UTC
+                     day>`; free is refused, charges 0, still 200. 499 allowed, past-500 **refused**
+                     with **one** `kind:"breaker"` row, **zero** `kind:"search"` rows, and an untrip
+                     on the next UTC day.
+                  4. **The build guard proved BOTH ways** against the real script in a scrubbed
+                     environment: each of the three required names is named when dropped;
+                     `TAVILY_API_KEY` present -> exit 1, named, **value never printed**.
+                  5. **Personas 45 of 45.** All five scans **0**, grepped independently and agreeing
+                     with the gate tests. **9 plants, 9 fired** — including the Brave protective
+                     test, proved able to fail (3 cases) and restored with an **asserted empty
+                     diff**.
+                  6. **6-01's rename is reported as QUEUED, not as a finding** (Ruling 14 point 3).
+                  **ONE `POLICY — manager decides` FOR THE OWNER:** `poolRefreshAllowed` reaches
+                  **no component**, so the one paid feature a reader could notice is invisible in
+                  the interface — the "Refresh now" button is shown to everyone and a free reader's
+                  click is refused silently. Not a spec violation; not on the difference list.
+                  ── Round-5 C's entry follows. ──
+                  ROUND 5 — **C HAS IMPLEMENTED. ALL FOUR ITEMS, 5-01 … 5-04**, one commit each,
                   each pushed as it finished. **THE GATE IS GREEN**: tsc 0 · eslint 1 (standing) ·
                   124 files / 2871 tests / **0 failed**. Every one of B's 28 cases was rewritten,
                   **none deleted**; 12 tests were added. D2a is now in the code: the resolver has no
@@ -206,7 +248,14 @@ STATUS:           ROUND 5 — **C HAS IMPLEMENTED. ALL FOUR ITEMS, 5-01 … 5-04
                      6 of 6, one failure each, then deleted and re-run green.
                   5. **45 of 45 persona/route pairs**; the cross-cutting fault round-3 A
                      counted outside the 45 is gone, so there is no number outside it now.
-GATE THIS TURN:   **Round-5 C, cold, after every throwaway was deleted:** `tsc` exit **0** ·
+GATE THIS TURN:   **Round-5 A, cold, after every throwaway was deleted and `git diff HEAD -- web/`
+                  proved empty:** `tsc` exit **0** · `eslint` **1 problem (1 error, 0 warnings)** —
+                  the standing `quiz.tsx:46:7 react-hooks/set-state-in-effect` · `vitest`
+                  **124 files passed | 1 skipped (125)** · **2871 tests passed | 1 skipped (2872)**,
+                  **0 failed**, 9.50 s. Identical to round-5 C's figures and to the manager's
+                  Ruling-14 re-run. `src/lib/events/benchmark.test.ts` is the one skip, named.
+                  Round-5 C's figures follow.
+                  **Round-5 C, cold, after every throwaway was deleted:** `tsc` exit **0** ·
                   `eslint` **1 error, 0 warnings** (the standing `quiz.tsx:46`) · `vitest`
                   **124 files passed | 1 skipped (125)** · **2871 tests passed | 1 skipped (2872)**,
                   **0 failed**, 9.58 s. `src/lib/events/benchmark.test.ts` is the one skip, named.
@@ -235,13 +284,18 @@ A'S OWN FIXTURE FAULTS, recorded because each produced a plausible FALSE reading
                   regressions.** Also live: the **CRLF** trap (Ruling 10 point 2c) — a
                   multi-line plant literal with `\n` separators matched **0** times; the count
                   assertion caught it and a whitespace-tolerant regex matched 1.
-LAST DIFFERENCE:  0.0% code-side against the PRE-D2a spec (manager-confirmed, Ruling 11). Not yet
-                  measured against D2a — that is round 5's A. Blocked on the owner: 6 — R-ENT-1,
-                  R-ENT-2, R-METER-1, R-METER-3, R-KEY-1, R-QUOTA-2. N/A: R-METER-2. Denominator 30.
-GATE (0% unexplained, both measurements):  **NOT MET — and the code side is no longer why.**
-           Code-side is 0% and the difference list is empty; seven items carry a blocked half
-           that only the owner can close. `GATE: MET` needs both at zero.
-DONE:      **Round 5 C: ALL FOUR ITEMS, 5-01 / 5-02 / 5-03 / 5-04**, one commit each, each
+LAST DIFFERENCE:  **0.0% code-side MEASURED AGAINST D2a (0 of 30) — round-5 A, difference list
+                  EMPTY.** Blocked on the owner: **6** — R-ENT-1, R-ENT-2, R-METER-1, R-METER-3,
+                  R-KEY-1, R-QUOTA-2. **N/A: R-METER-2** (re-listed by name with that word, Ruling
+                  12 point 3). Denominator **30**. **Not like-for-like with round 4's 0/31** — the
+                  denominator moved because R-METER-2 left it, not because anything improved.
+GATE (0% unexplained, both measurements):  **NOT MET — and the code side is still not why.**
+           Code-side is **0.0%** and the difference list is **empty**; six items carry a blocked
+           half that only the owner can close. `GATE: MET` needs both at zero.
+DONE:      **Round 5 A: all three parts**, one commit each, each pushed; no code changed
+           (`git diff HEAD -- web/` asserted empty); every throwaway deleted; every plant
+           restored with an asserted empty diff; 9 plants fired 9 times.
+           **Round 5 C: ALL FOUR ITEMS, 5-01 / 5-02 / 5-03 / 5-04**, one commit each, each
            pushed; gate green; every new test proved by reverting the source (revert asserted by
            substitution count first) and every new scan or guard proved by planting an offender.
            Round 1 A (three parts). Round 1 B, all seven units. Round 1 C: ALL 28 ITEMS.
@@ -254,10 +308,35 @@ DONE:      **Round 5 C: ALL FOUR ITEMS, 5-01 / 5-02 / 5-03 / 5-04**, one commit 
            every throwaway deleted and every plant restored with an asserted empty diff.
            **Round 5 B: all four items**, 5-01 … 5-04, one commit each, each pushed; no code
            changed; the three-stage measurement plant reverted with an asserted empty diff.
-GATE NOW:  tsc exit **0** · eslint **1 error** (the standing `quiz.tsx:46`, **0 warnings**) ·
+GATE NOW:  tsc exit **0** · eslint **1 problem (1 error, 0 warnings)** (the standing `quiz.tsx:46`) ·
            vitest **124 files passed | 1 skipped (125)** · **2871 tests passed | 1 skipped
-           (2872)**, **0 failed**, 9.58 s.
-TODO:      **ROUND-5 A RE-MEASURES AGAINST D2a.** The denominator is now **30**, not 31
+           (2872)**, **0 failed**, 9.50 s.
+TODO:      **THE MANAGER RE-MEASURES INDEPENDENTLY (Ruling 10 point 3), then opens round 6.**
+           A's code side is **0.0% (0 of 30)** with an **empty** difference list, so nothing routes
+           to B. What the manager should re-run cold, in A's own words:
+           1. The gate, cold, from `web/`.
+           2. **The headline**: both feed routes and all three adapters with `TAVILY_API_KEY` and
+              `BRAVE_SEARCH_API_KEY` armed as **distinct** sentinels and a **configured Vertex
+              project**, `paid` included — expect **0** requests carrying either sentinel and **0**
+              to any paid search host. Arm Brave separately from Tavily; C's suites blank Brave, and
+              blanking it is what would hide the one residual.
+           3. **The forced-true residual**, which is the only thing left that can reach an operator
+              search host: `resolveSystemSearchKeys({ systemSearchAllowed: true })` still hands back
+              **Brave**. A traced all 33 non-test mentions and every producer is a hard `false`, so
+              it is unreachable — but it is the seam Ruling 12 point 2 deliberately left, and it is
+              worth one manager check that no producer has drifted.
+           4. **The rebuild breaker**, from a real request on both surfaces for trial and paid, and
+              the cap at 500 — this is Ruling 13 point 1's whole claim.
+           5. **The guard**, both ways, against the real script.
+           **A'S FIXTURE WARNING FOR WHOEVER MEASURES NEXT:** a `trial` row with **no
+           `trial_ends_at`** is an EXPIRED trial and reads as `free` on every flag — A's first pass
+           read a false "trial lost refresh now" from exactly that. Give the row a future end date.
+           **ROUND 6 CARRIES:** 6-01 (the rest of the rename — `consumeSystemSearches`,
+           `path: "system-search"`, `search-breaker.ts`, the stale docblocks) and 6-02 (the Gemini
+           retirement of 2026-10-16, **only** once the owner confirms the model choice; if the owner
+           has not answered by 2026-10-01 the manager escalates).
+           ── The previous TODO follows, superseded. ──
+           **ROUND-5 A RE-MEASURES AGAINST D2a.** The denominator is now **30**, not 31
            (Ruling 12 point 3). **R-METER-2 is `N/A`** — re-list it by name, with that word, every
            round; an N/A that stops being mentioned quietly becomes permanent. Blocked stays **6**:
            R-ENT-1, R-ENT-2, R-METER-1, R-METER-3, R-KEY-1, R-QUOTA-2.
@@ -323,8 +402,19 @@ PENDING USER ACTION: (1) Apply the three migrations under `web/supabase/migratio
            NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY — and must NOT carry
            TAVILY_API_KEY (the build will refuse it after 5-03). Deploy only after round 5
            reports green and the branch is merged. WITHDRAWN: the trial backfill (no users).
-OPEN FOR MANAGER:  none — C's three flags ruled in §1o (Ruling 14 points 2-4); the unfinished
-           half of the rename is queued as round-6 item 6-01, not left to rot.
+OPEN FOR MANAGER:  **ONE, and it is the owner's to answer, not a defect** — `POLICY — manager
+           decides`. Under D2a the jobs/events long tail is identical on every plan (Ruling 12
+           point 5, accepted), so "refresh now" and the deep-report allowance are the whole of what
+           a paid reader gets. The server half of "refresh now" is correct and A proved it. But
+           **`poolRefreshAllowed` reaches no component** — A grepped every `.tsx` — and
+           `app/page.tsx:180` fires the refresh with no plan test, so the button is rendered for
+           everyone and a **free** reader's click is refused by silently serving the pool that is
+           already there: no error, no message, nothing visibly changes. R-POOL-2 does not require
+           hiding the control, so this is **not** a spec violation and is **not** on the difference
+           list — but it means the one paid feature a reader could notice is invisible in the
+           product. The owner should say whether that is intended.
+           Otherwise none — C's three flags were ruled in §1o (Ruling 14 points 2-4); the
+           unfinished half of the rename is queued as round-6 item 6-01, not left to rot.
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
@@ -339,6 +429,7 @@ part-way; a released lock looks identical in both cases.
 | 2 (A) | 19.4% (6/31, exclusions: none) | NOT MET — all 20 round-1 differences closed, all five scans 0, operator-key searches 0 for `anonymous` and `free-no-key` on both surfaces (the Vercel do-not-yet is lifted), `local-no-auth` ABSENT from every deployed runtime. Seven differences remain: three wrong-data (quota outage reads as exhaustion · `deepReportsRemaining` is a budget · a paid reader gets `null`), a red gate (three daily-window quota tests aged out at UTC midnight — deterministic, a fixture not a regression), Vertex/grounding search ungated by entitlement (0 reachability in a deployment), `GOOGLE_VERTEX_*` banned as 4 names not a prefix, and Brave outranking the system Tavily key. Four questions still BLOCKED: no key, migrations unapplied |
 | 3 (A) | **code-side 6.5% (2/31, exclusions: none)** · **blocked 7** — R-ENT-1, R-ENT-2, R-METER-1, R-METER-2, R-METER-3, R-KEY-1, R-QUOTA-2 | NOT MET — all seven round-2 differences CLOSED by behaviour; gate green with the quota fixture date unchanged and now a day in the past; personas 45 of 45 (was 41 of 45); all five scans 0, grepped independently and agreeing with C's three new gate tests; the `GOOGLE_VERTEX_` prefix ban proved with an invented `GOOGLE_VERTEX_ZZZ`; all four operator search providers gated, breaker-charged and writing one named usage row; papers 0 on every persona in both runtimes; `local-no-auth` ABSENT (503 ×3). Two differences remain, both NEW: a **paid** reader at the 200/day breaker is shown an upgrade prompt by 2-07's `QuotaNotice` (R-UI-3, the payload is correct and the component is the defect), and Ruling 7 point 3's branded entitlement context has not landed — zero branded/opaque types exist in the tree, so an unguarded caller is still a grep miss rather than a compile error (R-SEC-2). **The blocked count rose 4 -> 7 as accounting, not decay** (Ruling 5 point 8): same two owner-action causes, now enumerated per item by name |
 | **4 (A)** | **code-side 0.0% (0/31, exclusions: none)** · **blocked 7** — R-ENT-1, R-ENT-2, R-METER-1, R-METER-2, R-METER-3, R-KEY-1, R-QUOTA-2 | **NOT MET — but the code side is no longer why. The difference list is EMPTY.** Both round-3 differences closed by behaviour and each proved by planting the old defect back: a **paid** reader at the 200/day breaker renders the breaker sentence with **hours** and no upsell of any kind on either the breaker or the monthly path (trial keeps the prompt), and the branded entitlement context is enforced by the **compiler** — five bad shapes, five distinct errors (TS2345 / TS2554 / TS2554 / TS2322 / TS2353), including the `{ userId: null, byok: false }` figure context that used to compile. R-QUOTA-1 and R-QUOTA-3, `PARTIAL` on papers under Ruling 9, are `MET` on the **streamed** shape: streamed deep counts once, streamed shallow counts zero, `quota` precedes `mode`, the paid day-key is charged. Personas 45 of 45 with the cross-cutting fault gone. All five scans 0, grepped independently and agreeing with the gate tests, and **all six proved by planting an offender** (6 of 6, Ruling 10 point 4); `resolveProvider` call sites without a context **0 by construction**; figure matchers reachable with a null-user context **0 by the compiler**; `local-no-auth` ABSENT (503 ×3). **Blocked flat at 7** — two owner actions, three unapplied migrations and no local key, are now the entire gate |
+| **5 (A)** | **code-side 0.0% (0/30, exclusions: none)** · **blocked 6** — R-ENT-1, R-ENT-2, R-METER-1, R-METER-3, R-KEY-1, R-QUOTA-2 · **R-METER-2 is `N/A`** | **NOT MET — the code side is still not why; the difference list is EMPTY.** **NOT LIKE-FOR-LIKE WITH ROUND 4:** the denominator moved 31 -> 30 because Ruling 12 point 3 made R-METER-2 `N/A` and took it out of the scored set, so the two percentages are not a trend — what compares is that both rounds found **zero** code-side differences, and blocked fell 7 -> 6 **only** because R-METER-2 left the list, not because anything was unblocked. **D2a re-measured and MET:** the operator's search key is unreachable for every plan **including paid** — both feed routes and all three adapters, driven with `TAVILY_API_KEY` and `BRAVE_SEARCH_API_KEY` as distinct armed sentinels **and** a fully configured Vertex project, give **0 requests carrying either sentinel and 0 requests to any paid search host** across all five personas; a paid caller's explicit `poolRefresh: true` is 0 too. With the flag **forced `true`** — an input no production path can produce — the resolver still returns no Tavily key and `operatorSearchAvailability` is still frozen `false` with a Vertex project present; the residual is Brave only, behind a flag whose every producer is a hard `false` (all 33 non-test mentions traced). **BYOK survives on every plan, free included** (six route cases plus both adapters). **The rebuild breaker is reachable AND caps**, proved from real requests on both surfaces for trial and paid — exactly one increment on `forced_rebuilds_today:<user>:<UTC day>` — and 499 allowed / past-500 refused with one `kind:"breaker"` row, zero `kind:"search"` rows, and an untrip on the next UTC day. **The build guard proved both ways** against the real script: three required names each named when dropped, `TAVILY_API_KEY` refused and never printed. Personas **45 of 45**. All five scans **0**, grepped independently and agreeing with the gate tests (scan 3's Tavily case is now `[]`, deliberately non-uniform with Brave's `[GATE]`). **9 plants, 9 fired**; the Brave protective test proved able to fail (3 cases) and restored with an asserted empty diff. `kind:"search"` rows **0**; `process.env.TAVILY_API_KEY` reads in non-test source **0**; Ruling-75 absence cases **4**; structured-source accepted reads **3**; `local-no-auth` **ABSENT** (503 ×3); paid upsells **0**. **6-01's rename reported as QUEUED, not as a finding** (Ruling 14 point 3). One `POLICY — manager decides` for the owner: `poolRefreshAllowed` reaches no component, so the one paid feature a reader could notice is invisible in the interface |
 
 ---
 
@@ -10503,3 +10594,103 @@ each accepts — every operator credential armed, `systemSearchAllowed` forced `
    reach and which are dark on every plan. So: one rule of the three is uncovered, two are still
    exercised by the path a real user takes. The tally of **4** stands and the restore threshold is
    unchanged.
+
+#### Part 3 — scans, standing tallies, the difference list, and the two numbers
+
+**Every scan run TWICE — the gate tests, and my own greps — and I say whether they agree.**
+
+| # | Scan | My grep | Gate test | Agree? |
+|---|---|---|---|---|
+| 1 | Rendered strings matching `Tier 0\|Tier 1\|Tier 2\|BYOK` under `web/src` | **0 rendered.** 67 non-test lines match; the quoted/JSX-copy filter leaves **3**, and I read all three in context — `app/jobs/[id]/page.tsx:1017`, `app/page.tsx:851`, `components/profile/ai-setup.tsx:17`. All comments. | `ui-vocabulary.test.ts` green | **yes** |
+| 2 | `NODE_ENV === "development"` in code that ships to the browser | **0.** 8 non-test lines match; **4 are comments** and the 4 real tests are all server-only (`auth/callback/route.ts:17`, `env/local-dev.ts:23`, `pool-cache-disk.ts:42`, `pool-cache-runtime.ts:14`). | `no-client-dev-flags.test.ts` green, two ways | **yes** |
+| 3 | `process.env.TAVILY_API_KEY` reads outside the gated resolver | **0 reads.** 7 matches in the tree; in non-test source there are 3, **all inside comments** in `system-key.ts` (`:65` docblock, `:147`/`:148` the preserved deleted branch), plus one `delete` in `test-support/route-harness.ts:34`, which is a write in test support, not a read in production. | `spend-scans` scan 3 green — and note it is **deliberately non-uniform**: the Tavily case now expects `[]` while `BRAVE_SEARCH_API_KEY` still expects `[GATE]`, because 5-01 keeps the Brave read inside the gate | **yes** |
+| 4 | `resolveProvider()` with no override outside the entitlement-checked path | **0.** Exactly 3 textual `resolveProvider()` matches, **all in comments** (`api/figure/route.ts:30`, `figures/match-context.ts:8`, `figures/semantic-match.ts:55`) — each a "this used to call it with no arguments" note. | `spend-scans` scan 4 green | **yes** |
+| 5 | Routes reachable without the guard that can spend an operator key | **0.** All **9** routes carrying `requireEntitledAiRequest` enumerated by grep and the list matches the gate's own. | `spend-scans` scan 5 green three ways, and asserts the guarded count is **9** | **yes** |
+
+#### Standing tallies — every one reported, including the zeros
+
+| Tally | Value | How I got it |
+|---|---|---|
+| **Operator-key search requests, every persona including paid** | **0** | **SOURCE, stated as Ruling 14 point 4 requires: the FIVE surfaces that actually search** — `POST /api/jobs/feed`, `POST /api/events/feed`, and the `jobweb`, `eventweb`, `web-search` adapters. **Not** the four AI report routes, where zero is true but cannot fail. Driven with `TAVILY_API_KEY` and `BRAVE_SEARCH_API_KEY` as distinct armed sentinels and a fully configured Vertex project, across `anonymous` / `free-no-key` / `free-byok-tavily` / `trial` / `paid`. Also **0** requests to any paid search host. |
+| **Papers operator-key searches** | **0** | `web-search` on the real flag: 0 items, 0 outgoing, every explicit provider preference reaches nothing. `feed/pipeline.ts:134` passes a hard `false` of its own, so papers are false twice over. |
+| **Anonymous-BYOK feed requests** | **2 on the reader's own key, 0 on the operator's** | `anonymous` + `searchConnectors.tavily`, jobs feed: 200, two outgoing searches carrying `USER_SENTINEL`, zero carrying either operator sentinel. Their key, their money — D2a's shape. |
+| **`process.env.TAVILY_API_KEY` reads in non-test source** | **0** | Scan 3 above; reported from the gate test as Ruling 12 point 7 (a) directs, and independently grepped. |
+| **`kind:"search"` usage rows produced** | **0** | Behavioural, all three producers at once, most generous input each accepts: **0 usage rows of any kind**, 0 with `kind: "search"`. |
+| **Ruling-75 option-building cases asserting absence rather than content** | **4** | Three in `jobweb.test.ts` (`:3230`, `:3262`, `:3316`), one in `eventweb.test.ts` (`:2800`) — exactly Ruling 13 point 4's split. Threshold unchanged: if grounding is re-enabled for any plan, all four return to content assertions in the same round. |
+| **Structured-source key reads ACCEPTED outside the gate** | **3** | `adzuna.ts`, `jsearch.ts`, `usajobs.ts`, asserted by name in `spend-scans` scan 3. Ruling 6 point 4's threshold stands. |
+| **`resolveProvider` call sites without a context** | **0** | By construction — the parameter is required and the compiler enforces it (below). |
+| **Compile-time enforcement of the entitlement context** | **enforced — 3 of 3 bad shapes rejected** | A throwaway `.ts` probe with `@ts-expect-error` on each: a plain object shaped like the context, the context omitted, and the zero-argument form — `tsc` exit **0**, which with those directives means **all three were rejected**. **Proved not vacuous by a control**: the same call with `as never` (so it *does* compile) makes tsc fail with `TS2578: Unused '@ts-expect-error' directive`. Probe deleted. |
+| **Routes resolving a provider before the guard** | **0** | Scan 5, plus the persona suite's explicit "does not resolve a provider for a signed-out visitor" on all four report routes. |
+| **Quota / breaker checks reachable on the app's real request shape, per route** | **reachable on every route that has one** | The rebuild breaker driven from real `POST` requests on both feed routes for both entitled plans; the deep-report quota and 200/day breaker green in `deep-report-quota.test.ts`, which drives the streamed NDJSON shape 3-03 added. |
+| **`[quota] store unavailable` occurrences** | **0 this turn** · **1 writer in the tree** | I simulated no outage, so zero is expected; the point of the tally is the writer count, and `counters.ts:435` is still the only one. |
+| **`local-no-auth` reachability** | **ABSENT — stated explicitly** | Measured, not assumed: a **deployed** runtime with the Supabase auth config stripped — the only shape in which that branch could be reached — answers **503 on all three routes I drove** (`figure`, `test-digest`, `jobs/feed`), and the string `local-no-auth` appears in **none** of the three response bodies. |
+| **Usage rows per provider request** | **1 (mechanism)** · `BLOCKED (live)` | Unchanged by D2a; `src/lib/usage` suites green this turn. The half I measured directly is the search half: **0** rows. No row has ever reached a real table. |
+| **Paid readers shown any upsell** | **0** | The predicate is `exhausted && effectivePlan !== "paid"` — keyed on the plan, not on the shape of the refusal. |
+| **Papers-refusal degradation cost (Ruling 11's accepted cost)** | **1 small-model call per refused deep report on papers** | Unchanged this round and re-listed because Ruling 11 says it is tallied every round: a refused deep report on papers degrades to the shallow abstract-only report, which is R-QUOTA-3-exempt and bounded by the 20/h report bucket. |
+| **Guards and scans proved by PLANTING an offender** | **9 plants, 9 fired** | (1) the Brave gate removed from `system-key.ts` -> **3 cases failed**, restored with an asserted **empty** `git diff`; (2) the guard's three required names **plus `TAVILY_API_KEY`** -> exit 1; (3)(4)(5) each required name dropped in turn -> exit 1 naming it, three for three; (6) `BRAVE_SEARCH_API_KEY` -> exit 1; (7) an invented `GOOGLE_VERTEX_ZZZ_INVENTED` -> exit 1 (the **prefix** ban); (8) `PEER_DEV_ENTITLEMENT` -> exit 1; (9) the compile-probe control -> `TS2578`. |
+| **R-METER-2** | **`N/A`** | Re-listed by name with that word, per Ruling 12 point 3. Not in the denominator; neither MET nor BLOCKED. |
+
+#### Ranked difference list
+
+**EMPTY.** No numbered difference. Nothing was reclassified as cosmetic to get here, nothing from an
+earlier round was dropped, and no item was rounded down.
+
+#### Queued, NOT a defect (Ruling 14 point 3)
+
+**Round-6 item 6-01 — the unfinished half of the rename.** `consumeSystemSearches`,
+`path: "system-search"` on the usage row, `logStoreUnavailable("system-search", …)`, the breaker's
+error line and the file `search-breaker.ts` all still say "search" while the counter they drive is
+`forced_rebuilds_today`. I saw every one of these while measuring — the breaker's real error line
+reads `[quota] system-search breaker tripped for paid-user (limit 500/day)` — and **I am reporting
+them as queued, not as findings**, exactly as Ruling 14 point 3 directs.
+
+#### For the owner, not a defect — `POLICY — manager decides`
+
+**The one paid feature a reader could notice is invisible in the interface.** Under D2a the long
+tail is identical on every plan (Ruling 12 point 5, accepted), so "refresh now" and the deep-report
+allowance are the whole of what a paid reader gets. The server side of "refresh now" is correct and
+I proved it. But `poolRefreshAllowed` reaches **no component** — I grepped every `.tsx` — and
+`app/page.tsx:180` fires the refresh with no plan test, so the button is shown to everyone and a
+free reader's click is refused by silently serving the pool that is already there. **No error, no
+message, nothing visibly changes.** This is not a spec violation — R-POOL-2 does not require hiding
+the control — so it is not on the difference list. It is the honest answer to C's first question and
+it is the owner's to decide.
+
+#### The gate, verbatim
+
+Cold run from `web/`, after **every** throwaway was deleted and with `git diff HEAD -- web/` proved
+empty:
+
+- `npx tsc --noEmit -p tsconfig.json` -> exit **0**
+- `npm run lint --silent` -> **1 problem (1 error, 0 warnings)** — the standing
+  `src/components/persona/quiz.tsx:46:7 react-hooks/set-state-in-effect`
+- `npx vitest run --reporter=dot` -> **Test Files 124 passed | 1 skipped (125)** ·
+  **Tests 2871 passed | 1 skipped (2872)** · **0 failed** · 9.50 s
+
+Identical to round-5 C's figures and to the manager's Ruling-14 re-run. The one skip is
+`src/lib/events/benchmark.test.ts`, named.
+
+#### THE TWO NUMBERS
+
+**Code-side difference: 0.0% — 0 of 30.**
+Method: (NOT MET + PARTIAL) ÷ (31 R-* items − 1 `N/A`) = (0 + 0) ÷ 30. Exclusions: **none**.
+
+**Blocked: 6, by name** — **R-ENT-1, R-ENT-2, R-METER-1, R-METER-3, R-KEY-1, R-QUOTA-2.**
+Method: count of items carrying a half that cannot be observed from this checkout, each named in
+Part 1's table with the exact unobservable thing; two causes, both the owner's — three unapplied
+migrations and no local `GOOGLE_API_KEY`.
+
+**READING NOTE, REQUIRED AND REPEATED: round 4 and round 5 are not like-for-like.** Round 4 measured
+`0/31`; round 5 measures `0/30`, because Ruling 12 point 3 made **R-METER-2 `N/A`** and removed it
+from the scored set. The denominator moved for a reason that has nothing to do with quality, so the
+two percentages are not comparable as a trend. What *is* comparable, and is the honest statement:
+**both rounds found zero code-side differences**, and the blocked list went 7 -> 6 **only** because
+R-METER-2 left it for `N/A` — nothing was unblocked.
+
+#### Gate verdict
+
+**GATE: NOT MET — and the code side is still not why.** `GATE: MET` needs 0% code-side **and** an
+empty blocked list. The code side is **0.0%** and the difference list is **empty**; six items carry a
+blocked half that only the owner can close. Per Ruling 10 point 3 and the brief's Step 5, **A does
+not hand to B** — the code side is zero, so `WHOSE TURN` goes to the manager for an independent
+re-measure.
