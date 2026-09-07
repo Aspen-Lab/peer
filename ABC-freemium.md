@@ -11931,3 +11931,162 @@ clean-tree `tsc` figure is in part 3.
 3. **An invalid literal in my own fixture.** `source: "profile"` is not an `EntitlementSource`
    (`"supabase" | "dev-override" | "anonymous"`). Vitest ran it happily — types are erased — and
    only `tsc` caught it. **A probe that is never type-checked is a probe that can lie.**
+
+#### PART 2 of 3 — personas, and round 6 verified by behaviour
+
+No production code changed. Every plant in this part was reverted with
+`git diff --name-only -- web/` asserted at **0** files.
+
+##### 2.1 — Personas, per persona and per surface, never averaged
+
+Driven through the **real handlers** on real `NextRequest`s, in a stubbed deployed runtime, with the
+operator's Tavily key armed as a sentinel so "zero" is a statement about the gate rather than about
+an empty environment. **No real Supabase** (said once in part 1); the counter store is the in-memory
+fallback.
+
+| Surface | anonymous | free-no-key | free-byok-tavily | trial | paid |
+|---|---|---|---|---|---|
+| `POST /api/jobs/feed` | 200, **0** operator-key requests | 200, **0** | 200, **0** operator — the reader's own key **is** sent | 200, **0** | 200, **0**; explicit `poolRefresh` charges exactly **1** rebuild unit |
+| `POST /api/events/feed` | 200, **0** | 200, **0** | 200, **0** operator, own key sent | 200, **0** | 200, **0** |
+| `POST /api/feed` (papers) | **0** | **0** | **0** | **0** | **0** |
+| `POST /api/jobs/report` | **401** | **0** | **0** | **0** | **0** |
+| `POST /api/events/report` | **401** | **0** | **0** | **0** | **0** |
+| `POST /api/papers/report` | **401** | **0** | **0** | **0** | **0** |
+| `POST /api/digest` | **401** | **0** | **0** | **0** | **0** |
+| `GET /api/figure` | auth required; no provider without a branded context | — | — | — | — |
+| `POST /api/test-digest` | 404 unless `canUseLocalServerProvider()` | — | — | — | — |
+| `dispatch-digests` | pinned `aiTier: 0`, no system key (D9) | — | — | — | — |
+
+**Every pair behaves per spec.** Case counts actually run this round: the permanent persona harness
+**24 / 24**; the three feed suites **19 / 19**; figure + test-digest + profile + dispatch-digests
+**20 / 20**; the three search adapters **986 / 986**. A free reader's forced rebuild is **refused
+and still answered 200** with **0** rebuild units charged; a paid reader's is granted for exactly
+**one**.
+
+**Blocked half of this pass, restated:** no live model call is possible (no local `GOOGLE_API_KEY`),
+so every persona row above is the *route's* behaviour, not the model's. That is the R-METER-1 /
+R-KEY-1 blocked half of part 1, not a separate gap.
+
+##### 2.2 — 6-04 landed. Verified by render; see part 1 §1.3 for the full table
+
+Summarised here so this part stands alone: five entitlement states across three upsell surfaces and
+both whole report trees, all correct; nine source-level plants, eight fired; the ninth (the
+pass-through default) proved by the **compiler** instead, `TS2769` on both omissions with a
+compiling positive control.
+
+##### 2.3 — UPSELL SURFACES: **THREE, NOT TWO.** The count in §1 and Ruling 17 point 5 is now stale
+
+Re-proved my own way, and **not inherited**. Two independent enumerations, which agree:
+
+1. **By what reaches a component.** Every non-test read of the store's nullable `entitlement` is
+   **6** sites (three report pages, the discovery page, the welcome page, the digest component).
+   Four of the six immediately wrap it in `entitlementGrants` — a **capability** view by
+   construction. The two that keep the nullable value are the report pages (which pass
+   `entitlement?.effectivePlan ?? null` on to `QuotaNotice` and `TierUpgradeBlock`) and the
+   discovery page (which passes the raw object to `PoolRefreshNotice`).
+2. **By rendered vocabulary.** A grep for upsell words over non-test `.ts`/`.tsx`, comment lines
+   discarded, returns text in exactly **three** components.
+
+| # | Surface | The upsell it renders | Its link |
+|---|---|---|---|
+| 1 | `TierUpgradeBlock` | "Also in this report on Peer Pro" · "Peer Pro is $12/month" | `/welcome?step=ai` |
+| 2 | `QuotaNotice` | "Peer Pro lifts the monthly limit." | **`/settings`** |
+| 3 | **`PoolRefreshNotice`** (new in 6-03) | "Refresh now is on the paid plan…" · "Peer Pro refreshes them whenever you ask." | `/welcome?step=ai` |
+
+**Why the count moved and why it is not a defect.** C measured "exactly two" while implementing
+**6-04**, which landed **before** 6-03; 6-03 then added the third. Ruling 17 point 5 repeated the
+figure after both had landed. Nothing is wrong with the build — **the census is stale, and a
+count that stops being re-derived is exactly the kind of inherited number this loop keeps
+catching.** All three surfaces are correct on all five states (part 1 §1.3). Recorded so 7-01's
+"closing the class" is scoped to three surfaces plus the chip, not two plus the chip.
+
+##### 2.4 — THE DESTINATION REQUIREMENT (Ruling 17 point 6): **THEY DIFFER — AND ONE IS DEAD**
+
+The requirement was that 6-03's link point at "the same one the existing upgrade prompt uses". There
+is no single existing destination to match: **the two pre-existing surfaces already disagreed**,
+and one of them points at a path that does not exist.
+
+- `TierUpgradeBlock` → `/welcome?step=ai`
+- `PoolRefreshNotice` → `/welcome?step=ai` — **6-03 matched this one**
+- `QuotaNotice` → **`/settings`**, and **`src/app/settings` does not exist**
+
+**Measured, not grepped.** A scan over every `href="/…"` literal in non-test source, resolved
+against the real route tree (`src/app/*` directories) **and** against `public/` for static assets,
+returns **exactly one** dead link in the whole application: `/settings`, in `quota-notice.tsx:142`.
+`/CHANGELOG.md` also matched on the first pass and is a **false positive** — it is a real file in
+`public/`, and excluding static assets is what makes the number honest. Positive control: the scan
+sees `welcome` and `profile` as real segments and `settings` as absent.
+
+**`git log --all -- src/app/settings` returns nothing: the route has never existed on any branch.**
+The link has been dead since 2-07 shipped it in round 2, and **A scored R-QUOTA-1 `MET` in rounds
+3, 4 and 5 without catching it.** That is A's miss, recorded as one.
+
+It is a defect on its own terms, not only a unification chore: the component's own docblock says
+*"a dead link is worse than no link"* and *"The prompt points at the key panel, which is a real
+thing a reader can act on today."* Both sentences are false. The rendered call to action is the
+**only** action on that surface, and a free or trial reader who has spent their monthly allowance —
+the exact reader R-QUOTA-1 wrote the prompt for — clicks it and lands on `not-found`.
+
+**Ranked and carried to part 3 as difference 1.** 7-01 unifies the destination; the destination it
+unifies on must be a route that exists.
+
+##### 2.5 — THE FOURTH STATE, driven rather than read
+
+`ProfileSync`'s own source, run through all four paths (React's hooks replaced with stand-ins so
+the effect body executes; nothing in `profile-sync.tsx` itself stubbed):
+
+| Path | Drive | Store ends at |
+|---|---|---|
+| 1 | `getUser()` resolves with **no user** | **known + anonymous** — `source: "anonymous"`, deep-equal to `ANONYMOUS_CLIENT_ENTITLEMENT` |
+| 2 | `getUser()` **throws** | **not known** — stays `null` |
+| 3 | signed in, `GET /api/profile` **rejects** | **not known** — stays `null` |
+| 4 | signed in, profile answers `paid` | `effectivePlan: "paid"` |
+
+**So 6-03's sign-in sentence is live code, not dead code**, and Ruling 17 point 2's amendment is
+correct in the build. Both directions proved able to fail: deleting the signed-out `setEntitlement`
+reddens **path 1 only**; making either failure path invent the anonymous default reddens **paths 2
+and 3 only**.
+
+The `!supabase` branch (a local-only deployment where nobody can sign in) sets the same value at the
+same setter; it is the one path of the four not driven here, and it is named rather than claimed.
+
+##### 2.6 — 6-01 landed, by behaviour and by construction
+
+**By behaviour** — the rebuild breaker tripped through the **real** `POST /api/jobs/feed` handler,
+with only the rebuild counter past its cap, and the usage row read out of the admin client's own
+`insert`:
+
+- past the cap → the route still answers **200** (the cached pool is served), and writes **exactly
+  one** row: `{ kind: "breaker", path: "forced-rebuild", user_id, ok: false, byok: false }`
+- **0** rows with `kind: "search"`, **0** rows whose `path` contains `system-search`, and the
+  serialised row set contains the string `system-search` **0** times
+- under the cap → **0** breaker rows, because the row means *a cap tripped*
+
+Proved able to fail: restoring `path: "system-search"` reddens **2 of the 3** route-level cases (and
+C's own gate case).
+
+**By construction** — residual `consumeSystemSearches` / `system-search` / `search-breaker` under
+`src/`: **0**. The file is `src/lib/usage/rebuild-breaker.ts`. **The three unreachable fan-out call
+sites are all still present** (`jobweb.ts:2205`, `eventweb.ts:2808`, `web-search.ts:134`), each
+carrying the "THIS CALL SITE IS UNREACHABLE" docblock **and** B's split-not-flip warning, which the
+breaker module repeats. Their absence would have been the finding; they are there.
+
+##### 2.7 — 6-03 landed. One placement judgement, ruled
+
+Copy per branch is in part 1 §1.3 and is correct on all five states, including *"Sign in to
+refresh."* with **no "Pro"** for the signed-out reader, and silence for trial and paid.
+
+**Surface gate:** the notice renders only when `activeType !== "papers"`, on the same condition as
+the tile it explains, from the discovery page where the entitlement is already in scope. Papers
+refresh is a daily refetch and not a paid feature (D3), so the gate is required and present.
+
+**C's flagged judgement — the `underTuned` branch. A's ruling: report it, do not call it a
+defect.** The notice is gated on the *tile's* render condition, not the refresh *button's*. On
+`FeedMoreTile`'s `underTuned` branch (no topics, or one short or placeholder topic) the tile shows
+"Tune your signals" with an **"Edit profile" link and no refresh button at all** — so a free reader
+with an untuned profile is told refresh is on the paid plan next to a tile that offers no refresh.
+The sentence stays **true** there (their pool really does rebuild weekly), no wrong value is shown,
+and the spec rules on the copy and the audience but not on the placement. Against that: mirroring
+`looksUnderTuned` outside the tile would put one predicate in two files, which is a class of defect
+this loop keeps finding. **Carried to part 3 as a ranked observation, not a difference**, with the
+manager free to make it a round-7 item.
