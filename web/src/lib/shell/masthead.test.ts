@@ -4,7 +4,6 @@ import {
   SHELL_LINKS,
   THUMB_TABS,
   dayLine,
-  dayState,
   isActiveLink,
   mastheadCentre,
   paperIdFromPathname,
@@ -12,7 +11,6 @@ import {
   searchKeyTarget,
   shellRoute,
   thumbBarMode,
-  unreadCount,
 } from "./masthead";
 
 // 2026-09-06 is a Sunday; noon so no timezone lands it on another day.
@@ -58,45 +56,15 @@ describe("the centre cell", () => {
     expect(dayLine(SUNDAY)).toBe("Sunday, September 6");
   });
 
-  it("reads the date alone until the briefing has landed", () => {
-    // `papers` is not persisted, so a reload has none until the fetch
-    // returns; "0 papers" would be a claim about the day, not the store.
-    expect(dayState(SUNDAY, [], {})).toEqual({
-      date: "Sunday, September 6",
-      total: null,
-      unread: null,
-    });
-  });
-
-  it("counts the papers and the unread ones from the store", () => {
-    expect(dayState(SUNDAY, papers, { "arxiv:1": true })).toEqual({
-      date: "Sunday, September 6",
-      total: 3,
-      unread: 2,
-    });
-    expect(unreadCount(papers, { "arxiv:1": true, "arxiv:2": true, "openalex:W3": true })).toBe(0);
-  });
-
-  it("is the day on the briefing", () => {
-    const centre = mastheadCentre("briefing", {
-      date: SUNDAY,
-      pathname: "/",
-      papers,
-      readItems: {},
-    });
-    expect(centre).toEqual({
-      kind: "day",
-      day: { date: "Sunday, September 6", total: 3, unread: 3 },
-    });
+  it("is empty on the briefing — the page carries the day", () => {
+    // The dateline and the deck are the page's own front (BriefingHead);
+    // stating the day again in 13.5px above them was the small print the
+    // founder objected to.
+    expect(mastheadCentre("briefing", { pathname: "/", papers })).toEqual({ kind: "empty" });
   });
 
   it("is the rail on a paper, positioned by the briefing's order", () => {
-    const centre = mastheadCentre("paper", {
-      date: SUNDAY,
-      pathname: "/papers/arxiv%3A2",
-      papers,
-      readItems: {},
-    });
+    const centre = mastheadCentre("paper", { pathname: "/papers/arxiv%3A2", papers });
     expect(centre).toEqual({
       kind: "rail",
       nav: { index: 1, total: 3, prevId: "arxiv:1", nextId: "openalex:W3" },
@@ -105,12 +73,7 @@ describe("the centre cell", () => {
   });
 
   it("is the way back alone on a deep link", () => {
-    const centre = mastheadCentre("paper", {
-      date: SUNDAY,
-      pathname: "/papers/arxiv:9",
-      papers,
-      readItems: {},
-    });
+    const centre = mastheadCentre("paper", { pathname: "/papers/arxiv:9", papers });
     expect(centre.kind).toBe("rail");
     if (centre.kind === "rail") {
       expect(centre.nav.index).toBe(NONE);
@@ -120,9 +83,7 @@ describe("the centre cell", () => {
 
   it("is empty on search, saved and profile", () => {
     for (const route of ["search", "saved", "profile", "other"] as const) {
-      expect(
-        mastheadCentre(route, { date: SUNDAY, pathname: `/${route}`, papers, readItems: {} }),
-      ).toEqual({ kind: "empty" });
+      expect(mastheadCentre(route, { pathname: `/${route}`, papers })).toEqual({ kind: "empty" });
     }
   });
 });

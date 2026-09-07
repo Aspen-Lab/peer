@@ -27,6 +27,8 @@ import { PaperDigestLoader } from "@/components/digest/daily-digest";
 import { LoadingSkeleton } from "@/components/ui";
 import { buttonVariants } from "@/components/ui/button";
 import { emptyReason } from "@/lib/feed/empty-reason";
+import { briefingDeck } from "@/lib/briefing/deck";
+import { dayLine } from "@/lib/shell/masthead";
 import { allocatePlateTerms } from "@/lib/papers/plate-terms";
 
 export default function DailyBriefingPageWrapper() {
@@ -108,7 +110,6 @@ function DailyBriefingPage() {
   );
 
   const unreadCount = papers.filter((p) => !readItems[p.id]).length;
-  const briefingClosed = papers.length > 0 && unreadCount === 0;
   const empty = emptyReason({
     isLoading,
     papersCount: papers.length,
@@ -118,8 +119,9 @@ function DailyBriefingPage() {
 
   return (
     // The board uses the whole window now that nothing pads <main>; on a
-    // 2000px display it sits 360px from both edges. The masthead above it
-    // states the day and the counts; the page starts with its own line.
+    // 2000px display it sits 360px from both edges. The page opens with its
+    // own front — the dateline and the deck — and the masthead states nothing
+    // here, so the day is said once, at display size.
     <article className="mx-auto max-w-[1280px] px-6 pt-0 md:pt-5 pb-16 lg:pb-20">
       <PaperDigestLoader
         papers={papers}
@@ -128,16 +130,20 @@ function DailyBriefingPage() {
         llmOverride={digestLlmOverride}
       />
 
-      <BriefingLine
+      <BriefingHead
+        date={dayLine(new Date())}
+        total={papers.length}
+        unread={unreadCount}
+        topics={profile.researchTopics}
+        loading={papersLoading && papers.length === 0}
+        failed={Boolean(feedError)}
         lastRefresh={lastRefresh}
-        closed={briefingClosed}
         onRefresh={refreshFeed}
         isRefreshing={isLoading}
-        topics={profile.researchTopics}
-        failed={Boolean(feedError)}
       />
 
-      {papersLoading && papers.length === 0 && <LoadingSkeleton />}
+      {/* The deck already says what is being looked for. */}
+      {papersLoading && papers.length === 0 && <LoadingSkeleton label={null} />}
 
       {empty && (
         <div className="mx-auto max-w-[820px]">
@@ -155,7 +161,7 @@ function DailyBriefingPage() {
         // extractable figure, so card heights genuinely differ; a uniform grid
         // either ragged-edges every row or reserves dead space on the six cards
         // with no image. CSS columns let each card be its own height.
-        <div className="mt-5 columns-1 sm:columns-2 lg:columns-3 gap-4 [column-fill:_balance]">
+        <div className="mt-8 columns-1 sm:columns-2 lg:columns-3 gap-4 [column-fill:_balance]">
           {papers.map((paper, index) => (
             <div
               key={paper.id}
@@ -181,95 +187,101 @@ function DailyBriefingPage() {
   );
 }
 
-// One line under the masthead: why these papers are here, and when they
-// came. The date, the count and the unread count are the masthead's — they
-// used to be rendered here as well, and a third time in the sidebar. What is
-// left is the one statement about the whole briefing that only this page can
-// make, and the refresh button at the right. A failed load says so, in red,
-// and never "synced just now" (feed.ts keeps the old lastRefresh on error).
-function BriefingLine({
+// The page's front: the date as the headline, one sentence of reading type
+// under it, and the sync state at the right — the only small item, because
+// it is status. Two lines of small print used to stand here (the masthead's
+// counts and a mono "matching … · synced 4m ago"); a front page opens with a
+// dateline, not a status bar. A failed load still says so, in red, and never
+// "synced just now" (feed.ts keeps the old lastRefresh on error).
+function BriefingHead({
+  date,
+  total,
+  unread,
+  topics,
+  loading,
+  failed = false,
   lastRefresh,
-  closed,
   onRefresh,
   isRefreshing,
-  topics,
-  failed = false,
 }: {
-  lastRefresh: string | null;
-  /** Every paper decided: said here, since the masthead's "0 unread" is a number, not a state. */
-  closed: boolean;
-  onRefresh: () => void;
-  isRefreshing: boolean;
+  date: string;
+  total: number;
+  unread: number;
   topics: string[];
+  loading: boolean;
   /** The last paper load failed; say so instead of a sync time. */
   failed?: boolean;
+  lastRefresh: string | null;
+  onRefresh: () => void;
+  isRefreshing: boolean;
 }) {
+  const deck = briefingDeck({ total, unread, topics, loading });
   return (
-    <header className="flex h-9 items-center gap-3">
-      <h1 className="sr-only">Today&apos;s briefing</h1>
-      {/* Why these papers are here. This is one statement about the whole
-          briefing, so it belongs at the level where it is true — it used to be
-          repeated on every card as "Why you · <your own topic>", which meant
-          the loudest element on all ten cards was the reader's own query read
-          back to them. */}
-      {/* Two spans, not one truncating line: the topics give way, the sync
-          state never does. On a phone the whole line is 545px in 279px, and
-          a single `truncate` cut the tail — which is where 'sync failed'
-          lives, the only place the page says so now that the masthead
-          states counts and never sync. */}
-      <p className="flex min-w-0 items-center font-mono text-meta text-text-faint">
-        {topics.length > 0 && (
-          <span className="min-w-0 truncate">
-            matching <span className="text-text-muted">{topics.join(", ")}</span>
-          </span>
-        )}
-        <span className="shrink-0 whitespace-nowrap">
-          {topics.length > 0 && (
-            <span className="mx-1.5" aria-hidden>
-              ·
-            </span>
-          )}
-          {closed && (
-            <>
-              briefing closed
-              <span className="mx-1.5" aria-hidden>
-                ·
-              </span>
-            </>
-          )}
+    // One flex container, three children, two arrangements: from sm the
+    // status sits at the right of the dateline and the deck runs under both;
+    // on a phone the dateline takes the whole width (beside a 150px status
+    // cluster it broke into three lines), the deck follows, and the status
+    // closes the front on its own line at the right.
+    <header className="mt-2 md:mt-4 flex flex-wrap items-end gap-x-4">
+      {/* The date is computed on the server too; the timezones can differ
+          around midnight, and a warning would not change what is shown. */}
+      <h1
+        suppressHydrationWarning
+        className="w-full sm:w-auto sm:min-w-0 font-display font-normal text-[34px] sm:text-[40px] leading-[1.05] tracking-[-0.02em] text-heading text-balance"
+      >
+        {date}
+      </h1>
+      <div className="order-3 sm:order-none ml-auto mt-3 sm:mt-0 flex shrink-0 items-center gap-1 sm:pb-1 font-mono text-meta text-text-faint whitespace-nowrap">
           {failed ? (
             <span className="text-red">sync failed</span>
           ) : lastRefresh ? (
-            <>synced {formatTimeAgo(lastRefresh)}</>
+            <span>synced {formatTimeAgo(lastRefresh)}</span>
           ) : (
-            <>not synced yet</>
+            <span>not synced yet</span>
           )}
-        </span>
-      </p>
-      <button
-        type="button"
-        onClick={onRefresh}
-        disabled={isRefreshing}
-        aria-label="Refresh briefing"
-        title="Refresh briefing (r)"
-        className="ml-auto inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-text-faint hover:bg-bg-secondary/80 hover:text-text transition-[color,background-color,transform] duration-150 ease-snap active:scale-90 disabled:opacity-50 disabled:cursor-wait"
-      >
-        <svg
-          width="15"
-          height="15"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden
-          className={isRefreshing ? "animate-spin" : ""}
-        >
-          <path d="M21 12a9 9 0 1 1-3-6.7" />
-          <path d="M21 4v6h-6" />
-        </svg>
-      </button>
+          <button
+            type="button"
+            onClick={onRefresh}
+            disabled={isRefreshing}
+            aria-label="Refresh briefing"
+            title="Refresh briefing (r)"
+            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-text-faint hover:bg-bg-secondary/80 hover:text-text transition-[color,background-color,transform] duration-150 ease-snap active:scale-90 disabled:opacity-50 disabled:cursor-wait"
+          >
+            <svg
+              width="15"
+              height="15"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+              className={isRefreshing ? "animate-spin" : ""}
+            >
+              <path d="M21 12a9 9 0 1 1-3-6.7" />
+              <path d="M21 4v6h-6" />
+            </svg>
+          </button>
+      </div>
+      {/* Why these papers are here and how far along the day is, as one
+          sentence. It used to be repeated on every card as "Why you · <your
+          own topic>", which made the loudest element on all ten cards the
+          reader's own query read back to them. */}
+      {deck.length > 0 && (
+        // `w-full` on the paragraph, the measure on a span inside it: a
+        // max-width on the flex item itself caps its hypothetical size, and
+        // at 62ch it no longer forced a new row — it slid up beside the date.
+        <p className="order-2 sm:order-none w-full mt-3 font-display text-[19.5px] leading-[1.4] text-text-muted">
+          <span className="block max-w-[62ch] text-balance">
+            {deck.map((segment, i) => (
+              <span key={i} className={segment.tone === "heading" ? "text-heading" : undefined}>
+                {segment.text}
+              </span>
+            ))}
+          </span>
+        </p>
+      )}
     </header>
   );
 }

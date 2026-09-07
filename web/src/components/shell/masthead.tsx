@@ -35,7 +35,6 @@ import {
   mastheadCentre,
   railHasPosition,
   shellRoute,
-  type DayState,
 } from "@/lib/shell/masthead";
 
 /** Scrolled this far, the bar takes its glass. */
@@ -58,7 +57,6 @@ export function Masthead() {
   const pathname = usePathname();
   const route = shellRoute(pathname);
   const papers = useFeedStore((s) => s.papers);
-  const readItems = useFeedStore((s) => s.readItems);
   const auth = useAuthUser();
   const router = useRouter();
 
@@ -79,12 +77,7 @@ export function Masthead() {
   // The wizard is the one chrome-free route.
   if (route === "welcome") return null;
 
-  const centre = mastheadCentre(route, {
-    date: new Date(),
-    pathname,
-    papers,
-    readItems,
-  });
+  const centre = mastheadCentre(route, { pathname, papers });
   const avatar = auth.kind === "signed-in" ? userAvatar(auth.user) : null;
 
   return (
@@ -109,7 +102,6 @@ export function Masthead() {
           // utilities layer, so `[animation-duration:150ms]` lost silently.
           style={{ animationDuration: "150ms" }}
         >
-          {centre.kind === "day" && <DayLine day={centre.day} />}
           {centre.kind === "rail" && <RailLine nav={centre.nav} onBack={() => router.back()} />}
         </div>
 
@@ -153,17 +145,14 @@ export function Masthead() {
         </nav>
       </header>
 
-      {/* Phone, briefing only: the wordmark and the day line, in flow, and
-          then the page's own topics line under them. The reading page has
-          no top chrome — the plate is the first thing on screen. */}
-      {centre.kind === "day" && (
-        <div className="md:hidden px-6 pt-8">
+      {/* Phone, briefing only: the nameplate, in flow, above the page's own
+          dateline. The reading page has no top chrome — the plate is the
+          first thing on screen. */}
+      {route === "briefing" && (
+        <div className="md:hidden px-6 pt-6">
           <Link href="/" className={WORDMARK_CLASS}>
             Peer
           </Link>
-          <p className="mt-3.5 font-mono text-meta text-text-muted">
-            <DayLine day={centre.day} />
-          </p>
         </div>
       )}
     </>
@@ -172,28 +161,6 @@ export function Masthead() {
 
 function Numeral({ children }: { children: React.ReactNode }) {
   return <span className="text-heading tabular-nums">{children}</span>;
-}
-
-function DayLine({ day }: { day: DayState }) {
-  return (
-    <>
-      {/* The date is computed on the server too; the timezones can differ
-          around midnight, and a warning would not change what is shown. */}
-      <span suppressHydrationWarning>{day.date}</span>
-      {day.total !== null && (
-        <>
-          {DOT}
-          <span>
-            <Numeral>{day.total}</Numeral> paper{day.total === 1 ? "" : "s"}
-          </span>
-          {DOT}
-          <span>
-            <Numeral>{day.unread}</Numeral> unread
-          </span>
-        </>
-      )}
-    </>
-  );
 }
 
 function RailLine({ nav, onBack }: { nav: PaperNav; onBack: () => void }) {

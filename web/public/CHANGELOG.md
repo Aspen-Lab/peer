@@ -2,6 +2,25 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.14.1 — 2026-09-07
+
+The briefing opens with a dateline.
+
+The page used to start with two lines of small print — the masthead's
+"Monday, September 7 · 10 papers · 9 unread" and a mono "matching diffusion
+models, protein structure prediction · synced 4m ago": a status bar where a
+front page should be. Now the date is the headline, in serif at display size,
+and everything those lines said is one sentence of reading type under it —
+"Ten papers on diffusion models and protein structure prediction — nine
+unread." — with the unread phrase in ink, the one part that changes as the
+day is read. When everything is read it says so: "all read, back tomorrow."
+While the day loads it names what it is looking for. The sync state and the
+refresh button are the only small item, at the right of the headline,
+because they are status; a failed load is still red there.
+
+The masthead's centre is empty on the briefing, so the day is stated once.
+On a phone the nameplate sits above the dateline; the mono day line is gone.
+
 ## v0.14.0 — 2026-09-07
 
 The masthead.

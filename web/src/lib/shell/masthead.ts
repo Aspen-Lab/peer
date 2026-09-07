@@ -7,10 +7,10 @@
 // mapping here, with no DOM in it, so the three cannot drift and the mapping
 // can be tested without rendering.
 //
-// The shell states only what the store knows. Before the day's fetch lands
-// `papers` is empty — it is not persisted (store/feed.ts partialize) — so the
-// centre reads the date alone rather than "0 papers"; a count appears only
-// once there are papers to count.
+// On the briefing the centre is empty: the page opens with the date as its
+// headline and a one-sentence deck (app/page.tsx BriefingHead), so the day is
+// stated once, at display size, not again in 13.5px above it. The masthead
+// carries position only where the page cannot — on a paper.
 
 import { NONE } from "@/lib/navigation/card-focus";
 import { paperNav, type PaperNav } from "@/lib/reader/paper-nav";
@@ -80,7 +80,7 @@ export function isActiveLink(link: ShellLink, route: ShellRoute): boolean {
 
 // ── The centre cell ──
 
-/** "Sunday, September 7". A fixed locale: the server and the client must agree. */
+/** "Sunday, September 7" — the briefing's headline. A fixed locale: the server and the client must agree. */
 export function dayLine(date: Date): string {
   return date.toLocaleDateString("en-US", {
     weekday: "long",
@@ -89,50 +89,15 @@ export function dayLine(date: Date): string {
   });
 }
 
-export interface DayState {
-  date: string;
-  /** Null until the briefing has landed — never "0 papers" on a reload. */
-  total: number | null;
-  unread: number | null;
-}
-
-export function unreadCount(
-  papers: readonly { id: string }[],
-  readItems: Readonly<Record<string, true>>,
-): number {
-  return papers.filter((p) => !readItems[p.id]).length;
-}
-
-export function dayState(
-  date: Date,
-  papers: readonly { id: string }[],
-  readItems: Readonly<Record<string, true>>,
-): DayState {
-  if (papers.length === 0) return { date: dayLine(date), total: null, unread: null };
-  return {
-    date: dayLine(date),
-    total: papers.length,
-    unread: unreadCount(papers, readItems),
-  };
-}
-
-export type MastheadCentre =
-  | { kind: "day"; day: DayState }
-  | { kind: "rail"; nav: PaperNav }
-  | { kind: "empty" };
+export type MastheadCentre = { kind: "rail"; nav: PaperNav } | { kind: "empty" };
 
 export function mastheadCentre(
   route: ShellRoute,
   input: {
-    date: Date;
     pathname: string | null | undefined;
     papers: readonly { id: string }[];
-    readItems: Readonly<Record<string, true>>;
   },
 ): MastheadCentre {
-  if (route === "briefing") {
-    return { kind: "day", day: dayState(input.date, input.papers, input.readItems) };
-  }
   if (route === "paper") {
     const id = paperIdFromPathname(input.pathname) ?? "";
     return {
