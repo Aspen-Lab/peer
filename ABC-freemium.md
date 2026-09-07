@@ -11794,3 +11794,140 @@ free reader's jobs and events pool does rebuild weekly whatever the tile is show
 mirroring `looksUnderTuned` outside the tile would duplicate a predicate in two files, which is the
 class of thing this loop keeps finding as a defect. **A should decide by looking at it**, which is a
 question a fixture cannot settle.
+
+---
+
+### Round 6 — Agent A
+
+**Status: PART 1 of 3 banked.** Fixture + blocked halves. No production code changed;
+`git diff --name-only -- web/` asserted **0** files after every plant was reverted.
+
+#### 1.1 — The blocked halves, and the round's biggest non-news
+
+`grep -c "^GOOGLE_API_KEY=." web/.env.local` -> **0**. (A count, never a value; the file was never
+`cat`-ed.) The two Supabase names are **0** as well. **Nothing was unblocked.** The six blocked
+halves stand exactly as round-5 A left them, by name:
+
+| # | Requirement | Blocked half | Cause (both the owner's) |
+|---|---|---|---|
+| 1 | **R-ENT-1** | the migration's own effect — `plan`, `trial_started_at`, `trial_ends_at`, `plan_updated_at`, the `handle_new_user` trial grant, and the RLS split | the three `20260904*` migrations are unapplied |
+| 2 | **R-ENT-2** | `resolveEntitlement` against a real `profiles` row (expiry computed at read time on stored data) | same |
+| 3 | **R-METER-1** | a `usage_events` row actually written to Supabase on a live model call | same, **and** no local `GOOGLE_API_KEY` |
+| 4 | **R-METER-3** | the counters living in Supabase behind an atomic increment, surviving a cold start | the migrations are unapplied |
+| 5 | **R-KEY-1** | the system provider resolving a **real** Gemini key and returning a working provider | no local `GOOGLE_API_KEY` |
+| 6 | **R-QUOTA-2** | a trip recorded against the real store rather than the in-memory fallback | the migrations are unapplied |
+
+**`N/A`: R-METER-2** — re-listed by name with that word, Ruling 12 point 3. Operator-funded search
+rows are unreachable by construction under D2a, so the row is neither MET nor BLOCKED.
+
+**Exclusions: none.** **Denominator: 30.**
+
+**No real Supabase** — said once, and it governs every score below: the suites run on the in-memory
+fallback (R-METER-4, R-ENT-5), which is why the six halves above are blocked rather than failed.
+
+#### 1.2 — The fixture, all 30 scored
+
+| Item | Score | Evidence |
+|---|---|---|
+| R-SEC-1 | MET | figure route auth + the branded `EntitledContext` required by both matchers (compiler-enforced since 3-02) |
+| R-SEC-2 | MET | one shared entitlement check before `resolveProvider` on all eight spending routes; scan 5 = 0 |
+| R-SEC-3 | MET | body-borne `aiTier: 2` / `deepReport: true` downgraded server-side on all three feeds |
+| R-SEC-4 | MET | `dispatch-digests` pinned `aiTier: 0` with D9 named at the line |
+| R-METER-1 | **BLOCKED** (code half MET) | wrapper writes one row per provider request in the harness; the Supabase write is unprovable here |
+| R-METER-2 | **N/A** | Ruling 12 point 3 — unreachable by construction under D2a |
+| R-METER-3 | **BLOCKED** (code half MET) | the module-scope `Map` is gone and the store seam exists; the Supabase half needs the migration |
+| R-METER-4 | MET | the in-memory fallback is labelled and never selected when the Supabase env is present |
+| R-ENT-1 | **BLOCKED** | the migration file exists and is correct by reading; it has not been applied |
+| R-ENT-2 | **BLOCKED** (code half MET) | resolver unit-tested on all four plan states; a real `profiles` row is unreachable |
+| R-ENT-3 | MET | one predicate; six browser `NODE_ENV` tests gone (scan 2 = 0); summary delivered and held |
+| R-ENT-4 | MET | signed-out readers get tier-0 everywhere, no system spend — re-driven this round through `ProfileSync` PATH 1 |
+| R-ENT-5 | MET | `PEER_DEV_ENTITLEMENT` honoured only in development off Vercel; banned by the guard |
+| R-POOL-1 | MET | ISO-week key for jobs/events, local date for papers, `CACHE_KEY_VERSION` bumped |
+| R-POOL-2 | MET | refresh forces a rebuild, charged to the rebuild breaker; **and 6-03 now renders the outcome** |
+| R-POOL-3 | MET | a free reader with no Tavily key triggers no search on any key; free sources answer immediately |
+| R-KEY-1 | **BLOCKED** (code half MET) | order and the removed `NODE_ENV`/`VERCEL` gate verified; a real key is needed for the live half |
+| R-KEY-2 | MET | system provider only to authenticated **and** entitled requests |
+| R-KEY-3 | MET | D2a: no system branch, `process.env.TAVILY_API_KEY` reads in non-test source **0** |
+| R-KEY-4 | MET | `"default"` reads "Peer's AI (included)"; `welcome/completeness.ts` no longer calls it incomplete |
+| R-QUOTA-1 | MET | check + increment atomic; degraded payload + machine-readable signal; English copy; hours under a day |
+| R-QUOTA-2 | **BLOCKED** (code half MET) | trial cap, 200/day breaker and the **rebuild** breaker all behave; the real store is unreachable |
+| R-QUOTA-3 | MET | the exemption is a depth, not a transport — streamed deep counts once, streamed shallow zero |
+| R-UI-1 | MET | scan 1 = 0; the chip shows plan + AI state (see the 7-01 note in part 3 — **queued, not a defect**) |
+| R-UI-2 | MET | the "Tier 0" option is gone; the default reads "Peer's AI (included)" |
+| **R-UI-3** | **MET** — **re-scored from `PARTIAL`** | see 1.3 |
+| R-UI-4 | MET | report and digest cache keys discriminate system-AI output from no-AI output |
+| R-GUARD-1 | MET | three required names; `TAVILY_API_KEY` banned; exit 1 naming every missing and forbidden name |
+| R-GUARD-2 | MET | the message never prints a value — proved both ways against the real script in round 5 |
+| R-TEST-1 | MET | the rewritten suites plus the new ones; assertions rewritten, never deleted |
+| R-TEST-2 | MET | gate green — figures in part 3 |
+
+#### 1.3 — R-UI-3, RE-SCORED BY BEHAVIOUR: **`MET`**
+
+`PARTIAL` since Ruling 16 point 2. Scored here on renders, not on the commit. My probe was written
+from the requirement, not from C's suites (C's were read, never edited and never copied).
+
+**The unknown state is the store's own, not a hand-fed `null`.** A freshly-imported
+`useProfileStore` holds `entitlement === null`, and `partialize` writes only `profile`, so nothing
+persisted can put one back. Every "not known" case below takes its value **out of that store** and
+derives the prop with the pages' own expression (`entitlement?.effectivePlan ?? null`).
+
+Five states x three upsell surfaces, plus both whole report trees:
+
+| | QuotaNotice (exhausted **and** breaker) | TierUpgradeBlock | PoolRefreshNotice | whole Job + Event report tree |
+|---|---|---|---|---|
+| **not known** | sentence renders, **no upsell** | renders **nothing** | renders **nothing** | **0** upsell words, with and without a quota signal |
+| **known + anonymous** | — | — | *"Sign in to refresh."*, **no "Pro"** | — |
+| **known + free** | upgrade line | the $12 block | the ruled sentence + the upgrade line | — |
+| **known + trial** | upgrade line kept (they have 20 to spend) | nothing | **nothing** — they may refresh | — |
+| **known + paid** | **no upsell**, at either limit | nothing | nothing | **0** upsell words |
+
+"Upsell word" is a six-string vocabulary taken from the three surfaces' own rendered text
+(`Peer Pro`, `paid plan`, `$12/month`, `See what Pro adds`, `Add your own key`,
+`Or use your own AI key`), asserted over the full server-rendered markup of both report trees.
+
+**Every case proved able to fail, at the source, with the substitution count asserted before the
+run was read and an empty diff asserted after** (Ruling 10 point 2a/2b):
+
+| Plant | What it restored | Reddened |
+|---|---|---|
+| A | `QuotaNotice`'s pre-6-04 `exhausted && effectivePlan !== "paid"` | **2** cases |
+| B | `TierUpgradeBlock` to `!== "paid"` | **3** cases |
+| C | the store's `entitlement: ANONYMOUS_CLIENT_ENTITLEMENT` default | **5** cases |
+| D | `PoolRefreshNotice`'s not-known guard replaced by the anonymous fallback | **1** case |
+| E | both page wirings back to the capability view (`grants`) | **2** cases |
+| F | the usage row's `path` back to `"system-search"` | **2** (mine + C's gate test) |
+| G | `JobReport`'s `effectivePlan = "free"` pass-through default | **0** — see below |
+| H | `ProfileSync`'s signed-out `setEntitlement` deleted | **1** case |
+| I | both failure paths made to invent the anonymous default | **2** cases |
+
+**Nine plants, eight fired, and the ninth is the finding.** Plant G reddened **nothing**, which
+independently confirms Ruling 17 point 3: a parameter default fires on `undefined` and never on an
+explicit `null`, so no render can ever see it. **The compiler is the only evidence that reaches it**
+— and it does: with plant G applied, a call site omitting `effectivePlan` is **still** `TS2769`,
+because the guard lives in the **type annotation** (`effectivePlan: Plan | null`), not in the
+destructuring default. Recorded precisely, because "the default is gone" and "a caller cannot omit
+it" are two different claims and only the second is what R-UI-3 needs.
+
+#### 1.4 — The two removed pass-through defaults, confirmed by compile
+
+A throwaway `.tsx` probe, three call sites, run through the repo's own `tsc`:
+
+- `JobReport` with `effectivePlan` **omitted** -> **`TS2769`**
+- `EventReport` with `effectivePlan` **omitted** -> **`TS2769`**
+- **positive control:** the same `JobReport` call **with** `effectivePlan: null` -> **compiles**
+
+So the two failures are the required prop working, not the probe being broken. Probe deleted; the
+clean-tree `tsc` figure is in part 3.
+
+#### 1.5 — A's own fixture faults this round, recorded because each produced a false reading
+
+1. **The CRLF trap fired again** (Ruling 10 point 2c). Plant C's first attempt used a line-anchored
+   substitution; the tree is CRLF on disk, so it matched **0 times** and the run came back **13
+   passed**. That green was worthless. The substitution-count assertion caught it, and the
+   whitespace-tolerant retry reddened 5 cases. Same trap for plant G, same catch.
+2. **A plant that broke the file instead of changing it.** Plant D's first form also renamed the
+   destructured parameter and produced 5 failures — a number that would have read as strong
+   evidence. Re-planted minimally, it reddens exactly **1** case, which is the honest figure.
+3. **An invalid literal in my own fixture.** `source: "profile"` is not an `EntitlementSource`
+   (`"supabase" | "dev-override" | "anonymous"`). Vitest ran it happily — types are erased — and
+   only `tsc` caught it. **A probe that is never type-checked is a probe that can lie.**
