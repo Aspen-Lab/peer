@@ -96,8 +96,14 @@ async function runExtractor(pdfPath: string): Promise<ExtractorOutput | null> {
   const helperScript = resolveHelperScript();
   if (!helperScript) return null;
 
+  // macOS and most Linux images ship `python3` and no `python`; the old list
+  // tried `python` then `py -3`, so on a Mac every PDF quietly yielded null.
   const runners = [
-    { command: process.env.PYTHON_BIN || "python", args: [] as string[] },
+    ...(process.env.PYTHON_BIN
+      ? [{ command: process.env.PYTHON_BIN, args: [] as string[] }]
+      : []),
+    { command: "python3", args: [] as string[] },
+    { command: "python", args: [] as string[] },
     { command: "py", args: ["-3"] },
   ];
 

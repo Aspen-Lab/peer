@@ -2,6 +2,50 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.12.2 — 2026-09-06
+
+Full text reaches Peer again.
+
+Three of today's ten papers could not be read past their abstract for reasons
+that had nothing to do with access. Fixed on the way to the reading-surface
+work:
+
+**arXiv's own HTML.** arXiv has rendered LaTeX submissions at
+`arxiv.org/html/<id>` since late 2023, but Peer only knew ar5iv, which now
+answers recent ids with a redirect to the abstract stub. The native render is
+tried first (263 ms for a 38,000-character paper). The LaTeXML parser also
+stopped truncating any section that has subsections: it matched
+`<section>…</section>` non-greedily, so "4 Evaluation" ended at the first nested
+close and 4.4 Results and 4.5 Limitations were lost. It slices between
+consecutive headings of any level instead, and captures the abstract.
+
+**A `limitations` bucket.** Heading canonicalisation stripped one leading
+number, so "4.4 Results" became "body", and no bucket existed for the one
+section a reader most wants quoted. Numbering of every shape is stripped now,
+and Limitations / Threats to Validity / caveats have their own bucket. The
+Python PDF extractor mirrors it.
+
+**Zenodo.** A Zenodo DOI resolves to a landing page whose "Description" is long
+enough to pass the full-text check, so the record page was being read as the
+paper. The records API lists the deposited PDF; it is a source now, ranked
+above every HTML fallback, and the full-text check requires a recognisable
+body section or several long ones rather than one long block.
+
+**Macs.** The PDF extractor shelled out to `python`, then `py -3`. macOS ships
+neither — only `python3` — so every PDF on a Mac quietly yielded nothing.
+`python3` is tried first, after `PYTHON_BIN` when it is set.
+
+**Captions.** Labels read "Figure Figure1"; tables were labelled as figures;
+LaTeXML subfigure fragments — "(a) Original image", three of every four
+captions on a typical page — were emitted as captions of their own. One
+parser serves all four extractors.
+
+Verified live against real papers: arXiv 2609.02697 (HTML: 16 sections
+including Limitations, labelled captions), arXiv 2609.02113 (no HTML render;
+PDF via python3), and today's Zenodo preprint (deposited PDF: Abstract,
+Introduction, Related Work, Methodology, Results, Discussion, Conclusion).
+30 new tests.
+
 ## v0.12.1 — 2026-09-06
 
 An empty briefing says why.

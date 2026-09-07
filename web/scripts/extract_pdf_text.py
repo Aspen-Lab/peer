@@ -30,6 +30,12 @@ import fitz
 SECTION_HEADINGS = [
     "Abstract",
     "Introduction",
+    "Limitations",
+    "Threats to Validity",
+    "Evaluation",
+    "Experiments",
+    "Experimental Setup",
+    "Future Work",
     "Background",
     "Related Work",
     "Materials and Methods",
@@ -92,6 +98,13 @@ def canonicalize(heading: str) -> str:
     Example: "Materials and Methods", "Methods", "Methodology" -> "methods".
     """
     lower = heading.lower().strip()
+    # Mirrors canonicalizeHeading in web/src/lib/papers/html-text.ts: the
+    # limitations bucket is the section a reader most wants quoted, and
+    # "Evaluation"/"Experiments" hold results, not method.
+    if any(key in lower for key in ("limitation", "caveat", "threats to validity")):
+        return "limitations"
+    if lower.startswith(("evaluation", "experiments")) and "setup" not in lower:
+        return "results"
     if any(key in lower for key in ("materials and method", "experimental", "methodolog")):
         return "methods"
     if "method" in lower:
