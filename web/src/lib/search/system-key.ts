@@ -58,6 +58,25 @@
  * ordering clause runs. Both branches read the same `availability` object, so
  * gating that object closes both at once.
  *
+ * ── 5-01: D2a REMOVES THE SYSTEM BRANCH; THE GATE STAYS ──────────────────────
+ *
+ * The owner decided (D2a, Ruling 12) that **the operator never pays for search,
+ * for anyone, on any plan**. So `resolveSystemSearchKeys` is now BYOK-or-nothing:
+ * it never reads `process.env.TAVILY_API_KEY`, and `operatorSearchAvailability`
+ * answers `false` for both capabilities unconditionally.
+ *
+ * **What did NOT go, and must not (Ruling 13 point 3).** `systemSearchAllowed`
+ * stays on the input, because it is the ONLY gate on the Brave env read below.
+ * With the Tavily branch gone the field *looks* dead; deleting it would re-open
+ * `BRAVE_SEARCH_API_KEY` as an unconditional operator-funded read on any
+ * self-host or developer machine — verbatim the hole 2-04 closed, and Ruling 5
+ * point 2's reason still holds: a ban on Vercel is not a gate on a self-host.
+ * The protective test for exactly this lives in `system-key.test.ts`.
+ *
+ * `provenance: "system"` and `isOperatorFundedSearch`'s `=== "system"` test stay
+ * in the code as unreachable arms — Ruling 12 point 2's "wired to a hard `false`,
+ * not deleted", so reversing the decision is one constant rather than a rebuild.
+ *
  * ── WHAT IS DELIBERATELY *NOT* HERE ──────────────────────────────────────────
  *
  * **Adzuna, JSearch and USAJobs** (Ruling 6 point 4). They read
@@ -70,15 +89,18 @@
  * same round.
  */
 
-import { isGeminiSearchAvailable } from "@/lib/sources/gemini-search";
-import { isVertexSearchAvailable } from "@/lib/sources/vertex-search";
-
 export interface SystemSearchKeyInput {
   /** The user's own Tavily key, from `query.webSearch.tavilyApiKey`. */
   requestTavilyKey?: string;
   /**
    * From `entitlement.systemSearchAllowed` — never from a request body, and
-   * never defaulted to `true`. D2: trial and paid only.
+   * never defaulted to `true`.
+   *
+   * **5-01 / Ruling 13 point 3 — DO NOT DELETE THIS FIELD.** Under D2a it is
+   * permanently `false` (see `entitlement/resolve.ts`), which makes it look
+   * unused now that the system Tavily branch has gone. It is not: it is the one
+   * and only gate on the `BRAVE_SEARCH_API_KEY` read below. Removing it re-opens
+   * the hole 2-04 closed.
    */
   systemSearchAllowed: boolean;
 }
@@ -96,6 +118,10 @@ export interface SystemSearchKeys {
    * the keys are resolved, which reverses the call order at all three adapters.
    * `isOperatorFundedSearch` below mixes the two facts at the one point of use
    * instead.
+   *
+   * **5-01 · D2a — `"system"` is now unreachable** and is kept on purpose
+   * (Ruling 12 point 2). Nothing produces it; the arm stays so that reversing
+   * D2a restores one branch rather than a type.
    */
   provenance: "byok" | "system" | "none";
 }
@@ -117,9 +143,15 @@ export function resolveSystemSearchKeys(
   if (requestTavilyKey) {
     return { tavily: requestTavilyKey, brave, provenance: "byok" };
   }
-  if (input.systemSearchAllowed && process.env.TAVILY_API_KEY) {
-    return { tavily: process.env.TAVILY_API_KEY, brave, provenance: "system" };
-  }
+  // 5-01 · D2a (Ruling 12) — the system Tavily branch used to sit here:
+  //   if (input.systemSearchAllowed && process.env.TAVILY_API_KEY) {
+  //     return { tavily: process.env.TAVILY_API_KEY, ..., provenance: "system" };
+  //   }
+  // The operator now funds no search for anyone, so there is no server key to
+  // fall through to. A reader with no key of their own gets `"none"`, which is
+  // the honest answer this file already served them: `resolveSearchProvider`
+  // returns `null`, `fetchImpl` returns `[]`, and the pipeline answers 200 from
+  // the free structured sources. No error branch belongs here.
   return { brave, provenance: "none" };
 }
 
@@ -135,16 +167,21 @@ export function resolveSystemSearchKeys(
  * Three copies of `systemSearchAllowed && isXAvailable()` at three adapters is
  * how the fourth call site forgets; this is the one copy.
  */
-export function operatorSearchAvailability(input: {
-  systemSearchAllowed: boolean;
-}): { geminiAvailable: boolean; vertexAvailable: boolean } {
-  if (!input.systemSearchAllowed) {
-    return { geminiAvailable: false, vertexAvailable: false };
-  }
-  return {
-    geminiAvailable: isGeminiSearchAvailable(),
-    vertexAvailable: isVertexSearchAvailable(),
-  };
+export function operatorSearchAvailability(
+  // The parameter is deliberately unread. It stays so that all three adapters
+  // keep their call shape and so that restoring D2 is one edit in this body
+  // rather than four at the call sites (Ruling 12 point 2).
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _input: { systemSearchAllowed: boolean },
+): { geminiAvailable: boolean; vertexAvailable: boolean } {
+  // ABC-freemium 5-01 · D2a (Ruling 12) — FROZEN FALSE, unconditionally.
+  //
+  // Vertex AI Search and Gemini grounding are operator-funded capabilities, and
+  // D2a says the operator funds no search for anyone on any plan. So this no
+  // longer asks the environment whether a project is configured: the answer is
+  // "no" even on a machine where one is. The parameter stays so that every call
+  // site keeps its shape and re-enabling the decision is one edit here, not four.
+  return { geminiAvailable: false, vertexAvailable: false };
 }
 
 /**
@@ -156,6 +193,13 @@ export function operatorSearchAvailability(input: {
  * path to any of them (`searchConnectors` carries only a Tavily key, and
  * `SystemSearchKeys` has no Brave request field). Tavily is the only provider
  * with two possible payers, which is what `provenance` records.
+ *
+ * **5-01 · D2a — this function now always answers `false` in practice.** Tavily
+ * can only be `"byok"` or `"none"`, and the other three providers can no longer
+ * be reached at all: `operatorSearchAvailability` is frozen `false` and Brave is
+ * gated on a flag that is permanently `false`. The `=== "system"` test and the
+ * `true` fall-through are kept as the reversal seam (Ruling 12 point 2), not
+ * because either can fire.
  */
 export function isOperatorFundedSearch(
   provider: "tavily" | "brave" | "vertex" | "gemini",

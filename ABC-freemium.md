@@ -9687,3 +9687,93 @@ compiler or lint error at any point means something outside this guide went wron
 an asserted empty diff, and `git status --porcelain --untracked-files=all` is clean of scaffolds.
 Two items carry `POLICY — manager decides`: the Group-B RULING 75 collateral (5-04 iii) and the
 still-reachable search breaker (5-04 vii).
+
+---
+
+### Round 5 — Agent C
+
+**Working B's guide 5-01 … 5-04 in order, with Ruling 13 folded in. One commit per item, each
+pushed as it finished. Cold gate before the first edit: `tsc` exit **0** · `eslint` **1 error, 0
+warnings** (the standing `quiz.tsx:46`) · `vitest` **124 files passed | 1 skipped (125)** ·
+**2859 tests passed | 1 skipped (2860)**, **0 failed**, 9.77 s — identical to §1's baseline.**
+
+**ONE DEVIATION FROM B'S FILING, traced before taking it, and it changes no work and no order.**
+B's 5-04 is a *census* of all 28 changed cases across 9 files. I am filing each case with the item
+whose source change causes it where B's own item entry already names it — `system-key.test.ts` in
+5-01, `resolve.test.ts` in 5-02, `assert-byok-production-env.test.ts` in 5-03 — and 5-04 does the
+rest (the six adapter/route/scan files) plus the three new standing tallies. Reason: B's items name
+those tests themselves, a red case attributes better next to the line that reddened it, and it
+shortens the window in which the tree is red. **The order 5-01 → 5-02 → 5-03 → 5-04 is unchanged
+and every case in B's table is still accounted for**; the table is used as the checklist it is.
+
+---
+
+#### 5-01 — the search-key resolver · LANDED
+
+**Source, `web/src/lib/search/system-key.ts`.** Three changes, exactly B's fix direction:
+
+1. **The system Tavily branch is gone** (B's `120–122`). `resolveSystemSearchKeys` is now
+   BYOK-or-nothing and `process.env.TAVILY_API_KEY` is not read anywhere in the file. The deleted
+   branch is preserved **as a comment at the line it occupied**, naming D2a, so the reversal is
+   visible rather than archaeological.
+2. **`operatorSearchAvailability` is frozen `false`** for both capabilities, unconditionally, with
+   D2a named. It no longer asks the environment at all.
+3. **The two capability imports are deleted**, as B measured they must be — `isGeminiSearchAvailable`
+   / `isVertexSearchAvailable` are unreferenced once (2) lands, and `eslint` fails on an unused
+   import. This is what drops `spend-scans` scan 3's availability-helper expectation to the two
+   owning modules (5-04).
+
+**KEPT, per Ruling 13 point 3, and now defended by a test rather than by a comment.**
+`SystemSearchKeyInput.systemSearchAllowed` stays — it is the only gate on the `BRAVE_SEARCH_API_KEY`
+read. Its docblock now carries a **DO NOT DELETE THIS FIELD** paragraph saying why in the field's own
+comment, where a tidy-up would be typed. `provenance: "system"` and `isOperatorFundedSearch`'s
+`=== "system"` arm are likewise kept and now documented as deliberately unreachable (Ruling 12
+point 2).
+
+**One compile detail B did not hit, recorded because it is a trap for the next editor.** Freezing
+`operatorSearchAvailability` leaves its parameter unread, and this repo's `eslint` config carries
+`@typescript-eslint/no-unused-vars` at **`warn` with default options** — no `argsIgnorePattern` — so
+renaming it `_input` still emits a **warning**, and the gate's baseline is `1 error, **0 warnings**`.
+A warning would therefore have read as a regression. Resolved with an explicit
+`// eslint-disable-next-line @typescript-eslint/no-unused-vars` plus a sentence saying the parameter
+is kept so the three call sites keep their shape (precedent: eight existing disables in `src/`).
+**Do not "fix" this by widening the eslint config.**
+
+**Tests, `web/src/lib/search/system-key.test.ts` — 1 rewritten, 2 added, 0 deleted.**
+
+- **Rewritten:** `"gives an entitled request the operator's key"` →
+  `"gives even an 'entitled' request nothing — the operator funds no search"`. Same inputs
+  (`TAVILY_API_KEY` armed, `systemSearchAllowed: true`), the assertion inverted to
+  `{ tavily: undefined, brave: undefined, provenance: "none" }`. The comment names 5-01 and D2a and
+  keeps the old expectation verbatim. Note what it proves that the flag alone would not: the key is
+  refused **even when the flag arrives `true`**, so the closure is the removed branch, not only
+  5-02's constant.
+- **Added — the Ruling 13 point 3 protective test:**
+  `"withholds Brave when systemSearchAllowed is false, however the env is set"`.
+- **Added:** `"operatorSearchAvailability is frozen false for both capabilities, whatever the flag
+  says"`, with all four `GOOGLE_VERTEX_*` / `GOOGLE_API_KEY` names armed so the assertion is about
+  the freeze and not about an empty environment.
+
+**PROOF THAT THE NEW TESTS TEST THE FIX (Ruling 10 point 2a).** Source reverted with
+`git checkout -- src/lib/search/system-key.ts`; **the revert was asserted before the run** —
+`git diff --stat` over both paths listed **only the test file** (`58 insertions, 4 deletions`), so the
+source was provably back at `HEAD`. Result: **2 failed | 7 passed**, the two that must —
+the inverted resolver case and the frozen-availability case.
+
+**PROOF OF THE PROTECTIVE TEST BY PLANTING THE OFFENDER (Ruling 10 point 2b).** A revert cannot
+prove it: the field gated Brave before 5-01 too, so the case passes against the old source. The
+offender it exists to catch is the *tidy-up*, so that is what I planted — the gate removed from the
+Brave env read (`const brave = process.env.BRAVE_SEARCH_API_KEY || undefined;`), the plant confirmed
+present by grep before the run. Result: **3 failed | 6 passed** — the new protective case plus the
+two 2-04 cases it stands beside. Plant removed, re-run **9 passed | 9**.
+
+**GATE AFTER 5-01 — RED BY DESIGN, and the number is B's number.** `tsc` exit **0** · `eslint`
+**1 error, 0 warnings** (the standing `quiz.tsx:46`) · `vitest` **6 files failed | 118 passed |
+1 skipped (125)** · **20 failed | 2841 passed | 1 skipped (2862)**. B measured stage 5-01 at
+**21 failures in 7 files**; `system-key.test.ts`'s 1 case is fixed inside this commit, leaving
+**20 in 6 files** — exact agreement, file for file and case for case, with B's table. `tsc` and
+`eslint` are unmoved, which is the guide's stated signal that nothing outside it went wrong.
+Test total rises 2860 → 2862 (two added, none deleted).
+
+`git status --porcelain --untracked-files=all` shows only the two files above; the editing scaffold
+lives outside the repo.
