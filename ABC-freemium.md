@@ -10855,3 +10855,224 @@ the source file drags **no test-file rename** with it. `search-breaker.ts:44` re
 `FORCED_REBUILDS_PER_DAY` from `counters.ts`, which is why `jobweb.test.ts` imports the constant
 through the breaker module rather than from `counters` directly — that indirection is real and must
 survive the rename.
+
+---
+
+#### 6-03 — the refresh control refuses silently · `MISSING`
+
+**Classification: `MISSING`.** The server side is correct and round-5 A proved it; nothing renders
+the outcome. There is no wrong value on screen — there is **no value on screen**, which is why a
+free reader cannot tell a refusal from a refresh that happened to return the same pool.
+
+I confirmed round-5 A's central grep independently before building on it:
+`grep -rn "poolRefreshAllowed" --include=*.tsx src/` returns **0**. The field reaches no component.
+It does, however, already reach the **page** — see the seam below. Those are different claims and
+the difference is the whole item.
+
+##### 1. Where the plan already reaches the page — the seam exists; nothing needs a new prop
+
+`src/app/page.tsx:502` — `const entitlement = useProfileStore((state) => state.entitlement);` —
+sits inside `DiscoveryPage`, **the same component** that declares `refreshOpportunityPool` at
+`:179-181` and renders `<FeedMoreTile>` at `:1278-1287`. It is currently consumed only for
+`feedsUseAi` (`:503`) and the AI-mode chip (`:507-511`).
+
+`poolRefreshAllowed` is a field on `ClientEntitlement` (`entitlement/allowance.ts:137`; type at
+`entitlement/types.ts:67`), so it is **already in that object, already on that page, already in that
+component**. 3-01's one-prop treatment is not needed here: the three report pages needed prop
+drilling because `QuotaNotice` renders deep inside `JobReport` / `EventReport` and those trees are
+rendered in tests with no store, which is why `QuotaNotice` takes `effectivePlan` as a **required
+prop** rather than reading the store (`quota-notice.tsx:56-64`). The refresh control has no such
+distance: page and control are in the same function body.
+
+**Seam, stated plainly:** the notice is rendered by `DiscoveryPage` next to the tile, and it reads
+`entitlement` at `page.tsx:502`. If C instead wants the tile itself to own the message, the seam is
+`FeedMoreTileProps` (`components/cards/feed-more-tile.tsx:12-17` — currently `itemCount`, `topics`,
+`onRefresh?`, `isLoading?`, **no plan field**), fed from `page.tsx:1278-1287`. I recommend the first:
+see the trap in section 3b.
+
+##### 2. What the refresh does today, end to end — and why the response cannot be keyed on
+
+| Step | File:line | What happens |
+|---|---|---|
+| click | `components/cards/feed-more-tile.tsx:109-121` | `<button onClick={onRefresh} disabled={isLoading}>` |
+| wired | `app/page.tsx:1281-1285` | `onRefresh={activeType === "papers" ? refreshFeed : refreshOpportunityPool}` |
+| handler | `app/page.tsx:179-181` | `loadFeed({ advanceHistory: true, poolRefresh: true })` |
+| option | `store/feed.ts:586`, read `:716` | `FeedLoadOptions.poolRefresh` |
+| body | `store/feed.ts:424` | `poolRefresh: poolRefresh || undefined` |
+| POST | `store/feed.ts:437` / `:475` | `/api/events/feed` · `/api/jobs/feed` |
+| **decision** | `api/jobs/feed/route.ts:201` · `api/events/feed/route.ts:183` | `poolRefresh: body.poolRefresh === true && entitlement.poolRefreshAllowed` |
+| second gate | `jobs/pipeline.ts:256-259` · `events/pipeline.ts:273-276` | the daily breaker |
+| response | `api/jobs/feed/route.ts:204` · `api/events/feed/route.ts:186` | one unconditional `NextResponse.json(result, …)` |
+
+**The refused and granted responses are the same shape, and nothing in the body marks the refusal.**
+I read the returned object myself: `jobs/pipeline.ts:358-378` returns `{ items, pool, facetCounts,
+meta }` where `meta` is `{ fetched, errors, beforeDedup, afterDedup, beforeScoreFloor,
+afterScoreFloor, returned, latencyMs, generatedAt }`. **`cacheHit` is computed but never exposed** —
+it exists on the internal pool object (`jobs/pipeline.ts:310`, `events/pipeline.ts:330`, originating
+at `opportunities/pool-cache.ts:222`) and is dropped at the response boundary. There is no status
+difference either: a refused free user gets **200** with the cached pool, asserted at
+`api/jobs/feed/route.test.ts:320-331`.
+
+The only field that could differ at all is `generatedAt`, and it is not a signal — the client would
+have to remember the previous value, and a granted rebuild that returns the same content still moves
+it. **So the ruling's "never on the refusal" is not merely policy here; it is the only thing
+available.** That is a good property and C must not "improve" it: **do not add a `refused` flag to
+the response.** A flag would immediately become the thing a future component keys on, which is the
+Ruling 8 hole this item is closing.
+
+##### 3. Which component renders the message — RECOMMENDATION: a sibling, not `QuotaNotice`, not a variant
+
+**`QuotaNotice` cannot be reused as-is, and I read it rather than assuming.** Three of its four
+visible strings are hard-wired to deep reports:
+
+- `quota-notice.tsx:108` — the heading is a literal `"Deep reports"` / `"Deep reports unavailable"`.
+  Not a prop.
+- `:111` — the body is `quotaMessage(quota)`, and **all three** of that function's branches are
+  deep-report sentences (`deep-report-quota.ts:100-112`).
+- `:115` — the upsell reads *"Peer Pro lifts the **monthly** limit."* The refresh cadence is
+  **weekly**, so this sentence is wrong on this surface.
+
+And its data contract does not fit. `QuotaSignal` (`deep-report-quota.ts:59-86`) requires
+`kind: "deep_report" | "breaker"`, `reason: "exhausted" | "unavailable"`, `remaining: number`, and
+`resetsAt: string`. A refresh refusal has **no honest value** for `kind`, `remaining` or `resetsAt`,
+and the `reason` docblock at `:78-81` states the vocabulary is *"two values and stays two"*.
+Rendering 6-03 through `QuotaNotice` therefore means fabricating a signal **and** printing the
+heading "Deep reports" over a message about pool refresh. That is precisely the brief's *"reusing a
+component whose props do not fit"*, and it is the worse cost.
+
+**A variant prop is worse still.** `QuotaNotice`'s value is that it is hard to misuse: `effectivePlan`
+is **required with no default**, on purpose, because a `"free"` default would fail *open* on the very
+property it exists to protect (`:61-64`), and its docblock at `:49-54` records what happened the last
+time one flag drove two jobs — a paid reader got a silently retitled heading. Adding a `mode` or a
+`heading` prop turns a narrow, provably-safe component into a generic box and re-opens that.
+
+**Recommendation: a sibling component** — one small client component beside the tile (a natural home
+is `src/components/cards/`, next to `feed-more-tile.tsx`), taking exactly what it needs. It should
+copy `QuotaNotice`'s *presentation* — the same `<aside>` shell and classes at `:101-106`, the same
+`REPORT_LABEL_STEP` label style, the same `data-testid` discipline — and **none** of its logic. If C
+wants to avoid duplicating the shell, extracting that `<aside>` chrome into a tiny presentational
+wrapper both components use is cheap and honest; the two predicates stay separate. Cost: one small
+file. That is less than the cost of either widening `QuotaNotice` or lying in a `QuotaSignal`.
+
+**3b. A trap C will hit if the notice lives inside `FeedMoreTile`.** That tile serves **both**
+surfaces — `page.tsx:1281-1285` gives it `refreshFeed` for papers and `refreshOpportunityPool` for
+jobs and events. Papers refresh is a **plain refetch and is not a paid feature** (D3 keeps that pool
+daily; `pool-cache.ts:152-168`; `page.tsx:177` says so). A notice keyed on the tile alone would tell
+a free reader on the **Papers tab** that refresh is paid, which is false. The notice must be gated on
+`activeType !== "papers"` as well as on the plan. Rendering it from `DiscoveryPage`, where
+`activeType` already lives, is why I recommend that placement.
+
+**3c. The tile's label is not always "Refresh now".** `feed-more-tile.tsx` has three branches: the
+`underTuned` branch renders a `Link` to `/profile` and **no refresh button at all** (`:60`); the
+`sparse` branch renders **"Refresh now"** (`:64`); the default branch renders **"Refresh"** (`:68`).
+The ruled sentence quotes the label *"Refresh now"*, so on the default branch the message will name a
+button that says "Refresh". The ruled copy is the manager's and I am not changing it — recording the
+mismatch so C is not surprised and the manager can adjust one word if they want to. Also note the
+tile only renders when `opportunityPage.remaining === 0 && !isSearchMode` (`page.tsx:1272, :1277`),
+so this control is not always on screen.
+
+##### 4. Trial readers — entitled, and the obvious predicate gets them WRONG
+
+**A trial reader IS entitled to refresh, confirmed by reading the entitlement.**
+`entitlement/resolve.ts:139` — `poolRefreshAllowed: effectivePlan !== "free"` — with the comment at
+`:135-138` recording that it reads `effectivePlan` on purpose so an expired trial loses refresh the
+moment it expires. Asserted per plan in `entitlement/resolve.test.ts`: anonymous `false` (`:44`),
+**live trial `true` (`:66`)**, expired trial `false` (`:84`), paid `true` (`:104`).
+
+**This is where Ruling 15 point 2(b) has a trap in it, and I proved it in a throwaway harness outside
+the repo** (`node`, seven client states × three candidate predicates; harness deleted, never in the
+tree). The ruling says *"key it on the plan from the client entitlement summary"*. The most natural
+reading of "the plan" is `effectivePlan`, which is also the field `QuotaNotice` itself uses at
+`:98`. Measured:
+
+| Candidate predicate | Upsells someone the server actually serves? |
+|---|---|
+| `effectivePlan !== "paid"` — the `QuotaNotice` predicate | **3 violations** — upsells every **live trial** reader, and every reader mid-hydration |
+| `!poolRefreshAllowed` | **2 violations** — trial is now correct, but a **paid** reader mid-hydration is still upsold |
+| `!poolRefreshAllowed && source !== "anonymous"` | **0 violations** across all seven states |
+
+**(a) `effectivePlan !== "paid"` tells a trial reader that refresh is paid while the server grants
+their refresh.** Ruling 8 scopes the *deep-report* prompt to free **and** trial because a trial reader
+has 20 reports to exhaust — that reasoning does not carry here, because a trial reader is **not**
+refresh-limited. The correct field is `poolRefreshAllowed`, which is plan-derived and lives on the
+client entitlement summary, so it honours the ruling's intent exactly while its literal wording does
+not. **This is a correction to Ruling 15 point 2(b), not a reversal of it.**
+
+**(b) The hydration window upsells a PAID reader, which Ruling 8 forbids outright.**
+`store/profile.ts:354` initialises `entitlement: ANONYMOUS_CLIENT_ENTITLEMENT`, and that frozen
+object (`allowance.ts:153-164`) is `plan: "free"`, `effectivePlan: "free"`,
+`poolRefreshAllowed: false`, `source: "anonymous"`. The real value arrives only when
+`components/profile-sync.tsx` finishes `GET /api/profile`. **Until then every reader looks free on
+the client — including a paid one — while the server, which is authoritative, still grants their
+refresh.** A paid reader clicking in that window would be served *and* told to upgrade, on screen, at
+the same time. The window is short and needs a scroll to the tile, but Ruling 8 is absolute and the
+guard costs one clause.
+
+**The guard:** also require `entitlement.source !== "anonymous"` — `source` is exactly the "where did
+this come from" field (`allowance.ts:140`, values `"supabase" | "dev-override" | "anonymous"`).
+`entitlement.userId !== null` is equivalent for this purpose and either is defensible; `source` says
+what is meant.
+
+**So the recommended predicate is:**
+`!entitlement.poolRefreshAllowed && entitlement.source !== "anonymous" && activeType !== "papers"`.
+
+##### 5. What the free reader sees, and what the field shows when every candidate is rejected
+
+**Nothing is broken — the pool is explained, not repaired.** After the notice renders, the free
+reader still has the complete pool that was already on screen: the same items, the same facets, a
+**200**, and no error state. It is not stale in any sense the product promises — I verified the
+cadence rather than trusting the copy. `opportunities/pool-cache.ts:152-168`: `derivePoolCacheKey`
+uses `localIsoWeek(input.now)` for jobs and events and `localCalendarDate` for papers, so **jobs and
+events genuinely rebuild once a week**. The ruled sentence *"Your jobs and events refresh once a
+week"* is **factually true**, checked against the key that decides it.
+
+Two honest footnotes on that sentence, neither a defect: the period is a **local** ISO week, not a
+fixed server day, so the sentence correctly promises a cadence and not a day; and a free reader who
+**changes their topics** mid-week still gets a rebuild, because the topics are inside the cache
+signature (`pool-cache.ts:162-165`, and D3 calls that "their quota to spend"). So "once a week" is
+true of the refresh button, which is what the sentence is about.
+
+**What the field shows when every candidate is rejected — the residual, stated:** a **signed-out**
+reader. `ANONYMOUS_CLIENT_ENTITLEMENT` is what a logged-out reader legitimately holds, so the
+hydration guard in 4(b) also silences the notice for them, and their click stays exactly the silent
+no-op this item exists to remove. I recommend **accepting** that for now rather than blocking C:
+they cannot upgrade without an account, so an upgrade prompt is the wrong sentence for them, and
+silence is the status quo rather than a new regression. The better answer is a sign-in prompt instead
+of an upgrade prompt — which is new copy and therefore the owner's call.
+**`POLICY — manager decides`: what a signed-out reader is told when they click refresh.**
+
+##### Tests at risk, by grepping callers, and the blast radius
+
+**Blast radius: additive, and small.** No production behaviour changes — no route, no pipeline, no
+entitlement, no counter. The server already refuses correctly; 6-03 adds a render.
+
+- **No test exists to break on the client path.** Grepped: no test file anywhere under `web/`
+  mentions `refreshOpportunityPool`, `FeedMoreTile` or the string `"Refresh now"`.
+  `store/feed.test.ts` calls `loadFeed()` at `:198`, `:284`, `:342`, `:343` and
+  `loadFeed({ advanceHistory: true })` at `:295` — **never with `poolRefresh`**.
+  `store/feed-request-body.test.ts` always calls `opportunityRequestBody(profile, surface, [])` with
+  the three-argument form (`:47`, `:48`, `:71`, `:105`, `:106`), so `feed.ts:424`'s
+  `poolRefresh: poolRefresh || undefined` **has never been exercised with `true`**. C should add that
+  case while here — it is one line and it is currently unmeasured.
+- **`quota-notice.test.tsx` must not be widened to cover the new component.** Its 3-01 suite
+  (`:115-183`) is the protective test for "a paid reader is never upsold"; the sibling needs **its
+  own** paid-and-trial cases, including a **mid-hydration** case driving
+  `ANONYMOUS_CLIENT_ENTITLEMENT` directly and asserting **no upsell**. That case is the one that
+  proves 4(b), and per Ruling 10 point 2b it must be proved by planting the offending predicate
+  (`effectivePlan !== "paid"`) and watching it fail.
+- Existing server-side coverage stays valid and untouched: `api/jobs/feed/route.test.ts:320-331`
+  (free refused, still 200) and `:333-345` (paid charged exactly one), and
+  `opportunities/pool-refresh-gates.test.ts:88-163` (five gate cases).
+- **A new tally, proved able to fail (Ruling 14 point 5).** If A adds "readers shown the refresh
+  upsell who are entitled to refresh (must be 0)", it must be sourced from a **render** with a live
+  trial entitlement and from a **mid-hydration** anonymous-default entitlement — not from the
+  entitlement unit tests, which would pass no matter what the component does and would be vacuous in
+  exactly the way Ruling 14 point 4 retired.
+
+##### Where I looked for anything half-built, and found nothing
+
+No existing refresh-notice component, no dead `poolRefreshAllowed` prop threaded partway, no
+commented-out notice: `poolRefreshAllowed` has **19 mentions in the tree and 0 in any `.tsx`**, and
+the only client-side mention anywhere is a docblock at `store/feed.ts:582` explaining that the field
+is the route's business, not the client's. `FeedMoreTileProps` has never carried a plan field. The
+work is genuinely new.
