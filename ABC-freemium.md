@@ -118,10 +118,13 @@ lock by rebasing onto the holder's head.
 ## §1. CURRENT STATE — THE SOURCE OF TRUTH
 
 ```
-HELD BY:          C-round6 @ 2026-09-07 18:10 UTC
+HELD BY:          free
 ROUND:            6
 WHOSE TURN:       C  (round 6: implement 6-01 then 6-03; 6-02 still awaits the owner)
-STOPPED BECAUSE:  finished the turn @ 2026-09-07 18:05 UTC — both items written, gate green, no code changed
+STOPPED BECAUSE:  blocked: round-6 C died before doing any work - API unreachable (ENOTFOUND),
+                  not a credit limit. Lock claimed at 18:10 UTC, zero commits beyond the claim,
+                  working tree clean. Manager observed the death and released the lock rather
+                  than waiting out the 2-hour staleness window. C restarts from 6-04.
 STATUS:           ROUND 6 — **B HAS WRITTEN THE GUIDE. TWO ITEMS, 6-01 and 6-03**, one commit each,
                   each pushed as it finished; no code changed and `git diff HEAD -- web/` is
                   **empty**, asserted, with `git status --porcelain --untracked-files=all` clean.
