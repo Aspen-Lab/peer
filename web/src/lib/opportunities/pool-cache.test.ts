@@ -28,8 +28,28 @@ describe("daily opportunity pool cache key", () => {
 
     expect(reordered).toBe(first);
     expect(first).toMatch(
-      /^peer-pool-v3-events-2026-07-27-[a-f0-9]{32}$/,
+      /^peer-pool-v5-events-2026-07-27-[a-f0-9]{32}$/,
     );
+  });
+
+  it("ignores aiTier on surfaces that never send it", () => {
+    // `aiTier` exists for the papers pool, whose Tier-2 entry carries an LLM
+    // ranking a Tier-0 entry does not. Events and jobs pass it as undefined,
+    // and an undefined field must not perturb their keys.
+    expect(derivePoolCacheKey({ ...base, aiTier: undefined })).toBe(
+      derivePoolCacheKey(base),
+    );
+  });
+
+  it("gives each papers AI tier its own pool", () => {
+    const papers: PoolCacheKeyInput = { ...base, surface: "papers" };
+    const keys = [
+      derivePoolCacheKey({ ...papers, aiTier: 0 }),
+      derivePoolCacheKey({ ...papers, aiTier: 1 }),
+      derivePoolCacheKey({ ...papers, aiTier: 2 }),
+    ];
+
+    expect(new Set(keys).size).toBe(keys.length);
   });
 
   it("changes for every profile dimension, surface, and local date", () => {

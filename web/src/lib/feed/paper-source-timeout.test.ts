@@ -24,6 +24,19 @@ import { withSourceTimeout } from "@/lib/opportunities/shared";
 import { GEMINI_SOURCE_TIMEOUT_MS } from "@/lib/sources/gemini-search";
 import { bySourceId, webSearch } from "@/lib/sources";
 import type { RawItem } from "@/lib/sources/types";
+import type { CachedPool, PoolCache } from "@/lib/opportunities/pool-cache";
+
+class MemoryPoolCache implements PoolCache {
+  private readonly values = new Map<string, CachedPool>();
+
+  async get(key: string): Promise<CachedPool | null> {
+    return this.values.get(key) ?? null;
+  }
+
+  async set(key: string, pool: CachedPool): Promise<void> {
+    this.values.set(key, pool);
+  }
+}
 
 const paper: RawItem = {
   id: "openalex:timeout-probe",
@@ -64,6 +77,7 @@ describe("RULING 79c — the papers web source gets the gemini budget", () => {
   async function run(connectors: Record<string, unknown> | undefined) {
     bySourceId.openalex.fetch = vi.fn(async () => [paper]);
     webSearch.fetch = vi.fn(async () => []);
+    withSourceTimeoutSpy.mockReset();
     await runFeedPipeline(
       {
         topics: ["molten salt"],
@@ -71,7 +85,11 @@ describe("RULING 79c — the papers web source gets the gemini budget", () => {
         aiTier: 0 as const,
         ...(connectors ? { searchConnectors: connectors } : {}),
       } as Parameters<typeof runFeedPipeline>[0],
-      { now: new Date(2026, 7, 18, 9, 0) },
+      // A private cache per run. The daily pool would otherwise serve the
+      // second call of a comparison from the first call's entry, and a
+      // cache hit reaches no source at all — the assertion would pass by
+      // measuring nothing.
+      { now: new Date(2026, 7, 18, 9, 0), cache: new MemoryPoolCache() },
     );
     return new Map<string, number | undefined>(
       withSourceTimeoutSpy.mock.calls.map(
@@ -90,12 +108,19 @@ describe("RULING 79c — the papers web source gets the gemini budget", () => {
     expect(budgets.get("openalex")).toBeUndefined();
   });
 
-  it("does NOT raise the wall for the tavily provider", async () => {
-    // Ruling 75 suspended the quota-capped providers, but the branch survives
-    // and the raise was priced on GEMINI's measured latency alone. Nothing here
-    // makes a banned call — the source fetch is stubbed.
-    const budgets = await run({ tavily: { enabled: true, apiKey: "test-key" } });
-    expect(budgets.get("web")).toBeUndefined();
+  it("is unaffected by the Tavily connector, because papers never use it", async () => {
+    // THIS TEST USED TO ASSERT THE OPPOSITE, and the change of premise is the
+    // point: a Tavily key once selected a Tavily provider for this source and
+    // kept it on the 8 s default. The paper surface no longer spends the
+    // user's Tavily quota anywhere, so an enabled connector must now be
+    // indistinguishable from no connector at all.
+    vi.stubEnv("GOOGLE_VERTEX_PROJECT", "some-project");
+    const withTavily = await run({
+      tavily: { enabled: true, apiKey: "test-key" },
+    });
+    const without = await run(undefined);
+    expect([...withTavily.entries()]).toEqual([...without.entries()]);
+    expect(withTavily.get("web")).toBe(GEMINI_SOURCE_TIMEOUT_MS);
   });
 
   it("does not raise the wall when no Vertex project is configured", async () => {

@@ -65,12 +65,6 @@ export interface FeedMeta {
   searchBrief?: SearchBrief;
   aiTierUsed?: 0 | 1 | 2;
   llmProviderUsed?: ProviderOverrideConfig["provider"] | "default" | null;
-  connectorStats?: {
-    tavily?: {
-      results: number;
-      queryBoosts: number;
-    };
-  };
 }
 
 export interface FeedResponse {

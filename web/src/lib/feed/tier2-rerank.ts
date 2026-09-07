@@ -8,13 +8,64 @@ interface RerankResponse {
   reasons?: Record<string, string>;
 }
 
+export interface Tier2RerankResult {
+  items: ScoredItem[];
+  /** Best-first ids. Empty when the rerank did not run or did not parse. */
+  orderedIds: string[];
+  /** Written reasons by id. Empty when the rerank did not run. */
+  reasons: Record<string, string>;
+}
+
+const EMPTY_REASONS: Record<string, string> = {};
+
+/**
+ * Apply a Tier-2 ranking to a scored pool. Pure, local and free — split out of
+ * `applyTier2Rerank` so the daily paper pool can REPLAY a stored ranking onto
+ * freshly re-scored items instead of paying an LLM for the same answer again.
+ *
+ * The pool is cached with preference-neutral scores, so the boost has to be
+ * re-applied on every read rather than baked in once at build time; doing it
+ * here keeps the two paths using literally the same arithmetic.
+ */
+export function applyRerankOrder(
+  items: ScoredItem[],
+  orderedIds: string[],
+  reasons: Record<string, string> = EMPTY_REASONS,
+): ScoredItem[] {
+  if (orderedIds.length === 0 || items.length === 0) return items;
+
+  const byId = new Map(items.map((item) => [item.id, item]));
+  const ordered = orderedIds
+    .map((id) => byId.get(id))
+    .filter((item): item is ScoredItem => Boolean(item))
+    .map((item, index) => {
+      const aiBoost = Math.max(0, 0.12 - index * 0.002);
+      const combined = Math.max(0, Math.min(1, item.score + aiBoost));
+      return {
+        ...item,
+        score: combined,
+        scoreBreakdown: {
+          ...item.scoreBreakdown,
+          combined,
+        },
+        relevanceReason: reasons[item.id] || item.relevanceReason,
+      };
+    });
+
+  const seen = new Set(ordered.map((item) => item.id));
+  const rest = items.filter((item) => !seen.has(item.id));
+  return [...ordered, ...rest];
+}
+
 export async function applyTier2Rerank(
   items: ScoredItem[],
   brief: SearchBrief,
   llmOverride?: ProviderOverrideConfig,
-): Promise<ScoredItem[]> {
+): Promise<Tier2RerankResult> {
   const provider = resolveProvider(llmOverride);
-  if (!provider?.generateJsonText || items.length === 0) return items;
+  if (!provider?.generateJsonText || items.length === 0) {
+    return { items, orderedIds: [], reasons: {} };
+  }
 
   const candidates = items.slice(0, 50);
   // Only the leading items are ever shown, so we only need written reasons for
@@ -63,32 +114,26 @@ export async function applyTier2Rerank(
       tier: "small",
     });
     const parsed = parseRerankResponse(raw);
-    if (!Array.isArray(parsed.orderedIds)) return items;
+    if (!Array.isArray(parsed.orderedIds)) {
+      return { items, orderedIds: [], reasons: {} };
+    }
 
-    const byId = new Map(items.map((item) => [item.id, item]));
-    const ordered = parsed.orderedIds
-      .map((id) => byId.get(id))
-      .filter((item): item is ScoredItem => Boolean(item))
-      .map((item, index) => {
-        const aiBoost = Math.max(0, 0.12 - index * 0.002);
-        const combined = Math.max(0, Math.min(1, item.score + aiBoost));
-        return {
-          ...item,
-          score: combined,
-          scoreBreakdown: {
-            ...item.scoreBreakdown,
-            combined,
-          },
-          relevanceReason: parsed.reasons?.[item.id] || item.relevanceReason,
-        };
-      });
+    // Keep only ids the pool actually contains, so what gets cached is a
+    // ranking that still means something when it is replayed tomorrow.
+    const known = new Set(items.map((item) => item.id));
+    const orderedIds = parsed.orderedIds.filter(
+      (id): id is string => typeof id === "string" && known.has(id),
+    );
+    const reasons = parsed.reasons ?? {};
 
-    const orderedIds = new Set(ordered.map((item) => item.id));
-    const rest = items.filter((item) => !orderedIds.has(item.id));
-    return [...ordered, ...rest];
+    return {
+      items: applyRerankOrder(items, orderedIds, reasons),
+      orderedIds,
+      reasons,
+    };
   } catch (err) {
     console.warn("[feed/tier2] rerank failed, keeping Tier 1 order:", err);
-    return items;
+    return { items, orderedIds: [], reasons: {} };
   }
 }
 

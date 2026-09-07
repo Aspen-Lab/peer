@@ -316,11 +316,16 @@ describe("feed lane loading", () => {
       ([input]) => requestPath(input as string | URL | Request) === "/api/feed",
     );
     expect(paperRequests).toHaveLength(2);
+    // A PLAIN OPEN SENDS NO EXCLUSIONS AT ALL, and that is the point of the
+    // daily paper pool. The server builds one pool per local day; if the
+    // client kept subtracting everything it had already seen, that pool would
+    // be stable server-side and shredded client-side, and re-opening the app
+    // would still show a different — eventually empty — reading list.
     expect(
       JSON.parse(String((paperRequests[0]?.[1] as RequestInit).body)),
-    ).toMatchObject({
-      excludeIds: ["paper-already-seen"],
-    });
+    ).not.toHaveProperty("excludeIds");
+    // A deliberate refresh is the one path that asks for something new, so it
+    // alone carries the consume-once set.
     expect(
       JSON.parse(String((paperRequests[1]?.[1] as RequestInit).body)),
     ).toMatchObject({

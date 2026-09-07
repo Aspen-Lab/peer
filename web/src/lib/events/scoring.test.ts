@@ -89,15 +89,27 @@ describe("scoreEvents", () => {
       tags: [],
     });
     const good = event({ id: "c" });
-    const scored = scoreEvents([past, unrelated, good], {
-      topics: ["machine learning"],
-    });
+    // `NOW` IS NOT OPTIONAL WHENEVER A FIXTURE DATE COMES FROM `iso()`.
+    // `scoreEvents` defaults its third argument to `Date.now()`, so omitting it
+    // silently scores `NOW`-relative fixtures against the real clock — and the
+    // test then keeps passing until the wall clock walks past the fixture. This
+    // one drops `good` (NOW + 90 days) the day that date arrives; the one below
+    // had already reached its own expiry and was failing.
+    const scored = scoreEvents(
+      [past, unrelated, good],
+      { topics: ["machine learning"] },
+      NOW,
+    );
     expect(scored.map((s) => s.id)).toEqual(["c"]);
   });
 
   it("keeps an event whose deadline passed but start date is upcoming", () => {
     const attendOnly = event({ id: "a", deadline: undefined, startDate: iso(40) });
-    const scored = scoreEvents([attendOnly], { topics: ["machine learning"] });
+    const scored = scoreEvents(
+      [attendOnly],
+      { topics: ["machine learning"] },
+      NOW,
+    );
     expect(scored).toHaveLength(1);
   });
 

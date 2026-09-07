@@ -5,6 +5,7 @@ import type {
 } from "@/types";
 import type { ScoredEventItem } from "@/lib/events/types";
 import type { ScoredJobItem } from "@/lib/jobs/types";
+import type { ScoredItem } from "@/lib/scoring/types";
 import { localCalendarDate } from "@/lib/local-calendar-date";
 import { canonicalize } from "@/lib/scoring/term-expand";
 
@@ -21,10 +22,30 @@ interface CachedOpportunityPoolBase extends CachedPoolBase {
   facetCounts: OpportunityFacetCounts;
 }
 
-export interface CachedPaperDiscovery extends CachedPoolBase {
+/**
+ * The paper surface's daily pool — the twin of `CachedEventPool` /
+ * `CachedJobPool`, and it replaced a far thinner record that held ONLY the
+ * web-search discovery side-channel's query boosts. That record cached the
+ * cheap half of a paper build and left the expensive half — every academic
+ * source fetch and, at Tier 2, an LLM rerank — to re-run on every request, so
+ * a page reload rebuilt the feed and re-spent the tokens. The side-channel
+ * itself is gone; see `buildPaperPool` for why nothing was lost with it.
+ *
+ * Two fields have no counterpart on the other two surfaces:
+ *
+ * - `items` are scored WITHOUT the preference ledger, exactly as the jobs pool
+ *   is, so one day's pool can be re-ranked locally when likes/dismissals move.
+ * - `aiOrder` / `aiReasons` carry Tier 2's output forward. Re-scoring on a hit
+ *   would otherwise discard the one part of the build that costs money, which
+ *   would defeat the point of caching at all.
+ */
+export interface CachedPaperPool extends CachedPoolBase {
   surface: "papers";
-  queryBoosts: string[];
-  resultCount: number;
+  items: ScoredItem[];
+  /** Tier-2 ranking order, best-first. Empty when Tier 2 did not run. */
+  aiOrder: string[];
+  /** Tier-2 written reasons, by paper id. Empty when Tier 2 did not run. */
+  aiReasons: Record<string, string>;
 }
 
 export interface CachedEventPool extends CachedOpportunityPoolBase {
@@ -42,7 +63,7 @@ export interface CachedJobPool extends CachedOpportunityPoolBase {
  * preference scoring may reorder them locally without rebuilding this pool.
  */
 export type CachedPool =
-  | CachedPaperDiscovery
+  | CachedPaperPool
   | CachedEventPool
   | CachedJobPool;
 
@@ -68,9 +89,10 @@ export function isCachedPool(value: unknown): value is CachedPool {
 
   if (value.surface === "papers") {
     return (
-      Array.isArray(value.queryBoosts) &&
-      value.queryBoosts.every((query) => typeof query === "string") &&
-      typeof value.resultCount === "number"
+      Array.isArray(value.items) &&
+      Array.isArray(value.aiOrder) &&
+      value.aiOrder.every((id) => typeof id === "string") &&
+      isRecord(value.aiReasons)
     );
   }
 
@@ -79,9 +101,7 @@ export function isCachedPool(value: unknown): value is CachedPool {
   return isRecord(value.facetCounts);
 }
 
-export function isCachedPaperDiscovery(
-  pool: CachedPool,
-): pool is CachedPaperDiscovery {
+export function isCachedPaperPool(pool: CachedPool): pool is CachedPaperPool {
   return pool.surface === "papers";
 }
 
@@ -99,12 +119,22 @@ export interface PoolCacheKeyInput {
   exploreTopics?: string[];
   careerStage?: CareerStage;
   locationPreferences?: string[];
+  /**
+   * Papers only. A Tier-2 pool carries an LLM ranking a Tier-0 pool does not,
+   * so the tier changes the payload rather than just the view of it. Left
+   * undefined by every other caller, which `JSON.stringify` omits — so the
+   * events and jobs keys keep the shape they had before this field existed.
+   */
+  aiTier?: 0 | 1 | 2;
   now?: Date;
 }
 
 // Bump whenever the durable pool payload semantics change. v3 makes cached
 // scores preference-neutral so one daily pool can be safely re-ranked locally.
-const CACHE_KEY_VERSION = 3;
+// v4 turns the papers entry from a discovery-only record into a full daily
+// pool, so a v3 papers entry can no longer satisfy a v4 read. v5 drops the
+// deleted discovery side-channel's `queryBoosts`/`resultCount` from it.
+const CACHE_KEY_VERSION = 5;
 
 function normalizeSet(values: string[] | undefined): string[] {
   return Array.from(
@@ -125,6 +155,7 @@ export function derivePoolCacheKey(input: PoolCacheKeyInput): string {
     exploreTopics: normalizeSet(input.exploreTopics),
     careerStage: input.careerStage?.trim() ?? "",
     locationPreferences: normalizeSet(input.locationPreferences),
+    aiTier: input.aiTier,
     date,
   });
   const digest = createHash("sha256").update(signature).digest("hex").slice(0, 32);
