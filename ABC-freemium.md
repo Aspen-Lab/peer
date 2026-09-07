@@ -9418,3 +9418,201 @@ case** fail. If more than one fails, the spread is still doing the work.
 No production code path reads either list. **Deployment consequence, already recorded in §1
 `PENDING USER ACTION` (4):** after this lands, a Vercel project that still carries `TAVILY_API_KEY`
 will **fail the build**, by design. The owner must remove that variable before deploying, not after.
+
+---
+
+#### 5-04 — tests · the complete list, measured
+
+**THE HEADLINE: 28 cases in 9 files change, and 13 more pass for the wrong reason.** Every one below
+was produced by the runner against the planted D2a shape, not by reading.
+
+##### (i) The complete list of test files whose assertions now state the OPPOSITE contract
+
+| File | Cases | Line(s) |
+|---|---|---|
+| `web/src/lib/search/system-key.test.ts` | 1 | `35` |
+| `web/src/lib/entitlement/resolve.test.ts` | 2 | `49`, `83` |
+| `web/src/lib/security/spend-scans.test.ts` | 2 | scan 3's Tavily case + its availability-helper case |
+| `web/src/lib/sources/web-search.test.ts` | 1 | `146` |
+| `web/src/lib/events/sources/eventweb.test.ts` | 5 | `2585`, `2615`, `2627`, `2671`, `2711` |
+| `web/src/lib/jobs/sources/jobweb.test.ts` | 8 | `3065`, `3098`, `3108`, `3131`, `3208`, `3228`, `3245`, `3952` |
+| `web/src/app/api/events/feed/route.test.ts` | 2 | `176`, `187` |
+| `web/src/app/api/jobs/feed/route.test.ts` | 2 | `177`, `188` |
+| `web/src/scripts/assert-byok-production-env.test.ts` | 5 (+13 false greens) | `84`, `103`, `114`, `175`, `201` |
+
+**Every one is REWRITTEN, never deleted** (§3). Where a case's *name* asserts the old contract
+("gives an entitled request the operator's key", "sends the operator's key for a paid user",
+"gives a paid user unbounded deep reports and system search"), the name changes with the assertion —
+a renamed case with a comment saying which item changed it is the record; a deleted one is a hole.
+
+##### (ii) Group A — spend assertions that simply invert (11 cases)
+
+`system-key.test.ts:35`, `resolve.test.ts:49`+`83`, `jobweb.test.ts:3131`, `eventweb.test.ts:2671`,
+`web-search.test.ts:146`, `jobweb.test.ts:3952`, and the four feed-route cases
+(`events/feed:176`,`187` · `jobs/feed:177`,`188`).
+
+These are the round-2 and round-4 tests that **arm `TAVILY_API_KEY` as an operator sentinel and assert
+trial/paid DO spend it**. The four feed-route ones are the sharpest — each ends
+`expect(requestsCarrying(OPERATOR_SENTINEL).length).toBeGreaterThan(0);` and must become
+`expect(requestsCarrying(OPERATOR_SENTINEL)).toEqual([]);`, which is the identical assertion their
+anonymous and free-user siblings already make a few lines above. The sentinel **stays armed** — that
+is what makes "zero" a statement about the gate rather than about an empty environment, and the
+harness comment at `ai-route-personas.test.ts:146-148` already says so.
+
+`jobweb.test.ts:3952` ("writes a row naming GEMINI, not the literal tavily") and
+`web-search.test.ts:146` ("has the metering wired even though the gate makes it unreachable") are the
+two that assert a `kind:"search"` row **is** written. Under Ruling 12 point 7 the answer is now **0**,
+so both invert to `expect(rows).toHaveLength(0)` — and each keeps its old assertion as a comment
+naming D2a, because the row-shape knowledge (`provider` is the variable, not the literal `"tavily"`)
+is what 2-04 bought and it should not vanish from the file.
+
+##### (iii) Group B — 10 cases that LOSE THEIR SUBJECT · `POLICY — manager decides`
+
+`jobweb.test.ts` `3065`, `3098`, `3108`, `3208`, `3228`, `3245` and `eventweb.test.ts` `2585`,
+`2615`, `2627`, `2711`. **These are `RULING 75` cases inherited from the earlier report-parity loop
+and they are not about the freemium contract at all** — they assert how the *gemini adapter is
+called*: which deny list it receives, how the query is suffixed, that a grounded row still passes the
+shipped admission rule. Making grounding unreachable makes the code that builds those options
+unreachable, so the tests fail with nothing wrong.
+
+Two splits inside the group:
+
+- **Six are surface-resolver unit tests** (`3065`, `3098`, `3108`, `2585`, `2615`, `2627`) — "comes
+  back on when Vertex is present", "picks gemini on auto", "picks vertex on auto". Their honest
+  rewrite is direct: the same inputs now yield `null`, the assertion flips from `.toBe("gemini")` to
+  `.toBeNull()`, and the names change. **Recommend: rewrite in place.** They become the proof that
+  no plan reaches grounding, which is a thing worth asserting.
+- **Four assert option-building inside `fetchImpl`** (`3208`, `3228`, `3245`, `2711`). The code under
+  test is `jobweb`/`eventweb`'s own option construction, not the adapter's, so it cannot be
+  re-pointed one layer down without extracting it.
+
+**The policy question, for the manager, not for me:** Ruling 12 point 2 keeps the machinery
+unreachable-but-present. It does not say whether the machinery's *proofs* are kept alive by
+refactoring, or are allowed to become assertions of unreachability. Two options, cost written down:
+
+- **(a) — minimal, and what I recommend.** Rewrite all four to assert the surface never calls the
+  adapter (`expect(geminiSearchMock).not.toHaveBeenCalled()`), with the old assertion preserved in a
+  comment. **Cost:** the deny-list, suffix and admission rules lose live coverage; if grounding is
+  ever re-enabled, those three rules are unproven on the day they matter. No production code changes.
+- **(b).** Extract the option-building into a small exported pure function per surface and test that
+  directly, keeping every assertion. **Cost:** a production refactor of two files that D2a did not
+  ask for, inside a round whose whole point is that reversing the decision is one constant.
+
+I recommend (a) because Ruling 12 point 2's stated reason is "deleting touches a lot of independently
+verified code for no behavioural gain", and (b) is a change to that same code for no behavioural gain.
+But it is an earlier loop's rulings being retired, so it is the manager's call, not C's.
+
+##### (iv) Group C — the two scans, and what Ruling 12 point 7 needs from them
+
+**Scan 3's Tavily case must be TIGHTENED, and the brief's question is answered YES.** It reads
+`expect(readers).toEqual([GATE])` — exactly one reader, `src/lib/search/system-key.ts`. The answer is
+now **0**, so it becomes `expect(readers).toEqual([])`. Left as-is it fails; changed to `[]` it
+**becomes tally 1 of Ruling 12 point 7 verbatim** — `process.env.TAVILY_API_KEY` reads in non-test
+source must be 0 — and it is already a gate test, so that tally costs nothing new. Note the loop over
+`OPERATOR_SEARCH_ENV` can no longer be uniform: **`BRAVE_SEARCH_API_KEY` still expects `[GATE]`**
+(5-01 keeps that read inside the gate) while Tavily expects `[]`. Verified under the plant: the Brave
+case passed unchanged and only the Tavily case failed.
+
+**Scan 3's availability-helper case changes as a direct consequence of 5-01's import removal.** It
+asserts `is(Gemini|Vertex)SearchAvailable(` is called from exactly three files, `system-key.ts`
+first. Once `operatorSearchAvailability` stops calling them, the expectation drops to the two owning
+modules: `["src/lib/sources/gemini-search.ts", "src/lib/sources/vertex-search.ts"]`. Measured — this
+case failed under the plant for precisely that reason, and it is the scan working, not breaking.
+
+##### (v) The three new standing tallies as gate tests (Ruling 12 point 7)
+
+1. **`process.env.TAVILY_API_KEY` reads in non-test source = 0** -> scan 3, tightened above.
+   **Already a gate test. Prove it by planting** a `process.env.TAVILY_API_KEY` read in a production
+   file and watching only that case fail (Ruling 10 point 2b).
+2. **`kind:"search"` usage rows produced = 0** -> there are exactly **three** producers in non-test
+   source, all inside an `if (operatorFunded)` block: `jobweb.ts:2224`, `eventweb.ts:2829`,
+   `web-search.ts:151`. Best as a **behavioural** gate test, not a source scan: drive each of the
+   three surfaces with the operator environment fully armed and every persona including paid, and
+   assert the captured rows contain no `kind === "search"`. The row-capture harness already exists in
+   `jobweb.test.ts` and `web-search.test.ts` and can be reused.
+3. **Operator-key search requests = 0 for EVERY persona including paid, on every surface** -> this is
+   the one that needs **new cases, not rewrites**. `ai-route-personas.test.ts` covers four routes
+   (`/api/digest`, `/api/jobs/report`, `/api/events/report`, `/api/papers/report`) but only two
+   personas — `175` anonymous and `181` signed-in free. **Trial and paid are absent.** Add them, using
+   the plan-row construction the feed route tests already use (`planRow("paid")` and the live-trial
+   row at `jobs/feed/route.test.ts:188-209`). The comment at `184` ("D2 — the system search key is for
+   trial and paid only") states the superseded decision and is rewritten to D2a.
+
+**A correction to the brief's reading:** the four sentinel-carrying route suites are
+`ai-route-personas.test.ts`, `api/events/feed/route.test.ts`, `api/jobs/feed/route.test.ts` and
+**`api/test-digest/route.test.ts`** — **not `api/figure`**. Grepped: `OPERATOR_SENTINEL` appears in
+exactly those four plus the harness (`src/test-support/route-harness.ts`), and
+`api/figure/route.test.ts` contains no operator-search sentinel at all. `test-digest/route.test.ts`
+**needs no change**: its two cases (`90` at the wire, `93-103` at the seam) already assert zero and
+already assert the pipeline is never asked for `"systemSearchAllowed": true`. It passed unchanged at
+every plant stage and is the model the other suites should follow.
+
+##### (vi) The false greens — tests that will pass while proving nothing
+
+1. **`jobweb.test.ts:3979` "charges the 500/day breaker for a grounding fan-out".** Passes after the
+   fix. All three of its assertions (`items` is `[]`, the adapter was not called, no search row) are
+   satisfied by "no provider resolved at all" — the breaker never runs. It would pass with the
+   breaker deleted. **Must be rewritten to say what it now proves** (the surface refuses before the
+   breaker is consulted), with the breaker's own coverage left where it is genuinely exercised —
+   `web/src/lib/usage/deep-report-quota.test.ts` `224`, `227`, `235`, `237`, `322`, which call
+   `consumeSystemSearches` directly and stay valid (see the finding below).
+2. **The 13 guard cases** — covered in 5-03.
+3. Two cases per feed route become vacuous rather than false: "spends nothing for an EXPIRED trial"
+   (`events/feed:212`, `jobs/feed:213`) and "cannot be elevated by the request body"
+   (`events/feed:237`, `jobs/feed:238`) still pass and still assert the right thing, but they no
+   longer distinguish anything — every plan now spends nothing. Keep them (they guard
+   `poolRefreshAllowed` and body-elevation too), and add a comment saying the assertion is now
+   implied by D2a so a future reader does not mistake them for live coverage.
+
+##### (vii) A FINDING AGAINST RULING 12, established by grep and source · `POLICY — manager decides`
+
+**Ruling 12 point 2 and point 3, and the R-QUOTA-2 amendment, say the 500/day system-search breaker
+becomes unreachable. It does not.** `consumeSystemSearches` has **two** callers, and the ruling
+accounts for only one:
+
+- the search fan-out — `jobweb.ts:2186`, `eventweb.ts:2789`, `web-search.ts:115`. These **do** become
+  unreachable, as the ruling says.
+- **the forced pool rebuild — `jobs/pipeline.ts:258` and `events/pipeline.ts:275`**:
+  `forceRebuild = await consumeSystemSearches(req.userId, 1, now);`, gated on **`poolRefreshAllowed`**
+  and not on `systemSearchAllowed` at all. Ruling 12 point 5 keeps "refresh now" alive for trial and
+  paid, so **this caller stays live.** The breaker's own docblock says so in its first paragraph —
+  "Two callers, one home … and so does 1-18's forced pool rebuild" (`search-breaker.ts:6-8`).
+
+So after D2a the 500/day counter still fires, still logs at error level, and still writes a
+`kind:"breaker"` row with `path: "system-search"` — for a user who presses "refresh now" 500 times in
+a day. Three consequences the manager should rule on:
+
+1. **R-QUOTA-2's amendment is half right.** The search-breaker half is unreachable *from search*, not
+   unreachable. Either it stays scored (as a refresh cap) or the amendment needs a sentence saying it
+   is scored on the refresh path only. As written, A would mark a live mechanism `N/A`.
+2. **The name is now a lie.** `SYSTEM_SEARCHES_PER_DAY`, `systemSearchDayKey`, `searches_today` and
+   `path: "system-search"` all describe searches; the only thing left that increments them is a pool
+   rebuild. Renaming is a migration-visible change (`searches_today` is a counter column), so it is
+   not C's call this round — but leaving it silent is how the next reader misreads the ledger.
+3. **Ruling 12 point 7's tally 2 is unaffected and still correct.** The refresh path writes a
+   `kind:"breaker"` row, never a `kind:"search"` row — those come only from the three adapters. So
+   "`kind:"search"` rows produced must be 0" stands exactly as written.
+
+I am not recommending any ruling be reversed; this is recorded for the manager under Ruling 1 point 1.
+
+##### (viii) Order of work for C, and the gate
+
+`5-01 -> 5-02 -> 5-03 -> 5-04`, one commit each. **5-01 before 5-02** is not optional: 5-02 makes the
+flag permanently false, so with 5-02 landed first the 21 failures of 5-01 would arrive mixed with
+5-02's 2 and the attribution measured above would be lost. **5-03 is independent** of both and may be
+done at any point; it is listed third only because R-GUARD-1 and R-KEY-3 must land in the same round
+(Ruling 1 point 6) and this is that round.
+
+Expect the tree to be **red between items** — after 5-01 alone, 21 failures. That is the measured,
+expected shape, not a regression; the gate is green again only after 5-04. `tsc` stays at **0** and
+`eslint` at **1 (the standing `quiz.tsx:46`)** throughout, both verified under the full plant, so a
+compiler or lint error at any point means something outside this guide went wrong.
+
+---
+
+**Round-5 B close-out.** Four items, `5-01`…`5-04`. Classification: **1 `EXTRA` + 1 `WRONG DATA`
+(5-01, two defects in one file), 1 `WRONG DATA` (5-02), 1 `WRONG DATA` (5-03), 1 test-contract item
+(5-04)**. No code changed: `git diff HEAD -- web/` is empty, the three-stage plant was reverted with
+an asserted empty diff, and `git status --porcelain --untracked-files=all` is clean of scaffolds.
+Two items carry `POLICY — manager decides`: the Group-B RULING 75 collateral (5-04 iii) and the
+still-reachable search breaker (5-04 vii).
