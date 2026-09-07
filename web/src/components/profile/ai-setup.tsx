@@ -240,6 +240,13 @@ function modelLabel(model: string): string {
     "claude-sonnet-5": "Claude Sonnet 5",
     "gemini-2.5-flash-lite": "Gemini 2.5 Flash-Lite",
     "gemini-2.5-flash": "Gemini 2.5 Flash",
+    // ABC-freemium 6-02. This map fails SOFT — an unknown id renders as the
+    // raw id — so a model swap puts `gemini-3.1-flash-lite` in front of a
+    // beginner where a friendly name belongs, and no test can see it. The two
+    // retired ids stay listed: this is a label table, not a catalogue.
+    "gemini-3.1-flash-lite": "Gemini 3.1 Flash-Lite",
+    "gemini-3.5-flash-lite": "Gemini 3.5 Flash-Lite",
+    "gemini-3.6-flash": "Gemini 3.6 Flash",
     "gpt-5.4-nano": "GPT-5.4 nano",
     "gpt-5.4-mini": "GPT-5.4 mini",
     "qwen3.5-flash": "Qwen 3.5 Flash",
@@ -379,12 +386,30 @@ export function AiProviderGuide({ provider }: { provider: UserAiProvider }) {
             </div>
           </div>
 
-          <p className="text-caption leading-relaxed text-text-muted">
-            <strong className="text-heading">Why two models?</strong> You provide
-            one key. Peer automatically sends frequent, simpler work to the
-            economical model and reserves the stronger model for Deep reports.
-            You do not need to choose or switch models yourself.
-          </p>
+          {/*
+            ABC-freemium 6-02 · Ruling 19 point 1. After the swap both Gemini
+            tiers name ONE id, so the two cells above show the same name and
+            the "two models" explanation stops being true for that provider —
+            a promise the screen contradicts, which is the same defect class as
+            a button that leads nowhere. The routing is unchanged and still
+            per-job; only the destination happens to coincide, so the honest
+            version says exactly that.
+          */}
+          {models.small === models.large ? (
+            <p className="text-caption leading-relaxed text-text-muted">
+              <strong className="text-heading">Why one model?</strong> You
+              provide one key. For this provider Peer sends both the frequent,
+              simpler work and Deep reports to the same model. You do not need
+              to choose or switch models yourself.
+            </p>
+          ) : (
+            <p className="text-caption leading-relaxed text-text-muted">
+              <strong className="text-heading">Why two models?</strong> You
+              provide one key. Peer automatically sends frequent, simpler work
+              to the economical model and reserves the stronger model for Deep
+              reports. You do not need to choose or switch models yourself.
+            </p>
+          )}
 
           {provider === "openai" && (
             <p className="text-caption leading-relaxed text-text-muted">

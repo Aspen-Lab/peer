@@ -3,9 +3,14 @@ import { GoogleGenAI } from "@google/genai";
 import { PROVIDER_MODELS } from "@/lib/llm/provider-models";
 import { canUseLocalServerProvider } from "@/lib/llm/providers/registry";
 
+// ABC-freemium 6-02. De-duplicated because the two tiers now name ONE id, and
+// the results map below is keyed on `location/modelId`: without this, the
+// second probe silently overwrites the first and the diagnostic reports one
+// line where a reader counting models expects two — misleading in exactly the
+// situation this endpoint exists for. Probing the same endpoint twice tells
+// the operator nothing anyway.
 const REGIONAL_MODELS = [
-  PROVIDER_MODELS.gemini.small,
-  PROVIDER_MODELS.gemini.large,
+  ...new Set([PROVIDER_MODELS.gemini.small, PROVIDER_MODELS.gemini.large]),
 ];
 const GLOBAL_MODELS = ["gemini-3.5-flash-lite", "gemini-3.6-flash"];
 

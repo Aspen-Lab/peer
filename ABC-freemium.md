@@ -121,7 +121,24 @@ lock by rebasing onto the holder's head.
 HELD BY:          C-round8 @ 2026-09-07T22:40Z
 ROUND:            8
 WHOSE TURN:       C  (round 8; order is 6-02 -> 8-01 -> 8-02)
-STOPPED BECAUSE:  finished the turn @ 2026-09-07T22:34Z — both items written, one commit each,
+STOPPED BECAUSE:  IN PROGRESS — C-round8 holds the lock; 6-02 landed, 8-01 and 8-02 to come.
+                  **DEVIATION, LOGGED PER GROUND RULE 6 (6-02):** Ruling 23 point 1 and B both
+                  prescribe ONE widened regex covering the Gemini 3 family. **I called the live
+                  API for every id in both shipped chains and that fix would have caused a second
+                  outage:** `gemini-3.5-flash-lite` and `gemini-3.6-flash` **reject
+                  `thinkingBudget` with 400 INVALID_ARGUMENT**; only the swap target accepts it.
+                  `callModel` catches, so the widened predicate would have emptied the fallback
+                  chain in silence. There is no version-range regex that expresses "accepts
+                  `thinkingBudget: 0`". **The seam moved one step instead: the config decides
+                  WHICH control to send (2.5 family -> `thinkingBudget: 0`, 3.x family ->
+                  `thinkingLevel: MINIMAL`, unknown -> leave thinking on with headroom), not
+                  WHETHER to send one.** The ruling's stated requirement — match the family, not a
+                  literal, so the next swap does not re-open it — is met in full, and the durable
+                  guard is a TEST that walks every id both chains can send, because no regex can
+                  cover a generation nobody has called. B's "the design doc is stale" is
+                  **withdrawn**: it is correct for two models of three, and B generalised from the
+                  one model B probed.
+                  Previous line: finished the turn @ 2026-09-07T22:34Z — both items written, one commit each,
                   each pushed as it finished. No production code changed
                   (`git diff -- web/` **empty**, asserted). Four plants, four measured, every one
                   reverted with an asserted empty diff before the next run was read. The live
@@ -14576,3 +14593,159 @@ either until this is ruled on.** Whichever way it goes, the enable predicate mus
 Identical to baseline; B changed no code.
 
 **8-01 BANKED. ROUND-8 B COMPLETE — two items, both written, no production code changed.**
+
+---
+
+### Round 8 — Agent C
+
+**Turn opened 2026-09-07T22:40Z, lock claimed and pushed before anything else was read.** Branch
+`freemium-system-key`, no worktree. Gate confirmed green **cold** before the first edit and
+identical to the standing baseline: tsc **0** · eslint **1** (the standing `quiz.tsx:46`) · vitest
+**128 files passed | 1 skipped (129) · 2924 passed | 1 skipped (2925), 0 failed**.
+
+#### 8 · 6-02 — the model swap, and the thinking control. `WRONG DATA` (live outage). LANDED.
+
+**THE HEADLINE, AND IT IS A CORRECTION TO B AND TO RULING 23 POINT 1: B's licence to "widen the
+predicate to the family" IS ONLY TRUE OF THE ONE MODEL B TESTED. Widening a single regex across the
+Gemini 3 line as prescribed would have 400-ed BOTH global fallback models and, because `callModel`
+catches and moves on, would have emptied the fallback chain in silence — a second outage of exactly
+the shape 6-02 exists to close.** I did not take this on reading. Ruling 22 point 5 says an external
+call is unverified until something has made one, so I made them: a standalone probe inside `web/`,
+key read from `.env.local` by the script (never `cat`-ed, never printed; every error string through
+a redactor), deleted before this commit with `git status --porcelain --untracked-files=all` asserted
+empty. **Every id in both shipped chains, one ping each, 2026-09-07:**
+
+| model id | `thinkingBudget: 0` | `thinkingLevel: "MINIMAL"` | no control |
+|---|---|---|---|
+| `gemini-3.1-flash-lite` (the swap target) | **PASS** thoughts=0 | PASS thoughts=0 | thoughts=0 |
+| `gemini-3.5-flash-lite` (global fallback, small) | **400 INVALID_ARGUMENT** | PASS thoughts=0 | thoughts=0 |
+| `gemini-3.6-flash` (global fallback, large) | **400 INVALID_ARGUMENT** | PASS thoughts=0 | **thoughts=139** |
+
+**Three consequences, each of which changes something written down.**
+
+1. **`docs/API_PERFORMANCE_MY_REVIEW_AND_PLAN.md` IS NOT STALE — it is right about two models out of
+   three.** Its claim that Gemini 3 models take `thinkingLevel` and reject `thinkingBudget` is
+   **true** for `gemini-3.5-flash-lite` and `gemini-3.6-flash`. It is false **only** for
+   `gemini-3.1-flash-lite`, which accepts both. B disproved it on the single model B probed and
+   generalised to the generation; the generalisation does not hold. **B's own new §3 rule caught B.**
+2. **The docblock at `gemini.ts:54-64` was therefore CORRECT in its conclusion and wrong only in its
+   reason.** "Gemini 3 fallbacks use a different control, so we leave them alone" is a true
+   statement about the control; what was wrong was leaving them alone, because there **is** a
+   control for them and nobody had tried it.
+3. **`gemini-3.6-flash` billed 139 thought tokens for a one-line ping with no control set.** So the
+   fallback path's thinking is a real charge today, not a theoretical one. B could not make
+   `gemini-3.1-flash-lite` bill any and correctly declined to claim thinking was free; that caution
+   was right, and it does not carry to the other two models.
+
+**WHAT I BUILT INSTEAD, and it is a deviation from B's prescription that is logged in §1's STATUS
+line as ground rule 6 requires.** There is **no version-range regex that expresses "accepts
+`thinkingBudget: 0`"** — 2.5 does, 3.1 does, 3.5 and 3.6 do not — so the single widened predicate
+Ruling 23 point 1 describes cannot be written without breaking something. The seam moved by one step
+instead: **the config now decides WHICH control to send, not WHETHER to send one.**
+`thinkingOffConfig(modelId)` returns `{ thinkingBudget: 0 }` for the 2.5 Flash family,
+`{ thinkingLevel: ThinkingLevel.MINIMAL }` for the 3.x Flash family, and `undefined` for anything
+else; `disableThinking()` becomes "a control exists for this model", which is exactly what
+`outputCap` needs to know. **This satisfies the ruling's stated requirement in full** — matched by
+family, not by literal, so a move inside the 3.x line does not re-open it — and it does more than
+the ruling asked, because the two fallback models now also run thinking-off with a tight cap
+instead of thinking-on with `+4096`. **An unmeasured model still falls through to thinking-on with
+headroom: an unknown model must cost money, never 400.** `ThinkingLevel` is imported from the SDK
+rather than spelled as a string, so a wrong level is a compile error rather than a runtime 400.
+
+**THE DURABLE GUARD IS A TEST, NOT A REGEX — and that is the real answer to "so the next swap does
+not re-open this".** No regex can protect against a model from a generation nobody has called. The
+first new case **walks every id both shipped chains can send** (global fallback stubbed on, so the
+walk reaches all four attempts) and requires each one to carry a thinking-off control and a cap with
+no headroom. **Add a model to either chain that no family covers and it fails**, instead of the
+policy inverting invisibly the way it did when the 2.5 pair was retired.
+
+**FIVE NEW CASES, AND MY OWN FIRST DRAFT CONTAINED B's BUG.** I initially asserted the four walked
+ids were all distinct; it failed, because the two tiers now name one id — **the identical accidental
+assumption that made `gemini.test.ts:112` red.** Rewritten to count attempts (4) and require at
+least 3 distinct, which can only hold if both chains were reached. Recorded because the mistake is
+evidently easy to make twice in one file.
+
+**THREE PLANTS, THREE FIRED, each reverted with an asserted substitution count and an asserted
+absence of the planted value before the next run was read.**
+
+- **Plant 1 — the old literal-pinned predicate** (`GEMINI_3_FLASH_FAMILY` neutered, so only the 2.5
+  family is covered, which is exactly the pre-6-02 behaviour). **3 of the 5 new cases red**, and the
+  right 3: the chain walk, the Gemini-3 control, and the swap target. The 2.5 case and the
+  unrecognised-model case stayed green, which is correct — neither depends on the 3.x family. So no
+  case is carrying another's weight.
+- **Plant 2 — an unconfigured id in `GEMINI_API_MODEL_CHAIN`** (`gemini-3.6-flash` in the large
+  slot). **Exactly the rewritten ledger case red, nothing else** — proving line 112 now measures
+  *"the rows name the configured chain"* and not an accident of two ids differing. `toHaveLength(2)`
+  and the `ok` pair stayed green, so the rewrite did not quietly absorb their job.
+- **Plant 3 — a dead 2.5 id back on the small tier.** Exactly the catalog case red. The thinking
+  suite stayed green, correctly: 2.5 *is* a covered family, so the two concerns are independent.
+- **A fourth attempted plant failed to apply and was caught by its own assertion before any run was
+  read** (`SUBSTITUTIONS=0`, my escaping was wrong). Recorded because it is precisely the case
+  Ruling 10 point 1 exists for: without the count, the green run would have read as a passing
+  revert. A second plant needed a CRLF-tolerant pattern for the same reason §3 already warns about.
+
+**B's TWO RED TESTS, both handled as B directed and neither deleted.**
+`provider-models.test.ts` gets the new id with a comment naming the item. **`gemini.test.ts:112`
+rewritten through the constant** — `rows.map(r => r.model)` equals
+`[PROVIDER_MODELS.gemini.small, PROVIDER_MODELS.gemini.large]`, imported, never retyped — **and the
+stale comment on line 111 corrected in the same edit**, since left alone it ratifies a property the
+tree no longer has.
+
+**RULING 23 POINT 6 — MY OWN SHAPE-GREP, REPORTED IN FULL EVEN THOUGH MOST OF IT IS EMPTY.**
+Searched for regex `.test(`, `startsWith`, `endsWith`, `includes`, `indexOf`, `match`, `slice`,
+`split`, `===` against a model literal, `switch` on a model, and record-indexing by a model id,
+across `src/` and `scripts/`, plus every importer of `provider-models` and every caller of
+`providerModelForTier`.
+
+- **Regex shape tests on a model id in the whole tree: exactly ONE** — `gemini.ts:71`, the one B
+  found. There is no second.
+- **`startsWith` / `endsWith` / `includes` / `indexOf` / `match` / `===` / `switch` on a model id:
+  ZERO**, in both `src/` and `scripts/`.
+- **Two shape dependencies that are NOT regexes and would not be found by looking for one**, both
+  already in B's list and both fixed here: `ai-setup.tsx:250`, a `Record` **keyed on the literal
+  id** with a `?? model` soft fallback; and `api/digest/test/route.ts:58`, a **results-map key
+  derived from the id**, where two equal ids collide.
+- **ONE READ SITE B's 6-02 blast radius did not name**: `src/lib/sources/gemini-search.ts:135`,
+  `GEMINI_SEARCH_MODEL = PROVIDER_MODELS.gemini.large`. It is a plain read, not a shape test — it
+  flows only into `model:` on the grounding request at `:304` — so it needed no edit, but the
+  grounding search's model **does** move with `.large`. Harmless today (that path sits behind
+  `operatorSearchAvailability`, frozen false) and recorded so nobody rediscovers it as a surprise.
+- **`metered.test.ts:330,352` confirmed NOT at risk**, as B said: the file does not import
+  `provider-models`, so those are self-contained fixture literals. They now name a model the product
+  cannot call. **Left alone deliberately** (§2 — C does not widen scope) and recorded as a
+  maintenance note: a fixture named after a dead model is how folklore starts.
+
+**THE TWO SILENT CHANGES B FLAGGED, BOTH FIXED, because both are wrong data that the swap itself
+creates.**
+
+- **`ai-setup.tsx`** — the label map now carries all three Gemini 3 ids, so a beginner is not shown
+  `gemini-3.1-flash-lite` where a friendly name belongs. **And the "Why two models?" paragraph is
+  now conditional**: when a provider's two tiers name one id it reads *"Why one model?"* and says
+  the frequent work and Deep reports go to the same model. **This is a §3 Ruling 19 point 1 call,
+  not a taste call** — the two cells render the same name, so the old sentence was a promise the
+  screen contradicts, which is the same defect class as a button that leads nowhere. The routing is
+  untouched and still per-job; only the destination coincides. **The wording is mine and A should
+  read it** — it is the one thing in this item that is a judgement rather than a measurement.
+- **`api/digest/test/route.ts`** — `REGIONAL_MODELS` de-duplicated, so the second probe no longer
+  overwrites the first in a map keyed on `location/modelId`. The diagnostic reported one line where
+  a reader counting models expects two, misleading in exactly the situation the endpoint exists for.
+
+**COST: B's number is the one that stands and I did not re-derive it.** The deep report goes
+~$0.0100 to ~$0.0116 (**+15%**), because pass 1 carries 2.5x pass 2's input on the tier whose input
+price rose 2.5x. Nothing I changed moves that. **One thing my measurement adds:** turning thinking
+off on the two fallback models removes a real charge on that path (139 thought tokens on a ping),
+which pushes very slightly the other way and only on fallback traffic.
+
+**GATE, cold, after every plant was reverted and the probe deleted (`git status --porcelain
+--untracked-files=all` shows only the six intended source edits, asserted before this run was
+read):** `tsc` exit **0** · `eslint` **1 problem (1 error, 0 warnings)** — the standing
+`quiz.tsx:46` · `vitest` **128 files passed | 1 skipped (129) · 2929 passed | 1 skipped (2930), 0
+failed**. Test total 2924 to 2929: **+5 added, 0 deleted.** File count unchanged at 128.
+**Standing locks re-verified by name, all green:** `provider-models.test.ts`,
+`providers/gemini.test.ts`, `providers/registry.test.ts`, `providers/metered.test.ts`,
+`security/spend-scans.test.ts`, `search/system-key.test.ts`, `sources/vertex-search.test.ts`
+(7 files / 86 tests), plus `api/ai-route-personas.test.ts` and the usage-ledger suites
+(4 files / 72 tests).
+
+**6-02 LANDED. THE OUTAGE IS CLOSED IN THE TREE — and the live proof that it is closed in reality is
+8-02's job, below.**
