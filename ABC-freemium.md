@@ -594,18 +594,17 @@ GATE NOW:  **Round-6 A, cold, after every plant was reverted and every throwaway
            suite, `components/cards/pool-refresh-notice.test.tsx`.
            Round-5 A's figures follow: tsc **0** · eslint **1** · vitest **124 files passed | 1
            skipped (125)** · **2871 tests passed | 1 skipped (2872)**, **0 failed**, 9.50 s.
-TODO:      C WORKS THE ROUND-7 GUIDE FROM 7-02 (§4 "Round 7 — Agent B"), in B's order:
-           **7-02 first**, its four steps at 7-02.7 — the shared `UPGRADE_HREF` constant in
-           `src/lib/navigation/`, all three surfaces onto it with **zero** surviving literals,
-           the dead-internal-link gate test (resolve against `src/app` **and** `public/`, **no
-           allowlist** — `/CHANGELOG.md` is a real file, not a false positive), proved by
-           planting a dead link in **both** shapes; then the plan section on the AI step unless
-           the manager rules it out, because *"See what Pro adds"* does not otherwise keep its
-           promise. **Then 7-01**, its four steps at 7-01.8 — `| null` through `planChipText`
-           and `aiModeChip`, the call site passing the **raw** `entitlement`, the span guarded
-           on `!== null`, **both** wrong comments corrected, and new cases **proved able to fail
-           by restoring `entitlement: grants`** (the type change alone reddens nothing — B
-           measured it). Do NOT touch `ai: "AI off"`. **6-02** stays out until the owner answers.
+TODO:      C WORKS THE ROUND-7 GUIDE, order 7-02 -> 7-01 (Ruling 19 §1t):
+           **7-02 has TWO halves, both required** — (a) all three upsell surfaces resolve to
+           `/welcome?step=ai` through ONE constant in `src/lib/navigation/`, zero surviving
+           literals; (b) the AI step gains the plan copy, REUSING the exact strings already in
+           `tier-upgrade-block.tsx`'s D7 block — no new copy is written. Add the dead-link
+           scan as a gate test resolving against the route tree AND `public/`, with **no
+           allowlist** (Ruling 19 point 3) and proved by planting two dead links in two shapes.
+           **7-01** the chip: the plan segment is ABSENT until the plan is known, and the
+           `planChipText` docblock is corrected in the same commit. **B measured 7-01's blast
+           radius as ZERO — no existing test can tell the fix from the bug** (point 5), so C
+           adds cases and proves them by restoring the old argument. **6-02** still unanswered.
 PENDING USER ACTION: (1) Apply the three migrations under `web/supabase/migrations/20260904*`.
            (2) After applying, save a profile once in the app. (3) Optionally fill
            `GOOGLE_API_KEY` in `web/.env.local` (and the Supabase URL + service-role key) so A
@@ -614,22 +613,9 @@ PENDING USER ACTION: (1) Apply the three migrations under `web/supabase/migratio
            NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY — and must NOT carry
            TAVILY_API_KEY (the build will refuse it after 5-03). Deploy only after round 5
            reports green and the branch is merged. WITHDRAWN: the trial backfill (no users).
-OPEN FOR MANAGER:  **TWO `POLICY` items from round-7 B, neither blocking C.** (1) **The plan
-           section on the AI step** (7-02.7 step 4): making *"See what Pro adds"* keep its
-           promise means putting plan copy on an onboarding step — an editorial call. Every
-           string needed already exists verbatim under D7 at `tier-upgrade-block.tsx:111-112`,
-           which is **the only place in the whole app that says what Pro costs**, and it renders
-           only for a signed-in free reader with locked rows in a report. If ruled out of scope,
-           say so out loud rather than banking a green link scan over a promise still broken.
-           (2) **`typedRoutes`**: Next 16.2.3 ships it stable and this tsconfig already includes
-           the generated types, so a dead literal `href` could be a **compile** error instead of
-           a test — rejected this round on measured cost (the gate would need a `next build`,
-           and ~30 non-literal `href={…}` sites would need `as Route`). A later round's call.
-           **Also for the ruling record: three manager corrections in §4** — Ruling 18 point 6's
-           mechanism (the completeness rule cannot skip past `?step=ai`; the query is read
-           first), Ruling 18 point 2's `/CHANGELOG.md` "false positive" (it is a real file in
-           `public/`), and the brief's premise that `/profile` manages the reader's key (it
-           does not).
+OPEN FOR MANAGER:  none — B's two POLICY items ruled in §1t: the plan copy needs no editorial
+           decision because it reuses strings already ruled under D7 (point 2b), and
+           `typedRoutes` is rejected with a threshold (point 4).
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
@@ -1489,6 +1475,61 @@ right, and the fix target is the one the other two already use.**
 7. **Standing tallies for round 7** — everything carried, plus point 2's dead-internal-links tally,
    and the upsell-surface count is **re-derived every round, never quoted** (point 4).
 
+---
+
+## §1t. RULING 19 — after round-7 B; the destination must say what Pro is (2026-09-07, BINDING)
+
+**Manager's checks of B's claims, done in source before ruling:** `public/CHANGELOG.md` is a real
+40 KB file, so B's point about the allowlist holds. `welcome/page.tsx` contains **zero** plan words
+(the single grep hit is a code comment). `tier-upgrade-block.tsx:108-111` is the **only** place in
+the app that says what Pro is — *"Peer Pro is $12/month"*, students $6, with a comment recording
+D7's no-checkout rule.
+
+1. **B's finding is accepted and it changes 7-02's scope.** Fixing the link alone would leave a
+   quieter instance of the same defect: `PoolRefreshNotice`'s *"See what Pro adds"* would resolve
+   to a page that never says "Pro". **A call to action that resolves to a page which does not
+   answer it is still a broken promise** — Ruling 18 point 2's rule was written one step too short,
+   and this extends it: **the destination must answer the promise the control made.** Standing rule
+   added to §3.
+2. **7-02 therefore has two halves, and neither is optional.**
+   **(a)** All three upsell surfaces resolve to `/welcome?step=ai` through **one** constant in
+   `src/lib/navigation/` (B's seam), zero surviving literals.
+   **(b)** The AI step gains the plan copy, **reusing the exact strings that already exist** in
+   `tier-upgrade-block.tsx`'s D7 block — *"Peer Pro is $12/month"*, the student price, and what Pro
+   adds. **No new copy is written**, so B's editorial POLICY does not need an owner ruling: this is
+   the same sentence in one more place, already ruled under D7, and D7's no-checkout rule travels
+   with it unchanged.
+3. **B corrected the manager three times; all three accepted.**
+   - **Ruling 18 point 6's mechanism was wrong.** The completeness rule cannot skip a reader past
+     `?step=ai` — the query is read before the fallback, and B proved it able to fail. **The
+     conclusion survived the wrong mechanism**, which is exactly why the brief said "establish by
+     execution" rather than "confirm my reading". A manager's mechanism is a lead, never evidence.
+   - **`/CHANGELOG.md` is not a false positive**, so the tally needs **no allowlist**: resolve
+     against `public/` as well as the route tree. B is right that an allowlist is a hole that
+     eventually swallows a genuine dead link. Ruling 18 point 2 is corrected: **the dead-link tally
+     carries no exceptions.**
+   - **`/profile` does not manage the key** — the brief's premise was wrong; the key panel has
+     exactly two importers, neither of them `/profile`. `/profile` is correctly rejected as a
+     destination on evidence rather than on my guess.
+4. **B's `typedRoutes` POLICY — rejected this round, with a threshold so it can be revisited on
+   evidence.** Making a dead link a compile error is the stronger guard, but B measured the cost: a
+   build step inside the gate and casts at roughly 30 sites. The link scan buys the same outcome
+   for a fraction of that. **Threshold: if a second dead internal link ever reaches the tree,
+   `typedRoutes` is reconsidered that round, and B's measurement is the starting point** — recorded
+   now because it is cheapest to write down at the moment it was measured.
+5. **7-01's zero blast radius is itself the finding, and C must act on it.** B planted the finished
+   chip fix and the entire gate was byte-identical: **no existing test can tell the fixed chip from
+   the broken one.** C adds cases and proves them by restoring the old argument — a type change that
+   reddens nothing is not evidence of safety, it is evidence of an untested surface.
+6. **Order unchanged: 7-02 -> 7-01 -> 6-02.** 6-02 remains unanswered by the owner; B re-checked
+   `PENDING USER ACTION` at the end of its turn and correctly wrote one line rather than guessing.
+   The 2026-10-01 escalation stands.
+7. **For the owner, not a defect and not C's to fix — the next gap after this round.** Once 7-02
+   lands, the upgrade path is fully wired for the first time: prompt -> page -> *"Peer Pro is
+   $12/month"* -> **and then nothing, because D7 says there is no checkout.** That is intentional
+   and honest, and it is now the visible end of the road. Whether that page should offer a way to
+   register interest is the owner's call, not this loop's.
+
 ## §2. ROLES — DO ONLY YOUR OWN JOB
 
 ### Agent A — Reviewer
@@ -1621,6 +1662,10 @@ C does **not** judge whether something should be fixed.
   optional-with-a-default** (Ruling 17 point 1). A default that supplies the unsafe value is a
   fail-open wearing a type annotation, and it has undone a guard twice in this loop. If a caller
   may legitimately not know, the type says so (`null`); it never guesses.
+- **And the destination must ANSWER THE PROMISE the control made** (Ruling 19 point 1). A button
+  saying "See what Pro adds" that resolves to a page never mentioning Pro is still a broken
+  promise - it just returns 200. The dead-link tally carries NO allowlist: resolve against the
+  route tree and `public/` (Ruling 19 point 3).
 - **A rendered call to action is verified by RESOLVING ITS DESTINATION** against the real route
   tree, never by asserting the element exists (Ruling 18 point 2). Rendering a control is not
   the control working - the same gap hid a silent refresh button and an unreachable quota
