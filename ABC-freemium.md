@@ -118,23 +118,70 @@ lock by rebasing onto the holder's head.
 ## §1. CURRENT STATE — THE SOURCE OF TRUTH
 
 ```
-HELD BY:          B-round8 @ 2026-09-07T22:15Z
+HELD BY:          free
 ROUND:            8
-WHOSE TURN:       B  (round 8; order is 6-02 -> 8-01)
-STOPPED BECAUSE:  finished the turn @ 2026-09-07T22:09Z — all three parts done, one commit each,
+WHOSE TURN:       C  (round 8; order is 6-02 -> 8-01)
+STOPPED BECAUSE:  finished the turn @ 2026-09-07T22:34Z — both items written, one commit each,
                   each pushed as it finished. No production code changed
-                  (`git diff --name-only -- web/` **0** files). Nine plants, nine fired, every one
-                  reverted with an asserted substitution count AND an asserted empty diff before
-                  the next run was read. Every throwaway deleted
-                  (`git status --porcelain --untracked-files=all` empty). **ONE PART OF THE BRIEF
-                  WAS NOT COMPLETED AND IS RECORDED AS BLOCKED, NOT INFERRED:** Ruling 21 point 4's
-                  live key check — the script was written as specified and the sandbox refused to
-                  run it; I did not route around the refusal.
-STATUS:           ROUND 8 OPENS ON A LIVE OUTAGE. The manager ran the live check A's sandbox
-                  refused (Ruling 22, §1w): the system key WORKS, but BOTH models the product
-                  ships — `gemini-2.5-flash` and `gemini-2.5-flash-lite` — return HTTP 404 on
-                  it TODAY, not on 2026-10-16. Seven green rounds never caught it because every
-                  test deletes the key by design. R-KEY-1's live half PASSES; blocked 6 -> 5.
+                  (`git diff -- web/` **empty**, asserted). Four plants, four measured, every one
+                  reverted with an asserted empty diff before the next run was read. The live
+                  probe script was written inside `web/`, run, and **deleted** before its commit
+                  (`git status --porcelain --untracked-files=all` empty). `.env.local` was never
+                  `cat`-ed and no key material appears anywhere in this repo.
+STATUS:           ROUND 8 — **B HAS WRITTEN THE GUIDE. TWO ITEMS: 6-02 `WRONG DATA` (live outage)
+                  and 8-01 `DESIGN`.** Gate cold and identical to baseline after every revert:
+                  tsc 0 · eslint 1 (standing `quiz.tsx:46`) · vitest **128 files / 2924 passed /
+                  1 skipped / 0 failed**.
+                  1. **6-02 — RULING 22 IS CONFIRMED IN EVERY PARTICULAR, AND IT IS BIGGER THAN
+                     TWO STRINGS.** I re-ran the live probe rather than citing it: both shipping
+                     ids **404**, `gemini-3.1-flash-lite` **PASSES**. **The finding the ruling does
+                     not carry: `disableThinking()` in `providers/gemini.ts:70-72` is a regex on
+                     the MODEL NAME**, and it is the only thing deciding whether every Gemini call
+                     runs with thinking off and a tight cap or thinking on and `+4096` headroom.
+                     The swap makes it stop matching, so the policy its own docblock describes
+                     silently inverts on 100% of calls — **and the whole generation-config policy
+                     has ZERO test coverage**. The design doc that forbade widening it
+                     (`docs/API_PERFORMANCE_MY_REVIEW_AND_PLAN.md`) is **stale, proved by calling
+                     the API**: `gemini-3.1-flash-lite` accepts `thinkingBudget: 0` without error,
+                     so **C may safely widen the predicate**. **Blast radius by planting the
+                     finished swap: tsc 0; exactly 2 tests red in 2 files** — the expected string
+                     pair, and `providers/gemini.test.ts:112`, which is **a ledger contract, not a
+                     string**: it asserts two chain attempts name *different* models, which stops
+                     being true when both tiers name one id. Rewrite through the constant, never
+                     delete. **Three further changes NO test can see**: the thinking policy, the
+                     onboarding label map (`ai-setup.tsx:237-251`, renders the raw id and shows
+                     the same model twice under *"Why two models?"*), and the local diagnostic
+                     route (`api/digest/test/route.ts`, second probe overwrites the first).
+                     **COST, and the brief's framing is half right: a deep report gets ~15%
+                     DEARER, not cheaper** (~$0.0100 -> ~$0.0116). Pass 2 does get 35% cheaper;
+                     pass 1 carries 2.5x the input on the tier whose price rose 2.5x. **The four
+                     BYOK providers cannot be tested on a Google key and I make no claim about
+                     them** — but `testConnection()` exists on all five and is **invoked nowhere**
+                     (0 call sites), which is this outage's blind spot generalised.
+                  2. **8-01 — RULING 21 POINT 2'S MECHANISM IS INCOMPLETE, AND FIXING ONLY WHAT IT
+                     NAMES WOULD BE WORSE THAN NOT FIXING IT**, because it would look separated.
+                     There are **three** couplings, not one: the shared project name; a
+                     same-function fall-through in `webSearchOptions()`; and **the one nobody had
+                     written down — `backfillWithGrounding()`
+                     (`sources/vertex-search.ts:542-560`), whose enable predicate
+                     `fallbackEnabled()` (`:444-448`) is OPT-OUT and returns
+                     `isGeminiSearchAvailable()`**. So switching Vertex AI Search on switches
+                     grounding on with it, as a backfill inside the call the credit pays for —
+                     Ruling 21's own *"nobody chose it; it was a fallback"*, shipped as a default.
+                     **Inverting it to opt-in reddens NOTHING: 2924 tests stay green.** That is
+                     the second untested money switch this turn. **RECOMMENDATION: no new
+                     variable** — make `GOOGLE_VERTEX_SEARCH_PROJECT` the sole project source
+                     (drop the fallback at `vertex-search.ts:176`) and decouple
+                     `fallbackEnabled()`. The tree already reads that name first, both scripts
+                     already prefer it, the file itself rejects "inventing a second switch", and
+                     **the build guard's blanket `GOOGLE_VERTEX_` prefix ban already covers it, so
+                     NO guard edit is needed**. Blast radius: **6 tests in 1 file**, all fixtures.
+                     **The protective test the TODO asks for ALREADY EXISTS** — `system-key.test.ts:155-175`
+                     — and I proved it fires: planting the old shared read reddens **21 tests
+                     across 4 files**. So the gate layer is well defended; the gap is the backfill.
+                     **8-01 enables nothing** — `operatorSearchAvailability()` ignores its
+                     parameter and returns both-false, and all four adapter invocations sit behind
+                     it.
                   Round-7 A's summary follows.
                   ROUND 7 — **A HAS MEASURED. CODE-SIDE IS 0.0% (0 of 30). THE DIFFERENCE LIST IS
                   EMPTY.** Blocked on the owner: **6**, unchanged by count — R-ENT-1, R-ENT-2,
@@ -747,16 +794,30 @@ GATE NOW:  **Round-7 A, cold, after every plant was reverted and every throwaway
            suite, `components/cards/pool-refresh-notice.test.tsx`.
            Round-5 A's figures follow: tsc **0** · eslint **1** · vitest **124 files passed | 1
            skipped (125)** · **2871 tests passed | 1 skipped (2872)**, **0 failed**, 9.50 s.
-TODO:      B WRITES THE ROUND-8 GUIDE, order 6-02 -> 8-01 (Ruling 22 §1w point 7):
-           **6-02 FIRST, it is an outage** — `PROVIDER_MODELS.gemini.small` and `.large` both
-           move to `gemini-3.1-flash-lite`. Establish by execution what the swap touches: tests
-           asserting a model id, the `provider-models` suite, and anything reading the
-           small/large distinction in a way one model breaks. **Keep the two-tier structure** —
-           collapsing it is a refactor nobody asked for and it is the seam a future upgrade
-           uses. **8-01** — give Vertex AI Search its own enable signal, separate from
-           anything Gemini grounding reads, so D2b can be taken one day without switching
-           grounding back on (Ruling 21 point 2). It ENABLES NOTHING; protective test asserts
-           `geminiAvailable` stays false with the Vertex signal on.
+TODO:      **C WORKS THE ROUND-8 GUIDE FROM 6-02**, in that order (Ruling 22 §1w point 7), one
+           commit each, pushed as each finishes. Both items are written up in full in §4 under
+           `### Round 8 — Agent B` with file, line and measured blast radius.
+           **6-02 FIRST, it is an outage.** Both `PROVIDER_MODELS.gemini` tiers to
+           `gemini-3.1-flash-lite`; **keep the two-tier structure** (proved harmless: tsc 0 with
+           both literals equal, and `chainForTier` keys on the tier field, not the id). Two tests
+           go red and **the second is not a string** — `providers/gemini.test.ts:112` asserts two
+           chain attempts name *different* models; rewrite it through `PROVIDER_MODELS`, never
+           delete it, and correct its line-111 comment in the same edit. Then decide the three
+           silent changes B measured, each of which reddens nothing: **`disableThinking()`**
+           (`providers/gemini.ts:70-72` — widening it is proved safe against the live API), the
+           **onboarding label map** (`ai-setup.tsx:237-251` — new id absent, and both cells then
+           show one model under *"Why two models?"*), and the **local diagnostic route**
+           (`api/digest/test/route.ts` — the second probe overwrites the first).
+           **8-01 SECOND, and it enables nothing.** Make `GOOGLE_VERTEX_SEARCH_PROJECT` the sole
+           project source for Vertex AI Search (drop the fallback at `sources/vertex-search.ts:176`;
+           6 fixtures in one file follow). **No new variable and no build-guard edit** — the
+           blanket `GOOGLE_VERTEX_` prefix ban already covers it. **Do not add a second copy of
+           the protective test at the gate**: `system-key.test.ts:155-175` already is it and B
+           proved it fires (21 tests, 4 files). The protection that is genuinely missing is at
+           the **grounding backfill**. **DO NOT change `fallbackEnabled()`'s default until the
+           manager rules** — see `OPEN FOR MANAGER` below; decoupling it from
+           `isGeminiSearchAvailable()` is 8-01's point, but flipping opt-out to opt-in reverses a
+           recorded design decision.
 PENDING USER ACTION: (1) **Apply the three migrations** under `web/supabase/migrations/20260904*`
            — this is now the ONLY thing blocking five of the six remaining halves. (2) Add
            `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` to `web/.env.local` so
@@ -766,9 +827,29 @@ PENDING USER ACTION: (1) **Apply the three migrations** under `web/supabase/migr
            NOT carry `TAVILY_API_KEY`; deploy only after the branch is green and merged.
            DONE: the local `GOOGLE_API_KEY` is filled (Ruling 21 point 4). WITHDRAWN: the trial
            backfill (no users); the 2026-10-01 model escalation (the owner decided).
-OPEN FOR MANAGER:  none — A's two escalations both closed by the manager's live run
-           (Ruling 22 points 1-2): the key shape finding is withdrawn, and the live check found
-           the outage that became round 8's first item.
+OPEN FOR MANAGER:  **ONE, from round-8 B, and C is blocked on it for half of 8-01.**
+           **`POLICY — manager decides`: should the bounded grounding backfill stay ON by
+           default?** `backfillWithGrounding` (`sources/vertex-search.ts:533-560`) is a
+           deliberate, documented, priced decision that predates D2a: when a site-scoped Vertex
+           index returns too few rows, it tops the results up with Gemini grounding. Its enable
+           predicate `fallbackEnabled()` (`:444-448`) is **opt-out** and returns
+           `isGeminiSearchAvailable()`, so **enabling Vertex AI Search enables grounding with
+           it** — the exact "nobody chose it; it was a fallback" mechanism of Ruling 21 point 2,
+           and the reason separating the environment variable alone is not enough. B measured
+           that inverting it to opt-in **reddens nothing (2924 tests still green)**.
+           **B did not write a fix and flags it rather than reversing a recorded decision (§2).**
+           For: the owner's stated position that grounding is the most expensive path and must
+           never be reached by fallback. Against: a site-scoped index cannot return a host it has
+           never crawled, so D2b's search quality may lean on it. **Reconcilable — an opt-in flag
+           keeps the capability and removes the accident — but the default is the owner's call.**
+           Either way, the predicate must stop calling `isGeminiSearchAvailable()`.
+           **TWO LEADS, not escalations, recorded for the owner and not acted on:**
+           (a) `testConnection()` is implemented by all five LLM providers and **invoked from
+           nowhere** (0 call sites) — the blind spot that hid the 6-02 outage, generalised;
+           (b) the four BYOK providers' eight model ids **cannot be tested from this machine** on
+           a Google key, and B makes no claim about whether they still exist.
+           A's two round-7 escalations both stay closed by the manager's live run (Ruling 22
+           points 1-2).
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
