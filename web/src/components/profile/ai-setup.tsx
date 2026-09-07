@@ -171,7 +171,7 @@ export function AiKeyFields({
             onChange={(e) => onProviderChange(e.target.value as UserAiProvider)}
             className={`min-w-0 flex-1 rounded-lg px-3 py-2.5 text-meta font-medium text-text focus:outline-none focus:ring-2 focus:ring-accent/35 ${
               emphasized
-                ? "border border-accent/30 bg-bg shadow-[0_3px_14px_rgba(232,93,4,0.08)]"
+                ? "border border-accent/30 bg-bg shadow-[0_3px_14px_color-mix(in_srgb,var(--color-accent)_10%,transparent)]"
                 : "bg-bg-secondary/45"
             }`}
           >
@@ -211,7 +211,7 @@ export function AiKeyFields({
             placeholder={providerKeyPlaceholder(provider)}
             className={
               emphasized
-                ? "w-full rounded-lg border border-accent/30 bg-bg py-2.5 pl-3 pr-10 text-[12.5px] text-text shadow-[0_3px_14px_rgba(232,93,4,0.08)] placeholder:text-text-faint/65 focus:outline-none focus:ring-2 focus:ring-accent/35"
+                ? "w-full rounded-lg border border-accent/30 bg-bg py-2.5 pl-3 pr-10 text-[12.5px] text-text shadow-[0_3px_14px_color-mix(in_srgb,var(--color-accent)_10%,transparent)] placeholder:text-text-faint/65 focus:outline-none focus:ring-2 focus:ring-accent/35"
                 : undefined
             }
           />
@@ -221,7 +221,7 @@ export function AiKeyFields({
   );
 
   return emphasized ? (
-    <div className="space-y-3 rounded-2xl border-2 border-accent/25 bg-accent/[0.055] p-4 shadow-[0_8px_28px_rgba(232,93,4,0.06)]">
+    <div className="space-y-3 rounded-2xl border-2 border-accent/25 bg-accent/[0.055] p-4 shadow-[0_8px_28px_color-mix(in_srgb,var(--color-accent)_8%,transparent)]">
       {fields}
     </div>
   ) : (
