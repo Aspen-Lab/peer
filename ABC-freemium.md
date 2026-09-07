@@ -14306,3 +14306,144 @@ failed**, 10.30 s. `src/lib/events/benchmark.test.ts` is the one skip, named. Id
 standing baseline, as it must be, since B changed no code.
 
 **6-02 BANKED.**
+
+#### 8 · 8-01 — separate the Vertex AI Search signal from Gemini grounding. `DESIGN`, and **Ruling 21 point 2's mechanism is incomplete in a way that matters**.
+
+**THE HEADLINE: separating the environment variable does NOT deliver Ruling 21 point 2, because
+Vertex AI Search reaches Gemini grounding through a FUNCTION CALL, not through a shared name.**
+Ruling 21 point 2 is right that `isVertexSearchAvailable()` and `isGeminiSearchAvailable()` read
+the same variable today, and right that this is the $185 mechanism. But fixing only that would
+leave the owner believing the two are separated when they are not. **There are three couplings,
+not one**, and the ruling names one:
+
+**Coupling A — the shared project name (the one the ruling names).**
+`src/lib/sources/gemini-search.ts:179-181`, `isGeminiSearchAvailable()` is
+`Boolean(process.env.GOOGLE_VERTEX_PROJECT)`. `src/lib/sources/vertex-search.ts:198-200`,
+`isVertexSearchAvailable()` is `Boolean(vertexSearchProject() && vertexSearchApp())`, and
+`vertexSearchProject()` (`:173-179`) is
+`GOOGLE_VERTEX_SEARCH_PROJECT || GOOGLE_VERTEX_PROJECT`. Confirmed.
+
+**Coupling B — `webSearchOptions()` falls through to grounding in the same function.**
+`vertex-search.ts:211-217`: `if (isVertexSearchAvailable()) return { provider: "vertex" };` then
+`return isGeminiSearchAvailable() ? { provider: "gemini" } : undefined;`. Called from **all three
+pipelines** — `src/lib/feed/pipeline.ts:133`, `src/lib/events/pipeline.ts:182`,
+`src/lib/jobs/pipeline.ts:160`.
+
+**Coupling C — and this is the one nobody has written down: THE GROUNDING BACKFILL.**
+`vertex-search.ts:542-560`, `backfillWithGrounding()`, whose own docblock (`:533-541`) calls it
+*"THE BOUNDED GROUNDING BACKFILL — the deliberate, priced exception to 'all search runs on the
+credit'"*. It is reached from inside `searchVertex` (`:551`) and calls `searchGemini` (`:553`).
+Its enable predicate is `fallbackEnabled()` (`:444-448`):
+
+```
+const flag = process.env.GOOGLE_VERTEX_SEARCH_FALLBACK?.trim().toLowerCase();
+if (flag === "off" || flag === "false" || flag === "0") return false;
+return isGeminiSearchAvailable();
+```
+
+**It is OPT-OUT.** Unless somebody has explicitly set that flag to off, turning Vertex AI Search on
+turns Gemini grounding on with it — as a backfill inside the very call the credit is paying for.
+**That is Ruling 21 point 2's own sentence — *"nobody chose it; it was a fallback"* — implemented
+as a default.** Renaming the project variable does not touch it, because it does not read the
+project variable; it calls the predicate.
+
+**MEASURED, NOT ARGUED — and the result is the same shape as 6-02's.** I planted the inversion
+(`fallbackEnabled()` returns true only on an explicit `on`/`true`/`1`), asserted the substitution
+by a non-empty diff, and ran the suite cold from `web/`:
+**`128 files passed | 1 skipped (129) · 2924 passed | 1 skipped (2925) · 0 failed`.**
+**A real behaviour change on the exact path that cost the owner $185, and NOT ONE TEST MOVED.**
+Reverted with an asserted empty `git diff -- web/`. **The money-spending switches are the
+untested ones** — that is now true twice in one turn.
+
+**WHAT I RECOMMEND, and it is not a new variable.**
+**Make `GOOGLE_VERTEX_SEARCH_PROJECT` the SOLE project source for Vertex AI Search** — delete the
+`|| process.env.GOOGLE_VERTEX_PROJECT?.trim()` fallback at `vertex-search.ts:176` — **and make
+`fallbackEnabled()` opt-in and independent of `isGeminiSearchAvailable()`.** Reasons, in order of
+weight:
+
+1. **The tree already favours it; the separation is half-built.** `GOOGLE_VERTEX_SEARCH_PROJECT`
+   already exists, is already read **first** (`:175`), is already in the build guard's explicit
+   list (`scripts/assert-byok-production-env.mjs:56`), and both operational scripts already prefer
+   it (`scripts/setup-vertex-search.mjs:14-15`,
+   `scripts/probe-vertex-search-billing.mjs:18-19`). Configure Vertex search with
+   `GOOGLE_VERTEX_SEARCH_PROJECT` + an engine id and **leave `GOOGLE_VERTEX_PROJECT` unset, and
+   `isGeminiSearchAvailable()` is already false today.** The fallback at `:176` is the only thing
+   that makes the coupling mandatory rather than optional.
+2. **A new `..._ENABLED` boolean is the wrong shape and the file says so itself.**
+   `vertex-search.ts:206-209` rejects exactly that, in its own words: the gemini connector opt-out
+   is honoured *"so honouring it here keeps one switch instead of inventing a second one a caller
+   could half-set."* The existing signal is already two-part and explicit (a project **and** an
+   app id, `:198-200`) — you cannot switch it on by accident, which is the property an enable flag
+   would be added to provide.
+3. **The build guard's prefix ban still covers it, unchanged.**
+   `FORBIDDEN_PREFIXES_ON_VERCEL = ["GOOGLE_VERTEX_"]`
+   (`scripts/assert-byok-production-env.mjs:111`) is a blanket prefix, so
+   `GOOGLE_VERTEX_SEARCH_PROJECT` is refused on Vercel exactly as `GOOGLE_VERTEX_PROJECT` is.
+   **No guard edit is needed for 8-01** — which is the answer to the TODO's "or the guard must be
+   updated in the same item". **It also means D2b carries a SECOND lock**: taking D2b one day
+   requires narrowing that prefix ban deliberately, and that narrowing is the moment to re-read
+   this entry. Leave the ban blanket.
+4. **Do NOT add the name to `vitest.env-allowlist.ts`.** That list (3 names, `:18-22`) is what gets
+   copied **out of `.env.local` into the test process**, and its docblock forbids additions without
+   a stated cost. Tests set these with `vi.stubEnv`, which needs no allowlist entry. Adding it
+   would hand the suite a real project id — the opposite of item 1-00.
+
+**BLAST RADIUS, MEASURED BY PLANTING THE RECOMMENDED SEPARATION** (fallback at `:176` deleted,
+substitution asserted before the run was read): **1 file, 6 tests, all in
+`src/lib/sources/vertex-search.test.ts`** — `isVertexSearchAvailable > is true once both are
+configured` (`:95`), `> accepts a data-store id in place of an engine id` (`:103`), the three
+`searchEndpoint` cases, and `webSearchOptions > selects vertex when a Search App is configured`.
+**Every one is a fixture that sets `GOOGLE_VERTEX_PROJECT` and expects Vertex search to come up**;
+C rewrites each to set `GOOGLE_VERTEX_SEARCH_PROJECT`. **Nothing outside that file moves** — no
+pipeline test, no route test, no census, no scan. A contained seam. Reverted with an asserted
+empty diff.
+
+**THE PROTECTIVE TEST THE TODO ASKS FOR ALREADY EXISTS, AND I PROVED IT FIRES.**
+`src/lib/search/system-key.test.ts:155-175`, *"is frozen false for both capabilities, whatever the
+flag says"*, already stubs a Vertex **search** signal (`GOOGLE_VERTEX_SEARCH_ENGINE_ID`) alongside
+a project and a key, drives entitlement **both** ways (`systemSearchAllowed: false` **and**
+`true`), and asserts `{ geminiAvailable: false, vertexAvailable: false }`. I planted the old shared
+read into `operatorSearchAvailability` (`src/lib/search/system-key.ts:184` returning
+`geminiAvailable: Boolean(process.env.GOOGLE_VERTEX_PROJECT)`) and **21 tests across 4 files went
+red**, that case first — plus `web-search.test.ts` (4), `eventweb.test.ts` (6) and
+`jobweb.test.ts` (10). Reverted with an asserted empty diff. **So the GATE layer is already
+well defended and C should not add a second copy there.** The protection 8-01 actually needs is
+the one that does not exist: a case pinning that **a configured Vertex Search App does not enable
+the grounding backfill** — the `fallbackEnabled()` hole above, where today an inversion reddens
+nothing.
+
+**8-01 ENABLES NOTHING TODAY — confirmed, by enumeration rather than assertion.**
+`operatorSearchAvailability()` (`system-key.ts:170-185`) returns a hard-coded
+`{ geminiAvailable: false, vertexAvailable: false }` and **does not read its parameter at all**
+(it is `_input`, with an eslint disable for the unused argument, `:171-175`), so no entitlement and
+no environment can move it. Every invocation of a paid search adapter in the tree sits behind it —
+`grep` for `searchGemini(` / `searchVertex(` over non-test source returns exactly three call
+regions, and each is gated: `src/lib/sources/web-search.ts:85-95` (papers, returns `[]`),
+`src/lib/events/sources/eventweb.ts:2762` and `src/lib/jobs/sources/jobweb.ts:2157`. The only
+fourth invocation is `vertex-search.ts:553`, **inside** `backfillWithGrounding`, which runs only
+after `searchVertex` has already been reached — i.e. behind `vertexAvailable`, which is frozen
+false. **So both availability answers stay false in every reachable configuration, and the
+recommendation changes none of that**: it only decides *which* variable would answer, on a day
+when the answer is allowed to be yes. Nothing here makes anything reachable.
+
+**ONE THING FOR THE MANAGER, AND IT IS A POLICY CALL, NOT A FIX.**
+**`POLICY — manager decides`:** `backfillWithGrounding` is a **deliberate, documented, priced
+design decision** (`vertex-search.ts:533-541`) that predates D2a — someone chose to top up a
+site-scoped index with open-web grounding when a query comes back thin, and wrote down why. My
+recommendation turns it **off by default**, which is a reversal of that decision, and §2 forbids me
+from reversing a recorded decision on my own judgement. The argument for changing it is Ruling 21
+point 2: the owner's stated position is that grounding is *"the most expensive path in the
+product"* and must never be reached by fallback. The argument against is that a site-scoped index
+genuinely cannot return a host it has not crawled, so D2b's search quality may depend on it.
+**These are reconcilable — an opt-in flag keeps the capability and removes the accident** — but
+the choice of default is the owner's, not mine. **I have written no fix for it; C should not
+either until this is ruled on.** Whichever way it goes, the enable predicate must stop calling
+`isGeminiSearchAvailable()`, because that is the coupling 8-01 exists to remove.
+
+**GATE, cold, after all three plants were reverted (`git diff -- web/` empty and
+`git status --porcelain --untracked-files=all` empty, both asserted before this run was read):**
+`tsc` exit **0** · `eslint` **1 problem (1 error, 0 warnings)** — the standing `quiz.tsx:46` ·
+`vitest` **128 files passed | 1 skipped (129) · 2924 passed | 1 skipped (2925), 0 failed**.
+Identical to baseline; B changed no code.
+
+**8-01 BANKED. ROUND-8 B COMPLETE — two items, both written, no production code changed.**
