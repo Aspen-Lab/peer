@@ -118,12 +118,76 @@ lock by rebasing onto the holder's head.
 ## §1. CURRENT STATE — THE SOURCE OF TRUTH
 
 ```
-HELD BY:          A-round6 @ 2026-09-07T20:11:30Z
+HELD BY:          free
 ROUND:            6
-WHOSE TURN:       A  (round 6: re-measure. The manager opens round 7.)
-STOPPED BECAUSE:  finished the turn @ 2026-09-07T20:03:40Z — all three items landed, one commit
-                  each, each pushed as it finished. 6-02 still awaits the owner.
-STATUS:           ROUND 6 — **C HAS IMPLEMENTED. ALL THREE ITEMS, 6-04 / 6-01 / 6-03**, in the
+WHOSE TURN:       manager — **opens round 7.** A found a NEW defect (proposed **7-02**) that must be
+                  ranked against the already-queued 7-01 (the chip) and 6-02 (the model swap).
+STOPPED BECAUSE:  finished the turn @ 2026-09-07T20:35:00Z — all three parts, one commit each, each
+                  pushed as it finished. No production code changed; every plant reverted with an
+                  asserted empty diff; every throwaway deleted.
+STATUS:           ROUND 6 — **A HAS MEASURED. CODE-SIDE IS 3.3% (1 of 30). ONE DIFFERENCE, AND IT IS
+                  NOT A REGRESSION.** Three parts, one commit each, each pushed as it finished; no
+                  production code changed and `git diff --name-only -- web/` asserted **0** files.
+                  1. **R-UI-3 IS RE-SCORED `MET`** (it was `PARTIAL` from Ruling 16 point 2). Scored
+                     on renders, not on the commit, and the unknown state is **the store's own** —
+                     a freshly-imported `useProfileStore` holds `null`, `partialize` writes only
+                     `profile`, and every not-known case takes its value out of that store and
+                     derives the prop with the pages' own `entitlement?.effectivePlan ?? null`.
+                     **Five states x three upsell surfaces plus both whole report trees**: nothing
+                     upsells while the plan is unknown, nothing upsells a paid reader at either
+                     limit, trial keeps the deep-report prompt and gets no refresh upsell, and the
+                     signed-out reader gets *"Sign in to refresh."* with no "Pro". **Nine
+                     source-level plants, eight fired.** The ninth is the finding: restoring
+                     `JobReport`'s `= "free"` default reddens **nothing**, confirming Ruling 17
+                     point 3 independently — and the compiler is the only evidence that reaches it,
+                     which it does (`TS2769` on both omissions, positive control compiles). **The
+                     guard lives in the TYPE ANNOTATION, not the destructuring default** — with the
+                     default restored, omitting the prop is *still* a type error.
+                  2. **THE ONE DIFFERENCE — `QuotaNotice`'s upgrade prompt links to `/settings`,
+                     which is not a route.** R-QUOTA-1 goes **`PARTIAL`**. A free or trial reader at
+                     the monthly cap is shown the required prompt and its only call to action —
+                     "Add your own key" — lands on `not-found`. Measured, not grepped: a scan of
+                     every `href="/…"` in non-test source, resolved against the real route tree
+                     **and** `public/`, returns **exactly one** dead link in the whole app.
+                     `/CHANGELOG.md` was a false positive (a real file in `public/`). **The route
+                     has never existed on any branch** — dead since 2-07 in round 2, and **A scored
+                     R-QUOTA-1 `MET` in rounds 3, 4 and 5.** A's miss, recorded as one. This is also
+                     the answer to **Ruling 17 point 6**: the two pre-existing surfaces already
+                     disagreed, so 6-03 could not match both. **7-01 must unify on
+                     `/welcome?step=ai`**, the one that is real.
+                  3. **UPSELL SURFACES ARE THREE, NOT TWO** — re-derived two independent ways, not
+                     inherited. Not a defect; a stale census. C measured two while implementing
+                     **6-04**, and **6-03** then added `PoolRefreshNotice`. Ruling 17 point 5
+                     repeated the figure after both had landed. All three behave correctly on all
+                     five states. **7-01's "close the class" is three surfaces plus the chip.**
+                  4. **THE FOURTH STATE IS LIVE, driven not read.** `ProfileSync`'s own source
+                     through four paths: no session -> **known + anonymous**; `getUser()` throws ->
+                     **stays not known**; signed in with a failed profile fetch -> **stays not
+                     known**; signed in and answered -> the real plan. So 6-03's sign-in sentence is
+                     live code. Both directions proved able to fail.
+                  5. **6-01 PROVED BY BEHAVIOUR**, not by grep: the rebuild breaker tripped through
+                     the **real** `POST /api/jobs/feed` handler writes **exactly one** row,
+                     `{kind:"breaker", path:"forced-rebuild"}`, the route still answers **200**, and
+                     **0** rows say `kind:"search"` or contain `system-search`. Residual old names
+                     in `src/`: **0**. **All three unreachable fan-out sites still present**, each
+                     with its docblock and B's split-not-flip warning.
+                  6. **NEW TALLY (Ruling 17 point 4): report routes answering an anonymous caller
+                     401 = 3 of 3** (4 of 4 with digest). **Proved able to fail.** So
+                     `QuotaNotice`'s anonymous branch stays an accepted absence.
+                  7. **All five scans 0**, grepped by hand and agreeing with the gate tests, on the
+                     same named exclusions. **Blocked flat at 6** — `grep -c "^GOOGLE_API_KEY=."`
+                     returned **0**; nothing was unblocked.
+                  **THE READING NOTE THAT MATTERS MORE THAN THE NUMBER:** rounds 5 and 6 **are**
+                  like-for-like (denominator 30 both), so 0.0% -> 3.3% is a real comparison — and it
+                  is **not a regression**. Nothing broke this round; round 6's three items all
+                  landed clean. The number rose because the measurement reached somewhere it had
+                  never looked: whether a rendered link resolves to a route.
+                  **QUEUED, NOT DEFECTS:** the dashboard chip (7-01, Ruling 17 point 5) and the
+                  `underTuned` placement (a ranked observation — the notice explains a refresh
+                  control that branch does not render; the sentence stays true and the spec does not
+                  rule on placement).
+                  ── Round-6 C's entry follows. ──
+                  ROUND 6 — **C HAS IMPLEMENTED. ALL THREE ITEMS, 6-04 / 6-01 / 6-03**, in the
                   ruled order (Ruling 16 point 6), one commit each, each pushed as it finished.
                   **NO DEVIATION** from the order or from B's guide. **THE GATE IS GREEN**:
                   tsc 0 · eslint 1 (standing `quiz.tsx:46`) · vitest **125 files / 2906 tests /
@@ -406,15 +470,23 @@ A'S OWN FIXTURE FAULTS, recorded because each produced a plausible FALSE reading
                   regressions.** Also live: the **CRLF** trap (Ruling 10 point 2c) — a
                   multi-line plant literal with `\n` separators matched **0** times; the count
                   assertion caught it and a whitespace-tolerant regex matched 1.
-LAST DIFFERENCE:  **0.0% code-side MEASURED AGAINST D2a (0 of 30) — round-5 A, difference list
-                  EMPTY.** Blocked on the owner: **6** — R-ENT-1, R-ENT-2, R-METER-1, R-METER-3,
+LAST DIFFERENCE:  **3.3% code-side (1 of 30) — round-6 A. ONE difference: R-QUOTA-1 `PARTIAL`,
+                  `QuotaNotice`'s upgrade prompt links to `/settings`, a route that has never
+                  existed.** Blocked on the owner: **6** — R-ENT-1, R-ENT-2, R-METER-1, R-METER-3,
                   R-KEY-1, R-QUOTA-2. **N/A: R-METER-2** (re-listed by name with that word, Ruling
-                  12 point 3). Denominator **30**. **Not like-for-like with round 4's 0/31** — the
-                  denominator moved because R-METER-2 left it, not because anything improved.
-GATE (0% unexplained, both measurements):  **NOT MET — and the code side is still not why.**
-           Code-side is **0.0%** and the difference list is **empty**; six items carry a blocked
-           half that only the owner can close. `GATE: MET` needs both at zero.
-DONE:      **Round 6 C: ALL THREE ITEMS, 6-04 / 6-01 / 6-03**, in the ruled order, one commit
+                  12 point 3). Denominator **30**. **Like-for-like with round 5** (30 both) — but
+                  the rise is **not a regression**: the defect has been in the tree since round 2
+                  and A scored it `MET` three rounds running. The measurement improved, not the
+                  build's condition.
+GATE (0% unexplained, both measurements):  **NOT MET — and this time the code side IS part of why.**
+           Code-side is **3.3%** with one named difference, and six items carry a blocked half that
+           only the owner can close. `GATE: MET` needs both at zero.
+DONE:      **Round 6 A: all three parts**, one commit each, each pushed as it finished; no
+           production code changed (`git diff --name-only -- web/` asserted **0**); every plant
+           reverted with an asserted empty diff; every throwaway deleted; **9 plants, 8 fired and
+           the 9th is the finding** (Ruling 17 point 3 confirmed independently, and the compiler
+           carries what the render cannot see).
+           **Round 6 C: ALL THREE ITEMS, 6-04 / 6-01 / 6-03**, in the ruled order, one commit
            each, each pushed as it finished; gate green cold after each; every new test proved by
            reverting the source or planting the old defect (substitution count asserted before the
            run was read, every time) — **11 plants, 11 fired**; no test deleted; no migration; no
@@ -439,7 +511,16 @@ DONE:      **Round 6 C: ALL THREE ITEMS, 6-04 / 6-01 / 6-03**, in the ruled orde
            every throwaway deleted and every plant restored with an asserted empty diff.
            **Round 5 B: all four items**, 5-01 … 5-04, one commit each, each pushed; no code
            changed; the three-stage measurement plant reverted with an asserted empty diff.
-GATE NOW:  **Round-6 C, cold, after every plant was reverted and no throwaway remained
+GATE NOW:  **Round-6 A, cold, after every plant was reverted and every throwaway deleted
+           (`git diff --name-only -- web/` **0** files and
+           `git status --porcelain --untracked-files=all` **0** lines, both asserted before this run
+           was read):** `tsc` exit **0** · `eslint` **1 problem (1 error, 0 warnings)** — the
+           standing `quiz.tsx:46` · `vitest` **125 files passed | 1 skipped (126)** · **2906 tests
+           passed | 1 skipped (2907)**, **0 failed**, 9.50 s.
+           `src/lib/events/benchmark.test.ts` is the one skip, named. **Identical to round-6 C's
+           and to the manager's Ruling-17 re-run, as it must be — A changed no code.**
+           Round-6 C's figures follow.
+           **Round-6 C, cold, after every plant was reverted and no throwaway remained
            (`git status --porcelain --untracked-files=all` shows only the two new source files):**
            `tsc` exit **0** · `eslint` **1 problem (1 error, 0 warnings)** — the standing
            `quiz.tsx:46` · `vitest` **125 files passed | 1 skipped (126)** · **2906 tests passed |
@@ -449,50 +530,51 @@ GATE NOW:  **Round-6 C, cold, after every plant was reverted and no throwaway re
            suite, `components/cards/pool-refresh-notice.test.tsx`.
            Round-5 A's figures follow: tsc **0** · eslint **1** · vitest **124 files passed | 1
            skipped (125)** · **2871 tests passed | 1 skipped (2872)**, **0 failed**, 9.50 s.
-TODO:      **ROUND-6 A RE-MEASURES.** Denominator is **30**; **R-METER-2 is `N/A`** and must be
-           re-listed by name with that word every round (Ruling 12 point 3). **R-UI-3 was set
-           `PARTIAL` by Ruling 16 point 2 and is A's to re-score BY BEHAVIOUR** — not from this
-           log, and not from the commit message. Round-5 A's `MET` stands as history.
-           **Questions a fixture cannot settle — answer each by driving the thing, not by
-           reading it:**
-           1. **R-UI-3, the whole of it.** Render each upsell surface with the entitlement
-              genuinely unhydrated — not a hand-fed `null`, but the store as a cold page load
-              leaves it — and confirm a **paid** reader sees no upsell on either surface, at the
-              200/day breaker and on the monthly path. Then confirm the same reader is upsold
-              normally once the plan arrives. C's cases pass a `null` in directly; that proves the
-              component, not the page.
-           2. **Does anything still turn "not known" into "free" on the way to a screen?** C's
-              census says two upsell surfaces and no third, and the compiler enumerated 24
-              production reads — but a *new* consumer only has to call `entitlementGrants` and it
-              compiles. Grep for that helper's callers and ask of each: capability or upsell?
-           3. **The signed-out reader actually leaves the unknown state.** `ProfileSync` sets the
-              anonymous entitlement in two places (`!supabase`, and `onSession(false)`), and a
-              third path — a thrown `getUser()` — deliberately does not. Drive all three and say
-              which state the store ends in. If a real signed-out load never reaches either
-              setter, 6-03's sign-in sentence never renders and the item is only half landed.
-           4. **6-03 on screen, not in a string test.** Does the notice appear where the refresh
-              control is, on jobs and on events, and **not** on Papers? C recorded one placement
-              judgement to question: the notice is gated on the tile's render condition, not the
-              refresh **button's**, so on the `underTuned` branch it appears beside a tile that
-              has no refresh button. Look at it and rule.
-           5. **6-01 by behaviour.** Trip the rebuild breaker on a real request and read the row:
-              `kind: "breaker"`, `path: "forced-rebuild"`, and **zero** rows saying
-              `"system-search"` anywhere. Confirm the three fan-out sites are still **0** by
-              construction — kept, not deleted.
+TODO:      **THE MANAGER OPENS ROUND 7.** Round 6 is measured and closed on A's side. Denominator
+           stays **30**; **R-METER-2 is `N/A`** and must be re-listed by name with that word every
+           round (Ruling 12 point 3). Exclusions: **none**, re-listed.
+           **Three items are now queued and the manager ranks them:**
+           1. **PROPOSED 7-02 — the dead upgrade link.** `quota-notice.tsx:142` renders
+              `href="/settings"`; there is no `/settings` route and there never has been on any
+              branch. The two sibling surfaces both point at `/welcome?step=ai`, which exists.
+              **This is the only item on A's difference list** and it is wrong data aimed at a
+              reader who has just been refused, so by the standing rank rule it outranks the two
+              below. It also SUBSUMES Ruling 17 point 6's unification requirement: 6-03 could not
+              match "the existing upgrade prompt" because the two pre-existing surfaces already
+              disagreed. **Unify on `/welcome?step=ai`.**
+           2. **7-01 — the dashboard chip** (Ruling 17 point 5), unchanged and still queued.
+              **Scope correction from A's census: the class is THREE upsell surfaces plus the chip,
+              not two plus the chip** — 6-03 added `PoolRefreshNotice` after C counted.
+           3. **6-02 — the Gemini model swap.** Still waiting on the owner; the **2026-10-01**
+              escalation date stands and the models retire **2026-10-16**.
+           **Also for the manager to rule, not a defect:** the `underTuned` placement — on
+           `FeedMoreTile`'s "Tune your signals" branch there is no refresh button, yet the notice
+           explaining refresh renders beside it. A's ruling: report, do not score. The sentence
+           stays true, no wrong value is shown, and mirroring `looksUnderTuned` outside the tile
+           would put one predicate in two files.
            **CARRY EVERY STANDING TALLY BY NAME**, even at zero: paid readers shown any upsell
-           (0, by render — now **including a mid-hydration render**, which is new this round);
-           `poolRefreshAllowed` reaching a component (was 0; is now **1** — the count is no
-           longer the finding, so re-source it as "entitled readers shown a refresh upsell", which
-           must be 0 and must come from a **live-trial render** and a **mid-hydration render**,
-           never from the entitlement unit tests, which would be vacuous in exactly the way Ruling
-           14 point 4 retired); `process.env.TAVILY_API_KEY` reads in non-test source (0);
-           `kind:"search"` usage rows (0); operator-key search requests per persona (0, sourced
-           from the **five surfaces that actually search** — Ruling 14 point 4); Ruling-75
-           option-building cases asserting absence (4); `resolveProvider` call sites without a
-           context (0, by the compiler); figure matchers reachable with a null-user context (0);
-           quota/breaker reachability per route on the app's real request shape; guard tests
-           proved by planting; `local-no-auth` ABSENT; and **R-METER-2 `N/A`**.
+           (0, by render, **including a mid-hydration render**); entitled readers shown a refresh
+           upsell (0, from a **live-trial render** and a **mid-hydration render**, never from the
+           entitlement unit tests — Ruling 14 point 4); `poolRefreshAllowed` reaching a component
+           (**1**, no longer the finding); `process.env.TAVILY_API_KEY` reads in non-test source
+           (0); `kind:"search"` usage rows produced (0, measured on a real request); operator-key
+           search requests per persona (0, sourced from the **five surfaces that actually search**
+           — Ruling 14 point 4); Ruling-75 option-building cases asserting absence (4);
+           structured-source accepted reads (3); `resolveProvider` call sites without a context
+           (0, by the compiler); figure matchers reachable with a null-user context (0, by the
+           compiler); quota/breaker reachability per route on the app's real request shape; shallow
+           calls on refused deep requests (1 per refused papers request, bucket-bounded);
+           `[quota] store unavailable` lines (>=1 in the outage cases, 0 on production paths);
+           usage rows per provider request (1, never 2, never 0); guard tests proved by planting;
+           `local-no-auth` **ABSENT** (503 from the shared guard — **now asserted once at the
+           chokepoint rather than three times per route; not a drop**); **report routes answering
+           an anonymous caller 401 (3 of 3; 4 of 4 with digest)** — Ruling 17 point 4, proved able
+           to fail this round; and **R-METER-2 `N/A`**.
            **A new tally must be proved able to fail** (Ruling 14 point 5).
+           **NEW, EARNED THIS ROUND — a sixth scan is worth making permanent:** every rendered
+           internal `href` resolves to a real route segment or a `public/` asset. It found the only
+           defect on this round's list, and it is a handful of lines. **Manager's call**, since A
+           does not change code.
 PENDING USER ACTION: (1) Apply the three migrations under `web/supabase/migrations/20260904*`.
            (2) After applying, save a profile once in the app. (3) Optionally fill
            `GOOGLE_API_KEY` in `web/.env.local` (and the Supabase URL + service-role key) so A
@@ -501,9 +583,15 @@ PENDING USER ACTION: (1) Apply the three migrations under `web/supabase/migratio
            NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY — and must NOT carry
            TAVILY_API_KEY (the build will refuse it after 5-03). Deploy only after round 5
            reports green and the branch is merged. WITHDRAWN: the trial backfill (no users).
-OPEN FOR MANAGER:  none — C's three flags ruled in §1r (Ruling 17 points 4-6). The chip is
-           round-7 item 7-01; the anonymous quota copy is an accepted absence with a tally;
-           6-03's upgrade line is ratified. R-UI-3 is A's to re-score this turn.
+OPEN FOR MANAGER:  **ONE, and it is the round's difference.** `POLICY — manager decides` is not
+           claimed: the dead `/settings` link is a plain defect, not a judgement call, and A has
+           named the destination it should unify on. What the manager owes is the **ranking** of
+           proposed 7-02 against 7-01 and 6-02, and a ruling on the two things A reported without
+           scoring: the `underTuned` placement, and whether the internal-link scan becomes
+           permanent. **R-UI-3 is re-scored `MET`** — Ruling 16 point 2's `PARTIAL` is discharged,
+           and round-5 A's earlier `MET` still stands in the log as history.
+           C's three flags remain ruled in §1r; **Ruling 17 point 6's destination requirement is
+           now ANSWERED and it did not pass** — see proposed 7-02.
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
@@ -519,6 +607,7 @@ part-way; a released lock looks identical in both cases.
 | 3 (A) | **code-side 6.5% (2/31, exclusions: none)** · **blocked 7** — R-ENT-1, R-ENT-2, R-METER-1, R-METER-2, R-METER-3, R-KEY-1, R-QUOTA-2 | NOT MET — all seven round-2 differences CLOSED by behaviour; gate green with the quota fixture date unchanged and now a day in the past; personas 45 of 45 (was 41 of 45); all five scans 0, grepped independently and agreeing with C's three new gate tests; the `GOOGLE_VERTEX_` prefix ban proved with an invented `GOOGLE_VERTEX_ZZZ`; all four operator search providers gated, breaker-charged and writing one named usage row; papers 0 on every persona in both runtimes; `local-no-auth` ABSENT (503 ×3). Two differences remain, both NEW: a **paid** reader at the 200/day breaker is shown an upgrade prompt by 2-07's `QuotaNotice` (R-UI-3, the payload is correct and the component is the defect), and Ruling 7 point 3's branded entitlement context has not landed — zero branded/opaque types exist in the tree, so an unguarded caller is still a grep miss rather than a compile error (R-SEC-2). **The blocked count rose 4 -> 7 as accounting, not decay** (Ruling 5 point 8): same two owner-action causes, now enumerated per item by name |
 | **4 (A)** | **code-side 0.0% (0/31, exclusions: none)** · **blocked 7** — R-ENT-1, R-ENT-2, R-METER-1, R-METER-2, R-METER-3, R-KEY-1, R-QUOTA-2 | **NOT MET — but the code side is no longer why. The difference list is EMPTY.** Both round-3 differences closed by behaviour and each proved by planting the old defect back: a **paid** reader at the 200/day breaker renders the breaker sentence with **hours** and no upsell of any kind on either the breaker or the monthly path (trial keeps the prompt), and the branded entitlement context is enforced by the **compiler** — five bad shapes, five distinct errors (TS2345 / TS2554 / TS2554 / TS2322 / TS2353), including the `{ userId: null, byok: false }` figure context that used to compile. R-QUOTA-1 and R-QUOTA-3, `PARTIAL` on papers under Ruling 9, are `MET` on the **streamed** shape: streamed deep counts once, streamed shallow counts zero, `quota` precedes `mode`, the paid day-key is charged. Personas 45 of 45 with the cross-cutting fault gone. All five scans 0, grepped independently and agreeing with the gate tests, and **all six proved by planting an offender** (6 of 6, Ruling 10 point 4); `resolveProvider` call sites without a context **0 by construction**; figure matchers reachable with a null-user context **0 by the compiler**; `local-no-auth` ABSENT (503 ×3). **Blocked flat at 7** — two owner actions, three unapplied migrations and no local key, are now the entire gate |
 | **5 (A)** | **code-side 0.0% (0/30, exclusions: none)** · **blocked 6** — R-ENT-1, R-ENT-2, R-METER-1, R-METER-3, R-KEY-1, R-QUOTA-2 · **R-METER-2 is `N/A`** | **NOT MET — the code side is still not why; the difference list is EMPTY.** **NOT LIKE-FOR-LIKE WITH ROUND 4:** the denominator moved 31 -> 30 because Ruling 12 point 3 made R-METER-2 `N/A` and took it out of the scored set, so the two percentages are not a trend — what compares is that both rounds found **zero** code-side differences, and blocked fell 7 -> 6 **only** because R-METER-2 left the list, not because anything was unblocked. **D2a re-measured and MET:** the operator's search key is unreachable for every plan **including paid** — both feed routes and all three adapters, driven with `TAVILY_API_KEY` and `BRAVE_SEARCH_API_KEY` as distinct armed sentinels **and** a fully configured Vertex project, give **0 requests carrying either sentinel and 0 requests to any paid search host** across all five personas; a paid caller's explicit `poolRefresh: true` is 0 too. With the flag **forced `true`** — an input no production path can produce — the resolver still returns no Tavily key and `operatorSearchAvailability` is still frozen `false` with a Vertex project present; the residual is Brave only, behind a flag whose every producer is a hard `false` (all 33 non-test mentions traced). **BYOK survives on every plan, free included** (six route cases plus both adapters). **The rebuild breaker is reachable AND caps**, proved from real requests on both surfaces for trial and paid — exactly one increment on `forced_rebuilds_today:<user>:<UTC day>` — and 499 allowed / past-500 refused with one `kind:"breaker"` row, zero `kind:"search"` rows, and an untrip on the next UTC day. **The build guard proved both ways** against the real script: three required names each named when dropped, `TAVILY_API_KEY` refused and never printed. Personas **45 of 45**. All five scans **0**, grepped independently and agreeing with the gate tests (scan 3's Tavily case is now `[]`, deliberately non-uniform with Brave's `[GATE]`). **9 plants, 9 fired**; the Brave protective test proved able to fail (3 cases) and restored with an asserted empty diff. `kind:"search"` rows **0**; `process.env.TAVILY_API_KEY` reads in non-test source **0**; Ruling-75 absence cases **4**; structured-source accepted reads **3**; `local-no-auth` **ABSENT** (503 ×3); paid upsells **0**. **6-01's rename reported as QUEUED, not as a finding** (Ruling 14 point 3). One `POLICY — manager decides` for the owner: `poolRefreshAllowed` reaches no component, so the one paid feature a reader could notice is invisible in the interface |
+| **6 (A)** | **code-side 3.3% (1/30, exclusions: none)** · **blocked 6** — R-ENT-1, R-ENT-2, R-METER-1, R-METER-3, R-KEY-1, R-QUOTA-2 · **R-METER-2 is `N/A`** | **NOT MET — and this time the code side is part of why. ONE difference, and it is NOT a regression.** **R-UI-3 is re-scored `MET`** (Ruling 16 point 2's `PARTIAL` discharged): five entitlement states × three upsell surfaces plus both whole report trees, with the unknown state taken from the **real store** (a fresh `useProfileStore` holds `null`; `partialize` writes only `profile`) and the prop derived by the pages' own `entitlement?.effectivePlan ?? null` — nothing upsells while the plan is unknown, nothing upsells a paid reader at either limit, trial keeps the deep-report prompt and gets no refresh upsell, the signed-out reader gets *"Sign in to refresh."* with no "Pro". **9 source-level plants, 8 fired**; the 9th confirms **Ruling 17 point 3 independently** — restoring `JobReport`'s `= "free"` default reddens **nothing**, and the **compiler** is the only evidence that reaches it (`TS2769` on both omissions, positive control compiles); **the guard lives in the type annotation, not the destructuring default**. **THE ONE DIFFERENCE: `QuotaNotice`'s upgrade prompt links to `/settings`, which is not a route and never has been on any branch** — R-QUOTA-1 `PARTIAL`; a scan of every rendered internal `href` against the real route tree **and** `public/` returns **exactly one** dead link in the whole app (`/CHANGELOG.md` was a false positive). Dead since 2-07 in round 2; **A scored R-QUOTA-1 `MET` in rounds 3, 4 and 5** — A's miss, recorded as one, and it is also the answer to **Ruling 17 point 6**, which did not pass: the two pre-existing surfaces already disagreed, so 7-01 must unify on `/welcome?step=ai`. **Upsell surfaces are THREE, not two** — re-derived two ways, not inherited; a stale census (C counted during 6-04, 6-03 then added `PoolRefreshNotice`), not a defect. **The fourth state is live**, driven through `ProfileSync`'s four paths: no session → known+anonymous, a thrown `getUser()` and a failed profile fetch → stays not-known — both directions proved able to fail. **6-01 proved by behaviour** through the real jobs feed handler: one `{kind:"breaker", path:"forced-rebuild"}` row, route still 200, **0** rows saying `system-search`; residual old names **0**; all three unreachable fan-out sites still present with their docblocks. **NEW TALLY (Ruling 17 point 4): report routes answering an anonymous caller 401 = 3 of 3** (4 of 4 with digest), **proved able to fail**. All five scans **0**, grepped by hand and agreeing with the gate tests on the same named exclusions. Blocked flat at **6** — `grep -c "^GOOGLE_API_KEY=."` returned **0**; nothing unblocked. **READING NOTE: like-for-like with round 5 (30 both), so 0.0% → 3.3% is a real comparison — but nothing broke. Round 6's three items all landed clean; the number rose because the measurement reached somewhere it had never looked** |
 
 ---
 
@@ -12090,3 +12179,130 @@ and the spec rules on the copy and the audience but not on the placement. Agains
 `looksUnderTuned` outside the tile would put one predicate in two files, which is a class of defect
 this loop keeps finding. **Carried to part 3 as a ranked observation, not a difference**, with the
 manager free to make it a round-7 item.
+
+#### PART 3 of 3 — scans, tallies, the difference list, and the two numbers
+
+Cold: every throwaway deleted, `git diff --name-only -- web/` **0** files and
+`git status --porcelain --untracked-files=all` **0** lines before this run was read.
+
+##### 3.1 — The five static scans: grepped by hand AND run as gate tests. **They agree.**
+
+| Scan | My grep | The gate test | Agree? |
+|---|---|---|---|
+| 1 — rendered `Tier 0/1/2 \| BYOK` | **0** rendered. 67 raw hits; after dropping single-line comments, **4** remain and each was read: three are continuation lines inside `/* */` or `{/* */}` blocks (`jobs/[id]/page.tsx:1358`, `:1539`, `page.tsx:860`) and one is a **`console.warn`** (`tier2-rerank.ts:155`) — a developer log line, never rendered | `ui-vocabulary.test.ts` — "nothing outside the **four** unrendered exclusions", plus a case keeping the exclusion list honest | **yes**, and on the same four |
+| 2 — browser `NODE_ENV === "development"` | **0**. 8 raw hits: 4 are comments; the 4 real ones (`auth/callback/route.ts:17`, `env/local-dev.ts:23`, `pool-cache-disk.ts:42`, `pool-cache-runtime.ts:14`) are all **server-only** — I checked every importer for a `"use client"` header and found **none** — and not one decides AI availability, entitlement, or an AI-dependent UI state | `no-client-dev-flags.test.ts`, allow-list kept honest | **yes** |
+| 3 — `process.env.TAVILY_API_KEY` reads | **0** in non-test source. 4 hits: a docblock, two commented-out lines of the removed branch, and a `delete` in the test harness — a deletion, not a read | `spend-scans.test.ts` — "reads `TAVILY_API_KEY` **NOWHERE** in production source" | **yes** |
+| 4 — bare `resolveProvider()` | **0**. All 3 hits are comments | `spend-scans.test.ts` — "no argument-less call anywhere" | **yes** |
+| 5 — spending routes without the guard | **0**. I classified all 10 API routes that can reach a provider or a pipeline: **9 GUARDED**, 1 "unguarded" — `jobs/dispatch-digests`, the cron, whose justification I read in source rather than took on trust: `CRON_SECRET` at `:123` and `aiTier: 0` at `:223` (D9, R-SEC-4) | `spend-scans.test.ts` — three cases, including one that keeps the exemption list honest and one that reports the guarded count so a **drop** is visible | **yes** |
+
+##### 3.2 — Every standing tally, by name, reported even at zero
+
+| Tally | Value | Source, and how it could fail |
+|---|---|---|
+| Paid readers shown any upsell | **0** | by **render**, on three surfaces and both whole report trees, at the monthly path and the 200/day breaker — **now including a mid-hydration render**, new this round. Plants A/B/C redden it |
+| Entitled readers shown a refresh upsell (re-sourced, per the TODO) | **0** | from a **live-trial render** and a **mid-hydration render**, never from the entitlement unit tests. Plant D reddens the mid-hydration half |
+| `poolRefreshAllowed` reaching a component | **1** (was 0) | `pool-refresh-notice.tsx:101`. No longer the finding — 6-03 is why it moved |
+| `process.env.TAVILY_API_KEY` reads in non-test source | **0** | scan 3, both ways |
+| `kind:"search"` usage rows produced | **0** | measured on a real request in part 2 §2.6. The three writers exist (`jobweb:2243`, `eventweb:2848`, `web-search:170`) and all three sit inside `if (operatorFunded)`, which D2a makes dead |
+| Operator-key search requests per persona | **0 on every surface, every persona** | **sourced from the five surfaces that actually search** (Ruling 14 point 4): the two feed routes (14 sentinel-armed persona cases) and the three adapters (986 cases). Stated, because a number from the four report routes would be vacuous |
+| Ruling-75 option-building cases asserting absence | **4** | Ruling 13 point 4. Threshold unchanged: if grounding is re-enabled for any plan, all four are restored to content assertions the same round |
+| Structured-source key reads accepted outside the gate | **3** | `spend-scans.test.ts`, counted rather than allow-listed |
+| `resolveProvider` call sites without a context | **0** | **by the compiler** (branded `EntitledContext`, 3-02) |
+| Figure matchers reachable with a null-user context | **0** | **by the compiler** |
+| Quota/breaker reachability on the app's real request shape | **per route, all reached** | streamed and non-streamed papers, both feeds, both report routes; the rebuild breaker re-driven this round through the real jobs feed handler |
+| Guard/scan tests proved by planting | **all of them** | scans 1–5 each carry a plant or an honesty case; my own additions were planted this round |
+| Shallow calls on refused deep requests (Ruling 11 point 2) | **1 per refused papers deep request**, bounded by the 20/h report bucket | accepted cost. Jobs and events keep their true no-LLM payload. Threshold unchanged |
+| `[quota] store unavailable` lines | **≥1** in the outage cases, **0** on production paths | an outage writes the line and **no** `usage_events` row |
+| Usage rows per provider request | **1** — never 2, never 0 | R-METER-1 as amended |
+| `local-no-auth` | **ABSENT** from every deployed runtime | the shared guard fails closed with **503** when a deployment has no auth configuration, so the id is never synthesised. **Reading note:** round-5 A reported this as "503 ×3"; the assertion now lives **once**, at the shared chokepoint, rather than three times per route. Fewer assertions, same property, asserted in a stronger place — not a drop |
+| **NEW — report routes answering an anonymous caller 401** (Ruling 17 point 4) | **3 of 3** — `/api/jobs/report`, `/api/events/report`, `/api/papers/report`. **4 of 4** counting `/api/digest`, which is in the same family | driven on real `NextRequest`s. **Proved able to fail** (Ruling 14 point 5): turning the guard's 401 into a 200 reddens both cases. **A fixture pitfall met and cited, not reported:** an empty body returns 200 **above** the guard, so the first attempt measured the body validator instead of the auth gate — **Ruling 7 point 5**, not a finding |
+| R-METER-2 | **`N/A`** | Ruling 12 point 3, re-listed by name with that word |
+
+##### 3.3 — RANKED DIFFERENCES
+
+**1. `QuotaNotice`'s upgrade prompt links to a page that does not exist. — R-QUOTA-1, `PARTIAL`.**
+
+A free or trial reader who has used this month's deep reports is shown the required prompt, and its
+only call to action — **"Add your own key"** — points at **`/settings`**. There is no `/settings`
+route: the app's segments are `auth`, `changelog`, `events`, `jobs`, `papers`, `persona`, `profile`,
+`saved`, `welcome`. The reader lands on `not-found`. Measured, not grepped: a scan of every
+`href="/…"` in non-test source resolved against the real route tree **and** `public/` returns
+**exactly one** dead link in the whole application, this one, at `quota-notice.tsx:142`.
+`/CHANGELOG.md` matched on the first pass and is a false positive — a real file in `public/` — and
+excluding static assets is what makes the count honest.
+
+Ranked first because it is the surface's only action, aimed at the reader who has just been refused.
+It also contradicts the component's own docblock twice ("a dead link is worse than no link"; "The
+prompt points at the key panel, which is a real thing a reader can act on today").
+
+**`git log --all -- src/app/settings` returns nothing — the route has never existed on any branch.**
+It has been dead since 2-07 shipped it in round 2. **A scored R-QUOTA-1 `MET` in rounds 3, 4 and 5.
+That is A's miss and it is recorded as one**, not as a regression: nothing broke this round, the
+measurement got better. The two sibling surfaces both point at `/welcome?step=ai`, which exists.
+
+**Part 1's table scored R-QUOTA-1 `MET`. That score is corrected here to `PARTIAL`, not rewritten**
+— the same convention Ruling 9 point 1 and Ruling 16 point 2 used. It was found in part 2, after
+part 1 was banked and pushed.
+
+**This is also the answer to Ruling 17 point 6's destination requirement**, which asked whether
+6-03's link matches "the existing upgrade prompt". It does not match both, because the two
+pre-existing surfaces already disagreed. 7-01's unification must land on `/welcome?step=ai` — the
+one of the two that is real.
+
+*No second difference.* The list ends here.
+
+##### 3.4 — Reported, but NOT on the difference list
+
+- **The dashboard chip reads "Free" to a paid reader mid-hydration.** **QUEUED AS 7-01, NOT A
+  DEFECT** (Ruling 17 point 5). Confirmed present in source — `planChipText` returns `"Free"` for
+  any non-paid, non-trial plan, and `page.tsx:511` hands it `grants`, the capability view. Reported
+  here so it is not lost, and scored against nothing.
+- **"Exactly two upsell surfaces" is now three.** Not a defect; a stale census. C measured two while
+  implementing 6-04, and 6-03 then added `PoolRefreshNotice`. Ruling 17 point 5 repeated the figure
+  after both had landed. All three behave correctly on all five states. Recorded so 7-01's "close
+  the class" is scoped to **three surfaces plus the chip**.
+- **The `underTuned` placement.** A ranked observation, not a difference: on `FeedMoreTile`'s
+  "Tune your signals" branch there is no refresh button, yet the notice explaining refresh still
+  renders beside it. The sentence stays true, no wrong value is shown, and the spec rules on the
+  copy and the audience but not the placement. Manager's call whether it becomes a round-7 item.
+- **Ruling 7 point 5's fixture pitfalls**, met and cited rather than reported: an empty body returns
+  200 above the guard on the report routes.
+
+##### 3.5 — THE TWO NUMBERS
+
+**Code-side: 3.3% (1 of 30). Exclusions: none.** Method, in one sentence: (NOT MET + PARTIAL) ÷ 30,
+where the one item is **R-QUOTA-1 `PARTIAL`** (dead upgrade link) and `R-METER-2` is **`N/A`** and
+outside the denominator.
+
+**Blocked: 6, by name** — **R-ENT-1, R-ENT-2, R-METER-1, R-METER-3, R-KEY-1, R-QUOTA-2.** Method, in
+one sentence: count of requirements with a half that only the owner can close — the three unapplied
+`20260904*` migrations and the absent local `GOOGLE_API_KEY` (`grep -c` returned **0**, a count,
+never a value). Unchanged from round 5; nothing was unblocked.
+
+**READING NOTE, and it matters more than the number.** Rounds 5 and 6 **are** like-for-like — the
+denominator is 30 in both — so 0.0% → 3.3% is a real comparison, and it would be wrong to read it as
+a regression. **Nothing broke this round.** The one item on the list has been in the tree since
+round 2 and was scored `MET` by A three rounds running. The number went up because the measurement
+reached somewhere it had never looked: whether a rendered link resolves to a route. Round 6's own
+three items all landed and all verify clean.
+
+**Absences, and where I looked.** No live-model persona pass exists: `web/.env.local` has no
+`GOOGLE_API_KEY` (count, never a value) and no Supabase URL or service-role key, so every persona
+row is the route's behaviour and not the model's. No `next dev` was started (Ruling 2 point 5). The
+`!supabase` branch of `ProfileSync` is the one of its four paths not driven — it is named rather
+than claimed.
+
+##### 3.6 — THE GATE, verbatim, cold
+
+```
+tsc   exit 0
+eslint  ✖ 1 problem (1 error, 0 warnings)   — the standing quiz.tsx:46 react-hooks/set-state-in-effect
+vitest  Test Files  125 passed | 1 skipped (126)
+        Tests  2906 passed | 1 skipped (2907)     0 failed     9.50s
+```
+
+Identical to round-6 C's figures and to the manager's Ruling-17 re-run, as it must be — **A changed
+no code.** `src/lib/events/benchmark.test.ts` is the one skip, named.
+
+**`GATE: NOT MET`.** It needs **both** numbers at zero. Code-side is **3.3%**, and the blocked list
+still has six names on it.
