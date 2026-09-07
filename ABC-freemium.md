@@ -726,14 +726,15 @@ TODO:      A RE-MEASURES ROUND 7. **Denominator is 30. R-METER-2 is `N/A`** (Rul
            **6-02** remains unanswered by the owner; `PENDING USER ACTION` re-read after a
            `git pull` at the end of C's turn and the model swap is still not on it. The
            **2026-10-01** escalation date stands.
-PENDING USER ACTION: (1) Apply the three migrations under `web/supabase/migrations/20260904*`.
-           (2) After applying, save a profile once in the app. (3) Optionally fill
-           `GOOGLE_API_KEY` in `web/.env.local` (and the Supabase URL + service-role key) so A
-           can verify the live halves locally; otherwise A writes a production checklist.
-           (4) Vercel now needs THREE variables, not four: GOOGLE_API_KEY,
-           NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY — and must NOT carry
-           TAVILY_API_KEY (the build will refuse it after 5-03). Deploy only after round 5
-           reports green and the branch is merged. WITHDRAWN: the trial backfill (no users).
+PENDING USER ACTION: (1) **Apply the three migrations** under `web/supabase/migrations/20260904*`
+           — this is now the ONLY thing blocking five of the six remaining halves. (2) Add
+           `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` to `web/.env.local` so
+           those five can be measured locally rather than only in production. (3) After
+           applying, save a profile once in the app. (4) Vercel needs THREE variables
+           (`GOOGLE_API_KEY`, `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`) and must
+           NOT carry `TAVILY_API_KEY`; deploy only after the branch is green and merged.
+           DONE: the local `GOOGLE_API_KEY` is filled (Ruling 21 point 4). WITHDRAWN: the trial
+           backfill (no users); the 2026-10-01 model escalation (the owner decided).
 OPEN FOR MANAGER:  none — C's placement flag ruled in §1u (Ruling 20 point 3): the plan copy
            stays visible to every reader on that step, reversible by the owner in one line,
            and A does NOT report it as a finding.
@@ -1691,6 +1692,59 @@ unification was read in source: `UPGRADE_HREF` is declared once
    models in `provider-models.ts` retire **2026-10-16**. The manager's recommendation on file is
    both tiers to `gemini-3.1-flash-lite`. **Escalation date 2026-10-01 stands**, and it is now the
    only thing between this branch and a merge.
+
+---
+
+## §1v. RULING 21 — four owner decisions, and the trap inside the first one (2026-09-07, BINDING)
+
+**The owner answered four things in one message. Recorded verbatim in substance, with the manager's
+verification of the one that needs code.**
+
+1. **D2b — the conditional future path, recorded now, NOT enabled now.** The owner's words: *"之后
+   如果用公司来承包价格的话，就把 Vertex AI 搜索的所有需求放到这个 1000 美元上。"* — **if the operator
+   ever funds search again, it funds it through Vertex AI Search on the $1,000 credit, not through
+   Tavily and never through Gemini grounding.** D2a stands unchanged today: the operator funds no
+   search for anyone. This is the shape the reversal takes **when** it is taken.
+   **The credit expires 2027-04-10** (read off the owner's console screenshot: issued 2026-04-10,
+   one-time, $1,000 at 100%). Unused, it is gone. Recorded as a date, not a plan.
+2. **THE TRAP, and it is the same mechanism that already cost the owner real money.** The owner's
+   second answer explains the $185.48 they are being billed: *"tavily 没在用，于是所有 online search
+   都是在用 gemini 在做的"* — search fell through to **Gemini grounding** ($35/1,000, the most
+   expensive path in the product) because the cheap one was absent. **Nobody chose it; it was a
+   fallback.**
+   Today `isVertexSearchAvailable()` needs a project **and** a search-app id, while
+   `isGeminiSearchAvailable()` is `Boolean(GOOGLE_VERTEX_PROJECT)` — **the same environment
+   variable**. So the moment anyone un-bans that name to reach the credit-funded Vertex AI Search,
+   **Gemini grounding comes back on with it**, and the $185 mechanism reopens. The owner's D2b
+   cannot be delivered safely without separating those two signals first.
+   **Round-8 item 8-01, and it is defensive work worth doing regardless of whether D2b is ever
+   taken:** Vertex AI Search gets its **own explicit enable signal**, distinct from anything Gemini
+   grounding reads, so that one can be turned on without the other. **Gemini grounding stays
+   unreachable in every configuration** — 8-01 enables nothing, it only makes a future enabling
+   survivable. Protective test: with the Vertex search signal on and entitlement granted,
+   `geminiAvailable` is still `false`; proved by planting the old shared read.
+3. **6-02 is UNBLOCKED — the owner approved the model swap.** Both Gemini tiers move to
+   `gemini-3.1-flash-lite` in `provider-models.ts` (`small` and `large`, currently
+   `gemini-2.5-flash-lite` and `gemini-2.5-flash`, both retiring **2026-10-16**). The 2026-10-01
+   escalation is withdrawn — the decision is made. **Round-8 item.** B establishes by execution what
+   the swap touches: the model strings, any test asserting a model id, the `provider-models` tests,
+   and whether anything reads the `small`/`large` distinction in a way that a single model breaks.
+   The two-tier structure **stays** even though both tiers now name one model — collapsing it is a
+   refactor nobody asked for and it is the seam a future upgrade uses.
+4. **The local Google key is FILLED.** Verified by count, never by value: `GOOGLE_API_KEY` = 1,
+   `TAVILY_API_KEY` = 0 (correct under D2a), both Supabase names = 0. **R-KEY-1's live half is
+   measurable from this machine for the first time** — whether `createGeminiApiProvider` actually
+   works on a real key, and whether the metering wrapper records a real call. **The five
+   Supabase-dependent blocked halves are unchanged** (R-ENT-1, R-ENT-2, R-METER-1, R-METER-3,
+   R-QUOTA-2): they need the three migrations applied **and** the Supabase URL + service-role key in
+   `.env.local`. **Blocked drops 6 -> 5 only once R-KEY-1 is actually measured**, which is A's to do,
+   not the manager's to assume.
+   **How a live check is run, binding:** a **standalone script outside vitest** — item 1-00 makes the
+   test process delete both keys by design, so a live call can never come from the suite. It runs
+   one small prompt, asserts a response and a usage row, prints **no** key material, and is deleted
+   before the turn ends.
+5. **Round 8 is: 8-01 (the signal separation), 6-02 (the model swap), plus whatever round-7 A
+   returns.** Order set when A reports. B writes both.
 
 ## §2. ROLES — DO ONLY YOUR OWN JOB
 
