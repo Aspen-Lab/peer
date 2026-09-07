@@ -13472,3 +13472,141 @@ pre-push scan match this file.) No PR. No branch or worktree. **No
 test deleted** — three assertions rewritten to state the new contract, and one case I wrote myself
 removed rather than repaired, with the reason left in its place so a later round does not re-add
 it and rediscover the same trap.
+
+### Round 7 — Agent A
+
+**Turn lock claimed `A-round7 @ 2026-09-07T21:42Z`.** No production code changed this turn.
+**Ruling 21 landed mid-turn** (the manager rebased onto my lock head, as §0d allows) and it changes
+two things in this brief: **6-02 is UNBLOCKED** (the owner approved the model swap), and
+**R-KEY-1's live half became mine to measure**. Both are answered below.
+
+**THE GATE, COLD, BEFORE ANY MEASUREMENT, ON A CLEAN TREE, VERBATIM.**
+
+```
+tsc     exit 0
+eslint  x 1 problem (1 error, 0 warnings)   — the standing quiz.tsx:46
+vitest  Test Files  128 passed | 1 skipped (129)
+        Tests  2924 passed | 1 skipped (2925)     0 failed     9.94s
+```
+
+Identical to round-7 C's and to the manager's Ruling-20 re-run, as it must be — **A changed no
+code.** `src/lib/events/benchmark.test.ts` is the one skip, named.
+
+#### 1.1 — THE ROUND'S BIGGEST NEWS: **THE LOCAL GOOGLE KEY IS FILLED, AND ITS SHAPE IS WRONG**
+
+**Measured by count and by structure, never by value; the file was never `cat`-ed and no character
+of the value appears in this log, in any commit, or in my reasoning.**
+
+| name | round-6 A | round-7 A |
+|---|---|---|
+| `GOOGLE_API_KEY` populated lines | **0** | **1** |
+| `NEXT_PUBLIC_SUPABASE_URL` | 0 | **0** |
+| `SUPABASE_SERVICE_ROLE_KEY` | 0 | **0** |
+| `TAVILY_API_KEY` | 0 | **0** — correct under D2a |
+
+`.env.local` was last written **2026-09-07 21:39:24Z — three minutes before I claimed the lock**,
+while round-7 C was closing out. It now holds **exactly one** populated variable; every other name
+in the file is still commented out. Ruling 21 point 4's count is confirmed independently.
+
+**AND HERE IS THE PART THAT MATTERS, AND IT IS A FINDING, NOT A CELEBRATION.** D1 requires *"an
+AI Studio key, consumed through the existing `createGeminiApiProvider` path"*. **Every Google AI
+Studio key carries the well-known four-character Google API prefix and is 39 characters long.** The
+value now in `GOOGLE_API_KEY` is **53 characters and does not carry that prefix** — the only two
+structural facts I read, both non-identifying. I did **not** dissect it further: the sandbox refused
+a character-class probe of a credential, which is the correct refusal, and I did not work around it.
+
+*(The prefix is deliberately not written out here. Round-7 C made the same choice for the same
+reason: putting the literal pattern in this file would make every future round's pre-push
+credential scan match this log for ever. My own pre-push scan caught me doing it, which is the
+scan working.)*
+
+**So the honest reading is: a key is present, and its shape is not the shape D1 asks for.** It may
+be a Vertex/service-account fragment, another provider's key, or a paste that picked up the wrong
+line. Only a live call settles it — and see 1.2 for why this session could not make one.
+
+#### 1.2 — **R-KEY-1's LIVE HALF: STILL BLOCKED, AND THE CAUSE HAS CHANGED**
+
+Ruling 21 point 4 is explicit that **blocked drops 6 -> 5 only once R-KEY-1 is actually measured,
+"which is A's to do, not the manager's to assume"**. I could not measure it, so **it does not
+drop.** What follows is exactly how far I got, so nobody has to re-derive it.
+
+I wrote the standalone script the ruling specifies — **outside vitest**, because item 1-00 makes the
+test process delete both keys by design, so a live call can never come from the suite. It parsed
+`.env.local` by hand (there is no `dotenv` in this tree), called the **real** `resolveProvider(null,
+entitledContext({...}))` path, ran `testConnection()` and one 16-token `generateJsonText`, wrapped
+`recordUsageEvent` to observe the row, and scrubbed every 20+ character token out of any error
+string before printing. It printed no key material by construction.
+
+**The sandbox refused to run it.** A script that reads a credential file and makes an outbound call
+is exactly what that guard exists for, and I did not attempt to route around it. **The script is
+deleted** — no throwaway survives this turn. **This is the one part of my brief I could not
+complete, and it is recorded as blocked rather than inferred.**
+
+**What is NOT blocked, and was re-verified this round:** R-KEY-1's **code half** stays `MET` —
+the resolution order (BYOK override -> `GOOGLE_API_KEY` via `createGeminiApiProvider` -> `null`) is
+in `registry.ts:185-204`, `resolveSystemProvider()` reads `GOOGLE_API_KEY` at `registry.ts:122-123`
+with no `NODE_ENV`/`VERCEL` gate in the decision, and every resolved provider is handed to
+`meterProvider(...)` before it is returned, so metering cannot be skipped by a caller.
+
+#### 1.3 — BLOCKED HALVES: **6, unchanged, by name**
+
+| # | requirement | the half that cannot be measured here | cause |
+|---|---|---|---|
+| 1 | **R-ENT-1** | the migration's own effect — `plan`, `trial_started_at`, `trial_ends_at`, `plan_updated_at`, the `handle_new_user` trial grant, the RLS split | the three `20260904*` migrations are unapplied |
+| 2 | **R-ENT-2** | `resolveEntitlement` against a real `profiles` row | same |
+| 3 | **R-METER-1** | a `usage_events` row actually written to Supabase on a live model call | the migrations **and** no runnable live call (1.2) |
+| 4 | **R-METER-3** | the counters in Supabase behind an atomic increment, surviving a cold start | the migrations are unapplied |
+| 5 | **R-KEY-1** | the system provider resolving a **real** Gemini key and returning a working provider | **CAUSE CHANGED** — a key now exists; the live call is not runnable from this session (1.2) |
+| 6 | **R-QUOTA-2** | a trip recorded against the real store rather than the in-memory fallback | the migrations are unapplied |
+
+**`N/A`: R-METER-2** — re-listed by name with that word, per Ruling 12 point 3. Operator-funded
+search is unreachable by construction under D2a, so the row can never be written; it is neither
+`MET` nor `BLOCKED` and it is **out of the scored denominator**. The denominator is therefore **30**.
+
+**EXCLUSIONS: NONE.** Nothing is excluded from the scored set this round, and nothing ever has been.
+
+**NO REAL SUPABASE, said once and applying to every row below.** `.env.local` carries no Supabase
+URL and no service-role key (both counted `0` above), so every route measured here ran on the
+in-memory fallback (R-METER-4, R-ENT-5). That is *why* the six halves above are **blocked rather
+than failed** — the code is measurable and the storage is not.
+
+#### 1.4 — THE FIXTURE: all 30 scored items
+
+| requirement | score | evidence |
+|---|---|---|
+| R-SEC-1 | MET | figure-route auth + the branded `EntitledContext` required by both matchers, compiler-enforced |
+| R-SEC-2 | MET | one shared entitlement check before `resolveProvider`; I re-classified all 21 API routes myself this round — part 3 scan 5 |
+| R-SEC-3 | MET | body-borne `aiTier: 2` / `deepReport: true` downgraded server-side on all three feeds |
+| R-SEC-4 | MET | `dispatch-digests` pinned `aiTier: 0` at `route.ts:223` with D9 named at `:211-214` — read in source this round |
+| R-METER-1 | **BLOCKED** (code half MET) | one row per provider request in the harness; every provider leaves `resolveProvider` wrapped in `meterProvider`; the Supabase write is unprovable here |
+| **R-METER-2** | **N/A** | Ruling 12 point 3 — unreachable by construction under D2a |
+| R-METER-3 | **BLOCKED** (code half MET) | the module-scope `Map` is gone and the store seam exists; the Supabase half needs the migration |
+| R-METER-4 | MET | the in-memory fallback is labelled and never selected when the Supabase env is present |
+| R-ENT-1 | **BLOCKED** | the migration file exists and reads correctly; it has not been applied |
+| R-ENT-2 | **BLOCKED** (code half MET) | resolver unit-tested on all four plan states; a real `profiles` row is unreachable |
+| R-ENT-3 | MET | one predicate; no browser `NODE_ENV` test decides AI availability (scan 2 = 0) |
+| R-ENT-4 | MET | signed-out readers get tier-0 everywhere, no system spend |
+| R-ENT-5 | MET | `PEER_DEV_ENTITLEMENT` honoured only in development off Vercel; banned by the guard |
+| R-POOL-1 | MET | ISO-week key for jobs/events, local date for papers, `CACHE_KEY_VERSION` bumped |
+| R-POOL-2 | MET | refresh forces a rebuild, charged to the rebuild breaker; `PoolRefreshNotice` renders the outcome |
+| R-POOL-3 | MET | a free reader with no Tavily key triggers no search on any key |
+| R-KEY-1 | **BLOCKED** (code half MET) | order + no `NODE_ENV`/`VERCEL` gate re-read this round at `registry.ts:122-123,185-204`; the live half is 1.2 |
+| R-KEY-2 | MET | system provider only to authenticated **and** entitled requests |
+| R-KEY-3 | MET | D2a: no system branch; `process.env.TAVILY_API_KEY` reads in non-test source **0** (part 3) |
+| R-KEY-4 | MET | `"default"` reads "Peer's AI (included)"; `welcome/completeness.ts` no longer calls it incomplete |
+| **R-QUOTA-1** | **MET** — **RE-SCORED from `PARTIAL`** | **the link was followed, not asserted — full evidence in part 2 §2.1** |
+| R-QUOTA-2 | **BLOCKED** (code half MET) | trial cap, 200/day breaker and the **rebuild** breaker all behave; the real store is unreachable |
+| R-QUOTA-3 | MET | the exemption is a depth, not a transport — streamed deep counts once, streamed shallow zero |
+| R-UI-1 | MET | scan 1 = **0** rendered strings; the chip shows plan + AI state, and 7-01's absence guard is verified in part 2 §2.4 |
+| R-UI-2 | MET | the "Tier 0" option is gone; the default reads "Peer's AI (included)" |
+| R-UI-3 | MET | five entitlement states x three upsell surfaces, re-driven this round — **paid and unknown upsell nowhere** (part 2 §2.1) |
+| R-UI-4 | MET | report and digest cache keys discriminate system-AI output from no-AI output |
+| R-GUARD-1 | MET | three required names; `TAVILY_API_KEY` banned; exit 1 naming every missing and forbidden name |
+| R-GUARD-2 | MET | the message never prints a value |
+| R-TEST-1 | MET | the rewritten suites plus the three new ones; assertions rewritten, never deleted |
+| R-TEST-2 | MET | gate green and above baseline — figures above and in part 3 |
+
+**Count: 30 scored. `MET` 24 · `BLOCKED` 6 · `PARTIAL` 0 · `NOT MET` 0.** R-METER-2 `N/A`, outside
+the 30. **R-QUOTA-1 is the one score that moved**, `PARTIAL` -> `MET`, and it moved on behaviour.
+
+**PART 1 BANKED.** Part 2 next: the personas, and round 7's four items verified by behaviour.
