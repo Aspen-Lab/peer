@@ -10,7 +10,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "vitest run"
+    "test": "vitest run",
+    "check:providers": "node scripts/check-provider-models.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.91.1",

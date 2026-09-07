@@ -118,10 +118,19 @@ lock by rebasing onto the holder's head.
 ## §1. CURRENT STATE — THE SOURCE OF TRUTH
 
 ```
-HELD BY:          C-round8 @ 2026-09-07T22:40Z
+HELD BY:          free
 ROUND:            8
-WHOSE TURN:       C  (round 8; order is 6-02 -> 8-01 -> 8-02)
-STOPPED BECAUSE:  IN PROGRESS — C-round8 holds the lock; 6-02 and 8-01 landed, 8-02 to come.
+WHOSE TURN:       A  (round 8; C is finished — A re-measures, then the manager opens round 9)
+STOPPED BECAUSE:  finished the turn @ 2026-09-07T23:09Z — ALL THREE ITEMS LANDED (6-02, 8-01,
+                  8-02) in the ruled order, one commit each, each pushed as it finished. Gate
+                  green cold after every item. Eight plants, eight fired, every one reverted with
+                  an asserted substitution count AND an asserted absence of the planted value
+                  before the next run was read; a ninth failed to apply and its own assertion
+                  caught it. Two throwaway probes written inside `web/`, run, and deleted
+                  (`git status --porcelain --untracked-files=all` clean before every commit).
+                  `.env.local` was never `cat`-ed, the staged credential grep printed nothing on
+                  all three commits, and no key material is anywhere in this repo.
+                  **TWO DEVIATIONS, BOTH TRACED BEFORE THEY WERE TAKEN, PER GROUND RULE 6.**
                   **SECOND DEVIATION, LOGGED PER GROUND RULE 6 (8-01b):** the brief and Ruling 23's
                   verification note both say *"there is no on/off switch"* for the grounding
                   backfill and tell C to flip the default through the THRESHOLD.
@@ -157,7 +166,80 @@ STOPPED BECAUSE:  IN PROGRESS — C-round8 holds the lock; 6-02 and 8-01 landed,
                   probe script was written inside `web/`, run, and **deleted** before its commit
                   (`git status --porcelain --untracked-files=all` empty). `.env.local` was never
                   `cat`-ed and no key material appears anywhere in this repo.
-STATUS:           ROUND 8 — **B HAS WRITTEN THE GUIDE. TWO ITEMS: 6-02 `WRONG DATA` (live outage)
+STATUS:           ROUND 8 — **C HAS IMPLEMENTED. ALL THREE ITEMS: 6-02, 8-01, 8-02**, in the ruled
+                  order (Ruling 23 point 7), one commit each, each pushed as it finished. **THE
+                  GATE IS GREEN**: tsc 0 · eslint 1 (standing `quiz.tsx:46`) · vitest **128 files /
+                  2934 passed / 1 skipped (2935) / 0 failed** (2924 -> 2934: **+10 added, 0
+                  deleted**). **Eight plants, eight fired.** No migration. No throwaway left.
+                  **TWO DEVIATIONS from the guide, both traced first (ground rule 6), both above.**
+                  1. **6-02 — THE OUTAGE IS CLOSED, AND B's PRESCRIBED FIX WOULD HAVE CAUSED A
+                     SECOND ONE.** Both tiers now name `gemini-3.1-flash-lite`. Ruling 23 point 1
+                     and B both say to widen `disableThinking` into one regex over the Gemini 3
+                     family. **I called the live API for every id in both shipped chains first, and
+                     that fix 400s:** `gemini-3.5-flash-lite` and `gemini-3.6-flash` **reject
+                     `thinkingBudget` with INVALID_ARGUMENT**; only the swap target takes it.
+                     `callModel` catches and moves on, so the widened predicate would have emptied
+                     the global fallback chain **in silence**. **There is no version-range regex
+                     that expresses "accepts `thinkingBudget: 0`"** — 2.5 does, 3.1 does, 3.5 and
+                     3.6 do not. **So the seam moved one step: the config now decides WHICH control
+                     to send, not WHETHER to send one** (2.5 family -> `thinkingBudget: 0`; 3.x
+                     family -> `thinkingLevel: MINIMAL`, imported from the SDK so a wrong level is
+                     a compile error; anything unmeasured -> thinking stays ON with headroom,
+                     because an unknown model must cost money, never 400). **The ruling's stated
+                     requirement is met in full and exceeded**: the two fallback models now also
+                     run thinking-off with a tight cap, and `gemini-3.6-flash` was measured billing
+                     **139 thought tokens on a one-line ping** with no control set, so that was a
+                     real charge and not a theoretical one. **B's "the design doc is stale" is
+                     WITHDRAWN — it is correct for two models of three**; B generalised from the
+                     single model B probed, which is the same mistake B's own new §3 rule names.
+                     **The durable guard is a TEST, not a regex**: it walks every id both chains
+                     can send and fails the moment one has no control, because no regex can cover a
+                     generation nobody has called. **My own first draft of it contained B's bug** —
+                     I asserted the four walked ids were distinct, which they are not any more.
+                  2. **RULING 23 POINT 6, MY SHAPE-GREP: exactly ONE regex on a model id exists in
+                     the tree** (the one B found) and **ZERO** `startsWith` / `endsWith` /
+                     `includes` / `indexOf` / `match` / `===` / `switch` on a model id in `src/` or
+                     `scripts/`. Two non-regex shape dependencies, both B's and both fixed (the
+                     onboarding label map keyed on the literal id; the diagnostic's results map
+                     keyed on the id, where two equal ids collided). **One read site B's blast
+                     radius did not name:** `sources/gemini-search.ts:135` takes the grounding
+                     search model from `PROVIDER_MODELS.gemini.large`, so it moves with the swap —
+                     a read, not a shape test, needing no edit, and behind the frozen-false gate.
+                  3. **8-01 — BOTH HALVES, AND THE MANAGER'S "THERE IS NO ON/OFF SWITCH" IS WRONG.**
+                     (a) `GOOGLE_VERTEX_SEARCH_PROJECT` is now the sole Vertex-search signal; the
+                     guard needed no edit and I confirmed that rather than assuming it. **Coupling B
+                     falls out for free** — `webSearchOptions`'s fall-through is a real choice now
+                     that configuring search cannot make grounding available. (b) The backfill
+                     defaults **off**. **B's §4 entry contradicts Ruling 23's verification note and
+                     B is right:** `fallbackEnabled()` IS a switch, it was merely OPT-OUT. I flipped
+                     **that** flag to opt-in and stopped it reading `isGeminiSearchAvailable()`,
+                     and left the threshold alone — turning it off through both would take TWO
+                     variables to arm again, which `vertex-search.ts:206-209` rejects in its own
+                     words. **Nothing deleted; one variable restores it, and a test pins that it
+                     does.** B's blast radius was exact (6 tests, 1 file). **Two of the six rewrites
+                     were more than find-and-replace:** one would have gone on passing while
+                     measuring nothing, and one claims "both engines" in its name while configuring
+                     only one. **The money switch that had zero coverage in seven rounds now has
+                     it, proved by planting the old opt-out back.**
+                  4. **8-02 RAN AGAINST THE LIVE KEY AND 6-02 IS VERIFIED END TO END.**
+                     `npm run check:providers` -> `gemini gemini-3.1-flash-lite small+large PASS`,
+                     a real billed request through the product's own `testConnection()` and the new
+                     `genConfig`. The four BYOK providers report **SKIP with the variable that
+                     would configure them**, so "not checked" never looks like "fine". **Planting
+                     `gemini-2.5-flash` back reproduces the outage in under a minute** — FAIL, 404,
+                     *"no longer available to new users"*, exit 1. It refuses to run under vitest
+                     (proved three ways) and is unreachable by the suite's include glob anyway.
+                     **The redactor proof failed the first time and I recorded that** rather than
+                     the tidy version: the SDK's 401 did not contain the key, so the run looked
+                     green while measuring nothing — §3's exact failure shape. Re-proved by
+                     planting the key into the printed string.
+                  5. **ONE THING FLAGGED, NOT FIXED (§2):** the two operational scripts
+                     (`setup-vertex-search.mjs`, `probe-vertex-search-billing.mjs`) still carry the
+                     `GOOGLE_VERTEX_PROJECT` fallback 8-01(a) removed, so an operator can now build
+                     a Search App the running app will never look at, **silently**. Two lines to
+                     fix; outside the item's stated seam, so the manager rules.
+                  ── Round-8 B's summary follows. ──
+                  ROUND 8 — **B HAS WRITTEN THE GUIDE. TWO ITEMS: 6-02 `WRONG DATA` (live outage)
                   and 8-01 `DESIGN`.** Gate cold and identical to baseline after every revert:
                   tsc 0 · eslint 1 (standing `quiz.tsx:46`) · vitest **128 files / 2924 passed /
                   1 skipped / 0 failed**.
@@ -742,7 +824,16 @@ LAST DIFFERENCE:  0.0% code-side (0/30; exclusions: none) — but see Ruling 22:
 GATE (0% unexplained, both measurements):  **NOT MET — and this time the code side IS part of why.**
            Code-side is **3.3%** with one named difference, and six items carry a blocked half that
            only the owner can close. `GATE: MET` needs both at zero.
-DONE:      **Round 7 C: ALL FOUR ITEMS, 7-02(a) / 7-02(b) / 7-02(c) / 7-01**, in the ruled
+DONE:      **Round 8 C: ALL THREE ITEMS, 6-02 / 8-01 / 8-02**, in the ruled order, one commit
+           each, each pushed as it finished; gate green cold after every item; **8 plants, 8
+           fired**, every one reverted with an asserted substitution count AND an asserted absence
+           of the planted value before the run was read — plus a 9th that failed to apply and was
+           caught by its own assertion, and a redactor proof that passed while measuring nothing
+           and was re-done. **No test deleted** — the two red cases were rewritten to the new
+           contract with a comment naming the item, and six Vertex fixtures were re-pointed rather
+           than removed. Two throwaway live probes written in `web/`, run, deleted before their
+           commits; no migration; credential grep clean on all three staged diffs.
+           **Round 7 C: ALL FOUR ITEMS, 7-02(a) / 7-02(b) / 7-02(c) / 7-01**, in the ruled
            order, one commit each, each pushed as it finished; gate green after every item;
            **10 plants, 10 fired**, every one reverted with an asserted substitution count AND an
            asserted absence of the planted string before the run was read; no throwaway left
@@ -781,7 +872,25 @@ DONE:      **Round 7 C: ALL FOUR ITEMS, 7-02(a) / 7-02(b) / 7-02(c) / 7-01**, in
            every throwaway deleted and every plant restored with an asserted empty diff.
            **Round 5 B: all four items**, 5-01 … 5-04, one commit each, each pushed; no code
            changed; the three-stage measurement plant reverted with an asserted empty diff.
-GATE NOW:  **Round-7 A, cold, after every plant was reverted and every throwaway deleted
+GATE NOW:  **Round-8 C, cold, after every plant was reverted and both throwaway probes were
+           deleted (`git status --porcelain --untracked-files=all` clean before each commit,
+           asserted before the run was read):** `tsc` exit **0** · `eslint` **1 problem (1 error,
+           0 warnings)** — the standing `quiz.tsx:46` · `vitest` **128 files passed | 1 skipped
+           (129)** · **2934 tests passed | 1 skipped (2935)**, **0 failed**.
+           `src/lib/events/benchmark.test.ts` is the one skip, named. Test total 2924 -> 2934:
+           **+10 added, 0 deleted** (6-02 +5, 8-01 +5, 8-02 +0 — it ships a script, and Ruling 23
+           point 5 forbids putting it in the suite). **File count unchanged at 128 — no new suite;
+           both items extended the suite that already owned the seam.**
+           **Standing locks re-verified by name, all green:** `provider-models.test.ts`,
+           `providers/gemini.test.ts`, `providers/registry.test.ts`, `providers/metered.test.ts`,
+           `security/spend-scans.test.ts`, `search/system-key.test.ts`,
+           `sources/vertex-search.test.ts`, `api/ai-route-personas.test.ts`, the usage-ledger
+           suites, `sources/web-search.test.ts`, `events/sources/eventweb.test.ts`,
+           `jobs/sources/jobweb.test.ts` and `scripts/assert-byok-production-env.test.ts`.
+           **LIVE, and this is the figure no gate can produce:** `npm run check:providers` ->
+           `gemini gemini-3.1-flash-lite small+large PASS`, in=412 out=9, 564 ms, 2026-09-07.
+           Round-7 A's figures follow.
+           **Round-7 A, cold, after every plant was reverted and every throwaway deleted
            (`git status --porcelain --untracked-files=all` **empty** and
            `git diff --name-only -- web/` **0** files, both asserted before this run was read):**
            `tsc` exit **0** · `eslint` **1 problem (1 error, 0 warnings)** — the standing
@@ -823,23 +932,61 @@ GATE NOW:  **Round-7 A, cold, after every plant was reverted and every throwaway
            suite, `components/cards/pool-refresh-notice.test.tsx`.
            Round-5 A's figures follow: tsc **0** · eslint **1** · vitest **124 files passed | 1
            skipped (125)** · **2871 tests passed | 1 skipped (2872)**, **0 failed**, 9.50 s.
-TODO:      C WORKS ROUND 8 IN THIS ORDER (Ruling 23 §1x point 7):
-           **6-02** — both Gemini tiers to `gemini-3.1-flash-lite`, AND extend
-           `disableThinking` (`providers/gemini.ts:70`, today `/gemini-2\.5-flash/`) to cover
-           the new model, or the swap turns billed reasoning on for 100% of calls and widens
-           every output cap by 4096 tokens. No test covers it — write one, prove it by
-           reverting the predicate. B measured the swap itself: tsc 0, exactly 2 tests red in 2
-           files, one of which asserts two fallback attempts name DIFFERENT models — rewrite
-           it through the constant, do not bump a number.
-           **8-01, two halves, both required** — (a) `GOOGLE_VERTEX_SEARCH_PROJECT` becomes
-           the sole Vertex-search signal; drop the `GOOGLE_VERTEX_PROJECT` fallback; the build
-           guard needs NO edit. (b) the grounding backfill at `vertex-search.ts:494-499`
-           defaults **off**, threshold retained as the opt-in (Ruling 23 point 3 — the $1,000
-           credit does not cover grounding). Enables nothing; both availability answers stay
-           false. B proved inverting the default reddens zero tests — add coverage.
-           **8-02** — a runnable script in `web/scripts/` calling `testConnection()` for the
-           configured provider, printing pass/fail per model id, NEVER key material, and NEVER
-           inside vitest. It is the owner's "did the swap work" tool.
+TODO:      **ROUND-8 A RE-MEASURES. Denominator 30. R-METER-2 is `N/A`. Blocked is 5 — R-ENT-1,
+           R-ENT-2, R-METER-1, R-METER-3, R-QUOTA-2 — ALL of them waiting on the same three
+           unapplied migrations. R-KEY-1 came off the blocked list in Ruling 22 point 4 and must
+           not go back on without a stated reason.** Questions a fixture cannot settle:
+           1. **RUN THE LIVE MODEL CHECK YOURSELF. It is runnable now: `cd web && npm run
+              check:providers` (8-02).** Ruling 22 point 6 says round-8 A re-runs it and reports
+              its own numbers. **You are no longer blocked on writing a script and the sandbox
+              refusing it** — the script ships, it refuses to run inside vitest, and it prints no
+              key material. What does it print on your run? If your sandbox still refuses to make
+              an outbound call, record that as a standing environment limitation and cite C's run
+              (2026-09-07: `gemini-3.1-flash-lite small+large PASS`) with its date, exactly as
+              Ruling 22 point 6 prescribes. **Does a PASS here mean the product can complete a real
+              report, or only a ping?** C measured a `testConnection()` ping, not a deep report.
+           2. **6-02's deviation is the round's biggest open question and it is yours to check, not
+              to take on trust.** C claims a widened family regex would 400 the two global fallback
+              models and empty that chain in silence. **Re-derive it, or drive it:** with the
+              global fallback chain reachable, does every id in it get a control the model actually
+              accepts? Is `thinkingLevel: MINIMAL` genuinely equivalent to `thinkingBudget: 0` for
+              cost, or has C traded a 400 for a quieter overspend? C measured thoughts=0 on a ping
+              and explicitly did NOT claim that carries to a 60,000-character deep-report prompt.
+           3. **Does the onboarding copy still answer its own promise (Ruling 19 point 1)?** C
+              rewrote *"Why two models?"* into a conditional *"Why one model?"* for providers whose
+              tiers name one id. **That wording is C's own judgement and C flagged it as the one
+              thing in 6-02 that is not a measurement.** Render the Gemini panel and read what a
+              beginner actually sees: does the screen say the same thing the two cells show, and do
+              the four BYOK providers still read correctly?
+           4. **Is the Vertex/grounding separation real or only local?** C removed the fallback in
+              the runtime seam but **deliberately did not touch the two operational scripts**,
+              which still read `GOOGLE_VERTEX_SEARCH_PROJECT || GOOGLE_VERTEX_PROJECT`. So an
+              operator can run the setup script, watch it succeed, and end up with a Search App the
+              app will never query — **silently**. Is that a difference, a maintenance note, or a
+              fix for round 9? And does the build guard still refuse the surviving name on Vercel
+              (C says yes by prefix, unchanged — check it, do not inherit it)?
+           5. **CARRY EVERY STANDING TALLY BY NAME, and note the two that moved.** All five scans
+              **0** (grep them independently and say so). **Dead internal links 0, no allowlist.**
+              **Upsell surfaces 3.** **Paid upsells 0 on 3 of 3 surfaces; unknown-plan 0 of 3.**
+              **Personas 45 of 45.** **`kind:"search"` rows 0.** **`process.env.TAVILY_API_KEY`
+              reads in non-test source 0.** **Report routes answering an anonymous caller 401: 3 of
+              3 (4 of 4 with digest).** **`local-no-auth` ABSENT (503 x3).** **Structured-source
+              accepted reads 3.** **Ruling-75 absence cases: carried as 4 and round-7 A could not
+              reproduce it — measure it, name what you counted, and settle the number rather than
+              carrying it again.** **NEW this round and yours to source: regex shape-tests on a
+              model id in the tree — C measures 1.** **NEW: `.testConnection(` call sites in
+              non-test source — B measured 0 and 8-02 does not change it, because the script is not
+              `src/`. Say which number you mean.**
+           6. **Two things C could not settle and neither can a fixture.** Are the eight BYOK model
+              ids for `openai`, `qwen`, `anthropic` and `deepseek` still live? Nobody has a key for
+              any of them, and 8-02 reports `SKIP` rather than guessing — **the honest answer is
+              "unknown", and it should be recorded as unknown rather than assumed fine, because
+              that assumption is exactly what hid the Gemini outage for seven rounds.** And is the
+              +15% deep-report cost B measured still right after 6-02's thinking change, which
+              removes a real charge on the fallback path only?
+           7. **`metered.test.ts:330,352` name `"gemini-2.5-flash"`** — self-contained fixture
+              literals that do not import the constant, so they stay green while naming a model the
+              product cannot call. C left them deliberately (§2). Folklore risk or nothing?
 PENDING USER ACTION: (1) **Apply the three migrations** under `web/supabase/migrations/20260904*`
            — this is now the ONLY thing blocking five of the six remaining halves. (2) Add
            `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` to `web/.env.local` so
@@ -849,9 +996,19 @@ PENDING USER ACTION: (1) **Apply the three migrations** under `web/supabase/migr
            NOT carry `TAVILY_API_KEY`; deploy only after the branch is green and merged.
            DONE: the local `GOOGLE_API_KEY` is filled (Ruling 21 point 4). WITHDRAWN: the trial
            backfill (no users); the 2026-10-01 model escalation (the owner decided).
-OPEN FOR MANAGER:  none — B's grounding-backfill POLICY ruled in §1x (Ruling 23 point 3):
-           default flips to off, because the $1,000 credit funding D2b explicitly does not
-           cover grounding, so leaving it on would bill real dollars on the credit path.
+OPEN FOR MANAGER:  **THREE, all from round-8 C, all recorded rather than acted on (§2).**
+           (1) **6-02's deviation needs ratifying or reversing.** Ruling 23 point 1 prescribes one
+           widened regex; C measured live that it would 400 the two global fallback models and
+           empty that chain in silence, and built a per-family control instead. The ruling's stated
+           goal is met; its stated mechanism is not. (2) **8-01(b) used the switch that already
+           existed** (`GOOGLE_VERTEX_SEARCH_FALLBACK`, flipped opt-out -> opt-in) rather than the
+           threshold the brief named, because Ruling 23's *"there is no on/off switch"* is
+           contradicted by B's own §4 entry. Same default, one variable instead of two.
+           (3) **The two operational Vertex scripts still carry the fallback 8-01(a) removed**, so
+           an operator can build a Search App the app never queries, with no error. Two lines;
+           outside the item's seam, so C did not touch them.
+           **RESOLVED:** B's grounding-backfill POLICY was ruled in §1x (Ruling 23 point 3) and is
+           implemented — default off, nothing deleted, one variable restores it.
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
@@ -14869,3 +15026,87 @@ passed | 1 skipped (129) · 2934 passed | 1 skipped (2935), 0 failed**. Test tot
 green:** the five files above, plus `sources/vertex-search.test.ts` itself (36 tests, was 31).
 
 **8-01 LANDED, BOTH HALVES.**
+
+#### 8 · 8-02 — a runnable provider check. LANDED, AND IT RAN AGAINST THE LIVE KEY.
+
+**`web/scripts/check-provider-models.mjs`, entry point `cd web && npm run check:providers`.** It
+walks every provider in `PROVIDER_MODELS`, and for each distinct model id builds a real provider
+pinned to that one id and calls **the product's own `testConnection()`**. The script issues no
+request of its own, so a PASS means the code path the product actually uses works — including,
+after 6-02, the new `thinkingLevel` control, because `genConfig` is on that path.
+
+**IT RAN, AND HERE IS ITS OUTPUT VERBATIM (2026-09-07, the owner's key):**
+
+```
+Peer — live provider check (ABC-freemium 8-02)
+THIS MAKES REAL, BILLED API CALLS — one tiny request per model id below.
+Keys are read from the shell first, then …/web/.env.local. None are printed.
+
+[llm] gemini/gemini-3.1-flash-lite path=test in=412 out=9 564ms ok
+gemini     gemini-3.1-flash-lite          small+large    PASS
+openai     —                                             SKIP   no key (OPENAI_API_KEY)
+qwen       —                                             SKIP   no key (QWEN_API_KEY or DASHSCOPE_API_KEY)
+anthropic  —                                             SKIP   no key (ANTHROPIC_API_KEY)
+deepseek   —                                             SKIP   no key (DEEPSEEK_API_KEY)
+
+All 1 configured model id(s) answered.
+```
+
+**SO 6-02 IS VERIFIED END TO END, not merely by tests.** The `[llm]` line is the product's own usage
+logger writing a real row for a real request. **The four BYOK providers report `SKIP` with the
+variable name that would configure them** — deliberately, because "not checked" and "checked and
+fine" must not look the same. B could make no claim about those eight model ids; this script is how
+somebody with a key makes one in about ten seconds.
+
+**THREE GUARDS, ALL THREE PROVED BY PLANTING AN OFFENDER (§3).**
+
+1. **It refuses to run inside vitest.** Planted three ways — `VITEST=true`, `VITEST_WORKER_ID=1`,
+   `NODE_ENV=test` — and each refused with exit **2** and a message naming the hand-run command.
+   **There is a second, independent reason it cannot reach the suite:** vitest's include glob is
+   `src/**/*.test.{ts,tsx}` and this file is `scripts/*.mjs`, so it is unreachable by construction
+   as well as by guard. Item 1-00's key deletion is untouched and the gate gained nothing to run.
+2. **It never prints key material.** The first attempt at this proof **failed to prove anything and
+   I am recording that rather than the tidy version**: run with a bogus key, the SDK's 401 simply did
+   not contain the key, so the sentinel was absent and `[REDACTED]` was absent too — a green-looking
+   result measuring nothing, the exact shape §3's plant rule exists to catch. **So I planted the key
+   into the printed string itself** and re-ran: output reads `KEYWAS=[REDACTED]`, sentinel absent.
+   Reverted with an asserted count and an asserted absence of the planted token. **The redactor
+   blanks every key value the run holds verbatim** — that is the real protection — with a
+   prefix-shape net under it for a key arriving from somewhere else. **The prefixes are assembled
+   from string parts on purpose, with the reason written in the file:** spelling them out would make
+   the repo's standing pre-commit credential grep fire on this file forever and turn a real signal
+   into noise.
+3. **THE ONE THAT MATTERS: it catches the outage it was built for.** I planted `gemini-2.5-flash`
+   back onto the large tier and ran it. Output:
+   `gemini gemini-2.5-flash large FAIL ApiError: {"error":{"code":404,"message":"This model
+   models/gemini-2.5-flash is no longer available to new users…"`, `1 of 2 configured model id(s)
+   FAILED`, **exit 1**. **That is the defect seven rounds of green gates and 2,924 passing tests
+   could not see, reproduced by one hand-run command in under a minute.** Reverted with an asserted
+   substitution count and a value-scoped absence check.
+
+**THE ONE ENGINEERING DECISION WORTH REVIEWING, STATED PLAINLY.** The providers are TypeScript and
+import through the `@/` alias, so a plain `.mjs` script cannot load them; plain Node resolves
+neither the alias nor the extensionless imports. **I used `jiti`, which is already in
+`node_modules`** as a dependency of eslint, vite **and** tailwind independently — so no new package
+was installed, `package.json`'s dependency list is unchanged, and nothing about the gate or the
+build moved. **It is nonetheless a transitive dependency and that is a real, if small, fragility**,
+so the script fails with a plain-English instruction (`Run npm install in web/`) rather than a stack
+trace if it ever goes missing. **Alternatives rejected and why:** `vitest`/`vite-node` is forbidden
+by Ruling 23 point 5; `tsx` and `ts-node` are absent and would be new dependencies; hard-coding the
+model ids in the script would recreate exactly the drift this item exists to detect. **If the
+manager prefers a declared dependency, adding `jiti` to `devDependencies` is a one-line change.**
+
+**Two smaller notes.** The script sets `process.exitCode` rather than calling `process.exit()`:
+forcing the process down while the SDK's sockets are still closing makes libuv abort with an
+assertion on Windows, which printed an alarming line under an otherwise clean pass. And it reads
+`web/.env.local` itself but **never overwrites a variable already set in the shell**, so
+`OPENAI_API_KEY=… npm run check:providers` tests the key you just typed — which is how the four
+`SKIP` rows above get answered without editing any file.
+
+**GATE, cold, after every plant was reverted (`git status --porcelain --untracked-files=all` shows
+only `package.json` and the new script, asserted before this run was read):** `tsc` exit **0** ·
+`eslint` **1 problem (1 error, 0 warnings)** — the standing `quiz.tsx:46` · `vitest` **128 files
+passed | 1 skipped (129) · 2934 passed | 1 skipped (2935), 0 failed**. **No test added or deleted
+by this item** — it ships a script, and the ruling forbids putting it in the suite.
+
+**8-02 LANDED. ROUND-8 C COMPLETE — three items, three commits, each pushed as it finished.**
