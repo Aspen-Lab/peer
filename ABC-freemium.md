@@ -12324,3 +12324,223 @@ no code.** `src/lib/events/benchmark.test.ts` is the one skip, named.
 
 **`GATE: NOT MET`.** It needs **both** numbers at zero. Code-side is **3.3%**, and the blocked list
 still has six names on it.
+
+---
+
+### Round 7 — Agent B
+
+**Turn lock claimed `B-round7 @ 2026-09-07T20:40:25Z`. B changes no production code.** Every
+harness lives outside the repo (`<scratchpad>/h/`, with a junctioned `node_modules` and its own
+vitest config, so nothing was ever written into `web/`); every plant is reverted with an asserted
+empty diff before the commit that reports it.
+
+#### 7-02 — THE DEAD DESTINATION. Classification: `WRONG DATA` (a rendered control that lies about where it goes).
+
+**The manager's four citations are all correct, re-grepped:** `quota-notice.tsx:142` →
+`/settings`; `tier-upgrade-block.tsx:115` and `pool-refresh-notice.tsx:125` → `/welcome?step=ai`;
+`welcome/page.tsx:83` reads the `step` parameter. **There is no `/settings`.**
+
+##### 7-02.1 — WHAT A READER ACTUALLY GETS AT `/welcome?step=ai`, ESTABLISHED BY EXECUTION
+
+Harness: the **real** `WelcomePage` and the **real** `completeness.ts`, rendered with
+`renderToStaticMarkup` once per persona, driving the **real** `useProfileStore`. Two stubs, both
+hydration plumbing rather than the behaviour under test: `useSyncExternalStore` returns the
+**client** snapshot (what the reader sees after hydration; the server snapshot is the pre-paint
+blank hold at `welcome/page.tsx:258`), and `useRouter` / `useProfileSettled`, which have no server
+implementation.
+
+**A harness lesson worth one line, because it nearly produced a false all-clear:** patching only
+the *named* `useSyncExternalStore` export left zustand — which reads it off React's **default**
+export — on the real server-snapshot hook, so every persona silently rendered
+`getInitialState()` and all six outputs were byte-identical. The tell was the identical byte
+count, not a failing assertion. Both export shapes must be patched, and `zustand` must be in
+`server.deps.inline` or Vitest never transforms it and the mock cannot reach it at all.
+
+**RULING 18 POINT 6 IS WRONG, AND I FOUND IT BY EXECUTION.** The hypothesis was that the `ai`
+step's completeness rule (1-15) might mark the step done and skip past it. **It cannot.**
+`welcome/page.tsx:127-130` reads
+
+```
+setAutoStart(stepIndexFromKey(requestedStep) ?? firstIncompleteStep(profile, readPersonaDone(), entitlement))
+```
+
+— the query is consulted **first** and `firstIncompleteStep` is only the `??` fallback.
+`stepIndexFromKey("ai")` returns `5`, so the wizard opens on the AI step for every reader, done or
+not. **Proved able to fail, on the same signed-in reader:** with `?step=ai` the page renders
+*"Connect an AI key (optional)."*; with **no** query the same reader lands on **Persona** (step 8)
+and the AI step is absent from the render. The query genuinely wins; the control is not vacuous.
+
+**PER PERSONA — all six render the AI step, and the rail tick differs, which is how I know the
+probe can see the entitlement at all:**
+
+| persona | lands on | AI rail tick | plan/pricing words in the whole page |
+|---|---|---|---|
+| not-known (`entitlement === null`) | **AI step** | `Step 6: AI` | **none** |
+| signed-out (known + anonymous) | **AI step** | `Step 6: AI` | **none** |
+| free, no key | **AI step** | `Step 6: AI (completed)` | **none** |
+| free, own key | **AI step** | `Step 6: AI (completed)` | **none** |
+| trial | **AI step** | `Step 6: AI (completed)` | **none** |
+| paid | **AI step** | `Step 6: AI (completed)` | **none** |
+
+"Plan/pricing words" is the scan `Peer Pro · Pro · $12 · upgrad · plan(s) · pric · subscrib ·
+student · sign in` over the rendered text. **All nine are `false` on all six personas.**
+
+**SO THE DEFECT RULING 18 POINT 6 WAS LOOKING FOR IS REAL, BY A DIFFERENT MECHANISM.** The
+destination resolves, renders, and stays put. It simply has **nothing to do with paying**. What it
+is: a BYOK key-entry panel headed *"Connect an AI key (optional)."*, whose banner reads **"Peer's
+AI is included — no key needed."** and whose closing line reads *"No key is needed. Peer's AI is
+included … Choose a company here only if you would rather use your own model and be billed for it
+yourself."*
+
+**THE THREE CTAs ARE NOT ONE CLASS — this is the finding that changes 7-02's shape:**
+
+| surface | CTA text | promise | destination today | keeps its promise? |
+|---|---|---|---|---|
+| `TierUpgradeBlock:118` | *"Or use your own AI key"* | BYOK | `/welcome?step=ai` | **yes** |
+| `QuotaNotice:145` | *"Add your own key"* | BYOK | `/settings` | **no — `not-found`** |
+| `PoolRefreshNotice:128` | *"See what Pro adds"* | **the plan** | `/welcome?step=ai` | **no — the page never says "Pro"** |
+
+Two are BYOK promises; **one is a plan promise**, and it is the one Ruling 17 point 6 ratified. So
+"unify all three on `/welcome?step=ai`" fixes the dead link and leaves a second, quieter instance
+of exactly the defect Ruling 18 point 2 was written to catch — a control that renders, resolves,
+and does not do what it says.
+
+##### 7-02.2 — IS `/welcome?step=ai` THE RIGHT DESTINATION? THE CANDIDATES, MEASURED
+
+**`/profile` — REJECTED ON EVIDENCE, and the brief's premise for it is wrong.** `/profile` does
+**not** manage the reader's key. `grep -rln "profile/ai-setup" src` returns exactly **two**
+non-test files: `src/app/page.tsx` and `src/app/welcome/page.tsx`. `/profile` imports none of
+`AiKeyFields` / `ApiKeyHelp` / `AiProviderGuide`, contains no `feedAiProvider` or `feedAiApiKey`
+reference, and its `<h1>` is *"…'s signals"* — it is a reading-history and stats page (keyword
+cloud, read calendar, past briefings). Landing an "add your own key" CTA there is **worse** than
+today's `/welcome?step=ai`.
+
+**The dashboard `/` — the only other key panel, and it is not addressable.** `src/app/page.tsx:209`
+holds the panel behind `const [openTool, setOpenTool] = useState<"ai"|"apis"|"deep"|null>(null)`,
+opened only by the toolbar button at `:869`. The page reads `useSearchParams` for `q`, the feed
+type and filters (`:185-205`) — **never for a tool**. Deep-linking it means adding a query read,
+i.e. new code on the busiest page in the app. Not the cheap option it looks like.
+
+**A new route — REFUSED, and I can show the existing ones carry it.** D7 and spec section 3 put
+payment out of scope; `/welcome` already owns a deep-linkable `step` parameter that this very
+brief is built on, and it already renders the key panel. A new page is a new surface with new
+tests for a feature that does not exist yet.
+
+**`/welcome?step=ai` — the recommendation, with a required second half.** It is the destination the
+two BYOK CTAs already keep their promise with, it is one line for `QuotaNotice`, and it is Ruling
+18 point 5's ruled direction. **But it is only honest for all three once the AI step says what Pro
+is.** Every string needed already exists and is already ruled under D7 — `TierUpgradeBlock:111-112`
+carries *"Peer Pro is $12/month, or $6 for students."* verbatim.
+
+**MEASURED: that block is the ONLY place in the whole app that says what Pro costs.**
+`grep -rn "\$12|Peer Pro|\$6 for students" src --include=*.ts --include=*.tsx`, tests excluded,
+returns six lines in **three** files — the three upsell surfaces — and the price lives in
+**`tier-upgrade-block.tsx` alone**, which renders only for a **signed-in free reader with locked
+rows in a report**. A trial reader, a paid reader, a signed-out reader and a free reader who never
+opens a report **cannot find the price anywhere in the product**.
+
+**One cost I have to name because nobody has:** `/welcome` is the onboarding wizard, not a settings
+page. A reader who was mid-report is dropped into a setup flow with *"Skip setup →"* in the header;
+pressing **Continue** twice more runs `finishToTour()` (`welcome/page.tsx:170-173`), which calls
+`completeOnboarding()` and `router.push("/?tour=1")` — the coachmark tour. **They lose their place
+in the report and get re-onboarded.** That is not a reason to keep a dead link, and it is not
+7-02's to fix, but it is the reason the plan section belongs on a page a returning reader can leave
+cleanly, and the manager should know the trade before ratifying `/welcome?step=ai` as permanent.
+
+##### 7-02.3 — THE UNIFICATION SEAM
+
+**One constant, one module, three importers.** `src/lib/navigation/` already exists and is exactly
+this concern ("where the app sends the reader"); it holds `feed-history.ts` and `feed-tab.ts` and
+no UI. Add `src/lib/navigation/upgrade-destination.ts`:
+
+```
+/** The single destination every upsell CTA points at, so D7's payment ships in ONE edit. */
+export const UPGRADE_HREF = "/welcome?step=ai";
+```
+
+All three surfaces import it; **no literal `/welcome?step=ai` survives in a component.** The
+docblock must say what it is for and what changes when payment ships, because the whole value of
+the constant is that the next person finds one line instead of three. `entitlement/` is the wrong
+home — it answers *what the reader is entitled to*, not *where to send them*.
+
+**Prove the unification, don't assert it:** after the change, a grep for the literal
+`/welcome?step=ai` across non-test `src/**/*.tsx` must return **0** outside
+`upgrade-destination.ts`, and a gate test should assert that count so a fourth surface cannot
+reintroduce a literal.
+
+##### 7-02.4 — THE GATE TEST, AND IT IS PROVED ABLE TO FAIL
+
+Written and run outside the tree; C ports it to `src/**`.
+
+**Enumerating routes.** Every `src/app/**/page.tsx`: drop `src/app` and the trailing `/page.tsx`,
+**delete route-group segments `(name)`** (none today; the rule matters the day one appears), turn
+`[id]` into a one-segment wildcard and `[...slug]` / `[[...slug]]` into a many-segment one, and an
+empty result into `/`. **Cross-checked against Next's own answer, not assumed:**
+`.next/types/routes.d.ts` (generated, gitignored) declares `type AppRoutes` and my enumeration is
+**identical to it** — 11 routes, `/ · /auth/error · /changelog · /events/[id] · /jobs/[id] ·
+/papers/[id] · /papers/[id]/surface · /persona · /profile · /saved · /welcome`. The cross-check
+must stay **informational** (skip when the file is missing), because a fresh clone has no `.next`.
+
+**Enumerating links.** Non-test files under `src/`, three shapes:
+`href=` followed by a literal starting `/`; `router.push|replace|prefetch("/…")`; `redirect("/…")`.
+Strip query and hash before resolving. **Template literals:** truncate at the interpolation and
+treat the tail as a wildcard segment **deliberately** — my run got the right answer by accident
+(an events-card href scanned as `/events/$`, which happens to match `/events/[id]`); C should make
+that explicit rather than lucky.
+
+**Resolving.** Against the route patterns **and** every file under `public/`, plus `/_next/`.
+
+**`/CHANGELOG.md` IS NOT A FALSE POSITIVE — CORRECTION TO RULING 18 POINT 2.** `public/CHANGELOG.md`
+is a real 40 KB file that the route resolves to. It only looks like a false positive to a scan that
+forgets `public/`. **Do not add an allowlist entry for it** — an allowlist is a hole that will one
+day swallow a genuinely dead link. Resolve against `public/` and the tally needs no exceptions at
+all.
+
+**RESULT: exactly ONE dead link in the whole app** — `quota-notice.tsx:142 → /settings`. 36
+internal link sites, 10 distinct destinations. Confirms A and the manager independently.
+
+**PROVED ABLE TO FAIL (Ruling 14 point 5).** Two dead links planted in two different shapes —
+`href="/plans-does-not-exist"` in `tier-upgrade-block.tsx` and
+`router.push("/bookmarks-does-not-exist")` in `keyboard.tsx`. The scan went **1 → 3** and named
+both with file and line. Reverted; `git diff -- web/` **0 lines** and `git status --porcelain
+--untracked-files=all` **empty**, both asserted; the scan returned to **1**.
+
+**`typedRoutes` — the stronger seam, and why NOT this round.** Next 16.2.3 ships stable
+`typedRoutes`, which makes a literal `href` to a non-route a **compile** error, and this tsconfig
+**already** includes `.next/types/**/*.ts`. Rejected for now on measured cost: the types only exist
+after `next build`, so the gate would have to grow a build step (section 3's gate is tsc + lint +
+vitest, and `next dev` is banned outright by Ruling 2 point 5); and roughly 30 non-literal
+`href={…}` sites would each need an `as Route` cast. **Recorded as the upgrade path**, not as this
+round's work. `POLICY — manager decides` whether a later round takes it.
+
+##### 7-02.5 — WHAT THE FIELD SHOWS WHEN EVERY CANDIDATE IS REJECTED
+
+There is no "no honest destination" case here: `/welcome?step=ai` resolves for every reader in
+every entitlement state, including signed-out, and the AI step needs no account. So the CTA is
+never suppressed and the paragraph never renders empty. **The absence to guard is the opposite
+one:** if a future round ever needs a destination that does not exist yet, the constant must be
+typed to allow the CTA to be *omitted* rather than pointed at a placeholder — a missing link is
+honest, a dead one is not. That is the lesson of this item stated as a contract.
+
+##### 7-02.6 — TESTS AT RISK, FOUND BY GREPPING CALLERS
+
+`quota-notice.test.tsx` is the only suite that reads the string. It asserts the prompt's copy
+byte-for-byte and reads its own source file (`readFileSync` at the top of the suite) — so C must
+check whether any assertion pins `/settings` and **rewrite it to state the new contract, never
+delete it** (section 3). `tier-upgrade-block.test.tsx` and `pool-refresh-notice.test.tsx` cover the
+other two surfaces; if either pins the literal `/welcome?step=ai`, the assertion should move to the
+constant so the test and the code cannot drift. **Blast radius beyond these three suites: none** —
+the destination is a string in three leaf components with no other consumer, which is why the
+constant is cheap and why nobody noticed the link was dead for five rounds.
+
+##### 7-02.7 — WHAT C SHOULD DO, IN ORDER
+
+1. Add `src/lib/navigation/upgrade-destination.ts` with `UPGRADE_HREF` and its docblock.
+2. Point all three surfaces at it; assert **0** surviving literals outside that module.
+3. Add the dead-internal-link gate test (7-02.4), resolving against `src/app` **and** `public/`,
+   with no allowlist; prove it by planting a dead link in **both** shapes and reverting.
+4. **Then** the plan section on the AI step, so *"See what Pro adds"* keeps its promise — the price
+   line already exists verbatim at `tier-upgrade-block.tsx:111-112` under D7 and needs no new copy
+   invented. **If the manager rules this out of 7-02's scope, say so and leave the promise broken
+   deliberately rather than silently** — but it is the half of Ruling 18 point 6 that survives
+   contact with execution, and step 3's tally will not catch it, because the URL is valid.
