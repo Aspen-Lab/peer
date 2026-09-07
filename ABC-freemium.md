@@ -13097,3 +13097,72 @@ vitest  Test Files  128 passed | 1 skipped (129)
 ```
 
 **+1 file, +4 tests. Nothing deleted. 7-02 IS COMPLETE — all three parts.**
+
+#### 7-01 — THE CHIP. **LANDED.**
+
+**A paid reader no longer reads "Free" while the profile is loading.** The plan segment is
+**absent** while the plan is unknown — not blank-substituted, not defaulted, not a placeholder of
+reserved width.
+
+**FOUR EDITS, B's SHAPE EXACTLY.** `planChipText` takes `… | null` and returns `string | null`
+with `if (!entitlement) return null;` ahead of every branch; `aiModeChip`'s `entitlement` option
+takes `| null` and its `plan` becomes `string | null`; `page.tsx` passes the **raw** `entitlement`
+instead of `grants`; the span renders only when `aiChip.plan !== null`. `label`, `ai` and `title`
+are untouched — they are capability claims, and `allowance.ts` ratifies failing a capability closed
+while ignorant.
+
+**BOTH WRONG COMMENTS CORRECTED IN THE SAME COMMIT, AND B WAS RIGHT THAT THE SECOND IS WORSE.**
+`planChipText`'s docblock said *"…so the chip always has a value"* — the bug written down, treating
+*anonymous* and *not yet known* as one thing. `page.tsx`'s call-site comment went further and
+**ratified the defect in as many words**: the chip reading "Free" was *"exactly what shipped before
+6-04 and is the right direction to fail"*. It is not a direction to fail; it is a claim, and it was
+false. Anyone reading only that comment would have put `grants` back. Its stale second half —
+*"no upsell lives on this page"*, made false by 6-03's `PoolRefreshNotice` in the same round —
+is corrected too. **A third stale comment B did not list**, in `ai-tier.test.ts` (*"there is no
+empty state to design"*), is corrected on the same grounds; the assertion under it is unchanged.
+
+**SIX NEW CASES, AND THEY EXIST BECAUSE THE FIX REDDENED NOTHING (Ruling 19 point 5).** B planted
+the finished fix and the whole gate came back byte-identical — no existing test could tell the
+fixed chip from the broken one. The six: `null` in / `null` out at both `planChipText` and
+`aiModeChip`; the same on the **default clock**, which pins the guard **ahead of** the trial date
+maths; `ai`/`label`/`title` unchanged on the unknown reader, so *"fix the chip"* cannot become
+*"blank all four"*; **every known state still answers**, anonymous included, so a guard that
+swallowed the signed-out reader would fail R-UI-1 loudly; and the two source-level cases below.
+
+**THE TWO SOURCE-LEVEL CASES ARE THE ONES THAT MATTER, AND ROUND 6's TRAP IS WHY.** `aiModeChip`
+could be perfect and the page could still hand it `entitlementGrants(entitlement)` — no behavioural
+case can see that. So one case reads `page.tsx` and requires the call to pass bare `entitlement`
+and **not** `entitlement: grants`; another requires the span to be guarded rather than blank.
+Whitespace-tolerant regexes; the tree is CRLF on disk.
+
+**PROVED ABLE TO FAIL — THREE PLANTS, THREE DISTINCT SETS OF FAILURES, each reverted with an
+asserted substitution count of 1 and an asserted absence before the re-run was read.**
+1. `entitlement: grants` restored at the call site → **only** the raw-entitlement case reddened.
+   **This is B's predicted revert and it behaved exactly as predicted.**
+2. `planChipText` returning `"Free"` for an unknown plan — the literal old behaviour, not a
+   deletion, so it fails on the assertion rather than by throwing → **both** behavioural cases
+   reddened, on the injected clock and the default one.
+3. The JSX guard removed → **only** the render-absence case reddened.
+   Each plant reddens a different case: no case is carrying another's weight.
+
+**ONE THING B GOT SLIGHTLY WRONG, AND IT IS IN C's FAVOUR.** B wrote that *"the revert that reddens
+is `entitlement: grants`, never the `| null` type"*. True of B's measurement — B planted the whole
+fix and reverted pieces of it. It is **no longer true of the landed tree**: with the call site now
+passing a nullable value, narrowing the parameter back to non-nullable is a **tsc** error. The
+compiler holds one end and the six cases hold the other.
+
+**GATE AFTER 7-01, VERBATIM.**
+
+```
+tsc     exit 0
+eslint  ✖ 1 problem (1 error, 0 warnings)   — the standing quiz.tsx:46
+vitest  Test Files  128 passed | 1 skipped (129)
+        Tests  2924 passed | 1 skipped (2925)     0 failed
+```
+
+**+6 tests, no new file. Nothing deleted.**
+
+**STANDING LOCKS RE-VERIFIED BY NAME, ALL GREEN:** `ui-vocabulary.test.ts`, `ai-tier.test.ts`,
+`quota-notice.test.tsx`, `pool-refresh-notice.test.tsx`, `tier-upgrade-block.test.tsx`,
+`no-client-dev-flags.test.ts`, `spend-scans.test.ts` — **7 files / 92 tests passed**; the report
+page trees (`papers`, `jobs`, `events`) — **2 files / 106 tests passed**.

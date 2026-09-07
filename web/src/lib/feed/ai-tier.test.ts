@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { defaultProfile, type UserProfile } from "@/types";
 import { opportunityRequestBody, paperFeedRequestBody } from "@/store/feed";
@@ -10,6 +12,7 @@ import {
   aiModeChip,
   feedsUseAi,
   hasUserLlmOverride,
+  planChipText,
 } from "./ai-tier";
 
 /**
@@ -180,8 +183,16 @@ describe("aiModeChip — what the mode chip actually says", () => {
   });
 
   it("reads Free for a signed-out visitor, never a blank", () => {
-    // The anonymous entitlement is a real object, so the chip always has a
-    // value — there is no empty state to design.
+    // Signed-out is a KNOWN state whose `effectivePlan` really is "free", so
+    // this stays exactly as it was.
+    //
+    // 7-01 — the comment that used to sit here said "the anonymous entitlement
+    // is a real object, so the chip always has a value — there is no empty
+    // state to design." The first clause is true; the conclusion was the bug
+    // written down. **There is now an empty state**, and it is a different
+    // reader: `entitlement === null`, nobody has looked yet. The case below
+    // this one is that reader. Conflating them is what put "Free" in front of
+    // paying customers.
     expect(
       aiModeChip({
         feedsUseAi: false,
@@ -207,6 +218,105 @@ describe("aiModeChip — what the mode chip actually says", () => {
         }
       }
     }
+  });
+
+  /**
+   * ABC-freemium 7-01 · Ruling 17 point 5 · Ruling 19 point 5.
+   *
+   * **These cases exist because round-7 B planted the finished fix and the
+   * entire gate came back byte-identical to baseline.** Widening a parameter to
+   * `| null` breaks no caller that passes an object, and widening a return from
+   * `string` to `string | null` breaks no assertion expecting `"Free"` — so
+   * every test above stayed green whether the chip was fixed or broken.
+   * **A change that reddens nothing is not evidence of safety; it is evidence
+   * of an untested surface.**
+   */
+  describe("the plan is absent while it is unknown (7-01)", () => {
+    it("returns null, not 'Free', when nobody has looked yet", () => {
+      // The defect, driven at the seam: a PAID reader read "Free" until
+      // `GET /api/profile` answered, and "we have not asked" was
+      // indistinguishable on screen from "you are on the free plan".
+      expect(planChipText(null, NOW)).toBeNull();
+      expect(
+        aiModeChip({
+          feedsUseAi: false,
+          aiSearchActive: false,
+          entitlement: null,
+          now: NOW,
+        }).plan,
+      ).toBeNull();
+    });
+
+    it("returns null on the default clock too, not just an injected one", () => {
+      // The guard must sit ahead of every other branch, including the one that
+      // reads the trial clock. If it were reordered below the date maths this
+      // would throw rather than answer.
+      expect(planChipText(null)).toBeNull();
+    });
+
+    it("moves ONLY the plan segment — the capability claims are untouched", () => {
+      // `allowance.ts` ratifies failing a CAPABILITY closed while ignorant, and
+      // the chip's `ai`, `label` and `title` are capability claims. Only the
+      // plan asserts a fact about the reader, so only the plan may go absent.
+      // Without this, "fix the chip" invites someone to blank all four.
+      const unknown = aiModeChip({
+        feedsUseAi: false,
+        aiSearchActive: false,
+        entitlement: null,
+        now: NOW,
+      });
+
+      expect(unknown.ai).toBe("AI off");
+      expect(unknown.label).toBe("Auto");
+      expect(unknown.title).toBe("Sign in to use Peer's AI, or add your own key.");
+    });
+
+    it("still answers for every KNOWN state, anonymous included", () => {
+      // The complement of the case above: absence is for the unknown reader
+      // only. A guard that swallowed the anonymous reader too would pass the
+      // first case and break R-UI-1.
+      expect(planChipText(SIGNED_OUT, NOW)).toBe("Free");
+      expect(planChipText({ effectivePlan: "free", trialEndsAt: null }, NOW)).toBe("Free");
+      expect(planChipText({ effectivePlan: "paid", trialEndsAt: null }, NOW)).toBe("Pro");
+      expect(
+        planChipText(
+          { effectivePlan: "trial", trialEndsAt: "2026-09-07T12:00:00.000Z" },
+          NOW,
+        ),
+      ).toBe("Trial · 3 days left");
+    });
+
+    it("is given the RAW entitlement by the dashboard, never the grants view", () => {
+      // **This is the actual fix**, and it is the one thing no behavioural case
+      // above can see: `aiModeChip` could be perfect and the page could still
+      // hand it `entitlementGrants(entitlement)`, which turns "not known" into
+      // "free" by design. Asserted in source because `page.tsx` is a client
+      // component with a store graph a suite would have to fake wholesale.
+      // Whitespace-tolerant: the tree is CRLF on disk.
+      const source = readFileSync(
+        join(process.cwd(), "src", "app", "page.tsx"),
+        "utf8",
+      );
+      const call = source.match(/aiModeChip\(\{[\s\S]*?\}\);/);
+
+      expect(call, "the aiModeChip call site moved").not.toBeNull();
+      expect(call?.[0]).toMatch(/entitlement\s*,/);
+      expect(call?.[0]).not.toMatch(/entitlement\s*:\s*grants/);
+    });
+
+    it("renders NO plan span while the plan is unknown — not a blank one", () => {
+      // Ruling 17 point 5 forbids blank-substitution by name, so the segment
+      // must be absent rather than an empty span holding its width. The other
+      // half of the render nobody can drive in a unit test.
+      const source = readFileSync(
+        join(process.cwd(), "src", "app", "page.tsx"),
+        "utf8",
+      );
+
+      expect(source).toMatch(
+        /aiChip\.plan\s*===\s*null\s*\?\s*null\s*:\s*\(\s*<span/,
+      );
+    });
   });
 
   it("never lets the papers toggle move the plan text", () => {

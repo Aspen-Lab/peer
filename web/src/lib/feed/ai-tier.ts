@@ -111,11 +111,18 @@ export function aiModeChip(options: {
    * ABC-freemium 1-24 · R-UI-1 — the reader's plan, for the chip's plan text.
    * Display only: D5 makes the server the authority and this is the "client
    * only displays" half.
+   *
+   * **ABC-freemium 7-01 — `null` means the plan is not known yet**, and then
+   * `plan` comes back `null` and the caller renders no plan segment. Pass the
+   * store's **raw** entitlement here, never `entitlementGrants(...)`: that
+   * helper's whole job is to answer capability questions from the anonymous
+   * view while ignorant, which turns *"we have not asked"* into `"free"` — a
+   * safe default for a capability and a false claim for a plan name.
    */
-  entitlement: Pick<Entitlement, "effectivePlan" | "trialEndsAt">;
+  entitlement: Pick<Entitlement, "effectivePlan" | "trialEndsAt"> | null;
   /** Stubbed by tests; the trial's day count is relative to it. */
   now?: Date;
-}): { label: string; plan: string; ai: string; title: string } {
+}): { label: string; plan: string | null; ai: string; title: string } {
   return {
     label: options.aiSearchActive ? "AI search" : "Auto",
     // ABC-freemium 1-24 — `tier` is renamed `plan`, which is what makes the
@@ -133,13 +140,42 @@ export function aiModeChip(options: {
 /**
  * R-UI-1's three plan strings, verbatim: "Free" / "Trial · N days left" / "Pro".
  *
- * A signed-out reader reads **"Free"**, not a blank — the anonymous entitlement
- * is a real object, so the chip always has a value.
+ * A signed-out reader reads **"Free"**, not a blank. That is correct and stays:
+ * signed-out is a **known** state whose `effectivePlan` really is `"free"`.
+ *
+ * ── ABC-freemium 7-01 · Ruling 17 point 5 · Ruling 19 point 5 ───────────────
+ *
+ * **This docblock used to finish that sentence with "…so the chip always has a
+ * value", and that clause was the bug written down.** It treated *anonymous*
+ * and *not yet known* as the same thing — the exact conflation 6-04 spent a
+ * whole item separating. They are not the same: the anonymous entitlement is a
+ * real object, but before `GET /api/profile` answers there is **no object at
+ * all**, and the old signature could not say so.
+ *
+ * The cost was measured by driving the dashboard's own path: **a PAID reader
+ * read `plan="Free"` until the profile fetch landed**, and *"nobody has looked
+ * yet"* was indistinguishable on screen from *"you are on the free plan"*. The
+ * chip said the second. **An upsell — and a plan name is one — requires
+ * positive evidence that the reader is not entitled, and absence of data is
+ * not evidence.**
+ *
+ * So: **`null` in, `null` out.** Not `"Free"`, not `""`, not a placeholder of
+ * reserved width — Ruling 17 point 5 forbids blank-substitution by name, and
+ * the honest answer to *"which plan?"* before anyone has looked is silence. The
+ * caller renders the segment only when this returns a string.
+ *
+ * **`ai: "AI off"` next door is deliberately NOT changed.** That is a
+ * *capability* claim, and `allowance.ts` ratifies failing a capability closed
+ * while ignorant: refusing a capability for a few hundred milliseconds costs
+ * the reader a moment, asserting a plan puts a wrong claim on screen. Only the
+ * plan segment asserts a fact, so only the plan segment moves.
  */
 export function planChipText(
-  entitlement: Pick<Entitlement, "effectivePlan" | "trialEndsAt">,
+  entitlement: Pick<Entitlement, "effectivePlan" | "trialEndsAt"> | null,
   now: Date = new Date(),
-): string {
+): string | null {
+  // Not known yet. Say nothing rather than guess — 7-01.
+  if (!entitlement) return null;
   if (entitlement.effectivePlan === "paid") return "Pro";
   if (entitlement.effectivePlan === "trial" && entitlement.trialEndsAt) {
     const days = Math.max(

@@ -501,12 +501,24 @@ function DiscoveryPage() {
   // expression, and a copy is exactly what let the chip and the feeds disagree.
   // Same value, one home — `lib/feed/ai-tier.ts` — so the chip's tier text and
   // the feeds' `aiTier` are now provably the same boolean.
-  // ABC-freemium 6-04 — `null` until the profile fetch answers. Both readings
-  // below are CAPABILITY questions (does the feed ask for tier 2, and what does
-  // the mode chip say), so they take the anonymous view while unknown: AI off
-  // and the chip reading "Free", which is exactly what shipped before 6-04 and
-  // is the right direction to fail. The raw nullable value is what an upsell
-  // would have to read, and no upsell lives on this page.
+  // ABC-freemium 6-04 — `entitlement` is `null` until the profile fetch answers.
+  //
+  // ABC-freemium 7-01 — THIS COMMENT WAS WRONG IN TWO WAYS AND THE FIRST ONE
+  // SHIPPED A DEFECT. It used to say both readings below were CAPABILITY
+  // questions, so both could take the anonymous view while unknown — "AI off
+  // and the chip reading 'Free' … the right direction to fail". `feedsUseAi` is
+  // a capability question and that half stands: `allowance.ts` ratifies failing
+  // a capability closed while ignorant. **The chip's plan text is not a
+  // capability question. It is a claim about the reader**, and "Free" is not a
+  // fail-closed direction for a claim — it is simply a wrong one. A PAID reader
+  // read "Free" for as long as the profile fetch took. So the chip now takes
+  // the RAW nullable entitlement and shows no plan segment while it is null.
+  //
+  // The second error: the old comment ended "no upsell lives on this page". It
+  // was true when 6-04 wrote it and 6-03 made it false in the same round —
+  // `PoolRefreshNotice` renders further down this file and correctly takes the
+  // raw nullable value. No defect followed, but the sentence is the kind that
+  // gets trusted instead of checked.
   const entitlement = useProfileStore((state) => state.entitlement);
   const grants = entitlementGrants(entitlement);
   const canUseAiTools = feedsUseAi(profile, grants);
@@ -516,7 +528,10 @@ function DiscoveryPage() {
   const aiChip = aiModeChip({
     feedsUseAi: canUseAiTools,
     aiSearchActive,
-    entitlement: grants,
+    // 7-01 — the raw value, NOT `grants`. `entitlementGrants` answers "what may
+    // this reader do" from the anonymous view while ignorant; the plan name
+    // asks "who is this reader", and there is no safe guess for that.
+    entitlement,
   });
   const shouldLoadPaperDigest =
     !isSearchMode &&
@@ -860,8 +875,21 @@ function DiscoveryPage() {
                   showed "Tier 0" while jobs and events ran Tier 2. */}
               <span className="font-medium">{aiChip.label}</span>
               {/* ABC-freemium 1-24 · R-UI-1 — the plan, and whether AI is on.
-                  Two facts, because the tier number said neither. */}
-              <span className="opacity-60 text-micro">{aiChip.plan}</span>
+                  Two facts, because the tier number said neither.
+
+                  7-01 — the plan segment is ABSENT while the plan is unknown,
+                  not blank and not a placeholder of reserved width: Ruling 17
+                  point 5 forbids blank-substitution by name, and a reserved
+                  blank is a claim that there is a value to come. The honest
+                  price is that this button gets narrower for the few hundred
+                  milliseconds before the profile lands and then wider. The page
+                  does not reflow — the button is last in its group — but the
+                  button does change width, and that is better than a wrong
+                  word. `aiChip.ai` next to it is a CAPABILITY claim and
+                  deliberately keeps failing closed to "AI off". */}
+              {aiChip.plan === null ? null : (
+                <span className="opacity-60 text-micro">{aiChip.plan}</span>
+              )}
               <span className="opacity-60 text-micro">{aiChip.ai}</span>
             </button>
 
