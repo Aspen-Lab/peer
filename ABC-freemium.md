@@ -15159,3 +15159,104 @@ passed | 1 skipped (129) · 2934 passed | 1 skipped (2935), 0 failed**. **No tes
 by this item** — it ships a script, and the ruling forbids putting it in the suite.
 
 **8-02 LANDED. ROUND-8 C COMPLETE — three items, three commits, each pushed as it finished.**
+
+### Round 8 — Agent A
+
+**Turn opened 2026-09-07T23:17Z, lock claimed, committed and pushed before anything else was read**
+(`git branch --show-current` = `freemium-system-key`, no worktree, `git status --porcelain` empty).
+No production code changed this turn: every plant reverted with an asserted empty diff, every
+throwaway deleted. `.env.local` was never `cat`-ed and no key material appears anywhere in this
+repo or in any output below.
+
+#### A · Part 1 — the fixture, and what the owner has and has not done
+
+##### 1.1 The environment, measured by COUNT and NAME only — never by value
+
+`grep -c` over `web/.env.local`, per name, values never read:
+
+| name | populated lines | round-7 A | meaning |
+|---|---|---|---|
+| `GOOGLE_API_KEY` | **1** | 1 | unchanged; D1's key is present |
+| `NEXT_PUBLIC_SUPABASE_URL` | **0** | 0 | **unchanged — the five blocked halves stay blocked** |
+| `SUPABASE_SERVICE_ROLE_KEY` | **0** | 0 | unchanged |
+| `TAVILY_API_KEY` | **0** | 0 | correct under D2a |
+
+`grep -oE '^[A-Za-z_][A-Za-z0-9_]*=' .env.local | sort` returns **exactly one name**,
+`GOOGLE_API_KEY` — so there is no fourth variable I have failed to list. Three `SUPABASE`
+occurrences exist in the file and all three are commented out.
+
+**THE ROUND'S BIGGEST QUESTION, ANSWERED "NO": the owner has NOT filled the Supabase variables, so
+no blocked half became measurable.** The brief asked me to say so plainly either way. Blocked is
+**5**, by cause and not by inheritance: all five need the same three unapplied migrations
+(`web/supabase/migrations/20260904*`) **and** the two Supabase names above.
+
+**R-KEY-1 is NOT on the blocked list and this is the one that moved.** Ruling 22 point 4 took it
+off; Ruling 24 point 7 told me to re-run the live check myself rather than cite the manager's. I
+did (part 2 §2.1) and it **passes on my own run**, so R-KEY-1 stays off with a stated reason of my
+own rather than an inherited one.
+
+##### 1.2 The fixture checklist — all 31 rows, scored against behaviour
+
+**Denominator 30. `R-METER-2` is `N/A`, re-listed by name (Ruling 12 point 3 — the operator-search
+row is unreachable by construction under D2a). EXCLUSIONS: NONE.**
+
+| # | item | score | evidence |
+|---|---|---|---|
+| 1 | R-SEC-1 | MET | `/api/figure` behind `requireEntitledAiRequest`; both matchers take a branded `EntitledContext` the compiler requires |
+| 2 | R-SEC-2 | MET | one shared check before `resolveProvider`; I re-classified all **21** API handlers myself — part 3 scan 5 |
+| 3 | R-SEC-3 | MET | body-borne `aiTier: 2` / `deepReport: true` downgraded server-side on all three feeds |
+| 4 | R-SEC-4 | MET | `dispatch-digests` pinned `aiTier: 0`, D9 named at the line; it is one of scan 5's two justified exemptions |
+| 5 | R-METER-1 | **BLOCKED** (code half MET) | one row per provider request; every provider leaves `resolveProvider` wrapped in `meterProvider`. **The Supabase write is still unprovable** — and my live run (§2.1) writes the `[llm]` console row, not a `usage_events` row, because Supabase is unconfigured |
+| 6 | **R-METER-2** | **N/A** | unreachable by construction under D2a — re-listed by name, Ruling 12 point 3 |
+| 7 | R-METER-3 | **BLOCKED** (code half MET) | module-scope `Map` gone, store seam present; the Supabase half needs the migrations |
+| 8 | R-METER-4 | MET | in-memory fallback labelled and never selected when the Supabase env is present |
+| 9 | R-ENT-1 | **BLOCKED** | migration file exists and reads correctly; not applied |
+| 10 | R-ENT-2 | **BLOCKED** (code half MET) | resolver unit-tested on all four plan states; a real `profiles` row unreachable |
+| 11 | R-ENT-3 | MET | one predicate; scan 2 = 0 — no browser code decides AI availability from `NODE_ENV` |
+| 12 | R-ENT-4 | MET | signed-out readers get tier-0 everywhere and spend nothing — 4 of 4 AI routes answer **401**, driven through the real handlers (§3.5) |
+| 13 | R-ENT-5 | MET | `PEER_DEV_ENTITLEMENT` honoured only in development off Vercel; banned by the guard |
+| 14 | R-POOL-1 | MET | ISO-week key for jobs/events, local date for papers, `CACHE_KEY_VERSION` bumped |
+| 15 | R-POOL-2 | MET | refresh forces a rebuild and is charged to the rebuild breaker; `PoolRefreshNotice` renders the outcome |
+| 16 | R-POOL-3 | MET | a free reader with no Tavily key triggers no search on any key — adapter suites, §3.4 |
+| 17 | **R-KEY-1** | **MET — code half AND live half, and the live half is MY OWN RUN** | order re-read in source this round: `resolveSystemProvider` tries the **explicit** `PEER_DIGEST_PROVIDER` opt-in (banned on Vercel), then `GOOGLE_API_KEY` unconditionally — **no `NODE_ENV`/`VERCEL` gate decides whether a system provider exists, and `GOOGLE_VERTEX_PROJECT` is not read here at all**, so it cannot take precedence. Live half: `npm run check:providers` **PASS**, §2.1 |
+| 18 | R-KEY-2 | MET | the system provider reaches only authenticated **and** entitled requests |
+| 19 | R-KEY-3 | MET | D2a: no system branch survives; `process.env.TAVILY_API_KEY` reads in non-test source **0** (scan 3) |
+| 20 | R-KEY-4 | MET | `"default"` renders **"Peer's AI (included)"**; `welcome/completeness.ts` no longer calls it incomplete |
+| 21 | R-QUOTA-1 | MET | unchanged from round 7's re-score; the destination still answers the promise |
+| 22 | R-QUOTA-2 | **BLOCKED** (code half MET) | trial cap, 200/day deep-report breaker and the renamed rebuild breaker all behave; the real store is unreachable |
+| 23 | R-QUOTA-3 | MET | the exemption is a depth, never a transport |
+| 24 | R-UI-1 | MET | scan 1 = **0** rendered strings, re-derived with my own greps (§3.1); the provenance badge reads **"No model used"**, a constant, not a tier word |
+| 25 | R-UI-2 | MET | the "Tier 0" option is gone (it survives only in the comment explaining its removal); the default option reads "Peer's AI (included)"; "Use my own key" remains. **The new conditional copy read and judged — §2.5** |
+| 26 | R-UI-3 | MET | paid and unknown-plan readers get **0** upsells on **3 of 3** surfaces; the census is re-derived, never quoted (§3.3) |
+| 27 | R-UI-4 | MET | report and digest cache keys discriminate system-AI output from no-AI output |
+| 28 | R-GUARD-1 | MET | `REQUIRED_ON_VERCEL` read in source: exactly **three** names. `TAVILY_API_KEY` is in the ban list; `FORBIDDEN_PREFIXES_ON_VERCEL = ["GOOGLE_VERTEX_"]` — **checked, not inherited from C** (§2.4) |
+| 29 | R-GUARD-2 | MET | the message never prints a value |
+| 30 | R-TEST-1 | MET | the rewritten suites plus round 8's ten new cases; assertions rewritten, never deleted |
+| 31 | R-TEST-2 | MET | gate green and above baseline — §3.8 |
+
+**Counts: 30 scored. MET 25 · BLOCKED 5 · PARTIAL 0 · NOT MET 0.** `R-METER-2` `N/A`, outside the
+30. **EXCLUSIONS: NONE.** One score moved from round 7: **R-KEY-1 `BLOCKED` -> `MET`**, on the live
+half I ran myself.
+
+##### 1.3 The blocked halves, by name — 5, ALL ONE CAUSE
+
+| # | requirement | the half that cannot be measured | cause |
+|---|---|---|---|
+| 1 | **R-ENT-1** | the migration's own effect — `plan`, `trial_started_at`, `trial_ends_at`, `plan_updated_at`, the `handle_new_user` trial grant, the RLS split | the three `20260904*` migrations are unapplied |
+| 2 | **R-ENT-2** | `resolveEntitlement` against a real `profiles` row | same |
+| 3 | **R-METER-1** | a `usage_events` row actually written to Supabase | same — and unchanged by §2.1's live call, which proves the model works, not that the row persists |
+| 4 | **R-METER-3** | the counters in Supabase behind an atomic increment, surviving a cold start | same |
+| 5 | **R-QUOTA-2** | a trip recorded against the real store rather than the in-memory fallback | same |
+
+**All five share ONE cause and it is entirely in the owner's hands.** That is a real improvement in
+shape even though the count only fell 6 -> 5: last round the list had two causes.
+
+**Absence claims in this part, with the scope that produced them (Ruling 24 point 1).**
+- *"The Supabase variables are still unset"* — `grep -c '^NEXT_PUBLIC_SUPABASE_URL=.'` and
+  `grep -c '^SUPABASE_SERVICE_ROLE_KEY=.'` over `web/.env.local`, both **0**, plus
+  `grep -oE '^[A-Za-z_][A-Za-z0-9_]*='` over the same file returning one name. The file's values
+  were never read.
+- *"`GOOGLE_VERTEX_PROJECT` cannot outrank `GOOGLE_API_KEY`"* — read
+  `web/src/lib/llm/providers/registry.ts` lines 103–126 in full (`resolveLocalOptInProvider` and
+  `resolveSystemProvider`) plus `grep -rn "createGemini[A-Za-z]*Provider(" src/` (3 hits: the
+  declaration and two call sites). `GOOGLE_VERTEX_PROJECT` appears in neither function.
