@@ -7,7 +7,10 @@ import { cn } from "@/lib/cn";
 // <CardShell>.
 
 export const cardShell = cva(
-  "group block bg-surface shadow-card",
+  // `grain` is a background-image over the surface colour: in a palette with
+  // one hue, the grain is what tells the eye this is a material and not a
+  // filled rectangle.
+  "group block bg-surface grain shadow-card",
   {
     variants: {
       radius: {
@@ -26,7 +29,9 @@ export const cardShell = cva(
         true: [
           "transition-[box-shadow,transform] duration-200 ease-out",
           "hover:shadow-card-hover hover:-translate-y-[2px]",
-          "active:translate-y-0 active:shadow-card",
+          // Pressed, it goes below where it started: a thing under a finger
+          // does not merely stop rising.
+          "active:translate-y-[1px] active:shadow-well-soft active:duration-75",
         ].join(" "),
         false: "",
       },

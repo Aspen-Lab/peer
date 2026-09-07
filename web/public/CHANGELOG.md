@@ -2,6 +2,35 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.16.1 — 2026-09-07
+
+A little material.
+
+Greyscale removed the colour that used to carry the surfaces, and left flat
+fields behind. What replaces it is light: the interface now has a grain, an
+edge and a direction.
+
+**Grain.** A fine tileable noise on the ground and on every card. The ground's
+is fixed to the viewport, so it stays put under the scroll the way paper does
+rather than sliding with the content. It is deliberately faint — the tile is
+mid-grey with a noisy alpha, so it lightens a dark surface and darkens a light
+one, and at any strength where the texture is obvious on a #1d1d1d card the
+same tile is a grey veil over a white one. Tooth, not tint. (The ground had a
+grain already; it was near-black noise, which on #111 was a texture nobody
+could see.)
+
+**An edge.** A card catches the light along its top edge and loses it along
+the bottom, so it reads as a slab with thickness instead of a lighter
+rectangle.
+
+**A cut mat.** The figure sits *in* its mat now, not on it: the inset catches
+on the window's top and left, where a light from the upper left would leave
+it.
+
+**A press.** Pressing a card puts it a pixel below where it started, with the
+cast shadow collapsed to contact and a shallow well under the top edge. A
+thing under a finger does not merely stop rising.
+
 ## v0.16.0 — 2026-09-07
 
 Greyscale, and one hue.
