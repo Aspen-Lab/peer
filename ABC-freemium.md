@@ -119,8 +119,8 @@ lock by rebasing onto the holder's head.
 
 ```
 HELD BY:          free
-ROUND:            8
-WHOSE TURN:       manager — independent re-measure  (round 8 is measured; A is finished)
+ROUND:            9
+WHOSE TURN:       B  (round 9, the last agent round; order is 9-01 -> 9-03)
 STOPPED BECAUSE:  finished the turn @ 2026-09-07T23:38Z — ALL THREE PARTS, one commit each, each
                   pushed as it finished, plus one extra commit removing a credential-grep false
                   positive my own draft had introduced. **No production code changed**
@@ -1024,33 +1024,17 @@ GATE NOW:  **Round-8 A, cold, after every plant was reverted and no throwaway re
            suite, `components/cards/pool-refresh-notice.test.tsx`.
            Round-5 A's figures follow: tsc **0** · eslint **1** · vitest **124 files passed | 1
            skipped (125)** · **2871 tests passed | 1 skipped (2872)**, **0 failed**, 9.50 s.
-TODO:      **THE MANAGER RE-MEASURES ROUND 8 INDEPENDENTLY, then opens round 9.** A does not close
-           the gate alone (§2 exit condition, Ruling 8 point 4). Denominator **30**, `R-METER-2`
-           `N/A`, blocked **5** — R-ENT-1, R-ENT-2, R-METER-1, R-METER-3, R-QUOTA-2. **R-KEY-1 is
-           off the blocked list with a measured reason and must not go back on without a stated
-           one.** What the re-measure should check, in priority order:
-           1. **Re-run `npm run check:providers` yourself** — it is seconds, and it is the only
-              number no gate can produce. A got PASS / exit 0 and reproduced the outage on a plant.
-           2. **Rule on the two corrected tallies (§4, round-8 A part 3).** Ruling-75 absence cases:
-              A **settled** it at **4** and explains why round-7 A could not reproduce it (wrong
-              subject — production sites, not the four rewritten test cases). Round-7 A's
-              `POLICY — manager decides` can be closed. And the model-shape tally is **2, not 1**.
-           3. **A found something about 8-01(b) that neither B nor C stated, and it is good news:**
-              `GOOGLE_VERTEX_SEARCH_FALLBACK` is banned on Vercel by the `GOOGLE_VERTEX_` prefix, so
-              the grounding backfill cannot be armed on a deployment at all. Worth telling the owner,
-              because it moves the risk from "off by default" to "impossible in production".
-           4. **Decide 9-01** (two operator scripts still accept the old Vertex search setting
-              name). It is queued, not a finding; A did not report it as one.
-           5. **Two questions A could NOT settle and neither can a fixture.** Are the eight BYOK
-              model ids for `openai`, `qwen`, `anthropic` and `deepseek` still live? **Unknown, and
-              recorded as unknown** — nobody has a key and 8-02 reports `SKIP` rather than guessing,
-              which is the right shape. And does `thinkingLevel: MINIMAL` hold thinking at zero on a
-              60,000-character deep report? A's billed run printed **no** `think=` segment and the
-              logger prints one whenever the count is non-zero — so it is zero **on a ping**. A did
-              not extend that to deep-report scale, deliberately.
-           6. **The owner is the whole of what remains.** Five blocked halves, one action: apply the
-              three `20260904*` migrations and add `NEXT_PUBLIC_SUPABASE_URL` +
-              `SUPABASE_SERVICE_ROLE_KEY` to `web/.env.local`. Nothing in the loop can move them.
+TODO:      B WRITES THE ROUND-9 GUIDE — a SMALL round, two items (Ruling 25 §1z point 8):
+           **9-01** two operator scripts still accept the OLD Vertex search setting name, so
+           someone could build a search index the app never queries, silently and with no
+           error (round-8 C flagged it; find them by grep, name them, say what each should
+           accept). **9-03** add `npm run build` to the gate, run ONCE per turn before the
+           final commit — never after every item. The manager ran it: exit 0, ~20 s, 27 static
+           pages, 34 routes, prebuild guard fires. Update §3's gate definition and every place
+           the gate is quoted. NOTE for B: Ruling 19 point 4 rejected `typedRoutes` partly
+           because the gate would need a build — that cost is now paid, so re-cost it and
+           recommend, do not decide. **9-02 (the Turbopack file-tracing warning) is the
+           OWNER'S call, not an agent item** — do not write a fix for it.
 PENDING USER ACTION: (1) **Apply the three migrations** under `web/supabase/migrations/20260904*`
            — this is now the ONLY thing blocking five of the six remaining halves. (2) Add
            `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` to `web/.env.local` so
@@ -1060,11 +1044,9 @@ PENDING USER ACTION: (1) **Apply the three migrations** under `web/supabase/migr
            NOT carry `TAVILY_API_KEY`; deploy only after the branch is green and merged.
            DONE: the local `GOOGLE_API_KEY` is filled (Ruling 21 point 4). WITHDRAWN: the trial
            backfill (no users); the 2026-10-01 model escalation (the owner decided).
-OPEN FOR MANAGER:  **Round-7 A's one open `POLICY` is ANSWERED, not escalated** — the Ruling-75
-           absence tally is settled at 4 (§4, round-8 A part 3 §3.4), so the manager only has to
-           ratify it. Otherwise: none. 9-01 stays queued. One maintenance note, not a finding: this
-           state file carries 5 lines matching the repo's standing credential grep, inherited from
-           Ruling 22's text and §3's ground rule.
+OPEN FOR MANAGER:  none — round 8 accepted in §1z. One item is the owner's, not the loop's:
+           9-02, a pre-existing build warning that ships the whole project into one
+           serverless function (Ruling 25 point 4).
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
@@ -2261,6 +2243,72 @@ of the loop.**
    rather than citing the manager's — Ruling 22 point 6's independence requirement, now that the
    tool exists.
 
+---
+
+## §1z. RULING 25 — round 8 accepted; the loop had never built the product (2026-09-07, BINDING)
+
+**Manager's independent re-measure, four checks, all run by the manager:**
+- **Gate cold:** tsc 0 · eslint 1 (standing `quiz.tsx:46`) · vitest **128 files / 2934 passed /
+  1 skipped / 0 failed** — identical to A's and C's.
+- **The live check, re-run:** `gemini-3.1-flash-lite  small+large  PASS`, `in=412 out=9 749ms ok`,
+  four vendors `SKIP no key`, no key material printed. **The outage stays closed.**
+- **A's new fact, verified by running the real guard against planted environments:**
+  three required names alone -> **passes silently**; add `GOOGLE_VERTEX_SEARCH_FALLBACK` ->
+  **exit 1**, naming it; add `GOOGLE_VERTEX_SEARCH_PROJECT` -> **exit 1**, naming it.
+  **A is right, and neither B nor C said this.**
+- **The state file's five credential-grep hits read individually: all prose** about key *formats*
+  (`AQ.` / `AIza` discussed as shapes). No secret. Confirmed, not assumed.
+
+1. **Round 8 accepted. Code side 0.0% of 30, manager-confirmed. Blocked 5, all on one owner
+   action.** A's reading note is adopted verbatim into the record: round 7 also read 0.0% *while
+   the product could not make a single model call*. **The number did not change; what changed is
+   that a real request now answers.** That distinction is the whole justification for the
+   two-number convention and it should be quoted whenever the trend is quoted.
+2. **A's guard finding has a consequence A did not draw, and it is the more important half.**
+   The prefix ban means the grounding backfill **cannot be armed on a deployment at all** — better
+   than "off by default", and the strongest fact about 8-01(b). **But the same prefix ban is a trap
+   for D2b:** the day the owner enables Vertex AI Search on the $1,000 credit, un-banning by
+   *prefix* would un-ban `GOOGLE_VERTEX_SEARCH_FALLBACK` along with the names actually needed, and
+   grounding — which the credit does **not** cover — comes back with it.
+   **Recorded as a binding design note for whoever takes D2b:** the guard moves from a prefix ban
+   to an **explicit allow-list** of the Vertex-search names, with `GOOGLE_VERTEX_SEARCH_FALLBACK`
+   **staying banned**. Cheapest to write down now, while it is understood.
+3. **THE LOOP HAD NEVER BUILT THE PRODUCT, and the manager did.** Search scope, stated per Ruling
+   24 point 1: `grep -cnE "npm run build|next build" ABC-freemium.md` over the whole state file
+   returned **4**, and all four are *discussions about* the build (two describing the prebuild
+   interlock, two in `typedRoutes` cost estimates). **No round ever ran one.** The gate has been
+   tsc + lint + vitest for eight rounds.
+   **The manager ran `npm run build`: exit 0.** TypeScript passes under Next's own compilation,
+   27 static pages generate, the prebuild guard fires, 34 routes are emitted. **The branch builds.**
+   That was not previously known, and it is the check a deployment actually runs.
+4. **One build warning, and it is out of this loop's scope — flagged to the owner, not fixed.**
+   Turbopack reports the whole project traced into the bundle for `/api/papers/report`, through
+   `next.config.ts -> pdf-text.ts -> full-text.ts`, caused by filesystem operations in the PDF text
+   path. **Consequence: that serverless function ships far more than it needs** — slower cold
+   starts, and Vercel enforces a hard function-size limit. **It predates this loop and has nothing
+   to do with D1–D9**, so widening scope to fix it is not this loop's call. **Item 9-02, owner
+   decides:** fix before deploy, or deploy and watch the function size. The manager recommends
+   deploying first and only acting if the size limit actually bites — the warning is about weight,
+   not correctness.
+5. **New ground rule (§3): the gate grows a build, once per turn.** `npm run build` runs **before
+   the final commit of every turn**, not after every item — measured at roughly 20 s here, which is
+   affordable once and wasteful ten times. It catches a class tsc + lint + vitest never touch:
+   Next's own compilation, static generation, route emission, server/client boundary violations,
+   and the prebuild guard. **Round 9 lands it as item 9-03**, and B's earlier `typedRoutes`
+   rejection (Ruling 19 point 4) may be revisited now that its main cost is already paid.
+6. **A's other corrections, accepted:** the Ruling-75 tally is **settled at 4** — A showed round 7
+   measured the wrong subject (it counts rewritten *test cases*, each carrying an "N of 4" marker,
+   not production sites); the model-shape tally is **2, not 1** (C's own edit made C's number
+   stale); scan 5 has **two** justified exemptions, result unchanged at 0.
+7. **A's process note becomes a ground rule.** A's first §1 rewrite would have deleted ~600 lines
+   of nested round history; a **line-count assertion caught it before the commit** and A restored
+   from its own backup. **§1's STATUS is a stacked history, not a replaceable field.** Any edit to
+   this file asserts the line count did not drop unexpectedly before committing.
+8. **Round 9 is small and it is the last agent round before the loop waits on the owner.**
+   **9-01** the two operator scripts still accepting the old Vertex setting name (C's flag);
+   **9-03** the build in the gate (point 5). **9-02 is the owner's, not an agent's.** After round 9
+   there is nothing an agent can do until the three migrations are applied.
+
 ## §2. ROLES — DO ONLY YOUR OWN JOB
 
 ### Agent A — Reviewer
@@ -2420,6 +2468,15 @@ C does **not** judge whether something should be fixed.
   files read - or it is a guess wearing a fact's clothes (Ruling 24 point 1). **This binds the
   manager first**: Ruling 23 declared a switch did not exist while it sat seven lines above the
   call site the manager had read.
+- **The gate grows a build, run ONCE per turn before the final commit** (Ruling 25 point 5):
+  `npm run build` from `web/`. Not after every item - ~20 s is affordable once and wasteful ten
+  times. It catches what tsc + lint + vitest never touch: Next's own compilation, static
+  generation, route emission, server/client boundary violations, and the prebuild guard.
+  Eight rounds ran without it.
+- **This state file's §1 STATUS is a stacked history, not a replaceable field** (Ruling 25
+  point 7). Any edit asserts the file's line count did not drop unexpectedly BEFORE committing;
+  round-8 A's first rewrite would have deleted ~600 lines of round history and a line-count
+  assertion is what caught it.
 - Commit messages: plain sentences in the repo's existing style
   (`feat(scope): …`, `fix(scope): …`, `refactor(scope): …`), ending with
   `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>`.
