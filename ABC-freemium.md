@@ -118,13 +118,73 @@ lock by rebasing onto the holder's head.
 ## §1. CURRENT STATE — THE SOURCE OF TRUTH
 
 ```
-HELD BY:          B-round7 @ 2026-09-07T20:40:25Z
+HELD BY:          free
 ROUND:            7
-WHOSE TURN:       B  (round 7; order is 7-02 -> 7-01 -> 6-02)
-STOPPED BECAUSE:  finished the turn @ 2026-09-07T20:35:00Z — all three parts, one commit each, each
-                  pushed as it finished. No production code changed; every plant reverted with an
-                  asserted empty diff; every throwaway deleted.
-STATUS:           ROUND 7 OPENS ON THE WORST DEFECT OF THE LOOP SO FAR: the upgrade prompt's only
+WHOSE TURN:       C  (round 7; order is 7-02 -> 7-01 -> 6-02)
+STOPPED BECAUSE:  finished the turn @ 2026-09-07T21:05:53Z — two items written and one line for the
+                  third, one commit each, each pushed as it finished. No production code changed;
+                  all four plants reverted with an asserted empty diff; nothing was ever written
+                  into the tree (the harness lives in the session scratchpad).
+STATUS:           ROUND 7 — **B HAS WRITTEN THE GUIDE. TWO ITEMS, 7-02 and 7-01**, both
+                  `WRONG DATA`; **6-02 is still unanswered by the owner and nothing was written for
+                  it.** Gate cold on a clean tree: tsc 0 · eslint 1 (standing `quiz.tsx:46`) ·
+                  vitest **125 files / 2906 tests / 0 failed**. **Four plants, all reverted with an
+                  asserted empty diff.**
+                  1. **7-02 — THE DEAD DESTINATION, AND RULING 18 POINT 6'S MECHANISM IS WRONG
+                     WHILE ITS CONCLUSION HOLDS.** Established by execution against the real
+                     `WelcomePage`: the wizard reads `stepIndexFromKey(requestedStep) ??
+                     firstIncompleteStep(...)`, so **the query wins and the completeness rule
+                     cannot skip anyone past `?step=ai`** — proved able to fail, since the same
+                     signed-in reader lands on **Persona** with no query and on **AI** with one.
+                     **All six entitlement states land on the AI step; all six show ZERO
+                     plan/pricing words** (`Peer Pro · Pro · $12 · upgrad · plan · pric · subscrib ·
+                     student · sign in`, nine scans, false everywhere). So the destination resolves,
+                     renders, stays put — and has **nothing to do with paying**. **THE THREE CTAs
+                     ARE NOT ONE CLASS:** two are BYOK promises (`TierUpgradeBlock` keeps its,
+                     `QuotaNotice`'s lands on `not-found`), and **`PoolRefreshNotice`'s *"See what
+                     Pro adds"* is a PLAN promise that resolves to a page which never says "Pro"**.
+                     Unifying on `/welcome?step=ai` fixes the dead link and leaves that second,
+                     quieter instance of the same defect. **`/profile` REJECTED ON EVIDENCE** — it
+                     imports none of the AI-key panel (`ai-setup` has exactly two non-test
+                     importers, `app/page.tsx` and `welcome/page.tsx`) and is a reading-history
+                     page. **A new route REFUSED** — `/welcome` already owns the deep-linkable
+                     `step`. **Seam: one constant**, `src/lib/navigation/upgrade-destination.ts`,
+                     three importers, zero surviving literals. **Gate test written and PROVED ABLE
+                     TO FAIL**: route enumeration from `src/app/**/page.tsx` is **identical to
+                     Next's own generated `AppRoutes`** in `.next/types/routes.d.ts` (11 routes);
+                     36 link sites, 10 destinations, **exactly ONE dead** — `quota-notice.tsx:142
+                     → /settings`; two planted dead links in two shapes took it **1 → 3**.
+                     **CORRECTION TO RULING 18 POINT 2: `/CHANGELOG.md` is NOT a false positive** —
+                     it is a real 40 KB file in `public/`; resolve against `public/` and the tally
+                     needs no allowlist at all, and an allowlist is a hole that will one day swallow
+                     a genuine dead link.
+                  2. **7-01 — THE CHIP, AND A CENSUS RE-DERIVED THREE WAYS, NOT QUOTED.** Upsell
+                     vocabulary (14 files match, **3** render upsell copy), store-entitlement
+                     consumers (**6** production sites, 3 of them the upsell surfaces, 2 pure
+                     capability, 1 the chip), and the chip's own reachability (`planChipText` has
+                     **zero** importers outside its module; `aiModeChip` has **one** production
+                     caller). **THREE upsell surfaces plus the chip. No fourth.** The defect driven
+                     through the page's own path: **a PAID reader reads `plan="Free"` until
+                     `GET /api/profile` answers**, and *not known* is indistinguishable from
+                     *known + anonymous* on screen. **RULING 17 POINT 5'S ESCAPE CLAUSE IS REACHED
+                     and is hereby recorded:** `planChipText` cannot express absence — its parameter
+                     has no nullable member and its return is a bare `string` — so **the caller
+                     changes too**, which is exactly Ruling 17 point 1's prescribed shape. **BLAST
+                     RADIUS MEASURED BY PLANTING THE FINISHED FIX: ZERO — tsc, eslint and vitest all
+                     identical to baseline, and that is the finding**, because it means **no
+                     existing test can tell the fixed chip from the broken one**; the revert that
+                     reddens is `entitlement: grants` at the call site, never the `| null` type.
+                     **TWO wrong comments, not one:** the `planChipText` docblock Ruling 17 named,
+                     and `page.tsx:504-509`, which explicitly calls the chip reading "Free" *"the
+                     right direction to fail"* **and** claims *"no upsell lives on this page"* —
+                     false since 6-03 put `PoolRefreshNotice` at `page.tsx:1315`. **Do NOT also
+                     change `ai: "AI off"`** — that is a capability claim and `allowance.ts:166-187`
+                     ratifies failing it closed.
+                  3. **6-02 — UNANSWERED.** `PENDING USER ACTION` lists four items and the model
+                     swap is not among them; re-read after a `git pull` at the end of the turn.
+                     The **2026-10-01** escalation date stands.
+                  ── Round-6 A's summary follows. ──
+                  ROUND 7 OPENED ON THE WORST DEFECT OF THE LOOP SO FAR: the upgrade prompt's only
                   call to action links to `/settings`, which is not a route — verified by the
                   manager against the real route tree. A reader trying to pay lands on
                   not-found. In the tree since round 2; scored MET three rounds. R-QUOTA-1 is
@@ -534,15 +594,18 @@ GATE NOW:  **Round-6 A, cold, after every plant was reverted and every throwaway
            suite, `components/cards/pool-refresh-notice.test.tsx`.
            Round-5 A's figures follow: tsc **0** · eslint **1** · vitest **124 files passed | 1
            skipped (125)** · **2871 tests passed | 1 skipped (2872)**, **0 failed**, 9.50 s.
-TODO:      B WRITES THE ROUND-7 GUIDE, order 7-02 -> 7-01 -> 6-02 (Ruling 18 §1s):
-           **7-02 FIRST** — point `QuotaNotice`'s prompt at `/welcome?step=ai` (what the other
-           two upsell surfaces already use), and establish BY EXECUTION whether that page is
-           right for a signed-in reader who already has AI — the `ai` step's completeness rule
-           (1-15) may skip past it, and a prompt landing on a page that bounces the reader is
-           the same defect wearing a valid URL (point 6). Add the dead-internal-link scan as a
-           GATE TEST, proved by planting a dead link; `/CHANGELOG.md` is a known false
-           positive. **7-01** the chip, across THREE upsell surfaces plus the chip (point 4).
-           **6-02** the model swap only if the owner has answered.
+TODO:      C WORKS THE ROUND-7 GUIDE FROM 7-02 (§4 "Round 7 — Agent B"), in B's order:
+           **7-02 first**, its four steps at 7-02.7 — the shared `UPGRADE_HREF` constant in
+           `src/lib/navigation/`, all three surfaces onto it with **zero** surviving literals,
+           the dead-internal-link gate test (resolve against `src/app` **and** `public/`, **no
+           allowlist** — `/CHANGELOG.md` is a real file, not a false positive), proved by
+           planting a dead link in **both** shapes; then the plan section on the AI step unless
+           the manager rules it out, because *"See what Pro adds"* does not otherwise keep its
+           promise. **Then 7-01**, its four steps at 7-01.8 — `| null` through `planChipText`
+           and `aiModeChip`, the call site passing the **raw** `entitlement`, the span guarded
+           on `!== null`, **both** wrong comments corrected, and new cases **proved able to fail
+           by restoring `entitlement: grants`** (the type change alone reddens nothing — B
+           measured it). Do NOT touch `ai: "AI off"`. **6-02** stays out until the owner answers.
 PENDING USER ACTION: (1) Apply the three migrations under `web/supabase/migrations/20260904*`.
            (2) After applying, save a profile once in the app. (3) Optionally fill
            `GOOGLE_API_KEY` in `web/.env.local` (and the Supabase URL + service-role key) so A
@@ -551,7 +614,22 @@ PENDING USER ACTION: (1) Apply the three migrations under `web/supabase/migratio
            NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY — and must NOT carry
            TAVILY_API_KEY (the build will refuse it after 5-03). Deploy only after round 5
            reports green and the branch is merged. WITHDRAWN: the trial backfill (no users).
-OPEN FOR MANAGER:  none — A's proposed 7-02 is ruled in §1s and ranked first.
+OPEN FOR MANAGER:  **TWO `POLICY` items from round-7 B, neither blocking C.** (1) **The plan
+           section on the AI step** (7-02.7 step 4): making *"See what Pro adds"* keep its
+           promise means putting plan copy on an onboarding step — an editorial call. Every
+           string needed already exists verbatim under D7 at `tier-upgrade-block.tsx:111-112`,
+           which is **the only place in the whole app that says what Pro costs**, and it renders
+           only for a signed-in free reader with locked rows in a report. If ruled out of scope,
+           say so out loud rather than banking a green link scan over a promise still broken.
+           (2) **`typedRoutes`**: Next 16.2.3 ships it stable and this tsconfig already includes
+           the generated types, so a dead literal `href` could be a **compile** error instead of
+           a test — rejected this round on measured cost (the gate would need a `next build`,
+           and ~30 non-literal `href={…}` sites would need `as Route`). A later round's call.
+           **Also for the ruling record: three manager corrections in §4** — Ruling 18 point 6's
+           mechanism (the completeness rule cannot skip past `?step=ai`; the query is read
+           first), Ruling 18 point 2's `/CHANGELOG.md` "false positive" (it is a real file in
+           `public/`), and the brief's premise that `/profile` manages the reader's key (it
+           does not).
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
@@ -12700,3 +12778,72 @@ beyond `ai-tier.test.ts`: none**, and that is measured, not estimated.
 3. Correct **both** comments of 7-01.5, including the stale *"no upsell lives on this page"*.
 4. Add the `null` cases to `ai-tier.test.ts` **and prove them able to fail by restoring
    `entitlement: grants` at the call site** — the type change alone reddens nothing.
+
+#### 6-02 — THE MODEL SWAP. **STILL UNANSWERED — NOTHING WRITTEN.**
+
+`PENDING USER ACTION` in §1 lists four items and the model swap is not among them; `OPEN FOR
+MANAGER` reads `none`. Re-read after a `git pull` at the end of the turn, unchanged. Per Ruling 16
+point 6 and Ruling 18 point 5 it stays out of scope until the owner answers, and the **2026-10-01**
+escalation date stands — 24 days out at the time of writing, with the Gemini retirement on
+2026-10-16.
+
+#### ROUND-7 B — CLOSE-OUT
+
+**Two items written, one line for the third. Classification: 7-02 `WRONG DATA`, 7-01 `WRONG DATA`.**
+Both rank as wrong data rather than missing, and by §2's rank rule 7-02 leads: a rendered control
+that names a destination it cannot reach is a lie told to the reader most likely to be about to pay.
+
+**THE GATE, COLD, ON A CLEAN TREE, VERBATIM.** B changed no production code.
+
+```
+tsc     exit 0
+eslint  ✖ 1 problem (1 error, 0 warnings)   — the standing quiz.tsx:46 react-hooks/set-state-in-effect
+vitest  Test Files  125 passed | 1 skipped (126)
+        Tests  2906 passed | 1 skipped (2907)     0 failed     9.76s
+```
+
+Identical to round-6 C's and round-6 A's figures, as it must be.
+
+**PLANTS: 4, ALL FIRED OR MEASURED, ALL REVERTED WITH AN ASSERTED EMPTY DIFF.**
+Two dead links in two shapes (a `Link href` and a `router.push`) — the scan moved **1 → 3** and
+named both. The finished 7-01 fix in four edits across two files — **tsc, eslint and vitest all
+identical to baseline, which is itself the finding** (7-01.4). After every revert,
+`git diff -- web/` **0 lines** and `git status --porcelain --untracked-files=all` **empty**, both
+asserted before the run was read.
+
+**NOTHING WAS WRITTEN INTO THE TREE.** The harness lives entirely outside the repo, in the session
+scratchpad, with its own vitest config and a junctioned `node_modules`; four probe files, none of
+them ever under `web/`.
+
+**THREE THINGS I FOUND THE MANAGER WRONG ABOUT, all by execution rather than by reading:**
+
+1. **Ruling 18 point 6's mechanism.** The `ai` step's completeness rule cannot skip a reader past
+   `?step=ai` — the query is read **before** the fallback, and the same signed-in reader lands on
+   Persona with no query and on AI with one. **The conclusion survives; the mechanism does not.**
+   The destination is empty of plan content, not skipped.
+2. **`/CHANGELOG.md` is not a false positive.** It is a real 40 KB file in `public/`, and the fix is
+   to resolve against `public/`, not to allowlist a path. Ruling 18 point 2's standing tally should
+   say so, because an allowlist entry is a hole that will one day swallow a real dead link.
+3. **`/profile` does not manage the reader's key.** The `ai-setup` panel is imported by exactly two
+   non-test files, `app/page.tsx` and `welcome/page.tsx`; `/profile` is a reading-history page.
+
+**`POLICY — manager decides`, two items, neither blocking C:**
+
+- **`typedRoutes`.** Next 16.2.3 ships it stable and this tsconfig already includes the generated
+  types, so a dead literal `href` could be a **compile** error instead of a test. Rejected for this
+  round on measured cost (the gate would need a `next build`, and ~30 non-literal `href={…}` sites
+  would need `as Route`). Worth a later round's decision, not mine.
+- **The plan section on the AI step (7-02.7 step 4).** Making *"See what Pro adds"* keep its promise
+  means putting plan copy on an onboarding step, which is an editorial call. Every string needed
+  already exists verbatim under D7. If it is ruled out of scope, the promise stays broken and the
+  round should say so out loud rather than bank a green link scan and move on.
+
+**ABSENCES, AND WHERE I LOOKED.** No `next dev` was started (Ruling 2 point 5); the wizard was
+driven through `renderToStaticMarkup` against the real component instead. No live-model or Supabase
+work was attempted — irrelevant to both items, and the keys are still absent. I did **not** render
+the whole dashboard page to see the chip's span disappear: `page.tsx` is a 2,000-line component
+with a store graph the harness would have had to fake wholesale, so the chip is proved at the
+function that computes its strings — which is the seam Ruling 68a created for exactly this reason —
+plus a `tsc` pass over the real JSX guard. The one thing that is therefore **named rather than
+claimed**: nobody has watched the span vanish in a browser, and C's new case should assert the
+rendered absence, not only the `null`.
