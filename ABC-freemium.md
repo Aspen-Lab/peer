@@ -15260,3 +15260,203 @@ shape even though the count only fell 6 -> 5: last round the list had two causes
   `web/src/lib/llm/providers/registry.ts` lines 103–126 in full (`resolveLocalOptInProvider` and
   `resolveSystemProvider`) plus `grep -rn "createGemini[A-Za-z]*Provider(" src/` (3 hits: the
   declaration and two call sites). `GOOGLE_VERTEX_PROJECT` appears in neither function.
+
+#### A · Part 2 — the personas, and whether round 8 actually landed
+
+##### 2.1 THE LIVE CHECK, RUN BY ME, AND PROVED ABLE TO FAIL
+
+Ruling 24 point 7 says A runs 8-02 itself and reports its own output rather than citing the
+manager's. **The sandbox did not refuse it this time** — the standing environment limitation
+recorded in Ruling 22 point 6 is lifted, and that is worth saying plainly because two rounds of
+reports have carried it. `cd web && npm run check:providers`, **my own run, verbatim, exit code
+0:**
+
+```
+Peer — live provider check (ABC-freemium 8-02)
+THIS MAKES REAL, BILLED API CALLS — one tiny request per model id below.
+Keys are read from the shell first, then …/web/.env.local. None are printed.
+
+[llm] gemini/gemini-3.1-flash-lite path=test in=412 out=9 742ms ok
+gemini     gemini-3.1-flash-lite          small+large    PASS
+openai     —                                             SKIP   no key (OPENAI_API_KEY)
+qwen       —                                             SKIP   no key (QWEN_API_KEY or DASHSCOPE_API_KEY)
+anthropic  —                                             SKIP   no key (ANTHROPIC_API_KEY)
+deepseek   —                                             SKIP   no key (DEEPSEEK_API_KEY)
+
+All 1 configured model id(s) answered.
+```
+
+**No key material is printed, and I checked rather than assumed it:** the only path in the output
+is the `.env.local` location, and the whole output carries no `AIza`, no `AQ.`, no `tvly-`. The
+four `SKIP` rows name the *variable that would configure them*, never a value.
+
+**PROVED ABLE TO FAIL — my own plant, not C's.** I put a retired id back on the `large` tier
+(`provider-models.ts`, `large: "gemini-2.5-flash"`, substitution count asserted **1** and the
+non-empty diff asserted before the run was read) and re-ran:
+
+```
+gemini     gemini-3.1-flash-lite          small          PASS
+[llm] gemini/gemini-2.5-flash path=test 111ms ERR
+gemini     gemini-2.5-flash               large          FAIL   ApiError: {"error":{"code":404,
+  "message":"This model models/gemini-2.5-flash is no longer available to new users. …
+
+1 of 2 configured model id(s) FAILED.
+```
+
+**Exit code 1.** Reverted with `git checkout --`, then **`git diff` asserted 0 lines, the planted
+value asserted absent by grep, and the whole tree asserted clean** before anything else was read.
+
+**Three things this settles that a suite cannot.**
+1. **The outage is closed in reality, not only in the tree.** Ruling 22's finding is independently
+   reproduced *and* independently cleared, by the same command, four minutes apart.
+2. **The PASS goes through the product's own path.** The `[llm]` line is the product's own usage
+   logger — so `genConfig`, and therefore 6-02's new thinking control, is on the path that passed.
+3. **What a PASS does NOT mean, and the brief asked:** it is a `testConnection()` ping
+   (in=412 out=9), **not** a deep report. It proves the key authenticates, the model answers, and
+   token counts come back. It does **not** prove a 60,000-character two-pass report completes. **The
+   honest scope is "the product can make a model call again", and no more.**
+
+**ON C's OPEN QUESTION — is `thinkingLevel: MINIMAL` a real off-switch or a quieter overspend?**
+The usage logger prints a `think=N` segment **only when the count is truthy**
+(`usage-log.ts:35`), and C measured that segment printing `139` on an uncontrolled model — so the
+field is reported when it is non-zero. **My run's line carries no `think=` segment at all**, so the
+shipping model billed no thinking tokens I can observe on that call. **That is evidence, not
+proof, and it does not extend to deep-report scale** — C's refusal to generalise from a ping was
+right and I am not overturning it. Recorded as measured-on-a-ping.
+
+##### 2.2 6-02's thinking control — the guard is real, and I proved it TWICE
+
+Ruling 24 point 2 says the lasting guard is a **test that walks every model id the code can send**
+and fails the moment one has no verified setting. I did not take that on reading.
+
+- **Plant 1 — an unmeasured id on the `large` tier** (`provider-models.ts`,
+  `gemini-4.0-nobody-measured-this`, substitution asserted 1). **Three cases red:** the chain walk,
+  the swap-target case, and the catalog case.
+- **Plant 2 — the same id in `GLOBAL_FALLBACK_CHAIN` instead** (`gemini.ts:39`, substitution
+  asserted 1). **This is the one that isolates the guard**, because the catalog test cannot see the
+  global chain. **Exactly ONE case red — "turns thinking off for EVERY model id the shipped chains
+  can send" — failing on `AssertionError: expected undefined to be defined`,** which is the missing
+  `thinkingConfig` and nothing else. **So the walk is doing its own work and is not riding on the
+  catalog case.** Both plants reverted with an asserted 0-line diff and an asserted absence of the
+  planted string.
+
+**NEW STANDING TALLY, MINE TO SOURCE: model ids the code can send that have no verified thinking
+setting = 0.** Sourced by enumerating every `"gemini-*"` literal in non-test `src/`
+(`grep -rnoE '"gemini-[a-z0-9.\-]+"'`), then separating **sendable** ids from **label** ids:
+
+| id | where it is sent from | family matched | control |
+|---|---|---|---|
+| `gemini-3.1-flash-lite` | `provider-models.ts:28,29` — both tiers, so all three chains | 3.x Flash | `thinkingLevel: MINIMAL` |
+| `gemini-3.5-flash-lite` | `gemini.ts:38` global fallback (and the local diagnostic) | 3.x Flash | `thinkingLevel: MINIMAL` |
+| `gemini-3.6-flash` | `gemini.ts:39` global fallback (and the local diagnostic) | 3.x Flash | `thinkingLevel: MINIMAL` |
+
+**3 sendable ids, 3 covered, 0 uncovered** — evaluated by running both family patterns against
+each id rather than by reading them, with an unmeasured control id (`gemini-4.0-x`) confirming the
+predicate answers "none" rather than matching everything. The five `gemini-2.5-*` and `gemini-3.*`
+strings in `ai-setup.tsx:241-249` are a **display-label map**, not a chain — nothing is sent from
+there, and the two retired ids are deliberately kept so old labels still resolve.
+
+##### 2.3 THE COST POLICY ON THE SHIPPING MODEL — off-setting sent, no 4096 headroom
+
+Read in the generation config and then confirmed by execution. `outputCap()` is
+`disableThinking(modelId) ? maxTokens : maxTokens + THINKING_HEADROOM`, `THINKING_HEADROOM` is
+4096, and `disableThinking()` is now simply "a control exists for this model". For the shipping id
+a control exists, so **the caller's budget is the whole cap**. The executed proof is the case that
+drives the real provider with `PROVIDER_MODELS.gemini.small`/`.large` and a `maxTokens` of 120:
+`thinkingConfig` is **defined** and `maxOutputTokens` is **120**, not 4216. The unrecognised-model
+case is its control — same shape, `thinkingConfig` **undefined** and `maxOutputTokens` **50 +
+4096**. **So the policy is asserted in both directions and cannot pass vacuously.**
+
+##### 2.4 8-01 — both halves, each proved able to fail by restoring the old behaviour
+
+Neither half had a test before this round, so "it passes" was worth nothing until I made each one
+fail.
+
+- **(a) The project fallback.** Planted `|| process.env.GOOGLE_VERTEX_PROJECT?.trim()` back into
+  `vertexSearchProject()` (substitution asserted 1, diff non-empty). **Exactly one case red: "no
+  longer brings Vertex search up off the Gemini model project".** Reverted, 0-line diff asserted,
+  planted string asserted absent.
+- **(b) The grounding backfill.** Planted the **old opt-out** predicate back
+  (`off`/`false`/`0` -> false, otherwise `return isGeminiSearchAvailable()`). **Exactly one case
+  red: "does NOT reach grounding when a Search App is configured and nothing asked for it"** — the
+  money switch that had zero coverage for seven rounds. Reverted, 0-line diff asserted.
+- **MY FIRST ATTEMPT AT PLANT (b) FAILED TO APPLY AND ITS OWN ASSERTION CAUGHT IT** — a two-line
+  literal with `\n` separators matched **0** times against a CRLF file (`OCCURRENCES= 0`,
+  `AssertionError`). Recorded rather than quietly retried, because without the count the *next*
+  green run would have read as a passing revert. This is §3's CRLF trap firing for the third round
+  running, and the count assertion is what makes it harmless.
+
+**THE GUARD, CHECKED BY EXECUTION RATHER THAN INHERITED FROM C.** C says the surviving name is
+still refused on Vercel "by prefix, unchanged". I ran the real audit function against planted
+environments:
+
+| planted on a Vercel build | guard's answer |
+|---|---|
+| nothing beyond the three required names | `missing: []`, `forbidden: []` |
+| `GOOGLE_VERTEX_SEARCH_PROJECT` | **forbidden: `["GOOGLE_VERTEX_SEARCH_PROJECT"]`** |
+| `GOOGLE_VERTEX_SEARCH_FALLBACK` | **forbidden: `["GOOGLE_VERTEX_SEARCH_FALLBACK"]`** |
+| `TAVILY_API_KEY` | forbidden: `["TAVILY_API_KEY"]` |
+| two required names removed | missing: both, named |
+
+**AND THIS IS MORE THAN C CLAIMED.** 8-01(b)'s new opt-in switch — `GOOGLE_VERTEX_SEARCH_FALLBACK`,
+the one variable that can arm the $35/1,000 grounding backfill — **is itself banned on Vercel by
+the same prefix.** So the backfill is not merely off by default; on a deployment it **cannot be
+turned on at all** without the build failing first. Neither B nor C stated that, and it is the
+strongest single fact about 8-01(b). The message names the variable and prints no value (R-GUARD-2).
+
+##### 2.5 THE ONBOARDING COPY — C's one judgement call, read as a beginner would see it
+
+C flagged the conditional *"Why one model?"* rewrite as the one thing in 6-02 that is a judgement
+rather than a measurement, and the TODO asked me to read what the screen actually says.
+
+**It answers its own promise (Ruling 19 point 1), and I would not change it.** For Gemini the two
+cells render **"Gemini 3.1 Flash-Lite"** twice — a friendly label, not a raw id — under the headings
+*"Everyday model"* and *"Deep-report model"*, and the paragraph beneath now reads *"Why one
+model? … For this provider Peer sends both the frequent, simpler work and Deep reports to the same
+model."* **The sentence and the two cells now say the same thing**, which is exactly what the old
+*"Why two models?"* stopped doing the moment both tiers named one id.
+
+**The four BYOK providers still read correctly**, checked rather than assumed: each has two
+distinct ids and every one of the eight resolves to a friendly label in the map, so all four keep
+the *"Why two models?"* branch and none falls through to a raw id.
+
+##### 2.6 NOTHING BECAME REACHABLE — D2a re-confirmed, not inherited
+
+The brief's fourth check, and 8-01 is exactly the kind of change that could have loosened it.
+
+- **`systemSearchAllowed` is still hard-wired `false`.** `grep -rn "systemSearchAllowed" src/`
+  excluding tests returns **46 lines across 19 files**; every one is a pass-through, a type, a
+  comment, or a literal `false`. The **four** literal assignments are `entitlement/resolve.ts:134`,
+  `entitlement/types.ts:98`, `entitlement/allowance.ts:157` and `feed/pipeline.ts:134` — **all
+  `false`**, and `resolve.ts:134` carries D2a named at the line. Every other producer passes
+  `=== true` on an optional field, which is `false` when nothing supplies it. **`grep -rn
+  "systemSearchAllowed: true" src/` excluding tests returns 0.**
+- **Both operator-search availability answers are still false in every reachable configuration.**
+  `operatorSearchAvailability()` returns a hard `{ geminiAvailable: false, vertexAvailable: false }`
+  and still does not read its parameter (`_input`, with the eslint disable and the reason written
+  in the body). Its protective case is green.
+- **No persona reaches a paid search host** — §2.7.
+- **8-01 loosened nothing**, and the guard result in §2.4 is the reason it cannot: the one variable
+  that arms the expensive path is refused on a deployment.
+
+##### 2.7 THE FIVE PERSONAS, THROUGH THE REAL HANDLERS, REPORTED PER PERSONA
+
+Driven through the actual route handlers in the vitest harness (stubbed `createClient` + `fetch`,
+armed sentinel keys, `VERCEL=1`), never by calling a helper. **All 12 API route suites green: 97
+tests, 0 failed.**
+
+| persona | operator search key spent | own key sent | AI routes' answer | upsell shown |
+|---|---|---|---|---|
+| `anonymous` | **none** | n/a | **401 on 4 of 4** (digest, jobs/report, events/report, papers/report) and on `/api/figure`; no provider resolved | n/a |
+| `free-no-key` | **none** | none — structured sources only | 200, degraded | yes, correctly |
+| `free-byok-tavily` | **none** | **its own key, not the operator's** | 200 | yes, correctly |
+| `trial` | **none** (D2a) | its own or none | 200 | yes, correctly |
+| `paid` | **none** (D2a) | its own or none | 200 | **none — 0 on 3 of 3 surfaces** |
+
+Plus two cases neither persona list names and both green: an **expired trial** spends nothing on
+either feed, and **the request body cannot elevate** either feed. A paid user's granted "refresh
+now" is charged exactly one rebuild; a free user's is refused and the route still answers 200.
+
+**Route-level persona cases observed passing: 46, across 8 route surfaces** — 24 in the shared
+persona harness (4 report/digest routes × 6 cases), 9 on `/api/jobs/feed`, 7 on `/api/events/feed`,
+3 on `/api/feed`, 3 on `/api/figure`.
