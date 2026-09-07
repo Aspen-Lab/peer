@@ -118,14 +118,80 @@ lock by rebasing onto the holder's head.
 ## §1. CURRENT STATE — THE SOURCE OF TRUTH
 
 ```
-HELD BY:          C-round7 @ 2026-09-07T21:10:41Z
+HELD BY:          free
 ROUND:            7
-WHOSE TURN:       C  (round 7; order is 7-02 -> 7-01 -> 6-02)
-STOPPED BECAUSE:  finished the turn @ 2026-09-07T21:05:53Z — two items written and one line for the
-                  third, one commit each, each pushed as it finished. No production code changed;
-                  all four plants reverted with an asserted empty diff; nothing was ever written
-                  into the tree (the harness lives in the session scratchpad).
-STATUS:           ROUND 7 — **B HAS WRITTEN THE GUIDE. TWO ITEMS, 7-02 and 7-01**, both
+WHOSE TURN:       A  (round 7 — A re-measures; the MANAGER opens round 8)
+STOPPED BECAUSE:  finished the turn @ 2026-09-07T21:36:00Z — all four items landed, one commit
+                  each, each pushed as it finished. NO DEVIATION from the ruled order. Ten plants,
+                  ten fired, every one reverted with an asserted substitution count and an asserted
+                  absence before the re-run was read. No throwaway left in the tree
+                  (`git status --porcelain --untracked-files=all` empty). No migration.
+STATUS:           ROUND 7 — **C HAS IMPLEMENTED. ALL FOUR ITEMS: 7-02(a), 7-02(b), 7-02(c),
+                  7-01**, in the ruled order (Ruling 19 point 6), one commit each, each pushed as
+                  it finished. **NO DEVIATION** from the order or from B's guide. **THE GATE IS
+                  GREEN**: tsc 0 · eslint 1 (standing `quiz.tsx:46`) · vitest **128 files / 2924
+                  tests / 0 failed** (2906 -> 2925: **+18 added, 0 deleted**). **Ten plants, ten
+                  fired.** No migration. No throwaway left in the tree.
+                  1. **7-02(a) — THE DEAD LINK IS GONE.** `quota-notice.tsx` pointed at `/settings`,
+                     which is not a route and never has been. All three upsell surfaces now render
+                     **one constant**, `UPGRADE_HREF` in `src/lib/navigation/upgrade-destination.ts`.
+                     **Zero surviving literals**, asserted by a scan and proved by retyping one back
+                     (0 -> 1). **B's test-risk list was right and short by one, and the miss is the
+                     instructive part:** `quota-notice.test.tsx` had **three**
+                     `not.toContain("/settings")` lines — negative assertions on a route no
+                     component can emit any more, so after the fix all three would have stayed
+                     **green while measuring nothing**. Rewritten through the constant, never
+                     deleted. A fourth case I wrote ("no reference to `/settings` anywhere") was
+                     **removed rather than repaired**: it fired on the JSX comment that records the
+                     defect, and the only fixes were to stop naming the bug or to widen the comment
+                     filter inline, which §3 forbids. It was also redundant against 7-02(c).
+                  2. **7-02(b) — THE DESTINATION NOW ANSWERS THE PROMISE.** The AI step renders the
+                     price and two things Pro adds. **No new copy**: every sentence moved to
+                     `src/lib/entitlement/plan-copy.ts` and **the surfaces it came from import it**,
+                     so nothing is duplicated — and **a test reads the new component's own source
+                     and requires every JSX text node to be an interpolation**, which is the only
+                     mechanical way to hold "no new copy" after this turn. **The two labels travel
+                     with their sentences** because both borrowed sentences need them: standing
+                     alone, *"lifts the monthly limit"* has no subject and *"refreshes them"* has no
+                     antecedent. **D7 travelled with the copy and is asserted** — the block renders
+                     no anchor at all. `TierUpgradeBlock`'s *"Also in this report on Peer Pro"*
+                     deliberately did **not** travel: it is false anywhere but a report.
+                     Built as a component (`components/plan/pro-plan-summary.tsx`) precisely because
+                     `welcome/page.tsx` is unrenderable in a suite — **which is why nothing on that
+                     page had ever been checked against what the CTAs promise.**
+                  3. **7-02(c) — DEAD INTERNAL LINKS: 0, NO ALLOWLIST.**
+                     `src/lib/navigation/dead-links.test.ts`, resolving against the route tree,
+                     `public/` and `/_next/`. **B's shape list was incomplete and the tree has a
+                     live instance of the missing shape:** `<form action="/auth/signout">` in
+                     `user-menu.tsx`. It resolves today — **but a scan without that line reports a
+                     clean zero while a rendered control leads nowhere**, one shape over from the
+                     defect that opened this round. That also forced route **handlers** into the
+                     resolvable set. **Cross-checked against Next's own generated `AppRoutes`
+                     (11 routes) and identical to it** — and that cross-check caught a bug in my
+                     own enumeration: the root `page.tsx` produced a route called `/page.ts`, so
+                     **`/` had quietly stopped being a route** and every link to it would have been
+                     reported dead the moment anything else moved. Proved by planting **three** dead
+                     links in **three** shapes (0 -> 3), each named with file, line and shape.
+                  4. **7-01 — THE CHIP.** A paid reader no longer reads "Free" while the profile
+                     loads; the plan segment is **absent**, not blank and not width-reserved.
+                     `label`/`ai`/`title` untouched — capability claims still fail closed.
+                     **Both wrong comments corrected**, and B was right that the call-site one is
+                     worse: it **ratified the defect in as many words** ("the right direction to
+                     fail"), so anyone reading only it would have put `grants` back. **A third stale
+                     comment B did not list** — `ai-tier.test.ts`'s *"there is no empty state to
+                     design"* — corrected on the same grounds, assertion unchanged.
+                     **Six cases added because the fix reddened nothing** (Ruling 19 point 5), and
+                     **three plants redden three DIFFERENT cases**, so none is carrying another's
+                     weight. **ONE THING B GOT SLIGHTLY WRONG, IN C's FAVOUR:** B wrote that the
+                     `| null` type change "reddens nothing, ever". True of B's harness; **no longer
+                     true of the landed tree** — with the call site passing a nullable value,
+                     narrowing the parameter back is now a **tsc** error.
+                  5. **6-02 — STILL UNANSWERED, RE-READ AFTER A `git pull` AT THE END OF THE TURN.**
+                     `PENDING USER ACTION` lists four items and the model swap is not among them;
+                     `OPEN FOR MANAGER` reads `none`. Out of scope, untouched. The **2026-10-01**
+                     escalation date stands.
+                  ── Round-7 B's summary follows. ──
+                  ROUND 7 — **B HAS WRITTEN THE GUIDE. TWO ITEMS, 7-02 and 7-01**, both
                   `WRONG DATA`; **6-02 is still unanswered by the owner and nothing was written for
                   it.** Gate cold on a clean tree: tsc 0 · eslint 1 (standing `quiz.tsx:46`) ·
                   vitest **125 files / 2906 tests / 0 failed**. **Four plants, all reverted with an
@@ -545,7 +611,16 @@ LAST DIFFERENCE:  **3.3% code-side (1 of 30) — round-6 A. ONE difference: R-QU
 GATE (0% unexplained, both measurements):  **NOT MET — and this time the code side IS part of why.**
            Code-side is **3.3%** with one named difference, and six items carry a blocked half that
            only the owner can close. `GATE: MET` needs both at zero.
-DONE:      **Round 6 A: all three parts**, one commit each, each pushed as it finished; no
+DONE:      **Round 7 C: ALL FOUR ITEMS, 7-02(a) / 7-02(b) / 7-02(c) / 7-01**, in the ruled
+           order, one commit each, each pushed as it finished; gate green after every item;
+           **10 plants, 10 fired**, every one reverted with an asserted substitution count AND an
+           asserted absence of the planted string before the run was read; no throwaway left
+           (`git status --porcelain --untracked-files=all` empty); no migration; **no test
+           deleted** — the three vacuous `/settings` assertions were rewritten to state the new
+           contract, and one case C wrote itself was removed rather than repaired, with the
+           reason left in its place.
+           **Round 7 B: two items written and one line for the third**; no code changed.
+           **Round 6 A: all three parts**, one commit each, each pushed as it finished; no
            production code changed (`git diff --name-only -- web/` asserted **0**); every plant
            reverted with an asserted empty diff; every throwaway deleted; **9 plants, 8 fired and
            the 9th is the finding** (Ruling 17 point 3 confirmed independently, and the compiler
@@ -575,7 +650,21 @@ DONE:      **Round 6 A: all three parts**, one commit each, each pushed as it fi
            every throwaway deleted and every plant restored with an asserted empty diff.
            **Round 5 B: all four items**, 5-01 … 5-04, one commit each, each pushed; no code
            changed; the three-stage measurement plant reverted with an asserted empty diff.
-GATE NOW:  **Round-6 A, cold, after every plant was reverted and every throwaway deleted
+GATE NOW:  **Round-7 C, cold, after every plant was reverted and no throwaway remained
+           (`git status --porcelain --untracked-files=all` **empty**, asserted before this run was
+           read):** `tsc` exit **0** · `eslint` **1 problem (1 error, 0 warnings)** — the standing
+           `quiz.tsx:46` · `vitest` **128 files passed | 1 skipped (129)** · **2924 tests passed |
+           1 skipped (2925)**, **0 failed**. `src/lib/events/benchmark.test.ts` is the one skip,
+           named. Test total 2906 -> 2925: **+18 added, 0 deleted** (7-02a +2, 7-02b +6,
+           7-02c +4, 7-01 +6). File count 125 -> 128: three new suites —
+           `lib/navigation/upgrade-destination.test.ts`, `components/plan/pro-plan-summary.test.tsx`,
+           `lib/navigation/dead-links.test.ts`.
+           **Standing locks re-verified by name, all green:** `ui-vocabulary.test.ts`,
+           `ai-tier.test.ts`, `quota-notice.test.tsx`, `pool-refresh-notice.test.tsx`,
+           `tier-upgrade-block.test.tsx`, `no-client-dev-flags.test.ts`, `spend-scans.test.ts`
+           (7 files / 92 tests) and the three report-page trees (2 files / 106 tests).
+           Round-6 A's figures follow.
+           **Round-6 A, cold, after every plant was reverted and every throwaway deleted
            (`git diff --name-only -- web/` **0** files and
            `git status --porcelain --untracked-files=all` **0** lines, both asserted before this run
            was read):** `tsc` exit **0** · `eslint` **1 problem (1 error, 0 warnings)** — the
@@ -594,17 +683,49 @@ GATE NOW:  **Round-6 A, cold, after every plant was reverted and every throwaway
            suite, `components/cards/pool-refresh-notice.test.tsx`.
            Round-5 A's figures follow: tsc **0** · eslint **1** · vitest **124 files passed | 1
            skipped (125)** · **2871 tests passed | 1 skipped (2872)**, **0 failed**, 9.50 s.
-TODO:      C WORKS THE ROUND-7 GUIDE, order 7-02 -> 7-01 (Ruling 19 §1t):
-           **7-02 has TWO halves, both required** — (a) all three upsell surfaces resolve to
-           `/welcome?step=ai` through ONE constant in `src/lib/navigation/`, zero surviving
-           literals; (b) the AI step gains the plan copy, REUSING the exact strings already in
-           `tier-upgrade-block.tsx`'s D7 block — no new copy is written. Add the dead-link
-           scan as a gate test resolving against the route tree AND `public/`, with **no
-           allowlist** (Ruling 19 point 3) and proved by planting two dead links in two shapes.
-           **7-01** the chip: the plan segment is ABSENT until the plan is known, and the
-           `planChipText` docblock is corrected in the same commit. **B measured 7-01's blast
-           radius as ZERO — no existing test can tell the fix from the bug** (point 5), so C
-           adds cases and proves them by restoring the old argument. **6-02** still unanswered.
+TODO:      A RE-MEASURES ROUND 7. **Denominator is 30. R-METER-2 is `N/A`** (Ruling 12 point 3).
+           **R-QUOTA-1 is `PARTIAL` by Ruling 18 point 1 and is A's to RE-SCORE BY BEHAVIOUR** —
+           not by reading this entry, and not by grepping for the constant. Four items landed;
+           **every one of them was verified by C at a seam, and the questions below are the ones
+           a fixture cannot settle:**
+           1. **Does the reader who hits the monthly cap actually arrive somewhere useful?** Drive
+              the CTA, not the string: does it resolve, and does the page it reaches say what Pro
+              costs, for **every** entitlement state including signed-out and not-yet-known?
+              **Nobody has rendered the whole wizard in-tree.** B did it in a harness outside the
+              repo and warned how easily such a harness gives a false all-clear — patching one of
+              two `useSyncExternalStore` export shapes made all six personas render byte-identical
+              output and **the only tell was the identical byte count**. C proved the copy on the
+              component and the wiring by slicing the AI step's source. **The render is A's.**
+           2. **Does the plan segment actually vanish on screen?** C proved `null` at the seam and
+              the JSX guard in source. Nobody has watched the span disappear. Also worth driving:
+              the button gets narrower for a few hundred milliseconds and then wider — is that
+              acceptable, or does it read as a glitch? A judgement only a render answers.
+           3. **Is the plan copy right for a reader who did NOT come from an upsell?** The AI step
+              is onboarding. A first-run reader now meets a price block between the intro and the
+              key fields. **This is a placement question, not a correctness one**, and C is not the
+              one to rule on it — flagged rather than assumed. B also named a cost nobody had:
+              a reader dropped into the wizard mid-report can press Continue twice and be
+              re-onboarded to `/?tour=1`, losing their place. **Not 7-02's to fix; still true.**
+           4. **Is the dead-link scan complete?** C found a **fourth** link shape B did not list
+              (`<form action>`), live in the tree. **Look for a fifth.** The scan cannot see a
+              destination held in a variable, and treats an interpolation as one wildcard segment.
+              Re-derive the count independently; do not quote C's.
+           **STANDING TALLIES, ALL CARRIED BY NAME:** the five scans (**0** each) · `kind:"search"`
+           rows **0** · `process.env.TAVILY_API_KEY` reads in non-test source **0** · Ruling-75
+           absence cases **4** · structured-source accepted reads **3** · `local-no-auth`
+           **ABSENT** (503 ×3) · paid upsells **0** · report routes answering an anonymous caller
+           **401, 3 of 3** (4 of 4 with digest) · papers web-row count **0** · residual old
+           rename names in `src/` **0** · **DEAD INTERNAL LINKS — must be 0, and the tally carries
+           NO ALLOWLIST** (Ruling 19 point 3; `/CHANGELOG.md` is a real file in `public/`, not an
+           exception) · **THE UPSELL-SURFACE COUNT, which A RE-DERIVES EVERY ROUND AND NEVER
+           QUOTES** (Ruling 18 point 4 — the manager quoted a stale figure once already, and
+           7-02(b) has just added a plan surface that is **not** an upsell: decide on evidence
+           whether it counts).
+           **A NEW TALLY THIS ROUND, AND A MUST PROVE IT ABLE TO FAIL** (Ruling 14 point 5):
+           **surviving `/welcome?step=ai` literals outside `upgrade-destination.ts` — 0.**
+           **6-02** remains unanswered by the owner; `PENDING USER ACTION` re-read after a
+           `git pull` at the end of C's turn and the model swap is still not on it. The
+           **2026-10-01** escalation date stands.
 PENDING USER ACTION: (1) Apply the three migrations under `web/supabase/migrations/20260904*`.
            (2) After applying, save a profile once in the app. (3) Optionally fill
            `GOOGLE_API_KEY` in `web/.env.local` (and the Supabase URL + service-role key) so A
@@ -13166,3 +13287,89 @@ vitest  Test Files  128 passed | 1 skipped (129)
 `quota-notice.test.tsx`, `pool-refresh-notice.test.tsx`, `tier-upgrade-block.test.tsx`,
 `no-client-dev-flags.test.ts`, `spend-scans.test.ts` — **7 files / 92 tests passed**; the report
 page trees (`papers`, `jobs`, `events`) — **2 files / 106 tests passed**.
+
+#### ROUND-7 C — CLOSE-OUT
+
+**ALL FOUR ITEMS LANDED, IN THE RULED ORDER, ONE COMMIT EACH, EACH PUSHED AS IT FINISHED.**
+7-02(a) -> 7-02(b) -> 7-02(c) -> 7-01. **NO DEVIATION** from Ruling 19 point 6's order or from B's
+guide. **6-02 was re-read after a `git pull` at the end of the turn and is still unanswered** —
+`PENDING USER ACTION` lists four items and the model swap is not among them, `OPEN FOR MANAGER`
+reads `none`. Untouched. The 2026-10-01 escalation stands.
+
+**THE GATE, COLD, ON A CLEAN TREE, VERBATIM.**
+
+```
+tsc     exit 0
+eslint  ✖ 1 problem (1 error, 0 warnings)   — the standing quiz.tsx:46
+vitest  Test Files  128 passed | 1 skipped (129)
+        Tests  2924 passed | 1 skipped (2925)     0 failed     10.17s
+```
+
+`git status --porcelain --untracked-files=all -- web/` **empty**, asserted before this run was
+read. Test total 2906 -> 2925: **+18 added, 0 deleted.** File count 125 -> 128: three new suites.
+
+**TEN PLANTS, TEN FIRED. Every revert asserted twice** — a substitution count of exactly 1 **and**
+the absence of the planted string — before any run was read.
+
+| # | item | plant | what reddened |
+|---|---|---|---|
+| 1 | 7-02(a) | literal `href="/welcome?step=ai"` retyped into `pool-refresh-notice.tsx` | surviving-literals scan, 0 → 1 |
+| 2 | 7-02(b) | `<ProPlanSummary />` deleted from the AI step | the wiring case |
+| 3 | 7-02(b) | one benefit retyped as prose | the no-new-copy case |
+| 4 | 7-02(b) | `<a href="/checkout">Subscribe</a>` added | the D7 case **and** the no-new-copy case |
+| 5 | 7-02(b) | `PRO_REFRESHES_ON_DEMAND` dropped from the render | the what-Pro-adds case |
+| 6 | 7-02(c) | `href="/plans-does-not-exist"` | dead-link tally, 0 → 1 |
+| 7 | 7-02(c) | `router.push("/bookmarks-does-not-exist")` | dead-link tally, → 2 |
+| 8 | 7-02(c) | `action="/auth/nope-does-not-exist"` | dead-link tally, → 3 |
+| 9 | 7-01 | `entitlement: grants` restored at the call site | **only** the raw-entitlement case |
+| 10 | 7-01 | `planChipText` returning `"Free"` for an unknown plan | **both** behavioural cases |
+
+Plus the JSX-guard removal for 7-01's render case, which reddened **only** that case. **Each plant
+reddens a different case: no case is carrying another's weight**, and that separation is the point
+of running them one at a time rather than all at once.
+
+**THREE THINGS B OR THE RULINGS GOT WRONG, ALL FOUND BY DOING THE WORK.**
+
+1. **B's link-shape list was incomplete, and the tree has a live instance of the missing shape.**
+   B named `href`, `router.push|replace|prefetch` and `redirect`. `<form action="/…">` is a fourth,
+   and `user-menu.tsx:109` posts sign-out to a route handler through it. **It resolves, so nothing
+   is broken — but a scan without that line would have reported a clean zero while a rendered
+   control led nowhere**, which is the defect that opened this round, one shape over. It also
+   forced route **handlers** into the resolvable set: a page-only enumeration calls that working
+   form dead.
+2. **B's test-risk list missed the more interesting half of `quota-notice.test.tsx`.** B flagged
+   `tier-upgrade-block.test.tsx:55` for pinning the literal. It did not flag the **three**
+   `not.toContain("/settings")` lines, and those are the ones worth naming: they were negative
+   assertions on a route no component can emit any more, so after the fix all three would have
+   passed **while measuring nothing**. A vacuous assertion is exactly the shape that let this
+   defect live five rounds.
+3. **B's "the `| null` type change reddens nothing, ever" is no longer true of the landed tree.**
+   True of B's measurement, which planted the whole fix and reverted pieces of it. With the call
+   site now passing a nullable value, narrowing the parameter back is a **tsc** error. The
+   compiler holds one end of 7-01 and the six new cases hold the other.
+
+**AND ONE I GOT WRONG MYSELF, CAUGHT BY MY OWN CROSS-CHECK, RECORDED BECAUSE IT IS THE ARGUMENT
+FOR KEEPING THAT CROSS-CHECK.** My route enumeration produced a route called `/page.ts` for the
+app root, because slicing `/page.tsx` off a path with no directory part eats a character of the
+filename. The dead-link count was unaffected — **but `/` had quietly stopped being a route**, and
+every link to it would have been reported dead the moment anything else moved. Nothing but Next's
+own generated `AppRoutes` would have found that, and that check is informational and skippable.
+
+**ONE JUDGEMENT CALL, FLAGGED RATHER THAN BURIED (§2: C does not judge whether something should be
+fixed).** 7-02(b) puts a price block on an **onboarding** step, between the intro and the key
+fields, because that is where a reader arriving from *"See what Pro adds"* will look. **For a
+first-run reader who did not come from an upsell, that is a placement decision, and it is not
+mine.** Ruling 19 point 2(b) ruled the copy in; it did not rule on where. B also named a cost
+nobody had: a reader dropped into the wizard mid-report can press Continue twice and be
+re-onboarded to `/?tour=1`, losing their place. **Not 7-02's to fix; still true, and now more
+reachable than it was.**
+
+**WHAT I DID NOT DO.** No `next dev` (Ruling 2 point 5) — the routing work was done against the
+real route tree on disk and against Next's own generated types, never a running server. No
+migration. No credential written, logged or committed; the staged-diff grep for the Google and
+Tavily key prefixes was run before every one of the four pushes and was empty every time. (It is
+deliberately NOT quoted here: writing the pattern into this log would make every future round's
+pre-push scan match this file.) No PR. No branch or worktree. **No
+test deleted** — three assertions rewritten to state the new contract, and one case I wrote myself
+removed rather than repaired, with the reason left in its place so a later round does not re-add
+it and rediscover the same trap.
