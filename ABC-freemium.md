@@ -15464,3 +15464,195 @@ now" is charged exactly one rebuild; a free user's is refused and the route stil
 **Route-level persona cases observed passing: 46, across 8 route surfaces** — 24 in the shared
 persona harness (4 report/digest routes × 6 cases), 9 on `/api/jobs/feed`, 7 on `/api/events/feed`,
 3 on `/api/feed`, 3 on `/api/figure`.
+
+#### A · Part 3 — scans, standing tallies, the two numbers
+
+##### 3.1 The five static scans — my own greps AND the gate tests, and whether they agree
+
+**All five: 0. They agree on every one.** Scope stated for each, per Ruling 24 point 1.
+
+| # | scan | my grep | raw hits, and what they are | gate test | agree? |
+|---|---|---|---|---|---|
+| 1 | rendered `Tier 0/1/2` or `BYOK` | `grep -rnE "Tier [012]\|BYOK" src/` minus tests = **67**; minus comment lines = **4** | 3 are JSX comments (`jobs/[id]/page.tsx:1358,1539`, `page.tsx:875`), 1 is a server `console.warn` (`tier2-rerank.ts:155`). A second grep for the string forms (`"Tier`, `'Tier`, `` `Tier ``, `Tier ${`) returns **6, all comment lines** — so **zero literals and zero constructed strings** reach the DOM. The provenance badge is the constant `NO_MODEL_BADGE = "No model used"` | `ui-vocabulary.test.ts`, 3 cases, "**four** unrendered exclusions" | **yes — same 4** |
+| 2 | `NODE_ENV === "development"` in browser code deciding AI availability | `grep -rn 'NODE_ENV === "development"' src/` minus tests = **8** | 4 comments; 4 real reads, none of them client AI gating — `auth/callback/route.ts:17` (a server handler), `env/local-dev.ts:23`, `opportunities/pool-cache-disk.ts:42`, `opportunities/pool-cache-runtime.ts:14` | `no-client-dev-flags.test.ts`, 2 cases incl. an allow-list staleness check | **yes** |
+| 3 | `process.env.TAVILY_API_KEY` outside the gated resolver | `grep -rn "process\.env\.TAVILY_API_KEY" src/` minus tests = **4** | a docblock, **two commented-out lines** showing what D2a removed, and one `delete` in `src/test-support/route-harness.ts`. **Zero reads** | `spend-scans.test.ts` scan 3 | **yes** |
+| 4 | `resolveProvider()` with no override | `grep -rn "resolveProvider(" src/` minus tests = **17** | 4 comments; 1 declaration; 1 unrelated **local** function in `web-search.ts:341`; 11 real call sites, **every one passing both arguments**. The signature makes it structural, not a convention: `resolveProvider(override: … , ctx: ProviderContext)` — **neither parameter optional**, so an argument-less call is a compile error | `spend-scans.test.ts` scan 4 + scan 6 | **yes** |
+| 5 | routes reachable without the guard that can spend | all **21** `src/app/api/**/route.ts` handlers classified by hand. **9** carry `requireEntitledAiRequest`; of the 12 that do not, **only 2 can spend** by the same predicate the gate test uses (`resolveProvider(` \| `GoogleGenAI` \| `systemSearchAllowed`) | both are the **documented, justified exemptions**: `jobs/dispatch-digests` (D9 — cron on `CRON_SECRET`, `aiTier: 0`) and `digest/test` (local-only diagnostic, 404 unless `canUseLocalServerProvider()`). **Unjustified: 0** | `spend-scans.test.ts` scan 5, 3 cases incl. a guarded-count case so a drop is visible | **yes** |
+
+**A correction to round-7 A's prose, not to its number:** it wrote "one exemption". There are **two**,
+both in the test's own list, both still existing. The scan result — **0 unjustified** — is unchanged.
+
+##### 3.2 Every standing tally carried by Rulings 10–24, reported even at zero
+
+| tally | value | source / scope |
+|---|---|---|
+| Dead internal links | **0**, **NO allowlist** | `dead-links.test.ts`, 4 cases green, including the "not vacuous" case and the cross-check against Next's own generated route list |
+| Upsell surfaces | **3** — `TierUpgradeBlock`, `QuotaNotice`, `PoolRefreshNotice` | **RE-DERIVED THREE WAYS, NEVER QUOTED — §3.3** |
+| Plan surfaces that are not upsells | **1** — `ProPlanSummary` | re-checked: it imports no `UPGRADE_HREF`, renders no `href`, and takes no plan or entitlement |
+| Paid readers shown any upsell | **0**, on **3 of 3** surfaces | the three component suites, on rendered output |
+| Readers shown an upsell while the plan is unknown | **0**, on **3 of 3** surfaces | same |
+| Operator-key search requests | **0** for every persona **including paid** | **sourced from the five searching surfaces** — `/api/jobs/feed`, `/api/events/feed`, `jobweb`, `eventweb`, `web-search`. Feed suites + adapter suites, all green |
+| `kind:"search"` usage rows produced | **0** | **3** writer sites exist (`eventweb.ts:2848`, `jobweb.ts:2243`, `web-search.ts:170`), all behind `operatorFunded`, which is unreachable because `systemSearchAllowed` is a hard `false` on every producer and `operatorSearchAvailability` is frozen false. Kept deliberately so the path is metered *before* it is ever reopened |
+| `process.env.TAVILY_API_KEY` reads in non-test source | **0** | scan 3 |
+| Structured-source key reads ACCEPTED outside the gate | **3** — `adzuna.ts`, `jsearch.ts`, `usajobs.ts` | `spend-scans.test.ts` asserts the list and `toHaveLength(3)` |
+| Report routes answering an anonymous caller 401 | **3 of 3** (**4 of 4** with digest) | executed through the real handlers |
+| `local-no-auth` reachability | **PRESENT as code, ABSENT from any deployed runtime** — stated explicitly | **1** declaration (`ai-request.ts:42`), **1** use (`:123`), reached only when Supabase is unconfigured **and** `deployedRuntimeNeedsAuth()` is false. A deployed runtime with no Supabase answers **503** at `:106-111` instead; the persona harness drives every AI route anonymously and gets **401**, never this branch |
+| `resolveProvider` call sites without a context | **0, by construction** | the compiler — both parameters are required — plus scans 4 and 6 |
+| Guard tests proved by planting | **5 source plants, 5 fired**, plus **5 planted environments** against the real build-guard function, all answering correctly | §2.2, §2.4, §3.6 |
+| Regex shape-tests on a model id | **2** — **NOT 1; see §3.5** | `gemini.ts:93` and `:95`, two named family constants applied in one function |
+| `startsWith`/`endsWith`/`includes`/`indexOf`/`match`/`===`/`switch` on a model id | **0** in `src/` **and** `scripts/` | confirms C's zero |
+| `.testConnection(` call sites | **0 in `src/`**, **1 in `scripts/`** — and that distinction is the whole point | the blind spot Ruling 22 named is closed by a **hand-run tool**, not by production code. Production still never self-tests |
+| **NEW — model ids the code can send with no verified thinking setting** | **0** (3 sendable ids, 3 covered) | §2.2, evaluated by execution with an unmeasured control id |
+| Ruling-75 option-building cases asserting absence | **4 — SETTLED, see §3.4** | 3 in `jobweb.test.ts`, 1 in `eventweb.test.ts` |
+| `R-METER-2` | **`N/A`** | re-listed by name, Ruling 12 point 3 |
+| Personas | **46 route-level cases across 8 route surfaces**, all passing | §2.7 |
+
+##### 3.3 The upsell census — re-derived three ways, never quoted
+
+The count has been stale twice, so I built it three times from scratch and took the intersection.
+
+- **(a) By the destination constant.** Every non-test importer of `UPGRADE_HREF`:
+  `pool-refresh-notice.tsx`, `quota-notice.tsx`, `tier-upgrade-block.tsx` — **3**. (The other hits
+  are the definition itself, a docblock, and a JSX comment on the welcome page.)
+- **(b) By the copy.** Files rendering upgrade-pitch wording (`Peer Pro` / `upgrade to` / `see what
+  pro`) across `src/components` and `src/app`: **4** — the three above plus
+  `plan/pro-plan-summary.tsx`, which is the **destination's own content**, not a surface that
+  pitches at a reader.
+- **(c) By the decision.** Components that both consume the reader's plan (`effectivePlan` /
+  `unlimited` / `ClientEntitlement` / a `plan` prop) **and** render an upgrade control: **3**, the
+  same three.
+
+**Intersection: 3.** `ProPlanSummary` fails (a) and (c) — it takes no plan and renders no control —
+so round-7 A's ruling that it is not a fourth surface **reproduces independently**.
+
+##### 3.4 THE RULING-75 TALLY IS SETTLED AT 4, AND I CAN SAY WHY IT DID NOT REPRODUCE
+
+Round-7 A could not make this tally give 4 and asked the manager to fix or retire it. **It does not
+need either. The tally is sound; round-7 A measured a different subject.**
+
+**What the tally counts, from Ruling 13 point 4 where it was created:** ten inherited report-parity
+cases lost their subject under D2a; **six** were rewritten to assert `null`, and **four** — the ones
+that tested *option-building inside a now-unreachable path* — were rewritten to assert the surface
+never calls the adapter. The tally counts **those four TEST CASES**, and exists so nobody forgets
+they are owed content assertions again if grounding is ever re-enabled.
+
+**Round-7 A counted PRODUCTION option-building sites instead** — three feed routes, plus two
+consumer sites — and got 3 or 5. Different subject, so of course it never lands on 4.
+
+**Measured, and the cases number themselves so this cannot drift again.** Each carries an explicit
+marker in its own comment:
+
+| # | file · line | the case |
+|---|---|---|
+| 1 of 4 | `jobs/sources/jobweb.test.ts:3229` (marker at `:3238`) | "never calls the gemini adapter, so it passes no options at all (D2a)" |
+| 2 of 4 | `jobs/sources/jobweb.test.ts:3261` (marker at `:3269`) | "never reaches the suffixing step, because the adapter is never called (D2a)" |
+| 3 of 4 | `jobs/sources/jobweb.test.ts` (marker at `:3324`) | the shipped admission rule, same threshold |
+| 4 of 4 | `events/sources/eventweb.test.ts:2799` (marker at `:2813-2819`) | "never calls the gemini adapter at all, so it forwards nothing (D2a)" |
+
+**3 in `jobweb.test.ts` + 1 in `eventweb.test.ts` = 4** — exactly Ruling 13 point 4's split and
+exactly round-5 A's original citation. Greps run: `grep -nE "ACCEPTED COVERAGE COST|coverage
+cost|asserting absence|same threshold as above|Ruling 75"` over both files. One further hit
+(`eventweb.test.ts:2954`) is a comment about *separately* lost coverage and carries **no "N of the
+4" marker**, so it is not a fifth. **VERDICT: SETTLED at 4, reproducible, and the marker is what
+makes it reproducible.** Threshold unchanged: if grounding is ever re-enabled for any plan, all
+four return to content assertions in the same round.
+
+##### 3.5 THE MODEL-SHAPE TALLY IS 2, NOT 1 — and C's number is stale by C's own change
+
+C reported "exactly ONE regex on a model id in the whole tree". **Today there are two**, and the
+second is C's: `thinkingOffConfig` matches **two** named family constants,
+`GEMINI_2_5_FLASH_FAMILY` (`gemini.ts:93`) and `GEMINI_3_FLASH_FAMILY` (`:95`). C measured the
+pre-6-02 shape and carried the number past its own edit.
+
+**This is a tally correction, not a defect, and the structure is better than what it replaced:** one
+anonymous inline regex became two named constants in one function, each documented with the live
+result that justifies it, and the thing that actually guards the seam is the enumerating test, not
+either pattern. Recorded so the number is not inherited wrong next round. Non-regex shape tests
+remain **0** in both `src/` and `scripts/`.
+
+##### 3.6 The plants this round — 5 fired, 1 caught by its own assertion
+
+| # | plant | fired | reverted |
+|---|---|---|---|
+| 1 | retired `gemini-2.5-flash` on the `large` tier | live check reports **404**, **exit 1** | 0-line diff + value absent, both asserted |
+| 2 | unmeasured id on the `large` tier | 3 cases red (walk, swap target, catalog) | asserted |
+| 3 | unmeasured id in `GLOBAL_FALLBACK_CHAIN` — **the isolating plant** | **exactly 1** case red, on `expected undefined to be defined` | asserted |
+| 4 | the dropped `GOOGLE_VERTEX_PROJECT` fallback restored | exactly 1 case red | asserted |
+| 5 | the old opt-out grounding predicate restored | exactly 1 case red | asserted |
+| — | plant 5, **first attempt** | **failed to apply** — `OCCURRENCES= 0`, a `\n` literal against a CRLF file — and its own count assertion stopped the run being read | nothing to revert |
+
+Plus **5 planted environments** run against the real `auditVercelEnv` (§2.4), covering both the
+missing and the forbidden direction.
+
+##### 3.7 Differences — the ranked list
+
+**THE CODE-SIDE DIFFERENCE LIST IS EMPTY. 0 items.** Round 8's three items all landed and all three
+are proved by behaviour, not by commit message: the outage is closed against the live key, the
+thinking control is guarded by a test that fails when a model is uncovered, and both money switches
+now redden a case when the old behaviour is put back.
+
+**Five things that are NOT differences but must not be inherited wrong** (none of them changes a
+score):
+1. **The Ruling-75 tally is settled at 4** — §3.4. Round-7 A's `POLICY — manager decides` can be
+   closed without changing the tally.
+2. **The model-shape tally is 2, not 1** — §3.5.
+3. **`GOOGLE_VERTEX_SEARCH_FALLBACK` is banned on Vercel by prefix** — §2.4. Stronger than B or C
+   claimed: the grounding backfill cannot be armed on a deployment at all.
+4. **Scan 5 has two justified exemptions, not one** — §3.1. The scan result is unchanged at 0.
+5. **This state file carries 5 lines that match the repo's standing credential grep** — inherited
+   from Ruling 22's own text and §3's ground rule, not added by me. My part-2 draft briefly added a
+   sixth and I removed it in its own commit, because a permanent false positive turns a real signal
+   into noise. Flagged as maintenance, not as a finding.
+
+**9-01 is NOT reported as a finding** (Ruling 24 point 5) — the two operator scripts still accepting
+the old Vertex setting name are queued, not open.
+
+##### 3.8 The gate, cold
+
+Run from `web/` after every plant was reverted and with **`git status --porcelain
+--untracked-files=all` = 0 lines and `git diff --name-only -- web/` = 0 files, both asserted before
+this run was read**:
+
+- `npx tsc --noEmit -p tsconfig.json` — exit **0**
+- `npm run lint --silent` — **✖ 1 problem (1 error, 0 warnings)**, the standing
+  `src/components/persona/quiz.tsx:46:7  react-hooks/set-state-in-effect`
+- `npx vitest run --reporter=dot` — **Test Files 128 passed | 1 skipped (129)** ·
+  **Tests 2934 passed | 1 skipped (2935)**, **0 failed**, 9.61 s
+
+`src/lib/events/benchmark.test.ts` is the one skip, named. **Identical to round-8 C's and to the
+manager's Ruling-24 re-run, as it must be — A changed no code.** No test added or deleted this
+round.
+
+##### 3.9 THE TWO NUMBERS
+
+- **CODE-SIDE: 0.0% — (0 `NOT MET` + 0 `PARTIAL`) ÷ 30.**
+  *Method, one sentence:* every R-* requirement in spec §2 scored against behaviour, `R-METER-2`
+  removed as `N/A` under Ruling 12 point 3, no other exclusions, divided by the 30 that remain.
+- **BLOCKED: 5, by name — R-ENT-1, R-ENT-2, R-METER-1, R-METER-3, R-QUOTA-2.**
+  *Method, one sentence:* counted one per requirement whose remaining evidence needs something only
+  the owner can supply, which this round is a single thing for all five — the three unapplied
+  migrations plus the two Supabase names in `.env.local`.
+- **EXCLUSIONS RE-LISTED BY NAME: NONE.** **`N/A` RE-LISTED BY NAME: R-METER-2.**
+
+**READING NOTE, and it has two halves that point different ways.**
+**(a) The percentage IS like-for-like.** The denominator has been 30 in rounds 5, 6, 7 and 8, so
+0.0% -> 0.0% is a genuine flat reading and not an artefact.
+**(b) The blocked count IS like-for-like this round, and it fell for a real reason** — 6 -> 5,
+because R-KEY-1's live half is now measured and passing on **my own** run, not merely on the
+manager's. **But the count understates the improvement**: last round the five remaining halves had
+two causes, and now they have **one**. Every remaining blocked item is waiting on the same owner
+action.
+**(c) The thing the numbers cannot show, stated because Ruling 22 exists:** 0.0% code-side was also
+true in round 7, while the product could not complete a single model call. **What is different this
+round is not the number — it is that a real billed request now answers.**
+
+##### 3.10 GATE
+
+**`GATE: NOT MET`** — and the code side is **not** why.
+
+`GATE: MET` needs 0% code-side **and** an empty blocked list. **Code-side is 0.0% and the difference
+list is empty — I say that plainly, and I have not rounded down, reclassified anything, or dropped
+an old finding.** The blocked list has **5** entries and every one of them is waiting on the owner.
+
+**`WHOSE TURN: manager — independent re-measure.`** Per §2's exit condition and Ruling 8 point 4,
+A does not close the gate alone.
