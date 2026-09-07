@@ -14119,3 +14119,190 @@ one waiting on the owner.
 the next turn is the **manager's independent re-measure**, which never closes on A's word alone.
 
 **PART 3 BANKED. ROUND-7 A COMPLETE.**
+
+---
+
+### Round 8 — Agent B
+
+**Turn opened 2026-09-07T22:15Z, lock claimed before anything was read.** Branch
+`freemium-system-key`, no worktree. B changed no production code: every measurement below is a
+plant that was reverted with an asserted empty `git diff -- web/` before the next run was read.
+
+#### 8 · 6-02 — the model swap. `WRONG DATA` (live outage), and it is bigger than two strings.
+
+**Ruling 22's live results independently re-derived, not cited.** A standalone script inside
+`web/` (never vitest — item 1-00 deletes the key), key read from `.env.local`, every error string
+passed through a redactor that blanks the literal key and any token carrying either of the two
+Google key prefixes (spelled out in the script, deliberately not in this log, so the standing
+credential grep stays a real signal instead of firing on prose); the file
+was never `cat`-ed and the script was deleted before this commit
+(`git status --porcelain --untracked-files=all` empty, asserted).
+
+- `gemini-2.5-flash-lite` (ships as `.small`) -> **HTTP 404**, *"no longer available to new users"*,
+  Google's own text naming `gemini-3.5-flash-lite` as the replacement.
+- `gemini-2.5-flash` (ships as `.large`) -> **HTTP 404**, Google's text naming `gemini-3.6-flash`.
+- `gemini-3.1-flash-lite` -> **PASS**, `"pong"`, in=4 out=1.
+
+**Ruling 22 points 2-3 confirmed in every particular. The swap target is right.**
+
+**THE FINDING THE RULING DOES NOT CONTAIN: the swap silently disarms a cost policy, and no test
+in the tree can see it.** `web/src/lib/llm/providers/gemini.ts:70-72` is a **behaviour switch keyed
+on the model NAME** — `return /gemini-2\.5-flash/.test(modelId);` — and it is the only thing that
+decides two runtime facts for every Gemini call in the product (`gemini.ts:74-89`): whether
+`thinkingConfig: { thinkingBudget: 0 }` is sent at all, and whether `maxOutputTokens` is the
+caller's `maxTokens` or `maxTokens + 4096` (`THINKING_HEADROOM`, `gemini.ts:67`). Today both
+shipping ids match, so every call runs *thinking off, tight cap* — which is what the docblock at
+`gemini.ts:54-64` says the policy is. **Move both tiers to `gemini-3.1-flash-lite` and the regex
+stops matching, so the policy silently inverts to *thinking on, cap + 4096* on 100% of calls** —
+and the docblock above it becomes false, since it explains a 2.5-only rule for a tree that no
+longer ships a 2.5 model. The Gemini-3 exemption was written when Gemini 3 was only the
+`GLOBAL_FALLBACK_CHAIN` (`gemini.ts:36-39`); the swap promotes it to the sole primary.
+
+**Measured, not assumed — and the design doc this rule came from is stale.**
+`docs/API_PERFORMANCE_MY_REVIEW_AND_PLAN.md:63,141,186` is the origin of the regex and it asserts
+two things about Gemini 3: that such models *"use `thinkingLevel`, not `thinkingBudget`"* and that
+a `thinkingBudget: 0` would be *"rejected and the `catch` would silently skip the model"*. That is
+a **plan document, not a measurement**, and under the new §3 rule it does not count. So I called
+the API:
+
+- `gemini-3.1-flash-lite` + `thinkingBudget: 0` + `maxOutputTokens` -> **PASS**, thoughts=0.
+- `gemini-3.1-flash-lite` + `thinkingLevel: "MINIMAL"` -> **PASS**.
+- `gemini-3.1-flash-lite`, thinking left on, cap `200+4096` -> **PASS**.
+- `gemini-3.1-flash-lite`, thinking left on, raw cap `200`, no headroom -> **PASS** (the doc's
+  predicted "truncate mid-thinking" trap did not fire).
+
+**The load-bearing result is the first one: widening the regex does NOT 400, so it cannot cause a
+second outage.** The doc's warning is false for this model, and the SDK carries both controls
+(`web/node_modules/@google/genai/dist/genai.d.ts:10277-10288` — `ThinkingConfig` has
+`thinkingBudget` *and* `thinkingLevel`; `@google/genai` 1.50.1). **C may safely widen the
+predicate.**
+
+**What I could NOT measure, stated as a limit rather than a result:** on both a ping and a
+deliberately reasoning-shaped prompt, `gemini-3.1-flash-lite` returned `thoughts=0` in every
+configuration, thinking on or off (hard prompt: in=54 out=74 thoughts=0 with thinking on; in=54
+out=84 thoughts=0 with `thinkingBudget: 0`). Two small prompts are **not** evidence about a 60,000
+character deep-report prompt, so I am **not** claiming the thinking tokens are free — only that I
+could not make this model bill any, and that the `+4096` is a *cap*, not a spend, so the headroom
+itself costs nothing until tokens are actually generated. **Classification: a stale predicate and
+a false docblock, not a proven cost blowout.**
+
+**BLAST RADIUS, MEASURED BY PLANTING THE FINISHED SWAP** (both tiers -> `gemini-3.1-flash-lite`,
+substitution asserted by a non-empty diff before any run was read):
+
+`tsc --noEmit` exit **0**. **Two literal types becoming identical breaks nothing** — the
+`as const satisfies Record<UserCloudAiProvider, ProviderModelPlan>` still checks, and
+`providerModelForTier` still returns per tier. **The two-tier structure survives, as Ruling 22
+point 3 requires**, and `chainForTier` (`gemini.ts:49-52`) still filters to exactly one target per
+tier because it keys on the `tier` field, never on the id. The one behavioural consequence of the
+two ids being equal: the **untiered** digest path (`gemini.ts:238`, `generateDigest` iterates the
+whole chain with no tier filter) now retries the *same* endpoint on an empty response instead of
+falling through to a different model. Two billed requests, two ledger rows, same model — correct
+per Ruling 6 point 5, but the *reason* changes from "fell back" to "retried", which is what
+breaks the test below.
+
+`vitest` cold from `web/`: **2 files, 2 tests fail. Nothing else.**
+
+1. `src/lib/llm/provider-models.test.ts` — *"keeps the economical and deep-work routes explicit"*.
+   The expected one: two string assertions, lines 6-9. C updates both to the new id.
+2. **`src/lib/llm/providers/gemini.test.ts:112` — *"writes ONE ROW PER REQUEST across a fallback
+   chain, not one per call"*. THIS is the one the TODO asked me to find, and it is not a string
+   assertion.** It reads `expect(new Set(rows.map((r) => r.model)).size).toBe(2)`, under a comment
+   (line 111) reading *"Different models, so a reader can see which attempt cost what."* When both
+   tiers name one string, a chain that falls through writes two rows naming the **same** model, so
+   the distinct set is 1. **The property genuinely stops being true** — it was never the stated
+   contract, only an incidental consequence of the two tiers differing.
+   **Fix direction — a contract decision, not a number to bump.** Ruling 6 point 5's actual
+   contract is lines 109-110 (two rows, `ok` = `[false, true]`), and **both still pass**. Line 112
+   should be **rewritten, never deleted** (§3), asserting the property that survives: that the two
+   rows name the configured chain in order — `rows.map((r) => r.model)` equals
+   `[PROVIDER_MODELS.gemini.small, PROVIDER_MODELS.gemini.large]`, **imported from the constant**
+   rather than retyped. That stays meaningful whether or not the two ids are equal, and it still
+   reddens if the chain ever stops logging per attempt. **The comment on line 111 must be
+   corrected in the same edit** — left alone it ratifies a property the tree no longer has, which
+   is the exact class of stale comment rounds 6 and 7 kept finding.
+
+**WHAT THE FIELD SHOWS WHEN EVERY CANDIDATE IS REJECTED — three silent changes, zero red tests.**
+The plant proves these are invisible to the suite; each is a real change C must decide about:
+
+- **`disableThinking` above.** Coverage for the whole generation-config policy
+  (`disableThinking` / `outputCap` / `genConfig` / `THINKING_HEADROOM`) is **zero** — grepped over
+  every `*.test.ts(x)`, the only hit in the tree is `src/lib/sources/gemini-search.test.ts:570`,
+  which asserts `maxOutputTokens` is *absent* from the **grounding** config, a different path.
+  Nothing goes red either way.
+- **`src/components/profile/ai-setup.tsx:237-251` — `modelLabel()` is a `Record<string,string>`
+  with a `?? model` fallback**, and its keys are the literal ids (`"gemini-2.5-flash-lite"` ->
+  *"Gemini 2.5 Flash-Lite"*, lines 241-242). After the swap the new id is not a key, so the
+  onboarding walkthrough renders the **raw id** in place of a friendly name — at
+  `ai-setup.tsx:361` under *"Everyday model"* and `:373` under *"Deep-report model"*. **Both cells
+  then show the same text**, directly above body copy at `:382-384` that asks *"Why two models?"*.
+  It fails soft, so no test sees it. C adds the new id to the map and decides what those two cells
+  say when one model does both jobs. **This is a Ruling 19 point 1 shape — the copy promises
+  something the screen no longer shows** — flagged, not ruled on.
+- **`src/app/api/digest/test/route.ts:6-9`** derives `REGIONAL_MODELS` from `PROVIDER_MODELS`, so
+  it becomes `[X, X]`; the loop at `:57-76` keys its `results` map on `${location}/${modelId}`
+  (`:58`), so **the second probe overwrites the first** and the diagnostic reports one line where
+  it looks like two — misleading exactly when the owner is debugging models. Local-only
+  (`canUseLocalServerProvider()` 404s it otherwise, `:40-44`) and covered only by
+  `src/lib/security/spend-scans.test.ts`, which does not read the model list.
+
+**NOT AT RISK, recorded so C does not chase it:** `src/lib/llm/providers/metered.test.ts:330,352`
+name `"gemini-2.5-flash"` but the file **does not import `provider-models` at all** (asserted:
+`grep -c "provider-models"` = 0). They are self-contained fixture literals that stay green and
+become stale — a fixture named after a model the product cannot call. Worth renaming to an
+obviously-fake id in passing; it is not a break and not a blocker.
+
+**THE COST CONSEQUENCE, and the brief's framing is HALF RIGHT — the deep report gets DEARER, not
+cheaper.** Pass structure read from source, not assumed: the papers deep report is **two passes**,
+`src/lib/papers/deep-report.ts:163-168` (`tier: "small"`, `maxTokens: 1800`, input clipped to
+`PASS1_MAX_INPUT_CHARS` = **60,000** chars, `:29`) and `:295-301` (`tier: "large"`,
+`maxTokens: 2400`, `PASS2_MAX_INPUT_CHARS` = **24,000** chars, `:30`). At ~4 chars/token and both
+prompts at their clip limit:
+
+| pass | before (had it worked) | after, both on 3.1-flash-lite |
+|---|---|---|
+| Pass 1 — small, ~15,000 in / 1,800 out | $0.10/$0.40 -> **$0.00222** | $0.25/$1.50 -> **$0.00645** |
+| Pass 2 — large, ~6,000 in / 2,400 out | $0.30/$2.50 -> **$0.00780** | $0.25/$1.50 -> **$0.00510** |
+| **deep report total** | **~$0.0100** | **~$0.0116** |
+
+**Pass 2 gets 35% cheaper exactly as the ruling says. Pass 1 gets ~190% dearer, and it is the
+bigger prompt** — 2.5x pass 2's input — so the report as a whole lands about **+15%**. The
+brief's *"the deep report's expensive pass gets cheaper and better"* is true of the pass and false
+of the report. **Events and jobs reports are single large-tier passes**
+(`src/app/api/events/report/route.ts:180-181`, `maxTokens: 2000`;
+`src/app/api/jobs/report/route.ts:115-116`, `maxTokens: 1600`) and those do get straightforwardly
+cheaper. **Where the bill actually moves is the small tier**, which is every high-volume path —
+`src/lib/feed/tier2-rerank.ts:133-134`, `src/lib/opportunities/query-gen.ts:377`,
+`src/lib/papers/figure-binding.ts:148`, `src/lib/figures/vision-match.ts:185`,
+`src/lib/figures/semantic-match.ts:108` — all moving $0.10/$0.40 -> $0.25/$1.50: **2.5x on input,
+3.75x on output**, on calls that run per feed build rather than per report. **None of this is a
+reason to delay the swap** — the alternative is a product that cannot make one call — but the
+owner should be told the direction of the bill, and `gemini-3.5-flash-lite` ($0.30/$2.50, Google's
+own suggested replacement and also PASSing) is **not** the cheaper option.
+
+**THE OTHER FOUR PROVIDERS: I CANNOT TEST THEM AND I AM NOT GUESSING.** `openai`, `qwen`,
+`anthropic` and `deepseek` in `provider-models.ts:24-41` are BYOK-only; the owner's key is a
+Google key, so no live call can reach any of them from this machine. **No claim is made about
+whether those eight ids still exist.** What I *can* establish by execution is structural and
+worse: **`testConnection()` is defined by all five providers** (`gemini.ts:305`, `:443`,
+`openai.ts:162`, `qwen.ts:165`, `anthropic.ts:143`, `deepseek.ts:133`, contract at
+`providers/types.ts:66`) **and is invoked from nowhere in production** — `grep` for
+`.testConnection(` over non-test source returns **0 call sites**; only the metering wrapper
+mentions it (`metered.ts:123-127`). So the product ships a per-provider health check that nothing
+ever runs, which is the same blind spot that hid this outage for seven rounds, generalised to all
+five vendors. **Recorded as a lead for the owner, not a fix item** (§2: B does not widen scope).
+
+**ONE FIXTURE FAULT OF MY OWN, recorded because it produced a spectacular false reading.** My
+first vitest run was launched from the repo root with `--root web`; `process.cwd()` was then the
+repo root, every suite that reads a file relative to cwd threw, and the run reported **90 failed
+tests across 14 files**. Re-run from `web/` as §3 requires, the true figure is **2 tests in 2
+files**. Anyone who stopped at the first red would have reported the model swap as catastrophic.
+**Run the gate from `web/`, always.**
+
+**GATE, cold, after the plant was reverted and the probe script deleted (`git diff -- web/` empty
+and `git status --porcelain --untracked-files=all` empty, both asserted before this run was
+read):** `tsc` exit **0** · `eslint` **1 problem (1 error, 0 warnings)** — the standing
+`quiz.tsx:46` · `vitest` **128 files passed | 1 skipped (129) · 2924 passed | 1 skipped (2925), 0
+failed**, 10.30 s. `src/lib/events/benchmark.test.ts` is the one skip, named. Identical to the
+standing baseline, as it must be, since B changed no code.
+
+**6-02 BANKED.**
