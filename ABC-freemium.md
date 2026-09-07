@@ -10677,3 +10677,181 @@ empty blocked list. The code side is **0.0%** and the difference list is **empty
 blocked half that only the owner can close. Per Ruling 10 point 3 and the brief's Step 5, **A does
 not hand to B** — the code side is zero, so `WHOSE TURN` goes to the manager for an independent
 re-measure.
+
+---
+
+### Round 6 — Agent B
+
+**No code changed this turn.** Every plant below was reverted with an asserted empty diff
+(`git diff HEAD -- web/` empty **and** `git status --porcelain --untracked-files=all` empty, both
+shown). My own cold baseline before any plant, from `web/`: tsc **0** · vitest **124 files passed |
+1 skipped (125)** · **2871 passed | 1 skipped (2872)**, **0 failed**, 9.58 s — identical to the
+figure in §1.
+
+---
+
+#### 6-01 — finish the rename · `WRONG DATA`
+
+**Classification: `WRONG DATA`.** Not `MISSING`, not cosmetic. The function that charges the
+forced-rebuild counter is called `consumeSystemSearches`, and every usage row it writes carries
+`path: "system-search"`. That row is the **audit trail for a spend cap** (D4). A row saying a search
+was capped when a pool rebuild was capped is a false record of where the owner's money went, written
+to a persisted table — the same class of defect Ruling 13 point 1 fixed one layer up, which is
+Ruling 14 point 3's point exactly.
+
+##### The surface, established by grep (every hit, nothing sampled)
+
+**Production call sites of `consumeSystemSearches` — FIVE in five files, not six.**
+`grep -rn "consumeSystemSearches(" --include=*.ts src/ | grep -v "\.test\."` returns six lines, of
+which one is the declaration itself (`search-breaker.ts:60`):
+
+| # | Site | Reachable? |
+|---|---|---|
+| 1 | `src/lib/jobs/pipeline.ts:258` | **LIVE** — forced pool rebuild |
+| 2 | `src/lib/events/pipeline.ts:275` | **LIVE** — forced pool rebuild |
+| 3 | `src/lib/jobs/sources/jobweb.ts:2186` | unreachable (search fan-out) |
+| 4 | `src/lib/events/sources/eventweb.ts:2789` | unreachable (search fan-out) |
+| 5 | `src/lib/sources/web-search.ts:115` | unreachable (search fan-out) |
+
+**Precision note, not a manager error of substance.** Ruling 13's preamble says "six call sites in
+five files". Measured, it is **five calls in five files**, plus the declaration and one prose mention
+at `web-search.ts:107`. The design consequence is nil — both live sites and all three unreachable
+sites are exactly where Ruling 13 said they were — but "six" should not be re-quoted as measured.
+
+**Imports to repoint (7).** `events/pipeline.ts:23`, `events/sources/eventweb.ts:9`,
+`jobs/pipeline.ts:22`, `jobs/sources/jobweb.ts:8`, `sources/web-search.ts:9` — all
+`@/lib/usage/search-breaker` — plus two **test** imports: `jobs/sources/jobweb.test.ts:26`
+(`FORCED_REBUILDS_PER_DAY`) and `usage/deep-report-quota.test.ts:10` (relative `./search-breaker`).
+
+**Inside `search-breaker.ts`, four strings carry the false name.**
+`:60` the function name · `:86` `logStoreUnavailable("system-search", userId)` · `:93` the error line
+starting `[quota] system-search breaker tripped` · `:101` `path: "system-search"` on the usage row.
+The house style for the sibling breaker is `[quota] deep-report breaker tripped`
+(`deep-report-quota.ts:206`), so `forced-rebuild` matches it exactly.
+
+**Docblocks that are now false — the complete list by grep**, from
+`grep -rn "search breaker\|searches per day\|SYSTEM_SEARCHES\|systemSearches\|SEARCHES_PER_DAY"`
+plus `system-search` and `search-breaker`:
+
+| File:line | What it says |
+|---|---|
+| `src/app/page.tsx:175` | "the daily **search** breaker has not tripped" |
+| `src/lib/jobs/pipeline.ts:249` | "the daily **system-search** breaker" |
+| `src/lib/jobs/pipeline.ts:283` | "the **search** breaker" |
+| `src/lib/events/pipeline.ts:266` | "the daily **system-search** breaker" |
+| `src/lib/events/pipeline.ts:300` | "the **search** breaker" |
+| `src/lib/usage/counters.ts:411` | "because `search-breaker.ts` needs" — a file name |
+| `src/lib/opportunities/pool-refresh-gates.test.ts:15, :111` | "the daily **search** breaker" |
+| `src/app/api/jobs/feed/route.test.ts:289` | "the daily **system-search** counter" |
+| `src/lib/usage/deep-report-quota.test.ts:227, :230, :325, :327` | one comment + two suite/case names |
+| `src/lib/usage/search-breaker.ts:1-33, :46-58` | its own header and the function docblock |
+
+**`search-breaker.ts:46-58` must be DELETED, not reworded.** It is the paragraph saying *"The name
+still says 'searches' on purpose"* and explaining the deferral. Once the rename lands that paragraph
+is not stale, it is **false**, and a false explanation is worse than none.
+
+##### The three unreachable sites — what their docblocks must say, and the chain that proves it
+
+Ruling 12 point 2 keeps them; Ruling 14 point 3 requires docblocks saying they are unreachable and
+why. The chain, verified end to end in source this turn:
+
+1. `systemSearchAllowed` is a hard `false` on every producer — `entitlement/resolve.ts:134`,
+   `entitlement/allowance.ts:157`, `entitlement/types.ts:98`, with D2a named at the line.
+2. So `resolveSystemSearchKeys` returns **no Brave key** (`search/system-key.ts:139-141` — the env
+   read sits behind that flag) and Tavily can only be `"byok"` or `"none"` (`:143-155`, the system
+   branch is commented out).
+3. So `operatorSearchAvailability` is frozen `{ geminiAvailable: false, vertexAvailable: false }`
+   (`search/system-key.ts`, the `5-01 · D2a` body), and `resolveSearchProvider`
+   (`jobweb.ts:2142`, `eventweb.ts:2753`) is handed `braveKeyPresent: false`,
+   `geminiAvailable: false`, `vertexAvailable: false`.
+4. So the only provider selectable is `"tavily"` with `provenance: "byok"`, and
+   `isOperatorFundedSearch("tavily", { provenance: "byok" })` is **`false`**
+   (`search/system-key.ts:204-212`: `provider === "tavily" ? keys.provenance === "system" : true`).
+5. Therefore `if (operatorFunded)` never runs and the three sites never reach the breaker.
+
+**A finding the ruling does not cover, and C must write it into those docblocks.** After the rename
+the reversal seam gets *more* expensive, not less. `isOperatorFundedSearch` returns **`true`** for
+`brave` / `vertex` / `gemini` — the three sites are dead only because those providers can never be
+*selected*, not because the predicate refuses them. So if D2 is ever restored, these three sites
+immediately begin charging a counter named `forced_rebuilds_today` for **search** fan-outs, which
+re-creates the exact false-audit defect 6-01 exists to fix, in reverse. One sentence in each
+docblock: *restoring operator-funded search means splitting this counter again, not just flipping
+the flag.* The docblock is the only place a future reader will look.
+
+##### Blast radius — MEASURED by planting the finished rename, in two stages (Ruling 10 point 2a)
+
+Planted with `git mv` + `sed`; substitution proved before each run (residual old symbol in
+production source = **0**, shown); reverted afterwards with an asserted empty diff.
+
+**Stage 1 — production only, every test file left untouched.**
+
+- `tsc`: exit **2**, exactly **two** errors, both `TS2307` module-not-found —
+  `jobs/sources/jobweb.test.ts(26,41)` and `usage/deep-report-quota.test.ts(10,8)`.
+- `vitest`: **2 files failed to load**, 122 passed. **Tests 2871 -> 2171**: those two files hold
+  **700 tests between them and none of them ran.** A file that cannot resolve an import reports as a
+  single failure and takes its whole suite with it — which is exactly why stage 1 alone would have
+  badly *under*-counted the cost if I had stopped there.
+
+**Stage 2 — the same plant plus the two test *import lines only*; every assertion left as written.**
+
+- `tsc`: exit **0**.
+- `eslint`: **1 problem (1 error, 0 warnings)** — the standing `quiz.tsx:46`. No new lint.
+- `vitest`: **exactly ONE test fails**, and it is the one asserting the old value —
+  `deep-report-quota.test.ts > the system-search breaker (R-QUOTA-2) > allows the day's searches and
+  refuses the one past the cap`, with
+  `AssertionError: expected { user_id: 'user-1', ...(6) } to match object { kind: 'breaker', ...(1) }`.
+  **Tests 2870 passed | 1 failed.**
+
+**The brief's question, answered by execution: YES — exactly one test fixture asserts the old `path`
+string**, at `deep-report-quota.test.ts:238`:
+`expect(rows[0]).toMatchObject({ kind: "breaker", path: "system-search" });`
+It is the only one. **No test asserts the error log line** — `grep -rn "breaker tripped"` returns
+only the two production sites — so `:93` renames for free.
+
+**Measured cost of 6-01: 7 import lines, 4 strings in one file, ~14 docblock sites, 1 assertion, 2
+suite/case names — and 0 other tests.** `tsc` **0** and `eslint` **1 (standing)** under the full
+rename, so **Ruling 12 point 2's escape clause is NOT reached**: nothing kept stops compiling.
+
+**Blast radius beyond this surface: none, and I checked the database.** `usage_events.path` is
+declared `path text` at `supabase/migrations/20260904000100_usage_events.sql:22` — **nullable plain
+text, no `CHECK` constraint, no enum.** Nothing rejects the new value. The migrations are still
+unapplied and there are no registered users, so no stored row is orphaned — the same reason Ruling
+13 point 1 gave for renaming the counter key holds one layer down.
+
+##### Fix direction — the seam and the contract
+
+One home, one name. `src/lib/usage/search-breaker.ts` -> `src/lib/usage/rebuild-breaker.ts`;
+`consumeSystemSearches` -> `consumeForcedRebuild`; the usage row's `path` -> `"forced-rebuild"`; the
+log label at `:86` and the error line at `:93` -> `forced-rebuild`. The function keeps its signature
+and its optional `surface` parameter — nothing about the shape changes, only the name and the
+recorded value. `FORCED_REBUILDS_PER_DAY` and `forcedRebuildDayKey` are already correct
+(`counters.ts:145`, `:152`) and are not touched.
+
+**What the field shows when every candidate is rejected.** Unchanged, and that is the point. A
+tripped breaker still returns `false`, the pipeline still serves the cached pool, the route still
+answers **200**, and the reader still gets a complete surface from the free structured sources. The
+only thing that changes is what the audit row *says happened* — `kind: "breaker", path:
+"forced-rebuild"` instead of a row claiming a search was capped. **No behaviour moves; one recorded
+fact stops being false.**
+
+**Tests at risk, found by grepping callers, with what C owes each.**
+
+- `usage/deep-report-quota.test.ts` — import at `:10`; the symbol at `:9`, `:233`, `:236`, `:244`,
+  `:246`, `:331`; the `path` assertion at `:238` **updated to `"forced-rebuild"`, never deleted**;
+  the two names at `:230` / `:325` still say "the system-search breaker". The comment at `:227`
+  explicitly records that the name and the path were *not* renamed in 5-02 — it becomes false and
+  must go with the rename.
+- `jobs/sources/jobweb.test.ts:26` — import path only.
+- `opportunities/pool-refresh-gates.test.ts:15, :111` — prose only; `:111` is the
+  breaker-serves-cache case, the live path, and the one most worth keeping legible.
+- `api/jobs/feed/route.test.ts:289` — prose only.
+
+##### Where I looked for anything half-built, and found nothing
+
+I looked for a partially-landed `rebuild-breaker.ts`, a re-exported alias, a deprecation shim, and a
+second copy of the cap. `ls src/lib/usage/` shows **no** `rebuild-breaker.ts` and **no**
+`search-breaker.test.ts` — the breaker's tests live inside `deep-report-quota.test.ts`, so renaming
+the source file drags **no test-file rename** with it. `search-breaker.ts:44` re-exports
+`FORCED_REBUILDS_PER_DAY` from `counters.ts`, which is why `jobweb.test.ts` imports the constant
+through the breaker module rather than from `counters` directly — that indirection is real and must
+survive the rename.
