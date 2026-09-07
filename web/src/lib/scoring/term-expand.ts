@@ -175,6 +175,24 @@ export function termMatches(canonicalHaystack: string, term: string): boolean {
  * ("materials", "energy", "data"). Such a term still contributes to ranking,
  * but a gate must not open on a generic match alone.
  */
+/**
+ * How many times a term occurs in an already-canonicalised haystack, counting
+ * every variant `termMatches` would accept. `termMatches` answers whether a
+ * paper says the word at all; this answers how much it has to say about it.
+ */
+export function termOccurrences(canonicalHaystack: string, term: string): number {
+  let count = 0;
+  for (const variant of expandTerm(term)) {
+    const escaped = variant.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const re = new RegExp(
+      `(?<![${WORD_CHAR}])${escaped}(?![${WORD_CHAR}])`,
+      "gu",
+    );
+    count += (canonicalHaystack.match(re) ?? []).length;
+  }
+  return count;
+}
+
 export function isGenericTerm(term: string): boolean {
   const canonical = canonicalize(term);
   if (!canonical) return true;

@@ -1,65 +1,61 @@
 @import "tailwindcss";
 
 @theme {
-  /* Delphi-inspired system (delphi.ai): warm ivory ground, SAND surfaces
-     sitting DARKER than the background (tone-on-tone, no white cards),
-     espresso ink ladder, one hot-orange accent used sparingly. */
+  /* Greyscale, and one hue.
+     Every neutral here is a true grey; the accent seed is the only coloured
+     thing the interface owns. These are the defaults Tailwind compiles the
+     utilities from — the palette blocks below restate them per mode, and per
+     mode is where they can actually change. */
 
   /* ── Surfaces ───────────────────────────────────────── */
-  --color-bg: #fdf6ee;              /* warm ivory ground */
-  --color-bg-secondary: #f7f0e8;    /* sidebar / nav — a half-step deeper */
-  --color-surface: #f1e9da;         /* cards: sand, DEEPER than the bg */
-  --color-surface-hover: #eae0cd;   /* full delphi sand on hover */
+  --color-bg: #fafafa;              /* the ground */
+  --color-bg-secondary: #f1f1f1;    /* chrome — a half-step deeper */
+  --color-surface: #ffffff;         /* cards: a sheet on the ground */
+  --color-surface-hover: #f4f4f4;
 
-  /* Skeleton shimmer tones (overridden per theme below). Defaults to a
-     dark-ink-on-light overlay; dark themes flip to light-on-dark. */
-  --color-skeleton-base: rgba(62, 36, 7, 0.05);
-  --color-skeleton-highlight: rgba(62, 36, 7, 0.11);
+  /* Skeleton shimmer tones (restated per mode below). */
+  --color-skeleton-base: rgba(29, 29, 29, 0.05);
+  --color-skeleton-highlight: rgba(29, 29, 29, 0.11);
 
-  /* ── Ink — warm espresso ladder ─────────────────────── */
+  /* ── Ink ────────────────────────────────────────────── */
   /* Hairlines are whisper-level by design: boundaries come from surface
      tints and the soft-UI shadows below, not from 1px lines. */
-  --color-border: rgba(62, 36, 7, 0.04);
-  --color-border-strong: rgba(62, 36, 7, 0.09);
-  --color-heading: #2b180a;         /* espresso */
-  --color-text: #2a2722;            /* warm charcoal */
-  --color-text-muted: #6b6156;
-  --color-text-faint: #94877c;      /* taupe label gray */
+  --color-border: rgba(29, 29, 29, 0.06);
+  --color-border-strong: rgba(29, 29, 29, 0.12);
+  --color-heading: #1d1d1d;
+  --color-text: #282828;
+  --color-text-muted: #666666;
+  --color-text-faint: #8e8e8e;
 
-  /* ── Hues ───────────────────────────────────────────── */
-  --color-accent: #ff520d;          /* hot orange — use sparingly */
+  /* ── The hue ────────────────────────────────────────── */
+  --color-accent: #ff520d;
   --color-accent-dim: rgba(255, 82, 13, 0.09);
 
-  /* Links: espresso, underline carries the affordance */
-  --color-link: #3e2407;
-  --color-link-dim: rgba(62, 36, 7, 0.08);
+  /* Links are interactive, so they carry the hue; the underline still does
+     the work of saying so. */
+  --color-link: #ff520d;
+  --color-link-dim: rgba(255, 82, 13, 0.08);
 
-  /* Tags: burnt amber, harmonizes with the accent */
-  --color-tag: #a8642a;
-  --color-tag-dim: rgba(168, 100, 42, 0.10);
+  /* Tags classify, they do not alert: the strong neutral. */
+  --color-tag: #666666;
+  --color-tag-dim: rgba(29, 29, 29, 0.06);
 
-  /* Peach: light warm, for secondary/locations */
-  --color-peach: #e07a3f;
-  --color-peach-dim: rgba(224, 122, 63, 0.10);
+  /* A third tier below tag, for the weakest signals. */
+  --color-peach: #8e8e8e;
+  --color-peach-dim: rgba(29, 29, 29, 0.04);
 
-  /* Retained but rarely used — warning/yellow */
-  --color-yellow: #a8792c;
-  --color-yellow-dim: rgba(168, 121, 44, 0.10);
+  --color-yellow: #666666;
+  --color-yellow-dim: rgba(29, 29, 29, 0.06);
 
-  /* Red kept for destructive only (reset confirm, dismiss) */
-  --color-red: #b91c1c;
-  /* Fixed green relevance ramp; independent of the user-selected accent. */
-  --color-relevance: #237a4b;
-  /* Cool completion state; themes below switch indigo to teal. */
-  --color-done: #2b5c8f;
-  --color-done-dim: rgba(43, 92, 143, 0.10);
+  /* Attention is the accent's job. A second alarm hue in a monochrome
+     interface would be a second accent, and the one that shouts louder is
+     the one the eye learns to ignore. Where two states must stay apart —
+     the swipe reveals — one takes the accent and the other stays grey. */
+  --color-red: #ff520d;
+  --color-relevance: #ff520d;
+  --color-done: #666666;
+  --color-done-dim: rgba(29, 29, 29, 0.06);
 
-  /* ── Shadows — soft-UI (light neumorphism) ──────────────
-     Dual-source: a warm shade below-right plus a paper-light highlight
-     above-left, so cards read as gently extruded from the ivory ground.
-     The --nm-* colors are set per theme family (light defaults in the
-     :root block below; dark themes override) so these tokens stay
-     correct in all 10 themes. */
   /* Elevation, replacing the soft-UI pair.
      Neumorphism only reads as extrusion when the object and its ground are the
      same material and the ground is a mid-tone that can travel in BOTH
@@ -83,15 +79,22 @@
                  0 1px 1.5px -0.5px var(--nm-key),
                  0 4px 8px -4px var(--nm-key),
                  0 12px 26px -14px var(--nm-ambient),
-                 inset 0 1px 0 var(--nm-bevel);
+                 inset 0 1px 0 var(--nm-bevel),
+                 inset 0 -1px 0 var(--nm-underside);
   --shadow-card-hover: 0 0 0 1px var(--nm-rim-hi),
                        0 1px 1.5px -0.5px var(--nm-key),
                        0 8px 16px -8px var(--nm-key),
                        0 26px 50px -22px var(--nm-ambient),
-                       inset 0 1px 0 var(--nm-bevel);
+                       inset 0 1px 0 var(--nm-bevel),
+                       inset 0 -1px 0 var(--nm-underside);
   /* Pressed / input wells — gently carved into the surface */
   --shadow-well: inset 2px 2px 6px var(--nm-shade),
                  inset -2px -2px 5px var(--nm-highlight);
+  /* The press: the rim stays, the cast shadow collapses to contact, and a
+     shallow well appears under the top edge. */
+  --shadow-well-soft: 0 0 0 1px var(--nm-rim),
+                      0 1px 1px -1px var(--nm-key),
+                      inset 0 2px 4px -2px var(--nm-key);
 
   /* ── Type scale — 9 steps covering the 10–20px working range.
      Changing the app's type system = editing THIS block. Display sizes
@@ -132,14 +135,15 @@
    so every preset lands pre-harmonized ("one color, automatic gears").
      data-mode:   system | light | dark   (system follows the OS)
      data-accent: ember | rose | marigold | sage | indigo | violet
+   The seed is the whole palette's colour; everything else is grey.
    Legacy single-name themes are mapped in lib/theme.ts. */
 
-html[data-accent="ember"]    { --seed: #ff520d; --seed-dark: #ff6a2b; --done-light: #2b5c8f; --done-dark: #7aaee0; }
-html[data-accent="rose"]     { --seed: #e0347c; --seed-dark: #f0559a; --done-light: #2b5c8f; --done-dark: #7aaee0; }
-html[data-accent="marigold"] { --seed: #d98e04; --seed-dark: #eaa61e; --done-light: #2b5c8f; --done-dark: #7aaee0; }
-html[data-accent="sage"]     { --seed: #2e7d5b; --seed-dark: #4aa87d; --done-light: #2b5c8f; --done-dark: #7aaee0; }
-html[data-accent="indigo"]   { --seed: #3f5bd9; --seed-dark: #7a90f2; --done-light: #0f6f6a; --done-dark: #4fb3ac; }
-html[data-accent="violet"]   { --seed: #7a3fd9; --seed-dark: #a078f0; --done-light: #2b5c8f; --done-dark: #7aaee0; }
+html[data-accent="ember"]    { --seed: #ff520d; --seed-dark: #ff6a2b; }
+html[data-accent="rose"]     { --seed: #e0347c; --seed-dark: #f0559a; }
+html[data-accent="marigold"] { --seed: #d98e04; --seed-dark: #eaa61e; }
+html[data-accent="sage"]     { --seed: #2e7d5b; --seed-dark: #4aa87d; }
+html[data-accent="indigo"]   { --seed: #3f5bd9; --seed-dark: #7a90f2; }
+html[data-accent="violet"]   { --seed: #7a3fd9; --seed-dark: #a078f0; }
 
 /* Light palette (default; also data-mode="light" and system-on-light-OS) */
 :root {
@@ -147,134 +151,174 @@ html[data-accent="violet"]   { --seed: #7a3fd9; --seed-dark: #a078f0; --done-lig
   --seed-dark: #ff6a2b;
   --done-light: #2b5c8f;
   --done-dark: #7aaee0;
-  --color-bg: color-mix(in oklab, #fdfaf5 96%, var(--seed));
-  --color-bg-secondary: color-mix(in oklab, #f6f1e8 95%, var(--seed));
-  --color-surface: color-mix(in oklab, #f1eadb 94%, var(--seed));
-  --color-surface-hover: color-mix(in oklab, #eae1cd 93%, var(--seed));
-  --color-heading: color-mix(in oklab, #281a10 92%, var(--seed));
-  --color-text: color-mix(in oklab, #2c2721 94%, var(--seed));
-  --color-text-muted: color-mix(in oklab, #6e6459 91%, var(--seed));
-  --color-text-faint: color-mix(in oklab, #988c80 89%, var(--seed));
+  --color-bg: #fafafa;
+  --color-bg-secondary: #f1f1f1;
+  --color-surface: #ffffff;
+  --color-surface-hover: #f4f4f4;
+  --color-heading: #1d1d1d;
+  --color-text: #282828;
+  --color-text-muted: #666666;
+  --color-text-faint: #8e8e8e;
   --color-accent: var(--seed);
   --color-accent-dim: color-mix(in srgb, var(--seed) 9%, transparent);
-  --color-link: color-mix(in oklab, #241608 50%, var(--seed));
-  --color-link-dim: color-mix(in srgb, var(--color-link) 8%, transparent);
-  --color-tag: color-mix(in oklab, var(--seed) 58%, #6e6459);
-  --color-tag-dim: color-mix(in srgb, var(--color-tag) 10%, transparent);
-  --color-peach: color-mix(in oklab, var(--seed) 45%, #dda468);
-  --color-peach-dim: color-mix(in srgb, var(--color-peach) 10%, transparent);
-  --color-yellow: color-mix(in oklab, var(--seed) 25%, #a8792c);
-  --color-yellow-dim: color-mix(in srgb, var(--color-yellow) 10%, transparent);
-  --color-red: #b91c1c;
-  --color-relevance: #237a4b;
-  --color-done: var(--done-light);
-  --color-done-dim: color-mix(in srgb, var(--color-done) 10%, transparent);
-  --color-border: color-mix(in srgb, var(--color-heading) 4%, transparent);
-  --color-border-strong: color-mix(in srgb, var(--color-heading) 9%, transparent);
+  --color-link: var(--seed);
+  --color-link-dim: color-mix(in srgb, var(--seed) 8%, transparent);
+  --color-tag: #666666;
+  --color-tag-dim: color-mix(in srgb, #1d1d1d 6%, transparent);
+  --color-peach: #8e8e8e;
+  --color-peach-dim: color-mix(in srgb, #1d1d1d 4%, transparent);
+  --color-yellow: #666666;
+  --color-yellow-dim: color-mix(in srgb, #1d1d1d 6%, transparent);
+  --color-red: var(--seed);
+  --color-relevance: var(--seed);
+  --color-done: #666666;
+  --color-done-dim: color-mix(in srgb, #1d1d1d 6%, transparent);
+  --color-border: color-mix(in srgb, var(--color-heading) 6%, transparent);
+  --color-border-strong: color-mix(in srgb, var(--color-heading) 12%, transparent);
   --color-skeleton-base: color-mix(in srgb, var(--color-heading) 5%, transparent);
   --color-skeleton-highlight: color-mix(in srgb, var(--color-heading) 11%, transparent);
-  --nm-highlight: rgba(255, 253, 246, 0.85);
+  --nm-highlight: rgba(255, 255, 255, 0.9);
   --nm-shade: color-mix(in srgb, var(--color-heading) 12%, transparent);
   --nm-shade-deep: color-mix(in srgb, var(--color-heading) 18%, transparent);
-  --nm-rim: color-mix(in srgb, var(--color-heading) 6%, transparent);
-  --nm-rim-hi: color-mix(in srgb, var(--color-heading) 10%, transparent);
-  --nm-key: color-mix(in srgb, var(--color-heading) 13%, transparent);
-  --nm-ambient: color-mix(in srgb, var(--color-heading) 16%, transparent);
-  --nm-bevel: rgba(255, 253, 247, 0.75);
-  --plate-mat: color-mix(in srgb, var(--color-heading) 4%, transparent);
-  --plate-ink: var(--color-heading);
-  --plate-ink-muted: var(--color-text-muted);
-  --plate-ink-faint: var(--color-text-faint);
-  --glass-edge: rgba(255, 255, 255, 0.45);
+  --nm-rim: color-mix(in srgb, var(--color-heading) 7%, transparent);
+  --nm-rim-hi: color-mix(in srgb, var(--color-heading) 11%, transparent);
+  --nm-key: color-mix(in srgb, var(--color-heading) 12%, transparent);
+  --nm-ambient: color-mix(in srgb, var(--color-heading) 15%, transparent);
+  --nm-bevel: rgba(255, 255, 255, 0.8);
+  --plate-mat: #efefef;
+  --plate-ink: #1d1d1d;
+  --plate-ink-muted: #666666;
+  --plate-ink-faint: #8e8e8e;
+  --glass-edge: rgba(255, 255, 255, 0.5);
 }
 
 /* Dark palette — explicit toggle */
 html[data-mode="dark"] {
-  --color-bg: color-mix(in oklab, #141009 95%, var(--seed-dark));
-  --color-bg-secondary: color-mix(in oklab, #1c1712 94%, var(--seed-dark));
-  --color-surface: color-mix(in oklab, #221c14 94%, var(--seed-dark));
-  --color-surface-hover: color-mix(in oklab, #2a2219 93%, var(--seed-dark));
-  --color-heading: color-mix(in oklab, #f8f2e8 93%, var(--seed-dark));
-  --color-text: color-mix(in oklab, #eae2d5 94%, var(--seed-dark));
-  --color-text-muted: color-mix(in oklab, #b3a794 92%, var(--seed-dark));
-  --color-text-faint: color-mix(in oklab, #8c8172 90%, var(--seed-dark));
+  --color-bg: #111111;
+  --color-bg-secondary: #181818;
+  --color-surface: #1d1d1d;
+  --color-surface-hover: #242424;
+  --color-heading: #f3f3f3;
+  --color-text: #e3e3e3;
+  --color-text-muted: #a9a9a9;
+  --color-text-faint: #838383;
   --color-accent: var(--seed-dark);
   --color-accent-dim: color-mix(in srgb, var(--seed-dark) 14%, transparent);
-  --color-link: color-mix(in oklab, #ead9bf 55%, var(--seed-dark));
-  --color-link-dim: color-mix(in srgb, var(--color-link) 12%, transparent);
-  --color-tag: color-mix(in oklab, var(--seed-dark) 58%, #b3a794);
-  --color-tag-dim: color-mix(in srgb, var(--color-tag) 12%, transparent);
-  --color-peach: color-mix(in oklab, var(--seed-dark) 45%, #e0a069);
-  --color-peach-dim: color-mix(in srgb, var(--color-peach) 12%, transparent);
-  --color-yellow: color-mix(in oklab, var(--seed-dark) 25%, #d9a441);
-  --color-yellow-dim: color-mix(in srgb, var(--color-yellow) 12%, transparent);
-  --color-red: #ef4444;
-  --color-relevance: #69cc8c;
-  --color-done: var(--done-dark);
-  --color-done-dim: color-mix(in srgb, var(--color-done) 14%, transparent);
-  --color-border: rgba(255, 244, 230, 0.08);
-  --color-border-strong: rgba(255, 244, 230, 0.16);
+  --color-link: var(--seed-dark);
+  --color-link-dim: color-mix(in srgb, var(--seed-dark) 12%, transparent);
+  --color-tag: #a9a9a9;
+  --color-tag-dim: rgba(255, 255, 255, 0.08);
+  --color-peach: #838383;
+  --color-peach-dim: rgba(255, 255, 255, 0.06);
+  --color-yellow: #a9a9a9;
+  --color-yellow-dim: rgba(255, 255, 255, 0.08);
+  --color-red: var(--seed-dark);
+  --color-relevance: var(--seed-dark);
+  --color-done: #a9a9a9;
+  --color-done-dim: rgba(255, 255, 255, 0.08);
+  --color-border: rgba(255, 255, 255, 0.09);
+  --color-border-strong: rgba(255, 255, 255, 0.17);
   --color-skeleton-base: rgba(255, 255, 255, 0.05);
   --color-skeleton-highlight: rgba(255, 255, 255, 0.12);
-  --nm-highlight: rgba(255, 244, 230, 0.04);
+  --nm-highlight: rgba(255, 255, 255, 0.045);
   --nm-shade: rgba(0, 0, 0, 0.45);
   --nm-shade-deep: rgba(0, 0, 0, 0.6);
-  --nm-rim: rgba(255, 244, 230, 0.09);
-  --nm-rim-hi: rgba(255, 244, 230, 0.15);
+  --nm-rim: rgba(255, 255, 255, 0.09);
+  --nm-rim-hi: rgba(255, 255, 255, 0.16);
   --nm-key: rgba(0, 0, 0, 0.55);
   --nm-ambient: rgba(0, 0, 0, 0.45);
-  --nm-bevel: rgba(255, 244, 230, 0.06);
-  --plate-mat: #ece4d8;
-  --plate-ink: #2a2118;
-  --plate-ink-muted: #6b5d50;
-  --plate-ink-faint: #a0927f;
-  --glass-edge: rgba(255, 255, 255, 0.07);
+  --nm-bevel: rgba(255, 255, 255, 0.06);
+  --plate-mat: #e5e5e5;
+  --plate-ink: #232323;
+  --plate-ink-muted: #606060;
+  --plate-ink-faint: #949494;
+  --glass-edge: rgba(255, 255, 255, 0.08);
 }
 
 /* Dark palette — "system" following a dark OS. Identical to the block
    above; CSS has no mixins, keep the two in sync. */
 @media (prefers-color-scheme: dark) {
   html[data-mode="system"] {
-  --color-bg: color-mix(in oklab, #141009 95%, var(--seed-dark));
-  --color-bg-secondary: color-mix(in oklab, #1c1712 94%, var(--seed-dark));
-  --color-surface: color-mix(in oklab, #221c14 94%, var(--seed-dark));
-  --color-surface-hover: color-mix(in oklab, #2a2219 93%, var(--seed-dark));
-  --color-heading: color-mix(in oklab, #f8f2e8 93%, var(--seed-dark));
-  --color-text: color-mix(in oklab, #eae2d5 94%, var(--seed-dark));
-  --color-text-muted: color-mix(in oklab, #b3a794 92%, var(--seed-dark));
-  --color-text-faint: color-mix(in oklab, #8c8172 90%, var(--seed-dark));
+  --color-bg: #111111;
+  --color-bg-secondary: #181818;
+  --color-surface: #1d1d1d;
+  --color-surface-hover: #242424;
+  --color-heading: #f3f3f3;
+  --color-text: #e3e3e3;
+  --color-text-muted: #a9a9a9;
+  --color-text-faint: #838383;
   --color-accent: var(--seed-dark);
   --color-accent-dim: color-mix(in srgb, var(--seed-dark) 14%, transparent);
-  --color-link: color-mix(in oklab, #ead9bf 55%, var(--seed-dark));
-  --color-link-dim: color-mix(in srgb, var(--color-link) 12%, transparent);
-  --color-tag: color-mix(in oklab, var(--seed-dark) 58%, #b3a794);
-  --color-tag-dim: color-mix(in srgb, var(--color-tag) 12%, transparent);
-  --color-peach: color-mix(in oklab, var(--seed-dark) 45%, #e0a069);
-  --color-peach-dim: color-mix(in srgb, var(--color-peach) 12%, transparent);
-  --color-yellow: color-mix(in oklab, var(--seed-dark) 25%, #d9a441);
-  --color-yellow-dim: color-mix(in srgb, var(--color-yellow) 12%, transparent);
-  --color-red: #ef4444;
-  --color-relevance: #69cc8c;
-  --color-done: var(--done-dark);
-  --color-done-dim: color-mix(in srgb, var(--color-done) 14%, transparent);
-  --color-border: rgba(255, 244, 230, 0.08);
-  --color-border-strong: rgba(255, 244, 230, 0.16);
+  --color-link: var(--seed-dark);
+  --color-link-dim: color-mix(in srgb, var(--seed-dark) 12%, transparent);
+  --color-tag: #a9a9a9;
+  --color-tag-dim: rgba(255, 255, 255, 0.08);
+  --color-peach: #838383;
+  --color-peach-dim: rgba(255, 255, 255, 0.06);
+  --color-yellow: #a9a9a9;
+  --color-yellow-dim: rgba(255, 255, 255, 0.08);
+  --color-red: var(--seed-dark);
+  --color-relevance: var(--seed-dark);
+  --color-done: #a9a9a9;
+  --color-done-dim: rgba(255, 255, 255, 0.08);
+  --color-border: rgba(255, 255, 255, 0.09);
+  --color-border-strong: rgba(255, 255, 255, 0.17);
   --color-skeleton-base: rgba(255, 255, 255, 0.05);
   --color-skeleton-highlight: rgba(255, 255, 255, 0.12);
-  --nm-highlight: rgba(255, 244, 230, 0.04);
+  --nm-highlight: rgba(255, 255, 255, 0.045);
   --nm-shade: rgba(0, 0, 0, 0.45);
   --nm-shade-deep: rgba(0, 0, 0, 0.6);
-  --nm-rim: rgba(255, 244, 230, 0.09);
-  --nm-rim-hi: rgba(255, 244, 230, 0.15);
+  --nm-rim: rgba(255, 255, 255, 0.09);
+  --nm-rim-hi: rgba(255, 255, 255, 0.16);
   --nm-key: rgba(0, 0, 0, 0.55);
   --nm-ambient: rgba(0, 0, 0, 0.45);
-  --nm-bevel: rgba(255, 244, 230, 0.06);
-  --plate-mat: #ece4d8;
-  --plate-ink: #2a2118;
-  --plate-ink-muted: #6b5d50;
-  --plate-ink-faint: #a0927f;
-  --glass-edge: rgba(255, 255, 255, 0.07);
+  --nm-bevel: rgba(255, 255, 255, 0.06);
+  --plate-mat: #e5e5e5;
+  --plate-ink: #232323;
+  --plate-ink-muted: #606060;
+  --plate-ink-faint: #949494;
+  --glass-edge: rgba(255, 255, 255, 0.08);
   }
+}
+
+/* ── Material ─────────────────────────────────────────────
+   A grey with nothing on it is a digital field; a grey with a grain in it is
+   a surface. Monochrome has no colour to carry material, so the light does it:
+   a fine tileable noise on the ground and on every card, a top edge that
+   catches the light and a bottom edge that does not, and a picture set INTO
+   its mat rather than laid on top of it.
+
+   The noise is one baked data-URI with its alpha already low, used as an
+   ordinary background-image over the surface colour — no overlay element, so
+   nothing new enters the stacking order and nothing can sit above a menu. */
+
+@utility grain {
+  /* The tile is mid-grey with a noisy alpha, so it lightens a dark surface and
+     darkens a light one. That asymmetry is why it has to stay this faint: at
+     any strength where the texture is obvious on #1d1d1d, the same tile is a
+     grey veil over white. Tooth, not tint. */
+  background-image: url("data:image/svg+xml,<svg%20xmlns='http://www.w3.org/2000/svg'%20width='120'%20height='120'><filter%20id='g'><feTurbulence%20type='fractalNoise'%20baseFrequency='1.15'%20numOctaves='3'%20seed='7'%20stitchTiles='stitch'/><feColorMatrix%20type='saturate'%20values='0'/><feComponentTransfer><feFuncA%20type='linear'%20slope='0.075'/></feComponentTransfer></filter><rect%20width='100%'%20height='100%'%20filter='url(%23g)'/></svg>");
+  background-repeat: repeat;
+}
+
+/* A slab has a lit top edge and a shaded bottom one. The card shadow already
+   carried the top bevel; the underside is what makes it read as having
+   thickness rather than as a lighter rectangle. */
+:root {
+  --nm-underside: color-mix(in srgb, var(--color-heading) 5%, transparent);
+}
+html[data-mode="dark"] { --nm-underside: rgba(0, 0, 0, 0.34); }
+@media (prefers-color-scheme: dark) {
+  html[data-mode="system"] { --nm-underside: rgba(0, 0, 0, 0.34); }
+}
+
+/* A mat is cut, and the picture sits below the cut. The inset catches on the
+   window's top and left, which is where a light from the upper left would
+   leave it. */
+.tile-cover[data-plate="figure"] {
+  box-shadow:
+    inset 0 1px 2px color-mix(in srgb, #000 22%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, #000 6%, transparent);
 }
 
 /* ── Motion — fast-start easing so presses track the hand ── */
@@ -340,12 +384,15 @@ body {
      viewport (long unbreakable strings, raw figure HTML) gets clipped
      instead of pushing the page out. */
   overflow-x: hidden;
-  /* Faint paper grain — reads as texture, not noise. Fixed attachment so it
-     sits under scroll content like real paper. */
+  /* Paper grain, and a light coming from off the top right.
+     The tile carries both lighter and darker speckles, so the same image reads
+     as texture on the ivory ground and on the dark one — the old tile was
+     near-black noise, which on #111 was noise nobody could see. Fixed
+     attachment so the grain stays put under the scroll, like paper. */
   background-image:
     radial-gradient(1200px 600px at 85% -10%, color-mix(in srgb, var(--color-accent) 4%, transparent), transparent 60%),
-    radial-gradient(900px 500px at -10% 110%, color-mix(in srgb, var(--color-tag) 4%, transparent), transparent 60%),
-    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' seed='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.08  0 0 0 0 0.08  0 0 0 0 0.09  0 0 0 0.05 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+    radial-gradient(900px 500px at -10% 110%, color-mix(in srgb, var(--color-heading) 5%, transparent), transparent 60%),
+    url("data:image/svg+xml,<svg%20xmlns='http://www.w3.org/2000/svg'%20width='180'%20height='180'><filter%20id='g'><feTurbulence%20type='fractalNoise'%20baseFrequency='0.7'%20numOctaves='3'%20seed='3'%20stitchTiles='stitch'/><feColorMatrix%20type='saturate'%20values='0'/><feComponentTransfer><feFuncA%20type='linear'%20slope='0.09'/></feComponentTransfer></filter><rect%20width='100%'%20height='100%'%20filter='url(%23g)'/></svg>");
   background-attachment: fixed;
 }
 
@@ -433,12 +480,25 @@ body {
    reads as paper and a colour figure keeps its colours. On light the card is
    already near-ivory, so the mat is the surface itself. The typographic plate
    uses the same ground, which is what makes the two fills read as one slot. */
-.tile-cover { background: var(--plate-mat); }
+/* Two plates, one component. A figure is matted; type is not — see
+   cards/paper-plate.tsx for why. The ink follows the ground it is set on:
+   dark on the mat, the card's own ink on the card. */
+.tile-cover[data-plate="figure"] { background: var(--plate-mat); }
+.tile-cover[data-plate="terms"] {
+  /* The card's own surface, not transparency: on a card the seam disappears
+     (the card is this colour), and on the reading page, where the plate sits
+     framed by its own shadow, it stays a sheet rather than an empty frame. */
+  background: var(--color-surface);
+  --plate-ink: var(--color-heading);
+  --plate-ink-muted: var(--color-text-muted);
+  --plate-ink-faint: var(--color-text-faint);
+}
 
 /* A read paper still has to be readable. `tile-read` recedes the COVER and the
    chrome and leaves the title and the summary at full strength; the old
    blanket opacity-70 on the whole card faded the words too. */
-.tile-read .tile-cover { opacity: 0.45; transition: opacity 300ms var(--ease-snap); }
+.tile-read .tile-cover[data-plate="figure"] { opacity: 0.45; transition: opacity 300ms var(--ease-snap); }
+.tile-read .tile-cover[data-plate="terms"] { opacity: 0.55; transition: opacity 300ms var(--ease-snap); }
 .tile-read:hover .tile-cover { opacity: 1; }
 .tile-read .tile-chrome { opacity: 0.6; }
 

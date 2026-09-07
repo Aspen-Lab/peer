@@ -1,0 +1,655 @@
+[
+ {
+  "id": "openalex:W7208807247",
+  "source": "openalex",
+  "title": "Graph Embeddings for Protein Structure Prediction",
+  "abstract": "Predicting protein structure from its amino acid sequence remains a central challenge in computational biology. Traditional methods often rely on homology modeling and ab initio approaches, which can be computationally expensive and limited in their accuracy. This work explores the potential of graph embeddings to address this challenge. We propose a novel framework where proteins are represented as graphs, with amino acid residues as nodes and interactions as edges. Graph neural networks are then employed to learn embeddings for these nodes, capturing the intricate relationships between residues. These embeddings are subsequently used to predict the 3D structure of the protein. Our approach leverages the power of graph embedding techniques, which have demonstrated success in various domains, to tackle the complex problem of protein structure prediction. We demonstrate that graph embeddings can effectively capture the structural information encoded within protein sequences, leading to improved prediction accuracy. The core claim of this work is that graph embeddings can be utilized to predict protein structure accurately, capturing the complex relationships between residues. The core mechanism involves representing a protein as a graph, learning embeddings using graph neural networks, and then predicting the 3D structure. This novel approach offers a promising direction for future research in protein structure prediction.",
+  "tags": [
+   "Embedding",
+   "Graph",
+   "Protein structure prediction",
+   "Protein structure",
+   "Protein function prediction",
+   "Threading (protein sequence)",
+   "Graph embedding",
+   "Core (optical fiber)",
+   "Protein Structure and Dynamics",
+   "Machine Learning in Bioinformatics"
+  ],
+  "venue": "Zenodo (CERN European Organization for Nuclear Research)",
+  "publishedAt": "2026-09-05",
+  "url": "https://doi.org/10.5281/zenodo.22316532",
+  "label": "core"
+ },
+ {
+  "id": "openalex:W7208834547",
+  "source": "openalex",
+  "title": "Protein Structure Prediction via Adaptive Machine Learning",
+  "abstract": "Protein structure prediction remains a significant challenge in structural biology, driving advancements in drug discovery and biological research. Traditional methods often rely on static, pre-defined structural models, failing to capture the dynamic nature of proteins. This paper proposes a novel approach utilizing adaptive machine learning to dynamically adjust prediction parameters, resulting in improved accuracy and robustness. We introduce a self-adjusting algorithm that adapts to changes in the protein's conformational state during the prediction process. The core mechanism centers on a feedback loop that continuously refines the model based on observed structural changes, leading to more accurate predictions. This work addresses the limitations of static models by providing a flexible and adaptive framework for protein structure analysis.",
+  "tags": [
+   "Protein structure prediction",
+   "Core (optical fiber)",
+   "Mechanism (biology)",
+   "Predictive modelling",
+   "State (computer science)",
+   "Protein structure",
+   "Protein Structure and Dynamics",
+   "Machine Learning in Bioinformatics",
+   "Computational Drug Discovery Methods",
+   "Artificial intelligence"
+  ],
+  "venue": "Zenodo (CERN European Organization for Nuclear Research)",
+  "publishedAt": "2026-09-05",
+  "url": "https://doi.org/10.5281/zenodo.22327109",
+  "label": "core"
+ },
+ {
+  "id": "openalex:W7208838045",
+  "source": "openalex",
+  "title": "Training Order Effects in Diffusion Models",
+  "abstract": "An experimental investigation into whether the position of training data within a diffusion model's training sequence affects the model's generated outputs. Artist-level blocks of images are placed at the start, end, middle, or scattered throughout training, holding total exposure and all other conditions constant. Outputs are scored by CLIP similarity to the artist's real work, against a noise floor established by re-running identical setups with different training seeds. Motivated by recent work on the attributability of generative model outputs to individual training examples.",
+  "tags": [
+   "Training (meteorology)",
+   "Noise (video)",
+   "Similarity (geometry)",
+   "Sequence (biology)",
+   "Position (finance)",
+   "Diffusion",
+   "Training set",
+   "Work (physics)",
+   "Artificial intelligence",
+   "Algorithm"
+  ],
+  "venue": "Open Science Framework",
+  "publishedAt": "2026-09-05",
+  "url": "https://doi.org/10.17605/osf.io/z8gq5",
+  "label": "craft"
+ },
+ {
+  "id": "openalex:W4410074781",
+  "source": "openalex",
+  "title": "Improving RNA Secondary Structure Prediction Through Expanded Training Data",
+  "abstract": "In recent years, deep learning has revolutionized protein structure prediction, achieving remarkable speed and accuracy. RNA structure prediction, however, has lagged behind. Although several methods have shown some success in predicting RNA secondary and tertiary structures, none have reached the accuracy observed with contemporary protein models. The lack of success of these RNA structure prediction models has been proposed to be due to limited high-quality structural information that can be used as training data. To probe this proposed limitation, we developed a large and diverse dataset comprising paired RNA sequences and their corresponding secondary structures. We assess the utility of this enhanced dataset by retraining on a deep learning model, SincFold. We find that SincFold exhibited improved generalization to some previously unseen RNA families, enhancing its capability to predict accurate de novo RNA secondary structures. The RNASSTR dataset provides a substantial advance for RNA structure modeling, laying a strong foundation for the development of future RNA secondary structure prediction algorithms.",
+  "tags": [
+   "Training (meteorology)",
+   "Computer science",
+   "Training set",
+   "Artificial intelligence",
+   "RNA and protein synthesis mechanisms",
+   "RNA modifications and cancer",
+   "RNA Research and Splicing",
+   "Meteorology"
+  ],
+  "venue": "RNA",
+  "publishedAt": "2026-09-01",
+  "url": "https://www.biorxiv.org/content/biorxiv/early/2025/05/03/2025.05.03.652028.full.pdf",
+  "label": "core"
+ },
+ {
+  "id": "openalex:W7208820682",
+  "source": "openalex",
+  "title": "A dynamic fusion diffusion model for molecular generation",
+  "abstract": "",
+  "tags": [
+   "Fusion",
+   "Diffusion",
+   "Molecular dynamics",
+   "Molecular model",
+   "Reaction-diffusion system",
+   "stochastic dynamics and bifurcation",
+   "Advanced Physical and Chemical Molecular Interactions",
+   "Nonlinear Dynamics and Pattern Formation",
+   "Biological system",
+   "Statistical physics"
+  ],
+  "venue": "Molecular Diversity",
+  "publishedAt": "2026-09-05",
+  "url": "https://doi.org/10.1007/s11030-026-11718-9",
+  "label": "core"
+ },
+ {
+  "id": "arxiv:2609.05382",
+  "source": "arxiv",
+  "title": "Reflection-aware Generative Novel View Synthesis",
+  "abstract": "We propose Ref-GeNVS, a training-free, reflection-aware method for generative novel view synthesis (NVS) in mirror scenes. Existing multi-view diffusion models often fail to recognize the mirror in the scene and cannot exploit reflected content for scene generation. To fix this issue without additional training, our key idea is to treat a mirror image as two complementary views. From input images, we estimate the mirror plane and reflect camera poses to form virtual views. Based on this virtual view setup, we propose a two-stage generation method consisting of Mirror-gated attention and Reflection injection, which enables reflection-consistent NVS by explicitly leveraging reflection relationships in a multi-view diffusion model. Ref-GeNVS inherits the strong generalizability of the multi-view diffusion backbone, while it does not require finetuning. On synthetic and real scenes including mirrors, Ref-GeNVS outperforms recent generative NVS methods by generating reflection-consistent and contextually coherent novel views, revealing scene structure visible only through mirrors. Project page: https://kim-geonu.github.io/Ref-GeNVS/",
+  "tags": [
+   "cs.CV",
+   "cs.AI"
+  ],
+  "venue": "arXiv",
+  "publishedAt": "2026-09-04T17:33:45Z",
+  "url": "https://arxiv.org/abs/2609.05382v1",
+  "label": "off"
+ },
+ {
+  "id": "arxiv:2609.05404",
+  "source": "arxiv",
+  "title": "Diffusion TV: Experiencing Diffusion Models through Tangible, Embodied Interaction",
+  "abstract": "Diffusion TV is an interactive AI art installation that offers a tangible and embodied experience of diffusion models through a modified CRT TV. By physically manipulating the TV's antenna, audiences control the clarity of AI-generated images and sounds, metaphorically enacting the denoising process that underlies diffusion-based generation. Using the tuning knob, participants switch between three channels featuring AI-generated animals from the Past (extinct species), Present (endangered species), and Future (speculative creatures), situating the interaction within a temporal and ecological narrative. Through continuous audiovisual feedback and physical interaction, Diffusion TV foregrounds the generative process over final outputs, allowing audiences to explore intermediate states as experiential material. Rather than providing explicit technical explanation, the work presents an alternative, embodied mode of explainable AI that invites exploratory engagement with and reflection on generative technologies.",
+  "tags": [
+   "cs.HC",
+   "cs.AI"
+  ],
+  "venue": "arXiv",
+  "publishedAt": "2026-09-04T17:51:48Z",
+  "url": "https://arxiv.org/abs/2609.05404v1",
+  "label": "off",
+  "labelNote": "an art installation about diffusion models"
+ },
+ {
+  "id": "arxiv:2609.04921",
+  "source": "arxiv",
+  "title": "One Diffusion Model, Two Roles: Guided Trajectory Planning and Safety-Critical Scenario Generation in Closed-Loop Simulation",
+  "abstract": "Diffusion probabilistic models can capture the multi-modal, interaction-rich distribution of joint future trajectories in driving scenes. We show that a single pretrained diffusion traffic model can serve two complementary roles in the autonomous driving development loop: as an ego motion planner, and as a controllable generator of safety-critical scenarios for stress-testing the planners. On the planning side, we introduce a Single-Stream Dual-Stream (SSDS) diffusion-transformer decoder that fuses scene context via joint attention rather than late cross-attention, improving closed-loop performance on nuPlan. We further propose Decoupled Annealing Posterior Sampling with Energy (DAPSE), a training-free guidance scheme that injects arbitrary energy functions at the clean-sample level, avoiding the first-order approximation errors while requiring no auxiliary networks. Beyond planning, we leverage the same diffusion model as a controllable scenario generator to create realistic long-tail driving interactions for closed-loop evaluation. Through inference-time guidance, selected agents are steered toward safety-critical behaviors, including aggressive cut-ins, lead-vehicle braking, and combined longitudinal-lateral interactions, while preserving realistic traffic behaviors. Evaluated in closed-loop nuPlan simulations with independent black-box planners, the generated scenarios expose failure modes that remain hidden under standard benchmarks. Although the SSDS-based planner achieves stronger nominal performance, it experiences larger degradation under these challenging scenarios, demonstrating that benchmark superiority does not necessarily translate to robustness. These results demonstrate that a single learned traffic prior can simultaneously improve motion planning and provide a realistic framework for systematic planner robustness evaluation.",
+  "tags": [
+   "cs.CV",
+   "cs.AI",
+   "cs.LG",
+   "cs.RO"
+  ],
+  "venue": "arXiv",
+  "publishedAt": "2026-09-04T09:22:54Z",
+  "url": "https://arxiv.org/abs/2609.04921v1",
+  "label": "off"
+ },
+ {
+  "id": "arxiv:2609.05028",
+  "source": "arxiv",
+  "title": "Compositional Reward Models for Conditional Medical Image Generation",
+  "abstract": "Acquiring high quality annotated medical image data is critical for training deep learning models; however, annotation is expensive, time consuming, and requires domain expertise. Conditional diffusion models, such as ControlNet, offer an alternative by generating images conditioned on semantic masks and text. However, existing approaches fail to capture fine grained properties (e.g., intensity and texture), as well as semantic consistency expected by domain experts, limiting their effectiveness for downstream tasks. Recent attempts to address these issues using reinforcement learning fine-tuning remain limited due to the reliance on a single scalar reward, which conflates diverse failure modes and provides weak corrective signals. We propose PRISM, a Compositional Reward Model (CRM) framework for conditional medical image generation. Instead of assigning a single reward, we decompose image quality into verifier grounded stages, each evaluating a distinct aspect of correctness from fine to coarse properties, including low level attributes (intensity and texture), structural alignment with conditioning inputs, and high level semantic fidelity. These stage wise rewards are composed through a Hierarchical Constrained Propagation (HCP) mechanism that enforces a fine to coarse notion of correctness, ensuring that lower level deficiencies are resolved before higher level rewards are accrued, preventing easier objectives from masking critical failures.\nWe evaluate PRISM across three datasets spanning diverse medical imaging tasks: PanNuke (multi-class cell segmentation), CeDeM (villi/crypt detection and measurement), and ISIC (skin lesion classification). Training downstream models with data generated by PRISM yields improvements over closest baselines, including a 2.3% increase in mDice on PanNuke, a 8.5% reduction in Mean Relative Error (MRE) on CeDeM, and increases ISIC F1 by 5.9%.",
+  "tags": [
+   "cs.CV"
+  ],
+  "venue": "arXiv",
+  "publishedAt": "2026-09-04T11:46:25Z",
+  "url": "https://arxiv.org/abs/2609.05028v1",
+  "label": "off",
+  "labelNote": "medical image generation — imaging, not molecules"
+ },
+ {
+  "id": "arxiv:2609.04090",
+  "source": "arxiv",
+  "title": "Conditioning Degenerate Diffusion Models",
+  "abstract": "Current conditioned generative models heavily rely on score functions for guidance during training. When the generative model is a diffusion process with a singular diffusion coefficient and the underlying (conditional) densities either do not exist or are not smooth, we use causal optimal transport to define \\emphapproximate loss functions that identify a minimum-entropy control for guidance under minimal assumptions. Our approach relies on causal optimal transport and its characterization through the predictable representation property of (conditioned) diffusion processes whose associated martingale problem is well posed, à la Üstünel.",
+  "tags": [
+   "cs.LG"
+  ],
+  "venue": "arXiv",
+  "publishedAt": "2026-09-03T17:00:44Z",
+  "url": "https://arxiv.org/abs/2609.04090v1",
+  "label": "craft"
+ },
+ {
+  "id": "arxiv:2609.04837",
+  "source": "arxiv",
+  "title": "PAPT++: Risk-Aware Adversarial Tuning and Generation for Single Domain Generalization",
+  "abstract": "Single domain generalization (SDG) aims to learn a model from one labeled source domain that generalizes to unseen target domains. A common strategy is to enrich the source distribution with augmented or generated samples, and recent text-to-image (T2I) diffusion models provide a strong generative prior for this purpose. However, diversity alone is insufficient for robust generalization, because useful generated samples should also capture variations that the current classifier finds difficult. Motivated by distributionally robust optimization (DRO), we define a semantic ambiguity set in the class-conditional generative space of a pretrained T2I model and search it for samples with high classification loss under the current classifier. To this end, we introduce PAPT++, a risk-aware adversarial generation-training framework for SDG. PAPT++ first learns diverse semantic reference images for each class through image-text alignment and intra-class diversity regularization. These references then serve as denoising targets during classifier-guided diffusion synthesis, reducing semantic drift while guiding generation toward challenging variations. The generated samples are combined with the source data to update the classifier, and the updated classifier guides the next synthesis round in return. In this way, PAPT++ progressively exposes the classifier to challenging yet semantically consistent variations. Extensive experiments on standard SDG benchmarks demonstrate the superiority of the proposed PAPT++ method and the effectiveness of its main components.",
+  "tags": [
+   "cs.CV"
+  ],
+  "venue": "arXiv",
+  "publishedAt": "2026-09-04T07:54:30Z",
+  "url": "https://arxiv.org/abs/2609.04837v1",
+  "label": "off"
+ },
+ {
+  "id": "arxiv:2609.02113",
+  "source": "arxiv",
+  "title": "Logarithmic-scale variational quantum eigensolver for off-lattice protein structure prediction in continuous torsional angle space",
+  "abstract": "Classical and current quantum approaches to protein structure prediction (QPSP) face limitations, notably massive qubit requirements restricting near-term models to simplistic on-lattice simulations. We propose a logarithmic-scale variational quantum eigensolver (VQE) that reduces qubit requirements for N torsional degrees of freedom to O(log2N), enabling off-lattice, all-atom simulations. Our architecture extracts molecular torsions from relative phases in statevector simulations. On quantum hardware, a decoder maps the empirical cumulative distribution function (CDF) from basis-state probabilities to bounded torsional variables. These feed a classical algorithm to build heavy-atom coordinates. We use an EfficientSU2 ansatz and multi-stage relaxation to mitigate barren plateaus. Structures are evaluated via a custom hybrid quantum-classical Hamiltonian, alongside Rosetta and OpenMM benchmarks.\nEvaluation on chignolin and Trp-cage yielded native-like conformations. Chignolin reached a 0.623 Å Cα RMSD in retained snapshots and 1.199 Å in final models; Trp-cage achieved a 2.501 Å RMSD among snapshots (3.512 Å in final models). Execution on IBM processors (ibmcleveland, ibmmiami) successfully recovered native-like structures with a best RMSD of 1.758 Å. The custom energy function performed best overall, though energy-ranking imbalances persisted across sampled landscapes for all functions.\nThis introduces the first all-atom, continuous-space quantum algorithm for QPSP. By converting physical qubit constraints into circuit depth constraints, it proves high-resolution prediction is feasible with exponentially fewer qubits. Despite current limits like computational overhead and energy function sensitivity, it establishes a scalable foundation for hybrid quantum biophysics.",
+  "tags": [
+   "quant-ph",
+   "physics.chem-ph"
+  ],
+  "venue": "arXiv",
+  "publishedAt": "2026-09-02T05:05:46Z",
+  "url": "https://arxiv.org/abs/2609.02113v1",
+  "label": "core"
+ },
+ {
+  "id": "arxiv:2609.04516",
+  "source": "arxiv",
+  "title": "Pitch-class Steering for Diffusion-based Music Generation via Latent-space Probes",
+  "abstract": "Recent work on controllable music generation has focused on autoregressive models, leaving diffusion-based systems comparatively underexplored. We present a lightweight method for steering the pitch content of audio produced by Stable Audio Open, a latent diffusion model for music synthesis. A small convolutional probe containing approximately 125k parameters is trained to decode frame-level pitch-class activations from the model's variational autoencoder latent space, using paired audio and MIDI data. At inference time, the frozen probe serves as a differentiable loss function: its gradient with respect to the denoising latent is used to nudge generation toward a user-specified pitch-class sequence, requiring no retraining or architectural modification of the base model. Across 27 evaluation trials spanning 9 text prompts and 3 target melodies, probe-guided generation increases melodic coherence by 2.4x over the unguided baseline (p < 1e-5, Wilcoxon signed-rank test), demonstrating that musically meaningful structure is both recoverable and steerable in diffusion-based music latent spaces.",
+  "tags": [
+   "cs.SD",
+   "cs.AI"
+  ],
+  "venue": "arXiv",
+  "publishedAt": "2026-09-03T22:07:18Z",
+  "url": "https://arxiv.org/abs/2609.04516v1",
+  "label": "off"
+ },
+ {
+  "id": "arxiv:2609.04709",
+  "source": "arxiv",
+  "title": "AngelFingerprint: A Traceable, Explainable, and White-Box Stealthy Watermark for Text-Guided Image Editing",
+  "abstract": "Text-guided diffusion editing raises disinformation concerns, making reliable image provenance essential. While watermarks are commonly used for this purpose, most methods carry a fixed ID that cannot explain what was changed and which prompt produced it. Furthermore, under open-source white-box access, attackers can easily locate and remove watermarks added as separate modules. Targeting this setting, we propose AngelFingerprint, a novel watermarking framework ensuring edit traceability, explainability, and white-box stealthiness. It integrates a LoRA into the diffusion model to embed the editing prompt's CLIP text embedding directly into the model's weights. An extractor then recovers this embedding from the image pixels alone. This semantic payload explains the edit, while the weight-integrated design makes it hard to detect and isolate even under full white-box access. Two techniques make this possible: a velocity-alignment anchor that preserves edit quality, and a specially designed frequency filter that keeps the watermark imperceptible yet recoverable and robust. On the MagicBrush dataset, our extractor achieves 86\\% top-1 accuracy in a 200-way prompt retrieval, versus 20\\% for prompt inversion.",
+  "tags": [
+   "cs.CV"
+  ],
+  "venue": "arXiv",
+  "publishedAt": "2026-09-04T04:29:23Z",
+  "url": "https://arxiv.org/abs/2609.04709v1",
+  "label": "off"
+ },
+ {
+  "id": "arxiv:2609.04861",
+  "source": "arxiv",
+  "title": "When Genomic Masking Priors Fail to Transfer: Strong Variant Prediction, Weak Functional Generation",
+  "abstract": "Bidirectional discrete diffusion model appears naturally suited to genomic modeling because it can reconstruct missing sequence from both flanks. We developed GenDA (Genomic Density-optimized Absorbing Diffusion) under the additional hypothesis that entropy-guided span placement would concentrate reconstruction pressure on compositionally complex regions, improving both downstream variant-effect prediction and functional sequence generation. Our results only partially support this premise. After supervised fine-tuning, the 202M-parameter GenDA model reaches a pooled ClinVar SNV AUROC of 0.774, exceeding a similarly scaled autoregressive model by 0.103. However, a matched random-span variant reaches 0.777, providing no evidence that entropy guidance causes the ClinVar improvement. More unexpectedly, GenDA fails a zero-shot functional inpainting stress test: across promoters, enhancers, exon boundaries, and intron boundaries, it does not consistently outperform a control that shuffles the native gap while exactly preserving 3-mer composition. Failure is already present for 50--500-bp gaps, although enhancer degradation worsens at longer gaps. Diagnostics identify several boundary conditions: entropy measures local sequence complexity rather than functional importance; 1-mer tokenization limits physical context; training spans are capped at 300 bp; and high absolute AlphaGenome fidelity can coexist with negative control-normalized restoration. These results show that strong fine-tuned variant prediction, a plausible corruption prior, and functional generation are distinct claims that require separate validation.",
+  "tags": [
+   "cs.LG"
+  ],
+  "venue": "arXiv",
+  "publishedAt": "2026-09-04T08:21:34Z",
+  "url": "https://arxiv.org/abs/2609.04861v1",
+  "label": "core",
+  "labelNote": "genomics — biology-adjacent, counted core"
+ },
+ {
+  "id": "arxiv:2609.04282",
+  "source": "arxiv",
+  "title": "Step Back to Move Forward: Reflection-Aware Preference Optimization for Visual Generation",
+  "abstract": "Diffusion models have become the mainstream paradigm for modern visual generation and have substantially advanced multimedia content synthesis, especially in text-to-image and text-to-video tasks. To further align such generative models with human preferences, reinforcement learning (RL) has recently shown strong potential as a post-training strategy. Nevertheless, existing policy gradient-based methods often explore inefficiently, making them vulnerable to local optima that may degrade semantic faithfulness and visual realism. To address these challenges, we present Reflection-Aware GRPO (RA-GRPO), a new RL-based preference alignment framework for diffusion generative models. The core idea is to improve \"forward\" generation by incorporating \"backward\" reflection during optimization. We first introduce Diffusion Reflection, which rectifies intermediate sampling trajectories by inverting the diffusion process with a weak estimator, guiding latent states toward higher-probability regions of the true data manifold. Furthermore, we introduce Counterfactual Path Synthesis to implicitly distill these rectified trajectories into the policy, enabling the model to internalize the benefits of search-based exploration without incurring inference-time overhead. Extensive experiments on T2I and T2V models demonstrate that RA-GRPO significantly outperforms existing methods, particularly in mitigating reward hacking and improving generalization. The method remains architecture-agnostic and integrates seamlessly with standard pipelines, suggesting a promising direction for stable preference alignment.",
+  "tags": [
+   "cs.CV"
+  ],
+  "venue": "arXiv",
+  "publishedAt": "2026-09-03T04:37:19Z",
+  "url": "https://arxiv.org/abs/2609.04282v1",
+  "label": "off"
+ },
+ {
+  "id": "arxiv:2609.04903",
+  "source": "arxiv",
+  "title": "InterSing: Explicit Interaction Dynamics for 3D Duet Singing Animation and Beyond",
+  "abstract": "We present InterSing, a framework for generating realistic 3D head animations for duet singing performances. Unlike solo singing, duet performance requires each singer to balance individual expressiveness with intermittent interaction at musically salient moments, such as phrase boundaries, synchronized rhythms, and call-and-response passages. Because these interactions are sparse and rhythm-dependent, existing audio-driven animation methods and conversational interaction models do not adequately capture their structure. Our key insight is that duet coordination can be represented as a time-varying signal that reflects how strongly performers engage with one another throughout a song. Based on this observation, we introduce interaction logits, an interpretable latent representation that models the degree of cross-performer engagement at each time step. We learn these logits using weak supervision and use them to condition an interaction-aware diffusion model jointly driven by audio features and interaction dynamics. This formulation enables unified multi-mode generation, spanning independent motion, coordinated behavior, and smooth transitions between them. Experiments show that InterSing generates realistic and expressive singing head animations with stronger coordination and musical alignment than existing methods, while preserving each performer's characteristic motion style. We further demonstrate that the same formulation generalizes to multi-singer performances and provides intuitive control over when and how performers engage.",
+  "tags": [
+   "cs.CV"
+  ],
+  "venue": "arXiv",
+  "publishedAt": "2026-09-04T09:02:52Z",
+  "url": "https://arxiv.org/abs/2609.04903v1",
+  "label": "off"
+ },
+ {
+  "id": "arxiv:2609.05326",
+  "source": "arxiv",
+  "title": "Contrasting C/O ratios in Uranus and Neptune from disequilibrium chemistry: A clue to distinct evolutionary pathways?",
+  "abstract": "The formation of Uranus and Neptune remains poorly constrained largely due to uncertain deep elemental abundances. Carbon monoxide (CO), a disequilibrium species in the upper troposphere, provides an indirect constraint on the deep oxygen abundance. We investigate the deep O/H and C/O ratios of the ice giants and their formation history by accounting for meridional variations in atmospheric structure and uncertainties in chemical kinetics. We extended a 1D thermochemical and diffusion model into a pseudo-2D model by including latitudinal variations in key model parameters. The O/H ratio was inferred by matching the modeled upper-tropospheric CO mole fractions to observations, and combined with the deep carbon abundance to derive the C/O ratio. For Uranus, varying tropospheric methane alone yielded O/H \\sim [47-57] x protosolar, whereas allowing Kzz to vary expanded the range to O/H \\sim [62-177] x protosolar. For Neptune, the corresponding ranges are O/H \\sim [182-215] x protosolar and O/H \\sim [222-342] x protosolar, respectively, supporting lower oxygen enrichment in Uranus than Neptune. Chemical-network uncertainties have a more modest effect, amounting to at most \\sim 10\\% of the retrieved oxygen ranges, comparable to the uncertainty associated with the measured CO abundance on Neptune, but larger on Uranus. We computed C/O latitudinal ranges and found C/O \\sim [0.06-0.52] on Uranus and \\sim [0.02-0.12] on Neptune. Comparison with a protoplanetary disk model suggests different formation or evolutionary pathways for the two planets. Our results highlight the dominant role of vertical mixing in constraining deep oxygen abundance and the importance of accounting for meridional variability and chemical uncertainties. This work also provides a framework for selecting the entry latitude of a future Uranus Orbiter and Probe mission.",
+  "tags": [
+   "astro-ph.EP"
+  ],
+  "venue": "arXiv",
+  "publishedAt": "2026-09-04T16:23:01Z",
+  "url": "https://arxiv.org/abs/2609.05326v1",
+  "label": "off",
+  "labelNote": "planetary chemistry — 'diffusion' in the physical sense"
+ },
+ {
+  "id": "arxiv:2609.04031",
+  "source": "arxiv",
+  "title": "DSAQuant: Denoising-Stage-Aligned Quantization-Aware Training for Video Generation",
+  "abstract": "Video diffusion models (VDMs) have achieved impressive progress in text-to-video generation, but their high memory and computational costs hinder practical deployment. Quantization-aware training (QAT) is an effective solution for compressing and accelerating advanced generative models without runtime overhead at inference. However, existing QAT methods suffer from a distinctive challenge in VDMs: while they often preserve prompt semantics, global layout, and coarse motion, the quantized model severely degrades visual details, texture fidelity, and sharpness. In this paper, we trace this degradation to the timestep-agnostic design of conventional quantization pipelines, which overlooks the stage-wise functionality of video denoising. In VDMs, early denoising steps mainly establish global structure and motion, whereas middle and late steps refine local appearance and high-frequency details. Based on this insight, we propose DSAQuant, a Denoising-Stage-Aligned Quantization-aware training framework for VDMs. During training, Denoising-Stage Oriented Supervision preserves teacher distillation in early steps for stable structure planning, while shifting later steps toward target-driven optimization to enhance detail reconstruction. During inference, Denoising-Stage Gated Guidance disables CFG in the final denoising steps to prevent it from amplifying quantization-induced errors into high-frequency artifacts. Extensive experiments on the Wan and CogVideoX families under W4A4 and W3A3 settings show that DSAQuant consistently outperforms the SOTA QAT baseline, improving the VBench average score by up to 6.60 under aggressive W3A3 quantization while preserving strong text-video alignment. These results demonstrate that effective VDM quantization requires not only reducing quantization error, but also aligning quantization training and inference with the stage-wise nature of video diffusion.",
+  "tags": [
+   "cs.CV"
+  ],
+  "venue": "arXiv",
+  "publishedAt": "2026-09-03T16:09:25Z",
+  "url": "https://arxiv.org/abs/2609.04031v1",
+  "label": "off"
+ },
+ {
+  "id": "arxiv:2607.24109",
+  "source": "arxiv",
+  "title": "Earthquake Aftershock Forecasting using Conditional Generative Models",
+  "abstract": "Forecasting how aftershocks evolve in space and time after a large earthquake is a central problem in statistical seismology and underpins operational earthquake forecasting. Existing forecasting methods rest on statistical point-process models such as the epidemic-type aftershock sequence (ETAS) and Reasenberg-Jones models, which prescribe a fixed decay in time and an isotropic kernel in space. They match the average Omori-Utsu and Gutenberg-Richter statistics well but do not capture the fault-controlled spatial patterns of real sequences or the productivity that varies among sequences. Neural point-process models relax these fixed forms but keep the event-by-event view and have not consistently surpassed ETAS on common benchmarks. Rather than modeling individual events as a point process, we recast aftershock forecasting as conditional generation of a spatiotemporal field. We develop QuakeGen, a diffusion model that generates the evolving fields of aftershock rate and maximum magnitude conditioned on recent seismicity and the forecasting horizon. The same conditional generative framework can be trained on rich seismic catalogs to forecast global aftershock sequences and regional daily seismicity, and could further condition on physical fields such as fault geometry or geodetic deformation. On global sequences, the data-driven approach outperforms the operational USGS Reasenberg-Jones forecast, recovering the fault-controlled, anisotropic spatial structure that fixed kernels cannot express. On daily forecasting, QuakeGen also matches the well-tuned ETAS baselines, which neural point-process models have yet to surpass on the regional benchmark. Conditional generative modeling, which has transformed prediction in fields as diverse as weather forecasting and protein structure prediction, holds the potential to forecast more accurately how earthquake sequences unfold in space and time.",
+  "tags": [
+   "physics.geo-ph",
+   "physics.comp-ph"
+  ],
+  "venue": "arXiv",
+  "publishedAt": "2026-07-27T07:47:28Z",
+  "url": "https://arxiv.org/abs/2607.24109v1",
+  "label": "off"
+ },
+ {
+  "id": "arxiv:2609.03382",
+  "source": "arxiv",
+  "title": "SurgeGen: A Hybrid Generative Diffusion Framework for Storm Surge Scenario Synthesis",
+  "abstract": "Predicting storm surge induced by landfalling tropical cyclones is crucial for flood mitigation and coastal risk management. Traditionally, physics-based numerical models simulate storm surge by solving the Navier--Stokes equations using numerical methods, but these simulations are computationally expensive. Generative models are promising for storm surge emulation because they can generate diverse realizations rather than producing a single deterministic prediction. However, their use for storm surge emulation remains largely unexplored. In this paper, we leverage diffusion models for storm surge surrogate modeling, combining a baseline prediction stage with conditional generation to provide a more interpretable modeling framework. We develop SurgeGen, a two-stage generative framework for generating storm surge scenarios conditioned on hypothetical storms with parameters defined in a continuous space. First, a baseline model produces a coarse estimate of the storm surge height. This estimate then conditions a diffusion model, which generates refined storm surge scenarios that better capture spatial patterns and variability. We demonstrate that our approach can generate realistic and diverse storm surge scenarios under conditions both within and outside the training distribution.",
+  "tags": [
+   "math.DS",
+   "cs.LG"
+  ],
+  "venue": "arXiv",
+  "publishedAt": "2026-09-03T05:31:44Z",
+  "url": "https://arxiv.org/abs/2609.03382v1",
+  "label": "off"
+ },
+ {
+  "id": "arxiv:2609.02813",
+  "source": "arxiv",
+  "title": "GDB-Reward: From Evaluation Metrics to Training Rewards for Graphic Design",
+  "abstract": "Text-to-image models excel at natural image synthesis but struggle with graphic design, where success depends on satisfying precise constraints on typography, layout, color, and visual communication. While prompt optimization offers an attractive alternative to expensive diffusion model fine-tuning, learning prompts for frozen image generators requires informative reward functions despite the entirely non-differentiable generation process. Reinforcement learning does not require differentiable objectives; it requires only scalar rewards capable of ranking candidate outputs. This raises a simple question: can design evaluation metrics themselves become reinforcement learning rewards? Our central contribution is GDB-Reward, a framework that systematically transforms heterogeneous graphic design evaluation metrics into a unified reinforcement learning reward. Experiments demonstrate that GDB-Reward provides an effective optimization objective, substantially improving adherence to the design specification in perceptual quality, rendering fidelity, and spatial accuracy while keeping the image generator entirely frozen. More broadly, our results demonstrate that heterogeneous, non-differentiable evaluation metrics can move beyond passive benchmarking to become effective optimization objectives for reinforcement learning in domains where differentiable supervision is unavailable.",
+  "tags": [
+   "cs.CV"
+  ],
+  "venue": "arXiv",
+  "publishedAt": "2026-09-02T16:54:31Z",
+  "url": "https://arxiv.org/abs/2609.02813v1",
+  "label": "off"
+ },
+ {
+  "id": "arxiv:2609.03688",
+  "source": "arxiv",
+  "title": "ToPO: Token-Conditioned Preference Routing for Attention-Based Latent Diffusion Models",
+  "abstract": "Pairwise preference labels rank complete images, yet Diffusion-DPO applies their effect over many spatial and denoising-time coordinates. For attention-based, noise-prediction latent diffusion, ToPO (Token-Oriented Preference Optimization) constructs a per-minibatch, detached, separable spatial-temporal route from branchwise squared-residual contrast in a frozen reference denoiser. Preferred-branch cross-attention uses content tokens to modulate the spatial factor, and an auxiliary pixel-midpoint ordering term is added without local labels or a learned reward model. In matched three-seed retrainings with a shared update schedule, ToPO has higher endpoint estimates than Diffusion-DPO on all five reported SD-1.5 metrics and on HPSv2, ImageReward, and CLIP for SDXL. It also receives larger raw win shares in an aggregate blind SDXL A/B study. These findings are scoped to the reported equal-update U-Net protocols rather than an equal-compute comparison.",
+  "tags": [
+   "cs.CV"
+  ],
+  "venue": "arXiv",
+  "publishedAt": "2026-09-03T11:24:08Z",
+  "url": "https://arxiv.org/abs/2609.03688v1",
+  "label": "craft"
+ },
+ {
+  "id": "arxiv:2609.02847",
+  "source": "arxiv",
+  "title": "RoGe: Novel View Synthesis via End-to-End Implicit Reconstruction and Generation",
+  "abstract": "Novel view synthesis from sparse inputs requires both geometric grounding from the observed views and generative priors of unobserved regions, motivating recent hybrid methods that combine reconstruction and generation. However, existing methods bridge the two with rendered images or explicit 3D representations such as point maps or 3D Gaussians. Generation is thus conditioned on a lossy and imperfect projection of the scene, inheriting its errors, and reconstruction receives no signal from generation to correct them. We present RoGe, an end-to-end unified reconstruction and generation framework that removes this explicit bridge. It targets roaming within a scene anchored by sparse views: given a few posed images and a camera trajectory, it synthesizes a temporally coherent video along that trajectory. From the sparse input views, RoGe builds an implicit scene representation with a feed-forward reconstruction model, and queries it with target camera rays to obtain per-view geometric features. These features are injected into a video diffusion model as conditioning, without any 3D intermediate. Both modules are trained jointly, so the generation objective directly shapes its own geometric conditioning. We conduct experiments on DL3DV, where RoGe outperforms reconstruction-based, generation-based, and hybrid baselines on image-level metrics and video-level temporal consistency. Ablations confirm that ray-queried implicit features outperform both raw reconstruction tokens and rendered RGB as conditioning, and that joint training brings further gains. Our project page is at https://jerry-locker.github.io/roge/.",
+  "tags": [
+   "cs.CV"
+  ],
+  "venue": "arXiv",
+  "publishedAt": "2026-09-02T17:32:35Z",
+  "url": "https://arxiv.org/abs/2609.02847v2",
+  "label": "off"
+ },
+ {
+  "id": "arxiv:2609.03639",
+  "source": "arxiv",
+  "title": "Stabilizing Camera-Controlled Novel View Synthesis at Inference Time",
+  "abstract": "Training-free, camera-controlled novel view synthesis from a single image using pre-trained video diffusion models often becomes unstable under large camera motion and long generation horizons. Existing approaches commonly combine several inference-time components, making it unclear which design choices are most important for stability. We show that the main source of stability is simple. Decomposing camera motion into small autoregressive steps limits per-step geometric distortion and reduces error accumulation. A controlled camera-step study shows that performance remains stable for small motions and degrades more strongly as the per-step motion approaches 18-20^\\circ. We further evaluate geometry-constrained spatial attention and low-frequency appearance anchoring as supporting refinements, together with an efficient registration-free warping pipeline. Across RealEstate10K and MegaScene, CamTrol++ improves temporal and geometric consistency, downstream 3D reconstruction quality, and generation efficiency over training-free baselines. The method remains effective for 56-frame generation and under substantial controlled depth corruption. These results show that careful control of camera motion at inference time can substantially improve the stability of camera-controlled novel view synthesis without retraining or modifying the diffusion backbone.",
+  "tags": [
+   "cs.CV"
+  ],
+  "venue": "arXiv",
+  "publishedAt": "2026-09-03T10:39:44Z",
+  "url": "https://arxiv.org/abs/2609.03639v1",
+  "label": "off"
+ },
+ {
+  "id": "arxiv:2602.22122",
+  "source": "arxiv",
+  "title": "Probing the Geometry of Diffusion Models with the String Method",
+  "abstract": "Understanding the geometry of learned distributions is fundamental to improving and interpreting diffusion models, yet systematic tools for exploring their landscape remain limited. Standard latent-space interpolations fail to respect the structure of the learned distribution, often traversing low-density regions. We introduce a framework based on the string method that computes continuous paths between samples by evolving curves under the learned score function. Operating on pretrained models without retraining, our approach interpolates between three regimes: pure generative transport, which yields continuous sample paths; gradient-dominated dynamics, which recover minimum energy paths (MEPs); and finite-temperature string dynamics, which compute principal curves -- self-consistent paths that balance energy and entropy. We demonstrate that the choice of regime matters in practice. For image diffusion models, MEPs contain high-likelihood but unrealistic ''cartoon'' images, confirming prior observations that likelihood maxima appear unrealistic; principal curves instead yield realistic morphing sequences despite lower likelihood. For protein structure prediction, our method computes transition pathways between metastable conformers directly from models trained on static structures, yielding paths with physically plausible intermediates. Together, these results establish the string method as a principled tool for probing the modal structure of diffusion models -- identifying modes, characterizing barriers, and mapping connectivity in complex learned distributions.",
+  "tags": [
+   "stat.ML",
+   "cs.LG"
+  ],
+  "venue": "arXiv",
+  "publishedAt": "2026-02-25T17:10:59Z",
+  "url": "https://arxiv.org/abs/2602.22122v1",
+  "label": "craft"
+ },
+ {
+  "id": "arxiv:2609.04432",
+  "source": "arxiv",
+  "title": "Recovering molecules from coarse-grained beads: free-energy-conditioned generative backmapping across chemical space",
+  "abstract": "Transferable coarse-grained (CG) force fields compress chemical space: by aggregating atoms into a reduced set of interaction beads, models such as MARTINI reduce the number of distinguishable compounds by roughly three orders of magnitude, making high-throughput screening of thermodynamic properties tractable across soft matter, with drug--membrane permeability as a well-developed example. The compression is lossy and, so far, one-way: a screen returns a combination of beads, with no established route back to the compounds it stands for. Recovering those compounds--compositional backmapping--is a one-to-many inverse map, distinct from the better-studied conformational problem of rebuilding atomic coordinates from a known mapping. Here we formulate compositional backmapping as conditional graph generation by introducing juniper, a discrete denoising diffusion model over molecular graphs conditioned on the octanol--water partition free energy ΔGW \\mapsto \\mathrmO, the principal driver of MARTINI bead type assignment and hence a proxy for bead identity. Trained on molecules of up to 9 heavy atoms mapped onto one or two beads, juniper generates molecules that are 93\\% valid and 92\\% unique for two-bead targets, and whose ΔGW \\mapsto \\mathrmO distributions track the target ΔG(CG)W \\mapsto \\mathrmO linearly (r(2) \\geq 0.96), departing only in the hydrophobic and hydrophilic tails. Although the model receives no chemical information beyond a single scalar, the functional groups shift systematically with the imposed free energy, from branched hydrocarbons at the apolar end to amides, imides, and isocyanates at the polar end. A bead combination flagged by a CG screen can therefore be turned into candidate molecules for atomistic study or synthesis.",
+  "tags": [
+   "physics.chem-ph",
+   "cond-mat.soft",
+   "cs.LG",
+   "physics.bio-ph"
+  ],
+  "venue": "arXiv",
+  "publishedAt": "2026-09-03T19:53:31Z",
+  "url": "https://arxiv.org/abs/2609.04432v1",
+  "label": "core"
+ },
+ {
+  "id": "openalex:W4399911853",
+  "source": "openalex",
+  "title": "CollaFuse: Collaborative Diffusion Models",
+  "abstract": "In the landscape of generative artificial intelligence, diffusion-based models have emerged as a promising method for generating synthetic images. However, the application of diffusion models poses numerous challenges, particularly concerning data availability, computational requirements, and privacy. Traditional approaches to address these shortcomings, like federated learning, often impose significant computational burdens on individual clients, especially those with constrained resources. In response to these challenges, we introduce the novel approach CollaFuse for distributed collaborative diffusion models inspired by split learning. Our approach facilitates collaborative training of diffusion models while alleviating client computational burdens during image synthesis. This reduced computational burden is achieved by retaining data and computationally inexpensive processes locally at each client while outsourcing the computationally expensive processes to shared, more efficient server resources. Through experiments on the common datasets CelebA, CIFAR-10, and Animals-withAttributes2, our approach demonstrates enhanced performance while decreasing information disclosure as it reduces the necessity for sharing raw data. These capabilities hold significant potential across various application areas, including the design of edge computing solutions. Thus, our work advances distributed machine learning by contributing to the evolution of collaborative diffusion models.",
+  "tags": [
+   "Diffusion",
+   "Computer science",
+   "Generative Adversarial Networks and Image Synthesis",
+   "Stochastic Gradient Optimization Techniques",
+   "Privacy-Preserving Technologies in Data",
+   "Thermodynamics"
+  ],
+  "venue": "Journal of Artificial Intelligence Research",
+  "publishedAt": "2026-08-27",
+  "url": "https://www.jair.org/index.php/jair/article/download/20934/27361",
+  "label": "craft"
+ },
+ {
+  "id": "openalex:W7204992910",
+  "source": "openalex",
+  "title": "DiffKT: a diffusion model for fine-grained knowledge tracing",
+  "abstract": "",
+  "tags": [
+   "Probabilistic logic",
+   "Tracing",
+   "Noise (video)",
+   "Representation (politics)",
+   "Statistical model",
+   "Point (geometry)",
+   "Sequence (biology)",
+   "Intelligent Tutoring Systems and Adaptive Learning",
+   "Online Learning and Analytics",
+   "Innovative Teaching and Learning Methods"
+  ],
+  "venue": "Applied Intelligence",
+  "publishedAt": "2026-09-01",
+  "url": "https://doi.org/10.1007/s10489-026-07459-9",
+  "label": "off",
+  "labelNote": "education / knowledge tracing"
+ },
+ {
+  "id": "arxiv:2609.03084",
+  "source": "arxiv",
+  "title": "Convergence rates to traveling waves for an FKPP model with nonlinear advection",
+  "abstract": "We establish convergence rates of solutions to traveling waves for a reaction diffusion model with nonlinear advection. The convergence rate is proven using the shape defect function. We introduce a novel energy methods-based approach that uses a weighted Nash inequality to obtain L^\\infty-estimates on the shape defect function. In determining the convergence rates, we also establish the front location for the model.",
+  "tags": [
+   "math.AP"
+  ],
+  "venue": "arXiv",
+  "publishedAt": "2026-09-02T18:56:54Z",
+  "url": "https://arxiv.org/abs/2609.03084v2",
+  "label": "off",
+  "labelNote": "PDE analysis — an FKPP travelling wave, not a generative model"
+ },
+ {
+  "id": "openalex:W7204921383",
+  "source": "openalex",
+  "title": "Perceptual residual denoising diffusion model for image restoration",
+  "abstract": "",
+  "tags": [
+   "Image restoration",
+   "Residual",
+   "Noise reduction",
+   "Pattern recognition (psychology)",
+   "Image denoising",
+   "Noise (video)",
+   "Image and Signal Denoising Methods",
+   "Advanced Image Processing Techniques",
+   "Medical Image Segmentation Techniques",
+   "Artificial intelligence"
+  ],
+  "venue": "Neurocomputing",
+  "publishedAt": "2026-09-01",
+  "url": "https://doi.org/10.1016/j.neucom.2026.134979",
+  "label": "off"
+ },
+ {
+  "id": "openalex:W7204785639",
+  "source": "openalex",
+  "title": "Conditional Diffusion Models for Energy-Efficient Driving",
+  "abstract": "Electrification of commercial delivery fleets is shifting fleet routing from distance- and time-based optimization toward energy-aware decision-making. Existing sequence models primarily provide deterministic point estimates or limited uncertainty summaries, which do not capture the range of plausible energy-consumption trajectories required for operational decision-making. In this work, we introduce a conditional diffusion framework that generates EV battery-current profiles conditioned on route features such as vehicle velocity and ambient temperature. The model combines a latent conditioning encoder with a temporal 1D U-Net denoising backbone that enables trip-related conditions to be mapped into a shared representation and guides the reverse diffusion process. We evaluate the framework on an open-access commercial EV telemetry dataset containing 12k trips from 9 vehicles. The proposed latent-conditioned diffusion model generates realistic cur- rent trajectories that capture both the dominant temporal envelope and sharp transient events. The model achieves a Wasserstein distance of 0.0029 between generated and measured current distributions below the real vs real reference distance of 0.0085 indicating that generated samples lie within the empirical variability of the test set. We further demonstrate that learned latent conditioning substantially improves performance over direct condition injection, reducing the Wasserstein distance by 89.1% and MAE by 52.8%. This work demonstrates a generative modeling framework for characterizing EV energy consumption under real-world operating conditions, providing an essential foundation for uncertainty-aware fleet planning in large-scale operational settings.",
+  "tags": [
+   "Range (aeronautics)",
+   "Representation (politics)",
+   "Envelope (radar)",
+   "Transient (computer programming)",
+   "Sequence (biology)",
+   "Diffusion",
+   "Computation",
+   "Solver",
+   "Drifter",
+   "Generative model"
+  ],
+  "venue": "arXiv (Cornell University)",
+  "publishedAt": "2026-08-28",
+  "url": "https://arxiv.org/pdf/2608.28142",
+  "label": "off"
+ },
+ {
+  "id": "openalex:W7204565327",
+  "source": "openalex",
+  "title": "Some Other Simple and Precise Quantitative equations in Protein Structure Prediction",
+  "abstract": "In studies conducted on three-dimensional coordinate data of proteins downloaded from the world-renowned Protein Data Bank (PDB), it was discovered that the force balance problem of the main chain of many proteins can be divided into two parts. The first part is the backbone portion, which is the subject of the author's previous proposal: assuming a unidirectional tensile force along the protein main chain from one end to the other, the sum of the projections of the tensile forces between two adjacent central atoms along the,and -axes equals zero, thus satisfying the force balance conditions. The second part is the non-backbone portion. When forces are directed from the central atoms of the protein main chain to their associated non-central atoms, if all forces are assumed equal, the sum of their projections along the,and -axes also equals zero, indicating a state of force balance. Although the force balance of the protein side-chain backbone portion is still under investigation, other part other than the side-chain backbone portion also show good agreement with the force balance conditions. These simple and precise quantitative relationships can greatly facilitate research on protein structures. However, it should be noted that not all proteins satisfy these precise relationships. We believe that deviations from the force balance conditions are related to factors such as the binding of small organic molecules to proteins, which will be further explored in subsequent work.",
+  "tags": [
+   "Balance (ability)",
+   "Simple (philosophy)",
+   "Chain (unit)",
+   "Protein Data Bank",
+   "Protein structure",
+   "Force balance",
+   "Detailed balance",
+   "Protein Structure and Dynamics",
+   "Force Microscopy Techniques and Applications",
+   "Advanced Physical and Chemical Molecular Interactions"
+  ],
+  "venue": "Zenodo (CERN European Organization for Nuclear Research)",
+  "publishedAt": "2026-08-28",
+  "url": "https://doi.org/10.5281/zenodo.22141789",
+  "label": "core"
+ },
+ {
+  "id": "arxiv:2608.27408",
+  "source": "arxiv",
+  "title": "Reservoir: A Large-Scale Simulated Dataset for Training and Evaluating Epidemiological Models",
+  "abstract": "Large-scale, standardized datasets have driven many advances in AI-based scientific modeling, from protein structure prediction to natural language processing. Infectious disease epidemiology is increasingly adopting AI methods for forecasting, surveillance, and outbreak analytics, but the time-series data available to train them remains orders of magnitude smaller than the corpora behind the advances seen in other fields. Because the scope of real-world epidemiological data cannot practically reach the scale needed to train truly large-scale AI methods, simulated data provides a possible alternative. Here we introduce Reservoir, a large open simulator and dataset of realistic epidemic simulations in which every trajectory carries complete ground-truth labels, including quantities that cannot be measured directly in a real outbreak, such as true infection counts, time-varying reproduction numbers, and counterfactual intervention effects. Reservoir is generated by a stochastic simulator with realistic noise and reporting artifacts, together with interventions with configurable timing, compliance, and age-dependent efficacy. The current release contains 500,000 outbreak trajectories spanning one billion simulated days across diverse pathogen characteristics, population structures, and intervention regimes. Reservoir enables counterfactual experiments, surveillance-design studies, and training of epidemic models at a scale real-world datasets cannot provide.",
+  "tags": [
+   "q-bio.PE"
+  ],
+  "venue": "arXiv",
+  "publishedAt": "2026-08-27T17:36:46Z",
+  "url": "https://arxiv.org/abs/2608.27408v1",
+  "label": "off"
+ },
+ {
+  "id": "openalex:W7204243763",
+  "source": "openalex",
+  "title": "Research of Diffusion Model and Multimodal theory",
+  "abstract": "",
+  "tags": [],
+  "venue": "California Digital Library",
+  "publishedAt": "2026-08-26",
+  "url": "https://doi.org/10.48321/d153368061",
+  "label": "off"
+ },
+ {
+  "id": "openalex:W7167582678",
+  "source": "openalex",
+  "title": "Handwriting Trajectory Recovery with Diffusion Models",
+  "abstract": "",
+  "tags": [
+   "Trajectory",
+   "Handwriting",
+   "Fidelity",
+   "Similarity (geometry)",
+   "Task (project management)",
+   "Sample (material)",
+   "Pattern recognition (psychology)",
+   "Diffusion",
+   "Handwritten Text Recognition Techniques",
+   "Image Processing and 3D Reconstruction"
+  ],
+  "venue": "Lecture notes in computer science",
+  "publishedAt": "2026-08-25",
+  "url": "https://doi.org/10.48550/arxiv.2607.03422",
+  "label": "off"
+ },
+ {
+  "id": "openalex:W7204248978",
+  "source": "openalex",
+  "title": "On-Policy Self-Distillation in Diffusion Models",
+  "abstract": "Reinforcement learning can align diffusion models with human preferences and task-specific objectives, but endpoint rewards do not specify how an intermediate denoising prediction should change. We introduce DiffusionOPSD as an on-policy self-distillation framework that converts image-level reward guidance into explicit targets for clean-output predictions at sampled queries. At each outer iteration, a frozen behavior policy generates trajectories and supplies query states and anchors. Reward gradients construct bounded positive and negative targets around each anchor. The trainable policy fits these targets as detached supervision through finite fitting before an exponential moving average update refreshes the behavior policy. This setup lets us measure target construction and finite realization separately. Controlled same-query experiments show that larger target-construction gains do not necessarily translate into larger realized gains after a single fitting update. Across SD3.5-M and the step-distilled Z-Image-Turbo, our approach achieves the best final held-out scores in 19 of 20 reward-matched settings across two backbones and ten evaluators. It outperforms the strongest competing method by up to 44.0% and reduces training GPU-hours relative to DiffusionNFT by 40% on SD3.5-M and 63% on Z-Image-Turbo. These results support on-policy self-distillation as an efficient and analyzable approach to diffusion post-training by converting image-level reward guidance into explicit and continually refreshed intermediate supervision, thereby opening a path toward more efficient and diagnosable alignment.",
+  "tags": [
+   "Realization (probability)",
+   "Measure (data warehouse)",
+   "Bounded function",
+   "Diffusion",
+   "Construct (python library)",
+   "Reinforcement learning",
+   "Point (geometry)",
+   "Path (computing)",
+   "Domain Adaptation and Few-Shot Learning",
+   "Stochastic Gradient Optimization Techniques"
+  ],
+  "venue": "arXiv (Cornell University)",
+  "publishedAt": "2026-08-25",
+  "url": "https://arxiv.org/pdf/2608.24646",
+  "label": "craft"
+ },
+ {
+  "id": "openalex:W7204500099",
+  "source": "openalex",
+  "title": "Smoothing effect and uniqueness for aggregation diffusion models",
+  "abstract": "We consider aggregation-diffusion models for a density of mass in \\mathbb R(d), d\\ge 2, where the diffusion can be either linear or of porous medium type, while the aggregation effect is governed by the attractive Newtonian or Bessel potential. It is well known that the dynamics can be interpreted as Wasserstein gradient flow of the natural free energy of the system, and that, under suitable assumptions on the diffusion exponent and the mass of the initial datum, solutions exist globally in time. In these regimes, we perform the analysis of the discrete variational approach by means of the JKO scheme. We establish a sharp L^\\infty smoothing effect, which proves to be of same rate as that of the porous medium equation. Thanks to this estimate, we obtain uniqueness of global gradient flow solutions for initial data of finite energy and, in the diffusion dominated regime, for measure data having finite second moment. We prove the energy dissipation equality and characterize the gradient flow in terms of suitable evolution variational inequalities. In the fair competition regime, we show uniform extinction of solutions for large time under smallness conditions on the mass.",
+  "tags": [
+   "Uniqueness",
+   "Smoothing",
+   "Balanced flow",
+   "Exponent",
+   "Diffusion",
+   "Measure (data warehouse)",
+   "Flow (mathematics)",
+   "Dissipation",
+   "Mathematical Biology Tumor Growth",
+   "Nonlinear Partial Differential Equations"
+  ],
+  "venue": "arXiv (Cornell University)",
+  "publishedAt": "2026-08-24",
+  "url": "https://arxiv.org/pdf/2608.23734",
+  "label": "off",
+  "labelNote": "aggregation-diffusion PDE — the same false friend"
+ },
+ {
+  "id": "semantic_scholar:b36b9a86a72289ff7ba9e0c77a0fef115560bb60",
+  "source": "semantic_scholar",
+  "title": "The PSIPRED protein structure prediction server",
+  "abstract": "",
+  "tags": [
+   "Computer Science",
+   "Medicine"
+  ],
+  "venue": "Bioinform.",
+  "publishedAt": "2000-04-01",
+  "url": "https://academic.oup.com/bioinformatics/article-pdf/16/4/404/459497/160404.pdf",
+  "label": "core",
+  "labelNote": "a 2000s classic, correctly on topic but not new"
+ },
+ {
+  "id": "semantic_scholar:3a083d843f891b3574494c385699c21766ce8b7a",
+  "source": "semantic_scholar",
+  "title": "Improved protein structure prediction using potentials from deep learning",
+  "abstract": "",
+  "tags": [
+   "Computer Science",
+   "Medicine"
+  ],
+  "venue": "Nature",
+  "publishedAt": "2020-01-01",
+  "url": "https://doi.org/10.1038/s41586-019-1923-7",
+  "label": "core",
+  "labelNote": "AlphaFold-era classic, on topic but not new"
+ }
+]

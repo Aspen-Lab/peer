@@ -2,6 +2,117 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.16.1 — 2026-09-07
+
+A little material.
+
+Greyscale removed the colour that used to carry the surfaces, and left flat
+fields behind. What replaces it is light: the interface now has a grain, an
+edge and a direction.
+
+**Grain.** A fine tileable noise on the ground and on every card. The ground's
+is fixed to the viewport, so it stays put under the scroll the way paper does
+rather than sliding with the content. It is deliberately faint — the tile is
+mid-grey with a noisy alpha, so it lightens a dark surface and darkens a light
+one, and at any strength where the texture is obvious on a #1d1d1d card the
+same tile is a grey veil over a white one. Tooth, not tint. (The ground had a
+grain already; it was near-black noise, which on #111 was a texture nobody
+could see.)
+
+**An edge.** A card catches the light along its top edge and loses it along
+the bottom, so it reads as a slab with thickness instead of a lighter
+rectangle.
+
+**A cut mat.** The figure sits *in* its mat now, not on it: the inset catches
+on the window's top and left, where a light from the upper left would leave
+it.
+
+**A press.** Pressing a card puts it a pixel below where it started, with the
+cast shadow collapsed to contact and a shallow well under the top edge. A
+thing under a finger does not merely stop rising.
+
+## v0.16.0 — 2026-09-07
+
+Greyscale, and one hue.
+
+Peer was a warm ivory system: every neutral carried a little of the accent and
+a little more of a warm brown, and the interface answered in six or seven
+colours — burnt amber tags, peach chips, a green relevance ramp, a blue
+completion state, a red for failure. Now every neutral is a true grey and the
+accent is the only coloured thing on any screen, which is what lets it read as
+a signal instead of as decoration.
+
+**The greys are the old values.** Each one is the exact lightness of the warm
+colour it replaces, converted through OKLab with the chroma set to zero, so
+every contrast the layouts were built on is unchanged and only the hue is
+gone. Light is a #fafafa ground with white cards — sheets on a table, where
+before the cards sat darker than the page; dark is #111 with #1d1d1d cards.
+
+**What used to arrive in colour.** Tags and the profile's signal ramp step
+down through the greys instead of through amber and peach. Failure states,
+links and relevance take the accent — a monochrome interface that keeps a
+second alarm colour has two accents, and the louder one is the one the eye
+learns to ignore. The one place two states must stay apart is the swipe:
+keeping is the accent, letting go is ink.
+
+**The card.** A mat exists to hold a picture. Six cards in ten have no figure,
+and on those the mat was the brightest object on the page with two words in
+it — a placeholder wearing a composition's clothes, and worse once the warmth
+was gone. A figure is still matted, because scientific figures are drawn on
+white and matting is what stops a chart losing its axis labels to a crop.
+Type is not: it sits on the card's own surface, at its own proportion rather
+than a photograph's 16:9, and the numbering that reads "01" beside a lone
+term is gone — numbering says "several, in an order", and one term is
+neither. The venue and age line was the last small-caps label in the
+product; it is sentence case now, in the mono the reading page uses for the
+same fact.
+
+## v0.15.0 — 2026-09-07
+
+The briefing ranks by relevance.
+
+Today's ten opened with two protein-structure papers and then, from the fifth
+card on, an art installation about diffusion models, a paper on the C/O ratios
+of Uranus, 3D duet singing animation, and pitch-class steering for music
+generation. Every one of them had earned its place: they say "diffusion
+models", and the ranking could not tell them apart from the reader's own
+field. Measured against a labelled copy of the day's forty candidates —
+kept in `scoring/__fixtures__` so this stays measurable — twenty-four were
+strangers.
+
+**Relevance was outweighed by age.** The score was 0.35 keyword + 0.30 TF-IDF
++ 0.20 recency + 0.15 source, which reads as relevance-first and behaved as
+recency-first. The keyword term was the same 0.667 for twenty-eight of thirty
+papers — it counts how many of your topics a paper mentions, not how much it
+is about them. TF-IDF was the only term that discriminated, and the cosine of
+two short documents lives around 0.01–0.35, so weighted at 0.30 it could move
+a score by 0.1 while recency moved it by 0.17. Relevance is now scored
+against the rest of the day's pool, where the number means something, and
+leads: 0.55 topicality, 0.30 keyword, 0.10 recency, 0.05 source.
+
+**A mention is not a subject.** Two papers matched "protein structure
+prediction" on one sentence apiece — "generative modeling, which has
+transformed prediction in fields as diverse as weather forecasting and
+protein structure prediction, holds the potential to forecast earthquake
+aftershocks" — and that name-drop, counting as a full second topic match,
+ranked an earthquake paper with the day's real protein work. A match is now
+weighed by where it falls: title, tags, said repeatedly, or said once in
+passing. It still counts; it no longer counts the same.
+
+**A daily briefing carries news.** The reader's freshness window reaches the
+source queries, but Semantic Scholar's search takes no date parameter and
+answers with the field's classics: the 2000 PSIPRED paper and the 2020
+AlphaFold paper were both in a pool built for today. Nothing caught them
+afterwards — they stayed out of the briefing only because age outweighed
+relevance, so the moment relevance was allowed to lead, they led. There is a
+stated ceiling now, generous about the window (60 days for a reader on
+"week") and applied both where the pool is built and where it is read, since
+a pool outlives the request that built it.
+
+Today's briefing, after: six straight papers on protein structure
+prediction, then diffusion-model work, and the first stranger at card seven
+instead of card five. Nothing in it is older than three weeks.
+
 ## v0.14.1 — 2026-09-07
 
 The briefing opens with a dateline.
