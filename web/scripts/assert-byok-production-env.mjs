@@ -4,7 +4,7 @@
 // misconfigured Vercel project and a silently wrong deployment. It used to be
 // ban-only, and it banned `GOOGLE_API_KEY` — the very key D1 now makes the
 // product's default LLM. It also required nothing at all, so a deployment with
-// none of the four necessary variables built and shipped happily as BYOK-only.
+// none of the necessary variables built and shipped happily as BYOK-only.
 //
 // Two lists now, both checked on a Vercel build.
 //
@@ -16,12 +16,17 @@
 // asserts it with a sentinel.
 
 /**
- * Verbatim from R-GUARD-1. Four names, no more: without any one of them the
- * deployment cannot do what D1 and D2 say it does.
+ * Verbatim from R-GUARD-1. **Three names, no more** — without any one of them
+ * the deployment cannot do what D1 says it does.
+ *
+ * **ABC-freemium 5-03 · D2a (Ruling 12): it was four.** `TAVILY_API_KEY` was
+ * required here until the owner removed operator-funded search entirely. It has
+ * moved to the banned list below, next to `BRAVE_SEARCH_API_KEY`, because under
+ * D2a the two are the same kind of risk for the same reason: a server search key
+ * on a deployment is money nobody meant to spend.
  */
 const REQUIRED_ON_VERCEL = [
   "GOOGLE_API_KEY",
-  "TAVILY_API_KEY",
   "NEXT_PUBLIC_SUPABASE_URL",
   "SUPABASE_SERVICE_ROLE_KEY",
 ];
@@ -30,11 +35,17 @@ const REQUIRED_ON_VERCEL = [
  * Operator-funded settings that must never reach a deployment.
  *
  * `GOOGLE_API_KEY` has moved to the required list — that is the whole of D1.
- * `BRAVE_SEARCH_API_KEY` and `PEER_DEV_ENTITLEMENT` are new: D2 keeps Brave
+ * `BRAVE_SEARCH_API_KEY` and `PEER_DEV_ENTITLEMENT` are new: D2a keeps Brave
  * env-only and local, and R-ENT-5's plan override must not be settable on a
  * deployment (belt and braces — `resolveEntitlement` also refuses it at runtime,
  * which is what holds if someone adds the variable to an already-running
  * deployment).
+ *
+ * **5-03 · D2a — `TAVILY_API_KEY` joined them, coming the other way off the
+ * required list.** The operator funds no search for anyone on any plan, so the
+ * server never reads it and a deployment that carries it can only be a mistake
+ * or a leak. **A Vercel project that still has the variable set will now FAIL
+ * the build** — by design; the variable must be removed before deploying.
  */
 const FORBIDDEN_ON_VERCEL = [
   "PEER_DIGEST_PROVIDER",
@@ -52,6 +63,9 @@ const FORBIDDEN_ON_VERCEL = [
   "DASHSCOPE_API_KEY",
   "DEEPSEEK_API_KEY",
   "BRAVE_SEARCH_API_KEY",
+  // 5-03 · D2a — the same kind of risk as Brave, for the same reason, so it
+  // lives next to it.
+  "TAVILY_API_KEY",
   "PEER_DEV_ENTITLEMENT",
 ];
 
@@ -131,7 +145,11 @@ export function formatAuditMessage({ missing, forbidden }) {
   if (missing.length > 0) {
     lines.push(
       `Missing required settings: ${missing.join(", ")}.`,
-      "Peer runs on an operator-funded model and search key, and needs Supabase to know who a request is for.",
+      // 5-03 · D2a — this sentence used to say "an operator-funded model and
+      // search key". The search half became false the day the owner removed
+      // operator-funded search, and this is the only one of the file's four
+      // stale sentences that a deployer actually reads.
+      "Peer runs on an operator-funded model, and needs Supabase to know who a request is for.",
     );
   }
   if (forbidden.length > 0) {

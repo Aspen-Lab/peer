@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -28,9 +29,17 @@ const SCRIPT = path.join(
 /** A recognisable value that must never be echoed back (R-GUARD-2). */
 const SENTINEL = "SENTINEL-NOT-A-KEY-9f3a";
 
+/**
+ * **ABC-freemium 5-03 · D2a (Ruling 12) — `TAVILY_API_KEY` LEFT THIS OBJECT.**
+ *
+ * It is spread into every single case in this file, which made it far more than
+ * a fixture detail: while it sat here AND on the guard's ban list, every
+ * forbidden-name case exited 1 because of Tavily rather than because of the name
+ * under test, so half of each case's evidence was contaminated. See the
+ * explicit list contract below, which now pins both arrays to the guard's own.
+ */
 const ALL_REQUIRED = {
   GOOGLE_API_KEY: "REQUIRED-NOT-A-KEY",
-  TAVILY_API_KEY: "REQUIRED-NOT-A-KEY",
   NEXT_PUBLIC_SUPABASE_URL: "https://example.supabase.co",
   SUPABASE_SERVICE_ROLE_KEY: "REQUIRED-NOT-A-KEY",
 };
@@ -48,6 +57,10 @@ const FORBIDDEN_NAMES = [
   "DASHSCOPE_API_KEY",
   "DEEPSEEK_API_KEY",
   "BRAVE_SEARCH_API_KEY",
+  // 5-03 · D2a — came off the required list. The operator funds no search for
+  // anyone, so a server Tavily key on a deployment is a spend risk exactly as
+  // Brave is, and the build must refuse it.
+  "TAVILY_API_KEY",
   "PEER_DEV_ENTITLEMENT",
 ] as const;
 
@@ -80,7 +93,50 @@ function runGuard(env: Record<string, string>): {
   };
 }
 
+/**
+ * Read one of the guard's own lists straight out of its source (5-03).
+ *
+ * Whitespace-tolerant on purpose: the tree is CRLF on disk and the array bodies
+ * carry comments (Ruling 10 point 2c). Only double-quoted names are collected,
+ * so a name mentioned in a comment cannot be mistaken for a list entry.
+ */
+const GUARD_LIST_PATTERNS = {
+  REQUIRED_ON_VERCEL: /const\s+REQUIRED_ON_VERCEL\s*=\s*\[([\s\S]*?)\]/,
+  FORBIDDEN_ON_VERCEL: /const\s+FORBIDDEN_ON_VERCEL\s*=\s*\[([\s\S]*?)\]/,
+} as const;
+
+function guardList(name: keyof typeof GUARD_LIST_PATTERNS): string[] {
+  const source = readFileSync(SCRIPT, "utf8");
+  const match = GUARD_LIST_PATTERNS[name].exec(source);
+  if (!match) throw new Error(`${name} not found in the guard script`);
+  return [...match[1].matchAll(/"([A-Z0-9_]+)"/g)].map((m) => m[1]);
+}
+
 describe("assert-byok-production-env", () => {
+  it("states R-GUARD-1's amended lists explicitly, and the fixtures agree", () => {
+    // NEW — ABC-freemium 5-03 · D2a (Ruling 12).
+    //
+    // Two jobs. First, it writes the amended contract down as a list rather than
+    // leaving it implied by which cases happen to be generated: **three**
+    // required names, and `TAVILY_API_KEY` banned. Second — and this is the one
+    // that matters — it pins the fixtures to the guard. Every other case in this
+    // file is generated from `ALL_REQUIRED` / `FORBIDDEN_NAMES`, so while those
+    // disagreed with the guard, `TAVILY_API_KEY` was spread into all thirty
+    // cases *and* banned, and every forbidden-name case exited 1 because of
+    // Tavily rather than because of its own subject. Half of each case's
+    // evidence was contaminated and nothing said so. They cannot drift again.
+    expect(guardList("REQUIRED_ON_VERCEL")).toEqual([
+      "GOOGLE_API_KEY",
+      "NEXT_PUBLIC_SUPABASE_URL",
+      "SUPABASE_SERVICE_ROLE_KEY",
+    ]);
+    expect(guardList("FORBIDDEN_ON_VERCEL")).toContain("TAVILY_API_KEY");
+    expect(guardList("REQUIRED_ON_VERCEL")).not.toContain("TAVILY_API_KEY");
+
+    expect(Object.keys(ALL_REQUIRED)).toEqual(guardList("REQUIRED_ON_VERCEL"));
+    expect([...FORBIDDEN_NAMES]).toEqual(guardList("FORBIDDEN_ON_VERCEL"));
+  });
+
   it("passes a correctly configured Vercel build", () => {
     const { status } = runGuard({ VERCEL: "1", ...ALL_REQUIRED });
     expect(status).toBe(0);

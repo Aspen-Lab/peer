@@ -9870,3 +9870,76 @@ before the run** (the editor asserts exactly one match or raises, and reported a
 
 Combined run with both reverts in: **5 failed | 28 passed**, the 2 + 1 above plus the 2 that belong
 to 5-04. Both sources restored from backup; the two suites re-run **24 passed | 24**.
+
+---
+
+#### 5-03 — the build guard · LANDED
+
+**Source, `web/scripts/assert-byok-production-env.mjs`.** `TAVILY_API_KEY` moves from
+`REQUIRED_ON_VERCEL` to `FORBIDDEN_ON_VERCEL`, placed **next to `BRAVE_SEARCH_API_KEY`** because
+under D2a they are the same kind of risk for the same reason. Required drops to **three**:
+`GOOGLE_API_KEY`, `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`. No logic changed — every
+check is list-driven, so `missingRequiredNames`, `configuredForbiddenNames`, the `GOOGLE_VERTEX_`
+prefix ban, the de-duplication and R-GUARD-2's names-never-values property are all untouched.
+
+**All four pieces of stale prose moved with the list**, including the one that matters: the failure
+message said *"Peer runs on an operator-funded model **and search key**…"*. That is build output a
+deployer actually reads, and it was false. It now says *"Peer runs on an operator-funded model, and
+needs Supabase to know who a request is for."*
+
+**Tests, `web/src/scripts/assert-byok-production-env.test.ts` — B's two-line fix, plus one new case.**
+`TAVILY_API_KEY` deleted from `ALL_REQUIRED`, `"TAVILY_API_KEY"` added to `FORBIDDEN_NAMES`. Both
+loops are generated, so the required loop drops 4 → 3 cases and the forbidden loop rises 13 → 14
+**with no hand-written case added or deleted**, and the file's total stays at 30. Exactly as B
+measured.
+
+**NEW: an explicit list contract, which is what the item asked for and also closes the mechanism
+that caused the problem.** `"states R-GUARD-1's amended lists explicitly, and the fixtures agree"`
+reads the guard's own two arrays out of its source (static, whitespace-tolerant regexes — the file
+is CRLF on disk, Ruling 10 point 2c — collecting only double-quoted names so a name in a comment
+cannot be mistaken for an entry) and asserts: required is **exactly** the three names in that order;
+`TAVILY_API_KEY` **is** on the forbidden list and **is not** on the required one; and — the load-
+bearing half — **the fixture arrays equal the guard's arrays**. The fixtures generate every other
+case in the file, so pinning them to the guard means the contamination below cannot recur silently.
+
+**A CORRECTION TO B'S GUIDE, measured rather than argued. B's "13 pass falsely" overstates it, and
+the difference matters.** B wrote that the 13 forbidden-name cases "would pass with their own subject
+removed from the ban list entirely". They would not. I ran it: with the guard changed but the test
+arrays **not** yet fixed, I removed `BRAVE_SEARCH_API_KEY` from the guard's ban list and the BRAVE
+case **failed**. Each of those cases makes two assertions — `status === 1` and
+`output` contains the name — and only the **first** was satisfied by the spread-in `TAVILY_API_KEY`.
+The second went on doing real work.
+
+**So the accurate statement is: 13 cases had half of their evidence contaminated, not 13 cases that
+proved nothing.** B's underlying point stands and the fix is the same — while a banned name was
+spread into every case, no forbidden-name case could distinguish "the guard caught my subject" from
+"the guard caught Tavily" on its exit code alone, and nothing in the file said so. Recorded because
+the guide's number will otherwise be re-used as measured, and it is not.
+
+**PROOF BY PLANTING, both directions (Ruling 10 point 2b).**
+
+1. **B's requested proof.** After the fix, `BRAVE_SEARCH_API_KEY` removed from the guard's ban list:
+   **2 failed | 29 passed**. Of the file's pre-existing cases, **exactly one** fails — the BRAVE case,
+   which is what B asked for. The second failure is the **new drift-pin** doing its job (the fixture
+   list no longer matches the guard's). B's stated criterion — "if more than one fails, the spread is
+   still doing the work" — is met: the spread is gone, and the extra failure is a case I added this
+   turn that is *supposed* to fire on exactly this edit.
+2. **The item's own plant — a config carrying `TAVILY_API_KEY` must fail the build.** Driven against
+   the real script as a child process in a scrubbed environment, not through a fixture:
+   - the three required names alone → **exit 0**;
+   - the same three **plus** `TAVILY_API_KEY` → **exit 1**, output
+     `Remove these operator-funded AI settings from Vercel: TAVILY_API_KEY.` and **no value printed**
+     (the sentinel value is absent — R-GUARD-2 still holds on the new entry);
+   - a build missing two required names → **exit 1**, naming both, with the corrected sentence.
+   Plant removed, guard restored from backup, suite re-run **31 passed | 31**.
+
+**DEPLOYMENT CONSEQUENCE, already in §1 `PENDING USER ACTION` (4) and repeated because it is the one
+change in this round that can break a deploy:** a Vercel project that still carries
+`TAVILY_API_KEY` will now **fail the build**. That is the intent. The variable must be removed from
+Vercel **before** the next deploy, and required is now three names, not four.
+
+**GATE AFTER 5-03 — still red by design, and by the expected amount.** `tsc` exit **0** · `eslint`
+**1 error, 0 warnings** (the standing `quiz.tsx:46`) · `vitest` **6 files failed | 118 passed |
+1 skipped (125)** · **20 failed | 2842 passed | 1 skipped (2863)**. B measured 5-03's marginal cost
+at **5 cases**; all five are fixed inside this commit, so the failure count is unchanged at 20 and
+every one of them belongs to 5-04. Test total 2862 → 2863 (the new contract case).
