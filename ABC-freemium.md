@@ -323,7 +323,8 @@ PENDING USER ACTION: (1) Apply the three migrations under `web/supabase/migratio
            NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY — and must NOT carry
            TAVILY_API_KEY (the build will refuse it after 5-03). Deploy only after round 5
            reports green and the branch is merged. WITHDRAWN: the trial backfill (no users).
-OPEN FOR MANAGER:  none — B's two POLICY items ruled in §1n (Ruling 13 points 1 and 4).
+OPEN FOR MANAGER:  none — C's three flags ruled in §1o (Ruling 14 points 2-4); the unfinished
+           half of the rename is queued as round-6 item 6-01, not left to rot.
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
@@ -903,6 +904,52 @@ each: `consumeSystemSearches` has six call sites in five files, of which `jobs/p
    free user $0.14 -> $0.32/month, break-even conversion 2.4% -> 2.7%. **Kept out of round 5 on
    purpose** — mixing a model swap into a spend-policy change makes both unmeasurable.
 
+---
+
+## §1o. RULING 14 — after round-5 C; the rename is finished, not half-done (2026-09-07, BINDING)
+
+**Manager's independent check before accepting the round:** the gate re-run cold — tsc 0 · eslint 1
+(standing `quiz.tsx:46`) · vitest 124/1 files, **2871/1 tests, 0 failed** — identical to C's figures,
++12 tests, none deleted. The half-finished rename was then read in source (six files still import
+`consumeSystemSearches`; `counters.ts` carries the renamed constant). Round-5 A re-measures every
+closure; this ruling accepts the round, it does not close anything.
+
+1. **Round 5 accepted.** 5-01 through 5-04 landed as ruled, including Ruling 13's three
+   modifications: the Brave gate field kept **with its own protective test**, the counter renamed,
+   and the ten Ruling-75 cases split six/four.
+2. **C corrected B, and C is right.** B's "13 guard cases pass falsely" was an overstatement: C
+   removed a banned name and the case *failed*, because each case makes two checks and only the
+   first was contaminated. **The number 13 is retired and must not be reused as measured** — it was
+   an estimate presented as a measurement, which is exactly what this loop's evidence rules exist
+   to catch. B's fix direction was unaffected and stands.
+3. **The rename is finished this round, not left half-done.** Ruling 13 point 1 named two symbols
+   and C renamed exactly those two — correct discipline, and C flagged the rest rather than
+   widening. But the result is a name that lies one layer down: the counter now says
+   `forced_rebuilds_today` while the function that increments it is `consumeSystemSearches` and the
+   usage row it writes carries `path: "system-search"`. **That is the same defect Ruling 13 point 1
+   just fixed, and half a fix is how it comes back.** Round-6 item **6-01**: rename
+   `consumeSystemSearches` -> `consumeForcedRebuild`, the usage row's `path` -> `"forced-rebuild"`,
+   the file `search-breaker.ts` -> `rebuild-breaker.ts`, and every stale docblock that still says
+   "system-search breaker" (`jobs/pipeline.ts:249`, `events/pipeline.ts:266`, and the rest by grep).
+   **The three now-unreachable fan-out call sites** (`jobweb`, `eventweb`, `web-search`) keep
+   calling it behind their hard `false` — do not delete them (Ruling 12 point 2), but their
+   docblocks must say they are unreachable and why.
+4. **C's vacuous-tally finding is accepted and becomes the tally's definition.** Ruling 12 point
+   7's tally 3 ("operator-key search requests per persona = 0") **cannot be proved on the four AI
+   report routes** — they never search, so zero there proves nothing, and C proved the vacuity by
+   reverting the fix and watching the eight persona cases still pass. **From round 5 on, tally 3 is
+   sourced from the five surfaces that actually search** (the two feed routes and the three
+   adapters), and A states that source in the tally line. A number that cannot fail is not
+   evidence; recording where a number comes from is part of the number.
+5. **New standing rule (§3), from point 4.** When a tally is added, the round that adds it must
+   **prove it can fail** — revert the fix, watch the tally move. A tally that survives the revert is
+   measuring the wrong surface and is renamed or re-sourced in the same round, never reported as a
+   pass.
+6. **Round 6 opens after round-5 A**, and carries two items: **6-01** the rename above, and
+   **6-02** the Gemini model retirement of 2026-10-16 (Ruling 13 point 6) **once the owner
+   confirms the model choice** — it is not started without that word. If the owner has not answered
+   by 2026-10-01, the manager escalates: the current models stop existing on the 16th.
+
 ## §2. ROLES — DO ONLY YOUR OWN JOB
 
 ### Agent A — Reviewer
@@ -1028,6 +1075,9 @@ C does **not** judge whether something should be fixed.
   the run is read; **every new scan or guard test is proved by planting an offender**; source
   assertions across line breaks use whitespace-tolerant regexes — the tree is CRLF on disk
   (Ruling 10 point 2).
+- **A new tally must be proved able to fail** (Ruling 14 point 5): the round that adds it reverts
+  the fix and watches the tally move. A tally that survives the revert is measuring the wrong
+  surface - re-source or rename it in the same round; never report it as a pass.
 - Commit messages: plain sentences in the repo's existing style
   (`feat(scope): …`, `fix(scope): …`, `refactor(scope): …`), ending with
   `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>`.
