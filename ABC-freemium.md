@@ -9290,3 +9290,65 @@ they assert how the *gemini adapter is called* (deny lists, query suffixing, row
 grounding unreachable makes those adapters unreachable through the surfaces, so their tests lose
 their subject. That is a real cost of D2a and it is recorded here so C does not discover it as a
 surprise and delete them. Recommended handling in 5-04.
+
+---
+
+#### 5-02 — the entitlement · `WRONG DATA`
+
+**The single producer** is `web/src/lib/entitlement/resolve.ts:128` —
+`systemSearchAllowed: effectivePlan !== "free",` — inside `fromStoredPlan`, which every branch of
+`resolveEntitlement` funnels through (`184` dev override, `189` free fallback, `204` the stored row).
+There is **one** place to change and it is that line. Classification `WRONG DATA`: the field is
+computed and truthful about the old decision, and the new decision makes every non-free answer wrong.
+
+**Fix direction.** `systemSearchAllowed: false,` with **D2a named at that line**, and the comment at
+`125–127` split so it no longer claims both fields read `effectivePlan` — after the change only
+`poolRefreshAllowed` does. Leave the field on the interface (`types.ts:59`) and leave the frozen
+anonymous constants alone (`types.ts:92`, `allowance.ts:157`); they already say `false` and a second
+way of saying `false` is how the two drift apart.
+
+**Every producer and consumer, by grep, comments separated from code.**
+
+*Producers (3, all now agreeing on `false`):* `resolve.ts:128` (the live one),
+`types.ts:88–97` `ANONYMOUS_ENTITLEMENT` (already `false` at `92`), `allowance.ts:153–164`
+`ANONYMOUS_CLIENT_ENTITLEMENT` (already `false` at `157`).
+
+*Mirror to the browser:* `allowance.ts:136` copies the field into `ClientEntitlement`. After the fix
+the payload carries `systemSearchAllowed: false` for every plan. **Nothing on the client reads it** —
+grepped `src/components` and `src/app` for non-test readers and the result is empty — so there is no
+UI change and no D6 vocabulary exposure. The field stays in the payload; removing it is a shape
+change nobody asked for.
+
+*Real consumers (2, and only 2):* `app/api/events/feed/route.ts:178` and
+`app/api/jobs/feed/route.ts:196`, each threading it into the pipeline query alongside `userId`.
+
+**Question 4 of the brief — does anything outside search read it? No, and here is where I looked.**
+The four other grep hits are **all comments, read individually**: `api/jobs/dispatch-digests/
+route.ts:219` (the cron's note that it passes no flag and takes the `false` default),
+`api/test-digest/route.ts:85`, `lib/security/ai-request.ts:81`, `lib/usage/search-breaker.ts:36`.
+I also grepped `src/components` and `src/store` and found nothing. So a hard `false` **cannot** change
+behaviour anywhere unintended, and there is no finding to report here. Confirmed by execution: 5-02's
+marginal cost over 5-01 was **exactly 2 failing tests**, both of them assertions about
+`systemSearchAllowed` itself — if a hidden consumer existed, a third suite would have moved.
+
+**`poolRefreshAllowed` survives untouched — Ruling 12 point 5, confirmed rather than assumed.**
+`resolve.ts:129` keeps `effectivePlan !== "free"`, so trial and paid keep "refresh now" and free does
+not. The two routes keep `poolRefresh: body.poolRefresh === true && entitlement.poolRefreshAllowed`
+(`events/feed/route.ts:183`, `jobs/feed/route.ts:201`) — the body may ask, only the entitlement
+grants. What changes is **whose key the granted rebuild spends**: the pipeline now reaches the
+adapters with `provenance: "byok"` when the reader has their own Tavily key, and `"none"` when they
+do not. With `"none"` a granted refresh still does the right thing and nothing harmful — it rebuilds
+the pool from the free structured sources, sets the cache and answers 200; a rebuild is not a search.
+Evidence from the plant: the whole of `lib/opportunities/pool-refresh-gates.test.ts` and both feed
+routes' refresh cases (including "charges a paid user exactly one extra for a granted refresh" and
+"refuses a free user's forced rebuild, and still answers 200") **passed unchanged at every stage**.
+That is Ruling 12 point 5's "intended, not a defect", verified.
+
+**Tests at risk — 2, both in `web/src/lib/entitlement/resolve.test.ts`:**
+`49` "keeps a live trial on trial terms" and `83` "gives a paid user unbounded deep reports and
+system search". Both **state the opposite contract** and must be **rewritten, never deleted**; the
+second's *name* also has to change, since "and system search" is now false.
+
+**Blast radius: the smallest of the four items.** One line, two tests, no client change, no route
+change. The `poolRefreshAllowed` half is deliberately left alone and that is the whole reason the
+radius is small — the two flags were computed from one expression and the fix separates them.
