@@ -2,6 +2,55 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.19.0 — 2026-09-07
+
+TUI.
+
+Peer was a soft-UI product: rounded slabs floating on cast shadows, bevelled
+top edges, a lift under the pointer, Inter for everything the machine says.
+The direction now is a terminal — drawn, square, keyboard-first, dense — and
+most of it turned out to be four values.
+
+**Nothing is round.** Tailwind compiles its whole radius scale from eight
+variables; they are all zero now, and the one radius it does not take from a
+variable — `rounded-full` — is squared by a single rule beside them. 170
+`rounded-*` classes across the product changed without one of them being
+touched. Put the eight values back and the shape returns exactly.
+
+**A card is drawn, not floated.** `--shadow-card` was a rim, a contact
+shadow, a cast shadow, an ambient shadow and two bevels. It is one hairline
+now, and the only thing that happens under a pointer is that the hairline
+gets brighter — no lift, no press-below. The input well, carved with two
+inset shadows, is a box you type inside. Held, a card's frame takes the hue:
+a terminal has no depth to press into, what it has is a selected row.
+
+**The machine speaks mono; the paper speaks serif.** The reading page's own
+labels — the section names, the record, the footers, the commands — are in
+Roboto Mono. The paper's title, its claim and its sentences stay in
+Newsreader. The rule is not new; it is the one the stylesheet already stated
+for prose, applied in the other direction.
+
+**Sections are bands.** A name in mono on the rule it starts, running the
+width of the column: `The claim ────`, `The abstract ────`, `How it was done
+────`. The 22px serif headings are gone — a landmark down the column is now
+the rule, which is the width of the column, rather than a bigger line of the
+same colour. The claim's band label carries the one accent on the page.
+
+**Commands are named by their key.** `[o] Open on arXiv ↗`, `[s] Save`,
+`[x] Skip`, `[c] Copy` — the key first, in mono, because on this page the key
+is the interface and the button is its shadow. Three of the icons added
+yesterday are gone with the change: a bookmark beside "Save" said nothing the
+word did not. The one that stayed marks a destination.
+
+**The legend.** Every key the reading page answers to, on one line along the
+foot of the screen: `j next · k prev · s save · x skip · l like · u undo ·
+o open · c copy · esc briefing`. Peer had nine keys here and was telling the
+reader about the four that also have buttons. It is generated from
+`PAPER_KEYS` — the table the keyboard layer and the help sheet already read —
+so it cannot describe a key that does not exist. Nothing on it is clickable;
+it is a legend, not a toolbar. Desktop only: a phone has no keyboard and
+already has the thumb bar.
+
 ## v0.18.0 — 2026-09-07
 
 The reading page gets a shape.

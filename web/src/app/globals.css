@@ -75,26 +75,35 @@
      Every colour is a nested var(): Tailwind v4 inlines the token's value into
      the .shadow-card utility at build time, so per-theme overrides must happen
      on these inner variables, never on --shadow-card itself. */
-  --shadow-card: 0 0 0 1px var(--nm-rim),
-                 0 1px 1.5px -0.5px var(--nm-key),
-                 0 4px 8px -4px var(--nm-key),
-                 0 12px 26px -14px var(--nm-ambient),
-                 inset 0 1px 0 var(--nm-bevel),
-                 inset 0 -1px 0 var(--nm-underside);
-  --shadow-card-hover: 0 0 0 1px var(--nm-rim-hi),
-                       0 1px 1.5px -0.5px var(--nm-key),
-                       0 8px 16px -8px var(--nm-key),
-                       0 26px 50px -22px var(--nm-ambient),
-                       inset 0 1px 0 var(--nm-bevel),
-                       inset 0 -1px 0 var(--nm-underside);
-  /* Pressed / input wells — gently carved into the surface */
-  --shadow-well: inset 2px 2px 6px var(--nm-shade),
-                 inset -2px -2px 5px var(--nm-highlight);
-  /* The press: the rim stays, the cast shadow collapses to contact, and a
-     shallow well appears under the top edge. */
-  --shadow-well-soft: 0 0 0 1px var(--nm-rim),
-                      0 1px 1px -1px var(--nm-key),
-                      inset 0 2px 4px -2px var(--nm-key);
+  /* ── The frame ────────────────────────────────────────────────────
+     A terminal draws its surfaces; it does not float them. The cast
+     shadow, the ambient shadow and the two bevels are gone — a card is
+     now one hairline, and the only thing that happens under a pointer is
+     that the hairline gets brighter. Everything that reads `shadow-card`
+     changed with this block; nothing had to be touched to follow. */
+  --shadow-card: 0 0 0 1px var(--nm-frame);
+  --shadow-card-hover: 0 0 0 1px var(--nm-frame-hi);
+  /* Input wells. Carved with two inset shadows, they were the last soft-UI
+     surface left; a terminal's field is a box you type inside. */
+  --shadow-well: inset 0 0 0 1px var(--nm-frame);
+  /* The press: the frame takes the hue. A terminal has no depth to press
+     into — what it has is a selected state, and this is it. */
+  --shadow-well-soft: 0 0 0 1px var(--color-accent);
+
+  /* ── Nothing is round ──────────────────────────────────────────────
+     Tailwind compiles `rounded-md` … `rounded-4xl` from these, so setting
+     them to zero squares every corner in the product at once. `rounded-full`
+     is the one radius Tailwind does not take from a variable — it compiles
+     to calc(infinity * 1px) — so it is squared by the rule further down.
+     Restore these eight values and the soft-UI shape comes back exactly. */
+  --radius-xs: 0px;
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-xl: 0px;
+  --radius-2xl: 0px;
+  --radius-3xl: 0px;
+  --radius-4xl: 0px;
 
   /* ── Type scale — 9 steps covering the 10–20px working range.
      Changing the app's type system = editing THIS block. Display sizes
@@ -205,6 +214,8 @@ html[data-accent="violet"]   { --seed: #7a3fd9; --seed-dark: #a078f0; }
   --nm-shade-deep: color-mix(in srgb, var(--color-heading) 18%, transparent);
   --nm-rim: color-mix(in srgb, var(--color-heading) 7%, transparent);
   --nm-rim-hi: color-mix(in srgb, var(--color-heading) 11%, transparent);
+  --nm-frame: color-mix(in srgb, var(--color-heading) 13%, transparent);
+  --nm-frame-hi: color-mix(in srgb, var(--color-heading) 30%, transparent);
   --nm-key: color-mix(in srgb, var(--color-heading) 12%, transparent);
   --nm-ambient: color-mix(in srgb, var(--color-heading) 15%, transparent);
   --nm-bevel: rgba(255, 255, 255, 0.8);
@@ -248,6 +259,8 @@ html[data-mode="dark"] {
   --nm-shade-deep: rgba(0, 0, 0, 0.6);
   --nm-rim: rgba(255, 255, 255, 0.09);
   --nm-rim-hi: rgba(255, 255, 255, 0.16);
+  --nm-frame: rgba(255, 255, 255, 0.18);
+  --nm-frame-hi: rgba(255, 255, 255, 0.4);
   --nm-key: rgba(0, 0, 0, 0.55);
   --nm-ambient: rgba(0, 0, 0, 0.45);
   --nm-bevel: rgba(255, 255, 255, 0.06);
@@ -416,6 +429,11 @@ html[data-mode="dark"] { --nm-underside: rgba(0, 0, 0, 0.34); }
 
 /* Light is unconditional — no OS-preference dark mode. Dark mode would be a
    future explicit toggle on <html data-theme="dark">, not a reading-tool default. */
+
+/* The other half of "nothing is round" — see the radius scale above. The
+   rule is unlayered, so it beats the utility whatever its specificity, and
+   deleting these two lines brings the pills and the discs back. */
+[class~="rounded-full"] { border-radius: 0; }
 
 html[data-scroll-behavior="smooth"] { scroll-behavior: smooth; }
 

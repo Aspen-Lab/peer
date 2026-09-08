@@ -42,6 +42,7 @@ import { useResolvedFigure } from "@/components/paper-figure";
 import { TitleBlock } from "@/components/reader/title-block";
 import { PaperWords } from "@/components/reader/paper-words";
 import { RecordBlock } from "@/components/reader/record-block";
+import { KeyLegend } from "@/components/reader/key-legend";
 import { DecisionBlock } from "@/components/reader/decision-block";
 import { QuoteList } from "@/components/reader/quote-list";
 import { ClaimList, KeyResultList } from "@/components/reader/claim-list";
@@ -509,7 +510,7 @@ function Reader({
     // element after a client navigation, and an article that cannot take
     // focus makes that a no-op — j/k would change the paper without
     // assistive technology announcing anything.
-    <PageContainer width="spread" className={`${PAGE_CLASS} outline-none`} tabIndex={-1}>
+    <PageContainer width="spread" className={`${PAGE_CLASS} md:pb-16 outline-none`} tabIndex={-1}>
       {/* The blocks, in the spec's order; `ReaderLayout` places them — one
           column below xl, the spread from it. Later-arriving content (the
           server reading, a model report) is `additions`: on the spread it
@@ -651,6 +652,7 @@ function Reader({
         next={<NextRow nav={nav} next={nextPaper} />}
       />
       <ReaderToast toast={toast} />
+      <KeyLegend />
     </PageContainer>
   );
 }

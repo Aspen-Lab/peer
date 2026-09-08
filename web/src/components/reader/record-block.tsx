@@ -23,6 +23,7 @@ import {
   IconLink,
   type IconProps,
 } from "@/components/icons";
+import { Band } from "@/components/ui/band";
 import { RECORD } from "./copy";
 
 type Door = { href: string; label: string; Icon: (p: IconProps) => React.ReactElement };
@@ -74,11 +75,8 @@ export function RecordBlock({
   if (!published && !venue && links.length === 0) return null;
 
   return (
-    <section className="mt-14 border-t border-border pt-6">
-      <h2 className="font-display font-medium text-heading text-display-xs leading-[1.25] mb-4">
-        {RECORD.heading}
-      </h2>
-      <ul className="font-sans text-body-sm text-text-muted space-y-2.5 measure-ui">
+    <Band label={RECORD.heading} className="mt-14">
+      <ul className="font-mono text-caption text-text-muted space-y-2.5 measure-ui mt-4">
         {published && (
           <Row Icon={IconCalendar}>
             {RECORD.published} <span className="text-text">{published}</span>
@@ -108,6 +106,6 @@ export function RecordBlock({
           </Row>
         )}
       </ul>
-    </section>
+    </Band>
   );
 }

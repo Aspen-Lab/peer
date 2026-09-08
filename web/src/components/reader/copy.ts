@@ -23,6 +23,8 @@ export const ABSTRACT_FOOTER = "From the abstract · claim and numbers in ink";
 /** Under the lifted claim — whose sentence it is. It is chosen from the
  *  abstract's sentences, so it says the abstract whatever else Peer read. */
 export const LEAD_CLAIM = "The paper's own claim, from its abstract";
+export const LEAD_CLAIM_LABEL = "The claim";
+export const ABSTRACT_LABEL = "The abstract";
 
 /** The record: the facts that are true with no key and no model. */
 export const RECORD = {

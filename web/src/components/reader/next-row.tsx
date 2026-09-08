@@ -15,10 +15,11 @@ import { NONE } from "@/lib/navigation/card-focus";
 import type { PaperNav } from "@/lib/reader/paper-nav";
 import { shortVenue } from "@/components/cards/paper-plate";
 import { IconArrowRight } from "@/components/icons";
+import { BandRule } from "@/components/ui/band";
 import { NEXT_ROW } from "./copy";
 
 const ROW_CLASS =
-  "group block mt-16 border-t border-border pt-6 -mx-3 px-3 pb-4 rounded-2xl hover:bg-bg-secondary/50 transition-colors duration-150 ease-snap";
+  "group block mt-16 -mx-3 px-3 pt-5 pb-4 hover:bg-bg-secondary/50 transition-colors duration-150 ease-snap";
 const LABEL_CLASS = "font-mono text-meta text-text-faint";
 const TITLE_CLASS =
   "font-display text-display-xs leading-[1.25] text-heading mt-1.5 line-clamp-2 measure-lede";
@@ -40,27 +41,36 @@ function Go({ label }: { label: string }) {
 export function NextRow({ nav, next }: { nav: PaperNav; next: Paper | null }) {
   if (nav.index === NONE) {
     return (
-      <Link href="/" className={ROW_CLASS}>
-        <Go label={NEXT_ROW.deepLink} />
-      </Link>
+      <>
+        <BandRule className="mt-16" />
+        <Link href="/" className={ROW_CLASS.replace("mt-16 ", "")}>
+          <Go label={NEXT_ROW.deepLink} />
+        </Link>
+      </>
     );
   }
   if (!nav.nextId || !next) {
     return (
-      <Link href="/" className={ROW_CLASS}>
-        <Go label={NEXT_ROW.last} />
-      </Link>
+      <>
+        <BandRule className="mt-16" />
+        <Link href="/" className={ROW_CLASS.replace("mt-16 ", "")}>
+          <Go label={NEXT_ROW.last} />
+        </Link>
+      </>
     );
   }
   const venue = shortVenue(next.venue);
   return (
-    <Link href={`/papers/${nav.nextId}`} className={ROW_CLASS}>
+    <>
+      <BandRule className="mt-16" />
+      <Link href={`/papers/${nav.nextId}`} className={ROW_CLASS.replace("mt-16 ", "")}>
       <span className={LABEL_CLASS}>
         {NEXT_ROW.next(nav.index + 1, nav.total)}
         {venue ? ` \u00b7 ${venue}` : ""}
       </span>
       <span className={TITLE_CLASS}>{next.title}</span>
       <Go label={NEXT_ROW.read} />
-    </Link>
+      </Link>
+    </>
   );
 }

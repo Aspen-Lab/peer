@@ -25,22 +25,33 @@ export interface PaperKey {
   keys: readonly string[];
   action: ReaderAction;
   label: string;
+  /** One word for the legend along the foot of the page, where the row is
+   *  the whole width of the screen and the sentence would not fit. Same
+   *  table as the label, so the legend cannot drift from the help sheet
+   *  either. */
+  short: string;
 }
 
 export const PAPER_KEYS: readonly PaperKey[] = [
-  { keys: ["j", "]", "ArrowRight"], action: "next", label: "Next paper" },
-  { keys: ["k", "[", "ArrowLeft"], action: "prev", label: "Previous paper" },
-  { keys: ["s"], action: "save", label: "Save / unsave" },
-  { keys: ["x"], action: "skip", label: "Not interested, then next" },
-  { keys: ["l"], action: "like", label: "Like — more like this" },
+  { keys: ["j", "]", "ArrowRight"], action: "next", label: "Next paper", short: "next" },
+  { keys: ["k", "[", "ArrowLeft"], action: "prev", label: "Previous paper", short: "prev" },
+  { keys: ["s"], action: "save", label: "Save / unsave", short: "save" },
+  { keys: ["x"], action: "skip", label: "Not interested, then next", short: "skip" },
+  { keys: ["l"], action: "like", label: "Like — more like this", short: "like" },
   {
     keys: ["u"],
     action: "undoOrToggleRead",
     label: "Undo a dismiss, else mark unread / read",
+    short: "undo",
   },
-  { keys: ["o", "Enter"], action: "open", label: "Open at the source" },
-  { keys: ["c"], action: "copy", label: "Copy as Markdown" },
-  { keys: ["Escape", "Backspace"], action: "back", label: "Back to the briefing" },
+  { keys: ["o", "Enter"], action: "open", label: "Open at the source", short: "open" },
+  { keys: ["c"], action: "copy", label: "Copy as Markdown", short: "copy" },
+  {
+    keys: ["Escape", "Backspace"],
+    action: "back",
+    label: "Back to the briefing",
+    short: "briefing",
+  },
 ];
 
 export function resolvePaperKey(key: string): ReaderAction | null {

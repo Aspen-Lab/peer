@@ -9,19 +9,20 @@
 import Link from "next/link";
 import type { Ref } from "react";
 import { buttonVariants } from "@/components/ui/button";
-import {
-  IconArrowUpRight,
-  IconBookmark,
-  IconCopy,
-  IconLink,
-  IconX,
-} from "@/components/icons";
+import { IconArrowUpRight, IconLink } from "@/components/icons";
 import { Kbd } from "@/components/ui/kbd";
 import { cn } from "@/lib/cn";
 import type { PaperReading } from "@/lib/papers/reading";
 import { BUTTON, DOI, progressSuffix } from "./copy";
 
 const TOUCH_TARGET = "[@media(hover:none)]:min-h-11";
+/**
+ * A command, not a button: the key comes first and names it, the word says
+ * what the key does, and the type is the mono the rest of the machine's own
+ * voice is set in. The picture each one carried said nothing the word did not
+ * — a bookmark beside "Save" — and three of them were noise around a key.
+ */
+const COMMAND = "font-mono text-body-sm font-normal";
 /**
  * Touch room for a line of text that is a control, without moving the type:
  * the box grows to 44px with the text centred, and the margins give back
@@ -115,13 +116,16 @@ export function DecisionBlock({
             target="_blank"
             rel="noopener noreferrer"
             onClick={onOpen}
-            className={cn(buttonVariants({ tone: "primary", size: "lg" }), TOUCH_TARGET)}
+            className={cn(buttonVariants({ tone: "primary", size: "lg" }), COMMAND, TOUCH_TARGET)}
           >
-            <IconArrowUpRight size={13} />
-            {source.label}
-            <Kbd pointerOnly className="ml-1">
+            <Kbd pointerOnly className="mr-0.5">
               o
             </Kbd>
+            {source.label}
+            {/* The one icon left on a command: it marks a destination — this
+                leaves the page — where the others only named their key back
+                to the reader. */}
+            <IconArrowUpRight size={12} />
           </a>
         )}
         <button
@@ -130,36 +134,34 @@ export function DecisionBlock({
           aria-pressed={isSaved}
           className={cn(
             buttonVariants({ tone: isSaved ? "accentSoft" : "soft", size: "lg" }),
+            COMMAND,
             TOUCH_TARGET,
           )}
         >
-          <IconBookmark size={13} />
-          {isSaved ? BUTTON.saved : BUTTON.save}
-          <Kbd pointerOnly className="ml-1">
+          <Kbd pointerOnly className="mr-0.5">
             s
           </Kbd>
+          {isSaved ? BUTTON.saved : BUTTON.save}
         </button>
         <button
           type="button"
           onClick={onSkip}
-          className={cn(buttonVariants({ tone: "soft", size: "lg" }), TOUCH_TARGET)}
+          className={cn(buttonVariants({ tone: "soft", size: "lg" }), COMMAND, TOUCH_TARGET)}
         >
-          <IconX size={13} />
-          {BUTTON.skip}
-          <Kbd pointerOnly className="ml-1">
+          <Kbd pointerOnly className="mr-0.5">
             x
           </Kbd>
+          {BUTTON.skip}
         </button>
         <button
           type="button"
           onClick={onCopy}
-          className={cn(buttonVariants({ tone: "ghost", size: "lg" }), TOUCH_TARGET)}
+          className={cn(buttonVariants({ tone: "ghost", size: "lg" }), COMMAND, TOUCH_TARGET)}
         >
-          <IconCopy size={13} />
-          {BUTTON.copy}
-          <Kbd pointerOnly className="ml-1">
+          <Kbd pointerOnly className="mr-0.5">
             c
           </Kbd>
+          {BUTTON.copy}
         </button>
       </div>
 

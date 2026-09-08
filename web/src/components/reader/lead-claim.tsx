@@ -12,19 +12,19 @@
 // from the abstract below (`PaperWords`, `lead`), so no sentence on this
 // page is emphasised twice.
 
-import { LEAD_CLAIM } from "./copy";
+import { Band } from "@/components/ui/band";
+import { LEAD_CLAIM, LEAD_CLAIM_LABEL } from "./copy";
 
 export function LeadClaim({ sentence }: { sentence: string }) {
   return (
-    <section className="mt-10">
-      {/* The one accent mark on the page. The hue is the interface's only
-          signal, and this is the only thing on a reading page that Peer
-          chose rather than the paper — so it is where the signal belongs. */}
-      <span aria-hidden className="block h-[2px] w-8 rounded-full bg-accent mb-4" />
-      <p className="font-reading font-medium text-heading text-display-sm leading-[1.28] tracking-[-0.01em] measure-lede">
+    // The one accent on the page is this band's label. The hue is the
+    // interface's only signal, and this is the only thing on a reading page
+    // that Peer chose rather than the paper — so it is where the signal goes.
+    <Band label={LEAD_CLAIM_LABEL} className="mt-10" labelClassName="text-accent">
+      <p className="font-reading font-medium text-heading text-display-sm leading-[1.28] tracking-[-0.01em] measure-lede mt-4">
         {sentence}
       </p>
-      <p className="font-sans text-meta text-text-faint mt-3">{LEAD_CLAIM}</p>
-    </section>
+      <p className="font-mono text-caption text-text-faint mt-3">{LEAD_CLAIM}</p>
+    </Band>
   );
 }

@@ -26,12 +26,14 @@ export const cardShell = cva(
         xl: "p-8",
       },
       interactive: {
+        // A terminal's surfaces do not move. The lift and the press-below
+        // went with the cast shadow (globals.css, "The frame"): what is left
+        // is the frame brightening under a pointer and taking the hue while
+        // held — a selected row, which is how a TUI says the same thing.
         true: [
-          "transition-[box-shadow,transform] duration-200 ease-out",
-          "hover:shadow-card-hover hover:-translate-y-[2px]",
-          // Pressed, it goes below where it started: a thing under a finger
-          // does not merely stop rising.
-          "active:translate-y-[1px] active:shadow-well-soft active:duration-75",
+          "transition-[box-shadow,background-color] duration-150 ease-snap",
+          "hover:shadow-card-hover hover:bg-surface-hover",
+          "active:shadow-well-soft active:duration-75",
         ].join(" "),
         false: "",
       },

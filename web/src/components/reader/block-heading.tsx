@@ -1,20 +1,18 @@
-// The five block headings, from one table. Sentence case, display serif,
-// never doubled: a block renders its heading only when it has something
-// under it.
+// The five block headings, from one table. A band: the name in mono on its
+// own rule, running the width of the column.
 //
-// Each carries the rule above it, so the reading column reads as bands with
-// edges rather than as one column of text with larger lines in it. The rule
-// is the border hairline — a boundary, not a divider you notice.
+// They were 22px display serif. The serif on this page is the paper's voice —
+// its title, its claim, its own sentences — and these are Peer's names for
+// what it did with the paper, so they belong to the machine and are set in
+// the machine's face. The landmark down the column is now the rule, which is
+// the width of the column, rather than a larger line of the same colour.
 
+import { Band } from "@/components/ui/band";
 import type { ReadingBlock } from "@/lib/papers/reading";
 import { BLOCK_HEADING } from "./copy";
 
 export type BlockName = Exclude<ReadingBlock, "skim">;
 
 export function BlockHeading({ block }: { block: BlockName }) {
-  return (
-    <h2 className="font-display font-medium text-heading text-display-xs leading-[1.25] border-t border-border pt-6 mt-12 mb-3">
-      {BLOCK_HEADING[block]}
-    </h2>
-  );
+  return <Band label={BLOCK_HEADING[block]} className="mt-12 mb-4" />;
 }
