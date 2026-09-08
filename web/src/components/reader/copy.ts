@@ -26,6 +26,17 @@ export const LEAD_CLAIM = "The paper's own claim, from its abstract";
 export const LEAD_CLAIM_LABEL = "The claim";
 export const ABSTRACT_LABEL = "The abstract";
 
+/** The paper itself, when the extractor reached it. */
+export const BODY = {
+  heading: "The paper",
+  open: "Read it here",
+  /** Where the text came from, and how much of it there is. */
+  provenance: (sourceLabel: string | undefined, sections: number, words: number) => {
+    const size = `${sections} section${sections === 1 ? "" : "s"} \u00b7 ${words.toLocaleString("en-US")} words`;
+    return sourceLabel ? `Read from ${sourceLabel} \u00b7 ${size}` : size;
+  },
+} as const;
+
 /** The record: the facts that are true with no key and no model. */
 export const RECORD = {
   heading: "The record",

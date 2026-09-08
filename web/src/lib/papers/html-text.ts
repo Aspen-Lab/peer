@@ -61,16 +61,42 @@ function decodeEntities(text: string): string {
     );
 }
 
+/**
+ * Block elements whose end is a paragraph break. Everything else is inline
+ * and closes into a space.
+ */
+const BLOCK_END = /<\/(?:p|div|li|ul|ol|h[1-6]|blockquote|figcaption|section|article|tr|table|pre)\s*>/gi;
+
+/**
+ * Tags out, text back — with the paragraph boundaries kept.
+ *
+ * Every tag used to become a space and every run of whitespace one space,
+ * which turned a section into a single four-thousand-character line. That was
+ * invisible while the only readers were a sentence splitter and a model; it
+ * stopped being invisible when the reading page started setting the paper
+ * itself, where a section with no paragraphs in it is a wall. Block closers
+ * become a blank line and `<br>` a single one; the callers that want one line
+ * (headings) ask for it with `oneLine`.
+ */
 function stripTags(html: string): string {
   return decodeEntities(
     html
       .replace(/<script\b[\s\S]*?<\/script>/gi, " ")
       .replace(/<style\b[\s\S]*?<\/style>/gi, " ")
       .replace(/<sup\b[^>]*class=["'][^"']*reference[^"']*["'][\s\S]*?<\/sup>/gi, " ")
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(BLOCK_END, "\n\n")
       .replace(/<[^>]+>/g, " "),
   )
-    .replace(/\s+/g, " ")
+    .replace(/[^\S\n]+/g, " ")
+    .replace(/[ \t]*\n[ \t]*/g, "\n")
+    .replace(/\n{2,}/g, "\n\n")
     .trim();
+}
+
+/** A heading is one line whatever markup it was wrapped in. */
+function oneLine(text: string): string {
+  return text.replace(/\s+/g, " ").trim();
 }
 
 /**
@@ -222,7 +248,7 @@ function extractLatexml(html: string): ExtractedDocument {
   for (const match of html.matchAll(LATEXML_HEADING_RE)) {
     const index = match.index ?? 0;
     if (index >= bodyEnd) break;
-    const heading = stripTags(match[2]);
+    const heading = oneLine(stripTags(match[2]));
     if (!heading) continue;
     heads.push({ index, end: index + match[0].length, heading });
   }
@@ -266,7 +292,7 @@ function extractPmc(html: string): ExtractedDocument {
     // iteration of the regex too — pick the heading at this level).
     const headingMatch = inner.match(/<h[234]\b[^>]*>([\s\S]*?)<\/h[234]>/i);
     if (!headingMatch) continue;
-    const heading = stripTags(headingMatch[1]);
+    const heading = oneLine(stripTags(headingMatch[1]));
     if (!heading) continue;
     const text = stripTags(inner.replace(headingMatch[0], " "));
     if (!text) continue;
@@ -300,7 +326,7 @@ function extractBiorxiv(html: string): ExtractedDocument {
       const inner = match[1];
       const headingMatch = inner.match(/<h[23]\b[^>]*>([\s\S]*?)<\/h[23]>/i);
       if (!headingMatch) continue;
-      const heading = stripTags(headingMatch[1]);
+      const heading = oneLine(stripTags(headingMatch[1]));
       if (!heading) continue;
       const text = stripTags(inner.replace(headingMatch[0], " "));
       if (!text) continue;
@@ -339,7 +365,7 @@ function walkHeadings(html: string): ExtractedSection[] {
   const headingRe = /<h([23])\b[^>]*>([\s\S]*?)<\/h\1>/gi;
   const matches: Array<{ index: number; end: number; heading: string }> = [];
   for (const match of html.matchAll(headingRe)) {
-    const heading = stripTags(match[2]);
+    const heading = oneLine(stripTags(match[2]));
     if (!heading) continue;
     matches.push({
       index: match.index ?? 0,

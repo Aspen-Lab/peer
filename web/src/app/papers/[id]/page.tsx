@@ -41,6 +41,7 @@ import { SwipeableCard } from "@/components/cards/swipe-card";
 import { useResolvedFigure } from "@/components/paper-figure";
 import { TitleBlock } from "@/components/reader/title-block";
 import { PaperWords } from "@/components/reader/paper-words";
+import { PaperBody } from "@/components/reader/paper-body";
 import { RecordBlock } from "@/components/reader/record-block";
 import { KeyLegend } from "@/components/reader/key-legend";
 import { DecisionBlock } from "@/components/reader/decision-block";
@@ -641,6 +642,10 @@ function Reader({
                 stagger={stagger++}
               />
             )}
+
+            {/* The paper, when Peer reached it: everything the extractor
+                read, under everything Peer had to say about it. */}
+            <PaperBody reading={reading} />
 
             {/* Last, and always there: the facts that need no key. On a Tier 0
                 page it is the only block under the abstract, which is the

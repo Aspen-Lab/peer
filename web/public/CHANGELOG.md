@@ -2,6 +2,45 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.20.0 — 2026-09-07
+
+The paper itself, and a title bar that is drawn.
+
+**Peer had the whole paper the entire time.** `getFullText` returns an
+extracted document — every section, capped at 18k characters each and 90k in
+total — and `buildReading` read eight sentences out of it and dropped the
+rest. A reader who opened a paper Peer could reach saw one figure, an
+abstract, and a few quoted lines, and then had to leave for the publisher to
+read the thing. The reading now carries `body`: every section, in the paper's
+order, under a new block. It opens with the contents — which is also the
+honest statement of how much of the paper Peer reached — and where it came
+from. Long papers open on a click; short ones are simply there. The paper's
+own words, so it is set in the reading serif at the measure; the mono on that
+page is Peer's voice and none of this is Peer's.
+
+**Paragraphs survive extraction now.** `stripTags` turned every tag into a
+space and every run of whitespace into one space, so a section arrived as a
+single four-thousand-character line. That was invisible while the only
+readers were a sentence splitter and a model. Block closers are a blank line
+and `<br>` a single one; headings ask for one line explicitly. One paper went
+from 14 unbroken sections to 65 paragraphs. A line that is only a step number
+— LaTeXML renders an algorithm listing one cell per line — is dropped.
+
+**The reading document is version 2.** It has a version gate for exactly this
+reason, read by both the localStorage cache and the response check, and a
+document written by an older build is now discarded rather than half-read.
+
+**The masthead was the last surface without an edge.** Transparent at rest,
+three sans words and one boxed `?` floating on the ground with nothing
+holding them, while everything under it had become hairlines. It has the
+hairline at rest now; the glass still arrives on scroll, background only, so
+the height never changes. The nav is mono with the separators the rest of the
+machine's lines use — one row rather than three words with air between them —
+and the `?` lost its chip and joined it. The wordmark stays in the display
+serif: the product's own name is the one thing in that bar that is not the
+machine talking. The nav at the top and the key legend at the foot of the
+reading page are now the same object at the two edges of the window.
+
 ## v0.19.0 — 2026-09-07
 
 TUI.

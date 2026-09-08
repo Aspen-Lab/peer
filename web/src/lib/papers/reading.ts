@@ -80,7 +80,13 @@ export type ReadingSourceLabel =
   | "Open the source";
 
 export interface PaperReading {
-  version: 1;
+  /**
+   * 2 since the reading carries `body`. Both readers of this document check
+   * it — the localStorage cache in `use-reading` and the response the route
+   * hands back — so a document written by an older build is discarded rather
+   * than half-read. Bump it whenever a field is added or its meaning changes.
+   */
+  version: 2;
   paperId: string;
   builtAt: string;
   provenance: ReadingProvenance;
@@ -91,8 +97,32 @@ export interface PaperReading {
   method: ReadingQuote[];
   /** ≤3 */
   caveats: ReadingQuote[];
+  /**
+   * The paper itself — every section the extractor kept, in the order it
+   * wrote them, with the paragraph breaks it preserved.
+   *
+   * The extractor has always produced this: `getFullText` returns an
+   * `ExtractedDocument` whose sections carry the whole text (capped at 18k
+   * characters each, 90k in total), and `buildReading` read eight sentences
+   * out of it and dropped the rest on the floor. A reader who opened a paper
+   * Peer could reach saw one figure and an abstract, and had to leave for the
+   * publisher to read the thing. Now the document comes with the reading.
+   *
+   * Empty when the full text was not reached, which is what
+   * `provenance.fullText` already says and why this needs no flag of its own.
+   * The abstract is not in here — the page sets it above, from the record.
+   */
+  body: ReadingSection[];
   omitted: { block: ReadingBlock; reason: OmitReason }[];
   source: { label: ReadingSourceLabel; url: string } | null;
+}
+
+/** One section of the paper, as the extractor read it. */
+export interface ReadingSection {
+  heading: string;
+  /** introduction | methods | results | discussion | conclusion | body | … */
+  canonical: string;
+  paragraphs: string[];
 }
 
 /**
@@ -366,6 +396,31 @@ function pickSource(
  * alone, which is what the page renders at first paint before the server
  * reading arrives. `now` exists so tests can pin `builtAt`.
  */
+/**
+ * The document, split into paragraphs for the page.
+ *
+ * The abstract is dropped: the page sets it from the record, sentence by
+ * sentence, with the ink on it, and the extractor's copy is the same text
+ * without the marks. A section with nothing under its heading is dropped too
+ * — an extractor artefact, not a part of the paper.
+ */
+function readableBody(doc: ExtractedDocument): ReadingSection[] {
+  const out: ReadingSection[] = [];
+  for (const section of doc.sections) {
+    if (section.canonical === "abstract") continue;
+    const paragraphs = section.text
+      .split(/\n{2,}/)
+      .map((para) => para.replace(/\s+/g, " ").trim())
+      // A step number on its own line: LaTeXML renders an algorithm listing
+      // one cell per line, so "1:" and "2:" arrive as paragraphs of their
+      // own. Anything with no letter in it is the same kind of debris.
+      .filter((para) => para.length > 0 && !/^\d+[:.]?$/.test(para) && /\p{L}/u.test(para));
+    if (paragraphs.length === 0) continue;
+    out.push({ heading: section.heading, canonical: section.canonical, paragraphs });
+  }
+  return out;
+}
+
 export function buildReading(
   paper: Paper,
   fullText: FullTextResult | null,
@@ -380,6 +435,7 @@ export function buildReading(
   const provenance = buildProvenance(paper, sentences, fullText);
   const doc = fullText?.status === "ok" ? fullText.doc : undefined;
 
+  const body = doc ? readableBody(doc) : [];
   const findings = doc ? pickFindings(doc) : [];
   const method = doc ? pickMethod(doc) : [];
   const caveats = doc ? pickCaveats(doc) : [];
@@ -405,7 +461,7 @@ export function buildReading(
   omitted.push({ block: "nextStep", reason: "needs_key" });
 
   return {
-    version: 1,
+    version: 2,
     paperId: paper.id,
     builtAt: now.toISOString(),
     provenance,
@@ -413,6 +469,7 @@ export function buildReading(
     findings,
     method,
     caveats,
+    body,
     omitted,
     source: pickSource(paper, fullText),
   };

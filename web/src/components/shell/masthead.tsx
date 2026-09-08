@@ -6,11 +6,15 @@
 // its floating toggle, the two top-right pills and the phone's row of tabs.
 //
 // The grid is `1fr auto 1fr` so the centre cell sits on the window's centre
-// whatever the side cells measure. Transparent at scroll 0; glass with a
-// hairline once scrolled 8px, background only — the height never changes,
-// so nothing on the page moves and the reading panel's 4rem sticky top
-// still clears it. Scroll state is a data attribute written by a passive
-// listener: no React state, no re-render per scroll tick.
+// whatever the side cells measure. A hairline under it at rest — a title bar
+// is drawn, like every other surface — and glass once scrolled 8px,
+// background only, so the height never changes: nothing on the page moves
+// and the reading panel's 4rem sticky top still clears it. Scroll state is a
+// data attribute written by a passive listener: no React state, no re-render
+// per scroll tick.
+//
+// The wordmark is the display serif — the product's own name, the one thing
+// in the bar that is not the machine talking. Everything else in it is mono.
 //
 // On a paper the centre is the rail — ← Briefing · 3 of 10 · k j — with the
 // keycaps as the real prev/next buttons, calling what the page registered
@@ -18,7 +22,7 @@
 // 768px the bar is gone: the briefing gets the wordmark and the day line in
 // flow, and the thumb bar carries the shell.
 
-import { useEffect, useRef } from "react";
+import { Fragment, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useFeedStore } from "@/store/feed";
@@ -84,7 +88,13 @@ export function Masthead() {
     <>
       <header
         ref={ref}
-        className="hidden md:grid sticky top-0 z-50 h-12 px-6 grid-cols-[1fr_auto_1fr] items-center transition-[background-color,box-shadow] duration-150 ease-snap data-[scrolled=true]:glass-bar data-[scrolled=true]:shadow-[0_1px_0_var(--color-border)]"
+        // A title bar is drawn. It used to be transparent with no edge until
+        // the reader scrolled, which left three words and a boxed `?`
+        // floating on the ground with nothing holding them — the rest of the
+        // product is hairlines now, and this was the last surface without
+        // one. The edge is there at rest; the glass still arrives on scroll,
+        // background only, so the height never changes.
+        className="hidden md:grid sticky top-0 z-50 h-12 px-6 grid-cols-[1fr_auto_1fr] items-center border-b border-border transition-[background-color,box-shadow] duration-150 ease-snap data-[scrolled=true]:glass-bar data-[scrolled=true]:shadow-[0_1px_0_var(--color-border-strong)]"
       >
         <div className="justify-self-start">
           <Link href="/" className={WORDMARK_CLASS}>
@@ -96,7 +106,7 @@ export function Masthead() {
             still when a count lands. */}
         <div
           key={route}
-          className="justify-self-center inline-flex items-center whitespace-nowrap text-body-sm text-text-muted animate-fade-in"
+          className="justify-self-center inline-flex items-center whitespace-nowrap font-mono text-meta text-text-muted animate-fade-in"
           // Inline, not a utility: `.animate-fade-in` is an unlayered rule
           // in globals.css whose shorthand outranks anything in Tailwind's
           // utilities layer, so `[animation-duration:150ms]` lost silently.
@@ -107,21 +117,26 @@ export function Masthead() {
 
         <nav
           aria-label="Peer"
-          className="justify-self-end inline-flex items-center gap-[22px] text-body-sm text-text-muted"
+          // One row, not three words with air between them: mono, and the
+          // separators the rest of the machine's lines use. The nav and the
+          // reading page's key legend at the foot of the screen are now the
+          // same object at the two edges of the window.
+          className="justify-self-end inline-flex items-center font-mono text-meta text-text-muted"
         >
-          {SHELL_LINKS.map((link) => {
+          {SHELL_LINKS.map((link, i) => {
             const active = isActiveLink(link, route);
             const isProfile = link.route === "profile";
             return (
+              <Fragment key={link.href}>
+                {i > 0 && DOT}
               <Link
-                key={link.href}
                 href={link.href}
                 aria-current={active ? "page" : undefined}
                 aria-label={isProfile && auth.kind === "signed-in" ? link.label : undefined}
                 // The bar's own height, so the whole 48px row is the target
                 // on a tablet, and 44px wide where there is no hover — the
                 // same rule the k/j arrows two cells over follow.
-                className={`inline-flex h-12 items-center justify-center transition-colors duration-150 ease-snap hover:text-heading [@media(hover:none)]:min-w-11 ${
+                className={`inline-flex h-12 items-center justify-center px-1 transition-colors duration-150 ease-snap hover:text-heading [@media(hover:none)]:min-w-11 ${
                   active ? "text-heading" : ""
                 }`}
               >
@@ -131,16 +146,21 @@ export function Masthead() {
                   link.label
                 )}
               </Link>
+              </Fragment>
             );
           })}
+          {DOT}
           <button
             type="button"
             onClick={openHelp}
             aria-label="Keyboard shortcuts"
             title="Keyboard shortcuts (?)"
-            className="ml-0.5 inline-flex h-12 items-center justify-center rounded-md transition-[color,transform] duration-150 ease-snap hover:text-heading active:scale-[0.95] [@media(hover:none)]:min-w-11"
+            // The chip is gone: it was the one boxed object in a row of
+            // words, which read as unfinished rather than as emphasis. It is
+            // a link in the row like the rest, and its glyph is its name.
+            className="inline-flex h-12 items-center justify-center px-1 transition-colors duration-150 ease-snap hover:text-heading [@media(hover:none)]:min-w-11"
           >
-            <Kbd>?</Kbd>
+            ?
           </button>
         </nav>
       </header>

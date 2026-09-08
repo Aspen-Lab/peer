@@ -16,6 +16,9 @@ import { buildReading, type PaperReading } from "@/lib/papers/reading";
 const STORAGE_KEY = "peer-reading-v1";
 const MAX_ENTRIES = 40;
 const TTL_MS = 24 * 60 * 60 * 1000;
+/** The shape both gates below accept. Typed from the document itself, so
+ *  bumping `PaperReading["version"]` is the only edit a shape change needs. */
+const READING_VERSION: PaperReading["version"] = 2;
 
 type ReadingCache = Record<string, { reading: PaperReading; ts: number }>;
 
@@ -35,7 +38,7 @@ function readCache(): ReadingCache {
 
 function readCached(paperId: string): PaperReading | null {
   const entry = readCache()[paperId];
-  if (!entry?.reading || entry.reading.version !== 1) return null;
+  if (!entry?.reading || entry.reading.version !== READING_VERSION) return null;
   if (Date.now() - (entry.ts ?? 0) >= TTL_MS) return null;
   return entry.reading;
 }
@@ -93,7 +96,7 @@ export function useReading(paper: Paper | undefined): {
         if (!res.ok) throw new Error(`reading HTTP ${res.status}`);
         const reading = (await res.json()) as PaperReading;
         if (controller.signal.aborted) return;
-        if (reading?.version !== 1) throw new Error("reading: unexpected shape");
+        if (reading?.version !== READING_VERSION) throw new Error("reading: unexpected shape");
         // The route answers `no-store` when the full-text attempt timed out —
         // that reading is the abstract alone, and keeping it for a day would
         // hide the sections the next request gets. Follow the server's own

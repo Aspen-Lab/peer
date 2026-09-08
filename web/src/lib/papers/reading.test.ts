@@ -196,7 +196,7 @@ describe("buildReading", () => {
   it("abstract only: marks set, section blocks omitted as not_in_abstract, model blocks as needs_key", () => {
     const reading = buildReading(normalPaper, null, NOW);
 
-    expect(reading.version).toBe(1);
+    expect(reading.version).toBe(2);
     expect(reading.paperId).toBe("openalex:W7204479535");
     expect(reading.builtAt).toBe("2026-09-06T12:00:00.000Z");
     expect(reading.provenance).toEqual({
