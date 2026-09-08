@@ -118,10 +118,23 @@ lock by rebasing onto the holder's head.
 ## §1. CURRENT STATE — THE SOURCE OF TRUTH
 
 ```
-HELD BY:          B-round9 @ 2026-09-07T23:45Z
+HELD BY:          free
 ROUND:            9
-WHOSE TURN:       B  (round 9, the last agent round; order is 9-01 -> 9-03)
-STOPPED BECAUSE:  finished the turn @ 2026-09-07T23:38Z — ALL THREE PARTS, one commit each, each
+WHOSE TURN:       C  (round 9, the last agent round; C works 9-01 only — 9-03 is a state-file
+                  edit the manager may take directly, and 9-02 is the owner's)
+STOPPED BECAUSE:  finished the turn @ 2026-09-07T23:52Z — BOTH ITEMS, 9-01 and 9-03, one commit
+                  each, each pushed as it finished, plus one extra commit removing a
+                  credential-grep false positive my own draft had introduced (round-8 A's
+                  maintenance note, followed). **No production code changed**
+                  (`git diff --name-only -- web/` **0 files**, asserted before the closing gate
+                  run was read). **5 plants, 5 fired**, every one reverted with an asserted
+                  count AND an asserted absence of the planted value before the next run was
+                  read. The one harness lives **outside the repo**; no throwaway was written
+                  inside `web/` at all (`git status --porcelain --untracked-files=all`
+                  **0 lines**). `.env.local` was never `cat`-ed; the environment was measured by
+                  name and emptiness only. **I RAN `npm run build` AS A GATE STEP — the first
+                  turn to follow the rule it was sent to write: exit 0.**
+                  Previous line: finished the turn @ 2026-09-07T23:38Z — ALL THREE PARTS, one commit each, each
                   pushed as it finished, plus one extra commit removing a credential-grep false
                   positive my own draft had introduced. **No production code changed**
                   (`git diff --name-only -- web/` **0 files**, asserted before the closing gate run
@@ -178,7 +191,102 @@ STOPPED BECAUSE:  finished the turn @ 2026-09-07T23:38Z — ALL THREE PARTS, one
                   probe script was written inside `web/`, run, and **deleted** before its commit
                   (`git status --porcelain --untracked-files=all` empty). `.env.local` was never
                   `cat`-ed and no key material appears anywhere in this repo.
-STATUS:           ROUND 8 — **A HAS MEASURED. CODE-SIDE IS 0.0% (0 of 30). THE DIFFERENCE LIST
+STATUS:           ROUND 9 — **B HAS WRITTEN THE GUIDE. TWO ITEMS: 9-01 `WRONG DATA` (silent),
+                  9-03 `MISSING` (a gate step).** Gate cold and identical to round 8's, as it must
+                  be — B changed no code: tsc 0 · eslint 1 (standing `quiz.tsx:46`) · vitest
+                  **128 files / 2934 passed / 1 skipped / 0 failed** · **and `npm run build`
+                  exit 0**, 18 s.
+                  1. **9-01 IS FIVE SITES, NOT THE TWO LINES THE FLAG NAMED — and the operator
+                     document is the bigger half.** Two scripts is right; two lines is not. Each
+                     script also **prints an error naming `GOOGLE_VERTEX_PROJECT`**, and
+                     `setup-vertex-search.mjs:474-475` — the **success** message — tells the
+                     operator to add ONE line when `isVertexSearchAvailable()` now needs two.
+                     That last one is the sharpest instance and nobody had named it.
+                     **`docs/SETUP_vertex_ai_search.md` Step 3 is wrong in four places**, three of
+                     which produce the same silent no-op and one of which (`:243`,
+                     `GOOGLE_VERTEX_SEARCH_FALLBACK` "default on") is a **money control printed
+                     backwards** since 8-01(b). It is the only operator-facing instruction set —
+                     referenced from nowhere, and there is **no `.env.example`**. Fixing the
+                     scripts and leaving the doc is the defect moved, not closed.
+                     **Recommendation: fail loudly on the old name, no transition window** — and
+                     the reason it is cheap is that **an index built under the old name does not
+                     move and is not rebuilt**; the operator sets the new name to the same project
+                     id and the identical index is reachable. **Proved by execution** in a harness
+                     **outside the repo** that extracts the three expressions verbatim rather than
+                     retyping them: **divergent in 2 of 5 environments, and both divergent ones are
+                     exactly what the doc tells an operator to do.**
+                  2. **TESTS AT RISK FOR 9-01: ZERO — and that IS the finding, measured by
+                     planting.** Every spend scan walks `src/` and keeps `.tsx?` only
+                     (`spend-scans.test.ts:29-52`), so **`scripts/*.mjs` is outside all five.**
+                     A flagrant `process.env.TAVILY_API_KEY` read — the exact thing standing tally
+                     1 says must be **0** — planted inside `setup-vertex-search.mjs` left
+                     **12 passed, 0 failed**; the same read in `src/` reddened **exactly one**
+                     case. The scan works and cannot see the tooling. **The durable guard already
+                     has a working precedent**: `assert-byok-production-env.test.ts` spawns a
+                     `.mjs` from a test under `src/`, and says in its own header why it must live
+                     there — "a test placed next to the script would never run, and the
+                     requirement would be green by absence."
+                  3. **9-03 IS HALF-LANDED AND THE TWO HALVES CONTRADICT EACH OTHER.** §3's build
+                     rule (`:2471-2476`) says the gate has a build; §3's **canonical gate command**
+                     (`:2397-2398`) still does not mention one. A reader who copies the command
+                     runs the eight-round gate. **Reconciling those two lines is the whole of C's
+                     state-file work.** The three fenced copies in §4 (`:2918`, `:6624`, `:9258`)
+                     are history and stay.
+                  4. **THE BUILD LEAVES THE TREE CLEAN — but its artifacts are NOT inert.**
+                     `git status --porcelain --untracked-files=all` **0 lines** right after a
+                     build; `.next/` and `tsconfig.tsbuildinfo` are covered by `web/.gitignore:17`
+                     and `:40`, named with `git check-ignore -v` rather than assumed. **No note
+                     and no cleanup step needed.** BUT `tsconfig.json` **includes
+                     `.next/types/**/*.ts`**, so the build writes declarations the gate's FIRST
+                     step then reads: after a `typedRoutes` build I reverted `next.config.ts` to
+                     exactly what ships — empty diff asserted — and **`tsc` still reported 7
+                     errors on unchanged source**; a second build cleared it to 0. **Rule for C:
+                     if tsc reddens on code you did not touch, rebuild before believing it.**
+                  5. **THE WARNING MUST PASS, AND THE REASON IS ARITHMETIC, NOT TOLERANCE.**
+                     `next build` **already exits 0 with it present**. A warning-free requirement
+                     would be **red from the turn it lands**, which either stalls the round or
+                     teaches the next agent to ignore a red gate. **`build exit 0` is the whole
+                     pass criterion.** A NEW warning is noticed by a counted line Turbopack prints
+                     itself — `Turbopack build encountered 1 warnings:` — quoted verbatim in the
+                     round figures exactly as `eslint 1 problem` already is. **9-02 stays the
+                     owner's; I wrote no fix.**
+                  6. **`typedRoutes` RE-COSTED BY TURNING IT ON, AND THE OLD ESTIMATE WAS 4x TOO
+                     HIGH. I RECOMMEND ADOPTING IT — the manager decides.** Ruling 19 point 4's
+                     "~30 sites" was the wrong subject. Next 16 **validates template literals**
+                     (its own docs: "any string literal, including dynamic segments"), typed
+                     routes touch only `next/link` and `next/navigation`, and `tsconfig.json`
+                     **already includes the generated types** — so setup cost is zero.
+                     **Measured total: 7 errors, 6 files, one error class.** All 8
+                     `router.push`/`replace` calls are literals and pass free. **And the right fix
+                     is 6 type annotations at the SOURCE, not 7 casts at the use site** — casting
+                     silences the checker and buys nothing; `nav.tsx:13`'s `href: string` becoming
+                     `Route` fixes two errors at once and makes the nav bar compile-checked.
+                     It does **not** replace `dead-links.test.ts`, which also resolves `public/`.
+                  7. **A STANDING CROSS-CHECK HAS BEEN PASSING BY DOING NOTHING FOR EIGHT ROUNDS,
+                     and adding the build is what fixes it.** `dead-links.test.ts:268-286` compares
+                     the loop's route enumeration against **Next's generated list** — the
+                     independent source Ruling 20 point 2 demands — but skips when the file is
+                     absent (`:274`), and nobody had ever run a build. Proved both ways: a fake
+                     route planted into the generated list reddens **exactly one** case; the file
+                     removed entirely leaves **4 passed, green having checked nothing.**
+                  8. **RULING 25 POINT 3 IS WRONG ON ONE FIGURE AND LOOSE ON ANOTHER.** The route
+                     table has **36 rows** (9 `○` static, 27 `ƒ` dynamic, middleware listed
+                     separately), **not 34** — counted twice, by script and by hand. And **"the
+                     prebuild guard fires" is not what happens locally**: its whole body is behind
+                     `if (isVercelBuild(...))`, so with `VERCEL` unset it **runs, audits nothing,
+                     prints nothing, exits 0** — measured by running it alone. A green local build
+                     does **not** validate the deployment environment. With `VERCEL=1` set by
+                     accident it exits **1 before `next build` starts**, naming three variables and
+                     **no values** — loud, harmless, recoverable. Point 3's conclusion (the branch
+                     builds, and nobody had checked) stands untouched.
+                  9. **One maintenance number corrected, no defect:** the state file carries **6**
+                     lines matching the standing credential grep, not the 5 round-8 A recorded —
+                     three of them are consecutive lines of one Ruling 22 passage, which is
+                     probably how the count came to be 5. **My own entries added none**; my draft
+                     briefly introduced a sixth match and I removed it in its own commit before
+                     pushing, exactly as A did.
+                  ── Round-8 A's summary follows. ──
+                  ROUND 8 — **A HAS MEASURED. CODE-SIDE IS 0.0% (0 of 30). THE DIFFERENCE LIST
                   IS EMPTY.** Blocked on the owner: **5** — R-ENT-1, R-ENT-2, R-METER-1, R-METER-3,
                   R-QUOTA-2 — down from 6, and **all five now share ONE cause**. **N/A: R-METER-2.**
                   Exclusions: none. Gate cold and identical to C's: tsc 0 · eslint 1 (standing
@@ -1024,17 +1132,17 @@ GATE NOW:  **Round-8 A, cold, after every plant was reverted and no throwaway re
            suite, `components/cards/pool-refresh-notice.test.tsx`.
            Round-5 A's figures follow: tsc **0** · eslint **1** · vitest **124 files passed | 1
            skipped (125)** · **2871 tests passed | 1 skipped (2872)**, **0 failed**, 9.50 s.
-TODO:      B WRITES THE ROUND-9 GUIDE — a SMALL round, two items (Ruling 25 §1z point 8):
-           **9-01** two operator scripts still accept the OLD Vertex search setting name, so
-           someone could build a search index the app never queries, silently and with no
-           error (round-8 C flagged it; find them by grep, name them, say what each should
-           accept). **9-03** add `npm run build` to the gate, run ONCE per turn before the
-           final commit — never after every item. The manager ran it: exit 0, ~20 s, 27 static
-           pages, 34 routes, prebuild guard fires. Update §3's gate definition and every place
-           the gate is quoted. NOTE for B: Ruling 19 point 4 rejected `typedRoutes` partly
-           because the gate would need a build — that cost is now paid, so re-cost it and
-           recommend, do not decide. **9-02 (the Turbopack file-tracing warning) is the
-           OWNER'S call, not an agent item** — do not write a fix for it.
+TODO:      C WORKS THE ROUND-9 GUIDE, AND IT IS ONE ITEM — **9-01**, in §4 "Round 9 — Agent B".
+           **Land it as ONE commit**: the two scripts (5 sites) AND
+           `docs/SETUP_vertex_ai_search.md` Step 3 (4 rows) together — split them and the window
+           where the instructions contradict the tools is exactly the defect. Then the durable
+           guard, copying `assert-byok-production-env.test.ts`'s shape: a test under `src/` that
+           **spawns** the script and asserts the FAILING direction (old name only -> exit 1 naming
+           the new one). `--dry-run` exists and the project check exits before any network call, so
+           it costs no cloud call. **Do NOT run `probe-vertex-search-billing.mjs` — it spends ~$4
+           by design.** **9-03 is a §3 edit with no code** (reconcile `:2397-2398` with
+           `:2471-2476`); the manager may take it directly rather than spend a C turn on it.
+           **9-02 is the owner's** — do not write a fix.
 PENDING USER ACTION: (1) **Apply the three migrations** under `web/supabase/migrations/20260904*`
            — this is now the ONLY thing blocking five of the six remaining halves. (2) Add
            `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` to `web/.env.local` so
@@ -1044,9 +1152,21 @@ PENDING USER ACTION: (1) **Apply the three migrations** under `web/supabase/migr
            NOT carry `TAVILY_API_KEY`; deploy only after the branch is green and merged.
            DONE: the local `GOOGLE_API_KEY` is filled (Ruling 21 point 4). WITHDRAWN: the trial
            backfill (no users); the 2026-10-01 model escalation (the owner decided).
-OPEN FOR MANAGER:  none — round 8 accepted in §1z. One item is the owner's, not the loop's:
-           9-02, a pre-existing build warning that ships the whole project into one
-           serverless function (Ruling 25 point 4).
+OPEN FOR MANAGER:  **THREE, all flagged rather than decided.**
+           (1) **`typedRoutes` — Ruling 19 point 4 is yours to revisit.** Both its stated costs
+           are now measured: the build is paid by 9-03, and the cast count is **7 errors in 6
+           files**, not ~30. I recommend adopting it as **6 source-type annotations**, and I note
+           the honest argument against: it is a new failure mode with one agent round left. The
+           cost will not grow if you defer it.
+           (2) **Should the build assert the Turbopack warning COUNT** (exactly 1, and that one)?
+           It would catch a new warning automatically, but it pins the gate to a defect the owner
+           may or may not fix. I recommend the reported-figure form for now.
+           (3) **Ruling 25 point 2's D2b design note meets 9-01.** Both touch the
+           `GOOGLE_VERTEX_` family and a reader will be tempted to tidy the Vercel guard while in
+           there. **It is not in 9-01's scope and I am not recommending it now** — flagged only so
+           the allow-list note is not lost when D2b is taken.
+           Still the owner's, not the loop's: **9-02**, the build warning that ships the whole
+           project into one serverless function (Ruling 25 point 4).
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
