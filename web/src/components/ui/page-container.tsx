@@ -15,7 +15,7 @@ export const pageContainer = cva("mx-auto w-full px-6", {
       // empty gutter inside the reading column. Sized so the column is the
       // measure plus a rag margin, the two columns fill and the leftover
       // becomes the page's own margins.
-      spread: "max-w-[760px] xl:max-w-[1000px] 2xl:max-w-[1032px]",
+      spread: "max-w-[760px] xl:max-w-[1000px] 2xl:max-w-[1200px]",
       content: "max-w-[820px]",  // home column
       wide: "max-w-[920px]",     // saved grid (lg)
       board: "max-w-[1280px]",   // full-bleed feed board

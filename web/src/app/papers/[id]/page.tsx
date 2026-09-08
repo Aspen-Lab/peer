@@ -41,6 +41,7 @@ import { SwipeableCard } from "@/components/cards/swipe-card";
 import { useResolvedFigure } from "@/components/paper-figure";
 import { TitleBlock } from "@/components/reader/title-block";
 import { PaperWords } from "@/components/reader/paper-words";
+import { RecordBlock } from "@/components/reader/record-block";
 import { DecisionBlock } from "@/components/reader/decision-block";
 import { QuoteList } from "@/components/reader/quote-list";
 import { ClaimList, KeyResultList } from "@/components/reader/claim-list";
@@ -639,6 +640,12 @@ function Reader({
                 stagger={stagger++}
               />
             )}
+
+            {/* Last, and always there: the facts that need no key. On a Tier 0
+                page it is the only block under the abstract, which is the
+                point — the column used to end at the abstract's footer with
+                half the page under it. */}
+            <RecordBlock paper={paper} primaryUrl={reading.source?.url ?? null} />
           </>
         }
         next={<NextRow nav={nav} next={nextPaper} />}

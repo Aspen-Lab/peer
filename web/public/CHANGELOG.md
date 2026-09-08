@@ -2,6 +2,52 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.18.0 — 2026-09-07
+
+The reading page gets a shape.
+
+Without a key the page was an abstract and nothing else: eleven lines of body
+text at one size, two of them in ink, and under them half a screen of nothing.
+Everything on it was true and none of it was *arranged* — no second place for
+the eye to land after the title, no edges between one thing and the next, and
+on a wide screen a 1032px strip of page with 450px of black on either side.
+
+**The claim is lifted.** When a model has read the paper, Peer's skim already
+sits above the abstract as a deck, and the ink below moves to the sentences
+that are its evidence. Tier 0 now does the same with the paper's own words:
+the claim sentence — the one the ink was already choosing — is set at display
+size above the abstract, and its ink is dropped from the abstract below, so
+exactly one thing on the page is loud and nothing is emphasised twice. It
+carries the one accent mark on the page: a short rule, because this is the
+only line on a reading page that Peer chose rather than the paper.
+
+**The column has bands.** Every block heading now carries the hairline above
+it, so "How it was done", "Where it is thin" and the rest read as sections
+with edges instead of as one column of text with bigger lines in it.
+
+**The record.** A new block, last and always present: published date in full
+(the page had only "3w ago"), the venue, and every other door the paper has —
+the publisher's page, Scholar, and the authors' code. A repository was the
+worst of the omissions, because it is the part of a paper a reader can
+actually run, and the decision block opens exactly one link.
+
+**The end of the paper is a place.** The next paper was a 12.5px label over a
+19.5px title, the quietest thing on a page that ends early. It is now a band:
+a rule above it, the title at heading size, and an arrow that travels a couple
+of pixels under a pointer.
+
+**Marks on the actions.** Open, save, skip, copy and the DOI line each carry
+one stroke, drawn at the line's own size so the icon reads as punctuation
+rather than as an object.
+
+**The measure stops growing at 2xl.** A line does not get wider because the
+window did. Above 1536px the reading column is fixed at 560px and every extra
+pixel goes to the panel, so a wide screen buys a bigger figure and a title
+with more room. The spread itself is 1200px there rather than 1032.
+
+Also: a figure caption is prose, so it breaks at a word — "…seed samples (top
+row), sh…" was cut at the character it happened to fall on.
+
 ## v0.17.0 — 2026-09-07
 
 The measure, and a scale that reaches the headlines.

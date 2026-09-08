@@ -9,6 +9,13 @@
 import Link from "next/link";
 import type { Ref } from "react";
 import { buttonVariants } from "@/components/ui/button";
+import {
+  IconArrowUpRight,
+  IconBookmark,
+  IconCopy,
+  IconLink,
+  IconX,
+} from "@/components/icons";
 import { Kbd } from "@/components/ui/kbd";
 import { cn } from "@/lib/cn";
 import type { PaperReading } from "@/lib/papers/reading";
@@ -110,6 +117,7 @@ export function DecisionBlock({
             onClick={onOpen}
             className={cn(buttonVariants({ tone: "primary", size: "lg" }), TOUCH_TARGET)}
           >
+            <IconArrowUpRight size={13} />
             {source.label}
             <Kbd pointerOnly className="ml-1">
               o
@@ -125,6 +133,7 @@ export function DecisionBlock({
             TOUCH_TARGET,
           )}
         >
+          <IconBookmark size={13} />
           {isSaved ? BUTTON.saved : BUTTON.save}
           <Kbd pointerOnly className="ml-1">
             s
@@ -135,6 +144,7 @@ export function DecisionBlock({
           onClick={onSkip}
           className={cn(buttonVariants({ tone: "soft", size: "lg" }), TOUCH_TARGET)}
         >
+          <IconX size={13} />
           {BUTTON.skip}
           <Kbd pointerOnly className="ml-1">
             x
@@ -145,6 +155,7 @@ export function DecisionBlock({
           onClick={onCopy}
           className={cn(buttonVariants({ tone: "ghost", size: "lg" }), TOUCH_TARGET)}
         >
+          <IconCopy size={13} />
           {BUTTON.copy}
           <Kbd pointerOnly className="ml-1">
             c
@@ -167,6 +178,7 @@ export function DecisionBlock({
             TOUCH_LINE,
           )}
         >
+          <IconLink size={12} className="shrink-0 translate-y-[2px] mr-1.5" />
           doi:{doi}
         </button>
       )}

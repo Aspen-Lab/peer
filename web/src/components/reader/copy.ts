@@ -20,6 +20,20 @@ export const BLOCK_HEADING: Record<Exclude<ReadingBlock, "skim">, string> = {
 
 export const ABSTRACT_FOOTER = "From the abstract · claim and numbers in ink";
 
+/** Under the lifted claim — whose sentence it is. It is chosen from the
+ *  abstract's sentences, so it says the abstract whatever else Peer read. */
+export const LEAD_CLAIM = "The paper's own claim, from its abstract";
+
+/** The record: the facts that are true with no key and no model. */
+export const RECORD = {
+  heading: "The record",
+  published: "Published",
+  arxiv: "arXiv",
+  publisher: "Publisher",
+  code: "Code",
+  scholar: "Scholar",
+} as const;
+
 export const TLDR_LINE =
   "TLDR by Semantic Scholar — machine-written, not the authors' words";
 
@@ -74,6 +88,7 @@ export const AUTHORS = {
 
 export const NEXT_ROW = {
   next: (index: number, total: number) => `Next · ${index + 1} of ${total}`,
+  read: "Read it",
   last: "Back to the briefing",
   deepLink: "Today's briefing",
 };
@@ -101,5 +116,10 @@ export const CAPTION_CHARS = 140;
 export function plateCaption(caption: string | null | undefined): string | null {
   const text = caption?.replace(/\s+/g, " ").trim();
   if (!text) return null;
-  return text.length > CAPTION_CHARS ? `${text.slice(0, CAPTION_CHARS - 1).trimEnd()}…` : text;
+  if (text.length <= CAPTION_CHARS) return text;
+  // At the character it fell on: "…seed samples (top row), sh…". A caption is
+  // prose, and prose breaks at a word.
+  const cut = text.slice(0, CAPTION_CHARS - 1);
+  const lastSpace = cut.lastIndexOf(" ");
+  return `${(lastSpace > CAPTION_CHARS / 2 ? cut.slice(0, lastSpace) : cut).trimEnd()}…`;
 }

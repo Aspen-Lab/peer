@@ -225,6 +225,27 @@ export function pickSkimSentence(
  * claim already. Marks are capped at 60% of the text because an abstract that
  * is mostly ink has no ink; the lowest-scoring mark goes first.
  */
+/**
+ * The claim: the best sentence that is about the paper. A boilerplate opener
+ * never wins — when every sentence is about the field there is no claim to
+ * mark.
+ *
+ * Exported because the reading page lifts this one sentence above the abstract
+ * and sets it at display size (`LeadClaim`), and the ink then has to be
+ * dropped from it below: the two have to agree on which sentence it is, and
+ * `pickSkimMarks` returns its marks in reading order, not in this one.
+ */
+export function pickClaimMark(sentences: string[], scored?: number[]): number | null {
+  if (sentences.length <= 2) return null;
+  const scores = scored ?? sentences.map((sentence, index) => scoreSentence(sentence, index));
+  let winner: number | null = null;
+  for (let i = 0; i < sentences.length; i++) {
+    if (isBoilerplate(sentences[i])) continue;
+    if (winner === null || scores[i] > scores[winner]) winner = i;
+  }
+  return winner;
+}
+
 export function pickSkimMarks(sentences: string[]): number[] {
   const n = sentences.length;
   if (n <= 2) return [];
@@ -238,12 +259,7 @@ export function pickSkimMarks(sentences: string[]): number[] {
     return winner;
   };
 
-  // The claim: the best sentence that is about the paper. A boilerplate opener
-  // never wins — when every sentence is about the field there is no claim to
-  // mark.
-  const claim = best(
-    sentences.map((_, i) => i).filter((i) => !isBoilerplate(sentences[i])),
-  );
+  const claim = pickClaimMark(sentences, scores);
   if (claim === null) return [];
   const marks = new Set<number>([claim]);
 

@@ -9,6 +9,8 @@
 import type { Ref } from "react";
 import type { Claim, PaperReportBasis } from "@/lib/papers/report";
 import type { PaperReading } from "@/lib/papers/reading";
+import { pickClaimMark } from "@/lib/papers/skim";
+import { LeadClaim } from "./lead-claim";
 import { ABSTRACT_FOOTER, TLDR_LINE, attribution, skimFooter } from "./copy";
 
 const FOOTER_CLASS = "font-sans text-meta text-text-faint mt-2";
@@ -103,7 +105,13 @@ export function PaperWords({
   quotedSkim: Claim[];
 }) {
   const { sentences, introCount } = reading.abstract;
-  const inked = new Set(marks);
+  // With a model, the deck above is the claim and the ink below is its
+  // evidence. With no model there was no deck at all, and the column opened
+  // on eleven lines of one size — so Tier 0 lifts the paper's own claim into
+  // the deck's place. Either way exactly one thing on the page is loud, and
+  // the sentence that is loud is not also inked underneath it.
+  const lead = skim.length > 0 ? null : pickClaimMark(sentences);
+  const inked = new Set(marks.filter((index) => index !== lead));
   const split = Math.min(Math.max(introCount, 0), sentences.length);
 
   if (sentences.length === 0) {
@@ -124,6 +132,9 @@ export function PaperWords({
   return (
     <>
       {skim.length > 0 && basis && <Deck skim={skim} basis={basis} quoted={quotedSkim} />}
+      {lead !== null && (
+        <LeadClaim sentence={sentences[lead]} />
+      )}
       <div className="font-reading text-lead leading-[1.6] text-text-muted measure mt-10 space-y-4">
         {split > 0 && <Paragraph sentences={sentences.slice(0, split)} from={0} inked={inked} />}
         {split < sentences.length && (

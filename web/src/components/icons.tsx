@@ -135,3 +135,70 @@ export function IconThumbsDown({ size = 13, strokeWidth = 1.8, className }: Icon
     </svg>
   );
 }
+
+// ── The reading page's set ────────────────────────────────────────────
+// Actions carry a mark, not a picture: one stroke each, drawn at the meta
+// line's size so an icon never outweighs the word beside it.
+
+export function IconArrowUpRight({ size = 13, strokeWidth = 1.9, className }: IconProps) {
+  return (
+    <svg {...strokeProps(size, strokeWidth, className)}>
+      <path d="M7 17L17 7" />
+      <path d="M8 7h9v9" />
+    </svg>
+  );
+}
+
+export function IconArrowRight({ size = 13, strokeWidth = 1.9, className }: IconProps) {
+  return (
+    <svg {...strokeProps(size, strokeWidth, className)}>
+      <path d="M4 12h15" />
+      <path d="M13 6l6 6-6 6" />
+    </svg>
+  );
+}
+
+export function IconCopy({ size = 13, strokeWidth = 1.8, className }: IconProps) {
+  return (
+    <svg {...strokeProps(size, strokeWidth, className)}>
+      <rect x="9" y="9" width="11" height="11" rx="2.5" />
+      <path d="M15 5.5A2.5 2.5 0 0 0 12.5 4h-6A2.5 2.5 0 0 0 4 6.5v6A2.5 2.5 0 0 0 5.5 15" />
+    </svg>
+  );
+}
+
+export function IconX({ size = 13, strokeWidth = 2, className }: IconProps) {
+  return (
+    <svg {...strokeProps(size, strokeWidth, className)}>
+      <path d="M6 6l12 12" />
+      <path d="M18 6L6 18" />
+    </svg>
+  );
+}
+
+export function IconCode({ size = 13, strokeWidth = 1.9, className }: IconProps) {
+  return (
+    <svg {...strokeProps(size, strokeWidth, className)}>
+      <path d="M9 8l-5 4 5 4" />
+      <path d="M15 8l5 4-5 4" />
+    </svg>
+  );
+}
+
+export function IconLink({ size = 13, strokeWidth = 1.8, className }: IconProps) {
+  return (
+    <svg {...strokeProps(size, strokeWidth, className)}>
+      <path d="M10.5 13.5a3.5 3.5 0 0 0 5 0l3-3a3.5 3.5 0 0 0-5-5l-1.5 1.5" />
+      <path d="M13.5 10.5a3.5 3.5 0 0 0-5 0l-3 3a3.5 3.5 0 0 0 5 5l1.5-1.5" />
+    </svg>
+  );
+}
+
+export function IconQuote({ size = 13, strokeWidth = 1.8, className }: IconProps) {
+  return (
+    <svg {...strokeProps(size, strokeWidth, className)}>
+      <path d="M9 6.5C6.2 7.6 4.5 10 4.5 13v4.5h6V11H7.6c.1-1.4.7-2.4 1.9-3z" />
+      <path d="M19 6.5c-2.8 1.1-4.5 3.5-4.5 6.5v4.5h6V11h-2.9c.1-1.4.7-2.4 1.9-3z" />
+    </svg>
+  );
+}
