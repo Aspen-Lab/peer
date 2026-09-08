@@ -16001,3 +16001,283 @@ design note — when D2b is taken, the Vercel guard moves from a `GOOGLE_VERTEX_
 family of names and a reader will be tempted to tidy the guard while they are there. **It is not in
 9-01's scope and I am not recommending it now** — I am flagging that the two meet, so the note is
 not lost when D2b is taken.
+
+---
+
+#### 9-03 — the build joins the gate, once per turn
+
+**Classification: `MISSING` (a gate step), plus one `WRONG DATA` correction to Ruling 25 point 3
+and one `WRONG SHAPE` I found while measuring — a standing cross-check that passes by doing
+nothing whenever no build has run.** Everything below was run on this machine this turn.
+
+##### 1. Where the gate lives, and every place it is quoted
+
+**Search scope, per Ruling 24 point 1.** `grep -n "npx tsc --noEmit" ABC-freemium.md` (6 hits);
+`grep -n "^npx tsc --noEmit" ABC-freemium.md` (3, the fenced copies);
+`grep -n "npm run build|next build" ABC-freemium.md` (11 hits); `web/package.json` read in full.
+
+- **The canonical definition is `ABC-freemium.md:2397-2398`** — §3's `**The gate**, run from
+  `web/`:` bullet and the command on the next line. **This is the only line C should edit.**
+- **`ABC-freemium.md:2471-2476`** — §3's *separate* build bullet, already written by Ruling 25
+  point 5. **So half of 9-03 has already landed and the two bullets do not agree with each other:
+  the rule says the gate has a build; the gate's own command line does not mention one.** A reader
+  who copies the command runs the eight-round gate. **Reconciling those two bullets is the whole
+  of 9-03's state-file work.**
+- **Three verbatim fenced copies inside §4** — `:2918`, `:6624`, `:9258` — round entries where an
+  agent pasted the command it ran. **These are history and must NOT be edited** (§4 is
+  append-only, and the first line of §4 says so). They record what those rounds actually ran, which
+  was tsc + lint + vitest, truthfully.
+- Two partial quotes, `:11972` and `:15740`, cite only the `tsc` line inside a round's figures.
+  Also history, also untouched.
+- **`web/package.json` has no gate alias**, so there is no second definition to drift:
+  `predev`, `kill-orphans`, `dev`, `prebuild`, `build`, `start`, `lint`, `test`,
+  `check:providers`. The gate exists only as prose in §3.
+
+##### 2. How to invoke it — and the prebuild guard does **less** locally than Ruling 25 says
+
+`npm run build`, from `web/`. `npm`'s lifecycle runs `prebuild`
+(`node scripts/assert-byok-production-env.mjs`) first, automatically; there is nothing to add.
+
+**Ruling 25 point 3 says the local build proves "the prebuild guard fires." Measured, that is
+loose in a way that matters.** The guard's whole body is wrapped in
+`if (isVercelBuild(process.env))` (`assert-byok-production-env.mjs:170`), and `isVercelBuild` is
+`Boolean(env.VERCEL || env.VERCEL_ENV)` (`:147-149`).
+
+- **Measured:** `VERCEL` and `VERCEL_ENV` are both **unset** in this shell.
+- **Measured by running it alone:** `node scripts/assert-byok-production-env.mjs` → **exit 0, and
+  not one line of output.** The script *executes*; the audit **does not run at all**.
+
+**So a local build proves the guard's file parses and exits 0. It does not check a single
+variable.** Worth saying plainly, because "the prebuild guard fires" invites the belief that a
+green local build means the deployment environment is validated. It does not, and it cannot —
+the guard is deliberately inert off Vercel (`formatAuditMessage`'s own closing line says so:
+*"this check only runs on a Vercel build"*).
+
+**What happens if an agent runs it with `VERCEL` set by accident — measured, not reasoned:**
+
+```
+VERCEL=1 npm run build   ->   exit 1, before next build starts
+    Peer deployment blocked: the Vercel environment is wrong.
+    Missing required settings: GOOGLE_API_KEY, NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY.
+```
+
+**Three properties of that failure, all good, and one caveat.** It is **loud** (exit 1, named
+variables). It is **harmless** — `prebuild` fails, so `next build` never starts and nothing is
+written. It **prints names only, never values** (R-GUARD-2 holds; the repo’s standing credential grep found nothing
+in the output). **The caveat:** `prebuild` is run by `node` with **no `--env-file`**, so it
+sees only the shell environment and never `.env.local` — which is why the three required names
+read as missing here even though two of them are genuinely absent and one is present locally.
+**An agent who hits this has not broken anything; they have `VERCEL` set. Unset it and re-run.**
+
+##### 3. Artifacts: the build leaves the tree **clean**, and no note is needed
+
+Measured immediately after a build, from the repo root:
+`git status --porcelain --untracked-files=all` → **0 lines**.
+
+What is actually written, and why git does not see it — checked with `git check-ignore -v`, so the
+covering rule is named rather than assumed:
+
+| Path | Ignored by |
+| --- | --- |
+| `web/.next/` | `web/.gitignore:17` → `/.next/` |
+| `web/tsconfig.tsbuildinfo` | `web/.gitignore:40` → `*.tsbuildinfo` |
+| `web/out/` | not produced (no `output: "export"`); `web/.gitignore:18` covers it anyway |
+
+**Gitignore already covers it. C adds no note and no cleanup step**, and the loop's cleanliness
+check needs no exception.
+
+**But the artifacts are NOT inert with respect to the gate, and this is the one real hazard.**
+`web/tsconfig.json`'s `include` array carries **`.next/types/**/*.ts`** and
+`.next/dev/types/**/*.ts`. So **the build writes type declarations that the gate's first step then
+reads.** I measured the consequence while re-costing `typedRoutes` (§5 below): after a build with
+`typedRoutes: true`, I reverted `next.config.ts` to exactly what ships — asserted by an empty
+`git diff` — and `npx tsc --noEmit` still reported **7 errors**, on source that had not changed.
+**A second `npm run build` cleared it to 0.**
+
+**Consequence for the gate, stated as a rule C should write down:** the build must run **after**
+tsc/lint/vitest, exactly as Ruling 25 point 5 already says ("before the final commit"). And if
+`tsc` ever goes red on source you did not touch, **re-run the build before believing it** — the
+generated types are the likelier culprit than the code.
+
+##### 4. The warning — it must **PASS**, and here is the hook that notices a new one
+
+**Measured, three consecutive builds:** `exit 0` · **18 s**, then 17 s, then 17 s (Ruling 25's
+"~20 s" holds) · `✓ Compiled successfully in 5.1s` · TypeScript 9.2 s · **static pages 27/27** ·
+route table printed · **and one warning.**
+
+The warning is verbatim `Turbopack build encountered 1 warnings:` on `./next.config.ts`, import
+trace `next.config.ts -> src/lib/papers/pdf-text.ts -> src/lib/papers/full-text.ts ->
+src/app/api/papers/report/route.ts`. **That is 9-02. Ruling 25 point 4 makes it the owner's call
+and I have written no fix for it.**
+
+**The gate must treat it as PASS, and the reason is not tolerance — it is arithmetic.** `next
+build` **already exited 0 with the warning present**. Warnings are not failures to Turbopack. If
+the gate required a warning-free build it would be **red from the first turn that adopts it**,
+which would either stall round 9 or teach the next agent to ignore a red gate. Both are worse than
+the warning. **`build exit 0` is the whole pass criterion. Nothing about warning text belongs in
+it.**
+
+**How a NEW warning gets noticed — a counted line, not a judgement call.** Turbopack prints its
+own tally: `Turbopack build encountered 1 warnings:`. **A second warning changes that `1` to a
+`2`.** So the cheap, durable form is: **the turn's §4 figures quote that line verbatim, exactly as
+they already quote `eslint 1 problem`** — the standing `quiz.tsx:46` lint error is the precedent
+and it has worked for nine rounds. A drift from `1 warnings` to `2 warnings` is then visible in
+the round log without anyone having to read the trace.
+
+**`POLICY — manager decides`:** whether to go further and make the count a hard assertion (build
+must emit **exactly 1** warning, and it must be the file-tracing one). That would catch a new
+warning automatically instead of relying on a human reading the figures — but it pins the gate to
+a defect the owner may fix or may not, and 9-02 is explicitly not the loop's. **I recommend the
+reported-figure form now and the assertion only if the owner decides to keep the warning.**
+
+##### 5. `typedRoutes`, re-costed — **the old estimate was 4x too high. I recommend adopting it.**
+
+Ruling 19 point 4 rejected it on two costs: the gate would need a build, and *"~30 non-literal
+`href={…}` sites"* would need casts (`ABC-freemium.md:13685`). **The first cost is paid by 9-03.
+I re-measured the second by turning the flag on and building — not by counting greps.**
+
+**Framework facts first, from this repo's own Next 16.2.3 docs, because the option has moved.**
+`node_modules/next/dist/docs/.../typedRoutes.md`: it is **stable and top-level** —
+*"use `typedRoutes` instead of `experimental.typedRoutes`"*. And from `02-typescript.md`, the fact
+that changes the whole cost: **"support includes any string literal, including dynamic
+segments."** Template literals like `` href={`/papers/${paper.id}`} `` are **validated, not cast.**
+The docs also require `.next/types/**/*.ts` in `tsconfig.json`'s `include` — **already there**
+(`web/tsconfig.json`), so setup cost is **zero**.
+
+**The grep census, which is why ~30 was the wrong subject.** In `src/`: **132** `href=`
+occurrences — **91** plain string literals (free), **42** braced `href={…}`. But typedRoutes types
+only `next/link`'s `href` and `next/navigation`'s `push`/`replace`/`prefetch`. Of the 42 braced
+sites, most are plain `<a href={externalUrl}>` or a component's own `href` prop, neither of which
+Next touches, and many of the rest are template literals, which are checked for free. **All 8
+`router.push`/`replace` calls in the tree are string literals** (`profile/page.tsx:272`,
+`welcome/page.tsx:173,179`, `first-run.tsx:95`, `keyboard.tsx:94,100,106,112`) — free, and now
+checked.
+
+**MEASURED BY EXECUTION — plant: `typedRoutes: true` added to `next.config.ts`, build run.**
+`next build` stops at the first type error, so the build's "1 error" is not the total; I ran
+`npx tsc --noEmit`, which reports them all at once. **The complete cost:**
+
+**7 errors, 6 files, one single error class (`TS2322`, `Type 'string' is not assignable to type
+'UrlObject | RouteImpl<string>'`):**
+
+```
+src/app/papers/[id]/page.tsx(1941,9)              <Link href={surfaceHref}>
+src/components/cards/briefing-hero.tsx(59,7)      <Link href={detail}>
+src/components/cards/briefing-quick-hit.tsx(57,7) <Link href={detail}>
+src/components/cards/feed-more-tile.tsx(100,13)   <Link href={primary.href}>
+src/components/dashboard/deadlines-board.tsx(257,21)
+src/components/nav.tsx(195,19)
+src/components/nav.tsx(273,17)
+```
+
+Plant reverted; `typedRoutes` asserted absent from `next.config.ts`; `git diff --stat` on the file
+empty; tsc back to **0** after a rebuild.
+
+**7, not ~30 — and the right fix is 6 type annotations, not 7 casts.** This is the part that
+decides the recommendation. Casting each site `as Route` would silence the checker and buy
+nothing. Typing the **source** of each string buys the check. The clearest case: `nav.tsx:13`
+declares `href: string` on the tab interface, and `:94-97` fill it with the four literals `/`,
+`/saved`, `/persona`, `/profile`. **Changing that one annotation from `string` to `Route` fixes
+both nav errors and makes the navigation bar compile-checked against the real route tree.** Six
+edits, one of which covers two errors.
+
+**RECOMMENDATION — adopt, and I am recommending, not deciding (Ruling 19 point 4 is the
+manager's).** The measured cost is 6 source-type annotations and one config line. What it buys:
+
+- **A dead internal link becomes a compile error instead of a test.** The loop has already been
+  bitten here — Ruling 18 point 2 and Ruling 19 point 1 both exist because a rendered control
+  resolved nowhere.
+- **It is complementary to `dead-links.test.ts`, not a replacement, and C must not treat it as
+  one.** typedRoutes checks *literals and the types feeding them*; the test resolves **rendered**
+  links against the route tree **and `public/`** — it is what proves `/CHANGELOG.md` is a real file
+  (`dead-links.test.ts:258-265`). Neither covers the other. **Nothing gets deleted.**
+
+**Against, stated honestly:** it is a new failure mode in a loop with one agent round left, and
+`RouteImpl` errors read poorly to someone who has not seen them before. **If the manager wants
+round 9 to stay small, this is the item to defer — the cost is now known and it will not grow.**
+
+##### 6. One thing I found while measuring that nobody has stated: the build un-blinds a scan
+
+`src/lib/navigation/dead-links.test.ts:268-286` cross-checks the loop's own route enumeration
+against **Next's generated route list** — the independent source Ruling 20 point 2 demands after
+round-7 C's scan quietly lost `/`. **But it is conditional:** `if (!fs.existsSync(generated))
+return;` (`:274`), and its own comment says a fresh clone has none so it *"must skip rather than
+fail."*
+
+**For eight rounds nobody ran a build, so on a clean checkout that assertion passed by doing
+nothing.** Measured, both directions:
+
+- **PLANT — a fake route injected into `.next/types/routes.d.ts`:** **exactly 1 case red.** The
+  cross-check does real work when the file is there.
+- **PLANT — the generated file moved away entirely** (what a no-build turn looks like):
+  **4 passed, 0 failed. Green, having checked nothing.**
+
+Restored by rebuilding; the planted route asserted **absent** from the regenerated file; suite back
+to 4 passed.
+
+**So 9-03 buys something beyond compilation: running a build every turn makes that cross-check
+real instead of optional.** C should record this in the §3 bullet, because it is the argument that
+the build belongs in the gate rather than in a release checklist.
+
+##### 7. Ruling 25 point 3's figures, re-measured — one is wrong
+
+I re-ran the manager's build and counted its own output rather than inheriting the numbers.
+
+| Ruling 25 point 3 | Measured this turn | Verdict |
+| --- | --- | --- |
+| exit 0 | exit **0** | correct |
+| ~20 s | **18 s**, 17 s, 17 s | correct |
+| 27 static pages | `Generating static pages … (27/27)` | correct |
+| **34 routes** | **36 rows** in the route table | **wrong, by 2** |
+| prebuild guard fires | it **runs and no-ops**; audits nothing locally | loose — see §2 |
+
+**36 route rows: 9 marked `○ (Static)` and 27 marked `ƒ (Dynamic)`**, plus `ƒ Proxy (Middleware)`
+listed separately below the table and not counted in it. Counted twice — once with a script over
+the captured log, once by hand down the printed list. **Note the trap in the manager's sentence:
+"27 static pages" and "27 dynamic routes" are two different 27s, and only 9 rows carry the static
+marker.** The conclusion of point 3 — the branch builds, and nobody had checked — is untouched;
+only the route figure is wrong.
+
+##### 8. What C actually does
+
+1. **`ABC-freemium.md:2397-2398`** — extend the gate command so the one canonical definition
+   matches the rule already sitting nine bullets below it. The build is a **fourth step, run once,
+   last**, not a `&&` in the same one-liner: it must run after the other three and before the final
+   commit, and it must not re-run per item.
+2. **`ABC-freemium.md:2471-2476`** — fold in what is now measured rather than estimated: exit 0 in
+   ~18 s; artifacts are gitignored so the tree stays clean; **the guard no-ops off Vercel**; the
+   one warning is 9-02 and the gate **passes** with it; the build is what makes
+   `dead-links.test.ts`'s route cross-check non-vacuous.
+3. **Leave `:2918`, `:6624`, `:9258`, `:11972`, `:15740` alone** — §4 is append-only history.
+4. **`typedRoutes`: do nothing until the manager rules.** The cost is measured and recorded above;
+   it will not change.
+
+##### 9. What the field shows when every candidate is rejected
+
+**Nothing changes for any user.** 9-03 adds no product code and no route. Its entire visible effect
+is on agents: one more command per turn and one more line of figures in §4. **If the build ever
+goes red, the correct response is to stop and record it, never to drop the step** — the loop went
+eight rounds not knowing whether the branch compiled, and that is the hole this closes.
+
+##### 10. Gate, cold, after all five plants were reverted
+
+`git status --porcelain --untracked-files=all` **0 lines** and `git diff --name-only -- web/`
+**0 files**, both asserted before this run was read.
+
+`tsc` exit **0** · `eslint` **1 problem (1 error, 0 warnings)** — the standing `quiz.tsx:46` ·
+`vitest` **128 files passed | 1 skipped (129)** · **2934 passed | 1 skipped (2935)**, **0 failed**,
+9.58 s. `src/lib/events/benchmark.test.ts` is the one skip, named. **No test added or deleted —
+identical to round-8's, as it must be: B changed no code.**
+
+**AND, FOR THE FIRST TIME AS A GATE STEP: `npm run build` exit 0**, 18 s, 27/27 static pages,
+36 route rows, 1 Turbopack warning (9-02, the owner's).
+
+**FIVE PLANTS, FIVE FIRED, each reverted with an asserted count AND an asserted absence of the
+planted value before the next run was read:** (1) a `TAVILY_API_KEY` read inside
+`scripts/setup-vertex-search.mjs` — **0 cases red, the blind spot**; (2) the same read inside
+`src/lib/sources/vertex-search.ts` — **1 case red, the control**; (3) `typedRoutes: true` in
+`next.config.ts` — **7 errors, 6 files**; (4) a fake route in the generated route list — **1 case
+red**; (5) the generated route list removed — **0 cases red, green having checked nothing**.
+**No production code changed** (`git diff --name-only -- web/` **0 files**). The one harness lives
+**outside the repo** in the session scratchpad. `.env.local` was never `cat`-ed; the environment
+was measured by name and emptiness only, and the staged credential grep printed nothing.
