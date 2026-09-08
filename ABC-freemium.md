@@ -1313,22 +1313,9 @@ PENDING USER ACTION: (1) **Apply the three migrations** under `web/supabase/migr
            NOT carry `TAVILY_API_KEY`; deploy only after the branch is green and merged.
            DONE: the local `GOOGLE_API_KEY` is filled (Ruling 21 point 4). WITHDRAWN: the trial
            backfill (no users); the 2026-10-01 model escalation (the owner decided).
-OPEN FOR MANAGER:  **THREE, all from round-9 C, none of them blocking A.**
-           (1) **Ruling 26 point 5's prescribed fix shape is wrong for 4 of the 6 `typedRoutes`
-           files** — the bare `Route` rejects dynamic routes because its default type parameter
-           is `string`. The ruling's COUNT and its adopt/reject decision are both correct; only
-           the "`href: string` becomes `Route`" sentence needs amending, so a future reader does
-           not follow it into four fresh errors. Recorded in §4; the manager may want it as a
-           ruling correction, as Ruling 26 point 1 did for the route count.
-           (2) **Ruling 26 point 3's expected exclusion was not needed** — the build guard names
-           banned keys as data but the scans match a read, not a mention, so it stays fully in
-           scope. Measured both ways. No action needed unless the manager wants the ruling's
-           wording softened from "must be excluded" to "check whether it needs excluding".
-           (3) **A new gate hazard nobody has ruled on: a STALE-GREEN `tsc`.** Because
-           `tsconfig.json` includes the build's generated types, `tsc` can report **exit 0** on a
-           config change it has not yet seen. B's note covers only the red direction. §3 now
-           carries the rule; the manager may want it as a numbered point.
-           9-02 (the Turbopack tracing warning) remains the OWNER's call, not an agent item.
+OPEN FOR MANAGER:  none — C's two deviations ruled in §1ab (Ruling 27 point 4), both accepted
+           as corrections to the manager. 9-02 (the Turbopack tracing warning) remains the
+           OWNER's call, not an agent item.
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
@@ -2664,6 +2651,62 @@ of the loop.**
    count, and an overstated build claim (both above). The loop's checking runs in both directions
    or it is not checking.
 
+---
+
+## §1ab. RULING 27 — after round-9 C; the gate's first step can pass by reading yesterday (2026-09-07, BINDING)
+
+**Manager's independent verification:**
+- **Gate cold:** tsc 0 · eslint 1 (standing `quiz.tsx:46`) · vitest **129 files / 2954 passed /
+  1 skipped / 0 failed**. +20 tests this round, none deleted.
+- **C's stale-green finding, reproduced and made worse.** C found that removing `typedRoutes` and
+  running `tsc` **without rebuilding** gives exit 0. The manager went further: **deleted
+  `.next/types` entirely and ran `tsc` — exit 0, zero errors.** `tsconfig.json:29-30` includes
+  `.next/types/**/*.ts`, so with the generated route union absent the `Route` type degenerates and
+  **every annotation 9-05 added becomes inert while `tsc` still reports success.**
+
+1. **Round 9 accepted. All four items landed.** 9-01 (both scripts **and** the operator document,
+   one commit, plus a 13-case spawn guard), 9-03 (§3 reconciled), 9-04 (the spend scans reach
+   `web/scripts/`, 12 -> 19 cases, boundary asserted), 9-05 (`typedRoutes`, 7 source annotations,
+   **zero casts**).
+2. **THE FINDING OF THE ROUND, and it is about the gate itself: `tsc` alone cannot enforce typed
+   routes, and it reports success either way.** The check is real only when a build has produced a
+   current route union; without one it silently checks nothing. **This is the fourth instance of
+   this loop's recurring shape — a check that passes by not looking** (a route enumeration that
+   lost `/`; a cross-check that skipped for eight rounds; five spend scans blind to `scripts/`; now
+   the gate's own first step).
+   **Consequence, binding, and it changes the gate's order:** the turn's final verification runs
+   **`npm run build` FIRST, then tsc, lint, vitest** — so `tsc` reads types the build just wrote.
+   Ruling 25 point 5 put the build "before the final commit"; that is not enough, because a build
+   that runs *after* `tsc` leaves `tsc` reading the previous build's output. **§3's gate definition
+   is amended: build, then the three steps, in that order, once per turn.**
+   **A owes a new tally: was the build run before `tsc` in this turn — yes or no.**
+3. **C's process error becomes a ground rule, because the assertion that was supposed to catch it
+   is the one this loop has been relying on.** C ran a plant, reverted with `git checkout --`,
+   which restores HEAD and **silently deleted the entire uncommitted fix**. The **0-line-diff
+   assertion "passed" and told C nothing** — an empty diff is satisfied by *"the revert worked"*
+   **and** by *"your work was destroyed along with the plant."* Only C's separate
+   planted-value-absent check caught it.
+   **New standing rule (§3): a revert is asserted in BOTH directions — the planted value is absent
+   AND the fix is still present.** An empty diff alone is not evidence. Revert from a copy kept
+   **outside** the repo, never with `git checkout --` on an uncommitted file.
+4. **C's two deviations from Ruling 26, both accepted; both are corrections to me.**
+   - **Point 5's prescribed shape was wrong.** `href: string` -> `Route` fails for 4 of the 6
+     files: a bare `Route` defaults its type parameter to `string` and rejects every **dynamic**
+     route, turning 7 errors into 4 different ones. C used template-literal types instead — still
+     annotations at the source, still zero casts. **The instruction was wrong; the standard it
+     expressed was right, and C kept the standard.**
+   - **Point 3 expected the build guard to need excluding from the widened scan.** Measured: it
+     does not, because the scans match a **read**, not a mention. **Excluding it would have put a
+     blind spot inside the one file whose entire job is refusing credentials** — which is the
+     Ruling 26 point 2 shape one layer deeper.
+5. **The plant proved the fix.** B's exact banned-key read inside `setup-vertex-search.mjs` left
+   **12 passed / 0 failed** before 9-04; it now reddens **2 cases and names its own file**.
+6. **Round 9 continues with A**, the last agent turn. A re-measures against denominator **30**,
+   **R-METER-2 `N/A`**, blocked **5**, runs **`npm run check:providers`** and **`npm run build`**
+   itself, and carries all standing tallies including the two added this round (build warnings —
+   currently **1**, named; and point 2's build-before-`tsc` check). **After A, the loop waits on the
+   owner** and the resume clock stands down on `blocked:` ticks.
+
 ## §2. ROLES — DO ONLY YOUR OWN JOB
 
 ### Agent A — Reviewer
@@ -2881,6 +2924,15 @@ C does **not** judge whether something should be fixed.
   implementation detail. Every scan this loop built has had a hole that made it pass by not
   looking - a route enumeration that lost `/`, a cross-check that skipped for eight rounds,
   and five spend scans that cannot see `scripts/`. Three for three.
+- **The turn's final verification runs `npm run build` FIRST, then tsc, lint, vitest** (Ruling 27
+  point 2). `tsconfig.json` includes `.next/types/**`, so a build running AFTER tsc leaves tsc
+  reading the previous build's route union - and with those types absent entirely, tsc still
+  exits 0 while every typed-route annotation is inert. The gate's first step can pass by
+  reading yesterday.
+- **A revert is asserted in BOTH directions** (Ruling 27 point 3): the planted value is ABSENT
+  and the fix is still PRESENT. An empty diff alone is satisfied both by "the revert worked"
+  and by "your uncommitted work was destroyed with it". Revert from a copy kept OUTSIDE the
+  repo; never `git checkout --` an uncommitted file.
 - Commit messages: plain sentences in the repo's existing style
   (`feat(scope): …`, `fix(scope): …`, `refactor(scope): …`), ending with
   `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>`.
