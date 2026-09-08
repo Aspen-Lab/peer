@@ -17365,3 +17365,259 @@ outside the denominator = 31 items, which is the whole of spec §2.
 
 **All five share the single action at the top of `PENDING USER ACTION`.** Nothing an agent can do
 moves any of them.
+
+---
+
+#### Part 2 — the personas, and did round 9 actually land
+
+##### The five personas, per persona, never averaged
+
+Driven through the **real route handlers** in the vitest harness (§3 forbids `next dev` in this
+loop). **Coverage boundary of this measurement, stated:** `api-route-personas` drives the **four**
+AI-spending report/digest handlers — `POST /api/digest`, `/api/jobs/report`, `/api/events/report`,
+`/api/papers/report`. The two **feed** handlers are covered elsewhere in the suite and are not part
+of these 24 cases; I did not re-derive them this turn, and I say so rather than let "24 of 24" read
+as "everything".
+
+| Persona | Cases | Result |
+| --- | --- | --- |
+| `anonymous` | 12 (4 routes x: answers 401 · spends no operator search key · resolves no provider) | **12 / 12** |
+| `free-no-key` | 4 (spends no operator search key, each route) | **4 / 4** |
+| `free-byok-tavily` | — | the BYOK path is covered by the adapter suites, not by these 24; not re-derived this turn |
+| `trial` | 4 | **4 / 4** |
+| `paid` | 4 | **4 / 4** |
+
+**24 of 24.** Not one persona reaches a paid search host on any of the four routes.
+
+##### D2a re-confirmed by READING THE CODE, not by inheriting a score
+
+- `systemSearchAllowed: true` appears **0** times in non-test source
+  (`grep -rn "systemSearchAllowed:\s*true" src --include=*.ts --include=*.tsx | grep -v ".test."`).
+- `entitlement/resolve.ts:134` hard-wires `systemSearchAllowed: false`, and `types.ts:98` does the
+  same for the default context.
+- `search/system-key.ts:170` — `operatorSearchAvailability` **returns `{ geminiAvailable: false,
+  vertexAvailable: false }` unconditionally**, with the parameter deliberately unread and D2a named
+  at the line. Read in full this turn.
+- **The operator's search keys are unreachable:** `process.env.TAVILY_API_KEY` is read **0** times
+  in non-test source across **both** roots. The nine surviving matches are all tests deleting it,
+  comments, or the commented-out D2 branch at `system-key.ts:147-148`.
+
+**Nothing regressed.**
+
+---
+
+##### 9-05 — THE MOST IMPORTANT THING I VERIFIED, AND IT REPRODUCES IN BOTH DIRECTIONS
+
+This is the evidence for Ruling 27 point 2, measured on my own run rather than inherited.
+
+**Direction 1 — with a current build, the guard is real.** After `npm run build` (exit 0), I planted
+one character-level typo into the navigation bar — `{ href: "/savd", … }` in
+`src/components/nav.tsx:106`, substitution count asserted **exactly 1** before the run was read:
+
+```
+src/components/nav.tsx(106,5): error TS2820: Type '"/savd"' is not assignable to type 'Route'. Did you mean '"/saved"'?
+tsc exit 2
+```
+
+**Direction 2 — THE FALSE GREEN, and it is worse than a stale red.** With **the identical typo still
+in the file**, I moved `.next/types` aside and re-ran the same command:
+
+```
+tsc --noEmit -p tsconfig.json   ->   exit 0, zero errors
+(typo still present: grep -c savd src/components/nav.tsx = 1)
+```
+
+**The same broken code passes.** Not "an old error persists" — a real, current, uncommitted defect
+reports clean. `tsconfig.json:29-30` includes `.next/types/**/*.ts`; with the generated route union
+gone, `Route` degenerates and every annotation 9-05 added becomes inert **while `tsc` reports
+success**. `.next/types` was restored immediately afterwards and the typo reverted from a copy held
+outside the repo, with the planted value asserted absent and the `href: Route` annotation asserted
+still present.
+
+##### AND THE TRAP BITES IN A SECOND PLACE — C's question (g), answered YES
+
+C asked whether any other gate step can pass on stale artifacts. **It can, and I found it while
+`.next/types` was already aside, so the measurement cost nothing.**
+`src/lib/navigation/dead-links.test.ts:274` is `if (!fs.existsSync(generated)) return;` — the
+cross-check against Next's generated route list **silently returns** when the file is absent. With
+the directory moved away the suite reported **4 passed** while that cross-check checked nothing.
+B proved this by deleting one file; I reproduced it by removing the whole directory, this turn.
+
+**So the build-first order is now load-bearing for TWO checks, not one**, and they fail differently:
+
+| Check | Without a current build | Severity |
+| --- | --- | --- |
+| `tsc` typed routes | **false green on genuinely broken code** | worse — a defect gets committed |
+| `dead-links.test.ts` generated-route cross-check | green **having checked nothing** (its other assertions still run) | vacuous, not wrong |
+
+##### 9-05 — C's question (d), answered: `router.push` IS checked, not merely "passing free"
+
+B wrote that all 8 router calls are literals and "pass free"; C flagged that "passes free" and "is
+checked" are different claims and asked for a plant. I planted one:
+`router.push("/saved")` -> `router.push("/savd")` in `src/components/keyboard.tsx:100`.
+
+```
+src/components/keyboard.tsx(100,23): error TS2345: Argument of type '"/savd"' is not assignable to parameter of type 'RouteImpl<"/savd">'.
+```
+
+**It is checked.** Note the error is a *different* shape from `<Link>`'s — `TS2345`, and with **no
+"Did you mean" suggestion**, which `<Link>` does give. Worth knowing before someone reads a bare
+TS2345 and looks for a missing import.
+
+##### 9-05 — C's question (e), answered: the two guards ARE complementary, proved in BOTH directions
+
+C could not show a link that only one guard catches, so the claim "neither replaces the other" was
+unproven. It is proven now. Three plants, each asserted at substitution count 1, each reverted in
+both directions:
+
+| Plant | `tsc` | `dead-links.test.ts` | Reading |
+| --- | --- | --- | --- |
+| `<form method="POST" action="/auth/signowt">` in `user-menu.tsx:109` | **exit 0 — sees nothing** | **1 failed / 3 passed** | **only the test catches it.** A form `action` is a plain HTML attribute; typed routes cannot reach it — and this is the exact shape round-7 C found live in this tree |
+| `ItemDetailRoute`'s `` `/jobs/${string}` `` -> `` `/jerbs/${string}` `` | **6 errors across 3 files** | **4 passed — sees nothing** | **only the compiler catches it.** A dynamic route's *shape* is never a resolvable literal, so a link scan cannot judge it |
+| `router.push("/savd")` in `keyboard.tsx:100` | **1 error** | **1 failed** | both — so there is genuine overlap too, and neither guard is redundant |
+
+**C's guess about which shape only the test catches was wrong in a harmless way:** C expected it to
+be the `public/`-resolved links. The demonstrated case is the `<form action>` shape. The conclusion
+C drew is right; the reason is different.
+
+##### 9-04 — B's exact plant, re-run by me: IT REDDENS, AND IT NAMES ITS OWN FILE
+
+I planted the exact read B used — `const PLANTED_KEY = process.env.TAVILY_API_KEY;` — into
+`web/scripts/setup-vertex-search.mjs` (anchor occurrence count asserted **exactly 1** before the run
+was read). Baseline before the plant: **19 passed, 0 failed.**
+
+```
+× reads process.env.TAVILY_API_KEY NOWHERE in production source
+   AssertionError: expected [ 'scripts/setup-vertex-search.mjs' ] to deeply equal []
+× does NOT exclude the build guard, even though it names banned keys
+   AssertionError: expected [ 'scripts/setup-vertex-search.mjs' ] to deeply equal []
+Tests  2 failed | 17 passed (19)
+```
+
+**Two cases red, both naming the file.** The read that left 12 cases green this morning now fails
+the gate. Ruling 27 point 5 confirmed on my own run.
+
+**Reverted from a copy outside the repo, asserted in BOTH directions** (Ruling 27 point 3):
+planted string absent (`process.env.TAVILY_API_KEY` count **0**) **and** the 9-01 fix still present
+— reads the new name, `LEGACY_MODELS_PROJECT` present, the `||` fallback absent, the "does NOT move
+and is NOT rebuilt" recovery present, the "Add BOTH of these lines" success message present. Then
+`git diff --stat` on the file: **0 lines**.
+
+##### 9-04 — C's question (c), answered: the count IS honest, including the THREE readers
+
+C asked me to assume its numbers were the fourth instance of Ruling 26 point 2's pattern until I had
+looked. **I looked, and they hold.**
+
+- **The Vertex-capability expectation of THREE readers is right.** My first grep found **four**
+  files mentioning `GOOGLE_VERTEX_SEARCH_` — and the fourth is
+  `scripts/assert-byok-production-env.mjs`, which names them as **ban-list string literals**
+  (`:56-58`), never as `process.env.GOOGLE_VERTEX_SEARCH_…`. Re-run as a **read**-shaped grep:
+  `probe-vertex-search-billing.mjs` (2 sites), `setup-vertex-search.mjs` (3), `vertex-search.ts` (8)
+  — **exactly three files.** C's distinction between a read and a mention is the reason the number
+  is 3, and it is correct.
+- **The computed-read census reproduces exactly: 1 file, 2 sites**, both in
+  `scripts/check-provider-models.mjs` (`:111`, `:203`), both reading **model** key names.
+  **No search key is reachable through them.**
+- **Scan 5's exemption list is 2 and its guarded count is 9**, read out of the file rather than
+  inherited: `jobs/dispatch-digests/route.ts` (D9, named) and `digest/test/route.ts` (a local-only
+  diagnostic). My own raw grep for the guard string listed 12 unguarded api routes — **and that raw
+  grep is the wrong probe**, because the guard is called `requireEntitledAiRequest`, not
+  `protectAiRequest`. The scan's own `canSpend()` predicate is the right one and it returns 0
+  unguarded-and-unjustified.
+
+##### 9-04 — C's question (f), answered: nothing LIVE still says "src only"
+
+Search scope: `grep -rn "productionFiles" web/src web/scripts` -> **1 hit**, and it is
+`spend-scans.test.ts:84`, the docblock *recording* the rename, not a live use.
+`grep -rniE "src only|only src|walks src|walks the src" web/src` -> **0 hits**. `scannedFiles`
+has **12** live occurrences. **So nothing live still says "src only"** — the rename is complete and
+the only surviving mention of the old name is the sentence explaining why it changed. Earlier
+rounds' §4 entries cite the old name; those are history and correctly left alone.
+
+##### 9-01 — I READ BOTH DOCUMENTS MYSELF, and the four wrong places are fixed
+
+`docs/SETUP_vertex_ai_search.md` read **end to end, all 320 lines** — a doc fix is only verifiable
+by reading it.
+
+| C's site | Now reads | Verdict |
+| --- | --- | --- |
+| the fenced env block (`:227-230`) | **two** lines, project **and** engine id | **fixed** |
+| *"That single line switches all three surfaces over"* (`:232-236`) | *"Both lines are required, and one on its own does nothing"* | **fixed** |
+| the default row (`:250`) | `GOOGLE_VERTEX_SEARCH_PROJECT` · **`none — required`** · *"One of the two signals"* | **fixed** — the `GOOGLE_VERTEX_PROJECT` default is gone |
+| the fallback row (`:257`) | `GOOGLE_VERTEX_SEARCH_FALLBACK` · **`off`** · *"Set to `on` … to **arm** the grounding backfill"* | **fixed — the money control now reads forward** |
+
+**And C's question (a) — is the loud failure followable by a real operator with an index already
+built?** I read the message as that person. **Yes, and it is the best-written thing in the item:**
+it names the variable to set, says the old name is the *models* project and is deliberately not
+read, gives the literal line to paste with *"the SAME project id"*, and closes with *"An index
+already built under the old name does NOT move and is NOT rebuilt."* That last sentence is the one
+that stops a panicked rebuild, and it is on the same screen as the error. It prints a placeholder,
+never the old variable's value — asserted by its own case, not by my inspection.
+
+##### 9-01 — C's question (b): NO, the document is NOT consistent end to end. THREE things still contradict
+
+C fixed Step 3's four rows and asked what else disagrees. Three things do, and the first is the same
+money control C corrected one screen lower.
+
+1. **`:36-40` still describes the grounding backfill as ON BY DEFAULT.** *"When a query returns
+   fewer than `GOOGLE_VERTEX_SEARCH_MIN_RESULTS` rows (default 3), the provider tops that query up
+   with one grounding call. Expected steady state: … a small tail still paying for grounding."*
+   Since 8-01(b) the backfill is **off unless armed** (`vertex-search.ts:495`), so the steady state
+   is **no grounding tail at all** unless the operator turns it on. **C fixed the table row at
+   `:257` and left the prose at `:36-40` that the row contradicts** — one screen of the same
+   document, same control, same defect class.
+2. **`:256` sells `GOOGLE_VERTEX_SEARCH_MIN_RESULTS` as the disable switch** — *"`0` disables the
+   backfill"* — which is exactly what the code's own docblock says it is **not**:
+   `vertex-search.ts:114` reads *"This is the tuning knob, not the on/off switch."* Two adjacent
+   rows in the same table now disagree about whether the backfill runs by default.
+3. **`:194` tells the operator to pick the WRONG EDITION, and the same document says it costs a
+   rebuild.** Step 2 item 2: *"Edition: Search — Standard is enough."* Sixty lines earlier, under a
+   heading reading *"Two findings that cost a rebuild — do not repeat them"*: *"Website search is an
+   ENTERPRISE-tier feature. A `SEARCH_TIER_STANDARD` engine is created happily and then refuses
+   every single query."* `:133` records the shipped app as Enterprise. **This one predates 9-01 and
+   is the most expensive of the three** — an operator following the numbered steps in order does
+   the thing the document elsewhere begs them not to.
+
+**A fourth, smaller:** the same stale "small tail still paying for grounding" sentence sits in the
+provider's **own module header** (`vertex-search.ts:24-28`), one docblock above the corrected one.
+Same class as site 6, which C did fix.
+
+**None of these is a code defect and none moves a score** — `isVertexSearchAvailable()` is `false`
+and D2b is not taken. They are recorded because C asked the right question and the honest answer is
+"three more, and one of them is your own item's control".
+
+##### 9-03 — THE ANSWER IS NO. §3 STILL CONTRADICTS ITSELF, AND RULING 27 IS WHAT RE-OPENED IT
+
+My brief asked me to confirm that §3's gate command and its build rule agree and that the order is
+build-first. **They do not agree.** 9-03 landed correctly and reconciled what existed at the time;
+**Ruling 27 point 2 then changed the order by ADDING a fifth bullet instead of editing the four that
+9-03 had just reconciled.** C is not at fault — 9-03 was committed before Ruling 27 existed.
+
+Search scope, per Ruling 24 point 1: `grep -n "npm run build\|next build" ABC-freemium.md` and
+`grep -n "npx tsc --noEmit" ABC-freemium.md`, every hit classified by reading its surrounding lines.
+Files read: §0b, §2 (Agent C), §3 in full, §1ab.
+
+| Where | What it says | Order it teaches |
+| --- | --- | --- |
+| §3 `:2927` — the Ruling 27 bullet | *"The turn's final verification runs `npm run build` **FIRST**, then tsc, lint, vitest"* | **build FIRST** |
+| §3 `:2893` — the build bullet's sub-point 1 | *"**The build must run LAST, after tsc + lint + vitest**"* | **build LAST — a flat contradiction, in bold** |
+| §3 `:2799-2801` — the canonical gate command | three steps after every item; `npm run build` *"once per turn, **before the final commit**"* | reads as build last |
+| §3 `:2887` — the build bullet's own headline | *"run ONCE per turn **before the final commit**"* | reads as build last |
+| §0b `:55-56` — **the manager's own brief-building checklist** | *"run the gate's first three steps after every item and `npm run build` once, **before the final commit**"* | reads as build last |
+| §2 Agent C `:2770` | *"Run the gate's first three steps after each item, and `npm run build` once **before the final commit**"* | reads as build last |
+
+**One place carries the new order. Four read as the old one, and one of those four contradicts it
+outright in bold.** The sharpest is §0b: that bullet is the template a manager pastes into the next
+agent's brief, so a round-10 brief written from §3 as it stands would tell its agent to build
+**last** — and the false green I demonstrated above is precisely what that produces.
+
+**This is the fourth appearance of this loop's recurring shape, and the second time in two rounds
+that the fix for it was itself half-applied.** `POLICY — manager decides`: it is the manager's own
+text, and A does not change code or rulings. **It does not enter the percentage, and I want that
+said out loud rather than left to be noticed: no R-* item covers §3's internal consistency, so this
+finding is real and is NOT hidden inside a 0.0%.**
+
+**Maintenance note, same class, much smaller:** §3's last bullet tells every agent to end commit
+messages with `Co-Authored-By: Claude Fable 5.1`. Every agent commit for nine rounds ends with its
+own model instead. Harmless, but it is one more line that is wrong while everything around it is
+right.
