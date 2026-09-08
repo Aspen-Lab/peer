@@ -26,28 +26,81 @@ import { describe, expect, it } from "vitest";
  * someone is in a hurry.
  */
 
-const SRC = path.join(process.cwd(), "src");
+/**
+ * ── THE COVERAGE BOUNDARY, DECLARED IN THE FILE THAT USES IT ────────────────
+ *
+ * **ABC-freemium 9-04 · Ruling 26 points 2-3. "Which files did you look at" is
+ * part of a scan's RESULT, not a detail of its implementation.**
+ *
+ * Until 9-04 this walked `src/` only and kept `.tsx?` only, so **every one of
+ * these scans was blind to `web/scripts/`** — the operator tooling the owner
+ * runs by hand, and exactly where an operator credential would plausibly be
+ * read. Round-9 B measured it rather than arguing it: a flagrant
+ * `process.env.TAVILY_API_KEY` read planted inside `scripts/setup-vertex-search.mjs`
+ * left the suite at 12 passed, 0 failed, while the identical read in `src/`
+ * reddened exactly one case. **A scan that cannot see a directory is not a
+ * scan.**
+ *
+ * That was the third hole of its kind in this loop — a route enumeration that
+ * lost `/`, a cross-check that skipped for eight rounds, and this. Hence the
+ * standing rule, and hence the `describe` block at the bottom of this file that
+ * **asserts the boundary itself**: if `scripts/` ever stops being walked, or
+ * `.mjs` stops being read, a case goes red instead of the count quietly
+ * becoming a smaller truth.
+ */
+const ROOTS = [
+  { dir: "src", why: "the application itself" },
+  {
+    dir: "scripts",
+    why:
+      "operator tooling run by hand against real projects and real money — " +
+      "the setup script builds a Discovery Engine index, the billing probe " +
+      "spends ~$4 a run, and the prebuild guard decides whether a deployment " +
+      "is allowed to proceed",
+  },
+] as const;
 
-/** Every `.ts`/`.tsx` under `src`, excluding tests and the test scaffolding. */
-function productionFiles(): string[] {
+/** `.mjs` is here because `web/scripts/` is written in it. */
+const SOURCE_EXTENSION = /\.(tsx?|mjs)$/;
+
+/**
+ * Directories skipped, **each with the reason it is skipped** — never a
+ * convenience list. Ruling 4 point 7's shape, applied to the widened walk.
+ */
+const EXCLUDED_DIRECTORIES: Record<string, string> = {
+  "test-support":
+    "Ruling 4 point 7 — test scaffolding; its one key reference DELETES the " +
+    "key rather than reading it",
+  __pycache__:
+    "compiled Python bytecode under scripts/, not source anybody edits; the " +
+    "two .py extractors it caches are not JavaScript and cannot read an env " +
+    "name in a shape these scans are written for",
+};
+
+/**
+ * Every scannable source file under the roots above, excluding tests and the
+ * directories named with their reasons.
+ *
+ * **Renamed from `productionFiles()` in 9-04**, because it no longer returns
+ * only production files and a function whose name understates what it walks is
+ * the same small lie 9-01 was about.
+ */
+function scannedFiles(): string[] {
   const out: string[] = [];
   const walk = (dir: string): void => {
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) {
-        // Ruling 4 point 7 — `src/test-support/` is excluded alongside
-        // `*.test.ts`. Its one key reference DELETES the key rather than
-        // reading it.
-        if (entry.name === "test-support") continue;
+        if (entry.name in EXCLUDED_DIRECTORIES) continue;
         walk(full);
         continue;
       }
-      if (!/\.tsx?$/.test(entry.name)) continue;
+      if (!SOURCE_EXTENSION.test(entry.name)) continue;
       if (/\.test\.tsx?$/.test(entry.name)) continue;
       out.push(full);
     }
   };
-  walk(SRC);
+  for (const root of ROOTS) walk(path.join(process.cwd(), root.dir));
   return out;
 }
 
@@ -74,7 +127,7 @@ function code(file: string): string {
 }
 
 function filesMatching(pattern: RegExp): string[] {
-  return productionFiles()
+  return scannedFiles()
     .filter((file) => pattern.test(code(file)))
     .map(relative)
     .sort();
@@ -140,8 +193,66 @@ describe("scan 3 — every operator search credential is read in one place", () 
     // NOT happen is a third module calling the availability helpers directly,
     // which is precisely the defect 2-04 fixed in `web-search.ts`, `jobweb.ts`
     // and `eventweb.ts`.
+    //
+    // ── REWRITTEN, NOT DELETED — ABC-freemium 9-04 (Ruling 26 points 2-3) ────
+    //
+    // **This case going red is what 9-04 looks like working.** The expectation
+    // used to be the single app module, and that was only true because the walk
+    // could not see `web/scripts/`. Widening the walk did not introduce two new
+    // readers; it revealed two that have been there all along, in the files the
+    // owner runs by hand.
+    //
+    // **Both are legitimate and neither is a spend risk, stated so the next
+    // reader does not "tidy" them away:** these two scripts are the operator
+    // tools that BUILD and QUERY the Discovery Engine index, so needing to know
+    // which project and which app is their entire job. They are not runtime
+    // code, they are not imported by anything under `src/`, and — this is the
+    // part that matters — 9-01 made them read
+    // `GOOGLE_VERTEX_SEARCH_PROJECT` and nothing else, which is the SAME single
+    // expression `vertexSearchProject()` uses. Before 9-01 they fell back to
+    // `GOOGLE_VERTEX_PROJECT`; that fallback is what this scan would now catch
+    // coming back, because the fallback name would appear here as a fourth
+    // entry.
+    //
+    // A FIFTH entry, or either script disappearing, is a change somebody must
+    // explain.
     const readers = filesMatching(/process\.env\.GOOGLE_VERTEX_SEARCH_/);
-    expect(readers).toEqual(["src/lib/sources/vertex-search.ts"]);
+    expect(readers).toEqual([
+      "scripts/probe-vertex-search-billing.mjs",
+      "scripts/setup-vertex-search.mjs",
+      "src/lib/sources/vertex-search.ts",
+    ]);
+  });
+
+  it("counts which operator scripts read the OLD models-project name, and why (9-01)", () => {
+    // ABC-freemium 9-04, guarding 9-01, and written this way ON PURPOSE after a
+    // first draft asserted the wrong thing.
+    //
+    // The tempting assertion is "no script reads `GOOGLE_VERTEX_PROJECT` any
+    // more". **It is false, and asserting it would have been a wrong value
+    // dressed as a guard.** Both operator scripts still read the old name — to
+    // decide whether to PRINT the loud "that is the models project, and it is
+    // deliberately not read here" message. Reading a name to explain why you
+    // are ignoring it is the opposite of the defect.
+    //
+    // So the honest contract is the accepted SET, in the shape Ruling 6
+    // point 4's structured-source tally already uses: exactly these two, each
+    // for that one reason. A third script reading the models project is a new
+    // coupling somebody has to justify; either of these two disappearing means
+    // the loud message went with it.
+    //
+    // The contract that the old name never FEEDS the project — the actual
+    // fallback — is asserted where it can be proved by running the scripts, in
+    // `src/scripts/vertex-search-project.test.ts`. It is deliberately not
+    // duplicated here as a weaker source-text copy that could drift from it.
+    const legacyReaders = filesMatching(
+      /process\.env\.GOOGLE_VERTEX_PROJECT\b/,
+    ).filter((file) => file.startsWith("scripts/"));
+
+    expect(legacyReaders).toEqual([
+      "scripts/probe-vertex-search-billing.mjs",
+      "scripts/setup-vertex-search.mjs",
+    ]);
   });
 
   it("calls the availability helpers only from the gate and their own modules", () => {
@@ -216,7 +327,7 @@ describe("scan 4 — every resolveProvider call carries a context", () => {
     // authorised is a receipt, not a guard. Those two callers were safe because
     // of a numeric tier ceiling, not because they metered — and that reason is
     // now written at each of them as a `SpendJustification` the compiler checks.
-    const offenders = productionFiles().filter((file) => {
+    const offenders = scannedFiles().filter((file) => {
       const source = code(file);
       // The declaration itself, and the unrelated local helper in
       // `sources/web-search.ts`, both have a parameter list — so a zero-argument
@@ -245,7 +356,7 @@ describe("scan 6 — nothing re-opens the entitled-context hole (3-02)", () => {
     //
     // Optionality is banned in every spelling of it, including the union alias
     // and the `| undefined` form a formatter may produce.
-    const offenders = productionFiles().filter((file) =>
+    const offenders = scannedFiles().filter((file) =>
       /\b\w+\?\s*:\s*(EntitledContext|ProviderContext)\b|:\s*(EntitledContext|ProviderContext)\s*\|\s*undefined/.test(
         code(file),
       ),
@@ -261,7 +372,7 @@ describe("scan 6 — nothing re-opens the entitled-context hole (3-02)", () => {
     // than satisfied.
     // `entitled-context.ts` is exempt: it DECLARES the hatch, which is how
     // there comes to be exactly one.
-    const offenders = productionFiles()
+    const offenders = scannedFiles()
       .map(relative)
       .filter((file) => file !== ENTITLED_CONTEXT_MODULE)
       .filter((file) =>
@@ -279,7 +390,7 @@ describe("scan 6 — nothing re-opens the entitled-context hole (3-02)", () => {
     // asserting provenance you have not got becomes **greppable**, so this is
     // the grep. `entitled-context.ts` itself is exempt: the two casts inside it
     // are how the brand is applied at all.
-    const offenders = productionFiles()
+    const offenders = scannedFiles()
       .map(relative)
       .filter((file) => file !== ENTITLED_CONTEXT_MODULE)
       .filter((file) =>
@@ -314,7 +425,7 @@ describe("scan 5 — every route that can spend is behind requireEntitledAiReque
   };
 
   function apiRouteFiles(): string[] {
-    return productionFiles()
+    return scannedFiles()
       .map(relative)
       .filter((file) => /^src\/app\/api\/.*\/route\.ts$/.test(file));
   }
@@ -361,5 +472,131 @@ describe("scan 5 — every route that can spend is behind requireEntitledAiReque
     );
 
     expect(guarded).toHaveLength(9);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// THE COVERAGE BOUNDARY ITSELF — asserted, not merely documented
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * **ABC-freemium 9-04 · Ruling 26 point 2 — the new standing rule, applied to
+ * the scan that caused it.**
+ *
+ * Every scan this loop built has had a hole that made it pass by not looking:
+ * a route enumeration that silently lost `/`, a cross-check that skipped for
+ * eight rounds because no build ever ran, and these five scans, which could not
+ * see `web/scripts/`. Three for three. In all three the count stayed green and
+ * the count was the thing being trusted.
+ *
+ * So the boundary is a RESULT, and these cases assert it. **They are what makes
+ * the widening durable**: a future edit that narrows the walk back to `src/`,
+ * or drops `.mjs`, or moves the operator scripts somewhere unscanned, turns a
+ * case red instead of quietly shrinking what "0 offenders" means.
+ */
+describe("the scans' coverage boundary (9-04)", () => {
+  it("walks BOTH declared roots, and scripts/ is really in the walked set", () => {
+    // The single assertion this whole item exists for. If it ever fails, every
+    // count in this file has become a smaller truth than it reads as.
+    const walked = scannedFiles().map(relative);
+
+    expect(walked.some((file) => file.startsWith("src/"))).toBe(true);
+    expect(walked.some((file) => file.startsWith("scripts/"))).toBe(true);
+  });
+
+  it("reads .mjs, which is the language web/scripts/ is written in", () => {
+    // `.mjs` is not a detail. The old walk kept `.tsx?` only, so even pointing
+    // it at `scripts/` would have found nothing — the hole had two halves and
+    // closing one would have looked like closing both.
+    const walked = scannedFiles().map(relative);
+    const scriptFiles = walked.filter((file) => file.startsWith("scripts/"));
+
+    expect(scriptFiles.every((file) => /\.(tsx?|mjs)$/.test(file))).toBe(true);
+    expect(scriptFiles.some((file) => file.endsWith(".mjs"))).toBe(true);
+  });
+
+  it("has the operator tooling in scope BY NAME, so a move is visible", () => {
+    // A rename or a move to an unwalked folder would otherwise show up as an
+    // absence, and an absence is what nobody notices — the same reasoning as
+    // scan 5's guarded-count case.
+    const walked = scannedFiles().map(relative);
+
+    for (const file of [
+      "scripts/setup-vertex-search.mjs",
+      "scripts/probe-vertex-search-billing.mjs",
+      "scripts/assert-byok-production-env.mjs",
+      "scripts/check-provider-models.mjs",
+    ]) {
+      expect(walked, `${file} is no longer in the scanned set`).toContain(file);
+    }
+  });
+
+  it("keeps every exclusion NAMED WITH ITS REASON, and none of them silent", () => {
+    // Ruling 26 point 3's shape. An exclusion without a reason is how a scan
+    // stops looking somewhere and nobody can tell whether that was a decision.
+    for (const [dir, reason] of Object.entries(EXCLUDED_DIRECTORIES)) {
+      expect(reason.length, `${dir} is excluded without a reason`).toBeGreaterThan(20);
+    }
+    for (const root of ROOTS) {
+      expect(root.why.length, `root ${root.dir} has no stated purpose`).toBeGreaterThan(10);
+    }
+    // The excluded names are the two decided ones and no others. Adding a third
+    // is a decision, not a tidy-up.
+    expect(Object.keys(EXCLUDED_DIRECTORIES).sort()).toEqual([
+      "__pycache__",
+      "test-support",
+    ]);
+  });
+
+  it("does NOT exclude the build guard, even though it names banned keys", () => {
+    // **Measured, not assumed, and the answer went the other way from the
+    // ruling's expectation — so it is written down.**
+    //
+    // Ruling 26 point 3 anticipated that `assert-byok-production-env.mjs` would
+    // have to be excluded because it "names banned variables as data" and would
+    // trip a naive scan. It does name them: `TAVILY_API_KEY` and
+    // `BRAVE_SEARCH_API_KEY` sit in its FORBIDDEN_ON_VERCEL array, which is the
+    // whole point of the guard.
+    //
+    // **But no exclusion is needed, because these scans match a READ
+    // (`process.env.NAME`) and not a mention.** The guard never writes
+    // `process.env.TAVILY_API_KEY`; it takes `process.env` as a whole object and
+    // checks names against its lists. So the file stays fully in scope, and if
+    // somebody ever adds a real key read to it, the scans will say so.
+    //
+    // **Excluding it would have been the cheaper and worse answer** — it would
+    // have created exactly the kind of blind spot this item exists to close, in
+    // the single file whose job is refusing credentials.
+    const walked = scannedFiles().map(relative);
+    expect(walked).toContain("scripts/assert-byok-production-env.mjs");
+
+    // And it is not an offender: it is in scope and it reports clean.
+    expect(filesMatching(/process\.env\.TAVILY_API_KEY\b/)).toEqual([]);
+    expect(filesMatching(/process\.env\.BRAVE_SEARCH_API_KEY\b/)).toEqual([
+      "src/lib/search/system-key.ts",
+    ]);
+  });
+
+  it("names the one SHAPE these scans are still blind to, with its census", () => {
+    // **A boundary is not only which files — it is which shapes.** Every scan
+    // in this file matches a literal `process.env.NAME`. A computed read,
+    // `process.env[name]`, is invisible to all of them, and no amount of
+    // widening the walk changes that.
+    //
+    // Rather than leave that as an unstated limit, the sites are enumerated. The
+    // census is TWO, both inside `check-provider-models.mjs`, and both are the
+    // live provider check reading MODEL keys (`GOOGLE_API_KEY`, `OPENAI_API_KEY`
+    // and the BYOK vendors) from its own `keyNames` lists — no search key is
+    // reachable through them.
+    //
+    // A third site, or a site outside that file, is a place a search credential
+    // could be read without any scan in this file seeing it. That is a finding
+    // for the round it appears in, not a silent pass.
+    const computedReaders = scannedFiles()
+      .filter((file) => /process\.env\[/.test(code(file)))
+      .map(relative)
+      .sort();
+
+    expect(computedReaders).toEqual(["scripts/check-provider-models.mjs"]);
   });
 });

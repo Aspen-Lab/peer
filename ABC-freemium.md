@@ -16797,3 +16797,116 @@ no round history was displaced, and the two edited bullets were edited **in plac
 Unchanged from 9-01 by construction — this item touched one Markdown file — and re-run cold anyway
 rather than inherited: `tsc` exit **0** · `eslint` **1 problem (1 error, 0 warnings)** · `vitest`
 **129 files passed | 1 skipped (130)** · **2947 passed | 1 skipped (2948)**, **0 failed**.
+
+---
+
+#### 9-04 — the spend scans reach `web/scripts/`, and the boundary is asserted
+
+**The hole, restated: for nine rounds every "0 offenders" in this file meant "0 offenders in the
+half of the tree we walked", and nothing said so.** `spend-scans.test.ts:29` was
+`path.join(process.cwd(), "src")`, `:50` was `walk(SRC)`, `:45` kept `.tsx?` only. `web/scripts/`
+was outside all five scans — the files the owner runs by hand, against real projects and real
+money, and the likeliest place an operator credential would ever be read.
+
+##### The walk now declares its boundary in its own file (Ruling 26 point 2)
+
+- **`ROOTS`** — `src` ("the application itself") and `scripts` ("operator tooling run by hand
+  against real projects and real money — the setup script builds a Discovery Engine index, the
+  billing probe spends ~$4 a run, and the prebuild guard decides whether a deployment is allowed to
+  proceed"). Each root carries its `why` as data, and a case asserts the `why` is non-empty.
+- **`SOURCE_EXTENSION`** is `.ts` / `.tsx` / **`.mjs`**. The `.mjs` half is not a detail: the old
+  filter kept `.tsx?` only, so even pointing the walk at `scripts/` would have found **nothing**.
+  The hole had two halves and closing one would have looked like closing both.
+- **`EXCLUDED_DIRECTORIES`** is a `Record<string, string>` — **name → reason**, in Ruling 4
+  point 7's shape: `test-support` (test scaffolding; its one key reference deletes the key rather
+  than reading it) and `__pycache__` (compiled Python bytecode under `scripts/`, not source anybody
+  edits). A case asserts the set is exactly those two and that neither reason is empty, so a third
+  exclusion has to be a decision rather than a tidy-up.
+- **`productionFiles()` is renamed `scannedFiles()`.** A function that returns operator tooling
+  while calling itself "production files" is the same small lie 9-01 was about — an accurate label
+  is part of the result.
+
+##### ONE EXCLUSION THE RULING EXPECTED, MEASURED, AND **NOT** TAKEN — with the measurement
+
+Ruling 26 point 3 anticipated that `scripts/assert-byok-production-env.mjs` would have to be
+excluded, because it "names banned variables **as data**" and would trip a naive scan. **I checked
+before excluding it, and the ruling's expectation does not hold here.** It does name them —
+`TAVILY_API_KEY` and `BRAVE_SEARCH_API_KEY` are entries in its `FORBIDDEN_ON_VERCEL` array, which is
+its entire job. But **these scans match a READ (`process.env.NAME`), never a mention**, and the
+guard never writes `process.env.TAVILY_API_KEY`: it takes `process.env` as a whole object
+(`:170-171`) and checks names against its lists. Measured — with the guard fully in scope, scan 3
+reports `[]` for Tavily and `["src/lib/search/system-key.ts"]` for Brave.
+
+**So the file stays fully in scope, and a case pins that decision with the reasoning.** Excluding it
+would have been the cheaper and worse answer: a blind spot created inside the one file whose job is
+refusing credentials — the exact shape this item exists to close. `code()`'s comment-stripping
+already handles the prose mentions, and a bare string in an array is not a read.
+
+##### ONE CASE REWRITTEN, NOT DELETED — and it going red is the item working
+
+Widening the walk turned scan 3's `GOOGLE_VERTEX_SEARCH_` case red: expected the single app module,
+received three. **The two extra entries are the operator scripts, and they were not introduced by
+this change — they were revealed.** They read the search capability names because building and
+querying the index is their whole purpose; they are not runtime code, nothing under `src/` imports
+them, and 9-01 made them read the same single expression the app does. The expectation now states
+that contract, with the reason, and names what a change would mean: **a fourth entry would be the
+old `GOOGLE_VERTEX_PROJECT` fallback coming back, which is exactly what this scan should catch.**
+
+##### A CASE I WROTE, MEASURED AS FALSE, AND CORRECTED BEFORE IT LANDED
+
+My first draft added *"the old models-project name is read in no script at all"*. **It is false, and
+committing it would have been a wrong value dressed as a guard** — both scripts still read
+`GOOGLE_VERTEX_PROJECT`, on purpose, to decide whether to print 9-01's loud "that is the models
+project and it is deliberately not read here" message. Reading a name in order to explain why you
+are ignoring it is the opposite of the defect.
+
+The case that shipped states the **accepted set** instead, in the shape Ruling 6 point 4's
+structured-source tally already uses: exactly those two scripts, each for that one reason; a third
+is a new coupling somebody must justify, and either disappearing means the loud message went with
+it. **The contract that the old name never FEEDS the project is deliberately NOT duplicated here** —
+it is asserted in `src/scripts/vertex-search-project.test.ts`, where it can be proved by *running*
+the scripts, and a weaker source-text copy in a second file is a second source of truth that can
+drift from the first.
+
+##### A blind spot in SHAPE, not in files — named rather than left implicit
+
+A boundary is not only *which files*; it is *which shapes*. Every scan here matches a literal
+`process.env.NAME`, so a **computed** read, `process.env[name]`, is invisible to all of them and no
+amount of widening the walk changes that. Rather than leave that unstated, the sites are enumerated
+by a case: the census is **1 file, 2 sites**, both in `scripts/check-provider-models.mjs`, both the
+live provider check reading **model** keys from its own `keyNames` lists (`GOOGLE_API_KEY`,
+`OPENAI_API_KEY`, and the BYOK vendors) — **no search key is reachable through them**. A site
+outside that file is a place a search credential could be read with no scan seeing it, and it is now
+a finding for the round it appears in rather than a silent pass.
+
+##### Proved by planting — THREE MORE PLANTS, THREE FIRED (and a fourth caught by its assertion)
+
+| # | Plant | Cases red |
+| --- | --- | --- |
+| 6 | **`const PLANTED_KEY = process.env.TAVILY_API_KEY;` inside `scripts/setup-vertex-search.mjs`** — B's exact plant, which left **12 passed, 0 failed** this morning | **2** — standing tally 1 named the file, and the boundary case caught it too |
+| 7 | the walk narrowed back to `src/` only | **7** |
+| 8 | `.mjs` dropped from the extension filter | **7** |
+
+**Plant 6 is the item's whole point in one line: the read that passed every gate at the start of
+this turn now names its own file in the failure message.**
+
+**A FOURTH PLANT FAILED TO APPLY AND ITS COUNT ASSERTION CAUGHT IT — a NEW trap worth writing down,
+because it is not the CRLF one.** The first form of plant 8 searched for a regex literal containing
+`\\.`; **the shell layer collapsed the double backslash before Node saw it**, so the JavaScript
+string held `.` where the file holds `\.` and the match count was 0. Printing the pattern back
+(`JSON.stringify`) is what identified it. **Rule: a plant pattern containing backslashes cannot be
+passed through `node -e` inside a shell string — choose a substring with no backslashes, or the
+plant silently matches nothing and a green run means nothing.** Every plant this turn asserted its
+substitution count first, which is the only reason both misfires were harmless.
+
+Each plant was reverted from a copy held **outside the repo**, with the **planted string asserted
+absent AND the fix asserted still present** before the next run was read, plus an empty
+`git diff --stat` on the file.
+
+##### Gate after 9-04
+
+`tsc` exit **0** · `eslint` **1 problem (1 error, 0 warnings)** — the standing `quiz.tsx:46` ·
+`vitest` **129 files passed | 1 skipped (130)** · **2954 passed | 1 skipped (2955)**, **0 failed**.
+**+7 tests, 0 files** — `spend-scans.test.ts` goes **12 → 19 cases**. No test deleted; one
+rewritten to state the new contract with the item that changed it named in the comment, as §2
+requires.
