@@ -10,9 +10,27 @@
 
 import { GoogleAuth } from "google-auth-library";
 
-const PROJECT =
-  process.env.GOOGLE_VERTEX_SEARCH_PROJECT?.trim() ||
-  process.env.GOOGLE_VERTEX_PROJECT?.trim();
+// ── The search project ─────────────────────────────────────────────────────
+// ABC-freemium 9-01 · Ruling 21 point 2, Ruling 26 point 4.
+//
+// **Reads `GOOGLE_VERTEX_SEARCH_PROJECT` and nothing else — the same single
+// expression `vertexSearchProject()` uses in `src/lib/sources/vertex-search.ts`.**
+//
+// It used to fall back to `GOOGLE_VERTEX_PROJECT`, and that fallback was a
+// SILENT configuration lie. `GOOGLE_VERTEX_PROJECT` is the **models** project;
+// 8-01(a) separated the two capabilities on purpose. So an operator who
+// followed this repo's own Step 3 to the letter got: a script that succeeded,
+// a real index built in the grounding project, and an app that queried nothing
+// — `isVertexSearchAvailable()` false — with no error printed anywhere.
+//
+// **The old name is now a loud failure instead of a silent success**, and
+// recovering costs one line. A Discovery Engine index is addressed by
+// project + collection + engine id: it does not move and it is not re-crawled.
+// Setting `GOOGLE_VERTEX_SEARCH_PROJECT` to the SAME project id makes the
+// identical index reachable under the name the app actually reads. No rebuild,
+// no re-crawl, no second $-cost.
+const PROJECT = process.env.GOOGLE_VERTEX_SEARCH_PROJECT?.trim();
+const LEGACY_MODELS_PROJECT = process.env.GOOGLE_VERTEX_PROJECT?.trim();
 const LOCATION = "global";
 const DATA_STORE_ID = process.env.GOOGLE_VERTEX_SEARCH_DATA_STORE_ID || "peer-web";
 // MEASURED 2026-08-26, AND IT CLOSES THE "JUST ADD A SECOND STORE" ESCAPE:
@@ -247,7 +265,27 @@ const STORES = [
 // ── Plumbing ───────────────────────────────────────────────────────────────
 
 if (!PROJECT) {
-  console.error("GOOGLE_VERTEX_PROJECT is not set. Nothing to do.");
+  console.error("GOOGLE_VERTEX_SEARCH_PROJECT is not set. Nothing to do.");
+  if (LEGACY_MODELS_PROJECT) {
+    // The loud half. Silence here is what shipped the defect: the script would
+    // have run happily on the models project. Never print the VALUE.
+    console.error("");
+    console.error(
+      "GOOGLE_VERTEX_PROJECT is set, and it is deliberately NOT read here.",
+    );
+    console.error(
+      "That name is the MODELS project. Vertex AI Search is configured",
+    );
+    console.error("separately, and the app reads GOOGLE_VERTEX_SEARCH_PROJECT.");
+    console.error("");
+    console.error("Add this line to web/.env.local with the SAME project id:");
+    console.error("  GOOGLE_VERTEX_SEARCH_PROJECT=<the same project id>");
+    console.error("");
+    console.error(
+      "An index already built under the old name does NOT move and is NOT",
+    );
+    console.error("rebuilt — the same index is reachable under the new name.");
+  }
   process.exit(1);
 }
 
@@ -471,8 +509,20 @@ for (const store of STORES) {
 }
 await ensureEngine(STORES.map((s) => s.id));
 
-console.log("\nDone. Add this line to web/.env.local and restart the dev server:");
+// ABC-freemium 9-01 — TWO lines, not one. This is the success path, and it was
+// the sharpest instance of the defect: a script that succeeds while handing the
+// operator instructions that no longer work.
+// `isVertexSearchAvailable()` (`src/lib/sources/vertex-search.ts`) is
+// `Boolean(vertexSearchProject() && vertexSearchApp())` — BOTH signals are
+// required, and the script already holds both values. It was printing one.
+console.log(
+  "\nDone. Add BOTH of these lines to web/.env.local and restart the dev server:",
+);
+console.log(`GOOGLE_VERTEX_SEARCH_PROJECT=${PROJECT}`);
 console.log(`GOOGLE_VERTEX_SEARCH_ENGINE_ID=${ENGINE_ID}`);
+console.log(
+  "\nBoth are required: the provider stays off if either one is missing.",
+);
 if (sites.rejected?.length) {
   console.log(
     `\n${sites.rejected.length} pattern(s) were refused — see REJECTED lines above.`,

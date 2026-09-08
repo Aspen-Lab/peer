@@ -189,11 +189,19 @@ export interface DiscoveryResult {
  * With the fallback gone the two are genuinely independent: set
  * `GOOGLE_VERTEX_SEARCH_PROJECT` plus an app id and Vertex AI Search comes up
  * while `isGeminiSearchAvailable()` stays false. **No new variable was
- * invented** — this name already existed, was already read first, is already
- * in the build guard's explicit list, and both operational scripts already
- * prefer it. The guard needs no edit either: its ban is on the whole
- * `GOOGLE_VERTEX_` prefix, so this name is refused on Vercel exactly as the
- * old one was.
+ * invented** — this name already existed, was already read first, and is
+ * already in the build guard's explicit list. The guard needs no edit either:
+ * its ban is on the whole `GOOGLE_VERTEX_` prefix, so this name is refused on
+ * Vercel exactly as the old one was.
+ *
+ * **ABC-freemium 9-01 — one clause of this docblock was corrected, because it
+ * had become clearance for the defect it described.** It used to end "…and both
+ * operational scripts already *prefer* it." True, and beside the point: they
+ * preferred it **and still fell back** to `GOOGLE_VERTEX_PROJECT`, so an
+ * operator following `docs/SETUP_vertex_ai_search.md` built a real index in the
+ * models project while this function returned `undefined` and the provider
+ * stayed off — silently. Both scripts now read this name and **nothing else**,
+ * and exit 1 naming it when only the old one is set.
  */
 function vertexSearchProject(): string | undefined {
   return process.env.GOOGLE_VERTEX_SEARCH_PROJECT?.trim() || undefined;

@@ -16471,3 +16471,191 @@ red**; (5) the generated route list removed — **0 cases red, green having chec
 **No production code changed** (`git diff --name-only -- web/` **0 files**). The one harness lives
 **outside the repo** in the session scratchpad. `.env.local` was never `cat`-ed; the environment
 was measured by name and emptiness only, and the staged credential grep printed nothing.
+
+---
+
+### Round 9 — Agent C
+
+**Four items in the ruled order (Ruling 26 point 8): 9-01 -> 9-03 -> 9-04 -> 9-05. One commit per
+item, each pushed as it finished.**
+
+**Gate cold before the first edit, confirmed rather than inherited:** `tsc` exit **0** · `eslint`
+**1 problem (1 error, 0 warnings)** — the standing `quiz.tsx:46` · `vitest` **128 files passed |
+1 skipped (129)** · **2934 passed | 1 skipped (2935)**, **0 failed** · `npm run build` exit **0**,
+`Compiled successfully in 5.1s`, 27/27 static pages, **1 Turbopack warning** (9-02, the owner's —
+the `next.config.ts -> pdf-text.ts -> full-text.ts -> api/papers/report/route.ts` trace). Identical
+to B's figures.
+
+---
+
+#### 9-01 — the two operator scripts AND the operator document, one commit
+
+**B's five sites: all five confirmed by my own grep before I touched anything, and B's count is
+right.**
+
+**Search scope, per Ruling 24 point 1.** `grep -n "GOOGLE_VERTEX" web/scripts/setup-vertex-search.mjs
+web/scripts/probe-vertex-search-billing.mjs` — **10 hits**, the complete variable census of both
+files. It is a superset of B's five and adds only `GOOGLE_VERTEX_SEARCH_DATA_STORE_ID` (setup `:17`)
+and `GOOGLE_VERTEX_SEARCH_ENGINE_ID` (setup `:28`, probe `:20`), neither of which is the old name —
+so **there is no sixth script site B missed.** Also `grep -n "env.local|\.env"` over both scripts
+(11 hits, which is how the success message was cross-checked against the usage header);
+`grep -n "GOOGLE_VERTEX|single line|turns the provider on|FALLBACK|default" docs/SETUP_vertex_ai_search.md`
+(**20 hits** — the whole document's variable surface, so the four wrong rows were found against the
+file rather than inherited from B's table). Files read end to end or in the cited ranges: both
+operator scripts, `web/src/lib/sources/vertex-search.ts` (the project, availability and fallback
+functions plus the docblock above them, and the module header),
+`docs/SETUP_vertex_ai_search.md`, `web/src/scripts/assert-byok-production-env.test.ts`.
+
+**FIVE SCRIPT SITES FIXED, PLUS ONE MORE B NAMED IN PROSE AND LEFT OUT OF THE TABLE — SO SIX.**
+
+| # | Site | Before | After |
+| --- | --- | --- | --- |
+| 1 | `setup-vertex-search.mjs:13-15` | `GOOGLE_VERTEX_SEARCH_PROJECT \|\| GOOGLE_VERTEX_PROJECT` | reads the new name **only**; the old name goes into `LEGACY_MODELS_PROJECT`, which feeds the message and never feeds `PROJECT` |
+| 2 | `setup-vertex-search.mjs:250` | `"GOOGLE_VERTEX_PROJECT is not set. Nothing to do."` | names the **new** variable, and when the old one is set adds the loud paragraph below |
+| 3 | `setup-vertex-search.mjs:474-475` | `"Add this line…"` + engine id only | `"Add BOTH of these lines…"` + **project AND engine id** + *"Both are required: the provider stays off if either one is missing."* |
+| 4 | `probe-vertex-search-billing.mjs:17-19` | the same fallback | the same fix |
+| 5 | `probe-vertex-search-billing.mjs:33` | `"GOOGLE_VERTEX_PROJECT is not set."` | the same fix |
+| 6 | `vertex-search.ts:192-194` | *"…and both operational scripts already **prefer** it."* | clause corrected, and the docblock now records why it was wrong |
+
+**Site 6 is B's find, recorded in B's §4 prose but absent from B's table of five, so it is easy to
+lose. I fixed it and I am counting it, because my own change is what made it false:** after 9-01 the
+scripts do not "prefer" the name, they read it and nothing else. Leaving a sentence my edit
+falsified is the same defect class the item is about — and B's own words are that a future reader
+"will take it as clearance". It is a **comment-only** change: zero behaviour, zero control flow,
+zero exports touched. It sits beyond the manager's literal TODO wording and inside B's guide, which
+asked for it "in the same edit". Logged here rather than assumed.
+
+**The failure message, and why it is worded the way it is.** An operator script should fail loudly
+on the old name — but a loud failure that does not say what to do is a wall, so the message carries
+the recovery on the same screen. Verbatim, from a real run:
+
+```
+GOOGLE_VERTEX_SEARCH_PROJECT is not set. Nothing to do.
+
+GOOGLE_VERTEX_PROJECT is set, and it is deliberately NOT read here.
+That name is the MODELS project. Vertex AI Search is configured
+separately, and the app reads GOOGLE_VERTEX_SEARCH_PROJECT.
+
+Add this line to web/.env.local with the SAME project id:
+  GOOGLE_VERTEX_SEARCH_PROJECT=<the same project id>
+
+An index already built under the old name does NOT move and is NOT
+rebuilt — the same index is reachable under the new name.
+```
+
+**WHAT BREAKS FOR SOMEONE WHO ALREADY BUILT AN INDEX UNDER THE OLD NAME: NOTHING — and the message
+says so itself, which is the point.** A Discovery Engine index is addressed by
+project + collection + engine id. It does not move and it is not re-crawled. The operator sets the
+new name to the same project id and the identical index is reachable: no rebuild, no re-crawl, no
+second $-cost, the 50-pattern ceiling untouched. **The message never prints the VALUE** — a
+placeholder, not `${LEGACY_MODELS_PROJECT}` — and that is asserted by its own case, not by
+inspection.
+
+**THE DOCUMENT, IN THE SAME COMMIT (Ruling 26 point 4). Four wrong places, all four fixed:**
+
+| Line | Was | Now |
+| --- | --- | --- |
+| 227-232 | one fenced line (engine id) + *"That single line switches all three surfaces over"* | **two** fenced lines (project **and** engine id) + *"Both lines are required, and one on its own does nothing"* |
+| 236 | *"**Setting this is what turns the provider on.**"* | *"One of the two signals that turn the provider on… Either one missing leaves the provider off."* |
+| 238 | `GOOGLE_VERTEX_SEARCH_PROJECT` \| default `GOOGLE_VERTEX_PROJECT` \| *"Only needed if…"* | default **`none — required`**, promoted to the top of the table, plus a new paragraph saying `GOOGLE_VERTEX_PROJECT` is the **models** project, is not read, and that both scripts now exit 1 on it — with the "nothing is rebuilt" recovery |
+| 243 | `GOOGLE_VERTEX_SEARCH_FALLBACK` \| default **`on`** \| *"Set to `off` to forbid…"* | default **`off`** \| *"Set to `on` (or `true`/`1`) to **arm** the grounding backfill"*, with the price and the credit named, and the row says which item flipped it |
+
+**Every figure in the rewritten fallback row was verified in source before it was written, not
+carried from B's table:** `fallbackEnabled()` (`vertex-search.ts:487-490`) returns true only for
+`on`/`true`/`1`; *"~$35 / 1000 queries"* and *"that SKU is NOT covered by the project's Trial credit
+for GenAI App Builder"* are `vertex-search.ts:17-19`, quoted from the module's own header rather
+than from the state file.
+
+**Checked and deliberately NOT widened.** `assert-byok-production-env.mjs` names
+`GOOGLE_VERTEX_PROJECT` three times as **ban-list data**; B said do not touch it and I did not — its
+suite still passes with both names on the forbidden list. `docs/SETUP_vertex_ai_search.md:77-86`
+(the narrative about which project the credit is on) and `:293` (rolling back by deleting the engine
+id) are still true and were left alone. Ruling 25 point 2's prefix-ban-to-allow-list note stays a
+carried design note for whoever takes D2b — not actioned.
+
+##### The durable guard — `web/src/scripts/vertex-search-project.test.ts` (NEW, 13 cases)
+
+Built on the precedent B named rather than a design of my own: it **spawns** the scripts and asserts
+exit code and message, and it lives under `src/` because vitest's `include` is
+`src/**/*.test.{ts,tsx}` — a test next to the scripts would never run and the requirement would be
+green by absence.
+
+**IT DECLARES ITS COVERAGE BOUNDARY IN ITS OWN FILE AND NAMES ITS ONE EXCLUSION WITH THE REASON
+(Ruling 26 point 2):**
+
+- `setup-vertex-search.mjs` is spawned in **all three** project states, including the accepting one.
+  `--dry-run` plus a deliberately unreadable `GOOGLE_APPLICATION_CREDENTIALS` makes it die on the
+  credential file the instant it clears the project gate — **no network call, no cloud resource** —
+  and the credential error is itself the proof it got past rather than being skipped.
+- `probe-vertex-search-billing.mjs` is spawned **only in its two refusing states, and that exclusion
+  is deliberate and stated in the file**: past its project gate it spends **about $4 of real money**
+  by design (`PRICE_PER_1000 = 4`, default 1000 queries) and it has no `--dry-run`. Its accepting
+  half is pinned by **reading its source** instead. Both refusing states exit before
+  `new GoogleAuth(...)` is constructed, so they cost nothing.
+
+The 13 cases: the project expression matches the app's, in source, for **both** scripts — and the
+`||` fallback is asserted **absent**, so it cannot creep back; both scripts exit 1 naming the new
+variable with nothing set; both exit 1 on the **old name alone**, say it was seen and ignored, name
+the models project, and carry the "does not move, is not rebuilt" recovery; neither prints the old
+variable's **value**; the setup script clears the gate on the new name; the success message prints
+**both** lines; and three cases pin the **document** — the old default row gone, the "single line"
+and "Setting this is what turns the provider on" sentences gone, and the fallback row reading
+`off`/`arm` rather than `on`/`off`.
+
+##### Proved able to fail — FIVE PLANTS, FIVE FIRED (and a sixth that refused to apply)
+
+Each plant was applied with an **asserted substitution count of exactly 1** before the run was read,
+and each was reverted with **the planted string asserted absent AND the fix asserted still present**
+before the next run was read.
+
+| # | Plant | Cases red |
+| --- | --- | --- |
+| 1 | the `\|\| GOOGLE_VERTEX_PROJECT` fallback restored in `setup-vertex-search.mjs` | **3** |
+| 2 | the `\|\| GOOGLE_VERTEX_PROJECT` fallback restored in `probe-vertex-search-billing.mjs` | **3** |
+| 3 | the project line deleted from the success message (back to one line) | **1** |
+| 4 | the doc's `\| GOOGLE_VERTEX_SEARCH_PROJECT \| GOOGLE_VERTEX_PROJECT \|` default row restored | **1** |
+| 5 | the doc's fallback row back to default `on` | **1** |
+
+**A SIXTH PLANT FAILED TO APPLY AND ITS OWN COUNT ASSERTION CAUGHT IT** — the first form of plant 3
+matched **0** occurrences and aborted rather than running a meaningless green. This is the CRLF /
+exact-text trap, now the fourth round running that it has bitten someone. The count assertion is
+what makes it harmless.
+
+##### A PROCESS ERROR OF MINE, RECORDED BECAUSE IT NEARLY COST THE ITEM
+
+**I ran plant 1 BEFORE committing 9-01, and reverted it with `git checkout -- <file>` — which
+restores HEAD, not my uncommitted fix. It silently deleted the whole 9-01 edit to that file.** The
+0-line-diff assertion "passed" and told me nothing, because agreeing with HEAD is exactly what a
+revert-to-HEAD does. What caught it was the *other* assertion: `grep -c` for the planted string
+returned **1**, not 0. I re-applied all three edits and re-ran.
+
+**The rule this loop should carry, and it is a real hole in ground rule "a revert proof asserts the
+revert applied":** a plant/revert cycle runs **after** the item is committed, or the revert restores
+from a backup **outside** the repo — never `git checkout --` against an uncommitted fix, because
+then the revert step and the defect are the same operation. **A diff assertion cannot see this; only
+asserting BOTH that the planted value is absent AND that the fix is still present can.** Plants 2-5
+were reverted from a scratchpad backup outside the repo and asserted in both directions.
+
+##### Standing locks re-verified by running them, not by reasoning
+
+`spend-scans.test.ts` **12 passed** (unchanged — and see 9-04, the item about why it could not see
+any of this); `dead-links.test.ts` **4 passed**; `assert-byok-production-env.test.ts` **31 passed**,
+with `GOOGLE_VERTEX_PROJECT` and `GOOGLE_VERTEX_SEARCH_PROJECT` both still on its forbidden list and
+neither entry touched; `ui-vocabulary.test.ts` + `no-client-dev-flags.test.ts` **5 passed across 2
+files**.
+
+**What the field shows: nothing changes for any reader.** `isVertexSearchAvailable()` is `false`
+today and stays `false`; no surface switches provider; no route, no component and no rendered string
+moves. The only visible effect is that a misconfigured operator now gets an error instead of a
+working script and a dead index.
+
+##### Gate after 9-01
+
+`tsc` exit **0** · `eslint` **1 problem (1 error, 0 warnings)** — the standing `quiz.tsx:46` ·
+`vitest` **129 files passed | 1 skipped (130)** · **2947 passed | 1 skipped (2948)**, **0 failed**.
+**+1 file and +13 tests, all of them the new guard.** No test deleted, no assertion weakened.
+Staged credential grep — the three standing key prefixes, run over the **diff** rather than the
+files, because the state file legitimately carries prose mentions of them — printed nothing.
+**And it printed nothing only after I removed a match my own draft had introduced**: the first
+version of this paragraph quoted the pattern literally, which is a sixth-plus match in a file that
+already carries six. Round-8 A's maintenance note, followed.
