@@ -1132,17 +1132,22 @@ GATE NOW:  **Round-8 A, cold, after every plant was reverted and no throwaway re
            suite, `components/cards/pool-refresh-notice.test.tsx`.
            Round-5 A's figures follow: tsc **0** · eslint **1** · vitest **124 files passed | 1
            skipped (125)** · **2871 tests passed | 1 skipped (2872)**, **0 failed**, 9.50 s.
-TODO:      C WORKS THE ROUND-9 GUIDE, AND IT IS ONE ITEM — **9-01**, in §4 "Round 9 — Agent B".
-           **Land it as ONE commit**: the two scripts (5 sites) AND
-           `docs/SETUP_vertex_ai_search.md` Step 3 (4 rows) together — split them and the window
-           where the instructions contradict the tools is exactly the defect. Then the durable
-           guard, copying `assert-byok-production-env.test.ts`'s shape: a test under `src/` that
-           **spawns** the script and asserts the FAILING direction (old name only -> exit 1 naming
-           the new one). `--dry-run` exists and the project check exits before any network call, so
-           it costs no cloud call. **Do NOT run `probe-vertex-search-billing.mjs` — it spends ~$4
-           by design.** **9-03 is a §3 edit with no code** (reconcile `:2397-2398` with
-           `:2471-2476`); the manager may take it directly rather than spend a C turn on it.
-           **9-02 is the owner's** — do not write a fix.
+TODO:      C WORKS ROUND 9, FOUR ITEMS (Ruling 26 §1aa point 8):
+           **9-01** the two operator scripts in `web/scripts/` (five sites, B named them) AND
+           `docs/SETUP_vertex_ai_search.md`, wrong in four places, one printing a money control
+           backwards — **one commit**, or the defect is moved rather than closed (point 4).
+           **9-03** reconcile §3: the build rule landed but the canonical gate command still
+           omits the build (point 1).
+           **9-04** the five spend scans extend to `web/scripts/` including `.mjs`; any
+           exclusion is NAMED WITH ITS REASON; the scan's coverage boundary is asserted by a
+           test (points 2-3). Prove it by planting a banned-key read in a script — today that
+           passes every gate.
+           **9-05** `typedRoutes` — ADOPTED (point 5). B measured 7 errors in 6 files; fix at
+           the source with type annotations, NEVER casts. It does not replace the dead-link
+           test. NOTE: after a `typedRoutes` build, `tsc` can redden on untouched source until
+           a second build regenerates the types — rebuild before believing it (B measured this).
+           The gate REPORTS the build's warning count and does not assert it (point 6); it must
+           PASS with today's 1 warning.
 PENDING USER ACTION: (1) **Apply the three migrations** under `web/supabase/migrations/20260904*`
            — this is now the ONLY thing blocking five of the six remaining halves. (2) Add
            `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` to `web/.env.local` so
@@ -1152,21 +1157,8 @@ PENDING USER ACTION: (1) **Apply the three migrations** under `web/supabase/migr
            NOT carry `TAVILY_API_KEY`; deploy only after the branch is green and merged.
            DONE: the local `GOOGLE_API_KEY` is filled (Ruling 21 point 4). WITHDRAWN: the trial
            backfill (no users); the 2026-10-01 model escalation (the owner decided).
-OPEN FOR MANAGER:  **THREE, all flagged rather than decided.**
-           (1) **`typedRoutes` — Ruling 19 point 4 is yours to revisit.** Both its stated costs
-           are now measured: the build is paid by 9-03, and the cast count is **7 errors in 6
-           files**, not ~30. I recommend adopting it as **6 source-type annotations**, and I note
-           the honest argument against: it is a new failure mode with one agent round left. The
-           cost will not grow if you defer it.
-           (2) **Should the build assert the Turbopack warning COUNT** (exactly 1, and that one)?
-           It would catch a new warning automatically, but it pins the gate to a defect the owner
-           may or may not fix. I recommend the reported-figure form for now.
-           (3) **Ruling 25 point 2's D2b design note meets 9-01.** Both touch the
-           `GOOGLE_VERTEX_` family and a reader will be tempted to tidy the Vercel guard while in
-           there. **It is not in 9-01's scope and I am not recommending it now** — flagged only so
-           the allow-list note is not lost when D2b is taken.
-           Still the owner's, not the loop's: **9-02**, the build warning that ships the whole
-           project into one serverless function (Ruling 25 point 4).
+OPEN FOR MANAGER:  none — B's three POLICY items ruled in §1aa (Ruling 26 points 5-7).
+           9-02 (the Turbopack tracing warning) remains the OWNER's call, not an agent item.
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
@@ -2429,6 +2421,79 @@ of the loop.**
    **9-03** the build in the gate (point 5). **9-02 is the owner's, not an agent's.** After round 9
    there is nothing an agent can do until the three migrations are applied.
 
+---
+
+## §1aa. RULING 26 — after round-9 B; every scan in this loop has had a hole (2026-09-07, BINDING)
+
+**Manager's verification of B's two headline claims, both by reading the source, not by trust:**
+- `spend-scans.test.ts:10` is `const SRC = path.join(process.cwd(), "src")`, `:20` is `walk(SRC)`,
+  `:15` keeps only `.tsx?`. **Confirmed: `web/scripts/*.mjs` is invisible to all five spend
+  scans.** B also proved it by planting a flagrant banned-key read into a script — 12 cases stayed
+  green; the identical read in `src/` reddened exactly one.
+- Route rows recounted from the manager's own build log by script: **36 (9 static, 27 dynamic)**.
+  **B is right; the manager's 34 was wrong.**
+
+1. **Three corrections to Ruling 25, all accepted, all mine.**
+   - **Route count: 36, not 34.** Stated as measured, and it was not.
+   - **"The prebuild guard fires" was loose in a way that matters.** Locally the guard runs,
+     **audits nothing, prints nothing, and exits 0**, because `VERCEL` is unset. **A green local
+     build does NOT validate the deployment environment** — anyone reading Ruling 25 point 3 could
+     have concluded it did. With `VERCEL=1` set by accident it exits 1 *before* the build, naming
+     three variables and no values.
+   - **9-03 was already half-landed and self-contradictory:** §3 now carries a build rule while
+     §3's canonical gate command still omits it. Reconciling those two lines is C's whole
+     state-file job for that item.
+   **Point 3's conclusion stands: the branch builds, and nobody had checked.**
+2. **THE PATTERN, and it is the finding of the round. Every scan this loop built has had a
+   coverage hole that made it pass by not looking. Three for three.**
+   - Round-7 C's route enumeration silently lost `/` — a wrong model agreeing with a wrong world.
+   - The dead-link cross-check against Next's generated route list has been **skipping for eight
+     rounds** because no build ever ran; B proved it both ways — a fake route reddens one case,
+     removing the generated file leaves everything green *having checked nothing*.
+   - The five spend scans cannot see `scripts/`.
+   **New standing rule (§3): a scan declares its coverage boundary in its own file, and that
+   boundary is itself asserted by a test.** "Which files did you look at" is part of a scan's
+   result, not a detail of its implementation — the same standard Ruling 24 point 1 put on absence
+   claims made by people, applied to the ones made by code.
+3. **The blind spot becomes item 9-04.** The spend scans extend to `web/scripts/`, including
+   `.mjs`. **This is not cosmetic:** those scripts are exactly where an operator credential would
+   plausibly be read, they are the files the owner runs by hand, and today a banned-key read there
+   passes every gate. Where a scan legitimately must exclude something (the guard script names
+   banned variables **as data**), the exclusion is **named with its reason**, as Ruling 4 point 7
+   already does for `src/test-support/`.
+4. **9-01's bigger half is the document, and it lands in the same commit as the scripts.**
+   B found `docs/SETUP_vertex_ai_search.md` wrong in **four** places — three produce the same
+   silent no-op the item is about, and **one prints a money control backwards** since 8-01(b)
+   flipped the backfill default. It is the only operator-facing instruction set, nothing links to
+   it, and there is no `.env.example`. **Fixing the scripts and leaving the document is the defect
+   moved, not closed** — this loop has ruled that shape twice already (a rendered control that
+   resolves nowhere; a destination that answers nothing).
+5. **`typedRoutes`: ADOPTED, and Ruling 19 point 4 is reversed on measurement.** B turned it on and
+   built: **7 errors in 6 files**, not the ~30 sites estimated, because Next 16 validates template
+   literals, typed routes touch only `next/link` and `next/navigation`, and `tsconfig.json` already
+   includes the generated types — setup cost zero. All 8 router calls are literals and pass free.
+   **Fix at the source with 6 type annotations, never with casts** — a cast silences the checker
+   and buys nothing. **It does not replace the dead-link test**; it is a second, earlier guard.
+   Item **9-05**. Both of the original rejection's stated costs were measured and both were wrong
+   in the cheap direction, which is the reason to re-cost a rejection when its premise changes
+   rather than inheriting it.
+6. **B's POLICY on asserting the Turbopack warning count — B's recommendation adopted.** The gate
+   **reports** the figure and does **not** assert it. Asserting would pin the gate to a defect the
+   owner has not decided to fix (9-02 is theirs), and a gate that is red by design is a gate people
+   learn to ignore. **The gate must pass with today's warning.** A new warning is noticed because
+   the figure is reported and A tallies it — **new standing tally: build warnings, currently 1,
+   named.**
+7. **B's third POLICY — the D2b allow-list note meeting 9-01's family of names — is correctly out
+   of scope and stays recorded, not actioned.** Ruling 25 point 2 already holds the design note;
+   9-01 does not touch the guard.
+8. **Round 9's C works four items: 9-01 (scripts + document, one commit) -> 9-03 (reconcile §3) ->
+   9-04 (scans cover `scripts/`) -> 9-05 (`typedRoutes`).** Still the last agent round; after it,
+   nothing an agent can do remains until the owner applies the three migrations.
+9. **Recorded for the honesty of the record:** the manager has now been corrected by an agent
+   **three times in three rounds** — a false absence claim (Ruling 24 point 1), a wrong route
+   count, and an overstated build claim (both above). The loop's checking runs in both directions
+   or it is not checking.
+
 ## §2. ROLES — DO ONLY YOUR OWN JOB
 
 ### Agent A — Reviewer
@@ -2597,6 +2662,11 @@ C does **not** judge whether something should be fixed.
   point 7). Any edit asserts the file's line count did not drop unexpectedly BEFORE committing;
   round-8 A's first rewrite would have deleted ~600 lines of round history and a line-count
   assertion is what caught it.
+- **A scan declares its coverage boundary in its own file, and that boundary is asserted by a
+  test** (Ruling 26 point 2). "Which files did you look at" is part of a scan's RESULT, not an
+  implementation detail. Every scan this loop built has had a hole that made it pass by not
+  looking - a route enumeration that lost `/`, a cross-check that skipped for eight rounds,
+  and five spend scans that cannot see `scripts/`. Three for three.
 - Commit messages: plain sentences in the repo's existing style
   (`feat(scope): …`, `fix(scope): …`, `refactor(scope): …`), ending with
   `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>`.
