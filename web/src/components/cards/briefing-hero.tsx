@@ -1,5 +1,6 @@
 "use client";
 
+import type { ItemDetailRoute } from "@/lib/navigation/item-routes";
 import Link from "next/link";
 import type { Paper, Event, Job } from "@/types";
 import { useFeedStore } from "@/store/feed";
@@ -26,7 +27,10 @@ export function BriefingHero({ item }: { item: HeroItem }) {
     notInterestedJob,
   } = useFeedStore();
 
-  const detail =
+  // ABC-freemium 9-05 — annotated, not cast. A ternary of template literals is
+  // widened to `string`, so the annotation is what makes Next check all three
+  // branches against the real route tree; `/paperz/${id}` stops compiling.
+  const detail: ItemDetailRoute =
     item.kind === "paper"
       ? `/papers/${item.data.id}`
       : item.kind === "event"

@@ -1,6 +1,7 @@
 "use client";
 
 import { use, useMemo, useState, useEffect, useRef } from "react";
+import type { PaperSurfaceRoute } from "@/lib/navigation/item-routes";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Paper } from "@/types";
@@ -1815,7 +1816,12 @@ function ActionRow({
 }: {
   primaryUrl: string;
   primaryLabel: string;
-  surfaceHref: string;
+  // ABC-freemium 9-05 — the PROP is typed, not the `<Link>` cast, so the
+  // caller's `` `/papers/${encodeURIComponent(paper.id)}/surface` `` is what
+  // gets checked against the route tree. `primaryUrl` stays `string`: it is an
+  // EXTERNAL publisher URL, not an internal route, and typing it `Route` would
+  // be a wrong value dressed as extra safety.
+  surfaceHref: PaperSurfaceRoute;
   paper: Paper;
   onSave: () => void;
   onUnsave: () => void;

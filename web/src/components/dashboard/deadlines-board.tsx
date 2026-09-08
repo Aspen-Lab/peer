@@ -1,5 +1,6 @@
 "use client";
 
+import type { ItemDetailRoute } from "@/lib/navigation/item-routes";
 import Link from "next/link";
 import type { Event, Job } from "@/types";
 import { formatDate, parseDate } from "@/lib/format";
@@ -222,7 +223,9 @@ export function DeadlinesBoard({
         <ol className="mt-5 space-y-2.5">
           {rows.map((row) => {
             const tone = urgencyTone(row);
-            const href =
+            // ABC-freemium 9-05 — annotated, not cast, so both branches are
+            // checked against the real route tree.
+            const href: ItemDetailRoute =
               row.itemKind === "job"
                 ? `/jobs/${row.item.id}`
                 : `/events/${row.item.id}`;

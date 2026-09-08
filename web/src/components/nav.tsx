@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import type { Route } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -9,8 +10,18 @@ import { useUIStore } from "@/store/ui";
 import { formatTimeAgo } from "@/lib/format";
 import { UserMenu } from "@/components/user-menu";
 
+/**
+ * ABC-freemium 9-05 — `href` is a `Route`, not a `string`.
+ *
+ * **One annotation, two errors, and the whole navigation bar becomes
+ * compile-checked against the real route tree.** Casting at the two `<Link>`
+ * sites would have silenced the checker and bought nothing; typing the SOURCE
+ * of the string means a typo in the `tabs` array below is a build failure
+ * rather than a tab that renders and goes nowhere. That is the defect class
+ * Ruling 18 point 2 and Ruling 19 point 1 both exist because of.
+ */
 type Tab = {
-  href: string;
+  href: Route;
   label: string;
   shortcut: string;
 };

@@ -119,11 +119,53 @@ lock by rebasing onto the holder's head.
 ## §1. CURRENT STATE — THE SOURCE OF TRUTH
 
 ```
-HELD BY:          C-round9 @ 2026-09-08T00:14Z
+HELD BY:          free
 ROUND:            9
-WHOSE TURN:       C  (round 9, the last agent round; C works 9-01 only — 9-03 is a state-file
-                  edit the manager may take directly, and 9-02 is the owner's)
-STOPPED BECAUSE:  finished the turn @ 2026-09-07T23:52Z — BOTH ITEMS, 9-01 and 9-03, one commit
+WHOSE TURN:       A  (round 9 review — the last agent round's re-measure. All four of C's items
+                  landed; after A, nothing an agent can do remains until the owner applies the
+                  three migrations)
+STOPPED BECAUSE:  finished the turn @ 2026-09-08T01:06Z — **ALL FOUR ITEMS LANDED IN THE RULED
+                  ORDER (9-01 -> 9-03 -> 9-04 -> 9-05), one commit each, each pushed as it
+                  finished.** Gate green cold after every item, and **`npm run build` run as a
+                  gate step: exit 0, 27/27 static pages, 36 route rows, 1 Turbopack warning**
+                  (9-02, the owner's, unchanged). **11 plants, 11 fired**, every one reverted
+                  with the planted string asserted ABSENT **and the fix asserted still
+                  PRESENT** — two more plants failed to apply and their own count assertions
+                  caught them. No test deleted; **one rewritten to state a new contract** with
+                  the item named in its comment, as §2 requires. No throwaway left inside the
+                  repo (`git status --porcelain --untracked-files=all` clean before every
+                  commit). `.env.local` never `cat`-ed.
+                  **THREE THINGS THE NEXT TURN SHOULD NOT HAVE TO REDISCOVER:**
+                  **(1) A PROCESS ERROR OF MINE THAT NEARLY COST 9-01.** I ran a plant BEFORE
+                  committing the item and reverted it with `git checkout -- <file>` — which
+                  restores **HEAD**, not the uncommitted fix, so it silently deleted the whole
+                  edit. The 0-line-diff assertion "passed" and told me nothing, because agreeing
+                  with HEAD is what a revert-to-HEAD does. Only the planted-value-absent check
+                  caught it. **A plant/revert cycle runs AFTER the item is committed, or reverts
+                  from a copy outside the repo — and it asserts BOTH directions, absent AND
+                  present.** Every later plant did.
+                  **(2) THE `typedRoutes` REBUILD TRAP HIT IN THE OPPOSITE DIRECTION FROM THE
+                  ONE B WARNED ABOUT, AND THAT DIRECTION IS WORSE.** B's note is "tsc can go RED
+                  on untouched source until you rebuild"; that never happened to me. What did:
+                  removing `typedRoutes` and running `tsc` **without** rebuilding gave **exit 0,
+                  zero errors**, reading the previous build's generated types. **A stale red
+                  wastes an hour; a stale green gets committed.** After the rebuild the guard was
+                  genuinely gone and a planted nav typo compiled clean — so the flag is
+                  load-bearing and the annotations are inert without it. **Rule: after touching
+                  `next.config.ts`, neither a red nor a green `tsc` means anything until you
+                  rebuild.**
+                  **(3) RULING 26 POINT 5'S PRESCRIBED FIX SHAPE IS WRONG FOR 4 OF THE 6 FILES,
+                  measured by running it.** "`href: string` becomes `Route`" works only for
+                  STATIC routes: `Route`'s default type parameter is `string`, and `RouteImpl`'s
+                  dynamic arm is driven by that parameter, so the bare `Route` **rejects every
+                  dynamic route**. The count (6 files, 7 errors, `nav.tsx` fixing two) is exactly
+                  right; the shape needed template-literal types for the four dynamic sites.
+                  **Deviation in shape only — still annotations at the source, still ZERO
+                  casts**, traced before it was taken (ground rule 6).
+                  **AND ONE FIGURE INDEPENDENTLY CONFIRMED, NOT INHERITED: 36 route rows (9
+                  static, 27 dynamic)**, counted from my own build log by a different method than
+                  B used. Ruling 26 point 1's correction of the manager's 34 stands.
+                  Previous line: finished the turn @ 2026-09-07T23:52Z — BOTH ITEMS, 9-01 and 9-03, one commit
                   each, each pushed as it finished, plus one extra commit removing a
                   credential-grep false positive my own draft had introduced (round-8 A's
                   maintenance note, followed). **No production code changed**
@@ -192,7 +234,73 @@ STOPPED BECAUSE:  finished the turn @ 2026-09-07T23:52Z — BOTH ITEMS, 9-01 and
                   probe script was written inside `web/`, run, and **deleted** before its commit
                   (`git status --porcelain --untracked-files=all` empty). `.env.local` was never
                   `cat`-ed and no key material appears anywhere in this repo.
-STATUS:           ROUND 9 — **B HAS WRITTEN THE GUIDE. TWO ITEMS: 9-01 `WRONG DATA` (silent),
+STATUS:           ROUND 9 — **C HAS BUILT ALL FOUR ITEMS.** Final gate, cold, after the last
+                  item: `tsc` exit **0** · `eslint` **1 problem (1 error, 0 warnings)** — the
+                  standing `quiz.tsx:46` · `vitest` **129 files passed | 1 skipped (130)** ·
+                  **2954 passed | 1 skipped (2955)**, **0 failed** · **`npm run build` exit 0**,
+                  `Compiled successfully in 5.0s`, **27/27 static pages**, **36 route rows**,
+                  **`Turbopack build encountered 1 warnings:`** (9-02, the owner's).
+                  Net across the turn: **+1 test file, +20 tests** (2934 -> 2954).
+                  1. **9-01 — SIX SITES FIXED, NOT FIVE, AND THE DOCUMENT IS IN THE SAME
+                     COMMIT.** B's five confirmed by my own grep (`grep -n "GOOGLE_VERTEX"` over
+                     both scripts = **10 hits**, the complete variable census — so there is no
+                     sixth script site anyone missed). **The sixth is `vertex-search.ts:192-194`,
+                     which B found in prose and left out of B's own table**: the docblock said
+                     *"both operational scripts already prefer it"*, and MY change is what made
+                     that false. Comment-only, zero behaviour. Both scripts now read
+                     `GOOGLE_VERTEX_SEARCH_PROJECT` and nothing else and **exit 1 naming it** on
+                     the old name — with the recovery on the same screen, because an index built
+                     under the old name **does not move and is not rebuilt**. The success message
+                     now prints **both** required lines instead of one. The document's four wrong
+                     places are all fixed, including the money control that read backwards.
+                     **New guard: 13 spawn-based cases**, which **declare their coverage boundary
+                     and name their one exclusion with its reason** — the billing probe is never
+                     spawned past its project gate because it spends **~$4 of real money** per run
+                     and has no dry-run.
+                  2. **9-04 — THE SCANS NOW SEE `scripts/`, AND B'S PLANT PROVES IT.** The exact
+                     `process.env.TAVILY_API_KEY` read that left **12 passed, 0 failed** this
+                     morning now **reddens 2 cases and names its own file**. `spend-scans.test.ts`
+                     goes **12 -> 19 cases**; the walk's roots, extensions and exclusions are data
+                     with reasons attached, and **the boundary itself is asserted** — narrowing it
+                     back to `src/` reddens **7**, dropping `.mjs` reddens **7**.
+                     **ONE EXCLUSION THE RULING EXPECTED AND I DID NOT TAKE, with the
+                     measurement:** Ruling 26 point 3 predicted the build guard would need
+                     excluding because it names banned keys as data. **It does name them, and no
+                     exclusion is needed** — these scans match a **read** (`process.env.NAME`),
+                     never a mention, and the guard takes `process.env` as a whole object.
+                     Excluding it would have put a blind spot inside the one file whose job is
+                     refusing credentials. **One case rewritten, not deleted:** the Vertex
+                     capability names have **three** readers, not one — the two extra were
+                     revealed by the widening, not introduced by it, and a **fourth** entry would
+                     be 9-01's fallback coming back. **And one case I wrote, measured as FALSE,
+                     and corrected before it landed** — "no script reads the old name" is untrue,
+                     both read it to print the loud message; the shipped case states the accepted
+                     set with the reason instead.
+                  3. **A BLIND SPOT IN SHAPE, NAMED RATHER THAN LEFT IMPLICIT.** Every scan in
+                     that file matches a literal `process.env.NAME`, so a computed
+                     `process.env[name]` is invisible to all of them and no widening of the walk
+                     changes it. The census is now asserted: **1 file, 2 sites**, both in
+                     `check-provider-models.mjs`, both reading **model** keys — **no search key is
+                     reachable through them**. A third site is a finding, not a silent pass.
+                  4. **9-05 — A DEAD INTERNAL LINK IS NOW A COMPILE ERROR.** B's cost reproduces
+                     exactly: **7 errors, 6 files, one class**. Fixed with **7 source annotations
+                     and ZERO casts**, plus one new type module carrying the explanation. Proved:
+                     a nav tab typed `/savd` fails with **`TS2820 … Did you mean "/saved"?`**, and
+                     breaking a route shape reddens **6 errors across 3 files** — which is also
+                     the proof that the new aliases are **not a second route table**: they are
+                     checked against Next's own generated `DynamicRoutes` at every `<Link>`.
+                     **`dead-links.test.ts` untouched and still 4 passed** — nothing replaced,
+                     nothing deleted, and it now runs its generated-route cross-check for real
+                     because every turn builds.
+                  5. **9-03 — TWO PLACES THE GATE IS QUOTED THAT B'S LIST DID NOT CARRY**, and
+                     both are the "brief text a future agent copies" case: **§0b's brief-building
+                     checklist** (what a manager pastes into the next agent's brief) and **§2's
+                     Agent C contract**, which said "run the gate after each item" and would have
+                     meant building ten times a turn. Both corrected; §3's canonical command now
+                     states four steps with the build as a **separate** once-per-turn command; the
+                     three fenced copies and two partial quotes in §4 are history and untouched.
+                  ── Round-9 B's summary follows. ──
+                  ROUND 9 — **B HAS WRITTEN THE GUIDE. TWO ITEMS: 9-01 `WRONG DATA` (silent),
                   9-03 `MISSING` (a gate step).** Gate cold and identical to round 8's, as it must
                   be — B changed no code: tsc 0 · eslint 1 (standing `quiz.tsx:46`) · vitest
                   **128 files / 2934 passed / 1 skipped / 0 failed** · **and `npm run build`
@@ -1004,7 +1112,17 @@ GATE (0% unexplained, both measurements):  **NOT MET — and the code side is NO
            Code-side is **0.0%** with an empty difference list. Five items carry a blocked half that
            only the owner can close, and all five now wait on the same single action.
            `GATE: MET` needs both at zero.
-DONE:      **Round 8 A: ALL THREE PARTS**, one commit each, each pushed as it finished, plus one
+DONE:      **Round 9 C: ALL FOUR ITEMS** — 9-01 (both operator scripts + `docs/SETUP_vertex_ai_search.md`
+           + a new 13-case spawn guard, ONE commit), 9-03 (§3's gate reconciled with its own build
+           rule, plus §0b and §2 which quote it), 9-04 (the five spend scans reach `web/scripts/`
+           including `.mjs`, with the coverage boundary asserted; 12 -> 19 cases), 9-05
+           (`typedRoutes` on, 7 source annotations, zero casts, one new type module). One commit
+           per item, each pushed as it finished. **11 plants, 11 fired**; 2 more failed to apply
+           and their count assertions caught them. Final gate INCLUDING THE BUILD: tsc 0 ·
+           eslint 1 · vitest **129 files / 2954 passed / 1 skipped / 0 failed** ·
+           **build exit 0, 27/27 static pages, 36 route rows, 1 Turbopack warning**.
+           ── Round-8 A's DONE follows. ──
+           **Round 8 A: ALL THREE PARTS**, one commit each, each pushed as it finished, plus one
            extra commit removing a credential-grep false positive my own draft had introduced. **No
            production code changed** (`git diff --name-only -- web/` asserted **0 files**); every
            plant reverted with an asserted 0-line diff AND an asserted absence of the planted value;
@@ -1133,22 +1251,59 @@ GATE NOW:  **Round-8 A, cold, after every plant was reverted and no throwaway re
            suite, `components/cards/pool-refresh-notice.test.tsx`.
            Round-5 A's figures follow: tsc **0** · eslint **1** · vitest **124 files passed | 1
            skipped (125)** · **2871 tests passed | 1 skipped (2872)**, **0 failed**, 9.50 s.
-TODO:      C WORKS ROUND 9, FOUR ITEMS (Ruling 26 §1aa point 8):
-           **9-01** the two operator scripts in `web/scripts/` (five sites, B named them) AND
-           `docs/SETUP_vertex_ai_search.md`, wrong in four places, one printing a money control
-           backwards — **one commit**, or the defect is moved rather than closed (point 4).
-           **9-03** reconcile §3: the build rule landed but the canonical gate command still
-           omits the build (point 1).
-           **9-04** the five spend scans extend to `web/scripts/` including `.mjs`; any
-           exclusion is NAMED WITH ITS REASON; the scan's coverage boundary is asserted by a
-           test (points 2-3). Prove it by planting a banned-key read in a script — today that
-           passes every gate.
-           **9-05** `typedRoutes` — ADOPTED (point 5). B measured 7 errors in 6 files; fix at
-           the source with type annotations, NEVER casts. It does not replace the dead-link
-           test. NOTE: after a `typedRoutes` build, `tsc` can redden on untouched source until
-           a second build regenerates the types — rebuild before believing it (B measured this).
-           The gate REPORTS the build's warning count and does not assert it (point 6); it must
-           PASS with today's 1 warning.
+TODO:      **A WORKS ROUND 9 — the re-measure, and it is the last agent turn.**
+           **Denominator 30. R-METER-2 is N/A. Blocked is 5** — R-ENT-1, R-ENT-2, R-METER-1,
+           R-METER-3, R-QUOTA-2 — all five on the SAME single owner action, and C changed nothing
+           that could move any of them. **Run `npm run check:providers` AND `npm run build`
+           yourself** — the second is now a gate step (§3, 9-03), and its figures are part of your
+           round's report.
+           **STANDING TALLIES TO CARRY BY NAME, all of them:** (1) `process.env.TAVILY_API_KEY`
+           reads in non-test source = **0** — and re-derive it NOW THAT `scripts/` IS IN SCOPE,
+           because for nine rounds that 0 meant something smaller than it read as; (2)
+           `kind:"search"` usage rows = **0**; (3) structured-source accepted reads = **3**;
+           (4) Ruling-75 absence cases = **4** (settled); (5) dead internal links = **0**, no
+           allowlist, `/CHANGELOG.md` a known false positive; (6) paid and unknown-plan upsells
+           = **0** on **3** surfaces; (7) report routes answering an anonymous caller 401 = **3
+           of 3** (4 of 4 with digest); (8) model ids sendable with no verified thinking setting
+           = **0**; (9) regex shape-tests on a model id = **2**; (10) scan 5 justified exemptions
+           = **2**; (11) **NEW — build warnings = 1, NAMED**: the Turbopack file-tracing warning
+           on `next.config.ts -> pdf-text.ts -> full-text.ts -> api/papers/report/route.ts`, which
+           is 9-02 and the OWNER's. Quote `Turbopack build encountered N warnings:` verbatim, as
+           you already quote `eslint 1 problem`. It is REPORTED, never asserted (Ruling 26
+           point 6). (12) **NEW — scanned roots = 2** (`src`, `scripts`) with **2** named
+           directory exclusions; (13) **NEW — computed `process.env[name]` sites = 1 file, 2
+           sites**, both model keys, no search key reachable.
+           **QUESTIONS A FIXTURE CANNOT SETTLE — these are what I actually want checked:**
+           **(a) Does the loud failure help a REAL operator, or only a test?** I proved both
+           scripts exit 1 and name the new variable. I did NOT prove the message is followable by
+           someone who has an index already built. Read it as that person: does it tell you what
+           to type, and does it tell you your index survives? If not, the item is half-closed.
+           **(b) Is `docs/SETUP_vertex_ai_search.md` now internally consistent END TO END?** I
+           fixed Step 3's four places and pinned three of them with tests. **I did not read the
+           whole document against the code**, only the parts B named plus the rows I touched. Its
+           line 32-34 already said "both a project and a Search App id" — which CONTRADICTED
+           Step 3 for months and nobody noticed. Ask what else contradicts.
+           **(c) Is `spend-scans.test.ts`'s new count HONEST, or did widening the walk hide a
+           new hole?** Re-derive all five scans by hand over `src/` **and** `scripts/` and check
+           my numbers, especially the Vertex-capability expectation of THREE readers. Ruling 26
+           point 2's pattern is three-for-three; assume mine is the fourth until you have looked.
+           **(d) Does `typedRoutes` catch a shape I did not plant?** I planted a static typo and
+           a broken dynamic shape. **I did not test `router.push`/`replace`/`prefetch`, `<Form
+           action>`, or `redirect()`** — B says all 8 router calls are literals and pass free, but
+           "passes free" and "is checked" are different claims. Plant one and see.
+           **(e) Are the two guards genuinely complementary, or does one now hide the other?**
+           Typed routes and `dead-links.test.ts` overlap. Find a dead link that ONLY the test
+           catches (I believe `public/`-resolved ones) and one that ONLY the compiler catches, or
+           the claim that neither replaces the other is unproven.
+           **(f) Did my rename break any inherited claim?** `productionFiles()` is now
+           `scannedFiles()`. Earlier rounds' §4 entries cite the old name; those are history and
+           fine, but check nothing LIVE still says "src only".
+           **(g) The stale-green trap — does it bite anywhere else?** `tsc` read the previous
+           build's generated types and reported **exit 0** after I removed `typedRoutes`. Ask
+           whether any other gate step can pass on stale artifacts.
+           **VERIFY THE FOUR ITEMS BY BEHAVIOUR OR RENDERED OUTPUT, NEVER BY MY COMMIT
+           MESSAGES** — and note that three of my four items have no user-visible effect at all,
+           so "nothing changed on screen" is the expected result, not evidence of a miss.
 PENDING USER ACTION: (1) **Apply the three migrations** under `web/supabase/migrations/20260904*`
            — this is now the ONLY thing blocking five of the six remaining halves. (2) Add
            `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` to `web/.env.local` so
@@ -1158,7 +1313,21 @@ PENDING USER ACTION: (1) **Apply the three migrations** under `web/supabase/migr
            NOT carry `TAVILY_API_KEY`; deploy only after the branch is green and merged.
            DONE: the local `GOOGLE_API_KEY` is filled (Ruling 21 point 4). WITHDRAWN: the trial
            backfill (no users); the 2026-10-01 model escalation (the owner decided).
-OPEN FOR MANAGER:  none — B's three POLICY items ruled in §1aa (Ruling 26 points 5-7).
+OPEN FOR MANAGER:  **THREE, all from round-9 C, none of them blocking A.**
+           (1) **Ruling 26 point 5's prescribed fix shape is wrong for 4 of the 6 `typedRoutes`
+           files** — the bare `Route` rejects dynamic routes because its default type parameter
+           is `string`. The ruling's COUNT and its adopt/reject decision are both correct; only
+           the "`href: string` becomes `Route`" sentence needs amending, so a future reader does
+           not follow it into four fresh errors. Recorded in §4; the manager may want it as a
+           ruling correction, as Ruling 26 point 1 did for the route count.
+           (2) **Ruling 26 point 3's expected exclusion was not needed** — the build guard names
+           banned keys as data but the scans match a read, not a mention, so it stays fully in
+           scope. Measured both ways. No action needed unless the manager wants the ruling's
+           wording softened from "must be excluded" to "check whether it needs excluding".
+           (3) **A new gate hazard nobody has ruled on: a STALE-GREEN `tsc`.** Because
+           `tsconfig.json` includes the build's generated types, `tsc` can report **exit 0** on a
+           config change it has not yet seen. B's note covers only the red direction. §3 now
+           carries the rule; the manager may want it as a numbered point.
            9-02 (the Turbopack tracing warning) remains the OWNER's call, not an agent item.
 ```
 
@@ -16910,3 +17079,125 @@ absent AND the fix asserted still present** before the next run was read, plus a
 **+7 tests, 0 files** — `spend-scans.test.ts` goes **12 → 19 cases**. No test deleted; one
 rewritten to state the new contract with the item that changed it named in the comment, as §2
 requires.
+
+---
+
+#### 9-05 — `typedRoutes` adopted; a dead internal link is now a compile error
+
+**Framework facts checked in this repo's own Next 16.2.3 docs first**, per §3:
+`.../05-config/01-next-config-js/typedRoutes.md` — *"marked as stable, so you should use
+`typedRoutes` instead of `experimental.typedRoutes`"*; `.../05-config/02-typescript.md` §"Statically
+Typed Links" — it types `next/link`'s `href` and `next/navigation`'s `push`/`replace`/`prefetch`,
+*"support includes any string literal, including dynamic segments"*, and it requires
+`.next/types/**/*.ts` in `tsconfig.json`'s `include`. **Already there** (`tsconfig.json:29-30`), so
+setup cost is one config line and nothing else — B's measurement confirmed by reading the same docs
+independently.
+
+##### B's cost measurement reproduces exactly
+
+Flag on, build run: **7 errors, 6 files, one class** (`TS2322`,
+`Type 'string' is not assignable to type 'UrlObject | RouteImpl<string>'`) — the same seven files
+and line numbers B listed. Ruling 19 point 4's "~30 sites" was 4x high, and Ruling 26 point 5's
+reversal is confirmed on my own run rather than inherited.
+
+##### A CORRECTION TO B AND TO RULING 26 POINT 5 — the prescribed FIX SHAPE does not work
+
+Both say "6 type annotations at the source, `href: string` becomes `Route`". **The count is right.
+The shape is right for two of the six files and wrong for the other four, and I found out by
+running it.**
+
+`Route` is generated as `Route<T extends string = string> = RouteImpl<T>`, and `RouteImpl`'s
+dynamic-route arm is `T extends \`${DynamicRoutes<infer _>}${Suffix}\` ? T : never`. **That arm is
+driven by the type argument**, so the *bare* `Route` — default `T = string` — accepts static routes
+and **rejects every dynamic one**. Measured, after annotating exactly as prescribed:
+
+```
+src/app/papers/[id]/page.tsx(1168,11): Type '`/papers/${string}/surface`' is not assignable to type 'Route'.
+src/components/cards/briefing-hero.tsx(33,9):  Type '`/events/${string}` | `/jobs/${string}` | `/papers/${string}`' is not assignable to type 'Route'.
+```
+
+So the prescribed annotation turns 7 errors into 4 different ones. **The working shape is the
+template-literal type itself**, because `<Link>` is generic: it infers `RouteType` from what it is
+handed and then checks `RouteImpl<RouteType>`. Handing it a template literal type keeps the literal
+shape alive to that check; handing it a `string` — which is what an un-annotated ternary of template
+literals infers to — collapses it to `RouteImpl<string>`, the error we started from.
+
+**Traced before I deviated, per ground rule 6, and the deviation is in shape only, never in
+principle: still annotations at the source, still ZERO casts.**
+
+##### What landed — 7 annotations across 6 files, plus one new type module
+
+| File | Annotation | Why this shape |
+| --- | --- | --- |
+| `components/nav.tsx:13` | `href: string` → **`href: Route`** | four **static** literals, so bare `Route` is correct — and B is right that this one annotation fixes **two** errors and makes the whole navigation bar compile-checked |
+| `components/cards/feed-more-tile.tsx:53` | union member's `href: string` → **`href: Route`** | one static literal, `"/profile"` |
+| `components/cards/briefing-hero.tsx:29` | `const detail: ItemDetailRoute` | three dynamic branches |
+| `components/cards/briefing-quick-hit.tsx:24` | `const detail: ItemDetailRoute` | same |
+| `components/dashboard/deadlines-board.tsx:225` | `const href: ItemDetailRoute` | two dynamic branches |
+| `app/papers/[id]/page.tsx:1818` | prop `surfaceHref: string` → **`surfaceHref: PaperSurfaceRoute`** | the **prop** is typed, so the caller's `` `/papers/${encodeURIComponent(paper.id)}/surface` `` is what gets checked |
+
+**NEW: `src/lib/navigation/item-routes.ts`** — `ItemDetailRoute` and `PaperSurfaceRoute`, with the
+whole `RouteImpl` explanation above written into its docblock so the next reader does not repeat the
+measurement.
+
+**One thing deliberately NOT typed, because typing it would be wrong:** `primaryUrl` on the same
+props object stays `string`. It is an **external publisher URL**, not an internal route, and
+annotating it `Route` would be a wrong value wearing extra safety.
+
+##### THE REBUILD TRAP DID NOT HIT ME IN B'S DIRECTION — IT HIT IN THE OPPOSITE ONE, WHICH IS WORSE
+
+B's note is that after a `typedRoutes` build, `tsc` can go **red on untouched source** until a
+second build regenerates the types. **That did not happen to me: every red I saw was a real error on
+source I had just changed, and the 7 initial errors were all genuine.**
+
+**What I hit instead, by testing the reverse on purpose, and nobody had named it: `tsc` stays GREEN
+after a config change that should have changed everything.** Removing `typedRoutes` from
+`next.config.ts` and running `tsc` **without rebuilding** gave **exit 0, zero errors** — it was
+reading the previous build's `.next/types/link.d.ts`. A red that turns out to be stale wastes an
+hour; **a green that is stale gets committed.**
+
+Then, rebuilt with the flag still off: `link.d.ts` is **deleted**, `Route` falls back to `next`'s
+own permissive declaration, and **a planted nav typo `"/savd"` compiles clean**. Restored the flag,
+rebuilt, and the same typo fails again. **So the guard is entirely the flag** — the annotations are
+correct but inert without it, which is exactly why the config comment and §3's "the build runs last"
+rule both matter.
+
+**Stated as the rule the next agent needs, because B's version only covers half of it: after
+touching `next.config.ts`, neither a red NOR a green `tsc` means anything until you rebuild.**
+
+##### Proved able to fail — THREE PLANTS, THREE FIRED, plus one control
+
+| # | Plant | Result |
+| --- | --- | --- |
+| 9 | a nav tab pointing at `/savd` | **`TS2820: Type '"/savd"' is not assignable to type 'Route'. Did you mean '"/saved"'?`** — a typo in the navigation bar is now a build failure **with the fix suggested** |
+| 10 | `ItemDetailRoute`'s `` `/jobs/${string}` `` changed to `` `/jerbs/${string}` `` | **6 errors across 3 files** — and this is the one that answers "is the alias just a second route table?" **No:** the alias is checked against Next's **own generated `DynamicRoutes`** at every `<Link>`, so a shape naming a route that does not exist collapses to `never` and every user of it stops compiling. Delete the jobs detail page and the same thing happens |
+| 11 | `typedRoutes` removed from `next.config.ts` | tsc **green without a rebuild** (the stale-green trap above); after a rebuild, `link.d.ts` gone and the plant-9 typo **compiles clean** — the control proving the flag is load-bearing |
+
+Every plant asserted its substitution count before the run was read, and every revert asserted
+**the planted string absent AND the fix still present**, from copies held outside the repo.
+
+##### `dead-links.test.ts` is untouched and still passing — nothing was replaced
+
+Ruling 26 point 5 says typed routes are a second, earlier guard and not a replacement, and I did not
+treat them as one. Typed routes check literals and the types feeding them; `dead-links.test.ts`
+resolves **rendered** links against the route tree **and `public/`**, which is what proves
+`/CHANGELOG.md` is a real static file rather than a dead link. Re-run: **4 passed**, and it now runs
+its Next-generated-route cross-check for real, because every turn builds (9-03).
+
+##### Standing locks re-verified together after this item
+
+`dead-links.test.ts` + `spend-scans.test.ts` + `vertex-search-project.test.ts` +
+`assert-byok-production-env.test.ts` + `ui-vocabulary.test.ts` + `no-client-dev-flags.test.ts` —
+**6 files, 72 tests, all passing.**
+
+##### Gate after 9-05 — INCLUDING THE BUILD
+
+`tsc` exit **0** · `eslint` **1 problem (1 error, 0 warnings)** — the standing `quiz.tsx:46` ·
+`vitest` **129 files passed | 1 skipped (130)** · **2954 passed | 1 skipped (2955)**, **0 failed**.
+
+**`npm run build` exit 0** · `✓ Compiled successfully in 5.0s` · **27/27 static pages** ·
+**36 route rows (9 static, 27 dynamic)** — counted from my own build log by a different method than
+B used, independently confirming Ruling 26 point 1's correction of 34 → **36** ·
+**`Turbopack build encountered 1 warnings:`** — the standing 9-02 file-tracing warning, the owner's,
+unchanged. Build artifacts left the tracked tree clean; the only working-tree entries are this
+item's own six edited files and one new module.

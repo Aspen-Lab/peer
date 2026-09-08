@@ -7,6 +7,7 @@
 // Visual differentiation: dashed border, no shadow — reads as an action,
 // not content.
 
+import type { Route } from "next";
 import Link from "next/link";
 
 interface FeedMoreTileProps {
@@ -50,7 +51,9 @@ export function FeedMoreTile({
   // 3. feed has plenty → simple "Refresh" affordance
   let title: string;
   let body: string;
-  let primary: { kind: "link"; label: string; href: string } | { kind: "button"; label: string };
+  // ABC-freemium 9-05 — `href` is a `Route` on the union member that carries
+  // one, so the assignment below is checked rather than the `<Link>` cast.
+  let primary: { kind: "link"; label: string; href: Route } | { kind: "button"; label: string };
 
   if (underTuned) {
     title = "Tune your signals";

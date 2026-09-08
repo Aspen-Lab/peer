@@ -1,5 +1,6 @@
 "use client";
 
+import type { ItemDetailRoute } from "@/lib/navigation/item-routes";
 import Link from "next/link";
 import type { Paper, Event, Job } from "@/types";
 import { Relevance } from "@/components/ui";
@@ -21,7 +22,8 @@ const KIND_LABEL: Record<QuickHitItem["kind"], string> = {
 export function BriefingQuickHit({ item }: { item: QuickHitItem }) {
   const isRead = useFeedStore((s) => !!s.readItems[item.data.id]);
 
-  const detail =
+  // ABC-freemium 9-05 — annotated, not cast. See `briefing-hero.tsx`.
+  const detail: ItemDetailRoute =
     item.kind === "paper"
       ? `/papers/${item.data.id}`
       : item.kind === "event"
