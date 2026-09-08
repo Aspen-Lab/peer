@@ -118,7 +118,7 @@ lock by rebasing onto the holder's head.
 ## §1. CURRENT STATE — THE SOURCE OF TRUTH
 
 ```
-HELD BY:          free
+HELD BY:          C-round9 @ 2026-09-08T00:14Z
 ROUND:            9
 WHOSE TURN:       C  (round 9, the last agent round; C works 9-01 only — 9-03 is a state-file
                   edit the manager may take directly, and 9-02 is the owner's)
