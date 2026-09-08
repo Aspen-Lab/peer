@@ -119,7 +119,7 @@ lock by rebasing onto the holder's head.
 ## §1. CURRENT STATE — THE SOURCE OF TRUTH
 
 ```
-HELD BY:          free
+HELD BY:          A-round9 @ 2026-09-08T00:55Z
 ROUND:            9
 WHOSE TURN:       A  (round 9 review — the last agent round's re-measure. All four of C's items
                   landed; after A, nothing an agent can do remains until the owner applies the
