@@ -119,12 +119,60 @@ lock by rebasing onto the holder's head.
 ## §1. CURRENT STATE — THE SOURCE OF TRUTH
 
 ```
-HELD BY:          A-round9 @ 2026-09-08T00:55Z
+HELD BY:          free
 ROUND:            9
-WHOSE TURN:       A  (round 9 review — the last agent round's re-measure. All four of C's items
-                  landed; after A, nothing an agent can do remains until the owner applies the
-                  three migrations)
-STOPPED BECAUSE:  finished the turn @ 2026-09-08T01:06Z — **ALL FOUR ITEMS LANDED IN THE RULED
+WHOSE TURN:       manager — independent re-measure  (the last agent turn is DONE. Code side is
+                  0.0%; five halves remain blocked on the owner. Nothing an agent can do remains
+                  until the three migrations are applied)
+STOPPED BECAUSE:  finished the turn @ 2026-09-08T01:15Z — **ALL THREE PARTS, one commit each, each
+                  pushed as it finished.** **No production code changed** (`git diff --name-only
+                  -- web/` **0 files**, asserted before the closing gate run was read).
+                  **6 plants, 6 fired, 6 reverted from copies held OUTSIDE the repo**, every one
+                  asserted in BOTH directions (planted value ABSENT and the fix STILL PRESENT),
+                  per Ruling 27 point 3 — no `git checkout --` was used on anything. No throwaway
+                  written inside the repo at all (`git status --porcelain --untracked-files=all`
+                  **0 lines** before every commit). `.env.local` never `cat`-ed.
+                  **I RAN `npm run build` FIRST AND `tsc` AFTER IT — Ruling 27 point 2's new
+                  tally answered YES**, twice in the turn.
+                  **THREE THINGS THE OWNER AND THE MANAGER SHOULD NOT HAVE TO REDISCOVER:**
+                  **(1) THE FALSE GREEN REPRODUCES IN BOTH DIRECTIONS, ON MY OWN RUN.** With a
+                  current build, a one-character nav typo `/savd` is
+                  `TS2820 … Did you mean "/saved"?`, tsc exit 2. **With the IDENTICAL typo still
+                  in the file and `.next/types` moved aside, tsc exits 0 with zero errors.** The
+                  same broken code passes. This is Ruling 27 point 2's whole justification and it
+                  is now measured, not argued.
+                  **AND THE TRAP BITES A SECOND CHECK, which answers C's question (g): YES.**
+                  `dead-links.test.ts:274` is `if (!fs.existsSync(generated)) return;` — with the
+                  generated route file gone the suite reports **4 passed having checked nothing**.
+                  So build-first is load-bearing for **two** gate steps, and they fail differently:
+                  tsc gives a false green on broken code (worse), the dead-link cross-check goes
+                  vacuous.
+                  **(2) 9-03 IS RE-OPENED, AND RULING 27 IS WHAT RE-OPENED IT — NOT C.** §3 now
+                  teaches two gate orders. **One bullet says build FIRST** (§3 `:2927`, Ruling 27
+                  point 2). **Four read as build LAST**, and one of them —§3 `:2893` — says
+                  *"The build must run LAST, after tsc + lint + vitest"* **in bold**. The other
+                  three are §3's canonical gate command, §3's build-bullet headline, and
+                  **§0b `:55-56`, the manager's own brief-building template** — which is the text a
+                  round-10 brief gets copied from. C is blameless: 9-03 shipped before Ruling 27
+                  existed. It is the manager's own text, so it is `OPEN FOR MANAGER`.
+                  **(3) THE OPERATOR DOCUMENT IS NOT CONSISTENT END TO END — C's question (b),
+                  answered with three more contradictions.** C's four Step-3 rows are all fixed,
+                  verified by reading all 320 lines. But `:36-40` still says the grounding backfill
+                  tops queries up by default and `:256` sells the threshold as the disable switch —
+                  **the same money control C corrected one screen lower** — and `:194` tells the
+                  operator to build a `Standard`-tier Search App while `:160-165`, under *"findings
+                  that cost a rebuild — do not repeat them"*, says website search is Enterprise-only
+                  and Standard refuses every query. None is a code defect; all three are traps for
+                  the day D2b is taken.
+                  **AND FOUR OF C's SEVEN QUESTIONS ANSWERED BY EXECUTION:** (a) the loud failure
+                  **is** followable — it names the variable, gives the line to paste, and says the
+                  index does not move; (c) C's numbers are **honest**, including the three Vertex
+                  readers (my four-file grep was a mention/read confusion, and C's distinction is
+                  right); (d) `router.push` **is** checked, not merely passing free — `TS2345`, with
+                  no "did you mean" hint; (e) the two link guards **are** complementary, proved both
+                  ways — a `<form action>` typo is caught only by the test, a wrong dynamic route
+                  shape only by the compiler.
+                  Previous line: finished the turn @ 2026-09-08T01:06Z — **ALL FOUR ITEMS LANDED IN THE RULED
                   ORDER (9-01 -> 9-03 -> 9-04 -> 9-05), one commit each, each pushed as it
                   finished.** Gate green cold after every item, and **`npm run build` run as a
                   gate step: exit 0, 27/27 static pages, 36 route rows, 1 Turbopack warning**
@@ -234,7 +282,44 @@ STOPPED BECAUSE:  finished the turn @ 2026-09-08T01:06Z — **ALL FOUR ITEMS LAN
                   probe script was written inside `web/`, run, and **deleted** before its commit
                   (`git status --porcelain --untracked-files=all` empty). `.env.local` was never
                   `cat`-ed and no key material appears anywhere in this repo.
-STATUS:           ROUND 9 — **C HAS BUILT ALL FOUR ITEMS.** Final gate, cold, after the last
+STATUS:           ROUND 9 — **A HAS MEASURED, AND THE LOOP NOW WAITS ON THE OWNER. CODE-SIDE IS
+                  0.0% (0 of 30). THE CODE-SIDE DIFFERENCE LIST IS EMPTY.** Blocked on the owner:
+                  **5** — R-ENT-1, R-ENT-2, R-METER-1, R-METER-3, R-QUOTA-2, unchanged and all on
+                  the SAME single action. **N/A: R-METER-2.** Exclusions: none.
+                  **Gate IN THE NEW ORDER (build first): build exit 0 · 27/27 static pages ·
+                  36 route rows · `Turbopack build encountered 1 warnings:` (9-02, the owner's) ·
+                  tsc 0 · eslint 1 (standing `quiz.tsx:46`) · vitest 129 files / 2954 passed /
+                  1 skipped / 0 failed.** Identical to C's, as it must be — A changed no code.
+                  **LIVE, on my own run:** `gemini gemini-3.1-flash-lite small+large PASS`,
+                  `in=412 out=9 917ms ok`, exit 0, four vendors SKIP naming their variable.
+                  1. **THE OWNER HAS NOT ACTED, AND THAT IS THE ROUND'S BIGGEST NEWS.**
+                     `NEXT_PUBLIC_SUPABASE_URL` **0**, `SUPABASE_SERVICE_ROLE_KEY` **0**, measured
+                     by count, values never read. `.env.local`'s modification time is unchanged
+                     from round 7. **No blocked half became measurable; the blocked list is
+                     identical to round 8's.**
+                  2. **THE FALSE GREEN IS REAL AND I MEASURED IT BOTH WAYS.** Current build + a
+                     planted `/savd` nav typo -> `TS2820`, exit 2. Same typo, `.next/types` moved
+                     aside -> **exit 0, zero errors**. And `dead-links.test.ts` goes vacuous the
+                     same way (`:274` returns early), so **two** gate steps depend on the build
+                     having run first.
+                  3. **9-04's PLANT RE-RUN BY ME: B's exact banned-key read now reddens 2 cases
+                     and both name `scripts/setup-vertex-search.mjs`** — the read that left 12
+                     cases green this morning fails the gate. Baseline before the plant: 19 passed.
+                  4. **9-03 IS RE-OPENED BY RULING 27 ITSELF.** §3 carries one bullet saying build
+                     FIRST and four that read build LAST, one of them in bold — including §0b, the
+                     template every agent brief is copied from. `POLICY — manager decides`.
+                  5. **THE OPERATOR DOCUMENT HAS THREE MORE CONTRADICTIONS**, one of them the same
+                     money control C fixed one screen lower, and one (`Standard` vs Enterprise
+                     tier) that the document itself says costs a rebuild.
+                  6. **ALL FIVE SCANS 0**, my greps and the gate's cases agreeing on every one —
+                     and I record the **wrong probe I ran first** (grepping `protectAiRequest`
+                     when the guard is `requireEntitledAiRequest`), so nobody re-derives the scare.
+                  7. **ALL FIFTEEN TALLIES CARRIED.** Tally 1 re-derived with `scripts/` in scope
+                     for the first time — still **0**. Tally 4 **reproduces at 4**; only its marker
+                     wording is non-uniform, which is why a grep makes it read as 3. Recorded so
+                     round 10 does not re-open a settled number.
+                  ── Round-9 C's summary follows. ──
+                  ROUND 9 — **C HAS BUILT ALL FOUR ITEMS.** Final gate, cold, after the last
                   item: `tsc` exit **0** · `eslint` **1 problem (1 error, 0 warnings)** — the
                   standing `quiz.tsx:46` · `vitest` **129 files passed | 1 skipped (130)** ·
                   **2954 passed | 1 skipped (2955)**, **0 failed** · **`npm run build` exit 0**,
@@ -1103,16 +1188,29 @@ A'S OWN FIXTURE FAULTS, recorded because each produced a plausible FALSE reading
                   regressions.** Also live: the **CRLF** trap (Ruling 10 point 2c) — a
                   multi-line plant literal with `\n` separators matched **0** times; the count
                   assertion caught it and a whitespace-tolerant regex matched 1.
-LAST DIFFERENCE:  0.0% code-side (0/30; exclusions: none) — and this time the code is correct AND
-                  the model it names answers, proved by a real billed call on A's own run.
+LAST DIFFERENCE:  0.0% code-side (0/30; exclusions: none) — fifth round running with an empty
+                  code-side list, and this time **four real findings sit OUTSIDE the spec's
+                  numbering** and are named rather than implied by a zero: §3's two gate orders,
+                  and three contradictions left in the operator document.
                   BLOCKED on the owner: 5 — R-ENT-1, R-ENT-2, R-METER-1, R-METER-3, R-QUOTA-2, all
                   needing the three migrations plus the two Supabase names. R-METER-2: N/A.
-                  R-KEY-1: OFF the list, both halves MET, live half re-measured by A.
+                  R-KEY-1: OFF the list, both halves MET, live half re-measured by A this round too.
+                  Previous line: 0.0% code-side (0/30) — the code is correct AND the model it names
+                  answers, proved by a real billed call on A's own run.
 GATE (0% unexplained, both measurements):  **NOT MET — and the code side is NOT why.**
            Code-side is **0.0%** with an empty difference list. Five items carry a blocked half that
-           only the owner can close, and all five now wait on the same single action.
-           `GATE: MET` needs both at zero.
-DONE:      **Round 9 C: ALL FOUR ITEMS** — 9-01 (both operator scripts + `docs/SETUP_vertex_ai_search.md`
+           only the owner can close, and all five wait on the same single action.
+           `GATE: MET` needs both at zero, so **the gate cannot go green until the owner acts** —
+           there is no agent work left that would move it.
+DONE:      **Round 9 A: ALL THREE PARTS**, one commit each, each pushed as it finished. **No
+           production code changed** (`git diff --name-only -- web/` **0 files**, asserted before
+           the closing gate run was read). **6 plants, 6 fired**, every one reverted from a copy
+           held **outside** the repo and asserted in **BOTH** directions per Ruling 27 point 3.
+           **No throwaway written inside the repo at all** (`git status --porcelain
+           --untracked-files=all` **0 lines** before every commit). `.env.local` never `cat`-ed.
+           **The build ran FIRST and `tsc` after it** — the new tally answered YES.
+           ── Round-9 C's DONE follows. ──
+           **Round 9 C: ALL FOUR ITEMS** — 9-01 (both operator scripts + `docs/SETUP_vertex_ai_search.md`
            + a new 13-case spawn guard, ONE commit), 9-03 (§3's gate reconciled with its own build
            rule, plus §0b and §2 which quote it), 9-04 (the five spend scans reach `web/scripts/`
            including `.mjs`, with the coverage boundary asserted; 12 -> 19 cases), 9-05
@@ -1179,7 +1277,27 @@ DONE:      **Round 9 C: ALL FOUR ITEMS** — 9-01 (both operator scripts + `docs
            every throwaway deleted and every plant restored with an asserted empty diff.
            **Round 5 B: all four items**, 5-01 … 5-04, one commit each, each pushed; no code
            changed; the three-stage measurement plant reverted with an asserted empty diff.
-GATE NOW:  **Round-8 A, cold, after every plant was reverted and no throwaway remained
+GATE NOW:  **Round-9 A, cold, IN THE NEW ORDER (Ruling 27 point 2 — build FIRST), after every
+           plant was reverted and no throwaway remained (`git status --porcelain
+           --untracked-files=all` **0 lines** and `git diff --name-only -- web/` **0 files**, both
+           asserted before this run was read):**
+           **1. `npm run build` exit 0** · `✓ Compiled successfully in 5.0s` ·
+           `✓ Generating static pages using 15 workers (27/27) in 451ms` · **36 route rows**
+           (9 `○` static, 27 `ƒ` dynamic, middleware listed separately) ·
+           **`Turbopack build encountered 1 warnings:`** — the standing 9-02 file-tracing warning
+           through `./next.config.ts -> ./src/lib/papers/pdf-text.ts -> ./src/lib/papers/full-text.ts
+           -> ./src/app/api/papers/report/route.ts`, the OWNER's, reported and never asserted.
+           **2. `tsc` exit 0.** **3. `eslint` 1 problem (1 error, 0 warnings)** — the standing
+           `quiz.tsx:46`. **4. `vitest` 129 files passed | 1 skipped (130) · 2954 passed |
+           1 skipped (2955), 0 failed**, 9.81 s. `src/lib/events/benchmark.test.ts` is the one
+           skip, named. **Identical to round-9 C's, as it must be — A changed no code.** No test
+           added or deleted this round.
+           **LIVE, ON A's OWN RUN:** `npm run check:providers` ->
+           `gemini gemini-3.1-flash-lite small+large PASS`, `in=412 out=9 917ms ok`, **exit 0**,
+           four BYOK vendors `SKIP` naming the variable that would configure them, no key material
+           printed. Run **once** — it makes a real billed call.
+           Round-8 A's figures follow.
+           **Round-8 A, cold, after every plant was reverted and no throwaway remained
            (`git status --porcelain --untracked-files=all` **0 lines** and
            `git diff --name-only -- web/` **0 files**, both asserted before this run was read):**
            `tsc` exit **0** · `eslint` **1 problem (1 error, 0 warnings)** — the standing
@@ -1251,59 +1369,57 @@ GATE NOW:  **Round-8 A, cold, after every plant was reverted and no throwaway re
            suite, `components/cards/pool-refresh-notice.test.tsx`.
            Round-5 A's figures follow: tsc **0** · eslint **1** · vitest **124 files passed | 1
            skipped (125)** · **2871 tests passed | 1 skipped (2872)**, **0 failed**, 9.50 s.
-TODO:      **A WORKS ROUND 9 — the re-measure, and it is the last agent turn.**
-           **Denominator 30. R-METER-2 is N/A. Blocked is 5** — R-ENT-1, R-ENT-2, R-METER-1,
-           R-METER-3, R-QUOTA-2 — all five on the SAME single owner action, and C changed nothing
-           that could move any of them. **Run `npm run check:providers` AND `npm run build`
-           yourself** — the second is now a gate step (§3, 9-03), and its figures are part of your
-           round's report.
-           **STANDING TALLIES TO CARRY BY NAME, all of them:** (1) `process.env.TAVILY_API_KEY`
-           reads in non-test source = **0** — and re-derive it NOW THAT `scripts/` IS IN SCOPE,
-           because for nine rounds that 0 meant something smaller than it read as; (2)
-           `kind:"search"` usage rows = **0**; (3) structured-source accepted reads = **3**;
-           (4) Ruling-75 absence cases = **4** (settled); (5) dead internal links = **0**, no
-           allowlist, `/CHANGELOG.md` a known false positive; (6) paid and unknown-plan upsells
-           = **0** on **3** surfaces; (7) report routes answering an anonymous caller 401 = **3
-           of 3** (4 of 4 with digest); (8) model ids sendable with no verified thinking setting
-           = **0**; (9) regex shape-tests on a model id = **2**; (10) scan 5 justified exemptions
-           = **2**; (11) **NEW — build warnings = 1, NAMED**: the Turbopack file-tracing warning
-           on `next.config.ts -> pdf-text.ts -> full-text.ts -> api/papers/report/route.ts`, which
-           is 9-02 and the OWNER's. Quote `Turbopack build encountered N warnings:` verbatim, as
-           you already quote `eslint 1 problem`. It is REPORTED, never asserted (Ruling 26
-           point 6). (12) **NEW — scanned roots = 2** (`src`, `scripts`) with **2** named
-           directory exclusions; (13) **NEW — computed `process.env[name]` sites = 1 file, 2
-           sites**, both model keys, no search key reachable.
-           **QUESTIONS A FIXTURE CANNOT SETTLE — these are what I actually want checked:**
-           **(a) Does the loud failure help a REAL operator, or only a test?** I proved both
-           scripts exit 1 and name the new variable. I did NOT prove the message is followable by
-           someone who has an index already built. Read it as that person: does it tell you what
-           to type, and does it tell you your index survives? If not, the item is half-closed.
-           **(b) Is `docs/SETUP_vertex_ai_search.md` now internally consistent END TO END?** I
-           fixed Step 3's four places and pinned three of them with tests. **I did not read the
-           whole document against the code**, only the parts B named plus the rows I touched. Its
-           line 32-34 already said "both a project and a Search App id" — which CONTRADICTED
-           Step 3 for months and nobody noticed. Ask what else contradicts.
-           **(c) Is `spend-scans.test.ts`'s new count HONEST, or did widening the walk hide a
-           new hole?** Re-derive all five scans by hand over `src/` **and** `scripts/` and check
-           my numbers, especially the Vertex-capability expectation of THREE readers. Ruling 26
-           point 2's pattern is three-for-three; assume mine is the fourth until you have looked.
-           **(d) Does `typedRoutes` catch a shape I did not plant?** I planted a static typo and
-           a broken dynamic shape. **I did not test `router.push`/`replace`/`prefetch`, `<Form
-           action>`, or `redirect()`** — B says all 8 router calls are literals and pass free, but
-           "passes free" and "is checked" are different claims. Plant one and see.
-           **(e) Are the two guards genuinely complementary, or does one now hide the other?**
-           Typed routes and `dead-links.test.ts` overlap. Find a dead link that ONLY the test
-           catches (I believe `public/`-resolved ones) and one that ONLY the compiler catches, or
-           the claim that neither replaces the other is unproven.
-           **(f) Did my rename break any inherited claim?** `productionFiles()` is now
-           `scannedFiles()`. Earlier rounds' §4 entries cite the old name; those are history and
-           fine, but check nothing LIVE still says "src only".
-           **(g) The stale-green trap — does it bite anywhere else?** `tsc` read the previous
-           build's generated types and reported **exit 0** after I removed `typedRoutes`. Ask
-           whether any other gate step can pass on stale artifacts.
-           **VERIFY THE FOUR ITEMS BY BEHAVIOUR OR RENDERED OUTPUT, NEVER BY MY COMMIT
-           MESSAGES** — and note that three of my four items have no user-visible effect at all,
-           so "nothing changed on screen" is the expected result, not evidence of a miss.
+TODO:      **THIS ONE IS WRITTEN FOR THE OWNER, NOT FOR AN AGENT. THE LOOP HAS RUN OUT OF AGENT
+           WORK.** Every requirement whose behaviour can be observed on this machine is met and
+           has been for five rounds. What is left cannot be done by anyone but you.
+           **WHAT IS STILL BLOCKED — 5 of 30, all waiting on ONE thing:** R-ENT-1, R-ENT-2,
+           R-METER-1, R-METER-3, R-QUOTA-2. Plain language: **the app knows how to give people
+           plans, count their deep reports and record what it spends — but it has nowhere to write
+           any of it down.** The tables do not exist yet, so none of that behaviour can be seen,
+           and no agent can create them.
+           **WHAT UNBLOCKS THEM — three steps, in this order:**
+           1. **Apply the three migrations** in `web/supabase/migrations/20260904*` to the live
+              Supabase project. That is the whole of it for four of the five.
+           2. **Put two lines in `web/.env.local`** — `NEXT_PUBLIC_SUPABASE_URL=` and
+              `SUPABASE_SERVICE_ROLE_KEY=`. The names are already there, commented out; they need
+              values. This is what lets the fifth one (the counters surviving a restart) be checked
+              locally instead of only in production.
+           3. **Sign in to the app once**, so the new-user trigger writes your profile row with a
+              plan on it.
+           **HOW TO VERIFY, ONCE YOU HAVE DONE THAT — five checks, one per blocked item:**
+           - **R-ENT-1:** read your own `profiles` row. `plan` should be `trial` and
+             `trial_ends_at` should be 14 days out.
+           - **R-ENT-2:** load the app and look at the profile response. The deep-report number
+             should be a **number**, not blank with a "temporarily unavailable" note.
+           - **R-METER-1:** run one deep report, then look at `usage_events`. Expect **one row per
+             request the app made to a model** — never two for one request, never zero.
+           - **R-METER-3:** restart the app and check the deep-report count did **not** reset.
+           - **R-QUOTA-2:** on a `free` plan, the sixth deep report in a month should come back in
+             the plain no-AI form with "0 remaining", not an error.
+           **AND ONE COMMAND THAT ANSWERS "DOES THE AI ACTUALLY WORK", IN SECONDS:** from `web/`,
+           `npm run check:providers`. It makes one tiny real billed call. Today it prints
+           `gemini gemini-3.1-flash-lite small+large PASS` and exits 0. If it ever prints `FAIL`,
+           the model the product names has been retired and nothing else in the gate will tell you.
+           **THE FULL GATE, if you want to re-run what the agents ran** — from `web/`, and **the
+           build goes FIRST**, because otherwise the type-check silently passes on yesterday's
+           output:
+           `npm run build`, then
+           `npx tsc --noEmit -p tsconfig.json && npm run lint --silent && npx vitest run`
+           Expect: build exit 0 with 27/27 pages, 36 route rows and **1** Turbopack warning ·
+           tsc 0 · eslint **1 error** (a pre-existing one in `quiz.tsx`, not this loop's) ·
+           vitest **2954 passed, 1 skipped, 0 failed**.
+           **TWO THINGS THAT ARE YOURS TO DECIDE, NEITHER URGENT:**
+           - **9-02, the one build warning.** The papers-report function bundles far more than it
+             needs. It is about weight, not correctness. Recommendation on the record: deploy
+             first, act only if Vercel's function-size limit actually bites.
+           - **The operator document, `docs/SETUP_vertex_ai_search.md`.** It only matters the day
+             you turn Vertex AI Search on. Three things in it still contradict each other — see
+             round-9 A part 2 — and the most expensive is that Step 2 tells you to create a
+             `Standard`-tier Search App while the same document says website search is
+             Enterprise-only and Standard refuses every query.
+           **FOR THE MANAGER, NOT THE OWNER:** §3 now teaches two different gate orders and only
+           one of them is right — see `OPEN FOR MANAGER` below. Fix that before any round 10 brief
+           is written from §0b, because §0b is one of the four places that still says build last.
 PENDING USER ACTION: (1) **Apply the three migrations** under `web/supabase/migrations/20260904*`
            — this is now the ONLY thing blocking five of the six remaining halves. (2) Add
            `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` to `web/.env.local` so
@@ -1313,9 +1429,29 @@ PENDING USER ACTION: (1) **Apply the three migrations** under `web/supabase/migr
            NOT carry `TAVILY_API_KEY`; deploy only after the branch is green and merged.
            DONE: the local `GOOGLE_API_KEY` is filled (Ruling 21 point 4). WITHDRAWN: the trial
            backfill (no users); the 2026-10-01 model escalation (the owner decided).
-OPEN FOR MANAGER:  none — C's two deviations ruled in §1ab (Ruling 27 point 4), both accepted
-           as corrections to the manager. 9-02 (the Turbopack tracing warning) remains the
-           OWNER's call, not an agent item.
+OPEN FOR MANAGER:  **ONE, and it is the manager's own text. §3 TEACHES TWO DIFFERENT GATE
+           ORDERS.** Ruling 27 point 2 changed the order by **adding** a bullet rather than editing
+           the four that 9-03 had just reconciled, so §3 now says both things:
+           · §3 `:2927` — *"The turn's final verification runs `npm run build` **FIRST**, then tsc,
+             lint, vitest"* — the new, correct order.
+           · §3 `:2893` — *"**The build must run LAST, after tsc + lint + vitest**"* — a flat
+             contradiction, in bold.
+           · §3 `:2799-2801` (the canonical gate command), §3 `:2887` (the build bullet's
+             headline), §2 Agent C `:2770`, and **§0b `:55-56` — the manager's own brief-building
+             template** — all read as build-last.
+           **Four places teach the old order; one teaches the new one.** §0b is the sharp end: it
+           is the text a round-10 brief is copied from, and round-9 A demonstrated by execution
+           that building last produces a **false green on genuinely broken code**. C is blameless —
+           9-03 shipped before Ruling 27 existed. **This is the fourth appearance of this loop's
+           recurring shape (a check or an instruction that is wrong while everything around it is
+           right), and the second time in two rounds that the fix for it was itself half-applied.**
+           **Smaller, same class:** §3's commit-message bullet names `Claude Fable 5.1` for every
+           agent, while nine rounds of agent commits use their own model.
+           **Not open, recorded for completeness:** C's two deviations were ruled in §1ab (Ruling 27
+           point 4), both accepted as corrections to the manager. 9-02 (the Turbopack tracing
+           warning) remains the OWNER's call, not an agent item. The three operator-document
+           contradictions round-9 A found are documentation for a capability D2a keeps switched
+           off — recorded in §4 part 2, not actioned.
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
@@ -1333,6 +1469,8 @@ part-way; a released lock looks identical in both cases.
 | **5 (A)** | **code-side 0.0% (0/30, exclusions: none)** · **blocked 6** — R-ENT-1, R-ENT-2, R-METER-1, R-METER-3, R-KEY-1, R-QUOTA-2 · **R-METER-2 is `N/A`** | **NOT MET — the code side is still not why; the difference list is EMPTY.** **NOT LIKE-FOR-LIKE WITH ROUND 4:** the denominator moved 31 -> 30 because Ruling 12 point 3 made R-METER-2 `N/A` and took it out of the scored set, so the two percentages are not a trend — what compares is that both rounds found **zero** code-side differences, and blocked fell 7 -> 6 **only** because R-METER-2 left the list, not because anything was unblocked. **D2a re-measured and MET:** the operator's search key is unreachable for every plan **including paid** — both feed routes and all three adapters, driven with `TAVILY_API_KEY` and `BRAVE_SEARCH_API_KEY` as distinct armed sentinels **and** a fully configured Vertex project, give **0 requests carrying either sentinel and 0 requests to any paid search host** across all five personas; a paid caller's explicit `poolRefresh: true` is 0 too. With the flag **forced `true`** — an input no production path can produce — the resolver still returns no Tavily key and `operatorSearchAvailability` is still frozen `false` with a Vertex project present; the residual is Brave only, behind a flag whose every producer is a hard `false` (all 33 non-test mentions traced). **BYOK survives on every plan, free included** (six route cases plus both adapters). **The rebuild breaker is reachable AND caps**, proved from real requests on both surfaces for trial and paid — exactly one increment on `forced_rebuilds_today:<user>:<UTC day>` — and 499 allowed / past-500 refused with one `kind:"breaker"` row, zero `kind:"search"` rows, and an untrip on the next UTC day. **The build guard proved both ways** against the real script: three required names each named when dropped, `TAVILY_API_KEY` refused and never printed. Personas **45 of 45**. All five scans **0**, grepped independently and agreeing with the gate tests (scan 3's Tavily case is now `[]`, deliberately non-uniform with Brave's `[GATE]`). **9 plants, 9 fired**; the Brave protective test proved able to fail (3 cases) and restored with an asserted empty diff. `kind:"search"` rows **0**; `process.env.TAVILY_API_KEY` reads in non-test source **0**; Ruling-75 absence cases **4**; structured-source accepted reads **3**; `local-no-auth` **ABSENT** (503 ×3); paid upsells **0**. **6-01's rename reported as QUEUED, not as a finding** (Ruling 14 point 3). One `POLICY — manager decides` for the owner: `poolRefreshAllowed` reaches no component, so the one paid feature a reader could notice is invisible in the interface |
 | **6 (A)** | **code-side 3.3% (1/30, exclusions: none)** · **blocked 6** — R-ENT-1, R-ENT-2, R-METER-1, R-METER-3, R-KEY-1, R-QUOTA-2 · **R-METER-2 is `N/A`** | **NOT MET — and this time the code side is part of why. ONE difference, and it is NOT a regression.** **R-UI-3 is re-scored `MET`** (Ruling 16 point 2's `PARTIAL` discharged): five entitlement states × three upsell surfaces plus both whole report trees, with the unknown state taken from the **real store** (a fresh `useProfileStore` holds `null`; `partialize` writes only `profile`) and the prop derived by the pages' own `entitlement?.effectivePlan ?? null` — nothing upsells while the plan is unknown, nothing upsells a paid reader at either limit, trial keeps the deep-report prompt and gets no refresh upsell, the signed-out reader gets *"Sign in to refresh."* with no "Pro". **9 source-level plants, 8 fired**; the 9th confirms **Ruling 17 point 3 independently** — restoring `JobReport`'s `= "free"` default reddens **nothing**, and the **compiler** is the only evidence that reaches it (`TS2769` on both omissions, positive control compiles); **the guard lives in the type annotation, not the destructuring default**. **THE ONE DIFFERENCE: `QuotaNotice`'s upgrade prompt links to `/settings`, which is not a route and never has been on any branch** — R-QUOTA-1 `PARTIAL`; a scan of every rendered internal `href` against the real route tree **and** `public/` returns **exactly one** dead link in the whole app (`/CHANGELOG.md` was a false positive). Dead since 2-07 in round 2; **A scored R-QUOTA-1 `MET` in rounds 3, 4 and 5** — A's miss, recorded as one, and it is also the answer to **Ruling 17 point 6**, which did not pass: the two pre-existing surfaces already disagreed, so 7-01 must unify on `/welcome?step=ai`. **Upsell surfaces are THREE, not two** — re-derived two ways, not inherited; a stale census (C counted during 6-04, 6-03 then added `PoolRefreshNotice`), not a defect. **The fourth state is live**, driven through `ProfileSync`'s four paths: no session → known+anonymous, a thrown `getUser()` and a failed profile fetch → stays not-known — both directions proved able to fail. **6-01 proved by behaviour** through the real jobs feed handler: one `{kind:"breaker", path:"forced-rebuild"}` row, route still 200, **0** rows saying `system-search`; residual old names **0**; all three unreachable fan-out sites still present with their docblocks. **NEW TALLY (Ruling 17 point 4): report routes answering an anonymous caller 401 = 3 of 3** (4 of 4 with digest), **proved able to fail**. All five scans **0**, grepped by hand and agreeing with the gate tests on the same named exclusions. Blocked flat at **6** — `grep -c "^GOOGLE_API_KEY=."` returned **0**; nothing unblocked. **READING NOTE: like-for-like with round 5 (30 both), so 0.0% → 3.3% is a real comparison — but nothing broke. Round 6's three items all landed clean; the number rose because the measurement reached somewhere it had never looked** |
 | **7 (A)** | **code-side 0.0% (0/30, exclusions: none)** · **blocked 6** — R-ENT-1, R-ENT-2, R-METER-1, R-METER-3, R-KEY-1, R-QUOTA-2 · **R-METER-2 is `N/A`** | **NOT MET — and the code side is not why. THE DIFFERENCE LIST IS EMPTY.** **R-QUOTA-1 re-scored `PARTIAL` -> `MET`, and the METHOD is the finding as much as the verdict:** the link was **followed, not asserted** — every `href` was pulled out of the **rendered HTML** and resolved against a route tree the harness **built itself**, never compared against the constant it was meant to equal. Free and trial at the cap both emit `/welcome?step=ai`; it resolves; and the destination **answers the promise**, proved by **executing real routing code** rather than slicing source — `stepIndexFromKey("ai")` = **5**, `STEP_META[5].key` = `"ai"`, the same function returns `null` for a bogus key so the mapping is a real decision, the query is read **before** the completeness fallback so nobody is skipped past it, and `<ProPlanSummary />` sits at character **26443**, inside the `ai` branch (23155) and before `connectors` (27668). The reader arrives at *"Peer Pro is $12/month, or $6 for students"* plus what Pro adds, with **zero `href`s** — **D7 travelled with the copy**. **Ruling 8 holds everywhere: paid readers get 0 upsells and 0 links on 3 of 3 surfaces; unknown-plan readers 0 of 3**, both measured on rendered output. **`ProPlanSummary` is NOT a fourth upsell surface — decided on evidence** (no control, no entitlement prop, no claim about the reader's own plan), so the census stays **THREE**, re-derived three independent ways and never quoted. **All six of 7-01's cases proved able to fail — five plants, and two are new:** C proved the fix could be **undone**; nobody had proved it could be **over-applied**, so planting the over-fix reddens the two cases guarding against *"fix the chip"* becoming *"blank the chip"*. **Dead links 0, no allowlist**, with the enumeration **independently re-derived using a different algorithm on purpose** (segment-split, not suffix-slice) so C's `/page.ts` bug is structurally impossible: **11 pages + 23 handlers = 34, set-identical to Next's generated list, `/` present**. Proved able to fail in **two shapes C did not plant** (`router.replace`, `redirect`) plus the live `<form action>`. **NO FIFTH SHAPE EXISTS LIVE** — seven candidates checked; the two real blind spots (`permanentRedirect`, `location.assign`) have **zero instances**, a maintenance note not a difference. **9 plants, 9 fired.** All five scans **0**, greps and gate tests agreeing. **THE ROUND'S BIGGEST NEWS AND IT IS NOT GOOD: `GOOGLE_API_KEY` is filled (0 -> 1, written 21:39:24Z) but is 53 characters WITHOUT the four-character prefix every Google API key carries**, and D1 needs an AI Studio key — measured by count and structure only, the file never `cat`-ed. **Blocked stays 6, NOT 5: Ruling 21 point 4's live check was written as specified and the SANDBOX REFUSED TO RUN IT, and I did not route around the refusal** — the ruling says blocked drops only once R-KEY-1 is *actually measured*. **READING NOTE, two halves: (a) the percentage IS like-for-like** (30 in rounds 5-7), so **3.3% -> 0.0% is a real improvement**; **(b) the blocked count is NOT** — flat at 6, but R-KEY-1's *cause changed underneath it*, from "no key exists" to "a key exists, looks wrong, and cannot be tested here". Three items for the manager: that key, the unrun live check, and a **carried tally that does not reproduce** (Ruling-75 absence cases: carried **4**, measured **3** or **5**, never 4) |
+| **8 (A)** | **code-side 0.0% (0/30, exclusions: none)** · **blocked 5** — R-ENT-1, R-ENT-2, R-METER-1, R-METER-3, R-QUOTA-2 · **R-METER-2 is `N/A`** | **NOT MET — the code side is not why. THE DIFFERENCE LIST IS EMPTY.** **BLOCKED FELL 6 -> 5 AND THE REASON IS A MEASUREMENT, NOT AN ASSUMPTION: I RAN THE LIVE CHECK MYSELF.** `npm run check:providers` -> `gemini gemini-3.1-flash-lite small+large PASS`, `in=412 out=9 742ms ok`, exit **0**, four BYOK vendors `SKIP` naming the variable that would configure them, **no key material printed** (checked, not assumed). **The sandbox refusal recorded in Ruling 22 point 6 is LIFTED** — two rounds carried it. **PROVED ABLE TO FAIL WITH MY OWN PLANT:** a retired id back on the `large` tier reproduces the outage — **404, exit 1** — reverted with a 0-line diff and the planted value asserted absent. **R-KEY-1 `BLOCKED` -> `MET`** on that run, and it is the only score that moved. **What a PASS does NOT mean, stated because it matters: it is a `testConnection()` ping, not a deep report** — it proves the product can make a model call again, no more. **ALL FIVE REMAINING BLOCKED HALVES NOW SHARE ONE CAUSE** (the three unapplied migrations + the two Supabase names), where last round they had two — the count understates that. **THE OWNER HAS NOT ACTED: `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are still 0**, measured by count, the file never `cat`-ed. **6-02's GUARD IS REAL AND I ISOLATED IT:** planting an unmeasured id into the GLOBAL chain — which the catalog test cannot see — reddens **exactly one** case, the chain walk, on `expected undefined to be defined`; so the walk is not riding on another case. **NEW TALLY, 0:** model ids the code can send with no verified thinking setting (3 sendable, 3 covered, evaluated by execution with an unmeasured control id). **BOTH 8-01 MONEY SWITCHES PROVED ABLE TO FAIL** by restoring the old behaviour — one case each, and neither had any coverage before this round. **AND ONE FACT NEITHER B NOR C STATED, WHICH IS THE STRONGEST THING ABOUT 8-01(b): `GOOGLE_VERTEX_SEARCH_FALLBACK` — the one variable that arms the $35/1,000 backfill — IS ITSELF BANNED ON VERCEL BY THE `GOOGLE_VERTEX_` PREFIX**, proved by running the real audit function against planted environments; so on a deployment the backfill cannot be turned on at all, not merely off by default. **THE RULING-75 TALLY IS SETTLED AT 4, NOT UNRELIABLE** — round-7 A measured *production* option-building sites; the tally counts the **four rewritten TEST CASES** of Ruling 13 point 4, and each self-numbers "N of the 4" (3 in `jobweb.test.ts`, 1 in `eventweb.test.ts`). **TWO CARRIED NUMBERS CORRECTED:** regex shape-tests on a model id is **2, not 1** (C's number went stale by C's own edit — two named family constants in one function), and scan 5 has **two** justified exemptions, not one (result unchanged at 0 unjustified). **Upsell census re-derived three ways: 3.** Paid and unknown-plan readers: **0 upsells on 3 of 3**. All five scans **0**, my greps and the gate tests agreeing on every one. **Personas 46 route-level cases across 8 surfaces**; anonymous gets **401** on 4 of 4 AI routes; operator-key search requests **0** for every persona including paid, sourced from the five searching surfaces. **5 plants, 5 fired**, plus one that failed to apply and was caught by its own count assertion (the CRLF trap, third round running). **9-01 reported as QUEUED, not as a finding** (Ruling 24 point 5) |
+| **9 (A)** | **code-side 0.0% (0/30, exclusions: none)** · **blocked 5** — R-ENT-1, R-ENT-2, R-METER-1, R-METER-3, R-QUOTA-2 · **R-METER-2 is `N/A`** | **NOT MET — the code side is still not why, and this is the last agent turn. THE CODE-SIDE DIFFERENCE LIST IS EMPTY for the fifth round running — but four real findings sit OUTSIDE the spec's numbering and are named rather than implied by a zero.** **THE FALSE GREEN IS MEASURED, IN BOTH DIRECTIONS, AND IT IS THE ROUND'S MOST IMPORTANT RESULT.** With a current build, one planted character in the navigation bar (`/savd`) is `TS2820: … Did you mean "/saved"?`, tsc exit **2**. **With the IDENTICAL typo still in the file and `.next/types` moved aside, tsc exits 0 with zero errors** — the same broken code passes, because `tsconfig.json` includes the generated route union and without it `Route` degenerates while `tsc` reports success. That is Ruling 27 point 2's entire justification, now measured rather than argued. **AND THE TRAP BITES A SECOND CHECK — C's question (g) answered YES:** `dead-links.test.ts:274` returns early when the generated route file is absent, so with the directory gone the suite reports **4 passed having checked nothing**. **Build-first is load-bearing for TWO gate steps, and they fail differently** — tsc gives a false green on broken code (worse), the cross-check merely goes vacuous. **9-04 VERIFIED BY RE-RUNNING B's EXACT PLANT: the `process.env.TAVILY_API_KEY` read that left 12 cases green this morning now reddens 2 and both name `scripts/setup-vertex-search.mjs`** (baseline before the plant: 19 passed). **9-01's DOCUMENT READ END TO END, ALL 320 LINES — all four of C's rows are fixed, including the money control that read backwards; and C's question (b) is answered NO, with three more contradictions**: `:36-40` still says the grounding backfill tops queries up by default and `:256` sells the threshold as the disable switch — **the same money control one screen above the row C fixed** — while `:194` tells the operator to build a `Standard`-tier Search App and `:160-165`, under *"findings that cost a rebuild — do not repeat them"*, says website search is Enterprise-only and Standard refuses every query. **9-03 IS RE-OPENED, AND RULING 27 IS WHAT RE-OPENED IT, NOT C:** §3 now carries **one** bullet saying build FIRST and **four** that read build LAST — one of them (`:2893`) saying *"The build must run LAST"* **in bold**, and one of them **§0b, the manager's own brief-building template**, which is the text a round-10 brief gets copied from. `POLICY — manager decides`. **C's OTHER QUESTIONS ANSWERED BY EXECUTION:** (a) the loud failure **is** followable by an operator with an index already built — it names the variable, gives the line to paste, and says the index does not move; (c) C's numbers are **honest**, including the Vertex-capability **three** readers (my four-file grep was a mention/read confusion, and C's distinction is the right one); (d) `router.push` **is** checked, not merely passing free — `TS2345`, and note it gives **no** "did you mean" hint where `<Link>` does; (e) the two link guards **are** complementary, proved in both directions — a `<form action>` typo is caught **only** by the test (tsc exit 0) and a wrong dynamic route shape **only** by the compiler (6 errors, 3 files, dead-links 4 passed), with `router.push` overlapping both. **THE OWNER HAS NOT ACTED — `NEXT_PUBLIC_SUPABASE_URL` 0, `SUPABASE_SERVICE_ROLE_KEY` 0**, measured by count, the file never `cat`-ed, modification time unchanged since round 7; so **no blocked half became measurable and the blocked list is identical to round 8's**. **ALL FIVE SCANS 0**, my greps and the gate's own cases agreeing on every one — **and I record the wrong probe I ran first** (grepping `protectAiRequest` when the guard is `requireEntitledAiRequest`, which listed 12 false "unguarded" routes) so nobody re-derives the scare. **ALL FIFTEEN TALLIES CARRIED BY NAME**, including the two new ones: **build warnings = 1, named** (`Turbopack build encountered 1 warnings:`, the 9-02 file-tracing trace, the owner's) and **the build ran before `tsc` — YES**, twice. **Tally 1 re-derived with `scripts/` in scope for the first time and still 0.** **Tally 4 reproduces at 4** — only its marker wording is non-uniform, which is why `grep "of the 4"` returns 3 and reads like a drift; recorded so round 10 does not re-open a settled number. **6 plants, 6 fired, every one reverted from a copy OUTSIDE the repo and asserted in BOTH directions** (Ruling 27 point 3), with no `git checkout --` anywhere. **Gate in the new order:** build exit 0 · 27/27 pages · 36 route rows · 1 Turbopack warning · tsc 0 · eslint 1 · vitest **129 files / 2954 passed / 1 skipped / 0 failed**. **LIVE on my own run:** `gemini gemini-3.1-flash-lite small+large PASS`, `in=412 out=9 917ms ok`, exit 0. **READING NOTE: like-for-like with rounds 5-8 (30 every time), so 0.0% -> 0.0% is a real comparison and nothing regressed — but a zero on this table has never meant "nothing was found", and this round it means it less than usual.** **PROCESS FINDING: round 8's row was missing from this table** — it had been left stranded in §4 — and I added it below rather than leave the trend line skipping a round |
 
 ---
 
