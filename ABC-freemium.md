@@ -17253,3 +17253,115 @@ B used, independently confirming Ruling 26 point 1's correction of 34 → **36**
 **`Turbopack build encountered 1 warnings:`** — the standing 9-02 file-tracing warning, the owner's,
 unchanged. Build artifacts left the tracked tree clean; the only working-tree entries are this
 item's own six edited files and one new module.
+
+---
+
+### Round 9 — Agent A
+
+**The last agent turn.** Three parts, one commit each, each pushed as it finished. **No production
+code changed** — asserted before the closing gate run was read. Every plant reverted from a copy
+held **outside** the repo, with the planted value asserted **ABSENT** and the fix asserted **STILL
+PRESENT** (Ruling 27 point 3). `.env.local` never `cat`-ed; measured by count and name only.
+
+**THE BUILD RAN FIRST, BEFORE `tsc` — Ruling 27 point 2's new tally, answered: YES.** The order this
+turn was `npm run build` -> `tsc` -> `lint` -> `vitest`, and the build's own log is where the route
+figures below come from.
+
+---
+
+#### Part 1 — the fixture
+
+##### MY OWN MEASUREMENT SCRIPTS' COVERAGE BOUNDARY, DECLARED (Ruling 26 point 2 applies to me too)
+
+Every grep in this entry ran with this boundary, and it is stated so a later reader can tell what I
+did **not** look at:
+
+- **Roots: `web/src` and `web/scripts`.** Nothing else. `web/supabase/`, `web/public/`, `docs/`, the
+  repo root and the native app under `Peer/` are **outside** every count below, except where a scan
+  names a file there explicitly (the two documents I read end to end).
+- **Extensions: `.ts`, `.tsx`, `.mjs`, `.js`.** File census: **409** files, of which **5** are under
+  `scripts/`.
+- **Excluded: `node_modules`, `.next`, `__pycache__`.** Test files (`*.test.*`) are excluded from
+  every *production-source* count, and that exclusion is restated at each one.
+- **SHAPE boundary, which is the half people forget:** my greps match a **literal**
+  `process.env.NAME`. A computed `process.env[name]` is invisible to them, exactly as it is to the
+  gate's scans — so I re-derived that census separately below rather than leaving it implicit.
+
+##### The two numbers
+
+- **Code-side: 0.0% — 0 of 30.** Method: `(NOT MET + PARTIAL) / (31 items - 1 N/A)`. Zero items
+  scored `NOT MET` and zero scored `PARTIAL`, so the numerator is 0.
+- **Blocked on the owner: 5, by name — R-ENT-1, R-ENT-2, R-METER-1, R-METER-3, R-QUOTA-2.** Method:
+  the count of items whose code half is built and verified but whose behaviour cannot be observed
+  here, because the three Supabase migrations are unapplied and the two Supabase names are absent.
+- **N/A, re-listed by name as every round must: R-METER-2** (Ruling 12 — D2a makes the
+  system-search usage row unreachable by construction).
+- **Exclusions: none.** No item was excluded by the manager and none by me.
+
+##### THE ROUND'S BIGGEST NEWS: THE OWNER HAS **NOT** ACTED
+
+Measured by count, never by value, never by `cat`:
+
+| Name | `grep -c "^NAME=."` | Reading |
+| --- | --- | --- |
+| `NEXT_PUBLIC_SUPABASE_URL` | **0** | absent |
+| `SUPABASE_SERVICE_ROLE_KEY` | **0** | absent |
+| `GOOGLE_API_KEY` | **1** | present since round 7 |
+| `TAVILY_API_KEY` | **0** | absent, as D2a requires |
+
+Both Supabase names appear in the file **once each** as commented-out placeholders, so the *names*
+are there and the *values* are not. `web/.env.local`'s modification time is unchanged from round 7
+(2026-09-07 21:39:24Z, the minute `GOOGLE_API_KEY` landed), so the file has not been touched since.
+**No blocked half became measurable this round, and the blocked list is identical to round 8's.**
+
+##### The fixture, all 31 items
+
+| Item | Score | Evidence — this turn's own runs unless marked *(inherited)* |
+| --- | --- | --- |
+| R-SEC-1 | **MET** | `api/figure/route.ts:35` calls `requireEntitledAiRequest("figure", 60)` and hands the **entitlement object** into `extractFigure`'s `ctx`; read this turn. The matchers take a context explicitly — scan 4 finds **0** argument-less `resolveProvider()` calls |
+| R-SEC-2 | **MET** | scan 5: **9** api routes carry the shared guard, **2** justified exemptions with reasons, **0** unguarded-and-unjustified — the gate's own assertion re-run this turn (19/19) |
+| R-SEC-3 | **MET** | *(inherited from rounds 3-8; re-confirmed only by suite)* — the route persona suites are inside the 2954 |
+| R-SEC-4 | **MET** | `dispatch-digests` is one of scan 5's two named exemptions, exempted **for D9 by name**, passing `systemSearchAllowed: false` per enrolled user |
+| R-METER-1 | **BLOCKED** | the wrapper exists and is unit-covered; no `usage_events` table exists here, so no row can be observed. Owner action |
+| R-METER-2 | **N/A** | Ruling 12 / D2a — unreachable by construction. Standing tally: `kind:"search"` rows = **0** |
+| R-METER-3 | **BLOCKED** | the Supabase counter store cannot be reached; tests run the R-METER-4 fallback. Owner action |
+| R-METER-4 | **MET** | the whole 2954-test suite runs on the in-memory fallback and labels it |
+| R-ENT-1 | **BLOCKED** | migration files written under `web/supabase/migrations/20260904*`; unapplied. Owner action |
+| R-ENT-2 | **BLOCKED** | the resolver is built and unit-covered; `plan` cannot be read from a table that does not exist. Owner action |
+| R-ENT-3 | **MET** | the single predicate ships; scan 2 finds **0** live client-side `NODE_ENV` AI tests |
+| R-ENT-4 | **MET** | *(inherited)* — signed-out personas 401/503 across the report routes, inside the suite |
+| R-ENT-5 | **MET** | `lib/env/local-dev.ts:23` is the one gated helper; the guard bans `PEER_DEV_ENTITLEMENT` on Vercel (`assert-byok-production-env.test.ts` **31/31**, re-run this turn) |
+| R-POOL-1 | **MET** | *(inherited)* — ISO-week key suite green |
+| R-POOL-2 | **MET** | *(inherited)* — forced-rebuild breaker suite green |
+| R-POOL-3 | **MET** | scan 3: `process.env.TAVILY_API_KEY` read **0** times in non-test source **across `src/` AND `scripts/`** — re-derived under the widened scope this turn |
+| R-KEY-1 | **MET** | **both halves, and the live half is my own run:** `npm run check:providers` -> `gemini gemini-3.1-flash-lite small+large PASS`, `in=412 out=9 917ms ok`, **exit 0**, four BYOK vendors `SKIP` naming their variable, no key material printed |
+| R-KEY-2 | **MET** | *(inherited)* — the entitled-context brand makes an unguarded call a compile error |
+| R-KEY-3 | **MET** | **D2a re-confirmed, not inherited:** `systemSearchAllowed: true` appears **0** times in non-test source; `entitlement/resolve.ts:134` hard-wires `false` |
+| R-KEY-4 | **MET** | *(inherited)* — `ui-vocabulary.test.ts` **3/3** re-run this turn |
+| R-QUOTA-1 | **MET** | `dead-links.test.ts` **4/4** re-run this turn, and I proved it can fail in **two** shapes (part 2) rather than trusting the pass |
+| R-QUOTA-2 | **BLOCKED** | the trial cap and both breakers are built and unit-covered; a real trip cannot be observed without a counter store. Owner action |
+| R-QUOTA-3 | **MET** | *(inherited)* — the streamed-depth cases are inside the 2954 |
+| R-UI-1 | **MET** | scan 1: **0** rendered strings matching the banned vocabulary; all 12 `.tsx` matches are comments |
+| R-UI-2 | **MET** | *(inherited)* — `ai-setup.tsx` copy suite green |
+| R-UI-3 | **MET** | *(inherited from round 6's five-state x three-surface measurement)* — the upsell suites are inside the 2954 |
+| R-UI-4 | **MET** | *(inherited)* — cache-key discrimination suite green |
+| R-GUARD-1 | **MET** | `assert-byok-production-env.test.ts` **31/31** re-run this turn: three required names, `TAVILY_API_KEY` banned, `GOOGLE_VERTEX_` banned by prefix |
+| R-GUARD-2 | **MET** | the same suite asserts no value is ever printed, and `vertex-search-project.test.ts` (**13/13**) asserts 9-01's **new** message prints a placeholder rather than the old variable's value |
+| R-TEST-1 | **MET** | 129 files / 2954 passed / 1 skipped / 0 failed; **no test deleted this round**, one rewritten to a new contract with its item named |
+| R-TEST-2 | **MET** | gate green and **above** baseline (2552 -> 2954), build exit 0 |
+
+**Totals: 25 MET · 5 BLOCKED · 1 N/A · 0 PARTIAL · 0 NOT MET.** 25 + 5 = 30 scored, plus R-METER-2
+outside the denominator = 31 items, which is the whole of spec §2.
+
+##### The blocked table — five halves, ONE cause, and what closes each
+
+| Item | The half that is blocked | What unblocks it | How the owner verifies once they have acted |
+| --- | --- | --- | --- |
+| R-ENT-1 | `profiles.plan` / `trial_started_at` / `trial_ends_at` / `plan_updated_at` do not exist as columns anywhere reachable | apply the three migrations under `web/supabase/migrations/20260904*` | sign in once, then read the profile row: `plan` is `trial` and `trial_ends_at` is 14 days out |
+| R-ENT-2 | `resolveEntitlement` cannot read a real `plan`, so trial-expiry-at-read-time is unobserved | the same three migrations | `GET /api/profile` returns an entitlement summary whose `deepReportsRemaining` is a number, not `null` with `reason: "unavailable"` |
+| R-METER-1 | no `usage_events` row can be written or read | the same three migrations | run one deep report, then count rows in `usage_events` — expect **one row per provider request**, never two, never zero |
+| R-METER-3 | the per-user counters have no store, so the in-memory fallback is what runs | the same three migrations **plus** `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in `web/.env.local` | restart the app and confirm the deep-report count survives the restart |
+| R-QUOTA-2 | no cap can actually trip, because nothing counts across requests | the same three migrations | on the free plan, the 6th deep report in a month returns the degraded payload with `quota.remaining: 0` |
+
+**All five share the single action at the top of `PENDING USER ACTION`.** Nothing an agent can do
+moves any of them.
