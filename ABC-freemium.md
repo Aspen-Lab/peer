@@ -17621,3 +17621,146 @@ finding is real and is NOT hidden inside a 0.0%.**
 messages with `Co-Authored-By: Claude Fable 5.1`. Every agent commit for nine rounds ends with its
 own model instead. Harmless, but it is one more line that is wrong while everything around it is
 right.
+
+---
+
+#### Part 3 — scans, tallies, the ranked list, and the two numbers
+
+##### The five static scans (spec §5) — my own greps AND the gate's assertions, and they agree
+
+Boundary as declared in part 1: roots `src` + `scripts`, extensions `.ts/.tsx/.mjs/.js`, excluding
+`node_modules` / `.next` / `__pycache__`, and `*.test.*` excluded from every production count.
+
+| # | Scan | My grep | The gate's own case | Agree? |
+| --- | --- | --- | --- | --- |
+| 1 | banned vocabulary in rendered strings | **0** — 12 matches in `.tsx`, **all 12 are comments** (`events/[id]`, `jobs/[id]`, `page.tsx`, `onboarding-tour`, `ai-setup`, `report-badge`, `tier-upgrade-block`, `why-peer-sent-this`) | `ui-vocabulary.test.ts` **3/3** | **yes** |
+| 2 | `NODE_ENV === "development"` shipped to the browser | **0** — 8 matches: 4 comments; `auth/callback/route.ts:17` is a **server** route choosing a redirect origin; `lib/env/local-dev.ts:23` is the one gated helper; `pool-cache-disk.ts:42` and `pool-cache-runtime.ts:14` are server-side disk-cache toggles. **None gates AI availability** | `no-client-dev-flags.test.ts` **2/2** | **yes** |
+| 3 | `process.env.TAVILY_API_KEY` outside the gated resolver | **0**, and for the first time that 0 covers `scripts/` too. The 9 matches are: 4 test files deleting it, 2 comments in `system-key.ts` (including the commented-out D2 branch at `:147-148`), 3 inside `spend-scans.test.ts`'s own prose | `spend-scans.test.ts` **19/19** | **yes** |
+| 4 | argument-less `resolveProvider()` | **0** — 17 call sites, all carrying a context; the 3 matches for the bare shape are all comments recording that the two figure matchers used to do it | `spend-scans.test.ts` scan 4 | **yes** |
+| 5 | spending routes without the shared guard | **0 unguarded-and-unjustified** — **9** api routes carry `requireEntitledAiRequest`, **2** justified exemptions with written reasons | `spend-scans.test.ts` scan 5 | **yes** |
+
+**A correction to my own first probe, recorded because it is the kind of thing that becomes a false
+finding:** my initial scan-5 grep looked for `protectAiRequest` and listed 12 "unguarded" routes.
+**That grep was wrong, not the code** — the guard is `requireEntitledAiRequest`, which wraps it. The
+right predicate is the scan's own `canSpend()`, and it returns 0. I am recording the wrong probe as
+well as the right one so nobody re-derives the scare.
+
+##### The standing tallies — all fifteen, by name
+
+| # | Tally | This round | How I got it |
+| --- | --- | --- | --- |
+| 1 | `process.env.TAVILY_API_KEY` reads in non-test source | **0** | re-derived over **both** roots, as the TODO required. For nine rounds this 0 meant `src/` only; it now covers the operator tooling |
+| 2 | `kind:"search"` usage rows produced | **0** | the writer survives at 3 call sites behind the frozen-false gate; `usage/rebuild-breaker.ts:33` states in its own words that the rebuild path writes `kind:"breaker"`, never `kind:"search"` |
+| 3 | structured-source accepted reads | **3** | adzuna / jsearch / usajobs, asserted by name in the scan itself |
+| 4 | Ruling-75 absence cases | **4** — **reproduces, and the settlement holds** | **but see the maintenance note below** |
+| 5 | dead internal links | **0**, no allowlist, `/CHANGELOG.md` a known false positive | `dead-links.test.ts` **4/4**, and I proved it able to fail in **two** shapes this turn |
+| 6 | paid and unknown-plan upsells | **0** on **3** surfaces | *(inherited from round 6-7; inside the 2954, not re-derived this turn — said plainly)* |
+| 7 | report routes answering an anonymous caller 401 | **3 of 3** (4 of 4 with digest) | re-derived this turn from the persona suite's own cases |
+| 8 | model ids sendable with no verified thinking setting | **0** | `gemini.test.ts` **9/9**, including *"turns thinking off for EVERY model id the shipped chains can send"* |
+| 9 | regex shape-tests on a model id | **2** | `providers/gemini.ts:107` and `:108`, the two named family constants |
+| 10 | scan 5 justified exemptions | **2** (guarded routes **9**) | read out of `JUSTIFIED_EXEMPTIONS` rather than inherited |
+| 11 | **build warnings** | **1, NAMED** | verbatim: **`Turbopack build encountered 1 warnings:`** — the file-tracing warning through `./next.config.ts -> ./src/lib/papers/pdf-text.ts -> ./src/lib/papers/full-text.ts -> ./src/app/api/papers/report/route.ts`. **This is 9-02 and it is the OWNER's.** Reported, never asserted (Ruling 26 point 6) |
+| 12 | scanned roots | **2** (`src`, `scripts`) with **2** named directory exclusions (`test-support`, `__pycache__`) | the scan asserts its own boundary; I re-derived the file census independently: **409** files, **5** under `scripts/` |
+| 13 | computed `process.env[name]` sites | **1 file, 2 sites** | `scripts/check-provider-models.mjs:111` and `:203`, both **model** keys. **No search key reachable through them** |
+| 14 | **NEW (Ruling 27 point 2) — was the build run before `tsc` this turn?** | **YES** | twice: once at the start of the turn, and again as step 1 of the final verification. `tsc` never read a stale route union in this turn |
+| 15 | *(process)* plants fired / reverted in both directions | **6 plants, 6 fired, 6 reverted** | every one asserted at substitution count 1 before the run was read, reverted from a copy **outside** the repo, and asserted **planted value ABSENT + fix STILL PRESENT** |
+
+**MAINTENANCE NOTE ON TALLY 4, so round 10 does not re-open a settled number.** Round-8 A settled it
+at 4 and said each of the four carries an explicit *"N of the 4"* marker. **Three do**
+(`jobweb.test.ts:3238`, `:3269`, `:3324`). **The fourth words it differently** —
+`eventweb.test.ts:2813-2822` says *"the number is 4 (this one plus three in `jobweb.test.ts`)"*. So
+`grep "of the 4"` returns **3** and reads like a drift when nothing has drifted. The tally is **4**
+and it reproduces; only the marker convention is non-uniform.
+
+##### The ranked difference list
+
+Ranked by what someone notices — or is bitten by — first.
+
+1. **§3 teaches two different gate orders, and the one a brief gets built from is the wrong one.**
+   Detailed in part 2. **One place says build FIRST; four read as build LAST, and one of those four
+   says *"The build must run LAST"* in bold.** The most dangerous is §0b, the manager's own
+   brief-building template, because that is the text a round-10 brief is copied from — and I
+   demonstrated this turn exactly what building last produces: a **false green on genuinely broken
+   code**. `POLICY — manager decides`; it is the manager's own text, and A neither writes rulings
+   nor changes code.
+2. **`docs/SETUP_vertex_ai_search.md` still describes the grounding backfill as on by default, one
+   screen above the row 9-01 corrected** (`:36-40`, and `:256` sells the threshold as the disable
+   switch). Same document, same money control, same defect class as the row that was fixed.
+   Harmless today only because `isVertexSearchAvailable()` is `false`; it becomes a real bill the
+   day D2b is taken, which is the exact day someone reads this document.
+3. **The same document tells the operator to create a `Standard`-tier Search App** (`:194`) while
+   sixty lines above, under *"Two findings that cost a rebuild — do not repeat them"*, it says
+   website search is Enterprise-only and a Standard engine refuses every query. **Predates 9-01;
+   the most expensive of the three if anyone follows the steps in order.**
+4. **`vertex-search.ts:24-28`'s module header carries the same stale "a small tail still paying for
+   grounding" sentence** — one docblock above the corrected one. Cosmetic, same class as the site
+   C did fix.
+5. *(maintenance, not a difference)* §3's commit-message bullet names `Claude Fable 5.1` for every
+   agent; nine rounds of agent commits use their own model instead. And tally 4's marker wording,
+   above.
+
+**NONE OF THESE IS AN R-* ITEM.** Items 2-4 are operator documentation for a capability D2a keeps
+switched off; item 1 is this loop's own process text. **So the code-side percentage does not move,
+and I am saying that out loud rather than letting a 0.0% imply nothing was found.**
+
+##### The two numbers
+
+- **CODE-SIDE: 0.0% — 0 of 30.** One sentence of method: I scored every R-* item in spec §2, took
+  `(NOT MET + PARTIAL)` as the numerator and `31 items minus the one N/A` as the denominator, and
+  both `NOT MET` and `PARTIAL` came out empty.
+- **BLOCKED: 5, by name — R-ENT-1, R-ENT-2, R-METER-1, R-METER-3, R-QUOTA-2.** One sentence of
+  method: I counted the items whose code half is built and verified but whose behaviour cannot be
+  observed on this machine, and every one of the five is waiting on the same single owner action.
+- **N/A: R-METER-2. Exclusions: none.**
+
+**The difference list is empty on the code side for the fifth round running — and this time that is
+not the whole story, because four real findings above sit outside the spec's numbering.**
+
+##### THE GATE, RUN IN THE NEW ORDER (Ruling 27 point 2), COLD, ON A CLEAN TREE
+
+Asserted before the run was read: `git status --porcelain --untracked-files=all` **0 lines** and
+`git diff --name-only -- web/` **0 files**.
+
+**Step 1 — `npm run build` (FIRST):**
+- **exit 0**
+- `✓ Compiled successfully in 5.0s`
+- `✓ Generating static pages using 15 workers (27/27) in 451ms` — **27/27**
+- **36 route rows** (9 `○` static, 27 `ƒ` dynamic; middleware listed separately) — counted from my
+  own log, agreeing with Ruling 26 point 1's correction of 34 -> 36
+- **`Turbopack build encountered 1 warnings:`** — quoted verbatim; the standing 9-02 trace, the
+  owner's, unchanged
+
+**Step 2 — `npx tsc --noEmit -p tsconfig.json`: exit 0.**
+
+**Step 3 — `npm run lint --silent`: `✖ 1 problem (1 error, 0 warnings)`** — the standing
+`quiz.tsx:46` `react-hooks/set-state-in-effect`.
+
+**Step 4 — `npx vitest run --reporter=dot`: `Test Files 129 passed | 1 skipped (130)` ·
+`Tests 2954 passed | 1 skipped (2955)` · 0 failed**, 9.81 s. `src/lib/events/benchmark.test.ts` is
+the one skip, named. **Identical to round-9 C's, as it must be — I changed no code.** No test added
+or deleted this round.
+
+**LIVE, on my own run (Ruling 22 point 6 / Ruling 24 point 7):**
+
+```
+[llm] gemini/gemini-3.1-flash-lite path=test in=412 out=9 917ms ok
+gemini     gemini-3.1-flash-lite          small+large    PASS
+openai     —                                             SKIP   no key (OPENAI_API_KEY)
+qwen       —                                             SKIP   no key (QWEN_API_KEY or DASHSCOPE_API_KEY)
+anthropic  —                                             SKIP   no key (ANTHROPIC_API_KEY)
+deepseek   —                                             SKIP   no key (DEEPSEEK_API_KEY)
+All 1 configured model id(s) answered.
+exit 0
+```
+
+Run **once**, not in a loop — it makes a real billed call. No key material printed.
+
+##### Process, stated so it can be checked
+
+**No production code changed** — `git diff --name-only -- web/` **0 files**, asserted before the
+closing gate was read. **Six plants, six fired, six reverted from copies held OUTSIDE the repo**,
+each asserted in **both** directions per Ruling 27 point 3. **No throwaway written inside the repo
+at all** — the one harness and every backup live in the scratchpad; `git status --porcelain
+--untracked-files=all` was **0 lines** before every commit. `.env.local` was never `cat`-ed and was
+measured by count and name only. The staged credential grep — the three standing prefixes, run over
+the **diff** rather than the files — printed nothing on every commit.
