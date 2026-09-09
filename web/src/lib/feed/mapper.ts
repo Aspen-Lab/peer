@@ -125,6 +125,7 @@ export function rawItemToPaper(
     id: item.id,
     title: cleanedTitle,
     authors: item.authors.map(cleanDisplayText).filter(Boolean),
+    ...(item.leadAffiliation ? { leadAffiliation: cleanDisplayText(item.leadAffiliation) } : {}),
     relevanceReason: cleanDisplayText(options.relevanceReason),
     venue,
     source: mapSource(item.source, venue),

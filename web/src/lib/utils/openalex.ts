@@ -17,6 +17,19 @@ export function reconstructAbstract(
   return words.map(([, w]) => w).join(" ");
 }
 
+/**
+ * The first author's institution — the one line that turns a list of names
+ * into a byline. `author_position` rather than index 0: OpenAlex orders
+ * `authorships` by position already, but says so explicitly, and a record
+ * that has lost its order should not silently promote whoever is first.
+ */
+function leadAffiliationOf(authorships: OpenAlexAuthorship[]): string | undefined {
+  const lead =
+    authorships.find((a) => a.author_position === "first") ?? authorships[0];
+  const name = lead?.institutions?.find((i) => i.display_name)?.display_name;
+  return cleanDisplayTextOrUndefined(name);
+}
+
 export function normalizeOpenAlexId(openalexId: string): string {
   return "openalex:" + openalexId.split("/").pop();
 }
@@ -24,6 +37,8 @@ export function normalizeOpenAlexId(openalexId: string): string {
 interface OpenAlexAuthorship {
   author_position?: string;
   author: { display_name: string };
+  /** Present in the `authorships` field Peer already selects. */
+  institutions?: { display_name?: string }[];
 }
 
 interface OpenAlexConcept {
@@ -154,6 +169,7 @@ export function openAlexWorkToRawItem(w: OpenAlexWork): RawItem {
       .map((a) => a.author?.display_name)
       .map(cleanDisplayText)
       .filter((n): n is string => Boolean(n)),
+    leadAffiliation: leadAffiliationOf(w.authorships ?? []),
     abstract: abstract || undefined,
     url: bestUrl(w),
     publishedAt: w.publication_date || "",

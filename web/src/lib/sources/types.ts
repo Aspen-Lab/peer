@@ -44,6 +44,13 @@ export interface RawItem {
   source: SourceId;
   title: string;
   authors: string[];
+  /**
+   * Where the first author works, when the source says so. OpenAlex returns
+   * an institution per authorship inside `authorships`, which Peer has always
+   * fetched whole and read one field out of — the byline said "A. Kalisz,
+   * J. Simons +5" and could not say where any of them were.
+   */
+  leadAffiliation?: string;
   abstract?: string;
   /** Semantic Scholar's machine-written one-liner. Never merged into `abstract`; shown labelled. */
   tldr?: string;

@@ -2,6 +2,41 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.22.0 — 2026-09-09
+
+A byline, and the chart moves to the page you actually open.
+
+**The byline said "A. Kalisz, J. Simons +5".** Initials are what you set when
+the column is 40mm wide and paper costs money; on screen they cost the one
+thing a byline is for, which is recognising the people. The names are now
+written as they are written, three before it asks to be opened, and the "+5"
+— which read as a typo rather than a control — is a control that says what it
+does.
+
+**And it says where the first author works.** OpenAlex returns an institution
+with every authorship, inside the `authorships` field Peer has always fetched
+whole and read exactly one key out of. "University of Bayreuth" under the
+names was in the payload the entire time. Same shape of miss as the full text
+in v0.20.0, found the same way — by reading what was already on the wire.
+
+**Peer's chart was on the profile, which is the wrong page.** The reading
+calendar is a habit, and a habit belongs on the page you open every morning,
+not on the page you visit to change a setting. It is now one component in two
+sizes: the profile's labelled eighteen weeks, and a bare eight-week strip at
+the foot of the briefing — after the day's papers, because the brief opens on
+what there is to read and closes on what has been read. Two copies of a chart
+became one.
+
+**And it works signed out.** `readItems` was a set of booleans, so the only
+reading history Peer had was `/api/read`, which answers 401 without a session
+— on a self-hosted, local-first product, its own chart needed an account. The
+store now keeps the day each paper was first read, and the chart prefers the
+server's history and falls back to this browser's. Re-opening a paper next
+week does not move the day it was read.
+
+Nothing is drawn from nothing: with no reading history the strip renders
+nothing at all, and the streak is still never counted off invented weeks.
+
 ## v0.21.0 — 2026-09-08
 
 The overview, on papers whose findings were not where Peer was looking.

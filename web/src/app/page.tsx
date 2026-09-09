@@ -23,6 +23,13 @@ import { feedsUseAi } from "@/lib/feed/ai-tier";
 import { formatTimeAgo } from "@/lib/format";
 import { useProfileStore } from "@/store/profile";
 import { FeedTile } from "@/components/cards/feed-tile";
+import { Band } from "@/components/ui/band";
+import {
+  ReadingCalendar,
+  daysRead,
+  streakWeeks,
+  useReadingDays,
+} from "@/components/charts/reading-calendar";
 import { PaperDigestLoader } from "@/components/digest/daily-digest";
 import { LoadingSkeleton } from "@/components/ui";
 import { buttonVariants } from "@/components/ui/button";
@@ -183,7 +190,50 @@ function DailyBriefingPage() {
           ))}
         </div>
       )}
+
+      {/* After the day's papers, not before them: the brief opens on what
+          there is to read and closes on what has been read. */}
+      {papers.length > 0 && <ReadingStrip />}
     </article>
+  );
+}
+
+/** Eight weeks: two months is enough to see a habit and short enough to sit
+ *  under the day's papers without becoming a second page. */
+const STRIP_WEEKS = 8;
+
+const READING_STRIP = {
+  heading: "Your reading",
+  summary: (days: number, of: number, streak: number) =>
+    `${days} of the last ${of} days` +
+    (streak > 0 ? ` \u00b7 ${streak}-week streak` : ""),
+};
+
+/**
+ * Peer's own chart, at the foot of the brief — the eight weeks behind today.
+ *
+ * The briefing had no chart at all and the profile had the only one, which is
+ * the wrong way round: the reading habit belongs on the page you open every
+ * day, and the profile is where you go to change a setting. It is the same
+ * component the profile draws, at eight weeks instead of eighteen and with
+ * its rules off.
+ *
+ * Renders nothing until something has been read — never a placeholder grid,
+ * and never a streak counted off invented weeks.
+ */
+function ReadingStrip() {
+  const cells = useReadingDays(STRIP_WEEKS);
+  if (!cells) return null;
+  const days = daysRead(cells);
+  const streak = streakWeeks(cells, STRIP_WEEKS);
+
+  return (
+    <Band label={READING_STRIP.heading} className="mt-16">
+      <p className="font-mono text-caption text-text-faint mt-3 mb-3">
+        {READING_STRIP.summary(days, STRIP_WEEKS * 7, streak)}
+      </p>
+      <ReadingCalendar cells={cells} weeks={STRIP_WEEKS} labels={false} />
+    </Band>
   );
 }
 

@@ -10,7 +10,8 @@ import { formatDayAge } from "@/lib/format";
 import { shortVenue } from "@/components/cards/paper-plate";
 import { AUTHORS } from "./copy";
 
-const COLLAPSED_AUTHORS = 2;
+/** Names shown before the byline asks to be opened. */
+const COLLAPSED_AUTHORS = 3;
 /** Past this the display size stays at 28px on every breakpoint. */
 const LONG_TITLE_CHARS = 120;
 
@@ -32,28 +33,54 @@ export function initialName(name: string): string {
   return `${initials} ${surname}`;
 }
 
-function AuthorLine({ authors }: { authors: string[] }) {
+/**
+ * The byline.
+ *
+ * It used to read "A. Kalisz, J. Simons +5": two names cut to initials, and a
+ * bare "+5" that looked like a typo rather than a control. Initials are what
+ * you set when the column is 40mm wide and paper costs money — on screen they
+ * cost the one thing a byline is for, which is recognising the people. So:
+ * the names as they are written, three of them before it asks to be opened,
+ * a control that says what it does, and — where the record knows it — where
+ * the first author works, which is the line that turns a list of names into a
+ * byline.
+ *
+ * Serif, like the title above it: these are the paper's own words. The mono on
+ * this page is Peer talking.
+ */
+function AuthorLine({ authors, affiliation }: { authors: string[]; affiliation?: string }) {
   const [expanded, setExpanded] = useState(false);
   const hidden = authors.length - COLLAPSED_AUTHORS;
-  const className = "font-sans text-body-sm text-text-muted mt-3";
+  const className = "font-reading text-body-lg leading-[1.45] text-text mt-3";
 
-  if (hidden <= 0) {
-    return <p className={className}>{authors.map(initialName).join(", ")}</p>;
-  }
-  const collapsed = `${authors.slice(0, COLLAPSED_AUTHORS).map(initialName).join(", ")} +${hidden}`;
-  // The names stay the accessible name — an `aria-label` would replace them,
-  // and a screen reader would never hear an author. The action is a hidden
-  // suffix: "A. Jumper, B. Evans +9, Show 9 more".
+  const names =
+    hidden <= 0 || expanded ? authors.join(", ") : authors.slice(0, COLLAPSED_AUTHORS).join(", ");
+
   return (
-    <button
-      type="button"
-      onClick={() => setExpanded((v) => !v)}
-      aria-expanded={expanded}
-      className={`${className} block w-full text-left hover:text-heading transition-colors duration-150 ease-snap`}
-    >
-      {expanded ? authors.join(", ") : collapsed}
-      <span className="sr-only">, {expanded ? AUTHORS.showFewer : AUTHORS.showMore(hidden)}</span>
-    </button>
+    <div className="mt-3">
+      <p className={`${className} mt-0 measure-lede`}>
+        {names}
+        {hidden > 0 && (
+          <>
+            {expanded ? " " : ", "}
+            {/* The names stay the accessible name — an `aria-label` on the
+                button would replace them and a screen reader would never hear
+                an author. */}
+            <button
+              type="button"
+              onClick={() => setExpanded((v) => !v)}
+              aria-expanded={expanded}
+              className="font-mono text-caption text-text-faint hover:text-heading underline decoration-border-strong underline-offset-4 transition-colors duration-150 ease-snap [@media(hover:none)]:py-3"
+            >
+              {expanded ? AUTHORS.showFewer : AUTHORS.showMore(hidden)}
+            </button>
+          </>
+        )}
+      </p>
+      {affiliation && (
+        <p className="font-mono text-caption text-text-faint mt-1.5">{affiliation}</p>
+      )}
+    </div>
   );
 }
 
@@ -82,7 +109,9 @@ export function TitleBlock({
       >
         {paper.title}
       </h1>
-      {paper.authors.length > 0 && <AuthorLine authors={paper.authors} />}
+      {paper.authors.length > 0 && (
+        <AuthorLine authors={paper.authors} affiliation={paper.leadAffiliation} />
+      )}
       {recommendation && (
         <p className="font-sans text-body-sm text-text-muted mt-1">{recommendation}</p>
       )}

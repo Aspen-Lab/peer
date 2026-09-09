@@ -52,6 +52,8 @@ export interface Paper {
   id: string;
   title: string;
   authors: string[];
+  /** Where the first author works, when the record says so. */
+  leadAffiliation?: string;
   relevanceReason: string;
   venue: string;
   source: PaperSource;

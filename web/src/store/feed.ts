@@ -577,6 +577,17 @@ interface FeedState {
   feedTopicsKey: string | null;
   aiPaperSearchEnabled: boolean;
   readItems: Record<string, true>;
+  /**
+   * When each paper was first marked read, as an ISO date (UTC day).
+   *
+   * `readItems` is a boolean set, so a reader who is not signed in has no
+   * reading history at all — the calendar on the profile is drawn from
+   * `/api/read`, which answers 401 without a session. Peer is a self-hosted,
+   * local-first product; its own chart should not need an account. The date
+   * only, not the instant: the chart buckets by day, and a day is all this
+   * needs to remember.
+   */
+  readAt: Record<string, string>;
   appliedAt: Record<string, string>;
   registeredAt: Record<string, string>;
   submittedAt: Record<string, string>;
@@ -666,6 +677,7 @@ export const useFeedStore = create<FeedState>()(
       feedTopicsKey: null,
       aiPaperSearchEnabled: false,
       readItems: {},
+      readAt: {},
       appliedAt: {},
       registeredAt: {},
       submittedAt: {},
@@ -1287,7 +1299,14 @@ export const useFeedStore = create<FeedState>()(
 
       markRead: (id) => {
         set((s) =>
-          s.readItems[id] ? s : { readItems: { ...s.readItems, [id]: true } },
+          s.readItems[id]
+            ? s
+            : {
+                readItems: { ...s.readItems, [id]: true },
+                // The first read is the one the chart plots; re-opening a
+                // paper a week later does not move the day it was read.
+                readAt: { ...s.readAt, [id]: new Date().toISOString().slice(0, 10) },
+              },
         );
         cloudMarkRead(id);
       },
@@ -1297,7 +1316,9 @@ export const useFeedStore = create<FeedState>()(
           if (!s.readItems[id]) return s;
           const next = { ...s.readItems };
           delete next[id];
-          return { readItems: next };
+          const nextAt = { ...s.readAt };
+          delete nextAt[id];
+          return { readItems: next, readAt: nextAt };
         });
         cloudMarkUnread(id);
       },
@@ -1646,6 +1667,7 @@ export const useFeedStore = create<FeedState>()(
         savedEvents: state.savedEvents,
         savedJobs: state.savedJobs,
         readItems: state.readItems,
+        readAt: state.readAt,
         appliedAt: state.appliedAt,
         registeredAt: state.registeredAt,
         submittedAt: state.submittedAt,

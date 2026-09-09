@@ -12,6 +12,11 @@ import { formatTimeAgo } from "@/lib/format";
 import { useFeedStore } from "@/store/feed";
 import { careerStages, industryPreferences, themeAccentOptions, themeModeOptions, type ColorTheme, type ThemeAccent, type ThemeMode } from "@/types";
 import { SchoolAutocomplete } from "@/components/profile/school-autocomplete";
+import {
+  ReadingCalendar,
+  streakWeeks,
+  useReadingDays,
+} from "@/components/charts/reading-calendar";
 import { AdvisorField } from "@/components/profile/advisor-field";
 import { summarizePreferenceLedger } from "@/lib/preferences/ledger";
 import { apiFetch } from "@/lib/api";
@@ -426,7 +431,7 @@ function ReadingCard({
   profile: ReturnType<typeof useProfileStore.getState>["profile"];
 }) {
   const stats = useReadingStats();
-  const realCells = useDailyActivityCells();
+  const realCells = useReadingDays(CAL_WEEKS);
   const totalSurfaced = stats.saved + stats.read;
   const savedRate =
     totalSurfaced > 0 ? Math.round((stats.saved / totalSurfaced) * 100) : 0;
@@ -548,7 +553,7 @@ function ReadingCard({
           </span>
           <StreakBadge cells={realCells ?? undefined} />
         </div>
-        <ReadingCalendar cells={realCells ?? undefined} />
+        <ReadingGrid cells={realCells ?? undefined} />
       </div>
 
       {/* ── Sticky topics (keyword weighted cloud) ── */}
@@ -754,80 +759,21 @@ function VenueGrid({
   );
 }
 
-// ── Calendar (GitHub-style contribution grid) ──────────────────
+// ── Calendar ───────────────────────────────────────────────────
 //
-// Real per-day counts only, from /api/read?aggregate=daily. When the API has
-// nothing to return the grid says so rather than drawing something.
+// The drawing, the ramp and the honesty rule now live in
+// `components/charts/reading-calendar` — the briefing carries the same chart
+// at eight weeks — and what is left here is the profile's own framing.
 
 const CAL_WEEKS = 18;
-const CAL_DAYS = 7;
 
-// Fetches real per-day read counts and maps them into a cells grid
-// aligned with the calendar (CAL_WEEKS columns × CAL_DAYS rows,
-// newest column = today). Returns null while loading / when unauthenticated,
-// so callers can fall back to the synthesized shimmer.
-function useDailyActivityCells(): number[] | null {
-  const [cells, setCells] = useState<number[] | null>(null);
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const data = await apiFetch<{ daily: { date: string; count: number }[] }>(
-          "/api/read?aggregate=daily",
-          { cache: "no-store" },
-        );
-        if (cancelled) return;
-        const byDate = new Map(data.daily.map((d) => [d.date, d.count]));
-        const out = new Array<number>(CAL_WEEKS * CAL_DAYS).fill(0);
-        // Fill grid newest-first: rightmost column = today (UTC, to
-        // match the server's UTC bucketing in /api/read?aggregate=daily).
-        const today = new Date();
-        today.setUTCHours(0, 0, 0, 0);
-        for (let w = 0; w < CAL_WEEKS; w++) {
-          for (let d = 0; d < CAL_DAYS; d++) {
-            // cell at (w, d) represents (today - ((CAL_WEEKS-1-w) * 7 + (CAL_DAYS-1-d))) days
-            const daysAgo = (CAL_WEEKS - 1 - w) * 7 + (CAL_DAYS - 1 - d);
-            const dt = new Date(today.getTime() - daysAgo * 86_400_000);
-            const key = dt.toISOString().slice(0, 10);
-            out[w * CAL_DAYS + d] = byDate.get(key) ?? 0;
-          }
-        }
-        setCells(out);
-      } catch {
-        // swallow — fallback to synth
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-  return cells;
-}
-
-function streakFromCells(cells: number[]): number {
-  // Count consecutive active cells working backward from the last column.
-  let streak = 0;
-  for (let w = CAL_WEEKS - 1; w >= 0; w--) {
-    let anyActivity = false;
-    for (let d = 0; d < CAL_DAYS; d++) {
-      if (cells[w * CAL_DAYS + d] > 0) {
-        anyActivity = true;
-        break;
-      }
-    }
-    if (anyActivity) streak++;
-    else break;
-  }
-  return streak;
-}
-
-function StreakBadge({ cells: realCells }: { cells?: number[] }) {
-  // No fabrication. This used to fall back to synthesizeActivity() — a seeded
-  // pseudo-random grid derived from the total activity count — whenever the
-  // real per-day API was unavailable, which is every signed-out visitor. The
-  // streak was then counted off those invented weeks and shown as fact.
-  if (!realCells) return null;
-  const weeks = streakFromCells(realCells);
+function StreakBadge({ cells }: { cells?: number[] }) {
+  // No fabrication. This used to fall back to a seeded pseudo-random grid
+  // whenever the per-day API was unavailable — which is every signed-out
+  // visitor — and the streak was counted off those invented weeks and shown
+  // as fact.
+  if (!cells) return null;
+  const weeks = streakWeeks(cells, CAL_WEEKS);
   if (weeks === 0) {
     return (
       <span className="text-micro text-text-faint/60 uppercase tracking-[0.14em]">
@@ -836,9 +782,7 @@ function StreakBadge({ cells: realCells }: { cells?: number[] }) {
     );
   }
   return (
-    <span
-      className="inline-flex items-center gap-1.5 text-caption text-accent font-medium tabular-nums"
-    >
+    <span className="inline-flex items-center gap-1.5 text-caption text-accent font-medium tabular-nums">
       <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" className="text-accent" aria-hidden>
         <path d="M12 2s4 4 4 8a4 4 0 0 1-8 0c0-2 2-3 2-6z" />
         <path d="M6 14c0 4 3 7 6 7s6-3 6-7c0-2-1-4-2-5-1 2-3 3-4 3s-3-1-4-3c-1 1-2 3-2 5z" />
@@ -848,130 +792,15 @@ function StreakBadge({ cells: realCells }: { cells?: number[] }) {
   );
 }
 
-function ReadingCalendar({ cells: realCells }: { cells?: number[] }) {
-  // The "no data" branch lives below the hooks, not above them — an early
-  // return here would call useMemo conditionally.
-  const cells = realCells ?? [];
-  const maxActivity = Math.max(1, ...cells);
-
-  const intensity = (v: number): number => {
-    if (v <= 0) return 0;
-    const ratio = v / maxActivity;
-    if (ratio > 0.75) return 4;
-    if (ratio > 0.5) return 3;
-    if (ratio > 0.25) return 2;
-    return 1;
-  };
-
-  const cellClass = (level: number) => {
-    switch (level) {
-      case 0:
-        return "bg-bg-secondary/60";
-      case 1:
-        return "bg-accent/20 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-accent)_15%,transparent)]";
-      case 2:
-        return "bg-accent/40 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-accent)_20%,transparent)]";
-      case 3:
-        return "bg-accent/70 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-accent)_25%,transparent)]";
-      default:
-        return "bg-accent shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-accent)_30%,transparent)]";
-    }
-  };
-
-  // Weekday labels we'll surface
-  const dayLabels = ["Mon", "Wed", "Fri"];
-  // Rough month markers — synthesized labels positioned across weeks
-  const monthMarkers = useMemo(() => {
-    const today = new Date();
-    const labels: { col: number; label: string }[] = [];
-    let lastMonth = -1;
-    for (let w = 0; w < CAL_WEEKS; w++) {
-      const d = new Date(today);
-      d.setDate(today.getDate() - (CAL_WEEKS - 1 - w) * 7);
-      const m = d.getMonth();
-      if (m !== lastMonth) {
-        labels.push({ col: w, label: d.toLocaleDateString("en-US", { month: "short" }) });
-        lastMonth = m;
-      }
-    }
-    return labels;
-  }, []);
-
-  if (!realCells) {
+function ReadingGrid({ cells }: { cells?: number[] }) {
+  if (!cells) {
     return (
       <p className="text-micro text-text-faint/70">
         Your reading history appears here once you have opened a few papers.
       </p>
     );
   }
-  return (
-    <div>
-      <div className="flex gap-2">
-        {/* Weekday labels */}
-        <div className="flex flex-col justify-between pt-3.5 shrink-0">
-          {[0, 1, 2, 3, 4, 5, 6].map((d) => {
-            const visible = d === 1 || d === 3 || d === 5;
-            return (
-              <span
-                key={d}
-                className="text-micro text-text-faint/70 h-[11px] leading-[11px]"
-              >
-                {visible ? dayLabels[Math.floor(d / 2)] : "\u00A0"}
-              </span>
-            );
-          })}
-        </div>
-        {/* Grid */}
-        <div className="flex-1 min-w-0">
-          {/* Month labels */}
-          <div
-            className="grid mb-1 text-micro text-text-faint/70 uppercase tracking-[0.1em]"
-            style={{ gridTemplateColumns: `repeat(${CAL_WEEKS}, minmax(0, 1fr))` }}
-          >
-            {Array.from({ length: CAL_WEEKS }).map((_, w) => {
-              const m = monthMarkers.find((x) => x.col === w);
-              return (
-                <span key={w} className="truncate">
-                  {m ? m.label : ""}
-                </span>
-              );
-            })}
-          </div>
-          {/* Cells */}
-          <div
-            className="grid gap-[2px]"
-            style={{
-              gridTemplateColumns: `repeat(${CAL_WEEKS}, minmax(0, 1fr))`,
-            }}
-          >
-            {Array.from({ length: CAL_WEEKS }).map((_, w) => (
-              <div key={w} className="grid grid-rows-7 gap-[2px]">
-                {Array.from({ length: CAL_DAYS }).map((__, d) => {
-                  const v = cells[w * CAL_DAYS + d];
-                  const level = intensity(v);
-                  return (
-                    <span
-                      key={d}
-                      className={`block aspect-square rounded-[3px] transition-colors ${cellClass(level)}`}
-                      title={v > 0 ? `${v} interaction${v === 1 ? "" : "s"}` : "no activity"}
-                    />
-                  );
-                })}
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-      {/* Legend */}
-      <div className="mt-3 flex items-center justify-end gap-1.5 text-micro text-text-faint/70">
-        <span>Less</span>
-        {[0, 1, 2, 3, 4].map((l) => (
-          <span key={l} className={`w-2.5 h-2.5 rounded-[3px] ${cellClass(l)}`} aria-hidden />
-        ))}
-        <span>More</span>
-      </div>
-    </div>
-  );
+  return <ReadingCalendar cells={cells} weeks={CAL_WEEKS} />;
 }
 
 function KeywordCloud({ items }: { items: { name: string; count: number }[] }) {

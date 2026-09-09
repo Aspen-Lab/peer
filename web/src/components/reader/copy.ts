@@ -95,8 +95,8 @@ export const SWIPE = {
 };
 
 export const AUTHORS = {
-  showMore: (n: number) => `Show ${n} more`,
-  showFewer: "Show fewer",
+  showMore: (n: number) => `and ${n} more`,
+  showFewer: "fewer",
 };
 
 export const NEXT_ROW = {
