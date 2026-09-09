@@ -16,13 +16,14 @@
 // It is now one thing: today's papers. Search lives at /search, events at
 // /events, jobs at /jobs, and every credential form lives on /profile.
 
-import { useEffect, useMemo, useCallback, Suspense } from "react";
+import { useEffect, useMemo, useState, useCallback, Suspense } from "react";
 import Link from "next/link";
 import { activePaperTopicsKey, useFeedStore } from "@/store/feed";
 import { feedsUseAi } from "@/lib/feed/ai-tier";
 import { formatTimeAgo } from "@/lib/format";
 import { useProfileStore } from "@/store/profile";
 import { FeedTile } from "@/components/cards/feed-tile";
+import { DayStrip } from "@/components/briefing/day-strip";
 import { Band } from "@/components/ui/band";
 import {
   ReadingCalendar,
@@ -53,6 +54,9 @@ function DailyBriefingPage() {
   const lastRefresh = useFeedStore((s) => s.lastRefresh);
   const loadFeed = useFeedStore((s) => s.loadFeed);
   const readItems = useFeedStore((s) => s.readItems);
+  // One clock per mount — the reading page's pattern. `Date.now()` in render
+  // is impure and re-reads on every re-render.
+  const [now] = useState(() => Date.now());
   const feedTopicsKey = useFeedStore((s) => s.feedTopicsKey);
   const feedError = useFeedStore((s) => s.feedError);
   const profile = useProfileStore((s) => s.profile);
@@ -148,6 +152,12 @@ function DailyBriefingPage() {
         onRefresh={refreshFeed}
         isRefreshing={isLoading}
       />
+
+      {/* The day's shape, between the sentence that says what today is and
+          the cards that are it. */}
+      {papers.length > 0 && (
+        <DayStrip papers={papers} readIds={readItems} now={now} />
+      )}
 
       {/* The deck already says what is being looked for. */}
       {papersLoading && papers.length === 0 && <LoadingSkeleton label={null} />}

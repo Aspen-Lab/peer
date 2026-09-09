@@ -2,6 +2,44 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.23.0 — 2026-09-09
+
+The day has a shape, and now you can see it.
+
+The brief's whole summary was one sentence — "Ten papers on protein structure
+prediction and diffusion models — ten unread." True, and silent about the one
+thing that decides how long you spend here. A real day looks like this:
+
+    0.89  0.89  0.68  0.67  0.66  0.65  0.64  0.64  0.58  0.53
+
+Two papers that genuinely match, a flat middle of six that only roughly do,
+and a tail. That shape is where you stop reading, and it is invisible in a
+list where every row is the same height. It is now ten bars under the deck,
+in the order the page lists them, each as tall as its paper matches — Peer's
+own number, the one that already chose the order, so the strip explains the
+order instead of adding a second opinion to it. A bar is a link to its card;
+hovering one names the paper and its age.
+
+**Not a chart of topics.** That was the first idea and the data killed it:
+across a day's ten papers the concepts the sources hand over are arXiv filing
+codes ("cs.LG", "quant-ph") and OpenAlex categories that land off-domain often
+enough to matter — "Thermodynamics" on a diffusion-models paper, "Training
+(meteorology)" on an RNA one. The terms recurring on two or more papers were
+two filing codes, "computer science", and the reader's own declared topics
+read back at them. A chart of that would have been confident nonsense. This
+one is built only from numbers Peer computed itself.
+
+**And it is a chart, not a band.** Stretched across the board the bars were
+124px wide and 34px tall, ten of them in the accent: a solid orange rule under
+the deck, which is decoration, which is the one thing this interface does not
+do. At 12px on a 52px baseline the same ten numbers are a shape you read in
+one look. The bars are neutral — in this palette the hue is a signal and how
+well a paper matches is data — and a read paper drops to the hairline tone:
+spent, still counted.
+
+Zero-based against the day's best, because a bar chart that starts anywhere
+else is the oldest lie in the genre.
+
 ## v0.22.0 — 2026-09-09
 
 A byline, and the chart moves to the page you actually open.
