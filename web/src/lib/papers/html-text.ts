@@ -84,6 +84,12 @@ function stripTags(html: string): string {
       .replace(/<script\b[\s\S]*?<\/script>/gi, " ")
       .replace(/<style\b[\s\S]*?<\/style>/gi, " ")
       .replace(/<sup\b[^>]*class=["'][^"']*reference[^"']*["'][\s\S]*?<\/sup>/gi, " ")
+      // LaTeXML writes every formula twice — the presentation MathML and, in
+      // an <annotation>, the TeX it came from — so stripping tags produced
+      // "d = 3 d=3", "K K", "𝒰 \\mathcal{U}". It was in every quote, every
+      // figure caption and every line of the paper's body on the reading
+      // page. The rendered half is the readable one; the TeX half goes.
+      .replace(/<annotation(?:-xml)?\b[^>]*>[\s\S]*?<\/annotation(?:-xml)?>/gi, " ")
       .replace(/<br\s*\/?>/gi, "\n")
       .replace(BLOCK_END, "\n\n")
       .replace(/<[^>]+>/g, " "),
@@ -92,6 +98,21 @@ function stripTags(html: string): string {
     .replace(/[ \t]*\n[ \t]*/g, "\n")
     .replace(/\n{2,}/g, "\n\n")
     .trim();
+}
+
+/**
+ * Figure and table captions, out of the running text.
+ *
+ * They are collected separately (`collectCaptions`) and were *also* left in
+ * the section they sit in, where a sentence splitter cannot tell them from
+ * prose. "Mean-of-K TM-score achieved by FK-steering on 1CLL." is a label for
+ * a picture; quoted under "What they found, and how big" it is Peer claiming
+ * a caption is a result. Two of the three findings on one paper were captions.
+ */
+function withoutCaptions(html: string): string {
+  return html
+    .replace(/<figcaption\b[^>]*>[\s\S]*?<\/figcaption>/gi, " ")
+    .replace(/<div\b[^>]*class=["'][^"']*ltx_caption[^"']*["'][^>]*>[\s\S]*?<\/div>/gi, " ");
 }
 
 /** A heading is one line whatever markup it was wrapped in. */
@@ -141,6 +162,69 @@ export function canonicalizeHeading(heading: string): string {
   }
   if (/supplement|supporting|appendix/.test(lower)) return "supplementary";
   return "body";
+}
+
+/**
+ * A heading that numbers itself: "5.1", "5.1.2", "IV.2", "B.2",
+ * "Appendix C.1". Null for a heading that does not — "Impact Statement",
+ * and most of PMC and bioRxiv.
+ */
+function headingNumber(heading: string): string | null {
+  const match = heading.match(/^(?:Appendix\s+)?((?:\d+|[A-Z]|[IVX]+)(?:\.\d+)*)\.?\s+\S/);
+  return match ? match[1] : null;
+}
+
+/**
+ * A child heading only overrules its parent when it says something
+ * structural. "5.3 Limitations" under "5 Results" is limitations; "5.1 Model
+ * Comparison Across Budgets" under the same parent is not methods, whatever
+ * the word "model" in it suggests.
+ */
+const STRONG_BUCKETS = new Set([
+  "limitations",
+  "references",
+  "acknowledgments",
+  "supplementary",
+  "abstract",
+]);
+
+/**
+ * Numbered subsections inherit their parent's bucket.
+ *
+ * `canonicalizeHeading` reads one heading at a time, and a subsection's own
+ * heading is the weakest evidence in the document about what it contains: a
+ * paper whose results live in "5.1 Model Comparison Across Budgets", "5.2
+ * O3", "5.3 FK-steering" and "5.4 DPO" had exactly one section bucketed
+ * `results` — "5 Results" itself, a 315-character paragraph saying which
+ * subsection discusses what — and so the reading page's "What they found"
+ * block came out empty on a paper whose findings were all right there. The
+ * numbering is the document telling us its own structure, and it was being
+ * stripped and thrown away.
+ *
+ * Sections keep their own bucket where it is structural (`STRONG_BUCKETS`)
+ * and where they have no numbered parent, so an unnumbered document is
+ * untouched.
+ */
+export function withInheritedBuckets(sections: ExtractedSection[]): ExtractedSection[] {
+  const byNumber = new Map<string, string>();
+  return sections.map((section) => {
+    const number = headingNumber(section.heading);
+    if (!number) return section;
+    let canonical = section.canonical;
+    if (!STRONG_BUCKETS.has(canonical) && number.includes(".")) {
+      // The nearest numbered ancestor: "5.4.1" asks "5.4", then "5".
+      const parts = number.split(".");
+      for (let cut = parts.length - 1; cut > 0; cut--) {
+        const parent = byNumber.get(parts.slice(0, cut).join("."));
+        if (parent && parent !== "body") {
+          canonical = parent;
+          break;
+        }
+      }
+    }
+    byNumber.set(number, canonical);
+    return canonical === section.canonical ? section : { ...section, canonical };
+  });
 }
 
 function shouldKeepSection(canonical: string): boolean {
@@ -254,7 +338,7 @@ function extractLatexml(html: string): ExtractedDocument {
   }
   for (let i = 0; i < heads.length; i++) {
     const stop = i + 1 < heads.length ? heads[i + 1].index : bodyEnd;
-    const text = stripTags(html.slice(heads[i].end, stop));
+    const text = stripTags(withoutCaptions(html.slice(heads[i].end, stop)));
     if (!text) continue;
     const canonical = canonicalizeHeading(heads[i].heading);
     if (!shouldKeepSection(canonical)) continue;
@@ -263,7 +347,7 @@ function extractLatexml(html: string): ExtractedDocument {
 
   return {
     title: extractTitleFromHtml(html),
-    sections: trimToBudget(sections),
+    sections: trimToBudget(withInheritedBuckets(sections)),
     figureCaptions: collectCaptions(
       html,
       /<figcaption\b[^>]*class=["'][^"']*ltx_caption[^"']*["'][^>]*>([\s\S]*?)<\/figcaption>/gi,
@@ -294,7 +378,7 @@ function extractPmc(html: string): ExtractedDocument {
     if (!headingMatch) continue;
     const heading = oneLine(stripTags(headingMatch[1]));
     if (!heading) continue;
-    const text = stripTags(inner.replace(headingMatch[0], " "));
+    const text = stripTags(withoutCaptions(inner.replace(headingMatch[0], " ")));
     if (!text) continue;
     const canonical = canonicalizeHeading(heading);
     if (!shouldKeepSection(canonical)) continue;
@@ -303,7 +387,7 @@ function extractPmc(html: string): ExtractedDocument {
 
   return {
     title: extractTitleFromHtml(html),
-    sections: trimToBudget(sections),
+    sections: trimToBudget(withInheritedBuckets(sections)),
     // <figcaption> or <div class="caption"> containing <p>Fig N. text</p>
     figureCaptions: collectCaptions(html, /<figcaption\b[^>]*>([\s\S]*?)<\/figcaption>/gi),
     source: "pmc",
@@ -328,7 +412,7 @@ function extractBiorxiv(html: string): ExtractedDocument {
       if (!headingMatch) continue;
       const heading = oneLine(stripTags(headingMatch[1]));
       if (!heading) continue;
-      const text = stripTags(inner.replace(headingMatch[0], " "));
+      const text = stripTags(withoutCaptions(inner.replace(headingMatch[0], " ")));
       if (!text) continue;
       const canonical = canonicalizeHeading(heading);
       if (!shouldKeepSection(canonical)) continue;
@@ -345,7 +429,7 @@ function extractBiorxiv(html: string): ExtractedDocument {
 
   return {
     title: extractTitleFromHtml(html),
-    sections: trimToBudget(sections),
+    sections: trimToBudget(withInheritedBuckets(sections)),
     figureCaptions: collectCaptions(
       html,
       /<div\b[^>]*class=["'][^"']*\bfig-caption\b[^"']*["'][^>]*>([\s\S]*?)<\/div>/gi,
@@ -388,7 +472,7 @@ function walkHeadings(html: string): ExtractedSection[] {
     const start = matches[i].end;
     const stop = i + 1 < matches.length ? matches[i + 1].index : html.length;
     const slice = html.slice(start, stop);
-    const text = stripTags(slice);
+    const text = stripTags(withoutCaptions(slice));
     if (!text) continue;
     const heading = matches[i].heading;
     const canonical = canonicalizeHeading(heading);
@@ -406,7 +490,7 @@ function extractGeneric(html: string): ExtractedDocument {
   const sections = walkHeadings(body);
   return {
     title: extractTitleFromHtml(html),
-    sections: trimToBudget(sections),
+    sections: trimToBudget(withInheritedBuckets(sections)),
     figureCaptions: collectCaptions(html, /<figcaption\b[^>]*>([\s\S]*?)<\/figcaption>/gi),
     source: "generic-html",
   };

@@ -2,6 +2,57 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.21.0 — 2026-09-08
+
+The overview, on papers whose findings were not where Peer was looking.
+
+"What they found, and how big" was empty on two of the three papers in a
+day's briefing, and one of them had its numbers three lines from where Peer
+was reading. Four faults, none of them in the sentence filters.
+
+**A subsection's own heading is the weakest evidence in the document.**
+`canonicalizeHeading` reads one heading at a time, so a paper whose results
+live in "5.1 Model Comparison Across Budgets", "5.2 O3", "5.3 FK-steering"
+and "5.4 DPO" had exactly one section bucketed `results` — "5 Results"
+itself, a 315-character paragraph saying which subsection discusses what.
+"5.1" was called *methods*, on the strength of the word "model" in its title.
+The numbering is the document telling us its own structure and it was being
+stripped and thrown away: numbered subsections now inherit their parent's
+bucket, unless their own heading is structural — "5.3 Limitations" under
+"5 Results" is still limitations.
+
+**The results are often in the figures.** For a great many papers the running
+text says "Section 5.1 discusses the comparison" and the finding itself is in
+a caption Peer had already extracted and was only using to label a picture. A
+caption can now be quoted as a finding — last, after the paper's own prose,
+and cited as "Figure 6" rather than "§Results", because it is not a section
+and should not be dressed as one. Captions are also out of the running text
+now: they were being read twice, and a caption spliced into a Results section
+is a sentence the splitter cannot tell from prose.
+
+**`body` is a pool.** A paper whose headings never say "results" — a maths
+paper with numbered sections and nothing else — had these blocks empty
+however good its numbers were. The unclassified sections are the last pool
+for findings and for method; never `introduction` or `related_work`, where a
+number is somebody else's result or a promise about this one.
+
+**Rendered mathematics is not prose.** LaTeXML writes every formula twice —
+the MathML and the TeX it came from — so "d = 3" arrived as "d = 3 d=3", "K"
+as "K K", and every quote, every figure caption and every line of the paper's
+body carried it. The TeX half is dropped. What is left of an equation still
+survives a sentence splitter, so a sentence that is under 62% letters and
+spaces is no longer quotable, and neither is an algorithm listing's step
+number.
+
+Together, on the three papers checked: findings 0 → 3, 0 → 1, 3 → 3; method
+2 → 2 (both sentences now from the method, not an appendix pointer), 0 → 2.
+No sentence is quoted under two headings any more.
+
+**The reading is version 3.** It carries a day-long cache in the reader's
+browser, so a better summary with the same shape is exactly as invisible as a
+missing field. The version now moves when the derivation changes, not only
+when a field does. The figure module's cache key moved with it.
+
 ## v0.20.0 — 2026-09-07
 
 The paper itself, and a title bar that is drawn.

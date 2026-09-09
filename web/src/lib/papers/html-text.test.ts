@@ -4,6 +4,7 @@ import {
   chooseHtmlExtractor,
   looksLikeFullText,
   parseCaption,
+  withInheritedBuckets,
   type ExtractedDocument,
 } from "./html-text";
 
@@ -69,6 +70,48 @@ describe("canonicalizeHeading", () => {
   });
 });
 
+describe("withInheritedBuckets", () => {
+  const section = (heading: string, canonical: string) => ({ heading, canonical, text: "x" });
+
+  it("gives a numbered subsection its parent's bucket when its own heading is a guess", () => {
+    // The real shape that produced an empty "What they found" block: the only
+    // section bucketed `results` was the signpost paragraph, and the findings
+    // were in subsections one heading-keyword away from being called methods.
+    const out = withInheritedBuckets([
+      section("5 Results", "results"),
+      section("5.1 Model Comparison Across Budgets", "methods"),
+      section("5.2 O3", "body"),
+      section("5.3 FK-steering", "body"),
+    ]);
+    expect(out.map((s) => s.canonical)).toEqual(["results", "results", "results", "results"]);
+  });
+
+  it("lets a structural heading overrule its parent", () => {
+    const out = withInheritedBuckets([
+      section("5 Results", "results"),
+      section("5.3 Limitations", "limitations"),
+    ]);
+    expect(out[1].canonical).toBe("limitations");
+  });
+
+  it("reaches past a parent that is itself unclassified", () => {
+    const out = withInheritedBuckets([
+      section("4 Experiments", "results"),
+      section("4.2 Setup", "body"),
+      section("4.2.1 Hardware", "body"),
+    ]);
+    expect(out.map((s) => s.canonical)).toEqual(["results", "results", "results"]);
+  });
+
+  it("leaves an unnumbered document alone", () => {
+    const out = withInheritedBuckets([
+      section("Results", "results"),
+      section("Impact Statement", "body"),
+    ]);
+    expect(out.map((s) => s.canonical)).toEqual(["results", "body"]);
+  });
+});
+
 describe("LaTeXML extractor", () => {
   const extract = chooseHtmlExtractor("https://arxiv.org/html/2609.02697");
   const doc = extract(LATEXML);
@@ -82,9 +125,11 @@ describe("LaTeXML extractor", () => {
     expect(doc.sections.map((s) => [s.heading, s.canonical])).toEqual([
       ["Abstract", "abstract"],
       ["1 Introduction", "introduction"],
-      ["1.1 Contributions", "body"],
+      // Its own heading says nothing; its number says whose child it is.
+      ["1.1 Contributions", "introduction"],
       ["4 Evaluation", "results"],
       ["4.4 Results", "results"],
+      // A structural heading still overrules the parent it sits under.
       ["4.5 Limitations", "limitations"],
     ]);
   });

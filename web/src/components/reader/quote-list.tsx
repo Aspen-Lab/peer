@@ -3,7 +3,7 @@
 // is verbatim and carries the heading it was taken from; the heading over the
 // list is the only thing Peer adds.
 
-import { displayHeading, type ReadingQuote } from "@/lib/papers/reading";
+import { quoteAttribution, type ReadingQuote } from "@/lib/papers/reading";
 import { BlockHeading, type BlockName } from "./block-heading";
 
 export function QuoteList({
@@ -31,7 +31,7 @@ export function QuoteList({
           >
             {quote.text}
             <span className="font-mono text-meta text-text-faint ml-2">
-              §{displayHeading(quote.from.heading)}
+              {quoteAttribution(quote.from)}
             </span>
           </li>
         ))}

@@ -9,6 +9,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { cleanDisplayText } from "@/lib/text/clean";
+import { withInheritedBuckets } from "./html-text";
 import type { ExtractedDocument, ExtractedSection, ExtractedFigureCaption } from "./html-text";
 
 const execFileAsync = promisify(execFile);
@@ -145,13 +146,17 @@ async function runExtractor(
 }
 
 function normalize(extractor: ExtractorOutput): ExtractedDocument {
-  const sections: ExtractedSection[] = (extractor.sections ?? [])
+  // Numbered subsections inherit their parent's bucket here too — the Python
+  // extractor buckets one heading at a time, the same way the HTML one did.
+  const sections: ExtractedSection[] = withInheritedBuckets(
+    (extractor.sections ?? [])
     .map((section) => ({
       heading: cleanDisplayText(section.heading) || "Body",
       canonical: section.canonical || "body",
       text: cleanDisplayText(section.text),
     }))
-    .filter((section) => section.text.length > 0);
+    .filter((section) => section.text.length > 0),
+  );
 
   const figureCaptions: ExtractedFigureCaption[] = (extractor.figureCaptions ?? [])
     .map((cap, index) => ({

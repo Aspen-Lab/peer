@@ -9,7 +9,7 @@
 
 import type { Paper } from "@/types";
 import { APP_VERSION } from "@/lib/version";
-import { displayHeading } from "./reading";
+import { displayHeading, quoteAttribution } from "./reading";
 import type { OmitReason, PaperReading, ReadingBlock, ReadingQuote } from "./reading";
 
 /** One model claim with the sentence that supports it. */
@@ -119,7 +119,7 @@ function yaml(value: string | number | undefined | null): string {
 }
 
 function quoteLine(quote: ReadingQuote): string {
-  return `> ${quote.text} — §${displayHeading(quote.from.heading)}`;
+  return `> ${quote.text} — ${quoteAttribution(quote.from)}`;
 }
 
 function evidenceLine(claim: Omit<MarkdownClaim, "text">): string | null {

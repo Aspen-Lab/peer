@@ -9,6 +9,7 @@ import {
   pickCaveats,
   pickFindings,
   pickMethod,
+  quoteAttribution,
   sharedTerms,
   type PaperReading,
   displayHeading,
@@ -54,8 +55,11 @@ const ZENODO_LINK = {
   rank: 12,
 };
 
-function docWith(sections: ExtractedDocument["sections"]): ExtractedDocument {
-  return { sections, figureCaptions: [], source: "generic-html" };
+function docWith(
+  sections: ExtractedDocument["sections"],
+  figureCaptions: ExtractedDocument["figureCaptions"] = [],
+): ExtractedDocument {
+  return { sections, figureCaptions, source: "generic-html" };
 }
 
 function omittedReason(reading: PaperReading, block: string): string | undefined {
@@ -126,6 +130,71 @@ describe("pickFindings", () => {
   });
 });
 
+describe("pickFindings — the last two pools", () => {
+  const CAPTION = {
+    ordinal: 6,
+    label: "Figure 6",
+    caption:
+      "Mean-of-K TM-score achieved by FK-steering on 1CLL. Higher lambda increases the signal from the rewards and leads to better performance across budgets.",
+  };
+
+  it("reads an unlabelled document's body when no section calls itself results", () => {
+    // A maths paper: numbered sections, none of whose headings say "results".
+    const doc = docWith([
+      { heading: "3 A Numerical Illustration", canonical: "body", text: "The proposed estimator reduces the error by 12% compared with the baseline on every run." },
+    ]);
+
+    const findings = pickFindings(doc);
+
+    expect(findings).toHaveLength(1);
+    expect(quoteAttribution(findings[0].from)).toBe("§3 A Numerical Illustration");
+  });
+
+  it("never reads a finding out of an introduction", () => {
+    const doc = docWith([
+      { heading: "1 Introduction", canonical: "introduction", text: "We report a 40% gain over the baseline in this work." },
+    ]);
+
+    expect(pickFindings(doc)).toEqual([]);
+  });
+
+  it("quotes a figure caption when the running text has nothing, and cites the figure", () => {
+    const doc = docWith(
+      [{ heading: "5 Results", canonical: "results", text: "Section 5.1 discusses the comparison of the four methods." }],
+      [CAPTION],
+    );
+
+    const findings = pickFindings(doc);
+
+    expect(findings.length).toBeGreaterThan(0);
+    expect(findings[0].from.kind).toBe("figure");
+    // A figure is cited by its label — no section mark on something that is
+    // not a section.
+    expect(quoteAttribution(findings[0].from)).toBe("Figure 6");
+  });
+
+  it("prefers the paper's prose to its captions", () => {
+    const doc = docWith(
+      [{ heading: "5 Results", canonical: "results", text: "Our model outperforms the previous best by 7 points on the held-out set." }],
+      [CAPTION],
+    );
+
+    expect(pickFindings(doc)[0].from.kind).toBe("section");
+  });
+
+  it("does not quote rendered mathematics as prose", () => {
+    const doc = docWith([
+      {
+        heading: "4 Results",
+        canonical: "results",
+        text: "h ( t , x 1 ) = p ( X T ( 1 ) = - 1 | X t ( 1 ) = x 1 ) , ( 14 ) and d = 3 here.",
+      },
+    ]);
+
+    expect(pickFindings(doc)).toEqual([]);
+  });
+});
+
 describe("pickMethod", () => {
   it("quotes what was done from the arXiv methods section, skipping inline math", () => {
     const method = pickMethod(arxivHtmlDoc);
@@ -154,6 +223,25 @@ describe("pickMethod", () => {
     ]);
 
     expect(pickMethod(doc)).toEqual([]);
+  });
+});
+
+describe("blocks do not quote the same sentence twice", () => {
+  it("gives a sentence to the first block that claims it", () => {
+    // One `body` section, reachable by both last-resort pools.
+    const paper = { ...normalPaper, id: "openalex:W1" } as Paper;
+    const doc = docWith([
+      {
+        heading: "3 Experiments",
+        canonical: "body",
+        text: "We trained the model on 40,000 labelled samples and it outperforms the baseline by 7 points.",
+      },
+    ]);
+
+    const reading = buildReading(paper, fullTextOk(doc, ARXIV_HTML_LINK), NOW);
+    const texts = [...reading.findings, ...reading.method, ...reading.caveats].map((q) => q.text);
+
+    expect(new Set(texts).size).toBe(texts.length);
   });
 });
 
@@ -196,7 +284,7 @@ describe("buildReading", () => {
   it("abstract only: marks set, section blocks omitted as not_in_abstract, model blocks as needs_key", () => {
     const reading = buildReading(normalPaper, null, NOW);
 
-    expect(reading.version).toBe(2);
+    expect(reading.version).toBe(3);
     expect(reading.paperId).toBe("openalex:W7204479535");
     expect(reading.builtAt).toBe("2026-09-06T12:00:00.000Z");
     expect(reading.provenance).toEqual({

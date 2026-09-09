@@ -4,7 +4,10 @@ import { matchFigureVisually } from "./vision-match";
 
 const FETCH_TIMEOUT_MS = 7_000;
 const MAX_BODY_BYTES = 2_500_000;
-const FETCH_VERSION = "2026-05-12-source-quality";
+// Part of the candidate cache key (`cacheKey`), so bumping it is how a
+// change to what this module extracts reaches a reader who already has a
+// figure cached — the captions stopped carrying LaTeXML's duplicate TeX.
+const FETCH_VERSION = "2026-09-08-caption-annotation";
 
 interface ExtractInput {
   itemId: string;
@@ -262,6 +265,12 @@ function stripTags(html: string): string {
     html
       .replace(/<script\b[\s\S]*?<\/script>/gi, " ")
       .replace(/<style\b[\s\S]*?<\/style>/gi, " ")
+      // LaTeXML writes every formula twice — the rendered MathML and the TeX
+      // it came from, in an <annotation> — and a caption came out reading
+      // "d = 3 d=3 surrogate subspace". The same removal is in
+      // `papers/html-text.ts`; this module has its own tag stripper because
+      // it wants none of that one's paragraph breaks.
+      .replace(/<annotation(?:-xml)?\b[^>]*>[\s\S]*?<\/annotation(?:-xml)?>/gi, " ")
       .replace(/<[^>]+>/g, " "),
   )
     .replace(/\s+/g, " ")

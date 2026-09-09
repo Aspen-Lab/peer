@@ -53,9 +53,31 @@ export type OmitReason =
   /** The model ran and gave no sentence for this block that could be verified. */
   | "no_verified_claim";
 
+/**
+ * Where a quoted sentence came from. A figure caption is not a section: for a
+ * great many machine-learning papers the results are *in* the figures, and
+ * the running text says "Section 5.1 discusses the comparison" — so the block
+ * that asks what they found came out empty on papers whose findings were all
+ * right there, in the captions the extractor had already collected. Quoting a
+ * caption is honest; quoting it as though it were a sentence of the Results
+ * section is not, so the two are different shapes and read differently.
+ */
+export interface QuoteSource {
+  kind: "section" | "figure";
+  /** The section's heading, or the figure's label ("Figure 6"). */
+  heading: string;
+  /** The section's bucket, or "figure". */
+  canonical: string;
+}
+
 export interface ReadingQuote {
   text: string;
-  from: { kind: "section"; heading: string; canonical: string };
+  from: QuoteSource;
+}
+
+/** "§Results" for a section; a figure is cited by its own label, with no §. */
+export function quoteAttribution(from: QuoteSource): string {
+  return from.kind === "figure" ? from.heading : `§${displayHeading(from.heading)}`;
 }
 
 export interface ReadingProvenance {
@@ -81,12 +103,18 @@ export type ReadingSourceLabel =
 
 export interface PaperReading {
   /**
-   * 2 since the reading carries `body`. Both readers of this document check
-   * it — the localStorage cache in `use-reading` and the response the route
-   * hands back — so a document written by an older build is discarded rather
-   * than half-read. Bump it whenever a field is added or its meaning changes.
+   * Both readers of this document check it — the localStorage cache in
+   * `use-reading` and the response the route hands back — so a document
+   * written by an older build is discarded rather than half-read.
+   *
+   * Bump it whenever a field is added OR the way any field is derived
+   * changes. The reading is a derived artefact with a day-long cache in the
+   * reader's browser, so a better summary that keeps the same shape is
+   * exactly as invisible as a missing field: 2 → 3 was a quote-selection
+   * change with no new field, and without the bump every reader who had
+   * opened the paper that day would have kept the worse one.
    */
-  version: 2;
+  version: 3;
   paperId: string;
   builtAt: string;
   provenance: ReadingProvenance;
@@ -198,7 +226,9 @@ function sectionSentences(doc: ExtractedDocument, buckets: string[]): SectionSen
 
 function toQuote(sentence: SectionSentence): ReadingQuote {
   return {
-    text: sentence.text,
+    // One line. Section text carries the paper's paragraph breaks since the
+    // extractor started keeping them, and a quote is a line of type.
+    text: sentence.text.replace(/\s+/g, " ").trim(),
     from: {
       kind: "section",
       heading: sentence.heading,
@@ -213,13 +243,29 @@ function toQuote(sentence: SectionSentence): ReadingQuote {
  * and a PDF placeholder section opens with a bracket. Quoting these verbatim
  * is honest and unreadable; they are skipped, never repaired.
  */
-const UNREADABLE = /\\[a-zA-Z]+|[\u{1D400}-\u{1D7FF}]|^[^A-Za-z0-9"“'(]/u;
+const UNREADABLE =
+  /\\[a-zA-Z]+|[\u{1D400}-\u{1D7FF}]|[\u{2061}-\u{2064}]|(?:^|\n)\s*\d+:\s|^[^A-Za-z0-9"“'(]/u;
+
+/**
+ * The share of a sentence that is letters and spaces. Rendered mathematics
+ * survives every filter above as ordinary characters — "h ( t , x 1 ) = p ( X
+ * T ( 1 ) = - 1 | X t ( 1 ) = x 1 )" is a sentence to a sentence splitter —
+ * and it lands around 0.3 where prose with numbers in it, which is what this
+ * page is looking for, does not go below about 0.7.
+ */
+const MIN_PROSE_RATIO = 0.62;
+
+function proseRatio(text: string): number {
+  const letters = text.match(/[\p{L}\s]/gu)?.length ?? 0;
+  return text.length === 0 ? 0 : letters / text.length;
+}
 
 function quotable(sentence: SectionSentence, min: number): boolean {
   return (
     sentence.text.length >= min &&
     sentence.text.length <= MAX_QUOTE_CHARS &&
-    !UNREADABLE.test(sentence.text)
+    !UNREADABLE.test(sentence.text) &&
+    proseRatio(sentence.text) >= MIN_PROSE_RATIO
   );
 }
 
@@ -239,6 +285,14 @@ export function pickFindings(doc: ExtractedDocument): ReadingQuote[] {
     );
   let pool = candidates(["results"]);
   if (pool.length < 2) pool = candidates(["results", "discussion"]);
+  // A paper whose headings never say "results" — a maths paper with numbered
+  // sections and nothing else, which is most of them — had this block empty
+  // however good its numbers were. `body` is the unclassified content of the
+  // paper, so it is the last pool, and never `introduction` or `related_work`:
+  // a number in an introduction is somebody else's finding or a promise about
+  // this one, and the quote carries the heading it came from either way.
+  if (pool.length === 0) pool = candidates(["body"]);
+  if (pool.length === 0) return captionFindings(doc);
 
   const score = (sentence: SectionSentence) =>
     2 * (QUANTITY_STRICT.test(sentence.text) ? 1 : 0) +
@@ -255,16 +309,53 @@ export function pickFindings(doc: ExtractedDocument): ReadingQuote[] {
 }
 
 /**
+ * The findings a paper put in its figures.
+ *
+ * Last resort, and only when the running text yielded nothing: a paper that
+ * states its results in prose has better sentences than its captions. The
+ * caption is quoted whole where it is one sentence, and by its qualifying
+ * sentences where it is several — a caption's first sentence is usually the
+ * label ("Mean-of-K TM-score achieved by FK-steering on 1CLL.") and the ones
+ * after it are the reading of the figure.
+ */
+function captionFindings(doc: ExtractedDocument): ReadingQuote[] {
+  const out: ReadingQuote[] = [];
+  for (const caption of doc.figureCaptions) {
+    for (const text of splitSentences(caption.caption)) {
+      if (out.length >= MAX_FINDINGS) return out;
+      const sentence: SectionSentence = {
+        text,
+        heading: caption.label,
+        canonical: "figure",
+        order: out.length,
+      };
+      if (!quotable(sentence, MIN_FINDING_CHARS)) continue;
+      if (isBoilerplate(text)) continue;
+      if (!QUANTITY_STRICT.test(text) && !COMPARATIVE.test(text)) continue;
+      out.push({
+        text: text.replace(/\s+/g, " ").trim(),
+        from: { kind: "figure", heading: caption.label, canonical: "figure" },
+      });
+    }
+  }
+  return out;
+}
+
+/**
  * How it was done: the first two sentences of the methods section that say
  * what was done to what — a dataset, a cohort, "we trained".
  */
-export function pickMethod(doc: ExtractedDocument): ReadingQuote[] {
-  return sectionSentences(doc, ["methods"])
-    .filter(
-      (sentence) => quotable(sentence, MIN_METHOD_CHARS) && METHOD.test(sentence.text),
-    )
-    .slice(0, MAX_METHOD)
-    .map(toQuote);
+export function pickMethod(doc: ExtractedDocument, taken: Set<string> = new Set()): ReadingQuote[] {
+  const candidates = (buckets: string[]) =>
+    sectionSentences(doc, buckets).filter(
+      (sentence) =>
+        quotable(sentence, MIN_METHOD_CHARS) &&
+        METHOD.test(sentence.text) &&
+        !taken.has(sentence.text),
+    );
+  const pool = candidates(["methods"]);
+  // Same last resort as the findings, and the same exclusions.
+  return (pool.length > 0 ? pool : candidates(["body"])).slice(0, MAX_METHOD).map(toQuote);
 }
 
 /**
@@ -273,16 +364,18 @@ export function pickMethod(doc: ExtractedDocument): ReadingQuote[] {
  * of an abstract — a heading over an abstract sentence is a claim Peer makes
  * about it.
  */
-export function pickCaveats(doc: ExtractedDocument): ReadingQuote[] {
+export function pickCaveats(doc: ExtractedDocument, taken: Set<string> = new Set()): ReadingQuote[] {
   const stated = sectionSentences(doc, ["limitations"])
-    .filter((sentence) => quotable(sentence, MIN_CAVEAT_CHARS))
+    .filter((sentence) => quotable(sentence, MIN_CAVEAT_CHARS) && !taken.has(sentence.text))
     .slice(0, MAX_CAVEATS);
   if (stated.length > 0) return stated.map(toQuote);
 
   return sectionSentences(doc, ["discussion", "conclusion"])
     .filter(
       (sentence) =>
-        quotable(sentence, MIN_CAVEAT_CHARS) && LIMITATION.test(sentence.text),
+        quotable(sentence, MIN_CAVEAT_CHARS) &&
+        LIMITATION.test(sentence.text) &&
+        !taken.has(sentence.text),
     )
     .slice(0, 2)
     .map(toQuote);
@@ -436,9 +529,15 @@ export function buildReading(
   const doc = fullText?.status === "ok" ? fullText.doc : undefined;
 
   const body = doc ? readableBody(doc) : [];
+  // In order, each block excluding what the ones before it took: the three
+  // pools overlap now that `body` is a last resort for two of them, and one
+  // sentence quoted under two headings is Peer saying two different things
+  // about it.
   const findings = doc ? pickFindings(doc) : [];
-  const method = doc ? pickMethod(doc) : [];
-  const caveats = doc ? pickCaveats(doc) : [];
+  const taken = new Set(findings.map((quote) => quote.text));
+  const method = doc ? pickMethod(doc, taken) : [];
+  for (const quote of method) taken.add(quote.text);
+  const caveats = doc ? pickCaveats(doc, taken) : [];
 
   const omitted: PaperReading["omitted"] = [];
   if (provenance.abstract === "none") omitted.push({ block: "skim", reason: "no_abstract" });
@@ -461,7 +560,7 @@ export function buildReading(
   omitted.push({ block: "nextStep", reason: "needs_key" });
 
   return {
-    version: 2,
+    version: 3,
     paperId: paper.id,
     builtAt: now.toISOString(),
     provenance,
