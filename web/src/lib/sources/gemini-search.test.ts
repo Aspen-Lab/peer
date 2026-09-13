@@ -570,10 +570,22 @@ describe("the live grounding call, with the SDK stood in for", () => {
     expect(config).not.toHaveProperty("maxOutputTokens");
   });
 
-  it("swallows a grounding failure and returns [] rather than breaking the source", async () => {
+  // CONTRACT RESTATED, not deleted. Swallowing was the point of the old name,
+  // and swallowing is the defect: `[]` reads as "the web has nothing", so a
+  // provider that is down renders as a quiet day. Callers that treat grounding
+  // as a best-effort top-up still swallow it themselves — vertex-search's
+  // `backfillWithGrounding` catches this exact rejection and keeps its rows.
+  it("propagates a grounding failure so the caller can report it", async () => {
     vi.stubEnv("GOOGLE_VERTEX_PROJECT", "probe-project");
     generateContentMock.mockRejectedValueOnce(new Error("vertex 503"));
     vi.spyOn(console, "error").mockImplementation(() => {});
+    await expect(searchGemini("molten salt")).rejects.toThrow("vertex 503");
+  });
+
+  // Unchanged half of the contract: zero chunks is a normal answer.
+  it("returns [] when grounding succeeds with no chunks", async () => {
+    vi.stubEnv("GOOGLE_VERTEX_PROJECT", "probe-project");
+    generateContentMock.mockResolvedValueOnce({ candidates: [] });
     await expect(searchGemini("molten salt")).resolves.toEqual([]);
   });
 

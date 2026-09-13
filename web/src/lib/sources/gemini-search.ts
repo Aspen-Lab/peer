@@ -296,8 +296,12 @@ async function groundQuery(query: string): Promise<GroundingWebChunk[]> {
     });
     return groundingWebChunks(response);
   } catch (err) {
+    // Zero chunks stays a normal answer (see above) — but a call that never
+    // completed is not zero chunks, and returning `[]` for both is what let a
+    // dead provider read as a quiet web. Callers that treat grounding as a
+    // best-effort top-up catch this themselves; `backfillWithGrounding` does.
     console.error("[sources/gemini-search] grounding error:", err);
-    return [];
+    throw err;
   }
 }
 

@@ -15,6 +15,10 @@ import {
   searchVertex,
 } from "@/lib/sources/vertex-search";
 import {
+  collectSearchResults,
+  searchHttpFailure,
+} from "@/lib/sources/search-failure";
+import {
   cleanJobDescription,
   cleanJobSubtitlePart,
   cleanJobTitle,
@@ -2018,14 +2022,17 @@ async function searchTavily(
       signal: AbortSignal.timeout(7000),
       next: { revalidate: 3 * 60 * 60 },
     });
-    if (!res.ok) return [];
+    if (!res.ok) throw await searchHttpFailure("tavily", res);
     const data = (await res.json()) as { results?: TavilyResult[] };
     return (data.results ?? [])
       .map((r) => webResultToRawJobItem({ title: r.title, url: r.url, snippet: r.content }, topics))
       .filter((item): item is RawJobItem => item !== null);
   } catch (err) {
+    // Rethrown, not swallowed: `[]` here reads as "nobody is hiring for this",
+    // which is exactly how a dead key stayed invisible. See
+    // sources/search-failure.ts for the contract.
     console.error("[jobs/jobweb] tavily error:", err);
-    return [];
+    throw err;
   }
 }
 
@@ -2049,7 +2056,7 @@ async function searchBrave(
         next: { revalidate: 3 * 60 * 60 },
       },
     );
-    if (!res.ok) return [];
+    if (!res.ok) throw await searchHttpFailure("brave", res);
     const data = (await res.json()) as { web?: { results?: BraveResult[] } };
     return (data.web?.results ?? [])
       .map((r) =>
@@ -2058,7 +2065,7 @@ async function searchBrave(
       .filter((item): item is RawJobItem => item !== null);
   } catch (err) {
     console.error("[jobs/jobweb] brave error:", err);
-    return [];
+    throw err;
   }
 }
 
@@ -2151,19 +2158,25 @@ async function fetchImpl(query: JobsQuery): Promise<RawJobItem[]> {
 
   // One shared deadline for the whole fan-out — see eventweb for why.
   const deadlineAt = geminiSearchDeadline();
-  const resultSets = await Promise.all(
-    searches.map((q) => {
-      const jobQuery = `${q} position opening apply`;
-      if (provider === "vertex") {
-        return searchVertexJobs(jobQuery, query.limit, deadlineAt, query.topics);
-      }
-      if (provider === "gemini") {
-        return searchGeminiJobs(jobQuery, query.limit, deadlineAt, query.topics);
-      }
-      return provider === "tavily"
-        ? searchTavily(jobQuery, keys.tavily!, perQuery, query.topics)
-        : searchBrave(jobQuery, keys.brave!, perQuery, query.topics);
-    }),
+  // allSettled + collect — see eventweb for why a total provider failure has to
+  // reach `errors.jobweb` rather than render as an empty job market.
+  const resultSets = collectSearchResults(
+    provider,
+    "jobs/jobweb",
+    await Promise.allSettled(
+      searches.map((q) => {
+        const jobQuery = `${q} position opening apply`;
+        if (provider === "vertex") {
+          return searchVertexJobs(jobQuery, query.limit, deadlineAt, query.topics);
+        }
+        if (provider === "gemini") {
+          return searchGeminiJobs(jobQuery, query.limit, deadlineAt, query.topics);
+        }
+        return provider === "tavily"
+          ? searchTavily(jobQuery, keys.tavily!, perQuery, query.topics)
+          : searchBrave(jobQuery, keys.brave!, perQuery, query.topics);
+      }),
+    ),
   );
   const all: RawJobItem[] = [];
   for (const items of resultSets) {

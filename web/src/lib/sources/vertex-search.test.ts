@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { resolveWebSearchProvider } from "./gemini-search";
 import {
   discoveryResultToWebResult,
@@ -298,15 +298,39 @@ describe("searchVertex", () => {
     expect(grounded).toBe(0);
   });
 
-  it("returns an empty array when the search itself throws", async () => {
+  // CONTRACT RESTATED, not deleted. It read "returns an empty array when the
+  // search itself throws" and asserted `rows` was `[]`. That is precisely the
+  // silence a dead Tavily key hid behind for a full day on 2026-08-27: an empty
+  // array means "the web has no answer", and a caller cannot act on a failure it
+  // is handed as an ordinary empty result. See sources/search-failure.ts.
+  it("reports the failure when the search throws and nothing backfills it", async () => {
     setEnv({});
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    await expect(
+      searchVertex("q", {
+        search: async () => {
+          throw new Error("boom");
+        },
+        fallbackMinResults: 0,
+      }),
+    ).rejects.toThrow(/vertex web search failed for every query: boom/);
+  });
+
+  // The other half of the same contract: the backfill is what a Vertex outage
+  // exists to fall through to, so a failure it RESCUES must stay quiet.
+  it("stays silent when grounding backfills a failed search", async () => {
+    setEnv({});
+    vi.spyOn(console, "error").mockImplementation(() => {});
     const rows = await searchVertex("q", {
       search: async () => {
         throw new Error("boom");
       },
-      fallbackMinResults: 0,
+      fallbackMinResults: 3,
+      groundFallback: async () => [
+        { title: "Grounded", url: "https://example.edu/g", snippet: "s" },
+      ],
     });
-    expect(rows).toEqual([]);
+    expect(rows.map((row) => row.url)).toEqual(["https://example.edu/g"]);
   });
 });
 
