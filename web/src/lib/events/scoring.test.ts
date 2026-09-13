@@ -25,6 +25,13 @@ import {
 import type { RawEventItem, ScoredEventItem } from "./types";
 import { applyOpportunityFacetPreferenceSignal } from "@/lib/preferences/ledger";
 
+// Every fixture below is built as an offset from this instant, so every
+// `scoreEvents` call must be told to use it too. Leaving the third argument off
+// silently falls back to `Date.now()`, which makes the assertion depend on the
+// day the suite happens to run: `iso(40)` was "upcoming" when these were
+// written and became "in the past" on 2026-08-28, turning a green test red with
+// no code change behind it. Pass NOW explicitly — a test that expires is a
+// false alarm waiting to happen.
 const NOW = Date.parse("2026-07-19T00:00:00Z");
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -123,10 +130,11 @@ describe("scoreEvents", () => {
       tags: ["machine learning"],
     });
     expect(
-      scoreEvents([aiConference], {
-        topics: ["battery"],
-        methods: ["machine learning"],
-      }),
+      scoreEvents(
+        [aiConference],
+        { topics: ["battery"], methods: ["machine learning"] },
+        NOW,
+      ),
     ).toEqual([]);
   });
 
@@ -139,7 +147,7 @@ describe("scoreEvents", () => {
       description: "An industry conference in Chicago.",
       tags: [],
     });
-    const scored = scoreEvents([summit], { topics: ["battery"] });
+    const scored = scoreEvents([summit], { topics: ["battery"] }, NOW);
     expect(scored).toHaveLength(1);
     expect(scored[0].relevanceReason.toLowerCase()).toContain("battery");
     expect(scored[0].relevanceReason).not.toContain("Upcoming in your field");
@@ -158,7 +166,7 @@ describe("scoreEvents", () => {
       tags: [],
       rank: "CCF-B",
     });
-    const scored = scoreEvents([ranked], { topics: ["battery"] });
+    const scored = scoreEvents([ranked], { topics: ["battery"] }, NOW);
     expect(scored).toHaveLength(1);
     expect(scored[0].relevanceReason.toLowerCase()).toContain("focus and ccf-b");
     expect(scored[0].relevanceReason).not.toContain(" · ");
@@ -183,8 +191,8 @@ describe("scoreEvents", () => {
       tags: [],
     });
     const profile = { topics: ["battery", "molten salt"] };
-    expect(scoreEvents([oneBroadMatch], profile)).toEqual([]);
-    expect(scoreEvents([twoBroadMatches], profile)).toHaveLength(1);
+    expect(scoreEvents([oneBroadMatch], profile, NOW)).toEqual([]);
+    expect(scoreEvents([twoBroadMatches], profile, NOW)).toHaveLength(1);
   });
 
   it("does not allow an explore-only match through the required gate", () => {
@@ -197,10 +205,11 @@ describe("scoreEvents", () => {
       tags: [],
     });
     expect(
-      scoreEvents([exploreOnly], {
-        topics: ["battery"],
-        softTopics: ["electroplating"],
-      }),
+      scoreEvents(
+        [exploreOnly],
+        { topics: ["battery"], softTopics: ["electroplating"] },
+        NOW,
+      ),
     ).toEqual([]);
   });
 
