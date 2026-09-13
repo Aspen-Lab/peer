@@ -134,7 +134,11 @@ async function runExtractor(
         ],
         { timeout: 45_000, maxBuffer: MAX_STDIO_BYTES },
       );
-      return { output: JSON.parse(stdout) as ExtractorOutput };
+      // MuPDF prints format warnings ("cmsOpenProfileFromMem failed") to
+      // stdout ahead of the JSON; take the document from its first brace.
+      const start = stdout.indexOf("{");
+      if (start < 0) throw new Error("PDF text helper produced no JSON");
+      return { output: JSON.parse(stdout.slice(start)) as ExtractorOutput };
     } catch (err) {
       const message = String(err);
       if (/not recognized|ENOENT/i.test(message)) continue;

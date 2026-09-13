@@ -3,7 +3,7 @@
 
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -168,15 +168,24 @@ async function runExtractor(pdfPath: string): Promise<PdfExtractorOutput | null>
     { command: "py", args: ["-3"] },
   ];
 
+  // The helper writes its JSON to a file beside the PDF, not to stdout. Two
+  // real failures forced this (2026-09-13): PyMuPDF and MuPDF both print
+  // warnings to stdout, so `JSON.parse(stdout)` threw on the first word; and
+  // twelve rendered figures came to ~10 MB of base64, past the pipe's buffer.
+  // stdout is still captured so a stray print cannot block the process.
+  const outputPath = path.join(path.dirname(pdfPath), "figures.json");
+
   for (const runner of runners) {
     try {
-      const { stdout } = await execFileAsync(
+      await execFileAsync(
         runner.command,
         [
           ...runner.args,
           helperScript,
           "--input",
           pdfPath,
+          "--output",
+          outputPath,
           "--max-pages",
           String(MAX_PDF_PAGES),
           "--max-figures",
@@ -187,8 +196,8 @@ async function runExtractor(pdfPath: string): Promise<PdfExtractorOutput | null>
           maxBuffer: MAX_STDIO_BYTES,
         },
       );
-      const parsed = JSON.parse(stdout) as PdfExtractorOutput;
-      return parsed;
+      const raw = await readFile(outputPath, "utf-8");
+      return JSON.parse(raw) as PdfExtractorOutput;
     } catch (err) {
       const message = String(err);
       if (/not recognized|ENOENT/i.test(message)) continue;

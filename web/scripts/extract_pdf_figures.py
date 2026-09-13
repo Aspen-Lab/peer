@@ -15,7 +15,14 @@ import re
 import sys
 from dataclasses import dataclass
 
-import fitz
+# PyMuPDF 1.24+ is imported as `pymupdf`; the `fitz` name still works but
+# prints a deprecation line to STDOUT on import, which corrupted the JSON the
+# Node side parses (measured 2026-09-13: every PDF figure failed with
+# "Unexpected token 'w', \"warning: T\"..."). Older installs only know `fitz`.
+try:
+    import pymupdf as fitz
+except ImportError:  # pragma: no cover
+    import fitz
 
 CAPTION_RE = re.compile(r"^\s*(fig(?:ure)?\.?\s*\d+[a-z]?)\b", re.IGNORECASE)
 MIN_WIDTH = 120
@@ -284,6 +291,10 @@ def main() -> int:
     parser.add_argument("--input", required=True)
     parser.add_argument("--max-pages", type=int, default=24)
     parser.add_argument("--max-figures", type=int, default=12)
+    # Where to write the result. A dozen rendered figures is ~10 MB of base64,
+    # which overflowed the Node side's stdout buffer; and MuPDF itself prints
+    # format warnings to stdout, which is not JSON. A file has neither problem.
+    parser.add_argument("--output", default=None)
     args = parser.parse_args()
 
     try:
@@ -291,7 +302,11 @@ def main() -> int:
     except Exception as exc:
         result = {"figures": [], "reason": f"PDF figure extraction failed: {exc}"}
 
-    json.dump(result, sys.stdout)
+    if args.output:
+        with open(args.output, "w", encoding="utf-8") as handle:
+            json.dump(result, handle)
+    else:
+        json.dump(result, sys.stdout)
     return 0
 
 

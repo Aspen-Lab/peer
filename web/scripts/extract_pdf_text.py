@@ -23,7 +23,12 @@ import re
 import sys
 from dataclasses import dataclass
 
-import fitz
+# See extract_pdf_figures.py: `import fitz` prints a deprecation line to
+# stdout on PyMuPDF 1.24+, which is where this script's JSON goes.
+try:
+    import pymupdf as fitz
+except ImportError:  # pragma: no cover
+    import fitz
 
 # Known academic section headings, ordered so a later "Discussion" doesn't
 # accidentally match earlier in "Results and Discussion".
