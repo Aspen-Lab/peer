@@ -38,9 +38,19 @@ const GLOBAL_FALLBACK_CHAIN = [
   { id: "gemini-3.6-flash", location: "global", tier: "large" },
 ] satisfies ModelTarget[];
 
+// The reader's own Gemini API key. Google retired the 2.5 models for accounts
+// created after their successors shipped: measured 2026-09-13, a fresh key
+// answered `404 "models/gemini-2.5-flash-lite is no longer available to new
+// users. Please update your code to use models/gemini-3.5-flash-lite"` (and
+// 3.6-flash for 2.5-flash), so every report on that key failed. Each tier
+// keeps its cost-optimised 2.5 model first — an older key still has it — and
+// falls through to the successor Google names. Vertex is unaffected: its
+// regional chain above still serves 2.5.
 const GEMINI_API_MODEL_CHAIN = [
   { id: PROVIDER_MODELS.gemini.small, location: "global", tier: "small" },
+  { id: "gemini-3.5-flash-lite", location: "global", tier: "small" },
   { id: PROVIDER_MODELS.gemini.large, location: "global", tier: "large" },
+  { id: "gemini-3.6-flash", location: "global", tier: "large" },
 ] satisfies ModelTarget[];
 
 // For tier-aware calls, narrow the chain to a single appropriate model. The

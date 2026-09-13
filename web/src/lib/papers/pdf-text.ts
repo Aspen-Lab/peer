@@ -141,7 +141,11 @@ async function runExtractor(
       return { output: JSON.parse(stdout.slice(start)) as ExtractorOutput };
     } catch (err) {
       const message = String(err);
-      if (/not recognized|ENOENT/i.test(message)) continue;
+      // Windows ships a `python3` that is not Python: a Store alias stub that
+      // prints "Python was not found" and exits 9009. It is not ENOENT, so it
+      // used to end the search here and the real `python` two entries down
+      // was never tried — every deep report on this machine read no PDF.
+      if (/not recognized|ENOENT|Python was not found/i.test(message)) continue;
       console.warn("[papers/pdf-text] extractor failed:", err);
       return { failure: "failed" };
     }
