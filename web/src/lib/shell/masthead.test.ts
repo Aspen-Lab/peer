@@ -123,6 +123,10 @@ describe("the / key", () => {
     expect(searchKeyTarget("/papers/arxiv:1", false)).toEqual({ action: "push", href: "/search" });
   });
 
+  it("focuses the briefing's own box rather than leaving the page", () => {
+    expect(searchKeyTarget("/", true)).toEqual({ action: "focus" });
+  });
+
   it("navigates rather than focusing a box that is not there", () => {
     expect(searchKeyTarget("/search", false)).toEqual({ action: "push", href: "/search" });
   });

@@ -9,3 +9,9 @@ export const DAY_STRIP = {
    *  nothing for a key to distinguish. */
   readKey: "· grey is read",
 };
+
+export const SEARCH_BOX = {
+  /** What the search page searches; the box promises no less and no more. */
+  placeholder: "Search all papers…",
+  label: "Search papers",
+};

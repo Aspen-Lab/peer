@@ -24,6 +24,7 @@ import { formatTimeAgo } from "@/lib/format";
 import { useProfileStore } from "@/store/profile";
 import { FeedTile } from "@/components/cards/feed-tile";
 import { DayStrip } from "@/components/briefing/day-strip";
+import { SearchBox } from "@/components/briefing/search-box";
 import { Band } from "@/components/ui/band";
 import {
   ReadingCalendar,
@@ -154,10 +155,19 @@ function DailyBriefingPage() {
       />
 
       {/* The day's shape, between the sentence that says what today is and
-          the cards that are it. */}
-      {papers.length > 0 && (
-        <DayStrip papers={papers} readIds={readItems} now={now} />
-      )}
+          the cards that are it — and, at the right of the same line, the way
+          out of it: a search box that leaves for /search rather than
+          searching here (see briefing/search-box.tsx). The box stands even
+          when the strip does not; looking for a paper does not depend on
+          today having ten. */}
+      <div className="mt-6 flex flex-wrap items-start justify-between gap-x-6 gap-y-4">
+        {papers.length > 0 ? (
+          <DayStrip papers={papers} readIds={readItems} now={now} />
+        ) : (
+          <span aria-hidden />
+        )}
+        <SearchBox className="sm:mt-2" />
+      </div>
 
       {/* The deck already says what is being looked for. */}
       {papersLoading && papers.length === 0 && <LoadingSkeleton label={null} />}

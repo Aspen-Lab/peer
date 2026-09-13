@@ -46,6 +46,10 @@ function SearchPage() {
   const [results, setResults] = useState<SearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
+  // A search that never completed is not a search with no results. OpenAlex
+  // rate-limits the shared pool (429 → our 502), and that used to render as
+  // "no results for …" — the reader would rephrase a query that was fine.
+  const [failed, setFailed] = useState(false);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
@@ -84,6 +88,7 @@ function SearchPage() {
     const requestId = ++seqRef.current;
     setIsSearching(true);
     setResults([]);
+    setFailed(false);
     try {
       const apiParams = filtersToApiQuery(f);
       apiParams.set("q", q);
@@ -94,7 +99,10 @@ function SearchPage() {
       if (requestId !== seqRef.current) return;
       setResults((data.results as SearchResult[]) || []);
     } catch {
-      if (requestId === seqRef.current) setResults([]);
+      if (requestId === seqRef.current) {
+        setResults([]);
+        setFailed(true);
+      }
     } finally {
       if (requestId === seqRef.current) {
         setIsSearching(false);
@@ -121,6 +129,7 @@ function SearchPage() {
       setResults([]);
       setIsSearching(false);
       setHasSearched(false);
+      setFailed(false);
     }
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -236,9 +245,11 @@ function SearchPage() {
               ? "searching…"
               : results.length > 0
                 ? `${results.length} ${results.length === 1 ? "result" : "results"} for “${normalizedQuery}”`
-                : hasSearched
-                  ? `no results for “${normalizedQuery}”`
-                  : ""}
+                : failed
+                  ? <span className="text-red">search failed — the paper index is busy, try again in a moment</span>
+                  : hasSearched
+                    ? `no results for “${normalizedQuery}”`
+                    : ""}
           </p>
         )}
       </div>
@@ -264,10 +275,17 @@ function SearchPage() {
 
       {isActive && hasSearched && !isSearching && results.length === 0 && (
         <div className="mx-auto max-w-[820px] mt-6">
-          <EmptyState
-            title="Nothing turned up."
-            description="Try different keywords, or widen the year range and open-access filter."
-          />
+          {failed ? (
+            <EmptyState
+              title="The search did not go through."
+              description="The paper index turned the request away; nothing is wrong with your words. Press Enter to try again."
+            />
+          ) : (
+            <EmptyState
+              title="Nothing turned up."
+              description="Try different keywords, or widen the year range and open-access filter."
+            />
+          )}
         </div>
       )}
     </article>

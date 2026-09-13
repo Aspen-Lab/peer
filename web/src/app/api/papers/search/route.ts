@@ -110,7 +110,11 @@ export async function GET(req: NextRequest) {
     select:
       "id,title,publication_date,authorships,primary_location,open_access,abstract_inverted_index,cited_by_count,doi",
     sort,
-    mailto: "peer@example.com",
+    // The polite pool: OpenAlex throttles the anonymous pool hard (a 429 on
+    // the second query, measured 2026-09-13) and a placeholder address is
+    // one identity shared by every install. Every other OpenAlex caller in
+    // lib/ reads OPENALEX_EMAIL; this one had it hardcoded.
+    mailto: process.env.OPENALEX_EMAIL ?? "peer@example.com",
   });
   if (clauses.length > 0) params.set("filter", clauses.join(","));
 

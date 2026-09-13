@@ -63,7 +63,9 @@ export function DayStrip({
   const anyRead = papers.some((p) => readIds[p.id]);
 
   return (
-    <figure className="mt-6">
+    // The row it sits in (page.tsx) owns the space above; the strip shares
+    // that line with the search box.
+    <figure>
       <div className="flex items-end" style={{ height: HEIGHT, gap: BAR_GAP }}>
         {papers.map((paper) => {
           const score = paper.relevanceScore ?? 0;
