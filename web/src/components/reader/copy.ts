@@ -18,6 +18,40 @@ export const BLOCK_HEADING: Record<Exclude<ReadingBlock, "skim">, string> = {
   nextStep: "Next step",
 };
 
+/**
+ * The restored report sections, in the order the old report read them:
+ * novelty, proposal, results (or a review's contents), fit, a glance, and
+ * what else today's briefing holds. Named in this page's voice — sentence
+ * case, what Peer did with the paper — not the old title-case labels.
+ */
+export const REPORT_HEADING = {
+  novelty: "What is new",
+  proposal: "What it proposes",
+  review: "What the review covers",
+  fit: "Why it fits you",
+  glance: "At a glance",
+  related: "Related from your feed",
+} as const;
+
+/** Under a block Peer wrote with no sentence of the paper to show for it. */
+export const PEERS_READING = "Peer's reading — not a quote";
+
+/** Before a result's novelty line. */
+export const WHATS_NEW = "What is new here:";
+
+/** The keyword row under the fit reasons. */
+export const FIT_KEYWORDS = "Shared terms:";
+
+/** The glance facts. */
+export const GLANCE = {
+  preprint: "Preprint on arXiv",
+  journal: (venue: string) => `Published in ${venue}`,
+  code: "Code available",
+  match: (score: number) => `${Math.round(score * 100)}% match to your topics`,
+  team: (n: number) =>
+    n === 1 ? "Solo author" : n <= 3 ? `${n} authors · small team` : n <= 10 ? `${n} authors` : `${n} authors · large team`,
+} as const;
+
 export const ABSTRACT_FOOTER = "From the abstract · claim and numbers in ink";
 
 /** Under the lifted claim — whose sentence it is. It is chosen from the

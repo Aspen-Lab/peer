@@ -24,6 +24,7 @@ import {
   sanitizePaperReport,
   type PaperReport,
   type PaperReportDepth,
+  reviewPaperLabel,
 } from "./report";
 import { verifyReportEvidence } from "./evidence";
 import type { ExtractedDocument } from "./html-text";
@@ -197,8 +198,9 @@ function buildPass2Prompt(args: {
   project?: string;
   doc: ExtractedDocument;
   signal: CompressedSignal | null;
+  isReview: boolean;
 }): string {
-  const { paper, contextHint, project, doc, signal } = args;
+  const { paper, contextHint, project, doc, signal, isReview } = args;
   const buckets = sectionsByCanonical(doc);
 
   // Decide what body context to feed: compressed signal when available, else
@@ -239,9 +241,26 @@ function buildPass2Prompt(args: {
       }
     : {};
 
+  // A review or survey has no headline result to report; its body sections
+  // are the report. The key is offered only then, so a research paper is
+  // never invited to invent a table of contents.
+  const reviewSchema = isReview
+    ? {
+        reviewContents: {
+          sections: [
+            {
+              heading: "exact section title from the paper body",
+              summary: "1-2 sentences summarising the key point of that section (list 4-8 major body sections, using the paper's own section names)",
+            },
+          ],
+        },
+      }
+    : {};
+
   return JSON.stringify({
-    task:
-      "Create a structured Peer DEEP paper report from the supplied paper body (or compressed signal) and abstract. Every item carries an `evidence` sentence copied character-for-character from the supplied text; omit any item you cannot support that way. Do not fabricate numbers; if a number is not in the supplied text, omit it.",
+    task: isReview
+      ? "Create a structured Peer DEEP paper report for a REVIEW or SURVEY from the supplied paper body (or compressed signal) and abstract. List the body's major sections in `reviewContents.sections` using the paper's own section names. Every claim item carries an `evidence` sentence copied character-for-character from the supplied text; omit any item you cannot support that way. Do not fabricate numbers."
+      : "Create a structured Peer DEEP paper report from the supplied paper body (or compressed signal) and abstract. Every claim item carries an `evidence` sentence copied character-for-character from the supplied text; omit any item you cannot support that way. Every key result also carries a `novelty` line saying what is new about THIS result compared to prior approaches. Do not fabricate numbers; if a number is not in the supplied text, omit it.",
     userContext: contextHint || "",
     ...(project ? { readerProject: project } : {}),
     paper: {
@@ -268,6 +287,9 @@ function buildPass2Prompt(args: {
             evidence: evidenceRule,
           },
         ],
+        novelty: [
+          "one or two concise sentences saying what is new about this paper against prior work; do not repeat the methods here (max 2 items)",
+        ],
       },
       resultsAndSignificance: {
         summary: "2-3 sentences explaining the headline result and why it matters.",
@@ -276,8 +298,16 @@ function buildPass2Prompt(args: {
             title: "short label",
             detail: "one concrete result sentence grounded in the supplied text",
             evidence: evidenceRule,
+            novelty: "one sentence saying what specifically is new about THIS result compared to prior work",
           },
         ],
+      },
+      ...reviewSchema,
+      whyItFitsYou: {
+        reasons: [
+          "one specific reason this paper matters for the reader described in userContext, max 2 sentences, tied to their topics or project; never vague (max 3 items; empty when userContext is empty)",
+        ],
+        keywords: ["paper keywords that overlap with the reader's interests (max 8; empty when userContext is empty)"],
       },
       limitations: [
         {
@@ -294,7 +324,9 @@ function buildPass2Prompt(args: {
     rules: [
       "Return ONLY valid JSON.",
       "`evidence` is one sentence copied character-for-character from the supplied text (or the abstract). Do not paraphrase it, shorten it, or merge sentences.",
-      "Omit any item you cannot support with such a sentence. An empty array is correct when nothing qualifies.",
+      "Omit any claim item you cannot support with such a sentence. An empty array is correct when nothing qualifies.",
+      "`novelty` (proposal and per result) and `whyItFitsYou` are Peer's reading and carry no evidence sentence; keep them specific and grounded in the supplied text, never generic.",
+      "`whyItFitsYou` is written against userContext only; with no userContext, both arrays are empty. Do not mention missing context.",
       "`limitations` holds only what the authors state; do not infer weaknesses.",
       ...(project
         ? ["`relationToYourWork.basedOn` is the reader's project text copied back."]
@@ -308,7 +340,7 @@ const PASS2_SYSTEM = [
   "Write a structured deep paper report grounded in the supplied body text.",
   "Every claim carries an `evidence` sentence copied character-for-character from the supplied text; a claim without one is omitted.",
   "Be specific: name the actual technique, finding, or comparison rather than generic phrases.",
-  "Keep proposal and method separate: proposal says what the paper tries to do; methods say what experiments or evaluations were actually used.",
+  "Keep proposal, method and novelty separate: proposal says what the paper tries to do; methods say what experiments or evaluations were actually used; novelty says what is new against prior work, in one or two sentences.",
   "Do not fabricate numbers, citations, or experimental details.",
   "Return only valid JSON.",
 ].join(" ");
@@ -329,6 +361,7 @@ async function runPass2(args: {
     project: args.project,
     doc: args.doc,
     signal: args.signal,
+    isReview: reviewPaperLabel(args.paper) !== null,
   });
   const clipped = prompt.length > PASS2_MAX_INPUT_CHARS
     ? prompt.slice(0, PASS2_MAX_INPUT_CHARS)
@@ -336,7 +369,9 @@ async function runPass2(args: {
   const raw = await args.provider.generateJsonText({
     systemPrompt: PASS2_SYSTEM,
     userPrompt: clipped,
-    maxTokens: 2400,
+    // Room for the restored sections: novelty, per-result novelty, the fit
+    // block and, on a review, its contents.
+    maxTokens: 3200,
     tier: "large",
   });
   const parsed = safeJson(raw);

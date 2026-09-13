@@ -36,6 +36,12 @@ export interface PaperReportKeyResult {
   evidence: string;
   evidenceWhere?: string;
   /**
+   * Restored from the pre-2026-09 report: one sentence on what is new about
+   * THIS result against prior work. Peer's reading, not a quote — it carries
+   * no evidence sentence and the page labels it as Peer's.
+   */
+  novelty?: string;
+  /**
    * Deep-report only: figure label this result should reference (e.g.
    * "Figure 3"), chosen by post-report figure binding. Null/absent when no
    * good figure match was found — UI shows no figure in that case.
@@ -70,14 +76,26 @@ export interface PaperReportProvenance {
   droppedClaims: number;
 }
 
+/** One major section of a review or survey, named as the paper names it. */
+export interface PaperReportReviewSection {
+  heading: string;
+  summary: string;
+}
+
 export interface PaperReport {
   /** ≤3 sentences: Peer's skim, each carrying a sentence of the paper. */
   skim: Claim[];
   whatItProposes: {
-    /** Figure-binding query input only; the page never renders it. */
+    /** 2–3 sentences on the proposal or scope; the "Proposal" block. */
     summary: string;
     /** ≤4 concrete methods, each with evidence. */
     methods: Claim[];
+    /**
+     * Restored: ≤2 sentences on what is new against prior work — the
+     * "Novelty" block, the first thing under the decision. Peer's reading,
+     * no evidence sentence.
+     */
+    novelty?: string[];
     /**
      * Deep-report only: figure label promoted to the proposal area. Used when
      * a figure is reused by multiple result cards, or when the proposal itself
@@ -90,11 +108,23 @@ export interface PaperReport {
     figureSource?: string | null;
   };
   resultsAndSignificance: {
-    /** Figure-binding query input only; the page never renders it. */
+    /** 2–3 sentences on the headline result; the pull quote over the results. */
     summary: string;
     /** ≤4 results, each with evidence. */
     keyResults: PaperReportKeyResult[];
   };
+  /**
+   * Restored, review and survey papers only: the body's major sections, in
+   * the paper's own headings. Rendered as "Paper contents" in place of the
+   * results block when present.
+   */
+  reviewContents?: { sections: PaperReportReviewSection[] };
+  /**
+   * Restored: why this paper is on the reader's page. ≤3 reasons tied to
+   * the reader's topics, and the paper keywords that overlap them. Peer's
+   * reading against the profile; carries no evidence sentence.
+   */
+  whyItFitsYou?: { reasons: string[]; keywords: string[] };
   /** Deep only, ≤3: what the authors themselves state as limits. */
   limitations?: Claim[];
   /**
@@ -134,6 +164,15 @@ export const REPORT_CAPS = {
   basedOnChars: 200,
   summaryChars: 600,
   claimChars: 600,
+  novelty: 2,
+  noveltyChars: 320,
+  fitReasons: 3,
+  fitReasonChars: 320,
+  fitKeywords: 8,
+  fitKeywordChars: 40,
+  reviewSections: 8,
+  reviewHeadingChars: 120,
+  reviewSummaryChars: 400,
 } as const;
 
 /**
@@ -203,6 +242,19 @@ function claims(value: unknown, max: number, maxChars: number = REPORT_CAPS.clai
   return out;
 }
 
+/** Cleaned, non-empty strings, capped in count and length. */
+function strings(value: unknown, max: number, maxChars: number): string[] {
+  if (!Array.isArray(value)) return [];
+  const out: string[] = [];
+  for (const item of value) {
+    const t = text(item, maxChars);
+    if (!t) continue;
+    out.push(t);
+    if (out.length >= max) break;
+  }
+  return out;
+}
+
 function keyResult(value: unknown): PaperReportKeyResult | null {
   if (!isRecord(value)) return null;
   const title = text(value.title, 120);
@@ -211,12 +263,29 @@ function keyResult(value: unknown): PaperReportKeyResult | null {
   // No "Key result N" label is invented for a result the model left unnamed,
   // and no result without its receipt survives.
   if (!title || !detail || !evidence) return null;
+  const novelty = text(value.novelty, REPORT_CAPS.noveltyChars);
   return {
     title,
     detail,
     evidence,
+    ...(novelty ? { novelty } : {}),
     ...figureFields(value),
   };
+}
+
+function reviewSections(value: unknown): PaperReportReviewSection[] {
+  const raw = isRecord(value) ? value.sections : undefined;
+  if (!Array.isArray(raw)) return [];
+  const out: PaperReportReviewSection[] = [];
+  for (const item of raw) {
+    if (!isRecord(item)) continue;
+    const heading = text(item.heading, REPORT_CAPS.reviewHeadingChars);
+    const summary = text(item.summary, REPORT_CAPS.reviewSummaryChars);
+    if (!heading || !summary) continue;
+    out.push({ heading, summary });
+    if (out.length >= REPORT_CAPS.reviewSections) break;
+  }
+  return out;
 }
 
 /** An image the page may show as the paper's own: served over TLS, or rendered from its PDF. */
@@ -330,11 +399,14 @@ export function sanitizePaperReport(raw: unknown): PaperReport {
 
   const nextStep = claim(r.nextStep);
 
+  const novelty = strings(proposes.novelty, REPORT_CAPS.novelty, REPORT_CAPS.noveltyChars);
+
   const report: PaperReport = {
     skim: claims(r.skim, REPORT_CAPS.skim, REPORT_CAPS.skimChars),
     whatItProposes: {
       summary: text(proposes.summary, REPORT_CAPS.summaryChars),
       methods: claims(proposes.methods, REPORT_CAPS.methods),
+      ...(novelty.length > 0 ? { novelty } : {}),
       ...figureFields(proposes),
     },
     resultsAndSignificance: {
@@ -357,6 +429,16 @@ export function sanitizePaperReport(raw: unknown): PaperReport {
           : 0,
     },
   };
+
+  // Review contents and fit are present only with something in them: an
+  // empty heading is the shape this page refuses.
+  const sections = reviewSections(r.reviewContents);
+  if (sections.length > 0) report.reviewContents = { sections };
+  if (isRecord(r.whyItFitsYou)) {
+    const reasons = strings(r.whyItFitsYou.reasons, REPORT_CAPS.fitReasons, REPORT_CAPS.fitReasonChars);
+    const keywords = strings(r.whyItFitsYou.keywords, REPORT_CAPS.fitKeywords, REPORT_CAPS.fitKeywordChars);
+    if (reasons.length > 0 || keywords.length > 0) report.whyItFitsYou = { reasons, keywords };
+  }
 
   if (Array.isArray(r.limitations)) {
     report.limitations = claims(r.limitations, REPORT_CAPS.limitations);

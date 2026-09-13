@@ -31,7 +31,7 @@ describe("sanitizePaperReport", () => {
         summary: "A result.",
         keyResults: [{ title: "Gain", detail: "12% better.", evidence }],
       },
-      whyItFitsYou: { reasons: ["an old field"], keywords: [] },
+      whyItFitsYou: { reasons: ["a restored field"], keywords: [] },
       noLlm: false,
       depth: "abstract",
     });
@@ -47,7 +47,9 @@ describe("sanitizePaperReport", () => {
     expect(report.provenance).toEqual({ basis: "model-abstract", droppedClaims: 0 });
     expect(report.depth).toBe("abstract");
     expect(report.noLlm).toBeUndefined();
-    expect("whyItFitsYou" in report).toBe(false);
+    // Restored 2026-09-13 on the founder's call — it was dropped by the
+    // reader rewrite and is a report section again (see the describe below).
+    expect(report.whyItFitsYou).toEqual({ reasons: ["a restored field"], keywords: [] });
     expect("unknownField" in report.whatItProposes).toBe(false);
   });
 
@@ -223,6 +225,88 @@ describe("sanitizePaperReport", () => {
     // evidenceWhere is verification's to set; the sanitizer does not keep a
     // model's own claim about where its sentence came from.
     expect(report.skim[0].evidenceWhere).toBeUndefined();
+  });
+});
+
+describe("sanitizePaperReport — the restored sections", () => {
+  // These four existed before the 2026-09 reader rewrite dropped them, and
+  // were brought back on the founder's call. None carries an evidence
+  // sentence: they are Peer's reading, and the page labels them so.
+  it("keeps proposal novelty, per-result novelty, review contents and the fit block", () => {
+    const report = sanitizePaperReport({
+      skim: [],
+      whatItProposes: {
+        summary: "A proposal.",
+        methods: [],
+        novelty: ["  First&nbsp;new thing. ", "Second new thing."],
+      },
+      resultsAndSignificance: {
+        summary: "",
+        keyResults: [
+          { title: "Gain", detail: "It gained.", evidence, novelty: " Nobody had measured it. " },
+        ],
+      },
+      reviewContents: {
+        sections: [
+          { heading: "2. Cathodes", summary: "What is known about cathodes." },
+          { heading: "", summary: "dropped: no heading" },
+          { heading: "3. Anodes", summary: "" },
+        ],
+      },
+      whyItFitsYou: {
+        reasons: ["It uses the reader's own material system."],
+        keywords: ["LiCoO2", "  electrodeposition "],
+      },
+    });
+    expect(report.whatItProposes.novelty).toEqual(["First new thing.", "Second new thing."]);
+    expect(report.resultsAndSignificance.keyResults[0].novelty).toBe("Nobody had measured it.");
+    expect(report.reviewContents).toEqual({
+      sections: [{ heading: "2. Cathodes", summary: "What is known about cathodes." }],
+    });
+    expect(report.whyItFitsYou).toEqual({
+      reasons: ["It uses the reader's own material system."],
+      keywords: ["LiCoO2", "electrodeposition"],
+    });
+  });
+
+  it("leaves the restored sections absent rather than empty", () => {
+    const report = sanitizePaperReport({
+      whatItProposes: { summary: "", methods: [], novelty: [] },
+      resultsAndSignificance: { summary: "", keyResults: [{ title: "T", detail: "D", evidence }] },
+      reviewContents: { sections: [] },
+      whyItFitsYou: { reasons: [], keywords: [] },
+    });
+    expect(report.whatItProposes).not.toHaveProperty("novelty");
+    expect(report.resultsAndSignificance.keyResults[0]).not.toHaveProperty("novelty");
+    expect(report).not.toHaveProperty("reviewContents");
+    expect(report).not.toHaveProperty("whyItFitsYou");
+  });
+
+  it("caps them: novelty 2 × 320, reasons 3 × 320, keywords 8 × 40, review sections 8", () => {
+    const long = "x".repeat(1000);
+    const report = sanitizePaperReport({
+      whatItProposes: { summary: "", methods: [], novelty: [long, long, long] },
+      resultsAndSignificance: {
+        summary: "",
+        keyResults: [{ title: "T", detail: "D", evidence, novelty: long }],
+      },
+      reviewContents: {
+        sections: Array.from({ length: 12 }, (_, i) => ({ heading: `H${i}`, summary: long })),
+      },
+      whyItFitsYou: {
+        reasons: [long, long, long, long],
+        keywords: Array.from({ length: 12 }, (_, i) => `k${i}${long}`),
+      },
+    });
+    expect(report.whatItProposes.novelty).toHaveLength(REPORT_CAPS.novelty);
+    expect(report.whatItProposes.novelty?.[0].length).toBe(REPORT_CAPS.noveltyChars);
+    expect(report.resultsAndSignificance.keyResults[0].novelty?.length).toBe(REPORT_CAPS.noveltyChars);
+    expect(report.reviewContents?.sections).toHaveLength(REPORT_CAPS.reviewSections);
+    expect(report.reviewContents?.sections[0].summary.length).toBe(REPORT_CAPS.reviewSummaryChars);
+    expect(report.whyItFitsYou?.reasons).toHaveLength(REPORT_CAPS.fitReasons);
+    expect(report.whyItFitsYou?.reasons[0].length).toBe(REPORT_CAPS.fitReasonChars);
+    expect(report.whyItFitsYou?.keywords).toHaveLength(REPORT_CAPS.fitKeywords);
+    expect(report.whyItFitsYou?.keywords[0].length).toBe(REPORT_CAPS.fitKeywordChars);
   });
 });
 

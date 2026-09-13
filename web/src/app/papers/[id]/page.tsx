@@ -3,9 +3,12 @@
 // The reading surface — one paper, in a fixed order the reader learns once:
 // the plate and title, the abstract as written with the claim and the
 // numbers in ink, one sentence saying what Peer has and has not read, and
-// the decision. Everything below the decision is the paper's own sentences
-// (from the server reading) or a model claim carrying one (from the report);
-// both arrive after first paint and change nothing above.
+// the decision. Below the decision, first the report as it read before the
+// 2026-09 rewrite — what is new, the proposal, how it was done, the results
+// with their figures, a review's contents, why it fits you, a glance, and
+// today's related papers (components/reader/report-sections.tsx) — and under
+// that the blocks the rewrite added: where it is thin, the next step, the
+// paper itself. Both arrive after first paint and change nothing above.
 //
 // The page holds the wiring — which paper, the store, the keys, the swipe,
 // when "read" happens — and the components in `components/reader/` hold the
@@ -46,7 +49,18 @@ import { RecordBlock } from "@/components/reader/record-block";
 import { KeyLegend } from "@/components/reader/key-legend";
 import { DecisionBlock } from "@/components/reader/decision-block";
 import { QuoteList } from "@/components/reader/quote-list";
-import { ClaimList, KeyResultList } from "@/components/reader/claim-list";
+import { ClaimList } from "@/components/reader/claim-list";
+import {
+  FitBlock,
+  GlanceBlock,
+  NoveltyBlock,
+  ProposalBlock,
+  RelatedBlock,
+  ResultsBlock,
+  ReviewContentsBlock,
+  FigureRegistry,
+  pickRelated,
+} from "@/components/reader/report-sections";
 import { NextRow } from "@/components/reader/next-row";
 import { LoadingMat } from "@/components/reader/loading-mat";
 import { ReaderToast, useReaderToast } from "@/components/reader/reader-toast";
@@ -234,6 +248,9 @@ function Reader({
   const feedPapers = useFeedStore((s) => s.papers);
   const markRead = useFeedStore((s) => s.markRead);
   const [now] = useState(() => Date.now());
+  // The sections' own figure claims, for the page's life; keyed by paper
+  // inside, so j/k to the next paper starts its claims fresh.
+  const [figureRegistry] = useState(() => new FigureRegistry());
   // ≥ xl: the spread. Owned here so the decided-read observer can follow the
   // DecisionBlock when the structure switches and it remounts.
   const spread = useSpread();
@@ -499,12 +516,30 @@ function Reader({
 
   const keyResults = report?.resultsAndSignificance.keyResults ?? [];
   const methods = report?.whatItProposes.methods ?? [];
+  // The report's bound figures, deduped in page order: the plate first, then
+  // the proposal's, then each result's. The binder can hand one figure to
+  // several places; it is shown once, at the first. Known in render, so a
+  // local set does it; only the figures the sections fetch for themselves
+  // need the registry.
+  const boundShown = new Set<string>(boundFigure?.imageUrl ? [boundFigure.imageUrl] : []);
+  const takeBound = (url: string | null | undefined, caption?: string | null) => {
+    if (!url || boundShown.has(url)) return null;
+    boundShown.add(url);
+    return { url, caption };
+  };
+  const noveltyFigure = report
+    ? takeBound(report.whatItProposes.figureImageUrl, report.whatItProposes.figureCaption)
+    : null;
+  const resultFigures = keyResults.map((r) => takeBound(r.figureImageUrl, r.figureCaption));
   const limitations = report?.limitations ?? [];
   const relation = report?.relationToYourWork;
   const nextStep = report?.nextStep ?? null;
-  const shownFigures = new Set(boundFigure ? [boundFigure.imageUrl] : []);
   // Blocks that were not there at first paint fade in, staggered in order.
   let stagger = 0;
+  const related = pickRelated(paper, feedPapers);
+  const reviewSections = report?.reviewContents?.sections ?? [];
+  const fit = report?.whyItFitsYou ?? null;
+  const topics = [...profile.researchTopics, ...(profile.softTopics ?? [])];
 
   return (
     // `tabIndex={-1}`: Next's layout router focuses the segment's first
@@ -577,18 +612,20 @@ function Reader({
         }
         additions={
           <>
-            {keyResults.length > 0 ? (
-              <KeyResultList
-                results={keyResults}
-                abstractSentences={abstractSentences}
+            {/* ── The report as it read before the rewrite, in its order ── */}
+
+            {report && (
+              <NoveltyBlock
+                report={report}
+                paper={paper}
+                figure={noveltyFigure}
+                registry={figureRegistry}
+                bound={boundShown}
                 stagger={stagger++}
-                shownFigures={shownFigures}
               />
-            ) : (
-              fromServer && (
-                <QuoteList block="findings" quotes={reading.findings} stagger={stagger++} />
-              )
             )}
+
+            {report && <ProposalBlock report={report} stagger={stagger++} />}
 
             {methods.length > 0 ? (
               <ClaimList
@@ -603,20 +640,33 @@ function Reader({
               )
             )}
 
-            {limitations.length > 0 ? (
-              <ClaimList
-                block="caveats"
-                claims={limitations}
+            {/* A review's contents stand where its results would; a research
+                paper's results carry the headline, each result's novelty
+                and its figure. Without a report, the paper's own sentences. */}
+            {reviewSections.length > 0 ? (
+              <ReviewContentsBlock sections={reviewSections} stagger={stagger++} />
+            ) : report && (keyResults.length > 0 || report.resultsAndSignificance.summary) ? (
+              <ResultsBlock
+                report={report}
+                paper={paper}
                 abstractSentences={abstractSentences}
+                figures={resultFigures}
+                registry={figureRegistry}
+                bound={boundShown}
                 stagger={stagger++}
               />
             ) : (
               fromServer && (
-                <QuoteList block="caveats" quotes={reading.caveats} stagger={stagger++} />
+                <QuoteList block="findings" quotes={reading.findings} stagger={stagger++} />
               )
             )}
 
-            {relation && relation.items.length > 0 ? (
+            {/* Why it fits you — the model's reasons against the profile.
+                Without them, the rewrite's project relation, then the shared
+                terms line, as before. */}
+            {fit ? (
+              <FitBlock fit={fit} terms={topics} stagger={stagger++} />
+            ) : relation && relation.items.length > 0 ? (
               <ClaimList
                 block="forYou"
                 claims={relation.items}
@@ -631,6 +681,25 @@ function Reader({
                     {sharedTermsLine(shared)}
                   </p>
                 </section>
+              )
+            )}
+
+            <GlanceBlock paper={paper} now={now} stagger={stagger++} />
+
+            <RelatedBlock related={related} now={now} stagger={stagger++} />
+
+            {/* ── The blocks the rewrite added, kept under the old report ── */}
+
+            {limitations.length > 0 ? (
+              <ClaimList
+                block="caveats"
+                claims={limitations}
+                abstractSentences={abstractSentences}
+                stagger={stagger++}
+              />
+            ) : (
+              fromServer && (
+                <QuoteList block="caveats" quotes={reading.caveats} stagger={stagger++} />
               )
             )}
 

@@ -19,9 +19,11 @@ import { streamPaperReport } from "@/lib/papers/report-stream";
 import { reportOutcome } from "@/lib/reader/report-outcome";
 import { reportProviderConfigured } from "@/components/reports/provider-configured";
 
-const STORAGE_KEY = "peer-paper-report-v4";
+// v5: the restored sections (novelty, fit, review contents) — a v4 report
+// has none of them and would render the page without them for a day.
+const STORAGE_KEY = "peer-paper-report-v5";
 /** The cache the old page kept, with its fabricated fallbacks inside. */
-const LEGACY_STORAGE_KEY = "peer-paper-report-cache-v3";
+const LEGACY_STORAGE_KEYS = ["peer-paper-report-cache-v3", "peer-paper-report-v4"];
 const MAX_ENTRIES = 40;
 // A deep report stays well past a session; an abstract-tier one expires
 // sooner so a transient failure (paywall flap, model hiccup) self-heals on
@@ -160,7 +162,7 @@ export function useModelReport({
   // back.
   useEffect(() => {
     try {
-      localStorage.removeItem(LEGACY_STORAGE_KEY);
+      for (const key of LEGACY_STORAGE_KEYS) localStorage.removeItem(key);
     } catch {
       /* nothing to remove, or no storage */
     }

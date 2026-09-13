@@ -24,6 +24,8 @@ export interface MarkdownClaim {
 export interface MarkdownKeyResult extends Omit<MarkdownClaim, "text"> {
   title: string;
   detail: string;
+  /** Restored: what is new about this result. Peer's line, no evidence. */
+  novelty?: string;
 }
 
 /**
@@ -33,8 +35,10 @@ export interface MarkdownKeyResult extends Omit<MarkdownClaim, "text"> {
  */
 export interface MarkdownReport {
   skim?: MarkdownClaim[];
-  whatItProposes?: { methods?: MarkdownClaim[] };
-  resultsAndSignificance?: { keyResults?: MarkdownKeyResult[] };
+  whatItProposes?: { summary?: string; methods?: MarkdownClaim[]; novelty?: string[] };
+  resultsAndSignificance?: { summary?: string; keyResults?: MarkdownKeyResult[] };
+  reviewContents?: { sections: { heading: string; summary: string }[] };
+  whyItFitsYou?: { reasons: string[]; keywords: string[] };
   limitations?: MarkdownClaim[];
   relationToYourWork?: { basedOn: string; items: MarkdownClaim[] };
   nextStep?: MarkdownClaim | null;
@@ -260,22 +264,59 @@ export function readingToMarkdown(
     lines.push(`## ${HEADING[block]}`, "", ...body, "");
     filled.add(block);
   };
+  // The restored sections have no slot in the omissions list: they are
+  // Peer's reading, present when the model wrote them and silent otherwise.
+  const extra = (heading: string, body: string[]) => {
+    if (body.length === 0) return;
+    lines.push(`## ${heading}`, "", ...body, "");
+  };
+  const PEERS = "*Peer's reading — not a quote*";
 
-  const keyResults = report?.resultsAndSignificance?.keyResults?.filter((r) => r.title || r.detail) ?? [];
-  if (keyResults.length > 0) {
-    section(
-      "findings",
-      spaced(keyResults.map((result) => claimBlock(`**${result.title}.** ${result.detail}`.trim(), result))),
-    );
-  } else {
-    section("findings", spaced(reading.findings.map((quote) => [quoteLine(quote)])));
-  }
+  // The page's order: what is new, the proposal, the method, the results
+  // (or a review's contents), why it fits, then the rewrite's own blocks.
+  const novelty = report?.whatItProposes?.novelty?.filter(Boolean) ?? [];
+  if (novelty.length > 0) extra("What is new", [...novelty, "", PEERS]);
+
+  const proposal = report?.whatItProposes?.summary?.trim();
+  if (proposal) extra("What it proposes", [proposal]);
 
   const methods = report?.whatItProposes?.methods?.filter((claim) => claim.text) ?? [];
   if (methods.length > 0) {
     section("method", spaced(methods.map((claim) => claimBlock(claim.text, claim))));
   } else {
     section("method", spaced(reading.method.map((quote) => [quoteLine(quote)])));
+  }
+
+  const reviewSections = report?.reviewContents?.sections ?? [];
+  const keyResults = report?.resultsAndSignificance?.keyResults?.filter((r) => r.title || r.detail) ?? [];
+  const headline = report?.resultsAndSignificance?.summary?.trim();
+  if (reviewSections.length > 0) {
+    extra(
+      "What the review covers",
+      spaced(reviewSections.map((entry) => [`**${entry.heading}**`, entry.summary])),
+    );
+  } else if (keyResults.length > 0 || headline) {
+    section("findings", [
+      ...(headline ? [headline, ""] : []),
+      ...spaced(
+        keyResults.map((result) => [
+          ...claimBlock(`**${result.title}.** ${result.detail}`.trim(), result),
+          ...(result.novelty ? [`What is new here: ${result.novelty}`] : []),
+        ]),
+      ),
+    ]);
+  } else {
+    section("findings", spaced(reading.findings.map((quote) => [quoteLine(quote)])));
+  }
+
+  const fit = report?.whyItFitsYou;
+  if (fit && (fit.reasons.length > 0 || fit.keywords.length > 0)) {
+    extra("Why it fits you", [
+      ...fit.reasons,
+      ...(fit.keywords.length > 0 ? ["", `Shared terms: ${fit.keywords.join(" · ")}`] : []),
+      "",
+      PEERS,
+    ]);
   }
 
   const limitations = report?.limitations?.filter((claim) => claim.text) ?? [];

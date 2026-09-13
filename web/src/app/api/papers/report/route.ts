@@ -7,6 +7,7 @@ import {
   withoutFigures,
   type PaperReport,
   type PaperReportRequest,
+  reviewPaperLabel,
 } from "@/lib/papers/report";
 import { verifyReportEvidence } from "@/lib/papers/evidence";
 import { generateDeepReport, buildPaywalledFallback } from "@/lib/papers/deep-report";
@@ -94,9 +95,24 @@ function buildShallowPrompt(body: ExtendedRequest): string {
       }
     : {};
 
+  const isReview = reviewPaperLabel(paper) !== null;
+  const reviewSchema = isReview
+    ? {
+        reviewContents: {
+          sections: [
+            {
+              heading: "a major part of the review as the abstract names it",
+              summary: "1-2 sentences on what that part covers (only parts the abstract actually names; max 8)",
+            },
+          ],
+        },
+      }
+    : {};
+
   return JSON.stringify({
-    task:
-      "Create a structured Peer paper report from the paper's title and abstract. Every item carries an `evidence` sentence copied character-for-character from the abstract; omit any item you cannot support that way. Do not invent numbers.",
+    task: isReview
+      ? "Create a structured Peer paper report for a REVIEW or SURVEY from the paper's title and abstract. Every claim item carries an `evidence` sentence copied character-for-character from the abstract; omit any item you cannot support that way. Do not invent numbers."
+      : "Create a structured Peer paper report from the paper's title and abstract. Every claim item carries an `evidence` sentence copied character-for-character from the abstract; omit any item you cannot support that way. Every key result also carries a `novelty` line saying what is new about it compared to prior work. Do not invent numbers.",
     userContext: contextHint || "",
     ...(project ? { readerProject: project } : {}),
     paper: {
@@ -122,6 +138,9 @@ function buildShallowPrompt(body: ExtendedRequest): string {
             evidence: evidenceRule,
           },
         ],
+        novelty: [
+          "one or two concise sentences saying what is new about this paper against prior work, as the abstract states it; do not repeat the methods here (max 2 items)",
+        ],
       },
       resultsAndSignificance: {
         summary: "2-3 sentences explaining the key result and why it matters.",
@@ -130,15 +149,25 @@ function buildShallowPrompt(body: ExtendedRequest): string {
             title: "short result label",
             detail: "one concrete result sentence grounded in the abstract",
             evidence: evidenceRule,
+            novelty: "one sentence saying what specifically is new about this result compared to prior work",
           },
         ],
+      },
+      ...reviewSchema,
+      whyItFitsYou: {
+        reasons: [
+          "one specific reason this paper matters for the reader described in userContext, max 2 sentences, tied to their topics or project; never vague (max 3 items; empty when userContext is empty)",
+        ],
+        keywords: ["paper keywords that overlap with the reader's interests (max 8; empty when userContext is empty)"],
       },
       ...relationSchema,
     },
     rules: [
       "Return ONLY valid JSON.",
       "`evidence` is one sentence copied character-for-character from the abstract. Do not paraphrase it, shorten it, or merge sentences.",
-      "Omit any item you cannot support with such a sentence. An empty array is correct when nothing qualifies.",
+      "Omit any claim item you cannot support with such a sentence. An empty array is correct when nothing qualifies.",
+      "`novelty` (proposal and per result) and `whyItFitsYou` are Peer's reading and carry no evidence sentence; keep them specific to this abstract, never generic.",
+      "`whyItFitsYou` is written against userContext only; with no userContext, both arrays are empty. Do not mention missing context.",
       "Produce no limitations and no next step.",
       ...(project
         ? ["`relationToYourWork.basedOn` is the reader's project text copied back."]
@@ -151,7 +180,7 @@ const SHALLOW_SYSTEM = [
   "You are Peer, a careful research assistant.",
   "Write concise paper reports for researchers from the title and abstract alone.",
   "Every claim carries an `evidence` sentence copied character-for-character from the abstract; a claim without one is omitted.",
-  "Keep proposal and method separate: proposal says what the paper tries to do; methods say what experiments or evaluations the abstract states were used.",
+  "Keep proposal, method and novelty separate: proposal says what the paper tries to do; methods say what experiments or evaluations the abstract states were used; novelty says what is new against prior work.",
   "Do not fabricate experimental values, claims, or figures.",
   "Return only valid JSON.",
 ].join(" ");
@@ -172,7 +201,14 @@ async function generateShallowReport(
     const raw = await provider.generateJsonText({
       systemPrompt: SHALLOW_SYSTEM,
       userPrompt: buildShallowPrompt(body),
-      maxTokens: 1800,
+      // Room for the restored sections (novelty, fit, review contents).
+      maxTokens: 2400,
+      // The large tier, as the deep pass uses. The small model paraphrases
+      // its `evidence` sentences, and the verifier then drops the claim:
+      // measured 2026-09-13, 8 of 8 claims dropped on one abstract, leaving
+      // the results block with nothing but its headline. One report is
+      // ~2k tokens, so the step up is a fraction of a cent per paper.
+      tier: "large",
     });
     const parsed = parseJsonObject(raw);
     if (!parsed) return emptyReport("fallback");
