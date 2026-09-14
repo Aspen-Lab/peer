@@ -2,7 +2,6 @@ import { describe, it, expect } from "vitest";
 import { defaultProfile, type UserProfile } from "@/types";
 import {
   STEP_META,
-  connectorCount,
   firstIncompleteStep,
   isStepDone,
   stepIndexFromKey,
@@ -95,51 +94,11 @@ describe("isStepDone", () => {
     ).toBe(true);
   });
 
-  it("connectors: only Tavily counts, and only when fully configured", () => {
-    // Adzuna and USAJobs existed solely to widen JOB coverage; jobs are no
-    // longer a product surface, so their keys no longer make the step done.
-    expect(
-      isStepDone(
-        "connectors",
-        profileWith({ adzunaAppId: "id", adzunaAppKey: "key" }),
-        false,
-      ),
-    ).toBe(false);
-    expect(
-      isStepDone(
-        "connectors",
-        profileWith({ tavilyEnabled: true, tavilyApiKey: "tvly-x" }),
-        false,
-      ),
-    ).toBe(true);
-    // Tavily key without the toggle is not active.
-    expect(
-      isStepDone("connectors", profileWith({ tavilyApiKey: "tvly-x" }), false),
-    ).toBe(false);
-  });
-
   it("persona: driven by the passed-in flag", () => {
     expect(isStepDone("persona", defaultProfile, true)).toBe(true);
   });
 });
 
-describe("connectorCount", () => {
-  it("counts Tavily once and ignores the retired job connectors", () => {
-    expect(connectorCount(defaultProfile)).toBe(0);
-    expect(
-      connectorCount(
-        profileWith({
-          tavilyEnabled: true,
-          tavilyApiKey: "t",
-          adzunaAppId: "a",
-          adzunaAppKey: "b",
-          usajobsApiKey: "u",
-          usajobsUserAgent: "e@x.com",
-        }),
-      ),
-    ).toBe(1);
-  });
-});
 
 describe("firstIncompleteStep", () => {
   it("a fresh profile starts at step 0", () => {

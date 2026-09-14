@@ -26,7 +26,6 @@ import { PageContainer } from "@/components/ui/page-container";
 import { AccountSection } from "@/components/account/account-section";
 import { VersionLine } from "@/components/shell/version-line";
 import { AiKeyFields } from "@/components/profile/ai-setup";
-import { ConnectorPanel } from "@/components/profile/connector-panel";
 import { Toggle } from "@/components/ui/toggle";
 import { feedsUseAi } from "@/lib/feed/ai-tier";
 import {
@@ -1633,15 +1632,6 @@ function EditView({
         </div>
       </EditRow>
 
-      <EditRow icon={<IconGlobe />} tone="tag" label="Data APIs">
-        <div className="space-y-3">
-          <p className="text-caption leading-relaxed text-text-muted">
-            Optional third-party keys that widen coverage. All of Peer works
-            without them.
-          </p>
-          <ConnectorPanel />
-        </div>
-      </EditRow>
 
 
 
@@ -1654,15 +1644,6 @@ function IconKey() {
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
       <circle cx="8" cy="14" r="4" />
       <path d="M11 11l7-7M16 6l3 3M14 8l3 3" />
-    </svg>
-  );
-}
-
-function IconGlobe() {
-  return (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <circle cx="12" cy="12" r="9" />
-      <path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" />
     </svg>
   );
 }

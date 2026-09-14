@@ -45,7 +45,6 @@ import {
 } from "@/components/profile/ai-setup";
 import { SchoolAutocomplete } from "@/components/profile/school-autocomplete";
 import { AdvisorField } from "@/components/profile/advisor-field";
-import { ConnectorPanel } from "@/components/profile/connector-panel";
 import { useProfileSettled } from "@/components/first-run";
 import { Callout } from "@/components/ui";
 import { buttonVariants } from "@/components/ui/button";
@@ -56,7 +55,6 @@ import { SURFACE_TOPIC_DESCRIPTIONS } from "@/lib/profile/topic-copy";
 import {
   STEP_META,
   type StepKey,
-  connectorCount,
   firstIncompleteStep,
   isStepDone,
   readPersonaDone,
@@ -450,39 +448,6 @@ export default function WelcomePage() {
                 </StepFrame>
               )}
 
-              {key === "connectors" && (
-                <StepFrame
-                  kicker="Optional power-up"
-                  title="Turn on Events & Jobs for your field."
-                  subtitle="Papers work out of the box. Events and jobs need a data source — the free curated feeds only cover CS/AI, so for every other field these three free keys are what make your Events and Jobs tabs fill up."
-                >
-                  <Callout variant="accent">
-                    <strong>Why this matters:</strong> a materials-science conference or a
-                    battery-lab postdoc never appears in a CS-only feed. These sources search
-                    the whole web and every major job board for <em>your</em> topics — all free,
-                    all stored only in your browser.
-                  </Callout>
-
-                  <div className="space-y-2.5">
-                    <ApiIntro
-                      name="Tavily"
-                      tag="Web discovery · optional"
-                      why="Widens the daily paper search beyond the academic APIs. Peer works without it."
-                      how="Free — 1,000 searches/month. Sign up, copy the key from your dashboard."
-                      href="https://tavily.com"
-                    />
-                  </div>
-
-                  <div data-enter-scope className="rounded-xl bg-surface shadow-well overflow-hidden">
-                    <ConnectorPanel />
-                  </div>
-                  <p className="text-caption leading-relaxed text-text-faint">
-                    Add any or none now — you can paste keys later from the “Data APIs” button in
-                    the search bar. Keys never leave your browser.
-                  </p>
-                </StepFrame>
-              )}
-
               {key === "persona" && (
                 <StepFrame
                   kicker="One more thing"
@@ -736,55 +701,12 @@ function summarizeStep(key: StepKey, profile: UserProfile): string {
       return isStepDone("ai", profile, false)
         ? `${providerShortLabel(profile.feedAiProvider)} key connected`
         : "Not connected — works free";
-    case "connectors": {
-      const n = connectorCount(profile);
-      return n > 0 ? `${n} of 3 sources connected` : "None connected yet";
-    }
     case "persona":
       return "";
   }
 }
 
 // ── Small layout helpers ───────────────────────────────────────
-
-// Compact "what this API is and why it's worth 2 minutes" card, used in the
-// connectors onboarding step.
-function ApiIntro({
-  name,
-  tag,
-  why,
-  how,
-  href,
-}: {
-  name: string;
-  tag: string;
-  why: string;
-  how: string;
-  href: string;
-}) {
-  return (
-    <div className="rounded-xl bg-bg-secondary/40 px-4 py-3">
-      <div className="flex items-baseline justify-between gap-3 mb-1">
-        <span className="text-body-sm font-semibold text-heading">{name}</span>
-        <span className={cn(sectionLabel({ tracking: "tight", tone: "accent" }), "text-right")}>
-          {tag}
-        </span>
-      </div>
-      <p className="text-meta leading-relaxed text-text-muted">{why}</p>
-      <p className="text-caption leading-relaxed text-text-faint mt-1.5">
-        {how}{" "}
-        <a
-          href={href}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-accent hover:underline"
-        >
-          Get a key ↗
-        </a>
-      </p>
-    </div>
-  );
-}
 
 function StepFrame({
   kicker,
