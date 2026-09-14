@@ -263,7 +263,10 @@ const clients = new Map<string, GoogleGenAI>();
 function getSearchClient(): GoogleGenAI | null {
   const project = process.env.GOOGLE_VERTEX_PROJECT;
   if (!project) return null;
-  const location = process.env.GOOGLE_VERTEX_LOCATION ?? "us-central1";
+  // Global, not the configured region: the grounding model is a Gemini 3
+  // Flash, which Vertex serves from the global endpoint only (404 on
+  // us-central1, measured 2026-09-13; grounding itself answered fine there).
+  const location = "global";
   const key = `${project}:${location}`;
   const cached = clients.get(key);
   if (cached) return cached;

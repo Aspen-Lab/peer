@@ -394,8 +394,9 @@ accepted only by local `next dev`.
 
 **Local-development-only LLM provider keys:**
 `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GOOGLE_API_KEY`,
-`GOOGLE_VERTEX_PROJECT` / `GOOGLE_VERTEX_LOCATION` / `GOOGLE_APPLICATION_CREDENTIALS` /
-`GOOGLE_VERTEX_ALLOW_GLOBAL_FALLBACK`, `QWEN_API_KEY` (or `DASHSCOPE_API_KEY`), `DEEPSEEK_API_KEY`.
+`GOOGLE_VERTEX_PROJECT` / `GOOGLE_VERTEX_LOCATION` / `GOOGLE_APPLICATION_CREDENTIALS`
+(Gemini 3 models are served from Vertex's global endpoint; the configured region is only the
+last-resort fallback), `QWEN_API_KEY` (or `DASHSCOPE_API_KEY`), `DEEPSEEK_API_KEY`.
 Do not add these to Vercel. Preview/production builds fail when operator-funded model
 credentials are present; online users must supply their own key through the BYOK UI.
 

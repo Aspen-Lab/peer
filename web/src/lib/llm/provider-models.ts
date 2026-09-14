@@ -16,9 +16,16 @@ export type ProviderModelPlan = {
  * the same constants prevents the walkthrough from drifting away from runtime.
  */
 export const PROVIDER_MODELS = {
+  // Chosen 2026-09-13 from Google's live model and price lists, after the 2.5
+  // family was retired for new API accounts. 3.1 Flash-Lite is the cheapest
+  // model on the price list ($0.25 / $1.50 per 1M) and accepts minimal
+  // thinking; 3.6 Flash is the Flash Google names as 2.5 Flash's successor,
+  // priced with 3.7 and 3.8 ($0.75 / $3.75) but the only one of the three
+  // that accepts minimal thinking — 3.8 refuses it and spends ~190 thinking
+  // tokens on a one-word JSON answer. On Vertex both are global-endpoint only.
   gemini: {
-    small: "gemini-2.5-flash-lite",
-    large: "gemini-2.5-flash",
+    small: "gemini-3.1-flash-lite",
+    large: "gemini-3.6-flash",
     vision: true,
   },
   openai: {

@@ -4,9 +4,9 @@ import { PROVIDER_MODELS, providerModelForTier } from "./provider-models";
 describe("BYOK provider model catalog", () => {
   it("keeps the economical and deep-work routes explicit", () => {
     expect(providerModelForTier("gemini", "small")).toBe(
-      "gemini-2.5-flash-lite",
+      "gemini-3.1-flash-lite",
     );
-    expect(providerModelForTier("gemini", "large")).toBe("gemini-2.5-flash");
+    expect(providerModelForTier("gemini", "large")).toBe("gemini-3.6-flash");
     expect(providerModelForTier("openai", "small")).toBe("gpt-5.4-nano");
     expect(providerModelForTier("openai", "large")).toBe("gpt-5.4-mini");
     expect(providerModelForTier("qwen", "small")).toBe("qwen3.5-flash");

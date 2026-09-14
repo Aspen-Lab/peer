@@ -233,8 +233,8 @@ function modelLabel(model: string): string {
   const exactLabels: Record<string, string> = {
     "claude-haiku-4-5-20251001": "Claude Haiku 4.5",
     "claude-sonnet-5": "Claude Sonnet 5",
-    "gemini-2.5-flash-lite": "Gemini 2.5 Flash-Lite",
-    "gemini-2.5-flash": "Gemini 2.5 Flash",
+    "gemini-3.1-flash-lite": "Gemini 3.1 Flash-Lite",
+    "gemini-3.6-flash": "Gemini 3.6 Flash",
     "gpt-5.4-nano": "GPT-5.4 nano",
     "gpt-5.4-mini": "GPT-5.4 mini",
     "qwen3.5-flash": "Qwen 3.5 Flash",

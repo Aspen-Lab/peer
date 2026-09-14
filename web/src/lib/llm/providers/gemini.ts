@@ -20,37 +20,30 @@ type ModelTarget = {
   tier: ModelTier;
 };
 
-const REGIONAL_MODEL_CHAIN = [
-  {
-    id: PROVIDER_MODELS.gemini.small,
-    location: "regional",
-    tier: "small",
-  },
-  {
-    id: PROVIDER_MODELS.gemini.large,
-    location: "regional",
-    tier: "large",
-  },
-] satisfies ModelTarget[];
-
-const GLOBAL_FALLBACK_CHAIN = [
+// The server's own Vertex project. Gemini 3 is served from the global
+// endpoint only — measured 2026-09-13 on this project, every 3.x id answered
+// 404 on us-central1 and 200 on global — so the chain leads with global and
+// the configured region is the last resort, where the retired 2.5 Flash-Lite
+// still answers for an account old enough to have it. Small before large:
+// the digest walks the whole chain and takes the first model that answers.
+const VERTEX_MODEL_CHAIN = [
+  { id: PROVIDER_MODELS.gemini.small, location: "global", tier: "small" },
   { id: "gemini-3.5-flash-lite", location: "global", tier: "small" },
-  { id: "gemini-3.6-flash", location: "global", tier: "large" },
+  { id: "gemini-2.5-flash-lite", location: "regional", tier: "small" },
+  { id: PROVIDER_MODELS.gemini.large, location: "global", tier: "large" },
+  { id: "gemini-3.8-flash", location: "global", tier: "large" },
 ] satisfies ModelTarget[];
 
-// The reader's own Gemini API key. Google retired the 2.5 models for accounts
-// created after their successors shipped: measured 2026-09-13, a fresh key
-// answered `404 "models/gemini-2.5-flash-lite is no longer available to new
-// users. Please update your code to use models/gemini-3.5-flash-lite"` (and
-// 3.6-flash for 2.5-flash), so every report on that key failed. Each tier
-// keeps its cost-optimised 2.5 model first — an older key still has it — and
-// falls through to the successor Google names. Vertex is unaffected: its
-// regional chain above still serves 2.5.
+// The reader's own Gemini API key. Google retired the 2.5 family for accounts
+// created after their successors shipped (a fresh key answers `404 "no longer
+// available to new users"`, measured 2026-09-13), so no 2.5 id is tried here:
+// each would cost a new key a failed round-trip on every call. Each tier is
+// the chosen model, then the next one up the same line.
 const GEMINI_API_MODEL_CHAIN = [
   { id: PROVIDER_MODELS.gemini.small, location: "global", tier: "small" },
   { id: "gemini-3.5-flash-lite", location: "global", tier: "small" },
   { id: PROVIDER_MODELS.gemini.large, location: "global", tier: "large" },
-  { id: "gemini-3.6-flash", location: "global", tier: "large" },
+  { id: "gemini-3.8-flash", location: "global", tier: "large" },
 ] satisfies ModelTarget[];
 
 // For tier-aware calls, narrow the chain to a single appropriate model. The
@@ -61,30 +54,45 @@ function chainForTier(chain: ModelTarget[], tier?: ModelTier): ModelTarget[] {
   return chain.filter((target) => target.tier === tier);
 }
 
-// ── Generation-config policy (the fix) ──────────────────────────────
+// ── Generation-config policy ─────────────────────────────────────────
 //
 // Two Gemini-specific gotchas the old code ignored:
 //   1. It never forwarded the caller's `maxTokens`, so every call ran with an
 //      unbounded output cap.
-//   2. It set no `thinkingConfig`, so every 2.5 model ran default "dynamic
-//      thinking" — hidden reasoning tokens billed + latency on every call,
-//      even for bounded JSON extraction/ranking/classification.
-// This stays model-aware: the cost-optimized 2.5 Flash-Lite / Flash pair runs
-// bounded JSON work with thinking disabled. Gemini 3 fallbacks use a different
-// control, so we leave them alone and reserve headroom for their thinking.
+//   2. It set no `thinkingConfig`, so every model ran its default thinking —
+//      hidden reasoning tokens billed + latency on every call, even for
+//      bounded JSON extraction/ranking/classification.
+// Everything Peer asks a model for is bounded JSON, so thinking is held to the
+// floor each family offers: `thinkingBudget: 0` on 2.5 Flash (Flash-Lite is
+// off by default and rejects the level field), `thinkingLevel: "minimal"` on
+// the Gemini 3 models that accept it. Measured 2026-09-13: 3.6 Flash spends
+// 145 thinking tokens on a one-word answer at its default and 0 at minimal;
+// 3.8 Flash refuses minimal (`INVALID_ARGUMENT`) and is left at its default,
+// with headroom on the cap so its thinking cannot truncate the answer.
 
 const GEN_TIMEOUT_MS = 120_000; // generous per-attempt hang guard, not a latency cap
 const THINKING_HEADROOM = 4096;
 
-/** The cost-optimized Gemini 2.5 Flash family runs bounded JSON with thinking off. */
-function disableThinking(modelId: string): boolean {
+/** The 2.5 Flash family: thinking off by budget. */
+function budgetOff(modelId: string): boolean {
   return /gemini-2\.5-flash/.test(modelId);
 }
 
-/** Output cap including thinking headroom where the model still thinks. */
+/** The Gemini 3 models that accept `thinkingLevel: "minimal"`. */
+function minimalThinking(modelId: string): boolean {
+  return /^gemini-3\.[15]-flash-lite$|^gemini-3\.6-flash$/.test(modelId);
+}
+
+/** Output cap including thinking headroom wherever the model may still think. */
 function outputCap(modelId: string, maxTokens?: number): number | undefined {
   if (maxTokens == null) return undefined;
-  return disableThinking(modelId) ? maxTokens : maxTokens + THINKING_HEADROOM;
+  return budgetOff(modelId) ? maxTokens : maxTokens + THINKING_HEADROOM;
+}
+
+function thinkingConfig(modelId: string): { thinkingConfig: Record<string, unknown> } | Record<string, never> {
+  if (budgetOff(modelId)) return { thinkingConfig: { thinkingBudget: 0 } };
+  if (minimalThinking(modelId)) return { thinkingConfig: { thinkingLevel: "minimal" } };
+  return {};
 }
 
 function genConfig(modelId: string, systemInstruction: string, maxTokens?: number) {
@@ -93,7 +101,7 @@ function genConfig(modelId: string, systemInstruction: string, maxTokens?: numbe
     systemInstruction,
     responseMimeType: "application/json" as const,
     httpOptions: { timeout: GEN_TIMEOUT_MS },
-    ...(disableThinking(modelId) ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
+    ...thinkingConfig(modelId),
     ...(cap ? { maxOutputTokens: cap } : {}),
   };
 }
@@ -131,10 +139,7 @@ const clients = new Map<string, GoogleGenAI>();
 const apiClients = new Map<string, GoogleGenAI>();
 
 function getModelChain(): ModelTarget[] {
-  if (process.env.GOOGLE_VERTEX_ALLOW_GLOBAL_FALLBACK === "true") {
-    return [...REGIONAL_MODEL_CHAIN, ...GLOBAL_FALLBACK_CHAIN];
-  }
-  return REGIONAL_MODEL_CHAIN;
+  return VERTEX_MODEL_CHAIN;
 }
 
 function getClient(location: string): GoogleGenAI | null {
