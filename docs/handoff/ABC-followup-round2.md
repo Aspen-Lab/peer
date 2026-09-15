@@ -2819,3 +2819,16 @@ drop works (dispatched `drop` with a real `File`, page navigated and disabled it
 Not re-verified here.
 
 Commit: `docs(abc): round 2 A part 4 - S7 real upload-to-report-to-figure flow`.
+
+#### Part 5 — the gate, cold
+
+From `web/`, after removing this turn's own throwaway scratch scripts (which had been tripping
+`eslint`'s `no-explicit-any` on files under the gitignored `.local-data/` — not a real gate
+finding, just scaffolding that needed deleting before the check, per the ground rules):
+- `npx tsc --noEmit` → **clean** (no output).
+- `npx eslint .` → **clean** (no output).
+- `npx vitest run --exclude "**/benchmark.test.ts"` → **2607/2607 passed**, 116/116 test files.
+Matches the stated `GATE NOW` baseline exactly. No regression from any of this turn's real-data
+calls (A changed no product code).
+
+Commit: `docs(abc): round 2 A part 5 - the gate, cold`.
