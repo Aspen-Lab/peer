@@ -5059,3 +5059,128 @@ eslint clean · vitest 2639/2639 (2 new) — and committed. Live check on the re
 footer occurrences, 0 page-number splices in the extracted sections. C's revert-proof of the two
 tests was not observed by the manager (C died before logging it); A's closing round measures the
 outcome on the live report instead.
+
+### Round 4 — Agent A (closing)
+
+Branch confirmed `complimentary-enhancement-to-main-update` before starting; `git status` clean.
+Dev server `peer-web` confirmed up (`GET /` -> 200). No product code changed. Four throwaway
+vitest specs lived briefly under `web/src/lib/papers/__round4a_scratch_*.test.ts` (same technique
+as round 3: `vi.mock` wrapping the real, exported `verifyReportEvidence` to capture the
+pre-verification report alongside the post-verification one, calling through to the real
+implementation; plus two plain capture specs that dumped the real `getFullText()` corpus to this
+agent's own scratchpad directory, outside the repo, for direct classification with the real,
+unmodified `evidenceSupported`/`normalizeForMatch`) — deleted before this part's commit;
+`git status` clean again immediately after (confirmed below).
+
+#### Part 1 — S3 (full text + checker), closing measurement
+
+**Method note** (unchanged from round 3): the live route (`POST /api/papers/report`) returns only
+`droppedClaims` (a count) and `keyResults` (the survivors), never which claims were dropped. Every
+classification below was decided by running the real, exported `evidenceSupported`/
+`normalizeForMatch` against the real corpus (`getFullText()` output), not by inspection.
+
+**`openalex:W7207740551` (arXiv 2609.02668, physics) — two official route runs, as asked.**
+`getFullText()`: pageCount 20, source `pdf`, nothing clipped (unchanged from round 3).
+- **Route run 1**: `droppedClaims: 1`, `keyResults: 2` — **MEETS both halves.**
+- **Route run 2**: `droppedClaims: 0`, `keyResults: 3` — **MEETS both halves.**
+
+Both official runs now clear Ruling 10's target outright — round 3's miss (1 of 2 runs returning
+only 1 key result) did not recur on either run this round; 4-04's one-sentence prompt addition
+appears to be working.
+
+Three supplementary capture runs (same technique as round 3, same corpus, real checker) surfaced
+four distinct drop fragments, classified against the real corpus:
+1. `"Our key result is that multiple spectral features evolve systematically..."` (2 of 3 runs) —
+   never appears in the corpus in any form. **Correct drop** (standing, same fragment named in
+   rounds 2-3).
+2. `"The extracted Tc values trace the superconducting dome...reaching a maximum of 43 K...BPV
+   theory..."` (2 of 3 runs) — a fused, multi-source analytical sentence. **Correct drop**
+   (standing exclusion, reconfirmed).
+3. `"We find that...Δμ values for the AHTS with L/d = 0.67 and 0.78 lie above EL..."` (2 of 3
+   runs) — the corpus reads `"...Ld = 0.67and 0.78 lie above EL..."`, the same missing-space
+   character-loss defect already named in round 3 ("Ld = 0.44"/"0.67and" family). **Accepted
+   standing residual, not a new incorrect drop** — reconfirmed byte-for-byte the same defect.
+4. `"The extracted Δμ values evolve smoothly with increasing hole concentration, showing no
+   evidence of pinning."` (1 of 3 runs) — **NEW finding.** The real corpus reads `"The extracted
+   Δμ values [Fig. 3(b)] evolve smoothly with..."` — the model dropped a mid-sentence,
+   non-numeric figure cross-reference bracket. Directly confirmed both the whole-quote match and
+   the checker's own 80-char-prefix/40-char-suffix fallback fail: the bracket falls at character
+   ~25 of the quote, inside the 80-char prefix window, so even the "drops a mid-sentence citation"
+   fallback (built for exactly this shape) cannot bridge it. `CITATION_BRACKETS` only strips a
+   purely numeric bracket (`[12]`, `[3-5]`); `[Fig. 3(b)]` is a different, uncovered shape.
+   **Confirmed, new incorrect drop under Ruling 9's own definition** — the sentence boundary is
+   otherwise exact (the model neither truncated nor invented an ending), only a mid-sentence
+   reference marker is missing, the same forgiving intent `CITATION_BRACKETS` already expresses
+   for numeric refs, just an incomplete regex for this bracket shape.
+
+Per-run incorrect-drop count (capture runs, Ruling 9's counting rule): run A had 1 confirmed
+incorrect drop (item 4 above) alongside 2 correct drops — **at the ceiling, not over it**; runs B
+and C had 0 confirmed incorrect drops (their one non-correct drop each was item 3, the accepted
+residual). **Every sampled run (2 official + 3 capture) stays at or under Ruling 10's `≤ 1`
+incorrect-drop ceiling; both official runs meet `≥ 2 key results`.** This paper's target is now
+met cleanly, with one new, real, but currently-within-ceiling drop mechanism flagged below.
+
+**`openalex:W7212228226` (JECST, 34 pages) — two official route runs plus three supplementary
+capture runs (five total, to specifically answer the furniture-splice question).**
+- **Route run 1**: `droppedClaims: 0`, `keyResults: 2` — **MEETS.**
+- **Route run 2**: `droppedClaims: 1`, `keyResults: 2` — **MEETS** (the route never reveals which
+  claim; the capture runs below are the same-corpus parallel sample used to identify the shape).
+- **Capture runs (3)**: `{dropped: 0, keyResults: 4}`, `{dropped: 1, keyResults: 2}`,
+  `{dropped: 0, keyResults: 3}`.
+
+**The furniture-splice question, answered directly: the sentence A3-05 named
+(`"To compare Li metal transport kinetics against size, electrodes of identical thickness but
+different pore size were fabricated."`, dropped in 2 of 2 capture runs in round 3 because a page
+footer was spliced into it) was NOT dropped in any of the 5 runs sampled this round (2 official +
+3 capture).** Cross-checked directly against the real, fixed extractor: the "DOI: …" stamp and the
+bare page-number residual C's 4-03 write-up flagged as unresolved (`"...electrodes of identical 10
+thickness..."`) are both gone from the real JECST PDF's extracted text this round (grepped the
+corpus dump for both the DOI string and a bare "10" immediately after "identical" — zero hits) —
+**4-05's bare-page-number fix, banked by the manager, is confirmed working on the real PDF,
+live.** Tally for A's own naming convention: **furniture splice: 0** (down from 2 of 2 samples in
+round 3).
+
+The one capture-run drop found this round on this paper is a different sentence:
+`"In composite interlayers fabricated by piling up carbon spheres...the location and morphology of
+the plated Li shift with pore size."` — the corpus continues `"...shift with pore size (figure 4)
+[15]. In the largest-pore interlayer..."`; the model closed its quote with a period right after
+"pore size", where the source's real sentence-ending period comes after "[15]" — the same
+tail-elision-with-invented-punctuation shape already accepted in round 3 (the RHEED/wavelength-
+clause case). **Correct drop**, not a repeat of item 4 above (that one preserved the true sentence
+boundary; this one truncates it, exactly like the already-accepted precedent).
+
+**JECST verdict: closes cleanly.** Every one of 5 sampled runs meets `≤ 1 incorrect drop` (0
+incorrect drops confirmed in any run) and `≥ 2 key results` (every run: 2, 2, 4, 2, 3). The
+furniture splice this item was named for is gone, live, on the real PDF.
+
+**`arxiv:2501.00663` ("Titans…") — one official run, as asked.** The direct route
+(`GET /api/papers/arxiv:2501.00663`) answered 200 this round (not rate-limited, unlike rounds
+2-3), so this was used as the one official run instead of the `upload:` fallback (kept the
+`upload:a65e4a7d02784df1` run as a bonus comparison point, below).
+- **Route run** (real `arxiv:2501.00663` record, source `ar5iv`): `droppedClaims: 0`,
+  `keyResults: 3` — **MEETS both halves outright**, no drops to classify.
+
+**The zero-width-space question, answered directly against the real corpus.** Dumped the real
+`ar5iv` document for this exact paper and confirmed the artifact is still present verbatim:
+`"...learning rate of 4"` followed immediately by **U+200B** then `"e - 4 with cosine annealing
+schedule..."` (confirmed by reading the raw codepoints, not by inspection). Built the same
+sentence with an ordinary space in place of the U+200B and ran it through the real, unmodified
+`evidenceSupported` against the real corpus text: **returns `true`.** **4-02 CONFIRMED FIXED,
+live, on the exact real-corpus artifact Ruling 10 named** — this is the same character-level proof
+round 3 used to first find the defect, now run again post-fix.
+
+*Bonus comparison, not part of the official measurement*: the same paper via the `upload:` record
+(PDF-sourced, not ar5iv/HTML — a different extraction path the zero-width defect does not apply
+to) returned `droppedClaims: 2`, `keyResults: 3` on one run — still meets `≥ 2 key results`; not
+classified further since the ar5iv route (the shape this item targets) already met the target
+outright and this is a different `sourceKind`.
+
+**S3 verdict, closing: MEETS Ruling 10's target on all three papers, on every officially-required
+run measured this round.** One new drop mechanism was found (mid-sentence, non-numeric figure
+cross-reference brackets, e.g. `[Fig. 3(b)]`) — real and reproducible when it occurs, but it never
+pushed any sampled run over the `≤ 1` ceiling, and Ruling 10's own target is explicitly a ceiling,
+not a zero-tolerance bar. Recommending it join the standing-exclusions family (same shape as the
+`CITATION_BRACKETS` regex's own stated intent, just an uncovered bracket format) rather than
+opening a new round — see the difference list.
+
+Commit: `docs(abc): round 4 A part 1 - S3 closing measurement`.
