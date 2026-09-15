@@ -4660,3 +4660,98 @@ words into the same words).
 `locate`, and `placeEvidence` (client-side ink-mark placement) — all four already go through the
 identical fold pipeline for every other existing fold, so this is the same low-risk, symmetric-
 fold shape as the two prior accepted rulings (1-17, 2-02), not a new mechanism.
+
+#### Item 4-03 — A3-05: page-furniture spliced into a sentence ("furniture splice")
+
+**Files**: `web/scripts/extract_pdf_text.py` (the fix belongs here — see below), read alongside
+`web/src/lib/papers/pdf-text.ts` (confirmed it does NOT belong there). **Classification: EXTRA**
+— an injected line that does not belong in the corpus at all; the surrounding sentence is
+perfectly correct once the injected line is removed. Not wrong data, not missing data.
+
+**Verified by execution against the real PDF.** Downloaded
+`https://www.jecst.org/upload/pdf/jecst-2026-00892.pdf` into `web/.local-data/` (34 pages,
+matches A's page count; deleted after this check, never committed), ran the actual
+`scripts/extract_pdf_text.py` against it unmodified. Found the exact "DOI:
+10.33961/jecst.2026.00892" line, each time prefixed by an incrementing page number, spliced into
+the Abstract/Introduction/Conclusions section text on at least 10 distinct pages (pages 2 through
+11 confirmed directly in the script's own output before a Windows console encoding limit cut the
+listing short — a display artifact of the check script, not a limit on the underlying data), e.g.:
+`"...s against size, electrodes of identical 10 DOI: 10.33961/jecst.2026.00892 thickness but
+different pore size we..."` — byte-for-byte the sentence A's round-3 finding named.
+
+**Root cause**, read from the script: `extract_page_lines` (lines 140-158) returns one `(bbox,
+text)` tuple per visually-distinct line, including running header/footer lines, with no notion of
+"this is furniture." `segment_into_sections` (lines 181-245) then walks a flattened, cross-page
+list of these lines in strict reading order and blindly string-joins every non-heading line into
+whichever section bucket is currently open (`bucket["text"] + " " + text`, line 242) — a footer
+line, sorted by its low-page y-position immediately after the last body line of page N, followed
+immediately by page N+1's first body line, lands verbatim in the middle of the flowing text with
+no sentence-boundary awareness at all.
+
+**Where the fix belongs: the Python script, not `pdf-text.ts`.** `pdf-text.ts`'s
+`ExtractorSection`/`normalize()` (lines 27-32, 186-215) only ever see the ALREADY-FLATTENED
+`{heading, canonical, text}` per section, with all per-line/per-page structure gone by the time
+the JSON crosses the process boundary — there is no way to tell, from the TypeScript side, that a
+given substring came from "page 4" vs. "page 5", so a repetition-across-pages rule cannot be
+implemented there at all. The Python script is the only place `pages_lines` (page-indexed) still
+exists.
+
+**Fix direction**: add a new function, e.g. `find_running_furniture(pages_lines) -> set[str]`,
+called once right after `pages_lines` is built in `extract_text` (line 366) and *before*
+`find_heading_hits`/`segment_into_sections`/`extract_figure_captions` (lines 367-369) ever see it:
+1. A small helper `_strip_page_number(text)` strips at most one leading run of 1-4 digits +
+   whitespace, and at most one trailing run of the same shape (`^\d{1,4}\s+` / `\s+\d{1,4}$`),
+   leaving `"DOI: 10.33961/jecst.2026.00892"` from `"4 DOI: ..."` (and, symmetrically, from a
+   hypothetical trailing-number variant).
+2. For each page, collect the SET of distinct stripped keys seen on that page (count a line
+   repeated *within* one page once, so the rule matches "≥ 3 pages", not "≥ 3 occurrences").
+3. Any key seen on ≥ 3 distinct pages, with the stripped key at least ~6 characters (a floor
+   against a coincidentally-short repeat swallowing something meaningful), is furniture; collect
+   the set of ORIGINAL (unstripped) line texts that produced it.
+4. Filter every page's line list to drop lines whose exact text is in that furniture set, before
+   handing `pages_lines` to the three downstream functions — a single injection point right after
+   line 366, touching none of their own logic.
+
+Name for this class, per Ruling 10, used verbatim in the new function's docstring/comments so A's
+tally can grep it: **furniture splice**.
+
+**Protective test — where and what it looks like.** `web/src/lib/papers/pdf-text.test.ts`, inside
+(or beside) the existing `describe.skipIf(!PYTHON_AVAILABLE)("extract_pdf_text.py's extract_title
+— 2-06 synthetic layouts", ...)` block (lines 66-131), reusing its own `buildPdf(script,
+fileName)` helper (lines 77-81) exactly as its two existing tests do — this is the established,
+already-precedented way this repo tests the Python script's real behavior (there is no Python
+test runner wired up at all; confirmed no `test_*.py`/`conftest.py` anywhere in the repo). Build a
+synthetic 3-page PDF via PyMuPDF: page 1 carries an "Introduction" heading plus body text ending
+mid-sentence ("...electrodes of identical"), followed on that same page by a footer line ("1 DOI:
+10.1234/test.0001"); pages 2 and 3 each repeat the identical footer line with their own page
+number ("2 DOI: ...", "3 DOI: ...") and continue the same sentence across the page break
+("thickness but different pore size were fabricated."). Assert the returned `doc.sections`
+introduction text contains the unbroken sentence "electrodes of identical thickness but different
+pore size were fabricated." and does NOT contain the substring "DOI: 10.1234/test.0001" anywhere.
+
+**Risk named by Ruling 10 — a real sentence repeating verbatim on ≥ 3 pages.** Not plausible for
+body prose: an author repeating one full sentence three separate times across three different
+pages essentially never happens outside intentional running headers/footers/titles. The fix
+compares WHOLE lines, not substrings, so a false positive needs an entire line's content to
+recur verbatim with only a leading/trailing numeric token varying — a narrow enough shape that
+ordinary prose cannot accidentally satisfy it. A repeated FIGURE CAPTION is the one plausible
+near-miss Ruling 10 names directly — but a caption is only ever emitted once per figure by
+`extract_figure_captions` (lines 248-281), keyed off the figure-number regex on its own opening
+line, not by repeated-body-line matching, and ordinary papers do not print the identical caption
+text a second time as a body line on 3 separate pages. The 6-character floor and the
+≥ 3-distinct-page requirement together bound the remaining risk to near zero for real papers; if
+a future pool paper needs a higher floor, the constant is a one-line change in one place.
+
+**Tests at risk** (grepped `extract_pdf_text.py`, `pages_lines`, `segment_into_sections` across
+the whole suite): no existing test — Python or TypeScript — exercises `segment_into_sections`'s
+line-joining behavior with a repeated running-header shape; the only two existing Python-script-
+level tests (`pdf-text.test.ts` lines 83-130) test `extract_title`'s page-1 stamp filtering, a
+different function entirely, untouched by this change. Zero regression risk; purely additive.
+
+**Blast radius**: the new filter runs once, early, on `pages_lines`, before every downstream
+consumer (`find_heading_hits`, `segment_into_sections`, `extract_figure_captions`) — all three
+benefit from furniture removal (a repeated footer line can no longer be misread as a heading
+candidate, or spliced into a caption merge, either), not only the one splice A found. No change
+to `pdf-text.ts`, no change to the JSON shape `extract_text` returns (`title`/`sections`/
+`figureCaptions`/`pageCount`/`pagesRead`/`page1Text`/`reason` all keep their existing shape) — no
+TypeScript-side change is needed at all.
