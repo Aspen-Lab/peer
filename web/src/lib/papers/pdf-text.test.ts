@@ -129,3 +129,62 @@ doc.save(sys.argv[1])
     expect(result.doc?.title).not.toBeNull();
   });
 });
+
+// 4-03 (Ruling 10, A3-05): protective test for `find_running_furniture` in
+// extract_pdf_text.py — a running page-number+DOI footer line, repeated
+// verbatim (modulo its own incrementing page number) on every page, must
+// never be spliced into the flowing sentence that crosses the page break
+// around it. Same real-PDF, same-Python-level test shape as the 2-06 block
+// above (there is no Python test runner wired up in this repo).
+describe.skipIf(!PYTHON_AVAILABLE)("extract_pdf_text.py's furniture-splice removal — 4-03", () => {
+  let tempDir: string;
+
+  beforeAll(async () => {
+    tempDir = await mkdtemp(path.join(tmpdir(), "peer-pdffurniture-"));
+  });
+
+  afterAll(async () => {
+    await rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
+  });
+
+  async function buildPdf(script: string, fileName: string): Promise<string> {
+    const outputPath = path.join(tempDir, fileName);
+    await execFileAsync("python", ["-c", script, outputPath]);
+    return outputPath;
+  }
+
+  it("removes a repeated page-number+DOI footer instead of splicing it mid-sentence", async () => {
+    const pdfPath = await buildPdf(
+      `
+import sys
+import pymupdf as fitz
+doc = fitz.open()
+
+page1 = doc.new_page()
+page1.insert_text((72, 72), "Introduction", fontsize=14, fontname="helv")
+page1.insert_text((72, 100), "Body text discusses electrodes of identical", fontsize=11, fontname="helv")
+page1.insert_text((72, 800), "1 DOI: 10.1234/test.0001", fontsize=8, fontname="helv")
+
+page2 = doc.new_page()
+page2.insert_text((72, 72), "thickness but different pore size were fabricated.", fontsize=11, fontname="helv")
+page2.insert_text((72, 800), "2 DOI: 10.1234/test.0001", fontsize=8, fontname="helv")
+
+page3 = doc.new_page()
+page3.insert_text((72, 72), "Further discussion continues on this page.", fontsize=11, fontname="helv")
+page3.insert_text((72, 800), "3 DOI: 10.1234/test.0001", fontsize=8, fontname="helv")
+
+doc.save(sys.argv[1])
+`,
+      "furniture-splice.pdf",
+    );
+
+    const result = await extractPdfTextFromPath(pdfPath);
+
+    expect(result.ok).toBe(true);
+    const introduction = result.doc?.sections.find((section) => section.canonical === "introduction");
+    expect(introduction?.text).toContain(
+      "electrodes of identical thickness but different pore size were fabricated.",
+    );
+    expect(introduction?.text).not.toContain("DOI: 10.1234/test.0001");
+  });
+});

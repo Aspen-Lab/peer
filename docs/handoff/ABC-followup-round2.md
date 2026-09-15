@@ -4964,3 +4964,89 @@ dependency. TODO for A: the closing measurement question named in Ruling 10 — 
 any real ar5iv-sourced paper's) zero-width-space case now match on a live deep-report run?
 
 Commit: `fix(papers): fold zero-width characters to a space in the evidence checker`.
+
+#### Item 4-03 — A3-05: furniture-splice removal lands, but does not fully close on the real JECST PDF — record, do not widen
+
+**Change**: `web/scripts/extract_pdf_text.py` — new `find_running_furniture(pages_lines) ->
+set[str]` and its `_strip_page_number` helper, called once in `extract_text` right after
+`pages_lines` is built and before `find_heading_hits`/`segment_into_sections`/
+`extract_figure_captions` ever see it, per B's fix direction exactly: strip at most one
+leading/trailing run of 1-4 digits + whitespace from each line, collect the set of distinct
+stripped keys per page (a line repeated twice on one page counts once), and drop every ORIGINAL
+line whose stripped key (>= 6 chars) recurs on >= 3 distinct pages. Named "furniture splice" in the
+docstrings, matching Ruling 10's naming for A's tally.
+
+**Tests added** (`pdf-text.test.ts`): one synthetic 3-page-PDF test in a new
+`describe.skipIf(!PYTHON_AVAILABLE)` block next to the existing 2-06 one, reusing its own
+`buildPdf` helper exactly as B specified — page 1 carries an "Introduction" heading, body text
+ending mid-sentence, and a footer line ("1 DOI: ..."); pages 2-3 continue the sentence and repeat
+the footer with their own page number. Asserts the introduction text contains the unbroken
+sentence and never contains "DOI: 10.1234/test.0001".
+
+**Proved the new test tests the fix**: `git stash push -- scripts/extract_pdf_text.py` (source
+only), ran `npx vitest run src/lib/papers/pdf-text.test.ts` — the new test failed with the received
+text showing the exact splice shape byte-for-byte (`"...electrodes of identical 1 DOI:
+10.1234/test.0001 thickness..."`), the other 3 tests stayed green. `git stash pop` restored the
+source; reran — 4/4 green.
+
+**Gate**: `npx tsc --noEmit` clean · `npx eslint .` clean · `npx vitest run --exclude
+"**/benchmark.test.ts"` → **2637/2637** (1 more than the post-4-02 2636).
+
+**Important finding — the fix is a real, validated improvement, but does NOT fully close A3-05 on
+the actual JECST PDF. Recording per the standing rule ("stop and record, never widen inline"),
+not fixing further.** Downloaded the real PDF (`https://www.jecst.org/upload/pdf/jecst-2026-00892.pdf`,
+temporary, deleted before this commit, never committed) and ran the now-fixed script against it
+directly. Confirmed:
+- The `"DOI: 10.33961/jecst.2026.00892"` line itself is now fully removed from every section
+  (grepped the extractor's JSON output for the DOI string — zero hits, down from 10+ per B's
+  round-4 finding). This part of the splice is genuinely gone.
+- **But `extract_page_lines` on the real PDF emits the page number as its OWN separate line**,
+  not glued to the "DOI: ..." text on one line as B's fix direction (and the round-3 finding's
+  own written reconstruction, `"...identical 10 DOI: 10.33961... thickness..."`) assumed — direct
+  inspection confirms PyMuPDF returns two adjacent lines per page: `"10"` then `"DOI:
+  10.33961/jecst.2026.00892"` as separate `(bbox, text)` tuples, not one joined string. A bare
+  page-number line (`"2"`, `"3"`, … `"34"`) is different text on every page by construction — it
+  can never satisfy "repeats verbatim on >= 3 pages," and correctly does not (its stripped key
+  equals itself, since `_strip_page_number`'s regex requires the digit run to be adjacent to
+  *other* whitespace-separated content to strip, which a bare number has none of) — so it is not,
+  and per the standing "no fuzzy matching" rule for this item, must not be made to be, treated as
+  furniture by this algorithm. Residual effect on the real text: the Introduction section now
+  reads `"...electrodes of identical 10 thickness but different pore size were fabricated..."`
+  (the DOI phrase gone, a single bare page number left mid-sentence).
+- **Directly confirmed this residual still breaks the exact evidence match A3-05 was named for**:
+  ran the real, unmodified `evidenceSupported` (throwaway `tsx` script under `web/.local-data/`,
+  deleted before this commit) with the model's clean quote ("To compare Li metal transport
+  kinetics against size, electrodes of identical thickness but different pore size were
+  fabricated.") against both corpus forms — `false` with the residual `"10"` present, `true`
+  against a control corpus with it removed. **So A3-05's own named target sentence would still be
+  an incorrect drop on a live run**, just via a narrower defect (one bare digit) than before (a
+  full DOI stamp).
+
+**Why not widened inline**: the standing rule for this exact item ("4-03's repeat threshold stays
+'verbatim after stripping a leading/trailing page number, on >= 3 pages' — no fuzzy matching")
+pre-authorizes exactly this call — a bare, incrementing page-number line cannot be matched by a
+verbatim-repeat rule without inventing a new, differently-shaped heuristic (e.g. "a short
+digit-only line adjacent to an already-furniture line," or "a digit-only line within the
+document's own page-count range") that B never specified and this round's guide does not cover.
+That is a genuinely different rule, not a parameter tweak, so it is `POLICY — manager decides`,
+not something to add unilaterally.
+
+**Live check**: `POST /api/papers/report {deepReport:true}` on `openalex:W7212228226` (JECST),
+real paper record read live from `GET /api/papers/openalex:W7212228226`, no `llmOverride` (server's
+own Vertex provider), ~19s: `droppedClaims: 3`, `keyResults: 3` (`skim: 1`, `methods: 1`). Kept/
+dropped counts only, per this round's live-check scope — model variance across runs means this
+single droppedClaims count cannot by itself confirm or rule out whether the bare-page-number
+residual above was the specific cause of any of the 3 drops on this run (round 3's own two capture
+runs on this same paper varied: 0 dropped on the official route run, 1 dropped — the furniture
+sentence — on both supplementary capture runs). The direct, non-model-variance check above (real
+extractor + real `evidenceSupported`, no LLM involved) is the trustworthy signal for this item.
+
+**TODO for A's closing measurement, worded precisely per the finding above**: "does JECST's report
+no longer show the furniture splice drop?" — **answer once, in plain terms: the DOI-stamp half of
+the splice is gone; a bare page-number digit can still be spliced into the same sentence and can
+still cause the same claim to be dropped.** Not a clean close. The manager/A should decide whether
+this residual is accepted as a narrower, separately-tracked defect (e.g. "furniture splice — bare
+page number" as its own named sub-case) or whether B should be asked for a new, explicitly-scoped
+rule for a standalone page-number line in a follow-up round.
+
+Commit: `fix(papers): drop repeated page-footer furniture before it splices into PDF section text`.

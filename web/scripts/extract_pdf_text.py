@@ -158,6 +158,62 @@ def extract_page_lines(page: fitz.Page) -> list[tuple[fitz.Rect, str]]:
     return lines
 
 
+_LEADING_PAGE_NUMBER_RUN_RE = re.compile(r"^\d{1,4}\s+")
+_TRAILING_PAGE_NUMBER_RUN_RE = re.compile(r"\s+\d{1,4}$")
+
+# 4-03 (Ruling 10, A3-05): a running header/footer line sorts by page
+# position immediately next to real body text (its low y-position on page N,
+# right before page N+1's first line) and gets string-joined straight into
+# the flowing sentence by segment_into_sections below, with no notion that
+# it is furniture rather than prose. The only thing that reliably tells a
+# repeated footer/header apart from ordinary prose is that the SAME line
+# (modulo its own incrementing page number) recurs verbatim across several
+# pages of the same document — real body text essentially never does.
+# Named "furniture splice" per Ruling 10, used by find_running_furniture
+# below and by pdf-text.test.ts's synthetic-PDF test for this class.
+FURNITURE_MIN_KEY_CHARS = 6
+FURNITURE_MIN_PAGES = 3
+
+
+def _strip_page_number(text: str) -> str:
+    """Strip at most one leading and one trailing run of 1-4 digits plus
+    whitespace — a running header/footer's own incrementing page number —
+    leaving the stable text underneath for repetition comparison. "4 DOI:
+    10.1/x" and "DOI: 10.1/x 5" both strip to "DOI: 10.1/x"."""
+    stripped = _LEADING_PAGE_NUMBER_RUN_RE.sub("", text, count=1)
+    stripped = _TRAILING_PAGE_NUMBER_RUN_RE.sub("", stripped, count=1)
+    return stripped
+
+
+def find_running_furniture(pages_lines: list[list[tuple[fitz.Rect, str]]]) -> set[str]:
+    """Return the set of ORIGINAL line texts that are running-header/footer
+    furniture: a line whose text, after stripping a leading/trailing page
+    number, repeats verbatim (that stripped form) on at least
+    FURNITURE_MIN_PAGES distinct pages. A line repeated more than once on the
+    SAME page counts once for that page, so the rule matches "on >= 3 pages",
+    not "on >= 3 occurrences". A short stripped key (< FURNITURE_MIN_KEY_CHARS)
+    is never enough on its own — a coincidentally-short repeat (a lone page
+    number, a bare "-") must not swallow something meaningful."""
+    pages_with_key: dict[str, set[int]] = {}
+    key_to_originals: dict[str, set[str]] = {}
+    for page_index, lines in enumerate(pages_lines):
+        seen_this_page: set[str] = set()
+        for _rect, text in lines:
+            key = _strip_page_number(text)
+            if len(key) < FURNITURE_MIN_KEY_CHARS:
+                continue
+            seen_this_page.add(key)
+            key_to_originals.setdefault(key, set()).add(text)
+        for key in seen_this_page:
+            pages_with_key.setdefault(key, set()).add(page_index)
+
+    furniture: set[str] = set()
+    for key, pages in pages_with_key.items():
+        if len(pages) >= FURNITURE_MIN_PAGES:
+            furniture.update(key_to_originals[key])
+    return furniture
+
+
 def find_heading_hits(pages_lines: list[list[tuple[fitz.Rect, str]]]) -> list[HeadingHit]:
     hits: list[HeadingHit] = []
     for page_index, lines in enumerate(pages_lines):
@@ -364,6 +420,18 @@ def extract_text(pdf_path: str, max_pages: int) -> dict:
         total_pages = len(doc)
         page_count = min(total_pages, max_pages)
         pages_lines = [extract_page_lines(doc[i]) for i in range(page_count)]
+
+        # 4-03: drop running-header/footer furniture before anything below
+        # ever sees it — a single injection point, so a repeated footer line
+        # can no longer be misread as a heading candidate, spliced into a
+        # caption merge, or joined mid-sentence into body text.
+        furniture = find_running_furniture(pages_lines)
+        if furniture:
+            pages_lines = [
+                [(rect, text) for rect, text in lines if text not in furniture]
+                for lines in pages_lines
+            ]
+
         hits = find_heading_hits(pages_lines)
         sections = segment_into_sections(pages_lines, hits)
         captions = extract_figure_captions(pages_lines)
