@@ -5278,3 +5278,111 @@ From Part 1's five live deep-report responses (`W7207740551` x2, `W7212228226` x
 **S5/S6/S7: no regression.** Same result as rounds 2 and 3's confirmations.
 
 Commit: `docs(abc): round 4 A part 3 - S5/S6/S7 regression spot-check`.
+
+#### Part 4 — the gate, cold
+
+From `web/`, after confirming `git status` clean (all four throwaway vitest specs from Parts 1-2
+deleted, nothing left under the tracked tree):
+- `npx tsc --noEmit` -> **clean** (no output).
+- `npx eslint .` -> **clean** (no output).
+- `npx vitest run --exclude "**/benchmark.test.ts"` -> **2639/2639 passed**, 117/117 test files.
+
+Matches the stated `GATE NOW` baseline exactly — no regression from any of this round's real-data
+calls or measurement scripts (A changed no product code).
+
+Commit: `docs(abc): round 4 A part 4 - the gate, cold`.
+
+#### Difference list (round 4, closing)
+
+**All six of round 3's open items (A3-01 through A3-06) verified against the returned/rendered
+result, not the commit message:**
+- **A3-01 (the model sometimes returns one key result): CLOSED.** Both official runs on
+  `W7207740551` this round returned `keyResults: 2` and `3` (round 3: 1 and 2, one miss). Every
+  other paper's official/capture runs this round also met `≥ 2`. 4-04's one-sentence prompt
+  addition is working as intended (accepted model-variance cost, per Ruling 10 — not a checker
+  fix, and none was claimed).
+- **A3-02/A3-03 (a Semantic Scholar 429 masking the publisher branch's own outcome): CLOSED,
+  live.** Both named Springer papers (`W7212288571`, `W7204990919`) now return
+  `source_unavailable` with the exact bounce-page reason, never `rate_limited`, even though S2 was
+  throttled on 16 of 17 lookups this round (now folded into `reason`, never promoted to `status`).
+  Bonus: the same fix also resolved a third paper (`W7212165100`, Nature Energy) that was
+  `rate_limited` in rounds 2-3.
+- **A3-04 (zero-width characters survive every fold): CLOSED, live, on the real artifact.**
+  Directly confirmed against the real `ar5iv` corpus for `arxiv:2501.00663`: the exact
+  `"learning rate of 4[ZWSP]e - 4"` fragment, with an ordinary space in place of the zero-width
+  space, now returns `true` from the real, unmodified `evidenceSupported`. The paper's one
+  official run this round dropped 0 claims outright.
+- **A3-05 (page furniture spliced into a sentence): CLOSED, live, on the real JECST PDF.** The
+  exact sentence A3-05 was named for (`"...electrodes of identical thickness but different pore
+  size were fabricated."`) was not dropped in any of 5 sampled runs this round (2 official + 3
+  capture), versus 2 of 2 in round 3. Both the DOI-stamp splice (4-03) and the bare-page-number
+  residual C's own write-up flagged as unresolved (4-05, banked by the manager) are confirmed gone
+  from the real extracted text — furniture splice tally: **0** (round 3: 2 of 2 samples).
+- **A3-06 (1 of 17 figures): ACCEPTED AS HONEST, per Ruling 10, now that A3-02/A3-03 make the
+  Springer statuses observable.** Both Springer papers show the honest bounce-page status; the
+  found-figure count itself is unchanged (still the one real, verified, non-fabricated figure) —
+  exactly the outcome Ruling 10 said would close this item.
+
+**New findings this round, both informational, neither blocking closure:**
+- **A4-01 — S3, a new but currently within-ceiling incorrect-drop mechanism: mid-sentence,
+  non-numeric figure cross-reference brackets (e.g. `[Fig. 3(b)]`, `(figure 4)`) are not covered
+  by `CITATION_BRACKETS`'s numeric-only regex. REAL DATA, informational.** Confirmed once on
+  `W7207740551` (1 of 3 capture runs) as a genuine incorrect drop (sentence boundary preserved,
+  only the bracket missing); confirmed once on `W7212228226` as a correct drop instead (the
+  bracket sat at the end of the sentence, so the model's elision changed the sentence boundary too
+  — the already-accepted RHEED-shaped tail-elision pattern). Never pushed any sampled run over
+  Ruling 10's `≤ 1` ceiling. Recommend folding into the standing-exclusions list (same family as
+  the `CITATION_BRACKETS` fold's own stated intent, just an incomplete shape) rather than opening
+  a new round for it.
+- **A4-02 — S4, a bonus fix generalization: `W7212165100` (Nature Energy) also resolves via 4-01.
+  REAL DATA, informational, does not change any target.** Not named in Ruling 10; noted for
+  completeness.
+
+**Standing exclusions, re-listed by name (unchanged in kind from rounds 2-3):**
+- The JECST PDF has no embedded images (honest absence, `no_figures`).
+- A model's own synthesis/paraphrase (e.g. the Tc/BPV-theory sentence, the "multiple spectral
+  features" framing sentence, the "piling up carbon spheres...(figure 4)" tail elision) is a
+  **correct drop**, not a defect.
+- The "Ld = 0.44" / "0.67and" missing-character residuals (PyMuPDF dropping a single character
+  during extraction) are **accepted PDF-extraction residuals**, not fixable without loosening the
+  matcher into a similarity relaxation.
+- Semantic Scholar 429s are an **accepted cost**, tallied every round (`reason`, per 4-01's
+  design) — this round: 16 of 17 lookups throttled, 0 of 17 promoted to a final `rate_limited`
+  status.
+- Springer/Wiley/ACS/Elsevier/Nature bot walls and paywalls are **honest**
+  `source_unavailable`/`paywalled` statuses — Peer does not scrape past them.
+- **1 of 17 pool papers showing a figure is accepted as honest per Ruling 10 (A3-06)** — the pool
+  is mostly paywalled/bot-walled/figure-less papers; Peer never fabricates a figure.
+- `benchmark.test.ts` is excluded from the gate (live-network test on dead code).
+- Report tier is `large` (3.6 Flash) by default; not a loop item.
+- Vertex is global-endpoint only; no regional fallback.
+- Papers never web-search (Vertex AI Search / Tavily); events/jobs code is dead, not wired back.
+- **New this round, recommended for this same list**: mid-sentence, non-numeric figure
+  cross-reference brackets (A4-01 above) — real, but within Ruling 10's own ceiling.
+
+#### Gate line
+
+`GATE (0 open): MET.` All six of round 3's open items (A3-01 through A3-06) are confirmed closed,
+live, against the returned result — not the commit message. S3 meets Ruling 10's per-paper target
+on every officially-required run measured this round, on all three papers, including the two
+specific named questions (JECST's furniture splice: confirmed gone; 2501.00663's zero-width case:
+confirmed matching, directly, against the real corpus). S4 meets Ruling 10's target: both named
+Springer papers show the honest bounce-page status live, and the round-3 rate-limit escalation is
+fully resolved (0/17 final `rate_limited`, down from 3/17). S5, S6 and S7 remain fully closed, with
+no regression this round (Part 3). The gate itself is clean, cold: `npx tsc --noEmit` clean,
+`npx eslint .` clean, `npx vitest run --exclude "**/benchmark.test.ts"` -> 2639/2639, matching the
+stated baseline exactly. One new finding (A4-01, non-numeric figure cross-reference brackets)
+stays within Ruling 10's own explicit ceiling on every sampled run and is recommended for the
+standing-exclusions list rather than blocking closure.
+
+**What the manager should eyeball in the browser** (unchanged scope from round 3, plus this
+round's new items, none of them A's to do): the two uploaded titles rendering correctly on their
+own reading pages (not just in the API response); the blank PDF's reading-page message rendering
+directly with no spinner; the "matrix" scramble effect actually firing on a fresh generation and
+staying plain on a cache hit (S5, code-confirmed only all four rounds); a visual spot-check that
+`/papers/openalex:W7212288571` and `/papers/openalex:W7204990919` (the two Springer papers) now
+show the honest "could not find a figure" treatment rather than a stale cached blank state (server
+caches are 1h in `full-text.ts` — a hard refresh may be needed to see the post-fix figure lookup on
+a paper visited earlier this session).
+
+Commit: `docs(abc): round 4 A - difference list, gate line, §1 handoff`.
