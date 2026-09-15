@@ -321,7 +321,8 @@ function buildPass2Prompt(args: {
         keyResults: [
           {
             title: "short label",
-            detail: "one concrete result sentence grounded in the supplied text",
+            detail:
+              "one concrete result sentence grounded in the supplied text (report two to four key results when the paper states at least two distinct findings; a single-finding paper may report just one)",
             evidence: evidenceRule,
             novelty: "one sentence saying what specifically is new about THIS result compared to prior work",
           },
