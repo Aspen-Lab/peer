@@ -81,57 +81,22 @@ browser, run the reports), then report to the user in plain language and stop th
 
 ```
 ROUND:            1
-WHOSE TURN:       C (mid-turn — items 1-01..1-13 landed, working 1-14 next)
-STOPPED BECAUSE:  IN PROGRESS @ 2026-09-15 (checkpoint edit, not a stop — see DONE below)
-STATUS:           C working B's guide top to bottom, one commit per item, per Ruling 5's order.
-                   Landed so far: 1-01 (eslint), 1-02..1-09 (S6), 1-10..1-13 (S5). Gate green after
-                   every item. **Deviation from B's guide, logged per Ruling 5**: 1-12's suggested
-                   code (`useEffect(() => { if (model.fresh...) setRevealingReportKey(...) }, ...)`)
-                   reintroduces the exact `react-hooks/set-state-in-effect` violation 1-01 just
-                   fixed, one file over — landed instead as a conditional setState call during
-                   render (React's own "adjust state when a prop changes" pattern), guarded so it
-                   fires once per fresh report key. Confirmed clean by the gate. Full detail in §4.
-OPEN ITEMS:       S3 S4 S5(landed, unverified in browser) S6(landed) S7 — S4/S3/S7 still ahead
-GATE (0 open):    NOT MET (S3, S4, S7 remain)
+WHOSE TURN:       C (resume — items 1-01..1-17 and 1-22 landed; 1-18 is a note; pick up at 1-19)
+STOPPED BECAUSE:  out of budget @ 2026-09-15 ~07:30 UTC (Sonnet session limit), items 1-01..1-17
+                   + 1-22 landed and committed, 1-19 1-20 1-21 and 1-23..1-33 unstarted
+STATUS:           C's first turn landed item 0 (eslint), all of S6, all of S5, and S3 (1-14..1-17)
+                   plus 1-22, in 5 commits (6e167a7 aacdce5 d32af5d d378151 a31c16f). The manager
+                   re-ran the gate cold after the death: tsc clean · eslint clean · vitest
+                   2559/2559. Working tree clean. Deviation logged by C (1-12: conditional setState
+                   during render instead of an effect). C's own findings outside the guide are in
+                   §4 (html-text.ts caps; figures/pdf-extract.ts dead paywall check) — ruled in §1i.
+OPEN ITEMS:       S3(landed, unverified live) S4 S5(landed, unverified in browser) S6(landed) S7
+GATE (0 open):    NOT MET (S4 and S7 code still ahead; S3/S5/S6 need A's re-measure)
 
-DONE:      A measured (round 1, see above). B investigated every item by reading the exact code
-           plus real execution (source-link/full-text probes on 3 no_full_text DOIs, a live
-           two-pass LLM run against the real Vertex provider for the checker, figure-candidate-
-           pool probes for 2 source_unavailable + 2 no_figures papers) and wrote a numbered,
-           dependency-ordered fix guide with file/line references, classifications, fix
-           directions, empty-state answers, tests-at-risk (by grep) and blast radius for every
-           entry. See §4 "Round 1 — Agent B", parts 1-4.
-KEY FINDINGS (B):  (1) the paywall status-code check in both full-text.ts and figures/extract.ts
-           is dead code — a real 401/402/403/451 never reaches it because the fetch helper
-           already returned on `!res.ok` one branch earlier, so Wiley/ACS's genuine 403s are
-           misreported as "no legal source" instead of "paywalled" (1-16, 1-22). (2) One of the
-           two live checker drops on W7207740551 was a PDF-extraction artifact (PyMuPDF reorders
-           an inline "L/d" fraction into "Ld ⁄"), not a paraphrase — a text-cleanup fix, not a
-           matching-fuzziness one (1-17, flagged POLICY on how much effort this narrow case is
-           worth). The other drop was genuine model synthesis with no verbatim source anywhere
-           (correctly dropped — do not "fix"). (3) Nature Energy's figure fetch never reaches the
-           real article page — it stops on an IDP "transit" bounce stub a plain `curl -L` gets
-           past; the current `no_figures` message is factually wrong for that host (1-21).
-           (4) Semantic Scholar's figure endpoint 429s on both source_unavailable test DOIs (no
-           API key configured, no shared throttle across a briefing's concurrent lookups) —
-           flagged POLICY (register a key vs. add a queue) (1-20). (5) `Paper` has no
-           `sourceLinks`/deep `pageCount` field the S7 spec text assumes; 1-30 maps the upload
-           record onto the existing `linkPaper`/`doi` fields instead and adds one small optional
-           field (`pageCount`) rather than a competing parallel shape.
-POLICY — manager decides (from B, this round): (a) 1-17's PDF fraction-artifact text-cleanup —
-           worth the effort now, or accept the small residual drop rate it causes; (b) 1-20's
-           Semantic Scholar throttle — obtain an API key vs. build a request queue, or both;
-           (c) still open from A's round: the pre-existing eslint error's gate status (Ruling 1,
-           §1b, already resolved this as "item 0 of every C turn" — restated here only because
-           the gate line below still shows it NOT clean until C lands 1-01).
-GATE NOW:  unchanged from A's cold run (B changed no code): tsc clean · vitest 2544/2544 · eslint
-           NOT clean (`quiz.tsx:46`, fix is 1-01).
-TODO:      **C works §4 "Round 1 — Agent B"'s numbered guide, 1-01 through 1-33, top to bottom,
-           one commit per item**, per Ruling 5 (§1f) and the
-           dependency ordering B built into the numbering (shared helpers before dependents,
-           prompts before UI, storage before routes before pipelines before the button). Run the
-           gate after every item. If C runs out of budget, stop at an item boundary, mark
-           `PARTIAL`, and say exactly which item is next.
+DONE:      1-01, 1-02..1-09, 1-10..1-13, 1-14..1-17, 1-22.
+GATE NOW:  tsc clean · eslint clean · vitest 2559/2559 (manager, cold, 2026-09-15 ~09:30 UTC).
+TODO:      C resumes at 1-19 (og:image candidate + honesty guard), 1-20 (S2 queue, §1h), 1-21
+           (bounce-page retry), then S7 1-23..1-33 in order. Then hand to A.
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
@@ -401,6 +366,16 @@ status (`rate_limited`) so the final diagnostic never says "no figures" when the
 were throttled". (a) — a `SEMANTIC_SCHOLAR_API_KEY` — is a registration the user does; C documents
 the env var in the README's env section and nothing more. A tally owed by A next round: how many
 figure lookups in the pool hit 429 after the queue.
+
+---
+
+## §1i. RULING 8 — C's two out-of-guide findings (manager, 2026-09-15) — BINDING
+
+- `figures/pdf-extract.ts`'s dead paywall check: **in scope, same bug family as 1-16/1-22** — C
+  lands it as `1-22b` right after 1-21 (same `looksLikePaywallStatus` shape, protective test).
+- `html-text.ts` caps (90k total / 18k per section): **not a fix item this round.** A checks next
+  round whether any pool paper is HTML-sourced and long enough to hit them; if one is, it becomes
+  a round-2 item with evidence. Left as a lead, not authorisation.
 
 ---
 
@@ -1935,3 +1910,10 @@ locks explicitly: `evidence.test.ts`, `report.test.ts`, `reading-markdown.test.t
 Commit: two commits — `fix(report): pass 1 reads every canonical bucket, and a hard 401/402/403/451
 is paywalled, not source_unavailable` (1-14, 1-15, 1-16, 1-22), `fix(evidence): fold the PDF
 fraction-slash artifact; index figure captions in the corpus` (1-17).
+
+### Round 1 — manager (resume after C's death)
+
+C died on a Sonnet session limit right after committing 1-17 (`a31c16f`); §1 still read
+"working 1-14 next" from an earlier checkpoint. Manager re-ran the gate cold (tsc clean, eslint
+clean, vitest 2559/2559), corrected §1 to the true position (1-01..1-17 + 1-22 landed; 1-19 next),
+ruled on C's two out-of-guide findings (§1i), and re-spawned C to pick up at 1-19.
