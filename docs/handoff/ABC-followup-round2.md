@@ -363,3 +363,146 @@ Work B's guide in order.
 
 Spec extracted from the user's 2026-09-15 message and the manager's own checks (see §1a
 "Observed" lines). Loop opened; hourly resume clock created in the manager session.
+
+### Round 1 — Agent A
+
+Dev server confirmed up (`GET /` → 200) before starting. Branch confirmed
+`complimentary-enhancement-to-main-update`. No code changed; a throwaway measurement script lived
+at `web/.local-data/round1-scratch/` (gitignored) and is deleted before the final commit.
+
+#### Part 1 — S3 (full text + checker)
+
+**Constants unchanged from the manager's 2026-09-14 code reading** (`web/src/lib/papers/deep-report.ts`):
+`PASS1_MAX_INPUT_CHARS = 60_000` (line 34), `PASS2_MAX_INPUT_CHARS = 24_000` (line 35);
+`web/src/lib/papers/pdf-text.ts`: `MAX_PDF_PAGES = 40` (line 20). None raised toward the ruling's
+~400k chars / 100 pages. `web/src/lib/papers/evidence.ts` unchanged: `MIN_QUOTE_CHARS = 40`,
+`PREFIX_CHARS = 80`, `SUFFIX_CHARS = 40` (lines 21-24), still a normalized substring / prefix+suffix
+match only — no paraphrase acceptance.
+
+**Real-data run 1 — `openalex:W7207740551` (arXiv 2609.02668, physics, the named failing case).**
+`getFullText()` (real network fetch, no mock): `status: ok`, `source: pdf`, `pageCount: 20`,
+3 sections extracted — abstract (895 chars), introduction (9627 chars), "results and discussion"
+(17805 chars, canonical `results`) — total body **28327 chars**. No `methods` or `discussion`
+canonical bucket exists for this paper.
+Reconstructing `deep-report.ts`'s own pass-1 bucket+clip logic (intro capped 12000, methods/
+results/discussion each capped 14000) against this real doc — a construction of the payload, not
+a captured trace of the live call — **23628 of 28327 body chars (83%) would reach pass 1**; the
+loss is the 14000-char clip on the 17805-char results bucket (3805 chars cut), not the 60000-char
+outer cap (the resulting prompt is only 23702 chars).
+**Live run** via `POST /api/papers/report` `{deepReport:true}` (no `llmOverride`, server's own
+Vertex provider, ~13s): `depth: deep`, `sourceKind: pdf`, `provenance.pageCount: 20`,
+**droppedClaims: 4**, **keyResults: 1**, skim: 1, methods: 3, limitations: 0, no `nextStep`, no
+paywall notice. Target (≤1 dropped, ≥2 keyResults): **FAILS both.** Note: this is better than the
+manager's 2026-09-14 manual observation ("0 key results, everything dropped") — this round's live
+call kept one result — reported as observed now, not explained.
+
+**Real-data run 2 — `openalex:W7212228226` (JECST manuscript PDF, the named 34-page case).**
+`getFullText()`: `status: ok`, `source: pdf`, `pageCount: 34`, 3 sections — Abstract (1491 chars),
+Introduction (18061 chars), Conclusions (3364 chars, canonical **`conclusion`**) — total body
+**22916 chars**.
+Same pass-1 reconstruction: only the `introduction` bucket is non-empty (methods/results/discussion
+all empty) because this paper's only two body sections canonicalize to `introduction` and
+`conclusion`, and `buildPass1Prompt` only ever reads `introduction`/`methods`/`results`/`discussion`
+— it never reads a `conclusion` bucket. So the entire 3364-char Conclusions section is never
+offered to pass 1, and the 18061-char introduction is clipped to 12000. **Only 12000 of 22916 body
+chars (52%) would reach pass 1.**
+**Live run**: `depth: deep`, `sourceKind: pdf`, `provenance.pageCount: 34`, **droppedClaims: 0**,
+**keyResults: 3**, skim: 2, methods: 2, limitations: 1. Target: **MEETS** (0 ≤ 1 dropped, 3 ≥ 2
+keyResults) — despite under half the body reaching pass 1.
+
+**Third PDF-backed paper: none found in the given pool.** Ran `getFullText()` against all 15
+remaining pool papers (real network calls, real doi/url from each `/api/papers/<id>` record):
+`openalex:W7212017379` (Analytica Chimica Acta, ScienceDirect PDF link) → `status: source_unavailable`
+(HTTP 403 on both the ScienceDirect PDF URL and the DOI redirect). The other 14
+(`W7212151400, W7204990919, W7207750818, W7208780749, W7211884742, W7212207112, W7206205089,
+W7207719214, W7211870929, W7201867313, W7212354020, W7212165100, W7212256756, W7212288571`) all
+returned `status: no_full_text` ("No legal full-text source returned readable body text"), most
+in under 2 seconds. **Across the whole 17-paper pool only the two papers named in the spec have
+any real full text through the current pipeline.** Flagged as a difference for the record — not
+diagnosed as pool composition vs. pipeline gap; B's call.
+
+**Model tier**: `reportModelTier()` (`web/src/lib/llm/provider-models.ts:65-66`) returns `"large"`
+unless `PEER_REPORT_MODEL_TIER === "small"`. Not re-verified against the live flag value —
+checking it means reading `web/.env.local`, off limits under the ground rules. Standing item, not
+re-derived further.
+
+Commit: `docs(abc): round 1 A part 1 — S3 full-text and checker measurements`.
+
+#### Part 2 — S4 (figures)
+
+`GET /api/figure?id=&url=&doi=&paperTitle=` (no `query`) against all 17 pool papers, real network
+calls. Tally: **found: 1 · no_figures: 8 · source_unavailable: 7 · paywalled: 1 · other: 0** (17 total).
+
+| Paper | Status | Reason (verbatim, truncated) |
+|---|---|---|
+| W7212228226 (JECST) | no_figures | "opened the PDF, but did not find any figure regions..." |
+| W7207740551 (arXiv) | **found** | — |
+| W7212354020 (Wiley Small) | source_unavailable | "could not reach https://doi.org/10.1002/smll.75702" |
+| W7206205089 (AFM) | source_unavailable | "could not reach https://doi.org/10.1002/adfm.78026" |
+| W7207719214 (JACS) | source_unavailable | "could not reach https://doi.org/10.1021/jacs.6c12219" |
+| W7211870929 (ACS AMI) | source_unavailable | "could not reach https://doi.org/10.1021/acsami.6c16435" |
+| W7212017379 (Anal Chim Acta) | no_figures | "reached the source page, but it did not expose extractable figures" |
+| W7212151400 (Spectrochim Acta) | no_figures | same as above |
+| W7212288571 (Iran J Sci Technol) | no_figures | same as above |
+| W7204990919 (KJCE) | no_figures | same as above |
+| W7212207112 (OSF Preprints) | source_unavailable | "could not reach https://openalex.org/W7212207112" |
+| W7208780749 (Appl Surf Sci) | no_figures | same reason as above |
+| W7212256756 (Wiley book ch.) | source_unavailable | "could not reach https://doi.org/10.1002/9783527855469.ch15" |
+| W7201867313 (Angew Chem) | source_unavailable | "could not reach https://doi.org/10.1002/anie.3474461" |
+| W7207750818 (Chem Eng J) | no_figures | same reason as above |
+| W7212165100 (Nature Energy) | no_figures | same reason as above |
+| W7211884742 (JJAP) | paywalled | "reached validate.perfdrive.com, but that source appears to require paid or institutional access" |
+
+Only 1 of 17 pool papers ("today's briefing") currently shows a figure. JECST's `no_figures`
+reason matches the manager's 2026-09-15 observation verbatim in substance — stable across runs.
+
+**Query test** (per-section lookup): re-ran with `query=` set to the first ~150 chars of each
+paper's abstract, for `W7207740551` (found) and `W7212228226` (no_figures). Both returned the
+same `status` as the no-query call; for `W7207740551` the returned image was byte-identical
+(same base64 data URI) with and without `query`. No behavioral difference observed for these two
+papers — reported as "not observed", not "does not occur" (only 2 of 17 papers tested, and only
+one of them has any figure candidates to rank).
+
+Commit: `docs(abc): round 1 A part 2 — S4 figure-status tally`.
+
+#### Part 3 — S5, S6, S7 (code state)
+
+- **S5 (scramble reveal)**: `web/src/components/scramble-text.tsx` does **not exist** (confirmed
+  absent). `git show 4d4b0ef:web/src/components/scramble-text.tsx` shows the pre-pivot component
+  (ASCII-only glyph set, `resolveRevealMode`, reduce-motion → fade, never "no build-up"). Nothing
+  on `web/src/app/papers/[id]/page.tsx` references a scramble/reveal effect. **Unbuilt.**
+- **S6 (merge/delete sections)**: `web/src/components/reader/copy.ts` `REPORT_HEADING` (lines
+  26-29) still has **three separate** headings: `novelty: "What is new"`, `proposal: "What it
+  proposes"`, `fit: "Why it fits you"` — not merged, not deleted.
+  `web/src/components/reader/report-sections.tsx` renders `novelty` as its own heading block
+  (line 164, `REPORT_HEADING.novelty`) separate from the proposal summary, and a "Why it fits
+  you" block at line 308 (`NonNullable<PaperReport["whyItFitsYou"]>` at line 338). Cache key in
+  `web/src/components/reader/use-model-report.ts:24` is still `"peer-paper-report-v5"` (not
+  bumped to `v6`; legacy list at line 26 does not include `v5`). **Unbuilt** — both prompts in
+  `web/src/app/api/papers/report/route.ts` (`buildShallowPrompt`, lines 134-163) and
+  `web/src/lib/papers/deep-report.ts` (`buildPass2Prompt`, lines 283-311) still ask the model for
+  separate `whatItProposes.novelty` and `whyItFitsYou` blocks.
+- **S7 (PDF upload)**: `Glob web/src/app/api/papers/**` shows no `upload` route (`[id]/reading`,
+  `[id]`, `report`, `search` only). `web/src/components/briefing/search-box.tsx` (90 lines) has
+  no "upload" reference at all — no button, no file input, no drop handler.
+  `web/src/app/page.tsx` renders only `<SearchBox className="sm:mt-2" />` (line 169), nothing to
+  its left. **Unbuilt**, entirely — button, route, and reading-page wiring all absent.
+
+Commit: `docs(abc): round 1 A part 3 — S5/S6/S7 code-state findings`.
+
+#### Part 4 — the gate, cold
+
+From `web/`:
+- `npx tsc --noEmit` → **clean** (no output).
+- `npx vitest run --exclude "**/benchmark.test.ts"` → **2544/2544 passed**, 106/106 test files —
+  matches the stated baseline exactly.
+- `npx eslint .` → **NOT clean.** 1 error, reproduced twice:
+  `web/src/components/persona/quiz.tsx:46:7` — `react-hooks/set-state-in-effect`: "Avoid calling
+  setState() directly within an effect" (`setResult({ scores: parsed.scores, persona })` inside a
+  `useEffect`). This file's last touch in `git log` is `29569e0`/`7bfb94e`/`3466e10` — old,
+  pre-dating this branch's S3-S7 work, unrelated to any spec item. Contradicts the §1 `GATE NOW`
+  line's claim of "eslint clean ... as of commit e0f2cdc." Flagged as `POLICY — manager decides`:
+  whether this counts as an open item against this loop's 0-open-items target, or is tracked
+  separately since it touches no S3-S7 file.
+
+Commit: `docs(abc): round 1 A part 4 — the gate, cold`.
