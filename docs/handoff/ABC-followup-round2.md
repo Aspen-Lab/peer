@@ -2361,3 +2361,70 @@ also the only way §3's "S7 needs a browser for the button" constraint lets it b
 Gate: tsc clean, eslint clean, vitest 2604/2604 (unchanged — no test exercises this file).
 
 Commit: `feat(upload): the reading page fetches an uploaded paper's record on a cold load`.
+
+**1-32 — the button.** DONE. New `web/src/components/briefing/upload-button.tsx`, an
+`UPLOAD_BUTTON` entry in `lib/briefing/copy.ts` (`{ label, error: (reason) => reason }`, matching
+B's shape), placed immediately left of `<SearchBox>` in `app/page.tsx`'s existing flex row.
+
+**The layout fix B flagged as easy to get wrong, gotten right by wrapping, not restructuring:** the
+row is `justify-between` with the day strip (or a spacer) on the left and, previously, `SearchBox`
+alone as the second child on the right. Adding the button as a second top-level child would have
+put it at the *left* end of the remaining space, not beside the search box. Fixed by giving the pair
+its own wrapper `<div className="flex items-start gap-2 sm:mt-2">` as the row's second child (moving
+the `sm:mt-2` that used to live on `SearchBox` itself onto this wrapper, so both controls move
+together) — `justify-between` now pushes the *pair* right, and `gap-2` sits them next to each other
+inside it.
+
+**The button itself:** `h-9 w-9` (this theme's `rounded-md` compiles to `0px` — confirmed by reading
+`globals.css`'s "nothing is round" section — so it renders as a literal square with no extra class
+needed), `aria-label="Upload a paper PDF"`, a hand-written inline upload-arrow SVG (no icon library,
+matching every other icon in this codebase), a visually-hidden (`sr-only`) `<input type="file"
+accept="application/pdf">` triggered by the button's own click, and `onDragOver`/`onDragLeave`/
+`onDrop` handlers sharing the same upload function as the file-picker path (drop sets a visible
+`opacity-75` hover state, matches B's "visible hover state" ask without inventing a new visual
+language). Disabled + `disabled:opacity-50 disabled:cursor-wait` while a request is in flight —
+copied verbatim from `app/page.tsx`'s own refresh-button pattern, per B's instruction to reuse it.
+Deliberately does **not** reset `isUploading` back to `false` on the success path before navigating
+— the button should stay visibly disabled through the route change, not flash back to normal for
+one frame first.
+
+**Colors — a real design decision, not just "pick a token":** B's guide suggested
+`bg-[color:var(--color-text)]`/`--color-heading`, but reading `globals.css`'s dark-mode block this
+round shows both of those flip to *near-white* (`#f3f3f3`/`#e3e3e3`) under `html[data-mode="dark"]`
+— using either literally would make the square (and its white icon) disappear into a light square
+with an invisible icon in dark mode, breaking the user's own literal spec ("a black square... in
+white") exactly when dark mode is on. Rather than hardcode a raw hex in the component (against this
+codebase's own established convention of never doing that) or silently make the button
+theme-adaptive (contradicting the spec), added two new tokens to `globals.css`'s `@theme` block,
+`--color-fixed-black`/`--color-fixed-white`, defined once and deliberately never restated in the
+`:root` light restatement or the `html[data-mode="dark"]` override — so they hold their value
+across every theme. This is a real, logged deviation from B's literal suggestion, reasoned through
+rather than guessed past.
+
+**Client-side PDF check, before ever touching the network:** `looksLikePdf` (exported for the test)
+accepts a file whose reported MIME type is `application/pdf` **or** whose name ends in `.pdf` (some
+browsers/OSes omit `file.type` for certain sources) — a fast, honest pre-check; the server's own
+magic-byte check (1-26) is still the actual source of truth and the only thing that can accept a
+file this pre-check waved through. The upload call itself uses a bare `fetch`, not `apiFetch` — the
+exact gotcha B flagged, confirmed by reading `lib/api.ts` this round: `apiFetch` forces
+`Content-Type: application/json` onto any request with a body that doesn't already carry a header,
+which would corrupt a multipart `FormData` request's boundary.
+
+Tests: `upload-button.test.ts`, 3 cases on the exported `looksLikePdf` (typed as a PDF; untyped but
+`.pdf`-named; neither) — the same "test the extracted pure function, not the JSX" convention this
+codebase already uses everywhere else a component has any test at all (confirmed by reading
+`feed-tile.test.ts`; no React Testing Library setup exists in this repo). Proof: made the function
+always return `true`, re-ran — the rejection case failed, restored.
+
+**Could not verify in a browser this round** — attempted: tried `preview_start` against
+`http://localhost:3000` (the shared `peer-web` dev server) and it could not be reached from this
+agent's own sandbox (navigation denied/failed; a direct `curl` to the same URL from this session's
+Bash tool also got no response). Per the standing constraint ("S7 needs a browser for the
+button... leave closure to A/the manager"), this is expected — not a NEEDS RESTART case (the server
+was never reachable at all from here, not stale-cached), so nothing to note in §1 STATUS beyond
+this. The button's actual on-screen appearance, drag-and-drop behavior, and the black-square-in-
+dark-mode fix are unverified pending a session with real browser access to the dev server.
+
+Gate: tsc clean, eslint clean, vitest 2607/2607 (2604 + 3 new).
+
+Commit: `feat(upload): the button — a black square left of the search box that uploads a PDF`.

@@ -27,6 +27,17 @@
   --color-text-muted: #666666;
   --color-text-faint: #8e8e8e;
 
+  /* ── Fixed-contrast objects ─────────────────────────────
+     A small number of controls are deliberately NOT theme-adaptive: the PDF
+     upload button (briefing/upload-button.tsx) is a black square with a
+     white glyph in both light and dark mode — the user's own literal spec,
+     not "a dark surface that happens to match whichever theme is active."
+     Defined once here and never restated in the dark-mode block below (or
+     the `:root` restatement above it), so they hold their value when the
+     theme flips. */
+  --color-fixed-black: #1d1d1d;
+  --color-fixed-white: #ffffff;
+
   /* ── The hue ────────────────────────────────────────── */
   --color-accent: #ff520d;
   --color-accent-dim: rgba(255, 82, 13, 0.09);
