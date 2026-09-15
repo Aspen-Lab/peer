@@ -3188,3 +3188,174 @@ own line handling).
 confirmed-live incorrect drop (the hyphenation case) has a real, narrow fix available. Re-measure
 next round after the fold lands; expect the RHEED method claim to be kept, and the "Ld = 0.44"
 case to remain a drop (accepted, not fixed).
+
+#### Item 2-03 — A2-03: figure captions display the raw fraction-slash artifact
+
+**Every render/export site, enumerated:**
+- `web/src/components/paper-figure.tsx:304-312` — `<figcaption>{figure.caption}</figcaption>`,
+  raw interpolation, no cleaning at the render site itself.
+- `web/src/components/reader/matted-figure.tsx:5-18` — same: `caption` prop rendered verbatim in
+  a `<figcaption>` and as the `<img alt>`.
+- `web/src/components/reader/report-sections.tsx:140,198,289` — passes `figure.caption` straight
+  through to `MattedFigure`; no cleaning here either.
+- `web/src/lib/papers/figure-binding.ts` — the value these components eventually receive
+  (`figureCaption` on a bound report result) comes from `resolveImage(figurePool, ...)`'s
+  `image.caption` (the **figure-pool** candidate's caption) or `findCaptionByLabel(...)`'s match
+  against `fullText.doc.figureCaptions` (the **full-text extractor**'s captions) — two different
+  upstream sources, not one.
+- `web/src/lib/papers/reading-markdown.ts` — grepped for `caption`: zero hits. The Markdown export
+  does not print figure captions at all (confirmed, not assumed) — nothing to fix here, and
+  nothing at risk of regressing either.
+- `/api/figure`'s JSON response (`paper-figure.tsx`'s `data.caption`, line ~115) — the caption
+  text a client-side `<PaperFigure>` renders when it fetches directly, same two upstream sources
+  as above.
+
+**The single upstream point, found by tracing both sources to their root:**
+1. `web/src/lib/papers/pdf-text.ts:192-198` (`normalize()`, full-text extractor's
+   `figureCaptions`) already calls `cleanDisplayText(cap.caption)`.
+2. `web/src/lib/figures/pdf-extract.ts:332` (figure-pool's PDF-vision extractor,
+   `extract_pdf_figures.py`'s captions) **already calls `cleanDisplayText(figure.caption)` too** —
+   confirmed by reading the file; B expected to find a second, uncleaned path here and did not.
+
+Both real PDF-caption pipelines already funnel through the same shared TypeScript function,
+`cleanDisplayText` (`web/src/lib/text/clean.ts:194`). The fraction-slash artifact
+(U+2044) is never folded there — confirmed by reading `normalizeUnicodeSymbols` (`clean.ts:152-
+165`), which folds `×`, `±`, `≤`, `≥`, `µ`, `°`, and sub/superscripts, but not `⁄`. **This is the
+one place**: adding a fold there fixes both pipelines with zero call-site changes.
+
+(The third caption source, `web/src/lib/figures/extract.ts`'s HTML `captionFromFigure()` — reads
+a publisher page's own `<figcaption>`/`alt` text via `stripTags()`, not PyMuPDF — cannot carry
+this specific artifact at all, since it is never PDF-extracted; not in scope for this item.)
+
+**Fix direction.** In `normalizeUnicodeSymbols` (`clean.ts:152-165`), add one line:
+```ts
+.replace(/\s*⁄\s*/g, "")
+```
+placed with the other narrow Unicode-artifact folds. **Scoped to only U+2044**, never the ASCII
+`/` — unlike `evidence.ts`'s matching-only fold (which safely strips both, since matching
+tolerates false positives that only ever make the checker more lenient, never less honest), a
+*display* fold that stripped ordinary `/` would corrupt real, legitimate text everywhere
+`cleanDisplayText` runs (`"km/h"` → `"kmh"`, a date `"2024/01/15"`, `"and/or"`) — `cleanDisplayText`
+is used far beyond captions (titles, abstracts, every section). U+2044 essentially never appears in
+real scientific prose outside this exact artifact, so folding it unconditionally and globally is
+safe. **Accepted limitation, stated plainly**: this only removes the stray floating `⁄` glyph
+(`"Ld ⁄ = 0.44"` → `"Ld = 0.44"`); it does not and cannot reconstruct the original `/` PyMuPDF
+already deleted from `"L/d"` itself (that would require re-inserting a character with no way to
+know where — a harder, separate PDF-fidelity problem, out of scope for A2-03, which is specifically
+about the *stray artifact character* being shown, not about `"Ld"` reading imperfectly).
+
+**Does the checker's corpus regress (1-17)?** No. `evidence.ts`'s `normalizeForMatch` already
+calls `cleanDisplayText` as its own first step (confirmed by reading the function and its own
+docstring), then separately applies `FRACTION_SLASHES` (`/[/⁄]\s*/g`) later in its own chain —
+which already strips U+2044 unconditionally regardless of this change. Adding a narrower version of
+the same removal one step earlier changes nothing about what `normalizeForMatch` ultimately
+produces; it is a strict subset of work `normalizeForMatch` already does. Confirmed by tracing the
+exact call chain, not assumed. `web/src/lib/papers/evidence.test.ts`'s 1-17 tests (lines 46-52,
+111-129) construct their "garbled" fixtures as plain strings passed directly to
+`normalizeForMatch`/`evidenceSupported` — they never go through the Python extractor or
+`pdf-text.ts`'s `normalize()`, so this change does not touch them either way; still worth running
+to confirm.
+
+**Tests at risk**: no dedicated `clean.test.ts` exists (confirmed, `find` returns nothing) —
+`cleanDisplayText` is only exercised indirectly via callers' own tests. Nothing currently asserts
+a caption containing U+2044 anywhere (grepped `web/src/lib/papers/pdf-text.test.ts` and
+`web/src/lib/figures/pdf-extract.test.ts` for `2044`/`⁄`: zero hits) — no existing test breaks.
+
+**New test needed** (add to whichever of `pdf-text.test.ts` / `pdf-extract.test.ts` C finds more
+natural, or start a small `clean.test.ts` — B's preference is a `clean.test.ts` case, since this
+is really a `clean.ts` fix and today's indirect-only coverage is itself a minor gap): a caption
+containing `"Ld ⁄ = 0.44"` (raw extractor shape) becomes `"Ld = 0.44"` after `cleanDisplayText`.
+Prove it tests the fix: revert the one-line change, watch it fail, restore.
+
+**Blast radius**: one file, `web/src/lib/text/clean.ts`. Every caller of `cleanDisplayText`
+benefits identically (titles, abstracts, sections, captions) — this is a general PDF-display-
+quality fix, not a caption-only patch, since the same artifact can appear in body text too (the
+original 1-17 example, "We find that the Δμ values for the AHTS with L/d = 0.67 and 0.78 lie
+above EL…", was body text, not a caption).
+
+#### Item 2-04 — A2-04: the Springer graphical-abstract miss
+
+**Traced by execution** (`web/.local-data/round2b-scratch/check-springer-og.ts` +
+`check-springer-og2.ts`, deleted): called the real, exported `tryHtmlCandidates(url, "publisher")`
+from `web/src/lib/figures/extract.ts` directly — the actual production code path, not a
+reimplementation — against `https://doi.org/10.1007/s40998-026-01240-x` (W7212288571) and
+`https://doi.org/10.1007/s11814-026-00811-2` (W7204990919). Both return `status: "no_figures"`,
+matching A's finding exactly.
+
+**Root cause: neither the og:image guard nor `BAD_URL_PATTERNS` nor `candidateLooksImageUrl` is
+ever reached — Peer never sees the real article page.** Both DOI links resolve (via `redirect:
+"follow"`) to `link.springer.com/10.1007/...`, which returns **HTTP 200** with a **3,036-byte**
+HTML page whose `<title>` is literally **"Client Challenge"** — a bot-mitigation challenge stub
+(CSP header referencing hashed inline script/style, no article content, no meta tags of any kind:
+`metaOgImage()` finds zero `<meta property="og:image">`/`twitter:image` tags because there are
+none in this page at all). Confirmed by direct fetch with the app's own `BROWSER_UA` string and by
+inspecting the raw HTML's `<title>` and character codes. **A second fetch produces byte-for-byte
+the same 3,036-char "Client Challenge" page** (checked twice) — this bot-check does not clear on a
+plain retry, the same finding 1-21 already made for Nature's `idp.nature.com/transit` page.
+
+This is the **same class of bug 1-21 already fixed for Nature — a different publisher's bounce
+page, not caught by the existing detector.** `looksLikeBouncePage` (`extract.ts:882-888`) checks
+three things: host starts with `idp.` (false here — host is `link.springer.com`), path contains
+`/transit` (false — path is `/10.1007/...`), or `html.length < 8_000 && /cookie/i.test(html)` (the
+"thin cookie stub" signature). The Springer challenge page **is** thin (3,036 < 8,000) but
+**never mentions "cookie" anywhere** (confirmed: `/cookie/i.test(html)` is `false`) — it's a pure
+JS/CSP challenge stub, a different vocabulary than Nature's cookie-notice-shaped bounce. So
+`looksLikeBouncePage` returns `false`, the code proceeds to treat the challenge stub as if it were
+the real article, finds zero `<figure>` blocks and zero og:image meta tags (correctly — there are
+none in this stub), and falls through to the ordinary `candidates.length === 0` branch, producing
+the same message a genuine "reached the article, no figures there" case would: `"Peer reached the
+source page, but it did not expose extractable figures."` — **false**; Peer never reached the
+article.
+
+**Direct answers to the round's own checklist**: does `metaOgImage` see the `_Fig1_HTML.png`? No —
+it never runs against real article HTML at all. Rejected by the 1-19 honesty guard,
+`BAD_URL_PATTERNS`, or `candidateLooksImageUrl`? No — none of the three are ever reached; the
+og:image call happens against the challenge stub, which has no meta tags to find or reject. Is the
+bounce-page detector misfiring on Springer? **Yes — under-firing**: it fails to *recognize* this
+specific Springer challenge shape, so `tryHtmlCandidates` falls through to `no_figures` instead of
+ever calling `bouncePageReason`.
+
+**Fix direction.** Broaden `looksLikeThinCookieStub`'s signature (inline in `looksLikeBouncePage`,
+`extract.ts:886`) into a slightly wider, still host-agnostic "thin bot-challenge stub" check — same
+size threshold, a short, generic phrase list instead of the single word "cookie":
+```ts
+const CHALLENGE_STUB_PHRASES = /\bcookie\b|\bclient challenge\b|\bchecking your browser\b|\bjust a moment\b|\bverify you are human\b|\bddos protection by\b/i;
+const looksLikeThinChallengeStub = html.length < 8_000 && CHALLENGE_STUB_PHRASES.test(html);
+```
+Match against the page's `<title>` and body together (the "Client Challenge" signal here is in the
+`<title>` tag specifically) — pass the full `html` string, not just a body-text extraction, since
+`stripTags()` would otherwise remove the very `<title>` text this needs to see. This stays a
+generic, content-shaped signature (never `springernature.com`/`link.springer.com` by name), per
+§1d's "one publisher-shaped fix that works across hosts."
+
+**Important, execution-confirmed expectation to set for A's next re-measurement: this fix improves
+honesty, not necessarily the found-figure count.** A retry does not clear this specific challenge
+(confirmed twice, byte-identical). Once detected, the honest outcome per the existing retry-then-
+give-up logic (`extract.ts:1161-1175`) is `status: "source_unavailable"` with
+`bouncePageReason(finalUrl)` — **not** a found figure. These two papers most likely stay off the
+"found" tally after this fix; what changes is that their status becomes honest
+(`source_unavailable`, "Peer reached an access-check page at link.springer.com, not the article
+itself") instead of a false `no_figures`. This is the exact same "what stands in its place is the
+finding" pattern as A2-05's OSF case — the real og:image genuinely exists, but Peer has no way to
+get past this bot-check with a plain fetch (no JS execution, no browser automation available), and
+never should try to (no CAPTCHA/anti-bot bypass). **Flagging this now so A does not read an
+unchanged found-count next round as evidence the fix failed to land.**
+
+**What the field shows when every candidate is rejected**: `status: "source_unavailable"` →
+`paper-figure.tsx`'s existing "Figure source unavailable" / `bouncePageReason`'s own text. No UI
+change needed — same honest-emptiness path 1-21 already built for Nature.
+
+**Tests at risk**: `web/src/lib/figures/extract.test.ts:218-266` — the 1-21 describe block's two
+cases both build their fixture on an `idp.example.com`-hosted response whose body *also* contains
+the word "cookie" (`"Checking your browser for a valid cookie session..."`, line 229) — the
+existing `hostLooksLikeIdp` check alone already makes both pass regardless of this change (the
+fixture matches on host *and* phrase, belt-and-suspenders); broadening the phrase list is a
+superset, so nothing here can newly fail. Confirm by running, not just by this reasoning.
+
+**New protective test**: a fixture HTML of `<title>Client Challenge</title>` plus CSP boilerplate,
+under 8,000 chars, no "cookie" anywhere → `looksLikeBouncePage` returns `true`; the resulting
+`tryHtmlCandidates` call (retry also bouncing) → `source_unavailable` with `bouncePageReason`, not
+`no_figures`.
+
+**Blast radius**: one file, `web/src/lib/figures/extract.ts`. `looksLikeBouncePage` has one caller
+(`tryHtmlCandidates`); no other file imports it (it is not exported).
