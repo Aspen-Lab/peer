@@ -81,80 +81,77 @@ browser, run the reports), then report to the user in plain language and stop th
 
 ```
 ROUND:            3
-WHOSE TURN:       A
-STOPPED BECAUSE:  C finished the turn @ 2026-09-15 (commits dd999c4, 7b3122a, 3403ab3, 81ccef3,
-                   c061ff4, and 2-06's own commit) — all six of round 2's items (2-01 .. 2-06)
-                   landed, gate green throughout.
-STATUS:           Round 2 fully implemented: 2-01 (aggregator-host paywall fix, banked by the
-                   manager), 2-02 (hyphenated-line-break fold in the evidence checker), 2-03
-                   (fraction-slash display fold), 2-04 (Springer bot-challenge bounce detector),
-                   2-05 (empty-PDF textStatus + reading-route 404 fix + never-ask-for-a-report
-                   gate, three sub-entries), 2-06 (uploaded-PDF title heuristic, step a/b/c) —
-                   all committed individually with their own §4 log entries.
+WHOSE TURN:       B
+STOPPED BECAUSE:  A finished the turn @ 2026-09-15T15:20Z. Dev server confirmed up throughout;
+                   every live check owed from round 2 is now answered.
+STATUS:           All six of round 2's items (2-01..2-06) confirmed landed through the real
+                   running app: 2-01 (aggregator 403 -> source_unavailable), 2-02 (hyphenation
+                   fold — the RHEED drop it targeted no longer recurs), 2-03 (fraction-slash
+                   fold — no U+2044 in any shown caption), 2-05 (both empty-PDF sub-bugs and the
+                   reading-route 404 — 200 with correct `pdf_empty` provenance now, live), 2-06
+                   (both real PDFs return their true titles through the actual upload route).
+                   2-04 (Springer bounce-page detector) remains UNVERIFIED live — not because it
+                   failed, but because both target papers' final status is now `rate_limited`
+                   (Semantic Scholar) before the code ever reaches the branch 2-04 changed.
 
-                   DEVIATION FROM B'S GUIDE, FLAGGED PROMINENTLY: the dev server (`peer-web`,
-                   port 3000) was NOT running for this entire C turn, contrary to what this
-                   block said when the turn started ("Dev server up on :3000"). Confirmed
-                   repeatedly by curl/netstat/Get-NetTCPConnection: nothing listened on 3000, no
-                   matching Node process existed, from before 2-01's owed live-check through
-                   2-06's finish. Per the standing rule C did not start/stop/restart it. Every
-                   live HTTP check round 2's items call for is still owed — see TODO below — not
-                   skipped by choice. Each item was instead verified by unit tests proven against
-                   the fix by revert-and-restore, plus direct execution against real corpus/
-                   fixtures/PDFs where possible (see each item's §4 entry for specifics). None of
-                   this substitutes for the real HTTP path A's round normally checks.
-OPEN ITEMS:       S3 S4 S7 — code for all three now landed this round; **none re-measured live**
-                   (dev server was down all turn). A's round-3 job is exactly that re-measurement.
-                   (S5, S6 closed by A round 2.)
+                   Six new/standing differences found this round (A3-01..A3-06, full detail in
+                   §4 "Round 3 — Agent A"): `W7207740551` still misses the S3 keyResults target
+                   on 1 of 2 route runs (model variance, not the checker — 0 confirmed incorrect
+                   drops in 8 samples, a real improvement); Semantic Scholar rate-limiting has
+                   crossed Ruling 9's own "≥3 of 17" escalation threshold (3 of 17 this round,
+                   stable across retries) — masks 2-04's verification and is itself now B's job
+                   to address (fallback order trying other figure sources first); a new,
+                   confirmed incorrect-drop mechanism on the third S3 paper
+                   (`arxiv:2501.00663`) — a zero-width space (U+200B) inside a math expression,
+                   an ar5iv/HTML artifact, survives every existing fold (currently within the
+                   <=1 ceiling on every sampled run, but real and unaddressed); a boundary-case
+                   extraction artifact on `W7212228226` (a page-footer/DOI stamp spliced into a
+                   sentence) that doesn't cleanly fit either of Ruling 9's two named drop
+                   categories, `POLICY — manager decides` how to name it; the S4 found-figure
+                   count has not moved in three rounds (1 of 17, same paper each time).
+OPEN ITEMS:       A3-01 (S3, W7207740551 keyResults variance), A3-02 (S4, Semantic Scholar
+                   rate-limit escalation, POLICY/ACTION for B), A3-03 (S4, 2-04 still unverified
+                   live, now masked by A3-02), A3-04 (S3, new zero-width-space incorrect-drop
+                   mechanism on the arxiv paper, unaddressed), A3-05 (S3, boundary-case
+                   extraction artifact on W7212228226, POLICY — manager decides), A3-06 (S4,
+                   found-count unchanged at 1/17, informational/tracking). S5 and S6 remain
+                   fully closed (no regression, Part 4).
 GATE (0 open):    NOT MET
 
 DONE:      round 1: 1-01..1-33 + 1-22b. round 2: 2-01, 2-02, 2-03, 2-04, 2-05 (sub-entries A/B/C),
-           2-06 (steps a/b/c). See each item's own §4 entry (below, "Round 2 — Agent C (resumed)")
-           for what changed, the tests added, and how each was proven.
-GATE NOW:  tsc clean · eslint clean · vitest 2631/2631 (C, cold at the end of this turn; every
-           number in between — 2614, 2616, 2617, 2625, 2627, 2631 — appears in the per-item
-           entries below so a partial re-run can sanity-check by item).
-TODO:      A's round-3 measurement should answer, on the real, running app — none of these were
-           checkable this turn without the dev server:
-             - Is `openalex:W7212207112`'s `/api/figure` now `source_unavailable` (blocked), not
-               `paywalled`? (2-01, owed since the previous C's turn too)
-             - On a fresh deep-report run, does `openalex:W7207740551` now keep the RHEED method
-               claim (the hyphenation fold, 2-02)? Does it have ≤ 1 *incorrect* drop per Ruling
-               9's A2-06 definition (the "Ld = 0.44" missing-`=` case is accepted, not a defect;
-               the "Our key result is..." framing sentence and the Tc/BPV synthesis sentence are
-               correct drops, already ruled)?
-             - Does a figure caption carrying the fraction-slash artifact now render without the
-               stray fraction-slash glyph (2-03)?
-             - Does `/api/figure` on `openalex:W7212288571` (or `W7204990919`) now report
-               `source_unavailable` naming `link.springer.com`, instead of the old, false
-               `no_figures` (2-04)? Per B's own flag, this is a status-honesty fix, not
-               necessarily a new "found" figure — read it as fixed even if the found-count for
-               these two papers doesn't move.
-             - Uploading `web/.local-data/blank.pdf` (build fresh with
-               `python -c "import fitz; d=fitz.open(); d.new_page(); d.save(...)"` — delete any
-               stale hash under `.local-data/uploads/` first, since uploads are idempotent on
-               content hash) and opening `/papers/upload:<hash>`: does it show only the plain "no
-               readable text" message, and does reloading that page still show it (proving the
-               `GET /api/papers/[id]/reading` fix, not a client cache, is what's carrying it)
-               (2-05)?
-             - Uploading the two real PDFs (`https://arxiv.org/pdf/2501.00663`,
-               `https://arxiv.org/pdf/2609.02668`) through the actual `POST /api/papers/upload`
-               HTTP route (not just the direct script/TS calls this turn used): do they return
-               "Titans: Learning to Memorize at Test Time" and the full three-line 2609.02668
-               title respectively (2-06)?
-             - S4 figure tally, S3 dropped-claims tally: re-run both across the full pool now that
-               2-01/2-02/2-04 have landed, per the standing per-round tallies.
-             - How many Semantic Scholar 429s this round (Ruling 7's standing tally; ≥ 3 of 17
-               triggers B designing a fallback order next round)?
-             - Is any `found` figure actually a cover/logo (the never-fabricate check, still a
-               standing question every round per B's own template)?
+           2-06 (steps a/b/c) — ALL SIX now confirmed live this round except 2-04 (unverified,
+           not failed). See "Round 2 — Agent C (resumed)" for what changed and "Round 3 — Agent
+           A" for the live confirmation of each.
+GATE NOW:  tsc clean · eslint clean · vitest 2631/2631 (A, cold, round 3 — unchanged from C's
+           end-of-round-2 number; A changed no product code).
+TODO:      B's round-3 job, per Ruling 9's own words and A's difference list above:
+             - A3-02/A3-03 first (they gate the others): design a fallback figure-source order
+               that tries non-Semantic-Scholar sources before Semantic Scholar (or otherwise
+               reduces reliance on it) so the two Springer papers' true status (does 2-04's
+               bounce-page fix actually catch them?) becomes observable again, and so the
+               figure-status tally stops carrying 3+ uninformative `rate_limited` entries. State
+               whether a `SEMANTIC_SCHOLAR_API_KEY` (still the user's own action, per Ruling 7)
+               would independently resolve this, separately from any code reordering.
+             - A3-01: investigate why `W7207740551` sometimes proposes only 1 key result (not a
+               checker defect — 0 confirmed incorrect drops in 8 samples this round) — is this
+               prompt-shaped, model-variance-shaped, or something else? State whether a fix is
+               even appropriate given it is model output variance, not a bug.
+             - A3-04: a fix direction for the zero-width-space (U+200B) fold in
+               `normalizeForMatch`, same family and same file as 1-17/2-02's own folds (strip
+               U+200B — and likely its siblings U+200C/U+200D/U+FEFF — since `\s` does not match
+               any of them). Confirm no test regresses, same revert-and-restore discipline.
+             - A3-05: rule on how a "genuine paper text disrupted by injected page furniture"
+               drop should be classified going forward — a third named category, or folded into
+               one of the existing two? Manager's call, not B's alone, but B should propose.
+             - A3-06: re-state the S4(c) target status once A3-02/A3-03 are resolved — the
+               found-count may still not move even after a fix (2-04's own note from round 2:
+               this is an honesty fix, not necessarily a found-count fix).
 
-           Carrying every standing tally forward by name: S4 figure-status tally (found /
-           no_figures / source_unavailable / paywalled / other), S3 dropped-claims-per-paper
-           tally, Semantic Scholar 429 tally (Ruling 7), the eslint-gate-hygiene item (Ruling 1,
-           already fixed, stays in scope as item 0 of every C turn per that ruling's own words),
-           and the `html-text.ts` cap lead (Ruling 8, still not authorized as a fix item — A
-           checks next round whether any pool paper is HTML-sourced and long enough to hit it).
+           Carrying every standing tally forward by name: S4 figure-status tally, S3
+           dropped-claims-per-paper tally, Semantic Scholar rate-limit tally (now escalated,
+           see A3-02), the eslint-gate-hygiene item (Ruling 1, already fixed, stays item 0 of
+           every C turn), and the `html-text.ts` cap lead (Ruling 8 — still not implicated by
+           any pool paper or S3 test paper, per round 2's own check; not re-checked this round).
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
@@ -167,6 +164,7 @@ part-way.
 |---|---|---|
 | 1 | 5 (S3 S4 S5 S6 S7) | NOT MET — round 1 measured only, fixed nothing (by design). Gate also currently not clean: 1 pre-existing eslint error, unrelated to S3-S7 (POLICY flagged). |
 | 2 | 6 (A2-01..A2-06; A2-08 informational) | NOT MET — S5 and S6 fully closed (code+live API by A, visual by the manager). S3/S4/S7 each still carry real, execution-confirmed differences. Gate clean (tsc/eslint/vitest 2607/2607). |
+| 3 | 6 (A3-01..A3-06; A3-05 POLICY) | NOT MET — all 6 of round 2's items confirmed landed live except 2-04 (unverified, masked by a new rate-limit escalation, not failed). S5/S6 still fully closed. S3/S4 each carry new, narrower differences (model-variance keyResults count, a new zero-width-space drop mechanism, a Semantic Scholar rate-limit escalation). Gate clean (tsc/eslint/vitest 2631/2631). |
 
 ---
 
@@ -4333,3 +4331,107 @@ Matches the stated `GATE NOW` baseline exactly — no regression from any of thi
 calls or measurement scripts (A changed no product code).
 
 Commit: `docs(abc): round 3 A part 5 - the gate, cold`.
+
+#### Difference list (round 3)
+
+**Round 2's six items verified item by item, against the returned/rendered result, not the
+commit message:**
+- **2-01 (A2-05, aggregator-host 403 mislabelling): CONFIRMED FIXED, live.** `W7212207112` now
+  returns `source_unavailable` ("Peer reached openalex.org, but that source blocked this
+  request."), never `paywalled`. Closed.
+- **2-02 (A2-06, hyphenated-line-break fold): CONFIRMED WORKING, live.** The specific
+  confirmed-live incorrect drop it targeted (the RHEED "high- energy"/"high-energy" case) did
+  not recur in any of 6 post-fix samples this round. `W7207740551` still has open S3 problems
+  (below), but not this one.
+- **2-03 (A2-03, fraction-slash display fold): CONFIRMED FIXED, live.** Zero U+2044 characters in
+  any figure caption shown across this round's live report responses. Closed.
+- **2-04 (A2-04, Springer bounce-page detector): STILL NOT VERIFIABLE LIVE — a different blocker
+  than round 2's "dev server down."** Both target papers now return `rate_limited` (Semantic
+  Scholar) as their final status, before the code ever reaches the branch 2-04 changed. Not a
+  failure of the fix; an owed live check, carried forward again. See A3-03.
+- **2-05 (A2-02, empty-PDF message, both sub-bugs + the report-gate): CONFIRMED FIXED, live,
+  through the real HTTP route.** `GET /api/papers/upload:<hash>/reading` now returns 200 (not
+  404) for both a real and a blank upload, with the correct `pdf_empty` provenance on the blank
+  one; `textStatus` is set correctly at upload time for both. Closed at the route level (the
+  client-side "never asks for a report" gate is code-confirmed only — genuinely needs a browser,
+  see Gate section below).
+- **2-06 (A2-01, uploaded-PDF title heuristic): CONFIRMED FIXED, live, through the real HTTP
+  route (round 2 only checked this via a direct script call).** Both real PDFs now return their
+  full, correct titles through `POST /api/papers/upload` itself. Closed.
+
+**New/standing differences this round, ranked by what the user notices first:**
+
+- **A3-01 — S3, `openalex:W7207740551` (the paper the user's original complaint named) still
+  misses the target on 1 of its 2 required runs. REAL DATA.** Route run 1: `droppedClaims: 2`,
+  `keyResults: 1` (< 2, FAILS); route run 2: `droppedClaims: 3`, `keyResults: 2` (MEETS). Unlike
+  round 1/2, this is **not** the checker over-dropping — 8 total samples (2 route + 6 capture)
+  found **zero confirmed incorrect drops** on this paper this round, a real improvement 2-02
+  appears responsible for. The remaining gap is the model itself sometimes proposing only 1 key
+  result, independent of the checker. A narrower, different-shaped miss than round 2's, still a
+  real one against the spec's own per-paper target.
+- **A3-02 — S4, Semantic Scholar rate-limiting has crossed Ruling 9's own pre-registered
+  escalation threshold. REAL DATA + POLICY, escalate.** 3 of 17 lookups' final status was
+  `rate_limited` this round (`W7204990919`, `W7212165100`, `W7212288571`), stable across 3
+  retries each (9/9). Round 1: 0. Round 2: 1. Round 3: **3 — meets "≥ 3 of 17" verbatim.** Per
+  Ruling 9's own words this is B's cue to design a fallback order that tries other figure
+  sources first next round.
+- **A3-03 — S4, 2-04's Springer graphical-abstract fix remains unverified live, now masked by
+  A3-02 rather than by a down dev server. MISSING VERIFICATION, carried forward.** Both target
+  papers (`W7212288571`, `W7204990919`) report `rate_limited` as their final status this round,
+  so whether the bounce-page branch would now correctly label them `source_unavailable` (instead
+  of the old `no_figures`) cannot be observed through the live route until the rate limit clears
+  or A3-02's fallback-ordering fix lands.
+- **A3-04 — S3, a new confirmed incorrect-drop mechanism on `arxiv:2501.00663`: a zero-width
+  space (U+200B) inside a math expression survives every existing fold. REAL DATA, new finding
+  for B.** The source (ar5iv/HTML) reads a number and a following letter joined by an invisible
+  U+200B (an HTML math-rendering artifact); the model's otherwise character-perfect quote uses
+  an ordinary space there instead, and `\s` does not match U+200B, so `evidenceSupported`
+  returns false on an otherwise fully verbatim quote. Confirmed directly:
+  `normalizeForMatch` output differs by exactly this one invisible character. Currently within
+  Ruling 9's `<=1`-per-paper ceiling on every run sampled (never more than 1 in the same run as
+  another drop), but real, reproducible, and unaddressed — the pool itself has no HTML-sourced
+  paper, so this is the first time this artifact class has been measured at all.
+- **A3-05 — S3, a boundary-case extraction artifact on `openalex:W7212228226`, flagged rather
+  than silently classified. INFORMATIONAL, does not currently block the target.** A page-footer/
+  DOI stamp (`"10 DOI: 10.33961/jecst.2026.00892"`) is spliced into the middle of an otherwise
+  verbatim sentence by the PDF extractor; the model's clean quote (correctly omitting the stamp)
+  no longer matches after folding. This does not cleanly fit Ruling 9's two named categories
+  (model paraphrase vs. verbatim-after-fold) — it is genuinely the paper's own words, disrupted
+  by page layout, not paraphrased and not literally foldable without a new "strip injected page
+  furniture" rule. `POLICY — manager decides` how this class should be named going forward;
+  it does not block this paper's target this round (still 0-1 dropped, >=2 keyResults on both
+  runs).
+- **A3-06 — S4, the found-figure count has not moved in three rounds. REAL DATA, informational,
+  tracks slow progress against S4(c)'s full target.** Round 1: 1/17. Round 2: 1/17. Round 3:
+  1/17 (the same paper each time, `W7207740551`). The two Springer papers most likely to move
+  this number (per B's own round-2 note) remain unverifiable this round for the A3-03 reason
+  above, not because the fix failed.
+
+**Standing exclusions, re-listed by name (not re-diagnosed, unchanged from round 2):** the JECST
+PDF has no embedded images (honest absence); the Tc/BPV-theory synthesis sentence on
+`W7207740551` is a correct drop (Section 1c.3's standing ruling, reconfirmed 5 of 6 samples this
+round); the "Ld = 0.44" missing-operator residual (and this round's sibling instance, the
+"0.67and" missing-space case) are accepted PDF-extraction residuals, not fixable without
+loosening the matcher; Semantic Scholar 429s are an accepted cost in general, though the tally
+has now crossed the named escalation threshold (A3-02); Springer/Wiley/ACS/Elsevier bot walls
+and paywalls are honest `source_unavailable`/`paywalled` (Peer does not scrape past them);
+`benchmark.test.ts` is excluded from the gate; report tier is `large`; Vertex is global-endpoint
+only; papers never web-search.
+
+#### Gate line
+
+`GATE (0 open): NOT MET` — 6 open items above (A3-01 through A3-06; A3-05 is the one flagged
+`POLICY — manager decides` rather than a plain fail). All six of round 2's items are otherwise
+confirmed landed live. S5 and S6 remain fully closed (Part 4, no regression). S3 and S4 each
+still carry real, execution-confirmed differences — S3 because of model-variance keyResults
+counts and one newly found (but currently sub-threshold) incorrect-drop mechanism; S4 because of
+the rate-limit escalation and the still-unverifiable Springer fix it is now masking.
+
+**What the manager should still eyeball in the browser, once the gate does close** (unchanged
+scope from round 2, still not A's to do): the blank PDF's reading-page message (does
+`/papers/upload:6422afa156f795d1` render the plain "no readable text" sentence directly, with no
+loading spinner for a report that will never arrive); the two uploaded titles
+(`upload:a65e4a7d02784df1`, `upload:c5311fee90919716`) rendering correctly on their own reading
+pages, not just in the upload API response.
+
+Commit: `docs(abc): round 3 A - difference list, gate line, §1 handoff`.
