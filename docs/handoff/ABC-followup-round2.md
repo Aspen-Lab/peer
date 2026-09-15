@@ -2300,3 +2300,37 @@ regression locks explicitly: `evidence.test.ts`, `report.test.ts`, `reading-mark
 
 Commit: `feat(upload): full-text.ts reads an uploaded PDF directly, and a genuinely empty PDF gets
 its own honest reading state`.
+
+**1-29 — `web/src/lib/figures/extract.ts` recognizes `upload:` ids, mirroring 1-28.** DONE. Reused
+`upload-store.ts`'s `bareUploadId`/`pdfPath` directly (imported via the `@/lib/...` alias — this
+file's own imports had all been relative `./` so far since it had never needed to reach outside
+`lib/figures/`; matched the alias convention already used the other direction, `lib/papers/
+figure-binding.ts` importing `@/lib/figures/extract`, rather than inventing a second local
+`bareUploadId` copy). Added an early branch in `buildCandidatePool`, before the `arxivId`/
+`openAlexId` structure: an upload id calls `extractPdfCandidatesFromPath(pdfPath(hash16),
+"publisher")` (1-25) directly, pushes its `AttemptResult`, re-ordinalizes exactly like the normal
+path's own reordering step at the end of the function (filter `looksLikeLogo`, reassign `ordinal`
+0..N-1), and returns immediately — Semantic Scholar and `collectSourceLinks` never run, since an
+upload has no DOI to look either up by (a DOI 1-26 found by regex could, in principle, feed a
+secondary Semantic Scholar/Unpaywall lookup too, but B named that an enhancement, not required —
+not built this round).
+
+Tests: `extract.test.ts`, new `describe` block on the public `getFigurePool` (not `buildCandidatePool`
+directly — it isn't exported, and going through the real public entry point also exercises the
+cache/re-ordinalize path, not just the branch in isolation), mocking `./pdf-extract`'s
+`extractPdfCandidatesFromPath` — a real candidate comes back as one pool entry with its `imageUrl`
+intact, and the hash16 actually reaches the mock (`toContain("0000000000000010")`, proving the id was
+parsed and threaded through, not just "a request happened"); a `no_figures` result is an honest
+empty pool (`entries: []`) that still reports `attempted: true` (so a paper whose PDF was opened and
+read, but had no figures, is not confused with a paper Peer never tried). Proof: short-circuited the
+branch (`if (false && uploadHash16)`), re-ran — both new cases failed (the first for zero entries
+instead of one; the second for `attempted: false` since the branch that would have made an attempt
+never ran), restored.
+
+Gate: tsc clean, eslint clean, vitest 2604/2604 (2602 + 2 new). Re-ran `src/lib/figures/*.test.ts`
+(4 files now) as the standing regression lock — all pass, `arxiv-html-source.test.ts` unaffected.
+
+S7's two pipeline branches (1-28, 1-29) are both landed now. Remaining: 1-31 (reading page resolves
+`upload:` ids), 1-32 (the button), 1-33 (README note), then the live check.
+
+Commit: `feat(upload): figures/extract.ts reads an uploaded PDF's own images directly`.

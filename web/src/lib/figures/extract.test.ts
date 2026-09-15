@@ -1,6 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const mocks = vi.hoisted(() => ({
+  extractPdfCandidatesFromPath: vi.fn(),
+}));
+
+vi.mock("./pdf-extract", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./pdf-extract")>();
+  return { ...actual, extractPdfCandidatesFromPath: mocks.extractPdfCandidatesFromPath };
+});
+
 import {
   __resetSemanticScholarLimiterForTests,
+  getFigurePool,
   tryHtmlCandidates,
   trySemanticScholarCandidates,
 } from "./extract";
@@ -268,5 +279,40 @@ describe("tryHtmlCandidates — 1-21, a small identity-check bounce page is not 
 
     expect(globalThis.fetch).toHaveBeenCalledTimes(1); // no retry triggered
     expect(result.status).toBe("candidates");
+  });
+});
+
+describe("getFigurePool — 1-29, an upload: id reads the local PDF directly", () => {
+  beforeEach(() => {
+    mocks.extractPdfCandidatesFromPath.mockReset();
+  });
+
+  it("reads the stored PDF and never touches Semantic Scholar or collectSourceLinks", async () => {
+    mocks.extractPdfCandidatesFromPath.mockResolvedValue({
+      status: "candidates",
+      candidates: [
+        { imageUrl: "data:image/png;base64,AAAA", caption: "Figure 1", source: "publisher", ordinal: 0, qualityHint: "high" },
+      ],
+    });
+
+    const pool = await getFigurePool({ itemId: "upload:0000000000000010" });
+
+    expect(pool.entries).toHaveLength(1);
+    expect(pool.entries[0].imageUrl).toBe("data:image/png;base64,AAAA");
+    expect(mocks.extractPdfCandidatesFromPath).toHaveBeenCalledTimes(1);
+    expect(mocks.extractPdfCandidatesFromPath.mock.calls[0][0]).toContain("0000000000000010");
+  });
+
+  it("returns an honest empty pool (attempted, no candidates) when the PDF has no figures", async () => {
+    mocks.extractPdfCandidatesFromPath.mockResolvedValue({
+      status: "no_figures",
+      candidates: [],
+      reason: "Peer opened a legal PDF for this paper, but did not extract any usable figures from it.",
+    });
+
+    const pool = await getFigurePool({ itemId: "upload:0000000000000011" });
+
+    expect(pool.entries).toHaveLength(0);
+    expect(pool.attempted).toBe(true);
   });
 });

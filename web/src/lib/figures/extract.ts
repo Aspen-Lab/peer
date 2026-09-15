@@ -1,6 +1,7 @@
-import { tryPdfCandidates } from "./pdf-extract";
+import { extractPdfCandidatesFromPath, tryPdfCandidates } from "./pdf-extract";
 import { matchFigureSemantically } from "./semantic-match";
 import { matchFigureVisually } from "./vision-match";
+import { bareUploadId, pdfPath } from "@/lib/papers/upload-store";
 
 const FETCH_TIMEOUT_MS = 7_000;
 const MAX_BODY_BYTES = 2_500_000;
@@ -1355,6 +1356,21 @@ function poolCacheKey(input: ExtractInput): string {
 async function buildCandidatePool(input: ExtractInput): Promise<CachedPool> {
   const attempts: AttemptResult[] = [];
   const candidates: FigureCandidate[] = [];
+
+  // 1-29: an uploaded PDF is already on this server — read it directly and
+  // skip every other branch below (Semantic Scholar has no DOI to look this
+  // paper up by unless 1-26 found one via regex, and even then, looking it up
+  // too is an enhancement, not required: "has figures attached for analysis"
+  // per the user's own words is satisfied by the PDF's own embedded images).
+  const uploadHash16 = bareUploadId(input.itemId);
+  if (uploadHash16) {
+    const attempt = await extractPdfCandidatesFromPath(pdfPath(uploadHash16), "publisher");
+    attempts.push(attempt);
+    const reordered: FigureCandidate[] = attempt.candidates
+      .filter((c) => !looksLikeLogo(c.imageUrl))
+      .map((c, i) => ({ ...c, ordinal: i }));
+    return { candidates: reordered, attempts, ts: Date.now() };
+  }
 
   // Prefer original paper sources first. Semantic Scholar is useful, but its
   // figure URLs are often thumbnails, so it should enrich the pool rather than
