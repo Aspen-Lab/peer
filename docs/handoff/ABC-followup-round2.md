@@ -80,81 +80,62 @@ browser, run the reports), then report to the user in plain language and stop th
 ## §1. CURRENT STATE — THE SOURCE OF TRUTH
 
 ```
-ROUND:            1
-WHOSE TURN:       A
-STOPPED BECAUSE:  C finished the turn @ 2026-09-15 ~04:59 UTC — every item in B's guide (1-19
-                   through 1-33) is landed and committed. Combined with the previous C's 1-01..
-                   1-17 + 1-22, ALL 32 numbered items + the two rulings' extra items (1-22b) are
-                   now done. B's guide is exhausted; nothing left for C to pick up next round
-                   unless A's re-measure finds a defect.
-STATUS:           This C turn landed 1-19..1-33 in 11 commits: facc4d7 (1-19, og:image honesty
-                   guard), 8ba1f18 (1-20, Semantic Scholar queue + rate_limited), 38baa70 (1-21,
-                   bounce-page retry), 32b3353 (1-22b, pdf-extract.ts paywall status),
-                   64731a2 (1-23/1-24/1-25/1-30-field, upload-store.ts + the two *FromPath
-                   helpers), d869750 (1-26/1-27, the three upload routes), d590480 (1-28,
-                   full-text.ts upload branch + the new pdf_empty reading state), 9f42869
-                   (1-29, figures/extract.ts upload branch), 0138027 (1-31, reading page
-                   resolves upload: ids), 7fc541a (1-32, the button), 64b071c (1-33, README
-                   note). Gate re-run after every single item, never once left red.
-                   Two deviations from B's guide, both logged prominently at their commit's
-                   §4 entry, not just here: 1-23 pulled 1-30's `Paper.pageCount` field forward
-                   (upload-store.ts needed it to compile) and used a different dual-candidate
-                   cwd-resolution anchor than B's literal text (existsSync needs a file that
-                   already exists, and `.local-data/uploads` doesn't on a fresh checkout); 1-32
-                   added two new fixed-color CSS tokens instead of B's suggested
-                   `--color-heading`/`--color-text`, because both of those flip to near-white in
-                   dark mode, which would have made "a black square with a white icon" invisible
-                   exactly when dark mode is on.
-                   1-28 grew beyond a one-branch item: giving a genuinely-empty PDF its own
-                   honest reading state (not reusing `pdf_unreadable_here`, which specifically
-                   implies another deployment *could* read it) meant a real new
-                   `ReadingProvenance.fullText` value threaded through every site that already
-                   branches on `pdf_unreadable_here`, plus a `PaperReading.version` bump (3 -> 4)
-                   — two pre-existing tests that asserted the literal old version number were
-                   rewritten (not deleted), with a comment naming which item changed them.
-                   **The live check (real arXiv PDF -> upload -> report -> figure) could NOT be
-                   run this turn.** Confirmed by three independent checks: `curl` to
-                   localhost:3000 got connection refused from this session's Bash tool; the
-                   Browser pane's `preview_start` against the same URL was denied/failed to
-                   navigate; `netstat` found no process listening on port 3000 at all (only
-                   unrelated `node.exe`/`node_repl.exe` processes, none bound to that port). This
-                   is not a stale-cache "NEEDS RESTART" situation — the shared `peer-web` dev
-                   server was never reachable from this session's sandbox in the first place, and
-                   per the standing constraint C must not start it. A/the manager needs to run
-                   the live check from a session where the dev server is actually reachable
-                   (started via `.claude/launch.json`'s `peer-web` config, or already running).
-OPEN ITEMS:       S3(landed, unverified live) S4(landed, unverified live) S5(landed, unverified
-                   in browser) S6(landed) S7(landed, code-complete, live check pending — see
-                   STOPPED BECAUSE)
-GATE (0 open):    NOT MET — every item is now code-complete, but every one of S3/S4/S5/S6/S7
-                   still needs A's independent re-measure against real data/a real browser before
-                   the loop's 0-open-items target can be called met. No code differences are
-                   known to remain; what remains is verification, which is A's job, not C's.
+ROUND:            2
+WHOSE TURN:       B
+STOPPED BECAUSE:  A finished the round-2 re-measure @ 2026-09-15 ~10:35 UTC. Real-data and
+                   browser checks both done: A ran every route-level check (S3 three papers, S4
+                   all 17 pool papers, S7 full upload flow including a negative empty-PDF test);
+                   the manager separately did every browser-only check in a concurrent entry
+                   this round (S5 visual scramble, S7 button/drag-drop/Save) and found three
+                   issues of its own (M2-01/M2-02/M2-03), folded into A's difference list rather
+                   than duplicated.
+STATUS:           S5 and S6 are now fully closed — zero open items, confirmed both in code/live
+                   API response (A) and visually in the browser (the manager, same round). S3,
+                   S4 and S7 each still carry real, execution-confirmed differences; see the
+                   round-2 A difference list in §4 for A2-01 through A2-08. Highlights: the
+                   uploaded-PDF title heuristic is wrong on two different real PDFs, two
+                   different ways (A2-01, plus the manager's M2-01); a genuinely empty uploaded
+                   PDF never shows the promised "no readable text" message — confirmed by two
+                   independent execution checks, not one (A2-02); figure captions still show the
+                   raw PyMuPDF fraction-slash artifact to the reader even though the checker's
+                   own matching already folds it (A2-03, corroborates the manager's M2-02); the
+                   S4 found-count is unchanged at 1 of 17 since round 1, and at least two real,
+                   DOI-matching graphical abstracts (Springer `Fig1_HTML.png`) are still missed
+                   by the 1-19 fallback (A2-04); a 403 anti-bot block on a non-publisher host
+                   (OpenAlex itself) is now mislabelled `paywalled` (A2-05); `W7207740551` still
+                   exceeds the S3 ≤1-dropped-claim target live (2 dropped; A also supplied B
+                   three fresh dropped-claim fragments per the manager's M2-03, one matching the
+                   already-ruled synthesis drop by name, two new and unclassified) (A2-06).
+OPEN ITEMS:       S3(open — A2-06) S4(open — A2-03, A2-04, A2-05; informational: A2-08) S5(CLOSED)
+                   S6(CLOSED) S7(open — A2-01, A2-02)
+GATE (0 open):    NOT MET — 6 open differences (A2-01 through A2-06) plus one informational
+                   item (A2-08) not blocking the gate on its own. S5 and S6 are the only two spec
+                   items with zero open sub-items after this round.
 
-DONE:      1-01, 1-02..1-09, 1-10..1-13, 1-14..1-17, 1-18(note), 1-19, 1-20, 1-21, 1-22, 1-22b,
-           1-23, 1-24, 1-25, 1-26, 1-27, 1-28, 1-29, 1-30, 1-31, 1-32, 1-33. Every item in B's
-           round-1 guide.
-GATE NOW:  tsc clean · eslint clean · vitest 2607/2607 (this C, cold-checked before the first
-           edit and re-checked after every item; 2559 at turn start + 48 new/rewritten this
-           turn — see each commit's §4 entry for the per-item breakdown).
-TODO:      Hand to A. Re-measure every spec item on real data/a real browser and answer, per
-           §1a: (S3) does W7207740551 keep ≥2 key results and ≤1 dropped claim now, and does the
-           JECST report (W7212228226) still carry its Conclusions-derived claims — these were
-           already fixed by the previous C, re-confirm they held; (S4) how many of the 17 pool
-           papers show a figure now (before was 1/17) and is any of them a journal cover/logo
-           (should be zero — the 1-19 honesty guard's whole point) — also, how many Semantic
-           Scholar lookups still 429 after the 1-20 queue, and does the Nature Energy paper
-           (W7212165100) now say "access-check page" instead of a false "no_figures"; (S5) does
-           a fresh report generation actually scramble in the browser, and does a cached one
-           render plain, on a real page load; (S6) does the rendered page actually show one
-           merged "What it proposes" heading with no "Why it fits you" anywhere, on a real
-           report; (S7) — genuinely unverified end to end — does uploading a real arXiv PDF
-           produce a saved, sectioned, figured deep report; does a PDF with no text layer show
-           the plain "this PDF has no readable text" message instead of a broken report; does
-           the black square actually render black-with-white-icon in both light and dark mode
-           (the fixed-token fix in 1-32 is unverified in an actual browser); does drag-and-drop
-           work. Carry every standing tally forward by name (S4 status tally, S3 dropped-claims
-           per paper, 429 count) per the round-log rule.
+DONE:      Everything through 1-33 (unchanged from round 1's close). Round 2 has not added any
+           numbered B/C items yet — A's turn only measures.
+GATE NOW:  tsc clean · eslint clean · vitest 2607/2607 (A, cold-checked, no product code
+           changed this turn).
+TODO:      Hand to B. Take A's round-2 difference list (A2-01..A2-08) plus the manager's
+           M2-01/M2-02/M2-03 (already folded into A's list by cross-reference) and write the
+           fix guide, same discipline as round 1: enumerate the producing path before any
+           per-paper fix, classify each item (MISSING/WRONG DATA/WRONG SHAPE/WRONG ORDER/EXTRA),
+           rank wrong-data first. In particular: (A2-01/M2-01) the title heuristic needs a real
+           fix — join consecutive title-sized lines rather than taking one, and fall back to the
+           file name when unsure, never a half title or an unrelated stamp; (A2-02) the
+           `pdf_empty` classification needs to actually fire on a real empty PDF (fix
+           `tryUploadLink`'s success/failure branching) AND the `/reading` route needs an
+           `upload:` branch of its own (mirroring how `full-text.ts`/`figures/extract.ts` already
+           got one) before the honest message can ever reach a reader; (A2-03) fold the
+           fraction-slash artifact in the *displayed* caption text, not just the matching corpus;
+           (A2-04) the two Springer og:image misses — check whether the app's own fetch is being
+           blocked differently than a plain browser-UA probe, or whether the DOI-suffix token
+           check needs to handle a URL-encoded path segment; (A2-05) the paywall guard needs a
+           host-type check (a subscription publisher vs. an anti-bot block on a free aggregator
+           like openalex.org) before it labels a 403 "paywalled"; (A2-06) classify A's two new
+           dropped-claim fragments on `W7207740551` (correct drop vs. suspicious), same method as
+           §1c.3's already-ruled one. Carry every standing tally forward by name (S4 status
+           tally, S3 dropped-claims per paper, 429 count) per the round-log rule.
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
@@ -166,6 +147,7 @@ part-way.
 | Round | Open items after A | Verdict |
 |---|---|---|
 | 1 | 5 (S3 S4 S5 S6 S7) | NOT MET — round 1 measured only, fixed nothing (by design). Gate also currently not clean: 1 pre-existing eslint error, unrelated to S3-S7 (POLICY flagged). |
+| 2 | 6 (A2-01..A2-06; A2-08 informational) | NOT MET — S5 and S6 fully closed (code+live API by A, visual by the manager). S3/S4/S7 each still carry real, execution-confirmed differences. Gate clean (tsc/eslint/vitest 2607/2607). |
 
 ---
 
@@ -2832,3 +2814,83 @@ Matches the stated `GATE NOW` baseline exactly. No regression from any of this t
 calls (A changed no product code).
 
 Commit: `docs(abc): round 2 A part 5 - the gate, cold`.
+
+#### Difference list (round 2)
+
+Ranked by what the user notices first: the upload feature's own defects (visible the moment
+someone uses the new button), then per-report figure/caption problems (visible on nearly every
+paper), then the subtler full-text/checker numbers (visible only by comparing to the source).
+Real-data and code-state findings are kept separate within each item where both apply.
+
+- **A2-01 — S7, uploaded-PDF title extraction. WRONG DATA.** Spec wants: the real title, or (if
+  unsure) the file name — never a guessed/wrong title. **Observed, two independent real PDFs,
+  two different failure modes**: `2501.00663` → title returned is the arXiv margin stamp
+  (`"arXiv:2501.00663v1 [cs.LG] 31 Dec 2024"`), not "Titans: Learning to Memorize at Test Time";
+  the manager's M2-01 (same round, different PDF, `2609.02668`) → title truncated to its first
+  wrapped line only. Neither is fabricated text, both are the wrong text.
+- **A2-02 — S7, the "no readable text" message never reaches the reader for a genuinely empty
+  PDF. WRONG DATA + MISSING route branch.** Spec wants a plain "this PDF has no readable text"
+  message. Observed, two real blank PDFs, confirmed by execution: `extractPdfTextFromPath`
+  returns `ok:true` with zero sections for a real empty file (not the `ok:false` "produced no
+  sections" reason `tryUploadLink`'s `pdf_empty` branch checks for), so the deep-report route
+  shows the generic "the deep-read step failed" message instead; separately,
+  `GET /api/papers/[id]/reading` — the only route that actually builds the `pdf_empty` reading
+  sentence — 404s for any `upload:` id before it would ever apply that classification, and the
+  reading page's `useReading` hook falls back to a client-only reading that never carries
+  `pdf_empty` either way.
+- **A2-03 — S4, figure captions show the raw PyMuPDF fraction-slash artifact. WRONG DATA
+  (display).** The manager's M2-02, independently corroborated this round: 4 of 7 figure
+  captions on `W7207740551` contain the raw U+2044 character (confirmed by direct check on the
+  live `figureCaptions` array). The 1-17 fold only normalizes text for evidence *matching*; the
+  caption *shown* to the reader is never cleaned. Display-only; the checker's matching is fine.
+- **A2-04 — S4, at least 2 real graphical abstracts still missed. MISSING.** Spec target: every
+  paper with an honest available source shows a figure. Observed: `W7212288571` and `W7204990919`
+  (both Springer, both `no_figures`) each have a real, DOI-path-matching `og:image` on their
+  publisher page (`..._Fig1_HTML.png`) that `/api/figure` does not surface. Found count is
+  unchanged at 1 of 17 since round 1 — the 1-19 fix has not moved this number on the measured
+  pool.
+- **A2-05 — S4, a non-publisher 403 is mislabelled `paywalled`. WRONG DATA.** `W7212207112`
+  (OSF Preprints)'s only link is `openalex.org` itself, which anti-bot-blocks with a 403 —
+  OpenAlex is a free aggregator, not a subscription gate. 1-22's reclassification now reports
+  this as "requires paid or institutional access," which is false for this host. A new
+  inaccuracy introduced by a fix aimed at genuine publisher paywalls (Wiley/ACS/Elsevier, all 9
+  of the other `paywalled` results, not disputed).
+- **A2-06 — S3, `W7207740551` still exceeds the dropped-claims target. REAL DATA, standing.**
+  Target: ≤1 dropped. Live route: 2 dropped (down from round 1's 4, but still over target). A
+  separate reconstruction this round (labelled a construction, not the live route) dropped 3 of 9
+  items in one run; one fragment matches §1c.3's already-ruled synthesis drop by name, the other
+  two are new and unclassified — handed to B as fragments, not diagnosed by A.
+- **A2-07 — S3, JECST's dropped-claim count moved 0 → 1 across rounds. REAL DATA, informational,
+  does not block the target.** Both round-2 runs still meet ≤1 dropped / ≥2 keyResults, and one
+  of two runs confirmed a Conclusions-sourced kept claim (the manager's TODO, answered: yes, it
+  can happen, model-choice dependent — not observed on every run). Listed for the record per the
+  round-log tally rule, not as an open item.
+- **A2-08 — S4, Semantic Scholar rate limiting persists after the 1-20 queue. Informational,
+  `POLICY` if action is wanted.** 1 of 17 lookups' final status was `rate_limited`, stable across
+  3 retries ~10s apart — consistent with B's round-1 note that pacing alone may not clear a
+  daily-level quota, not just a per-second one. Not a regression; the queue's own honest
+  `rate_limited` label (vs. a false `no_figures`) is confirmed working as designed.
+
+**Standing exclusions, re-listed by name (not re-diagnosed):** the JECST PDF has no embedded
+images (honest absence, unchanged); the reconstruction's second dropped fragment on
+`W7207740551` is the same genuine-synthesis quote §1c.3 already ruled a correct drop;
+`benchmark.test.ts` stays excluded from the gate; the report tier is `large` throughout (pass 2
+used `gemini-3.6-flash` live this round); Vertex stays global-endpoint-only; papers never
+web-search.
+
+#### Gate line
+
+`GATE (0 open): NOT MET` — 8 items above, none closed to zero. S5 and S6 are the only two spec
+items with **no** open items after this round (S6 confirmed live+in code by A; S5 confirmed
+in code by A and visually in the browser by the manager, this round). S3, S4 and S7 each still
+carry at least one real, execution-confirmed difference.
+
+**Sub-items already closed by the manager's browser check this round (not A's work, cited above,
+not re-listed as open):** S5 visual scramble/cache-plain behavior; S7 button rendering,
+drag-and-drop, and Save.
+
+**No sub-item remains that needs *only* a browser and nothing else** — every remaining open item
+(A2-01 through A2-06, A2-08) is reproducible without a browser (route/API level) and is therefore
+B's to investigate next, not something left for "the manager's browser check."
+
+Commit: `docs(abc): round 2 A - difference list, gate line, §1 handoff to B`.
