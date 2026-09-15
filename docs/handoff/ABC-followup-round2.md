@@ -81,61 +81,57 @@ browser, run the reports), then report to the user in plain language and stop th
 
 ```
 ROUND:            2
-WHOSE TURN:       B
-STOPPED BECAUSE:  A finished the round-2 re-measure @ 2026-09-15 ~10:35 UTC. Real-data and
-                   browser checks both done: A ran every route-level check (S3 three papers, S4
-                   all 17 pool papers, S7 full upload flow including a negative empty-PDF test);
-                   the manager separately did every browser-only check in a concurrent entry
-                   this round (S5 visual scramble, S7 button/drag-drop/Save) and found three
-                   issues of its own (M2-01/M2-02/M2-03), folded into A's difference list rather
-                   than duplicated.
-STATUS:           S5 and S6 are now fully closed — zero open items, confirmed both in code/live
-                   API response (A) and visually in the browser (the manager, same round). S3,
-                   S4 and S7 each still carry real, execution-confirmed differences; see the
-                   round-2 A difference list in §4 for A2-01 through A2-08. Highlights: the
-                   uploaded-PDF title heuristic is wrong on two different real PDFs, two
-                   different ways (A2-01, plus the manager's M2-01); a genuinely empty uploaded
-                   PDF never shows the promised "no readable text" message — confirmed by two
-                   independent execution checks, not one (A2-02); figure captions still show the
-                   raw PyMuPDF fraction-slash artifact to the reader even though the checker's
-                   own matching already folds it (A2-03, corroborates the manager's M2-02); the
-                   S4 found-count is unchanged at 1 of 17 since round 1, and at least two real,
-                   DOI-matching graphical abstracts (Springer `Fig1_HTML.png`) are still missed
-                   by the 1-19 fallback (A2-04); a 403 anti-bot block on a non-publisher host
-                   (OpenAlex itself) is now mislabelled `paywalled` (A2-05); `W7207740551` still
-                   exceeds the S3 ≤1-dropped-claim target live (2 dropped; A also supplied B
-                   three fresh dropped-claim fragments per the manager's M2-03, one matching the
-                   already-ruled synthesis drop by name, two new and unclassified) (A2-06).
-OPEN ITEMS:       S3(open — A2-06) S4(open — A2-03, A2-04, A2-05; informational: A2-08) S5(CLOSED)
-                   S6(CLOSED) S7(open — A2-01, A2-02)
-GATE (0 open):    NOT MET — 6 open differences (A2-01 through A2-06) plus one informational
-                   item (A2-08) not blocking the gate on its own. S5 and S6 are the only two spec
-                   items with zero open sub-items after this round.
+WHOSE TURN:       C
+STOPPED BECAUSE:  B finished the turn @ 2026-09-15 ~11:09 UTC. Six fix-guide items written
+                   (2-01..2-06, Ruling 9's order), every one verified by execution against real
+                   PDFs, the real corpus, or the real production code path — not reasoned about
+                   from A's log alone. B changed no product code; gate re-run cold at the end,
+                   unchanged from A's (tsc/eslint clean, vitest 2607/2607).
+STATUS:            Item count: 6. Classification breakdown: WRONG DATA x4 (2-01 host
+                   mislabelling; 2-02's one real fix, a hyphenation-fold gap; 2-05's bug A,
+                   textStatus never set on a real empty PDF; 2-06, the title heuristic itself)
+                   · WRONG SHAPE x1 (2-03, caption display) · MISSING x2 (2-04's bounce-page
+                   detector under-firing; 2-05's bug B, the /reading route's absent upload:
+                   branch) — 2-05 carries two sub-bugs plus a third, narrower client-side gate,
+                   kept as one guide item per Ruling 5's "big items get sub-entries" pattern, not
+                   split into three numbers. Two items came back with less to fix than the round-2
+                   framing assumed, both stated plainly rather than papered over: 2-02 found that
+                   2 of A's 3 named fragments are correct drops (one already standing-ruled, one
+                   newly confirmed as the model's own framing sentence) and a third,
+                   source-caused character loss that has **no safe fix** without loosening the
+                   matcher (left alone, not chased) — the one real, confirmed-live incorrect drop
+                   this round is a *new* finding (PDF line-break hyphenation), not any of A's
+                   three; 2-04 found the real og:image is genuinely unreachable behind a Springer
+                   bot-check that a retry does not clear, so the fix corrects the *status*
+                   (`source_unavailable`, honest) but will very likely **not** move the S4
+                   found-count — flagged explicitly so A does not read that as the fix having
+                   failed next round.
+OPEN ITEMS:        S3(open — 2-02) S4(open — 2-03, 2-04, 2-01; informational: A2-08 unchanged)
+                   S5(CLOSED) S6(CLOSED) S7(open — 2-05, 2-06)
+GATE (0 open):     NOT MET — unchanged from A's count (6 real items + 1 informational); B adds
+                   no new open items, only fix directions for the ones A already found. C landing
+                   all six is what would bring this to 0, pending A's re-measure next round.
 
-DONE:      Everything through 1-33 (unchanged from round 1's close). Round 2 has not added any
-           numbered B/C items yet — A's turn only measures.
-GATE NOW:  tsc clean · eslint clean · vitest 2607/2607 (A, cold-checked, no product code
-           changed this turn).
-TODO:      Hand to B. Take A's round-2 difference list (A2-01..A2-08) plus the manager's
-           M2-01/M2-02/M2-03 (already folded into A's list by cross-reference) and write the
-           fix guide, same discipline as round 1: enumerate the producing path before any
-           per-paper fix, classify each item (MISSING/WRONG DATA/WRONG SHAPE/WRONG ORDER/EXTRA),
-           rank wrong-data first. In particular: (A2-01/M2-01) the title heuristic needs a real
-           fix — join consecutive title-sized lines rather than taking one, and fall back to the
-           file name when unsure, never a half title or an unrelated stamp; (A2-02) the
-           `pdf_empty` classification needs to actually fire on a real empty PDF (fix
-           `tryUploadLink`'s success/failure branching) AND the `/reading` route needs an
-           `upload:` branch of its own (mirroring how `full-text.ts`/`figures/extract.ts` already
-           got one) before the honest message can ever reach a reader; (A2-03) fold the
-           fraction-slash artifact in the *displayed* caption text, not just the matching corpus;
-           (A2-04) the two Springer og:image misses — check whether the app's own fetch is being
-           blocked differently than a plain browser-UA probe, or whether the DOI-suffix token
-           check needs to handle a URL-encoded path segment; (A2-05) the paywall guard needs a
-           host-type check (a subscription publisher vs. an anti-bot block on a free aggregator
-           like openalex.org) before it labels a 403 "paywalled"; (A2-06) classify A's two new
-           dropped-claim fragments on `W7207740551` (correct drop vs. suspicious), same method as
-           §1c.3's already-ruled one. Carry every standing tally forward by name (S4 status
-           tally, S3 dropped-claims per paper, 429 count) per the round-log rule.
+DONE:      Everything through 1-33 (unchanged). Round 2's A turn (measurement) and B turn (this
+           guide) are both done; C has not started.
+GATE NOW:  tsc clean · eslint clean · vitest 2607/2607 (B, cold-checked at the end of this turn,
+           no product code changed by B).
+TODO:      Hand to C. Work items 2-01 through 2-06 in that order (already Ruling 9's order), one
+           commit per item, gate after each. Two items are two-and-three-part respectively — land
+           every part of 2-02 (the hyphen fold; do **not** chase the unfixable "Ld = 0.44"
+           character-loss case, leave it alone) and every part of 2-05 (UploadMeta/Paper
+           textStatus field, tryUploadLink's zero-sections check, the /reading route's new
+           upload: branch, AND the client-side never-ask-for-a-report gate — all four, not a
+           subset) before moving on. 2-06's fix lives entirely in Python
+           (`extract_pdf_text.py`'s `extract_title`); do not add a TypeScript re-
+           implementation of the join logic — only the safety-net word-count/stamp re-check and
+           the step-(b) model-fallback belong in the route. New protective tests are named in
+           each item; where an existing test's *fixture* doesn't match reality (2-05's
+           full-text.test.ts case built on a shape a real empty PDF never produces) add the
+           correct-shape case alongside it — never delete the old one, it still guards a
+           different real path. Carry every standing tally forward by name (S4 status tally, S3
+           dropped-claims per paper, 429 count) per the round-log rule; A2-08's Semantic Scholar
+           rate-limit tally is unchanged by this turn (B did not re-run the pool).
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
@@ -3359,3 +3355,322 @@ under 8,000 chars, no "cookie" anywhere → `looksLikeBouncePage` returns `true`
 
 **Blast radius**: one file, `web/src/lib/figures/extract.ts`. `looksLikeBouncePage` has one caller
 (`tryHtmlCandidates`); no other file imports it (it is not exported).
+
+#### Item 2-05 — A2-02: the empty-PDF message never reaches the reader (two bugs, one wider gap)
+
+**Bug A, root cause confirmed by execution.** Built a real blank single-page PDF with PyMuPDF
+(`python -c "import fitz; d=fitz.open(); d.new_page(); d.save(...)"`) and ran the real, exported
+`extractPdfTextFromPath` against it directly. Result: **`{ ok: true, doc: { sections: [], ... },
+reason: undefined }`** — not `{ ok: false, reason: "...produced no sections" }` as
+`tryUploadLink`'s current check (`web/src/lib/papers/full-text.ts:226`,
+`/produced no sections/i.test(result.reason)`) expects.
+
+Traced into `web/scripts/extract_pdf_text.py`'s `extract_text()` (lines ~275-290): when a page has
+**zero text lines at all** (a truly blank page — `flat` is empty in `segment_into_sections`), the
+"no headings found" branch still returns **one** `"Body"` section, with `text: ""` (the empty-list
+join of zero lines is `""`, but the *section itself* is a real dict, not absent). Then:
+```python
+running = 0
+trimmed = []
+for section in sections:
+    ...
+    trimmed.append(section)          # appended even when text == ""
+return {
+    ...,
+    "reason": None if trimmed else "PDF text extractor produced no sections.",
+}
+```
+`trimmed` has length 1 (one section, empty text) — **truthy** — so `reason` comes back `None`. Back
+in `web/src/lib/papers/pdf-text.ts`'s `normalize()` (line 189), the zero-length section is then
+silently dropped by `.filter((section) => section.text.length > 0)` — producing exactly the
+observed shape: `ok: true`, `sections: []`, `reason: null`. **Two functions, in two languages, each
+individually reasonable, compose into a false "successful, empty" read.** `tryUploadLink`'s
+existing `ok:false`-branch check for "produced no sections" is real code guarding a case that a
+truly empty PDF never actually produces — it only fires for a *different* Python-side failure
+(e.g. a totally unreadable/corrupt file), not for "read fine, found nothing."
+
+**Design per Ruling 9 — do not chase the Python string-truthiness bug; carry the fact structurally
+instead**, exactly as the ruling specifies:
+
+1. **`UploadMeta`** (`web/src/lib/papers/upload-store.ts:78-90`) gets one new optional field,
+   following the exact precedent already set for `pageCount` (same file, same interface, comment
+   citing the same "only ever set for an uploaded PDF" pattern):
+   ```ts
+   /** Ruling 9 (§1j) / A2-02: "ok" when the extractor found at least one
+    *  section of real text; "empty" when it read the file successfully but
+    *  found nothing extractable (most likely a scanned PDF with no text
+    *  layer). Set once, at upload time, from a fact upload/route.ts already
+    *  has (doc.sections.length) — never re-derived downstream. */
+   textStatus: "ok" | "empty";
+   ```
+2. **`web/src/app/api/papers/upload/route.ts`** (around line 95-107, where `meta` is built): add
+   `textStatus: (doc?.sections.length ?? 0) > 0 ? "ok" : "empty"`.
+3. **`uploadMetaToPaper`** (`upload-store.ts:138-154`) forwards it: `textStatus: meta.textStatus`
+   onto the returned `Paper`.
+4. **`Paper`** (`web/src/types/index.ts:51-83`) gets the matching optional field, placed next to
+   `pageCount` with the same "1-30-style, upload-only" comment convention:
+   `textStatus?: "ok" | "empty";`.
+5. **`tryUploadLink`** (`full-text.ts:214-235`) — fix the actual bug, not just the symptom, so the
+   classification is correct even outside the upload route (e.g. a report generated later against
+   a stale record): change the `ok:true` branch from an unconditional "it's ok" to also check
+   `result.doc.sections.length === 0`:
+   ```ts
+   if (result.ok && result.doc) {
+     if (result.doc.sections.length === 0) {
+       return { status: "no_full_text", reason: "pdf-empty: PDF text extractor produced no sections." };
+     }
+     return { status: "ok", doc: result.doc };
+   }
+   ```
+   This reuses the exact same `"pdf-empty: ..."` reason string the existing `ok:false` branch
+   already produces (line 232) — `reading.ts`'s `pdfHasNoText` (which matches `/\bpdf-empty\b/`
+   on the attempt outcome) needs no change at all; it already looks for exactly this marker.
+
+**Bug B, confirmed by execution: `GET /api/papers/[id]/reading` 404s for every `upload:` id, not
+just empty ones.** The route (`web/src/app/api/papers/[id]/reading/route.ts:60`) calls
+`fetchPaperById(decodedId)` (`web/src/lib/papers/fetch-by-id.ts:113-121`), which only recognizes
+an `openalex:`/`arxiv:` prefix and returns `null` for anything else — confirmed by reading the
+function, it has no third branch. This is the **only** place `buildReading` ever runs with a real,
+non-null `FullTextResult` (`reading.ts`'s `pdfHasNoText`/`sectionReason()` logic, which is what
+would turn `pdf_empty` into the plain "This PDF has no readable text..." sentence, lives entirely
+inside `buildReading`, and this route is the only caller that gives it a real `fullText`). The
+client's `useReading` hook (`web/src/components/reader/use-reading.ts:88-112`) calls this same
+route unconditionally for every paper id; on the 404 it falls back to
+`buildReading(paper, null)` — client-side, `fullText: null` — which short-circuits
+`buildProvenance` to `fullText: "none"` before `pdfHasNoText` is ever consulted. **This means
+every uploaded paper, empty or not, currently only ever gets the degraded client-only reading** —
+no server-built findings/method/caveats quotes, no accurate "Full text read: a 27-page PDF..."
+sentence — not only the empty-PDF case A2-02 names. Fixing only bug A would leave this wider gap
+in place: the correct `pdf_empty` provenance would exist on the server, but the route that would
+ever apply it to a real `FullTextResult` never runs for an `upload:` id at all.
+
+**Fix direction for bug B** — give the reading route the same `upload:` branch `full-text.ts`
+(1-28) and `figures/extract.ts` (1-29) already have, rather than teaching `fetchPaperById` a
+`RawItem`-shaped lie about an upload (uploads map straight to `Paper`, skipping `RawItem`
+entirely, exactly as `uploadMetaToPaper` already does):
+```ts
+// GET /api/papers/[id]/reading, before the fetchPaperById(decodedId) call:
+const uploadHash16 = bareUploadId(decodedId);
+if (uploadHash16) {
+  const meta = await readUploadMeta(uploadHash16);
+  if (!meta) return NextResponse.json({ error: "Paper not found" }, { status: 404, headers: NO_STORE_HEADERS });
+  const paper = uploadMetaToPaper(meta);
+  const fullText = await fullTextWithin({ paperId: paper.id, url: paper.linkPaper ?? null, doi: paper.doi ?? null }, FULL_TEXT_TIMEOUT_MS);
+  const reading = buildReading(paper, fullText.settled ? fullText.result : null);
+  return NextResponse.json(reading, { headers: fullText.settled && !refresh ? CACHE_HEADERS : NO_STORE_HEADERS });
+}
+```
+(`bareUploadId`, `readUploadMeta`, `uploadMetaToPaper` all already exported from
+`upload-store.ts`.) With this landed, `getFullText`'s own existing `upload:`-aware `buildResult`
+branch (`full-text.ts:238-258`) does the rest — no further change needed there beyond bug A's fix.
+
+**Fix direction, third part — "never asks for a report" (Ruling 9's own words).** Even with bugs A
+and B fixed, `useModelReport` (`web/src/components/reader/use-model-report.ts:180-183`) fires its
+report-generating effect unconditionally whenever a paper + reportKey exist and nothing is cached
+— it does not know a paper is textless. Gate it: `if (!current || !reportKey || cached ||
+current.textStatus === "empty") return;` (same early-return shape the effect already uses one
+line above). In `Reader` (`web/src/app/papers/[id]/page.tsx`), add an early branch — before
+`useReading`/`useModelReport` even need to run their effects meaningfully — that renders the
+plain "This PDF has no readable text — Peer could not extract anything from it." sentence directly
+from `paper.textStatus === "empty"` (the exact string `reading.ts:743` already uses for the
+`pdf_empty` case; reuse it as a shared constant so the two paths can never drift), never asking for
+either an abstract-tier or a deep report. This is a client-side, additive gate — it does not change
+what the server computes, only whether the client bothers to ask.
+
+**What the field shows when every candidate is rejected**: unchanged from the spec's own words —
+"this PDF has no readable text" — now actually reachable, via three independent paths agreeing
+(the record's own `textStatus`, the server reading's `pdf_empty` provenance, and no wasted report
+call in between).
+
+**Tests at risk**:
+- `web/src/lib/papers/full-text.test.ts:113-123` — **"marks a genuinely empty PDF distinctly"**
+  mocks `extractPdfTextFromPath` to return `{ ok: false, reason: "PDF text extractor produced no
+  sections." }` directly — this is **not** what a real empty PDF returns (confirmed above: real
+  shape is `{ ok: true, doc: { sections: [] } }`). This test currently passes against a scenario
+  that cannot happen, so it gives false confidence and must **not** be treated as proof the fix
+  works. Per "never delete a test": keep it (it still validates the `ok:false` reason-string
+  branch, a real path for a different failure), and **add a new case** using the true shape —
+  `{ ok: true, doc: { sections: [], title: null, figureCaptions: [], source: "pdf", pageCount: 1,
+  reason: null } }` → expect `result.status` to be `"no_full_text"` and `result.attempts[0].outcome`
+  to contain `"pdf-empty"`. Only the new case can prove bug A's fix; prove it the standard way
+  (revert the source change, watch the new case fail, restore).
+- `web/src/app/api/papers/[id]/reading/route.test.ts` — mocks `fetchPaperById` entirely (grepped:
+  every test supplies its own mock return value regardless of the id passed), so **no existing
+  test exercises the real 404-on-upload behavior at all** — a genuine, previously untested gap,
+  not a regression risk. New tests needed: an `upload:` id with a real (mocked) empty doc →
+  `pdf_empty` provenance in the response; an `upload:` id with real sections → an ordinary `pdf`
+  provenance, proving the wider gap (not just the empty case) is closed.
+- `web/src/lib/papers/upload-store.test.ts` — **`UploadMeta.textStatus` should be a required field
+  on the interface, not optional** (unlike `Paper.textStatus`): the upload route always knows the
+  answer at write time, so "unknown" is never a real state for a stored record the way it is for
+  a `Paper` from a source that never sets the field at all. That means the three existing
+  `UploadMeta` object literals in this file (lines 76-82 "round-trips a written record", 91-96
+  "never invents an author...", 110-118 "carries a found DOI...") will **fail to compile** once
+  the field is added as required — a real, mechanical, TypeScript-caught blast radius, not a
+  behavior risk: each needs one line added (`textStatus: "ok"`, since none of these three
+  represent an empty-PDF case). This is a rewrite of the fixture to match the new (still-honest)
+  shape, not a deleted assertion. `uploadMetaToPaper`'s two "honesty" tests (lines 90-107, 109-125)
+  use narrow, field-by-field `toBe`/`toEqual` (checked directly — not a whole-object `toEqual`), so
+  they do **not** need a `textStatus` assertion added to keep passing, though C should add one
+  (`expect(paper.textStatus).toBe("ok")`) since this is exactly the field the fix is about.
+- `web/src/app/api/papers/[id]/reading/route.test.ts` — mocks `fetchPaperById` entirely (grepped:
+  every test supplies its own mock return value regardless of the id passed), so **no existing
+  test exercises the real 404-on-upload behavior at all** — a genuine, previously untested gap,
+  not a regression risk. New tests needed: an `upload:` id with a real (mocked) empty doc →
+  `pdf_empty` provenance in the response; an `upload:` id with real sections → an ordinary `pdf`
+  provenance, proving the wider gap (not just the empty case) is closed.
+- `web/src/app/api/papers/upload/route.test.ts` — the four title-focused cases (lines 94-157) use
+  narrow `expect(body.paper.title)`-style assertions, not a whole-body `toEqual`, so they stay
+  green untouched; a new case should assert `body.paper.textStatus` for both the "found sections"
+  and "empty" cases.
+
+**Blast radius**: `upload-store.ts` (1 new field + `uploadMetaToPaper`), `upload/route.ts` (1 new
+field write), `types/index.ts` (1 new optional `Paper` field — optional, so every existing `Paper`
+literal across the codebase stays valid; same low-risk pattern `pageCount` already established),
+`full-text.ts` (`tryUploadLink`'s one branch), `app/api/papers/[id]/reading/route.ts` (one new
+early branch), `use-model-report.ts` (one line), `app/papers/[id]/page.tsx` (one new early-render
+branch). No change to `reading.ts` itself — its `pdf_empty` machinery already does the right thing
+once it is ever given the chance to run.
+
+#### Item 2-06 — A2-01: the uploaded-PDF title heuristic
+
+**Both real failure modes reproduced and measured by execution** (`python .local-data/round2b-
+scratch/dump_page1_lines.py`, PyMuPDF's own `get_text("dict")`, against the two real PDFs already
+on disk from earlier rounds — `web/.local-data/uploads/a65e4a7d02784df1.pdf` = the Titans paper
+`2501.00663`, `.../c5311fee90919716.pdf` = `2609.02668` — no new download needed, never
+committed):
+
+- **`2501.00663` (A's own paper, the arXiv-stamp case)**: page 1's **largest font
+  span on the whole page is the rotated arXiv margin stamp itself — 20.0pt** — strictly larger
+  than the real title's 17.22pt. `extract_title()` (`extract_pdf_text.py`, current code) picks the
+  single largest span on the page with no exclusion list at all, so it picks the stamp,
+  confirming the exact bug and, precisely, *why*: the stamp is not merely "also large," it is
+  measured as the **single largest thing on the page**.
+- **`2609.02668` (the truncated-title case)**: the real title spans **three separate lines, all
+  at the identical largest size (15.96pt), consecutive, evenly spaced (y ≈ 72.7, 100.6, 128.5)**,
+  with no other content interleaved between them. `extract_title()`'s `if size > best[0]` (strict
+  `>`, not `>=`) keeps only the **first** line it meets at that size and never appends the other
+  two — exactly reproducing M2-01's truncation.
+- A structural gap in the current implementation, not just a missing exclusion list:
+  `extract_title()` re-walks `data.get("blocks")` **independently of, and in a different order
+  than,** `extract_page_lines()` (the function that already exists and already sorts lines into
+  real reading order for the rest of the script, `extract_pdf_text.py:140-157`). Without
+  that shared sort, "consecutive lines" is not even a well-defined concept in the current code —
+  it walks blocks in the PDF's internal storage order, not top-to-bottom reading order.
+
+**What step (a) alone (join consecutive largest-font lines, correctly ordered) produces on both
+real PDFs, verified by execution**:
+- `2609.02668` → **fully correct**: joining the three consecutive 15.96pt lines in reading order
+  yields exactly "Electronic Structure and Superconductivity in La1.55Sr0.45CuO4/La2CuO4
+  Artificial High-*T*c Superlattices Probed by Hard and Soft X-ray Spectroscopy" — the paper's
+  real title. Step (a) alone, done correctly, fixes this case completely.
+- `2501.00663` → **only correct if stamp-exclusion happens *before* the max-size search, not
+  after.** If "largest font on the page" is computed first and the stamp is filtered out of the
+  *result* afterward, the algorithm never notices the real title (17.22pt) at all, because 20.0pt
+  (the stamp) already won that comparison. The exclusion must filter candidate lines **before**
+  computing which size is "largest" — then the real title (17.22pt, a single line, ≥3 words, not
+  stamp-shaped) naturally becomes the new maximum and step (a) alone also fixes this case, with no
+  need to fall through to step (b) at all.
+
+**Fix direction — entirely in Python, one rewritten function.** Rewrite `extract_title()` in
+`web/scripts/extract_pdf_text.py` to:
+1. Reuse `extract_page_lines(doc[0])` (already computed once per document at the top of
+   `extract_text()` as `pages_lines[0]` — pass it in rather than re-deriving) for the real,
+   sorted, top-to-bottom reading order.
+2. Filter **out** any line matching a small stamp/DOI/URL/running-header/date pattern set —
+   `^arXiv:\d{4}\.\d{4,5}` (the exact pattern Ruling 9 names), a bare DOI (`10\.\d{4,9}/`), a bare
+   URL (`^https?://`), and a short all-digits-and-slashes date-shaped line — **before** computing
+   the maximum span size, not after.
+3. Find the maximum span size among the *remaining* (filtered) lines only.
+4. Walk the filtered lines in order and join every **consecutive run** of lines at that maximum
+   size into one string (space-joined) — stopping at the first line of a different size (the
+   author-affiliation line that follows a title is reliably smaller, confirmed in both real PDFs
+   above).
+5. Return the joined string, or `None` if no candidate line survives the filter at all (e.g. a
+   page that actually is 100% a stamp — a real, if rare, honest "found nothing" case).
+
+**Step (b) — the small-tier model, only for what step (a) could not resolve.** In
+`web/src/app/api/papers/upload/route.ts`, after computing `doc?.title` (which now already carries
+step (a)'s filtered join): add a safety-net re-check — even though (2) above should already
+exclude a stamp, re-validate what Python returned before trusting it (defense in depth, in case a
+stamp shape (1) doesn't cover slips through): word count `< 3` **or** it matches the same
+stamp/DOI/URL pattern set (a small shared regex, duplicated deliberately rather than round-
+tripped through a second process boundary — Python and TS each need their own copy, same as the
+paywall-status duplication A2-05 is undoing was a *cross-file* problem, not a cross-language one).
+If it fails that check, call `resolveProvider(null)` (`web/src/lib/llm/providers/registry.ts:97`)
+— **the same no-override pattern `report/route.ts` already uses**, so this works locally (dev
+credentials via `resolveLocalServerProvider()`) and fails closed on a deployed instance with no
+user key (`canUseLocalServerProvider()` requires `NODE_ENV === "development" && !VERCEL`) — that
+is not a gap to fix, it is the existing, deliberate "never spend the operator's account on a
+stranger's request" rule (`registry.ts:29-36`) applying correctly here too; a deployed Peer with
+no key simply skips straight to (c), which is honest, not broken. If a provider exists, one
+`generateJsonText({ tier: "small", systemPrompt: "...", userPrompt: <page-1 text, first ~3000
+chars>, ... })` call asking only for `{ "title": string | null }`, validated the same way (≥3
+words, not stamp-shaped, ≤200 chars) before being trusted.
+
+**Step (c) — file name.** Unchanged; already correct (`titleFromFileName`, `route.ts:43-46`).
+
+**Protective synthetic-layout tests** (Ruling 9's own ask — two, both at the Python level since
+that's where the join logic lives; a `subprocess`/fixture-PDF test, mirroring however
+`extract_pdf_figures.py`'s existing Python-side tests, if any, are structured — check for a
+`test_extract_pdf_text.py` or equivalent before inventing a new harness):
+1. **Wrapped title**: a synthetic single-page PDF (built with PyMuPDF in the test itself, the same
+   `fitz.open(); page.insert_text(...)` pattern used to make this round's blank-PDF fixture) with
+   three lines at one large size, one line at a smaller size below them → `extract_title` returns
+   the three lines joined, not just the first.
+2. **Stamp above title**: a synthetic PDF with one line at a *larger* size matching the arXiv-stamp
+   pattern, and, below it, a real-title-shaped line at a smaller size → `extract_title` returns the
+   title line, never the stamp, and never `None` (proving the filter runs before the size
+   comparison, not after).
+
+**Verified against A's and the manager's real PDFs one more time, end to end (not just page-1
+lines in isolation)**: with the redesigned step (a), `2609.02668`'s upload would return the full
+three-line title (fixing M2-01) and `2501.00663`'s would return "Titans: Learning to Memorize at
+Test Time" (fixing A2-01) — **both from step (a) alone**, confirmed by the reading-order + pre-
+filter design above; step (b) exists for a page-1 layout neither of these two real PDFs actually
+exercises (e.g. a title in a smaller font than a running header, or a title that's genuinely
+short/ambiguous), which is exactly why Ruling 9 asks for it as a fallback rather than the primary
+mechanism.
+
+**What the field shows when every candidate is rejected**: the file name without its extension —
+unchanged, already the existing, correct step (c) — never a half title, never a stamp, matching
+the spec's own words exactly.
+
+**Tests at risk**:
+- `web/src/app/api/papers/upload/route.test.ts:109-124` — **"falls back to the file name when the
+  extractor found no title"** (mocks `extractPdfTextFromPath` → `emptyDoc`, `title: null`) and
+  **"uses the extractor's own title when it found one"** (mocks `doc.title: "The Real Paper
+  Title"`) both mock `extractPdfTextFromPath` directly, bypassing Python entirely — neither
+  exercises the join/filter logic this fix rewrites. Both stay green unmodified: the first still
+  hits step (c) because `resolveProvider(null)` returns `null` under Vitest's default
+  `NODE_ENV=test` (not `"development"`), so the new step (b) is naturally inert in this suite
+  unless a test explicitly mocks the registry — confirmed by reading `canUseLocalServerProvider`'s
+  exact condition, not assumed; the second passes step (a)'s already-successful title through
+  unchanged since "The Real Paper Title" clearly clears the ≥3-word/non-stamp bar.
+- `web/src/app/api/papers/upload/route.test.ts:148-157` — **"still succeeds when the extractor
+  fails entirely"** (mocks `ok: false`, expects `title: "scanned"`) — same reasoning, stays green:
+  no `doc` at all → step (a) has nothing to filter → step (b) inert in tests → step (c) file name,
+  unchanged outcome.
+- No existing Python-side test was found for `extract_title` specifically (grepped for a
+  `test_extract_pdf_text.py`/similar harness; if C finds the project has no Python test runner
+  wired up at all, the two new protective tests above may need to be TypeScript-side instead,
+  invoking the script via the same `execFile` pattern `pdf-text.ts` already uses, against two
+  synthetic PDFs written to a temp dir with PyMuPDF at test setup — slower, but exercises the real
+  script rather than a reimplementation).
+
+**Blast radius**: `web/scripts/extract_pdf_text.py` (`extract_title`, rewritten; its one caller,
+`extract_text`, changes only in what it passes in — the already-computed `pages_lines[0]`).
+`web/src/app/api/papers/upload/route.ts` (the new step-(b)/(c) escalation logic — additive, wraps
+the existing `doc?.title?.trim() || titleFromFileName(...)` line rather than replacing its
+structure). No change to `upload-store.ts`, `full-text.ts`, or anything downstream of `title` —
+every consumer of `Paper.title` already treats it as an opaque string.
+
+#### Gate — cold, after this turn's investigation (no product code changed)
+
+B changed no product code this turn (per role). Ran the gate once at the end anyway, to confirm B's
+own throwaway scripts and the deleted scratch vitest spec left no trace: from `web/`,
+`npx tsc --noEmit` → clean; `npx eslint .` → clean; `npx vitest run --exclude
+"**/benchmark.test.ts"` → **2607/2607 passed**, matching A's round-2 baseline exactly (unchanged,
+as expected — B touched no source file).
+
+Commit: `docs(abc): round 2 B part 3 - A2-02 upload text-status, A2-01 title heuristic, gate`.
