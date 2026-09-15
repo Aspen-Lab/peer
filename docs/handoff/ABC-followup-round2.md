@@ -515,6 +515,20 @@ if it meets the targets above; the manager then re-checks in the browser and rep
 
 ---
 
+## §1l. RULING 11 — the bare page-number line is furniture too (manager, 2026-09-15) — BINDING
+
+C's 4-03 residual: PyMuPDF emits the page number as its own line, so after the "DOI: …" footer
+is stripped a bare "10" can still land mid-sentence. This is a **closed shape, not fuzzy
+matching**: a line consisting only of 1–4 digits is furniture **when its value tracks the page
+sequence** — i.e. `value = page_index + k` for one constant `k` that holds on ≥ 3 pages of the
+same PDF (first page may be unnumbered; `k` is found from the pages that have such a line). A
+bare number that does not track the sequence (a table cell, a year on its own line) is left
+alone. Lives in `extract_pdf_text.py` next to `find_running_furniture`, removed in the same
+pass. Protective test: a synthetic 4-page text with "1", "2", "3", "4" lines and one "2024"
+line that must survive. Item **4-05** for C, then A's closing measurement.
+
+---
+
 ## §2. ROLES — DO ONLY YOUR OWN JOB
 
 ### Agent A — Reviewer
