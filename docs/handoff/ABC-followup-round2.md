@@ -2931,3 +2931,260 @@ drag-and-drop, and Save.
 B's to investigate next, not something left for "the manager's browser check."
 
 Commit: `docs(abc): round 2 A - difference list, gate line, §1 handoff to B`.
+
+### Round 2 — Agent B
+
+Branch confirmed `complimentary-enhancement-to-main-update` before starting; `git status` clean.
+B changed no product code. Throwaway execution scripts lived under
+`web/.local-data/round2b-scratch/` (gitignored) and one throwaway vitest spec at
+`web/src/lib/papers/__round2b_scratch_dropped_claims.test.ts` (tracked path — deleted before
+this part's commit, confirmed by `git status` below each part). No credential was read, printed,
+or logged; the dev server (`peer-web`, port 3000) was only read from, never restarted.
+
+Numbering is `2-01 … 2-06`, in Ruling 9's order (§1j): **A2-05 → A2-06 → A2-03 → A2-04 → A2-02 →
+A2-01.** Classifications: `MISSING` / `WRONG DATA` / `WRONG SHAPE` / `WRONG ORDER` / `EXTRA`.
+
+#### Item 2-01 — A2-05: a free-aggregator 403 is mislabelled `paywalled`
+
+**Traced by execution.** Grepped every copy of the status-based paywall check
+(`select:Grep` for `function looksLikePaywallStatus`): there are exactly **three** real copies,
+not four —
+
+- `web/src/lib/papers/full-text.ts:80-82` — `looksLikePaywallStatus(status)`, called at
+  `tryHtmlLink` (line 154) and `tryPdfLink` (line 185). **No host guard of any kind** — neither a
+  local `hostLooksOpenAccess` nor an `OPEN_ACCESS_HOST_PATTERNS` list exists in this file. This is
+  the worst-off of the three: every hard 401/402/403/451 this file sees becomes `paywalled`,
+  aggregator host or not.
+- `web/src/lib/figures/extract.ts:1074` (`looksLikePaywallStatus`) + `:212-218`
+  (`OPEN_ACCESS_HOST_PATTERNS`, 5 entries: `pmc.ncbi.nlm.nih.gov`, `arxiv.org`,
+  `ar5iv.labs.arxiv.org`, `biorxiv.org`, `medrxiv.org`) + `:248-255` (`hostLooksOpenAccess`).
+  Guarded call site at line 1110: `if (res && !hostLooksOpenAccess(url) && looksLikePaywallStatus(res.status))`.
+- `web/src/lib/figures/pdf-extract.ts:20-26` (own copy of the same 5-host list) + `:94-101`
+  (`hostLooksOpenAccess`) + `:113-115` (`looksLikePaywallStatus`). Guarded call site at line 231,
+  identical shape to `extract.ts`'s.
+
+**`web/src/lib/papers/pdf-text.ts` has no paywall logic at all** — confirmed by grep, zero hits.
+It only returns the raw HTTP `status` on `downloadPdf` failure (line 94); `full-text.ts`'s
+`tryPdfLink` is what interprets that status. Ruling 9 names `pdf-text.ts` as one of "the four
+files"; read literally that file has nothing to change — the real fourth site *reachable through
+it* is `full-text.ts`'s `tryPdfLink`, already counted above. Not a policy conflict, just a
+correction so C doesn't hunt for logic that isn't there.
+
+**Root cause of A2-05's OSF finding, confirmed by direct fetch**: `W7212207112`'s only link,
+`https://openalex.org/W7212207112`, 403s. `figures/extract.ts`'s own guarded call site *does* run
+`hostLooksOpenAccess` before calling it `paywalled` — but `openalex.org` is not one of the 5
+patterns in that file's `OPEN_ACCESS_HOST_PATTERNS`, so the guard passes it through as paywalled
+anyway. Confirmed by reading the list, not by network call (a 403 is already established fact from
+A's round). Every one of the 9 other `paywalled` results this round is a real subscription
+publisher (Wiley/ACS/Elsevier/JJAP hosts) — none of those hosts are in Ruling 9's aggregator list
+either, so they are unaffected by this fix.
+
+**Fix direction.** One new shared module: **`web/src/lib/papers/paywall-status.ts`**.
+
+```ts
+export type HardAccessVerdict = "paywalled" | "blocked" | null;
+
+// Ruling 9 (§1j) — closed by construction, not a heuristic. These are the
+// aggregator/free hosts this codebase itself calls; a 401/402/403/451 from
+// one of them is an anti-bot block, never a subscription gate.
+const AGGREGATOR_HOSTS: RegExp[] = [
+  /(^|\.)openalex\.org$/i,
+  /(^|\.)api\.openalex\.org$/i,
+  /(^|\.)semanticscholar\.org$/i,
+  /(^|\.)europepmc\.org$/i,
+  /(^|\.)arxiv\.org$/i,
+  /(^|\.)ar5iv\.labs\.arxiv\.org$/i,
+  /(^|\.)osf\.io$/i,
+  /(^|\.)biorxiv\.org$/i,
+  /(^|\.)medrxiv\.org$/i,
+  /(^|\.)ncbi\.nlm\.nih\.gov$/i, // also covers pmc.ncbi.nlm.nih.gov by suffix
+];
+
+export function isAggregatorHost(url: string): boolean { /* try/catch new URL(url).hostname, .some(pattern.test) */ }
+
+/** null when status isn't one of the four hard-access codes at all — callers
+ *  keep their own existing handling for every other status unchanged. */
+export function classifyHardAccessStatus(url: string, status: number): HardAccessVerdict {
+  if (![401, 402, 403, 451].includes(status)) return null;
+  return isAggregatorHost(url) ? "blocked" : "paywalled";
+}
+```
+
+Each of the 5 call sites replaces its local `looksLikePaywallStatus(...)` (+, in the two figures
+files, the narrow local host guard — **kept**, see below) with `classifyHardAccessStatus(url,
+status)` and branches on the three-way result: `"paywalled"` keeps today's `status: "paywalled"` +
+that file's own existing `paywallReason(url)`; `"blocked"` becomes `status: "source_unavailable"`
+with a new sibling `blockedReason(url)` next to each file's existing `paywallReason` (wording stays
+local and context-specific — full-text.ts's is about the report falling back to the abstract,
+figures' is about figure lookup — no existing test asserts wording for this brand-new branch, so
+there is no reason to force one shared string); `null` falls through to whatever each site already
+does for a non-hard-access failure (unchanged).
+
+**Do not delete `figures/extract.ts`'s / `figures/pdf-extract.ts`'s existing
+`OPEN_ACCESS_HOST_PATTERNS` + `hostLooksOpenAccess`.** They are also used inside each file's
+`appearsPaywalled(...)` (the *phrase*-based paywall detector, a different call site, unrelated to
+A2-05) to skip phrase-matching on a handful of always-open hosts. Only the two **status**-based
+call sites (line 1110 in `extract.ts`, line 231 in `pdf-extract.ts`) switch to the new shared
+helper; the phrase-based guard is untouched, in scope, and out of this item's blast radius.
+
+**What the field shows when every candidate is rejected**: unchanged shape, more accurate content.
+`figures`: `status: "source_unavailable"`, and on the reading page `paper-figure.tsx`'s
+`noticeTitle`/`defaultReason` (lines 345-365) already render `source_unavailable` as "Figure
+source unavailable" — no UI change needed, the existing honest-emptiness copy is correct once the
+status is correct. `full-text.ts`: `status: "source_unavailable"` folds into `buildResult`'s
+existing "no legal full-text source" path (no special casing needed — `source_unavailable` was
+never surfaced as its own top-level status; it already becomes `no_full_text` with the per-attempt
+reason kept in `attempts[]` for anyone who reads that far, exactly like every other non-paywall
+failure today).
+
+**Tests at risk** (grepped by file):
+- `web/src/lib/papers/full-text.test.ts:28-78` — three cases, all built on `doi:
+  "10.1002/test.1"` / `"10.1021/test.1"` → host is `doi.org`, never in the aggregator list. **Not
+  at risk** (still paywalled after the fix) but must still pass unchanged — they are the
+  regression lock proving the refactor didn't change real-publisher behavior.
+- `web/src/lib/figures/extract.test.ts:19-59` — same shape; the third case (lines 47-59) already
+  asserts `pmc.ncbi.nlm.nih.gov` 403 → `source_unavailable`, which the new 10-host list still
+  covers (via the `ncbi.nlm.nih.gov` suffix pattern) — **must keep passing**, and its comment
+  (lines 48-50, "hostLooksOpenAccess screens hosts this codebase already trusts") should be
+  updated to name the shared helper instead of the file-local one it's about to stop being.
+- `web/src/lib/figures/pdf-extract.test.ts:4-40` — same shape as `extract.test.ts`'s, same
+  verdict.
+- `web/src/lib/papers/pdf-text.test.ts` — no paywall assertions exist here (confirmed by grep);
+  nothing to update.
+
+**New protective tests needed** (one per file, mirroring the existing pmc-host shape exactly): a
+403 from `https://openalex.org/...` (or `https://api.openalex.org/...`) → `source_unavailable`,
+not `paywalled`, in `full-text.test.ts` and both figures test files.
+
+**Blast radius**: 3 files edited (`full-text.ts`, `figures/extract.ts`, `figures/pdf-extract.ts`)
++ 1 new file (`paywall-status.ts`). No caller outside these three imports the local
+`looksLikePaywallStatus`/`hostLooksOpenAccess` symbols (they are all file-local, not exported) —
+confirmed by grep, so removing the three local `looksLikePaywallStatus` function bodies breaks
+nothing else.
+
+#### Item 2-02 — A2-06: the checker on `W7207740551`
+
+**Method**: `verifyReportEvidence` (`web/src/lib/papers/evidence.ts:143`) drops silently — it
+counts but never records *which* item or its text. To see real, full (untruncated) dropped-claim
+text — necessary because A's own log fragments are truncated to ≤90 chars per the "quote ≤1 line"
+rule, which is too short to test the checker's own 80-char-prefix/40-char-suffix logic precisely —
+B ran a throwaway vitest spec (`__round2b_scratch_dropped_claims.test.ts`, deleted before this
+commit) that `vi.mock`s `./evidence` to capture `verifyReportEvidence`'s raw (pre-drop) report
+before calling through to the real implementation, then diffs raw vs. verified claims by evidence
+text. This calls the real `generateDeepReport` against the real local-dev provider (`gemini-3.1
+-flash-lite` pass 1, `gemini-3.6-flash` pass 2 — confirmed from the run's own `[llm]` log lines,
+no credential value ever printed) on the real `getFullText()` output for `openalex:W7207740551`,
+fetched live from `GET /api/papers/openalex:W7207740551` on the running dev server. Run 6 times to
+sample the model's non-determinism (1-2 claims dropped per run, 40s ballpark each).
+
+**A's fragment 1 ("Our key result is that multiple spectral features evolve systematically as a
+function of L…") — CORRECT DROP.** Tested with the real exported `evidenceSupported`/
+`normalizeForMatch` against every section and caption of the real corpus, and against the whole
+concatenated body: not found anywhere, even after stripping the truncated trailing word. This
+reads as the model's own framing sentence ("Our key result is that…"), never as paper prose — no
+paper's own Results section narrates itself in the third-person-plural "our key result is."
+
+**A's fragment 2, standing exclusion (Tc-values/BPV-theory sentence) — reproduced in 5 of 6 fresh
+runs, character-for-character identical every time.** Confirms A's own identification: this is
+§1c.3's already-ruled synthesis drop. Its full text (captured this round, for the first time,
+via the raw/verified diff — quoted here in full since it is not being re-litigated, only
+confirmed): a single sentence that fuses the Tc trend, a specific doping value, and a
+theory-prediction attribution into one analytical claim no single sentence of the paper states
+this way. **Correct drop, no fix, S3 does not need this one to close.**
+
+**A's fragment 3 ("This analysis reveals that the AHTS with L/d = 0.67 exhibits the smallest ΔS,
+correspondin…") — could not be reproduced live in 6 runs (never appeared, dropped or kept), so B
+cannot test the model's true, full, untruncated string.** What B *could* test: A's own ≤90-char
+fragment, verbatim, against the real corpus. Result: **the entire 89-character fragment matches a
+real, contiguous run of text in the "RESULTS AND DISCUSSION" bucket**, continuing past where A's
+log truncated it into "...corresponding to the leading edge closest to EF, indicative of enhanced
+near-EF spectral weight..." — genuine paper prose, not synthesis. This is decisive evidence that
+*as far as the shown fragment goes*, it is verbatim source text, not a paraphrase — but since B
+cannot see whether the model's true (longer) evidence string continues to match past
+"correspondin[g]," B cannot rule with full confidence that this exact instance was a defect in the
+live route (A's own reconstruction is explicitly "a construction, not a captured trace of the live
+route call," and may have built its corpus differently than production). **Classified: likely an
+incorrect drop, not confirmed live; superseded in practical terms by the new, confirmed-live defect
+below, which most plausibly explains it too** (the passage this fragment continues into contains
+exactly the failure class the new defect describes).
+
+**New defect found by execution (beyond A's 3 fragments) — a genuine, confirmed-live incorrect
+drop: hyphenation at a line break.** Run 1 and run 2 of the fresh spec both dropped a `method`
+claim: `"All four superlattices were grown by molecular beam epitaxy (MBE) on LaSrAlO4 (001)
+substrates, with the assembly of each monolayer monitored in real time using reflection
+high-energy electron diffraction (RHEED)."` Direct search of the real corpus (via
+`getFullText()`) finds the identical passage, **except** the source reads `"...using reflection
+high- energy electron diffraction (RHEED)..."` — a hyphen immediately followed by a **space**,
+where the model's clean quote has `"high-energy"` (hyphen, no space). This is PyMuPDF's PDF text
+extraction re-joining a word that wrapped across a line break ("high-" end of one line, "energy"
+start of the next) with a space instead of nothing — a genuine extraction artifact, not a model
+error, and not covered by any existing fold in `normalizeForMatch` (which folds dash
+*characters*, ligatures, and the 1-17 fraction slash, but nothing about a hyphen-then-whitespace
+sequence). **Confirmed incorrect drop.**
+
+**Second new finding — a source-side character loss, not fixable by folding.** Run 3 dropped a
+`keyResult` referencing `"the L/d = 0.44 and 0.89 samples"`. Direct character-code inspection of
+the real corpus (`web/.local-data/round2b-scratch/check-raw-context2.ts`, deleted) shows the
+source literally reads `"the Ld 0.44 and 0.89"` — **no `=` character anywhere between `Ld` and
+`0.44`**, not a different symbol, just absent — while a few words later in the same sentence the
+source correctly has `"Ld = 0.67"` (with a real `=`, plus 1-17's already-fixed stray `⁄`
+immediately after `0.67`). PyMuPDF's own extraction dropped a glyph outright at that one spot
+(most likely a math operator the font's encoding didn't decode cleanly, the same broad family as
+the already-known fraction-slash artifact). **This is not fixable by adding a fold rule** — there
+is no way to symmetrically normalize "a character that is simply missing" without inventing a
+character that isn't in the source (which is exactly the paraphrase-acceptance move Ruling 9 and
+§1c.3 rule out). **Classified: a real, source-caused drop, but not one B can respons­ibly write a
+fix direction for without loosening the matcher.** No code change recommended for this one; it is
+an accepted residual cost of PDF text extraction, same family as the already-known-and-accepted
+math/subscript gaps, not a new category needing a ruling.
+
+**Fix direction — the one item C should implement.** In `web/src/lib/papers/evidence.ts`, add one
+more narrow, symmetric fold to `normalizeForMatch` (same file, same function, right after the
+existing `FRACTION_SLASHES` fold at line 68), following Ruling 6's own pattern exactly (a cheap,
+auditable text-cleanup step, never a similarity relaxation):
+
+```ts
+// A word that wrapped across a PDF line break re-joins with a hyphen AND an
+// inserted space ("high- energy") where the clean text has neither reason
+// for one ("high-energy"). Folding any hyphen sitting directly between two
+// letters — whether or not whitespace follows — makes both forms converge to
+// the same normalized string. Scoped to LETTERS only (not digits) so a
+// numeric range ("43-45 K") or a negative number is never joined.
+const HYPHENATED_WORD_BREAK = /([A-Za-z])-\s*([A-Za-z])/g;
+// ... in normalizeForMatch's chain, after FRACTION_SLASHES:
+.replace(HYPHENATED_WORD_BREAK, "$1$2")
+```
+
+State plainly for C: this is **broader** than Ruling 6's fraction-slash fold — it folds *every*
+inter-letter hyphen for matching purposes, including a normal compound word like "state-of-the-art"
+or "well-known," not only line-wrap artifacts (there is no cheap way to tell the two apart from
+the text alone: the corpus's line-wrap case and a real compound word are both "letter-hyphen-
+letter"; the *only* structural difference — a space after the hyphen in the artifact, none in a
+clean compound — has to be erased on both sides to converge). This still cannot turn a paraphrase
+into a match (two *different* hyphenated words fold to two different strings; only the *same*
+word's clean and line-wrapped spellings converge) and does not touch `MIN_QUOTE_CHARS`/
+`PREFIX_CHARS`/`SUFFIX_CHARS`. Apply the same three-part protective-test discipline Ruling 6 used:
+(1) the "high-energy"/"high- energy" case now matches; (2) a paraphrase using different words
+still does not; (3) a case proven to fail *without* the fold (revert, watch it fail, restore) —
+the RHEED sentence above is a ready-made real-text fixture for exactly this.
+
+**What the report shows when every claim is rejected**: unchanged — honest emptiness, per §1a(b).
+This fix only recovers real, verbatim-but-hyphenation-broken claims; it adds no new failure mode.
+
+**Tests at risk**: `web/src/lib/papers/evidence.test.ts` — the existing "folds ligatures, curly
+quotes, dashes..." test (line 40) and the 1-17 fraction-slash tests (lines 46-52, 111-129) all use
+inputs with no letter-hyphen-letter run inside a real compound word, so they are unaffected;
+confirm by running them, do not just reason about it. `web/src/lib/papers/deep-report.ts`'s own
+tests, if any assert exact `droppedClaims` counts against a fixture corpus containing a
+hyphenated word — grep found none as of this round.
+
+**Blast radius**: one file, `evidence.ts`. `normalizeForMatch` is also called from
+`placeEvidence` (same file, client-side, turns an abstract quote into an ink mark) — the new fold
+applies there too, which is correct and desired (the same hyphen-break case would otherwise fail
+to mark an abstract sentence that happens to wrap a hyphenated word across `cleanDisplayText`'s
+own line handling).
+
+**S3 status per Ruling 9**: does **not** close on `W7207740551` this round — at least one
+confirmed-live incorrect drop (the hyphenation case) has a real, narrow fix available. Re-measure
+next round after the fold lands; expect the RHEED method claim to be kept, and the "Ld = 0.44"
+case to remain a drop (accepted, not fixed).
