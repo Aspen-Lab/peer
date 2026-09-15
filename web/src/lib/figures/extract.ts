@@ -23,7 +23,8 @@ export type FigureStatus =
   | "paywalled"
   | "caption_mismatch"
   | "no_figures"
-  | "source_unavailable";
+  | "source_unavailable"
+  | "rate_limited";
 
 export interface FigureResult {
   imageUrl: string | null;
@@ -44,7 +45,7 @@ interface FigureCandidate {
 }
 
 interface AttemptResult {
-  status: "candidates" | "paywalled" | "no_figures" | "source_unavailable";
+  status: "candidates" | "paywalled" | "no_figures" | "source_unavailable" | "rate_limited";
   candidates: FigureCandidate[];
   reason?: string;
 }
@@ -753,39 +754,104 @@ interface SSFigure {
   url?: string;
 }
 
-async function trySemanticScholarCandidates(ssPaperId: string): Promise<AttemptResult> {
-  const apiUrl =
-    `https://api.semanticscholar.org/graph/v1/paper/${encodeURIComponent(ssPaperId)}` +
-    "?fields=figures,title";
-  const res = await timedFetch(apiUrl, {
-    headers: {
-      Accept: "application/json",
-      ...(process.env.SEMANTIC_SCHOLAR_API_KEY
-        ? { "x-api-key": process.env.SEMANTIC_SCHOLAR_API_KEY }
-        : {}),
-    },
-  });
-  if (!res || !res.ok) return { status: "source_unavailable", candidates: [] };
+// 1-20: a briefing loads a whole page's worth of papers together, and every
+// one of them used to fire its Semantic Scholar figure lookup at once —
+// against an unauthenticated per-IP rate limit, this reliably drew 429s.
+// Module-level state (same shape as `candidatePoolCache` above — process-wide
+// for a different reason) caps concurrent requests and spaces consecutive
+// starts out, shared across every call in this Node process regardless of
+// which paper or which request triggered it.
+const SEMANTIC_SCHOLAR_MAX_CONCURRENT = 2;
+const SEMANTIC_SCHOLAR_MIN_INTERVAL_MS = 350;
+let semanticScholarActive = 0;
+let semanticScholarLastStart = 0;
+// Chains each caller's admission check onto the previous one, so concurrent
+// callers are granted a slot in call order rather than racing each other.
+let semanticScholarAdmission: Promise<void> = Promise.resolve();
 
+function waitMs(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function acquireSemanticScholarSlot(): Promise<void> {
+  const myTurn = semanticScholarAdmission.then(async () => {
+    while (semanticScholarActive >= SEMANTIC_SCHOLAR_MAX_CONCURRENT) {
+      await waitMs(25);
+    }
+    const wait = semanticScholarLastStart + SEMANTIC_SCHOLAR_MIN_INTERVAL_MS - Date.now();
+    if (wait > 0) await waitMs(wait);
+    semanticScholarLastStart = Date.now();
+    semanticScholarActive += 1;
+  });
+  // Swallow here (not at the caller) so one rejected admission never breaks
+  // the chain for everyone queued behind it; the caller still awaits `myTurn`
+  // directly and sees any rejection itself.
+  semanticScholarAdmission = myTurn.catch(() => {});
+  await myTurn;
+}
+
+function releaseSemanticScholarSlot(): void {
+  semanticScholarActive = Math.max(0, semanticScholarActive - 1);
+}
+
+// Exported for tests only (1-20) — the limiter's module-level state persists
+// across test cases in the same file.
+export function __resetSemanticScholarLimiterForTests(): void {
+  semanticScholarActive = 0;
+  semanticScholarLastStart = 0;
+  semanticScholarAdmission = Promise.resolve();
+}
+
+// Exported for tests only (1-20) — every other caller reaches it through
+// `buildCandidatePool`.
+export async function trySemanticScholarCandidates(ssPaperId: string): Promise<AttemptResult> {
+  await acquireSemanticScholarSlot();
   try {
-    const data = (await res.json()) as { figures?: SSFigure[] };
-    const candidates = (data.figures ?? [])
-      .map((figure, ordinal): FigureCandidate | null => {
-        if (!figure.url || looksLikeLogo(figure.url)) return null;
-        return {
-          imageUrl: figure.url,
-          caption: figure.caption ?? null,
-          source: "semantic-scholar",
-          ordinal,
-          qualityHint: looksLowResUrl(figure.url) ? "low" : looksHighResUrl(figure.url) ? "high" : "medium",
-        };
-      })
-      .filter((candidate): candidate is FigureCandidate => candidate !== null);
-    return candidates.length > 0
-      ? { status: "candidates", candidates }
-      : { status: "no_figures", candidates: [], reason: "Semantic Scholar did not expose any paper figures for this record." };
-  } catch {
-    return { status: "source_unavailable", candidates: [] };
+    const apiUrl =
+      `https://api.semanticscholar.org/graph/v1/paper/${encodeURIComponent(ssPaperId)}` +
+      "?fields=figures,title";
+    const res = await timedFetch(apiUrl, {
+      headers: {
+        Accept: "application/json",
+        ...(process.env.SEMANTIC_SCHOLAR_API_KEY
+          ? { "x-api-key": process.env.SEMANTIC_SCHOLAR_API_KEY }
+          : {}),
+      },
+    });
+    if (res?.status === 429) {
+      // Honest attempt status: a 429 means Peer never got an answer, not
+      // that Semantic Scholar has nothing — `finalDiagnostic` must not
+      // report this the same way as a confirmed-empty source.
+      return {
+        status: "rate_limited",
+        candidates: [],
+        reason: "Semantic Scholar rate-limited Peer's figure lookup for this paper.",
+      };
+    }
+    if (!res || !res.ok) return { status: "source_unavailable", candidates: [] };
+
+    try {
+      const data = (await res.json()) as { figures?: SSFigure[] };
+      const candidates = (data.figures ?? [])
+        .map((figure, ordinal): FigureCandidate | null => {
+          if (!figure.url || looksLikeLogo(figure.url)) return null;
+          return {
+            imageUrl: figure.url,
+            caption: figure.caption ?? null,
+            source: "semantic-scholar",
+            ordinal,
+            qualityHint: looksLowResUrl(figure.url) ? "low" : looksHighResUrl(figure.url) ? "high" : "medium",
+          };
+        })
+        .filter((candidate): candidate is FigureCandidate => candidate !== null);
+      return candidates.length > 0
+        ? { status: "candidates", candidates }
+        : { status: "no_figures", candidates: [], reason: "Semantic Scholar did not expose any paper figures for this record." };
+    } catch {
+      return { status: "source_unavailable", candidates: [] };
+    }
+  } finally {
+    releaseSemanticScholarSlot();
   }
 }
 
@@ -1168,6 +1234,27 @@ function finalDiagnostic(
       source: null,
       status: "no_figures",
       reason: noFigures.reason ?? "Peer reached the source page, but did not find extractable figures.",
+      hideFigure: false,
+      matchedBy: null,
+    };
+  }
+
+  // 1-20: a real "reached the page, nothing there" verdict above is still the
+  // more informative message when one exists — this only replaces the
+  // generic "could not reach" fallback below, for the case where every
+  // attempt on this paper was some flavor of unreachable and at least one of
+  // those was specifically a throttled Semantic Scholar lookup. Saying
+  // "no figures" here would be dishonest: the truth is Peer never got an
+  // answer, not that it checked and found nothing.
+  const rateLimited = attempts.find((attempt) => attempt.status === "rate_limited");
+  if (rateLimited) {
+    return {
+      imageUrl: null,
+      source: null,
+      status: "rate_limited",
+      reason:
+        rateLimited.reason ??
+        "A figure source rate-limited Peer's request; try again in a moment.",
       hideFigure: false,
       matchedBy: null,
     };

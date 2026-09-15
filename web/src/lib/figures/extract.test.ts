@@ -1,5 +1,9 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { tryHtmlCandidates } from "./extract";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  __resetSemanticScholarLimiterForTests,
+  tryHtmlCandidates,
+  trySemanticScholarCandidates,
+} from "./extract";
 
 describe("tryHtmlCandidates — 1-22, a hard 401/402/403/451 is reported as paywalled", () => {
   const originalFetch = globalThis.fetch;
@@ -97,5 +101,105 @@ describe("tryHtmlCandidates — 1-19, the graphical-abstract/og:image honesty gu
     const result = await tryHtmlCandidates(articleUrl, "publisher");
 
     expect(result.status).toBe("no_figures");
+  });
+});
+
+describe("trySemanticScholarCandidates — 1-20, concurrency cap + minimum interval", () => {
+  const originalFetch = globalThis.fetch;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    __resetSemanticScholarLimiterForTests();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    globalThis.fetch = originalFetch;
+    vi.restoreAllMocks();
+  });
+
+  it("never runs more than 2 Semantic Scholar requests at once", async () => {
+    let active = 0;
+    let maxActive = 0;
+    const pending: Array<() => void> = [];
+    globalThis.fetch = vi.fn(async () => {
+      active += 1;
+      maxActive = Math.max(maxActive, active);
+      await new Promise<void>((resolve) => pending.push(resolve));
+      active -= 1;
+      return new Response(JSON.stringify({ figures: [] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }) as unknown as typeof fetch;
+
+    const calls = [1, 2, 3, 4].map((n) => trySemanticScholarCandidates(`DOI:${n}`));
+
+    // Let call 1 through admission immediately; call 2 is gated behind the
+    // ~350ms minimum interval, not the concurrency cap, so it needs time to
+    // pass before it starts too.
+    await vi.advanceTimersByTimeAsync(0);
+    expect(pending.length).toBe(1);
+    await vi.advanceTimersByTimeAsync(400);
+    expect(pending.length).toBe(2);
+    expect(maxActive).toBe(2);
+
+    // Calls 3 and 4 must wait for a slot to free, no matter how much time
+    // passes, since both existing calls are still in flight (fetch has not
+    // resolved for either).
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(pending.length).toBe(2);
+    expect(maxActive).toBe(2);
+
+    // Free one slot; a queued call should take it (after its own interval
+    // wait), never pushing concurrent-in-flight above 2.
+    pending.shift()!();
+    await vi.advanceTimersByTimeAsync(400);
+    expect(maxActive).toBeLessThanOrEqual(2);
+
+    pending.shift()!();
+    await vi.advanceTimersByTimeAsync(400);
+    pending.forEach((resolve) => resolve());
+    await vi.advanceTimersByTimeAsync(400);
+    await Promise.all(calls);
+    expect(maxActive).toBeLessThanOrEqual(2);
+  });
+
+  it("spaces consecutive request starts by at least ~350ms", async () => {
+    const starts: number[] = [];
+    globalThis.fetch = vi.fn(async () => {
+      starts.push(Date.now());
+      return new Response(JSON.stringify({ figures: [] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }) as unknown as typeof fetch;
+
+    const p1 = trySemanticScholarCandidates("DOI:1");
+    await vi.advanceTimersByTimeAsync(0);
+    const p2 = trySemanticScholarCandidates("DOI:2");
+    await vi.advanceTimersByTimeAsync(0);
+    expect(starts.length).toBe(1);
+
+    await vi.advanceTimersByTimeAsync(349);
+    expect(starts.length).toBe(1);
+
+    await vi.advanceTimersByTimeAsync(2);
+    expect(starts.length).toBe(2);
+    expect(starts[1] - starts[0]).toBeGreaterThanOrEqual(350);
+
+    await Promise.all([p1, p2]);
+  });
+
+  it("reports a 429 as rate_limited, not source_unavailable", async () => {
+    globalThis.fetch = vi.fn(
+      async () => new Response("", { status: 429 }),
+    ) as unknown as typeof fetch;
+
+    const promise = trySemanticScholarCandidates("DOI:1");
+    await vi.advanceTimersByTimeAsync(0);
+    const result = await promise;
+
+    expect(result.status).toBe("rate_limited");
   });
 });

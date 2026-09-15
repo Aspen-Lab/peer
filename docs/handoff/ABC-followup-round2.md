@@ -1978,3 +1978,48 @@ for this file family explicitly: `src/lib/figures/*.test.ts` (2 files, 8 tests, 
 
 Commit: `feat(figures): fold the graphical-abstract fallback into the candidate pool, with an
 honesty guard`.
+
+**1-20 — `web/src/lib/figures/extract.ts` — Semantic Scholar concurrency cap + minimum interval,
+honest `rate_limited` status.** DONE, per §1h/Ruling 7's (b) (the manager already ruled (a), a paid
+API key, is the user's own call — not pursued here). Added module-level `semanticScholarActive` /
+`semanticScholarLastStart` / a chained `semanticScholarAdmission` promise (same "process-wide state"
+shape as the existing `candidatePoolCache`, just for a different reason) around
+`trySemanticScholarCandidates`: `acquireSemanticScholarSlot()` makes every caller wait its turn in
+call order for both constraints — at most 2 requests in flight at once, **and** every request start
+(not just ones over the concurrency cap) spaced out by at least ~350ms from the previous one, exactly
+as the ruling specifies both together. `releaseSemanticScholarSlot()` runs in a `finally` so a
+throwing/aborted fetch still frees its slot.
+
+A hard 429 is now its own `AttemptResult`/`FigureStatus` value, `"rate_limited"`, detected before the
+generic `!res.ok` branch (which still covers every other non-2xx code as `source_unavailable`,
+unchanged). `finalDiagnostic` gained a branch for it, deliberately ranked **below** a real `no_figures`
+verdict (a source that was actually reached and confirmed empty is still more informative than "one
+lookup got throttled") but **above** the generic "could not reach" fallback — so the only behavior
+change for a real page is: when every attempt on a paper failed to reach *anything*, and at least one
+of those failures was specifically a Semantic Scholar 429, the reader now sees "a figure source
+rate-limited Peer's request" instead of the vague default. `components/paper-figure.tsx`'s
+`noticeTitle`/`defaultReason` (both plain if-chains, not exhaustive switches — confirmed no other
+consumer of `FigureStatus` needed a matching update, grepped for `FigureStatus`/status-literal
+comparisons across `src/` first) got a matching case each, for the (rare) path where the API route
+returns `rate_limited` with no `reason` set.
+
+README: `SEMANTIC_SCHOLAR_API_KEY` was already named in the "Search / enrichment" env list (predates
+this branch, commit `821fd5e`) — added one clarifying clause on the same line (what it does; that
+it's optional now that Peer queues/paces without one) rather than a new section, per "documents the
+env var... and nothing more."
+
+Tests: `web/src/lib/figures/extract.test.ts`, new `describe` block, 3 cases, all using
+`vi.useFakeTimers()` (module state reset between cases via a new test-only export,
+`__resetSemanticScholarLimiterForTests`, same "exported for tests only" convention as
+`tryHtmlCandidates`) — (1) never more than 2 concurrent in-flight fetches, proven with a
+never-resolving mock fetch and counting; (2) two consecutive calls' fetch-dispatch timestamps are
+>=350ms apart, proven by advancing fake time to 349ms (not yet dispatched) then 2ms more (dispatched);
+(3) a 429 response resolves to `status: "rate_limited"`. Proof: commented out
+`await acquireSemanticScholarSlot()` and the 429 branch together, re-ran — all 3 new cases failed
+(concurrency test saw 4 concurrent instead of capping at 2; interval test saw both calls dispatch in
+the same tick; 429 test got `source_unavailable`), restored both, re-ran green.
+
+Gate: tsc clean, eslint clean, vitest 2565/2565 (2562 + 3 new).
+
+Commit: `feat(figures): queue Semantic Scholar lookups and report a 429 as rate_limited, not
+source_unavailable`.

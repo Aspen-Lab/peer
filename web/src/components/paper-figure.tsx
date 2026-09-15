@@ -347,6 +347,7 @@ function noticeTitle(status: FigureState["status"]): string {
   if (status === "no_figures") return "No extractable figures found";
   if (status === "paywalled") return "Figure source unavailable";
   if (status === "source_unavailable") return "Figure source unavailable";
+  if (status === "rate_limited") return "Figure source rate-limited";
   return "No verified paper figure found";
 }
 
@@ -359,6 +360,9 @@ function defaultReason(status: FigureState["status"]): string {
   }
   if (status === "paywalled") {
     return "Peer reached the source, but figure access appears restricted.";
+  }
+  if (status === "rate_limited") {
+    return "A figure source rate-limited Peer's request; try again in a moment.";
   }
   return "Peer could not reach a usable figure source.";
 }
