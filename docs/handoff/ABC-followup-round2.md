@@ -5184,3 +5184,74 @@ not a zero-tolerance bar. Recommending it join the standing-exclusions family (s
 opening a new round — see the difference list.
 
 Commit: `docs(abc): round 4 A part 1 - S3 closing measurement`.
+
+#### Part 2 — S4 (figures), closing measurement
+
+`GET /api/figure?id=&url=&doi=&paperTitle=` (no `query`) against all 17 pool papers, fresh calls
+(via a throwaway Python `urllib` script instead of shell `curl` — a `curl`-in-a-loop combined with
+this session's Windows scratch-directory path produced spurious "No such file or directory"
+errors on every write; `urllib.request` avoided the problem entirely and hit the exact same real
+HTTP route. Deleted before this commit, never committed).
+
+**Tally: found: 1 - no_figures: 3 - source_unavailable: 4 - paywalled: 9 - rate_limited: 0 -
+other: 0** (17 total). Round 1: `found:1 no_figures:8 source_unavailable:7 paywalled:1`. Round 2:
+`found:1 no_figures:5 paywalled:10 rate_limited:1 source_unavailable:0`. Round 3: `found:1
+no_figures:3 paywalled:9 rate_limited:3 source_unavailable:1`.
+
+| Paper | Status | Reason (verbatim, truncated) |
+|---|---|---|
+| W7212228226 (JECST) | no_figures | "opened the PDF, but did not find any figure regions..." |
+| W7207740551 (arXiv) | **found** | verified below |
+| W7212354020 (Wiley Small) | paywalled | "doi.org... requires paid or institutional access" |
+| W7206205089 (AFM, Wiley) | paywalled | "doi.org... requires paid or institutional access" |
+| W7207719214 (JACS, ACS) | paywalled | "doi.org... requires paid or institutional access" |
+| W7211870929 (ACS AMI) | paywalled | "doi.org... requires paid or institutional access" |
+| W7212017379 (Anal Chim Acta, Elsevier) | paywalled | "sciencedirect.com... requires paid or institutional access" |
+| W7212151400 (Spectrochim Acta, Elsevier) | paywalled | "sciencedirect.com... requires paid or institutional access" |
+| W7212288571 (Iran J Sci Technol, Springer) | **source_unavailable** | "Peer reached an access-check page at link.springer.com, not the article itself." — **target, see below** |
+| W7204990919 (KJCE, Springer) | **source_unavailable** | "Peer reached an access-check page at link.springer.com, not the article itself." — **target, see below** |
+| W7212207112 (OSF Preprints) | source_unavailable | "Peer reached openalex.org, but that source blocked this request." (2-01, unchanged) |
+| W7208780749 (Appl Surf Sci, Elsevier) | no_figures | "reached the source page, but it did not expose extractable figures" |
+| W7212256756 (Wiley book ch.) | paywalled | "doi.org... requires paid or institutional access" |
+| W7201867313 (Angew Chem, Wiley) | paywalled | "doi.org... requires paid or institutional access" |
+| W7207750818 (Chem Eng J, Elsevier) | no_figures | "reached the source page, but it did not expose extractable figures" |
+| W7212165100 (Nature Energy) | **source_unavailable** | "Peer reached an access-check page at idp.nature.com, not the article itself." — **bonus, was `rate_limited` in rounds 2-3** |
+| W7211884742 (JJAP) | paywalled | "validate.perfdrive.com... requires paid or institutional access" (unchanged since round 1) |
+
+**A3-02/A3-03 target: CONFIRMED, live, on both named Springer papers.** `W7212288571` and
+`W7204990919` both now return `status: "source_unavailable"` with the exact bounce-page reason
+("Peer reached an access-check page at link.springer.com, not the article itself.") — neither is
+masked by the Semantic Scholar rate limit any more. Each `reason` also carries the throttle note
+("; the figure index was rate-limited.") per Ruling 10's design: the throttling still happened
+(confirmed below), it just no longer wins the final `status`.
+
+**Rate-limit escalation: resolved.** `rate_limited` is the **final `status` for 0 of 17** papers
+this round — down from round 3's 3/17 (which had crossed the ≥3 escalation threshold). This is
+not because Semantic Scholar stopped throttling: **16 of 17 `reason` strings this round mention
+"the figure index was rate-limited"** (the one exception is the `found` case, whose reason is
+empty) — S2 was throttled on almost every lookup, exactly as heavily as before, but 4-01's
+reordering fix means that throttling is now folded into `reason` and counted, never promoted to
+`status`. Per B's own note in the 4-01 write-up, this tally used `reason`, not `status`, to count
+the throttle events.
+
+**Bonus finding, not named in Ruling 10**: `W7212165100` (Nature Energy) — `rate_limited` in
+rounds 2 and 3 — now also resolves through the same reordering fix to `source_unavailable` with
+its own bounce-page reason ("an access-check page at idp.nature.com"). The 4-01 fix generalizes
+beyond the two Springer papers it was written for.
+
+**"found" figure re-verified, still the only one, still honest.** `W7207740551`'s image:
+`source: "open-access"`, caption starts "FIG. 1. (a) High-resolution θ-2θ XRD patterns of the
+LSCO/LCO superlattice series..." — the paper's own figure, real chart, not a logo/cover. **1 of 17
+pool papers shows a figure — unchanged across all four rounds**, accepted as honest per Ruling 10
+(A3-06): the pool is 9 paywalled + 4 publisher bot-walls/blocks + a figure-less manuscript (JECST)
++ 3 pages that genuinely expose no extractable figure.
+
+**Never-fabricate check**: confirmed across all 17 — no cover, logo, or wrong-paper image anywhere
+in the sweep.
+
+**S4 verdict, closing: MEETS Ruling 10's target.** Both named Springer papers show the honest
+`source_unavailable` bounce-page status live; the rate-limit escalation (round 3's 3/17) is fully
+resolved (0/17 final `rate_limited` this round, well under the ≥3 threshold); no `found` figure is
+a cover/logo; the 1-of-17 found-figure count is accepted as honest per Ruling 10 (A3-06).
+
+Commit: `docs(abc): round 4 A part 2 - S4 closing measurement`.
