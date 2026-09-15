@@ -7,6 +7,7 @@
 
 import { NextResponse } from "next/server";
 import { extractPdfTextFromPath } from "@/lib/papers/pdf-text";
+import { resolveProvider } from "@/lib/llm/providers/registry";
 import {
   pdfPath,
   sha16,
@@ -43,6 +44,79 @@ function stripTrailingPunctuation(raw: string): string {
 function titleFromFileName(fileName: string): string {
   const withoutExtension = fileName.replace(/\.pdf$/i, "").trim();
   return withoutExtension || "Untitled PDF";
+}
+
+// 2-06 (Ruling 9, A2-01), step (b): mirrors extract_pdf_text.py's own
+// TITLE_STAMP_RE — a small shared pattern, duplicated deliberately rather
+// than round-tripped through a second process boundary (Python and TS each
+// need their own copy). Defense in depth: extract_title (step a) already
+// excludes a stamp/DOI/URL line before picking the largest-font line, so
+// this only ever catches a shape that slipped past that filter.
+const TITLE_STAMP_RE = /^(?:arXiv:\d{4}\.\d{4,5}|10\.\d{4,9}\/|https?:\/\/)/i;
+
+/** ≥ 3 words, not stamp-shaped, ≤ 200 chars — the bar both step (a)'s
+ *  output and step (b)'s model answer must clear before either is trusted. */
+function looksLikeUsableTitle(title: string): boolean {
+  const trimmed = title.trim();
+  if (!trimmed || trimmed.length > 200) return false;
+  if (TITLE_STAMP_RE.test(trimmed)) return false;
+  const wordCount = trimmed.split(/\s+/).filter(Boolean).length;
+  return wordCount >= 3;
+}
+
+/**
+ * Step (b): a small-tier-model re-check, only reached when step (a) —
+ * extract_pdf_text.py's own largest-font-line join — did not produce a
+ * usable title. Uses the same no-override `resolveProvider(null)` pattern
+ * `report/route.ts` already uses: a real model call locally (dev
+ * credentials via `resolveLocalServerProvider`), inert on a deployed
+ * instance with no operator key (`canUseLocalServerProvider`'s existing,
+ * deliberate fail-closed rule — a stranger's upload never spends the
+ * operator's account). Never invents a title: a missing/unusable model
+ * answer falls through to step (c), the file name.
+ */
+async function modelTitleFallback(page1Text: string): Promise<string | null> {
+  const provider = resolveProvider(null);
+  if (!provider?.generateJsonText || !page1Text.trim()) return null;
+  try {
+    const raw = await provider.generateJsonText({
+      systemPrompt:
+        "You are given the raw text extracted from page 1 of an academic " +
+        "paper's PDF. Reply with only a JSON object of the shape " +
+        '{"title": string | null}. Set "title" to the paper\'s own title as ' +
+        "printed on the page. Use null when the text does not clearly " +
+        "contain a title — never guess or invent one.",
+      userPrompt: page1Text.slice(0, 3000),
+      maxTokens: 200,
+      tier: "small",
+    });
+    const match = raw.match(/\{[\s\S]*\}/);
+    const parsed = JSON.parse(match ? match[0] : raw) as { title?: unknown };
+    const title = typeof parsed.title === "string" ? parsed.title.trim() : "";
+    return title && looksLikeUsableTitle(title) ? title : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The full title heuristic (2-06, Ruling 9 / A2-01): (a) the extractor's own
+ * largest-first-page-font join, when it produced something usable; else (b)
+ * a small-tier-model re-check of page 1's raw text; else (c) the file name.
+ * Never a half title, never a stamp — at every step the same
+ * `looksLikeUsableTitle` bar decides, and an unusable answer falls through
+ * rather than being trusted anyway.
+ */
+async function resolveUploadTitle(
+  extractorTitle: string | null | undefined,
+  page1Text: string | undefined,
+  fileName: string,
+): Promise<string> {
+  const stepA = extractorTitle?.trim() ?? "";
+  if (looksLikeUsableTitle(stepA)) return stepA;
+  const stepB = await modelTitleFallback(page1Text ?? "");
+  if (stepB) return stepB;
+  return titleFromFileName(fileName);
 }
 
 export async function POST(req: Request) {
@@ -92,14 +166,17 @@ export async function POST(req: Request) {
 
   const abstractSection = doc?.sections.find((section) => section.canonical === "abstract");
 
+  // 2-06 (Ruling 9, A2-01): (a) the extractor's own largest-first-page-font
+  // join, when usable; else (b) a small-tier-model re-check of page 1's raw
+  // text (inert without a local dev provider — see `modelTitleFallback`);
+  // else (c) the file name. Never a guessed title, never a half title,
+  // never a stamp.
+  const title = await resolveUploadTitle(doc?.title, extracted.page1Text, file.name);
+
   const meta: UploadMeta = {
     hash16,
     fileName: file.name,
-    // The extractor's own largest-first-page-font heuristic, when it found
-    // one (see extract_pdf_text.py's `extract_title`) — never an LLM guess.
-    // Falls back to the file name (minus its extension) rather than
-    // inventing a title.
-    title: doc?.title?.trim() || titleFromFileName(file.name),
+    title,
     doi: doiMatch ? stripTrailingPunctuation(doiMatch[0]) : undefined,
     pageCount: doc?.pageCount,
     summaryIntro: abstractSection ? abstractSection.text.slice(0, 400) : undefined,

@@ -281,28 +281,78 @@ def extract_figure_captions(pages_lines: list[list[tuple[fitz.Rect, str]]]) -> l
     return captions
 
 
+# 2-06 (Ruling 9, A2-01): an arXiv margin stamp, a bare DOI, or a bare URL on
+# page 1 — excluded from the title candidate pool *before* the max-font-size
+# search below runs, never filtered out of the result afterward (a stamp
+# rendered larger than the real title, as arXiv's own margin stamp is,
+# would otherwise already have won the size comparison by the time any
+# after-the-fact filter saw it).
+TITLE_STAMP_RE = re.compile(r"^(?:arXiv:\d{4}\.\d{4,5}|10\.\d{4,9}/|https?://)", re.IGNORECASE)
+# A short line that is only digits, slashes, dots, colons, and spaces — a
+# bare date stamp ("03/2026", "2026.09.15"), not title prose.
+DATE_STAMP_RE = re.compile(r"^[\d/.\-: ]{1,20}$")
+
+
+def _looks_like_title_stamp(text: str) -> bool:
+    return bool(TITLE_STAMP_RE.match(text) or DATE_STAMP_RE.match(text))
+
+
+def _first_page_lines_with_size(page: fitz.Page) -> list[tuple[fitz.Rect, str, float]]:
+    """Page-1 lines, sorted top-to-bottom the same way `extract_page_lines`
+    already does, each carrying its largest span size. Kept as its own
+    function rather than widening `extract_page_lines`'s shared (bbox, text)
+    shape, which `find_heading_hits`/`segment_into_sections`/
+    `extract_figure_captions` all destructure directly — the title heuristic
+    below is the only caller that needs a size alongside the text."""
+    lines: list[tuple[fitz.Rect, str, float]] = []
+    data = page.get_text("dict")
+    for block in data.get("blocks", []):
+        if block.get("type") != 0:
+            continue
+        for line in block.get("lines", []):
+            spans = line.get("spans", [])
+            if not spans:
+                continue
+            text = "".join(span.get("text", "") for span in spans).strip()
+            if not text:
+                continue
+            size = max((float(span.get("size", 0)) for span in spans), default=0.0)
+            bbox = fitz.Rect(line.get("bbox", (0, 0, 0, 0)))
+            lines.append((bbox, text, size))
+    # Identical sort key to extract_page_lines — real top-to-bottom reading
+    # order is what makes "consecutive lines" a well-defined idea at all.
+    lines.sort(key=lambda entry: (round(entry[0].y0, 1), entry[0].x0))
+    return lines
+
+
 def extract_title(doc: fitz.Document) -> str | None:
     meta_title = (doc.metadata or {}).get("title")
     if meta_title and len(meta_title) >= 6:
         return meta_title.strip()
     if len(doc) == 0:
         return None
-    # Largest text on first page (by font size).
-    first_page = doc[0]
-    data = first_page.get_text("dict")
-    best: tuple[float, str] | None = None
-    for block in data.get("blocks", []):
-        if block.get("type") != 0:
-            continue
-        for line in block.get("lines", []):
-            for span in line.get("spans", []):
-                size = float(span.get("size", 0))
-                text = span.get("text", "").strip()
-                if len(text) < 12 or size < 12:
-                    continue
-                if best is None or size > best[0]:
-                    best = (size, text)
-    return best[1] if best else None
+    lines = _first_page_lines_with_size(doc[0])
+    # Filter stamps/short fragments out of the candidate pool *before*
+    # finding the largest size, not after (see TITLE_STAMP_RE's comment).
+    candidates = [
+        (text, size)
+        for _bbox, text, size in lines
+        if len(text) >= 12 and size >= 12 and not _looks_like_title_stamp(text)
+    ]
+    if not candidates:
+        return None
+    max_size = max(size for _text, size in candidates)
+    # Join every consecutive run of lines at the max size — a wrapped title
+    # spans several lines at the same size; the run stops at the first line
+    # of a different size (the author/affiliation line that follows a title
+    # is reliably smaller).
+    joined: list[str] = []
+    for text, size in candidates:
+        if abs(size - max_size) < 0.01:
+            joined.append(text)
+        elif joined:
+            break
+    return " ".join(joined) if joined else None
 
 
 def extract_text(pdf_path: str, max_pages: int) -> dict:
@@ -332,12 +382,24 @@ def extract_text(pdf_path: str, max_pages: int) -> dict:
             running += len(text)
             trimmed.append(section)
 
+        # 2-06 (Ruling 9, A2-01), step (b): the upload route's small-tier-
+        # model title fallback needs page 1's own text when step (a)
+        # (extract_title, above) doesn't produce a usable title — segmented
+        # `sections` never carries it (segment_into_sections deliberately
+        # drops everything before the first recognized heading, which is
+        # exactly the title-page area). Already have `pages_lines[0]` in
+        # memory from the pass above; joining it is free. Capped generously
+        # (well under MAX_TOTAL_CHARS) since this is model-prompt input, not
+        # a displayed section — the caller slices further if it wants less.
+        page1_text = " ".join(text for _bbox, text in pages_lines[0])[:4000] if pages_lines else ""
+
         return {
             "title": extract_title(doc),
             "sections": trimmed,
             "figureCaptions": captions,
             "pageCount": total_pages,
             "pagesRead": page_count,
+            "page1Text": page1_text,
             "reason": None if trimmed else "PDF text extractor produced no sections.",
         }
     finally:

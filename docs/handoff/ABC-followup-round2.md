@@ -80,22 +80,81 @@ browser, run the reports), then report to the user in plain language and stop th
 ## §1. CURRENT STATE — THE SOURCE OF TRUTH
 
 ```
-ROUND:            2
-WHOSE TURN:       C (resume — 2-01 landed as dd999c4; pick up at 2-02)
-STOPPED BECAUSE:  out of budget @ 2026-09-15 ~12:40 UTC (Sonnet session limit) — 2-01 code+tests
-                   were on the working tree, gate green; the manager committed them. 2-02..2-06
-                   unstarted.
-STATUS:           Round 2 C: 2-01 (shared paywall-status helper, aggregator hosts → blocked)
-                   landed. 2-01's live check (`/api/figure` on openalex:W7212207112 → blocked,
-                   not paywalled) still owed by C. Dev server up on :3000.
-OPEN ITEMS:       S3 S4 S7 (S5, S6 closed by A round 2)
+ROUND:            3
+WHOSE TURN:       A
+STOPPED BECAUSE:  C finished the turn @ 2026-09-15 (commits dd999c4, 7b3122a, 3403ab3, 81ccef3,
+                   c061ff4, and 2-06's own commit) — all six of round 2's items (2-01 .. 2-06)
+                   landed, gate green throughout.
+STATUS:           Round 2 fully implemented: 2-01 (aggregator-host paywall fix, banked by the
+                   manager), 2-02 (hyphenated-line-break fold in the evidence checker), 2-03
+                   (fraction-slash display fold), 2-04 (Springer bot-challenge bounce detector),
+                   2-05 (empty-PDF textStatus + reading-route 404 fix + never-ask-for-a-report
+                   gate, three sub-entries), 2-06 (uploaded-PDF title heuristic, step a/b/c) —
+                   all committed individually with their own §4 log entries.
+
+                   DEVIATION FROM B'S GUIDE, FLAGGED PROMINENTLY: the dev server (`peer-web`,
+                   port 3000) was NOT running for this entire C turn, contrary to what this
+                   block said when the turn started ("Dev server up on :3000"). Confirmed
+                   repeatedly by curl/netstat/Get-NetTCPConnection: nothing listened on 3000, no
+                   matching Node process existed, from before 2-01's owed live-check through
+                   2-06's finish. Per the standing rule C did not start/stop/restart it. Every
+                   live HTTP check round 2's items call for is still owed — see TODO below — not
+                   skipped by choice. Each item was instead verified by unit tests proven against
+                   the fix by revert-and-restore, plus direct execution against real corpus/
+                   fixtures/PDFs where possible (see each item's §4 entry for specifics). None of
+                   this substitutes for the real HTTP path A's round normally checks.
+OPEN ITEMS:       S3 S4 S7 — code for all three now landed this round; **none re-measured live**
+                   (dev server was down all turn). A's round-3 job is exactly that re-measurement.
+                   (S5, S6 closed by A round 2.)
 GATE (0 open):    NOT MET
 
-DONE:      round 1: 1-01..1-33 + 1-22b. round 2: 2-01.
-GATE NOW:  tsc clean · eslint clean · vitest 2610/2610 (manager, cold, after 2-01).
-TODO:      C resumes at 2-02 (hyphenation fold in the checker), then 2-03 (caption display fold),
-           2-04 (bounce-page phrase list), 2-05 (empty-PDF textStatus, A/B/C sub-entries), 2-06
-           (title heuristic). Then hand to A for round 3.
+DONE:      round 1: 1-01..1-33 + 1-22b. round 2: 2-01, 2-02, 2-03, 2-04, 2-05 (sub-entries A/B/C),
+           2-06 (steps a/b/c). See each item's own §4 entry (below, "Round 2 — Agent C (resumed)")
+           for what changed, the tests added, and how each was proven.
+GATE NOW:  tsc clean · eslint clean · vitest 2631/2631 (C, cold at the end of this turn; every
+           number in between — 2614, 2616, 2617, 2625, 2627, 2631 — appears in the per-item
+           entries below so a partial re-run can sanity-check by item).
+TODO:      A's round-3 measurement should answer, on the real, running app — none of these were
+           checkable this turn without the dev server:
+             - Is `openalex:W7212207112`'s `/api/figure` now `source_unavailable` (blocked), not
+               `paywalled`? (2-01, owed since the previous C's turn too)
+             - On a fresh deep-report run, does `openalex:W7207740551` now keep the RHEED method
+               claim (the hyphenation fold, 2-02)? Does it have ≤ 1 *incorrect* drop per Ruling
+               9's A2-06 definition (the "Ld = 0.44" missing-`=` case is accepted, not a defect;
+               the "Our key result is..." framing sentence and the Tc/BPV synthesis sentence are
+               correct drops, already ruled)?
+             - Does a figure caption carrying the fraction-slash artifact now render without the
+               stray fraction-slash glyph (2-03)?
+             - Does `/api/figure` on `openalex:W7212288571` (or `W7204990919`) now report
+               `source_unavailable` naming `link.springer.com`, instead of the old, false
+               `no_figures` (2-04)? Per B's own flag, this is a status-honesty fix, not
+               necessarily a new "found" figure — read it as fixed even if the found-count for
+               these two papers doesn't move.
+             - Uploading `web/.local-data/blank.pdf` (build fresh with
+               `python -c "import fitz; d=fitz.open(); d.new_page(); d.save(...)"` — delete any
+               stale hash under `.local-data/uploads/` first, since uploads are idempotent on
+               content hash) and opening `/papers/upload:<hash>`: does it show only the plain "no
+               readable text" message, and does reloading that page still show it (proving the
+               `GET /api/papers/[id]/reading` fix, not a client cache, is what's carrying it)
+               (2-05)?
+             - Uploading the two real PDFs (`https://arxiv.org/pdf/2501.00663`,
+               `https://arxiv.org/pdf/2609.02668`) through the actual `POST /api/papers/upload`
+               HTTP route (not just the direct script/TS calls this turn used): do they return
+               "Titans: Learning to Memorize at Test Time" and the full three-line 2609.02668
+               title respectively (2-06)?
+             - S4 figure tally, S3 dropped-claims tally: re-run both across the full pool now that
+               2-01/2-02/2-04 have landed, per the standing per-round tallies.
+             - How many Semantic Scholar 429s this round (Ruling 7's standing tally; ≥ 3 of 17
+               triggers B designing a fallback order next round)?
+             - Is any `found` figure actually a cover/logo (the never-fabricate check, still a
+               standing question every round per B's own template)?
+
+           Carrying every standing tally forward by name: S4 figure-status tally (found /
+           no_figures / source_unavailable / paywalled / other), S3 dropped-claims-per-paper
+           tally, Semantic Scholar 429 tally (Ruling 7), the eslint-gate-hygiene item (Ruling 1,
+           already fixed, stays in scope as item 0 of every C turn per that ruling's own words),
+           and the `html-text.ts` cap lead (Ruling 8, still not authorized as a fix item — A
+           checks next round whether any pool paper is HTML-sourced and long enough to hit it).
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
@@ -3886,3 +3945,83 @@ upload response is gone from the client) still show the message, proving `GET
 /api/papers/[id]/reading`'s new `upload:` branch is what's carrying it, not a client cache?
 
 Commit: `fix(upload): an empty-PDF upload never reaches the reading route as a 404 or asks for a report`.
+
+#### Item 2-06 — A2-01: the uploaded-PDF title heuristic
+
+**Step (a) — Python, `web/scripts/extract_pdf_text.py`'s `extract_title` rewritten.** Added
+`_first_page_lines_with_size` (page-1 lines, sorted with the identical sort key
+`extract_page_lines` already uses, each carrying its largest span size) as its own function
+rather than widening `extract_page_lines`'s shared `(bbox, text)` shape that
+`find_heading_hits`/`segment_into_sections`/`extract_figure_captions` all destructure directly —
+`extract_title` is the only caller that needs a size alongside the text, so a sibling function
+with the same ordering guarantee, not a shared-shape change, keeps this item's blast radius to
+one function. `TITLE_STAMP_RE` (arXiv-stamp / bare DOI / bare URL) and a short `DATE_STAMP_RE`
+filter candidate lines **before** the max-size search runs, per Ruling 9's own requirement — not
+filtered out of the result afterward. The rewritten function then finds the max size among the
+filtered candidates and joins every consecutive run at that size, stopping at the first line of a
+different size.
+
+**Step (b) — TypeScript, `web/src/app/api/papers/upload/route.ts`.** A new
+`resolveUploadTitle`/`modelTitleFallback` pair: when step (a)'s title fails the same
+`looksLikeUsableTitle` bar (at least 3 words, not stamp-shaped, at most 200 chars) applied at
+both ends, a `resolveProvider(null)` call (the same no-override pattern `report/route.ts` uses —
+a real model call locally, inert on a deployed instance with no operator key) asks a small-tier
+model to name the title from page 1's raw text. **New plumbing needed and not spelled out in
+B's guide**: `extract_pdf_text.py`'s segmented `sections` output never carries page-1's own text
+at all (`segment_into_sections` deliberately drops everything before the first recognized
+heading — the title-page area), so there was no existing source for "page-1 text" to hand the
+model. Added one new, additive field to the Python script's JSON output, `page1Text` (the same
+`pages_lines[0]` already computed, joined and capped at 4,000 chars — free, no extra
+computation), threaded through as `PdfTextResult.page1Text` (not the shared, HTML-and-PDF-common
+`ExtractedDocument` type, to keep this PDF-only, upload-route-only field out of a broader
+interface) and consumed only by the upload route's step (b).
+
+**Step (c)** — unchanged, already correct (`titleFromFileName`).
+
+**Tests added**:
+- `web/src/lib/papers/pdf-text.test.ts`: two new Python-level protective tests, run at the
+  TypeScript level through the real `extractPdfTextFromPath` entry point (this repo has no
+  Python test runner at all — confirmed, no `test_*.py`/`conftest.py` anywhere — so per B's own
+  authorized fallback these exercise the real script via `execFile`, not a reimplementation) — a
+  synthetic wrapped-title PDF (3 lines, same size) joins correctly; a synthetic stamp-above-title
+  PDF never returns the stamp. Guarded with `describe.skipIf(!PYTHON_AVAILABLE)` (checked once,
+  by trying `python -c "import pymupdf"` — never `python3`, which can hang on this Windows
+  machine's Store alias stub rather than fail fast) so a machine with no working Python+PyMuPDF
+  skips this block instead of failing the gate.
+- `web/src/app/api/papers/upload/route.test.ts`: four new cases — never calls the model when
+  step (a)'s title is already usable; step (b) recovers a title from the model when step (a)
+  found only a stamp; a stamp-shaped model answer is never trusted, falls through to the file
+  name; with no local dev provider (the deployed-Peer shape), a stamp-only title falls straight
+  through to the file name without ever calling the model.
+
+**Proved each new test tests the fix — reverted, watched fail, restored**:
+1. `extract_title` reverted to the original span-walk version (via a saved `git diff` patch,
+   `git checkout --`, then `git apply`) — both new `pdf-text.test.ts` cases failed exactly as
+   predicted (the wrapped title returned only its first line; the stamp test returned the stamp
+   itself); the pre-existing "reports no-python" case stayed green. Patch reapplied; 3/3 green.
+2. `resolveUploadTitle`/`modelTitleFallback`/`TITLE_STAMP_RE` reverted to the original one-line
+   `doc?.title?.trim() || titleFromFileName(...)` (same patch-save/checkout/apply method) — all
+   three new step-(b)/(c) cases failed (the stamp text came through unfiltered every time); the
+   15 pre-existing cases stayed green. Patch reapplied; 18/18 green.
+
+**Verified against the two real PDFs from earlier rounds, end to end, twice (before and after the
+revert-and-restore proof above)** — `web/.local-data/uploads/a65e4a7d02784df1.pdf` (2501.00663,
+the arXiv-stamp case) and `.../c5311fee90919716.pdf` (2609.02668, the wrapped-title case), both
+still on disk from a prior round, neither re-downloaded nor committed:
+- `2501.00663` -> "Titans: Learning to Memorize at Test Time" — exactly the real title, fixing
+  A2-01, from step (a) alone (never reached step b).
+- `2609.02668` -> "Electronic Structure and Superconductivity in La1.55Sr0.45CuO4/La2CuO4
+  Artificial High-Tc Superlattices Probed by Hard and Soft X-ray Spectroscopy" (the PDF's own
+  math-italic glyphs for the subscripted Tc, not an artifact) — the full, correctly-joined
+  three-line title, fixing M2-01, from step (a) alone.
+
+**Gate**: `npx tsc --noEmit` clean · `npx eslint .` clean · `npx vitest run --exclude
+"**/benchmark.test.ts"` -> **2631/2631** (6 more new).
+
+**Live check**: blocked, dev server down (see the turn-level note at the top of this section) —
+this item's real-PDF verification above stands in for it, run directly against the actual upload
+files rather than through the HTTP route. TODO for A next round: does `POST /api/papers/upload`
+on these same two real PDFs (via `curl -F "file=@..."` once the dev server is back) return these
+exact titles through the full HTTP path, not just the direct Python/TS call this turn verified?
+
+Commit: `fix(upload): a page-1 layout heuristic for the uploaded-PDF title, never a stamp`.

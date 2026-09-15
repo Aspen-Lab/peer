@@ -43,6 +43,11 @@ interface ExtractorOutput {
   sections?: ExtractorSection[];
   figureCaptions?: ExtractorCaption[];
   pageCount?: number;
+  /** 2-06, step (b): page 1's raw joined text, for the upload route's
+   *  small-tier-model title fallback when extract_title (step a) can't
+   *  produce one — never carried in `sections`, which drops everything
+   *  before the first recognized heading. */
+  page1Text?: string;
   reason?: string | null;
 }
 
@@ -58,6 +63,8 @@ export interface PdfTextResult {
    * see 1-16.
    */
   status?: number;
+  /** 2-06, step (b): forwarded from `ExtractorOutput.page1Text` — see there. */
+  page1Text?: string;
 }
 
 function resolveHelperScript(): string | null {
@@ -236,7 +243,7 @@ export async function extractPdfTextFromPath(pdfPath: string): Promise<PdfTextRe
     return { ok: false, reason: extractor.reason };
   }
   const doc = normalize(extractor);
-  return { ok: true, doc };
+  return { ok: true, doc, page1Text: extractor.page1Text };
 }
 
 /**

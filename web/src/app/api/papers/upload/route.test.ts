@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   extractPdfTextFromPath: vi.fn(),
   writeUploadPdfIfAbsent: vi.fn(async () => undefined),
   writeUploadMeta: vi.fn(async () => undefined),
+  resolveProvider: vi.fn(),
 }));
 
 vi.mock("@/lib/papers/pdf-text", () => ({
@@ -21,6 +22,10 @@ vi.mock("@/lib/papers/upload-store", async (importOriginal) => {
     writeUploadMeta: mocks.writeUploadMeta,
   };
 });
+
+vi.mock("@/lib/llm/providers/registry", () => ({
+  resolveProvider: mocks.resolveProvider,
+}));
 
 import { POST } from "./route";
 
@@ -58,6 +63,8 @@ describe("POST /api/papers/upload", () => {
     mocks.extractPdfTextFromPath.mockReset();
     mocks.writeUploadPdfIfAbsent.mockClear();
     mocks.writeUploadMeta.mockClear();
+    mocks.resolveProvider.mockReset();
+    mocks.resolveProvider.mockReturnValue(null); // no local dev provider unless a test opts in
     mocks.extractPdfTextFromPath.mockResolvedValue({ ok: true, doc: emptyDoc } satisfies PdfTextResult);
   });
 
@@ -121,6 +128,71 @@ describe("POST /api/papers/upload", () => {
     const res = await postWith(pdfFile(pdfBytes(), "untitled-download.pdf"));
     const body = await res.json();
     expect(body.paper.title).toBe("The Real Paper Title");
+    expect(mocks.resolveProvider).not.toHaveBeenCalled();
+  });
+
+  it("2-06: never asks the model when step (a)'s title is already usable — never a network/model call for the common case", async () => {
+    mocks.extractPdfTextFromPath.mockResolvedValue({
+      ok: true,
+      doc: { ...emptyDoc, title: "The Real Paper Title" },
+      page1Text: "The Real Paper Title\nJ. Smith, University of Nowhere",
+    } satisfies PdfTextResult);
+    const generateJsonText = vi.fn();
+    mocks.resolveProvider.mockReturnValue({ generateJsonText });
+
+    await postWith(pdfFile(pdfBytes()));
+
+    expect(generateJsonText).not.toHaveBeenCalled();
+  });
+
+  it("2-06 step (b): falls back to a local-dev small-tier model when step (a) found only an arXiv stamp", async () => {
+    mocks.extractPdfTextFromPath.mockResolvedValue({
+      ok: true,
+      doc: { ...emptyDoc, title: "arXiv:2401.12345v2" },
+      page1Text: "arXiv:2401.12345v2\nA Study Of Interesting Reactions In Modern Battery Chemistry",
+    } satisfies PdfTextResult);
+    const generateJsonText = vi.fn().mockResolvedValue(
+      JSON.stringify({ title: "A Study Of Interesting Reactions In Modern Battery Chemistry" }),
+    );
+    mocks.resolveProvider.mockReturnValue({ generateJsonText });
+
+    const res = await postWith(pdfFile(pdfBytes(), "untitled-download.pdf"));
+    const body = await res.json();
+
+    expect(body.paper.title).toBe("A Study Of Interesting Reactions In Modern Battery Chemistry");
+    expect(generateJsonText).toHaveBeenCalledTimes(1);
+    expect(generateJsonText.mock.calls[0][0]).toMatchObject({ tier: "small" });
+  });
+
+  it("2-06 step (b) -> (c): a stamp-shaped or unusable model answer is never trusted — falls through to the file name", async () => {
+    mocks.extractPdfTextFromPath.mockResolvedValue({
+      ok: true,
+      doc: { ...emptyDoc, title: "arXiv:2401.12345v2" },
+      page1Text: "arXiv:2401.12345v2\nsome ambiguous page 1 layout",
+    } satisfies PdfTextResult);
+    // The model echoes the same stamp shape back — never trusted, same bar
+    // as step (a)'s own output.
+    const generateJsonText = vi.fn().mockResolvedValue(JSON.stringify({ title: "arXiv:2401.12345v2" }));
+    mocks.resolveProvider.mockReturnValue({ generateJsonText });
+
+    const res = await postWith(pdfFile(pdfBytes(), "My Battery Paper.pdf"));
+    const body = await res.json();
+
+    expect(body.paper.title).toBe("My Battery Paper");
+  });
+
+  it("2-06: without a local dev provider (the deployed-Peer case), a stamp-only title falls straight through to the file name", async () => {
+    mocks.extractPdfTextFromPath.mockResolvedValue({
+      ok: true,
+      doc: { ...emptyDoc, title: "arXiv:2401.12345v2" },
+      page1Text: "arXiv:2401.12345v2",
+    } satisfies PdfTextResult);
+    mocks.resolveProvider.mockReturnValue(null); // canUseLocalServerProvider() false on a deployed instance
+
+    const res = await postWith(pdfFile(pdfBytes(), "My Battery Paper.pdf"));
+    const body = await res.json();
+
+    expect(body.paper.title).toBe("My Battery Paper");
   });
 
   it("finds a DOI mentioned in the extracted body text, stripping trailing punctuation", async () => {
