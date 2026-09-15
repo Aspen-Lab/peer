@@ -2502,3 +2502,39 @@ gate re-run for completeness, unaffected (2607/2607).
 next section.
 
 Commit: `docs(upload): README note that uploads are local to this machine`.
+
+### Round 2 — manager browser checks (2026-09-15, while A re-measures)
+
+Dev server restarted cold (`peer-web`, port 3000) after C's second turn; gate re-run cold by the
+manager: tsc clean · eslint clean · vitest 2607/2607.
+
+Browser checks A cannot do, all on the Browser pane against a real arXiv PDF (2609.02668, 20
+pages, uploaded via `curl -F` → `upload:c5311fee90919716`):
+- **S7 button** — renders on the briefing page immediately left of the search box: black square,
+  white upload glyph, `aria-label="Upload a paper PDF"`. **Drag-and-drop** verified by dispatching
+  `dragenter`/`dragover`/`drop` with a real `File` on the button: the button disabled itself during
+  the upload and the page navigated to `/papers/upload%3Ac5311fee90919716`, which renders the same
+  reading page as the raw-colon URL. Re-uploading the same bytes gave the same id (idempotent).
+- **S7 reading page** — hero figure (FIG. 1, XRD), the abstract, "Read by your model from the full
+  text (PDF, 20 pages)", merged **What it proposes** (one summary + one "new here" line, no
+  separate "What is new", no "Why it fits you"), **How it was done** (3 methods with verbatim
+  quotes), **What they found** (2 key results with quotes, per-result "What is new here", FIG. 3
+  and FIG. 2 bound under them). **Save** → the Saved page lists the paper (1 on the shelf).
+- **S5 scramble** — cleared `peer-paper-report-v6`, reloaded, polled `innerText` at 40 ms: glyph
+  runs from the scramble alphabet observed 6 times as the fresh report arrived (first within ~4 s);
+  reloaded again with the report cached: 0 glyph runs in 8 s. Fresh scrambles, cached is plain.
+- **The L/d fraction fix holds live**: the kept quote "We find that the Δμ values for the AHTS with
+  L/d = 0.67 and 0.78 lie above EL…" is exactly the one round 1 dropped.
+
+Findings for B (manager, round 2) — these join A's list:
+- **M2-01 (S7, WRONG DATA)** — the uploaded paper's title is truncated to the first wrapped line:
+  "Electronic Structure and Superconductivity in". The extractor takes one line where the PDF's
+  title spans three. Title derivation must join consecutive title-sized lines on page 1 (or ask the
+  small tier with the first page's text) and fall back to the file name when unsure — never a
+  half title.
+- **M2-02 (S3/S4, WRONG SHAPE, low)** — figure captions display PyMuPDF's fraction artifact
+  ("Ld ⁄ = 0.44") in the reader; the same fold the checker got (1-17) should apply when a caption
+  is shown, or the caption text should be cleaned at extraction. Display only; matching is fine.
+- **M2-03 (S3, real data)** — the uploaded 2609.02668 report says "3 claims were dropped"; A
+  measures the same paper via `openalex:W7207740551` this round — B classifies each drop (correct
+  synthesis drop vs. suspicious) from A's fragments.
