@@ -377,6 +377,29 @@ up the first unstarted item.
 
 ---
 
+## §1g. RULING 6 — the fraction artifact (1-17): fold it symmetrically, in the checker (manager, 2026-09-15) — BINDING
+
+B's diagnosis: PyMuPDF flattens a stacked "L/d" into "Ld ⁄" (U+2044), so a verbatim quote fails
+the literal match. Ruling: **do it, cheaply, in `normalizeForMatch`** — applied to BOTH the quote
+and the corpus, so it stays a symmetric folding step like the ligature/dash rules already there,
+never a similarity relaxation: drop `/` and `⁄` (with any surrounding spaces) from both sides.
+"L/d = 0.67" and "Ld ⁄ = 0.67" then both normalise to "ld = 0.67". No change to the Python
+extractor, no change to `MIN_QUOTE_CHARS`/`PREFIX_CHARS`/`SUFFIX_CHARS`. Protective tests: (1)
+the L/d case now matches; (2) a paraphrase still does not; (3) the figure-caption corpus entry
+(B's latent gap) is proven by a test that fails without it. B's second dropped quote (genuine
+synthesis) stays dropped — A counts it as a correct drop next round, not a defect.
+
+## §1h. RULING 7 — Semantic Scholar 429s (1-20): queue now, key is the user's call (manager, 2026-09-15) — BINDING
+
+Do (b) now: a module-level concurrency cap (2) plus a minimum interval (~350 ms) around
+`trySemanticScholarCandidates`, shared across the Node process; and make a 429 an honest attempt
+status (`rate_limited`) so the final diagnostic never says "no figures" when the truth is "we
+were throttled". (a) — a `SEMANTIC_SCHOLAR_API_KEY` — is a registration the user does; C documents
+the env var in the README's env section and nothing more. A tally owed by A next round: how many
+figure lookups in the pool hit 429 after the queue.
+
+---
+
 ## §2. ROLES — DO ONLY YOUR OWN JOB
 
 ### Agent A — Reviewer
