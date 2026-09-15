@@ -4589,3 +4589,74 @@ product code outside this file imports it. The retry adds up to one extra networ
 **Note for A's next tally**: since `reason` (not `status`) now carries the throttle note, A's
 Semantic-Scholar rate-limit count should grep `reason` for "rate-limited" (or the older exact
 `status === "rate_limited"` for the sole-branch case) rather than only counting final `status`.
+
+#### Item 4-02 — A3-04: zero-width characters survive every existing fold
+
+**File**: `web/src/lib/papers/evidence.ts`, `normalizeForMatch` (lines 82-95).
+**Classification: MISSING** — a fold this function needs does not exist yet; the four other
+folds already there (ligatures, curly quotes, dashes, fraction slashes, hyphenated breaks) are
+unaffected.
+
+**Verified by execution** (throwaway `tsx` script under `web/.local-data/`, deleted before this
+commit — imported the real, unmodified `normalizeForMatch`, no product code touched):
+- Reproduced A's exact finding: `normalizeForMatch("learning rate of 4​e - 4...")` !==
+  `normalizeForMatch("learning rate of 4 e - 4...")` today (confirmed `false`).
+- Tested both candidate fixes on the same pair, and on the task's own `"12​x"` vs. `"12 x"`
+  shape: **folding the zero-width characters to `""` (deletion) does NOT make them match** —
+  `4​e` -> `4e` (no space), but the model's own copied quote has an ordinary space there
+  (`4 e`), so `"4e - 4"` != `"4 e - 4"`. **Folding them to a literal `" "` (space), placed BEFORE
+  the existing `.replace(/\s+/g, " ")` whitespace-collapse step, converges both sides**:
+  `4​e` -> `4 e` -> (collapse, no-op here) `4 e`, matching the model's own text exactly. Both
+  candidates confirmed directly by running them against the literal strings, not by inspection.
+- Also confirmed directly: JS `\s` already matches `﻿` (it is in ECMAScript's own
+  `WhiteSpace` production) — the existing `.replace(/\s+/g, " ")` step silently already folds a
+  bare U+FEFF to a space today. U+200B/U+200C/U+200D are `Cf` (Format) characters, not `Zs`
+  (Space Separator), so `\s` does **not** match them — confirmed by direct regex test, matching
+  A's own claim. Including U+FEFF in the new fold (Ruling 10 names all four) is therefore
+  redundant with existing behavior but harmless, and keeps the story in one visible place instead
+  of split between an explicit fold and a JS regex quirk nobody would think to look for.
+
+**Fix direction**: add one constant next to `FRACTION_SLASHES`/`HYPHENATED_WORD_BREAK` (lines
+50/71):
+```
+const ZERO_WIDTH_CHARS = /[​‌‍﻿]/g;
+```
+with a comment naming the ar5iv/MathML-rendering origin (mirroring the existing `FRACTION_SLASHES`
+comment) and stating explicitly that it folds to a **space**, not empty — unlike the fraction-slash
+artifact (a spurious extra token, correctly deleted), this character is doing the job of a
+word-boundary space in the source, so deleting it outright would erase a boundary the model's own
+quote still has. Insert `.replace(ZERO_WIDTH_CHARS, " ")` into the existing chain (lines 82-95) at
+any point *before* `.replace(/\s+/g, " ")` — grouping it right after the soft-hyphen removal
+(`­` -> `""`, line 88) keeps the two invisible-character folds together.
+
+**What shows when every candidate is rejected**: unaffected — this only changes which
+corpus/quote strings `normalizeForMatch` treats as equal; a genuinely non-matching claim is still
+dropped by `verifyReportEvidence` exactly as today (no change to `evidenceSupported`'s control
+flow, `MIN_QUOTE_CHARS`/`PREFIX_CHARS`/`SUFFIX_CHARS`, or the drop-counting path).
+
+**Confirmed no regression**: ran `evidence.test.ts`'s exact "rejects a paraphrase" fixture text
+through a candidate implementation of the fix — its normalized form stays distinct from the
+ZWSP-corpus's normalized form (folding four invisible characters to spaces cannot turn different
+words into the same words).
+
+**Tests at risk** (grepped every importer of `normalizeForMatch`/`evidenceSupported` — only
+`evidence.test.ts` besides `evidence.ts` itself):
+- None of the existing 15 cases in `describe("normalizeForMatch", ...)` / `describe
+  ("evidenceSupported", ...)` contain any zero-width character (confirmed by reading the full
+  file) — the new fold is a no-op on every existing fixture string. Zero regression risk.
+- New protective test to add, mirroring the established 1-17/2-02 pair pattern exactly (lines
+  46-52/54-61 for the "folds the same way on both sides" half, 136-142/160-168 for the
+  "does not turn a paraphrase into a match" half):
+  ```
+  it("A3-04: folds a zero-width space the same way on both sides of an ar5iv math-rendering artifact", () => {
+    expect(normalizeForMatch("learning rate of 4​e - 4")).toBe(
+      normalizeForMatch("learning rate of 4 e - 4"),
+    );
+  });
+  ```
+  plus a same-shape paraphrase-rejection sibling.
+
+**Blast radius**: `normalizeForMatch` is exported and used by `evidenceSupported`, `buildCorpus`,
+`locate`, and `placeEvidence` (client-side ink-mark placement) — all four already go through the
+identical fold pipeline for every other existing fold, so this is the same low-risk, symmetric-
+fold shape as the two prior accepted rulings (1-17, 2-02), not a new mechanism.
