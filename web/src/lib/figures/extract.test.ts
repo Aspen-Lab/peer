@@ -280,6 +280,35 @@ describe("tryHtmlCandidates — 1-21, a small identity-check bounce page is not 
     expect(result.candidates[0]?.imageUrl).toContain("fig1.png");
   });
 
+  it("2-04: recognises a Springer-style 'Client Challenge' bot-mitigation stub with no cookie wording at all", async () => {
+    // A trimmed-down stand-in for the real link.springer.com stub found
+    // live: a bare CSP/JS challenge page, no <figure>, no og:image, and —
+    // unlike Nature's idp.nature.com/transit page — never mentions
+    // "cookie" anywhere, so the 1-21 detector alone missed it.
+    const challengeHtml =
+      "<!doctype html><html><head><title>Client Challenge</title></head>" +
+      "<body><script>/* bot-mitigation challenge, no article content */</script></body></html>";
+    const challengeResponse = () => {
+      const res = new Response(challengeHtml, { status: 200, headers: { "content-type": "text/html" } });
+      Object.defineProperty(res, "url", {
+        value: "https://link.springer.com/10.1007/s40998-026-01240-x",
+        configurable: true,
+      });
+      return res;
+    };
+    globalThis.fetch = vi.fn(async () => challengeResponse()) as unknown as typeof fetch;
+
+    const result = await tryHtmlCandidates(
+      "https://doi.org/10.1007/s40998-026-01240-x",
+      "publisher",
+    );
+
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2); // original + one retry
+    expect(result.status).toBe("source_unavailable");
+    expect(result.reason).toContain("access-check page");
+    expect(result.reason).toContain("link.springer.com");
+  });
+
   it("does not mistake a real, cookie-notice-carrying article page for a bounce stub", async () => {
     const realArticleHtml =
       "<!doctype html><html><body>" +

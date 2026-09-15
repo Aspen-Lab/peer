@@ -3757,3 +3757,40 @@ TODO for A next round: does `/api/figure` on a paper whose caption carries this 
 `W7207740551` figure, if it has a caption with a fraction in it) now render without the stray `⁄`?
 
 Commit: `fix(figures): fold the stray fraction-slash artifact out of displayed text`.
+
+#### Item 2-04 — A2-04: the Springer graphical-abstract miss
+
+**Change**: `web/src/lib/figures/extract.ts` — broadened 1-21's `looksLikeThinCookieStub` (a
+single `/cookie/i` word match) into `looksLikeThinChallengeStub`, tested against a new
+`CHALLENGE_STUB_PHRASES` regex (`cookie`, `client challenge`, `checking your browser`, `just a
+moment`, `verify you are human`, `ddos protection by`) — a short, closed phrase list, still
+matched against the full `html` string (not stripped body text, since Springer's "Client
+Challenge" signal lives in `<title>`), per B's fix direction exactly. Never a host name — stays
+the same generic, content-shaped signature `looksLikeBouncePage` already was for Nature.
+
+**Test added**: a new case in the existing 1-21 describe block in `extract.test.ts` —
+`link.springer.com` serving a bare `<title>Client Challenge</title>` + script-only stub (no
+"cookie" anywhere, under 8,000 chars) → `tryHtmlCandidates` retries once, still bounces, returns
+`source_unavailable` with `bouncePageReason` naming `link.springer.com` — not `no_figures`.
+
+**Proved the new test tests the fix**: reverted `looksLikeThinChallengeStub`/
+`CHALLENGE_STUB_PHRASES` back to the original single-word `/cookie/i` check, reran
+`extract.test.ts` — the new case failed (`fetch` called once instead of twice — the stub was
+never recognised as a bounce, so no retry fired), all 15 other tests (including the three
+original 1-21 cases) stayed green. Restored the fix; reran — 16/16 green.
+
+**Gate**: `npx tsc --noEmit` clean · `npx eslint .` clean · `npx vitest run --exclude
+"**/benchmark.test.ts"` → **2617/2617** (1 more new).
+
+**Found nothing in B's guide to contest.** Flagging forward, per B's own explicit note: this fix
+improves honesty (`source_unavailable` instead of a false `no_figures`), not the found-figure
+count — a plain retry does not clear this Springer challenge (B confirmed twice, byte-identical),
+so W7212288571/W7204990919 most likely stay off the "found" tally next round even with the fix
+correctly landed. TODO for A: read the new status as `source_unavailable`
+("Peer reached an access-check page at link.springer.com..."), not as evidence the fix failed.
+
+**Live check**: blocked, dev server down (see the turn-level note at the top of this section).
+TODO for A next round: does `/api/figure` on `openalex:W7212288571` now report
+`source_unavailable` (naming `link.springer.com`) instead of the old, false `no_figures`?
+
+Commit: `fix(figures): recognise a Springer-style bot-challenge stub as a bounce page`.

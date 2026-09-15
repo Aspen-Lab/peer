@@ -874,6 +874,18 @@ function safeHostname(url: string): string | null {
   }
 }
 
+// 2-04: a short, closed phrase list for a thin bot-mitigation/challenge stub
+// — broadened from 1-21's single "cookie" word after a Springer DOI
+// resolved to a `link.springer.com` "Client Challenge" page (a bare CSP/JS
+// challenge stub, no cookie wording at all, that a plain retry never
+// clears). Still a generic, content-shaped signature, never a host name —
+// per §1d, "one publisher-shaped fix that works across hosts beats
+// per-host patches." Kept short and closed on purpose: a stub shape none
+// of these phrases cover is a gap to record for A, not a reason to widen
+// this inline.
+const CHALLENGE_STUB_PHRASES =
+  /\bcookie\b|\bclient challenge\b|\bchecking your browser\b|\bjust a moment\b|\bverify you are human\b|\bddos protection by\b/i;
+
 // 1-21: a generic "this looks like a stub, not real content" check, the same
 // kind `isAr5ivErrorPage` above already is for a different stub — applies to
 // any publisher whose access gateway bounces an unauthenticated request
@@ -884,8 +896,14 @@ function looksLikeBouncePage(finalUrl: string, html: string): boolean {
   const host = safeHostname(finalUrl);
   const hostLooksLikeIdp = Boolean(host && /^idp\./i.test(host));
   const pathLooksLikeTransit = /\/transit(?:[/?]|$)/i.test(finalUrl);
-  const looksLikeThinCookieStub = html.length < 8_000 && /cookie/i.test(html);
-  return hostLooksLikeIdp || pathLooksLikeTransit || looksLikeThinCookieStub;
+  // 2-04: match against the full `html` (including <title>, where Springer's
+  // "Client Challenge" signal lives), not a stripped-tags body-text
+  // extraction, which would remove the very text this needs to see.
+  // 2-04: match against the full `html` (including <title>, where Springer's
+  // "Client Challenge" signal lives), not a stripped-tags body-text
+  // extraction, which would remove the very text this needs to see.
+  const looksLikeThinChallengeStub = html.length < 8_000 && CHALLENGE_STUB_PHRASES.test(html);
+  return hostLooksLikeIdp || pathLooksLikeTransit || looksLikeThinChallengeStub;
 }
 
 function bouncePageReason(finalUrl: string): string {
