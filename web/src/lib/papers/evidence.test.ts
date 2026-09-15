@@ -42,6 +42,14 @@ describe("normalizeForMatch", () => {
       normalizeForMatch("The ﬁrst “counter‐factual” — 12–15 %  gain­s [12], see [3–5]."),
     ).toBe(normalizeForMatch('The first "counter-factual" - 12-15 % gains, see.'));
   });
+
+  it("1-17: folds an inline fraction slash the same way on both sides of the PDF extraction artifact", () => {
+    // PyMuPDF reorders a stacked "L/d" into "Ld" + U+2044 (FRACTION SLASH)
+    // when lifting text from a PDF's glyph layout — a real paper's own
+    // wording, garbled by extraction, not a paraphrase.
+    expect(normalizeForMatch("L/d = 0.67")).toBe(normalizeForMatch("Ld ⁄ = 0.67"));
+    expect(normalizeForMatch("L/d = 0.67")).toBe("ld = 0.67");
+  });
 });
 
 describe("evidenceSupported", () => {
@@ -99,6 +107,26 @@ describe("evidenceSupported", () => {
     expect(corpus).toContain(short);
     expect(evidenceSupported(short, corpus)).toBe(false);
   });
+
+  it("1-17: a model's verbatim-correct quote matches a corpus garbled by the fraction-slash artifact", () => {
+    // The corpus is what PyMuPDF actually extracted from the PDF (the
+    // artifact); the quote is how a human — and the model — would
+    // transcribe the same sentence. Neither side is edited to make them
+    // match; normalizeForMatch's symmetric fold does that.
+    const garbledCorpus =
+      "we find that the ahts with ld ⁄ = 0.67 and 0.78 lie above el for all temperatures measured.";
+    const modelQuote =
+      "We find that the AHTS with L/d = 0.67 and 0.78 lie above EL for all temperatures measured.";
+    expect(evidenceSupported(modelQuote, garbledCorpus)).toBe(true);
+  });
+
+  it("1-17: the fraction fold does not turn a paraphrase into a match", () => {
+    const garbledCorpus =
+      "we find that the ahts with ld ⁄ = 0.67 and 0.78 lie above el for all temperatures measured.";
+    const paraphrase =
+      "The AHTS samples with a length-to-diameter ratio of 0.67 and 0.78 sit above the EL curve.";
+    expect(evidenceSupported(paraphrase, garbledCorpus)).toBe(false);
+  });
 });
 
 describe("verifyReportEvidence", () => {
@@ -128,6 +156,36 @@ describe("verifyReportEvidence", () => {
       "Success rate",
       "No generator",
     ]);
+  });
+
+  it("1-17: a verbatim figure-caption quote is kept — buildCorpus now includes figureCaptions", () => {
+    // A minimal doc of our own (not the shared fixture): the caption
+    // sentence appears nowhere else, so this proves buildCorpus reads
+    // figureCaptions and not some other section that happens to repeat it.
+    const captionSentence =
+      "The superconducting dome narrows sharply as the layer ratio approaches its critical value.";
+    const miniDoc: ExtractedDocument = {
+      sections: [
+        { heading: "Introduction", canonical: "introduction", text: "This paper studies a layered superlattice." },
+      ],
+      figureCaptions: [{ ordinal: 0, label: "Figure 7", caption: captionSentence }],
+      source: "pdf",
+    };
+    const { report: verified, dropped } = verifyReportEvidence(
+      report({
+        resultsAndSignificance: {
+          summary: "",
+          keyResults: [
+            { title: "Dome narrowing", detail: "Seen in the figure.", evidence: captionSentence },
+          ],
+        },
+      }),
+      { abstract: "", doc: miniDoc },
+    );
+
+    expect(dropped).toBe(0);
+    expect(verified.resultsAndSignificance.keyResults).toHaveLength(1);
+    expect(verified.resultsAndSignificance.keyResults[0].evidenceWhere).toBe("Figure 7");
   });
 
   it("sets evidenceWhere to the section heading or to abstract", () => {

@@ -1821,3 +1821,117 @@ code — confirmed by reading the route, it touches no file this round changed) 
 this browser session; not fixed, since it is not one of B's 32 items.
 
 Commit: `feat(reader): restore the scramble-text reveal on fresh report generation`.
+
+**1-14..1-18 — S3, full text reaches pass 1, and the checker stops dropping true claims.** DONE
+(1-14, 1-15, 1-16, 1-17, 1-22 landed as two commits — 1-14/1-15/1-16/1-22 together, since
+`pdf-text.ts` carries a piece of both the pass-1-budget change and the paywall-status fix and
+splitting one file's diff across two commits by hunk was not worth the risk; 1-17 separately, no
+file overlap with the others). 1-18 is a note, not code (below).
+
+**1-14** (`deep-report.ts`): `buildPass1Prompt` no longer destructures four named buckets —
+`nonAbstractSections()` (new helper, shared with `buildPass2Prompt`'s raw-fallback branch) reads
+every canonical bucket `sectionsByCanonical` returns except `abstract`, in the paper's own section
+order. This is broader than the ruling's literal ask (which named `conclusion` specifically) — it
+also reaches `limitations`, `related_work`, `supplementary` and the `body` catch-all, per B's own
+fix direction ("Read buckets generically... instead of destructuring five named ones"). Per-bucket
+clips (12k intro / 14k methods,results,discussion) removed; `PASS1_MAX_INPUT_CHARS` 60k → 400k.
+The raw-fallback branch in `buildPass2Prompt` (short papers that skip pass 1) now uses the same
+helper instead of four separate `.slice(0,6000)` calls. **Token-cost estimate, corrected from B's
+guide**: B guessed 3.1 Flash-Lite at $0.10/1M input; `provider-models.ts`'s own comment (line 21)
+gives the real published rate as **$0.25/1M input, $1.50/1M output**. At ~4 chars/token, a
+400k-char pass-1 input is ~100k tokens ≈ **$0.025/paper** (not B's ~$0.01) — still negligible
+against report-generation cost overall; the 34-page test paper's actual 22,916-char body is
+~5,700 tokens ≈ $0.0014/paper. Pass 2 is unaffected by this cap (it carries the compressed signal,
+not raw body, when pass 1 ran).
+
+**1-15** (`pdf-text.ts` + `extract_pdf_text.py`): `MAX_PDF_PAGES` 40 → 100 in both the Node caller
+and the Python script's own `argparse` default (the Node side always passes `--max-pages`
+explicitly, so the Python default only matters for a direct invocation). Raised the Node-side
+`execFileAsync` timeout 45s → 100s alongside it (not explicitly asked, but PyMuPDF text extraction
+scales roughly with page count and the old timeout was tuned for 40 pages) — **not verified against
+a real 100-page PDF's wall-clock time this round**; if a live check next round times out, the fix
+is here, not a deeper investigation.
+
+**1-16 + 1-22** (`full-text.ts`, `pdf-text.ts`, `figures/extract.ts`) — landed together per B's
+note they're the same bug. Added `looksLikePaywallStatus(status)` (`[401,402,403,451].includes`)
+to each of the three files (not shared — B explicitly scoped de-duplication out this round) and
+moved the status check out of each file's `appearsPaywalled` (dead there — only ever called after
+a 2xx fetch) into the actual early-return paths: `full-text.ts`'s `fetchHtml` now carries `status`
+on its failure shape so `tryHtmlLink` can check it before falling to `source_unavailable`;
+`pdf-text.ts`'s `downloadPdf`/`PdfTextResult` gained the same `status` field so `full-text.ts`'s
+`tryPdfLink` (the PDF path) gets the identical fix; `figures/extract.ts`'s `tryHtmlCandidates`
+checks `res.status` directly on its `!res.ok` branch (simpler here — `res` was already in scope,
+unlike `full-text.ts`'s `fetchHtml` which discarded it). A hard 401/402/403/451 is now `paywalled`
+with a host-naming reason instead of the generic "could not reach"/"source unavailable" — the
+underlying fact is unchanged, only the label and message.
+
+**1-17** (`evidence.ts`): `buildCorpus` now also indexes `doc.figureCaptions` (`where: cap.label`),
+so a genuinely verbatim caption quote is no longer dropped as unverifiable. The fraction-slash fold
+(`FRACTION_SLASHES`) required more care than B's guide's illustrative example implied — **the
+naive symmetric fix (`\s*[/⁄]\s*` → `""`, stripping whitespace on *both* sides of the slash) does
+NOT actually make "L/d = 0.67" and "Ld ⁄ = 0.67" normalise identically** (empirically verified:
+it produces "ld = 0.67" vs "ld= 0.67" — one space apart, because the artifact's stray "⁄" token
+carries a space on *each* side, while the clean "L/d" form carries none, so symmetric stripping
+removes one too many spaces from the artifact form's tail). The working fix strips the slash plus
+only its *trailing* whitespace (`[/⁄]\s*` → `""`): the clean form loses only the slash (no trailing
+space to strip), and the artifact form's stray-token space budget balances out to the same single
+separator space the clean form already has before whatever follows. Verified empirically (node
+one-liners, logged as fragments not full corpus text) before writing it into the source. No change
+to `MIN_QUOTE_CHARS`/`PREFIX_CHARS`/`SUFFIX_CHARS`, no paraphrase-acceptance — `evidenceSupported`
+still requires the folded strings to match exactly.
+
+**Tests, all proven by revert-watch-restore (per item, logged individually)**:
+- `deep-report.test.ts` (new file): `generateDeepReport` with a fake provider proves pass 1's
+  prompt includes a `conclusion` section — reverted `buildPass1Prompt` to the old four-bucket
+  destructure, watched the assertion fail (`sections.conclusion` undefined), restored.
+- `full-text.test.ts` (new file): three cases on `getFullText` with a mocked `collectSourceLinks`
+  and a mocked global `fetch` — a hard 403 (HTML and PDF link) is `paywalled`; a 404 stays
+  `no_full_text` (the top-level `FullTextResult.status` never surfaces `source_unavailable` at
+  all — `buildResult`'s aggregation only ever returns `ok`/`paywalled`/`no_full_text`; confirmed by
+  reading the function, not assumed, after my first draft of this test asserted the wrong status
+  and failed against the *working* code). Reverted both status checks, watched the two 403 cases
+  fail (`no_full_text` instead of `paywalled`), restored.
+- `extract.test.ts` (new file, `lib/figures/`): exported `tryHtmlCandidates` (was module-private;
+  now `export`ed with a "tests only" comment — every other caller reaches it through
+  `buildCandidatePool`) and wrote three cases mirroring `full-text.test.ts`'s, plus one confirming
+  `hostLooksOpenAccess` still overrides a status-based paywall guess on a trusted host (PMC).
+  Reverted the status check, watched the 403 case fail, restored.
+- `evidence.test.ts`: 4 new cases — the two Ruling-6-required ones (L/d fold match; a paraphrase
+  near the same numbers still rejected) plus a `normalizeForMatch`-level case proving the exact
+  fold, plus the figure-caption corpus case using a **synthetic minimal doc**, not the shared
+  fixture — my first attempt reused the shared `arxiv-2609.02697.doc.json` fixture's own figure
+  caption text and it failed for the wrong reason (the caption's first sentence turned out to
+  already be duplicated verbatim in the fixture's Introduction section, so the match came from
+  `doc.sections`, not from the new `figureCaptions` corpus entry — the test would have passed
+  whether or not 1-17 shipped). Building a controlled fixture with a caption sentence that exists
+  nowhere else, then reverting the `figureCaptions` loop and watching that specific test fail
+  (`dropped` 0 → 1), is the real proof.
+
+Gate: tsc clean, eslint clean, vitest 2559/2559 (2548 + 11 new). Re-ran the standing regression
+locks explicitly: `evidence.test.ts`, `report.test.ts`, `reading-markdown.test.ts`,
+`source-links.test.ts`, `pdf-text.test.ts`, everything under `lib/figures/` — all pass (49 tests,
+7 files). No `reader/*.test.ts*` files exist to re-run (confirmed by find, matches B's finding).
+
+**Findings outside B's 32 items, not fixed — noted for the manager/A:**
+- `html-text.ts`'s own `MAX_TOTAL_CHARS = 90_000` / `MAX_SECTION_CHARS = 18_000` (HTML-extraction
+  caps, upstream of everything `deep-report.ts` does) were not named in B's guide, which only
+  covered `deep-report.ts`'s and `pdf-text.ts`'s constants. Both of this round's real-data test
+  papers are PDF-sourced (unaffected by these HTML-only caps), so this is unconfirmed for any real
+  paper — a plausible sibling gap for an HTML-sourced (ar5iv/PMC/bioRxiv/generic) paper long enough
+  to hit 90k total chars, not a landed fix. Flagging per "land what is confirmed, not what is
+  plausible" — A should check whether any pool paper is HTML-sourced and long enough for this to
+  matter before it becomes a fix item.
+- `figures/pdf-extract.ts`'s own `tryPdfCandidates`/`fetchPdfResponse` (the figures pipeline's PDF
+  path, separate from `pdf-text.ts`'s) has the identical dead-paywall-detection shape on its
+  `if (!res || !res.ok)` early return — B's 1-22 scope named only `full-text.ts`/`pdf-text.ts`/
+  `figures/extract.ts`'s `tryHtmlCandidates`, not this file. Not fixed (outside the guide's named
+  scope); noted for the manager to decide if it's a ninth sibling fix or out of scope.
+- **1-18**: per B, `arxiv:2501.00663` is the suggested third S3 test paper, outside the 17-paper
+  pool, PDF-backed — **A must confirm with a live `getFullText()` call before treating it as
+  settled** (B did not verify this exact id's PDF bytes live, to avoid spending A's next-round
+  budget on a check A will redo anyway). Any other arXiv id already confirmed live is an equally
+  valid substitute.
+
+Commit: two commits — `fix(report): pass 1 reads every canonical bucket, and a hard 401/402/403/451
+is paywalled, not source_unavailable` (1-14, 1-15, 1-16, 1-22), `fix(evidence): fold the PDF
+fraction-slash artifact; index figure captions in the corpus` (1-17).

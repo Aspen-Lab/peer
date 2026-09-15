@@ -30,12 +30,32 @@ const SUFFIX_CHARS = 40;
 const CITATION_BRACKETS = /\s*\[\d+(?:\s*[-,]\s*\d+)*\]/g;
 
 /**
+ * `/` (ASCII slash) and `⁄` (U+2044, FRACTION SLASH). PyMuPDF's PDF text
+ * extraction reorders a stacked inline fraction like "L/d" into
+ * letters-then-fraction-slash ("Ld" + U+2044) when lifting text from the
+ * PDF's glyph layout, as its own free-floating token — "Ld ⁄ = 0.67" where
+ * the clean text reads "L/d = 0.67". A real extraction artifact, not a
+ * paraphrase.
+ *
+ * The slash and any whitespace immediately *after* it are dropped — not
+ * whitespace before it — so the artifact's own two added spaces (one on
+ * each side of the stray "⁄" token) collapse to the single natural space
+ * the clean text already has before whatever follows, while "L/d" (no
+ * space on either side) is untouched by that extra step and simply loses
+ * its slash. Both then normalise to "ld = 0.67" (applied to both the quote
+ * and the corpus, per this function's own symmetric-folding design). A
+ * cheap, auditable text-cleanup step, not a paraphrase-acceptance one:
+ * `evidenceSupported` still requires the folded strings to match exactly.
+ */
+const FRACTION_SLASHES = /[/⁄]\s*/g;
+
+/**
  * Normalise for matching only — never for display. `cleanDisplayText` first,
  * so a quote that went through the sanitizer and a raw section text land in
  * the same alphabet (it already folds entities, mojibake, `×`, `±`, sub- and
  * superscripts). Then NFKC (ligatures `ﬁ` → `fi`), curly → straight quotes,
- * every dash → `-`, soft hyphens gone, citation brackets gone, lowercase,
- * whitespace collapsed.
+ * every dash → `-`, soft hyphens gone, citation brackets gone, both slash
+ * characters gone (1-17), lowercase, whitespace collapsed.
  */
 export function normalizeForMatch(s: string): string {
   return cleanDisplayText(s)
@@ -45,6 +65,7 @@ export function normalizeForMatch(s: string): string {
     .replace(/[‐‑‒–—―−]/g, "-")
     .replace(/\u00AD/g, "")
     .replace(CITATION_BRACKETS, "")
+    .replace(FRACTION_SLASHES, "")
     .toLowerCase()
     .replace(/\s+/g, " ")
     .trim();
@@ -90,6 +111,16 @@ function buildCorpus(corpus: { abstract: string; doc?: ExtractedDocument }): Cor
     const text = normalizeForMatch(section.text);
     if (!text) continue;
     entries.push({ where: section.heading.trim() || section.canonical, text });
+  }
+  // 1-17: figure captions are supplied text too — `buildPass2Prompt` hands
+  // the model `figureCaptions` alongside `body`, and the evidence rule says
+  // "one sentence copied character-for-character from the supplied text (or
+  // the abstract)" — a caption qualifies, but was never in the matchable
+  // corpus, so a genuine verbatim caption quote was dropped as unverifiable.
+  for (const cap of corpus.doc?.figureCaptions ?? []) {
+    const text = normalizeForMatch(cap.caption);
+    if (!text) continue;
+    entries.push({ where: cap.label.trim() || "figure", text });
   }
   return entries;
 }
