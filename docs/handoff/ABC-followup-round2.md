@@ -4025,3 +4025,122 @@ on these same two real PDFs (via `curl -F "file=@..."` once the dev server is ba
 exact titles through the full HTTP path, not just the direct Python/TS call this turn verified?
 
 Commit: `fix(upload): a page-1 layout heuristic for the uploaded-PDF title, never a stamp`.
+
+### Round 3 — Agent A
+
+Branch confirmed `complimentary-enhancement-to-main-update` before starting; `git status` clean.
+Dev server `peer-web` confirmed up (`GET /` -> 200) before any measurement. Same 17-paper pool
+and method as rounds 1-2, plus the third S3 paper (`arxiv:2501.00663`), for a comparable trend.
+No product code changed. Two throwaway vitest specs lived briefly under
+`web/src/lib/papers/__round3a_scratch_*.test.ts` (used to capture pre-verification claim text
+via a mocked `verifyReportEvidence`, since the live HTTP route never exposes which claims it
+dropped) and were deleted before this part's commit; throwaway output files lived under this
+agent's own scratchpad directory (outside the repo, never committed).
+
+#### Part 1 — S3 (full text + checker)
+
+**Method note.** The live route (`POST /api/papers/report`) returns only `droppedClaims` (a
+count) and `keyResults` (the survivors) — it never returns which claims were dropped or their
+text. To classify drops per Ruling 9, a throwaway vitest spec wrapped the real, exported
+`verifyReportEvidence` (via `vi.mock`, calling through to the real implementation) to capture the
+pre-verification report alongside the post-verification one, against the real `getFullText()`
+output and the real local-dev provider (`resolveProvider(null)` with `NODE_ENV` stubbed to
+`"development"` for this process only — the same credentials the dev server already uses, never
+logged). This is a parallel, same-corpus sampling method, not a re-implementation of the
+checker; every classification below was decided by running the real, exported
+`evidenceSupported`/`normalizeForMatch` against the real corpus.
+
+**`openalex:W7207740551` (arXiv 2609.02668, physics), run twice via the actual HTTP route as
+asked.** `getFullText()`: pageCount 20, source `pdf`, buckets abstract(895)
+introduction(9627) results(17805), body 28,327 chars — well under the 400k cap, **nothing
+clipped**.
+- **Route run 1**: `droppedClaims: 2`, `keyResults: 1`. keyResults **FAILS** (< 2).
+- **Route run 2**: `droppedClaims: 3`, `keyResults: 2`. keyResults **MEETS**.
+
+Six supplementary capture runs against the same paper/corpus (to see what is actually being
+dropped, since the route itself will not say) surfaced only four distinct candidate sentences,
+repeating across runs — classified against the real corpus, one line each:
+1. `"Our key result is that multiple spectral features evolve systematically..."` — never appears
+   in the corpus in any form; the model's own framing wording, not the paper's. **Correct drop**
+   (standing, same fragment A/B already named in round 2).
+2. `"The extracted Tc values trace the superconducting dome... reaching a maximum of 43 K...
+   consistent with the asymmetric Fano-shaped superconducting dome predicted by BPV theory..."`
+   — appeared in 5 of 6 runs; a fused, multi-source analytical sentence, not a single quote from
+   the paper. **Correct drop** (Section 1c.3's already-ruled standing exclusion, reconfirmed).
+3. `"We find that the delta-mu values for the AHTS with L/d = 0.67 and 0.78 lie above EL... whereas the
+   L/d = 0.44 sample remains below this threshold."` — the real corpus reads `"...with Ld =
+   0.67and 0.78 lie above EL..."` (no `/`, already folded — but also **no space** between
+   `"0.67"` and `"and"`, a real character the extractor dropped, not something any existing fold
+   inserts). **Not verbatim after current folds; same defect family as the already-accepted
+   "Ld 0.44" missing-operator residual (round 2) — a new instance, not a new category.**
+4. `"High-resolution symmetric theta-2theta X-ray diffraction (XRD) measurements were performed using a
+   Rigaku SmartLab diffractometer... Cu K-alpha1 radiation."` — the source continues `"...Cu K-alpha1
+   radiation (lambda = 1.5406 A). As shown in Fig. 1(a)..."`; the model silently dropped the
+   wavelength clause and closed the sentence with a period that isn't there in the source.
+   **Correct drop** (model elision/paraphrase at the tail, not a verbatim quote).
+
+**The confirmed-live incorrect drop 2-02 targeted (the RHEED "high- energy"/"high-energy"
+hyphenation case) did not appear in any of the 6 post-fix samples** — consistent with the fix
+landing and working. **Zero confirmed incorrect drops observed across 8 total samples (2 route +
+6 capture) on this paper.** Per Ruling 9's drop-count target, this paper now passes on drop
+classification alone. **It does not reliably pass on keyResults**: one of the two official route
+runs returned only 1 (< 2) — model output variance in how many results it proposes, not a
+checker defect, but a real, measured miss against the "≥2 keyResults" half of the target.
+
+**`openalex:W7212228226` (JECST, 34 pages).** `getFullText()`: pageCount 34, source `pdf`,
+buckets abstract(1491) introduction(18061) conclusion(3364), body 22,916 chars, nothing clipped.
+- **Route run**: `droppedClaims: 0`, `keyResults: 2`, both `evidenceWhere: "Introduction"`.
+  **MEETS** outright.
+- Two supplementary capture runs both dropped exactly one method claim, the identical sentence
+  each time: `"To compare Li metal transport kinetics against size, electrodes of identical
+  thickness but different pore size were fabricated."` The real corpus has a page-footer/DOI
+  stamp injected mid-sentence — `"...electrodes of identical 10 DOI: 10.33961/jecst.2026.00892
+  thickness but..."` — a PDF running-header artifact landing exactly inside this one sentence, a
+  **new extraction-artifact shape** (a whole page-furniture string spliced into running text, not
+  a hyphen break or a dropped operator). Not verbatim after any current fold. **Boundary case,
+  flagged for the manager rather than silently classified**: it reads as genuinely the paper's
+  own words, disrupted by page layout — not a model paraphrase — but Ruling 9's own two named
+  categories (paraphrase/synthesis vs. verbatim-after-fold) don't cleanly cover it. Both capture
+  runs still met keyResults (2 and 3). No route run saw a Conclusions-sourced result this round
+  (both route/introduction-sourced); not investigated further (A does not diagnose).
+
+**`arxiv:2501.00663` ("Titans: Learning to Memorize at Test Time") — the third S3 paper.**
+`GET /api/papers/arxiv:2501.00663` 404'd (arXiv metadata rate limit, independent of this branch,
+same as round 2's finding) — worked around identically: confirmed live via `arxiv.org/abs/...` and
+`/pdf/...` (both 200, real title/authors read off the abstract page), built the `Paper` object by
+hand, POSTed directly (`getFullText`/the report route never touch the rate-limited endpoint).
+`getFullText()`: source `ar5iv` (HTML), no `pageCount`, buckets abstract(1552)
+introduction(8914) body(29278) results(19613) conclusion(962), total 60,319 chars, nothing
+clipped (well under 400k and under `html-text.ts`'s 90k cap).
+- **Route run**: `droppedClaims: 3`, `keyResults: 2`. keyResults **MEETS**.
+- Two supplementary capture runs: run 1 dropped 2 (below), run 2 dropped 0.
+  1. `"We employ AdamW optimizer with learning rate of 4 e - 4 with cosine annealing schedule...
+     weight decay of 0.1."` — **confirmed, new incorrect-drop mechanism.** The real corpus reads
+     `"...learning rate of 4[ZWSP]e - 4 with..."` — a **zero-width space (U+200B)** sits between
+     `"4"` and `"e"`, an ar5iv/HTML math-rendering artifact. Verified directly:
+     `normalizeForMatch` on both strings is identical **except** for this one invisible
+     character (`\s` does not match U+200B, confirmed by direct regex test), so
+     `evidenceSupported` returns `false` even though every visible character matches. **This is a
+     genuine incorrect drop under Ruling 9's own definition** — the first one found this round
+     that is not already covered by an existing, accepted residual category. Not fixed (A does
+     not change code); flagged as a new difference below.
+  2. `"Titans outperform Transformers with the same context window..."` — the source reads
+     `"Titans **outperforms** Transformers..."` (verb agreement differs by one letter — the paper
+     treats "Titans" as grammatically singular). **Correct drop**: the model silently "corrected"
+     the paper's own grammar, so its quote is not actually verbatim, however close.
+- **Net for this paper**: at most 1 confirmed incorrect drop appeared in any single sampled run
+  (never 2 together) — numerically still inside Ruling 9's `<=1` ceiling on every run observed,
+  but the underlying zero-width-space defect is real, reproducible, and specific to
+  HTML/ar5iv-sourced text (the pool itself has none; this third paper is the only ar5iv case
+  measured all round) — one more affected sentence in the same run would push this paper over
+  the ceiling. Flagged as a live, open risk, not yet a failure.
+
+**S3 verdict**: **not closed.** `W7212228226` and `arxiv:2501.00663` meet the numeric target on
+every run measured (the latter with a newly identified, unaddressed risk). `W7207740551` fails
+the target on 1 of its 2 required route runs — not from over-dropping (0 confirmed incorrect
+drops in 8 samples, a real improvement, 2-02 appears to have worked) but from the model itself
+proposing only 1 key result on one run. This is a different, narrower gap than round 2's
+(checker honesty vs. model output count) but it is still a real miss against the spec's own
+per-paper target as measured.
+
+Commit: `docs(abc): round 3 A part 1 - S3 real-data re-measurement`.
