@@ -2741,3 +2741,81 @@ a cached reload. **Citing that result rather than re-doing it**: S5's browser-on
 closed, by the manager, this round — not by A.
 
 Commit: `docs(abc): round 2 A part 3 - S5/S6 shape confirmed live and in code`.
+
+#### Part 4 — S7 (route level)
+
+Downloaded a real arXiv PDF (`https://arxiv.org/pdf/2501.00663`, 3.66MB, 27 pages) into
+`web/.local-data/round2a-scratch/` (deleted before this commit; the resulting upload record under
+`web/.local-data/uploads/` was left in place — real app data, not scaffolding).
+
+**Upload.** `curl -F "file=@titans.pdf"` → `HTTP 200`, `id: "upload:a65e4a7d02784df1"`,
+`pageCount: 27` (honest, matches the extractor's own count), `authors: []` (honest — author
+extraction is out of scope per spec), `venue: ""`, no `doi` (honest — none found by the in-text
+regex on this paper). **`title` is wrong**: the returned title is
+`"arXiv:2501.00663v1 [cs.LG] 31 Dec 2024"` — the arXiv preprint banner stamped in the page
+margin, not the paper's real title ("Titans: Learning to Memorize at Test Time"). This is real
+text lifted from the PDF (not fabricated), but it is the wrong text — the title heuristic picked
+the watermark line, not the title. **This is a second, independent title bug alongside the
+manager's M2-01** (which found a *different* failure mode — a title truncated to its first
+wrapped line — on a different PDF, `2609.02668`). Two different real PDFs, two different ways the
+same "largest-font-line" heuristic picks the wrong text; both are `WRONG DATA` against the spec's
+"never a guessed title," even though neither is a fabrication.
+
+**Idempotency**: re-uploading the identical bytes returned the same id, `upload:a65e4a7d02784df1`.
+**Magic-byte check**: a plain-text file renamed `.pdf` → `HTTP 415`, `{"error":"That file is not a
+PDF."}` — clean rejection, not fooled by the extension or a claimed `Content-Type`.
+
+**The two GET routes**: `GET /api/papers/upload/a65e4a7d02784df1` → 200, the mapped `Paper` JSON
+(same shape as the upload response's `paper`). `GET .../file` → 200, `content-type:
+application/pdf`, streamed.
+
+**The deep report** (`POST /api/papers/report {deepReport:true}` with the uploaded record, real
+provider, ~12.5s): `depth: "deep"`, `sourceKind: "pdf"`, `provenance.pageCount: 27`,
+`droppedClaims: 0`, `keyResults: 3`, `methods: 4`, `skim: 2`, no paywall notice — the full deep
+pipeline runs on an uploaded PDF exactly like any other paper, per spec S7(c).
+
+**The figure** (`GET /api/figure?id=upload:a65e4a7d02784df1`): `status: "found"`, `source:
+"publisher"`, a real 1290×446 PNG (143,879 bytes), caption "Figure 2: Memory as a Context (MAC)
+Architecture..." — matches the paper's own content. Genuine own-figure, not fabricated.
+
+**Negative test — a genuinely empty PDF.** Built two textless PDFs (a hand-written minimal one,
+then a proper single blank page via PyMuPDF, to rule out my first file being too malformed to be
+a fair test) and uploaded both. Both uploads succeeded (`200`, honest empty fields, file-name
+title fallback) — matches spec. **But the promised honest message never reaches the reader,
+confirmed two independent ways:**
+1. `extractPdfTextFromPath` on the real blank PDF returns `{ ok: true, doc: { sections: [] } }` —
+   **not** `{ ok: false, reason: "...produced no sections" }`. `full-text.ts`'s `tryUploadLink`
+   only recognizes the "produced no sections" *failure* reason to mark `pdf-empty`; a *successful*
+   extraction that simply found zero sections takes the first branch instead
+   (`if (result.ok && result.doc) return { status: "ok", doc: result.doc }`) and is reported as a
+   normal, successful full-text read with an empty document. The `pdf_empty` classification 1-28
+   built is never reached for this real case.
+   Consequence, confirmed by running the deep report on both blank PDFs: the reader sees "Peer
+   downloaded the paper but the deep-read step failed. Showing an abstract-only report instead."
+   — a generic message, not "this PDF has no readable text." (Route path: `fullText.status ===
+   "ok"` passes the early check, `generateDeepReport` returns `null` on the empty doc, and the
+   `!deep` branch's generic message fires — never the `pdf_empty`-specific copy.)
+2. Independently, `GET /api/papers/[id]/reading` — the route that actually calls `buildReading`
+   with a real `FullTextResult` and is the only place `readingSentence`/`fullTextClause`'s
+   `pdf_empty` copy is produced — 404s for any `upload:` id: it calls `fetchPaperById(id)`
+   (`openalex:`/`arxiv:` only), which has no upload branch. Confirmed live:
+   `GET /api/papers/upload:fad8d25d9ca41233/reading` → 404. The reading page's `useReading` hook
+   calls this same route unconditionally for every paper id; on the 404 it falls back to the
+   client-only `buildReading(paper, null)`, which never carries `pdf_empty` either way. So even a
+   report that *did* carry the right classification would not reach the reading page's baseline
+   availability sentence through this path for an uploaded paper.
+Both gaps are confirmed by execution against the real code and a real file, not investigated for
+cause beyond what is shown above (A does not diagnose).
+
+**Save**: not independently re-tested this turn — the manager's browser-check entry (this round)
+already confirmed Save works for an uploaded paper (the Saved page listed it). Code reading
+(round 1 B/C, re-confirmed by grep this round) shows the saved store and `RecordBlock` are
+generic over `paper.id`'s prefix, so this is expected to generalize; citing the manager's live
+result rather than re-testing.
+
+**Button, drag-and-drop, dark-mode color**: needs a browser; the manager's entry already
+confirmed the button renders correctly (black square, white glyph, left of search) and drag-and-
+drop works (dispatched `drop` with a real `File`, page navigated and disabled itself correctly).
+Not re-verified here.
+
+Commit: `docs(abc): round 2 A part 4 - S7 real upload-to-report-to-figure flow`.
