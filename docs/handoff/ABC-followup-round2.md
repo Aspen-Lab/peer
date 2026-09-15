@@ -5255,3 +5255,26 @@ resolved (0/17 final `rate_limited` this round, well under the ≥3 threshold); 
 a cover/logo; the 1-of-17 found-figure count is accepted as honest per Ruling 10 (A3-06).
 
 Commit: `docs(abc): round 4 A part 2 - S4 closing measurement`.
+
+#### Part 3 — S5/S6/S7 regression, one line each
+
+From Part 1's five live deep-report responses (`W7207740551` x2, `W7212228226` x2,
+`arxiv:2501.00663` x1):
+- **No `whyItFitsYou` on any of the 5** responses — confirmed absent every time.
+- **`whatItProposes` is the merged shape on all 5**: one `summary` string plus an optional
+  `newHere` array; no separate "What is new" block.
+- **Per-result `novelty` present on every `keyResults[]` entry across all 5** responses.
+- **`scramble-text.tsx` present, with its test file, and wired**: imported by
+  `report-sections.tsx`, `claim-list.tsx`, and `paper-words.tsx` (grepped for `ScrambleText`
+  outside test files).
+- **Cache key**: `use-model-report.ts` `STORAGE_KEY = "peer-paper-report-v6"`,
+  `LEGACY_STORAGE_KEYS` includes `"peer-paper-report-v5"` — unchanged.
+- **Upload chain, both routes, live**: `GET /api/papers/upload/a65e4a7d02784df1` -> `200`,
+  `title: "Titans: Learning to Memorize at Test Time"` (full title, no stamp). `GET
+  /api/papers/upload:6422afa156f795d1/reading` -> `200`, `provenance.fullText: "pdf_empty"`,
+  `omitted` names `findings`/`method`/`caveats` -> `"pdf_empty"`, `skim` -> `"no_abstract"`,
+  `forYou`/`nextStep` -> `"needs_key"` — the exact classification from round 2/3, still correct.
+
+**S5/S6/S7: no regression.** Same result as rounds 2 and 3's confirmations.
+
+Commit: `docs(abc): round 4 A part 3 - S5/S6/S7 regression spot-check`.
