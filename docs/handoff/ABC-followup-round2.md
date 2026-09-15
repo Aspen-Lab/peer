@@ -4216,3 +4216,83 @@ out-of-scope fidelity question, per B's own accepted limitation).
 cover, logo, or wrong-paper image appeared anywhere in the 17-paper sweep this round.
 
 Commit: `docs(abc): round 3 A part 2 - S4 figure-status tally`.
+
+#### Part 3 — S7 (route level)
+
+Downloaded `https://arxiv.org/pdf/2501.00663` (3.66MB) and `https://arxiv.org/pdf/2609.02668`
+(1.13MB) fresh into `web/.local-data/`; built a truly blank single-page PDF with
+`python -c "import fitz; d=fitz.open(); d.new_page(); d.save('web/.local-data/blank.pdf')"`.
+**Idempotency note applied**: both real PDFs already had stale hash records under
+`web/.local-data/uploads/` from round 2 (`a65e4a7d02784df1.{pdf,json}`,
+`c5311fee90919716.{pdf,json}`), predating 2-05/2-06 — confirmed stale by reading their `.json`
+(still carried the old wrong stamp title and the truncated title, and no `textStatus` field at
+all). Deleted both pairs, plus two leftover blank-PDF hash records, before uploading, so the
+current code actually ran, not a cached pre-fix record. All checks below went through the real
+`POST /api/papers/upload` HTTP route via `curl -F`, not a direct script call.
+
+**Upload, real PDF 1 (`2501.00663`, the arXiv-stamp case)**: `HTTP 200`,
+`id: "upload:a65e4a7d02784df1"`, **`title: "Titans: Learning to Memorize at Test Time"`** — the
+exact real title, no stamp — `doi: null` (honest, none in text), `pageCount: 27`,
+`textStatus: "ok"`, `authors: []` (honest, author extraction out of scope). **2-06 (A2-01)
+CONFIRMED FIXED through the actual HTTP route** (round 2 only verified this via a direct
+Python/TS call).
+
+**Upload, real PDF 2 (`2609.02668`, the wrapped-title case)**: `HTTP 200`,
+`id: "upload:c5311fee90919716"`, **`title`** = the full, correctly-joined three-line title,
+"Electronic Structure and Superconductivity in La1.55Sr0.45CuO4/La2CuO4 Artificial High-Tc
+Superlattices Probed by Hard and Soft X-ray Spectroscopy" — not truncated to the first line —
+`pageCount: 20`, `textStatus: "ok"`. **M2-01 CONFIRMED FIXED through the actual HTTP route.**
+
+**Idempotency**: re-uploading `2501.00663`'s identical bytes returned the same
+`id: "upload:a65e4a7d02784df1"`.
+
+**Upload, blank PDF**: `HTTP 200`, `id: "upload:6422afa156f795d1"`, `title: "blank"` (the file
+name, step (c), honest — never a guess), `pageCount: 1`, **`textStatus: "empty"`** — confirmed
+live through the real route.
+
+**Negative test**: a plain-text file saved as `fake.pdf` -> `HTTP 415`,
+`{"error":"That file is not a PDF."}` — clean rejection by magic bytes, not fooled by the
+extension or a claimed content type.
+
+**The two GET routes, both ids**: `GET /api/papers/upload/a65e4a7d02784df1` -> 200;
+`GET .../6422afa156f795d1` (blank) -> 200. `GET .../a65e4a7d02784df1/file` -> 200,
+`content-type: application/pdf`; `GET .../6422afa156f795d1/file` -> 200, same content type. Both
+ids round-trip their stored record and file correctly.
+
+**`GET /api/papers/upload:<hash>/reading` — the exact route 2-05's sub-entry B targeted.**
+- Real PDF (`a65e4a7d02784df1`): **`HTTP 200`** (not 404). Real server-built provenance:
+  `fullText: "pdf"`, `pageCount: 27`, `buckets: [abstract, introduction, results, methods, model,
+  conclusion, related_work]`, real `findings` sourced from the actual document (one finding
+  attributed to "Figure 6"). This is the full server-side reading build, not the degraded
+  client-only fallback round 2 found for *every* uploaded paper — confirmed fixed, live.
+- Blank PDF (`6422afa156f795d1`): **`HTTP 200`** (not 404). `provenance.fullText: "pdf_empty"`,
+  `abstract: "none"`, `buckets: []`, `findings/method/caveats` all empty, `omitted` names the
+  reasons explicitly (`findings`/`method`/`caveats` -> `"pdf_empty"`, `skim` -> `"no_abstract"`,
+  `forYou`/`nextStep` -> `"needs_key"`). This is exactly the classification 2-05 built, now
+  reachable through the real route for an `upload:` id — **2-05 (A2-02, both sub-bugs) CONFIRMED
+  FIXED, live.**
+
+**Deep report on the uploaded `2609.02668` record** (`POST /api/papers/report {deepReport:
+true}`, real provider, ~11s): `depth: "deep"`, `sourceKind: "pdf"`, `provenance.pageCount: 20`,
+`droppedClaims: 2`, `keyResults: 1`, `methods: 4` — the full deep pipeline runs on an uploaded
+PDF exactly like any other paper, per spec S7(c). (Same paper as Part 1's `W7207740551`, same
+candidate drop pool — not re-classified here to avoid duplicating Part 1's work; the keyResults
+< 2 miss recurs on this upload copy too, consistent with Part 1's finding that it is model
+variance, not upload-specific.)
+
+**The figure, uploaded Titans PDF** (`GET /api/figure?id=upload:a65e4a7d02784df1`):
+`status: "found"`, `source: "publisher"`, real 191,862-byte image, caption "Figure 2: Memory as a
+Context (MAC) Architecture..." — matches the paper's own content, not fabricated.
+
+**The figure, blank upload** (`GET /api/figure?id=upload:6422afa156f795d1`): `status:
+"no_figures"`, honest, no crash, no fabricated image.
+
+**S7 verdict: every route-level item this round's TODO named is now confirmed fixed through the
+real HTTP path** — uploaded titles (both real PDFs), the empty-PDF `textStatus`, the
+reading-route 404 fix (both a real record and an empty one), figures for an uploaded PDF, and
+the negative magic-byte rejection. The only S7 sub-items still open are the ones that always
+needed a browser (does the client actually withhold the report call and render the plain
+message for `textStatus: "empty"`, confirmed only by code reading this round — see Part 4) —
+carried to the manager's eyeball list, not counted as a code-state difference.
+
+Commit: `docs(abc): round 3 A part 3 - S7 real upload-to-report-to-figure flow`.
