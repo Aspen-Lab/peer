@@ -95,9 +95,8 @@ GATE NOW:  tsc clean · vitest 2544/2544 (benchmark.test.ts excluded) — matche
            eslint NOT clean: 1 error, `web/src/components/persona/quiz.tsx:46`
            (react-hooks/set-state-in-effect), pre-existing and unrelated to S3-S7 —
            `POLICY — manager decides` whether this blocks the loop's gate.
-TODO:      B investigates A1-01 (S7) → A1-02 (S6) → A1-03 (S5) → A1-04 (S4) → A1-05 (S3), in
-           that order (see §4 difference list), and rules on the eslint POLICY flag if the
-           manager has not already.
+TODO:      B investigates per §1b–§1f (rulings written by the manager after A's turn): the
+           eslint item 0, then S6, S5, S3, S4, S7 — fix guide in that order for C.
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
@@ -264,6 +263,86 @@ Binding reading:
 - Vertex is global-endpoint only (commit `e0f2cdc`). Do not add regional fallbacks.
 - The paper feed never calls web search (Vertex AI Search / Tavily); events/jobs code is dead.
   Do not wire it back.
+
+---
+
+## §1b. RULING 1 — the pre-existing eslint error is gate hygiene, fixed first (manager, 2026-09-15) — BINDING
+
+A is right: `npx eslint .` fails on `web/src/components/persona/quiz.tsx:46`
+(`react-hooks/set-state-in-effect`), which predates this branch. The `GATE NOW` baseline in the
+opening §1 was wrong about eslint. Ruling: **it is in scope as item 0 of every C turn until fixed.**
+Minimal fix, no behaviour change, hydration-safe (the server-rendered markup and the first client
+render must stay identical — `useSyncExternalStore` with a null server snapshot, or an equivalent
+that keeps the localStorage read off the render path). Never disable the rule. From then on the
+gate baseline is: tsc clean · eslint clean · vitest 2544/2544 (+ whatever tests C adds).
+
+## §1c. RULING 2 — S3 scope on real papers (manager, 2026-09-15) — BINDING
+
+A found that **14 of 17** pool papers return `no_full_text` and 1 is a 403. So "read the full
+paper" has two halves, and B enumerates both before writing fix entries:
+
+1. **Are the `no_full_text` verdicts honest?** For at least 3 of the 14 (pick a Wiley, an ACS
+   and an Elsevier/Nature one), run `collectSourceLinks` + `getFullText` and log which links were
+   tried (publisher HTML, publisher PDF, Unpaywall OA locations, Europe PMC, arXiv) and why each
+   failed. `OPENALEX_EMAIL` is set locally, so Unpaywall lookups should be running — confirm by
+   execution, not by reading. If an open-access copy exists somewhere (arXiv / ChemRxiv / PMC /
+   institutional repository) that the pipeline never asks for, that is a gap. If nothing legal is
+   reachable, the honest outcome is the abstract-tier report with its existing paywall notice —
+   **never scrape a paywall**.
+2. **When full text IS read, all of it reaches pass 1.** A's construction says the binding limits
+   are the per-bucket clips (intro 12k, methods/results/discussion 14k) and that a `conclusion`
+   bucket is never read. B confirms by execution and writes the fix: every canonical bucket
+   (including `conclusion`, and any unclassified body text) reaches pass 1, per-bucket clips go,
+   the whole-prompt cap rises to ~400k chars, `MAX_PDF_PAGES` to 100. State the token cost per
+   paper on 3.1 Flash-Lite.
+3. **The checker.** On `W7207740551` 4 claims were dropped. B feeds the dropped quotes (from a
+   fresh run; do not paste them into the log — quote ≤ 1 line each) through `evidenceSupported`
+   against the real corpus and says, per quote, why it failed (not in corpus at all / hyphenation /
+   math / model paraphrase). Fix must keep the no-paraphrase rule: a kept quote is traceable to the
+   source text. Say what the report shows when everything is rejected (unchanged: honest emptiness).
+4. **Third test paper.** B names one open-access paper outside the pool (an arXiv id is fine)
+   that A uses next round, so the S3 target is measured on 3 papers.
+
+## §1d. RULING 3 — S4 figures: enumerate the path before any per-paper fix (manager, 2026-09-15) — BINDING
+
+A's tally: 1 found, 8 `no_figures`, 7 `source_unavailable`, 1 paywalled. Before writing fix
+entries B enumerates, for each status group, **which branches of `lib/figures/extract.ts` ran and
+which were skipped**, by execution (a throwaway script that logs the attempt list is fine):
+
+- The 7 `source_unavailable` are all "could not reach https://doi.org/…" on Wiley/ACS/OpenAlex.
+  Is that a 403/anti-bot on the publisher, a redirect the fetch does not follow, or a timeout?
+  Were the DOI-independent branches (Semantic Scholar figure records, Unpaywall OA locations,
+  Europe PMC) tried at all for these papers?
+- The 8 `no_figures` "reached the source page, but it did not expose extractable figures" are
+  Elsevier / Springer / Nature / KJCE HTML pages. Do those pages carry a graphical abstract
+  (`og:image`, `twitter:image`, a `figure` with a caption) that the parser misses? One
+  publisher-shaped fix that works across hosts beats per-host patches.
+- The JECST PDF genuinely has no images; a paper like it shows nothing. **Never fabricate**: no
+  logos, no cover images, no images from a different paper, no stock art. A publisher's
+  graphical abstract of *this* paper is acceptable; a journal cover is not.
+
+Target stays as §1a S4(c). A reports the before/after count next round.
+
+## §1e. RULING 4 — S7 storage and record shape (manager, 2026-09-15) — BINDING
+
+- Uploaded PDFs live on the server under `web/.local-data/uploads/<sha16>.pdf` (gitignored),
+  metadata beside it as `<sha16>.json`. Id `upload:<sha16>`. Idempotent on re-upload.
+- The reading page `/papers/upload:<sha16>` gets its paper record from
+  `GET /api/papers/upload/<sha16>` (so a reload works with an empty client store). The upload
+  response also hands the record to the client so navigation is immediate.
+- `lib/papers/full-text.ts` and `lib/figures/extract.ts` recognise `upload:` ids and read the
+  local file directly — no HTTP round-trip to fetch a file the server already has.
+- Everything downstream (deep report, evidence checker, figure binding, per-section figures,
+  Save, Copy, Markdown export) is the existing code path. No parallel "upload report" pipeline.
+- Documented in README: uploads are local to this machine; not persisted on Vercel.
+- B orders C's guide so shared helpers land before the button, and the button lands last.
+
+## §1f. RULING 5 — C's working order (manager, 2026-09-15) — BINDING
+
+C works B's guide in this order of items, one commit each: **0 eslint → S6 → S5 → S3 → S4 → S7**
+(smallest and most visible first; S7 last because it is the largest and depends on S3/S4 helpers).
+If C runs out of budget, it stops at an item boundary with `PARTIAL`, and the next C turn picks
+up the first unstarted item.
 
 ---
 
