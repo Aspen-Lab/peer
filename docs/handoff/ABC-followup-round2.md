@@ -2072,3 +2072,31 @@ Gate: tsc clean, eslint clean, vitest 2568/2568 (2565 + 3 new). Re-ran
 entirely).
 
 Commit: `fix(figures): a small identity-check bounce page is reported honestly, not as no_figures`.
+
+**1-22b — `web/src/lib/figures/pdf-extract.ts` — the dead paywall-status check, same bug family as
+1-16/1-22.** DONE, per Ruling 8 (§1i — the previous C's own out-of-guide finding, ruled in scope).
+Identical shape to the other three: `appearsPaywalled`'s `[401,402,403,451].includes(res.status)`
+check (old line 105) was unreachable — it's only called from `tryPdfCandidates`'s `!looksLikePdf`
+branch, which is itself only reached after the earlier `!res.ok` early return (old lines 217-223)
+already passed, so `res.status` there is always a 2xx by construction. A hard 401/402/403/451 on
+the initial fetch (Wiley/ACS-shaped, same as 1-16/1-22) fell into the generic
+`source_unavailable`/"could not reach" branch instead. Fix: pulled the check out into a standalone
+`looksLikePaywallStatus(status)` (a fourth copy, not shared — matching the other three files'
+already-established choice not to de-duplicate this round) and applied it in the early-return path,
+same guard shape as the other three (`hostLooksOpenAccess` first, so a trusted open-access host's
+own 40x is never miscalled a paywall). Removed the now-fully-dead status check from inside
+`appearsPaywalled` itself, matching how 1-16 left `full-text.ts`'s equivalent function (checked
+this round — `full-text.ts`'s `appearsPaywalled` takes no status/URL at all, the check lives only
+at the call sites), rather than leaving two copies of the same dead check in one file.
+
+Tests: new file `web/src/lib/figures/pdf-extract.test.ts` (this module had no test file at all
+before), 3 cases mirroring `extract.test.ts`'s 1-22 block exactly (hard 403 -> paywalled with the
+host named in the reason; a plain 404 -> still source_unavailable; an open-access host's 403 ->
+source_unavailable, never paywalled). Proof: commented out the new early-return branch, re-ran — the
+403 case failed (`source_unavailable` instead of `paywalled`), the other two were unaffected (as
+expected, they don't exercise the new branch), restored.
+
+Gate: tsc clean, eslint clean, vitest 2571/2571 (2568 + 3 new). This closes out every item B/the
+previous C named in the S4 (figures) guide — 1-19 through 1-22b are all landed now.
+
+Commit: `fix(figures): the PDF-figure fetch also reports a hard 401/402/403/451 as paywalled`.

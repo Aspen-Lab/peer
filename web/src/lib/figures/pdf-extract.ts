@@ -100,9 +100,22 @@ function hostLooksOpenAccess(url: string): boolean {
   }
 }
 
+/**
+ * 1-22b: a hard 401/402/403/451 is as clear a paywall signal as a fetch ever
+ * gets — same fix as 1-16 (`papers/full-text.ts`) and 1-22
+ * (`figures/extract.ts`'s `tryHtmlCandidates`), same bug, found in this file
+ * separately (it keeps its own copy of this logic, like the other two).
+ * This used to live inside `appearsPaywalled` below, which is only ever
+ * called after `tryPdfCandidates`'s own `!res.ok` branch has already
+ * returned — so a real 401/402/403/451 never reached it; it was reported as
+ * `source_unavailable` ("could not reach") instead.
+ */
+function looksLikePaywallStatus(status: number): boolean {
+  return [401, 402, 403, 451].includes(status);
+}
+
 function appearsPaywalled(res: Response, html: string): boolean {
   if (hostLooksOpenAccess(res.url)) return false;
-  if ([401, 402, 403, 451].includes(res.status)) return true;
   if (/captcha/i.test(html)) return true;
   const lowered = html.toLowerCase();
   const phrases = [
@@ -215,6 +228,9 @@ export async function tryPdfCandidates(
 ): Promise<PdfAttemptResult> {
   const res = await fetchPdfResponse(url);
   if (!res || !res.ok) {
+    if (res && !hostLooksOpenAccess(url) && looksLikePaywallStatus(res.status)) {
+      return { status: "paywalled", candidates: [], reason: paywallReason(url) };
+    }
     return {
       status: "source_unavailable",
       candidates: [],
