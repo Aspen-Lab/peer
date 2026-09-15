@@ -28,7 +28,11 @@ export type SourceLinkLabel =
   | "europepmc"
   | "input"
   | "doi"
-  | "derived";
+  | "derived"
+  /** 1-28: an `upload:` id's own stored file — not a fetched "link" in the
+   * usual sense, but the source-link shape is what `full-text.ts`'s callers
+   * (the reading page, figure binding) already know how to read. */
+  | "upload";
 
 export interface SourceLink {
   url: string;

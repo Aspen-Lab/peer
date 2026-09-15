@@ -1,13 +1,21 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { ExtractedDocument } from "./html-text";
+import type { PdfTextResult } from "./pdf-text";
 import type { SourceLink } from "./source-links";
 
 const mocks = vi.hoisted(() => ({
   collectSourceLinks: vi.fn(),
+  extractPdfTextFromPath: vi.fn(),
 }));
 
 vi.mock("./source-links", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./source-links")>();
   return { ...actual, collectSourceLinks: mocks.collectSourceLinks };
+});
+
+vi.mock("./pdf-text", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./pdf-text")>();
+  return { ...actual, extractPdfTextFromPath: mocks.extractPdfTextFromPath };
 });
 
 // Mocked after source-links so `pdf-text.ts`'s own network call (a real
@@ -68,5 +76,58 @@ describe("getFullText — 1-16, a hard 401/402/403/451 is reported as paywalled"
 
     expect(result.status).toBe("paywalled");
     expect(result.reason).toContain("pubs.acs.org");
+  });
+});
+
+describe("getFullText — 1-28, an upload: id reads the local file, never collectSourceLinks", () => {
+  const emptyDoc: ExtractedDocument = {
+    title: "An Uploaded Paper",
+    sections: [{ heading: "Body", canonical: "body", text: "Real body text." }],
+    figureCaptions: [],
+    source: "pdf",
+    pageCount: 5,
+    reason: null,
+  };
+
+  beforeEach(() => {
+    mocks.collectSourceLinks.mockReset();
+    mocks.extractPdfTextFromPath.mockReset();
+  });
+
+  it("reads the local PDF directly and never calls collectSourceLinks", async () => {
+    mocks.extractPdfTextFromPath.mockResolvedValue({ ok: true, doc: emptyDoc } satisfies PdfTextResult);
+
+    const result = await getFullText({ paperId: "upload:0000000000000001" });
+
+    expect(result.status).toBe("ok");
+    expect(result.doc).toEqual(emptyDoc);
+    expect(result.sourceLink).toEqual({
+      url: "/api/papers/upload/0000000000000001/file",
+      kind: "pdf",
+      label: "upload",
+      rank: 0,
+    });
+    expect(mocks.collectSourceLinks).not.toHaveBeenCalled();
+  });
+
+  it("marks a genuinely empty PDF distinctly (pdf-empty), not as a generic failure", async () => {
+    mocks.extractPdfTextFromPath.mockResolvedValue({
+      ok: false,
+      reason: "PDF text extractor produced no sections.",
+    } satisfies PdfTextResult);
+
+    const result = await getFullText({ paperId: "upload:0000000000000002" });
+
+    expect(result.status).toBe("no_full_text");
+    expect(result.attempts[0].outcome).toContain("pdf-empty");
+  });
+
+  it("marks a no-python/no-extractor failure the same way a normal PDF link would", async () => {
+    mocks.extractPdfTextFromPath.mockResolvedValue({ ok: false, reason: "no-python" } satisfies PdfTextResult);
+
+    const result = await getFullText({ paperId: "upload:0000000000000003" });
+
+    expect(result.status).toBe("no_full_text");
+    expect(result.attempts[0].outcome).toContain("no-python");
   });
 });

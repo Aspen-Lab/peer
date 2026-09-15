@@ -13,8 +13,9 @@ import {
   looksLikeFullText,
   type ExtractedDocument,
 } from "./html-text";
-import { tryExtractPdfText } from "./pdf-text";
+import { extractPdfTextFromPath, tryExtractPdfText } from "./pdf-text";
 import { collectSourceLinks, type SourceLink } from "./source-links";
+import { bareUploadId, pdfPath } from "./upload-store";
 
 const FETCH_TIMEOUT_MS = 12_000;
 const MAX_HTML_BYTES = 4_000_000;
@@ -203,7 +204,59 @@ function paywallReason(url: string): string {
   }
 }
 
+/**
+ * 1-28: an uploaded PDF already lives on this server (`upload-store.ts`), so
+ * reading it is a local file read, not a fetch — no `collectSourceLinks`
+ * walk, no network attempt, no paywall to hit. Mirrors `tryPdfLink`'s
+ * shape/reasoning so `buildResult`'s single `attempts` entry reads the same
+ * way a normal PDF attempt would.
+ */
+async function tryUploadLink(hash16: string): Promise<{ status: FullTextStatus; doc?: ExtractedDocument; reason?: string }> {
+  const result = await extractPdfTextFromPath(pdfPath(hash16));
+  if (result.ok && result.doc) {
+    return { status: "ok", doc: result.doc };
+  }
+  if (result.reason === "no-python" || result.reason === "no-extractor") {
+    // Same "the file is there, this deployment cannot read it" fact
+    // `pdfUnreadableHere` (reading.ts) already detects for a normal PDF
+    // link — kept as the exact same reason string so that detector needs no
+    // upload-specific branch of its own.
+    return { status: "no_full_text", reason: result.reason };
+  }
+  if (result.reason && /produced no sections/i.test(result.reason)) {
+    // Python ran fine and read every page; there was simply no text to find
+    // (most likely a scanned PDF with no text layer). A genuinely different
+    // fact from every other `no_full_text` reason here — reading.ts's
+    // `pdfHasNoText` looks for this exact marker so the reading page can say
+    // "this PDF has no readable text" instead of a generic "no full text."
+    return { status: "no_full_text", reason: `pdf-empty: ${result.reason}` };
+  }
+  return { status: "no_full_text", reason: result.reason ?? "PDF text extractor failed on this server." };
+}
+
 async function buildResult(input: FullTextInput): Promise<FullTextResult> {
+  const uploadHash16 = bareUploadId(input.paperId);
+  if (uploadHash16) {
+    const link: SourceLink = {
+      url: `/api/papers/upload/${uploadHash16}/file`,
+      kind: "pdf",
+      label: "upload",
+      rank: 0,
+    };
+    const outcome = await tryUploadLink(uploadHash16);
+    const attempts: FullTextResult["attempts"] = [
+      { link, outcome: outcome.status + (outcome.reason ? `: ${outcome.reason}` : "") },
+    ];
+    if (outcome.status === "ok" && outcome.doc) {
+      return { status: "ok", doc: outcome.doc, sourceLink: link, attempts };
+    }
+    return {
+      status: "no_full_text",
+      reason: outcome.reason ?? "This PDF has no readable text.",
+      attempts,
+    };
+  }
+
   const links = await collectSourceLinks({
     url: input.url ?? undefined,
     doi: input.doi ?? undefined,

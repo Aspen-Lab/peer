@@ -73,7 +73,9 @@ describe("GET /api/papers/[id]/reading", () => {
       "public, s-maxage=86400, stale-while-revalidate=604800",
     );
     const body = await res.json();
-    expect(body.version).toBe(3);
+    // 1-28/1-31: PaperReading.version bumped 3 -> 4 for the new
+    // `pdf_empty` fullText state.
+    expect(body.version).toBe(4);
     expect(body.paperId).toBe("openalex:W7208807247");
     expect(body.provenance.fullText).toBe("pdf");
     expect(body.provenance.pageCount).toBe(5);

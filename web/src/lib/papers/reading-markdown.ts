@@ -80,6 +80,10 @@ const REASON_PHRASE: Record<OmitReason, { one: string; many: string }> = {
     one: "the PDF is readable only by a self-hosted Peer",
     many: "the PDF is readable only by a self-hosted Peer",
   },
+  pdf_empty: {
+    one: "this PDF has no readable text",
+    many: "this PDF has no readable text",
+  },
   paywalled: {
     one: "the full text is behind access",
     many: "the full text is behind access",
@@ -101,6 +105,7 @@ const REASON_ORDER: OmitReason[] = [
   "not_in_abstract",
   "no_section",
   "pdf_only_hosted",
+  "pdf_empty",
   "paywalled",
   "needs_full_text",
   "no_profile",

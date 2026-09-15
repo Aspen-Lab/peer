@@ -2240,3 +2240,63 @@ circuited with `if (false && ...)` or deleted), all four restored and green agai
 Gate: tsc clean, eslint clean, vitest 2597/2597 (2580 + 17 new).
 
 Commit: `feat(upload): the multipart upload route and the two GET routes it hands the reading page`.
+
+**1-28 — `web/src/lib/papers/full-text.ts` recognizes `upload:` ids — plus the honest "no readable
+text" state B asked for, wired all the way through.** DONE. Added `SourceLinkLabel`'s `"upload"`
+case (`source-links.ts`) and a `bareUploadId`-gated branch at the top of `buildResult`, exactly per
+B: for an `upload:<hash16>` paper id, read `pdfPath(hash16)` directly via `extractPdfTextFromPath`
+(1-24) — no `collectSourceLinks`, no network fetch, no paywall check (there is nothing to be
+paywalled by; the file is already on this server). Confirmed `reading.ts`'s `pickSource` needed no
+change, exactly as B said: it already prefers a `kind: "pdf"` `sourceLink` over `paper.doi`/
+`paper.linkPaper`, so "Open the PDF" already points at `/api/papers/upload/<hash16>/file` with zero
+changes to that function.
+
+**This item grew beyond a single branch because B's own point (e) needed real plumbing, not just a
+route change:** "a PDF with no extractable text -> plain 'this PDF has no readable text' message...
+a distinct case from 'the extractor couldn't run at all'." Reusing `pdf_unreadable_here` (the
+existing "PDF exists, this deployment can't read it" state) for a genuinely-empty PDF would have
+been dishonest — that state specifically means "another, self-hosted Peer *could* read this," which
+is false for a scanned image with no text layer on *any* deployment. So this landed as a proper new
+`ReadingProvenance.fullText` state, `"pdf_empty"`, mirroring `pdf_unreadable_here`'s exact shape at
+every site that branches on it (found by grep, not partially): the type union, `buildProvenance`'s
+detector (`pdfHasNoText`, marker string `pdf-empty` in the attempt's `outcome`, set by
+`full-text.ts`'s new `tryUploadLink` only when the extractor's own reason matches
+`/produced no sections/i` — i.e. Python ran cleanly and read every page, there was simply nothing to
+extract, as opposed to `no-python`/`no-extractor`, which stays mapped to the existing
+`pdf_unreadable_here`, or a real crash, which falls through to the generic default rather than
+guessing), `sectionReason()`'s new `OmitReason` (`"pdf_empty"`, added to the `Record<OmitReason,…>`
+in `reading-markdown.ts` too — a `Record` type, so a missing case there is a compile error, not a
+silent gap), `readingSentence()`, and `fullTextClause()`. `PaperReading.version` bumped 3 -> 4 (its
+own doc comment: "bump it whenever a field is added OR the way any field is derived changes" — a new
+possible value for an existing field qualifies) and `use-reading.ts`'s `READING_VERSION` constant
+alongside it, so a reader with yesterday's cached reading gets a fresh one rather than a stale
+`fullText` that can never say `pdf_empty`.
+
+**One deliberate deviation from the `pdf_unreadable_here` pattern, not an oversight:** its message
+is wrapped in `withKey(...)` (appends "…needs a key" when no model is configured), but `pdf_empty`'s
+message is not — a key or a model cannot do anything with a file that has no text in it, so offering
+that clause would be a false lead. Logged here since it's an asymmetry with the pattern it otherwise
+mirrors exactly.
+
+Tests: `full-text.test.ts` (+3, new `describe` block) — the upload branch reads the local file and
+never calls `collectSourceLinks`; a "produced no sections" extractor reason is marked `pdf-empty` in
+the attempt outcome; a `no-python`/`no-extractor` reason is marked the same way a normal PDF link's
+would be (proving the two failure kinds stay distinguishable downstream). `reading.test.ts` (+2) —
+`buildProvenance` sets `pdf_empty` (and explicitly not `pdf_unreadable_here`) from a `pdf-empty`-
+marked attempt, and both `readingSentence` (no model) and `fullTextClause` (deep report requested,
+model ran) produce the distinct "this PDF has no readable text" copy, with the "no model" case
+proven to omit the key clause. Two pre-existing tests asserted the literal old version number
+(`reading.test.ts`'s `buildReading` test, `[id]/reading/route.test.ts`'s cache-header test) —
+rewritten to `4` with a comment explaining the bump, per "never delete a test, rewrite the
+assertion." Proof: reverted `buildProvenance`'s `pdfHasNoText` branch (short-circuited with
+`if (false && ...)`) — the new `buildReading` case failed (`fullText` stayed `"none"`); the two
+`describeAvailability` cases construct their `PaperReading` by hand and don't exercise the detector,
+so they correctly kept passing (they're proving the message layer, not the detection layer — both
+are needed and neither substitutes for the other), restored.
+
+Gate: tsc clean, eslint clean, vitest 2602/2602 (2597 + 5 new, 2 rewritten). Re-ran the standing
+regression locks explicitly: `evidence.test.ts`, `report.test.ts`, `reading-markdown.test.ts`,
+`source-links.test.ts`, `pdf-text.test.ts`, everything under `lib/figures/` — all pass.
+
+Commit: `feat(upload): full-text.ts reads an uploaded PDF directly, and a genuinely empty PDF gets
+its own honest reading state`.
