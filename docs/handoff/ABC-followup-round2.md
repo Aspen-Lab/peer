@@ -2624,3 +2624,72 @@ no_full_text:5` (17 total). Most of the old generic `source_unavailable`/
 reclassification fix reaches the full-text path, not just the figures path.
 
 Commit: `docs(abc): round 2 A part 1 — S3 real-data re-measurement`.
+
+#### Part 2 — S4 (figures)
+
+`GET /api/figure?id=&url=&doi=&paperTitle=` (no `query`) against all 17 pool papers, fresh calls
+(cold caches). Tally: **found: 1 · no_figures: 5 · paywalled: 10 · rate_limited: 1 ·
+source_unavailable: 0 · other: 0** (17 total). Round-1 baseline: `found:1 · no_figures:8 ·
+source_unavailable:7 · paywalled:1`. Found count is unchanged (1 of 17, still only
+`W7207740551`) — the S4(c) target ("every paper with some honest source shows one") is **not
+met**; see the og:image finding below for at least one concrete miss.
+
+| Paper | Status | Reason (verbatim, truncated) |
+|---|---|---|
+| W7212228226 (JECST) | no_figures | "opened the PDF, but did not find any figure regions..." |
+| W7207740551 (arXiv) | **found** | — (verified below) |
+| W7212354020 (Wiley Small) | paywalled | "doi.org... requires paid or institutional access" |
+| W7206205089 (AFM, Wiley) | paywalled | "doi.org... requires paid or institutional access" |
+| W7207719214 (JACS, ACS) | paywalled | "doi.org... requires paid or institutional access" |
+| W7211870929 (ACS AMI) | paywalled | "doi.org... requires paid or institutional access" |
+| W7212017379 (Anal Chim Acta, Elsevier) | paywalled | "sciencedirect.com... requires paid or institutional access" |
+| W7212151400 (Spectrochim Acta, Elsevier) | paywalled | "sciencedirect.com... requires paid or institutional access" |
+| W7212288571 (Iran J Sci Technol, Springer) | no_figures | "reached the source page, but it did not expose extractable figures" — **see finding below: a real article-specific og:image exists** |
+| W7204990919 (KJCE, Springer) | no_figures | same reason — **same finding: a real og:image exists** |
+| W7212207112 (OSF Preprints) | paywalled | "openalex.org... requires paid or institutional access" — **see finding below: mislabelled** |
+| W7208780749 (Appl Surf Sci, Elsevier) | no_figures | "reached the source page, but it did not expose extractable figures" |
+| W7212256756 (Wiley book ch.) | paywalled | "doi.org... requires paid or institutional access" |
+| W7201867313 (Angew Chem, Wiley) | paywalled | "doi.org... requires paid or institutional access" |
+| W7207750818 (Chem Eng J, Elsevier) | no_figures | "reached the source page, but it did not expose extractable figures" |
+| W7212165100 (Nature Energy) | rate_limited | "Semantic Scholar rate-limited Peer's figure lookup for this paper" |
+| W7211884742 (JJAP) | paywalled | "validate.perfdrive.com... requires paid or institutional access" (pre-existing, unchanged since round 1) |
+
+**"found" image verified, per the instruction to judge every found case.** `W7207740551`'s
+image: real PNG, 578×536, 212,024 bytes, `source: "open-access"`. Caption starts "FIG. 1. (a)
+High-resolution θ-2θ XRD patterns of the LSCO/LCO superlattice series..." — matches the paper's
+own abstract topic (LSCO/LCO superlattices). Judged plausibly this paper's own figure by: real
+chart-shaped aspect ratio (not a square logo/banner), caption content matching the paper's
+subject, and `source` not being a generic-image branch. **Not** a journal cover/logo.
+
+**Rate-limited tally owed (§1h)**: 1 of 17 lookups' *final* status was `rate_limited`
+(`W7212165100`, Nature Energy) — re-checked 3 times over ~10s, same result every time, so this is
+not a one-off blip for this paper in this session. Per the code's own diagnostic ranking
+(`rate_limited` reported only when nothing more informative — a real `no_figures`, a paywall — was
+also found), a 429 may also be occurring silently on papers whose *final* status came from a
+different, higher-priority branch; **not observed ≠ does not occur** for those other 16.
+
+**New finding — a real graphical abstract exists for at least 2 of the 5 `no_figures` papers,
+undetected.** Direct fetch (same DOI, a real browser user agent) of the two Springer-hosted
+`no_figures` papers' publisher pages found a genuine, article-specific `og:image` on both:
+`W7212288571` and `W7204990919` each have an `og:image` pointing at a `springernature.com` URL
+whose filename is literally `..._Fig1_HTML.png` — the paper's own Figure 1, with the DOI baked
+into the path. Yet `/api/figure` reports `no_figures` for both. Not diagnosed (a fetch-blocking
+difference between this check's request and the app's own, or a token-matching gap in 1-19's
+guard, are both plausible — A does not investigate causes); flagged as a real miss against the
+S4(c) target, on the honesty guard's own intended case (a real, DOI-matching graphical abstract).
+A third `no_figures` paper (Elsevier, `W7208780749`) could not be checked the same way — the same
+probe landed on a bot-check "Redirecting" stub, matching round 1's own note that ScienceDirect's
+gate is inconsistent; not claimed as a finding for that paper.
+
+**New finding — a 403 from a non-paywalled host is mislabelled `paywalled`.** `W7212207112`
+(OSF Preprints)'s `linkPaper` is `https://openalex.org/W7212207112` — OpenAlex's own site, a free
+metadata aggregator, not a subscription publisher. That URL 403s (confirmed by direct fetch, a
+Cloudflare-style anti-bot block, not a subscription gate), and 1-22's fix now reports it as
+`paywalled` with "requires paid or institutional access" — which is false for this host; no
+payment would ever grant access to an anti-bot block on a free site. This is exactly the
+"what stands in its place is the finding" case: the old vague `source_unavailable` is gone, but
+the more specific label it was replaced with is now inaccurate for at least this one host. The
+other 9 `paywalled` results are all real subscription publishers (Wiley ×4, ACS ×2, Elsevier ×2,
+JJAP ×1 via `validate.perfdrive.com`, pre-existing) — not disputed.
+
+Commit: `docs(abc): round 2 A part 2 - S4 figure-status tally`.
