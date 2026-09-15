@@ -419,6 +419,43 @@ figure lookups in the pool hit 429 after the queue.
 
 ---
 
+## §1j. RULING 9 — round 2 scope (manager, 2026-09-15) — BINDING
+
+Round 2 works A2-01 … A2-06 (plus M2-01/M2-02, which A2-01/A2-03 absorb). A2-07 is informational.
+
+- **A2-05 (403 on a non-publisher host):** `paywalled` is only honest when the 403 comes from a
+  publisher. Keep a **closed, finite list of aggregator / free hosts** where a 401/403 means
+  "blocked", never "paywalled": `openalex.org`, `api.openalex.org`, `semanticscholar.org`,
+  `europepmc.org`, `arxiv.org`, `ar5iv.labs.arxiv.org`, `osf.io`, `biorxiv.org`, `medrxiv.org`,
+  `ncbi.nlm.nih.gov`. On those hosts a 403 is `source_unavailable` with a "blocked" reason. The
+  list is finite by construction (it names services we call, not an open class) — do not turn it
+  into a heuristic. Same fix in `full-text.ts`, `pdf-text.ts`, `figures/extract.ts`,
+  `figures/pdf-extract.ts` (share the helper this time; B says where it lives).
+- **A2-06 (S3 target):** the ≤ 1 target counts **incorrect** drops only — a quote that exists in
+  the source verbatim (after the checker's own folding) and was still rejected. A paraphrase or a
+  synthesis the model wrote is a correct drop and does not count. B classifies A's fragments by
+  execution; if both remaining drops on `W7207740551` are correct drops, S3 closes on that paper.
+  The report's "N claims were dropped" sentence stays honest (it counts all drops).
+- **A2-08 (Semantic Scholar 429s): accepted cost this round.** The queue is doing its job (honest
+  `rate_limited` label). Getting a `SEMANTIC_SCHOLAR_API_KEY` is the user's action; the manager
+  tells them at close. Tally continues every round; threshold: if ≥ 3 of 17 lookups end
+  `rate_limited` in a round, B designs a fallback order that tries the other sources first.
+- **A2-02:** both bugs are in scope — an empty PDF is detected at upload time (zero sections →
+  the record carries an explicit `textStatus`), and the reading page shows the plain "this PDF
+  has no readable text" message from the record alone, without depending on the `/reading` route.
+- **A2-01:** the title comes from page-1 layout (join consecutive lines in the largest font,
+  skipping arXiv margin stamps and running headers), and when that yields fewer than 3 words or
+  looks like a stamp/DOI/URL, from the small-tier model given page 1's text; when both fail, the
+  file name. Never a half title, never a stamp. Protective tests with two synthetic page-1 layouts
+  (wrapped title; stamp above title).
+- **A2-03:** apply the same fraction fold to caption text when it is shown (display only).
+- **A2-04:** B finds by execution why the Springer `_Fig1_HTML.png` og:image is not surfaced
+  through 1-19's guard, and fixes the guard without loosening it into accepting covers/logos.
+
+C's order for round 2: **A2-05 → A2-06 (if any code) → A2-03 → A2-04 → A2-02 → A2-01.**
+
+---
+
 ## §2. ROLES — DO ONLY YOUR OWN JOB
 
 ### Agent A — Reviewer
