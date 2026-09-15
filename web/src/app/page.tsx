@@ -20,6 +20,7 @@ import { useEffect, useMemo, useState, useCallback, Suspense } from "react";
 import Link from "next/link";
 import { activePaperTopicsKey, useFeedStore } from "@/store/feed";
 import { feedsUseAi } from "@/lib/feed/ai-tier";
+import { entitlementGrants } from "@/lib/entitlement/allowance";
 import { formatTimeAgo } from "@/lib/format";
 import { useProfileStore } from "@/store/profile";
 import { FeedTile } from "@/components/cards/feed-tile";
@@ -60,6 +61,7 @@ function DailyBriefingPage() {
   const feedTopicsKey = useFeedStore((s) => s.feedTopicsKey);
   const feedError = useFeedStore((s) => s.feedError);
   const profile = useProfileStore((s) => s.profile);
+  const entitlement = useProfileStore((s) => s.entitlement);
 
   // Papers only. Events and jobs used to run on every home-page tick — the
   // progress bar labelled "Finding today's papers" was 30% driven by
@@ -82,7 +84,7 @@ function DailyBriefingPage() {
     void loadFeed({ lanes: ["papers"] });
   }, [feedAutoLoadKey, feedTopicsKey, isLoading, loadFeed]);
 
-  const canUseAiTools = feedsUseAi(profile);
+  const canUseAiTools = feedsUseAi(profile, entitlementGrants(entitlement));
   const shouldLoadPaperDigest = papers.length > 0 && canUseAiTools;
   const digestLlmOverride = useMemo(
     () =>

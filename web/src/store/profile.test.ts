@@ -1,5 +1,11 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { StateStorage } from "zustand/middleware";
+import {
+  ANONYMOUS_CLIENT_ENTITLEMENT,
+  type ClientEntitlement,
+} from "@/lib/entitlement/allowance";
 import { defaultProfile, type UserProfile } from "@/types";
 import {
   exportProfileDocument,
@@ -415,5 +421,77 @@ describe("profile export and import", () => {
       false,
     );
     expect(useProfileStore.getState().profile).toEqual(before);
+  });
+});
+
+/**
+ * ABC-freemium 6-04 · R-UI-3 · Ruling 16 points 2-3 — **the entitlement has a
+ * third state, and the store starts in it.**
+ *
+ * This is the root of the fix rather than a restatement of the component
+ * cases. The two upsell surfaces can only stay silent while the plan is unknown
+ * if "unknown" is representable here at all — and for three rounds it was not:
+ * the store opened on `ANONYMOUS_CLIENT_ENTITLEMENT`, so a **paid** reader
+ * looked free from the first render until `GET /api/profile` came back, and was
+ * upsold in that window while the server went on granting what they paid for.
+ *
+ * Planting the old default back — `entitlement: ANONYMOUS_CLIENT_ENTITLEMENT`
+ * at the store's initialiser — fails the first case here and the unhydrated
+ * cases in both component suites.
+ */
+describe("the client entitlement's third state (6-04)", () => {
+  it("starts as null — not known yet, not known to be anonymous", () => {
+    expect(useProfileStore.getState().entitlement).toBeNull();
+  });
+
+  it("holds whatever the server sent once setEntitlement runs", () => {
+    // The negative twin: a store that returned `null` forever would pass the
+    // case above and break every plan-aware surface in the product.
+    const paid: ClientEntitlement = {
+      plan: "paid",
+      effectivePlan: "paid",
+      systemSearchAllowed: false,
+      poolRefreshAllowed: true,
+      trialEndsAt: null,
+      userId: "user-1",
+      source: "supabase",
+      unlimited: true,
+      deepReportsRemaining: 0,
+    };
+
+    useProfileStore.getState().setEntitlement(paid);
+
+    expect(useProfileStore.getState().entitlement).toEqual(paid);
+  });
+
+  it("can be told the reader is anonymous, which is a different answer", () => {
+    // `ProfileSync` sets this once it has established there is no session. It
+    // is the `known + anonymous` state: a fact, not the absence of one, and the
+    // difference is what lets a signed-out reader be told to sign in while a
+    // reader mid-hydration is told nothing.
+    useProfileStore.getState().setEntitlement(ANONYMOUS_CLIENT_ENTITLEMENT);
+
+    const held = useProfileStore.getState().entitlement;
+    expect(held).not.toBeNull();
+    expect(held?.source).toBe("anonymous");
+    expect(held?.poolRefreshAllowed).toBe(false);
+  });
+
+  it("still writes only the profile to storage (the entitlement never persists)", () => {
+    // Unchanged contract, re-asserted at the point the type changed: a cached
+    // `paid` would survive a downgrade, and a cached `null` would be a lie the
+    // moment the reader signed in on another tab. A source assertion because
+    // `partialize` is a persist-middleware option with no runtime seam here;
+    // whitespace-tolerant because the tree is CRLF on disk (Ruling 10 point 2c).
+    const text = readFileSync(
+      join(process.cwd(), "src/store/profile.ts"),
+      "utf8",
+    );
+    // The positive form is the whole guard: `profile` is the ONLY key in the
+    // persisted object, so adding `entitlement` to it cannot help but change
+    // this shape and redden this line.
+    expect(text).toMatch(
+      /partialize:\s*\(state\)\s*=>\s*\(\{\s*profile:\s*state\.profile\s*\}\)/,
+    );
   });
 });

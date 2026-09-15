@@ -1,12 +1,18 @@
 import type { SourceAdapter, SourceQuery, RawItem } from "./types";
+import {
+  isOperatorFundedSearch,
+  operatorSearchAvailability,
+  resolveSystemSearchKeys,
+} from "@/lib/search/system-key";
 import { cleanDisplayText, cleanDisplayTextOrUndefined } from "@/lib/text/clean";
+import { recordUsageEvent } from "@/lib/usage/events";
+import { consumeForcedRebuild } from "@/lib/usage/rebuild-breaker";
 import {
   geminiSearchDeadline,
-  isGeminiSearchAvailable,
   resolveWebSearchProvider,
   searchGemini,
 } from "./gemini-search";
-import { isVertexSearchAvailable, searchVertex } from "./vertex-search";
+import { searchVertex } from "./vertex-search";
 
 interface BraveResult {
   title?: string;
@@ -39,30 +45,102 @@ async function fetchImpl(query: SourceQuery): Promise<RawItem[]> {
   if (searchQueries.length === 0) return [];
 
   const limit = query.limit ?? 20;
-  const braveKey = process.env.BRAVE_SEARCH_API_KEY;
+  // ABC-freemium 1-05 · R-KEY-3 · D3 — this used to be
+  // "the request key, or else the operator's environment key", unconditionally.
+  //
+  // **On this surface the flag is always `false`, and gating alone is not the
+  // whole fix.** A user's own Tavily key cannot reach here at all:
+  // `feed/pipeline.ts` builds the papers web options with
+  // `webSearchOptions(req.searchConnectors)`, which returns only `{ provider }`
+  // and never a `tavilyApiKey`, and `store/feed.ts` sends no `searchConnectors`
+  // for papers by design. So the only Tavily key this line could ever have
+  // reached was the operator's — for every plan, including paid. D3 says the
+  // papers surface costs zero paid search, which makes its
+  // `systemSearchAllowed` permanently false. That is D3 implemented, not
+  // reversed.
+  const keys = resolveSystemSearchKeys({
+    requestTavilyKey: query.webSearch?.tavilyApiKey,
+    systemSearchAllowed: query.webSearch?.systemSearchAllowed === true,
+  });
+  const braveKey = keys.brave;
   const requestTavilyKey = query.webSearch?.tavilyApiKey?.trim();
-  const tavilyKey = requestTavilyKey || process.env.TAVILY_API_KEY;
-  // RULING 75 — the key gate now admits the gemini provider too. Without this
-  // the paper surface returned `[]` here the moment Tavily was disabled. The
-  // credit migration adds vertex on the same footing: a configured Search App
-  // is a usable search capability exactly as Vertex credentials are.
+  const tavilyKey = keys.tavily;
+  // ABC-freemium 2-04 · Ruling 6 point 3 — THE PAPERS SURFACE SPENDS NOTHING ON
+  // ANY OPERATOR KEY, IN ANY RUNTIME.
+  //
+  // This early return used to call `isGeminiSearchAvailable()` and
+  // `isVertexSearchAvailable()` **directly from the environment**, so the hard
+  // `systemSearchAllowed: false` that `feed/pipeline.ts` passes was permanent
+  // only for Tavily. Brave came from an ungated env read, and these two walked
+  // straight past the flag — meaning that on a self-host or a developer machine
+  // with any of those three names set, this source ran operator-funded search
+  // for an anonymous caller, with no gate, no breaker and no usage row.
+  //
+  // Ruling 6 point 3 accepted the consequence explicitly: the papers `web`
+  // source now returns `[]` in local development too, not only in production.
+  // Rulings 75 and 79c of the report-parity loop, which kept it alive locally
+  // through grounding, are **superseded for this surface** by D3 and Ruling 3
+  // point 5. The gate stays one predicate with no runtime test inside a spend
+  // path, which is the shape 1-06 and R-ENT-5 spent a round removing.
+  const availability = operatorSearchAvailability({
+    systemSearchAllowed: query.webSearch?.systemSearchAllowed === true,
+  });
   if (
     !braveKey &&
     !tavilyKey &&
-    !isGeminiSearchAvailable() &&
-    !isVertexSearchAvailable()
+    !availability.geminiAvailable &&
+    !availability.vertexAvailable
   ) {
     return [];
   }
 
   const perQuery = Math.max(3, Math.ceil(Math.min(limit, 20) / searchQueries.length));
   const all: RawItem[] = [];
-  const provider = resolveProvider(query, {
+  const provider = resolveProvider(query, availability, {
     braveKeyPresent: Boolean(braveKey),
     tavilyKeyPresent: Boolean(tavilyKey),
     requestTavilyKeyPresent: Boolean(requestTavilyKey),
   });
   if (!provider) return [];
+
+  // ABC-freemium 2-04 — the breaker and the R-METER-2 row, which this file had
+  // NEITHER of before (grepped: no `consumeForcedRebuild`, no
+  // `recordUsageEvent` anywhere in it). Under Ruling 6 point 3 the gate above
+  // makes `operatorFunded` unreachable today, and that is exactly why it is
+  // here: **if this surface is ever un-gated, it is metered from the first
+  // request rather than from the round after someone notices.** A gate without
+  // metering behind it is how the same defect comes back wearing a new name.
+  //
+  // **ABC-freemium 6-01 · Ruling 14 point 3 — THIS CALL SITE IS UNREACHABLE,
+  // and it is KEPT on purpose (Ruling 12 point 2).** The chain, end to end:
+  // `systemSearchAllowed` is a hard `false` on every producer (D2a), so
+  // `resolveSystemSearchKeys` returns no Brave key and Tavily can only be
+  // `"byok"` or `"none"`; `operatorSearchAvailability` is frozen false for
+  // both providers; so the only provider selectable here is Tavily with
+  // `provenance: "byok"`, and `isOperatorFundedSearch` answers `false` for
+  // exactly that pair. `operatorFunded` is therefore never `true` and the
+  // breaker below never runs. Deleting it would remove the metering that has
+  // to exist BEFORE the gate is ever reopened, not the round after.
+  //
+  // **If operator-funded search is restored, this counter must be SPLIT — do
+  // not just flip the flag.** These sites are dead because no operator-funded
+  // provider can be *selected*, not because anything refuses them:
+  // `isOperatorFundedSearch` still returns `true` for Brave, Vertex and
+  // Gemini. Reopening the gate would start charging **search fan-outs** to a
+  // counter named `forced_rebuilds_today`, which re-creates the exact
+  // false-audit defect 6-01 exists to fix, in reverse.
+  const operatorFunded = isOperatorFundedSearch(provider, keys);
+  if (operatorFunded) {
+    const allowed = await consumeForcedRebuild(
+      query.webSearch?.userId ?? null,
+      searchQueries.length,
+      undefined,
+      "papers",
+    );
+    // The same degraded value a keyless reader already gets: the paper
+    // pipeline serves its other sources. No error, no new shape.
+    if (!allowed) return [];
+  }
   const deadlineAt = geminiSearchDeadline();
 
   // Fan the per-query fetches out concurrently (like the other source
@@ -82,6 +160,20 @@ async function fetchImpl(query: SourceQuery): Promise<RawItem[]> {
   );
   for (const result of settled) {
     if (result.status === "fulfilled") all.push(...result.value);
+  }
+
+  // 2-04 · R-METER-2 — the row this file never wrote, carrying the provider's
+  // own name. Unreachable today for the same reason as the breaker above.
+  if (operatorFunded) {
+    recordUsageEvent({
+      user_id: query.webSearch?.userId ?? null,
+      kind: "search",
+      surface: "papers",
+      query_count: searchQueries.length,
+      provider,
+      ok: true,
+      byok: false,
+    });
   }
 
   return uniqueById(all).slice(0, limit);
@@ -248,16 +340,20 @@ function buildSearchQueries(query: SourceQuery): string[] {
 // absent this returns exactly what the previous local version returned.
 function resolveProvider(
   query: SourceQuery,
-  availability: {
+  // 2-04 — the two operator capabilities are PASSED IN, gated, rather than read
+  // from the environment here. This function used to call
+  // `isGeminiSearchAvailable()` and `isVertexSearchAvailable()` directly, which
+  // is the second of the two ungated reads in this file.
+  operatorAvailability: { geminiAvailable: boolean; vertexAvailable: boolean },
+  keyAvailability: {
     braveKeyPresent: boolean;
     tavilyKeyPresent: boolean;
     requestTavilyKeyPresent: boolean;
   },
 ): "brave" | "tavily" | "gemini" | "vertex" | null {
   return resolveWebSearchProvider(query.webSearch?.provider, {
-    geminiAvailable: isGeminiSearchAvailable(),
-    vertexAvailable: isVertexSearchAvailable(),
-    ...availability,
+    ...operatorAvailability,
+    ...keyAvailability,
   });
 }
 

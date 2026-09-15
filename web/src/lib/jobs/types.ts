@@ -105,6 +105,15 @@ export interface JobsQuery {
     // ruling's "all three surfaces uniform" requires it to start.
     provider?: WebSearchProvider;
     tavilyApiKey?: string;
+    // ABC-freemium 1-05 · R-KEY-3 — may this request spend the operator's
+    // Tavily key? **Absent means `false`.** Never inferred, never defaulted to
+    // true: the nightly cron and test-digest pass nothing and must therefore
+    // get nothing (D9).
+    systemSearchAllowed?: boolean;
+    // ABC-freemium 1-05 · R-METER-2 — who to attribute a system search to.
+    // Travels with the flag because the fan-out is the one place that knows the
+    // surface, the provenance and the query count.
+    userId?: string | null;
   };
   apiKeys?: JobApiCredentials;
 }
@@ -135,6 +144,21 @@ export interface JobsFeedRequest {
   searchConnectors?: SearchConnectors;
   apiKeys?: JobApiCredentials;
   llmOverride?: ProviderOverrideConfig;
+  /**
+   * ABC-freemium 1-05 · R-KEY-3 — set by the route from
+   * `entitlement.systemSearchAllowed`, never parsed from a request body.
+   * **Absent means `false`**, which is what keeps `dispatch-digests` (D9) and
+   * `test-digest` off the operator's Tavily key.
+   */
+  systemSearchAllowed?: boolean;
+  /** ABC-freemium 1-05 · R-METER-2 — attribution for a system search. */
+  userId?: string | null;
+  /**
+   * ABC-freemium 1-18 · R-POOL-2 — "refresh now". Set by the route from
+   * `entitlement.poolRefreshAllowed`; a body that asks for it without the
+   * entitlement gets nothing, because the route never forwards it.
+   */
+  poolRefresh?: boolean;
 }
 
 export interface JobsFeedMeta {

@@ -1,5 +1,6 @@
 import { tryPdfCandidates } from "./pdf-extract";
 import { matchFigureSemantically } from "./semantic-match";
+import type { FigureMatchContext } from "./match-context";
 import { matchFigureVisually } from "./vision-match";
 
 const FETCH_TIMEOUT_MS = 7_000;
@@ -9,13 +10,31 @@ const MAX_BODY_BYTES = 2_500_000;
 // figure cached — the captions stopped carrying LaTeXML's duplicate TeX.
 const FETCH_VERSION = "2026-09-08-caption-annotation";
 
-interface ExtractInput {
+/**
+ * Everything the deterministic half needs: which paper, and where to look. No
+ * model is reachable from any of it.
+ */
+interface FigureSourceInput {
   itemId: string;
   url?: string;
   doi?: string;
   query?: string;
   figureIndex?: number;
   paperTitle?: string;
+}
+
+interface ExtractInput extends FigureSourceInput {
+  /**
+   * ABC-freemium 1-07 · R-SEC-1 — **required.** Choosing between candidates can
+   * reach a model (the semantic and vision matchers), so the request that wants
+   * a figure has to say whose request it is. `GET /api/figure` fills this from
+   * the shared entitlement check.
+   *
+   * `getFigurePool` deliberately takes `FigureSourceInput` instead: it only
+   * collects candidates and never chooses, so it needs no context and its two
+   * callers in `papers/report` are unaffected.
+   */
+  ctx: FigureMatchContext;
 }
 
 export type FigureStatus =
@@ -576,6 +595,7 @@ function visionShortlist(
 async function chooseCandidate(
   candidates: FigureCandidate[],
   n: number,
+  ctx: FigureMatchContext,
   query?: string,
   paperTitle?: string,
 ): Promise<CandidateSelection> {
@@ -639,6 +659,7 @@ async function chooseCandidate(
   const semantic = await matchFigureSemantically({
     paperTitle,
     query,
+    ctx,
     candidates: scored
       .map((entry) => entry.candidate)
       .filter((candidate) => candidate.caption?.trim())
@@ -665,6 +686,7 @@ async function chooseCandidate(
   const visual = await matchFigureVisually({
     paperTitle,
     query,
+    ctx,
     candidates: visionShortlist(valid, scored).map((candidate) => ({
       ordinal: candidate.ordinal,
       imageUrl: candidate.imageUrl,
@@ -1031,7 +1053,7 @@ function addSourceLink(target: Map<string, SourceLink>, link: SourceLink) {
   if (!target.has(normalized)) target.set(normalized, link);
 }
 
-async function collectSourceLinks(input: ExtractInput): Promise<SourceLink[]> {
+async function collectSourceLinks(input: FigureSourceInput): Promise<SourceLink[]> {
   const links = new Map<string, SourceLink>();
   const inputUrlWasPdf = input.url ? inferLinkKind(input.url) === "pdf" : false;
 
@@ -1154,11 +1176,11 @@ interface CachedPool {
 const CANDIDATE_CACHE_TTL_MS = 30 * 60 * 1000;
 const candidatePoolCache = new Map<string, CachedPool | Promise<CachedPool>>();
 
-function poolCacheKey(input: ExtractInput): string {
+function poolCacheKey(input: FigureSourceInput): string {
   return [FETCH_VERSION, input.itemId, input.url ?? "", input.doi ?? ""].join("|");
 }
 
-async function buildCandidatePool(input: ExtractInput): Promise<CachedPool> {
+async function buildCandidatePool(input: FigureSourceInput): Promise<CachedPool> {
   const attempts: AttemptResult[] = [];
   const candidates: FigureCandidate[] = [];
 
@@ -1238,7 +1260,7 @@ async function buildCandidatePool(input: ExtractInput): Promise<CachedPool> {
   return { candidates: reordered, attempts, ts: Date.now() };
 }
 
-async function getCandidatePool(input: ExtractInput): Promise<CachedPool> {
+async function getCandidatePool(input: FigureSourceInput): Promise<CachedPool> {
   const key = poolCacheKey(input);
   const existing = candidatePoolCache.get(key);
   if (existing) {
@@ -1284,7 +1306,7 @@ export interface FigurePool {
   attempted: boolean;
 }
 
-export async function getFigurePool(input: ExtractInput): Promise<FigurePool> {
+export async function getFigurePool(input: FigureSourceInput): Promise<FigurePool> {
   const pool = await getCandidatePool(input);
   return {
     entries: pool.candidates.map((c) => ({
@@ -1359,7 +1381,7 @@ export async function extractFigure(input: ExtractInput): Promise<FigureResult> 
   const pool = await getCandidatePool(input);
 
   if (pool.candidates.length > 0) {
-    const selection = await chooseCandidate(pool.candidates, n, query, paperTitle);
+    const selection = await chooseCandidate(pool.candidates, n, input.ctx, query, paperTitle);
     if (selection.status === "found") {
       return candidateResult(selection);
     }

@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { extractFigure } from "./extract";
+import { ANONYMOUS_ENTITLEMENT } from "@/lib/entitlement/types";
+
+/** No user and no key: the matchers may not reach a model, which is not what these tests exercise. */
+const TEST_CTX = { entitlement: ANONYMOUS_ENTITLEMENT, byok: false };
 
 const FIGURE_HTML = `<!doctype html><html><body>
   <figure class="ltx_figure">
@@ -43,7 +47,7 @@ describe("arXiv figure source", () => {
       }),
     );
 
-    const result = await extractFigure({ itemId: "arxiv:2609.02697" });
+    const result = await extractFigure({ itemId: "arxiv:2609.02697", ctx: TEST_CTX });
 
     const arxivNative = seen.findIndex((u) =>
       u.startsWith("https://arxiv.org/html/"),
@@ -77,7 +81,7 @@ describe("arXiv figure source", () => {
 
     // A distinct id: extract.ts memoises the candidate pool per paper, so
     // reusing the id above would replay the first test's result.
-    await extractFigure({ itemId: "arxiv:2609.09999" });
+    await extractFigure({ itemId: "arxiv:2609.09999", ctx: TEST_CTX });
 
     expect(seen.some((u) => u.includes("ar5iv.labs.arxiv.org"))).toBe(true);
   });

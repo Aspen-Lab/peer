@@ -2,6 +2,8 @@
 // See docs/THIRD_PARTY_NOTICES.md.
 
 import { resolveProvider } from "@/lib/llm/providers/registry";
+import type { FigureMatchContext } from "./match-context";
+import { entitledContext } from "@/lib/security/entitled-context";
 import type { VisionImageInput } from "@/lib/llm/providers/types";
 import { cleanDisplayText } from "@/lib/text/clean";
 
@@ -126,12 +128,20 @@ function confidenceRank(confidence: VisionFigureMatch["confidence"]): number {
   return 1;
 }
 
+/** ABC-freemium 1-07 · R-SEC-1 — see the note on `matchFigureSemantically`. */
 export async function matchFigureVisually(args: {
   paperTitle?: string;
   query: string;
   candidates: VisionMatchCandidate[];
+  ctx: FigureMatchContext;
 }): Promise<VisionFigureMatch | null> {
-  const provider = resolveProvider();
+  // ABC-freemium 3-02 — minted from the entitlement `api/figure` resolved, so
+  // this acquisition carries compile-checked proof rather than a hand-made
+  // `{ userId, byok }` that anyone could have written.
+  const provider = resolveProvider(
+    args.ctx.override ?? null,
+    entitledContext(args.ctx.entitlement, "figure:vision", args.ctx.byok),
+  );
   if (!provider?.generateVisionJsonText) return null;
   if (!args.query.trim() || args.candidates.length === 0) return null;
 

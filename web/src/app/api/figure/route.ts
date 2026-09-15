@@ -6,6 +6,7 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 import { extractFigure } from "@/lib/figures/extract";
+import { requireEntitledAiRequest } from "@/lib/security/ai-request";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 86_400;
@@ -23,6 +24,17 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "id required" }, { status: 400 });
   }
 
+  // ABC-freemium 1-07 · R-SEC-1 — **this route had no authentication of any
+  // kind.** It reaches a provider through `extractFigure` -> `chooseCandidate`
+  // -> the semantic and vision matchers, which were the only two no-argument
+  // `resolveProvider()` calls in the tree. D8 says a route that can reach a
+  // provider requires a signed-in user in deployed runtimes.
+  //
+  // 60/h matches the feed scopes: this is hit once per card, so a lower limit
+  // would break an ordinary page of results.
+  const gate = await requireEntitledAiRequest("figure", 60);
+  if (gate instanceof NextResponse) return gate;
+
   const result = await extractFigure({
     itemId: id,
     url,
@@ -30,6 +42,12 @@ export async function GET(req: NextRequest) {
     query,
     paperTitle,
     figureIndex,
+    // No BYOK override reaches this route — figures are requested by the card,
+    // which carries no key — so `byok` is false and the matchers fall to the
+    // system provider or to null.
+    // ABC-freemium 3-02 — the entitlement itself, not a copy of its user id:
+    // holding one is the proof a check ran.
+    ctx: { entitlement: gate.entitlement, byok: false },
   });
   const cacheControl = result.imageUrl
     ? "public, s-maxage=86400, stale-while-revalidate=604800"

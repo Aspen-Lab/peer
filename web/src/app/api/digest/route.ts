@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { resolveProvider } from "@/lib/llm/providers/registry";
+import {
+  hasUsableProviderOverride,
+  resolveProvider,
+} from "@/lib/llm/providers/registry";
 import type {
   PaperLite,
   ProviderOverrideConfig,
 } from "@/lib/llm/providers/types";
-import { protectAiRequest } from "@/lib/security/ai-request";
+import { requireEntitledAiRequest } from "@/lib/security/ai-request";
+import { entitledContext } from "@/lib/security/entitled-context";
 
 interface DigestRequest {
   papers: PaperLite[];
@@ -64,14 +68,31 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(emptyResponse());
   }
 
-  const provider = resolveProvider(body.llmOverride ?? null);
+  // ABC-freemium 1-06 · R-SEC-2 — **the guard moved ABOVE `resolveProvider`.**
+  // It used to sit below the early `emptyResponse(true)` return, so this route
+  // answered a stranger 200 and never authenticated. That was harmless only
+  // while no provider ever resolved; R-KEY-1 makes one always resolve. This
+  // route now answers a signed-out caller 401 — Ruling 3 point 7 predicts it,
+  // and it is the fix working, not a regression.
+  const gate = await requireEntitledAiRequest("digest", 60);
+  if (gate instanceof NextResponse) return gate;
+  const { entitlement } = gate;
+
+  // ABC-freemium 3-02 — minted from the entitlement the gate above resolved,
+  // so the acquisition carries compile-checked proof a check ran, not a
+  // hand-built object that merely looks like one.
+  const provider = resolveProvider(
+    body.llmOverride ?? null,
+    entitledContext(
+      entitlement,
+      "digest",
+      hasUsableProviderOverride(body.llmOverride ?? null),
+    ),
+  );
   if (!provider) {
     // No provider configured — graceful Tier 0 fallback.
     return NextResponse.json(emptyResponse(true));
   }
-
-  const denied = await protectAiRequest("digest", 60);
-  if (denied) return denied;
 
   try {
     const result = await provider.generateDigest({

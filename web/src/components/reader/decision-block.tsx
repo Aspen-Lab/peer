@@ -7,6 +7,7 @@
 // phone. The sentence is `describeAvailability`'s, never typed here.
 
 import Link from "next/link";
+import { UPGRADE_HREF } from "@/lib/navigation/upgrade-destination";
 import type { Ref } from "react";
 import { buttonVariants } from "@/components/ui/button";
 import { IconArrowUpRight, IconLink } from "@/components/icons";
@@ -72,7 +73,7 @@ export function DecisionBlock({
           <>
             {" "}
             <Link
-              href="/welcome?step=ai"
+              href={UPGRADE_HREF}
               className={cn(
                 "text-text-faint underline decoration-border-strong underline-offset-4 hover:text-heading transition-colors duration-150 ease-snap",
                 TOUCH_INLINE,

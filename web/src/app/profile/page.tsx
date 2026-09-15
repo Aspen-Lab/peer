@@ -29,6 +29,7 @@ import { AiKeyFields } from "@/components/profile/ai-setup";
 import { ConnectorPanel } from "@/components/profile/connector-panel";
 import { Toggle } from "@/components/ui/toggle";
 import { feedsUseAi } from "@/lib/feed/ai-tier";
+import { entitlementGrants } from "@/lib/entitlement/allowance";
 import {
   type Tone,
   toneBadge,
@@ -1359,6 +1360,8 @@ function EditView({
   updateCareerStage: (s: typeof profile.careerStage) => void;
   updateIndustryPreference: (s: typeof profile.industryVsAcademia) => void;
 }) {
+  // One tier: signed in means Peer's model is available; a BYOK key also counts.
+  const aiGrants = entitlementGrants(useProfileStore((st) => st.entitlement));
   // Pulled straight from the store rather than threaded through this
   // component's already-long prop list.
   const updateFeedAiProvider = useProfileStore((s) => s.updateFeedAiProvider);
@@ -1593,9 +1596,9 @@ function EditView({
       <EditRow icon={<IconKey />} tone="neutral" label="AI provider">
         <div className="space-y-3">
           <p className="text-caption leading-relaxed text-text-muted">
-            Tier 0 uses no AI API and always works. To turn on Tier 2 reranking
-            and written relevance reasons, choose a provider and add your own
-            key. Peer sends model calls only to the key you enter here.
+            Signed in, Peer uses its own model for ranking, relevance reasons
+            and reports. Add your own key only to use a different provider —
+            Peer then sends model calls to that key instead.
           </p>
           <AiKeyFields
             provider={profile.feedAiProvider}
@@ -1619,15 +1622,15 @@ function EditView({
             <Toggle
               checked={profile.deepReportEnabled}
               onChange={(next) => updateDeepReportEnabled(next)}
-              disabled={!feedsUseAi(profile)}
+              disabled={!feedsUseAi(profile, aiGrants)}
               className="mt-0.5"
               aria-label="Deep report"
             />
           </div>
-          {!feedsUseAi(profile) && (
+          {!feedsUseAi(profile, aiGrants) && (
             <p className="text-micro leading-relaxed text-text-faint">
-              Add your own provider and key above first. Without one, Peer shows
-              the Tier 0 report and makes no AI model call.
+              Sign in first. Signed out, Peer shows the reading without a model
+              and makes no AI call.
             </p>
           )}
         </div>

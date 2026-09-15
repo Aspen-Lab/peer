@@ -35,7 +35,9 @@ import {
 } from "@/lib/papers/reading";
 import { readingToMarkdown } from "@/lib/papers/reading-markdown";
 import type { Claim, PaperReport } from "@/lib/papers/report";
-import { reportProviderConfigured } from "@/components/reports/provider-configured";
+import type { Route } from "next";
+import { aiAvailability } from "@/lib/feed/ai-tier";
+import { entitlementGrants } from "@/lib/entitlement/allowance";
 import { PaperPlate } from "@/components/cards/paper-plate";
 import { SwipeableCard } from "@/components/cards/swipe-card";
 import { useResolvedFigure } from "@/components/paper-figure";
@@ -248,7 +250,9 @@ function Reader({
   const model = useModelReport({ paper, profile });
   const report = model.report;
 
-  const providerConfigured = reportProviderConfigured(profile);
+  // One tier: a signed-in reader has Peer's model; a reader with their own key has theirs.
+  const entitlement = useProfileStore((s) => s.entitlement);
+  const providerConfigured = aiAvailability(profile, entitlementGrants(entitlement)) !== "none";
   const projectText = useMemo(
     () => [profile.currentProject, profile.currentChallenges].filter(Boolean).join("\n"),
     [profile.currentProject, profile.currentChallenges],
@@ -404,7 +408,7 @@ function Reader({
     const here = paperNav(store.papers.map((p) => p.id), paper.id);
     store.notInterestedPaper(paper);
     decide();
-    router.push(here.nextId ? paperHref(here.nextId) : "/");
+    router.push((here.nextId ? paperHref(here.nextId) : "/") as Route);
   };
   const like = () => {
     useFeedStore.getState().moreLikePaper(paper);
@@ -413,12 +417,12 @@ function Reader({
   const next = () => {
     if (!nav.nextId) return;
     decide();
-    router.push(paperHref(nav.nextId));
+    router.push(paperHref(nav.nextId) as Route);
   };
   const prev = () => {
     if (!nav.prevId) return;
     decide();
-    router.push(paperHref(nav.prevId));
+    router.push(paperHref(nav.prevId) as Route);
   };
   const undoOrToggleRead = () => {
     const store = useFeedStore.getState();
@@ -647,7 +651,7 @@ function Reader({
                 read, under everything Peer had to say about it. */}
             <PaperBody reading={reading} />
 
-            {/* Last, and always there: the facts that need no key. On a Tier 0
+            {/* Last, and always there: the facts that need no key. On a page with no model
                 page it is the only block under the abstract, which is the
                 point — the column used to end at the abstract's footer with
                 half the page under it. */}

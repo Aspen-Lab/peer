@@ -36,6 +36,27 @@ export interface SourceQuery {
     tavilyApiKey?: string;
     includeDomains?: string[];
     excludeDomains?: string[];
+    // ABC-freemium 1-05 · R-KEY-3 · D3 — the papers surface passes a hard
+    // `false` here. See the comment at `feed/pipeline.ts`'s call site: a user's
+    // own Tavily key cannot reach this surface at all, so the only key it could
+    // ever spend is the operator's, and D3 says papers cost zero paid search.
+    systemSearchAllowed?: boolean;
+    /**
+     * Who to charge, for shape parity with the jobs and events queries
+     * (ABC-freemium 2-04).
+     *
+     * **The papers pipeline does not populate this today, and that is recorded
+     * rather than fixed inline.** `feed/pipeline.ts` has no user in scope at
+     * all — threading one would mean changing the feed request type and the
+     * `api/feed` route, which is wider than this item. It does not matter today
+     * because `systemSearchAllowed` is a hard `false` on this surface, so the
+     * metering branch is unreachable (Ruling 6 point 3).
+     *
+     * **It is the first thing anyone un-gating this surface must do.** With it
+     * unset the breaker would see a `null` user and decline to charge, which is
+     * a meter that looks present and counts nothing.
+     */
+    userId?: string | null;
   };
 }
 

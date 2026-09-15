@@ -4,8 +4,10 @@ import type { FeedRequest, SearchConnectors } from "@/lib/feed/types";
 import type { ProviderOverrideConfig } from "@/lib/llm/providers/types";
 import type { SourceId } from "@/lib/sources/types";
 import { cleanPreferenceLedger } from "@/lib/preferences/ledger";
-import { resolveProvider } from "@/lib/llm/providers/registry";
-import { protectAiRequest } from "@/lib/security/ai-request";
+import {
+  entitledAiTier,
+  requireEntitledAiRequest,
+} from "@/lib/security/ai-request";
 
 const CACHE_HEADERS = {
   "Cache-Control": "private, no-store",
@@ -147,14 +149,31 @@ export async function POST(req: NextRequest) {
   const preferenceLedger = cleanPreferenceLedger(body.preferenceLedger);
   const requestedAiTier = parseAiTier(body.aiTier) ?? 0;
   const llmOverride = parseLlmOverride(body.llmOverride);
-  const aiProvider =
-    requestedAiTier >= 2 ? resolveProvider(llmOverride) : null;
-  const aiTier = requestedAiTier >= 2 && !aiProvider ? 0 : requestedAiTier;
-
-  if (aiTier >= 2 && aiProvider) {
-    const denied = await protectAiRequest("paper-feed", 60);
-    if (denied) return denied;
-  }
+  // ABC-freemium 1-06 · R-SEC-2, R-SEC-3 — **the entitlement is resolved BEFORE
+  // the provider, and it is what caps the tier.** The old line here downgraded
+  // because *no provider resolved*, which stops being a defence the moment
+  // R-KEY-1 makes one always resolve; this downgrades because the caller is
+  // *not entitled*, which no request body can change.
+  //
+  // `allowAnonymous` keeps R-ENT-4's "signed-out users get tier-0 behaviour
+  // everywhere ... unchanged": a stranger still gets a feed built from free
+  // structured sources, and `entitledAiTier` caps them at 0 so they reach
+  // neither a provider nor the system search key.
+  const gate = await requireEntitledAiRequest("paper-feed", 60, {
+    allowAnonymous: true,
+  });
+  if (gate instanceof NextResponse) return gate;
+  const { entitlement } = gate;
+  const aiTier = entitledAiTier(requestedAiTier, entitlement);
+  //
+  // **The route no longer resolves a provider itself.** It only ever did so to
+  // decide the downgrade, and R-SEC-3 replaces that predicate with the
+  // entitlement above; the value was never passed on, because the pipeline
+  // resolves its own provider where it needs one. Deleting the call removes a
+  // redundant provider construction per feed request and leaves exactly one
+  // reason a tier can drop. The pipeline's own degrade paths are unchanged —
+  // `query-gen.ts` returns template queries and `tier2-rerank.ts` returns the
+  // input order when no provider resolves.
 
   const result = await runFeedPipeline({
     topics,

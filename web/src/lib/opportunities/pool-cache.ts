@@ -6,12 +6,12 @@ import type {
 import type { ScoredEventItem } from "@/lib/events/types";
 import type { ScoredJobItem } from "@/lib/jobs/types";
 import type { ScoredItem } from "@/lib/scoring/types";
-import { localCalendarDate } from "@/lib/local-calendar-date";
+import { localCalendarDate, localIsoWeek } from "@/lib/local-calendar-date";
 import { canonicalize } from "@/lib/scoring/term-expand";
 
 export type OpportunitySurface = "papers" | "events" | "jobs";
 export type { OpportunityFacetCounts, OpportunityFormat } from "@/types";
-export { localCalendarDate } from "@/lib/local-calendar-date";
+export { localCalendarDate, localIsoWeek } from "@/lib/local-calendar-date";
 
 interface CachedPoolBase {
   generatedAt: string;
@@ -133,8 +133,11 @@ export interface PoolCacheKeyInput {
 // scores preference-neutral so one daily pool can be safely re-ranked locally.
 // v4 turns the papers entry from a discovery-only record into a full daily
 // pool, so a v3 papers entry can no longer satisfy a v4 read. v5 drops the
-// deleted discovery side-channel's `queryBoosts`/`resultCount` from it.
-const CACHE_KEY_VERSION = 5;
+// deleted discovery side-channel's `queryBoosts`/`resultCount` from it. v6
+// moves the jobs and events period from a day to an ISO week (R-POOL-1); the
+// bump is **not optional**, because a v5 daily key and a v6 weekly key would
+// otherwise collide in the shared `opportunity_pools` table.
+const CACHE_KEY_VERSION = 6;
 
 function normalizeSet(values: string[] | undefined): string[] {
   return Array.from(
@@ -147,7 +150,22 @@ function normalizeSet(values: string[] | undefined): string[] {
 }
 
 export function derivePoolCacheKey(input: PoolCacheKeyInput): string {
-  const date = localCalendarDate(input.now);
+  // ABC-freemium 1-17 · R-POOL-1 · D3 — **jobs and events rebuild weekly;
+  // papers stay daily.** The function already knows the surface, so the fork
+  // lives here and no caller changes.
+  //
+  // The period appears TWICE below — inside the hashed signature and again as a
+  // plaintext segment of the returned key. A fix that changed only the
+  // signature would leave a daily string in the key and rebuild daily anyway,
+  // so both read the same `period`.
+  //
+  // A mid-week topic change is still a cache miss on the user's own key, because
+  // `requiredTopics`/`exploreTopics` remain in the signature. D3 says that in as
+  // many words ("that is their quota to spend") — intended, not a regression.
+  const period =
+    input.surface === "papers"
+      ? localCalendarDate(input.now)
+      : localIsoWeek(input.now);
   const signature = JSON.stringify({
     version: CACHE_KEY_VERSION,
     surface: input.surface,
@@ -156,10 +174,10 @@ export function derivePoolCacheKey(input: PoolCacheKeyInput): string {
     careerStage: input.careerStage?.trim() ?? "",
     locationPreferences: normalizeSet(input.locationPreferences),
     aiTier: input.aiTier,
-    date,
+    date: period,
   });
   const digest = createHash("sha256").update(signature).digest("hex").slice(0, 32);
-  return `peer-pool-v${CACHE_KEY_VERSION}-${input.surface}-${date}-${digest}`;
+  return `peer-pool-v${CACHE_KEY_VERSION}-${input.surface}-${period}-${digest}`;
 }
 
 const inFlightByCache = new WeakMap<
@@ -176,6 +194,21 @@ export async function getOrBuildCachedPool<TPool extends CachedPool>(
   key: string,
   accepts: (pool: CachedPool) => pool is TPool,
   build: () => Promise<TPool>,
+  /**
+   * ABC-freemium 1-18 · R-POOL-2 — **"refresh now": skip the READ, keep the
+   * WRITE and the single-flight, under the SAME key.**
+   *
+   * R-POOL-2 offers "key nonce or bypass" and both obvious readings are
+   * defective. A **nonce in the key** stores the rebuilt pool where nobody else
+   * will ever look, so the user pays for a rebuild and the next ordinary page
+   * load still serves the stale pool. A **bypass around this function** skips
+   * the single-flight map below, so two clicks fire two full builds — two
+   * Tavily fan-outs, on the operator's key.
+   *
+   * This third shape gives the user a genuinely fresh pool, gives everyone else
+   * that pool on their next load, and still builds **once** for a double click.
+   */
+  forceRebuild = false,
 ): Promise<DailyPoolLoad<TPool>> {
   let inFlight = inFlightByCache.get(cache);
   if (!inFlight) {
@@ -191,11 +224,15 @@ export async function getOrBuildCachedPool<TPool extends CachedPool>(
 
   let builtFresh = false;
   const pending = (async (): Promise<TPool> => {
-    try {
-      const cached = await cache.get(key);
-      if (cached && accepts(cached)) return cached;
-    } catch {
-      // A cache outage is a miss, not a feed outage.
+    // The read is the only thing a forced rebuild skips. The write below, and
+    // the single-flight map above, both still apply.
+    if (!forceRebuild) {
+      try {
+        const cached = await cache.get(key);
+        if (cached && accepts(cached)) return cached;
+      } catch {
+        // A cache outage is a miss, not a feed outage.
+      }
     }
 
     builtFresh = true;

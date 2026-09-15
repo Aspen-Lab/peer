@@ -24,6 +24,7 @@
 
 import { Fragment, useEffect, useRef } from "react";
 import Link from "next/link";
+import type { Route } from "next";
 import { usePathname, useRouter } from "next/navigation";
 import { useFeedStore } from "@/store/feed";
 import { Kbd } from "@/components/ui/kbd";
@@ -130,7 +131,7 @@ export function Masthead() {
               <Fragment key={link.href}>
                 {i > 0 && DOT}
               <Link
-                href={link.href}
+                href={link.href as Route}
                 aria-current={active ? "page" : undefined}
                 aria-label={isProfile && auth.kind === "signed-in" ? link.label : undefined}
                 // The bar's own height, so the whole 48px row is the target

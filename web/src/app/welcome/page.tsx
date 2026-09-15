@@ -20,6 +20,8 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import { useProfileStore } from "@/store/profile";
+import type { Entitlement } from "@/lib/entitlement/types";
+import { entitlementGrants } from "@/lib/entitlement/allowance";
 import { careerStages, industryPreferences } from "@/types";
 import type { UserProfile } from "@/types";
 import {
@@ -53,6 +55,7 @@ import { sectionLabel } from "@/components/ui/section-label";
 import { cardShell } from "@/components/ui/card-shell";
 import { cn } from "@/lib/cn";
 import { SURFACE_TOPIC_DESCRIPTIONS } from "@/lib/profile/topic-copy";
+import { ProPlanSummary } from "@/components/plan/pro-plan-summary";
 import {
   STEP_META,
   type StepKey,
@@ -83,6 +86,13 @@ const readRequestedStep = () => {
 export default function WelcomePage() {
   const router = useRouter();
   const profile = useProfileStore((s) => s.profile);
+  // ABC-freemium 1-15 — the `ai` step is complete when the reader has AI at all.
+  // ABC-freemium 6-04 — a capability question, so the anonymous view while the
+  // plan is unknown: the step reads as not-yet-done rather than done, which is
+  // the direction that shows the reader the step instead of hiding it.
+  const entitlement = entitlementGrants(
+    useProfileStore((s) => s.entitlement),
+  );
   const store = useProfileStore();
   const topicMirroringRef = useRef<TopicMirroringController | null>(null);
   const completeOnboarding = useProfileStore((s) => s.completeOnboarding);
@@ -116,7 +126,7 @@ export default function WelcomePage() {
   if (settled && autoStart === null) {
     setAutoStart(
       stepIndexFromKey(requestedStep) ??
-        firstIncompleteStep(profile, readPersonaDone()),
+        firstIncompleteStep(profile, readPersonaDone(), entitlement),
     );
   }
   const step = manualStep ?? autoStart;
@@ -136,9 +146,12 @@ export default function WelcomePage() {
   const done = useMemo(
     () =>
       Object.fromEntries(
-        STEP_META.map((m) => [m.key, isStepDone(m.key, profile, personaDone)]),
+        STEP_META.map((m) => [
+          m.key,
+          isStepDone(m.key, profile, personaDone, entitlement),
+        ]),
       ) as Record<StepKey, boolean>,
-    [profile, personaDone],
+    [profile, personaDone, entitlement],
   );
 
   // Jumping is free among the first steps and everywhere once the topics
@@ -417,14 +430,52 @@ export default function WelcomePage() {
                 <StepFrame
                   kicker="Optional power-up"
                   title="Connect an AI key (optional)."
-                  subtitle="Peer works fully free with zero setup. Adding a key unlocks sharper, AI-written briefings and Deep report — and you can always do this later."
+                  subtitle="Peer works fully free with zero setup, and its AI is included. Adding your own key is optional — it sends the model calls to your account instead, and you can always do this later."
                 >
+                  {/* ABC-freemium 1-24 · R-UI-1, D1 — this said a key is what
+                      unlocks AI. Peer's AI is included now, so a key is an
+                      alternative rather than an unlock. */}
                   <Callout variant="accent">
-                    <strong>Peer runs significantly better with an API key.</strong>{" "}
-                    One key powers smarter Tier 1/2 ranking and full Deep reports
-                    across Papers, Events, and Jobs. Without one, you still get a
-                    complete free Tier 0 briefing.
+                    <strong>Peer&apos;s AI is included — no key needed.</strong>{" "}
+                    Ranking, summaries and Deep reports across Papers, Events and
+                    Jobs all run on it. Adding your own key sends those calls to
+                    your own account instead, on whichever model you prefer.
                   </Callout>
+                  {/* ABC-freemium 7-02(b) · D7 · Ruling 19 points 1-2 — **this
+                      is the half of the fix that makes the link honest.**
+
+                      Every upsell call to action in the app now resolves here
+                      (`UPGRADE_HREF`), and one of them reads *"See what Pro
+                      adds"*. Round-7 B drove all six entitlement states through
+                      this page and found ZERO plan or pricing words on any of
+                      them: the link resolved, rendered, stayed put, and had
+                      nothing to do with paying. A control that resolves and
+                      does not answer its own promise is still a broken promise.
+
+                      **Every string below already shipped elsewhere and is
+                      imported from `plan-copy.ts`, not retyped** — Ruling 19
+                      point 2(b) requires the exact existing sentences, so no
+                      new copy is written here and no editorial call is being
+                      taken. The labels travel with their sentences on purpose:
+                      without "Deep reports" above it, *"the monthly limit"* has
+                      no referent, and without the weekly sentence before it,
+                      *"refreshes them"* has no antecedent.
+
+                      **D7 — display only. No checkout link, and do not add
+                      one:** payment is out of scope (spec §3) and a dead link
+                      is worse than none. That rule travelled with the copy.
+
+                      Placed directly under the intro and above the key fields
+                      because a reader who arrived from the upsell came for
+                      this; a reader who arrived from onboarding scrolls one
+                      block to reach the panel they came for.
+
+                      A component rather than inline JSX so it can be rendered
+                      and asserted on its own — this page is a 970-line client
+                      component with a store graph a suite would have to fake
+                      wholesale, and that cost is exactly why nothing here was
+                      ever checked against what the CTAs promise. */}
+                  <ProPlanSummary />
                   <div className="mt-4 space-y-3">
                     <ApiKeyHelp provider={profile.feedAiProvider} />
                     <AiProviderRecommendation />
@@ -519,7 +570,11 @@ export default function WelcomePage() {
                     </div>
                   </div>
 
-                  <ReviewList profile={profile} onJump={setStep} />
+                  <ReviewList
+                    profile={profile}
+                    entitlement={entitlement}
+                    onJump={setStep}
+                  />
                 </StepFrame>
               )}
             </div>
@@ -665,15 +720,17 @@ function StepRail({
 // confirms at a glance instead of paging back through steps.
 function ReviewList({
   profile,
+  entitlement,
   onJump,
 }: {
   profile: UserProfile;
+  entitlement: Pick<Entitlement, "userId">;
   onJump: (i: number) => void;
 }) {
   const rows = STEP_META.slice(0, -1).map((m, i) => ({
     index: i,
     label: m.label,
-    summary: summarizeStep(m.key, profile),
+    summary: summarizeStep(m.key, profile, entitlement),
   }));
   return (
     <div>
@@ -704,7 +761,11 @@ function ReviewList({
   );
 }
 
-function summarizeStep(key: StepKey, profile: UserProfile): string {
+function summarizeStep(
+  key: StepKey,
+  profile: UserProfile,
+  entitlement: Pick<Entitlement, "userId">,
+): string {
   switch (key) {
     case "basics": {
       const name =
@@ -733,7 +794,7 @@ function summarizeStep(key: StepKey, profile: UserProfile): string {
     case "radar":
       return isStepDone("radar", profile, false) ? "Customized" : "Defaults";
     case "ai":
-      return isStepDone("ai", profile, false)
+      return isStepDone("ai", profile, false, entitlement)
         ? `${providerShortLabel(profile.feedAiProvider)} key connected`
         : "Not connected — works free";
     case "connectors": {

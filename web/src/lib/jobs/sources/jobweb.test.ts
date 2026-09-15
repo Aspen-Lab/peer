@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // RULING 75 (round 28 C, item 0). Only `searchGemini` is stood in for; the
 // provider-order helpers stay REAL.
@@ -18,6 +18,16 @@ import {
   resolveSearchProvider,
   webResultToRawJobItem,
 } from "./jobweb";
+import {
+  getCounterStore,
+  resetCounterStoreForTests,
+  forcedRebuildDayKey,
+} from "@/lib/usage/counters";
+import { FORCED_REBUILDS_PER_DAY } from "@/lib/usage/rebuild-breaker";
+import {
+  setUsageEventsClientForTests,
+  type UsageEventRow,
+} from "@/lib/usage/events";
 
 describe("job aggregator listing pages", () => {
   it.each([
@@ -3044,26 +3054,80 @@ describe("RULING 75 — jobweb provider resolution", () => {
     expect(jobweb.enabled(baseQuery)).toBe(false);
   });
 
-  it("comes back on when Vertex is present and the query asks for gemini", () => {
+  // ABC-freemium 2-04 — an ENTITLED query. Every case below that exercises
+  // provider resolution now has to say so, because Vertex and grounding sit
+  // behind `systemSearchAllowed` exactly as the Tavily and Brave keys do.
+  const entitledQuery = {
+    ...baseQuery,
+    webSearch: { systemSearchAllowed: true },
+  };
+
+  it("stays DARK even when Vertex is present and the query asks for gemini", () => {
+    // REWRITTEN, NOT DELETED — ABC-freemium 5-04 · D2a (Ruling 12), Ruling 13
+    // point 4. Was "comes back on when Vertex is present…", asserting
+    // `.toBe("gemini")` and `enabled` true.
+    //
+    // A RULING 75 case inherited from the report-parity loop, whose subject D2a
+    // removed: grounding is operator-funded and so is unreachable on every
+    // plan. Rewritten in place with the same inputs because the inverted
+    // assertion is the stronger statement — a configured Vertex project, an
+    // explicit `provider` preference AND a forced entitlement flag together
+    // still reach nothing.
     withoutKeys();
     vi.stubEnv("GOOGLE_VERTEX_PROJECT", "some-project");
-    const query = { ...baseQuery, webSearch: { provider: "gemini" as const } };
-    expect(resolveSearchProvider(query)).toBe("gemini");
-    expect(jobweb.enabled(query)).toBe(true);
+    const query = {
+      ...baseQuery,
+      webSearch: { provider: "gemini" as const, systemSearchAllowed: true },
+    };
+    expect(resolveSearchProvider(query)).toBeNull();
+    expect(jobweb.enabled(query)).toBe(false);
   });
 
-  it("picks gemini on auto when Tavily is not enabled", () => {
-    withoutKeys();
-    vi.stubEnv("GOOGLE_VERTEX_PROJECT", "some-project");
-    expect(resolveSearchProvider(baseQuery)).toBe("gemini");
-  });
-
-  // CREDIT MIGRATION — the new default, pinned beside the old one.
-  it("picks vertex on auto once a Search App is configured", () => {
+  it("refuses an EXPLICIT gemini or vertex preference when the reader is not entitled", () => {
+    // THE case an order-only fix would have left open, and the reason 2-04
+    // gates the availability inputs rather than the ordering clauses. The
+    // pipeline sets `provider` from the server's own environment, so a free or
+    // anonymous caller lands on the explicit branch and never reaches the auto
+    // order at all.
     withoutKeys();
     vi.stubEnv("GOOGLE_VERTEX_PROJECT", "some-project");
     vi.stubEnv("GOOGLE_VERTEX_SEARCH_ENGINE_ID", "peer-web");
-    expect(resolveSearchProvider(baseQuery)).toBe("vertex");
+
+    for (const provider of ["gemini", "vertex"] as const) {
+      const query = {
+        ...baseQuery,
+        webSearch: { provider, systemSearchAllowed: false },
+      };
+      expect(resolveSearchProvider(query)).toBeNull();
+      expect(jobweb.enabled(query)).toBe(false);
+    }
+  });
+
+  it("picks NOTHING on auto, entitled or not, once the operator stops paying", () => {
+    // REWRITTEN, NOT DELETED — 5-04 · D2a, Ruling 13 point 4. Was "picks gemini
+    // on auto when the reader is entitled…" and asserted `.toBe("gemini")` for
+    // the entitled query. Both halves now answer `null`: under D2a the
+    // entitlement no longer changes what search a reader gets, because nobody
+    // gets operator-funded search.
+    withoutKeys();
+    vi.stubEnv("GOOGLE_VERTEX_PROJECT", "some-project");
+    expect(resolveSearchProvider(entitledQuery)).toBeNull();
+    expect(resolveSearchProvider(baseQuery)).toBeNull();
+  });
+
+  // CREDIT MIGRATION — the new default, pinned beside the old one.
+  it("does NOT pick vertex on auto, even with a Search App configured", () => {
+    // REWRITTEN, NOT DELETED — 5-04 · D2a, Ruling 13 point 4. Was "picks vertex
+    // on auto once a Search App is configured", asserting `.toBe("vertex")`. A
+    // configured Vertex AI Search app is operator-funded search, so D2a makes it
+    // unreachable however completely it is configured. The CREDIT MIGRATION
+    // ordering this used to pin (a Search App outranks grounding) no longer
+    // decides anything, and the case records that rather than pretending.
+    withoutKeys();
+    vi.stubEnv("GOOGLE_VERTEX_PROJECT", "some-project");
+    vi.stubEnv("GOOGLE_VERTEX_SEARCH_ENGINE_ID", "peer-web");
+    expect(resolveSearchProvider(entitledQuery)).toBeNull();
+    expect(resolveSearchProvider(baseQuery)).toBeNull();
   });
 
   it("still yields to a caller-supplied Tavily key", () => {
@@ -3074,15 +3138,53 @@ describe("RULING 75 — jobweb provider resolution", () => {
     ).toBe("tavily");
   });
 
-  it("keeps the shipped behaviour exactly when Vertex is absent", () => {
+  // ABC-freemium 1-05 · R-KEY-3 — REWRITTEN, NOT DELETED. This case asserted
+  // that the operator's environment Tavily key alone resolved `"tavily"`. That
+  // was the leak: nothing on that path read a session or an entitlement, so an
+  // unauthenticated request spent the operator's search credits. The env key now
+  // requires `systemSearchAllowed`, which only the route can set and only from
+  // the entitlement, so the case is split in two and both halves are asserted.
+  it("NEVER spends the operator's env Tavily key, entitled or not (D2a)", () => {
+    // REWRITTEN, NOT DELETED — ABC-freemium 5-04 · D2a (Ruling 12). The entitled
+    // half asserted `.toBe("tavily")` and `enabled` true; it now answers `null`
+    // and `false` like the unentitled half. The env key is armed on purpose, so
+    // zero is a statement about the gate and not about an empty environment.
     vi.stubEnv("GOOGLE_VERTEX_PROJECT", "");
     vi.stubEnv("TAVILY_API_KEY", "env-tavily");
     vi.stubEnv("BRAVE_SEARCH_API_KEY", "");
-    expect(resolveSearchProvider(baseQuery)).toBe("tavily");
+
+    // Not entitled — and a query that says nothing is not entitled either.
+    expect(resolveSearchProvider(baseQuery)).toBeNull();
+    expect(jobweb.enabled(baseQuery)).toBe(false);
+
+    // "Entitled" — and it makes no difference any more. That is the whole of
+    // D2a: the operator's key has no branch left to be reached from.
+    const entitled = {
+      ...baseQuery,
+      webSearch: { systemSearchAllowed: true },
+    };
+    expect(resolveSearchProvider(entitled)).toBeNull();
+    expect(jobweb.enabled(entitled)).toBe(false);
+  });
+
+  it("spends the operator's env Brave key only when the request is entitled", () => {
+    // REWRITTEN, NOT DELETED — ABC-freemium 2-04 · Ruling 5 point 2. This case
+    // was "keeps the shipped Brave behaviour exactly", and its comment said
+    // R-KEY-3 leaves Brave ungated because D2 bans it on Vercel. A ban on
+    // Vercel is not a gate on a self-host or a developer machine, and Brave is
+    // operator-funded on both. Split in two exactly like the Tavily case above,
+    // with both halves asserted.
+    vi.stubEnv("GOOGLE_VERTEX_PROJECT", "");
     vi.stubEnv("TAVILY_API_KEY", "");
     vi.stubEnv("BRAVE_SEARCH_API_KEY", "env-brave");
-    expect(resolveSearchProvider(baseQuery)).toBe("brave");
-    expect(jobweb.enabled(baseQuery)).toBe(true);
+
+    // Not entitled.
+    expect(resolveSearchProvider(baseQuery)).toBeNull();
+    expect(jobweb.enabled(baseQuery)).toBe(false);
+
+    // Entitled: the shipped behaviour, unchanged.
+    expect(resolveSearchProvider(entitledQuery)).toBe("brave");
+    expect(jobweb.enabled(entitledQuery)).toBe(true);
   });
 
   it("an aggregator row still reaches the shipped posting-id rule, not a pre-screen", () => {
@@ -3124,27 +3226,48 @@ describe("RULING 75 — jobweb hands the gemini adapter NO deny list", () => {
     geminiSearchMock.mockReset();
   });
 
-  it("passes no denyHosts and no excludeDomains", async () => {
+  it("never calls the gemini adapter, so it passes no options at all (D2a)", async () => {
+    // REWRITTEN, NOT DELETED — ABC-freemium 5-04 · **Ruling 13 point 4**, option
+    // (a). Old assertions kept verbatim so the knowledge survives the coverage:
+    //
+    //     expect(geminiSearchMock).toHaveBeenCalledTimes(1);
+    //     const options = geminiSearchMock.mock.calls[0][1] as Record<string, unknown>;
+    //     expect(options.denyHosts).toBeUndefined();
+    //     expect(options.excludeDomains).toBeUndefined();
+    //
+    // **ACCEPTED COVERAGE COST — 1 of the 4 A tallies every round** ("Ruling 75
+    // option-building cases now asserting absence rather than content"). The
+    // code under test is jobweb's own option construction inside `fetchImpl`,
+    // which D2a makes unreachable; re-pointing it would need a production seam
+    // D2a did not ask for. **Threshold: if grounding is re-enabled for any plan,
+    // all four go back to content assertions in the same round.**
     vi.stubEnv("TAVILY_API_KEY", "");
     vi.stubEnv("BRAVE_SEARCH_API_KEY", "");
     vi.stubEnv("GOOGLE_VERTEX_PROJECT", "some-project");
     geminiSearchMock.mockResolvedValue([]);
 
-    await jobweb.fetch({
+    const items = await jobweb.fetch({
       topics: ["molten salt"],
       queries: ["molten salt postdoc"],
       locations: [],
       limit: 60,
-      webSearch: { provider: "gemini" },
+      webSearch: { provider: "gemini", systemSearchAllowed: true },
     });
 
-    expect(geminiSearchMock).toHaveBeenCalledTimes(1);
-    const options = geminiSearchMock.mock.calls[0][1] as Record<string, unknown>;
-    expect(options.denyHosts).toBeUndefined();
-    expect(options.excludeDomains).toBeUndefined();
+    expect(geminiSearchMock).not.toHaveBeenCalled();
+    expect(items).toEqual([]);
   });
 
-  it("suffixes the job query the same way every other provider is suffixed", async () => {
+  it("never reaches the suffixing step, because the adapter is never called (D2a)", async () => {
+    // REWRITTEN, NOT DELETED — 5-04 · Ruling 13 point 4, option (a). The old
+    // assertion, kept verbatim:
+    //
+    //     expect(geminiSearchMock.mock.calls[0][0]).toBe(
+    //       "molten salt postdoc position opening apply",
+    //     );
+    //
+    // **ACCEPTED COVERAGE COST — 2 of the 4.** The query-suffixing rule loses
+    // live coverage under D2a; same threshold as above.
     vi.stubEnv("TAVILY_API_KEY", "");
     vi.stubEnv("BRAVE_SEARCH_API_KEY", "");
     vi.stubEnv("GOOGLE_VERTEX_PROJECT", "some-project");
@@ -3155,10 +3278,11 @@ describe("RULING 75 — jobweb hands the gemini adapter NO deny list", () => {
       queries: ["molten salt postdoc"],
       locations: [],
       limit: 60,
-      webSearch: { provider: "gemini" },
+      webSearch: { provider: "gemini", systemSearchAllowed: true },
     });
 
-    expect(geminiSearchMock.mock.calls[0][0]).toBe("molten salt postdoc position opening apply");
+    expect(geminiSearchMock).not.toHaveBeenCalled();
+    expect(geminiSearchMock.mock.calls).toEqual([]);
   });
 
   it("maps a grounded row through the SHIPPED admission, unchanged", async () => {
@@ -3186,11 +3310,24 @@ describe("RULING 75 — jobweb hands the gemini adapter NO deny list", () => {
       queries: ["molten salt postdoc"],
       locations: [],
       limit: 60,
-      webSearch: { provider: "gemini" },
+      webSearch: { provider: "gemini", systemSearchAllowed: true },
     });
 
-    expect(rows).toHaveLength(1);
-    expect(rows[0].title).toBe("Nuclear Materials and Molten Salt Technologist 1");
+    // REWRITTEN, NOT DELETED — 5-04 · Ruling 13 point 4, option (a). The old
+    // assertions, kept verbatim:
+    //
+    //     expect(rows).toHaveLength(1);
+    //     expect(rows[0].title).toBe(
+    //       "Nuclear Materials and Molten Salt Technologist 1",
+    //     );
+    //
+    // **ACCEPTED COVERAGE COST — 3 of the 4.** The shipped admission rule
+    // (a real posting admits, an aggregator LISTING page does not, however
+    // real its page title) is still enforced everywhere else in this file for
+    // the providers that remain reachable; what it loses is its proof on the
+    // GROUNDED row shape specifically. Same threshold as above.
+    expect(geminiSearchMock).not.toHaveBeenCalled();
+    expect(rows).toEqual([]);
   });
 });
 
@@ -3820,5 +3957,189 @@ describe("J7 — the ZIP-ending location shape (Phase 3 round 6 C, ITEM 6)", () 
     ])("keeps `%s` untouched", (company) => {
       expect(employerOf(`Battery Scientist - ${company}`)).toBe(company);
     });
+  });
+});
+
+/**
+ * ABC-freemium 2-04 · R-METER-2 · R-QUOTA-2 · Ruling 5 point 2.
+ *
+ * The breaker and the usage row used to be charged under
+ * `keys.provenance === "system" && provider === "tavily"` — a hard-coded pair.
+ * Three of the four operator-funded providers therefore ran free of the 500/day
+ * cap and wrote no row at all, and the row that did get written carried the
+ * literal `"tavily"` whatever had actually run.
+ */
+describe("2-04 — every operator-funded provider is charged and metered", () => {
+  const rows: UsageEventRow[] = [];
+
+  beforeEach(() => {
+    rows.length = 0;
+    resetCounterStoreForTests();
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "");
+    vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "");
+    setUsageEventsClientForTests({
+      from: () => ({
+        insert: (inserted: UsageEventRow[]) => {
+          rows.push(...inserted);
+          return Promise.resolve({ error: null });
+        },
+      }),
+    } as never);
+    geminiSearchMock.mockResolvedValue([]);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    setUsageEventsClientForTests(undefined);
+    resetCounterStoreForTests();
+    geminiSearchMock.mockReset();
+  });
+
+  function query(overrides: Record<string, unknown>) {
+    return {
+      topics: ["molten salt"],
+      queries: ["molten salt postdoc"],
+      locations: [],
+      limit: 60,
+      ...overrides,
+    };
+  }
+
+  it("writes NO search row at all, on the most generous input there is (D2a)", async () => {
+    // REWRITTEN, NOT DELETED — ABC-freemium 5-04 · D2a (Ruling 12).
+    //
+    // Was "writes a row naming GEMINI, not the literal tavily". The old
+    // assertion is kept verbatim because the row's SHAPE is what 2-04 bought —
+    // the row names the `provider` that actually ran, never a hard-coded
+    // `"tavily"` — and that knowledge should not leave the file with the
+    // assertion:
+    //
+    //     expect(rows).toHaveLength(1);
+    //     expect(rows[0]).toMatchObject({
+    //       kind: "search", surface: "jobs", provider: "gemini",
+    //       query_count: 1, byok: false,
+    //     });
+    //
+    // **This case IS standing tally 2 of Ruling 12 point 7 for the jobs
+    // surface** — `kind:"search"` usage rows produced must be 0 — and it is
+    // measured on the most generous input the surface accepts: a configured
+    // Vertex project, an explicit `provider`, a real user id and the entitlement
+    // flag forced `true`.
+    vi.stubEnv("TAVILY_API_KEY", "");
+    vi.stubEnv("BRAVE_SEARCH_API_KEY", "");
+    vi.stubEnv("GOOGLE_VERTEX_PROJECT", "some-project");
+
+    await jobweb.fetch(
+      query({
+        webSearch: {
+          provider: "gemini",
+          systemSearchAllowed: true,
+          userId: "user-1",
+        },
+      }),
+    );
+
+    expect(rows).toHaveLength(0);
+    expect(rows.filter((row) => row.kind === "search")).toEqual([]);
+  });
+
+  it("refuses BEFORE the breaker is ever consulted, so nothing is charged (D2a)", async () => {
+    // REWRITTEN, NOT DELETED — ABC-freemium 5-04 · D2a (Ruling 12), and it is
+    // here because B flagged it as a **FALSE GREEN**: was "charges the 500/day
+    // breaker for a grounding fan-out", and after D2a all three of its original
+    // assertions are satisfied by "no provider resolved at all". It would have
+    // gone on passing with the breaker deleted, which is Ruling 10 point 2b's
+    // exact class of worthless green.
+    //
+    // It now says what it actually proves: the surface refuses at the gate, one
+    // step EARLIER than the breaker, so the counter is untouched rather than
+    // charged-and-refused. The pre-loaded counter below is left in place on
+    // purpose — it is what makes "untouched" measurable.
+    //
+    // The breaker's own live coverage is elsewhere and is unaffected:
+    // `lib/usage/deep-report-quota.test.ts`, driven through the forced-rebuild
+    // caller that Ruling 13 point 1 keeps alive.
+    //
+    // Before 2-04 this fan-out was free of the cap entirely, so the breaker
+    // protected one of the four ways to spend the operator's money.
+    vi.stubEnv("TAVILY_API_KEY", "");
+    vi.stubEnv("BRAVE_SEARCH_API_KEY", "");
+    vi.stubEnv("GOOGLE_VERTEX_PROJECT", "some-project");
+    await getCounterStore().increment(
+      forcedRebuildDayKey("user-1", new Date()),
+      null,
+      FORCED_REBUILDS_PER_DAY,
+    );
+
+    const items = await jobweb.fetch(
+      query({
+        webSearch: {
+          provider: "gemini",
+          systemSearchAllowed: true,
+          userId: "user-1",
+        },
+      }),
+    );
+
+    // The same degraded value a keyless reader gets — but now reached at the
+    // gate rather than at the breaker.
+    expect(items).toEqual([]);
+    expect(geminiSearchMock).not.toHaveBeenCalled();
+    expect(rows.filter((r) => r.kind === "search")).toHaveLength(0);
+    // 5-04 — THE ASSERTION THAT MAKES THIS CASE MEAN SOMETHING AGAIN. A
+    // breaker that had been consulted and tripped would have written its own
+    // `kind: "breaker"` row. Nothing was consulted, so there is no row of any
+    // kind, and the counter still holds exactly what was pre-loaded.
+    expect(rows).toEqual([]);
+    expect(
+      (await getCounterStore().read(forcedRebuildDayKey("user-1", new Date())))
+        .value,
+    ).toBe(FORCED_REBUILDS_PER_DAY);
+  });
+
+  it("charges NEITHER breaker nor row for a BYOK Tavily fan-out", async () => {
+    // A reader's own key costs the operator nothing, so attributing it would be
+    // noise. This is the one provider with two possible payers, and it is why
+    // `provenance` still describes Tavily specifically.
+    vi.stubEnv("GOOGLE_VERTEX_PROJECT", "");
+    vi.stubEnv("TAVILY_API_KEY", "");
+    vi.stubEnv("BRAVE_SEARCH_API_KEY", "");
+    const before = await getCounterStore().read(
+      forcedRebuildDayKey("user-1", new Date()),
+    );
+
+    await jobweb.fetch(
+      query({
+        webSearch: {
+          tavilyApiKey: "USER-NOT-A-KEY",
+          systemSearchAllowed: false,
+          userId: "user-1",
+        },
+      }),
+    );
+
+    expect(rows).toHaveLength(0);
+    expect(
+      (await getCounterStore().read(forcedRebuildDayKey("user-1", new Date())))
+        .value,
+    ).toBe(before.value);
+  });
+
+  it("spends nothing at all for an unentitled reader", async () => {
+    // Every candidate configured, and the reader is still refused: no provider,
+    // no fan-out, no breaker charge, no row. This is R-POOL-3's "still respond
+    // from the free structured sources" seen from the spend side.
+    vi.stubEnv("TAVILY_API_KEY", "OPERATOR-NOT-A-KEY");
+    vi.stubEnv("BRAVE_SEARCH_API_KEY", "OPERATOR-NOT-A-KEY");
+    vi.stubEnv("GOOGLE_VERTEX_PROJECT", "some-project");
+    vi.stubEnv("GOOGLE_VERTEX_SEARCH_ENGINE_ID", "peer-web");
+
+    const items = await jobweb.fetch(
+      query({ webSearch: { systemSearchAllowed: false, userId: "user-1" } }),
+    );
+
+    expect(items).toEqual([]);
+    expect(geminiSearchMock).not.toHaveBeenCalled();
+    expect(rows).toHaveLength(0);
   });
 });

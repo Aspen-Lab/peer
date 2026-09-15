@@ -3,6 +3,7 @@ import {
   createPartFromText,
   createUserContent,
   GoogleGenAI,
+  ThinkingLevel,
 } from "@google/genai";
 import type {
   DigestProvider,
@@ -56,19 +57,63 @@ function chainForTier(chain: ModelTarget[], tier?: ModelTier): ModelTarget[] {
 // Two Gemini-specific gotchas the old code ignored:
 //   1. It never forwarded the caller's `maxTokens`, so every call ran with an
 //      unbounded output cap.
-//   2. It set no `thinkingConfig`, so every 2.5 model ran default "dynamic
+//   2. It set no `thinkingConfig`, so every model ran default "dynamic
 //      thinking" — hidden reasoning tokens billed + latency on every call,
 //      even for bounded JSON extraction/ranking/classification.
-// This stays model-aware: the cost-optimized 2.5 Flash-Lite / Flash pair runs
-// bounded JSON work with thinking disabled. Gemini 3 fallbacks use a different
-// control, so we leave them alone and reserve headroom for their thinking.
+//
+// Everything this provider sends is bounded JSON work, so thinking is turned
+// OFF for every Gemini Flash model in the chains above. **The control is not
+// the same across generations, and sending the wrong one is a 400, not a
+// warning** — and `callModel` catches, so a 400 here would empty the chain in
+// silence. That is why this matches by FAMILY, and why each family's control
+// is the one that was actually observed to work.
+//
+// ABC-freemium 6-02 · measured live against every id in both chains,
+// 2026-09-07, one ping each:
+//
+//   id                      thinkingBudget:0   thinkingLevel:"MINIMAL"
+//   gemini-3.1-flash-lite   OK                 OK
+//   gemini-3.5-flash-lite   400 INVALID_ARG    OK
+//   gemini-3.6-flash        400 INVALID_ARG    OK
+//
+// So 2.5 Flash takes `thinkingBudget`, 3.x Flash takes `thinkingLevel`, and
+// the swap target happens to accept both. Left with no control at all,
+// `gemini-3.6-flash` billed 139 thought tokens for a one-line ping, so this is
+// a real charge on the fallback path and not a theoretical one.
+//
+// A model no family matches keeps thinking ON and gets `THINKING_HEADROOM`, so
+// an unmeasured model costs money rather than 400-ing — and
+// `gemini.test.ts` fails the moment a chain gains an id no family covers,
+// which is the guard that stops the next swap re-opening this.
 
 const GEN_TIMEOUT_MS = 120_000; // generous per-attempt hang guard, not a latency cap
 const THINKING_HEADROOM = 4096;
 
-/** The cost-optimized Gemini 2.5 Flash family runs bounded JSON with thinking off. */
+/** Gemini 2.5 Flash — the generation whose thinking control is `thinkingBudget`. */
+const GEMINI_2_5_FLASH_FAMILY = /gemini-2\.5-flash\b/;
+/** Gemini 3.x Flash — the generation whose thinking control is `thinkingLevel`. */
+const GEMINI_3_FLASH_FAMILY = /gemini-3(?:\.\d+)?-flash\b/;
+
+type ThinkingOff =
+  | { thinkingBudget: 0 }
+  | { thinkingLevel: ThinkingLevel.MINIMAL };
+
+/**
+ * The `thinkingConfig` that turns this model's reasoning off, or `undefined`
+ * when no control has been verified for it — in which case thinking stays on
+ * and the cap reserves headroom for it.
+ */
+function thinkingOffConfig(modelId: string): ThinkingOff | undefined {
+  if (GEMINI_2_5_FLASH_FAMILY.test(modelId)) return { thinkingBudget: 0 };
+  if (GEMINI_3_FLASH_FAMILY.test(modelId)) {
+    return { thinkingLevel: ThinkingLevel.MINIMAL };
+  }
+  return undefined;
+}
+
+/** True when this model's thinking can be turned off, so its cap needs no headroom. */
 function disableThinking(modelId: string): boolean {
-  return /gemini-2\.5-flash/.test(modelId);
+  return thinkingOffConfig(modelId) !== undefined;
 }
 
 /** Output cap including thinking headroom where the model still thinks. */
@@ -79,11 +124,12 @@ function outputCap(modelId: string, maxTokens?: number): number | undefined {
 
 function genConfig(modelId: string, systemInstruction: string, maxTokens?: number) {
   const cap = outputCap(modelId, maxTokens);
+  const thinkingConfig = thinkingOffConfig(modelId);
   return {
     systemInstruction,
     responseMimeType: "application/json" as const,
     httpOptions: { timeout: GEN_TIMEOUT_MS },
-    ...(disableThinking(modelId) ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
+    ...(thinkingConfig ? { thinkingConfig } : {}),
     ...(cap ? { maxOutputTokens: cap } : {}),
   };
 }
@@ -97,6 +143,23 @@ type GeminiResult = {
   };
 };
 
+/**
+ * One `usage_events` row per **provider request** (ABC-freemium 2-05 ·
+ * Ruling 6 point 5 · R-METER-1 as amended 2026-09-05).
+ *
+ * A "call" for billing purposes is one HTTP request to a model, so each attempt
+ * in a fallback chain gets its own row with its own `ok` and `model`. Both
+ * Gemini providers loop over a model chain, so one `generateJsonText` that
+ * falls back from model A to model B legitimately writes **two** rows — that is
+ * the ledger telling the owner about a retry they paid for, not a defect.
+ *
+ * **`ok` means "this request produced usable output", not "the HTTP call
+ * returned".** Every caller of the four call sites below used to pass a literal
+ * `true` on the success path, so a model that answered with empty text wrote an
+ * `ok: true` row and the chain then fell through to the next model. The ledger
+ * recorded a success the caller never received. The four sites now pass
+ * `(result.text ?? "").trim().length > 0`.
+ */
 function logGemini(
   modelId: string,
   path: string | undefined,
@@ -171,7 +234,7 @@ async function callModel(
       contents: prompt,
       config: genConfig(modelId, systemInstruction, opts.maxTokens),
     })) as GeminiResult;
-    logGemini(modelId, opts.path, result, started, true);
+    logGemini(modelId, opts.path, result, started, (result.text ?? "").trim().length > 0);
     return result.text ?? "";
   } catch (err) {
     logGemini(modelId, opts.path, undefined, started, false);
@@ -202,7 +265,7 @@ async function callVisionModel(
       ]),
       config: genConfig(modelId, systemInstruction, opts.maxTokens),
     })) as GeminiResult;
-    logGemini(modelId, opts.path, result, started, true);
+    logGemini(modelId, opts.path, result, started, (result.text ?? "").trim().length > 0);
     return result.text ?? "";
   } catch (err) {
     logGemini(modelId, opts.path, undefined, started, false);
@@ -325,7 +388,7 @@ export function createGeminiApiProvider(
         contents: prompt,
         config: genConfig(modelId, systemInstruction, opts.maxTokens),
       })) as GeminiResult;
-      logGemini(modelId, opts.path, result, started, true);
+      logGemini(modelId, opts.path, result, started, (result.text ?? "").trim().length > 0);
       return result.text ?? "";
     } catch (err) {
       logGemini(modelId, opts.path, undefined, started, false);
@@ -353,7 +416,7 @@ export function createGeminiApiProvider(
         ]),
         config: genConfig(modelId, systemInstruction, opts.maxTokens),
       })) as GeminiResult;
-      logGemini(modelId, opts.path, result, started, true);
+      logGemini(modelId, opts.path, result, started, (result.text ?? "").trim().length > 0);
       return result.text ?? "";
     } catch (err) {
       logGemini(modelId, opts.path, undefined, started, false);

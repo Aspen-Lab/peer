@@ -2,6 +2,39 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.24.0 — 2026-09-14
+
+One plan, on Peer's model.
+
+The freemium branch is merged, and then cut down to what Peer needs with no
+users yet: **one tier**. Every signed-in reader gets the whole product on
+Peer's own Gemini key — AI ranking, relevance reasons, the model report and
+deep reports with no monthly cap — behind the daily circuit breaker that
+protects the bill. A reader who adds their own key uses it instead. Signed out,
+Peer still works without a model, as before. The free / trial / paid machinery
+stays in the code and the database, resolved to a single plan in one line of
+`lib/entitlement/resolve.ts`, so three plans are one edit away.
+
+**The build now requires `GOOGLE_API_KEY` on Vercel.** It used to ban it: the
+guard kept deployments BYOK-only. A deployment without the key is refused at
+build time rather than shipping a product whose AI silently does nothing.
+
+**Every AI route is behind one entitlement check**, meters its spend into
+`usage_events`, and counts deep reports and rate limits in `usage_counters` —
+tables that exist in production as of today.
+
+**The profile grant is the one that works.** The branch's migration revoked
+UPDATE on the four plan columns, which on Supabase does nothing while the
+table-level grant stands — a signed-in user could have set their own plan. The
+migration file now says what production actually ran: table-level write
+revoked, every other column granted back to `authenticated`.
+
+The merge kept main's side wherever the two had diverged: the papers-only
+briefing and the reading page stay as they are, and the branch's work on the
+jobs and events surfaces — deleted from main — went with them. Typed routes
+are on, so a dead internal link is a compile error. The profile page no longer
+says "Tier 0".
+
 ## v0.23.0 — 2026-09-09
 
 The day has a shape, and now you can see it.

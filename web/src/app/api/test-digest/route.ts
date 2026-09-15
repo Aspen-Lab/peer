@@ -11,6 +11,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { canUseLocalServerProvider } from "@/lib/llm/providers/registry";
+import { requireEntitledAiRequest } from "@/lib/security/ai-request";
 import { runFeedPipeline } from "@/lib/feed/pipeline";
 import type { FeedControls } from "@/lib/feed/profile-compiler";
 import { sendDigestEmail } from "@/lib/email/send-digest";
@@ -79,6 +80,21 @@ export async function POST(req: NextRequest) {
   if (!canUseLocalServerProvider()) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
   }
+  // ABC-freemium 1-06 · R-SEC-2 — this route is named in the requirement and had
+  // no shared check at all: it did its own `getUser()` 401 and then called
+  // `runFeedPipeline`, with no entitlement and no rate limit. The shared check
+  // goes first so the rule is the same one every other AI route obeys.
+  //
+  // It reads the session a second time below because this route needs the full
+  // user (its email) and the request-scoped client for the profile query. That
+  // is one extra round trip on a manual diagnostic route, not on a feed load —
+  // the "one `getUser()` per request" rule is about the hot paths.
+  //
+  // The pipeline call below passes no `aiTier` and papers hard-code
+  // `systemSearchAllowed: false` (D3), so this route still spends nothing. That
+  // is deliberate and unchanged.
+  const gate = await requireEntitledAiRequest("test-digest", 20);
+  if (gate instanceof NextResponse) return gate;
 
   const supabase = await createClient();
   const {

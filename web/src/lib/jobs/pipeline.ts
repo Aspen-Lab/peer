@@ -19,6 +19,7 @@ import {
   type PoolCache,
 } from "@/lib/opportunities/pool-cache";
 import { getDefaultOpportunityPoolCache } from "@/lib/opportunities/pool-cache-runtime";
+import { consumeForcedRebuild } from "@/lib/usage/rebuild-breaker";
 import {
   countOpportunityFacets,
   DEFAULT_OPPORTUNITY_TOP_N,
@@ -52,6 +53,12 @@ export interface JobsPipelineOptions {
 export interface DailyJobPoolOptions {
   cache?: PoolCache;
   now?: Date;
+  /**
+   * ABC-freemium 1-18 · R-POOL-2 — "refresh now". Set by the route from the
+   * entitlement, never from the request body, and refused for a free user by
+   * serving the pool that is already there.
+   */
+  poolRefresh?: boolean;
 }
 
 export interface BuiltJobPool {
@@ -140,11 +147,20 @@ async function buildJobPool(
     limit: req.perSourceLimit ?? DEFAULT_PER_SOURCE_LIMIT,
     // RULING 75 — see the matching comment in `events/pipeline.ts`. The Tavily
     // branch is untouched; the gemini branch is what turns this surface back on.
-    webSearch: req.searchConnectors?.tavily?.enabled
-      ? { tavilyApiKey: req.searchConnectors.tavily.apiKey }
-      // CREDIT MIGRATION — prefers Vertex AI Search when a Search App is
-      // configured, otherwise byte-identical to `geminiWebSearchOptions`.
-      : webSearchOptions(req.searchConnectors),
+    //
+    // ABC-freemium 1-05 · R-KEY-3 — the two fields below ride on both branches.
+    // `systemSearchAllowed` comes from the caller's entitlement and is `false`
+    // when nothing passes it, which is what keeps the nightly cron
+    // (`dispatch-digests`) and `test-digest` off the operator's key (D9).
+    webSearch: {
+      ...(req.searchConnectors?.tavily?.enabled
+        ? { tavilyApiKey: req.searchConnectors.tavily.apiKey }
+        : // CREDIT MIGRATION — prefers Vertex AI Search when a Search App is
+          // configured, otherwise byte-identical to `geminiWebSearchOptions`.
+          webSearchOptions(req.searchConnectors)),
+      systemSearchAllowed: req.systemSearchAllowed === true,
+      userId: req.userId ?? null,
+    },
     apiKeys: req.apiKeys,
   };
 
@@ -225,6 +241,23 @@ export async function buildDailyJobPool(
     locationPreferences: req.locationPreferences,
     now,
   });
+  // ABC-freemium 1-18 · R-POOL-2 — the two gates, both required.
+  //
+  // 1. `poolRefreshAllowed` is the entitlement's, resolved by the route. A free
+  //    user's forced rebuild is REFUSED, not errored: `forceRebuild` stays
+  //    false and they get the cached pool exactly as they would have.
+  // 2. It counts against the daily forced-rebuild breaker, and a tripped breaker
+  //    also serves the cache. Without this second gate the refresh button is an
+  //    unbounded spend button for a paid user.
+  //
+  // **Fails closed**, like every breaker (see `counters.ts`): an unreadable
+  // counter means no forced rebuild, which costs the user a refresh rather than
+  // costing the owner a fan-out.
+  let forceRebuild = false;
+  if ((options.poolRefresh ?? req.poolRefresh) && req.userId) {
+    forceRebuild = await consumeForcedRebuild(req.userId, 1, now);
+  }
+
   let fresh: BuiltJobPool | undefined;
 
   const loaded = await getOrBuildCachedPool(
@@ -246,6 +279,9 @@ export async function buildDailyJobPool(
         localDate: fresh.localDate,
       };
     },
+    // ABC-freemium 1-18 · R-POOL-2 — the route decides this from the
+    // entitlement and the forced-rebuild breaker, never from the request body alone.
+    forceRebuild,
   );
 
   const rescored = scoreJobs(

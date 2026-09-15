@@ -16,8 +16,17 @@ import type {
 // battery-research demo data as the user's feed. Removed.
 import { apiFetch } from "@/lib/api";
 import { useProfileStore } from "@/store/profile";
+import {
+  ANONYMOUS_ENTITLEMENT,
+  type Entitlement,
+} from "@/lib/entitlement/types";
+import { entitlementGrants } from "@/lib/entitlement/allowance";
 import { scoredItemToPaper } from "@/lib/feed/mapper";
-import { feedsUseAi, hasUserLlmOverride } from "@/lib/feed/ai-tier";
+import {
+  aiAvailability,
+  feedsUseAi,
+  hasUserLlmOverride,
+} from "@/lib/feed/ai-tier";
 import type { FeedResponse } from "@/lib/feed/types";
 import type { EventsFeedResponse } from "@/lib/events/types";
 import type { JobsFeedResponse } from "@/lib/jobs/types";
@@ -245,6 +254,10 @@ export function paperFeedRequestBody(
   advisorSeeds: { seedTexts: string[]; seedWorkIds: string[] },
   aiPaperSearchEnabled = false,
   excludeIds: string[] = [],
+  // ABC-freemium 1-14 — passed in rather than read from the store inside, so a
+  // test can construct any persona. Defaults to anonymous, which is the safe
+  // direction: no entitlement means no AI.
+  entitlement: Pick<Entitlement, "userId"> = ANONYMOUS_ENTITLEMENT,
 ): Record<string, unknown> {
   const { topics, softTopics } = activeSurfaceTopics(profile, "papers");
   const seedTexts = [
@@ -257,14 +270,16 @@ export function paperFeedRequestBody(
   );
   const preferenceLedger = profile.preferenceLedger ?? {};
   const feedAiApiKey = profile.feedAiApiKey?.trim();
-  const hasUserLlmOverride =
-    aiPaperSearchEnabled &&
-    profile.feedAiProvider !== "default" &&
-    Boolean(feedAiApiKey);
-  const hasLocalDeveloperProvider =
-    aiPaperSearchEnabled &&
-    process.env.NODE_ENV === "development" &&
-    profile.feedAiProvider === "default";
+  // ABC-freemium 1-14 · R-ENT-3 — **this used to re-implement both halves of
+  // the shared predicate inline, and the local `hasUserLlmOverride` SHADOWED the
+  // imported function of the same name.** So the papers request builder never
+  // called the shared predicate at all, and the leftover copy was invisible to
+  // anyone grepping for callers. It now reads `aiAvailability` like everything
+  // else; the papers toggle stays ANDed on top, because that is a separate
+  // choice the reader makes about this surface.
+  const aiMode = aiAvailability(profile, entitlement);
+  const paperAiAvailable = aiPaperSearchEnabled && aiMode !== "none";
+  const useOwnKey = aiPaperSearchEnabled && aiMode === "byok";
 
   return {
     topics,
@@ -290,12 +305,12 @@ export function paperFeedRequestBody(
           }
         : undefined,
     topN: profile.paperCount,
-    aiTier: hasUserLlmOverride || hasLocalDeveloperProvider ? 2 : 0,
+    aiTier: paperAiAvailable ? 2 : 0,
     // NO `searchConnectors`. The Tavily toggle stays in the profile because
     // events and jobs still need it — their listings only exist on the open
     // web — but the paper surface has nothing left to spend it on, so it does
     // not ask for the key. `opportunityRequestBody` is where it is still sent.
-    llmOverride: hasUserLlmOverride
+    llmOverride: useOwnKey
       ? {
           provider: profile.feedAiProvider,
           apiKey: feedAiApiKey,
@@ -314,6 +329,9 @@ export function paperFeedRequestBody(
       avoidBroadSurveys: profile.feedAvoidBroadSurveys,
     },
     excludeIds: excludeIds.length > 0 ? excludeIds : undefined,
+    // ABC-freemium 1-18 — **no `poolRefresh` here, deliberately.** D3 keeps the
+    // papers pool daily and never refreshed on demand; it is built from free
+    // academic sources, so there is no paid fan-out to force.
   };
 }
 
@@ -337,6 +355,12 @@ async function fetchRealFeed(
           advisorSeeds,
           aiPaperSearchEnabled,
           excludeIds,
+          // ABC-freemium 6-04 — the request builders ask a CAPABILITY
+          // question (which AI tier to ask for). While the plan is unknown the
+          // anonymous view is the honest answer and it asks for less, never
+          // more; the server re-resolves the entitlement anyway and is the
+          // authority. Never the place to decide an upsell.
+          entitlementGrants(useProfileStore.getState().entitlement),
         ),
       ),
     });
@@ -355,6 +379,8 @@ export function opportunityRequestBody(
   profile: UserProfile,
   surface: "events" | "jobs",
   excludeIds: string[],
+  entitlement: Pick<Entitlement, "userId"> = ANONYMOUS_ENTITLEMENT,
+  poolRefresh = false,
 ): Record<string, unknown> {
   const { topics, softTopics } = activeSurfaceTopics(profile, surface);
   const activeInputs = profile.activeSearchInputs;
@@ -383,7 +409,7 @@ export function opportunityRequestBody(
       : {}),
     currentProject: profile.currentProject,
     topN: DEFAULT_OPPORTUNITY_TOP_N,
-    aiTier: feedsUseAi(profile) ? 2 : 0,
+    aiTier: feedsUseAi(profile, entitlement) ? 2 : 0,
     searchConnectors: profile.tavilyEnabled
       ? { tavily: { enabled: true, apiKey: tavilyApiKey || undefined } }
       : undefined,
@@ -402,12 +428,15 @@ export function opportunityRequestBody(
       ? { provider: profile.feedAiProvider, apiKey: feedAiApiKey }
       : undefined,
     excludeIds: excludeIds.length > 0 ? excludeIds : undefined,
+    // ABC-freemium 1-18 · R-POOL-2 — an ask, not a grant. See `FeedLoadOptions`.
+    poolRefresh: poolRefresh || undefined,
   };
 }
 
 async function fetchRealEvents(
   profile: UserProfile,
   excludeIds: string[] = [],
+  poolRefresh = false,
 ): Promise<OpportunityClientPool<Event>> {
   if (activeSurfaceTopics(profile, "events").topics.length === 0) {
     return emptyOpportunityClientPool<Event>();
@@ -417,7 +446,18 @@ async function fetchRealEvents(
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(
-        opportunityRequestBody(profile, "events", excludeIds),
+        opportunityRequestBody(
+          profile,
+          "events",
+          excludeIds,
+          // ABC-freemium 6-04 — the request builders ask a CAPABILITY
+          // question (which AI tier to ask for). While the plan is unknown the
+          // anonymous view is the honest answer and it asks for less, never
+          // more; the server re-resolves the entitlement anyway and is the
+          // authority. Never the place to decide an upsell.
+          entitlementGrants(useProfileStore.getState().entitlement),
+          poolRefresh,
+        ),
       ),
     });
     if (!res.ok) {
@@ -439,6 +479,7 @@ async function fetchRealEvents(
 async function fetchRealJobs(
   profile: UserProfile,
   excludeIds: string[] = [],
+  poolRefresh = false,
 ): Promise<OpportunityClientPool<Job>> {
   if (activeSurfaceTopics(profile, "jobs").topics.length === 0) {
     return emptyOpportunityClientPool<Job>();
@@ -447,7 +488,20 @@ async function fetchRealJobs(
     const res = await fetch("/api/jobs/feed", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(opportunityRequestBody(profile, "jobs", excludeIds)),
+      body: JSON.stringify(
+        opportunityRequestBody(
+          profile,
+          "jobs",
+          excludeIds,
+          // ABC-freemium 6-04 — the request builders ask a CAPABILITY
+          // question (which AI tier to ask for). While the plan is unknown the
+          // anonymous view is the honest answer and it asks for less, never
+          // more; the server re-resolves the entitlement anyway and is the
+          // authority. Never the place to decide an upsell.
+          entitlementGrants(useProfileStore.getState().entitlement),
+          poolRefresh,
+        ),
+      ),
     });
     if (!res.ok) {
       console.error("[feed] /api/jobs/feed returned", res.status);
@@ -543,6 +597,20 @@ export interface FeedLoadOptions {
    * Omitted means all three, so existing callers keep their behaviour.
    */
   lanes?: FeedLane[];
+  /**
+   * ABC-freemium 1-18 · R-POOL-2 — ask for a forced pool rebuild on the jobs and
+   * events surfaces.
+   *
+   * **This is what keeps the existing "Refresh now" button honest after 1-17.**
+   * Those pools now rebuild weekly, so a plain refetch reads the same cached
+   * pool all week and the button would do nothing visible. Asking for a rebuild
+   * makes it mean what it says.
+   *
+   * Only an ASK: the route forwards it only when `entitlement.poolRefreshAllowed`
+   * is true, and a free user is refused by being served the pool that is already
+   * there — no error, no empty surface.
+   */
+  poolRefresh?: boolean;
 }
 
 interface FeedState {
@@ -698,6 +766,8 @@ export const useFeedStore = create<FeedState>()(
         const wantsPapers = lanes.includes("papers");
         const wantsEvents = lanes.includes("events");
         const wantsJobs = lanes.includes("jobs");
+        // ABC-freemium 1-18 · R-POOL-2 — only ever an ask; the route decides.
+        const poolRefresh = options?.poolRefresh === true;
         set({
           isLoading: true,
           papersLoading: wantsPapers,
@@ -830,7 +900,11 @@ export const useFeedStore = create<FeedState>()(
         const eventsLane = (async () => {
           if (!wantsEvents) return;
           try {
-            const realEvents = await fetchRealEvents(profile, dismissedEventIds);
+            const realEvents = await fetchRealEvents(
+              profile,
+              dismissedEventIds,
+              poolRefresh,
+            );
             if (requestId !== feedLoadSeq) return;
             set((state) => {
               const currentSavedIds = new Set(
@@ -870,7 +944,11 @@ export const useFeedStore = create<FeedState>()(
         const jobsLane = (async () => {
           if (!wantsJobs) return;
           try {
-            const realJobs = await fetchRealJobs(profile, dismissedJobIds);
+            const realJobs = await fetchRealJobs(
+              profile,
+              dismissedJobIds,
+              poolRefresh,
+            );
             if (requestId !== feedLoadSeq) return;
             set((state) => {
               const currentSavedIds = new Set(

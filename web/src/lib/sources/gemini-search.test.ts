@@ -637,7 +637,16 @@ describe("resolveWebSearchProvider — explicit → gemini → brave → tavily"
     ).toBe("tavily");
   });
 
-  it("auto picks gemini when Vertex is present and Tavily is NOT enabled", () => {
+  it("auto puts the METERED providers ahead of the local-only ones", () => {
+    // REWRITTEN, NOT DELETED — ABC-freemium 2-04 · Ruling 5 point 2 ·
+    // R-KEY-3 as amended 2026-09-05.
+    //
+    // This case used to assert that grounding won over an available system
+    // Tavily key. That was the WRONG ORDER half of the defect: grounding was
+    // neither gated, nor charged to the 500/day breaker, nor written to the
+    // usage ledger, so an uncounted provider outranked the gated, metered one.
+    // Ruling 5 point 2 states the principle directly — an uncounted provider
+    // never outranks the gated, metered one — so Tavily now wins here.
     expect(
       resolveWebSearchProvider(undefined, {
         ...none,
@@ -645,8 +654,66 @@ describe("resolveWebSearchProvider — explicit → gemini → brave → tavily"
         braveKeyPresent: true,
         tavilyKeyPresent: true,
       }),
-    ).toBe("gemini");
+    ).toBe("tavily");
+    // With nothing else configured, grounding is still reached.
     expect(resolveWebSearchProvider("auto", { ...none, geminiAvailable: true })).toBe("gemini");
+  });
+
+  it("auto follows R-KEY-3's arrow chain, group by group (2-04)", () => {
+    // The whole order asserted as a SEQUENCE rather than as one pair: remove
+    // the winner and the next candidate must step up. This is the case that
+    // makes the order a contract instead of five independent facts.
+    const all = {
+      geminiAvailable: true,
+      vertexAvailable: true,
+      braveKeyPresent: true,
+      tavilyKeyPresent: true,
+      requestTavilyKeyPresent: true,
+    };
+
+    // 1. the reader's own key — costs the operator nothing
+    expect(resolveWebSearchProvider("auto", all)).toBe("tavily");
+    // 2. the system Tavily key — gated AND metered
+    expect(
+      resolveWebSearchProvider("auto", { ...all, requestTavilyKeyPresent: false }),
+    ).toBe("tavily");
+    // 3. Brave, then Vertex, then grounding — all local-only
+    expect(
+      resolveWebSearchProvider("auto", {
+        ...all,
+        requestTavilyKeyPresent: false,
+        tavilyKeyPresent: false,
+      }),
+    ).toBe("brave");
+    expect(
+      resolveWebSearchProvider("auto", {
+        ...all,
+        requestTavilyKeyPresent: false,
+        tavilyKeyPresent: false,
+        braveKeyPresent: false,
+      }),
+    ).toBe("vertex");
+    expect(
+      resolveWebSearchProvider("auto", {
+        ...all,
+        requestTavilyKeyPresent: false,
+        tavilyKeyPresent: false,
+        braveKeyPresent: false,
+        vertexAvailable: false,
+      }),
+    ).toBe("gemini");
+    // 4. nothing — the surface serves its free structured sources
+    expect(resolveWebSearchProvider("auto", none)).toBeNull();
+  });
+
+  it("returns null for an EXPLICIT preference whose availability is gated off (2-04)", () => {
+    // THE most important new case in this item. For jobs and events the auto
+    // branch is usually never reached: the pipeline sets an explicit `provider`
+    // from the server's own environment, so this branch answers first. A fix
+    // that only rewrote the ordering clauses would have left this wide open.
+    for (const preferred of ["vertex", "gemini", "brave", "tavily"] as const) {
+      expect(resolveWebSearchProvider(preferred, none)).toBeNull();
+    }
   });
 
   it("auto still yields to a caller-supplied Tavily key — 'AND Tavily is disabled' is load-bearing", () => {
@@ -660,14 +727,17 @@ describe("resolveWebSearchProvider — explicit → gemini → brave → tavily"
     ).toBe("tavily");
   });
 
-  it("reproduces the shipped auto order exactly when Vertex is absent", () => {
+  it("puts the system Tavily key ahead of Brave when Vertex is absent", () => {
+    // REWRITTEN, NOT DELETED — 2-04. The one assertion that moved is the
+    // Brave-vs-system-Tavily pair: Brave used to win, and Brave was the
+    // uncounted one. Every other line here is unchanged.
     expect(
       resolveWebSearchProvider("auto", { ...none, tavilyKeyPresent: true, requestTavilyKeyPresent: true }),
     ).toBe("tavily");
     expect(resolveWebSearchProvider("auto", { ...none, braveKeyPresent: true })).toBe("brave");
     expect(
       resolveWebSearchProvider("auto", { ...none, braveKeyPresent: true, tavilyKeyPresent: true }),
-    ).toBe("brave");
+    ).toBe("tavily");
     expect(resolveWebSearchProvider("auto", { ...none, tavilyKeyPresent: true })).toBe("tavily");
     expect(resolveWebSearchProvider("auto", none)).toBeNull();
   });

@@ -6,6 +6,16 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { resolveEntitlement } from "@/lib/entitlement/resolve";
+import {
+  toClientEntitlement,
+  type ClientEntitlement,
+} from "@/lib/entitlement/allowance";
+import {
+  deepReportMonthKey,
+  deepReportTrialKey,
+  getCounterStore,
+} from "@/lib/usage/counters";
 import type { UserProfile } from "@/types";
 import { cleanPreferenceLedger } from "@/lib/preferences/ledger";
 
@@ -150,9 +160,61 @@ export async function GET() {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  // ABC-freemium 1-14 · R-ENT-3 — the entitlement is delivered here, computed
+  // by the server. **Never derived on the client from the raw row**: D5 makes
+  // the server the authority and expiry is computed at read time.
+  //
+  // A signed-out caller already gets `401 { profile: null }` above, and the
+  // client's default is the frozen anonymous entitlement — the same object
+  // shape — so no consumer needs a null branch.
+  //
+  // **`plan` is deliberately NOT added to `profileRowToProfile`.** It reaches
+  // the browser as part of the entitlement and nowhere else, and 1-13's column
+  // grants mean a browser could not write it back even if it tried. See the
+  // matching note on `profilePatchToRow`.
   return NextResponse.json({
     profile: data ? profileRowToProfile(data as ProfileRow) : null,
+    entitlement: await clientEntitlement(user.id),
   });
+}
+
+/**
+ * The entitlement in the shape the browser gets (ABC-freemium 2-03).
+ *
+ * **This is the only place the subtraction happens.** `resolveEntitlement`
+ * gives the plan's budget and deliberately never reads the counter store — it
+ * runs on every AI request, and a counter read inside it would put a database
+ * round trip on every feed load to compute a number only this screen wants. So
+ * the extra read lands here, on the profile fetch, and nowhere else.
+ *
+ * **It reads, it never increments.** A profile fetch that consumed a deep
+ * report would be the worst bug in this file; there is a test asserting the
+ * counter does not move across repeated GETs.
+ *
+ * `deepReportsBudget` is dropped on the way out by `ClientEntitlement`, so
+ * `Infinity` cannot reach the payload by construction.
+ */
+async function clientEntitlement(userId: string): Promise<ClientEntitlement> {
+  const now = new Date();
+  const entitlement = await resolveEntitlement(userId);
+
+  // Paid needs no reading at all — D4 makes it unlimited whatever the counter
+  // says, and `deepReportAllowance` short-circuits before it looks. Skipping
+  // the round trip keeps the paid profile fetch exactly as fast as it was.
+  const used =
+    entitlement.effectivePlan === "paid"
+      ? { value: 0, ok: true }
+      : await getCounterStore().read(
+          // The key depends on the plan and must not be guessed: a trial's
+          // twenty are counted on a key with NO period segment, so reading the
+          // monthly key for a trial user would always answer zero.
+          entitlement.effectivePlan === "trial"
+            ? deepReportTrialKey(userId)
+            : deepReportMonthKey(userId, now),
+          now,
+        );
+
+  return toClientEntitlement(entitlement, used);
 }
 
 export async function PUT(request: NextRequest) {

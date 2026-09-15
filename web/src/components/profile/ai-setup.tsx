@@ -13,7 +13,12 @@ import {
 } from "@/lib/llm/provider-models";
 
 export const FEED_AI_PROVIDER_OPTIONS: { value: UserAiProvider; label: string }[] = [
-  { value: "default", label: "Tier 0 — no AI API" },
+  // ABC-freemium 1-15 · R-UI-2, R-KEY-4 — **`"default"` now MEANS something.**
+  // It read "Tier 0 — no AI API", which under D1 is simply false: a signed-in
+  // reader who never opens this panel is on Peer's model. This is the exact
+  // string R-UI-2 names. The other five options are the "use my own key"
+  // choice R-UI-2 says remains. (1-25 owns the body copy in this file.)
+  { value: "default", label: "Peer's AI (included)" },
   { value: "gemini", label: "Google Gemini — recommended: best value" },
   { value: "openai", label: "OpenAI (ChatGPT models) — recommended: easiest" },
   { value: "qwen", label: "Alibaba Qwen — low-cost alternative" },
@@ -78,7 +83,7 @@ const PROVIDER_GUIDES: Record<UserCloudAiProvider, ProviderGuide> = {
     verdict: "Lowest-cost text-only option",
     dropdownTitle: "Why DeepSeek is the lowest-cost text-only option",
     bestFor:
-      "Tier 1/2 text ranking, summaries, and report writing when you do not need figures, charts, or other images analyzed.",
+      "Text ranking, summaries, and report writing when you do not need figures, charts, or other images analyzed.",
     estimatedMonthly: "about $7/month",
     keyUrl: "https://platform.deepseek.com/api_keys",
     keyLinkLabel: "Create a DeepSeek API key",
@@ -235,6 +240,13 @@ function modelLabel(model: string): string {
     "claude-sonnet-5": "Claude Sonnet 5",
     "gemini-2.5-flash-lite": "Gemini 2.5 Flash-Lite",
     "gemini-2.5-flash": "Gemini 2.5 Flash",
+    // ABC-freemium 6-02. This map fails SOFT — an unknown id renders as the
+    // raw id — so a model swap puts `gemini-3.1-flash-lite` in front of a
+    // beginner where a friendly name belongs, and no test can see it. The two
+    // retired ids stay listed: this is a label table, not a catalogue.
+    "gemini-3.1-flash-lite": "Gemini 3.1 Flash-Lite",
+    "gemini-3.5-flash-lite": "Gemini 3.5 Flash-Lite",
+    "gemini-3.6-flash": "Gemini 3.6 Flash",
     "gpt-5.4-nano": "GPT-5.4 nano",
     "gpt-5.4-mini": "GPT-5.4 mini",
     "qwen3.5-flash": "Qwen 3.5 Flash",
@@ -279,9 +291,15 @@ export function AiProviderGuide({ provider }: { provider: UserAiProvider }) {
   if (provider === "default") {
     return (
       <div className="rounded-xl bg-bg-secondary/35 p-4 text-meta leading-relaxed text-text-muted shadow-[inset_0_0_0_1px_rgba(20,20,20,0.05)]">
-        <span className="font-semibold text-heading">No key is okay.</span>{" "}
-        Peer&apos;s free Tier 0 briefing still works. Choose a company above only
-        when you want Tier 1/2 AI ranking, richer summaries, and Deep reports.
+        {/* ABC-freemium 1-25 · R-UI-2, D1 — this said the alternative to a key
+            was a no-AI briefing. It is not: Peer's AI is included, and a key
+            means your own model and your own bill. */}
+        <span className="font-semibold text-heading">
+          No key is needed.
+        </span>{" "}
+        Peer&apos;s AI is included, and everything above runs on it. Choose a
+        company here only if you would rather use your own model and be billed
+        for it yourself.
       </div>
     );
   }
@@ -324,9 +342,9 @@ export function AiProviderGuide({ provider }: { provider: UserAiProvider }) {
           <strong className="text-heading">
             Important: DeepSeek cannot process images in Peer.
           </strong>{" "}
-          It can power Tier 1/2 text work and text Deep reports across Papers,
-          Events, and Jobs, but Peer will skip figure, chart, diagram, and other
-          image analysis.
+          It can power text ranking, summaries and text Deep reports across
+          Papers, Events, and Jobs, but Peer will skip figure, chart, diagram,
+          and other image analysis.
         </div>
       )}
 
@@ -368,12 +386,30 @@ export function AiProviderGuide({ provider }: { provider: UserAiProvider }) {
             </div>
           </div>
 
-          <p className="text-caption leading-relaxed text-text-muted">
-            <strong className="text-heading">Why two models?</strong> You provide
-            one key. Peer automatically sends frequent, simpler work to the
-            economical model and reserves the stronger model for Deep reports.
-            You do not need to choose or switch models yourself.
-          </p>
+          {/*
+            ABC-freemium 6-02 · Ruling 19 point 1. After the swap both Gemini
+            tiers name ONE id, so the two cells above show the same name and
+            the "two models" explanation stops being true for that provider —
+            a promise the screen contradicts, which is the same defect class as
+            a button that leads nowhere. The routing is unchanged and still
+            per-job; only the destination happens to coincide, so the honest
+            version says exactly that.
+          */}
+          {models.small === models.large ? (
+            <p className="text-caption leading-relaxed text-text-muted">
+              <strong className="text-heading">Why one model?</strong> You
+              provide one key. For this provider Peer sends both the frequent,
+              simpler work and Deep reports to the same model. You do not need
+              to choose or switch models yourself.
+            </p>
+          ) : (
+            <p className="text-caption leading-relaxed text-text-muted">
+              <strong className="text-heading">Why two models?</strong> You
+              provide one key. Peer automatically sends frequent, simpler work
+              to the economical model and reserves the stronger model for Deep
+              reports. You do not need to choose or switch models yourself.
+            </p>
+          )}
 
           {provider === "openai" && (
             <p className="text-caption leading-relaxed text-text-muted">
@@ -385,8 +421,8 @@ export function AiProviderGuide({ provider }: { provider: UserAiProvider }) {
 
           <p className="text-micro leading-relaxed text-text-faint">
             Estimate assumes about 40 opened Deep reports per day (10 papers, 15
-            events, and 15 jobs), plus normal daily Tier 1/2 use. Actual billing
-            is usage-based and can be much lower.
+            events, and 15 jobs), plus normal daily ranking and summary use.
+            Actual billing is usage-based and can be much lower.
           </p>
         </div>
       )}

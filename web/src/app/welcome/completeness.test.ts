@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { ANONYMOUS_ENTITLEMENT } from "@/lib/entitlement/types";
 import { defaultProfile, type UserProfile } from "@/types";
 import {
   STEP_META,
@@ -87,12 +88,31 @@ describe("isStepDone", () => {
     ).toBe(false);
   });
 
-  it("ai: requires a non-default provider AND a key", () => {
+  // ABC-freemium 1-15 · R-KEY-4 — REWRITTEN, NOT DELETED. This asserted that
+  // the step needs a non-default provider AND a key, because `"default"` meant
+  // no AI. Under D1 it means Peer's AI, so the question is now "does this
+  // reader have a model at all". A signed-out reader's answer is unchanged,
+  // which is why every case below still passes with no entitlement.
+  it("ai: a signed-out reader still needs their own provider AND key", () => {
     expect(isStepDone("ai", profileWith({ feedAiProvider: "openai" }), false)).toBe(false);
     expect(isStepDone("ai", profileWith({ feedAiApiKey: "sk-x" }), false)).toBe(false);
     expect(
       isStepDone("ai", profileWith({ feedAiProvider: "openai", feedAiApiKey: "sk-x" }), false),
     ).toBe(true);
+  });
+
+  it("ai: a signed-in reader is complete with no key at all", () => {
+    // The D1 consequence, and the one A should expect to see move: adding a key
+    // stops being a prerequisite and becomes an upgrade. The `welcome`
+    // completeness count moves by one for a signed-in reader.
+    const signedIn = { ...ANONYMOUS_ENTITLEMENT, userId: "user-1" };
+
+    expect(isStepDone("ai", defaultProfile, false, signedIn)).toBe(true);
+    // and the other steps are NOT swept along with it — a broad edit that made
+    // everything complete would pass the assertion above on its own.
+    expect(isStepDone("radar", defaultProfile, false, signedIn)).toBe(false);
+    expect(isStepDone("connectors", defaultProfile, false, signedIn)).toBe(false);
+    expect(isStepDone("topics", defaultProfile, false, signedIn)).toBe(false);
   });
 
   it("connectors: only Tavily counts, and only when fully configured", () => {

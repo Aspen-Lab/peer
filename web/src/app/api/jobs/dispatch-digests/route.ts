@@ -208,8 +208,18 @@ export async function GET(req: NextRequest) {
         topN: targetCount,
         controls: feedControlsFromRow(row),
         excludeIds: Array.from(seenIds),
-        // Scheduled jobs cannot safely access a browser user's private BYOK
-        // key, so email/in-app digests are always deterministic Tier 0.
+        // ABC-freemium 1-08 · R-SEC-4 · **D9.** The old reason here was that a
+        // scheduled job cannot reach a browser user's private BYOK key. That
+        // stopped being the reason the moment a system key existed: this cron
+        // could now afford a model. D9 says it must not. Users who never open
+        // the app must cost nothing, so the nightly digest stays deterministic
+        // even though a system key is available. Revisit after launch.
+        //
+        // The same paragraph covers the other half, and the two facts belong
+        // together: this call passes **no `systemSearchAllowed`**, so it takes
+        // the `false` default in `lib/search/system-key.ts` and spends no system
+        // Tavily key on behalf of every enrolled user either. A future reader
+        // removing one of these should see the other.
         aiTier: 0,
       });
 

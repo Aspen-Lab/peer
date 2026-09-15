@@ -13,6 +13,7 @@
 // the spacer below keeps the page's last line above it.
 
 import Link from "next/link";
+import type { Route } from "next";
 import { usePathname, useRouter } from "next/navigation";
 import { useFeedStore } from "@/store/feed";
 import { BackToFeedLink } from "@/components/navigation/back-to-feed-link";
@@ -81,7 +82,7 @@ function Tabs({ route, savedCount }: { route: ShellRoute; savedCount: number }) 
         return (
           <Link
             key={tab.href}
-            href={tab.href}
+            href={tab.href as Route}
             aria-current={active ? "page" : undefined}
             className={`flex flex-col items-center justify-center gap-1 h-14 text-caption transition-colors duration-150 ease-snap ${
               active ? "text-heading" : "text-text-faint"

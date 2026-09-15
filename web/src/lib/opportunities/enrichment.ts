@@ -1,4 +1,9 @@
 import type { Event, Job, UserAiProvider, UserProfile } from "@/types";
+import { aiAvailability } from "@/lib/feed/ai-tier";
+import {
+  ANONYMOUS_ENTITLEMENT,
+  type Entitlement,
+} from "@/lib/entitlement/types";
 import { cleanOwnedEventReportSummary } from "@/lib/events/mapper";
 import type { ProviderOverrideConfig } from "@/lib/llm/providers/types";
 import {
@@ -972,10 +977,15 @@ export function loadConfiguredOpportunityEnrichment<T>(
   loader: (override?: ProviderOverrideConfig) => Promise<T | null>,
   nowMs = Date.now(),
   storage: Storage | undefined = browserStorage(),
+  // ABC-freemium 1-14 — defaults to anonymous, the safe direction: with no
+  // entitlement there is no AI and the caller gets the same `null` it got
+  // before when no key was configured.
+  entitlement: Pick<Entitlement, "userId"> = ANONYMOUS_ENTITLEMENT,
 ): Promise<T | null> {
   const provider = profile.feedAiProvider;
   const apiKey = profile.feedAiApiKey?.trim();
-  if (!canAttemptOpportunityEnrichment(profile)) return Promise.resolve(null);
+  if (!canAttemptOpportunityEnrichment(profile, entitlement))
+    return Promise.resolve(null);
   if (provider === "default") {
     return loadOpportunityEnrichment(
       cacheKey,
@@ -994,11 +1004,22 @@ export function loadConfiguredOpportunityEnrichment<T>(
   );
 }
 
+/**
+ * ABC-freemium 1-14 · R-ENT-3 — **a thin wrapper over the one predicate.**
+ *
+ * The old body asked the BROWSER whether it had been built in development, which
+ * Next inlines at build time, and otherwise tested only BYOK. Both halves are
+ * now `aiAvailability`: a signed-in reader gets enrichment on Peer's model even
+ * with no key of their own (D1), and the dev override lives server-side in
+ * `PEER_DEV_ENTITLEMENT` (R-ENT-5).
+ *
+ * Kept as a named function rather than inlined at its five call sites because
+ * the name says what the call site means, and 1-26 changes what the report
+ * surfaces do with it.
+ */
 export function canAttemptOpportunityEnrichment(
   profile: OpportunityProviderProfile,
+  entitlement: Pick<Entitlement, "userId">,
 ): boolean {
-  if (profile.feedAiProvider === "default") {
-    return process.env.NODE_ENV === "development";
-  }
-  return Boolean(profile.feedAiApiKey?.trim());
+  return aiAvailability(profile as UserProfile, entitlement) !== "none";
 }

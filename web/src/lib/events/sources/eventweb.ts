@@ -1,6 +1,13 @@
 import type { EventType } from "@/types";
 import type { EventSourceAdapter, EventsQuery, RawEventItem } from "../types";
 import {
+  isOperatorFundedSearch,
+  operatorSearchAvailability,
+  resolveSystemSearchKeys,
+} from "@/lib/search/system-key";
+import { recordUsageEvent } from "@/lib/usage/events";
+import { consumeForcedRebuild } from "@/lib/usage/rebuild-breaker";
+import {
   DATE_TOKEN_PATTERN,
   DAY_PATTERN,
   looksLikeHostBrand,
@@ -17,14 +24,10 @@ import {
 } from "@/lib/opportunities/query-budget";
 import {
   geminiSearchDeadline,
-  isGeminiSearchAvailable,
   resolveWebSearchProvider,
   searchGemini,
 } from "@/lib/sources/gemini-search";
-import {
-  isVertexSearchAvailable,
-  searchVertex,
-} from "@/lib/sources/vertex-search";
+import { searchVertex } from "@/lib/sources/vertex-search";
 import { classifyEventType } from "../mapper";
 import { dateClaimEndMs } from "@/lib/format";
 
@@ -2722,11 +2725,22 @@ async function searchVertexEvents(
   });
 }
 
-function resolveKeys(query: EventsQuery): { tavily?: string; brave?: string } {
-  return {
-    tavily: query.webSearch?.tavilyApiKey?.trim() || process.env.TAVILY_API_KEY,
-    brave: process.env.BRAVE_SEARCH_API_KEY,
-  };
+/**
+ * ABC-freemium 1-05 · R-KEY-3 — this used to be
+ * a bare "the request key, or else the operator's environment key". This
+ * surface was the largest single leak in the round: an unauthenticated request
+ * produced seven outgoing searches on the operator's key. See
+ * `lib/search/system-key.ts`.
+ */
+function resolveKeys(query: EventsQuery): {
+  tavily?: string;
+  brave?: string;
+  provenance: "byok" | "system" | "none";
+} {
+  return resolveSystemSearchKeys({
+    requestTavilyKey: query.webSearch?.tavilyApiKey,
+    systemSearchAllowed: query.webSearch?.systemSearchAllowed === true,
+  });
 }
 
 /**
@@ -2742,8 +2756,12 @@ export function resolveSearchProvider(
   const requestTavilyKey = query.webSearch?.tavilyApiKey?.trim();
   const keys = resolveKeys(query);
   return resolveWebSearchProvider(query.webSearch?.provider, {
-    geminiAvailable: isGeminiSearchAvailable(),
-    vertexAvailable: isVertexSearchAvailable(),
+    // ABC-freemium 2-04 — gated at the availability inputs, which both the
+    // explicit and the auto branch of `resolveWebSearchProvider` consult. See
+    // the matching note in `jobweb.ts`.
+    ...operatorSearchAvailability({
+      systemSearchAllowed: query.webSearch?.systemSearchAllowed === true,
+    }),
     braveKeyPresent: Boolean(keys.brave),
     tavilyKeyPresent: Boolean(keys.tavily),
     requestTavilyKeyPresent: Boolean(requestTavilyKey),
@@ -2757,6 +2775,44 @@ async function fetchImpl(query: EventsQuery): Promise<RawEventItem[]> {
 
   const searches = query.queries.slice(0, EVENT_QUERY_BUDGET);
   if (searches.length === 0) return [];
+
+  // ABC-freemium 1-21 · R-QUOTA-2, D4 — the daily cap on operator-funded
+  // search, charged before the fan-out and only when the key is the
+  // operator's. A BYOK fan-out costs the owner nothing and is not counted.
+  //
+  // A tripped breaker returns `[]`, which is the SAME degraded value a keyless
+  // reader already gets here: the pipeline serves its free structured sources.
+  // No error, no new shape.
+  // 2-04 — charged for ANY operator-funded provider, not only system Tavily.
+  //
+  // **ABC-freemium 6-01 · Ruling 14 point 3 — THIS CALL SITE IS UNREACHABLE,
+  // and it is KEPT on purpose (Ruling 12 point 2).** The chain, end to end:
+  // `systemSearchAllowed` is a hard `false` on every producer (D2a), so
+  // `resolveSystemSearchKeys` returns no Brave key and Tavily can only be
+  // `"byok"` or `"none"`; `operatorSearchAvailability` is frozen false for
+  // both providers; so the only provider selectable here is Tavily with
+  // `provenance: "byok"`, and `isOperatorFundedSearch` answers `false` for
+  // exactly that pair. `operatorFunded` is therefore never `true` and the
+  // breaker below never runs. Deleting it would remove the metering that has
+  // to exist BEFORE the gate is ever reopened, not the round after.
+  //
+  // **If operator-funded search is restored, this counter must be SPLIT — do
+  // not just flip the flag.** These sites are dead because no operator-funded
+  // provider can be *selected*, not because anything refuses them:
+  // `isOperatorFundedSearch` still returns `true` for Brave, Vertex and
+  // Gemini. Reopening the gate would start charging **search fan-outs** to a
+  // counter named `forced_rebuilds_today`, which re-creates the exact
+  // false-audit defect 6-01 exists to fix, in reverse.
+  const operatorFunded = isOperatorFundedSearch(provider, keys);
+  if (operatorFunded) {
+    const allowed = await consumeForcedRebuild(
+      query.webSearch?.userId ?? null,
+      searches.length,
+      undefined,
+      "events",
+    );
+    if (!allowed) return [];
+  }
   // Search providers bill per *search*, not per result, so asking each query
   // for a full page of results is free. The previous formula divided a fixed
   // cap across the query set, which meant every added query starved the
@@ -2784,6 +2840,20 @@ async function fetchImpl(query: EventsQuery): Promise<RawEventItem[]> {
             : searchBrave(q, keys.brave!, perQuery),
     ),
   );
+  // ABC-freemium 1-05 / 2-04 · R-METER-2 — one row per operator-funded fan-out,
+  // carrying the provider's own name. A BYOK search costs the operator nothing.
+  if (operatorFunded) {
+    recordUsageEvent({
+      user_id: query.webSearch?.userId ?? null,
+      kind: "search",
+      surface: "events",
+      query_count: searches.length,
+      provider,
+      ok: true,
+      byok: false,
+    });
+  }
+
   for (const results of resultSets) {
     for (const result of results) {
       const item = webResultToRawEventItem(result, now);
