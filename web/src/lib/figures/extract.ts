@@ -214,6 +214,22 @@ const OPEN_ACCESS_HOST_PATTERNS = [
   /(^|\.)biorxiv\.org$/i,
   /(^|\.)medrxiv\.org$/i,
 ];
+// 1-19: a journal cover/masthead image is not caught by BAD_URL_PATTERNS's
+// logo/icon patterns above, but it is exactly the "never fabricate" case the
+// og:image honesty guard exists to reject — kept separate from the general
+// logo list rather than folded in, since it only matters for the og:image
+// fallback below, not the wider candidate-scoring code that reuses
+// BAD_URL_PATTERNS for other purposes.
+const COVER_IMAGE_URL_PATTERNS: RegExp[] = [
+  /\/covers?\//i,
+  /journal[-_]?cover/i,
+  /\bmasthead\b/i,
+  /\bbanner\b/i,
+];
+
+function looksLikeCoverImage(url: string): boolean {
+  return COVER_IMAGE_URL_PATTERNS.some((pattern) => pattern.test(url));
+}
 
 function looksLikeLogo(url: string): boolean {
   return BAD_URL_PATTERNS.some((pattern) => pattern.test(url));
@@ -1031,6 +1047,16 @@ export async function tryHtmlCandidates(
   }
 
   const candidates = htmlFigureCandidates(html, finalUrl, source);
+  // 1-19: fold the graphical-abstract/og:image fallback in here (rather than
+  // only in `extractFigure`'s query-less last resort) so `getFigurePool` —
+  // used by every deep-report section's figure binding, and by `/api/figure`
+  // whenever a `query` is supplied — can reach it too. Pushed as one extra,
+  // low-priority candidate (`sourcePriority` already ranks "og" below
+  // "semantic-scholar") so a real in-article figure still wins when both
+  // exist.
+  const ogCandidate = ogImageCandidate(html, finalUrl, candidates.length);
+  if (ogCandidate) candidates.push(ogCandidate);
+
   if (candidates.length === 0) {
     return {
       status: "no_figures",
@@ -1398,15 +1424,23 @@ export async function extractFigure(input: ExtractInput): Promise<FigureResult> 
     }
   }
 
-  // Truly nothing available anywhere — preserve original OG-image fallback.
+  // Truly nothing available anywhere — preserve the original OG-image
+  // fallback for shapes `buildCandidatePool` never fetches `input.url` for
+  // (e.g. an arXiv paper, which skips `collectSourceLinks` entirely). Reuses
+  // 1-19's guarded helper rather than the bare `metaOgImage` call this used
+  // to make directly — otherwise this path could accept an og:image the
+  // candidate-pool path (same URL, same guard) had already rejected, which
+  // would make the honesty guard inconsistent depending on which code path
+  // happened to run.
   if (!query?.trim() && input.url) {
     const res = await timedFetch(input.url);
     if (res?.ok) {
       const html = await readBoundedText(res);
-      const imageUrl = metaOgImage(html, res.url || input.url);
-      if (imageUrl) {
+      const finalUrl = res.url || input.url;
+      const ogCandidate = ogImageCandidate(html, finalUrl, 0);
+      if (ogCandidate) {
         return {
-          imageUrl,
+          imageUrl: ogCandidate.imageUrl,
           source: "og",
           status: "found",
           hideFigure: false,
@@ -1437,4 +1471,48 @@ function metaOgImage(html: string, baseUrl: string): string | null {
   }
 
   return null;
+}
+
+// 1-19: a publisher's og:image/twitter:image meta tag is often the article's
+// own graphical abstract, but the same tag is just as often a journal cover
+// or a generic social-share default. Ruling: only accept it when the image
+// URL itself carries an identifying path segment the article page's own URL
+// also carries — most publisher CDNs key a graphical abstract's filename by
+// the DOI suffix or article id, but a shared cover/masthead image does not.
+// No identifying segment to check against -> reject. Unsure is a reason to
+// show nothing, never a reason to guess (§1d, "never fabricate a figure").
+function articleSpecificToken(articleUrl: string): string | null {
+  try {
+    const segments = new URL(articleUrl).pathname.split("/").filter(Boolean);
+    // The DOI suffix (e.g. "adfm.78026") or a similarly-shaped last path
+    // segment is the part a publisher's own CDN is most likely to echo back
+    // in an image filename. Require some digits so a bare word like "full"
+    // or "abstract" never counts as identifying.
+    const candidate = segments[segments.length - 1];
+    if (candidate && candidate.length >= 4 && /\d/.test(candidate)) {
+      return candidate.toLowerCase();
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function ogImageCandidate(
+  html: string,
+  articleUrl: string,
+  ordinal: number,
+): FigureCandidate | null {
+  const imageUrl = metaOgImage(html, articleUrl);
+  if (!imageUrl) return null;
+  if (looksLikeCoverImage(imageUrl)) return null;
+  const token = articleSpecificToken(articleUrl);
+  if (!token || !imageUrl.toLowerCase().includes(token)) return null;
+  return {
+    imageUrl,
+    caption: null,
+    source: "og",
+    ordinal,
+    qualityHint: "low",
+  };
 }

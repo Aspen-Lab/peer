@@ -1917,3 +1917,64 @@ C died on a Sonnet session limit right after committing 1-17 (`a31c16f`); §1 st
 "working 1-14 next" from an earlier checkpoint. Manager re-ran the gate cold (tsc clean, eslint
 clean, vitest 2559/2559), corrected §1 to the true position (1-01..1-17 + 1-22 landed; 1-19 next),
 ruled on C's two out-of-guide findings (§1i), and re-spawned C to pick up at 1-19.
+
+### Round 1 — Agent C (resumed)
+
+Branch confirmed `complimentary-enhancement-to-main-update` before starting; `git status` clean.
+Cold gate matched §1's stated baseline exactly: tsc clean, eslint clean, vitest 2559/2559. Picking
+up B's guide at 1-19, one commit per item.
+
+**1-19 — `web/src/lib/figures/extract.ts` — og:image folded into the HTML candidate path, with the
+honesty guard.** DONE. `tryHtmlCandidates` now also calls a new `ogImageCandidate(html, finalUrl,
+ordinal)` after `htmlFigureCandidates` runs, and pushes one extra `FigureCandidate` (`source: "og"`,
+`qualityHint: "low"`) onto whatever it already found — `sourcePriority` already scored `"og"` at 0
+(below `"semantic-scholar"`'s 18) from the very first commit that introduced this file, so no change
+was needed there; B's guide read that as still-to-do, but it was already correct. This means
+`getFigurePool` (deep-report section binding) and `/api/figure?query=...` (every per-section lookup)
+both reach the graphical-abstract fallback now, not just `extractFigure`'s old query-less last
+resort.
+
+Honesty guard, exactly per the ruling ("article-specific URL path; never `/covers/`, logos, generic
+defaults; if unsure -> no figure"): new `looksLikeCoverImage` (a small pattern list — `/covers?/`,
+`journal-cover`, `masthead`, `banner` — kept separate from the shared `BAD_URL_PATTERNS`/
+`looksLikeLogo` used throughout the rest of the file, to keep this guard's blast radius to exactly
+this one feature) rejects outright; otherwise `articleSpecificToken(articleUrl)` takes the article
+page's own last URL path segment (requires it be >=4 chars and contain a digit, so a generic word
+like "abstract" never counts) and the og:image URL must contain that same token, case-insensitive —
+most publisher CDNs key a graphical abstract's filename by the DOI suffix, which is exactly what
+that last path segment usually is (e.g. `.../doi/10.1002/adfm.78026` -> token `adfm.78026`). No
+token, or no match -> reject, per "unsure -> no figure." Did not widen this to a looser check (e.g.
+matching on host alone, or accepting any non-generic-looking image) even though it means most real
+og:image graphical abstracts this round could not verify against a live publisher page will
+probably still be rejected whenever the CDN doesn't echo the DOI suffix — recording that as a
+limitation for A/the manager rather than loosening the guard inline, per the standing instruction.
+
+Also updated `extractFigure`'s own pre-existing query-less og:image fallback (the "truly nothing
+available anywhere" branch) to call the same guarded `ogImageCandidate` instead of the bare
+`metaOgImage` it used before — found while implementing 1-19, not itself a numbered B item: without
+this, a paper whose `input.url` produces zero pool candidates (so `extractFigure` falls through to
+this branch) could accept an og:image that the guarded path, on the very same URL, had already
+rejected inside `tryHtmlCandidates` — the same fact getting two different (and inconsistent)
+answers depending on which code path happened to run. Fixing it keeps the guard's decision the same
+everywhere it's asked, which is what "never fabricate" requires in practice, not just in the one
+call site the guide named.
+
+Tests: `web/src/lib/figures/extract.test.ts`, new `describe` block, 3 cases — accept (og:image URL
+contains the article's DOI-suffix token), reject (journal cover pattern, `/covers/`), reject (no
+identifying token in the URL at all). Proven two ways: (1) commented out the
+`ogImageCandidate`/`candidates.push` wiring in `tryHtmlCandidates` — the accept case failed
+(`no_figures` instead of `candidates`), the two reject cases still passed trivially (they assert
+`no_figures` either way, so this alone doesn't prove they test anything); (2) to close that gap,
+separately commented out just the `looksLikeCoverImage` check inside `ogImageCandidate` — the cover
+URL in the test fixture also contains the article token, so with only that guard removed the cover
+image gets accepted and the "rejects a journal cover image" test fails on its own, confirming that
+test exercises the cover check specifically, not just the overall wiring. Restored both after each
+check.
+
+Gate: tsc clean, eslint clean, vitest 2562/2562 (2559 + 3 new). Re-ran the standing regression lock
+for this file family explicitly: `src/lib/figures/*.test.ts` (2 files, 8 tests, both pass —
+`arxiv-html-source.test.ts`'s 2 tests untouched by this change, confirmed, since arXiv papers skip
+`tryHtmlCandidates` entirely per B's own note).
+
+Commit: `feat(figures): fold the graphical-abstract fallback into the candidate pool, with an
+honesty guard`.
