@@ -2693,3 +2693,51 @@ other 9 `paywalled` results are all real subscription publishers (Wiley ×4, ACS
 JJAP ×1 via `validate.perfdrive.com`, pre-existing) — not disputed.
 
 Commit: `docs(abc): round 2 A part 2 - S4 figure-status tally`.
+
+#### Part 3 — S6 + S5 (shape, by execution + reading)
+
+**S6.** From the three live report responses in Part 1 (real route output, not a fixture):
+none of the three has a `whyItFitsYou` key at all (`whyItFitsYou !== undefined` is `false` on all
+three). `whatItProposes.newHere` is present on all three (1 line each), and a programmatic check
+(no duplicated sentence between `summary` and any `newHere` line, exact-string and substring
+both) found **zero duplicates** on any of the three. Sentence-length rule checked
+programmatically too: every `summary`/`newHere` sentence on all three reports is ≤24 words (cap
+is "about 25"). Per-result `novelty` still exists (confirmed present on `W7207740551`'s key
+results). Code reading, cross-checked against these live responses:
+- `web/src/components/reader/copy.ts`'s `REPORT_HEADING` has exactly four keys —
+  `proposal, review, glance, related` — no `novelty`, no `fit`. `FIT_KEYWORDS` grep: zero hits
+  anywhere in `src/`.
+- `web/src/components/reader/report-sections.tsx`: no `FitBlock`, no `NoveltyBlock` component
+  (only a code comment mentions the old name); `ProposalBlock` renders `summary` then up to two
+  `newHere` lines under a footer shown only when `newHere` is non-empty.
+- `web/src/lib/papers/reading-markdown.ts`: one merged "What it proposes" Markdown block; no
+  separate "What is new"/"Why it fits you" block.
+- `web/src/components/reader/use-model-report.ts`: `STORAGE_KEY = "peer-paper-report-v6"`,
+  `LEGACY_STORAGE_KEYS` includes `"peer-paper-report-v5"`; the hook exposes `fresh`/`reportKey`.
+- `grep -rn "whyItFitsYou|REPORT_HEADING\.fit|FIT_KEYWORDS|FitBlock" src` (excluding `*.test.ts`):
+  the only hits left are `report.ts`'s and `reading-markdown.ts`'s type declarations and
+  `sanitizePaperReport`'s legacy branch — no render path anywhere. **S6 fully confirmed landed**,
+  in the actual returned/rendered result, not just the commit message.
+
+**S5.** `web/src/components/scramble-text.tsx` and its test both exist.
+`resolveRevealMode(false)` → `"scramble"`, `resolveRevealMode(true)` → `"fade"`, matching the
+restored test's two cases exactly. In `web/src/app/papers/[id]/page.tsx`: `revealingReportKey`
+state, a conditional-set-during-render (not inside a `useEffect` body, avoiding the
+`react-hooks/set-state-in-effect` rule 1-01 fixed elsewhere), a clearing effect on a timeout, and
+`shouldScrambleReport = revealingReportKey === model.reportKey && model.fresh`. `scramble={...}`
+is threaded to 8 call sites in `page.tsx` covering the merged proposal block, results, review
+contents, and (via `claim-list.tsx`/`paper-words.tsx`) method/caveats/forYou/nextStep and the
+skim deck — matches B's enumeration plus C's own addition (`resultsAndSignificance.summary`).
+`QuoteList` (direct paper quotes, not model report) is confirmed **not** wired, matching the
+spec's own reasoning. Fresh-vs-cached rule read directly:
+`use-model-report.ts:195, if (!current || !reportKey || cached) return;` — a cache hit never
+re-runs the fetch effect, so `model.fresh` stays `false` on a cached load, exactly the mechanism
+the spec asks for.
+**The actual visual check (does it scramble on screen, does it lock in, does a reload show it
+plain) needs a browser — A has none.** The manager's separate "Round 2 — manager browser checks"
+entry (this round, same file) already did this: cleared the v6 cache key, reloaded, and observed
+6 scramble-alphabet glyph runs as a fresh report arrived (first within ~4s), then 0 runs in 8s on
+a cached reload. **Citing that result rather than re-doing it**: S5's browser-only sub-item is
+closed, by the manager, this round — not by A.
+
+Commit: `docs(abc): round 2 A part 3 - S5/S6 shape confirmed live and in code`.
