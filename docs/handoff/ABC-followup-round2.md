@@ -81,18 +81,23 @@ browser, run the reports), then report to the user in plain language and stop th
 
 ```
 ROUND:            1
-WHOSE TURN:       A
-STOPPED BECAUSE:  —             (always one of: finished the turn @ <UTC> /
-                                 out of budget @ <UTC>, parts X done Y unstarted /
-                                 blocked: <one sentence>)
-STATUS:           NOT STARTED. Spec written by the manager 2026-09-15.
-OPEN ITEMS:       S3 S4 S5 S6 S7 (all five open)
+WHOSE TURN:       B
+STOPPED BECAUSE:  finished the turn @ 2026-09-15 06:12 UTC
+STATUS:           A's round-1 measurement complete (4 parts + difference list), all committed.
+                   Dev server was up throughout; no check was blocked.
+OPEN ITEMS:       S3 S4 S5 S6 S7 (all five open — round 1 measures, does not fix)
 GATE (0 open):    NOT MET
 
-DONE:      —
-GATE NOW:  tsc clean · eslint clean · vitest 2544/2544 (benchmark.test.ts excluded) — as of
-           commit e0f2cdc; A confirms cold in round 1.
-TODO:      A measures round 1 (see §2 A and §1a).
+DONE:      A measured S3 (2 real full-text papers; 3rd PDF-backed case does not exist in the
+           pool), S4 (figure tally on all 17 pool papers + query variant), S5/S6/S7 (confirmed
+           unbuilt by reading source), and ran the gate cold. See §4 "Round 1 — Agent A".
+GATE NOW:  tsc clean · vitest 2544/2544 (benchmark.test.ts excluded) — matches baseline.
+           eslint NOT clean: 1 error, `web/src/components/persona/quiz.tsx:46`
+           (react-hooks/set-state-in-effect), pre-existing and unrelated to S3-S7 —
+           `POLICY — manager decides` whether this blocks the loop's gate.
+TODO:      B investigates A1-01 (S7) → A1-02 (S6) → A1-03 (S5) → A1-04 (S4) → A1-05 (S3), in
+           that order (see §4 difference list), and rules on the eslint POLICY flag if the
+           manager has not already.
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
@@ -103,7 +108,7 @@ part-way.
 
 | Round | Open items after A | Verdict |
 |---|---|---|
-| | | |
+| 1 | 5 (S3 S4 S5 S6 S7) | NOT MET — round 1 measured only, fixed nothing (by design). Gate also currently not clean: 1 pre-existing eslint error, unrelated to S3-S7 (POLICY flagged). |
 
 ---
 
@@ -506,3 +511,69 @@ From `web/`:
   separately since it touches no S3-S7 file.
 
 Commit: `docs(abc): round 1 A part 4 — the gate, cold`.
+
+#### Difference list (round 1)
+
+Ranked by what the user notices first: the missing upload button is on the front page before a
+paper is even opened; the duplicated sections and missing reveal effect are on every report;
+missing figures are per-paper; the dropped-claims problem is the most subtle (needs comparing
+against the source paper). Code-state findings (S5-S7) and real-data findings (S3-S4) are kept
+separate below.
+
+- **A1-01 — S7, upload a PDF. CODE STATE. Spec wants:** a black square upload button immediately
+  left of the search box, native file picker + drag-and-drop, `POST /api/papers/upload`
+  (multipart, magic-byte PDF check, `upload:<sha256>` id), the reading page treating it like any
+  other paper (deep report, figures, save). **Build has:** none of it.
+  `web/src/components/briefing/search-box.tsx` (90 lines) has zero "upload" references;
+  `web/src/app/page.tsx:169` renders only `<SearchBox className="sm:mt-2" />` with nothing beside
+  it; `Glob web/src/app/api/papers/**` shows no `upload` route. Entirely unbuilt — 0 of the spec's
+  6 sub-items (a)-(f) present.
+- **A1-02 — S6, merge/delete sections. CODE STATE. Spec wants:** one heading "What it proposes"
+  replacing "What is new" + "What it proposes", "Why it fits you" deleted everywhere (page, both
+  prompts, sanitizer, Markdown export, copy table), cache key bumped v5→v6. **Build has:**
+  `web/src/components/reader/copy.ts:26-29` still declares all three headings separately
+  (`novelty: "What is new"`, `proposal: "What it proposes"`, `fit: "Why it fits you"`);
+  `report-sections.tsx` renders novelty (line 164) and "Why it fits you" (line 308) as separate
+  blocks; both prompts (`report/route.ts` `buildShallowPrompt`, `deep-report.ts`
+  `buildPass2Prompt`) still ask for both `whatItProposes.novelty` and a separate `whyItFitsYou`;
+  cache key is still `"peer-paper-report-v5"` (`use-model-report.ts:24`). Entirely unbuilt.
+- **A1-03 — S5, the matrix/scramble reveal. CODE STATE. Spec wants:** `ScrambleText` restored
+  (deterministic first frame, reduce-motion → fade) and applied to every report block on fresh
+  generation, plain on cache hit. **Build has:** `web/src/components/scramble-text.tsx` does not
+  exist (confirmed by direct file check); nothing on the reading page references a reveal/scramble
+  mechanism. Entirely unbuilt. A has no browser access, so sub-item (d) ("verify in the browser")
+  is untestable by A regardless — flagged for whoever next has a browser, but the component's
+  absence alone already settles this item.
+- **A1-04 — S4, figures. REAL DATA.** Spec target: every paper with some honest available source
+  shows a figure. **Observed (all 17 pool papers, live `/api/figure` calls):** tally
+  `found: 1 · no_figures: 8 · source_unavailable: 7 · paywalled: 1 · other: 0` — full per-paper
+  table in Part 2 above. Round-1 baseline (the "before" count A is asked to report, since no B/C
+  work has happened yet this loop): **1 of 17** pool papers currently shows a figure.
+- **A1-05 — S3, full text + checker. REAL DATA.** Spec target: ≤1 dropped claim, ≥2 key results
+  on every paper whose full text was read; full text (~400k chars / 100 pages) reaching pass 1.
+  **Observed:** budget constants unchanged (`PASS1_MAX_INPUT_CHARS=60_000`,
+  `PASS2_MAX_INPUT_CHARS=24_000`, `MAX_PDF_PAGES=40` — none raised). Of the two papers in the
+  17-paper pool that have any real full text at all (checked all 17 — see Part 1): `W7207740551`
+  (arXiv) **fails** the target (4 dropped, 1 keyResult; reconstructed pass-1 payload carries 83%
+  of its body chars, limited by the per-section 12k/14k clips, not the 60k outer cap);
+  `W7212228226` (JECST) **meets** the per-paper target (0 dropped, 3 keyResults) despite only 52%
+  of its body reaching the reconstructed pass-1 payload (its whole Conclusions section is excluded
+  because the pass-1 prompt builder never reads a `conclusion` canonical bucket). The spec's third
+  required PDF-backed test case **does not exist anywhere in this 17-paper pool** — all 15 other
+  papers are either `source_unavailable` (1, HTTP 403) or `no_full_text` (14).
+
+**Open items: 5 of 5** (S3, S4, S5, S6, S7 — none closed this round; expected for round 1).
+
+**Separately tracked, not counted in the 5 above — `POLICY — manager decides`:** the gate itself
+is not currently clean. `npx eslint .` (Part 4) fails with 1 error in
+`web/src/components/persona/quiz.tsx:46` (`react-hooks/set-state-in-effect`), a file untouched by
+any S3-S7 work (last touched in the pre-loop rename/redesign commits). This contradicts §1's
+`GATE NOW` line as inherited from round 0. Flagging for the manager to rule whether this blocks
+the loop's gate or is tracked outside it; A does not diagnose or fix it.
+
+#### Gate line
+
+`GATE (0 open): NOT MET` — 5 of 5 spec items open, plus the untracked eslint discrepancy above.
+Not expected to be met in round 1.
+
+Commit: `docs(abc): round 1 A — difference list, gate line, §1 handoff to B`.
