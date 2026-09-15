@@ -1334,7 +1334,9 @@ export function finalDiagnostic(
   // top-level status.
   const wasThrottled = attempts.some((attempt) => attempt.status === "rate_limited");
   const withThrottleNote = (reason: string): string =>
-    wasThrottled ? `${reason}; the figure index was rate-limited.` : reason;
+    wasThrottled
+      ? `${reason.replace(/[.;\s]+$/, "")}. The figure index was also rate-limited.`
+      : reason;
 
   const paywalled = attempts.find((attempt) => attempt.status === "paywalled");
   if (paywalled) {

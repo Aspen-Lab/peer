@@ -80,38 +80,28 @@ browser, run the reports), then report to the user in plain language and stop th
 ## §1. CURRENT STATE — THE SOURCE OF TRUTH
 
 ```
-ROUND:            4
-WHOSE TURN:       manager
-STOPPED BECAUSE:  finished the turn @ 2026-09-15 19:28 UTC
-STATUS:           A's closing measurement complete. All six of round 3's open items (A3-01
-                   through A3-06) confirmed closed, live, against the returned result. S3: all
-                   three papers (W7207740551, W7212228226/JECST, arxiv:2501.00663) meet Ruling
-                   10's target on every officially-required run this round; JECST's named
-                   furniture-splice sentence not dropped in any of 5 sampled runs (was 2/2 in
-                   round 3); 2501.00663's exact zero-width-space artifact confirmed folding and
-                   matching against the real ar5iv corpus. S4: both named Springer papers
-                   (W7212288571, W7204990919) show honest `source_unavailable` with the
-                   bounce-page reason, live, no longer masked by a Semantic Scholar 429; the
-                   round-3 rate-limit escalation is resolved (0/17 final `rate_limited` this
-                   round, was 3/17); found-figure count holds at 1/17, still the paper's own
-                   figure. S5/S6/S7: no regression. One new, currently within-ceiling finding
-                   (non-numeric figure cross-reference brackets, e.g. `[Fig. 3(b)]`) recorded for
-                   the standing-exclusions list, not blocking closure — see A4-01.
-OPEN ITEMS:       0 (A4-01, A4-02 informational only; POLICY note below for the standing list).
+ROUND:            4 — LOOP CLOSED by the manager @ 2026-09-15 ~22:10 UTC
+WHOSE TURN:       nobody (closed)
+STOPPED BECAUSE:  finished — A's closing measurement met the gate; the manager re-verified
+                   independently (browser + two live figure statuses + the gate cold).
+STATUS:           S3 S4 S5 S6 S7 all closed under Rulings 9–11. Manager's independent checks:
+                   `/api/figure` W7212288571 → source_unavailable (Springer access-check page),
+                   W7212207112 → source_unavailable (openalex.org blocked) — neither "paywalled";
+                   `/papers/openalex:W7207740551` fresh in the browser → scramble reveal observed
+                   then settled (0 glyph runs after), merged "What it proposes", no "What is new"
+                   heading, no "Why it fits you", 3 figures (FIG. 3 hero, FIG. 5, FIG. 2), methods
+                   and results with verbatim quotes, "3 claims were dropped" (A classified all as
+                   correct drops). One cosmetic fix by the manager: the throttle note no longer
+                   yields ".;" (extract.ts + its test).
+OPEN ITEMS:       none
 GATE (0 open):    MET
 
-DONE:      round 1: 1-01..1-33 + 1-22b. round 2: 2-01..2-06. round 4: 4-01..4-05. round 4
-           (closing): A's measurement, all six round-3 items confirmed closed.
-GATE NOW:  tsc clean · eslint clean · vitest 2639/2639 (A, cold, closing round).
-TODO:      For the manager: browser eyeball pass only (A cannot open a browser) — the two
-           uploaded titles rendering on their own reading pages; the blank PDF's plain "no
-           readable text" message with no spinner; the scramble effect firing on a fresh
-           generation and staying plain on a cache hit; `/papers/openalex:W7212288571` and
-           `/papers/openalex:W7204990919` showing the new honest figure-absent treatment (a hard
-           refresh may be needed past `full-text.ts`'s 1h cache). POLICY: fold A4-01 (mid-sentence
-           non-numeric figure cross-reference brackets, e.g. `[Fig. 3(b)]`, `(figure 4)`) into the
-           standing-exclusions list next time this doc is touched — real, reproducible, but never
-           breached Ruling 10's `≤ 1` ceiling on any sampled run, so it does not reopen the loop.
+DONE:      round 1: 1-01..1-33 + 1-22b. round 2: 2-01..2-06. round 4: 4-01..4-05.
+GATE NOW:  tsc clean · eslint clean · vitest 2639/2639 (manager, cold, at close).
+TODO:      none for the loop. For the user: register a free SEMANTIC_SCHOLAR_API_KEY (16/17 figure
+           lookups were throttled this round; the queue keeps the status honest but a key lifts
+           the limit). Leads recorded, not authorised: html-text.ts caps (Ruling 8); non-numeric
+           figure cross-reference brackets like "[Fig. 3(b)]" in the citation fold (A round 4).
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
@@ -5397,3 +5387,12 @@ caches are 1h in `full-text.ts` — a hard refresh may be needed to see the post
 a paper visited earlier this session).
 
 Commit: `docs(abc): round 4 A - difference list, gate line, §1 handoff`.
+
+### Close — manager (2026-09-15)
+
+A's round-4 measurement reported `GATE: MET`. Per the loop's rule the manager re-measured
+independently before closing: the two figure statuses above by curl, the reading page for
+`openalex:W7207740551` in the browser (fresh report → scramble reveal, merged proposal section, no
+"Why it fits you", three bound figures), the upload reading pages from round 3 (full titles,
+empty-PDF message), and the gate cold (tsc · eslint · 2639/2639). One cosmetic fix landed by the
+manager (throttle-note punctuation). Hourly clock deleted. Loop closed.

@@ -13,11 +13,17 @@ Source of truth for the hourly clock on this branch. One tick = read this file, 
 2. **Figures on the reading page** — root causes fixed: `OPENALEX_EMAIL` set locally (Unpaywall lookups now run), PyMuPDF installed, PDF helper output moved from stdout to a file (`--output`; two real bugs), `extract_pdf_text.py` import fixed. Per-section figure lookup restored in `components/reader/report-sections.tsx` with a page-level dedupe registry.
 3. **Report content restored** — `PaperReport` regained `whatItProposes.novelty[]`, `keyResults[].novelty`, `reviewContents`, `whyItFitsYou`; both prompts (deep pass 2, abstract tier) ask for them; sanitizer + tests; cache key v5; Markdown export carries them. Reading page order: old sections (novelty / proposal / method / results+figures or review contents / fit / glance / related) ABOVE the rewrite's blocks (caveats / next step / paper body / record). Abstract-tier report moved to the `large` model tier (evidence sentences were being paraphrased and every claim dropped).
 
+4. **Deep reports read the whole paper** — pass 1 gets every section (incl. Conclusions), 400k-char budget, PDFs to 100 pages; the evidence checker folds PDF artifacts (fraction slash, line-break hyphen, zero-width chars) and indexes figure captions; page-footer/page-number furniture stripped at extraction; pass 2 asks for 2–4 key results. Publisher 403 → "paywalled", aggregator 403 → "blocked".
+5. **Figures** — graphical-abstract (og:image) candidate with an honesty guard; Semantic Scholar queue + retry, and a 429 never masks the publisher outcome; bounce/bot-check pages reported honestly. Of the user's 17 briefing papers only 1 exposes a figure Peer may use (9 paywalled, Springer bot walls, one figure-less manuscript) — honest absence elsewhere.
+6. **Scramble ("matrix") reveal** — `components/scramble-text.tsx` restored; fires only on a freshly generated report, cached reports render plain; reduced motion → fade.
+7. **"What is new" merged into "What it proposes"; "Why it fits you" removed** — both prompts, sanitizer, page, Markdown export, copy; cache key v6.
+8. **PDF upload → deep report** — black upload button left of the search box (click or drop); `POST /api/papers/upload` stores under `web/.local-data/uploads/` (local to this machine), `upload:<sha16>` ids flow through the same report/figure/save pipeline; full titles from page-1 layout (model fallback, then file name); a textless PDF shows a plain message instead of a report.
+
 Also on this branch, from before the pull: search-provider failures now surface in `meta.errors` (`lib/sources/search-failure.ts`), `kill-dev-orphans.mjs` catches the server process, `scoring.test.ts` clock pinned.
 
 ## §2 Open (the user adds; the clock takes the top item)
 
-_The 2026-09-15 batch (S3–S7) runs as an ABC loop — see `docs/handoff/ABC-followup-round2.md`. This ledger is not the clock's source of truth while that loop is open._
+_(none — the 2026-09-15 batch S3–S7 closed via the ABC loop in `docs/handoff/ABC-followup-round2.md`; see §1 items 4–8)_
 
 ## §3 Rules for a tick
 
@@ -63,6 +69,8 @@ _The 2026-09-15 batch (S3–S7) runs as an ABC loop — see `docs/handoff/ABC-fo
 - 2026-09-14 — user authorized commits ("commit, with descriptions of each commit"); 12 commits landed (search box, figures, restored sections, Tavily removal, Gemini 3.x, Vertex global-only, arXiv PDF hand-off, report tier knob).
 
 - 2026-09-15 — new batch S3–S7 opened as an ABC loop (`ABC-followup-round2.md`); hourly clock restarted for that loop.
+
+- 2026-09-15 ~22:10 UTC — ABC loop closed: 4 rounds, all five items verified; gate tsc/eslint clean, vitest 2639/2639; clock deleted. Not pushed.
 
 ## §5 Authorizations
 

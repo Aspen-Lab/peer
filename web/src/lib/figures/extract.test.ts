@@ -251,7 +251,7 @@ describe("finalDiagnostic — 4-01, a throttled Semantic Scholar attempt never h
 
     expect(result.status).toBe("source_unavailable");
     expect(result.reason).toBe(
-      "Peer reached an access-check page at link.springer.com, not the article itself.; the figure index was rate-limited.",
+      "Peer reached an access-check page at link.springer.com, not the article itself. The figure index was also rate-limited.",
     );
   });
 
