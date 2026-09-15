@@ -76,7 +76,7 @@ function appearsPaywalled(res: Response, html: string): boolean {
   return hasPaywallPhrase && !looksOpen;
 }
 
-async function fetchHtml(url: string): Promise<{ ok: true; html: string; finalUrl: string; res: Response } | { ok: false; reason: string }> {
+async function fetchHtml(url: string): Promise<{ ok: true; html: string; finalUrl: string; res: Response } | { ok: false; reason: string; isPdf?: boolean }> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
@@ -93,7 +93,7 @@ async function fetchHtml(url: string): Promise<{ ok: true; html: string; finalUr
     const contentType = res.headers.get("content-type") ?? "";
     // Some PDF links serve directly when the URL looks HTML — let the PDF
     // path handle them by signalling no-HTML here.
-    if (/pdf/i.test(contentType)) return { ok: false, reason: "Server returned PDF, not HTML." };
+    if (/pdf/i.test(contentType)) return { ok: false, reason: "Server returned PDF, not HTML.", isPdf: true };
     if (contentType && !/html|xml/i.test(contentType)) {
       return { ok: false, reason: `Unsupported content-type: ${contentType}` };
     }
@@ -128,6 +128,13 @@ async function fetchHtml(url: string): Promise<{ ok: true; html: string; finalUr
 async function tryHtmlLink(link: SourceLink): Promise<{ status: FullTextStatus; doc?: ExtractedDocument; reason?: string }> {
   const fetched = await fetchHtml(link.url);
   if (!fetched.ok) {
+    // A link filed as HTML that serves a PDF is read as one, here, rather
+    // than dropped. This is how every arXiv paper lost its full text: the
+    // caller's `arxiv.org/pdf/<id>` has no `.pdf` suffix, was filed as HTML
+    // at a rank that beat the builder's own PDF entry for the same URL, and
+    // then failed here with "Server returned PDF" — the PDF path never ran
+    // and the deep report fell back to the abstract (measured 2026-09-14).
+    if (fetched.isPdf) return tryPdfLink(link);
     return { status: "source_unavailable", reason: fetched.reason };
   }
   if (appearsPaywalled(fetched.res, fetched.html)) {

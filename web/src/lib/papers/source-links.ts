@@ -98,7 +98,10 @@ export function cleanDoi(doi: string): string {
 }
 
 function inferKind(url: string): SourceLinkKind {
-  return /\.pdf(?:$|[?#])/i.test(url) ? "pdf" : "html";
+  // arXiv serves its PDFs at `/pdf/<id>` with no suffix; filing that as HTML
+  // let the caller's link outrank the builder's own PDF entry for the same
+  // URL and route it down the HTML path, which cannot read a PDF.
+  return /\.pdf(?:$|[?#])|arxiv\.org\/pdf\//i.test(url) ? "pdf" : "html";
 }
 
 function pmcIdFromUrl(url: string): string | null {
