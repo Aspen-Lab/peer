@@ -2428,3 +2428,19 @@ dark-mode fix are unverified pending a session with real browser access to the d
 Gate: tsc clean, eslint clean, vitest 2607/2607 (2604 + 3 new).
 
 Commit: `feat(upload): the button — a black square left of the search box that uploads a PDF`.
+
+**1-33 — README note that uploads are local to this machine.** DONE. Grepped for an existing
+"local to this machine"/`.local-data` mention first, per B's blast-radius note — found none
+anywhere in the README, so this is the first, not a second copy of the same fact. Added one
+paragraph to the existing "Deep paper reports & figures" section (the section that already
+documents `full-text.ts`/`lib/figures/`, which is exactly what the upload feature extends) rather
+than a new top-level section: what the route does, where the file lives, the gitignored/
+local-only/not-persisted-on-Vercel fact in bold (matching how the same section already bolds its
+one warning callout), and the empty-text-PDF honesty behavior in one sentence. No code changed;
+gate re-run for completeness, unaffected (2607/2607).
+
+**S7 is now fully landed: 1-23 through 1-33, all committed.** Every numbered item in B's guide
+(1-19 through 1-33) is done. What remains is the live check B/the manager asked for on a real PDF —
+next section.
+
+Commit: `docs(upload): README note that uploads are local to this machine`.

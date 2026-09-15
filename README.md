@@ -294,6 +294,15 @@ Figures get their own subsystem ([`lib/figures/`](web/src/lib/figures/)): extrac
 extraction, semantic matching, and vision matching, then binding to report results
 ([`figure-binding.ts`](web/src/lib/papers/figure-binding.ts)).
 
+**Upload your own PDF** (the black square left of the front-page search box) reads a paper Peer
+never crawled: `POST /api/papers/upload` hashes the file (`upload-store.ts`, id `upload:<sha16>`,
+idempotent) and stores it under `web/.local-data/uploads/` — **gitignored and local to this
+machine only; an upload made in one `next dev`/deployment is not visible from another, and nothing
+here is persisted on Vercel.** `full-text.ts` and `lib/figures/extract.ts` both recognize an
+`upload:` id and read the stored file directly, so the rest of the deep-report/figure pipeline
+needs no separate code path. A PDF with no extractable text (a scanned image, most often) still
+uploads successfully; the reading page says so plainly instead of pretending a report exists.
+
 > ⚠️ Deep reports burn tokens (small + large model **per paper**). They are gated behind
 > an explicit user toggle and require a resolvable key. Any LLM failure must return `null`
 > so the caller falls back to the abstract path. Preserve that.
