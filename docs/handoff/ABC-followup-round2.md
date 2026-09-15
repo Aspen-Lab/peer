@@ -81,22 +81,80 @@ browser, run the reports), then report to the user in plain language and stop th
 
 ```
 ROUND:            1
-WHOSE TURN:       C (resume — items 1-01..1-17 and 1-22 landed; 1-18 is a note; pick up at 1-19)
-STOPPED BECAUSE:  out of budget @ 2026-09-15 ~07:30 UTC (Sonnet session limit), items 1-01..1-17
-                   + 1-22 landed and committed, 1-19 1-20 1-21 and 1-23..1-33 unstarted
-STATUS:           C's first turn landed item 0 (eslint), all of S6, all of S5, and S3 (1-14..1-17)
-                   plus 1-22, in 5 commits (6e167a7 aacdce5 d32af5d d378151 a31c16f). The manager
-                   re-ran the gate cold after the death: tsc clean · eslint clean · vitest
-                   2559/2559. Working tree clean. Deviation logged by C (1-12: conditional setState
-                   during render instead of an effect). C's own findings outside the guide are in
-                   §4 (html-text.ts caps; figures/pdf-extract.ts dead paywall check) — ruled in §1i.
-OPEN ITEMS:       S3(landed, unverified live) S4 S5(landed, unverified in browser) S6(landed) S7
-GATE (0 open):    NOT MET (S4 and S7 code still ahead; S3/S5/S6 need A's re-measure)
+WHOSE TURN:       A
+STOPPED BECAUSE:  C finished the turn @ 2026-09-15 ~04:59 UTC — every item in B's guide (1-19
+                   through 1-33) is landed and committed. Combined with the previous C's 1-01..
+                   1-17 + 1-22, ALL 32 numbered items + the two rulings' extra items (1-22b) are
+                   now done. B's guide is exhausted; nothing left for C to pick up next round
+                   unless A's re-measure finds a defect.
+STATUS:           This C turn landed 1-19..1-33 in 11 commits: facc4d7 (1-19, og:image honesty
+                   guard), 8ba1f18 (1-20, Semantic Scholar queue + rate_limited), 38baa70 (1-21,
+                   bounce-page retry), 32b3353 (1-22b, pdf-extract.ts paywall status),
+                   64731a2 (1-23/1-24/1-25/1-30-field, upload-store.ts + the two *FromPath
+                   helpers), d869750 (1-26/1-27, the three upload routes), d590480 (1-28,
+                   full-text.ts upload branch + the new pdf_empty reading state), 9f42869
+                   (1-29, figures/extract.ts upload branch), 0138027 (1-31, reading page
+                   resolves upload: ids), 7fc541a (1-32, the button), 64b071c (1-33, README
+                   note). Gate re-run after every single item, never once left red.
+                   Two deviations from B's guide, both logged prominently at their commit's
+                   §4 entry, not just here: 1-23 pulled 1-30's `Paper.pageCount` field forward
+                   (upload-store.ts needed it to compile) and used a different dual-candidate
+                   cwd-resolution anchor than B's literal text (existsSync needs a file that
+                   already exists, and `.local-data/uploads` doesn't on a fresh checkout); 1-32
+                   added two new fixed-color CSS tokens instead of B's suggested
+                   `--color-heading`/`--color-text`, because both of those flip to near-white in
+                   dark mode, which would have made "a black square with a white icon" invisible
+                   exactly when dark mode is on.
+                   1-28 grew beyond a one-branch item: giving a genuinely-empty PDF its own
+                   honest reading state (not reusing `pdf_unreadable_here`, which specifically
+                   implies another deployment *could* read it) meant a real new
+                   `ReadingProvenance.fullText` value threaded through every site that already
+                   branches on `pdf_unreadable_here`, plus a `PaperReading.version` bump (3 -> 4)
+                   — two pre-existing tests that asserted the literal old version number were
+                   rewritten (not deleted), with a comment naming which item changed them.
+                   **The live check (real arXiv PDF -> upload -> report -> figure) could NOT be
+                   run this turn.** Confirmed by three independent checks: `curl` to
+                   localhost:3000 got connection refused from this session's Bash tool; the
+                   Browser pane's `preview_start` against the same URL was denied/failed to
+                   navigate; `netstat` found no process listening on port 3000 at all (only
+                   unrelated `node.exe`/`node_repl.exe` processes, none bound to that port). This
+                   is not a stale-cache "NEEDS RESTART" situation — the shared `peer-web` dev
+                   server was never reachable from this session's sandbox in the first place, and
+                   per the standing constraint C must not start it. A/the manager needs to run
+                   the live check from a session where the dev server is actually reachable
+                   (started via `.claude/launch.json`'s `peer-web` config, or already running).
+OPEN ITEMS:       S3(landed, unverified live) S4(landed, unverified live) S5(landed, unverified
+                   in browser) S6(landed) S7(landed, code-complete, live check pending — see
+                   STOPPED BECAUSE)
+GATE (0 open):    NOT MET — every item is now code-complete, but every one of S3/S4/S5/S6/S7
+                   still needs A's independent re-measure against real data/a real browser before
+                   the loop's 0-open-items target can be called met. No code differences are
+                   known to remain; what remains is verification, which is A's job, not C's.
 
-DONE:      1-01, 1-02..1-09, 1-10..1-13, 1-14..1-17, 1-22.
-GATE NOW:  tsc clean · eslint clean · vitest 2559/2559 (manager, cold, 2026-09-15 ~09:30 UTC).
-TODO:      C resumes at 1-19 (og:image candidate + honesty guard), 1-20 (S2 queue, §1h), 1-21
-           (bounce-page retry), then S7 1-23..1-33 in order. Then hand to A.
+DONE:      1-01, 1-02..1-09, 1-10..1-13, 1-14..1-17, 1-18(note), 1-19, 1-20, 1-21, 1-22, 1-22b,
+           1-23, 1-24, 1-25, 1-26, 1-27, 1-28, 1-29, 1-30, 1-31, 1-32, 1-33. Every item in B's
+           round-1 guide.
+GATE NOW:  tsc clean · eslint clean · vitest 2607/2607 (this C, cold-checked before the first
+           edit and re-checked after every item; 2559 at turn start + 48 new/rewritten this
+           turn — see each commit's §4 entry for the per-item breakdown).
+TODO:      Hand to A. Re-measure every spec item on real data/a real browser and answer, per
+           §1a: (S3) does W7207740551 keep ≥2 key results and ≤1 dropped claim now, and does the
+           JECST report (W7212228226) still carry its Conclusions-derived claims — these were
+           already fixed by the previous C, re-confirm they held; (S4) how many of the 17 pool
+           papers show a figure now (before was 1/17) and is any of them a journal cover/logo
+           (should be zero — the 1-19 honesty guard's whole point) — also, how many Semantic
+           Scholar lookups still 429 after the 1-20 queue, and does the Nature Energy paper
+           (W7212165100) now say "access-check page" instead of a false "no_figures"; (S5) does
+           a fresh report generation actually scramble in the browser, and does a cached one
+           render plain, on a real page load; (S6) does the rendered page actually show one
+           merged "What it proposes" heading with no "Why it fits you" anywhere, on a real
+           report; (S7) — genuinely unverified end to end — does uploading a real arXiv PDF
+           produce a saved, sectioned, figured deep report; does a PDF with no text layer show
+           the plain "this PDF has no readable text" message instead of a broken report; does
+           the black square actually render black-with-white-icon in both light and dark mode
+           (the fixed-token fix in 1-32 is unverified in an actual browser); does drag-and-drop
+           work. Carry every standing tally forward by name (S4 status tally, S3 dropped-claims
+           per paper, 429 count) per the round-log rule.
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
