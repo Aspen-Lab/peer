@@ -132,15 +132,15 @@ function buildShallowPrompt(body: ExtendedRequest): string {
         },
       ],
       whatItProposes: {
-        summary: "2-3 plain-English sentences describing the paper's proposal or scope. Do not include the method list here.",
+        summary: "one plain paragraph, at most 2 sentences, describing the paper's proposal or scope. Do not include the method list here.",
         methods: [
           {
             text: "one concrete method or experiment sentence naming the actual experiment, dataset, instrument, measurement, simulation, or evaluation the abstract states (max 4 items; empty when the abstract names none)",
             evidence: evidenceRule,
           },
         ],
-        novelty: [
-          "one or two concise sentences saying what is new about this paper against prior work, as the abstract states it; do not repeat the methods here (max 2 items)",
+        newHere: [
+          "a short 'new here' line — the novelty, stated only where it differs from `summary`, as the abstract states it; omit entirely if there is nothing to add beyond the summary (max 2 items)",
         ],
       },
       resultsAndSignificance: {
@@ -155,20 +155,15 @@ function buildShallowPrompt(body: ExtendedRequest): string {
         ],
       },
       ...reviewSchema,
-      whyItFitsYou: {
-        reasons: [
-          "one specific reason this paper matters for the reader described in userContext, max 2 sentences, tied to their topics or project; never vague (max 3 items; empty when userContext is empty)",
-        ],
-        keywords: ["paper keywords that overlap with the reader's interests (max 8; empty when userContext is empty)"],
-      },
       ...relationSchema,
     },
     rules: [
       "Return ONLY valid JSON.",
       "`evidence` is one sentence copied character-for-character from the abstract. Do not paraphrase it, shorten it, or merge sentences.",
       "Omit any claim item you cannot support with such a sentence. An empty array is correct when nothing qualifies.",
-      "`novelty` (proposal and per result) and `whyItFitsYou` are Peer's reading and carry no evidence sentence; keep them specific to this abstract, never generic.",
-      "`whyItFitsYou` is written against userContext only; with no userContext, both arrays are empty. Do not mention missing context.",
+      "`newHere` (proposal) and `novelty` (per result) are Peer's reading and carry no evidence sentence; keep them specific to this abstract, never generic.",
+      "Do not repeat a sentence from `summary` inside `newHere`; if the novelty is not separable from the summary, leave `newHere` empty.",
+      "No sentence in `summary` or `newHere` exceeds about 25 words; use plain, high-school-reading-level wording.",
       "Produce no limitations and no next step.",
       ...(project
         ? ["`relationToYourWork.basedOn` is the reader's project text copied back."]
@@ -202,7 +197,7 @@ async function generateShallowReport(
     const raw = await provider.generateJsonText({
       systemPrompt: SHALLOW_SYSTEM,
       userPrompt: buildShallowPrompt(body),
-      // Room for the restored sections (novelty, fit, review contents).
+      // Room for the restored sections (new-here lines, review contents).
       maxTokens: 2400,
       tier: reportModelTier(),
     });

@@ -47,8 +47,11 @@ describe("sanitizePaperReport", () => {
     expect(report.provenance).toEqual({ basis: "model-abstract", droppedClaims: 0 });
     expect(report.depth).toBe("abstract");
     expect(report.noLlm).toBeUndefined();
-    // Restored 2026-09-13 on the founder's call — it was dropped by the
-    // reader rewrite and is a report section again (see the describe below).
+    // S6 (2026-09-15): "Why it fits you" is deleted from every new report and
+    // no prompt asks for it any more, but sanitizePaperReport still whitelists
+    // and caps the field when given one — the honest way to bound a v5-shaped
+    // report replayed from an old cache without widening what a *new* report
+    // can carry. Nothing on the page renders it any more.
     expect(report.whyItFitsYou).toEqual({ reasons: ["a restored field"], keywords: [] });
     expect("unknownField" in report.whatItProposes).toBe(false);
   });
@@ -229,16 +232,20 @@ describe("sanitizePaperReport", () => {
 });
 
 describe("sanitizePaperReport — the restored sections", () => {
-  // These four existed before the 2026-09 reader rewrite dropped them, and
-  // were brought back on the founder's call. None carries an evidence
-  // sentence: they are Peer's reading, and the page labels them so.
-  it("keeps proposal novelty, per-result novelty, review contents and the fit block", () => {
+  // These existed before the 2026-09 reader rewrite dropped them, and were
+  // brought back on the founder's call. None carries an evidence sentence:
+  // they are Peer's reading, and the page labels them so. S6 (2026-09-15)
+  // merged the proposal's "novelty" into `newHere` and deleted the fit
+  // block from every *new* report — sanitizePaperReport still accepts an
+  // old-cached `whyItFitsYou` blob (see the "whitelists" test above) and a
+  // legacy `novelty` key (below), but nothing writes either any more.
+  it("keeps proposal newHere, per-result novelty and review contents", () => {
     const report = sanitizePaperReport({
       skim: [],
       whatItProposes: {
         summary: "A proposal.",
         methods: [],
-        novelty: ["  First&nbsp;new thing. ", "Second new thing."],
+        newHere: ["  First&nbsp;new thing. ", "Second new thing."],
       },
       resultsAndSignificance: {
         summary: "",
@@ -253,39 +260,37 @@ describe("sanitizePaperReport — the restored sections", () => {
           { heading: "3. Anodes", summary: "" },
         ],
       },
-      whyItFitsYou: {
-        reasons: ["It uses the reader's own material system."],
-        keywords: ["LiCoO2", "  electrodeposition "],
-      },
     });
-    expect(report.whatItProposes.novelty).toEqual(["First new thing.", "Second new thing."]);
+    expect(report.whatItProposes.newHere).toEqual(["First new thing.", "Second new thing."]);
     expect(report.resultsAndSignificance.keyResults[0].novelty).toBe("Nobody had measured it.");
     expect(report.reviewContents).toEqual({
       sections: [{ heading: "2. Cathodes", summary: "What is known about cathodes." }],
     });
-    expect(report.whyItFitsYou).toEqual({
-      reasons: ["It uses the reader's own material system."],
-      keywords: ["LiCoO2", "electrodeposition"],
+  });
+
+  it("1-04: still reads a v5-shaped `novelty` key as `newHere`, for an old cached report", () => {
+    const report = sanitizePaperReport({
+      whatItProposes: { summary: "A proposal.", methods: [], novelty: ["Old-shaped field."] },
+      resultsAndSignificance: { summary: "", keyResults: [] },
     });
+    expect(report.whatItProposes.newHere).toEqual(["Old-shaped field."]);
   });
 
   it("leaves the restored sections absent rather than empty", () => {
     const report = sanitizePaperReport({
-      whatItProposes: { summary: "", methods: [], novelty: [] },
+      whatItProposes: { summary: "", methods: [], newHere: [] },
       resultsAndSignificance: { summary: "", keyResults: [{ title: "T", detail: "D", evidence }] },
       reviewContents: { sections: [] },
-      whyItFitsYou: { reasons: [], keywords: [] },
     });
-    expect(report.whatItProposes).not.toHaveProperty("novelty");
+    expect(report.whatItProposes).not.toHaveProperty("newHere");
     expect(report.resultsAndSignificance.keyResults[0]).not.toHaveProperty("novelty");
     expect(report).not.toHaveProperty("reviewContents");
-    expect(report).not.toHaveProperty("whyItFitsYou");
   });
 
-  it("caps them: novelty 2 × 320, reasons 3 × 320, keywords 8 × 40, review sections 8", () => {
+  it("caps them: newHere 2 × 320, review sections 8", () => {
     const long = "x".repeat(1000);
     const report = sanitizePaperReport({
-      whatItProposes: { summary: "", methods: [], novelty: [long, long, long] },
+      whatItProposes: { summary: "", methods: [], newHere: [long, long, long] },
       resultsAndSignificance: {
         summary: "",
         keyResults: [{ title: "T", detail: "D", evidence, novelty: long }],
@@ -293,16 +298,24 @@ describe("sanitizePaperReport — the restored sections", () => {
       reviewContents: {
         sections: Array.from({ length: 12 }, (_, i) => ({ heading: `H${i}`, summary: long })),
       },
+    });
+    expect(report.whatItProposes.newHere).toHaveLength(REPORT_CAPS.novelty);
+    expect(report.whatItProposes.newHere?.[0].length).toBe(REPORT_CAPS.noveltyChars);
+    expect(report.resultsAndSignificance.keyResults[0].novelty?.length).toBe(REPORT_CAPS.noveltyChars);
+    expect(report.reviewContents?.sections).toHaveLength(REPORT_CAPS.reviewSections);
+    expect(report.reviewContents?.sections[0].summary.length).toBe(REPORT_CAPS.reviewSummaryChars);
+  });
+
+  it("1-04: still caps a legacy whyItFitsYou blob (reasons 3 × 320, keywords 8 × 40) though nothing writes one any more", () => {
+    const long = "x".repeat(1000);
+    const report = sanitizePaperReport({
+      whatItProposes: { summary: "", methods: [] },
+      resultsAndSignificance: { summary: "", keyResults: [] },
       whyItFitsYou: {
         reasons: [long, long, long, long],
         keywords: Array.from({ length: 12 }, (_, i) => `k${i}${long}`),
       },
     });
-    expect(report.whatItProposes.novelty).toHaveLength(REPORT_CAPS.novelty);
-    expect(report.whatItProposes.novelty?.[0].length).toBe(REPORT_CAPS.noveltyChars);
-    expect(report.resultsAndSignificance.keyResults[0].novelty?.length).toBe(REPORT_CAPS.noveltyChars);
-    expect(report.reviewContents?.sections).toHaveLength(REPORT_CAPS.reviewSections);
-    expect(report.reviewContents?.sections[0].summary.length).toBe(REPORT_CAPS.reviewSummaryChars);
     expect(report.whyItFitsYou?.reasons).toHaveLength(REPORT_CAPS.fitReasons);
     expect(report.whyItFitsYou?.reasons[0].length).toBe(REPORT_CAPS.fitReasonChars);
     expect(report.whyItFitsYou?.keywords).toHaveLength(REPORT_CAPS.fitKeywords);

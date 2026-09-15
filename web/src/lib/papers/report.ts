@@ -91,11 +91,12 @@ export interface PaperReport {
     /** ≤4 concrete methods, each with evidence. */
     methods: Claim[];
     /**
-     * Restored: ≤2 sentences on what is new against prior work — the
-     * "Novelty" block, the first thing under the decision. Peer's reading,
-     * no evidence sentence.
+     * S6 (2026-09): ≤2 short "new here" lines — the novelty, stated only
+     * where it differs from `summary`. Folded into this one section along
+     * with the old "What is new" block, which duplicated `summary`'s
+     * content; Peer's reading, no evidence sentence.
      */
-    novelty?: string[];
+    newHere?: string[];
     /**
      * Deep-report only: figure label promoted to the proposal area. Used when
      * a figure is reused by multiple result cards, or when the proposal itself
@@ -120,9 +121,9 @@ export interface PaperReport {
    */
   reviewContents?: { sections: PaperReportReviewSection[] };
   /**
-   * Restored: why this paper is on the reader's page. ≤3 reasons tied to
-   * the reader's topics, and the paper keywords that overlap them. Peer's
-   * reading against the profile; carries no evidence sentence.
+   * S6 (2026-09): removed from every new report — deleted from both prompts,
+   * the page and the Markdown export. Stays optional here only so a report
+   * cached under an older wire shape still type-checks; nothing reads it.
    */
   whyItFitsYou?: { reasons: string[]; keywords: string[] };
   /** Deep only, ≤3: what the authors themselves state as limits. */
@@ -164,8 +165,11 @@ export const REPORT_CAPS = {
   basedOnChars: 200,
   summaryChars: 600,
   claimChars: 600,
-  novelty: 2,
+  novelty: 2, // bounds whatItProposes.newHere (S6 renamed the field; the cap name did not)
   noveltyChars: 320,
+  // S6: whyItFitsYou is deleted from every new report. These four caps stay
+  // only to bound sanitizePaperReport's legacy-cache branch below — do not
+  // remove them while that branch reads a v5-shaped whyItFitsYou blob.
   fitReasons: 3,
   fitReasonChars: 320,
   fitKeywords: 8,
@@ -399,14 +403,21 @@ export function sanitizePaperReport(raw: unknown): PaperReport {
 
   const nextStep = claim(r.nextStep);
 
-  const novelty = strings(proposes.novelty, REPORT_CAPS.novelty, REPORT_CAPS.noveltyChars);
+  // S6: the model's field is `newHere`; a v5-shaped cached/replayed object
+  // may still carry the old `novelty` key, so accept either while nothing
+  // new is ever asked to produce it.
+  const newHere = strings(
+    proposes.newHere ?? proposes.novelty,
+    REPORT_CAPS.novelty,
+    REPORT_CAPS.noveltyChars,
+  );
 
   const report: PaperReport = {
     skim: claims(r.skim, REPORT_CAPS.skim, REPORT_CAPS.skimChars),
     whatItProposes: {
       summary: text(proposes.summary, REPORT_CAPS.summaryChars),
       methods: claims(proposes.methods, REPORT_CAPS.methods),
-      ...(novelty.length > 0 ? { novelty } : {}),
+      ...(newHere.length > 0 ? { newHere } : {}),
       ...figureFields(proposes),
     },
     resultsAndSignificance: {

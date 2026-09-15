@@ -35,9 +35,11 @@ export interface MarkdownKeyResult extends Omit<MarkdownClaim, "text"> {
  */
 export interface MarkdownReport {
   skim?: MarkdownClaim[];
-  whatItProposes?: { summary?: string; methods?: MarkdownClaim[]; novelty?: string[] };
+  whatItProposes?: { summary?: string; methods?: MarkdownClaim[]; newHere?: string[] };
   resultsAndSignificance?: { summary?: string; keyResults?: MarkdownKeyResult[] };
   reviewContents?: { sections: { heading: string; summary: string }[] };
+  /** S6 (2026-09): removed from every new report; kept only so an old cached
+   *  wire shape still type-checks. Nothing reads it. */
   whyItFitsYou?: { reasons: string[]; keywords: string[] };
   limitations?: MarkdownClaim[];
   relationToYourWork?: { basedOn: string; items: MarkdownClaim[] };
@@ -272,13 +274,18 @@ export function readingToMarkdown(
   };
   const PEERS = "*Peer's reading — not a quote*";
 
-  // The page's order: what is new, the proposal, the method, the results
-  // (or a review's contents), why it fits, then the rewrite's own blocks.
-  const novelty = report?.whatItProposes?.novelty?.filter(Boolean) ?? [];
-  if (novelty.length > 0) extra("What is new", [...novelty, "", PEERS]);
-
+  // The page's order: the proposal (merged with the old "what is new"
+  // block — S6, they duplicated each other), the method, the results (or a
+  // review's contents), then the rewrite's own blocks. "Why it fits you" is
+  // deleted (S6).
   const proposal = report?.whatItProposes?.summary?.trim();
-  if (proposal) extra("What it proposes", [proposal]);
+  const newHere = report?.whatItProposes?.newHere?.filter(Boolean) ?? [];
+  if (proposal) {
+    extra(
+      "What it proposes",
+      newHere.length > 0 ? [proposal, "", ...newHere, "", PEERS] : [proposal],
+    );
+  }
 
   const methods = report?.whatItProposes?.methods?.filter((claim) => claim.text) ?? [];
   if (methods.length > 0) {
@@ -307,16 +314,6 @@ export function readingToMarkdown(
     ]);
   } else {
     section("findings", spaced(reading.findings.map((quote) => [quoteLine(quote)])));
-  }
-
-  const fit = report?.whyItFitsYou;
-  if (fit && (fit.reasons.length > 0 || fit.keywords.length > 0)) {
-    extra("Why it fits you", [
-      ...fit.reasons,
-      ...(fit.keywords.length > 0 ? ["", `Shared terms: ${fit.keywords.join(" · ")}`] : []),
-      "",
-      PEERS,
-    ]);
   }
 
   const limitations = report?.limitations?.filter((claim) => claim.text) ?? [];

@@ -4,8 +4,8 @@
 // the plate and title, the abstract as written with the claim and the
 // numbers in ink, one sentence saying what Peer has and has not read, and
 // the decision. Below the decision, first the report as it read before the
-// 2026-09 rewrite — what is new, the proposal, how it was done, the results
-// with their figures, a review's contents, why it fits you, a glance, and
+// 2026-09 rewrite — the proposal (what is new, folded in — S6), how it was
+// done, the results with their figures, a review's contents, a glance, and
 // today's related papers (components/reader/report-sections.tsx) — and under
 // that the blocks the rewrite added: where it is thin, the next step, the
 // paper itself. Both arrive after first paint and change nothing above.
@@ -51,9 +51,7 @@ import { DecisionBlock } from "@/components/reader/decision-block";
 import { QuoteList } from "@/components/reader/quote-list";
 import { ClaimList } from "@/components/reader/claim-list";
 import {
-  FitBlock,
   GlanceBlock,
-  NoveltyBlock,
   ProposalBlock,
   RelatedBlock,
   ResultsBlock,
@@ -527,7 +525,9 @@ function Reader({
     boundShown.add(url);
     return { url, caption };
   };
-  const noveltyFigure = report
+  // S6: the proposal figure — the old "What is new" section's figure slot,
+  // now the merged proposal block's.
+  const proposalFigure = report
     ? takeBound(report.whatItProposes.figureImageUrl, report.whatItProposes.figureCaption)
     : null;
   const resultFigures = keyResults.map((r) => takeBound(r.figureImageUrl, r.figureCaption));
@@ -538,8 +538,6 @@ function Reader({
   let stagger = 0;
   const related = pickRelated(paper, feedPapers);
   const reviewSections = report?.reviewContents?.sections ?? [];
-  const fit = report?.whyItFitsYou ?? null;
-  const topics = [...profile.researchTopics, ...(profile.softTopics ?? [])];
 
   return (
     // `tabIndex={-1}`: Next's layout router focuses the segment's first
@@ -614,18 +612,18 @@ function Reader({
           <>
             {/* ── The report as it read before the rewrite, in its order ── */}
 
+            {/* S6: "What is new" merged into "What it proposes" — one block,
+                one figure slot. */}
             {report && (
-              <NoveltyBlock
+              <ProposalBlock
                 report={report}
                 paper={paper}
-                figure={noveltyFigure}
+                figure={proposalFigure}
                 registry={figureRegistry}
                 bound={boundShown}
                 stagger={stagger++}
               />
             )}
-
-            {report && <ProposalBlock report={report} stagger={stagger++} />}
 
             {methods.length > 0 ? (
               <ClaimList
@@ -661,12 +659,9 @@ function Reader({
               )
             )}
 
-            {/* Why it fits you — the model's reasons against the profile.
-                Without them, the rewrite's project relation, then the shared
-                terms line, as before. */}
-            {fit ? (
-              <FitBlock fit={fit} terms={topics} stagger={stagger++} />
-            ) : relation && relation.items.length > 0 ? (
+            {/* S6 deleted "Why it fits you"; the rewrite's project relation,
+                then the shared terms line, stand in its place, as before. */}
+            {relation && relation.items.length > 0 ? (
               <ClaimList
                 block="forYou"
                 claims={relation.items}

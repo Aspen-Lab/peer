@@ -20,15 +20,16 @@ export const BLOCK_HEADING: Record<Exclude<ReadingBlock, "skim">, string> = {
 
 /**
  * The restored report sections, in the order the old report read them:
- * novelty, proposal, results (or a review's contents), fit, a glance, and
- * what else today's briefing holds. Named in this page's voice — sentence
- * case, what Peer did with the paper — not the old title-case labels.
+ * proposal, results (or a review's contents), a glance, and what else
+ * today's briefing holds. Named in this page's voice — sentence case, what
+ * Peer did with the paper — not the old title-case labels.
+ *
+ * S6 (2026-09): "What is new" merged into "What it proposes" (they
+ * duplicated each other) and "Why it fits you" was deleted outright.
  */
 export const REPORT_HEADING = {
-  novelty: "What is new",
   proposal: "What it proposes",
   review: "What the review covers",
-  fit: "Why it fits you",
   glance: "At a glance",
   related: "Related from your feed",
 } as const;
@@ -38,9 +39,6 @@ export const PEERS_READING = "Peer's reading — not a quote";
 
 /** Before a result's novelty line. */
 export const WHATS_NEW = "What is new here:";
-
-/** The keyword row under the fit reasons. */
-export const FIT_KEYWORDS = "Shared terms:";
 
 /** The glance facts. */
 export const GLANCE = {

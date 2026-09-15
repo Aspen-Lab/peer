@@ -31,7 +31,7 @@ import { useResolvedFigure } from "@/components/paper-figure";
 import { EvidenceQuote } from "./evidence-quote";
 import { MattedFigure } from "./matted-figure";
 import { BlockHeading } from "./block-heading";
-import { FIT_KEYWORDS, GLANCE, PEERS_READING, REPORT_HEADING, WHATS_NEW } from "./copy";
+import { GLANCE, PEERS_READING, REPORT_HEADING, WHATS_NEW } from "./copy";
 
 const CLAIM_CLASS = "font-reading text-lead leading-[1.6] text-text";
 /** The pull quote over the results: the deck's face, the headline result. */
@@ -139,9 +139,17 @@ function SectionFigure({
   return <MattedFigure src={url} caption={figure.caption} />;
 }
 
-// ── Novelty ────────────────────────────────────────────────────────────
+// ── Proposal ───────────────────────────────────────────────────────────
 
-export function NoveltyBlock({
+/**
+ * S6 (2026-09): the old "What is new" and "What it proposes" blocks merged
+ * into one — the two were duplicating the same content. One heading, the
+ * plain-language summary first, then up to two short "new here" lines where
+ * the novelty is not already said by the summary. Inherits the old
+ * NoveltyBlock's figure slot: the proposal's own figure now hangs off this
+ * merged block instead of a separate "What is new" section.
+ */
+export function ProposalBlock({
   report,
   paper,
   figure,
@@ -157,44 +165,35 @@ export function NoveltyBlock({
   bound: ReadonlySet<string>;
   stagger: number;
 }) {
-  const novelty = report.whatItProposes.novelty ?? [];
-  if (novelty.length === 0) return null;
-  return (
-    <Section stagger={stagger}>
-      <Heading label={REPORT_HEADING.novelty} />
-      <div className="space-y-4 measure">
-        {novelty.map((sentence, i) => (
-          <p key={`${i}:${sentence}`} className={CLAIM_CLASS}>
-            {sentence}
-          </p>
-        ))}
-      </div>
-      <p className={FOOTER_CLASS}>{PEERS_READING}</p>
-      {figure ? (
-        <MattedFigure src={figure.url} caption={figure.caption} />
-      ) : (
-        <SectionFigure
-          paper={paper}
-          query={novelty[0]}
-          index={0}
-          slot="novelty"
-          registry={registry}
-          bound={bound}
-        />
-      )}
-    </Section>
-  );
-}
-
-// ── Proposal ───────────────────────────────────────────────────────────
-
-export function ProposalBlock({ report, stagger }: { report: PaperReport; stagger: number }) {
   const summary = report.whatItProposes.summary.trim();
+  const newHere = report.whatItProposes.newHere ?? [];
   if (!summary) return null;
   return (
     <Section stagger={stagger}>
       <Heading label={REPORT_HEADING.proposal} />
       <p className={`${CLAIM_CLASS} measure`}>{summary}</p>
+      {newHere.length > 0 && (
+        <div className="space-y-3 measure mt-4">
+          {newHere.map((sentence, i) => (
+            <p key={`${i}:${sentence}`} className={CLAIM_CLASS}>
+              {sentence}
+            </p>
+          ))}
+        </div>
+      )}
+      {newHere.length > 0 && <p className={FOOTER_CLASS}>{PEERS_READING}</p>}
+      {figure ? (
+        <MattedFigure src={figure.url} caption={figure.caption} />
+      ) : (
+        <SectionFigure
+          paper={paper}
+          query={newHere[0] ?? summary}
+          index={0}
+          slot="proposal"
+          registry={registry}
+          bound={bound}
+        />
+      )}
     </Section>
   );
 }
@@ -301,65 +300,6 @@ export function ReviewContentsBlock({
           </div>
         ))}
       </div>
-    </Section>
-  );
-}
-
-// ── Why it fits you ────────────────────────────────────────────────────
-
-/** The reader's own terms, set heavier where a reason names them. */
-function emphasise(text: string, terms: string[]): React.ReactNode[] {
-  const cleaned = terms.map((t) => t.trim()).filter((t) => t.length >= 2);
-  if (cleaned.length === 0) return [text];
-  // Longest first, so "solid state" is not split by "state".
-  const pattern = new RegExp(
-    `(${[...cleaned]
-      .sort((a, b) => b.length - a.length)
-      .map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
-      .join("|")})`,
-    "gi",
-  );
-  return text.split(pattern).map((part, i) =>
-    i % 2 === 1 ? (
-      <b key={i} className="font-medium text-heading">
-        {part}
-      </b>
-    ) : (
-      part
-    ),
-  );
-}
-
-export function FitBlock({
-  fit,
-  terms,
-  stagger,
-}: {
-  fit: NonNullable<PaperReport["whyItFitsYou"]>;
-  /** The reader's topics, emphasised where a reason names them. */
-  terms: string[];
-  stagger: number;
-}) {
-  if (fit.reasons.length === 0 && fit.keywords.length === 0) return null;
-  return (
-    <Section stagger={stagger}>
-      <Heading label={REPORT_HEADING.fit} />
-      {fit.reasons.length > 0 && (
-        <div className="space-y-4 measure">
-          {fit.reasons.map((reason, i) => (
-            <p key={`${i}:${reason}`} className={CLAIM_CLASS}>
-              {emphasise(reason, terms)}
-            </p>
-          ))}
-        </div>
-      )}
-      {fit.keywords.length > 0 && (
-        <p className="font-mono text-meta text-text-muted mt-4">
-          <span className="text-text-faint mr-2">{FIT_KEYWORDS}</span>
-          {fit.keywords.join(" · ")}
-        </p>
-      )}
-      <p className={FOOTER_CLASS}>{PEERS_READING}</p>
     </Section>
   );
 }

@@ -1686,3 +1686,72 @@ Blast radius: only `web/src/app/persona/page.tsx` renders `<PersonaQuiz/>`; noth
 it or `QuizResultStore`. Self-contained, matches B's read.
 
 Commit: `fix(persona): read the quiz's saved result through a sync-safe store, not a mount effect`.
+
+**1-02..1-09 — S6, merge "What is new" into "What it proposes"; delete "Why it fits you".** DONE,
+landed as one commit (prompts, type/sanitizer and UI must agree on the shape together, per B's
+note). Field name chosen: `newHere` (not `novelty`) at the section level, to read clearly next to
+the per-result `novelty` field B's guide explicitly keeps.
+
+- **1-02/1-03** (`deep-report.ts` `buildPass2Prompt`, `report/route.ts` `buildShallowPrompt`):
+  `whatItProposes.novelty` → `whatItProposes.newHere` in both schemas, `summary` reworded to "one
+  plain paragraph, at most 2 sentences" (was "2-3 sentences"), `whyItFitsYou` schema block deleted
+  from both, its two rule lines replaced with three: `newHere`/`novelty` carry no evidence (kept,
+  reworded), "do not repeat a sentence from `summary` inside `newHere`", and a new ~25-word/
+  high-schooler-wording cap rule, per the ruling. Per-result `novelty` (the "What is new here:"
+  line) untouched in both prompts, per §1a(b).
+- **1-04** (`report.ts`): `PaperReport.whatItProposes.novelty?` renamed to `.newHere?`;
+  `whyItFitsYou?` **stays** in the type (comment updated: legacy-cache-only, nothing writes it).
+  `REPORT_CAPS.fitReasons/fitReasonChars/fitKeywords/fitKeywordChars` stay, comment added
+  explaining they only bound `sanitizePaperReport`'s untouched legacy branch now.
+  `sanitizePaperReport` reads `proposes.newHere ?? proposes.novelty` — the fallback is new (B's
+  guide didn't ask for it explicitly but it's the natural reading of "additive, never a guess": a
+  v5-shaped cached blob replayed through the sanitizer still round-trips its novelty content
+  instead of silently losing it before the cache-key bump in 1-08 evicts it). Proved by reverting
+  the `?? proposes.novelty` fallback to bare `proposes.newHere`: the new "still reads a v5-shaped
+  `novelty` key" test failed (`expected undefined to deeply equal ["Old-shaped field."]`); restored,
+  it passed again — logged in full below.
+- **1-05** (`report-sections.tsx`): `NoveltyBlock` and `ProposalBlock` folded into one
+  `ProposalBlock` (kept that name — least churn) that renders `summary` then up to two `newHere`
+  lines under a `PEERS_READING` footer (footer shown only when `newHere` has content — the summary
+  alone was never labelled "Peer's reading" before this merge and still isn't). Inherits
+  `NoveltyBlock`'s figure-slot props (`figure`/`registry`/`bound`); the `SectionFigure` query falls
+  back from `newHere[0]` to `summary` so the slot still has something to search on when there is no
+  new-here line. `FitBlock` and its private `emphasise` helper deleted outright (nothing else called
+  `emphasise`).
+- **1-06** (`copy.ts`): `REPORT_HEADING.novelty` and `.fit` deleted; `.proposal` is the only heading
+  left for this block. `FIT_KEYWORDS` deleted (unused). `WHATS_NEW` and `sharedTermsLine` untouched
+  (per-result line and the unrelated project-relation fallback string, respectively).
+- **1-07** (`reading-markdown.ts`): the separate "What is new" and "Why it fits you" Markdown
+  blocks merged/deleted into one `extra("What it proposes", …)` call — `[proposal]` alone when
+  `newHere` is empty, `[proposal, "", ...newHere, "", PEERS]` when it isn't (mirrors the TSX: a
+  footer only when there's a Peer-authored line to label). `MarkdownReport.whatItProposes.novelty?`
+  renamed to `.newHere?`; `.whyItFitsYou?` left in the type per B's note (mirrors `report.ts`).
+- **1-08** (`use-model-report.ts`): `STORAGE_KEY` `v5` → `v6`; `v5` appended to
+  `LEGACY_STORAGE_KEYS`. Comment rewritten to name what v6 actually changed.
+- **1-09** (`page.tsx`): one `<ProposalBlock>` call (was two) in `NoveltyBlock`'s old page slot;
+  `noveltyFigure` renamed `proposalFigure`; the `fit ? <FitBlock/> : …` ternary's first branch
+  dropped (now `relation ... ? ... : shared.length > 0 ? ... : null`); unused `fit`/`topics`
+  variables removed (grepped first — `topics` had no other reader). Header comment at the top of
+  the file updated to drop "why it fits you" from the section list.
+
+Tests: `report.test.ts`'s two S6-touching `describe` blocks rewritten, not deleted. The
+"whitelists the report fields" test's `whyItFitsYou` assertion (previously commented "restored on
+the founder's call") kept passing (sanitizer branch untouched) with an updated comment explaining
+it's now legacy-only. The "restored sections" describe: renamed its three tests' fixtures from
+`novelty` to `newHere`, added one new test for the v5→v6 fallback (proved above) and one new test
+proving the sanitizer still bounds a legacy `whyItFitsYou` blob's caps (renamed from the old combined
+caps test, which used to assert both `newHere`'s and `whyItFitsYou`'s caps in one test — split in
+two since they're now unrelated code paths). No test file exists for `report-sections.tsx`,
+`copy.ts`, `use-model-report.ts` or `reading-markdown.ts`'s fit-line specifically, matching B's
+grep — verified by the gate, not by red tests, for 1-05/1-06/1-07/1-09.
+
+Gate: tsc clean, eslint clean, vitest 2546/2546 (2544 + 2 new report.test.ts cases).
+
+Blast radius: re-checked `route.test.ts` (mocks `generateDeepReport` wholesale, its
+`generatedReport` fixture never sets `novelty`/`newHere`/`whyItFitsYou` — confirmed unaffected,
+matches B's read) and `reading-markdown.test.ts` (no assertions on the removed/renamed fields,
+confirmed by grep, unaffected). `figure-binding.ts` and `evidence.ts` both spread
+`...report.whatItProposes` rather than naming `.novelty`, so the field rename reached them with
+zero code changes, verified by reading both call sites.
+
+Commit: `feat(reader): merge "what is new" into "what it proposes"; delete "why it fits you"`.

@@ -281,15 +281,15 @@ function buildPass2Prompt(args: {
         },
       ],
       whatItProposes: {
-        summary: "2-3 sentences describing the proposal/scope in plain English. Do not include the method list here.",
+        summary: "one plain paragraph, at most 2 sentences, describing what the paper does. Do not include the method list here.",
         methods: [
           {
             text: "one concrete method sentence naming the actual experiment, instrument, dataset, control, ablation, measurement, simulation, or evaluation protocol used (max 4 items)",
             evidence: evidenceRule,
           },
         ],
-        novelty: [
-          "one or two concise sentences saying what is new about this paper against prior work; do not repeat the methods here (max 2 items)",
+        newHere: [
+          "a short 'new here' line — the novelty, stated only where it differs from `summary`; omit entirely if there is nothing to add beyond the summary (max 2 items)",
         ],
       },
       resultsAndSignificance: {
@@ -304,12 +304,6 @@ function buildPass2Prompt(args: {
         ],
       },
       ...reviewSchema,
-      whyItFitsYou: {
-        reasons: [
-          "one specific reason this paper matters for the reader described in userContext, max 2 sentences, tied to their topics or project; never vague (max 3 items; empty when userContext is empty)",
-        ],
-        keywords: ["paper keywords that overlap with the reader's interests (max 8; empty when userContext is empty)"],
-      },
       limitations: [
         {
           text: "one limitation the authors themselves state — only what the authors state, nothing inferred (max 3 items; omit the key if the authors state none)",
@@ -326,8 +320,9 @@ function buildPass2Prompt(args: {
       "Return ONLY valid JSON.",
       "`evidence` is one sentence copied character-for-character from the supplied text (or the abstract). Do not paraphrase it, shorten it, or merge sentences.",
       "Omit any claim item you cannot support with such a sentence. An empty array is correct when nothing qualifies.",
-      "`novelty` (proposal and per result) and `whyItFitsYou` are Peer's reading and carry no evidence sentence; keep them specific and grounded in the supplied text, never generic.",
-      "`whyItFitsYou` is written against userContext only; with no userContext, both arrays are empty. Do not mention missing context.",
+      "`newHere` (proposal) and `novelty` (per result) are Peer's reading and carry no evidence sentence; keep them specific and grounded in the supplied text, never generic.",
+      "Do not repeat a sentence from `summary` inside `newHere`; if the novelty is not separable from the summary, leave `newHere` empty.",
+      "No sentence in `summary` or `newHere` exceeds about 25 words; use plain, high-school-reading-level wording.",
       "`limitations` holds only what the authors state; do not infer weaknesses.",
       ...(project
         ? ["`relationToYourWork.basedOn` is the reader's project text copied back."]
