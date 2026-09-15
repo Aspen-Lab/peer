@@ -81,57 +81,21 @@ browser, run the reports), then report to the user in plain language and stop th
 
 ```
 ROUND:            2
-WHOSE TURN:       C
-STOPPED BECAUSE:  B finished the turn @ 2026-09-15 ~11:09 UTC. Six fix-guide items written
-                   (2-01..2-06, Ruling 9's order), every one verified by execution against real
-                   PDFs, the real corpus, or the real production code path — not reasoned about
-                   from A's log alone. B changed no product code; gate re-run cold at the end,
-                   unchanged from A's (tsc/eslint clean, vitest 2607/2607).
-STATUS:            Item count: 6. Classification breakdown: WRONG DATA x4 (2-01 host
-                   mislabelling; 2-02's one real fix, a hyphenation-fold gap; 2-05's bug A,
-                   textStatus never set on a real empty PDF; 2-06, the title heuristic itself)
-                   · WRONG SHAPE x1 (2-03, caption display) · MISSING x2 (2-04's bounce-page
-                   detector under-firing; 2-05's bug B, the /reading route's absent upload:
-                   branch) — 2-05 carries two sub-bugs plus a third, narrower client-side gate,
-                   kept as one guide item per Ruling 5's "big items get sub-entries" pattern, not
-                   split into three numbers. Two items came back with less to fix than the round-2
-                   framing assumed, both stated plainly rather than papered over: 2-02 found that
-                   2 of A's 3 named fragments are correct drops (one already standing-ruled, one
-                   newly confirmed as the model's own framing sentence) and a third,
-                   source-caused character loss that has **no safe fix** without loosening the
-                   matcher (left alone, not chased) — the one real, confirmed-live incorrect drop
-                   this round is a *new* finding (PDF line-break hyphenation), not any of A's
-                   three; 2-04 found the real og:image is genuinely unreachable behind a Springer
-                   bot-check that a retry does not clear, so the fix corrects the *status*
-                   (`source_unavailable`, honest) but will very likely **not** move the S4
-                   found-count — flagged explicitly so A does not read that as the fix having
-                   failed next round.
-OPEN ITEMS:        S3(open — 2-02) S4(open — 2-03, 2-04, 2-01; informational: A2-08 unchanged)
-                   S5(CLOSED) S6(CLOSED) S7(open — 2-05, 2-06)
-GATE (0 open):     NOT MET — unchanged from A's count (6 real items + 1 informational); B adds
-                   no new open items, only fix directions for the ones A already found. C landing
-                   all six is what would bring this to 0, pending A's re-measure next round.
+WHOSE TURN:       C (resume — 2-01 landed as dd999c4; pick up at 2-02)
+STOPPED BECAUSE:  out of budget @ 2026-09-15 ~12:40 UTC (Sonnet session limit) — 2-01 code+tests
+                   were on the working tree, gate green; the manager committed them. 2-02..2-06
+                   unstarted.
+STATUS:           Round 2 C: 2-01 (shared paywall-status helper, aggregator hosts → blocked)
+                   landed. 2-01's live check (`/api/figure` on openalex:W7212207112 → blocked,
+                   not paywalled) still owed by C. Dev server up on :3000.
+OPEN ITEMS:       S3 S4 S7 (S5, S6 closed by A round 2)
+GATE (0 open):    NOT MET
 
-DONE:      Everything through 1-33 (unchanged). Round 2's A turn (measurement) and B turn (this
-           guide) are both done; C has not started.
-GATE NOW:  tsc clean · eslint clean · vitest 2607/2607 (B, cold-checked at the end of this turn,
-           no product code changed by B).
-TODO:      Hand to C. Work items 2-01 through 2-06 in that order (already Ruling 9's order), one
-           commit per item, gate after each. Two items are two-and-three-part respectively — land
-           every part of 2-02 (the hyphen fold; do **not** chase the unfixable "Ld = 0.44"
-           character-loss case, leave it alone) and every part of 2-05 (UploadMeta/Paper
-           textStatus field, tryUploadLink's zero-sections check, the /reading route's new
-           upload: branch, AND the client-side never-ask-for-a-report gate — all four, not a
-           subset) before moving on. 2-06's fix lives entirely in Python
-           (`extract_pdf_text.py`'s `extract_title`); do not add a TypeScript re-
-           implementation of the join logic — only the safety-net word-count/stamp re-check and
-           the step-(b) model-fallback belong in the route. New protective tests are named in
-           each item; where an existing test's *fixture* doesn't match reality (2-05's
-           full-text.test.ts case built on a shape a real empty PDF never produces) add the
-           correct-shape case alongside it — never delete the old one, it still guards a
-           different real path. Carry every standing tally forward by name (S4 status tally, S3
-           dropped-claims per paper, 429 count) per the round-log rule; A2-08's Semantic Scholar
-           rate-limit tally is unchanged by this turn (B did not re-run the pool).
+DONE:      round 1: 1-01..1-33 + 1-22b. round 2: 2-01.
+GATE NOW:  tsc clean · eslint clean · vitest 2610/2610 (manager, cold, after 2-01).
+TODO:      C resumes at 2-02 (hyphenation fold in the checker), then 2-03 (caption display fold),
+           2-04 (bounce-page phrase list), 2-05 (empty-PDF textStatus, A/B/C sub-entries), 2-06
+           (title heuristic). Then hand to A for round 3.
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
