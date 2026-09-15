@@ -656,3 +656,309 @@ the loop's gate or is tracked outside it; A does not diagnose or fix it.
 Not expected to be met in round 1.
 
 Commit: `docs(abc): round 1 A — difference list, gate line, §1 handoff to B`.
+
+### Round 1 — Agent B
+
+Branch confirmed `complimentary-enhancement-to-main-update` before starting. B changed no
+product code. Throwaway execution scripts lived under
+`web/.local-data/round1-b-scratch/` (gitignored, `node --env-file`/silent-`.env.local`-loader
+pattern — no credential ever printed) and are deleted before the final commit of each part.
+
+Numbering is sequential across the whole guide (`1-01, 1-02, …`); the manager's working order
+(§1f) is **0 eslint → S6 → S5 → S3 → S4 → S7**, so the entries below are grouped in that order.
+C should work them top to bottom. Classifications: `MISSING` / `WRONG DATA` / `WRONG SHAPE` /
+`WRONG ORDER` / `EXTRA`.
+
+#### Item 0 — the eslint error
+
+**1-01 — `web/src/components/persona/quiz.tsx:38-51`.** `MISSING` (a hydration-safe read
+pattern). The `useEffect` reads `localStorage` and calls `setResult(...)` directly inside the
+effect body (line 46) — flagged by `react-hooks/set-state-in-effect`. This predates S3-S7 and
+touches no spec item; it blocks the gate per Ruling 1 (§1b).
+
+Fix direction: follow the pattern already in this codebase —
+`web/src/components/reader/report-sections.tsx`'s `FigureRegistry` (lines 72-99, used via
+`useSyncExternalStore(registry.subscribe, () => registry.ownerOf(...))`) is exactly this
+problem solved correctly: state that depends on browser-only storage, read through
+`useSyncExternalStore` instead of `useState` + `useEffect`, so React never sees a state update
+"during" an effect. For the quiz:
+- Write a tiny module-level store (or an inline `subscribe`/`getSnapshot` pair) that reads
+  `localStorage.getItem("peer:persona:v1")`, parses it, and derives `{ scores, persona }` via
+  `pickPersona` — pure, no side effect.
+- `getServerSnapshot: () => null` (matches `getReducedMotionServerSnapshot` in the pre-pivot
+  `scramble-text.tsx`, restored below in 1-10 — same idiom, second use in this codebase).
+- `subscribe`: listen for the `"storage"` event (fires on other tabs) — a same-tab write does
+  not need a subscription push since `restart()`/the quiz's own completion already triggers a
+  re-render through `setState` elsewhere (the *write* path, `choose()`/`restart()`, is unaffected
+  by this rule — only the *mount-time read* is the violation).
+- Do **not** disable the rule and do not wrap `setResult` in `startTransition` (that silences the
+  lint warning without fixing the actual hydration hazard the rule exists to catch — a
+  `startTransition`-wrapped call is still a state update sourced from an effect, just batched).
+- The result: server render and first client paint both show the fresh-quiz start screen (`null`
+  snapshot); the localStorage-backed result appears on the next paint via the store's own
+  subscription, exactly as the effect did today, but through a channel React's rules allow.
+
+Empty state: unchanged from today — no stored quiz result renders the fresh multi-step quiz.
+
+Tests at risk: none found (`Grep` for `quiz.tsx|PersonaQuiz` → `app/welcome/completeness.ts`,
+`app/persona/page.tsx`, the component itself; no `*.test.*` file references either). No fixture
+to update.
+
+Blast radius: `web/src/app/persona/page.tsx` renders `<PersonaQuiz/>` directly; nothing else
+imports it. Self-contained.
+
+#### S6 — merge "What is new" into "What it proposes"; delete "Why it fits you"
+
+Dependency order: prompts first (what the model is asked to produce), then the type/sanitizer
+(what shape survives the wire), then the UI (what renders it), then the export/cache-key
+bookkeeping. C should land 1-02 → 1-09 as one logical commit (or a tight sequence) since the
+prompt and the sanitizer must agree on the schema before the UI can render it.
+
+**1-02 — `web/src/lib/papers/deep-report.ts`, `buildPass2Prompt` (lines 261-336, this round's
+read).** `WRONG SHAPE`. The schema asks for two separate blocks: `whatItProposes.summary` +
+`whatItProposes.novelty` (lines 283-294, a `summary` field plus a sibling `novelty` array), and a
+whole separate `whyItFitsYou` object (lines 307-311). The user's complaint is exactly this split:
+"what is new" (`novelty`) duplicates "what it proposes" (`summary`) in content.
+
+Fix direction: replace the `whatItProposes` schema block with one shape:
+```
+whatItProposes: {
+  summary: "one plain paragraph, at most 2 sentences, of what the paper does",
+  methods: [ ...unchanged... ],
+  newHere: ["a short 'new here' line — the novelty, stated only where it differs from the
+    summary; omit entirely if there is nothing to add beyond the summary (max 2 items)"],
+}
+```
+Rename `novelty` → `newHere` (or keep `novelty` as the field name if C prefers less churn in
+`report.ts` — either way, pick one and make the prompt, the type and the UI agree). Delete the
+`whyItFitsYou` key from the schema entirely (lines 307-311) and delete the corresponding rules
+lines (329-331, "`whyItFitsYou` is written against userContext only..."). Add an explicit rule:
+`"Do not repeat a sentence from `summary` inside `newHere`; if the novelty is not separable from
+the summary, leave `newHere` empty."` Cap sentence length per the ruling: no sentence over ~25
+words — add as a rule line, e.g. `"No sentence in `summary` or `newHere` exceeds about 25 words;
+use plain, high-school-reading-level wording."` The per-result `novelty` field ("What is new
+here:" under each key result, lines 302-305) is **not** touched — the user's complaint is about
+the two *section-level* blocks, and §1a(b) explicitly keeps the per-result line.
+
+**1-03 — `web/src/app/api/papers/report/route.ts`, `buildShallowPrompt` (lines 79-178, this
+round's read).** Same shape, same fix, mirrored: `whatItProposes.novelty` (lines 142-144) →
+`newHere` with the same "omit if not separable" rule; delete `whyItFitsYou` (lines 158-163) and
+its rule line (170-171, "`whyItFitsYou` is written against userContext only..."). Keep this
+prompt's per-result `novelty` (line 153) untouched, same reasoning as 1-02.
+
+**1-04 — `web/src/lib/papers/report.ts` — type + sanitizer.** `WRONG SHAPE` (type) +
+`EXTRA` (sanitizer still whitelists a field the page must stop rendering). Two independent
+changes:
+- Type (`PaperReport.whatItProposes`, lines 88-109): rename/repurpose `novelty?: string[]`
+  (line 98) to the merged field (`newHere`, matching 1-02's prompt key) — same optionality and
+  cap. `whyItFitsYou?: {...}` (line 127) **stays in the type as optional** per §1a(b) ("may stay
+  optional in the type for old caches") — do not remove the field, only stop the UI from
+  rendering it (1-05) and stop the sanitizer from *keeping content the model still might send if
+  an old cached prompt string were replayed* — in practice the sanitizer already only keeps what
+  it's given, so no sanitizer change is strictly required to satisfy "nothing renders it"; the
+  honest move is to leave `sanitizePaperReport`'s `whyItFitsYou` handling (lines 437-440) alone
+  (it is dead code once nothing calls it with the field populated, and removing it now would be
+  removing working sanitizer logic for a field the type still declares) — **do not delete it**,
+  just confirm no UI path reads `report.whyItFitsYou` after 1-05.
+- `REPORT_CAPS` (lines 156-176): `novelty`/`noveltyChars` stay (now used for `newHere`);
+  `fitReasons`/`fitReasonChars`/`fitKeywords`/`fitKeywordChars` (lines 169-172) become unused by
+  any *new* report but must stay in the object — `sanitizePaperReport` still uses them to bound
+  an old cached/replayed `whyItFitsYou` blob, and removing the caps while keeping the sanitizer
+  branch would make that branch uncapped. Leave them.
+
+**1-05 — `web/src/components/reader/report-sections.tsx`.** `EXTRA` (renders a section the spec
+deletes) + `WRONG SHAPE` (two components where the merge wants one). `NoveltyBlock` (lines
+144-187) and `ProposalBlock` (lines 191-200) are separate; `FitBlock` (lines 333-365) renders
+`whyItFitsYou`.
+
+Fix direction: fold `NoveltyBlock`'s body into `ProposalBlock` — one component, one heading
+(`REPORT_HEADING.proposal`, "What it proposes"), rendering `report.whatItProposes.summary` as
+the lead paragraph and `report.whatItProposes.newHere` (1-04's renamed field) as up to two
+lines under it, in the reader's own voice (no "Peer's reading" footer needed if the lines are
+framed as continuation of the proposal — C's call, but note the old `PEERS_READING` footer was
+specifically for content with *no* verbatim backing, which still applies to `newHere`, so keep a
+footer). This merged component inherits `NoveltyBlock`'s figure-slot props (`figure`, `registry`,
+`bound` — lines 148-158) since the figure that used to hang off "What is new" needs a new home;
+attach it to the merged block. **Delete `FitBlock`** (lines 333-365) and its `emphasise` helper
+(lines 311-331) entirely — nothing else calls `emphasise`.
+Note the naming collision this creates for **S5** (next): whatever C names the merged component
+(keeping `ProposalBlock` is the path of least churn), S5's scramble wiring (1-13) targets *that*
+component's text nodes, not `NoveltyBlock`'s (which will no longer exist).
+
+**1-06 — `web/src/components/reader/copy.ts`.** `WRONG SHAPE`. `REPORT_HEADING` (lines 27-34)
+declares `novelty: "What is new"` and `fit: "Why it fits you"` as separate headings (lines
+28, 31). Fix: delete both keys; `proposal: "What it proposes"` (line 29) is the only heading
+left for this block. Delete `FIT_KEYWORDS` (line 43, "Shared terms:") — unused once `FitBlock`
+is gone (note: `sharedTermsLine` at line 98-100 is a **different**, still-used string for the
+project-relation fallback path in `page.tsx` — do not confuse the two "shared terms" strings).
+`WHATS_NEW` (line 40, "What is new here:") **stays** — it labels the per-result novelty line,
+which 1-02/1-03 explicitly keep.
+
+**1-07 — `web/src/lib/papers/reading-markdown.ts`.** `EXTRA`. The `novelty` extraction (lines
+277-278, heading "What is new") and the `whyItFitsYou` block (lines 312-320, heading "Why it
+fits you") are separate. Fix: merge into one `extra("What it proposes", [proposal, ...newHere,
+"", PEERS])`-shaped call (adjust to keep `proposal` unwrapped-plain per the current "What it
+proposes" line 281 and `newHere` lines under it) and delete the `fit` block (lines 312-320)
+entirely, consistent with 1-05.
+
+**1-08 — `web/src/components/reader/use-model-report.ts`.** `WRONG DATA` (a stale cache key
+means an old shape is served back). Line 24: `STORAGE_KEY = "peer-paper-report-v5"` → `"v6"`.
+Line 26: `LEGACY_STORAGE_KEYS = ["peer-paper-report-cache-v3", "peer-paper-report-v4"]` → append
+`"peer-paper-report-v5"`. Without this, a reader with a cached deep report from before this
+round keeps seeing the old two-block/fit shape for up to `DEEP_TTL_MS` (7 days) after upgrade,
+per the comment already on line 22-23 ("a v4 report has none of them and would render the page
+without them for a day" — same mechanism, one version further).
+
+**1-09 — `web/src/app/papers/[id]/page.tsx`.** `EXTRA`. `<NoveltyBlock .../>` (lines 618-626)
+and `<ProposalBlock .../>` (line 628) render as two calls; the `fit ? <FitBlock/> : relation ?
+... : shared...` ternary (lines 667-685) has a dead first branch once `whyItFitsYou` never
+populates. Fix: one call to the merged component from 1-05 in `NoveltyBlock`'s old slot (so
+figure-slot ordering on the page is unchanged — the merged block was "first after the decision"
+before, and stays there); collapse the ternary to `relation && relation.items.length > 0 ? ... :
+shared.length > 0 ? ... : null` (drop the `fit` branch and the now-unused `topics` variable at
+line 542 if nothing else reads it — check before deleting).
+
+**Tests at risk (S6), found by grep:**
+- `web/src/lib/papers/report.test.ts` — asserts `report.whyItFitsYou` is kept and shaped (lines
+  34, 52, 256-282, 285-309: "keeps proposal novelty, per-result novelty, review contents and the
+  fit block" and the caps test at 285-309 asserts `REPORT_CAPS.fitReasons` etc. are applied).
+  **Rewrite, do not delete**: the caps test can keep asserting the caps *object* still exists and
+  bounds an old-shaped input (1-04 keeps the caps and the sanitizer branch for exactly this
+  reason), but the "restored... fit block" framing in the comment (line 50-51) and the assertion
+  that a *new* report exposes `whyItFitsYou` need a comment update explaining it's now
+  legacy-cache-only, plus a new assertion that `whatItProposes.newHere` round-trips instead of
+  `novelty` where the test currently uses that field name.
+- No test file exists for `report-sections.tsx`, `copy.ts`, `use-model-report.ts`, or
+  `reading-markdown.ts`'s fit-line specifically (`Grep` for `report-sections|use-model-report`
+  under `*.test.*` → no matches; `reading-markdown.test.ts` has no `whyItFitsYou`/`novelty`/"What
+  is new" assertions). Low direct test risk for 1-05/1-06/1-07/1-08/1-09 — verify by running the
+  gate, not by expecting red tests to guide you.
+- `web/src/app/api/papers/report/route.test.ts` references `whatItProposes` at lines 55-56,
+  244-245, 270, 287, 352, 389-390 — none assert on `novelty` or `whyItFitsYou` specifically (they
+  assert on `summary`/`methods` pass-through and on the deep-report mock), so 1-02/1-03 should
+  not break this file, but re-run it explicitly since it is the file most tightly coupled to the
+  prompt-building functions changed here.
+
+**Blast radius (S6):** `reading-markdown.ts`'s `MarkdownReport` type (lines 36-46) still declares
+`whyItFitsYou?` — leave it (mirrors `report.ts` keeping the field optional for old caches) but
+its consumer branch is deleted per 1-07. `web/src/lib/papers/copy.ts` (briefing copy, distinct
+file from `reader/copy.ts`) is unrelated — do not confuse the two `copy.ts` files during grep.
+
+#### S5 — the "matrix" text-reveal effect
+
+**1-10 — restore `web/src/components/scramble-text.tsx` and `scramble-text.test.ts`.**
+`MISSING`. Neither file exists on this branch (confirmed absent by A and independently by B this
+round). Restore from `git show 4d4b0ef:web/src/components/scramble-text.tsx` with one required
+edit: the old file imports `useUIStore, type RevealMotionPreference` from `@/store/ui` (deleted —
+confirmed absent this round, `ls web/src/store/*.ts` shows only `feed.ts`/`profile.ts`) and reads
+`revealMotion` to feed `resolveRevealMode(revealMotion, systemReducedMotion)`. Since the setting
+is gone and §1a(b)/the ruling say "honour `prefers-reduced-motion` via `matchMedia` only,"
+simplify: `resolveRevealMode(systemReducedMotion: boolean): RevealMode { return
+systemReducedMotion ? "fade" : "scramble"; }` (drop the `revealMotion` parameter and the `"full"`
+override branch entirely — there is no UI left that could set it). Everything else in the file
+(the ASCII glyph set, `initialFrame`'s index-based determinism, the `useSyncExternalStore` reduced-
+motion read at lines ~76-88, the scramble/fade `useEffect`s) restores unchanged — it has no other
+external dependency. Restore the test file too, trimmed to 2 cases instead of 4 (drop the
+`"full"`-override cases, which no longer apply; keep "plays the decode animation when the system
+allows motion" and "falls back to a gentle fade when the system asks for reduced motion") and
+update the call signature (`resolveRevealMode(false)` / `resolveRevealMode(true)`, one arg not
+two). This is a **rewrite**, not a deletion — the restored test still proves the one behaviour
+rule that survives the pivot.
+
+**1-11 — `web/src/components/reader/use-model-report.ts`.** `MISSING`. Nothing in
+`ModelReportState` (lines 86-93) says whether the current `report` just finished generating in
+*this* visit or came back from `readCached` (line 152) on mount. This is exactly the distinction
+the old page's `hasFetchedReport`/`revealingReportKey` logic needed (git show 4d4b0ef, lines
+598-600, 705-707, 732-735) and the current hook cannot answer.
+
+Fix direction: the hook already knows the answer internally — `cached` (line 152, from
+`readCached`) vs `settled` (line 303, from a completed `load()`/`fetchJsonFallback()` this
+mount). Add two fields to the returned object (line 307's `return`):
+```
+return {
+  report,
+  stage,
+  failed: Boolean(settled?.failed),
+  fresh: !cached && settled?.report != null,   // this visit generated it, not a cache hit
+  reportKey,                                    // so the page can key its own reveal state
+};
+```
+`reportKey` (line 149) is already computed; exposing it costs nothing and is the only way the
+page can tell "which report" `fresh` refers to across paper navigation (`j`/`k`) without
+recomputing the same `${paper.id}|${depth}|${hash(project)}|${profile.feedAiProvider}` string a
+second time in `page.tsx` (recomputing it in two places risks the two copies drifting when one
+of the four inputs changes without the other being updated — expose it once, here).
+
+**1-12 — `web/src/app/papers/[id]/page.tsx`, `Reader` component.** `MISSING`. Add the old page's
+`revealingReportKey` state and its two effects (git show 4d4b0ef lines 598-600, 743- [the effect
+that *sets* it — search that commit for where `setRevealingReportKey` is first called; it is set
+when `hasFetchedReport` newly becomes true, not shown in the earlier grep window] and 898-911,
+the effect that *clears* it after `REVEAL_DURATION_MS`-scale time, shorter under reduced motion).
+Ported to the current hook's fields:
+```
+const [revealingReportKey, setRevealingReportKey] = useState<string | null>(null);
+useEffect(() => {
+  if (model.fresh && model.reportKey) setRevealingReportKey(model.reportKey);
+}, [model.fresh, model.reportKey]);
+useEffect(() => {
+  if (!revealingReportKey) return;
+  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const t = window.setTimeout(
+    () => setRevealingReportKey((k) => (k === revealingReportKey ? null : k)),
+    reducedMotion ? 0 : 900,
+  );
+  return () => window.clearTimeout(t);
+}, [revealingReportKey]);
+const shouldScrambleReport = revealingReportKey === model.reportKey && model.fresh;
+```
+Note this duplicates the reduced-motion check that `ScrambleText` itself also makes (once, via
+`useSyncExternalStore`, restored in 1-10) — that duplication is intentional and matches the old
+page exactly: the page-level check decides *how long to keep treating this as a reveal* (so the
+"scramble" state doesn't linger indefinitely and re-trigger on unrelated re-renders), the
+component-level check decides *how each character animates*. Do not try to unify them into one
+check — they answer different questions at different lifetimes.
+
+**1-13 — thread `scramble={shouldScrambleReport}` through every report-derived text node.**
+`MISSING`, enumerated by grepping the old page's `<ScrambleText` call sites (git show
+4d4b0ef, `web/src/app/papers/[id]/page.tsx`) against where the same content lives today:
+- `web/src/components/reader/report-sections.tsx` — the merged proposal block (1-05's output,
+  wrapping the old `ProposalBlock`+`NoveltyBlock`): the summary paragraph and each `newHere`
+  line. `ResultsBlock` (lines 221-279): `result.title`, `result.detail` (line 250-251) and
+  `result.novelty` (lines 254-258, the per-result "What is new here:" line — old page lines
+  1596-1622, `ResultClaimList`'s per-field scramble). `ReviewContentsBlock` (lines 283-306):
+  `section.summary` (line 300 — old page line 1274, the review-section summary).
+- `web/src/components/reader/claim-list.tsx` — `ClaimList`'s `claim.text` (line 55, currently
+  bare `<p className={CLAIM_CLASS}>{claim.text}</p>`) covers method/caveats/forYou/nextStep. Add
+  an optional `scramble?: boolean` prop and swap in `<ScrambleText text={claim.text}
+  className={CLAIM_CLASS}/>` when true. `KeyResultList` (further down the same file, not fully
+  read this round — verify before wiring) may hold a second copy of key-result rendering; check
+  whether `ResultsBlock` (report-sections.tsx) or `KeyResultList` (claim-list.tsx) is the one
+  actually mounted on the current page (`page.tsx` imports `ResultsBlock` from
+  `report-sections.tsx`, line 59 — `KeyResultList` may be dead code from before this round's
+  restoration; confirm with a grep for `KeyResultList` callers before spending effort wiring it).
+- `web/src/components/reader/paper-words.tsx` — the private `Deck` component's skim line (around
+  line 70, `skim.map((claim) => claim.text).join(" ")` — old page lines 1290-1302, the pull-quote
+  skim). Needs the same `scramble` prop threaded from `PaperWords`'s own props down to `Deck`.
+- **Not** `QuoteList` (reader/) — its `quotes` come from the paper's own extracted text
+  (`reading.method`/`reading.findings`/`reading.caveats`, the `fromServer` fallback path), never
+  from a model report, so nothing there should scramble; scrambling implies "Peer just wrote
+  this," which is false for a direct quote.
+- **Not** `FitBlock` — deleted in 1-05.
+
+Empty state (S5): a report that fails or never runs (Tier 0, no key, paywalled with no shallow
+fallback) shows today's existing plain/skeleton treatment (`LoadingMat`/shimmer per §1a(c)) —
+scramble only ever wraps text that exists; it is never a substitute for the empty/loading states.
+
+**Tests at risk (S5):** the restored `scramble-text.test.ts` is new (a restoration), so nothing
+currently depends on it — it cannot be "at risk," only added. `Grep` for `ScrambleText|
+resolveRevealMode|revealMotion` under `src/` (this round) found **zero** current references
+anywhere — confirms S5 is purely additive and no existing test asserts the *absence* of a
+scramble effect that 1-10/1-13 would now contradict.
+
+**Blast radius (S5):** `web/src/store/ui.ts` stays deleted — do not recreate it; 1-10's
+simplified `resolveRevealMode` has no store dependency at all. Verify in the browser per §1a(d)
+once C lands this: open a paper whose report is not cached (a fresh `openalex:`/`arxiv:` id
+never opened before) and confirm the scramble plays once on arrival; reload the same paper and
+confirm it renders plainly from cache (`model.fresh` will be `false` on that load since
+`readCached` returns non-null and the fetch effect never runs, per `use-model-report.ts` line
+183: `if (!current || !reportKey || cached) return;`).
