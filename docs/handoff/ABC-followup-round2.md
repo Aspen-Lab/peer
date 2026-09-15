@@ -2023,3 +2023,52 @@ Gate: tsc clean, eslint clean, vitest 2565/2565 (2562 + 3 new).
 
 Commit: `feat(figures): queue Semantic Scholar lookups and report a 429 as rate_limited, not
 source_unavailable`.
+
+**1-21 — `web/src/lib/figures/extract.ts` — Nature-style IDP/transit bounce detection + one
+retry.** DONE. New `looksLikeBouncePage(finalUrl, html)` (host starts with `idp.`, or the URL path
+contains `/transit`, or the body is under 8KB and mentions "cookie" — exactly B's three heuristics,
+generic across publishers per §1d, same "looks like a stub, not real content" idiom as the existing
+`isAr5ivErrorPage`) runs in `tryHtmlCandidates` right after the paywall check, before
+`htmlFigureCandidates`. On a hit: one retry (a second `timedFetch(url)`, same URL, no special
+handling); if the retry's own result no longer looks like a bounce, its `finalUrl`/`html` replace
+the originals and normal figure extraction proceeds; otherwise `status: "source_unavailable"` with
+`bouncePageReason(finalUrl)` ("Peer reached an access-check page at `<host>`, not the article
+itself.") — replacing what would otherwise have been a false `no_figures` ("reached the source
+page, but did not expose extractable figures"), which is exactly the `WRONG DATA` bug A/B named.
+
+**Live-verified before committing to a mechanism, per the instruction not to guess at a cookie
+relay.** Wrote a throwaway Node script (deleted, not committed) against the real DOI for
+`openalex:W7212165100` (`10.1038/s41560-026-02120-8`, the Nature Energy paper A's tally named) with
+the same UA/redirect-follow behavior `timedFetch` uses. Result, logged as status codes and lengths
+only, no page text: every attempt — the original fetch, a second plain fetch of the same URL, a
+third fetch replaying the bounce response's own `Set-Cookie` header as a `Cookie` header, and even
+a direct fetch of the resolved article URL (skipping `doi.org` entirely) — landed back on
+`idp.nature.com/transit` with a fresh one-time `code` each time, same ~3KB body every time. So for
+this specific publisher the retry does **not** clear the bounce, with or without a cookie relay —
+this is not the "transient failure" case B's guide flagged as possible; it held up as structural
+across 4 different attempt shapes. Per the standing instruction ("if a guarded fix misses shapes
+B's cases did not span — stop and record, never widen the guard inline"), no cookie-relay code was
+added (there was nothing shown to work to commit to), and the retry stays in as a generic, low-cost
+step for a publisher whose bounce genuinely is transient — which this round never observed, but the
+codebase has no way to tell apart from Nature's case in advance. The concrete, confirmed win for
+Nature specifically is the reclassification: `source_unavailable` with an honest reason, not a false
+`no_figures`.
+
+Tests: `web/src/lib/figures/extract.test.ts`, new `describe` block, 3 cases — a bounce that bounces
+again on retry -> `source_unavailable` with a reason naming the access-check host (and asserts
+`fetch` was called exactly twice: original + one retry, not a retry loop); a bounce that clears on
+retry -> the retry's real content is used (`status: "candidates"`, the real `<figure>` found); a
+large real article page whose footer happens to mention "cookies" (a cookie-consent notice, a
+realistic false-positive risk for the naive keyword check) is NOT mistaken for a bounce stub,
+proven by asserting `fetch` was called only once (no retry fired). Proof: short-circuited
+`looksLikeBouncePage`'s call site to always skip the branch (`if (false && looksLikeBouncePage(...))`)
+— the first two cases failed (fetch called once instead of twice; the second case's status came back
+`no_figures` instead of `candidates`, the exact false-diagnostic bug this item exists to fix),
+restored.
+
+Gate: tsc clean, eslint clean, vitest 2568/2568 (2565 + 3 new). Re-ran
+`src/lib/figures/*.test.ts` as the standing regression lock: 3 files, 20 tests, all pass —
+`arxiv-html-source.test.ts`'s 2 tests unaffected (arXiv papers still skip `tryHtmlCandidates`
+entirely).
+
+Commit: `fix(figures): a small identity-check bounce page is reported honestly, not as no_figures`.

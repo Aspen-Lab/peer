@@ -864,6 +864,33 @@ function isAr5ivErrorPage(html: string): boolean {
   );
 }
 
+function safeHostname(url: string): string | null {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return null;
+  }
+}
+
+// 1-21: a generic "this looks like a stub, not real content" check, the same
+// kind `isAr5ivErrorPage` above already is for a different stub — applies to
+// any publisher whose access gateway bounces an unauthenticated request
+// through an identity-check page rather than serving (or cleanly rejecting)
+// the article. Not a nature.com-specific branch (per §1d), even though
+// Nature is the only host this round observed it on.
+function looksLikeBouncePage(finalUrl: string, html: string): boolean {
+  const host = safeHostname(finalUrl);
+  const hostLooksLikeIdp = Boolean(host && /^idp\./i.test(host));
+  const pathLooksLikeTransit = /\/transit(?:[/?]|$)/i.test(finalUrl);
+  const looksLikeThinCookieStub = html.length < 8_000 && /cookie/i.test(html);
+  return hostLooksLikeIdp || pathLooksLikeTransit || looksLikeThinCookieStub;
+}
+
+function bouncePageReason(finalUrl: string): string {
+  const host = safeHostname(finalUrl) ?? finalUrl;
+  return `Peer reached an access-check page at ${host}, not the article itself.`;
+}
+
 /**
  * arXiv's own LaTeXML rendering, which is where a modern preprint's figures
  * live. This used to try ar5iv alone, and ar5iv now serves a stub for recent
@@ -1102,14 +1129,48 @@ export async function tryHtmlCandidates(
     };
   }
 
-  const finalUrl = res.url || url;
-  const html = await readBoundedText(res);
+  let finalUrl = res.url || url;
+  let html = await readBoundedText(res);
   if (appearsPaywalled(finalUrl, html)) {
     return {
       status: "paywalled",
       candidates: [],
       reason: paywallReason(finalUrl),
     };
+  }
+
+  // 1-21: a 2xx HTML response can still be an intermediate identity-check
+  // stub rather than the article — Nature's DOI resolution sends every
+  // unauthenticated request through one (`idp.nature.com/transit`, ~3KB,
+  // a "checking your browser" cookie notice). Reporting this as "reached
+  // the source page, but it did not expose extractable figures" (today's
+  // `no_figures` message, a few lines down) would be false — Peer never saw
+  // the article. One retry first: a generic "small bounce page" heuristic
+  // (not a nature.com-specific branch, per §1d) since some publishers' bounce
+  // is a one-off transient hiccup a plain retry clears. Live-verified against
+  // a real Nature.com DOI this round: for Nature specifically, neither a
+  // plain retry nor one that replayed the bounce page's own Set-Cookie header
+  // as a Cookie header got past it (both bounced again, with a fresh transit
+  // code each time) — so this gateway is not a transient/cookie-missing case
+  // a Node-side retry can clear, and no cookie-relay mechanism was added
+  // (nothing to commit to that was shown to work). The retry still runs
+  // because it is cheap and may help a different, genuinely transient bounce
+  // this round never observed; when it does not clear, the result is at
+  // least an honest `source_unavailable` instead of a false `no_figures`.
+  if (looksLikeBouncePage(finalUrl, html)) {
+    const retryRes = await timedFetch(url);
+    const retryFinalUrl = retryRes?.url || url;
+    const retryHtml = retryRes?.ok ? await readBoundedText(retryRes) : "";
+    if (retryRes?.ok && !looksLikeBouncePage(retryFinalUrl, retryHtml)) {
+      finalUrl = retryFinalUrl;
+      html = retryHtml;
+    } else {
+      return {
+        status: "source_unavailable",
+        candidates: [],
+        reason: bouncePageReason(finalUrl),
+      };
+    }
   }
 
   const candidates = htmlFigureCandidates(html, finalUrl, source);

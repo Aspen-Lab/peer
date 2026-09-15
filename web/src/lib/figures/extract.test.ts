@@ -203,3 +203,70 @@ describe("trySemanticScholarCandidates — 1-20, concurrency cap + minimum inter
     expect(result.status).toBe("rate_limited");
   });
 });
+
+describe("tryHtmlCandidates — 1-21, a small identity-check bounce page is not the article", () => {
+  const originalFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    vi.restoreAllMocks();
+  });
+
+  // A trimmed-down stand-in for Nature's own idp.nature.com/transit stub —
+  // small, mentions cookies, does not carry a <figure> or an og:image.
+  const bounceHtml =
+    "<!doctype html><html><body><p>Checking your browser for a valid cookie session before continuing.</p></body></html>";
+  const bounceResponse = () => {
+    const res = new Response(bounceHtml, { status: 200, headers: { "content-type": "text/html" } });
+    Object.defineProperty(res, "url", {
+      value: "https://idp.example.com/transit?redirect_uri=https%3A%2F%2Fpublisher.example.com%2Farticle%2F1",
+      configurable: true,
+    });
+    return res;
+  };
+
+  it("reports source_unavailable (not no_figures) when the retry bounces again too", async () => {
+    globalThis.fetch = vi.fn(async () => bounceResponse()) as unknown as typeof fetch;
+
+    const result = await tryHtmlCandidates("https://publisher.example.com/article/1", "publisher");
+
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2); // original + one retry
+    expect(result.status).toBe("source_unavailable");
+    expect(result.reason).toContain("access-check page");
+    expect(result.reason).toContain("idp.example.com");
+  });
+
+  it("uses the retry's content once the bounce clears", async () => {
+    const realArticleHtml =
+      '<!doctype html><html><body><figure><img src="/fig1.png"><figcaption>Figure 1. Panel A shows the result.</figcaption></figure></body></html>';
+    let call = 0;
+    globalThis.fetch = vi.fn(async () => {
+      call += 1;
+      if (call === 1) return bounceResponse();
+      const res = new Response(realArticleHtml, { status: 200, headers: { "content-type": "text/html" } });
+      Object.defineProperty(res, "url", { value: "https://publisher.example.com/article/1", configurable: true });
+      return res;
+    }) as unknown as typeof fetch;
+
+    const result = await tryHtmlCandidates("https://publisher.example.com/article/1", "publisher");
+
+    expect(result.status).toBe("candidates");
+    expect(result.candidates[0]?.imageUrl).toContain("fig1.png");
+  });
+
+  it("does not mistake a real, cookie-notice-carrying article page for a bounce stub", async () => {
+    const realArticleHtml =
+      "<!doctype html><html><body>" +
+      '<figure><img src="/fig1.png"><figcaption>Figure 1. The real result.</figcaption></figure>' +
+      "<footer>This site uses cookies. ".padEnd(9_000, "x") +
+      "</footer></body></html>";
+    globalThis.fetch = vi.fn(
+      async () => new Response(realArticleHtml, { status: 200, headers: { "content-type": "text/html" } }),
+    ) as unknown as typeof fetch;
+
+    const result = await tryHtmlCandidates("https://publisher.example.com/article/2", "publisher");
+
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1); // no retry triggered
+    expect(result.status).toBe("candidates");
+  });
+});
