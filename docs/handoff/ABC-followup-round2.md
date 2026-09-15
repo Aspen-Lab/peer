@@ -2334,3 +2334,30 @@ S7's two pipeline branches (1-28, 1-29) are both landed now. Remaining: 1-31 (re
 `upload:` ids), 1-32 (the button), 1-33 (README note), then the live check.
 
 Commit: `feat(upload): figures/extract.ts reads an uploaded PDF's own images directly`.
+
+**1-31 — `web/src/app/papers/[id]/page.tsx` resolves `upload:` ids.** DONE, exactly B's diff:
+`isUploadId = id.startsWith("upload:")` alongside the existing `isExternalId`, folded into
+`shouldFetchById`, and the fetch URL branches to `/api/papers/upload/<hash16>` (id with the
+`upload:` prefix stripped) instead of `/api/papers/<id>`. Confirmed by reading the rest of the
+component this round, as B said: nothing downstream (`Reader`, `useModelReport`, `useReading`,
+figure resolution) branches on an id prefix — they all just operate on the `Paper` object this
+fetch hands them, so this one id-resolution point is genuinely the only change the file needs.
+Added `isUploadId` to the fetch effect's own dependency array (it's read inside the effect body) —
+a derived boolean of `id` alone, so this never causes an extra run beyond what `id`'s own change
+already would.
+
+Did not wire the upload POST response into a transient store slot for the very first navigation
+(B named this optional — "a nice-to-have... not required for correctness"): the `GET` fallback
+alone already makes a cold load or a reload work, which is Ruling 4's one hard requirement. Skipped
+to keep this item's diff to the one thing it needs.
+
+**No test added** — `app/papers/[id]/page.tsx` has no test file today (confirmed by `find`, matches
+B's own finding for S7: "Tests at risk: none... nothing exercises this path yet") and B's test ask
+for S7 was scoped to "the routes and the two upload: branches" specifically (1-26/1-27's routes,
+1-28/1-29's pipeline branches) — all of which now have coverage. This one id-resolution branch in a
+large, hook-heavy client page component is verified by the live check instead (§ below), which is
+also the only way §3's "S7 needs a browser for the button" constraint lets it be checked this round.
+
+Gate: tsc clean, eslint clean, vitest 2604/2604 (unchanged — no test exercises this file).
+
+Commit: `feat(upload): the reading page fetches an uploaded paper's record on a cold load`.

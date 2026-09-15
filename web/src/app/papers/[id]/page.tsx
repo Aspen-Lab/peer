@@ -131,6 +131,11 @@ export default function PaperReadingPage({
     }
   })();
   const isExternalId = id.startsWith("openalex:") || id.startsWith("arxiv:");
+  // 1-31: an uploaded paper's id matches neither prefix above, so on a cold
+  // load (a fresh tab on `/papers/upload:<hash16>`, nothing in the client
+  // store yet) the page would otherwise fall straight to the "not found"
+  // branch below instead of ever fetching the record.
+  const isUploadId = id.startsWith("upload:");
 
   const feedPapers = useFeedStore((s) => s.papers);
   const savedPapers = useFeedStore((s) => s.savedPapers);
@@ -179,12 +184,16 @@ export default function PaperReadingPage({
     [baseContent, isSavedInStore, feedbackForId],
   );
   const shouldFetchById =
-    isExternalId && !storePaperIsEnriched && !fetchDoneForId && !pendingPaper;
+    (isExternalId || isUploadId) && !storePaperIsEnriched && !fetchDoneForId && !pendingPaper;
 
   useEffect(() => {
     if (!shouldFetchById) return;
     let cancelled = false;
-    apiFetch<Paper>(`/api/papers/${encodeURIComponent(id)}`)
+    apiFetch<Paper>(
+      isUploadId
+        ? `/api/papers/upload/${encodeURIComponent(id.slice("upload:".length))}`
+        : `/api/papers/${encodeURIComponent(id)}`,
+    )
       .then((p) => {
         if (!cancelled) setFetchResult({ id, paper: p, done: true });
       })
@@ -194,7 +203,7 @@ export default function PaperReadingPage({
     return () => {
       cancelled = true;
     };
-  }, [id, shouldFetchById]);
+  }, [id, shouldFetchById, isUploadId]);
 
   if (!paper) {
     if (shouldFetchById) {
