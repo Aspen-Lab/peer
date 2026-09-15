@@ -17,7 +17,7 @@ Also on this branch, from before the pull: search-provider failures now surface 
 
 ## §2 Open (the user adds; the clock takes the top item)
 
-_(none)_
+_The 2026-09-15 batch (S3–S7) runs as an ABC loop — see `docs/handoff/ABC-followup-round2.md`. This ledger is not the clock's source of truth while that loop is open._
 
 ## §3 Rules for a tick
 
@@ -60,7 +60,11 @@ _(none)_
 
 - 2026-09-13 15:27 — clock stopped by the user after 13 noop ticks; nothing changed on the branch since it started.
 
+- 2026-09-14 — user authorized commits ("commit, with descriptions of each commit"); 12 commits landed (search box, figures, restored sections, Tavily removal, Gemini 3.x, Vertex global-only, arXiv PDF hand-off, report tier knob).
+
+- 2026-09-15 — new batch S3–S7 opened as an ABC loop (`ABC-followup-round2.md`); hourly clock restarted for that loop.
+
 ## §5 Authorizations
 
-- Commit to the branch: **not yet authorized**
+- Commit to the branch: **authorized by the user 2026-09-14** ("commit, with descriptions of each commit")
 - Push to origin: **not yet authorized**
