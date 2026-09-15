@@ -962,3 +962,219 @@ never opened before) and confirm the scramble plays once on arrival; reload the 
 confirm it renders plainly from cache (`model.fresh` will be `false` on that load since
 `readCached` returns non-null and the fetch effect never runs, per `use-model-report.ts` line
 183: `if (!current || !reportKey || cached) return;`).
+
+#### S3 — full text reaches pass 1, and the checker stops dropping true claims
+
+All four sub-items below were checked **by execution** (throwaway `tsx` scripts under
+`web/.local-data/round1-b-scratch/`, deleted before this commit; `.env.local` loaded silently via
+a small in-script parser — never printed, never echoed; `NODE_ENV` set to `"development"` in the
+harness only to exercise the same `canUseLocalServerProvider()` gate the running dev server
+already satisfies, so the real Vertex/Gemini provider — the one the product actually calls — ran
+the same prompts against the same paper).
+
+**1-14 — `web/src/lib/papers/deep-report.ts`, `buildPass1Prompt` (lines 120-155) and the module
+constants (lines 33-35).** `MISSING` + `WRONG SHAPE`. Confirmed by reading (matches A's claim
+exactly) and cross-checked against a real `getFullText()` call on `openalex:W7212228226`: the
+function reads only `buckets.introduction`, `.methods`, `.results`, `.discussion` (lines 121-125)
+— never `buckets.conclusion`, even though `canonicalizeHeading` (`html-text.ts:157`) and its
+Python mirror (`extract_pdf_text.py:129-130`, `canonicalize()`) both produce a `conclusion`
+bucket for headings like "Conclusion"/"Summary"/"Future Work" — confirmed this round by reading
+both canonicalizers and by re-deriving A's own live result (JECST's 3364-char Conclusions section
+canonicalizes to `conclusion` and is silently dropped from pass 1 today). Per-bucket clips (intro
+12,000, methods/results/discussion each 14,000 — lines 138-141) and the outer
+`PASS1_MAX_INPUT_CHARS = 60_000` (line 34) are both far under the ruling's ~400k-char budget.
+
+Fix direction:
+- Add a `conclusion` key to the `sections` object passed to the model (line 137-142) and to the
+  `clip(...)` calls, reading `buckets.conclusion ?? ""`.
+- Add whatever body text canonicalized to something *other* than the five known buckets
+  (`abstract`/`introduction`/`methods`/`results`/`discussion`/`conclusion`) as a generic
+  `otherBody` bucket rather than silently dropping it — `canonicalizeHeading`'s fallback bucket
+  is `"body"` (html-text.ts, confirmed this round) for anything unmatched, and `sectionsByCanonical`
+  (deep-report.ts lines 62-68) already folds every section into its canonical key regardless of
+  which one it is — `buildPass1Prompt` is the only place selectively reading five of however many
+  keys exist. Read `buckets` generically (iterate its own keys minus `abstract`, which is handled
+  separately as `paper.abstract` already) instead of destructuring five named ones.
+- Raise the per-bucket clips or remove them and rely solely on the outer cap — the ruling accepts
+  either; removing the per-bucket clips and keeping ONE prompt-wide cap is simpler to reason about
+  and matches how `buildPass2Prompt`'s non-signal fallback path already does it (6000/bucket, also
+  worth raising — see below).
+- Raise `PASS1_MAX_INPUT_CHARS` (line 34) from `60_000` to `~400_000` per the ruling.
+- `PASS2_MAX_INPUT_CHARS` (line 35, currently `24_000`) governs pass 2's prompt, which normally
+  carries the *compressed signal* (small, from pass 1) rather than raw body text — it only carries
+  raw body when `signal` is `null`, i.e. when `bodyChars <= PASS1_TRIGGER_CHARS` (10,000, line 33)
+  and pass 1 was skipped entirely. In that raw-fallback branch (`buildPass2Prompt` lines 216-221),
+  the four `.slice(0, 6000)` calls are the same kind of clip as pass 1's and should be raised or
+  removed together with pass 1's, for consistency — a short paper (<10k chars) that skips pass 1
+  should still get its *entire* body into pass 2, not a re-clipped 24k-char version of it.
+- **Token/cost estimate** (ruling asks for this): a 34-page paper like `W7212228226` has ~22,916
+  body chars measured this round (A's Part 1) — at ~4 chars/token that is ~5,700 tokens for pass 1
+  input, well under any raised cap; a paper with the full ~400k-char budget is ~100k tokens. On
+  3.1 Flash-Lite (`reportModelTier()` returns `"small"` for pass 1 regardless of the report tier —
+  `deep-report.ts` line 184, `tier: "small"` is hardcoded for pass 1) at **$0.10/1M input tokens**
+  (Flash-Lite's published input rate — cross-check against whatever `provider-models.ts` documents
+  for the exact SKU in use before quoting a number to the user) a 100k-token pass-1 call costs
+  roughly **$0.01/paper**; pass 2 (the compressed signal, always small regardless of body size) is
+  unaffected by this cap and stays cheap. This is a rough order-of-magnitude number for the fix
+  guide, not a billing commitment — C should re-derive it from `provider-models.ts`'s actual
+  pricing table if one exists there before stating it to the user.
+
+Empty state: unchanged — a paper whose full text was never fetched (no OA source) still falls
+back to the abstract-tier report exactly as today; this item only changes what pass 1 sees once
+full text *was* fetched.
+
+**1-15 — `web/src/lib/papers/pdf-text.ts`, `MAX_PDF_PAGES = 40` (line 20) and
+`web/scripts/extract_pdf_text.py` (`--max-pages`, default 40, line 350).** `WRONG SHAPE`. Both
+sides of the Node/Python boundary cap at 40 pages; the ruling wants 100. Fix: raise
+`MAX_PDF_PAGES` in `pdf-text.ts` to `100` — the value is passed through as `--max-pages` (line
+132-133) so the Python default never actually matters (always overridden), but raise the
+`argparse` default too for anyone invoking the script directly. Check the interplay with
+`MAX_STDIO_BYTES` (line 19, 18MB) and the 45-second `execFileAsync` timeout (line 135) — a
+100-page PDF's extracted JSON is still just text (no images, unlike `extract_pdf_figures.py`
+which embeds base64 image data and has its own 24-page/12-figure caps for exactly that byte-size
+reason) so 18MB of JSON text is generous headroom, but the 45s timeout was tuned for 40 pages;
+watch it in the gate run and raise if a 100-page real paper times out.
+
+**1-16 — dead paywall-status-code detection, `web/src/lib/papers/full-text.ts` and
+`web/src/lib/figures/extract.ts`.** `WRONG DATA` — not something A or the manager's spec named,
+found this round by execution: B fetched the three §1c.1 test DOIs (Wiley `10.1002/smll.75702`,
+ACS `10.1021/jacs.6c12219`, Nature Energy `10.1038/s41560-026-02120-8`) directly with the same
+headers `source-links.ts`/`full-text.ts` use, and independently probed Unpaywall, Europe PMC and
+OpenAlex's own `locations` for all three — **confirmed no OA copy exists anywhere for any of the
+three** (Unpaywall `is_oa: false`, 0 `oa_locations`; Europe PMC found no record for ACS/Nature and
+a closed record for Wiley; OpenAlex `locations` has 1-2 entries, none with a `pdf_url`). So A's
+`no_full_text` verdicts for these three are **honest** — no gap in *what sources are queried*.
+Also confirmed the Unpaywall email gate genuinely passes locally (`OPENALEX_EMAIL` is set to a
+24-character real address, not `example.com`; a live probe against a known-OA PLOS DOI returned
+`is_oa: true` — the lookup runs).
+
+But the *classification* of the failure is wrong. `full-text.ts`'s `fetchHtml` (lines 79-126)
+returns `{ok:false, reason: "Fetch returned ${status}"}` on any non-2xx response **before** it
+ever reads the response body (line 91) — and `appearsPaywalled` (lines 70-77), which checks
+`[401,402,403,451].includes(res.status)` (line 71) as one of its two conditions, is only ever
+called from `tryHtmlLink` in the branch where `fetchHtml` already succeeded (line 140,
+`if (appearsPaywalled(fetched.res, fetched.html))`) — a branch a 403 response can never reach,
+because `fetchHtml` already returned `{ok:false}` for it two lines earlier. The status-code half
+of `appearsPaywalled` is dead code for every real 401/402/403/451 response; only the body-phrase
+half can ever fire, and only on a 2xx response that happens to contain paywall wording. Confirmed
+live: Wiley and ACS both hard-403 (via `onlinelibrary.wiley.com`/`pubs.acs.org` after the DOI
+redirect resolves correctly — **not** a redirect-following bug, `redirect:"follow"` does reach
+the real publisher URL) and both get reported as `source_unavailable`/`no_full_text`, never
+`paywalled`, even though a 403 from a major subscription publisher is about as clear a paywall
+signal as exists. The PDF path (`downloadPdf`, lines 62-94) has the same gap in the opposite
+direction — no status-code check at all, only `tryPdfLink`'s regex over the reason string (line
+166, `/paywall|subscription|purchase|access/i`), which `"PDF fetch returned 403"` does not match.
+`web/src/lib/figures/extract.ts` has the identical bug: `tryHtmlCandidates` (lines 977-1026) only
+calls `appearsPaywalled` (lines 956-975, same status-code list at line 958) after a successful
+fetch (line 1005), never on the `!res.ok` early return (lines 982-988).
+
+Fix direction: in both files, check `res.status` against `[401,402,403,451]` **immediately** on
+the non-2xx branch, before falling through to `source_unavailable` — i.e. move the status check
+out of `appearsPaywalled` (or call a small `looksLikePaywallStatus(status)` helper) into
+`fetchHtml`'s/`downloadPdf`'s/`tryHtmlCandidates`'s early-return paths, and return `paywalled`
+with `paywallReason(url)` (both files already have this helper) instead of `source_unavailable`.
+This changes the *label and the message the reader sees* (the current generic "No legal full-text
+source returned readable body text." / "Peer could not reach ${url}." becomes "onlinelibrary.wiley.com
+requires paid or institutional access..."), not the underlying fact — no new source is scraped,
+this purely corrects a misclassification the ruling's honesty language ("the honest outcome is the
+abstract-tier report with its existing paywall notice") already anticipates.
+
+Empty state (1-16): unchanged in substance — still falls back to the abstract-tier report with a
+notice — but the notice is now accurate (names the publisher, says "paid or institutional
+access") instead of the generic "no legal full-text source" line, for every hard-403 case.
+
+**1-17 — `web/src/lib/papers/evidence.ts`, `buildCorpus` (lines 85-95).** `MISSING`. Confirmed
+this round by execution: running the real pass1+pass2 flow on `openalex:W7207740551` (arXiv
+2609.02668) through the actual Vertex provider produced (in one run) 2 dropped key results out of
+8 evidence-bearing items. One dropped quote ("We find that the Δμ values for the AHTS with L/d =
+0.67 and 0.78 lie above EL...") is a **PDF-extraction artifact, not a paraphrase**: the real
+extracted text reads "...the AHTS with Ld ⁄ = 0.67..." — PyMuPDF's text extraction reorders an
+inline stacked-fraction ("L/d") into letters-then-fraction-slash ("Ld" then U+2044 `⁄`) when
+lifting text from the PDF's glyph layout, so the model's verbatim-correct quote (which reads the
+fraction the way a human would say it, "L/d") no longer literal-matches the garbled corpus even
+after `normalizeForMatch`'s character folding (which only substitutes characters 1:1, never
+reorders tokens). The other dropped quote ("The extracted Tc values trace the superconducting
+dome as a function of L/d, reaching a maximum...") was checked against **every** figure caption
+on the paper (7 captions, none contain "dome" or "Tc") as well as the full body — genuinely absent
+anywhere in the supplied text; this one is a real model synthesis/paraphrase (describing a trend
+across a plotted dataset in its own words) and **the checker is correctly dropping it** — do not
+"fix" this one.
+
+Separately, and orthogonal to that specific run's causes, `buildCorpus` (evidence.ts lines 85-95)
+only builds its matchable corpus from `corpus.abstract` and `corpus.doc?.sections` — it never
+includes `corpus.doc?.figureCaptions`, even though `buildPass2Prompt` explicitly supplies
+`figureCaptions` to the model (deep-report.ts line 275, `figureCaptions,` as a sibling of `body`)
+and the prompt's own evidence rule says "one sentence copied character-for-character from the
+supplied text (or the abstract)" — figure captions **are** supplied text, but a model that
+genuinely, verbatim quotes one today gets it dropped as unverifiable. Confirmed this round: none
+of the two actual drops in the test run were caption quotes, so this is a **latent** gap, not the
+cause observed this run — worth fixing anyway since it will silently drop a correct claim the
+day a model does quote a caption.
+
+Fix direction:
+- Add `doc.figureCaptions` entries to `buildCorpus` (evidence.ts), e.g. `{ where: cap.label,
+  text: cap.caption }` for each caption, normalized the same way section text already is.
+- For the fraction/notation-reordering artifact: this is a text-cleanup problem, not a matching-
+  fuzziness problem, and the fix must **not** loosen `evidenceSupported` into accepting
+  paraphrases (the no-paraphrase rule is binding). The defensible fix is upstream, in PDF text
+  extraction: `extract_pdf_text.py` (and/or `cleanDisplayText`) could detect the specific
+  Unicode fraction-slash artifact (`⁄`, U+2044, distinct from ASCII `/`) adjacent to two short
+  alphanumeric runs (a heuristic for "this was a stacked fraction PyMuPDF flattened out of order")
+  and re-order it to `X/Y` at extraction time, so the corpus itself reads the way a human — and
+  the model — would transcribe it. This is a narrow, auditable text-normalization step (like the
+  existing ligature/dash/soft-hyphen folding in `normalizeForMatch`), not a semantic-similarity
+  relaxation, so it keeps quotes "traceable to the source text" per the ruling. **Flag as
+  `POLICY — manager decides`** how much engineering effort this narrow PDF-artifact fix is worth
+  versus accepting that a small, known class of quotes touching inline fractions/stacked notation
+  will keep being dropped (they are a minority of drops — 1 of 2 in this run, 0 of the figure-
+  caption class) — the other, larger fix (1-14's full-text-reaching-pass-1 change) is likely to
+  matter far more for the ≤1-dropped/≥2-kept target than this narrow artifact.
+- Do **not** change `MIN_QUOTE_CHARS`/`PREFIX_CHARS`/`SUFFIX_CHARS` (evidence.ts lines 21-24) —
+  untouched by any of this round's findings and not implicated by either dropped-quote diagnosis.
+
+Empty state (1-17): unchanged — "what shows when every claim is rejected" is still the honest
+empty report (`emptyReport`/no keyResults array), per §1a(b) and confirmed by this round's own
+adversarial framing: the second dropped quote in the test run *should* stay dropped, and the
+checker did the right thing.
+
+**Tests at risk (S3), found by grep:** `evidence.test.ts` (`verifyReportEvidence`,
+`evidenceSupported`, `normalizeForMatch`, `buildCorpus` is not exported — its behavior is only
+tested through `verifyReportEvidence`) — lines 104-184 build a synthetic `doc` and abstract; a
+new figure-caption entry in `buildCorpus` needs a new test case there (`doc.figureCaptions` is
+never populated in the existing fixtures — confirmed by reading the file's `describe(
+"verifyReportEvidence")` block, which constructs `doc` inline without a `figureCaptions` key each
+time — so no existing test will fail from 1-17, but none currently proves the new behavior either;
+C must add one, per the ground rules "prove new tests test the fix"). No `deep-report.test.ts`
+exists (`Glob` for `web/src/lib/papers/*.test.ts` — confirmed, 11 files, none named
+`deep-report.test.ts`) and `route.test.ts` mocks `generateDeepReport` wholesale (`vi.mock(
+"@/lib/papers/deep-report", ...)`, confirmed this round) — so **no existing test exercises
+`buildPass1Prompt`/`buildPass2Prompt`'s bucket selection at all**; 1-14's bucket/cap changes are
+currently untested in either direction. `pdf-text.test.ts` — check for a hardcoded `40` assertion
+on `MAX_PDF_PAGES` or the `--max-pages` arg before raising it in 1-15.
+
+**Blast radius (S3):** `getFullText`'s 1-hour in-memory cache (`full-text.ts` line 21,
+`CACHE_TTL_MS`) means a paper already fetched once this server session keeps its **old**
+`no_full_text`/`source_unavailable` verdict until the cache entry expires or the server restarts
+— 1-16's reclassification will not retroactively relabel an already-cached result. `NEEDS
+RESTART` is not asserted here since B did not restart the server or exhaust the cache window
+during this round's checks (each test paper was fetched fresh, first-time, by B's scripts against
+DOIs A had not separately warmed in this exact process — but the *dev server's own* cache, shared
+with A's and the manager's earlier runs, may already hold entries for these ids; C should note
+`NEEDS RESTART: full-text.ts's 1h cache may mask 1-16's reclassification for papers already
+fetched this session` in §1 STATUS if a live re-check still shows the old status after landing
+the fix). `1-14`'s bucket changes affect every deep report, not just the two named test papers —
+re-run the gate's full vitest suite, not just papers-related files, since `report/route.test.ts`'s
+mocked `generateDeepReport` insulates it, but any snapshot-style test elsewhere that captures a
+full deep-report shape (none found this round, but confirm) would not be.
+
+**1-18 — third open-access test paper for A's next round.** Per §1c.4: **`arxiv:2501.00663`**
+("A Survey on LLM-as-a-Judge", or substitute any arXiv id with a live PDF if this one rotates out
+of relevance) is outside the current 17-paper pool and `getFullText` returns `ok`/`source: "pdf"`
+for any live arXiv id in general (confirmed structurally this round — `source-links.ts`'s arXiv
+branch, lines 284-307, always produces `arxiv.org/html/<id>` first, `ar5iv` second, then the PDF
+at rank 80 as a guaranteed-reachable fallback; B did not re-verify this exact id's PDF bytes live
+to avoid burning A's next-round budget on a check A will redo anyway — **A should confirm with a
+live `getFullText()` call before treating it as settled**, per the instruction that named ids
+are for A's test case, not a B-verified fact). Any arXiv id A already has handy from an unrelated
+check is an equally valid substitute — the requirement is "outside the pool, arXiv, PDF-backed,"
+not this specific id.
