@@ -81,22 +81,53 @@ browser, run the reports), then report to the user in plain language and stop th
 
 ```
 ROUND:            1
-WHOSE TURN:       B
-STOPPED BECAUSE:  finished the turn @ 2026-09-15 06:12 UTC
-STATUS:           A's round-1 measurement complete (4 parts + difference list), all committed.
-                   Dev server was up throughout; no check was blocked.
-OPEN ITEMS:       S3 S4 S5 S6 S7 (all five open — round 1 measures, does not fix)
+WHOSE TURN:       C
+STOPPED BECAUSE:  finished the turn @ 2026-09-15 07:05 UTC
+STATUS:           B's fix guide complete: 33 numbered entries (1-01..1-33), all committed in 4
+                   parts (item 0+S6+S5, S3, S4, S7). Dev server was up throughout; no check was
+                   blocked. No product code changed; every execution script was throwaway and
+                   deleted before its part's commit.
+OPEN ITEMS:       S3 S4 S5 S6 S7 (still all five open — round 1 investigates, does not fix)
 GATE (0 open):    NOT MET
 
-DONE:      A measured S3 (2 real full-text papers; 3rd PDF-backed case does not exist in the
-           pool), S4 (figure tally on all 17 pool papers + query variant), S5/S6/S7 (confirmed
-           unbuilt by reading source), and ran the gate cold. See §4 "Round 1 — Agent A".
-GATE NOW:  tsc clean · vitest 2544/2544 (benchmark.test.ts excluded) — matches baseline.
-           eslint NOT clean: 1 error, `web/src/components/persona/quiz.tsx:46`
-           (react-hooks/set-state-in-effect), pre-existing and unrelated to S3-S7 —
-           `POLICY — manager decides` whether this blocks the loop's gate.
-TODO:      B investigates per §1b–§1f (rulings written by the manager after A's turn): the
-           eslint item 0, then S6, S5, S3, S4, S7 — fix guide in that order for C.
+DONE:      A measured (round 1, see above). B investigated every item by reading the exact code
+           plus real execution (source-link/full-text probes on 3 no_full_text DOIs, a live
+           two-pass LLM run against the real Vertex provider for the checker, figure-candidate-
+           pool probes for 2 source_unavailable + 2 no_figures papers) and wrote a numbered,
+           dependency-ordered fix guide with file/line references, classifications, fix
+           directions, empty-state answers, tests-at-risk (by grep) and blast radius for every
+           entry. See §4 "Round 1 — Agent B", parts 1-4.
+KEY FINDINGS (B):  (1) the paywall status-code check in both full-text.ts and figures/extract.ts
+           is dead code — a real 401/402/403/451 never reaches it because the fetch helper
+           already returned on `!res.ok` one branch earlier, so Wiley/ACS's genuine 403s are
+           misreported as "no legal source" instead of "paywalled" (1-16, 1-22). (2) One of the
+           two live checker drops on W7207740551 was a PDF-extraction artifact (PyMuPDF reorders
+           an inline "L/d" fraction into "Ld ⁄"), not a paraphrase — a text-cleanup fix, not a
+           matching-fuzziness one (1-17, flagged POLICY on how much effort this narrow case is
+           worth). The other drop was genuine model synthesis with no verbatim source anywhere
+           (correctly dropped — do not "fix"). (3) Nature Energy's figure fetch never reaches the
+           real article page — it stops on an IDP "transit" bounce stub a plain `curl -L` gets
+           past; the current `no_figures` message is factually wrong for that host (1-21).
+           (4) Semantic Scholar's figure endpoint 429s on both source_unavailable test DOIs (no
+           API key configured, no shared throttle across a briefing's concurrent lookups) —
+           flagged POLICY (register a key vs. add a queue) (1-20). (5) `Paper` has no
+           `sourceLinks`/deep `pageCount` field the S7 spec text assumes; 1-30 maps the upload
+           record onto the existing `linkPaper`/`doi` fields instead and adds one small optional
+           field (`pageCount`) rather than a competing parallel shape.
+POLICY — manager decides (from B, this round): (a) 1-17's PDF fraction-artifact text-cleanup —
+           worth the effort now, or accept the small residual drop rate it causes; (b) 1-20's
+           Semantic Scholar throttle — obtain an API key vs. build a request queue, or both;
+           (c) still open from A's round: the pre-existing eslint error's gate status (Ruling 1,
+           §1b, already resolved this as "item 0 of every C turn" — restated here only because
+           the gate line below still shows it NOT clean until C lands 1-01).
+GATE NOW:  unchanged from A's cold run (B changed no code): tsc clean · vitest 2544/2544 · eslint
+           NOT clean (`quiz.tsx:46`, fix is 1-01).
+TODO:      **C works §4 "Round 1 — Agent B"'s numbered guide, 1-01 through 1-33, top to bottom,
+           one commit per item**, per Ruling 5 (§1f) and the
+           dependency ordering B built into the numbering (shared helpers before dependents,
+           prompts before UI, storage before routes before pipelines before the button). Run the
+           gate after every item. If C runs out of budget, stop at an item boundary, mark
+           `PARTIAL`, and say exactly which item is next.
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
@@ -1340,3 +1371,260 @@ the fix in `buildCandidatePool` reaches both callers automatically) and `report/
 report figure binding (confirmed this round, lines 371-379 and 525-533) — a single fix in
 `buildCandidatePool`/`tryHtmlCandidates` improves both the plain figure endpoint and the bound
 report figures, which is the intent (one producing path, per §1d).
+
+#### S7 — upload a PDF, get a deep report like any other paper
+
+Dependency order per Ruling 4 (§1e, "shared helpers before the button"): a storage helper, then
+the two PDF-extraction refactors it needs, then the two new API routes, then the `upload:`
+branches in the two existing pipelines, then a small `Paper`-type addition, then the reading
+page's id-resolution change, and the button last.
+
+**1-23 — new shared module, `web/src/lib/papers/upload-store.ts` (does not exist yet).**
+`MISSING`. Centralizes everything the routes and the two pipelines need to agree on, so the id
+scheme and file layout are defined exactly once:
+```
+export const UPLOAD_DIR = path.join(process.cwd(), ".local-data", "uploads");
+// sha256 of the raw bytes, first 16 hex chars — short enough for a URL segment,
+// long enough that a collision is not a real concern for this use case.
+export function sha16(bytes: Buffer): string { return createHash("sha256").update(bytes).digest("hex").slice(0, 16); }
+export function uploadId(hash16: string): string { return `upload:${hash16}`; }
+export function pdfPath(hash16: string): string { return path.join(UPLOAD_DIR, `${hash16}.pdf`); }
+export function metaPath(hash16: string): string { return path.join(UPLOAD_DIR, `${hash16}.json`); }
+export interface UploadMeta { hash16: string; fileName: string; title: string; doi?: string; pageCount?: number; summaryIntro?: string; uploadedAt: string; }
+export async function readUploadMeta(hash16: string): Promise<UploadMeta | null> { ... }
+export async function writeUploadMeta(hash16: string, meta: UploadMeta): Promise<void> { ... }
+export function uploadMetaToPaper(meta: UploadMeta): Paper { ... } // maps to the app's Paper shape, see 1-30
+```
+`process.cwd()` resolution mirrors the existing pattern in `pdf-text.ts`'s `resolveHelperScript`
+(lines 51-60, which tries both `process.cwd()` and `process.cwd()/web` since the dev server and
+some test runners start from different working directories) — reuse that same dual-candidate
+resolution here rather than assuming one cwd, or the upload directory could silently split across
+two locations depending on how the server was started. Ensure `UPLOAD_DIR` is created
+(`mkdir(UPLOAD_DIR, { recursive: true })`) on first write rather than assumed to exist.
+
+**1-24 — `web/src/lib/papers/pdf-text.ts` — factor out a local-file extraction entry point.**
+`MISSING`. `tryExtractPdfText(url)` (lines 190-224) does download → temp-write → `runExtractor` →
+`normalize`. An uploaded PDF is already on disk at a known path — downloading it again (or
+copying it to a *second* temp path only to run the same extractor) is exactly the "no HTTP
+round-trip to fetch a file the server already has" the ruling forbids, and also wastes a
+temp-directory copy for no reason (the uploaded file is already private, server-local storage;
+there's no need to sandbox it into `os.tmpdir()` the way a downloaded PDF is). Fix direction:
+split `tryExtractPdfText` into `downloadPdf` (unchanged) + a new `extractPdfTextFromPath(pdfPath:
+string): Promise<PdfTextResult>` that does exactly what lines 199-221 do today (`runExtractor` +
+the `extractor.reason`/empty-sections check + `normalize`), minus the temp-dir lifecycle (no
+`mkdtemp`/`rm` — the caller owns the file's lifetime, which for an upload is "as long as the
+upload exists on disk," not "for the duration of this one extraction"). `tryExtractPdfText(url)`
+becomes: download → write to its own temp path (unchanged) → call the new shared function →
+clean up the temp dir (unchanged). Export both.
+
+**1-25 — `web/src/lib/figures/pdf-extract.ts` — same split, for figures.** `MISSING`, mirror of
+1-24. `tryPdfCandidates(url, source)` (lines 212-321) does fetch → validate → temp-write →
+`runExtractor` → build candidates. Split out `extractPdfCandidatesFromPath(pdfPath: string,
+source: FigureSource): Promise<PdfAttemptResult>` covering lines 269-320 (temp-write through
+candidate-building, again minus the temp-dir lifecycle since the file already lives at a stable
+path), and have `tryPdfCandidates(url, source)` become fetch/validate → call the shared function
+on a temp copy → clean up. Export both.
+
+**1-26 — `POST /api/papers/upload/route.ts` (does not exist yet).** `MISSING`. New route:
+1. `const form = await req.formData(); const file = form.get("file");` — reject (400) if absent
+   or not a `File`.
+2. Size: reject over 25 MB (`file.size`) before reading bytes into memory.
+3. Read bytes (`Buffer.from(await file.arrayBuffer())`); reject (415 or 400) unless the first 5
+   bytes are `%PDF-` (same magic-byte check `pdf-text.ts`'s `downloadPdf` already does at line 85
+   — reuse that exact check, by extension not by MIME type, since a browser's reported
+   `file.type` for a `.pdf` is client-supplied and not trustworthy).
+4. `const hash16 = sha16(bytes);` — write `pdfPath(hash16)` only if it does not already exist
+   (idempotency: same bytes twice → same id, per Ruling 4; skip the write, not an error, on a
+   repeat upload).
+5. Extract text via 1-24's `extractPdfTextFromPath(pdfPath(hash16))`. On failure (`no-python` /
+   `no-extractor` / a real extraction error) or on an empty/near-empty result, **do not fail the
+   upload** — store the metadata with whatever was extracted (possibly nothing) and let the
+   reading page show the "this PDF has no readable text" message (§1a(e)) rather than rejecting
+   the upload outright; the file itself is still valid and downloadable even if PyMuPDF found no
+   text layer (a scanned PDF).
+6. Derive the record fields from the extracted `doc` (see 1-30 for exactly which `Paper` fields):
+   - `title`: **the largest-font line on the first page**, not an LLM call. B's reasoning: an
+     LLM-derived title needs a configured provider (`resolveProvider`), which a deployed user may
+     not have (deep reports are opt-in / BYOK per the standing item in §1a), and the honesty rule
+     ("never a guessed title") is best served by a deterministic, no-network heuristic. This needs
+     a small addition to `extract_pdf_text.py`'s output (it does not currently report per-line
+     font sizes — confirm before assuming this is free; if adding font-size-aware line detection
+     to the Python script is more than a few lines, the fallback (file name without extension) is
+     always correct and acceptable per §1a(b) — do not block the whole feature on getting the
+     heuristic exactly right). Fallback: `file.name` with the `.pdf` extension stripped.
+   - `doi`: regex over the first ~2 pages' extracted text, `/\b10\.\d{4,9}\/[^\s"'<>]+/` — take
+     the first match, strip trailing punctuation. Absent if no match — never invented.
+   - `authors`: **do not attempt** in this pass. Author-block formats vary too much across
+     publishers/templates for a low-confidence heuristic to be worth the risk of a wrong guess
+     (explicitly worse than empty, per §1a(d)); leave `authors: []`. Flag as an intentional scope
+     cut, not an oversight, in the PR/commit description so the manager can decide if it's worth a
+     future pass.
+   - `summaryIntro`: the extracted `abstract` canonical bucket's text, when present (the same
+     Python extractor already recognizes an "Abstract" heading, confirmed this round by reading
+     `SECTION_HEADINGS` in `extract_pdf_text.py`) — capped the same way any other abstract text is
+     displayed elsewhere (check `cleanDisplayText`'s existing caps rather than inventing a new
+     one). `summaryResultDiscussion` stays empty — there is no natural "second half" for an
+     uploaded PDF's abstract; `fullAbstract()` (deep-report.ts line 71-73) already handles either
+     half being empty via `.filter(Boolean)`.
+   - `pageCount`: from the extractor's `pageCount` (already returned, `pdf-text.ts` line 182).
+7. Write `UploadMeta` (1-23) and respond with the mapped `Paper` record (1-30) plus `{ id:
+   "upload:<hash16>" }`.
+
+**1-27 — two GET routes, both new.**
+- `GET /api/papers/upload/[id]/route.ts`: read `metaPath(id)`, 404 if absent, else
+  `uploadMetaToPaper(meta)` (1-30) — this is what the reading page fetches on a cold load/reload
+  (1-31).
+- `GET /api/papers/upload/[id]/file/route.ts`: stream `pdfPath(id)` back with
+  `Content-Type: application/pdf`, 404 if absent. This is both the "Open at the publisher"
+  fallback target (§1a(d), via `pickSource` — see 1-29's note, no change needed to `reading.ts`
+  itself) and, indirectly, what a reader's browser opens when they click "Open the PDF."
+
+**1-28 — `web/src/lib/papers/full-text.ts` — recognize `upload:` ids.** `MISSING`. Add a branch
+at the top of `buildResult` (before `collectSourceLinks` runs, lines 181-187): if
+`input.paperId.startsWith("upload:")`, extract the hash16, call 1-24's
+`extractPdfTextFromPath(pdfPath(hash16))` directly, and return `{status: "ok", doc, sourceLink: {
+url: "/api/papers/upload/<hash16>/file", kind: "pdf", label: "upload", rank: 0 }, attempts: [...]
+}` on success, or the matching failure shape (`no_full_text`/`source_unavailable` per the
+extractor's own failure reason, same mapping `tryPdfLink` already does at lines 162-169) on
+failure. Requires adding `"upload"` to the `SourceLinkLabel` union in `source-links.ts` (line
+20-31, currently `"arxiv-html"|"ar5iv"|"zenodo"|"pmc"|"biorxiv"|"publisher-html"|"unpaywall"|
+"europepmc"|"input"|"doi"|"derived"` — no case fits an id-scheme source that isn't really a
+"link" in the fetched sense). **Confirmed this round, no change needed:** `reading.ts`'s
+`pickSource` (lines 472-485) already prefers `fullText.sourceLink` when its `kind === "pdf"`
+(line 478-479) over `paper.doi`/`paper.linkPaper`, so as long as this branch returns a `sourceLink`
+with `kind: "pdf"`, the reading page will correctly show "Open the PDF" pointing at the local file
+route with zero changes to `reading.ts` — verified by reading the function this round, not
+assumed.
+
+**1-29 — `web/src/lib/figures/extract.ts` — recognize `upload:` ids.** `MISSING`, mirror of
+1-28. Add a `bareUploadId(itemId)` helper (alongside `bareArxivId`/`bareOpenAlexId`, lines
+156-164) and, in `buildCandidatePool` (lines 1161-1239), an early branch before the
+`if (arxivId)`/`if (openAlexId)`/`if (!arxivId)` structure: if the id is an upload id, call 1-25's
+`extractPdfCandidatesFromPath(pdfPath(hash16), "publisher")` directly, push its `AttemptResult`,
+and **skip** the Semantic Scholar / `collectSourceLinks` walk entirely — an uploaded PDF has no
+DOI to look either up by (unless 1-26 found one via regex, in which case it is reasonable to
+*also* try Semantic Scholar/Unpaywall by that DOI as a secondary source of extra figures, but this
+is an enhancement, not required for the target: "has figures attached for analysis" per the
+user's own words is satisfied by extracting the PDF's own embedded images).
+
+**1-30 — `web/src/types/index.ts`, `Paper` interface (lines 51-76) — one additive field.**
+`MISSING`. The spec text (§1a S7(b)) describes a `sourceLinks: [{kind, url}]` array and a
+`pageCount` field on the returned record, but **the actual `Paper` type has neither** — it uses
+`linkPaper`/`linkArxiv`/`doi` for links (confirmed this round; no `sourceLinks` field exists
+anywhere in the type). Do not add a parallel `sourceLinks` array — it would be a second, competing
+way to express "where can Peer read this paper" alongside the fields every other pipeline stage
+already reads (`linkPaper`, `doi`, `linkArxiv`), and 1-28/1-29 already give `full-text.ts`/
+`figures/extract.ts` a *better* signal than a URL (the id prefix itself). Map the upload record
+onto the **existing** fields instead: `linkPaper: "/api/papers/upload/<hash16>/file"` (relative
+URL — same-origin, resolves fine as both an `href` and a `fetch` target), `doi` set only if 1-26
+found one, `authors: []`, `venue: ""` (no invented venue, per §1a(d) — check how the page renders
+an empty `venue` today before assuming this is already handled gracefully; `GlanceBlock`,
+report-sections.tsx lines 379-384, already conditionally skips a missing venue/arXiv/code fact,
+so an empty string should degrade gracefully there, but verify `RecordBlock` similarly does not
+print a bare "Published in " with nothing after it). **Add one new optional field to the `Paper`
+interface**: `pageCount?: number` (nothing in the existing type carries this at the paper-record
+level, only inside a report's `provenance` — confirmed this round) — used only for upload records
+today, ignored everywhere else, and worth having on the type since the record block can then show
+"12 pages" the way it shows "5 authors" for the papers that have one.
+
+**1-31 — `web/src/app/papers/[id]/page.tsx` — resolve `upload:` ids.** `MISSING`. Confirmed this
+round by reading lines 128-199: `isExternalId = id.startsWith("openalex:") || id.startsWith(
+"arxiv:")` (line 135) gates both `shouldFetchById` (line 183-184) and, transitively, whether the
+page ever calls `GET /api/papers/<id>` (line 189) on a cold load with nothing in `feedPapers`/
+`savedPapers` yet. An `upload:` id matches **neither** prefix, so on a fresh browser tab (no
+client store populated — e.g. a reload of `/papers/upload:<hash16>`), the page would fall through
+to the "not found" branch (lines 201-230) instead of ever fetching the record. This is the
+"smallest change" Ruling 4 asks B to name:
+```
+const isUploadId = id.startsWith("upload:");
+const shouldFetchById = (isExternalId || isUploadId) && !storePaperIsEnriched && !fetchDoneForId && !pendingPaper;
+...
+apiFetch<Paper>(
+  isUploadId
+    ? `/api/papers/upload/${encodeURIComponent(id.slice("upload:".length))}`
+    : `/api/papers/${encodeURIComponent(id)}`,
+)
+```
+This is the only change this file needs — everything downstream (`Reader`, `useModelReport`,
+`useReading`, figure resolution) already operates on a plain `Paper` object regardless of how its
+`id` is shaped, confirmed by reading the rest of the component this round (nothing else branches
+on an id prefix). The upload POST response (1-26) handing the client the full record immediately
+is a nice-to-have for the very first navigation (skips one loading-mat flash) but is **not
+required for correctness** — B chooses to make it optional: the GET fallback above already makes
+a cold load/reload work on its own, which is the one hard requirement (§1e, "so a reload works
+with an empty client store"); wiring the POST response into a transient store slot too is
+additional plumbing C can add if there's time, not a blocker.
+
+**1-32 — the button: `web/src/components/briefing/search-box.tsx`, `web/src/lib/briefing/
+copy.ts`, `web/src/app/page.tsx`.** `MISSING`. `app/page.tsx` line 169 renders only `<SearchBox
+className="sm:mt-2" />`; the button goes immediately to its left in the same flex row (the
+existing `<div className="mt-6 flex flex-wrap items-start justify-between gap-x-6 gap-y-4">` at
+line 163 — the search box currently sits alone at the far right of that row via
+`justify-between`; the upload button needs its own wrapper so the two sit side by side at the
+right rather than being pushed to opposite ends — check the flex layout carefully when landing
+this, it is easy to accidentally push the button to the far left instead of beside the search
+box). New component (either inline in `search-box.tsx` or a sibling `upload-button.tsx` — C's
+call, but co-locating it next to `SearchBox` matches how the two are described as one unit in the
+spec): a `<button>` sized to the search box's height (`h-9`, matching `search-box.tsx` line 42),
+`bg-[color:var(--color-text)]`/similar-to-black per the app's own token names (check
+`globals.css`/tailwind config for the actual "black square" token rather than hardcoding `#000` —
+this codebase clearly prefers CSS variables throughout every file read this round), a white
+inline-SVG upload glyph (no icon library — this repo has no icon dependency anywhere read this
+round, every icon seen has been a hand-written inline `<svg>`, matching `search-box.tsx`'s own
+magnifier icon at lines 44-58), `aria-label="Upload a paper PDF"`, and a visually-hidden `<input
+type="file" accept="application/pdf">` triggered by the button's click. Drag-and-drop: `onDragOver`
+(preventDefault, set a hover class), `onDragLeave` (clear it), `onDrop` (preventDefault, read
+`e.dataTransfer.files[0]`, same upload handler as the file-picker path). Disabled state while a
+request is in flight (`aria-disabled`/`disabled`, per the existing `isRefreshing`/`disabled` gate
+pattern in `app/page.tsx`'s refresh button, lines 312-319 — reuse that visual language:
+`disabled:opacity-50 disabled:cursor-wait`). Error line on rejection (not-a-PDF, too large, magic-
+byte check failed server-side) — a short inline message near the button, styled like the existing
+`BriefingEmpty`/error copy (`text-red`, per `app/page.tsx` line 306, `sync failed`).
+
+**Copy (`lib/briefing/copy.ts`):** add an `UPLOAD_BUTTON` entry alongside `SEARCH_BOX` (lines
+13-17): `{ label: "Upload a paper PDF", error: (reason: string) => reason }` shaped to match how
+`SEARCH_BOX.label` is a plain aria-label string — keep the wording at the same plain,
+high-schooler reading level as every other string in that file.
+
+**The upload request itself — a real gotcha, found by reading `lib/api.ts` this round:**
+`apiFetch` (lines 17-32) sets `Content-Type: application/json` on **any** call with a non-null
+`body` that doesn't already carry a `Content-Type` header (line 21-22) — this is correct for
+every other caller in the app (all JSON), but a multipart `FormData` body must let the browser set
+its own `Content-Type` (with the multipart boundary) — `apiFetch` would silently corrupt the
+request by forcing `application/json` onto a `FormData` body. **Do not use `apiFetch` for the
+upload POST** — call `fetch("/api/papers/upload", { method: "POST", body: formData })` directly
+(no headers object at all, so the browser sets its own multipart Content-Type), and handle the
+response/error shape by hand to match what `apiFetch` would have thrown, for consistency with how
+the rest of the page handles a failed request.
+
+Empty state (S7): a PDF the extractor cannot read any text from (a scanned image PDF with no text
+layer) still succeeds as an *upload* (1-26 step 5 does not fail the upload) but the reading page
+must show a plain "this PDF has no readable text" message in place of the report per §1a(e) —
+this is a **new** message, check `reading.ts`'s existing `ReadingProvenance`/`fullText` status
+handling (e.g. `pdf_unreadable_here`, line 466, an existing similarly-shaped case for a different
+reason — a PDF the *server* cannot run Python against) for the closest existing pattern to extend
+rather than inventing a fresh code path; a PDF with genuinely empty extracted text is a distinct
+case from "the extractor couldn't run at all" and should say something distinct to the reader.
+
+**Tests at risk (S7):** none — every file this section touches is either new
+(`upload-store.ts`, both routes, the button) or gets a strictly additive branch keyed on an id
+prefix nothing existing exercises (`full-text.ts`'s and `figures/extract.ts`'s existing tests all
+use `openalex:`/`arxiv:`/DOI-shaped inputs, confirmed by `source-links.test.ts` and
+`arxiv-html-source.test.ts`'s test names read this round). `Paper`'s new optional `pageCount`
+field cannot break existing object literals (TypeScript optional fields are additive). C should
+still add new tests for the routes and the two `upload:` branches — there is nothing to prove
+them wrong today because nothing exercises this path yet.
+
+**Blast radius (S7):** `web/.local-data/uploads/` needs a `.gitignore` check — `.local-data` is
+already gitignored at the `web/` level (confirmed this round, `web/.gitignore:46`, `/.local-data`)
+so no new ignore rule is needed, but confirm a stray `uploads/` subfolder doesn't need its own
+entry (it shouldn't — the parent is already fully ignored). Document in the README (per §1e,
+"uploads are local to this machine; not persisted on Vercel") — B did not locate the exact README
+section this round; grep for an existing "local to this machine"/`.local-data` mention before
+adding a new one, to keep the documentation in one place rather than two. `report/route.ts`'s
+`POST` handler (§1a(c), "deep report via the existing `/api/papers/report` with `deepReport:
+true`") needs **no changes** — it already takes a `Paper` object of any shape and calls
+`getFullText`/`getFigurePool` keyed on `paper.id`, both of which 1-28/1-29 make upload-aware; this
+is the payoff of Ruling 4's "no parallel upload pipeline" — confirmed by re-reading the whole
+route this round with upload ids specifically in mind, not just the parts A/the manager already
+flagged.
