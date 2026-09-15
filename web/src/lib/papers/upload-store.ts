@@ -56,6 +56,17 @@ export function bareUploadId(itemId: string): string | null {
   return match ? match[1].toLowerCase() : null;
 }
 
+/**
+ * Exactly 16 lowercase-or-uppercase hex chars — the shape `sha16` always
+ * produces. The two `GET` upload routes take a hash16 straight from a URL
+ * path segment; validating it here before it ever reaches `pdfPath`/
+ * `metaPath` (a plain `path.join`) is what keeps a hand-crafted id like
+ * `../../.env` from resolving outside `UPLOAD_DIR`.
+ */
+export function isValidHash16(value: string): boolean {
+  return /^[0-9a-f]{16}$/i.test(value);
+}
+
 export function pdfPath(hash16: string): string {
   return path.join(UPLOAD_DIR, `${hash16}.pdf`);
 }

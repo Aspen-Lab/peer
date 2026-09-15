@@ -2181,3 +2181,62 @@ Gate: tsc clean, eslint clean, vitest 2580/2580 (2571 + 9 new).
 Commit: `feat(upload): the shared storage module for uploaded PDFs, and the two PDF-extraction
 helpers it needs` (1-23, 1-24, 1-25, and 1-30's `Paper.pageCount` field, together — see the
 dependency note above for why 1-30 came forward).
+
+**1-26 — `POST /api/papers/upload` (new route) and 1-27 — the two `GET` routes (new).** DONE,
+landed together (the three routes share the same request/response shape and it made no sense to
+split the diff). Followed B's steps in order: `req.formData()` (400 on a non-multipart body or a
+missing/non-`File` `file` field), size cap (25 MB, checked on `file.size` **before** reading bytes
+into memory), magic-byte check (`%PDF-`, never the client-supplied `file.type` or the `.pdf`
+extension), `sha16` + `writeUploadPdfIfAbsent` (idempotent per 1-23), `extractPdfTextFromPath`
+(1-24) to derive the record.
+
+**One thing in B's guide was wrong, confirmed by reading the Python extractor before assuming
+otherwise (per the standing instruction):** B's fix direction for the title heuristic said
+`extract_pdf_text.py` "does not currently report per-line font sizes — confirm before assuming this
+is free" and offered the file-name fallback as the safe default if adding it was more than a few
+lines. Reading `scripts/extract_pdf_text.py` this round: it already has `extract_title()` (doc
+metadata title, else the largest-font first-page span >=12pt/12 chars) and already returns it as
+`"title"` in its JSON output, which `pdf-text.ts`'s `normalize()` already carries into
+`ExtractedDocument.title`. So the "largest-font first-page line" heuristic B asked for was already
+built and already wired through — 1-26 just reads `doc?.title`, no Python changes needed at all.
+DOI: a regex over the concatenated extracted section text (capped at 20k chars), not literally "the
+first ~2 pages" as B wrote, since the structured extractor output has no page-boundary concept to
+slice by — noted as an honest, accepted gap in a code comment: the Python extractor's own section
+builder drops all text before the first recognized heading (the title/header area, where a DOI is
+usually printed), so a DOI printed only there will not be found by this pass. Absent, never
+invented, exactly as the spec requires either way. Author list: not attempted, per B's explicit
+scope cut — `authors: []`, unconditionally.
+
+On an extraction failure (`no-python`, `no-extractor`, a real error, or a scanned PDF with no text
+layer) the upload still succeeds (200): `doc` is `undefined`, every derived field degrades to its
+honest empty/fallback (title -> file name minus `.pdf`, everything else absent) rather than failing
+the request — per §1a(e), the reading page (1-28/1-31) is what tells the reader their PDF has no
+text, not this route. The two `GET` routes are exactly B's shapes: `/api/papers/upload/[id]` (the
+bare hash16, not the `upload:`-prefixed id — resolved by the reading page in 1-31) returns the
+mapped `Paper` or 404; `/api/papers/upload/[id]/file` streams the stored bytes with
+`Content-Type: application/pdf`.
+
+**Added beyond B's literal list, found while implementing 1-27:** both `GET` routes take a hash16
+straight from a URL path segment and hand it to `pdfPath`/`metaPath` (a plain `path.join` with no
+sanitization of its own) — an id like `../../../../.env` would resolve outside `UPLOAD_DIR`. Added
+`isValidHash16` to `upload-store.ts` (exactly 16 hex chars, the shape `sha16` always produces) and
+check it first in both routes, before any disk access. Not a numbered B item; logged here as a
+finding, not silently added.
+
+Tests: three new files. `upload/route.test.ts` (11 cases) — missing/non-File `file` field, the size
+cap (constructs a real >25MB buffer, checked before `extractPdfTextFromPath` is ever called),
+the magic-byte rejection (renamed-text file, 415, no write attempted), a full happy path (hash
+computed from real bytes via Node's own `crypto`, `id`/`paper.id` both `upload:<hash>`, empty
+authors/venue), the title fallback (file name minus extension) vs. the extractor's own title taking
+priority when found, DOI extraction (found and stripped of trailing punctuation; genuinely absent
+when nothing matches), the extractor-failure path still succeeding with degraded fields, and the
+400-char cap on `summaryIntro`. `upload/[id]/route.test.ts` and `upload/[id]/file/route.test.ts`
+(3 cases each) — the path-traversal rejection, 404 on a well-shaped but unknown id, and the happy
+path (mapped `Paper` JSON / streamed PDF bytes with the right content type). Proof, per the
+"revert-watch-restore" rule, done for every load-bearing guard: the size cap, the magic-byte check,
+and both routes' `isValidHash16` guards — each one's test failed when its guard was removed (short-
+circuited with `if (false && ...)` or deleted), all four restored and green again afterward.
+
+Gate: tsc clean, eslint clean, vitest 2597/2597 (2580 + 17 new).
+
+Commit: `feat(upload): the multipart upload route and the two GET routes it hands the reading page`.
