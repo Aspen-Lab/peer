@@ -80,78 +80,80 @@ browser, run the reports), then report to the user in plain language and stop th
 ## §1. CURRENT STATE — THE SOURCE OF TRUTH
 
 ```
-ROUND:            3
-WHOSE TURN:       B
-STOPPED BECAUSE:  A finished the turn @ 2026-09-15T15:20Z. Dev server confirmed up throughout;
-                   every live check owed from round 2 is now answered.
-STATUS:           All six of round 2's items (2-01..2-06) confirmed landed through the real
-                   running app: 2-01 (aggregator 403 -> source_unavailable), 2-02 (hyphenation
-                   fold — the RHEED drop it targeted no longer recurs), 2-03 (fraction-slash
-                   fold — no U+2044 in any shown caption), 2-05 (both empty-PDF sub-bugs and the
-                   reading-route 404 — 200 with correct `pdf_empty` provenance now, live), 2-06
-                   (both real PDFs return their true titles through the actual upload route).
-                   2-04 (Springer bounce-page detector) remains UNVERIFIED live — not because it
-                   failed, but because both target papers' final status is now `rate_limited`
-                   (Semantic Scholar) before the code ever reaches the branch 2-04 changed.
-
-                   Six new/standing differences found this round (A3-01..A3-06, full detail in
-                   §4 "Round 3 — Agent A"): `W7207740551` still misses the S3 keyResults target
-                   on 1 of 2 route runs (model variance, not the checker — 0 confirmed incorrect
-                   drops in 8 samples, a real improvement); Semantic Scholar rate-limiting has
-                   crossed Ruling 9's own "≥3 of 17" escalation threshold (3 of 17 this round,
-                   stable across retries) — masks 2-04's verification and is itself now B's job
-                   to address (fallback order trying other figure sources first); a new,
-                   confirmed incorrect-drop mechanism on the third S3 paper
-                   (`arxiv:2501.00663`) — a zero-width space (U+200B) inside a math expression,
-                   an ar5iv/HTML artifact, survives every existing fold (currently within the
-                   <=1 ceiling on every sampled run, but real and unaddressed); a boundary-case
-                   extraction artifact on `W7212228226` (a page-footer/DOI stamp spliced into a
-                   sentence) that doesn't cleanly fit either of Ruling 9's two named drop
-                   categories, `POLICY — manager decides` how to name it; the S4 found-figure
-                   count has not moved in three rounds (1 of 17, same paper each time).
-OPEN ITEMS:       A3-01 (S3, W7207740551 keyResults variance), A3-02 (S4, Semantic Scholar
-                   rate-limit escalation, POLICY/ACTION for B), A3-03 (S4, 2-04 still unverified
-                   live, now masked by A3-02), A3-04 (S3, new zero-width-space incorrect-drop
-                   mechanism on the arxiv paper, unaddressed), A3-05 (S3, boundary-case
-                   extraction artifact on W7212228226, POLICY — manager decides), A3-06 (S4,
-                   found-count unchanged at 1/17, informational/tracking). S5 and S6 remain
-                   fully closed (no regression, Part 4).
+ROUND:            4
+WHOSE TURN:       C
+STOPPED BECAUSE:  B finished the turn @ 2026-09-15T15:40Z. Every claim below checked by
+                   execution (a temporarily-reverted export, a temporarily-downloaded PDF,
+                   both gone before commit; git status clean throughout). B changed no code.
+STATUS:           Round 4's fix guide is complete: 4 items, in Ruling 10's own order (4-01 =
+                   A3-02/A3-03, 4-02 = A3-04, 4-03 = A3-05, 4-04 = A3-01), full detail in §4
+                   "Round 4 — Agent B". Classification: 4-01 WRONG ORDER (finalDiagnostic's
+                   precedence in extract.ts picks rate_limited over an already-correct
+                   source_unavailable attempt — confirmed by execution that 2-04's bounce-page
+                   detector already fires correctly for both Springer papers; the pool just
+                   never surfaces it), plus a bounded S2-429 retry Ruling 10 also asks for;
+                   4-02 MISSING (normalizeForMatch has no fold for U+200B/U+200C/U+200D/U+FEFF
+                   — confirmed by execution that folding to a SPACE, not deletion, is what
+                   makes the ar5iv case match); 4-03 EXTRA (a repeating page-number+DOI footer
+                   line splices into flowing text — confirmed on the real downloaded JECST PDF,
+                   10+ occurrences; fix belongs in extract_pdf_text.py, which still has page
+                   boundaries pdf-text.ts has already lost; named "furniture splice" per Ruling
+                   10); 4-04 MISSING, smallest of the four (buildPass2Prompt's keyResults schema
+                   has no count instruction at all, unlike every sibling array in the same
+                   schema — one sentence to add; report.ts's REPORT_CAPS.keyResults is already 4,
+                   so nothing is clipped). No WRONG DATA this round.
+OPEN ITEMS:       Unchanged from A's round-3 list (A3-01..A3-06) until A re-measures — B does
+                   not close items, only guides C. 4-01/4-02/4-03/4-04 map to A3-02+A3-03/
+                   A3-04/A3-05/A3-01 respectively; A3-06 stays informational, expected to
+                   resolve as a side effect of 4-01 (once the Springer papers' true status is
+                   observable, A restates the S4(c) target per Ruling 10's own words).
 GATE (0 open):    NOT MET
 
-DONE:      round 1: 1-01..1-33 + 1-22b. round 2: 2-01, 2-02, 2-03, 2-04, 2-05 (sub-entries A/B/C),
-           2-06 (steps a/b/c) — ALL SIX now confirmed live this round except 2-04 (unverified,
-           not failed). See "Round 2 — Agent C (resumed)" for what changed and "Round 3 — Agent
-           A" for the live confirmation of each.
-GATE NOW:  tsc clean · eslint clean · vitest 2631/2631 (A, cold, round 3 — unchanged from C's
-           end-of-round-2 number; A changed no product code).
-TODO:      B's round-3 job, per Ruling 9's own words and A's difference list above:
-             - A3-02/A3-03 first (they gate the others): design a fallback figure-source order
-               that tries non-Semantic-Scholar sources before Semantic Scholar (or otherwise
-               reduces reliance on it) so the two Springer papers' true status (does 2-04's
-               bounce-page fix actually catch them?) becomes observable again, and so the
-               figure-status tally stops carrying 3+ uninformative `rate_limited` entries. State
-               whether a `SEMANTIC_SCHOLAR_API_KEY` (still the user's own action, per Ruling 7)
-               would independently resolve this, separately from any code reordering.
-             - A3-01: investigate why `W7207740551` sometimes proposes only 1 key result (not a
-               checker defect — 0 confirmed incorrect drops in 8 samples this round) — is this
-               prompt-shaped, model-variance-shaped, or something else? State whether a fix is
-               even appropriate given it is model output variance, not a bug.
-             - A3-04: a fix direction for the zero-width-space (U+200B) fold in
-               `normalizeForMatch`, same family and same file as 1-17/2-02's own folds (strip
-               U+200B — and likely its siblings U+200C/U+200D/U+FEFF — since `\s` does not match
-               any of them). Confirm no test regresses, same revert-and-restore discipline.
-             - A3-05: rule on how a "genuine paper text disrupted by injected page furniture"
-               drop should be classified going forward — a third named category, or folded into
-               one of the existing two? Manager's call, not B's alone, but B should propose.
-             - A3-06: re-state the S4(c) target status once A3-02/A3-03 are resolved — the
-               found-count may still not move even after a fix (2-04's own note from round 2:
-               this is an honesty fix, not necessarily a found-count fix).
+DONE:      round 1: 1-01..1-33 + 1-22b. round 2: 2-01..2-06, all confirmed live in round 3.
+           round 3: A's re-measurement (A3-01..A3-06) + Ruling 10 (manager) scoping round 4.
+           round 4 (B): fix guide for 4-01..4-04, this turn.
+GATE NOW:  tsc clean · eslint clean · vitest 2631/2631 (unchanged — B changed no product code
+           this turn; C re-runs the gate after each item per §3).
+TODO:      C works Ruling 10's order, one commit per item, gate after each (§3):
+             - 4-01 (A3-02/A3-03): in `finalDiagnostic` (web/src/lib/figures/extract.ts,
+               lines 1293-1363), add an explicit `source_unavailable` check between the
+               existing `no_figures` and `rate_limited` checks; append a throttle note to the
+               winning reason when a rate_limited attempt also exists, instead of promoting it
+               to status. Add the bounded one-retry-after-2.5s to `trySemanticScholarCandidates`
+               (lines 809-858), re-entering the existing 1-20 concurrency queue rather than
+               holding a slot idle. Rewrite (never delete) the "reports a 429 as rate_limited"
+               test (extract.test.ts lines 220-230) for the new retry timing; add a new
+               protective test for the precedence fix itself (full detail and exact test shapes
+               in §4 "Round 4 — Agent B", item 4-01).
+             - 4-02 (A3-04): in `normalizeForMatch` (web/src/lib/papers/evidence.ts, lines
+               82-95), add `ZERO_WIDTH_CHARS = /[​‌‍﻿]/g` folded to a SPACE
+               (not deletion — confirmed by execution that only a space makes the ar5iv case
+               match), placed before the existing whitespace-collapse step. Add the 1-17/2-02-
+               shaped protective test pair (exact fixture in §4, item 4-02).
+             - 4-03 (A3-05): in `web/scripts/extract_pdf_text.py`, add `find_running_furniture`
+               (called right after `pages_lines` is built, before heading/section/caption
+               detection) — strips a leading/trailing page number, drops any line whose
+               stripped text repeats on >= 3 pages. Name the class "furniture splice". Add the
+               synthetic 3-page PDF test in `pdf-text.test.ts`'s existing
+               `describe.skipIf(!PYTHON_AVAILABLE)` block (exact shape in §4, item 4-03).
+             - 4-04 (A3-01): in `buildPass2Prompt` (web/src/lib/papers/deep-report.ts, line
+               324), append one clause to the `detail` field's description asking for "two to
+               four key results when the paper states at least two distinct findings; a
+               single-finding paper may report just one" — exact sentence in §4, item 4-04. No
+               test changes; no sanitizer change (REPORT_CAPS.keyResults is already 4).
+
+           After 4-04: hand back to A for the closing measurement per Ruling 10 — does this
+           round meet the loop's own close conditions (both Springer papers show an honest
+           `source_unavailable`; `W7207740551` clears >= 2 key results on at least one of two
+           runs; S3's <= 1 incorrect-drop target holds on all three papers including the new
+           zero-width-space risk; S4(c) tally restated). If yes, the manager re-checks in the
+           browser and reports to the user; if not, the manager rules on what remains.
 
            Carrying every standing tally forward by name: S4 figure-status tally, S3
-           dropped-claims-per-paper tally, Semantic Scholar rate-limit tally (now escalated,
-           see A3-02), the eslint-gate-hygiene item (Ruling 1, already fixed, stays item 0 of
-           every C turn), and the `html-text.ts` cap lead (Ruling 8 — still not implicated by
-           any pool paper or S3 test paper, per round 2's own check; not re-checked this round).
+           dropped-claims-per-paper tally, Semantic Scholar rate-limit tally (grep `reason` for
+           "rate-limited" after 4-01 lands, not only `status`), the eslint-gate-hygiene item
+           (Ruling 1, already fixed, stays item 0 of every C turn), and the `html-text.ts` cap
+           lead (Ruling 8 — still not implicated by any pool paper or S3 test paper).
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
@@ -4755,3 +4757,84 @@ candidate, or spliced into a caption merge, either), not only the one splice A f
 to `pdf-text.ts`, no change to the JSON shape `extract_text` returns (`title`/`sections`/
 `figureCaptions`/`pageCount`/`pagesRead`/`page1Text`/`reason` all keep their existing shape) — no
 TypeScript-side change is needed at all.
+
+#### Item 4-04 — A3-01: does the pass-2 prompt already ask for two to four key results?
+
+**Answer: no — C needs to add one sentence.** Read `buildPass2Prompt` in full
+(`web/src/lib/papers/deep-report.ts`, lines 220-356). The `resultsAndSignificance.keyResults`
+schema block (lines 319-329) carries no count guidance at all:
+```
+keyResults: [
+  {
+    title: "short label",
+    detail: "one concrete result sentence grounded in the supplied text",
+    evidence: evidenceRule,
+    novelty: "one sentence saying what specifically is new about THIS result compared to prior work",
+  },
+],
+```
+— unlike every sibling array in the same schema, which all embed a count instruction directly in
+a field's own description: `skim`'s `text` says "(max 3 items)" (line 303), `methods`' `text`
+says "(max 4 items)" (line 311), `newHere` says "(max 2 items)" (line 316), `limitations`' `text`
+says "(max 3 items)" (line 333). `keyResults` is the one array in this schema with no such
+instruction — confirming A3-01's live finding (the model sometimes proposes only 1) is a genuine
+prompt gap, not a checker defect (A already established 0 confirmed incorrect drops in 8 samples
+on this exact paper this round).
+
+**Exact sentence, and where it goes**: append to the `detail` field's description (line 324),
+matching the established idiom exactly:
+```
+detail: "one concrete result sentence grounded in the supplied text (report two to four key results when the paper states at least two distinct findings; a single-finding paper may report just one)",
+```
+(a `title`-field placement would work identically; `detail` is chosen only because it is the field
+parallel to `skim`/`methods`/`limitations`'s own count-carrying field). Nothing else in
+`buildPass2Prompt` changes — no schema restructuring, no new `rules` bullet (the existing count
+instructions all live inline on the item's own field, not in the flat `rules` list at lines
+343-354, which holds only cross-cutting policy, never per-array counts).
+
+**Sanitizer cap check** (Ruling 10 asks for this explicitly): `web/src/lib/papers/report.ts`,
+`REPORT_CAPS.keyResults = 4` (line 161), enforced in `sanitizePaperReport` (lines 391-397,
+`if (keyResults.length >= REPORT_CAPS.keyResults) break;`). The cap already allows exactly 4 — the
+top of the "two to four" range asked for — so **no sanitizer change is needed**; a model that
+follows the new instruction and returns 4 key results is not clipped.
+
+This is otherwise exactly what Ruling 10 frames it as: "no code beyond that one sentence; accepted
+variance." A's own tally (key results per run) stays the metric; the S3 target for the loop's
+close is unchanged from Ruling 10's own words ("≤ 1 incorrect drop per paper, and ≥ 2 key results
+on at least one of two runs").
+
+**Tests at risk**: grepped `deep-report.test.ts` for `buildPass2Prompt`/`resultsAndSignificance`/
+`keyResults` — the one existing test that touches this shape (lines 65-105) asserts against a
+MOCKED model JSON response (`pass2Response`, lines 73-86), never against the prompt's own schema-
+description text, so editing that one description string changes nothing any test inspects. Zero
+regression risk — this is a pure prompt-wording change with no type or runtime-shape impact
+(`buildPass2Prompt` still returns a `string`; `PaperReportKeyResult`'s TypeScript shape in
+`report.ts` is untouched).
+
+**Blast radius**: `buildPass2Prompt` is called from exactly one place, `runPass2` (line 378) — the
+change only affects the text sent to the model, never parsed or validated by any code path, so
+there is no code-level blast radius at all; the only observable effect is (hopefully) fewer
+1-key-result runs on live papers, measured by A next round.
+
+#### Gate — cold, after this turn's investigation (no product code changed)
+
+From `web/`, after confirming `git status` clean (the temporary `buildCandidatePool` export was
+reverted via `git checkout` before its commit; the downloaded JECST PDF and every throwaway
+script lived only under `web/.local-data/`, gitignored, and were deleted before this commit):
+`git status` shows no product-code diff across all four items — B changed no code, per the ground
+rules. The gate itself was not re-run this turn (nothing it would catch changed); C re-runs it
+after each item per §3.
+
+#### Handoff to C
+
+Four items, all `MISSING`/`WRONG ORDER`/`EXTRA` (no `WRONG DATA` this round — no field is lying,
+one is silently absent, one picks the wrong true thing, one drops a true thing mid-sentence).
+Work in Ruling 10's own order: **4-01 (A3-02/A3-03) → 4-02 (A3-04) → 4-03 (A3-05) → 4-04
+(A3-01)**. One commit per item, gate after each, per §3. 4-01 and 4-03 each need a new protective
+test (specified above); 4-01 also needs one existing test rewritten (never deleted) for the new
+retry timing; 4-02 needs one new test pair; 4-04 needs no test changes at all. After 4-04, hand
+back to A for the closing measurement — the two watch points a fixture cannot settle: (1) do the
+two Springer papers now actually report `source_unavailable` live, per Ruling 10's own target
+("S4 closes with the tally stated" if they do); (2) does `openalex:W7207740551` now clear
+"≥ 2 key results on at least one of two runs" — the sentence changes model behavior, which only a
+live run against the real provider can confirm, not a mocked-response unit test.
