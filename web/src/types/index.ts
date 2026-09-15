@@ -80,6 +80,17 @@ export interface Paper {
    * no other paper source populates it.
    */
   pageCount?: number;
+  /**
+   * A2-02 (2-05): only ever set for an uploaded PDF (`upload-store.ts`'s
+   * `uploadMetaToPaper`), same "upload-only" convention as `pageCount`
+   * above. "ok" when the extractor found real text; "empty" when the PDF
+   * read successfully but had nothing extractable (most likely scanned,
+   * no text layer) — the reading page uses this to skip straight to the
+   * plain "this PDF has no readable text" message instead of asking for a
+   * report. Optional (unlike `UploadMeta.textStatus`): every existing
+   * `Paper` literal from every other source simply never sets it.
+   */
+  textStatus?: "ok" | "empty";
 }
 
 // ── Event ──

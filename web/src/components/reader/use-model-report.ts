@@ -192,7 +192,13 @@ export function useModelReport({
 
   useEffect(() => {
     const current = paperRef.current;
-    if (!current || !reportKey || cached) return;
+    // 2-05 (A2-02): a paper whose record already says its PDF had nothing
+    // extractable (an uploaded, scanned PDF with no text layer) has no text
+    // for any tier to report on — asking anyway would waste a call to
+    // return the same honest emptiness the record's own textStatus already
+    // states. The reading page renders the plain "no readable text"
+    // sentence directly from `paper.textStatus` instead.
+    if (!current || !reportKey || cached || current.textStatus === "empty") return;
     const controller = new AbortController();
     const active = () => !controller.signal.aborted;
 

@@ -224,6 +224,16 @@ function blockedReason(url: string): string {
 async function tryUploadLink(hash16: string): Promise<{ status: FullTextStatus; doc?: ExtractedDocument; reason?: string }> {
   const result = await extractPdfTextFromPath(pdfPath(hash16));
   if (result.ok && result.doc) {
+    // A2-02 (2-05): a truly empty/scanned PDF reads *successfully* — the
+    // Python extractor still returns one real (empty-text) "Body" section
+    // rather than failing outright, so `result.ok` is `true` here even
+    // though there is nothing to report on. Confirmed by execution against
+    // a real blank PDF: `{ ok: true, doc: { sections: [] } }`, never the
+    // `ok: false` shape the branch below was written for. Catch it here,
+    // structurally, rather than trusting an unconditional "it's ok."
+    if (result.doc.sections.length === 0) {
+      return { status: "no_full_text", reason: "pdf-empty: PDF text extractor produced no sections." };
+    }
     return { status: "ok", doc: result.doc };
   }
   if (result.reason === "no-python" || result.reason === "no-extractor") {

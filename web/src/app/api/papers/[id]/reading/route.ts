@@ -11,6 +11,7 @@ import { fetchPaperById } from "@/lib/papers/fetch-by-id";
 import { getFullText, type FullTextResult } from "@/lib/papers/full-text";
 import { buildReading } from "@/lib/papers/reading";
 import { rawItemToPaper } from "@/lib/feed/mapper";
+import { bareUploadId, readUploadMeta, uploadMetaToPaper } from "@/lib/papers/upload-store";
 
 /**
  * How long the route waits for the full text before answering with the
@@ -56,6 +57,42 @@ export async function GET(
   const { id } = await params;
   const decodedId = decodeURIComponent(id);
   const refresh = req.nextUrl.searchParams.get("refresh") === "1";
+
+  // 2-05 (Ruling 4, §1e / bug B): `fetchPaperById` only ever recognizes an
+  // `openalex:`/`arxiv:` prefix and returns null for anything else — an
+  // uploaded PDF maps straight to a `Paper` (like `uploadMetaToPaper`
+  // already does elsewhere), skipping the RawItem shape entirely, rather
+  // than teaching `fetchPaperById` a RawItem-shaped lie about an upload.
+  // Before this branch existed this route 404'd for every `upload:` id
+  // (empty or not), so the client's useReading hook fell back to a
+  // client-only reading that never runs buildReading's real pdf_empty
+  // provenance logic at all — confirmed by execution.
+  const uploadHash16 = bareUploadId(decodedId);
+  if (uploadHash16) {
+    const meta = await readUploadMeta(uploadHash16);
+    if (!meta) {
+      return NextResponse.json(
+        { error: "Paper not found" },
+        { status: 404, headers: NO_STORE_HEADERS },
+      );
+    }
+    const uploadPaper = uploadMetaToPaper(meta);
+    const uploadFullText = await fullTextWithin(
+      {
+        paperId: uploadPaper.id,
+        url: uploadPaper.linkPaper ?? null,
+        doi: uploadPaper.doi ?? null,
+      },
+      FULL_TEXT_TIMEOUT_MS,
+    );
+    const uploadReading = buildReading(
+      uploadPaper,
+      uploadFullText.settled ? uploadFullText.result : null,
+    );
+    return NextResponse.json(uploadReading, {
+      headers: uploadFullText.settled && !refresh ? CACHE_HEADERS : NO_STORE_HEADERS,
+    });
+  }
 
   const raw = await fetchPaperById(decodedId);
   if (!raw) {

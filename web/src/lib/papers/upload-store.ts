@@ -87,6 +87,17 @@ export interface UploadMeta {
   /** The extracted `abstract` canonical bucket's text, when present. */
   summaryIntro?: string;
   uploadedAt: string;
+  /**
+   * Ruling 9 (§1j) / A2-02: "ok" when the extractor found at least one
+   * section of real text; "empty" when it read the file successfully but
+   * found nothing extractable (most likely a scanned PDF with no text
+   * layer). Set once, at upload time, from a fact upload/route.ts already
+   * has (doc.sections.length) — never re-derived downstream. Required (not
+   * optional) here: the upload route always knows the answer at write
+   * time, unlike `Paper.textStatus`, which is unset for every non-upload
+   * source.
+   */
+  textStatus: "ok" | "empty";
 }
 
 async function ensureUploadDir(): Promise<void> {
@@ -150,5 +161,6 @@ export function uploadMetaToPaper(meta: UploadMeta): Paper {
     doi: meta.doi,
     isSaved: false,
     pageCount: meta.pageCount,
+    textStatus: meta.textStatus,
   };
 }

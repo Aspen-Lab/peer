@@ -25,6 +25,16 @@ import {
   splitSentences,
 } from "./skim";
 
+/**
+ * 2-05 (A2-02): the PDF read successfully but had nothing extractable
+ * (most likely scanned, no text layer). Shared with the reading page's own
+ * early branch (rendered straight from `paper.textStatus`, before a report
+ * would ever be requested) so the two paths — this module's own decision
+ * sentence below and the page's pre-report render — can never drift apart.
+ */
+export const PDF_NO_TEXT_MESSAGE =
+  "This PDF has no readable text — Peer could not extract anything from it.";
+
 export type ReadingBlock =
   | "skim"
   | "findings"
@@ -740,7 +750,7 @@ function readingSentence(reading: PaperReading, providerConfigured: boolean): st
     return withKey("Abstract only; the PDF is there, but only a self-hosted Peer reads PDFs.");
   }
   if (provenance.fullText === "pdf_empty") {
-    return "This PDF has no readable text — Peer could not extract anything from it.";
+    return PDF_NO_TEXT_MESSAGE;
   }
   if (provenance.fullText === "paywalled") {
     const host = provenance.paywallHost ?? "the publisher";

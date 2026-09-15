@@ -137,6 +137,32 @@ describe("getFullText — 1-28, an upload: id reads the local file, never collec
     expect(result.attempts[0].outcome).toContain("pdf-empty");
   });
 
+  it("2-05 (A2-02): a real empty/scanned PDF — which extracts as ok:true with zero sections, not ok:false — is still marked pdf-empty", async () => {
+    // The shape above (`ok: false, reason: "...produced no sections"`)
+    // guards a real but different Python-side failure (a totally unreadable
+    // file). A truly blank PDF instead reads *successfully*: the Python
+    // extractor still returns one real (empty-text) "Body" section, which
+    // pdf-text.ts's normalize() then filters out — producing exactly this
+    // shape, confirmed by executing extractPdfTextFromPath against a real
+    // blank PDF built with PyMuPDF.
+    mocks.extractPdfTextFromPath.mockResolvedValue({
+      ok: true,
+      doc: {
+        title: null,
+        sections: [],
+        figureCaptions: [],
+        source: "pdf",
+        pageCount: 1,
+        reason: null,
+      },
+    } satisfies PdfTextResult);
+
+    const result = await getFullText({ paperId: "upload:0000000000000004" });
+
+    expect(result.status).toBe("no_full_text");
+    expect(result.attempts[0].outcome).toContain("pdf-empty");
+  });
+
   it("marks a no-python/no-extractor failure the same way a normal PDF link would", async () => {
     mocks.extractPdfTextFromPath.mockResolvedValue({ ok: false, reason: "no-python" } satisfies PdfTextResult);
 

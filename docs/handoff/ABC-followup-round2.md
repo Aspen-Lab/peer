@@ -3794,3 +3794,95 @@ TODO for A next round: does `/api/figure` on `openalex:W7212288571` now report
 `source_unavailable` (naming `link.springer.com`) instead of the old, false `no_figures`?
 
 Commit: `fix(figures): recognise a Springer-style bot-challenge stub as a bounce page`.
+
+#### Item 2-05 — A2-02: the empty-PDF message never reaches the reader (sub-entries A, B, C)
+
+**Sub-entry A — the structural `textStatus` field.**
+- `web/src/lib/papers/upload-store.ts`: `UploadMeta` gets a new **required** field
+  `textStatus: "ok" | "empty"` (required here, unlike `Paper.textStatus`, since the upload route
+  always knows the answer at write time); `uploadMetaToPaper` forwards it onto the returned
+  `Paper`.
+- `web/src/types/index.ts`: `Paper` gets the matching **optional** `textStatus?: "ok" | "empty"`,
+  same "upload-only" comment convention as `pageCount`.
+- `web/src/app/api/papers/upload/route.ts`: sets `textStatus: (doc?.sections.length ?? 0) > 0 ?
+  "ok" : "empty"` when building `meta`.
+- `web/src/lib/papers/full-text.ts`'s `tryUploadLink`: fixed the actual bug (not just the
+  symptom) — a real blank PDF extracts as `{ ok: true, doc: { sections: [] } }`, not the
+  `{ ok: false, reason: "...produced no sections" }` shape the old code checked for. The `ok:
+  true` branch now checks `result.doc.sections.length === 0` and returns the same
+  `"pdf-empty: ..."` reason string the `ok:false` branch already used, so `reading.ts`'s
+  `pdfHasNoText` needs no change.
+
+**Sub-entry B — the reading route 404 for every `upload:` id.** `fetchPaperById` only recognizes
+`openalex:`/`arxiv:` prefixes; confirmed by reading it has no third branch. `GET
+/api/papers/[id]/reading` now branches on `bareUploadId(decodedId)` *before* calling
+`fetchPaperById` — reads the upload record via `readUploadMeta`, maps it with `uploadMetaToPaper`
+(the same function the upload route and its own `GET /api/papers/upload/[id]` route already use),
+runs the same `fullTextWithin` + `buildReading` the normal path uses, 404s only when no record
+exists for the hash. This was a wider gap than just the empty-PDF case: **every** uploaded paper,
+empty or not, previously fell back to the client-only `buildReading(paper, null)` path with no
+server-built findings/method/caveats and no accurate full-text sentence.
+
+**Sub-entry C — never ask for a report on a textless paper.**
+- `web/src/components/reader/use-model-report.ts`: the report-generating effect's early-return
+  guard now also checks `current.textStatus === "empty"` — no abstract-tier or deep report is
+  ever requested for a paper whose record already says its PDF had nothing extractable.
+- `web/src/lib/papers/reading.ts`: extracted the existing pdf_empty decision sentence into an
+  exported constant, `PDF_NO_TEXT_MESSAGE`, used both by `describeAvailability`'s existing
+  `pdf_empty` branch and by the new page-level branch below, so the two paths can never drift.
+- `web/src/app/papers/[id]/page.tsx` (`Reader`): a new early return, placed after every hook (the
+  same position as the pre-existing `if (!reading) return null;`), renders a minimal page — title,
+  the plain `PDF_NO_TEXT_MESSAGE` sentence, a back link, the record block — the moment
+  `paper.textStatus === "empty"`, skipping the whole report/figures/related-papers layout
+  entirely. Known instantly from the paper record itself, so it doesn't wait on `reading`'s own
+  fetch to resolve the same fact through `provenance.fullText === "pdf_empty"`.
+
+**Tests added**:
+- `upload-store.test.ts`: `textStatus: "ok"` added to the three existing `UploadMeta` fixtures
+  (now required — a real, mechanical, TypeScript-caught blast radius, exactly as B predicted; a
+  second fixture in `app/api/papers/upload/[id]/route.test.ts` needed the same fix, found by
+  `tsc`, not by B's own grep — flagging this as one thing B's guide missed), plus one new case
+  asserting `uploadMetaToPaper` forwards `textStatus` for both values.
+- `app/api/papers/upload/route.test.ts`: three new cases — `textStatus: "empty"` when the
+  extractor found sections but none carry text (the default mock), `"ok"` when it found a real
+  section, `"empty"` when the extractor fails entirely.
+- `full-text.test.ts`: one new case using the *true* empty-PDF shape (`ok: true, doc: {
+  sections: [] }`, not the pre-existing test's `ok: false` shape, which B correctly identified as
+  guarding a real but different failure and which stays, per "never delete a test").
+- `app/api/papers/[id]/reading/route.test.ts`: new describe block, three cases — 404 (and
+  `fetchPaperById` never called) for an unknown hash; `pdf_empty` provenance for an upload whose
+  full text comes back with a `pdf-empty` attempt outcome; ordinary `pdf` provenance for an
+  upload with real sections (proving the *wider* 404 gap is closed, not only the empty case).
+
+**Proved each new test tests the fix — reverted, watched fail, restored, in this order**:
+1. `tryUploadLink`'s `sections.length === 0` check removed → the new `full-text.test.ts` case
+   failed (`status` was `"ok"` instead of `"no_full_text"`); 7 others stayed green. Restored.
+2. `extract.ts`'s bounce-stub broadening N/A here (that was 2-04). Not repeated.
+3. The reading route's whole `upload:` branch removed → all three new
+   `reading/route.test.ts` cases failed (two `404`s that should have been `200`, one call to
+   `fetchPaperById` that should never have happened); the 6 pre-existing cases stayed green.
+   Restored from a scratch backup, diffed back in with the import list confirmed present.
+4. `use-model-report.ts`'s guard and `page.tsx`'s early branch have **no dedicated test file** —
+   confirmed by `find`, none exists for this reader page component (a heavy-hook client
+   component; adding a first test harness for it is out of this item's scope). Not revert-tested
+   for lack of a harness; verified instead by `tsc`/`eslint` passing and by tracing the exact
+   prop shapes against the file's own existing, working usages of the same components
+   (`TitleBlock`, `RecordBlock`, `BackToFeedLink`) a few lines below in the same function.
+
+**Gate**: `npx tsc --noEmit` clean · `npx eslint .` clean · `npx vitest run --exclude
+"**/benchmark.test.ts"` → **2625/2625** (8 more new).
+
+**Found one thing in B's guide to correct, not contest**: B's own "blast radius" list did not
+mention `app/api/papers/upload/[id]/route.test.ts` as a second file needing a `textStatus: "ok"`
+fixture update once `UploadMeta.textStatus` became required — `tsc` caught it immediately, fixed
+the same way as the three B did list.
+
+**Live check**: blocked, dev server down (see the turn-level note at the top of this section).
+TODOs for A next round: does uploading a blank PDF (`web/.local-data/blank.pdf`, built with
+`python -c "import fitz; d=fitz.open(); d.new_page(); d.save(...)"`) and opening
+`/papers/upload:<hash>` show only the plain "no readable text" message and never a loading
+spinner for a report that will never arrive? Does reloading that same page (after the initial
+upload response is gone from the client) still show the message, proving `GET
+/api/papers/[id]/reading`'s new `upload:` branch is what's carrying it, not a client cache?
+
+Commit: `fix(upload): an empty-PDF upload never reaches the reading route as a 404 or asks for a report`.

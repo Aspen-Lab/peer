@@ -79,6 +79,7 @@ describe("readUploadMeta / writeUploadMeta", () => {
       title: "A Study Of Things",
       pageCount: 12,
       uploadedAt: "2026-09-15T00:00:00.000Z",
+      textStatus: "ok",
     };
 
     await writeUploadMeta(hash16, meta);
@@ -93,6 +94,7 @@ describe("uploadMetaToPaper — honesty of the mapped Paper record", () => {
       fileName: "no-metadata-found.pdf",
       title: "no-metadata-found",
       uploadedAt: "2026-09-15T00:00:00.000Z",
+      textStatus: "ok",
     };
 
     const paper = uploadMetaToPaper(meta);
@@ -115,6 +117,7 @@ describe("uploadMetaToPaper — honesty of the mapped Paper record", () => {
       pageCount: 20,
       summaryIntro: "This paper studies things.",
       uploadedAt: "2026-09-15T00:00:00.000Z",
+      textStatus: "ok",
     };
 
     const paper = uploadMetaToPaper(meta);
@@ -122,5 +125,25 @@ describe("uploadMetaToPaper — honesty of the mapped Paper record", () => {
     expect(paper.doi).toBe("10.1000/example");
     expect(paper.pageCount).toBe(20);
     expect(paper.summaryIntro).toBe("This paper studies things.");
+  });
+
+  it("2-05: forwards textStatus onto the mapped Paper record", () => {
+    const emptyMeta: UploadMeta = {
+      hash16: "abcdef0123456789",
+      fileName: "scanned.pdf",
+      title: "scanned",
+      uploadedAt: "2026-09-15T00:00:00.000Z",
+      textStatus: "empty",
+    };
+    const okMeta: UploadMeta = {
+      hash16: "abcdef0123456789",
+      fileName: "paper.pdf",
+      title: "A Real Title",
+      uploadedAt: "2026-09-15T00:00:00.000Z",
+      textStatus: "ok",
+    };
+
+    expect(uploadMetaToPaper(emptyMeta).textStatus).toBe("empty");
+    expect(uploadMetaToPaper(okMeta).textStatus).toBe("ok");
   });
 });

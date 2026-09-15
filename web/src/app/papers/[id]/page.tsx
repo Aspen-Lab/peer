@@ -31,6 +31,7 @@ import { recommendationLine } from "@/lib/reader/recommendation";
 import { allocatePlateTerms } from "@/lib/papers/plate-terms";
 import { placeEvidence } from "@/lib/papers/evidence";
 import {
+  PDF_NO_TEXT_MESSAGE,
   describeAvailability,
   omittedForReader,
   sharedTerms,
@@ -536,6 +537,36 @@ function Reader({
   });
 
   if (!reading) return null;
+
+  // S7(e) / 2-05 (A2-02): an uploaded PDF the extractor read successfully
+  // but found nothing in (most likely scanned, no text layer) gets this
+  // plain message, never a report — known instantly from the paper record
+  // itself (`paper.textStatus`), so this renders without waiting on
+  // `reading`'s own fetch to resolve the same fact through
+  // `provenance.fullText === "pdf_empty"`. `useModelReport`'s own effect
+  // never asks for a report for this paper either way (guarded there on
+  // the same field) — this is only about what the page shows.
+  if (paper.textStatus === "empty") {
+    return (
+      <PageContainer width="spread" className={PAGE_CLASS}>
+        <div className={SPREAD_GRID}>
+          <div>
+            <TitleBlock paper={paper} recommendation={null} now={now} />
+            <p className="font-reading text-lead leading-[1.6] text-text mt-6">
+              {PDF_NO_TEXT_MESSAGE}
+            </p>
+            <BackToFeedLink
+              onBack={() => router.back()}
+              className="font-sans text-meta text-text-faint hover:text-heading mt-3 inline-block"
+            >
+              {RAIL.back}
+            </BackToFeedLink>
+            <RecordBlock paper={paper} primaryUrl={reading.source?.url ?? null} />
+          </div>
+        </div>
+      </PageContainer>
+    );
+  }
 
   // Only a paper from today's briefing, and only when there are topics for
   // it to have matched; a deep link has no reason to show.

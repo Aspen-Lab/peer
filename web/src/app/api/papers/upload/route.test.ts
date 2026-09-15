@@ -156,6 +156,36 @@ describe("POST /api/papers/upload", () => {
     expect(mocks.writeUploadMeta).toHaveBeenCalled();
   });
 
+  it("2-05: marks textStatus 'empty' when the extractor found sections but none carry text", async () => {
+    // The default beforeEach mock (`emptyDoc`, sections: []) — extraction
+    // succeeded, there is simply nothing to report on.
+    const res = await postWith(pdfFile(pdfBytes()));
+    const body = await res.json();
+    expect(body.paper.textStatus).toBe("empty");
+  });
+
+  it("2-05: marks textStatus 'ok' when the extractor found at least one real section", async () => {
+    mocks.extractPdfTextFromPath.mockResolvedValue({
+      ok: true,
+      doc: {
+        ...emptyDoc,
+        sections: [{ heading: "Abstract", canonical: "abstract", text: "This paper studies things." }],
+      },
+    } satisfies PdfTextResult);
+
+    const res = await postWith(pdfFile(pdfBytes()));
+    const body = await res.json();
+    expect(body.paper.textStatus).toBe("ok");
+  });
+
+  it("2-05: marks textStatus 'empty' when the extractor fails entirely", async () => {
+    mocks.extractPdfTextFromPath.mockResolvedValue({ ok: false, reason: "no-python" } satisfies PdfTextResult);
+
+    const res = await postWith(pdfFile(pdfBytes(), "scanned.pdf"));
+    const body = await res.json();
+    expect(body.paper.textStatus).toBe("empty");
+  });
+
   it("carries the abstract section through as summaryIntro, capped to 400 chars", async () => {
     const longAbstract = "x".repeat(500);
     mocks.extractPdfTextFromPath.mockResolvedValue({

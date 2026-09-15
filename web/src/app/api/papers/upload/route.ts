@@ -104,6 +104,12 @@ export async function POST(req: Request) {
     pageCount: doc?.pageCount,
     summaryIntro: abstractSection ? abstractSection.text.slice(0, 400) : undefined,
     uploadedAt: new Date().toISOString(),
+    // A2-02 (2-05): "empty" covers both a failed extraction (`doc` is
+    // undefined) and a successful-but-textless one (`doc.sections` is a
+    // real, present, zero-length array — confirmed by execution against a
+    // real blank PDF) — both mean the same thing to the reader: nothing to
+    // report on.
+    textStatus: (doc?.sections.length ?? 0) > 0 ? "ok" : "empty",
   };
   await writeUploadMeta(hash16, meta);
 

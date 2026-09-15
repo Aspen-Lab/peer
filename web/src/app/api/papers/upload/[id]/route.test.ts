@@ -39,6 +39,7 @@ describe("GET /api/papers/upload/[id]", () => {
       fileName: "paper.pdf",
       title: "A Real Paper",
       uploadedAt: "2026-09-15T00:00:00.000Z",
+      textStatus: "ok",
     };
     mocks.readUploadMeta.mockResolvedValueOnce(meta);
 
