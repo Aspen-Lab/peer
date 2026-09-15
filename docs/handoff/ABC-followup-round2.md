@@ -4481,3 +4481,111 @@ Commit: `docs(abc): round 3 A - difference list, gate line, §1 handoff`.
 - `/papers/upload:a65e4a7d02784df1` (arXiv 2501.00663): full title "Titans: Learning to Memorize
   at Test Time", hero figure (Figure 2, MAC architecture), abstract and claim. Stored record for
   2609.02668 now carries the full three-line title. **S7 titles: closed in the browser.**
+
+### Round 4 — Agent B
+
+Branch confirmed `complimentary-enhancement-to-main-update` before starting; `git status` clean.
+B does not change code — every claim below was checked by execution (a temporary one-word export
+of an internal function, and a temporarily-downloaded PDF, both reverted/deleted before this
+part's commit; `git status` clean again immediately after). Working Ruling 10's own order:
+**A3-02/A3-03 → A3-04 → A3-05 → A3-01**, numbered `4-01 … 4-04`.
+
+#### Item 4-01 — A3-02/A3-03: a Semantic Scholar 429 masks the publisher/HTML/PDF branch's own outcome
+
+**File**: `web/src/lib/figures/extract.ts`. **Classification: WRONG ORDER** — every needed
+`AttemptResult` already exists in the candidate pool; `finalDiagnostic` (lines 1293-1363) simply
+picks the wrong one when more than one is present. Not missing data, not wrong data.
+
+**Verified by execution.** `buildCandidatePool` (line 1384) is not exported; temporarily added
+`export` to its one-line signature (reverted via `git checkout` immediately after, confirmed clean
+before this commit), then ran it directly, via `tsx`, against both Springer papers A3-03 named,
+using their real DOIs read from `web/.local-data/pool-cache/*.json`:
+- `openalex:W7212288571` (DOI `10.1007/s40998-026-01240-x`): `pool.attempts` =
+  `[{status: "source_unavailable", reason: "Peer reached an access-check page at
+  link.springer.com, not the article itself."}, {status: "rate_limited"}, {status:
+  "rate_limited"}]` (the two `rate_limited` entries are the OpenAlex-id and DOI-id Semantic
+  Scholar lookups; `candidates: []`).
+- `openalex:W7204990919` (DOI `10.1007/s11814-026-00811-2`): byte-identical shape — one
+  `source_unavailable` bounce-page attempt, two `rate_limited` attempts.
+
+This directly answers A3-03's open question: **2-04's bounce-page detector already fires
+correctly for both target papers and already produces the right `source_unavailable` attempt —
+2-04's fix works.** The only reason A never sees it live is `finalDiagnostic`'s own precedence:
+it checks `paywalled` (line 1308), then `no_figures` (line 1320), then `rate_limited` (line 1339)
+— and only *then* falls through to a generic default that hard-codes `status:
+"source_unavailable"` (lines 1353-1362). There is no explicit `attempts.find(status ===
+"source_unavailable")` check placed *before* the `rate_limited` check, so a `source_unavailable`
+attempt only ever wins by accident, when no `rate_limited` attempt happens to exist alongside it.
+
+**Fix direction.** Insert an explicit check —
+```
+const sourceUnavailable = attempts.find((a) => a.status === "source_unavailable");
+if (sourceUnavailable) return { ...(as today's fallback shape), reason: withThrottleNote(sourceUnavailable.reason ?? "...") };
+```
+— between the existing `no_figures` check (ends line 1330) and the existing `rate_limited` check
+(starts line 1339). This is a **pure reordering**: for any paper with no `rate_limited` attempt,
+the returned diagnostic is identical to today's, because `source_unavailable` was already the
+fallback's hardcoded status — the only behavior change is when a `rate_limited` attempt *also*
+exists alongside a `paywalled`/`no_figures`/`source_unavailable` one, and now the more specific
+one wins, per Ruling 10 ("publisher/HTML/PDF branch outcome wins the status").
+
+Per Ruling 10, also append the throttle note to whichever attempt wins ("a Semantic Scholar 429
+is appended to reason text... and counted in the tally, not promoted to the status"): compute
+`const wasThrottled = attempts.some((a) => a.status === "rate_limited")` once at the top of
+`finalDiagnostic`, and a tiny helper `withThrottleNote(reason)` that appends `"; the figure index
+was rate-limited."` when `wasThrottled` is true, applied to the `paywalled`, `no_figures`, and
+new `source_unavailable` branches alike (not to the `rate_limited` branch itself, which already
+says so directly, and not to the bottom generic fallback, which by definition means nothing
+conclusive ran at all). This keeps the throttling event visible in `reason` for A's Semantic
+Scholar tally even when it is no longer the `status`.
+
+**What shows when every candidate is rejected**: unchanged. The true bottom fallback (`attempts`
+empty, or containing only `candidates`-status entries with nothing selectable) still returns
+`status: "source_unavailable"` with the existing generic reason ("Peer could not reach a usable
+full-text source for this paper's figures.", lines 1353-1362) — same message, same code, now
+simply reached only after paywalled/no_figures/source_unavailable(explicit)/rate_limited have all
+been checked and found nothing.
+
+**The bounded retry.** Ruling 10 also asks for "one retry of the S2 lookup after a 2-3 s wait on
+a 429 (bounded, not a loop)". Site: `trySemanticScholarCandidates` (lines 809-858). Split the
+existing body (from `await acquireSemanticScholarSlot()` through the `finally { …release… }`)
+into a new private helper, e.g. `attemptSemanticScholarFetch(ssPaperId)`, unchanged in every
+particular from today. `trySemanticScholarCandidates` becomes a thin wrapper: call the helper
+once; if `status !== "rate_limited"`, return it; otherwise `await waitMs(2_500)` (a new
+`SEMANTIC_SCHOLAR_RETRY_DELAY_MS` constant, inside the ruling's named "2-3 s") and call the
+helper exactly once more, returning whatever it produces even if still `rate_limited` — bounded,
+never a loop. **The retry re-enters `acquireSemanticScholarSlot`/`releaseSemanticScholarSlot`
+rather than holding its slot through the wait**: with only `SEMANTIC_SCHOLAR_MAX_CONCURRENT = 2`
+slots shared across an entire 17-paper briefing sweep (1-20), holding a slot idle for 2-3 s would
+only make every *other* paper's lookup in the same sweep queue longer; releasing and re-queuing
+keeps the existing concurrency/interval discipline intact for the retry too.
+
+**Tests at risk** (grepped `rate_limited` and `finalDiagnostic` across the whole suite — every
+hit is in this one file):
+- `extract.test.ts` lines 220-230, "reports a 429 as rate_limited, not source_unavailable" — runs
+  under `vi.useFakeTimers()`, does `await vi.advanceTimersByTimeAsync(0); const result = await
+  promise;`. Once the bounded retry lands, the always-429 mocked fetch is called a second time
+  after the new 2-3 s wait; this test's single `advanceTimersByTimeAsync(0)` never reaches that
+  timer and `await promise` hangs. **Rewrite, do not delete**: add `await
+  vi.advanceTimersByTimeAsync(2_500)` (or `vi.runAllTimersAsync()`) before awaiting `promise`,
+  keep the same final assertion (`result.status === "rate_limited"` — the contract is unchanged,
+  only the mechanics of reaching it), and add `expect(globalThis.fetch).toHaveBeenCalledTimes(2)`,
+  mirroring how the existing 1-21/2-04 bounce-page retry tests already assert call counts.
+- The other two tests in the same describe block (lines 147-218) mock a 200 response and never
+  reach the retry path — unaffected.
+- No existing test exercises `finalDiagnostic`'s cross-attempt precedence at all (`getFigurePool`'s
+  two tests, lines 329-360, cover only the `upload:` short-circuit branch) — zero regression risk
+  from the reorder itself, but C should add a new protective test through `extractFigure`: attempts
+  `[source_unavailable, rate_limited]` -> final `status: "source_unavailable"` with the throttle
+  note appended; attempts `[rate_limited]` alone -> final `status: "rate_limited"`, unchanged.
+
+**Blast radius**: `finalDiagnostic` has exactly one call site (`extractFigure`, line 1645).
+`trySemanticScholarCandidates` is called only from `buildCandidatePool` (three call sites, one per
+identifier kind: arXiv, OpenAlex, DOI) and is exported "for tests only" per its own comment — no
+product code outside this file imports it. The retry adds up to one extra network round-trip
+(2-3 s) and one extra `waitMs` per Semantic Scholar lookup that 429s; it does not change the
+`SEMANTIC_SCHOLAR_MAX_CONCURRENT`/`MIN_INTERVAL_MS` contract the existing 1-20 queue test covers.
+
+**Note for A's next tally**: since `reason` (not `status`) now carries the throttle note, A's
+Semantic-Scholar rate-limit count should grep `reason` for "rate-limited" (or the older exact
+`status === "rate_limited"` for the sole-branch case) rather than only counting final `status`.
