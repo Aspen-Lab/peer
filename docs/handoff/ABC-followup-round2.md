@@ -4296,3 +4296,27 @@ message for `textStatus: "empty"`, confirmed only by code reading this round —
 carried to the manager's eyeball list, not counted as a code-state difference.
 
 Commit: `docs(abc): round 3 A part 3 - S7 real upload-to-report-to-figure flow`.
+
+#### Part 4 — S5/S6 regression spot-check
+
+From Part 1's live route responses (`W7207740551` runs 1-2, `W7212228226`, `arxiv:2501.00663` —
+4 real, fresh deep-report responses this round, not fixtures):
+
+- **No `whyItFitsYou` on any of the 4** — `"whyItFitsYou" in response` is `false` on every one.
+- **`whatItProposes` is the merged shape** on all 4 — one `summary` string plus an optional
+  `newHere` array (1 line each on every response that had one); no separate "What is new"
+  block anywhere in the payload.
+- **Per-result `novelty` is present** — every `keyResults[]` entry across all 4 responses carries
+  its own `novelty` string (Peer's reading, no evidence sentence attached, as designed).
+- **`grep -rn "whyItFitsYou|REPORT_HEADING\.fit|FIT_KEYWORDS|FitBlock" src` (excluding
+  `*.test.ts`)**: the only hits left are `report.ts`'s and `reading-markdown.ts`'s type
+  declarations (`whyItFitsYou?: {...}`, kept optional so an old cached v5 record still
+  type-checks) and `sanitizePaperReport`'s legacy-parsing branch, which only reads an old blob
+  if one exists — **zero render-path hits**, unchanged since round 2.
+- **Cache key**: `use-model-report.ts` `STORAGE_KEY = "peer-paper-report-v6"`,
+  `LEGACY_STORAGE_KEYS` includes `"peer-paper-report-v5"` — unchanged.
+
+**S5/S6: no regression.** Same result as round 2's confirmation; nothing in round 2's C work
+(2-01 through 2-06) touched any S5/S6 file, and this spot-check confirms nothing drifted.
+
+Commit: `docs(abc): round 3 A part 4 - S5/S6 regression spot-check`.
