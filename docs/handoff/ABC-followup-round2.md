@@ -4838,3 +4838,78 @@ two Springer papers now actually report `source_unavailable` live, per Ruling 10
 ("S4 closes with the tally stated" if they do); (2) does `openalex:W7207740551` now clear
 "≥ 2 key results on at least one of two runs" — the sentence changes model behavior, which only a
 live run against the real provider can confirm, not a mocked-response unit test.
+
+---
+
+### Round 4 — Agent C
+
+Branch confirmed `complimentary-enhancement-to-main-update` before starting; `git status` clean.
+Cold gate re-confirmed before the first edit: `npx tsc --noEmit` clean, `npx eslint .` clean,
+`npx vitest run --exclude "**/benchmark.test.ts"` → 2631/2631, matching B's baseline exactly.
+Working Ruling 10's order: **4-01 → 4-02 → 4-03 → 4-04**.
+
+#### Item 4-01 — A3-02/A3-03: a Semantic Scholar 429 no longer masks the publisher/HTML/PDF branch's own outcome
+
+**Change**: `web/src/lib/figures/extract.ts`, `finalDiagnostic` — inserted an explicit
+`source_unavailable` check between the existing `no_figures` and `rate_limited` checks, exactly
+per B's fix direction (a pure reorder: unchanged output for any paper with no `rate_limited`
+attempt, since `source_unavailable` was already the bottom fallback's hardcoded status). Added
+`wasThrottled`/`withThrottleNote` computed once at the top of the function, applied to the
+`paywalled`, `no_figures`, and new `source_unavailable` branches (not to `rate_limited` itself,
+which already states the throttle directly, and not to the bottom generic fallback, which is only
+reached when no `rate_limited` attempt exists either). **The bounded retry**:
+`trySemanticScholarCandidates`'s body was split into a new private `attemptSemanticScholarFetch`
+(byte-identical to the old body); `trySemanticScholarCandidates` is now a thin wrapper — call once,
+if not `rate_limited` return it, else `await waitMs(SEMANTIC_SCHOLAR_RETRY_DELAY_MS)` (new
+constant, 2_500ms) and call once more, returning whatever comes back even if still `rate_limited`.
+The retry re-enters `acquireSemanticScholarSlot`/`releaseSemanticScholarSlot` rather than holding a
+slot through the wait, per B's reasoning (the 1-20 concurrency cap must still apply to every other
+paper in the same briefing sweep).
+
+**Also exported** `AttemptResult` and `finalDiagnostic` with "exported for tests only" comments,
+matching the file's existing convention (`__resetSemanticScholarLimiterForTests`,
+`trySemanticScholarCandidates`) — **a deviation from B's suggestion to test the precedence fix
+"through `extractFigure`"**, logged per §2's C contract: driving `extractFigure` to produce a
+specific `[source_unavailable, rate_limited]` attempts pair would require mocking every branch of
+`buildCandidatePool` (arXiv/OpenAlex/DOI Semantic Scholar calls, `collectSourceLinks`, HTML/PDF
+fetches) just to reach `finalDiagnostic` with a controlled input — brittle and indirect for testing
+a pure reordering function. Exporting the already-existing internal function directly (same shape
+as the file's other test-only exports) tests the exact unit B diagnosed as wrong, deterministically.
+
+**Tests changed/added** (`extract.test.ts`):
+- Rewrote (never deleted) "reports a 429 as rate_limited, not source_unavailable" →
+  "…, after one bounded retry": added `await vi.advanceTimersByTimeAsync(2_500)` (was `(0)`) before
+  awaiting the promise, kept the same status assertion, added
+  `expect(globalThis.fetch).toHaveBeenCalledTimes(2)` per B's exact spec.
+- New `describe("finalDiagnostic — 4-01, …")`: (1) `[source_unavailable, rate_limited]` →
+  `status: "source_unavailable"`, reason carries the bounce-page text plus
+  `"; the figure index was rate-limited."`; (2) `[rate_limited]` alone → `status: "rate_limited"`,
+  reason unchanged (no note appended), matching B's exact two cases.
+
+**Proved the new/rewritten tests test the fix**: `git stash push -- src/lib/figures/extract.ts`
+(reverting only the source, keeping the test file's new content), ran
+`npx vitest run src/lib/figures/extract.test.ts` — all three targeted tests failed as expected (the
+retry test: `fetch` called once, not twice; both `finalDiagnostic` tests: `TypeError: finalDiagnostic
+is not a function`, since the export did not exist pre-fix). `git stash pop` restored the source;
+reran the same file — 18/18 green.
+
+**Gate**: `npx tsc --noEmit` clean · `npx eslint .` clean · `npx vitest run --exclude
+"**/benchmark.test.ts"` → **2633/2633** (2 more than B's 2631 baseline — the rewritten 429 test
+does not add a count, the two new `finalDiagnostic` tests do). Regression locks re-verified in the
+same run: `extract.test.ts`'s 2-04 bounce-page case, 1-19 og:image guard, and 1-20 queue tests
+(concurrency cap + minimum interval) all still pass.
+
+**Found nothing in B's guide to contest** beyond the test-shape deviation logged above.
+
+**Live check**: `GET /api/figure` on `openalex:W7212288571` (id/url/doi/paperTitle read live from
+`GET /api/papers/openalex:W7212288571`) returned:
+```
+{"status":"source_unavailable","reason":"Peer reached an access-check page at link.springer.com, not the article itself.; the figure index was rate-limited."}
+```
+— exactly the target shape: an honest `source_unavailable` with the bounce-page reason, the S2
+throttle folded into `reason` (not promoted to `status`). TODO for A: same check on the second
+named Springer paper (`openalex:W7204990919` per B's investigation), and the tally question —
+per Ruling 10's note, grep `reason` for "rate-limited" now, not only `status`, since a throttled-
+but-not-final attempt no longer shows up as `status: "rate_limited"`.
+
+Commit: `fix(figures): a Semantic Scholar 429 no longer hides the publisher branch's own figure status`.

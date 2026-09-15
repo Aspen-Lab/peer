@@ -46,7 +46,10 @@ interface FigureCandidate {
   qualityHint?: "high" | "medium" | "low";
 }
 
-interface AttemptResult {
+// Exported for tests only (4-01) — lets a test build a specific attempts
+// array directly against `finalDiagnostic`'s precedence, without mocking the
+// several network branches that would otherwise be needed to produce one.
+export interface AttemptResult {
   status: "candidates" | "paywalled" | "no_figures" | "source_unavailable" | "rate_limited";
   candidates: FigureCandidate[];
   reason?: string;
@@ -804,9 +807,12 @@ export function __resetSemanticScholarLimiterForTests(): void {
   semanticScholarAdmission = Promise.resolve();
 }
 
-// Exported for tests only (1-20) — every other caller reaches it through
-// `buildCandidatePool`.
-export async function trySemanticScholarCandidates(ssPaperId: string): Promise<AttemptResult> {
+// 4-01: one bounded retry after a 429 — never a loop. A single unlucky
+// throttle should not sink the whole lookup when Semantic Scholar is likely
+// to answer a couple of seconds later.
+const SEMANTIC_SCHOLAR_RETRY_DELAY_MS = 2_500;
+
+async function attemptSemanticScholarFetch(ssPaperId: string): Promise<AttemptResult> {
   await acquireSemanticScholarSlot();
   try {
     const apiUrl =
@@ -855,6 +861,19 @@ export async function trySemanticScholarCandidates(ssPaperId: string): Promise<A
   } finally {
     releaseSemanticScholarSlot();
   }
+}
+
+// Exported for tests only (1-20) — every other caller reaches it through
+// `buildCandidatePool`.
+export async function trySemanticScholarCandidates(ssPaperId: string): Promise<AttemptResult> {
+  const first = await attemptSemanticScholarFetch(ssPaperId);
+  if (first.status !== "rate_limited") return first;
+  // Bounded: re-enters the acquire/release queue rather than holding a slot
+  // idle through the wait, so the 1-20 concurrency cap and interval still
+  // apply to every other paper in the same briefing sweep. Exactly one
+  // retry — whatever it returns (even still rate_limited) is final.
+  await waitMs(SEMANTIC_SCHOLAR_RETRY_DELAY_MS);
+  return attemptSemanticScholarFetch(ssPaperId);
 }
 
 function isAr5ivErrorPage(html: string): boolean {
@@ -1290,7 +1309,10 @@ async function collectSourceLinks(input: ExtractInput): Promise<SourceLink[]> {
   });
 }
 
-function finalDiagnostic(
+// Exported for tests only (4-01) — see the `AttemptResult` export comment
+// above; every product call site still reaches this only through
+// `extractFigure`.
+export function finalDiagnostic(
   attempts: AttemptResult[],
   mismatchReason?: string,
 ): FigureResult {
@@ -1305,13 +1327,22 @@ function finalDiagnostic(
     };
   }
 
+  // 4-01: a Semantic Scholar 429 is a secondary-source hiccup, never a reason
+  // to hide what the publisher/HTML/PDF branch actually found. Computed once
+  // so every more-specific branch below can fold the throttle event into its
+  // own reason text (for A's tally) instead of letting it silently win the
+  // top-level status.
+  const wasThrottled = attempts.some((attempt) => attempt.status === "rate_limited");
+  const withThrottleNote = (reason: string): string =>
+    wasThrottled ? `${reason}; the figure index was rate-limited.` : reason;
+
   const paywalled = attempts.find((attempt) => attempt.status === "paywalled");
   if (paywalled) {
     return {
       imageUrl: null,
       source: null,
       status: "paywalled",
-      reason: paywalled.reason ?? "The figure source appears paywalled.",
+      reason: withThrottleNote(paywalled.reason ?? "The figure source appears paywalled."),
       hideFigure: true,
       matchedBy: null,
     };
@@ -1323,7 +1354,31 @@ function finalDiagnostic(
       imageUrl: null,
       source: null,
       status: "no_figures",
-      reason: noFigures.reason ?? "Peer reached the source page, but did not find extractable figures.",
+      reason: withThrottleNote(
+        noFigures.reason ?? "Peer reached the source page, but did not find extractable figures.",
+      ),
+      hideFigure: false,
+      matchedBy: null,
+    };
+  }
+
+  // 4-01: the publisher/HTML/PDF branch's own outcome (e.g. 2-04's bounce-page
+  // detector) wins the final status over a throttled Semantic Scholar
+  // attempt — this used to only win by accident, when no rate_limited
+  // attempt happened to also exist, because this explicit check did not
+  // exist and the generic fallback below (which also hard-codes
+  // "source_unavailable") was reached only after `rateLimited` had already
+  // claimed the slot.
+  const sourceUnavailable = attempts.find((attempt) => attempt.status === "source_unavailable");
+  if (sourceUnavailable) {
+    return {
+      imageUrl: null,
+      source: null,
+      status: "source_unavailable",
+      reason: withThrottleNote(
+        sourceUnavailable.reason ??
+          "Peer could not reach a usable full-text source for this paper's figures.",
+      ),
       hideFigure: false,
       matchedBy: null,
     };

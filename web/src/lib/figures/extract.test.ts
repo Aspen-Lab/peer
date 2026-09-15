@@ -11,6 +11,7 @@ vi.mock("./pdf-extract", async (importOriginal) => {
 
 import {
   __resetSemanticScholarLimiterForTests,
+  finalDiagnostic,
   getFigurePool,
   tryHtmlCandidates,
   trySemanticScholarCandidates,
@@ -217,16 +218,54 @@ describe("trySemanticScholarCandidates — 1-20, concurrency cap + minimum inter
     await Promise.all([p1, p2]);
   });
 
-  it("reports a 429 as rate_limited, not source_unavailable", async () => {
+  it("reports a 429 as rate_limited, not source_unavailable, after one bounded retry", async () => {
+    // 4-01: a 429 is no longer final on the first try — one retry follows a
+    // ~2.5s wait (re-entering the same concurrency queue) before the lookup
+    // reports rate_limited. Rewritten from the pre-4-01 version (which
+    // asserted this off a single fetch call) because that version now hangs:
+    // the always-429 mock is called a second time after the new wait, which
+    // needs its own timer advance before `await promise` can resolve.
     globalThis.fetch = vi.fn(
       async () => new Response("", { status: 429 }),
     ) as unknown as typeof fetch;
 
     const promise = trySemanticScholarCandidates("DOI:1");
-    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(2_500);
     const result = await promise;
 
     expect(result.status).toBe("rate_limited");
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("finalDiagnostic — 4-01, a throttled Semantic Scholar attempt never hides what the publisher/HTML/PDF branch found", () => {
+  it("a source_unavailable attempt (e.g. 2-04's bounce-page detector) wins the status over a rate_limited one, with a throttle note appended", () => {
+    const result = finalDiagnostic([
+      {
+        status: "source_unavailable",
+        candidates: [],
+        reason: "Peer reached an access-check page at link.springer.com, not the article itself.",
+      },
+      { status: "rate_limited", candidates: [] },
+    ]);
+
+    expect(result.status).toBe("source_unavailable");
+    expect(result.reason).toBe(
+      "Peer reached an access-check page at link.springer.com, not the article itself.; the figure index was rate-limited.",
+    );
+  });
+
+  it("still reports rate_limited, unchanged, when it is the only attempt", () => {
+    const result = finalDiagnostic([
+      {
+        status: "rate_limited",
+        candidates: [],
+        reason: "Semantic Scholar rate-limited Peer's figure lookup for this paper.",
+      },
+    ]);
+
+    expect(result.status).toBe("rate_limited");
+    expect(result.reason).toBe("Semantic Scholar rate-limited Peer's figure lookup for this paper.");
   });
 });
 
