@@ -11,6 +11,7 @@ import type { Claim, PaperReportBasis } from "@/lib/papers/report";
 import type { PaperReading } from "@/lib/papers/reading";
 import { pickClaimMark } from "@/lib/papers/skim";
 import { Band } from "@/components/ui/band";
+import { ScrambleText } from "@/components/scramble-text";
 import { LeadClaim } from "./lead-claim";
 import { ABSTRACT_FOOTER, ABSTRACT_LABEL, TLDR_LINE, attribution, skimFooter } from "./copy";
 
@@ -55,20 +56,31 @@ function Deck({
   skim,
   basis,
   quoted,
+  scramble,
 }: {
   skim: Claim[];
   basis: PaperReportBasis;
   /** Skim claims whose evidence is not in the abstract. */
   quoted: Claim[];
+  /** S5: true while this report is scrambling into place. */
+  scramble?: boolean;
 }) {
+  const skimLine = skim.map((claim) => claim.text).join(" ");
   return (
     <div
       className="animate-fade-in-up"
       style={{ "--i": 0 } as React.CSSProperties}
     >
-      <p className="font-reading text-title-lg leading-[1.45] text-heading measure mt-10">
-        {skim.map((claim) => claim.text).join(" ")}
-      </p>
+      {scramble ? (
+        <ScrambleText
+          text={skimLine}
+          className="font-reading text-title-lg leading-[1.45] text-heading measure mt-10 block"
+        />
+      ) : (
+        <p className="font-reading text-title-lg leading-[1.45] text-heading measure mt-10">
+          {skimLine}
+        </p>
+      )}
       {quoted.map((claim, i) => (
         // Keyed by position: two skim lines may cite the same sentence.
         <p
@@ -93,6 +105,7 @@ export function PaperWords({
   skim,
   basis,
   quotedSkim,
+  scramble,
 }: {
   /** The words' last line — the footer under the abstract (or the TL;DR).
    *  On the spread the decided-read observer watches this, not the
@@ -104,6 +117,8 @@ export function PaperWords({
   skim: Claim[];
   basis: PaperReportBasis | null;
   quotedSkim: Claim[];
+  /** S5: true while the report the skim deck came from is scrambling into place. */
+  scramble?: boolean;
 }) {
   const { sentences, introCount } = reading.abstract;
   // With a model, the deck above is the claim and the ink below is its
@@ -132,7 +147,9 @@ export function PaperWords({
 
   return (
     <>
-      {skim.length > 0 && basis && <Deck skim={skim} basis={basis} quoted={quotedSkim} />}
+      {skim.length > 0 && basis && (
+        <Deck skim={skim} basis={basis} quoted={quotedSkim} scramble={scramble} />
+      )}
       {lead !== null && (
         <LeadClaim sentence={sentences[lead]} />
       )}

@@ -263,6 +263,36 @@ function Reader({
   const model = useModelReport({ paper, profile });
   const report = model.report;
 
+  // S5: the "matrix" scramble reveal, restored. `revealingReportKey` is the
+  // key of a report that just arrived fresh in this visit; while it matches
+  // the current report's key, every report-derived text block scrambles into
+  // place instead of rendering plainly. Cleared after REVEAL_DURATION_MS-scale
+  // time (immediately under reduced motion) so it never lingers and re-fires
+  // on an unrelated re-render.
+  //
+  // Setting it happens during render, not inside an effect: this is the
+  // "adjust state when a prop changes" pattern React's own docs recommend
+  // over an effect for exactly this shape (derive-and-store), and it is the
+  // only way to avoid the react-hooks/set-state-in-effect violation 1-01
+  // fixed elsewhere — an effect that calls setState unconditionally in its
+  // body is the same violation, model.fresh/model.reportKey as the "prop"
+  // that changed. The guard (`!== model.reportKey`) keeps this a one-time
+  // adjustment per fresh report, not a render loop.
+  const [revealingReportKey, setRevealingReportKey] = useState<string | null>(null);
+  if (model.fresh && model.reportKey && revealingReportKey !== model.reportKey) {
+    setRevealingReportKey(model.reportKey);
+  }
+  useEffect(() => {
+    if (!revealingReportKey) return;
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const t = window.setTimeout(
+      () => setRevealingReportKey((k) => (k === revealingReportKey ? null : k)),
+      reducedMotion ? 0 : 900,
+    );
+    return () => window.clearTimeout(t);
+  }, [revealingReportKey]);
+  const shouldScrambleReport = revealingReportKey === model.reportKey && model.fresh;
+
   const providerConfigured = reportProviderConfigured(profile);
   const projectText = useMemo(
     () => [profile.currentProject, profile.currentChallenges].filter(Boolean).join("\n"),
@@ -590,6 +620,7 @@ function Reader({
             skim={report?.skim ?? []}
             basis={report?.provenance.basis ?? null}
             quotedSkim={quotedSkim}
+            scramble={shouldScrambleReport}
           />
         }
         decision={
@@ -622,6 +653,7 @@ function Reader({
                 registry={figureRegistry}
                 bound={boundShown}
                 stagger={stagger++}
+                scramble={shouldScrambleReport}
               />
             )}
 
@@ -631,6 +663,7 @@ function Reader({
                 claims={methods}
                 abstractSentences={abstractSentences}
                 stagger={stagger++}
+                scramble={shouldScrambleReport}
               />
             ) : (
               fromServer && (
@@ -642,7 +675,11 @@ function Reader({
                 paper's results carry the headline, each result's novelty
                 and its figure. Without a report, the paper's own sentences. */}
             {reviewSections.length > 0 ? (
-              <ReviewContentsBlock sections={reviewSections} stagger={stagger++} />
+              <ReviewContentsBlock
+                sections={reviewSections}
+                stagger={stagger++}
+                scramble={shouldScrambleReport}
+              />
             ) : report && (keyResults.length > 0 || report.resultsAndSignificance.summary) ? (
               <ResultsBlock
                 report={report}
@@ -652,6 +689,7 @@ function Reader({
                 registry={figureRegistry}
                 bound={boundShown}
                 stagger={stagger++}
+                scramble={shouldScrambleReport}
               />
             ) : (
               fromServer && (
@@ -668,6 +706,7 @@ function Reader({
                 abstractSentences={abstractSentences}
                 stagger={stagger++}
                 anchor={relation.basedOn}
+                scramble={shouldScrambleReport}
               />
             ) : (
               shared.length > 0 && (
@@ -691,6 +730,7 @@ function Reader({
                 claims={limitations}
                 abstractSentences={abstractSentences}
                 stagger={stagger++}
+                scramble={shouldScrambleReport}
               />
             ) : (
               fromServer && (
@@ -704,6 +744,7 @@ function Reader({
                 claims={[nextStep]}
                 abstractSentences={abstractSentences}
                 stagger={stagger++}
+                scramble={shouldScrambleReport}
               />
             )}
 

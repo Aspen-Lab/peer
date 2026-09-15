@@ -92,6 +92,16 @@ export interface ModelReportState {
   stage: { label: string; pct: number } | null;
   /** The model was asked and could not finish; the paper's own text stands. */
   failed: boolean;
+  /**
+   * S5: true when `report` just finished generating in this visit — a live
+   * model call settled, not a `readCached` hit on mount. The page uses this
+   * to decide whether the report's text scrambles into place (fresh) or
+   * renders plainly (a cache hit, including a page revisited later in the
+   * same session).
+   */
+  fresh: boolean;
+  /** The cache key this report was fetched/cached under — `""` with no paper. */
+  reportKey: string;
 }
 
 interface Result {
@@ -306,5 +316,11 @@ export function useModelReport({
   const report = cached ?? settled?.report ?? null;
   const stage =
     !report && buildup?.key === reportKey ? { label: buildup.label, pct: buildup.pct } : null;
-  return { report, stage, failed: Boolean(settled?.failed) };
+  return {
+    report,
+    stage,
+    failed: Boolean(settled?.failed),
+    fresh: !cached && settled?.report != null,
+    reportKey,
+  };
 }

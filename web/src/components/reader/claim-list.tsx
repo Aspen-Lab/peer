@@ -9,6 +9,7 @@
 
 import type { Claim, PaperReportKeyResult } from "@/lib/papers/report";
 import { placeEvidence } from "@/lib/papers/evidence";
+import { ScrambleText } from "@/components/scramble-text";
 import { BlockHeading, type BlockName } from "./block-heading";
 import { EvidenceQuote } from "./evidence-quote";
 import { MattedFigure } from "./matted-figure";
@@ -34,6 +35,7 @@ export function ClaimList({
   abstractSentences,
   stagger,
   anchor,
+  scramble,
 }: {
   block: BlockName;
   claims: Claim[];
@@ -41,6 +43,8 @@ export function ClaimList({
   stagger: number;
   /** The relation block's `basedOn`, shown faint above the claims. */
   anchor?: string;
+  /** S5: true while the report these claims belong to is scrambling into place. */
+  scramble?: boolean;
 }) {
   if (claims.length === 0) return null;
   return (
@@ -57,7 +61,11 @@ export function ClaimList({
         {claims.map((claim, i) => (
           // Keyed by position: a model can write the same sentence twice.
           <div key={`${i}:${claim.text}`}>
-            <p className={CLAIM_CLASS}>{claim.text}</p>
+            {scramble ? (
+              <ScrambleText text={claim.text} className={CLAIM_CLASS} />
+            ) : (
+              <p className={CLAIM_CLASS}>{claim.text}</p>
+            )}
             <Receipt claim={claim} abstractSentences={abstractSentences} />
           </div>
         ))}

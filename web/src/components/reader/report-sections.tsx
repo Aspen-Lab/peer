@@ -28,6 +28,7 @@ import { placeEvidence } from "@/lib/papers/evidence";
 import { formatDayAge } from "@/lib/format";
 import { Band } from "@/components/ui/band";
 import { useResolvedFigure } from "@/components/paper-figure";
+import { ScrambleText } from "@/components/scramble-text";
 import { EvidenceQuote } from "./evidence-quote";
 import { MattedFigure } from "./matted-figure";
 import { BlockHeading } from "./block-heading";
@@ -156,6 +157,7 @@ export function ProposalBlock({
   registry,
   bound,
   stagger,
+  scramble,
 }: {
   report: PaperReport;
   paper: Paper;
@@ -164,6 +166,8 @@ export function ProposalBlock({
   registry: FigureRegistry;
   bound: ReadonlySet<string>;
   stagger: number;
+  /** S5: true while this report is scrambling into place — a fresh generation, not a cache hit. */
+  scramble?: boolean;
 }) {
   const summary = report.whatItProposes.summary.trim();
   const newHere = report.whatItProposes.newHere ?? [];
@@ -171,14 +175,22 @@ export function ProposalBlock({
   return (
     <Section stagger={stagger}>
       <Heading label={REPORT_HEADING.proposal} />
-      <p className={`${CLAIM_CLASS} measure`}>{summary}</p>
+      {scramble ? (
+        <ScrambleText text={summary} className={`${CLAIM_CLASS} measure block`} />
+      ) : (
+        <p className={`${CLAIM_CLASS} measure`}>{summary}</p>
+      )}
       {newHere.length > 0 && (
         <div className="space-y-3 measure mt-4">
-          {newHere.map((sentence, i) => (
-            <p key={`${i}:${sentence}`} className={CLAIM_CLASS}>
-              {sentence}
-            </p>
-          ))}
+          {newHere.map((sentence, i) =>
+            scramble ? (
+              <ScrambleText key={`${i}:${sentence}`} text={sentence} className={`${CLAIM_CLASS} block`} />
+            ) : (
+              <p key={`${i}:${sentence}`} className={CLAIM_CLASS}>
+                {sentence}
+              </p>
+            ),
+          )}
         </div>
       )}
       {newHere.length > 0 && <p className={FOOTER_CLASS}>{PEERS_READING}</p>}
@@ -225,6 +237,7 @@ export function ResultsBlock({
   registry,
   bound,
   stagger,
+  scramble,
 }: {
   report: PaperReport;
   paper: Paper;
@@ -234,6 +247,8 @@ export function ResultsBlock({
   registry: FigureRegistry;
   bound: ReadonlySet<string>;
   stagger: number;
+  /** S5: true while the report these results belong to is scrambling into place. */
+  scramble?: boolean;
 }) {
   const results = report.resultsAndSignificance.keyResults;
   const summary = report.resultsAndSignificance.summary.trim();
@@ -241,19 +256,33 @@ export function ResultsBlock({
   return (
     <Section stagger={stagger}>
       <BlockHeading block="findings" />
-      {summary && <p className={`${PULL_CLASS} mb-6`}>{summary}</p>}
+      {summary &&
+        (scramble ? (
+          <ScrambleText text={summary} className={`${PULL_CLASS} mb-6 block`} />
+        ) : (
+          <p className={`${PULL_CLASS} mb-6`}>{summary}</p>
+        ))}
       <div className="space-y-6 measure">
         {results.map((result, i) => (
           // Keyed by position: a model can write the same title twice.
           <div key={`${i}:${result.title}`}>
             <p className={CLAIM_CLASS}>
-              <b className="font-medium text-heading">{result.title}.</b> {result.detail}
+              {scramble ? (
+                <>
+                  <ScrambleText text={`${result.title}.`} className="font-medium text-heading" />{" "}
+                  <ScrambleText text={result.detail} />
+                </>
+              ) : (
+                <>
+                  <b className="font-medium text-heading">{result.title}.</b> {result.detail}
+                </>
+              )}
             </p>
             <Receipt claim={result} abstractSentences={abstractSentences} />
             {result.novelty && (
               <p className="font-reading text-body leading-[1.55] text-text-muted mt-2">
                 <span className="font-mono text-meta text-text-faint mr-2">{WHATS_NEW}</span>
-                {result.novelty}
+                {scramble ? <ScrambleText text={result.novelty} /> : result.novelty}
               </p>
             )}
             {figures[i] ? (
@@ -282,9 +311,12 @@ export function ResultsBlock({
 export function ReviewContentsBlock({
   sections,
   stagger,
+  scramble,
 }: {
   sections: PaperReportReviewSection[];
   stagger: number;
+  /** S5: true while the report these sections belong to is scrambling into place. */
+  scramble?: boolean;
 }) {
   if (sections.length === 0) return null;
   return (
@@ -296,7 +328,11 @@ export function ReviewContentsBlock({
             {/* The paper's own heading, in the machine's face: it is a label
                 here, not the paper's prose. */}
             <p className="font-mono text-meta text-heading">{section.heading}</p>
-            <p className={`${CLAIM_CLASS} mt-1`}>{section.summary}</p>
+            {scramble ? (
+              <ScrambleText text={section.summary} className={`${CLAIM_CLASS} mt-1 block`} />
+            ) : (
+              <p className={`${CLAIM_CLASS} mt-1`}>{section.summary}</p>
+            )}
           </div>
         ))}
       </div>

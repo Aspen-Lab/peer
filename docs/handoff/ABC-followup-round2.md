@@ -81,14 +81,18 @@ browser, run the reports), then report to the user in plain language and stop th
 
 ```
 ROUND:            1
-WHOSE TURN:       C
-STOPPED BECAUSE:  finished the turn @ 2026-09-15 07:05 UTC
-STATUS:           B's fix guide complete: 33 numbered entries (1-01..1-33), all committed in 4
-                   parts (item 0+S6+S5, S3, S4, S7). Dev server was up throughout; no check was
-                   blocked. No product code changed; every execution script was throwaway and
-                   deleted before its part's commit.
-OPEN ITEMS:       S3 S4 S5 S6 S7 (still all five open — round 1 investigates, does not fix)
-GATE (0 open):    NOT MET
+WHOSE TURN:       C (mid-turn — items 1-01..1-13 landed, working 1-14 next)
+STOPPED BECAUSE:  IN PROGRESS @ 2026-09-15 (checkpoint edit, not a stop — see DONE below)
+STATUS:           C working B's guide top to bottom, one commit per item, per Ruling 5's order.
+                   Landed so far: 1-01 (eslint), 1-02..1-09 (S6), 1-10..1-13 (S5). Gate green after
+                   every item. **Deviation from B's guide, logged per Ruling 5**: 1-12's suggested
+                   code (`useEffect(() => { if (model.fresh...) setRevealingReportKey(...) }, ...)`)
+                   reintroduces the exact `react-hooks/set-state-in-effect` violation 1-01 just
+                   fixed, one file over — landed instead as a conditional setState call during
+                   render (React's own "adjust state when a prop changes" pattern), guarded so it
+                   fires once per fresh report key. Confirmed clean by the gate. Full detail in §4.
+OPEN ITEMS:       S3 S4 S5(landed, unverified in browser) S6(landed) S7 — S4/S3/S7 still ahead
+GATE (0 open):    NOT MET (S3, S4, S7 remain)
 
 DONE:      A measured (round 1, see above). B investigated every item by reading the exact code
            plus real execution (source-link/full-text probes on 3 no_full_text DOIs, a live
@@ -1755,3 +1759,65 @@ confirmed by grep, unaffected). `figure-binding.ts` and `evidence.ts` both sprea
 zero code changes, verified by reading both call sites.
 
 Commit: `feat(reader): merge "what is new" into "what it proposes"; delete "why it fits you"`.
+
+**1-10..1-13 — S5, the "matrix" scramble reveal restored.** DONE, landed as one commit.
+
+- **1-10**: `scramble-text.tsx` + its test restored from `git show 4d4b0ef`, exactly per B's guide —
+  `resolveRevealMode` simplified to one argument (`systemReducedMotion: boolean`), the `store/ui.ts`
+  `revealMotion`/`"full"`-override branch dropped since that store stays deleted. Test trimmed to
+  the two cases that still apply (`resolveRevealMode(false)` → `"scramble"`,
+  `resolveRevealMode(true)` → `"fade"`), the two "full override" cases dropped since there is no
+  longer a second argument for them to exercise.
+- **1-11** (`use-model-report.ts`): added `fresh` (`!cached && settled?.report != null`) and
+  `reportKey` to `ModelReportState` and the hook's return, per B's spec exactly.
+- **1-12** (`page.tsx`, `Reader`): **deviation from B's exact code, logged here per Ruling 5's
+  "trace and log prominently"**. B's suggested effect —
+  `useEffect(() => { if (model.fresh && model.reportKey) setRevealingReportKey(model.reportKey); }, ...)`
+  — calls `setState` unconditionally in an effect body, which is *exactly* the
+  `react-hooks/set-state-in-effect` violation 1-01 just fixed elsewhere on this same gate; landing
+  B's code verbatim reintroduced the gate's one eslint error one file over. Traced it: the fix is
+  the same family as 1-01 but a different shape (this is "derive state from a changing value," not
+  "read an external store"), so the applicable React-documented pattern is different —
+  **conditionally call the setter during render** (`if (model.fresh && model.reportKey &&
+  revealingReportKey !== model.reportKey) setRevealingReportKey(model.reportKey);`, no `useEffect`
+  wrapper at all), which is React's own documented "adjust state when a prop changes" pattern and
+  does not trigger the lint rule (confirmed: `npx eslint .` clean after the change). The guard
+  (`!== model.reportKey`) is what keeps this a one-time adjustment instead of a render loop. The
+  second effect (clearing `revealingReportKey` after a timeout) is unchanged from B's guide — it
+  defers through `setTimeout`, which is not the pattern the rule flags.
+- **1-13**: `scramble={shouldScrambleReport}` threaded through every report-derived text node B
+  enumerated: the merged `ProposalBlock` (summary + each `newHere` line), `ResultsBlock`
+  (`result.title`, `result.detail`, `result.novelty`), `ReviewContentsBlock` (`section.summary`),
+  `ClaimList`'s `claim.text` (covers method/caveats/forYou/nextStep — all four call sites in
+  `page.tsx` updated), and `PaperWords`' `Deck` (the skim line, prop threaded through
+  `PaperWords` → `Deck`). `KeyResultList` confirmed dead code by grep (no callers anywhere) —
+  left untouched, matching B's note not to spend effort on it. `QuoteList` deliberately **not**
+  wired — its quotes are the paper's own text, never a model report, per B's reasoning.
+  **Completed one gap in B's own enumeration**: checking the pre-pivot page's actual
+  `<ScrambleText>` call sites myself (`git show 4d4b0ef` grep) turned up one B's list didn't
+  name — `resultsAndSignificance.summary`, the pull-quote headline over the results, was scrambled
+  in the old page (`PullQuote` block) — added it to `ResultsBlock` for parity with the restored
+  behavior's own history and the spec's "every report-derived text block" wording.
+
+Tests: `scramble-text.test.ts` proven by reverting `resolveRevealMode`'s return values (swapped
+`"fade"`/`"scramble"`) — both cases failed with the exact expected/received swap, restored, both
+passed again. No test exists for `use-model-report.ts`, `page.tsx`, `report-sections.tsx`,
+`claim-list.tsx` or `paper-words.tsx` (confirmed by grep, matches B's finding of zero existing
+`ScrambleText`/`resolveRevealMode`/`revealMotion` references anywhere) — additive only, verified
+by the gate.
+
+Gate: tsc clean, eslint clean (the 1-12 deviation above is what got it there), vitest 2548/2548.
+
+Browser smoke check (dev server `peer-web`, already running): opened `/persona` — fresh quiz
+renders correctly (question 1/15, no stored result), no console errors, no hydration warnings.
+Opened `/papers/openalex:W7207740551` — page renders (title, abstract, one figure), no console
+errors, no hydration warnings; this browser session has no model key configured so the page is at
+the abstract-only tier and no report/scramble renders — confirms no crash on the report-absent
+path but **does not confirm the scramble animation is visually correct**, which needs a configured
+provider key to generate a fresh report; leaving that to A/the manager per the standing rule ("you
+do not need to close items you cannot verify"). Noted, out of scope: `/api/read?aggregate=daily`
+returned a pre-existing 500 (a Supabase-backed reading-calendar endpoint, unrelated to any S3-S7
+code — confirmed by reading the route, it touches no file this round changed) on every page load in
+this browser session; not fixed, since it is not one of B's 32 items.
+
+Commit: `feat(reader): restore the scramble-text reveal on fresh report generation`.
