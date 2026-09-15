@@ -1178,3 +1178,165 @@ live `getFullText()` call before treating it as settled**, per the instruction t
 are for A's test case, not a B-verified fact). Any arXiv id A already has handy from an unrelated
 check is an equally valid substitute — the requirement is "outside the pool, arXiv, PDF-backed,"
 not this specific id.
+
+#### S4 — figures: enumerate the producing path, then one publisher-shaped fix
+
+Executed this round (`web/.local-data/round1-b-scratch/s4-figure-attempts.ts`, deleted before
+this commit): direct probes reproducing what `buildCandidatePool` (`lib/figures/extract.ts`,
+lines 1161-1239) does for two `source_unavailable` papers (Wiley `10.1002/smll.75702`, ACS
+`10.1021/jacs.6c12219`) and two `no_figures` papers (Elsevier/ScienceDirect `10.1016/
+j.aca.2026.346245`, Nature Energy `10.1038/s41560-026-02120-8`), using the same UA
+(`BROWSER_UA`, extract.ts line 98-100) and the same Semantic Scholar endpoint the real code calls.
+
+**Enumeration — which branches ran, which didn't, and why (§1d's first requirement):**
+- **Wiley, ACS (`source_unavailable`):** neither is an arXiv id, so `buildCandidatePool`'s
+  `if (!arxivId)` branch (line 1199) runs — it walks `collectSourceLinks` (this file's own, lines
+  1034-1089, distinct from `papers/source-links.ts`) which for a non-arXiv, non-bioRxiv DOI with
+  no PMC match reduces to exactly one link: the DOI URL itself (`doiUrl(input.doi)`, line 1053-
+  1057), since `lookupUnpaywallLinks`/`lookupEuropePmcLinks` (lines 863-945) both returned empty
+  for these DOIs (confirmed live this round, matching S3's identical finding for the same two
+  DOIs against `papers/source-links.ts` — no OA copy exists anywhere, verified against Unpaywall/
+  EuropePMC/OpenAlex directly). **Both DOI redirects resolve correctly** to the real publisher
+  page (`onlinelibrary.wiley.com/doi/10.1002/smll.75702`,
+  `pubs.acs.org/jacsat/article/doi/10.1021/jacs.6c12219/...`) — confirmed live, `redirect:
+  "follow"` is not the problem — and **both then hard-403** at the publisher (anti-bot / access
+  gate, not a redirect-following bug, not a timeout: both responses landed in under 1 second).
+  `semanticTasks` (lines 1181-1186) **is** unconditionally attempted for both (DOI-keyed lookup,
+  line 1185) — but a live probe against the exact same Semantic Scholar endpoint
+  (`api.semanticscholar.org/graph/v1/paper/DOI:<doi>?fields=figures,title`) returned **HTTP 429
+  (rate-limited)** for both DOIs this round, not a clean "no figures" result. `SEMANTIC_SCHOLAR_API_KEY`
+  is not set (confirmed by reading `trySemanticScholarCandidates`, extract.ts lines 740-774: the
+  `x-api-key` header is only added `...(process.env.SEMANTIC_SCHOLAR_API_KEY ? {...} : {})`) — the
+  unauthenticated public rate limit is easy to exhaust when a 10-17-paper briefing fires this many
+  concurrent lookups (every paper's figure pool build fires its own `semanticTasks`, all in
+  parallel across papers, with no shared throttle). So: publisher branch = genuine 403 (real
+  finding, see 1-20); Semantic Scholar branch = attempted but **silently starved by rate-limiting**,
+  which the `AttemptResult` shape (line 46) reports simply as `source_unavailable` — indistinguishable
+  from "Semantic Scholar has no record for this paper" in the final diagnostic (`finalDiagnostic`,
+  lines 1091-1140).
+- **Elsevier/ScienceDirect, Nature Energy (`no_figures`):** for ScienceDirect, B's direct fetch of
+  the exact URL A's round found reachable (`https://www.sciencedirect.com/science/article/pii/
+  S0003267026011955/pdf`) returned **403 this round**, not the 200 A's tally implies — flagged
+  honestly as **not reproduced identically**; ScienceDirect's bot gate is plausibly inconsistent
+  (rate-limited or time-of-day/IP-reputation dependent) rather than the pipeline being wrong twice
+  in different ways. For Nature Energy, B's fetch (same UA, `redirect: "follow"`) landed on a
+  **3KB stub page at `idp.nature.com/transit?redirect_uri=...&code=...`** — a single-sign-on
+  "transit" bounce page with 1 `<img>` tag and no article content, `og:image`, or `<figure>`
+  markup at all. A **separate `curl -L` probe** (same UA passed via `-A`) on the identical
+  `https://doi.org/10.1038/s41560-026-02120-8` **did** reach the real 383KB article page
+  (`www.nature.com/articles/s41560-026-02120-8?error=cookies_not_supported&code=...`) — so the
+  real article page, with whatever figure markup it carries, is reachable, but the code path
+  A/B both exercised (`fetch()` with `redirect: "follow"`, no cookie jar) stops one hop early on
+  nature.com's IDP bounce and never sees it. This means A's `no_figures` reason ("reached the
+  source page, but it did not expose extractable figures") is **not accurate for Nature.com specifically**
+  — the code did not reach the source page; it reached an intermediate transit stub and correctly
+  found nothing on it. Classify this as `WRONG DATA`, not `MISSING`: the message asserts something
+  that didn't happen.
+
+**1-19 — fold the graphical-abstract/`og:image` fallback into `buildCandidatePool`'s HTML path,
+not `extractFigure`'s query-less last resort.** `MISSING`. `metaOgImage` (extract.ts lines 1402-
+1420) already exists, already excludes generic default images (`BAD_URL_PATTERNS`, lines 184-193,
+covers `og[-_]?image[-_]?default`/`twitter[-_]?(?:card|image)[-_]?default`/`opengraph[-_]?default`
+and generic `logo`/`favicon`/`sprite`/`placeholder`) — but it is only ever called from
+`extractFigure` (line 1382-1397) as the **last** thing tried, and **only when `!query?.trim()`**
+(line 1382). `getFigurePool` (lines 1287-1299, used by `bindFiguresToReport` for every deep
+report's per-section figure binding) calls `getCandidatePool` → `buildCandidatePool` directly and
+**never reaches `extractFigure`'s og:image fallback at all** — so a paper whose only honest figure
+is its publisher page's `og:image`/graphical-abstract meta tag currently shows nothing in the
+deep-report figure binding path, and shows nothing in the plain `/api/figure` path either whenever
+a `query` is supplied (which every report section's per-result figure lookup does, per
+`report-sections.tsx`'s `SectionFigure`, `query={...}` always non-empty).
+
+Fix direction: make the graphical-abstract check a **candidate source**, not a last-resort
+side-path. In `tryHtmlCandidates` (extract.ts lines 977-1026), after `htmlFigureCandidates` runs
+and before returning `no_figures` (or in addition to whatever candidates it found), also call
+`metaOgImage(html, finalUrl)` and, if it returns a URL, push one additional `FigureCandidate`
+with a **low** `qualityHint`/`sourcePriority` (extend `sourcePriority`, lines 508-515, with an
+`"og"` case scored below `"semantic-scholar"` — it already exists as a `FigureCandidate["source"]`
+value, line 31, just never produced here) so real in-article figures still win when both exist,
+but the graphical abstract is shown when nothing else is found. Apply the **honesty guard** the
+ruling requires: only accept it when the fetched page's own URL/DOI matches the paper being
+looked up (already true here — `finalUrl` is the same page `input.doi`/`input.url` resolved to,
+not a generic journal homepage) and keep the existing exclusion list, which already screens out
+cover images and generic OG defaults by URL pattern; additionally check the caption/alt text (via
+`captionFromFigure`-style extraction on the same `<meta>` neighborhood, or simply require the
+`og:image` URL path to contain the article's own id/DOI-derived path segment, which most publisher
+CDNs do for a real graphical abstract but not for a journal-wide cover image) before accepting it
+— **do not accept an `og:image` whose URL has no article-specific path component**, since that
+pattern (`/covers/`, `/journal-logo/`, a bare `/default.jpg`) is exactly a journal cover, not this
+paper's own figure.
+
+**1-20 — Semantic Scholar rate limiting.** `MISSING` (no backoff/queue) — a real, execution-
+confirmed contributor to the low figure yield, not previously named by A or the spec. Fix
+direction: either (a) obtain and set a `SEMANTIC_SCHOLAR_API_KEY` (the header-gated higher rate
+limit already exists in the code, line 747-749 — this is a config change, not a code change, and
+outside B's read-only remit to actually obtain), or (b) add a shared, module-level request queue/
+token-bucket around `trySemanticScholarCandidates` so a briefing's worth of concurrent paper
+lookups do not all fire at once against an unauthenticated per-IP limit — e.g. a simple
+`p-limit`-style concurrency cap (2-3 concurrent) or a minimum-interval queue shared across all
+calls in the Node process (module-level state, similar in shape to `candidatePoolCache`, lines
+1149-1159, which already exists for a different reason). **Flag as `POLICY — manager decides`**
+which of (a)/(b) to pursue — (a) needs a decision to spend on/register for a key, (b) is pure
+engineering and bounded in scope, but on its own may only reduce 429s rather than eliminate them
+if the daily unauthenticated quota (not just the per-second rate) is what's actually being hit —
+B could not distinguish a per-second vs. a daily quota from two data points.
+
+**1-21 — Nature-style IDP/transit-page detection.** `WRONG DATA` (per the enumeration above).
+Fix direction: after any HTML fetch that followed at least one redirect, check whether the
+**final** URL or the response body looks like an intermediate bounce page rather than an article
+— heuristics that fit this codebase's existing style (`isAr5ivErrorPage`, lines 776-783, is the
+same kind of "this looks like a stub, not real content" check already used for ar5iv): final URL
+host starts with `idp.` or contains `/transit`, or the response body is implausibly small (e.g.
+under ~8KB, versus a real article page's tens-to-hundreds of KB) **and** contains a `cookie`-
+related phrase. On a hit, retry the fetch once, replaying any `Set-Cookie` header from the IDP's
+own response as a `Cookie` header on the retry (B's `curl -L` probe reached the real page without
+an explicit cookie jar, suggesting the retry may not even need the cookie — B could not fully
+isolate why `curl -L` succeeded where Node's `fetch` did not in one afternoon of probing; C should
+verify with a second Node-side retry attempt before committing to a specific cookie-relay
+mechanism, since the simpler "just retry the fetch" might already be sufficient if the first
+attempt's failure was transient rather than structural). This is explicitly a "one publisher-
+shaped fix, not per-host patches" per §1d — write it as a generic "small bounce-page, retry once"
+check applicable to any publisher, not a `nature.com`-specific branch, even though Nature is the
+only host B observed it on this round.
+
+**1-22 — Wiley/ACS 403 → `paywalled`, not `source_unavailable`.** Same underlying bug as 1-16,
+same fix, applied to `web/src/lib/figures/extract.ts`'s `appearsPaywalled`/`tryHtmlCandidates`
+(lines 956-1026) — the status-code check (`[401,402,403,451]`, line 958) is dead code here for
+the identical reason (only reached after `res.ok`, line 1005, never on the early `!res.ok` return,
+lines 982-988). Land 1-16 and 1-22 together — they are the same fix in two files, and `full-text.ts`
+and `figures/extract.ts` maintain two independent copies of the same `appearsPaywalled`/paywall-
+phrase logic (confirmed by reading both this round — genuinely duplicated, not shared code); C is
+not asked to de-duplicate them into a shared helper this round (out of scope, larger refactor),
+but should fix both copies identically so the two paywall messages a reader might see (report
+paywall notice vs. figure paywall reason) agree on what counts as a paywall signal.
+
+**Target check (§1a S4(c)/§1d, "never fabricate a figure"):** none of 1-19/1-20/1-21/1-22 relax
+any existing anti-fabrication guard — `looksLikeLogo`, `BAD_URL_PATTERNS`, `LOW_RES_URL_PATTERNS`
+and the caption/URL-path checks in 1-19's fix direction all stay in force; 1-19 explicitly adds a
+guard (article-specific URL path / caption check) rather than removing one. A paper with no figure
+anywhere still shows nothing — no heading, no placeholder — unchanged from today's `no_figures`/
+`source_unavailable`/`paywalled` handling on the reading page (B did not find any placeholder
+rendering in `report-sections.tsx`/`paper-figure`'s consumer code this round — confirmed the
+`SectionFigure` component (report-sections.tsx lines 106-140) returns `null` when there is no
+url, which is the correct honest-absence behavior already).
+
+**Tests at risk (S4), found by grep:** only `web/src/lib/figures/arxiv-html-source.test.ts`
+exists under `lib/figures/` (`Glob` for `*.test.ts` there found exactly one file) — its two tests
+(lines 26, 59) cover arXiv's `arxiv.org/html` vs `ar5iv` fallback ordering only, calling
+`extractFigure` with an arXiv-shaped `itemId`. None of 1-19 through 1-22 touch the arXiv branch
+(`if (arxivId)`, lines 1176-1180) — arXiv papers skip the `collectSourceLinks`/`tryHtmlCandidates`
+path this round's fixes target (`if (!arxivId)`, line 1199) — so this file is **not** expected to
+be affected, but re-run it explicitly since it is the only guard on this module's behavior at all.
+No test exists for `appearsPaywalled`, `metaOgImage`, `sourcePriority`, or the Semantic Scholar
+lookup — 1-19/1-20/1-21/1-22 are all currently unguarded by any test; C should add coverage
+per the "prove new tests test the fix" rule (revert, watch red, restore).
+
+**Blast radius (S4):** `candidatePoolCache` (extract.ts lines 1149-1159, 30-minute TTL) means,
+same caveat as S3's 1h full-text cache: a paper whose figure pool was already built this server
+session keeps its old (pre-fix) attempt outcomes for up to 30 minutes. `getFigurePool` (line
+1287) is called from **both** `/api/figure`'s route (not read this round — verify its exact path
+before landing 1-19, but `extractFigure`'s candidate-pool-first structure, lines 1359-1364, means
+the fix in `buildCandidatePool` reaches both callers automatically) and `report/route.ts`'s deep-
+report figure binding (confirmed this round, lines 371-379 and 525-533) — a single fix in
+`buildCandidatePool`/`tryHtmlCandidates` improves both the plain figure endpoint and the bound
+report figures, which is the intent (one producing path, per §1d).
