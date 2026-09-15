@@ -155,6 +155,15 @@ function normalizeUnicodeSymbols(text: string): string {
     .replace(/[‘’]/g, "'")
     .replace(/[“”]/g, '"')
     .replace(/[‐‑‒–—―−]/g, "-")
+    // 2-03: PyMuPDF reorders a stacked inline fraction like "L/d" into
+    // letters-then-fraction-slash ("Ld" + U+2044 FRACTION SLASH) as its own
+    // free-floating token when lifting text from a PDF's glyph layout — a
+    // real extraction artifact, never real prose. Scoped to U+2044 only,
+    // never the ASCII "/" (which is real, load-bearing text everywhere
+    // this function runs — "km/h", a date, "and/or"). Matches the same
+    // (display-only) removal `evidence.ts`'s FRACTION_SLASHES already does
+    // for matching purposes (1-17) — this is the display-side counterpart.
+    .replace(/\s*⁄\s*/g, "")
     .replace(/×/g, "x")
     .replace(/±/g, "+/-")
     .replace(/≤/g, "<=")

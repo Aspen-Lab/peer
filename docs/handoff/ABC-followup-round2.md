@@ -3725,3 +3725,35 @@ round** (per B) — TODO for A next round: with the fold landed, does a fresh de
 un-fixed drop (accepted, not a defect)?
 
 Commit: `fix(papers): fold a hyphenated PDF line-break in the evidence checker`.
+
+#### Item 2-03 — A2-03: figure captions display the raw fraction-slash artifact
+
+**Change**: one line in `web/src/lib/text/clean.ts`'s `normalizeUnicodeSymbols` —
+`.replace(/\s*⁄\s*/g, "")` (U+2044 FRACTION SLASH only, never the ASCII `/`), placed with the
+other narrow Unicode-artifact folds, per B's fix direction exactly. Confirmed by reading both real
+PDF-caption pipelines (`web/src/lib/papers/pdf-text.ts` and `web/src/lib/figures/pdf-extract.ts`)
+that both already call `cleanDisplayText` on every caption — B's claim that this is the single
+upstream point holds; no call-site changes needed.
+
+**Test added**: new file `web/src/lib/text/clean.test.ts` (none existed) — one case for the fold
+itself ("Ld ⁄ = 0.44" → "Ld = 0.44") and one guarding that an ordinary ASCII slash ("km/h", a
+date, "and/or") is never touched, since this fold runs on titles/abstracts/sections too, not only
+captions.
+
+**Proved the new test tests the fix**: removed the one `.replace(/\s*⁄\s*/g, "")` line, reran
+`clean.test.ts` — the fold case failed exactly as expected (`"Ld ⁄ = 0.44"` unchanged), the
+ASCII-slash case stayed green. Restored the line; reran — 2/2 green.
+
+**Gate**: `npx tsc --noEmit` clean · `npx eslint .` clean · `npx vitest run --exclude
+"**/benchmark.test.ts"` → **2616/2616** (2 more new). `evidence.test.ts`'s 1-17 tests still pass
+unchanged — confirmed by execution, not just B's reasoning, since `normalizeForMatch` already
+called `cleanDisplayText` as its first step before this fix landed, so this change is a strict
+subset of work that function already did.
+
+**Found nothing in B's guide to contest.**
+
+**Live check**: blocked, dev server down (see the turn-level note at the top of this section).
+TODO for A next round: does `/api/figure` on a paper whose caption carries this artifact (e.g. the
+`W7207740551` figure, if it has a caption with a fraction in it) now render without the stray `⁄`?
+
+Commit: `fix(figures): fold the stray fraction-slash artifact out of displayed text`.
