@@ -4471,3 +4471,13 @@ loading spinner for a report that will never arrive); the two uploaded titles
 pages, not just in the upload API response.
 
 Commit: `docs(abc): round 3 A - difference list, gate line, §1 handoff`.
+
+### Round 3 — manager browser checks (2026-09-15, after A's round-3 measurement)
+
+- `/papers/upload:6422afa156f795d1` (the blank PDF): the reading page shows only the title
+  ("blank"), the sentence "This PDF has no readable text — Peer could not extract anything from
+  it." and a "← Briefing" link. No report requested, no empty headings. **S7 empty-PDF message:
+  closed in the browser.**
+- `/papers/upload:a65e4a7d02784df1` (arXiv 2501.00663): full title "Titans: Learning to Memorize
+  at Test Time", hero figure (Figure 2, MAC architecture), abstract and claim. Stored record for
+  2609.02668 now carries the full three-line title. **S7 titles: closed in the browser.**
