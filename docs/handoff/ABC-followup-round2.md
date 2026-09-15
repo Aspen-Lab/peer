@@ -4144,3 +4144,75 @@ proposing only 1 key result on one run. This is a different, narrower gap than r
 per-paper target as measured.
 
 Commit: `docs(abc): round 3 A part 1 - S3 real-data re-measurement`.
+
+#### Part 2 — S4 (figures)
+
+`GET /api/figure?id=&url=&doi=&paperTitle=` (no `query`) against all 17 pool papers, fresh calls.
+Tally: **found: 1 - no_figures: 3 - paywalled: 9 - rate_limited: 3 - source_unavailable: 1 -
+other: 0** (17 total). Round 1: `found:1 no_figures:8 source_unavailable:7 paywalled:1`.
+Round 2: `found:1 no_figures:5 paywalled:10 rate_limited:1 source_unavailable:0`.
+
+| Paper | Status | Reason (verbatim, truncated) |
+|---|---|---|
+| W7212228226 (JECST) | no_figures | "opened the PDF, but did not find any figure regions..." |
+| W7207740551 (arXiv) | **found** | verified below |
+| W7212354020 (Wiley Small) | paywalled | "doi.org... requires paid or institutional access" |
+| W7206205089 (AFM, Wiley) | paywalled | "doi.org... requires paid or institutional access" |
+| W7207719214 (JACS, ACS) | paywalled | "doi.org... requires paid or institutional access" |
+| W7211870929 (ACS AMI) | paywalled | "doi.org... requires paid or institutional access" |
+| W7212017379 (Anal Chim Acta, Elsevier) | paywalled | "sciencedirect.com... requires paid or institutional access" |
+| W7212151400 (Spectrochim Acta, Elsevier) | paywalled | "sciencedirect.com... requires paid or institutional access" |
+| W7212288571 (Iran J Sci Technol, Springer) | **rate_limited** | "Semantic Scholar rate-limited Peer's figure lookup" — see below |
+| W7204990919 (KJCE, Springer) | **rate_limited** | "Semantic Scholar rate-limited Peer's figure lookup" — see below |
+| W7212207112 (OSF Preprints) | **source_unavailable** | "Peer reached openalex.org, but that source blocked this request." — **2-01 CONFIRMED FIXED, see below** |
+| W7208780749 (Appl Surf Sci, Elsevier) | no_figures | "reached the source page, but it did not expose extractable figures" |
+| W7212256756 (Wiley book ch.) | paywalled | "doi.org... requires paid or institutional access" |
+| W7201867313 (Angew Chem, Wiley) | paywalled | "doi.org... requires paid or institutional access" |
+| W7207750818 (Chem Eng J, Elsevier) | no_figures | "reached the source page, but it did not expose extractable figures" |
+| W7212165100 (Nature Energy) | **rate_limited** | "Semantic Scholar rate-limited Peer's figure lookup" (unchanged since round 2) |
+| W7211884742 (JJAP) | paywalled | "validate.perfdrive.com... requires paid or institutional access" (unchanged since round 1) |
+
+**2-01 (A2-05) CONFIRMED FIXED, live, this round.** `W7212207112` (OSF Preprints)'s only link,
+`openalex.org`, 403s; it now returns `status: "source_unavailable"` with reason "Peer reached
+openalex.org, but that source blocked this request." — not `paywalled`. This directly answers
+the round-2 TODO and Ruling 9's own worked example. The other 9 `paywalled` results are all real
+subscription publishers (Wiley x4, ACS x2, Elsevier/ScienceDirect x2, JJAP via
+`validate.perfdrive.com` x1) — unchanged, not disputed.
+
+**2-04 (A2-04, the Springer graphical-abstract/bounce-page fix) COULD NOT BE VERIFIED LIVE this
+round — a different blocker than round 2's "dev server down."** Both Springer papers
+(`W7212288571`, `W7204990919`) returned `status: "rate_limited"` (Semantic Scholar), not
+`source_unavailable` or `no_figures`, on every one of 3 repeated calls each (6 calls total,
+spaced a few seconds apart, byte-identical reason each time). Whatever the code's internal
+attempt order is, the *final* status reported for both papers this round is the Semantic
+Scholar rate limit, not a result from the publisher-HTML/bounce-page branch 2-04 changed — so
+this round's live measurement cannot say whether 2-04's fix would now correctly label these two
+papers `source_unavailable` instead of the old `no_figures`, because the route never gets far
+enough to show it. Carried forward as a still-owed live check, not a failure of the fix.
+
+**New escalation: the Semantic Scholar rate-limit tally has crossed Ruling 9 / A2-08's own named
+threshold.** 3 of 17 lookups' final status was `rate_limited` this round (`W7204990919`,
+`W7212165100`, `W7212288571`) — confirmed stable across 3 retries each (9 total checks, 9/9
+`rate_limited`, not a one-off blip). Round 1: 0. Round 2: 1. Round 3: **3 of 17 — meets the "≥ 3
+of 17" trigger named in Ruling 9 verbatim** ("if ≥ 3 of 17 lookups end `rate_limited` in a round,
+B designs a fallback order that tries the other sources first"). This is not informational this
+round; it is the exact condition the ruling pre-registered for escalation.
+
+**"found" figure re-verified.** `W7207740551`'s image: same real PNG, `source: "open-access"`,
+caption starts "FIG. 1. (a) High-resolution theta-2theta XRD patterns of the LSCO/LCO
+superlattice series..." — matches the paper's own subject, real chart aspect ratio, not a
+logo/cover. Only 1 of 17 pool papers shows a figure — unchanged across all three rounds.
+
+**2-03 (A2-03, the fraction-slash display fold) CONFIRMED FIXED, live.** Checked every figure
+caption returned across this round's Part 1 deep-report responses for `W7207740551` (which has
+fraction-shaped captions — "Ld = 0.44", "Ld = 0.67", etc., the exact pattern 1-17/2-03 target):
+zero instances of the raw U+2044 character in any caption text, in any of the two live report
+responses. One caption reads "...with different Ldratios..." and another "...Ld = 0.44, 0.67,
+0.78, and 0.89..." — the fold removes the stray glyph as designed; it does not (and was never
+meant to) restore the original `/` PyMuPDF already deleted from "L/d" itself (a separate,
+out-of-scope fidelity question, per B's own accepted limitation).
+
+**Never-fabricate check**: the one `found` case is confirmed the paper's own figure (above); no
+cover, logo, or wrong-paper image appeared anywhere in the 17-paper sweep this round.
+
+Commit: `docs(abc): round 3 A part 2 - S4 figure-status tally`.
