@@ -45,9 +45,12 @@ describe("tryHtmlCandidates — 1-22, a hard 401/402/403/451 is reported as payw
   });
 
   it("never calls an open-access host's own 40x a paywall", async () => {
-    // hostLooksOpenAccess screens hosts this codebase already trusts as open
-    // (e.g. arXiv/PMC-shaped hosts) — a status-based paywall guess must not
-    // override that, matching the existing body-phrase check's own guard.
+    // 2-01: classifyHardAccessStatus (shared with papers/full-text.ts and
+    // figures/pdf-extract.ts) screens hosts this codebase already trusts as
+    // aggregator/free (e.g. arXiv/PMC-shaped hosts) — a status-based paywall
+    // guess must not override that; the verdict is "blocked", which still
+    // surfaces as source_unavailable here, matching the existing
+    // body-phrase check's own guard.
     globalThis.fetch = vi.fn(async () => new Response("", { status: 403 })) as unknown as typeof fetch;
 
     const result = await tryHtmlCandidates(
@@ -56,6 +59,18 @@ describe("tryHtmlCandidates — 1-22, a hard 401/402/403/451 is reported as payw
     );
 
     expect(result.status).toBe("source_unavailable");
+  });
+
+  it("2-01: reports an OpenAlex 403 as blocked (source_unavailable), never paywalled", async () => {
+    // Ruling 9 (§1j) / A2-05: openalex.org is an aggregator host this
+    // codebase itself calls, not a publisher — a 403 there is an anti-bot
+    // block, and must not read as a subscription paywall.
+    globalThis.fetch = vi.fn(async () => new Response("", { status: 403 })) as unknown as typeof fetch;
+
+    const result = await tryHtmlCandidates("https://openalex.org/W7212207112", "publisher");
+
+    expect(result.status).toBe("source_unavailable");
+    expect(result.reason).toContain("openalex.org");
   });
 });
 

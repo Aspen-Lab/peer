@@ -13,6 +13,7 @@ import {
   looksLikeFullText,
   type ExtractedDocument,
 } from "./html-text";
+import { classifyHardAccessStatus } from "./paywall-status";
 import { extractPdfTextFromPath, tryExtractPdfText } from "./pdf-text";
 import { collectSourceLinks, type SourceLink } from "./source-links";
 import { bareUploadId, pdfPath } from "./upload-store";
@@ -67,19 +68,6 @@ const PAYWALL_PHRASES = [
   "rent this article",
   "subscribe for full access",
 ];
-
-/**
- * A hard 401/402/403/451 is as clear a paywall signal as a fetch ever gets.
- * 1-16: this used to live inside `appearsPaywalled`, which is only ever
- * called after a successful (2xx) fetch — a real 401/402/403/451 response
- * never reached it, since `fetchHtml`/`downloadPdf` already return on
- * `!res.ok` one branch earlier. Moved here so the early-return paths can
- * check it directly, before falling through to the generic
- * "source_unavailable" a non-paywall failure gets.
- */
-function looksLikePaywallStatus(status: number): boolean {
-  return [401, 402, 403, 451].includes(status);
-}
 
 function appearsPaywalled(html: string): boolean {
   if (/captcha/i.test(html)) return true;
@@ -151,8 +139,12 @@ async function tryHtmlLink(link: SourceLink): Promise<{ status: FullTextStatus; 
     // 1-16: a hard 401/402/403/451 here is a publisher access gate, not
     // "could not reach the source" — Wiley/ACS both hard-403 after the DOI
     // redirect resolves correctly, and were misreported as source_unavailable.
-    if (typeof fetched.status === "number" && looksLikePaywallStatus(fetched.status)) {
-      return { status: "paywalled", reason: paywallReason(link.url) };
+    // 2-01: except on an aggregator/free host (Ruling 9, §1j) — there a hard
+    // status is an anti-bot block, not a subscription gate.
+    if (typeof fetched.status === "number") {
+      const verdict = classifyHardAccessStatus(link.url, fetched.status);
+      if (verdict === "paywalled") return { status: "paywalled", reason: paywallReason(link.url) };
+      if (verdict === "blocked") return { status: "source_unavailable", reason: blockedReason(link.url) };
     }
     return { status: "source_unavailable", reason: fetched.reason };
   }
@@ -182,8 +174,11 @@ async function tryPdfLink(link: SourceLink): Promise<{ status: FullTextStatus; d
   // failed) is checked first — a hard 401/402/403/451 there is the same
   // publisher-gate signal as the HTML path's, and previously reached here
   // only as an un-matchable reason string ("PDF fetch returned 403").
-  if (typeof result.status === "number" && looksLikePaywallStatus(result.status)) {
-    return { status: "paywalled", reason: paywallReason(link.url) };
+  // 2-01: except on an aggregator/free host, where it's a block, not a paywall.
+  if (typeof result.status === "number") {
+    const verdict = classifyHardAccessStatus(link.url, result.status);
+    if (verdict === "paywalled") return { status: "paywalled", reason: paywallReason(link.url) };
+    if (verdict === "blocked") return { status: "source_unavailable", reason: blockedReason(link.url) };
   }
   // Otherwise fall back to the phrase-based reasons already produced
   // elsewhere in the PDF pipeline (e.g. downloadPdf's "likely a
@@ -201,6 +196,21 @@ function paywallReason(url: string): string {
     return `${host} requires paid or institutional access — Peer could not read the full paper, so the report falls back to the abstract.`;
   } catch {
     return "The publisher requires paid or institutional access — Peer could not read the full paper, so the report falls back to the abstract.";
+  }
+}
+
+/**
+ * 2-01 (Ruling 9, §1j): an aggregator/free host's own 401/402/403/451 is an
+ * anti-bot block, not a subscription gate — worded separately from
+ * `paywallReason` so the honest reason a report falls back to the abstract
+ * never claims a paywall that isn't there.
+ */
+function blockedReason(url: string): string {
+  try {
+    const host = new URL(url).hostname.replace(/^www\./, "");
+    return `${host} blocked this request — Peer could not read the full paper, so the report falls back to the abstract.`;
+  } catch {
+    return "The source blocked this request — Peer could not read the full paper, so the report falls back to the abstract.";
   }
 }
 

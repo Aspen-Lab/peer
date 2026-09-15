@@ -39,4 +39,16 @@ describe("tryPdfCandidates — 1-22b, a hard 401/402/403/451 is reported as payw
 
     expect(result.status).toBe("source_unavailable");
   });
+
+  it("2-01: reports an OpenAlex 403 as blocked (source_unavailable), never paywalled", async () => {
+    // Ruling 9 (§1j) / A2-05: openalex.org is an aggregator host this
+    // codebase itself calls, not a publisher — a 403 there is an anti-bot
+    // block, and must not read as a subscription paywall.
+    globalThis.fetch = vi.fn(async () => new Response("", { status: 403 })) as unknown as typeof fetch;
+
+    const result = await tryPdfCandidates("https://openalex.org/W7212207112", "open-access");
+
+    expect(result.status).toBe("source_unavailable");
+    expect(result.reason).toContain("openalex.org");
+  });
 });

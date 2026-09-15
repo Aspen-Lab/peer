@@ -77,6 +77,21 @@ describe("getFullText — 1-16, a hard 401/402/403/451 is reported as paywalled"
     expect(result.status).toBe("paywalled");
     expect(result.reason).toContain("pubs.acs.org");
   });
+
+  it("2-01: an openalex.org 403 is blocked, not paywalled (Ruling 9, §1j)", async () => {
+    // A2-05's OSF finding: openalex.org is an aggregator host this codebase
+    // itself calls, not a publisher — a 403 there is an anti-bot block, and
+    // must fall back to the abstract as "blocked", never claim a paywall.
+    mocks.collectSourceLinks.mockResolvedValue([
+      htmlLink("https://openalex.org/W7212207112"),
+    ]);
+    globalThis.fetch = vi.fn(async () => new Response("", { status: 403 })) as unknown as typeof fetch;
+
+    const result = await getFullText({ paperId: "openalex:W7212207112" });
+
+    expect(result.status).toBe("no_full_text");
+    expect(result.attempts[0].outcome).toContain("source_unavailable");
+  });
 });
 
 describe("getFullText — 1-28, an upload: id reads the local file, never collectSourceLinks", () => {

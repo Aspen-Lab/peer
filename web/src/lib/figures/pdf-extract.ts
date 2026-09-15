@@ -7,6 +7,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
+import { classifyHardAccessStatus } from "@/lib/papers/paywall-status";
 import { cleanDisplayText } from "@/lib/text/clean";
 
 const execFileAsync = promisify(execFile);
@@ -91,6 +92,21 @@ function paywallReason(url: string): string {
   }
 }
 
+/**
+ * 2-01 (Ruling 9, §1j): an aggregator/free host's own 401/402/403/451 is an
+ * anti-bot block, not a subscription gate — worded separately from
+ * `paywallReason` so figure-lookup honesty never claims a paywall on a host
+ * that was never a publisher in the first place.
+ */
+function blockedReason(url: string): string {
+  try {
+    const host = new URL(url).hostname.replace(/^www\./, "");
+    return `Peer reached ${host}, but that source blocked this request.`;
+  } catch {
+    return "Peer reached the source, but it blocked this request.";
+  }
+}
+
 function hostLooksOpenAccess(url: string): boolean {
   try {
     const host = new URL(url).hostname;
@@ -98,20 +114,6 @@ function hostLooksOpenAccess(url: string): boolean {
   } catch {
     return false;
   }
-}
-
-/**
- * 1-22b: a hard 401/402/403/451 is as clear a paywall signal as a fetch ever
- * gets — same fix as 1-16 (`papers/full-text.ts`) and 1-22
- * (`figures/extract.ts`'s `tryHtmlCandidates`), same bug, found in this file
- * separately (it keeps its own copy of this logic, like the other two).
- * This used to live inside `appearsPaywalled` below, which is only ever
- * called after `tryPdfCandidates`'s own `!res.ok` branch has already
- * returned — so a real 401/402/403/451 never reached it; it was reported as
- * `source_unavailable` ("could not reach") instead.
- */
-function looksLikePaywallStatus(status: number): boolean {
-  return [401, 402, 403, 451].includes(status);
 }
 
 function appearsPaywalled(res: Response, html: string): boolean {
@@ -228,8 +230,14 @@ export async function tryPdfCandidates(
 ): Promise<PdfAttemptResult> {
   const res = await fetchPdfResponse(url);
   if (!res || !res.ok) {
-    if (res && !hostLooksOpenAccess(url) && looksLikePaywallStatus(res.status)) {
-      return { status: "paywalled", candidates: [], reason: paywallReason(url) };
+    // 2-01 (Ruling 9, §1j): a hard 401/402/403/451 on an aggregator/free
+    // host is a block, not a paywall — the shared helper's own host list
+    // replaces this call site's narrower `hostLooksOpenAccess` guard (still
+    // used below by the phrase-based `appearsPaywalled`, unrelated to this).
+    if (res) {
+      const verdict = classifyHardAccessStatus(url, res.status);
+      if (verdict === "paywalled") return { status: "paywalled", candidates: [], reason: paywallReason(url) };
+      if (verdict === "blocked") return { status: "source_unavailable", candidates: [], reason: blockedReason(url) };
     }
     return {
       status: "source_unavailable",

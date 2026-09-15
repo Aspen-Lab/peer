@@ -1,6 +1,7 @@
 import { extractPdfCandidatesFromPath, tryPdfCandidates } from "./pdf-extract";
 import { matchFigureSemantically } from "./semantic-match";
 import { matchFigureVisually } from "./vision-match";
+import { classifyHardAccessStatus } from "@/lib/papers/paywall-status";
 import { bareUploadId, pdfPath } from "@/lib/papers/upload-store";
 
 const FETCH_TIMEOUT_MS = 7_000;
@@ -1064,15 +1065,18 @@ function paywallReason(url: string): string {
 }
 
 /**
- * A hard 401/402/403/451 is as clear a paywall signal as a fetch ever gets.
- * 1-22 (mirrors 1-16 in papers/full-text.ts): this used to live inside
- * `appearsPaywalled`, which is only ever called after a successful (2xx)
- * fetch in `tryHtmlCandidates` — a real 401/402/403/451 response returns on
- * the earlier `!res.ok` branch and never reached it, so Wiley/ACS's genuine
- * 403s were reported as `source_unavailable` instead of `paywalled` here too.
+ * 2-01 (Ruling 9, §1j): an aggregator/free host's own 401/402/403/451 is an
+ * anti-bot block, not a subscription gate — worded separately from
+ * `paywallReason` so figure-lookup honesty never claims a paywall on a host
+ * that was never a publisher in the first place.
  */
-function looksLikePaywallStatus(status: number): boolean {
-  return [401, 402, 403, 451].includes(status);
+function blockedReason(url: string): string {
+  try {
+    const host = new URL(url).hostname.replace(/^www\./, "");
+    return `Peer reached ${host}, but that source blocked this request.`;
+  } catch {
+    return "Peer reached the source, but it blocked this request.";
+  }
 }
 
 function appearsPaywalled(url: string, html: string): boolean {
@@ -1107,8 +1111,14 @@ export async function tryHtmlCandidates(
     // 1-16 fixed for the report's own full-text path — Wiley/ACS both
     // hard-403 after their DOI redirect resolves correctly, and were
     // reported as `source_unavailable` ("could not reach") instead.
-    if (res && !hostLooksOpenAccess(url) && looksLikePaywallStatus(res.status)) {
-      return { status: "paywalled", candidates: [], reason: paywallReason(url) };
+    // 2-01: except on an aggregator/free host (Ruling 9, §1j), where it's a
+    // block, not a paywall — the shared helper's own host list replaces this
+    // call site's narrower `hostLooksOpenAccess` guard (still used below by
+    // the phrase-based `appearsPaywalled`, unrelated to this check).
+    if (res) {
+      const verdict = classifyHardAccessStatus(url, res.status);
+      if (verdict === "paywalled") return { status: "paywalled", candidates: [], reason: paywallReason(url) };
+      if (verdict === "blocked") return { status: "source_unavailable", candidates: [], reason: blockedReason(url) };
     }
     return {
       status: "source_unavailable",

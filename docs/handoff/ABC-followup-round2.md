@@ -3674,3 +3674,14 @@ own throwaway scripts and the deleted scratch vitest spec left no trace: from `w
 as expected — B touched no source file).
 
 Commit: `docs(abc): round 2 B part 3 - A2-02 upload text-status, A2-01 title heuristic, gate`.
+
+### Round 2 — Agent C (part 1, banked by the manager)
+
+C died on a Sonnet session limit after finishing item **2-01**'s code and tests but before its
+live check and commit. The working tree held `web/src/lib/papers/paywall-status.ts` (new:
+`isAggregatorHost`, `classifyHardAccessStatus`, Ruling 9's host list verbatim) and the three
+call sites (`papers/full-text.ts`, `figures/extract.ts`, `figures/pdf-extract.ts`) plus their
+tests. The manager re-ran the gate cold — tsc clean · eslint clean · vitest 2610/2610 (3 new) —
+and committed it as C's 2-01 so nothing is lost. Live check done by the manager: `/api/figure`
+on `openalex:W7212207112` (openalex.org 403) — see the next C entry for the status it now
+returns. C resumes at **2-02**.
