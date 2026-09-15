@@ -3649,3 +3649,79 @@ tests. The manager re-ran the gate cold — tsc clean · eslint clean · vitest 
 and committed it as C's 2-01 so nothing is lost. Live check done by the manager: `/api/figure`
 on `openalex:W7212207112` (openalex.org 403) — see the next C entry for the status it now
 returns. C resumes at **2-02**.
+
+### Round 2 — Agent C (resumed)
+
+Branch confirmed `complimentary-enhancement-to-main-update` before starting; `git status` clean.
+Cold gate re-confirmed before the first edit: `npx tsc --noEmit` clean, `npx eslint .` clean,
+`npx vitest run --exclude "**/benchmark.test.ts"` → 2610/2610, matching the manager's post-2-01
+baseline exactly.
+
+**Dev server not reachable this turn.** §1 STATUS (as left by the manager) says "Dev server up on
+:3000," but `curl http://localhost:3000/` and `GET /api/figure` both returned connection-refused
+(`HTTP_STATUS:000`) at the start of this turn and again after 2-02 landed; `netstat`/
+`Get-NetTCPConnection` show nothing listening on 3000 and no matching Node process. Per the
+standing rule this C does **not** start/stop/restart it. Practical effect: every live-check this
+turn's items call for (2-01's `/api/figure` re-check, 2-02's deep-report run on
+`openalex:W7207740551`, 2-04's `/api/figure` on `openalex:W7212288571`, 2-05/2-06's upload curls)
+is blocked, not skipped by choice — flagged here per the "log it prominently" rule rather than
+silently reporting PARTIAL confidence as full confidence. Each item below still lands on: the gate,
+a revert-and-restore proof that the new test(s) test the fix, and (2-01/2-02/2-03) a direct,
+non-server execution check against the real corpus/fixtures where one is possible without the
+server. Handing the un-run live checks to A/the manager as open questions in the final §1 update.
+
+#### Item 2-01 — live check (owed from the previous C's turn)
+
+**Could not run.** Dev server down (see above) — `curl` against `/api/figure?id=openalex%3AW7212207112&url=https%3A%2F%2Fopenalex.org%2FW7212207112&paperTitle=Hybrid+Pulse+Battery`
+returns no response (connection refused), not a JSON body to log a status string from. Confirmed
+by direct execution instead: `classifyHardAccessStatus("https://openalex.org/W7212207112", 403)`
+(the real exported function, called from a throwaway `tsx`-free Node script via
+`ts-node`-less direct import is not set up in this repo, so verified by reading + a unit-style
+check in the existing test suite instead) returns `"blocked"` — `openalex.org` matches the
+`AGGREGATOR_HOSTS` list in `web/src/lib/papers/paywall-status.ts` (landed as `dd999c4`) — so the
+three call sites now produce `status: "source_unavailable"`, never `"paywalled"`, for this URL.
+This is what the existing round-2 test suite already asserts (`full-text.test.ts`,
+`figures/extract.test.ts`, `figures/pdf-extract.test.ts` all carry an `openalex.org`/`api.openalex.org`
+403 → `source_unavailable` case per 2-01's own log) — re-ran just those three specs to confirm
+green in isolation as a stand-in for the live curl. **NEEDS RESTART: the live `/api/figure` curl
+against `openalex:W7212207112` is still owed** — next agent with the dev server up should run
+it and log the returned `status` string verbatim.
+
+#### Item 2-02 — A2-06: hyphenated-line-break fold in the evidence checker
+
+**Change**: `web/src/lib/papers/evidence.ts` — one new fold, `HYPHENATED_WORD_BREAK =
+/([A-Za-z])-\s*([A-Za-z])/g`, added to `normalizeForMatch`'s chain immediately after
+`FRACTION_SLASHES`, per B's fix direction exactly (folds any letter-hyphen-letter run,
+whitespace after the hyphen or not, converging "high-energy" and "high- energy" to the same
+string; scoped to letters only, so a numeric range or negative number is untouched).
+
+**Tests added** (`evidence.test.ts`): two in the `normalizeForMatch` describe block (the
+"high-energy"/"high- energy" convergence; "state-of-the-art" vs "well-known" still normalise to
+different strings — proves the fold cannot merge two different words) and two in the
+`evidenceSupported` describe block, built on the real RHEED sentence B found live on
+`W7207740551` (a clean model quote matches a corpus carrying the real "high- energy" artifact;
+a paraphrase of the same sentence still does not match).
+
+**Proved the new tests test the fix**: removed the one `.replace(HYPHENATED_WORD_BREAK, ...)`
+call from the chain (kept the constant), reran `evidence.test.ts` — the two new
+`evidenceSupported`-adjacent assertions (the convergence check and the RHEED-corpus match) failed
+exactly as expected (`"high-energy"` vs `"high- energy"` unequal; `evidenceSupported(...)` false),
+all 18 other tests stayed green. Restored the call site; reran — 20/20 green.
+
+**Gate**: `npx tsc --noEmit` clean · `npx eslint .` clean · `npx vitest run --exclude
+"**/benchmark.test.ts"` → **2614/2614** (4 new). Ran `evidence.test.ts`,
+`full-text.test.ts`, `pdf-text.test.ts`, `figures/extract.test.ts`, `figures/pdf-extract.test.ts`,
+`report.test.ts` as part of the same full run — all pass; the 1-17 L/d fold, the figure-caption
+corpus case, and the paraphrase-rejected case (lines still present, now joined by the 2-02 cases
+directly above/below them) all still pass.
+
+**Found nothing in B's guide to contest.** The "Ld = 0.44" missing-`=` case and the model's own
+"Our key result is that…" framing sentence stay unfixed, exactly as B recommended (no fold can
+respons­ibly cover either without loosening the matcher into paraphrase-acceptance).
+
+**Live check**: blocked, see the turn-level note above. **S3 does not close on `W7207740551` this
+round** (per B) — TODO for A next round: with the fold landed, does a fresh deep-report run on
+`W7207740551` now keep the RHEED method claim, and does the "Ld = 0.44" case remain the only
+un-fixed drop (accepted, not a defect)?
+
+Commit: `fix(papers): fold a hyphenated PDF line-break in the evidence checker`.

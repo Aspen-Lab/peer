@@ -50,12 +50,34 @@ const CITATION_BRACKETS = /\s*\[\d+(?:\s*[-,]\s*\d+)*\]/g;
 const FRACTION_SLASHES = /[/⁄]\s*/g;
 
 /**
+ * A word that wraps across a PDF line break re-joins with a hyphen AND an
+ * inserted space ("high- energy") where the clean text has neither reason
+ * for one ("high-energy") — PyMuPDF's own extraction artifact, the same
+ * family as the fraction-slash case above (1-17). Folding any hyphen sitting
+ * directly between two letters — whether or not whitespace follows — makes
+ * both forms converge to the same normalized string.
+ *
+ * This is broader than the fraction-slash fold: it folds *every* inter-
+ * letter hyphen for matching purposes, including a normal compound word
+ * like "state-of-the-art", not only line-wrap artifacts — there is no cheap
+ * way to tell the two apart from the text alone, since the only structural
+ * difference (a space after the hyphen in the artifact, none in a clean
+ * compound) has to be erased on both sides to converge them. It still
+ * cannot turn a paraphrase into a match: two *different* hyphenated words
+ * fold to two different strings; only the *same* word's clean and
+ * line-wrapped spellings converge. Scoped to letters only (not digits) so a
+ * numeric range ("43-45 K") or a negative number is never joined. (2-02)
+ */
+const HYPHENATED_WORD_BREAK = /([A-Za-z])-\s*([A-Za-z])/g;
+
+/**
  * Normalise for matching only — never for display. `cleanDisplayText` first,
  * so a quote that went through the sanitizer and a raw section text land in
  * the same alphabet (it already folds entities, mojibake, `×`, `±`, sub- and
  * superscripts). Then NFKC (ligatures `ﬁ` → `fi`), curly → straight quotes,
  * every dash → `-`, soft hyphens gone, citation brackets gone, both slash
- * characters gone (1-17), lowercase, whitespace collapsed.
+ * characters gone (1-17), a hyphenated line-break re-joined (2-02),
+ * lowercase, whitespace collapsed.
  */
 export function normalizeForMatch(s: string): string {
   return cleanDisplayText(s)
@@ -66,6 +88,7 @@ export function normalizeForMatch(s: string): string {
     .replace(/\u00AD/g, "")
     .replace(CITATION_BRACKETS, "")
     .replace(FRACTION_SLASHES, "")
+    .replace(HYPHENATED_WORD_BREAK, "$1$2")
     .toLowerCase()
     .replace(/\s+/g, " ")
     .trim();

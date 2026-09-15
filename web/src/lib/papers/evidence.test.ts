@@ -50,6 +50,19 @@ describe("normalizeForMatch", () => {
     expect(normalizeForMatch("L/d = 0.67")).toBe(normalizeForMatch("Ld ⁄ = 0.67"));
     expect(normalizeForMatch("L/d = 0.67")).toBe("ld = 0.67");
   });
+
+  it("2-02: folds a hyphenated PDF line-break the same way on both sides", () => {
+    // PyMuPDF re-joins a word that wrapped across a line break with a
+    // hyphen AND an inserted space ("high- energy") where the clean text
+    // has neither reason for one ("high-energy") — a real extraction
+    // artifact, not a paraphrase.
+    expect(normalizeForMatch("high-energy")).toBe(normalizeForMatch("high- energy"));
+    expect(normalizeForMatch("high-energy")).toBe("highenergy");
+  });
+
+  it("2-02: still tells two different hyphenated words apart", () => {
+    expect(normalizeForMatch("state-of-the-art")).not.toBe(normalizeForMatch("well-known"));
+  });
 });
 
 describe("evidenceSupported", () => {
@@ -125,6 +138,32 @@ describe("evidenceSupported", () => {
       "we find that the ahts with ld ⁄ = 0.67 and 0.78 lie above el for all temperatures measured.";
     const paraphrase =
       "The AHTS samples with a length-to-diameter ratio of 0.67 and 0.78 sit above the EL curve.";
+    expect(evidenceSupported(paraphrase, garbledCorpus)).toBe(false);
+  });
+
+  it("2-02: a model's clean quote matches a corpus garbled by a hyphenated PDF line-break", () => {
+    // Real defect found on openalex:W7207740551: PyMuPDF's extraction joins
+    // "high-energy" wrapped across a line break as "high- energy" (hyphen,
+    // then a space) — the model's own quote has no reason to reproduce that
+    // space, so the verbatim match must still be found.
+    const garbledCorpus =
+      "all four superlattices were grown by molecular beam epitaxy (mbe) on lasralo4 (001) " +
+      "substrates, with the assembly of each monolayer monitored in real time using reflection " +
+      "high- energy electron diffraction (rheed).";
+    const modelQuote =
+      "All four superlattices were grown by molecular beam epitaxy (MBE) on LaSrAlO4 (001) " +
+      "substrates, with the assembly of each monolayer monitored in real time using reflection " +
+      "high-energy electron diffraction (RHEED).";
+    expect(evidenceSupported(modelQuote, garbledCorpus)).toBe(true);
+  });
+
+  it("2-02: the hyphenation fold does not turn a paraphrase into a match", () => {
+    const garbledCorpus =
+      "all four superlattices were grown by molecular beam epitaxy (mbe) on lasralo4 (001) " +
+      "substrates, with the assembly of each monolayer monitored in real time using reflection " +
+      "high- energy electron diffraction (rheed).";
+    const paraphrase =
+      "Every superlattice sample was fabricated via MBE growth and checked in situ with RHEED.";
     expect(evidenceSupported(paraphrase, garbledCorpus)).toBe(false);
   });
 });
