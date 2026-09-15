@@ -2538,3 +2538,89 @@ Findings for B (manager, round 2) — these join A's list:
 - **M2-03 (S3, real data)** — the uploaded 2609.02668 report says "3 claims were dropped"; A
   measures the same paper via `openalex:W7207740551` this round — B classifies each drop (correct
   synthesis drop vs. suspicious) from A's fragments.
+
+### Round 2 — Agent A
+
+Branch confirmed `complimentary-enhancement-to-main-update` before starting; `git status` clean.
+Dev server `peer-web` confirmed up (`GET /` → 200) before any measurement. Same 17-paper pool and
+method as round 1, for a comparable trend. While this turn was running, the manager committed a
+separate entry ("Round 2 — manager browser checks") with live browser checks A cannot do (S5
+visual, S7 button/drag-drop/Save) and three findings (M2-01, M2-02, M2-03) — folded into this
+turn's difference list below, not duplicated. No product code changed. Throwaway measurement
+scripts lived under `web/.local-data/round2a-scratch/` (gitignored) and were deleted before each
+part's commit; test uploads under `web/.local-data/uploads/` were left in place (real app data,
+not scaffolding, gitignored either way).
+
+#### Part 1 — S3 (full text + checker)
+
+Constants re-read, confirmed raised exactly as C's log claims: `deep-report.ts`
+`PASS1_MAX_INPUT_CHARS = 400_000` (was 60,000), `PASS2_MAX_INPUT_CHARS = 24_000` (unchanged, only
+governs the short-paper raw-fallback branch), `pdf-text.ts` `MAX_PDF_PAGES = 100` (was 40). Read
+`nonAbstractSections` directly: it now iterates every canonical bucket the extractor produced
+(minus `abstract`), no per-bucket `.slice(...)` calls anywhere in the file — confirmed by grep,
+zero hits for the old 12,000/14,000/6,000 clip literals. This is a code-reading confirmation, not
+just trusting the commit message.
+
+**Live run 1 — `openalex:W7207740551`** (`POST /api/papers/report {deepReport:true}`, no
+`llmOverride`, ~20s). `getFullText()` (fresh call, matches round-1 exactly): pageCount 20, source
+`pdf`, buckets `abstract`(895) `introduction`(9627) `results`(17805), total body 28,327 chars —
+well under the new 400k cap, nothing clipped. Live report: `droppedClaims: 2`, `keyResults: 2`,
+`sourceKind: pdf`, `provenance.pageCount: 20`, no paywall notice. Target (≤1 dropped, ≥2
+keyResults): **keyResults MEETS, droppedClaims FAILS** (2 > 1). Improvement over round 1 (4
+dropped / 1 kept) but still short of the target on this paper.
+Per M2-03's ask, a second, separate measurement for B: reconstructed pass1+pass2 against the real
+provider (prompt JSON copied verbatim from `deep-report.ts`'s source, since `buildPass1Prompt`/
+`buildPass2Prompt` are not exported — **labelled a construction, not a captured trace of the live
+route call**, per the evidence rules), then ran the real exported `verifyReportEvidence` against
+the real corpus. That run dropped 3 of 9 evidence items; three ≤90-char fragments, one per line:
+`[skim] "Our key result is that multiple spectral features evolve systematically as a function of
+L…"`, `[keyResult] "The extracted Tc values trace the superconducting dome as a function of L/d,
+reaching a ma…"`, `[keyResult] "This analysis reveals that the AHTS with L/d = 0.67 exhibits the
+smallest ΔS, correspondin…"`. **Standing exclusion, re-listed by name**: the second fragment is
+character-for-character the same quote §1c.3 already ruled a genuine model-synthesis drop, not a
+defect — it recurs reliably across runs. The other two fragments are new this round; B classifies
+them (fixture cannot settle this — needs the diagnosis step A does not do).
+
+**Live run 2 — `openalex:W7212228226` (JECST)**, run once, then a second time specifically to
+answer the manager's TODO about the Conclusions section. `getFullText()`: pageCount 34, source
+`pdf`, buckets `abstract`(1491) `introduction`(18061) `conclusion`(3364), total 22,916 chars,
+nothing clipped (well under 400k; the per-bucket clips that used to cut the introduction to 12k
+are confirmed gone by both code reading and this real body reaching pass 1 whole).
+- Run A: `droppedClaims: 1`, `keyResults: 2`, both `evidenceWhere: "Introduction"`.
+- Run B (immediate re-run, same paper, same endpoint): `droppedClaims: 1`, `keyResults: 3`, one
+  `evidenceWhere: "Conclusions"` — **the JECST report DOES now carry a claim sourced from the
+  Conclusions section** — confirmed live, not just structurally. The other two kept results in
+  run B were `"Introduction"` again.
+Target (≤1 dropped, ≥2 keyResults): **MEETS on both runs.** Note against round 1 (0 dropped / 3
+kept): droppedClaims went from 0 to 1 — a small regression, still within target, not investigated
+(not A's job) — flagged as a real-data difference, not "unchanged."
+
+**Live run 3 — `arxiv:2501.00663`** ("Titans: Learning to Memorize at Test Time" — confirmed live
+by fetching `arxiv.org/abs/2501.00663` and `/pdf/2501.00663`, both 200, real title/authors read off
+the abstract page; B's suggested title guess, "A Survey on LLM-as-a-Judge," was wrong for this id
+— substituted the real one, same id). `GET /api/papers/arxiv:2501.00663` itself 404'd both times
+tried (the app's own arXiv metadata lookup hit `export.arxiv.org`'s rate limit, "Rate exceeded,"
+independent of anything in this branch) — worked around by building the `Paper` object by hand
+from the confirmed-live title/authors/id and POSTing directly; `getFullText`/the deep-report route
+never touch that rate-limited endpoint, so the report call itself is unaffected. `getFullText()`:
+source `ar5iv` (HTML), no `pageCount` (HTML extraction doesn't carry one), buckets `abstract`
+(1552) `introduction`(8914) `body`(29278) `results`(19613) `conclusion`(962), total 60,319 chars.
+Live report: `droppedClaims: 1`, `keyResults: 4`, sourced from "Contributions and Roadmap"
+(×2), "5.2 Language Modeling," "5.4 BABILong Benchmark." Target: **MEETS clearly.**
+
+**§1i lead, resolved for this pool**: re-ran `getFullText()` against all 17 pool papers (fresh
+calls). Status tally: `ok: 2` (both PDF-sourced, as above) · `paywalled: 10` · `no_full_text: 5`.
+**No pool paper is HTML-sourced** — the only HTML/`ar5iv`-sourced document measured this round is
+the third S3 test paper (`arxiv:2501.00663`, outside the pool), whose 60,319-char total is under
+`html-text.ts`'s 90,000-char cap anyway, so nothing is clipped there either. This settles §1i: the
+`html-text.ts` caps are not implicated by anything in the current pool or the three S3 test papers
+— still a lead, not a fix item, per the ruling.
+
+**Full-text status tally, before/after (§1c's honesty check, extended)**: round 1 was `ok:2 ·
+source_unavailable:1 · no_full_text:14` (17 total). This round: `ok:2 · paywalled:10 ·
+no_full_text:5` (17 total). Most of the old generic `source_unavailable`/
+`no_full_text` verdicts on hard-403 hosts (Wiley, ACS, Elsevier/ScienceDirect) now correctly read
+`paywalled` with the host named — matches 1-16's intent. This is a real-data confirmation that the
+reclassification fix reaches the full-text path, not just the figures path.
+
+Commit: `docs(abc): round 2 A part 1 — S3 real-data re-measurement`.
