@@ -347,7 +347,10 @@ def extract_text(pdf_path: str, max_pages: int) -> dict:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", required=True)
-    parser.add_argument("--max-pages", type=int, default=40)
+    # 100, up from 40 (S3, 2026-09-15): the Node caller (pdf-text.ts) always
+    # passes --max-pages explicitly, so this default only matters for someone
+    # invoking the script directly; kept in sync with MAX_PDF_PAGES there.
+    parser.add_argument("--max-pages", type=int, default=100)
     args = parser.parse_args()
 
     try:

@@ -31,7 +31,13 @@ import { verifyReportEvidence } from "./evidence";
 import type { ExtractedDocument } from "./html-text";
 
 const PASS1_TRIGGER_CHARS = 10_000;
-const PASS1_MAX_INPUT_CHARS = 60_000;
+// S3 (2026-09-15 ruling): ~400k chars (~100k tokens) is the accepted budget
+// for a full paper's body reaching pass 1 — was 60_000, which combined with
+// the per-bucket clips this round also removed to under-feed a paper's real
+// body (a 34-page paper's Conclusions section, in particular, never reached
+// pass 1 at all: buildPass1Prompt only read four of the canonicalizer's
+// buckets and this one wasn't among them).
+const PASS1_MAX_INPUT_CHARS = 400_000;
 const PASS2_MAX_INPUT_CHARS = 24_000;
 
 interface CompressedSignal {
@@ -70,6 +76,36 @@ function sectionsByCanonical(doc: ExtractedDocument): Record<string, string> {
 /** The whole abstract as the mapper split it — the corpus a Tier-1 claim must quote. */
 function fullAbstract(paper: Paper): string {
   return [paper.summaryIntro, paper.summaryResultDiscussion].filter(Boolean).join(" ");
+}
+
+/**
+ * Every canonical bucket the extractor found, in the paper's own section
+ * order, minus the abstract (carried separately as `paper.summaryIntro` /
+ * `summaryResultDiscussion` — a Tier-1 claim quotes those, not this).
+ *
+ * S3 (2026-09-15): this used to be a fixed destructure of four names
+ * (introduction/methods/results/discussion), which silently dropped any
+ * other bucket the canonicalizer produces — `conclusion` (a 34-page test
+ * paper's entire Conclusions section, unread by pass 1 until this fix),
+ * `limitations`, `related_work`, `supplementary`, and its `body` catch-all
+ * for anything unmatched. Reading every key `sectionsByCanonical` actually
+ * returns means a new bucket the canonicalizer grows later reaches pass 1
+ * for free, with no second place to remember to update.
+ */
+function nonAbstractSections(buckets: Record<string, string>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [canonical, text] of Object.entries(buckets)) {
+    if (canonical === "abstract") continue;
+    const trimmed = text.trim();
+    if (trimmed) out[canonical] = trimmed;
+  }
+  // A paper with no heading the canonicalizer recognizes as "introduction"
+  // (rare, but seen on some PDF extractions) still gets an opening section —
+  // the abstract stands in, as before this fix.
+  if (!out.introduction && buckets.abstract?.trim()) {
+    out.introduction = buckets.abstract.trim();
+  }
+  return out;
 }
 
 function safeJson(text: string): Record<string, unknown> | null {
@@ -118,14 +154,7 @@ function parseCompressedSignal(text: string): CompressedSignal {
 }
 
 function buildPass1Prompt(paper: Paper, doc: ExtractedDocument): string {
-  const buckets = sectionsByCanonical(doc);
-  const intro = buckets.introduction ?? buckets.abstract ?? "";
-  const methods = buckets.methods ?? "";
-  const results = buckets.results ?? "";
-  const discussion = buckets.discussion ?? "";
-
-  const clip = (text: string, n: number) =>
-    text.length > n ? text.slice(0, n) : text;
+  const sections = nonAbstractSections(sectionsByCanonical(doc));
 
   return JSON.stringify({
     task:
@@ -134,12 +163,7 @@ function buildPass1Prompt(paper: Paper, doc: ExtractedDocument): string {
       title: paper.title,
       venue: paper.venue,
     },
-    sections: {
-      introduction: clip(intro, 12_000),
-      methods: clip(methods, 14_000),
-      results: clip(results, 14_000),
-      discussion: clip(discussion, 14_000),
-    },
+    sections,
     outputSchema: {
       noveltyClaims: ["sentences from the paper that state what is new about this work — typically appear in intro and discussion (max 6)"],
       keyResults: ["sentences stating concrete results, numbers, or measurements — typically in results/discussion (max 6)"],
@@ -205,7 +229,12 @@ function buildPass2Prompt(args: {
   const buckets = sectionsByCanonical(doc);
 
   // Decide what body context to feed: compressed signal when available, else
-  // trimmed raw sections.
+  // every section verbatim — this branch only runs when pass 1 was skipped
+  // for being short (bodyChars <= PASS1_TRIGGER_CHARS), so "every section" is
+  // already a bounded amount of text, not a second copy of the 400k budget.
+  // S3: previously four named buckets each clipped to 6000 chars, which
+  // re-clipped an already-short paper's body for no reason and dropped the
+  // same buckets buildPass1Prompt used to drop (conclusion, limitations, …).
   const bodyPayload: Record<string, unknown> = signal
     ? {
         noveltyClaims: signal.noveltyClaims,
@@ -213,12 +242,7 @@ function buildPass2Prompt(args: {
         methodHighlights: signal.methodHighlights,
         priorWorkComparisons: signal.priorWorkComparisons,
       }
-    : {
-        introduction: (buckets.introduction ?? buckets.abstract ?? "").slice(0, 6000),
-        methods: (buckets.methods ?? "").slice(0, 6000),
-        results: (buckets.results ?? "").slice(0, 6000),
-        discussion: (buckets.discussion ?? "").slice(0, 6000),
-      };
+    : nonAbstractSections(buckets);
 
   const figureCaptions = doc.figureCaptions.slice(0, 8).map((cap) => ({
     label: cap.label,

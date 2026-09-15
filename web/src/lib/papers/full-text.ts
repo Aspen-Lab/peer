@@ -67,8 +67,20 @@ const PAYWALL_PHRASES = [
   "subscribe for full access",
 ];
 
-function appearsPaywalled(res: Response, html: string): boolean {
-  if ([401, 402, 403, 451].includes(res.status)) return true;
+/**
+ * A hard 401/402/403/451 is as clear a paywall signal as a fetch ever gets.
+ * 1-16: this used to live inside `appearsPaywalled`, which is only ever
+ * called after a successful (2xx) fetch — a real 401/402/403/451 response
+ * never reached it, since `fetchHtml`/`downloadPdf` already return on
+ * `!res.ok` one branch earlier. Moved here so the early-return paths can
+ * check it directly, before falling through to the generic
+ * "source_unavailable" a non-paywall failure gets.
+ */
+function looksLikePaywallStatus(status: number): boolean {
+  return [401, 402, 403, 451].includes(status);
+}
+
+function appearsPaywalled(html: string): boolean {
   if (/captcha/i.test(html)) return true;
   const lowered = html.toLowerCase();
   const hasPaywallPhrase = PAYWALL_PHRASES.some((p) => lowered.includes(p));
@@ -76,7 +88,7 @@ function appearsPaywalled(res: Response, html: string): boolean {
   return hasPaywallPhrase && !looksOpen;
 }
 
-async function fetchHtml(url: string): Promise<{ ok: true; html: string; finalUrl: string; res: Response } | { ok: false; reason: string; isPdf?: boolean }> {
+async function fetchHtml(url: string): Promise<{ ok: true; html: string; finalUrl: string; res: Response } | { ok: false; reason: string; isPdf?: boolean; status?: number }> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
@@ -88,7 +100,7 @@ async function fetchHtml(url: string): Promise<{ ok: true; html: string; finalUr
         Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
       },
     });
-    if (!res.ok) return { ok: false, reason: `Fetch returned ${res.status}` };
+    if (!res.ok) return { ok: false, reason: `Fetch returned ${res.status}`, status: res.status };
 
     const contentType = res.headers.get("content-type") ?? "";
     // Some PDF links serve directly when the URL looks HTML — let the PDF
@@ -135,9 +147,15 @@ async function tryHtmlLink(link: SourceLink): Promise<{ status: FullTextStatus; 
     // then failed here with "Server returned PDF" — the PDF path never ran
     // and the deep report fell back to the abstract (measured 2026-09-14).
     if (fetched.isPdf) return tryPdfLink(link);
+    // 1-16: a hard 401/402/403/451 here is a publisher access gate, not
+    // "could not reach the source" — Wiley/ACS both hard-403 after the DOI
+    // redirect resolves correctly, and were misreported as source_unavailable.
+    if (typeof fetched.status === "number" && looksLikePaywallStatus(fetched.status)) {
+      return { status: "paywalled", reason: paywallReason(link.url) };
+    }
     return { status: "source_unavailable", reason: fetched.reason };
   }
-  if (appearsPaywalled(fetched.res, fetched.html)) {
+  if (appearsPaywalled(fetched.html)) {
     return {
       status: "paywalled",
       reason: paywallReason(fetched.finalUrl),
@@ -159,9 +177,16 @@ async function tryPdfLink(link: SourceLink): Promise<{ status: FullTextStatus; d
   if (result.ok && result.doc) {
     return { status: "ok", doc: result.doc };
   }
-  // Distinguish "paywalled" (HTTP 403 / paywall phrases) from
-  // "source_unavailable" — paywall detection happens earlier when downloadPdf
-  // sees a landing page; here we just inspect the reason.
+  // 1-16: the status code from the PDF fetch itself (when that's where it
+  // failed) is checked first — a hard 401/402/403/451 there is the same
+  // publisher-gate signal as the HTML path's, and previously reached here
+  // only as an un-matchable reason string ("PDF fetch returned 403").
+  if (typeof result.status === "number" && looksLikePaywallStatus(result.status)) {
+    return { status: "paywalled", reason: paywallReason(link.url) };
+  }
+  // Otherwise fall back to the phrase-based reasons already produced
+  // elsewhere in the PDF pipeline (e.g. downloadPdf's "likely a
+  // landing/paywall page" when the response wasn't really a PDF).
   const reason = result.reason ?? "PDF unavailable.";
   if (/paywall|subscription|purchase|access/i.test(reason)) {
     return { status: "paywalled", reason };

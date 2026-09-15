@@ -17,7 +17,11 @@ const execFileAsync = promisify(execFile);
 const FETCH_TIMEOUT_MS = 12_000;
 const MAX_PDF_BYTES = 18_000_000;
 const MAX_STDIO_BYTES = 18_000_000;
-const MAX_PDF_PAGES = 40;
+// S3 (2026-09-15 ruling): 100 pages, up from 40 — a full paper's text reaching
+// pass 1 needs the extractor to see the whole PDF, not the first 40 pages.
+// Extracted text (no embedded images, unlike extract_pdf_figures.py) stays
+// well under MAX_STDIO_BYTES even at 100 pages.
+const MAX_PDF_PAGES = 100;
 const FETCH_VERSION = "2026-05-01-pdf-text";
 
 interface ExtractorSection {
@@ -46,6 +50,14 @@ export interface PdfTextResult {
   ok: boolean;
   doc?: ExtractedDocument;
   reason?: string;
+  /**
+   * The HTTP status the PDF fetch itself returned, when the failure happened
+   * there (not on a later step like the byte-size or magic-bytes checks).
+   * `full-text.ts`'s `tryPdfLink` uses this to tell a real paywall/access
+   * gate (401/402/403/451) from every other "could not get the PDF" reason —
+   * see 1-16.
+   */
+  status?: number;
 }
 
 function resolveHelperScript(): string | null {
@@ -59,7 +71,9 @@ function resolveHelperScript(): string | null {
   return null;
 }
 
-async function downloadPdf(url: string): Promise<{ bytes: Buffer; finalUrl: string } | { error: string }> {
+async function downloadPdf(
+  url: string,
+): Promise<{ bytes: Buffer; finalUrl: string } | { error: string; status?: number }> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
@@ -72,7 +86,12 @@ async function downloadPdf(url: string): Promise<{ bytes: Buffer; finalUrl: stri
         Accept: "application/pdf,*/*;q=0.8",
       },
     });
-    if (!res.ok) return { error: `PDF fetch returned ${res.status}` };
+    // 1-16: `status` rides along so the caller can tell a real paywall/access
+    // gate (401/402/403/451) from any other non-2xx — previously only the
+    // reason *string* reached the caller, and "PDF fetch returned 403"
+    // matches no paywall-phrase regex, so every hard-403 was reported as
+    // plain "source unavailable".
+    if (!res.ok) return { error: `PDF fetch returned ${res.status}`, status: res.status };
 
     const lengthHeader = Number.parseInt(res.headers.get("content-length") ?? "", 10);
     if (Number.isFinite(lengthHeader) && lengthHeader > MAX_PDF_BYTES) {
@@ -132,7 +151,11 @@ async function runExtractor(
           "--max-pages",
           String(MAX_PDF_PAGES),
         ],
-        { timeout: 45_000, maxBuffer: MAX_STDIO_BYTES },
+        // Raised from 45s alongside MAX_PDF_PAGES 40 -> 100: PyMuPDF text
+        // extraction (no image work, unlike the figure extractor) scales
+        // roughly linearly with page count, so the old timeout tuned for 40
+        // pages was tight for the new cap.
+        { timeout: 100_000, maxBuffer: MAX_STDIO_BYTES },
       );
       // MuPDF prints format warnings ("cmsOpenProfileFromMem failed") to
       // stdout ahead of the JSON; take the document from its first brace.
@@ -190,7 +213,7 @@ function normalize(extractor: ExtractorOutput): ExtractedDocument {
 export async function tryExtractPdfText(url: string): Promise<PdfTextResult> {
   const download = await downloadPdf(url);
   if ("error" in download) {
-    return { ok: false, reason: download.error };
+    return { ok: false, reason: download.error, status: download.status };
   }
 
   const tempDir = await mkdtemp(path.join(tmpdir(), "peer-pdftext-"));

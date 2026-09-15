@@ -953,9 +953,20 @@ function paywallReason(url: string): string {
   }
 }
 
-function appearsPaywalled(url: string, res: Response, html: string): boolean {
+/**
+ * A hard 401/402/403/451 is as clear a paywall signal as a fetch ever gets.
+ * 1-22 (mirrors 1-16 in papers/full-text.ts): this used to live inside
+ * `appearsPaywalled`, which is only ever called after a successful (2xx)
+ * fetch in `tryHtmlCandidates` — a real 401/402/403/451 response returns on
+ * the earlier `!res.ok` branch and never reached it, so Wiley/ACS's genuine
+ * 403s were reported as `source_unavailable` instead of `paywalled` here too.
+ */
+function looksLikePaywallStatus(status: number): boolean {
+  return [401, 402, 403, 451].includes(status);
+}
+
+function appearsPaywalled(url: string, html: string): boolean {
   if (hostLooksOpenAccess(url)) return false;
-  if ([401, 402, 403, 451].includes(res.status)) return true;
   if (/captcha/i.test(html)) return true;
   const lowered = html.toLowerCase();
   const phrases = [
@@ -974,12 +985,21 @@ function appearsPaywalled(url: string, res: Response, html: string): boolean {
   return phrases.some((phrase) => lowered.includes(phrase)) && !/creative commons|cc-by|free full text|open access/i.test(html);
 }
 
-async function tryHtmlCandidates(
+// Exported for tests only (1-22) — every other caller in this file reaches
+// it through `buildCandidatePool`/`getCandidatePool`.
+export async function tryHtmlCandidates(
   url: string,
   source: FigureCandidate["source"],
 ): Promise<AttemptResult> {
   const res = await timedFetch(url);
   if (!res || !res.ok) {
+    // 1-22: a hard 401/402/403/451 here is the same publisher access gate
+    // 1-16 fixed for the report's own full-text path — Wiley/ACS both
+    // hard-403 after their DOI redirect resolves correctly, and were
+    // reported as `source_unavailable` ("could not reach") instead.
+    if (res && !hostLooksOpenAccess(url) && looksLikePaywallStatus(res.status)) {
+      return { status: "paywalled", candidates: [], reason: paywallReason(url) };
+    }
     return {
       status: "source_unavailable",
       candidates: [],
@@ -1002,7 +1022,7 @@ async function tryHtmlCandidates(
 
   const finalUrl = res.url || url;
   const html = await readBoundedText(res);
-  if (appearsPaywalled(finalUrl, res, html)) {
+  if (appearsPaywalled(finalUrl, html)) {
     return {
       status: "paywalled",
       candidates: [],
