@@ -81,27 +81,37 @@ browser, run the reports), then report to the user in plain language and stop th
 
 ```
 ROUND:            4
-WHOSE TURN:       A (closing measurement)
-STOPPED BECAUSE:  C finished 4-05 (banked by the manager) @ 2026-09-15 ~21:30 UTC
-STATUS:           Round 4 complete: 4-01 (S2 429 never masks the publisher outcome + one retry),
-                   4-02 (zero-width fold), 4-03 (repeated footer furniture), 4-04 (prompt asks for
-                   2–4 key results), 4-05 (sequence-tracking bare page-number lines are furniture —
-                   C's code+tests were on the working tree when its session limit hit; the manager
-                   ran the gate cold and committed them). Manager's own check on the real JECST PDF
-                   through `extract_pdf_text.py`: 0 "DOI: 10.33961" footer occurrences in the
-                   sections, 0 bare page-number splices (the one regex hit is a real "1 µm to 75
-                   nm"). Dev server restarted by the manager for A.
-OPEN ITEMS:       S3 S4 (A's closing measurement decides); S5 S6 S7 closed.
-GATE (0 open):    NOT MET (pending A round 4)
+WHOSE TURN:       manager
+STOPPED BECAUSE:  finished the turn @ 2026-09-15 19:28 UTC
+STATUS:           A's closing measurement complete. All six of round 3's open items (A3-01
+                   through A3-06) confirmed closed, live, against the returned result. S3: all
+                   three papers (W7207740551, W7212228226/JECST, arxiv:2501.00663) meet Ruling
+                   10's target on every officially-required run this round; JECST's named
+                   furniture-splice sentence not dropped in any of 5 sampled runs (was 2/2 in
+                   round 3); 2501.00663's exact zero-width-space artifact confirmed folding and
+                   matching against the real ar5iv corpus. S4: both named Springer papers
+                   (W7212288571, W7204990919) show honest `source_unavailable` with the
+                   bounce-page reason, live, no longer masked by a Semantic Scholar 429; the
+                   round-3 rate-limit escalation is resolved (0/17 final `rate_limited` this
+                   round, was 3/17); found-figure count holds at 1/17, still the paper's own
+                   figure. S5/S6/S7: no regression. One new, currently within-ceiling finding
+                   (non-numeric figure cross-reference brackets, e.g. `[Fig. 3(b)]`) recorded for
+                   the standing-exclusions list, not blocking closure — see A4-01.
+OPEN ITEMS:       0 (A4-01, A4-02 informational only; POLICY note below for the standing list).
+GATE (0 open):    MET
 
-DONE:      round 1: 1-01..1-33 + 1-22b. round 2: 2-01..2-06. round 4: 4-01..4-05.
-GATE NOW:  tsc clean · eslint clean · vitest 2639/2639 (manager, cold, after 4-05).
-TODO:      A's closing measurement (round 4): S3 on the three papers under Ruling 10's target
-           (≤ 1 incorrect drop per paper; ≥ 2 key results on at least one of two runs); S4 tally
-           on the 17 (are the two Springer papers `source_unavailable` with the bounce reason?
-           S2 429s after the retry? any cover/logo among `found`?); JECST: no furniture-splice
-           drop; 2501.00663: the zero-width case matches; S5/S6/S7 one-line regression checks;
-           gate cold. If all met → `GATE: MET`, `WHOSE TURN: manager`.
+DONE:      round 1: 1-01..1-33 + 1-22b. round 2: 2-01..2-06. round 4: 4-01..4-05. round 4
+           (closing): A's measurement, all six round-3 items confirmed closed.
+GATE NOW:  tsc clean · eslint clean · vitest 2639/2639 (A, cold, closing round).
+TODO:      For the manager: browser eyeball pass only (A cannot open a browser) — the two
+           uploaded titles rendering on their own reading pages; the blank PDF's plain "no
+           readable text" message with no spinner; the scramble effect firing on a fresh
+           generation and staying plain on a cache hit; `/papers/openalex:W7212288571` and
+           `/papers/openalex:W7204990919` showing the new honest figure-absent treatment (a hard
+           refresh may be needed past `full-text.ts`'s 1h cache). POLICY: fold A4-01 (mid-sentence
+           non-numeric figure cross-reference brackets, e.g. `[Fig. 3(b)]`, `(figure 4)`) into the
+           standing-exclusions list next time this doc is touched — real, reproducible, but never
+           breached Ruling 10's `≤ 1` ceiling on any sampled run, so it does not reopen the loop.
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
@@ -115,6 +125,7 @@ part-way.
 | 1 | 5 (S3 S4 S5 S6 S7) | NOT MET — round 1 measured only, fixed nothing (by design). Gate also currently not clean: 1 pre-existing eslint error, unrelated to S3-S7 (POLICY flagged). |
 | 2 | 6 (A2-01..A2-06; A2-08 informational) | NOT MET — S5 and S6 fully closed (code+live API by A, visual by the manager). S3/S4/S7 each still carry real, execution-confirmed differences. Gate clean (tsc/eslint/vitest 2607/2607). |
 | 3 | 6 (A3-01..A3-06; A3-05 POLICY) | NOT MET — all 6 of round 2's items confirmed landed live except 2-04 (unverified, masked by a new rate-limit escalation, not failed). S5/S6 still fully closed. S3/S4 each carry new, narrower differences (model-variance keyResults count, a new zero-width-space drop mechanism, a Semantic Scholar rate-limit escalation). Gate clean (tsc/eslint/vitest 2631/2631). |
+| 4 | 0 (A4-01, A4-02 informational only) | **MET** — all 6 of round 3's items (A3-01..A3-06) confirmed closed live: S3 meets Ruling 10's target on all 3 papers on every officially-required run, including the JECST furniture-splice and 2501.00663 zero-width-space questions named by Ruling 10/11; S4 meets Ruling 10's target (both Springer papers `source_unavailable` with the bounce reason, rate-limit escalation resolved 0/17). S5/S6/S7 no regression. One new within-ceiling finding (A4-01) recorded for the standing-exclusions list, not blocking. Gate clean (tsc/eslint/vitest 2639/2639). |
 
 ---
 
