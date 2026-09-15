@@ -63,6 +63,15 @@ describe("normalizeForMatch", () => {
   it("2-02: still tells two different hyphenated words apart", () => {
     expect(normalizeForMatch("state-of-the-art")).not.toBe(normalizeForMatch("well-known"));
   });
+
+  it("4-02: folds a zero-width space the same way on both sides of an ar5iv math-rendering artifact", () => {
+    // ar5iv's MathML-to-text rendering can emit U+200B where a genuine
+    // word-boundary space belongs, mid-token — the model's own copied
+    // quote has an ordinary space there instead.
+    expect(normalizeForMatch("learning rate of 4\u200Be - 4")).toBe(
+      normalizeForMatch("learning rate of 4 e - 4"),
+    );
+  });
 });
 
 describe("evidenceSupported", () => {
@@ -164,6 +173,30 @@ describe("evidenceSupported", () => {
       "high- energy electron diffraction (rheed).";
     const paraphrase =
       "Every superlattice sample was fabricated via MBE growth and checked in situ with RHEED.";
+    expect(evidenceSupported(paraphrase, garbledCorpus)).toBe(false);
+  });
+
+  it("4-02: a model's clean quote matches a corpus garbled by an ar5iv zero-width-space artifact", () => {
+    // ar5iv's MathML-to-text rendering emits a zero-width space (U+200B)
+    // where a genuine word-boundary space belongs, e.g. splitting a
+    // learning-rate value from the exponent notation around it — the
+    // model's own copied quote has an ordinary space there instead.
+    const garbledCorpus =
+      "we trained every model with a learning rate of 4\u200Be - 4 and a batch size of 32, " +
+      "annealed over 100 epochs using a cosine schedule.";
+    const modelQuote =
+      "We trained every model with a learning rate of 4 e - 4 and a batch size of 32, " +
+      "annealed over 100 epochs using a cosine schedule.";
+    expect(evidenceSupported(modelQuote, garbledCorpus)).toBe(true);
+  });
+
+  it("4-02: the zero-width-space fold does not turn a paraphrase into a match", () => {
+    const garbledCorpus =
+      "we trained every model with a learning rate of 4\u200Be - 4 and a batch size of 32, " +
+      "annealed over 100 epochs using a cosine schedule.";
+    const paraphrase =
+      "Training used a small learning rate and a moderate batch size, with a gradually " +
+      "decreasing schedule across the run.";
     expect(evidenceSupported(paraphrase, garbledCorpus)).toBe(false);
   });
 });

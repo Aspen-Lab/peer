@@ -4913,3 +4913,54 @@ per Ruling 10's note, grep `reason` for "rate-limited" now, not only `status`, s
 but-not-final attempt no longer shows up as `status: "rate_limited"`.
 
 Commit: `fix(figures): a Semantic Scholar 429 no longer hides the publisher branch's own figure status`.
+
+#### Item 4-02 — A3-04: zero-width characters now fold to a space in the evidence checker
+
+**Change**: `web/src/lib/papers/evidence.ts`, `normalizeForMatch` — added `ZERO_WIDTH_CHARS =
+/[​‌‍﻿]/g` (U+200B/U+200C/U+200D/U+FEFF) next to `FRACTION_SLASHES`/
+`HYPHENATED_WORD_BREAK`, per B's fix direction exactly: folded to a literal **space**, not deleted
+(unlike the fraction-slash artifact), placed right after the soft-hyphen removal and before the
+`\s+` whitespace collapse, so "4​e" and "4 e" both normalise to "4 e". Updated both the new
+constant's own doc comment and the function's doc comment to name the fold.
+
+**Note on the diff mechanics**: writing invisible Unicode characters and `­`-shaped escape
+sequences through this session's normal file-editing tool kept silently mismatching (its string
+parameters collapse a typed `​`-style escape into the literal invisible character before it
+ever reaches the file, and this repo mixes LF (`evidence.ts`) and CRLF (`evidence.test.ts`) line
+endings) — worked around with small one-off Python scripts, run from this session's own OS scratch
+directory (never under the repo, nothing committed), that construct the exact bytes via `chr()` and
+apply `text.replace()` against an exact anchor. End state: the source file states the fold as an
+auditable escape sequence (`​` etc., matching `­`'s existing precedent) rather than an
+invisible raw character embedded in the file. No product-code approach changed; this is purely
+about how the edit was mechanically applied.
+
+**Tests added** (`evidence.test.ts`), mirroring the established 1-17/2-02 pair pattern exactly:
+one in `describe("normalizeForMatch", ...)` (B's own suggested case: `"learning rate of 4​e -
+4"` normalises the same as `"learning rate of 4 e - 4"`), and two in `describe("evidenceSupported",
+...)` — a realistic ar5iv-shaped corpus/quote pair (a learning-rate sentence with the zero-width
+space mid-token) that now matches, and the same corpus against an unrelated paraphrase, which still
+does not match.
+
+**Proved the new tests test the fix**: `git stash push -- src/lib/papers/evidence.ts` (source only,
+keeping the test file), ran `npx vitest run src/lib/papers/evidence.test.ts` — both new
+`normalizeForMatch` and `evidenceSupported` 4-02 tests failed exactly as expected (unequal strings;
+`evidenceSupported` false), the 21 other tests (including 1-17/2-02 and the 4-02
+paraphrase-rejection case, which needs no fold) stayed green. `git stash pop` restored the source;
+reran — 23/23 green.
+
+**Gate**: `npx tsc --noEmit` clean · `npx eslint .` clean · `npx vitest run --exclude
+"**/benchmark.test.ts"` → **2636/2636** (3 more than the post-4-01 2633). Regression locks
+re-verified in the same run: `evidence.test.ts`'s 1-17 L/d fold, the 2-02 hyphenation fold, the
+figure-caption corpus case, and the paraphrase-rejected case all still pass.
+
+**Found nothing in B's guide to contest.** Confirmed independently, as B did, that U+FEFF alone was
+already silently folded by the pre-existing `\s+` collapse (JS's `\s` matches it) — including it
+explicitly in `ZERO_WIDTH_CHARS` anyway, per Ruling 10 naming all four code points and B's reasoning
+that the whole invisible-character story should live in one visible place.
+
+**Live check**: not in this round's live-check list (only 4-01/4-03/4-04 are); no test-only
+verification needed beyond the above, since this is a pure text-normalisation fold with no network
+dependency. TODO for A: the closing measurement question named in Ruling 10 — does 2501.00663's (or
+any real ar5iv-sourced paper's) zero-width-space case now match on a live deep-report run?
+
+Commit: `fix(papers): fold zero-width characters to a space in the evidence checker`.

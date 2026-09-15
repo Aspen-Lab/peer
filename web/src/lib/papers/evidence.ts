@@ -71,11 +71,33 @@ const FRACTION_SLASHES = /[/⁄]\s*/g;
 const HYPHENATED_WORD_BREAK = /([A-Za-z])-\s*([A-Za-z])/g;
 
 /**
+ * U+200B (zero-width space), U+200C (zero-width non-joiner), U+200D
+ * (zero-width joiner), U+FEFF (zero-width no-break space / BOM). ar5iv's
+ * MathML-to-text rendering emits one of these where a genuine word-boundary
+ * space belongs (e.g. splitting a formula token from the prose around it) —
+ * the model's own copied quote has an ordinary space there instead. Folded
+ * to a literal **space**, not deleted: unlike the fraction-slash artifact
+ * above (a spurious extra token, correctly dropped), this character is
+ * doing the job of a word-boundary space in the source, so deleting it
+ * outright would erase a boundary the model's quote still has — an ar5iv
+ * MathML render of "4​e - 4" must fold to "4 e - 4", not "4e - 4".
+ * Placed before the `\s+` collapse below so the fold's own new space is
+ * normalised the same way as every other space. (U+FEFF alone is already
+ * matched by JS's `\s` in that collapse — ECMAScript's `WhiteSpace`
+ * production includes it — but it's named explicitly here too so the whole
+ * invisible-character story lives in one visible place rather than being
+ * split across an explicit fold and a regex quirk nobody would think to
+ * look for.) (4-02)
+ */
+const ZERO_WIDTH_CHARS = /[​‌‍﻿]/g;
+
+/**
  * Normalise for matching only — never for display. `cleanDisplayText` first,
  * so a quote that went through the sanitizer and a raw section text land in
  * the same alphabet (it already folds entities, mojibake, `×`, `±`, sub- and
  * superscripts). Then NFKC (ligatures `ﬁ` → `fi`), curly → straight quotes,
- * every dash → `-`, soft hyphens gone, citation brackets gone, both slash
+ * every dash → `-`, soft hyphens and zero-width characters gone (the latter
+ * folded to a space, not deleted — 4-02), citation brackets gone, both slash
  * characters gone (1-17), a hyphenated line-break re-joined (2-02),
  * lowercase, whitespace collapsed.
  */
@@ -86,6 +108,7 @@ export function normalizeForMatch(s: string): string {
     .replace(/[“”„‟]/g, '"')
     .replace(/[‐‑‒–—―−]/g, "-")
     .replace(/\u00AD/g, "")
+    .replace(ZERO_WIDTH_CHARS, " ")
     .replace(CITATION_BRACKETS, "")
     .replace(FRACTION_SLASHES, "")
     .replace(HYPHENATED_WORD_BREAK, "$1$2")
