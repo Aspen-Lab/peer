@@ -188,3 +188,114 @@ doc.save(sys.argv[1])
     expect(introduction?.text).not.toContain("DOI: 10.1234/test.0001");
   });
 });
+
+// 4-05 (Ruling 11, A3-05 residual): protective test for
+// `find_page_number_furniture` in extract_pdf_text.py — 4-03 only caught a
+// page number glued to OTHER footer text on the same line; PyMuPDF can also
+// emit the page number as its own bare line, which `find_running_furniture`
+// never sees as a repeat (nothing else on the line to strip it against). A
+// bare 1-4 digit line is furniture only when its value tracks the page
+// sequence (int(line) == page_index + k for one constant k, >= 3 pages); a
+// bare number that does NOT track the sequence (a table cell, a year
+// sitting alone on its own line) must be left exactly where it is. Same
+// real-PDF, same-Python-level test shape as the 4-03 block above.
+describe.skipIf(!PYTHON_AVAILABLE)("extract_pdf_text.py's page-number furniture removal — 4-05", () => {
+  let tempDir: string;
+
+  beforeAll(async () => {
+    tempDir = await mkdtemp(path.join(tmpdir(), "peer-pdfpagenum-"));
+  });
+
+  afterAll(async () => {
+    await rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
+  });
+
+  async function buildPdf(script: string, fileName: string): Promise<string> {
+    const outputPath = path.join(tempDir, fileName);
+    await execFileAsync("python", ["-c", script, outputPath]);
+    return outputPath;
+  }
+
+  it("removes bare page-number lines that track the page sequence, but keeps a bare '2024' that doesn't", async () => {
+    const pdfPath = await buildPdf(
+      `
+import sys
+import pymupdf as fitz
+doc = fitz.open()
+
+page1 = doc.new_page()
+page1.insert_text((72, 72), "Introduction", fontsize=14, fontname="helv")
+page1.insert_text((72, 100), "Body text discusses electrodes of identical", fontsize=11, fontname="helv")
+page1.insert_text((72, 800), "1", fontsize=8, fontname="helv")
+
+page2 = doc.new_page()
+page2.insert_text((72, 72), "thickness but different pore size were fabricated.", fontsize=11, fontname="helv")
+page2.insert_text((72, 150), "2024", fontsize=11, fontname="helv")
+page2.insert_text((72, 800), "2", fontsize=8, fontname="helv")
+
+page3 = doc.new_page()
+page3.insert_text((72, 72), "Further discussion continues on this page.", fontsize=11, fontname="helv")
+page3.insert_text((72, 800), "3", fontsize=8, fontname="helv")
+
+page4 = doc.new_page()
+page4.insert_text((72, 72), "The study concludes with final remarks here.", fontsize=11, fontname="helv")
+page4.insert_text((72, 800), "4", fontsize=8, fontname="helv")
+
+doc.save(sys.argv[1])
+`,
+      "page-number-furniture.pdf",
+    );
+
+    const result = await extractPdfTextFromPath(pdfPath);
+
+    expect(result.ok).toBe(true);
+    const introduction = result.doc?.sections.find((section) => section.canonical === "introduction");
+    // Exact join: proves "1"/"2"/"3"/"4" (each tracking page_index + 1) are
+    // gone from every seam they used to splice into, while "2024" (present
+    // on only one page, so it can never reach the >= 3-page bar) survives
+    // untouched in the middle of the text.
+    expect(introduction?.text).toBe(
+      "Body text discusses electrodes of identical thickness but different pore size were fabricated. " +
+        "2024 Further discussion continues on this page. The study concludes with final remarks here.",
+    );
+  });
+
+  it("leaves a bare number alone when it does not track the page sequence", async () => {
+    const pdfPath = await buildPdf(
+      `
+import sys
+import pymupdf as fitz
+doc = fitz.open()
+
+page1 = doc.new_page()
+page1.insert_text((72, 72), "Introduction", fontsize=14, fontname="helv")
+page1.insert_text((72, 100), "Experimental values were measured across three", fontsize=11, fontname="helv")
+page1.insert_text((72, 800), "2024", fontsize=8, fontname="helv")
+
+page2 = doc.new_page()
+page2.insert_text((72, 72), "trials to assess performance under load.", fontsize=11, fontname="helv")
+page2.insert_text((72, 800), "2024", fontsize=8, fontname="helv")
+
+page3 = doc.new_page()
+page3.insert_text((72, 72), "A separate note follows here for completeness.", fontsize=11, fontname="helv")
+page3.insert_text((72, 800), "2024", fontsize=8, fontname="helv")
+
+doc.save(sys.argv[1])
+`,
+      "page-number-not-tracking.pdf",
+    );
+
+    const result = await extractPdfTextFromPath(pdfPath);
+
+    expect(result.ok).toBe(true);
+    const introduction = result.doc?.sections.find((section) => section.canonical === "introduction");
+    // "2024" repeated as-is (not incrementing with the page) never shares a
+    // single k = value - page_index across pages, so it must stay exactly
+    // where the PDF put it — the un-tracking case a fuzzy matcher would get
+    // wrong.
+    expect(introduction?.text).toBe(
+      "Experimental values were measured across three 2024 trials to assess performance under load. " +
+        "2024 A separate note follows here for completeness. 2024",
+    );
+  });
+});

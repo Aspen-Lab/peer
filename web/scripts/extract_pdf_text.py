@@ -214,6 +214,57 @@ def find_running_furniture(pages_lines: list[list[tuple[fitz.Rect, str]]]) -> se
     return furniture
 
 
+_BARE_DIGITS_RE = re.compile(r"^\d{1,4}$")
+
+
+def find_page_number_furniture(
+    pages_lines: list[list[tuple[fitz.Rect, str]]],
+) -> dict[int, set[str]]:
+    """Return {page_index: {original line texts}} for a bare 1-4 digit line
+    that is itself a running page number.
+
+    4-05 (Ruling 11, A3-05 residual): PyMuPDF sometimes emits the page
+    number as its OWN line rather than glued to a footer
+    `find_running_furniture` above already catches (e.g. "10" and
+    "DOI: 10.1/x" as two separate lines, not one "10 DOI: 10.1/x" line) —
+    with nothing else on the line to strip it against, `find_running_furniture`
+    never sees it as a repeat.
+
+    Closed shape, no fuzzy matching: a bare-digit line is furniture only
+    when its value tracks the page sequence — `int(line) == page_index + k`
+    for ONE constant k that holds on at least FURNITURE_MIN_PAGES distinct
+    pages of the same document (the first page may be unnumbered; k itself
+    is found from the candidate lines — the most common `value - page_index`
+    among them, accepted only if it clears the same >= 3-page bar
+    `find_running_furniture` uses). A bare number that does not track the
+    sequence (a table cell, a year like "2024" sitting alone on its own
+    line, a constant reprinted on every page) is left alone — a page with
+    no line at the winning offset is simply skipped, not forced to match."""
+    # offset (k) -> distinct page indices that offered a bare-digit line at that k
+    pages_by_offset: dict[int, set[int]] = {}
+    # (page_index, k) -> the original line text(s) that produced it
+    text_by_offset: dict[tuple[int, int], set[str]] = {}
+    for page_index, lines in enumerate(pages_lines):
+        for _rect, text in lines:
+            if not _BARE_DIGITS_RE.match(text):
+                continue
+            offset = int(text) - page_index
+            pages_by_offset.setdefault(offset, set()).add(page_index)
+            text_by_offset.setdefault((page_index, offset), set()).add(text)
+
+    if not pages_by_offset:
+        return {}
+
+    best_offset = max(pages_by_offset, key=lambda offset: len(pages_by_offset[offset]))
+    if len(pages_by_offset[best_offset]) < FURNITURE_MIN_PAGES:
+        return {}
+
+    furniture_by_page: dict[int, set[str]] = {}
+    for page_index in pages_by_offset[best_offset]:
+        furniture_by_page[page_index] = text_by_offset[(page_index, best_offset)]
+    return furniture_by_page
+
+
 def find_heading_hits(pages_lines: list[list[tuple[fitz.Rect, str]]]) -> list[HeadingHit]:
     hits: list[HeadingHit] = []
     for page_index, lines in enumerate(pages_lines):
@@ -421,15 +472,26 @@ def extract_text(pdf_path: str, max_pages: int) -> dict:
         page_count = min(total_pages, max_pages)
         pages_lines = [extract_page_lines(doc[i]) for i in range(page_count)]
 
-        # 4-03: drop running-header/footer furniture before anything below
-        # ever sees it — a single injection point, so a repeated footer line
-        # can no longer be misread as a heading candidate, spliced into a
-        # caption merge, or joined mid-sentence into body text.
+        # 4-03/4-05: drop running-header/footer furniture (and a bare page-
+        # number line PyMuPDF sometimes emits on its own, per Ruling 11)
+        # before anything below ever sees it — a single injection point, so
+        # a repeated footer line or a sequence-tracking page number can no
+        # longer be misread as a heading candidate, spliced into a caption
+        # merge, or joined mid-sentence into body text. The page-number check
+        # is per-page (the same digits mean different things on different
+        # pages), so it is applied by page_index rather than folded into the
+        # flat `furniture` set above.
         furniture = find_running_furniture(pages_lines)
-        if furniture:
+        page_number_furniture = find_page_number_furniture(pages_lines)
+        if furniture or page_number_furniture:
             pages_lines = [
-                [(rect, text) for rect, text in lines if text not in furniture]
-                for lines in pages_lines
+                [
+                    (rect, text)
+                    for rect, text in lines
+                    if text not in furniture
+                    and text not in page_number_furniture.get(page_index, ())
+                ]
+                for page_index, lines in enumerate(pages_lines)
             ]
 
         hits = find_heading_hits(pages_lines)
