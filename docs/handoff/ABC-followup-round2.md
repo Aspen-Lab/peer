@@ -4320,3 +4320,16 @@ From Part 1's live route responses (`W7207740551` runs 1-2, `W7212228226`, `arxi
 (2-01 through 2-06) touched any S5/S6 file, and this spot-check confirms nothing drifted.
 
 Commit: `docs(abc): round 3 A part 4 - S5/S6 regression spot-check`.
+
+#### Part 5 — the gate, cold
+
+From `web/`, after confirming `git status` clean (no throwaway scaffolding left in the tracked
+tree — the two scratch vitest specs used in Part 1 were deleted before that part's commit):
+- `npx tsc --noEmit` -> **clean** (no output).
+- `npx eslint .` -> **clean** (no output).
+- `npx vitest run --exclude "**/benchmark.test.ts"` -> **2631/2631 passed**, 117/117 test files.
+
+Matches the stated `GATE NOW` baseline exactly — no regression from any of this turn's real-data
+calls or measurement scripts (A changed no product code).
+
+Commit: `docs(abc): round 3 A part 5 - the gate, cold`.
