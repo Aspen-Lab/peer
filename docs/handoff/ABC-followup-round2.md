@@ -2100,3 +2100,84 @@ Gate: tsc clean, eslint clean, vitest 2571/2571 (2568 + 3 new). This closes out 
 previous C named in the S4 (figures) guide — 1-19 through 1-22b are all landed now.
 
 Commit: `fix(figures): the PDF-figure fetch also reports a hard 401/402/403/451 as paywalled`.
+
+S4 (figures) is now fully landed: 1-19 through 1-22b all committed. Moving to S7 (upload a PDF),
+per Ruling 5's order (S4 -> S7) and Ruling 4's dependency order within S7 (storage helper, then the
+two PDF-extraction refactors, then the routes, then the two `upload:` pipeline branches, then the
+type addition, then the reading page, then the button last).
+
+**1-24 — `web/src/lib/papers/pdf-text.ts` — factored out `extractPdfTextFromPath(pdfPath)`.** DONE.
+Split `tryExtractPdfText(url)`'s download-then-extract body exactly as B specified: the new function
+covers `runExtractor` + the failure/empty-sections check + `normalize`, with no temp-dir lifecycle
+of its own (the caller owns the file's lifetime). `tryExtractPdfText(url)` is now
+download -> write to its own temp path -> call the shared function -> clean up, unchanged in
+observable behavior. Pure refactor, no new tests (none needed — same inputs produce the same
+outputs through the same code, confirmed by re-running the existing `pdf-text.test.ts` regression
+lock, still 1/1 passing).
+
+**1-25 — `web/src/lib/figures/pdf-extract.ts` — same split, for figures: `extractPdfCandidatesFromPath(pdfPath, source)`.**
+DONE, mirrors 1-24. One correction to B's fix direction while implementing it: B described the
+split as covering "temp-write through candidate-building," but the original `tryPdfCandidates`
+had **one** `try/catch/finally` wrapping both the `writeFile` and the `runExtractor`+candidate-build
+steps, with a single shared catch message for either kind of failure. Moving only the
+`runExtractor`+candidate-build half into the new function while leaving `writeFile` in
+`tryPdfCandidates` meant a `writeFile` failure would no longer be caught anywhere and would reject
+the promise instead of returning the graceful `source_unavailable` result it used to — an actual
+behavior change B's guide did not call for. Fixed by keeping a small inner `try/catch` around just
+`writeFile` in `tryPdfCandidates` (same message as before), so `extractPdfCandidatesFromPath`'s own
+`try/catch` only ever needs to cover what it always covered. Pure refactor otherwise; re-ran the new
+`pdf-extract.test.ts` (1-22b's file) as the regression lock, still 3/3 passing.
+
+**1-23 — new module `web/src/lib/papers/upload-store.ts`.** DONE, landed after 1-24/1-25 in commit
+order even though it's B's dependency root, since it needed `Paper.pageCount` (1-30) to exist before
+`uploadMetaToPaper` could type-check — pulled 1-30's one-field type addition forward into this same
+commit rather than leaving the module uncompilable until later; logged here per "deviating from B's
+guide is allowed when you trace why first." `UPLOAD_DIR` resolution: B's guide literally wrote
+`path.join(process.cwd(), ".local-data", "uploads")` but then separately asked for the same
+dual-candidate cwd resolution `pdf-text.ts`'s `resolveHelperScript` uses "or the upload directory
+could silently split across two locations" — those two instructions conflict as written, since
+`resolveHelperScript`'s `existsSync`-based candidate selection can't work on a directory that is
+gitignored and may not exist yet on a fresh checkout (there's nothing to check existence of before
+the first upload). Resolved it by anchoring the same dual-candidate check on `scripts/extract_pdf_text.py`
+instead — a file that **is** always checked in — so `UPLOAD_DIR` always resolves to the same root the
+Python helper itself resolves from, which is the actual property the ruling cares about (uploads and
+the extractor that reads them never split across two directories), without requiring the target
+directory itself to already exist.
+
+Everything else matches B's signature list: `sha16` (sha256, first 16 hex chars), `uploadId` /
+`bareUploadId` (round-trip helpers — `bareUploadId` requires exactly 16 lowercase hex chars, added
+beyond B's literal list since 1-28/1-29 need to parse an `upload:` id back out, not just build one),
+`pdfPath` / `metaPath`, `UploadMeta`, `readUploadMeta` / `writeUploadMeta`, and
+`writeUploadPdfIfAbsent` (the actual idempotency guarantee — skips the write, not an error, when the
+hash already has a file on disk, per Ruling 4). `uploadMetaToPaper` maps onto the **existing** `Paper`
+shape per 1-30's own reasoning (no parallel `sourceLinks` type): every field the meta doesn't know is
+an honest empty/undefined, never invented — `authors: []`, `venue: ""`, `relevanceReason: ""`,
+`source: "other"` (the closest honest fit; this codebase's `PaperSource` union has no "upload" case
+and nothing downstream branches on it for this path, confirmed by grep), `doi`/`pageCount` passed
+through only when the meta actually has them. Checked `RecordBlock` (`components/reader/record-block.tsx`)
+and `recommendationLine` (`lib/reader/recommendation.ts`) per B's instruction: both already degrade
+to "render nothing" on an empty venue/relevanceReason (`RecordBlock` returns `null` entirely when
+there's no published date, venue, or link; `recommendationLine` only ever reads a paper from the
+**feed store**, not the fetched record, so an upload paper's empty `relevanceReason` is never even
+consulted for that line) — no changes needed there, confirmed by reading rather than assumed. Did
+**not** wire `pageCount` into `GlanceBlock`'s "N facts" line — B's own text called the field "used
+only for upload records today, ignored everywhere else," and rendering it was described as "worth
+having," not required; leaving that as a follow-up rather than scope creep.
+
+Tests: new file `web/src/lib/papers/upload-store.test.ts`, 9 cases — `sha16` determinism/collision
+resistance, the `uploadId`/`bareUploadId` round trip (and rejection of a non-upload-shaped or
+short id), `writeUploadPdfIfAbsent`'s idempotency (a repeat "upload" with different bytes under the
+same claimed hash does not overwrite the stored file — proven by reverting the guard to always
+overwrite and watching the assertion fail, restored), `readUploadMeta`/`writeUploadMeta` round trip
+(including "unwritten hash reads as null, not an error"), and `uploadMetaToPaper`'s honesty (no
+invented author/venue/DOI when the meta doesn't have one; a real DOI/pageCount/abstract does carry
+through). Tests write through the real `UPLOAD_DIR` (there's no dependency-injection seam for it,
+unlike `DiskPoolCache`'s constructor-injected directory) but every test cleans up its own
+hash's files in `afterEach`; confirmed zero files remain under `web/.local-data/uploads/` after the
+run.
+
+Gate: tsc clean, eslint clean, vitest 2580/2580 (2571 + 9 new).
+
+Commit: `feat(upload): the shared storage module for uploaded PDFs, and the two PDF-extraction
+helpers it needs` (1-23, 1-24, 1-25, and 1-30's `Paper.pageCount` field, together — see the
+dependency note above for why 1-30 came forward).

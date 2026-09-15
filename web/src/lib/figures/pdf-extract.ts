@@ -286,7 +286,35 @@ export async function tryPdfCandidates(
   const pdfPath = path.join(tempDir, "paper.pdf");
 
   try {
-    await writeFile(pdfPath, bytes);
+    try {
+      await writeFile(pdfPath, bytes);
+    } catch (err) {
+      console.warn("[figures/pdf-extract] failed:", err);
+      return {
+        status: "source_unavailable",
+        candidates: [],
+        reason: "Peer found a legal PDF, but could not finish extracting its figures.",
+      };
+    }
+    return await extractPdfCandidatesFromPath(pdfPath, source);
+  } finally {
+    await rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
+  }
+}
+
+/**
+ * Run the figure extractor against a PDF that already lives on disk. Split
+ * out of `tryPdfCandidates` (1-25, mirrors `papers/pdf-text.ts`'s 1-24) for
+ * an uploaded PDF: the file is already private, server-local storage, so
+ * there's no reason to copy it into a *second* temp path just to run the
+ * same extractor — the caller owns the file's lifetime, so this function has
+ * no temp-dir lifecycle of its own.
+ */
+export async function extractPdfCandidatesFromPath(
+  pdfPath: string,
+  source: FigureSource,
+): Promise<PdfAttemptResult> {
+  try {
     const extracted = await runExtractor(pdfPath);
     if (!extracted) {
       return {
@@ -331,7 +359,5 @@ export async function tryPdfCandidates(
       candidates: [],
       reason: "Peer found a legal PDF, but could not finish extracting its figures.",
     };
-  } finally {
-    await rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
   }
 }

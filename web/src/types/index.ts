@@ -73,6 +73,13 @@ export interface Paper {
   feedback?: ItemFeedback;
   relevanceScore?: number;
   preferenceSignals?: PreferenceConcept[];
+  /**
+   * 1-30: only ever set for an uploaded PDF (`upload-store.ts`'s
+   * `uploadMetaToPaper`) — the record block can show "N pages" the way it
+   * shows a fact for an authors list that has one. Ignored everywhere else;
+   * no other paper source populates it.
+   */
+  pageCount?: number;
 }
 
 // ── Event ──

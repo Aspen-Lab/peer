@@ -208,6 +208,38 @@ function normalize(extractor: ExtractorOutput): ExtractedDocument {
 }
 
 /**
+ * Run the Python extractor against a PDF that already lives on disk, and
+ * normalize its output. Split out of `tryExtractPdfText` (1-24) for an
+ * uploaded PDF (`web/.local-data/uploads/<hash16>.pdf`, see
+ * `papers/upload-store.ts`): the file is already private, server-local
+ * storage, so there is no reason to download it again or copy it into a
+ * *second* temp path only to run the same extractor — the caller owns the
+ * file's lifetime (for an upload, that's "as long as the upload exists on
+ * disk", not "for the duration of this one extraction"), so this function
+ * has no temp-dir lifecycle of its own.
+ */
+export async function extractPdfTextFromPath(pdfPath: string): Promise<PdfTextResult> {
+  const ran = await runExtractor(pdfPath);
+  if ("failure" in ran) {
+    return {
+      ok: false,
+      reason:
+        ran.failure === "no-python"
+          ? "no-python"
+          : ran.failure === "no-script"
+            ? "no-extractor"
+            : "PDF text extractor failed on this server.",
+    };
+  }
+  const extractor = ran.output;
+  if (extractor.reason && (!extractor.sections || extractor.sections.length === 0)) {
+    return { ok: false, reason: extractor.reason };
+  }
+  const doc = normalize(extractor);
+  return { ok: true, doc };
+}
+
+/**
  * Download a legal PDF and extract sectioned text + figure captions.
  */
 export async function tryExtractPdfText(url: string): Promise<PdfTextResult> {
@@ -221,24 +253,7 @@ export async function tryExtractPdfText(url: string): Promise<PdfTextResult> {
 
   try {
     await writeFile(pdfPath, download.bytes);
-    const ran = await runExtractor(pdfPath);
-    if ("failure" in ran) {
-      return {
-        ok: false,
-        reason:
-          ran.failure === "no-python"
-            ? "no-python"
-            : ran.failure === "no-script"
-              ? "no-extractor"
-              : "PDF text extractor failed on this server.",
-      };
-    }
-    const extractor = ran.output;
-    if (extractor.reason && (!extractor.sections || extractor.sections.length === 0)) {
-      return { ok: false, reason: extractor.reason };
-    }
-    const doc = normalize(extractor);
-    return { ok: true, doc };
+    return await extractPdfTextFromPath(pdfPath);
   } catch (err) {
     return { ok: false, reason: String(err) };
   } finally {
