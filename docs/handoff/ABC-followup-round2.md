@@ -473,6 +473,42 @@ C's order for round 2: **A2-05 → A2-06 (if any code) → A2-03 → A2-04 → A
 
 ---
 
+## §1k. RULING 10 — round 4 scope: the last narrow fixes, then close (manager, 2026-09-15) — BINDING
+
+Round 3 closed S7 (full titles, empty-PDF state, route chain 200) on top of S5/S6. What remains
+is narrow. Round 4 works exactly these, then A measures once more and the loop closes:
+
+- **A3-02 / A3-03 (Semantic Scholar 429 masking the publisher outcome):** the final figure
+  diagnostic must never let a throttled *secondary* source hide what the *primary* branch found.
+  Rule: when the publisher/HTML/PDF branch ran, its outcome (`source_unavailable` with the
+  bounce-page reason, `paywalled`, `no_figures`) is the final status; a Semantic Scholar 429 is
+  appended to the reason text ("…; the figure index was rate-limited") and counted in the tally,
+  not promoted to the status. `rate_limited` is the status only when S2 was the sole branch that
+  could have produced a figure. Also: one retry of the S2 lookup after a 2–3 s wait on a 429
+  (bounded, not a loop). This lets A finally observe 2-04 on the two Springer papers.
+- **A3-04 (zero-width characters):** fold U+200B, U+200C, U+200D, U+FEFF out of both sides in
+  `normalizeForMatch`, next to the existing folds. Protective test with the ar5iv shape.
+- **A3-05 (page furniture spliced into a sentence):** in scope as PDF-extraction cleanup, not
+  matcher loosening. Rule: a line that repeats verbatim (after stripping a leading/trailing page
+  number) on ≥ 3 pages of the same PDF is running-header/footer furniture and is removed at
+  extraction (`extract_pdf_text.py` or `pdf-text.ts` — B says where; the Python side already has
+  the page structure). Protective test: a synthetic three-page text with a repeated "DOI: …"
+  line. Name for this class going forward: **furniture splice** (A tallies it by that name).
+- **A3-01 (the model sometimes returns one key result):** B reads the pass-2 prompt; if it does
+  not already ask for "two to four key results when the paper reports at least two findings",
+  C adds that sentence — nothing more. Then this is an accepted model-variance cost with A's
+  tally (key results per run); the S3 target for the loop's close is **≤ 1 incorrect drop per
+  paper, and ≥ 2 key results on at least one of two runs**.
+- **A3-06 (1 of 17 figures):** accepted as honest once A3-02/A3-03 make the Springer statuses
+  observable. The pool is 9 paywalled + Springer bot walls + a figure-less manuscript; Peer does
+  not scrape past walls. If the two Springer papers show an honest `source_unavailable`, S4
+  closes with the tally stated.
+
+C's order: **A3-02 → A3-04 → A3-05 → A3-01.** After C, A's round-4 measurement is the closing one
+if it meets the targets above; the manager then re-checks in the browser and reports to the user.
+
+---
+
 ## §2. ROLES — DO ONLY YOUR OWN JOB
 
 ### Agent A — Reviewer
