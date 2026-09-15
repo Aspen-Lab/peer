@@ -1651,3 +1651,38 @@ true`") needs **no changes** — it already takes a `Paper` object of any shape 
 is the payoff of Ruling 4's "no parallel upload pipeline" — confirmed by re-reading the whole
 route this round with upload ids specifically in mind, not just the parts A/the manager already
 flagged.
+
+### Round 1 — Agent C
+
+Branch confirmed `complimentary-enhancement-to-main-update` before starting; `git status` clean.
+Cold gate matched the expected baseline exactly: tsc clean, vitest 2544/2544, eslint failing on
+exactly one error (`quiz.tsx:46`). Working B's guide top to bottom, one commit per item, per
+Ruling 5's order (0 eslint → S6 → S5 → S3 → S4 → S7).
+
+**1-01 — `web/src/components/persona/quiz.tsx`.** DONE. Replaced the mount-effect
+`localStorage` read + `setResult(...)` with a module-level `QuizResultStore` (a tiny
+`useSyncExternalStore` external store, same idiom as `FigureRegistry` in
+`reader/report-sections.tsx`): `getSnapshot` re-reads `localStorage` only when the raw string
+changed (cached, so it never returns a fresh object reference when nothing changed — required or
+`useSyncExternalStore` would loop), `getServerSnapshot` returns `null` (server and first client
+paint both show the fresh-quiz screen, exactly as B's fix direction specified), and `set()` writes
+(or removes) the key and notifies listeners synchronously — same-tab writes no longer go through
+an effect at all, they happen directly in the `choose()`/`restart()` event handlers, which was
+always allowed (B's note: "the write path... is unaffected by this rule — only the mount-time read
+is the violation"). Both old effects are gone; no `useEffect` remains in the file. Did not disable
+the rule, did not use `startTransition`.
+
+Gate: tsc clean, eslint clean (0 errors, down from 1), vitest 2544/2544 (unchanged — no test
+covers this component, confirmed by B's grep and re-confirmed here).
+
+Tests at risk: none, per B's grep (`quiz.tsx|PersonaQuiz` has no `*.test.*` caller) — reconfirmed
+this round, still true. No fixture to update, nothing to prove-by-reverting since there is no test
+either direction; verified by hand instead: with the old effect-based code restored temporarily
+(`git stash` the file), `npx eslint .` reproduced the original single error; restoring the fix
+made it clean again — that is the "prove it" step for a lint rule (there is no runtime test to
+fail/pass here, only the linter's own verdict).
+
+Blast radius: only `web/src/app/persona/page.tsx` renders `<PersonaQuiz/>`; nothing else imports
+it or `QuizResultStore`. Self-contained, matches B's read.
+
+Commit: `fix(persona): read the quiz's saved result through a sync-safe store, not a mount effect`.
