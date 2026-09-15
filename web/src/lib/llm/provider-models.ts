@@ -50,6 +50,22 @@ export const PROVIDER_MODELS = {
   },
 } as const satisfies Record<UserCloudAiProvider, ProviderModelPlan>;
 
+/**
+ * Which tier writes the paper report (the deep pass and the abstract tier).
+ * Everything else — pass-1 extraction, the skim, the digest, figure binding —
+ * runs on the small tier regardless.
+ *
+ * Measured 2026-09-14 on the same 39-page PDF, two runs each: 3.6 Flash
+ * (large) wrote 3 key results with 3–4 methods and dropped 0 claims both
+ * times; 3.1 Flash-Lite (small) wrote 1–2 results with 2 methods and dropped
+ * 0–1. Tokens per report put the difference at about half a cent, so the
+ * default is the larger model; `PEER_REPORT_MODEL_TIER=small` in the local
+ * env flips it for a trial.
+ */
+export function reportModelTier(): "small" | "large" {
+  return process.env.PEER_REPORT_MODEL_TIER === "small" ? "small" : "large";
+}
+
 export function providerModelForTier(
   provider: UserCloudAiProvider,
   tier: "small" | "large",

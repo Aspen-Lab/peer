@@ -18,6 +18,7 @@
 // is sent directly to Pass 2 to save the extra round-trip.
 
 import type { Paper } from "@/types";
+import { reportModelTier } from "@/lib/llm/provider-models";
 import type { DigestProvider } from "@/lib/llm/providers/types";
 import {
   emptyReport,
@@ -372,7 +373,7 @@ async function runPass2(args: {
     // Room for the restored sections: novelty, per-result novelty, the fit
     // block and, on a review, its contents.
     maxTokens: 3200,
-    tier: "large",
+    tier: reportModelTier(),
   });
   const parsed = safeJson(raw);
   if (!parsed) return null;

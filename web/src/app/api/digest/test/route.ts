@@ -4,10 +4,8 @@ import { PROVIDER_MODELS } from "@/lib/llm/provider-models";
 import { canUseLocalServerProvider } from "@/lib/llm/providers/registry";
 
 // The same order the provider walks: the chosen Gemini 3 pair on the global
-// endpoint (the only one that serves them), then the configured region's
-// 2.5 Flash-Lite as the last resort.
+// endpoint, which is the only endpoint Peer uses.
 const GLOBAL_MODELS = [PROVIDER_MODELS.gemini.small, PROVIDER_MODELS.gemini.large];
-const REGIONAL_MODELS = ["gemini-2.5-flash-lite"];
 
 async function testModel(project: string, location: string, modelId: string): Promise<string> {
   const ai = new GoogleGenAI({
@@ -65,26 +63,6 @@ export async function GET() {
           configuredLocation: regionalLocation,
           allResults: results,
           note: "Peer's Gemini 3 models answer from the global Vertex endpoint.",
-        });
-      }
-      results[key] = "Empty response";
-    } catch (err) {
-      results[key] = classifyError(err);
-    }
-  }
-
-  for (const modelId of REGIONAL_MODELS) {
-    const key = `${regionalLocation}/${modelId}`;
-    try {
-      const text = await testModel(project, regionalLocation, modelId);
-      if (text) {
-        results[key] = "OK";
-        return NextResponse.json({
-          working: { location: regionalLocation, model: modelId, scope: "regional" },
-          credentials: creds ?? "not set",
-          configuredLocation: regionalLocation,
-          allResults: results,
-          note: "The Gemini 3 models did not answer; the configured region's 2.5 Flash-Lite still does.",
         });
       }
       results[key] = "Empty response";

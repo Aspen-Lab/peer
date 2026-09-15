@@ -20,16 +20,15 @@ type ModelTarget = {
   tier: ModelTier;
 };
 
-// The server's own Vertex project. Gemini 3 is served from the global
-// endpoint only — measured 2026-09-13 on this project, every 3.x id answered
-// 404 on us-central1 and 200 on global — so the chain leads with global and
-// the configured region is the last resort, where the retired 2.5 Flash-Lite
-// still answers for an account old enough to have it. Small before large:
-// the digest walks the whole chain and takes the first model that answers.
+// The server's own Vertex project. Global endpoint only, by the founder's
+// call (2026-09-14): Gemini 3 is served from nowhere else — measured on this
+// project, every 3.x id answered 404 on us-central1 and 200 on global — and
+// the retired 2.5 family is not kept as a regional fallback. Small before
+// large: the digest walks the whole chain and takes the first model that
+// answers.
 const VERTEX_MODEL_CHAIN = [
   { id: PROVIDER_MODELS.gemini.small, location: "global", tier: "small" },
   { id: "gemini-3.5-flash-lite", location: "global", tier: "small" },
-  { id: "gemini-2.5-flash-lite", location: "regional", tier: "small" },
   { id: PROVIDER_MODELS.gemini.large, location: "global", tier: "large" },
   { id: "gemini-3.8-flash", location: "global", tier: "large" },
 ] satisfies ModelTarget[];

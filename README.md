@@ -390,7 +390,8 @@ None are required for Tier 0 to function. Grouped by purpose:
 `SUPABASE_SERVICE_ROLE_KEY` (server/cron only).
 
 **Feed / tiers:** `PEER_FEED_AI_TIER` (0/1/2, default 0). `PEER_DIGEST_PROVIDER` is
-accepted only by local `next dev`.
+accepted only by local `next dev`. `PEER_REPORT_MODEL_TIER` (`large` default, or
+`small`) picks which Gemini tier writes the paper report; everything else runs small.
 
 **Local-development-only LLM provider keys:**
 `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GOOGLE_API_KEY`,

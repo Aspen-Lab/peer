@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { reportModelTier } from "@/lib/llm/provider-models";
 import { resolveProvider } from "@/lib/llm/providers/registry";
 import type { ProviderOverrideConfig } from "@/lib/llm/providers/types";
 import {
@@ -203,12 +204,7 @@ async function generateShallowReport(
       userPrompt: buildShallowPrompt(body),
       // Room for the restored sections (novelty, fit, review contents).
       maxTokens: 2400,
-      // The large tier, as the deep pass uses. The small model paraphrases
-      // its `evidence` sentences, and the verifier then drops the claim:
-      // measured 2026-09-13, 8 of 8 claims dropped on one abstract, leaving
-      // the results block with nothing but its headline. One report is
-      // ~2k tokens, so the step up is a fraction of a cent per paper.
-      tier: "large",
+      tier: reportModelTier(),
     });
     const parsed = parseJsonObject(raw);
     if (!parsed) return emptyReport("fallback");
