@@ -8154,3 +8154,63 @@ matching B's finding; confirmed by reading `profile.test.ts`'s test names.
 environmental, not a guide error.
 
 Commit: `feat(reader): fade the palette over 1s when the reader switches day/night mode`.
+
+#### Item 6-07 — S18: shared hover-cue on all four icons
+
+**Change**: `web/src/components/ui/button.tsx` — revived the previously-zero-consumer
+`iconButtonVariants` rather than a new component, per Ruling 15 exactly. Added `hover:scale-125`
+to the existing base class, kept `active:scale-90`, and added explicit `disabled:scale-100`
+(belt-and-suspenders, same reasoning as 6-01's upload button: a disabled native `<button>` can
+still match `:hover` in most browsers). Added a parallel `aria-disabled:scale-100
+aria-disabled:opacity-50 aria-disabled:cursor-not-allowed` block using Tailwind v4's built-in
+`aria-disabled:` variant, addressing B's real gotcha: S15's clamp state and S16's design both use
+`aria-disabled`, which the pre-existing `disabled:*` classes (compiling to the `:disabled`
+pseudo-class) do not match. S15's A/A buttons already set **both** the real `disabled` attribute
+and `aria-disabled` (done ahead of time in 6-04, per Ruling 15's "the clamp state is real disabled
++ mirrored aria-disabled"), so they get both blocks' styling for free; a future button using only
+`aria-disabled` (never landed this round) would still be covered.
+
+**Deviation from B's guide, logged, same reasoning as 6-01**: B's option (i) — splitting
+`transform` into its own `transition-transform duration-[120ms]` alongside a
+`transition-[color,background-color,box-shadow] duration-150` declaration — has the identical
+`transition-property`-clobbers-`transition-property` conflict already traced and avoided in 6-01
+(two separate Tailwind transition-property-setting utilities on one element don't merge; whichever
+wins the cascade replaces the other's property list outright). Took B's own explicitly-sanctioned
+fallback, option (ii): kept the swell inside the existing single
+`transition-[color,background-color,box-shadow,transform] duration-150 ease-snap` bracket, at
+150ms instead of the spec's literal 120ms — the same ~30ms accepted cost as 6-01, now applied
+consistently to both buttons that carry this swell.
+
+**Verified the scale utilities themselves don't have the transition-property conflict**: unlike
+`transition-*`, Tailwind's `scale-*` family composes via shared `--tw-scale-x`/`--tw-scale-y`
+CSS variables feeding one underlying `transform` declaration, so stacking
+`hover:scale-125 active:scale-90 disabled:scale-100 aria-disabled:scale-100` on one element is
+safe and already this codebase's own established pattern (e.g. the original pre-6-01
+`group-hover:scale-125 group-disabled:scale-100` pairing). Confirmed the four new buttons render
+with the full expected class list via a live DOM query (`className` read directly from the served
+page), and confirmed `iconButtonVariants` had zero existing consumers before this item (so no
+existing button anywhere regresses from this change) — matching B's "Blast radius" note exactly.
+
+**Explicitly excluded, restated**: the figure-lightbox trigger (6-08, next) does not get this
+hover-swell — it keeps `cursor-zoom-in` instead, per S12(a) and this item's own text. Nothing in
+6-08 imports `iconButtonVariants`.
+
+**Tests at risk**: none — `iconButtonVariants`/`IconButton` has no test file; a cva base-class
+addition isn't independently unit-testable without a rendering harness, matching B's own stated
+ceiling for this repo (confirmed again: no test anywhere simulates hover).
+
+**Gate**: `npx tsc --noEmit` clean · `npx eslint .` clean · `npx vitest run --exclude
+"**/benchmark.test.ts"` → 2650/2650 (unchanged).
+
+**Found nothing in B's guide to contest** beyond the already-logged transition-property deviation.
+
+**Live check**: confirmed live in the browser (dev server, hot-reloaded, no restart) — read the
+rendered `<button aria-label="Larger text">`'s own `className` directly off the served DOM and
+confirmed every expected class is present (`hover:scale-125 active:scale-90 disabled:scale-100
+disabled:opacity-50 disabled:cursor-wait aria-disabled:scale-100 aria-disabled:opacity-50
+aria-disabled:cursor-not-allowed`). Did not attempt to capture an actual `:hover`-triggered
+repaint this turn (this session's Browser pane was reported hidden during 6-06's check, which
+freezes more than just CSS transitions — real mouse-hover pixel verification is exactly the kind
+of interactive check the round-6 text assigns to the manager's own eyeball).
+
+Commit: `feat(reader): the four new icon buttons swell on hover like the upload button`.

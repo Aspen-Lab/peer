@@ -40,8 +40,22 @@ export const buttonVariants = cva(
 export const iconButtonVariants = cva(
   [
     "inline-flex items-center justify-center rounded-full shrink-0",
+    // S18: the hover swell shares this one bracket's 150ms with
+    // color/background-color/box-shadow rather than a separate
+    // transition-transform at the spec's literal 120ms — Tailwind's
+    // per-property transition-* utilities all set the single
+    // transition-property value outright, so a second declaration on the
+    // same element would replace this one's list, not merge with it (the
+    // same conflict upload-button.tsx's own hover swell, S13, traced and
+    // avoided the same way). A ~30ms difference is the accepted cost.
     "transition-[color,background-color,box-shadow,transform] duration-150 ease-snap",
-    "active:scale-90 disabled:opacity-50 disabled:cursor-wait",
+    "hover:scale-125 active:scale-90",
+    "disabled:scale-100 disabled:opacity-50 disabled:cursor-wait",
+    // S15/S16's clamp/inactive state uses aria-disabled, not the native
+    // disabled attribute — Tailwind v4's aria-disabled: variant covers the
+    // case a button carries only that; the ones that also set the real
+    // `disabled` attribute (S15's clamp) get the block above for free too.
+    "aria-disabled:scale-100 aria-disabled:opacity-50 aria-disabled:cursor-not-allowed",
   ].join(" "),
   {
     variants: {
