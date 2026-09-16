@@ -9,11 +9,13 @@
 import Link from "next/link";
 import type { Ref } from "react";
 import { buttonVariants, IconButton } from "@/components/ui/button";
-import { IconArrowUpRight, IconLink } from "@/components/icons";
+import { IconArrowUpRight, IconLink, IconMoon, IconSun } from "@/components/icons";
 import { Kbd } from "@/components/ui/kbd";
 import { cn } from "@/lib/cn";
 import type { PaperReading } from "@/lib/papers/reading";
+import { useProfileStore } from "@/store/profile";
 import { READING_SCALE_STEPS, useReadingPrefsStore } from "@/store/reading-prefs";
+import type { ColorTheme, ThemeMode } from "@/types";
 import { BUTTON, DOI, PROGRESS_LABEL, progressSuffix } from "./copy";
 
 const TOUCH_TARGET = "[@media(hover:none)]:min-h-11";
@@ -73,6 +75,16 @@ export function DecisionBlock({
   const decreaseScale = useReadingPrefsStore((s) => s.decreaseScale);
   const atMaxScale = scaleIndex >= READING_SCALE_STEPS.length - 1;
   const atMinScale = scaleIndex <= 0;
+
+  // S16: sun = system (the existing default), moon = night — the same
+  // `mode:accent` plumbing the Profile page's own picker already drives, so
+  // the two stay in sync through one source of truth (`profile.colorTheme`).
+  const colorTheme = useProfileStore((s) => s.profile.colorTheme);
+  const updateColorTheme = useProfileStore((s) => s.updateColorTheme);
+  const [mode, accent] = colorTheme.split(":") as [ThemeMode, string];
+  const setMode = (nextMode: "system" | "dark") => {
+    updateColorTheme(`${nextMode}:${accent}` as ColorTheme);
+  };
 
   return (
     <div ref={ref}>
@@ -181,6 +193,22 @@ export function DecisionBlock({
           className="font-reading text-meta font-semibold"
         >
           A
+        </IconButton>
+        <IconButton
+          aria-label="Day reading mode"
+          aria-pressed={mode === "system"}
+          tone={mode === "system" ? "soft" : "ghost"}
+          onClick={() => setMode("system")}
+        >
+          <IconSun size={14} />
+        </IconButton>
+        <IconButton
+          aria-label="Night reading mode"
+          aria-pressed={mode === "dark"}
+          tone={mode === "dark" ? "soft" : "ghost"}
+          onClick={() => setMode("dark")}
+        >
+          <IconMoon size={14} />
         </IconButton>
       </div>
 

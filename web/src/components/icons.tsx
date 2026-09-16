@@ -68,6 +68,25 @@ export function IconCalendar({ size = 12, strokeWidth = 2, className }: IconProp
   );
 }
 
+/** S16: day mode — the sun, one of the reader's two reading-mode buttons. */
+export function IconSun({ size = 12, strokeWidth = 2, className }: IconProps) {
+  return (
+    <svg {...strokeProps(size, strokeWidth, className)}>
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 3v2M12 19v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M3 12h2M19 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
+    </svg>
+  );
+}
+
+/** S16: night mode — the moon, the reader's other reading-mode button. */
+export function IconMoon({ size = 12, strokeWidth = 2, className }: IconProps) {
+  return (
+    <svg {...strokeProps(size, strokeWidth, className)}>
+      <path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5z" />
+    </svg>
+  );
+}
+
 export function IconBullseye({ size = 12, strokeWidth = 2, className }: IconProps) {
   return (
     <svg {...strokeProps(size, strokeWidth, className)}>

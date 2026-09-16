@@ -8060,3 +8060,42 @@ panel/buttons themselves stay fixed) is the manager's own browser click-through 
 text's assignment, not attempted here.
 
 Commit: `feat(reader): font-size controls (A / A) for the deep report`.
+
+#### Item 6-05 — S16: sun / moon day/night toggle
+
+**Change**: `web/src/components/icons.tsx` — two new hand-drawn icons, `IconSun` (a circle plus
+eight short rays) and `IconMoon` (a crescent via one overlapping-circle path), matching this
+file's existing 24×24 stroke convention exactly (own coordinates, not copied from any icon
+library). `web/src/components/reader/decision-block.tsx` — two more `IconButton`s appended to the
+same S15 row, reading `profile.colorTheme` and calling the existing, **unmodified**
+`updateColorTheme` action: `onClick` reads the current accent off
+`colorTheme.split(":")[1]` and calls `updateColorTheme(\`system:${accent}\`)` /
+`` `dark:${accent}` `` — the exact pattern `ColorThemePicker` on the Profile page already runs, so
+both surfaces write the same store field and stay in sync for free. `aria-pressed={mode ===
+"system"}` / `{mode === "dark"}`, matching the same idiom `DecisionBlock`'s own Save button and
+`ColorThemePicker` already use. Active-state mark, per S16's "filled vs outline" requirement:
+`tone={mode === X ? "soft" : "ghost"}` on the `IconButton`, the same soft/ghost pair
+`iconButtonVariants` already defines — the pressed icon gets a filled pill, the other stays plain.
+
+**Verified, not assumed**: re-read `applyColorTheme`/`html[data-mode="dark"]`/`@media
+(prefers-color-scheme: dark) html[data-mode="system"]` — confirmed sun=system / moon=dark is
+already a complete, correct mapping with the exact palette B quoted; zero new CSS needed for this
+item (S17 touches CSS separately, next). Confirmed `ThemeMode` has a third value, `"light"`,
+reachable only from the Profile page's picker — if a reader arrives with `mode === "light"`,
+neither button shows pressed, an accurate reflection of a state this 2-button control cannot fully
+express (out of scope, not a bug, per B's own note).
+
+**Tests at risk**: none — `theme.ts`/`profile.ts`'s `colorTheme` plumbing is unmodified (no
+signature changes), matching B's finding exactly.
+
+**Gate**: `npx tsc --noEmit` clean · `npx eslint .` clean · `npx vitest run --exclude
+"**/benchmark.test.ts"` → 2650/2650 (unchanged from 6-04 — no new test possible/needed here,
+matching B's prediction).
+
+**Found nothing in B's guide to contest.**
+
+**Live check**: hot-reloadable — no restart needed. The interactive check (clicking sun/moon
+actually flips the palette, and the Profile page's own picker reflects the same change) is the
+manager's browser click-through, not attempted here.
+
+Commit: `feat(reader): sun / moon day-night reading mode toggle`.
