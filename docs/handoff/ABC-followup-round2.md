@@ -6147,3 +6147,107 @@ rehydrated-`papers` cold-start path at all — a genuine coverage gap C should c
 ~50 entries add on the order of tens of KB, far under any browser storage ceiling.
 
 Commit: `docs(abc): round 5 B part 2 - A5-05 fix guide (5-04)`.
+
+#### Item 5-05 — A5-03: the first `/api/figure` call's ≤ 10 s bound, enumerated — no code change
+
+**Classification: informational, closed by Ruling 12** (which already restated the target as
+"≤ 10 s ... bounded by the per-source fetch timeouts, and 5.7–9.4 s is the honest cost of trying
+every legal source once"). B's job here is to name the timeouts, per the brief, not to propose a
+further speed-up A5-03 was not asked for.
+
+**Enumerated, by reading `web/src/lib/figures/extract.ts` and `pdf-extract.ts`:**
+- `extract.ts`'s own `FETCH_TIMEOUT_MS = 7_000` (line 7) bounds every HTML/publisher-page
+  `timedFetch` — including a bounce-page retry (lines 1225-1231), which can cost up to **two**
+  sequential 7 s attempts on one link.
+- `pdf-extract.ts` has its own, separate `FETCH_TIMEOUT_MS = 10_000` (line 15) for a PDF download
+  attempt.
+- `SEMANTIC_SCHOLAR_ENRICH_GRACE_MS = 3_000` (line 829) caps how long the pool build waits on the
+  Semantic Scholar enrichment lookup **once candidates already exist** from the paper's own
+  sources (`Promise.race` against the grace timer, line 1560-1566) — with nothing in hand yet, it
+  awaits the S2 call fully instead.
+- For a non-arXiv paper (every paper A sampled except the `found` arXiv control), `buildCandidatePool`
+  (line 1467) walks `collectSourceLinks(input)`'s links **sequentially, by design** ("respect
+  external rate limits on publisher sites", line ~1520) — PDF links via `tryPdfCandidates` (10 s
+  each), HTML links via `tryHtmlCandidates` (7 s each, doubled on a bounce retry) — while the one
+  Semantic Scholar lookup for the paper runs in parallel alongside this walk, not stacked on top
+  of it.
+
+**Why the observed max (9.39 s) stays under 10 s in practice, but is not a structural guarantee**:
+none of A's 5 non-`found` sampled papers actually hung to any of these timeouts' full duration —
+each publisher/bounce host responded (with a bounce page, a 403, a redirect) in well under a
+second to a few seconds, not by timing out. The ≤ 10 s figure Ruling 12 accepted is the *honest
+cost of the sources this round's papers actually have*, not a hard ceiling the code enforces. A
+paper whose source links genuinely hang (a host that accepts the connection but never responds)
+could in theory stack two HTML timeouts and a PDF timeout past 10 s — an accepted, not-currently-
+observed structural risk, named here for completeness per the brief's honesty requirement, not a
+defect to fix this round.
+
+**What shows when every candidate is rejected**: unchanged from rounds 1-4 —
+`finalDiagnostic(pool.attempts)` returns the most specific real status
+(`paywalled`/`no_figures`/`source_unavailable`/`rate_limited`) with the throttle note folded in
+when applicable; never a fabricated figure. No action item.
+
+#### Item 5-06 — A5-04: cache the query-less og:image last-resort outcome — the actual fix for the cached-call miss
+
+**File**: `web/src/lib/figures/extract.ts`. **Classification: MISSING** (the empty-pool cache
+(`candidatePoolCache`, `EMPTY_POOL_CACHE_TTL_MS = 10 * 60 * 1000`, lines 1454-1461) exists and is
+hit — confirmed by reading `getCandidatePool`, lines 1587-1607 — but a second, uncached network
+call still runs downstream of it on every no-query request).
+
+**Verified by reading `extractFigure` end to end (lines 1703-1751).** When `pool.candidates.length
+=== 0` (the paywalled/bot-walled shape every A5-04 paper hit) **and** the call has no `query`
+(the reading page's own hero-figure lookup, not a per-claim `query=` lookup) **and** `input.url`
+is present, the function does an **unconditional fresh `timedFetch(input.url)`** (line ~1730) to
+look for an `og:image` meta tag as a last resort, *every single time this branch is reached* — this
+sits entirely outside `getCandidatePool`'s cache, so a "cached" empty-pool call still pays a live
+network round trip (`FETCH_TIMEOUT_MS = 7_000` ceiling; A measured 191 ms–2.36 s in practice) on
+every visit within the 10-minute empty-pool TTL window.
+
+**Why this fetch is very likely to fail again, every time, for exactly the papers A tested**:
+`buildCandidatePool`'s own HTML-fetch branch (line ~1243-1246, comment: *"fold the graphical-
+abstract/og:image fallback in here ... so `getFigurePool` ... can reach it too"*) **already**
+tries the identical og:image extraction (`ogImageCandidate`) as part of building the pool in the
+first place, whenever it successfully fetches a source page's HTML. For the 5 papers A sampled,
+the pool came back **empty** specifically because the bounce-page/paywall detector (lines
+1225-1240) recognized the page as blocked and returned `paywalled`/`source_unavailable` **before**
+ever reaching the og:image extraction step on that HTML — i.e. the pool-building code already
+tried, on the same blocked page, and the query-less "last resort" at the bottom of `extractFigure`
+re-fetches that *same* URL a second time, hitting the *same* wall, for no new information — it
+only pays off for the shape the comment names as its real reason to exist: a paper `buildCandidatePool`
+never fetches `input.url` for at all (its own example: arXiv, which skips `collectSourceLinks`
+entirely) — not the paywalled/bot-walled shape this round's cached-call numbers were measured on.
+
+**Fix direction**: extend `CachedPool` (interface at line 1449: `{candidates, attempts, ts}`) with
+a fourth, optional field — e.g. `ogFallback?: FigureCandidate | null` (`undefined` = not yet
+tried, `null` = tried and found nothing, a candidate = tried and found one). Compute it lazily,
+inside `extractFigure`'s existing query-less branch, only when `pool.ogFallback === undefined`;
+write the result back onto the **same `pool` object** `getCandidatePool` returned (it is the exact
+object reference stored in `candidatePoolCache`'s `Map`, not a copy — confirmed by tracing
+`getCandidatePool`/`buildCandidatePool`'s return flow, lines 1587-1607), so a mutation is visible
+to every future cache hit for the same key with zero new cache-management code. The existing
+`EMPTY_POOL_CACHE_TTL_MS` (10 min) then governs this field's lifetime for free, since the whole
+`CachedPool` entry expires together — no second cache, no new TTL to keep in sync. This is a
+minimal, self-consistent change: on the first no-query call for an empty pool, pay the one
+`timedFetch`; every subsequent call within the TTL reads `pool.ogFallback` directly, comfortably
+inside the 300 ms target Ruling 12 restated.
+
+**What shows when every candidate is rejected**: unchanged — a cached `null` `ogFallback` still
+falls through to `finalDiagnostic(pool.attempts)`, the same honest status as today; nothing is
+fabricated because the cache stores "tried and found nothing" as a real, distinct value from
+"never tried."
+
+**Tests at risk.** Grepped `web/src/lib/figures/extract.test.ts` and `web/src/app/api/figure/`:
+**zero existing tests call `extractFigure` directly** (the test file only exercises internal
+helpers — `tryHtmlCandidates`, `getFigurePool`, `pickFigureForCaption` — and there is no
+`route.test.ts` for `/api/figure` at all). `getFigurePool`'s own tests (lines 424-452) call the
+*public* function, which already re-maps `CachedPool` into a narrower `{entries, attempted}`
+shape (lines 1636-1645) that does not surface `ts` or the new `ogFallback` field — confirmed by
+reading `getFigurePool`'s body — so this change is invisible to `getFigurePool`'s existing
+callers and tests. **This means the fix C writes here has no existing regression protection
+at all** — C should add a new, targeted test: mock `timedFetch`/the underlying `fetch`, call
+`extractFigure` twice with the same no-query input against an empty pool, and assert the mock
+fired once, not twice.
+
+**Blast radius**: one file, one new optional field on an internal (non-exported) type, additive.
+
+Commit: `docs(abc): round 5 B part 3 - A5-03/A5-04 fix guide (5-05, 5-06)`.
