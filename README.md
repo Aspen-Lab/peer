@@ -411,9 +411,10 @@ Do not add these to Vercel. Preview/production builds fail when operator-funded 
 credentials are present; online users must supply their own key through the BYOK UI.
 
 **Search / enrichment:** `TAVILY_API_KEY`, `BRAVE_SEARCH_API_KEY`,
-`SEMANTIC_SCHOLAR_API_KEY` (raises Semantic Scholar's per-IP figure-lookup rate limit; optional —
-without one, Peer queues and paces those requests to stay under the unauthenticated limit instead
-of failing), `OPENALEX_EMAIL`, `UNPAYWALL_EMAIL` (polite-pool emails).
+`SEMANTIC_SCHOLAR_API_KEY` (one server-side key, shared by every reader of the deployment; free from
+semanticscholar.org/product/api — the Academic Graph API is the one Peer calls; a keyed account is
+allowed 1 request per second, and Peer paces its figure lookups to that. Optional — without one,
+Peer queues and paces those requests under the unauthenticated per-IP limit instead of failing), `OPENALEX_EMAIL`, `UNPAYWALL_EMAIL` (polite-pool emails).
 
 **Jobs feed (all optional — Remotive/Arbeitnow/Himalayas run keyless):**
 `ADZUNA_APP_ID` + `ADZUNA_APP_KEY` (free at developer.adzuna.com; best industry

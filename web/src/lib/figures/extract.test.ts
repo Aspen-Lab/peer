@@ -218,6 +218,36 @@ describe("trySemanticScholarCandidates — 1-20, concurrency cap + minimum inter
     await Promise.all([p1, p2]);
   });
 
+  it("paces to one request per second when SEMANTIC_SCHOLAR_API_KEY is set", async () => {
+    // Semantic Scholar's keyed limit is 1 RPS per key, and the key is shared
+    // by every reader of a deployment — so with a key the spacing widens.
+    vi.stubEnv("SEMANTIC_SCHOLAR_API_KEY", "test-key");
+    const starts: number[] = [];
+    globalThis.fetch = vi.fn(async () => {
+      starts.push(Date.now());
+      return new Response(JSON.stringify({ figures: [] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }) as unknown as typeof fetch;
+
+    const p1 = trySemanticScholarCandidates("DOI:1");
+    await vi.advanceTimersByTimeAsync(0);
+    const p2 = trySemanticScholarCandidates("DOI:2");
+    await vi.advanceTimersByTimeAsync(0);
+    expect(starts.length).toBe(1);
+
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(starts.length).toBe(1);
+
+    await vi.advanceTimersByTimeAsync(101);
+    expect(starts.length).toBe(2);
+    expect(starts[1] - starts[0]).toBeGreaterThanOrEqual(1100);
+
+    await Promise.all([p1, p2]);
+    vi.unstubAllEnvs();
+  });
+
   it("reports a 429 as rate_limited, not source_unavailable, after one bounded retry", async () => {
     // 4-01: a 429 is no longer final on the first try — one retry follows a
     // ~2.5s wait (re-entering the same concurrency queue) before the lookup

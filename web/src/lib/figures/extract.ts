@@ -768,6 +768,16 @@ interface SSFigure {
 // which paper or which request triggered it.
 const SEMANTIC_SCHOLAR_MAX_CONCURRENT = 2;
 const SEMANTIC_SCHOLAR_MIN_INTERVAL_MS = 350;
+// With an API key Semantic Scholar's published limit is 1 request per second
+// on every endpoint, per key — and the key is shared by every reader of this
+// deployment, so the queue paces to that instead of the unauthenticated
+// spacing. Read at call time so a test (or a late-loaded env) can flip it.
+const SEMANTIC_SCHOLAR_KEYED_MIN_INTERVAL_MS = 1100;
+function semanticScholarMinIntervalMs(): number {
+  return process.env.SEMANTIC_SCHOLAR_API_KEY
+    ? SEMANTIC_SCHOLAR_KEYED_MIN_INTERVAL_MS
+    : SEMANTIC_SCHOLAR_MIN_INTERVAL_MS;
+}
 let semanticScholarActive = 0;
 let semanticScholarLastStart = 0;
 // Chains each caller's admission check onto the previous one, so concurrent
@@ -783,7 +793,7 @@ async function acquireSemanticScholarSlot(): Promise<void> {
     while (semanticScholarActive >= SEMANTIC_SCHOLAR_MAX_CONCURRENT) {
       await waitMs(25);
     }
-    const wait = semanticScholarLastStart + SEMANTIC_SCHOLAR_MIN_INTERVAL_MS - Date.now();
+    const wait = semanticScholarLastStart + semanticScholarMinIntervalMs() - Date.now();
     if (wait > 0) await waitMs(wait);
     semanticScholarLastStart = Date.now();
     semanticScholarActive += 1;
