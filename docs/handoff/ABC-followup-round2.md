@@ -6529,3 +6529,51 @@ browser check is the honest way to confirm `setError` renders the message; not r
 without a request").
 
 Commit: `fix(upload): the client refuses an over-cap file before sending it`.
+
+#### Item 5-04 — A5-05: persist today's briefing papers (Ruling 12/13 direction 1)
+
+**Change**: `web/src/store/feed.ts`, the `persist` `partialize` block — added `papers:
+state.papers`, exactly the one line B specified, with a comment naming why (the reading page's
+existing `storePaper` lookup already prefers this array over a fetch; it only fails today because
+`papers` was never persisted) and the accepted staleness cost (bounded, save/feedback fields
+re-applied live regardless — both per B's own reasoning, restated here rather than only in this
+log so a future reader of the source sees it too).
+
+**Tests added** (`feed.test.ts`): "5-04: persists today's briefing papers, not just saved ones" —
+sets `papers` via `setState`, calls the captured `partialize` function directly (same pattern the
+existing "persists all three completion maps" test already uses), asserts the result contains the
+paper. No change needed to the existing `toMatchObject`-based test (confirmed by B: a subset
+match, doesn't break on an added key) or any other test — grepped `partialize` across every test
+file, only this one references it.
+
+**Proved the new test tests the fix**: `git stash push -- src/store/feed.ts` (source only), ran
+`npx vitest run src/store/feed.test.ts` — the new test failed (`persisted` object had no `papers`
+key, `toMatchObject` reported the full actual object with every other persisted key present but
+not `papers`). `git stash pop` restored the source; reran — 8/8 green.
+
+**Gate**: `npx tsc --noEmit` clean · `npx eslint .` clean · `npx vitest run --exclude
+"**/benchmark.test.ts"` → 2645/2645 (1 more than 5-03's 2644). Regression locks re-verified in
+the same run: `feed.test.ts`'s own hydration/decoration tests (the "simulate hydration" case at
+line ~212 that already sets `savedPapers` directly) and `profile-hydration.test.ts` (unrelated
+store, run separately too) both still pass.
+
+**Ruling 12's "also asked" diagnostic (why `/api/papers/<id>` takes 4.57 s cold, and whether the
+page needs to wait for it all)**: not a directed fix this round (B's own classification:
+informational). No code change made for it — B's noted future-enhancement (parallelizing the two
+sequential Semantic Scholar enrichment calls in `enrich.ts`, or returning the OpenAlex-derived
+paper immediately and enriching the abstract in the background) is out of this round's scope and
+not attempted, since 5-04 alone already meets the 1 s target for the specific "cached report"
+case Ruling 12 named.
+
+**Why not direction 2 as well**: not attempted — B's own investigation (traced in the fix guide)
+found it requires decoupling `reportKey` computation from a full `Paper` object and restructuring
+`page.tsx`'s binary paper-resolved/`LoadingMat` gate to accept a stub-paper state, a materially
+larger and narrower change for a smaller win than direction 1. Ruling 13 confirmed direction 1
+alone as B recommended; nothing to add.
+
+**Live check**: **not possible without a browser** (Ruling 12/13's own S10(a) target — "the
+report text is on screen within 1 s of navigation" — needs the actual client render/hydration
+path, which no `curl` can exercise). Left for the manager's browser check per the round's own
+instructions.
+
+Commit: `fix(feed): persist today's briefing papers so a refresh finds them locally`.

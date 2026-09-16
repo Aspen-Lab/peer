@@ -460,6 +460,31 @@ describe("feed lane loading", () => {
     expect(replacementPayloads[5]).not.toHaveProperty("submittedAt");
   });
 
+  it("5-04: persists today's briefing papers, not just saved ones", () => {
+    useFeedStore.setState({
+      papers: [
+        {
+          id: "paper-today",
+          title: "Today's briefing paper",
+          authors: ["Researcher"],
+          relevanceReason: "Matches materials.",
+          venue: "Example Journal",
+          source: "other",
+          summaryIntro: "Intro.",
+          summaryExperimentKeywords: [],
+          summaryResultDiscussion: "Result.",
+          isSaved: false,
+        },
+      ],
+    });
+
+    expect(persistenceCapture.partialize).toBeTypeOf("function");
+    const persisted = persistenceCapture.partialize?.(useFeedStore.getState());
+    expect(persisted).toMatchObject({
+      papers: [expect.objectContaining({ id: "paper-today" })],
+    });
+  });
+
   it("persists all three completion maps", () => {
     useFeedStore.setState({
       appliedAt: { "job-persisted": "2026-07-30T15:00:00.000Z" },
