@@ -6046,3 +6046,104 @@ own "before reading its bytes" test uses on the server side).
 **Blast radius**: one file, additive, no existing behavior removed.
 
 Commit: `docs(abc): round 5 B part 1 - S11 fix guide (5-01..5-03)`.
+
+#### Item 5-04 — A5-05: persist today's briefing papers (Ruling 12 direction 1) — recommended, the smaller of the two
+
+**File**: `web/src/store/feed.ts`, the `persist` `partialize` block (lines 1665-1679).
+**Classification: MISSING** — `papers` (today's briefing array, `state.papers: Paper[]`, line
+549) is not one of the keys returned by `partialize`, so `skipHydration`'s rehydration
+(`<StoreHydrator/>`) never restores it after a hard refresh or fresh tab; only `savedPapers` and
+the feedback/completion maps survive.
+
+**Read, confirmed by tracing `papers/[id]/page.tsx` (lines 141-190):**
+`storePaper = feedPapers.find(p => p.id === id) ?? savedPapers.find(p => p.id === id) ??
+pendingPaper`, where `feedPapers = useFeedStore(s => s.papers)`. So today: a **saved** paper
+already survives a hard refresh (found via the persisted `savedPapers`); an **unsaved** paper the
+user only saw in today's briefing does not — `feedPapers` rehydrates empty, `storePaper` is
+`undefined`, `shouldFetchById` fires, and the whole page (cached report included, since
+`use-model-report.ts`'s `reportKey` needs `paper.id` to even compute — see below) blocks on
+`GET /api/papers/<id>` regardless of whether a report was already cached for that exact paper.
+This is the more common shape of the user's complaint ("已经 render 过的 report 不应该再被 render
+一遍") — reopening something from today's list, not literally a cold deep link to a paper never
+seen before.
+
+**Fix direction**: add `papers: state.papers` to the `partialize` object (line 1665-1679). One
+line. This requires no change to `page.tsx`'s existing gating logic at all — it already prefers
+`storePaper` over a fetch when one exists; today it only fails to find one after a refresh because
+the array was never persisted. Once persisted, `paper` resolves in the same render pass as
+hydration (no network round trip), `use-model-report.ts`'s `reportKey` computes immediately, and
+`readCached(reportKey)` (a synchronous `localStorage` read inside a `useMemo`, no `await`) puts a
+cached report on screen with no gate in between — comfortably inside the 1 s target.
+
+**Honest caveats, stated plainly:**
+- `skipHydration: true` means this is a **post-mount, synchronous-`localStorage`-read** resolve,
+  not a same-tick SSR value — categorically faster than a network round trip (no server, no
+  latency), but not literally frame-zero. Well inside 1 s.
+- **Staleness, not incorrectness.** `papers` is a snapshot of whatever the last feed fetch
+  returned; persisting it means a hard refresh can show yesterday's copy of a paper's title/
+  summary until the next feed fetch overwrites `papers` in memory. This is already the accepted
+  cost of the "bounded, ~50 records" framing in Ruling 12. It does **not** risk stale
+  save/feedback state specifically: `page.tsx`'s own `paper` `useMemo` (lines 176-186) already
+  re-applies `isSavedInStore`/`feedbackForId` from the separately-persisted `savedPapers`/
+  `paperFeedback` maps on top of whatever `baseContent` it found, so a persisted-but-stale
+  `papers` entry's save/feedback fields are always overridden by live state regardless.
+- **Does not close every case.** `storePaperIsEnriched` (line 166) also requires
+  `summaryIntro.trim()` to be non-empty — a paper whose abstract enrichment failed at
+  feed-build time still triggers `shouldFetchById` even when found in the persisted `papers`
+  array. Honest, narrower gap; not addressed by this item.
+
+**Why not Ruling 12's direction 2 as well (a minimal paper snapshot inside the report cache)**:
+traced `use-model-report.ts`'s `reportKey` (line 158-160):
+`` `${paper.id}|${depth}|${hash(project)}|${profile.feedAiProvider}` `` — computing it **already
+requires a `Paper` object** (specifically `paper.id`), so the hook cannot even look itself up
+without one. Direction 2 would require decoupling key computation from a full `Paper` (keying an
+early lookup off the raw URL id param instead), then restructuring `page.tsx`'s render gate to
+accept a "minimal stub paper, report already in hand" state distinct from today's binary
+paper-resolved/`LoadingMat` gate — and a stub lacks `relevanceScore`, `preferenceSignals`,
+`isSaved`, `feedback`, `relevanceReason`, so every UI element reading those needs checking for
+what it shows with an incomplete record for the one render before `/api/papers/<id>` fills them
+in. It is also **narrower** than direction 1: it only helps a paper whose report was already
+generated in some *prior* session, not "any paper in today's list" — the shape the user's own
+words describe. **Recommendation: direction 1 alone, this round.** Direction 2 stays available as
+a future enhancement for the narrower cold-deep-link-with-a-prior-report case, not worth this
+round's blast radius for a smaller win.
+
+**Also asked by Ruling 12 — what makes `/api/papers/<id>` take 4.57 s cold, and does the page need
+to wait for all of it:** traced `fetch-by-id.ts`'s `fetchOpenAlexPaper` (lines 12-51) end to end.
+For an `openalex:` id (what A measured): (1) one OpenAlex API call (`AbortSignal.timeout(8000)`),
+which supplies title/authors/venue/date/links — everything the reading page's header needs; then
+(2) **only if** `!item.abstract` (OpenAlex's own record has none — common for Wiley/Nature/
+Springer, the exact publisher shapes in this round's own test pool), up to **two sequential**
+Semantic Scholar calls (`enrich.ts`'s `trySS`, `TIMEOUT_MS = 6_000` each, no retry/backoff) — first
+by OpenAlex id, then by DOI if the first found nothing. This is a **separate, unqueued** S2 call
+path from the one `figures/extract.ts` paces (that queue/backoff lives only in the figures
+pipeline, confirmed by grepping every file that mentions Semantic Scholar — `enrich.ts` makes its
+own direct `fetch` with no shared queue), so it competes for the same external rate limit without
+coordinating with it, though its own lack of retry means a 429 here fails fast rather than
+backing off slowly. Two sequential ~2 s S2 calls plus one OpenAlex call is consistent with A's
+measured 4.570 s. **Does the page need to wait for all of it?** No — title/authors/venue/date/
+links are already complete after step (1) alone; only the abstract (`summaryIntro`) needs step
+(2), and a page rendering a cached **report** does not read `summaryIntro` for its report text at
+all (that comes from `useModelReport`'s own cache, independent of `paper.summaryIntro` — see
+S8's inventory: `summaryIntro` only feeds the TL;DR fallback shown when there is *no* report).
+**Not proposed as a required fix this round** (Ruling 12 asked this as a diagnostic question, not
+a directed fix) — noted for C's judgment as a cheap, independent follow-up: making the two S2
+attempts run in parallel (`Promise.allSettled` instead of sequential early-return) would roughly
+halve the worst case, and/or returning the OpenAlex-derived paper immediately while enriching the
+abstract in the background would let title + a cached report paint before the abstract arrives at
+all — orthogonal to, and smaller in effect than, 5-04 above for the specific "cached report" case.
+
+**Tests at risk.** `src/store/feed.test.ts` line 470's `partialize` test (`"persists all three
+completion maps"`) asserts with `toMatchObject`, a subset match — adding `papers` to the
+`partialize` result does not break it (confirmed: no test anywhere asserts the partialize output's
+*absence* of a key; grepped `partialize` across every test file, only `feed.test.ts` references
+it). `src/store/profile-hydration.test.ts` covers profile-store hydration ordering, not feed's
+`papers` persistence — unrelated, no risk. No test currently exercises the reading page's
+rehydrated-`papers` cold-start path at all — a genuine coverage gap C should consider filling
+(mount the page with `papers` pre-populated via a mocked persisted store, assert no fetch fires).
+
+**Blast radius**: one line in `feed.ts`. Every localStorage write already goes through this same
+`persist` middleware; `papers` records (title/authors/summary strings, no full text, no report) at
+~50 entries add on the order of tens of KB, far under any browser storage ceiling.
+
+Commit: `docs(abc): round 5 B part 2 - A5-05 fix guide (5-04)`.
