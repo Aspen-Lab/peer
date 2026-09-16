@@ -21,11 +21,25 @@ interface UploadResponse {
   paper: Paper;
 }
 
+// 5-03: mirrors MAX_UPLOAD_BYTES in api/papers/upload/route.ts — a plain
+// number, not an import, since a Route Handler module's exports are
+// constrained to what Next allows (route.ts cannot export a plain
+// constant for a client component to share). Same wording as the server's
+// own message so a client-side and server-side rejection read identically.
+const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
+
 /** Exported for the test — a quick client-side check so an obviously
  * wrong file (an image, a video) never makes a round trip; the server's own
  * magic-byte check is still the actual source of truth. */
 export function looksLikePdf(file: Pick<File, "type" | "name">): boolean {
   return file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+}
+
+/** 5-03: exported for the test, same reasoning as `looksLikePdf` — this repo
+ * has no component-rendering test harness, so the decision a handler makes
+ * is what gets unit-tested directly, not the JSX around it. */
+export function isOverUploadCap(file: Pick<File, "size">): boolean {
+  return file.size > MAX_UPLOAD_BYTES;
 }
 
 async function errorFromResponse(res: Response): Promise<string> {
@@ -49,6 +63,14 @@ export function UploadButton({ className = "" }: { className?: string }) {
     setError(null);
     if (!looksLikePdf(file)) {
       setError(UPLOAD_BUTTON.error("That doesn't look like a PDF."));
+      return;
+    }
+    // 5-03: refuse an over-cap file before the request — saves a round
+    // trip for an obviously-too-big file. Not a substitute for the
+    // server's own check (5-02): a non-browser client or a request built
+    // by hand still needs the server to enforce this.
+    if (isOverUploadCap(file)) {
+      setError(UPLOAD_BUTTON.error("That PDF is larger than 25 MB."));
       return;
     }
     setIsUploading(true);

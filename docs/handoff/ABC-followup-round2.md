@@ -6487,3 +6487,45 @@ would itself truncate first at today's still-10-MiB limit. Noted for A: once the
 for 5-01, the 26 MB → 413 check also confirms this item.
 
 Commit: `fix(upload): the pre- and post-parse size gates agree on 413, not two different codes`.
+
+#### Item 5-03 — S11: the client refuses an over-cap file before the request
+
+**Change**: `web/src/components/briefing/upload-button.tsx` — added a size check right after the
+existing `looksLikePdf` check and before `setIsUploading(true)`, exactly where B pointed. Same
+error string the server returns ("That PDF is larger than 25 MB."), a plain-number
+`MAX_UPLOAD_BYTES` literal with a comment cross-referencing `route.ts`'s constant of the same
+name (B's own suggested pattern — a Route Handler's exports are constrained, so the two files
+cannot share the constant by import).
+
+**Deviation, logged**: B's fix direction called the check inline (`if (file.size > ...)`); this
+implementation instead extracts it as an exported `isOverUploadCap(file)` pure function,
+mirroring the file's own existing `looksLikePdf` convention. Reason: B's "tests at risk" section
+assumed rendering the component and mocking `fetch`/asserting `setError` — but this repo has no
+component-rendering test harness at all (grepped: zero `@testing-library/*` in `package.json`,
+zero `render(` calls anywhere under `src/components`, every existing component test file is
+`.test.ts` not `.test.tsx` and tests only pure functions exported alongside the component, exactly
+like `looksLikePdf` already does in this same file). Adding `@testing-library/react` would be a
+new dependency, forbidden by this round's own standard ("no new dependencies"). Extracting the
+decision as a pure function keeps the same test-without-rendering convention this file already
+uses, tests the exact logic that matters (the size boundary), and needed no new tooling.
+
+**Tests added** (`upload-button.test.ts`): `describe("isOverUploadCap", ...)` — accepts a file at
+exactly the cap, rejects one byte over it.
+
+**Proved the new tests test the fix**: `git stash push -- .../upload-button.tsx` (source only),
+ran `npx vitest run .../upload-button.test.ts` — `isOverUploadCap is not a function` on both new
+tests (the export did not exist pre-fix). `git stash pop` restored the source; reran — 5/5 green.
+
+**Gate**: `npx tsc --noEmit` clean · `npx eslint .` clean · `npx vitest run --exclude
+"**/benchmark.test.ts"` → 2644/2644 (2 more than 5-02's 2642). Regression lock re-verified in the
+same run: `upload-button.test.ts`'s three original `looksLikePdf` cases still pass unchanged.
+
+**Blast radius confirmed additive**: `upload()`'s existing behavior (server round trip, error
+handling, navigation on success) is unchanged for any file at or under the cap.
+
+**Live check**: verify-only by nature (a UI refusal with no server round trip) — the manager's
+browser check is the honest way to confirm `setError` renders the message; not reachable by
+`curl`. Left for the manager per S11's own verification list (Ruling 12: "a > 25 MB file inline
+without a request").
+
+Commit: `fix(upload): the client refuses an over-cap file before sending it`.
