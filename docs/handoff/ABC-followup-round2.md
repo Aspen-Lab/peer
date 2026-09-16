@@ -80,22 +80,17 @@ browser, run the reports), then report to the user in plain language and stop th
 ## §1. CURRENT STATE — THE SOURCE OF TRUTH
 
 ```
-ROUND:            5 — LOOP CLOSED by the manager @ 2026-09-16
-WHOSE TURN:       nobody (closed)
-STOPPED BECAUSE:  finished — A's closing measurement left one gap, ruled an accepted cost (§1p);
-                   the manager re-verified S8–S11 independently in the browser (§4).
-STATUS:           S8 justified prose · S9 hover cue · S10 latency (cached figure ≤ 20 ms, cached
-                   report 810 ms on hard refresh, first-call ≤ 10 s on 5/6, flood worst case
-                   14–15 s accepted) · S11 large PDF (15/20/24 MB ok, 26 MB → 413, the user's
-                   real 14.5 MB Zotero PDF → full report with figures).
-OPEN ITEMS:       none
-GATE (0 open):    MET
+ROUND:            6 (loop REOPENED by the manager 2026-09-16 — two new user items, §1q)
+WHOSE TURN:       B  (round 6 starts at B: both items are new features the manager has
+                  already confirmed unbuilt — see §1q "current state"; A measures after C)
+STOPPED BECAUSE:  —
+STATUS:           Round 6 opened. Nothing landed yet.
+OPEN ITEMS:       S12 S13 (see §1q)
+GATE (0 open):    NOT MET
 
-DONE:      rounds 1–5: S3–S11.
-GATE NOW:  tsc clean · eslint clean · vitest 2646/2646 (manager, cold, at close).
-TODO:      none for the loop. For the user: SEMANTIC_SCHOLAR_API_KEY when it arrives; push is
-           still not authorised. Leads (not authorised): tighten per-source figure timeouts;
-           html-text.ts caps; non-numeric figure cross-reference brackets.
+DONE:      rounds 1–5 (S3–S11 closed). Round 6: nothing yet.
+GATE NOW:  tsc clean · eslint clean · vitest 2646/2646 (manager, cold, at round-5 close).
+TODO:      B designs S12 and S13 (§1q); then C; then A's measurement + the manager's browser.
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
@@ -614,6 +609,65 @@ authorised: tighten the per-source fetch timeouts in `lib/figures/extract.ts` so
 lands under 8 s.
 
 S8–S11 closed. Loop closed by the manager after independent browser verification (§4).
+
+---
+
+## §1q. ROUND 6 SPEC — two user items from 2026-09-16 (manager) — BINDING
+
+User's words: *"For pictures in the report, add this function: 1. when cursor move to the
+picture, cursor become a magnifier symbol cursor 2. and then by clicking the picture, the picture
+can enlarge and become bigger, taking over the whole screen. And then if user click the enlarged
+picture again, the picture will shrink and get back to normal. Also, for the black upload icon,
+not only the upload symbol should enlarge, but the black button should enlarge at the same rate
+and ratio too."*
+
+### S12 — Figure lightbox on the reading page
+Current state (manager, by reading): report figures render through
+`web/src/components/reader/matted-figure.tsx` (`MattedFigure`: `<figure>` + `<img … max-h-[260px]
+sm:max-h-[360px] object-contain>` + caption) and the hero through `web/src/components/paper-figure.tsx`
+(`<img` at ~line 280). No click handler, no cursor style, no overlay exists. The reader binds
+`Escape` in `web/src/components/keyboard.tsx` (~line 105: help → typing target → otherwise the
+reader's own Esc = back to the briefing) and single-letter shortcuts (j/k/s/x/l/u/o/c).
+
+Binding reading:
+- (a) **Cursor:** hovering any report figure image (hero and section figures) shows the
+  magnifier cursor — CSS `cursor: zoom-in` on the image; the enlarged image shows
+  `cursor: zoom-out`.
+- (b) **Enlarge:** click → the same image fills the screen: a fixed full-viewport overlay
+  (dark, ~90 % black backdrop), the image centred and scaled to fit (`max-width: 96vw`,
+  `max-height: 96vh`, `object-fit: contain`, never upscaled beyond its natural size × 2 so a
+  thumbnail does not become a blur — B decides the cap), the caption under it in the page's
+  meta style. Body scroll locked while open. A short (~150 ms) fade/scale-in with the page's
+  `ease-snap` curve; reduced-motion → plain.
+- (c) **Shrink:** click anywhere on the overlay (image or backdrop) → back to normal. `Esc`
+  also closes it, and **must not** fall through to the reader's Esc (= leave the page) or to any
+  letter shortcut while the overlay is open: the overlay captures keydown first (capture phase
+  or a guard in `keyboard.tsx` that ignores keys while a lightbox is open — B picks the smaller).
+- (d) **Accessibility:** the image is wrapped in a `<button type="button">` (or the `<img>` gets
+  `role="button" tabIndex=0` + Enter/Space) with `aria-label="Enlarge figure"`; the overlay is
+  `role="dialog" aria-modal="true"` with the caption as its label; focus moves into the overlay
+  on open and returns to the figure on close.
+- (e) **One component**, e.g. `components/reader/figure-lightbox.tsx`, used by both
+  `MattedFigure` and the hero figure. No new dependencies; no `useEffect` setState (lint rule —
+  the page already has patterns: `useSyncExternalStore`, conditional setState during render).
+- (f) Verify: unit test for open/close/Esc/no-leak-to-shortcuts (React Testing Library is
+  already in the repo — check); the manager clicks a figure in the browser.
+
+### S13 — The whole upload button swells on hover, not only the glyph
+Current state: `web/src/components/briefing/upload-button.tsx` — the `<svg>` carries
+`transition-transform duration-[120ms] ease-snap group-hover:scale-125 group-disabled:scale-100`
+(and `scale-125` while a PDF is dragged over); the `<button>` itself has `transition-[opacity,transform]
+duration-150 ease-snap active:scale-90 disabled:opacity-50` and no hover scale.
+
+Binding reading: move the swell to the **button**: `hover:scale-125` (same 120 ms, same
+`ease-snap`) on the black square so square and glyph grow together at one ratio; the glyph keeps
+no separate scale. Drag-over gives the button the same scale; disabled → no swell;
+`active:scale-90` stays (press still dips). `transform` on the button must not shift the search
+box beside it (it is a transform, not layout — confirm) and must not be clipped by an
+`overflow-hidden` parent (check `app/page.tsx`'s row). Update `upload-button.test.ts` if it
+asserts class strings.
+
+Gate baseline: tsc clean · eslint clean · vitest 2646/2646. C's order: S13 → S12.
 
 ---
 
@@ -7070,3 +7124,10 @@ Round 5's A reported one narrow miss (cold paywalled lookup under a 17-card floo
 ~10 s); ruled an accepted cost with a tally (§1p). Manager's independent checks are in "Round 5 —
 manager browser checks" above; gate cold at close: tsc · eslint · 2646/2646. Hourly clock deleted.
 Loop closed. Branch not pushed.
+
+### Round 6 — manager (2026-09-16, reopening)
+
+User asked for a figure lightbox (S12) and for the upload button to swell as a whole (S13); by
+standing instruction every task runs through the ABC loop with the hourly clock. Both items are
+new features whose "current state" the manager recorded in §1q from the code, so round 6 starts
+at B (A measures after C). Clock re-created. B spawned.
