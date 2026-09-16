@@ -545,6 +545,41 @@ S8 → S9 (S9 is likely verify-only).
 
 ---
 
+## §1n. RULING 12 — round 5 scope after A's measurement (manager, 2026-09-16) — BINDING
+
+- **S8, the two ambiguous sites:** both stay **left-aligned**. The author byline is a list of
+  names, not prose; the Decision sentence is Peer's own status line, not part of the report.
+  Everything else in A5-08's "justify" inventory is justified, with `hyphens: auto`. The
+  related-papers title link that shares `CLAIM_CLASS`'s string stays left (A's trap) — C gives
+  it its own class or excludes it explicitly, never by accident.
+- **S10 targets, restated with the measurements in hand:** first `/api/figure` call on a
+  paywalled / bot-walled paper **≤ 10 s** (it is bounded by the per-source fetch timeouts, and
+  5.7–9.4 s is the honest cost of trying every legal source once); the **cached** call
+  **≤ 300 ms**. B enumerates by execution what still runs on a call whose empty pool is cached
+  (A saw 0.19–2.36 s — the suspect is `extractFigure`'s no-query last resort that re-fetches the
+  publisher page for `og:image` outside the pool cache, but B checks, not inherits).
+- **A5-05 (cached report blocked by a cold paper fetch): in scope, two directions, B picks the
+  smaller and says why, or does both if each is small:** (1) the feed store persists today's
+  briefing paper records (bounded — the day's list, ~50 records) so a hard refresh / fresh tab /
+  deep link finds the paper locally; (2) the report cache entry (`peer-paper-report-v6`) keeps a
+  minimal paper record (title, authors, venue, date, links) beside the report so the reading page
+  can render both immediately and let `/api/papers/<id>` enrich in the background. Either way a
+  cached report must be on screen **within 1 s** of navigation on a hard refresh, and never
+  regenerated. Also: B says what makes `/api/papers/<id>` take 4.57 s cold and whether the
+  reading page needs to wait for all of it.
+- **S11:** the route stops using `req.formData()` for the file; it reads the body as bytes
+  (stream / `arrayBuffer`) and parses the single-file multipart by the boundary itself, or the
+  client sends raw `application/pdf` with the filename in a header — B proves which passes a 24 MB
+  body through the real route in dev AND says whether `next build` / Vercel would differ. The
+  size check reads `Content-Length` first: an over-cap body gets "That PDF is larger than 25 MB"
+  (413) before any parsing; a parse failure gets its own honest message; the client refuses a
+  > 25 MB file inline without a request. Verify at 15, 20, 24 MB (ok) and 26 MB (honest 413).
+- **S9:** closed on A's code check; the manager eyeballs it at the close.
+
+C's order for round 5: **S11 → A5-05 → A5-03/A5-04 → S8.**
+
+---
+
 ## §2. ROLES — DO ONLY YOUR OWN JOB
 
 ### Agent A — Reviewer
