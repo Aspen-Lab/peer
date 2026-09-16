@@ -641,6 +641,7 @@ function Reader({
                 terms={plateTerms}
                 figure={boundFigure}
                 imageAlt={caption ? "" : undefined}
+                lightbox
               />
             </SwipeableCard>
             {caption && (

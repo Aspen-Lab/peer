@@ -545,6 +545,18 @@ body {
   100% { transform: scale(1); }
 }
 
+/* S12: the figure lightbox's own fade/scale-in — the repo's other two
+   entrance animations (fade-in-up, pop-in) run 250-260ms with bouncier
+   eases, not a match for the spec's explicit "150ms... ease-snap", so this
+   is a small new one rather than reusing either. Needs no JS
+   mount-trigger: the overlay's conditional render means the DOM node is
+   fresh every time it appears, the same reasoning HelpOverlay's own
+   animate-fade-in*classes already rely on. */
+@keyframes lightbox-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
 @keyframes stamp {
   0%   { transform: scale(1) rotate(0); }
   35%  { transform: scale(1.28) rotate(-6deg); }
@@ -581,6 +593,7 @@ body {
 .animate-fade-in-up { animation: fade-in-up 0.26s var(--ease-snap, cubic-bezier(0.2, 0.9, 0.25, 1)) both; }
 .animate-fade-in    { animation: fade-in 0.3s ease-out both; }
 .animate-pop-in     { animation: pop-in 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+.animate-lightbox-in { animation: lightbox-in 150ms var(--ease-snap, cubic-bezier(0.2, 0.9, 0.25, 1)) both; }
 .animate-stamp      { animation: stamp 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
 .animate-tab-burst  { animation: tab-burst 0.55s ease-out both; }
 

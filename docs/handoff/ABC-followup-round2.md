@@ -8214,3 +8214,94 @@ freezes more than just CSS transitions — real mouse-hover pixel verification i
 of interactive check the round-6 text assigns to the manager's own eyeball).
 
 Commit: `feat(reader): the four new icon buttons swell on hover like the upload button`.
+
+#### Item 6-08 — S12: figure lightbox (largest item)
+
+**Change**: new `web/src/components/reader/figure-lightbox.tsx`, exporting `FigureLightbox`
+(`"use client"`) and `clampFigureSize`. Props exactly as B's 6-08c specified
+(`src, alt, caption, className, wrapperClassName, onLoad`), plus two additions B's own later
+sub-entries required to preserve both callers' existing behaviour: `imgRef` (a passthrough ref to
+the thumbnail `<img>` — `PaperPlate`'s cached-image opacity check needs to read the same node
+FigureLightbox itself reads `naturalWidth`/`naturalHeight` off) and `onError` (`PaperPlate`'s
+existing broken-figure fallback). Implemented every sub-entry: **6-08d** trigger is a real
+`<button type="button" aria-label="Enlarge figure" className="cursor-zoom-in block ...">`
+wrapping the thumbnail `<img>` — keyboard-operable for free. **6-08e** `clampFigureSize(natural,
+viewport)` extracted as a pure function exactly as specified — whichever is smaller of the
+2×-natural ceiling and the 96vw/96vh ceiling, aspect preserved, zero-size guard for a
+zero-natural-size image; captured off the already-loaded thumbnail at click time, no second image
+load. **6-08f** overlay markup mirrors `HelpOverlay` closely: `role="dialog" aria-modal="true"
+aria-label={caption ?? alt}`, a real `<button aria-label="Close figure" className="absolute
+inset-0 bg-black/90">` backdrop, the enlarged `<img className="cursor-zoom-out" onClick={close}
+style={{maxWidth:'96vw', maxHeight:'96vh', width, height}}>` (own `onClick` too, no bubbling
+reliance), caption in the DOI-line "mono meta" style, `z-[80]` (the codebase's highest, reused
+rather than a new tier). **6-08g** new `@keyframes lightbox-in` + `.animate-lightbox-in` (150ms,
+`var(--ease-snap)`) in `globals.css`, next to `fade-in-up`/`pop-in` — reduced-motion is free via
+the existing global `0.01ms !important` rule. **6-08h** the keyboard guard: a capture-phase
+`document.addEventListener("keydown", ..., true)` inside a `useEffect` gated on `isOpen`, calling
+`stopPropagation()` on every key and closing on Escape — zero changes to `keyboard.tsx`, exactly
+B's recommended smaller option. **6-08i** body-scroll lock + focus in/out, two more DOM-effects,
+neither doing `setState` in the effect body. **6-08j** the trigger no-ops if
+`thumbRef.current.naturalWidth === 0`.
+
+**6-08a/6-08b, the stale file pointer**: confirmed by reading — `paper-figure.tsx`'s
+`PaperFigureFrame`/`PaperFigure` are dead code (zero non-definition-file imports, confirmed again
+by grep); the live hero is `PaperPlate` (`components/cards/paper-plate.tsx`). Per Ruling 15, added
+an **opt-in** `lightbox?: boolean` prop (default `false`) to `PaperPlate`: when true and a figure
+is showing, the existing bare `<img>` branch is replaced by a `FigureLightbox` carrying the exact
+same classes/ref/onLoad/onError the plain branch already had (both branches now sit side by side
+in the same `showFigure` conditional, so nothing is lost, only chosen between); `feed-tile.tsx`'s
+own `<PaperPlate paper={paper} terms={plateTerms} />` call passes no `lightbox` prop and is
+byte-for-byte unaffected. `web/src/app/papers/[id]/page.tsx`'s reading-page call site gained one
+new prop: `lightbox` (boolean shorthand for `true`). `web/src/components/reader/matted-figure.tsx`
+now renders through `FigureLightbox` unconditionally (every section figure gets the lightbox, per
+S12's own binding reading) — its 4 call sites (`report-sections.tsx` ×3, `claim-list.tsx` ×1) pass
+only `src`/`caption`, confirmed unaffected by construction.
+
+**Tests added**: `web/src/components/reader/figure-lightbox.test.ts` — a
+`renderToStaticMarkup` smoke test of the default (closed) render (`aria-label="Enlarge figure"`,
+`cursor-zoom-in` present; no `role="dialog"`/`aria-modal`/close button anywhere) plus four
+`clampFigureSize` unit tests: viewport-bound scaling between 1×-2×, the 2×-natural cap when the
+viewport has room to spare, shrinking an oversized figure below its own natural size to fit
+96vw/96vh, and the zero-natural-size guard. Matches B's exact recommended shape (a) and (b).
+
+**Proved the new tests test the fix**: temporarily replaced `clampFigureSize`'s body with a bare
+passthrough (`return { width: natural.width, height: natural.height }`) — 3 of the 4 clamp tests
+failed exactly as expected (the 4th, the zero-size case, still incidentally passed since
+passthrough-of-zero is also zero — expected and not a gap, since that guard is a separate `if`
+this change didn't touch); restored the source, reran — 7/7 green.
+
+**Gate**: `npx tsc --noEmit` clean · `npx eslint .` (one `react-hooks/exhaustive-deps` warning
+caught and fixed — captured `triggerRef.current` into a local `const trigger` before the effect's
+cleanup closure, the standard fix for "ref value may have changed by cleanup time") · `npx vitest
+run --exclude "**/benchmark.test.ts"` → 2657/2657 (2650 + 7 new).
+
+**Live-checked thoroughly in the browser**, dev server hot-reloaded, no restart needed: confirmed
+the trigger button + `cursor-zoom-in` class on the served hero figure; confirmed **2** `Enlarge
+figure` buttons on this paper's reading page (the hero plus one report-bound section figure via
+`MattedFigure` — both wired correctly). Clicking the trigger opens `role="dialog"
+aria-modal="true"` with the figure's own caption as the dialog's label, locks
+`document.body.style.overflow`, and moves focus into the overlay. Dispatching `Escape` closes it,
+restores body scroll, returns focus to the trigger, and — critically — **does not** navigate away
+(confirmed `location.href` unchanged, proving the capture-phase guard stopped Escape before
+`keyboard.tsx`'s own bubble-phase "Esc = back to the briefing" handler ever saw it). Dispatching
+`j` (the next-paper shortcut) while the overlay is open left it open and did not change the URL —
+no shortcut leak. Both the backdrop button and the enlarged image's own `onClick` independently
+close the overlay. One honest complication, isolated and recorded rather than silently worked
+around: this session's Browser pane is hidden (confirmed via `tabs_context`), and a hidden pane
+does not perform real lazy-loading intersection checks — the hero's `loading="lazy"` thumbnail
+never actually loaded (`naturalWidth: 0`) until forced via `img.loading = "eager"; await
+img.decode()`, at which point everything above worked on the first try. This is the same category
+of hidden-pane artifact 6-06 already logged (there: a frozen animation clock; here: lazy-loading
+never triggering) — not a defect in `loading="lazy"`, which is the exact same attribute the
+original, pre-existing `PaperPlate`/`MattedFigure` images already carried. Visual appearance
+(centering, backdrop darkness, the fade-in itself) remains the manager's own eyeball check, per
+the round-6 text's assignment — screenshots of the open overlay were unreliable in this hidden-pane
+session (the DOM/ARIA state was confirmed correct by direct query even when a screenshot still
+showed the pre-click page).
+
+**Found nothing in B's guide to contest** beyond the two additive prop extensions (`imgRef`,
+`onError`) needed to keep `PaperPlate`'s existing cached-image and broken-image handling working
+unchanged — both are small, natural extensions of the "composed alongside" reasoning B's own
+6-08c already named for `onLoad`.
+
+Commit: `feat(reader): a figure lightbox for the hero and every report figure`.
