@@ -5524,3 +5524,94 @@ encoding. A real browser upload of the user's 14,519,501-byte Zotero PDF would h
 `formData()` wall server-side — nothing client-side shields it or changes the failure mode.
 
 Commit: `docs(abc): round 5 A part 1 - S11 measurement`.
+
+#### Part 2 — S10 (latency)
+
+All timings `curl -w "%{time_total}"`, per paper, not averaged, against the live routes.
+Paper metadata (`url`/`title`) for the query strings came from this machine's own briefing pool
+cache (`web/.local-data/pool-cache/peer-pool-v5-papers-*.json`), a local file already on disk —
+not fetched from a third party for this measurement.
+
+**(a) `/api/figure` (no `query`), 6 named papers spanning the status classes, twice each, back to
+back:**
+
+| Paper | Status | Call 1 | Call 2 |
+|---|---|---|---|
+| `W7212354020` (Wiley, paywalled) | `paywalled` | 8.615 s | 0.525 s |
+| `W7212288571` (Springer bot wall) | `source_unavailable` | 8.476 s | 0.191 s |
+| `W7212165100` (Nature) | `source_unavailable` | 9.387 s | 0.651 s |
+| `W7212228226` (JECST, no images) | `no_figures` | 5.658 s | 2.361 s |
+| `W7207740551` (arXiv, has figures) | `found` | 0.022 s | 0.022 s |
+| `W7212207112` (openalex.org blocked) | `source_unavailable` | 8.465 s | 0.981 s |
+
+The round-5 target (§1m) is "≤ 5 s the first time and ≤ 100 ms while its empty pool is cached."
+**Both halves miss on every one of the 5 non-`found` papers**: first calls ran 5.66-9.39 s (all
+over the 5 s ceiling, four of five by 3-4 s), and second calls ran 191 ms-2.36 s (all over the
+100 ms ceiling, though 4-45× faster than the first call — real caching, just not to the stated
+number). `W7207740551`'s `found` case answered in 22 ms both times, but that paper's figure had
+already been resolved once earlier in this same session's testing (Part 1 warmed nothing figure-
+related, but this pair of calls is itself the first live `/api/figure` hit on it this round) — a
+genuinely cold state, unlike the 5 papers above whose fast second call still is not fast enough.
+
+**(b) All 17 pool-paper `/api/figure` calls fired concurrently (background `curl`s), then
+immediately a reading-page-style call with `query=` for `W7207740551`:**
+
+The queued call answered `200` in **0.075 s** — comfortably inside the "~10 s" target. All 17
+concurrent calls completed successfully (verified via each response file, not the launch log,
+which lost lines to a write race): `found:1 no_figures:3 source_unavailable:4 paywalled:9` —
+identical to round 4's closing tally. Two of the 17 background calls whose timing did survive the
+log race took 14.2 s and 16.1 s (`W7204990919`, `W7211884742`) — the concurrent flood is still
+slow for individual papers under it, just not for the one this test specifically measured.
+**Caveat, stated plainly**: `W7207740551`'s own figure had just been resolved and cached moments
+earlier in part (a) above, so this 0.075 s result shows a per-claim `query=` lookup for an
+*already-resolved* paper staying fast under concurrent load — it does not exercise a cold S2/
+pipeline lookup made for the first time while 17 others are in flight.
+
+**(c) `POST /api/papers/report {paper, deepReport:true}` on `W7207740551`:**
+
+Total time **13.975 s**. Response: `depth: "deep"`, `sourceKind: "pdf"`,
+`provenance: {basis: "model-fulltext", droppedClaims: 0, pageCount: 20}`, 4 `keyResults`. **Meets**
+the "report text within 30 s" target for a fresh deep report on an OA paper, with room to spare.
+(Getting the `paper` object to send required its own `GET /api/papers/openalex:W7207740551` first:
+4.570 s cold, then 0.023 s / 0.016 s on two immediate repeats — see (d), this is not incidental.)
+
+**(d) Cached-report render path, by reading the code** (`src/app/papers/[id]/page.tsx`,
+`src/components/reader/use-model-report.ts`, `src/components/reader/use-reading.ts`):
+
+- `page.tsx`'s `Reader` component — everything on the page, report included — only renders once
+  `paper` resolves; until then the page shows only `LoadingMat` (or "not found"). `paper` comes
+  instantly, with no request, when it is already in the client's `feed`/`saved` store (the normal
+  case: clicking a card from today's briefing). Otherwise `shouldFetchById` fires
+  `GET /api/papers/<id>` (or `/api/papers/upload/<id>` for an upload) and the page is blocked on
+  it — measured this round at 4.570 s cold / 0.015-0.023 s warm (the server's own in-memory cache)
+  for the one paper tested.
+- **This gate is reachable more often than it looks**: `src/store/feed.ts`'s zustand `persist`
+  `partialize` does **not** include `papers` (today's briefing array) — only `savedPapers`,
+  `paperFeedback`, and the read/applied/registered maps survive a reload. So a hard refresh, or a
+  fresh tab opened straight on `/papers/<id>` for a paper that was never saved, always takes the
+  `shouldFetchById` branch — even when that exact paper's report is sitting, ready, in the
+  *separately*-persisted report cache.
+- Once `paper` exists, `reading` (`use-reading.ts`) is synchronous every time: `buildReading(paper,
+  null)` runs in a plain `useMemo`, no `await`; a previously-cached server reading is also read
+  synchronously from `localStorage` in its own `useMemo`. `reading` is `null` only when `paper` is
+  undefined, so it never independently gates anything once the page has a paper.
+- `report` (`use-model-report.ts`) is read the same way: `cached = useMemo(() =>
+  readCached(reportKey), [reportKey])` reads `localStorage` in the same render pass, and the
+  fetch effect explicitly short-circuits when `cached` is set (`if (!current || !reportKey ||
+  cached || ...) return;`). **A cached report is on `report` in the very first render after
+  `paper` resolves — no `await`, no stage/loading state gates it.**
+- `useResolvedFigure` (`src/components/paper-figure.tsx`) is independent of every text section: it
+  only feeds the plate image, its caption, and `hasPlate`. No claim, quote, proposal, result, or
+  abstract text reads from it, so a slow or still-pending figure lookup never blocks text from
+  painting.
+- **Net answer to "which state gates the sections": `paper` alone.** When the paper is already in
+  the client store, a cached report renders in the same tick as the rest of the page — no network
+  round trip at all, well under the 1 s target. When it is not (fresh tab / hard refresh / unsaved
+  deep link), the whole page — cached report included — waits on the `/api/papers/<id>` (or
+  `/upload/<id>`) fetch regardless, measured at 4.570 s cold this round.
+- **One-time cost, stated as instructed, not a new finding**: `use-model-report.ts`'s
+  `STORAGE_KEY = "peer-paper-report-v6"` (bumped from `v5` in round 1) means every report a user
+  had cached under the old key regenerated once, the first time they reopened it after that
+  change landed.
+
+Commit: `docs(abc): round 5 A part 2 - S10 measurement`.
