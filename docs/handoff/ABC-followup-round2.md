@@ -8005,3 +8005,58 @@ click-through per the round-6 text's assignment, not attempted here.
 **Found nothing in B's guide to contest.**
 
 Commit: `feat(reader): the generation progress bar moves to the bottom of the panel`.
+
+#### Item 6-04 — S15: font-size controls (A / A)
+
+**Change**: three new/touched files, per B's guide. (1) `web/src/app/globals.css` — redefined
+`--text-body`/`--text-body-lg`/`--text-lead` as `calc(<base-px> * var(--reading-scale, 1))`,
+leaving the paired `--text-*--line-height` unitless multipliers untouched (they already scale
+proportionally). (2) New `web/src/store/reading-prefs.ts` — a `persist({ skipHydration: true })`
+zustand store (mirroring `store/feed.ts`/`store/profile.ts` exactly) holding `scaleIndex` over the
+six-step ladder `[0.85, 0.925, 1, 1.1, 1.2, 1.32]`, default index 2 (1x), `increaseScale`/
+`decreaseScale` clamped to `[0, 5]`, persisted as `"peer-reading-prefs"`; exports
+`useReadingScale()`, a selector hook returning the resolved multiplier. (3)
+`web/src/components/store-hydrator.tsx` — added the third `.persist.rehydrate()` call. (4)
+`web/src/components/reader/reader-layout.tsx` — calls `useReadingScale()` directly (not threaded
+as a prop from `page.tsx`, per B's direction) and wraps `p.words` and `p.additions` **each** in
+their own thin `<div style={{"--reading-scale": readingScale}}>` in **both** the flat (`!p.spread`)
+and spread branches — four wrap points total, `p.decision`/`p.plate`/`p.title`/`p.next` untouched,
+matching B's finding that a single shared wrapper is impossible in the flat branch since
+`decision` sits between `words` and `additions` there. (5)
+`web/src/components/reader/decision-block.tsx` — new icon row mounted after the button grid,
+before the DOI block: two `IconButton`s (reviving the existing, previously-zero-consumer
+component from `components/ui/button.tsx`, per Ruling 15) rendering literal `"A"` text glyphs in
+`font-reading` at the panel's own non-scaling `text-body-lg`/`text-meta` steps — never the
+`--reading-scale`-driven tokens. Clamp state is the real `disabled` attribute with `aria-disabled`
+mirrored, per Ruling 15's S13/S18 note, computed from `scaleIndex` against the ladder's two ends.
+
+**Verified the calc()-fallback mechanism is actually a no-op everywhere else**, not just trusted
+the theory: ran the gate's full suite (below) with zero test touching `--reading-scale`, confirming
+nothing else regressed; separately confirmed by reading that `measure`/`measure-lede` are already
+`em`-based (so a scaled paragraph's line measure widens in lockstep automatically, no extra code).
+
+**Honest edge state, re-verified**: the "PDF has no readable text" fallback
+(`paper.textStatus === "empty"`, `page.tsx` ~line 549) renders before `DecisionBlock` is reached at
+all (confirmed by grep: `DecisionBlock` only appears once, at line 667, outside that branch) — so
+the four new buttons are correctly absent there, matching B's finding that this is self-consistent
+or a partial miss.
+
+**Tests added**: `web/src/store/reading-prefs.test.ts` — four tests: the default index resolves to
+the 1x step, `increaseScale`/`decreaseScale` each clamp at their respective end of the ladder, and
+the ladder itself is exactly the six spec'd steps in order.
+
+**Proved the new tests test the fix**: temporarily removed the `Math.min`/`Math.max` clamps in
+`reading-prefs.ts` (bare `state.scaleIndex + 1` / `- 1`) — both clamp tests failed exactly as
+expected (`expected 6 to be 5`, `expected -1 to be +0`); restored the source, reran — 4/4 green.
+
+**Gate**: `npx tsc --noEmit` clean · `npx eslint .` clean · `npx vitest run --exclude
+"**/benchmark.test.ts"` → 2650/2650 (2646 + 4 new). Full suite re-run, not just the new file.
+
+**Found nothing in B's guide to contest.**
+
+**Live check**: hot-reloadable (no config file touched) — no restart needed. The visual/behavioural
+check (clicking A/A actually changes the reading column's size, persists across reload, and the
+panel/buttons themselves stay fixed) is the manager's own browser click-through per the round-6
+text's assignment, not attempted here.
+
+Commit: `feat(reader): font-size controls (A / A) for the deep report`.

@@ -8,11 +8,12 @@
 
 import Link from "next/link";
 import type { Ref } from "react";
-import { buttonVariants } from "@/components/ui/button";
+import { buttonVariants, IconButton } from "@/components/ui/button";
 import { IconArrowUpRight, IconLink } from "@/components/icons";
 import { Kbd } from "@/components/ui/kbd";
 import { cn } from "@/lib/cn";
 import type { PaperReading } from "@/lib/papers/reading";
+import { READING_SCALE_STEPS, useReadingPrefsStore } from "@/store/reading-prefs";
 import { BUTTON, DOI, PROGRESS_LABEL, progressSuffix } from "./copy";
 
 const TOUCH_TARGET = "[@media(hover:none)]:min-h-11";
@@ -63,6 +64,16 @@ export function DecisionBlock({
   onOpen: () => void;
   onCopyDoi: () => void;
 }) {
+  // S15: the font-size ladder — read here rather than threaded through
+  // props, the same reasoning as `ReaderLayout`'s own `useReadingScale`
+  // (see reader-layout.tsx): this is the one place both the buttons and
+  // the clamp state live.
+  const scaleIndex = useReadingPrefsStore((s) => s.scaleIndex);
+  const increaseScale = useReadingPrefsStore((s) => s.increaseScale);
+  const decreaseScale = useReadingPrefsStore((s) => s.decreaseScale);
+  const atMaxScale = scaleIndex >= READING_SCALE_STEPS.length - 1;
+  const atMinScale = scaleIndex <= 0;
+
   return (
     <div ref={ref}>
       <p className="font-reading text-lead text-text-muted measure-lede mt-12">
@@ -145,6 +156,32 @@ export function DecisionBlock({
           </Kbd>
           {BUTTON.copy}
         </button>
+      </div>
+
+      {/* S15/S16/S18: font-size and day/night controls, in the user's own
+          order — A (big) · A (small) · sun · moon. Sized with the panel's
+          own (non-scaling) type steps, never the --reading-scale-driven
+          reading tokens: only the article text these buttons control
+          moves, not the controls themselves. */}
+      <div className="flex items-center gap-2 mt-5">
+        <IconButton
+          aria-label="Larger text"
+          onClick={increaseScale}
+          disabled={atMaxScale}
+          aria-disabled={atMaxScale}
+          className="font-reading text-body-lg font-semibold"
+        >
+          A
+        </IconButton>
+        <IconButton
+          aria-label="Smaller text"
+          onClick={decreaseScale}
+          disabled={atMinScale}
+          aria-disabled={atMinScale}
+          className="font-reading text-meta font-semibold"
+        >
+          A
+        </IconButton>
       </div>
 
       {doi && (

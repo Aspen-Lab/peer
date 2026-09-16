@@ -13,7 +13,8 @@
 // blocks (the authors toggle resets); a window resize across the
 // breakpoint is rare and gets no transition.
 
-import { useEffect, useRef, useSyncExternalStore, type ReactNode } from "react";
+import { useEffect, useRef, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
+import { useReadingScale } from "@/store/reading-prefs";
 import { COLUMN_CLASS, PANEL_CLASS, SPREAD_GRID, SPREAD_QUERY } from "./spread";
 
 interface ReaderLayoutProps {
@@ -49,6 +50,15 @@ export function useSpread(): boolean {
 
 export function ReaderLayout(p: ReaderLayoutProps) {
   const panelRef = useRef<HTMLDivElement>(null);
+  // S15: read here, not threaded as a prop from page.tsx — this file
+  // already self-contains its one other piece of layout-affecting state
+  // (`useSpread`), so the reading-size scale follows the same shape. Sets
+  // --reading-scale on a thin wrapper around `words` and `additions` only
+  // (never `decision`, never the panel) — the CSS variable falls back to 1
+  // everywhere it isn't explicitly set, so nothing outside these two wraps
+  // is affected.
+  const readingScale = useReadingScale();
+  const readingScaleStyle = { "--reading-scale": readingScale } as CSSProperties;
 
   // The panel's height, for the sticky rule: a panel taller than the
   // viewport pins by its bottom so the decision stays and the plate scrolls
@@ -65,14 +75,17 @@ export function ReaderLayout(p: ReaderLayoutProps) {
   }, [p.spread]);
 
   if (!p.spread) {
-    // Today's DOM, byte for byte: no wrapper, spec order, fragments flatten.
+    // Today's DOM, byte for byte except for the two new scale wrappers:
+    // spec order, fragments flatten. `decision` sits between `words` and
+    // `additions` here (screen-reader order), so each gets its own thin
+    // wrapper rather than one shared one around both.
     return (
       <>
         {p.plate}
         {p.title}
-        {p.words}
+        <div style={readingScaleStyle}>{p.words}</div>
         {p.decision}
-        {p.additions}
+        <div style={readingScaleStyle}>{p.additions}</div>
         {p.next}
       </>
     );
@@ -86,8 +99,8 @@ export function ReaderLayout(p: ReaderLayoutProps) {
         {p.decision}
       </div>
       <div className={COLUMN_CLASS}>
-        {p.words}
-        {p.additions}
+        <div style={readingScaleStyle}>{p.words}</div>
+        <div style={readingScaleStyle}>{p.additions}</div>
         {/* Takes the free space on a page shorter than the panel, so the row
             sits bottom-right level with the DOI line; on a long page it is
             simply last. Never at the top — full text arriving later must
