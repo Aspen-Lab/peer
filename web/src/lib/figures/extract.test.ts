@@ -11,6 +11,7 @@ vi.mock("./pdf-extract", async (importOriginal) => {
 
 import {
   __resetSemanticScholarLimiterForTests,
+  extractFigure,
   finalDiagnostic,
   getFigurePool,
   tryHtmlCandidates,
@@ -453,5 +454,38 @@ describe("getFigurePool — 1-29, an upload: id reads the local PDF directly", (
 
     expect(pool.entries).toHaveLength(0);
     expect(pool.attempted).toBe(true);
+  });
+});
+
+describe("extractFigure — 5-06, the query-less og:image last resort is cached on the pool", () => {
+  const originalFetch = globalThis.fetch;
+
+  beforeEach(() => {
+    mocks.extractPdfCandidatesFromPath.mockReset();
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    vi.restoreAllMocks();
+  });
+
+  it("fetches input.url at most once across repeat no-query calls against the same empty pool", async () => {
+    mocks.extractPdfCandidatesFromPath.mockResolvedValue({
+      status: "no_figures",
+      candidates: [],
+      reason: "Peer opened a legal PDF for this paper, but did not extract any usable figures from it.",
+    });
+    globalThis.fetch = vi.fn(async () => new Response("", { status: 404 })) as unknown as typeof fetch;
+
+    const input = { itemId: "upload:00000000000000f6", url: "https://example.com/paper-5-06" };
+
+    const first = await extractFigure(input);
+    const second = await extractFigure(input);
+
+    expect(first.status).toBe("no_figures");
+    expect(second.status).toBe("no_figures");
+    // Once for the og:image last resort, cached on the pool for the second
+    // call — not twice, which is what A5-04 measured as the cached-call miss.
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
   });
 });

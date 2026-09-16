@@ -6577,3 +6577,61 @@ path, which no `curl` can exercise). Left for the manager's browser check per th
 instructions.
 
 Commit: `fix(feed): persist today's briefing papers so a refresh finds them locally`.
+
+#### Item 5-05 — A5-03: no code change (informational, closed by Ruling 12)
+
+Confirmed B's classification: Ruling 12 already restated A5-03's target as "≤ 10 s ... bounded by
+the per-source fetch timeouts" and accepted 5.7–9.4 s as the honest cost. Re-read the same three
+timeout constants B named (`extract.ts` `FETCH_TIMEOUT_MS = 7_000`, `pdf-extract.ts`
+`FETCH_TIMEOUT_MS = 10_000`, `SEMANTIC_SCHOLAR_ENRICH_GRACE_MS = 3_000`) — nothing to contest,
+nothing to fix. No code change, no test, no commit of its own (folded into the 5-06 commit below,
+matching B's own single commit for both items).
+
+#### Item 5-06 — A5-04: cache the query-less og:image last-resort outcome
+
+**Change**: `web/src/lib/figures/extract.ts` — extended the internal `CachedPool` interface with
+an optional `ogFallback?: FigureCandidate | null` field (`undefined` = not yet tried, `null` =
+tried and found nothing, a candidate = tried and found one), exactly the shape B specified.
+`extractFigure`'s existing query-less og:image branch now checks `pool.ogFallback === undefined`
+before doing the `timedFetch`; either way (fetch succeeded with no usable og:image, or the fetch
+failed/wasn't ok) the outcome is written back onto `pool.ogFallback` — the mutation lands on the
+exact object `getCandidatePool` returned, which B traced (and this implementation re-confirmed by
+the test below) is the same reference stored in the module's `candidatePoolCache` Map, so the
+write is visible to every future cache hit for the same key with no new cache-management code.
+The existing `EMPTY_POOL_CACHE_TTL_MS` (10 min) governs this field's lifetime for free.
+
+**Tests added** (`extract.test.ts`): new `describe("extractFigure — 5-06, ...")` — mocks
+`extractPdfCandidatesFromPath` to return an empty `no_figures` pool (via the `upload:` id shortcut
+in `buildCandidatePool`, which returns fast and needs no Semantic Scholar/HTML mocking) and mocks
+`globalThis.fetch` to a bare 404; calls `extractFigure` twice with the same no-query input carrying
+a `url`; asserts both calls return `status: "no_figures"` and `globalThis.fetch` was called exactly
+once. `extractFigure` had to be added to this test file's import list (previously unimported here,
+matching B's own finding that no existing test calls it directly).
+
+**Proved the new test tests the fix**: `git stash push -- src/lib/figures/extract.ts` (source
+only), ran `npx vitest run src/lib/figures/extract.test.ts` — the new test failed exactly as
+predicted (`expected "vi.fn()" to be called 1 times, but got 2 times`), the other 20 tests
+unaffected. `git stash pop` restored the source; reran — 21/21 green.
+
+**Gate**: `npx tsc --noEmit` clean · `npx eslint .` clean · `npx vitest run --exclude
+"**/benchmark.test.ts"` → 2646/2646 (1 more than 5-04's 2645). Regression locks re-verified in the
+same run: `extract.test.ts`'s 1-19 og:image honesty guard, 1-20 queue tests, 1-21/1-22 bounce-page
+tests, 4-01 `finalDiagnostic` precedence tests, and the 1-29 `getFigurePool` upload-id tests all
+still pass — none of them exercise `ogFallback` (confirmed by reading `getFigurePool`'s own
+re-mapping, which drops it, exactly as B found), so none could have been affected either way.
+
+**Found nothing in B's guide to contest.**
+
+**Live check**: `GET /api/figure` on `openalex:W7212354020` with its real `url`/`doi`/`paperTitle`
+(fetched live from `GET /api/papers/openalex:W7212354020` — `doi: 10.1002/smll.75702`,
+`linkPaper: https://doi.org/10.1002/smll.75702`, per S11's own worked example, this round's own
+A5-04 paper), called twice back to back:
+- Call 1: `200`, **8.997 s**, `status: "paywalled"` (doi.org resolves to a paid-access page; the
+  Semantic Scholar throttle note is folded in, unrelated to this fix). Within Ruling 12's
+  restated ≤ 10 s target for a first call.
+- Call 2 (same URL, immediately after): `200`, **0.009 s** — comfortably inside Ruling 12's
+  restated **≤ 300 ms** cached-call target, and a direct measurement that the second call does
+  **not** pay for a second `timedFetch` (identical response body to call 1, confirming
+  `pool.ogFallback`'s cached `null` was read, not recomputed).
+
+Commit: `fix(figures): cache the query-less og:image fallback so a repeat empty-pool call is fast`.

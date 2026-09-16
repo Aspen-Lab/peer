@@ -1450,6 +1450,14 @@ interface CachedPool {
   candidates: FigureCandidate[];
   attempts: AttemptResult[];
   ts: number;
+  /** 5-06: the query-less og:image last-resort outcome (see `extractFigure`'s
+   *  own fallback below), cached alongside the rest of the pool so a repeat
+   *  call within the same TTL window does not pay a second live fetch for a
+   *  URL `buildCandidatePool` most likely already tried and failed on (the
+   *  paywalled/bot-walled shape this fallback actually gets hit for in
+   *  practice). `undefined` = not yet tried; `null` = tried, found nothing;
+   *  a candidate = tried, found one. */
+  ogFallback?: FigureCandidate | null;
 }
 const CANDIDATE_CACHE_TTL_MS = 30 * 60 * 1000;
 // An EMPTY pool is remembered too, briefly: a paywalled or bot-walled paper
@@ -1736,20 +1744,30 @@ export async function extractFigure(input: ExtractInput): Promise<FigureResult> 
   // would make the honesty guard inconsistent depending on which code path
   // happened to run.
   if (!query?.trim() && input.url) {
-    const res = await timedFetch(input.url);
-    if (res?.ok) {
-      const html = await readBoundedText(res);
-      const finalUrl = res.url || input.url;
-      const ogCandidate = ogImageCandidate(html, finalUrl, 0);
-      if (ogCandidate) {
-        return {
-          imageUrl: ogCandidate.imageUrl,
-          source: "og",
-          status: "found",
-          hideFigure: false,
-          matchedBy: "fallback",
-        };
+    // 5-06: compute this once per pool, then write the outcome back onto the
+    // exact `pool` object `getCandidatePool` returned (the same reference
+    // stored in `candidatePoolCache`) — a later query-less call for the same
+    // cache key reads `pool.ogFallback` directly, no new fetch, for as long
+    // as the pool entry itself stays cached (`EMPTY_POOL_CACHE_TTL_MS`
+    // governs this for free; no second TTL to keep in sync).
+    if (pool.ogFallback === undefined) {
+      const res = await timedFetch(input.url);
+      if (res?.ok) {
+        const html = await readBoundedText(res);
+        const finalUrl = res.url || input.url;
+        pool.ogFallback = ogImageCandidate(html, finalUrl, 0) ?? null;
+      } else {
+        pool.ogFallback = null;
       }
+    }
+    if (pool.ogFallback) {
+      return {
+        imageUrl: pool.ogFallback.imageUrl,
+        source: "og",
+        status: "found",
+        hideFigure: false,
+        matchedBy: "fallback",
+      };
     }
   }
 
