@@ -248,23 +248,49 @@ describe("trySemanticScholarCandidates — 1-20, concurrency cap + minimum inter
     vi.unstubAllEnvs();
   });
 
-  it("reports a 429 as rate_limited, not source_unavailable, after one bounded retry", async () => {
-    // 4-01: a 429 is no longer final on the first try — one retry follows a
-    // ~2.5s wait (re-entering the same concurrency queue) before the lookup
-    // reports rate_limited. Rewritten from the pre-4-01 version (which
-    // asserted this off a single fetch call) because that version now hangs:
-    // the always-429 mock is called a second time after the new wait, which
-    // needs its own timer advance before `await promise` can resolve.
+  it("reports a 429 as rate_limited only after exponential backoff: 2.5 s, 5 s, 10 s", async () => {
+    // 4-01 widened for the Semantic Scholar key application: a 429 is retried
+    // three times with doubling waits (re-entering the same concurrency
+    // queue each time) before the lookup reports rate_limited. Four fetches
+    // in all; the mock always answers 429.
     globalThis.fetch = vi.fn(
       async () => new Response("", { status: 429 }),
     ) as unknown as typeof fetch;
 
     const promise = trySemanticScholarCandidates("DOI:1");
-    await vi.advanceTimersByTimeAsync(2_500);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(2_499);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(3);
+    await vi.advanceTimersByTimeAsync(10_000);
     const result = await promise;
 
     expect(result.status).toBe("rate_limited");
-    expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(4);
+  });
+
+  it("stops retrying as soon as a retry succeeds", async () => {
+    let calls = 0;
+    globalThis.fetch = vi.fn(async () => {
+      calls += 1;
+      return calls < 3
+        ? new Response("", { status: 429 })
+        : new Response(JSON.stringify({ figures: [] }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          });
+    }) as unknown as typeof fetch;
+
+    const promise = trySemanticScholarCandidates("DOI:1");
+    await vi.advanceTimersByTimeAsync(2_500 + 5_000);
+    const result = await promise;
+
+    expect(result.status).not.toBe("rate_limited");
+    expect(globalThis.fetch).toHaveBeenCalledTimes(3);
   });
 });
 

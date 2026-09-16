@@ -817,10 +817,12 @@ export function __resetSemanticScholarLimiterForTests(): void {
   semanticScholarAdmission = Promise.resolve();
 }
 
-// 4-01: one bounded retry after a 429 — never a loop. A single unlucky
-// throttle should not sink the whole lookup when Semantic Scholar is likely
-// to answer a couple of seconds later.
-const SEMANTIC_SCHOLAR_RETRY_DELAY_MS = 2_500;
+// 4-01, widened to exponential backoff for the Semantic Scholar API key
+// application (their terms ask for it): a 429 is retried after 2.5 s, then
+// 5 s, then 10 s — three retries, doubling, then final. Bounded by the list,
+// never a loop; the whole sequence is under 20 s so a briefing sweep is not
+// held hostage by one throttled paper.
+const SEMANTIC_SCHOLAR_RETRY_DELAYS_MS = [2_500, 5_000, 10_000] as const;
 
 async function attemptSemanticScholarFetch(ssPaperId: string): Promise<AttemptResult> {
   await acquireSemanticScholarSlot();
@@ -876,14 +878,18 @@ async function attemptSemanticScholarFetch(ssPaperId: string): Promise<AttemptRe
 // Exported for tests only (1-20) — every other caller reaches it through
 // `buildCandidatePool`.
 export async function trySemanticScholarCandidates(ssPaperId: string): Promise<AttemptResult> {
-  const first = await attemptSemanticScholarFetch(ssPaperId);
-  if (first.status !== "rate_limited") return first;
-  // Bounded: re-enters the acquire/release queue rather than holding a slot
-  // idle through the wait, so the 1-20 concurrency cap and interval still
-  // apply to every other paper in the same briefing sweep. Exactly one
-  // retry — whatever it returns (even still rate_limited) is final.
-  await waitMs(SEMANTIC_SCHOLAR_RETRY_DELAY_MS);
-  return attemptSemanticScholarFetch(ssPaperId);
+  let result = await attemptSemanticScholarFetch(ssPaperId);
+  // Bounded: each retry re-enters the acquire/release queue rather than
+  // holding a slot idle through the wait, so the 1-20 concurrency cap and
+  // interval still apply to every other paper in the same briefing sweep.
+  // After the last delay, whatever comes back (even still rate_limited) is
+  // final.
+  for (const delay of SEMANTIC_SCHOLAR_RETRY_DELAYS_MS) {
+    if (result.status !== "rate_limited") return result;
+    await waitMs(delay);
+    result = await attemptSemanticScholarFetch(ssPaperId);
+  }
+  return result;
 }
 
 function isAr5ivErrorPage(html: string): boolean {

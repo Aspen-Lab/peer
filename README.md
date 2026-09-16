@@ -413,7 +413,8 @@ credentials are present; online users must supply their own key through the BYOK
 **Search / enrichment:** `TAVILY_API_KEY`, `BRAVE_SEARCH_API_KEY`,
 `SEMANTIC_SCHOLAR_API_KEY` (one server-side key, shared by every reader of the deployment; free from
 semanticscholar.org/product/api — the Academic Graph API is the one Peer calls; a keyed account is
-allowed 1 request per second, and Peer paces its figure lookups to that. Optional — without one,
+allowed 1 request per second, and Peer paces its figure lookups to that, retrying a 429 with
+exponential backoff — 2.5 s, 5 s, 10 s — then reporting the lookup as rate-limited. Optional — without one,
 Peer queues and paces those requests under the unauthenticated per-IP limit instead of failing), `OPENALEX_EMAIL`, `UNPAYWALL_EMAIL` (polite-pool emails).
 
 **Jobs feed (all optional — Remotive/Arbeitnow/Himalayas run keyless):**
