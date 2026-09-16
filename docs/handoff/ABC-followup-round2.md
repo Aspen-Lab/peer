@@ -789,6 +789,26 @@ colour fade and the progress bar in the browser.
 
 ---
 
+## §1s. RULING 15 — round 6: B's corrections stand (manager, 2026-09-16) — BINDING
+
+- **S12 hero:** B is right — `paper-figure.tsx`'s frame is dead code; the live hero is
+  `components/cards/paper-plate.tsx`, shared with the briefing tiles. C lands the lightbox on the
+  reading page's hero through an **opt-in prop** on `PaperPlate` (default off; `feed-tile.tsx`
+  untouched) and on every `MattedFigure`. The dead `PaperFigureFrame`/`PaperFigure` exports are
+  left alone this round (a lead, not an item).
+- **S14 icon:** PyMuPDF-rendered PNG-in-ICO per B's proven script; C regenerates `favicon.ico`
+  from the same SVG so the tab shows the pear whichever file Chrome picks. The manager eyeballs
+  the tab.
+- **S17 fade:** lives only in the two new click handlers, never in `applyColorTheme` (which fires
+  on hydration).
+- **S15 scale:** `calc(px * var(--reading-scale, 1))` on the reading tokens, variable set at B's
+  two wrap points; the Decision sentence and the panel do not scale.
+- **S13/S18:** revive the existing `IconButton` primitive rather than a new one; the clamp state
+  is `disabled` (real, so the swell is off), with `aria-disabled` mirrored.
+- Tests follow the repo's `renderToStaticMarkup` + pure-function convention (no RTL).
+
+---
+
 ## §2. ROLES — DO ONLY YOUR OWN JOB
 
 ### Agent A — Reviewer
