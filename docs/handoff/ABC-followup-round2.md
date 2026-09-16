@@ -5471,3 +5471,56 @@ manager (throttle-note punctuation). Hourly clock deleted. Loop closed.
 User asked for four more items (S8–S11, §1m) and for the ABC loop + hourly clock to handle them.
 Manager pre-work committed before reopening: 4a0f6e7 (figure latency cuts + hover cue + upload
 error log), 6851b0b (keyed S2 pacing), da9b46d (exponential backoff). Clock re-created. A spawned.
+
+### Round 5 — Agent A
+
+Branch confirmed `complimentary-enhancement-to-main-update` before starting; `git status` clean.
+Dev server `peer-web` confirmed up (`GET /` -> 200). No product code changed. The manager's
+pre-work (4a0f6e7, 6851b0b, da9b46d) was treated as unverified per the brief — every number below
+is a fresh measurement, not a re-read of the commit messages.
+
+#### Part 1 — S11 (large PDF upload)
+
+Built six padded PDFs from a fresh `https://arxiv.org/pdf/2609.02668` download (base 1,127,174
+bytes) with a throwaway Python script (`\n%` + 1023×`x` lines, the manager's own method), sized to
+9,437,184 / 12,582,912 / 15,728,640 / 20,971,520 / 25,165,824 / 27,262,976 bytes (9/12/15/20/24/26
+MB). Uploaded each with `curl -F "file=@…;type=application/pdf"` against the live
+`POST /api/papers/upload`. Both the padded files and the generator script were deleted before this
+commit; nothing under `web/.local-data/` was committed (the directory is fully gitignored).
+
+| Size | Bytes | Result |
+|---|---|---|
+| base (~1.07 MB) | 1,127,174 | `200`, 0.562 s — real title, `textStatus: "ok"` |
+| 9 MB | 9,437,184 | `200`, 0.570 s — same title, `textStatus: "ok"` |
+| 12 MB | 12,582,912 | `400 {"error":"Expected a multipart/form-data upload."}`, 0.031 s |
+| 15 MB | 15,728,640 | `400`, same error string, 0.032 s |
+| 20 MB | 20,971,520 | `400`, same error string, 0.037 s |
+| 24 MB | 25,165,824 | `400`, same error string, 0.041 s |
+| 26 MB | 27,262,976 | `400`, same error string, 0.053 s |
+
+`GET /api/papers/upload/<id>` for the 9 MB record → `200`, full title, `textStatus: "ok"` — the
+record round-trips cleanly for every size that gets in.
+
+**The wall is confirmed exactly where the manager's repro said**: between 9 and 12 MB, and every
+failing size returns in ~30-50 ms — far too fast to be the model reading the PDF, consistent with
+`req.formData()` throwing before any of the route's own logic runs (`src/app/api/papers/upload/route.ts`
+line 125: `form = await req.formData()`; line 127-128 catches and returns the "not multipart"
+message). `MAX_UPLOAD_BYTES = 25 * 1024 * 1024` (line 27) is checked at line 135-136, but no size in
+this sweep ever reaches that check.
+
+**New, real finding not covered by the manager's repro**: the 26 MB file is also over the 25 MB
+cap, and it still comes back as `"Expected a multipart/form-data upload."` — the identical string
+every smaller-but-still-failing size gets, never `"That PDF is larger than 25 MB."` The round-5
+spec (§1m) states this exactly as a requirement: *"the error for an over-cap file must say so, and
+a parse failure must never be reported as 'not multipart.'"* That requirement is unmet today for
+every size sampled at or past the parse wall, over-cap or not — the size check never gets a chance
+to run its own, more honest message.
+
+**Client-side path, read (not executed in a browser)**: `web/src/components/briefing/upload-button.tsx`
+builds a `FormData` (`form.set("file", file)`) and posts it with a bare `fetch(...)` — deliberately
+not the shared `apiFetch` helper, per the file's own comment, so the browser sets its own
+multipart `Content-Type` with the boundary. No chunking, no pre-flight size check, no alternate
+encoding. A real browser upload of the user's 14,519,501-byte Zotero PDF would hit the exact same
+`formData()` wall server-side — nothing client-side shields it or changes the failure mode.
+
+Commit: `docs(abc): round 5 A part 1 - S11 measurement`.
