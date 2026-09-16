@@ -81,20 +81,33 @@ browser, run the reports), then report to the user in plain language and stop th
 
 ```
 ROUND:            5
-WHOSE TURN:       B
-STOPPED BECAUSE:  —
-STATUS:           A's round-5 measurement done (all 5 parts committed). S9 closes clean on the
-                   code (A5-09); S8 is unbuilt (A5-08); S10 and S11 each carry real,
-                   execution-confirmed differences (A5-01..A5-05) — the manager's pre-work
-                   (4a0f6e7, 6851b0b, da9b46d) narrowed the S10 gap but did not close it. Two S10
-                   findings meet target already (A5-06, A5-07), recorded, not blocking.
-OPEN ITEMS:       A5-01 A5-02 A5-03 A5-04 A5-05 A5-08 (see §4 round 5 A for detail; A5-09 closed)
+WHOSE TURN:       C
+STOPPED BECAUSE:  finished the turn @ 2026-09-16 05:45 UTC
+STATUS:           B's round-5 fix guide done (4 parts committed, items 5-01..5-07). S11's true
+                   cause is Next.js 16's proxy body-clone truncation (10 MiB default), not
+                   formData()/undici and not multipart-specific — proven by execution; the
+                   round-5 spec's own two proposed fixes would not have worked. A5-05: persisting
+                   feed.ts's `papers` array (Ruling 12 direction 1) recommended over the report-
+                   cache-snapshot direction. A5-03 closed informational (Ruling 12 already
+                   accepted the target as met); A5-04's real cause is an uncached og:image
+                   re-fetch inside `extractFigure`, fixable by writing the outcome back onto the
+                   existing pool-cache object. S8: one `reading-justify` CSS utility, added to
+                   eight specific literals, never via a selector (the related-papers title-link
+                   trap named by Ruling 12 confirmed real). One undecided risk flagged, not
+                   solved: scramble-reveal glyph-width variance may become visible as word-
+                   spacing pulses under justify — needs a visual check once built.
+OPEN ITEMS:       5-01 5-02 5-03 5-04 5-06 5-07 (5-05 informational/closed, no code; see §4 round
+                   5 B for detail and exact fix directions)
 GATE (0 open):    NOT MET
 
-DONE:      rounds 1–4 (S3–S7 closed). Round 5: A's measurement pass done; S9 closed, S8/S10/S11 open.
-GATE NOW:  tsc clean · eslint clean · vitest 2641/2641 (A, cold, round 5).
-TODO:      B investigates A5-01..A5-05 and A5-08, writes the fix guide (§1m has C's suggested
-           order: S11 → S10 → S8 → S9).
+DONE:      rounds 1–4 (S3–S7 closed). Round 5: A measured (S9 closed, S8/S10/S11 open); B wrote
+           the fix guide for all of S8/S10/S11 in Ruling 12's order.
+GATE NOW:  tsc clean · eslint clean · vitest 2641/2641 (A, cold, round 5) — B changed no product
+           code; unaffected.
+TODO:      C works 5-01 … 5-07 in order (5-01 first: the `next.config.ts` proxy-body-size fix is
+           a prerequisite the rest of S11 depends on being correct about). One commit per item,
+           gate after each. Flag anything §4's fix guide got wrong back to the manager rather
+           than silently reinterpreting it.
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
