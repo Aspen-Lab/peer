@@ -81,17 +81,27 @@ browser, run the reports), then report to the user in plain language and stop th
 
 ```
 ROUND:            6 (reopened 2026-09-16; extended the same day with S14–S18, §1r)
-WHOSE TURN:       B  (B's first spawn died on a usage limit before writing anything; restart
-                  from scratch and cover S12–S18)
-STOPPED BECAUSE:  —
-STATUS:           Round 6 open. Nothing landed yet. Dev server was down at the manager's last
-                   check — the manager restarts it before C's turn.
-OPEN ITEMS:       S12 S13 S14 S15 S16 S17 S18 S19 (§1q + §1r)
+WHOSE TURN:       C
+STOPPED BECAUSE:  B finished the turn @ 2026-09-16 20:41 UTC
+STATUS:           Round 6 fix guide written (6-01..6-08, §4 "Round 6 — Agent B"), committed in
+                   three parts. No product code changed (B does not change code). Dev server
+                   was up on port 3000 throughout B's turn (used read-only, for the icon
+                   <head> check and the browser network-log check — not started/stopped/
+                   restarted). Two of B's checks are BLOCKED, not resolved: which of icon.svg/
+                   favicon.ico Chrome actually prefers (this session's browser tool records zero
+                   favicon network requests — left for the manager's own real-browser eyeball,
+                   which §1r already assigns), and the manager's browser click-through for the
+                   interactive parts of every item (also already assigned to the manager).
+OPEN ITEMS:       S12 S13 S14 S15 S16 S17 S18 S19 (§1q + §1r) — 8 items, all still open; B only
+                  investigates, does not close anything.
 GATE (0 open):    NOT MET
 
-DONE:      rounds 1–5 (S3–S11 closed). Round 6: nothing yet.
-GATE NOW:  tsc clean · eslint clean · vitest 2646/2646 (manager, cold, at round-5 close).
-TODO:      B designs S12–S18; C implements in the order §1r gives; A measures; manager eyeballs.
+DONE:      rounds 1–5 (S3–S11 closed). Round 6: fix guide written, nothing implemented yet.
+GATE NOW:  tsc clean · eslint clean · vitest 2646/2646 (manager, cold, at round-5 close) —
+           UNCHANGED this turn; B touched no code.
+TODO:      C works 6-01..6-08 in order (S13 → S14 → S19 → S15 → S16 → S17 → S18 → S12), one
+           commit per item, gate after each; then A measures; manager eyeballs the tab icon, the
+           lightbox, the font steps, the 1-s colour fade and the progress bar in the browser.
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
@@ -7698,3 +7708,134 @@ top).
 
 **Blast radius**: additive edit to a shared, currently-**zero-consumer** primitive — there is no
 existing caller to regress. The four new buttons become its first consumers.
+
+---
+
+#### 6-08 — S12: figure lightbox (largest item, sub-entries in dependency order)
+
+**Classification**: MISSING, with one file pointer in the spec itself stale (found by execution,
+corrected below — not silently, per the standing instruction to flag rather than guide a
+reversal quietly).
+
+**6-08a — the manager's own "hero" file pointer is stale.** `web/src/components/paper-figure.tsx`'s
+`PaperFigureFrame`/`PaperFigure` (lines 228-327, including the `<img>` at ~line 280 the round-6
+text names) are **dead code** — grepped exhaustively (`PaperFigureFrame(`/`PaperFigure(` across
+all of `src`, excluding their own definition file): zero other files import or render either
+export. Only `useResolvedFigure` (a different export in the same file — a data-fetching hook, no
+JSX) is ever imported, by `page.tsx`, `paper-plate.tsx`, `report-sections.tsx`. **The actual, live
+hero figure is rendered by `PaperPlate`** (`web/src/components/cards/paper-plate.tsx`, `<img>` at
+line 141) — confirmed by tracing `page.tsx`'s JSX: `<SwipeableCard ...><PaperPlate paper={paper}
+terms={plateTerms} figure={boundFigure} imageAlt={...} /></SwipeableCard>` sits in `ReaderLayout`'s
+`plate` slot. This changes where the hero half of the fix lands.
+
+**6-08b — `PaperPlate` is shared with the briefing feed, out of scope for S12.** The same
+component/`<img>` is also used by `components/cards/feed-tile.tsx` for the small card thumbnails
+on the briefing page — S12's own binding reading is "figure lightbox on the reading page," report
+figures, not feed cards. Fix direction: an **opt-in prop** on `PaperPlate`, e.g. `lightbox?:
+boolean` (default off); `page.tsx`'s call site passes it, `feed-tile.tsx`'s is left untouched —
+the briefing cards' existing click-to-open-paper behaviour is provably unaffected by construction,
+not by care.
+
+**6-08c — new component**: `web/src/components/reader/figure-lightbox.tsx`, exporting
+`FigureLightbox` (`"use client"`). Props: `{ src: string; alt: string; caption?: string | null;
+className?: string; wrapperClassName?: string; onLoad?: (e: SyntheticEvent<HTMLImageElement>) =>
+void }`. `className` is the thumbnail `<img>`'s own existing sizing classes, passed through
+unchanged (`MattedFigure`'s `"mx-auto max-h-[260px] sm:max-h-[360px] object-contain"`,
+`PaperPlate`'s `"h-full w-full object-contain opacity-0 transition-opacity duration-[320ms]
+ease-snap"`) — neither caller's layout changes. `wrapperClassName` lets `PaperPlate`'s `absolute`/
+`h-full w-full` frame reach the new wrapping `<button>`. `onLoad` is a passthrough so
+`PaperPlate`'s own existing `onLoad`/`ref`-`complete` opacity-fade logic (lines ~144-149) keeps
+working, composed alongside the lightbox's own natural-size capture.
+
+**6-08d — trigger + cursor**: `<button type="button" aria-label="Enlarge figure" onClick={...}
+className={cn("cursor-zoom-in block", wrapperClassName)}><img ref={imgRef} src={src} alt={alt}
+onLoad={composedOnLoad} className={className} /></button>` — satisfies S12(a)/(d) directly. A
+native `<button>` is keyboard-operable (Enter/Space) for free, matching S12(d)'s alternative
+without hand-wiring key handling.
+
+**6-08e — the 2× natural-size cap**: capture `naturalWidth`/`naturalHeight` off the **thumbnail**
+`<img ref={imgRef}>` (already loaded and on-screen by the time it's clickable — no second
+load/race) at the moment `onClick` fires, rather than waiting on the overlay's own image to fire a
+fresh `onLoad`. Recommend extracting the cap math as a pure function, e.g.
+`clampFigureSize(natural: {width,height}, viewport: {width,height}): {width,height}` — whichever
+is smaller of the 2×-natural ceiling and the 96vw/96vh ceiling, aspect preserved — matching this
+repo's own established convention of extracting pure, directly-testable logic alongside a
+component (`isOverUploadCap`, `looksLikePdf`, `resolveRevealMode`). Natural-size-capture idiom
+precedent: `paper-figure.tsx`'s own (dead, but valid as a pattern) `onLoad={(event) => { const next
+= event.currentTarget; if (next.naturalWidth > 0 && ...) setLoadedImage({...}) }}` — an ordinary
+event-handler `setState`, not a `useEffect` — zero lint risk.
+
+**6-08f — overlay markup**, closely mirroring an existing in-repo modal (`HelpOverlay`,
+`components/keyboard.tsx` ~317-345, read in full): `role="dialog" aria-modal="true"
+aria-label={caption ?? alt}`; a `<button aria-label="Close figure" className="absolute inset-0
+bg-black/90 ..." onClick={close} />` as the backdrop (a real `<button>`, exactly `HelpOverlay`'s
+own trick — makes "click anywhere on the overlay... back to normal" a11y-clean with no bare
+`<div onClick>`); the enlarged `<img className="cursor-zoom-out" onClick={close} style={{
+maxWidth:'96vw', maxHeight:'96vh', width: capped.width, height: capped.height }} />` (its own
+onClick also closes — no reliance on bubbling); caption in the existing DOI-line "mono meta"
+style (`font-mono text-meta text-text-muted`, matching 6-03's new progress label for consistency).
+z-index: grepped every `z-[N]` in the codebase — `HelpOverlay`'s `z-[80]` is the highest currently
+used; reuse `z-[80]` rather than inventing a new tier (nothing needs to render above a full-screen
+figure).
+
+**6-08g — fade/scale-in**: new `@keyframes` in globals.css (next to `fade-in-up`/`pop-in`, ~524-
+538), e.g. `@keyframes lightbox-in { from { opacity:0; transform:scale(0.96); } to { opacity:1;
+transform:scale(1); } }` + `.animate-lightbox-in { animation: lightbox-in 150ms var(--ease-snap)
+both; }` — the repo's existing `pop-in`/`fade-in-up` run at 250/260ms with bouncier eases, not a
+match for the spec's explicit "150ms... `ease-snap`," so a small new one is warranted. Applied as
+a plain className on the overlay's outer div — needs no JS mount-trigger, since the overlay's
+conditional render means the DOM node is fresh every time it appears (same reasoning
+`HelpOverlay`'s own `animate-fade-in*` classes already rely on). Reduced motion: free, via the
+same global `@media (prefers-reduced-motion: reduce) { *, ... { animation-duration: 0.01ms
+!important } }` rule already in globals.css (~652) — no bespoke handling needed.
+
+**6-08h — the keyboard guard**, the decision the round-6 text explicitly leaves to B ("capture
+phase or a guard in `keyboard.tsx`... B picks the smaller"): verified `keyboard.tsx`'s global
+handler is `window.addEventListener("keydown", handler)` at line 277 — default options, i.e.
+**bubble phase**. A capture-phase listener anywhere in the ancestry runs before any bubble-phase
+listener on `window`, because capture completes in full before bubble begins. Fix direction:
+inside `FigureLightbox`'s own `useEffect` (gated on `isOpen`, cleaned up on close/unmount — a
+DOM-listener effect, not a setState effect, no lint risk), `document.addEventListener("keydown",
+onKeyDown, true)` that calls `e.stopPropagation()` unconditionally for every key while open, plus
+closes on `e.key === "Escape"` (`close(); e.preventDefault();`). **Zero changes to
+`keyboard.tsx`** — smaller by every measure than the alternative (a new shared mutable
+"lightbox open" flag that `keyboard.tsx` itself would have to import and check on every keystroke
+sitewide). Honest edge state: if the keyboard help sheet (also owned by `keyboard.tsx`) is
+somehow open at the same time as the lightbox, the lightbox's capture-phase Escape closes the
+**lightbox** first (capture fires before the help sheet's own bubble-phase close logic runs); a
+second Escape then closes the help sheet — standard top-most-layer-first modal stacking, not a
+defect.
+
+**6-08i — body-scroll lock + focus in/out**: two more `useEffect`s gated on `isOpen`, neither doing
+`setState` in the effect body (both pre-approved by the round-6 text): lock/restore
+`document.body.style.overflow`; focus the overlay on open, restore focus to the trigger
+(`triggerRef.current?.focus()`) on close/cleanup.
+
+**6-08j — broken image → no open**: the trigger's `onClick` no-ops (never opens) if the
+thumbnail's `imgRef.current.naturalWidth === 0` — the standard browser signal for a failed image
+load.
+
+**Testing, confirmed not guessed**: `package.json` read in full — no `@testing-library/*`
+dependency of any kind. Three independent existing test files all converge on the same
+convention: `components/ui/progress-bar.test.ts`, `app/saved/page.test.tsx` (the repo's only
+`.test.tsx` file — correcting the round-5 log's claim that none existed), and every
+`upload-button.test.ts`/`scramble-text.test.ts`-style pure-function test. All either (a)
+`renderToStaticMarkup` + string `toContain` assertions on the closed/default render, with
+`vi.mock`'d stores, or (b) an exported pure function tested with plain inputs — never a simulated
+click/keydown. Recommend both for `figure-lightbox.tsx`: (a) a `renderToStaticMarkup` smoke test
+asserting the default (closed) render carries `aria-label="Enlarge figure"`, `cursor-zoom-in`, and
+no `role="dialog"` anywhere; (b) unit tests on `clampFigureSize` (6-08e) covering under-cap
+(unconstrained), over-2×-natural (capped there), over-viewport-under-2× (capped at 96vw/96vh).
+This is the ceiling this codebase already sets for what gets tested here — interactive open/close/
+focus/keyboard-guard behaviour isn't unit-tested anywhere comparable either (e.g. `upload-
+button.tsx`'s own drag-and-drop and focus handling aren't). The manager's own browser click-through
+remains the acceptance test for the interactive parts, exactly as the round-6 text already assigns.
+
+**Tests at risk**: none existing reference `MattedFigure`, `PaperPlate`, or `PaperFigureFrame`/
+`PaperFigure` by rendering (grepped: zero `.test.ts(x)` files import any of the four).
+
+**Blast radius**: `MattedFigure` (4 call sites, all pass-through — `report-sections.tsx` ×3,
+`claim-list.tsx` ×1) gets one internal swap, no prop-shape change — all 4 unaffected by
+construction. `PaperPlate` gains one new **optional** prop, default off — its other caller
+(`feed-tile.tsx`) is provably unaffected. `keyboard.tsx` is untouched. New file, new CSS
+keyframes — all additive.
