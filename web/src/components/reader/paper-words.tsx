@@ -85,7 +85,7 @@ function Deck({
         // Keyed by position: two skim lines may cite the same sentence.
         <p
           key={`${i}:${claim.evidence}`}
-          className="font-reading italic text-body leading-[1.55] text-text-muted pl-5 mt-1.5"
+          className="font-reading italic text-body leading-[1.55] text-text-muted pl-5 mt-1.5 reading-justify"
         >
           {claim.evidence}
           <span className="font-mono not-italic text-meta text-text-faint ml-2">
@@ -135,7 +135,7 @@ export function PaperWords({
     if (!tldr) return null;
     return (
       <div>
-        <p className="font-reading text-lead leading-[1.6] text-text-muted measure mt-10">
+        <p className="font-reading text-lead leading-[1.6] text-text-muted measure mt-10 reading-justify">
           {tldr}
         </p>
         <p ref={endRef} className={FOOTER_CLASS}>
@@ -154,7 +154,7 @@ export function PaperWords({
         <LeadClaim sentence={sentences[lead]} />
       )}
       <Band label={ABSTRACT_LABEL} className="mt-12">
-        <div className="font-reading text-lead leading-[1.6] text-text-muted measure mt-4 space-y-4">
+        <div className="font-reading text-lead leading-[1.6] text-text-muted measure mt-4 space-y-4 reading-justify">
           {split > 0 && <Paragraph sentences={sentences.slice(0, split)} from={0} inked={inked} />}
           {split < sentences.length && (
             <Paragraph sentences={sentences.slice(split)} from={split} inked={inked} />

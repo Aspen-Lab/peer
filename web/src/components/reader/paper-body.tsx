@@ -44,7 +44,7 @@ function Section({ section }: { section: ReadingSection }) {
       <h3 className="font-reading font-medium text-heading text-title leading-[1.3] mb-2">
         {section.heading}
       </h3>
-      <div className="font-reading text-lead leading-[1.6] text-text-muted measure space-y-3">
+      <div className="font-reading text-lead leading-[1.6] text-text-muted measure space-y-3 reading-justify">
         {section.paragraphs.map((paragraph, i) => (
           <p key={i}>{paragraph}</p>
         ))}

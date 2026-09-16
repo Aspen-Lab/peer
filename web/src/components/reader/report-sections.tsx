@@ -34,7 +34,7 @@ import { MattedFigure } from "./matted-figure";
 import { BlockHeading } from "./block-heading";
 import { GLANCE, PEERS_READING, REPORT_HEADING, WHATS_NEW } from "./copy";
 
-const CLAIM_CLASS = "font-reading text-lead leading-[1.6] text-text";
+const CLAIM_CLASS = "font-reading text-lead leading-[1.6] text-text reading-justify";
 /** The pull quote over the results: the deck's face, the headline result. */
 const PULL_CLASS = "font-reading text-title-lg leading-[1.45] text-heading measure";
 const FOOTER_CLASS = "font-mono text-caption text-text-faint mt-3";
@@ -280,7 +280,7 @@ export function ResultsBlock({
             </p>
             <Receipt claim={result} abstractSentences={abstractSentences} />
             {result.novelty && (
-              <p className="font-reading text-body leading-[1.55] text-text-muted mt-2">
+              <p className="font-reading text-body leading-[1.55] text-text-muted mt-2 reading-justify">
                 <span className="font-mono text-meta text-text-faint mr-2">{WHATS_NEW}</span>
                 {scramble ? <ScrambleText text={result.novelty} /> : result.novelty}
               </p>

@@ -438,6 +438,31 @@ html[data-mode="dark"] { --nm-underside: rgba(0, 0, 0, 0.34); }
   max-width: 14.5em;
 }
 
+/* 5-07 (S8): justified reading prose. Applied by adding this class name to
+   specific literals (report sections, quotes, abstract, paper body — see
+   each call site's own comment), never by a selector on `font-reading` or
+   `text-lead` generally — several of those classes are shared with
+   non-prose text (a paper title, a byline) that must stay left-aligned. */
+@utility reading-justify {
+  text-align: justify;
+  hyphens: auto;
+  text-wrap: pretty;
+}
+
+/* Ruling 13: while a `ScrambleText` reveal is still running, keep its
+   paragraph left-aligned — the random glyphs it swaps in vary in rendered
+   width, and under justify that variance would show up as inter-word
+   spacing pulses instead of the naturally-varying ragged right edge.
+   `ScrambleText` exposes `data-reveal="revealing"`/`"settled"` on its own
+   wrapper (derived from render state, never a `useEffect` setState); this
+   matches either that wrapper carrying `reading-justify` directly (the
+   common case) or an ancestor `reading-justify` paragraph wrapping an
+   unstyled `ScrambleText` span (report-sections' "What is new here" line). */
+.reading-justify[data-reveal="revealing"],
+.reading-justify:has(> [data-reveal="revealing"]) {
+  text-align: left;
+}
+
 /* Light is unconditional — no OS-preference dark mode. Dark mode would be a
    future explicit toggle on <html data-theme="dark">, not a reading-tool default. */
 

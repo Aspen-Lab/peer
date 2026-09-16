@@ -552,7 +552,7 @@ function Reader({
         <div className={SPREAD_GRID}>
           <div>
             <TitleBlock paper={paper} recommendation={null} now={now} />
-            <p className="font-reading text-lead leading-[1.6] text-text mt-6">
+            <p className="font-reading text-lead leading-[1.6] text-text mt-6 reading-justify">
               {PDF_NO_TEXT_MESSAGE}
             </p>
             <BackToFeedLink
@@ -751,7 +751,7 @@ function Reader({
             ) : (
               shared.length > 0 && (
                 <section>
-                  <p className="font-reading text-lead leading-[1.6] text-text mt-12">
+                  <p className="font-reading text-lead leading-[1.6] text-text mt-12 reading-justify">
                     {sharedTermsLine(shared)}
                   </p>
                 </section>

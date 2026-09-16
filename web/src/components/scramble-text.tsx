@@ -169,7 +169,14 @@ export function ScrambleText({ text, className }: ScrambleTextProps) {
       : initialFrame(text);
 
   return (
-    <span className={className} aria-label={text}>
+    // Ruling 13 / 5-07: `data-reveal` lets a justified paragraph
+    // (`reading-justify` in globals.css) stay left-aligned only while this
+    // text is still scrambling — swapped-in random glyphs vary in rendered
+    // width, and under justify that variance would land on inter-word
+    // spacing instead of the (naturally varying) ragged right edge. Derived
+    // directly from render state already computed above, not a `useEffect`
+    // setState.
+    <span className={className} aria-label={text} data-reveal={hasSettled ? "settled" : "revealing"}>
       <span aria-hidden>{visibleText}</span>
     </span>
   );

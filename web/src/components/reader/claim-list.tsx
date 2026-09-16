@@ -15,7 +15,7 @@ import { EvidenceQuote } from "./evidence-quote";
 import { MattedFigure } from "./matted-figure";
 import { projectAnchor } from "./copy";
 
-const CLAIM_CLASS = "font-reading text-lead leading-[1.6] text-text";
+const CLAIM_CLASS = "font-reading text-lead leading-[1.6] text-text reading-justify";
 
 function Receipt({
   claim,

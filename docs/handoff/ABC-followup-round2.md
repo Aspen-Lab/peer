@@ -6635,3 +6635,74 @@ A5-04 paper), called twice back to back:
   `pool.ogFallback`'s cached `null` was read, not recomputed).
 
 Commit: `fix(figures): cache the query-less og:image fallback so a repeat empty-pool call is fast`.
+
+#### Item 5-07 — S8: `reading-justify` added to eight named sites, plus the scramble-safe switch
+
+**Change**: `web/src/app/globals.css` — one new `@utility reading-justify { text-align: justify;
+hyphens: auto; text-wrap: pretty; }`, next to the existing `measure*` utilities, exactly B's spec.
+Applied the class name to the class **strings**, never via a selector on `font-reading`/`text-lead`:
+`report-sections.tsx` line 37 (`CLAIM_CLASS`) and line 283 (the "What is new here" inline
+literal); `claim-list.tsx` line 18 (its own separate `CLAIM_CLASS`); `evidence-quote.tsx` line 9
+and `paper-words.tsx` line 88 (the italic verbatim-quote literal); `paper-words.tsx` lines 138 and
+157 (TL;DR fallback, real abstract); `paper-body.tsx` line 47 (paper body); `page.tsx` lines 555
+and 754 (the "PDF has no readable text" and "shared terms" fallback lines). Left exactly as-is,
+confirmed by direct read: `PULL_CLASS`/`FOOTER_CLASS`, the related-papers title link and its meta
+line (Ruling 12's named trap — shares `CLAIM_CLASS`'s font/size prefix but is a distinct literal,
+so it was never touched), the review-section heading, `paper-words.tsx`'s Deck skim line,
+`title-block.tsx`, `lead-claim.tsx`, `decision-block.tsx` (including the two Ruling 12 resolved
+"stay left" sites — author byline, Decision sentence — neither had code to revert).
+
+**Deviation, logged**: B's `quote-list.tsx` line 30 was described as sharing the italic
+verbatim-quote literal (`"font-reading italic text-body leading-[1.55] text-text-muted pl-5
+mt-1.5"`) with `evidence-quote.tsx`/`paper-words.tsx` line 88. Reading the actual file: line 30's
+literal is `"font-reading text-lead leading-[1.6] text-text"` — the same shape as `CLAIM_CLASS`,
+not italic, not the quote family B named. This is a real, verbatim-sentence "what they found /
+how it was done" quote block (`QuoteList`), which S8's own binding reading names explicitly
+("the verbatim quotes ... justified") — so the *target* B identified for this site was correct,
+only the specific string was misdescribed. Added `reading-justify` to the actual literal present,
+not the one B guessed; noted here per "stop and record, never widen inline" rather than silently
+reconciling the mismatch without saying so.
+
+**S8 under the scramble reveal (Ruling 13)**: implemented the scramble-safe switch, not left
+undecided — B's flagged risk (random-glyph width variance surfacing as inter-word spacing pulses
+under justify) has a real, cheap fix. `scramble-text.tsx`'s `hasSettled` is already computed
+synchronously in the render body (not a `useEffect` setState); exposed it as
+`data-reveal="settled"`/`"revealing"` on the component's own wrapper `<span>`. Added one CSS rule:
+`.reading-justify[data-reveal="revealing"], .reading-justify:has(> [data-reveal="revealing"])
+{ text-align: left; }` — the first selector covers the common case (`reading-justify` sits
+directly on `ScrambleText`'s own span, e.g. `CLAIM_CLASS` usages); the second (`:has()`) covers
+`report-sections.tsx`'s "What is new here" line, the one site where an unstyled `ScrambleText`
+sits inside a separately-`reading-justify`-classed static `<p>`. Traced every `ScrambleText` call
+site touching the eight sites above: only `report-sections.tsx` (`CLAIM_CLASS` spans, the novelty
+line) and `claim-list.tsx` (`CLAIM_CLASS` span) ever scramble — `paper-words.tsx` lines 138/157
+and `paper-body.tsx`/`page.tsx`'s four sites are always static (S5's own binding reading:
+paper body/abstract are never AI-report content, never wrapped in `ScrambleText`), so no
+scramble-safety concern exists for them.
+
+**No test possible for the scramble-safe switch** — same reason as 5-03: this repo has no
+component-rendering test harness, so a transient 600 ms `data-reveal` transition cannot be unit
+tested; `scramble-text.test.ts` only tests the pure `resolveRevealMode` function and needed no
+change. Recorded rather than attempting a brittle test.
+
+**Live check (this repo's CSS/component changes hot-reload, unlike 5-01's `next.config.ts`)**:
+used the Browser pane against the running dev server. On `openalex:W7212354020` (a real cached
+report), screenshotted desktop and mobile (375 px) widths: the abstract and the report's own claim
+paragraph render with visibly flush right edges and stretched word-spacing (justified), while the
+pull-quote/skim line and the related-papers title links keep their ragged right edge (left-aligned,
+unchanged) — the Ruling 12 trap confirmed avoided in the rendered page, not just in the source.
+Read computed styles via the page's own JS runtime for a harder check than "reading the class
+list": every element carrying `reading-justify` reported `textAlign: "justify"`,
+`hyphens: "auto"`, `textWrap: "pretty"`; every related-papers title link reported
+`textAlign: "start"` and confirmed no `reading-justify` class. No hyphenation rivers or broken
+wrapping observed at either width. The scramble-reveal's own 600 ms transition was **not**
+re-verified visually (this paper's report was already cached, so nothing scrambled on this visit;
+catching a live reveal needs a paper whose report is not yet cached, which the manager can do more
+directly) — the manager's own eyeball check per Ruling 13 still applies for that specific
+transition, though the switch itself is now implemented rather than left undecided.
+
+**Gate**: `npx tsc --noEmit` clean · `npx eslint .` clean · `npx vitest run --exclude
+"**/benchmark.test.ts"` → 2646/2646 (unchanged from 5-06 — no test file exists for any of the nine
+touched components; grepped `report-sections|claim-list|quote-list|evidence-quote|paper-words|
+paper-body` across every `*.test.ts`, zero matches, confirming B's own risk assessment).
+
+Commit: `feat(reader): justify the report's reading prose, left-aligned while it is still scrambling in`.

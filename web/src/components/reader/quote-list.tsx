@@ -27,7 +27,7 @@ export function QuoteList({
         {quotes.map((quote) => (
           <li
             key={`${quote.from.heading}${quote.text}`}
-            className="font-reading text-lead leading-[1.6] text-text"
+            className="font-reading text-lead leading-[1.6] text-text reading-justify"
           >
             {quote.text}
             <span className="font-mono text-meta text-text-faint ml-2">
