@@ -593,6 +593,24 @@ C's order for round 5: **S11 → A5-05 → A5-03/A5-04 → S8.**
 
 ---
 
+## §1o. RULING 13 — B's round-5 flags (manager, 2026-09-16) — BINDING
+
+- **S11 cause accepted:** the wall is Next 16's proxy body clone (`experimental.proxyClientMaxBodySize`,
+  10 MiB default), not `formData()`. C raises it to **30 MiB** in `next.config.ts` (the app's cap is
+  25 MB; the margin covers multipart overhead), keeps the `Content-Length` pre-check (honest 413
+  above 25 MB, before any parse), the client-side size refusal, and `formData()` as the parser
+  (proven fine at 24 MB in bare Node). Verify at 15 / 20 / 24 MB ok and 26 MB → 413 through the
+  real route. Note in the README env/config section that the proxy body limit is deliberately
+  above the upload cap.
+- **S8 under the scramble reveal:** land the justification. If C can do it in a few lines, a
+  paragraph is left-aligned while its `ScrambleText` is still revealing and justified once it
+  settles (the component knows when it locks in — expose that as a `data-` attribute or a
+  class on its wrapper and select on it); otherwise leave it and the manager eyeballs the
+  600 ms pulse. Never a `useEffect` setState (lint rule).
+- **A5-05:** direction 1 (persist today's `papers` in the feed store, bounded) as B recommends.
+
+---
+
 ## §2. ROLES — DO ONLY YOUR OWN JOB
 
 ### Agent A — Reviewer
