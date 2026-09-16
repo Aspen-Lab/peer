@@ -81,27 +81,56 @@ browser, run the reports), then report to the user in plain language and stop th
 
 ```
 ROUND:            6 (reopened 2026-09-16; extended the same day with S14–S18, §1r)
-WHOSE TURN:       C
-STOPPED BECAUSE:  B finished the turn @ 2026-09-16 20:41 UTC
-STATUS:           Round 6 fix guide written (6-01..6-08, §4 "Round 6 — Agent B"), committed in
-                   three parts. No product code changed (B does not change code). Dev server
-                   was up on port 3000 throughout B's turn (used read-only, for the icon
-                   <head> check and the browser network-log check — not started/stopped/
-                   restarted). Two of B's checks are BLOCKED, not resolved: which of icon.svg/
-                   favicon.ico Chrome actually prefers (this session's browser tool records zero
-                   favicon network requests — left for the manager's own real-browser eyeball,
-                   which §1r already assigns), and the manager's browser click-through for the
-                   interactive parts of every item (also already assigned to the manager).
-OPEN ITEMS:       S12 S13 S14 S15 S16 S17 S18 S19 (§1q + §1r) — 8 items, all still open; B only
-                  investigates, does not close anything.
-GATE (0 open):    NOT MET
+WHOSE TURN:       A
+STOPPED BECAUSE:  C finished the turn @ 2026-09-16 21:33 UTC
+STATUS:           All 8 items (6-01..6-08, S13/S14/S19/S15/S16/S17/S18/S12) implemented, one
+                   commit each, gate green after every one (final: tsc clean · eslint clean ·
+                   vitest 2657/2657). No restart needed for anything this round — icon.svg/
+                   favicon.ico, all components, globals.css and lib/theme.ts are all
+                   hot-reloadable, and every live check below was run against the hot-reloaded
+                   dev server on port 3000 (not started/stopped/restarted). One deviation from
+                   B's guide, same shape twice, logged inline at 6-01 and 6-07: the swell's
+                   literal "120ms" duration was not used — splitting `transform` into its own
+                   transition alongside the existing color/background/box-shadow transition
+                   would have Tailwind's per-property transition-property utilities silently
+                   clobber each other (confirmed by reading how every multi-property transition
+                   in this repo is written: always one combined bracket, one shared duration) —
+                   took B's own pre-sanctioned fallback (150ms for the swell too) both times.
+                   Commit-trailer note: 6-01's commit reads "Claude Opus 5" (this round's task
+                   brief's own wording); every commit from 6-02 on reads "Claude Sonnet 5" per a
+                   session-level attribution reminder that takes precedence over plain task text —
+                   logged in full at the top of "Round 6 — Agent C" in §4, not a process change.
+                   Two Browser-pane artifacts hit and isolated during live checks (both logged in
+                   full at 6-06 and 6-08, not real defects): this session's pane reports itself
+                   hidden (`tabs_context`), which freezes CSS animation timelines (the 1s theme
+                   fade) and skips real lazy-image loading (the lightbox's first click needed a
+                   forced `img.decode()` to prove the mechanism, then worked every time after).
+OPEN ITEMS:       S12 S13 S14 S15 S16 S17 S18 S19 (§1q + §1r) — all 8 implemented by C this turn;
+                  0 remain for A to find already-known-open. A now measures whether each actually
+                  meets its target.
+GATE (0 open):    NOT MET — A has not yet measured this round's 8 items against target.
 
-DONE:      rounds 1–5 (S3–S11 closed). Round 6: fix guide written, nothing implemented yet.
-GATE NOW:  tsc clean · eslint clean · vitest 2646/2646 (manager, cold, at round-5 close) —
-           UNCHANGED this turn; B touched no code.
-TODO:      C works 6-01..6-08 in order (S13 → S14 → S19 → S15 → S16 → S17 → S18 → S12), one
-           commit per item, gate after each; then A measures; manager eyeballs the tab icon, the
-           lightbox, the font steps, the 1-s colour fade and the progress bar in the browser.
+DONE:      rounds 1–5 (S3–S11 closed). Round 6: all 8 items (6-01..6-08) implemented and
+           committed by C; A has not yet measured.
+GATE NOW:  tsc clean · eslint clean · vitest 2657/2657 (C, cold-started at 2646, +4 reading-prefs
+           tests at 6-04, +7 figure-lightbox tests at 6-08).
+TODO for A:  read the served HTML/class lists and the new test files to confirm each item's shape
+           landed as C's §4 log describes (file paths and line-level detail are all in the
+           "Round 6 — Agent C" entries below, one per item) — tsc/eslint/vitest are already
+           confirmed green, so A's job is checking the actual landed shape against §1q/§1r/Ruling
+           15's binding reading, not re-running the gate. TODO for the manager's own browser: the
+           tab icon (both /favicon.ico and /icon.svg now serve the pear, confirmed byte-identical
+           to the new files — which one Chrome's own tab actually paints is still an eyeball
+           check); the lightbox (click / click-again / Esc / backdrop-click / no j-k leak — all
+           already confirmed by DOM/attribute inspection in this turn's own live checks, §4 6-08,
+           but never visually screenshotted due to the hidden-pane artifact above); the A/A font
+           steps and their persistence across reload; the sun/moon toggle's 1-s fade and its sync
+           with the Profile page's own picker (the underlying mechanism is confirmed correct by
+           this turn's own Web-Animations-API trace at 6-06, but never visually watched); every
+           icon's hover swell; the progress bar's new position/width/label while a report is
+           generating (already seen once, incidentally, in this turn's own live check: "loading
+           report..." rendered correctly under real generation); and the upload button's
+           whole-square swell.
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
