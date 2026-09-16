@@ -8378,3 +8378,39 @@ against the gate.
 the served output and the source. Continuing to part 2.
 
 Commit: `docs(abc): round 6 A part 1 — S14 icon and S13 upload button both meet target`.
+
+### Round 6 — manager browser checks (2026-09-16, while A measures)
+
+On `/papers/openalex:W7207740551` and `/`, by DOM inspection (the Browser pane is hidden in this
+session, so CSS transitions freeze and screenshots are stale — animations are read from the
+code, not the screen):
+
+- **S14:** `<link rel="icon">` now points at `/favicon.ico` and `/icon.svg` (both regenerated).
+  Tab eyeball left to the user.
+- **S13:** the `<button>` carries `cursor-pointer … hover:scale-125 active:scale-90
+  disabled:scale-100`; the svg has no scale of its own. **Closed.**
+- **S12:** hero trigger `cursor: zoom-in`; click → `role="dialog" aria-modal="true"` with the
+  same `src`, image `cursor: zoom-out`, `body.overflow = hidden`; `j` while open does not
+  navigate; `Escape` closes it, the URL is unchanged, focus returns to "Enlarge figure", scroll
+  unlocked. **Closed.**
+- **S16:** moon → `data-mode="dark"`, `--color-bg #111`, `aria-pressed` moon=true/sun=false,
+  profile `colorTheme` = `dark:ember` (one source of truth); sun → `system`. **Closed.**
+- **S17:** `withThemeTransition` adds `.theme-transition` on `<html>` (`background-color, color,
+  border-color, fill, stroke 1s` on everything but buttons/links/images), forces a recalc, runs
+  the switch, removes the class after 1.1 s; reduced-motion → none. The fade itself is not
+  observable in a hidden pane (samples froze) — **user eyeballs it.**
+- **S15 — FINDING M6-01 (WRONG DATA, blocks the gate):** clicking big A twice sets
+  `--reading-scale` 1 → 1.1 → 1.2 on the reading column and persists `scaleIndex` in
+  `peer-reading-prefs`, **but the prose font-size stays 16.5 px.** Cause (manager's reading,
+  B checks): the tokens are defined at `:root` as `--text-lead: calc(16.5px * var(--reading-scale, 1))`;
+  a custom property is computed where it is declared, so `var(--reading-scale)` resolves at
+  `:root` (unset → 1) and a value set on a descendant never re-evaluates it. The utilities must
+  multiply at the use site instead: keep the tokens plain px and add a scoped rule such as
+  `.reading-scaled :is(.text-lead, .text-body, .text-body-lg) { font-size: calc(var(--text-…) *
+  var(--reading-scale, 1)) }` (or apply the calc inside the `@utility`), with the Decision
+  sentence and panel outside the scope. Protective test: a rendered prose node's computed size
+  changes with the variable (jsdom computes `calc()` on inline styles; else a pure test of the
+  generated CSS).
+- **S18:** the four icon buttons share the `IconButton` hover classes (read); the swell is not
+  observable in a hidden pane.
+- **S19:** not observed live (no generation ran in this pass); read the markup — A covers it.
