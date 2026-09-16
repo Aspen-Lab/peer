@@ -6251,3 +6251,120 @@ fired once, not twice.
 **Blast radius**: one file, one new optional field on an internal (non-exported) type, additive.
 
 Commit: `docs(abc): round 5 B part 3 - A5-03/A5-04 fix guide (5-05, 5-06)`.
+
+#### Item 5-07 — S8: one utility, applied by adding a class name to specific literals — never by a selector on `text-lead`/`font-reading`
+
+**File**: `web/src/app/globals.css`, near the existing `measure`/`measure-lede`/`measure-ui`/
+`measure-title` utilities (lines 424-439, Tailwind v4 `@utility` syntax). **Classification:
+MISSING** (A5-08 confirmed zero hits for `text-align`/`justify`/`hyphens`/`text-wrap` anywhere in
+the nine named reader files or `globals.css`).
+
+**Fix direction**: define one new utility —
+```css
+@utility reading-justify {
+  text-align: justify;
+  hyphens: auto;
+  text-wrap: pretty;
+}
+```
+— and add its class name (`reading-justify`) to the specific class **strings**, not to a
+selector targeting `.text-lead`/`.font-reading` generally. This distinction is load-bearing:
+`report-sections.tsx`'s related-papers title link (line 415,
+`"font-reading text-lead leading-[1.4] text-heading transition-colors..."`) shares the
+`font-reading text-lead` **prefix** with `CLAIM_CLASS` (line 37,
+`"font-reading text-lead leading-[1.6] text-text"`) but is a different literal string (different
+`leading`, different color) — it is a paper title, not reading prose, and Ruling 12 named it
+explicitly as the trap to avoid ("C gives it its own class or excludes it explicitly, never by
+accident"). A selector-based rule keyed on either class name would catch it; adding
+`reading-justify` only to the specific constants/literals below does not, by construction.
+
+**Every site to add `reading-justify` to (grepped, not guessed — the literal string, not just
+the named constants, since several sites duplicate it instead of importing):**
+- `report-sections.tsx` line 37 — `CLAIM_CLASS` constant (covers every claim/method/results/
+  forYou/caveats/nextStep/review-summary use of it).
+- `report-sections.tsx` line 283 — a separate inline literal,
+  `"font-reading text-body leading-[1.55] text-text-muted mt-2"` (the per-result "What is new
+  here" line) — does **not** go through `CLAIM_CLASS`, needs its own edit.
+- `claim-list.tsx` line 18 — its own, separately-declared `CLAIM_CLASS` (identical string, no
+  shared import with `report-sections.tsx` — confirmed by grep, two files, two constants, same
+  name and value).
+- `quote-list.tsx` line 30 and `evidence-quote.tsx` line 9 and `paper-words.tsx` line 88 — all
+  three are the exact same literal,
+  `"font-reading italic text-body leading-[1.55] text-text-muted pl-5 mt-1.5"` (the verbatim-quote
+  family; confirmed by grep, three separate copies).
+- `paper-words.tsx` line 138 (TL;DR fallback) and line 157 (real abstract) —
+  `"font-reading text-lead leading-[1.6] text-text-muted measure ..."`.
+- `paper-body.tsx` line 47 — `"font-reading text-lead leading-[1.6] text-text-muted measure
+  space-y-3"` (the paper body itself).
+- `papers/[id]/page.tsx` line 555 — the honest "PDF has no readable text" message,
+  `"font-reading text-lead leading-[1.6] text-text mt-6"` — reading prose in the same family,
+  confirmed by direct read (not named by A's file list, but is the literal at the line number the
+  brief pointed to).
+- `papers/[id]/page.tsx` line 754 — the "shared terms" fallback line,
+  `"font-reading text-lead leading-[1.6] text-text mt-12"` — same family, same reasoning.
+
+**Every site to leave exactly as-is (confirmed by A, none disputed by this investigation):**
+`PULL_CLASS` and `FOOTER_CLASS` (`report-sections.tsx` 39-40), the review-section heading
+(`report-sections.tsx` ~330, already `font-mono`), the related-list title link (line 415, the
+trap above) and its meta line (419), `paper-words.tsx`'s Deck skim line (77/80, pull-quote
+family) and its footer/meta lines, `paper-body.tsx`'s `<h3>` section headings (44) and mono
+caption lines (71/74), `title-block.tsx`'s title (108) and every meta line (73/81/105),
+`lead-claim.tsx`'s lead claim (24) and caption (27), `decision-block.tsx`'s command labels (25)
+and meta line (179).
+
+**Ruling 12's resolution of A5-08's two ambiguous sites — both confirmed still left-aligned,
+nothing further to decide:** `title-block.tsx`'s `AuthorLine` byline (line 54) and
+`decision-block.tsx`'s Decision sentence (line 68) both stay left per the binding ruling ("a list
+of names, not prose"; "Peer's own status line, not part of the report"). No code exists yet for
+either, so there is nothing to revert — simply do not add `reading-justify` to either literal.
+
+**`hyphens: auto` and `lang`**: confirmed `web/src/app/layout.tsx` line 63 already sets
+`lang="en"` on `<html>` — no additional markup needed; the browser's hyphenation dictionary
+selection is already correct for every reading site named above (all English prose; the app's own
+`ScrambleText` is deliberately ASCII-only per its own file comment, so no non-English/CJK content
+ever reaches these paragraphs).
+
+**`ScrambleText`'s interaction with justify — read in full (`scramble-text.tsx`).** The
+"inline-block wrapper" question resolves cleanly: `ScrambleText` renders a `<span>` (either
+`className="inline-block ..."` in the reduced-motion/fade branch, line 154-157, or a bare
+`<span className={className}>` in the scrambling branch, line 172) that **replaces** the `<p>`
+tag entirely at call sites like `report-sections.tsx` line 330-333 (note the caller adds its own
+`block` override: `` `${CLAIM_CLASS} mt-1 block` ``). Both `block` and `inline-block` establish
+their own line boxes, so `text-align: justify` set on that same element justifies its own wrapped
+lines correctly regardless of which display value wins — **not a blocking issue**.
+
+**A real, separate risk this investigation did surface, worth flagging for C's visual check
+rather than deciding here**: the scramble animation swaps each character to a random glyph of the
+*same count* but *not the same rendered width* (Newsreader is proportional; the file's own
+comment already accepts this causes some width variance, mitigating it only by keeping glyphs
+ASCII rather than eliminating the variance). Today, under left alignment, that per-frame width
+fluctuation is invisible — it only nudges the ragged right edge, which naturally varies anyway.
+Under `text-align: justify`, the same fluctuation would land on the **inter-word spacing across
+the whole justified line** instead (justify redistributes exactly the slack that width variance
+changes frame to frame), which could read as a visible pulsing/breathing of word gaps during the
+~600 ms (`REVEAL_DURATION_MS`) reveal — a new visual effect that does not exist today, not
+something this investigation can confirm or rule out without eyes on the running animation.
+**Flagged, not decided, per this role's mandate** (A5-08 flagged two ambiguous *sites*; this is an
+ambiguous *interaction* the same class of problem). If C finds it distracting after implementing:
+the smallest mitigation is not to withhold `reading-justify` from scrambled paragraphs altogether
+(that would silently shrink S8's actual coverage for every fresh, not-yet-cached report), but to
+confirm visually first — the 600 ms window and the fact that only *unsettled* characters
+contribute width variance (settled ones lock to their final glyph and stop fluctuating) may make
+this a non-issue in practice.
+
+**Tests at risk.** Grepped for existing coverage of these class strings:
+`src/components/reader/report-sections.test.ts` (if present) and sibling test files assert on
+rendered text/structure, not on Tailwind class strings, by this repo's established pattern
+(confirmed by the style of round 1-4's own S5/S6 fix verification, which read rendered output,
+not class names) — expected low risk, but C should still grep each touched file's own test
+before editing, since a test asserting `className` via snapshot or exact string match anywhere
+would need its assertion updated to include `reading-justify`, per the "rewrite the assertion,
+comment which item changed it" rule (never delete). `reading-markdown` is a separate rendering
+path (markdown → HTML for a different surface) and is unaffected — confirmed by grep, it does not
+share any of the class constants above.
+
+**Blast radius**: one new CSS utility (additive, zero existing usages to conflict with) plus
+eight call sites gaining one additional class name each. No component's props/behavior changes;
+this is presentation-only.
+
+Commit: `docs(abc): round 5 B part 4 - S8 fix guide (5-07)`.
