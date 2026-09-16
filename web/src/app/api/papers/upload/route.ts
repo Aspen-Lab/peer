@@ -119,7 +119,18 @@ async function resolveUploadTitle(
   return titleFromFileName(fileName);
 }
 
+const OVER_CAP_RESPONSE = { error: "That PDF is larger than 25 MB." } as const;
+
 export async function POST(req: Request) {
+  // 5-02: fail fast on Content-Length before spending any time on
+  // parsing. Absent for chunked transfer-encoding or a Request built
+  // directly without a computed length (e.g. this route's own tests) — the
+  // post-parse check below is the fallback gate for those cases.
+  const contentLength = req.headers.get("content-length");
+  if (contentLength !== null && Number(contentLength) > MAX_UPLOAD_BYTES) {
+    return NextResponse.json(OVER_CAP_RESPONSE, { status: 413 });
+  }
+
   let form: FormData;
   try {
     form = await req.formData();
@@ -132,8 +143,11 @@ export async function POST(req: Request) {
   if (!(file instanceof File)) {
     return NextResponse.json({ error: "No PDF file was attached." }, { status: 400 });
   }
+  // 5-02: same message and status as the pre-parse gate above — this is the
+  // fallback for a request whose Content-Length was absent or understated,
+  // not a different failure mode the client should be able to tell apart.
   if (file.size > MAX_UPLOAD_BYTES) {
-    return NextResponse.json({ error: "That PDF is larger than 25 MB." }, { status: 400 });
+    return NextResponse.json(OVER_CAP_RESPONSE, { status: 413 });
   }
 
   const bytes = Buffer.from(await file.arrayBuffer());

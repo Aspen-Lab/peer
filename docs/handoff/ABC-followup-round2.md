@@ -6436,3 +6436,54 @@ carried into §1 STATUS below. A verifies S11 live next round after the manager 
 MB ok, 26 MB → 413, per Ruling 12/13's exact verification list).
 
 Commit: `fix(upload): raise the proxy's body-clone limit above the 25 MB upload cap`.
+
+**Deviation, logged (not from B's guide — a session-level override on this turn's own commit
+attribution):** this turn's commits end `Co-Authored-By: Claude Sonnet 5`, not `Claude Opus 5` as
+every prior round's commits in this doc do and as this round's own task brief asked for. A
+system-level instruction delivered to this session states it "replaces any earlier attribution
+guidance" for every commit and PR "from here on" — followed as the more authoritative source.
+Purely a metadata/trailer difference; no code, test, or doc content is affected. Flagging so a
+future A/B/manager reading `git log` does not read the change in trailer text as a change of
+author, tooling, or process.
+
+#### Item 5-02 — S11: the honest 413 before parsing, and the post-parse gate as fallback
+
+**Change**: `web/src/app/api/papers/upload/route.ts` — added a `Content-Length` pre-check at the
+top of `POST` (before `req.formData()` is ever called): present and over `MAX_UPLOAD_BYTES` →
+`413` with `{"error": "That PDF is larger than 25 MB."}` immediately. Changed the existing
+post-parse `file.size > MAX_UPLOAD_BYTES` check from `400` to the same `413`/message (extracted
+to a shared `OVER_CAP_RESPONSE` constant) — per B's own "what shows" description ("an over-cap
+file always gets ... (413) ... from whichever of the two gates catches it first"), so the two
+gates are indistinguishable to the client, not two different failure shapes. The `catch` around
+`formData()` (the "not multipart" message) and the magic-byte `415` are both unchanged in
+wording, per B's fix direction exactly.
+
+**Tests changed/added** (`route.test.ts`): rewrote (never deleted) "rejects a file over 25 MB
+before reading its bytes" → asserts `413` (was `400`), with a comment naming 5-02 as the change
+and noting this request has no computed `Content-Length` (built via `FormData` body, confirmed by
+B's own execution note) so it specifically exercises the post-parse fallback gate. Added a new
+test, "5-02: rejects an over-cap body via Content-Length before any parsing at all" — builds a
+`Request` with an explicit `content-length` header over the cap and a body that is never
+actually read, asserts `413` + the exact error string + `extractPdfTextFromPath` never called
+(proving the pre-parse gate returns before `formData()` even runs).
+
+**Proved the new/rewritten tests test the fix**: `git stash push -- .../route.ts` (source only,
+test file kept), ran `npx vitest run .../route.test.ts` — both the rewritten and the new test
+failed exactly as expected (`expected 400 to be 413` on both, since the pre-check does not exist
+pre-fix and the post-parse check still returned `400`). `git stash pop` restored the source;
+reran — 19/19 green.
+
+**Gate**: `npx tsc --noEmit` clean · `npx eslint .` clean · `npx vitest run --exclude
+"**/benchmark.test.ts"` → 2642/2642 (1 more than 5-01's 2641 — one net new test in this file: +1
+new, 1 rewritten in place). Full suite re-run, not just this file, per the standing rule.
+
+**Found nothing in B's guide to contest.**
+
+**Live check**: not run this item — the `Content-Length` pre-check is real dev-server-reachable
+behavior (no restart needed, unlike 5-01), but verifying it live requires a request shaped exactly
+like a real oversized upload, which is best done together with 5-01's restart-gated checks next
+round rather than a throwaway curl now that would only exercise the pre-check for a body the proxy
+would itself truncate first at today's still-10-MiB limit. Noted for A: once the manager restarts
+for 5-01, the 26 MB → 413 check also confirms this item.
+
+Commit: `fix(upload): the pre- and post-parse size gates agree on 413, not two different codes`.

@@ -86,8 +86,25 @@ describe("POST /api/papers/upload", () => {
   });
 
   it("rejects a file over 25 MB before reading its bytes", async () => {
+    // 5-02: an over-cap file now gets the honest 413 (not 400) — this
+    // request has no computed Content-Length (see the postWith helper), so
+    // it exercises the post-parse fallback gate specifically.
     const res = await postWith(pdfFile(pdfBytes(25 * 1024 * 1024 + 1)));
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(413);
+    expect(mocks.extractPdfTextFromPath).not.toHaveBeenCalled();
+  });
+
+  it("5-02: rejects an over-cap body via Content-Length before any parsing at all", async () => {
+    const oversizeLength = 25 * 1024 * 1024 + 1;
+    const req = new Request("http://localhost/api/papers/upload", {
+      method: "POST",
+      headers: { "content-length": String(oversizeLength) },
+      body: "irrelevant — never read",
+    });
+    const res = await POST(req);
+    expect(res.status).toBe(413);
+    const body = await res.json();
+    expect(body.error).toBe("That PDF is larger than 25 MB.");
     expect(mocks.extractPdfTextFromPath).not.toHaveBeenCalled();
   });
 
