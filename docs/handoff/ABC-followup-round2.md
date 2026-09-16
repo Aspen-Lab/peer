@@ -80,28 +80,20 @@ browser, run the reports), then report to the user in plain language and stop th
 ## §1. CURRENT STATE — THE SOURCE OF TRUTH
 
 ```
-ROUND:            4 — LOOP CLOSED by the manager @ 2026-09-15 ~22:10 UTC
-WHOSE TURN:       nobody (closed)
-STOPPED BECAUSE:  finished — A's closing measurement met the gate; the manager re-verified
-                   independently (browser + two live figure statuses + the gate cold).
-STATUS:           S3 S4 S5 S6 S7 all closed under Rulings 9–11. Manager's independent checks:
-                   `/api/figure` W7212288571 → source_unavailable (Springer access-check page),
-                   W7212207112 → source_unavailable (openalex.org blocked) — neither "paywalled";
-                   `/papers/openalex:W7207740551` fresh in the browser → scramble reveal observed
-                   then settled (0 glyph runs after), merged "What it proposes", no "What is new"
-                   heading, no "Why it fits you", 3 figures (FIG. 3 hero, FIG. 5, FIG. 2), methods
-                   and results with verbatim quotes, "3 claims were dropped" (A classified all as
-                   correct drops). One cosmetic fix by the manager: the throttle note no longer
-                   yields ".;" (extract.ts + its test).
-OPEN ITEMS:       none
-GATE (0 open):    MET
+ROUND:            5 (loop REOPENED by the manager 2026-09-15 — four new user items, §1m)
+WHOSE TURN:       A
+STOPPED BECAUSE:  —
+STATUS:           Round 5 opened. Manager pre-work already committed (4a0f6e7, 6851b0b,
+                   da9b46d): figure-latency cuts (one S2 lookup per paper, 3 s enrich grace,
+                   1/2/4 s backoff, 10-min empty-pool cache), S9's hover cue, an [upload] error
+                   log line. A measures the four items from scratch — treat the pre-work as
+                   unverified.
+OPEN ITEMS:       S8 S9 S10 S11 (see §1m)
+GATE (0 open):    NOT MET
 
-DONE:      round 1: 1-01..1-33 + 1-22b. round 2: 2-01..2-06. round 4: 4-01..4-05.
-GATE NOW:  tsc clean · eslint clean · vitest 2639/2639 (manager, cold, at close).
-TODO:      none for the loop. For the user: register a free SEMANTIC_SCHOLAR_API_KEY (16/17 figure
-           lookups were throttled this round; the queue keeps the status honest but a key lifts
-           the limit). Leads recorded, not authorised: html-text.ts caps (Ruling 8); non-numeric
-           figure cross-reference brackets like "[Fig. 3(b)]" in the citation fold (A round 4).
+DONE:      rounds 1–4 (S3–S7 closed). Round 5: nothing verified yet.
+GATE NOW:  tsc clean · eslint clean · vitest 2641/2641 (manager, cold, after 4a0f6e7).
+TODO:      A measures S8–S11 (see §1m for what to measure and how).
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
@@ -471,6 +463,83 @@ bare number that does not track the sequence (a table cell, a year on its own li
 alone. Lives in `extract_pdf_text.py` next to `find_running_furniture`, removed in the same
 pass. Protective test: a synthetic 4-page text with "1", "2", "3", "4" lines and one "2024"
 line that must survive. Item **4-05** for C, then A's closing measurement.
+
+---
+
+## §1m. ROUND 5 SPEC — four user items from 2026-09-15 (manager) — BINDING
+
+User's words (Chinese, translated where needed) and the binding reading:
+
+### S8 — Deep-report body text is justified; section titles stay left-aligned
+User: *"let the text from the deep report all justified, instead of aligning to the left (other
+than the titles of each part)."*
+- Justify every body-sized reading paragraph on `/papers/[id]`: the report sections (proposal
+  summary + "new here" lines, method claims, result summary and items, "What is new here" lines,
+  review contents, caveats, next step), the verbatim quotes, the abstract and the paper body.
+  Class families: `font-reading` with `text-lead` / `text-body` / `text-body-lg`.
+- Left-aligned as before: section labels (mono captions), the paper title, the lead claim
+  (display size), pull quotes (`text-title-lg`), figure captions, meta lines ("Peer's reading —
+  not a quote", "§Introduction"), the related-papers list.
+- Add `hyphens: auto` (and `text-wrap: pretty` where supported) with the justification so
+  narrow measures do not get rivers; the reading measure (`measure` utility) is unchanged.
+- One place, not per element: a scoped rule (the reading page's column) or one utility applied
+  by the shared class constants (`CLAIM_CLASS` etc.). Verify in the browser at desktop and
+  mobile widths; A verifies by reading the rendered class list / computed `text-align`.
+
+### S9 — Upload button hover: pointer cursor and a quick, slight glyph swell
+User: *"当鼠标移动到黑色的 upload 的 button 的时候，鼠标要变成手的状态，并且黑色的图标要微微快速的渐变放大。"*
+- `cursor: pointer` on hover; the white glyph scales up slightly (~1.2–1.25×) over ~120 ms with
+  the page's `ease-snap` curve; back to 1× on leave; the same cue while a PDF is dragged over
+  the button; no swell while disabled (uploading). Manager pre-landed this in
+  `components/briefing/upload-button.tsx` (4a0f6e7) — A verifies by reading the classes and,
+  where possible, the computed style; the manager eyeballs it.
+
+### S10 — Opening a paper must not take "so long", and a cached report must render instantly
+User: *"为什么我点开以后 render 了那么久？就算是之前存过的 report 也 render 了很久。已经 render 过的
+report 不应该再被 render 一遍。"*
+Manager's reading of the dev-server log before the pre-work (binding as evidence, not as the
+full cause): the report route answered in 7.7 s, but every `/api/figure` call took 20–45 s —
+Semantic Scholar 429s with the new 2.5/5/10 s backoff, up to THREE S2 lookups per paper (arXiv,
+OpenAlex, DOI), all 17 briefing cards firing at once through one process-wide queue, and an
+EMPTY figure pool never cached (so a paywalled paper rebuilt every branch for the hero figure
+and again for each section's lookup, on every visit). Pre-work landed (4a0f6e7): one S2 lookup
+per paper; 3 s grace for S2 once the paper's own sources have a figure; 1/2/4 s backoff; empty
+pools cached 10 min. Also: the report cache key moved v5 → v6 in round 1, so every report the
+user had cached under v5 regenerated once — a one-time cost, but say so.
+- **Targets (A measures on the running app, per paper, not averaged):** (a) a paper whose
+  report is already cached: the report text is on screen within 1 s of navigation, figures may
+  arrive later but never block it; (b) `/api/figure` for a paywalled/bot-walled paper answers
+  in ≤ 5 s the first time and ≤ 100 ms while its empty pool is cached; (c) the briefing page's
+  17 card lookups no longer delay a reading-page figure lookup by more than ~10 s; (d) a fresh
+  deep report on an OA paper: report text within 30 s. A reports the timings from the route
+  responses (`curl -w %{time_total}`) and, for (a), by reading how the page renders a cached
+  report (does anything — the `/reading` fetch, `bindFiguresToReport`, `useResolvedFigure` — sit
+  between the cache read and the first paint?). B enumerates the full path from click to first
+  paint before writing fix entries.
+- Never trade honesty for speed: no fake figures, no skipped evidence check.
+
+### S11 — A 14.5 MB paper PDF must upload; today it is refused as "not multipart"
+User: *"我想 upload 这个 pdf 到 peer 里去，结果回复说是 No file chosen / Expected a multipart/form-data
+upload. 我必须要 peer 能够 upload 并且 read 这种的 pdf."* (a Zotero-stored Wiley PDF, 14,519,501 bytes)
+Manager's reproduction by curl: 3, 6, 9 MB uploads succeed; 12 MB and the user's 14.5 MB file
+fail with `req.formData()` throwing `TypeError: Failed to parse body as FormData … expected
+boundary after body` (logged by the new `[upload]` line). So the wall is between 9 and 12 MB,
+in body parsing, not in the 25 MB cap — the client is not at fault ("No file chosen" is just
+the native input's label after the failed attempt).
+- B finds the exact cause by execution (Next 16 / undici `formData()` on a large multipart
+  body? a proxy/middleware body limit? a dev-server limit?) and designs the fix: read the body
+  as a stream/`arrayBuffer` and parse the single-file multipart by boundary ourselves, or have
+  the client send raw `application/pdf` bytes with the filename in a header (`X-File-Name`) —
+  whichever is proven to pass 25 MB through the real route. Keep the magic-byte check, the
+  25 MB cap and the honest error strings; the error for an over-cap file must say so, and a
+  parse failure must never be reported as "not multipart".
+- Verify with the user's actual file size class: a ≥ 14 MB real PDF (pad an arXiv PDF as the
+  manager did, or download a large OA PDF into `web/.local-data/`; never commit it). Then the
+  whole chain: record → report → figures on the reading page. A measures; the manager confirms
+  with the user's real Zotero PDF in the browser.
+
+Gate baseline for round 5: tsc clean · eslint clean · vitest 2641/2641. C's order: S11 → S10 →
+S8 → S9 (S9 is likely verify-only).
 
 ---
 
@@ -5396,3 +5465,9 @@ independently before closing: the two figure statuses above by curl, the reading
 "Why it fits you", three bound figures), the upload reading pages from round 3 (full titles,
 empty-PDF message), and the gate cold (tsc · eslint · 2639/2639). One cosmetic fix landed by the
 manager (throttle-note punctuation). Hourly clock deleted. Loop closed.
+
+### Round 5 — manager (2026-09-15, reopening)
+
+User asked for four more items (S8–S11, §1m) and for the ABC loop + hourly clock to handle them.
+Manager pre-work committed before reopening: 4a0f6e7 (figure latency cuts + hover cue + upload
+error log), 6851b0b (keyed S2 pacing), da9b46d (exponential backoff). Clock re-created. A spawned.
