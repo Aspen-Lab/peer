@@ -80,17 +80,18 @@ browser, run the reports), then report to the user in plain language and stop th
 ## §1. CURRENT STATE — THE SOURCE OF TRUTH
 
 ```
-ROUND:            6 (loop REOPENED by the manager 2026-09-16 — two new user items, §1q)
-WHOSE TURN:       B  (round 6 starts at B: both items are new features the manager has
-                  already confirmed unbuilt — see §1q "current state"; A measures after C)
+ROUND:            6 (reopened 2026-09-16; extended the same day with S14–S18, §1r)
+WHOSE TURN:       B  (B's first spawn died on a usage limit before writing anything; restart
+                  from scratch and cover S12–S18)
 STOPPED BECAUSE:  —
-STATUS:           Round 6 opened. Nothing landed yet.
-OPEN ITEMS:       S12 S13 (see §1q)
+STATUS:           Round 6 open. Nothing landed yet. Dev server was down at the manager's last
+                   check — the manager restarts it before C's turn.
+OPEN ITEMS:       S12 S13 S14 S15 S16 S17 S18 S19 (§1q + §1r)
 GATE (0 open):    NOT MET
 
 DONE:      rounds 1–5 (S3–S11 closed). Round 6: nothing yet.
 GATE NOW:  tsc clean · eslint clean · vitest 2646/2646 (manager, cold, at round-5 close).
-TODO:      B designs S12 and S13 (§1q); then C; then A's measurement + the manager's browser.
+TODO:      B designs S12–S18; C implements in the order §1r gives; A measures; manager eyeballs.
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
@@ -668,6 +669,113 @@ box beside it (it is a transform, not layout — confirm) and must not be clippe
 asserts class strings.
 
 Gate baseline: tsc clean · eslint clean · vitest 2646/2646. C's order: S13 → S12.
+
+---
+
+## §1r. ROUND 6 SPEC, PART 2 — five more user items from 2026-09-16 (manager) — BINDING
+
+User's words: *"change the web icon (web tag icon) of peer to this picture attached [a black pear
+silhouette with a curved stem, on white]. Add the following icons and function to deep report:
+1. Add 4 icons, one is a big letter A, and another one is a smaller capitaled letter A. And then
+add a sun and a moon icon button too. 2. The bigger and smaller capital letter A are to change the
+font size of the deep report. By clicking on bigger A, the font size increase a little bit, and
+smaller A font size will decrease a bit too. 3. Sun and Moon are for shifting day/night reading
+mode. By clicking sun, it is the default color following the system. If clicking the moon, then
+the report will shift color to black background and letters to white so it is more comfortable
+for night reading. 4. The shifting night/day reading should be a smooth color gradient transition
+than finish in 1 second, not sudden color change. 5. All the icon should have dynamic reaction
+with the cursor like the upload button at the home page does. And also, when deep report is on,
+and when the ai is generating the new report. There is currently a progress bar already. I want
+you to put the progress bar beneath all texts and buttons on the left part of the report when it
+is generating. Broaden the bar so it is more visible, and show words beneath it saying 'loading
+report...'"* The user's sketch places the four icons in the left panel **under the action
+buttons** (Open / Save / Skip / Copy), in the order **A (big) · A (small) · sun · moon**.
+
+### S14 — The site icon becomes the pear
+The user's image cannot be read as bytes by the agents; the manager authored an SVG of it
+(black pear silhouette, curved stem to the upper right, transparent background). C writes it
+verbatim to `web/src/app/icon.svg`, replacing the current multi-colour mark:
+
+```svg
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <path fill="#000" d="M50 30c-8 0-12 8-14 16-2 8-8 12-10 22-2 14 10 24 24 24s26-10 24-24c-2-10-8-14-10-22-2-8-6-16-14-16z"/>
+  <path fill="none" stroke="#000" stroke-width="4.5" stroke-linecap="round" d="M50 30c0-6 2-10 7-13"/>
+</svg>
+```
+
+- Current state: `web/src/app/icon.svg` (838×838, multi-path colour mark) and `web/src/app/favicon.ico`
+  both exist; `public/logo-mark.png` / `logo.png` exist too but are not the tab icon. B checks
+  which files Next 16 emits as `<link rel="icon">` and whether a browser prefers the `.ico` over
+  the `.svg` when both exist; if it does, C either removes `favicon.ico` (so the SVG wins) or
+  regenerates it as a 32×32 PNG-in-ICO of the same pear (a Python/PIL script drawing the two
+  paths is acceptable; no new npm dependency). The Next `metadata.icons` in `app/layout.tsx`, if
+  any, points at the pear. Verify by reading the served `<head>` links and opening
+  `/icon.svg` — the manager eyeballs the tab.
+- Dark tabs: a pure-black silhouette vanishes on a dark browser chrome. Ruling: keep it black
+  (the user's picture is black); do not invent a light variant.
+
+### S15 — Font-size controls for the deep report (A / A)
+- Two icon buttons in the left panel under the action buttons: a large capital **A** (increase)
+  and a small capital **A** (decrease), text glyphs in the reading face, not SVG.
+- Each click moves the report's reading size by one step; **steps: 0.85 / 0.925 / 1 / 1.1 / 1.2 /
+  1.32** (× the current size), default 1, clamped at both ends (the button at the end is
+  `aria-disabled`, dimmed, no swell). Implemented as ONE CSS variable (e.g. `--reading-scale`) on
+  the reading column that the reading text sizes multiply (`text-lead`, `text-body`,
+  `text-body-lg`, quotes, the abstract and paper body — the same prose the `reading-justify`
+  work touched), so line-height and measure scale with it. Titles, labels, captions, buttons and
+  the left panel do not scale.
+- Persisted per reader in localStorage (a small `peer-reading-prefs` key, or the existing profile
+  store if B finds a `readingPrefs` slot) so the choice survives navigation and reload;
+  hydration-safe (server and first client render at scale 1, then the stored value applies —
+  `useSyncExternalStore` or the profile store's existing hydration path; never a `useEffect`
+  setState).
+- `aria-label="Larger text"` / `"Smaller text"`; keyboard operable.
+
+### S16 — Sun / moon: day and night reading mode
+- Two icon buttons after the A / A: **sun** = the default, colours follow the system (this is the
+  existing `applyColorTheme("system")` → `html[data-mode="system"]`); **moon** = night: black
+  background, white/light text (the existing `html[data-mode="dark"]` palette — `--color-bg
+  #111111`, `--color-text #e3e3e3` … in `globals.css`). B confirms the existing `lib/theme.ts` /
+  profile `colorTheme` plumbing does exactly this and whether "dark" there already means the
+  moon; if the profile already exposes a theme setting elsewhere (Profile page), the two must
+  stay in sync (one source of truth: the profile store).
+- The active mode's icon is marked (filled vs outline, or an underline) and `aria-pressed`.
+- The palette switch applies to the whole page (it is the same `data-mode` attribute), which is
+  what "the report will shift" means in practice; the user's words name the report, and the
+  report is the page.
+
+### S17 — Smooth 1-second colour transition between day and night
+- Switching `data-mode` transitions colours over **1 s** instead of snapping: a
+  `transition: background-color 1s, color 1s, border-color 1s, fill 1s, stroke 1s` (with
+  `ease-snap` or a gentle ease) applied while the switch is in progress. Rule: the transition
+  class is added on `<html>` for the switch and removed after ~1.1 s (a timer in the click
+  handler is fine — it is not setState in an effect), so ordinary page interactions are not
+  slowed by a global 1 s colour transition. `prefers-reduced-motion` → no transition. Images and
+  figures do not fade. Verify in the browser: the manager watches the switch and reads
+  `getComputedStyle` mid-transition.
+
+### S18 — Every reader icon reacts to the cursor like the upload button
+- All four icons (and the figure lightbox trigger is NOT included — it uses the magnifier
+  cursor per S12): `cursor: pointer`, the whole button swells to 1.25× in 120 ms with
+  `ease-snap` on hover, `active:scale-90`, no swell when disabled/at the clamp. Reuse S13's
+  button classes (one shared class string or a tiny `IconButton` in `components/reader/`).
+
+### S19 — The generation progress bar: below everything in the left panel, wider, labelled
+Current state: `components/reader/decision-block.tsx` renders a 2-px `role="progressbar"` under
+the Decision sentence, above the action buttons, only while `stage` is set.
+- Move it to the **bottom of the left panel**, below the action buttons AND below the new
+  icon row (S15/S16) — the last thing in the panel while generating.
+- Height **6 px**, full panel width (not `measure-lede`), the accent fill, the same eased width
+  transition; under it a line in the mono meta style reading exactly **"loading report..."**
+  (lower-case, three dots) — add it to `components/reader/copy.ts`, never inline.
+- It appears only while generating and leaves when the report arrives (as now). `aria-live`
+  polite on the label so screen readers hear it once.
+
+### Order and gate
+C's order: **S13 → S14 → S19 → S15 → S16 → S17 → S18 → S12** (small and independent first;
+S12 last because it is the largest). Gate baseline: tsc clean · eslint clean · vitest 2646/2646.
+A measures after C; the manager eyeballs the tab icon, the lightbox, the font steps, the 1-s
+colour fade and the progress bar in the browser.
 
 ---
 
@@ -7131,3 +7239,10 @@ User asked for a figure lightbox (S12) and for the upload button to swell as a w
 standing instruction every task runs through the ABC loop with the hourly clock. Both items are
 new features whose "current state" the manager recorded in §1q from the code, so round 6 starts
 at B (A measures after C). Clock re-created. B spawned.
+
+### Round 6 — manager (2026-09-16, extension)
+
+B's first spawn died on a Sonnet session limit before writing anything (`git status` clean). The
+user added five items (site icon, font-size A/A, sun/moon night mode, 1-s colour transition,
+icon hover cues, and the progress bar's placement/label) — written as §1r (S14–S19). B
+re-spawned to cover S12–S19 in one guide.
