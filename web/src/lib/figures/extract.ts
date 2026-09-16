@@ -818,11 +818,15 @@ export function __resetSemanticScholarLimiterForTests(): void {
 }
 
 // 4-01, widened to exponential backoff for the Semantic Scholar API key
-// application (their terms ask for it): a 429 is retried after 2.5 s, then
-// 5 s, then 10 s — three retries, doubling, then final. Bounded by the list,
-// never a loop; the whole sequence is under 20 s so a briefing sweep is not
-// held hostage by one throttled paper.
-const SEMANTIC_SCHOLAR_RETRY_DELAYS_MS = [2_500, 5_000, 10_000] as const;
+// application (their terms ask for it): a 429 is retried after 1 s, then
+// 2 s, then 4 s — three retries, doubling, then final. Bounded by the list,
+// never a loop; the whole sequence is 7 s so a briefing sweep is not held
+// hostage by one throttled paper (the first cut, 2.5/5/10 s, made a single
+// figure request wait 20–45 s behind a 17-card queue).
+const SEMANTIC_SCHOLAR_RETRY_DELAYS_MS = [1_000, 2_000, 4_000] as const;
+// How long the pool waits for Semantic Scholar once the paper's own sources
+// have already produced a figure.
+const SEMANTIC_SCHOLAR_ENRICH_GRACE_MS = 3_000;
 
 async function attemptSemanticScholarFetch(ssPaperId: string): Promise<AttemptResult> {
   await acquireSemanticScholarSlot();
@@ -1448,6 +1452,12 @@ interface CachedPool {
   ts: number;
 }
 const CANDIDATE_CACHE_TTL_MS = 30 * 60 * 1000;
+// An EMPTY pool is remembered too, briefly: a paywalled or bot-walled paper
+// used to rebuild its whole pool — every branch, every queue wait — for the
+// hero figure, then again for each section's lookup, then again on the next
+// visit. Short, so a cleared throttle or a publisher that answers later gets
+// another chance within minutes.
+const EMPTY_POOL_CACHE_TTL_MS = 10 * 60 * 1000;
 const candidatePoolCache = new Map<string, CachedPool | Promise<CachedPool>>();
 
 function poolCacheKey(input: ExtractInput): string {
@@ -1487,14 +1497,20 @@ async function buildCandidatePool(input: ExtractInput): Promise<CachedPool> {
   if (arxivId) {
     originalTasks.push(tryAr5ivCandidates(arxivId));
     originalTasks.push(tryPdfCandidates(`https://arxiv.org/pdf/${arxivId}`, "open-access"));
-    semanticTasks.push(trySemanticScholarCandidates(`arXiv:${arxivId}`));
   }
-  if (openAlexId) {
-    semanticTasks.push(trySemanticScholarCandidates(`OpenAlex:${openAlexId}`));
-  }
-  if (input.doi) {
-    semanticTasks.push(trySemanticScholarCandidates(`DOI:${cleanDoi(input.doi)}`));
-  }
+  // ONE Semantic Scholar lookup per paper, by the strongest id it has —
+  // DOI, else arXiv, else OpenAlex. They all resolve to the same record, and
+  // the lookup is the one branch that queues process-wide (1-20) and backs
+  // off on a 429: three lookups per paper across a 17-card briefing was
+  // what made a single figure request wait 20–45 s behind the queue.
+  const semanticId = input.doi
+    ? `DOI:${cleanDoi(input.doi)}`
+    : arxivId
+      ? `arXiv:${arxivId}`
+      : openAlexId
+        ? `OpenAlex:${openAlexId}`
+        : null;
+  if (semanticId) semanticTasks.push(trySemanticScholarCandidates(semanticId));
 
   const originalSettled = await Promise.allSettled(originalTasks);
   for (const r of originalSettled) {
@@ -1534,11 +1550,31 @@ async function buildCandidatePool(input: ExtractInput): Promise<CachedPool> {
     }
   }
 
-  const semanticSettled = await Promise.allSettled(semanticTasks);
-  for (const r of semanticSettled) {
-    if (r.status !== "fulfilled") continue;
-    attempts.push(r.value);
-    if (r.value.status === "candidates") candidates.push(...r.value.candidates);
+  // Semantic Scholar enriches the pool; it must not hold the pool hostage.
+  // With a figure already in hand from the paper's own sources, give the
+  // lookup a short grace period and otherwise let it finish in the
+  // background (its result is not lost — the next pool build for this paper
+  // starts from a warm queue). With nothing in hand, wait for it.
+  const semanticAll = Promise.allSettled(semanticTasks);
+  const semanticSettled =
+    candidates.length > 0 && semanticTasks.length > 0
+      ? await Promise.race([
+          semanticAll,
+          waitMs(SEMANTIC_SCHOLAR_ENRICH_GRACE_MS).then(() => null),
+        ])
+      : await semanticAll;
+  if (semanticSettled === null) {
+    attempts.push({
+      status: "rate_limited",
+      candidates: [],
+      reason: "The figure index had not answered in time; the paper's own figure is shown.",
+    });
+  } else {
+    for (const r of semanticSettled) {
+      if (r.status !== "fulfilled") continue;
+      attempts.push(r.value);
+      if (r.value.status === "candidates") candidates.push(...r.value.candidates);
+    }
   }
 
   // Re-ordinalize so figure indices in the unified pool are stable 0..N-1.
@@ -1554,7 +1590,9 @@ async function getCandidatePool(input: ExtractInput): Promise<CachedPool> {
   const existing = candidatePoolCache.get(key);
   if (existing) {
     const resolved = existing instanceof Promise ? await existing : existing;
-    if (Date.now() - resolved.ts <= CANDIDATE_CACHE_TTL_MS && resolved.candidates.length > 0) {
+    const ttl =
+      resolved.candidates.length > 0 ? CANDIDATE_CACHE_TTL_MS : EMPTY_POOL_CACHE_TTL_MS;
+    if (Date.now() - resolved.ts <= ttl) {
       return resolved;
     }
     // Expired or empty — fall through to rebuild.

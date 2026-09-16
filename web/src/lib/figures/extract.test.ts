@@ -248,7 +248,7 @@ describe("trySemanticScholarCandidates — 1-20, concurrency cap + minimum inter
     vi.unstubAllEnvs();
   });
 
-  it("reports a 429 as rate_limited only after exponential backoff: 2.5 s, 5 s, 10 s", async () => {
+  it("reports a 429 as rate_limited only after exponential backoff: 1 s, 2 s, 4 s", async () => {
     // 4-01 widened for the Semantic Scholar key application: a 429 is retried
     // three times with doubling waits (re-entering the same concurrency
     // queue each time) before the lookup reports rate_limited. Four fetches
@@ -260,13 +260,13 @@ describe("trySemanticScholarCandidates — 1-20, concurrency cap + minimum inter
     const promise = trySemanticScholarCandidates("DOI:1");
     await vi.advanceTimersByTimeAsync(0);
     expect(globalThis.fetch).toHaveBeenCalledTimes(1);
-    await vi.advanceTimersByTimeAsync(2_499);
+    await vi.advanceTimersByTimeAsync(999);
     expect(globalThis.fetch).toHaveBeenCalledTimes(1);
     await vi.advanceTimersByTimeAsync(1);
     expect(globalThis.fetch).toHaveBeenCalledTimes(2);
-    await vi.advanceTimersByTimeAsync(5_000);
+    await vi.advanceTimersByTimeAsync(2_000);
     expect(globalThis.fetch).toHaveBeenCalledTimes(3);
-    await vi.advanceTimersByTimeAsync(10_000);
+    await vi.advanceTimersByTimeAsync(4_000);
     const result = await promise;
 
     expect(result.status).toBe("rate_limited");
@@ -286,7 +286,7 @@ describe("trySemanticScholarCandidates — 1-20, concurrency cap + minimum inter
     }) as unknown as typeof fetch;
 
     const promise = trySemanticScholarCandidates("DOI:1");
-    await vi.advanceTimersByTimeAsync(2_500 + 5_000);
+    await vi.advanceTimersByTimeAsync(1_000 + 2_000);
     const result = await promise;
 
     expect(result.status).not.toBe("rate_limited");

@@ -123,7 +123,8 @@ export async function POST(req: Request) {
   let form: FormData;
   try {
     form = await req.formData();
-  } catch {
+  } catch (err) {
+    console.error("[upload] formData failed:", err);
     return NextResponse.json({ error: "Expected a multipart/form-data upload." }, { status: 400 });
   }
 

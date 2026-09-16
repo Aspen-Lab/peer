@@ -94,10 +94,13 @@ export function UploadButton({ className = "" }: { className?: string }) {
           const file = event.dataTransfer.files?.[0];
           if (file) void upload(file);
         }}
-        className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-[color:var(--color-fixed-black)] transition-[opacity,transform] duration-150 ease-snap active:scale-90 disabled:opacity-50 disabled:cursor-wait ${
+        className={`group inline-flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-md bg-[color:var(--color-fixed-black)] transition-[opacity,transform] duration-150 ease-snap active:scale-90 disabled:opacity-50 disabled:cursor-wait ${
           isDragOver ? "opacity-75" : ""
         }`}
       >
+        {/* The glyph, not the square, grows on hover — a quick, small swell
+            (~120 ms) that reads as "this reacts", the way the reader's other
+            controls do; a drop hover gets the same cue. */}
         <svg
           width="15"
           height="15"
@@ -108,7 +111,9 @@ export function UploadButton({ className = "" }: { className?: string }) {
           strokeLinecap="round"
           strokeLinejoin="round"
           aria-hidden
-          className="text-[color:var(--color-fixed-white)]"
+          className={`text-[color:var(--color-fixed-white)] transition-transform duration-[120ms] ease-snap group-hover:scale-125 group-disabled:scale-100 ${
+            isDragOver ? "scale-125" : ""
+          }`}
         >
           <path d="M12 16V4" />
           <path d="M6 10l6-6 6 6" />
