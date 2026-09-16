@@ -854,6 +854,32 @@ colour fade and the progress bar in the browser.
 
 ---
 
+## §1t. RULING 16 — round 6 second pass (manager, 2026-09-16) — BINDING
+
+Six of eight closed by A (S12, S13, S14, S16 mechanism, S18, S19) and by the manager's DOM checks.
+Two remain, both in scope:
+
+- **A6-01 / M6-01 (font size does not reach the prose):** the cause is settled — a custom
+  property is computed where it is declared, so a `calc()` at `:root` never sees a descendant's
+  `--reading-scale`. Fix at the use site: tokens back to plain px; a scoped rule (or the
+  `@utility` bodies) multiplies `font-size` by `var(--reading-scale, 1)` for `text-lead`,
+  `text-body`, `text-body-lg` **inside the reading column only**; the Decision sentence and the
+  panel stay unscaled. B writes the exact selector; C adds a protective test that fails on the
+  old CSS (a generated-CSS assertion is acceptable).
+- **A6-02 (Profile "Mode" picker stuck on Auto and unresponsive):** B reproduces by execution
+  against a **freshly restarted** dev server (the manager restarts it before B's turn so a
+  hot-reload artifact is ruled out). Trace `ColorThemePicker` in `app/profile/page.tsx` (the
+  `value` it receives, `themeModeOptions`), `updateColorTheme` in `store/profile.ts`,
+  `ThemeSync`, and the persisted `colorTheme` (`mergeHydratedProfileState`, the v2 migration) —
+  say exactly which value the picker sees and why a click there does not move `data-mode`.
+  Ruling on shape: one source of truth stays the profile store; the reader's sun/moon and the
+  Profile picker must both read and write it.
+
+C's order: A6-01 → A6-02. Then A re-measures those two only; the manager eyeballs the fade and
+the swells with the pane fronted (or the user does).
+
+---
+
 ## §2. ROLES — DO ONLY YOUR OWN JOB
 
 ### Agent A — Reviewer
