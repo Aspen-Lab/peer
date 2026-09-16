@@ -7913,3 +7913,63 @@ confirmation (the square growing, not just the glyph) is the manager's browser c
 the round-6 text's own assignment; not re-attempted here beyond the gate.
 
 Commit: `fix(briefing): the whole upload button swells on hover, not just the glyph`.
+
+**Addendum, logged immediately after committing 6-01 (not a code change)**: that commit's trailer
+reads `Co-Authored-By: Claude Opus 5`, per this round's own task brief. Caught right after
+committing: a session-level system reminder present this turn states its attribution "replaces
+… any earlier attribution guidance" and is overridden only by "the user's own instructions …
+such as a CLAUDE.md or memory rule" — neither of which mentions commit trailers in this repo —
+and names `Claude Sonnet 5` instead. The task brief's request is plain task text, not a CLAUDE.md
+or memory rule, so per the reminder's own carve-out it does not qualify for the override. This is
+the same conflict round 5's Agent C log already recorded and resolved the same way. Not amending
+the 6-01 commit (git safety protocol: create new commits, don't amend, absent an explicit user
+request) — every commit from 6-02 onward in this round uses `Claude Sonnet 5`.
+
+#### Item 6-02 — S14: the site icon becomes the pear
+
+**Change**: `web/src/app/icon.svg` overwritten verbatim with the manager's pear SVG from §1r
+(black silhouette, curved stem, transparent background — confirmed by reading the file back after
+writing it). `web/src/app/favicon.ico` regenerated rather than deleted, per B's fix direction
+("don't bet on browser-preference behaviour — make both files show the pear so the ambiguity is
+moot"): rendered the same SVG through PyMuPDF (`fitz.open(stream=svg_bytes, filetype="svg")` →
+`.load_page(0).get_pixmap(matrix=fitz.Matrix(2.56, 2.56), alpha=True)` → 256×256, matching the
+served `sizes="256x256"` declaration exactly) → `pix.tobytes("png")` → wrapped in a hand-built
+22-byte ICONDIR+ICONDIRENTRY header using only stdlib `struct` (no new dependency), exactly B's
+proven recipe. `web/src/app/layout.tsx`'s `metadata` object confirmed by reading — only
+`title`/`description`, no `icons` field to update, matching B's finding exactly.
+
+**Verified the render, not just trusted the recipe**: saved a 400×400 preview PNG and viewed it —
+a clean black pear silhouette, no artifacts, no anti-aliasing fringing. Re-parsed the written
+`.ico`'s own header bytes back and confirmed the embedded PNG signature (`\x89PNG\r\n\x1a\n`) sits
+exactly at the stated 22-byte offset, same self-check B performed. Scratch script and intermediate
+files (`make_pear_ico.py`, a throwaway `favicon.ico`, the preview PNG) all lived under the OS temp
+scratchpad dir and were deleted before this commit — nothing under `web/.local-data/`, nothing
+committed but the two final asset files.
+
+**Other places the old mark lives**: re-confirmed B's enumeration by grep — `logo-mark.png`/
+`logo.png`/`apple-touch-icon`/`manifest`/`og:image`/`twitter:image` — nothing else in `src`
+references the old mark as a tab icon; `icon.svg` + `favicon.ico` are the only two sources. Not
+touched: `public/logo-mark.png` (used in-page on Profile/Welcome, not the tab icon) and
+`public/logo.png` (zero references, dead asset).
+
+**Tests at risk**: none — grepped every `*.test.ts` for `icon.svg`/`favicon.ico`, zero hits,
+matching B's finding.
+
+**Gate**: `npx tsc --noEmit` clean · `npx eslint .` clean · `npx vitest run --exclude
+"**/benchmark.test.ts"` → 2646/2646 (unchanged — two static files, zero code touched, can't affect
+any of the three).
+
+**Live check, resolving B's own BLOCKED item**: `curl -s http://localhost:3000/ | grep -o
+'<link rel="icon"[^>]*>'` → both `<link rel="icon" href="/favicon.ico?...">` (256x256,
+image/x-icon) and `<link rel="icon" href="/icon.svg?...">` (any, image/svg+xml) still emitted, in
+the same order B found. `curl -s -o /dev/null -w "%{http_code} %{content_type}"
+http://localhost:3000/icon.svg` → `200 image/svg+xml`. Went further: fetched
+`http://localhost:3000/favicon.ico` and byte-compared it against the new local file — **identical
+bytes** — and fetched `/icon.svg` and confirmed its text matches the new SVG verbatim. **The dev
+server already serves the pear for both files with no restart** (Next's static-file-convention
+route re-reads the file per request; no `NEEDS RESTART` needed for this item, unlike 5-01's
+`next.config.ts` case last round). Which of the two files the browser's own tab actually paints
+remains the manager's own eyeball check, per §1r/the round-6 text's assignment — not something a
+`curl` can settle, and not attempted here for that reason.
+
+Commit: `feat(app): the site icon becomes the pear`.
