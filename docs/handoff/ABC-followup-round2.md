@@ -6745,3 +6745,65 @@ Commit: `feat(reader): justify the report's reading prose, left-aligned while it
 - **S10 (hard refresh, cached report):** `/papers/openalex:W7212354020` reloaded with the
   report in `peer-paper-report-v6` → "What it proposes" in the DOM **810 ms** after navigation
   start (target ≤ 1 s). **Closed in the browser.**
+
+### Round 5 — Agent A (closing)
+
+Branch confirmed `complimentary-enhancement-to-main-update` before starting; `git status` clean.
+Dev server `peer-web` confirmed up (`GET /` → 200) — the manager's post-restart server, not
+restarted by A. A changed no product code. The manager's own browser checks above (S11 real
+Zotero PDF, S8, S9, S10 hard-refresh) are read as already-closed per their own log, not
+re-derived; this closing pass adds the real-HTTP-route measurements the manager's brief asked A
+to do independently with padded files, plus the remaining code checks.
+
+#### Part 1 — S11 (large PDF upload, post-restart)
+
+Padded the same base file used in A's own round-5 Part 1 and B's investigation
+(`web/.local-data/2609.02668.pdf`, 1,127,174 bytes, already on disk — not re-downloaded) to exactly
+15,728,640 / 20,971,520 / 25,165,824 / 27,262,976 bytes (15/20/24/26 MiB) with a throwaway Python
+script using the same method (`\n%` + 1023×`x` padding chunks, topped up byte-for-byte to hit the
+exact target size). Uploaded each with `curl -F "file=@…;type=application/pdf"` against the live,
+now-restarted `POST /api/papers/upload`:
+
+| Size | Bytes | Result |
+|---|---|---|
+| 15 MB | 15,728,640 | `200`, 0.607 s — real title, `textStatus: "ok"`, `pageCount: 20` |
+| 20 MB | 20,971,520 | `200`, 0.645 s — same title, `textStatus: "ok"` |
+| 24 MB | 25,165,824 | `200`, 0.642 s — same title, `textStatus: "ok"` |
+| 26 MB | 27,262,976 | **`413` `{"error":"That PDF is larger than 25 MB."}`, 0.029 s** |
+
+**Matches every round-5 target exactly**: 15/20/24 MB all succeed with a real record (the parse
+wall B found at 9-12 MB pre-restart is gone — 5-01's `proxyClientMaxBodySize: "30mb"` fix is live);
+26 MB gets the honest over-cap message from the `Content-Length` pre-check (5-02), not the old
+"not multipart" string A5-01 flagged as wrong. **A5-01 and A5-02 are both closed** — the specific
+defect A's own round-5 pass reported (over-cap files getting the wrong error) no longer reproduces
+at any sampled size.
+
+A non-PDF file renamed `.pdf` (56 bytes of plain text) → `415 {"error":"That file is not a PDF."}`,
+0.019 s — its own honest message, unchanged, unaffected by any of this round's fixes (the
+magic-byte check runs after the two size gates and before `formData()`, per B's own ordering).
+
+For the 24 MB record (`upload:458bee6639969098`):
+- `GET /api/papers/upload/458bee6639969098` → `200`, 0.017 s, full title, `textStatus: "ok"` — the
+  record round-trips cleanly.
+- `POST /api/papers/report {paper, deepReport: true}` → `200`, **10.728 s** — `depth: "deep"`,
+  `sourceKind: "pdf"`, `provenance: {basis: "model-fulltext", droppedClaims: 0, pageCount: 20}`,
+  one figure bound into a claim (`figureSource: "publisher"`). Meets S10's "fresh deep report on
+  an OA paper: report text within 30 s" target with room to spare, on a genuinely large (24 MB)
+  upload, not just a small one.
+- `GET /api/figure?id=upload:458bee6639969098` → `200`, 0.806 s, `status: "found"`. The whole
+  chain (record → report → figure) works end to end on a padded file at the top of the accepted
+  size range, not just at the wall's edge.
+
+**Client-side refusal, read in `web/src/components/briefing/upload-button.tsx`**: an exported pure
+function, `isOverUploadCap(file: Pick<File, "size">): boolean { return file.size >
+MAX_UPLOAD_BYTES; }` (lines 41-43, `MAX_UPLOAD_BYTES = 25 * 1024 * 1024` at line 29), called at
+line 72 inside `upload()` before `setIsUploading(true)` — the same shape B's fix guide asked for,
+implemented as C's own logged deviation (a testable pure function instead of an inline `if`, since
+this repo has no component-render test harness). A user's real Zotero PDF (14,519,501 bytes) is
+under the cap and would never hit this branch — consistent with the manager's own browser result
+above (uploaded successfully, no client-side refusal fired).
+
+Padded files and the fake-PDF probe were deleted immediately after this measurement;
+`web/.local-data/` remains fully gitignored and untouched in git status.
+
+Commit: `docs(abc): round 5 A closing part 1 - S11 post-restart verification`.
