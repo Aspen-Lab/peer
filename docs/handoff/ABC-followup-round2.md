@@ -5674,3 +5674,23 @@ design the fix):**
   Peer's own one-line status sentence, not part of "the deep report."
 
 Commit: `docs(abc): round 5 A part 3 - S8 code-state inventory`.
+
+#### Part 4 — S9 (hover cue), code state
+
+`web/src/components/briefing/upload-button.tsx`, one file, both spec questions:
+- Button (line 97): `"group inline-flex h-9 w-9 shrink-0 cursor-pointer items-center
+  justify-center rounded-md bg-[color:var(--color-fixed-black)] transition-[opacity,transform]
+  duration-150 ease-snap active:scale-90 disabled:opacity-50 disabled:cursor-wait ..."` —
+  **`cursor-pointer` present.**
+- Glyph (line 114): `"text-[color:var(--color-fixed-white)] transition-transform
+  duration-[120ms] ease-snap group-hover:scale-125 group-disabled:scale-100 ${isDragOver ?
+  "scale-125" : ""}"` — **120 ms `transition-transform`, `group-hover:scale-125`** (1.25×, inside
+  the spec's 1.2-1.25× range), **`group-disabled:scale-100`** (stays 1× while
+  `disabled={isUploading}`), and **the drag-over branch applies the identical `scale-125`.**
+
+**S9 verdict: built, matches every named requirement in the code** — cursor, swell amount, timing,
+the disabled exception, and the drag-over cue are all present exactly as specified. A cannot open
+a browser to read the computed style or watch the animation fire; that confirmation is the
+manager's, per the spec's own instruction.
+
+Commit: `docs(abc): round 5 A part 4 - S9 code-state verification`.
