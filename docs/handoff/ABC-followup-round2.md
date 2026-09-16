@@ -8536,3 +8536,68 @@ not qualify for the override. This is the identical conflict rounds 5 and 6's ow
 already recorded and resolved the same way. Part 1's commit above was already made with `Claude
 Opus 5` before this was caught (not amended, per git safety protocol — create new commits, don't
 amend); every commit from part 2 onward in this entry uses `Claude Sonnet 5`.
+
+### Round 6 — Agent A (part 3 of 4 — S12 figure lightbox)
+
+**Code review — matches C's log and §1q/Ruling 15 exactly, no differences found.**
+`figure-lightbox.tsx` read in full: trigger is `<button type="button" aria-label="Enlarge
+figure" className={cn("cursor-zoom-in block", wrapperClassName)}>` wrapping the thumbnail `<img>`
+— keyboard-operable for free, matches S12(d)'s native-button alternative. `clampFigureSize`
+exported as a pure function: `Math.min(natural*2, viewport*0.96)` per axis, aspect preserved via
+one shared `scale`, zero-size guard for a broken image. Overlay: `role="dialog" aria-modal="true"
+aria-label={caption ?? alt}`, a real `<button aria-label="Close figure" className="absolute
+inset-0 bg-black/90">` backdrop (not a bare `<div onClick>`), the enlarged `<img
+className="cursor-zoom-out object-contain" onClick={close} style={{maxWidth:'96vw',
+maxHeight:'96vh', width, height}}>` (own `onClick` too), caption in the mono-meta style,
+`z-[80]`. Keyboard guard: a capture-phase `document.addEventListener("keydown", ..., true)`
+inside a `useEffect` gated on `isOpen`, calling `stopPropagation()` on every key and closing on
+Escape — confirmed `git diff d164aba..HEAD -- web/src/components/keyboard.tsx` is empty, zero
+changes there. Body-scroll lock and focus-in/return are two more DOM-effects, no `setState` in
+either body. `git diff d164aba..HEAD -- web/src/components/cards/feed-tile.tsx` is empty —
+confirmed byte-for-byte untouched. `paper-plate.tsx`: `lightbox?: boolean` prop, default `false`,
+both the plain-`<img>` branch and the `FigureLightbox` branch sit side by side in the same
+`showFigure` conditional (nothing removed, only chosen between); `app/papers/[id]/page.tsx`'s
+`<PaperPlate ... lightbox />` is the only caller passing it. `matted-figure.tsx` renders through
+`FigureLightbox` unconditionally, matching S12's "every report figure" reading. `globals.css` has
+`@keyframes lightbox-in` + `.animate-lightbox-in { animation: lightbox-in 150ms
+var(--ease-snap...) both; }`, matching the spec's literal 150ms/ease-snap (no accepted-cost
+deviation on this one — the transition-property conflict that forced 6-01/6-07/6-06 to 150ms
+doesn't apply to `animation`, a separate CSS mechanism from `transition`). Reduced motion is
+already covered by the existing global `0.01ms !important` rule.
+
+**Live checks, Browser pane tools, DOM/attribute queries (no screenshots)** on
+`/papers/openalex:W7207740551`: found **2** `[aria-label="Enlarge figure"]` triggers (hero +
+one section figure via `MattedFigure`), both carrying `cursor-zoom-in`. Same hidden-pane
+lazy-loading artifact C logged at 6-08 (`naturalWidth: 0` until forced `loading="eager"` +
+`img.decode()`) — reproduced identically, not a new finding.
+
+- **Hero**: clicked the trigger → `role="dialog"` exists, `aria-modal="true"`, the dialog's
+  `<img>` `src` is byte-identical to the thumbnail's own `src` (compared by string equality, not
+  printed — one is a 282,722-character data URL), `document.body.style.overflow === "hidden"`,
+  and focus moved into the dialog (`document.activeElement === dialog`). Dispatched a `j`
+  keydown while open: URL unchanged, dialog still open — **no shortcut leak**. Dispatched
+  `Escape`: dialog gone, `body.style.overflow` restored to `""`, focus returned to the trigger
+  button (confirmed via `document.activeElement`), and **`location.href` unchanged** — proves the
+  capture-phase guard stopped Escape before `keyboard.tsx`'s own bubble-phase "back to the
+  briefing" handler ever ran.
+- **Section figure**: clicked its trigger → dialog opened; clicked the `"Close figure"` backdrop
+  button → dialog gone, still on the same paper URL.
+
+**Tests**: `figure-lightbox.test.ts` read in full — 3 `renderToStaticMarkup` smoke-test cases on
+the default closed render (`aria-label="Enlarge figure"`/`cursor-zoom-in` present;
+`role="dialog"`/`aria-modal`/`"Close figure"` absent; `src`/`alt` pass through) plus 4
+`clampFigureSize` unit tests (viewport-bound scale-up, 2x-natural cap, oversized-shrink-to-fit,
+zero-size guard) — 7 tests total, matching the 2650→2657 jump. C's log already records the
+revert-proof (temporarily replaced `clampFigureSize` with a passthrough, 3/4 clamp tests failed
+as expected, restored, 7/7 green) — re-confirmed by reading the log, not re-executed (re-running
+the same revert-and-restore adds no new information over C's own logged execution).
+
+**Verdict, part 3: 0 open differences.** Every sub-check in §1q(a)-(f) and Ruling 15's S12/S14
+corrections is confirmed live: cursor states, enlarge/shrink, Esc/backdrop/image-click-to-close
+with no keyboard leak and no navigation, ARIA roles and labels, focus management, the 2x cap,
+`feed-tile.tsx` and `keyboard.tsx` both provably untouched. Visual appearance (centering, backdrop
+darkness, the fade-in's actual look) remains the manager's own eyeball check, per this round's own
+assignment — not something DOM inspection can settle, and not attempted here for that reason.
+
+Commit: `docs(abc): round 6 A part 3 - S12 lightbox meets target, 0 differences`.
+
