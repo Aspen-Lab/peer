@@ -13,6 +13,7 @@ import { IconArrowUpRight, IconLink, IconMoon, IconSun } from "@/components/icon
 import { Kbd } from "@/components/ui/kbd";
 import { cn } from "@/lib/cn";
 import type { PaperReading } from "@/lib/papers/reading";
+import { withThemeTransition } from "@/lib/theme";
 import { useProfileStore } from "@/store/profile";
 import { READING_SCALE_STEPS, useReadingPrefsStore } from "@/store/reading-prefs";
 import type { ColorTheme, ThemeMode } from "@/types";
@@ -83,7 +84,10 @@ export function DecisionBlock({
   const updateColorTheme = useProfileStore((s) => s.updateColorTheme);
   const [mode, accent] = colorTheme.split(":") as [ThemeMode, string];
   const setMode = (nextMode: "system" | "dark") => {
-    updateColorTheme(`${nextMode}:${accent}` as ColorTheme);
+    // S17: a click fades the palette over ~1s; hydration and background
+    // profile syncs (which also call updateColorTheme indirectly via
+    // ThemeSync) never go through this wrapper, so they stay instant.
+    withThemeTransition(() => updateColorTheme(`${nextMode}:${accent}` as ColorTheme));
   };
 
   return (

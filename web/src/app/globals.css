@@ -667,3 +667,27 @@ body {
   }
 }
 
+/* S17: the sun/moon switch (lib/theme.ts's `withThemeTransition`) adds this
+   class to <html> for ~1.1s so the palette eases instead of snapping.
+   Excludes every native button/link and every img: buttonVariants/
+   iconButtonVariants already declare their own 150ms
+   transition-[color,background-color,box-shadow,transform] (a single
+   transition-property value — stacking a second, unlayered rule on the
+   same property would replace it outright, not merge, per the same
+   conflict the upload button's own hover-swell fix (6-01) traced), so a
+   button a reader is actively touching keeps its normal snappy feel
+   instead of lagging behind the page; images/figures never fade, per the
+   spec. `prefers-reduced-motion` already forces every transition-duration
+   to 0.01ms above, which also collapses this one — no separate guard
+   needed here, though `withThemeTransition` itself also checks
+   `matchMedia` before ever adding the class, belt-and-suspenders. */
+.theme-transition,
+.theme-transition *:not(button):not(a):not(img) {
+  transition:
+    background-color 1s,
+    color 1s,
+    border-color 1s,
+    fill 1s,
+    stroke 1s;
+}
+

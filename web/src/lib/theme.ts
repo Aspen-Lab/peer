@@ -46,3 +46,41 @@ export function applyColorTheme(theme: ColorTheme | string) {
   root.setAttribute("data-mode", mode);
   root.setAttribute("data-accent", accent);
 }
+
+const THEME_TRANSITION_CLASS = "theme-transition";
+// A little over the CSS rule's own 1s, so the class outlives the
+// transition it triggers rather than cutting it off early.
+const THEME_TRANSITION_MS = 1100;
+
+/**
+ * S17: runs `run` (a theme-changing action, e.g. `updateColorTheme`) with a
+ * ~1s colour fade instead of an instant snap. Deliberately not wired inside
+ * `applyColorTheme` itself: `ThemeSync` calls that on every hydration and
+ * every background profile sync, neither of which is a user click — fading
+ * those would play the transition on every page load. Only call this from
+ * an actual click handler.
+ */
+export function withThemeTransition(run: () => void): void {
+  if (typeof document === "undefined" || typeof window === "undefined") {
+    run();
+    return;
+  }
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    run();
+    return;
+  }
+  const root = document.documentElement;
+  root.classList.add(THEME_TRANSITION_CLASS);
+  // Force a style recalc before `run()` changes the palette attributes:
+  // without this, the class-add and the attribute change can land in the
+  // same synchronous style recalculation, so the browser never registers
+  // a "before" value to fade from and the colours snap instead of easing
+  // (confirmed by execution: without this line, a click-triggered switch
+  // left `background-color` visibly stuck at the old value well past the
+  // transition's own 1.1s window, while the identical attribute change
+  // made directly — no wrapper — updated instantly, isolating the cause
+  // to this add-then-change ordering rather than the CSS rule itself).
+  void root.offsetHeight;
+  run();
+  window.setTimeout(() => root.classList.remove(THEME_TRANSITION_CLASS), THEME_TRANSITION_MS);
+}

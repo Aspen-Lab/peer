@@ -8099,3 +8099,58 @@ actually flips the palette, and the Profile page's own picker reflects the same 
 manager's browser click-through, not attempted here.
 
 Commit: `feat(reader): sun / moon day-night reading mode toggle`.
+
+#### Item 6-06 — S17: 1-second colour transition
+
+**Change**: `web/src/lib/theme.ts` — new export `withThemeTransition(run: () => void)`: skips
+straight to `run()` under `prefers-reduced-motion: reduce` or when `document`/`window` are
+unavailable; otherwise adds a `theme-transition` class to `<html>`, forces a synchronous style
+recalculation (`void root.offsetHeight`, standard practice for "add a transition-enabling class
+then change the property in the same tick" — without it a browser can coalesce both into one
+recalculation with no "before" value to fade from), runs the theme change, then removes the class
+after 1100ms (100ms past the CSS rule's own 1s, so the class outlives the transition it triggers).
+`web/src/app/globals.css` — new unlayered rule next to the existing reduced-motion block:
+`.theme-transition, .theme-transition *:not(button):not(a):not(img) { transition:
+background-color 1s, color 1s, border-color 1s, fill 1s, stroke 1s; }`, per B's recommended
+selector exactly — excludes every native button/link (which already own their own 150ms
+`transition-[color,background-color,box-shadow,transform]` from `buttonVariants`/
+`iconButtonVariants`; a second unlayered rule on the same `transition-property` value would
+replace it outright rather than merge, the identical conflict 6-01 traced for the upload button)
+and every `<img>` (images/figures never fade, per spec). `web/src/components/reader/
+decision-block.tsx` — the S16 `setMode` handler now calls `withThemeTransition(() =>
+updateColorTheme(...))` instead of calling `updateColorTheme` directly.
+
+**Verified, not assumed**: traced all five `applyColorTheme` call sites (the boot script,
+`updateColorTheme`, `mergeRemoteProfile`, `importProfile`, `logOut`) plus `ThemeSync`'s own effect
+— confirmed `withThemeTransition` is called from nowhere except the two new reader buttons, so
+hydration and background profile syncs stay instant, matching B's decisive finding exactly.
+Confirmed the reduced-motion block already forces every `transition-duration` to `0.01ms
+!important`, a second, independent guard beneath `withThemeTransition`'s own `matchMedia` check.
+
+**Live-checked in the browser, with an honest complication**: clicking the reader's sun/moon
+buttons correctly flips `data-mode` and `--color-bg` every time (confirmed repeatedly). Checking
+whether the fade itself plays produced a confusing result at first — `document.body`'s computed
+`background-color` appeared stuck at the pre-click value well past the 1.1s window. Isolated the
+cause with the Web Animations API (`document.body.getAnimations()`): **two transition animations
+are correctly created**, with the exact right `duration: 1000` and the right properties — but
+their `currentTime`/`progress` never advance from 0. `tabs_context` explained why: **"the Browser
+pane is currently hidden"** in this session — a hidden pane's compositor doesn't advance its
+animation timeline, the same reason `computer` screenshots intermittently timed out this turn with
+"the page did not finish rendering... Claude's window is minimized or hidden." This is a property
+of the automated test harness's hidden pane, not a defect in the CSS or the click handler — the
+transition is demonstrably created correctly with the correct timing; it simply never got a frame
+to animate across in this hidden session. Recorded here in full so a future agent doesn't re-chase
+this exact false lead. The reflow line stays in `withThemeTransition` regardless — it is correct,
+standard defensive practice for this exact "add class, then change property" pattern independent
+of this finding, not something adopted to chase the apparent stall.
+
+**Tests at risk**: none — no test exercises `applyColorTheme`/`ThemeSync`/CSS transition timing,
+matching B's finding; confirmed by reading `profile.test.ts`'s test names.
+
+**Gate**: `npx tsc --noEmit` clean · `npx eslint .` clean · `npx vitest run --exclude
+"**/benchmark.test.ts"` → 2650/2650 (unchanged).
+
+**Found nothing in B's guide to contest** beyond the live-check complication above, which is
+environmental, not a guide error.
+
+Commit: `feat(reader): fade the palette over 1s when the reader switches day/night mode`.
