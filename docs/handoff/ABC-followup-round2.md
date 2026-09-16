@@ -81,56 +81,69 @@ browser, run the reports), then report to the user in plain language and stop th
 
 ```
 ROUND:            6 (reopened 2026-09-16; extended the same day with S14–S18, §1r)
-WHOSE TURN:       A
-STOPPED BECAUSE:  C finished the turn @ 2026-09-16 21:33 UTC
-STATUS:           All 8 items (6-01..6-08, S13/S14/S19/S15/S16/S17/S18/S12) implemented, one
-                   commit each, gate green after every one (final: tsc clean · eslint clean ·
-                   vitest 2657/2657). No restart needed for anything this round — icon.svg/
-                   favicon.ico, all components, globals.css and lib/theme.ts are all
-                   hot-reloadable, and every live check below was run against the hot-reloaded
-                   dev server on port 3000 (not started/stopped/restarted). One deviation from
-                   B's guide, same shape twice, logged inline at 6-01 and 6-07: the swell's
-                   literal "120ms" duration was not used — splitting `transform` into its own
-                   transition alongside the existing color/background/box-shadow transition
-                   would have Tailwind's per-property transition-property utilities silently
-                   clobber each other (confirmed by reading how every multi-property transition
-                   in this repo is written: always one combined bracket, one shared duration) —
-                   took B's own pre-sanctioned fallback (150ms for the swell too) both times.
-                   Commit-trailer note: 6-01's commit reads "Claude Opus 5" (this round's task
-                   brief's own wording); every commit from 6-02 on reads "Claude Sonnet 5" per a
-                   session-level attribution reminder that takes precedence over plain task text —
-                   logged in full at the top of "Round 6 — Agent C" in §4, not a process change.
-                   Two Browser-pane artifacts hit and isolated during live checks (both logged in
-                   full at 6-06 and 6-08, not real defects): this session's pane reports itself
-                   hidden (`tabs_context`), which freezes CSS animation timelines (the 1s theme
-                   fade) and skips real lazy-image loading (the lightbox's first click needed a
-                   forced `img.decode()` to prove the mechanism, then worked every time after).
-OPEN ITEMS:       S12 S13 S14 S15 S16 S17 S18 S19 (§1q + §1r) — all 8 implemented by C this turn;
-                  0 remain for A to find already-known-open. A now measures whether each actually
-                  meets its target.
-GATE (0 open):    NOT MET — A has not yet measured this round's 8 items against target.
+WHOSE TURN:       B
+STOPPED BECAUSE:  A finished the turn @ 2026-09-16 (part 4 of 4) — GATE NOT MET, 2 real,
+                   execution-confirmed differences (A6-01, A6-02), full log in §4 "Round 6 —
+                   Agent A".
+STATUS:           A measured all 8 items with the Browser pane tools (live DOM/attribute/
+                   computed-style checks, not screenshots — this session's pane also reports
+                   itself hidden). 6 of 8 items (S12, S13, S14, S17, S18, S19) confirmed meeting
+                   target with 0 differences, live-checked in the browser. 2 of 8 (S15, S16) each
+                   carry one new, real, execution-confirmed difference the gate/code-reading pass
+                   could not have caught:
+                     - A6-01 (S15): the font-size ladder updates the store and the
+                       `--reading-scale` CSS variable correctly, but the reading prose's actual
+                       font-size never changes on any of the 6 steps. Root mechanism (verified by
+                       an isolated, app-code-free synthetic CSS test, not guessed): `--text-lead`/
+                       `--text-body`/`--text-body-lg` are declared exactly once, in `@layer theme`
+                       at `:root, :host`, and CSS resolves a custom property's own internal var()
+                       references once, at that single declaration — a descendant that only
+                       overrides `--reading-scale` (never redeclares the alias itself) inherits
+                       the value already frozen at `:root` with scale=1 baked in. B's own 6-04
+                       confidence language ("This is how [it] is actually achieved, not merely
+                       proposed") is the claim this disproves by execution.
+                     - A6-02 (S16 sync requirement): `/profile`'s own Mode picker (Auto/Light/
+                       Dark) shows "Auto" permanently pressed and does not respond to its own
+                       clicks, even though `data-mode`/localStorage both correctly read "dark"
+                       after the reader's moon button is clicked — survives a genuine hard
+                       reload. The accent-color picker on the same page correctly tracks the
+                       store, so only the 3-way mode control is affected. A flagged, did not
+                       diagnose: could not rule out a dev-session artifact (no restart available
+                       to A) vs. a real bug in `ColorThemePicker`/`AppearanceCard`.
+                   Two items previously flagged as "not observable, hidden pane" by C (the 1s
+                   theme fade at 6-06; lazy-load-blocks-the-lightbox at 6-08) were re-hit by A in
+                   the identical shape and are NOT counted as new differences — this round's own
+                   text pre-authorized "not observable here" over "broken" for exactly this case.
+                   The 150ms-vs-120ms hover-swell duration (S13/S18, logged at 6-01/6-07) is also
+                   not counted — an already-explained, already-accepted cost.
+                   Commit-trailer note, standing: this round's own task-brief text asks for
+                   "Claude Opus 5"; the session-level attribution reminder (not a CLAUDE.md/
+                   memory rule, so the brief's plain text doesn't override it) names
+                   "Claude Sonnet 5" — same conflict rounds 5 and 6's Agent C log already
+                   recorded, resolved the same way both times: A's part-1 commit reads "Claude
+                   Opus 5" (caught right after), every commit from part 2 on reads
+                   "Claude Sonnet 5".
+OPEN ITEMS:       A6-01 (S15 font-scale has no visual effect), A6-02 (Profile page theme picker
+                  desynced/unresponsive). Both real, execution-confirmed, need B's investigation.
+GATE (0 open):    NOT MET — 2 open differences (A6-01, A6-02).
 
-DONE:      rounds 1–5 (S3–S11 closed). Round 6: all 8 items (6-01..6-08) implemented and
-           committed by C; A has not yet measured.
-GATE NOW:  tsc clean · eslint clean · vitest 2657/2657 (C, cold-started at 2646, +4 reading-prefs
-           tests at 6-04, +7 figure-lightbox tests at 6-08).
-TODO for A:  read the served HTML/class lists and the new test files to confirm each item's shape
-           landed as C's §4 log describes (file paths and line-level detail are all in the
-           "Round 6 — Agent C" entries below, one per item) — tsc/eslint/vitest are already
-           confirmed green, so A's job is checking the actual landed shape against §1q/§1r/Ruling
-           15's binding reading, not re-running the gate. TODO for the manager's own browser: the
-           tab icon (both /favicon.ico and /icon.svg now serve the pear, confirmed byte-identical
-           to the new files — which one Chrome's own tab actually paints is still an eyeball
-           check); the lightbox (click / click-again / Esc / backdrop-click / no j-k leak — all
-           already confirmed by DOM/attribute inspection in this turn's own live checks, §4 6-08,
-           but never visually screenshotted due to the hidden-pane artifact above); the A/A font
-           steps and their persistence across reload; the sun/moon toggle's 1-s fade and its sync
-           with the Profile page's own picker (the underlying mechanism is confirmed correct by
-           this turn's own Web-Animations-API trace at 6-06, but never visually watched); every
-           icon's hover swell; the progress bar's new position/width/label while a report is
-           generating (already seen once, incidentally, in this turn's own live check: "loading
-           report..." rendered correctly under real generation); and the upload button's
-           whole-square swell.
+DONE:      rounds 1–5 (S3–S11 closed). Round 6: all 8 items implemented by C; A measured live —
+           6/8 (S12/S13/S14/S17/S18/S19) confirmed meeting target, 2/8 (S15/S16) carry new,
+           real differences (A6-01, A6-02).
+GATE NOW:  tsc clean · eslint clean · vitest 2657/2657 (A re-ran the full gate cold this turn,
+           unchanged from C's own count — no code changed).
+TODO for B:  investigate A6-01 (why `--reading-scale` overrides on the wrapper divs never reach
+           the `:root`-declared `--text-lead`/`--text-body`/`--text-body-lg` tokens — A's part-2
+           log names the mechanism and includes a synthetic repro, marked unverified-by-B and to
+           be checked by execution, not inherited) and A6-02 (why `/profile`'s Mode picker shows
+           "Auto" pressed and ignores clicks regardless of the real stored/applied theme — A's
+           part-2 log traced only as far as `AppearanceCard`'s prop being an unmemoized
+           passthrough; B should trace further, and should test whether the mismatch survives a
+           restart before assuming A's "possible dev-session artifact" caveat). TODO for the
+           manager's own browser, unrelated to A6-01/A6-02 and not blocking: the tab icon in a
+           real tab; the 1-s fade's actual visual look; every icon's hover swell as a felt
+           interaction; the lightbox's full-screen visual appearance; the progress bar during a
+           real report generation.
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
@@ -147,6 +160,7 @@ part-way.
 | 4 | 0 (A4-01, A4-02 informational only) | **MET** — all 6 of round 3's items (A3-01..A3-06) confirmed closed live: S3 meets Ruling 10's target on all 3 papers on every officially-required run, including the JECST furniture-splice and 2501.00663 zero-width-space questions named by Ruling 10/11; S4 meets Ruling 10's target (both Springer papers `source_unavailable` with the bounce reason, rate-limit escalation resolved 0/17). S5/S6/S7 no regression. One new within-ceiling finding (A4-01) recorded for the standing-exclusions list, not blocking. Gate clean (tsc/eslint/vitest 2639/2639). |
 | 5 | 6 (A5-01..A5-05, A5-08; A5-09 closed) | NOT MET — loop reopened for S8-S11. S9 (A5-09) closes clean on the code. S8 (A5-08) is entirely unbuilt. S10 misses its own stated targets on both the first `/api/figure` call (5.7-9.4 s vs a 5 s ceiling, A5-03) and the cached call (0.19-2.36 s vs a 100 ms ceiling, A5-04), and a report already cached does not always render within 1 s because `paper` alone gates the whole page and is not always already in the client's persisted store (A5-05); two other S10 targets already meet spec (A5-06, A5-07). S11's upload wall is confirmed exactly where the manager's repro said, plus one new gap: an over-cap file gets the same wrong "not multipart" error instead of its own honest size message (A5-01, A5-02). Gate clean (tsc/eslint/vitest 2641/2641). |
 | 5 (closing) | 1 (A5b-04; A5b-03 explained by an existing ruling) | NOT MET, narrowly — all 6 of round 5's items (5-01..5-07) confirmed closed live, most via the manager's own browser checks: S11 (padded 15/20/24 MB + the user's real 14.5 MB Zotero PDF), S8 (justified prose + scramble-safe switch, live-computed styles), S9 (hover cue, live-computed scale), S10(a) cached-report-within-1s (810 ms) and S10(b) cached-figure-within-300ms (8-19 ms) all closed. One real, newly-tested gap: S10 target (c)'s concurrent-flood delay measured ~14-15 s on a genuinely cold paper (vs. ~10 s), a shape A5-06 itself flagged as untested last round (A5b-04) — not addressed by any of round 5's landed items. A second, smaller miss (one paper's first-call time, 10.748 s vs ≤10s) is explained in advance by item 5-05's own named risk, not a fresh defect (A5b-03). Gate clean (tsc/eslint/vitest 2646/2646). |
+| 6 | 2 (A6-01, A6-02) | NOT MET — 6 of round 6's 8 items (S12 lightbox, S13 upload swell, S14 icon, S17 fade mechanism, S18 hover cues, S19 progress bar) confirmed meeting target with live Browser-pane checks (DOM/attribute/computed-style, not screenshots). 2 real, execution-confirmed differences neither B nor C could have caught from code reading alone: S15's `--reading-scale` mechanism updates the store and the CSS variable correctly but never actually changes any reading-prose font-size, on any of its 6 steps (a CSS custom-property inheritance gap, confirmed with an isolated synthetic repro, not just the app's own code) — A6-01. The Profile page's own theme-mode picker shows "Auto" permanently pressed and does not respond to clicks, even though the applied theme and its own localStorage both correctly say "dark" — A6-02, flagged not diagnosed (a possible dev-session artifact could not be ruled out without a restart). The 1s fade and the 120ms-vs-150ms swell timing are each re-confirmed as already-logged, not-new (hidden-pane-frozen / accepted-cost respectively). Gate clean (tsc/eslint/vitest 2657/2657, re-run cold by A). |
 
 ---
 
@@ -8601,3 +8615,70 @@ assignment — not something DOM inspection can settle, and not attempted here f
 
 Commit: `docs(abc): round 6 A part 3 - S12 lightbox meets target, 0 differences`.
 
+### Round 6 — Agent A (part 4 of 4 — the gate, cold, and the difference list)
+
+**Gate, run cold from `web/`:**
+- `npx tsc --noEmit` → clean, zero errors.
+- `npx eslint .` → clean, zero errors/warnings.
+- `npx vitest run --exclude "**/benchmark.test.ts"` → **2657/2657** (119 test files), matching
+  the round's own stated baseline exactly. No regression from C's last recorded run.
+
+**Difference list, ranked by what the user notices first, real inputs only (not fixtures — this
+round has no separate-fixture-vs-real-data split; every check above ran against the live,
+hot-reloaded dev server and the actual served DOM/CSS):**
+
+1. **A6-01 — S15's font-size controls have no visible effect (real, high severity).** Clicking
+   "Larger text"/"Smaller text" on the reading page correctly updates the persisted store and the
+   `--reading-scale` CSS variable on both wrapper elements — but the actual reading prose
+   (`text-lead`/`text-body`/`text-body-lg`) never changes size, on any of the six ladder steps,
+   confirmed by direct `getComputedStyle` measurement plus an isolated, app-code-free synthetic
+   CSS reproduction (see part 2's log entry for the mechanism: a custom property declared only
+   once, at `:root`, freezes its own internal `var()` substitution there — a descendant
+   overriding only the *referenced* variable, never the alias itself, does not retroactively
+   change what already inherited down). This is the one thing S15 exists to do, and it does not
+   happen. Everything else about S15 (buttons, clamp state, ARIA, localStorage persistence
+   across reload) is correctly built.
+2. **A6-02 — the Profile page's theme-mode picker doesn't track or respond to the applied theme
+   (real, medium severity).** After the reader sets night mode (`data-mode="dark"`, confirmed by
+   `localStorage`), `/profile`'s own "Mode" picker shows `Auto` permanently pressed, never `Dark`,
+   even after a genuine hard reload; clicking its `Light`/`Dark` buttons does not change
+   `data-mode` either. The accent-color picker on the same page correctly reflects the stored
+   accent, so only the three-way mode control is affected. Breaks §1r/S16's explicit
+   "the two must stay in sync" requirement. Not diagnosed (A's role stops at reporting); flagged
+   for B with the one caveat that a dev-session artifact (this server has run continuously,
+   hot-reloaded, through all of round 6) could not be ruled out without a restart, which A may
+   not perform.
+3. **Not a difference — explained, logged, accepted cost, unchanged from B/C's own sanctioned
+   fallback:** the hover swell on the upload button and all four new reader icons runs at a
+   shared 150ms instead of the spec's literal 120ms, because two Tailwind transition-property
+   utilities on one element clobber rather than merge (traced independently at 6-01 and 6-07,
+   applied consistently both times).
+4. **Not a difference — not observable in this session, matching C's own logged finding, not
+   re-litigated as new:** the 1-second day/night colour fade creates the correct transition
+   objects (right duration, right properties, added/removed at the right times) but this
+   session's Browser pane reports itself hidden, which freezes the animation timeline —
+   `background-color` never visibly moves within the session. C hit and logged the identical
+   artifact at 6-06.
+
+**Standing exclusions, re-listed by name (none new this round, none dropped):**
+`src/lib/events/benchmark.test.ts` (a live-network test on dead code, excluded since round 1);
+A4-01 (a within-ceiling S3 finding, informational only, round 4); A5b-03 (one paper's first-call
+timing, explained in advance by item 5-05's own named risk); the round-5 accepted-cost item
+closed by Ruling 14 (S10's concurrent-flood delay, single-instance, no fix attempted per that
+ruling — still standing, not reopened by anything measured this round).
+
+**GATE: NOT MET.** Two new, real, execution-confirmed differences (A6-01, A6-02) — neither
+previously known, neither B's nor C's fault to have missed without a live browser (C's own log
+explicitly deferred both areas to "the manager's own browser click-through," which this round's
+text upgraded to Agent A with browser-tool access). Remaining for the manager's own eyes,
+unrelated to A6-01/A6-02 and not blocking on their own: the tab icon in a real browser tab
+(favicon vs SVG, which one Chrome paints); the 1-second fade's actual visual look (code and
+mechanism confirmed correct here, motion not observable in this pane); all four icons' hover
+swell as a felt interaction (classes confirmed correct here); the lightbox's full-screen visual
+appearance (DOM/ARIA/keyboard/focus all confirmed correct here); the progress bar during a real
+report generation (code confirmed correct here, "loading report..." was seen once incidentally by
+C during a real generation at 6-03/6-08).
+
+**WHOSE TURN: B.**
+
+Commit: `docs(abc): round 6 A part 4 - gate green, GATE NOT MET, 2 open differences, turn to B`.
