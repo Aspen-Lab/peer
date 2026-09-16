@@ -27,6 +27,17 @@ const nextConfig: NextConfig = {
   outputFileTracingExcludes: {
     "/*": [".tmp*/**"],
   },
+  // Next's proxy clones every non-GET/HEAD request body in memory and
+  // silently truncates the clone past this limit (10 MiB default) — no
+  // error, just a console.warn, so a route parsing the truncated body sees
+  // what looks like a smaller, legitimate upload. The upload route's own
+  // cap is 25 MB (MAX_UPLOAD_BYTES in api/papers/upload/route.ts); this is
+  // set above that cap, with headroom for multipart overhead, so the proxy
+  // never hands the route a partial body for anything the app itself would
+  // accept.
+  experimental: {
+    proxyClientMaxBodySize: "30mb",
+  },
 };
 
 export default nextConfig;

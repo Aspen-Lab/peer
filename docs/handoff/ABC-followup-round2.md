@@ -6399,3 +6399,40 @@ eight call sites gaining one additional class name each. No component's props/be
 this is presentation-only.
 
 Commit: `docs(abc): round 5 B part 4 - S8 fix guide (5-07)`.
+
+### Round 5 — Agent C
+
+Branch confirmed `complimentary-enhancement-to-main-update` before starting; `git status` clean.
+Cold gate re-confirmed before the first edit: `npx tsc --noEmit` clean, `npx eslint .` clean,
+`npx vitest run --exclude "**/benchmark.test.ts"` → 2641/2641, matching B's baseline exactly.
+Working Ruling 12/13's order: **5-01 → 5-02 → 5-03 (S11) → 5-04 (A5-05) → 5-05/5-06 (A5-03/A5-04)
+→ 5-07 (S8)**.
+
+#### Item 5-01 — S11: raise `experimental.proxyClientMaxBodySize` to 30 MiB
+
+**Change**: `web/next.config.ts` — added `experimental: { proxyClientMaxBodySize: "30mb" }`, per
+Ruling 13 exactly (30 MiB, comfortably above the app's own 25 MB cap). Confirmed against
+`node_modules/next/dist/docs/.../proxyClientMaxBodySize.md` and `config-shared.js` before editing:
+the option takes a string (parsed by the `bytes` package) or a raw byte count; default is
+`10485760` (10 MiB), matching B's investigation exactly. Added a comment naming why 30 MiB (the
+app's cap plus multipart-overhead headroom) rather than a bare round number with no reasoning
+attached.
+
+**No test possible** — B's own investigation already proved this by execution: the existing
+19 tests in `upload/route.test.ts` build `Request`s in-process (never through Next's HTTP
+router/proxy), so none of them exercise `cloneBodyStream`'s truncation, and none can. Recorded
+here rather than attempting a unit test that would not actually test the config value.
+
+**Gate**: `npx tsc --noEmit` clean · `npx eslint .` clean · `npx vitest run --exclude
+"**/benchmark.test.ts"` → 2641/2641 (unchanged — no test touches this file). No regression
+possible to check for the same reason no test can confirm the fix.
+
+**Found nothing in B's guide to contest.**
+
+**Live check**: **NOT POSSIBLE THIS TURN** — `next.config.ts` is not hot-reloaded; the dev server
+must restart to pick this up, and the standing constraint (manager owns the dev server) forbids
+C from restarting it. **NEEDS RESTART: `next.config.ts` changed (`proxyClientMaxBodySize`)** —
+carried into §1 STATUS below. A verifies S11 live next round after the manager restarts (15/20/24
+MB ok, 26 MB → 413, per Ruling 12/13's exact verification list).
+
+Commit: `fix(upload): raise the proxy's body-clone limit above the 25 MB upload cap`.
