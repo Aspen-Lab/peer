@@ -7431,3 +7431,270 @@ convention named up top, which is the shape of test to add here if C wants one (
 
 **Blast radius**: one file, one component, one caller (`app/papers/[id]/page.tsx`, its only
 importer). `stage`'s shape/source (`use-model-report.ts`) is untouched.
+
+---
+
+#### 6-04 — S15: font-size controls (A / A)
+
+**Files**: `web/src/app/globals.css` (theme tokens, lines 132/134/136), `web/src/components/
+reader/reader-layout.tsx` (lines 67-92, both branches), new `web/src/store/reading-prefs.ts`,
+`web/src/components/store-hydrator.tsx` (+1 line), `web/src/components/reader/decision-block.tsx`
+(new icon row, mounts after line 112, before line 168). **Classification**: MISSING.
+
+**Answering the manager's own open question, verified by reading, not asserted**: `--text-lead`/
+`--text-body`/`--text-body-lg` (globals.css lines 132/134/136) are Tailwind v4 `@theme` tokens in
+plain **px** (14.5/15.5/16.5px) — not `@utility` blocks, not rem/em; Tailwind auto-generates
+`.text-lead { font-size: var(--text-lead); line-height: var(--text-lead--line-height) }`-shaped
+utilities straight from them. These same class names are used **both** by prose that must scale
+(the nine sites the round-5 `reading-justify` work touched) **and** by UI that must not
+(`decision-block.tsx`'s own sentence, line 68, uses `text-lead`) — so the fix has to be scoped by
+ancestry, not by class name.
+
+**The mechanism, verified safe**: redefine the three tokens as `calc(<base-px> *
+var(--reading-scale, 1))` (e.g. `--text-lead: calc(16.5px * var(--reading-scale, 1));`), leaving
+the paired `--text-*--line-height` values untouched — they're unitless multipliers (`1.55`,
+`1.6`...), which already scale proportionally with font-size with no calc() needed. Because a CSS
+custom property falls back to its default on any element that isn't a descendant of wherever it's
+explicitly set, `var(--reading-scale, 1)` resolves to `1` (unchanged) everywhere the variable
+isn't set — meaning every existing site app-wide keeps working with zero per-site edits, and only
+descendants of the new wrapper actually scale. This is how "read a `--reading-scale` variable via
+calc() without touching every site" is actually achieved, not merely proposed.
+
+**Bonus, already true, verified by reading**: the `measure`/`measure-lede` utilities (globals.css
+~397-433) are already expressed in `em` specifically so they "hold at any type size" (the
+utility's own comment) — `em` for `max-width` resolves against the element's own font-size, so a
+paragraph carrying both `measure` and the new scaled font-size widens its measure in lockstep,
+automatically, satisfying "measure... scale[s] with it" with no new code.
+
+**Where to scope the wrapper — a real DOM-order constraint, found by reading `reader-layout.tsx`
+in full**: the `!p.spread` branch (line 67) returns a **flat fragment** —
+`{p.plate}{p.title}{p.words}{p.decision}{p.additions}{p.next}` — with `p.decision` (which must
+NOT scale) sitting **between** `p.words` and `p.additions`. A single shared wrapper around
+"words+additions" is therefore impossible there without reordering the DOM, which this file's own
+comments explicitly forbid (screen-reader-order reasons). Correct fix: wrap `p.words` and
+`p.additions` **each** in their own thin element carrying `style={{ "--reading-scale": scale }}`,
+in **both** branches (four wrap points total) — not a prop threaded through `page.tsx`;
+`ReaderLayout` reads the scale itself via a hook, the same way it already self-reads `useSpread()`
+in this same file.
+
+**New store, verified none exists**: grepped every `store/*.ts` and every `peer-*` localStorage
+key in `src` — only `peer-feed` and `peer-profile` are persisted stores; no `readingPrefs` slot
+anywhere (`peer-reading-v1` in `use-reading.ts` is unrelated — paper-source-availability state,
+not typography). Recommend a new `web/src/store/reading-prefs.ts`: `{ scaleIndex: number }` over
+the ladder `[0.85, 0.925, 1, 1.1, 1.2, 1.32]`, default index 2 (1×), `increaseScale`/
+`decreaseScale` clamped to `[0,5]`, persisted as `"peer-reading-prefs"`.
+
+**Hydration safety — an existing convention, not a new mechanism**: verified by reading
+`store/profile.ts` (`persist({ skipHydration: true }, ...)`, line 674) together with
+`components/store-hydrator.tsx` in full (18 lines: a single `useEffect` calling
+`useProfileStore.persist.rehydrate()` / `useFeedStore.persist.rehydrate()`, mounted once in
+`layout.tsx`). This is the repo's own established answer to exactly this problem — mirror it
+exactly rather than reaching for a bespoke `useSyncExternalStore`: `reading-prefs.ts` gets
+`skipHydration: true`; `store-hydrator.tsx` gets a third `.persist.rehydrate()` line. Server and
+first client render both read the default `scaleIndex` (→ scale 1) for free.
+
+**New icon row**: mounts in `decision-block.tsx` right after the button grid (after line 112,
+before the DOI block at line 168) — shared button primitive covered once, in 6-07, for S15/S16/
+S18 together rather than repeating it three times. A-big/A-small are literal text glyphs
+(`children: "A"`), sized via the button's own **non-scaling** panel-side classes (e.g.
+`text-body-lg`/`text-meta`) — never the `--reading-scale`-driven tokens; only the article text
+they control moves.
+
+**Honest edge state, found by reading `page.tsx`, not assumed**: one of the round-5
+`reading-justify` sites — the "PDF has no readable text" fallback (`PDF_NO_TEXT_MESSAGE`, ~line
+555) — renders through a wholly separate early-return branch
+(`if (paper.textStatus === "empty") return (...)`) that bypasses `ReaderLayout` entirely (a bare
+`<div className={SPREAD_GRID}><div>...</div></div>`, no `words`/`additions` slots). This wrapper
+design will not reach that line. **Verified this is not a partial miss**: the same branch, read in
+full, never renders `DecisionBlock` either (only `TitleBlock`, the message, `BackToFeedLink`,
+`RecordBlock`) — so the four new scale/theme buttons are also absent on that exact page state.
+There is no control the user could reach there to ask for a different size, so the line's
+exemption is self-consistent. The other fallback (`sharedTermsLine`, ~line 754) sits inside the
+`additions={ <> ... </> }` block (confirmed by reading its surrounding JSX) and **is** covered.
+
+**Tests at risk**: none existing reference `--reading-scale` or assert on `text-lead`/`text-body`/
+`text-body-lg` values. A new `reading-prefs.test.ts` (pure store-logic, same shape as
+`feed.test.ts`'s `partialize` tests) is the natural, zero-rendering test to add for the clamp
+behaviour.
+
+**Blast radius**: the `globals.css` token edit is app-wide by name but a provable no-op wherever
+`--reading-scale` isn't set (see mechanism above) — actual visible change is confined to
+descendants of the two new wrap points. `reader-layout.tsx` gains small, additive per-branch
+wrappers; its existing slot handling is untouched. New store + one new line in
+`store-hydrator.tsx` — additive only.
+
+---
+
+#### 6-05 — S16: sun / moon day/night toggle
+
+**Files**: `web/src/lib/theme.ts` (read in full), `web/src/store/profile.ts` (`colorTheme`/
+`updateColorTheme`, line 584), `web/src/app/profile/page.tsx` (`ColorThemePicker`, ~1676-1710),
+`web/src/types/index.ts` (`ThemeMode`/`ColorTheme`). **Classification**: MISSING (the reader-page
+control) — reusing entirely existing, verified-correct plumbing underneath.
+
+**Verified, not assumed**: `applyColorTheme` (theme.ts line 42) already splits `"mode:accent"` and
+sets `data-mode`/`data-accent` on `<html>`. `html[data-mode="dark"]` (globals.css line 241)
+already carries the exact night palette the spec quotes (`--color-bg:#111111`,
+`--color-text:#e3e3e3`, confirmed by reading the actual values). `@media (prefers-color-scheme:
+dark) html[data-mode="system"]` (globals.css line 288) already gives "system" the same values
+when the OS is dark. **Sun = system, moon = dark is already a complete, correct mapping — zero
+new CSS needed.**
+
+**The one real design decision**: `updateColorTheme` (profile.ts line 584) takes a **full**
+`ColorTheme` (`"mode:accent"`), not a bare mode — `updateColorTheme("dark")` is a type error and
+would also destroy the user's chosen accent. The correct pattern already exists and runs today:
+`ColorThemePicker`'s own mode buttons (profile/page.tsx ~1700) call
+`onChange(\`${option.value}:${accent}\` as ColorTheme)`, reading `accent` off
+`value.split(":")[1]`. The reader's sun/moon `onClick` must do the identical thing: read the
+current accent off `profile.colorTheme.split(":")[1]`, call `updateColorTheme(\`system:${accent}\`)`
+/ `` `dark:${accent}` ``.
+
+**`aria-pressed` convention**: already used identically twice in this codebase for "which of a
+small fixed set is active" — `DecisionBlock`'s own Save button (`aria-pressed={isSaved}`) and
+`ColorThemePicker`'s mode buttons (`aria-pressed={mode === option.value}`). Sun gets
+`aria-pressed={mode === "system"}`, moon gets `aria-pressed={mode === "dark"}` — same idiom, no
+new pattern.
+
+**"Stay in sync, one source of truth"**: satisfied for free — both the reader buttons and the
+Profile page's picker read/write the same `profile.colorTheme` via the same `updateColorTheme`
+action; `ThemeSync` (6-06) re-applies it globally regardless of which UI triggered the change.
+
+**Honest edge state, verified by reading the type, not assumed**: `ThemeMode` has a third value,
+`"light"`, reachable only from the Profile page's three-way picker. If `mode === "light"` and the
+user opens a paper, **neither** sun nor moon shows as pressed — an accurate representation of a
+real state the reader's 2-button control cannot fully express, not a bug to paper over with a
+third reader icon (out of scope; the user asked for exactly two).
+
+**Tests at risk**: none — `theme.ts`/`profile.ts`'s `colorTheme` plumbing is unmodified by this
+item (no function signature changes); the new buttons carry the same "no rendering harness"
+ceiling as the rest of this guide.
+
+**Blast radius**: two new buttons calling an existing, unmodified store action. Zero change to
+`theme.ts`, `profile.ts`, or `globals.css` for this item specifically (S17 touches CSS, separately,
+below).
+
+---
+
+#### 6-06 — S17: 1-second colour transition
+
+**Files**: `web/src/lib/theme.ts` (new export), `web/src/components/theme-sync.tsx` (read in
+full), `web/src/app/globals.css` (new rule near the existing reduced-motion block, ~652-660),
+`web/src/store/profile.ts` (the other `applyColorTheme` call sites). **Classification**: MISSING.
+
+**The decisive finding — answering the manager's own flagged-unverified question by tracing every
+call site, not guessing**: `applyColorTheme` is called from five places — the pre-paint inline
+`<script>` in `layout.tsx` (raw DOM write, before React, irrelevant here), `updateColorTheme`
+(profile.ts 584-586), `mergeRemoteProfile` (~645-651, a **background sync**, not a click),
+`importProfile` (~659-660), `logOut` (~665). None of these fire automatically on hydration by
+themselves — **but** `components/theme-sync.tsx` (11 lines, read in full) is a separate
+`useEffect` that calls `applyColorTheme(colorTheme)` any time the store's `colorTheme` value
+changes, **for any reason** — including the moment `StoreHydrator`'s
+`useProfileStore.persist.rehydrate()` merges the persisted value in. **Conclusion, proven, not
+suspected: `applyColorTheme` effectively runs once on every page load whenever the persisted
+theme differs from the just-mounted default.** If the 1-second fade were wired inside
+`applyColorTheme` itself, it would incorrectly play on every page load — and, separately, on
+every background `mergeRemoteProfile` sync, which has nothing to do with a user click. Both are
+independent reasons the fade must NOT live there.
+
+**Fix direction**: new export in `lib/theme.ts`, e.g. `withThemeTransition(run: () => void):
+void` — checks `window.matchMedia("(prefers-reduced-motion: reduce)").matches` (skip the class,
+just call `run()`, if true); else adds a class (`"theme-transition"`) to `document.documentElement`,
+calls `run()` synchronously, `window.setTimeout(() => classList.remove(...), 1100)`. The new
+reader sun/moon `onClick` handlers (6-05) call `withThemeTransition(() => updateColorTheme(...))`
+— nothing else calls this helper, so `applyColorTheme`/`updateColorTheme`/`ThemeSync`/rehydration/
+background sync are all untouched and structurally cannot trigger the fade.
+
+**The real CSS conflict, found by reading, not guessed**: `buttonVariants` **and**
+`iconButtonVariants` (`components/ui/button.tsx`) already declare
+`transition-[color,background-color,box-shadow,transform] duration-150 ease-snap` (or the icon
+variant's equivalent) — `color`/`background-color` are already in every pill/icon button's own
+`transition-property` at 150ms. `transition-property` is a single-value longhand: whichever rule
+wins the cascade replaces the **whole** list, it doesn't merge. This repo has an existing,
+deliberate convention of writing certain override rules **unlayered** specifically so they beat
+Tailwind's `@layer utilities` output regardless of specificity (see the comment directly above the
+border-radius override rule in globals.css: "the rule is unlayered, so it beats the utility
+whatever its specificity"). A naive unlayered `.theme-transition, .theme-transition * {
+transition: background-color 1s, color 1s, border-color 1s, fill 1s, stroke 1s; }` would win over
+every button's own 150ms declaration for the ~1.1s the fade runs — slowing their hover colour
+changes to 1s **and** dropping `transform`/`box-shadow` from their transition-property entirely
+(hover/press scale would snap instead of ease) for that window.
+
+**Recommended selector**: `.theme-transition, .theme-transition *:not(button):not(a):not(img)` —
+excludes every native `<button>`/`<a>` (covers `buttonVariants`/`iconButtonVariants`/
+upload-button's hand-rolled button sitewide) and every `<img>` (satisfies "images and figures do
+not fade" literally), while still reaching headings/paragraphs/panels/cards/bare icons with the
+full 1s fade. Named, accepted cost: an icon glyph inside an excluded button changes colour at that
+button's own 150ms rather than the page's 1s — reads as "the icon updates quickly, the page eases
+around it," and means a button the user is actively touching keeps its normal snappy feel instead
+of lagging. This is B's judgment call, not silently decided — the manager may prefer the simpler
+blanket `*` and accept the dropped-transform edge case instead (bounded to ≤1.1s, self-resolving);
+either is legitimate.
+
+**Reduced motion — free, verified**: globals.css already has (line ~652)
+`@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: 0.01ms
+!important; animation-duration: 0.01ms !important; } }`. Being `!important`, this already forces
+the new rule's 1s down to effectively-instant under reduced motion with **no new code**.
+`withThemeTransition`'s own `matchMedia` check is a second, independent guard (skips adding the
+class at all) — doubly safe, not fragile.
+
+**Tests at risk**: none — no test exercises `applyColorTheme`/`ThemeSync`/CSS transition timing;
+confirmed by reading `profile.test.ts`'s test names, none touch transition timing.
+
+**Blast radius**: one new export in `theme.ts` (additive, nothing else calls it yet), one new CSS
+rule (scoped by the `:not()` list above), two new onClick call sites (6-05). Zero change to any
+existing call path.
+
+---
+
+#### 6-07 — S18: shared hover-cue on all four icons
+
+**Files**: `web/src/components/ui/button.tsx` (`iconButtonVariants`/`IconButton`, lines 40-96),
+`web/src/components/reader/decision-block.tsx` (the four buttons from 6-04/6-05).
+**Classification**: MISSING, but the right infrastructure already exists, unused.
+
+**Verified by exhaustive grep**: `IconButton`/`iconButtonVariants` are fully built — tones
+`ghost`/`soft`, sizes `sm`/`md`/`lg`, `active:scale-90 disabled:opacity-50 disabled:cursor-wait`
+already in the base class — but have **zero consumers anywhere** in `src` (every import of
+`"@/components/ui/button"` pulls only `buttonVariants`). Separately, `scale-125` (the actual
+swell) exists in exactly one place today, `upload-button.tsx` — `iconButtonVariants`'s base has no
+hover-swell at all yet.
+
+**Fix direction**: revive the existing, currently-dead `iconButtonVariants` rather than building a
+new bespoke class string or a new `components/reader/icon-button.tsx` (the round-6 text's own
+"or" option) — smallest surface area, and it stops leaving a second, competing pattern behind. Add
+`hover:scale-125`. Duration nuance: `iconButtonVariants`'s shared transition is 150ms, but S13/S18
+want the swell at 120ms specifically. Two options: (i) split `transform` into its own
+`transition-transform duration-[120ms]` declaration alongside the existing
+`transition-[color,background-color,box-shadow] duration-150` (two declarations, disjoint
+properties, no conflict) for literal spec fidelity, or (ii) accept 150ms for the swell too (a
+~30ms difference, likely imperceptible) if C judges the extra declaration not worth it. B
+recommends (i) but flags (ii) as an acceptable simplification.
+
+**The real gotcha, verified against how CSS pseudo-classes work**: S15's clamp state and S16's
+inactive sun/moon are specified as `aria-disabled` (not the native `disabled` attribute) — but
+`iconButtonVariants`'s existing `disabled:opacity-50 disabled:cursor-wait` compile to the CSS
+`:disabled` pseudo-class, which does **not** match an element carrying only `aria-disabled="true"`.
+Left as-is, a clamped A-big/A-small button would show no visual clamp **and** would still swell on
+hover — contradicting "no swell when disabled/at the clamp" directly. Tailwind v4 (confirmed:
+`package.json` pins `"tailwindcss": "^4"`) ships a built-in `aria-disabled:` variant
+(`&[aria-disabled="true"]`) for exactly this. Recommend the belt-and-suspenders combination —
+both the native `disabled` attribute **and** `aria-disabled="true"` on the clamp buttons — over
+`aria-disabled` alone: it satisfies the spec's literal wording, gets the existing `disabled:*`
+styling for free, and gets native keyboard-focus/click-suppression that `aria-disabled` alone does
+not provide. Flagged as a judgment call for C/the manager, since the spec's own wording only said
+"aria-disabled."
+
+**Fix direction, concretely**: the four new buttons render via
+`<IconButton tone="ghost" size="md" aria-label={...} ...>` — reviving the dead component rather
+than adding a new one.
+
+**Explicitly excluded** (restated so C doesn't over-apply this): the figure-lightbox trigger
+(6-08/S12) does **not** get this hover-swell — it keeps `cursor: zoom-in` instead, per S12(a) and
+this item's own text.
+
+**Tests at risk**: none — `iconButtonVariants`/`IconButton` has no test file; a cva base-class
+addition isn't independently unit-testable without a rendering harness (see the ceiling named up
+top).
+
+**Blast radius**: additive edit to a shared, currently-**zero-consumer** primitive — there is no
+existing caller to regress. The four new buttons become its first consumers.
