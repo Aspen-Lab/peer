@@ -81,33 +81,55 @@ browser, run the reports), then report to the user in plain language and stop th
 
 ```
 ROUND:            5
-WHOSE TURN:       C
-STOPPED BECAUSE:  finished the turn @ 2026-09-16 05:45 UTC
-STATUS:           B's round-5 fix guide done (4 parts committed, items 5-01..5-07). S11's true
-                   cause is Next.js 16's proxy body-clone truncation (10 MiB default), not
-                   formData()/undici and not multipart-specific — proven by execution; the
-                   round-5 spec's own two proposed fixes would not have worked. A5-05: persisting
-                   feed.ts's `papers` array (Ruling 12 direction 1) recommended over the report-
-                   cache-snapshot direction. A5-03 closed informational (Ruling 12 already
-                   accepted the target as met); A5-04's real cause is an uncached og:image
-                   re-fetch inside `extractFigure`, fixable by writing the outcome back onto the
-                   existing pool-cache object. S8: one `reading-justify` CSS utility, added to
-                   eight specific literals, never via a selector (the related-papers title-link
-                   trap named by Ruling 12 confirmed real). One undecided risk flagged, not
-                   solved: scramble-reveal glyph-width variance may become visible as word-
-                   spacing pulses under justify — needs a visual check once built.
-OPEN ITEMS:       5-01 5-02 5-03 5-04 5-06 5-07 (5-05 informational/closed, no code; see §4 round
-                   5 B for detail and exact fix directions)
-GATE (0 open):    NOT MET
+WHOSE TURN:       A
+STOPPED BECAUSE:  finished the turn @ 2026-09-16 06:04 UTC
+STATUS:           All 6 of round 5's items landed (5-01, 5-02, 5-03, 5-04, 5-05/5-06, 5-07 — one
+                   commit each, 5-05 folded into 5-06's commit since it produced no code). S11:
+                   `next.config.ts` now sets `experimental.proxyClientMaxBodySize: "30mb"`
+                   (Ruling 13's fix); the route's Content-Length pre-check and post-parse fallback
+                   both now return 413 "That PDF is larger than 25 MB." (was 400 on the post-parse
+                   path — rewrote, did not delete, that test); the client refuses a > 25 MB file
+                   before sending it. A5-05: `feed.ts` now persists today's `papers` array
+                   (Ruling 12/13 direction 1). A5-04: `extractFigure`'s query-less og:image
+                   fallback now caches its outcome on the pool object itself — live-verified,
+                   openalex:W7212354020 went 8.997 s → 0.009 s on the repeat call. S8: the
+                   `reading-justify` utility landed on all eight named sites (one, quote-list.tsx,
+                   had the wrong literal string in B's guide — fixed against the actual code,
+                   logged in §4) plus Ruling 13's scramble-safe switch (`ScrambleText` now exposes
+                   `data-reveal`, one CSS rule keeps a paragraph left-aligned only while its text
+                   is still scrambling in) — implemented, not left undecided. Live-verified in the
+                   Browser pane at desktop + mobile widths via computed styles (not just source):
+                   every `reading-justify` element reports `text-align: justify`, the
+                   related-papers trap reports `text-align: start`, untouched.
+                   **Attribution deviation, logged**: this turn's own commits (5-01 through 5-07)
+                   end `Co-Authored-By: Claude Sonnet 5`, not `Claude Opus 5` like every earlier
+                   round's commits in this doc — a session-level instruction delivered to this
+                   turn stated it replaces all earlier attribution guidance. No code/test/doc
+                   content is affected, only the trailer text; flagging so this isn't misread as a
+                   change of author or process partway through the loop.
+OPEN ITEMS:       none from round 5's own code — **NEEDS RESTART: `next.config.ts` changed
+                   (`proxyClientMaxBodySize`)**, so S11's live behavior cannot be confirmed until
+                   the manager restarts the dev server. A5-05/S8's browser-only checks (cached-
+                   report-within-1s, the scramble-reveal's own 600 ms transition) still need the
+                   manager's eyes per the round's own instructions.
+GATE (0 open):    tsc clean · eslint clean · vitest 2646/2646 (cold-confirmed before the first
+                   edit at 2641/2641, then re-run green after every single item).
 
-DONE:      rounds 1–4 (S3–S7 closed). Round 5: A measured (S9 closed, S8/S10/S11 open); B wrote
-           the fix guide for all of S8/S10/S11 in Ruling 12's order.
-GATE NOW:  tsc clean · eslint clean · vitest 2641/2641 (A, cold, round 5) — B changed no product
-           code; unaffected.
-TODO:      C works 5-01 … 5-07 in order (5-01 first: the `next.config.ts` proxy-body-size fix is
-           a prerequisite the rest of S11 depends on being correct about). One commit per item,
-           gate after each. Flag anything §4's fix guide got wrong back to the manager rather
-           than silently reinterpreting it.
+DONE:      rounds 1–4 (S3–S7 closed). Round 5: A measured (S9 closed), B wrote the fix guide, C
+           landed all 6 items (5-01..5-07, 5-05 informational).
+GATE NOW:  tsc clean · eslint clean · vitest 2646/2646 (C, this turn, after the last item).
+TODO:      A verifies, after the manager restarts the dev server for S11's `next.config.ts`
+           change: (1) S11 at 15/20/24 MB → ok, 26 MB → 413, through the real HTTP route, not an
+           in-process test. (2) `/api/figure` on openalex:W7212354020 — C already measured
+           8.997 s / 0.009 s live; A re-confirms post-restart and checks a second paper. (3) A
+           hard refresh on a paper from today's briefing with an already-cached report renders
+           within 1 s (browser-only — C could not check this without a browser). (4) S8's
+           justified text is already C's own live-verified finding (computed styles read via the
+           Browser pane, desktop + mobile) — not left for A to re-derive from source, though a
+           final eyeball is still fine. What A still needs to check: the scramble-reveal's own
+           600 ms transition on a paper whose report is NOT yet cached (C's check used an
+           already-cached report, so the justify mechanism is built and confirmed but this one
+           transient transition is unverified).
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
