@@ -7246,3 +7246,188 @@ B's first spawn died on a Sonnet session limit before writing anything (`git sta
 user added five items (site icon, font-size A/A, sun/moon night mode, 1-s colour transition,
 icon hover cues, and the progress bar's placement/label) — written as §1r (S14–S19). B
 re-spawned to cover S12–S19 in one guide.
+
+### Round 6 — Agent B
+
+Branch confirmed `complimentary-enhancement-to-main-update` before starting; `git status` clean.
+Read §1a, §1q, §1r, §2, §3, and the round-5 C log in full before touching any code (B changes no
+code this round — investigation only). Fix guide below, numbered `6-01`..`6-08`, in the C order
+§1r gives: S13 → S14 → S19 → S15 → S16 → S17 → S18 → S12.
+
+**Three findings that change the shape of the work below, each verified by execution/reading, not
+assumed** — flagged up front because each corrects something the manager's §1q/§1r "current
+state" text got wrong or left open:
+
+1. **S14's own suggested tool doesn't exist here.** `python -c "import PIL"` →
+   `ModuleNotFoundError: No module named 'PIL'`. `python -c "import fitz"` succeeds (PyMuPDF
+   1.28.2). Verified the PyMuPDF path works end to end (rendered the manager's exact pear SVG,
+   visually confirmed a clean silhouette, wrapped the PNG in a hand-built ICO container with
+   nothing but stdlib `struct` — see 6-02).
+2. **Three pieces of UI infrastructure this round needs already exist in the repo, fully built,
+   and are never imported anywhere**: `IconButton`/`iconButtonVariants`
+   (`components/ui/button.tsx`), `ProgressBar` (`components/ui/progress-bar.tsx`), and
+   `PaperFigureFrame`/`PaperFigure` (`components/paper-figure.tsx`). Each is named below where it
+   matters (6-07, 6-03, 6-08 respectively). Two are genuinely reusable; one (`PaperFigureFrame`)
+   is a dead end — the file the round-6 spec points at for the hero figure is not the file that
+   actually renders it.
+3. **This repo has no `@testing-library/react`** (confirmed in `package.json`) and exactly one
+   `.test.tsx` file exists (`app/saved/page.test.tsx`) — correcting the round-5 log's claim that
+   none did. Every component-adjacent test in this repo, without exception, is either (a)
+   `renderToStaticMarkup` (`react-dom/server`) + string assertions with `vi.mock`'d stores, or
+   (b) a pure function exported alongside the component and tested with plain inputs. No test
+   anywhere simulates a click or keydown. This is the ceiling for what gets tested below.
+
+---
+
+#### 6-01 — S13: the button swells, not the glyph
+
+**File**: `web/src/components/briefing/upload-button.tsx`. **Classification**: WRONG SHAPE (the
+swell targets the wrong element, not a missing feature).
+
+**Code today**: button className, lines 119-121 (`transition-[opacity,transform] duration-150
+ease-snap active:scale-90 disabled:opacity-50 disabled:cursor-wait`, plus `isDragOver ?
+"opacity-75" : ""`); svg className, lines 135-138 (`transition-transform duration-[120ms]
+ease-snap group-hover:scale-125 group-disabled:scale-100`, plus `isDragOver ? "scale-125" : ""`).
+
+**Fix direction**: move the swell from the svg to the button. Button gains `hover:scale-125` (self
+target, not `group-hover` — it is scaling itself now) at the same 120 ms/`ease-snap`, keeps
+`active:scale-90`, and add `disabled:scale-100` explicitly (belt-and-suspenders: a disabled native
+`<button>` can still match `:hover` in most browsers even though it won't fire clicks, so the
+reset needs to be stated, not assumed). The `isDragOver ? "scale-125" : ""` interpolation moves
+from the svg's className to the button's. Svg's className loses `group-hover:scale-125
+group-disabled:scale-100` and its drag-over scale entirely — it inherits the parent's transform
+visually for free, no separate scale needed (that's the whole point: "the glyph keeps no separate
+scale"). The button's `group` class becomes dead once nothing under it uses `group-hover`/
+`group-disabled` — harmless to leave, but note it for C as an optional one-line cleanup.
+
+**Verified safe by reading, not assumed**: grepped `app/page.tsx` and `app/layout.tsx` for
+`overflow-hidden` — zero hits in either. `transform` is paint-only (never participates in
+layout/reflow), so the swell cannot shift the search box beside it regardless. Both are
+confirmed, not just plausible.
+
+**Edge state**: disabled — covered above (explicit `disabled:scale-100`, not inferred from
+`disabled:opacity-50` alone).
+
+**Tests at risk**: `upload-button.test.ts` read in full — it tests only the exported pure
+functions `looksLikePdf`/`isOverUploadCap`; zero assertions on any className string. **No test
+needs updating** — this corrects the round-6 spec's own conditional instruction ("update
+`upload-button.test.ts` if it asserts class strings" — it does not).
+
+**Blast radius**: `upload-button.tsx` has exactly one caller (`app/page.tsx`, confirmed by grep).
+Purely a relocation of existing classes between two elements in the same file — no prop, no
+behaviour, no shape change.
+
+---
+
+#### 6-02 — S14: the site icon becomes the pear
+
+**Files**: `web/src/app/icon.svg` (replace), `web/src/app/favicon.ico` (regenerate),
+`web/src/app/layout.tsx` (checked, needs no change). **Classification**: WRONG DATA (both files
+ship the old multi-colour mark).
+
+**Verified today's state**: `icon.svg` read in full — 838×838, multiple `fill="#141414"`/
+`#FEF3DB"`/`"#F58414"` paths, the old colour mark exactly as §1r describes. `favicon.ico` exists,
+25931 bytes (real content, not a stub). `layout.tsx`'s `metadata` object (lines 51-54) has only
+`title`/`description` — **no `metadata.icons` field exists to update**; both files are served via
+Next's file-convention auto-detection alone. Fetched the running dev server's own head
+(`curl http://localhost:3000/`): both are emitted, in this order —
+`<link rel="icon" href="/favicon.ico?..." sizes="256x256" type="image/x-icon">` first, then
+`<link rel="icon" href="/icon.svg?..." sizes="any" type="image/svg+xml">` second.
+
+**Blocked verification, reported as blocked, not inferred**: tried to settle "does Chrome prefer
+the `.ico` over the `.svg`" by loading the page in this session's own browser tool and reading
+its network log — zero requests to `/favicon.ico` or `/icon.svg` were ever recorded (the tool's
+embedded browser does not appear to fetch tab favicons at all). Cannot settle this by execution
+in-session; left for the manager's own real-browser eyeball check, which §1r already assigns.
+
+**Fix direction, regardless of which one wins**: don't bet on browser-preference behaviour — make
+both files show the pear so the ambiguity is moot. (1) `icon.svg`: C overwrites verbatim with the
+manager's §1r SVG (already fully specified, no B decision needed). (2) `favicon.ico`: regenerate
+rather than delete — deleting only helps browsers with SVG-favicon support; anything that still
+reads `favicon.ico` specifically (older embeds, link-preview/crawler tools, a pinned taskbar/
+shortcut icon) would otherwise show no icon or a browser default instead of the pear.
+
+**Generation path, verified by execution** (throwaway script under the OS temp scratchpad dir,
+deleted, never committed): `fitz.open(stream=SVG_BYTES, filetype="svg")` on the manager's exact
+pear SVG → `.load_page(0).get_pixmap(matrix=fitz.Matrix(zoom, zoom), alpha=True)` rendered cleanly
+at both 32×32 and a 256×256 preview (visually confirmed: a clean black pear silhouette, no
+artifacts) → `pix.tobytes("png")` → wrapped in a hand-built 22-byte ICONDIR + ICONDIRENTRY header
+(pure stdlib `struct`, no new dependency — PNG-in-ICO is a standard, Vista+/browser-supported ICO
+shape) → wrote the file, re-parsed its own header bytes back, confirmed the embedded PNG
+signature sits exactly at the stated offset. This is a real, working recipe, not a guess. Either
+32×32 or 256×256 is a safe render size — the served `sizes="256x256"` attribute is just Next's
+generic declaration for any `.ico` and doesn't require the content to literally be 256×256, but
+256×256 gives pixel parity with what's declared if the manager prefers that.
+
+**Other places the old mark lives, enumerated**: grepped `logo-mark.png`/`logo.png`/`apple-touch-
+icon`/`manifest`/`og:image`/`twitter:image` across all of `src`. `logo-mark.png` is used in
+exactly two places, both in-page images, **not** the tab icon: `app/profile/page.tsx:364` and
+`app/welcome/page.tsx:229` (a 28×28 logo next to text in each page's own header). `public/
+logo.png` has **zero** references anywhere in `src` — it only appears inside `proxy.ts`'s route-
+matcher exclusion list (a path pattern, not a use of the file's content) — dead static asset,
+untouched by this item. No `apple-touch-icon`, no `manifest.json`/`site.webmanifest` exists
+anywhere. Every `og:image`/`twitter:image` hit found belongs to unrelated features (the figure-
+extraction pipeline scraping OTHER sites' pages, the opportunities enrichment pipeline) — none are
+Peer's own site metadata. **Conclusion: `icon.svg` + `favicon.ico` are the only two tab-icon
+sources; nothing else needs touching.**
+
+**Honest edge state**: a pure-black silhouette on dark browser chrome is faint — already ruled on
+in §1r ("keep it black... do not invent a light variant"). Not a defect to solve here.
+
+**Tests at risk**: none — grepped every `*.test.ts` for `icon.svg`/`favicon.ico`/tab-icon
+references, zero hits.
+
+**Blast radius**: two static files, zero code change. Cannot affect tsc/eslint/vitest.
+
+---
+
+#### 6-03 — S19: the progress bar moves to the bottom of the panel, widens, gets a label
+
+**File**: `web/src/components/reader/decision-block.tsx`. **Classification**: WRONG ORDER /
+WRONG SHAPE (the mechanism exists — `stage &&` gates it correctly already — it is placed, sized
+and labelled wrong, nothing is missing structurally).
+
+**Code today**: sentence paragraph + inline stage suffix, line 68/70 (`measure-lede`, and
+`{stage && <span>{progressSuffix(stage.label)}</span>}`); the bar itself, lines 84-100 (`h-[2px]
+mt-3 measure-lede overflow-hidden rounded-full bg-bg-secondary`, positioned between the sentence
+and the button grid); button grid, line 112; DOI block, lines 168-186 (last thing rendered today).
+
+**Fix direction**: (a) remove the bar block from its current position. (b) Re-insert it as the
+unconditionally-last child of the returned `<div>` — after the button grid, after the new S15/
+S16/S18 icon row (6-04/6-05/6-07 recommend mounting that row right after the button grid, before
+DOI), and after the DOI block. Final order while generating: sentence → button grid → icon row →
+DOI (if present) → progress bar. This keeps the bar "the last thing in the panel while
+generating" regardless of whether `doi` is present, without depending on DOM reordering tricks.
+(c) Style: drop `measure-lede` (globals.css line 428, `max-width: 24em`) from the bar's outer
+container — verified `PANEL_CLASS` (`spread.ts`) itself carries no competing max-width, so
+removing it is sufficient on its own, the bar will span the full panel width with no replacement
+class needed. Change `h-[2px]` to `h-[6px]`, matching the file's own explicit-px convention.
+Leave `mt-3`, `overflow-hidden rounded-full bg-bg-secondary`, and the inner fill div's
+`bg-accent transition-[width] duration-300 ease-snap motion-reduce:transition-none` untouched.
+(d) New label: add one constant to `components/reader/copy.ts` (near `progressSuffix`, ~line
+132), e.g. `export const PROGRESS_LABEL = "loading report...";` (verbatim, lower-case, three
+dots). Render `<p aria-live="polite" className="font-mono text-meta text-text-muted mt-1.5">
+{PROGRESS_LABEL}</p>` directly under the relocated bar, matching the DOI line's own existing
+`font-mono text-meta text-text-muted` "mono meta" triplet (line ~178) rather than inventing a new
+type combination.
+
+**Do not conflate with the existing inline suffix**: `{stage && <span
+className="text-text-faint">{progressSuffix(stage.label)}</span>}` at line 70 (e.g. "— reading
+the paper…", next to the sentence) is a separate, pre-existing mechanism naming the pipeline
+stage. Nothing in S19 touches it — it stays exactly where it is. The new "loading report..." text
+is a second, always-identical string that only lives under the relocated bar. Do not merge or
+delete either.
+
+**Prior art found, not recommended for reuse**: `components/ui/progress-bar.tsx` (`ProgressBar`)
+is a complete, separate, **unused** (zero imports anywhere) component — a `fixed inset-x-4 top-14
+z-[60]` floating toast with a live percentage and the label ABOVE a 4px bar. Structurally
+different from what S19 wants (in-flow, 6px, label below, no percentage). Recommend leaving it
+untouched — merging it in would be a larger refactor than this item asks for — but its test
+(`progress-bar.test.ts`) confirms the same `renderToStaticMarkup`-with-no-testing-library
+convention named up top, which is the shape of test to add here if C wants one (optional —
+`decision-block.tsx` has no test file today and none is required).
+
+**Tests at risk**: none — `decision-block.tsx` has no existing test file.
+
+**Blast radius**: one file, one component, one caller (`app/papers/[id]/page.tsx`, its only
+importer). `stage`'s shape/source (`use-model-report.ts`) is untouched.
