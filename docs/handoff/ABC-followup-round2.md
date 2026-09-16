@@ -5615,3 +5615,62 @@ the "report text within 30 s" target for a fresh deep report on an OA paper, wit
   change landed.
 
 Commit: `docs(abc): round 5 A part 2 - S10 measurement`.
+
+#### Part 3 — S8 (justified text), code state
+
+Grepped `report-sections.tsx`, `claim-list.tsx`, `quote-list.tsx`, `evidence-quote.tsx`,
+`paper-words.tsx`, `paper-body.tsx`, `decision-block.tsx`, `title-block.tsx`, `lead-claim.tsx` and
+`globals.css` for `text-align`, `justify` (as a text property), `text-justify`, `hyphens`, and
+`text-wrap`. **The only hit is `justify-items-start` in `decision-block.tsx`** — a flex/grid
+placement utility, unrelated to text justification. `globals.css`'s `measure` /
+`measure-lede` / `measure-ui` / `measure-title` utilities (lines 424-439) are `max-width` only, no
+`text-align`. **S8 is unbuilt, as expected.**
+
+**Body-sized reading sites (`font-reading` + `text-lead`/`text-body`/`text-body-lg`) the spec asks
+to justify:**
+- `report-sections.tsx`: `CLAIM_CLASS = "font-reading text-lead leading-[1.6] text-text"` (line
+  37) — the proposal summary + "new here" lines, review-section summaries; the per-result "What is
+  new here" line, a separate literal at line 283 (`"font-reading text-body leading-[1.55]
+  text-text-muted mt-2"`).
+- `claim-list.tsx`: its own `CLAIM_CLASS` (line 18, identical value) — method / results / forYou /
+  caveats / nextStep claim text.
+- `quote-list.tsx` (line 30) and `evidence-quote.tsx` (line 9) and the inline evidence-quote
+  paragraph inside `paper-words.tsx` (line 88): the verbatim-quote family, `"font-reading [italic]
+  text-lead|text-body leading-[1.55-1.6] text-text[-muted]"`.
+- `paper-words.tsx`: the TL;DR fallback paragraph (line 138) and the real abstract paragraphs
+  (line 157), both `"font-reading text-lead ... text-text-muted measure"`.
+- `paper-body.tsx` (line 47): each paper section's paragraph text, `"font-reading text-lead
+  leading-[1.6] text-text-muted measure space-y-3"` — "the paper body" the spec names directly.
+
+**Left-aligned sites that must stay as they are:**
+- `report-sections.tsx`: `PULL_CLASS` (line 39, `text-title-lg`, pull quotes), `FOOTER_CLASS`
+  (line 40) and every other `font-mono text-meta`/`text-caption` line (labels, review section
+  headings at line 330, the related-list meta at line 419) — **and the related-papers list's title
+  link itself (line 415)**, which is set in the exact same `font-reading`/`text-lead` pairing as
+  `CLAIM_CLASS` but is a paper title, not a reading paragraph. A fix keyed on the class *string*
+  rather than the component/purpose would wrongly justify this one line.
+- `paper-words.tsx`: the Deck's skim line (lines 77/80, `text-title-lg` — a pull-quote-shaped
+  synthesis line, same family as `PULL_CLASS`) and every `FOOTER_CLASS`/meta-attribution line
+  (lines 18, 91, 96).
+- `paper-body.tsx`: each section's own `<h3>` heading (line 44, the paper's own section title —
+  e.g. "Introduction") and the mono contents/provenance caption lines (71, 74).
+- `title-block.tsx`: the paper's own title (line 108, `font-display ...
+  text-display-sm`/`text-display`) and every meta line (the byline-toggle caption at 73, the
+  affiliation line at 81, the published/venue line at 105).
+- `lead-claim.tsx`: the lead claim itself (line 24, `text-display-sm` — the spec's own "display
+  size" exclusion) and its "Peer's reading — not a quote" caption (line 27).
+- `decision-block.tsx`: the mono command labels (`COMMAND`, line 25) and the already-`text-left`
+  meta line (line 179).
+
+**Two sites the spec's own wording leaves genuinely ambiguous — flagged, not decided (A does not
+design the fix):**
+- `title-block.tsx`'s `AuthorLine` byline (line 54, `"font-reading text-body-lg leading-[1.45]
+  text-text mt-3"`) is technically inside the named class family (`text-body-lg`), but it is a
+  short, comma-separated list of names, not reading prose — justifying a 1-2-line byline would
+  visibly stretch its letter/word spacing rather than fix a ragged edge.
+- `decision-block.tsx`'s Decision sentence (line 68, `"font-reading text-lead text-text-muted
+  measure-lede mt-12"`) is also in the named class family (`text-lead`) but is not one of the
+  spec's enumerated categories (report sections, quotes, the abstract, the paper body) — it is
+  Peer's own one-line status sentence, not part of "the deep report."
+
+Commit: `docs(abc): round 5 A part 3 - S8 code-state inventory`.
