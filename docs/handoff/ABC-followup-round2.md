@@ -6728,3 +6728,20 @@ touched components; grepped `report-sections|claim-list|quote-list|evidence-quot
 paper-body` across every `*.test.ts`, zero matches, confirming B's own risk assessment).
 
 Commit: `feat(reader): justify the report's reading prose, left-aligned while it is still scrambling in`.
+
+### Round 5 — manager browser checks (2026-09-16, after the restart, while A re-measures)
+
+- Dev server restarted for `next.config.ts` (`proxyClientMaxBodySize: 30mb`). **The user's real
+  Zotero PDF (14,519,501 bytes) uploads through the route in 1.7 s** → `upload:d165d9f2878ea623`,
+  19 pages, full title "Electrochemically Tuned Crystal Tectonics in Crack-Resistant Textured
+  Oxide Cathode Films for Electrochemical Energy Storage", `textStatus: ok`.
+- Its reading page: hero figure (Figure 1 schematic), deep report from the full text (19 pages,
+  3 claims dropped), merged "What it proposes", 3 figures bound. **S11 closed in the browser.**
+- **S8:** 13 `.reading-justify` elements on that page, computed `text-align: justify`,
+  `hyphens: auto`; the section labels are headings, left. Visible in the screenshot as even
+  right edges. **Closed in the browser.**
+- **S9:** on hover the button reports `cursor: pointer`, the glyph's computed `scale` goes
+  1 → 1.25 with a 0.12 s transition. **Closed in the browser.**
+- **S10 (hard refresh, cached report):** `/papers/openalex:W7212354020` reloaded with the
+  report in `peer-paper-report-v6` → "What it proposes" in the DOM **810 ms** after navigation
+  start (target ≤ 1 s). **Closed in the browser.**
