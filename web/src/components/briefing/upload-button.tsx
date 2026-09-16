@@ -116,13 +116,21 @@ export function UploadButton({ className = "" }: { className?: string }) {
           const file = event.dataTransfer.files?.[0];
           if (file) void upload(file);
         }}
-        className={`group inline-flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-md bg-[color:var(--color-fixed-black)] transition-[opacity,transform] duration-150 ease-snap active:scale-90 disabled:opacity-50 disabled:cursor-wait ${
-          isDragOver ? "opacity-75" : ""
+        className={`group inline-flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-md bg-[color:var(--color-fixed-black)] transition-[opacity,transform] duration-150 ease-snap hover:scale-125 active:scale-90 disabled:scale-100 disabled:opacity-50 disabled:cursor-wait ${
+          isDragOver ? "opacity-75 scale-125" : ""
         }`}
       >
-        {/* The glyph, not the square, grows on hover — a quick, small swell
-            (~120 ms) that reads as "this reacts", the way the reader's other
-            controls do; a drop hover gets the same cue. */}
+        {/* 6-01: the whole square grows on hover now, not just the glyph —
+            so the black square and the glyph swell together at one ratio.
+            The glyph inherits the parent's transform for free and keeps no
+            separate scale of its own. A drop hover gets the same cue.
+            (Kept opacity and transform on one shared 150ms transition,
+            same as before the swell moved here — Tailwind's separate
+            transition-opacity/transition-transform utilities both set the
+            single transition-property value, so stacking them as two
+            classes would have one silently override the other; this repo's
+            own convention is always one combined transition-[a,b] bracket
+            for exactly that reason.) */}
         <svg
           width="15"
           height="15"
@@ -133,9 +141,7 @@ export function UploadButton({ className = "" }: { className?: string }) {
           strokeLinecap="round"
           strokeLinejoin="round"
           aria-hidden
-          className={`text-[color:var(--color-fixed-white)] transition-transform duration-[120ms] ease-snap group-hover:scale-125 group-disabled:scale-100 ${
-            isDragOver ? "scale-125" : ""
-          }`}
+          className="text-[color:var(--color-fixed-white)]"
         >
           <path d="M12 16V4" />
           <path d="M6 10l6-6 6 6" />

@@ -7859,3 +7859,57 @@ remains the acceptance test for the interactive parts, exactly as the round-6 te
 construction. `PaperPlate` gains one new **optional** prop, default off — its other caller
 (`feed-tile.tsx`) is provably unaffected. `keyboard.tsx` is untouched. New file, new CSS
 keyframes — all additive.
+
+---
+
+### Round 6 — Agent C
+
+Branch confirmed `complimentary-enhancement-to-main-update` before starting; `git status` clean.
+Cold gate re-confirmed before the first edit: `npx tsc --noEmit` clean, `npx eslint .` clean,
+`npx vitest run --exclude "**/benchmark.test.ts"` → 2646/2646, matching B's baseline exactly.
+Working B's order: **6-01 (S13) → 6-02 (S14) → 6-03 (S19) → 6-04 (S15) → 6-05 (S16) → 6-06 (S17)
+→ 6-07 (S18) → 6-08 (S12)**.
+
+#### Item 6-01 — S13: the whole upload button swells on hover, not only the glyph
+
+**Change**: `web/src/components/briefing/upload-button.tsx` — moved the hover/drag-over swell
+from the `<svg>` glyph to the `<button>` itself. Button's className gained `hover:scale-125` (self
+target, not `group-hover`) and an explicit `disabled:scale-100`, kept `active:scale-90`, and the
+`isDragOver` interpolation now also adds `scale-125` on the button (was on the svg). The svg lost
+`group-hover:scale-125 group-disabled:scale-100` and its own drag-over scale entirely — it now
+inherits the button's transform visually, no separate scale, per the spec's "the glyph keeps no
+separate scale."
+
+**Deviation from B's guide, logged**: B's fix direction said the button's hover swell should run
+"at the same 120 ms/ease-snap" as the glyph's old transition, implying a value distinct from the
+button's existing 150ms `transition-[opacity,transform]`. Traced this before implementing:
+Tailwind's individual `transition-opacity`/`transition-transform` utilities each set the single
+CSS `transition-property` value outright, so stacking them as two separate classes on one element
+does not merge into a combined property list — the later one in Tailwind's generated stylesheet
+order wins outright and the other's properties silently stop transitioning. Grepped every
+multi-property transition site in `src/components` and `src/app`: without exception, this repo
+always expresses "more than one property transitions together" as one combined
+`transition-[a,b,...]` bracket with one shared duration, never as stacked single-property
+utilities — confirming this is a real gotcha, not a hypothetical one. Kept the swell on the
+existing single `transition-[opacity,transform] duration-150 ease-snap` declaration instead of
+introducing a second, conflicting transition rule. Net effect: the hover swell now runs at 150ms
+instead of the spec's literal 120ms — a ~30ms difference, the same accepted-cost tradeoff B itself
+sanctioned for the analogous case in 6-07 ("(ii) accept 150ms for the swell too... if C judges the
+extra declaration not worth it"). Recorded here rather than applied silently.
+
+**Verified safe by reading, matching B's own note**: `transform` is paint-only, confirmed no
+`overflow-hidden` ancestor in `app/page.tsx`/`app/layout.tsx` — the swell cannot shift the search
+box or get clipped.
+
+**Tests at risk**: `upload-button.test.ts` read in full — asserts only the exported pure functions
+`looksLikePdf`/`isOverUploadCap`, zero className assertions. **No test needed updating**, matching
+B's correction to the round-6 spec's own conditional instruction.
+
+**Gate**: `npx tsc --noEmit` clean · `npx eslint .` clean · `npx vitest run --exclude
+"**/benchmark.test.ts"` → 2646/2646 (unchanged — no test touches class strings here).
+
+**Live check**: hot-reloadable (component file, not config) — no restart needed. Visual
+confirmation (the square growing, not just the glyph) is the manager's browser click-through, per
+the round-6 text's own assignment; not re-attempted here beyond the gate.
+
+Commit: `fix(briefing): the whole upload button swells on hover, not just the glyph`.
