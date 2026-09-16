@@ -6886,3 +6886,54 @@ now one of the persisted keys, exactly as B specified and C implemented. The sur
 5-04's fix guide.
 
 Commit: `docs(abc): round 5 A closing part 2 - S10 measurement, post-restart`.
+
+#### Part 3 — S8/S9 code check
+
+**`globals.css`** (lines 446-462): the `reading-justify` utility exists exactly as 5-07 specified
+(`text-align: justify; hyphens: auto; text-wrap: pretty;`), plus the scramble-safe switch —
+`.reading-justify[data-reveal="revealing"], .reading-justify:has(> [data-reveal="revealing"]) {
+text-align: left; }`.
+
+**`scramble-text.tsx`**: `data-reveal={hasSettled ? "settled" : "revealing"}` (line 179),
+`hasSettled` computed synchronously in the render body from `frame.settledTargets` (line 164) —
+not a `useEffect` setState, matching the lint rule C's own log cited.
+
+**All eight named sites carry `reading-justify` (grepped the literal class string, not just the
+constant names):**
+- `report-sections.tsx` line 37 (`CLAIM_CLASS`) and line 283 (the "What is new here" inline
+  literal).
+- `claim-list.tsx` line 18 (its own separate `CLAIM_CLASS`).
+- `quote-list.tsx` line 30, `evidence-quote.tsx` line 9, `paper-words.tsx` line 88 (the verbatim
+  quote family).
+- `paper-words.tsx` lines 138 and 157 (TL;DR fallback, real abstract).
+- `paper-body.tsx` line 47 (the paper body).
+- `papers/[id]/page.tsx` lines 555 and 754 (the "no readable text" and "shared terms" fallback
+  lines).
+
+**Every excluded site confirmed still carrying no `reading-justify`:** `report-sections.tsx`'s
+`PULL_CLASS`/`FOOTER_CLASS` (lines 39-40) and the related-papers title link (line 415,
+`"font-reading text-lead leading-[1.4] text-heading transition-colors..."` — Ruling 12's named
+trap, a different literal from `CLAIM_CLASS` despite sharing the `font-reading text-lead` prefix,
+confirmed not touched); `title-block.tsx`'s title (line 108) and `AuthorLine` byline (line 54,
+`"font-reading text-body-lg leading-[1.45] text-text mt-3"`, the ambiguous site Ruling 12 resolved
+to "stay left"); `lead-claim.tsx`'s lead claim (line 24); `decision-block.tsx`'s Decision sentence
+(line 68, `"font-reading text-lead text-text-muted measure-lede mt-12"`, the other Ruling 12
+"stay left" site) and its `COMMAND` labels.
+
+**`upload-button.tsx` hover classes (S9), re-read, unchanged from A's original round-5 finding**:
+button (line ~117) still carries `cursor-pointer`; the glyph still carries
+`transition-transform duration-[120ms] ease-snap group-hover:scale-125
+group-disabled:scale-100`, and the `isDragOver` branch still applies the identical `scale-125`. No
+regression from any of round 5's six landed items, all of which touched other files.
+
+Visual confirmation (the scramble-reveal's own 600 ms transition, the hover swell in motion) is
+the manager's per the round's own division of labour — already partly done: the manager's browser
+check above (2026-09-16, after the restart) confirms both S8 (13 `.reading-justify` elements,
+computed `text-align: justify`) and S9 (hover `cursor: pointer`, computed scale 1 → 1.25 over
+0.12 s) live, on the user's real Zotero-PDF reading page. That page's report was freshly generated
+(not pre-cached), so its claim/quote paragraphs did pass through `ScrambleText`'s reveal on that
+same visit — but the manager's log states the settled, post-reveal state, not whether the
+transient left-aligned-while-revealing frame was specifically observed. The 600 ms transient
+itself is not separately confirmed by either C's or the manager's log to date.
+
+Commit: `docs(abc): round 5 A closing part 3 - S8/S9 code check`.
