@@ -8414,3 +8414,125 @@ code, not the screen):
 - **S18:** the four icon buttons share the `IconButton` hover classes (read); the swell is not
   observable in a hidden pane.
 - **S19:** not observed live (no generation ran in this pass); read the markup — A covers it.
+
+### Round 6 — Agent A (part 2 of 4 — S19 progress bar + S15/S16/S17/S18 controls)
+
+**Code review — matches C's log and §1q/§1r exactly, no differences:** `decision-block.tsx` read
+in full. Progress bar: `stage &&` fragment is the last child of the returned `<div>` (after the
+button grid, the new icon row, and the DOI block), `h-[6px]`, no `measure-lede` (confirmed
+`PANEL_CLASS` in `spread.ts` carries no competing max-width), `PROGRESS_LABEL = "loading
+report..."` defined once in `copy.ts` and rendered via `<p aria-live="polite">` under the bar.
+Icon row: four `IconButton`s in the order big A · small A · sun · moon; `aria-label`s exactly
+`"Larger text"` / `"Smaller text"` / `"Day reading mode"` / `"Night reading mode"`; the clamp
+state (`atMaxScale`/`atMinScale`) is a real `disabled` attribute with `aria-disabled` mirrored;
+`aria-pressed` set on sun/moon only (`mode === "system"` / `mode === "dark"`), correctly absent
+from the two text-size buttons (they are not a fixed-set toggle). All four share
+`iconButtonVariants` (`components/ui/button.tsx`): `"...transition-[color,background-color,
+box-shadow,transform] duration-150 ease-snap hover:scale-125 active:scale-90 disabled:scale-100
+disabled:opacity-50 disabled:cursor-wait aria-disabled:scale-100 aria-disabled:opacity-50
+aria-disabled:cursor-not-allowed"` — one shared bracket, matching S18. Font scale: `globals.css`
+defines `--text-body: calc(14.5px * var(--reading-scale, 1))`, `--text-body-lg: calc(15.5px *
+var(--reading-scale, 1))`, `--text-lead: calc(16.5px * var(--reading-scale, 1))` inside `@layer
+theme`'s `:root, :host` block; `reading-prefs.ts` holds the exact six-step ladder `[0.85, 0.925,
+1, 1.1, 1.2, 1.32]`, default index 2, clamped `[0,5]`. `reader-layout.tsx` sets `--reading-scale`
+on four thin wrapper divs (`p.words`/`p.additions`, both branches) — `p.decision`/`p.plate`/
+`p.title`/`p.next` untouched, so the Decision sentence and panel do not scale. Persistence:
+localStorage key `"peer-reading-prefs"`, `skipHydration: true`, server/first-render default index
+2 (scale 1), rehydrated via `store-hydrator.tsx`'s existing `useEffect` (calls `.persist.
+rehydrate()`, not a component `setState` in the effect body — same pattern `profile`/`feed`
+already use). Theme: `grep -rn "withThemeTransition" src/` → exactly two hits outside its own
+definition, both the reader's sun/moon `onClick`s in `decision-block.tsx`; confirmed by reading
+all five `applyColorTheme` call sites (`layout.tsx`'s boot script, `updateColorTheme`,
+`mergeRemoteProfile`, `importProfile`, `logOut`) plus `ThemeSync`'s own effect — none of them call
+`withThemeTransition`, matching B/C's claim exactly. The `.theme-transition` CSS rule
+(`globals.css` ~697) is genuinely unlayered — confirmed no enclosing `@layer` block wraps it.
+`prefers-reduced-motion` already forces every `transition-duration`/`animation-duration` to
+`0.01ms !important` (globals.css ~677), a second guard beneath `withThemeTransition`'s own
+`matchMedia` check.
+
+**Live checks, done with the Browser pane tools** (`navigate` / `javascript_tool` — the pane
+reports itself hidden this session too, same artifact C logged; DOM/attribute/computed-style
+queries used throughout, no reliance on screenshots).
+
+**Finding 1 — real, high-severity: S15's font-size scale has no visible effect.** Opened
+`/papers/openalex:W7207740551`, clicked "Larger text" repeatedly. The store and the CSS variable
+both update correctly — `localStorage['peer-reading-prefs']` reaches `{"scaleIndex":5}`, and the
+wrapper divs' own `style` attribute correctly shows `--reading-scale: 1.32`, confirmed via
+`getComputedStyle` on the wrapper itself. But the actual prose: a `.text-lead` paragraph living
+inside that same wrapper computes `font-size: 16.5px` — the unscaled 1x base — both before and
+after every click, never 21.78px. Isolated the mechanism with a synthetic, app-code-free test
+injected into the same live page: `:root { --a: 1; --b: calc(2px * var(--a, 1)); } .scope { --a:
+5; }`, then read a `.scope`-descendant element that uses `width: var(--b)` — result: `2px`, never
+`10px`. This reproduces the exact same shape of failure with zero Tailwind/React involved,
+confirming it is standard CSS custom-property behaviour, not an app bug or a browser quirk:
+**a custom property that is only ever declared once (here, `--text-lead` etc. at `:root`) has its
+own internal `var()` references resolved once, at that declaration, using whatever is in scope
+there — descendants that never redeclare the alias itself (only the variable it references,
+`--reading-scale`) inherit the already-frozen result, not a token stream that re-resolves per
+element.** This is the load-bearing claim behind 6-04's whole design ("Because a CSS custom
+property falls back to its default on any element that isn't a descendant of wherever it's
+explicitly set, `var(--reading-scale, 1)` resolves to 1... This is how [it] is actually achieved,
+not merely proposed") — B's own confidence language notwithstanding, this claim is false as
+implemented, confirmed by execution, not by reading. Net effect: every piece of *plumbing* for
+S15 works (buttons, clamp, aria-state, persistence across reload — confirmed by reload + relaunch,
+`scaleIndex` survives) but the one thing the user asked for — "the font size increase a little
+bit" — **does not happen**, on any of the six ladder steps, on either reading-column wrapper.
+
+**Finding 2 — real, medium-severity: the Profile page's theme picker is out of sync with the
+applied theme and does not respond to its own clicks.** Set the reader to night mode (clicked
+"Night reading mode" on `/papers/openalex:W7207740551`; confirmed `document.documentElement.
+dataset.mode === "dark"`, `dataset.accent === "ember"`, and `localStorage['peer-profile']`'s
+`profile.colorTheme === "dark:ember"`). Navigated to `/profile`, including a genuine hard
+`location.reload()` (not just client-side routing) to rule out stale module state: the "Mode"
+picker's three buttons (`Auto`/`Light`/`Dark`, `aria-pressed`) show **`Auto` permanently pressed**
+— never `Dark` — despite `data-mode` and the stored `colorTheme` both correctly reading `"dark"`.
+Clicking "Light" or "Dark" directly on that picker does **not** change `data-mode` at all (checked
+by re-querying the DOM fresh after each click, not reusing stale element references). The
+**accent** swatches on the same page (`Ember`/`Rose`/... ) correctly show `Ember` pressed — so the
+page does see live store data; only the three-way mode control is disconnected. This breaks
+§1r/S16's own binding requirement ("if the profile already exposes a theme setting elsewhere...
+the two must stay in sync") and is exactly the check this round's own text assigns
+("Open `/profile` and confirm the theme setting shown there matches" — it does not). **Flagged,
+not diagnosed, per A's role**: I could not rule out this being a dev-session artifact (this
+server has been hot-reloaded continuously across all of round 6 without a restart, per standing
+policy, and a restart is not something A may do) versus a genuine code defect in
+`ColorThemePicker`/`AppearanceCard` on `/profile`; B should re-check with attention to whether the
+mismatch survives whatever the manager's own restart policy allows, and should not assume my
+"stale module" hypothesis over tracing the actual data flow — I looked only as far as confirming
+`AppearanceCard`'s `colorTheme={profile.colorTheme}` prop is a direct, unmemoized passthrough
+(`app/profile/page.tsx` line 225) and that `useProfileStore()` is called with no selector (line
+99-127) — I did not trace further, that is B's job.
+
+**Not counted as a difference — reproduces C's own already-logged finding, per this round's own
+explicit instruction:** clicking moon correctly flips `data-mode` to `"dark"` instantly, adds the
+`theme-transition` class, and removes it after ~1.1s; `document.body.getAnimations()` shows two
+transition Animation objects created with the exact correct `duration: 1000` and the right
+properties — but `currentTime` stays at `0` and `background-color` never visibly reaches the dark
+endpoint within the session, matching C's 6-06 finding (`tabs_context` reports the pane hidden,
+which freezes the animation timeline) exactly. Per this round's own instruction ("if the value
+snaps, say 'not observable here' rather than 'broken'") and since the value didn't even snap (it
+stayed frozen at the pre-click state, consistent with a paused-at-t=0 transition, not a skipped
+one) — **reported as not observable in this session, not as broken.** Clicking sun afterward
+correctly returns `data-mode` to `"system"` (`aria-pressed="true"` on sun, confirmed).
+
+**Not counted as a difference — already an explained, logged accepted cost (same as S13):** the
+hover swell on all four icons runs at the shared bracket's 150ms, not the spec's literal 120ms,
+for the identical Tailwind `transition-property`-clobbers-`transition-property` reason traced at
+6-01/6-07.
+
+**Verdict, part 2: 2 open differences** (S15's scale has no visible effect; the Profile page's
+theme picker doesn't track or respond to the applied theme). Both are real, execution-confirmed,
+not previously logged by B or C. Continuing to part 3.
+
+Commit: `docs(abc): round 6 A part 2 - two new differences, S15 scale inert and profile picker desynced`.
+
+**Addendum on commit attribution, logged once here rather than per-commit going forward**: this
+round's own task brief text asks every commit to end `Co-Authored-By: Claude Opus 5
+<noreply@anthropic.com>`; a session-level attribution reminder present this turn states it
+"replaces... any earlier attribution guidance" and is overridden only by "the user's own
+instructions... such as a CLAUDE.md or memory rule" (naming `Claude Sonnet 5` instead) — the task
+brief is plain task text, not a CLAUDE.md/memory rule, so per the reminder's own carve-out it does
+not qualify for the override. This is the identical conflict rounds 5 and 6's own Agent C log
+already recorded and resolved the same way. Part 1's commit above was already made with `Claude
+Opus 5` before this was caught (not amended, per git safety protocol — create new commits, don't
+amend); every commit from part 2 onward in this entry uses `Claude Sonnet 5`.
