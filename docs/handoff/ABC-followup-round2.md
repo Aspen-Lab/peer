@@ -81,55 +81,47 @@ browser, run the reports), then report to the user in plain language and stop th
 
 ```
 ROUND:            5
-WHOSE TURN:       A
-STOPPED BECAUSE:  finished the turn @ 2026-09-16 06:04 UTC
-STATUS:           All 6 of round 5's items landed (5-01, 5-02, 5-03, 5-04, 5-05/5-06, 5-07 — one
-                   commit each, 5-05 folded into 5-06's commit since it produced no code). S11:
-                   `next.config.ts` now sets `experimental.proxyClientMaxBodySize: "30mb"`
-                   (Ruling 13's fix); the route's Content-Length pre-check and post-parse fallback
-                   both now return 413 "That PDF is larger than 25 MB." (was 400 on the post-parse
-                   path — rewrote, did not delete, that test); the client refuses a > 25 MB file
-                   before sending it. A5-05: `feed.ts` now persists today's `papers` array
-                   (Ruling 12/13 direction 1). A5-04: `extractFigure`'s query-less og:image
-                   fallback now caches its outcome on the pool object itself — live-verified,
-                   openalex:W7212354020 went 8.997 s → 0.009 s on the repeat call. S8: the
-                   `reading-justify` utility landed on all eight named sites (one, quote-list.tsx,
-                   had the wrong literal string in B's guide — fixed against the actual code,
-                   logged in §4) plus Ruling 13's scramble-safe switch (`ScrambleText` now exposes
-                   `data-reveal`, one CSS rule keeps a paragraph left-aligned only while its text
-                   is still scrambling in) — implemented, not left undecided. Live-verified in the
-                   Browser pane at desktop + mobile widths via computed styles (not just source):
-                   every `reading-justify` element reports `text-align: justify`, the
-                   related-papers trap reports `text-align: start`, untouched.
-                   **Attribution deviation, logged**: this turn's own commits (5-01 through 5-07)
-                   end `Co-Authored-By: Claude Sonnet 5`, not `Claude Opus 5` like every earlier
-                   round's commits in this doc — a session-level instruction delivered to this
-                   turn stated it replaces all earlier attribution guidance. No code/test/doc
-                   content is affected, only the trailer text; flagging so this isn't misread as a
-                   change of author or process partway through the loop.
-OPEN ITEMS:       none from round 5's own code — **NEEDS RESTART: `next.config.ts` changed
-                   (`proxyClientMaxBodySize`)**, so S11's live behavior cannot be confirmed until
-                   the manager restarts the dev server. A5-05/S8's browser-only checks (cached-
-                   report-within-1s, the scramble-reveal's own 600 ms transition) still need the
-                   manager's eyes per the round's own instructions.
-GATE (0 open):    tsc clean · eslint clean · vitest 2646/2646 (cold-confirmed before the first
-                   edit at 2641/2641, then re-run green after every single item).
+WHOSE TURN:       B
+STOPPED BECAUSE:  A's closing pass finished @ 2026-09-16 (post-restart) — one narrow real
+                   difference remains under S10's own target (c).
+STATUS:           A's closing measurement (post-restart) confirms 8 of the round's 9
+                   sub-targets closed, most of them live in the browser (the manager's own checks,
+                   logged above A's closing entry): S11 (padded 15/20/24 MB ok, 26 MB → 413 honest
+                   message, non-PDF → its own 415, full record→report→figure chain on a 24 MB
+                   upload, AND the user's real 14.5 MB Zotero PDF live in the browser), S8
+                   (justified prose + the scramble-safe switch, live-computed styles on the user's
+                   real report), S9 (hover cue, live-computed scale), S10(a) cached-report-within-
+                   1s (810 ms, browser-confirmed), S10(b) cached-`/api/figure`-within-300ms (8-19
+                   ms across 6 papers). **One real, open gap: S10 target (c)** ("the briefing
+                   page's 17 card lookups no longer delay a reading-page figure lookup by more
+                   than ~10 s") — the first genuinely-cold test of this exact shape (fire all 17
+                   pool papers concurrently, then a `query=` call for a paper never before touched
+                   this process) measured **~14-15 s**, not ~10 s. Round 5's own A5-06 recorded
+                   this target as met but explicitly on an already-warm paper, flagging the gap
+                   this closing pass then filled. A second, smaller difference (a single paper's
+                   first-`/api/figure`-call time, 10.748 s vs. ≤10s) is explained in advance by
+                   item 5-05's own named risk ("a paper whose source links genuinely hang could
+                   stack past 10 s") and is not counted as a fresh defect.
+OPEN ITEMS:       one — S10 target (c)'s concurrent-flood delay (~14-15 s vs. ~10 s), not
+                   addressed by any of round 5's 7 landed items (5-01..5-07 touched the proxy body
+                   limit, the upload error messages/client refusal, feed persistence, and the
+                   og:image cache — none touched figure-lookup scheduling under concurrent load).
+                   B's job: enumerate what actually runs on a cold `query=` lookup fired alongside
+                   16 others, and say whether the ~14-15 s is this paper's own honest per-source
+                   timeout stack (item 5-05's already-accepted risk) or a distinguishable
+                   concurrency effect a small fix could shorten. If it is the former, the manager
+                   can close on that finding alone without a further C turn.
+GATE (0 open):    tsc clean · eslint clean · vitest 2646/2646 (A's closing pass, cold, unchanged
+                   from C's own closing tally — no product code touched this pass).
 
 DONE:      rounds 1–4 (S3–S7 closed). Round 5: A measured (S9 closed), B wrote the fix guide, C
-           landed all 6 items (5-01..5-07, 5-05 informational).
-GATE NOW:  tsc clean · eslint clean · vitest 2646/2646 (C, this turn, after the last item).
-TODO:      A verifies, after the manager restarts the dev server for S11's `next.config.ts`
-           change: (1) S11 at 15/20/24 MB → ok, 26 MB → 413, through the real HTTP route, not an
-           in-process test. (2) `/api/figure` on openalex:W7212354020 — C already measured
-           8.997 s / 0.009 s live; A re-confirms post-restart and checks a second paper. (3) A
-           hard refresh on a paper from today's briefing with an already-cached report renders
-           within 1 s (browser-only — C could not check this without a browser). (4) S8's
-           justified text is already C's own live-verified finding (computed styles read via the
-           Browser pane, desktop + mobile) — not left for A to re-derive from source, though a
-           final eyeball is still fine. What A still needs to check: the scramble-reveal's own
-           600 ms transition on a paper whose report is NOT yet cached (C's check used an
-           already-cached report, so the justify mechanism is built and confirmed but this one
-           transient transition is unverified).
+           landed all 6 items (5-01..5-07, 5-05 informational), A's closing pass (post-restart)
+           confirmed 8 of 9 sub-targets closed live, one open (S10 target (c)).
+GATE NOW:  tsc clean · eslint clean · vitest 2646/2646 (A's closing pass).
+TODO:      B enumerates the cold concurrent-flood `query=` lookup's full path (see OPEN ITEMS
+           above) and either names a small additive fix or confirms this is item 5-05's already-
+           accepted risk under a different S10 target letter, in which case the manager can close
+           without another C turn.
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
@@ -145,6 +137,7 @@ part-way.
 | 3 | 6 (A3-01..A3-06; A3-05 POLICY) | NOT MET — all 6 of round 2's items confirmed landed live except 2-04 (unverified, masked by a new rate-limit escalation, not failed). S5/S6 still fully closed. S3/S4 each carry new, narrower differences (model-variance keyResults count, a new zero-width-space drop mechanism, a Semantic Scholar rate-limit escalation). Gate clean (tsc/eslint/vitest 2631/2631). |
 | 4 | 0 (A4-01, A4-02 informational only) | **MET** — all 6 of round 3's items (A3-01..A3-06) confirmed closed live: S3 meets Ruling 10's target on all 3 papers on every officially-required run, including the JECST furniture-splice and 2501.00663 zero-width-space questions named by Ruling 10/11; S4 meets Ruling 10's target (both Springer papers `source_unavailable` with the bounce reason, rate-limit escalation resolved 0/17). S5/S6/S7 no regression. One new within-ceiling finding (A4-01) recorded for the standing-exclusions list, not blocking. Gate clean (tsc/eslint/vitest 2639/2639). |
 | 5 | 6 (A5-01..A5-05, A5-08; A5-09 closed) | NOT MET — loop reopened for S8-S11. S9 (A5-09) closes clean on the code. S8 (A5-08) is entirely unbuilt. S10 misses its own stated targets on both the first `/api/figure` call (5.7-9.4 s vs a 5 s ceiling, A5-03) and the cached call (0.19-2.36 s vs a 100 ms ceiling, A5-04), and a report already cached does not always render within 1 s because `paper` alone gates the whole page and is not always already in the client's persisted store (A5-05); two other S10 targets already meet spec (A5-06, A5-07). S11's upload wall is confirmed exactly where the manager's repro said, plus one new gap: an over-cap file gets the same wrong "not multipart" error instead of its own honest size message (A5-01, A5-02). Gate clean (tsc/eslint/vitest 2641/2641). |
+| 5 (closing) | 1 (A5b-04; A5b-03 explained by an existing ruling) | NOT MET, narrowly — all 6 of round 5's items (5-01..5-07) confirmed closed live, most via the manager's own browser checks: S11 (padded 15/20/24 MB + the user's real 14.5 MB Zotero PDF), S8 (justified prose + scramble-safe switch, live-computed styles), S9 (hover cue, live-computed scale), S10(a) cached-report-within-1s (810 ms) and S10(b) cached-figure-within-300ms (8-19 ms) all closed. One real, newly-tested gap: S10 target (c)'s concurrent-flood delay measured ~14-15 s on a genuinely cold paper (vs. ~10 s), a shape A5-06 itself flagged as untested last round (A5b-04) — not addressed by any of round 5's landed items. A second, smaller miss (one paper's first-call time, 10.748 s vs ≤10s) is explained in advance by item 5-05's own named risk, not a fresh defect (A5b-03). Gate clean (tsc/eslint/vitest 2646/2646). |
 
 ---
 
@@ -6937,3 +6930,145 @@ transient left-aligned-while-revealing frame was specifically observed. The 600 
 itself is not separately confirmed by either C's or the manager's log to date.
 
 Commit: `docs(abc): round 5 A closing part 3 - S8/S9 code check`.
+
+#### Part 4 — the gate, cold
+
+From `web/`, `git status` clean (every throwaway script and padded PDF from Parts 1-2 deleted,
+nothing left under the tracked tree, `.local-data/` fully gitignored anyway):
+- `npx tsc --noEmit` → **clean** (no output).
+- `npx eslint .` → **clean** (no output).
+- `npx vitest run --exclude "**/benchmark.test.ts"` → **2646/2646 passed**, 117/117 test files.
+
+Matches the round-5 baseline (§4's own history table, C's closing tally) exactly — no regression
+from any real-data call or measurement script this closing pass ran (A changed no product code).
+
+Commit: `docs(abc): round 5 A closing part 4 - the gate, cold`.
+
+#### Difference list (round 5, closing)
+
+Numbered `A5b-01, …`, ranked by user impact.
+
+**S11 — real data, closed:**
+- **A5b-01 — closed.** 15/20/24 MB uploads all succeed (`200`, real record, `textStatus: "ok"`);
+  26 MB gets `413 {"error":"That PDF is larger than 25 MB."}` — the correct, honest message, not
+  the old "not multipart" string A5-01 flagged. A non-PDF renamed `.pdf` gets its own clean
+  `415 {"error":"That file is not a PDF."}`. The full chain on the 24 MB record — `GET
+  /api/papers/upload/<id>` (200), a deep report (200, 10.7 s, `droppedClaims: 0`, one figure
+  bound), `GET /api/figure` (200, `found`) — works end to end. The client's own refusal
+  (`isOverUploadCap`, `upload-button.tsx` line 41-43) is in place and, per the manager's browser
+  check, never fires for the user's actual 14.5 MB file (it uploaded normally). **A5-01 and A5-02
+  both closed.** The manager's own browser check additionally confirms the user's real 14,519,501-
+  byte Zotero PDF uploads in 1.7 s with a full record, report, and 3 bound figures — **S11 closed
+  live, on the real file, not just padded proxies.**
+
+**S10 — real data, mixed:**
+- **A5b-02 — closed.** A5-04 (cached `/api/figure` call ≤ 300 ms): now 8-19 ms on all 6 named
+  papers, well inside target — 5-06's og:image-fallback cache is confirmed live and working.
+- **A5b-03 — explained by an existing ruling, not a fresh defect.** A5-03 (first `/api/figure`
+  call ≤ 10 s): 5 of 6 named papers meet it; `W7212228226` (JECST, direct-PDF-only source) missed
+  by 0.748 s (10.748 s). Item 5-05 already named this exact shape ("a paper whose source links
+  genuinely hang... could in theory stack... past 10 s — an accepted, not-currently-observed
+  structural risk... not a defect to fix this round") before this round's own code changes; this
+  is that risk's first observed instance, not a new mechanism. Recorded per A's own "no rounding
+  down" rule, not counted as a fresh open item since the round's own binding ruling already
+  accepted it in advance.
+- **A5b-04 — real, open, not covered by any of round 5's 7 landed items.** S10 target (c) ("the
+  briefing page's 17 card lookups no longer delay a reading-page figure lookup by more than
+  ~10 s"), tested for the first time this round on a genuinely cold paper fired concurrently with
+  all 17 pool papers: **~14-15 s**, not ~10 s. Round 5's own A5-06 recorded this target as met
+  (0.075 s) but explicitly could not test the cold-paper shape; this measurement closes that gap
+  and the honest answer misses the target. **Caveat, stated per A's mandate not to investigate
+  causes**: the delay is consistent with this specific paper's own source chain (a bot-check host
+  named in its `reason` string, matching item 5-05's "two sequential 7 s timeouts stacking"
+  shape) rather than proven evidence that concurrent load specifically added delay — B's job, if
+  picked up, includes telling those two apart. None of round 5's 7 landed items (5-01 through
+  5-07) touched figure-lookup scheduling/queueing under concurrent load; this is a genuinely new
+  finding, not a regression in anything just fixed.
+- **A5b-05 — closed, browser-confirmed.** A5-05 (cached report on a hard refresh, within 1 s):
+  `feed.ts` line 1674 now persists `papers: state.papers` exactly as 5-04 specified; the manager's
+  own browser check (hard refresh on `openalex:W7212354020`) measured the cached report's "What it
+  proposes" text in the DOM at **810 ms**, inside the 1 s target. **Closed live**, not just by
+  source read.
+- **A5b-06 — within target, informational (unchanged from A5-07).** A fresh deep report on
+  `W7207740551` (OA arXiv paper) completed in 17.240 s this round (13.975 s in round 5's own
+  pass) — both within the ≤ 30 s target; the difference is ordinary model-latency variance across
+  two genuinely-cold runs, not a regression signal.
+
+**S8 — code + browser, closed:**
+- **A5b-07 — closed.** The `reading-justify` utility and all eight named call sites are in place;
+  every excluded site (including Ruling 12's related-papers-title-link trap and both "ambiguous,
+  resolved to stay left" sites — the byline, the Decision sentence) confirmed still untouched. The
+  scramble-safe switch (`data-reveal`, the `:has()` CSS rule) is implemented, not left undecided.
+  The manager's browser check confirms 13 `.reading-justify` elements computing `text-align:
+  justify` live on the user's real, freshly-generated Zotero-PDF report. **Not separately
+  confirmed by either C's or the manager's log**: the transient 600 ms left-aligned-while-
+  revealing frame itself (as opposed to the settled end state) — a purely visual, sub-second
+  detail Ruling 13 left to the manager's own eyeball if C's implementation needed it, which C did
+  implement.
+
+**S9 — code + browser, closed:**
+- **A5b-08 — closed.** `upload-button.tsx`'s hover classes unchanged from A's original round-5
+  reading (`cursor-pointer`, `group-hover:scale-125`, 120 ms transition, `group-disabled:
+  scale-100`, matching drag-over cue). The manager's browser check confirms the live computed
+  scale transition (1 → 1.25 over 0.12 s) and `cursor: pointer` on hover. **Closed live.**
+
+**Standing exclusions, re-listed by name (unchanged in kind from rounds 2-5; this closing pass's
+measurement did not touch them):**
+- The JECST PDF has no embedded images (honest absence, `no_figures`) — and, per A5b-03 above, is
+  also the specific paper whose direct-PDF-only source now shows item 5-05's named timeout-stack
+  risk in practice.
+- A model's own synthesis/paraphrase is a correct drop, not a defect (S3).
+- The "Ld = 0.44" / "0.67and" missing-character residuals are accepted PDF-extraction residuals,
+  not fixable without loosening the matcher into a similarity relaxation (S3).
+- Mid-sentence, non-numeric figure cross-reference brackets (e.g. `[Fig. 3(b)]`) are a real but
+  within-ceiling drop mechanism (S3).
+- Semantic Scholar 429s are an accepted cost, tallied every round via `reason`, never promoted to
+  a final `rate_limited` status since round 4's fix (S4/S10). This round's sweep still shows every
+  non-`found` paper's `reason` naming the throttle.
+- Springer/Wiley/ACS/Elsevier/Nature bot walls and paywalls are honest `source_unavailable`/
+  `paywalled` statuses — Peer does not scrape past them (S4).
+- 1 of 17 pool papers showing a figure (`found:1` this round too) is accepted as honest per Ruling
+  10 — the pool is mostly paywalled/bot-walled/figure-less papers; Peer never fabricates a figure
+  (S4).
+- `benchmark.test.ts` is excluded from the gate (live-network test on dead code).
+- Report tier is `large` (3.6 Flash) by default; not a loop item.
+- Vertex is global-endpoint only; no regional fallback.
+- Papers never web-search (Vertex AI Search / Tavily); events/jobs code is dead, not wired back.
+
+**Attribution note, logged for the same reason C's own round-5 entry flagged it**: this closing
+pass's first commit (Part 1) used `Co-Authored-By: Claude Opus 5`, matching this doc's own §3
+ground rules and the task brief's explicit instruction; every commit from Part 2 onward in this
+closing pass uses `Co-Authored-By: Claude Sonnet 5`, per a session-level instruction delivered
+directly to this turn stating it "replaces any earlier attribution guidance... from here on" —
+the same override C's own round-5 turn already logged and treated as authoritative. Flagging the
+inconsistency within this closing pass's own commits explicitly rather than silently normalizing
+it: no code, test, or doc content is affected, only the trailer text on Part 1's single commit.
+
+#### Gate line
+
+`GATE (0 open under §1m-§1o's numbered targets, 1 open under target (c)): NOT MET, narrowly.`
+Every item C landed this round (5-01 through 5-07) is confirmed closed, live, either by A's own
+HTTP-route measurement or by the manager's browser check already logged above: S11 (real Zotero
+PDF + padded 15/20/24/26 MB sweep + the honest 413 message), S8 (justified prose + the
+scramble-safe switch, live-computed styles), S9 (hover cue, live-computed scale), and S10's targets
+(a) cached-report-within-1s (810 ms, browser-confirmed) and (b) cached-`/api/figure`-within-300ms
+(8-19 ms) are all closed. **One real, open difference remains: S10 target (c)** (concurrent-flood
+delay on a reading-page figure lookup, "~10 s") — measured at ~14-15 s on the first genuinely cold
+test of that exact shape, a gap A5-06 itself flagged as untested last round. A second, much
+smaller difference (A5b-03, `W7212228226`'s first-call time at 10.748 s) is explained in advance by
+item 5-05's own named risk and not counted as a fresh defect. Neither of round 5's own C items
+(5-01..5-07) targeted concurrent-lookup scheduling, so this is not a regression in anything just
+landed — it is a real gap the round's own spec (§1m, target (c)) named and no landed fix touched.
+The gate itself is clean, cold: `npx tsc --noEmit` clean, `npx eslint .` clean, `npx vitest run
+--exclude "**/benchmark.test.ts"` → 2646/2646, unchanged from C's own closing tally.
+
+**WHOSE TURN: B** — one item, narrowly scoped: enumerate what actually runs when a `query=`
+figure lookup for a not-yet-cached paper is made while the briefing's other 16 cards are also
+fetching figures, and say whether the ~14-15 s cost is this paper's own honest per-source
+timeout stack (item 5-05's named risk, already accepted) or a distinguishable concurrency effect
+(e.g. a shared fetch queue/pool serializing more than intended) that a small, additive fix could
+shorten. If B's answer is "this is 5-05's risk, already accepted, nothing to fix," the manager can
+close on that finding alone without a further C turn — worth saying explicitly since this is the
+loop's own closing round and the remaining gap is narrow.
+
+Commit: `docs(abc): round 5 A closing part 4 - difference list, gate line, §1 handoff`.
