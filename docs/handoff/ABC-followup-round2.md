@@ -6807,3 +6807,82 @@ Padded files and the fake-PDF probe were deleted immediately after this measurem
 `web/.local-data/` remains fully gitignored and untouched in git status.
 
 Commit: `docs(abc): round 5 A closing part 1 - S11 post-restart verification`.
+
+#### Part 2 — S10 (latency), post-restart
+
+Reused the exact 17-paper pool list from round 5 A's own Part 2(b) / B's investigation
+(`web/.local-data/part2b_urls.tsv`, already on disk from earlier rounds — not rebuilt), so this is
+the same fixed set of `id`/`url`/`paperTitle` query strings used consistently across rounds 4-5,
+not necessarily today's live briefing pool.
+
+**(a) `/api/figure` (no `query`), the same 6 named papers, twice each, back to back:**
+
+| Paper | Status | Call 1 | Call 2 |
+|---|---|---|---|
+| `W7212354020` (paywalled) | `paywalled` | 8.679 s | 0.018 s |
+| `W7212288571` (Springer bot wall) | `source_unavailable` | 8.478 s | 0.009 s |
+| `W7212165100` (Nature) | `source_unavailable` | 9.100 s | 0.009 s |
+| `W7212228226` (JECST PDF, no images) | `no_figures` | **10.748 s** | 0.011 s |
+| `W7207740551` (arXiv, has figures) | `found` | 4.579 s | 0.019 s |
+| `W7212207112` (openalex.org blocked) | `source_unavailable` | 8.194 s | 0.008 s |
+
+Ruling 12's restated targets: first call ≤ 10 s, cached call ≤ 300 ms. **Cached calls now
+comfortably meet target on all 6 papers** (8-19 ms — 5-06's og:image-fallback caching fix is
+confirmed live, a large improvement over A's original round-5 pass, which measured 191 ms-2.36 s
+on the same shape of paper before the fix). **First calls meet target on 5 of 6; `W7212228226`
+missed by 0.748 s** (10.748 s vs. ≤ 10 s). This is not a new mechanism: item 5-05 (B, unchanged
+this round) already named the exact structural risk — this paper's only source is a direct PDF
+link (`pdf-extract.ts`'s own 10 s `FETCH_TIMEOUT_MS`), and B's own words called a stack past 10 s
+"an accepted, not-currently-observed structural risk... not a defect to fix this round." This
+measurement is that risk's first observed instance, not a different problem — recorded here as
+the honest number, not rounded down, per A's own exit condition, but not treated as a fresh
+uncovered defect since Ruling 12/item 5-05 already named and accepted this exact shape in advance.
+
+**(b) All 17 pool-paper `/api/figure` calls fired concurrently (background `curl`s), then
+immediately a second, `query=`-bearing call for a paper picked specifically because it had not
+been called anywhere in this server process yet (`W7211884742`, last on the 17-paper list):**
+
+All 17 background calls completed successfully — confirmed via each response file (not the launch
+log, which lost lines to the same write race A's original pass reported): `found:1 no_figures:3
+source_unavailable:4 paywalled:9`, identical to rounds 4 and 5's own closing tallies.
+
+**The cold `query=` call itself took ~14 s — the first real test of S10 target (c) ("the briefing
+page's 17 card lookups no longer delay a reading-page figure lookup by more than ~10 s") on a
+genuinely cold paper, and it misses that target.** Exact numbers, both read from the surviving
+per-call output (the shared timing log itself lost two of three lines to the write race, same as
+round 5's own launch log): the flood's own no-query call for `W7211884742` finished in 14.913 s;
+the separate `query=`-bearing call for the identical paper, fired in parallel, finished in
+14.085 s (the only other unlabeled timing line, its own label lost to the same race — matched by
+elimination and by both calls returning byte-identical response bodies, `status: "paywalled"`,
+`reason` naming `validate.perfdrive.com`). **A5-06 (round 5's own close of target (c)) explicitly
+could not test this shape** — its own measured 0.075 s used a paper already warmed by the
+immediately-preceding measurement, and named that gap itself ("does not exercise a cold ...
+lookup made for the first time while 17 others are in flight"). This measurement closes that gap,
+and the honest number is ~14 s, not ~10 s.
+
+**Caveat, stated plainly, per A's own exit condition ("A does not investigate causes")**: this
+number does not by itself prove the concurrent flood is what added the delay. `W7211884742`'s own
+reason string names `validate.perfdrive.com` — a bot-check host — and item 5-05 already named
+"two sequential HTML timeouts (7 s each) stacking past 10 s on a bounce-page retry" as an accepted
+risk; 14-15 s is consistent with exactly that stack (2×7 s plus overhead) happening on this
+paper's own source chain regardless of concurrent load, not necessarily evidence that firing it
+alongside 16 others made it slower than firing it alone. **This measurement is reported as a real,
+open difference against target (c)'s literal "~10 s" ceiling, not as proof of a concurrency-specific
+regression** — B's job, if this is picked up, would include distinguishing "this paper's own
+source chain is just this slow" from "concurrent load added delay," which A does not do.
+
+**(c) `POST /api/papers/report {paper, deepReport:true}` on `W7207740551`:**
+
+Total time **17.240 s**. Response: `depth: "deep"`, `provenance: {basis: "model-fulltext",
+droppedClaims: 0, pageCount: 20}`. **Meets** the "report text within 30 s" target, with less margin
+than round 5 A's original 13.975 s measurement on the same paper (both runs are genuinely cold —
+no shared cache between the model call and the earlier one — so the difference is ordinary
+model-latency variance, not a regression signal by itself).
+
+**(d) `feed.ts` `partialize` — confirmed by direct read** (`web/src/store/feed.ts` line 1674,
+inside the `partialize` block added by 5-04): `papers: state.papers,` — today's briefing array is
+now one of the persisted keys, exactly as B specified and C implemented. The surrounding comment
+(lines 1666-1673) names the bound (~50 records) and the accepted staleness cost, matching item
+5-04's fix guide.
+
+Commit: `docs(abc): round 5 A closing part 2 - S10 measurement, post-restart`.
