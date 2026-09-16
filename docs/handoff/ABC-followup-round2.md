@@ -80,20 +80,21 @@ browser, run the reports), then report to the user in plain language and stop th
 ## §1. CURRENT STATE — THE SOURCE OF TRUTH
 
 ```
-ROUND:            5 (loop REOPENED by the manager 2026-09-15 — four new user items, §1m)
-WHOSE TURN:       A
+ROUND:            5
+WHOSE TURN:       B
 STOPPED BECAUSE:  —
-STATUS:           Round 5 opened. Manager pre-work already committed (4a0f6e7, 6851b0b,
-                   da9b46d): figure-latency cuts (one S2 lookup per paper, 3 s enrich grace,
-                   1/2/4 s backoff, 10-min empty-pool cache), S9's hover cue, an [upload] error
-                   log line. A measures the four items from scratch — treat the pre-work as
-                   unverified.
-OPEN ITEMS:       S8 S9 S10 S11 (see §1m)
+STATUS:           A's round-5 measurement done (all 5 parts committed). S9 closes clean on the
+                   code (A5-09); S8 is unbuilt (A5-08); S10 and S11 each carry real,
+                   execution-confirmed differences (A5-01..A5-05) — the manager's pre-work
+                   (4a0f6e7, 6851b0b, da9b46d) narrowed the S10 gap but did not close it. Two S10
+                   findings meet target already (A5-06, A5-07), recorded, not blocking.
+OPEN ITEMS:       A5-01 A5-02 A5-03 A5-04 A5-05 A5-08 (see §4 round 5 A for detail; A5-09 closed)
 GATE (0 open):    NOT MET
 
-DONE:      rounds 1–4 (S3–S7 closed). Round 5: nothing verified yet.
-GATE NOW:  tsc clean · eslint clean · vitest 2641/2641 (manager, cold, after 4a0f6e7).
-TODO:      A measures S8–S11 (see §1m for what to measure and how).
+DONE:      rounds 1–4 (S3–S7 closed). Round 5: A's measurement pass done; S9 closed, S8/S10/S11 open.
+GATE NOW:  tsc clean · eslint clean · vitest 2641/2641 (A, cold, round 5).
+TODO:      B investigates A5-01..A5-05 and A5-08, writes the fix guide (§1m has C's suggested
+           order: S11 → S10 → S8 → S9).
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
@@ -108,6 +109,7 @@ part-way.
 | 2 | 6 (A2-01..A2-06; A2-08 informational) | NOT MET — S5 and S6 fully closed (code+live API by A, visual by the manager). S3/S4/S7 each still carry real, execution-confirmed differences. Gate clean (tsc/eslint/vitest 2607/2607). |
 | 3 | 6 (A3-01..A3-06; A3-05 POLICY) | NOT MET — all 6 of round 2's items confirmed landed live except 2-04 (unverified, masked by a new rate-limit escalation, not failed). S5/S6 still fully closed. S3/S4 each carry new, narrower differences (model-variance keyResults count, a new zero-width-space drop mechanism, a Semantic Scholar rate-limit escalation). Gate clean (tsc/eslint/vitest 2631/2631). |
 | 4 | 0 (A4-01, A4-02 informational only) | **MET** — all 6 of round 3's items (A3-01..A3-06) confirmed closed live: S3 meets Ruling 10's target on all 3 papers on every officially-required run, including the JECST furniture-splice and 2501.00663 zero-width-space questions named by Ruling 10/11; S4 meets Ruling 10's target (both Springer papers `source_unavailable` with the bounce reason, rate-limit escalation resolved 0/17). S5/S6/S7 no regression. One new within-ceiling finding (A4-01) recorded for the standing-exclusions list, not blocking. Gate clean (tsc/eslint/vitest 2639/2639). |
+| 5 | 6 (A5-01..A5-05, A5-08; A5-09 closed) | NOT MET — loop reopened for S8-S11. S9 (A5-09) closes clean on the code. S8 (A5-08) is entirely unbuilt. S10 misses its own stated targets on both the first `/api/figure` call (5.7-9.4 s vs a 5 s ceiling, A5-03) and the cached call (0.19-2.36 s vs a 100 ms ceiling, A5-04), and a report already cached does not always render within 1 s because `paper` alone gates the whole page and is not always already in the client's persisted store (A5-05); two other S10 targets already meet spec (A5-06, A5-07). S11's upload wall is confirmed exactly where the manager's repro said, plus one new gap: an over-cap file gets the same wrong "not multipart" error instead of its own honest size message (A5-01, A5-02). Gate clean (tsc/eslint/vitest 2641/2641). |
 
 ---
 
@@ -5694,3 +5696,110 @@ a browser to read the computed style or watch the animation fire; that confirmat
 manager's, per the spec's own instruction.
 
 Commit: `docs(abc): round 5 A part 4 - S9 code-state verification`.
+
+#### Part 5 — the gate, cold
+
+From `web/`, after confirming `git status` clean (every throwaway script and padded PDF from
+Parts 1-2 deleted, nothing left under the tracked tree, `.local-data/` fully gitignored anyway):
+- `npx tsc --noEmit` -> **clean** (no output).
+- `npx eslint .` -> **clean** (no output).
+- `npx vitest run --exclude "**/benchmark.test.ts"` -> **2641/2641 passed**, 117/117 test files.
+
+Matches the round-5 baseline (§1m) exactly — no regression from any real-data call or measurement
+script this round (A changed no product code).
+
+Commit: `docs(abc): round 5 A part 5 - the gate, cold`.
+
+#### Difference list (round 5)
+
+Numbered `A5-01, …`, ranked by user impact. Real-data findings first (S10, S11), then code-state
+findings (S8, S9).
+
+**S11 — real data:**
+- **A5-01 — the error for an over-cap file is wrong, not just missing.** The 26 MB file (over the
+  25 MB cap) returns the same `"Expected a multipart/form-data upload."` string every merely-too-
+  big-to-parse file gets, never `"That PDF is larger than 25 MB."` The round-5 spec requires both
+  a correct over-cap message and that a parse failure never claim to be "not multipart" — neither
+  half is met for any size sampled at or past 12 MB. **Highest user impact of this round's real
+  findings**: this is the literal error string a user like the one who filed S11 sees, and it is
+  actively misleading about the real problem (size vs. shape) whichever one actually applies.
+- **A5-02 — the wall confirmed at 9-12 MB, in parsing, before the size check; the client offers no
+  shelter.** Restates the manager's own diagnosis, now execution-confirmed this round on a fresh
+  arXiv-derived file: every size ≥ 12 MB fails in ~30-50 ms (too fast to be real work, consistent
+  with `req.formData()` throwing at `upload/route.ts` line 125 before line 135's size check ever
+  runs). `upload-button.tsx` sends a bare `fetch`/`FormData` with no client-side pre-check or
+  chunking, so a real browser upload of the user's actual 14.5 MB file hits the identical 400.
+  Kept as its own numbered entry (distinct from A5-01) because A5-01 is the part of this behavior
+  not already named by the manager's binding reading in §1m.
+
+**S10 — real data:**
+- **A5-03 — `/api/figure`'s first call misses its 5 s ceiling on every non-`found` sampled paper.**
+  5.66-9.39 s measured on 5 of 6 named papers (all but the already-cached arXiv one), all over the
+  spec's "≤ 5 s the first time" target, four of five by 3-4 s.
+- **A5-04 — the cached second call misses its 100 ms ceiling on the same 5 papers.** 191 ms-2.36 s
+  measured — 4-45× faster than the first call (real caching effect, not nothing), but none reaches
+  the spec's stated ≤ 100 ms.
+- **A5-05 — a report already cached does not always render within 1 s, because `paper` gates
+  everything and is not always free.** Code-traced and then measured: when a paper is not already
+  in the client's persisted `feed`/`saved` store (a hard refresh, a fresh tab, or a deep link to an
+  unsaved paper — real and common, since `feed.ts`'s `persist` `partialize` does not keep today's
+  briefing array), the whole page — including an already-cached report — blocks on
+  `GET /api/papers/<id>`/`/upload/<id>`, measured at 4.570 s cold this round. When the paper *is*
+  already in the store (the common case, clicking from today's briefing), a cached report renders
+  in the same tick with no network call at all — well under 1 s. Both are true; which one a user
+  hits depends on how they arrived at the page.
+
+**S10 — real data, within target (recorded for completeness, not blocking):**
+- **A5-06 —** a `query=` figure lookup for an already-resolved paper, made immediately after firing
+  all 17 pool papers' `/api/figure` calls concurrently, answered in 0.075 s — meets the "~10 s"
+  target. Caveat stated in Part 2(b): the target paper's figure was already warm from the
+  immediately-preceding measurement, so this does not exercise a cold per-claim lookup competing
+  with the same flood.
+- **A5-07 —** a fresh deep report on the OA arXiv paper completed in 13.975 s total — meets the
+  "≤ 30 s" target with room to spare.
+
+**S8 — code state:**
+- **A5-08 — unbuilt.** No `text-align`/`justify`/`hyphens`/`text-wrap` anywhere in the nine named
+  reader files or `globals.css`. Full site inventory in Part 3, including one fix trap (the
+  related-papers list title shares `CLAIM_CLASS`'s exact class string but must stay left) and two
+  sites the spec's own class-family wording leaves ambiguous (the author byline, the Decision
+  sentence) — flagged for B/the manager, not decided by A.
+
+**S9 — code state:**
+- **A5-09 — built, matches spec.** No code difference found in `upload-button.tsx`; only a
+  live-browser confirmation (the manager's) remains, per the spec's own division of labour.
+
+**Standing exclusions, re-listed by name (unchanged in kind from rounds 2-4; none of this round's
+measurement touched them):**
+- The JECST PDF has no embedded images (honest absence, `no_figures`).
+- A model's own synthesis/paraphrase is a correct drop, not a defect (S3).
+- The "Ld = 0.44" / "0.67and" missing-character residuals are accepted PDF-extraction residuals,
+  not fixable without loosening the matcher into a similarity relaxation (S3).
+- Mid-sentence, non-numeric figure cross-reference brackets (e.g. `[Fig. 3(b)]`) are a real but
+  within-ceiling drop mechanism, recommended for this list in round 4 (S3).
+- Semantic Scholar 429s are an accepted cost, tallied every round via `reason`, never promoted to
+  a final `rate_limited` status since round 4's fix (S4). This round's `/api/figure` sweep
+  (Part 2) still shows every non-`found` paper's `reason` naming the throttle.
+- Springer/Wiley/ACS/Elsevier/Nature bot walls and paywalls are honest `source_unavailable`/
+  `paywalled` statuses — Peer does not scrape past them (S4).
+- 1 of 17 pool papers showing a figure is accepted as honest per Ruling 10 (A3-06) — the pool is
+  mostly paywalled/bot-walled/figure-less papers; Peer never fabricates a figure (S4).
+- `benchmark.test.ts` is excluded from the gate (live-network test on dead code).
+- Report tier is `large` (3.6 Flash) by default; not a loop item.
+- Vertex is global-endpoint only; no regional fallback.
+- Papers never web-search (Vertex AI Search / Tavily); events/jobs code is dead, not wired back.
+
+#### Gate line
+
+`GATE (0 open): NOT MET.` Five real-data differences remain open (A5-01 through A5-05: S11's
+over-cap error string, S10's first- and cached-call `/api/figure` timings, and the "`paper` gates
+everything" render-order gap), plus S8 is entirely unbuilt (A5-08). S9 (A5-09) is the only item of
+the four that closes clean on A's own reading of the code, pending the manager's browser
+confirmation. Two informational S10 findings (A5-06, A5-07) meet their targets and are recorded
+for completeness, not blocking. The gate itself is clean, cold: `npx tsc --noEmit` clean,
+`npx eslint .` clean, `npx vitest run --exclude "**/benchmark.test.ts"` -> 2641/2641, matching the
+round-5 baseline exactly.
+
+**WHOSE TURN: B.**
+
+Commit: `docs(abc): round 5 A - difference list, gate line, §1 handoff`.
