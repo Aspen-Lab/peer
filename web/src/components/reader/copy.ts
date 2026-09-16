@@ -153,6 +153,10 @@ export function progressSuffix(stageLabel: string): string {
   return ` — ${stageLabel}…`;
 }
 
+/** S19: the fixed label under the relocated progress bar — always this
+ * exact string, never the pipeline-stage label `progressSuffix` names. */
+export const PROGRESS_LABEL = "loading report...";
+
 export const NOT_FOUND = "Paper not found.";
 
 /** ≤140 chars under the plate, when the resolver returned a caption. */

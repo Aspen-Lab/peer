@@ -13,7 +13,7 @@ import { IconArrowUpRight, IconLink } from "@/components/icons";
 import { Kbd } from "@/components/ui/kbd";
 import { cn } from "@/lib/cn";
 import type { PaperReading } from "@/lib/papers/reading";
-import { BUTTON, DOI, progressSuffix } from "./copy";
+import { BUTTON, DOI, PROGRESS_LABEL, progressSuffix } from "./copy";
 
 const TOUCH_TARGET = "[@media(hover:none)]:min-h-11";
 /**
@@ -83,24 +83,6 @@ export function DecisionBlock({
           </>
         )}
       </p>
-
-      {stage && (
-        // Two pixels of progress under the sentence — the only chrome the
-        // model gets, and only while it works.
-        <div
-          role="progressbar"
-          aria-valuenow={Math.round(stage.pct)}
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-label={stage.label}
-          className="h-[2px] mt-3 measure-lede overflow-hidden rounded-full bg-bg-secondary"
-        >
-          <div
-            className="h-full rounded-full bg-accent transition-[width] duration-300 ease-snap motion-reduce:transition-none"
-            style={{ width: `${Math.max(0, Math.min(100, stage.pct))}%` }}
-          />
-        </div>
-      )}
 
       {/* From xl the block lives in the spread's 400–503px panel: the four
           lg pills need ≈510px on one row and would wrap 3+1, so there they
@@ -183,6 +165,30 @@ export function DecisionBlock({
           <IconLink size={12} className="shrink-0 translate-y-[2px] mr-1.5" />
           doi:{doi}
         </button>
+      )}
+
+      {stage && (
+        // S19: the last thing in the panel while generating — moved off
+        // the sentence, widened, and labelled, so it reads as the whole
+        // panel's own progress rather than a thin accent under one line.
+        <>
+          <div
+            role="progressbar"
+            aria-valuenow={Math.round(stage.pct)}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label={stage.label}
+            className="h-[6px] mt-3 overflow-hidden rounded-full bg-bg-secondary"
+          >
+            <div
+              className="h-full rounded-full bg-accent transition-[width] duration-300 ease-snap motion-reduce:transition-none"
+              style={{ width: `${Math.max(0, Math.min(100, stage.pct))}%` }}
+            />
+          </div>
+          <p aria-live="polite" className="font-mono text-meta text-text-muted mt-1.5">
+            {PROGRESS_LABEL}
+          </p>
+        </>
       )}
     </div>
   );

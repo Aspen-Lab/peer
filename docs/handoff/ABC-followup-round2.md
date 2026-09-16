@@ -7973,3 +7973,35 @@ remains the manager's own eyeball check, per §1r/the round-6 text's assignment 
 `curl` can settle, and not attempted here for that reason.
 
 Commit: `feat(app): the site icon becomes the pear`.
+
+#### Item 6-03 — S19: the progress bar moves to the bottom of the panel, widens, gets a label
+
+**Change**: `web/src/components/reader/decision-block.tsx` — removed the bar block from its old
+position (directly under the sentence) and re-inserted it as the unconditionally-last child of
+the returned `<div>`, after the button grid and after the DOI block. Since the S15/S16/S18 icon
+row doesn't exist yet (this item runs before 6-04/6-05/6-07 in B's stated order), the bar is
+simply last-after-DOI for now; when the icon row lands it will insert between the button grid and
+DOI, and the bar — already unconditionally last — needs no further change to stay last. Style:
+dropped `measure-lede` from the bar's outer div (confirmed `PANEL_CLASS` in `spread.ts` carries no
+competing max-width, so the bar now spans the full panel width with nothing else to change);
+`h-[2px]` → `h-[6px]`; kept `mt-3`, `overflow-hidden rounded-full bg-bg-secondary`, and the inner
+fill div's `bg-accent transition-[width] duration-300 ease-snap motion-reduce:transition-none`
+untouched, per B's direction exactly. Added `PROGRESS_LABEL = "loading report..."` to
+`components/reader/copy.ts` next to `progressSuffix`, and render it as
+`<p aria-live="polite" className="font-mono text-meta text-text-muted mt-1.5">` directly under
+the bar — the same "mono meta" triplet the DOI line already uses. Left the pre-existing inline
+`{stage && <span>{progressSuffix(stage.label)}</span>}` suffix on the sentence completely alone —
+a separate, older mechanism naming the pipeline stage, not touched or merged with the new label.
+
+**Tests at risk**: none — `decision-block.tsx` has no existing test file, matching B's finding.
+
+**Gate**: `npx tsc --noEmit` clean · `npx eslint .` clean · `npx vitest run --exclude
+"**/benchmark.test.ts"` → 2646/2646 (unchanged — no test exercises this file).
+
+**Live check**: hot-reloadable (component file) — no restart needed; a real visual check needs
+`stage` to be non-null (a report actively generating), which is the manager's own browser
+click-through per the round-6 text's assignment, not attempted here.
+
+**Found nothing in B's guide to contest.**
+
+Commit: `feat(reader): the generation progress bar moves to the bottom of the panel`.
