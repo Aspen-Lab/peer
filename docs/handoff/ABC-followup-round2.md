@@ -91,7 +91,9 @@ STATUS:           A measured all 8 items with the Browser pane tools (live DOM/a
                    target with 0 differences, live-checked in the browser. 2 of 8 (S15, S16) each
                    carry one new, real, execution-confirmed difference the gate/code-reading pass
                    could not have caught:
-                     - A6-01 (S15): the font-size ladder updates the store and the
+                     - A6-01 (S15; same finding as the manager's own concurrent M6-01, commit
+                       `8a08b77` — confirmed twice, independently, see A's part-4 addendum): the
+                       font-size ladder updates the store and the
                        `--reading-scale` CSS variable correctly, but the reading prose's actual
                        font-size never changes on any of the 6 steps. Root mechanism (verified by
                        an isolated, app-code-free synthetic CSS test, not guessed): `--text-lead`/
@@ -8682,3 +8684,20 @@ C during a real generation at 6-03/6-08).
 **WHOSE TURN: B.**
 
 Commit: `docs(abc): round 6 A part 4 - gate green, GATE NOT MET, 2 open differences, turn to B`.
+
+**Addendum — reconciling with the manager's own concurrent spot-check.** While this measurement
+was in progress, a commit landed independently between part 1 and part 2 ("Round 6 — manager
+browser checks (2026-09-16, while A measures)", commit `8a08b77`): the manager's own DOM check
+found the identical S15 gap and logged it as **M6-01** ("the prose font-size stays 16.5px"),
+with a proposed root cause matching this entry's part-2 finding almost exactly (a `:root`-declared
+alias variable does not re-resolve on a descendant override) and a candidate fix direction (move
+the `calc()` to the use site — e.g. a `.reading-scaled :is(.text-lead, ...)` scoped rule — rather
+than the token declaration). **M6-01 and A6-01 are the same finding**, now confirmed twice by
+two independent methods (the manager's direct DOM read; this entry's isolated synthetic CSS
+repro, which additionally rules out a Tailwind-specific or React-specific cause). B should treat
+the manager's proposed fix direction the same as any other unverified reading in this file — a
+lead to check by execution, not to inherit — and should design against A6-01's own repro (the
+minimal `:root`/`.scope` case in part 2) since it isolates the mechanism furthest from this app's
+own code. The manager's check did not surface A6-02 (the `/profile` picker desync) — that
+finding is unique to this entry. The manager's other closures (S12/S13/S16/S17/S18, S19 left to
+A) agree with this entry's own part 1/2/3 findings; no conflict to resolve there.
