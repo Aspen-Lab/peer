@@ -5838,3 +5838,211 @@ round-5 baseline exactly.
 **WHOSE TURN: B.**
 
 Commit: `docs(abc): round 5 A - difference list, gate line, §1 handoff`.
+
+### Round 5 — Agent B
+
+Branch confirmed `complimentary-enhancement-to-main-update` before starting; `git status` clean.
+Ruling 12's order: **S11 → A5-05 → A5-03/A5-04 → S8**, numbered `5-01 … 5-NN`. B changes no
+product code. Every claim below was checked by execution: a throwaway route
+`web/src/app/api/probe-upload/route.ts` (see the naming note in 5-01), two padded PDFs under
+`web/.local-data/probe/` built from the already-downloaded `2609.02668.pdf`, and one Node script
+under the same throwaway directory — all deleted, and `git status` confirmed clean, before this
+part's commit.
+
+#### Item 5-01 — S11: the wall is Next.js 16's proxy body-clone limit, not `formData()`/undici, and not multipart-specific at all
+
+**Classification: WRONG SHAPE (of the manager's and the round-5 spec's own diagnosis) — the
+literal fix directions §1m/Ruling 12 name ("read the body as bytes and parse the multipart
+ourselves" / "send raw `application/pdf` with the filename in a header") do not fix anything on
+their own, because the truncation happens one layer below either.**
+
+**Verified by execution, in this order:**
+
+1. A naming correction first: the spec's own throwaway-route path,
+   `web/src/app/api/_probe/route.ts`, never routes — Next's App Router treats any folder starting
+   with `_` as a private, non-routable folder by convention. Confirmed empirically (404 on every
+   verb) before moving the file to `web/src/app/api/probe-upload/route.ts`, which routed
+   immediately. Noting this so C or a future B does not lose time on the same naming trap.
+2. Built two padded PDFs the same way A did (a `\n%` + 1023×`x` comment-line pad on the existing
+   `web/.local-data/2609.02668.pdf`, sha256 recorded before padding): 12,582,912 and 25,165,824
+   bytes.
+3. `mode=raw` on the probe route (`await req.arrayBuffer()` on a bare `application/pdf` POST,
+   *not* multipart): both the 12 MB and 24 MB uploads came back with `byteLength: 10485760`
+   (exactly 10 MiB) even though the request's own `Content-Length` header correctly reported the
+   full 12,582,912 / 25,165,824. A control run with the original 1,127,174-byte file (under 10
+   MiB) came back with the full, correct `byteLength`. **This alone rules out `formData()` and
+   multipart parsing as the cause**: a raw, non-multipart body read hits the identical wall at the
+   identical size.
+4. `mode=formdata` (`await req.formData()`) on the same two multipart uploads: both throw
+   `TypeError: Failed to parse body as FormData.` — the same shape A already found on the real
+   upload route.
+5. `mode=manual` — a hand-rolled boundary parser over `await req.arrayBuffer()` (find
+   `--<boundary>`, the header/body separator, the closing `--<boundary>--`): `totalBytes` for
+   *both* the 12 MB and 24 MB multipart uploads was **exactly 10,485,760**, and `closeIdx: -1` —
+   the closing boundary is missing because the bytes past 10 MiB are already gone by the time our
+   route code ever sees the request. A hand-written parser cannot recover what was never
+   delivered; this is not a parser bug, it is data loss upstream.
+6. Grepped `node_modules/next/dist/server` for the exact constant: `body-streams.js`'s
+   `getCloneableBody`/`cloneBodyStream` truncates any request body it clones at
+   `sizeLimit ?? DEFAULT_BODY_CLONE_SIZE_LIMIT` (`10 * 1024 * 1024`), logging only a
+   `console.warn` — no error, no altered status code, nothing the client ever sees. The limit is
+   configurable via `experimental.proxyClientMaxBodySize` (`config-shared.js`'s documented
+   default, also `10485760`). `next-server.js`'s `runMiddleware` (the code path that invokes
+   `src/proxy.ts`) calls `requestData.body.cloneBodyStream()` for **every non-GET/HEAD request
+   whose path matches the proxy's matcher** — regardless of whether the proxy function itself
+   ever reads `request.body`. This project's `proxy.ts` matcher
+   (`"/((?!_next/static|_next/image|favicon.ico|...).*)"`) excludes only static assets; it does
+   **not** exclude `/api/*`, so `POST /api/papers/upload` is cloned and truncated on every
+   request, before `route.ts`'s own code — including `req.formData()` — ever runs.
+   `src/lib/supabase/middleware.ts`'s `updateSession` (what `proxy.ts` actually calls) never
+   touches `request.body` itself; the truncation is a side effect of the framework routing *any*
+   request through Node middleware/proxy at all, not of anything `updateSession` does.
+7. To rule out a second, independent ceiling inside Node's own `formData()`/multipart parser
+   (undici, built into Node 24, not a local `node_modules` package — there is nothing to grep),
+   ran a bare-Node script with no Next.js, no HTTP, no proxy involved: constructed a `FormData`
+   with each padded file, serialized it through a real `Request`/`Response` round trip (forcing
+   actual multipart encode/decode), then called `formData()` on the re-parsed `Request`. Result
+   for both 12 MB and 24 MB: `ok: true`, exact byte count recovered, **sha256 match** against the
+   original file. **`Request.formData()` itself has no size ceiling below at least 24 MB** — the
+   9 MB in-range success A already measured on the live route was not a lucky small case, it is
+   what every size up to the real 25 MB cap should look like once the proxy stops truncating.
+
+**Fix direction — corrects, does not reverse, the spec's own hypothesis (flagging per the ground
+rules: "check the manager's readings by execution").** The route does not need a hand-rolled
+multipart parser, and switching the client to raw `application/pdf` bytes buys nothing — both
+would still be truncated at 10 MiB by the exact same mechanism, since `mode=raw` above proves the
+limit applies to *any* body shape, not just multipart. The actual fix is the one Next.js
+documents for this exact situation (the `console.warn` links to it):
+
+- **Primary: raise `experimental.proxyClientMaxBodySize` in `next.config.ts`** to something
+  comfortably above the app's own 25 MB cap — e.g. `"30mb"` or a byte count (`zSizeLimit` accepts
+  either a string parsed by the `bytes` package, or a raw number). This is a one-line, app-wide
+  fix: every route behind `proxy.ts` (which is every API route today) stops silently truncating
+  large bodies, not just the upload route. Once this lands, `req.formData()` needs no other
+  change — it already works correctly at 25 MB, per the bare-Node proof above.
+- **Not recommended: excluding `/api/papers/upload` from `proxy.ts`'s matcher instead.** It would
+  also fix this one route (skipping the proxy invocation skips `cloneBodyStream()` entirely for
+  matched-out paths), but it is narrower (any future large-body route would need its own matcher
+  carve-out) and saves nothing meaningful (`updateSession` is cheap, and the upload route does not
+  currently depend on it for anything). Config is the more general, more maintainable fix, and it
+  is the one the framework's own warning points to.
+- **This changes what "the size check reads Content-Length first" (Ruling 12) is actually for.**
+  Before this fix, it was framed as a fast-fail optimization. After it, it is also a **correctness
+  requirement**: once `proxyClientMaxBodySize` is raised, if it were ever set *below* the app's own
+  25 MB cap by mistake, the proxy would silently hand the route a truncated-but-still-parseable
+  file — a corrupted PDF that looks like a smaller, legitimate upload, not an error. Reading the
+  real `Content-Length` header (confirmed accurate and untouched by the truncation — my own
+  probe's `raw` mode logged the correct pre-truncation `Content-Length` on every oversized
+  request, because HTTP headers are read before the proxy's body-*stream* truncation ever
+  touches anything) and rejecting anything over 25 MB **before** calling `formData()`/
+  `arrayBuffer()` at all is the only way to guarantee a partial body is never mistaken for a
+  complete one. Keep the existing post-parse `file.size > MAX_UPLOAD_BYTES` check too (see 5-02) —
+  do not delete it.
+- **Would `next build && next start` (or Vercel) behave the same?** Not run (building into the
+  same `.next` directory the live dev server uses risks disturbing it, which the standing
+  constraints forbid). By source, yes: `resolveRoutes`'s call to `getCloneableBody` (dev router)
+  and `next-server.js`'s `attachRequestMeta`/`runMiddleware` (the shared base-server code used by
+  both `next dev` and `next start`) are not gated on `opts.dev` — the same clone-and-truncate path
+  runs in production and, per the warning's own doc link, on Vercel. This is a platform-level
+  behavior, not a dev-server quirk; the config fix is required regardless of where this deploys.
+
+**Tests at risk.** `src/app/api/papers/upload/route.test.ts` constructs `Request`s directly and
+calls `POST(req)` in-process (`postWith`, line ~41) — it never goes through Next's HTTP
+router/proxy, so **none of this file's 19 existing tests exercise the truncation bug, and none
+will be affected by the config change** (confirmed: `it("rejects a file over 25 MB before reading
+its bytes", ...)`, line 88, already passes today because `formData()` parses the full
+26,214,401-byte body fine in-process — the bug only exists on the real HTTP path, which no unit
+test can reach). **This is also why the config fix itself cannot be verified by any vitest test** —
+only by hitting the real running server (as this investigation did) or by a real deployment. C
+should note this explicitly rather than trying to write a unit test that "proves" the config fix;
+the honest verification is a live `curl` at 15/20/24/26 MB, same as A's and this investigation's
+method. `src/components/briefing/upload-button.test.ts` only tests `looksLikePdf` today — no risk,
+but see 5-03 for what a new client-side check should add there.
+
+**Blast radius.** `next.config.ts` is shared by the whole app; raising
+`proxyClientMaxBodySize` affects every route reachable through `proxy.ts` (effectively all of
+`/api/*` and every page), all in the direction of *not* silently truncating bodies that used to be
+silently truncated — there is no route today that depends on the 10 MiB truncation happening
+(nothing catches or expects a truncated body as a feature). Low risk, one file.
+
+#### Item 5-02 — S11: the honest over-cap message, and why the post-parse check must stay
+
+**File**: `web/src/app/api/papers/upload/route.ts`, lines 124-138 (`req.formData()` at 125, the
+`file.size > MAX_UPLOAD_BYTES` check at 135-136, `MAX_UPLOAD_BYTES = 25 * 1024 * 1024` at line
+27). **Classification: MISSING** (the `Content-Length` pre-check does not exist yet) **+ WRONG
+DATA** (today, every size at or past the parse wall — over-cap or merely-too-big-to-parse alike —
+returns the identical "Expected a multipart/form-data upload." string; A5-01 already named this
+exactly).
+
+**Fix direction**, in order, before any parsing:
+1. Read `const contentLength = req.headers.get("content-length")`. If present and
+   `Number(contentLength) > MAX_UPLOAD_BYTES`, return `413` with
+   `{"error": "That PDF is larger than 25 MB."}` immediately — no `formData()`/`arrayBuffer()`
+   call at all. This is the fast, honest path for the size class the user who filed S11 actually
+   hit (14.5 MB is not close to today's ceiling once 5-01 lands, but a genuinely-over-cap upload
+   still needs its own message, and now gets one before spending any time on it).
+2. Keep the existing post-parse `file.size > MAX_UPLOAD_BYTES` check (line 135-136) as a second,
+   fallback gate — it is what already makes the existing 25 MB unit test pass, and it is the only
+   check that fires when `Content-Length` is absent (chunked transfer-encoding, or a `Request`
+   constructed directly without a computed length — confirmed by execution: building a `Request`
+   with a `FormData` body via `new Request(url, {method, body: form})`, the same way both the
+   existing test suite and a real edge case would, produces `headers.get("content-length") ===
+   null` until the body is actually serialized over the wire). Two gates, not a replacement.
+3. The `catch` around `req.formData()` (today's line 126-129) should keep its own message but
+   stop being reachable for legitimate uploads once 5-01's config fix lands and step 1 above
+   rejects true over-cap bodies before they get here — it should now only ever fire for a body
+   that is genuinely malformed multipart (wrong/missing boundary, corrupted stream), which is a
+   real, distinct failure from "too big." Its current string ("Expected a multipart/form-data
+   upload.") is accurate for that narrower case and does not need to change in wording, only in
+   how rarely it is reached.
+
+**What shows when every candidate is rejected**: an over-cap file always gets "That PDF is larger
+than 25 MB." (413) before any parsing is attempted, from whichever of the two gates catches it
+first; a genuinely malformed body still gets the honest "not multipart" message; a non-PDF still
+gets "That file is not a PDF." (415, unchanged, magic-byte check). No case is left returning the
+wrong one of these three once 5-01 and this item both land.
+
+**Tests at risk.** Same file as 5-01: the existing "rejects a file over 25 MB before reading its
+bytes" test (line 88) constructs its `Request` with no `content-length` header (see point 2
+above), so it will keep exercising the **post-parse** gate specifically — C should add a *new*
+test that sets a `content-length` header explicitly (or asserts on the route's behavior when one
+is present) to cover the new pre-parse 413 path, since the existing test cannot reach it. Grepped:
+no other file constructs a request against this route.
+
+**Blast radius**: one file, additive (`413` is a new status code returned by this route; no
+existing caller expects size-rejection to be `400` specifically — grepped `upload-button.tsx`'s
+`errorFromResponse`, which only reads `res.ok` and the JSON `error` field, not the status code, so
+a `400` → `413` status change is invisible to the client's own error handling).
+
+#### Item 5-03 — S11: the client refuses an over-cap file before the request, per Ruling 12
+
+**File**: `web/src/components/briefing/upload-button.tsx`, the `upload()` function (lines 48-76),
+specifically right after the existing `looksLikePdf` check (line 50-53) and before
+`setIsUploading(true)` (line 54). **Classification: MISSING** — confirmed by execution-adjacent
+grep (A already noted this; re-confirmed here): no `size`/`MB`/byte-count check exists anywhere in
+this file or its test.
+
+**Fix direction**: add `if (file.size > MAX_UPLOAD_BYTES) { setError(UPLOAD_BUTTON.error("That
+PDF is larger than 25 MB.")); return; }`, using the identical message string the server returns
+(`UPLOAD_BUTTON.error` is a pure passthrough — `src/lib/briefing/copy.ts` line 23 — so the two
+call sites must agree on wording by hand, not by import, since the route file's exports are
+constrained by Next's Route Handler module rules; a plain-number literal `25 * 1024 * 1024` with a
+comment cross-referencing `MAX_UPLOAD_BYTES` in `route.ts` matches this repo's existing convention
+for the same kind of cross-file constant, e.g. `route.ts`'s own `TITLE_STAMP_RE` comment mirroring
+`extract_pdf_text.py`'s pattern). This is UX-only — a nicety that saves a round trip for an
+obviously-too-big file — and is independent of 5-01/5-02: it does not fix the wall itself, and a
+user could still reach the server-side checks via drag-and-drop or a non-browser client.
+
+**What shows when rejected**: the identical "That PDF is larger than 25 MB." string the server
+would give, before any network request — no difference in wording between a client-side and
+server-side rejection.
+
+**Tests at risk**: `upload-button.test.ts` currently only tests `looksLikePdf`; C should add a new
+test constructing an oversized `File` (a `Blob`-backed `File` with a real byte length, not a
+mocked `.size` getter, to match this file's existing test style) and asserting `setError` fires
+without a `fetch` call (mock `fetch` and assert it was never called, the same pattern the route's
+own "before reading its bytes" test uses on the server side).
+
+**Blast radius**: one file, additive, no existing behavior removed.
+
+Commit: `docs(abc): round 5 B part 1 - S11 fix guide (5-01..5-03)`.
