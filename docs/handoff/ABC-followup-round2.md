@@ -8334,3 +8334,47 @@ unchanged — both are small, natural extensions of the "composed alongside" rea
 6-08c already named for `onLoad`.
 
 Commit: `feat(reader): a figure lightbox for the hero and every report figure`.
+
+### Round 6 — Agent A (part 1 of 4 — S14 icon + S13 upload button)
+
+Branch confirmed `complimentary-enhancement-to-main-update` before starting; `git status` clean.
+Dev server confirmed up: `curl http://localhost:3000/` → 200. Browser pane tools available this
+turn (`mcp__Claude_Browser__*`) — used for parts 2/3 below; this part is curl + source reading
+only.
+
+**S14 — site icon.** `curl -s http://localhost:3000/ | grep -o '<link rel="icon"[^>]*>'` →
+both `<link rel="icon" href="/favicon.ico?..." sizes="256x256" type="image/x-icon"/>` and
+`<link rel="icon" href="/icon.svg?..." sizes="any" type="image/svg+xml"/>` served, matching C's
+log. `curl -s http://localhost:3000/icon.svg` diffed byte-for-byte against §1r's SVG block —
+**identical**, no whitespace or attribute drift. `curl -s -o /dev/null -w "%{http_code}
+%{content_type} %{size_download}" http://localhost:3000/favicon.ico` → `200 image/x-icon 2915` —
+non-zero size, correct MIME type. **Meets target.** Which of the two files a real browser tab
+paints is still the manager's own eyeball check (unchanged from C's own note) — not something
+`curl` can settle.
+
+**S13 — upload button.** Read `web/src/components/briefing/upload-button.tsx` in full. Button
+className (line 119): `"group inline-flex h-9 w-9 shrink-0 cursor-pointer items-center
+justify-center rounded-md bg-[color:var(--color-fixed-black)] transition-[opacity,transform]
+duration-150 ease-snap hover:scale-125 active:scale-90 disabled:scale-100 disabled:opacity-50
+disabled:cursor-wait"`, with `isDragOver ? "opacity-75 scale-125" : ""` appended (line 120) —
+carries the hover swell (`hover:scale-125`) directly, not `group-hover`. Svg className (line 144):
+`"text-[color:var(--color-fixed-white)]"` only — no `scale-*` of any kind, confirming the glyph
+keeps no separate scale and inherits the button's transform visually. Disabled state:
+`disabled:scale-100` present explicitly (not merely inferred from opacity), so a disabled button
+does not swell even if `:hover` still matches natively. Drag-over: same `scale-125` now lands on
+the button (was on the svg pre-round-6). **All four sub-checks match §1q's binding reading.**
+
+**One standing, already-logged deviation, re-confirmed, not a new difference**: the swell runs at
+150ms (the button's pre-existing shared `transition-[opacity,transform] duration-150` bracket),
+not the spec's literal 120ms. C's log at item 6-01 traces why: Tailwind's separate
+`transition-opacity`/`transition-transform` utilities each set the single CSS
+`transition-property` outright, so a second, disjoint-property transition class on the same
+element doesn't merge with the first — one silently wins and the other stops transitoning. This is
+B's own pre-sanctioned fallback (accepted at 6-07 for the identical shape), not a fresh problem —
+recorded as a permanent, explained difference, ~30ms off spec, invisible in practice. Not counted
+against the gate.
+
+**Verdict, part 1: 0 open differences.** S14 and S13 both meet their target as measured against
+the served output and the source. Continuing to part 2.
+
+Commit: `docs(abc): round 6 A part 1 — S14 icon and S13 upload button both meet target`.
