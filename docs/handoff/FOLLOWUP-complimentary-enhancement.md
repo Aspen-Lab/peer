@@ -18,12 +18,16 @@ Source of truth for the hourly clock on this branch. One tick = read this file, 
 6. **Scramble ("matrix") reveal** — `components/scramble-text.tsx` restored; fires only on a freshly generated report, cached reports render plain; reduced motion → fade.
 7. **"What is new" merged into "What it proposes"; "Why it fits you" removed** — both prompts, sanitizer, page, Markdown export, copy; cache key v6.
 8. **PDF upload → deep report** — black upload button left of the search box (click or drop); `POST /api/papers/upload` stores under `web/.local-data/uploads/` (local to this machine), `upload:<sha16>` ids flow through the same report/figure/save pipeline; full titles from page-1 layout (model fallback, then file name); a textless PDF shows a plain message instead of a report.
+9. **Justified reading prose** — `reading-justify` utility on the report's body paragraphs, quotes, abstract and paper body; titles, labels, pull quotes, captions, byline and Decision line stay left; left while a ScrambleText is still revealing.
+10. **Upload button hover** — pointer cursor, glyph swells to 1.25× in 120 ms; same cue on drag-over; none while disabled.
+11. **Open-paper latency** — one Semantic Scholar lookup per paper, 3 s enrich grace, 1/2/4 s backoff, 10-min empty-pool cache, og:image fallback cached; today's briefing papers persisted so a hard refresh renders a cached report in < 1 s.
+12. **Large PDF upload** — Next 16 proxy body limit raised to 30 MB (`experimental.proxyClientMaxBodySize`); Content-Length pre-check → honest 413 above 25 MB; client refuses oversize inline. The user's 14.5 MB Zotero PDF now uploads and reads.
 
 Also on this branch, from before the pull: search-provider failures now surface in `meta.errors` (`lib/sources/search-failure.ts`), `kill-dev-orphans.mjs` catches the server process, `scoring.test.ts` clock pinned.
 
 ## §2 Open (the user adds; the clock takes the top item)
 
-_(none — the 2026-09-15 batch S3–S7 closed via the ABC loop in `docs/handoff/ABC-followup-round2.md`; see §1 items 4–8)_
+_(none — S3–S7 (2026-09-15) and S8–S11 (2026-09-16) closed via the ABC loop in `docs/handoff/ABC-followup-round2.md`; see §1 items 4–12)_
 
 ## §3 Rules for a tick
 
@@ -71,6 +75,8 @@ _(none — the 2026-09-15 batch S3–S7 closed via the ABC loop in `docs/handoff
 - 2026-09-15 — new batch S3–S7 opened as an ABC loop (`ABC-followup-round2.md`); hourly clock restarted for that loop.
 
 - 2026-09-15 ~22:10 UTC — ABC loop closed: 4 rounds, all five items verified; gate tsc/eslint clean, vitest 2639/2639; clock deleted. Not pushed.
+
+- 2026-09-16 — loop reopened for S8–S11 (round 5), closed the same day; gate tsc/eslint clean, vitest 2646/2646; clock deleted. Not pushed.
 
 ## §5 Authorizations
 

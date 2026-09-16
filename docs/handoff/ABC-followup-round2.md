@@ -80,48 +80,22 @@ browser, run the reports), then report to the user in plain language and stop th
 ## §1. CURRENT STATE — THE SOURCE OF TRUTH
 
 ```
-ROUND:            5
-WHOSE TURN:       B
-STOPPED BECAUSE:  A's closing pass finished @ 2026-09-16 (post-restart) — one narrow real
-                   difference remains under S10's own target (c).
-STATUS:           A's closing measurement (post-restart) confirms 8 of the round's 9
-                   sub-targets closed, most of them live in the browser (the manager's own checks,
-                   logged above A's closing entry): S11 (padded 15/20/24 MB ok, 26 MB → 413 honest
-                   message, non-PDF → its own 415, full record→report→figure chain on a 24 MB
-                   upload, AND the user's real 14.5 MB Zotero PDF live in the browser), S8
-                   (justified prose + the scramble-safe switch, live-computed styles on the user's
-                   real report), S9 (hover cue, live-computed scale), S10(a) cached-report-within-
-                   1s (810 ms, browser-confirmed), S10(b) cached-`/api/figure`-within-300ms (8-19
-                   ms across 6 papers). **One real, open gap: S10 target (c)** ("the briefing
-                   page's 17 card lookups no longer delay a reading-page figure lookup by more
-                   than ~10 s") — the first genuinely-cold test of this exact shape (fire all 17
-                   pool papers concurrently, then a `query=` call for a paper never before touched
-                   this process) measured **~14-15 s**, not ~10 s. Round 5's own A5-06 recorded
-                   this target as met but explicitly on an already-warm paper, flagging the gap
-                   this closing pass then filled. A second, smaller difference (a single paper's
-                   first-`/api/figure`-call time, 10.748 s vs. ≤10s) is explained in advance by
-                   item 5-05's own named risk ("a paper whose source links genuinely hang could
-                   stack past 10 s") and is not counted as a fresh defect.
-OPEN ITEMS:       one — S10 target (c)'s concurrent-flood delay (~14-15 s vs. ~10 s), not
-                   addressed by any of round 5's 7 landed items (5-01..5-07 touched the proxy body
-                   limit, the upload error messages/client refusal, feed persistence, and the
-                   og:image cache — none touched figure-lookup scheduling under concurrent load).
-                   B's job: enumerate what actually runs on a cold `query=` lookup fired alongside
-                   16 others, and say whether the ~14-15 s is this paper's own honest per-source
-                   timeout stack (item 5-05's already-accepted risk) or a distinguishable
-                   concurrency effect a small fix could shorten. If it is the former, the manager
-                   can close on that finding alone without a further C turn.
-GATE (0 open):    tsc clean · eslint clean · vitest 2646/2646 (A's closing pass, cold, unchanged
-                   from C's own closing tally — no product code touched this pass).
+ROUND:            5 — LOOP CLOSED by the manager @ 2026-09-16
+WHOSE TURN:       nobody (closed)
+STOPPED BECAUSE:  finished — A's closing measurement left one gap, ruled an accepted cost (§1p);
+                   the manager re-verified S8–S11 independently in the browser (§4).
+STATUS:           S8 justified prose · S9 hover cue · S10 latency (cached figure ≤ 20 ms, cached
+                   report 810 ms on hard refresh, first-call ≤ 10 s on 5/6, flood worst case
+                   14–15 s accepted) · S11 large PDF (15/20/24 MB ok, 26 MB → 413, the user's
+                   real 14.5 MB Zotero PDF → full report with figures).
+OPEN ITEMS:       none
+GATE (0 open):    MET
 
-DONE:      rounds 1–4 (S3–S7 closed). Round 5: A measured (S9 closed), B wrote the fix guide, C
-           landed all 6 items (5-01..5-07, 5-05 informational), A's closing pass (post-restart)
-           confirmed 8 of 9 sub-targets closed live, one open (S10 target (c)).
-GATE NOW:  tsc clean · eslint clean · vitest 2646/2646 (A's closing pass).
-TODO:      B enumerates the cold concurrent-flood `query=` lookup's full path (see OPEN ITEMS
-           above) and either names a small additive fix or confirms this is item 5-05's already-
-           accepted risk under a different S10 target letter, in which case the manager can close
-           without another C turn.
+DONE:      rounds 1–5: S3–S11.
+GATE NOW:  tsc clean · eslint clean · vitest 2646/2646 (manager, cold, at close).
+TODO:      none for the loop. For the user: SEMANTIC_SCHOLAR_API_KEY when it arrives; push is
+           still not authorised. Leads (not authorised): tighten per-source figure timeouts;
+           html-text.ts caps; non-numeric figure cross-reference brackets.
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
@@ -623,6 +597,23 @@ C's order for round 5: **S11 → A5-05 → A5-03/A5-04 → S8.**
   class on its wrapper and select on it); otherwise leave it and the manager eyeballs the
   600 ms pulse. Never a `useEffect` setState (lint rule).
 - **A5-05:** direction 1 (persist today's `papers` in the feed store, bounded) as B recommends.
+
+---
+
+## §1p. RULING 14 — the one remaining round-5 gap is an accepted cost; loop closed (manager, 2026-09-16) — BINDING
+
+A's closing measurement left one miss: a cold, paywalled paper's `query=` figure lookup during a
+17-card flood took 14–15 s against a "~10 s" target, while the same paper solo takes ~10.7 s (its
+own source chain: publisher fetch → bot wall → PDF attempt → S2 grace). The queue adds ~4 s on
+top under a full-briefing flood. Ruling: **accepted** — it is the honest cost of trying every
+legal source once for a paper that has none, in the worst case, and the user's original
+complaint (20–45 s on every visit, including cached ones) is gone: cached figure calls answer in
+≤ 20 ms, a cached report renders in 0.8 s on a hard refresh, and the first-visit cost is paid once
+per 10 minutes. Tally for any future round: "cold paywalled lookup under flood: N s". Lead, not
+authorised: tighten the per-source fetch timeouts in `lib/figures/extract.ts` so the solo chain
+lands under 8 s.
+
+S8–S11 closed. Loop closed by the manager after independent browser verification (§4).
 
 ---
 
@@ -7072,3 +7063,10 @@ close on that finding alone without a further C turn — worth saying explicitly
 loop's own closing round and the remaining gap is narrow.
 
 Commit: `docs(abc): round 5 A closing part 4 - difference list, gate line, §1 handoff`.
+
+### Close — manager (2026-09-16)
+
+Round 5's A reported one narrow miss (cold paywalled lookup under a 17-card flood, 14–15 s vs
+~10 s); ruled an accepted cost with a tally (§1p). Manager's independent checks are in "Round 5 —
+manager browser checks" above; gate cold at close: tsc · eslint · 2646/2646. Hourly clock deleted.
+Loop closed. Branch not pushed.
