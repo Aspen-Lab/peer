@@ -80,18 +80,30 @@ browser, run the reports), then report to the user in plain language and stop th
 ## §1. CURRENT STATE — THE SOURCE OF TRUTH
 
 ```
-ROUND:            7 (loop REOPENED by the manager 2026-09-16 — page zoom + fit to screen, §1w)
-WHOSE TURN:       C
-STOPPED BECAUSE:  B finished the turn @ 2026-09-17T04:15Z
-STATUS:           Round 7 open. B's fix guide written (7-01/7-02/7-03), nothing implemented yet.
-OPEN ITEMS:       S20 S21 S22 (§1w) — fix guide 7-01 (S20), 7-02 (S22), 7-03 (S21) in §4
-GATE (0 open):    NOT MET
+ROUND:            7
+WHOSE TURN:       A
+STOPPED BECAUSE:  C finished 7-01/7-02 (own commits) and 7-03 (banked by the manager @
+                   2026-09-17 ~06:40 UTC after C's session limit hit mid-live-check)
+STATUS:           S20 page zoom (95d546e), S22 0.3-s zoom transition (b2b63fd), S21 fit toggle +
+                   Ctrl/⌘ zoom keys (manager-banked: reading-prefs `fit`/`setFit`/`resetScale`/
+                   `fitScaleIndex`, decision-block fifth IconButton, keyboard.tsx shortcuts above
+                   the Ctrl-swallow line, reader-layout fitted scale at read time, spread.ts,
+                   icons.tsx, page.tsx; new decision-block.test.tsx + reading-prefs tests). Gate
+                   with the other agent's dirty lightbox files present: tsc clean · eslint clean
+                   · vitest 2682/2682. C's live check (Fit at 2560/1440, keyboard) was NOT
+                   completed — A owes it. Dev server down at the manager's check; restarted.
+OPEN ITEMS:       S20 S21 S22 — landed, unmeasured.
+GATE (0 open):    NOT MET (pending A)
 
-DONE:      rounds 1–6 (S3–S19 closed). Round 7: B's fix guide (3 items, §4 "Round 7 — Agent B").
-GATE NOW:  tsc clean · eslint clean · vitest 2662/2662 (manager, cold, at round-6 close).
-TODO:      C works 7-01 → 7-02 → 7-03 in order (matches §1w's S20 → S22 → S21); A measures;
-           manager eyeballs. Dirty tree note: figure-lightbox.tsx/.test.ts modified by another
-           agent, not C's — do not touch, stage by explicit path only.
+DONE:      round 7: 7-01, 7-02, 7-03 (C's log entry for 7-03 is missing — C died before writing
+           it; A reads the diff).
+GATE NOW:  tsc clean · eslint clean · vitest 2682/2682 (manager, cold, 2026-09-17).
+TODO:      A measures S20/S21/S22 at 2560×1400 and 1440×900 (Browser pane resize_window):
+           column width and prose font-size at 1× vs Fit; panel width constant; Fit picks a
+           smaller step at 1440; button disabled below 1280; Ctrl/⌘ =/-/0; A/A clears fit;
+           `fit` persisted; `.zoom-transition` class present for ~350 ms after a click; the
+           transition CSS lists font-size, max-width, grid-template-columns at .3s. Figure files
+           are excluded and may be dirty (other agent) — ignore them.
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
@@ -9868,3 +9880,11 @@ DOM-level facts independent of that limitation.
 no change to the existing `.theme-transition` CSS block, no change to any figure file.
 
 Commit: `feat(reader): the page zoom eases over 0.3s, like the day/night fade (S22)`.
+
+### Round 7 — Agent C, item 7-03 (banked by the manager, 2026-09-17)
+
+C landed 7-01 and 7-02 with their own commits and log entries, then died on a session limit in
+the middle of 7-03's live check with the code and tests complete on the working tree. The
+manager ran the gate (tsc clean · eslint clean · vitest 2682/2682, with the other agent's
+uncommitted `figure-lightbox.*` edits present and untouched) and committed 7-03's eight files by
+explicit path. C's revert-proof and live numbers for 7-03 were not logged; A measures.

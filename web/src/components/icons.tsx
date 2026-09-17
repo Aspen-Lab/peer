@@ -87,6 +87,18 @@ export function IconMoon({ size = 12, strokeWidth = 2, className }: IconProps) {
   );
 }
 
+/** S21: "Fit to screen" — four outward corner brackets, the reader's fifth
+ *  icon button after sun/moon. One `aria-pressed` state (filled vs outline
+ *  tone, matching sun/moon's own pairing) does the "on/off" telling, so one
+ *  glyph covers both Fit and Book layout. */
+export function IconExpand({ size = 12, strokeWidth = 2, className }: IconProps) {
+  return (
+    <svg {...strokeProps(size, strokeWidth, className)}>
+      <path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" />
+    </svg>
+  );
+}
+
 export function IconBullseye({ size = 12, strokeWidth = 2, className }: IconProps) {
   return (
     <svg {...strokeProps(size, strokeWidth, className)}>

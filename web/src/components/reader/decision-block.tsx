@@ -9,11 +9,12 @@
 import Link from "next/link";
 import type { Ref } from "react";
 import { buttonVariants, IconButton } from "@/components/ui/button";
-import { IconArrowUpRight, IconLink, IconMoon, IconSun } from "@/components/icons";
+import { IconArrowUpRight, IconExpand, IconLink, IconMoon, IconSun } from "@/components/icons";
 import { Kbd } from "@/components/ui/kbd";
 import { cn } from "@/lib/cn";
 import type { PaperReading } from "@/lib/papers/reading";
 import { withThemeTransition, withZoomTransition } from "@/lib/theme";
+import { useSpread } from "./reader-layout";
 import { useProfileStore } from "@/store/profile";
 import { READING_SCALE_STEPS, useReadingPrefsStore } from "@/store/reading-prefs";
 import type { ColorTheme, ThemeMode } from "@/types";
@@ -76,6 +77,14 @@ export function DecisionBlock({
   const decreaseScale = useReadingPrefsStore((s) => s.decreaseScale);
   const atMaxScale = scaleIndex >= READING_SCALE_STEPS.length - 1;
   const atMinScale = scaleIndex <= 0;
+
+  // S21: Fit needs the two-column spread to have a panel and a column to
+  // balance — read the same hook `page.tsx` already owns via
+  // `reader-layout.tsx`, not threaded as a prop, the same "read the hook
+  // directly" idiom this file's own S15/S16 comments establish.
+  const spread = useSpread();
+  const fit = useReadingPrefsStore((s) => s.fit);
+  const setFit = useReadingPrefsStore((s) => s.setFit);
 
   // S16: sun = system (the existing default), moon = night — the same
   // `mode:accent` plumbing the Profile page's own picker already drives, so
@@ -174,11 +183,11 @@ export function DecisionBlock({
         </button>
       </div>
 
-      {/* S15/S16/S18: font-size and day/night controls, in the user's own
-          order — A (big) · A (small) · sun · moon. Sized with the panel's
-          own (non-scaling) type steps, never the --reading-scale-driven
-          reading tokens: only the article text these buttons control
-          moves, not the controls themselves. */}
+      {/* S15/S16/S18/S21: font-size, day/night and fit controls, in the
+          user's own order — A (big) · A (small) · sun · moon · fit. Sized
+          with the panel's own (non-scaling) type steps, never the
+          --reading-scale-driven reading tokens: only the article text
+          these buttons control moves, not the controls themselves. */}
       <div className="flex items-center gap-2 mt-5">
         <IconButton
           aria-label="Larger text"
@@ -216,6 +225,17 @@ export function DecisionBlock({
           onClick={() => setMode("dark")}
         >
           <IconMoon size={14} />
+        </IconButton>
+        <IconButton
+          aria-label={fit ? "Book layout" : "Fit to screen"}
+          aria-pressed={fit}
+          tone={fit ? "soft" : "ghost"}
+          disabled={!spread}
+          title={!spread ? "Fit needs the two-column layout" : undefined}
+          // S22: Fit on/off eases like every other zoom change.
+          onClick={() => withZoomTransition(() => setFit(!fit))}
+        >
+          <IconExpand size={14} />
         </IconButton>
       </div>
 

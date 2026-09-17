@@ -63,11 +63,10 @@ import {
 import { NextRow } from "@/components/reader/next-row";
 import { LoadingMat } from "@/components/reader/loading-mat";
 import { ReaderToast, useReaderToast } from "@/components/reader/reader-toast";
-import { ReaderLayout, useSpread } from "@/components/reader/reader-layout";
+import { ReaderLayout, useResolvedReadingScale, useSpread } from "@/components/reader/reader-layout";
 import { THUMB_BAR_PX, THUMB_BAR_QUERY } from "@/components/shell/thumb-bar";
 import { PAGE_CLASS, SPREAD_GRID } from "@/components/reader/spread";
 import { useReading } from "@/components/reader/use-reading";
-import { useReadingScale } from "@/store/reading-prefs";
 import { useModelReport } from "@/components/reader/use-model-report";
 import {
   NOT_FOUND,
@@ -263,13 +262,18 @@ function Reader({
   // ≥ xl: the spread. Owned here so the decided-read observer can follow the
   // DecisionBlock when the structure switches and it remounts.
   const spread = useSpread();
-  // S20: the page-zoom multiplier, set on the one `<PageContainer>` below so
-  // its `max-w` (page-container.tsx's `spread` variant) and `SPREAD_GRID`'s
-  // 2xl column track (both `calc(... * var(--reading-scale, 1))`) scale
-  // together. The other 4 `width="spread"` call sites in this file never set
-  // this variable, so `var(--reading-scale, 1)` falls back to `1` there —
-  // byte-identical to before this item.
-  const readingScale = useReadingScale();
+  // S20/S21: the page-zoom multiplier, set on the one `<PageContainer>`
+  // below so its `max-w` (page-container.tsx's `spread` variant) and
+  // `SPREAD_GRID`'s 2xl column track (both `calc(... * var(--reading-scale,
+  // 1))`) scale together. `useResolvedReadingScale` — not the raw
+  // `scaleIndex` — because it must resolve to the SAME value
+  // `reader-layout.tsx` uses for the grid track, manual step or Fit's own,
+  // or the panel-width invariant those two calc()s are built on breaks
+  // while Fit is on (see that hook's own comment). The other 4
+  // `width="spread"` call sites in this file never set this variable, so
+  // `var(--reading-scale, 1)` falls back to `1` there — byte-identical to
+  // before S20.
+  const readingScale = useResolvedReadingScale();
   const readingScaleStyle = { "--reading-scale": readingScale } as CSSProperties;
 
   const nav = useMemo(

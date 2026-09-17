@@ -14,8 +14,15 @@
 // breakpoint is rare and gets no transition.
 
 import { useEffect, useRef, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
-import { useReadingScale } from "@/store/reading-prefs";
-import { COLUMN_CLASS, PANEL_CLASS, SPREAD_GRID, SPREAD_QUERY } from "./spread";
+import { fitScaleIndex, READING_SCALE_STEPS, useReadingPrefsStore } from "@/store/reading-prefs";
+import {
+  COLUMN_CLASS,
+  PANEL_CLASS,
+  READING_COLUMN_BASE_PX,
+  READING_GRID_GAP_2XL_PX,
+  SPREAD_GRID,
+  SPREAD_QUERY,
+} from "./spread";
 
 interface ReaderLayoutProps {
   /** From `useSpread()`; the page owns it so its own effects can depend on it. */
@@ -48,16 +55,72 @@ export function useSpread(): boolean {
   );
 }
 
+function subscribeResize(onChange: () => void) {
+  window.addEventListener("resize", onChange);
+  return () => window.removeEventListener("resize", onChange);
+}
+
+/**
+ * S21: the reading scale actually shown — the reader's manual ladder step,
+ * or, while Fit is on (and the spread applies — Fit has nothing to do
+ * below xl), the step `fitScaleIndex` picks for the current viewport.
+ * Computed fresh at read time rather than written back into `scaleIndex`
+ * (see reading-prefs.ts's own header comment): nothing here calls
+ * `setState` from an effect. Subscribed to `window`'s `resize` event via
+ * `useSyncExternalStore`, the same shape `useSpread` above already uses
+ * for `matchMedia`'s `change` event, so Fit's step re-picks itself as the
+ * window is dragged, not only on the next click.
+ *
+ * Reads the panel's live width via `[data-reader-panel]` rather than a
+ * threaded ref, because this hook has **two** call sites that need the
+ * identical resolved value — this file's own `ReaderLayout` (for the
+ * spread's grid track) and `app/papers/[id]/page.tsx` (for the article's
+ * own max-width, S20's other half of the same calc() pair) — and page.tsx
+ * is `ReaderLayout`'s parent, with no ref path from a ref created inside a
+ * child to a parent that renders before it. A DOM-query lookup sidesteps
+ * that entirely and matches this codebase's own established
+ * cross-component idiom (`keyboard.tsx`'s `document.querySelectorAll("[data-paper-id]")`,
+ * `withZoomTransition`'s `[data-zoom-root]`) — both call sites compute the
+ * same thing independently and can never disagree, the same reason it was
+ * already safe for both to call the old, non-fit-aware `useReadingScale`
+ * selector. (Traced deviation from the round-7 fix guide, logged in full
+ * in §4: the guide's own text put this computation "inside
+ * useReadingScale()'s existing consumer, reader-layout.tsx" as if it had
+ * one call site — 7-01, the guide's own earlier item, gave it a second,
+ * in page.tsx. Computing fit-awareness in only one of the two would let
+ * the article's max-width and the grid's column width use two different
+ * scales while Fit is on, breaking the exact panel-width invariant 7-01
+ * derived and live-verified. This hook is the fix: identical computation,
+ * called independently from both places, so they cannot diverge.)
+ */
+export function useResolvedReadingScale(): number {
+  const scaleIndex = useReadingPrefsStore((s) => s.scaleIndex);
+  const fit = useReadingPrefsStore((s) => s.fit);
+  const spread = useSpread();
+  useSyncExternalStore(subscribeResize, () => window.innerWidth, () => 0);
+  if (!fit || !spread || typeof window === "undefined") {
+    return READING_SCALE_STEPS[scaleIndex];
+  }
+  const panel = document.querySelector<HTMLElement>("[data-reader-panel]");
+  const index = fitScaleIndex(
+    window.innerWidth,
+    panel?.offsetWidth ?? 0,
+    READING_GRID_GAP_2XL_PX,
+    READING_COLUMN_BASE_PX,
+  );
+  return READING_SCALE_STEPS[index];
+}
+
 export function ReaderLayout(p: ReaderLayoutProps) {
   const panelRef = useRef<HTMLDivElement>(null);
-  // S15: read here, not threaded as a prop from page.tsx — this file
-  // already self-contains its one other piece of layout-affecting state
-  // (`useSpread`), so the reading-size scale follows the same shape. Sets
-  // --reading-scale on a thin wrapper around `words` and `additions` only
-  // (never `decision`, never the panel) — the CSS variable falls back to 1
+  // S15/S21: read here, not threaded as a prop from page.tsx — this file
+  // already self-contains its other layout-affecting state (`useSpread`),
+  // so the reading-size scale follows the same shape. Sets --reading-scale
+  // on a thin wrapper around `words` and `additions` only (never
+  // `decision`, never the panel) — the CSS variable falls back to 1
   // everywhere it isn't explicitly set, so nothing outside these two wraps
   // is affected.
-  const readingScale = useReadingScale();
+  const readingScale = useResolvedReadingScale();
   const readingScaleStyle = { "--reading-scale": readingScale } as CSSProperties;
 
   // The panel's height, for the sticky rule: a panel taller than the
@@ -100,7 +163,9 @@ export function ReaderLayout(p: ReaderLayoutProps) {
     // needs the variable set on itself; `readingScaleStyle` is the same
     // constant those wraps already use, reused rather than duplicated.
     <div className={SPREAD_GRID} style={readingScaleStyle}>
-      <div ref={panelRef} className={PANEL_CLASS}>
+      {/* data-reader-panel: useResolvedReadingScale's own DOM-query
+          target for the panel's live width — see that hook's comment. */}
+      <div ref={panelRef} className={PANEL_CLASS} data-reader-panel="">
         {p.plate}
         {p.title}
         {p.decision}

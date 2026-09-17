@@ -36,6 +36,16 @@ export const PAGE_CLASS = "px-5 sm:px-6 py-8 sm:py-12 xl:pt-4";
 export const SPREAD_GRID =
   "xl:grid xl:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] 2xl:grid-cols-[minmax(0,1fr)_calc(560px*var(--reading-scale,1))] xl:gap-x-16 2xl:gap-x-24 xl:items-start";
 
+/** S21: the 2xl track's base column width and gap, as plain numbers —
+ *  `fitScaleIndex` (store/reading-prefs.ts) needs them outside a Tailwind
+ *  class string. Keep these two in step with the `560`/`gap-x-24` literals
+ *  baked into `SPREAD_GRID` above and the `640` in page-container.tsx's
+ *  `spread` variant — the same "two places, one query" risk this file's
+ *  own header comment already names for `SPREAD_QUERY` vs. the `xl:`
+ *  breakpoint, now a third place that must agree. */
+export const READING_COLUMN_BASE_PX = 560;
+export const READING_GRID_GAP_2XL_PX = 96;
+
 /** The left panel: pinned while the reader scrolls the column (`reader-panel`
  *  in `globals.css`). */
 export const PANEL_CLASS = "xl:min-w-0 xl:self-start xl:reader-panel";
