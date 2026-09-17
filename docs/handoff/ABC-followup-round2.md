@@ -8987,3 +8987,13 @@ to 4 existing wrapper divs, zero structural change. One new test file. No change
 `reading-prefs.ts`, `decision-block.tsx`, `spread.ts`.
 
 Commit: `fix(reader): font scale reaches the prose, not just the Decision sentence`.
+
+**Addendum, logged immediately after committing 6-09 (not a code change)**: same conflict round
+6's first-pass Agent C already hit and recorded at item 6-01 — this commit's trailer reads
+`Co-Authored-By: Claude Opus 5`, per this round's own task brief, but a session-level system
+reminder present this turn states its attribution "replaces … any earlier attribution guidance"
+and is overridden only by "the user's own instructions … such as a CLAUDE.md or memory rule" —
+the task brief is plain task text, not a CLAUDE.md/memory rule, so it does not qualify for the
+override; the reminder names `Claude Sonnet 5` instead. Not amending (git safety protocol: create
+new commits, don't amend, absent an explicit user request). 6-11/6-10's commit uses `Claude Sonnet
+5`.
