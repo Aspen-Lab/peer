@@ -11054,3 +11054,173 @@ next item or finishing this turn — nothing to clean up in `git status`.
 
 Gate at the end of this turn: `npx tsc --noEmit` clean · `npx eslint .` clean · `npx vitest run
 --exclude "**/benchmark.test.ts"` → **2682/2682**.
+
+### Round 7 — Agent C, item S23 (Ruling 20 — Semantic Scholar)
+
+Confirmed `git status` showed `lib/figures/extract.ts`/`extract.test.ts` clean (only the other
+agent's `figure-lightbox.*` dirty, untouched) before starting — S23 was not blocked. Read Ruling
+20 (§1y) in full as the guide; it is explicitly "already fully guided by the manager, B did not
+touch it."
+
+**1. Removed the Semantic Scholar figure branch from `extract.ts`.** Deleted wholesale:
+`interface SSFigure`, the 1-20 queue (`acquireSemanticScholarSlot`/`releaseSemanticScholarSlot`/
+`__resetSemanticScholarLimiterForTests`/`waitMs`), the 4-01 backoff constants, `attemptSemantic
+ScholarFetch`, and `trySemanticScholarCandidates` — 142 contiguous lines. In `buildCandidatePool`:
+removed `semanticTasks`, the DOI/arXiv/OpenAlex `semanticId` priority chain, the
+`SEMANTIC_SCHOLAR_ENRICH_GRACE_MS` race and its `rate_limited`-attempt fallback; the now-orphaned
+`openAlexId`/`bareOpenAlexId` (only ever used to build `semanticId`) removed too. In
+`finalDiagnostic`: removed `wasThrottled`/`withThrottleNote` and the whole `rateLimited` branch —
+the function now has exactly 4 outcomes (caption_mismatch, paywalled, no_figures,
+source_unavailable-or-generic-fallback), matching Ruling 20's "the Graph API has no figures field"
+finding (nothing can be throttled from a call that is never made).
+
+**Type changes — one deviation from a literal reading of Ruling 20, traced and resolved by
+compiling, not guessed:** `AttemptResult["status"]` drops `"rate_limited"` cleanly (nothing else
+in the codebase reads this internal, this-file-only type — confirmed by `tsc` after the edit:
+zero errors). `FigureStatus` (the outward status, `FigureResult["status"]`) **keeps**
+`"rate_limited"` — Ruling 20's own hedge ("the status may stay in the type if other code reads
+it — grep") applies: `components/paper-figure.tsx` (frozen, round-7's own exclusion list) imports
+`FigureStatus` directly into its own `FigureState["status"]` field and does `if (status ===
+"rate_limited")` against it; removing the literal would make that a compile error in a file this
+round must not touch. Grepped first, not assumed. **A second, non-obvious case of the same
+hedge, found only by running `tsc` after an initial attempt to narrow `FigureResult["source"]`
+too:** removing `"semantic-scholar"` from `FigureResult["source"]`/`FigureCandidate["source"]`
+broke the build — `lib/figures/pdf-extract.ts` (also frozen) independently declares its own
+`FigureSource` type with the same literal, and its exports (`extractPdfCandidatesFromPath`/
+`tryPdfCandidates`) return values typed against it that flow into `extract.ts`'s own
+`FigureCandidate`/`AttemptResult`. Reverted that narrowing; `sourcePriority`'s own
+`"semantic-scholar"` branch (score 18) restored for the same reason, rather than left to fall
+through to the generic `return 0` for a value the type still structurally allows — both now carry
+a comment explaining why they could not be removed, so the next reader does not attempt the same
+narrowing and hit the same wall blind.
+
+**Tests, `extract.test.ts` — rewritten, not deleted, per Ruling 20's own instruction.** The
+`describe("trySemanticScholarCandidates — 1-20, ...")` block (5 tests: concurrency cap, interval
+spacing, keyed pacing, backoff, retry-success) and the two `rate_limited`-specific
+`finalDiagnostic` tests are gone from this file — replaced with a new
+`describe("getFigurePool — Ruling 20 (S23): the pool has no Semantic Scholar branch")` (2 tests:
+a DOI-only paper — the exact shape that used to trigger the *strongest*-priority Semantic Scholar
+lookup — never has any fetch call whose URL contains "semanticscholar"; the pool resolves in
+under 1s with no grace-period wait left to race) and a rewritten
+`describe("finalDiagnostic — Ruling 20 (S23): no Semantic Scholar/rate_limited handling left")`
+(2 tests: the source_unavailable-wins precedence 4-01 originally tested, now with no throttled
+attempt in the mix; the generic fallback). Net count: 21 → 18 in this file (2682 → 2679
+codebase-wide) — the concurrency/pacing/backoff *behavior* itself is not lost, it moved to its
+own test file below, per Ruling 20's own "the queue tests move with it (rewritten, not deleted)."
+
+**Proved by execution, reverted, restored**: temporarily reinserted one `timedFetch("https://
+api.semanticscholar.org/__TEMP_REVERT_PROOF__")` call into `buildCandidatePool` — the new "never
+contacts api.semanticscholar.org" test failed exactly as expected
+(`expected true to be false`); removed the line, reran, 18/18 green.
+
+**2. `web/src/lib/sources/semantic-scholar-client.ts` — new, shared, keyed, paced client.**
+Concurrency 2, interval 350ms unkeyed / 1500ms keyed (Ruling 20's own number, wider than the
+published 1 RPS — the manager's live testing found 429s persisting between 200s at 1.1–3s, so the
+key's limit has burst memory), 1s/2s/4s backoff on 429 (3 retries, then final), `x-api-key` sent
+when `SEMANTIC_SCHOLAR_API_KEY` is set, returns `null` on a network error rather than throwing
+(matches every other source adapter's "honest empty" shape). Mechanism is a direct port of the
+retired `extract.ts` queue (`acquireSlot`/`releaseSlot`/module-level `active`/`lastStart`/
+`admission` chain) — same shape, generalized to a plain `fetchSemanticScholar(url, init?,
+timeoutMs?)` with no figure-specific typing.
+
+**Wired into both call sites named by the ruling**: `sources/semantic-scholar.ts`'s `fetchOne`
+(paper search) now calls `fetchSemanticScholar` instead of the generic `sourceFetch` — same
+`next: {revalidate: 300}` caching, same 6s timeout, same `res.ok`/JSON-parse shape, `sourceFetch`
+import dropped (nothing else in this file used it). `papers/enrich.ts`'s `trySS` (the
+`abstract,tldr` lookup) now calls `fetchSemanticScholar` instead of the shared `timedFetchText`
+helper — `tryCrossref`/`tryDoiPageMeta` keep using `timedFetchText` unchanged, since only the
+Semantic Scholar call needs the key/queue/backoff, confirmed by grep before editing (both other
+functions hit unrelated hosts, api.crossref.org and doi.org).
+
+**Tests, new file `semantic-scholar-client.test.ts`** (Ruling 20: "the queue tests move with it
+(rewritten, not deleted); one test that the header is present iff the env var is set"): the same
+5 concurrency/interval/backoff tests retired from `extract.test.ts`, rewritten against
+`fetchSemanticScholar` directly (own ids replaced with plain URLs, `Response`-status assertions
+instead of `AttemptResult.status`); one new "returns null, never throws, on a network error" test
+(a behavior the old figure-specific wrapper never exposed this cleanly, since it converted every
+failure into an `AttemptResult`); two new header tests (`x-api-key` present iff the env var is
+set). **A real test-isolation bug found and fixed while writing these, not shipped**: the keyed-
+pacing test's own `vi.unstubAllEnvs()` cleanup lived at the end of the test body — if that test's
+own assertion failed first (as it did during the revert-proof below), the env stub leaked into
+every later test in the file, since `SEMANTIC_SCHOLAR_API_KEY` stayed "test-key" and cascaded a
+second, unrelated-looking failure plus a timeout in a third test. Moved the unstub into
+`afterEach` (this describe block's existing pattern for every other kind of cleanup already) so a
+failing assertion can never leak state sideways again.
+
+**Proved by execution, reverted, restored, twice** (two independent behaviors): (a) the
+`x-api-key` header — blanked the conditional spread to `{}` — the "sends x-api-key" test failed
+exactly as expected (`expected null to be 'test-key-123'`); restored, 8/8 green. (b) the keyed
+interval — changed `1500` back to the old `1100`ms — with the `afterEach` fix already in place,
+**exactly one** test failed this time (`paces to one request per 1.5s`, `expected 2 to be 1`),
+confirming the isolation fix actually worked (before that fix, the same revert cascaded 3
+failures); restored, 8/8 green.
+
+**Gate**: `npx tsc --noEmit` clean · `npx eslint .` clean · `npx vitest run --exclude
+"**/benchmark.test.ts"` → **2687/2687** (2682 − 3 from the `extract.test.ts` consolidation + 8
+new in `semantic-scholar-client.test.ts`).
+
+**3. README env section** (`README.md`, not `web/README.md` — the latter has no env
+documentation at all, grepped first). Two edits: the source-adapter table row for
+`semantic_scholar` no longer says "for figures" (it said this before Ruling 20's own finding —
+the Graph API never had a figures field, so this was never true) — now states the key raises the
+search/enrichment limit and that the Graph API has no figures field, with a pointer to Ruling 20.
+The "Search / enrichment" env-var paragraph rewritten in full: names both real call sites
+(paper search, abstract/TLDR enrichment), states plainly that Semantic Scholar does not supply
+figures and why, and replaces the stale "2.5s/5s/10s, then rate-limited" backoff description
+(the old figure-branch's own numbers) with the actual current ones (1.5s/350ms pacing, 1s/2s/4s
+backoff) and the two real module names.
+
+**Live-checked, dev server `peer-web` already running with the key loaded (not restarted, per
+this round's standing instruction) — key never printed, never logged:**
+- `curl "http://localhost:3000/api/figure?id=openalex%3AW7212165100&url=https%3A%2F%2Fdoi.org%2F
+  10.1038%2Fs41560-026-02120-8&doi=10.1038%2Fs41560-026-02120-8&paperTitle=x"` →
+  `{"status":"source_unavailable","reason":"Peer reached an access-check page at idp.nature.com,
+  not the article itself.", ...}` — the reason names the real bounce-page finding, no mention of
+  a figure index, rate limiting, or Semantic Scholar anywhere in it.
+- **One correction to this item's own brief, traced by reading the route file, not guessed**:
+  `src/app/api/papers/search/route.ts` exports only `GET` (query-string `q=`, OpenAlex-only —
+  confirmed by reading the whole file), not `POST`; no route at that exact path takes a body.
+  The multi-source pipeline this item is meant to exercise (the one that actually calls
+  `sources/semantic-scholar.ts`, which this turn changed) is `POST /api/feed`
+  (`runFeedPipeline`, `sources: SourceId[]` in its own body, `aiTier: 0` avoids any LLM cost).
+  Called it with a fresh (uncached — a repeated topic string returned an identical, stale,
+  all-zero `meta.fetched` object with the SAME `generatedAt` timestamp across two different
+  calls, an unrelated Next.js data-cache quirk on the *derived search query*, not a defect in
+  this turn's own change) topic: `{"topics":["quantum gravity xyz unique test 12345"],
+  "aiTier":0,"perSourceLimit":3}` → **200**, `meta.fetched.semantic_scholar: 3` — 3 real results
+  came back through the new keyed, paced client, live, with the real deployment key. No error
+  logged server-side for this call (checked the dev server's own log, filtered for
+  "semantic-scholar" — zero hits, meaning no non-ok-response or fetch-error branch fired).
+
+**Blast radius**: `extract.ts` (Semantic Scholar branch removed, ~180 lines net), `extract.test.ts`
+(rewritten per above), two new files under `lib/sources/`, `sources/semantic-scholar.ts` (one
+import + one call site), `papers/enrich.ts` (one import + `trySS`'s fetch call), `README.md` (env
+docs). No figure file on the round's own exclusion list touched — confirmed by `git status`
+before every commit this item.
+
+Commit: `refactor(sources): remove the Semantic Scholar figure branch (it never worked), add one
+shared keyed client for search + enrich (Ruling 20, S23)`.
+
+### Round 7 — Agent C, final summary (second pass + S23)
+
+All of this turn's work items landed: **7-04 → 7-05 → 7-06 → S23**, one commit each, gate green
+after every one (final: tsc clean · eslint clean · vitest **2687/2687**). No figure file was ever
+staged or committed by this turn; the other agent's `figure-lightbox.tsx`/`.test.ts` stayed dirty
+and untouched throughout, confirmed by `git status` before every commit.
+
+**One standing item for A/the manager, repeated from the 7-06 entry above**: this session's dev
+server did not hot-reload any CSS/Tailwind-class-string change made during 7-04/7-05/7-06 — every
+number reported for those three items came from live DOM/layout measurement against an injected,
+exact-match `!important` override, not from the actually-served stylesheet, which will not show
+round 7's second-pass CSS until the dev server restarts. **S23's own checks did not hit this
+limitation** — `lib/figures/extract.ts` and `lib/sources/*` are plain server-side TypeScript, not
+CSS, and both the `/api/figure` curl and the `/api/feed` POST above ran against the live,
+hot-reloaded server code with no override needed.
+
+**Two out-of-guide findings for the manager, traced by compiling/grepping, not by choice**:
+(1) `FigureResult["source"]`/`FigureCandidate["source"]` cannot drop `"semantic-scholar"` without
+editing the frozen `pdf-extract.ts` — a structural-type version of Ruling 20's own literal-type
+hedge, worth knowing before any future round tries the same narrowing. (2) The task's own S23
+brief named `POST /api/papers/search` for the live check; that path is `GET`-only in this
+codebase — `POST /api/feed` is the route that actually exercises the changed
+`sources/semantic-scholar.ts` adapter, and that is what was checked instead.

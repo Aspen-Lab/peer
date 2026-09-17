@@ -9,14 +9,7 @@ vi.mock("./pdf-extract", async (importOriginal) => {
   return { ...actual, extractPdfCandidatesFromPath: mocks.extractPdfCandidatesFromPath };
 });
 
-import {
-  __resetSemanticScholarLimiterForTests,
-  extractFigure,
-  finalDiagnostic,
-  getFigurePool,
-  tryHtmlCandidates,
-  trySemanticScholarCandidates,
-} from "./extract";
+import { extractFigure, finalDiagnostic, getFigurePool, tryHtmlCandidates } from "./extract";
 
 describe("tryHtmlCandidates — 1-22, a hard 401/402/403/451 is reported as paywalled", () => {
   const originalFetch = globalThis.fetch;
@@ -132,197 +125,79 @@ describe("tryHtmlCandidates — 1-19, the graphical-abstract/og:image honesty gu
   });
 });
 
-describe("trySemanticScholarCandidates — 1-20, concurrency cap + minimum interval", () => {
+describe("getFigurePool — Ruling 20 (S23): the pool has no Semantic Scholar branch", () => {
   const originalFetch = globalThis.fetch;
 
-  beforeEach(() => {
-    vi.useFakeTimers();
-    __resetSemanticScholarLimiterForTests();
-  });
-
   afterEach(() => {
-    vi.useRealTimers();
     globalThis.fetch = originalFetch;
     vi.restoreAllMocks();
   });
 
-  it("never runs more than 2 Semantic Scholar requests at once", async () => {
-    let active = 0;
-    let maxActive = 0;
-    const pending: Array<() => void> = [];
-    globalThis.fetch = vi.fn(async () => {
-      active += 1;
-      maxActive = Math.max(maxActive, active);
-      await new Promise<void>((resolve) => pending.push(resolve));
-      active -= 1;
-      return new Response(JSON.stringify({ figures: [] }), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      });
+  it("never contacts api.semanticscholar.org, even for a DOI paper that used to be looked up there first", async () => {
+    // Before Ruling 20, a DOI was the STRONGEST id `buildCandidatePool` used
+    // to key a Semantic Scholar lookup by (ahead of arXiv/OpenAlex) — a
+    // plain DOI paper with no upload and no arXiv id is exactly the shape
+    // that used to trigger it. The Graph API has no `figures` field (Ruling
+    // 20), so that whole branch is gone; every fetch below (the DOI landing
+    // page, Unpaywall, Europe PMC) is mocked to fail fast, and the only
+    // thing this test cares about is which URLs were ever asked for.
+    const calledUrls: string[] = [];
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      calledUrls.push(String(input));
+      return new Response("", { status: 404 });
     }) as unknown as typeof fetch;
 
-    const calls = [1, 2, 3, 4].map((n) => trySemanticScholarCandidates(`DOI:${n}`));
+    const pool = await getFigurePool({ itemId: "openalex:W1", doi: "10.1000/test-doi" });
 
-    // Let call 1 through admission immediately; call 2 is gated behind the
-    // ~350ms minimum interval, not the concurrency cap, so it needs time to
-    // pass before it starts too.
-    await vi.advanceTimersByTimeAsync(0);
-    expect(pending.length).toBe(1);
-    await vi.advanceTimersByTimeAsync(400);
-    expect(pending.length).toBe(2);
-    expect(maxActive).toBe(2);
-
-    // Calls 3 and 4 must wait for a slot to free, no matter how much time
-    // passes, since both existing calls are still in flight (fetch has not
-    // resolved for either).
-    await vi.advanceTimersByTimeAsync(10_000);
-    expect(pending.length).toBe(2);
-    expect(maxActive).toBe(2);
-
-    // Free one slot; a queued call should take it (after its own interval
-    // wait), never pushing concurrent-in-flight above 2.
-    pending.shift()!();
-    await vi.advanceTimersByTimeAsync(400);
-    expect(maxActive).toBeLessThanOrEqual(2);
-
-    pending.shift()!();
-    await vi.advanceTimersByTimeAsync(400);
-    pending.forEach((resolve) => resolve());
-    await vi.advanceTimersByTimeAsync(400);
-    await Promise.all(calls);
-    expect(maxActive).toBeLessThanOrEqual(2);
+    expect(pool.attempted).toBe(true);
+    expect(calledUrls.some((url) => url.includes("semanticscholar"))).toBe(false);
   });
 
-  it("spaces consecutive request starts by at least ~350ms", async () => {
-    const starts: number[] = [];
-    globalThis.fetch = vi.fn(async () => {
-      starts.push(Date.now());
-      return new Response(JSON.stringify({ figures: [] }), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      });
-    }) as unknown as typeof fetch;
+  it("resolves without waiting on any grace period — there is no background lookup left to wait for or race", async () => {
+    // The old code raced a 3s SEMANTIC_SCHOLAR_ENRICH_GRACE_MS timer against
+    // the Semantic Scholar lookup whenever the paper's own sources already
+    // had a candidate. With no such lookup started at all, nothing should
+    // make this call outlive its own (mocked, instant) fetches — asserted
+    // by giving the test itself a budget well under the old grace period,
+    // with real timers (not `vi.useFakeTimers()` — there is no timer left
+    // to advance).
+    globalThis.fetch = vi.fn(async () => new Response("", { status: 404 })) as unknown as typeof fetch;
 
-    const p1 = trySemanticScholarCandidates("DOI:1");
-    await vi.advanceTimersByTimeAsync(0);
-    const p2 = trySemanticScholarCandidates("DOI:2");
-    await vi.advanceTimersByTimeAsync(0);
-    expect(starts.length).toBe(1);
-
-    await vi.advanceTimersByTimeAsync(349);
-    expect(starts.length).toBe(1);
-
-    await vi.advanceTimersByTimeAsync(2);
-    expect(starts.length).toBe(2);
-    expect(starts[1] - starts[0]).toBeGreaterThanOrEqual(350);
-
-    await Promise.all([p1, p2]);
-  });
-
-  it("paces to one request per second when SEMANTIC_SCHOLAR_API_KEY is set", async () => {
-    // Semantic Scholar's keyed limit is 1 RPS per key, and the key is shared
-    // by every reader of a deployment — so with a key the spacing widens.
-    vi.stubEnv("SEMANTIC_SCHOLAR_API_KEY", "test-key");
-    const starts: number[] = [];
-    globalThis.fetch = vi.fn(async () => {
-      starts.push(Date.now());
-      return new Response(JSON.stringify({ figures: [] }), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      });
-    }) as unknown as typeof fetch;
-
-    const p1 = trySemanticScholarCandidates("DOI:1");
-    await vi.advanceTimersByTimeAsync(0);
-    const p2 = trySemanticScholarCandidates("DOI:2");
-    await vi.advanceTimersByTimeAsync(0);
-    expect(starts.length).toBe(1);
-
-    await vi.advanceTimersByTimeAsync(1000);
-    expect(starts.length).toBe(1);
-
-    await vi.advanceTimersByTimeAsync(101);
-    expect(starts.length).toBe(2);
-    expect(starts[1] - starts[0]).toBeGreaterThanOrEqual(1100);
-
-    await Promise.all([p1, p2]);
-    vi.unstubAllEnvs();
-  });
-
-  it("reports a 429 as rate_limited only after exponential backoff: 1 s, 2 s, 4 s", async () => {
-    // 4-01 widened for the Semantic Scholar key application: a 429 is retried
-    // three times with doubling waits (re-entering the same concurrency
-    // queue each time) before the lookup reports rate_limited. Four fetches
-    // in all; the mock always answers 429.
-    globalThis.fetch = vi.fn(
-      async () => new Response("", { status: 429 }),
-    ) as unknown as typeof fetch;
-
-    const promise = trySemanticScholarCandidates("DOI:1");
-    await vi.advanceTimersByTimeAsync(0);
-    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
-    await vi.advanceTimersByTimeAsync(999);
-    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
-    await vi.advanceTimersByTimeAsync(1);
-    expect(globalThis.fetch).toHaveBeenCalledTimes(2);
-    await vi.advanceTimersByTimeAsync(2_000);
-    expect(globalThis.fetch).toHaveBeenCalledTimes(3);
-    await vi.advanceTimersByTimeAsync(4_000);
-    const result = await promise;
-
-    expect(result.status).toBe("rate_limited");
-    expect(globalThis.fetch).toHaveBeenCalledTimes(4);
-  });
-
-  it("stops retrying as soon as a retry succeeds", async () => {
-    let calls = 0;
-    globalThis.fetch = vi.fn(async () => {
-      calls += 1;
-      return calls < 3
-        ? new Response("", { status: 429 })
-        : new Response(JSON.stringify({ figures: [] }), {
-            status: 200,
-            headers: { "content-type": "application/json" },
-          });
-    }) as unknown as typeof fetch;
-
-    const promise = trySemanticScholarCandidates("DOI:1");
-    await vi.advanceTimersByTimeAsync(1_000 + 2_000);
-    const result = await promise;
-
-    expect(result.status).not.toBe("rate_limited");
-    expect(globalThis.fetch).toHaveBeenCalledTimes(3);
+    const start = Date.now();
+    await getFigurePool({ itemId: "openalex:W2", doi: "10.1000/test-doi-2" });
+    expect(Date.now() - start).toBeLessThan(1_000);
   });
 });
 
-describe("finalDiagnostic — 4-01, a throttled Semantic Scholar attempt never hides what the publisher/HTML/PDF branch found", () => {
-  it("a source_unavailable attempt (e.g. 2-04's bounce-page detector) wins the status over a rate_limited one, with a throttle note appended", () => {
+describe("finalDiagnostic — Ruling 20 (S23): no Semantic Scholar/rate_limited handling left", () => {
+  it("has no rate_limited branch — an attempts array with only recognised statuses is unaffected", () => {
+    // finalDiagnostic's `AttemptResult["status"]` union no longer includes
+    // "rate_limited" at all (nothing produces it any more), so there is no
+    // longer a throttle note to fold into another branch's reason, and no
+    // separate rate_limited status to report. This is the same
+    // source_unavailable-wins-over-nothing-else precedence 4-01 originally
+    // tested, just without a throttled attempt in the mix.
     const result = finalDiagnostic([
       {
         status: "source_unavailable",
         candidates: [],
         reason: "Peer reached an access-check page at link.springer.com, not the article itself.",
       },
-      { status: "rate_limited", candidates: [] },
     ]);
 
     expect(result.status).toBe("source_unavailable");
     expect(result.reason).toBe(
-      "Peer reached an access-check page at link.springer.com, not the article itself. The figure index was also rate-limited.",
+      "Peer reached an access-check page at link.springer.com, not the article itself.",
     );
   });
 
-  it("still reports rate_limited, unchanged, when it is the only attempt", () => {
-    const result = finalDiagnostic([
-      {
-        status: "rate_limited",
-        candidates: [],
-        reason: "Semantic Scholar rate-limited Peer's figure lookup for this paper.",
-      },
-    ]);
+  it("falls through to the generic source_unavailable fallback when every attempt is candidates-empty with no reason", () => {
+    const result = finalDiagnostic([{ status: "candidates", candidates: [] }]);
 
-    expect(result.status).toBe("rate_limited");
-    expect(result.reason).toBe("Semantic Scholar rate-limited Peer's figure lookup for this paper.");
+    expect(result.status).toBe("source_unavailable");
+    expect(result.reason).toBe(
+      "Peer could not reach a usable full-text source for this paper's figures.",
+    );
   });
 });
 

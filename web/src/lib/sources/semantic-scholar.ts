@@ -1,6 +1,6 @@
 import type { SourceAdapter, SourceQuery, RawItem } from "./types";
 import { cleanDisplayText, cleanDisplayTextOrUndefined } from "@/lib/text/clean";
-import { sourceFetch } from "./_fetch";
+import { fetchSemanticScholar } from "./semantic-scholar-client";
 
 const S2_API = "https://api.semanticscholar.org/graph/v1/paper/search";
 const MAX_QUERIES = 3;
@@ -58,12 +58,17 @@ async function fetchOne(searchQuery: string, perQuery: number): Promise<RawItem[
   });
 
   try {
-    const res = await sourceFetch(`${S2_API}?${params}`, {
-      timeoutMs: 6000,
-      revalidate: 300,
-    });
-    if (!res.ok) {
-      console.error("[semantic-scholar] non-ok response:", res.status);
+    // Ruling 20 (S23): the shared, keyed, paced client — not the generic
+    // `sourceFetch` every other adapter uses — so this call queues and
+    // paces alongside `papers/enrich.ts`'s own Semantic Scholar calls, and
+    // sends the API key when the deployment has one.
+    const res = await fetchSemanticScholar(
+      `${S2_API}?${params}`,
+      { next: { revalidate: 300 } },
+      6000,
+    );
+    if (!res || !res.ok) {
+      console.error("[semantic-scholar] non-ok response:", res?.status);
       return [];
     }
     const data = (await res.json()) as { data?: S2Paper[] };

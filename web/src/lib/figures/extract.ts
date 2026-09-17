@@ -20,6 +20,14 @@ interface ExtractInput {
   paperTitle?: string;
 }
 
+// Ruling 20 (round 7, S23): "rate_limited" stays here even though nothing in
+// this file produces it any more (the Semantic Scholar figure branch below
+// is gone — the Graph API has no `figures` field, so every call to it was
+// always either a 400 or, when throttled, a 429; see the ruling). Kept
+// because `components/paper-figure.tsx` (frozen this round) narrows against
+// the exact `FigureStatus` union via its own `FigureState["status"]` field —
+// removing this member would make that file's own `status === "rate_limited"`
+// checks a compile error there, in a file this round must not touch.
 export type FigureStatus =
   | "found"
   | "paywalled"
@@ -31,6 +39,15 @@ export type FigureStatus =
 export interface FigureResult {
   imageUrl: string | null;
   caption?: string | null;
+  // Ruling 20: kept here despite nothing in THIS file producing
+  // "semantic-scholar" any more — `lib/figures/pdf-extract.ts` (frozen this
+  // round) independently declares its own `FigureSource` type with the same
+  // literal, and its exports (`extractPdfCandidatesFromPath`/
+  // `tryPdfCandidates`) return values typed against it that flow into this
+  // file's `FigureCandidate`/`AttemptResult`. Narrowing this union breaks
+  // that assignment without touching the frozen file — exactly the "stays
+  // in the type if other code reads it" case the ruling names, just via a
+  // structural type rather than a literal `===` check.
   source?: "semantic-scholar" | "ar5iv" | "publisher" | "open-access" | "og" | null;
   status: FigureStatus;
   reason?: string | null;
@@ -49,8 +66,12 @@ interface FigureCandidate {
 // Exported for tests only (4-01) — lets a test build a specific attempts
 // array directly against `finalDiagnostic`'s precedence, without mocking the
 // several network branches that would otherwise be needed to produce one.
+// Ruling 20: "rate_limited" dropped here (unlike `FigureStatus` above) —
+// this is an internal, per-attempt status nothing outside this file reads,
+// and nothing produces it any more now that the Semantic Scholar branch is
+// gone, so keeping it would be a dead union member with no producer.
 export interface AttemptResult {
-  status: "candidates" | "paywalled" | "no_figures" | "source_unavailable" | "rate_limited";
+  status: "candidates" | "paywalled" | "no_figures" | "source_unavailable";
   candidates: FigureCandidate[];
   reason?: string;
 }
@@ -162,11 +183,6 @@ function asArray<T>(value: T | T[] | null | undefined): T[] {
 function bareArxivId(itemId: string): string | null {
   const match = itemId.match(/^arxiv:(.+)$/i);
   return match ? match[1].replace(/^abs\//, "") : null;
-}
-
-function bareOpenAlexId(itemId: string): string | null {
-  const match = itemId.match(/^openalex:(.+)$/i);
-  return match ? match[1] : null;
 }
 
 function cleanDoi(doi: string): string {
@@ -531,6 +547,12 @@ function sourcePriority(source: FigureCandidate["source"]): number {
   if (source === "open-access") return 60;
   if (source === "ar5iv") return 56;
   if (source === "publisher") return 52;
+  // Ruling 20: never actually produced any more (the Semantic Scholar
+  // figure branch that used to return this source is gone), but the type
+  // still structurally allows it — see `FigureResult["source"]`'s own
+  // comment. Kept at its old, low priority rather than silently falling
+  // through to the same `return 0` as "og" for an input this function
+  // could still type-check against.
   if (source === "semantic-scholar") return 18;
   if (source === "og") return 0;
   return 0;
@@ -752,148 +774,6 @@ function candidateResult(
     hideFigure: false,
     matchedBy: selection.matchedBy ?? null,
   };
-}
-
-interface SSFigure {
-  caption?: string;
-  url?: string;
-}
-
-// 1-20: a briefing loads a whole page's worth of papers together, and every
-// one of them used to fire its Semantic Scholar figure lookup at once —
-// against an unauthenticated per-IP rate limit, this reliably drew 429s.
-// Module-level state (same shape as `candidatePoolCache` above — process-wide
-// for a different reason) caps concurrent requests and spaces consecutive
-// starts out, shared across every call in this Node process regardless of
-// which paper or which request triggered it.
-const SEMANTIC_SCHOLAR_MAX_CONCURRENT = 2;
-const SEMANTIC_SCHOLAR_MIN_INTERVAL_MS = 350;
-// With an API key Semantic Scholar's published limit is 1 request per second
-// on every endpoint, per key — and the key is shared by every reader of this
-// deployment, so the queue paces to that instead of the unauthenticated
-// spacing. Read at call time so a test (or a late-loaded env) can flip it.
-const SEMANTIC_SCHOLAR_KEYED_MIN_INTERVAL_MS = 1100;
-function semanticScholarMinIntervalMs(): number {
-  return process.env.SEMANTIC_SCHOLAR_API_KEY
-    ? SEMANTIC_SCHOLAR_KEYED_MIN_INTERVAL_MS
-    : SEMANTIC_SCHOLAR_MIN_INTERVAL_MS;
-}
-let semanticScholarActive = 0;
-let semanticScholarLastStart = 0;
-// Chains each caller's admission check onto the previous one, so concurrent
-// callers are granted a slot in call order rather than racing each other.
-let semanticScholarAdmission: Promise<void> = Promise.resolve();
-
-function waitMs(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function acquireSemanticScholarSlot(): Promise<void> {
-  const myTurn = semanticScholarAdmission.then(async () => {
-    while (semanticScholarActive >= SEMANTIC_SCHOLAR_MAX_CONCURRENT) {
-      await waitMs(25);
-    }
-    const wait = semanticScholarLastStart + semanticScholarMinIntervalMs() - Date.now();
-    if (wait > 0) await waitMs(wait);
-    semanticScholarLastStart = Date.now();
-    semanticScholarActive += 1;
-  });
-  // Swallow here (not at the caller) so one rejected admission never breaks
-  // the chain for everyone queued behind it; the caller still awaits `myTurn`
-  // directly and sees any rejection itself.
-  semanticScholarAdmission = myTurn.catch(() => {});
-  await myTurn;
-}
-
-function releaseSemanticScholarSlot(): void {
-  semanticScholarActive = Math.max(0, semanticScholarActive - 1);
-}
-
-// Exported for tests only (1-20) — the limiter's module-level state persists
-// across test cases in the same file.
-export function __resetSemanticScholarLimiterForTests(): void {
-  semanticScholarActive = 0;
-  semanticScholarLastStart = 0;
-  semanticScholarAdmission = Promise.resolve();
-}
-
-// 4-01, widened to exponential backoff for the Semantic Scholar API key
-// application (their terms ask for it): a 429 is retried after 1 s, then
-// 2 s, then 4 s — three retries, doubling, then final. Bounded by the list,
-// never a loop; the whole sequence is 7 s so a briefing sweep is not held
-// hostage by one throttled paper (the first cut, 2.5/5/10 s, made a single
-// figure request wait 20–45 s behind a 17-card queue).
-const SEMANTIC_SCHOLAR_RETRY_DELAYS_MS = [1_000, 2_000, 4_000] as const;
-// How long the pool waits for Semantic Scholar once the paper's own sources
-// have already produced a figure.
-const SEMANTIC_SCHOLAR_ENRICH_GRACE_MS = 3_000;
-
-async function attemptSemanticScholarFetch(ssPaperId: string): Promise<AttemptResult> {
-  await acquireSemanticScholarSlot();
-  try {
-    const apiUrl =
-      `https://api.semanticscholar.org/graph/v1/paper/${encodeURIComponent(ssPaperId)}` +
-      "?fields=figures,title";
-    const res = await timedFetch(apiUrl, {
-      headers: {
-        Accept: "application/json",
-        ...(process.env.SEMANTIC_SCHOLAR_API_KEY
-          ? { "x-api-key": process.env.SEMANTIC_SCHOLAR_API_KEY }
-          : {}),
-      },
-    });
-    if (res?.status === 429) {
-      // Honest attempt status: a 429 means Peer never got an answer, not
-      // that Semantic Scholar has nothing — `finalDiagnostic` must not
-      // report this the same way as a confirmed-empty source.
-      return {
-        status: "rate_limited",
-        candidates: [],
-        reason: "Semantic Scholar rate-limited Peer's figure lookup for this paper.",
-      };
-    }
-    if (!res || !res.ok) return { status: "source_unavailable", candidates: [] };
-
-    try {
-      const data = (await res.json()) as { figures?: SSFigure[] };
-      const candidates = (data.figures ?? [])
-        .map((figure, ordinal): FigureCandidate | null => {
-          if (!figure.url || looksLikeLogo(figure.url)) return null;
-          return {
-            imageUrl: figure.url,
-            caption: figure.caption ?? null,
-            source: "semantic-scholar",
-            ordinal,
-            qualityHint: looksLowResUrl(figure.url) ? "low" : looksHighResUrl(figure.url) ? "high" : "medium",
-          };
-        })
-        .filter((candidate): candidate is FigureCandidate => candidate !== null);
-      return candidates.length > 0
-        ? { status: "candidates", candidates }
-        : { status: "no_figures", candidates: [], reason: "Semantic Scholar did not expose any paper figures for this record." };
-    } catch {
-      return { status: "source_unavailable", candidates: [] };
-    }
-  } finally {
-    releaseSemanticScholarSlot();
-  }
-}
-
-// Exported for tests only (1-20) — every other caller reaches it through
-// `buildCandidatePool`.
-export async function trySemanticScholarCandidates(ssPaperId: string): Promise<AttemptResult> {
-  let result = await attemptSemanticScholarFetch(ssPaperId);
-  // Bounded: each retry re-enters the acquire/release queue rather than
-  // holding a slot idle through the wait, so the 1-20 concurrency cap and
-  // interval still apply to every other paper in the same briefing sweep.
-  // After the last delay, whatever comes back (even still rate_limited) is
-  // final.
-  for (const delay of SEMANTIC_SCHOLAR_RETRY_DELAYS_MS) {
-    if (result.status !== "rate_limited") return result;
-    await waitMs(delay);
-    result = await attemptSemanticScholarFetch(ssPaperId);
-  }
-  return result;
 }
 
 function isAr5ivErrorPage(html: string): boolean {
@@ -1246,9 +1126,8 @@ export async function tryHtmlCandidates(
   // only in `extractFigure`'s query-less last resort) so `getFigurePool` —
   // used by every deep-report section's figure binding, and by `/api/figure`
   // whenever a `query` is supplied — can reach it too. Pushed as one extra,
-  // low-priority candidate (`sourcePriority` already ranks "og" below
-  // "semantic-scholar") so a real in-article figure still wins when both
-  // exist.
+  // low-priority candidate (`sourcePriority` already ranks "og" below every
+  // other source) so a real in-article figure still wins when both exist.
   const ogCandidate = ogImageCandidate(html, finalUrl, candidates.length);
   if (ogCandidate) candidates.push(ogCandidate);
 
@@ -1347,24 +1226,13 @@ export function finalDiagnostic(
     };
   }
 
-  // 4-01: a Semantic Scholar 429 is a secondary-source hiccup, never a reason
-  // to hide what the publisher/HTML/PDF branch actually found. Computed once
-  // so every more-specific branch below can fold the throttle event into its
-  // own reason text (for A's tally) instead of letting it silently win the
-  // top-level status.
-  const wasThrottled = attempts.some((attempt) => attempt.status === "rate_limited");
-  const withThrottleNote = (reason: string): string =>
-    wasThrottled
-      ? `${reason.replace(/[.;\s]+$/, "")}. The figure index was also rate-limited.`
-      : reason;
-
   const paywalled = attempts.find((attempt) => attempt.status === "paywalled");
   if (paywalled) {
     return {
       imageUrl: null,
       source: null,
       status: "paywalled",
-      reason: withThrottleNote(paywalled.reason ?? "The figure source appears paywalled."),
+      reason: paywalled.reason ?? "The figure source appears paywalled.",
       hideFigure: true,
       matchedBy: null,
     };
@@ -1376,52 +1244,21 @@ export function finalDiagnostic(
       imageUrl: null,
       source: null,
       status: "no_figures",
-      reason: withThrottleNote(
-        noFigures.reason ?? "Peer reached the source page, but did not find extractable figures.",
-      ),
+      reason: noFigures.reason ?? "Peer reached the source page, but did not find extractable figures.",
       hideFigure: false,
       matchedBy: null,
     };
   }
 
-  // 4-01: the publisher/HTML/PDF branch's own outcome (e.g. 2-04's bounce-page
-  // detector) wins the final status over a throttled Semantic Scholar
-  // attempt — this used to only win by accident, when no rate_limited
-  // attempt happened to also exist, because this explicit check did not
-  // exist and the generic fallback below (which also hard-codes
-  // "source_unavailable") was reached only after `rateLimited` had already
-  // claimed the slot.
   const sourceUnavailable = attempts.find((attempt) => attempt.status === "source_unavailable");
   if (sourceUnavailable) {
     return {
       imageUrl: null,
       source: null,
       status: "source_unavailable",
-      reason: withThrottleNote(
-        sourceUnavailable.reason ??
-          "Peer could not reach a usable full-text source for this paper's figures.",
-      ),
-      hideFigure: false,
-      matchedBy: null,
-    };
-  }
-
-  // 1-20: a real "reached the page, nothing there" verdict above is still the
-  // more informative message when one exists — this only replaces the
-  // generic "could not reach" fallback below, for the case where every
-  // attempt on this paper was some flavor of unreachable and at least one of
-  // those was specifically a throttled Semantic Scholar lookup. Saying
-  // "no figures" here would be dishonest: the truth is Peer never got an
-  // answer, not that it checked and found nothing.
-  const rateLimited = attempts.find((attempt) => attempt.status === "rate_limited");
-  if (rateLimited) {
-    return {
-      imageUrl: null,
-      source: null,
-      status: "rate_limited",
       reason:
-        rateLimited.reason ??
-        "A figure source rate-limited Peer's request; try again in a moment.",
+        sourceUnavailable.reason ??
+        "Peer could not reach a usable full-text source for this paper's figures.",
       hideFigure: false,
       matchedBy: null,
     };
@@ -1477,10 +1314,8 @@ async function buildCandidatePool(input: ExtractInput): Promise<CachedPool> {
   const candidates: FigureCandidate[] = [];
 
   // 1-29: an uploaded PDF is already on this server — read it directly and
-  // skip every other branch below (Semantic Scholar has no DOI to look this
-  // paper up by unless 1-26 found one via regex, and even then, looking it up
-  // too is an enhancement, not required: "has figures attached for analysis"
-  // per the user's own words is satisfied by the PDF's own embedded images).
+  // skip every other branch below. "has figures attached for analysis" per
+  // the user's own words is satisfied by the PDF's own embedded images.
   const uploadHash16 = bareUploadId(input.itemId);
   if (uploadHash16) {
     const attempt = await extractPdfCandidatesFromPath(pdfPath(uploadHash16), "publisher");
@@ -1491,34 +1326,16 @@ async function buildCandidatePool(input: ExtractInput): Promise<CachedPool> {
     return { candidates: reordered, attempts, ts: Date.now() };
   }
 
-  // Prefer original paper sources first. Semantic Scholar is useful, but its
-  // figure URLs are often thumbnails, so it should enrich the pool rather than
-  // short-circuit HTML/PDF extraction.
   const arxivId =
     bareArxivId(input.itemId) ??
     (input.doi ? arxivIdFromDoi(input.doi) : null) ??
     (input.url ? arxivIdFromUrl(input.url) : null);
-  const openAlexId = bareOpenAlexId(input.itemId);
 
   const originalTasks: Promise<AttemptResult>[] = [];
-  const semanticTasks: Promise<AttemptResult>[] = [];
   if (arxivId) {
     originalTasks.push(tryAr5ivCandidates(arxivId));
     originalTasks.push(tryPdfCandidates(`https://arxiv.org/pdf/${arxivId}`, "open-access"));
   }
-  // ONE Semantic Scholar lookup per paper, by the strongest id it has —
-  // DOI, else arXiv, else OpenAlex. They all resolve to the same record, and
-  // the lookup is the one branch that queues process-wide (1-20) and backs
-  // off on a 429: three lookups per paper across a 17-card briefing was
-  // what made a single figure request wait 20–45 s behind the queue.
-  const semanticId = input.doi
-    ? `DOI:${cleanDoi(input.doi)}`
-    : arxivId
-      ? `arXiv:${arxivId}`
-      : openAlexId
-        ? `OpenAlex:${openAlexId}`
-        : null;
-  if (semanticId) semanticTasks.push(trySemanticScholarCandidates(semanticId));
 
   const originalSettled = await Promise.allSettled(originalTasks);
   for (const r of originalSettled) {
@@ -1547,41 +1364,11 @@ async function buildCandidatePool(input: ExtractInput): Promise<CachedPool> {
       attempts.push(attempt);
       if (attempt.status === "candidates") {
         candidates.push(...attempt.candidates);
-        const originalCount = candidates.filter(
-          (candidate) => candidate.source !== "semantic-scholar",
-        ).length;
         const hasPdfCandidates = candidates.some((candidate) =>
           candidate.imageUrl.startsWith("data:image/"),
         );
-        if (originalCount >= 12 && hasPdfCandidates) break;
+        if (candidates.length >= 12 && hasPdfCandidates) break;
       }
-    }
-  }
-
-  // Semantic Scholar enriches the pool; it must not hold the pool hostage.
-  // With a figure already in hand from the paper's own sources, give the
-  // lookup a short grace period and otherwise let it finish in the
-  // background (its result is not lost — the next pool build for this paper
-  // starts from a warm queue). With nothing in hand, wait for it.
-  const semanticAll = Promise.allSettled(semanticTasks);
-  const semanticSettled =
-    candidates.length > 0 && semanticTasks.length > 0
-      ? await Promise.race([
-          semanticAll,
-          waitMs(SEMANTIC_SCHOLAR_ENRICH_GRACE_MS).then(() => null),
-        ])
-      : await semanticAll;
-  if (semanticSettled === null) {
-    attempts.push({
-      status: "rate_limited",
-      candidates: [],
-      reason: "The figure index had not answered in time; the paper's own figure is shown.",
-    });
-  } else {
-    for (const r of semanticSettled) {
-      if (r.status !== "fulfilled") continue;
-      attempts.push(r.value);
-      if (r.value.status === "candidates") candidates.push(...r.value.candidates);
     }
   }
 

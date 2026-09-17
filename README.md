@@ -196,7 +196,7 @@ beyond normalization.
 | --- | --- | --- |
 | `openalex` | `openalex.ts` | Primary academic source (250M+ works). Also powers live search. |
 | `arxiv` | `arxiv.ts` | Preprints. |
-| `semantic_scholar` | `semantic-scholar.ts` | Optional `SEMANTIC_SCHOLAR_API_KEY` for figures. |
+| `semantic_scholar` | `semantic-scholar.ts` | Optional `SEMANTIC_SCHOLAR_API_KEY` raises its search/enrichment rate limit; the Graph API has no figures field, so it never supplies figures (see Ruling 20). |
 | `dblp` | `dblp.ts` | CS bibliography. |
 | `pubmed` | `pubmed.ts` | Biomedical. |
 | `web` | `web-search.ts` | Brave/Tavily-backed web scouting (non-paper context). |
@@ -412,10 +412,15 @@ credentials are present; online users must supply their own key through the BYOK
 
 **Search / enrichment:** `TAVILY_API_KEY`, `BRAVE_SEARCH_API_KEY`,
 `SEMANTIC_SCHOLAR_API_KEY` (one server-side key, shared by every reader of the deployment; free from
-semanticscholar.org/product/api — the Academic Graph API is the one Peer calls; a keyed account is
-allowed 1 request per second, and Peer paces its figure lookups to that, retrying a 429 with
-exponential backoff — 2.5 s, 5 s, 10 s — then reporting the lookup as rate-limited. Optional — without one,
-Peer queues and paces those requests under the unauthenticated per-IP limit instead of failing), `OPENALEX_EMAIL`, `UNPAYWALL_EMAIL` (polite-pool emails).
+semanticscholar.org/product/api — the Academic Graph API is the one Peer calls, for paper search
+(`sources/semantic-scholar.ts`) and abstract/TLDR enrichment (`papers/enrich.ts`) only. **Semantic
+Scholar does not supply figures**: the Graph API has no `figures` field, so a figure lookup there
+always failed — 400 unthrottled, 429 throttled — and Peer no longer attempts one (Ruling 20). A
+keyed account's published limit is 1 request per second, enforced with some burst memory in
+practice, so Peer's own shared client (`sources/semantic-scholar-client.ts`) paces keyed calls to
+one per 1.5 s (350 ms unkeyed) and retries a 429 with exponential backoff — 1 s, 2 s, 4 s — before
+giving up. Optional — without a key, search and enrichment still work, just slower and more likely
+to be throttled), `OPENALEX_EMAIL`, `UNPAYWALL_EMAIL` (polite-pool emails).
 
 **Jobs feed (all optional — Remotive/Arbeitnow/Himalayas run keyless):**
 `ADZUNA_APP_ID` + `ADZUNA_APP_KEY` (free at developer.adzuna.com; best industry
