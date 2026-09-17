@@ -30,7 +30,7 @@ export function PaperCard({ paper }: { paper: Paper }) {
     >
       {typeLabel && (
         <span
-          className="inline-block mb-2 text-micro font-semibold uppercase tracking-[0.14em] px-2 py-0.5 rounded-md bg-tag-dim text-tag border border-tag/20"
+          className="eyebrow inline-block mb-2 px-2 py-0.5 rounded-md bg-tag-dim text-tag border border-tag/20"
         >
           {typeLabel}
         </span>

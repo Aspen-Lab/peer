@@ -45,7 +45,7 @@ function PersonaArt({ name }: { name: string }) {
         />
       </div>
       <figcaption
-        className="mt-4 text-center text-micro uppercase tracking-[0.22em] text-text-faint"
+        className="eyebrow mt-4 text-center text-text-faint"
       >
         — Profile sketch —
       </figcaption>
@@ -70,7 +70,7 @@ export function PersonaResult({
       {/* ── Right: text, axes, retake ── */}
       <div className="flex flex-col gap-10 max-w-[620px]">
         <header className="flex flex-col gap-3">
-          <span className="text-micro uppercase tracking-[0.22em] text-[color:var(--color-accent)]">
+          <span className="eyebrow text-[color:var(--color-accent)]">
             Your academic persona
           </span>
           <h1
@@ -94,7 +94,7 @@ export function PersonaResult({
         <section className="flex flex-col gap-3">
           <div className="flex items-center gap-3">
             <span className="h-px flex-1 bg-[color:var(--color-border)]" aria-hidden />
-            <h2 className="text-micro uppercase tracking-[0.22em] text-text-faint">
+            <h2 className="eyebrow text-text-faint">
               Spotted at the conference like
             </h2>
             <span className="h-px flex-1 bg-[color:var(--color-border)]" aria-hidden />
@@ -107,7 +107,7 @@ export function PersonaResult({
         </section>
 
         <section className="flex flex-col gap-5">
-          <h2 className="text-micro uppercase tracking-[0.22em] text-text-faint">
+          <h2 className="eyebrow text-text-faint">
             Your axes
           </h2>
           <div className="flex flex-col gap-5">
@@ -128,7 +128,7 @@ export function PersonaResult({
           <button
             type="button"
             onClick={onRestart}
-            className="h-10 px-5 rounded-full bg-surface shadow-card hover:shadow-card-hover hover:-translate-y-[1px] active:translate-y-0 transition-all duration-200 ease-out text-body-sm text-text"
+            className="h-10 px-5 rounded-full bg-surface shadow-card hover:shadow-card-hover hover:-translate-y-[1px] active:translate-y-0 transition-all ease-out text-body-sm text-text"
           >
             Retake quiz
           </button>
@@ -191,7 +191,7 @@ function AxisBar({ negative, positive, blurb, score }: AxisBarProps) {
           style={{ left: "50%", transform: "translate(-50%, -50%)" }}
         />
         <div
-          className="absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-[color:var(--color-accent)] shadow-card transition-[left] duration-500 ease-out"
+          className="absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-[color:var(--color-accent)] shadow-card transition-[left] duration-[var(--dur-base)] ease-out"
           style={{ left: `calc(${pct}% - 8px)` }}
           aria-label={`Score ${score.toFixed(2)}`}
         />

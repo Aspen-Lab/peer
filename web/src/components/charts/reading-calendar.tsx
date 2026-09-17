@@ -13,9 +13,12 @@
 // legend box — the line above it names it — but the ramp gets its Less/More
 // key, because a heatmap's steps are not self-evident.
 //
-// The ramp is the accent, light to dark: sequential magnitude is one hue, and
-// the accent is the only hue Peer has. Zero is a neutral, not the palest step
-// — a day with nothing read is not a small amount of reading.
+// The ramp is neutral, light to dark. The day-strip twenty pixels away states
+// the rule in its own comment — "in this palette the hue is a signal, and how
+// well a paper matches is data" — and this chart used to state the opposite,
+// spending 126 accent cells on /profile, by area the largest use of the hue
+// anywhere in the product. Zero is the ground, not the palest step: a day with
+// nothing read is not a small amount of reading.
 //
 // Nothing here is ever synthesized. This chart used to fall back to a seeded
 // pseudo-random grid whenever the per-day API was unavailable — which is
@@ -28,13 +31,13 @@ import { apiFetch } from "@/lib/api";
 
 export const CAL_DAYS = 7;
 
-/** The ramp: zero is neutral, then four steps of the one hue. */
+/** The ramp: zero is the ground, then four steps toward the heading tone. */
 const CELL_CLASS = [
   "bg-bg-secondary/60",
-  "bg-accent/20",
-  "bg-accent/40",
-  "bg-accent/70",
-  "bg-accent",
+  "bg-text-faint/40",
+  "bg-text-faint",
+  "bg-text-muted",
+  "bg-heading",
 ];
 
 function levelOf(value: number, max: number): number {
@@ -166,7 +169,7 @@ export function ReadingCalendar({
         {labels && (
           <div className="flex flex-col justify-between pt-3.5 shrink-0">
             {[0, 1, 2, 3, 4, 5, 6].map((d) => (
-              <span key={d} className="text-micro text-text-faint/70 h-[11px] leading-[11px]">
+              <span key={d} className="annotation text-micro text-text-faint/70 h-[11px] leading-[11px]">
                 {d === 1 ? "Mon" : d === 3 ? "Wed" : d === 5 ? "Fri" : " "}
               </span>
             ))}
@@ -175,7 +178,7 @@ export function ReadingCalendar({
         <div className="flex-1 min-w-0">
           {labels && (
             <div
-              className="grid mb-1 text-micro text-text-faint/70 uppercase tracking-[0.1em]"
+              className="eyebrow grid mb-1 text-text-faint/70"
               style={grid}
             >
               {Array.from({ length: weeks }).map((_, w) => (

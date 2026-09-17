@@ -94,13 +94,22 @@
      Two curves and three durations, taken from Latent's own tokens. The
      expo-out is what makes a 180ms colour change read as deliberate rather
      than as a flicker; `ease-snap` stays for the press, which wants the
-     shorter tail. Nothing here loops: the one keyframe animation in the whole
-     interface is the accent dot, and it is the only thing that repeats. */
+     shorter tail, and only on a press — see `@utility ease-snap` below.
+     One thing in the whole interface repeats: the accent dot on the claim's
+     band. Everything else is a one-shot. Before you add a second loop, read
+     the census in CHANGELOG v0.29.0 — there were five. */
   --ease-expo: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-inout: cubic-bezier(0.65, 0, 0.35, 1);
   --dur-fast: 180ms;
   --dur-base: 360ms;
   --dur-slow: 720ms;
+
+  /* Every `transition-*` that names no duration and no curve — 56 of them —
+     was silently taking Tailwind's 150ms on `cubic-bezier(.4,0,.2,1)`, a
+     third curve nobody chose. These two lines move all of them onto Peer's
+     own, and are why most class strings below no longer say `duration-*`. */
+  --default-transition-duration: var(--dur-fast);
+  --default-transition-timing-function: var(--ease-expo);
 
   /* ── Tracking ──────────────────────────────────────────────────────
      A display line closes up as it grows; a mono label opens out. Both are
@@ -123,6 +132,22 @@
   --radius-2xl: 0px;
   --radius-3xl: 0px;
   --radius-4xl: 0px;
+
+  /* ── Space ─────────────────────────────────────────────────────────
+     Two named steps, for the two gaps that were being retyped per call site.
+     A census of the tree found 418 vertical spacing utilities across 19
+     distinct steps and no token anywhere — the same "continuum is not a scale"
+     the type block below was written to end. These are the two that carry
+     meaning: the pause above a section, and the page's own top and bottom.
+     Everything smaller stays on Tailwind's 4px steps; Latent's scale has no
+     half-steps and neither should new work.
+
+     Permitted: 1 2 3 4 5 6 8 10 12 16 20 24 32
+     BANNED → replacement:  0.5→1  1.5→2  2.5→2|3  3.5→4  7→6|8  14→12|16
+     `eslint.config.mjs` warns on the banned steps. It is a warning while the
+     101 existing sites are cleared, and then it becomes an error. */
+  --spacing-band: 4rem;   /* 64 — above a section's eyebrow */
+  --spacing-page: 6rem;   /* 96 — a page's top and bottom, from lg up */
 
   /* ── Type scale — 9 steps covering the 10–20px working range.
      Changing the app's type system = editing THIS block. Display sizes
@@ -331,6 +356,14 @@ html[data-mode="dark"] {
   --nm-shade-deep: rgba(0, 0, 0, 0.6);
   --nm-rim: rgba(255, 255, 255, 0.09);
   --nm-rim-hi: rgba(255, 255, 255, 0.16);
+  /* These two were declared in `html[data-mode="dark"]` and nowhere else, so a
+     reader on a dark OS who never touched the theme switch — the default path —
+     got `--shadow-card` resolved from the LIGHT value: every card frame on the
+     first briefing Peer ever showed them was 28% fainter than the drawn one.
+     The dark palette is written twice; anything added to one half has to be
+     added to the other. */
+  --nm-frame: rgba(255, 255, 255, 0.18);
+  --nm-frame-hi: rgba(255, 255, 255, 0.4);
   --nm-key: rgba(0, 0, 0, 0.55);
   --nm-ambient: rgba(0, 0, 0, 0.45);
   --nm-bevel: rgba(255, 255, 255, 0.06);
@@ -382,7 +415,10 @@ html[data-mode="dark"] { --nm-underside: rgba(0, 0, 0, 0.34); }
     inset 0 0 0 1px color-mix(in srgb, #000 6%, transparent);
 }
 
-/* ── Motion — fast-start easing so presses track the hand ── */
+/* ── Motion — fast-start easing so a press tracks the hand.
+      PRESSES ONLY. Everything that hovers, focuses, tints or lifts is on
+      `--ease-expo`; a press is the one gesture that wants the short tail,
+      because the finger is already there. One caller: `card-shell.tsx`. ── */
 :root { --ease-snap: cubic-bezier(0.2, 0.9, 0.25, 1); }
 
 @utility ease-snap {
@@ -526,44 +562,14 @@ body {
   100% { transform: scale(1); }
 }
 
-@keyframes stamp {
-  0%   { transform: scale(1) rotate(0); }
-  35%  { transform: scale(1.28) rotate(-6deg); }
-  60%  { transform: scale(0.92) rotate(4deg); }
-  85%  { transform: scale(1.12) rotate(-1deg); }
-  100% { transform: scale(1.1) rotate(0); }
-}
+/* A loading slot says "a figure goes here". The shape already says it; a
+   sweep across eighty of them at once is the ornament this product's own
+   rule forbids, and it was the largest moving thing on a cold briefing. */
+.skeleton { background: var(--color-skeleton-base); }
 
-@keyframes tab-burst {
-  0%   { opacity: 0.6; transform: scale(0.4); }
-  100% { opacity: 0; transform: scale(2.4); }
-}
-
-@keyframes shimmer {
-  0%   { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
-}
-
-.skeleton-shimmer {
-  background: linear-gradient(
-    100deg,
-    var(--color-skeleton-base) 20%,
-    var(--color-skeleton-highlight) 45%,
-    var(--color-skeleton-base) 70%
-  );
-  background-size: 200% 100%;
-  animation: shimmer 1.6s ease-in-out infinite;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .skeleton-shimmer { animation: none; background: var(--color-skeleton-base); }
-}
-
-.animate-fade-in-up { animation: fade-in-up 0.26s var(--ease-snap, cubic-bezier(0.2, 0.9, 0.25, 1)) both; }
+.animate-fade-in-up { animation: fade-in-up 0.26s var(--ease-expo) both; }
 .animate-fade-in    { animation: fade-in 0.3s ease-out both; }
-.animate-pop-in     { animation: pop-in 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
-.animate-stamp      { animation: stamp 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
-.animate-tab-burst  { animation: tab-burst 0.55s ease-out both; }
+.animate-pop-in     { animation: pop-in 0.25s var(--ease-expo) both; }
 
 /* Tiny stagger: set --stagger on parent, N*i on children via style={{ "--i": i }}. */
 [style*="--i"] { animation-delay: calc(var(--i) * 40ms); }
@@ -591,8 +597,8 @@ body {
 /* A read paper still has to be readable. `tile-read` recedes the COVER and the
    chrome and leaves the title and the summary at full strength; the old
    blanket opacity-70 on the whole card faded the words too. */
-.tile-read .tile-cover[data-plate="figure"] { opacity: 0.45; transition: opacity 300ms var(--ease-snap); }
-.tile-read .tile-cover[data-plate="terms"] { opacity: 0.55; transition: opacity 300ms var(--ease-snap); }
+.tile-read .tile-cover[data-plate="figure"] { opacity: 0.45; transition: opacity var(--dur-base) var(--ease-expo); }
+.tile-read .tile-cover[data-plate="terms"] { opacity: 0.55; transition: opacity var(--dur-base) var(--ease-expo); }
 .tile-read:hover .tile-cover { opacity: 1; }
 .tile-read .tile-chrome { opacity: 0.6; }
 
@@ -634,7 +640,11 @@ body {
   outline: 2px solid var(--color-accent);
   outline-offset: 3px;
   box-shadow: var(--shadow-card-hover);
-  transform: translateY(-2px);
+  /* No lift. The anchor's transition list is box-shadow and background only,
+     so a `translateY(-2px)` here was an instant jump on every j and every k,
+     in a masonry column — and `card-shell.tsx` had already retired the lift
+     on the grounds that a terminal's surfaces do not move. The 2px outline at
+     a 3px offset is the mark. */
 }
 [data-paper-id][data-focused="true"] .tile-actions { opacity: 1; transition-delay: 0ms; }
 
@@ -642,9 +652,18 @@ body {
   .animate-fade-in-up,
   .animate-fade-in,
   .animate-pop-in { animation: none; }
+  /* Loops stop. `animation-duration` alone does not stop an infinite
+     animation — it runs one cycle per 0.01ms, i.e. it strobes — so the
+     iteration count is the half that does the work.
+
+     `transition-duration` is deliberately NOT here. Peer's rule is that
+     reduced motion kills loops, never an intentional one-shot: flattening
+     every transition to 0.01ms teleported the swipe card while its removal
+     timeout still waited 180ms. The four hand-placed
+     `motion-reduce:transition-none` guards are the per-case answer. */
   *, *::before, *::after {
-    transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
   }
 }
 
@@ -666,10 +685,36 @@ body {
 
 @utility eyebrow {
   font-family: var(--font-mono);
+  /* The weight is stated, not inherited. Without it, `cn(buttonVariants(…),
+     "eyebrow")` rendered at 500 from the button's own `font-medium`, and the
+     first workaround was a `font-normal` pasted beside the utility. */
+  font-weight: 400;
   font-size: var(--text-caption);
   line-height: 1.4;
   letter-spacing: var(--tracking-mono);
   text-transform: uppercase;
+}
+
+@utility annotation {
+  /* The other mono form: a sentence-case note, not a label. The triple
+     `font-mono text-caption text-text-faint` was retyped 18 times at two
+     sizes with nothing saying which case took which; two files had already
+     hoisted it into a local constant, the same instinct arrived at twice and
+     shared zero times. No colour and no margin — both belong to the call
+     site, and a margin inside a v4 utility collides with the `mt-*` the five
+     reader sites each need differently. */
+  font-family: var(--font-mono);
+  font-size: var(--text-caption);
+  line-height: 1.4;
+}
+
+@utility paper-line {
+  /* The serif twin of `display-line`: the paper's own words, wherever they
+     are set at display size. The tracking token existed and had no consumer,
+     so the paper's title was set at five different values across nine sites. */
+  font-family: var(--font-display);
+  font-weight: 400;
+  letter-spacing: var(--tracking-display);
 }
 
 @utility display-line {

@@ -30,7 +30,7 @@ export function QuoteList({
             className="font-reading text-lead leading-[1.6] text-text"
           >
             {quote.text}
-            <span className="font-mono text-meta text-text-faint ml-2">
+            <span className="annotation text-meta text-text-faint ml-2">
               {quoteAttribution(quote.from)}
             </span>
           </li>

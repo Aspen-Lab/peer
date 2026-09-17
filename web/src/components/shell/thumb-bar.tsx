@@ -84,7 +84,7 @@ function Tabs({ route, savedCount }: { route: ShellRoute; savedCount: number }) 
             key={tab.href}
             href={tab.href as Route}
             aria-current={active ? "page" : undefined}
-            className={`flex flex-col items-center justify-center gap-1 h-14 text-caption transition-colors duration-150 ease-snap ${
+            className={`flex flex-col items-center justify-center gap-1 h-14 text-caption transition-colors  ${
               active ? "text-heading" : "text-text-faint"
             }`}
           >

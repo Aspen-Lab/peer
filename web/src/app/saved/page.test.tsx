@@ -42,7 +42,7 @@ describe("SavedPageView", () => {
     );
 
     expect(html).toContain("A saved paper");
-    expect(html).toContain("1 paper on your shelf");
+    expect(html).toContain("1 paper");
     for (const gone of [">Events<", ">Jobs<", ">To-do<", ">Done<"]) {
       expect(html).not.toContain(gone);
     }

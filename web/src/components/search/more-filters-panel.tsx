@@ -51,7 +51,7 @@ export function MoreFiltersPanel({
   return (
     <div
       className={[
-        "grid transition-[grid-template-rows] duration-300 ease-out",
+        "grid transition-[grid-template-rows] duration-[var(--dur-base)] ease-out",
         open ? "grid-rows-[1fr] mt-3" : "grid-rows-[0fr]",
       ].join(" ")}
       aria-hidden={!open}
@@ -61,7 +61,7 @@ export function MoreFiltersPanel({
           className="bg-surface shadow-card rounded-xl p-4 flex flex-col gap-4"
         >
           <div className="flex flex-col gap-2">
-            <label className="text-meta text-text-faint uppercase tracking-wider">
+            <label className="eyebrow text-text-faint">
               Source type
             </label>
             <div className="flex flex-wrap gap-2">
@@ -92,7 +92,7 @@ export function MoreFiltersPanel({
           <div className="flex flex-col gap-2">
             <label
               htmlFor="peer-filter-venue"
-              className="text-meta text-text-faint uppercase tracking-wider"
+              className="eyebrow text-text-faint"
             >
               Venue contains
             </label>

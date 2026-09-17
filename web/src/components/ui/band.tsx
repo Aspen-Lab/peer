@@ -12,8 +12,26 @@
 // The label is mono because it is the machine speaking. The paper's own words
 // are never in a band label.
 
+import { cn } from "@/lib/cn";
+
+/**
+ * The gap above a section belongs to the section, not to whoever placed it.
+ *
+ * Nine call sites each typed their own — 32, 40, 48, 48, 56, 56, 64 — so a
+ * reader scrolling one paper passed six different pauses between blocks that
+ * are all the same kind of thing. There are two values, named by what they
+ * are for, not by how big they are: `section` is the pause, and `none` is for
+ * a caller whose container already owns the rhythm (the briefing board) and
+ * says so out loud.
+ *
+ * 48 on a phone, 64 from `sm` up. A flat 64 makes the reader noticeably
+ * longer on the screen most reading happens on, and buys nothing there.
+ */
+const GAP = { section: "mt-12 sm:mt-16", none: "" };
+
 export function Band({
   label,
+  gap = "section",
   className,
   labelClassName,
   dot = true,
@@ -21,6 +39,8 @@ export function Band({
   children,
 }: {
   label: string;
+  /** The pause above this section. `none` when the container owns it. */
+  gap?: keyof typeof GAP;
   className?: string;
   /** The claim's band is the one that carries the hue. */
   labelClassName?: string;
@@ -32,7 +52,7 @@ export function Band({
   children?: React.ReactNode;
 }) {
   return (
-    <section className={className}>
+    <section className={cn(GAP[gap], className)}>
       <div className="flex items-center gap-3">
         <h2
           className={`eyebrow inline-flex items-center gap-2 whitespace-nowrap ${labelClassName ?? "text-text-faint"}`}
@@ -53,6 +73,12 @@ export function Band({
 }
 
 /** The rule alone — a band with nothing to say, or a divider inside one. */
-export function BandRule({ className }: { className?: string }) {
-  return <span aria-hidden className={`block h-px bg-border-strong ${className ?? ""}`} />;
+export function BandRule({
+  gap = "section",
+  className,
+}: {
+  gap?: keyof typeof GAP;
+  className?: string;
+}) {
+  return <span aria-hidden className={cn("block h-px bg-border-strong", GAP[gap], className)} />;
 }

@@ -4,7 +4,7 @@
 
 export function MattedFigure({ src, caption }: { src: string; caption?: string | null }) {
   return (
-    <figure className="rounded-2xl bg-[var(--plate-mat)] p-4 mt-4">
+    <figure className="bg-[var(--plate-mat)] p-4 mt-4">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={src}
@@ -15,7 +15,7 @@ export function MattedFigure({ src, caption }: { src: string; caption?: string |
         className="mx-auto max-h-[260px] sm:max-h-[360px] object-contain"
       />
       {caption && (
-        <figcaption className="font-sans text-meta text-text-muted mt-3">{caption}</figcaption>
+        <figcaption className="font-reading text-body-sm text-text-muted mt-3">{caption}</figcaption>
       )}
     </figure>
   );

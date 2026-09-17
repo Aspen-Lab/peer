@@ -273,7 +273,7 @@ export function PaperFigureFrame({
         }}
       >
         {figure.status === "idle" && (
-          <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-bg-secondary/40 via-bg-secondary/70 to-bg-secondary/40" />
+          <div className="absolute inset-0 bg-skeleton-base" />
         )}
         {figure.imageUrl && (
           // eslint-disable-next-line @next/next/no-img-element
@@ -292,7 +292,7 @@ export function PaperFigureFrame({
                 });
               }
             }}
-            className="absolute inset-0 h-full w-full bg-white object-contain p-1.5 sm:p-2 lg:p-2.5 opacity-100 transition-opacity duration-500 ease-out"
+            className="absolute inset-0 h-full w-full bg-white object-contain p-1.5 sm:p-2 lg:p-2.5 opacity-100 transition-opacity duration-[var(--dur-base)] ease-out"
           />
         )}
         {!figure.imageUrl && figure.status !== "idle" && !figure.hideFigure && (
@@ -332,7 +332,7 @@ function MissingFigureNotice({ figure }: { figure: FigureState }) {
     <div
       className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-surface px-5 text-center"
     >
-      <p className="text-caption font-semibold uppercase tracking-[0.16em] text-text-faint">
+      <p className="eyebrow text-text-faint">
         {noticeTitle(figure.status)}
       </p>
       <p className="max-w-[260px] text-meta leading-relaxed text-text-muted">

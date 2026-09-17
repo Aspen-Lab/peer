@@ -2,6 +2,83 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.29.0 — 2026-09-17
+
+The design pass Latent's own stylesheet argued for: one label, one gap, one
+curve, and one animation that actually loops.
+
+**The dark card frame, which has been missing since the day it shipped.**
+`--nm-frame` was declared for the explicit dark theme and never for the dark
+palette that follows the OS — and following the OS is the default, because the
+boot script throws on a first visit before it can write anything else. So every
+card frame on the first briefing Peer ever showed a dark-OS reader resolved
+from the light value and came out 28% fainter than the drawn one. Two lines.
+
+**One repeating animation, as the file claimed twice and broke five times.**
+Eighty skeleton blocks swept at once on a cold briefing; the loading header
+stacked `animate-pulse` and `animate-ping` on the same 6px disc that the
+claim's dot owns; the refresh icon spun. Skeletons are now still, the header is
+an ordinary band, and the refresh state is a word — `syncing…` — beside the
+other three. The only thing that loops anywhere is the accent dot.
+
+Reduced motion now stops loops properly: `animation-duration: 0.01ms` alone
+does not stop an infinite animation, it *strobes* it. And it stopped killing
+one-shots — flattening every transition to 0.01ms teleported the swipe card
+while its removal timeout still waited 180ms.
+
+**One curve, from the one place it is set.** 56 transitions declared no
+duration and silently took Tailwind's 150ms on a third curve nobody chose, so
+the largest motion decision in the product was made by a default. Two theme
+lines move all of them to Peer's own 180ms on the expo-out. `ease-snap` is now
+a press curve only, and says so.
+
+**One label.** `eyebrow` gained the weight it was missing, `sectionLabel` and
+its four tracking tiers are deleted, and the 57 hand-rolled
+`uppercase tracking-[…]` strings — six tiers, none of them the token, 44 of
+them bold — are one form. The last two `font-bold` in the product were on two
+field labels at 10.5px; they are gone.
+
+**One gap, one page rhythm.** `Band` owns the pause above a section (48 on a
+phone, 64 above it) instead of nine call sites typing 32, 40, 48, 56 and 64 for
+the same figure. `PageContainer` owns the page's top and bottom; 96px, Latent's
+actual heartbeat, appeared five times before this and every one was on a page
+nobody designs.
+
+**One display voice.** `display-line` for Peer's own sentences, the new
+`paper-line` for the paper's. /profile narrated the reader's own behaviour in
+Newsreader italic; the changelog set its title in grotesk and every entry in
+serif; `text-text-heading` is not a token and had been silently doing nothing
+on four of the changelog's selectors. The claim keeps its weight, and the file
+now says why.
+
+**One empty state**, shared by the briefing, /saved, /search, /error and
+/not-found, which were three different products. /search printed its result
+count twice, 60px apart, in two treatments.
+
+**Things that were claims Peer could not support.** The profile drew
+"EVENTS 0 / JOBS 0" under "What you save" for every reader, though neither can
+ever be saved. The briefing had a "no topics" branch that could not fire. Two
+gradient washes had painted nothing since they shipped — `color-mix(in_srgb,…)`
+inside a real `style` attribute never gets Tailwind's underscore conversion.
+The card stagger had never run: the delay was on the wrapper and the animation
+two levels down, and `animation-delay` does not inherit.
+
+**Smaller, and visible.** The record is keyed in words, not pictures — the
+venue had no key at all, only a 13px building glyph. The day-strip's caption
+moved beside its chart, where 1,085px of that row was empty. Figure captions
+went back to the paper's serif; they are the paper's own words. The reading
+heatmap stopped spending 126 accent cells on data, which is the rule the
+day-strip twenty pixels away states in its own comment. The keyboard-focused
+card stopped jumping 2px on every `j`. The crash screen is no longer the last
+cream page in a greyscale product. The `radius` variant, whose three options
+all compiled to 0, is gone.
+
+**And a guard, so this is the last sweep.** ESLint now warns on off-scale
+spacing and errors on any `rounded-[…]` or inline `borderRadius` — the two
+mechanisms that let a round corner survive a squaring. Every previous
+systematization here was a one-time pass with no enforcement, and the files
+record the decay in their own comments.
+
 ## v0.28.0 — 2026-09-17
 
 MIT, a page counter, and a page that says what Peer keeps.

@@ -2,6 +2,7 @@
 // and renders it with brand styling. No third-party markdown lib;
 // the source format is fully ours, parser handles only what we emit.
 
+import { PageContainer } from "@/components/ui/page-container";
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { ReactNode } from "react";
@@ -82,7 +83,7 @@ function renderInline(text: string): ReactNode[] {
     const tok = m[0];
     if (tok.startsWith("**")) {
       out.push(
-        <strong key={key++} className="text-text-heading font-semibold">
+        <strong key={key++} className="text-heading font-semibold">
           {tok.slice(2, -2)}
         </strong>,
       );
@@ -90,7 +91,7 @@ function renderInline(text: string): ReactNode[] {
       out.push(
         <code
           key={key++}
-          className="px-1.5 py-0.5 rounded bg-bg-secondary/60 text-meta font-mono text-text-heading"
+          className="px-1.5 py-0.5 rounded bg-bg-secondary/60 text-meta font-mono text-heading"
         >
           {tok.slice(1, -1)}
         </code>,
@@ -134,14 +135,12 @@ function renderBody(body: string): ReactNode {
 export default async function ChangelogPage() {
   const { intro, entries } = await loadChangelog();
   return (
-    <main
-      className="mx-auto max-w-2xl px-6 pt-20 pb-24 font-sans"
-    >
+    <PageContainer as="main" className="font-sans">
       <header className="mb-14 animate-fade-in-up">
-        <p className="text-micro font-semibold uppercase tracking-[0.22em] text-accent mb-3">
+        <p className="eyebrow text-text-faint mb-3">
           Peer · Changelog
         </p>
-        <h1 className="display-line text-display lg:text-display-lg leading-[1.02] text-text-heading">
+        <h1 className="display-line text-display lg:text-display-lg leading-[1.02] text-heading">
           What we shipped.
         </h1>
         {intro && (
@@ -161,7 +160,7 @@ export default async function ChangelogPage() {
             style={{ animationDelay: `${Math.min(i * 40, 320)}ms` }}
           >
             <div className="flex items-baseline gap-3 mb-3">
-              <span className="text-micro font-semibold uppercase tracking-[0.18em] text-accent tabular-nums">
+              <span className="eyebrow text-accent tabular-nums">
                 v{e.version}
               </span>
               <span className="text-micro text-text-faint tabular-nums">
@@ -169,7 +168,7 @@ export default async function ChangelogPage() {
               </span>
             </div>
             <h2
-              className="text-display-xs leading-[1.18] text-text-heading font-light mb-3 tracking-[-0.005em] font-display"
+              className="display-line text-display-xs leading-[1.18] text-heading mb-3"
             >
               {e.title}
             </h2>
@@ -197,6 +196,6 @@ export default async function ChangelogPage() {
         </a>
         .
       </footer>
-    </main>
+    </PageContainer>
   );
 }

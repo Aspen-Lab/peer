@@ -11,27 +11,29 @@
 import type { Paper } from "@/types";
 import { useFeedStore } from "@/store/feed";
 import { PaperCard } from "@/components/cards/paper-card";
-import { EmptyState } from "@/components/ui";
+import { EmptyState } from "@/components/ui/empty-state";
 import { PageContainer } from "@/components/ui/page-container";
 
 export function SavedPageView({ savedPapers }: { savedPapers: Paper[] }) {
   return (
-    <PageContainer width="wideResponsive" className="px-6 py-16 lg:py-20">
+    <PageContainer>
       <header className="mb-8">
         <h1 className="display-line text-display leading-[1.1] text-heading lg:text-display-lg">
           Saved
         </h1>
-        <p className="mt-3 text-lead leading-relaxed text-text-muted">
-          {savedPapers.length === 0
-            ? "Your reading shelf."
-            : `${savedPapers.length} paper${savedPapers.length === 1 ? "" : "s"} on your shelf.`}
-        </p>
+        {/* A count is a machine fact, not a lede — it was set at 16.5px on a
+            measure written for prose, holding one number. */}
+        {savedPapers.length > 0 && (
+          <p className="annotation text-meta text-text-faint mt-3">
+            {savedPapers.length} paper{savedPapers.length === 1 ? "" : "s"}
+          </p>
+        )}
       </header>
 
       {savedPapers.length === 0 ? (
         <EmptyState
           title="Nothing saved yet."
-          description="Tap the bookmark on any paper in your briefing and it will land here."
+          line="Tap the bookmark on any paper in your briefing and it will land here."
         />
       ) : (
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">

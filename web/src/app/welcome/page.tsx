@@ -51,7 +51,6 @@ import { ConnectorPanel } from "@/components/profile/connector-panel";
 import { useProfileSettled } from "@/components/first-run";
 import { Callout } from "@/components/ui";
 import { buttonVariants } from "@/components/ui/button";
-import { sectionLabel } from "@/components/ui/section-label";
 import { cardShell } from "@/components/ui/card-shell";
 import { cn } from "@/lib/cn";
 import { SURFACE_TOPIC_DESCRIPTIONS } from "@/lib/profile/topic-copy";
@@ -551,7 +550,7 @@ export default function WelcomePage() {
                       <p className="text-body-lg font-medium text-heading">
                         Academic persona quiz
                         {personaDone && (
-                          <span className={cn(sectionLabel({ tone: "accent", tracking: "tight" }), "ml-2 align-middle")}>
+                          <span className={cn("eyebrow text-accent", "ml-2 align-middle")}>
                             Completed
                           </span>
                         )}
@@ -673,7 +672,7 @@ function StepRail({
                 <span
                   className={cn(
                     "flex h-[26px] w-[26px] items-center justify-center rounded-full text-micro font-semibold tabular-nums",
-                    "transition-[background-color,color,transform,box-shadow] duration-150 ease-snap",
+                    "transition-[background-color,color,transform,box-shadow] ",
                     isCurrent
                       ? "bg-accent text-bg shadow-card scale-110"
                       : isDone
@@ -692,7 +691,7 @@ function StepRail({
                 </span>
                 <span
                   className={cn(
-                    sectionLabel({ tracking: "tight" }),
+                    "eyebrow text-text-faint",
                     "hidden sm:block",
                     isCurrent ? "text-heading" : isDone ? "text-text-muted" : "text-text-faint/80",
                   )}
@@ -734,13 +733,13 @@ function ReviewList({
   }));
   return (
     <div>
-      <p className={cn(sectionLabel({ tracking: "tight" }), "text-text-faint/80 mb-2")}>
+      <p className={cn("eyebrow text-text-faint", "text-text-faint/80 mb-2")}>
         What Peer knows so far
       </p>
-      <div className={cn(cardShell({ interactive: false, entrance: "none", padding: "none", radius: "xl" }), "divide-y divide-border/60")}>
+      <div className={cn(cardShell({ interactive: false, entrance: "none", padding: "none" }), "divide-y divide-border/60")}>
         {rows.map((row) => (
           <div key={row.label} className="flex items-center gap-3 px-4 py-2.5">
-            <span className={cn(sectionLabel({ tracking: "tight" }), "w-[72px] shrink-0")}>
+            <span className={cn("eyebrow text-text-faint", "w-[72px] shrink-0")}>
               {row.label}
             </span>
             <span className="flex-1 min-w-0 truncate text-meta text-text-muted">
@@ -827,7 +826,7 @@ function ApiIntro({
     <div className="rounded-xl bg-bg-secondary/40 px-4 py-3">
       <div className="flex items-baseline justify-between gap-3 mb-1">
         <span className="text-body-sm font-semibold text-heading">{name}</span>
-        <span className={cn(sectionLabel({ tracking: "tight", tone: "accent" }), "text-right")}>
+        <span className={cn("eyebrow text-accent", "text-right")}>
           {tag}
         </span>
       </div>
@@ -860,14 +859,13 @@ function StepFrame({
 }) {
   return (
     <div>
-      <p className={cn(sectionLabel({ tone: "accent", tracking: "wider" }), "mb-2.5 flex items-center gap-2")}>
-        <span aria-hidden className="inline-block w-4 h-[1.5px] bg-accent/70" />
+      <p className={cn("eyebrow text-text-faint", "mb-2.5 flex items-center gap-2")}>
         {kicker}
       </p>
       <h1
         tabIndex={-1}
         data-step-heading
-        className="font-display font-light text-display-sm lg:text-display tracking-[-0.015em] leading-[1.1] text-heading outline-none"
+        className="display-line text-display-sm lg:text-display leading-[1.1] text-balance text-heading outline-none"
       >
         {title}
       </h1>
@@ -890,7 +888,7 @@ function Field({
 }) {
   return (
     <div>
-      <p className={cn(sectionLabel({ tracking: "tight" }), "text-text-faint/80 mb-1.5 block")}>
+      <p className={cn("eyebrow text-text-faint", "text-text-faint/80 mb-1.5 block")}>
         {label}
       </p>
       {children}
@@ -919,7 +917,7 @@ function PillGroup({
             key={o.value}
             type="button"
             onClick={() => onChange(o.value)}
-            className={`text-meta px-2.5 py-1 rounded-full transition-all duration-200 ease-out active:scale-[0.94] ${
+            className={`text-meta px-2.5 py-1 rounded-full transition-all ease-out active:scale-[0.94] ${
               active
                 ? "bg-accent-dim text-accent shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-accent)_30%,transparent)] scale-[1.03]"
                 : "text-text-faint hover:text-text-muted bg-bg-secondary/40 hover:bg-bg-secondary/70"

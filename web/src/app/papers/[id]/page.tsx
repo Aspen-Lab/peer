@@ -191,7 +191,7 @@ export default function PaperReadingPage({
       return (
         // The page's own container and grid, so from xl the mat stands in the
         // panel column at the plate's width and the plate replaces it in place.
-        <PageContainer width="spread" className={PAGE_CLASS}>
+        <PageContainer width="spread" rhythm="reader" className={PAGE_CLASS}>
           <div className={SPREAD_GRID}>
             <div>
               <LoadingMat />
@@ -201,7 +201,7 @@ export default function PaperReadingPage({
       );
     }
     return (
-      <PageContainer width="spread" className={PAGE_CLASS}>
+      <PageContainer width="spread" rhythm="reader" className={PAGE_CLASS}>
         <div className={SPREAD_GRID}>
           <div>
             <p className="font-reading text-lead text-text-muted">{NOT_FOUND}</p>
@@ -515,7 +515,7 @@ function Reader({
     // element after a client navigation, and an article that cannot take
     // focus makes that a no-op — j/k would change the paper without
     // assistive technology announcing anything.
-    <PageContainer width="spread" className={`${PAGE_CLASS} md:pb-16 outline-none`} tabIndex={-1}>
+    <PageContainer width="spread" rhythm="reader" className={`${PAGE_CLASS} md:pb-16 outline-none`} tabIndex={-1}>
       {/* The blocks, in the spec's order; `ReaderLayout` places them — one
           column below xl, the spread from it. Later-arriving content (the
           server reading, a model report) is `additions`: on the spread it
@@ -545,7 +545,7 @@ function Reader({
               />
             </SwipeableCard>
             {caption && (
-              <figcaption className="font-sans text-meta text-text-muted mt-2">
+              <figcaption className="font-reading text-body-sm text-text-muted mt-2">
                 {caption}
               </figcaption>
             )}

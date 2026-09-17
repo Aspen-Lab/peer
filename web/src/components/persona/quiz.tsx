@@ -115,7 +115,7 @@ export function PersonaQuiz() {
       <div className="flex items-center gap-4">
         <div className="flex-1 h-1 bg-[color:var(--color-bg-secondary)] rounded-full overflow-hidden">
           <div
-            className="h-full bg-[color:var(--color-accent)] transition-[width] duration-300 ease-out"
+            className="h-full bg-[color:var(--color-accent)] transition-[width] duration-[var(--dur-base)] ease-out"
             style={{ width: `${progress * 100}%` }}
           />
         </div>
@@ -125,7 +125,7 @@ export function PersonaQuiz() {
       </div>
 
       <div className="flex flex-col gap-1">
-        <span className="text-caption uppercase tracking-[0.16em] text-text-faint">
+        <span className="eyebrow text-text-faint">
           {axisLabel(current.axis)}
         </span>
         <h2
@@ -166,7 +166,7 @@ function ChoiceButton({
     <button
       type="button"
       onClick={onClick}
-      className="text-left p-5 rounded-2xl bg-surface shadow-card hover:shadow-card-hover hover:-translate-y-[1px] active:translate-y-0 active:shadow-card transition-[box-shadow,transform] duration-200 text-body-lg text-text leading-[1.5]"
+      className="text-left p-5 rounded-2xl bg-surface shadow-card hover:shadow-card-hover hover:-translate-y-[1px] active:translate-y-0 active:shadow-card transition-[box-shadow,transform] text-body-lg text-text leading-[1.5]"
     >
       {text}
     </button>

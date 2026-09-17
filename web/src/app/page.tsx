@@ -35,10 +35,13 @@ import {
   useReadingDays,
 } from "@/components/charts/reading-calendar";
 import { PaperDigestLoader } from "@/components/digest/daily-digest";
+import { PageContainer } from "@/components/ui/page-container";
 import { LoadingSkeleton } from "@/components/ui";
 import { buttonVariants } from "@/components/ui/button";
 import { emptyReason } from "@/lib/feed/empty-reason";
 import { briefingDeck } from "@/lib/briefing/deck";
+import { SYNC, BRIEFING_EMPTY } from "@/lib/briefing/copy";
+import { EmptyState } from "@/components/ui/empty-state";
 import { dayLine } from "@/lib/shell/masthead";
 import { allocatePlateTerms } from "@/lib/papers/plate-terms";
 
@@ -141,9 +144,6 @@ function DailyBriefingPage() {
   const empty = emptyReason({
     isLoading,
     papersCount: papers.length,
-    // In starter mode "no topics" is not an empty state — there are papers.
-    // A failed or empty sample is still reported as itself.
-    topicsCount: starter ? 1 : profile.researchTopics.length,
     feedError,
   });
 
@@ -152,7 +152,15 @@ function DailyBriefingPage() {
     // 2000px display it sits 360px from both edges. The page opens with its
     // own front — the dateline and the deck — and the masthead states nothing
     // here, so the day is said once, at display size.
-    <article className="mx-auto max-w-[1280px] px-6 pt-0 md:pt-5 pb-16 lg:pb-20">
+    // The board is the one documented exception to `PageContainer`'s page
+    // rhythm: its top is the masthead's own edge and its sections are
+    // heterogeneous, so the gaps belong to the container. `space-y-*`
+    // compiles to `> * + * { margin-top }` — do not restate it as a class.
+    <PageContainer
+      width="board"
+      rhythm="none"
+      className="pt-0 md:pt-5 pb-16 lg:pb-20 space-y-8 sm:space-y-10 lg:space-y-12"
+    >
       <PaperDigestLoader
         papers={papers}
         contextHint={digestContextHint}
@@ -202,7 +210,7 @@ function DailyBriefingPage() {
         // extractable figure, so card heights genuinely differ; a uniform grid
         // either ragged-edges every row or reserves dead space on the six cards
         // with no image. CSS columns let each card be its own height.
-        <div className="mt-8 columns-1 sm:columns-2 lg:columns-3 gap-4 [column-fill:_balance]">
+        <div className="columns-1 sm:columns-2 lg:columns-3 gap-4 [column-fill:_balance]">
           {papers.map((paper, index) => (
             <div
               key={paper.id}
@@ -211,10 +219,14 @@ function DailyBriefingPage() {
               // Today's papers arrive as a stack dealt in reading order. All
               // ten used to fade up on the identical frame, which reads as the
               // page reflowing rather than as a delivery. globals.css already
-              // carried the plumbing — `[style*="--i"]` at :375 — and the feed
-              // had never used it. Capped at 9 so the tail never exceeds 360ms.
+              // carried the plumbing — `[style*="--i"]` in the Motion block —
+              // but the delay landed on this wrapper while `animate-fade-in-up`
+              // landed on the <Link> two levels down, and `animation-delay`
+              // does not inherit, so all ten still arrived on one frame. Both
+              // go on one element, the way the skeleton already does it.
+              // Capped at 9 so the tail never exceeds 360ms.
               style={{ "--i": Math.min(index, 9) } as React.CSSProperties}
-              className="mb-4 break-inside-avoid rounded-3xl transition-shadow"
+              className="mb-4 break-inside-avoid animate-fade-in-up"
             >
               <FeedTile
                 item={{ kind: "paper", data: starter ? { ...paper, relevanceReason: "" } : paper }}
@@ -228,7 +240,7 @@ function DailyBriefingPage() {
       {/* After the day's papers, not before them: the brief opens on what
           there is to read and closes on what has been read. */}
       {papers.length > 0 && <ReadingStrip />}
-    </article>
+    </PageContainer>
   );
 }
 
@@ -262,8 +274,8 @@ function ReadingStrip() {
   const streak = streakWeeks(cells, STRIP_WEEKS);
 
   return (
-    <Band label={READING_STRIP.heading} className="mt-16">
-      <p className="font-mono text-caption text-text-faint mt-3 mb-3">
+    <Band label={READING_STRIP.heading} gap="none">
+      <p className="annotation text-text-faint mt-3 mb-3">
         {READING_STRIP.summary(days, STRIP_WEEKS * 7, streak)}
       </p>
       <ReadingCalendar cells={cells} weeks={STRIP_WEEKS} labels={false} />
@@ -306,7 +318,7 @@ function BriefingHead({
     // on a phone the dateline takes the whole width (beside a 150px status
     // cluster it broke into three lines), the deck follows, and the status
     // closes the front on its own line at the right.
-    <header className="mt-2 md:mt-4 flex flex-wrap items-end gap-x-4">
+    <header className="flex flex-wrap items-end gap-x-4">
       {/* The date is computed on the server too; the timezones can differ
           around midnight, and a warning would not change what is shown. */}
       <h1
@@ -315,21 +327,24 @@ function BriefingHead({
       >
         {date}
       </h1>
-      <div className="order-3 sm:order-none ml-auto mt-3 sm:mt-0 flex shrink-0 items-center gap-1 sm:pb-1 font-mono text-meta text-text-faint whitespace-nowrap">
-          {failed ? (
-            <span className="text-red">sync failed</span>
+      <div className="order-3 sm:order-none ml-auto mt-3 sm:mt-0 flex shrink-0 items-center gap-1 sm:pb-1 annotation text-meta text-text-faint whitespace-nowrap">
+          {isRefreshing ? (
+            <span>{SYNC.syncing}</span>
+          ) : failed ? (
+            <span className="text-red">{SYNC.failed}</span>
           ) : lastRefresh ? (
-            <span>synced {formatTimeAgo(lastRefresh)}</span>
+            <span>{SYNC.synced(formatTimeAgo(lastRefresh))}</span>
           ) : (
-            <span>not synced yet</span>
+            <span>{SYNC.never}</span>
           )}
           <button
             type="button"
             onClick={onRefresh}
             disabled={isRefreshing}
+            aria-busy={isRefreshing}
             aria-label="Refresh briefing"
             title="Refresh briefing (r)"
-            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-text-faint hover:bg-bg-secondary/80 hover:text-text transition-[color,background-color,transform] duration-150 ease-snap active:scale-90 disabled:opacity-50 disabled:cursor-wait"
+            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-text-faint hover:bg-bg-secondary/80 hover:text-text transition-[color,background-color,transform] active:scale-90 disabled:opacity-50 disabled:cursor-wait"
           >
             <svg
               width="15"
@@ -341,7 +356,6 @@ function BriefingHead({
               strokeLinecap="round"
               strokeLinejoin="round"
               aria-hidden
-              className={isRefreshing ? "animate-spin" : ""}
             >
               <path d="M21 12a9 9 0 1 1-3-6.7" />
               <path d="M21 4v6h-6" />
@@ -370,51 +384,30 @@ function BriefingHead({
   );
 }
 
-// Nothing to show — and three different reasons for it, each with its own
-// answer. This replaces a single "Your briefing is still waking up… Set up
-// profile" that was shown for all three, including to a reader whose topics
-// were set and whose connection had simply dropped. Display serif, one line,
-// a real button; left-aligned in the header's column rather than floating in
-// the middle of an empty page.
+// Nothing to show — and two different reasons for it, each with its own
+// answer. This replaced a single "Your briefing is still waking up… Set up
+// profile" shown for both, including to a reader whose topics were set and
+// whose connection had simply dropped. The words live in `copy.ts` with the
+// rest of the briefing's fixed words; the shape is the product's one empty
+// state, shared with /saved, /search, /error and /not-found.
 function BriefingEmpty({
   reason,
   errorDetail,
   onRetry,
   onRefresh,
 }: {
-  reason: "no-topics" | "error" | "empty";
+  reason: "error" | "empty";
   errorDetail: string | null;
   onRetry: () => void;
   onRefresh: () => void;
 }) {
-  const copy = {
-    "no-topics": {
-      title: "What are you working on?",
-      line: "Peer builds tomorrow’s briefing from your topics.",
-    },
-    error: {
-      title: "Couldn’t reach the paper sources.",
-      line: "Check your connection, then try again.",
-    },
-    empty: {
-      title: "Nothing new for these topics today.",
-      line: "Peer only sends what is new and relevant. Refresh to look again, or widen your topics.",
-    },
-  }[reason];
-
+  const copy = BRIEFING_EMPTY[reason];
   return (
-    <section className="mt-16 measure">
-      <h2 className="font-display text-display-sm font-normal leading-[1.15] tracking-[-0.015em] text-heading text-balance">
-        {copy.title}
-      </h2>
-      <p className="mt-3 text-body-sm text-text-muted leading-relaxed">{copy.line}</p>
-      <div className="mt-6 flex flex-wrap items-center gap-2.5">
-        {reason === "no-topics" && (
-          <Link href="/profile" className={buttonVariants({ tone: "primary", size: "lg" })}>
-            Set up profile
-          </Link>
-        )}
-        {reason === "error" && (
+    <EmptyState
+      title={copy.title}
+      line={copy.line}
+      actions={
+        reason === "error" ? (
           <>
             <button
               type="button"
@@ -422,28 +415,27 @@ function BriefingEmpty({
               title={errorDetail ?? undefined}
               className={buttonVariants({ tone: "primary", size: "lg" })}
             >
-              Try again
+              {BRIEFING_EMPTY.error.retry}
             </button>
             <Link href="/profile" className={buttonVariants({ tone: "ghost", size: "lg" })}>
-              Edit topics
+              {BRIEFING_EMPTY.error.edit}
             </Link>
           </>
-        )}
-        {reason === "empty" && (
+        ) : (
           <>
             <button
               type="button"
               onClick={onRefresh}
               className={buttonVariants({ tone: "primary", size: "lg" })}
             >
-              Refresh
+              {BRIEFING_EMPTY.empty.refresh}
             </button>
             <Link href="/profile" className={buttonVariants({ tone: "ghost", size: "lg" })}>
-              Widen topics
+              {BRIEFING_EMPTY.empty.widen}
             </Link>
           </>
-        )}
-      </div>
-    </section>
+        )
+      }
+    />
   );
 }

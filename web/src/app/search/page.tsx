@@ -12,7 +12,9 @@ import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { SearchResultCard } from "@/components/cards/search-result-card";
-import { EmptyState, LoadingSkeleton, SectionHeading } from "@/components/ui";
+import { LoadingSkeleton } from "@/components/ui";
+import { PageContainer } from "@/components/ui/page-container";
+import { EmptyState } from "@/components/ui/empty-state";
 import { FilterBar } from "@/components/search/filter-bar";
 import {
   DEFAULT_FILTERS,
@@ -153,17 +155,26 @@ function SearchPage() {
   }, [query, filters]);
 
   return (
-    <article className="mx-auto max-w-[1280px] px-6 py-16 lg:py-20">
+    <PageContainer width="board">
       <div className="mx-auto max-w-[820px]">
-        <header className="mb-5">
-          <h1 className="text-title font-medium text-heading">Search papers</h1>
-          <p className="mt-1 text-meta text-text-faint">
+        <header className="mb-8">
+          <p className="eyebrow text-text-faint">Search</p>
+          {/* Not "the whole record" — OpenAlex is 250M works, and a display
+              line that overstates is worse than one that labels. */}
+          <h1 className="display-line text-display lg:text-display-lg text-heading leading-[1.05] mt-3">
+            Every paper, not just today&rsquo;s.
+          </h1>
+          <p className="mt-3 text-body-lg text-text-muted measure-ui leading-[1.55]">
             Across OpenAlex — 250M+ academic works. Your daily briefing is
             untouched by anything you do here.
           </p>
         </header>
 
-        <div className="rounded-3xl glass shadow-card focus-within:shadow-card-hover transition-[box-shadow] duration-200">
+        {/* A field, not floating chrome. `glass` is documented in globals.css
+            as "floating chrome only … never on reading surfaces", and this
+            page was blurring its own background behind the one object the
+            reader came here to type into. */}
+        <div className="bg-surface shadow-well focus-within:shadow-card-hover transition-[box-shadow]">
           <div className="relative">
             <svg
               className="absolute left-4 top-1/2 -translate-y-1/2 text-text-faint pointer-events-none"
@@ -251,9 +262,6 @@ function SearchPage() {
 
       {results.length > 0 && (
         <div className="mt-6">
-          <div className="mx-auto max-w-[820px]">
-            <SectionHeading count={results.length}>Papers</SectionHeading>
-          </div>
           <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {results.map((result) => (
               <SearchResultCard key={result.id} result={result as never} />
@@ -266,10 +274,10 @@ function SearchPage() {
         <div className="mx-auto max-w-[820px] mt-6">
           <EmptyState
             title="Nothing turned up."
-            description="Try different keywords, or widen the year range and open-access filter."
+            line="Try different keywords, or widen the year range and open-access filter."
           />
         </div>
       )}
-    </article>
+    </PageContainer>
   );
 }

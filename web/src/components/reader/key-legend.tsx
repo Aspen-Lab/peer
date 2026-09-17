@@ -19,11 +19,11 @@ export function KeyLegend() {
   return (
     <div
       aria-hidden
-      className="hidden md:flex fixed inset-x-0 bottom-0 z-30 h-7 items-center justify-center gap-x-5 overflow-hidden glass-bar border-t border-border px-6 font-mono text-caption text-text-faint"
+      className="hidden md:flex fixed inset-x-0 bottom-0 z-30 h-7 items-center justify-center gap-x-5 overflow-hidden glass-bar border-t border-border px-6 eyebrow text-text-faint"
     >
       {PAPER_KEYS.map((entry) => (
         <span key={entry.action} className="whitespace-nowrap">
-          <span className="text-text">{keyCap(entry.keys[0]).toLowerCase()}</span>{" "}
+          <span className="text-text">{keyCap(entry.keys[0])}</span>{" "}
           {entry.short}
         </span>
       ))}

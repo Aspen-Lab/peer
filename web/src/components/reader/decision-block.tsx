@@ -23,7 +23,7 @@ const TOUCH_TARGET = "[@media(hover:none)]:min-h-11";
  * voice is set in. The picture each one carried said nothing the word did not
  * — a bookmark beside "Save" — and three of them were noise around a key.
  */
-const COMMAND = "eyebrow font-normal";
+const COMMAND = "eyebrow";
 /**
  * Touch room for a line of text that is a control, without moving the type:
  * the box grows to 44px with the text centred, and the margins give back
@@ -66,7 +66,7 @@ export function DecisionBlock({
 }) {
   return (
     <div ref={ref}>
-      <p className="font-reading text-lead text-text-muted measure-lede mt-12">
+      <p className="font-reading text-lead text-text-muted measure-lede mt-12 sm:mt-16">
         {sentences.join(" ")}
         {stage && <span className="text-text-faint">{progressSuffix(stage.label)}</span>}
         {showAddKey && (
@@ -75,7 +75,7 @@ export function DecisionBlock({
             <Link
               href={UPGRADE_HREF}
               className={cn(
-                "text-text-faint underline decoration-border-strong underline-offset-4 hover:text-heading transition-colors duration-150 ease-snap",
+                "text-text-faint underline decoration-border-strong underline-offset-4 hover:text-heading transition-colors ",
                 TOUCH_INLINE,
               )}
             >
@@ -94,10 +94,10 @@ export function DecisionBlock({
           aria-valuemin={0}
           aria-valuemax={100}
           aria-label={stage.label}
-          className="h-[2px] mt-3 measure-lede overflow-hidden rounded-full bg-bg-secondary"
+          className="h-[2px] mt-3 measure-lede overflow-hidden bg-bg-secondary"
         >
           <div
-            className="h-full rounded-full bg-accent transition-[width] duration-300 ease-snap motion-reduce:transition-none"
+            className="h-full bg-accent transition-[width] duration-[var(--dur-base)] ease-expo motion-reduce:transition-none"
             style={{ width: `${Math.max(0, Math.min(100, stage.pct))}%` }}
           />
         </div>
@@ -177,7 +177,7 @@ export function DecisionBlock({
             // column and the DOI holds one line there as today. `text-left`:
             // a button centres its text by default, so a wrapped DOI's
             // second line would sit centred under a left-aligned first.
-            "flex text-left font-mono text-meta text-text-muted mt-3 hover:text-heading transition-colors duration-150 ease-snap xl:wrap-anywhere",
+            "flex text-left font-mono text-meta text-text-muted mt-3 hover:text-heading transition-colors xl:wrap-anywhere",
             TOUCH_LINE,
           )}
         >

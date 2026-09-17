@@ -145,13 +145,12 @@ export default function ProfilePage() {
   const total = signals.length;
 
   return (
-    <PageContainer width="contentResponsive" className="px-6 py-16 lg:py-20">
+    <PageContainer width="contentResponsive">
       {/* ── Header ── */}
       <header className="mb-8">
         <p
-          className="text-caption font-semibold uppercase tracking-[0.22em] text-accent/90 mb-3"
+          className="eyebrow text-text-faint mb-3"
         >
-          <span className="inline-block w-5 h-[1.5px] bg-accent/70 align-middle mr-2.5" />
           Your profile
         </p>
         <div className="flex items-start justify-between gap-6 flex-wrap">
@@ -160,11 +159,10 @@ export default function ProfilePage() {
           >
             {firstName ? (
               <>
-                <span
-                  className="italic font-medium font-reading"
-                >
-                  {firstName}
-                </span>
+                {/* One uninterrupted grotesk line. The name used to be set in
+                    Newsreader italic 500 inside a `display-line` h1, so half
+                    the sentence was the paper's voice and half was Peer's. */}
+                <span>{firstName}</span>
                 &rsquo;s signals
                 <span className="text-text-faint/70">.</span>
               </>
@@ -178,9 +176,9 @@ export default function ProfilePage() {
           {mode === "view" ? (
             <button
               onClick={() => setMode("edit")}
-              className="group inline-flex items-center gap-1.5 h-9 pl-3 pr-4 rounded-full bg-accent-dim text-accent hover:bg-accent/15 transition-all duration-200 ease-out active:scale-[0.96] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-accent)_25%,transparent)] text-body-sm font-medium"
+              className="group inline-flex items-center gap-1.5 h-9 pl-3 pr-4 rounded-full bg-accent-dim text-accent hover:bg-accent/15 transition-all ease-out active:scale-[0.96] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-accent)_25%,transparent)] text-body-sm font-medium"
             >
-              <span className="transition-transform duration-200 ease-out group-hover:-rotate-12">
+              <span className="transition-transform ease-out group-hover:-rotate-12">
                 <IconPencil />
               </span>
               Edit
@@ -188,7 +186,7 @@ export default function ProfilePage() {
           ) : (
             <button
               onClick={() => setMode("view")}
-              className="group inline-flex items-center gap-1.5 h-9 pl-3 pr-4 rounded-full bg-heading text-bg hover:bg-heading/90 transition-all duration-200 ease-out active:scale-[0.96] text-body-sm font-medium shadow-card"
+              className="group inline-flex items-center gap-1.5 h-9 pl-3 pr-4 rounded-full bg-heading text-bg hover:bg-heading/90 transition-all ease-out active:scale-[0.96] text-body-sm font-medium shadow-card"
             >
               <IconCheck />
               Done
@@ -200,7 +198,7 @@ export default function ProfilePage() {
             {signals.map((done, i) => (
               <span
                 key={i}
-                className={`block w-1.5 h-1.5 rounded-full transition-colors duration-500 ${
+                className={`block w-1.5 h-1.5 rounded-full transition-colors duration-[var(--dur-base)] ${
                   done ? "bg-accent" : "bg-border-strong/40"
                 }`}
               />
@@ -343,20 +341,11 @@ function DashboardView({
     >
       {/* ── Identity band ── */}
       <div className="relative px-7 pt-7 pb-6">
-        {/* Ambient gradient wash */}
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0 opacity-70"
-          style={{
-            backgroundImage:
-              "radial-gradient(520px 200px at 90% -30%, color-mix(in_srgb,var(--color-accent)_12%,transparent), transparent 60%), radial-gradient(420px 180px at 0% 120%, color-mix(in srgb, var(--color-tag) 7%, transparent), transparent 60%)",
-          }}
-        />
         <div className="relative flex items-center gap-4">
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-accent-dim shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-accent)_28%,transparent)]">
             {avatarLetter ? (
               <span
-                className="text-accent text-display-sm font-medium italic leading-none font-reading"
+                className="text-accent display-line text-display-sm leading-none"
               >
                 {avatarLetter}
               </span>
@@ -374,12 +363,12 @@ function DashboardView({
           <div className="min-w-0">
             {displayName ? (
               <p
-                className="text-display-sm italic font-medium text-heading tracking-tight leading-tight font-reading"
+                className="display-line text-display-sm text-heading leading-tight"
               >
                 {displayName}
               </p>
             ) : (
-              <p className="text-title text-text-faint italic font-reading">
+              <p className="text-title text-text-faint">
                 Unnamed — tap edit to introduce yourself
               </p>
             )}
@@ -458,23 +447,12 @@ function ReadingCard({
       className="relative mt-5 rounded-3xl bg-surface shadow-card overflow-hidden animate-fade-in-up"
       style={{ animationDelay: "80ms" }}
     >
-      {/* Ambient gradient wash — Anthropic-style warm backdrop */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 opacity-90"
-        style={{
-          backgroundImage:
-            "radial-gradient(680px 260px at 10% -10%, color-mix(in_srgb,var(--color-accent)_10%,transparent), transparent 60%), radial-gradient(520px 220px at 100% 120%, color-mix(in srgb, var(--color-tag) 7%, transparent), transparent 65%)",
-        }}
-      />
-
       {/* ── Header kicker ── */}
       <div className="relative px-7 pt-7 pb-4 flex items-baseline justify-between">
-        <span className="inline-flex items-center gap-2 text-micro font-semibold uppercase tracking-[0.22em] text-accent/90">
-          <span className="inline-block w-4 h-[1.5px] bg-accent/70" />
+        <span className="eyebrow inline-flex items-center gap-2 text-accent/90">
           Reading · your rhythm
         </span>
-        <span className="text-micro uppercase tracking-[0.16em] text-text-faint/70">
+        <span className="eyebrow text-text-faint/70">
           Since day one
         </span>
       </div>
@@ -482,21 +460,21 @@ function ReadingCard({
       {/* ── Hero line ── */}
       <div className="relative px-7 pb-5">
         <p
-          className="text-heading leading-[1.15] tracking-[-0.01em] text-display-sm lg:text-display font-reading"
+          className="display-line text-heading leading-[1.15] text-display-sm lg:text-display"
         >
           You&apos;ve kept{" "}
-          <span className="italic font-medium text-accent tabular-nums">
+          <span className="text-accent tabular-nums">
             {stats.saved}
           </span>{" "}
           item{stats.saved === 1 ? "" : "s"} out of{" "}
-          <span className="italic font-medium tabular-nums">
+          <span className="tabular-nums">
             {totalSurfaced}
           </span>{" "}
           Peer surfaced<span className="text-text-faint/70">.</span>
         </p>
         {stats.saved > 0 && (
           <p
-            className="mt-3 text-body text-text-muted max-w-[56ch] leading-[1.55] italic font-reading"
+            className="mt-3 text-body text-text-muted measure-lede leading-[1.55]"
           >
             {pullQuote}
           </p>
@@ -517,25 +495,11 @@ function ReadingCard({
       </div>
 
       {/* ── What you save — tile grid ── */}
-      {stats.saved > 0 && (
-        <div className="relative px-7 pb-5">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-micro font-semibold uppercase tracking-[0.18em] text-text-faint">
-              What you save
-            </span>
-            <span className="text-micro text-text-faint/60 tabular-nums">
-              {stats.saved} total
-            </span>
-          </div>
-          <TypeTiles breakdown={stats.typeBreakdown} total={stats.saved} />
-        </div>
-      )}
-
       {/* ── Top venues — tile grid ── */}
       {venueBreakdown.length > 0 && (
         <div className="relative px-7 pb-5">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-micro font-semibold uppercase tracking-[0.18em] text-text-faint">
+            <span className="eyebrow text-text-faint">
               Where you read most
             </span>
             <span className="text-micro text-text-faint/60 tabular-nums">
@@ -549,7 +513,7 @@ function ReadingCard({
       {/* ── Continuous learning calendar ── */}
       <div className="relative px-7 pb-5">
         <div className="flex items-center justify-between mb-3">
-          <span className="text-micro font-semibold uppercase tracking-[0.18em] text-text-faint">
+          <span className="eyebrow text-text-faint">
             Continuous reading
           </span>
           <StreakBadge cells={realCells ?? undefined} />
@@ -561,7 +525,7 @@ function ReadingCard({
       {stats.keywordBreakdown.length > 0 && (
         <div className="relative px-7 pb-5">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-micro font-semibold uppercase tracking-[0.18em] text-text-faint">
+            <span className="eyebrow text-text-faint">
               Topics sticky with you
             </span>
             <span className="text-micro text-text-faint/60 tabular-nums">
@@ -578,15 +542,15 @@ function ReadingCard({
           {archetype.glyph}
         </span>
         <div className="flex-1 min-w-0">
-          <p className="text-micro font-semibold uppercase tracking-[0.18em] text-text-faint">
+          <p className="eyebrow text-text-faint">
             Reader archetype
           </p>
           <p
-            className="text-title-lg lg:text-display-xs italic text-heading leading-tight mt-0.5 tracking-tight font-reading"
+            className="display-line text-title-lg lg:text-display-xs text-heading leading-tight mt-0.5"
           >
             {archetype.label}
           </p>
-          <p className="text-meta text-text-muted leading-[1.55] mt-1 max-w-[48ch]">
+          <p className="text-meta text-text-muted leading-[1.55] mt-1 measure-lede">
             {archetype.description}
           </p>
         </div>
@@ -620,7 +584,7 @@ function HeroStat({
     <div
       className="bg-surface px-4 py-4 flex flex-col items-start"
     >
-      <span className="text-caption uppercase tracking-[0.16em] text-text-faint">
+      <span className="eyebrow text-text-faint">
         {label}
       </span>
       <span
@@ -634,77 +598,12 @@ function HeroStat({
 
 // ── Charts ─────────────────────────────────────────────────────
 
-function TypeTiles({
-  breakdown,
-  total,
-}: {
-  breakdown: { papers: number; events: number; jobs: number };
-  total: number;
-}) {
-  const tiles = [
-    {
-      key: "papers",
-      label: "Papers",
-      count: breakdown.papers,
-      color: "text-accent",
-      bg: "bg-accent-dim",
-      ring: "shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-accent)_22%,transparent)]",
-    },
-    {
-      key: "events",
-      label: "Events",
-      count: breakdown.events,
-      color: "text-tag",
-      bg: "bg-tag-dim",
-      ring: "shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-tag)_22%,transparent)]",
-    },
-    {
-      key: "jobs",
-      label: "Jobs",
-      count: breakdown.jobs,
-      color: "text-peach",
-      bg: "bg-peach-dim",
-      ring: "shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-peach)_22%,transparent)]",
-    },
-  ];
-
-  if (total === 0) return null;
-
-  return (
-    <div
-      className="grid grid-cols-3 gap-2"
-    >
-      {tiles.map((t) => {
-        const pct = total > 0 ? Math.round((t.count / total) * 100) : 0;
-        const empty = t.count === 0;
-        return (
-          <div
-            key={t.key}
-            className={`relative rounded-xl px-3.5 py-3 transition-all duration-300 ${
-              empty
-                ? "bg-bg-secondary/30 text-text-faint/60"
-                : `${t.bg} ${t.ring}`
-            }`}
-          >
-            <div className={`text-display-xs font-semibold tabular-nums leading-none ${empty ? "" : t.color}`}>
-              {t.count}
-            </div>
-            <div className="mt-1.5 flex items-baseline justify-between text-micro uppercase tracking-[0.14em]">
-              <span className={empty ? "text-text-faint/60" : "text-text-muted"}>
-                {t.label}
-              </span>
-              {!empty && (
-                <span className={`tabular-nums ${t.color} opacity-70`}>
-                  {pct}%
-                </span>
-              )}
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
+// `TypeTiles` stood here. It drew "EVENTS 0 / JOBS 0" under a heading that
+// said "What you save" — a claim about the reader that Peer could not support,
+// since `saveEvent` and `saveJob` are called nowhere outside the store and
+// both surfaces state in their own header comments that they are gone. The
+// `savedEvents`/`savedJobs` selectors stay in `useReadingStats`, so legacy
+// synced rows are still counted honestly in the total.
 
 // ── Venue grid — blocks, warm intensity by rank ───────────────
 
@@ -777,7 +676,7 @@ function StreakBadge({ cells }: { cells?: number[] }) {
   const weeks = streakWeeks(cells, CAL_WEEKS);
   if (weeks === 0) {
     return (
-      <span className="text-micro text-text-faint/60 uppercase tracking-[0.14em]">
+      <span className="eyebrow text-text-faint/60">
         No streak yet
       </span>
     );
@@ -925,8 +824,7 @@ function SectionHeader({
     <div
       className="flex items-center justify-between"
     >
-      <span className="inline-flex items-center gap-2 text-micro font-semibold uppercase tracking-[0.18em] text-text-faint">
-        <span className="inline-block w-3.5 h-[1.5px] bg-accent/70" aria-hidden />
+      <span className="eyebrow inline-flex items-center gap-2 text-text-faint">
         {label}
       </span>
       {onAdjust && (
@@ -1002,13 +900,6 @@ function useReadingStats() {
   const saved = savedPapers.length + savedEvents.length + savedJobs.length;
   const read = Object.keys(readItems).length;
 
-  // Saved-item type distribution
-  const typeBreakdown = {
-    papers: savedPapers.length,
-    events: savedEvents.length,
-    jobs: savedJobs.length,
-  };
-
   // Top keywords across saved papers' experiment keywords
   const kwCounts = new Map<string, number>();
   savedPapers.forEach((p) => {
@@ -1078,7 +969,6 @@ function useReadingStats() {
     readerHint,
     lastBriefing,
     venueBreakdown,
-    typeBreakdown,
     keywordBreakdown,
   };
 }
@@ -1147,8 +1037,7 @@ function LearnedPreferences({
       style={{ animationDelay: "120ms" }}
     >
       <div className="px-7 pt-6 pb-4 flex items-baseline justify-between gap-4">
-        <span className="inline-flex items-center gap-2 text-micro font-semibold uppercase tracking-[0.22em] text-accent/90">
-          <span className="inline-block w-4 h-[1.5px] bg-accent/70" />
+        <span className="eyebrow inline-flex items-center gap-2 text-accent/90">
           What Peer has learned
         </span>
         {hasAny &&
@@ -1193,7 +1082,7 @@ function LearnedPreferences({
           <div className="space-y-4">
             {liked.length > 0 && (
               <div>
-                <p className="text-micro font-semibold uppercase tracking-[0.16em] text-text-faint mb-2">
+                <p className="eyebrow text-text-faint mb-2">
                   Leaning toward
                 </p>
                 <div className="flex flex-wrap gap-1.5">
@@ -1205,7 +1094,7 @@ function LearnedPreferences({
             )}
             {disliked.length > 0 && (
               <div>
-                <p className="text-micro font-semibold uppercase tracking-[0.16em] text-text-faint mb-2">
+                <p className="eyebrow text-text-faint mb-2">
                   Easing off
                 </p>
                 <div className="flex flex-wrap gap-1.5">
@@ -1257,7 +1146,7 @@ function PastBriefings() {
       <section
         className="mt-8 rounded-2xl bg-surface shadow-card px-7 py-6"
       >
-        <p className="text-micro font-semibold uppercase tracking-[0.18em] text-text-faint mb-1.5">
+        <p className="eyebrow text-text-faint mb-1.5">
           Past briefings
         </p>
         <p className="text-body-sm text-text-faint/80">
@@ -1272,7 +1161,7 @@ function PastBriefings() {
       className="mt-8 rounded-2xl bg-surface shadow-card overflow-hidden"
     >
       <div className="px-7 pt-6 pb-3 flex items-center justify-between">
-        <p className="text-micro font-semibold uppercase tracking-[0.18em] text-text-faint">
+        <p className="eyebrow text-text-faint">
           Past briefings
         </p>
         <span className="text-micro text-text-faint/60 tabular-nums">
@@ -1289,7 +1178,7 @@ function PastBriefings() {
                 <p className="text-caption text-text-muted tabular-nums">
                   {(formatTimeAgo(b.deliveredAt) ?? "—")}
                 </p>
-                <p className="text-micro text-text-faint/60 uppercase tracking-[0.1em] mt-0.5">
+                <p className="eyebrow text-text-faint/60 mt-0.5">
                   {b.channel}
                 </p>
               </div>
@@ -1404,7 +1293,7 @@ function EditView({
       <EditRow icon={<IconBuilding size={13} strokeWidth={1.9} />} tone="neutral" label="Affiliation">
         <div className="space-y-2">
           <div>
-            <p className="text-micro font-semibold uppercase tracking-[0.14em] text-text-faint/80 mb-1.5">
+            <p className="eyebrow text-text-faint/80 mb-1.5">
               School / org
             </p>
             <SchoolAutocomplete
@@ -1414,7 +1303,7 @@ function EditView({
             />
           </div>
           <div>
-            <p className="text-micro font-semibold uppercase tracking-[0.14em] text-text-faint/80 mb-1.5">
+            <p className="eyebrow text-text-faint/80 mb-1.5">
               Advisor / PI
             </p>
             <AdvisorField
@@ -1459,7 +1348,7 @@ function EditView({
       <EditRow icon={<IconCareer />} tone="neutral" label="Career">
         <div className="space-y-3">
           <div>
-            <p className="text-micro font-semibold uppercase tracking-[0.14em] text-text-faint/80 mb-1.5">
+            <p className="eyebrow text-text-faint/80 mb-1.5">
               Stage
             </p>
             <div className="flex flex-wrap gap-1.5">
@@ -1469,7 +1358,7 @@ function EditView({
                   <button
                     key={s}
                     onClick={() => updateCareerStage(s)}
-                    className={`text-meta px-2.5 py-1 rounded-full transition-all duration-200 ease-out active:scale-[0.94] ${
+                    className={`text-meta px-2.5 py-1 rounded-full transition-all ease-out active:scale-[0.94] ${
                       active
                         ? "bg-accent-dim text-accent shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-accent)_30%,transparent)] scale-[1.03]"
                         : "text-text-faint hover:text-text-muted bg-bg-secondary/40 hover:bg-bg-secondary/70"
@@ -1482,7 +1371,7 @@ function EditView({
             </div>
           </div>
           <div>
-            <p className="text-micro font-semibold uppercase tracking-[0.14em] text-text-faint/80 mb-1.5">
+            <p className="eyebrow text-text-faint/80 mb-1.5">
               Looking toward
             </p>
             <div className="flex flex-wrap gap-1.5">
@@ -1492,7 +1381,7 @@ function EditView({
                   <button
                     key={p}
                     onClick={() => updateIndustryPreference(p)}
-                    className={`text-meta px-2.5 py-1 rounded-full transition-all duration-200 ease-out active:scale-[0.94] ${
+                    className={`text-meta px-2.5 py-1 rounded-full transition-all ease-out active:scale-[0.94] ${
                       active
                         ? "bg-accent-dim text-accent shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-accent)_30%,transparent)] scale-[1.03]"
                         : "text-text-faint hover:text-text-muted bg-bg-secondary/40 hover:bg-bg-secondary/70"
@@ -1537,7 +1426,7 @@ function EditView({
             onChange={(value) => updateFeedSourceMix(value as typeof profile.feedSourceMix)}
           />
           <div>
-            <p className="text-micro font-semibold uppercase tracking-[0.14em] text-text-faint/80 mb-1.5">
+            <p className="eyebrow text-text-faint/80 mb-1.5">
               Preferred journals
             </p>
             <ChipInput
@@ -1565,7 +1454,7 @@ function EditView({
             onChange={(value) => updateFeedDiscoveryMode(value as typeof profile.feedDiscoveryMode)}
           />
           <div>
-            <p className="text-micro font-semibold uppercase tracking-[0.14em] text-text-faint/80 mb-1.5">
+            <p className="eyebrow text-text-faint/80 mb-1.5">
               Avoid
             </p>
             <div className="flex flex-wrap gap-1.5">
@@ -1683,7 +1572,7 @@ function AppearanceCard({
       style={{ animationDelay: "40ms" }}
     >
       <div className="px-7 pt-6 pb-4">
-        <p className="text-caption font-semibold uppercase tracking-[0.18em] text-text-faint/80">
+        <p className="eyebrow text-text-faint/80">
           Appearance
         </p>
         <h2 className="mt-1 text-title-lg text-heading font-medium tracking-[-0.01em]">
@@ -1710,7 +1599,7 @@ function ColorThemePicker({
     <div className="space-y-6">
       {/* Mode: auto / light / dark */}
       <div>
-        <p className="mb-2 text-micro font-semibold uppercase tracking-[0.18em] text-text-faint/80">
+        <p className="eyebrow mb-2 text-text-faint/80">
           Mode
         </p>
         <div className="inline-flex items-center gap-1 rounded-full bg-bg-secondary/70 shadow-well p-1">
@@ -1720,7 +1609,7 @@ function ColorThemePicker({
               type="button"
               aria-pressed={mode === option.value}
               onClick={() => onChange(`${option.value}:${accent}` as ColorTheme)}
-              className={`h-8 px-4 rounded-full text-meta font-medium transition-all duration-200 ease-out active:scale-[0.96] ${
+              className={`h-8 px-4 rounded-full text-meta font-medium transition-all ease-out active:scale-[0.96] ${
                 mode === option.value
                   ? "bg-surface text-heading shadow-card"
                   : "text-text-muted hover:text-heading"
@@ -1734,7 +1623,7 @@ function ColorThemePicker({
 
       {/* Accent palette: one color drives the whole palette */}
       <div>
-        <p className="mb-1 text-micro font-semibold uppercase tracking-[0.18em] text-text-faint/80">
+        <p className="eyebrow mb-1 text-text-faint/80">
           Color
         </p>
         <p className="mb-3 text-meta text-text-muted">
@@ -1750,7 +1639,7 @@ function ColorThemePicker({
                 aria-pressed={selected}
                 title={option.label}
                 onClick={() => onChange(`${mode}:${option.value}` as ColorTheme)}
-                className={`group relative inline-flex h-11 w-11 items-center justify-center rounded-full transition-all duration-200 ease-out active:scale-[0.94] ${
+                className={`group relative inline-flex h-11 w-11 items-center justify-center rounded-full transition-all ease-out active:scale-[0.94] ${
                   selected ? "shadow-card-hover scale-[1.06]" : "shadow-card hover:scale-[1.04]"
                 }`}
                 style={{
@@ -1796,7 +1685,7 @@ function EditRow({
         >
           {icon}
         </span>
-        <span className="text-meta font-medium text-text-faint uppercase tracking-[0.1em]">
+        <span className="eyebrow text-text-faint">
           {label}
         </span>
       </div>

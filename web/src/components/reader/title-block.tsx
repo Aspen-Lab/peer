@@ -70,7 +70,7 @@ function AuthorLine({ authors, affiliation }: { authors: string[]; affiliation?:
               type="button"
               onClick={() => setExpanded((v) => !v)}
               aria-expanded={expanded}
-              className="font-mono text-caption text-text-faint hover:text-heading underline decoration-border-strong underline-offset-4 transition-colors duration-150 ease-snap [@media(hover:none)]:py-3"
+              className="annotation text-text-faint hover:text-heading underline decoration-border-strong underline-offset-4 transition-colors [@media(hover:none)]:py-3"
             >
               {expanded ? AUTHORS.showFewer : AUTHORS.showMore(hidden)}
             </button>
@@ -78,7 +78,7 @@ function AuthorLine({ authors, affiliation }: { authors: string[]; affiliation?:
         )}
       </p>
       {affiliation && (
-        <p className="font-mono text-caption text-text-faint mt-1.5">{affiliation}</p>
+        <p className="annotation text-text-faint mt-1.5">{affiliation}</p>
       )}
     </div>
   );
@@ -102,10 +102,10 @@ export function TitleBlock({
   return (
     <header>
       {meta.length > 0 && (
-        <p className="font-mono text-meta text-text-muted mt-6">{meta.join(" · ")}</p>
+        <p className="annotation text-meta text-text-muted mt-6">{meta.join(" · ")}</p>
       )}
       <h1
-        className={`font-display font-medium text-heading tracking-[-0.01em] leading-[1.15] text-display-sm measure-title mt-2${long ? "" : " sm:text-display"}`}
+        className={`paper-line text-heading text-display-sm measure-title mt-2${long ? "" : " sm:text-display"}`}
       >
         {paper.title}
       </h1>

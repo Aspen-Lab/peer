@@ -1,14 +1,15 @@
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/cn";
 
-// One page column instead of seven hand-typed max-w values. Vertical
-// rhythm stays per-page (pass py-* via className).
+// One page column and one page rhythm. Override the rhythm with `rhythm=`,
+// never with a raw `py-*` — seven different vertical recipes across fifteen
+// route files is what the old "rhythm stays per-page" comment produced, and
+// the one value Latent actually beats time on (96px) survived only on the
+// four pages nobody designs: 500, 404, the auth error, and a footer.
 
 export const pageContainer = cva("mx-auto w-full px-6", {
   variants: {
     width: {
-      narrow: "max-w-[720px]",   // event detail, not-found
-      detail: "max-w-[760px]",   // paper/job detail
       // Paper reading: one column, a two-column spread from xl. The spread's
       // width is set by the measure, not by the window — at 1320 the 7fr
       // column was 681px holding a 462px line, so a fifth of the page was an
@@ -16,16 +17,20 @@ export const pageContainer = cva("mx-auto w-full px-6", {
       // measure plus a rag margin, the two columns fill and the leftover
       // becomes the page's own margins.
       spread: "max-w-[760px] xl:max-w-[1000px] 2xl:max-w-[1200px]",
-      content: "max-w-[820px]",  // home column
-      wide: "max-w-[920px]",     // saved grid (lg)
+      content: "max-w-[820px]",  // home column, /privacy, /saved
       board: "max-w-[1280px]",   // full-bleed feed board
-      // Pages that narrow on small screens, widen at lg
-      contentResponsive: "max-w-[740px] lg:max-w-[820px]", // profile
-      wideResponsive: "max-w-[740px] lg:max-w-[920px]",    // saved
+      // Narrows on small screens, widens at lg — /profile.
+      contentResponsive: "max-w-[740px] lg:max-w-[820px]",
+    },
+    rhythm: {
+      page: "py-12 md:py-16 lg:py-24",  // 48 → 64 → 96, the section heartbeat
+      reader: "py-8 sm:py-12 xl:pt-4",  // the spread keeps its own top
+      none: "",
     },
   },
   defaultVariants: {
     width: "content",
+    rhythm: "page",
   },
 });
 
@@ -37,10 +42,9 @@ type PageContainerProps = React.HTMLAttributes<HTMLElement> &
 export function PageContainer({
   className,
   width,
+  rhythm,
   as: Tag = "article",
   ...props
 }: PageContainerProps) {
-  return (
-    <Tag className={cn(pageContainer({ width }), className)} {...props} />
-  );
+  return <Tag className={cn(pageContainer({ width, rhythm }), className)} {...props} />;
 }

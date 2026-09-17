@@ -29,7 +29,7 @@ export function VersionLine({
       <Link
         href="/changelog"
         onNavigate={onNavigate}
-        className="hover:text-heading transition-colors duration-150 ease-snap"
+        className="hover:text-heading transition-colors "
       >
         What&apos;s new
       </Link>

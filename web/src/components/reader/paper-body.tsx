@@ -64,14 +64,14 @@ export function PaperBody({ reading }: { reading: PaperReading }) {
   const shown = words <= ALWAYS_OPEN_WORDS || open;
 
   return (
-    <Band label={BODY.heading} className="mt-14">
+    <Band label={BODY.heading}>
       {/* The contents: the sections Peer reached, in the paper's own order.
           It doubles as the statement of what it did not reach — a paper whose
           extractor found four headings says so here and nowhere else. */}
-      <p className="font-mono text-caption text-text-faint mt-4 measure-ui">
+      <p className="annotation text-text-faint mt-4 measure-ui">
         {body.map((section) => section.heading).join(" · ")}
       </p>
-      <p className="font-mono text-caption text-text-faint mt-1.5">
+      <p className="annotation text-text-faint mt-1.5">
         {BODY.provenance(reading.provenance.sourceLabel, body.length, words)}
       </p>
 
@@ -81,10 +81,10 @@ export function PaperBody({ reading }: { reading: PaperReading }) {
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="group inline-flex items-center gap-1.5 font-mono text-body-sm text-text-muted mt-5 hover:text-heading transition-colors duration-150 ease-snap [@media(hover:none)]:min-h-11"
+          className="group inline-flex items-center gap-1.5 font-mono text-body-sm text-text-muted mt-5 hover:text-heading transition-colors [@media(hover:none)]:min-h-11"
         >
           {BODY.open}
-          <span className="transition-transform duration-150 ease-snap group-hover:translate-x-0.5 motion-reduce:transition-none">
+          <span className="transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none">
             <IconArrowRight size={13} />
           </span>
         </button>

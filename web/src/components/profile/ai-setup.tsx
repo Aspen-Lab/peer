@@ -163,9 +163,7 @@ export function AiKeyFields({
       <div className="space-y-1.5">
         <label
           htmlFor={`${idPrefix}-provider`}
-          className={`block text-micro font-bold uppercase tracking-[0.14em] ${
-            emphasized ? "text-accent" : "text-text-faint"
-          }`}
+          className="block eyebrow text-text-faint"
         >
           AI company
         </label>
@@ -203,9 +201,7 @@ export function AiKeyFields({
         <div className="space-y-1.5">
           <label
             htmlFor={`${idPrefix}-key`}
-            className={`block text-micro font-bold uppercase tracking-[0.14em] ${
-              emphasized ? "text-accent" : "text-text-faint"
-            }`}
+            className="block eyebrow text-text-faint"
           >
             API key
           </label>
@@ -325,7 +321,7 @@ export function AiProviderGuide({ provider }: { provider: UserAiProvider }) {
           stroke="currentColor"
           strokeWidth="1.8"
           strokeLinecap="round"
-          className={`shrink-0 opacity-60 transition-transform duration-200 ${
+          className={`shrink-0 opacity-60 transition-transform ${
             open ? "rotate-180" : ""
           }`}
           aria-hidden
@@ -361,7 +357,7 @@ export function AiProviderGuide({ provider }: { provider: UserAiProvider }) {
 
           <div className="grid gap-2 sm:grid-cols-2">
             <div className="rounded-xl bg-bg/65 p-3">
-              <p className="text-micro font-semibold uppercase tracking-[0.12em] text-text-faint">
+              <p className="eyebrow text-text-faint">
                 Everyday model
               </p>
               <p className="mt-1 text-meta font-semibold text-heading">
@@ -373,7 +369,7 @@ export function AiProviderGuide({ provider }: { provider: UserAiProvider }) {
               </p>
             </div>
             <div className="rounded-xl bg-bg/65 p-3">
-              <p className="text-micro font-semibold uppercase tracking-[0.12em] text-text-faint">
+              <p className="eyebrow text-text-faint">
                 Deep-report model
               </p>
               <p className="mt-1 text-meta font-semibold text-heading">
@@ -472,7 +468,7 @@ export function ApiKeyHelp({ provider }: { provider: UserAiProvider }) {
           stroke="currentColor"
           strokeWidth="1.8"
           strokeLinecap="round"
-          className={`opacity-60 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+          className={`opacity-60 transition-transform ${open ? "rotate-180" : ""}`}
           aria-hidden
         >
           <path d="M2 4l4 4 4-4" />

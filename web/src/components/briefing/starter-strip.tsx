@@ -41,7 +41,7 @@ export function StarterStrip() {
   };
 
   return (
-    <Band label={STARTER.label} className="mt-8">
+    <Band label={STARTER.label} gap="none">
       <p className="font-sans text-body-lg leading-[1.55] text-text-muted measure-ui mt-4">
         {STARTER.line}
       </p>
@@ -52,7 +52,7 @@ export function StarterStrip() {
             key={topic}
             type="button"
             onClick={() => choose(topic)}
-            className={cn(buttonVariants({ tone: "soft", size: "sm" }), "eyebrow")}
+            className={cn(buttonVariants({ tone: "soft" }), "eyebrow")}
           >
             {topic}
           </button>
@@ -71,22 +71,22 @@ export function StarterStrip() {
           onChange={(event) => setTyped(event.target.value)}
           placeholder={STARTER.placeholder}
           aria-label={STARTER.placeholder}
-          className="min-w-0 flex-1 max-w-[22em] bg-bg-secondary/45 px-3 py-2 font-mono text-meta text-text shadow-well placeholder:text-text-faint/65 focus:outline-none focus:ring-2 focus:ring-accent/25"
+          className="min-w-0 flex-1 max-w-[22em] bg-bg-secondary/45 px-3 py-2 annotation text-meta text-text shadow-well placeholder:text-text-faint/65 focus:outline-none focus:ring-2 focus:ring-accent/25"
         />
         <button
           type="submit"
           disabled={typed.trim().length === 0}
-          className={cn(buttonVariants({ tone: "primary", size: "sm" }), "eyebrow")}
+          className={cn(buttonVariants({ tone: "primary" }), "eyebrow")}
         >
           {STARTER.submit}
         </button>
       </form>
 
-      <p className="font-mono text-caption text-text-faint mt-3">
+      <p className="annotation text-text-faint mt-3">
         {STARTER.rest}{" "}
         <Link
           href="/welcome"
-          className="underline decoration-border-strong underline-offset-4 hover:text-heading transition-colors duration-150 ease-snap"
+          className="underline decoration-border-strong underline-offset-4 hover:text-heading transition-colors "
         >
           {STARTER.restLink}
         </Link>

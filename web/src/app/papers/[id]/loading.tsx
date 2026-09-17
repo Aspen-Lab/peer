@@ -6,7 +6,7 @@ import { PAGE_CLASS, SPREAD_GRID } from "@/components/reader/spread";
 // panel column at the plate's width and the plate replaces it in place.
 export default function Loading() {
   return (
-    <PageContainer width="spread" className={PAGE_CLASS}>
+    <PageContainer width="spread" rhythm="reader" className={PAGE_CLASS}>
       <div className={SPREAD_GRID}>
         <div>
           <LoadingMat />

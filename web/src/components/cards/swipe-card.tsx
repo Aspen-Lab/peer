@@ -27,7 +27,10 @@ interface SwipeableCardProps {
   className?: string;
 }
 
-const SNAP_MS = 220;
+// The gesture and the chrome move at the same speed or they read as two
+// products. Both are --dur-fast (globals.css, "Motion"); JS cannot read a CSS
+// variable without a layout call, so they are restated here and only here.
+const SNAP_MS = 180;
 const FLY_MS = 180;
 
 export function SwipeableCard({
@@ -133,9 +136,9 @@ export function SwipeableCard({
   const p = progress(dx);
   const towardRight = dx > 0;
   const transition = flying
-    ? `transform ${FLY_MS}ms ease-in`
+    ? `transform ${FLY_MS}ms var(--ease-inout)`
     : settling
-      ? `transform ${SNAP_MS}ms var(--ease-snap)`
+      ? `transform ${SNAP_MS}ms var(--ease-expo)`
       : "none";
 
   return (

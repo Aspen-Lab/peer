@@ -95,7 +95,7 @@ export function Masthead() {
         // product is hairlines now, and this was the last surface without
         // one. The edge is there at rest; the glass still arrives on scroll,
         // background only, so the height never changes.
-        className="hidden md:grid sticky top-0 z-50 h-12 px-6 grid-cols-[1fr_auto_1fr] items-center border-b border-border transition-[background-color,box-shadow] duration-150 ease-snap data-[scrolled=true]:glass-bar data-[scrolled=true]:shadow-[0_1px_0_var(--color-border-strong)]"
+        className="hidden md:grid sticky top-0 z-50 h-12 px-6 grid-cols-[1fr_auto_1fr] items-center border-b border-border transition-[background-color,box-shadow] data-[scrolled=true]:glass-bar data-[scrolled=true]:shadow-[0_1px_0_var(--color-border-strong)]"
       >
         <div className="justify-self-start">
           <Link href="/" className={WORDMARK_CLASS}>
@@ -137,7 +137,7 @@ export function Masthead() {
                 // The bar's own height, so the whole 48px row is the target
                 // on a tablet, and 44px wide where there is no hover — the
                 // same rule the k/j arrows two cells over follow.
-                className={`inline-flex h-12 items-center justify-center px-1 transition-colors duration-150 ease-snap hover:text-heading [@media(hover:none)]:min-w-11 ${
+                className={`inline-flex h-12 items-center justify-center px-1 transition-colors  hover:text-heading [@media(hover:none)]:min-w-11 ${
                   active ? "text-heading" : ""
                 }`}
               >
@@ -159,7 +159,7 @@ export function Masthead() {
             // The chip is gone: it was the one boxed object in a row of
             // words, which read as unfinished rather than as emphasis. It is
             // a link in the row like the rest, and its glyph is its name.
-            className="inline-flex h-12 items-center justify-center px-1 transition-colors duration-150 ease-snap hover:text-heading [@media(hover:none)]:min-w-11"
+            className="inline-flex h-12 items-center justify-center px-1 transition-colors hover:text-heading [@media(hover:none)]:min-w-11"
           >
             ?
           </button>
@@ -189,7 +189,7 @@ function RailLine({ nav, onBack }: { nav: PaperNav; onBack: () => void }) {
     <>
       <BackToFeedLink
         onBack={onBack}
-        className="transition-colors duration-150 ease-snap hover:text-heading"
+        className="transition-colors hover:text-heading"
       >
         {RAIL.back}
       </BackToFeedLink>
@@ -247,7 +247,7 @@ function StepButton({
       disabled={disabled}
       aria-label={label}
       title={`${label} (${cap})`}
-      className="inline-flex items-center justify-center rounded-md transition-[opacity,transform] duration-150 ease-snap disabled:opacity-40 active:scale-[0.95] disabled:active:scale-100 [@media(hover:none)]:min-h-11 [@media(hover:none)]:min-w-11"
+      className="inline-flex items-center justify-center rounded-md transition-[opacity,transform] disabled:opacity-40 active:scale-[0.95] disabled:active:scale-100 [@media(hover:none)]:min-h-11 [@media(hover:none)]:min-w-11"
     >
       <Kbd pointerOnly>{cap}</Kbd>
       <span className="hidden [@media(hover:none)]:inline text-body text-text-muted" aria-hidden>

@@ -13,7 +13,6 @@ import { PaperPlate, shortVenue } from "@/components/cards/paper-plate";
 import { SwipeableCard } from "@/components/cards/swipe-card";
 import { cardShell } from "@/components/ui/card-shell";
 import { cn } from "@/lib/cn";
-import { chipTones } from "@/components/ui/chip";
 
 type FeedItem = { kind: "paper"; data: Paper };
 
@@ -27,7 +26,7 @@ type FeedItem = { kind: "paper"; data: Paper };
  */
 function paperShellClass(isRead: boolean) {
   return cn(
-    cardShell({ radius: "2xl", padding: "none" }),
+    cardShell({ padding: "none", entrance: "none" }),
     "group/tile relative overflow-hidden",
     isRead && "tile-read",
   );
@@ -52,16 +51,6 @@ function paperBadgeKind(paper: Paper): BadgeKind {
 
 // ── Category icons (12px line, currentColor) ──────────────────
 
-function PaperIcon() {
-  return (
-    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
-      <path d="M14 3v5h5" />
-      <path d="M9 13h6M9 17h4" />
-    </svg>
-  );
-}
-
 function DiscussionIcon() {
   return (
     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -75,36 +64,18 @@ function DiscussionIcon() {
 
 // ── Inline metadata icons (10px) ──────────────────────────────
 
-// ── Badge / chip ──────────────────────────────────────────────
-
-const KIND_ICON: Record<BadgeKind, () => React.ReactElement> = {
-  paper: PaperIcon,
-  discussion: DiscussionIcon,
-};
-
-const KIND_LABEL: Record<BadgeKind, string> = {
-  paper: "Paper",
-  discussion: "Discussion",
-};
-
-const KIND_TONE: Record<BadgeKind, string> = {
-  paper: chipTones.accent,
-  discussion: "text-text-muted bg-bg-secondary/70",
-};
-
-
-function KindBadge({ kind }: { kind: BadgeKind }) {
-  const Icon = KIND_ICON[kind];
+// The kind mark. It used to be a tinted square box in tracked capitals at
+// weight 600 — a "chip" whose own radius token is 0 — sitting two lines above
+// a comment explaining that the venue line had been de-capitalised because it
+// was the last small-caps label in the product. It still was one.
+function KindMark() {
   return (
-    <span
-      className={`inline-flex items-center gap-1.5 text-micro font-semibold uppercase tracking-[0.14em] pl-1.5 pr-2 py-[3px] rounded-md ${KIND_TONE[kind]}`}
-    >
-      <Icon />
-      {KIND_LABEL[kind]}
+    <span className="eyebrow inline-flex items-center gap-1.5 text-text-muted shrink-0">
+      <DiscussionIcon />
+      Discussion
     </span>
   );
 }
-
 
 function SaveButton({
   isSaved,
@@ -215,10 +186,10 @@ function PaperTile({ paper, isRead, selected, plateTerms = [] }: { paper: Paper;
     >
       <Link
         href={`/papers/${paper.id}`}
-        className={paperShellClass(isRead)}
-        style={{
-          ...(selected ? { background: SELECTED_BG, transition: "background 0.3s" } : { transition: "background 0.3s" }),
-        }}
+        className={cn(paperShellClass(isRead), "transition-colors")}
+        // The transition belongs in the class string; only the tinted ground,
+        // which is computed from the palette, has to be inline.
+        style={selected ? { background: SELECTED_BG } : undefined}
       >
         <PaperPlate paper={paper} terms={plateTerms} />
         {/* `first:` — with no plate above it this block leads the card, and
@@ -232,16 +203,16 @@ function PaperTile({ paper, isRead, selected, plateTerms = [] }: { paper: Paper;
             feed said nothing, and it said it twice: `paper.source` repeated it
             at the bottom. */}
         <div className="flex items-baseline gap-2 mb-2 min-w-0">
-          {kind !== "paper" && <KindBadge kind={kind} />}
+          {kind !== "paper" && <KindMark />}
           {/* Sentence case, in the mono the reading page uses for the same
               fact. Set in tracked capitals this was the last small-caps label
               in the product, and it shouted the one line on the card that is
               pure filing. */}
-          <span className="font-mono text-caption text-text-faint truncate">
+          <span className="annotation text-text-faint truncate">
             {metaBits.join(" · ")}
           </span>
         </div>
-        <h3 className="font-display text-title-lg font-normal text-heading leading-[1.2] tracking-[-0.015em] line-clamp-3">
+        <h3 className="paper-line text-title-lg text-heading leading-[1.2] line-clamp-3">
           {paper.title}
         </h3>
         <p

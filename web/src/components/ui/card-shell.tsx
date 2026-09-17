@@ -13,11 +13,9 @@ export const cardShell = cva(
   "group block bg-surface grain shadow-card",
   {
     variants: {
-      radius: {
-        xl: "rounded-xl",
-        "2xl": "rounded-2xl",
-        "3xl": "rounded-3xl",
-      },
+      // There is no `radius` variant. All three values compiled to 0 — an API
+      // that read as a choice and was not one, which is exactly how a round
+      // corner gets back in. The frame is `--shadow-card`.
       padding: {
         none: "",
         sm: "p-4",
@@ -33,7 +31,7 @@ export const cardShell = cva(
         true: [
           "transition-[box-shadow,background-color] duration-[180ms] ease-expo",
           "hover:shadow-card-hover hover:bg-surface-hover",
-          "active:shadow-well-soft active:duration-75",
+          "active:shadow-well-soft",
         ].join(" "),
         false: "",
       },
@@ -43,7 +41,6 @@ export const cardShell = cva(
       },
     },
     defaultVariants: {
-      radius: "2xl",
       padding: "lg",
       interactive: true,
       entrance: "fade",
@@ -58,7 +55,6 @@ type CardShellProps = React.HTMLAttributes<HTMLElement> &
 
 export function CardShell({
   className,
-  radius,
   padding,
   interactive,
   entrance,
@@ -68,7 +64,7 @@ export function CardShell({
   return (
     <Tag
       className={cn(
-        cardShell({ radius, padding, interactive, entrance }),
+        cardShell({ padding, interactive, entrance }),
         className,
       )}
       {...props}

@@ -63,8 +63,12 @@ export function DayStrip({
   const anyRead = papers.some((p) => readIds[p.id]);
 
   return (
-    <figure className="mt-6">
-      <div className="flex items-end" style={{ height: HEIGHT, gap: BAR_GAP }}>
+    // Ten bars occupy 147px of a 1232px row; the line that explains them used
+    // to sit underneath, pushing every card on the board down for a sentence
+    // that fits beside the chart four times over. `flex-wrap` keeps the phone
+    // stacking it.
+    <figure className="flex flex-wrap items-end gap-x-6 gap-y-3">
+      <div className="flex shrink-0 items-end" style={{ height: HEIGHT, gap: BAR_GAP }}>
         {papers.map((paper) => {
           const score = paper.relevanceScore ?? 0;
           const read = Boolean(readIds[paper.id]);
@@ -84,7 +88,7 @@ export function DayStrip({
                 // Neutral, not the accent: in this palette the hue is a
                 // signal, and how well a paper matches is data. Read papers
                 // drop to the hairline tone — spent, still counted.
-                className={`block w-full transition-colors duration-150 ease-snap ${
+                className={`block w-full transition-colors  ${
                   read
                     ? "bg-border-strong group-hover:bg-text-faint"
                     : "bg-text-muted group-hover:bg-heading"
@@ -96,7 +100,7 @@ export function DayStrip({
           );
         })}
       </div>
-      <figcaption className="font-mono text-caption text-text-faint mt-2">
+      <figcaption className="annotation text-text-faint measure-ui self-end pb-1">
         {DAY_STRIP.caption}
         {anyRead && <span className="ml-2">{DAY_STRIP.readKey}</span>}
       </figcaption>

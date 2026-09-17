@@ -73,7 +73,7 @@ export function AdvisorField({
           </svg>
         </span>
         <div className="min-w-0 flex-1">
-          <p className="text-micro font-semibold uppercase tracking-[0.14em] text-accent/90">
+          <p className="eyebrow text-accent/90">
             Advisor confirmed
           </p>
           <p className="text-body-sm text-heading font-medium mt-0.5 leading-snug">

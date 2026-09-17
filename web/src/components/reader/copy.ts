@@ -41,6 +41,8 @@ export const BODY = {
 export const RECORD = {
   heading: "The record",
   published: "Published",
+  venue: "Venue",
+  links: "Links",
   arxiv: "arXiv",
   publisher: "Publisher",
   code: "Code",

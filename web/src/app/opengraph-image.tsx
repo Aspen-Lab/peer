@@ -34,11 +34,12 @@ export default function OpengraphImage() {
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <div style={{ width: 10, height: 10, background: "#ff520d" }} />
+          {/* 6px, like `Band`'s mark — globals.css, `@utility eyebrow`. */}
+          <div style={{ width: 6, height: 6, background: "#ff520d" }} />
           <div
             style={{
               fontSize: 22,
-              letterSpacing: "0.16em",
+              letterSpacing: "0.06em",  // --tracking-mono, globals.css
               color: "#a9a9a9",
               textTransform: "uppercase",
             }}

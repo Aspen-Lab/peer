@@ -14,7 +14,7 @@ import { Band } from "@/components/ui/band";
 import { LeadClaim } from "./lead-claim";
 import { ABSTRACT_FOOTER, ABSTRACT_LABEL, TLDR_LINE, attribution, skimFooter } from "./copy";
 
-const FOOTER_CLASS = "font-mono text-caption text-text-faint mt-2";
+const FOOTER_CLASS = "annotation text-text-faint mt-2";
 
 function Paragraph({
   sentences,
@@ -66,7 +66,7 @@ function Deck({
       className="animate-fade-in-up"
       style={{ "--i": 0 } as React.CSSProperties}
     >
-      <p className="font-reading text-title-lg leading-[1.45] text-heading measure mt-10">
+      <p className="font-reading text-title-lg leading-[1.45] text-heading measure mt-12 sm:mt-16">
         {skim.map((claim) => claim.text).join(" ")}
       </p>
       {quoted.map((claim, i) => (
@@ -136,7 +136,7 @@ export function PaperWords({
       {lead !== null && (
         <LeadClaim sentence={sentences[lead]} />
       )}
-      <Band label={ABSTRACT_LABEL} className="mt-12">
+      <Band label={ABSTRACT_LABEL}>
         <div className="font-reading text-lead leading-[1.6] text-text-muted measure mt-4 space-y-4">
           {split > 0 && <Paragraph sentences={sentences.slice(0, split)} from={0} inked={inked} />}
           {split < sentences.length && (

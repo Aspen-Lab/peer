@@ -132,7 +132,7 @@ export function ChoiceGroup({
 }) {
   return (
     <div>
-      <p className="text-micro font-semibold uppercase tracking-[0.14em] text-text-faint/80 mb-1.5">
+      <p className="eyebrow text-text-faint/80 mb-1.5">
         {label}
       </p>
       <div className="flex flex-wrap gap-1.5">
@@ -144,7 +144,7 @@ export function ChoiceGroup({
               type="button"
               onClick={() => onChange(option.value)}
               title={option.help}
-              className={`group text-left text-meta px-2.5 py-1.5 rounded-xl transition-all duration-200 ease-out active:scale-[0.94] ${
+              className={`group text-left text-meta px-2.5 py-1.5 rounded-xl transition-all ease-out active:scale-[0.94] ${
                 active
                   ? "bg-accent-dim text-accent shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-accent)_30%,transparent)] scale-[1.02]"
                   : "text-text-faint hover:text-text-muted bg-bg-secondary/40 hover:bg-bg-secondary/70"
@@ -186,7 +186,7 @@ export function RadioGroup({
             role="radio"
             aria-checked={active}
             onClick={() => onChange(option.value)}
-            className={`flex items-start gap-3 w-full text-left rounded-xl px-3.5 py-3 transition-all duration-200 ease-out active:scale-[0.99] ${
+            className={`flex items-start gap-3 w-full text-left rounded-xl px-3.5 py-3 transition-all ease-out active:scale-[0.99] ${
               active
                 ? "bg-accent-dim shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-accent)_40%,transparent)]"
                 : "bg-bg-secondary/40 hover:bg-bg-secondary/65 shadow-[inset_0_0_0_1px_rgba(20,20,20,0.05)]"
@@ -237,7 +237,7 @@ export function TogglePill({
       role="switch"
       aria-checked={active}
       onClick={onToggle}
-      className={`inline-flex items-center gap-2 rounded-full px-2.5 py-1 text-meta transition-all duration-200 ease-out active:scale-[0.94] ${
+      className={`inline-flex items-center gap-2 rounded-full px-2.5 py-1 text-meta transition-all ease-out active:scale-[0.94] ${
         active
           ? "bg-accent-dim text-accent shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-accent)_30%,transparent)]"
           : "bg-bg-secondary/40 text-text-faint hover:bg-bg-secondary/70 hover:text-text-muted"
@@ -481,7 +481,7 @@ export function ChipInput({
         <div
           className="mt-1.5 rounded-lg bg-bg-secondary/45 shadow-[inset_0_0_0_1px_rgba(20,20,20,0.05)] px-3 py-2"
         >
-          <p className="text-micro font-semibold uppercase tracking-[0.14em] text-text-faint/80 mb-1.5">
+          <p className="eyebrow text-text-faint/80 mb-1.5">
             Did you mean…?
           </p>
           <div className="space-y-1">
@@ -518,7 +518,7 @@ export function ChipInput({
       )}
       {(suggestions && suggestions.length > 0 && values.length === 0) && (
         <div className="flex flex-wrap items-center gap-1 mt-1.5 px-1">
-          <span className="text-micro text-text-faint/70 uppercase tracking-[0.14em] mr-1">
+          <span className="eyebrow text-text-faint/70 mr-1">
             Try
           </span>
           {suggestions
@@ -567,7 +567,7 @@ export function TopicsField({
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
       <div className="min-w-0">
-        <p className="mb-1.5 text-micro font-semibold uppercase tracking-[0.14em] text-accent/80">
+        <p className="eyebrow mb-1.5 text-accent/80">
           Required
         </p>
         <ChipInput
@@ -593,7 +593,7 @@ export function TopicsField({
         </p>
       </div>
       <div className="min-w-0">
-        <p className="mb-1.5 text-micro font-semibold uppercase tracking-[0.14em] text-tag/80">
+        <p className="eyebrow mb-1.5 text-tag/80">
           Explore
         </p>
         <ChipInput

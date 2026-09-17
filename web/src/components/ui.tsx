@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import type { ReactNode } from "react";
+import { Band } from "@/components/ui/band";
 import { chipTones } from "@/components/ui/chip";
-import { sectionLabel } from "@/components/ui/section-label";
 import { cn } from "@/lib/cn";
 
 // ── Callout (Notion-style colored info box) ──
@@ -34,7 +34,7 @@ export function Callout({
     >
       {(title || icon) && (
         <header
-          className={cn(sectionLabel({ size: "caption" }), "flex items-center gap-2 mb-2")}
+          className={cn("eyebrow text-text-faint", "flex items-center gap-2 mb-2")}
         >
           {icon}
           {title}
@@ -71,7 +71,7 @@ export function Property({
   return (
     <div className="min-w-0">
       <div
-        className="flex items-center gap-1.5 text-micro font-medium uppercase tracking-[0.14em] text-text-faint mb-1"
+        className="eyebrow flex items-center gap-1.5 text-text-faint mb-1"
       >
         {icon}
         {label}
@@ -175,24 +175,6 @@ export function FactChip({
 
 // ── Section heading ──
 
-export function SectionHeading({
-  children,
-  count,
-}: {
-  children: ReactNode;
-  count?: number;
-}) {
-  return (
-    <h2
-      className={cn(sectionLabel({ size: "caption", tracking: "wide" }), "mt-14 mb-5 flex items-baseline justify-between")}
-    >
-      <span>{children}</span>
-      {count !== undefined && (
-        <span className="text-text-faint/60 tabular-nums">{count}</span>
-      )}
-    </h2>
-  );
-}
 
 // ── Inline tag ──
 
@@ -239,11 +221,11 @@ export function LinkChip({
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className="group inline-flex items-center gap-1.5 h-8 px-3.5 rounded-full bg-surface shadow-card text-meta text-text-muted hover:text-heading hover:shadow-card-hover hover:bg-surface-hover transition-[color,background-color,box-shadow] duration-200 ease-out active:scale-[0.96]"
+      className="group inline-flex items-center gap-1.5 h-8 px-3.5 rounded-full bg-surface shadow-card text-meta text-text-muted hover:text-heading hover:shadow-card-hover hover:bg-surface-hover transition-[color,background-color,box-shadow] ease-out active:scale-[0.96]"
     >
       {icon}
       {label}
-      <span className="text-micro opacity-60 transition-transform duration-200 ease-out group-hover:translate-x-[2px] group-hover:-translate-y-[1px]">
+      <span className="text-micro opacity-60 transition-transform ease-out group-hover:translate-x-[2px] group-hover:-translate-y-[1px]">
         ↗
       </span>
     </a>
@@ -282,7 +264,7 @@ export function ActionBar({
             onClick={isSaved ? stop(onUnsave) : stop(onSave)}
             aria-pressed={isSaved}
             aria-label={isSaved ? "Remove from saved" : "Save"}
-            className={`group/save inline-flex items-center gap-1.5 h-8 pl-2.5 pr-3.5 rounded-full text-meta font-medium transition-[background-color,border-color,color,transform,box-shadow] duration-200 ease-out active:scale-[0.94] ${
+            className={`group/save inline-flex items-center gap-1.5 h-8 pl-2.5 pr-3.5 rounded-full text-meta font-medium transition-[background-color,border-color,color,transform,box-shadow] ease-out active:scale-[0.94] ${
               isSaved
                 ? "bg-accent text-bg shadow-card hover:bg-accent/90"
                 : "bg-bg-secondary/60 shadow-card text-text-muted hover:text-heading hover:bg-surface-hover"
@@ -297,7 +279,7 @@ export function ActionBar({
               strokeWidth="2"
               strokeLinecap="round"
               strokeLinejoin="round"
-              className={`transition-transform duration-300 ease-out ${
+              className={`transition-transform duration-[var(--dur-base)] ease-out ${
                 isSaved ? "scale-100" : "group-hover/save:-translate-y-[1px]"
               }`}
               aria-hidden
@@ -316,7 +298,7 @@ export function ActionBar({
                   strokeWidth="2.5"
                   strokeLinecap="round"
                   strokeLinejoin="round"
-                  className="opacity-70 group-hover/save:opacity-100 transition-opacity duration-150"
+                  className="opacity-70 group-hover/save:opacity-100 transition-opacity "
                   aria-hidden
                 >
                   <line x1="18" y1="6" x2="6" y2="18" />
@@ -335,7 +317,7 @@ export function ActionBar({
             onClick={stop(onMore)}
             aria-label="Like — show me more like this"
             title="Like — show me more like this"
-            className="group/like inline-flex items-center gap-1.5 h-8 px-3 rounded-full text-meta text-text-faint hover:text-accent hover:bg-accent-dim transition-colors duration-200 ease-out active:scale-[0.94]"
+            className="group/like inline-flex items-center gap-1.5 h-8 px-3 rounded-full text-meta text-text-faint hover:text-accent hover:bg-accent-dim transition-colors ease-out active:scale-[0.94]"
           >
             <svg
               width="13"
@@ -346,7 +328,7 @@ export function ActionBar({
               strokeWidth="1.8"
               strokeLinecap="round"
               strokeLinejoin="round"
-              className="transition-transform duration-300 ease-out group-hover/like:-translate-y-[1.5px]"
+              className="transition-transform duration-[var(--dur-base)] ease-out group-hover/like:-translate-y-[1.5px]"
               aria-hidden
             >
               <path d="M7 10v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V11a1 1 0 0 1 1-1h3zM7 10l4-7a2 2 0 0 1 2 2v3h5.5a2 2 0 0 1 2 2.3l-1.2 7A2 2 0 0 1 17.3 19H7" />
@@ -361,7 +343,7 @@ export function ActionBar({
             onClick={stop(onDismiss)}
             aria-label="Dislike — show me less like this"
             title="Dislike — show me less like this"
-            className="group/dislike inline-flex items-center gap-1.5 h-8 px-3 rounded-full text-meta text-text-faint hover:text-red hover:bg-red/10 transition-colors duration-200 ease-out active:scale-[0.94]"
+            className="group/dislike inline-flex items-center gap-1.5 h-8 px-3 rounded-full text-meta text-text-faint hover:text-red hover:bg-red/10 transition-colors ease-out active:scale-[0.94]"
           >
             <svg
               width="13"
@@ -372,7 +354,7 @@ export function ActionBar({
               strokeWidth="1.8"
               strokeLinecap="round"
               strokeLinejoin="round"
-              className="transition-transform duration-300 ease-out group-hover/dislike:translate-y-[1.5px]"
+              className="transition-transform duration-[var(--dur-base)] ease-out group-hover/dislike:translate-y-[1.5px]"
               aria-hidden
             >
               <path d="M17 14V4a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-3zM17 14l-4 7a2 2 0 0 1-2-2v-3H5.5a2 2 0 0 1-2-2.3l1.2-7A2 2 0 0 1 6.7 5H17" />
@@ -404,7 +386,7 @@ export function FeedbackRow({
         "--i": index,
         } as React.CSSProperties}
     >
-      <p className="text-micro font-semibold uppercase tracking-[0.18em] text-text-faint mb-3">
+      <p className="eyebrow text-text-faint mb-3">
         Was this worth your time?
       </p>
       <div className="flex items-center gap-2.5">
@@ -412,7 +394,7 @@ export function FeedbackRow({
           type="button"
           onClick={onLike}
           aria-label="Like — show me more like this"
-          className="group inline-flex items-center gap-2 h-10 px-4 rounded-full bg-surface border border-border-strong text-body-sm text-text-muted hover:text-accent hover:border-accent/40 hover:bg-accent-dim transition-colors duration-200 ease-out active:scale-[0.96]"
+          className="group inline-flex items-center gap-2 h-10 px-4 rounded-full bg-surface border border-border-strong text-body-sm text-text-muted hover:text-accent hover:border-accent/40 hover:bg-accent-dim transition-colors ease-out active:scale-[0.96]"
         >
           <svg
             width="14"
@@ -423,7 +405,7 @@ export function FeedbackRow({
             strokeWidth="1.8"
             strokeLinecap="round"
             strokeLinejoin="round"
-            className="transition-transform duration-300 ease-out group-hover:-translate-y-[2px]"
+            className="transition-transform duration-[var(--dur-base)] ease-out group-hover:-translate-y-[2px]"
             aria-hidden
           >
             <path d="M7 10v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V11a1 1 0 0 1 1-1h3zM7 10l4-7a2 2 0 0 1 2 2v3h5.5a2 2 0 0 1 2 2.3l-1.2 7A2 2 0 0 1 17.3 19H7" />
@@ -435,7 +417,7 @@ export function FeedbackRow({
           type="button"
           onClick={onDislike}
           aria-label="Dislike — show me less like this"
-          className="group inline-flex items-center gap-2 h-10 px-4 rounded-full bg-surface border border-border-strong text-body-sm text-text-muted hover:text-red hover:border-red/35 hover:bg-red/[0.06] transition-colors duration-200 ease-out active:scale-[0.96]"
+          className="group inline-flex items-center gap-2 h-10 px-4 rounded-full bg-surface border border-border-strong text-body-sm text-text-muted hover:text-red hover:border-red/35 hover:bg-red/[0.06] transition-colors ease-out active:scale-[0.96]"
         >
           <svg
             width="14"
@@ -446,7 +428,7 @@ export function FeedbackRow({
             strokeWidth="1.8"
             strokeLinecap="round"
             strokeLinejoin="round"
-            className="transition-transform duration-300 ease-out group-hover:translate-y-[2px]"
+            className="transition-transform duration-[var(--dur-base)] ease-out group-hover:translate-y-[2px]"
             aria-hidden
           >
             <path d="M17 14V4a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-3zM17 14l-4 7a2 2 0 0 1-2-2v-3H5.5a2 2 0 0 1-2-2.3l1.2-7A2 2 0 0 1 6.7 5H17" />
@@ -477,7 +459,7 @@ export function DetailSection({
   return (
     <section className="mt-10 animate-fade-in-up" style={style}>
       <h3
-        className="text-caption font-semibold uppercase tracking-[0.18em] text-text-faint mb-3"
+        className="eyebrow text-text-faint mb-3"
       >
         {title}
       </h3>
@@ -495,38 +477,11 @@ export function LinkRow({ label, href }: { label: string; href?: string }) {
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className="group inline-flex items-center gap-1.5 text-link hover:text-link/75 underline decoration-link/25 hover:decoration-link/60 underline-offset-4 transition-all duration-200 ease-out active:scale-[0.97] mr-5 text-body-lg"
+      className="group inline-flex items-center gap-1.5 text-link hover:text-link/75 underline decoration-link/25 hover:decoration-link/60 underline-offset-4 transition-all ease-out active:scale-[0.97] mr-5 text-body-lg"
     >
       {label}
-      <span className="text-micro opacity-60 transition-transform duration-200 ease-out group-hover:translate-x-[2px] group-hover:-translate-y-[2px]">↗</span>
+      <span className="text-micro opacity-60 transition-transform ease-out group-hover:translate-x-[2px] group-hover:-translate-y-[2px]">↗</span>
     </a>
-  );
-}
-
-// ── Empty state ──
-
-export function EmptyState({
-  title,
-  description,
-  action,
-}: {
-  icon?: ReactNode;
-  title: string;
-  description: string;
-  action?: ReactNode;
-}) {
-  return (
-    <div className="py-20 text-center flex flex-col items-center">
-      <p
-        className="text-heading text-title font-medium tracking-[-0.01em]"
-      >
-        {title}
-      </p>
-      <p className="text-text-muted text-body mt-2 leading-relaxed max-w-[40ch]">
-        {description}
-      </p>
-      {action && <div className="mt-5">{action}</div>}
-    </div>
   );
 }
 
@@ -560,13 +515,13 @@ export function LoadingSkeleton({
 
   return (
     <div aria-busy="true" aria-label={label ?? "Loading"}>
+      {/* The loading header is a band like any other. It used to stack
+          `animate-pulse` and `animate-ping` on one 6px disc — two loops in two
+          rhythms on the exact mark the claim's dot owns. It is not the claim,
+          so it does not pulse. */}
       {label && (
-        <div className="mx-auto max-w-[820px] flex items-center gap-2 pt-6 sm:pt-8 text-caption text-text-faint tracking-[0.16em] uppercase">
-          <span className="relative inline-flex h-1.5 w-1.5">
-            <span className="absolute inset-0 rounded-full bg-accent/70 animate-pulse" />
-            <span className="absolute inset-0 rounded-full bg-accent/30 motion-safe:animate-ping" />
-          </span>
-          <span>{label}</span>
+        <div className="mx-auto max-w-[820px] pt-6 sm:pt-8">
+          <Band label={label} gap="none" />
         </div>
       )}
 
@@ -580,20 +535,20 @@ export function LoadingSkeleton({
             <div className="overflow-hidden rounded-2xl bg-surface shadow-card">
               {/* The plate — same slot, same ratio, as the figure or the type it
                   will hold. */}
-              <div className="aspect-[16/9] skeleton-shimmer" />
+              <div className="aspect-[16/9] skeleton" />
               <div className="px-5 pt-4 pb-4">
-                <div className="h-[10px] w-[30%] rounded skeleton-shimmer" />
+                <div className="h-[10px] w-[30%] rounded skeleton" />
                 <div className="mt-2.5 space-y-1.5">
                   {card.title.map((w, j) => (
-                    <div key={j} className="h-[17px] rounded-md skeleton-shimmer" style={{ width: w }} />
+                    <div key={j} className="h-[17px] rounded-md skeleton" style={{ width: w }} />
                   ))}
                 </div>
                 <div className="mt-3 space-y-2">
                   {card.skim.map((w, j) => (
-                    <div key={j} className="h-[11px] rounded skeleton-shimmer" style={{ width: w }} />
+                    <div key={j} className="h-[11px] rounded skeleton" style={{ width: w }} />
                   ))}
                 </div>
-                <div className="mt-4 h-[10px] rounded skeleton-shimmer" style={{ width: card.author }} />
+                <div className="mt-4 h-[10px] rounded skeleton" style={{ width: card.author }} />
               </div>
             </div>
           </div>

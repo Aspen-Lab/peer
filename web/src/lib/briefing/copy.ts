@@ -19,3 +19,30 @@ export const STARTER = {
   rest: "The longer setup — project, methods, sources, your own model key —",
   restLink: "is here.",
 };
+
+/** The sync state, said in words at the top right. The refresh control used to
+ *  spin its own icon; a loop for a state that has a word for it is ornament,
+ *  and the word is also the only one of the four a screen reader could reach. */
+export const SYNC = {
+  failed: "sync failed",
+  syncing: "syncing…",
+  /** `formatTimeAgo` returns null under a minute — then it is just synced. */
+  synced: (ago: string | null) => (ago ? `synced ${ago}` : "synced"),
+  never: "not synced yet",
+};
+
+/** Nothing to show, and the two reasons it can be. */
+export const BRIEFING_EMPTY = {
+  error: {
+    title: "Couldn’t reach the paper sources.",
+    line: "Check your connection, then try again.",
+    retry: "Try again",
+    edit: "Edit topics",
+  },
+  empty: {
+    title: "Nothing new for these topics today.",
+    line: "Peer only sends what is new and relevant. Refresh to look again, or widen your topics.",
+    refresh: "Refresh",
+    widen: "Widen topics",
+  },
+};

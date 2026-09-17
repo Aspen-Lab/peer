@@ -23,7 +23,9 @@ export const SPREAD_QUERY = "(min-width: 80rem)";
  *  article, and 48 + 16 = the panel's sticky top (4rem), so the stuck position
  *  is the first-paint position and the panel never slides. (It was pt-16 when
  *  the shell was a fixed sidebar that took no height.) */
-export const PAGE_CLASS = "px-5 sm:px-6 py-8 sm:py-12 xl:pt-4";
+/** The reader's horizontal inset only — the vertical rhythm is
+ *  `PageContainer`'s `rhythm="reader"`. */
+export const PAGE_CLASS = "px-5 sm:px-6";
 
 /** 5/7 columns at xl, where the reading column lands on the measure with a
  *  rag margin and no more.

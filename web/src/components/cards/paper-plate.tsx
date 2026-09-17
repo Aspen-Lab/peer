@@ -153,7 +153,7 @@ export function PaperPlate({
             }}
             onLoad={(event) => event.currentTarget.classList.remove("opacity-0")}
             onError={() => setFailedSrc(src)}
-            className="h-full w-full object-contain opacity-0 transition-opacity duration-[320ms] ease-snap"
+            className="h-full w-full object-contain opacity-0 transition-opacity duration-[var(--dur-base)] ease-expo"
           />
         </>
       ) : (
@@ -177,7 +177,7 @@ export function PaperPlate({
                   {terms.map((term, index) => (
                     <span
                       key={term}
-                      className={`font-display leading-[1.06] tracking-[-0.02em] truncate ${PLATE_TERM_CLASS[index]}`}
+                      className={`paper-line leading-[1.06] truncate ${PLATE_TERM_CLASS[index]}`}
                     >
                       {term}
                     </span>

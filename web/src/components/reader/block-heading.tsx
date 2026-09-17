@@ -14,5 +14,5 @@ import { BLOCK_HEADING } from "./copy";
 export type BlockName = Exclude<ReadingBlock, "skim">;
 
 export function BlockHeading({ block }: { block: BlockName }) {
-  return <Band label={BLOCK_HEADING[block]} className="mt-12 mb-4" />;
+  return <Band label={BLOCK_HEADING[block]} className="mb-4" />;
 }

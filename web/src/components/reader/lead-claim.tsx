@@ -20,11 +20,16 @@ export function LeadClaim({ sentence }: { sentence: string }) {
     // The one accent on the page is this band's label. The hue is the
     // interface's only signal, and this is the only thing on a reading page
     // that Peer chose rather than the paper — so it is where the signal goes.
-    <Band label={LEAD_CLAIM_LABEL} className="mt-10" labelClassName="text-accent" dot pulse>
+    <Band label={LEAD_CLAIM_LABEL} labelClassName="text-accent" dot pulse>
+      {/* `font-medium` stays here and nowhere else on the display scale. This is
+          the one line in the product where weight is carrying information —
+          "the paper said this, not the machine" — and Peer's no-invention rule
+          outranks the everything-at-400 rule when the two collide. Do not
+          sweep it. */}
       <p className="font-reading font-medium text-heading text-display-sm leading-[1.28] tracking-[-0.01em] measure-lede mt-4">
         {sentence}
       </p>
-      <p className="font-mono text-caption text-text-faint mt-3">{LEAD_CLAIM}</p>
+      <p className="annotation text-text-faint mt-3">{LEAD_CLAIM}</p>
     </Band>
   );
 }

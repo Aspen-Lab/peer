@@ -9,16 +9,18 @@
 // block opens exactly one of them. A repository nobody can see is the worst
 // of those omissions: it is the part of a paper a reader can actually run.
 //
-// Each row is a fact with its mark. Sentence case, no badges; the icon is
-// drawn at the line's own size so it reads as punctuation, not as an object.
+// Each row is a key and a value. The keys used to be pictures — a calendar, a
+// building, a link — and the venue had no key at all, so a 13px building glyph
+// was the only thing saying what the string was. `decision-block.tsx` settled
+// this one file over: the picture said nothing the word did not. The door
+// icons inside the links row stay; those mark where a link goes, which is the
+// documented exception.
 
 import type { Paper } from "@/types";
 import { formatDate } from "@/lib/format";
 import { shortVenue } from "@/components/cards/paper-plate";
 import {
   IconArrowUpRight,
-  IconBuilding,
-  IconCalendar,
   IconCode,
   IconLink,
   type IconProps,
@@ -44,19 +46,11 @@ export function doors(paper: Paper, primaryUrl: string | null): Door[] {
   });
 }
 
-function Row({
-  Icon,
-  children,
-}: {
-  Icon: (p: IconProps) => React.ReactElement;
-  children: React.ReactNode;
-}) {
+function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <li className="flex items-baseline gap-2.5">
-      <span className="shrink-0 translate-y-px text-text-faint">
-        <Icon size={13} />
-      </span>
-      <span className="min-w-0">{children}</span>
+    <li className="grid grid-cols-[5.5rem_minmax(0,1fr)] gap-4">
+      <span className="text-text-faint">{label}</span>
+      <span className="min-w-0 text-text">{children}</span>
     </li>
   );
 }
@@ -75,20 +69,16 @@ export function RecordBlock({
   if (!published && !venue && links.length === 0) return null;
 
   return (
-    <Band label={RECORD.heading} className="mt-14">
-      <ul className="font-mono text-caption text-text-muted space-y-2.5 measure-ui mt-4">
+    <Band label={RECORD.heading}>
+      <ul className="annotation text-text-muted space-y-2.5 measure-ui mt-4">
         {published && (
-          <Row Icon={IconCalendar}>
-            {RECORD.published} <span className="text-text">{published}</span>
-          </Row>
+          <Row label={RECORD.published}>{published}</Row>
         )}
         {venue && (
-          <Row Icon={IconBuilding}>
-            <span className="text-text">{venue}</span>
-          </Row>
+          <Row label={RECORD.venue}>{venue}</Row>
         )}
         {links.length > 0 && (
-          <Row Icon={IconLink}>
+          <Row label={RECORD.links}>
             <span className="flex flex-wrap gap-x-4 gap-y-1.5">
               {links.map((door) => (
                 <a
@@ -96,7 +86,7 @@ export function RecordBlock({
                   href={door.href}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-text hover:text-heading underline decoration-border-strong underline-offset-4 transition-colors duration-150 ease-snap [@media(hover:none)]:py-2"
+                  className="inline-flex items-center gap-1 text-text hover:text-heading underline decoration-border-strong underline-offset-4 transition-colors [@media(hover:none)]:py-2"
                 >
                   {door.label}
                   <door.Icon size={12} />

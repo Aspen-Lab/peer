@@ -64,7 +64,7 @@ const SECTIONS = [
 
 export default function PrivacyPage() {
   return (
-    <PageContainer width="content" className="py-10 sm:py-14 pb-24">
+    <PageContainer>
       <p className="eyebrow text-text-faint">Privacy</p>
       <h1 className="display-line text-display lg:text-display-lg text-heading leading-[1.05] mt-3">
         What Peer keeps.
@@ -82,7 +82,7 @@ export default function PrivacyPage() {
       </p>
 
       {SECTIONS.map((section) => (
-        <Band key={section.label} label={section.label} className="mt-12">
+        <Band key={section.label} label={section.label}>
           <div className="font-sans text-body-lg leading-[1.6] text-text-muted measure-ui mt-4 space-y-3">
             {section.body.map((line, i) => (
               <p key={i}>{line}</p>
@@ -91,7 +91,7 @@ export default function PrivacyPage() {
         </Band>
       ))}
 
-      <p className="font-mono text-caption text-text-faint mt-12">
+      <p className="annotation text-text-faint mt-12">
         Last changed 2026-09-17 · changes to this page ship in the{" "}
         <Link href="/changelog" className="underline decoration-border-strong underline-offset-4 hover:text-heading">
           changelog

@@ -76,12 +76,12 @@ export function ConnectorPanel() {
             role="switch"
             aria-checked={profile.tavilyEnabled}
             onClick={() => updateTavilyEnabled(!profile.tavilyEnabled)}
-            className={`relative h-5 w-9 shrink-0 rounded-full transition-colors duration-200 ease-out ${
+            className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ease-out ${
               profile.tavilyEnabled ? "bg-accent" : "bg-bg-secondary"
             }`}
           >
             <span
-              className={`absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-bg shadow transition-transform duration-200 ease-out ${
+              className={`absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-bg shadow transition-transform ease-out ${
                 profile.tavilyEnabled ? "translate-x-4" : ""
               }`}
             />
