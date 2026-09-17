@@ -13,7 +13,7 @@ import { IconArrowUpRight, IconLink, IconMoon, IconSun } from "@/components/icon
 import { Kbd } from "@/components/ui/kbd";
 import { cn } from "@/lib/cn";
 import type { PaperReading } from "@/lib/papers/reading";
-import { withThemeTransition } from "@/lib/theme";
+import { withThemeTransition, withZoomTransition } from "@/lib/theme";
 import { useProfileStore } from "@/store/profile";
 import { READING_SCALE_STEPS, useReadingPrefsStore } from "@/store/reading-prefs";
 import type { ColorTheme, ThemeMode } from "@/types";
@@ -182,7 +182,10 @@ export function DecisionBlock({
       <div className="flex items-center gap-2 mt-5">
         <IconButton
           aria-label="Larger text"
-          onClick={increaseScale}
+          // S22: every zoom change eases over ~0.3s instead of snapping,
+          // wrapped at the call site — the same idiom S17's setMode above
+          // already uses for withThemeTransition.
+          onClick={() => withZoomTransition(increaseScale)}
           disabled={atMaxScale}
           aria-disabled={atMaxScale}
           className="font-reading text-body-lg font-semibold"
@@ -191,7 +194,7 @@ export function DecisionBlock({
         </IconButton>
         <IconButton
           aria-label="Smaller text"
-          onClick={decreaseScale}
+          onClick={() => withZoomTransition(decreaseScale)}
           disabled={atMinScale}
           aria-disabled={atMinScale}
           className="font-reading text-meta font-semibold"

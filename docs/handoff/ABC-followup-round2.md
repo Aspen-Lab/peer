@@ -9806,3 +9806,65 @@ also needs measuring there.
 `decision-block.tsx`, no change to `globals.css`'s existing `.reading-scaled` rules.
 
 Commit: `feat(reader): A/A become a page zoom, not just larger text (S20)`.
+
+#### Item 7-02 — S22: the zoom animates like the day/night fade, at 0.3s
+
+**Change, exactly B's guide, no deviation.** (1) `lib/theme.ts` — new `withZoomTransition(run)`,
+mirroring `withThemeTransition`'s shape exactly: same three guards (no `document`/`window` → run
+bare; `prefers-reduced-motion: reduce` → run bare; here, a fourth — no `[data-zoom-root]` element
+found → run bare, defensive), same reflow-before-change trick (`void root.offsetHeight`), same
+`window.setTimeout` cleanup. `ZOOM_DURATION_MS = 300`, cleanup at `+50` (350ms) rather than
+`withThemeTransition`'s `+100`, matching B's own stated "~350ms" target exactly (a smaller margin
+for a 10x-shorter transition). Targets `document.querySelector("[data-zoom-root]")`, not
+`document.documentElement` — no ref-threading, the same `document.querySelectorAll` cross-component
+shape `keyboard.tsx` already uses. (2) `globals.css`, beside the existing `.theme-transition`
+block — new `.zoom-transition` rule naming exactly the 3 properties 7-01's mechanism actually
+changes: `font-size, max-width, grid-template-columns`, each `.3s var(--ease-snap)`, same
+`:not(button):not(a):not(img)` exclusion and the same reasoning. (3) `page.tsx` — `data-zoom-root=""`
+added to the one `<PageContainer>` that already carries `readingScaleStyle` (S20's own element,
+reused). (4) `decision-block.tsx` — the two A/A `onClick`s now read
+`() => withZoomTransition(increaseScale)` / `(...decreaseScale)`, the same call-site-wraps-the-action
+idiom S17's `setMode` already established for `withThemeTransition`, not a new shape. Fit's toggle
+and the 3 keyboard chords (7-03) will add the remaining 4 call sites next item.
+
+**Tests — beyond what 6-06 (the theme-fade equivalent) managed, because B specifically flagged this
+one as newly testable**: new `web/src/lib/theme.test.ts` — 4 tests on `withZoomTransition`'s pure
+guard branches, using `vi.stubGlobal` (this repo's own established pattern for stubbing globals in
+its Node-environment test runner, e.g. `src/lib/opportunities/*`) rather than switching to a jsdom
+environment: (a) no document/window (this file's own default Node environment, no stub needed) →
+runs bare; (b) reduced-motion → runs bare, never even calls `querySelector`; (c) no
+`[data-zoom-root]` found → runs bare; (d) the real path — class added before `run()` fires (asserted
+inside the `run` callback itself, so the ordering is actually exercised, not just the end state),
+present immediately after the call, gone after `vi.advanceTimersByTime(400)`. (d) needed a
+`window.setTimeout` stub that delegates to the ambient (faked) timer — the first attempt threw
+`window.setTimeout is not a function` since the plain stub object had no such method, fixed by
+adding one that forwards to the real (faked) global.
+
+**Proved the tests test the fix**: temporarily replaced `withZoomTransition`'s body with a bare
+`run()` (no guards, no class, no timer) — 3 of 4 tests still passed (they only assert "run() was
+called", true either way — an honest limitation of guard-clause tests, not a bug in them), but the
+4th (class add/remove) failed exactly as expected (`expected false to be true`, the class was
+never added). Restored; reran; 4/4 green.
+
+**Gate**: `npx tsc --noEmit` clean · `npx eslint .` clean · `npx vitest run --exclude
+"**/benchmark.test.ts"` → **2671/2671** (2667 + 4 new).
+
+**Found nothing in B's guide to contest.**
+
+**Live-checked in the Browser pane, same page/viewport as 7-01**: read `[data-zoom-root]`'s
+`classList` via `javascript_tool` rather than trying to catch a live paint (the hidden-pane
+animation-timeline trap 6-06 already hit and documented — this check reads DOM state, which does
+not depend on the pane's compositor). Clicked "Larger text": `zoom-transition` present on
+`[data-zoom-root]` immediately after the click. Waited 400ms: class gone, matching the ~350ms
+cleanup window. Clicked "Smaller text" (back to `scaleIndex: 2`) and read
+`getComputedStyle(root).transitionProperty` mid-window: `"font-size, max-width,
+grid-template-columns"`, `transitionDuration: "0.3s, 0.3s, 0.3s"` — the CSS rule is live and
+matches the guide's named property list exactly. Whether the interpolation itself actually paints
+smoothly is the same "hidden pane freezes the compositor" limitation 6-06 recorded, not
+re-attempted here; the class lifecycle and the computed transition declaration are both real,
+DOM-level facts independent of that limitation.
+
+**Blast radius**: exactly as B's guide stated. No change to `withThemeTransition`/`applyColorTheme`,
+no change to the existing `.theme-transition` CSS block, no change to any figure file.
+
+Commit: `feat(reader): the page zoom eases over 0.3s, like the day/night fade (S22)`.

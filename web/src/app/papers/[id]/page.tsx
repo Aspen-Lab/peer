@@ -628,6 +628,9 @@ function Reader({
       className={`${PAGE_CLASS} md:pb-16 outline-none`}
       tabIndex={-1}
       style={readingScaleStyle}
+      // S22: withZoomTransition's own document.querySelector target — the
+      // element S20 already puts --reading-scale on.
+      data-zoom-root=""
     >
       {/* The blocks, in the spec's order; `ReaderLayout` places them — one
           column below xl, the spread from it. Later-arriving content (the
