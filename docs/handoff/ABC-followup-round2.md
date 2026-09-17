@@ -81,15 +81,17 @@ browser, run the reports), then report to the user in plain language and stop th
 
 ```
 ROUND:            7 (loop REOPENED by the manager 2026-09-16 — page zoom + fit to screen, §1w)
-WHOSE TURN:       B  (new feature; the manager recorded the current state in §1w)
-STOPPED BECAUSE:  —
-STATUS:           Round 7 open. Nothing landed yet.
-OPEN ITEMS:       S20 S21 S22 (§1w)
+WHOSE TURN:       C
+STOPPED BECAUSE:  B finished the turn @ 2026-09-17T04:15Z
+STATUS:           Round 7 open. B's fix guide written (7-01/7-02/7-03), nothing implemented yet.
+OPEN ITEMS:       S20 S21 S22 (§1w) — fix guide 7-01 (S20), 7-02 (S22), 7-03 (S21) in §4
 GATE (0 open):    NOT MET
 
-DONE:      rounds 1–6 (S3–S19 closed). Round 7: nothing yet.
+DONE:      rounds 1–6 (S3–S19 closed). Round 7: B's fix guide (3 items, §4 "Round 7 — Agent B").
 GATE NOW:  tsc clean · eslint clean · vitest 2662/2662 (manager, cold, at round-6 close).
-TODO:      B designs S20–S22; C implements; A measures; manager eyeballs.
+TODO:      C works 7-01 → 7-02 → 7-03 in order (matches §1w's S20 → S22 → S21); A measures;
+           manager eyeballs. Dirty tree note: figure-lightbox.tsx/.test.ts modified by another
+           agent, not C's — do not touch, stage by explicit path only.
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
@@ -9517,3 +9519,200 @@ in).
 `withThemeTransition`/`applyColorTheme`. `globals.css`: one new rule block, zero change to the
 `.theme-transition` block or the `.reading-scaled` rules. `page.tsx`: one new attribute/class on
 one existing element. No change to any figure file.
+
+---
+
+#### 7-03 — S21: "Fit to screen" toggle + keyboard
+
+**Files**: `web/src/store/reading-prefs.ts` (new `fit` field + actions); `web/src/components/reader/
+decision-block.tsx` (lines 74-78 the existing scale reads, 182-217 the icon row — new 5th button);
+`web/src/components/reader/reader-layout.tsx` (line 52 `panelRef`, lines 60-61
+`readingScale`/`readingScaleStyle` — becomes fit-aware); `web/src/components/icons.tsx` (new icon,
+mirroring `IconSun`/`IconMoon`'s exact shape at lines 72-88); `web/src/components/keyboard.tsx`
+(line 131 the modifier-key bail-out — **the real gotcha**, see below); `web/src/store/
+reading-prefs.test.ts` (new tests).
+
+**Classification: MISSING** — no `fit` field, no toggle, no keyboard chords exist.
+
+**Design that avoids a `useEffect` setState, worked through concretely rather than deferred to
+C:** the round rule is explicit ("never a `useEffect` setState in a component — put it in the
+store or a `useSyncExternalStore`"). The naive shape — an effect that measures the viewport on
+resize and calls `setScaleIndex(fitScaleIndex(...))` — is exactly the pattern being forbidden (a
+component effect writing derived state back into a store on an external event). **Recommend
+avoiding the write entirely**, not just relocating it: keep `scaleIndex` meaning exactly what it
+means today (the reader's own manual/"book layout" choice, untouched by Fit), add a separate `fit:
+boolean`, and make the **displayed** scale a value computed fresh at read time —
+`fit ? fitScaleIndex(...) : READING_SCALE_STEPS[scaleIndex]` — inside `useReadingScale()`'s
+existing consumer, `reader-layout.tsx`, via `useSyncExternalStore` subscribed to `window`'s
+`resize` event (the exact shape `useSpread()` already uses for `matchMedia`'s `change` event,
+`reader-layout.tsx` lines 31-49 — same file, same idiom, one new subscription). Nothing ever
+writes `scaleIndex` from a resize; turning Fit off is then **free** — `scaleIndex` was never
+touched while Fit was on, so "back to the book layout (the step the reader had before Fit)" falls
+out with zero bookkeeping, not a value that needs saving-and-restoring.
+
+**`fitScaleIndex`, a pure function per the spec's own instruction — signature and body sketched,
+not just named:**
+```
+fitScaleIndex(viewportWidth, panelWidth, gap, baseColumnWidth): number
+  target = 0.85 * viewportWidth
+  // largest step whose page width (panel + gap + column) still fits the target
+  for i from READING_SCALE_STEPS.length - 1 downto 0:
+    if panelWidth + gap + baseColumnWidth * READING_SCALE_STEPS[i] <= target: return i
+  return 0
+```
+Pure arithmetic, zero DOM access inside the function itself — matches "so it is unit-testable"
+literally: every test can call it with plain numbers, no jsdom, no store.
+
+**Where the three numeric inputs come from — the part the spec's signature elides and B is
+checking by reading, not leaving as an exercise:** `viewportWidth` = `window.innerWidth`, read
+inside the `useSyncExternalStore` getSnapshot (same place `useSpread()` already reads
+`window.matchMedia(...).matches` — an established precedent for reading a live browser value
+inside a getSnapshot in this exact file). `panelWidth` = the live rendered width of the panel —
+`reader-layout.tsx` **already has a ref to it**, `panelRef` (line 52, currently used only for the
+`--panel-h` `ResizeObserver`) — read `panelRef.current?.offsetWidth`. `gap` and `baseColumnWidth`
+are the 2xl design constants from 7-01 (`96` and `560`) — **not currently exported as numbers
+anywhere**, only baked into `spread.ts`'s Tailwind class strings. Recommend adding two exported
+`const`s in `spread.ts` (e.g. `READING_COLUMN_BASE_PX = 560`, `READING_GRID_GAP_2XL_PX = 96`) and
+having **both** the Tailwind class string (7-01) and `fitScaleIndex`'s caller reference them, with
+a comment tying the three together — the same "keep the two in step" duplication risk this file's
+own header comment already calls out for `SPREAD_QUERY` vs. the `xl:` breakpoint, now a third
+place (Tailwind string, JS constant, `fitScaleIndex` call) that must agree. **Below xl, Fit is
+meaningless** (`useSpread() === false`, no panel/column split to fit) — the button must be
+`disabled` with a `title` explaining why; `fitScaleIndex` should never be invoked in that state
+(gate the call, not just the button).
+
+**Store shape (`reading-prefs.ts`)**: add `fit: boolean` (default `false`), `setFit(fit: boolean):
+void`. **The one design choice that most affects behaviour, flagged explicitly rather than
+silently resolved**: should `increaseScale`/`decreaseScale` clear `fit` themselves (in the store),
+or should each caller (the A/A buttons, and 7-03's own keyboard chords) remember to clear it?
+**Recommend the store**: put `set({ fit: false })` inside `increaseScale`/`decreaseScale` (and a
+new `resetScale` action, below) themselves, once, so every current and future caller — buttons,
+keyboard, anything added later — gets "manual zoom cancels Fit" for free, with no risk of one call
+site forgetting it. This is the same reasoning 7-02 rejected for `withZoomTransition` (there,
+consistency with an established per-call-site idiom won); here there is no established idiom to
+match, and a single point of truth avoids a real correctness risk (a forgotten call site silently
+leaving Fit on while the ladder index also changes underneath it) — the two recommendations are not
+inconsistent, they are the same principle ("one source of truth") applied to whichever side of
+each specific tradeoff actually has an established precedent to weigh against.
+
+**New `resetScale` action, for Ctrl/⌘+0**: sets `scaleIndex` to `DEFAULT_SCALE_INDEX` and `fit` to
+`false` (Ctrl+0 is "reset to 1×, book layout" — the spec's own "reset to 1×" wording implies
+leaving Fit on would be incoherent, since Fit's whole point is picking a non-1× step
+automatically). Not spelled out explicitly in §1w's Ctrl+0 line; flagging the reading rather than
+silently assuming it.
+
+**Open call C must make, not resolved here**: what happens when the reader presses A/A while Fit
+is on. §1w's own text ("Manual A/A while Fit is on turns Fit off") describes the **Fit-button**
+case cleanly (Off restores the untouched `scaleIndex`). It does not say what number A/A should
+apply *from* — the old, untouched `scaleIndex` (may visually jump, since Fit's displayed step could
+be far from the book-layout step) or the currently-*displayed* fit-derived step (visually
+continuous, but requires `decision-block.tsx` to also do the panel/viewport measurement
+`fitScaleIndex` needs, which it does not currently have access to — `panelRef` lives in
+`reader-layout.tsx`, a different component). **Recommend the simpler option** (apply from the old,
+untouched `scaleIndex` — zero new plumbing, `increaseScale`/`decreaseScale` already operate on it
+unchanged) and name the alternative so C can pick the other one deliberately if the visual jump is
+judged worse than the plumbing cost.
+
+**Persistence and hydration — no new hydration code needed, checked against the existing
+mechanism rather than assumed:** `fit` persists in `peer-reading-prefs` exactly like `scaleIndex`
+today (same `persist({ skipHydration: true })` store, `StoreHydrator` already calls
+`.rehydrate()` unconditionally for this store, `store-hydrator.tsx` line 21 — no edit needed
+there). Because the displayed scale is computed at **read time** (this item's own design, above)
+rather than written back into `scaleIndex`, there is no separate "apply the fitted step on
+hydration" step to build: the moment `.rehydrate()` fires and `fit` flips to its persisted `true`,
+every subscribed consumer re-renders and `reader-layout.tsx`'s `fit ? fitScaleIndex(...) :
+...` branch naturally picks the fitted path — the same "first client render is the book layout,
+then hydration corrects it" sequence `scaleIndex` itself already goes through today, extended for
+free rather than specially built. Matches §1w's own "after hydration... a 0.3s ease, acceptable"
+note without new code for it — 7-02's transition wrapper, if the rehydration-triggered change is
+also routed through it, covers the visual settle; if not wrapped, it snaps once on load, which
+§1w's own text says is acceptable either way.
+
+**The 5th icon button (`decision-block.tsx`)**: after the existing 4 (`IconButton`, same file,
+same row, `iconButtonVariants`, same hover swell — no new variant needed). `useSpread()` (exported
+today from `reader-layout.tsx`) is not currently imported into `decision-block.tsx` — needs one new
+import + call, same "read the hook directly, don't thread a prop" idiom the S15/S16 comments at
+the top of this file already establish for exactly this reason. `disabled={!spread}` +
+`title={!spread ? "Fit needs the two-column layout" : undefined}` (exact copy TBD, not a fix-guide
+concern) + `aria-pressed={fit}` + `aria-label={fit ? "Book layout" : "Fit to screen"}` per §1w's
+own naming. New icon: `IconExpand` (or similar), same `strokeProps` helper (`icons.tsx` lines
+13-26), own coordinates (outward-pointing corner arrows), 24×24 viewBox, matching `IconSun`/
+`IconMoon`'s exact construction (lines 72-88) — not copied from any icon library, per this file's
+own header rule.
+
+**Keyboard — the load-bearing finding, confirmed by reading the actual control flow, not
+assumed from the spec's own hint:** `keyboard.tsx`'s single global `handler` bails out on **any**
+modifier combo, for **every** page, **before** it ever reaches the paper-page branch:
+```
+// Ignore modifier combos
+if (e.metaKey || e.ctrlKey || e.altKey) return;
+```
+(line 131, confirmed by reading — this sits after the typing-target guard and *before* both the
+`g`-chord handling and the `onPaperPage()` branch). A Ctrl/⌘+`=`/`-`/`0` chord as specified would
+be **swallowed by this line before it is ever inspected**, and since nothing calls
+`e.preventDefault()` on that path either, the browser's own native page-zoom would fire instead of
+being suppressed — the opposite of what §1w asks ("preventDefault so the browser's own zoom does
+not also fire"). **Fix direction**: add a new branch **above** this bail-out line (order matters —
+after the typing-target guard, since typing must still win, but before the blanket modifier
+return) that checks `(e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && onPaperPage()`, and
+inside it matches `e.key` against `"="`/`"+"` → wraps `increaseScale` in `withZoomTransition`,
+`"-"` → `decreaseScale`, `"0"` → the new `resetScale`, each followed by `e.preventDefault()` and
+`return`; anything else in that modifier-branch falls through unchanged to the existing blanket
+`return` so no other Ctrl/⌘ combo anywhere in the app changes behaviour. These three actions are
+store-level (`useReadingPrefsStore.getState().increaseScale()`, etc.) — no per-page registration
+through `registerReaderActions`/`PAPER_KEYS` (`lib/reader/reader-keys.ts`) is needed or
+appropriate, since that table has no concept of a required modifier key and every existing entry
+there is a bare, unmodified key; forcing zoom into that table would be a shape mismatch, not a
+reuse.
+
+**No collision with existing chords, checked against the actual tables, not assumed clear:**
+`PAPER_KEYS` (`reader-keys.ts`) has no modifier-gated entries at all — bare `=`/`-`/`0` are not
+bound to anything there either, so even an unmodified press is currently inert on the reading page
+(not a collision, but worth confirming the guide isn't quietly shadowing something). The `g`-chord
+table (`h`/`s`/`p`) and the card-focus keys (`j`/`k`/`s`/`x`/`l`/Enter/`o`) are both keyed on plain,
+unmodified presses — a Ctrl/⌘-gated chord cannot collide with any of them by construction, since
+the new branch only matches when a modifier is held.
+
+**Tests.** `fitScaleIndex`: pure-function tests, no jsdom needed — e.g. a wide viewport picks a
+high step, a narrow one picks a low step, the boundary case at exactly `0.85×`, and the "even the
+smallest step doesn't fit" floor returning `0`. Store: `fit` starts `false`; `setFit(true)` then
+`increaseScale()`/`decreaseScale()` clears it back to `false` (the store-level design above);
+`resetScale()` returns to `DEFAULT_SCALE_INDEX` and clears `fit`. A `renderToStaticMarkup` test of
+the icon row with `fit` true/false, asserting `aria-pressed` and the label swap — same shape
+`app/profile/page.test.tsx`'s `ColorThemePicker` smoke test already established for exactly this
+kind of assertion (6-11).
+
+**Tests at risk — grepped, not assumed.** `reading-prefs.test.ts`'s existing 4 tests
+(`beforeEach` resets only `scaleIndex`, not a `fit` field that doesn't exist yet) keep passing
+unedited once `fit` defaults to `false` — none of them assert on `fit`. No test references
+`useSpread`, `IconButton`, or `iconButtonVariants` from a reading-page context beside the
+`ColorThemePicker` one just named, which is unrelated (Profile page, different picker). No test
+references `keyboard.tsx`'s modifier bail-out line directly (grepped: no test file imports
+`KeyboardLayer` or simulates a `keydown` with `ctrlKey`) — this is itself worth naming as a real
+gap C should consider closing, not a reason to skip it (this repo has no keyboard-simulation
+harness at all today, matching Ruling 15's own stated ceiling for this codebase — `keyboard.tsx`'s
+`handler` is exported from nowhere, so even a unit test would need refactoring to extract testable
+logic; flagging honestly rather than guessing at a test shape).
+
+**Blast radius.** `reading-prefs.ts`: 1 new field, 1 new setter, 1 new action, `fit`-clearing added
+to 2 existing actions (both already-narrow, single-purpose functions). `decision-block.tsx`: 1 new
+import (`useSpread`), 1 new `IconButton`. `reader-layout.tsx`: `useReadingScale()`'s call site
+becomes fit-aware (new `useSyncExternalStore` subscription, same file already has one for
+`useSpread`) — no prop-shape change to `ReaderLayoutProps`. `icons.tsx`: 1 new icon function, zero
+change to any existing one. `keyboard.tsx`: 1 new branch inserted above an existing line, zero
+change to any existing branch's own logic or order relative to each other. `spread.ts`: 2 new
+exported numeric constants (shared with 7-01). No change to any figure file, no change to
+`reader-keys.ts`'s table or registry shape.
+
+---
+
+### Round 7 — Agent B, summary
+
+Fix guide: **7-01 (S20) → 7-02 (S22) → 7-03 (S21)**, per §1w's own stated order. All three verified
+by reading and, where B's own constraints allowed (no code changes, no browser), by execution: the
+dev server's compiled CSS for the Tailwind arbitrary-value question (7-01), the actual
+`keyboard.tsx` control flow for the modifier-bail-out gotcha (7-03), and the algebraic derivation
+of the panel-stability claim (7-02). One correction to the manager's own §1w reading: the article
+max-width lives in `page-container.tsx`'s cva with 5 call sites, not literally in `page.tsx` with
+1 (7-01). Dirty tree noted, not touched: `figure-lightbox.tsx`/`.test.ts` (another agent's, on the
+round's own exclusion list). No product code changed by this turn.
