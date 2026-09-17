@@ -1003,6 +1003,51 @@ S20 xl case only.
 
 ---
 
+## §1y. RULING 20 — Semantic Scholar: the figure field does not exist; one keyed client for search + enrich (manager, 2026-09-17) — BINDING
+
+The user's `SEMANTIC_SCHOLAR_API_KEY` is now in `web/.env.local` (never read it into a log). The
+manager tested it directly (a Node one-liner with `--env-file`, printing status codes only):
+
+- Keyed `paper/search` and `paper/DOI:…?fields=title` → **200**. The key works.
+- `paper/DOI:…?fields=title,figures` → **400 `{"error":"Unrecognized or unsupported fields:
+  [figures]"}`**. **The Graph API has no `figures` field.** Peer's Semantic Scholar figure branch
+  (`lib/figures/extract.ts` `trySemanticScholarCandidates`, `?fields=figures,title`) has never
+  returned a figure — every call was a 400 when not throttled, which the pool reported as
+  `source_unavailable`, and a 429 when throttled. Round 1's "S2 returned 429 for both DOIs" and
+  every `rate_limited` tally since were measuring a request that could not succeed.
+- Even paced at one call per 1.2–3 s with the key, 429s still appeared between 200s: the keyed
+  limit ("1 request per second, cumulative across all endpoints") is enforced with some burst
+  memory. Pace keyed calls at **1.5 s**, not 1.1 s.
+
+Ruling — item **S23**, for C after 7-06 (B need not design it; this section is the guide):
+1. **Remove the Semantic Scholar figure branch**: delete `trySemanticScholarCandidates` and its
+   `semanticTasks` in `buildCandidatePool`, the `SEMANTIC_SCHOLAR_ENRICH_GRACE_MS` race, the
+   `rate_limited` attempt status and its `finalDiagnostic` handling and throttle note (the status
+   may stay in the type if other code reads it — grep), and the tests that exercised them
+   (**rewrite** each to state the new contract: "the pool has no Semantic Scholar branch"; never
+   delete a test file). `AttemptResult["source"]`'s `"semantic-scholar"` value goes if nothing
+   else produces it. **This is the one exception to the figure-file freeze**: the manager
+   coordinates with the other agent; C touches only the Semantic Scholar code paths in
+   `extract.ts` / `extract.test.ts`, nothing about candidates, og:image, bounce pages, PDFs or the
+   lightbox. If `git status` shows `extract.ts` dirty from the other agent, **stop, log
+   `blocked: extract.ts dirty (other agent)` in §1, and skip S23** — never merge over their edit.
+2. **One shared, keyed, paced client** `web/src/lib/sources/semantic-scholar-client.ts`: moves
+   the 1-20 queue (concurrency 2, keyed interval **1500 ms**, unkeyed 350 ms) and the 1/2/4-s
+   backoff out of `extract.ts`; sends `x-api-key` when set; used by `lib/sources/semantic-scholar.ts`
+   (paper search) and `lib/papers/enrich.ts` (`abstract,tldr`) — today neither sends the key nor
+   queues. Tests: the queue tests move with it (rewritten, not deleted); one test that the header
+   is present iff the env var is set.
+3. README env section: the key raises the search/enrich limit; Semantic Scholar does not serve
+   figures.
+
+A's tallies from here on: "S2 429s (search + enrich)" replaces the figure tally.
+
+**Push:** authorised by the user on 2026-09-17 ("after finishing, commit and push"). The manager
+pushes once round 7 closes — after scanning the outgoing diff for key-shaped strings — and never
+includes the other agent's uncommitted figure files.
+
+---
+
 ## §2. ROLES — DO ONLY YOUR OWN JOB
 
 ### Agent A — Reviewer

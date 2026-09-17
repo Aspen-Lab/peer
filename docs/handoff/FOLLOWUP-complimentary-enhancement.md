@@ -87,4 +87,4 @@ _(none — S3–S7, S8–S11 and S12–S19 (2026-09-15/16) closed via the ABC lo
 ## §5 Authorizations
 
 - Commit to the branch: **authorized by the user 2026-09-14** ("commit, with descriptions of each commit")
-- Push to origin: **not yet authorized**
+- Push to origin: **authorized by the user 2026-09-17** ("after finishing, commit and push") — the manager pushes at the close of round 7 after a credential scan
