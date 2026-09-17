@@ -2,6 +2,35 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.28.0 — 2026-09-17
+
+MIT, a page counter, and a page that says what Peer keeps.
+
+**MIT.** The repository was public with no licence, which means nobody could
+legally use or fork it — the opposite of what a public repository is for.
+
+**A page counter.** Vercel Analytics, one component. It records which page was
+opened, not who opened it, and it is the only third-party script on the site.
+
+**And the page that says so.** Written from the code rather than from a
+template: every claim on it points at a table in `schema.sql`, a fetch in
+`lib/sources/`, or a line in `profile-sync.tsx`. What it says, in short —
+
+- Signed out, nothing about you reaches Peer's servers; your browser keeps
+  your topics and today's papers, and clearing site data ends it.
+- Signed in, the account, the profile you type, what you save, what you open
+  and what you like are stored, because that is what makes tomorrow's briefing
+  different from today's.
+- **Your own model key never leaves your browser.** The sync deliberately
+  drops it, and the line that does so is there for a future edit to trip over.
+- The usage rows that record what a model call cost hold no paper text, no
+  prompt, no answer and no credential — the table has no column that could.
+- Deleting a signed-in account is a request today, not a button. The page says
+  that plainly instead of implying otherwise.
+
+It is linked from the one place a reader is asked for an account, and it is in
+the sitemap.
+
 ## v0.27.0 — 2026-09-17
 
 Launch preparation: a ceiling, a card, and a warm pool.

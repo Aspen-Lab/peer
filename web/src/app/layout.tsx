@@ -7,6 +7,7 @@ import {
   Roboto_Mono,
 } from "next/font/google";
 import "./globals.css";
+import { Analytics } from "@vercel/analytics/next";
 import { SITE_URL } from "@/lib/site";
 import { Masthead } from "@/components/shell/masthead";
 import { ThumbBar } from "@/components/shell/thumb-bar";
@@ -121,7 +122,10 @@ export default function RootLayout({
         <ProfileSync />
         <FeedSync />
         <FirstRunGate />
-      </body>
+              {/* Page counts only — how many people arrived and where they
+            landed. It records the page, never who was on it. */}
+        <Analytics />
+</body>
     </html>
   );
 }
