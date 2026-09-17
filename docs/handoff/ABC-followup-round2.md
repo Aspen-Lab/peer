@@ -81,42 +81,45 @@ browser, run the reports), then report to the user in plain language and stop th
 
 ```
 ROUND:            7
-WHOSE TURN:       C
-STOPPED BECAUSE:  B finished the second-pass fix guide (7-04/7-05/7-06) @ 2026-09-17, per Ruling
-                   19 (whole-page CSS zoom, composes with A/A).
-STATUS:           Ruling 19 already settled A7-01's design (continuous CSS `zoom` on the article,
-                   not a ladder extension). B's own turn worked the mechanism: where `zoom` lands
-                   (the outer <PageContainer>, confirmed safe for max-width/mx-auto centering by
-                   execution), the sticky-panel drift Ruling 19 flagged (confirmed exactly,
-                   `top: calc(4rem / var(--page-zoom,1))` for the top-stick branch; a second,
-                   ruling-unmentioned asymmetric fix derived and given for the bottom-stick branch
-                   involving --panel-h/100vh/1.5rem), `fitZoom`'s exact shape (measures
-                   `offsetWidth`, not a breakpoint formula — retires `fitScaleIndex` and 2 dead
-                   constants), the store changes (increaseScale/decreaseScale/resetScale stop
-                   clearing `fit`), the xl cap for A7-02 (page-container.tsx's xl term gets the
-                   same calc pair as 2xl), and S22's `.zoom-transition` property list (+zoom, +top).
-                   A new commit landed on the branch mid-turn from outside this session
-                   (`e3d8a7f`, Ruling 20 — Semantic Scholar/S23) — unrelated to this scope,
-                   explicitly sequenced by the manager for C "after 7-06."
-OPEN ITEMS:       None left for B. C builds 7-04 → 7-05 → 7-06, then S23 (Ruling 20, §1y —
-                   already fully guided by the manager, B did not touch it).
-GATE (0 open):    Unchanged from A's cold run this round: tsc clean · eslint clean ·
-                   vitest 2682/2682. Not re-run by B (B changes no code).
+WHOSE TURN:       A
+STOPPED BECAUSE:  C finished the turn @ 2026-09-17 23:43 UTC — 7-04, 7-05, 7-06 (Ruling 19) and
+                   S23 (Ruling 20) all landed, one commit each, gate green after every one.
+STATUS:           Fit is now a whole-page CSS `zoom` (`fitZoom`, composing with A/A rather than
+                   being cancelled by it — Ruling 19); the xl cap scales with `--reading-scale`
+                   too; `.zoom-transition` covers `zoom`/`top`. The Semantic Scholar figure branch
+                   is gone from `lib/figures/extract.ts` (the Graph API has no `figures` field —
+                   Ruling 20); a new shared, keyed, paced client
+                   (`lib/sources/semantic-scholar-client.ts`) now backs both paper search and
+                   abstract/TLDR enrichment, neither of which sent the key or queued before.
+OPEN ITEMS:       For A: re-measure S21 (Fit) and the S20 xl case at 2560/1440/1300 (C's own live
+                   numbers below are a starting point, not a substitute for A's own pass); verify
+                   the sticky-panel bottom-stick branch end-to-end if a live paper offers one
+                   (C found one by accident at 2560×1400 on openalex:W7207740551 — a real,
+                   unusually tall panel — see §4, item 7-04's live-check); S23: confirm no S2
+                   figure attempt anywhere live, search/enrich keyed and paced, tally "S2 429s
+                   (search + enrich)" replacing the old figure-rate-limit tally.
+GATE (0 open):    tsc clean · eslint clean · vitest 2687/2687 (C, this turn — 2682 baseline − 3
+                   from extract.test.ts's Semantic Scholar tests consolidating to the new
+                   contract + 8 new in semantic-scholar-client.test.ts).
 
-DONE:      round 7 B (second pass): read Ruling 19 + all 4 of A's log parts; verified by
-           execution (throwaway served pages, deleted before finishing — see §4) where `zoom`
-           should land, the exact sticky-panel compensation (both branches), that `offsetWidth`
-           is immune to an element's own zoom (the basis for `fitZoom`'s measurement approach),
-           and that this session's Chromium animates `zoom` smoothly under a transition. Wrote
-           the 7-04/7-05/7-06 fix guide in §4.
-GATE NOW:  tsc clean · eslint clean · vitest 2682/2682 (A, cold, 2026-09-17 — unchanged, B wrote
-           no code this turn).
-TODO:      C works 7-04 (the whole-page zoom mechanism + sticky compensation + fitZoom + store
-           changes) → 7-05 (the xl cap) → 7-06 (`.zoom-transition`'s property list + the
-           reading-prefs.test.ts rewrites), one commit per item, gate after each. Then S23 per
-           Ruling 20 (§1y) — a separate, already-complete guide from the manager, not from B.
-           Figure files are still excluded and may be dirty (other agent) — ignore them, except
-           S23's own narrow, manager-coordinated exception to the freeze (§1y point 1).
+DONE:      round 7 C (second pass): 7-04 (Fit → whole-page zoom, `fitZoom`, sticky-panel
+           compensation on both branches, store stops clearing `fit` on A/A), 7-05 (xl cap gets
+           the 2xl term's calc/var shape), 7-06 (`.zoom-transition` gains `zoom`/`top`) — all per
+           B's fix guide, no deviation found worth contesting. Then S23 (Ruling 20): removed
+           `trySemanticScholarCandidates`/its queue/the enrich-grace race/the `rate_limited`
+           finalDiagnostic branch from `extract.ts`; kept `FigureStatus`'s and
+           `FigureCandidate["source"]`'s own `"semantic-scholar"`/`"rate_limited"` literals where
+           two OTHER frozen files (`paper-figure.tsx`, `pdf-extract.ts`) still structurally
+           depend on them (traced by compiling, not guessed); built the shared client; wired it
+           into `sources/semantic-scholar.ts` and `papers/enrich.ts`; rewrote/added tests;
+           corrected the README env section. Full detail, live-check numbers, and two
+           out-of-guide findings (the `pdf-extract.ts` type coupling; the task brief's own
+           `POST /api/papers/search` naming a `GET`-only route — `POST /api/feed` is what
+           actually exercises the changed code) are in §4.
+GATE NOW:  tsc clean · eslint clean · vitest 2687/2687 (C, this turn, after every commit).
+TODO:      A re-measures per OPEN ITEMS above. Figure files are still excluded and may be dirty
+           (other agent) — confirmed untouched by this turn's every commit (staged by explicit
+           path throughout, never `git add -A`/`-a`).
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
