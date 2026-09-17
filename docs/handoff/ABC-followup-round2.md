@@ -80,45 +80,22 @@ browser, run the reports), then report to the user in plain language and stop th
 ## §1. CURRENT STATE — THE SOURCE OF TRUTH
 
 ```
-ROUND:            6 (second pass)
-WHOSE TURN:       A
-STOPPED BECAUSE:  finished the turn @ 2026-09-17 01:37 UTC
-STATUS:           Round 6: 6-01..6-09 landed (C). S15 (6-09, font scale reaches the prose) closed
-                   live: Larger text x2 moves a .reading-justify paragraph 16.5 -> 18.15 ->
-                   19.8px, Decision sentence pinned at 16.5px throughout, Smaller text x2 returns
-                   it — confirmed on /papers/openalex:W7207740551, Browser pane, getComputedStyle.
-                   S16 sync (A6-02) still OPEN: C tried 6-11 (Ruling 17's whole-Profile-view
-                   selector fix), then the narrower 6-10 leaf selector, live on a genuinely fresh
-                   /profile load each time (new tab, real navigation, no HMR) — both show the
-                   Mode picker still stuck on Auto / careerStage still stale, identically to
-                   A6-02's original report. C's diagnostic execution DISPROVES B's diagnosed
-                   mechanism: the store itself rehydrates correctly (`hasHydrated: true`,
-                   `profile.colorTheme` already "dark:ember" from the first sample) and
-                   `theme-sync.tsx`'s identical leaf-selector expression correctly reflects it on
-                   the very same page load — but `ProfilePage`'s own read of that same selector
-                   never re-renders, even after a manual store write. Selector shape (whole-state
-                   / sub-object / leaf) is not the differentiator; something specific to
-                   `ProfilePage`'s own subscription/re-render is. No source fix landed for this —
-                   landing 6-10 "as written" would have knowingly committed a non-fix. What did
-                   land: `ColorThemePicker` exported + a `renderToStaticMarkup` regression test
-                   (Ruling 17's test-gap ask), honestly scoped as guarding the picker's own
-                   value-to-aria-pressed logic, not A6-02 itself.
-OPEN ITEMS:       S16 sync (A6-02) — needs re-investigation by B with C's new diagnostic evidence,
-                   not another selector attempt by C. S17 fade and S18 swells still need eyes with
-                   a fronted pane (unchanged from round 6 first pass).
-GATE (0 open):    NOT MET
+ROUND:            6 — LOOP CLOSED by the manager @ 2026-09-16 ~21:40 UTC
+WHOSE TURN:       nobody (closed)
+STOPPED BECAUSE:  finished — S12–S19 landed; S15 fixed (6-09) and re-verified live; A6-02 ruled a
+                   hidden-pane streaming artifact (§1v), no code change.
+STATUS:           S12 lightbox · S13 whole-button swell · S14 pear icon · S15 font steps (fixed
+                   at the use site) · S16 sun/moon on the profile store · S17 1-s fade (code) ·
+                   S18 icon hover cues · S19 progress bar at the panel's foot with
+                   "loading report...". User eyeballs the icon, the fade and the swells.
+OPEN ITEMS:       none
+GATE (0 open):    MET
 
-DONE:      round 6: 6-01..6-09. 6-11 attempted and found not to fix A6-02 (documented, test-only
-           commit landed).
-GATE NOW:  tsc clean · eslint clean · vitest 2662/2662 (C, cold before 6-09; re-confirmed after
-           every item).
-TODO:      A re-measures S15 (should now meet target — confirm the font steps move the reading
-           column, not the Decision sentence). For S16 sync: re-confirm A6-02 is still open (it
-           is, by C's own live execution) — do not mark it closed on the 6-11/6-10 diff alone.
-           Then route back to B, not C: B's own "narrow selector fixes it" diagnosis is now
-           execution-disproven (see the 6-11 log entry's control test against `theme-sync.tsx`);
-           B needs to explain why `ProfilePage` specifically fails to re-render on a store update
-           that reaches other subscribers correctly at the same instant.
+DONE:      rounds 1–6: S3–S19.
+GATE NOW:  tsc clean · eslint clean · vitest 2662/2662 (manager, cold, at close).
+TODO:      none for the loop. Leads (not authorised): tighten per-source figure timeouts;
+           html-text.ts caps; non-numeric figure cross-reference brackets; the dead
+           PaperFigureFrame exports. Push still not authorised.
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
@@ -865,6 +842,38 @@ the swells with the pane fronted (or the user does).
   unnecessary. If that proves invasive, land 6-10 as written and log 6-11 as a lead.
 - **Test gap:** accepted. 6-09 gets B's source-text assertion on `globals.css`; 6-10/6-11 get a
   `renderToStaticMarkup` test of `ColorThemePicker`'s `aria-pressed` derivation. No RTL this round.
+
+---
+
+## §1v. RULING 18 — A6-02 is a measurement artifact of the hidden Browser pane; round 6 closed (manager, 2026-09-16) — BINDING
+
+Diagnosed by the manager on a freshly restarted server, by reading the served HTML and the live
+DOM of `/profile`:
+
+- The Profile route has `loading.tsx`, so Next streams the page: the real content arrives inside
+  `<div hidden id="S:0">` and React's inline `$RC("B:0","S:0")` swaps it into the Suspense
+  boundary. That swap is scheduled with **`requestAnimationFrame`** on the first reveal
+  (`"number"!==typeof $RT ? requestAnimationFrame($RV…)` — quoted from the served script).
+- This session's Browser pane is hidden (`document.hidden === true`; screenshots time out;
+  transitions freeze). A hidden tab never fires `requestAnimationFrame`, so the reveal never
+  runs: `<main>` keeps the loading skeleton and the picker A and C read lives in the hidden,
+  never-hydrated server markup — `Auto` pressed (the SSR default), clicks inert, `careerStage`
+  at its default. Everything A6-02 reported, without any Peer code being wrong. C's "clicking
+  works" observation came after a Fast Refresh, which mounts the page client-side and bypasses
+  the streamed reveal — also consistent.
+- `data-mode="dark"` on the same page comes from `ThemeSync` in the root layout, which is outside
+  the streamed segment and hydrates normally — which is why the two disagreed.
+
+Ruling: **A6-02 closed, no code change.** The selector refactor C tried (and correctly did not
+land) was chasing an artifact. Standing rule for future rounds: **any DOM measurement on a
+route with `loading.tsx` needs a visible tab**; in a hidden pane, check for `div[hidden][id^="S:"]`
+first and report "streamed content not revealed (hidden tab)" rather than a finding. B's wider
+lead (the Profile view's whole-state store read) is withdrawn — it was the same artifact.
+
+S15 re-verified by the manager on the hydrated reading page after C's 6-09: prose 16.5 px →
+14.025 (two steps down) → 16.5 → 19.8 (two steps up); the Decision sentence stays 16.5 px at
+every step. **Round 6 closed.** Left for the user's own eyes (a visible tab): the tab icon, the
+1-s day/night fade, the hover swells.
 
 ---
 
@@ -9116,3 +9125,11 @@ a manual store write not triggering a re-render either) should let B skip re-der
 item already confirmed.
 
 Commit: `test(profile): export ColorThemePicker for a regression test; document that 6-10/6-11's selector fix does not close A6-02`.
+
+### Close — round 6 (manager, 2026-09-16)
+
+C's second pass landed 6-09 (font scale multiplies at the use site; source-text test) and a
+`ColorThemePicker` static-markup test, and honestly declined to land a selector change that did
+not fix A6-02. The manager then found A6-02's cause outside Peer (§1v: React's streamed reveal
+waits on `requestAnimationFrame`, which a hidden tab never fires). Gate cold at close: tsc ·
+eslint · 2662/2662. Hourly clock deleted. Branch not pushed.

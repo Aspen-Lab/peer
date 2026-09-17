@@ -22,12 +22,16 @@ Source of truth for the hourly clock on this branch. One tick = read this file, 
 10. **Upload button hover** — pointer cursor, glyph swells to 1.25× in 120 ms; same cue on drag-over; none while disabled.
 11. **Open-paper latency** — one Semantic Scholar lookup per paper, 3 s enrich grace, 1/2/4 s backoff, 10-min empty-pool cache, og:image fallback cached; today's briefing papers persisted so a hard refresh renders a cached report in < 1 s.
 12. **Large PDF upload** — Next 16 proxy body limit raised to 30 MB (`experimental.proxyClientMaxBodySize`); Content-Length pre-check → honest 413 above 25 MB; client refuses oversize inline. The user's 14.5 MB Zotero PDF now uploads and reads.
+13. **Figure lightbox** — magnifier cursor on every report figure and the hero; click fills the screen, click/Esc shrinks; shortcuts do not leak while open (`components/reader/figure-lightbox.tsx`, opt-in on `PaperPlate`).
+14. **Reader controls** — A/A font steps (`--reading-scale`, persisted in `peer-reading-prefs`, multiplied at the use site), sun/moon day-night on the profile's `colorTheme` with a 1-s fade, all four icons and the upload button swell on hover; the generation bar sits at the panel's foot, 6 px, "loading report...".
+15. **Site icon** — the pear (`app/icon.svg` + regenerated `favicon.ico`).
+16. **Measurement rule** — a route with `loading.tsx` streams; in a hidden Browser pane React's reveal (`requestAnimationFrame`) never fires, so DOM reads there are stale SSR markup (Ruling 18).
 
 Also on this branch, from before the pull: search-provider failures now surface in `meta.errors` (`lib/sources/search-failure.ts`), `kill-dev-orphans.mjs` catches the server process, `scoring.test.ts` clock pinned.
 
 ## §2 Open (the user adds; the clock takes the top item)
 
-_(none — S3–S7 (2026-09-15) and S8–S11 (2026-09-16) closed via the ABC loop in `docs/handoff/ABC-followup-round2.md`; see §1 items 4–12)_
+_(none — S3–S7, S8–S11 and S12–S19 (2026-09-15/16) closed via the ABC loop in `docs/handoff/ABC-followup-round2.md`; see §1 items 4–16)_
 
 ## §3 Rules for a tick
 
@@ -77,6 +81,8 @@ _(none — S3–S7 (2026-09-15) and S8–S11 (2026-09-16) closed via the ABC loo
 - 2026-09-15 ~22:10 UTC — ABC loop closed: 4 rounds, all five items verified; gate tsc/eslint clean, vitest 2639/2639; clock deleted. Not pushed.
 
 - 2026-09-16 — loop reopened for S8–S11 (round 5), closed the same day; gate tsc/eslint clean, vitest 2646/2646; clock deleted. Not pushed.
+
+- 2026-09-16 — round 6 (S12–S19) closed; gate tsc/eslint clean, vitest 2662/2662; clock deleted. Not pushed.
 
 ## §5 Authorizations
 
