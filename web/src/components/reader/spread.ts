@@ -19,12 +19,14 @@
 
 export const SPREAD_QUERY = "(min-width: 80rem)";
 
-/** The article's padding. From xl the 48px masthead sits in flow above the
- *  article, and 48 + 16 = the panel's sticky top (4rem), so the stuck position
- *  is the first-paint position and the panel never slides. (It was pt-16 when
- *  the shell was a fixed sidebar that took no height.) */
-/** The reader's horizontal inset only — the vertical rhythm is
- *  `PageContainer`'s `rhythm="reader"`. */
+/** The reader's horizontal inset. The vertical half moved to
+ *  `PageContainer`'s `rhythm="reader"` (`py-8 sm:py-12 xl:pt-4`) — the same
+ *  three values, in the component that owns every other page's rhythm.
+ *
+ *  That `xl:pt-4` is load-bearing: from xl the 48px masthead sits in flow
+ *  above the article, and 48 + 16 = the panel's sticky top (4rem), so the
+ *  stuck position is the first-paint position and the panel never slides.
+ *  (It was pt-16 when the shell was a fixed sidebar that took no height.) */
 export const PAGE_CLASS = "px-5 sm:px-6";
 
 /** 5/7 columns at xl, where the reading column lands on the measure with a
