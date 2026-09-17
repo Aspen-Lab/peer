@@ -26,10 +26,26 @@
  * on a deployment is money nobody meant to spend.
  */
 const REQUIRED_ON_VERCEL = [
-  "GOOGLE_API_KEY",
   "NEXT_PUBLIC_SUPABASE_URL",
   "SUPABASE_SERVICE_ROLE_KEY",
 ];
+
+/**
+ * **`GOOGLE_API_KEY` MOVED HERE FROM THE REQUIRED LIST (owner, 2026-09-16).**
+ *
+ * It blocked the build, on the reasoning that a deployment with no model ships
+ * "a product whose AI silently does nothing". Half of that is right and the
+ * conclusion was wrong: Peer without a model is not broken — it is the Tier 0
+ * product every signed-out reader gets, and it is what this deployment served
+ * for months. Refusing to ship it meant the site stayed several versions behind
+ * because one variable was unset, which is a worse failure than a briefing with
+ * no model report in it.
+ *
+ * So: warned, not blocked. The build says the key is missing, names it, and
+ * ships. The two Supabase names stay REQUIRED because without them the server
+ * cannot tell who a request is for at all.
+ */
+const EXPECTED_ON_VERCEL = ["GOOGLE_API_KEY"];
 
 /**
  * Operator-funded settings that must never reach a deployment.
@@ -130,14 +146,25 @@ function configuredForbiddenNames(env) {
  */
 export function auditVercelEnv(env) {
   const missing = missingRequiredNames(env);
+  const warnings = EXPECTED_ON_VERCEL.filter((name) => !isSet(env, name));
   const forbidden = configuredForbiddenNames(env);
   const forcedAiTier = Number(env.PEER_FEED_AI_TIER ?? "0");
   const tierForced = Number.isFinite(forcedAiTier) && forcedAiTier > 0;
   return {
     missing,
+    warnings,
     forbidden: tierForced ? [...forbidden, "PEER_FEED_AI_TIER"] : forbidden,
+    // Warnings deliberately do not enter `ok`: they are the half that ships.
     ok: missing.length === 0 && forbidden.length === 0 && !tierForced,
   };
+}
+
+/** Names only, never a value — R-GUARD-2 applies to this message too. */
+export function formatWarningMessage({ warnings }) {
+  return [
+    `Peer is deploying without: ${warnings.join(", ")}.`,
+    "Signed-in readers get the no-model briefing until it is set. Nothing is broken; the AI half is simply off.",
+  ].join("\n");
 }
 
 export function formatAuditMessage({ missing, forbidden }) {
@@ -169,6 +196,9 @@ export function formatAuditMessage({ missing, forbidden }) {
 // way to test a script whose contract *is* `process.exit(1)`.
 if (isVercelBuild(process.env)) {
   const audit = auditVercelEnv(process.env);
+  if (audit.warnings.length > 0) {
+    console.warn(formatWarningMessage(audit));
+  }
   if (!audit.ok) {
     console.error(formatAuditMessage(audit));
     process.exit(1);

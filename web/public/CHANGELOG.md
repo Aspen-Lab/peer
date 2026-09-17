@@ -2,6 +2,21 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.25.1 — 2026-09-16
+
+A missing model key no longer holds the site back.
+
+The build refused to deploy without `GOOGLE_API_KEY`, on the reasoning that a
+deployment with no model ships "a product whose AI silently does nothing". Half
+of that is right and the conclusion was wrong: Peer without a model is not
+broken — it is the same briefing every signed-out reader gets, and it is what
+this deployment served for months. Refusing to ship it kept the live site
+several versions behind over one unset variable.
+
+The key is now **warned, not required**: the build names it, says the AI half
+is off, and ships. The two Supabase settings stay required — without them the
+server cannot tell who a request is for at all, which is a real break.
+
 ## v0.25.0 — 2026-09-16
 
 Open on a paper, not a form.

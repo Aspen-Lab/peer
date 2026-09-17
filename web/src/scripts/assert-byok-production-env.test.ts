@@ -39,9 +39,13 @@ const SENTINEL = "SENTINEL-NOT-A-KEY-9f3a";
  * explicit list contract below, which now pins both arrays to the guard's own.
  */
 const ALL_REQUIRED = {
-  GOOGLE_API_KEY: "REQUIRED-NOT-A-KEY",
   NEXT_PUBLIC_SUPABASE_URL: "https://example.supabase.co",
   SUPABASE_SERVICE_ROLE_KEY: "REQUIRED-NOT-A-KEY",
+};
+
+/** Warned when absent, never blocking (owner, 2026-09-16). */
+const ALL_EXPECTED = {
+  GOOGLE_API_KEY: "EXPECTED-NOT-A-KEY",
 };
 
 const FORBIDDEN_NAMES = [
@@ -102,6 +106,7 @@ function runGuard(env: Record<string, string>): {
  */
 const GUARD_LIST_PATTERNS = {
   REQUIRED_ON_VERCEL: /const\s+REQUIRED_ON_VERCEL\s*=\s*\[([\s\S]*?)\]/,
+  EXPECTED_ON_VERCEL: /const\s+EXPECTED_ON_VERCEL\s*=\s*\[([\s\S]*?)\]/,
   FORBIDDEN_ON_VERCEL: /const\s+FORBIDDEN_ON_VERCEL\s*=\s*\[([\s\S]*?)\]/,
 } as const;
 
@@ -126,20 +131,32 @@ describe("assert-byok-production-env", () => {
     // Tavily rather than because of its own subject. Half of each case's
     // evidence was contaminated and nothing said so. They cannot drift again.
     expect(guardList("REQUIRED_ON_VERCEL")).toEqual([
-      "GOOGLE_API_KEY",
       "NEXT_PUBLIC_SUPABASE_URL",
       "SUPABASE_SERVICE_ROLE_KEY",
     ]);
+    expect(guardList("EXPECTED_ON_VERCEL")).toEqual(["GOOGLE_API_KEY"]);
     expect(guardList("FORBIDDEN_ON_VERCEL")).toContain("TAVILY_API_KEY");
     expect(guardList("REQUIRED_ON_VERCEL")).not.toContain("TAVILY_API_KEY");
 
     expect(Object.keys(ALL_REQUIRED)).toEqual(guardList("REQUIRED_ON_VERCEL"));
+    expect(Object.keys(ALL_EXPECTED)).toEqual(guardList("EXPECTED_ON_VERCEL"));
     expect([...FORBIDDEN_NAMES]).toEqual(guardList("FORBIDDEN_ON_VERCEL"));
   });
 
   it("passes a correctly configured Vercel build", () => {
-    const { status } = runGuard({ VERCEL: "1", ...ALL_REQUIRED });
+    const { status } = runGuard({ VERCEL: "1", ...ALL_REQUIRED, ...ALL_EXPECTED });
     expect(status).toBe(0);
+  });
+
+  it("SHIPS without GOOGLE_API_KEY, and says so", () => {
+    // The owner's call (2026-09-16): a deployment with no model is the Tier 0
+    // product, not a broken one. Blocking it kept the site several versions
+    // behind over one unset variable.
+    const { status, output } = runGuard({ VERCEL: "1", ...ALL_REQUIRED });
+
+    expect(status).toBe(0);
+    expect(output).toContain("GOOGLE_API_KEY");
+    expect(output).not.toContain("blocked");
   });
 
   it("does nothing at all off Vercel, whatever the environment holds", () => {
