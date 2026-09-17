@@ -9368,3 +9368,12 @@ the reason it changed; do not delete the test. The other 3 tests in that file us
 `reading-prefs.ts`: 1 array literal extended (2 new values appended, existing 6 unchanged). No
 change to `decision-block.tsx`, no change to any figure file, no change to `globals.css`'s
 existing `.reading-scaled` rules.
+
+**Addendum, logged immediately after the part-1 commit (not a code change)**: that commit's
+trailer read `Co-Authored-By: Claude Opus 5` per this round's own task brief — the exact same
+conflict 6-09's addendum already resolved (a session-level system reminder present this turn
+states its attribution "replaces … any earlier attribution guidance" and is overridden only by
+"the user's own instructions … such as a CLAUDE.md or memory rule"; the task brief is plain task
+text, not a CLAUDE.md/memory rule, so it does not qualify). Missed re-applying that precedent on
+the first commit this round. Not amending (git safety protocol: create new commits, don't amend,
+absent an explicit user request). Every commit from here on this round uses `Claude Sonnet 5`.
