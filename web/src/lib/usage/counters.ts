@@ -113,6 +113,19 @@ export function deepReportMonthKey(userId: string, now: Date): string {
 }
 
 /** R-QUOTA-2 — the paid 200/day breaker. */
+/**
+ * The ceiling across EVERY reader, for one UTC day.
+ *
+ * The per-user breaker caps what one account can spend; it says nothing about
+ * what a hundred accounts can spend together, and the model key is the
+ * operator's. Before launch that distinction is the whole of the risk: sign-up
+ * is open, so "unlimited to the reader, capped to protect the wallet" was only
+ * half true. This is the other half.
+ */
+export function deepReportGlobalDayKey(now: Date): string {
+  return `deep:all:${now.toISOString().slice(0, 10)}`;
+}
+
 export function deepReportDayKey(userId: string, now: Date): string {
   return `deep:${userId}:${utcDaySegment(now)}`;
 }

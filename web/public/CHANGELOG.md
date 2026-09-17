@@ -2,6 +2,36 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.27.0 — 2026-09-17
+
+Launch preparation: a ceiling, a card, and a warm pool.
+
+**A house ceiling on spend.** The daily breaker capped one reader at 200 deep
+reports; it said nothing about what a hundred readers cost together, and the
+model key is the operator's. With sign-up open that is the whole of the
+financial risk at launch, so there is now a second counter — every reader,
+one UTC day, 1,000 deep reports — and either one can refuse. It is a round
+number on purpose: a launch that goes unexpectedly well should cost a known
+amount. Raising it is one constant.
+
+**A card for every shared link.** Peer had no Open Graph image, so a link
+posted anywhere arrived as a bare URL. The card is the briefing's own front at
+1200×630: the eyebrow, the headline, and the day-shape bars. Drawn in the
+runtime's own face rather than Host Grotesk deliberately — an image route that
+fetches a font at request time fails on a cold edge, and no card is worse than
+a card in the wrong face.
+
+**The day's first reader no longer builds the day.** Peer caches one paper pool
+per UTC day; the request that finds it empty waits for the sources — 20–30
+seconds measured cold, against 0.4s warm. That bill landed on whoever arrived
+first. A scheduled job now pays it three times a day, asking for the starter
+sample, which is what a first-time visitor loads.
+
+**Indexing, on purpose.** `robots.txt` and a sitemap: the briefing and the
+changelog are worth finding; `/api`, `/auth`, `/profile`, `/saved` and the
+wizard are not. The canonical host reads from one place, so pointing a domain
+at Peer is a Vercel variable rather than an edit.
+
 ## v0.26.0 — 2026-09-17
 
 A grotesk for Peer's own voice, and two curves.

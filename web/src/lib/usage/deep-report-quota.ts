@@ -37,6 +37,7 @@ import {
   FORCED_REBUILDS_PER_DAY,
   breakerTripped,
   deepReportDayKey,
+  deepReportGlobalDayKey,
   deepReportMonthKey,
   deepReportTrialKey,
   endOfUtcDay,
@@ -45,6 +46,15 @@ import {
   logStoreUnavailable,
 } from "./counters";
 import { recordUsageEventAwaited } from "./events";
+
+/**
+ * The ceiling across every reader for one UTC day (launch, 2026-09-17).
+ *
+ * Deliberately a round, low number rather than a computed budget: it exists so
+ * that a launch day that goes unexpectedly well costs a known amount instead of
+ * an unknown one. Raising it is one edit; discovering the bill is not.
+ */
+export const ALL_USERS_DEEP_REPORTS_PER_DAY = 1000;
 
 /** D4 — the paid breaker. Unlimited to the user, capped to protect the wallet. */
 export const PAID_DEEP_REPORTS_PER_DAY = 200;
@@ -181,6 +191,42 @@ export async function consumeDeepReport(
       1,
       now,
     );
+    // The house ceiling, counted on every deep read whatever the per-user
+    // reading said, so the number stays true even on a day nobody trips their
+    // own breaker. Both counters are incremented; either one can refuse.
+    const houseReading = await store.increment(
+      deepReportGlobalDayKey(now),
+      endOfUtcDay(now),
+      1,
+      now,
+    );
+    const houseTripped = breakerTripped(
+      houseReading,
+      ALL_USERS_DEEP_REPORTS_PER_DAY,
+    );
+    if (houseTripped) {
+      const resetsAt = endOfUtcDay(now).toISOString();
+      if (!houseReading.ok) {
+        logStoreUnavailable("deep-report", userId);
+        return {
+          allowed: false,
+          quota: { kind: "breaker", reason: "unavailable", remaining: 0, resetsAt },
+        };
+      }
+      console.error(
+        `[quota] HOUSE deep-report breaker tripped (limit ${ALL_USERS_DEEP_REPORTS_PER_DAY}/day, all readers)`,
+      );
+      await recordUsageEventAwaited({
+        user_id: userId,
+        kind: "breaker",
+        path: "deep-report-house",
+        ok: false,
+      });
+      return {
+        allowed: false,
+        quota: { kind: "breaker", reason: "exhausted", remaining: 0, resetsAt },
+      };
+    }
     if (breakerTripped(reading, PAID_DEEP_REPORTS_PER_DAY)) {
       const resetsAt = endOfUtcDay(now).toISOString();
       // **The decision is the same either way — only the explanation differs**

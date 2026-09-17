@@ -441,11 +441,23 @@ describe("POST /api/papers/report — the quota is REACHABLE on the streamed sha
     return vi.spyOn(InMemoryCounterStore.prototype, "increment");
   }
 
-  /** Only the deep-report keys; the rate-limit key shares the same store. */
+  /**
+   * Only the READER's deep-report keys; the rate-limit key shares the same
+   * store, and since the launch house ceiling every deep read also increments
+   * `deep:all:<day>` — a second counter by design, asserted separately below so
+   * that "counted once" keeps meaning once per reader.
+   */
   function deepKeys(spy: ReturnType<typeof spyOnCounter>): string[] {
     return spy.mock.calls
       .map(([key]) => String(key))
-      .filter((key) => key.startsWith("deep:"));
+      .filter((key) => key.startsWith("deep:") && !key.startsWith("deep:all:"));
+  }
+
+  /** The house ceiling's own key. */
+  function houseKeys(spy: ReturnType<typeof spyOnCounter>): string[] {
+    return spy.mock.calls
+      .map(([key]) => String(key))
+      .filter((key) => key.startsWith("deep:all:"));
   }
 
   /**
@@ -508,6 +520,8 @@ describe("POST /api/papers/report — the quota is REACHABLE on the streamed sha
 
     // The paid path charges the DAY key, not the month key.
     expect(deepKeys(increments)).toHaveLength(1);
+    // The launch ceiling is charged on the same read, once.
+    expect(houseKeys(increments)).toHaveLength(1);
     expect(deepKeys(increments)[0]).toBe(
       deepReportDayKey(userId, new Date()),
     );

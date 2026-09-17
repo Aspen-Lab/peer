@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  ALL_USERS_DEEP_REPORTS_PER_DAY,
   PAID_DEEP_REPORTS_PER_DAY,
   consumeDeepReport,
   quotaMessage,
@@ -233,6 +234,47 @@ describe("paid breaker (R-QUOTA-2, D4)", () => {
 // trail for a spend cap (D4) — a row naming the wrong cap is wrong data in the
 // one artefact built to say where the money went, which is why this is a
 // `WRONG DATA` item and not a tidy-up.
+describe("the house ceiling (launch, 2026-09-17)", () => {
+  it("refuses once the day's total is spent, however many readers spent it", async () => {
+    // One deep read each, by a thousand different readers: nobody comes near
+    // their own 200/day breaker, which is the whole point — the per-user cap
+    // says nothing about what the accounts cost together, and the key is the
+    // operator's.
+    for (let i = 0; i < ALL_USERS_DEEP_REPORTS_PER_DAY; i += 1) {
+      const decision = await consumeDeepReport(
+        entitlement({ plan: "paid", effectivePlan: "paid", userId: `reader-${i}` }),
+        NOW,
+      );
+      expect(decision.allowed).toBe(true);
+    }
+
+    const next = await consumeDeepReport(
+      entitlement({ plan: "paid", effectivePlan: "paid", userId: "reader-new" }),
+      NOW,
+    );
+
+    expect(next.allowed).toBe(false);
+    expect(next.quota).toMatchObject({ kind: "breaker", reason: "exhausted" });
+  });
+
+  it("untrips on the next UTC day", async () => {
+    for (let i = 0; i < ALL_USERS_DEEP_REPORTS_PER_DAY; i += 1) {
+      await consumeDeepReport(
+        entitlement({ plan: "paid", effectivePlan: "paid", userId: `reader-${i}` }),
+        NOW,
+      );
+    }
+    const tomorrow = new Date("2026-09-05T00:30:00.000Z");
+
+    const decision = await consumeDeepReport(
+      entitlement({ plan: "paid", effectivePlan: "paid", userId: "reader-new" }),
+      tomorrow,
+    );
+
+    expect(decision.allowed).toBe(true);
+  });
+});
+
 describe("the forced-rebuild breaker (R-QUOTA-2)", () => {
   it("allows the day's rebuild units and refuses the one past the cap", async () => {
     expect(
