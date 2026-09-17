@@ -9377,3 +9377,143 @@ states its attribution "replaces … any earlier attribution guidance" and is ov
 text, not a CLAUDE.md/memory rule, so it does not qualify). Missed re-applying that precedent on
 the first commit this round. Not amending (git safety protocol: create new commits, don't amend,
 absent an explicit user request). Every commit from here on this round uses `Claude Sonnet 5`.
+
+---
+
+#### 7-02 — S22: the zoom animates like the day/night fade, at 0.3s
+
+**Files**: `web/src/lib/theme.ts` (`withThemeTransition`, lines 50-86 — the shape to mirror);
+`web/src/app/globals.css` (lines 698-720, the `.theme-transition` rule — the shape to mirror);
+`web/src/app/papers/[id]/page.tsx` (line 617, the one `<PageContainer>` this needs an identifying
+hook on); `web/src/components/reader/decision-block.tsx` (the A/A and, from 7-03, Fit `onClick`
+handlers); `web/src/lib/keyboard.tsx` or a new small module (7-03's new keyboard handlers).
+
+**Classification: MISSING** — no zoom transition exists; every scale change today is an instant
+snap (confirmed: `increaseScale`/`decreaseScale` are called bare, no wrapper, at
+`decision-block.tsx` lines 185/194).
+
+**Which properties actually change, under 7-01's specific mechanism — not the spec's own
+menu of six candidates, narrowed by what 7-01 actually touches:**
+- `font-size` — yes: `.reading-scaled [class~="text-lead"|"text-body"|"text-body-lg"]`
+  (`globals.css` lines 493-495) change value on every scale step.
+- `grid-template-columns` — yes: `spread.ts`'s 2xl term (7-01, point 1) changes value.
+- `max-width` — yes, but **only** on the article (`page-container.tsx`'s `spread` variant, 7-01
+  point 2) — the `measure`/`measure-lede` utilities' own `max-width: 28em`/`24em` (`globals.css`
+  432-439) never need a `max-width` transition of their own: they are `em`-based, so their
+  resolved pixel value already tracks the (separately, explicitly transitioning) `font-size`
+  continuously, every paint frame, for free — a second, redundant `max-width` transition
+  declaration on those elements would be a no-op, not a bug, but is not needed and B recommends
+  not adding it (matches "list only the properties that actually change").
+- `width`, `margin`, `padding` — **no.** 7-01's mechanism touches none of these; the spec's own
+  draft text listed them as one menu of candidates for whichever mechanism B chose, not a mandate.
+  Recommend the transition rule name exactly 3 properties:
+  `font-size, max-width, grid-template-columns`. A narrower property list is not just tidier — it
+  is fewer properties for the browser to watch for changes on every element the selector matches,
+  and fewer places a future edit could silently start (or stop) animating something unintended.
+
+**`grid-template-columns` interpolability, checked, not assumed the spec's parenthetical is
+correct just because it says so:** the CSS transitions spec interpolates a track list
+position-by-position, and only where the type at that position matches on both sides. Track 1
+(`minmax(0,1fr)`) is the literal, unchanged token at every step — nothing to interpolate, it just
+matches itself. Track 2 is a `<length>` (`calc(560px*s)`, a resolved px value) on **both** sides of
+any transition (default 1× → 1.6×, or any other pair of steps) — same type, only the magnitude
+differs — so the pair is interpolable in the modern-engine sense the spec's own text names. The one
+honest caveat, restated because C should know it going in rather than discover it live: browser
+support for animating `grid-template-columns` at all has historically lagged in WebKit/Safari;
+where it is unsupported the browser does not error, it just fails to animate that one property and
+the grid snaps instantly while `font-size`/`max-width` still ease — a partial, ungraceful-looking
+degradation, not a crash. Not fixable from CSS alone; noting it as an accepted cost, same shape as
+6-01/6-07's ~30ms accepted transition-property cost.
+
+**A genuinely non-obvious result worth recording so C does not have to re-derive it: the panel
+does not jitter mid-transition, provided the two calc() formulas from 7-01 are used exactly as
+derived (both linear in the same scale variable, tied to the same base numbers).** Because
+`max_w(s) = 640 + 560s` and `column(s) = 560s` are both **linear** in `s`, and a CSS transition
+between two computed pixel values interpolates linearly-in-time (times the shared easing curve),
+subtracting the two interpolated curves at any instant `t` during the transition gives
+`max_w(t) - column(t) - gap = 640 - gap`, a constant, **independent of `t`** — not just equal at
+the two endpoints. The panel's `1fr` track resolves fresh every rendered frame as "whatever is
+left" of the (separately, currently-interpolating) article width minus gap minus the
+(separately, currently-interpolating) column width — so as long as both properties are declared
+in the **same** `.zoom-transition` rule (same duration, same timing-function, same start time —
+guaranteed by putting both on one selector, not two), the panel's rendered width is
+mathematically pinned throughout the whole 300ms, not just at rest. This only holds because 7-01's
+two formulas share the same `560` and were derived from the same base numbers — if a future edit
+changes one without the other, this guarantee silently breaks; worth a code comment tying them
+together (mirroring `spread.ts`'s own header comment about `SPREAD_QUERY` needing to match the
+`xl:` breakpoint in two places).
+
+**Mechanism, mirroring `withThemeTransition`'s shape exactly, one substitution:** a new
+`withZoomTransition(run: () => void)` in `lib/theme.ts` (or a new sibling file — 7-02 does not
+require a fork, since it shares zero state with the theme one). Same three guards
+(`document`/`window` undefined → run bare; `prefers-reduced-motion: reduce` → run bare), same
+reflow trick (`void el.offsetHeight` before `run()`, for the identical reason `withThemeTransition`
+documents — without it the class-add and the store change can coalesce into one recalc with no
+"before" value to fade from), same `window.setTimeout(..., DURATION_MS + 100)` cleanup pattern —
+with `DURATION_MS = 300` instead of `1000`, so the class lives ~350ms rather than ~1100ms.
+
+**Where the class goes — the one real design decision this item adds, since there is no
+`document.documentElement` equivalent for "the reading wrapper":** `withThemeTransition` targets
+`document.documentElement`, a global singleton that always exists. Nothing today plays that role
+for "the article." Two of the spec's own suggested options: a `ref` threaded to the helper, or
+`document.querySelector` inside the helper. **Recommend the query option**, not a ref, because the
+call sites (`decision-block.tsx`'s onClick handlers, and 7-03's keyboard handlers in a different
+file entirely) have no natural path to a ref living in `page.tsx`/`reader-layout.tsx` without new
+prop-threading `reader-layout.tsx`'s S15 comment specifically chose to avoid. Concretely: give the
+`<PageContainer>` at `page.tsx:617` one new stable selector — either a `data-zoom-root` attribute
+or reuse the existing custom-utility-class convention (`reader-panel` is exactly this pattern
+already, `globals.css` `@utility reader-panel`) — and have `withZoomTransition` do
+`document.querySelector('[data-zoom-root]')` (or the class equivalent), no-op if not found (the
+helper is only ever called from the reading page's own controls, which do not render unless the
+article does, so the null case is defensive, not expected). This is the same "helper does its own
+DOM lookup" shape the spec explicitly floats as acceptable, and the same shape `keyboard.tsx`
+already uses for cross-component coordination without ref-threading (`document.querySelectorAll("[data-paper-id]")`,
+`keyboard.tsx` line 70) — a precedented pattern in this codebase, not a new one.
+
+**CSS rule**, beside the existing `.theme-transition` block (`globals.css` ~720), same
+`:not(button):not(a):not(img)` exclusion for the same reason `withThemeTransition`'s own comment
+gives (icon buttons already own a 150ms `transition-[color,background-color,box-shadow,transform]`
+bracket — `button.tsx` line 51 — and a second, unlayered rule setting `transition-property` on the
+same element would replace that list outright, the identical conflict 6-01/6-06/6-07 already
+traced; images are explicitly out of scope per §1w):
+```
+.zoom-transition,
+.zoom-transition *:not(button):not(a):not(img) {
+  transition: font-size .3s var(--ease-snap), max-width .3s var(--ease-snap),
+    grid-template-columns .3s var(--ease-snap);
+}
+```
+`prefers-reduced-motion: reduce` already forces every `transition-duration` to `0.01ms !important`
+sitewide (`globals.css` ~692-695) — a second, independent guard beneath `withZoomTransition`'s own
+`matchMedia` check, matching `withThemeTransition`'s own belt-and-suspenders note exactly.
+
+**Every zoom change must route through it**: A/A buttons and (7-03) the Fit toggle and the 3
+keyboard chords — 6 call sites in total, each wrapping its store action exactly the way
+`decision-block.tsx`'s existing `setMode` wraps `updateColorTheme` today (at the **call site**, not
+inside the store action) — matching the established idiom exactly rather than inventing a new one
+(e.g. wrapping inside the store actions themselves), even though 6 repeated
+`withZoomTransition(() => …)` call sites is more text than wrapping once centrally. Consistency
+with the one existing precedent in this codebase outweighs the small duplication; flagging so C
+does not "simplify" it into a different shape mid-item.
+
+**Tests at risk — grepped, not assumed.** Zero existing tests reference `withThemeTransition`,
+`theme-transition`, or any CSS transition timing (confirmed by reading `profile.test.ts`'s test
+names, same finding 6-06 already made for the theme fade) — nothing here can regress from adding a
+parallel, independent helper. A `withZoomTransition`-level test is the same shape 6-06 already
+found itself unable to write for the same reason (jsdom has no real paint/animation timeline); a
+guard-clause unit test (reduced-motion / no-`document` → runs bare, synchronously, without adding
+any class) is a real, executable, `renderToStaticMarkup`-adjacent-style test **B recommends but
+does not mandate** — pure-function testable without jsdom's cascade limitations, since it only
+needs to assert `run()` was called and no `classList.add` happened under each guard.
+
+**Honest edge state.** A click that lands exactly on the ladder's clamp (already at 1.6× and
+presses A again) still goes through `withZoomTransition`, wrapping a no-op `increaseScale()` call
+— the class gets added and removed for a store update that never happens, a harmless but slightly
+wasteful 300ms no-op transition window; not worth guarding specially (the identical shape already
+exists un-guarded for `withThemeTransition` wrapping a `setMode` call to the mode it is already
+in).
+
+**Blast radius.** `lib/theme.ts`: one new exported function, zero change to
+`withThemeTransition`/`applyColorTheme`. `globals.css`: one new rule block, zero change to the
+`.theme-transition` block or the `.reading-scaled` rules. `page.tsx`: one new attribute/class on
+one existing element. No change to any figure file.
