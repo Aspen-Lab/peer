@@ -80,22 +80,16 @@ browser, run the reports), then report to the user in plain language and stop th
 ## §1. CURRENT STATE — THE SOURCE OF TRUTH
 
 ```
-ROUND:            6 — LOOP CLOSED by the manager @ 2026-09-16 ~21:40 UTC
-WHOSE TURN:       nobody (closed)
-STOPPED BECAUSE:  finished — S12–S19 landed; S15 fixed (6-09) and re-verified live; A6-02 ruled a
-                   hidden-pane streaming artifact (§1v), no code change.
-STATUS:           S12 lightbox · S13 whole-button swell · S14 pear icon · S15 font steps (fixed
-                   at the use site) · S16 sun/moon on the profile store · S17 1-s fade (code) ·
-                   S18 icon hover cues · S19 progress bar at the panel's foot with
-                   "loading report...". User eyeballs the icon, the fade and the swells.
-OPEN ITEMS:       none
-GATE (0 open):    MET
+ROUND:            7 (loop REOPENED by the manager 2026-09-16 — page zoom + fit to screen, §1w)
+WHOSE TURN:       B  (new feature; the manager recorded the current state in §1w)
+STOPPED BECAUSE:  —
+STATUS:           Round 7 open. Nothing landed yet.
+OPEN ITEMS:       S20 S21 S22 (§1w)
+GATE (0 open):    NOT MET
 
-DONE:      rounds 1–6: S3–S19.
-GATE NOW:  tsc clean · eslint clean · vitest 2662/2662 (manager, cold, at close).
-TODO:      none for the loop. Leads (not authorised): tighten per-source figure timeouts;
-           html-text.ts caps; non-numeric figure cross-reference brackets; the dead
-           PaperFigureFrame exports. Push still not authorised.
+DONE:      rounds 1–6 (S3–S19 closed). Round 7: nothing yet.
+GATE NOW:  tsc clean · eslint clean · vitest 2662/2662 (manager, cold, at round-6 close).
+TODO:      B designs S20–S22; C implements; A measures; manager eyeballs.
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
@@ -874,6 +868,90 @@ S15 re-verified by the manager on the hydrated reading page after C's 6-09: pros
 14.025 (two steps down) → 16.5 → 19.8 (two steps up); the Decision sentence stays 16.5 px at
 every step. **Round 6 closed.** Left for the user's own eyes (a visible tab): the tab icon, the
 1-s day/night fade, the hover swells.
+
+---
+
+## §1w. ROUND 7 SPEC — page zoom and fit to screen (manager, 2026-09-16) — BINDING
+
+User's problem: on a large monitor the reading page uses about a third of the width. User's
+words on the plan: *"use (a) start in the book layout and let you click Fit once — it's
+remembered after that. Also for increasing the size, do the same smooth transition animation
+just like the night/day shift, and then make it faster like only taking 0.3 seconds. Don't
+touch the figure function yet, another agent is working on that."*
+
+### Current state (manager, by reading)
+- `app/papers/[id]/page.tsx` wraps the page in `<article class="mx-auto w-full max-w-[760px]
+  xl:max-w-[1000px] 2xl:max-w-[1200px] …">`; `components/reader/spread.ts` defines the two-column
+  spread from xl (`SPREAD_GRID`: 5fr/7fr at xl, `1fr 560px` from 2xl — the reading column is a
+  fixed 560 px track at 2xl), `PAGE_CLASS`, `PANEL_CLASS`, `COLUMN_CLASS`; `reader-layout.tsx`
+  renders it and sets `style={readingScaleStyle}` (`--reading-scale`) + `reading-scaled` on the
+  wrappers.
+- Text sizes: `globals.css` scoped rules `.reading-scaled [class~="text-lead"|"text-body"|"text-body-lg"]
+  { font-size: calc(var(--text-*) * var(--reading-scale, 1)) }` (6-09); the reading measure
+  utilities (`measure` 28em, `measure-lede` 24em) are em-based, so the text column already widens
+  with the font — until the 560 px track / 1200 px article cap stops it.
+- `store/reading-prefs.ts`: `READING_SCALE_STEPS = [0.85, 0.925, 1, 1.1, 1.2, 1.32]`, `scaleIndex`,
+  persisted in `peer-reading-prefs` (skipHydration + `StoreHydrator`). The A / A buttons live in
+  `decision-block.tsx`'s icon row with sun/moon (`IconButton`, hover swell).
+- `lib/theme.ts` `withThemeTransition(run)`: adds `.theme-transition` on `<html>`, forces a
+  recalc, runs, removes after 1.1 s; `globals.css` `.theme-transition, .theme-transition
+  *:not(button):not(a):not(img) { transition: background-color 1s, color 1s, … }`.
+
+### S20 — A / A become a page zoom
+- Each step scales the **reading column as a page**: text (as now) **and the column's width**.
+  Mechanism B chooses; the intent: the reading column's max width = its base width ×
+  `--reading-scale` (e.g. the 2xl `560px` track becomes `calc(560px * var(--reading-scale, 1))`
+  and the article's `max-w` cap lifts in step, or the spread switches to `minmax(0, 1fr)` with the
+  column self-limiting via `measure`), so line length stays ~66–72 characters at every step and
+  a bigger step is a bigger page, not a longer line.
+- Extend the ladder upward so a wide monitor can be filled: `[0.85, 0.925, 1, 1.1, 1.2, 1.32,
+  1.45, 1.6]` (default index unchanged = 1×). Clamp behaviour as now.
+- **Figures are out of scope this round** — another agent is working on the figure function.
+  C must not edit `matted-figure.tsx`, `figure-lightbox.tsx`, `paper-plate.tsx`,
+  `paper-figure.tsx`, `lib/figures/*`, or the figure parts of `report-sections.tsx`. Figures
+  keep their current caps; if a wider column leaves them small, that is expected and noted for
+  later.
+- The **left panel** keeps its current width; every extra pixel goes to the reading column.
+  The Decision sentence and the panel do not scale (unchanged rule).
+
+### S21 — "Fit to screen" toggle
+- A fifth icon button after sun/moon (same `IconButton`, same hover swell, `aria-pressed`):
+  an outward-arrows glyph (inline SVG), `aria-label="Fit to screen"` / `"Book layout"` when on.
+- **On:** the page picks the zoom step whose page width fills **≈ 85 % of the viewport width**
+  (panel + gap + column), computed from the viewport at click time and on resize (a
+  `matchMedia`/`ResizeObserver` read in an effect that writes a store value is acceptable; never
+  a `useEffect` setState in a component — put it in the store or a `useSyncExternalStore`).
+  Below xl (one-column layout) Fit has nothing to do: the button is disabled with a title.
+- **Off:** back to the book layout (the step the reader had before Fit, or 1×).
+- **Remembered per reader** in `peer-reading-prefs` (`fit: boolean`); on load with `fit` on, the
+  page opens fitted (after hydration — the first client render is the book layout, then the
+  fitted step applies; with S22's transition that is a 0.3-s ease, acceptable).
+- Manual A / A while Fit is on turns Fit off (the reader took control) — mirrors PDF viewers.
+- Keyboard: **Ctrl/⌘ + `=`/`+`** zoom in, **Ctrl/⌘ + `-`** zoom out, **Ctrl/⌘ + `0`** reset
+  to 1× — only on the reading page, only when not typing, `preventDefault` so the browser's own
+  zoom does not also fire. B checks `keyboard.tsx`'s existing bindings and `isTypingTarget`.
+
+### S22 — the zoom animates like the day/night fade, at 0.3 s
+- Reuse `withThemeTransition`'s shape: a `withZoomTransition(run)` (or a `durationMs` parameter
+  on the existing helper) that adds a `.zoom-transition` class on the reading wrapper (not on
+  `<html>` — the palette rule must not fire), forces a recalc, runs the store change, removes
+  the class after ~350 ms. CSS: `.zoom-transition, .zoom-transition * { transition: font-size
+  .3s, max-width .3s, width .3s, grid-template-columns .3s, margin .3s, padding .3s; }` with the
+  page's `ease-snap`; `prefers-reduced-motion` → none. B says which properties actually change
+  under the chosen mechanism and lists only those.
+- Every zoom change (A, A, Fit on/off, keyboard) goes through it. Images excluded (they are
+  out of scope anyway).
+
+### Order and gate
+C's order: **S20 → S22 → S21**. Gate baseline: tsc clean · eslint clean · vitest 2662/2662.
+A measures by reading the served classes/computed widths at two viewports (Browser pane
+`resize_window`, if fronted; else code + tests); the manager eyeballs on the user's monitor via
+the user.
+
+### Ground rule for this round — another agent may be editing figure files in the same checkout
+- `git status` may show modified figure files that are **not ours**. Agents must not stash,
+  revert, or commit them. Stage by explicit path only (`git add <file> …`), never `git add -A`
+  or `git commit -a`. If a figure file is dirty, note it in §4 and continue.
 
 ---
 
@@ -9133,3 +9211,9 @@ C's second pass landed 6-09 (font scale multiplies at the use site; source-text 
 not fix A6-02. The manager then found A6-02's cause outside Peer (§1v: React's streamed reveal
 waits on `requestAnimationFrame`, which a hidden tab never fires). Gate cold at close: tsc ·
 eslint · 2662/2662. Hourly clock deleted. Branch not pushed.
+
+### Round 7 — manager (2026-09-16, reopening)
+
+User approved the page-zoom plan with option (a) (book layout by default, Fit remembered), asked
+for a 0.3-s zoom transition like the day/night fade, and ruled figures out of scope (another agent
+owns them). §1w written; clock re-created; B spawned.
