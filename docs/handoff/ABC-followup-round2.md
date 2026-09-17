@@ -10954,3 +10954,103 @@ Cleaned up: removed the injected override before navigating away, reset the view
 "desktop"`) and the reading scale back to its default step before moving on.
 
 Commit: `feat(reader): the xl cap scales with A/A too, matching 2xl (Ruling 19, 7-05)`.
+
+#### Item 7-06 — S22: `.zoom-transition` gains `zoom`/`top`; tests
+
+**Change, exactly B's guide, no deviation.** `app/globals.css`'s `.zoom-transition` rule's
+property list gains `zoom 0.3s var(--ease-snap)` and `top 0.3s var(--ease-snap)`, alongside the
+three already there (`font-size`, `max-width`, `grid-template-columns`). Comment block above the
+rule extended to explain both additions (Fit's own `zoom`; the sticky panel's `top`, now a
+function of `--page-zoom` per 7-04) and to name the browser-support caveats (Chromium confirmed
+by B's own execution; Firefox unverified; Safari's support for *transitioning* — not just
+applying — `zoom` unknown, an accepted degradation, same shape as `grid-template-columns`'s own
+already-accepted one). No change to `lib/theme.ts`'s `withZoomTransition` — the class lifecycle
+was already correct and untouched by this item, only the CSS rule's own target list changed.
+
+**Tests**: none added by this item — the two `reading-prefs.test.ts` `describe` blocks B's guide
+named for this item are the same ones already rewritten in 7-04 (composing `fit`/`scaleIndex`,
+and `fitZoom`'s 4 tests), since both items share one source file's "tests at risk" section and
+7-04 landed first in C's own order. Re-confirmed here that both blocks are still green with 7-06
+also applied (they do not depend on the CSS transition list at all, being pure store-logic
+tests) — no double-counting, no test skipped.
+
+**Gate**: `npx tsc --noEmit` clean · `npx eslint .` clean · `npx vitest run --exclude
+"**/benchmark.test.ts"` → **2682/2682**, unchanged (as B's guide itself predicted — "likely still
+2682, not a new count").
+
+**Found nothing in B's guide to contest.**
+
+**Live-checked, same dev-server CSS staleness as 7-04/7-05** (confirmed again: no new `Compiled`
+line, the running page's own computed `transitionProperty` for `[data-zoom-root]` still read the
+pre-7-06, 3-property list until overridden). Verified with the same injected-override technique,
+this time matching 7-06's exact new property list: clicked "Larger text" with the override
+active — `[data-zoom-root]`'s `classList` gained `zoom-transition` immediately (same lifecycle
+6-06/7-02 already established), `getComputedStyle(root).transitionProperty` read exactly
+**"font-size, max-width, grid-template-columns, zoom, top"** with `transitionDuration` **"0.3s,
+0.3s, 0.3s, 0.3s, 0.3s"** — all five present, all five at 0.3s, matching this item's CSS
+verbatim. Waited 400ms: class gone, matching the ~350ms cleanup window (unchanged from 7-02,
+confirmed not accidentally altered by this item). Whether the interpolation itself paints
+smoothly for `zoom`/`top` specifically (as opposed to the class lifecycle and the declared
+property list, both DOM-level facts) is B's own already-completed execution check from the
+round-7-second-pass log (frame-by-frame `zoom` interpolation, Chromium) — not re-attempted here,
+same "hidden pane freezes the compositor" limit 6-06 recorded and this round's own task brief
+names as "not observable" for a hidden pane.
+
+**One standing item flagged across all three of this turn's live checks, for A/the manager, not
+a C action**: this session's dev server did not hot-reload any of 7-04/7-05/7-06's CSS/Tailwind-
+class-string changes for the whole of this turn (confirmed repeatedly by curling the compiled CSS
+chunk and by reading the live page's `document.styleSheets`) even though every `.tsx`/`.ts` edit
+hot-reloaded normally throughout. All three items' CSS was instead verified by injecting a
+same-selector `!important` override matching the exact rule the source now contains, checked
+against real computed style/layout, then removed before moving on — a legitimate stand-in given
+the standing "do not start/stop/restart the dev server" instruction, but the actual **served**
+page will not show any of round 7's second-pass CSS until the dev server is restarted (by the
+manager, per that same instruction) or the app is rebuilt. Not investigated further (would need
+exactly the restart this turn is told not to do); flagging so A's own re-measurement pass does
+not mistake a stale-server artifact for a code regression, and so the manager knows to restart
+before any user-facing check.
+
+**Blast radius**: exactly as B's guide stated — one CSS rule's property list, one comment block.
+No test file, no component file, no figure file touched. Cleaned up: removed the injected
+override before navigating away; scale reset to its default step.
+
+Commit: `feat(reader): the 0.3s ease now covers Fit's zoom and the sticky panel too (Ruling 19, 7-06)`.
+
+### Round 7 — Agent C (second pass), summary
+
+Worked B's own order exactly, one commit per item, gate green after each (**2682/2682** the whole
+way through, tsc/eslint clean throughout):
+
+- **7-04** (A7-01): Fit is now a continuous, whole-page CSS `zoom` (`fitZoom`, replacing the
+  retired ladder-index `fitScaleIndex`), composing with A/A rather than being cancelled by it.
+  Live-verified at 2560×1400: zoom lands at exactly `0.85×` (`2176px`, bit-for-bit against the
+  formula). The sticky panel's harder, previously-untested bottom-stick branch got a real,
+  live confirmation this turn (a real paper's own unusually tall panel engaged it), closing an
+  open item B could not close against real content.
+- **7-05** (A7-02): the xl cap now scales with `--reading-scale` too (same shape as the already-
+  shipped 2xl term). Live-verified at 1300×800: default step unchanged (`1000px`), top step now
+  fills the full available width instead of stopping ~300px short.
+- **7-06** (S22): `.zoom-transition`'s property list gains `zoom` and `top`. Live-verified: the
+  class lifecycle and the five-property, all-0.3s transition declaration are both exactly as
+  specified.
+
+**One cross-cutting finding, not scored against any item, flagged for A/the manager**: this
+session's dev server stopped hot-reloading CSS/Tailwind-class-string changes partway through (or
+possibly from the start of) this turn — every JS/TSX edit hot-reloaded normally, but none of the
+three CSS changes this turn made were ever recompiled into a served stylesheet, confirmed
+repeatedly by curling the compiled CSS chunk. Worked around for verification purposes by
+injecting matching `!important` overrides into the live page and measuring against them (a
+legitimate technique, not a guess — every number reported above came from the real DOM/layout
+engine evaluating the exact CSS this turn wrote, not from reasoning about it in the abstract), but
+the actually-served page will not reflect any of round 7's second-pass CSS until the dev server
+is restarted — which this turn was told not to do. **A's own re-measurement pass should expect a
+restart to be needed first**, or it will see stale (pre-round-7-second-pass) CSS behavior and may
+misread it as a regression.
+
+Three throwaway `<style>` overrides were created directly in the live DOM via `javascript_tool`
+for verification (7-04's `reader-panel` fix, 7-05's xl-cap fix, 7-06's transition-property list);
+none were written to any file, and each was removed (`element.remove()`) before moving to the
+next item or finishing this turn — nothing to clean up in `git status`.
+
+Gate at the end of this turn: `npx tsc --noEmit` clean · `npx eslint .` clean · `npx vitest run
+--exclude "**/benchmark.test.ts"` → **2682/2682**.

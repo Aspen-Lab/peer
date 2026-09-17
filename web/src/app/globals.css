@@ -745,25 +745,44 @@ body {
    at 0.3s instead of 1s — `lib/theme.ts`'s `withZoomTransition` adds this
    class to the reading page's own `[data-zoom-root]` element (not <html>:
    the palette rule above must not fire) for ~350ms. Names exactly the
-   three properties S20's mechanism actually changes — font-size (the
+   properties S20/S21's mechanism actually changes — font-size (the
    `.reading-scaled [class~="text-*"]` rules above),
    grid-template-columns (spread.ts's 2xl track) and max-width
-   (page-container.tsx's `spread` variant's 2xl cap) — not a wider menu of
-   candidates that would just be more properties for the browser to watch
-   for no visual gain. Same button/link/img exclusion as `.theme-transition`
-   and for the same reason (iconButtonVariants already owns its own 150ms
-   transition-[...] bracket; images are out of scope this round).
+   (page-container.tsx's `spread` variant's xl/2xl caps) — not a wider menu
+   of candidates that would just be more properties for the browser to
+   watch for no visual gain. Same button/link/img exclusion as
+   `.theme-transition` and for the same reason (iconButtonVariants already
+   owns its own 150ms transition-[...] bracket; images are out of scope
+   this round).
+   Round 7, second pass (Ruling 19): Fit's own whole-page CSS `zoom` is a
+   fourth changing property (the article's `zoom` inline style, S21) and
+   the sticky panel's `top` (globals.css's `reader-panel` utility, now a
+   function of `--page-zoom`) is a fifth — both added below, or Fit would
+   visibly snap while everything around it eases. `top` on the broad
+   `*:not(button):not(a):not(img)` selector is safe to declare broadly:
+   `reader-panel` is the only positioned (sticky/absolute/fixed) element
+   under the reader surface, so this is inert everywhere else it is
+   declared, the same reasoning already accepted for font-size/max-width.
    `grid-template-columns` animating at all is a real, browser-dependent
-   capability — where it is unsupported the grid snaps instantly while
-   font-size/max-width still ease, a partial but non-crashing degradation,
-   accepted rather than fixed from CSS alone. `prefers-reduced-motion`
-   already forces every transition-duration to 0.01ms above, a second,
-   independent guard beneath `withZoomTransition`'s own `matchMedia` check. */
+   capability — where it is unsupported the grid snaps instantly while the
+   other properties still ease, a partial but non-crashing degradation,
+   accepted rather than fixed from CSS alone. `zoom` itself is legacy and
+   non-standard, but confirmed to animate smoothly under a transition in
+   this session's Chromium by direct execution (round-7-second-pass log,
+   frame-by-frame interpolation, not a snap); Firefox unverified (matches
+   Ruling 19's own claim); Safari's support for *transitioning* zoom
+   specifically is unknown and treated as an accepted degradation, the same
+   shape already accepted for `grid-template-columns`. `prefers-reduced-
+   motion` already forces every transition-duration to 0.01ms above, a
+   second, independent guard beneath `withZoomTransition`'s own
+   `matchMedia` check. */
 .zoom-transition,
 .zoom-transition *:not(button):not(a):not(img) {
   transition:
     font-size 0.3s var(--ease-snap),
     max-width 0.3s var(--ease-snap),
-    grid-template-columns 0.3s var(--ease-snap);
+    grid-template-columns 0.3s var(--ease-snap),
+    zoom 0.3s var(--ease-snap),
+    top 0.3s var(--ease-snap);
 }
 
