@@ -9217,3 +9217,154 @@ eslint · 2662/2662. Hourly clock deleted. Branch not pushed.
 User approved the page-zoom plan with option (a) (book layout by default, Fit remembered), asked
 for a 0.3-s zoom transition like the day/night fade, and ruled figures out of scope (another agent
 owns them). §1w written; clock re-created; B spawned.
+
+### Round 7 — Agent B (2026-09-16)
+
+Branch verified (`complimentary-enhancement-to-main-update`) before reading anything. **Dirty
+tree, not mine**: `git status --short` shows `web/src/components/reader/figure-lightbox.tsx` and
+`figure-lightbox.test.ts` modified — both are on the round-7 figure-file exclusion list (another
+agent's work). Not staged, not touched, not read beyond confirming the path. No other files dirty.
+
+Working order per §1w: **S20 → S22 → S21**. All three share one load-bearing correction to the
+manager's own §1w reading, found by execution, not just by re-reading the same files: the
+`<article class="mx-auto w-full max-w-[760px] xl:max-w-[1000px] 2xl:max-w-[1200px] …">` the spec
+places at `app/papers/[id]/page.tsx` ~line 620 is **not written there**. It is
+`components/ui/page-container.tsx`'s `pageContainer` cva, `width: "spread"` variant (line 18:
+`"max-w-[760px] xl:max-w-[1000px] 2xl:max-w-[1200px]"`), consumed via `<PageContainer
+width="spread" …>` — **5 call sites**, not 1: `page.tsx` lines 214 (loading), 224 (not-found), 551
+(S7(e) empty-text), 617 (the actual reader, the only one with `<ReaderLayout>`/`<DecisionBlock>`),
+and `app/papers/[id]/loading.tsx:9` (a Server Component — cannot call any client hook). This
+changes where a fix lands: editing the shared `pageContainer` cva string affects all 5 call sites,
+not just the reader, so the mechanism below is written to be a **provable no-op** on the other 4
+(same reasoning 6-09 used for `.reading-scaled` not leaking into unrelated `text-*` call sites).
+
+---
+
+#### 7-01 — S20: A / A become a page zoom
+
+**Files**: `web/src/components/reader/spread.ts` (`SPREAD_GRID`, line 37 — the `2xl:grid-cols-[...]`
+term); `web/src/components/ui/page-container.tsx` (line 18, the `spread` variant's `2xl:max-w-`
+term); `web/src/components/reader/reader-layout.tsx` (line 60-61 `readingScale`/`readingScaleStyle`,
+line 95 the `SPREAD_GRID` div); `web/src/app/papers/[id]/page.tsx` (line 264 `const spread =
+useSpread();`, line 617 the one `<PageContainer>` call that needs the new wiring);
+`web/src/store/reading-prefs.ts` (line 15 `READING_SCALE_STEPS`); `web/src/app/globals.css`
+(no change to the existing `.reading-scaled [class~="text-*"]` rules — new rules added beside
+them).
+
+**Classification: MISSING.** The ladder extension and the em-based text-measure scaling
+(`measure`/`measure-lede`, `globals.css` lines 432-439, confirmed `em`-based) are the only two
+pieces already true; the column/article width scaling does not exist at all yet.
+
+**Root cause / why the naive fix (just widen `SPREAD_GRID`'s literal `560px`) is not enough,
+confirmed by reading the grid's own numbers, not assumed:** the 2xl track is
+`grid-cols-[minmax(0,1fr)_560px]` inside a `max-w-[1200px]` article. Above the 2xl breakpoint
+(96rem = 1536px) the article's rendered width is always exactly its `max-width` cap (viewport room
+never runs out first), so the panel's `1fr` track always resolves to exactly `1200 - gap - 560`
+px today. If only the column track's `560px` is replaced with a bigger number, the panel's `1fr`
+share **shrinks by the same amount** the column grows (the total available width, 1200px, is
+unchanged) — violating S20's explicit "the left panel keeps its current width; every extra pixel
+goes to the reading column." The article's own `max-w-[1200px]` cap must grow in step, by exactly
+the column's growth, so `1fr`'s resolved width is unchanged.
+
+**Recommended mechanism (one calc pair, not a new grid shape):**
+
+1. `spread.ts` line 37 — 2xl term becomes
+   `2xl:grid-cols-[minmax(0,1fr)_calc(560px*var(--reading-scale,1))]`. (The `xl:` 5fr/7fr term is
+   untouched — see "xl is out of scope" below.)
+2. `page-container.tsx` line 18 — 2xl term of the `spread` variant becomes
+   `2xl:max-w-[calc(640px+560px*var(--reading-scale,1))]`. Derivation, checked algebraically, not
+   guessed: base panel width at 1×dpi is `1200 - 96(gap, `2xl:gap-x-24`) - 560(column) = 544px`.
+   For the panel to stay at 544px at any scale `s`: `max_w(s) = 544 + 96 + 560s = 640 + 560s`. At
+   `s=1`: `640+560=1200` ✓ (matches today exactly, zero regression at the default step). This
+   keeps the panel's `1fr` share numerically constant at **every** intermediate value of `s`, not
+   just the two endpoints — worth stating precisely because §22 depends on it (see 7-02's "why the
+   panel doesn't jitter").
+3. `reading-prefs.ts` line 15 — `READING_SCALE_STEPS = [0.85, 0.925, 1, 1.1, 1.2, 1.32, 1.45, 1.6]
+   as const`. `DEFAULT_SCALE_INDEX = 2` (line 16) is unchanged — still the `1` entry, since the
+   extension only appends two steps after it. `MAX_SCALE_INDEX` (line 17, `= .length - 1`) and
+   every clamp comparison in `decision-block.tsx` (`atMaxScale`/`atMinScale`, both using
+   `.length - 1`, never a literal `5`) auto-adjust — grepped, confirmed no literal step-count
+   anywhere else.
+4. `reader-layout.tsx` — the `SPREAD_GRID` div (line 95) needs `--reading-scale` set on **itself**,
+   not only on the two descendant `.reading-scaled` wraps (lines 86/88/102/103, unchanged). Reason,
+   the same custom-property mechanism 6-09 already diagnosed for `--text-body` applied in reverse:
+   a `var()` reference inside a **regular property** (here, `grid-template-columns`,
+   `max-width` — not another custom property's own declaration) resolves fresh, per element, using
+   whatever `--reading-scale` is inherited *at that element*. Since `--reading-scale` only
+   inherits downward, and the grid div and the `<PageContainer>` article are **ancestors** of the
+   two existing wraps (not descendants), setting the variable only on the wraps (today's state)
+   never reaches them. Concretely: add `style={readingScaleStyle}` to the `<div
+   className={SPREAD_GRID}>` at line 95 (the same `readingScaleStyle` constant already computed at
+   line 61 — reused, not duplicated).
+5. `page.tsx` — add one `useReadingScale()` call near line 264 (beside the existing `useSpread()`)
+   and pass `style={{"--reading-scale": readingScale} as CSSProperties}` to the **one**
+   `<PageContainer>` at line 617 only. `PageContainer`'s prop type
+   (`React.HTMLAttributes<HTMLElement> & …`, page-container.tsx line 32) already accepts and
+   forwards `style` via `{...props}` — no change needed to `page-container.tsx` itself beyond the
+   cva string in point 2.
+
+**The other 4 `PageContainer width="spread"` call sites are a provable no-op, not merely assumed
+safe:** none of them ever sets `--reading-scale` anywhere in their subtree (grepped: `SPREAD_GRID`
+appears standalone at `page.tsx:215/225/552` and `loading.tsx:10`, none inside a
+`readingScaleStyle`-carrying wrapper), so `var(--reading-scale, 1)` falls back to the literal `1`
+at every one — `560px*1=560px`, `640+560*1=1200px`, byte-identical to today. `loading.tsx` is a
+Server Component and structurally cannot call `useReadingScale()` even if a future edit wanted to
+extend this — worth a comment at the call site so a later agent doesn't assume it is an oversight.
+
+**xl (5fr/7fr) is out of scope, checked, not just asserted:** at xl (80rem-96rem, 1280-1535px) the
+column track is `minmax(0,7fr)`, already flexible — the `measure`/`measure-lede` `em`-based caps
+(28em / 24em) already self-limit the actual prose width, and the 7fr share at any real xl-range
+viewport (≈700-870px before gap) has headroom the fixed 2xl 560px track deliberately does not.
+Concretely: `text-lead measure` (`paper-words.tsx:138`, `paper-body.tsx:47`) at the top new step
+(1.6×) needs `28em × 16.5px × 1.6 ≈ 739px` — comfortably inside a typical xl 7fr column, the
+scenario the 2xl track was fixed specifically to prevent. No change recommended to `spread.ts`'s
+`xl:` term. **Honest gap**: this is arithmetic, not a live measurement at every xl-range width; C
+should sanity-check one real xl-only viewport (e.g. 1366px, a common laptop width) at the top step
+once built, since B does not have a browser.
+
+**Tailwind arbitrary-value compilation — verified by execution, not assumed, with an honest
+limit on how far that verification goes:** `npx tailwindcss --help` was run in `web/` and fails
+("could not determine executable to run") — Tailwind v4 ships no standalone CLI here (only
+`@tailwindcss/postcss`), confirming the manager's own hint. Per B's "no code changes" constraint,
+no throwaway class could be added to a real source file to force a fresh compile. Instead: curled
+the running dev server (`peer-web`, already up, not restarted) — `GET /` → found the served CSS
+chunk → `GET` it → confirmed **today's own shipped code already contains the identical shape**:
+```
+@media (min-width: 96rem) {
+  .\32 xl\:grid-cols-\[minmax\(0\,1fr\)_560px\] { grid-template-columns: minmax(0, 1fr) 560px; }
+}
+```
+This is direct, executed evidence (not a doc claim) that Tailwind v4's bracket-value parser in
+*this exact project's real build* already treats a comma nested inside parens (`minmax(0,1fr)`) as
+opaque content, not a token delimiter needing escaping. `var(--reading-scale, 1)`'s own comma sits
+at the identical paren-depth, so by direct structural analogy it should compile the same way — but
+this is analogy, not a compiled example of the *exact* new string, since nothing in the codebase
+today nests a `var()` inside a bracket arbitrary value. **Recommend C's first sub-step on this
+item be a live check**: write the real class, save, `curl` the hot-reloaded CSS chunk, confirm the
+emitted rule before building anything on top of it — the same verify-by-execution habit 6-04 used
+for the `calc()`-fallback theory, just moved to implementation time since B cannot make the edit.
+
+**Honest edge state.** Figures untouched (no file on the exclusion list read or edited); a wider
+2xl column leaves the plate's own current caps unchanged, so a figure just gets more empty margin
+at high zoom — expected, not a bug, matches §1w's own note. `paper.textStatus === "empty"`
+fallback (`page.tsx:549`) and the not-found/loading branches keep their current 1200px cap
+regardless of the reader's saved scale (see "no-op" above) — an honest inconsistency (a reader who
+saved 1.6× and revisits mid-load briefly sees the old width until the reader mounts) that nothing
+in §1w asks B to close; flagging so C doesn't "fix" it unprompted.
+
+**Tests at risk — grepped, not assumed.** `reading-prefs.test.ts`'s 4th test hard-codes the old
+6-step array: `expect(READING_SCALE_STEPS).toEqual([0.85, 0.925, 1, 1.1, 1.2, 1.32]);` — **will
+fail** the moment the ladder extends to 8 steps. Per the standing rule ("never delete a test to
+make a change pass"), rewrite this assertion to the new 8-value array with a comment naming S20 as
+the reason it changed; do not delete the test. The other 3 tests in that file use
+`READING_SCALE_STEPS.length - 1`, not a literal, and need no edit. No other test file references
+`READING_SCALE_STEPS`, `SPREAD_GRID`, `PANEL_CLASS`, or `COLUMN_CLASS` (grepped: zero hits outside
+`spread.ts`/`reader-layout.tsx`/`page.tsx`/`loading.tsx` and this one test file).
+
+**Blast radius.** `spread.ts`: 1 line changed (2xl grid term). `page-container.tsx`: 1 line changed
+(2xl max-w term in one cva variant used by 5 call sites, 4 of which are provable no-ops per above).
+`reader-layout.tsx`: 1 `style` prop added to 1 existing div, reusing an existing constant.
+`page.tsx`: 1 new hook call + 1 `style` prop on 1 of its 5 `PageContainer` call sites.
+`reading-prefs.ts`: 1 array literal extended (2 new values appended, existing 6 unchanged). No
+change to `decision-block.tsx`, no change to any figure file, no change to `globals.css`'s
+existing `.reading-scaled` rules.
