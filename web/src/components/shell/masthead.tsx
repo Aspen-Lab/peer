@@ -107,7 +107,7 @@ export function Masthead() {
             still when a count lands. */}
         <div
           key={route}
-          className="justify-self-center inline-flex items-center whitespace-nowrap font-mono text-meta text-text-muted animate-fade-in"
+          className="justify-self-center inline-flex items-center whitespace-nowrap eyebrow text-text-muted animate-fade-in"
           // Inline, not a utility: `.animate-fade-in` is an unlayered rule
           // in globals.css whose shorthand outranks anything in Tailwind's
           // utilities layer, so `[animation-duration:150ms]` lost silently.
@@ -122,7 +122,7 @@ export function Masthead() {
           // separators the rest of the machine's lines use. The nav and the
           // reading page's key legend at the foot of the screen are now the
           // same object at the two edges of the window.
-          className="justify-self-end inline-flex items-center font-mono text-meta text-text-muted"
+          className="justify-self-end inline-flex items-center eyebrow text-text-muted"
         >
           {SHELL_LINKS.map((link, i) => {
             const active = isActiveLink(link, route);

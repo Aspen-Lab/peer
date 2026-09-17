@@ -90,6 +90,25 @@
      into — what it has is a selected state, and this is it. */
   --shadow-well-soft: 0 0 0 1px var(--color-accent);
 
+  /* ── Motion ────────────────────────────────────────────────────────
+     Two curves and three durations, taken from Latent's own tokens. The
+     expo-out is what makes a 180ms colour change read as deliberate rather
+     than as a flicker; `ease-snap` stays for the press, which wants the
+     shorter tail. Nothing here loops: the one keyframe animation in the whole
+     interface is the accent dot, and it is the only thing that repeats. */
+  --ease-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-inout: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-fast: 180ms;
+  --dur-base: 360ms;
+  --dur-slow: 720ms;
+
+  /* ── Tracking ──────────────────────────────────────────────────────
+     A display line closes up as it grows; a mono label opens out. Both are
+     the grotesk look and both are wrong at the other's size. */
+  --tracking-display: -0.02em;
+  --tracking-h1: -0.03em;
+  --tracking-mono: 0.06em;
+
   /* ── Nothing is round ──────────────────────────────────────────────
      Tailwind compiles `rounded-md` … `rounded-4xl` from these, so setting
      them to zero squares every corner in the product at once. `rounded-full`
@@ -158,8 +177,14 @@
         closest open relative), one serif family for display AND prose ── */
   --font-reading: var(--font-newsreader), "Iowan Old Style", Georgia, "Times New Roman", serif;
   --font-mono: var(--font-roboto-mono), ui-monospace, SFMono-Regular, monospace;
-  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
-               "Segoe UI", var(--font-noto-sc), "PingFang SC", "Helvetica Neue", sans-serif;
+  /* Peer's own voice — labels, controls, the dateline, every page title. The
+     grotesk replaced Inter here (2026-09-17, after latenthealth.com): the look
+     being taken is a display line at weight 400 with tight tracking, and Inter
+     needs weight to hold that line. Inter stays loaded as the fallback so a
+     failed font fetch degrades to what shipped yesterday, not to Helvetica. */
+  --font-sans: var(--font-grotesk), var(--font-inter), ui-sans-serif, system-ui,
+               -apple-system, BlinkMacSystemFont, "Segoe UI", var(--font-noto-sc),
+               "PingFang SC", "Helvetica Neue", sans-serif;
   --font-display: var(--font-newsreader), Georgia, serif;
 }
 
@@ -623,3 +648,44 @@ body {
   }
 }
 
+/* ── The grotesk look ────────────────────────────────────────────────
+   Three utilities, so the treatment lives in one place rather than in a
+   dozen class strings.
+
+   `eyebrow` is the mono label: uppercase, opened out, small. **It overrides
+   the "nothing uppercase" rule** set with the masthead — that rule was about
+   shouty small-caps buttons, and this is the opposite, a label so quiet it
+   needs the tracking to be legible at all.
+
+   `dot-pulse` is the one repeating animation in the product. It is on the
+   accent mark and nowhere else: a second pulsing thing would make both
+   ornament. */
+@utility ease-expo {
+  transition-timing-function: var(--ease-expo);
+}
+
+@utility eyebrow {
+  font-family: var(--font-mono);
+  font-size: var(--text-caption);
+  line-height: 1.4;
+  letter-spacing: var(--tracking-mono);
+  text-transform: uppercase;
+}
+
+@utility display-line {
+  font-family: var(--font-sans);
+  font-weight: 400;
+  letter-spacing: var(--tracking-h1);
+}
+
+@keyframes dot-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.55; transform: scale(0.82); }
+}
+
+@utility dot-pulse {
+  animation: dot-pulse 2.4s var(--ease-inout) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .dot-pulse { animation: none; }
+}

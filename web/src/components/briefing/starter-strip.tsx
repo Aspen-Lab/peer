@@ -42,7 +42,7 @@ export function StarterStrip() {
 
   return (
     <Band label={STARTER.label} className="mt-8">
-      <p className="font-reading text-lead leading-[1.6] text-text-muted measure mt-4">
+      <p className="font-sans text-body-lg leading-[1.55] text-text-muted measure-ui mt-4">
         {STARTER.line}
       </p>
 
@@ -52,7 +52,7 @@ export function StarterStrip() {
             key={topic}
             type="button"
             onClick={() => choose(topic)}
-            className={cn(buttonVariants({ tone: "soft", size: "sm" }), "font-mono")}
+            className={cn(buttonVariants({ tone: "soft", size: "sm" }), "eyebrow")}
           >
             {topic}
           </button>
@@ -76,7 +76,7 @@ export function StarterStrip() {
         <button
           type="submit"
           disabled={typed.trim().length === 0}
-          className={cn(buttonVariants({ tone: "primary", size: "sm" }), "font-mono")}
+          className={cn(buttonVariants({ tone: "primary", size: "sm" }), "eyebrow")}
         >
           {STARTER.submit}
         </button>

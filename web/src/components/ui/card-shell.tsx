@@ -31,7 +31,7 @@ export const cardShell = cva(
         // is the frame brightening under a pointer and taking the hue while
         // held — a selected row, which is how a TUI says the same thing.
         true: [
-          "transition-[box-shadow,background-color] duration-150 ease-snap",
+          "transition-[box-shadow,background-color] duration-[180ms] ease-expo",
           "hover:shadow-card-hover hover:bg-surface-hover",
           "active:shadow-well-soft active:duration-75",
         ].join(" "),

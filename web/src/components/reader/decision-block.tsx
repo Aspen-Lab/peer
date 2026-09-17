@@ -23,7 +23,7 @@ const TOUCH_TARGET = "[@media(hover:none)]:min-h-11";
  * voice is set in. The picture each one carried said nothing the word did not
  * — a bookmark beside "Save" — and three of them were noise around a key.
  */
-const COMMAND = "font-mono text-body-sm font-normal";
+const COMMAND = "eyebrow font-normal";
 /**
  * Touch room for a line of text that is a control, without moving the type:
  * the box grows to 44px with the text centred, and the margins give back

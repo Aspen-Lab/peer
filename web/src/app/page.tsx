@@ -311,7 +311,7 @@ function BriefingHead({
           around midnight, and a warning would not change what is shown. */}
       <h1
         suppressHydrationWarning
-        className="w-full sm:w-auto sm:min-w-0 font-display font-normal text-display sm:text-display-lg leading-[1.05] tracking-[-0.02em] text-heading text-balance"
+        className="w-full sm:w-auto sm:min-w-0 display-line text-display sm:text-display-lg leading-[1.05] text-heading text-balance"
       >
         {date}
       </h1>
@@ -356,7 +356,7 @@ function BriefingHead({
         // `w-full` on the paragraph, the measure on a span inside it: a
         // max-width on the flex item itself caps its hypothetical size, and
         // at 62ch it no longer forced a new row — it slid up beside the date.
-        <p className="order-2 sm:order-none w-full mt-3 font-display text-title-lg leading-[1.4] text-text-muted">
+        <p className="order-2 sm:order-none w-full mt-3 font-sans text-title-lg leading-[1.45] tracking-[-0.01em] text-text-muted">
           <span className="block measure text-balance">
             {deck.map((segment, i) => (
               <span key={i} className={segment.tone === "heading" ? "text-heading" : undefined}>

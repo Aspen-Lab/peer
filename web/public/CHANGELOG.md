@@ -2,6 +2,43 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.26.0 — 2026-09-17
+
+A grotesk for Peer's own voice, and two curves.
+
+After latenthealth.com — read from its own stylesheet rather than from a
+screenshot, which is where the tokens below come from.
+
+**The face.** Latent sets everything in FK Grotesk, which is licensed; the
+fallback they name in their own token is **Host Grotesk**, which is open, so
+that is what Peer takes. It replaces Inter for everything that is *Peer*
+talking: the dateline, the deck, page titles, labels, controls. Inter stays
+loaded behind it, so a failed font fetch degrades to yesterday's page rather
+than to Helvetica.
+
+**The paper still speaks serif.** Newsreader keeps the paper's title, its
+claim, its abstract and its body — the rule that has held since the reading
+page was built. What changed is only the other half of the conversation.
+
+**A display line at weight 400.** Peer's page titles were semibold with
+-0.02em tracking; they are now regular at -0.03em, which is the whole of the
+look being borrowed. Inter needs weight to hold that line, which is the real
+reason the face changed.
+
+**Labels became eyebrows.** Mono, uppercase, opened out to +0.06em, with a
+6px mark in front: `● THE CLAIM`, `● THE RECORD`, `● A SAMPLE, UNTIL YOU SAY
+OTHERWISE`. The masthead's nav and the reading page's commands are the same
+object — `[O] OPEN ON ARXIV`. **This overrides the "nothing uppercase" rule**
+set with the masthead: that rule was about shouty small-caps buttons, and this
+is its opposite, a label so quiet it needs the tracking to be read at all.
+
+**Two curves, three durations, one animation.** `cubic-bezier(0.16, 1, 0.3, 1)`
+for anything that enters or changes colour, `cubic-bezier(0.65, 0, 0.35, 1)`
+for anything that returns; 180 / 360 / 720ms. Latent's whole site has two
+keyframe animations and Peer now has one: the accent dot on the claim breathes
+at 2.4s and nothing else repeats. A second pulsing thing would make both of
+them ornament. It stops under reduced motion.
+
 ## v0.25.1 — 2026-09-16
 
 A missing model key no longer holds the site back.

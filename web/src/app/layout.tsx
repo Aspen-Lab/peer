@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import {
+  Host_Grotesk,
   Inter,
   Newsreader,
   Noto_Sans_SC,
@@ -17,6 +18,17 @@ import { FirstRunGate } from "@/components/first-run";
 import { StoreHydrator } from "@/components/store-hydrator";
 
 // Primary UI sans — Delphi-style interface text
+// Peer's own voice: the dateline, the page titles, every label and control.
+// Host Grotesk is the open face Latent name as their own fallback, and the
+// reason to take it rather than Inter is the shape of a display line at
+// weight 400 with -0.03em tracking — Inter goes soft there and needs weight
+// to hold, which is the look this moves away from.
+const hostGrotesk = Host_Grotesk({
+  subsets: ["latin"],
+  variable: "--font-grotesk",
+  display: "swap",
+});
+
 const inter = Inter({
   subsets: ["latin"],
   variable: "--font-inter",
@@ -67,7 +79,7 @@ export default function RootLayout({
       // The boot script below rewrites data-mode/data-accent before
       // hydration; suppress the expected server/client attribute mismatch.
       suppressHydrationWarning
-      className={`${inter.variable} ${robotoMono.variable} ${newsreader.variable} ${notoSansSC.variable} h-full`}
+      className={`${hostGrotesk.variable} ${inter.variable} ${robotoMono.variable} ${newsreader.variable} ${notoSansSC.variable} h-full`}
     >
       <body className="min-h-full flex flex-col antialiased">
         {/* Pre-paint theme boot: apply the persisted mode+accent before first

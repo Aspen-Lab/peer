@@ -156,7 +156,7 @@ export default function ProfilePage() {
         </p>
         <div className="flex items-start justify-between gap-6 flex-wrap">
           <h1
-            className="text-display lg:text-display-lg font-semibold text-heading tracking-[-0.02em] leading-[1.05]"
+            className="display-line text-display lg:text-display-lg text-heading leading-[1.05]"
           >
             {firstName ? (
               <>

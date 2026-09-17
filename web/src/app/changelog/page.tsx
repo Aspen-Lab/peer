@@ -141,7 +141,7 @@ export default async function ChangelogPage() {
         <p className="text-micro font-semibold uppercase tracking-[0.22em] text-accent mb-3">
           Peer · Changelog
         </p>
-        <h1 className="text-display lg:text-display-lg leading-[1.02] text-text-heading font-light tracking-[-0.01em] font-display">
+        <h1 className="display-line text-display lg:text-display-lg leading-[1.02] text-text-heading">
           What we shipped.
         </h1>
         {intro && (

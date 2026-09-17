@@ -16,20 +16,33 @@ export function Band({
   label,
   className,
   labelClassName,
+  dot = true,
+  pulse = false,
   children,
 }: {
   label: string;
   className?: string;
   /** The claim's band is the one that carries the hue. */
   labelClassName?: string;
+  /** The eyebrow's mark, on by default — it is what makes a two-word label
+   *  read as a section rather than as a stray line of small type. */
+  dot?: boolean;
+  /** The one repeating animation in the product. Never on two things at once. */
+  pulse?: boolean;
   children?: React.ReactNode;
 }) {
   return (
     <section className={className}>
       <div className="flex items-center gap-3">
         <h2
-          className={`font-mono text-caption whitespace-nowrap ${labelClassName ?? "text-text-faint"}`}
+          className={`eyebrow inline-flex items-center gap-2 whitespace-nowrap ${labelClassName ?? "text-text-faint"}`}
         >
+          {dot && (
+            <span
+              aria-hidden
+              className={`block h-[6px] w-[6px] shrink-0 bg-current${pulse ? " dot-pulse" : ""}`}
+            />
+          )}
           {label}
         </h2>
         <span aria-hidden className="h-px flex-1 bg-border-strong" />
