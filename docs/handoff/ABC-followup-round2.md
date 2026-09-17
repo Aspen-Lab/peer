@@ -8918,3 +8918,72 @@ Commit: `docs(abc): round 6 B second pass - fix guides 6-09 (A6-01 font scale) a
 
 _(B's second-pass guide above was complete on disk when B's session limit hit; committed by the
 manager unchanged.)_
+
+---
+
+### Round 6 — Agent C (second pass)
+
+Branch confirmed `complimentary-enhancement-to-main-update`, working tree clean before starting.
+Cold gate re-confirmed before the first edit: `npx tsc --noEmit` clean, `npx eslint .` clean,
+`npx vitest run --exclude "**/benchmark.test.ts"` → 2657/2657, matching the manager's baseline.
+Working B's order: **6-09 → 6-11 (falling back to 6-10)**.
+
+#### Item 6-09 (A6-01) — S15: font scale reaches the prose
+
+**Change, exactly B's guide, no deviation.** (1) `web/src/app/globals.css` lines ~140/142/144 —
+`--text-body`/`--text-body-lg`/`--text-lead` back to plain px (`14.5px`/`15.5px`/`16.5px`),
+`calc()`/`var(--reading-scale, …)` removed from the token declarations entirely; line-height pairs
+untouched. (2) `globals.css`, next to the existing `[class~="rounded-full"] { border-radius: 0; }`
+override (~line 480) — three new unlayered scoped rules:
+`.reading-scaled [class~="text-lead"] { font-size: calc(var(--text-lead) * var(--reading-scale, 1)); }`
+and the same shape for `text-body` and `text-body-lg`. (3)
+`web/src/components/reader/reader-layout.tsx` — added `className="reading-scaled"` to the four
+wrapper `<div>`s that already carry `style={readingScaleStyle}` (lines 86, 88, 102, 103 pre-edit;
+purely additive, same elements, same style prop, no restructuring).
+
+**Why this was the right fix, confirmed by reading, not re-derived**: a CSS custom property's own
+`calc()`/`var()` references resolve once, at that property's declaration site (`:root`, inside
+`@theme`) — so `var(--reading-scale, 1)` there can never see a value a descendant sets. Moving the
+`calc()` to the use site (a rule scoped to `.reading-scaled`, an ancestor the descendant class
+selector `[class~="text-*"]` matches) is the only shape that lets the descendant's own
+`--reading-scale` actually participate.
+
+**Test added**: `web/src/app/globals.css.test.ts` (new file) — a source-text assertion per Ruling
+17/B's recommendation, not a computed-style test (jsdom does not reliably compute cascade-layer
+precedence or `calc()` against custom properties). Two `it`s: (a) the three tokens are plain px and
+none of their own declarations still reference `--reading-scale`; (b) the three `.reading-scaled
+[class~="text-*"]` rules exist with the `calc(var(--text-*) * var(--reading-scale, 1))` shape.
+
+**Proved the test fails on the pre-fix file — literally, not by inspection**: `git stash push --
+web/src/app/globals.css` (isolating just the CSS revert, keeping the new test file and the
+`reader-layout.tsx` edit in place), ran `npx vitest run src/app/globals.css.test.ts` against the
+stashed-out (pre-fix, `calc()`-at-declaration-site) file → **2/2 failed**, both assertions in the
+"applies … at the use site" `it` and the "plain px" `it` failed exactly as expected against the old
+CSS. `git stash pop` restored the fix; reran the same file → 2/2 passed.
+
+**Gate**: `npx tsc --noEmit` clean · `npx eslint .` clean · `npx vitest run --exclude
+"**/benchmark.test.ts"` → **2659/2659** (2657 + 2 new).
+
+**Found nothing in B's guide to contest.** B's edge-state grep (Decision sentence, feed tiles,
+Profile/Saved/Persona pages, the "not found" and PDF-no-text fallbacks — none descend from
+`.reading-scaled`) re-confirmed by the live check below rather than re-derived.
+
+**Live check, Browser pane, `/papers/openalex:W7207740551`** (server was already up, no restart
+needed — CSS/TSX are both hot-reloadable): `peer-reading-prefs` in `localStorage` started at
+`scaleIndex: 5` (left over from earlier browser sessions this round) — reset to the default
+`scaleIndex: 2` (1x) via 3 clicks on "Smaller text" before measuring, confirmed
+`.reading-justify`'s computed `font-size` was `16.5px` at that point. Then, exactly per the guide:
+clicked "Larger text" once → `18.15px` (`scaleIndex: 3`); clicked again → `19.8px` (`scaleIndex:
+4`) — both computed via `getComputedStyle`, not read off a screenshot. Throughout both clicks, the
+Decision sentence (the `<p>` starting "Read by your model from the abstract…", `text-lead` but
+outside both `.reading-scaled` wrap points) stayed pinned at `16.5px`, confirmed by the same
+`getComputedStyle` call each time. Clicked "Smaller text" twice → back to `16.5px` (`scaleIndex:
+2`), matching the guide's round-trip exactly. Full sequence: 16.5 → 18.15 → 19.8 → 16.5, Decision
+sentence never moved.
+
+**Blast radius.** `globals.css`: 3 lines reverted + 3 lines added, a provable no-op outside
+`.reading-scaled` descendants (class-selector ancestry). `reader-layout.tsx`: one `className` added
+to 4 existing wrapper divs, zero structural change. One new test file. No change to
+`reading-prefs.ts`, `decision-block.tsx`, `spread.ts`.
+
+Commit: `fix(reader): font scale reaches the prose, not just the Decision sentence`.

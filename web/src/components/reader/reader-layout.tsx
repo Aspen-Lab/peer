@@ -83,9 +83,9 @@ export function ReaderLayout(p: ReaderLayoutProps) {
       <>
         {p.plate}
         {p.title}
-        <div style={readingScaleStyle}>{p.words}</div>
+        <div className="reading-scaled" style={readingScaleStyle}>{p.words}</div>
         {p.decision}
-        <div style={readingScaleStyle}>{p.additions}</div>
+        <div className="reading-scaled" style={readingScaleStyle}>{p.additions}</div>
         {p.next}
       </>
     );
@@ -99,8 +99,8 @@ export function ReaderLayout(p: ReaderLayoutProps) {
         {p.decision}
       </div>
       <div className={COLUMN_CLASS}>
-        <div style={readingScaleStyle}>{p.words}</div>
-        <div style={readingScaleStyle}>{p.additions}</div>
+        <div className="reading-scaled" style={readingScaleStyle}>{p.words}</div>
+        <div className="reading-scaled" style={readingScaleStyle}>{p.additions}</div>
         {/* Takes the free space on a page shorter than the panel, so the row
             sits bottom-right level with the DOI line; on a long page it is
             simply last. Never at the top — full text arriving later must

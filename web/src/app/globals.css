@@ -129,19 +129,19 @@
   --text-meta--line-height: 1.45;
   --text-body-sm: 13.5px;    /* dense body, descriptions */
   --text-body-sm--line-height: 1.5;
-  /* S15: these three are also the reading prose's own sizes (the nine
-     sites the reading-justify work touched, plus the lede sentence and
-     abstract/paper body) — `--reading-scale` lets the font-size controls
-     scale just those sites via `calc()`, with zero effect anywhere the
-     variable isn't set (it falls back to 1 on every element that isn't a
-     descendant of the two reading wrap points in reader-layout.tsx). The
-     paired --line-height values are unitless multipliers already, so they
-     scale in step with no calc() needed. */
-  --text-body: calc(14.5px * var(--reading-scale, 1));    /* controls, standard body */
+  /* S15 / 6-09: these three are also the reading prose's own sizes (the
+     nine sites the reading-justify work touched, plus the lede sentence and
+     abstract/paper body). A `calc()` on a custom property is resolved once,
+     at the property's OWN declaration site — here, `:root` — so a
+     `var(--reading-scale, 1)` inside these tokens can never see the value a
+     descendant sets; it permanently bakes in the `1` fallback. Tokens stay
+     plain px; the scale is applied at the USE site instead by three scoped
+     rules next to the `[class~="rounded-full"]` override below. */
+  --text-body: 14.5px;    /* controls, standard body */
   --text-body--line-height: 1.55;
-  --text-body-lg: calc(15.5px * var(--reading-scale, 1)); /* emphasized body, tile titles */
+  --text-body-lg: 15.5px; /* emphasized body, tile titles */
   --text-body-lg--line-height: 1.55;
-  --text-lead: calc(16.5px * var(--reading-scale, 1));    /* lede paragraphs, card titles */
+  --text-lead: 16.5px;    /* lede paragraphs, card titles */
   --text-lead--line-height: 1.6;
   --text-title: 17.5px;      /* section titles */
   --text-title--line-height: 1.4;
@@ -478,6 +478,21 @@ html[data-mode="dark"] { --nm-underside: rgba(0, 0, 0, 0.34); }
    rule is unlayered, so it beats the utility whatever its specificity, and
    deleting these two lines brings the pills and the discs back. */
 [class~="rounded-full"] { border-radius: 0; }
+
+/* 6-09: the font-size controls' actual effect. `--text-lead`/`--text-body`/
+   `--text-body-lg` above are plain px again — a `calc()` inside a custom
+   property resolves at that property's own declaration site (`:root`), so
+   it can never see a `--reading-scale` a descendant sets. These three rules
+   apply the scale at the USE site instead, only inside `.reading-scaled`
+   (the two wrap points in reader-layout.tsx) — unlayered, so each beats the
+   Tailwind-generated utility whatever its specificity, matching the
+   `rounded-full` override just above. `[class~="text-body"]` cannot
+   false-match `text-body-lg`/`text-body-sm`: `~=` matches a whole
+   space-delimited class token, and `text-body-lg` is one token, not
+   `text-body` plus a suffix. */
+.reading-scaled [class~="text-lead"] { font-size: calc(var(--text-lead) * var(--reading-scale, 1)); }
+.reading-scaled [class~="text-body"] { font-size: calc(var(--text-body) * var(--reading-scale, 1)); }
+.reading-scaled [class~="text-body-lg"] { font-size: calc(var(--text-body-lg) * var(--reading-scale, 1)); }
 
 html[data-scroll-behavior="smooth"] { scroll-behavior: smooth; }
 
