@@ -9964,3 +9964,90 @@ the manager, not a scored difference.
 Gate not re-run this part (code unchanged by A per the round's own rule); part 4 runs it cold.
 
 Commit: this log entry only (`docs/handoff/ABC-followup-round2.md`), staged by explicit path.
+
+### Round 7 — Agent A (part 2 of 4 — S21 at 2560×1400, 1440×900, 1200×800)
+
+All width/layout numbers below use the same reload method part 1 established as reliable in
+this hidden pane (set `localStorage`, navigate, measure after hydration); button attributes and
+store transitions were read live throughout (not layout-dependent, unaffected by the freeze).
+
+**At 2560×1400 — toggle mechanics, correct:** turning Fit on sets `aria-pressed="true"`, label
+flips to "Book layout", `fit: true` persists. Turning it on picks `scaleIndex` 7 (the ladder's
+own ceiling, 1.6×) — page width (panel `496` + gap `96` + column `896` = `1488px`) is **58.1% of
+the 2560px viewport, not ≈85%.** Reload with `fit: true` still persisted → still fitted after
+hydration (matches spec). Manual "Larger text" while Fit is on: `fit` → `false`,
+`scaleIndex` moves from its **old, untouched raw value** (2 → 3), not from the displayed
+fit-derived step (7) — matches B's recommended, simpler design exactly, confirmed live via
+`localStorage`, not inferred. Clicking Fit again: `fit` → `true`, `scaleIndex` stays at its
+last manual value (3, untouched) — matches "the step the reader had before Fit."
+
+**A7-01 — WRONG DATA (the ≈85% target itself, at a wide monitor).** The 58.1% figure above is
+not a rounding slip: the ladder's own top step is 1.6×, and even at 1.6× the page (1488px)
+sits far short of 85% of a 2560px monitor (2176px) — there is no step on today's ladder that
+could reach the stated target at this width. `fitScaleIndex` is not miscoded (it correctly picks
+"the largest step that still fits"); the ladder itself does not reach far enough for the exact
+monitor size §1w's own opening problem statement names ("on a large monitor the reading page
+uses about a third of the width"). Real, execution-confirmed, not a rounding artifact — flagged
+as a difference from the spec's own explicit "≈85%" text, not a coding mistake.
+
+**At 1440×900 (xl, *below* the 1536px 2xl breakpoint) — a more fundamental gap, confirmed by
+direct comparison, not inferred from B's own honest "xl is out of scope" note on 7-01:** Fit is
+**enabled** here (`spreadActive` true, matches "below xl... disabled" — 1440 is not below xl) and
+**does** pick a smaller step than at 2560 (index 5, 1.32×, derived from the live
+`.reading-scaled` lead font-size of `21.78px = 16.5×1.32`) — satisfying the letter of "Fit
+picks a smaller step" literally. But the **page footprint does not move at all**: reloading with
+`scaleIndex: 0` (0.85×, `fit: false`) and reloading again with Fit on (effectively 1.32×)
+produce **byte-identical** `grid-template-columns` (`370px 518px`) and article `max-width`
+(`1000px`) at 1440px in both cases. Root: confirmed by reading `spread.ts` (round 7's own
+diff) that the `xl:` grid term (`minmax(0,5fr)_minmax(0,7fr)`) and `page-container.tsx`'s `xl:`
+max-width term (`1000px`) were deliberately left untouched by S20 — only the `2xl:` terms read
+`--reading-scale`. That scoping choice (B's own "xl is out of scope" reasoning: the flexible
+7fr track already has headroom for A/A's font growth) has a side effect B's note didn't carry
+through to Fit specifically: **Fit computes and applies a scale step at every viewport where
+`spread` is true, including this one, but that step changes only the font-size — the actual page
+width (952px = panel 370 + gap 64 + column 518) stays fixed at 66.1% of 1440px regardless of
+which step is chosen**, and cannot reach 85% at this breakpoint no matter what `fitScaleIndex`
+returns, because nothing in this breakpoint's CSS reads the variable it sets. A second, smaller
+inaccuracy layered on the same gap: `fitScaleIndex` is always called with the hardcoded 2xl gap
+constant (`READING_GRID_GAP_2XL_PX = 96`) even here, where the live rendered gap is `64px`
+(Tailwind's `xl:gap-x-16`) — moot given the mechanism does not move the page width at this
+breakpoint at all, but would matter if a future fix made it not-moot.
+
+**A7-02 — MISSING (Fit has no effect at the xl-only sub-range, 1280–1535px).** Not merely
+"undertested," per B's own honest flag on 7-01 — measured directly, twice, with a controlled
+before/after: Fit is enabled and changes the displayed scale step at this breakpoint, but
+produces **zero** change to `grid-template-columns` or article `max-width`. §1w's own text
+("Below xl... Fit has nothing to do... disabled") implies Fit should be meaningful everywhere
+`spread` is true, i.e. xl and up — it is currently only meaningful at 2xl and up.
+
+**At 1200×800 (below xl) — matches spec exactly.** `spreadActive` false; Fit button
+`disabled: true`, `title="Fit needs the two-column layout"`. No difference.
+
+**Keyboard, at 2560×1400, `scaleIndex` reset to 2/`fit` false before each check:**
+- `Ctrl+=`: dispatched via the automation layer's `key` action (its own docs warn zoom chords
+  are normally intercepted for the tool's own page-zoom — verified empirically instead of
+  assumed: attached a capture-phase `keydown` listener first and confirmed the real event
+  (`key: "="`, `ctrlKey: true`) reaches the page). `scaleIndex` 2 → 3. Native browser zoom did
+  **not** fire: `window.devicePixelRatio` = 1, `visualViewport.scale` = 1,
+  `document.documentElement.clientWidth` ≈ viewport width (2552 vs 2560, the scrollbar gutter,
+  unchanged from a normal unzoomed page) both before and after.
+- `Ctrl+-`: `scaleIndex` 3 → 2. `Ctrl+=` ×2: 2 → 4. Toggled Fit on, then `Ctrl+0`: `scaleIndex`
+  → 2 **and** `fit` → `false` in one step — matches B's "reset to 1×, book layout" reading.
+- **Typing-target guard.** The reading page itself has no inline search box to focus with `/` —
+  checked, not assumed: `document.getElementById("peer-search")` is absent on `/papers/[id]`,
+  and reading `lib/shell/masthead.ts`'s `searchKeyTarget` confirms `/` from any `/papers/*` path
+  always **navigates** to `/search` regardless of whether a local box exists (pre-existing
+  behaviour, unrelated to this round — not a defect). Since navigating to `/search` would also
+  make `onPaperPage()` false (a second, independent reason the shortcut wouldn't fire there,
+  which would make that path an inconclusive test of the typing guard specifically), tested the
+  actual guard directly instead: injected a throwaway `<input>` into the paper page, focused it
+  (confirmed via `document.activeElement`), pressed `Ctrl+=` — `scaleIndex` stayed at `2`,
+  unchanged. Guard confirmed working; input removed immediately after.
+
+**Verdict, S21: two real, execution-confirmed gaps (A7-01, A7-02) against the spec's own text;
+everything else (toggle mechanics, persistence, clamp-to-disabled below xl, all three keyboard
+chords, the typing guard) matches.**
+
+Gate not re-run this part; part 4 runs it cold.
+
+Commit: this log entry only, staged by explicit path.
