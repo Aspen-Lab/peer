@@ -9716,3 +9716,93 @@ of the panel-stability claim (7-02). One correction to the manager's own §1w re
 max-width lives in `page-container.tsx`'s cva with 5 call sites, not literally in `page.tsx` with
 1 (7-01). Dirty tree noted, not touched: `figure-lightbox.tsx`/`.test.ts` (another agent's, on the
 round's own exclusion list). No product code changed by this turn.
+
+---
+
+### Round 7 — Agent C
+
+Branch verified (`complimentary-enhancement-to-main-update`) before touching anything. Dirty tree
+confirmed, not mine: `figure-lightbox.tsx`/`.test.ts` (another agent's, round-7 exclusion list) —
+not staged, not touched, not read beyond confirming the path. Gate confirmed cold before starting:
+`npx tsc --noEmit && npx eslint . && npx vitest run --exclude "**/benchmark.test.ts"` → **tsc
+clean · eslint clean · 2667/2667** (5 more than round 6's close of 2662 — the other agent's
+in-progress figure-lightbox work, not mine; noted, not investigated, per the round's own ground
+rule). Working B's order: **7-01 (S20) → 7-02 (S22) → 7-03 (S21)**.
+
+#### Item 7-01 — S20: A / A become a page zoom
+
+**Change, exactly B's guide, no deviation.** (1) `spread.ts` line 37 — the 2xl grid term's `560px`
+column track becomes `calc(560px*var(--reading-scale,1))`. (2) `page-container.tsx` line 18 — the
+`spread` variant's 2xl term becomes `calc(640px+560px*var(--reading-scale,1))`, the exact
+`640 + 560s` formula B derived so the panel's `1fr` share stays numerically constant at every step.
+(3) `reader-layout.tsx` — `style={readingScaleStyle}` added to the `SPREAD_GRID` div itself (the
+existing constant, reused), not only the two `words`/`additions` wraps, since
+`grid-template-columns` is a regular property whose `var()` needs the variable inherited at that
+same element, not a descendant's. (4) `page.tsx` — one new `useReadingScale()` call beside the
+existing `useSpread()`, one `style={readingScaleStyle}` prop on the one `<PageContainer>` at the
+real reader (line 617); the other 3 call sites in this file untouched. (5) `loading.tsx` — a
+comment only, explaining why a Server Component can never set the variable (no code change).
+(6) `reading-prefs.ts` — `READING_SCALE_STEPS` extended to 8 steps: `[0.85, 0.925, 1, 1.1, 1.2,
+1.32, 1.45, 1.6]`; `DEFAULT_SCALE_INDEX`/`MAX_SCALE_INDEX` untouched (the latter derives from
+`.length`).
+
+**B's own first sub-step, run before any file was built on top of it**: curled the running dev
+server's compiled CSS chunk after each of the two arbitrary-value edits above. Both compiled
+exactly as B's analogy predicted, confirmed by the emitted rules themselves:
+```
+.\32 xl\:grid-cols-\[minmax\(0\,1fr\)_calc\(560px\*var\(--reading-scale\,1\)\)\] {
+  grid-template-columns: minmax(0,1fr) calc(560px * var(--reading-scale, 1));
+}
+.\32 xl\:max-w-\[calc\(640px\+560px\*var\(--reading-scale\,1\)\)\] {
+  max-width: calc(640px + 560px * var(--reading-scale, 1));
+}
+```
+Tailwind's arbitrary-value parser handled both the nested-comma `var()` and the unspaced `+` (it
+inserted the CSS-required whitespace around `+` automatically) — the exact two things B flagged as
+analogy rather than confirmed fact. Confirmed before writing `reader-layout.tsx`/`page.tsx`'s
+wiring on top.
+
+**One arithmetic note for the next agent, found by measuring, not by re-deriving B's algebra**:
+B's own worked example computed the panel's base width as 544px (`1200 - 96(gap) - 560(column)`),
+omitting the article's own `px-6` horizontal padding (48px total, from `pageContainer`'s base
+class). The live-measured panel is **496px** (`1200 - 48(padding) - 96(gap) - 560(column)`), not
+544 — a labeling slip in B's illustration, not a defect in the mechanism: the padding term is a
+constant added to both sides of the `max_w(s) = 640 + 560s` derivation, so it cancels out of the
+invariant either way. Confirmed by measuring the live panel at both the default step and the new
+top step (below) — 496px at both, not 544px at either.
+
+**Tests.** `reading-prefs.test.ts`'s ladder assertion rewritten for 8 steps (not deleted, per the
+standing rule), commented as 7-01's change. Also fixed, past what B's guide called out: the
+"clamps at the top" test drove the store with a **fixed 3 presses** from the default index 2,
+which only reached the old ladder's top (index 5) by coincidence (`2+3=5`); running the suite
+after extending the ladder to 8 steps (top index 7) left this test silently under-testing the
+clamp instead of failing loudly — 3 presses from index 2 lands on index 5, still a valid (if
+untested) index, so nothing failed, it just stopped proving what its own name claimed. Rewrote it
+to press `READING_SCALE_STEPS.length` times, reaching the top from any starting index for any
+ladder length, so it cannot silently go stale again the same way.
+
+**Proved the fix, by execution**: reverted `READING_SCALE_STEPS` to the old 6-step array — the
+"eight steps" test failed exactly as expected (diff showing the missing `1.45, 1.6`), the other 3
+tests stayed green (they are ladder-length-agnostic by design). Restored; reran; 4/4 green.
+
+**Gate**: `npx tsc --noEmit` clean · `npx eslint .` clean · `npx vitest run --exclude
+"**/benchmark.test.ts"` → **2667/2667** (unchanged — an existing test was rewritten, not added).
+
+**Found nothing else in B's guide to contest** beyond the panel-width arithmetic note above, which
+does not change the guide's mechanism or its correctness.
+
+**Live-checked in the Browser pane, `/papers/openalex:W7207740551` at 2560×1400** (dev server
+already up, hot-reloaded, no restart): at the default step (`scaleIndex: 2`, 1x) — article
+`max-width` computed `1200px`, grid `grid-template-columns` computed `496px 560px`, `.reading-scaled
+text-lead` computed `font-size: 16.5px`. Clicked "Larger text" 5 times (`scaleIndex: 7`, the new
+top step, 1.6x) — article `1536px` (`640+560*1.6`), grid `496px 896px` (panel unchanged at 496px,
+column `560*1.6=896`), lead font-size `26.4px` (`16.5*1.6`) — matching the formula exactly at the
+one endpoint furthest from today's default. Clicked "Smaller text" 5 times to return to
+`scaleIndex: 2` before moving on. Did not sanity-check a real xl-only (below-2xl) viewport this
+item — deferred to the end-of-round live-check pass together with 7-02/7-03, since Fit (7-03)
+also needs measuring there.
+
+**Blast radius**: exactly as B's guide stated. No change to any figure file, no change to
+`decision-block.tsx`, no change to `globals.css`'s existing `.reading-scaled` rules.
+
+Commit: `feat(reader): A/A become a page zoom, not just larger text (S20)`.
