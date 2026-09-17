@@ -81,29 +81,42 @@ browser, run the reports), then report to the user in plain language and stop th
 
 ```
 ROUND:            7
-WHOSE TURN:       B
-STOPPED BECAUSE:  A finished measuring S20/S21/S22 in 4 parts (2026-09-17); gate cold and clean.
-STATUS:           S20 (page zoom) and S22 (0.3s transition) both fully match spec — zero open
-                   items, confirmed live/via reload at 2560x1400 and via a timed class-lifecycle
-                   poll. S21 (Fit) has 2 real, execution-confirmed gaps: A7-01 (Fit's own ladder
-                   ceiling, 1.6x, only reaches 58.1% of a 2560px viewport, not the spec's ≈85%)
-                   and A7-02 (Fit is enabled and changes font-size at the xl-only sub-range,
-                   1280-1535px, but the page width never moves there, since S20 only wired
-                   --reading-scale into the 2xl grid/max-width terms). Both under S21; ranked
-                   A7-01 first (wider-impact, and misses the spec's own headline scenario).
-OPEN ITEMS:       A7-01, A7-02 (both S21). POLICY: A7-01 needs a manager design ruling (extend
-                   the ladder vs. change fitScaleIndex's own target/rounding) before B can guide
-                   a fix.
-GATE (0 open):    NOT MET — 2 open items (A7-01, A7-02).
+WHOSE TURN:       C
+STOPPED BECAUSE:  B finished the second-pass fix guide (7-04/7-05/7-06) @ 2026-09-17, per Ruling
+                   19 (whole-page CSS zoom, composes with A/A).
+STATUS:           Ruling 19 already settled A7-01's design (continuous CSS `zoom` on the article,
+                   not a ladder extension). B's own turn worked the mechanism: where `zoom` lands
+                   (the outer <PageContainer>, confirmed safe for max-width/mx-auto centering by
+                   execution), the sticky-panel drift Ruling 19 flagged (confirmed exactly,
+                   `top: calc(4rem / var(--page-zoom,1))` for the top-stick branch; a second,
+                   ruling-unmentioned asymmetric fix derived and given for the bottom-stick branch
+                   involving --panel-h/100vh/1.5rem), `fitZoom`'s exact shape (measures
+                   `offsetWidth`, not a breakpoint formula — retires `fitScaleIndex` and 2 dead
+                   constants), the store changes (increaseScale/decreaseScale/resetScale stop
+                   clearing `fit`), the xl cap for A7-02 (page-container.tsx's xl term gets the
+                   same calc pair as 2xl), and S22's `.zoom-transition` property list (+zoom, +top).
+                   A new commit landed on the branch mid-turn from outside this session
+                   (`e3d8a7f`, Ruling 20 — Semantic Scholar/S23) — unrelated to this scope,
+                   explicitly sequenced by the manager for C "after 7-06."
+OPEN ITEMS:       None left for B. C builds 7-04 → 7-05 → 7-06, then S23 (Ruling 20, §1y —
+                   already fully guided by the manager, B did not touch it).
+GATE (0 open):    Unchanged from A's cold run this round: tsc clean · eslint clean ·
+                   vitest 2682/2682. Not re-run by B (B changes no code).
 
-DONE:      round 7 A: measured S20/S21/S22 in 4 committed parts (8ede31f, e798f5d, c54f03b, and
-           this part's own commit). Gate cold: tsc clean · eslint clean · vitest 2682/2682 (no
-           regression from §1's own recorded baseline).
-GATE NOW:  tsc clean · eslint clean · vitest 2682/2682 (A, cold, 2026-09-17).
-TODO:      Manager rules on A7-01 (POLICY). B reads A's 4 log entries (parts 1-4), writes a fix
-           guide for whichever of A7-01/A7-02 the manager doesn't accept as a cost, per §2's own
-           rules (name files/lines, classify, rank wrong-data first, state the fallback). Figure
-           files are still excluded and may be dirty (other agent) — ignore them.
+DONE:      round 7 B (second pass): read Ruling 19 + all 4 of A's log parts; verified by
+           execution (throwaway served pages, deleted before finishing — see §4) where `zoom`
+           should land, the exact sticky-panel compensation (both branches), that `offsetWidth`
+           is immune to an element's own zoom (the basis for `fitZoom`'s measurement approach),
+           and that this session's Chromium animates `zoom` smoothly under a transition. Wrote
+           the 7-04/7-05/7-06 fix guide in §4.
+GATE NOW:  tsc clean · eslint clean · vitest 2682/2682 (A, cold, 2026-09-17 — unchanged, B wrote
+           no code this turn).
+TODO:      C works 7-04 (the whole-page zoom mechanism + sticky compensation + fitZoom + store
+           changes) → 7-05 (the xl cap) → 7-06 (`.zoom-transition`'s property list + the
+           reading-prefs.test.ts rewrites), one commit per item, gate after each. Then S23 per
+           Ruling 20 (§1y) — a separate, already-complete guide from the manager, not from B.
+           Figure files are still excluded and may be dirty (other agent) — ignore them, except
+           S23's own narrow, manager-coordinated exception to the freeze (§1y point 1).
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
@@ -10242,3 +10255,517 @@ target-formula change), and write B's usual fix guide for whichever of A7-01/A7-
 rules should be fixed rather than accepted.
 
 Commit: this log entry, plus §1 edited in place (below).
+
+---
+
+### Round 7 — Agent B (second pass, 2026-09-17)
+
+Branch verified (`complimentary-enhancement-to-main-update`) before reading anything. Dirty tree
+confirmed, not mine: `figure-lightbox.tsx`/`.test.ts` — not staged, not touched, not read beyond
+confirming the path. Also found, mid-session, that `git log` had moved past what this turn's
+brief described: a new commit (`e3d8a7f`, Ruling 20 — Semantic Scholar figures/S23) landed on the
+branch while this turn was running, from outside this session. Read it: it is a self-contained
+guide for C, scoped to `lib/figures/extract.ts`'s Semantic Scholar branch and a new shared
+Semantic Scholar client, explicitly "B need not design it," and explicitly sequenced "for C after
+7-06." It does not touch anything this turn's own scope covers (`reading-prefs.ts`, `spread.ts`,
+`page-container.tsx`, `reader-layout.tsx`, `globals.css`'s zoom/panel rules) and its own
+"push authorised" line is the manager's own action after round 7 closes, not a change to this
+turn's standing "commit, never push" instruction — not pushing.
+
+Read Ruling 19 (§1x) in full, re-read A's four round-7 log parts, and read the current code for
+every file the ruling touches. Ruling 19 already settled A7-01's design question (whole-page CSS
+`zoom`, continuous, composes with A/A) — this turn's job is the concrete mechanism: where `zoom`
+lands, the sticky-panel interaction the ruling itself flagged as needing verification, `fitZoom`'s
+exact shape, the store/hook rewrite, the xl cap (A7-02), and S22's transition-property list.
+
+**Verified by execution, not read from documentation**, because `zoom` is a legacy,
+implementation-defined CSS property with no formal spec and real behavioural surprises: wrote
+three throwaway HTML files, served them through the already-running dev server as
+`web/public/zoom-*-test.html` (a local `file://` page could not be driven interactively by the
+Browser pane tools in this session — only a same-origin, served page could; each file was deleted
+immediately after use, confirmed absent from `git status` before finishing). All three used only
+plain HTML/CSS/JS, matched the real app's actual structure at the relevant points (verified
+against the real files first), and were read with a forced reflow (`void el.offsetHeight`) plus a
+double-`requestAnimationFrame` wait before every measurement, after an initial run without that
+wait produced one now-understood-to-be-stale reading (below).
+
+---
+
+#### 7-04 — A7-01: Fit becomes a whole-page zoom (Ruling 19)
+
+**Files**: `web/src/app/papers/[id]/page.tsx` (lines 265–277, the `readingScale`/`readingScaleStyle`
+block; line 630–637, the one `<PageContainer data-zoom-root>`); `web/src/components/reader/
+reader-layout.tsx` (lines 17–25 imports; lines 58–61 `subscribeResize`; lines 96–112
+`useResolvedReadingScale`, replaced; lines 114–184 `ReaderLayout`, line 165 the `SPREAD_GRID` div);
+`web/src/store/reading-prefs.ts` (lines 37–46 the interface; lines 53–58 `increaseScale`/
+`decreaseScale`/`resetScale`; lines 80–91 `fitScaleIndex`, retired); `web/src/components/reader/
+spread.ts` (lines 39–47, `READING_COLUMN_BASE_PX`/`READING_GRID_GAP_2XL_PX`, now dead — see
+below); `web/src/app/globals.css` (lines 416–419 `@utility reader-panel`; lines 740–746
+`.zoom-transition`, its property list revisited in 7-06). No file on the round's own figure
+exclusion list is touched.
+
+**Classification: WRONG SHAPE.** 7-03's `fitScaleIndex`/`fit`-branch mechanism (a ladder-index
+Fit) is not a bug to patch — Ruling 19 replaces the mechanism itself. Extending the ladder
+further (the naive reading of A7-01) was the alternative the ruling explicitly rejected: A's own
+number (2.7× needed to hit 85% at 2560px with the column-only mechanism) would put body text at
+45px, which the ruling calls "not what 'fit to screen' means." The fix is a new, continuous,
+CSS-`zoom`-based Fit that composes with the existing ladder rather than replacing or extending it.
+
+**1. Where `zoom` lands — the outer `<PageContainer>` article, not `reader-layout.tsx`'s
+`SPREAD_GRID` div. Decided by execution, not by re-reading the ruling's own parenthetical.**
+
+Both candidates were built and measured (a synthetic `mx-auto w-full px-6 max-w-[…]` box, matching
+`page-container.tsx`'s real `spread` variant, vs. the same box with an inner `display:grid`
+child matching `SPREAD_GRID`, matching the real nesting). Two properties were checked:
+
+- **Does `max-width` + `mx-auto` centering survive `zoom`?** Yes, cleanly, on every isolated,
+  correctly-reflowed test run: a `width:100%; max-width:400px; margin:0 auto` box in a 1000px
+  viewport, zoomed 1×/1.5×/1.8×/2×, measured `left`/`right`/`width` via `getBoundingClientRect()`
+  after a forced reflow and a double-`requestAnimationFrame` wait: `400/300–700 → 600/200–800 →
+  720/140–860 → 800/100–900` — width scales by exactly the zoom factor and the box stays
+  perfectly centred (symmetric margins) at every step, matching what "the page grows like a
+  fitted PDF" should look like. This held with a nested grid child, with a `position:sticky`
+  sibling masthead, and with a tall (3000px) scrollable child — four separate variants, same
+  clean result each time. **One earlier reading, on a busier throwaway page (many fixed-position
+  overlay elements, a `setInterval` poll, and a rapid programmatic toggle between "zoom the
+  child" and "zoom the parent" within one page load) showed `max-width` apparently ignored
+  (`left:0`, full-viewport width) — this could not be reproduced in four follow-up, more targeted
+  variants and is recorded here as an unexplained, unreproduced anomaly of that one busier test
+  page, not a browser behaviour to design around.** Recommend C's own first live check on the
+  real app (below) treat this as the closing word, not either synthetic test.
+- **Does the choice change the sticky-panel finding (next section)?** No — verified both ways;
+  the drift is a property of the panel's own `top` living inside *some* zoomed ancestor, and is
+  identical whether that ancestor is the outer article or the inner grid div.
+
+Given centering is confirmed safe either way, the outer `<PageContainer>` wins on **simplicity**:
+it already carries `data-zoom-root` and `--reading-scale` (S22, S20), so `zoom` and a new
+`--page-zoom` custom property join the same `style` object with no new element, no new attribute,
+and no change to `reader-layout.tsx`'s own component boundary. The masthead is a sibling
+rendered by the shell, not a descendant of `<PageContainer>` at any point in the tree — confirmed
+by reading `page.tsx`'s own render tree, not assumed — so it is structurally impossible for it to
+be inside the zoomed box regardless of which of the two candidates is chosen.
+
+**One accepted, named cost of this choice**: `PAGE_CLASS` (`spread.ts` line 26) puts `xl:pt-4`
+(the article's own 16px top padding) on the *same* element that will now carry `zoom`. That
+padding is what makes "48px masthead + 16px padding = 4rem, the panel's sticky top" line up
+today. Under zoom, that padding scales too (it is just another length inside the zoomed box), so
+the panel's natural (pre-stick) resting position moves down by `16px × (zoom − 1)` before it
+reaches the (now-compensated, below) sticky threshold and locks — a one-time slide, bounded by
+the ruling's own `clamp(…, 2.5)` ceiling at `16×1.5=24px`, visible only during the first ~24px of
+scroll and only while Fit is on above 1×. Putting `zoom` on the grid div instead avoids this
+(confirmed by the same execution: the grid div's own top-left position is unaffected by its own
+`zoom`, so the padding above it, being outside the zoomed box, stays true-pixel and the "stuck
+from first paint" invariant holds exactly) — naming both so C/the manager can pick the small
+slide over the extra plumbing, or not, rather than discovering the trade-off after building.
+
+**2. The sticky panel drift — Ruling 19's own instruction to verify by execution, done, with
+exact numbers, both of `reader-panel`'s two branches, not just the one the ruling named.**
+
+Built the real shape: a `position:sticky` masthead (48px) outside a `zoom:1.8` box; inside it, at
+the same nesting depth as the real `SPREAD_GRID`/`PANEL_CLASS`, a sticky panel with
+`top: 4rem` (today's literal value, `globals.css` line 418). Measured with
+`getBoundingClientRect()`, forced reflow, after a real scroll (not just a click) so the sticky
+state was genuinely engaged, not read mid-transition:
+
+| state | declared `top` | real, on-screen panel top | masthead bottom | drift |
+|---|---|---|---|---|
+| zoom 1× (today) | `4rem` (64px) | 64px | 48px | 16px (the design intent) |
+| zoom 1.8×, uncompensated | `4rem` (64px) | **115.2px** (`64×1.8`) | 48px | **67.2px** |
+| zoom 1.8×, `top: calc(4rem / 1.8)` | 35.5556px | **64px**, once actually scrolled/stuck | 48px | **16px** — matches 1× exactly |
+
+**Mechanism, confirmed with a plain custom element too, not just the panel**: any CSS length
+declared on an element that lives inside a `zoom`-ed ancestor is resolved in that ancestor's
+*local* (pre-zoom) coordinate space, then the box's whole rendering — including that resolved
+position — is scaled by the ambient zoom for painting. `position: sticky`'s `top` offset is one
+such length, so its *effective*, real-pixel threshold is `declared-top × zoom`, not
+`declared-top`. Ruling 19's own fix is exactly right for the simple case: `top: calc(4rem /
+var(--page-zoom, 1))` cancels the multiplication, confirmed by execution to land at exactly 64px
+real regardless of zoom, matching the 1× baseline exactly.
+
+**The second branch is not this simple, and Ruling 19's text does not mention it — found by
+reading `reader-panel`'s full declaration, not just the `4rem` the ruling quotes.**
+`globals.css` line 418 is `top: min(4rem, calc(100vh - var(--panel-h, 0px) - 1.5rem))` — a tall
+panel (taller than the viewport) uses the *second* branch, which pins the panel by its **bottom**
+instead. `--panel-h` is set by `reader-layout.tsx` lines 130–137's `ResizeObserver`, reading
+`el.offsetHeight`. Confirmed by execution (a zoomed box and a zoomed descendant, both measured):
+**`offsetWidth`/`offsetHeight` report the *local* (pre-zoom) size on every element regardless of
+its own or an ancestor's zoom, while `getBoundingClientRect()` reports the real, on-screen
+(post-zoom) size, on every element** — a 100px-tall child inside a `zoom:1.8` box reports
+`offsetHeight: 100` and `getBoundingClientRect().height: 180`, consistently, including on the
+zoomed element itself. So `--panel-h` already holds the *local* (already-divided-by-zoom) number
+— dividing it again would under-compensate it. `100vh` is different again: a `50vh` box inside
+the same zoomed ancestor reported `offsetHeight: 300` (local) against a real `innerHeight: 600` —
+`vh` resolves against the *true* viewport (not zoom-divided) when read locally, then that number
+gets the *same* ambient-zoom multiplication as everything else in the box when painted. Worked
+through algebraically and cross-checked against the two confirmed facts above (full derivation
+kept out of this log; the shape is "every literal length constant needs `/var(--page-zoom, 1)`;
+`var(--panel-h)` does not, because the JS that produced it already divided it out via
+`offsetHeight`"). The corrected declaration:
+
+```css
+@utility reader-panel {
+  position: sticky;
+  top: min(
+    calc(4rem / var(--page-zoom, 1)),
+    calc(100vh / var(--page-zoom, 1) - var(--panel-h, 0px) - 1.5rem / var(--page-zoom, 1))
+  );
+}
+```
+
+(Division binds tighter than subtraction in CSS `calc()`, so the one outer `calc()` parses as
+intended without nested `calc()` wrappers — recommend C confirm the parsed result via
+`getComputedStyle` on the real page once built, the same verify-by-execution habit 7-01 used for
+the Tailwind arbitrary-value question, since this is hand-written CSS, not a Tailwind class, and
+deserves the same check rather than trust-by-derivation alone.) **Untested by B**: a panel
+genuinely taller than the viewport is not present in this app's real content at any viewport B
+could reach without a browser-rendered live page; the algebra above is confirmed against the
+*mechanism* (offsetHeight-vs-real, vh-vs-real) with a synthetic repro, not against this exact
+formula end-to-end with a real tall panel. Recommend C's own live check include forcing a tall
+panel (e.g. a paper with a long plate + title) at a narrow-enough viewport that the bottom-stick
+branch actually engages, with Fit on, before trusting this formula in production.
+
+**`--page-zoom` placement**: set alongside `zoom` and `--reading-scale` on the `<PageContainer>`
+(page.tsx line 630-ish) — CSS custom properties inherit downward by default, so `reader-panel`
+(a descendant, however many levels down) sees it without extra plumbing. **Matching the existing,
+already-shipped precedent** (7-01 re-set `--reading-scale` a second time on `SPREAD_GRID`'s own
+`style`, beyond relying on inheritance from the article — B did not re-derive why that
+redundancy was needed for a property that should inherit either way, since it is already
+shipped, verified-by-live-measurement code, not something this turn is changing): recommend
+mirroring `--page-zoom` onto `SPREAD_GRID`'s own `style` too, for consistency with that pattern,
+even though B's own reasoning says plain inheritance should suffice.
+
+**3. `fitZoom` — pure, two arguments, matching Ruling 19's own signature exactly:**
+
+```ts
+export function fitZoom(viewportWidth: number, pageWidthAt1x: number): number {
+  if (pageWidthAt1x <= 0) return 1; // every candidate rejected — see below
+  return Math.min(2.5, Math.max(1, (0.85 * viewportWidth) / pageWidthAt1x));
+}
+```
+
+**What it shows when the candidate is rejected**: `pageWidthAt1x <= 0` (the zoom-root element not
+found, or not yet measured) returns `1` — no zoom, book layout, never `Infinity` or `2.5` (a
+naive `0.85*vw/0` would wrongly clamp to the *maximum* zoom, the opposite of a safe fallback).
+Replaces `fitScaleIndex` (reading-prefs.ts lines 80–91) entirely — **retire it, do not keep it
+unused**: nothing in Ruling 19's mechanism picks a ladder step for Fit any more, so an unused
+ladder-search function left in the store is dead code inviting a future caller to reintroduce the
+column-only mechanism by accident.
+
+**Where `pageWidthAt1x` comes from — measuring, not the breakpoint+scale formula, decided by a
+concrete correctness argument, not just the ruling's own "recommend measuring" hint:** the
+formula alternative (recompute `640+560×scale` at 2xl, a *different*, proportional 5fr/7fr formula
+at xl) would be a **fourth** place that must be kept in sync with the Tailwind strings — on top of
+the three `spread.ts`'s own header comment already tracks (the class string, the JS constants,
+`SPREAD_QUERY` vs. the `xl:` breakpoint) — and it would need its own xl-specific proportional-split
+logic once 7-05 (below) makes the xl cap scale too. Measuring sidesteps all of that: read
+`document.querySelector<HTMLElement>("[data-zoom-root]")?.offsetWidth` — confirmed by execution
+(above) that `offsetWidth` is *immune to the element's own `zoom`* — so this always reports the
+current, `--reading-scale`-adjusted, pre-Fit-zoom width, correctly composing with whatever A/A
+step is active, at any breakpoint, with zero breakpoint-specific code and zero new constants.
+This also means `READING_COLUMN_BASE_PX`/`READING_GRID_GAP_2XL_PX` (`spread.ts` lines 39–47,
+added in 7-03 specifically for the old `fitScaleIndex`'s panel/gap/column parameters) become
+**dead** — nothing calls `fitScaleIndex` any more and `fitZoom` needs neither. Recommend removing
+both exports and the paragraph of header comment naming them, since a comment about "keep these
+two in step" for constants nothing reads is actively misleading to the next reader; not mandatory
+(they cause no test failure and no lint error, being exported bindings), but named so C makes the
+call deliberately rather than leaving them by omission.
+
+**New hook, `reader-layout.tsx`, replacing `useResolvedReadingScale`'s fit-branch:**
+
+```ts
+function subscribeResize(onChange: () => void) {
+  window.addEventListener("resize", onChange);
+  return () => window.removeEventListener("resize", onChange);
+}
+
+/** S20: unconditionally the reader's own ladder step — Fit no longer branches
+ *  this (Ruling 19: the two compose, Fit never writes scaleIndex and never
+ *  changes what this returns). */
+export function useResolvedReadingScale(): number {
+  const scaleIndex = useReadingPrefsStore((s) => s.scaleIndex);
+  return READING_SCALE_STEPS[scaleIndex];
+}
+
+/** S21 (Ruling 19): the whole-page zoom multiplier. 1 (no-op) unless Fit is
+ *  on and the spread applies (Fit has nothing to do below xl). Reads the
+ *  zoom-root's own width via `offsetWidth`, immune to that element's own
+ *  `zoom` (confirmed by execution — see round-7-second-pass log) — so this
+ *  always reflects the CURRENT --reading-scale-adjusted 1x width, composing
+ *  with A/A automatically, no breakpoint-specific arithmetic needed. */
+export function usePageZoom(): number {
+  const fit = useReadingPrefsStore((s) => s.fit);
+  const spread = useSpread();
+  useSyncExternalStore(subscribeResize, () => window.innerWidth, () => 0);
+  if (!fit || !spread || typeof window === "undefined") return 1;
+  const root = document.querySelector<HTMLElement>("[data-zoom-root]");
+  return fitZoom(window.innerWidth, root?.offsetWidth ?? 0);
+}
+```
+
+`useResolvedReadingScale` drops its own `useSyncExternalStore` resize subscription entirely (it
+no longer reads anything viewport- or DOM-dependent) and its `document.querySelector("[data-
+reader-panel]")` read — both move to `usePageZoom`, which needs `[data-zoom-root]` (already on
+the `<PageContainer>` for S22), not `[data-reader-panel]` (that attribute becomes unused by this
+hook; leave it — S15/S18/S19 or a future reader may still find `data-reader-panel` useful as a
+stable selector, and it costs nothing to keep on the element it is already on).
+
+**A genuinely non-obvious, execution-derived staleness, named so C does not have to rediscover
+it**: `root?.offsetWidth` is read *during React's render phase*, before the DOM commits that
+render's own changes. If a reader presses A/A while Fit is on (now possible — Ruling 19: "the
+two compose"), the same render pass that updates `scaleIndex` (and therefore
+`readingScaleStyle`'s `--reading-scale`) also re-invokes `usePageZoom`'s snapshot — but the DOM
+still shows the *previous* `--reading-scale`, so `offsetWidth` is one render stale for that one
+frame. It self-corrects on the next render (any resize, or any other store change), and the
+window is a single frame — but it is real, and worth naming rather than silently accepting.
+**Optional mitigation, not mandated**: have `usePageZoom`'s `subscribe` also listen to
+`useReadingPrefsStore`'s own changes and defer the `onChange` call via `requestAnimationFrame`
+(so it fires after the triggering render has committed, not synchronously inside it) — still no
+`useEffect`-driven `setState`, the same `subscribe`-does-its-own-thing shape this file already
+uses for `matchMedia`/`resize`, just with the callback timing adjusted. B recommends accepting
+the one-frame staleness as-is (matches the loop's existing tolerance for similarly minor,
+self-correcting timing costs, e.g. 7-02's already-accepted no-op-transition case) unless the
+manager judges the visible jump worth the extra plumbing.
+
+**Store changes (`reading-prefs.ts`)**: per this turn's own item 3 — `increaseScale`,
+`decreaseScale` (lines 53–56) and `resetScale` (line 58) all currently do `set({ …, fit: false
+})`; **all three lose the `fit: false`**. Ruling 19: "Fit no longer turns off on A/A... A/A still
+clears nothing," and Ctrl+0 (`resetScale`) is grouped with the other two in this turn's own brief
+— all three are now pure ladder operations, orthogonal to `fit`. `setFit` (line 57) is unchanged.
+The `fit: boolean` field, its persistence, and its hydration story (7-03's own already-verified
+`skipHydration`/`StoreHydrator` reasoning) are untouched — none of that depended on the retired
+ladder-index mechanism.
+
+**Fit toggle mechanics unaffected**: `decision-block.tsx`'s Fit button (lines 229–239) already
+reads `fit`/`setFit`/`spread` and already wraps its `onClick` in `withZoomTransition` — **no
+change needed there**. The A/A buttons (lines 191–212) already wrap their clicks in
+`withZoomTransition` too — also no change. `keyboard.tsx`'s Ctrl+`=`/`-`/`0` chords (confirmed at
+lines 140–160, already correctly gated behind the typing-target guard and ahead of the blanket
+modifier bail-out, per 7-03's own already-verified work) call the same three store actions and
+need **no change** — Fit stays button-only, per spec, so nothing about the keyboard insertion
+point moves.
+
+**Confirmed by execution: this Chromium build animates `zoom` smoothly under a CSS transition**
+— set `transition: zoom 0.3s linear`, toggled `zoom` from 1 to 1.8, sampled `getComputedStyle(…).
+zoom` on every animation frame: a clean, monotonic interpolation (1.0 → 1.018 → 1.036 → … → 1.8)
+landing within one frame of the declared 300ms, not a snap. Directly confirms Ruling 19's own
+"Chromium and Firefox animate zoom" claim, at least for Chromium, by direct measurement in this
+session rather than by trusting the ruling's text. Firefox not independently checked (not
+available in this session). **Safari**: not checked (not available); WebKit originated the
+non-standard `zoom` property but B has no way to confirm whether *transitioning* it (as opposed
+to applying a static value) is supported in a current Safari — recommend treating an un-animated
+snap in Safari as an accepted degradation, the same shape already accepted for
+`grid-template-columns` in 7-02's own log, not a new risk category.
+
+**`vh` and figure caps, checked per this turn's own instruction, not skipped:**
+`grep -rn "vh\b" src/app/globals.css src/components/reader/` finds exactly one hit in the reader
+surface: `reader-panel`'s own `100vh` (handled above). No other reader component or rule uses
+`vh`/`dvh` inside the article. **Figure caps**: `matted-figure.tsx:16`,
+`max-h-[260px] sm:max-h-[360px]` — a plain length, not `vh`-based, so it scales in lockstep with
+everything else in the zoomed box exactly as Ruling 19 already expects ("figures scale with the
+page as a side effect of zoom") — confirmed by the same mechanism already established (any length
+inside the zoomed box paints at `declared × zoom`), no extra compensation needed, matches
+expectation, not a defect. **One cross-cutting finding for the manager, not a C action item**:
+`figure-lightbox.tsx:198` uses `max-h-[24dvh]` on a `position: fixed`-ish overlay (file excluded
+from this round's edits). Checked by execution whether `position: fixed` escapes a zoomed
+ancestor to the true viewport, or stays inside the zoomed coordinate space: built a `zoom:1.8` box
+with a `position:fixed; top:10px` child — the child rendered at **18px** real (`10×1.8`), not
+10px, and did not reposition on scroll (confirmed it is still "fixed" in the usual sense, just
+zoom-scaled) — **`position: fixed` does not escape a zoomed ancestor's local coordinate space in
+this browser**, so if the figure lightbox ever renders while its ancestor chain includes the
+zoomed `<PageContainer>` (i.e., a reader opens a lightbox while Fit is on), its own fixed offsets
+and `dvh`-based cap would be zoom-scaled too, by the same mechanism as everything else in this
+log. Not this turn's file to fix; flagging for the manager to relay to the figure-owning agent,
+since it is a real interaction between two rounds' work that neither agent could see from their
+own file alone.
+
+**Tests at risk — grepped, not assumed.** `reading-prefs.test.ts`: the "fit to screen" `describe`
+block (lines 58–94) — its "increaseScale clears fit" and "decreaseScale clears fit" tests
+(lines 72–82) **must be rewritten**, not deleted, to assert the *opposite* new contract
+("increaseScale/decreaseScale leave fit untouched — Ruling 19, S20 and S21 compose"); the
+"resetScale returns to the default step and clears fit" test (lines 84–93) needs its
+`expect(state.fit).toBe(false)` assertion removed/rewritten the same way (resetScale still resets
+`scaleIndex`, no longer touches `fit`). The `fitScaleIndex` `describe` block (lines 96–128, 4
+tests) is rewritten wholesale to test `fitZoom`'s 2-argument signature instead (clamp-to-1-min,
+clamp-to-2.5-max, the `pageWidthAt1x<=0` fallback, and one mid-range value) — same file, same
+"never delete a test" rule, comment naming Ruling 19/7-04 as the reason the contract changed. No
+other test file references `fitScaleIndex`, `READING_COLUMN_BASE_PX`, or `READING_GRID_GAP_2XL_PX`
+(grepped: zero hits outside `spread.ts`/`reader-layout.tsx`/this test file). `useResolvedReadingScale`
+and the new `usePageZoom` are not directly unit-tested anywhere today (7-03's own log already
+named this as this repo's standing ceiling — no DOM/window in the Node test environment — not a
+new gap this item introduces).
+
+**Blast radius.** `reading-prefs.ts`: `fitScaleIndex` removed, `fitZoom` added (same shape, new
+signature); 3 existing actions each lose one field from their `set({…})` call, no other logic
+changed. `reader-layout.tsx`: `useResolvedReadingScale` shrinks to one line; `usePageZoom` is new;
+`fitScaleIndex`/`READING_COLUMN_BASE_PX`/`READING_GRID_GAP_2XL_PX` imports drop, `useSpread`
+import stays (still used by `usePageZoom` and `ReaderLayout` itself). `spread.ts`: two exported
+constants removed (or left unused, C's call), zero change to `SPREAD_GRID`/`PAGE_CLASS`/
+`PANEL_CLASS`/`COLUMN_CLASS`. `page.tsx`: `readingScaleStyle` gains two keys (`zoom`,
+`--page-zoom`) computed from the new `usePageZoom()` call; no change to any of the other 4
+`PageContainer` call sites (none of them call `usePageZoom` or set `--page-zoom`, so `zoom`
+simply is not set there — no fallback needed the way `--reading-scale, 1` needed one, since an
+absent inline `zoom` style is just "no zoom," not a broken calc()). `globals.css`:
+`reader-panel`'s one `top` declaration changes formula; no other utility touched.
+`decision-block.tsx`, `keyboard.tsx`: **zero changes** (confirmed above). No figure file touched.
+
+---
+
+#### 7-05 — A7-02: the xl cap gets the same calc pair as 2xl (Ruling 19)
+
+**File**: `web/src/components/ui/page-container.tsx`, line 26, the `spread` variant's `xl:` term.
+
+**Classification: MISSING** — A/A's `--reading-scale` mechanism (S20) was wired into only the
+`2xl:` grid/max-width terms (7-01's own named, deliberate scope decision); the `xl:` term never
+reads the variable at all.
+
+**Change**: `xl:max-w-[1000px]` → `xl:max-w-[calc(1000px*var(--reading-scale,1))]`, the identical
+syntactic shape 7-01 already built and C already **proved compiles** in this exact project's real
+Tailwind v4 build (the curled dev-server CSS chunk in round 7's own C log, confirmed emitting
+`calc(640px + 560px * var(--reading-scale, 1))` correctly, including the auto-inserted whitespace
+around the operator and the nested-comma `var()`) — same variable, same `calc()` shape, only the
+literal base number differs (`1000` vs. `640+560s`), so this is lower-risk than 7-01's own
+original edit was, not higher; a fresh curl-and-confirm is still good practice but not required
+to trust the syntax will parse.
+
+**`spread.ts`'s own `xl:` grid term needs no change** — Ruling 19's own text says so
+("the 5fr/7fr grid then fills it") and B's original 7-01 finding already established why:
+`minmax(0,5fr)_minmax(0,7fr)` is proportional, not a fixed-track shape, so it automatically fills
+whatever total width the now-larger cap gives it with zero additional wiring.
+
+**One consequence of the ruling's own instruction, named rather than silently accepted or
+"fixed" beyond what was asked**: at 2xl, growing `--reading-scale` holds the **panel** width
+exactly constant (7-01's own derived invariant, `640+560s` chosen specifically so the panel's
+`1fr` share never moves) — but at xl, the 5fr/7fr split is *proportional*, not
+fixed-plus-flexible, so growing the cap grows **both** the panel and the column, in a fixed 5:12
+share each. Concretely, from A's own live numbers at 1440px (cap 1000, panel 370, column 518,
+padding 48): at the ladder's new top step (1.6×), the cap becomes `1000×1.6=1600`, content width
+`1600-48=1552`, panel `1552×5/12≈647` (up from 370), column `1552×7/12≈905` (up from 518) — the
+panel visibly widens under A/A at xl, unlike at 2xl where it is pinned. This is exactly what
+Ruling 19's own text prescribes ("the 5fr/7fr grid then fills it"), not a bug B is flagging for a
+reversal — naming it because a future reader comparing xl and 2xl behaviour side by side would
+otherwise wonder whether the panel-invariance was forgotten at xl, when it was never asked for
+there.
+
+**The other 4 `PageContainer width="spread"` call sites — still a no-op, same reasoning 7-01
+already established for the 2xl term, re-confirmed for this new xl term**: none of them ever sets
+`--reading-scale`, so `var(--reading-scale, 1)` falls back to `1` at every one —
+`1000×1=1000px`, byte-identical to today.
+
+**A7-02's other half (Fit itself inert at xl) needs no separate code** — per Ruling 19's own
+text, once 7-04's `zoom` mechanism is in place and applies uniformly to the whole
+`<PageContainer>` whenever `spread` is true, Fit "works at every two-column width by
+construction," xl included, since `zoom` scales the *whole rendered box* regardless of how that
+box's size was computed (fixed-plus-flexible at 2xl, proportional at xl) — no xl-specific branch
+needed in `usePageZoom`/`fitZoom`. B's original 7-01 guide's own xl arithmetic (28em/24em
+`measure`/`measure-lede` caps having headroom in a 7fr column) is unaffected by this change and
+needs no revisiting.
+
+**Tests at risk**: none — `page-container.test.tsx` (if any) was not found referencing the
+`spread` variant's literal `xl:max-w-[1000px]` string (grepped: no test file matches
+`max-w-\[1000px\]` or asserts on `pageContainer({width:"spread"})`'s exact class string). No test
+in `reading-prefs.test.ts` or elsewhere depends on the xl cap being scale-invariant.
+
+**Blast radius**: one Tailwind class-string literal changed, in one `cva` variant, used by 5 call
+sites (4 of which are a proven no-op, per above). No change to `spread.ts`, no change to any
+component file, no change to any figure file.
+
+---
+
+#### 7-06 — S22: `.zoom-transition` gains `zoom`/`top`; tests
+
+**File**: `web/src/app/globals.css`, lines 740–746.
+
+**Classification: MISSING** — the existing rule (added in round 7's first pass, 7-02) names only
+the three properties S20's *column/font* mechanism changes (`font-size`, `max-width`,
+`grid-template-columns`). Ruling 19 adds a fourth changing property (`zoom` itself) and this
+turn's own sticky fix (7-04) adds a fifth (`top`, on the panel specifically, via `--page-zoom`).
+Both need naming or they will **snap** instead of easing while everything else around them eases,
+a visible mismatch during Fit's own 0.3s transition.
+
+**Change**:
+
+```css
+.zoom-transition,
+.zoom-transition *:not(button):not(a):not(img) {
+  transition:
+    font-size 0.3s var(--ease-snap),
+    max-width 0.3s var(--ease-snap),
+    grid-template-columns 0.3s var(--ease-snap),
+    zoom 0.3s var(--ease-snap),
+    top 0.3s var(--ease-snap);
+}
+```
+
+`top` on the broad `*:not(button):not(a):not(img)` selector is safe to declare, not just
+convenient — grepped the reader surface for other positioned elements inside the zoom root:
+`reader-panel` (the sticky panel) is the **only** `position: sticky`/`absolute`/`fixed` element
+anywhere under `components/reader/*` or the article; declaring `transition-property: top`
+broadly costs nothing on the other, statically-positioned descendants (an unused
+`transition-property` entry on a property that never changes on that element is inert, the same
+reasoning already accepted for `font-size`/`max-width` being declared on elements that do not
+carry those specific classes).
+
+**Fit's own toggle and the composing-with-A/A behaviour already route through
+`withZoomTransition`** (`decision-block.tsx` lines 197/206/236, confirmed unchanged by this turn
+— see 7-04) — so no new call site needs wiring here, only the CSS list.
+
+**Tests.** Rewrite `reading-prefs.test.ts`'s two affected `describe` blocks per 7-04's own "tests
+at risk" section (not repeated here). No test exists or is recommended for the CSS property list
+itself — 7-02's own log already established (and this turn found no reason to revisit) that this
+repo's Node-environment test runner cannot assert on live CSS transition behaviour; the class
+lifecycle (`withZoomTransition`'s own guard-clause tests, already shipped in `theme.test.ts`) is
+the testable half and needs no change, since `withZoomTransition` itself is untouched by this
+turn — only the *targets* of the CSS rule it triggers changed.
+
+**Gate**: not run by B (B changes no code, per this round's standing rule); C runs
+`npx tsc --noEmit && npx eslint . && npx vitest run --exclude "**/benchmark.test.ts"` after each
+of 7-04/7-05/7-06, expected baseline **2682/2682** plus whatever net test count the
+`reading-prefs.test.ts` rewrite produces (same file, same number of tests, contents changed —
+likely still 2682, not a new count, since no test is added or removed, only rewritten; C should
+still report the actual number rather than assume).
+
+---
+
+### Round 7 — Agent B, summary (second pass)
+
+Fix guide: **7-04 (A7-01, the whole-page zoom mechanism) → 7-05 (A7-02, the xl cap) → 7-06 (S22's
+transition list + tests)**, per this turn's own stated order. Ruling 19 already settled the
+design question (whole-page CSS `zoom`, composes with A/A); this turn's own contribution is the
+concrete mechanism, verified by execution wherever the ruling itself flagged uncertainty:
+
+- `zoom` lands on the outer `<PageContainer>` article (confirmed safe for `max-width`/`mx-auto`
+  centering by direct measurement across four synthetic variants; one unreproduced anomaly on a
+  fifth, busier test page recorded honestly rather than either trusted or silently dropped).
+- The sticky panel's `top: 4rem` branch needs `calc(4rem / var(--page-zoom, 1))`, confirmed by
+  execution to land at exactly the 1x baseline (64px real) regardless of zoom. **The panel's
+  second, bottom-stick branch (`100vh`/`--panel-h`/`1.5rem`) needs an asymmetric fix Ruling 19's
+  own text does not mention** — `100vh` and `1.5rem` divide by `--page-zoom`, `--panel-h` does
+  not, because `offsetHeight` (how it is measured) already divides it out — derived from two
+  independently confirmed mechanisms (`offsetWidth`/`offsetHeight` report pre-zoom size on every
+  element; `vh` resolves against the true viewport, not a zoom-divided one) and cross-checked
+  algebraically, but not yet end-to-end tested against a real tall panel (named as an open
+  verification for C).
+- `fitZoom(viewportWidth, pageWidthAt1x)` measures `[data-zoom-root]`'s own `offsetWidth` (proven
+  immune to that element's own `zoom`) rather than recomputing the breakpoint formula — this also
+  retires `fitScaleIndex` and two now-dead exported constants, and surfaces a real but minor
+  one-render staleness when A/A is pressed while Fit is on (named, with an optional mitigation,
+  not mandated).
+- 7-05's xl-cap fix is a one-line, low-risk repeat of 7-01's own already-proven Tailwind syntax;
+  its one real consequence (the panel is no longer width-invariant at xl the way it is at 2xl,
+  per the ruling's own instruction) is named, not silently accepted or "fixed" further.
+- 7-06 adds `zoom`/`top` to `.zoom-transition`'s property list; Chromium's own smooth animation of
+  `zoom` under a CSS transition was independently confirmed by execution (frame-by-frame
+  interpolation, not a snap), not just taken from the ruling's text; Firefox unverified (matches
+  the ruling's own claim, not independently checked); Safari's support for *transitioning* zoom
+  specifically is unknown and treated as an accepted degradation, the same shape 7-02 already
+  accepted for `grid-template-columns`.
+- One cross-cutting, execution-confirmed finding outside this turn's own files, flagged for the
+  manager rather than acted on: `position: fixed` does not escape a zoomed ancestor's coordinate
+  space in this browser, so the figure lightbox's own fixed offsets/`dvh` cap would be
+  zoom-scaled if it is ever opened while Fit is on — a real interaction between this round and
+  the other agent's figure work, not this turn's file to fix.
+
+No product code changed by this turn. Three throwaway HTML files were created under
+`web/public/` to get real, served pages the Browser pane tools could drive interactively (a
+`file://` page could not be); all three were deleted before this entry was written, confirmed
+absent from `git status`.
