@@ -10051,3 +10051,48 @@ chords, the typing guard) matches.**
 Gate not re-run this part; part 4 runs it cold.
 
 Commit: this log entry only, staged by explicit path.
+
+### Round 7 — Agent A (part 3 of 4 — S22 zoom transition)
+
+**Code read, matching B's guide and C's log exactly.** `globals.css` lines 722-746: `.zoom-transition,
+.zoom-transition *:not(button):not(a):not(img)` names exactly three properties —
+`font-size 0.3s var(--ease-snap), max-width 0.3s var(--ease-snap), grid-template-columns 0.3s
+var(--ease-snap)` — same button/link/img exclusion and reasoning as `.theme-transition` just
+above it; `--ease-snap` confirmed defined (`:root { --ease-snap: cubic-bezier(0.2, 0.9, 0.25, 1);
+}`, line 380). The sitewide `prefers-reduced-motion` rule (lines 692-695, forces every
+`transition-duration` to `0.01ms !important`) covers this block too, independent of
+`withZoomTransition`'s own `matchMedia` guard. `lib/theme.ts` lines 88-131:
+`withZoomTransition` mirrors `withThemeTransition` exactly — same three early-outs (no
+`document`/`window`; reduced-motion; here, a fourth, no `[data-zoom-root]` found), same
+reflow-before-`run()` trick, same `window.setTimeout` cleanup pattern, `ZOOM_DURATION_MS = 300`
+/ cleanup at `+50` (350ms). Targets `document.querySelector("[data-zoom-root]")`; confirmed the
+attribute exists exactly once, on the one `<PageContainer>` `page.tsx` line 637 (`grep
+data-zoom-root` → 1 hit).
+
+**Live check — class lifecycle, timed precisely, not just "present then absent".** Clicked
+"Larger text" (via a script that also polls in the same execution, avoiding the
+click→observe round-trip latency that would otherwise blow past a 350ms window) and sampled
+`root.classList.contains('zoom-transition')` every ~60ms for 600ms: **present** at t=8, 66, 127,
+190, 254, 316ms; **gone** at t=376ms onward — a clean, single transition from present to absent
+landing almost exactly on the coded 350ms cleanup window (not a jittery flicker, not stuck).
+`scaleIndex` correctly moved 2→3 in the same call, confirming the click was real (React
+processed it, `run()` fired). Mid-transition (t≈100ms, a second click on "Smaller text"), read
+the actual computed CSS: `transitionProperty: "font-size, max-width, grid-template-columns"`
+(exactly 3, in the guide's own order), `transitionDuration: "0.3s, 0.3s, 0.3s"`,
+`transitionTimingFunction`: the `--ease-snap` cubic-bezier repeated 3×. After the window closed,
+confirmed `document.documentElement.classList` and the zoom-root's own classList both **do not**
+contain `theme-transition` — a zoom click never triggers the palette fade.
+
+**Honest note on what this does and doesn't prove, given part 1's hidden-pane finding**: this
+confirms the **class lifecycle and the CSS declaration** are both real and correctly timed —
+DOM-level facts that don't require a live paint to observe (matching 6-06's own established
+"class lifecycle is provable without a compositor" method). Whether the *visual interpolation*
+itself paints smoothly frame-by-frame is the same hidden-pane limitation named in part 1 and not
+re-attempted here — consistent with the brief's "report not observable, not broken" framing for
+anything that needs an actual compositor frame.
+
+**Verdict, S22: matches spec exactly.** No open item.
+
+Gate not re-run this part; part 4 runs it cold.
+
+Commit: this log entry only, staged by explicit path.
