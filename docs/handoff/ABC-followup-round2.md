@@ -970,6 +970,39 @@ the user.
 
 ---
 
+## §1x. RULING 19 — Fit scales the whole page, not just the column (manager, 2026-09-17) — BINDING
+
+A's numbers settle the design question the spec left open. With the panel pinned and only the
+column scaling, the page grows slowly: at 2560 px, filling 85 % would need ≈ 2.7× — 45-px body
+text. That is not what "fit to screen" means; a PDF viewer's fit-width scales the *whole page*.
+
+- **Fit (S21) becomes a whole-page zoom:** CSS `zoom` on the reading article (panel, gap, column,
+  figures and all), continuous rather than ladder-bound: `zoom = clamp(1, 0.85 × viewportWidth /
+  pageWidthAt1x, 2.5)`, computed at read time from the viewport (a `useSyncExternalStore` on
+  `resize` is fine) and recomputed on resize. At 2560 that is ≈ 1.8×; text ≈ 30 px, the way a
+  fitted PDF reads on a big monitor. Figures scale with the page as a side effect of `zoom` —
+  no figure file is edited (they stay excluded).
+- **A / A (S20) stay the reader's text/column step**, and the two **compose**: Fit no longer turns
+  off on A/A (they are different knobs — page size vs. reading size), and A/A still clears
+  nothing. Ctrl/⌘ `=`/`-`/`0` keep driving A/A. The ladder stays at 8 steps.
+- **A7-02 (xl band, 1280–1535):** with `zoom` on the article, Fit works at every two-column
+  width by construction. For A/A at xl, the article's `1000px` cap also multiplies by
+  `--reading-scale` (same calc pair as 2xl; the 5fr/7fr grid then fills it), so the column
+  widens there too. Below xl Fit stays disabled.
+- **S22:** the `.zoom-transition` rule adds `zoom .3s` (Chromium and Firefox animate `zoom`;
+  where a browser does not, the change is instant — acceptable) so Fit eases like the steps.
+- **Sticky panel under `zoom`:** B verifies by execution that the panel's `position: sticky`
+  top offset and the masthead height still line up at 1.8× (the panel's sticky top is 4rem, the
+  masthead is outside the zoomed article — if the numbers drift, B says by how much and C
+  compensates with `calc(4rem / var(--page-zoom))`).
+- Tests: `fitZoom(viewportWidth, pageWidthAt1x)` pure and unit-tested at 2560/1440/1280;
+  store: A/A no longer touch `fit`.
+
+C's order: A7-01 (the zoom mechanism) → A7-02 (xl cap) → tests. Then A re-measures S21 and the
+S20 xl case only.
+
+---
+
 ## §2. ROLES — DO ONLY YOUR OWN JOB
 
 ### Agent A — Reviewer
