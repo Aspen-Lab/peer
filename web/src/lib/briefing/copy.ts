@@ -9,3 +9,13 @@ export const DAY_STRIP = {
    *  nothing for a key to distinguish. */
   readKey: "· grey is read",
 };
+
+/** The setup strip above a sample briefing. */
+export const STARTER = {
+  label: "A sample, until you say otherwise",
+  line: "These are real papers from today, across a few broad fields. Pick the one you work in and this becomes your briefing — everything else is optional.",
+  placeholder: "or type your field",
+  submit: "Use this",
+  rest: "The longer setup — project, methods, sources, your own model key —",
+  restLink: "is here.",
+};

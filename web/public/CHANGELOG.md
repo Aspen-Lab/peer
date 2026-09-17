@@ -2,6 +2,44 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.25.0 — 2026-09-16
+
+Open on a paper, not a form.
+
+A first visit used to be a seven-step wizard. Peer asked for your research
+topics, your project, your methods, your sources and a model key before it
+would show you a single paper — the one screen that says what the product *is*
+came last, and only to the people who finished the form.
+
+**The first visit is now a briefing.** No profile, no sign-in, nothing typed:
+ten real papers from today, sampled across six broad fields, with the day's
+shape and the reading surface exactly as a set-up reader sees them.
+
+**And the sample says it is a sample.** A strip above the cards names what it
+is — "these are real papers, across a few broad fields" — because ten papers
+that look chosen for you and were chosen for nobody is the dishonest version of
+this idea. The deck does not claim the sample's fields as your interests, the
+plates do not headline them (that is the "your own query, read back at you"
+failure the plate rules exist to prevent), and a card with no abstract says
+"Open this paper for details" instead of "Matches your interest in molecular
+biology".
+
+**Setup happens against the papers, one choice at a time.** Tap the field you
+work in — or type your own — and the sample becomes your briefing on that tap:
+the topic is promoted immediately rather than waiting for the next day's
+day-lock, the strip goes away, and the deck starts naming your topic. Project,
+methods, sources and your own model key are all still there, in the long form,
+now linked rather than imposed.
+
+**The wizard no longer intercepts anyone.** `/welcome` is a page you can visit,
+not a gate you must pass. The only thing the first-run code still does is
+backfill the local flag for a returning reader whose synced profile already has
+topics.
+
+One line had to go with it: the feed store returned an empty list, before the
+request, whenever the profile had no topics — which is exactly the reader this
+release is for.
+
 ## v0.24.0 — 2026-09-14
 
 One plan, on Peer's model.

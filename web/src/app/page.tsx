@@ -25,6 +25,8 @@ import { formatTimeAgo } from "@/lib/format";
 import { useProfileStore } from "@/store/profile";
 import { FeedTile } from "@/components/cards/feed-tile";
 import { DayStrip } from "@/components/briefing/day-strip";
+import { StarterStrip } from "@/components/briefing/starter-strip";
+import { STARTER_TOPICS, isStarterFeed } from "@/lib/feed/starter-topics";
 import { Band } from "@/components/ui/band";
 import {
   ReadingCalendar,
@@ -117,16 +119,31 @@ function DailyBriefingPage() {
   // Allocated once across the whole briefing, not per card: the source field is
   // `matchedKeywords ∪ tags`, so per-card selection would put the reader's own
   // query on all ten plates and let one concept headline half of them.
+  // The banned list is "the query, read back at the reader". In starter mode
+  // the query is the sample's own fields, so they are what must not headline
+  // every card — without this each plate said "molecular biology".
+  // Nothing chosen yet: the briefing is the starter sample, and the strip below
+  // the dateline is where it becomes the reader's own.
+  const starter = isStarterFeed(profile.researchTopics);
+
   const plateTerms = useMemo(
-    () => allocatePlateTerms(papers, profile.researchTopics),
-    [papers, profile.researchTopics],
+    () =>
+      allocatePlateTerms(
+        papers,
+        starter ? [...STARTER_TOPICS] : profile.researchTopics,
+      ),
+    [papers, starter, profile.researchTopics],
   );
 
   const unreadCount = papers.filter((p) => !readItems[p.id]).length;
+  // Nothing chosen yet: the briefing is the starter sample, and the strip below
+  // the dateline is where it becomes the reader's own.
   const empty = emptyReason({
     isLoading,
     papersCount: papers.length,
-    topicsCount: profile.researchTopics.length,
+    // In starter mode "no topics" is not an empty state — there are papers.
+    // A failed or empty sample is still reported as itself.
+    topicsCount: starter ? 1 : profile.researchTopics.length,
     feedError,
   });
 
@@ -147,7 +164,9 @@ function DailyBriefingPage() {
         date={dayLine(new Date())}
         total={papers.length}
         unread={unreadCount}
-        topics={profile.researchTopics}
+        // The sample's fields are not the reader's interests, so the deck
+        // does not name them. The strip below says what they are.
+        topics={starter ? [] : profile.researchTopics}
         loading={papersLoading && papers.length === 0}
         failed={Boolean(feedError)}
         lastRefresh={lastRefresh}
@@ -160,6 +179,9 @@ function DailyBriefingPage() {
       {papers.length > 0 && (
         <DayStrip papers={papers} readIds={readItems} now={now} />
       )}
+
+      {/* Setup, above the papers it is about — and only until it is done. */}
+      {starter && <StarterStrip />}
 
       {/* The deck already says what is being looked for. */}
       {papersLoading && papers.length === 0 && <LoadingSkeleton label={null} />}
@@ -195,7 +217,7 @@ function DailyBriefingPage() {
               className="mb-4 break-inside-avoid rounded-3xl transition-shadow"
             >
               <FeedTile
-                item={{ kind: "paper", data: paper }}
+                item={{ kind: "paper", data: starter ? { ...paper, relevanceReason: "" } : paper }}
                 plateTerms={plateTerms[paper.id]}
               />
             </div>

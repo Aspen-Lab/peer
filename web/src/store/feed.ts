@@ -22,6 +22,7 @@ import {
 } from "@/lib/entitlement/types";
 import { entitlementGrants } from "@/lib/entitlement/allowance";
 import { scoredItemToPaper } from "@/lib/feed/mapper";
+import { STARTER_TOPICS_KEY, topicsOrStarter } from "@/lib/feed/starter-topics";
 import {
   aiAvailability,
   feedsUseAi,
@@ -243,10 +244,13 @@ function activeSurfaceTopics(
 }
 
 export function activePaperTopicsKey(profile: UserProfile): string {
-  return (profile.activeSearchInputs?.papers.required ?? [])
+  const own = (profile.activeSearchInputs?.papers.required ?? [])
     .map((topic) => topic.trim())
-    .filter(Boolean)
-    .join("\n");
+    .filter(Boolean);
+  // A reader who has chosen nothing still gets a briefing — the starter sample.
+  // It needs a key of its own: the empty string reads as "nothing to load" at
+  // the page's auto-load effect, which is what kept a new visitor paperless.
+  return own.length > 0 ? own.join("\n") : STARTER_TOPICS_KEY;
 }
 
 export function paperFeedRequestBody(
@@ -259,7 +263,8 @@ export function paperFeedRequestBody(
   // direction: no entitlement means no AI.
   entitlement: Pick<Entitlement, "userId"> = ANONYMOUS_ENTITLEMENT,
 ): Record<string, unknown> {
-  const { topics, softTopics } = activeSurfaceTopics(profile, "papers");
+  const { topics: ownTopics, softTopics } = activeSurfaceTopics(profile, "papers");
+  const topics = topicsOrStarter(ownTopics);
   const seedTexts = [
     profile.currentProject,
     profile.currentChallenges,
@@ -340,8 +345,10 @@ async function fetchRealFeed(
   aiPaperSearchEnabled = false,
   excludeIds: string[] = [],
 ): Promise<Paper[]> {
-  const { topics } = activeSurfaceTopics(profile, "papers");
-  if (topics.length === 0) return [];
+  // No guard on an empty topic list any more. It used to return `[]` before the
+  // request, which is what made a reader with no profile see an empty page: the
+  // starter sample is built in `paperFeedRequestBody`, and it never gets the
+  // chance to be sent if this returns first.
 
   // Advisor / PI discovery seeds (recomputed monthly). Their text biases TF-IDF
   // scoring; their work IDs anchor the citation-neighborhood pull in the pipeline.

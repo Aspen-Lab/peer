@@ -1,14 +1,21 @@
 "use client";
 
-// First-run onboarding plumbing: FirstRunGate redirects a user who has never
-// completed the welcome wizard to /welcome (once the persisted profile has
-// hydrated, to avoid a false redirect).
+// First-run onboarding plumbing.
+//
+// **It no longer redirects.** A first visitor used to be sent to /welcome and
+// saw a seven-step form before a single paper. The first visit is now the
+// briefing itself, with a sample feed and a setup strip above it
+// (`components/briefing/starter-strip.tsx`); /welcome is still there and is
+// still linked, for a reader who wants the long form.
+//
+// What is left here is the backfill: a synced profile that already has topics
+// is proof of prior onboarding, so the local flag is written to match.
 //
 // Onboarding state is local (see UserProfile.onboardedAt), so this works for
 // signed-out visitors too and resets cleanly when localStorage is cleared.
 
 import { useEffect, useState, useSyncExternalStore } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useProfileStore } from "@/store/profile";
 import { useSyncGate } from "@/components/profile-sync";
 
@@ -46,7 +53,6 @@ export function useProfileSettled(): boolean {
 }
 
 export function FirstRunGate() {
-  const router = useRouter();
   const pathname = usePathname();
   const onboardedAt = useProfileStore((s) => s.profile.onboardedAt);
   const topicsCount = useProfileStore((s) => s.profile.researchTopics.length);
@@ -59,33 +65,12 @@ export function FirstRunGate() {
   // localStorage flag was lost. Backfill the flag from that evidence so the
   // rest of the app sees a consistent value (skipped while ON /welcome, where
   // a mid-wizard user may have only just added their first topic).
-  const onboarded = Boolean(onboardedAt) || topicsCount > 0;
 
   useEffect(() => {
     if (!settled) return;
     if (pathname === "/welcome") return;
     if (!onboardedAt && topicsCount > 0) completeOnboarding();
   }, [settled, pathname, onboardedAt, topicsCount, completeOnboarding]);
-
-  useEffect(() => {
-    // Redirect only once the profile is trustworthy — after local hydration
-    // AND the initial remote pull. Deciding on the pre-sync default profile
-    // bounced returning users into the wizard on their first fresh-browser
-    // load.
-    if (!settled) return;
-    if (!pathname) return;
-    // /persona is reachable straight from the wizard's final step — taking
-    // the quiz must not require marking onboarding complete first.
-    if (
-      pathname === "/welcome" ||
-      pathname === "/persona" ||
-      pathname.startsWith("/auth")
-    ) {
-      return;
-    }
-    if (onboarded) return;
-    router.replace("/welcome");
-  }, [settled, pathname, onboarded, router]);
 
   return null;
 }
