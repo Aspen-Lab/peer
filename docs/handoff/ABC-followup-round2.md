@@ -81,29 +81,29 @@ browser, run the reports), then report to the user in plain language and stop th
 
 ```
 ROUND:            7
-WHOSE TURN:       A
-STOPPED BECAUSE:  C finished 7-01/7-02 (own commits) and 7-03 (banked by the manager @
-                   2026-09-17 ~06:40 UTC after C's session limit hit mid-live-check)
-STATUS:           S20 page zoom (95d546e), S22 0.3-s zoom transition (b2b63fd), S21 fit toggle +
-                   Ctrl/⌘ zoom keys (manager-banked: reading-prefs `fit`/`setFit`/`resetScale`/
-                   `fitScaleIndex`, decision-block fifth IconButton, keyboard.tsx shortcuts above
-                   the Ctrl-swallow line, reader-layout fitted scale at read time, spread.ts,
-                   icons.tsx, page.tsx; new decision-block.test.tsx + reading-prefs tests). Gate
-                   with the other agent's dirty lightbox files present: tsc clean · eslint clean
-                   · vitest 2682/2682. C's live check (Fit at 2560/1440, keyboard) was NOT
-                   completed — A owes it. Dev server down at the manager's check; restarted.
-OPEN ITEMS:       S20 S21 S22 — landed, unmeasured.
-GATE (0 open):    NOT MET (pending A)
+WHOSE TURN:       B
+STOPPED BECAUSE:  A finished measuring S20/S21/S22 in 4 parts (2026-09-17); gate cold and clean.
+STATUS:           S20 (page zoom) and S22 (0.3s transition) both fully match spec — zero open
+                   items, confirmed live/via reload at 2560x1400 and via a timed class-lifecycle
+                   poll. S21 (Fit) has 2 real, execution-confirmed gaps: A7-01 (Fit's own ladder
+                   ceiling, 1.6x, only reaches 58.1% of a 2560px viewport, not the spec's ≈85%)
+                   and A7-02 (Fit is enabled and changes font-size at the xl-only sub-range,
+                   1280-1535px, but the page width never moves there, since S20 only wired
+                   --reading-scale into the 2xl grid/max-width terms). Both under S21; ranked
+                   A7-01 first (wider-impact, and misses the spec's own headline scenario).
+OPEN ITEMS:       A7-01, A7-02 (both S21). POLICY: A7-01 needs a manager design ruling (extend
+                   the ladder vs. change fitScaleIndex's own target/rounding) before B can guide
+                   a fix.
+GATE (0 open):    NOT MET — 2 open items (A7-01, A7-02).
 
-DONE:      round 7: 7-01, 7-02, 7-03 (C's log entry for 7-03 is missing — C died before writing
-           it; A reads the diff).
-GATE NOW:  tsc clean · eslint clean · vitest 2682/2682 (manager, cold, 2026-09-17).
-TODO:      A measures S20/S21/S22 at 2560×1400 and 1440×900 (Browser pane resize_window):
-           column width and prose font-size at 1× vs Fit; panel width constant; Fit picks a
-           smaller step at 1440; button disabled below 1280; Ctrl/⌘ =/-/0; A/A clears fit;
-           `fit` persisted; `.zoom-transition` class present for ~350 ms after a click; the
-           transition CSS lists font-size, max-width, grid-template-columns at .3s. Figure files
-           are excluded and may be dirty (other agent) — ignore them.
+DONE:      round 7 A: measured S20/S21/S22 in 4 committed parts (8ede31f, e798f5d, c54f03b, and
+           this part's own commit). Gate cold: tsc clean · eslint clean · vitest 2682/2682 (no
+           regression from §1's own recorded baseline).
+GATE NOW:  tsc clean · eslint clean · vitest 2682/2682 (A, cold, 2026-09-17).
+TODO:      Manager rules on A7-01 (POLICY). B reads A's 4 log entries (parts 1-4), writes a fix
+           guide for whichever of A7-01/A7-02 the manager doesn't accept as a cost, per §2's own
+           rules (name files/lines, classify, rank wrong-data first, state the fallback). Figure
+           files are still excluded and may be dirty (other agent) — ignore them.
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
@@ -121,6 +121,7 @@ part-way.
 | 5 | 6 (A5-01..A5-05, A5-08; A5-09 closed) | NOT MET — loop reopened for S8-S11. S9 (A5-09) closes clean on the code. S8 (A5-08) is entirely unbuilt. S10 misses its own stated targets on both the first `/api/figure` call (5.7-9.4 s vs a 5 s ceiling, A5-03) and the cached call (0.19-2.36 s vs a 100 ms ceiling, A5-04), and a report already cached does not always render within 1 s because `paper` alone gates the whole page and is not always already in the client's persisted store (A5-05); two other S10 targets already meet spec (A5-06, A5-07). S11's upload wall is confirmed exactly where the manager's repro said, plus one new gap: an over-cap file gets the same wrong "not multipart" error instead of its own honest size message (A5-01, A5-02). Gate clean (tsc/eslint/vitest 2641/2641). |
 | 5 (closing) | 1 (A5b-04; A5b-03 explained by an existing ruling) | NOT MET, narrowly — all 6 of round 5's items (5-01..5-07) confirmed closed live, most via the manager's own browser checks: S11 (padded 15/20/24 MB + the user's real 14.5 MB Zotero PDF), S8 (justified prose + scramble-safe switch, live-computed styles), S9 (hover cue, live-computed scale), S10(a) cached-report-within-1s (810 ms) and S10(b) cached-figure-within-300ms (8-19 ms) all closed. One real, newly-tested gap: S10 target (c)'s concurrent-flood delay measured ~14-15 s on a genuinely cold paper (vs. ~10 s), a shape A5-06 itself flagged as untested last round (A5b-04) — not addressed by any of round 5's landed items. A second, smaller miss (one paper's first-call time, 10.748 s vs ≤10s) is explained in advance by item 5-05's own named risk, not a fresh defect (A5b-03). Gate clean (tsc/eslint/vitest 2646/2646). |
 | 6 | 2 (A6-01, A6-02) | NOT MET — 6 of round 6's 8 items (S12 lightbox, S13 upload swell, S14 icon, S17 fade mechanism, S18 hover cues, S19 progress bar) confirmed meeting target with live Browser-pane checks (DOM/attribute/computed-style, not screenshots). 2 real, execution-confirmed differences neither B nor C could have caught from code reading alone: S15's `--reading-scale` mechanism updates the store and the CSS variable correctly but never actually changes any reading-prose font-size, on any of its 6 steps (a CSS custom-property inheritance gap, confirmed with an isolated synthetic repro, not just the app's own code) — A6-01. The Profile page's own theme-mode picker shows "Auto" permanently pressed and does not respond to clicks, even though the applied theme and its own localStorage both correctly say "dark" — A6-02, flagged not diagnosed (a possible dev-session artifact could not be ruled out without a restart). The 1s fade and the 120ms-vs-150ms swell timing are each re-confirmed as already-logged, not-new (hidden-pane-frozen / accepted-cost respectively). Gate clean (tsc/eslint/vitest 2657/2657, re-run cold by A). |
+| 7 | 2 (A7-01, A7-02) | NOT MET — S20 (page zoom) and S22 (0.3s transition) fully match spec: ladder steps/clamps/panel-invariance/Decision-exclusion all confirmed via reload-based measurement at 2560×1400 (0×, default, and the new 1.6× ceiling), and the `.zoom-transition` class lifecycle timed live to ~350ms with the CSS declaring exactly the 3 named properties. S21 (Fit) carries 2 real, execution-confirmed gaps: at 2560px Fit's own ladder ceiling (1.6×) reaches only 58.1% of the viewport, well short of the spec's own ≈85% target (A7-01, POLICY — needs a manager design ruling); at the xl-only sub-range (1280–1535px) Fit is enabled and changes the font size but the page width never moves, since S20 wired `--reading-scale` into only the 2xl grid/max-width terms (A7-02). Also recorded: a hidden-pane environment finding (this session's Browser pane was hidden throughout; live in-session clicks update the store/CSS-variable correctly but derived `calc()` layout does not visually recompute without a reload) — not scored, flagged for the manager's own visible-browser check. Gate clean (tsc/eslint/vitest 2682/2682, re-run cold by A). |
 
 ---
 
@@ -10096,3 +10097,70 @@ anything that needs an actual compositor frame.
 Gate not re-run this part; part 4 runs it cold.
 
 Commit: this log entry only, staged by explicit path.
+
+### Round 7 — Agent A (part 4 of 4 — the gate, cold, and the difference list)
+
+Dirty tree re-confirmed unchanged from part 1: only `figure-lightbox.tsx`/`.test.ts` (not ours).
+Browser viewport reset to `desktop` (cleared the emulation part 1-3 set) before running the gate.
+
+**Gate, cold, from `web/`:**
+- `npx tsc --noEmit` → clean.
+- `npx eslint .` → clean.
+- `npx vitest run --exclude "**/benchmark.test.ts"` → **2682/2682** (123 test files), matching
+  §1's own recorded baseline exactly — no regression from anything measured this round (A changed
+  no code; the other agent's in-progress figure-file edits sat in the tree throughout every gate
+  run this round and did not move the number).
+
+**Difference list, ranked by what the user notices first:**
+
+**A7-01 — WRONG DATA — Fit's ≈85%-of-viewport target is not reached on a wide monitor (2560px:
+58.1% actual).** The ladder's own ceiling (1.6×) is the binding constraint, not a bug in
+`fitScaleIndex`'s logic — confirmed by direct measurement (part 2), reproducible via reload.
+User-facing effect: on the exact class of monitor §1w's own opening problem statement names
+("on a large monitor the reading page uses about a third of the width"), clicking "Fit to
+screen" goes only partway to filling the screen, well short of the stated intent. `POLICY —
+manager decides`: closing this means either extending `READING_SCALE_STEPS` further (more steps
+above 1.6×) or changing `fitScaleIndex`'s target/rounding — a design call B should make, not A.
+
+**A7-02 — MISSING — Fit has no effect on page width at the xl-only sub-range (1280–1535px),
+though it is enabled and changes the font size there.** Confirmed by a controlled before/after
+(part 2): identical `grid-template-columns`/`max-width` at two different resolved scales,
+because S20 wired `--reading-scale` into only the `2xl:` grid/max-width terms, leaving the
+`xl:` terms (`spread.ts`'s `5fr/7fr`, `page-container.tsx`'s fixed `1000px`) untouched — a scope
+B named as a known, deliberate gap for S20 alone ("xl is out of scope... C should sanity-check
+one real xl-only viewport"), but did not carry through to what it implies for **Fit**
+specifically: Fit's whole purpose (filling more of the screen) does nothing at this breakpoint.
+Below A7-01 in rank because it affects a narrower, though not rare, monitor band (common laptop
+widths, e.g. 1366/1440px) and the feature at least doesn't misbehave (no wrong value shown, no
+crash) — it is simply inert.
+
+**Standing exclusions, re-listed by name (per the loop's own rule that they must be named every
+round, not silently assumed permanent):**
+- **Figures** — out of scope this round by the manager's own ruling (§1w); another agent owns
+  `matted-figure.tsx`/`figure-lightbox.tsx`/`paper-plate.tsx`/`paper-figure.tsx`/`lib/figures/*`.
+  Confirmed untouched by round 7's own commits (7-01/7-02/7-03 blast-radius sections all say so;
+  re-confirmed by this A's own reading — no figure file appears in any round-7 diff).
+- **`src/lib/events/benchmark.test.ts`** — standing ruling (§3): a live-network test on dead
+  code, excluded from every gate run, never "fixed."
+- **The hidden-pane artifacts** (part 1) — this session's Browser pane was hidden throughout
+  (`tabs_context` confirmed); live, in-session (no-reload) visual recompute of every
+  `calc()`-based, `--reading-scale`-driven style (column width, article max-width, reading font
+  sizes) did not update following a click, while a fresh reload with the identical persisted
+  state always rendered correctly. Reported per the brief's own instruction as an environment
+  limitation, not scored as a difference — every width/font number in parts 1-2 was independently
+  confirmed correct via the reload method instead. Flagged for the manager's own visible-browser
+  check, since a live click failing to visually update in a normal user's browser would be a real
+  regression and nothing in the reload-based evidence suggests it actually would.
+- **Push not authorised** — every commit this round is local only, per §3.
+
+**S20 and S22: zero open items — both fully match spec on every axis measured** (ladder steps,
+clamps, panel invariance, Decision-sentence exclusion, transition class lifecycle and CSS
+declaration). **S21: 2 open items (A7-01, A7-02).**
+
+**GATE (0 open): NOT MET.** Two real, execution-confirmed, unexplained differences remain
+(A7-01, A7-02), both under S21. `WHOSE TURN: B` — B should read the two findings above (both
+under S21) plus the reload-verified data in parts 1-2, decide the design for A7-01 (ladder vs.
+target-formula change), and write B's usual fix guide for whichever of A7-01/A7-02 the manager
+rules should be fixed rather than accepted.
+
+Commit: this log entry, plus §1 edited in place (below).
