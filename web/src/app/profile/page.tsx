@@ -1675,7 +1675,9 @@ function AppearanceCard({
   );
 }
 
-function ColorThemePicker({
+// Exported for tests only (6-11/Ruling 17) — every other caller reaches it
+// through `AppearanceCard`, like `trySemanticScholarCandidates`.
+export function ColorThemePicker({
   value,
   onChange,
 }: {

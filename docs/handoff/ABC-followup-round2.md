@@ -81,22 +81,44 @@ browser, run the reports), then report to the user in plain language and stop th
 
 ```
 ROUND:            6 (second pass)
-WHOSE TURN:       C
-STOPPED BECAUSE:  B finished (guide banked by the manager @ 2026-09-16 ~20:30 UTC after B's
-                   session limit)
-STATUS:           Round 6: 6-01..6-08 landed (C); A closed S12 S13 S14 S16 S18 S19 and opened
-                   A6-01 (font scale not reaching the prose) and A6-02 (Profile Mode picker
-                   stale on cold load). B's second pass: 6-09 (scoped font-size rules at the use
-                   site) and 6-10 (Profile page reads colorTheme through a selector); Ruling 17
-                   adds 6-11 (the whole Profile view's stale read). Dev server down at the
-                   manager's check — restarted before C.
-OPEN ITEMS:       S15 (6-09), S16 sync (6-10/6-11); S17 fade and S18 swells need eyes with a
-                   fronted pane.
+WHOSE TURN:       A
+STOPPED BECAUSE:  finished the turn @ 2026-09-17 01:37 UTC
+STATUS:           Round 6: 6-01..6-09 landed (C). S15 (6-09, font scale reaches the prose) closed
+                   live: Larger text x2 moves a .reading-justify paragraph 16.5 -> 18.15 ->
+                   19.8px, Decision sentence pinned at 16.5px throughout, Smaller text x2 returns
+                   it — confirmed on /papers/openalex:W7207740551, Browser pane, getComputedStyle.
+                   S16 sync (A6-02) still OPEN: C tried 6-11 (Ruling 17's whole-Profile-view
+                   selector fix), then the narrower 6-10 leaf selector, live on a genuinely fresh
+                   /profile load each time (new tab, real navigation, no HMR) — both show the
+                   Mode picker still stuck on Auto / careerStage still stale, identically to
+                   A6-02's original report. C's diagnostic execution DISPROVES B's diagnosed
+                   mechanism: the store itself rehydrates correctly (`hasHydrated: true`,
+                   `profile.colorTheme` already "dark:ember" from the first sample) and
+                   `theme-sync.tsx`'s identical leaf-selector expression correctly reflects it on
+                   the very same page load — but `ProfilePage`'s own read of that same selector
+                   never re-renders, even after a manual store write. Selector shape (whole-state
+                   / sub-object / leaf) is not the differentiator; something specific to
+                   `ProfilePage`'s own subscription/re-render is. No source fix landed for this —
+                   landing 6-10 "as written" would have knowingly committed a non-fix. What did
+                   land: `ColorThemePicker` exported + a `renderToStaticMarkup` regression test
+                   (Ruling 17's test-gap ask), honestly scoped as guarding the picker's own
+                   value-to-aria-pressed logic, not A6-02 itself.
+OPEN ITEMS:       S16 sync (A6-02) — needs re-investigation by B with C's new diagnostic evidence,
+                   not another selector attempt by C. S17 fade and S18 swells still need eyes with
+                   a fronted pane (unchanged from round 6 first pass).
 GATE (0 open):    NOT MET
 
-DONE:      round 6: 6-01..6-08.
-GATE NOW:  tsc clean · eslint clean · vitest 2657/2657 (A, cold).
-TODO:      C works 6-09 → 6-11 (falls back to 6-10). Then A re-measures S15 and S16 sync only.
+DONE:      round 6: 6-01..6-09. 6-11 attempted and found not to fix A6-02 (documented, test-only
+           commit landed).
+GATE NOW:  tsc clean · eslint clean · vitest 2662/2662 (C, cold before 6-09; re-confirmed after
+           every item).
+TODO:      A re-measures S15 (should now meet target — confirm the font steps move the reading
+           column, not the Decision sentence). For S16 sync: re-confirm A6-02 is still open (it
+           is, by C's own live execution) — do not mark it closed on the 6-11/6-10 diff alone.
+           Then route back to B, not C: B's own "narrow selector fixes it" diagnosis is now
+           execution-disproven (see the 6-11 log entry's control test against `theme-sync.tsx`);
+           B needs to explain why `ProfilePage` specifically fails to re-render on a store update
+           that reaches other subscribers correctly at the same instant.
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
@@ -8997,3 +9019,100 @@ the task brief is plain task text, not a CLAUDE.md/memory rule, so it does not q
 override; the reminder names `Claude Sonnet 5` instead. Not amending (git safety protocol: create
 new commits, don't amend, absent an explicit user request). 6-11/6-10's commit uses `Claude Sonnet
 5`.
+
+---
+
+#### Item 6-11 (A6-02) — S16: the Profile view reads the live store — attempted, does not close the gap; B's own diagnosed mechanism disproven by execution
+
+**Tried first, per Ruling 17**: added `const profile = useProfileStore((s) => s.profile);` plus a
+per-action selector for each of the 24 actions `ProfilePage` needs (`updateDisplayName`,
+`updateCareerStage`, … `logOut`), replacing the whole-store destructure at (then) lines 100-127.
+Mechanical, not invasive — every action's type inferred cleanly, matching this same file's own
+existing `EditView` precedent (`updateFeedAiProvider` etc., already read this way). Gate stayed
+green throughout (2662/2662).
+
+**Live-checked before committing, per the guide's own instruction — and this is where it stopped
+qualifying as a fix.** Cold-load check on `/profile` (a genuine full browser navigation each time,
+confirmed via `performance.getEntriesByType('navigation')[0].type === "navigate"`, network tab
+showing real `200`/`304` document + chunk fetches, not a cached client-side route — and repeated in
+a brand-new tab to rule out any HMR/tab-history artifact from this session's own rapid edits):
+`localStorage['peer-profile']` held `colorTheme: "dark:ember"`, `careerStage: "Postdoc"` (both
+non-default, set in an earlier round's testing). Polled the Mode picker for 3-5 seconds, zero
+clicks, immediately after each fresh load — **the picker still showed `Auto` pressed, `Dark`
+`aria-pressed="false"`, the entire time**, identically to A6-02's original report. The `s.profile`
+selector did not close the gap.
+
+**Went one step further than the guide asked, to find out why, since landing 6-10's narrower
+selector next without checking would have meant knowingly committing the same non-fix**: added a
+temporary leaf-value selector, `useProfileStore((s) => s.profile.colorTheme)` — the *exact* pattern
+`theme-sync.tsx` uses and B named as "reliably immune" — wired to a diagnostic DOM attribute on the
+same page. **It showed the identical stale value.** Then read the store directly
+(`useProfileStore.getState().profile.colorTheme` via a temporary `window` handle) at the same
+moments: **`"dark:ember"`, `hasHydrated: true`, from the very first sample** — the store itself is
+correctly rehydrated; only the component's own rendered output stays stale. A manual click on the
+picker's own "Dark" button (which does correctly call `updateColorTheme` and does correctly persist
+`"dark:ember"` to `localStorage`, confirmed) still left the on-screen picker and both diagnostic
+selectors unchanged 200ms later — so this is not merely a slow first-paint, the component is not
+re-rendering on store updates *at all*, by any selector shape. **The clinching control**: at the
+identical moment, on the identical `/profile` document, `<html data-mode="dark">` (driven by
+`theme-sync.tsx`'s use of the very same leaf selector expression) was already correct. Same store,
+same selector expression, same instant — one component sees the update, the other does not. This
+rules out the store, the persist/rehydrate mechanism, and the selector's shape (object vs. leaf vs.
+whole-state) as the differentiator; whatever is wrong is specific to how `ProfilePage` itself
+subscribes or re-renders, not to which selector it calls. Re-tested against the untouched,
+pre-6-11 code (`git stash` back to the committed whole-store destructure) to confirm this is the
+pre-existing A6-02 bug and not something this item's own edit introduced: identical symptom,
+confirmed.
+
+**Conclusion: neither 6-11 nor 6-10 would close A6-02.** Both guides' fix rests on B's diagnosis
+that a whole-state read is the cause and a selector (narrow or otherwise) is the cure; execution
+now shows a selector — including the *exact* leaf selector B pointed to as proof the pattern works
+— does not change the outcome on this specific page. Landing 6-10 "as written" next would mean
+knowingly committing code proven not to fix the user-visible bug, which is worse than leaving it
+open and honestly flagged: "a wrong value is worse than a missing one" extends here to "a fix
+that doesn't fix is worse than no fix." Per the round rules ("if a guarded fix misses shapes B's
+cases did not span — stop and record, never widen inline") and C's remit (does not diagnose root
+cause), stopping here rather than guessing at a different, self-invented mechanism (e.g. forcing a
+re-render, `key`-remounting the page, `useSyncExternalStore` directly) — any of which would be C
+investigating, not implementing.
+
+**What did land — the one genuinely independent, honest piece of Ruling 17's ask**: `ColorThemePicker`
+exported from `app/profile/page.tsx` (`// Exported for tests only`, same convention as
+`trySemanticScholarCandidates`) and a new `app/profile/page.test.tsx` with a `renderToStaticMarkup`
+smoke test asserting `aria-pressed` on the three Mode buttons derives correctly from the `value`
+prop (`system:*` → only Auto pressed, `light:*` → only Light, `dark:*` → only Dark). This is
+exactly B's own honest caveat on this test from the 6-10 guide, restated because it is now proven,
+not hypothetical: `ColorThemePicker`'s own logic was never the bug, so this test guards a smaller,
+real, but different regression and does not and cannot prove A6-02 fixed. All other profile/page.tsx
+edits (the selector refactor, the diagnostic scaffolding) were reverted — see below.
+
+**Everything reverted, nothing thrown away half-built.** The whole-page selector refactor
+(`profile` + 24 action selectors) was reverted back to the original whole-store destructure — it
+is provably inert (doesn't fix the bug) and only adds surface area, so keeping it would violate
+"additive and optional, never a guess" for zero benefit. `store/profile.ts`'s temporary
+`window.__diagProfileStore` handle and `page.tsx`'s temporary `data-diag-*` attributes/local const
+were removed before this commit — `git diff` shows only the `ColorThemePicker` export as the
+functional change.
+
+**Gate**: `npx tsc --noEmit` clean · `npx eslint .` clean · `npx vitest run --exclude
+"**/benchmark.test.ts"` → **2662/2662** (2659 + 3 new `ColorThemePicker` tests).
+
+**Blast radius.** One `export` keyword + one comment on `ColorThemePicker`; one new test file. Zero
+change to `store/profile.ts`, `theme-sync.tsx`, `decision-block.tsx`, or `ProfilePage`'s own
+data-reading code — A6-02 is exactly as open as B left it, now with a narrower, execution-confirmed
+lead instead of a hypothesis.
+
+**Handing back, not guessing forward.** Recommend the manager route S16 sync to B again rather than
+to C: the next investigation should explain why `ProfilePage` specifically fails to commit a
+re-render on a `useProfileStore` update that the same store, same selector expression, reaches
+`ThemeSync` correctly at the same instant — candidates B could check by execution: an error thrown
+and silently swallowed somewhere in `ProfilePage`'s large render tree (no console error was
+observed, but worth instrumenting directly), a memoization boundary (`React.memo`/context selector)
+between the store update and this component specifically, or a Next.js App-Router-specific
+interaction with this route's `loading.tsx` Suspense boundary (both `/profile` and
+`/papers/[id]` have one, so likely not the sole differentiator, but not yet ruled out for
+`/profile` alone). Diagnostic evidence above (store state + `hasHydrated` correct while DOM stale,
+a manual store write not triggering a re-render either) should let B skip re-deriving what this
+item already confirmed.
+
+Commit: `test(profile): export ColorThemePicker for a regression test; document that 6-10/6-11's selector fix does not close A6-02`.
