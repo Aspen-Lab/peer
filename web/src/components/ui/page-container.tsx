@@ -15,7 +15,15 @@ export const pageContainer = cva("mx-auto w-full px-6", {
       // empty gutter inside the reading column. Sized so the column is the
       // measure plus a rag margin, the two columns fill and the leftover
       // becomes the page's own margins.
-      spread: "max-w-[760px] xl:max-w-[1000px] 2xl:max-w-[1200px]",
+      //
+      // S20: the 2xl cap grows in lockstep with the reading column
+      // (`spread.ts`'s `SPREAD_GRID`, same `560px` base, same
+      // `--reading-scale`) so the panel's `1fr` share stays numerically
+      // constant at every step — 544px panel + 96px 2xl gap + 560px*scale
+      // column = 640 + 560*scale. At scale 1: 640+560=1200, byte-identical
+      // to before this item. Keep the two `560`s and this `640` in step —
+      // same "two places, one query" risk spread.ts's own header names.
+      spread: "max-w-[760px] xl:max-w-[1000px] 2xl:max-w-[calc(640px+560px*var(--reading-scale,1))]",
       content: "max-w-[820px]",  // home column
       wide: "max-w-[920px]",     // saved grid (lg)
       board: "max-w-[1280px]",   // full-bleed feed board

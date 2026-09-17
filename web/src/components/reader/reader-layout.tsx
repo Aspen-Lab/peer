@@ -92,7 +92,14 @@ export function ReaderLayout(p: ReaderLayoutProps) {
   }
 
   return (
-    <div className={SPREAD_GRID}>
+    // S20: `--reading-scale` set here too, not only on the two `words`/
+    // `additions` wraps below — `grid-template-columns` (spread.ts) is a
+    // regular property, not a custom one, so its own `var()` resolves fresh
+    // per element from whatever is inherited AT THAT ELEMENT. The grid div
+    // is an ancestor of the two existing wraps, not a descendant, so it
+    // needs the variable set on itself; `readingScaleStyle` is the same
+    // constant those wraps already use, reused rather than duplicated.
+    <div className={SPREAD_GRID} style={readingScaleStyle}>
       <div ref={panelRef} className={PANEL_CLASS}>
         {p.plate}
         {p.title}

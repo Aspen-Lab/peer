@@ -12,7 +12,11 @@ import { persist } from "zustand/middleware";
 // rehydrates the saved value after mount, so there is no hydration
 // mismatch to guard against here.
 
-export const READING_SCALE_STEPS = [0.85, 0.925, 1, 1.1, 1.2, 1.32] as const;
+// S20: two steps appended above 1.32x so a wide monitor can fill more of
+// itself — the column now scales as a page (spread.ts, page-container.tsx),
+// not just the text, so a bigger step is safe to add. `DEFAULT_SCALE_INDEX`
+// (below) is unchanged: it still lands on the same `1` entry.
+export const READING_SCALE_STEPS = [0.85, 0.925, 1, 1.1, 1.2, 1.32, 1.45, 1.6] as const;
 const DEFAULT_SCALE_INDEX = 2; // 1x, the middle step
 const MAX_SCALE_INDEX = READING_SCALE_STEPS.length - 1;
 

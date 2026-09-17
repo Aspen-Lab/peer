@@ -15,7 +15,7 @@
 // blocks. No status string is typed here: the Decision sentence is
 // `describeAvailability`'s, the keys are `PAPER_KEYS`, absence is `omitted`.
 
-import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { use, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import type { Paper } from "@/types";
 import { useFeedStore } from "@/store/feed";
@@ -67,6 +67,7 @@ import { ReaderLayout, useSpread } from "@/components/reader/reader-layout";
 import { THUMB_BAR_PX, THUMB_BAR_QUERY } from "@/components/shell/thumb-bar";
 import { PAGE_CLASS, SPREAD_GRID } from "@/components/reader/spread";
 import { useReading } from "@/components/reader/use-reading";
+import { useReadingScale } from "@/store/reading-prefs";
 import { useModelReport } from "@/components/reader/use-model-report";
 import {
   NOT_FOUND,
@@ -262,6 +263,14 @@ function Reader({
   // ≥ xl: the spread. Owned here so the decided-read observer can follow the
   // DecisionBlock when the structure switches and it remounts.
   const spread = useSpread();
+  // S20: the page-zoom multiplier, set on the one `<PageContainer>` below so
+  // its `max-w` (page-container.tsx's `spread` variant) and `SPREAD_GRID`'s
+  // 2xl column track (both `calc(... * var(--reading-scale, 1))`) scale
+  // together. The other 4 `width="spread"` call sites in this file never set
+  // this variable, so `var(--reading-scale, 1)` falls back to `1` there —
+  // byte-identical to before this item.
+  const readingScale = useReadingScale();
+  const readingScaleStyle = { "--reading-scale": readingScale } as CSSProperties;
 
   const nav = useMemo(
     () => paperNav(feedPapers.map((p) => p.id), paper.id),
@@ -614,7 +623,12 @@ function Reader({
     // element after a client navigation, and an article that cannot take
     // focus makes that a no-op — j/k would change the paper without
     // assistive technology announcing anything.
-    <PageContainer width="spread" className={`${PAGE_CLASS} md:pb-16 outline-none`} tabIndex={-1}>
+    <PageContainer
+      width="spread"
+      className={`${PAGE_CLASS} md:pb-16 outline-none`}
+      tabIndex={-1}
+      style={readingScaleStyle}
+    >
       {/* The blocks, in the spec's order; `ReaderLayout` places them — one
           column below xl, the spread from it. Later-arriving content (the
           server reading, a model report) is `additions`: on the spread it

@@ -17,10 +17,14 @@ describe("reading prefs scale ladder", () => {
   });
 
   it("increases one step at a time and clamps at the top of the ladder", () => {
+    // S20 (7-01): was 3 fixed presses, which only reached the top because
+    // the old 6-step ladder's top sat exactly 3 above the default index 2.
+    // The 8-step ladder's top is 5 above it — a fixed count silently
+    // undertested the clamp instead of failing loudly, caught by running
+    // this file after the ladder grew. `.length` presses reaches the top
+    // from any starting index, for any ladder length.
     const store = useReadingPrefsStore.getState();
-    store.increaseScale();
-    store.increaseScale();
-    store.increaseScale();
+    for (let i = 0; i < READING_SCALE_STEPS.length; i++) store.increaseScale();
     expect(useReadingPrefsStore.getState().scaleIndex).toBe(READING_SCALE_STEPS.length - 1);
     // One more click past the top does not go out of bounds.
     useReadingPrefsStore.getState().increaseScale();
@@ -37,7 +41,10 @@ describe("reading prefs scale ladder", () => {
     expect(useReadingPrefsStore.getState().scaleIndex).toBe(0);
   });
 
-  it("the ladder is exactly the six steps the spec names, in order", () => {
-    expect(READING_SCALE_STEPS).toEqual([0.85, 0.925, 1, 1.1, 1.2, 1.32]);
+  // S20 (round 7, item 7-01): the ladder grew two steps upward (1.45, 1.6)
+  // so a wide monitor can be filled — the column now scales as a page, not
+  // just the text, so a bigger step is safe.
+  it("the ladder is exactly the eight steps the spec names, in order", () => {
+    expect(READING_SCALE_STEPS).toEqual([0.85, 0.925, 1, 1.1, 1.2, 1.32, 1.45, 1.6]);
   });
 });

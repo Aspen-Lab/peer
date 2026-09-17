@@ -34,7 +34,7 @@ export const PAGE_CLASS = "px-5 sm:px-6 py-8 sm:py-12 xl:pt-4";
  *  there and every extra pixel goes to the panel, so a wide screen buys a
  *  bigger figure and a title with more room, not a longer line. */
 export const SPREAD_GRID =
-  "xl:grid xl:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] 2xl:grid-cols-[minmax(0,1fr)_560px] xl:gap-x-16 2xl:gap-x-24 xl:items-start";
+  "xl:grid xl:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] 2xl:grid-cols-[minmax(0,1fr)_calc(560px*var(--reading-scale,1))] xl:gap-x-16 2xl:gap-x-24 xl:items-start";
 
 /** The left panel: pinned while the reader scrolls the column (`reader-panel`
  *  in `globals.css`). */
