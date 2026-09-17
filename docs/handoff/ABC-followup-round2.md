@@ -9888,3 +9888,79 @@ the middle of 7-03's live check with the code and tests complete on the working 
 manager ran the gate (tsc clean · eslint clean · vitest 2682/2682, with the other agent's
 uncommitted `figure-lightbox.*` edits present and untouched) and committed 7-03's eight files by
 explicit path. C's revert-proof and live numbers for 7-03 were not logged; A measures.
+
+### Round 7 — Agent A (part 1 of 4 — S20 at 2560×1400)
+
+Branch verified (`complimentary-enhancement-to-main-update`) before reading anything. Dirty tree
+confirmed, not mine: `figure-lightbox.tsx`/`.test.ts` — not touched. Read §1w, §1a's predecessor
+rulings, §2 Agent A, §3, round 7's B and C log entries in full, and `git show 3d2331a` (the
+missing 7-03 diff) before measuring. Dev server confirmed up (curl `/` → 200).
+
+**Load-bearing environment finding, checked by execution before trusting any width/font
+number**: `tabs_context` reports the Browser pane **hidden** for this entire session. In a
+hidden pane, a **live** (no-navigation) click on "Larger text"/"Smaller text" correctly updates
+the Zustand store (`localStorage['peer-reading-prefs']` changes immediately and correctly on
+every click) and correctly updates the `--reading-scale` custom property's raw value in the DOM
+(confirmed via `getComputedStyle(...).getPropertyValue('--reading-scale')` **and** the raw
+`style` attribute string on both the grid div and the article) — but the **derived**
+`calc()`-based values that read that variable (`grid-template-columns`, `max-width`, and every
+`.reading-scaled` font-size) do not recompute: they stay frozen at whatever a page currently
+mounted last computed, indefinitely (waited 3s+, forced `offsetHeight` reflows — no change),
+even though the variable feeding the `calc()` has already moved on. **This is not merely a
+transition not animating** (which the brief's hidden-pane warning names) — it is the *final,
+settled* value being stale, past any conceivable transition window. Isolated it with three
+checks, not assumed: (1) a synthetic element created fresh with the scale baked in at creation
+computes correctly (proves the calc()/var() mechanism itself is sound in this browser build);
+(2) the same synthetic element, mutated live *after* first paint via `style.setProperty`
+followed immediately by `getComputedStyle` in the same script, **also** recomputes correctly —
+proving a same-turn, script-forced read works; (3) a full page **reload** with the target
+`scaleIndex` pre-set in `localStorage` (a fresh mount, no live mutation involved) renders every
+value correctly at every step tested (0, 3, 4, 7). Only a live, event-driven (click →
+React re-render → DOM mutation) update, read back in a *separate* tool round-trip, fails to
+recompute in this session. Per the brief's own instruction, reporting this as **"not observable
+live in this hidden pane"**, not as a product defect — and used the reload method (set
+`localStorage`, navigate, measure) as the reliable substitute for every width/font number below,
+since it is proven to match the same code path a real, visible browser paints on first load.
+Store-level facts (index transitions, clamps, persistence) do not depend on layout and were
+measured live throughout, no substitution needed. Flagging for the manager's own real-browser
+(visible pane) sanity pass, since if this ever reproduced in a normal user's visible tab it would
+be a real bug — nothing in the reload-based evidence below suggests it does.
+
+**S20 measurements (all via the reload method above except where marked "live"), at 2560×1400,
+`/papers/openalex:W7207740551`:**
+
+| scaleIndex | multiplier | grid-template-columns | article max-width | `.reading-justify` font-size | panel width |
+|---|---|---|---|---|---|
+| 0 (min) | 0.85× | `496px 476px` | `1116px` | `14.025px` | `496px` |
+| 2 (default) | 1× | `496px 560px` | `1200px` | `14.5px` (`.text-body`) / `16.5px` (`.text-lead`) | `496px` |
+| 7 (max) | 1.6× | `496px 896px` | `1536px` | `26.4px` | `496px` |
+
+Every cell matches the spec's own formulas exactly: column `560×s`, article `640+560×s`, font
+`base×s`, panel constant at `496px` (not B's illustrative `544px` — C's own log entry already
+caught and corrected that arithmetic slip; the *invariant*, not the specific number, is what
+matters and it holds). The "Decision sentence" (`measure-lede text-lead`, "Read by your model
+from the abstract…") stayed `16.5px` unchanged at **every** step tested, including the two
+extremes — confirms it never goes through `.reading-scaled`, architecturally, not just by
+coincidence at 1×.
+
+**Ladder — 8 steps, confirmed two ways**: `git show 3d2331a` and the current
+`reading-prefs.ts` both show `READING_SCALE_STEPS = [0.85, 0.925, 1, 1.1, 1.2, 1.32, 1.45, 1.6]`
+(8 entries); live-measured floor (index 0) and ceiling (index 7) above are the array's own first
+and last entries.
+
+**Clamp — confirmed live (button `disabled`, not layout-dependent, unaffected by the freeze
+above)**: at scaleIndex 0, "Smaller text" `disabled=true`, "Larger text" `disabled=false`; at
+scaleIndex 7, "Larger text" `disabled=true`, "Smaller text" `disabled=false`.
+
+**Click sequence — confirmed live via `localStorage`, store-level only (see freeze note for why
+the visual side used the reload substitute)**: from a clean default (`scaleIndex: 2`), 3×
+"Larger text" → `scaleIndex` 2→3→4→5 (one click at a time, each read back correctly); 3× "Smaller
+text" → 5→4→3→2, back to exactly the starting index. No drift, no double-fire, no missed click.
+
+**Verdict, S20: matches spec on every measured axis.** No open item for S20 itself. The only
+finding is the hidden-pane live-recompute gap named above, logged as an environment caveat for
+the manager, not a scored difference.
+
+Gate not re-run this part (code unchanged by A per the round's own rule); part 4 runs it cold.
+
+Commit: this log entry only (`docs/handoff/ABC-followup-round2.md`), staged by explicit path.
