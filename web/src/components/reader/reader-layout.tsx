@@ -14,15 +14,8 @@
 // breakpoint is rare and gets no transition.
 
 import { useEffect, useRef, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
-import { fitScaleIndex, READING_SCALE_STEPS, useReadingPrefsStore } from "@/store/reading-prefs";
-import {
-  COLUMN_CLASS,
-  PANEL_CLASS,
-  READING_COLUMN_BASE_PX,
-  READING_GRID_GAP_2XL_PX,
-  SPREAD_GRID,
-  SPREAD_QUERY,
-} from "./spread";
+import { fitZoom, READING_SCALE_STEPS, useReadingPrefsStore } from "@/store/reading-prefs";
+import { COLUMN_CLASS, PANEL_CLASS, SPREAD_GRID, SPREAD_QUERY } from "./spread";
 
 interface ReaderLayoutProps {
   /** From `useSpread()`; the page owns it so its own effects can depend on it. */
@@ -61,54 +54,44 @@ function subscribeResize(onChange: () => void) {
 }
 
 /**
- * S21: the reading scale actually shown — the reader's manual ladder step,
- * or, while Fit is on (and the spread applies — Fit has nothing to do
- * below xl), the step `fitScaleIndex` picks for the current viewport.
- * Computed fresh at read time rather than written back into `scaleIndex`
- * (see reading-prefs.ts's own header comment): nothing here calls
- * `setState` from an effect. Subscribed to `window`'s `resize` event via
- * `useSyncExternalStore`, the same shape `useSpread` above already uses
- * for `matchMedia`'s `change` event, so Fit's step re-picks itself as the
- * window is dragged, not only on the next click.
- *
- * Reads the panel's live width via `[data-reader-panel]` rather than a
- * threaded ref, because this hook has **two** call sites that need the
- * identical resolved value — this file's own `ReaderLayout` (for the
- * spread's grid track) and `app/papers/[id]/page.tsx` (for the article's
- * own max-width, S20's other half of the same calc() pair) — and page.tsx
- * is `ReaderLayout`'s parent, with no ref path from a ref created inside a
- * child to a parent that renders before it. A DOM-query lookup sidesteps
- * that entirely and matches this codebase's own established
- * cross-component idiom (`keyboard.tsx`'s `document.querySelectorAll("[data-paper-id]")`,
- * `withZoomTransition`'s `[data-zoom-root]`) — both call sites compute the
- * same thing independently and can never disagree, the same reason it was
- * already safe for both to call the old, non-fit-aware `useReadingScale`
- * selector. (Traced deviation from the round-7 fix guide, logged in full
- * in §4: the guide's own text put this computation "inside
- * useReadingScale()'s existing consumer, reader-layout.tsx" as if it had
- * one call site — 7-01, the guide's own earlier item, gave it a second,
- * in page.tsx. Computing fit-awareness in only one of the two would let
- * the article's max-width and the grid's column width use two different
- * scales while Fit is on, breaking the exact panel-width invariant 7-01
- * derived and live-verified. This hook is the fix: identical computation,
- * called independently from both places, so they cannot diverge.)
+ * S20: unconditionally the reader's own ladder step — Ruling 19 (round 7,
+ * second pass) makes Fit a separate, composing whole-page zoom rather than
+ * a different way to pick this same value, so this hook no longer branches
+ * on `fit` at all and needs no DOM/viewport access.
  */
 export function useResolvedReadingScale(): number {
   const scaleIndex = useReadingPrefsStore((s) => s.scaleIndex);
+  return READING_SCALE_STEPS[scaleIndex];
+}
+
+/**
+ * Ruling 19: Fit's whole-page zoom multiplier — 1 (no-op) unless Fit is on
+ * and the spread applies (Fit has nothing to do below xl, per spec). Reads
+ * `[data-zoom-root]`'s own `offsetWidth`, which is immune to that element's
+ * *own* `zoom` (confirmed by execution, round-7 second-pass log) — so this
+ * always reflects the CURRENT `--reading-scale`-adjusted 1x width,
+ * composing with A/A automatically, at any breakpoint, with no
+ * breakpoint-specific arithmetic (unlike the retired `fitScaleIndex`, which
+ * needed the panel/gap/column numbers kept in step by hand).
+ *
+ * Subscribed to `window`'s `resize` event via `useSyncExternalStore`, the
+ * same shape `useSpread` above already uses for `matchMedia`'s `change`
+ * event, so Fit's zoom re-picks itself as the window is dragged, not only
+ * on the next click.
+ *
+ * One accepted, named cost (round-7 second-pass log): `offsetWidth` is read
+ * during React's render phase, before the DOM commits that render's own
+ * `--reading-scale` change — so pressing A/A while Fit is on can read one
+ * render's worth of stale width for a single frame. Self-corrects on the
+ * next render (any resize, or any other store change); not mitigated here.
+ */
+export function usePageZoom(): number {
   const fit = useReadingPrefsStore((s) => s.fit);
   const spread = useSpread();
   useSyncExternalStore(subscribeResize, () => window.innerWidth, () => 0);
-  if (!fit || !spread || typeof window === "undefined") {
-    return READING_SCALE_STEPS[scaleIndex];
-  }
-  const panel = document.querySelector<HTMLElement>("[data-reader-panel]");
-  const index = fitScaleIndex(
-    window.innerWidth,
-    panel?.offsetWidth ?? 0,
-    READING_GRID_GAP_2XL_PX,
-    READING_COLUMN_BASE_PX,
-  );
-  return READING_SCALE_STEPS[index];
+  if (!fit || !spread || typeof window === "undefined") return 1;
+  const root = document.querySelector<HTMLElement>("[data-zoom-root]");
+  return fitZoom(window.innerWidth, root?.offsetWidth ?? 0);
 }
 
 export function ReaderLayout(p: ReaderLayoutProps) {
@@ -163,8 +146,10 @@ export function ReaderLayout(p: ReaderLayoutProps) {
     // needs the variable set on itself; `readingScaleStyle` is the same
     // constant those wraps already use, reused rather than duplicated.
     <div className={SPREAD_GRID} style={readingScaleStyle}>
-      {/* data-reader-panel: useResolvedReadingScale's own DOM-query
-          target for the panel's live width — see that hook's comment. */}
+      {/* data-reader-panel: no longer read by this file (Ruling 19 moved
+          Fit's own DOM query to [data-zoom-root], see usePageZoom above) —
+          left on the element as a stable selector future code may still
+          want, costs nothing to keep. */}
       <div ref={panelRef} className={PANEL_CLASS} data-reader-panel="">
         {p.plate}
         {p.title}

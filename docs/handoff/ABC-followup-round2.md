@@ -10769,3 +10769,132 @@ No product code changed by this turn. Three throwaway HTML files were created un
 `web/public/` to get real, served pages the Browser pane tools could drive interactively (a
 `file://` page could not be); all three were deleted before this entry was written, confirmed
 absent from `git status`.
+
+### Round 7 — Agent C (second pass)
+
+Branch verified (`complimentary-enhancement-to-main-update`) before touching anything. Dirty tree
+confirmed, not mine: `figure-lightbox.tsx`/`.test.ts` — not staged, not touched. Gate confirmed
+cold before starting: tsc clean · eslint clean · vitest **2682/2682**, matching A's cold run.
+Read Ruling 19 (§1x), Ruling 20 (§1y), §1w, and B's full second-pass fix guide (7-04/7-05/7-06)
+plus the earlier 7-01..7-03 log entries for the code being extended. Working B's own stated
+order: **7-04 → 7-05 → 7-06**, then S23.
+
+#### Item 7-04 — A7-01: Fit becomes a whole-page zoom (Ruling 19)
+
+**Change, exactly B's guide, no deviation.** `store/reading-prefs.ts`: `fitScaleIndex` (the
+ladder-search function) replaced by `fitZoom(viewportWidth, pageWidthAt1x)` (clamp to
+`[1, 2.5]`, `<=0` width falls back to `1`, never `Infinity`/the ceiling); `increaseScale`/
+`decreaseScale`/`resetScale` each drop `fit: false` from their `set()` call — all three are now
+pure ladder operations, `fit` orthogonal. `components/reader/reader-layout.tsx`:
+`useResolvedReadingScale` shrinks to the one-line "just the ladder step" version (drops its
+`fit`/`useSyncExternalStore`/DOM-query branch entirely); new `usePageZoom()` hook, exactly B's
+given shape — `fit && spread` gate, `useSyncExternalStore` on `resize`, reads
+`[data-zoom-root]`'s `offsetWidth`, calls `fitZoom`. `components/reader/spread.ts`:
+`READING_COLUMN_BASE_PX`/`READING_GRID_GAP_2XL_PX` and the header paragraph naming them removed
+(B named this "not mandatory but recommended" — taken, since nothing calls `fitScaleIndex`
+anymore and a "keep these in step" comment for constants nothing reads would mislead the next
+reader). `app/papers/[id]/page.tsx`: one new `usePageZoom()` call beside the existing
+`useResolvedReadingScale()`; `readingScaleStyle` (the object already passed to the one
+`<PageContainer data-zoom-root>`, confirmed by grep to be the ONLY consumer of that particular
+`readingScaleStyle` binding — `ReaderLayout` computes its own, separate copy of the same name
+from its own `useResolvedReadingScale()` call, unaffected) gains two keys: `zoom` and
+`--page-zoom`, both the same `usePageZoom()` number. `zoom` is set only on the article root, not
+re-applied inside `ReaderLayout`'s grid/panel/column divs — `zoom` is a rendering-time scale on
+the box and everything painted inside it, not an inherited property children re-read, so setting
+it twice would double it; the descendants pick it up from being inside the zoomed box, exactly
+as Ruling 19 itself describes ("figures scale with the page as a side effect of zoom"). `app/
+globals.css`: `reader-panel`'s `top` formula changed to B's exact two-branch fix — the top-stick
+branch divides `4rem` by `var(--page-zoom, 1)`; the bottom-stick branch divides `100vh` and
+`1.5rem` the same way but leaves `var(--panel-h)` undivided (already local/pre-zoom, per B's own
+derivation from `offsetHeight`'s behavior) — B's own noted "division binds tighter than
+subtraction" meant no nested `calc()` wrappers were needed; matches B's given CSS exactly.
+
+**Comments updated past what B's guide literally quoted**, since several were now stale after the
+mechanism swap: `reading-prefs.ts`'s header block above the interface (previously described the
+retired "Fit picks a ladder index, A/A clears it" contract — rewritten for "Fit is a separate,
+composing multiplier, neither knob clears the other"); `resetScale`'s own doc comment (previously
+"leaving Fit on would be incoherent" — no longer true, rewritten); `reader-layout.tsx`'s
+`data-reader-panel` JSX comment (previously said `useResolvedReadingScale`'s own DOM-query
+target — that hook no longer queries anything; rewritten to say it is unused by this file now,
+kept as a stable selector, per B's own "costs nothing to keep" reasoning for the attribute
+itself).
+
+**Proved both fixes by execution, reverted, restored — two separate reverts, since two
+independent behaviors changed:**
+1. Restored `fit: false` in all three store actions: `npx vitest run
+   src/store/reading-prefs.test.ts` → the 3 rewritten "compose" tests failed exactly as expected
+   (`expected false to be true` on each), the other 10 stayed green. Reverted; reran; 13/13 green.
+2. Broke `fitZoom`'s clamp (`<=0` → returns `2.5` instead of `1`; dropped `Math.min`/`Math.max`
+   entirely) → 3 of the 4 new `fitZoom` tests failed exactly as expected (the floor case, the
+   ceiling case, and the `<=0` fallback case), the mid-range test stayed green (it never needed
+   the clamp). Reverted; reran; 4/4 green.
+
+**Gate**: `npx tsc --noEmit` clean · `npx eslint .` clean · `npx vitest run --exclude
+"**/benchmark.test.ts"` → **2682/2682** (unchanged — tests rewritten, not added/removed, matching
+B's own predicted count).
+
+**Found nothing in B's guide to contest.** B's own two named open items (the bottom-stick
+branch's formula untested end-to-end against a real tall panel; the one-render `offsetWidth`
+staleness when A/A is pressed while Fit is on) are carried forward to A/the manager, not resolved
+here — B explicitly scoped both as "named, not mandated" and this item's own live check (below)
+did not have a paper with a panel taller than the viewport available to force the bottom-stick
+branch.
+
+**Live-checked in the Browser pane, `/papers/openalex:W7207740551` at 2560×1400** (via
+`javascript_tool` reads of real computed style/`getBoundingClientRect()`, not screenshots, since
+this session's pane is hidden — same limitation 6-06/7-02 already documented). Clicked "Fit to
+screen" (via the button's own `.click()`, the Browser pane's coordinate-click landed on a stale
+ref after a scroll and silently missed — worked around, not a product bug): `[data-zoom-root]`'s
+computed `zoom` read **1.81333**, `--page-zoom` the same; the article's
+`getBoundingClientRect().width` read **2176px**, exactly `0.85 × 2560 = 2176` — matches
+`fitZoom`'s own formula bit-for-bit, tighter than B's own "≈1.8×"/"≈85%" approximations.
+
+**The sticky-panel check found a real dev-server staleness, not a code defect** — worth logging
+in full since it could otherwise look like a silent failure: a fresh `curl` of the compiled CSS
+chunk (`_next/static/chunks/[root-of-the-server]__0jtj3s7._.css`) and a read of the page's live
+`document.styleSheets` both still showed the **pre-7-04** `reader-panel` rule
+(`top: min(4rem, calc(100vh - var(--panel-h, 0px) - 1.5rem))`, no `--page-zoom` anywhere) several
+seconds after the edit, with no new `Compiled` line in the dev server's own log — Turbopack did
+not pick up this one CSS file change, even though every `.tsx`/`.ts` edit this item made hot-
+reloaded normally (confirmed: the zoom number above only exists because `usePageZoom`/`page.tsx`
+did reload). Not investigated further — the standing instruction is "do not start, stop or
+restart the dev server," and a full explanation would need exactly that. **Verified the formula
+anyway** by injecting a same-selector, `!important` override `<style>` tag with the exact CSS
+this item wrote (a legitimate stand-in for the file the running server refuses to pick up, not a
+different mechanism) and re-measuring against this paper's own, real, unusually tall left panel
+(plate figure + title + decision, `--panel-h` **957px** local/pre-zoom, confirmed equal to
+`offsetHeight`, per B's own mechanism finding) — a panel taller than the viewport, the exact case
+B named as **untestable in this app's real content** and left as an open verification for C:
+- **Bottom-stick branch actually engaged** (panel taller than the zoomed viewport): declared
+  `top` computed to **-198.176px** (local) → real, painted top `-198.176 × 1.81333 ≈ -359.36px`
+  (matches the directly-read `getBoundingClientRect().top` of **-359.359px** exactly). Panel's
+  real bottom edge: `-359.36 + (957 × 1.81333 ≈ 1735.86) ≈ 1376.5px`, i.e. **23.5px** above the
+  1400px viewport bottom — matching the design intent (`1.5rem` = 24px true-pixel clearance)
+  almost exactly, sub-pixel rounding only. **Confirmed this needed the fix**: recomputing the
+  *old*, unfixed formula by hand for the same panel (`min(4rem, 100vh − 957 − 1.5rem) = min(64,
+  419) = 64` local → real `64 × 1.81333 ≈ 116.05px`, which is what this same page actually showed
+  *before* the override was injected) would put the panel's real bottom at `116.05 + 1735.86 ≈
+  1851.9px` — **452px past the bottom of a 1400px viewport**, the panel hanging off-screen. B's
+  derivation was exactly right; this is the first end-to-end confirmation against real content.
+- **Top-stick branch, Fit off** (`--page-zoom` back to its default `1`): panel top **64px** real,
+  masthead bottom **48px** real — a **16px** gap, byte-identical to the pre-Ruling-19 baseline, as
+  the formula's own `--page-zoom, 1` fallback guarantees.
+
+Also checked composing: with Fit on, clicked "Larger text" (`increaseScale`) — `fit` stayed
+`true` (`aria-pressed` unchanged), `zoom` recomputed on the next render to a new value off the
+now-wider 1x page width, matching Ruling 19's "the two compose" exactly, not turning Fit off.
+Checked 1440×900 (xl band, below 2xl's 1536px breakpoint — confirmed via grep, no
+`--breakpoint-2xl` override in this repo): zoom read **1.224** (`0.85×1440/1000`, the *xl* cap
+being 1000 before 7-05's own fix, not the 2xl 1200 cap) — a real, correctly-computed number that
+came out higher than this round's own "≈1.0–1.1" rough estimate for that viewport; not a defect
+(the formula matches Ruling 19's text exactly, verified twice now at two different viewports with
+two different 1x base widths), naming the gap between the estimate and the measurement rather
+than silently squaring one against the other. Deferred 1300×800 (A/A widening the xl cap) to
+7-05, which is what actually changes that behavior — checking it before 7-05 would test nothing.
+
+**Blast radius**: exactly as B's guide stated, plus the comment-staleness fixes named above (no
+additional logic change). No figure file touched. Cleaned up: removed the injected verification
+`<style>` tag before navigating away; no throwaway file was written to disk this item (the
+override lived only in the live DOM).
+
+Commit: `feat(reader): Fit becomes a whole-page zoom, composing with A/A (Ruling 19, 7-04)`.

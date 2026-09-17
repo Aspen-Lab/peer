@@ -412,10 +412,32 @@ html[data-mode="dark"] { --nm-underside: rgba(0, 0, 0, 0.34); }
    min() resolve to 4rem — a plain top-stick, never a broken first paint.
    Desktop-only, so vh, no dvh. Any ancestor with an overflow other than
    visible silently kills the sticky — main, the article and the grid
-   wrapper must keep it. */
+   wrapper must keep it.
+
+   Ruling 19 (round 7, second pass): under Fit's whole-page `zoom`, a CSS
+   length declared inside a zoomed ancestor is resolved in that ancestor's
+   LOCAL (pre-zoom) space, then painted at `local × zoom` — so this panel's
+   own `top` would drift to `4rem × zoom` on screen unless divided back
+   down first (confirmed by execution: 4rem at zoom 1.8 painted at 115.2px,
+   not 64px, until divided). `--panel-h` needs NO such division: it is
+   written from `el.offsetHeight` (reader-layout.tsx), and `offsetWidth`/
+   `offsetHeight` already report the local, pre-zoom size on every element
+   regardless of its own or an ancestor's zoom — dividing it again would
+   under-compensate it. `100vh` and the `1.5rem` margin DO need dividing:
+   `vh` resolves against the true viewport even when read inside a zoomed
+   box, then gets the same ambient-zoom multiplication as everything else
+   in the box when painted, same as the 4rem case. Division binds tighter
+   than subtraction in CSS calc(), so this parses as intended with one
+   outer calc() and no nested wrappers. `--page-zoom` defaults to 1 (set on
+   `page.tsx`'s `<PageContainer data-zoom-root>`, Fit off or not applicable)
+   so this formula is byte-identical to the un-zoomed one above whenever
+   Fit is off. */
 @utility reader-panel {
   position: sticky;
-  top: min(4rem, calc(100vh - var(--panel-h, 0px) - 1.5rem));
+  top: min(
+    calc(4rem / var(--page-zoom, 1)),
+    calc(100vh / var(--page-zoom, 1) - var(--panel-h, 0px) - 1.5rem / var(--page-zoom, 1))
+  );
 }
 
 /* ── The measure ──────────────────────────────────────────────────────

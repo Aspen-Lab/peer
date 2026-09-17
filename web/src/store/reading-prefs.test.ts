@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { fitScaleIndex, READING_SCALE_STEPS, useReadingPrefsStore } from "@/store/reading-prefs";
+import { fitZoom, READING_SCALE_STEPS, useReadingPrefsStore } from "@/store/reading-prefs";
 
 // S15: the font-size ladder's clamp logic — the only real behaviour this
 // store has (persistence itself is the repo's established
@@ -49,12 +49,13 @@ describe("reading prefs scale ladder", () => {
   });
 });
 
-// S21 (round 7, item 7-03): "Fit to screen". `fit` never gets written back
-// into `scaleIndex` — the displayed scale is resolved at read time by
-// `reader-layout.tsx`'s `useResolvedReadingScale`, not tested here (it
-// needs a DOM/window this Node-environment test file doesn't have); this
-// file covers the store's own contract: `fit` starts off, manual zoom
-// clears it, and `resetScale` clears both.
+// S21 / Ruling 19 (round 7, second pass — was 7-03's ladder-index Fit,
+// replaced): "Fit to screen" is now a whole-page CSS zoom, computed fresh
+// at read time by `reader-layout.tsx`'s `usePageZoom` (not tested here — it
+// needs a DOM/window this Node-environment test file doesn't have), not a
+// different way to pick `scaleIndex`. So `fit` and `scaleIndex` are now
+// independent: manual A/A no longer clears `fit`, and `resetScale` no
+// longer clears it either — this file covers that composing contract.
 describe("reading prefs — fit to screen", () => {
   beforeEach(() => {
     useReadingPrefsStore.setState({ scaleIndex: 2, fit: false });
@@ -69,19 +70,19 @@ describe("reading prefs — fit to screen", () => {
     expect(useReadingPrefsStore.getState().fit).toBe(true);
   });
 
-  it("increaseScale clears fit — manual zoom cancels Fit", () => {
+  it("increaseScale leaves fit untouched — Ruling 19: A/A and Fit compose", () => {
     useReadingPrefsStore.getState().setFit(true);
     useReadingPrefsStore.getState().increaseScale();
-    expect(useReadingPrefsStore.getState().fit).toBe(false);
+    expect(useReadingPrefsStore.getState().fit).toBe(true);
   });
 
-  it("decreaseScale clears fit — manual zoom cancels Fit", () => {
+  it("decreaseScale leaves fit untouched — Ruling 19: A/A and Fit compose", () => {
     useReadingPrefsStore.getState().setFit(true);
     useReadingPrefsStore.getState().decreaseScale();
-    expect(useReadingPrefsStore.getState().fit).toBe(false);
+    expect(useReadingPrefsStore.getState().fit).toBe(true);
   });
 
-  it("resetScale returns to the default step and clears fit", () => {
+  it("resetScale returns to the default step and leaves fit untouched", () => {
     const store = useReadingPrefsStore.getState();
     store.increaseScale();
     store.increaseScale();
@@ -89,40 +90,33 @@ describe("reading prefs — fit to screen", () => {
     store.resetScale();
     const state = useReadingPrefsStore.getState();
     expect(state.scaleIndex).toBe(2);
-    expect(state.fit).toBe(false);
+    expect(state.fit).toBe(true);
   });
 });
 
-describe("fitScaleIndex", () => {
-  // Base 2xl numbers from spread.ts: a 560px column, a 96px gap. A generous
-  // panel (300px) so the arithmetic below is easy to check by hand.
-  const PANEL = 300;
-  const GAP = 96;
-  const BASE = 560;
-
-  it("a wide viewport picks a high step", () => {
-    // Needs panel(300) + gap(96) + 560*1.6(896) = 1292 to fit within 85% of
-    // the viewport — 1292 / 0.85 ≈ 1520, so 1600px clears it.
-    expect(fitScaleIndex(1600, PANEL, GAP, BASE)).toBe(READING_SCALE_STEPS.length - 1);
+// Ruling 19 (round 7, second pass): replaces `fitScaleIndex`'s ladder
+// search — Fit is continuous now, a multiplier straight off the viewport
+// and the page's own live (pre-Fit-zoom) width, not a step index.
+describe("fitZoom", () => {
+  it("clamps to 1 (no zoom) below the 1x floor", () => {
+    // 0.85*1000/1000 = 0.85, below the floor — a page already wider than
+    // 85% of the viewport should never shrink under Fit.
+    expect(fitZoom(1000, 1000)).toBe(1);
   });
 
-  it("a narrow viewport picks a low, non-floor step", () => {
-    // 0.85*1100 = 935. Page widths (300+96+560*step): index 1 (0.925x) is
-    // 914, which fits; index 2 (1x) is 956, which does not — so this lands
-    // on exactly 1, neither the top nor the 0 floor.
-    expect(fitScaleIndex(1100, PANEL, GAP, BASE)).toBe(1);
+  it("clamps to the 2.5 ceiling on a very narrow page", () => {
+    // 0.85*3000/100 = 25.5, far past the ceiling.
+    expect(fitZoom(3000, 100)).toBe(2.5);
   });
 
-  it("the boundary case at exactly 0.85x of the viewport", () => {
-    // Numbers chosen so both sides land on an exact float, not a division
-    // round-trip that could land a hair off either way: with panel 500,
-    // gap 100, base 1000, index 3's (1.1x) page width is exactly 1700, and
-    // 0.85*2000 is exactly 1700 too. A page exactly at the target should
-    // still fit — the guide's own condition is `<=`, not `<`.
-    expect(fitScaleIndex(2000, 500, 100, 1000)).toBe(3);
+  it("a mid-range value fills ~85% of the viewport", () => {
+    // 0.85*2560/1200 ≈ 1.8133..., matching the ruling's own worked example
+    // (2560px, a 1200px 1x page, "≈ 1.8x").
+    expect(fitZoom(2560, 1200)).toBeCloseTo(1.8133, 4);
   });
 
-  it("floors to 0 when even the smallest step does not fit", () => {
-    expect(fitScaleIndex(200, PANEL, GAP, BASE)).toBe(0);
+  it("falls back to 1 (book layout), never Infinity or the ceiling, when the page width is not yet known", () => {
+    expect(fitZoom(2560, 0)).toBe(1);
+    expect(fitZoom(2560, -1)).toBe(1);
   });
 });

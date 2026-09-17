@@ -63,7 +63,12 @@ import {
 import { NextRow } from "@/components/reader/next-row";
 import { LoadingMat } from "@/components/reader/loading-mat";
 import { ReaderToast, useReaderToast } from "@/components/reader/reader-toast";
-import { ReaderLayout, useResolvedReadingScale, useSpread } from "@/components/reader/reader-layout";
+import {
+  ReaderLayout,
+  usePageZoom,
+  useResolvedReadingScale,
+  useSpread,
+} from "@/components/reader/reader-layout";
 import { THUMB_BAR_PX, THUMB_BAR_QUERY } from "@/components/shell/thumb-bar";
 import { PAGE_CLASS, SPREAD_GRID } from "@/components/reader/spread";
 import { useReading } from "@/components/reader/use-reading";
@@ -274,7 +279,18 @@ function Reader({
   // `var(--reading-scale, 1)` falls back to `1` there — byte-identical to
   // before S20.
   const readingScale = useResolvedReadingScale();
-  const readingScaleStyle = { "--reading-scale": readingScale } as CSSProperties;
+  // Ruling 19 (round 7, second pass): Fit's own whole-page CSS `zoom`,
+  // composing on top of `readingScale` above rather than replacing it —
+  // `usePageZoom` is 1 (no-op) unless Fit is on. `--page-zoom` mirrors the
+  // same number as a custom property so `globals.css`'s `reader-panel`
+  // utility (a descendant, however many levels down — custom properties
+  // inherit) can cancel the sticky `top` offset's own zoom-multiplication.
+  const pageZoom = usePageZoom();
+  const readingScaleStyle = {
+    "--reading-scale": readingScale,
+    zoom: pageZoom,
+    "--page-zoom": pageZoom,
+  } as CSSProperties;
 
   const nav = useMemo(
     () => paperNav(feedPapers.map((p) => p.id), paper.id),

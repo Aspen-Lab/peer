@@ -20,28 +20,27 @@ export const READING_SCALE_STEPS = [0.85, 0.925, 1, 1.1, 1.2, 1.32, 1.45, 1.6] a
 const DEFAULT_SCALE_INDEX = 2; // 1x, the middle step
 const MAX_SCALE_INDEX = READING_SCALE_STEPS.length - 1;
 
-// S21: "Fit to screen" — `scaleIndex` keeps meaning exactly what it means
-// today (the reader's own manual/"book layout" choice); `fit` is a
-// separate flag, never written back into `scaleIndex`. The DISPLAYED scale
-// is computed fresh at read time by the caller (fit ? fitScaleIndex(...) :
-// READING_SCALE_STEPS[scaleIndex]) — see reader-layout.tsx's
-// `useResolvedReadingScale`, this store's one consumer (and, through it,
-// page.tsx's — both call the same hook, so they can never see two
-// different resolved scales at once; see that file's own comment for why
-// this store alone can't compute it, since `fitScaleIndex` needs the
-// panel's live DOM width). Turning Fit off is then free: `scaleIndex` was
-// never touched while Fit was on, so "back to the book layout" falls out
-// with no bookkeeping. Manual A/A cancels Fit — done once, here, in the
-// two actions themselves, so no future caller (button, keyboard, anything
-// added later) can forget it.
+// S21 / Ruling 19 (round 7, second pass): "Fit to screen" is a whole-page
+// CSS `zoom`, not a ladder step — `fit` just says whether it is on.
+// `scaleIndex` keeps meaning exactly what it means today (the reader's own
+// manual/"book layout" text-and-column step). The two now COMPOSE rather
+// than one replacing the other: Fit's own multiplier is computed fresh at
+// read time from the live DOM (`reader-layout.tsx`'s `usePageZoom`, via
+// `fitZoom` below — this store has no DOM access, so it cannot compute it
+// itself), on top of whatever `scaleIndex` already produced. Neither knob
+// clears the other any more: `increaseScale`/`decreaseScale`/`resetScale`
+// leave `fit` untouched, and `setFit` leaves `scaleIndex` untouched. Turning
+// Fit off falls out with no bookkeeping either way, since neither action
+// ever wrote into the other's field.
 interface ReadingPrefsState {
   scaleIndex: number;
   fit: boolean;
   increaseScale: () => void;
   decreaseScale: () => void;
   setFit: (fit: boolean) => void;
-  /** Ctrl/⌘+0: back to 1x, book layout — leaving Fit on would be
-   *  incoherent, since Fit's whole point is picking a non-1x step itself. */
+  /** Ctrl/⌘+0: back to 1x on the ladder. Does not touch `fit` — Fit is a
+   *  separate, composable knob (Ruling 19), not something a ladder reset
+   *  is expected to clear. */
   resetScale: () => void;
 }
 
@@ -51,11 +50,11 @@ export const useReadingPrefsStore = create<ReadingPrefsState>()(
       scaleIndex: DEFAULT_SCALE_INDEX,
       fit: false,
       increaseScale: () =>
-        set((state) => ({ scaleIndex: Math.min(MAX_SCALE_INDEX, state.scaleIndex + 1), fit: false })),
+        set((state) => ({ scaleIndex: Math.min(MAX_SCALE_INDEX, state.scaleIndex + 1) })),
       decreaseScale: () =>
-        set((state) => ({ scaleIndex: Math.max(0, state.scaleIndex - 1), fit: false })),
+        set((state) => ({ scaleIndex: Math.max(0, state.scaleIndex - 1) })),
       setFit: (fit) => set({ fit }),
-      resetScale: () => set({ scaleIndex: DEFAULT_SCALE_INDEX, fit: false }),
+      resetScale: () => set({ scaleIndex: DEFAULT_SCALE_INDEX }),
     }),
     {
       name: "peer-reading-prefs",
@@ -72,20 +71,22 @@ export const useReadingPrefsStore = create<ReadingPrefsState>()(
 );
 
 /**
- * S21: the largest ladder step whose page width (panel + gap + column)
- * still fits within ~85% of the viewport — pure arithmetic, zero DOM
- * access, so it is unit-testable with plain numbers. Falls back to the
- * smallest step if even that does not fit.
+ * Ruling 19 (round 7, second pass): Fit's whole-page zoom multiplier — the
+ * factor that scales the page (panel, gap, column, figures, all of it) so
+ * it fills ~85% of the viewport, the way a PDF viewer's "fit width" reads
+ * on a big monitor. Pure arithmetic, zero DOM access, so it is
+ * unit-testable with plain numbers; `reader-layout.tsx`'s `usePageZoom`
+ * supplies the two arguments from the live page (`window.innerWidth` and
+ * `[data-zoom-root]`'s own `offsetWidth`, immune to that element's own
+ * `zoom` — confirmed by execution, round-7 second-pass log).
+ *
+ * Replaces `fitScaleIndex` (retired: nothing picks a ladder step for Fit
+ * any more — Fit is continuous, not ladder-bound).
  */
-export function fitScaleIndex(
-  viewportWidth: number,
-  panelWidth: number,
-  gap: number,
-  baseColumnWidth: number,
-): number {
-  const target = 0.85 * viewportWidth;
-  for (let i = READING_SCALE_STEPS.length - 1; i >= 0; i--) {
-    if (panelWidth + gap + baseColumnWidth * READING_SCALE_STEPS[i] <= target) return i;
-  }
-  return 0;
+export function fitZoom(viewportWidth: number, pageWidthAt1x: number): number {
+  // Every candidate rejected (the zoom-root element not found, or not yet
+  // measured): no zoom, book layout — never Infinity or the 2.5 ceiling,
+  // which a naive 0.85*viewportWidth/0 would wrongly produce.
+  if (pageWidthAt1x <= 0) return 1;
+  return Math.min(2.5, Math.max(1, (0.85 * viewportWidth) / pageWidthAt1x));
 }
