@@ -80,72 +80,23 @@ browser, run the reports), then report to the user in plain language and stop th
 ## §1. CURRENT STATE — THE SOURCE OF TRUTH
 
 ```
-ROUND:            6 (reopened 2026-09-16; extended the same day with S14–S18, §1r)
-WHOSE TURN:       B
-STOPPED BECAUSE:  A finished the turn @ 2026-09-16 (part 4 of 4) — GATE NOT MET, 2 real,
-                   execution-confirmed differences (A6-01, A6-02), full log in §4 "Round 6 —
-                   Agent A".
-STATUS:           A measured all 8 items with the Browser pane tools (live DOM/attribute/
-                   computed-style checks, not screenshots — this session's pane also reports
-                   itself hidden). 6 of 8 items (S12, S13, S14, S17, S18, S19) confirmed meeting
-                   target with 0 differences, live-checked in the browser. 2 of 8 (S15, S16) each
-                   carry one new, real, execution-confirmed difference the gate/code-reading pass
-                   could not have caught:
-                     - A6-01 (S15; same finding as the manager's own concurrent M6-01, commit
-                       `8a08b77` — confirmed twice, independently, see A's part-4 addendum): the
-                       font-size ladder updates the store and the
-                       `--reading-scale` CSS variable correctly, but the reading prose's actual
-                       font-size never changes on any of the 6 steps. Root mechanism (verified by
-                       an isolated, app-code-free synthetic CSS test, not guessed): `--text-lead`/
-                       `--text-body`/`--text-body-lg` are declared exactly once, in `@layer theme`
-                       at `:root, :host`, and CSS resolves a custom property's own internal var()
-                       references once, at that single declaration — a descendant that only
-                       overrides `--reading-scale` (never redeclares the alias itself) inherits
-                       the value already frozen at `:root` with scale=1 baked in. B's own 6-04
-                       confidence language ("This is how [it] is actually achieved, not merely
-                       proposed") is the claim this disproves by execution.
-                     - A6-02 (S16 sync requirement): `/profile`'s own Mode picker (Auto/Light/
-                       Dark) shows "Auto" permanently pressed and does not respond to its own
-                       clicks, even though `data-mode`/localStorage both correctly read "dark"
-                       after the reader's moon button is clicked — survives a genuine hard
-                       reload. The accent-color picker on the same page correctly tracks the
-                       store, so only the 3-way mode control is affected. A flagged, did not
-                       diagnose: could not rule out a dev-session artifact (no restart available
-                       to A) vs. a real bug in `ColorThemePicker`/`AppearanceCard`.
-                   Two items previously flagged as "not observable, hidden pane" by C (the 1s
-                   theme fade at 6-06; lazy-load-blocks-the-lightbox at 6-08) were re-hit by A in
-                   the identical shape and are NOT counted as new differences — this round's own
-                   text pre-authorized "not observable here" over "broken" for exactly this case.
-                   The 150ms-vs-120ms hover-swell duration (S13/S18, logged at 6-01/6-07) is also
-                   not counted — an already-explained, already-accepted cost.
-                   Commit-trailer note, standing: this round's own task-brief text asks for
-                   "Claude Opus 5"; the session-level attribution reminder (not a CLAUDE.md/
-                   memory rule, so the brief's plain text doesn't override it) names
-                   "Claude Sonnet 5" — same conflict rounds 5 and 6's Agent C log already
-                   recorded, resolved the same way both times: A's part-1 commit reads "Claude
-                   Opus 5" (caught right after), every commit from part 2 on reads
-                   "Claude Sonnet 5".
-OPEN ITEMS:       A6-01 (S15 font-scale has no visual effect), A6-02 (Profile page theme picker
-                  desynced/unresponsive). Both real, execution-confirmed, need B's investigation.
-GATE (0 open):    NOT MET — 2 open differences (A6-01, A6-02).
+ROUND:            6 (second pass)
+WHOSE TURN:       C
+STOPPED BECAUSE:  B finished (guide banked by the manager @ 2026-09-16 ~20:30 UTC after B's
+                   session limit)
+STATUS:           Round 6: 6-01..6-08 landed (C); A closed S12 S13 S14 S16 S18 S19 and opened
+                   A6-01 (font scale not reaching the prose) and A6-02 (Profile Mode picker
+                   stale on cold load). B's second pass: 6-09 (scoped font-size rules at the use
+                   site) and 6-10 (Profile page reads colorTheme through a selector); Ruling 17
+                   adds 6-11 (the whole Profile view's stale read). Dev server down at the
+                   manager's check — restarted before C.
+OPEN ITEMS:       S15 (6-09), S16 sync (6-10/6-11); S17 fade and S18 swells need eyes with a
+                   fronted pane.
+GATE (0 open):    NOT MET
 
-DONE:      rounds 1–5 (S3–S11 closed). Round 6: all 8 items implemented by C; A measured live —
-           6/8 (S12/S13/S14/S17/S18/S19) confirmed meeting target, 2/8 (S15/S16) carry new,
-           real differences (A6-01, A6-02).
-GATE NOW:  tsc clean · eslint clean · vitest 2657/2657 (A re-ran the full gate cold this turn,
-           unchanged from C's own count — no code changed).
-TODO for B:  investigate A6-01 (why `--reading-scale` overrides on the wrapper divs never reach
-           the `:root`-declared `--text-lead`/`--text-body`/`--text-body-lg` tokens — A's part-2
-           log names the mechanism and includes a synthetic repro, marked unverified-by-B and to
-           be checked by execution, not inherited) and A6-02 (why `/profile`'s Mode picker shows
-           "Auto" pressed and ignores clicks regardless of the real stored/applied theme — A's
-           part-2 log traced only as far as `AppearanceCard`'s prop being an unmemoized
-           passthrough; B should trace further, and should test whether the mismatch survives a
-           restart before assuming A's "possible dev-session artifact" caveat). TODO for the
-           manager's own browser, unrelated to A6-01/A6-02 and not blocking: the tab icon in a
-           real tab; the 1-s fade's actual visual look; every icon's hover swell as a felt
-           interaction; the lightbox's full-screen visual appearance; the progress bar during a
-           real report generation.
+DONE:      round 6: 6-01..6-08.
+GATE NOW:  tsc clean · eslint clean · vitest 2657/2657 (A, cold).
+TODO:      C works 6-09 → 6-11 (falls back to 6-10). Then A re-measures S15 and S16 sync only.
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
@@ -877,6 +828,21 @@ Two remain, both in scope:
 
 C's order: A6-01 → A6-02. Then A re-measures those two only; the manager eyeballs the fade and
 the swells with the pane fronted (or the user does).
+
+---
+
+## §1u. RULING 17 — B's second-pass flags (manager, 2026-09-16) — BINDING
+
+- **6-10 widens to the whole Profile view (item 6-11):** B found `careerStage` equally stale on a
+  cold `/profile` load — the page's whole-state `useProfileStore()` read misses the one-time
+  rehydration. That is a user-visible bug on every field of the Profile page, not only the Mode
+  picker. C first tries the one-line general fix: read `profile` through a selector
+  (`const profile = useProfileStore((s) => s.profile)`) and take the actions the page needs via
+  their own selectors or `useProfileStore.getState()` at call time; if the gate stays green and
+  `careerStage` + `colorTheme` render correctly on a cold load, 6-10's narrower change is
+  unnecessary. If that proves invasive, land 6-10 as written and log 6-11 as a lead.
+- **Test gap:** accepted. 6-09 gets B's source-text assertion on `globals.css`; 6-10/6-11 get a
+  `renderToStaticMarkup` test of `ColorThemePicker`'s `aria-pressed` derivation. No RTL this round.
 
 ---
 
@@ -8727,3 +8693,228 @@ minimal `:root`/`.scope` case in part 2) since it isolates the mechanism furthes
 own code. The manager's check did not surface A6-02 (the `/profile` picker desync) — that
 finding is unique to this entry. The manager's other closures (S12/S13/S16/S17/S18, S19 left to
 A) agree with this entry's own part 1/2/3 findings; no conflict to resolve there.
+
+---
+
+### Round 6 — Agent B (second pass)
+
+Branch verified (`complimentary-enhancement-to-main-update`), working tree clean before starting.
+The dev server (`peer-web`, port 3000) was confirmed freshly restarted by the manager
+(`startedAt` timestamped this session, no earlier `peer-web` process still running) before any of
+this entry's checks — every finding below is against that fresh process, ruling out a hot-reload
+artifact for both items, as Ruling 16 requires. Both items investigated by direct execution
+against the live app with the Browser pane tools (DOM reads, `localStorage` reads, and one React
+Fiber inspection — not code-reading alone, not screenshots), on `openalex:W7207740551` and
+`/profile`.
+
+#### 6-09 (A6-01) — S15: font-size controls have no visible effect
+
+**Files**: `web/src/app/globals.css` lines 140/142/144 (the three `@theme` tokens) and line 480
+(the existing unlayered-override precedent to match); `web/src/components/reader/reader-layout.tsx`
+lines 86, 88 (the `!p.spread` branch's two wraps) and 102, 103 (the spread branch's two wraps) —
+four wrap points total, not two; no change needed in `spread.ts` or `reading-prefs.ts`.
+
+**Classification: WRONG SHAPE.** Every value in the mechanism is right — the six-step ladder,
+the `--reading-scale` variable, the per-element inline `style` C already wires on all four
+wrappers, the clamp/ARIA/persistence A already confirmed live. What's wrong is *where* the
+`calc()` runs, not any value in it.
+
+**Root cause, re-confirmed by reading, not re-guessed** — this is the same mechanism A's part-2
+synthetic repro and the manager's M6-01 DOM read already independently nailed, and this pass adds
+nothing new to the diagnosis, only the fix's exact shape: a CSS custom property's own internal
+`var()` references are resolved once, at the property's declaration site, using whatever is in
+scope *there*. `globals.css` line 140/142/144 declare `--text-body`/`--text-body-lg`/`--text-lead`
+inside `@theme`'s `:root, :host` block as `calc(<base-px> * var(--reading-scale, 1))` — so
+`var(--reading-scale, 1)` resolves against `:root`, where the variable is never set, permanently
+baking in the `1` fallback. Setting `--reading-scale` on a descendant (what `reader-layout.tsx`
+already does, correctly) changes what that descendant would see if it asked for
+`--reading-scale` directly — it does not reach back and re-evaluate a `calc()` that was already
+resolved higher up the tree at a different element.
+
+**Fix, one rule per token, at the use site instead of the declaration site:**
+
+1. `globals.css` lines 140/142/144 — revert the three tokens to the plain px they were before
+   S15, dropping the `calc()`/`var()` entirely:
+   ```css
+   --text-body: 14.5px;    /* controls, standard body */
+   --text-body-lg: 15.5px; /* emphasized body, tile titles */
+   --text-lead: 16.5px;    /* lede paragraphs, card titles */
+   ```
+   (line-height pairs unchanged — see below).
+2. `globals.css` — add three new rules, one per token, next to the existing
+   `[class~="rounded-full"] { border-radius: 0; }` override (line 480), matching its own
+   established convention exactly (a bare, unlayered rule so it beats the Tailwind-generated
+   `@layer utilities` output regardless of specificity — confirmed by reading that block's own
+   comment, "the rule is unlayered, so it beats the utility whatever its specificity"):
+   ```css
+   .reading-scaled [class~="text-lead"] { font-size: calc(var(--text-lead) * var(--reading-scale, 1)); }
+   .reading-scaled [class~="text-body"] { font-size: calc(var(--text-body) * var(--reading-scale, 1)); }
+   .reading-scaled [class~="text-body-lg"] { font-size: calc(var(--text-body-lg) * var(--reading-scale, 1)); }
+   ```
+   `[class~="text-body"]` cannot false-match `text-body-lg`/`text-body-sm` — `~=` matches a whole
+   space-delimited token, and `text-body-lg` is one token, not `text-body` plus a suffix.
+3. `reader-layout.tsx` — add `className="reading-scaled"` to the four existing wrapper `<div>`s
+   (lines 86, 88, 102, 103), alongside the `style={readingScaleStyle}` they already carry. Purely
+   additive: no restructuring, no new elements, no change to what each branch wraps.
+
+**Line-height needs nothing.** `--text-lead--line-height` etc. are unitless multipliers (1.55,
+1.6…), and an element's unitless `line-height` is always computed against *that element's own*
+used font-size — once the scoped rule above changes the used font-size, the already-correct
+unitless line-height recomputes to match automatically. Same reasoning already covers
+`measure`/`measure-lede` (`em`-based, resolves against the element's own font-size) — 6-04's
+"bonus, already true" note stands unchanged.
+
+**Honest edge state — confirmed by grep, not assumed.** `text-lead`/`text-body`/`text-body-lg`
+are used sitewide, not just in the reading column: `decision-block.tsx:95` (the Decision
+sentence, which must NOT scale — outside both wrap points, by design), `search-result-card.tsx`
+(feed tile titles), `app/profile/page.tsx`, `app/saved/page.tsx`, `app/persona/page.tsx`,
+`components/ui.tsx`, `app/papers/[id]/page.tsx:227` (the "not found" paragraph) and `:555` (the
+`PDF_NO_TEXT_MESSAGE` fallback — already documented by 6-04 as a branch `ReaderLayout` never
+renders on). None of these are descendants of `.reading-scaled`, so the new scoped rules never
+match them — they keep the plain-px token value, zero visual change, confirmed by the class
+selector's ancestry requirement alone (no need to touch or re-verify each call site
+individually). The one paper-body call site that *is* meant to scale but sits inside a bare
+`<section>` fallback (`page.tsx:755`, the shared-terms line) is already inside the `additions`
+wrap per 6-04's own read of `page.tsx` — covered, no separate fix needed.
+
+**Tests at risk — grepped, not assumed.** Zero existing tests reference `--reading-scale`,
+`text-lead`, `text-body`, or `text-body-lg` as CSS values. `reading-prefs.test.ts` (the only
+existing S15 test) is pure store-logic — the ladder's clamp behaviour — untouched by a CSS-only
+change; it stays green with zero edits. There is currently no protective test that would have
+failed on the old (broken) CSS, which is exactly the gap A/M6-01 both flagged. Recommend C add
+one, but flag honestly: this repo's own convention (Ruling 15) is `renderToStaticMarkup` +
+pure-function tests, no RTL — and `jsdom` (what `renderToStaticMarkup`-adjacent tests run under)
+does not reliably compute cascade-layer precedence or `calc()` against custom properties the way
+a real browser does, so a computed-style assertion risks being either a false-negative (jsdom
+under-supports layers) or not actually exercising the real cascade. The safer, deterministic
+option under this repo's own convention is a **source-text assertion against `globals.css`
+itself** — read the file, assert the three token lines are plain px (not `calc(`) and assert the
+three new scoped rules exist with the right `calc(var(--text-*) * var(--reading-scale, 1))` shape
+— which fails on the pre-fix file and passes on the post-fix file, satisfying "fails on the old
+CSS" literally. C decides the exact assertion shape; this is a recommendation, not a mandate.
+
+**Blast radius.** `globals.css`: 3 lines reverted (tokens back to plain px) + 3 lines added
+(scoped rules) — provably a no-op outside `.reading-scaled` descendants, per the edge-state check
+above. `reader-layout.tsx`: one `className` added to 4 already-existing wrapper divs — zero
+structural change, zero prop-shape change. No change to `reading-prefs.ts`, `decision-block.tsx`,
+`spread.ts`, or any component outside these two files.
+
+#### 6-10 (A6-02) — S16: the Profile page's Mode picker shows "Auto" pressed and ignores the true theme on cold load
+
+**Files**: `web/src/app/profile/page.tsx` lines 100-127 (`ProfilePage`'s `useProfileStore()` call
+— the whole store, destructured, no selector) and line 225 (`colorTheme={profile.colorTheme}`,
+the only place this page reads `colorTheme`). Contrast (both already correct, unmodified by this
+fix): `web/src/components/theme-sync.tsx:8` and
+`web/src/components/reader/decision-block.tsx:83`, both
+`useProfileStore((s) => s.profile.colorTheme)` — a scoped selector, not a whole-state read.
+
+**Classification: WRONG DATA.** `ColorThemePicker` itself (`value.split(":")`, `aria-pressed={mode
+=== option.value}`) is not the bug — it renders exactly what its `value` prop tells it. The prop
+it is handed is stale.
+
+**Reproduced by execution, not inherited from A — confirmed the fix target precisely.** Set
+`colorTheme` to `"dark:ember"` (via the reader's own "Night reading mode" button, then confirmed
+independently via a direct `localStorage` write), hard-`location.reload()`d `/profile` against
+the freshly-restarted server, and polled the Mode picker's `aria-pressed` state every 200ms for a
+full 8 seconds with **zero clicks**: `data-mode` was correctly `"dark"` from the first sample
+(210ms) and never changed; the Mode picker showed `Auto: aria-pressed="true"`, `Dark:
+aria-pressed="false"` for all 40 samples, no self-correction at any point. In the same run,
+`profile.careerStage` (set to `"Postdoc"` via `localStorage`, default is `"PhD Year 3"`) also
+displayed the stale default the entire 8 seconds. Confirmed via direct **React Fiber
+inspection** of the live page (not just the rendered DOM) that `ColorThemePicker`'s actual,
+current `memoizedProps.value` was `"system:ember"` — the pre-hydration default — while
+`localStorage['peer-profile']` correctly held `"dark:ember"` at the same instant. This rules out
+a purely-cosmetic/CSS explanation: the React tree itself, at that moment, genuinely believes the
+theme is `"system:ember"`.
+
+**Correction to A's own characterization, found by execution, stated plainly.** A logged
+"clicking 'Light' or 'Dark' directly on that picker does not change `data-mode` at all." Retested
+this exact action on the freshly-restarted server: clicking "Light" (and, separately, "Dark")
+*does* correctly update `data-mode`, `localStorage`, and the picker's own `aria-pressed` state
+immediately — the write path (`updateColorTheme`, a stable store action) has never been broken.
+What is broken, and what A's own repro sequence most likely actually hit, is narrower and more
+useful to name precisely: the picker's *displayed* pressed state is wrong **only until the next
+write to the store happens for any reason** (a click on the picker itself, or, per
+`theme.ts`'s own comment, a later background `mergeRemoteProfile` sync) — at which point
+`ProfilePage`'s subscription "wakes up" and every subsequent render is correct. The 8-second,
+zero-click poll above is what isolates the true defect from A's click-conflated description.
+
+**Root cause — a whole-state, no-selector `useProfileStore()` call missing the one-time update
+`persist.rehydrate()` produces.** `store/profile.ts`'s `peer-profile` persist config uses
+`skipHydration: true` (matching `reading-prefs.ts`/`feed.ts`'s own established pattern): the
+store starts at `defaultProfile` (`colorTheme: "system:ember"`) on both the server render and the
+first client render, and only becomes the real, persisted value after `StoreHydrator`'s
+`useEffect` calls `.persist.rehydrate()` post-mount — a single, one-time state replacement.
+`ThemeSync` and `decision-block.tsx` each subscribe with a **narrow selector**
+(`useProfileStore((s) => s.profile.colorTheme)`) and both correctly reflect that one-time
+replacement, confirmed by execution on a cold `/papers/...` load (the reader's own moon button
+shows `aria-pressed="true"` immediately, no click, no wait beyond normal page load).
+`ProfilePage` is the only consumer of `profile.colorTheme` that instead destructures the
+**entire** store with no selector at all (`const { profile, ... } = useProfileStore();`,
+lines 100-127) — and it is exactly this one consumer, and only this one, that misses the
+rehydration update and is left showing the pre-hydration default until a fresh write occurs.
+This is consistent with a subscription-registration race specific to how large a component tree
+`ProfilePage` is (dozens of child cards, versus `ThemeSync`'s single trivial hook or
+`decision-block.tsx`'s much smaller tree) — B did not chase the exact React/zustand internal
+mechanism further than establishing, by direct execution, that the selector-based pattern is
+reliably immune and the whole-state pattern is reliably not; that correlation, not a guess, is
+what the fix targets.
+
+**Ruling on shape, honoured as written**: this is **not** a local draft copy — `ColorThemePicker`
+and `AppearanceCard` hold no `useState` of their own (confirmed by reading both in full, again,
+this pass); `mode === "view"` is the only branch that renders `AppearanceCard` (there is no
+second call site in `mode === "edit"` to keep in sync), so there is no draft-vs-live split to
+preserve. It is a pre-existing bug in how this one page subscribes to the store, in scope per
+Ruling 16 ("one source of truth"), unrelated to anything C built this round.
+
+**Fix — the smallest change, per the manager's own constraint not to disturb the edit form's
+draft semantics** (there are none here to disturb, but the fix stays scoped anyway): in
+`app/profile/page.tsx`, add one narrow-selector read next to the existing whole-state call —
+```ts
+const colorTheme = useProfileStore((s) => s.profile.colorTheme);
+```
+— and change line 225 from `colorTheme={profile.colorTheme}` to `colorTheme={colorTheme}`.
+`onChange={updateColorTheme}` (also on line 226) needs no change — it is a stable store action,
+already proven correct by the write-path retest above. Zero change to `ColorThemePicker`,
+`AppearanceCard`, `store/profile.ts`, or `theme.ts`.
+
+**Wider finding, out of scope, flagged not fixed.** The same whole-state read pattern feeds every
+other field `ProfilePage` shows in view mode (`careerStage` confirmed stale-on-cold-load above by
+the same mechanism; by the same logic, every other `DashboardView`/`ReadingCard`/
+`LearnedPreferences` field read via this page's own `profile` variable is a candidate). This
+fix does **not** touch that — Ruling 16 names only the Mode picker's sync requirement, and
+widening the fix to every field on the page is a bigger, riskier change than this round asked
+for or than B was asked to guide. Recording it here for the manager to decide whether it becomes
+a new item; C should not fix it "in passing" while working 6-09/6-10.
+
+**Honest edge state.** If `colorTheme` is ever a malformed string (not `mode:accent`), the
+picker's `[mode, accent] = value.split(":")` produces a `mode` that matches none of
+`themeModeOptions`' three values — all three buttons render `aria-pressed="false"`, an honest
+"nothing selected" state, not a crash. Unaffected by this fix (same behaviour before and after —
+the fix changes *which* value reaches the picker, not how the picker handles a bad one).
+
+**Tests at risk — grepped, not assumed.** Zero existing tests import `app/profile/page.tsx`,
+`ColorThemePicker`, or `AppearanceCard` — this page has no rendering harness at all, matching
+A's own note about the reader's icon row. No regression risk to any existing test. A genuine
+protective test for *this exact bug class* (a `useSyncExternalStore` snapshot missing an async
+`persist.rehydrate()` update) needs a real render-and-effect harness — `renderToStaticMarkup`
+cannot exercise `useEffect`/`useSyncExternalStore` at all, and this repo's convention (Ruling 15)
+deliberately has no RTL. The best available test under the existing convention — a
+`renderToStaticMarkup` assertion that `ColorThemePicker` derives the right `aria-pressed` set
+from a given `value` prop — guards a *different*, smaller regression (the picker's own
+`split(":")`/comparison logic) and would not have caught this bug (the picker's own logic was
+never wrong). Naming this honestly rather than passing off that smaller test as proof of the fix:
+closing the gap for real is a convention-level (RTL) decision above B's or C's remit — POLICY,
+if the manager wants it closed this round rather than left as a documented gap.
+
+**Blast radius.** One new selector-based hook call (1 line) + one prop-feed line changed (line
+225) in `app/profile/page.tsx`. Zero change to `ColorThemePicker`, `AppearanceCard`,
+`store/profile.ts`, `theme.ts`, or `decision-block.tsx`. The wider dashboard-staleness lead above
+is explicitly not addressed by this change.
+
+**WHOSE TURN: C.**
+
+Commit: `docs(abc): round 6 B second pass - fix guides 6-09 (A6-01 font scale) and 6-10 (A6-02 profile picker)`.
+
+_(B's second-pass guide above was complete on disk when B's session limit hit; committed by the
+manager unchanged.)_
