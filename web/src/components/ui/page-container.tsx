@@ -23,7 +23,17 @@ export const pageContainer = cva("mx-auto w-full px-6", {
       // column = 640 + 560*scale. At scale 1: 640+560=1200, byte-identical
       // to before this item. Keep the two `560`s and this `640` in step —
       // same "two places, one query" risk spread.ts's own header names.
-      spread: "max-w-[760px] xl:max-w-[1000px] 2xl:max-w-[calc(640px+560px*var(--reading-scale,1))]",
+      //
+      // Ruling 19 / A7-02 (round 7, second pass): the xl term gets the same
+      // treatment — `1000 * var(--reading-scale, 1)`. Unlike 2xl's fixed-
+      // plus-flexible split, xl's grid (spread.ts's `SPREAD_GRID`) is
+      // proportional (`minmax(0,5fr)_minmax(0,7fr)`), so it fills whatever
+      // total width this cap gives it with no separate wiring — the panel
+      // is NOT width-invariant at xl the way it is at 2xl (both panel and
+      // column grow, in a fixed 5:12 share), which is what Ruling 19's own
+      // text asks for ("the 5fr/7fr grid then fills it"), not an oversight.
+      spread:
+        "max-w-[760px] xl:max-w-[calc(1000px*var(--reading-scale,1))] 2xl:max-w-[calc(640px+560px*var(--reading-scale,1))]",
       content: "max-w-[820px]",  // home column
       wide: "max-w-[920px]",     // saved grid (lg)
       board: "max-w-[1280px]",   // full-bleed feed board

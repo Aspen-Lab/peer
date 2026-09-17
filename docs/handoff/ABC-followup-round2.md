@@ -10898,3 +10898,59 @@ additional logic change). No figure file touched. Cleaned up: removed the inject
 override lived only in the live DOM).
 
 Commit: `feat(reader): Fit becomes a whole-page zoom, composing with A/A (Ruling 19, 7-04)`.
+
+#### Item 7-05 — A7-02: the xl cap gets the same calc pair as 2xl (Ruling 19)
+
+**Change, exactly B's guide, no deviation.** `components/ui/page-container.tsx`, the `spread`
+variant's `xl:` term: `xl:max-w-[1000px]` → `xl:max-w-[calc(1000px*var(--reading-scale,1))]` —
+same syntactic shape as the already-shipped 2xl term (7-01), same `var()` with fallback, one
+multiply instead of an add. `spread.ts`'s own `xl:` grid term (`minmax(0,5fr)_minmax(0,7fr)`)
+needs no change, confirmed by the same reasoning B and 7-01 already established: it is
+proportional, so it fills whatever total width the cap gives it. Comment added above the changed
+line naming Ruling 19/A7-02 and the panel-width consequence below.
+
+**Tests**: none needed, confirmed by the same grep B ran (`max-w-\[1000px\]`, `width:"spread"`,
+`width: "spread"` — zero hits in any test file).
+
+**Gate**: `npx tsc --noEmit` clean · `npx eslint .` clean · `npx vitest run --exclude
+"**/benchmark.test.ts"` → **2682/2682** (unchanged, as expected — no test touches this).
+
+**Found nothing in B's guide to contest.** The panel-width consequence B named (at xl, unlike
+2xl, growing `--reading-scale` widens both the panel and the column in a fixed 5:12 share, since
+the grid is proportional there) is confirmed exactly by the live numbers below — not a defect.
+
+**Live-checked, with the same dev-server CSS staleness from 7-04 still in effect** (no new
+`Compiled` line for this edit either — confirmed by curling the CSS chunk again and by reading
+`root.className` in the live DOM, which correctly showed the **new** class string
+`xl:max-w-[calc(1000px*var(--reading-scale,1))]` — so the JS/JSX side hot-reloaded as normal, only
+the Tailwind-generated CSS rule for that new arbitrary-value class was never compiled into any
+stylesheet this session). Verified the same way as 7-04: injected a `@media (min-width: 1280px) {
+[data-zoom-root] { max-width: calc(1000px * var(--reading-scale, 1)) !important; } }` override
+(the exact declaration Tailwind would have generated) at **1300×800** (xl band, below the 1536px
+2xl breakpoint):
+- At the default step (`--reading-scale: 1`, confirmed via the already-working `.reading-scaled`
+  font-size rule reading exactly **16.5px**, the same number 7-01 measured at 1x): `max-width`
+  **1000px**, real `getBoundingClientRect().width` **1000px** — byte-identical to today, as B's
+  guide predicted.
+- At the ladder's top step (5× "Larger text", `--reading-scale: 1.6`): `max-width` **1600px**,
+  real width **1292px** — clipped by the 1300px viewport itself, not by the cap, i.e. **A/A now
+  fills the full available width at xl** where it topped out at 1000px (leaving ~300px of unused
+  margin) before this item. Matches this round's own "A/A widens the page (xl cap)" target
+  exactly.
+- **One real measurement pitfall worth logging, not a product bug**: the first attempt at this
+  read `max-width` as a stale **1600px even at `--reading-scale: 1`** right after clicking
+  "Smaller text" — reading too early relative to the browser's own style-recalc batching for a
+  `calc()` expression depending on a custom property changed via React's own style-object commit
+  (the exact class of bug `withThemeTransition`/`withZoomTransition` already work around in
+  shipped code with `void el.offsetHeight`). Isolated by manually setting `--reading-scale` via
+  `el.style.setProperty` and forcing a reflow, which recomputed correctly every time; fixed the
+  *measurement* by adopting B's own established double-`requestAnimationFrame`-plus-reflow wait
+  (round-7-second-pass log) before every read from here on — not a defect in 7-04's or 7-05's
+  product code, both of which use the ordinary React re-render path, already reflow-safe on the
+  next real paint.
+
+**Blast radius**: exactly as B's guide stated — one Tailwind class-string literal, no other file.
+Cleaned up: removed the injected override before navigating away, reset the viewport (`preset:
+"desktop"`) and the reading scale back to its default step before moving on.
+
+Commit: `feat(reader): the xl cap scales with A/A too, matching 2xl (Ruling 19, 7-05)`.
