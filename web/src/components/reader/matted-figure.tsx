@@ -4,7 +4,7 @@
 
 export function MattedFigure({ src, caption }: { src: string; caption?: string | null }) {
   return (
-    <figure className="bg-[var(--plate-mat)] p-4 mt-4">
+    <figure className="cropmarks [--cm-inset:6px] [--cm-c:var(--plate-ink-faint)] bg-[var(--plate-mat)] p-4 mt-4">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={src}

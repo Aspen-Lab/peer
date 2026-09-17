@@ -259,16 +259,8 @@ html[data-accent="violet"]   { --seed: #7a3fd9; --seed-dark: #a078f0; }
   --color-border-strong: color-mix(in srgb, var(--color-heading) 12%, transparent);
   --color-skeleton-base: color-mix(in srgb, var(--color-heading) 5%, transparent);
   --color-skeleton-highlight: color-mix(in srgb, var(--color-heading) 11%, transparent);
-  --nm-highlight: rgba(255, 255, 255, 0.9);
-  --nm-shade: color-mix(in srgb, var(--color-heading) 12%, transparent);
-  --nm-shade-deep: color-mix(in srgb, var(--color-heading) 18%, transparent);
-  --nm-rim: color-mix(in srgb, var(--color-heading) 7%, transparent);
-  --nm-rim-hi: color-mix(in srgb, var(--color-heading) 11%, transparent);
   --nm-frame: color-mix(in srgb, var(--color-heading) 13%, transparent);
   --nm-frame-hi: color-mix(in srgb, var(--color-heading) 30%, transparent);
-  --nm-key: color-mix(in srgb, var(--color-heading) 12%, transparent);
-  --nm-ambient: color-mix(in srgb, var(--color-heading) 15%, transparent);
-  --nm-bevel: rgba(255, 255, 255, 0.8);
   --plate-mat: #efefef;
   --plate-ink: #1d1d1d;
   --plate-ink-muted: #666666;
@@ -280,12 +272,12 @@ html[data-accent="violet"]   { --seed: #7a3fd9; --seed-dark: #a078f0; }
 html[data-mode="dark"] {
   --color-bg: #111111;
   --color-bg-secondary: #181818;
-  --color-surface: #1d1d1d;
-  --color-surface-hover: #242424;
+  --color-surface: #232323;
+  --color-surface-hover: #2b2b2b;
   --color-heading: #f3f3f3;
   --color-text: #e3e3e3;
   --color-text-muted: #a9a9a9;
-  --color-text-faint: #838383;
+  --color-text-faint: #8d8d8d;
   --color-accent: var(--seed-dark);
   --color-accent-dim: color-mix(in srgb, var(--seed-dark) 14%, transparent);
   --color-link: var(--seed-dark);
@@ -304,16 +296,8 @@ html[data-mode="dark"] {
   --color-border-strong: rgba(255, 255, 255, 0.17);
   --color-skeleton-base: rgba(255, 255, 255, 0.05);
   --color-skeleton-highlight: rgba(255, 255, 255, 0.12);
-  --nm-highlight: rgba(255, 255, 255, 0.045);
-  --nm-shade: rgba(0, 0, 0, 0.45);
-  --nm-shade-deep: rgba(0, 0, 0, 0.6);
-  --nm-rim: rgba(255, 255, 255, 0.09);
-  --nm-rim-hi: rgba(255, 255, 255, 0.16);
-  --nm-frame: rgba(255, 255, 255, 0.18);
+  --nm-frame: rgba(255, 255, 255, 0.3);
   --nm-frame-hi: rgba(255, 255, 255, 0.4);
-  --nm-key: rgba(0, 0, 0, 0.55);
-  --nm-ambient: rgba(0, 0, 0, 0.45);
-  --nm-bevel: rgba(255, 255, 255, 0.06);
   --plate-mat: #e5e5e5;
   --plate-ink: #232323;
   --plate-ink-muted: #606060;
@@ -327,12 +311,12 @@ html[data-mode="dark"] {
   html[data-mode="system"] {
   --color-bg: #111111;
   --color-bg-secondary: #181818;
-  --color-surface: #1d1d1d;
-  --color-surface-hover: #242424;
+  --color-surface: #232323;
+  --color-surface-hover: #2b2b2b;
   --color-heading: #f3f3f3;
   --color-text: #e3e3e3;
   --color-text-muted: #a9a9a9;
-  --color-text-faint: #838383;
+  --color-text-faint: #8d8d8d;
   --color-accent: var(--seed-dark);
   --color-accent-dim: color-mix(in srgb, var(--seed-dark) 14%, transparent);
   --color-link: var(--seed-dark);
@@ -351,22 +335,14 @@ html[data-mode="dark"] {
   --color-border-strong: rgba(255, 255, 255, 0.17);
   --color-skeleton-base: rgba(255, 255, 255, 0.05);
   --color-skeleton-highlight: rgba(255, 255, 255, 0.12);
-  --nm-highlight: rgba(255, 255, 255, 0.045);
-  --nm-shade: rgba(0, 0, 0, 0.45);
-  --nm-shade-deep: rgba(0, 0, 0, 0.6);
-  --nm-rim: rgba(255, 255, 255, 0.09);
-  --nm-rim-hi: rgba(255, 255, 255, 0.16);
   /* These two were declared in `html[data-mode="dark"]` and nowhere else, so a
      reader on a dark OS who never touched the theme switch — the default path —
      got `--shadow-card` resolved from the LIGHT value: every card frame on the
      first briefing Peer ever showed them was 28% fainter than the drawn one.
      The dark palette is written twice; anything added to one half has to be
      added to the other. */
-  --nm-frame: rgba(255, 255, 255, 0.18);
+  --nm-frame: rgba(255, 255, 255, 0.3);
   --nm-frame-hi: rgba(255, 255, 255, 0.4);
-  --nm-key: rgba(0, 0, 0, 0.55);
-  --nm-ambient: rgba(0, 0, 0, 0.45);
-  --nm-bevel: rgba(255, 255, 255, 0.06);
   --plate-mat: #e5e5e5;
   --plate-ink: #232323;
   --plate-ink-muted: #606060;
@@ -395,16 +371,13 @@ html[data-mode="dark"] {
   background-repeat: repeat;
 }
 
-/* A slab has a lit top edge and a shaded bottom one. The card shadow already
-   carried the top bevel; the underside is what makes it read as having
-   thickness rather than as a lighter rectangle. */
-:root {
-  --nm-underside: color-mix(in srgb, var(--color-heading) 5%, transparent);
-}
-html[data-mode="dark"] { --nm-underside: rgba(0, 0, 0, 0.34); }
-@media (prefers-color-scheme: dark) {
-  html[data-mode="system"] { --nm-underside: rgba(0, 0, 0, 0.34); }
-}
+/* The slab vocabulary — a lit top edge, a shaded underside, a bevel, a rim —
+   was retired by the TUI pass, which made a card a flat rectangle with one
+   frame. Eight tokens outlived it in all three palette blocks with zero
+   consumers: `grep -rn "var(--nm-" src/` resolves only to `--nm-frame` and
+   `--nm-frame-hi`. Twenty-five declarations deleted, nothing rendered
+   differently. If depth ever comes back, it comes back as a decision, not as
+   a token nobody removed. */
 
 /* A mat is cut, and the picture sits below the cut. The inset catches on the
    window's top and left, which is where a light from the upper left would
@@ -455,9 +428,17 @@ html[data-mode="dark"] { --nm-underside: rgba(0, 0, 0, 0.34); }
    Desktop-only, so vh, no dvh. Any ancestor with an overflow other than
    visible silently kills the sticky — main, the article and the grid
    wrapper must keep it. */
+:root {
+  /* `KeyLegend` is `h-[var(--legend-h)]`; the panel reserves the same
+     number. They were 28px and 24px, so at bottom-stick the DOI line sat 4px
+     behind an 18px-blur glass bar — the normal state at 1280x800, not an
+     edge case. */
+  --legend-h: 1.75rem;
+}
+
 @utility reader-panel {
   position: sticky;
-  top: min(4rem, calc(100vh - var(--panel-h, 0px) - 1.5rem));
+  top: min(4rem, calc(100vh - var(--panel-h, 0px) - var(--legend-h) - 1rem));
 }
 
 /* ── The measure ──────────────────────────────────────────────────────
@@ -482,6 +463,17 @@ html[data-mode="dark"] { --nm-underside: rgba(0, 0, 0, 0.34); }
 @utility measure-ui {
   /* 60 characters of Inter — descriptions, help text, empty states. */
   max-width: 28.5em;
+}
+
+@utility measure-mono {
+  /* 66 characters of Roboto Mono — the same count as `measure`, so a mono
+     note under a serif column shares its right edge.
+
+     In `ch`, not `em`, and the note above says why: `ch` is the advance of
+     "0", which in a monospaced family IS every character's advance.
+     `measure-ui`'s em figure is 60 characters OF INTER; on the `annotation`
+     face at 11.5px it set a 47-character line. */
+  max-width: 66ch;
 }
 @utility measure-title {
   /* 34 characters of Newsreader. A title turns before the text does. */
@@ -514,20 +506,35 @@ body {
      viewport (long unbreakable strings, raw figure HTML) gets clipped
      instead of pushing the page out. */
   overflow-x: hidden;
-  /* Paper grain, and a light coming from off the top right.
+  /* Paper grain.
      The tile carries both lighter and darker speckles, so the same image reads
      as texture on the ivory ground and on the dark one — the old tile was
      near-black noise, which on #111 was noise nobody could see. Fixed
      attachment so the grain stays put under the scroll, like paper. */
+  /* One layer. The two radial washes that used to sit above the noise were
+     `background-attachment: fixed` like it, so they did not move with the
+     page — a card's separation from the ground changed as it scrolled and
+     collapsed to almost nothing in the bottom-left corner, which is half of
+     why the board read flat. The other half is the surface step below. */
   background-image:
-    radial-gradient(1200px 600px at 85% -10%, color-mix(in srgb, var(--color-accent) 4%, transparent), transparent 60%),
-    radial-gradient(900px 500px at -10% 110%, color-mix(in srgb, var(--color-heading) 5%, transparent), transparent 60%),
     url("data:image/svg+xml,<svg%20xmlns='http://www.w3.org/2000/svg'%20width='180'%20height='180'><filter%20id='g'><feTurbulence%20type='fractalNoise'%20baseFrequency='0.7'%20numOctaves='3'%20seed='3'%20stitchTiles='stitch'/><feColorMatrix%20type='saturate'%20values='0'/><feComponentTransfer><feFuncA%20type='linear'%20slope='0.09'/></feComponentTransfer></filter><rect%20width='100%'%20height='100%'%20filter='url(%23g)'/></svg>");
   background-attachment: fixed;
 }
 
+/* Selecting the paper's sentences is the reading page's own gesture — it is
+   how a quote leaves Peer. `--color-accent-dim` is a badge ground (9% light,
+   14% dark); as a selection over a grained, gradient-washed page it is inside
+   the noise. Its own token, so the badge fill and the selection can move
+   apart, built from `--color-accent` — which is already restated correctly in
+   all three theme blocks — so ONE line is correct in all ten palettes and in
+   both dark paths. Declaring it three times off `--seed` is the bug class
+   v0.29.0 shipped a fix for. Transient: it exists only while held, so it does
+   not spend the one-accent-at-rest budget, the same argument
+   `--shadow-well-soft` makes for a held control. */
+:root { --selection-bg: color-mix(in srgb, var(--color-accent) 22%, transparent); }
+
 ::selection {
-  background: var(--color-accent-dim);
+  background: var(--selection-bg);
   color: var(--color-heading);
 }
 
@@ -547,7 +554,7 @@ body {
    and short duration. Respect reduced-motion. */
 
 @keyframes fade-in-up {
-  from { opacity: 0; transform: translateY(6px); }
+  from { opacity: 0; transform: translateY(var(--ry, 6px)); }
   to   { opacity: 1; transform: translateY(0); }
 }
 
@@ -574,6 +581,57 @@ body {
 /* Tiny stagger: set --stagger on parent, N*i on children via style={{ "--i": i }}. */
 [style*="--i"] { animation-delay: calc(var(--i) * 40ms); }
 
+/* ── The approach ─────────────────────────────────────────────────────
+   Latent's MECHANISM, not their settings: the animation lives on the child
+   and is paused by a custom property the child INHERITS from the host, so
+   one class toggled on one section by one observer runs a whole group —
+   no per-element JS, no wrapper component. `both` fill means nothing
+   flashes before it runs.
+
+   Three departures from their stylesheet:
+
+   1. No blur. Latent open on `filter: blur(.25em)`, which is right for a
+      five-word hero and wrong for a sentence somebody is about to read.
+      So there is no second keyframe: this is `fade-in-up` with the rise
+      made a variable.
+   2. 360ms (`--dur-base`), not their 500 or 720. A scroll reveal covers
+      more distance than the mount fade and must still be finished before
+      the eye lands on the first line.
+   3. Scoped. These rules do NOTHING until an ancestor carries
+      `data-motion="reveal"`, which only the reading page sets. An ungated
+      `--rp: paused` is a blank article on /privacy and the briefing.
+
+   `.rv` is placed BY HAND, one element at a time. A `[data-reveal] > *`
+   child selector looks like less work and is the wrong trade: it animates
+   whatever happens to be a direct child, which on `PaperBody`'s band is
+   every section of a four-thousand-word paper. Which things arrive is a
+   design decision, so it is written down per element.
+
+   What arrives: Peer's claims about the paper. What never does: the paper's
+   own words. That division is the reason this page has motion at all, and
+   it replaces the old meaning of `animate-fade-in-up` here, which fired
+   below the fold to an empty room on every paper and was never once seen. */
+[data-motion="reveal"] [data-reveal]       { --rp: paused; }
+[data-motion="reveal"] [data-reveal].is-in { --rp: running; }
+
+[data-motion="reveal"] .rv {
+  /* 8px, the spacing scale's own step. 6 (the mount value) reads as a
+     twitch; 16 is a visible slide, and a reading column that slides says
+     the page is still laying out. */
+  --ry: 8px;
+  animation: fade-in-up var(--dur-base) var(--ease-expo) var(--rdl, 0s) both;
+  animation-play-state: var(--rp, running);
+}
+/* The one step — Latent's own first nav interval (60/100/140/…). The label
+   and its rule lead; the block's content follows. Two steps, never a
+   cascade: prose does not stagger against itself. */
+[data-motion="reveal"] .rv-late { --rdl: 60ms; }
+
+/* A paused `both`-filled animation prints at opacity 0. This is a tool for
+   reading papers; a printed paper with four blank blocks in it is not a
+   motion bug, it is a lost page. */
+@media print { [data-reveal] { --rp: running; } }
+
 /* The plate's mat. A scientific figure is usually drawn on white; dropped
    straight onto a dark card it glares like a lightbox. On dark the figure is
    mounted on an off-white mat the way a real plate is, so a white-ground chart
@@ -588,7 +646,7 @@ body {
   /* The card's own surface, not transparency: on a card the seam disappears
      (the card is this colour), and on the reading page, where the plate sits
      framed by its own shadow, it stays a sheet rather than an empty frame. */
-  background: var(--color-surface);
+  background-color: var(--color-surface);
   --plate-ink: var(--color-heading);
   --plate-ink-muted: var(--color-text-muted);
   --plate-ink-faint: var(--color-text-faint);
@@ -648,10 +706,40 @@ body {
 }
 [data-paper-id][data-focused="true"] .tile-actions { opacity: 1; transition-delay: 0ms; }
 
+/* The keyboard's mark, everywhere it is missing. The briefing's focused card
+   has drawn a 2px accent outline at a 3px offset since the keyboard layer
+   shipped (above); every other control in a keyboard-first product fell
+   through to the user agent's own ring — `grep -rn "focus-visible" src/`
+   returned exactly one hit in the whole repo, and it was a Tailwind variant.
+
+   In `@layer base` on purpose. Tailwind emits `@layer theme, base,
+   components, utilities;`, and v4's `outline-none` compiles to
+   `outline-style: none` inside `@layer utilities` — so a base-layer rule
+   ALWAYS loses to it, whatever the specificity. That is what keeps the
+   sixteen `focus:outline-none focus:ring-*` form fields winning as they do
+   today. Drop the wrapper and this reverses; the same mechanism is stated
+   in the `[class~="rounded-full"]` comment below.
+
+   `[tabindex="-1"]` is excluded structurally rather than being spared by an
+   `outline-none` somebody has to remember: the reading article carries
+   `tabIndex={-1}` because the router focuses it after every `j` and `k`, and
+   that must never draw a ring. */
+@layer base {
+  :where(a, button, [tabindex]:not([tabindex="-1"])):focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 3px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-fade-in-up,
   .animate-fade-in,
   .animate-pop-in { animation: none; }
+  /* The GATE, not the one-shot. The `animation-duration` below already
+     flattens the reveal; what must not survive is the PAUSE, which would
+     leave a reader who asked for less motion looking at an empty column
+     until an observer got to it. */
+  [data-reveal] { --rp: running; }
   /* Loops stop. `animation-duration` alone does not stop an infinite
      animation — it runs one cycle per 0.01ms, i.e. it strobes — so the
      iteration count is the half that does the work.
@@ -706,6 +794,101 @@ body {
   font-family: var(--font-mono);
   font-size: var(--text-caption);
   line-height: 1.4;
+}
+
+/* ── Registration marks ─────────────────────────────────────
+   The corner detail. Latent draws `.ltv2-cropframe` as two 14px L-brackets at
+   opposite corners of a plate; on their video frame it is four, sitting off the
+   image with a gap. It is a printer's mark: it says "this is the whole plate,
+   registered, not a crop".
+
+   Peer's card already carries a 1px frame (`--shadow-card`), and a second ring
+   inside it would be two frames saying one thing — the ornament trap this
+   product deletes things for. So the marks ARE the frame: the edge stays at
+   `--nm-frame`, and the last 12px into each corner steps up to `--nm-frame-hi`.
+   One line, registered at the corners, nothing added.
+
+   Drawn as eight background slices on one pseudo-element rather than with
+   `::before`/`::after` corners, because two pseudo-elements can only make two
+   corners and the tile needs both of its own for other work. `inset: 0` keeps
+   it inside the tile's `overflow: hidden`; a negative inset would be clipped.
+
+   Override per call site with `[--cm-len:…]`, `[--cm-w:…]`, `[--cm-c:…]`,
+   `[--cm-inset:…]`. */
+@utility cropmarks {
+  position: relative;
+
+  &::after {
+    --cm-len: 12px;
+    --cm-w: 1px;
+    --cm-c: var(--nm-frame-hi);
+    --cm-inset: 0px;
+    content: "";
+    position: absolute;
+    inset: var(--cm-inset);
+    pointer-events: none;
+    z-index: 1;
+    background-repeat: no-repeat;
+    background-image:
+      linear-gradient(var(--cm-c), var(--cm-c)), linear-gradient(var(--cm-c), var(--cm-c)),
+      linear-gradient(var(--cm-c), var(--cm-c)), linear-gradient(var(--cm-c), var(--cm-c)),
+      linear-gradient(var(--cm-c), var(--cm-c)), linear-gradient(var(--cm-c), var(--cm-c)),
+      linear-gradient(var(--cm-c), var(--cm-c)), linear-gradient(var(--cm-c), var(--cm-c));
+    background-size:
+      var(--cm-len) var(--cm-w), var(--cm-w) var(--cm-len),
+      var(--cm-len) var(--cm-w), var(--cm-w) var(--cm-len),
+      var(--cm-len) var(--cm-w), var(--cm-w) var(--cm-len),
+      var(--cm-len) var(--cm-w), var(--cm-w) var(--cm-len);
+    background-position:
+      left top, left top,
+      right top, right top,
+      left bottom, left bottom,
+      right bottom, right bottom;
+  }
+}
+
+/* A full-bleed FIGURE plate covers the card's top edge with a light mat, and
+   the card's own marks are white at 40% — invisible on it. So the card drops
+   the two corners that mat covers and the plate draws its own up there, in its
+   own ink: an object draws its own corners, minus the ones another object's
+   mat covers.
+
+   Scoped to `[data-plate="figure"]` on purpose. The terms plate is set on
+   `--color-surface`, the card's own colour, so nothing of the card's is hidden
+   under it and all four of its corners stay. */
+.cropmarks:has(> .tile-cover[data-plate="figure"])::after {
+  background-size:
+    0 0, 0 0,
+    0 0, 0 0,
+    var(--cm-len) var(--cm-w), var(--cm-w) var(--cm-len),
+    var(--cm-len) var(--cm-w), var(--cm-w) var(--cm-len);
+}
+
+@utility reading-prose {
+  /* The prose voice of the reading column — the serif twin of `paper-line`,
+     which stops at display size. Below it six sites each retyped
+     `font-reading text-lead leading-[1.6]`, and that leading restates
+     `--text-lead--line-height` verbatim, so a retune of the token would have
+     been ignored at all six. (`decision-block.tsx` already omits it and
+     renders identically — proof the literal was never doing anything.)
+
+     It states the SIZE, and that is the load-bearing part: `measure` is 28em
+     and em is the element's own font-size, so `measure` on a wrapper that
+     declares no size resolved against body's 17px. Putting the size and the
+     measure on one element is the only thing that makes the measure block
+     above true.
+
+     Named for the column, not the paper: it carries the abstract and the
+     body, which are the paper's words, and the model's claims, which are
+     not. No colour and no margin — both belong to the call site, same rule
+     as `annotation`. No `hyphens` and no `text-wrap`: a hyphen is a glyph
+     that is not in the paper, and a wrap mode is a per-site decision.
+
+     Never pair it with a `text-*` size: custom utilities are emitted before
+     the core ones in the same layer, so the core class would silently win. */
+  font-family: var(--font-reading);
+  font-size: var(--text-lead);
+  line-height: var(--text-lead--line-height);
 }
 
 @utility paper-line {

@@ -6,28 +6,20 @@
 import { quoteAttribution, type ReadingQuote } from "@/lib/papers/reading";
 import { BlockHeading, type BlockName } from "./block-heading";
 
-export function QuoteList({
-  block,
-  quotes,
-  stagger,
-}: {
-  block: BlockName;
-  quotes: ReadingQuote[];
-  stagger: number;
-}) {
+export function QuoteList({ block, quotes }: { block: BlockName; quotes: ReadingQuote[] }) {
   if (quotes.length === 0) return null;
   return (
-    <section
-      className="animate-fade-in-up"
-      style={{ "--i": stagger } as React.CSSProperties}
-    >
-      <BlockHeading block={block} />
+    // The Tier 0 twin of `ClaimList`, and the same host. The list is ONE
+    // `.rv` — these are the paper's sentences, and prose does not stagger
+    // against itself.
+    <section data-reveal>
+      <BlockHeading block={block} className="rv" />
       {/* The abstract's measure, so the column has one right edge. */}
-      <ul className="space-y-4 list-none measure">
+      <ul className="rv rv-late reading-prose space-y-4 list-none measure">
         {quotes.map((quote) => (
           <li
-            key={`${quote.from.heading}${quote.text}`}
-            className="font-reading text-lead leading-[1.6] text-text"
+            key={`${quote.from.heading}${quote.text}`}
+            className="text-text"
           >
             {quote.text}
             <span className="annotation text-meta text-text-faint ml-2">

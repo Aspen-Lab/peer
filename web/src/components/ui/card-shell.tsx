@@ -13,6 +13,20 @@ export const cardShell = cva(
   "group block bg-surface grain shadow-card",
   {
     variants: {
+      // There is no `corners` variant either, and for the opposite reason to
+      // the radius one: the corner detail is not a second frame inside this
+      // frame, it IS this frame. `@utility cropmarks` (globals.css) steps
+      // `--nm-frame` up to `--nm-frame-hi` for the last 12px into each corner,
+      // applied at the call site (`paperShellClass`, feed-tile.tsx), and
+      // `.cropmarks:has(> .tile-cover[data-plate="figure"])` drops the top pair
+      // where a figure's mat covers the card's own edge. Nothing is added, so
+      // there is no choice to expose here.
+      //
+      // The version to keep refusing is Latent's other one: an L-bracket
+      // OUTSIDE the frame with a gap. It states the boundary a second time,
+      // four marks per card and forty on a ten-card briefing, and `cropmarks`
+      // uses a POSITIVE inset because the tile is `overflow-hidden` and a
+      // negative one is clipped. That is the category v0.29.0 emptied.
       // There is no `radius` variant. All three values compiled to 0 — an API
       // that read as a choice and was not one, which is exactly how a round
       // corner gets back in. The frame is `--shadow-card`.

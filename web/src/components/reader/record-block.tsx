@@ -70,7 +70,7 @@ export function RecordBlock({
 
   return (
     <Band label={RECORD.heading}>
-      <ul className="annotation text-text-muted space-y-2.5 measure-ui mt-4">
+      <ul className="annotation text-text-muted space-y-3 measure-mono mt-4">
         {published && (
           <Row label={RECORD.published}>{published}</Row>
         )}

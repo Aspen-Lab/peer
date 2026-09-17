@@ -68,7 +68,7 @@ export function PaperBody({ reading }: { reading: PaperReading }) {
       {/* The contents: the sections Peer reached, in the paper's own order.
           It doubles as the statement of what it did not reach — a paper whose
           extractor found four headings says so here and nowhere else. */}
-      <p className="annotation text-text-faint mt-4 measure-ui">
+      <p className="annotation text-text-faint mt-4 measure-mono">
         {body.map((section) => section.heading).join(" · ")}
       </p>
       <p className="annotation text-text-faint mt-1.5">

@@ -14,7 +14,12 @@ import { EvidenceQuote } from "./evidence-quote";
 import { MattedFigure } from "./matted-figure";
 import { projectAnchor } from "./copy";
 
-const CLAIM_CLASS = "font-reading text-lead leading-[1.6] text-text";
+// The family, the size and the leading now come from the `reading-prose`
+// wrapper. Not cosmetic: `measure` is 28em and em is the element's OWN
+// font-size, so on a bare <div> that em was body's 17px — 476px against the
+// abstract's 462px, fourteen pixels of disagreement down a scroll, on a page
+// whose comments twice promise one right edge.
+const CLAIM_CLASS = "text-text";
 
 function Receipt({
   claim,
@@ -32,28 +37,35 @@ export function ClaimList({
   block,
   claims,
   abstractSentences,
-  stagger,
   anchor,
 }: {
   block: BlockName;
   claims: Claim[];
   abstractSentences: string[];
-  stagger: number;
   /** The relation block's `basedOn`, shown faint above the claims. */
   anchor?: string;
 }) {
   if (claims.length === 0) return null;
   return (
-    <section
-      className="animate-fade-in-up"
-      style={{ "--i": stagger } as React.CSSProperties}
-    >
-      <BlockHeading block={block} />
+    // The host is the section, not the band inside it: this block's content
+    // is a SIBLING of its heading, so the outer section owns the group.
+    //
+    // This REPLACES `animate-fade-in-up` rather than joining it — an element
+    // must never carry both; the reveal wins on specificity and the class
+    // would silently do nothing. The mount fade fired when the model's report
+    // landed, ~900px below the fold while the reader is still on the
+    // abstract, so by the time anyone got here it was long over. The observer
+    // fires immediately for a block already in view, so it covers the arrival
+    // case too — one trigger, not two. `--i` went with it: 0/40/80/120ms
+    // across blocks separated by a 64px gap never rendered a visible frame.
+    <section data-reveal>
+      <BlockHeading block={block} className="rv" />
       {anchor && (
-        <p className="font-sans text-meta text-text-faint mb-3">{projectAnchor(anchor)}</p>
+        <p className="rv rv-late font-sans text-meta text-text-faint mb-3">{projectAnchor(anchor)}</p>
       )}
-      {/* The abstract's measure, so the column has one right edge. */}
-      <div className="space-y-4 measure">
+      {/* The abstract's measure, so the column has one right edge. Five
+          claims are ONE `.rv`: prose does not stagger against itself. */}
+      <div className="rv rv-late reading-prose space-y-4 measure">
         {claims.map((claim, i) => (
           // Keyed by position: a model can write the same sentence twice.
           <div key={`${i}:${claim.text}`}>
@@ -69,24 +81,19 @@ export function ClaimList({
 export function KeyResultList({
   results,
   abstractSentences,
-  stagger,
   /** Image URLs already on the page (the plate's bound figure), not repeated. */
   shownFigures,
 }: {
   results: PaperReportKeyResult[];
   abstractSentences: string[];
-  stagger: number;
   shownFigures: Set<string>;
 }) {
   if (results.length === 0) return null;
   const seen = new Set(shownFigures);
   return (
-    <section
-      className="animate-fade-in-up"
-      style={{ "--i": stagger } as React.CSSProperties}
-    >
-      <BlockHeading block="findings" />
-      <div className="space-y-4 measure">
+    <section data-reveal>
+      <BlockHeading block="findings" className="rv" />
+      <div className="rv rv-late reading-prose space-y-4 measure">
         {results.map((result, i) => {
           const figure =
             result.figureImageUrl && !seen.has(result.figureImageUrl)

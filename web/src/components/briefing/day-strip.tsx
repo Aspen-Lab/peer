@@ -43,6 +43,8 @@ const BAR_GAP = 3;
 const HEIGHT = 52;
 /** A bar this short still has to be visible as "there is a paper here". */
 const MIN_BAR = 4;
+/** The chart's own width, so the zero line stops where the bars do. */
+const STRIP_W = (n: number) => n * BAR_W + (n - 1) * BAR_GAP;
 
 export function DayStrip({
   papers,
@@ -68,7 +70,19 @@ export function DayStrip({
     // that fits beside the chart four times over. `flex-wrap` keeps the phone
     // stacking it.
     <figure className="flex flex-wrap items-end gap-x-6 gap-y-3">
-      <div className="flex shrink-0 items-end" style={{ height: HEIGHT, gap: BAR_GAP }}>
+      {/* The zero the bars are measured from, at the chart's own width and no
+          wider. A sibling UNDER the bars, not an absolute span behind them: as
+          `absolute inset-x-0 bottom-0` it is the later sibling and paints over
+          each bar's last pixel, so the "baseline" would show only in the nine
+          3px gaps.
+
+          No numerals, no top tick, no left axis: zero is the only value on
+          this chart that is a fact rather than a rank. The caveat the drawn
+          zero makes is that MIN_BAR clamps at 4px, so a bar under 7.7% of the
+          day's best is drawn taller than it measures; on a real day the tail
+          sits near 0.6 of the best and it never binds. */}
+      <div className="shrink-0" style={{ width: STRIP_W(papers.length) }}>
+      <div className="flex items-end" style={{ height: HEIGHT, gap: BAR_GAP }}>
         {papers.map((paper) => {
           const score = paper.relevanceScore ?? 0;
           const read = Boolean(readIds[paper.id]);
@@ -99,6 +113,8 @@ export function DayStrip({
             </a>
           );
         })}
+      </div>
+      <span aria-hidden className="block h-px w-full bg-border-strong" />
       </div>
       <figcaption className="annotation text-text-faint measure-ui self-end pb-1">
         {DAY_STRIP.caption}

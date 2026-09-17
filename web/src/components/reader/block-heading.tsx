@@ -8,11 +8,12 @@
 // the width of the column, rather than a larger line of the same colour.
 
 import { Band } from "@/components/ui/band";
+import { cn } from "@/lib/cn";
 import type { ReadingBlock } from "@/lib/papers/reading";
 import { BLOCK_HEADING } from "./copy";
 
 export type BlockName = Exclude<ReadingBlock, "skim">;
 
-export function BlockHeading({ block }: { block: BlockName }) {
-  return <Band label={BLOCK_HEADING[block]} className="mb-4" />;
+export function BlockHeading({ block, className }: { block: BlockName; className?: string }) {
+  return <Band label={BLOCK_HEADING[block]} className={cn("mb-4", className)} />;
 }

@@ -118,9 +118,18 @@ export function PaperPlate({
   // 16:9 is a picture's shape, and only the picture needs it. A title block
   // sized by a photograph left two thirds of itself empty above the type; set
   // to its own proportion it reads as composed rather than as unfilled.
+  // `cropmarks` on the FIGURE branch only, in the plate's own ink: a figure is
+  // a reproduction, and a crop mark is what registers one. On the mat the
+  // card's own marks would vanish, which is the other half of the
+  // `:has(> .tile-cover[data-plate="figure"])` rule in globals.css.
+  //
+  // Not on the terms branch. A crop mark says "cropped from a larger original".
+  // These words are Peer's own composition, allocated across the briefing by
+  // `allocatePlateTerms`; nothing was cropped, and a mark that appears on both
+  // branches marks neither.
   const base = showFigure
-    ? "tile-cover overflow-hidden aspect-[16/9] @container"
-    : "tile-cover overflow-hidden aspect-[2.4/1] @container";
+    ? "tile-cover cropmarks [--cm-inset:6px] [--cm-c:var(--plate-ink-faint)] overflow-hidden aspect-[16/9] @container"
+    : "tile-cover grain overflow-hidden aspect-[2.4/1] @container";
 
   // A mat exists to hold a picture. With a figure the plate is a mat — light,
   // because scientific figures are drawn on white and matting is what keeps a

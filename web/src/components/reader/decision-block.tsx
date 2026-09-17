@@ -13,6 +13,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { IconArrowUpRight, IconLink } from "@/components/icons";
 import { Kbd } from "@/components/ui/kbd";
 import { cn } from "@/lib/cn";
+import { SECTION_GAP } from "@/components/ui/band";
 import type { PaperReading } from "@/lib/papers/reading";
 import { BUTTON, DOI, progressSuffix } from "./copy";
 
@@ -66,7 +67,7 @@ export function DecisionBlock({
 }) {
   return (
     <div ref={ref}>
-      <p className="font-reading text-lead text-text-muted measure-lede mt-12 sm:mt-16">
+      <p className={cn("reading-prose text-text-muted measure-lede", SECTION_GAP)}>
         {sentences.join(" ")}
         {stage && <span className="text-text-faint">{progressSuffix(stage.label)}</span>}
         {showAddKey && (

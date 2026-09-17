@@ -19,6 +19,7 @@ import { useFeedStore } from "@/store/feed";
 import { useProfileStore } from "@/store/profile";
 import { apiFetch } from "@/lib/api";
 import { PageContainer } from "@/components/ui/page-container";
+import { useReveal } from "@/components/ui/reveal";
 import { BackToFeedLink } from "@/components/navigation/back-to-feed-link";
 import { hasImmediateFeedHistoryEntry } from "@/lib/navigation/feed-history";
 import { NONE } from "@/lib/navigation/card-focus";
@@ -394,6 +395,17 @@ function Reader({
     // re-attaches when the words (and their footer) arrive or change.
   }, [decide, spread, reading]);
 
+  // The approach. One observer for every `[data-reveal]` in the scope below.
+  // The deps are the two things that arrive after first paint — the server
+  // reading and the model report — plus the spread flip, which remounts the
+  // blocks. `useReveal` reveals anything already on screen synchronously, so
+  // neither page open nor the xl flip shows an animation.
+  //
+  // Never make `decisionRef`'s or `wordsEndRef`'s block a `[data-reveal]`
+  // host: IntersectionObserver reports geometry, not opacity, so a paper
+  // would be marked read from a block sitting at opacity 0.
+  useReveal([reading, report, spread]);
+
   // ── Actions ──
   // One set for the keys, the buttons and the swipe.
   const save = () => {
@@ -506,16 +518,35 @@ function Reader({
   const limitations = report?.limitations ?? [];
   const relation = report?.relationToYourWork;
   const nextStep = report?.nextStep ?? null;
+  // One boundary per object. `PaperPlate` draws `cropmarks` at a 6px inset on
+  // the figure branch, and the `:has(> .tile-cover[data-plate="figure"])`
+  // suppression in globals.css cannot reach it here — SwipeableCard's outer
+  // div and its translate div sit between. So a framed SwipeableCard around a
+  // marked plate is four hi-contrast corners inside a 1px rectangle twelve
+  // pixels further out: two frames saying one thing. The corners say more, so
+  // the rectangle goes. The TERMS plate keeps the frame: it is set on
+  // `--color-surface`, the card's own colour, and with no frame it would have
+  // no edge against the page at all.
+  const plateIsFigure =
+    Boolean(boundFigure?.imageUrl) ||
+    (Boolean(resolvedFigure.imageUrl) && !resolvedFigure.hideFigure);
   const shownFigures = new Set(boundFigure ? [boundFigure.imageUrl] : []);
-  // Blocks that were not there at first paint fade in, staggered in order.
-  let stagger = 0;
-
   return (
     // `tabIndex={-1}`: Next's layout router focuses the segment's first
     // element after a client navigation, and an article that cannot take
     // focus makes that a no-op — j/k would change the paper without
     // assistive technology announcing anything.
-    <PageContainer width="spread" rhythm="reader" className={`${PAGE_CLASS} md:pb-16 outline-none`} tabIndex={-1}>
+    // `data-motion="reveal"` is the switch for globals.css's approach rules
+    // and the ONLY place in the product that sets it. Static in JSX rather
+    // than written from an effect on purpose: written afterwards, the page
+    // would paint once at full opacity and then snap to hidden.
+    <PageContainer
+      width="spread"
+      rhythm="reader"
+      className={`${PAGE_CLASS} md:pb-16 outline-none`}
+      tabIndex={-1}
+      data-motion="reveal"
+    >
       {/* The blocks, in the spec's order; `ReaderLayout` places them — one
           column below xl, the spread from it. Later-arriving content (the
           server reading, a model report) is `additions`: on the spread it
@@ -535,7 +566,7 @@ function Reader({
               rightLabel={paper.isSaved ? SWIPE.unsave : SWIPE.save}
               leftLabel={SWIPE.notInterested}
               rightActive={paper.isSaved}
-              className="shadow-card"
+              className={plateIsFigure ? undefined : "shadow-card"}
             >
               <PaperPlate
                 paper={paper}
@@ -585,12 +616,11 @@ function Reader({
               <KeyResultList
                 results={keyResults}
                 abstractSentences={abstractSentences}
-                stagger={stagger++}
                 shownFigures={shownFigures}
               />
             ) : (
               fromServer && (
-                <QuoteList block="findings" quotes={reading.findings} stagger={stagger++} />
+                <QuoteList block="findings" quotes={reading.findings} />
               )
             )}
 
@@ -599,11 +629,10 @@ function Reader({
                 block="method"
                 claims={methods}
                 abstractSentences={abstractSentences}
-                stagger={stagger++}
               />
             ) : (
               fromServer && (
-                <QuoteList block="method" quotes={reading.method} stagger={stagger++} />
+                <QuoteList block="method" quotes={reading.method} />
               )
             )}
 
@@ -612,11 +641,10 @@ function Reader({
                 block="caveats"
                 claims={limitations}
                 abstractSentences={abstractSentences}
-                stagger={stagger++}
               />
             ) : (
               fromServer && (
-                <QuoteList block="caveats" quotes={reading.caveats} stagger={stagger++} />
+                <QuoteList block="caveats" quotes={reading.caveats} />
               )
             )}
 
@@ -625,7 +653,6 @@ function Reader({
                 block="forYou"
                 claims={relation.items}
                 abstractSentences={abstractSentences}
-                stagger={stagger++}
                 anchor={relation.basedOn}
               />
             ) : (
@@ -643,7 +670,6 @@ function Reader({
                 block="nextStep"
                 claims={[nextStep]}
                 abstractSentences={abstractSentences}
-                stagger={stagger++}
               />
             )}
 

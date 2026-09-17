@@ -2,6 +2,80 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.30.0 — 2026-09-17
+
+Corner marks, an approach, and the sentence three cards were sharing.
+
+**The corner detail.** Latent registers a plate with L-brackets at its corners —
+a printer's mark that says "this is the whole plate, not a crop". Peer's card
+already had a 1px frame, and a second ring inside it would be two frames saying
+one thing, so the marks ARE the frame: the edge stays at `--nm-frame` and the
+last 12px into each corner steps up to `--nm-frame-hi`. Nothing is added.
+
+The paper's extracted figure gets the same marks in its own ink, because a
+figure is genuinely a reproduction — and there the marks replace the rectangle
+rather than joining it. The typographic term plate gets none: a crop mark says
+"cropped from a larger original", and those words are Peer's own composition,
+so nothing was cropped. Where a figure's light mat covers the card's top edge
+the card drops that pair, because white marks on a near-white mat are not marks.
+
+**Peer's blocks arrive as you reach them; the paper's own words are already
+there.** That division is the reason this page has motion at all. The mechanism
+is Latent's and it is the good part: the animation lives on the child and is
+paused by a custom property it inherits from the section, so one observer adding
+one class runs a whole group with no per-element JavaScript. Three things are
+not theirs — no blur, because a sentence you are about to read must not arrive
+out of focus; 360ms rather than 500 or 720; and it fires 15% of a screen *early*,
+so a block is never still moving while its first line is being read.
+
+What this replaces had never once been seen. Five blocks carried a mount fade
+that fired when the model's report landed — roughly 900px below the fold, while
+the reader is still on the abstract — so by the time anyone scrolled down it was
+long over, and its 40ms stagger ran between blocks that are never on screen
+together. Reduced motion lifts the pause rather than keeping it; so does
+printing, since a paused animation prints blank.
+
+**The card was pale, and the largest cause was one string.** The sentence under
+a card's title fell through to "Matches your interest in <your topic>", which
+for a reader with one topic is the same sentence on every paper of the day —
+three cards carrying it carry no bits each. It is out of the chain. The line is
+now decided for the whole board at once, the way the plate's words already were,
+because a card cannot see that two other cards are saying what it says: any
+sentence more than half the day is carrying is suppressed everywhere it appears.
+With no abstract and no model, the card says the lead author's institution, or
+nothing. "Open this paper for details." is deleted — it described the link the
+reader was already looking at.
+
+**And the ground it sat on.** The card surface was 1.12:1 against the page and
+the two radial washes over the grain were viewport-fixed, so a card's separation
+from the ground *changed as it scrolled* and almost vanished in one corner. The
+washes are gone, the surface goes to #232323 (1.24:1) and the frame to 30%, and
+the faint tone to #8d8d8d, which was already under AA and would have fallen
+further. Light is untouched. The eight slab tokens that survived the TUI pass
+with zero consumers — highlight, shade, rim, bevel, key, ambient, underside —
+are deleted, 25 declarations, nothing rendered differently.
+
+**Instrument marks, where the numbers are real.** The day strip draws its zero,
+at the chart's own width and no wider, so the bars are measured against
+something rather than floating; its caption now says they are drawn against
+today's best match, because the tallest bar is full height every single day and
+the old wording implied today's top paper was a perfect one. Each card takes its
+position — `01`, `02` — in the mono row it already had. Not a percentage: the
+match score is largely a within-day percentile, is overwritten by the rerank and
+reordered past by diversification, so no percentage of it is a fact about one
+paper. The position is a fact, and the masonry is column-major, so nothing else
+on screen said the reading order runs down column one.
+
+**Smaller.** A focus ring, on every control the keys reach — the product had one
+`:focus-visible` rule in the whole of `src/`, a Tailwind variant, on a page whose
+own comment calls it keyboard-first. A selection you can see: it was the badge
+ground at 9%, which over a grained page is inside the noise. `reading-prose` and
+`measure-mono`, because `measure` is in `em` and on a wrapper that declared no
+size it was resolving against the body's 17px — fourteen pixels of disagreement
+down a column that promises one right edge twice in its own comments. And the
+key legend and the panel that reserves room for it now read the same token;
+they were 28px and 24px, so the DOI line sat 4px behind a blurred bar.
+
 ## v0.29.0 — 2026-09-17
 
 The design pass Latent's own stylesheet argued for: one label, one gap, one

@@ -40,6 +40,7 @@ import { LoadingSkeleton } from "@/components/ui";
 import { buttonVariants } from "@/components/ui/button";
 import { emptyReason } from "@/lib/feed/empty-reason";
 import { briefingDeck } from "@/lib/briefing/deck";
+import { briefingTileLines } from "@/lib/briefing/tile-lines";
 import { SYNC, BRIEFING_EMPTY } from "@/lib/briefing/copy";
 import { EmptyState } from "@/components/ui/empty-state";
 import { dayLine } from "@/lib/shell/masthead";
@@ -138,6 +139,15 @@ function DailyBriefingPage() {
     [papers, starter, profile.researchTopics],
   );
 
+  // The card's sentence, decided for the whole board: a sentence more than
+  // half the day is carrying is suppressed everywhere it appears. See
+  // lib/briefing/tile-lines.ts.
+  const paperSummaries = useFeedStore((s) => s.paperSummaries);
+  const tileLines = useMemo(
+    () => briefingTileLines(papers, paperSummaries),
+    [papers, paperSummaries],
+  );
+
   const unreadCount = papers.filter((p) => !readItems[p.id]).length;
   // Nothing chosen yet: the briefing is the starter sample, and the strip below
   // the dateline is where it becomes the reader's own.
@@ -229,8 +239,11 @@ function DailyBriefingPage() {
               className="mb-4 break-inside-avoid animate-fade-in-up"
             >
               <FeedTile
-                item={{ kind: "paper", data: starter ? { ...paper, relevanceReason: "" } : paper }}
+                item={{ kind: "paper", data: paper }}
                 plateTerms={plateTerms[paper.id]}
+                line={tileLines[paper.id] ?? null}
+                index={index}
+                total={papers.length}
               />
             </div>
           ))}

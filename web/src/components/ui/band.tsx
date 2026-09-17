@@ -27,7 +27,13 @@ import { cn } from "@/lib/cn";
  * 48 on a phone, 64 from `sm` up. A flat 64 makes the reader noticeably
  * longer on the screen most reading happens on, and buys nothing there.
  */
-const GAP = { section: "mt-12 sm:mt-16", none: "" };
+/** The pause above a section, for the two blocks on the reading page that are
+ *  not a Band and so cannot take `gap="section"`: the skim deck and the
+ *  decision. Anything new that opens a section imports this rather than
+ *  retyping the pair. */
+export const SECTION_GAP = "mt-12 sm:mt-16";
+
+const GAP = { section: SECTION_GAP, none: "" };
 
 export function Band({
   label,

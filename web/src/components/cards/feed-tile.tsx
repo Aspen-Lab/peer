@@ -8,7 +8,6 @@ import Link from "next/link";
 import type { Paper } from "@/types";
 import { useFeedStore } from "@/store/feed";
 import { formatDayAge } from "@/lib/format";
-import { pickSkimSentence } from "@/lib/papers/skim";
 import { PaperPlate, shortVenue } from "@/components/cards/paper-plate";
 import { SwipeableCard } from "@/components/cards/swipe-card";
 import { cardShell } from "@/components/ui/card-shell";
@@ -27,7 +26,10 @@ type FeedItem = { kind: "paper"; data: Paper };
 function paperShellClass(isRead: boolean) {
   return cn(
     cardShell({ padding: "none", entrance: "none" }),
-    "group/tile relative overflow-hidden",
+    // The corner detail. Not a second ring inside the frame — the frame's own
+    // last 12px into each corner, stepped up from `--nm-frame` to
+    // `--nm-frame-hi`. See `@utility cropmarks` in globals.css.
+    "cropmarks group/tile relative overflow-hidden",
     isRead && "tile-read",
   );
 }
@@ -124,39 +126,14 @@ function SaveButton({
 
 const SELECTED_BG = "color-mix(in srgb, var(--color-accent) 15%, var(--color-surface))";
 
-export function resolvePaperTileSummary(
-  paper: Pick<
-    Paper,
-    "summaryIntro" | "summaryResultDiscussion" | "relevanceReason"
-  >,
-  storedSummary?: string,
-): string {
-  // A real digest sentence still wins when a key is configured.
-  const digestSentence = storedSummary?.trim();
-  if (digestSentence) return digestSentence;
 
-  // Without one, read the whole abstract and pick the sentence that says what
-  // the paper did. This used to take `summaryIntro` — the first one or two
-  // sentences — which for an academic abstract is the motivation, and reads
-  // identically across every paper in a field.
-  const skim = pickSkimSentence(
-    paper.summaryIntro,
-    paper.summaryResultDiscussion,
-  );
-  if (skim) return skim;
-
-  return paper.relevanceReason.trim() || "Open this paper for details.";
-}
-
-function PaperTile({ paper, isRead, selected, plateTerms = [] }: { paper: Paper; isRead: boolean; selected?: boolean; plateTerms?: string[] }) {
+function PaperTile({ paper, isRead, selected, plateTerms = [], line, index, total = 0 }: { paper: Paper; isRead: boolean; selected?: boolean; plateTerms?: string[]; line?: string | null; index?: number; total?: number }) {
   const savePaper = useFeedStore((s) => s.savePaper);
   const unsavePaper = useFeedStore((s) => s.unsavePaper);
   const moreLikePaper = useFeedStore((s) => s.moreLikePaper);
   const notInterestedPaper = useFeedStore((s) => s.notInterestedPaper);
-  const storedSummary = useFeedStore((s) => s.paperSummaries[paper.id]);
 
   const isLiked = paper.feedback === "moreLikeThis" || paper.feedback === "liked";
-  const summary = resolvePaperTileSummary(paper, storedSummary);
 
   const stop = (fn: () => void) => (e: React.MouseEvent) => {
     e.preventDefault();
@@ -204,6 +181,23 @@ function PaperTile({ paper, isRead, selected, plateTerms = [] }: { paper: Paper;
             at the bottom. */}
         <div className="flex items-baseline gap-2 mb-2 min-w-0">
           {kind !== "paper" && <KindMark />}
+          {/* The card's place in today's briefing. The masonry is column-major,
+              so nothing else on screen says the reading order runs down column
+              one. A position, not a quality: `relevanceScore` is 55% a
+              within-day percentile, is overwritten by the rerank and reordered
+              past by `diversify`, so no percentage of it is a fact about this
+              paper. Outside the truncated span, because a long venue must not
+              eat it. */}
+          {typeof index === "number" && total > 1 && (
+            <>
+              <span className="annotation text-text-faint tabular-nums shrink-0">
+                {String(index + 1).padStart(2, "0")}
+              </span>
+              <span className="annotation text-text-faint shrink-0" aria-hidden>
+                ·
+              </span>
+            </>
+          )}
           {/* Sentence case, in the mono the reading page uses for the same
               fact. Set in tracked capitals this was the last small-caps label
               in the product, and it shouted the one line on the card that is
@@ -215,15 +209,27 @@ function PaperTile({ paper, isRead, selected, plateTerms = [] }: { paper: Paper;
         <h3 className="paper-line text-title-lg text-heading leading-[1.2] line-clamp-3">
           {paper.title}
         </h3>
-        <p
-          className="text-body-sm sm:text-meta text-text-muted mt-2 leading-[1.6] sm:leading-[1.55] line-clamp-3 font-reading"
-        >
-          {summary}
-        </p>
+        {/* One size, not `text-body-sm sm:text-meta` — that SHRANK to 12.5px
+            at desktop width and sat a pixel above the 11.5px meta and author
+            lines, so four bands of one grey with nothing loud and nothing
+            quiet. The paper's own sentence stays in the paper's face; the
+            affiliation that stands in for it is a field of the record, so it
+            is Peer's. */}
+        {line ? (
+          <p className="text-body-sm text-text-muted mt-2 leading-[1.6] line-clamp-3 font-reading">
+            {line}
+          </p>
+        ) : paper.leadAffiliation ? (
+          <p className="text-body-sm text-text-faint mt-2 leading-[1.6] line-clamp-2">
+            {paper.leadAffiliation}
+          </p>
+        ) : null}
         <div className="tile-chrome mt-4 flex items-center gap-1 min-w-0">
-          <span className="text-caption text-text-faint truncate mr-1">
-            {authorLine}
-          </span>
+          {authorLine && (
+            <span className="text-caption text-text-faint truncate mr-1">
+              {authorLine}
+            </span>
+          )}
           <span className="flex-1" aria-hidden />
           <span className="tile-actions flex items-center gap-1">
 
@@ -282,11 +288,20 @@ export function FeedTile({
   item,
   selected,
   plateTerms,
+  line,
+  index,
+  total,
 }: {
   item: FeedItem;
   selected?: boolean;
   /** Allocated across the whole briefing — see lib/papers/plate-terms.ts. */
   plateTerms?: string[];
+  /** Position in today's briefing, and how many there are. */
+  index?: number;
+  total?: number;
+  /** Decided for the whole board — see lib/briefing/tile-lines.ts. A card
+   *  cannot see that two other cards are carrying its sentence. */
+  line?: string | null;
 }) {
   const isRead = useFeedStore((s) => !!s.readItems[item.data.id]);
   return (
@@ -295,6 +310,9 @@ export function FeedTile({
       isRead={isRead}
       selected={selected}
       plateTerms={plateTerms}
+      line={line}
+      index={index}
+      total={total}
     />
   );
 }
