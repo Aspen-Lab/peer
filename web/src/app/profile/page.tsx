@@ -661,9 +661,10 @@ function VenueGrid({
 
 // ── Calendar ───────────────────────────────────────────────────
 //
-// The drawing, the ramp and the honesty rule now live in
-// `components/charts/reading-calendar` — the briefing carries the same chart
-// at eight weeks — and what is left here is the profile's own framing.
+// The drawing, the ramp and the honesty rule live in
+// `components/charts/reading-calendar`; what is left here is the profile's
+// own framing. This is the one place the calendar is drawn — the briefing
+// carried an eight-week copy until v0.32.5.
 
 const CAL_WEEKS = 18;
 

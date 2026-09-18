@@ -16,7 +16,7 @@
 // It is now one thing: today's papers. Search lives at /search, events at
 // /events, jobs at /jobs, and every credential form lives on /profile.
 
-import { useEffect, useMemo, useRef, useState, useCallback, Suspense } from "react";
+import { useEffect, useMemo, useRef, useCallback, Suspense } from "react";
 import Link from "next/link";
 import { activePaperTopicsKey, useFeedStore } from "@/store/feed";
 import { feedsUseAi } from "@/lib/feed/ai-tier";
@@ -24,7 +24,6 @@ import { entitlementGrants } from "@/lib/entitlement/allowance";
 import { formatTimeAgo } from "@/lib/format";
 import { useProfileStore } from "@/store/profile";
 import { FeedTile } from "@/components/cards/feed-tile";
-import { DayStrip } from "@/components/briefing/day-strip";
 import { StarterStrip } from "@/components/briefing/starter-strip";
 import { STARTER_TOPICS, isStarterFeed } from "@/lib/feed/starter-topics";
 import { Band } from "@/components/ui/band";
@@ -63,9 +62,6 @@ function DailyBriefingPage() {
   const lastRefresh = useFeedStore((s) => s.lastRefresh);
   const loadFeed = useFeedStore((s) => s.loadFeed);
   const readItems = useFeedStore((s) => s.readItems);
-  // One clock per mount — the reading page's pattern. `Date.now()` in render
-  // is impure and re-reads on every re-render.
-  const [now] = useState(() => Date.now());
   const feedTopicsKey = useFeedStore((s) => s.feedTopicsKey);
   const feedError = useFeedStore((s) => s.feedError);
   const profile = useProfileStore((s) => s.profile);
@@ -222,19 +218,18 @@ function DailyBriefingPage() {
 
       {papers.length > 0 && (
         // Two sections, each under its band: what you have read (above), and
-        // today's papers — the day's shape, then the cards that are it. The
-        // strip used to float between the two, under the graph's key and
-        // beside the calendar, with nothing saying which of them it belonged to.
+        // today's papers — the cards, straight under their band the way the
+        // graph sits under its own. A bar chart of the day's match scores
+        // stood between them until v0.33.1: ten near-equal grey bars whose
+        // "shape of the day" was flat on most days, and whose "dim ones are
+        // read" the deck already says in words.
         <Band label={TODAY.heading} gap="none">
-        <div className="mt-4">
-          <DayStrip papers={papers} readIds={readItems} now={now} />
-        </div>
         {/* Masonry, not a fixed grid. Roughly four papers in ten carry an
             extractable figure, so card heights genuinely differ; a uniform
             grid either ragged-edges every row or reserves dead space on the
             six cards with no image. CSS columns let each card be its own
             height. */}
-        <div className="mt-6 columns-1 sm:columns-2 lg:columns-3 gap-4 [column-fill:_balance]">
+        <div className="mt-4 columns-1 sm:columns-2 lg:columns-3 gap-4 [column-fill:_balance]">
           {papers.map((paper, index) => (
             <div
               key={paper.id}
@@ -265,7 +260,7 @@ function DailyBriefingPage() {
   );
 }
 
-/** The day's section: its strip and its cards. */
+/** The day's section: its cards. */
 const TODAY = { heading: "Today's papers" };
 
 const READING_STRIP = { heading: "Your reading" };

@@ -2,6 +2,17 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.33.1 — 2026-09-18
+
+The bar chart above today's papers is gone.
+
+"Today's papers" opens on the cards now, the way "Your reading" opens on the
+graph. The strip of ten bars — each paper's match against the day's best — was
+meant to show the shape of the day: two strong papers, a flat middle, a tail.
+On most days it showed ten bars of nearly the same height, and its key ("The
+dim ones are read") repeated what the deck already says in words. Each bar was
+also a link to its card, which nothing on the page ever said.
+
 ## v0.33.0 — 2026-09-18
 
 Steer the briefing from your reading graph.

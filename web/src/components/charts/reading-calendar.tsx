@@ -1,11 +1,11 @@
 "use client";
 
-// Peer's one chart: which days you read something.
+// Which days you read something — drawn on /profile, eighteen weeks labelled.
 //
-// It lived inline on the profile and the briefing had none. Now it is one
-// component in two sizes — the profile's labelled eighteen weeks, and a bare
-// eight-week strip at the foot of the day's briefing — so there is one
-// drawing of this and one set of rules for it.
+// It lived inline on the profile, then became a component in two sizes when
+// the briefing carried an eight-week copy under the reading graph. That copy
+// is gone (v0.32.5): it answered "which days", which the briefing does not
+// need. The component stays one drawing with one set of rules.
 //
 // The form is a calendar heatmap because the question is "which days", not
 // "how many": a bar chart of daily counts answers a question nobody asked and
@@ -13,12 +13,11 @@
 // legend box — the line above it names it — but the ramp gets its Less/More
 // key, because a heatmap's steps are not self-evident.
 //
-// The ramp is neutral, light to dark. The day-strip twenty pixels away states
-// the rule in its own comment — "in this palette the hue is a signal, and how
-// well a paper matches is data" — and this chart used to state the opposite,
-// spending 126 accent cells on /profile, by area the largest use of the hue
-// anywhere in the product. Zero is the ground, not the palest step: a day with
-// nothing read is not a small amount of reading.
+// The ramp is neutral, light to dark. In this palette the hue is a signal, and
+// how much was read is data — this chart used to state the opposite, spending
+// 126 accent cells on /profile, by area the largest use of the hue anywhere in
+// the product. Zero is the ground, not the palest step: a day with nothing
+// read is not a small amount of reading.
 //
 // Nothing here is ever synthesized. This chart used to fall back to a seeded
 // pseudo-random grid whenever the per-day API was unavailable — which is
@@ -37,14 +36,13 @@ export const FUTURE = -1;
 const DAY_MS = 86_400_000;
 
 /**
- * One size, fixed — the day-strip's own unit (12px marks, 3px apart), so the
- * two charts on one board read as one system.
+ * One size, fixed: 12px marks, 3px apart.
  *
  * It used to be `repeat(weeks, minmax(0, 1fr))` with `aspect-square` cells,
  * which is a chart sized by its container: on the briefing's 1232px board
  * eight columns made 150px squares, seven rows of them a thousand pixels tall,
  * and the one day read was a white slab in the corner of an empty field. A
- * cell is a glyph, not a layout region. The day-strip learned this first.
+ * cell is a glyph, not a layout region.
  */
 const CELL = 12;
 const GAP = 3;
