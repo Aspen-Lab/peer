@@ -2,14 +2,21 @@
 
 // Bridges the local zustand feed store to Supabase (saved_items + read_items).
 //
-//   signed-out  — localStorage only (unchanged)
+//   signed-out  — localStorage only, kept across reloads
 //   signed-in   — on login: merge local-only saves/reads up → pull server → hydrate store
 //                 on sign-out: resetLocal so next user starts clean
+//
+// Which of those a page load is, is decided in lib/feed/session-step.ts — read
+// its header. The short version: "no user found at mount" used to be treated
+// as "signed out just now", so every signed-out reader's saves were wiped on
+// every reload.
 //
 // Mount once, near the root, alongside <ProfileSync />.
 
 import { useEffect, useRef } from "react";
+import { isAuthSessionMissingError } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase/client";
+import { sessionStep } from "@/lib/feed/session-step";
 import { useFeedStore } from "@/store/feed";
 import type { Paper, Event, Job } from "@/types";
 import { apiFetch } from "@/lib/api";
@@ -82,14 +89,30 @@ export function FeedSync() {
   useEffect(() => {
     if (!supabase) return;
 
-    const onSession = async (signedIn: boolean) => {
-      console.info("[FeedSync] auth:", signedIn ? "signed-in" : "signed-out");
-      if (!signedIn) {
+    /** The store is restored from localStorage after mount. The decision
+     *  below reads whose data this is, so it must never be made from the
+     *  pre-restore default. */
+    const restored = () =>
+      new Promise<void>((resolve) => {
+        if (useFeedStore.persist.hasHydrated()) return resolve();
+        const unsub = useFeedStore.persist.onFinishHydration(() => {
+          unsub();
+          resolve();
+        });
+      });
+
+    const onSession = async (userId: string | null | undefined, signedOut = false) => {
+      await restored();
+      const store = useFeedStore.getState();
+      const step = sessionStep({ userId, syncedUserId: store.syncedUserId, signedOut });
+      console.info("[FeedSync] auth:", step);
+      if (step === "keep") return;
+      if (step === "reset" || step === "reset-then-sync") {
         didInitialSyncRef.current = false;
-        useFeedStore.getState().resetLocal();
-        return;
+        store.resetLocal();
+        if (step === "reset") return;
       }
-      if (didInitialSyncRef.current) return;
+      if (!userId || didInitialSyncRef.current) return;
       didInitialSyncRef.current = true;
 
       // 1. Push any local-only signals up first. The cloud is source of
@@ -123,13 +146,22 @@ export function FeedSync() {
         savedJobs,
         readItems,
       });
+      // From here the data in this browser is this account's copy: it goes
+      // when this session ends, and it is never pushed into another account.
+      useFeedStore.getState().setSyncedUserId(userId);
     };
 
-    supabase.auth.getUser().then(({ data }) => onSession(!!data.user));
+    supabase.auth.getUser().then(({ data, error }) => {
+      if (data.user) return onSession(data.user.id);
+      // Only a DEFINITELY absent session counts as signed out. A network
+      // failure or a server error is "could not tell" — and a reader's data is
+      // never wiped because the network was down when the page loaded.
+      return onSession(isAuthSessionMissingError(error) ? null : undefined);
+    });
 
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "SIGNED_OUT") onSession(false);
-      else if (session?.user) onSession(true);
+      if (event === "SIGNED_OUT") onSession(null, true);
+      else if (session?.user) onSession(session.user.id);
     });
 
     return () => sub.subscription.unsubscribe();

@@ -672,6 +672,13 @@ interface FeedState {
    * nothing but a count. Local-first like `readAt`; a few hundred bytes each.
    */
   library: Record<string, LibraryEntry>;
+  /**
+   * Whose account the data in this browser was last synced from; null when it
+   * was made signed out. It is what tells a reader's own local data (kept
+   * across reloads) from an account's copy (cleared when that session ends).
+   * See lib/feed/session-step.ts.
+   */
+  syncedUserId: string | null;
   appliedAt: Record<string, string>;
   registeredAt: Record<string, string>;
   submittedAt: Record<string, string>;
@@ -713,6 +720,7 @@ interface FeedState {
   /** `paper` when the caller has it (the reading page always does), so a
    *  paper opened from search or a link still enters the library. */
   markRead: (id: string, paper?: Paper) => void;
+  setSyncedUserId: (id: string | null) => void;
   markUnread: (id: string) => void;
   setJobApplied: (job: Job, applied: boolean, at?: string) => void;
   setEventRegistered: (
@@ -765,6 +773,7 @@ export const useFeedStore = create<FeedState>()(
       readItems: {},
       readAt: {},
       library: {},
+      syncedUserId: null,
       appliedAt: {},
       registeredAt: {},
       submittedAt: {},
@@ -1415,6 +1424,8 @@ export const useFeedStore = create<FeedState>()(
         cloudMarkRead(id);
       },
 
+      setSyncedUserId: (id) => set({ syncedUserId: id }),
+
       markUnread: (id) => {
         set((s) => {
           if (!s.readItems[id]) return s;
@@ -1748,11 +1759,14 @@ export const useFeedStore = create<FeedState>()(
           savedEvents: [],
           savedJobs: [],
           readItems: {},
-          // `readAt` and `library` are deliberately NOT cleared here yet. This
-          // runs on every page load for a visitor who is not signed in (see
-          // FeedSync's mount path), not only on a real sign-out, so clearing
-          // them would erase every signed-out reader's reading history on each
-          // load. Fix the trigger first, then clear all three together.
+          // The three are one record — `markRead` writes them together and
+          // `markUnread` deletes them together — so a reset clears all three.
+          // This is safe only because the reset now runs when a session has
+          // really ended (lib/feed/session-step.ts); it used to run on every
+          // signed-out page load.
+          readAt: {},
+          library: {},
+          syncedUserId: null,
           appliedAt: {},
           registeredAt: {},
           submittedAt: {},
@@ -1780,6 +1794,7 @@ export const useFeedStore = create<FeedState>()(
         readItems: state.readItems,
         readAt: state.readAt,
         library: state.library,
+        syncedUserId: state.syncedUserId,
         appliedAt: state.appliedAt,
         registeredAt: state.registeredAt,
         submittedAt: state.submittedAt,

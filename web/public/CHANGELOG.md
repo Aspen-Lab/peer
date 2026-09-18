@@ -2,6 +2,37 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.32.1 — 2026-09-18
+
+Your saves and your reading now survive a reload when you are not signed in.
+
+**What was happening.** Every page load for a visitor who was not signed in ran
+the sign-out reset. The sign-in bridge asked "is anyone signed in?" on arrival,
+got "no", and treated that as "someone just signed out" — so a signed-out
+reader's saved papers and read marks were wiped on every reload. The briefing
+said "ten unread" for papers you had already read that morning, and /profile
+said "Read 0" beside a calendar showing the days you read, because the reading
+dates were the one thing the reset forgot. It forgot them on a real sign-out
+too, which left the last account's reading on a shared machine.
+
+**What happens now.** Peer tells apart the two kinds of data a browser can hold.
+What you made while signed out is yours: it stays until you clear site data,
+which is what /privacy has always said. What came down from an account is that
+account's copy: it goes when that session ends — on sign-out, or when the
+session is found to have ended while the tab was closed — and it is never pushed
+up into a different account that signs in on the same browser. A reset now
+clears the whole reading record: the marks, the days and the library behind the
+reading graph.
+
+**And a network failure is not a sign-out.** Finding out who is signed in is a
+request to the sign-in service. Only a definite "there is no session" counts as
+signed out; if the request fails, Peer does nothing, so being offline when the
+page loads can never wipe anything.
+
+/privacy now says what the reading graph keeps in your browser, and that signing
+out clears it — it lives only in this browser, so it does not come back when you
+sign in again.
+
 ## v0.32.0 — 2026-09-18
 
 Your library opens the briefing, and the cards arrive.

@@ -20,7 +20,7 @@ const SECTIONS = [
     label: "Without an account",
     body: [
       "You can read a briefing without signing in, and Peer stores nothing about you on its servers when you do.",
-      "Your browser keeps your topics, your settings, today's papers and which ones you have opened, so the page works on your next visit. Clearing site data removes all of it.",
+      "Your browser keeps your topics, your settings, today's papers, the ones you have saved and the ones you have opened, so the page works on your next visit. For each paper you read it also keeps the title, the venue, the day you read it and the terms it is filed under — that is what draws your reading graph. Clearing site data removes all of it.",
     ],
   },
   {
@@ -29,6 +29,7 @@ const SECTIONS = [
       "Signing in is GitHub OAuth through Supabase. Peer receives the account id and email address GitHub returns, and stores them in its own database.",
       "From then on these are stored against your account: the topics, methods, journals, school and lab you enter; the free-text project and challenges you write; your feed and digest settings; papers you save; papers you open; likes and dismissals; and digests that were sent to you.",
       "A like or a dismissal is kept as a small ledger of concepts, which is what makes tomorrow's briefing different from today's.",
+      "Signing in carries what you had saved and opened in this browser into your account. Signing out clears this browser's copy, including the reading graph — which is kept only in this browser, never on Peer's servers, so it does not come back when you sign in again.",
     ],
   },
   {
