@@ -359,7 +359,7 @@ function Reader({
   // re-expressed, since in one column the decision sits under the abstract.
   // A page with no words (record only) falls back to the decision, which
   // keeps it read on open, as v0.13.1 says.
-  const decide = useCallback(() => markRead(paper.id), [markRead, paper.id]);
+  const decide = useCallback(() => markRead(paper.id, paper), [markRead, paper]);
   const decisionRef = useRef<HTMLDivElement>(null);
   const wordsEndRef = useRef<HTMLParagraphElement>(null);
   useEffect(() => {
@@ -440,7 +440,7 @@ function Reader({
     const store = useFeedStore.getState();
     if (store.pendingDismissal) store.undoDismiss();
     else if (store.readItems[paper.id]) store.markUnread(paper.id);
-    else store.markRead(paper.id);
+    else store.markRead(paper.id, paper);
   };
   const open = () => {
     if (!reading?.source) return;

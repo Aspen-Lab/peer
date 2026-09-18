@@ -78,6 +78,48 @@ function groundedIn(paper: PlateTermInput): (term: string) => boolean {
 }
 
 /**
+ * The quality rules every display of a paper's terms shares — the plate's and
+ * the library graph's. A term that fails one of these is wrong wherever it is
+ * shown. What is NOT here is the plate's own allocation policy (the reader's
+ * topics banned, a per-briefing cap), which only makes sense on a card.
+ */
+function passesTermRules(
+  term: string,
+  isGrounded: (term: string) => boolean,
+  maxChars: number,
+): boolean {
+  const key = normalize(term);
+  if (!key) return false;
+  if (OFF_DOMAIN.test(term)) return false;
+  if (CATEGORY_CODE.test(key)) return false;
+  if (key.length < MIN_TERM_CHARS) return false;
+  if (term.length > maxChars) return false;
+  return isGrounded(term);
+}
+
+/**
+ * A paper's own terms that survive the shared rules, in the record's order,
+ * with subsumed ones dropped. The reader's topics are NOT removed: a graph of
+ * what someone has read is exactly where "this paper carries your topic" is
+ * information rather than an echo.
+ */
+export function cleanTerms(paper: PlateTermInput, max: number, maxChars = 32): string[] {
+  const kept: string[] = [];
+  const isGrounded = groundedIn(paper);
+  for (const raw of paper.summaryExperimentKeywords ?? []) {
+    if (kept.length >= max) break;
+    const term = raw.trim();
+    if (!passesTermRules(term, isGrounded, maxChars)) continue;
+    if (subsumed(term, kept)) continue;
+    kept.push(term);
+  }
+  return kept;
+}
+
+/** Case- and whitespace-insensitive key a term is compared by. */
+export const termKey = normalize;
+
+/**
  * Allocate plate terms across a whole briefing.
  *
  * Returns a map from paper id to the terms that card may set. A card can come
@@ -106,11 +148,7 @@ export function allocatePlateTerms(
       // A topic the reader declared, reached by substring — "protein structure"
       // when they asked for "protein structure prediction".
       if ([...banned].some((b) => b.includes(key) || key.includes(b))) continue;
-      if (OFF_DOMAIN.test(term)) continue;
-      if (CATEGORY_CODE.test(key)) continue;
-      if (key.length < MIN_TERM_CHARS) continue;
-      if (term.length > MAX_TERM_CHARS) continue;
-      if (!isGrounded(term)) continue;
+      if (!passesTermRules(term, isGrounded, MAX_TERM_CHARS)) continue;
       if (subsumed(term, kept)) continue;
       if ((usage.get(key) ?? 0) >= MAX_CARDS_PER_TERM) continue;
 

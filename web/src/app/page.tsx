@@ -41,6 +41,9 @@ import { buttonVariants } from "@/components/ui/button";
 import { emptyReason } from "@/lib/feed/empty-reason";
 import { briefingDeck } from "@/lib/briefing/deck";
 import { briefingTileLines } from "@/lib/briefing/tile-lines";
+import { buildLibraryGraph } from "@/lib/library/graph";
+import type { Paper } from "@/types";
+import { LibraryGraph, LibraryLegend } from "@/components/charts/library-graph";
 import { SYNC, BRIEFING_EMPTY } from "@/lib/briefing/copy";
 import { EmptyState } from "@/components/ui/empty-state";
 import { dayLine } from "@/lib/shell/masthead";
@@ -252,7 +255,9 @@ function DailyBriefingPage() {
 
       {/* After the day's papers, not before them: the brief opens on what
           there is to read and closes on what has been read. */}
-      {papers.length > 0 && <ReadingStrip />}
+      {papers.length > 0 && (
+        <ReadingStrip papers={papers} readerTopics={starter ? [] : profile.researchTopics} />
+      )}
     </PageContainer>
   );
 }
@@ -283,24 +288,50 @@ const READING_STRIP = {
  * Renders nothing until something has been read — never a placeholder grid,
  * and never a streak counted off invented weeks.
  */
-function ReadingStrip() {
+function ReadingStrip({ papers, readerTopics }: { papers: Paper[]; readerTopics: string[] }) {
   const cells = useReadingDays(STRIP_WEEKS);
-  if (!cells) return null;
-  const days = daysRead(cells);
-  const streak = streakWeeks(cells, STRIP_WEEKS);
+  const library = useFeedStore((s) => s.library);
+  const savedPapers = useFeedStore((s) => s.savedPapers);
+  const readItems = useFeedStore((s) => s.readItems);
+  // The library as a graph: what has been read or kept, joined wherever two
+  // papers carry the same term — and today's papers placed against it. See
+  // lib/library/graph.ts for what an edge is allowed to mean.
+  const graph = useMemo(
+    () =>
+      buildLibraryGraph({
+        library: Object.values(library ?? {}),
+        saved: savedPapers,
+        today: papers,
+        readIds: readItems,
+        readerTopics,
+      }),
+    [library, savedPapers, papers, readItems, readerTopics],
+  );
+  const hasLibrary = graph.counts.read + graph.counts.saved > 0;
+  if (!cells && !hasLibrary) return null;
+  const days = cells ? daysRead(cells) : 0;
+  const streak = cells ? streakWeeks(cells, STRIP_WEEKS) : 0;
 
   return (
     <Band label={READING_STRIP.heading} gap="none">
-      {/* The day-strip's arrangement: a compact chart with its sentence
-          beside it, not a line above a field. `flex-wrap` stacks them on a
-          phone. No Less/More key here — with empty slots against filled ones
-          the reading is self-evident, and the profile carries the key. */}
-      <figure className="mt-4 flex flex-wrap items-end gap-x-6 gap-y-3">
-        <ReadingCalendar cells={cells} weeks={STRIP_WEEKS} labels={false} showKey={false} />
-        <figcaption className="annotation text-text-faint measure-ui self-end">
-          {READING_STRIP.summary(days, STRIP_WEEKS, streak)}
-        </figcaption>
-      </figure>
+      {hasLibrary && (
+        <div className="mt-4">
+          <LibraryGraph graph={graph} />
+        </div>
+      )}
+      <div className="mt-4 flex flex-wrap items-end justify-between gap-x-10 gap-y-5">
+        {hasLibrary && <LibraryLegend />}
+        {cells && (
+          // The reading rhythm, beside the library it built: which days,
+          // not which papers. The calendar's own sentence sits next to it.
+          <figure className="flex flex-wrap items-end gap-x-6 gap-y-3">
+            <ReadingCalendar cells={cells} weeks={STRIP_WEEKS} labels={false} showKey={false} />
+            <figcaption className="annotation text-text-faint measure-ui self-end">
+              {READING_STRIP.summary(days, STRIP_WEEKS, streak)}
+            </figcaption>
+          </figure>
+        )}
+      </div>
     </Band>
   );
 }

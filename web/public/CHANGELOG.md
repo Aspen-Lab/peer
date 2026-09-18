@@ -2,6 +2,49 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.31.0 — 2026-09-18
+
+Your reading, drawn as a library: every paper you have read or kept, and the
+terms that join them.
+
+**What it is.** At the foot of the briefing, the "Your reading" band is now a
+graph. A square is a paper — filled once read, outlined while it is one of
+today's and still waiting. A filled chip is one of your own topics; an outlined
+chip is a term two or more of your papers share. Today's unread papers are in it
+on purpose, and only when they connect to something: the library is most useful
+the morning a new paper turns out to sit next to three you have already read.
+Point at anything and its neighbourhood lifts while the rest recedes, a readout
+in the plate's corner says what it is, and four corners in your accent register
+it. Click a paper to open it; drag anything and the graph re-settles around it.
+
+**Every line is a fact from the paper's own record.** No similarity score, no
+embedding, no "related" guess — two papers are near each other only because
+their records say the same thing. A term comes from one of two places, and the
+readout names which: OpenAlex filed the work under it, from a curated taxonomy
+of about 4,500 topics assigned to the whole work — which is what joins the books
+that ship no abstract — or it is in the paper's own title or abstract, under the
+same rules the card's plate uses, which is what keeps the older tagger's
+"Identity (music)" on a crowdsourcing paper out. A label that contains one of
+your topics — "Machine Learning and Data Classification" under "machine
+learning" — hangs beneath it on a solid line instead of being merged into it, so
+two corners of one field stay two corners, and its chip names only what
+differs: DATA CLASSIFICATION.
+
+**How it moves.** Most of the layout is found before the first paint, so it
+opens on the library's shape rather than a tangle unknotting; then about a
+second and a half of the terms drawing their papers in, topics first, papers
+after, the lines last, and the titles only once it is still — placed like town
+names on a map, most-linked first, and dropped wherever they would overprint.
+The camera follows the settle so nothing leaves the plate. It is a simulation
+that cools and stops, not a loop. Reduced motion draws it already still, and so
+does a briefing opened in a background tab, which has no one to play it to.
+
+**The library needed somewhere to live.** A read paper used to leave the store
+the day it left the briefing — Peer kept its id and the date, nothing you could
+draw. It now keeps the title, the venue, the day and the paper's cleaned terms,
+a few hundred bytes each, in this browser. Papers read before today are not in
+it; everything from here on is.
+
 ## v0.30.1 — 2026-09-18
 
 The reading calendar, drawn at the size of what it says.

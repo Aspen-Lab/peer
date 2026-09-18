@@ -15,6 +15,7 @@ import type {
 // fallback when the real API returned 0 results, which silently surfaced
 // battery-research demo data as the user's feed. Removed.
 import { apiFetch } from "@/lib/api";
+import { libraryEntryOf, type LibraryEntry } from "@/lib/library/graph";
 import { useProfileStore } from "@/store/profile";
 import {
   ANONYMOUS_ENTITLEMENT,
@@ -663,6 +664,14 @@ interface FeedState {
    * needs to remember.
    */
   readAt: Record<string, string>;
+  /**
+   * What Peer keeps about each paper once it is read: its title, venue, day
+   * and cleaned terms. `readItems` and `readAt` are ids and dates only, and a
+   * paper's record leaves the store the moment it leaves the day's briefing,
+   * so without this the library graph could draw yesterday's reading as
+   * nothing but a count. Local-first like `readAt`; a few hundred bytes each.
+   */
+  library: Record<string, LibraryEntry>;
   appliedAt: Record<string, string>;
   registeredAt: Record<string, string>;
   submittedAt: Record<string, string>;
@@ -701,7 +710,9 @@ interface FeedState {
     feedback: ItemFeedback,
     payload?: unknown,
   ) => void;
-  markRead: (id: string) => void;
+  /** `paper` when the caller has it (the reading page always does), so a
+   *  paper opened from search or a link still enters the library. */
+  markRead: (id: string, paper?: Paper) => void;
   markUnread: (id: string) => void;
   setJobApplied: (job: Job, applied: boolean, at?: string) => void;
   setEventRegistered: (
@@ -753,6 +764,7 @@ export const useFeedStore = create<FeedState>()(
       aiPaperSearchEnabled: false,
       readItems: {},
       readAt: {},
+      library: {},
       appliedAt: {},
       registeredAt: {},
       submittedAt: {},
@@ -1382,17 +1394,24 @@ export const useFeedStore = create<FeedState>()(
         if (kind) cloudFeedback(itemId, kind, feedback, payload);
       },
 
-      markRead: (id) => {
-        set((s) =>
-          s.readItems[id]
-            ? s
-            : {
-                readItems: { ...s.readItems, [id]: true },
-                // The first read is the one the chart plots; re-opening a
-                // paper a week later does not move the day it was read.
-                readAt: { ...s.readAt, [id]: new Date().toISOString().slice(0, 10) },
-              },
-        );
+      markRead: (id, paper) => {
+        set((s) => {
+          if (s.readItems[id]) return s;
+          // The first read is the one the chart plots; re-opening a paper a
+          // week later does not move the day it was read.
+          const day = new Date().toISOString().slice(0, 10);
+          const record =
+            paper ??
+            s.papers.find((p) => p.id === id) ??
+            s.savedPapers.find((p) => p.id === id);
+          return {
+            readItems: { ...s.readItems, [id]: true },
+            readAt: { ...s.readAt, [id]: day },
+            library: record
+              ? { ...s.library, [id]: libraryEntryOf(record, day) }
+              : s.library,
+          };
+        });
         cloudMarkRead(id);
       },
 
@@ -1403,7 +1422,9 @@ export const useFeedStore = create<FeedState>()(
           delete next[id];
           const nextAt = { ...s.readAt };
           delete nextAt[id];
-          return { readItems: next, readAt: nextAt };
+          const nextLibrary = { ...s.library };
+          delete nextLibrary[id];
+          return { readItems: next, readAt: nextAt, library: nextLibrary };
         });
         cloudMarkUnread(id);
       },
@@ -1727,6 +1748,11 @@ export const useFeedStore = create<FeedState>()(
           savedEvents: [],
           savedJobs: [],
           readItems: {},
+          // `readAt` and `library` are deliberately NOT cleared here yet. This
+          // runs on every page load for a visitor who is not signed in (see
+          // FeedSync's mount path), not only on a real sign-out, so clearing
+          // them would erase every signed-out reader's reading history on each
+          // load. Fix the trigger first, then clear all three together.
           appliedAt: {},
           registeredAt: {},
           submittedAt: {},
@@ -1753,6 +1779,7 @@ export const useFeedStore = create<FeedState>()(
         savedJobs: state.savedJobs,
         readItems: state.readItems,
         readAt: state.readAt,
+        library: state.library,
         appliedAt: state.appliedAt,
         registeredAt: state.registeredAt,
         submittedAt: state.submittedAt,
