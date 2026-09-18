@@ -352,6 +352,9 @@ export function cleanPreferenceLedger(
         entry.origin === "event" || entry.origin === "job"
           ? entry.origin
           : undefined,
+      // Kept through cleaning, or the exemption it grants would vanish the
+      // first time the ledger is normalised — on the server, every request.
+      explicit: entry.explicit === true ? true : undefined,
     };
   }
 
@@ -632,7 +635,9 @@ export function scorePreferenceMatch(
         net < -0.05 &&
         // Required-topic protection guards the paper feed only; on job/event
         // surfaces a repeatedly-dismissed core topic should genuinely sink.
-        (targetKind !== "paper" || !conceptMatchesRequired(concept, requiredTopics))
+        (targetKind !== "paper" ||
+          entry.explicit === true ||
+          !conceptMatchesRequired(concept, requiredTopics))
       ) {
         const magnitude = 1 - Math.exp(-Math.abs(net) / 2);
         penaltyLoss += NEGATIVE_PENALTY_MAX * magnitude * specificity * influence;
@@ -750,4 +755,53 @@ export function summarizePreferenceLedger(
     .slice(0, limit)
     .map((r) => ({ label: r.label, weight: -r.net }));
   return { liked, disliked };
+}
+
+export type TermLean = "more" | "less";
+
+/** The concept a term on the reading graph stands for. Text-keyed: the
+ *  ledger's lookup bridges by normalised label, so it reaches papers carrying
+ *  the same term under an OpenAlex id as well. */
+export function termConcept(label: string): PreferenceConcept {
+  return { key: preferenceKey(label, "paper_keyword"), label, source: "paper_keyword" };
+}
+
+/**
+ * A deliberate lean on one term, or none. Writes a single explicit entry worth
+ * two likes (or two dismissals) — enough to move the briefing, not enough to
+ * drown the reader's own topics — and replaces whatever lean was there, so
+ * "more" after "less" means more, not neutral. `null` removes the lean. It
+ * decays like any other evidence; a lean nobody renews fades over months.
+ */
+export function setTermLean(
+  ledger: PreferenceLedger | undefined,
+  label: string,
+  lean: TermLean | null,
+  at: string = new Date().toISOString(),
+): PreferenceLedger {
+  const next = { ...cleanPreferenceLedger(ledger) };
+  const concept = termConcept(label);
+  if (lean === null) {
+    delete next[concept.key];
+    return next;
+  }
+  next[concept.key] = {
+    ...concept,
+    explicit: true,
+    positive: lean === "more" ? 2 : 0,
+    negative: lean === "less" ? 2 : 0,
+    lastPositiveAt: lean === "more" ? at : undefined,
+    lastNegativeAt: lean === "less" ? at : undefined,
+    lastSeenAt: at,
+  };
+  return next;
+}
+
+/** The lean the reader set on a term, if any. */
+export function termLean(ledger: PreferenceLedger | undefined, label: string): TermLean | null {
+  const entry = ledger?.[termConcept(label).key];
+  if (!entry?.explicit) return null;
+  if (entry.positive > entry.negative) return "more";
+  if (entry.negative > entry.positive) return "less";
+  return null;
 }

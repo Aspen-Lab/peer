@@ -2,6 +2,47 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.33.0 — 2026-09-18
+
+Steer the briefing from your reading graph.
+
+Click a term in the graph and it stays picked up; the readout in the plate's
+corner carries its full name, where it came from, and three buttons:
+
+- **+ More / − Less.** A deliberate lean on the term, written to the same
+  preference ledger your saves and dismissals feed. Today's papers re-rank at
+  once, right below: the day's pool is already built and your preferences are
+  applied when it is read, so the board simply re-reads it — no new search, no
+  model call. Press the same button again and the lean comes off. The chip says
+  what is set: `ALGORITHMS +`.
+- **Follow.** The term joins the explore topics the briefing searches alongside
+  your own. Topics move into the search once a day, so a follow shows in
+  tomorrow's briefing. A followed chip is filled, a step dimmer than your own
+  topics, and the key gains a "followed" swatch.
+
+Before you press anything, the readout says which lever works when; after, it
+says what the press did.
+
+A lean on a term inside one of your own topics counts. "Machine Learning and
+Data Classification" sits under "machine learning", and dislikes of anything
+carrying your topic's words are normally ignored, so one bad paper cannot bury
+your field — but a lean set on purpose is not a stray dislike, and it applies.
+
+A click on a paper now picks it up too, instead of opening it; "Open →" in the
+readout opens it, and Enter still opens it straight from the keyboard. Tab
+reaches every term; Enter or Space picks it up, Escape puts it down.
+
+The graph makes room for what you hold. If the term is under the readout, the
+plate slides down just far enough to show it — or, with no room below, fits the
+whole library into the space left — and the key steps aside until you put the
+term down. Only a click moves it; pointing never does.
+
+And it keeps its shape when the day changes under it. A lean that moves a paper
+into today's ten or out of it rebuilds the graph, and that used to re-deal the
+whole layout: the term in your hand jumped across the plate. Now everything
+already on the plate holds still, and only the paper that arrived finds its
+place.
+
 ## v0.32.5 — 2026-09-18
 
 The reading calendar is off the briefing.

@@ -44,6 +44,16 @@ export interface PreferenceLedgerEntry extends PreferenceConcept {
    * origin are legacy paper entries.
    */
   origin?: FeedItemKind;
+  /**
+   * Set by a deliberate lean the reader made on a term — "more of this",
+   * "less of this" from the reading graph — rather than evidence inferred from
+   * liking or dismissing a paper. It exempts the entry from the required-topic
+   * protection, which exists so incidental dismissals cannot erode a reader's
+   * own topic: for a reader of "machine learning" nearly every OpenAlex topic
+   * is "Machine Learning and …", so without this a deliberate "less of Data
+   * Classification" would be stored and silently ignored.
+   */
+  explicit?: boolean;
 }
 
 export type PreferenceLedger = Record<string, PreferenceLedgerEntry>;

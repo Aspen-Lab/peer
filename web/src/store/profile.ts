@@ -29,7 +29,9 @@ import {
   conceptsFromEvent,
   conceptsFromJob,
   conceptsFromPaper,
+  setTermLean,
   type OpportunityFacetGroup,
+  type TermLean,
 } from "@/lib/preferences/ledger";
 
 type PersistedUserProfile = Omit<Partial<UserProfile>, "colorTheme"> & {
@@ -121,6 +123,15 @@ interface ProfileState {
   ) => void;
   /** Wipe everything Peer has learned from likes/saves/dismissals. */
   resetPreferenceLedger: () => void;
+  /** A deliberate lean on a term from the reading graph: more of it, less of
+   *  it, or none. The ledger rides along with every feed request, so it
+   *  applies from the next load — the board issues one straight away. See
+   *  `setTermLean`. */
+  leanOnTerm: (label: string, lean: TermLean | null) => void;
+  /** Add a term to, or take it out of, the explore topics the briefing
+   *  searches alongside the reader's own. Topic changes are promoted once a
+   *  day (`promoteSearchInputs`), so this reaches tomorrow's briefing. */
+  followTerm: (label: string, follow: boolean) => void;
   updateFeedFocus: (value: FeedFocus) => void;
   updateFeedFreshness: (value: FeedFreshness) => void;
   updatePaperCount: (value: 5 | 10) => void;
@@ -507,6 +518,30 @@ export const useProfileStore = create<ProfileState>()(
 
       resetPreferenceLedger: () =>
         set((s) => ({ profile: { ...s.profile, preferenceLedger: {} } })),
+
+      leanOnTerm: (label, lean) =>
+        set((s) => ({
+          profile: {
+            ...s.profile,
+            preferenceLedger: setTermLean(s.profile.preferenceLedger, label, lean),
+          },
+        })),
+
+      followTerm: (label, follow) =>
+        set((s) => {
+          const current = s.profile.softTopics ?? [];
+          const key = label.trim().toLowerCase();
+          const has = current.some((t) => t.trim().toLowerCase() === key);
+          if (follow === has) return s;
+          return {
+            profile: {
+              ...s.profile,
+              softTopics: follow
+                ? [...current, label.trim()]
+                : current.filter((t) => t.trim().toLowerCase() !== key),
+            },
+          };
+        }),
 
       updateFeedFocus: (value) =>
         set((s) => ({ profile: { ...s.profile, feedFocus: value } })),

@@ -16,7 +16,7 @@
 // It is now one thing: today's papers. Search lives at /search, events at
 // /events, jobs at /jobs, and every credential form lives on /profile.
 
-import { useEffect, useMemo, useState, useCallback, Suspense } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback, Suspense } from "react";
 import Link from "next/link";
 import { activePaperTopicsKey, useFeedStore } from "@/store/feed";
 import { feedsUseAi } from "@/lib/feed/ai-tier";
@@ -38,7 +38,8 @@ import { briefingDeck } from "@/lib/briefing/deck";
 import { briefingTileLines } from "@/lib/briefing/tile-lines";
 import { buildLibraryGraph } from "@/lib/library/graph";
 import type { Paper } from "@/types";
-import { LibraryGraph } from "@/components/charts/library-graph";
+import { LibraryGraph, type GraphSteer } from "@/components/charts/library-graph";
+import { termLean } from "@/lib/preferences/ledger";
 import { SYNC, BRIEFING_EMPTY } from "@/lib/briefing/copy";
 import { EmptyState } from "@/components/ui/empty-state";
 import { dayLine } from "@/lib/shell/masthead";
@@ -284,6 +285,39 @@ function ReadingStrip({ papers, readerTopics }: { papers: Paper[]; readerTopics:
   const library = useFeedStore((s) => s.library);
   const savedPapers = useFeedStore((s) => s.savedPapers);
   const readItems = useFeedStore((s) => s.readItems);
+  // Steering from the graph — a lean on a term (the preference ledger, which
+  // re-ranks today's papers at once) or following it (explore topics, from
+  // tomorrow's search).
+  const ledger = useProfileStore((s) => s.profile.preferenceLedger);
+  const softTopics = useProfileStore((s) => s.profile.softTopics);
+  const leanOnTerm = useProfileStore((s) => s.leanOnTerm);
+  const followTerm = useProfileStore((s) => s.followTerm);
+  const loadFeed = useFeedStore((s) => s.loadFeed);
+  // A lean answers on the board below, not tomorrow: the day's pool is
+  // already built and the ledger is applied when it is read, so a plain load
+  // re-ranks it — no search, no model call. Pressed three times in a second,
+  // it loads once.
+  const rerank = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (rerank.current) clearTimeout(rerank.current);
+    },
+    [],
+  );
+  const steer = useMemo<GraphSteer>(
+    () => ({
+      leanOf: (label) => termLean(ledger, label),
+      followed: (label) =>
+        (softTopics ?? []).some((t) => t.trim().toLowerCase() === label.trim().toLowerCase()),
+      lean: (label, lean) => {
+        leanOnTerm(label, lean);
+        if (rerank.current) clearTimeout(rerank.current);
+        rerank.current = setTimeout(() => void loadFeed({ lanes: ["papers"] }), 400);
+      },
+      follow: followTerm,
+    }),
+    [ledger, softTopics, leanOnTerm, followTerm, loadFeed],
+  );
   // The library as a graph: what has been read or kept, joined wherever two
   // papers carry the same term — and today's papers placed against it. See
   // lib/library/graph.ts for what an edge is allowed to mean.
@@ -303,7 +337,7 @@ function ReadingStrip({ papers, readerTopics }: { papers: Paper[]; readerTopics:
   return (
     <Band label={READING_STRIP.heading} gap="none">
       <div className="mt-4">
-        <LibraryGraph graph={graph} />
+        <LibraryGraph graph={graph} steer={steer} />
       </div>
     </Band>
   );
