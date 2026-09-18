@@ -28,12 +28,6 @@ import { DayStrip } from "@/components/briefing/day-strip";
 import { StarterStrip } from "@/components/briefing/starter-strip";
 import { STARTER_TOPICS, isStarterFeed } from "@/lib/feed/starter-topics";
 import { Band } from "@/components/ui/band";
-import {
-  ReadingCalendar,
-  daysRead,
-  streakWeeks,
-  useReadingDays,
-} from "@/components/charts/reading-calendar";
 import { PaperDigestLoader } from "@/components/digest/daily-digest";
 import { PageContainer } from "@/components/ui/page-container";
 import { useReveal } from "@/components/ui/reveal";
@@ -270,37 +264,23 @@ function DailyBriefingPage() {
   );
 }
 
-/** Eight weeks: two months is enough to see a habit and short enough to sit
- *  under the day's papers without becoming a second page. */
-const STRIP_WEEKS = 8;
-
 /** The day's section: its strip and its cards. */
 const TODAY = { heading: "Today's papers" };
 
-const READING_STRIP = {
-  heading: "Your reading",
-  // Weeks, not "of the last 53 days": the grid is calendar weeks and the one
-  // in progress is partial, so a day count would be a number that changes its
-  // denominator every morning.
-  summary: (days: number, weeks: number, streak: number) =>
-    `${days} ${days === 1 ? "day" : "days"} read in the last ${weeks} weeks` +
-    (streak > 0 ? ` \u00b7 ${streak}-week streak` : ""),
-};
+const READING_STRIP = { heading: "Your reading" };
 
 /**
- * Peer's own chart, at the foot of the brief — the eight weeks behind today.
+ * Your reading: the library graph — every paper read or kept, the terms that
+ * join them, and today's papers placed against it.
  *
- * The briefing had no chart at all and the profile had the only one, which is
- * the wrong way round: the reading habit belongs on the page you open every
- * day, and the profile is where you go to change a setting. It is the same
- * component the profile draws, at eight weeks instead of eighteen and with
- * its rules off.
+ * The eight-week reading calendar that sat under it is gone from the
+ * briefing: it answered "which days", which the graph does not need and the
+ * briefing did not either. /profile keeps its own, labelled version.
  *
- * Renders nothing until something has been read — never a placeholder grid,
- * and never a streak counted off invented weeks.
+ * Renders nothing until something has been read or kept — never a
+ * placeholder.
  */
 function ReadingStrip({ papers, readerTopics }: { papers: Paper[]; readerTopics: string[] }) {
-  const cells = useReadingDays(STRIP_WEEKS);
   const library = useFeedStore((s) => s.library);
   const savedPapers = useFeedStore((s) => s.savedPapers);
   const readItems = useFeedStore((s) => s.readItems);
@@ -318,29 +298,13 @@ function ReadingStrip({ papers, readerTopics }: { papers: Paper[]; readerTopics:
       }),
     [library, savedPapers, papers, readItems, readerTopics],
   );
-  const hasLibrary = graph.counts.read + graph.counts.saved > 0;
-  if (!cells && !hasLibrary) return null;
-  const days = cells ? daysRead(cells) : 0;
-  const streak = cells ? streakWeeks(cells, STRIP_WEEKS) : 0;
+  if (graph.counts.read + graph.counts.saved === 0) return null;
 
   return (
     <Band label={READING_STRIP.heading} gap="none">
-      {hasLibrary && (
-        <div className="mt-4">
-          <LibraryGraph graph={graph} />
-        </div>
-      )}
-      {cells && (
-        // The reading rhythm, under the library it built: which days, not
-        // which papers. Chart then sentence, left-aligned — the same figure as
-        // the day's strip in the next section, so the two read as one system.
-        <figure className="mt-4 flex flex-wrap items-end gap-x-6 gap-y-3">
-          <ReadingCalendar cells={cells} weeks={STRIP_WEEKS} labels={false} showKey={false} />
-          <figcaption className="annotation text-text-faint measure-mono self-end">
-            {READING_STRIP.summary(days, STRIP_WEEKS, streak)}
-          </figcaption>
-        </figure>
-      )}
+      <div className="mt-4">
+        <LibraryGraph graph={graph} />
+      </div>
     </Band>
   );
 }

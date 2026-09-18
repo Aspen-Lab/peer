@@ -2,6 +2,17 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.32.5 — 2026-09-18
+
+The reading calendar is off the briefing.
+
+"Your reading" is the library graph now, and nothing under it — the eight-week
+grid of reading days and its "1 day read in the last 8 weeks" line are gone. It
+answered "which days", which the graph does not need to be read and the briefing
+did not need either, and it was one more small chart between the library and
+today's papers. /profile keeps its own labelled calendar, and the briefing no
+longer asks the server for the reading history it no longer draws.
+
 ## v0.32.4 — 2026-09-18
 
 Pointing at a card, its corners close in.
