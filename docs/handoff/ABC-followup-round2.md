@@ -1070,6 +1070,34 @@ includes the other agent's uncommitted figure files.
 
 ---
 
+## §1z. RULING 21 — the fit zoom is computed, never measured (manager, 2026-09-17) — BINDING
+
+A's A7b-01/A7b-02 share one cause: `fitZoom` takes the page's 1× width from the zoomed
+element's `offsetWidth`, which (a) is only re-read on resize, so an A/A change under Fit leaves
+the zoom stale (89 % / 81 % instead of 85 %), and (b) is not zoom-invariant once the zoomed
+article is clamped by its container, so a resize while fitted can strand the zoom near 99 %.
+
+Ruling — item **7-07**, C directly (the mechanism is fully specified; no B turn):
+- `pageWidthAt1x` is **computed from the layout's own numbers**, never measured:
+  `capPx(viewportWidth) × readingScale`, where `capPx` = 1200 for ≥ 1536 px (2xl), 1000 for
+  1280–1535 px (xl), and Fit is disabled below 1280 — the same constants `page-container.tsx`'s
+  calc pair uses (export them from one place, e.g. `spread.ts`, so the CSS and the formula
+  cannot drift; a source-text or constant-equality test pins them).
+- `fitZoom(viewportWidth, readingScale)` = `clamp(1, 0.85 × viewportWidth / (capPx × readingScale), 2.5)`,
+  pure and unit-tested at (2560, 1) → ≈ 1.813, (2560, 1.2) → ≈ 1.511, (1440, 1) → ≈ 1.224,
+  (1300, 1) → ≈ 1.105, (1200, 1) → 1 (disabled path).
+- The reading page derives the zoom from two store/external values — the viewport width
+  (`useSyncExternalStore` on `resize`, as now) and `scaleIndex` (the store) — so an A/A click
+  under Fit recomputes immediately and a resize can never read a clamped width. Remove the
+  `offsetWidth` read and its "accepted cost" note.
+- A's A7b-03 (two `/api/feed` calls hit the 8-s wall) is informational — the feed's per-source
+  timeout is a standing design (Ruling 79c in the pipeline comments); not this round's item.
+
+Then A re-measures only: Fit at 2560 with A/A changes under it (85 % held at every step), a
+resize 2560 → 1440 → 2560 while fitted (85 % each time), and the gate.
+
+---
+
 ## §2. ROLES — DO ONLY YOUR OWN JOB
 
 ### Agent A — Reviewer
