@@ -11227,3 +11227,95 @@ hedge, worth knowing before any future round tries the same narrowing. (2) The t
 brief named `POST /api/papers/search` for the live check; that path is `GET`-only in this
 codebase — `POST /api/feed` is the route that actually exercises the changed
 `sources/semantic-scholar.ts` adapter, and that is what was checked instead.
+
+### Round 7 — Agent A (closing, part 1 of 4 — S21/Fit at 2560×1400, 1440×900, 1300×800, 1200×800)
+
+Branch verified (`complimentary-enhancement-to-main-update`) before reading anything. Dirty tree
+confirmed, not mine: `figure-lightbox.tsx`/`.test.ts` — not touched. Read §1 (WHOSE TURN: A, C's
+TODO), §1x (Ruling 19), §1y (Ruling 20), §1w, §2 Agent A, §3, and both of round 7's second-pass B
+and C log entries in full, plus my own first-pass log (parts 1-4) for context. Dev server
+confirmed up (`curl /` → 200), **not restarted by me** — the manager's cold restart already
+happened before this turn, so, unlike C's own second-pass turn, the served stylesheet is current
+and every number below is measured against the real served CSS, no injected override needed.
+
+**Environment note, checked before trusting anything**: `tabs_context` reports the Browser pane
+**displayed**, not hidden, this session (unlike every prior round) — confirmed by testing a live
+click's effect on a `calc()`-derived computed style directly: it recomputes correctly after a
+forced reflow + double-`requestAnimationFrame` wait, no reload substitute needed. One early false
+alarm, resolved by testing rather than assumed: a `getComputedStyle().zoom` read immediately after
+a same-script `.click()` + a fixed `await new Promise(setTimeout)` sometimes still showed the
+pre-click value — not the hidden-pane freeze, just an ordinary same-turn read-before-reflow race
+(the same class of pitfall B/C's own logs already name), fixed by always forcing a reflow and
+waiting two animation frames before reading. All numbers below use that method; where a reading
+looked suspicious, I repeated the whole cycle from a fresh page load and confirmed it reproduced
+before reporting it.
+
+**Coordinate clicks on this button were unreliable** (both a `computer` coordinate click and a
+`ref`-based `computer` click on "Fit to screen" landed with no visible error but changed nothing —
+`aria-pressed`/`localStorage` unchanged after either); switched to `element.click()` via
+`javascript_tool` for every button interaction below, which reliably fired the real React handler
+(confirmed via the resulting store/DOM change every time) — a measurement-tooling workaround, not
+a product finding.
+
+**Baseline (Fit off), 2560×1400, `/papers/openalex:W7207740551`, `scaleIndex: 2` (1x)**: article
+`zoom: 1`, `--page-zoom: 1`, `--reading-scale: 1`, real width **1200px** (matches `640+560×1`,
+the already-verified S20 formula).
+
+**Fit on — the headline number, matching Ruling 19's own formula bit-for-bit**: clicked "Fit to
+screen" → `aria-pressed="true"`, label → "Book layout", computed `zoom` **1.81333**, `--page-zoom`
+the same, real `getBoundingClientRect().width` **2176px** = **exactly 85.00%** of 2560px (not
+"≈85%" — bit-for-bit `0.85×2560`). `fit: true` persisted to `peer-reading-prefs`. **Reload** with
+that persisted state → still fitted after hydration, same 1.81333/2176px/85.00%. Both A7-01
+(ladder-ceiling short of 85%) and A7-02 (xl cap inert under Fit) are confirmed **closed**.
+
+**Sticky panel — both branches, against the real served CSS this time (C could only verify this
+via an injected override, since C's own dev server never hot-reloaded the CSS this round)**.
+Scrolled to `window.scrollY = 800` (confirmed via read-back, not assumed — the first read raced
+the scroll and showed 0, a tooling timing issue, not a product one). This paper's real left panel
+is unusually tall (plate + title + decision): `--panel-h` **957px** (local, `offsetHeight`).
+- **Top-stick, Fit off**: panel real top **64px**, masthead real bottom **48px** — a **16px** gap,
+  the design intent, byte-identical to the pre-Ruling-19 baseline.
+- **Bottom-stick, Fit on** (panel taller than the zoomed viewport, the branch B could not test
+  against real content and flagged as open): declared `top` (local) **-198.176px** → real
+  `getBoundingClientRect().top` **-359.359px** (matches `-198.176 × 1.81333` exactly); real panel
+  bottom **1376.5px**, i.e. **23.5px** above the 1400px viewport bottom — matches the `1.5rem`
+  (24px) design intent almost exactly (sub-pixel rounding). **Bit-for-bit the same numbers C
+  reported from its injected-override workaround** — this turn's own measurement is the first
+  confirmation against the actually-served rule, closing B's own named open item for real.
+
+**Composing — mechanics correct, but a real, execution-confirmed gap in the recompute, named
+A7b-01 below.** With Fit on, clicked "Larger text": `aria-pressed` stayed `true` (Fit did not turn
+off — matches "the two compose"), `scaleIndex` 2→3, prose font 14.5px→15.95px (×1.1). See A7b-01
+for what `--page-zoom` does in this same click, which does not match spec.
+
+**Ctrl+`0`, matching spec exactly**: from `scaleIndex: 4, fit: true`, pressed `Ctrl+0` (via the
+automation layer's `key` action, confirmed reaching the page as a real event, same verification
+method my first pass already established) → `scaleIndex` → **2** (1x), `fit` **unchanged**
+(`true`) — matches this turn's own stated expectation ("Ctrl+0 → 1× and fit unchanged"), a
+deliberate change from my first-pass finding (pre-Ruling-19, Ctrl+0 used to clear `fit` too).
+
+**1440×900 (xl band) — the clean, reload-based number matches C's own already-reported one, not a
+new defect**: fresh reload with `fit: true, scaleIndex: 2` at 1440×900 → `zoom` **1.224** exactly
+(`0.85×1440/1000`, the xl cap), real width 1224px = 85.00%. Higher than this round's own rough
+"≈1.02–1.1" guess, same gap C already named and explained — not scored again here. **A second,
+new, real defect found via a *live* resize (not a fresh load) is A7b-02 below.**
+
+**1300×800, Fit off, "Larger text" ×5 (`scaleIndex` 2→7)**: article `max-width` **1000px → 1600px**
+(`1000×1.6`, the now-fixed xl cap), real width clipped to **1292px** by the 1300px viewport itself
+(not by the cap) — A/A now fills the full available width at xl where it stopped ~300px short
+before 7-05. Matches spec exactly, matches C's own live number.
+
+**1200×800 (below xl)**: "Fit to screen" `disabled: true`, `title="Fit needs the two-column
+layout"` — matches spec exactly, no change from my first pass.
+
+**Verdict, S21 mechanics**: the two items my first pass opened (A7-01, A7-02) are both closed,
+confirmed live, bit-for-bit against Ruling 19's own formula. Two new, real, execution-confirmed
+gaps found this turn in the *composing*/*resize* behavior Ruling 19 itself introduced — not
+regressions of anything my first pass tested, since composing (A/A while Fit is on) and a live
+resize while already fitted were both out of scope before Ruling 19 — are named as A7b-01/A7b-02
+in part 4's difference list below.
+
+Gate not re-run this part; part 4 runs it cold. Viewport left at 1200×800 for the next part's own
+setup; reset to 2560×1400 before part 4.
+
+Commit: this log entry only, staged by explicit path (`docs/handoff/ABC-followup-round2.md`).
