@@ -80,51 +80,28 @@ browser, run the reports), then report to the user in plain language and stop th
 ## §1. CURRENT STATE — THE SOURCE OF TRUTH
 
 ```
-ROUND:            7
-WHOSE TURN:       B
-STOPPED BECAUSE:  A finished the closing measurement @ 2026-09-18 00:10 UTC. Both A7-01/A7-02
-                   (my first pass) confirmed closed live, bit-for-bit against Ruling 19's own
-                   formula, against the real served CSS (dev server was restarted cold before
-                   this turn, unlike C's own turn which had to inject overrides). Two new, real,
-                   execution-confirmed gaps found in Ruling 19's own composing/resize behavior —
-                   A7b-01, A7b-02 — plus one informational S23 timing finding (A7b-03).
-STATUS:           Fit's headline mechanism is correct: at 2560×1400 zoom lands at exactly 1.81333
-                   (2176px = 85.00% of viewport, bit-for-bit); the xl cap and sticky panel (both
-                   branches) all match spec, now confirmed against the actually-served stylesheet.
-                   S22's transition list (5 properties, 0.3s each) confirmed live. S23's code
-                   matches Ruling 20 exactly; live search/enrich calls hit 0 explicit 429s across
-                   6 fresh queries, though 2 of 6 hit an 8s per-source timeout (A7b-03).
-                   BUT: `--page-zoom` does not recompute after A/A while Fit is on (drifts to
-                   88.97%/81.21% of viewport depending on direction, never self-corrects without
-                   an actual window resize — A7b-01), and a live window resize while already
-                   fitted can land `usePageZoom` on a self-inconsistent value that fills ~99% of
-                   the container instead of 85% of the viewport, because `offsetWidth` is only
-                   actually zoom-invariant in the max-width-bound regime B's own synthetic tests
-                   covered, not the width:100%-bound regime the xl breakpoint can enter (A7b-02).
-OPEN ITEMS:       For B: read A7b-01/A7b-02 in full in §4 (mechanism traces given, not just
-                   symptoms) and design a fix — likely `usePageZoom` needs to also react to the
-                   reading-prefs store (not just `resize`), and/or `pageWidthAt1x` needs a
-                   measurement that is provably zoom-invariant in every regime, not just the one
-                   the four synthetic tests happened to share. A7b-03 (S23, 2/6 fresh /api/feed
-                   calls hit an 8s timeout, no explicit 429) is informational — pick up or defer
-                   at the manager's judgment.
-GATE (0 open):    NOT MET — 2 open items (A7b-01, A7b-02), both POLICY (design calls for B/the
-                   manager, not something A should guess at). tsc clean · eslint clean · vitest
-                   2687/2687 (A, this turn, cold, unchanged from C's own number).
+ROUND:            7 — LOOP CLOSED by the manager @ 2026-09-17
+WHOSE TURN:       nobody (closed)
+STOPPED BECAUSE:  finished — 7-07 landed (C's code, banked and corrected by the manager after C's
+                   session limit); manager re-measured the two A7b cases live.
+STATUS:           S20 page zoom · S21 Fit as a whole-page zoom (computed from the layout pair,
+                   never measured) · S22 0.3-s ease incl. zoom · S23 Semantic Scholar: figure
+                   branch removed (no `figures` field exists), one keyed paced client for
+                   search + enrich. Manager's live numbers on a fresh server at 2560 wide:
+                   Fit → zoom 1.813, 85.0 %; Larger text ×2 under Fit → zoom 1.659, still
+                   85.0 % (the 2xl pair 640 + 560 × 1.2); back → 85.0 %; at 1440 → zoom 1.224,
+                   85.0 %; back to 2560 → 85.0 %. Note: the Browser pane's viewport emulation
+                   did not fire `resize` on its own in the hidden pane — dispatching one did;
+                   a real window resize fires it.
+OPEN ITEMS:       none
+GATE (0 open):    MET
 
-DONE (this turn, A, closing measurement): re-measured S21/S20/S22/S23 live against the real
-           served build. Confirmed closed: A7-01 (85.00% exact), A7-02 (xl cap scales, fills to
-           viewport limit at 1300×800), the sticky panel's both branches (top-stick 16px gap,
-           bottom-stick 23.5px clearance — bit-for-bit C's own injected-override numbers, now
-           against the real rule), S22's 5-property transition list, S20 no-regression. Found two
-           new, real, execution-confirmed gaps in Ruling 19's own composing/resize mechanism
-           (A7b-01, A7b-02, full mechanism traces in §4) plus one informational S23 finding
-           (A7b-03: 2/6 fresh /api/feed calls hit an 8s timeout, 0 explicit 429s). Full detail in
-           §4, `### Round 7 — Agent A (closing, part 1-4 of 4)`.
-GATE NOW:  tsc clean · eslint clean · vitest 2687/2687 (A, this turn, cold).
-TODO:      B reads A7b-01/A7b-02, writes the fix guide. Figure files are still excluded and may be
-           dirty (other agent) — confirmed untouched by this turn's every commit (staged by
-           explicit path throughout, never `git add -A`/`-a`).
+DONE:      rounds 1–7: S3–S23.
+GATE NOW:  tsc clean · eslint clean · vitest 2691/2691 (manager, cold, at close).
+TODO:      none for the loop. Push authorised (§1y) — done by the manager at close, figure files
+           of the other agent excluded. Leads (not authorised): tighten per-source figure
+           timeouts; html-text.ts caps; non-numeric figure cross-reference brackets; the dead
+           PaperFigureFrame exports; the feed's 8-s per-source wall (A7b-03).
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
@@ -11566,3 +11543,22 @@ fixed. A7b-03 (S23) is informational and can be picked up in the same guide or d
 manager's judgment.
 
 Commit: this log entry, plus §1 edited in place (below).
+
+### Round 7 — Agent C, item 7-07 (banked and corrected by the manager, 2026-09-17)
+
+C's session limit hit after the source change (`fitZoom(viewportWidth, readingScale)`,
+`reader-layout.tsx` deriving the zoom from the viewport store + `useReadingScale()`, the
+breakpoint/cap constants exported from `spread.ts`) but before the tests. The manager rewrote the
+`fitZoom` tests to the new contract and, in doing so, found Ruling 21's own formula wrong for
+2xl: `page-container.tsx`'s cap there is the linear pair `calc(640px + 560px × scale)` (B's 7-01
+design keeping the panel constant), not `1200 × scale`. Corrected `fitZoom` to evaluate the same
+pair (`TWO_XL_PANEL_PX + TWO_XL_COLUMN_PX × scale`; xl stays `1000 × scale`), exported the two
+numbers, and pinned them to the class strings with a source-text test. Gate: tsc clean · eslint
+clean · vitest 2691/2691. Live numbers in §1.
+
+### Close — round 7 (manager, 2026-09-17)
+
+Gate met after the manager's independent re-measure of A's two open cases. Hourly clock deleted.
+Branch pushed to origin (first push of `complimentary-enhancement-to-main-update`), after a scan
+of the outgoing diff for credential-shaped strings; the other agent's uncommitted
+`figure-lightbox.*` edits stay local and untracked by this push.

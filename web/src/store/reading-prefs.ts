@@ -2,6 +2,13 @@
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import {
+  TWO_XL_BREAKPOINT_PX,
+  TWO_XL_COLUMN_PX,
+  TWO_XL_PANEL_PX,
+  XL_BREAKPOINT_PX,
+  XL_CAP_PX,
+} from "@/components/reader/spread";
 
 // S15: the reader's font-size controls (A / A) — one index into a fixed
 // ladder of multipliers, read by globals.css's --reading-scale-driven
@@ -71,22 +78,43 @@ export const useReadingPrefsStore = create<ReadingPrefsState>()(
 );
 
 /**
- * Ruling 19 (round 7, second pass): Fit's whole-page zoom multiplier — the
+ * Ruling 21 (round 7, item 7-07): Fit's whole-page zoom multiplier — the
  * factor that scales the page (panel, gap, column, figures, all of it) so
  * it fills ~85% of the viewport, the way a PDF viewer's "fit width" reads
- * on a big monitor. Pure arithmetic, zero DOM access, so it is
- * unit-testable with plain numbers; `reader-layout.tsx`'s `usePageZoom`
- * supplies the two arguments from the live page (`window.innerWidth` and
- * `[data-zoom-root]`'s own `offsetWidth`, immune to that element's own
- * `zoom` — confirmed by execution, round-7 second-pass log).
+ * on a big monitor. Pure arithmetic, zero DOM access, unit-testable with
+ * plain numbers.
+ *
+ * The page's 1x width (`pageWidthAt1x`, the previous version's second
+ * argument) used to be MEASURED — `reader-layout.tsx`'s `usePageZoom` read
+ * `[data-zoom-root]`'s own `offsetWidth` off the live DOM. A7b-01/A7b-02
+ * (round 7, closing) found two real ways that measurement lies: it goes
+ * stale after "Larger text"/"Smaller text" while Fit is on (nothing
+ * re-triggers the read until an actual window resize), and it is not
+ * zoom-invariant once the zoomed element is clamped by `width: 100%` rather
+ * than its own `max-width` (the xl breakpoint's regime), so a resize while
+ * already fitted can strand the zoom near a self-inconsistent value with no
+ * fixed point. Ruling 21: COMPUTE it instead, from the same two numbers
+ * `page-container.tsx`'s own calc pair uses for the spread's max-width at
+ * each breakpoint (`spread.ts`'s `XL_CAP_PX`/`TWO_XL_CAP_PX`, pinned against
+ * that file's literals by its own test) times the reader's current
+ * `readingScale` step — both already-known values with nothing to measure,
+ * so this can never go stale or land on an inconsistent state.
  *
  * Replaces `fitScaleIndex` (retired: nothing picks a ladder step for Fit
  * any more — Fit is continuous, not ladder-bound).
  */
-export function fitZoom(viewportWidth: number, pageWidthAt1x: number): number {
-  // Every candidate rejected (the zoom-root element not found, or not yet
-  // measured): no zoom, book layout — never Infinity or the 2.5 ceiling,
-  // which a naive 0.85*viewportWidth/0 would wrongly produce.
-  if (pageWidthAt1x <= 0) return 1;
-  return Math.min(2.5, Math.max(1, (0.85 * viewportWidth) / pageWidthAt1x));
+export function fitZoom(viewportWidth: number, readingScale: number): number {
+  // The page's 1x-zoom width at this A/A step — the same expression
+  // page-container.tsx's max-width calc pair evaluates to: at 2xl the panel
+  // share is fixed and only the reading track scales; at xl the whole cap
+  // scales; below xl Fit has nothing to do (spec) — book layout, not a
+  // divide-by-zero.
+  const pageWidth =
+    viewportWidth >= TWO_XL_BREAKPOINT_PX
+      ? TWO_XL_PANEL_PX + TWO_XL_COLUMN_PX * readingScale
+      : viewportWidth >= XL_BREAKPOINT_PX
+        ? XL_CAP_PX * readingScale
+        : 0;
+  if (pageWidth <= 0) return 1;
+  return Math.min(2.5, Math.max(1, (0.85 * viewportWidth) / pageWidth));
 }

@@ -26,12 +26,14 @@ Source of truth for the hourly clock on this branch. One tick = read this file, 
 14. **Reader controls** — A/A font steps (`--reading-scale`, persisted in `peer-reading-prefs`, multiplied at the use site), sun/moon day-night on the profile's `colorTheme` with a 1-s fade, all four icons and the upload button swell on hover; the generation bar sits at the panel's foot, 6 px, "loading report...".
 15. **Site icon** — the pear (`app/icon.svg` + regenerated `favicon.ico`).
 16. **Measurement rule** — a route with `loading.tsx` streams; in a hidden Browser pane React's reveal (`requestAnimationFrame`) never fires, so DOM reads there are stale SSR markup (Ruling 18).
+17. **Page zoom + Fit to screen** — A/A scale text and column together (8 steps, ladder to 1.6×); the ⤢ button zooms the whole reading page to 85 % of the viewport (CSS `zoom`, computed from the layout's own cap formula and the reading scale — never measured), remembered per reader; Ctrl/⌘ =/−/0; every change eases over 0.3 s; sticky panel compensated for zoom.
+18. **Semantic Scholar** — the figure branch is gone (the Graph API has no `figures` field; it never returned one); paper search and abstract/TLDR enrichment share one keyed, paced client (`SEMANTIC_SCHOLAR_API_KEY`, 1.5 s spacing, 1/2/4-s backoff).
 
 Also on this branch, from before the pull: search-provider failures now surface in `meta.errors` (`lib/sources/search-failure.ts`), `kill-dev-orphans.mjs` catches the server process, `scoring.test.ts` clock pinned.
 
 ## §2 Open (the user adds; the clock takes the top item)
 
-_(none — S3–S7, S8–S11 and S12–S19 (2026-09-15/16) closed via the ABC loop in `docs/handoff/ABC-followup-round2.md`; see §1 items 4–16)_
+_(none — S3–S23 (2026-09-15 → 17) closed via the ABC loop in `docs/handoff/ABC-followup-round2.md`; see §1 items 4–18)_
 
 ## §3 Rules for a tick
 
@@ -83,6 +85,8 @@ _(none — S3–S7, S8–S11 and S12–S19 (2026-09-15/16) closed via the ABC lo
 - 2026-09-16 — loop reopened for S8–S11 (round 5), closed the same day; gate tsc/eslint clean, vitest 2646/2646; clock deleted. Not pushed.
 
 - 2026-09-16 — round 6 (S12–S19) closed; gate tsc/eslint clean, vitest 2662/2662; clock deleted. Not pushed.
+
+- 2026-09-17 — round 7 (S20–S23) closed; gate tsc/eslint clean, vitest 2691/2691; clock deleted. **Pushed to origin.**
 
 ## §5 Authorizations
 

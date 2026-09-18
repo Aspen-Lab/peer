@@ -65,33 +65,34 @@ export function useResolvedReadingScale(): number {
 }
 
 /**
- * Ruling 19: Fit's whole-page zoom multiplier — 1 (no-op) unless Fit is on
- * and the spread applies (Fit has nothing to do below xl, per spec). Reads
- * `[data-zoom-root]`'s own `offsetWidth`, which is immune to that element's
- * *own* `zoom` (confirmed by execution, round-7 second-pass log) — so this
- * always reflects the CURRENT `--reading-scale`-adjusted 1x width,
- * composing with A/A automatically, at any breakpoint, with no
- * breakpoint-specific arithmetic (unlike the retired `fitScaleIndex`, which
- * needed the panel/gap/column numbers kept in step by hand).
+ * Ruling 21 (round 7, item 7-07): Fit's whole-page zoom multiplier — 1
+ * (no-op) unless Fit is on and the spread applies (Fit has nothing to do
+ * below xl, per spec). COMPUTED from the viewport width and the reader's
+ * own `readingScale` step (`fitZoom`, `store/reading-prefs.ts`) — never
+ * measured off a live DOM element any more. The previous version read
+ * `[data-zoom-root]`'s own `offsetWidth` as a stand-in for the page's 1x
+ * width; A7b-01/A7b-02 (round 7, closing) found that stand-in goes stale
+ * after "Larger text"/"Smaller text" while Fit is on (nothing re-triggers a
+ * DOM read until an actual window resize) and is not zoom-invariant once
+ * the zoomed element is clamped by `width: 100%` instead of its own
+ * `max-width` (the regime the xl breakpoint can enter), so a resize while
+ * already fitted could strand the zoom on a self-inconsistent value. Both
+ * inputs here are already-known numbers — nothing to go stale, nothing to
+ * mis-measure.
  *
- * Subscribed to `window`'s `resize` event via `useSyncExternalStore`, the
+ * Subscribed to `window`'s `resize` event via `useSyncExternalStore` (the
  * same shape `useSpread` above already uses for `matchMedia`'s `change`
- * event, so Fit's zoom re-picks itself as the window is dragged, not only
- * on the next click.
- *
- * One accepted, named cost (round-7 second-pass log): `offsetWidth` is read
- * during React's render phase, before the DOM commits that render's own
- * `--reading-scale` change — so pressing A/A while Fit is on can read one
- * render's worth of stale width for a single frame. Self-corrects on the
- * next render (any resize, or any other store change); not mitigated here.
+ * event) and to the reading-prefs store via `useResolvedReadingScale`, so
+ * Fit's zoom recomputes immediately on either an A/A click or an actual
+ * window resize — not only on the next resize.
  */
 export function usePageZoom(): number {
   const fit = useReadingPrefsStore((s) => s.fit);
   const spread = useSpread();
-  useSyncExternalStore(subscribeResize, () => window.innerWidth, () => 0);
-  if (!fit || !spread || typeof window === "undefined") return 1;
-  const root = document.querySelector<HTMLElement>("[data-zoom-root]");
-  return fitZoom(window.innerWidth, root?.offsetWidth ?? 0);
+  const readingScale = useResolvedReadingScale();
+  const viewportWidth = useSyncExternalStore(subscribeResize, () => window.innerWidth, () => 0);
+  if (!fit || !spread) return 1;
+  return fitZoom(viewportWidth, readingScale);
 }
 
 export function ReaderLayout(p: ReaderLayoutProps) {
