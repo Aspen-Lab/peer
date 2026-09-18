@@ -493,7 +493,7 @@ export function ChipInput({
                   e.stopPropagation();
                   applySuggestion(c.name);
                 }}
-                className="block w-full text-left rounded-md px-2 py-1.5 hover:bg-accent-dim/40 transition-colors active:scale-[0.99]"
+                className="block w-full text-left rounded-md px-2 py-1.5 hover:bg-accent-dim/40 transition-[color,background-color,border-color,scale] active:scale-[0.99]"
               >
                 <span className="text-meta font-medium text-accent">{c.name}</span>
                 {c.hint && (
@@ -531,7 +531,7 @@ export function ChipInput({
                   e.stopPropagation();
                   commit(s);
                 }}
-                className="text-caption text-text-faint hover:text-accent px-1.5 py-0.5 rounded-md hover:bg-accent-dim/40 transition-colors active:scale-[0.95]"
+                className="text-caption text-text-faint hover:text-accent px-1.5 py-0.5 rounded-md hover:bg-accent-dim/40 transition-[color,background-color,border-color,scale] active:scale-[0.95]"
               >
                 + {s}
               </button>

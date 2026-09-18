@@ -300,13 +300,13 @@ export default function ProfilePage() {
                   setShowLogout(false);
                   setMode("view");
                 }}
-                className="text-red hover:text-red/80 font-medium transition-colors active:scale-95"
+                className="text-red hover:text-red/80 font-medium transition-[color,background-color,border-color,scale] active:scale-95"
               >
                 Confirm reset
               </button>
               <button
                 onClick={() => setShowLogout(false)}
-                className="text-text-faint hover:text-text-muted transition-colors active:scale-95"
+                className="text-text-faint hover:text-text-muted transition-[color,background-color,border-color,scale] active:scale-95"
               >
                 Cancel
               </button>
@@ -830,7 +830,7 @@ function SectionHeader({
       {onAdjust && (
         <button
           onClick={onAdjust}
-          className="text-caption text-text-faint/80 hover:text-accent transition-colors active:scale-95"
+          className="text-caption text-text-faint/80 hover:text-accent transition-[color,background-color,border-color,scale] active:scale-95"
         >
           adjust
         </button>
@@ -1049,14 +1049,14 @@ function LearnedPreferences({
                   onReset();
                   setConfirmReset(false);
                 }}
-                className="text-red hover:text-red/80 font-medium transition-colors active:scale-95"
+                className="text-red hover:text-red/80 font-medium transition-[color,background-color,border-color,scale] active:scale-95"
               >
                 Reset all
               </button>
               <button
                 type="button"
                 onClick={() => setConfirmReset(false)}
-                className="text-text-faint hover:text-text-muted transition-colors active:scale-95"
+                className="text-text-faint hover:text-text-muted transition-[color,background-color,border-color,scale] active:scale-95"
               >
                 Cancel
               </button>

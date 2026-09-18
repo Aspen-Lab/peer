@@ -2,6 +2,41 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.32.0 — 2026-09-18
+
+Your library opens the briefing, and the cards arrive.
+
+**"Your reading" is at the top.** It used to close the page, below ten cards,
+so the one view of everything you have read was the last thing on the screen
+anyone reached. It now sits directly under the date: the library first, with
+today's papers already placed against it, then the day's cards.
+
+**The cards arrive as you reach them.** The reading page's approach is on the
+board now. The mount fade it replaces played all ten on load, so the cards below
+the fold had finished arriving before anyone scrolled to them. The first
+screenful is still dealt in order, 40ms apart; everything after that comes up as
+it approaches, about a sixth of a screen early, so a card is never still moving
+while you read it.
+
+**Pointing at a card registers it.** Its corners reach further in, from 12px to
+18px, and take your accent, in the time the frame takes to brighten. They had to
+change: a hovered frame steps up to the corners' own resting value, so corners
+that stayed put dissolved into the edge at the exact moment the card was being
+looked at. The action row's buttons now arrive in order — like, dislike, save —
+40ms apart.
+
+**Every press now animates, as it was always written to.** Tailwind compiles
+`active:scale-*` to the `scale` property, not `transform`, and the transition
+lists named `transform` — so every button press in the product snapped straight
+to its pressed size. Twenty-six press sites were affected; the button bases
+every pill and icon button derives from were two of them.
+
+**Fixed: a figure plate's corner marks were invisible.** The marks' utility
+declared its defaults on the mark itself, which overrides whatever the host
+sets, so the plate's own ink and its inset never reached its corners: they were
+drawn 40% white on a near-white mat. The defaults are fallbacks now, and a
+figure plate is registered in its own ink, 6px in.
+
 ## v0.31.0 — 2026-09-18
 
 Your reading, drawn as a library: every paper you have read or kept, and the

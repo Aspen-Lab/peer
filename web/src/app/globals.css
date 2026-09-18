@@ -619,13 +619,18 @@ body {
      twitch; 16 is a visible slide, and a reading column that slides says
      the page is still laying out. */
   --ry: 8px;
-  animation: fade-in-up var(--dur-base) var(--ease-expo) var(--rdl, 0s) both;
+  /* Two delays that add: `--rdl` is the host's place in the first screenful
+     (written by `useReveal`, inherited), `--rv-step` is this element's place
+     inside its host. Were they one variable, the later one would REPLACE the
+     other and a block's content could arrive before its own label. */
+  animation: fade-in-up var(--dur-base) var(--ease-expo)
+    calc(var(--rdl, 0ms) + var(--rv-step, 0ms)) both;
   animation-play-state: var(--rp, running);
 }
 /* The one step — Latent's own first nav interval (60/100/140/…). The label
    and its rule lead; the block's content follows. Two steps, never a
    cascade: prose does not stagger against itself. */
-[data-motion="reveal"] .rv-late { --rdl: 60ms; }
+[data-motion="reveal"] .rv-late { --rv-step: 60ms; }
 
 /* A paused `both`-filled animation prints at opacity 0. This is a tool for
    reading papers; a printed paper with four blank blocks in it is not a
@@ -672,6 +677,24 @@ body {
 }
 .group\/tile:hover .tile-actions,
 .group\/tile:focus-within .tile-actions { opacity: 1; transition-delay: 0ms; }
+/* And the buttons inside it arrive in order — like, dislike, save — 40ms
+   apart, Latent's own nav interval. Each button owns its fade, because the
+   row's opacity is shared and a delay on a child of a fading parent changes
+   nothing. Opacity only: they appear, they do not travel. Leaving, they go
+   together, with no delay. */
+.tile-actions > * {
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-expo);
+}
+.group\/tile:hover .tile-actions > *,
+.group\/tile:focus-within .tile-actions > *,
+[data-paper-id][data-focused="true"] .tile-actions > * { opacity: 1; }
+.group\/tile:hover .tile-actions > :nth-child(2) { transition-delay: 40ms; }
+.group\/tile:hover .tile-actions > :nth-child(3) { transition-delay: 80ms; }
+.group\/tile:hover .tile-actions > :nth-child(n + 4) { transition-delay: 120ms; }
+/* Where the row is always shown, its buttons are too. */
+@media (hover: none) { .tile-actions > * { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .tile-actions > * { opacity: 1; } }
 /* On a touchscreen the card is swiped, not clicked: right saves, left
    dismisses. The buttons stay in the DOM for assistive technology — VoiceOver
    and switch users navigate by control, not by gesture — but leave the
@@ -819,31 +842,43 @@ body {
   position: relative;
 
   &::after {
-    --cm-len: 12px;
-    --cm-w: 1px;
-    --cm-c: var(--nm-frame-hi);
-    --cm-inset: 0px;
     content: "";
     position: absolute;
-    inset: var(--cm-inset);
+    inset: var(--cm-inset, 0px);
     pointer-events: none;
     z-index: 1;
+    /* Defaults are FALLBACKS, never declarations. The first version declared
+       `--cm-c` and `--cm-inset` right here, on the pseudo-element — which
+       overrides whatever the host sets, so every `[--cm-c:…]` at a call site
+       did nothing: the figure plate's marks were 40% white on a near-white
+       mat, i.e. absent, and never inset. A value set on the host now reaches
+       the marks by inheritance, and only the fallback applies when it is not.
+
+       The colour is this box's own `color`, painted with `currentColor`. A
+       custom property inside a gradient cannot transition; `color` can, and
+       every gradient drawn in `currentColor` follows it frame by frame. */
+    color: var(--cm-c, var(--nm-frame-hi));
+    --cm-l: var(--cm-len, 12px);
+    --cm-s: var(--cm-w, 1px);
     background-repeat: no-repeat;
     background-image:
-      linear-gradient(var(--cm-c), var(--cm-c)), linear-gradient(var(--cm-c), var(--cm-c)),
-      linear-gradient(var(--cm-c), var(--cm-c)), linear-gradient(var(--cm-c), var(--cm-c)),
-      linear-gradient(var(--cm-c), var(--cm-c)), linear-gradient(var(--cm-c), var(--cm-c)),
-      linear-gradient(var(--cm-c), var(--cm-c)), linear-gradient(var(--cm-c), var(--cm-c));
+      linear-gradient(currentColor, currentColor), linear-gradient(currentColor, currentColor),
+      linear-gradient(currentColor, currentColor), linear-gradient(currentColor, currentColor),
+      linear-gradient(currentColor, currentColor), linear-gradient(currentColor, currentColor),
+      linear-gradient(currentColor, currentColor), linear-gradient(currentColor, currentColor);
     background-size:
-      var(--cm-len) var(--cm-w), var(--cm-w) var(--cm-len),
-      var(--cm-len) var(--cm-w), var(--cm-w) var(--cm-len),
-      var(--cm-len) var(--cm-w), var(--cm-w) var(--cm-len),
-      var(--cm-len) var(--cm-w), var(--cm-w) var(--cm-len);
+      var(--cm-l) var(--cm-s), var(--cm-s) var(--cm-l),
+      var(--cm-l) var(--cm-s), var(--cm-s) var(--cm-l),
+      var(--cm-l) var(--cm-s), var(--cm-s) var(--cm-l),
+      var(--cm-l) var(--cm-s), var(--cm-s) var(--cm-l);
     background-position:
       left top, left top,
       right top, right top,
       left bottom, left bottom,
       right bottom, right bottom;
+    transition:
+      color var(--dur-fast) var(--ease-expo),
+      background-size var(--dur-fast) var(--ease-expo);
   }
 }
 
@@ -860,8 +895,22 @@ body {
   background-size:
     0 0, 0 0,
     0 0, 0 0,
-    var(--cm-len) var(--cm-w), var(--cm-w) var(--cm-len),
-    var(--cm-len) var(--cm-w), var(--cm-w) var(--cm-len);
+    var(--cm-l) var(--cm-s), var(--cm-s) var(--cm-l),
+    var(--cm-l) var(--cm-s), var(--cm-s) var(--cm-l);
+}
+
+/* Pointing at a card registers it: the corners reach further in and take the
+   accent, in the time the frame takes to brighten. They have to change — the
+   hovered frame steps up to `--nm-frame-hi`, the corners' own resting value,
+   so corners that stayed put would dissolve into the edge at the exact moment
+   the card is being looked at. Transient, like selection and focus, so it does
+   not spend the accent at rest. Pointer only: a keyboard-focused card already
+   carries the focus outline in the same hue. */
+@media (hover: hover) {
+  a.cropmarks:hover::after {
+    --cm-len: 18px;
+    color: var(--color-accent);
+  }
 }
 
 @utility reading-prose {

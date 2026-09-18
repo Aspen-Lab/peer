@@ -36,6 +36,7 @@ import {
 } from "@/components/charts/reading-calendar";
 import { PaperDigestLoader } from "@/components/digest/daily-digest";
 import { PageContainer } from "@/components/ui/page-container";
+import { useReveal } from "@/components/ui/reveal";
 import { LoadingSkeleton } from "@/components/ui";
 import { buttonVariants } from "@/components/ui/button";
 import { emptyReason } from "@/lib/feed/empty-reason";
@@ -59,6 +60,9 @@ export default function DailyBriefingPageWrapper() {
 
 function DailyBriefingPage() {
   const papers = useFeedStore((s) => s.papers);
+  // The cards arrive as they are reached. `papers` is what changes which
+  // cards exist; a card already revealed is never hidden again.
+  useReveal([papers]);
   const isLoading = useFeedStore((s) => s.isLoading);
   const papersLoading = useFeedStore((s) => s.papersLoading);
   const lastRefresh = useFeedStore((s) => s.lastRefresh);
@@ -173,6 +177,7 @@ function DailyBriefingPage() {
       width="board"
       rhythm="none"
       className="pt-0 md:pt-5 pb-16 lg:pb-20 space-y-8 sm:space-y-10 lg:space-y-12"
+      data-motion="reveal"
     >
       <PaperDigestLoader
         papers={papers}
@@ -194,6 +199,14 @@ function DailyBriefingPage() {
         onRefresh={refreshFeed}
         isRefreshing={isLoading}
       />
+
+      {/* The library first: what you have read, with today's papers placed
+          against it — so the day's cards arrive already knowing where they
+          sit. It used to close the page, below ten cards, where the one view
+          of everything read was the last thing on the screen anyone reached. */}
+      {papers.length > 0 && (
+        <ReadingStrip papers={papers} readerTopics={starter ? [] : profile.researchTopics} />
+      )}
 
       {/* The day's shape, between the sentence that says what today is and
           the cards that are it. */}
@@ -229,17 +242,14 @@ function DailyBriefingPage() {
               key={paper.id}
               id={`paper-${paper.id}`}
               data-paper-id={paper.id}
-              // Today's papers arrive as a stack dealt in reading order. All
-              // ten used to fade up on the identical frame, which reads as the
-              // page reflowing rather than as a delivery. globals.css already
-              // carried the plumbing — `[style*="--i"]` in the Motion block —
-              // but the delay landed on this wrapper while `animate-fade-in-up`
-              // landed on the <Link> two levels down, and `animation-delay`
-              // does not inherit, so all ten still arrived on one frame. Both
-              // go on one element, the way the skeleton already does it.
-              // Capped at 9 so the tail never exceeds 360ms.
-              style={{ "--i": Math.min(index, 9) } as React.CSSProperties}
-              className="mb-4 break-inside-avoid animate-fade-in-up"
+              // Each card arrives as it is reached — the reading page's approach
+              // (globals.css, "The approach"), now on the board. The mount fade
+              // it replaces played all ten on load, so the cards below the fold
+              // had finished arriving before anyone scrolled to them. The first
+              // screenful is still dealt in order, 40ms apart: `useReveal`
+              // staggers the hosts that are already on screen when it runs.
+              data-reveal
+              className="rv mb-4 break-inside-avoid"
             >
               <FeedTile
                 item={{ kind: "paper", data: paper }}
@@ -253,11 +263,6 @@ function DailyBriefingPage() {
         </div>
       )}
 
-      {/* After the day's papers, not before them: the brief opens on what
-          there is to read and closes on what has been read. */}
-      {papers.length > 0 && (
-        <ReadingStrip papers={papers} readerTopics={starter ? [] : profile.researchTopics} />
-      )}
     </PageContainer>
   );
 }
@@ -397,7 +402,7 @@ function BriefingHead({
             aria-busy={isRefreshing}
             aria-label="Refresh briefing"
             title="Refresh briefing (r)"
-            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-text-faint hover:bg-bg-secondary/80 hover:text-text transition-[color,background-color,transform] active:scale-90 disabled:opacity-50 disabled:cursor-wait"
+            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-text-faint hover:bg-bg-secondary/80 hover:text-text transition-[color,background-color,transform,scale] active:scale-90 disabled:opacity-50 disabled:cursor-wait"
           >
             <svg
               width="15"

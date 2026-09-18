@@ -247,7 +247,7 @@ function StepButton({
       disabled={disabled}
       aria-label={label}
       title={`${label} (${cap})`}
-      className="inline-flex items-center justify-center rounded-md transition-[opacity,transform] disabled:opacity-40 active:scale-[0.95] disabled:active:scale-100 [@media(hover:none)]:min-h-11 [@media(hover:none)]:min-w-11"
+      className="inline-flex items-center justify-center rounded-md transition-[opacity,transform,scale] disabled:opacity-40 active:scale-[0.95] disabled:active:scale-100 [@media(hover:none)]:min-h-11 [@media(hover:none)]:min-w-11"
     >
       <Kbd pointerOnly>{cap}</Kbd>
       <span className="hidden [@media(hover:none)]:inline text-body text-text-muted" aria-hidden>

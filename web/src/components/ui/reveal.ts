@@ -59,8 +59,15 @@ export function useReveal(deps: unknown[]): void {
       hosts.forEach(reveal);
       return;
     }
+    // What is already on screen is revealed now, dealt in document order
+    // 40ms apart (capped at nine, so the tail never passes 360ms) — the one
+    // place a stagger is seen, because these are on screen together. A host
+    // reached later by scrolling arrives on its own, with no delay.
+    let dealt = 0;
     const pending = hosts.filter((host) => {
       if (!onScreen(host)) return true;
+      (host as HTMLElement).style.setProperty("--rdl", `${Math.min(dealt, 9) * 40}ms`);
+      dealt++;
       reveal(host);
       return false;
     });

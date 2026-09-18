@@ -672,7 +672,7 @@ function StepRail({
                 <span
                   className={cn(
                     "flex h-[26px] w-[26px] items-center justify-center rounded-full text-micro font-semibold tabular-nums",
-                    "transition-[background-color,color,transform,box-shadow] ",
+                    "transition-[background-color,color,scale,box-shadow]",
                     isCurrent
                       ? "bg-accent text-bg shadow-card scale-110"
                       : isDone

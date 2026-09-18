@@ -352,7 +352,7 @@ function HelpOverlay({
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="inline-flex items-center justify-center w-7 h-7 rounded-full text-text-faint hover:text-heading hover:bg-bg-secondary transition-colors active:scale-[0.92]"
+            className="inline-flex items-center justify-center w-7 h-7 rounded-full text-text-faint hover:text-heading hover:bg-bg-secondary transition-[color,background-color,border-color,scale] active:scale-[0.92]"
           >
             <svg
               width="13"

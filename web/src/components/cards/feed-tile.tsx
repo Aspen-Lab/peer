@@ -96,7 +96,7 @@ function SaveButton({
       }}
       aria-label={isSaved ? "Unsave" : "Save"}
       className={[
-        "p-1.5 rounded-md transition-colors active:scale-90",
+        "p-1.5 rounded-md transition-[color,background-color,border-color,scale] active:scale-90",
         isSaved
           ? "text-accent bg-accent-dim/60 hover:bg-accent-dim"
           : "text-text-faint hover:text-heading hover:bg-bg-secondary/60",
@@ -241,7 +241,7 @@ function PaperTile({ paper, isRead, selected, plateTerms = [], line, index, tota
             aria-label="Like — show more like this"
             title="Like"
             className={[
-              "p-1.5 rounded-md transition-colors active:scale-90",
+              "p-1.5 rounded-md transition-[color,background-color,border-color,scale] active:scale-90",
               isLiked
                 ? "text-accent bg-accent-dim/60"
                 : "text-text-faint hover:text-accent hover:bg-accent-dim/60",
@@ -258,7 +258,7 @@ function PaperTile({ paper, isRead, selected, plateTerms = [], line, index, tota
             onClick={stop(() => notInterestedPaper(paper))}
             aria-label="Not interested — show less like this"
             title="Not interested"
-            className="p-1.5 rounded-md text-text-faint hover:text-red hover:bg-red/10 transition-colors active:scale-90"
+            className="p-1.5 rounded-md text-text-faint hover:text-red hover:bg-red/10 transition-[color,background-color,border-color,scale] active:scale-90"
           >
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
               <path d="M17 14V4a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-3zM17 14l-4 7a2 2 0 0 1-2-2v-3H5.5a2 2 0 0 1-2-2.3l1.2-7A2 2 0 0 1 6.7 5H17" />

@@ -186,7 +186,7 @@ export function Tag({
   href?: string;
 }) {
   const classes =
-    "inline-block text-caption text-tag bg-tag-dim px-2 py-[3px] rounded-md tracking-wide transition-colors";
+    "inline-block text-caption text-tag bg-tag-dim px-2 py-[3px] rounded-md tracking-wide transition-[color,background-color,scale]";
   if (href) {
     return (
       <a
@@ -221,7 +221,7 @@ export function LinkChip({
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className="group inline-flex items-center gap-1.5 h-8 px-3.5 rounded-full bg-surface shadow-card text-meta text-text-muted hover:text-heading hover:shadow-card-hover hover:bg-surface-hover transition-[color,background-color,box-shadow] ease-out active:scale-[0.96]"
+      className="group inline-flex items-center gap-1.5 h-8 px-3.5 rounded-full bg-surface shadow-card text-meta text-text-muted hover:text-heading hover:shadow-card-hover hover:bg-surface-hover transition-[color,background-color,box-shadow,scale] ease-out active:scale-[0.96]"
     >
       {icon}
       {label}
@@ -264,7 +264,7 @@ export function ActionBar({
             onClick={isSaved ? stop(onUnsave) : stop(onSave)}
             aria-pressed={isSaved}
             aria-label={isSaved ? "Remove from saved" : "Save"}
-            className={`group/save inline-flex items-center gap-1.5 h-8 pl-2.5 pr-3.5 rounded-full text-meta font-medium transition-[background-color,border-color,color,transform,box-shadow] ease-out active:scale-[0.94] ${
+            className={`group/save inline-flex items-center gap-1.5 h-8 pl-2.5 pr-3.5 rounded-full text-meta font-medium transition-[background-color,border-color,color,scale,box-shadow] ease-out active:scale-[0.94] ${
               isSaved
                 ? "bg-accent text-bg shadow-card hover:bg-accent/90"
                 : "bg-bg-secondary/60 shadow-card text-text-muted hover:text-heading hover:bg-surface-hover"
@@ -317,7 +317,7 @@ export function ActionBar({
             onClick={stop(onMore)}
             aria-label="Like — show me more like this"
             title="Like — show me more like this"
-            className="group/like inline-flex items-center gap-1.5 h-8 px-3 rounded-full text-meta text-text-faint hover:text-accent hover:bg-accent-dim transition-colors ease-out active:scale-[0.94]"
+            className="group/like inline-flex items-center gap-1.5 h-8 px-3 rounded-full text-meta text-text-faint hover:text-accent hover:bg-accent-dim transition-[color,background-color,border-color,scale] ease-out active:scale-[0.94]"
           >
             <svg
               width="13"
@@ -343,7 +343,7 @@ export function ActionBar({
             onClick={stop(onDismiss)}
             aria-label="Dislike — show me less like this"
             title="Dislike — show me less like this"
-            className="group/dislike inline-flex items-center gap-1.5 h-8 px-3 rounded-full text-meta text-text-faint hover:text-red hover:bg-red/10 transition-colors ease-out active:scale-[0.94]"
+            className="group/dislike inline-flex items-center gap-1.5 h-8 px-3 rounded-full text-meta text-text-faint hover:text-red hover:bg-red/10 transition-[color,background-color,border-color,scale] ease-out active:scale-[0.94]"
           >
             <svg
               width="13"
@@ -394,7 +394,7 @@ export function FeedbackRow({
           type="button"
           onClick={onLike}
           aria-label="Like — show me more like this"
-          className="group inline-flex items-center gap-2 h-10 px-4 rounded-full bg-surface border border-border-strong text-body-sm text-text-muted hover:text-accent hover:border-accent/40 hover:bg-accent-dim transition-colors ease-out active:scale-[0.96]"
+          className="group inline-flex items-center gap-2 h-10 px-4 rounded-full bg-surface border border-border-strong text-body-sm text-text-muted hover:text-accent hover:border-accent/40 hover:bg-accent-dim transition-[color,background-color,border-color,scale] ease-out active:scale-[0.96]"
         >
           <svg
             width="14"
@@ -417,7 +417,7 @@ export function FeedbackRow({
           type="button"
           onClick={onDislike}
           aria-label="Dislike — show me less like this"
-          className="group inline-flex items-center gap-2 h-10 px-4 rounded-full bg-surface border border-border-strong text-body-sm text-text-muted hover:text-red hover:border-red/35 hover:bg-red/[0.06] transition-colors ease-out active:scale-[0.96]"
+          className="group inline-flex items-center gap-2 h-10 px-4 rounded-full bg-surface border border-border-strong text-body-sm text-text-muted hover:text-red hover:border-red/35 hover:bg-red/[0.06] transition-[color,background-color,border-color,scale] ease-out active:scale-[0.96]"
         >
           <svg
             width="14"

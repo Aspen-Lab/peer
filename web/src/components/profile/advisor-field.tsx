@@ -125,7 +125,7 @@ export function AdvisorField({
           type="button"
           onClick={() => void find()}
           disabled={advisorName.trim().length < 2 || status === "searching"}
-          className={`shrink-0 h-[42px] px-3.5 rounded-lg text-meta font-medium transition-colors active:scale-[0.97] ${
+          className={`shrink-0 h-[42px] px-3.5 rounded-lg text-meta font-medium transition-[color,background-color,border-color,scale] active:scale-[0.97] ${
             advisorName.trim().length >= 2 && status !== "searching"
               ? "bg-heading text-bg hover:bg-heading/90"
               : "bg-bg-secondary text-text-faint/70 cursor-not-allowed"
@@ -154,7 +154,7 @@ export function AdvisorField({
                 setStatus("idle");
                 setCandidate(null);
               }}
-              className="inline-flex items-center gap-1.5 h-8 px-3.5 rounded-full bg-accent text-white text-meta font-medium hover:bg-accent/90 transition-colors active:scale-[0.97]"
+              className="inline-flex items-center gap-1.5 h-8 px-3.5 rounded-full bg-accent text-white text-meta font-medium hover:bg-accent/90 transition-[color,background-color,border-color,scale] active:scale-[0.97]"
             >
               Yes, that&rsquo;s my advisor
             </button>
