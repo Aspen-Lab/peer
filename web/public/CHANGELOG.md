@@ -2,6 +2,29 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.32.2 — 2026-09-18
+
+Pointing at the reading graph no longer makes it twitch.
+
+**Moving between two nodes flashed the whole graph.** Pointing lifts one
+neighbourhood and lets the rest recede, and it was set on every enter and
+cleared on every leave — so going from a node to its neighbour passed through
+"pointing at nothing", and every node on the plate flashed back to full and down
+again in the space of one move. A sweep across the plate strobed it. Now the
+pointer has to rest on a node for a moment before anything recedes, moves
+straight from one node to the next with no flash between, and waits a beat on
+leaving so it can reach the next one.
+
+**An invisible title was catching the pointer.** A paper's title that was
+dropped for overprinting was transparent, not gone, and papers are drawn over
+the chips — so pointing at a chip under an invisible title kept handing the
+pointer to the paper and back. Titles are labels now, never targets.
+
+**And the marker no longer flashes in the corner.** The four accent corners were
+positioned a frame after they appeared, so they were painted once at the plate's
+top-left and then jumped to the node. They are placed on the frame that draws
+them.
+
 ## v0.32.1 — 2026-09-18
 
 Your saves and your reading now survive a reload when you are not signed in.

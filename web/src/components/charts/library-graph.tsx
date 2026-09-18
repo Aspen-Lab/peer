@@ -128,6 +128,10 @@ export function LibraryGraph({ graph }: { graph: Graph }) {
   const viewRef = useRef<SVGGElement>(null);
   const view = useRef({ k: 1, tx: 0, ty: 0 });
   const [hover, setHover] = useState<string | null>(null);
+  const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (hoverTimer.current) clearTimeout(hoverTimer.current);
+  }, []);
   const [pinned, setPinned] = useState<string | null>(null);
   const active = hover ?? pinned;
   const activeRef = useRef<string | null>(null);
@@ -444,14 +448,28 @@ export function LibraryGraph({ graph }: { graph: Graph }) {
     };
   }, [size, nodes, links, byId, parents, labelPapers, chipMax]);
 
-  // Keep the marker on the active node when it changes while the layout is
-  // still (the tick loop only runs during a settle or a drag).
-  useEffect(() => {
-    const a = active ? byId.get(active) : null;
-    if (a && markerRef.current && a.x !== undefined) {
-      markerRef.current.setAttribute("transform", `translate(${a.x.toFixed(1)},${a.y!.toFixed(1)})`);
+  // ── Pointing ──────────────────────────────────────────────────────────
+  // The whole plate dims around what is pointed at, so pointing must not
+  // flicker. Setting it on every enter and clearing it on every leave did:
+  // moving from one node to its neighbour passed through "nothing", and the
+  // entire graph flashed back to full and down again; a sweep across the plate
+  // strobed it. So:
+  //   - from nothing, the pointer has to REST on a node (70ms) before the rest
+  //     recedes — passing over one on the way somewhere else does nothing;
+  //   - from one node to another, it moves straight across, no flash between;
+  //   - leaving, it waits 140ms, long enough to reach the next node.
+  const pointAt = (id: string) => {
+    if (hoverTimer.current) clearTimeout(hoverTimer.current);
+    if (hover) {
+      setHover(id);
+      return;
     }
-  }, [active, byId]);
+    hoverTimer.current = setTimeout(() => setHover(id), 70);
+  };
+  const pointAway = (id: string) => {
+    if (hoverTimer.current) clearTimeout(hoverTimer.current);
+    hoverTimer.current = setTimeout(() => setHover((h) => (h === id ? null : h)), 140);
+  };
 
   // ── Dragging ──────────────────────────────────────────────────────────
   const drag = useRef<{ id: string; x0: number; y0: number; moved: boolean; pointer: string } | null>(null);
@@ -645,10 +663,10 @@ export function LibraryGraph({ graph }: { graph: Graph }) {
                 className: "cursor-pointer transition-opacity outline-none",
                 style: { opacity: dim ? 0.28 : 1 } as React.CSSProperties,
                 onPointerEnter: (e: React.PointerEvent) => {
-                  if (e.pointerType !== "touch") setHover(node.id);
+                  if (e.pointerType !== "touch") pointAt(node.id);
                 },
                 onPointerLeave: (e: React.PointerEvent) => {
-                  if (e.pointerType !== "touch") setHover((h) => (h === node.id ? null : h));
+                  if (e.pointerType !== "touch") pointAway(node.id);
                 },
                 onPointerDown: (e: React.PointerEvent) => onNodeDown(e, node.id),
                 onPointerMove: onNodeMove,
@@ -710,6 +728,12 @@ export function LibraryGraph({ graph }: { graph: Graph }) {
                             fontSize: 12,
                             opacity: 0,
                             transition: "opacity var(--dur-base) var(--ease-expo)",
+                            // A label, not a target. A title dropped for
+                            // overprinting is transparent but still
+                            // hit-testable, and papers paint over the chips —
+                            // so a chip under an invisible title kept losing
+                            // the pointer to the paper, back and forth.
+                            pointerEvents: "none",
                           }}
                         >
                           {paperText(node.label)}
@@ -762,7 +786,19 @@ export function LibraryGraph({ graph }: { graph: Graph }) {
               exists only while something is pointed at, so it does not spend
               the accent at rest. */}
           {activeNode && (
-            <g ref={markerRef} className="pointer-events-none" style={{ animation: "fade-in 180ms var(--ease-expo) both" }}>
+            <g
+              ref={markerRef}
+              className="pointer-events-none"
+              // Placed on the render that creates it. Positioned from an
+              // effect instead, it was painted once at the camera's origin —
+              // a flash in the plate's top-left — and then jumped. The tick
+              // loop keeps it on the node while the layout moves.
+              transform={(() => {
+                const at = byId.get(activeNode.id);
+                return at?.x !== undefined ? `translate(${at.x.toFixed(1)},${at.y!.toFixed(1)})` : undefined;
+              })()}
+              style={{ animation: "fade-in 180ms var(--ease-expo) both" }}
+            >
               {(() => {
                 const hw = halfWidth(activeNode, parents, chipMax) + 5;
                 const hh = halfHeight(activeNode) + 5;
