@@ -263,8 +263,11 @@ const STRIP_WEEKS = 8;
 
 const READING_STRIP = {
   heading: "Your reading",
-  summary: (days: number, of: number, streak: number) =>
-    `${days} of the last ${of} days` +
+  // Weeks, not "of the last 53 days": the grid is calendar weeks and the one
+  // in progress is partial, so a day count would be a number that changes its
+  // denominator every morning.
+  summary: (days: number, weeks: number, streak: number) =>
+    `${days} ${days === 1 ? "day" : "days"} read in the last ${weeks} weeks` +
     (streak > 0 ? ` \u00b7 ${streak}-week streak` : ""),
 };
 
@@ -288,10 +291,16 @@ function ReadingStrip() {
 
   return (
     <Band label={READING_STRIP.heading} gap="none">
-      <p className="annotation text-text-faint mt-3 mb-3">
-        {READING_STRIP.summary(days, STRIP_WEEKS * 7, streak)}
-      </p>
-      <ReadingCalendar cells={cells} weeks={STRIP_WEEKS} labels={false} />
+      {/* The day-strip's arrangement: a compact chart with its sentence
+          beside it, not a line above a field. `flex-wrap` stacks them on a
+          phone. No Less/More key here — with empty slots against filled ones
+          the reading is self-evident, and the profile carries the key. */}
+      <figure className="mt-4 flex flex-wrap items-end gap-x-6 gap-y-3">
+        <ReadingCalendar cells={cells} weeks={STRIP_WEEKS} labels={false} showKey={false} />
+        <figcaption className="annotation text-text-faint measure-ui self-end">
+          {READING_STRIP.summary(days, STRIP_WEEKS, streak)}
+        </figcaption>
+      </figure>
     </Band>
   );
 }

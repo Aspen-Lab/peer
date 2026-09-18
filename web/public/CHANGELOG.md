@@ -2,6 +2,34 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.30.1 — 2026-09-18
+
+The reading calendar, drawn at the size of what it says.
+
+**It was sized by its container.** The columns were fractions of the width and
+every cell was a square, so on the briefing's 1232px board eight weeks made
+cells 150px on a side and seven rows of them a thousand pixels tall. The
+fifty-five days a new reader had not read were drawn in a grey two percent off
+the page, so the grid itself vanished, and the one day read was a white slab in
+the corner of an empty field. The day-strip above it had already been through
+exactly this and wrote down the lesson in its own header; the calendar had not.
+
+It now uses the day-strip's unit — 12px marks, 3px apart — so the two charts on
+one board read as one system, and the grid is exactly as wide as its weeks.
+**A day with nothing read is an empty slot**, outlined and unfilled, rather than
+the palest step of the ramp, because a day with nothing read is not a small
+amount of reading; the slots are what give a filled day somewhere to be. On the
+briefing the sentence sits beside the chart instead of above a field: "1 day
+read in the last 8 weeks".
+
+**The weekdays were wrong.** The grid ended on today in the bottom row whatever
+day today was, so on a Thursday the row /profile labels "Mon" was a Saturday —
+on the one chart whose own comment says the weekday pattern is the whole point.
+Columns are now calendar weeks, Sunday at the top, and the days of this week
+that have not happened are not drawn, so the ragged last column is where "now"
+is. A week that is still in progress no longer breaks a streak before you have
+had the chance to read in it.
+
 ## v0.30.0 — 2026-09-17
 
 Corner marks, an approach, and the sentence three cards were sharing.
