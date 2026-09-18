@@ -11356,3 +11356,66 @@ second-pass log: Chromium interpolates `zoom` smoothly, not a snap).
 Gate not re-run this part; part 4 runs it cold.
 
 Commit: this log entry only, staged by explicit path.
+
+### Round 7 — Agent A (closing, part 3 of 4 — S23 Semantic Scholar)
+
+**Code, grepped and read, not assumed.** `grep -rniE "semanticscholar|semantic.scholar" src/lib/
+figures/` → every hit is a type literal, a comment, or a test description — `extract.ts` line 51
+(`FigureCandidate["source"]`'s union), line 556 (`sourcePriority`'s `"semantic-scholar"` branch,
+score 18), `pdf-extract.ts` line 29 (`FigureSource` union) — zero fetch calls, zero URLs, zero
+queue/backoff code left in the figures tree. Matches Ruling 20's own hedge exactly (both frozen
+files — `paper-figure.tsx`, `pdf-extract.ts` — still structurally need the literal, per C's own
+traced-by-compiling finding).
+
+`web/src/lib/sources/semantic-scholar-client.ts` read in full: `MAX_CONCURRENT = 2`,
+`UNKEYED_MIN_INTERVAL_MS = 350`, `KEYED_MIN_INTERVAL_MS = 1500`, `RETRY_DELAYS_MS = [1000, 2000,
+4000]`, `x-api-key` header spread in `iff process.env.SEMANTIC_SCHOLAR_API_KEY` is set — matches
+Ruling 20's own spec numbers exactly. `sources/semantic-scholar.ts` line 3 imports
+`fetchSemanticScholar` from it (line 65 call site, replacing the generic `sourceFetch`);
+`papers/enrich.ts` line 11 imports it too (`trySS`, line 66) — both real call sites wired, neither
+sent the key or queued before this round, confirmed by reading both files, not just grepping the
+import line.
+
+**Live — `GET /api/figure`, the exact URL from this turn's own brief**: `{"status":
+"source_unavailable","reason":"Peer reached an access-check page at idp.nature.com, not the
+article itself.", ...}` — the reason names the real bounce-page finding; no mention of a figure
+index, rate limiting, or Semantic Scholar anywhere in it. Matches spec.
+
+**Live — the route correction C already found, re-verified by reading the route files myself
+before trusting it**: `src/app/api/papers/search/route.ts` exports only `GET` (confirmed, line
+67); `src/app/api/feed/route.ts` exports `POST` (line 126) and is the pipeline that actually calls
+`sources/semantic-scholar.ts`. Used `POST /api/feed` per C's own already-documented correction.
+
+**Live — 6 calls, fresh unique topics each time (avoiding the Next.js data-cache quirk C's own log
+already named), `{"aiTier":0,"perSourceLimit":3}`**:
+
+| # | topic (truncated) | result |
+|---|---|---|
+| 1 | lithium cobalt oxide battery cathode round7... | `errors.semantic_scholar: "source-timeout after 8000ms"`, `semantic_scholar: 0` |
+| 2 | nickel manganese cobalt cathode degradation... | `semantic_scholar: 3`, no error, 6.0s |
+| 3 | perovskite solar cell stability xyz round7c | `errors.semantic_scholar: "source-timeout after 8000ms"`, `semantic_scholar: 0` |
+| 4 | graphene oxide membrane desalination round7d | `semantic_scholar: 3`, no error, 2.2s |
+| 5 | solid state electrolyte interface round7e | `semantic_scholar: 3`, no error, 1.3s |
+| 6 | zinc air battery catalyst round7f | `semantic_scholar: 3`, no error, 0.6s |
+
+**Tally, "S2 429s (search + enrich)": 0 explicit 429s surfaced** — the route's own meta never
+names a status code, only a rolled-up error string, and neither of the two failures' text mentions
+"429" or "rate limit" (both read exactly `"Error: [semantic_scholar] source-timeout after
+8000ms"`, the pipeline's own per-source deadline firing). **Named as a new, real, execution-
+confirmed finding, not diagnosed further (A does not investigate causes)**: 2 of 6 fresh, unrelated
+queries hit this same-shaped timeout with zero Semantic Scholar results, while the other 4 (issued
+immediately after, no code or config change in between) succeeded in 0.6-6.0s with 3 results each
+and no error — both failures were the first and third calls of the sequence, every call afterward
+succeeded. Consistent with, but not confirmed as, the new 1500ms keyed pacing plus 1s/2s/4s backoff
+occasionally exceeding the *pipeline's own* 8s per-source budget when a request has to queue behind
+another — flagged for B/the manager, since this is new behavior this round's own client
+introduced (the retired figure-branch queue had no external caller with its own competing
+deadline).
+
+**Blast radius of this check**: read-only (curl + file reads); no product code touched, no figure
+file touched, key never printed or logged (only presence/absence via `iff` reasoning, per Ruling 20
+and §3's standing rule).
+
+Gate not re-run this part; part 4 runs it cold.
+
+Commit: this log entry only, staged by explicit path.
