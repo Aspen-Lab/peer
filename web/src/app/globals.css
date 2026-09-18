@@ -878,7 +878,11 @@ body {
       right bottom, right bottom;
     transition:
       color var(--dur-fast) var(--ease-expo),
-      background-size var(--dur-fast) var(--ease-expo);
+      background-size var(--dur-fast) var(--ease-expo),
+      top var(--dur-fast) var(--ease-expo),
+      right var(--dur-fast) var(--ease-expo),
+      bottom var(--dur-fast) var(--ease-expo),
+      left var(--dur-fast) var(--ease-expo);
   }
 }
 
@@ -899,16 +903,18 @@ body {
     var(--cm-l) var(--cm-s), var(--cm-s) var(--cm-l);
 }
 
-/* Pointing at a card registers it: the corners reach further in and take the
-   accent, in the time the frame takes to brighten. They have to change — the
-   hovered frame steps up to `--nm-frame-hi`, the corners' own resting value,
-   so corners that stayed put would dissolve into the edge at the exact moment
-   the card is being looked at. Transient, like selection and focus, so it does
-   not spend the accent at rest. Pointer only: a keyboard-focused card already
-   carries the focus outline in the same hue. */
+/* Pointing at a card registers it: the corners close in — off the edge and
+   6px inside it, like a viewfinder locking on — and take the accent, in the
+   time the frame takes to brighten. They have to move: the hovered frame steps
+   up to `--nm-frame-hi`, the corners' own resting value, so corners that
+   stayed on the edge would dissolve into it at the exact moment the card is
+   being looked at. Transient, like selection and focus, so it does not spend
+   the accent at rest. Pointer only: a keyboard-focused card already carries
+   the focus outline in the same hue. */
 @media (hover: hover) {
   a.cropmarks:hover::after {
-    --cm-len: 18px;
+    --cm-len: 16px;
+    inset: 6px;
     color: var(--color-accent);
   }
 }

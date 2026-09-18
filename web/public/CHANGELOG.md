@@ -2,6 +2,16 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.32.4 — 2026-09-18
+
+Pointing at a card, its corners close in.
+
+The corners used to grow along the card's edge and take the accent. Now they
+also come off the edge — 6px inside it, legs 16px — like a viewfinder locking
+on, in the same 180ms the frame takes to brighten, and ease back out when the
+pointer leaves. Off the edge they no longer have to fight the brightened frame
+to be seen.
+
 ## v0.32.3 — 2026-09-18
 
 The space between your reading and today's papers, tidied.
