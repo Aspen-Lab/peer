@@ -11319,3 +11319,40 @@ Gate not re-run this part; part 4 runs it cold. Viewport left at 1200×800 for t
 setup; reset to 2560×1400 before part 4.
 
 Commit: this log entry only, staged by explicit path (`docs/handoff/ABC-followup-round2.md`).
+
+### Round 7 — Agent A (closing, part 2 of 4 — S22 zoom transition)
+
+**Read the served CSS directly** (`globals.css`, the `.zoom-transition` rule) rather than trusting
+C's log alone, since this is exactly the rule C could only verify via an injected override this
+round: confirmed the property list is `font-size 0.3s var(--ease-snap), max-width 0.3s
+var(--ease-snap), grid-template-columns 0.3s var(--ease-snap), zoom 0.3s var(--ease-snap), top
+0.3s var(--ease-snap)` — all 5, all 0.3s, all the same easing. The sitewide reduced-motion rule
+(`*, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms
+!important; }`) covers this block too, independent of `withZoomTransition`'s own `matchMedia`
+guard — confirmed by reading the rule, not re-derived from scratch (6-06/7-02 already established
+this pattern for `.theme-transition`).
+
+**Live class lifecycle, against the real served stylesheet (not an override) for the first time
+this round**: clicked "Fit to screen" and read `classList` immediately in the same script — present
+(`t≈7ms` in-page). Read `transitionProperty`/`transitionDuration`/`transitionTimingFunction` while
+present: exactly **"font-size, max-width, grid-template-columns, zoom, top"**, all **"0.3s"**, all
+the `--ease-snap` cubic-bezier — matches the CSS verbatim, live, on the actually-served page.
+
+**Timing — present-then-gone confirmed, precise sub-350ms sampling not possible, named honestly
+per this turn's own brief ("timing may be throttled — say so")**: a same-script polling loop
+(`setTimeout(25ms)` between reads) collapsed to a single sample after ~7ms — the automation
+environment's own timer throttling, not a product symptom (confirmed separately: a two-checkpoint
+script requesting 200ms-then-250ms waits actually elapsed 855ms-then-1845ms wall-clock, an order
+of magnitude slower than requested). Within that throttled budget, the class was **present**
+immediately after click and at the "≈200ms-requested" checkpoint, and **gone** by the
+"≈450ms-requested" checkpoint — present-then-gone confirmed qualitatively; the exact ~350ms
+cleanup window is not independently re-timeable in this environment, consistent with the standing
+hidden/throttled-pane caveat this loop has named every round for compositor-timed effects, and
+already independently confirmed at the frame level by B's own execution testing (round-7
+second-pass log: Chromium interpolates `zoom` smoothly, not a snap).
+
+**Verdict, S22: matches spec exactly, now confirmed against the real served CSS.** No open item.
+
+Gate not re-run this part; part 4 runs it cold.
+
+Commit: this log entry only, staged by explicit path.
