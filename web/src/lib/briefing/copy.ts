@@ -7,7 +7,9 @@ export const DAY_STRIP = {
   caption: "Each bar is a paper below, against today's best match",
   /** Only when some of the day has been read — with none read there is
    *  nothing for a key to distinguish. */
-  readKey: "· grey is read",
+  // Every bar is grey; the read ones are the dimmer grey. "Grey is read"
+  // described all ten.
+  readKey: "The dim ones are read.",
 };
 
 /** The setup strip above a sample briefing. */

@@ -44,7 +44,7 @@ import { briefingDeck } from "@/lib/briefing/deck";
 import { briefingTileLines } from "@/lib/briefing/tile-lines";
 import { buildLibraryGraph } from "@/lib/library/graph";
 import type { Paper } from "@/types";
-import { LibraryGraph, LibraryLegend } from "@/components/charts/library-graph";
+import { LibraryGraph } from "@/components/charts/library-graph";
 import { SYNC, BRIEFING_EMPTY } from "@/lib/briefing/copy";
 import { EmptyState } from "@/components/ui/empty-state";
 import { dayLine } from "@/lib/shell/masthead";
@@ -208,12 +208,6 @@ function DailyBriefingPage() {
         <ReadingStrip papers={papers} readerTopics={starter ? [] : profile.researchTopics} />
       )}
 
-      {/* The day's shape, between the sentence that says what today is and
-          the cards that are it. */}
-      {papers.length > 0 && (
-        <DayStrip papers={papers} readIds={readItems} now={now} />
-      )}
-
       {/* Setup, above the papers it is about — and only until it is done. */}
       {starter && <StarterStrip />}
 
@@ -232,11 +226,20 @@ function DailyBriefingPage() {
       )}
 
       {papers.length > 0 && (
-        // Masonry, not a fixed grid. Roughly four papers in ten carry an
-        // extractable figure, so card heights genuinely differ; a uniform grid
-        // either ragged-edges every row or reserves dead space on the six cards
-        // with no image. CSS columns let each card be its own height.
-        <div className="columns-1 sm:columns-2 lg:columns-3 gap-4 [column-fill:_balance]">
+        // Two sections, each under its band: what you have read (above), and
+        // today's papers — the day's shape, then the cards that are it. The
+        // strip used to float between the two, under the graph's key and
+        // beside the calendar, with nothing saying which of them it belonged to.
+        <Band label={TODAY.heading} gap="none">
+        <div className="mt-4">
+          <DayStrip papers={papers} readIds={readItems} now={now} />
+        </div>
+        {/* Masonry, not a fixed grid. Roughly four papers in ten carry an
+            extractable figure, so card heights genuinely differ; a uniform
+            grid either ragged-edges every row or reserves dead space on the
+            six cards with no image. CSS columns let each card be its own
+            height. */}
+        <div className="mt-6 columns-1 sm:columns-2 lg:columns-3 gap-4 [column-fill:_balance]">
           {papers.map((paper, index) => (
             <div
               key={paper.id}
@@ -261,8 +264,8 @@ function DailyBriefingPage() {
             </div>
           ))}
         </div>
+        </Band>
       )}
-
     </PageContainer>
   );
 }
@@ -270,6 +273,9 @@ function DailyBriefingPage() {
 /** Eight weeks: two months is enough to see a habit and short enough to sit
  *  under the day's papers without becoming a second page. */
 const STRIP_WEEKS = 8;
+
+/** The day's section: its strip and its cards. */
+const TODAY = { heading: "Today's papers" };
 
 const READING_STRIP = {
   heading: "Your reading",
@@ -324,19 +330,17 @@ function ReadingStrip({ papers, readerTopics }: { papers: Paper[]; readerTopics:
           <LibraryGraph graph={graph} />
         </div>
       )}
-      <div className="mt-4 flex flex-wrap items-end justify-between gap-x-10 gap-y-5">
-        {hasLibrary && <LibraryLegend />}
-        {cells && (
-          // The reading rhythm, beside the library it built: which days,
-          // not which papers. The calendar's own sentence sits next to it.
-          <figure className="flex flex-wrap items-end gap-x-6 gap-y-3">
-            <ReadingCalendar cells={cells} weeks={STRIP_WEEKS} labels={false} showKey={false} />
-            <figcaption className="annotation text-text-faint measure-ui self-end">
-              {READING_STRIP.summary(days, STRIP_WEEKS, streak)}
-            </figcaption>
-          </figure>
-        )}
-      </div>
+      {cells && (
+        // The reading rhythm, under the library it built: which days, not
+        // which papers. Chart then sentence, left-aligned — the same figure as
+        // the day's strip in the next section, so the two read as one system.
+        <figure className="mt-4 flex flex-wrap items-end gap-x-6 gap-y-3">
+          <ReadingCalendar cells={cells} weeks={STRIP_WEEKS} labels={false} showKey={false} />
+          <figcaption className="annotation text-text-faint measure-mono self-end">
+            {READING_STRIP.summary(days, STRIP_WEEKS, streak)}
+          </figcaption>
+        </figure>
+      )}
     </Band>
   );
 }

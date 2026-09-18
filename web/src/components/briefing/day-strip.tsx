@@ -116,9 +116,10 @@ export function DayStrip({
       </div>
       <span aria-hidden className="block h-px w-full bg-border-strong" />
       </div>
-      <figcaption className="annotation text-text-faint measure-ui self-end pb-1">
+      <figcaption className="annotation text-text-faint measure-mono self-end">
         {DAY_STRIP.caption}
-        {anyRead && <span className="ml-2">{DAY_STRIP.readKey}</span>}
+        {/* Its own line: run on after the caption it broke mid-phrase. */}
+        {anyRead && <span className="block">{DAY_STRIP.readKey}</span>}
       </figcaption>
     </figure>
   );

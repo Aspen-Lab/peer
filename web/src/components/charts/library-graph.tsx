@@ -173,6 +173,9 @@ export function LibraryGraph({ graph }: { graph: Graph }) {
   const chipMax = narrow ? 16 : CHIP_MAX;
   /** The readout's own height, measured — the camera keeps the graph below it. */
   const readoutRef = useRef<HTMLDivElement>(null);
+  /** The key's height, measured — it sits in the plate's bottom-left corner,
+   *  and the camera keeps the graph above it. */
+  const keyRef = useRef<HTMLDivElement>(null);
 
   const neighbours = useMemo(() => {
     const out = new Map<string, Set<string>>();
@@ -274,17 +277,19 @@ export function LibraryGraph({ graph }: { graph: Graph }) {
     const target = () => {
       const { x0, y0, x1, y1 } = extent();
       if (!Number.isFinite(x0)) return null;
-      // Below the readout, however many lines it is running to.
+      // Between the readout at the top and the key at the bottom, however
+      // many lines either is running to.
       const top = (readoutRef.current?.offsetHeight ?? 24) + 14;
+      const bottom = Math.max(EDGE_PAD, (keyRef.current?.offsetHeight ?? 0) + 12);
       const k = Math.min(
         1,
         (w - EDGE_PAD * 2) / Math.max(1, x1 - x0),
-        (h - top - EDGE_PAD) / Math.max(1, y1 - y0),
+        (h - top - bottom) / Math.max(1, y1 - y0),
       );
       return {
         k,
         tx: w / 2 - ((x0 + x1) / 2) * k,
-        ty: top + (h - top - EDGE_PAD) / 2 - ((y0 + y1) / 2) * k,
+        ty: top + (h - top - bottom) / 2 - ((y0 + y1) / 2) * k,
       };
     };
 
@@ -604,6 +609,16 @@ export function LibraryGraph({ graph }: { graph: Graph }) {
             <p className="text-title text-heading mt-1">{activeNode.label}</p>
           </div>
         )}
+      </div>
+
+      {/* The key, in the plate's bottom-left corner — the instrument carries
+          its own key, the way the readout sits in its top-left. It used to be
+          a separate row under the plate, where it lined up with nothing. */}
+      <div
+        ref={keyRef}
+        className="pointer-events-none absolute left-2 bottom-2 z-[2] max-w-[calc(100%-1rem)] bg-surface/85 px-2 py-1"
+      >
+        <LibraryLegend />
       </div>
 
       {size && (

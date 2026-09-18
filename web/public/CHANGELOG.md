@@ -2,6 +2,28 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.32.3 — 2026-09-18
+
+The space between your reading and today's papers, tidied.
+
+Three things used to sit between the reading graph and the cards, each lined up
+with nothing: the graph's key along the bottom of the reading calendar, the
+calendar floating right of centre with its sentence at the far edge, and the
+day's bar chart on a line of its own below, belonging to neither side.
+
+Now the page is two sections, each under its band:
+
+- **Your reading.** The graph carries its own key, in the plate's bottom-left
+  corner — the instrument's key sits inside the instrument, the way its readout
+  sits in the top-left. Under the plate, the reading calendar, left-aligned,
+  with its sentence beside it.
+- **Today's papers.** The day's bar chart, then the cards it describes. Same
+  arrangement as the calendar — chart, then its sentence — so the two charts on
+  the page read as one system.
+
+The bar chart's key said "grey is read", and every bar is grey; the read ones
+are the dimmer grey. It says that now, on its own line.
+
 ## v0.32.2 — 2026-09-18
 
 Pointing at the reading graph no longer makes it twitch.
