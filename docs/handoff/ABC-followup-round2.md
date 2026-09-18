@@ -81,45 +81,50 @@ browser, run the reports), then report to the user in plain language and stop th
 
 ```
 ROUND:            7
-WHOSE TURN:       A
-STOPPED BECAUSE:  C finished the turn @ 2026-09-17 23:43 UTC — 7-04, 7-05, 7-06 (Ruling 19) and
-                   S23 (Ruling 20) all landed, one commit each, gate green after every one.
-STATUS:           Fit is now a whole-page CSS `zoom` (`fitZoom`, composing with A/A rather than
-                   being cancelled by it — Ruling 19); the xl cap scales with `--reading-scale`
-                   too; `.zoom-transition` covers `zoom`/`top`. The Semantic Scholar figure branch
-                   is gone from `lib/figures/extract.ts` (the Graph API has no `figures` field —
-                   Ruling 20); a new shared, keyed, paced client
-                   (`lib/sources/semantic-scholar-client.ts`) now backs both paper search and
-                   abstract/TLDR enrichment, neither of which sent the key or queued before.
-OPEN ITEMS:       For A: re-measure S21 (Fit) and the S20 xl case at 2560/1440/1300 (C's own live
-                   numbers below are a starting point, not a substitute for A's own pass); verify
-                   the sticky-panel bottom-stick branch end-to-end if a live paper offers one
-                   (C found one by accident at 2560×1400 on openalex:W7207740551 — a real,
-                   unusually tall panel — see §4, item 7-04's live-check); S23: confirm no S2
-                   figure attempt anywhere live, search/enrich keyed and paced, tally "S2 429s
-                   (search + enrich)" replacing the old figure-rate-limit tally.
-GATE (0 open):    tsc clean · eslint clean · vitest 2687/2687 (C, this turn — 2682 baseline − 3
-                   from extract.test.ts's Semantic Scholar tests consolidating to the new
-                   contract + 8 new in semantic-scholar-client.test.ts).
+WHOSE TURN:       B
+STOPPED BECAUSE:  A finished the closing measurement @ 2026-09-18 00:10 UTC. Both A7-01/A7-02
+                   (my first pass) confirmed closed live, bit-for-bit against Ruling 19's own
+                   formula, against the real served CSS (dev server was restarted cold before
+                   this turn, unlike C's own turn which had to inject overrides). Two new, real,
+                   execution-confirmed gaps found in Ruling 19's own composing/resize behavior —
+                   A7b-01, A7b-02 — plus one informational S23 timing finding (A7b-03).
+STATUS:           Fit's headline mechanism is correct: at 2560×1400 zoom lands at exactly 1.81333
+                   (2176px = 85.00% of viewport, bit-for-bit); the xl cap and sticky panel (both
+                   branches) all match spec, now confirmed against the actually-served stylesheet.
+                   S22's transition list (5 properties, 0.3s each) confirmed live. S23's code
+                   matches Ruling 20 exactly; live search/enrich calls hit 0 explicit 429s across
+                   6 fresh queries, though 2 of 6 hit an 8s per-source timeout (A7b-03).
+                   BUT: `--page-zoom` does not recompute after A/A while Fit is on (drifts to
+                   88.97%/81.21% of viewport depending on direction, never self-corrects without
+                   an actual window resize — A7b-01), and a live window resize while already
+                   fitted can land `usePageZoom` on a self-inconsistent value that fills ~99% of
+                   the container instead of 85% of the viewport, because `offsetWidth` is only
+                   actually zoom-invariant in the max-width-bound regime B's own synthetic tests
+                   covered, not the width:100%-bound regime the xl breakpoint can enter (A7b-02).
+OPEN ITEMS:       For B: read A7b-01/A7b-02 in full in §4 (mechanism traces given, not just
+                   symptoms) and design a fix — likely `usePageZoom` needs to also react to the
+                   reading-prefs store (not just `resize`), and/or `pageWidthAt1x` needs a
+                   measurement that is provably zoom-invariant in every regime, not just the one
+                   the four synthetic tests happened to share. A7b-03 (S23, 2/6 fresh /api/feed
+                   calls hit an 8s timeout, no explicit 429) is informational — pick up or defer
+                   at the manager's judgment.
+GATE (0 open):    NOT MET — 2 open items (A7b-01, A7b-02), both POLICY (design calls for B/the
+                   manager, not something A should guess at). tsc clean · eslint clean · vitest
+                   2687/2687 (A, this turn, cold, unchanged from C's own number).
 
-DONE:      round 7 C (second pass): 7-04 (Fit → whole-page zoom, `fitZoom`, sticky-panel
-           compensation on both branches, store stops clearing `fit` on A/A), 7-05 (xl cap gets
-           the 2xl term's calc/var shape), 7-06 (`.zoom-transition` gains `zoom`/`top`) — all per
-           B's fix guide, no deviation found worth contesting. Then S23 (Ruling 20): removed
-           `trySemanticScholarCandidates`/its queue/the enrich-grace race/the `rate_limited`
-           finalDiagnostic branch from `extract.ts`; kept `FigureStatus`'s and
-           `FigureCandidate["source"]`'s own `"semantic-scholar"`/`"rate_limited"` literals where
-           two OTHER frozen files (`paper-figure.tsx`, `pdf-extract.ts`) still structurally
-           depend on them (traced by compiling, not guessed); built the shared client; wired it
-           into `sources/semantic-scholar.ts` and `papers/enrich.ts`; rewrote/added tests;
-           corrected the README env section. Full detail, live-check numbers, and two
-           out-of-guide findings (the `pdf-extract.ts` type coupling; the task brief's own
-           `POST /api/papers/search` naming a `GET`-only route — `POST /api/feed` is what
-           actually exercises the changed code) are in §4.
-GATE NOW:  tsc clean · eslint clean · vitest 2687/2687 (C, this turn, after every commit).
-TODO:      A re-measures per OPEN ITEMS above. Figure files are still excluded and may be dirty
-           (other agent) — confirmed untouched by this turn's every commit (staged by explicit
-           path throughout, never `git add -A`/`-a`).
+DONE (this turn, A, closing measurement): re-measured S21/S20/S22/S23 live against the real
+           served build. Confirmed closed: A7-01 (85.00% exact), A7-02 (xl cap scales, fills to
+           viewport limit at 1300×800), the sticky panel's both branches (top-stick 16px gap,
+           bottom-stick 23.5px clearance — bit-for-bit C's own injected-override numbers, now
+           against the real rule), S22's 5-property transition list, S20 no-regression. Found two
+           new, real, execution-confirmed gaps in Ruling 19's own composing/resize mechanism
+           (A7b-01, A7b-02, full mechanism traces in §4) plus one informational S23 finding
+           (A7b-03: 2/6 fresh /api/feed calls hit an 8s timeout, 0 explicit 429s). Full detail in
+           §4, `### Round 7 — Agent A (closing, part 1-4 of 4)`.
+GATE NOW:  tsc clean · eslint clean · vitest 2687/2687 (A, this turn, cold).
+TODO:      B reads A7b-01/A7b-02, writes the fix guide. Figure files are still excluded and may be
+           dirty (other agent) — confirmed untouched by this turn's every commit (staged by
+           explicit path throughout, never `git add -A`/`-a`).
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
@@ -138,6 +143,7 @@ part-way.
 | 5 (closing) | 1 (A5b-04; A5b-03 explained by an existing ruling) | NOT MET, narrowly — all 6 of round 5's items (5-01..5-07) confirmed closed live, most via the manager's own browser checks: S11 (padded 15/20/24 MB + the user's real 14.5 MB Zotero PDF), S8 (justified prose + scramble-safe switch, live-computed styles), S9 (hover cue, live-computed scale), S10(a) cached-report-within-1s (810 ms) and S10(b) cached-figure-within-300ms (8-19 ms) all closed. One real, newly-tested gap: S10 target (c)'s concurrent-flood delay measured ~14-15 s on a genuinely cold paper (vs. ~10 s), a shape A5-06 itself flagged as untested last round (A5b-04) — not addressed by any of round 5's landed items. A second, smaller miss (one paper's first-call time, 10.748 s vs ≤10s) is explained in advance by item 5-05's own named risk, not a fresh defect (A5b-03). Gate clean (tsc/eslint/vitest 2646/2646). |
 | 6 | 2 (A6-01, A6-02) | NOT MET — 6 of round 6's 8 items (S12 lightbox, S13 upload swell, S14 icon, S17 fade mechanism, S18 hover cues, S19 progress bar) confirmed meeting target with live Browser-pane checks (DOM/attribute/computed-style, not screenshots). 2 real, execution-confirmed differences neither B nor C could have caught from code reading alone: S15's `--reading-scale` mechanism updates the store and the CSS variable correctly but never actually changes any reading-prose font-size, on any of its 6 steps (a CSS custom-property inheritance gap, confirmed with an isolated synthetic repro, not just the app's own code) — A6-01. The Profile page's own theme-mode picker shows "Auto" permanently pressed and does not respond to clicks, even though the applied theme and its own localStorage both correctly say "dark" — A6-02, flagged not diagnosed (a possible dev-session artifact could not be ruled out without a restart). The 1s fade and the 120ms-vs-150ms swell timing are each re-confirmed as already-logged, not-new (hidden-pane-frozen / accepted-cost respectively). Gate clean (tsc/eslint/vitest 2657/2657, re-run cold by A). |
 | 7 | 2 (A7-01, A7-02) | NOT MET — S20 (page zoom) and S22 (0.3s transition) fully match spec: ladder steps/clamps/panel-invariance/Decision-exclusion all confirmed via reload-based measurement at 2560×1400 (0×, default, and the new 1.6× ceiling), and the `.zoom-transition` class lifecycle timed live to ~350ms with the CSS declaring exactly the 3 named properties. S21 (Fit) carries 2 real, execution-confirmed gaps: at 2560px Fit's own ladder ceiling (1.6×) reaches only 58.1% of the viewport, well short of the spec's own ≈85% target (A7-01, POLICY — needs a manager design ruling); at the xl-only sub-range (1280–1535px) Fit is enabled and changes the font size but the page width never moves, since S20 wired `--reading-scale` into only the 2xl grid/max-width terms (A7-02). Also recorded: a hidden-pane environment finding (this session's Browser pane was hidden throughout; live in-session clicks update the store/CSS-variable correctly but derived `calc()` layout does not visually recompute without a reload) — not scored, flagged for the manager's own visible-browser check. Gate clean (tsc/eslint/vitest 2682/2682, re-run cold by A). |
+| 7 (closing) | 2 (A7b-01, A7b-02; A7b-03 informational) | NOT MET — Ruling 19's own fix for A7-01/A7-02 confirmed closed, live, bit-for-bit (85.00% exact at 2560px; xl cap scales; both sticky-panel branches match, now against the real served CSS after the manager's cold restart, not an injected override). S22 and S20 confirmed no regression. S23 (Ruling 20) code matches spec exactly; live checks found 0 explicit 429s but 2 of 6 fresh `/api/feed` calls hit an 8s per-source timeout (A7b-03, informational). Two new, real, execution-confirmed gaps in Ruling 19's own composing/resize mechanism, neither a regression of anything closed before this round: `--page-zoom` does not recompute after "Larger text"/"Smaller text" while Fit is on and never self-corrects without an actual window resize, drifting the page to 88.97%/81.21% of the viewport instead of 85% (A7b-01, the easiest to trigger — no resize needed); a live window resize while already fitted can land on a self-inconsistent zoom that fills ~99% of the container instead of 85% of the viewport, because `offsetWidth` is zoom-invariant only in the max-width-bound regime B's own synthetic tests covered, not the width:100%-bound regime the xl breakpoint can enter (A7b-02, recoverable by toggling Fit off/on, confirmed). Gate clean (tsc/eslint/vitest 2687/2687, re-run cold by A). |
 
 ---
 
@@ -11419,3 +11425,116 @@ and §3's standing rule).
 Gate not re-run this part; part 4 runs it cold.
 
 Commit: this log entry only, staged by explicit path.
+
+### Round 7 — Agent A (closing, part 4 of 4 — S20 regression, the gate cold, and the difference list)
+
+Dirty tree re-confirmed unchanged from part 1: only `figure-lightbox.tsx`/`.test.ts` (not ours).
+Viewport reset to 2560×1400, then to `desktop` (cleared) after this part's own check, before
+running the gate.
+
+**S20 regression, one paper at 2560×1400, Fit off, "Larger text" ×2 (`scaleIndex` 2→4)**: article
+`max-width`/real width **1200px → 1312px** (`640+560×1.2`), left panel width **unchanged** (496px
+before and after), Decision-sentence font **unchanged** (16.5px before and after) — matches my
+first pass exactly, no regression from any of round 7's second-pass work.
+
+**Gate, cold, from `web/`:**
+- `npx tsc --noEmit` → clean.
+- `npx eslint .` → clean.
+- `npx vitest run --exclude "**/benchmark.test.ts"` → **2687/2687** (124 test files) — matches §1's
+  own recorded baseline exactly, no regression.
+
+**Difference list, ranked by what the user notices first.** Both A7-01 and A7-02 (my first pass)
+are confirmed **closed** (part 1). Two new, real, execution-confirmed gaps found this turn, both in
+behavior Ruling 19 itself introduces (composing, and Fit's own resize-time recompute) — neither is
+a regression of anything closed before this round, since neither code path existed before Ruling
+19 — plus one new, unresolved backend-timing finding from S23:
+
+**A7b-01 — WRONG DATA — `--page-zoom` does not recompute after A/A while Fit is on; it silently
+drifts away from the 85% target and does not self-correct.** At 2560×1400, Fit on (`zoom: 1.81333`,
+correct), clicked "Larger text" (`scaleIndex` 2→3): `fit` correctly stayed `true` and prose
+correctly grew (14.5px→15.95px) — but `--page-zoom` stayed frozen at **1.81333** instead of
+recomputing against the new, wider 1x page width (1256px), which would give **1.7325**. Real
+on-screen article width became **2277.53px = 88.97%** of the viewport (target 85%) — confirmed
+stable for 400ms+ across multiple animation frames, not a one-frame flicker. Repeated in the other
+direction ("Smaller text" from a wider state): real width fell to **81.21%**, an undershoot.
+**Traced to the mechanism, not guessed**: `usePageZoom`'s `useSyncExternalStore` subscribes only to
+`window`'s `resize` event, not to the reading-prefs store; dispatching a synthetic `resize` event
+with no actual dimension change also did **not** trigger a recompute (confirmed: React's own
+snapshot-comparison in `useSyncExternalStore` correctly no-ops when `window.innerWidth` is
+unchanged), while an *actual* dimension change (even 2560→2561px) immediately recomputed correctly
+— so only a genuine viewport resize fixes it, never "any other store change." This directly
+contradicts B's own round-7 second-pass characterization ("self-corrects on the next render, any
+resize, or any other store change") — confirmed false for the store-change half of that claim by
+direct execution. **User-facing effect**: pressing "Larger text"/"Smaller text" — the very controls
+Ruling 19 says should now *compose* with Fit — is the single easiest way to break Fit's own 85%
+promise, and nothing in the UI self-heals it short of an incidental window resize. Ranked first:
+needs no resize, no unusual viewport, no unusual paper — reproducible on every paper, every time,
+with the two buttons this round's own spec calls out by name. `POLICY — manager decides`: the fix
+is a mechanism change (e.g., `usePageZoom` also subscribing to the reading-prefs store, per B's own
+already-named-but-unmandated "optional mitigation" — except that mitigation was written assuming a
+harmless one-frame gap, not this unbounded, non-self-correcting one), not a guess A should make.
+
+**A7b-02 — WRONG DATA — resizing the actual browser window while Fit is on can leave the page
+filling ~99% of its container instead of ~85% of the viewport, and the value is not a pure function
+of viewport width.** From a clean, settled 2560×1400 Fit-on state (`zoom: 1.81333`, confirmed
+correct), resized directly to 1440×900: `--page-zoom` settled at **1.549367088607595** — not
+`fitZoom`'s own **1.224** (the value a fresh page load at the same 1440×900 gives, confirmed twice,
+matching C's own already-reported number). Real article width **1432px, exactly equal to its
+parent's real width** (the `<main>` element) — i.e. the page fills essentially 100% of the
+available content area, not 85% of the viewport. Reproduced identically twice from a clean
+starting state (same value to 6 significant figures both times). **Root mechanism, traced by
+execution, not guessed**: `usePageZoom` measures `pageWidthAt1x` as `[data-zoom-root]`'s own
+`offsetWidth`, which B's own round-7 second-pass log verified is "immune to that element's own
+zoom" — true only in the regime B's four synthetic tests all shared, where `max-width` is the
+binding CSS constraint. At the xl breakpoint (1000px cap) when a sufficiently high zoom is already
+applied, `width: 100%` becomes the binding constraint instead, and in *that* regime `offsetWidth`
+resolves to `(container's real width) ÷ (the element's own, currently-applied zoom)` — genuinely
+*not* zoom-invariant, contradicting B's own claim for this specific, untested regime. Confirmed
+algebraically and by execution: this regime has **no self-consistent fixed point** at 1440px (it
+would require the container's real width to equal exactly 1224px; it is actually ~1432px, a fixed,
+viewport-determined number) — so the landed value is a function of *resize history*, not of
+viewport width alone. **A working recovery path exists and was confirmed**: toggling "Fit to
+screen" off then on again (with the window still at 1440×900) re-measures cleanly and lands
+correctly at 1.224/85.00% — but nothing in the product prompts a reader to do this, and the
+contaminated state persists indefinitely otherwise. Ranked second (below A7b-01): needs an actual
+window resize while already fitted at a wide-viewport zoom — a real but less frequent path than
+clicking A/A (still plausible: e.g. snapping a Fit-enabled window from a wide monitor down to half
+of an ultrawide, landing in the xl band). `POLICY — manager decides`: same family of fix as
+A7b-01 (the "immune to zoom" measurement needs to hold in every regime, or Fit needs a
+zoom-independent way to learn the 1x width) — not a guess A should make.
+
+**A7b-03 — informational, not scored — a live-only, S23 backend-timing finding, not a code-review
+gap**: part 3's own tally (2 of 6 fresh `/api/feed` calls hit an 8-second per-source timeout with
+zero Semantic Scholar results, the other 4 succeeded in under 6s). No explicit 429 was ever
+surfaced (the S2 429 tally is 0), and both failures happened to be the first calls of the sequence
+with nothing failing afterward — plausibly transient server-side or queue-warmup noise rather than
+a deterministic defect, but real and reproducible enough this session to name rather than omit.
+Not ranked against A7b-01/A7b-02 (a different subsystem, S23 not S20/S21/S22) and not gating —
+flagged for B/the manager's own judgment on whether it needs a fix guide.
+
+**Standing exclusions, re-listed by name (per the loop's own rule)**:
+- **Figures** — out of scope this round by the manager's own ruling (§1w), except S23's own
+  narrow, ruling-authorized exception to the Semantic Scholar code paths only (§1y). Confirmed
+  untouched by every commit this round, including this turn's own three log-only commits.
+- **`src/lib/events/benchmark.test.ts`** — standing ruling (§3): excluded from every gate run,
+  never "fixed."
+- **The transition's visual smoothness** (as opposed to the class lifecycle and CSS declaration,
+  both DOM-level facts confirmed above) — the user's own check, per this round's own brief; not
+  re-attempted here.
+- **Push not authorised for A** — every commit this turn is local only. The manager's own
+  previously-recorded authorization (§1y, "after finishing, commit and push") is the manager's
+  action once the loop actually closes, not a change to A's own standing instruction.
+
+**S20 and S22: zero open items, fully confirmed against the real served build.** **S21 (Fit): the
+two items my first pass opened are closed, but two new items (A7b-01, A7b-02) are open.** **S23: 0
+explicit 429s, code matches spec exactly; one informational timing finding (A7b-03) not gating.**
+
+**GATE (0 open): NOT MET.** Two real, execution-confirmed, unexplained differences remain
+(A7b-01, A7b-02), both under S21/Ruling 19's own composing/resize behavior. `WHOSE TURN: B` — B
+should read both findings above (the mechanism traces are given in full so B does not have to
+re-derive them), decide the design for a zoom-independent (or store-subscribed) 1x-width
+measurement, and write the fix guide for whichever of A7b-01/A7b-02 the manager rules should be
+fixed. A7b-03 (S23) is informational and can be picked up in the same guide or deferred, at the
+manager's judgment.
+
+Commit: this log entry, plus §1 edited in place (below).
