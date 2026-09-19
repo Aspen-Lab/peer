@@ -33,6 +33,13 @@ const SECTIONS = [
     ],
   },
   {
+    label: "Your notes",
+    body: [
+      "Notes and drafts you write from the Saved page are kept only in this browser. Peer never sends them to its servers, and signing in does not copy them into your account.",
+      "Signing out leaves them in place — they were never an account's, so signing out has nothing to take back. On a shared computer, delete them before you leave. Clearing site data deletes them for good; export a note as Markdown to keep a copy.",
+    ],
+  },
+  {
     label: "Your own model key",
     body: [
       "If you add your own provider key, it stays in your browser. It is deliberately excluded from everything Peer syncs to its server — the one line that does it is a `void feedAiApiKey` in the sync code, there so a future edit has to remove it on purpose.",

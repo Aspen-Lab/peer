@@ -544,9 +544,16 @@ body {
 ::-webkit-scrollbar-thumb:hover { background: rgba(24, 24, 27, 0.2); }
 
 /* iOS safari auto-zooms any input whose font-size < 16px on focus. Pin to 16px
-   on mobile so form fields never trigger the zoom-in-then-snap-back dance. */
+   on mobile so form fields never trigger the zoom-in-then-snap-back dance.
+
+   The note editor's fields are exempt (`data-typeset`): each is set in the
+   type of the block it edits — 16.5px prose, 22px headings, a 31px title —
+   and pinned to 16px a heading shrank the moment it was tapped, a title sat
+   smaller than its own sections. Nothing there is under 16px on a phone
+   (code is raised to 16px there, typed and read alike), so the zoom this
+   rule prevents cannot happen in them. */
 @media (max-width: 640px) {
-  input, textarea, select { font-size: 16px !important; }
+  input, textarea:not([data-typeset]), select { font-size: 16px !important; }
 }
 
 /* ── Motion ─────────────────────────────────────────────

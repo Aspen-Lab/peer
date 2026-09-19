@@ -18,6 +18,8 @@ vi.mock("@/store/feed", () => ({
 }));
 
 import { SavedPageView } from "./page";
+import { citableFromPaper } from "@/lib/notes/cite";
+import { readingNote, relatedWorkDraft } from "@/lib/notes/templates";
 
 const paper: Paper = {
   id: "paper:saved",
@@ -30,6 +32,14 @@ const paper: Paper = {
   summaryExperimentKeywords: ["battery"],
   summaryResultDiscussion: "A useful result.",
   isSaved: true,
+};
+
+const other: Paper = {
+  ...paper,
+  id: "paper:other",
+  title: "Another saved paper",
+  authors: ["B. Writer"],
+  publishedDate: "2025-01-02",
 };
 
 describe("SavedPageView", () => {
@@ -54,5 +64,34 @@ describe("SavedPageView", () => {
     );
 
     expect(html).toContain("Nothing saved yet.");
+  });
+
+  it("holds the reader's notes above the papers they came from", () => {
+    const own = readingNote(citableFromPaper(paper), "2026-09-18T09:00:00.000Z");
+    const draft = { ...relatedWorkDraft([citableFromPaper(other)]), title: "Related work on batteries" };
+    const html = renderToStaticMarkup(
+      createElement(SavedPageView, {
+        savedPapers: [paper, other],
+        notes: { [own.id]: own, [draft.id]: draft },
+      }),
+    );
+
+    expect(html).toContain("2 papers · 2 notes");
+    expect(html.indexOf(">Notes<")).toBeLessThan(html.indexOf(">Papers<"));
+    expect(html).toContain("Related work on batteries");
+    // The paper with its own reading notes opens them; the other offers to start some.
+    expect(html).toContain("Your notes →");
+    expect(html).toContain("Take notes");
+    // The draft cites the other paper, and the shelf says so.
+    expect(html).toContain("cited in 1 note");
+  });
+
+  it("does not call the notes empty before this browser's notes are read", () => {
+    const html = renderToStaticMarkup(
+      createElement(SavedPageView, { savedPapers: [paper], notesReady: false }),
+    );
+
+    expect(html).not.toContain("Reading notes and drafts land here");
+    expect(html).toContain("+ New note");
   });
 });

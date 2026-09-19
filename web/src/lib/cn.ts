@@ -29,6 +29,14 @@ const twMerge = extendTailwindMerge({
         "text-lead",
         "text-title",
         "text-title-lg",
+        // The display steps, missing from the list above until the note
+        // editor's headings put one beside `text-heading` in a single `cn()`
+        // and lost it — a Heading 2 set at body size, 17px for 22.
+        "text-display-xs",
+        "text-display-sm",
+        "text-display",
+        "text-display-lg",
+        "text-display-xl",
       ],
     },
   },

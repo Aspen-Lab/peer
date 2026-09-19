@@ -41,6 +41,7 @@ import type { GraphNode, LibraryGraph as Graph } from "@/lib/library/graph";
 import { shortVenue } from "@/components/cards/paper-plate";
 import Link from "next/link";
 import type { TermLean } from "@/lib/preferences/ledger";
+import { COMMAND } from "@/components/ui/command";
 
 type SimNode = GraphNode & SimulationNodeDatum;
 type SimLink = SimulationLinkDatum<SimNode>;
@@ -61,12 +62,8 @@ const PAPER_LABEL_MAX = 24;
 const NARROW = 520;
 const EDGE_PAD = 16;
 
-/** A command in the readout: the product's mono label, outlined like a
- *  term chip, taking the accent only when it is the state that is set. */
-const ACTION =
-  "eyebrow px-2 py-1 text-text-muted shadow-[inset_0_0_0_1px_var(--color-border-strong)] " +
-  "hover:text-heading transition-colors " +
-  "aria-pressed:text-accent aria-pressed:shadow-[inset_0_0_0_1px_var(--color-accent)]";
+/** A command in the readout — Peer's one command style (components/ui/command). */
+const ACTION = COMMAND;
 
 /**
  * The chip's words. A term drawn under one of the reader's topics names only

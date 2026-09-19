@@ -57,6 +57,7 @@ import { ReaderLayout, useSpread } from "@/components/reader/reader-layout";
 import { THUMB_BAR_PX, THUMB_BAR_QUERY } from "@/components/shell/thumb-bar";
 import { PAGE_CLASS, SPREAD_GRID } from "@/components/reader/spread";
 import { useReading } from "@/components/reader/use-reading";
+import { PaperNotes } from "@/components/notes/paper-notes";
 import { useModelReport } from "@/components/reader/use-model-report";
 import {
   NOT_FOUND,
@@ -612,6 +613,10 @@ function Reader({
         }
         additions={
           <>
+            {/* The reader's own notes on this paper, and the way into them —
+                first, because taking notes is what follows keeping it. */}
+            <PaperNotes paper={paper} />
+
             {keyResults.length > 0 ? (
               <KeyResultList
                 results={keyResults}

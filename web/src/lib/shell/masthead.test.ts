@@ -25,12 +25,15 @@ describe("shellRoute", () => {
     expect(shellRoute("/search")).toBe("search");
     expect(shellRoute("/search/")).toBe("search");
     expect(shellRoute("/saved")).toBe("saved");
+    // A note is written from the shelf; the shell keeps Saved lit on it.
+    expect(shellRoute("/notes/abc")).toBe("saved");
     expect(shellRoute("/profile")).toBe("profile");
   });
 
   it("does not mistake a prefix for a route", () => {
     expect(shellRoute("/searching")).toBe("other");
     expect(shellRoute("/savedx")).toBe("other");
+    expect(shellRoute("/notesx")).toBe("other");
     expect(shellRoute("/changelog")).toBe("other");
     expect(shellRoute(null)).toBe("other");
   });

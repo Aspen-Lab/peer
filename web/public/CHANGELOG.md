@@ -2,6 +2,56 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.34.0 — 2026-09-18
+
+Notes: what you saved, turned into writing.
+
+Saved is now where reading becomes writing. It holds two things: **Notes**,
+your own, newest first, and **Papers**, the shelf as before. From the shelf:
+
+- **Take notes** on any paper opens its reading notes — made the first time
+  from the paper's record: its card, the opening of its abstract in its own
+  words, and four headings to answer under (what it claims, how, what you
+  think, questions). The prompts are placeholders, never text.
+- **Draft from papers** lets you pick several and start a **related-work
+  section** (one paragraph per paper, each opening on its citation) or a
+  **paper outline** (abstract to conclusion, the papers already cited under
+  related work).
+- **+ New note** starts blank.
+
+The editor works in blocks, the way Notion and Logseq do, over Markdown, the
+way Obsidian keeps a note. The block you are typing in shows its source; the
+rest read rendered.
+
+- `/` opens the block menu: headings, lists, to-do, quote, code, divider,
+  paper card. Markdown typed at a block's start converts it: `# `, `- `,
+  `1. `, `[] `, `> `, three backticks, `---`.
+- `@` (or `[[`) cites a paper you saved, read or have in today's briefing. It
+  reads as "(Rose et al., 2024)" and links to the paper; `[[` also links your
+  other notes by title.
+- Enter splits a block, Backspace at its start joins it back, the arrows move
+  between blocks, Tab nests, ⌘⇧↑↓ moves a block, ⌘B ⌘I ⌘E format. Drag a
+  block by its grip; click the grip to turn it into another kind, duplicate or
+  delete it (with undo). Pasted Markdown arrives as blocks, and text copied
+  out of a PDF has its broken lines mended.
+- A **References** list builds itself from what you cite, in the order you
+  first cite it.
+- **Export** as Markdown (front matter, `[@key]` citations Pandoc reads, a
+  references list) or as a `.bib` with the same keys — `pandoc draft.md
+  --citeproc --bibliography draft.bib` turns a draft into a formatted paper.
+
+A paper's own page now says which of your notes cite it, with the way into its
+reading notes.
+
+Notes are kept in this browser, the way Obsidian keeps a vault on your disk:
+Peer never uploads them, and signing out leaves them where they are. /privacy
+says so. Export a note to keep a copy elsewhere.
+
+Two fixes the editor turned up: a class merge was dropping the display type
+sizes whenever a colour sat beside one — a heading set at body size — and a
+phone-only rule pinned every text field to 16px, which shrank the note's title
+below its own sections. Both now hold.
+
 ## v0.33.1 — 2026-09-18
 
 The bar chart above today's papers is gone.
