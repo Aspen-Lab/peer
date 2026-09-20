@@ -13369,3 +13369,66 @@ Commit: `fix(upload): refuse a state-changing request with neither Origin nor Se
 staging `web/src/lib/papers/upload-access.ts`, `web/src/lib/papers/upload-access.test.ts`,
 `web/src/app/api/papers/upload/route.test.ts`, `web/src/app/api/papers/upload/[id]/route.test.ts`,
 `docs/handoff/ABC-followup-round2.md`.
+
+### Round 9 — Agent C, phase 1, item 9-12 (status + revision fields, matrix B7/C5)
+
+Branch confirmed clean before touching anything. Baseline gate re-run cold: tsc clean, eslint
+clean, **vitest 2720/2720** (post-9-11).
+
+**Change**: `web/src/lib/papers/upload-store.ts` `UploadMeta` gains `status?: "pending" |
+"ready" | "deleted" | "blocked"` and `revision?: number`, both optional in the TS type (a
+legacy record on disk predates both fields; the type has to admit that) but always set by
+every write this app performs from here on. `uploadMetaToPaper` passes `revision` straight
+through. `web/src/types/index.ts`'s `Paper` gains an additive optional `revision?: number`
+(no other field touched — confirmed via `git diff` scoped to just this one interface).
+`upload-access.ts`'s `ownedUpload()` gains one line: `if (meta.status && meta.status !==
+"ready") return null;` — a record with **no** `status` (legacy) still reads as ready (it
+already had to clear the pre-existing `ownerKey`/`expiresAt` checks); a record that **does**
+carry a `status` must be exactly `"ready"`, refusing `pending`/`deleted`/`blocked` at the one
+choke point every private route already goes through.
+
+**Revision semantics (upload/route.ts, the one write site)**: an idempotent re-upload of bytes
+already on disk (`previous` meta found by hash16) keeps that meta's own `revision` — a refresh,
+not a new version. A genuinely new hash16 starts its chain at 1, unless it supersedes a
+still-live sibling of the **same owner** — matched by the same DOI-verified `documentKey`, or
+by sharing the just-uploaded `target.id` in the sibling's `paperIds` — in which case it
+continues that sibling's chain (`sibling.revision + 1`). This interpretation is B's guide text
+("incremented on attach-replace for the same owner+documentKey/paper") made concrete since the
+guide names the trigger but not the lookup mechanism; flagging for A to scrutinize specifically
+— an alternative reading (revision living on the attachment pointer file instead of `UploadMeta`)
+was considered and rejected because the guide explicitly places the field on `UploadMeta` and
+`uploadMetaToPaper`'s passthrough only has a per-hash16 meta to read from.
+
+**Tests**: `upload-access.test.ts` gained one case covering all three non-ready statuses plus
+the legacy-absent and explicit-ready cases. `upload/route.test.ts`: mocked `listUploadMeta`
+(previously **unmocked** in this file — the revision fallback would otherwise have hit the real
+`.local-data/uploads` directory on disk during every test; caught before it shipped) and
+`readUploadMeta` via the shared `mocks` object instead of an inline `vi.fn`; four new tests
+(fresh upload -> `status: "ready"`, `revision: 1`; idempotent re-upload keeps `revision: 3` and
+never calls `listUploadMeta`; a same-target-paper replace with a live `revision: 2` sibling ->
+`3`; an unrelated live sibling present -> still starts at `1`).
+
+**Revert-proof**: reverted the `ownedUpload` status line and both the `revision` computation
+and the `status: "ready"` meta field to their pre-fix shapes; re-ran the affected test files —
+the status-check unit case and 3 of the 4 new route tests failed exactly as expected (the
+fourth, "no sibling -> still starts at 1", correctly stayed green either way — it isn't testing
+the reverted code path); restored and confirmed 49/49 green again in the three targeted files.
+
+**Gate after this item**: tsc clean, eslint clean, **vitest 2725/2725** (2720 + 1 + 4).
+
+**Live check** (dev server `peer-web` on `:3000`, untouched): uploaded the draft's own fixture
+PDF via `curl` with a fresh cookie jar -> `200`, `upload:c5121e3294402ac1`, response body's
+`paper.revision` is `1`. Read the actual `.local-data/uploads/c5121e3294402ac1.json` off disk
+directly (status is deliberately not exposed to the client, per data-minimization) — confirmed
+`"status": "ready"`, `"revision": 1`. Cleaned up via the real `DELETE` route afterward.
+
+**Blast radius**: one interface (`UploadMeta`) plus one additive `Paper` field, one function
+(`ownedUpload`), one write site (`upload/route.ts`'s meta construction), one passthrough
+(`uploadMetaToPaper`). No route yet re-checks `status`/`revision` mid-flight — that is 9-13
+(atomic write) and 9-14 (in-flight re-check), not this item.
+
+Commit: `feat(upload): add UploadMeta status and revision, gate ownedUpload on status (9-12)`,
+staging `web/src/lib/papers/upload-store.ts`, `web/src/lib/papers/upload-access.ts`,
+`web/src/types/index.ts`, `web/src/app/api/papers/upload/route.ts`,
+`web/src/lib/papers/upload-access.test.ts`, `web/src/app/api/papers/upload/route.test.ts`,
+`docs/handoff/ABC-followup-round2.md`.

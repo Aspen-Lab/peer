@@ -229,6 +229,19 @@ export async function POST(req: Request) {
   const now = new Date().toISOString();
   // DOI deduplicates alternate publisher PDFs; otherwise use identical bytes.
   const documentKey = createHash("sha256").update(`${ownerKey}:${doi?.toLowerCase() ?? hash16}`).digest("hex");
+  // 9-12 (A9-10, matrix B7): an idempotent re-upload of bytes already on disk
+  // keeps its own revision (a refresh, not a new version). A genuinely new
+  // asset (a hash16 never seen before) starts a fresh chain at 1, UNLESS it
+  // supersedes a still-live sibling asset of this owner — either the same
+  // DOI-verified `documentKey`, or the same target paper's prior attachment
+  // — in which case it continues that sibling's chain. Never touches any
+  // other owner's records (`listUploadMeta` is already owner-scoped).
+  const revision = previous?.revision ?? await (async () => {
+    const siblings = await listUploadMeta(ownerKey);
+    const prior = siblings.find((sibling) => sibling.hash16 !== hash16 &&
+      (sibling.documentKey === documentKey || (target && sibling.paperIds?.includes(target.id))));
+    return prior ? (prior.revision ?? 1) + 1 : 1;
+  })();
 
   const meta: UploadMeta = {
     ownerKey,
@@ -238,6 +251,8 @@ export async function POST(req: Request) {
     paperIds: [...new Set([...(previous?.paperIds ?? []), ...(target ? [target.id] : [])])],
     preferenceSignals: doc ? extractUploadConcepts(doc) : [],
     documentKey,
+    status: "ready",
+    revision,
     hash16,
     fileName: file.name,
     title,

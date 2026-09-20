@@ -9,6 +9,11 @@ const mocks = vi.hoisted(() => ({
   extractPdfTextFromPath: vi.fn(),
   writeUploadPdfIfAbsent: vi.fn(async () => undefined),
   writeUploadMeta: vi.fn(async () => undefined),
+  readUploadMeta: vi.fn<() => Promise<import("@/lib/papers/upload-store").UploadMeta | null>>(async () => null),
+  // 9-12: the revision chain looks at this owner's other live assets — kept
+  // empty by default (a mock, not a real disk read) so tests are isolated;
+  // individual tests override it to exercise the chaining itself.
+  listUploadMeta: vi.fn(async () => [] as import("@/lib/papers/upload-store").UploadMeta[]),
   resolveProvider: vi.fn(),
 }));
 
@@ -28,7 +33,8 @@ vi.mock("@/lib/papers/upload-store", async (importOriginal) => {
     ...actual,
     writeUploadPdfIfAbsent: mocks.writeUploadPdfIfAbsent,
     writeUploadMeta: mocks.writeUploadMeta,
-    readUploadMeta: vi.fn(async () => null),
+    readUploadMeta: mocks.readUploadMeta,
+    listUploadMeta: mocks.listUploadMeta,
     purgeExpiredUploads: vi.fn(async () => undefined),
     attachUpload: mocks.attachUpload,
   };
@@ -83,6 +89,10 @@ describe("POST /api/papers/upload", () => {
     mocks.extractPdfTextFromPath.mockReset();
     mocks.writeUploadPdfIfAbsent.mockClear();
     mocks.writeUploadMeta.mockClear();
+    mocks.readUploadMeta.mockReset();
+    mocks.readUploadMeta.mockResolvedValue(null);
+    mocks.listUploadMeta.mockReset();
+    mocks.listUploadMeta.mockResolvedValue([]);
     mocks.resolveProvider.mockReset();
     mocks.resolveProvider.mockReturnValue(null); // no local dev provider unless a test opts in
     mocks.extractPdfTextFromPath.mockResolvedValue({ ok: true, doc: emptyDoc } satisfies PdfTextResult);
@@ -359,5 +369,72 @@ describe("POST /api/papers/upload", () => {
     const res = await postWith(pdfFile(pdfBytes()));
     const body = await res.json();
     expect(body.paper.summaryIntro).toHaveLength(400);
+  });
+
+  it("9-12: a brand new asset is written status 'ready' at revision 1", async () => {
+    const res = await postWith(pdfFile(pdfBytes()));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.paper.revision).toBe(1);
+    expect(mocks.writeUploadMeta).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ status: "ready", revision: 1 }),
+    );
+  });
+
+  it("9-12: an idempotent re-upload of the same bytes keeps its own revision", async () => {
+    mocks.readUploadMeta.mockResolvedValue({
+      hash16: "existing-hash16-",
+      fileName: "paper.pdf",
+      title: "A Real Paper",
+      uploadedAt: "2026-09-01T00:00:00.000Z",
+      textStatus: "ok",
+      status: "ready",
+      revision: 3,
+    });
+    const res = await postWith(pdfFile(pdfBytes()));
+    const body = await res.json();
+    expect(body.paper.revision).toBe(3);
+    expect(mocks.listUploadMeta).not.toHaveBeenCalled();
+  });
+
+  it("9-12: a new PDF replacing a still-live sibling for the same target paper continues its revision chain", async () => {
+    const title = "Solid electrolytes for lithium metal batteries";
+    mocks.extractPdfTextFromPath.mockResolvedValue({ ok: true, doc: { ...emptyDoc, title,
+      sections: [{ heading: "Abstract", canonical: "abstract", text: "Solid electrolytes improve lithium metal batteries. Solid electrolytes conduct lithium ions." }] } });
+    mocks.listUploadMeta.mockResolvedValue([{
+      hash16: "0000000000000001",
+      fileName: "old.pdf",
+      title: "An older attempt",
+      uploadedAt: "2026-09-01T00:00:00.000Z",
+      textStatus: "ok",
+      status: "ready",
+      revision: 2,
+      paperIds: ["openalex:W123"],
+    }]);
+    const form = new FormData();
+    form.set("rightsVersion", "2026-09-19");
+    form.set("file", pdfFile(pdfBytes()));
+    form.set("targetPaper", JSON.stringify({ id: "openalex:W123", title }));
+    const res = await POST(new Request("http://localhost/api/papers/upload", { method: "POST", headers: SAME_ORIGIN_HEADERS, body: form }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.paper.revision).toBe(3);
+  });
+
+  it("9-12: a genuinely new document (no sibling) starts its own chain at 1, even with other live assets present", async () => {
+    mocks.listUploadMeta.mockResolvedValue([{
+      hash16: "0000000000000001",
+      fileName: "unrelated.pdf",
+      title: "Something else entirely",
+      uploadedAt: "2026-09-01T00:00:00.000Z",
+      textStatus: "ok",
+      status: "ready",
+      revision: 5,
+      paperIds: ["openalex:W999"],
+    }]);
+    const res = await postWith(pdfFile(pdfBytes()));
+    const body = await res.json();
+    expect(body.paper.revision).toBe(1);
   });
 });

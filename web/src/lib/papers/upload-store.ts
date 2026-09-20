@@ -86,6 +86,27 @@ export interface UploadMeta {
   preferenceSignals?: PreferenceConcept[];
   /** Stable within an owner; DOI when known, otherwise the PDF content hash. */
   documentKey?: string;
+  /**
+   * 9-12/9-13 (A9-15, A9-13, A9-10): required on every new write; absent only
+   * on legacy meta written before this field existed. `ownedUpload` treats a
+   * legacy record with no `status` as "ready" (it already required
+   * `ownerKey`+`expiresAt`, which legacy unowned files never have) — but any
+   * record that DOES carry an explicit `status` must be exactly "ready".
+   * Write order (9-13): "pending" -> PDF bytes written -> "ready"; a failure
+   * partway removes both the meta and any partial PDF bytes rather than
+   * leaving a stuck "pending" record.
+   */
+  status?: "pending" | "ready" | "deleted" | "blocked";
+  /**
+   * 9-12 (A9-10, matrix B7): monotonic per owner+document, starting at 1.
+   * Unchanged by an idempotent re-upload of the same bytes (that's a
+   * refresh, not a new version). Bumped when a new physical asset (a
+   * different hash16) supersedes a still-live one for the same owner —
+   * either the same `documentKey` (a DOI-verified new PDF of the same
+   * document) or the same attached paper — so report/reading/figure caches
+   * keyed on it (9-15) never mix an old and a new attachment.
+   */
+  revision?: number;
   hash16: string;
   fileName: string;
   /** Largest-font first-page line, or the file name without its extension
@@ -168,6 +189,7 @@ export function uploadMetaToPaper(meta: UploadMeta): Paper {
     summaryExperimentKeywords: (meta.preferenceSignals ?? []).map((c) => c.label),
     preferenceSignals: meta.preferenceSignals,
     uploadDocumentKey: meta.documentKey,
+    revision: meta.revision,
     summaryResultDiscussion: "",
     linkPaper: `/api/papers/upload/${meta.hash16}/file`,
     doi: meta.doi,

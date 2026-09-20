@@ -28,6 +28,20 @@ describe("private upload authorization", () => {
     mocks.read.mockResolvedValue({ ...meta, expiresAt: "2000-01-01T00:00:00Z" });
     expect(await ownedUpload("0".repeat(16), "alice")).toBeNull();
   });
+  // 9-12: a record with no `status` field at all is legacy and reads as
+  // "ready" (it already had to pass the ownerKey/expiresAt checks above); a
+  // record that DOES carry a `status` must be exactly "ready".
+  it("requires status to be exactly 'ready', but treats a missing status as legacy-ready", async () => {
+    const meta = { ownerKey: "alice", expiresAt: "2099-01-01T00:00:00Z" };
+    mocks.read.mockResolvedValue(meta); // no `status` field at all
+    expect(await ownedUpload("0".repeat(16), "alice")).toEqual(meta);
+    for (const status of ["pending", "deleted", "blocked"] as const) {
+      mocks.read.mockResolvedValue({ ...meta, status });
+      expect(await ownedUpload("0".repeat(16), "alice")).toBeNull();
+    }
+    mocks.read.mockResolvedValue({ ...meta, status: "ready" });
+    expect(await ownedUpload("0".repeat(16), "alice")).toEqual({ ...meta, status: "ready" });
+  });
   it("derives account ownership only from the verified server session", async () => {
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://example.supabase.co");
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "public-test-key");

@@ -98,6 +98,14 @@ export interface Paper {
    * `Paper` literal from every other source simply never sets it.
    */
   textStatus?: "ok" | "empty";
+  /**
+   * 9-12: only ever set for an uploaded PDF's own asset record
+   * (`upload-store.ts`'s `uploadMetaToPaper`, from `UploadMeta.revision`) —
+   * monotonic per owner+document, starting at 1. Lets the reader/report
+   * caches (`use-model-report.ts`, `use-reading.ts`) tell two attachments of
+   * the same paper apart after a replace, without changing `id`.
+   */
+  revision?: number;
 }
 
 // ── Event ──

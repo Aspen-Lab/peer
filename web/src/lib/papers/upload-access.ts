@@ -53,6 +53,13 @@ export async function ownedUpload(hash16: string, owner?: string | null): Promis
   // Old unowned files cannot safely be assigned to whoever asks first.
   if (!meta?.ownerKey || meta.ownerKey !== key || !meta.expiresAt ||
     !Number.isFinite(Date.parse(meta.expiresAt)) || Date.parse(meta.expiresAt) <= Date.now()) return null;
+  // 9-12: a record with no `status` at all is legacy, written before this
+  // field existed, and reads as "ready" (it already had to clear the
+  // ownerKey/expiresAt checks above). A record that DOES carry a `status`
+  // must be exactly "ready" — "pending" (9-13, a write still in flight),
+  // "deleted", or "blocked" (9-19) are all refused here, the single choke
+  // point every private route goes through.
+  if (meta.status && meta.status !== "ready") return null;
   return meta;
 }
 
