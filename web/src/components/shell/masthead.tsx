@@ -49,11 +49,29 @@ const SCROLLED_AT = 8;
 const WORDMARK_CLASS =
   "font-display text-title-lg font-medium leading-none tracking-[-0.01em] text-heading";
 
-const DOT = (
-  <span className="px-[7px] text-text-faint" aria-hidden>
-    ·
-  </span>
-);
+/** The hairline between two words in the bar. A middot is a glyph in a row
+ *  of glyphs; a rule is the machine's own line, and the rest of this product
+ *  is ruled — the band's rule, the key's, the plate's edge. */
+const RULE = <span aria-hidden className="mx-2 block h-3 w-px bg-border-strong" />;
+
+/**
+ * The registration mark, in the bar's size: four 1px corners around a plate.
+ * The graph puts it on the node being pointed at and a card grows it under
+ * the pointer; here it says which section you are in, and boxes the
+ * nameplate. It marks, it does not decorate — nothing wears it that is not
+ * registered.
+ */
+function Corners({ className = "border-border-strong" }: { className?: string }) {
+  const leg = `pointer-events-none absolute h-[5px] w-[5px] transition-colors ${className}`;
+  return (
+    <span aria-hidden>
+      <span className={`${leg} left-0 top-0 border-l border-t`} />
+      <span className={`${leg} right-0 top-0 border-r border-t`} />
+      <span className={`${leg} bottom-0 left-0 border-b border-l`} />
+      <span className={`${leg} bottom-0 right-0 border-b border-r`} />
+    </span>
+  );
+}
 
 function openHelp() {
   window.dispatchEvent(new CustomEvent("peer:toggle-help"));
@@ -98,9 +116,19 @@ export function Masthead() {
         // background only, so the height never changes.
         className="hidden md:grid sticky top-0 z-50 h-12 px-6 grid-cols-[1fr_auto_1fr] items-center border-b border-border transition-[background-color,box-shadow] data-[scrolled=true]:glass-bar data-[scrolled=true]:shadow-[0_1px_0_var(--color-border-strong)]"
       >
-        <div className="justify-self-start">
-          <Link href="/" className={WORDMARK_CLASS}>
-            Peer
+        {/* The bar's tooth, under its words. It cannot ride on the header
+            itself: `glass-bar` sets `background` as a shorthand, which resets
+            the image. Every cell below is positioned, so the words paint over
+            it. */}
+        <span
+          aria-hidden
+          className="grain pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-[180ms] [[data-scrolled=true]_&]:opacity-100"
+        />
+
+        <div className="relative justify-self-start">
+          <Link href="/" className="group/mark relative inline-flex items-center px-2 py-1.5">
+            <span className={WORDMARK_CLASS}>Peer</span>
+            <Corners className="border-border-strong group-hover/mark:border-text-muted" />
           </Link>
         </div>
 
@@ -108,7 +136,7 @@ export function Masthead() {
             still when a count lands. */}
         <div
           key={route}
-          className="justify-self-center inline-flex items-center whitespace-nowrap eyebrow text-text-muted animate-fade-in"
+          className="relative justify-self-center inline-flex items-center whitespace-nowrap eyebrow text-text-muted animate-fade-in"
           // Inline, not a utility: `.animate-fade-in` is an unlayered rule
           // in globals.css whose shorthand outranks anything in Tailwind's
           // utilities layer, so `[animation-duration:150ms]` lost silently.
@@ -123,7 +151,7 @@ export function Masthead() {
           // separators the rest of the machine's lines use. The nav and the
           // reading page's key legend at the foot of the screen are now the
           // same object at the two edges of the window.
-          className="justify-self-end inline-flex items-center eyebrow text-text-muted"
+          className="relative justify-self-end inline-flex items-center eyebrow text-text-muted"
         >
           <WriteButton />
           {SHELL_LINKS.map((link, i) => {
@@ -131,7 +159,7 @@ export function Masthead() {
             const isProfile = link.route === "profile";
             return (
               <Fragment key={link.href}>
-                {i > 0 && DOT}
+                {i > 0 && RULE}
               <Link
                 href={link.href as Route}
                 aria-current={active ? "page" : undefined}
@@ -143,16 +171,19 @@ export function Masthead() {
                   active ? "text-heading" : ""
                 }`}
               >
-                {isProfile && auth.kind === "signed-in" && avatar ? (
-                  <Avatar user={auth.user} size={22} />
-                ) : (
-                  link.label
-                )}
+                <span className="relative inline-flex items-center px-2 py-1">
+                  {isProfile && auth.kind === "signed-in" && avatar ? (
+                    <Avatar user={auth.user} size={22} />
+                  ) : (
+                    link.label
+                  )}
+                  {active && <Corners className="border-text-muted" />}
+                </span>
               </Link>
               </Fragment>
             );
           })}
-          {DOT}
+          {RULE}
           <button
             type="button"
             onClick={openHelp}
@@ -197,11 +228,11 @@ function RailLine({ nav, onBack }: { nav: PaperNav; onBack: () => void }) {
       </BackToFeedLink>
       {railHasPosition(nav) && (
         <>
-          {DOT}
+          {RULE}
           <span className="tabular-nums">
             <Numeral>{nav.index + 1}</Numeral> of <Numeral>{nav.total}</Numeral>
           </span>
-          {DOT}
+          {RULE}
           <span className="inline-flex items-center gap-1.5">
             <StepButton
               cap="k"

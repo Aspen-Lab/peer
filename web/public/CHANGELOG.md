@@ -2,6 +2,28 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.35.1 — 2026-09-20
+
+The masthead, drawn.
+
+It was four words and a button on an empty rule. It is now the instrument's
+own bezel, in marks this product already owns:
+
+- **The nameplate is registered** — four 1px corners around "Peer", the mark
+  the reading graph puts on the node you point at and a card grows under the
+  pointer. They brighten when you point at it.
+- **The section you are in wears the same corners**, so where you are is said
+  with a mark instead of a slightly brighter grey.
+- **Hairlines instead of middots** between the words, and in the paper rail's
+  row: the machine's own line, the one the bands, the graph's key and every
+  plate edge already use.
+- **Scrolled, the glass takes the product's tooth** — the grain every card
+  surface carries. On its own layer, because `glass-bar` sets `background` as
+  a shorthand and would have wiped an image off the bar.
+
+Write keeps the one closed box in the row: a place is registered, an action is
+boxed.
+
 ## v0.35.0 — 2026-09-20
 
 Write, in the masthead. Your files, beside the draft.
