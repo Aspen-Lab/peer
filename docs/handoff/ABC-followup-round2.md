@@ -80,19 +80,20 @@ browser, run the reports), then report to the user in plain language and stop th
 ## §1. CURRENT STATE — THE SOURCE OF TRUTH
 
 ```
-ROUND:            8 — CLOSED by the manager @ 2026-09-19 (pushed). ROUND 9 opens next (§1ac).
-WHOSE TURN:       nobody (round 8 closed)
-STOPPED BECAUSE:  finished — A: GATE MET (2713/2713); manager saw S25/S26/S27 live.
-STATUS:           S24 persona back buttons · S25 collapsed abstract · S26 boxed findings · S27
-                   Main link · S28 investigation delivered (feedback-to-AI is dead code;
-                   dislikedTopics has no writer; the ledger only re-ranks the fetched pool).
-                   Left to the user's eyes: persona buttons in dark mode; the box shade.
-OPEN ITEMS:       none (round 8)
-GATE (0 open):    MET
+ROUND:            9 (opened 2026-09-19 — the upload/learning/supplement handoff, §1ac)
+WHOSE TURN:       A
+STOPPED BECAUSE:  —
+STATUS:           The draft is committed as 73323bd (unchanged, "under review"); the unowned
+                   lightbox rewrite as a1d6fd1. Tree clean. A reviews the draft against the
+                   handoff's §7 gaps and §9 matrix.
+OPEN ITEMS:       H-A (learning) · H-B (supplement) · H-C (boundary/lifecycle) — see §1ac
+GATE (0 open):    NOT MET
 
-DONE:      rounds 1–8: S3–S28.
-GATE NOW:  tsc clean · eslint clean · vitest 2713/2713 (A, cold, with the upload draft present).
-TODO:      round 9 = docs/handoff/HANDOFF-upload-profile-fulltext-pdf.md (see §1ac).
+DONE:      rounds 1–8. Round 9: checkpoint commits only.
+GATE NOW:  tsc clean · eslint clean · vitest 2713/2713 (with the draft).
+TODO:      A measures (§1ac). Then B → C by phase (§8 of the handoff), A re-measures the matrix
+           rows of each phase. Close = every matrix row that code can satisfy is green; the
+           §6.5 pre-launch conditions are reported as open, never claimed.
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
@@ -1192,6 +1193,81 @@ works in place under these rules:
 - S28: B's verdict is the deliverable (feedback-to-AI is dead code; `dislikedTopics` has no
   writer; the ledger only re-ranks the fetched pool). 8-05/8-06 are informational — the user
   chooses any follow-up. The manager relays.
+
+---
+
+## §1ac. ROUND 9 SPEC — the upload / learning / supplement handoff (manager, 2026-09-19) — BINDING
+
+**The spec is `docs/handoff/HANDOFF-upload-profile-fulltext-pdf.md`** (421 lines, Chinese; every
+agent reads all of it — it is the contract). This section only fixes the manager's rulings on
+the choices the handoff leaves open, and how the loop maps onto it.
+
+### Items
+- **H-A — upload → preference learning** (handoff §4, matrix A1–A8).
+- **H-B — "upload full article pdf" supplement on a paywalled report** (handoff §5, matrix B1–B7).
+- **H-C — owner boundary, storage, cache, temp files, deletion/expiry, legacy** (handoff §6.2–6.4,
+  matrix C1–C10, L1).
+
+### Manager's rulings on the open choices
+1. **The draft (commit 73323bd) is the starting point, not the answer.** A measures it against
+   §7 (known gaps) and §9 (matrix). B decides per §8 phase 0 which draft parts stand, which are
+   fixed, which are dropped — and says so per file. C never "keeps the draft because it is
+   there"; every kept piece is one B has read and a matrix row covers.
+2. **Retention: 30 days** (handoff §6.3 — a design choice; state it in the UI copy and README).
+   Expiry = access refused at once; physical purge by the scheduled job; the job must be real
+   (`/api/jobs/purge-uploads` with `CRON_SECRET`), and README documents how it is scheduled
+   locally (a note) and on Vercel (cron config) — but **do not claim** a scheduler runs here.
+3. **Owner in local development:** a per-browser HttpOnly capability cookie minted by the
+   server on first upload (random 128-bit id, `SameSite=Lax`, `Secure` in production), never a
+   shared `local-user`. In production, the authenticated session's user id (Supabase) is the
+   owner; hosted upload is **refused** when no auth is configured. All owner resolution goes
+   through one helper; every private route calls it before any disk read, model call or cache.
+4. **Cache rule (handoff §4.4.3): the shared candidate pool stays untouched by private
+   learning.** Upload concepts affect **ranking at read time** and at most **3 extra retrieval
+   queries anchored on declared topics** — and those queries make the pool key include a
+   normalised digest of the concepts (`uploadInterestDigest`), so two users never share a pool
+   built from different private interests. Private text never enters any cache.
+5. **Learning weight:** upload evidence enters the ledger as its own source (`upload`) at
+   `2 × confidence` (cap 2), 60-day decay, existing positive-gain cap; dedupe by content hash
+   within owner; a DOI merges versions only when it is verified as this paper's DOI (§4.3).
+   Deleting an upload retracts its evidence unless another live copy of the same logical
+   document exists. Never touch `researchTopics`, `currentProject`, required topics.
+6. **Tier 0 only this round** (local phrase extraction, ≤ 12 concepts, filters per §4.2); the
+   model-enhanced tier is a lead unless it already works in the draft AND passes A4 — B decides.
+7. **Supplement button:** `DecisionBlock`, right of "Open at the publisher", same row, exact
+   text `upload full article pdf`, green fill via a theme-safe token (B names it — never a raw
+   hex that breaks dark mode), `buttonVariants` sizing; shown for every non-`upload:` paper's
+   report including the abstract-tier/paywalled case; hidden on `upload:` papers. The pair
+   wraps as a group with controlled label wrapping — the green button never drops below the
+   row on desktop.
+8. **Matching:** verified DOI → auto-bind; else normalised-title overlap ≥ threshold → bind
+   with a one-line "attached to: <title>" confirmation; else an explicit "This is the right
+   paper" confirm dialog; never silent accept, never a blanket refusal.
+9. **Report/reading cache keys** include the supplement revision; both the JSON and NDJSON
+   branches resolve the owner's supplement; `deepRequested` copy matches what is requested.
+10. **Python:** `PYTHON_BIN` from `.env.local` points at `web/.local-data/pdf-runtime` (the
+    draft's venv). Agents verify the server actually uses it (a route-level check), never print
+    env values, never install to global Python.
+11. **Out of scope (report as open, never claim):** handoff §6.5 — legal review, DMCA/complaint
+    operations, production storage + scheduler measurement, PyMuPDF licence. L1 (copy) IS in
+    scope: no "guaranteed legal" wording anywhere; the consent dialog says private storage,
+    30-day retention, learning use, AI-provider transfer; a README section restates §6.1 in
+    plain words with the same links.
+12. **Test material:** self-made PDFs only (the draft's `create-private-pdf-fixture.py`); never
+    the user's Zotero PDFs; never an external upload.
+
+### Loop mapping
+- **Round 9 A:** measure the draft — for each §7 gap and each matrix row, `PASS / FAIL /
+  BLOCKED(reason) / NOT BUILT`, by execution where a route or unit test can exercise it (the
+  dev server is up; `curl` two owners via two cookie jars). Also the code-state list of which
+  handoff requirements have no draft code at all.
+- **Round 9 B:** phase 0 + phase 1 fix guide (boundary first — handoff §8); then phase 2, 3, 4
+  guides in later B turns if the first is too long (B may split: `9-1x` boundary, `9-2x`
+  learning, `9-3x` supplement, `9-4x` lifecycle).
+- **C:** one phase per turn, matrix rows named per item, tests proven by revert.
+- **A after each C:** the phase's matrix rows only; the full matrix at the end.
+- **Close:** every row a local build can satisfy is PASS; the rest are listed by row id with the
+  reason; the manager reports per handoff §11 in Chinese; push at close (standing authorization).
 
 ---
 
@@ -12603,3 +12679,10 @@ Commit: this entry, staging only `docs/handoff/ABC-followup-round2.md`.
 A met the gate; manager saw the Main link, the abstract toggle and the boxed findings live.
 Round 8's 16 commits pushed (credential scan clean; the upload draft's 45 dirty/untracked files
 excluded). Clock kept running for round 9.
+
+### Round 9 — manager (2026-09-19, opening)
+
+The user handed over `docs/handoff/HANDOFF-upload-profile-fulltext-pdf.md` and asked for it via
+the ABC loop tonight. The working-tree draft (45 files) it describes was committed unchanged as
+73323bd ("under review") and the unowned lightbox rewrite as a1d6fd1, so nothing is lost to
+agent deaths. Rulings on the handoff's open choices in §1ac. A spawned.
