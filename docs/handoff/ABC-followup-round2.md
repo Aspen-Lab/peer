@@ -12393,6 +12393,43 @@ deleted one, two edited inline literals, all scoped inside `ResultsBlock`. `Bloc
 Commit: `feat(reader): box the findings section and outline each result (8-04/S26)`, staging only
 `web/src/components/reader/report-sections.tsx`, `docs/handoff/ABC-followup-round2.md`.
 
+### Round 8 — Agent A
+
+Branch confirmed `complimentary-enhancement-to-main-update` before reading anything. Verified via
+`git show --stat` that each of C's four commits (465b795, c2741d5, fed4e20, 3610041) touches
+exactly the files named in the round-8 brief and named in C's own §4 entries — zero overlap with
+the other agent's 34 modified / 11 untracked files (`git status --short` re-checked at the start
+of every part below).
+
+#### Part 1 — S27 (Main link)
+
+**Code read**: `web/src/lib/shell/masthead.ts` lines 62-72 — `SHELL_LINKS` is `[Main → "/",
+Search, Saved, Profile]` in that order, `Main`'s `route: "briefing"`. `isActiveLink` is a plain
+`link.route === route` equality, so Main can only be active when `shellRoute(pathname) ===
+"briefing"`, i.e. exactly `/`. `masthead.tsx` lines 126-151: the render loop maps `SHELL_LINKS`
+generically (`{SHELL_LINKS.map((link, i) => ...)}`), no per-link special-casing beyond the
+profile-avatar branch — confirmed a 4th entry needed no render-loop edit. The wordmark link
+(`masthead.tsx` lines 100-102, 173-175) is a plain `<Link href="/" className={WORDMARK_CLASS}>`
+with no `isActiveLink`/`aria-current` logic at all — cannot double up with Main's active state.
+`thumb-bar.tsx` uses a separate constant, `THUMB_TABS` (`"Today"`, not `"Main"`), on a hard-coded
+`grid-cols-4` (line 78) sized for exactly 4 cells — confirmed untouched by C's diff, matching the
+brief's "desktop-only, say so" instruction.
+
+**Live check** (Browser pane, `/` and `/search`, not hidden-pane-trapped): on `/`, the masthead
+nav (`nav[aria-label="Peer"]`) renders anchors in order Main, Search, Saved, Profile; Main carries
+`aria-current="page"` and the conditional `text-heading` class, the other three do not; the
+wordmark's own `className` (`font-display text-title-lg …`) carries no `aria-current` and no
+active class. On `/search`, Main carries neither `aria-current` nor `text-heading` — only Search
+does. The phone bar's separate "Today"/Search/Saved/You row is unaffected on both routes (checked
+in the same DOM read). `masthead.test.ts` lines 93-101 confirmed rewritten in place, commented
+"8-01/S27", not deleted — `git show 465b795 -- web/src/lib/shell/masthead.test.ts` shows the two
+assertions changed, no assertion removed.
+
+**Result: matches S27 and C's own claim exactly. No difference found.**
+
+Commit: this entry, plus §1 STATUS untouched (round still open), staging only
+`docs/handoff/ABC-followup-round2.md`.
+
 ### Round 8 — manager browser checks (2026-09-19, while A measures)
 
 On `/papers/openalex:W7207740551` (hydrated; DOM/computed-style reads — screenshots blank in the
