@@ -77,6 +77,8 @@ export async function GET(
         { status: 404, headers: NO_STORE_HEADERS },
       );
     }
+    // 9-14 (A9-13, matrix C5): captured before the (up to 8s) full-text wait.
+    const startRevision = meta.revision;
     const uploadPaper = uploadMetaToPaper(meta);
     const uploadFullText = await fullTextWithin(
       {
@@ -90,6 +92,13 @@ export async function GET(
       uploadPaper,
       uploadFullText.settled ? uploadFullText.result : null,
     );
+    const stillCurrent = await ownedUpload(uploadHash16);
+    if (!stillCurrent || stillCurrent.revision !== startRevision) {
+      return NextResponse.json(
+        { error: "Upload no longer available" },
+        { status: 410, headers: PRIVATE_UPLOAD_HEADERS },
+      );
+    }
     return NextResponse.json(uploadReading, {
       headers: PRIVATE_UPLOAD_HEADERS,
     });
@@ -109,7 +118,14 @@ export async function GET(
     const hash = bareUploadId(supplement);
     const meta = hash ? await ownedUpload(hash) : null;
     if (!meta?.paperIds?.includes(paper.id)) return NextResponse.json({ error: "Upload not found." }, { status: 404, headers: PRIVATE_UPLOAD_HEADERS });
+    // 9-14 (A9-13, matrix C5): re-checked after getFullText, before this
+    // owner-supplied reading is ever returned.
+    const startRevision = meta.revision;
     const fullText = await getFullText({ paperId: supplement });
+    const stillCurrent = hash ? await ownedUpload(hash) : null;
+    if (!stillCurrent || stillCurrent.revision !== startRevision) {
+      return NextResponse.json({ error: "Upload no longer available" }, { status: 410, headers: PRIVATE_UPLOAD_HEADERS });
+    }
     return NextResponse.json(buildReading(paper, fullText), { headers: PRIVATE_UPLOAD_HEADERS });
   }
 

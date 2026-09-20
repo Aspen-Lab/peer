@@ -255,7 +255,34 @@ function bestPaperUrl(paper: PaperReportRequest["paper"]): string | null {
   return paper.linkPaper ?? paper.linkArxiv ?? null;
 }
 
-function streamReport(body: ExtendedRequest): Response {
+/** 9-14 (A9-13): the bare hash16 of this paper's private full-text
+ * supplement, if any — either the paper's own `upload:` id, or a
+ * `fullTextUploadId` attached to a foreign paper. `null` when nothing
+ * private is involved (nothing to guard against a mid-flight delete/block). */
+function paperPrivateUploadHash(paper: PaperReportRequest["paper"]): string | null {
+  const id = paper.fullTextUploadId ?? (paper.id?.startsWith("upload:") ? paper.id : undefined);
+  return typeof id === "string" ? bareUploadId(id) : null;
+}
+
+/**
+ * 9-14 (A9-13, matrix C5): re-reads the upload's own meta after the
+ * long-running full-text/model/figure work and refuses to let a report
+ * built from it land if the asset was deleted, blocked, or replaced by a
+ * newer revision while generation was running — `ownedUpload` (9-12) is the
+ * one place `status` is checked, and comparing the captured `revision`
+ * catches a same-owner replace that `status` alone would not (the new
+ * asset is also "ready"). `privateHash === null` means nothing private was
+ * involved at all; always safe to proceed.
+ */
+async function uploadStillCurrent(privateHash: string | null, startRevision: number | undefined): Promise<boolean> {
+  if (!privateHash) return true;
+  const current = await ownedUpload(privateHash);
+  return current !== null && current.revision === startRevision;
+}
+
+const UPLOAD_GONE_RESPONSE = { error: "Upload no longer available" } as const;
+
+function streamReport(body: ExtendedRequest, privateHash: string | null, startRevision: number | undefined): Response {
   const readable = new ReadableStream<Uint8Array>({
     async start(controller) {
       const encoder = new TextEncoder();
@@ -414,6 +441,16 @@ function streamReport(body: ExtendedRequest): Response {
           figurePool,
         });
 
+        // 9-14 (A9-13, matrix C5): the full-text fetch, both model passes and
+        // figure binding above can together run close to a minute — re-check
+        // right before this report is ever sent or the client is told to
+        // cache it.
+        if (!(await uploadStillCurrent(privateHash, startRevision))) {
+          send({ type: "error", message: UPLOAD_GONE_RESPONSE.error });
+          close();
+          return;
+        }
+
         finish(bound);
       } catch (err) {
         console.error("[papers/report] streaming flow failed:", err);
@@ -451,13 +488,18 @@ async function handlePost(req: NextRequest) {
   if (typeof body?.paper?.id !== "string" || !body.paper.id || typeof body.paper.title !== "string" || !body.paper.title) {
     return NextResponse.json({ error: "paper is required" }, { status: 400 });
   }
-  const privateId = body.paper.fullTextUploadId ?? (body.paper.id.startsWith("upload:") ? body.paper.id : undefined);
-  if (privateId) {
-    const hash = typeof privateId === "string" ? bareUploadId(privateId) : null;
-    const meta = hash ? await ownedUpload(hash) : null;
+  // 9-14 (A9-13, matrix C5): the revision captured here, at the very start
+  // of the request, is what both the JSON deep path below and the NDJSON
+  // stream re-check against after their own long-running full-text/model
+  // work — before this specific generation is ever cached or returned.
+  const privateHash = paperPrivateUploadHash(body.paper);
+  let startRevision: number | undefined;
+  if (privateHash) {
+    const meta = await ownedUpload(privateHash);
     if (!meta || (body.paper.fullTextUploadId && !meta.paperIds?.includes(body.paper.id))) {
       return NextResponse.json({ error: "Upload not found." }, { status: 404 });
     }
+    startRevision = meta.revision;
   }
 
   const provider = resolveProvider(body.llmOverride ?? null);
@@ -470,7 +512,7 @@ async function handlePost(req: NextRequest) {
     req.headers.get("accept")?.includes("application/x-ndjson") === true ||
     body.stream === true;
   if (wantsStream) {
-    return streamReport(body);
+    return streamReport(body, privateHash, startRevision);
   }
 
   // ── Deep path ────────────────────────────────────────────────────
@@ -554,6 +596,13 @@ async function handlePost(req: NextRequest) {
         provider,
         figurePool,
       });
+
+      // 9-14 (A9-13, matrix C5): the full-text fetch, both model passes and
+      // figure binding above can together run close to a minute — re-check
+      // right before this report is ever sent or cached.
+      if (!(await uploadStillCurrent(privateHash, startRevision))) {
+        return NextResponse.json(UPLOAD_GONE_RESPONSE, { status: 410 });
+      }
 
       return NextResponse.json(bound);
     } catch (err) {

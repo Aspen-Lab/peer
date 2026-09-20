@@ -13491,3 +13491,87 @@ Nothing else touched.
 Commit: `fix(upload): make the new-asset write pending -> bytes -> ready, roll back on failure (9-13/A9-15)`,
 staging `web/src/app/api/papers/upload/route.ts`, `web/src/app/api/papers/upload/route.test.ts`,
 `docs/handoff/ABC-followup-round2.md`.
+
+### Round 9 — Agent C, phase 1, item 9-14 (A9-13 — in-flight re-check before caching/returning, matrix C5)
+
+Branch confirmed clean before touching anything. Baseline gate re-run cold: tsc clean, eslint
+clean, **vitest 2730/2730** (post-9-13).
+
+**Change**: four private-full-text call sites now capture the upload's `revision` (9-12) at the
+start of the request and re-check `ownedUpload()` — the single status/expiry choke point —
+right before any report/reading built from private text is cached or returned, refusing with
+`410 { error: "Upload no longer available" }` if the asset is gone or a different revision now
+exists (a same-owner replace mid-flight, not just a delete).
+
+- `web/src/app/api/papers/report/route.ts`, **JSON deep path** (`handlePost`'s
+  `if (body.deepReport)` branch): a new `paperPrivateUploadHash(paper)` helper (either the
+  paper's own `upload:` id or its `fullTextUploadId`) and `uploadStillCurrent(hash, revision)`
+  re-check, called once right before `return NextResponse.json(bound)` — after `getFullText`,
+  `generateDeepReport` and `bindFiguresToReport` have all run (matrix C5's own words: "任务不能重新
+  发布/落盘该资产"). The existing top-of-`handlePost` ownership check now also captures
+  `startRevision` for reuse here and in the stream branch below, replacing its previous
+  throwaway `hash`/`meta` locals — no behavior change to that check itself.
+- `web/src/app/api/papers/report/route.ts`, **NDJSON path** (`streamReport`, now takes
+  `privateHash`/`startRevision` as two extra parameters from `handlePost`): the same re-check
+  runs right before `finish(bound)` in the tier-2 branch. A stream's HTTP status is already
+  committed (200) by the time this fires deep inside the body, so a literal 410 is not possible
+  here — instead it emits the stream's existing `{ type: "error", message }` event and closes.
+  Confirmed this is not a new client-side contract: `use-model-report.ts`'s stream consumer
+  already throws on any `error` event and falls back to the JSON path on any stream failure
+  (`src/components/reader/use-model-report.ts:301,304-305`) — so a live client re-fetches via
+  JSON, which resolves the true current state (a real 410, or a fresh report against the new
+  revision) rather than accepting the stale one.
+- `web/src/app/api/papers/[id]/reading/route.ts`: both `ownedUpload` sites gain the same
+  before/after pattern — the standalone `upload:`-paper branch (capture before the up-to-8s
+  `fullTextWithin` wait, re-check before returning `uploadReading`) and the `?upload=` supplement
+  branch on a foreign paper (capture before `getFullText`, re-check before returning
+  `buildReading(...)`). Both return the same `410 { error: "Upload no longer available" }` shape
+  with `PRIVATE_UPLOAD_HEADERS` (never cached — these routes never send `CACHE_HEADERS` on this
+  path regardless).
+- **Confirmed, not changed** (guide's explicit ask): `full-text.ts`'s `getFullText` and
+  `figures/extract.ts`'s `getCandidatePool`, for `upload:` ids, both call `ownedUpload` fresh on
+  *every* call and bypass their shared in-process caches entirely (read directly — no cached
+  branch exists for `upload:` in either file) — so they already re-authenticate per request; no
+  code change needed there.
+
+**Tests**: `report/route.test.ts` (3 new, in "owner-only full article supplement"): revision
+changed mid-flight -> JSON `410`; deleted mid-flight -> JSON `410`; revision changed mid-flight
+-> NDJSON emits an `error` event naming the same message and never a `report` event. All three
+use `mockResolvedValueOnce` chains on the single shared `ownedUpload` mock (first call = the
+initial check, second = the re-check) — confirmed against the route's actual call count first.
+`[id]/reading/route.test.ts` (4 new): standalone-upload branch, revision-changed and
+deleted-mid-flight, both `410`; supplement branch, revision-changed -> `410` and
+unchanged-revision -> still `200` (a same-value regression guard).
+
+**Revert-proof**: reverted all four call sites to their pre-fix shapes (dropping the capture,
+the re-check, and — for the stream — the parameters); re-ran the affected files: all 3 new
+report tests and all 3 new (non-regression-guard) reading tests failed exactly as expected
+(`200` where `410` was wanted, or no `error` event where one was required); restored and
+confirmed 16/16 and 13/13 green again respectively.
+
+**Gate after this item**: tsc clean, eslint clean, **vitest 2737/2737** (2730 + 7).
+
+**Live check** (dev server `peer-web` on `:3000`, untouched, a real model key configured):
+uploaded the draft's own fixture PDF, then `POST /api/papers/report` with `deepReport: true` for
+`upload:862ac9e999442702` -> `200`, a genuine deep report grounded in the fixture's own text
+(`"three-node, two-edge synthetic graph system"`, `provenance.basis: "model-fulltext"`). Deleted
+the upload via the real route, then repeated the identical report request -> `404
+{"error":"Upload not found."}`, **not** the `410` this item's own code path returns. This is
+correct, not a defect: a plain sequential "generate, then delete, then generate again" hits the
+pre-existing top-of-`handlePost` ownership gate (unaffected by this item, already correct since
+9-12 tightened `ownedUpload` to require `status: "ready"`) before generation ever starts again;
+this item's new `410` path is specifically for a delete/block/replace landing **while a single
+request's own generation is still running** — a true race that a sequential `curl` cannot
+trigger (matches A9's own "matrix C5 needs a long-running harness" note, part 2). That exact
+race is what the three mocked, revert-proven unit tests above cover instead. Test upload cleaned
+up via the real routes.
+
+**Blast radius**: two files (`report/route.ts`, `[id]/reading/route.ts`), one new function
+signature change (`streamReport` gains two parameters, one call site updated), two small new
+helpers (`paperPrivateUploadHash`, `uploadStillCurrent`) local to `report/route.ts`. No caching
+behavior changed for the non-private path.
+
+Commit: `fix(upload): re-check status/revision after generation, before returning private report/reading (9-14/A9-13)`,
+staging `web/src/app/api/papers/report/route.ts`, `web/src/app/api/papers/report/route.test.ts`,
+`web/src/app/api/papers/[id]/reading/route.ts`, `web/src/app/api/papers/[id]/reading/route.test.ts`,
+`docs/handoff/ABC-followup-round2.md`.
