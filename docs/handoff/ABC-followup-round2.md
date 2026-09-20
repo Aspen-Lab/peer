@@ -81,60 +81,52 @@ browser, run the reports), then report to the user in plain language and stop th
 
 ```
 ROUND:            8 (loop REOPENED by the manager 2026-09-19 — five user items, §1aa)
-WHOSE TURN:       A
-STOPPED BECAUSE:  C finished the turn @ 2026-09-20 02:20 UTC
-STATUS:           Round 8: C worked all four fix-guide items in order, one commit each, gate green
-                   after every one — 8-01 (S27, "Main" link), 8-02 (S24, two "Back to main"
-                   buttons + Esc), 8-03 (S25, collapsible Abstract toggle), 8-04 (S26, boxed
-                   findings section). Every item confirmed live in the Browser pane (DOM/computed
-                   styles, not screenshots — see TODO's hidden-pane/screenshot note). S28 stays
-                   closed from B's turn (informational, no C step; 8-05/8-06 untouched, the
-                   manager/user's call). The other agent's upload/private-PDF work-in-progress is
-                   still dirty/untracked in the tree, all of it untouched by C (see TODO's file
-                   list) — one new untracked file appeared mid-round on their side,
-                   `docs/handoff/HANDOFF-upload-profile-fulltext-pdf.md`, also untouched.
-OPEN ITEMS:       S24 S25 S26 S27 — awaiting A's verification (S28 closed, no C step)
-GATE (0 open):    NOT MET (pending A's review)
+WHOSE TURN:       manager
+STOPPED BECAUSE:  A finished the turn @ 2026-09-20 02:40 UTC — GATE MET, 0 open items
+STATUS:           Round 8: all four fix-guide items confirmed matching §1aa exactly, in the
+                   rendered/served result — 8-01 (S27, "Main" link), 8-02 (S24, two "Back to main"
+                   buttons + Esc), 8-03 (S25, collapsible Abstract toggle, including a live proof
+                   the decided-read observer still fires correctly off the Decision block while
+                   closed), 8-04 (S26, boxed findings section, independently re-measured in both
+                   themes). S28 stays closed from B's turn (informational, no C step; 8-05/8-06
+                   untouched, the manager/user's call). Gate re-run cold: tsc clean, eslint clean,
+                   vitest 2713/2713. The other agent's upload/private-PDF work-in-progress is
+                   still dirty/untracked in the tree, confirmed byte-identical to the round's
+                   starting `git status` after all of A's reads — untouched throughout.
+OPEN ITEMS:       0 — see §4 "Round 8 — Agent A" for the full difference list (none found) and the
+                   3 not-a-defect items flagged for the manager's own eyes (dark-mode persona
+                   buttons, the findings-box shade in both modes, hover-swell clipping — all three
+                   are tooling-limited or subtle-by-design, not execution-confirmed differences).
+GATE (0 open):    MET
 
 DONE:      rounds 1–7 (S3–S23 closed, pushed 2026-09-17). Round 8: B's fix guide + S28
            investigation done (§4). C implemented 8-01..8-04 (§4, four entries below B's), each
            committed separately: 465b795 (8-01), c2741d5 (8-02), fed4e20 (8-03), 3610041 (8-04).
+           A verified all four in 5 parts (§4 "Round 8 — Agent A"), gate re-run cold, GATE MET.
 GATE NOW:  tsc clean · eslint clean · vitest 2713/2713 (2711 baseline + 2 new test files from
-           8-02/8-03), re-run cold after all four items.
-TODO:      A verifies 8-01..8-04 against §1aa, item by item — C's own §4 entries name exactly what
-           was checked and how, so treat gaps between "C checked X" and "the spec asked for Y" as
-           the differences to report, not a restart from zero:
-             - 8-01: masthead shows Main first with aria-current on `/`, no double-active with the
-               wordmark; phone bar and `g h` chord deliberately untouched (say so, don't flag as
-               missed).
-             - 8-02: both buttons' href/aria-label/44px height/accent fill confirmed in light AND
-               dark (dark verified via a real theme reload, see below); Esc-to-home confirmed by
-               URL change. Hover-swell clipping was reasoned from bounding-rect geometry only, not
-               eyeballed on screen (the pane's screenshot call timed out every time it was tried,
-               hidden or fronted) — if A can get a real screenshot, that closes the one thing C
-               could not.
-             - 8-03: closed-by-default/open/closed cycle confirmed on `openalex:W7207740551`
-               (aria-expanded, panel presence, actual abstract text appearing/disappearing). The
-               decided-read-observer risk B flagged (a CSS-only collapse would freeze it) was
-               designed around, not just noted — worth A re-confirming the observer still fires
-               correctly when the abstract is left closed on the two-column spread, live.
-             - 8-04: box background/padding/border/summary+novelty color+size confirmed via
-               computed styles in both themes (dark via the same real-reload method). No new test
-               exists for this item (B did not recommend one; ResultsBlock's prop surface is
-               heavy) — if A wants stronger regression coverage here, that is a gap to name, not
-               an error to fix silently.
-           **Hidden-pane / hidden-tab trap, found firsthand this turn, broader than the manager's
-           own note:** this session's Browser pane started hidden. Screenshots timed out
-           consistently (`"the page did not finish rendering in time"`) both hidden and after
-           fronting the tab. Worse — a same-tab runtime `document.documentElement.setAttribute
-           ("data-mode", "dark")` gave a **stale cached `getComputedStyle` reading** on
-           already-painted elements (confirmed against a freshly-created scratch element in the
-           same document, which read correctly) — a real reload (setting `localStorage`'s
-           `peer-profile.state.profile.colorTheme` to `"dark:ember"`/`"system:ember"`, the app's
-           own boot-script mechanism in `layout.tsx`, then navigating) was the only reliable way to
-           read dark-mode styles this session. `/persona` and `/profile` still carry the
-           documented streamed-DOM trap (`div[hidden][id^="S:"]`) on top of this — check for it
-           before trusting any read there.
+           8-02/8-03), re-run cold by A after all four items and all live checks.
+TODO:      **For the manager, not another agent turn** — three items worth a human eyeball, named
+           in A's own difference list, none of them execution-confirmed differences:
+             - The persona "Back to main" buttons in dark mode (confirmed via computed
+               `background-color`/`color` after a real theme reload; never seen by a human eye).
+             - The findings box's shade in light mode — B flagged this in the fix guide as only a
+               ~2% lightness step (`#fafafa` → `#f1f1f1`); computed-style-correct, but possibly
+               subtler than the user's screenshot-driven request implied. Fallback already named
+               (a bespoke deeper value, or `--color-surface-hover` in dark mode).
+             - Hover-swell clipping on 8-02/8-03's buttons — geometry-verified only, by both B/C
+               and A independently: the automated Browser pane's synthetic hover does not trigger
+               a real CSS `:hover` state in this environment (confirmed via
+               `element.matches(':hover')` reading `false` and pixel-identical before/after
+               screenshots), so this needs the manager's own real cursor to close.
+           **Hidden-pane / hidden-tab trap, found firsthand last turn, still worth knowing:** a
+           same-tab runtime `document.documentElement.setAttribute("data-mode", "dark")` gives a
+           **stale cached `getComputedStyle` reading** on already-painted elements — a real reload
+           (setting `localStorage`'s `peer-profile.state.profile.colorTheme` to
+           `"dark:ember"`/`"system:ember"`, the app's own boot-script mechanism in `layout.tsx`,
+           then navigating) is the only reliable way to read dark-mode styles. `/persona` and
+           `/profile` carry a streamed-DOM trap (`div[hidden][id^="S:"]`) on top of this — check
+           for it before trusting any read there (this round, `/persona` revealed cleanly with no
+           trap present, and a persisted quiz result meant the quiz never needed retaking).
            **Files that are the other agent's — do not flag as C's gap, do not edit:** `.env.example`,
            `api/figure/route.ts`, `api/papers/[id]/reading/route.ts(+.test)`,
            `api/papers/report/route.ts(+.test)`, `api/papers/upload/**` (all of it),
@@ -170,6 +162,7 @@ part-way.
 | 6 | 2 (A6-01, A6-02) | NOT MET — 6 of round 6's 8 items (S12 lightbox, S13 upload swell, S14 icon, S17 fade mechanism, S18 hover cues, S19 progress bar) confirmed meeting target with live Browser-pane checks (DOM/attribute/computed-style, not screenshots). 2 real, execution-confirmed differences neither B nor C could have caught from code reading alone: S15's `--reading-scale` mechanism updates the store and the CSS variable correctly but never actually changes any reading-prose font-size, on any of its 6 steps (a CSS custom-property inheritance gap, confirmed with an isolated synthetic repro, not just the app's own code) — A6-01. The Profile page's own theme-mode picker shows "Auto" permanently pressed and does not respond to clicks, even though the applied theme and its own localStorage both correctly say "dark" — A6-02, flagged not diagnosed (a possible dev-session artifact could not be ruled out without a restart). The 1s fade and the 120ms-vs-150ms swell timing are each re-confirmed as already-logged, not-new (hidden-pane-frozen / accepted-cost respectively). Gate clean (tsc/eslint/vitest 2657/2657, re-run cold by A). |
 | 7 | 2 (A7-01, A7-02) | NOT MET — S20 (page zoom) and S22 (0.3s transition) fully match spec: ladder steps/clamps/panel-invariance/Decision-exclusion all confirmed via reload-based measurement at 2560×1400 (0×, default, and the new 1.6× ceiling), and the `.zoom-transition` class lifecycle timed live to ~350ms with the CSS declaring exactly the 3 named properties. S21 (Fit) carries 2 real, execution-confirmed gaps: at 2560px Fit's own ladder ceiling (1.6×) reaches only 58.1% of the viewport, well short of the spec's own ≈85% target (A7-01, POLICY — needs a manager design ruling); at the xl-only sub-range (1280–1535px) Fit is enabled and changes the font size but the page width never moves, since S20 wired `--reading-scale` into only the 2xl grid/max-width terms (A7-02). Also recorded: a hidden-pane environment finding (this session's Browser pane was hidden throughout; live in-session clicks update the store/CSS-variable correctly but derived `calc()` layout does not visually recompute without a reload) — not scored, flagged for the manager's own visible-browser check. Gate clean (tsc/eslint/vitest 2682/2682, re-run cold by A). |
 | 7 (closing) | 2 (A7b-01, A7b-02; A7b-03 informational) | NOT MET — Ruling 19's own fix for A7-01/A7-02 confirmed closed, live, bit-for-bit (85.00% exact at 2560px; xl cap scales; both sticky-panel branches match, now against the real served CSS after the manager's cold restart, not an injected override). S22 and S20 confirmed no regression. S23 (Ruling 20) code matches spec exactly; live checks found 0 explicit 429s but 2 of 6 fresh `/api/feed` calls hit an 8s per-source timeout (A7b-03, informational). Two new, real, execution-confirmed gaps in Ruling 19's own composing/resize mechanism, neither a regression of anything closed before this round: `--page-zoom` does not recompute after "Larger text"/"Smaller text" while Fit is on and never self-corrects without an actual window resize, drifting the page to 88.97%/81.21% of the viewport instead of 85% (A7b-01, the easiest to trigger — no resize needed); a live window resize while already fitted can land on a self-inconsistent zoom that fills ~99% of the container instead of 85% of the viewport, because `offsetWidth` is zoom-invariant only in the max-width-bound regime B's own synthetic tests covered, not the width:100%-bound regime the xl breakpoint can enter (A7b-02, recoverable by toggling Fit off/on, confirmed). Gate clean (tsc/eslint/vitest 2687/2687, re-run cold by A). |
+| 8 | 0 | **MET** — all four of round 8's items (S24 S25 S26 S27) confirmed matching spec exactly in the rendered/served result: S27's masthead order/active-state/wordmark-non-doubling, S24's two 44px accent buttons in light AND dark (real reload) plus working Esc-to-home, S25's closed-by-default/open/close/not-persisted cycle plus a live-proved decided-read observer fallback (the round's own load-bearing risk, designed around correctly), S26's box/border/summary/novelty colors and sizes independently re-measured in both themes. Zero execution-confirmed differences. Three items flagged for the manager's own eyes, none of them defects: dark-mode persona buttons (computed-style-confirmed, never human-eyeballed), the findings box's light-mode shade (B's own flagged ~2% lightness step), and hover-swell clipping on both new buttons (geometry-verified only — the automated pane cannot trigger a real CSS `:hover` state, confirmed independently by both C and A). Gate clean (tsc/eslint/vitest 2713/2713, re-run cold by A). S28 (investigation, no C step) stays closed from B's turn. |
 
 ---
 
@@ -12604,5 +12597,53 @@ agent's tree still dirty/untracked throughout, untouched by any of A's reads):
 "**/benchmark.test.ts"` — **2713/2713** (129 test files), matching the exact number C's own gate
 already reported after 8-03 and re-confirmed unchanged after 8-04. No regression anywhere in the
 suite, including the other agent's own added tests.
+
+Commit: this entry, staging only `docs/handoff/ABC-followup-round2.md`.
+
+#### Difference list
+
+**Zero unexplained differences this round.** All four items C built (8-01/S27, 8-02/S24,
+8-03/S25, 8-04/S26) confirmed matching §1aa's spec exactly, in the rendered/served result — not
+just C's own commit message — via a mix of code reading, computed-style reads, and live
+interaction in the Browser pane (including one check that went beyond C's own: proving the
+decided-read observer actually fires and marks a paper read off the Decision block while the
+abstract sits closed on the two-column spread, S25's own load-bearing risk).
+
+**Standing exclusions, re-listed as required every round:**
+- Figure files (`matted-figure.tsx`, `paper-figure.tsx`, the figure extraction/API pipeline) —
+  frozen this round by explicit instruction; none touched by C, none tested by A.
+- The other agent's 33 modified + 11 untracked upload/private-PDF files — untouched by C,
+  unread beyond what B/C's own guide needed (`button.tsx`'s diff, `page.tsx`'s observer effect);
+  `git status --short` re-checked identical to the round's starting snapshot after all of A's
+  work, confirming no collision.
+- `src/lib/events/benchmark.test.ts` — excluded from the gate by standing ruling (live-network
+  test on dead code), not re-litigated.
+- Hidden-pane/streamed-route timing traps (`/persona`, `/profile`) — did not block this round:
+  `/persona` revealed cleanly (no `div[hidden][id^="S:"]`), and a persisted quiz result meant the
+  15-question quiz never needed retaking.
+
+**One item stays open as "not observable," not scored as a difference (POLICY-adjacent):**
+hover-swell clipping on the two "Back to main" buttons (8-02/S24) is geometry-verified only —
+both this session and C's own session found the automated Browser pane's synthetic hover does not
+trigger a real CSS `:hover` state (`element.matches(':hover')` reads `false` after the pane's own
+`hover` action; before/after screenshots are pixel-identical). This is a tooling limit on both
+attempts, not a reason to withhold `GATE: MET` — closing it needs the manager's own visible
+browser, exactly as the round-8 brief itself anticipated.
+
+**GATE: MET.** Zero open items across S24, S25, S26, S27. What the manager should eyeball with
+real eyes, not because A found a defect but because these are the two checks a computed-style
+read cannot fully replace:
+1. **The persona "Back to main" buttons in dark mode** — confirmed via computed
+   `background-color`/`color` after a real theme reload (ember accent `rgb(255,106,43)` on
+   near-black `rgb(17,17,17)` text), but never seen rendered by a human eye this round.
+2. **The findings box's shade in both modes** — confirmed via computed `background-color`
+   matching `--color-bg-secondary` exactly in both themes, but B's own fix guide flagged the
+   light-mode step as only a ~2% lightness change (`#fafafa` → `#f1f1f1`), subtler than a
+   screenshot-driven user request likely implies; the documented fallback (a bespoke deeper value,
+   or `--color-surface-hover` in dark mode) is a one-line change if the manager's own eyes find it
+   too weak.
+3. **Hover-swell clipping on both 8-02 and 8-03's buttons** — geometry-verified only, per above;
+   the fallback classes (`hover:scale-[1.04]`) are already in place for 8-03, available for 8-02
+   if needed.
 
 Commit: this entry, staging only `docs/handoff/ABC-followup-round2.md`.
