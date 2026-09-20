@@ -12284,3 +12284,68 @@ Commit: `feat(reader): make the abstract a collapsed-by-default toggle (8-03/S25
 `web/src/components/reader/abstract-toggle.tsx`, `web/src/components/reader/abstract-toggle.test.ts`,
 `web/src/components/reader/copy.ts`, `web/src/components/reader/paper-words.tsx`,
 `web/src/components/icons.tsx`, `docs/handoff/ABC-followup-round2.md`.
+
+### Round 8 — Agent C, item 8-04 (S26 — "What they found, and how big": boxed, outlined findings)
+
+Checked `report-sections.tsx`, `block-heading.tsx`, `globals.css`, `matted-figure.tsx` all clean
+before touching anything.
+
+**Change**: `web/src/components/reader/report-sections.tsx`, `ResultsBlock` only.
+- **Whole-section box**: nested the block's children one level deeper in a new `<div
+  className="rounded-2xl bg-bg-secondary measure p-6">`. `measure` (the reading-width clamp)
+  moved here from the results list (was `"space-y-6 measure"`, now `"space-y-4"` — the redundant
+  `measure` dropped since the box now carries it, matching "full column width" to the same width
+  every other reading-prose block on the page already uses). `BlockHeading` (untouched, shared,
+  takes no className override) wrapped in `<div className="-mt-8">` to undo its own `mt-12`
+  stacking against the box's `p-6` — purely visual, zero behavior change.
+- **Summary**: new `RESULTS_SUMMARY_CLASS` (`text-lead`/`text-heading`/`reading-justify`, same
+  size/leading/justify as `CLAIM_CLASS`) replaces `PULL_CLASS` at both its call sites. `PULL_CLASS`
+  grepped — no other consumer anywhere — **deleted** rather than left dead (named here per B's
+  instruction to state the choice).
+- **Each result's box**: the per-result `<div key=...>` gains `className="rounded-md border
+  border-heading/40 p-4"`. Parent spacing `space-y-6` → `space-y-4` (the border+padding already
+  separates items visually).
+- **"What is new here:"**: paragraph class `text-body text-text-muted` → `text-lead text-heading`
+  (matches the result text's own size, dark instead of muted); the mono label span
+  `text-text-faint` → `text-text` (stays mono, loses the faint tone).
+- Figures (`MattedFigure`/`SectionFigure`) untouched, still inside the same per-result `<div>` —
+  now inside its border box "by construction," no figure file edited.
+- The bold title (`<b className="font-medium text-heading">`) was already `text-heading` —
+  untouched.
+
+**No new test added.** B's own fix guide found zero existing tests reference
+`report-sections.tsx`/`ResultsBlock`/`PULL_CLASS`/`CLAIM_CLASS`/`WHATS_NEW` anywhere (re-grepped,
+confirmed) and, unlike 8-02/8-03, did not recommend adding one — `ResultsBlock`'s prop surface
+(`PaperReport`, `FigureRegistry`, `useResolvedFigure`'s `useSyncExternalStore`) is heavy for a
+pure-className/structural change; verified instead by the gate (no regression) and the live
+computed-style checks below.
+
+**Gate after this item**: tsc clean, eslint clean, **vitest 2713/2713** (unchanged — no test file
+touches this component, as predicted).
+
+**Live check** (Browser pane, `openalex:W7207740551`, the papers page — not hidden-pane-trapped):
+found the box via `.rounded-2xl.bg-bg-secondary`. **Light mode**: box `background-color: rgb(241,
+241, 241)` (`#f1f1f1`) vs. page `rgb(250, 250, 250)` (`#fafafa`) — deeper than the page, confirmed.
+`padding: 24px`. Summary `font-size: 16.5px`, `color: rgb(29, 29, 29)` (`--color-heading`) —
+identical size to a result's own claim text (also `16.5px`) and dark, not muted. First result's
+computed `border`: `1px solid` at ~40% opacity resolving near `--color-heading`. "What is new
+here:" sentence `font-size: 16.5px` (matches result text), `color: rgb(29, 29, 29)`
+(`--color-heading`); its mono label `color: rgb(40, 40, 40)` (`--color-text`, not faint).
+**Dark mode** (verified via a real reload — `localStorage`'s `peer-profile.state.profile.colorTheme`
+set to `"dark:ember"`, the app's own boot-script mechanism, same method used for 8-02's dark-mode
+check after the same-tab runtime-mutation artifact found there): box `background-color: rgb(24,
+24, 24)` (`#181818`) vs. page `rgb(17, 17, 17)` (`#111111`) — **lighter** than the page, correct
+direction for dark mode. Summary and novelty text both `rgb(243, 243, 243)` (`--color-heading`
+dark, light-on-dark, good contrast); the label `rgb(227, 227, 227)` (`--color-text` dark, visibly
+distinct from the heading-colour sentence beside it, matching light mode's own distinction).
+First result's border resolved near the light heading colour at ~40% opacity. `localStorage`
+reset to `"system:ember"` after the checks. No rounding was visible in either mode — expected,
+confirmed against `globals.css`'s own stated sitewide radius-flattening rule, not investigated as
+a bug.
+
+**Blast radius**: one new wrapper `<div>`, one moved `measure`, one new constant replacing a
+deleted one, two edited inline literals, all scoped inside `ResultsBlock`. `BlockHeading`,
+`MattedFigure`, `Band`/`band.tsx` (unrelated to this item) all read, none edited.
+
+Commit: `feat(reader): box the findings section and outline each result (8-04/S26)`, staging only
+`web/src/components/reader/report-sections.tsx`, `docs/handoff/ABC-followup-round2.md`.

@@ -35,8 +35,11 @@ import { BlockHeading } from "./block-heading";
 import { GLANCE, PEERS_READING, REPORT_HEADING, WHATS_NEW } from "./copy";
 
 const CLAIM_CLASS = "font-reading text-lead leading-[1.6] text-text reading-justify";
-/** The pull quote over the results: the deck's face, the headline result. */
-const PULL_CLASS = "font-reading text-title-lg leading-[1.45] text-heading measure";
+// 8-04/S26: the findings summary reads as body text now, not a pull quote —
+// same size/leading/justify as CLAIM_CLASS, text-heading (dark) instead of
+// muted. Replaces the old PULL_CLASS, which had no other consumer (grepped)
+// and is deleted rather than left dead.
+const RESULTS_SUMMARY_CLASS = "font-reading text-lead leading-[1.6] text-heading reading-justify";
 const FOOTER_CLASS = "font-mono text-caption text-text-faint mt-3";
 
 function Section({
@@ -255,52 +258,76 @@ export function ResultsBlock({
   if (results.length === 0 && !summary) return null;
   return (
     <Section stagger={stagger}>
-      <BlockHeading block="findings" />
-      {summary &&
-        (scramble ? (
-          <ScrambleText text={summary} className={`${PULL_CLASS} mb-6 block`} />
-        ) : (
-          <p className={`${PULL_CLASS} mb-6`}>{summary}</p>
-        ))}
-      <div className="space-y-6 measure">
-        {results.map((result, i) => (
-          // Keyed by position: a model can write the same title twice.
-          <div key={`${i}:${result.title}`}>
-            <p className={CLAIM_CLASS}>
-              {scramble ? (
-                <>
-                  <ScrambleText text={`${result.title}.`} className="font-medium text-heading" />{" "}
-                  <ScrambleText text={result.detail} />
-                </>
-              ) : (
-                <>
-                  <b className="font-medium text-heading">{result.title}.</b> {result.detail}
-                </>
-              )}
-            </p>
-            <Receipt claim={result} abstractSentences={abstractSentences} />
-            {result.novelty && (
-              <p className="font-reading text-body leading-[1.55] text-text-muted mt-2 reading-justify">
-                <span className="font-mono text-meta text-text-faint mr-2">{WHATS_NEW}</span>
-                {scramble ? <ScrambleText text={result.novelty} /> : result.novelty}
+      {/* 8-04/S26: the whole section sits in a solid box, one step deeper
+          than the page in both modes (bg-bg-secondary, full opacity — light
+          #f1f1f1 vs. page #fafafa; dark #181818 vs. page #111111). `measure`
+          moves here from the results list below, so the box matches the
+          same reading-column width every other block on this page already
+          uses, rather than a wider box with dead padding down one side.
+          rounded-2xl names this box the same radius token MattedFigure
+          already uses; every radius in this app is 0px by design
+          (globals.css), so no rounding actually shows — expected, not a
+          bug. -mt-8 undoes BlockHeading's own mt-12 stacking against this
+          box's p-6, a purely visual offset. */}
+      <div className="rounded-2xl bg-bg-secondary measure p-6">
+        <div className="-mt-8">
+          <BlockHeading block="findings" />
+        </div>
+        {summary &&
+          (scramble ? (
+            <ScrambleText text={summary} className={`${RESULTS_SUMMARY_CLASS} mb-6 block`} />
+          ) : (
+            <p className={`${RESULTS_SUMMARY_CLASS} mb-6`}>{summary}</p>
+          ))}
+        <div className="space-y-4">
+          {results.map((result, i) => (
+            // Keyed by position: a model can write the same title twice.
+            // 8-04/S26: each result gets its own thin dark-outline box —
+            // border-heading/40 (near-black at 40% in light, the light
+            // heading colour at 40% in dark), small radius, ~16px padding.
+            <div
+              key={`${i}:${result.title}`}
+              className="rounded-md border border-heading/40 p-4"
+            >
+              <p className={CLAIM_CLASS}>
+                {scramble ? (
+                  <>
+                    <ScrambleText text={`${result.title}.`} className="font-medium text-heading" />{" "}
+                    <ScrambleText text={result.detail} />
+                  </>
+                ) : (
+                  <>
+                    <b className="font-medium text-heading">{result.title}.</b> {result.detail}
+                  </>
+                )}
               </p>
-            )}
-            {figures[i] ? (
-              <MattedFigure src={figures[i]!.url} caption={figures[i]!.caption} />
-            ) : result.figureImageUrl ? null : (
-              // Bound elsewhere on the page already, or never bound: only the
-              // latter asks the service.
-              <SectionFigure
-                paper={paper}
-                query={`${result.title} ${result.detail}`}
-                index={i + 1}
-                slot={`result-${i}`}
-                registry={registry}
-                bound={bound}
-              />
-            )}
-          </div>
-        ))}
+              <Receipt claim={result} abstractSentences={abstractSentences} />
+              {result.novelty && (
+                // 8-04/S26: same size as the result text (text-lead) and
+                // dark (text-heading), not muted; the mono label stays mono
+                // but loses its faint colour.
+                <p className="font-reading text-lead leading-[1.6] text-heading mt-2 reading-justify">
+                  <span className="font-mono text-meta text-text mr-2">{WHATS_NEW}</span>
+                  {scramble ? <ScrambleText text={result.novelty} /> : result.novelty}
+                </p>
+              )}
+              {figures[i] ? (
+                <MattedFigure src={figures[i]!.url} caption={figures[i]!.caption} />
+              ) : result.figureImageUrl ? null : (
+                // Bound elsewhere on the page already, or never bound: only the
+                // latter asks the service. Stays inside the result's own box.
+                <SectionFigure
+                  paper={paper}
+                  query={`${result.title} ${result.detail}`}
+                  index={i + 1}
+                  slot={`result-${i}`}
+                  registry={registry}
+                  bound={bound}
+                />
+              )}
+            </div>
+          ))}
+        </div>
       </div>
     </Section>
   );
