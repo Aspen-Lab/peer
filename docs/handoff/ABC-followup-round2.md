@@ -81,19 +81,24 @@ browser, run the reports), then report to the user in plain language and stop th
 
 ```
 ROUND:            9 (opened 2026-09-19 — the upload/learning/supplement handoff, §1ac)
-WHOSE TURN:       A
+WHOSE TURN:       B
 STOPPED BECAUSE:  —
-STATUS:           The draft is committed as 73323bd (unchanged, "under review"); the unowned
-                   lightbox rewrite as a1d6fd1. Tree clean. A reviews the draft against the
-                   handoff's §7 gaps and §9 matrix.
-OPEN ITEMS:       H-A (learning) · H-B (supplement) · H-C (boundary/lifecycle) — see §1ac
+STATUS:           A measured the 73323bd draft against the handoff's §7 gaps and §9 matrix by
+                   execution (two real owner cookie jars, self-made fixture PDFs, curl against
+                   every private route). 13 PASS / 6 PARTIAL / 2 FAIL / 5 BLOCKED-NEEDS BROWSER
+                   of 26 rows. 16-item difference list (A9-01..A9-16) in §4, ranked wrong-data/
+                   security first. Tree clean; A changed no product code.
+OPEN ITEMS:       H-A (learning) · H-B (supplement) · H-C (boundary/lifecycle) — see §1ac and
+                   §4's round-9 difference list (A9-01..A9-16)
 GATE (0 open):    NOT MET
 
-DONE:      rounds 1–8. Round 9: checkpoint commits only.
-GATE NOW:  tsc clean · eslint clean · vitest 2713/2713 (with the draft).
-TODO:      A measures (§1ac). Then B → C by phase (§8 of the handoff), A re-measures the matrix
-           rows of each phase. Close = every matrix row that code can satisfy is green; the
-           §6.5 pre-launch conditions are reported as open, never claimed.
+DONE:      rounds 1–8. Round 9: A's measurement pass (4 commits, no code).
+GATE NOW:  tsc clean · eslint clean · vitest 2713/2713 (with the draft, re-confirmed cold by A).
+TODO:      B takes A9-01..A9-16 (§4, round 9 Agent A part 4), writes the phase-0/phase-1 fix
+           guide (boundary first, per handoff §8 and §1ac's loop mapping — B may split
+           9-1x/9-2x/9-3x/9-4x if one turn is too long). Then C by phase, A re-measures the
+           phase's matrix rows after each. Close = every matrix row that code can satisfy is
+           green; the §6.5 pre-launch conditions stay reported as open, never claimed.
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
@@ -114,6 +119,7 @@ part-way.
 | 7 | 2 (A7-01, A7-02) | NOT MET — S20 (page zoom) and S22 (0.3s transition) fully match spec: ladder steps/clamps/panel-invariance/Decision-exclusion all confirmed via reload-based measurement at 2560×1400 (0×, default, and the new 1.6× ceiling), and the `.zoom-transition` class lifecycle timed live to ~350ms with the CSS declaring exactly the 3 named properties. S21 (Fit) carries 2 real, execution-confirmed gaps: at 2560px Fit's own ladder ceiling (1.6×) reaches only 58.1% of the viewport, well short of the spec's own ≈85% target (A7-01, POLICY — needs a manager design ruling); at the xl-only sub-range (1280–1535px) Fit is enabled and changes the font size but the page width never moves, since S20 wired `--reading-scale` into only the 2xl grid/max-width terms (A7-02). Also recorded: a hidden-pane environment finding (this session's Browser pane was hidden throughout; live in-session clicks update the store/CSS-variable correctly but derived `calc()` layout does not visually recompute without a reload) — not scored, flagged for the manager's own visible-browser check. Gate clean (tsc/eslint/vitest 2682/2682, re-run cold by A). |
 | 7 (closing) | 2 (A7b-01, A7b-02; A7b-03 informational) | NOT MET — Ruling 19's own fix for A7-01/A7-02 confirmed closed, live, bit-for-bit (85.00% exact at 2560px; xl cap scales; both sticky-panel branches match, now against the real served CSS after the manager's cold restart, not an injected override). S22 and S20 confirmed no regression. S23 (Ruling 20) code matches spec exactly; live checks found 0 explicit 429s but 2 of 6 fresh `/api/feed` calls hit an 8s per-source timeout (A7b-03, informational). Two new, real, execution-confirmed gaps in Ruling 19's own composing/resize mechanism, neither a regression of anything closed before this round: `--page-zoom` does not recompute after "Larger text"/"Smaller text" while Fit is on and never self-corrects without an actual window resize, drifting the page to 88.97%/81.21% of the viewport instead of 85% (A7b-01, the easiest to trigger — no resize needed); a live window resize while already fitted can land on a self-inconsistent zoom that fills ~99% of the container instead of 85% of the viewport, because `offsetWidth` is zoom-invariant only in the max-width-bound regime B's own synthetic tests covered, not the width:100%-bound regime the xl breakpoint can enter (A7b-02, recoverable by toggling Fit off/on, confirmed). Gate clean (tsc/eslint/vitest 2687/2687, re-run cold by A). |
 | 8 | 0 | **MET** — all four of round 8's items (S24 S25 S26 S27) confirmed matching spec exactly in the rendered/served result: S27's masthead order/active-state/wordmark-non-doubling, S24's two 44px accent buttons in light AND dark (real reload) plus working Esc-to-home, S25's closed-by-default/open/close/not-persisted cycle plus a live-proved decided-read observer fallback (the round's own load-bearing risk, designed around correctly), S26's box/border/summary/novelty colors and sizes independently re-measured in both themes. Zero execution-confirmed differences. Three items flagged for the manager's own eyes, none of them defects: dark-mode persona buttons (computed-style-confirmed, never human-eyeballed), the findings box's light-mode shade (B's own flagged ~2% lightness step), and hover-swell clipping on both new buttons (geometry-verified only — the automated pane cannot trigger a real CSS `:hover` state, confirmed independently by both C and A). Gate clean (tsc/eslint/vitest 2713/2713, re-run cold by A). S28 (investigation, no C step) stays closed from B's turn. |
+| 9 | 16 (A9-01..A9-16) | NOT MET — new loop on the upload/learning/supplement handoff, measuring the pre-committed 73323bd draft rather than fresh code. Of 26 scoreable matrix rows: 13 PASS, 6 PARTIAL, 2 FAIL, 5 BLOCKED/NEEDS BROWSER. Two real, execution-confirmed problems rank above everything else: `sameOriginUploadRequest()` treats a request with no Origin/Sec-Fetch-Site header as same-origin, and a bare DELETE with neither header actually succeeded (A9-01/C2); and deleting one of two PDF copies that share a documentKey (the same-DOI-merge case) erases the only preference-ledger evidence for a document the user still has a live copy of, reproduced with a throwaway vitest repro (A9-02/A3). Also confirmed live: real upload output includes noise terms ("three", "nodes") as preference signals (A9-04/A4); a pre-existing 8.6 MB shared `figures.json` from before the per-request-temp-dir fix is invisible to the purge job's filename filter and will never be auto-purged (A9-03); no scheduler exists for the 30-day retention promise and no operator/admin block-or-remove path exists (A9-05, A9-06); the green supplement button uses a raw Tailwind color instead of the app's theme tokens (A9-16). Gate clean regardless (tsc/eslint/vitest 2713/2713, re-run cold by A, matching the draft's own claimed baseline). |
 
 ---
 
@@ -13071,3 +13077,104 @@ npx vitest run src/lib/preferences src/lib/papers/upload-store.test.ts \
 
 Commit: this entry only (§4 append), staging `docs/handoff/ABC-followup-round2.md`. No product
 code touched.
+
+### Round 9 — Agent A (part 4 of 4 — difference list, gate line, cleanup)
+
+**Difference list**, ranked wrong-data/security first, then unkeepable promises, then missing,
+then shape. Each cites the matrix row(s) and the evidence already logged in parts 1-2.
+
+**Wrong data / security holes**
+1. **A9-01** (C2). `sameOriginUploadRequest()` (`upload-access.ts:59-62`) treats a request with
+   **no** `Origin`/`Sec-Fetch-Site` header as same-origin. Execution-confirmed: a `DELETE` with
+   neither header succeeded (`200`, asset actually deleted) against the same route that correctly
+   403s an explicit cross-site `Origin`. Handoff wants "no CSRF-triggerable third-party site";
+   this leaves the door open for any client that omits the header, which the unit suite never
+   exercises.
+2. **A9-02** (A3, §4.3, §7-4). Two PDFs verified to the same DOI share one `documentKey`
+   (`upload/route.ts:231`); the ledger's `uploads` evidence map is keyed by `documentKey` only.
+   Deleting **one** of two still-live copies (`removeUploadPreferenceSignal`) erases the **only**
+   evidence record for a document the user still has a valid copy of — execution-confirmed with a
+   throwaway repro. Handoff explicitly requires "删除一个副本不误撤销其他有效来源."
+3. **A9-03** (C4, C10, §6.2 "中间产物"). A pre-existing, unrelated-to-this-session 8.6 MB shared
+   `.local-data/uploads/figures.json` (base64 image data) sits on disk today and is invisible to
+   the purge job's `^[0-9a-f]{16}\.json$` filename filter — it can never be auto-purged by any
+   code that exists, so it silently outlives the 30-day retention promise indefinitely.
+4. **A9-04** (A4, §4.1, §7-1). Real upload output includes `"three"` and `"nodes"` — a bare number
+   and a single generic noun — as `preferenceSignals`, i.e. genuinely wrong/noise data entering the
+   preference ledger, not just a missing filter.
+
+**Promises that cannot be kept as shipped**
+5. **A9-05** (§6.2 "保留期," §7-7). No cron/scheduler config anywhere in the repo calls
+   `/api/jobs/purge-uploads`; the only cleanup trigger is "someone happens to upload again." The
+   30-day retention line shown to the user in the consent dialog and `PrivatePdfStatus` is not
+   backed by an operating schedule.
+6. **A9-06** (§6.2 "删除/封禁"). No operator/admin-side path exists anywhere in the diff to
+   block or remove another user's private upload. Handoff: "版权处理需可由授权运营人员
+   block/remove，不能只有用户自己能删" — currently only the uploader themself can ever delete it.
+7. **A9-07** (§4.3, §7-3). `recordUploadPreference` is a pure client-side Zustand write with no
+   server-side idempotent persistence or outbox. The "uploading teaches Peer your interests"
+   promise silently fails whenever the browser navigates away, loses connectivity, or closes
+   before the next delayed profile-sync tick.
+8. **A9-08** (L1, §6.3). No README section restates handoff §6.1's legal caveats (fair-use
+   nuance, section 512 conditions, PyMuPDF licence note) in plain words as Ruling 11 requires;
+   `docs/PRIVATE_PDF_UPLOADS.md`, referenced by the new `.env.example` comment, does not exist;
+   the existing `README.md` upload section was left describing pre-draft, ownerless behavior.
+
+**Missing**
+9. **A9-09** (B4/B5, Ruling 8, §7-2). No three-tier match-confirmation flow. A near-miss title is
+   blanket 422-refused; there is no "attached to: <title>" one-line confirm nor an explicit "is
+   this the right paper" dialog anywhere in the diff.
+10. **A9-10** (B7, handoff §3). No `revision` field anywhere on `UploadMeta`/the attachment
+    record. A same-owner, same-paper attachment replace is last-write-wins with no ordering
+    guarantee against a concurrent second replace, and report/reading/figure have no revision to
+    key against beyond the current hash16.
+11. **A9-11** (handoff §3, §4.1). No `facet` classification, no `extractionVersion`, no
+    `evidence.start/end` offsets on the extracted-concept contract — only a `section` string
+    survived from the handoff's own suggested shape.
+12. **A9-12** (§4.4 bullet 5). No per-entry "sourced from an upload" label and no standalone
+    "this doesn't represent me / remove just this source" action in "What Peer has learned" —
+    only the all-or-nothing "Delete PDF and its learned signals" exists.
+13. **A9-13** (§6.2 "并发删除"). No version/status check anywhere in `report/route.ts` or
+    `full-text.ts` that would cancel or refuse an in-flight generation after a mid-flight
+    delete/ban; the handoff's own suggested `status` field does not exist on `UploadMeta`.
+14. **A9-14** (§7-10). A chunked request body with no (or an understated) `Content-Length` is
+    bounded only by the post-parse `file.size` check, which runs after `req.formData()` has
+    already buffered the entire body.
+15. **A9-15** (§7-6). `writeUploadPdfIfAbsent` and `writeUploadMeta` are two separate awaited
+    writes with no rollback path if the second fails after the first succeeds.
+
+**Shape**
+16. **A9-16** (Ruling 7). The green supplement button's `tone: "green"`
+    (`button.tsx:18`, `bg-emerald-700 ... hover:bg-emerald-800`) is a raw Tailwind palette color,
+    not one of this app's own theme custom-properties every other button tone uses.
+
+**Standing exclusions, re-listed (not new differences, not to be re-flagged by B/C):**
+- Handoff §6.5's four pre-launch conditions (legal-jurisdiction review, DMCA/complaint operating
+  process, production storage + scheduler measurement, PyMuPDF licence resolution) are open **by
+  ruling** (§1ac item 11) — report as open, never claim closed, never assign to this loop's code
+  work.
+- `src/lib/events/benchmark.test.ts` stays excluded from the gate (live-network test on dead
+  code, standing ruling since round 1).
+- Hidden-Browser-pane measurement traps (rounds 6-7's own findings) are a standing risk for
+  whichever agent next drives a real browser against this draft's layout claims (B1's button
+  position, Ruling 7's "never drops to the next line," §5.1's modal focus/Esc) — A carries no
+  browser tool this round, so none of B1/A6/A7/B6/C7/§7-9/§7-12's NEEDS BROWSER items were
+  screenshotted; they are open, not failing.
+
+**GATE (0 open): NOT MET.** 2 execution-confirmed FAILs (A3, A4), 1 execution-confirmed security
+gap (C2), 5 BLOCKED/NEEDS BROWSER rows, and 6 PARTIAL rows remain. Per §2's exit condition, GATE
+MET is not being claimed this round and could not honestly be claimed regardless of these results
+(B has not yet had a turn on any of it). **WHOSE TURN: B.**
+
+**Cleanup performed before this commit:** both test uploads (`74c54e7e55abf542` owner A,
+`2e331279af72abbd` owner B — the earlier `ac688389e2c7dab1` was already removed by the C2 CSRF
+test itself) deleted via the real `DELETE /api/papers/upload/[id]` route, not by hand; the second
+fixture PDF (`private-upload-test-2.pdf`) and the scratchpad's cookie jars removed; `git status`
+confirmed clean (no test debris ever entered the tracked tree — `.local-data/` is gitignored).
+The pre-existing legacy files under `.local-data/uploads/` (dated before this session, including
+the 8.6 MB `figures.json` from A9-03) were left untouched — they are evidence for B/C, not this
+session's to remove, and the handoff explicitly warns against unauthorized bulk deletion of that
+directory.
+
+Commit: this entry (§4 append) plus the §1 block edited in place and the history table row below,
+staged together as one commit, `docs/handoff/ABC-followup-round2.md` only.
