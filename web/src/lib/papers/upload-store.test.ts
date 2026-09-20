@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   bareUploadId,
+  hasOtherReadyDocumentCopy,
   metaPath,
   pdfPath,
   purgeExpiredUploads,
@@ -217,5 +218,79 @@ describe("purgeExpiredUploads — stray derived files (9-16)", () => {
     } finally {
       await rm(trickyTmp, { force: true });
     }
+  });
+});
+
+// 9-22 (A9-02): the reference-counting helper the DELETE and admin-block
+// routes both call before retracting a document's shared preference-ledger
+// evidence — reproduces A's own throwaway repro (two live copies sharing a
+// documentKey; forgetting one must not erase the other's still-valid
+// evidence) as a real, persisted test.
+describe("hasOtherReadyDocumentCopy (9-22)", () => {
+  const ownerKey = "owner-under-test-9-22-store";
+  const documentKey = "shared-doi-doc-key-9-22";
+
+  function fixtureMeta(hash16: string, overrides: Partial<UploadMeta> = {}): UploadMeta {
+    return {
+      hash16, fileName: "paper.pdf", title: "A Real Paper",
+      uploadedAt: "2026-09-15T00:00:00.000Z", textStatus: "ok",
+      status: "ready", revision: 1, ownerKey, documentKey,
+      expiresAt: new Date(Date.now() + 86_400_000).toISOString(),
+      ...overrides,
+    };
+  }
+
+  it("is false with no documentKey, and false when this is the only copy", async () => {
+    const hash16 = sha16(Buffer.from("9-22: only copy"));
+    writtenHashes.push(hash16);
+    await writeUploadMeta(hash16, fixtureMeta(hash16));
+
+    expect(await hasOtherReadyDocumentCopy(ownerKey, undefined, hash16)).toBe(false);
+    expect(await hasOtherReadyDocumentCopy(ownerKey, documentKey, hash16)).toBe(false);
+  });
+
+  it("is true when another ready copy of the same document is live, false once that's the one excluded", async () => {
+    const hashA = sha16(Buffer.from("9-22: copy a"));
+    const hashB = sha16(Buffer.from("9-22: copy b"));
+    writtenHashes.push(hashA, hashB);
+    await writeUploadMeta(hashA, fixtureMeta(hashA));
+    await writeUploadMeta(hashB, fixtureMeta(hashB));
+
+    // Deleting A: B is still a live ready sibling.
+    expect(await hasOtherReadyDocumentCopy(ownerKey, documentKey, hashA)).toBe(true);
+    // Deleting B: A is still a live ready sibling.
+    expect(await hasOtherReadyDocumentCopy(ownerKey, documentKey, hashB)).toBe(true);
+  });
+
+  it("ignores a sibling that is blocked, deleted-shaped, or another owner's", async () => {
+    const target = sha16(Buffer.from("9-22: target of interest"));
+    const blockedSibling = sha16(Buffer.from("9-22: blocked sibling"));
+    const otherOwnerSibling = sha16(Buffer.from("9-22: other owner sibling"));
+    writtenHashes.push(target, blockedSibling, otherOwnerSibling);
+    await writeUploadMeta(target, fixtureMeta(target));
+    // A blocked sibling has no expiresAt (matches the real admin route's
+    // minimal record) — listUploadMeta already excludes it on that basis,
+    // and the explicit status check here is the second, defensive layer.
+    await writeUploadMeta(blockedSibling, { hash16: blockedSibling, fileName: "", title: "",
+      uploadedAt: "2026-09-15T00:00:00.000Z", textStatus: "empty", status: "blocked",
+      ownerKey, documentKey });
+    await writeUploadMeta(otherOwnerSibling, fixtureMeta(otherOwnerSibling, { ownerKey: "a-different-owner" }));
+
+    expect(await hasOtherReadyDocumentCopy(ownerKey, documentKey, target)).toBe(false);
+  });
+
+  it("ignores a still-writing 'pending' sibling, even though it already has expiresAt set", async () => {
+    // 9-13's own write order gives a `pending` record `expiresAt` from the
+    // very first write (before the bytes even land) — so `listUploadMeta`'s
+    // own unexpired-only filter does NOT exclude it on that basis alone.
+    // This is the one case where the explicit `status === "ready"` check
+    // inside this function is load-bearing, not merely defensive.
+    const target = sha16(Buffer.from("9-22: target with a pending sibling"));
+    const pendingSibling = sha16(Buffer.from("9-22: pending sibling"));
+    writtenHashes.push(target, pendingSibling);
+    await writeUploadMeta(target, fixtureMeta(target));
+    await writeUploadMeta(pendingSibling, fixtureMeta(pendingSibling, { status: "pending" }));
+
+    expect(await hasOtherReadyDocumentCopy(ownerKey, documentKey, target)).toBe(false);
   });
 });

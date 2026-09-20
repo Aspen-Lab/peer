@@ -4,6 +4,13 @@ import type { UploadMeta } from "@/lib/papers/upload-store";
 const mocks = vi.hoisted(() => ({
   readUploadMeta: vi.fn(),
   deleteUpload: vi.fn(async () => undefined),
+  // 9-22 (A9-02): mocked directly rather than via its own internal
+  // `listUploadMeta` call — that call is same-module-internal in
+  // upload-store.ts, so mocking only the exported `listUploadMeta` binding
+  // would not reach it (vi.mock replaces import bindings other modules see,
+  // not a function's own in-module calls). Default true (no sibling), the
+  // common case; per-test overrides cover the reference-counted branch.
+  hasOtherReadyDocumentCopy: vi.fn(async () => false),
 }));
 
 vi.mock("@/lib/papers/upload-store", async (importOriginal) => {
@@ -12,6 +19,7 @@ vi.mock("@/lib/papers/upload-store", async (importOriginal) => {
     ...actual,
     readUploadMeta: mocks.readUploadMeta,
     deleteUpload: mocks.deleteUpload,
+    hasOtherReadyDocumentCopy: mocks.hasOtherReadyDocumentCopy,
   };
 });
 
@@ -68,6 +76,8 @@ describe("DELETE /api/papers/upload/[id]", () => {
   beforeEach(() => {
     mocks.readUploadMeta.mockClear();
     mocks.deleteUpload.mockClear();
+    mocks.hasOtherReadyDocumentCopy.mockClear();
+    mocks.hasOtherReadyDocumentCopy.mockResolvedValue(false);
   });
 
   it("9-11: refuses a DELETE with neither Origin nor Sec-Fetch-Site header, before ever reading the record", async () => {
@@ -97,5 +107,51 @@ describe("DELETE /api/papers/upload/[id]", () => {
     expect(body.deleted).toBe(true);
     expect(body.documentKey).toBe("doc-key");
     expect(mocks.deleteUpload).toHaveBeenCalledWith(meta);
+    // No ownerKey on this fixture — the reference-count check is skipped
+    // entirely and evidence is safe to retract by default.
+    expect(body.retractEvidence).toBe(true);
+    expect(mocks.hasOtherReadyDocumentCopy).not.toHaveBeenCalled();
+  });
+
+  // 9-22 (A9-02): reproduces A's own throwaway repro as a real, persisted
+  // test at the route level — two live copies sharing one documentKey; only
+  // the LAST deletion may say it is safe to retract the shared evidence.
+  it("9-22: does not offer to retract evidence while another ready copy of the document is live", async () => {
+    const meta: UploadMeta = {
+      hash16: "0123456789abcdef",
+      fileName: "paper.pdf",
+      title: "A Real Paper",
+      uploadedAt: "2026-09-15T00:00:00.000Z",
+      textStatus: "ok",
+      ownerKey: "owner-under-test",
+      documentKey: "shared-doi-doc-key",
+    };
+    mocks.readUploadMeta.mockResolvedValueOnce(meta);
+    mocks.hasOtherReadyDocumentCopy.mockResolvedValueOnce(true);
+
+    const res = await deleteCall("0123456789abcdef");
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.retractEvidence).toBe(false);
+    expect(mocks.hasOtherReadyDocumentCopy).toHaveBeenCalledWith("owner-under-test", "shared-doi-doc-key", "0123456789abcdef");
+  });
+
+  it("9-22: offers to retract evidence once no other ready copy of the document remains", async () => {
+    const meta: UploadMeta = {
+      hash16: "0123456789abcdef",
+      fileName: "paper.pdf",
+      title: "A Real Paper",
+      uploadedAt: "2026-09-15T00:00:00.000Z",
+      textStatus: "ok",
+      ownerKey: "owner-under-test",
+      documentKey: "shared-doi-doc-key",
+    };
+    mocks.readUploadMeta.mockResolvedValueOnce(meta);
+    mocks.hasOtherReadyDocumentCopy.mockResolvedValueOnce(false);
+
+    const res = await deleteCall("0123456789abcdef");
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.retractEvidence).toBe(true);
   });
 });

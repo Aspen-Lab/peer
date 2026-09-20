@@ -82,7 +82,9 @@ describe("POST /api/admin/uploads/block", () => {
       const res = await call({ hash16 }, { authorization: "Bearer correct-token" });
       expect(res.status).toBe(200);
       const body = await res.json();
-      expect(body).toEqual({ blocked: true, hash16 });
+      // 9-22 (A9-02): no sibling shares this documentKey, so the response
+      // says it is safe to retract the shared ledger evidence too.
+      expect(body).toEqual({ blocked: true, hash16, retractEvidence: true, documentKey: "doc-key-under-test" });
 
       expect(existsSync(pdfPath(hash16))).toBe(false);
 
@@ -102,6 +104,42 @@ describe("POST /api/admin/uploads/block", () => {
     } finally {
       await rm(pdfPath(hash16), { force: true });
       await rm(metaPath(hash16), { force: true });
+    }
+  });
+
+  // 9-22 (A9-02): reproduces A's own throwaway repro as a real, persisted
+  // test — two live, `ready` assets sharing one documentKey (the same-DOI-
+  // merge case). Blocking one must NOT claim it is safe to retract the
+  // document's shared evidence while the other copy is still live.
+  it("does not offer to retract evidence when another ready copy of the same document is still live", async () => {
+    process.env.ADMIN_TOKEN = "correct-token";
+    const ownerKey = "owner-under-test-9-22";
+    const documentKey = "shared-doi-doc-key";
+    const blockedHash = sha16(Buffer.from("9-22: block target"));
+    const survivingHash = sha16(Buffer.from("9-22: surviving sibling"));
+    await writeFile(pdfPath(blockedHash), Buffer.from("%PDF-1.4 fixture a"), { mode: 0o600 });
+    await writeFile(pdfPath(survivingHash), Buffer.from("%PDF-1.4 fixture b"), { mode: 0o600 });
+    const base = {
+      fileName: "paper.pdf", title: "A Real Paper", uploadedAt: "2026-09-15T00:00:00.000Z",
+      textStatus: "ok" as const, status: "ready" as const, revision: 1, ownerKey, documentKey,
+      expiresAt: new Date(Date.now() + 86_400_000).toISOString(),
+    };
+    await writeUploadMeta(blockedHash, { ...base, hash16: blockedHash });
+    await writeUploadMeta(survivingHash, { ...base, hash16: survivingHash });
+
+    try {
+      const res = await call({ hash16: blockedHash }, { authorization: "Bearer correct-token" });
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.retractEvidence).toBe(false);
+      // The sibling is untouched — still ready, still on disk.
+      expect((await readUploadMeta(survivingHash))?.status).toBe("ready");
+      expect(existsSync(pdfPath(survivingHash))).toBe(true);
+    } finally {
+      await rm(pdfPath(blockedHash), { force: true });
+      await rm(metaPath(blockedHash), { force: true });
+      await rm(pdfPath(survivingHash), { force: true });
+      await rm(metaPath(survivingHash), { force: true });
     }
   });
 

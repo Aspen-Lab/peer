@@ -4,7 +4,7 @@
 // `isUploadId` branch, which strips the prefix before calling this route).
 
 import { NextResponse } from "next/server";
-import { isValidHash16, deleteUpload, uploadMetaToPaper } from "@/lib/papers/upload-store";
+import { isValidHash16, deleteUpload, hasOtherReadyDocumentCopy, uploadMetaToPaper } from "@/lib/papers/upload-store";
 import { ownedUpload, PRIVATE_UPLOAD_HEADERS, sameOriginUploadRequest } from "@/lib/papers/upload-access";
 
 export async function GET(
@@ -29,6 +29,15 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
   const { id } = await params;
   const meta = isValidHash16(id) ? await ownedUpload(id) : null;
   if (!meta) return NextResponse.json({ error: "Upload not found." }, { status: 404, headers: PRIVATE_UPLOAD_HEADERS });
+  // 9-22 (A9-02): count this owner's OTHER still-live copies of the same
+  // logical document BEFORE deleting this one — the exact A9-02 over-erasure
+  // repro was deleting one of two same-DOI copies and losing the only
+  // preference-ledger evidence for a document the owner still has a live
+  // copy of. `meta.ownerKey` is guaranteed set here (ownedUpload only
+  // returns a match), but guarded anyway for a mocked/legacy caller shape.
+  const retractEvidence = meta.ownerKey
+    ? !(await hasOtherReadyDocumentCopy(meta.ownerKey, meta.documentKey, meta.hash16))
+    : true;
   await deleteUpload(meta);
-  return NextResponse.json({ deleted: true, documentKey: meta.documentKey }, { headers: PRIVATE_UPLOAD_HEADERS });
+  return NextResponse.json({ deleted: true, documentKey: meta.documentKey, retractEvidence }, { headers: PRIVATE_UPLOAD_HEADERS });
 }

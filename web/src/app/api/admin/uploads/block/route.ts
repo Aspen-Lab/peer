@@ -13,6 +13,7 @@ import { timingSafeEqual } from "node:crypto";
 import { unlink } from "node:fs/promises";
 import { NextResponse } from "next/server";
 import {
+  hasOtherReadyDocumentCopy,
   isValidHash16,
   pdfPath,
   readUploadMeta,
@@ -53,6 +54,17 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Upload not found." }, { status: 404 });
   }
 
+  // 9-22 (A9-02): same reference-counting rule as the owner-facing DELETE
+  // route — an operator takedown of one copy must not silently claim to
+  // retract evidence still justified by another live `ready` copy of the
+  // same document. This route has no client session to act on the flag
+  // itself (the owner's browser is what forgets a ledger entry); returning
+  // it keeps the two takedown paths' contracts identical for any future
+  // admin tooling that does act on it.
+  const retractEvidence = meta.ownerKey
+    ? !(await hasOtherReadyDocumentCopy(meta.ownerKey, meta.documentKey, hash16))
+    : true;
+
   // The PDF is the only per-hash16 derived content that ever lands on disk
   // for an upload (confirmed 9-16: full-text/figure extraction for
   // `upload:` ids never writes a shared or per-request cache file into
@@ -88,5 +100,5 @@ export async function POST(req: Request) {
   };
   await writeUploadMeta(hash16, minimal);
 
-  return NextResponse.json({ blocked: true, hash16 });
+  return NextResponse.json({ blocked: true, hash16, retractEvidence, documentKey: meta.documentKey });
 }

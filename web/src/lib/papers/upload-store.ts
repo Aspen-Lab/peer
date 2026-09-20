@@ -288,3 +288,28 @@ export async function listUploadMeta(ownerKey: string): Promise<UploadMeta[]> {
   }
   return out.sort((a, b) => b.uploadedAt.localeCompare(a.uploadedAt));
 }
+
+/**
+ * 9-22 (A9-02): true when this owner has at least one OTHER `ready` asset
+ * sharing `documentKey` — i.e. the caller (a delete or an operator block)
+ * must NOT retract this document's shared preference-ledger evidence,
+ * because a still-live copy of the same logical document continues to
+ * justify it. `listUploadMeta` already excludes anything without a live,
+ * unexpired `expiresAt` (which a blocked/deleted record never carries), but
+ * checks `status === "ready"` explicitly too, defensively, rather than
+ * relying on that as an implicit proxy — a transient "pending" write (9-13)
+ * must never count as a live sibling either.
+ */
+export async function hasOtherReadyDocumentCopy(
+  ownerKey: string,
+  documentKey: string | undefined,
+  excludeHash16: string,
+): Promise<boolean> {
+  if (!documentKey) return false;
+  const siblings = await listUploadMeta(ownerKey);
+  return siblings.some((sibling) =>
+    sibling.hash16 !== excludeHash16 &&
+    sibling.status === "ready" &&
+    sibling.documentKey === documentKey,
+  );
+}

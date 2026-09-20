@@ -14280,3 +14280,96 @@ staging `web/src/lib/preferences/upload-concepts.ts`, `web/src/lib/preferences/u
 `web/src/lib/preferences/ledger.ts`, `web/src/types/index.ts`, `web/src/lib/papers/upload-store.ts`,
 `web/src/app/api/papers/upload/route.ts`, `docs/handoff/ABC-followup-round2.md`.
 
+### Round 9 — Agent C, phase 2, item 9-22 (A9-02 — reference-counted retraction, matrix A3/A7)
+
+Branch confirmed clean before touching anything. Baseline gate re-run cold: tsc clean, eslint
+clean, **vitest 2764/2764** (post-9-21).
+
+**Change**: `web/src/lib/papers/upload-store.ts` gains `hasOtherReadyDocumentCopy(ownerKey,
+documentKey, excludeHash16)` — true iff this owner has another `status === "ready"` asset
+sharing `documentKey`, excluding the asset being acted on. Built as a thin wrapper over the
+existing owner-scoped `listUploadMeta`, with an EXPLICIT `status === "ready"` re-check rather
+than relying on `listUploadMeta`'s own unexpired-only filter as an implicit proxy — a `pending`
+write (9-13) already carries `expiresAt` from its very first write, before the bytes even land,
+so it is not excluded by that filter alone. Confirmed load-bearing by a dedicated revert-proof
+test (below), not assumed.
+
+Both takedown paths now call it and return `retractEvidence` in their response, computed
+BEFORE the delete/unlink so the still-live sibling is still on disk to be counted:
+- `web/src/app/api/papers/upload/[id]/route.ts`'s `DELETE`: `{ deleted, documentKey,
+  retractEvidence }`. `meta.ownerKey` is guaranteed set by `ownedUpload` in production, but
+  guarded (`retractEvidence = true` when absent) for a mocked/legacy caller shape.
+- `web/src/app/api/admin/uploads/block/route.ts`: `{ blocked, hash16, retractEvidence,
+  documentKey }` — same rule, same guard. This route has no client session of its own to act on
+  the flag (an operator takedown isn't the owner's browser), but returning it keeps both
+  takedown paths' contracts identical for any future admin tooling that would act on it.
+
+**Client**: `web/src/components/reader/private-pdf-status.tsx` — the DELETE response's
+`retractEvidence` now gates the `forgetUploadPreference` call (previously unconditional, the
+exact A9-02 over-erasure bug). This also lands 9-24's two-actions ask in the same file, since
+both changes touch the same component's markup: a new, always-visible **"Forget what Peer
+learned from this"** button (ledger-only, `forgetUploadPreference(documentKey)`, PDF untouched)
+alongside the existing delete button, retitled **"Delete PDF"** (was "Delete PDF and its learned
+signals" — no longer accurate now that deletion doesn't always retract). Both actions render in
+both places `PrivatePdfStatus` is used (the profile page's uploads list AND the reader page's
+own upload status line) since it's the one shared component, satisfying A9-12's ask on both
+surfaces rather than only the profile list the guide named.
+
+**Tests**:
+- `upload-store.test.ts` (new `describe`, 4 cases): no-documentKey and only-copy → false;
+  two live ready siblings → true either way you exclude one; a blocked sibling (no `expiresAt`,
+  already excluded by `listUploadMeta` on that basis) AND a different-owner sibling → false; a
+  **`pending`** sibling that DOES already carry `expiresAt` → false — the one case that actually
+  exercises the explicit `status === "ready"` check rather than riding on `listUploadMeta`'s
+  filter.
+- `upload/[id]/route.test.ts` (`DELETE`, 2 new + 1 existing assertion extended): the pre-existing
+  no-`ownerKey` fixture now also asserts `retractEvidence: true` and that
+  `hasOtherReadyDocumentCopy` was never called (short-circuited); two new cases mock
+  `hasOtherReadyDocumentCopy` to `true`/`false` and assert the response inverts it, and that it's
+  called with `(ownerKey, documentKey, hash16)`. Mocked the function directly (not
+  `listUploadMeta`) — `hasOtherReadyDocumentCopy` calls `listUploadMeta` as a same-module-internal
+  reference inside `upload-store.ts`, which `vi.mock`'s import-binding replacement does not
+  reach; mocking the outer function is what test-doubles the real call site.
+- `admin/uploads/block/route.test.ts`: the pre-existing full-round-trip test's assertion widened
+  (additively) to include `retractEvidence: true, documentKey`; one new real-files test — two
+  live `ready` assets sharing a `documentKey`, block one → `retractEvidence: false`, the sibling
+  is confirmed untouched on disk and in its own meta (`status: "ready"` still).
+
+**Revert-proof**: reverted each of the three integration points independently — the DELETE
+route's computation (hardcoded `retractEvidence = true`): the 2 new DELETE-route tests failed
+exactly as expected (`true` where `false` was wanted); the admin route's computation (same
+hardcode): its new test failed the same way; the store helper's `status === "ready"` clause
+alone (leaving the `documentKey`/`hash16` clauses intact): the **first** version of the
+`upload-store.test.ts` "ignores a blocked/other-owner sibling" test still passed even with the
+status clause removed (a real, if narrow, test-authoring miss — that fixture's blocked sibling
+has no `expiresAt`, so `listUploadMeta`'s own filter already excluded it for an unrelated
+reason), caught by adding the dedicated `pending`-sibling case above, which failed exactly as
+expected once the status clause was removed and passed once restored. All reverts restored;
+confirmed 17/17 in `upload-store.test.ts`, 46/46 across the two route test files (`DELETE` +
+`GET` + admin block combined).
+
+**Gate after this item**: tsc clean, eslint clean, **vitest 2771/2771** (2764 + 7: 4 store + 2
+route + 1 admin).
+
+**Live check** (dev server `peer-web` on `:3000`, untouched): generated two self-made PDFs
+sharing one DOI line (`10.9999/peer-c-9-22-live-check`, distinct titles/bodies otherwise) via
+the venv's `python.exe` + PyMuPDF, in the session scratch directory — never committed. Uploaded
+both under one fresh owner cookie jar: both returned the same `uploadDocumentKey`
+(`b0b10c84…eea949d`), confirming the DOI-based merge from phase 1's 9-12 revision-chaining
+(copy A `revision: 1`, copy B `revision: 2`). `DELETE` copy A (while B is still `ready`) →
+`{"deleted":true,...,"retractEvidence":false}`. `DELETE` copy B (the last live copy) →
+`{"deleted":true,...,"retractEvidence":true}` — exactly the task's stated expectation. Both
+scratch PDFs and the cookie jar removed afterward; `.local-data/uploads/` back to its
+pre-existing 12 `.pdf`/`.json` pairs, confirmed by count.
+
+**Blast radius**: one new store function (pure addition), two response-shape additions (both
+additive fields on existing 200-status JSON bodies — no route caller outside this codebase's own
+client depends on the exact key set), one shared component's markup/copy. No change to the
+delete/block routes' authorization, file-removal, or status-transition logic.
+
+Commit: `fix(learning): reference-count sibling copies before retracting upload evidence (9-22/A9-02)`,
+staging `web/src/lib/papers/upload-store.ts`, `web/src/lib/papers/upload-store.test.ts`,
+`web/src/app/api/papers/upload/[id]/route.ts`, `web/src/app/api/papers/upload/[id]/route.test.ts`,
+`web/src/app/api/admin/uploads/block/route.ts`, `web/src/app/api/admin/uploads/block/route.test.ts`,
+`web/src/components/reader/private-pdf-status.tsx`, `docs/handoff/ABC-followup-round2.md`.
+
