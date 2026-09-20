@@ -14517,3 +14517,77 @@ staging `web/src/lib/preferences/ledger.ts`, `web/src/app/profile/page.tsx`,
 `web/src/app/profile/page.test.tsx`, `web/src/components/reader/private-pdf-status.test.tsx`,
 `docs/handoff/ABC-followup-round2.md`.
 
+### Round 9 — Agent C, phase 2, item 9-25 (Ruling 4 — ranking/retrieval, matrix A5/A8)
+
+Branch confirmed clean before touching anything. Baseline gate re-run cold: tsc clean, eslint
+clean, **vitest 2777/2777** (post-9-24).
+
+**Confirmed by reading, then by test — no production code changed**, per this item's own stated
+option ("if the draft does NOT add queries, do nothing and say so"; here the draft already DOES
+the right thing on every count, so the correct action is confirm + strengthen coverage, not
+rewrite):
+
+- **Ranking**: `ledger.ts:603` (`decayedCounts`) already folds `uploads` weights into `positive`
+  with the same decay curve as an ordinary like — already covered by the pre-existing "boosts a
+  matching title..." test in `upload-concepts.test.ts`.
+- **Word-boundary matching**: `ledger.ts:672`, `scorePreferenceMatch`'s upload-concept text
+  match, uses `text.includes(\` ${label} \`)` (padded spaces) against
+  `` ` ${normalizePreferenceLabel(...)} ` `` — both sides run through the exact same
+  `normalizePreferenceLabel` function, so "the text is normalised the same way as labels" (the
+  guide's own explicit ask) holds by construction, not by convention. This exact mechanism had
+  **no dedicated test** before this item — the closest existing coverage (the "boosts a matching
+  title" test) never tries a near-miss.
+- **Retrieval**: `lib/feed/profile-compiler.ts`'s `compileSearchBrief` already calls
+  `uploadInterestTerms()` (already capped at 3 inside `ledger.ts:338`, `.slice(0, 3)`) and
+  anchors each on the first declared core topic (`` coreTopics[0] ? `${coreTopics[0]} ${term}` :
+  term ``) — satisfies "cap at 3, anchor on declared topics" exactly as asked.
+- **Cache**: `lib/opportunities/pool-cache.ts`'s `PoolCacheKeyInput`/`derivePoolCacheKey` already
+  fold a normalized, sorted `uploadInterests` list into the key's hashed signature — the guide's
+  `uploadInterestDigest` is a name for what this already does (the *whole* signature object,
+  including the normalized upload list, is what gets hashed into the key's digest suffix — not
+  a separately-named field, but the same mechanism). Confirmed this picks either "affects the
+  key" or "shared pool untouched," never a mix (Ruling 4): private text itself never enters any
+  cached payload (unchanged by this item; already true).
+
+**Tests** (3 new, no source changes):
+- `ledger.test.ts` (`scorePreferenceMatch` describe): a new case builds an upload-sourced
+  concept labelled "electrolyte" via `applyUploadPreferenceSignal`, then scores it against a
+  title containing the standalone word ("...the electrolyte") vs. one containing it only as part
+  of a longer word ("...a nonelectrolyte compound") — asserts a real boost on the former and
+  exactly zero on the latter.
+- `pool-cache.test.ts` (2 new cases, placed beside this key's other dimension tests rather than
+  only in `upload-concepts.test.ts`): `uploadInterests` changes the key order/case-insensitively
+  (mirrors how every other topic list in this key already behaves); an absent `uploadInterests`
+  and an explicitly empty one produce the identical key (no private-learning residue when
+  nothing has yet surfaced).
+
+**Revert-proof**: temporarily dropped the space-padding in `scorePreferenceMatch`'s text-match
+(`text.includes(label)` instead of `` text.includes(\` ${label} \`) ``) — the new word-boundary
+test failed exactly as expected (the "nonelectrolyte" miss case scored a nonzero boost).
+Separately dropped the `uploadInterests` line from `derivePoolCacheKey`'s signature object —
+both new `pool-cache.test.ts` cases AND the pre-existing `upload-concepts.test.ts` "adds bounded
+discovery terms..." case failed exactly as expected (confirming this mechanism is shared, not
+newly duplicated). Both reverts restored; confirmed 29/29 (`ledger.test.ts`), 7/7
+(`pool-cache.test.ts`), 9/9 (`upload-concepts.test.ts`).
+
+**Gate after this item**: tsc clean, eslint clean, **vitest 2780/2780** (2777 + 3).
+
+**No live check** — this item confirms an existing, already-live-checked-by-A ranking/retrieval
+mechanism (A's own round-9 part-1 measurement independently confirmed the ranking/retrieval/
+cache-key code paths as "BUILT" by reading); nothing here changes a route response shape.
+
+**Blast radius**: zero. Every file touched is a test file; the two files whose behavior these
+tests pin down (`ledger.ts`, `pool-cache.ts`) are unmodified by this item.
+
+Commit: `test(learning): confirm word-boundary ranking match and upload-interest pool-cache key (9-25)`,
+staging `web/src/lib/preferences/ledger.test.ts`, `web/src/lib/opportunities/pool-cache.test.ts`,
+`docs/handoff/ABC-followup-round2.md`.
+
+**Phase 2 complete.** Items 9-21 through 9-25 all landed, one commit each, gate green after
+every one (final: tsc clean, eslint clean, vitest 2780/2780). Matrix rows this phase targets for
+A's re-measurement: **A1** (9-21: real, filtered keywords with source section), **A4** (9-21:
+reference/generic/number-word noise no longer dominates), **A2** (9-23: server-recorded evidence
++ idempotent recovery merge), **A7** (9-22/9-23: reference-counted retraction, ledger survives
+sync), **A6** (9-24: "from your upload" caption + the two-actions split), **A5**/**A8** (9-25:
+bounded, word-bounded ranking boost; retrieval capped/anchored; cache key isolation confirmed).
+
