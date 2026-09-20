@@ -13722,3 +13722,51 @@ Commit: `chore(upload): purge stray derived files (figures.json, *.tmp) from the
 staging `web/src/lib/papers/upload-store.ts`, `web/src/lib/papers/upload-store.test.ts`,
 `docs/handoff/ABC-followup-round2.md` (the deleted `.local-data/uploads/figures.json` is
 gitignored, nothing to stage for it).
+
+### Round 9 — Agent C, phase 1, item 9-17 (A9-14 — body bound confirmed, matrix C9)
+
+Branch confirmed clean before touching anything. Baseline gate re-run cold: tsc clean, eslint
+clean, **vitest 2752/2752** (post-9-16).
+
+**Confirm-only item — no code change.** Per the phase-1 guide and Ruling 23 (A9-14): "No custom
+streaming multipart parser this round." Verified by reading, not assumed:
+
+- `web/src/app/api/papers/upload/route.ts:145-147` — the `Content-Length` pre-check still runs
+  immediately after the CSRF/hosted/owner gates and strictly before `req.formData()` (line 152),
+  unmodified by any of this phase's five prior commits (9-11 through 9-16 never touched this
+  section — confirmed by `grep`). `contentLength !== null && Number(contentLength) >
+  MAX_UPLOAD_BYTES` -> `413` before any parsing.
+- The post-parse fallback (`file.size > MAX_UPLOAD_BYTES` -> the same `413`/message) is the
+  bound for a request that omits or understates `Content-Length` (a chunked body, or any
+  `Request` built without a computed length) — this is the accepted, named gap from A9's own
+  finding: bounded only after `req.formData()` has buffered the body, not before. Ruling 23
+  explicitly scopes closing that fully out of this round.
+- `web/next.config.ts:38-39`'s `proxyClientMaxBodySize: "30mb"` (round 5) is the outer ceiling on
+  Next's own request-body clone/truncation, already documented in the file's own adjacent
+  comment (unmodified) — the app's 25 MB cap sits under it with headroom, so the proxy never
+  hands the route a silently-truncated body for anything the app would otherwise accept.
+
+**Existing test coverage re-confirmed, not added to**: `upload/route.test.ts`'s "5-02: rejects an
+over-cap body via Content-Length before any parsing at all" (the header-present case) and
+"rejects a file over 25 MB before reading its bytes" (the header-absent/post-parse-fallback
+case, the shape a chunked body actually takes) both still pass unmodified — re-run individually
+(`-t` filters) to confirm neither regressed silently under the intervening 9-11..9-16 commits.
+
+**Live check** (dev server `peer-web` on `:3000`, untouched): built a 26 MB fake PDF fixture
+(over the app's 25 MB cap, under the proxy's 30 MB cap) and POSTed it with
+`Transfer-Encoding: chunked` set explicitly (forcing curl to omit `Content-Length` entirely,
+the actual shape of the gap this item confirms) -> `413 {"error":"That PDF is larger than
+25 MB."}`, proving the post-parse fallback bound holds for a real header-absent request against
+the running server, not just the mocked unit test. Fixture and cookie jar removed after.
+
+**Gate**: unchanged — tsc clean, eslint clean, **vitest 2752/2752** (no new tests; nothing to
+prove by revert since nothing changed).
+
+**For phase 3's docs pass (9-08/A9-08, `docs/PRIVATE_PDF_UPLOADS.md`)**: note precisely — a
+chunked request body with no (or an understated) `Content-Length` is bounded by (1) the Next
+proxy's 30 MB clone/truncation ceiling (`next.config.ts`) and (2) the app's own 25 MB post-parse
+`file.size` check; there is no pre-parse streaming size guard for this specific shape this round,
+by ruling, and the docs should say so plainly rather than imply a stronger guarantee.
+
+Commit: this entry only (§4 append), staging `docs/handoff/ABC-followup-round2.md`. No product
+code touched — the check was already correct and unmodified.
