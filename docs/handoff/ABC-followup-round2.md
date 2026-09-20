@@ -81,19 +81,39 @@ browser, run the reports), then report to the user in plain language and stop th
 
 ```
 ROUND:            9
-WHOSE TURN:       C (phase 1 — boundary: 9-11 … 9-19)
-STOPPED BECAUSE:  B's spawn died on a session limit with nothing written; the manager wrote the
-                   phase-1 guide (§4) @ 2026-09-20 ~06:20 UTC and spawned C.
+WHOSE TURN:       A
+STOPPED BECAUSE:  C finished phase 1 (9-11 .. 9-19), one commit each, gate green after every
+                   one @ 2026-09-20 06:35 UTC.
 STATUS:           A measured the draft: 13 PASS · 6 PARTIAL · 2 FAIL · 5 BLOCKED of 26 matrix
                    rows; sixteen findings A9-01..A9-16; Ruling 23 fixed every fix's shape.
-                   Phase-1 guide 9-11..9-19 (manager-written). Phases 2–3 still need a B turn.
-OPEN ITEMS:       H-A H-B H-C (A9-01..A9-16 open)
-GATE (0 open):    NOT MET
+                   Phase-1 guide 9-11..9-19 (manager-written) fully worked by C. Phases 2–3
+                   (learning: A9-04/A9-11/A9-02/A9-07/A9-12; supplement+docs: A9-09/A9-16/A9-08)
+                   still need a B turn to write their guides.
+DONE:      9-11 CSRF (absent Origin+Sec-Fetch-Site refused); 9-12 UploadMeta status+revision
+           fields, ownedUpload gated on status; 9-13 atomic pending->bytes->ready write with
+           rollback; 9-14 in-flight status/revision re-check before report/reading cache or
+           return (JSON+NDJSON+reading, both call sites); 9-15 revision folded into
+           report/reading/figure client cache keys (3 pure functions extracted + tested,
+           use-private-supplement.ts wired); 9-16 purged the pre-existing 8.6 MB orphaned
+           figures.json (one-time) + closed-list stray-file sweep in purgeExpiredUploads;
+           9-17 confirmed (no code change) the Content-Length pre-check bound still holds;
+           9-18 vercel.json cron + purge-uploads.mjs script + CRON_SECRET docs (no scheduler
+           claimed to run here); 9-19 operator takedown route (ADMIN_TOKEN, 404-when-unset)
+           + closed the blocked-hash re-claim gap in upload/route.ts. 47 new tests total
+           (2713->2760), every one revert-proven (source reverted, test watched fail,
+           restored). 9 commits, one per item, `docs/handoff/ABC-followup-round2.md` staged
+           with each.
+GATE (0 open):    NOT MET (phases 2-3 still open; A has not yet re-measured phase 1's rows)
 
-DONE:      round 9: checkpoint commits; A's measurement; Ruling 23; phase-1 guide.
-GATE NOW:  tsc clean · eslint clean · vitest 2713/2713.
-TODO:      C works 9-11 → 9-19; then B (phase 2 + 3 guides) or the manager if B keeps dying;
-           A re-measures per phase; full matrix at the end.
+GATE NOW:  tsc clean · eslint clean · vitest 2760/2760 (cold, re-run after 9-19).
+TODO:      A re-measures matrix rows C2, C4, C5, C6, C9, B7 (+ a C1/C3 regression check) against
+           phase 1's actual commits — C's own §4 entries name exactly which sub-behavior each
+           item addresses and what was NOT exercised live (mid-flight-race 410s, the
+           authenticated-cron-success path, the authenticated-admin-block-success path — all
+           three need a real second process/restart neither C's session nor a plain curl call
+           can produce, and are called out explicitly in the relevant log entries). Then B (or
+           the manager if B keeps dying) writes the phase-2 (learning) and phase-3
+           (supplement+docs) guides.
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
