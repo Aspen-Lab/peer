@@ -13996,3 +13996,64 @@ execution this round rather than trusted from the commit message.
 Commit: this entry only (§4 append), staging `docs/handoff/ABC-followup-round2.md`. No product
 code touched. Owner A's `upload:955597d0d271a5df` asset intentionally kept alive for part 2's
 C1/C5 tests (not cleaned up in this commit).
+
+### Round 9 — Agent A (after phase 1, part 2 of 4 — C1/C3/C5)
+
+Continuing with the same two owner cookie jars and `upload:955597d0d271a5df` (owner A, still
+live from part 1).
+
+**C3.** Uploaded fixture A's identical bytes as owner B → `200`, `upload:54bb139785574481` — a
+**different** hash16 despite byte-identical content (owner-salted hash, confirmed by
+`privateUploadHash(ownerKey, bytes)` being the real function the route calls). Owner B's
+`DELETE` on owner A's hash → `404`; owner A's `DELETE`/metadata `GET` on owner B's hash → `404`;
+each owner's own list (`GET /api/papers/upload`) shows exactly its own one asset, never the
+other's.
+
+**C1.** Owner B, cold, against owner A's `955597d0d271a5df`: metadata `404`, PDF-bytes route
+`404`, reading route (`/api/papers/upload:<hash>/reading`) `404 {"error":"Paper not found"}`,
+figure route `404`, `DELETE` `404`, deep-report `POST` (both the plain-JSON branch and the
+`Accept: application/x-ndjson` stream branch, same body) → `404 {"error":"Upload not found."}` —
+the report route refuses **before ever branching into the stream**, since `handlePost`'s
+top-of-function ownership check runs first regardless of `wantsStream`. Then **warmed every one
+of owner A's own caches for real**: a legitimate reading `GET` (`200`), a legitimate figure `GET`
+(`200`), and a legitimate deep-report `POST` that actually ran a configured model and returned a
+real report grounded in the fixture's own text — then repeated all six of owner B's refused
+attempts against the now-warm asset: **still `404` on every one**, byte-for-byte the same
+refusal shapes as cold. No route's private-response cache (server-side or otherwise) leaked
+across the owner boundary at any point this round.
+
+**C5.** Same-origin `DELETE` (`sec-fetch-site: same-origin`, the legitimate path) on owner A's
+asset → `200 {"deleted":true,...}` — this is also the "same-origin succeeds" half of part 1's C2
+check, folded in here since it doubles as this row's own delete step. Then **delete-then-
+re-request, twice in a row**: `POST /api/papers/report` for the now-deleted
+`upload:955597d0d271a5df` → `404 {"error":"Upload not found."}` both times (not `410`), and the
+reading/figure routes for the same id → `404`/`404` too. **This is not a defect** — it is exactly
+what 9-14's own log entry predicted and explained: a sequential curl "delete, then generate
+again" hits the pre-existing, `status`-tightened (9-12) top-of-`handlePost`/`ownedUpload` gate
+before generation ever starts, which is a real and correct refusal, just via a different,
+equally-safe status code than the `410` shorthand this round's own task text names. The `410`
+path exists specifically for a delete/replace landing **while a single request's own generation
+is still in flight** — a genuine race no sequential `curl` call can produce. That race is what
+9-14's three mocked, revert-proven unit tests cover instead; I independently re-ran
+`report/route.test.ts` and `[id]/reading/route.test.ts` cold (not trusting C's log) —
+**29/29 passed**, including all three revision/`410` cases. Repeating the request never
+resurrected or cached anything (the deleted hash16's `.json`/`.pdf` pair never reappeared in the
+directory listing).
+
+Admin block route: `POST /api/admin/uploads/block` with `ADMIN_TOKEN` confirmed unset (not added
+to `.env.local`, never will be) → `404 {"error":"Not found"}`, **with or without** an
+`Authorization` header at all — the route hides its own existence exactly as designed. The
+authenticated block-then-reclaim-refused round trip against the **live** dev server cannot be
+exercised this session: `ADMIN_TOKEN` lives in the already-running server process's environment,
+fixed before this session started, and cannot change without restarting that process — forbidden
+by this round's standing constraints; setting the variable only in my own shell (as the task text
+allows) has no effect on a different, already-running process. Rather than skip verification, I
+independently re-ran the two tests that exercise this exact behavior against **real files and the
+real, unmocked `ownedUpload` helper** (not a stub): `admin/uploads/block/route.test.ts`'s "blocks
+a real upload: unlinks the PDF, keeps a minimal meta, and the asset then fails `ownedUpload` for
+its own owner" (**1 passed**), and `upload/route.test.ts`'s "9-19: refuses to re-upload a blocked
+hash16, never resurrecting it as a fresh ready asset" (**1 passed**) — both cold, both
+independently confirmed, not merely trusted from C's log.
+
+Commit: this entry only (§4 append), staging `docs/handoff/ABC-followup-round2.md`. No product
+code touched. Owner B's `upload:54bb139785574481` kept alive for part 3's cleanup.
