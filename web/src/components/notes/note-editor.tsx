@@ -68,6 +68,7 @@ import { COMMAND } from "@/components/ui/command";
 import { cn } from "@/lib/cn";
 import { caretCoords, caretLine, offsetFromPoint } from "./caret";
 import { InlineText } from "./inline-text";
+import { NotesRail } from "./notes-rail";
 
 type Doc = { title: string; blocks: Block[]; sources: Record<string, Source> };
 type Caret = number | "start" | "end";
@@ -432,6 +433,8 @@ export function NoteEditor({ note }: { note: Note }) {
   const [anchor, setAnchor] = useState<{ top: number; left: number; above: boolean } | null>(null);
   const [blockMenu, setBlockMenu] = useState<{ id: string; top: number } | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
+  /** The rail as a panel, where there is no room for it as a column. */
+  const [railOpen, setRailOpen] = useState(false);
   const [drag, setDrag] = useState<{ id: string; gap: number } | null>(null);
   /** The drag in progress, and the gap it would drop into now — read on
    *  release from here, not from state, which can be a move behind. */
@@ -1127,13 +1130,46 @@ export function NoteEditor({ note }: { note: Note }) {
   }, [saved, refs]);
 
   return (
-    <div className="xl:grid xl:grid-cols-[minmax(0,1fr)_15rem] xl:gap-16">
+    // Three columns where the window allows: the notes rail, the note, the
+    // shelf to cite from. Below that the rail is a panel the bar opens, and
+    // the shelf gives way to @.
+    <div className="lg:grid lg:grid-cols-[13rem_minmax(0,1fr)] lg:gap-10 xl:grid-cols-[13rem_minmax(0,1fr)_13rem] xl:gap-12">
+      <aside className="hidden lg:block">
+        <div className="sticky top-24 flex max-h-[calc(100vh-8rem)] flex-col">
+          <NotesRail currentId={note.id} />
+        </div>
+      </aside>
+
       <div className="min-w-0">
         {/* The page's own bar: where it lives, that it is kept, and out. */}
-        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 pl-10">
-          <Link href="/saved" className="eyebrow text-text-faint hover:text-heading">
-            ← Saved
-          </Link>
+        <div className="relative flex flex-wrap items-center justify-between gap-x-4 gap-y-2 pl-10">
+          <div className="flex items-center gap-3">
+            <Link href="/saved" className="eyebrow text-text-faint hover:text-heading">
+              ← Saved
+            </Link>
+            <button
+              type="button"
+              className={`${COMMAND} lg:hidden`}
+              aria-expanded={railOpen}
+              onClick={() => setRailOpen((o) => !o)}
+            >
+              Notes
+            </button>
+          </div>
+          {railOpen && (
+            <>
+              <button
+                type="button"
+                aria-hidden
+                tabIndex={-1}
+                className="fixed inset-0 z-20 cursor-default lg:hidden"
+                onClick={() => setRailOpen(false)}
+              />
+              <div className="absolute left-0 top-full z-30 mt-2 flex max-h-[70vh] w-[min(20rem,calc(100vw-3rem))] flex-col bg-surface p-3 shadow-card lg:hidden">
+                <NotesRail currentId={note.id} onPicked={() => setRailOpen(false)} />
+              </div>
+            </>
+          )}
           <div className="relative flex items-center gap-3">
             <span className="annotation text-text-faint tabular-nums" aria-live="polite">
               {notice ?? `${words} ${words === 1 ? "word" : "words"} · ${status === "saving" ? "saving…" : "kept in this browser"}`}

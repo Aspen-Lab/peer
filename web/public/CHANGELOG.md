@@ -2,6 +2,19 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.34.1 — 2026-09-19
+
+A rail of your notes, beside the one you are writing.
+
+Every note in this browser is listed down the left of the editor, newest
+first, with the open one marked — Obsidian's file list, Notion's sidebar.
+Switching notes is a click instead of a trip back to the shelf, and "+ New"
+starts one from where you are. Past seven notes the rail carries a filter,
+which reads titles and text. Where the window is too narrow for a column, the
+bar's "Notes" button opens the same list as a panel.
+
+It is the editor's rail, not the shell's: Peer's chrome is still the masthead.
+
 ## v0.34.0 — 2026-09-18
 
 Notes: what you saved, turned into writing.

@@ -18,7 +18,9 @@ export default function NotePage() {
   const note = useNotesStore((s) => s.notes[id]);
 
   return (
-    <PageContainer width="spread" rhythm="reader" className="pb-24">
+    // The board's width: the note keeps its own measure, and the room around
+    // it carries the notes rail and the shelf.
+    <PageContainer width="board" rhythm="reader" className="pb-24">
       {!ready ? null : note ? (
         // Keyed by the note: moving to another note starts a fresh editor
         // rather than carrying one note's state into the next.
