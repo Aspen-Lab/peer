@@ -14862,3 +14862,16 @@ items A's own round-9 measurement already flagged as **NEEDS BROWSER**/**NEEDS B
 (deepRequested copy-vs-behavior, full UI/build polish, the green button's actual rendered
 appearance in both themes).
 
+### Round 9 — manager browser checks (2026-09-20, while A runs the full matrix)
+
+`/papers/openalex:W7212354020` (Wiley, abstract-tier report — the exact B1 case), by DOM
+rects in the Browser pane at three widths (a `vw: 0` reading occurs while the pane is
+collapsed — discarded):
+- **2560 px:** "Open at the publisher" x 700–1282 and **"upload full article pdf"** x 1294–1852,
+  same row (y 1245), both 40 px tall; the green one's background is `rgb(4,120,87)` =
+  `--color-positive` (`#047857`). **B1 layout closed on desktop.**
+- **1300 px (xl band):** side by side, y 1162, 482 + 458 px wide. **No wrap.**
+- **390 px (phone):** side by side, y 975, 181 + 157 px, 50 px tall, page width 390 = no
+  horizontal overflow. **Closed.**
+- The exact text `upload full article pdf` is rendered (the "o" prefix on the publisher label
+  is its keyboard hint glyph).
