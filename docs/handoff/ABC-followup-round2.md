@@ -14057,3 +14057,50 @@ independently confirmed, not merely trusted from C's log.
 
 Commit: this entry only (§4 append), staging `docs/handoff/ABC-followup-round2.md`. No product
 code touched. Owner B's `upload:54bb139785574481` kept alive for part 3's cleanup.
+
+### Round 9 — Agent A (after phase 1, part 3 of 4 — C4/C6/C10)
+
+**C4.** Confirmed no `figures.json` anywhere in `.local-data/uploads/` before starting (the
+directory listing at the top of this session already showed none — 9-16's one-time deletion
+holds). Generated two new, genuinely different self-made fixtures this round (`fixtureB.pdf`,
+"Impedance Spectroscopy of Solid State Battery Electrolytes," a blue Nyquist-plot figure;
+`fixtureC.pdf`, "Thermal Stability of Perovskite Solar Cell Interfaces," a red triangular-plot
+figure) and ran **two truly concurrent uploads** (owner A → fixtureB, owner B → fixtureC, both
+`curl` calls backgrounded and `wait`ed together) → `200`/`200`, `upload:47bfe21c8aa706ab` (owner
+A) and `upload:fe1e8f2ee70d20cb` (owner B), each with the correct, non-swapped title in its own
+response. Then **two truly concurrent `/api/figure` calls** (owner A → its own hash, owner B →
+its own hash, backgrounded together) → each returned its **own** correct caption (verified by
+reading the actual caption strings back) and a distinct image (SHA-256 of the two data URIs
+differ in the first 16 hex chars, `87d0d1d7...` vs `c6803195...`, different byte lengths too) —
+no cross-contamination under real concurrency. After both requests settled: `.local-data/uploads/`
+had no `figures.json` and no non-`.pdf`/`.json` file of any kind; the real Windows temp directory
+(not just the Git-Bash `$TEMP` alias) had no `peer-*`-prefixed leftover directory either.
+
+**C6.** `vercel.json` (repo root) declares the cron exactly as specified
+(`{"crons":[{"path":"/api/jobs/purge-uploads","schedule":"17 3 * * *"}]}`); `web/package.json`
+has the `purge-uploads` script. Ran `npm run purge-uploads` from `web/` with `CRON_SECRET`
+confirmed unset (never added) → refused immediately with its own clear message, **exit code 1**,
+before making any HTTP call at all — confirmed none of this session's three still-live test
+uploads were touched (all three `.pdf` files still present on disk right after). README's
+"Retention & cleanup (9-18)" paragraph names both enablement paths (Vercel cron + `CRON_SECRET`
+project env var; `npm run purge-uploads` + an operator's own OS scheduler) and states plainly
+"**neither runs automatically in this local checkout**" — matches Ruling 23's "never claim a
+scheduler runs on this machine" exactly; grepped for any stronger claim anywhere else in
+`README.md` — none found.
+
+**C10.** Captured a fresh metadata-route response and the list-route response this round and
+grepped both for `data:image` — **zero matches** in either; the metadata response's
+`summaryIntro` was 221 characters (well under the deliberate 400-char cap), no full section text
+anywhere in the body. The concrete prior evidence for this row (the pre-existing 8.6 MB
+`figures.json`) is confirmed **gone** (see C4 above) — nothing on disk today matches the shape
+this row exists to catch.
+
+**Cleanup.** All three of this session's remaining live test uploads — owner B's
+`upload:54bb139785574481` (fixture A content), owner A's `upload:47bfe21c8aa706ab` (fixture B),
+owner B's `upload:fe1e8f2ee70d20cb` (fixture C) — deleted via the real `DELETE` route
+(`200`/`200`/`200`), not by hand. `.local-data/uploads/` afterward has exactly the same 12
+pre-existing legacy `.pdf`/`.json` pairs that were there before this session started (untouched,
+not this session's to remove); `git status` confirmed clean.
+
+Commit: this entry only (§4 append), staging `docs/handoff/ABC-followup-round2.md`. No product
+code touched.
