@@ -107,6 +107,10 @@ export interface UploadMeta {
    * keyed on it (9-15) never mix an old and a new attachment.
    */
   revision?: number;
+  /** 9-19 (A9-06): set only by the operator takedown route, alongside
+   *  `status: "blocked"` — an audit timestamp, never displayed to the owner
+   *  as anything but "no longer available". */
+  blockedAt?: string;
   hash16: string;
   fileName: string;
   /** Largest-font first-page line, or the file name without its extension

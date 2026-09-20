@@ -13837,3 +13837,87 @@ no new automated tests to add to the suite; script behavior proven by direct exe
 Commit: `chore(ops): add the daily purge-uploads scheduler config and local trigger script (9-18/A9-05)`,
 staging `vercel.json` (repo root), `web/scripts/purge-uploads.mjs`, `web/package.json`,
 `web/.env.example`, `README.md` (repo root), `docs/handoff/ABC-followup-round2.md`.
+
+### Round 9 — Agent C, phase 1, item 9-19 (A9-06 — operator takedown, matrix C5/L1)
+
+Branch confirmed clean before touching anything. Baseline gate re-run cold: tsc clean, eslint
+clean, **vitest 2760/2760** — wait, that is *after* this item; the pre-item baseline was
+**vitest 2752/2752** (post-9-18, since 9-17 added no tests).
+
+**New route**: `web/src/app/api/admin/uploads/block/route.ts` — `POST { hash16 }`, gated by
+`ADMIN_TOKEN` with the same timing-safe bearer pattern as the existing purge-uploads route:
+**404 when the env var is unset** (never reveals the route exists to an unconfigured
+deployment), `401` on a present-but-wrong token or a missing header entirely, `400` on a
+malformed `hash16`, `404` when no record exists for a well-shaped one. On success: unlinks
+`pdfPath(hash16)` (ENOENT tolerated — idempotent re-block), then overwrites the meta with a
+**minimal** record — exactly the four fields the guide names (`status: "blocked"`, `blockedAt`,
+`ownerKey`, `documentKey`) plus the type's other required scalars set to honestly-empty values
+(`fileName`/`title`: `""`, `textStatus: "empty"`) and `preferenceSignals: []` (explicit
+retraction, not merely absent) — dropping DOI, page count, rights-acceptance audit fields, and
+`expiresAt` entirely (no `expiresAt` also means `listUploadMeta`, the owner's own upload list,
+naturally excludes it). Comment notes phase 2 is where cross-document reference-counted
+retraction belongs; this pass only ever clears the one blocked asset's own signals.
+
+**"Unlinks... derived files" — verified, not assumed**: re-confirmed (already established in
+9-16's own investigation) that the PDF is the *only* per-hash16 file that ever lands in
+`UPLOAD_DIR` — full-text/figure extraction for `upload:` ids bypasses every shared/per-request
+cache and reads the PDF directly on each call, so there is no other derived file anywhere to
+clean up.
+
+**A real interaction bug this item's own guarantee required catching**: "so the id cannot be
+re-claimed" does not hold for free. Before this item's `upload/route.ts` change, a blocked
+hash16's meta survives (deliberately, to prevent re-claim) but its PDF is gone — which is
+*exactly* 9-13's `isNewAsset = !uploadFileExists(hash16)` condition for treating a re-upload as
+brand new, silently overwriting the "blocked" meta with a fresh "ready" one on the very next
+identical-bytes upload attempt by the same owner. Added one check in `upload/route.ts`
+(`if (previous?.status === "blocked") return 403`) right after `previous` is read, before any
+further processing — closing this before it could ever ship. Documented as a comment naming the
+9-13/9-19 interaction directly.
+
+**Tests**: `admin/uploads/block/route.test.ts` (new, 7 cases) — the four guide-named cases
+(404 unset, 401 wrong token, 400 malformed hash16, 404 no record) plus three more found while
+writing them: 401 with no `Authorization` header at all (distinct code path from "wrong token"),
+the full block-then-`ownedUpload`-fails round trip against **real** `UPLOAD_DIR` files and the
+**real**, unmocked `ownedUpload` (not a stubbed check — matches the standing instruction that
+security tests must exercise the real authorization helper), and idempotent re-block (no PDF on
+disk at all) not throwing. `upload/route.test.ts` gains one more case (the 9-13/9-19 interaction
+above): a blocked `previous` meta -> `403`, `writeUploadMeta`/`writeUploadPdfIfAbsent` never
+called.
+
+**Revert-proof**: reverted three things independently and re-ran each time — (1) the
+`upload/route.ts` blocked-hash guard removed -> the new upload-route test failed exactly as
+expected (`200` instead of `403`, i.e. the asset really would have been resurrected); (2) the
+block route's `if (!token) return 404` guard removed -> the 404-when-unset test failed (`401`
+instead of `404`); (3) the block route's `unlink` call removed -> the full block test failed
+(`existsSync` still `true`). All three restored and confirmed green again (41/41 across both
+test files).
+
+**Gate after this item**: tsc clean, eslint clean, **vitest 2760/2760** (2752 + 8: 7 new + 1
+new).
+
+**Live check** (dev server `peer-web` on `:3000`, untouched; `ADMIN_TOKEN` confirmed absent from
+`.env.local` — not added, per the standing instruction): `curl -X POST
+/api/admin/uploads/block` with an `Authorization: Bearer anything` header and a well-shaped
+`hash16` body -> `404 {"error":"Not found"}`, live-confirming the env-gated route never even
+reveals its own existence on this unconfigured server. The authenticated-success path (block a
+real live asset end-to-end against the running server) was not exercised live — it would require
+setting a real `ADMIN_TOKEN` in the running server's environment, which needs a restart this
+session does not perform; covered instead by the test above against real files and the real
+`ownedUpload` helper.
+
+**Blast radius**: one new route + one new test file; one small guard added to the pre-existing
+`upload/route.ts` (required for this item's own correctness, not scope creep — documented as
+such); one new optional field (`blockedAt`) on `UploadMeta`.
+
+Commit: `feat(admin): add the operator upload-takedown route (9-19/A9-06)`, staging
+`web/src/app/api/admin/uploads/block/route.ts`,
+`web/src/app/api/admin/uploads/block/route.test.ts`, `web/src/lib/papers/upload-store.ts`,
+`web/src/app/api/papers/upload/route.ts`, `web/src/app/api/papers/upload/route.test.ts`,
+`docs/handoff/ABC-followup-round2.md`.
+
+**Phase 1 complete.** Items 9-11 through 9-19 all landed, one commit each, gate green after
+every one. Matrix rows this phase targets for A's re-measurement: **C2** (9-11: the CSRF gap),
+**C4** (9-16: the orphaned `figures.json`), **C5** (9-13/9-14/9-19: atomic write, in-flight
+re-check, and operator takedown together), **C6** (9-18: the scheduler config), **C9** (9-17:
+confirmed, unchanged), **B7** (9-12/9-13/9-15: status+revision fields, atomic write, and
+revision-aware cache keys together).

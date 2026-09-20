@@ -515,4 +515,27 @@ describe("POST /api/papers/upload", () => {
     expect(res.status).toBe(500);
     expect(mocks.deleteUpload).not.toHaveBeenCalled();
   });
+
+  it("9-19: refuses to re-upload a blocked hash16, never resurrecting it as a fresh ready asset", async () => {
+    // The PDF bytes are gone (unlinked by the block route), so
+    // uploadFileExists would say "not on disk" — exactly the shape that
+    // would otherwise make isNewAsset true and let 9-13's pending->ready
+    // write silently overwrite the blocked record.
+    mocks.uploadFileExists.mockReturnValue(false);
+    mocks.readUploadMeta.mockResolvedValue({
+      hash16: "existing-hash16-",
+      fileName: "",
+      title: "",
+      uploadedAt: "2026-09-01T00:00:00.000Z",
+      textStatus: "empty",
+      status: "blocked",
+      blockedAt: "2026-09-02T00:00:00.000Z",
+      ownerKey: "test-owner",
+      documentKey: "doc-key",
+    });
+    const res = await postWith(pdfFile(pdfBytes()));
+    expect(res.status).toBe(403);
+    expect(mocks.writeUploadMeta).not.toHaveBeenCalled();
+    expect(mocks.writeUploadPdfIfAbsent).not.toHaveBeenCalled();
+  });
 });

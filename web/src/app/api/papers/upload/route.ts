@@ -228,6 +228,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "This PDF could not be verified as this article. Choose its full-text PDF with readable text; the existing report has been kept." }, { status: 422, headers: PRIVATE_UPLOAD_HEADERS });
   }
   const previous = await readUploadMeta(hash16);
+  // 9-19 (A9-06): a blocked hash16 keeps a minimal meta specifically so it
+  // cannot be re-claimed — without this check, the PDF being gone would
+  // make `isNewAsset` true below and silently resurrect a fresh "ready"
+  // asset at the same content hash, undoing the takedown.
+  if (previous?.status === "blocked") {
+    return NextResponse.json({ error: "This content is not available for upload." }, { status: 403, headers: PRIVATE_UPLOAD_HEADERS });
+  }
   const now = new Date().toISOString();
   // DOI deduplicates alternate publisher PDFs; otherwise use identical bytes.
   const documentKey = createHash("sha256").update(`${ownerKey}:${doi?.toLowerCase() ?? hash16}`).digest("hex");
