@@ -81,19 +81,39 @@ browser, run the reports), then report to the user in plain language and stop th
 
 ```
 ROUND:            9
-WHOSE TURN:       C (phase 2 — learning: 9-21 … 9-25; then phase 3: 9-31 … 9-33)
-STOPPED BECAUSE:  A's phase-1 re-measure banked by the manager (A died after part 3); phase-2/3
-                   guides written by the manager @ 2026-09-20 ~11:30 UTC.
-STATUS:           Phase 1 closed: C1 C2 C3 C4 C5 C6 C9 C10 B7 PASS. Open: A1–A8 (learning), B1–B6
-                   (supplement), L1 (docs). Server was down at the manager's check — restarted.
-OPEN ITEMS:       A9-02 A9-04 A9-07 A9-08 A9-09 A9-11 A9-12 A9-16
-GATE (0 open):    NOT MET
+WHOSE TURN:       A
+STOPPED BECAUSE:  C finished phase 2 (9-21..9-25) AND phase 3 (9-31..9-33) @ 2026-09-20 ~11:41 UTC.
+                   Budget allowed the full remainder of round 9's C work in one sitting.
+STATUS:           Phase 1 closed (prior turn): C1 C2 C3 C4 C5 C6 C9 C10 B7 PASS. Phase 2 + 3 code
+                   landed this turn, one commit per item, gate green after every one — NOT YET
+                   independently re-measured by A. A1–A8 (learning), B1–B6 (supplement), L1
+                   (docs) all have code now; some sub-cases (B's own "NEEDS BROWSER" layout/
+                   deepRequested questions from Round 9 part 1) still need a browser, which C does
+                   not have.
+OPEN ITEMS:       A9-02 A9-04 A9-07 A9-08 A9-09 A9-11 A9-12 A9-16 — all have code changes this
+                   turn; awaiting A's re-measurement to confirm closed, not yet banked as PASS.
+GATE (0 open):    NOT MET (awaiting A's verdict)
 
-DONE:      round 9: A's draft measurement; Ruling 23; phase 1 (9-11..9-19) landed and re-measured.
-GATE NOW:  tsc clean · eslint clean · vitest 2760/2760 (manager, cold).
-TODO:      C works 9-21 → 9-25 (phase 2), then 9-31 → 9-33 (phase 3) — one turn each if budget
-           allows, else stop at the phase boundary. A then measures A1–A8, B1–B6, L1 and the full
-           matrix.
+DONE:      round 9: A's draft measurement; Ruling 23; phase 1 (9-11..9-19); phase 2 (9-21 Tier-0
+           quality/facet/extractionVersion, 9-22 reference-counted retraction, 9-23 server-
+           recorded evidence + idempotent recovery merge, 9-24 "from your upload" caption + two
+           learn-forget actions, 9-25 ranking/retrieval confirmation tests); phase 3 (9-31
+           three-band matching + confirm dialog + "Attached to" status line, 9-32 --color-positive
+           theme tokens, 9-33 docs/PRIVATE_PDF_UPLOADS.md + README + no-guarantee-of-legality
+           test). 8 commits total this turn (9-21, 9-22, 9-23, 9-24, 9-25, 9-31, 9-32, 9-33),
+           each with its own §4 entry, gate figures, and revert-proof.
+GATE NOW:  tsc clean · eslint clean · vitest 2798/2798 (C, cold, this turn's last run).
+TODO:      A measures A1–A8, B1–B6, L1, and the full matrix (C1–C10 already PASS from the prior
+           phase-1 re-measure — re-confirm only if a phase-2/3 change plausibly touched one of
+           those paths, e.g. 9-22's DELETE-route response shape). Live-check items this session's
+           curl-only tooling could exercise: 9-21 (real upload → no "three"/"nodes", facets
+           present), 9-22 (two same-DOI copies, delete order → retractEvidence false then true),
+           9-23 (GET list → preferenceSignalsRecordedAt/extractionVersion present), 9-31 (all
+           three match bands live, including the confirm→confirm=1 round trip) — all confirmed
+           working by C this turn; A should independently re-derive rather than trust the log.
+           Genuinely NEEDS BROWSER (neither C nor A has one): the green button's actual rendered
+           color in both themes (9-32), the confirm dialog's and "Attached to" line's real layout,
+           the supplement-attach flow end to end through the actual UI (not curl).
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
