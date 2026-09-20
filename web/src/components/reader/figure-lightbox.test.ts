@@ -1,15 +1,10 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { clampFigureSize, FigureLightbox } from "./figure-lightbox";
+import { clampFigurePan, clampFigureSize, FigureLightbox } from "./figure-lightbox";
 
-// S12 (6-08): this repo has no @testing-library/react and no test anywhere
-// simulates a click/keydown (confirmed by B's investigation) — so the
-// ceiling here is the same as every other component in this codebase: a
-// renderToStaticMarkup smoke test of the default (closed) render, plus
-// direct unit tests on the one pure function the interactive behaviour
-// depends on. Open/close/focus/keyboard-guard behaviour is exercised by the
-// manager's own browser click-through, per the round-6 text's assignment.
+// Geometry regressions and SSR safety; pointer/focus/layout behavior is also
+// checked in the browser, where transformed ancestors and real image sizes matter.
 
 describe("FigureLightbox — default (closed) render", () => {
   const html = renderToStaticMarkup(
@@ -38,22 +33,18 @@ describe("FigureLightbox — default (closed) render", () => {
 });
 
 describe("clampFigureSize", () => {
-  it("scales up toward the viewport's own ceiling when that binds tighter than the 2x-natural cap", () => {
-    // naturalCeiling {600,400}; viewportCeiling {384,288} — viewport wins on both axes.
+  it("fits a landscape image into the available viewport", () => {
     const size = clampFigureSize({ width: 300, height: 200 }, { width: 400, height: 300 });
     expect(size).toEqual({ width: 384, height: 256 });
   });
 
-  it("caps at 2x the natural size when the viewport has room to spare", () => {
-    // naturalCeiling {100,100}; viewportCeiling {3840,3840} — the 2x cap wins.
+  it("fills the available space even for a small source image", () => {
     const size = clampFigureSize({ width: 50, height: 50 }, { width: 4000, height: 4000 });
-    expect(size).toEqual({ width: 100, height: 100 });
+    expect(size).toEqual({ width: 3840, height: 3840 });
   });
 
   it("shrinks an oversized figure to fit within 96vw/96vh, aspect preserved", () => {
-    // naturalCeiling {4000,2000}; viewportCeiling {960,960} — viewport wins, and the
-    // resulting scale (0.48) is below 1x: the figure is shown smaller than its own
-    // natural size, the "contain" half of never overflowing the screen.
+    // Large sources shrink as needed; the aspect ratio stays intact.
     const size = clampFigureSize({ width: 2000, height: 1000 }, { width: 1000, height: 1000 });
     expect(size).toEqual({ width: 960, height: 480 });
   });
@@ -63,5 +54,29 @@ describe("clampFigureSize", () => {
       width: 0,
       height: 0,
     });
+  });
+
+  it("fits a tall figure into the space remaining around a caption", () => {
+    const size = clampFigureSize({ width: 600, height: 1800 }, { width: 1200, height: 600 });
+    expect(size).toEqual({ width: 192, height: 576 });
+  });
+
+  it("handles a viewport with no available image space", () => {
+    expect(clampFigureSize({ width: 600, height: 400 }, { width: 320, height: 0 })).toEqual({ width: 0, height: 0 });
+  });
+});
+
+describe("clampFigurePan", () => {
+  it("allows movement within the zoomed image's bounds", () => {
+    expect(clampFigurePan({ x: 120, y: -90 }, { width: 1600, height: 1200 }, { width: 800, height: 600 })).toEqual({ x: 120, y: -90 });
+  });
+
+  it("stops at each edge so the figure cannot be lost offscreen", () => {
+    expect(clampFigurePan({ x: 2000, y: -2000 }, { width: 1600, height: 1200 }, { width: 800, height: 600 })).toEqual({ x: 400, y: -300 });
+    expect(clampFigurePan({ x: -2000, y: 2000 }, { width: 1600, height: 1200 }, { width: 800, height: 600 })).toEqual({ x: -400, y: 300 });
+  });
+
+  it("keeps axes that already fit centered, including after a resize", () => {
+    expect(clampFigurePan({ x: 80, y: 900 }, { width: 400, height: 1200 }, { width: 800, height: 600 })).toEqual({ x: 0, y: 300 });
   });
 });
