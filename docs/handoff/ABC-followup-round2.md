@@ -12686,3 +12686,220 @@ The user handed over `docs/handoff/HANDOFF-upload-profile-fulltext-pdf.md` and a
 the ABC loop tonight. The working-tree draft (45 files) it describes was committed unchanged as
 73323bd ("under review") and the unowned lightbox rewrite as a1d6fd1, so nothing is lost to
 agent deaths. Rulings on the handoff's open choices in §1ac. A spawned.
+
+### Round 9 — Agent A (part 1 of 4 — code-state inventory)
+
+Branch confirmed `complimentary-enhancement-to-main-update`, tree clean, HEAD `252838c` before
+touching anything. Read all 421 lines of the handoff and §1ac/§2/§3 of this file. Read every new
+file the draft added and `git show 73323bd --` on every changed file (44 files total).
+
+**§4.1/4.2 — extraction, Tier 0 (handoff §4.1–4.2)**
+- **BUILT** `web/src/lib/preferences/upload-concepts.ts:16-48` `extractUploadConcepts()` — local
+  n-gram phrase extractor (1-3 grams), stopword list (line 7-14), section weighting title(4) >
+  abstract(3) > method/result/conclusion(2) > other(1), references/acknowledgment/funding/author
+  sections excluded by regex (line 19), capped at 12 concepts (line 45), confidence formula
+  `min(0.95, base + min(count,5)*0.06)` (line 44). No model-enhanced tier exists anywhere in the
+  diff — correct per Ruling 6 (Tier 0 only this round), not a gap.
+- **PARTIAL** against the handoff's own `UploadedConcept` contract (§3): no `facet`
+  (topic/problem/method/material/dataset/application) field anywhere — `PreferenceConcept` only
+  gained `section?: string` (`web/src/types/index.ts` diff, +13/+23). No `extractionVersion`
+  field exists on `UploadMeta` (`web/src/lib/papers/upload-store.ts:80-111`) or on the concept
+  type. No `evidence.start/end` offsets — only the section name. Ruling 1 allows renaming but not
+  dropping semantics; facet classification is dropped entirely, so nothing downstream can weight
+  "method" vs "material" terms differently as §4.1 intends.
+- **FAIL, execution-confirmed** — generic/noise terms are not filtered enough. Uploading a
+  self-made fixture PDF (title/abstract/methods/results, no references section) through the real
+  route returned `"three"` (a bare number) and `"nodes"` (a single generic noun) as
+  `preferenceSignals` alongside the real phrases. Matches handoff §7 bullet 1 exactly.
+
+**§4.3 — ledger entry (handoff §4.3)**
+- **BUILT** `web/src/lib/preferences/ledger.ts` new `applyUploadPreferenceSignal()` (~L299-318),
+  `removeUploadPreferenceSignal()` (~L320-329), `uploadInterestTerms()` (~L331-335). Dedup is
+  per-concept-per-documentKey (`if (current?.uploads?.[documentKey]) continue`). Weight =
+  `2 × confidence`, capped at 2 (`cleanUploadEvidence`, `Math.min(2, value.weight)`). 60-day decay
+  reuses the existing `decayFactor` (`decayedCounts`, ~L600). `cleanPreferenceLedger` preserves
+  the new `uploads` field (confirmed by unit test and by reading the function). No code path
+  touches `researchTopics`/`currentProject`/required topics.
+- **FAIL, execution-confirmed** (throwaway vitest repro, run once and deleted — see part 2, A3) —
+  two live PDF copies verified to the *same DOI* get the *same* `documentKey`
+  (`upload/route.ts:231`, `sha256(ownerKey:doi)`). The ledger's `uploads` map is keyed by
+  `documentKey` only, not by physical asset. Deleting **one** of the two copies calls
+  `forgetUploadPreference(upload.uploadDocumentKey)` →
+  `removeUploadPreferenceSignal(ledger, documentKey)`, which deletes the **only** evidence record
+  for that document — even though the second copy is still live on disk. Reproduced directly: a
+  ledger built from two `applyUploadPreferenceSignal` calls sharing one `documentKey`, then one
+  `removeUploadPreferenceSignal` call, erases the concept entirely. This is handoff §7 bullet 4,
+  still present.
+- **PARTIAL** — persistence is client-only. `recordUploadPreference` (new `web/src/store/profile.ts`
+  action) is invoked only from `UploadButton`'s `onUploaded` callback
+  (`web/src/components/briefing/upload-button.tsx` diff: `recordUpload(data.paper)`), a pure
+  in-browser Zustand write that depends on the pre-existing delayed profile-sync PUT to ever reach
+  the server. No server-side idempotent write, no outbox. A dropped connection or a navigation
+  between upload success and the next sync tick silently loses the learning signal. Matches
+  handoff §7 bullet 3 exactly, still present.
+
+**§4.4 — recommendation effect (handoff §4.4)**
+- **BUILT** ranking: `ledger.ts` `scorePreferenceMatch()` (~L656-670) now also matches
+  upload-sourced ledger entries against candidate title/abstract text with padded-space word
+  boundaries (`text.includes(\` ${label} \`)`), respecting the existing 0.18 positive-gain cap
+  (unit-tested).
+- **BUILT** retrieval: `web/src/lib/feed/profile-compiler.ts` diff — `compileSearchBrief()` calls
+  `uploadInterestTerms()` (max 3), each anchored as `` `${coreTopics[0]} ${term}` ``, and shrinks
+  the base query budget from 15 to 7 to make room rather than uncapping the total (unit-tested,
+  `generatedQueries.length <= 10`).
+- **BUILT** cache key: `web/src/lib/opportunities/pool-cache.ts` diff adds `uploadInterests` to
+  `PoolCacheKeyInput`, folded into `derivePoolCacheKey`'s digest (`web/src/lib/feed/pipeline.ts`
+  diff wires `uploadInterestTerms(req.preferenceLedger, ...)` in). Matches Ruling 4's "must pick
+  one, no mixing" — the draft picked "affects the key."
+- **PARTIAL** — UI visibility. The "What Peer has learned" empty-state copy on
+  `web/src/app/profile/page.tsx` now mentions "upload," but no individual ledger entry in that
+  list is labelled as sourced from an upload, and there is no standalone "this doesn't represent
+  me / remove this source" action separate from `PrivatePdfStatus`'s "Delete PDF and its learned
+  signals" (which deletes the whole private file, not just the learning contribution). Handoff
+  §4.4 bullet 5 asks for both; only the blunt combined action exists.
+
+**§5 — supplement (handoff §5)**
+- **BUILT**, exact text confirmed: `web/src/components/briefing/upload-button.tsx` diff renders
+  literal string `"upload full article pdf"` when `targetPaper` is set, `aria-label` matches.
+  Styled via `buttonVariants({ tone: "green", size: "lg" })`.
+- **FAIL (shape)** — `web/src/components/ui/button.tsx:18`: `green:
+  "bg-emerald-700 text-white shadow-card hover:bg-emerald-800"`. This app defines its own theme
+  tokens (`--color-accent` etc., redefined per light/dark/`data-theme` in `globals.css`); every
+  other `tone` (`primary`, `soft`, `surface`, `ghost`) uses one of those tokens. `emerald-700`/`800`
+  are raw Tailwind palette classes wired to nothing in the token system — exactly what Ruling 7's
+  "never a raw hex that breaks dark mode" was warning against in spirit, even though it is not
+  literally a hex literal.
+- **BUILT**: shown unconditionally on every non-`upload:` paper
+  (`web/src/app/papers/[id]/page.tsx` diff, `Reader`, `!paper.id.startsWith("upload:")`, not gated
+  on `depth`/paywall state — correct per Ruling 7's "including the abstract-tier/paywalled case").
+  Hidden on `upload:` papers (same gate, confirmed).
+- **FAIL** against Ruling 8 (matching tiers) and handoff §7 bullet 2 — matching is strictly
+  binary. `matchesUploadedPaper()` (`upload-concepts.ts:50-58`) returns a boolean; the server
+  422-rejects on any non-match (execution-confirmed, part 2 B5). There is no verified-DOI
+  auto-bind / title-overlap one-line-confirm / explicit "is this the right paper" three-tier flow
+  anywhere in the diff — a near-miss title is refused outright, never offered a confirm dialog.
+- **BUILT**: owner-scoped resolution in both report branches and reading —
+  `web/src/app/api/papers/report/route.ts`, `web/src/app/api/papers/[id]/reading/route.ts`,
+  `web/src/lib/papers/full-text.ts`, `web/src/lib/figures/extract.ts` diffs all call
+  `ownedUpload()` before serving private content. Cache keys carry the revision:
+  `use-model-report.ts` bumped to `peer-paper-report-v7` and keys on
+  `` `${paper.id}|${paper.fullTextUploadId ?? "public"}|...` ``; `use-reading.ts` bumped to
+  `peer-reading-v2`, same shape, and actively `localStorage.removeItem("peer-reading-v1")` once.
+- **BUILT**: stays on the original URL — `use-private-supplement.ts` merges `fullTextUploadId`
+  onto the *original* paper object; `paper.id` never changes.
+- **NEEDS BROWSER**: the "green button never drops to the next line on desktop" layout claim
+  (Ruling 7's last sentence) — A has no browser tool; the JSX restructure in `decision-block.tsx`
+  (flex-wrap replacing the old `xl:grid` layout) is a real, non-trivial layout change that needs
+  eyes, not just code reading.
+
+**§6.2 table (handoff §6.2), row by row**
+- Owner: **BUILT**, execution-confirmed (part 2, C1/C3) — prod requires a Supabase session;
+  dev mints a per-browser `HttpOnly`/`SameSite=strict` cookie only at upload time
+  (`upload-access.ts:27-47`), never a shared value.
+- Local dev: **BUILT**, confirmed — two cookie jars got two different owner keys and two
+  different asset hashes for byte-identical PDFs.
+- ID/path: **BUILT**, execution-confirmed — `isValidHash16()` gates every hash before any
+  `path.join`; a traversal-shaped id returns 400, a wrong-length/invalid id returns 404.
+- File/storage: **BUILT** for local disk only (mode `0o600`/`0o700`, `PRIVATE_UPLOAD_HEADERS` on
+  every private route); hosted bucket/RLS storage does not exist in this diff — correctly out of
+  scope per Ruling 11/handoff §6.5, not claimed anywhere.
+- Authorization coverage: **BUILT**, execution-confirmed across metadata / PDF file / reading /
+  report (JSON path) / figure / list / delete (part 2, C1).
+- Cache: **BUILT** — `PRIVATE_UPLOAD_HEADERS` (`private, no-store`) stamped on every private
+  route; note the report `POST` wrapper (`report/route.ts` diff, new `handlePost`/`POST` split)
+  now stamps these headers on **every** report response, including public non-upload papers —
+  an over-broad but safe direction (kills report caching generally), not a security defect.
+  Process-level caches (`full-text.ts`, `figures/extract.ts`) bypass the shared cache entirely for
+  `upload:` ids (confirmed by reading `getFullText`/`getCandidatePool`).
+- Intermediate/temp files: **BUILT** for new extractions — `web/src/lib/figures/pdf-extract.ts`
+  diff: unique `mkdtemp` per call, `finally`-block cleanup, covered by a new, real concurrency unit
+  test (`private-pdf-extract.test.ts`) and independently reproduced by A with two different real
+  owners/PDFs (part 2, C4: zero new leftovers). **But**: a pre-existing 8.6 MB shared
+  `.local-data/uploads/figures.json`, dated before this session, is still on disk today and is
+  **not** matched by the purge job's filename filter (`^[0-9a-f]{16}\.json$`,
+  `upload-store.ts:221`) — it can never be auto-purged by the code that exists.
+- Explicit consent: **BUILT** — `upload-consent-dialog.tsx`, checkbox-gated, server checks
+  `rightsVersion` (execution-confirmed 400 on missing/old version, part 2 C9), `rightsAcceptedAt`
+  stored.
+- External AI: **PARTIAL** — private uploads are excluded from the figure semantic/visual model
+  matcher (`chooseCandidate(..., allowModel=false)` for `upload:` ids, confirmed) and the
+  title-model fallback only ever sees page 1; but no code differentiates "a provider is
+  configured" from "the provider the user consented to," and the consent copy names no specific
+  provider.
+- Data minimization: **BUILT** — only phrases + section name persist in the ledger; no full text
+  in ledger, cache or (checked) logs.
+- Deletion/ban: **PARTIAL** — owner self-delete is built and execution-confirmed (file + meta +
+  attachment removed, ledger evidence forgotten client-side); there is **no** operator/admin-side
+  block-or-remove path anywhere in the diff, which handoff §6.2 explicitly requires ("不能只有用户
+  自己能删").
+- Concurrent delete/in-flight: **NOT BUILT** — no version/status check exists in `report/route.ts`
+  or `full-text.ts` that would cancel or refuse an in-flight generation after a mid-flight delete.
+  The handoff's own suggested `status: "pending"|"ready"|"deleted"|"blocked"` field
+  (§3) does not exist anywhere in the actual `UploadMeta` interface.
+- Retention: **PARTIAL** — `expiresAt` set at 30 days, access refused past expiry
+  (`ownedUpload`'s own check), sweep-on-upload exists (`purgeExpiredUploads()` runs after every
+  upload) — but nothing schedules `web/src/app/api/jobs/purge-uploads/route.ts` anywhere in this
+  repo (no cron config found); correctly *not* claimed as scheduled by the draft's own comments,
+  matches handoff §7 bullet 7.
+- Resource protection: **BUILT** for size (execution-confirmed 413 pre- and post-parse, 415 on
+  non-PDF magic bytes) and for the rights gate; **NOT BUILT**: no rate limit / concurrent-upload
+  quota anywhere in the diff, and the pre-parse guard is Content-Length-only (see C2/§7 bullet 10
+  below — a chunked body with no Content-Length skips straight to `req.formData()` with no size
+  ceiling until the whole body has already been buffered).
+- Packaging/deployment: not exercised this round (would need a production build) — **NEEDS
+  BUILD-CHECK**.
+
+**§6.3 — retention/UI honesty**: **BUILT** for in-app copy (dialog and `PrivatePdfStatus` both say
+"30 days"). **NOT BUILT** for docs: `web/.env.example`'s new comment points at
+`docs/PRIVATE_PDF_UPLOADS.md`, which does not exist anywhere in the repo (confirmed by `find`).
+`README.md`'s existing upload section (lines 297-304) was **not updated** by this draft at all —
+it still says an upload "is not visible from another [deployment]" with no owner, no mention of
+30-day retention, learning use or AI-provider transfer, and no mention of the purge job.
+
+**§6.4 — legacy migration**: **BUILT** for the safety-critical half — a real Sep-15 legacy
+metadata file with no `ownerKey` field (`.local-data/uploads/6422afa156f795d1.json`, `blank.pdf`)
+is refused (404) to a live owner's cookie, execution-confirmed; no preemptive-claim path exists
+(`ownedUpload`'s strict `meta.ownerKey === key` cannot match `undefined`). **NOT BUILT**: no
+migration or re-upload prompt, and no cleanup route — legacy files have no `expiresAt`, so
+`purgeExpiredUploads()` silently skips them forever (confirmed by reading the filter); they leak
+disk indefinitely with nothing in the diff to ever remove them (the handoff does say not to
+"擅自清空旧目录" without authorization, but the draft leaves no explicit operator path for that
+authorized cleanup to happen through, either). Old client-cache migration: **PARTIAL** —
+`use-model-report.ts`/`use-reading.ts` bump storage-key versions and actively delete named legacy
+keys (confirmed in code, `LEGACY_STORAGE_KEYS` loop); old public CDN edge-cache migration is out
+of scope for a local dev review and correctly unclaimed.
+
+**§7 gap list — still present? (yes/no + evidence)**
+1. Cross-domain/alias/generic-term robustness — **yes**, still present. Evidence: `"three"` /
+   `"nodes"` in a real upload's `preferenceSignals` (execution).
+2. DOI-from-wrong-place / no uncertain-match confirmation flow — **yes**, still present. Evidence:
+   binary accept/422-reject confirmed by curl (part 2 B5); no tiered-confirmation UI anywhere in
+   the diff.
+3. Browser-only learning, no server idempotency/outbox — **yes**, still present. Evidence:
+   `recordUploadPreference` is pure client Zustand state; no server-side ledger-write route
+   exists anywhere in the diff.
+4. Same-DOI duplicate deletion over-forgets — **yes**, still present. Evidence: throwaway vitest
+   repro (run once, deleted) reproduces the exact erasure described in §4.3 above.
+5. In-flight delete/ban races, full CDN cache history — **yes**, still present (no version/status
+   check found; see §6.2 "Concurrent delete" row above). Not independently timed this round
+   (BLOCKED, needs a long-running harness).
+6. Non-transactional writes — **yes**, still present: `writeUploadPdfIfAbsent` and
+   `writeUploadMeta` in `upload/route.ts` are two separate awaited writes with no rollback if the
+   second fails (code reading; not forced to fail this round).
+7. No real scheduled purge job — **yes**, still present (§6.2 Retention row above,
+   execution/search-confirmed: no cron config anywhere in the repo).
+8. Self-hosted local-disk assumption, unverified platform limits — **yes**, unchanged; all storage
+   is local disk gated only by `hostedUploadsEnabled()`.
+9. `deepRequested` copy-vs-behavior consistency — **NEEDS BROWSER**, client-rendered copy, not
+   checkable by curl.
+10. Chunked-body / rate-limit resource limits — **yes**, still present, execution-adjacent: the
+    only pre-body-read guard is the `Content-Length` header check (`upload/route.ts:143-146`); a
+    request that omits or understates it is bounded only by the post-parse `file.size` check,
+    which runs **after** `req.formData()` has already buffered the whole body.
+11. Old derived-copy cleanup incomplete — **yes**, still present, and now live-confirmed: the
+    pre-existing 8.6 MB shared `figures.json` (§6.2 above).
+12. No full UI/build polish pass — **NEEDS BROWSER / NEEDS BUILD-CHECK**, out of A's curl-based
+    tools this round.
+
+Commit: this entry only (§4 append), staging `docs/handoff/ABC-followup-round2.md`. No product
+code touched. §1 left untouched until part 4.
