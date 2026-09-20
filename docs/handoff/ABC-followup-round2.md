@@ -80,25 +80,20 @@ browser, run the reports), then report to the user in plain language and stop th
 ## §1. CURRENT STATE — THE SOURCE OF TRUTH
 
 ```
-ROUND:            9 (opened 2026-09-19 — the upload/learning/supplement handoff, §1ac)
-WHOSE TURN:       B
-STOPPED BECAUSE:  —
-STATUS:           A measured the 73323bd draft against the handoff's §7 gaps and §9 matrix by
-                   execution (two real owner cookie jars, self-made fixture PDFs, curl against
-                   every private route). 13 PASS / 6 PARTIAL / 2 FAIL / 5 BLOCKED-NEEDS BROWSER
-                   of 26 rows. 16-item difference list (A9-01..A9-16) in §4, ranked wrong-data/
-                   security first. Tree clean; A changed no product code.
-OPEN ITEMS:       H-A (learning) · H-B (supplement) · H-C (boundary/lifecycle) — see §1ac and
-                   §4's round-9 difference list (A9-01..A9-16)
+ROUND:            9
+WHOSE TURN:       C (phase 1 — boundary: 9-11 … 9-19)
+STOPPED BECAUSE:  B's spawn died on a session limit with nothing written; the manager wrote the
+                   phase-1 guide (§4) @ 2026-09-20 ~06:20 UTC and spawned C.
+STATUS:           A measured the draft: 13 PASS · 6 PARTIAL · 2 FAIL · 5 BLOCKED of 26 matrix
+                   rows; sixteen findings A9-01..A9-16; Ruling 23 fixed every fix's shape.
+                   Phase-1 guide 9-11..9-19 (manager-written). Phases 2–3 still need a B turn.
+OPEN ITEMS:       H-A H-B H-C (A9-01..A9-16 open)
 GATE (0 open):    NOT MET
 
-DONE:      rounds 1–8. Round 9: A's measurement pass (4 commits, no code).
-GATE NOW:  tsc clean · eslint clean · vitest 2713/2713 (with the draft, re-confirmed cold by A).
-TODO:      B takes A9-01..A9-16 (§4, round 9 Agent A part 4), writes the phase-0/phase-1 fix
-           guide (boundary first, per handoff §8 and §1ac's loop mapping — B may split
-           9-1x/9-2x/9-3x/9-4x if one turn is too long). Then C by phase, A re-measures the
-           phase's matrix rows after each. Close = every matrix row that code can satisfy is
-           green; the §6.5 pre-launch conditions stay reported as open, never claimed.
+DONE:      round 9: checkpoint commits; A's measurement; Ruling 23; phase-1 guide.
+GATE NOW:  tsc clean · eslint clean · vitest 2713/2713.
+TODO:      C works 9-11 → 9-19; then B (phase 2 + 3 guides) or the manager if B keeps dying;
+           A re-measures per phase; full matrix at the end.
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
@@ -13240,3 +13235,83 @@ directory.
 
 Commit: this entry (§4 append) plus the §1 block edited in place and the history table row below,
 staged together as one commit, `docs/handoff/ABC-followup-round2.md` only.
+
+### Round 9 — Agent B, phase 1 guide (written by the MANAGER, 2026-09-20)
+
+B's spawn died on a session limit with nothing written (the second B death of the round). Per
+the skill's rule the manager wrote phase 1's guide directly — it is a less independent guide;
+C must check every line pointer by grepping, not inherit it. Phases 2–3 get a B turn later.
+
+**9-11 — A9-01, CSRF (matrix C2).** `web/src/lib/papers/upload-access.ts:59-63`
+`sameOriginUploadRequest`: `(!origin || origin === same) && sec-fetch-site !== "cross-site"`
+accepts a request with NEITHER header. Fix: for the state-changing callers
+(`app/api/papers/upload/route.ts:135` POST, `upload/[id]/route.ts:28` DELETE, and any PUT/POST
+attach route — grep `sameOriginUploadRequest(`), require `sec-fetch-site ∈ {same-origin,
+same-site, none}` OR `origin === self`; absent both → refuse 403 with the existing error shape.
+Keep GET routes untouched. Tests: `upload-access.test.ts` gains three cases (no headers → false;
+`sec-fetch-site: same-origin` alone → true; `origin` = self alone → true); the route tests that
+POST without headers must now set `sec-fetch-site: same-origin` (rewrite, not delete). Empty
+state: the client's `fetch` always carries the header, so no user-visible change.
+
+**9-12 — status + revision fields (matrix B7, C5).** `upload-store.ts:80-110` `UploadMeta`:
+add `status: "pending" | "ready" | "deleted" | "blocked"` (required on new writes; a missing
+field on legacy meta reads as `"ready"` ONLY if `ownerKey` and `expiresAt` are present — legacy
+unowned files already fail `ownedUpload`) and `revision: number` (starts 1; incremented on
+attach-replace for the same owner+documentKey/paper). `ownedUpload` (`upload-access.ts:49-57`)
+additionally requires `status === "ready"`. `uploadMetaToPaper` passes `revision` through so
+the client can key on it.
+
+**9-13 — A9-15, atomic write (matrix B7).** `upload/route.ts:255-256` writes the PDF then the
+meta. Fix: write meta with `status: "pending"` → `writeUploadPdfIfAbsent` → rewrite meta
+`status: "ready"`; wrap in try/catch that unlinks both on failure and returns 500 with the
+existing error shape. Idempotent re-upload of the same bytes by the same owner: if a `ready`
+meta exists, return it (already so — confirm). Test: a fake `writeUploadPdfIfAbsent` that throws
+leaves no `.json`/`.pdf` behind.
+
+**9-14 — A9-13, in-flight re-check (matrix C5).** `app/api/papers/report/route.ts` (~457, both
+the JSON and NDJSON branches — find both `ownedUpload` sites or the shared resolver) and
+`[id]/reading/route.ts` (~73, ~110): after `generateDeepReport` / reading build and before
+caching or returning, re-read the meta and require `status === "ready"` and the same
+`revision` captured at the start; otherwise return 410 `{ error: "Upload no longer available" }`
+and do not cache. `full-text.ts:328` and `figures/extract.ts`' upload branch already go through
+`ownedUpload` — confirm they re-check on each call (they run per request, so yes).
+
+**9-15 — A9-10, revision in cache keys.** `components/reader/use-model-report.ts` (report key)
+and `use-reading.ts` (reading key): include the attachment `revision` (the page has the paper
+record → `revision` from 9-12's pass-through); server-side `candidatePoolCache` key
+(`figures/extract.ts` `poolCacheKey`) and the `full-text` cache key include `revision` for
+`upload:` ids; `paper-figure.tsx`'s module-level `inFlight`/`settled` maps key on the same
+string the request uses (confirm the URL carries `v=`/revision).
+
+**9-16 — A9-03, orphaned derived files (matrix C4, C10).** Manager-authorised one-time
+deletion of `web/.local-data/uploads/figures.json` (C does it, logs the size). `purgeExpiredUploads`
+(`upload-store.ts:218-224`) also removes stray entries in `UPLOAD_DIR` matching the closed list
+`["figures.json", /\.tmp$/, /^extract-[0-9a-f]+$/ (temp dirs the extractor creates — read
+`figures/pdf-extract.ts` for the actual temp-dir name pattern)]`; never anything else. Test with
+a temp dir fixture.
+
+**9-17 — A9-14, body bound (matrix C9).** `upload/route.ts`: before `req.formData()`, if
+`content-length` is present and > cap → 413 (already the case since round 5 — confirm and keep);
+document in `docs/PRIVATE_PDF_UPLOADS.md` (phase 3) that chunked bodies are bounded by the Next
+proxy cap (30 MB, `next.config.ts`). No code beyond the check.
+
+**9-18 — A9-05, scheduler config (matrix C6).** Add `vercel.json` at the repo root (none
+exists) with `{"crons":[{"path":"/api/jobs/purge-uploads","schedule":"17 3 * * *"}]}`; Vercel
+sends `Authorization: Bearer $CRON_SECRET` automatically when `CRON_SECRET` is set — the route
+already checks it. Add `web/package.json` script `"purge-uploads": "node scripts/purge-uploads.mjs"`
+that calls the same `purgeExpiredUploads` (a small ESM script via `npx tsx` or a compiled
+helper — pick what runs without a build; `tsx` is present if `npx tsx` works in this repo,
+else a `.mjs` that spawns the dev server's route with the bearer). README: how to enable each.
+Never claim it runs on this machine.
+
+**9-19 — A9-06, operator takedown (matrix C5, L1).** New `app/api/admin/uploads/block/route.ts`:
+`POST { hash16 }`, bearer `ADMIN_TOKEN` (timing-safe compare like the purge route; **404 when
+the env var is unset**); sets `status: "blocked"`, unlinks the PDF and derived files, keeps a
+minimal meta (`status`, `blockedAt`, `ownerKey`, `documentKey`) so the id cannot be re-claimed,
+and calls the evidence retraction path (phase 2 adds the reference count; for now, mark
+`preferenceSignals: []`). Tests: 404 without env; 401 wrong token; blocked upload then fails
+`ownedUpload`.
+
+**Gate for phase 1:** tsc · eslint clean; vitest ≥ 2713 + new; matrix rows C2, C4, C5, C6, C9,
+B7 re-measured by A next.
+
