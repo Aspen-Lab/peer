@@ -1,4 +1,5 @@
 import type { FeedRequest } from "./types";
+import { uploadInterestTerms } from "@/lib/preferences/ledger";
 
 export type FeedFocus = "tight" | "balanced" | "exploratory";
 export type FeedFreshness = "today" | "week" | "month";
@@ -158,7 +159,11 @@ export function compileSearchBrief(req: FeedRequest): SearchBrief {
     ...(controls.avoidOldPapers ? ["older paper"] : []),
   ]);
 
-  const generatedQueries = projectQueries(req, controls);
+  const learned = uploadInterestTerms(req.preferenceLedger);
+  const generatedQueries = cleanList([
+    ...projectQueries(req, controls).slice(0, learned.length ? 7 : 15),
+    ...learned.map((term) => coreTopics[0] ? `${coreTopics[0]} ${term}` : term),
+  ]);
 
   return {
     coreTopics,

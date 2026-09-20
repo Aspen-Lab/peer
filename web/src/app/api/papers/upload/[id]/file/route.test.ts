@@ -1,8 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
+  ownedUpload: vi.fn(async () => ({ ownerKey: "test" })),
   uploadFileExists: vi.fn(),
   readFile: vi.fn(),
+}));
+
+vi.mock("@/lib/papers/upload-access", async (original) => ({
+  ...await original<typeof import("@/lib/papers/upload-access")>(), ownedUpload: mocks.ownedUpload,
 }));
 
 vi.mock("@/lib/papers/upload-store", async (importOriginal) => {

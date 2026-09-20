@@ -8,14 +8,15 @@
 import { readFile } from "node:fs/promises";
 import { NextResponse } from "next/server";
 import { isValidHash16, pdfPath, uploadFileExists } from "@/lib/papers/upload-store";
+import { ownedUpload, PRIVATE_UPLOAD_HEADERS } from "@/lib/papers/upload-access";
 
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  if (!isValidHash16(id) || !uploadFileExists(id)) {
-    return NextResponse.json({ error: "Upload not found." }, { status: 404 });
+  if (!isValidHash16(id) || !(await ownedUpload(id)) || !uploadFileExists(id)) {
+    return NextResponse.json({ error: "Upload not found." }, { status: 404, headers: PRIVATE_UPLOAD_HEADERS });
   }
 
   const bytes = await readFile(pdfPath(id));
@@ -23,7 +24,8 @@ export async function GET(
     headers: {
       "Content-Type": "application/pdf",
       "Content-Disposition": `inline; filename="${id}.pdf"`,
-      "Cache-Control": "private, max-age=3600",
+      ...PRIVATE_UPLOAD_HEADERS,
+      "Content-Security-Policy": "sandbox",
     },
   });
 }

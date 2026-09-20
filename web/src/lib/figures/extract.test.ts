@@ -297,6 +297,8 @@ describe("tryHtmlCandidates — 1-21, a small identity-check bounce page is not 
   });
 });
 
+vi.mock("@/lib/papers/upload-access", () => ({ ownedUpload: vi.fn(async () => ({ ownerKey: "test" })) }));
+
 describe("getFigurePool — 1-29, an upload: id reads the local PDF directly", () => {
   beforeEach(() => {
     mocks.extractPdfCandidatesFromPath.mockReset();
@@ -344,7 +346,7 @@ describe("extractFigure — 5-06, the query-less og:image last resort is cached 
     vi.restoreAllMocks();
   });
 
-  it("fetches input.url at most once across repeat no-query calls against the same empty pool", async () => {
+  it("never caches an uploaded PDF pool or fetches its URL as a public fallback", async () => {
     mocks.extractPdfCandidatesFromPath.mockResolvedValue({
       status: "no_figures",
       candidates: [],
@@ -361,6 +363,7 @@ describe("extractFigure — 5-06, the query-less og:image last resort is cached 
     expect(second.status).toBe("no_figures");
     // Once for the og:image last resort, cached on the pool for the second
     // call — not twice, which is what A5-04 measured as the cached-call miss.
-    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+    expect(mocks.extractPdfCandidatesFromPath).toHaveBeenCalledTimes(2);
   });
 });

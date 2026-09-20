@@ -19,6 +19,7 @@ import {
 } from "@/components/charts/reading-calendar";
 import { AdvisorField } from "@/components/profile/advisor-field";
 import { summarizePreferenceLedger } from "@/lib/preferences/ledger";
+import { ProfileUploads } from "@/components/profile-uploads";
 import { apiFetch } from "@/lib/api";
 import { SURFACE_TOPIC_DESCRIPTIONS } from "@/lib/profile/topic-copy";
 import { IconBook, IconBuilding, IconCheck } from "@/components/icons";
@@ -231,6 +232,7 @@ export default function ProfilePage() {
             onReset={resetPreferenceLedger}
           />
           <PastBriefings />
+          <ProfileUploads />
         </>
       ) : (
         <EditView
@@ -1183,7 +1185,7 @@ function LearnedPreferences({
       <div className="px-7 pb-6">
         {!hasAny ? (
           <p className="text-body-sm text-text-faint/80 leading-relaxed measure-ui">
-            Nothing learned yet. As you like, save, or dismiss papers, Peer builds a private
+            Nothing learned yet. As you upload, like, save, or dismiss papers, Peer builds a private
             taste profile here — quietly boosting topics you favor and easing off ones you skip.
             Like and Save count equally; dismissing eases a topic down.
           </p>

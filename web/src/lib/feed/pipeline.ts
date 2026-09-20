@@ -23,6 +23,7 @@ import {
   type PoolCache,
 } from "@/lib/opportunities/pool-cache";
 import { getDefaultOpportunityPoolCache } from "@/lib/opportunities/pool-cache-runtime";
+import { uploadInterestTerms } from "@/lib/preferences/ledger";
 
 const ACADEMIC_PAPER_SOURCES: SourceId[] = [
   "openalex",
@@ -311,6 +312,7 @@ export async function runFeedPipeline(
   const key = derivePoolCacheKey({
     surface: "papers",
     requiredTopics: req.topics,
+    uploadInterests: uploadInterestTerms(req.preferenceLedger, now.getTime()),
     exploreTopics: req.softTopics,
     aiTier: requestedTier,
     now,

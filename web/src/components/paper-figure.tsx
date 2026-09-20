@@ -135,7 +135,7 @@ function acquire(key: string, args: ResolveFigureArgs): InFlight {
     // session's, not the paper's, and the next asker may reach the route.
     created.promise = fetchFigure(key, args, controller.signal)
       .then((state) => {
-        remember(key, state);
+        if (!args.itemId.startsWith("upload:")) remember(key, state);
         return state;
       })
       .finally(() => {

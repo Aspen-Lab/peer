@@ -6,11 +6,21 @@
 // extractor could read; never invents a field it could not find.
 
 import { NextResponse } from "next/server";
+import { createHash } from "node:crypto";
+import { mkdtemp, writeFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { hostedUploadsEnabled, ownedUpload, PRIVATE_UPLOAD_HEADERS, sameOriginUploadRequest, UPLOAD_RIGHTS_VERSION, uploadOwner } from "@/lib/papers/upload-access";
+import { extractUploadConcepts, matchesUploadedPaper } from "@/lib/preferences/upload-concepts";
 import { extractPdfTextFromPath } from "@/lib/papers/pdf-text";
 import { resolveProvider } from "@/lib/llm/providers/registry";
 import {
-  pdfPath,
-  sha16,
+  attachUpload,
+  attachedUploadHash,
+  privateUploadHash,
+  readUploadMeta,
+  purgeExpiredUploads,
+  listUploadMeta,
   uploadId,
   uploadMetaToPaper,
   writeUploadMeta,
@@ -122,6 +132,10 @@ async function resolveUploadTitle(
 const OVER_CAP_RESPONSE = { error: "That PDF is larger than 25 MB." } as const;
 
 export async function POST(req: Request) {
+  if (!sameOriginUploadRequest(req)) return NextResponse.json({ error: "Cross-site upload refused." }, { status: 403 });
+  if (!hostedUploadsEnabled()) return NextResponse.json({ error: "Private PDF storage is not configured on this server." }, { status: 503 });
+  const ownerKey = await uploadOwner(true);
+  if (!ownerKey) return NextResponse.json({ error: "Sign in to upload a private PDF." }, { status: 401, headers: PRIVATE_UPLOAD_HEADERS });
   // 5-02: fail fast on Content-Length before spending any time on
   // parsing. Absent for chunked transfer-encoding or a Request built
   // directly without a computed length (e.g. this route's own tests) — the
@@ -160,24 +174,43 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "That file is not a PDF." }, { status: 415 });
   }
 
-  const hash16 = sha16(bytes);
-  // Idempotent: a repeat upload of the same bytes reuses the existing file
-  // rather than writing (or erroring) again.
-  await writeUploadPdfIfAbsent(hash16, bytes);
+  if (form.get("rightsVersion") !== UPLOAD_RIGHTS_VERSION) {
+    return NextResponse.json({ error: "Confirm that you are authorized to store and process this PDF in Peer." }, { status: 400 });
+  }
+  let target: { id: string; title: string; doi?: string } | undefined;
+  const targetValue = form.get("targetPaper");
+  if (targetValue !== null) {
+    try {
+      target = JSON.parse(String(targetValue));
+      if (!target || typeof target.id !== "string" || target.id.length > 200 || !target.id.trim() || target.id.startsWith("upload:") ||
+          typeof target.title !== "string" || !target.title.trim() || target.title.length > 1000 ||
+          (target.doi !== undefined && typeof target.doi !== "string")) throw new Error("invalid");
+    } catch { return NextResponse.json({ error: "Invalid paper to supplement." }, { status: 400 }); }
+  }
+  const hash16 = privateUploadHash(ownerKey, bytes);
 
   // Extract text now to derive title/DOI/abstract/page count. A failure here
   // (no Python on this machine, the extractor errored, a scanned PDF with no
   // text layer) does not fail the upload — the file is still valid and
   // downloadable either way; the reading page is what tells the reader their
   // PDF has no readable text (1-28), not this route.
-  const extracted = await extractPdfTextFromPath(pdfPath(hash16));
+  const temporary = await mkdtemp(path.join(tmpdir(), "peer-upload-"));
+  const temporaryPdf = path.join(temporary, "source.pdf");
+  const extracted = await (async () => {
+    try {
+      await writeFile(temporaryPdf, bytes, { mode: 0o600 });
+      return await extractPdfTextFromPath(temporaryPdf);
+    } finally {
+      await rm(temporary, { recursive: true, force: true });
+    }
+  })();
   const doc = extracted.ok ? extracted.doc : undefined;
 
   const bodyText = (doc?.sections ?? [])
     .map((section) => section.text)
     .join(" ")
     .slice(0, DOI_SEARCH_CHARS);
-  const doiMatch = bodyText.match(DOI_RE);
+  const doiMatch = (extracted.page1Text || bodyText).match(DOI_RE);
 
   const abstractSection = doc?.sections.find((section) => section.canonical === "abstract");
 
@@ -188,11 +221,27 @@ export async function POST(req: Request) {
   // never a stamp.
   const title = await resolveUploadTitle(doc?.title, extracted.page1Text, file.name);
 
+  const doi = doiMatch ? stripTrailingPunctuation(doiMatch[0]) : undefined;
+  if (target && (!(doc?.sections.length) || !matchesUploadedPaper(target, title, doi))) {
+    return NextResponse.json({ error: "This PDF could not be verified as this article. Choose its full-text PDF with readable text; the existing report has been kept." }, { status: 422, headers: PRIVATE_UPLOAD_HEADERS });
+  }
+  const previous = await readUploadMeta(hash16);
+  const now = new Date().toISOString();
+  // DOI deduplicates alternate publisher PDFs; otherwise use identical bytes.
+  const documentKey = createHash("sha256").update(`${ownerKey}:${doi?.toLowerCase() ?? hash16}`).digest("hex");
+
   const meta: UploadMeta = {
+    ownerKey,
+    rightsVersion: UPLOAD_RIGHTS_VERSION,
+    rightsAcceptedAt: now,
+    expiresAt: new Date(Date.now() + 30 * 86400_000).toISOString(),
+    paperIds: [...new Set([...(previous?.paperIds ?? []), ...(target ? [target.id] : [])])],
+    preferenceSignals: doc ? extractUploadConcepts(doc) : [],
+    documentKey,
     hash16,
     fileName: file.name,
     title,
-    doi: doiMatch ? stripTrailingPunctuation(doiMatch[0]) : undefined,
+    doi,
     pageCount: doc?.pageCount,
     summaryIntro: abstractSection ? abstractSection.text.slice(0, 400) : undefined,
     uploadedAt: new Date().toISOString(),
@@ -203,7 +252,24 @@ export async function POST(req: Request) {
     // report on.
     textStatus: (doc?.sections.length ?? 0) > 0 ? "ok" : "empty",
   };
+  await writeUploadPdfIfAbsent(hash16, bytes);
   await writeUploadMeta(hash16, meta);
+  if (target) await attachUpload(ownerKey, target.id, hash16);
+  await purgeExpiredUploads();
 
-  return NextResponse.json({ id: uploadId(hash16), paper: uploadMetaToPaper(meta) });
+  return NextResponse.json({ id: uploadId(hash16), paper: uploadMetaToPaper(meta), expiresAt: meta.expiresAt }, { headers: PRIVATE_UPLOAD_HEADERS });
+}
+
+/** The mapping itself is private: shared paper metadata never gains an upload. */
+export async function GET(req: Request) {
+  const owner = await uploadOwner();
+  const paperId = new URL(req.url).searchParams.get("paperId");
+  if (!owner) return NextResponse.json({ paper: null, uploads: [] }, { headers: PRIVATE_UPLOAD_HEADERS });
+  if (!paperId) {
+    const uploads = (await listUploadMeta(owner)).map((meta) => ({ paper: uploadMetaToPaper(meta), expiresAt: meta.expiresAt }));
+    return NextResponse.json({ uploads }, { headers: PRIVATE_UPLOAD_HEADERS });
+  }
+  const hash = await attachedUploadHash(owner, paperId);
+  const meta = hash ? await ownedUpload(hash, owner) : null;
+  return NextResponse.json({ paper: meta ? uploadMetaToPaper(meta) : null }, { headers: PRIVATE_UPLOAD_HEADERS });
 }

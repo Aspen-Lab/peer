@@ -15,6 +15,11 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Paper } from "@/types";
 import { UPLOAD_BUTTON } from "@/lib/briefing/copy";
+import { UploadConsentDialog } from "./upload-consent-dialog";
+import { UPLOAD_RIGHTS_VERSION } from "@/lib/papers/upload-policy";
+import { useProfileStore } from "@/store/profile";
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/cn";
 
 interface UploadResponse {
   id: string;
@@ -52,12 +57,23 @@ async function errorFromResponse(res: Response): Promise<string> {
   return `Upload failed (${res.status}).`;
 }
 
-export function UploadButton({ className = "" }: { className?: string }) {
+export function UploadButton({ className = "", targetPaper, onUploaded }: {
+  className?: string; targetPaper?: Paper; onUploaded?: (paper: Paper) => void;
+}) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const recordUpload = useProfileStore((s) => s.recordUploadPreference);
+
+  const chooseFile = (file: File) => {
+    setError(null);
+    if (!looksLikePdf(file)) { setError("That doesn't look like a PDF."); return; }
+    if (isOverUploadCap(file)) { setError("That PDF is larger than 25 MB."); return; }
+    setPendingFile(file);
+  };
 
   const upload = async (file: File) => {
     setError(null);
@@ -77,6 +93,8 @@ export function UploadButton({ className = "" }: { className?: string }) {
     try {
       const form = new FormData();
       form.set("file", file);
+      form.set("rightsVersion", UPLOAD_RIGHTS_VERSION);
+      if (targetPaper) form.set("targetPaper", JSON.stringify({ id: targetPaper.id, title: targetPaper.title, doi: targetPaper.doi }));
       // Not `apiFetch`: it sets `Content-Type: application/json` on any
       // request with a body that doesn't already carry one, which would
       // corrupt a multipart request — the browser must set its own
@@ -87,21 +105,25 @@ export function UploadButton({ className = "" }: { className?: string }) {
         return;
       }
       const data = (await res.json()) as UploadResponse;
-      router.push(`/papers/${encodeURIComponent(data.id)}`);
+      recordUpload(data.paper);
+      if (onUploaded) onUploaded(data.paper);
+      else router.push(`/papers/${encodeURIComponent(data.id)}`);
       // Deliberately not resetting `isUploading` on the success path: the
       // button should stay disabled through the navigation, not flash back
       // to its normal state for the instant before the route changes.
     } catch {
       setError(UPLOAD_BUTTON.error("Upload failed — check your connection and try again."));
       setIsUploading(false);
+    } finally {
+      setIsUploading(false);
     }
   };
 
   return (
-    <div className={`relative ${className}`}>
+    <div className={cn("relative", targetPaper && "min-w-0 flex-1", className)}>
       <button
         type="button"
-        aria-label={UPLOAD_BUTTON.label}
+        aria-label={targetPaper ? "upload full article pdf" : UPLOAD_BUTTON.label}
         disabled={isUploading}
         onClick={() => inputRef.current?.click()}
         onDragOver={(event) => {
@@ -114,9 +136,9 @@ export function UploadButton({ className = "" }: { className?: string }) {
           setIsDragOver(false);
           if (isUploading) return;
           const file = event.dataTransfer.files?.[0];
-          if (file) void upload(file);
+          if (file) chooseFile(file);
         }}
-        className={`group inline-flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-md bg-[color:var(--color-fixed-black)] transition-[opacity,transform] duration-150 ease-snap hover:scale-125 active:scale-90 disabled:scale-100 disabled:opacity-50 disabled:cursor-wait ${
+        className={targetPaper ? cn(buttonVariants({ tone: "green", size: "lg" }), "h-full min-h-10 w-full px-3 py-2 font-mono text-body-sm font-normal leading-tight whitespace-normal [@media(hover:none)]:min-h-11") : `group inline-flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-md bg-[color:var(--color-fixed-black)] transition-[opacity,transform] duration-150 ease-snap hover:scale-125 active:scale-90 disabled:scale-100 disabled:opacity-50 disabled:cursor-wait ${
           isDragOver ? "opacity-75 scale-125" : ""
         }`}
       >
@@ -131,7 +153,7 @@ export function UploadButton({ className = "" }: { className?: string }) {
             classes would have one silently override the other; this repo's
             own convention is always one combined transition-[a,b] bracket
             for exactly that reason.) */}
-        <svg
+        {targetPaper ? (isUploading ? "Uploading PDF…" : "upload full article pdf") : <svg
           width="15"
           height="15"
           viewBox="0 0 24 24"
@@ -146,7 +168,7 @@ export function UploadButton({ className = "" }: { className?: string }) {
           <path d="M12 16V4" />
           <path d="M6 10l6-6 6 6" />
           <path d="M4 20h16" />
-        </svg>
+        </svg>}
       </button>
       <input
         ref={inputRef}
@@ -158,9 +180,11 @@ export function UploadButton({ className = "" }: { className?: string }) {
           const file = event.target.files?.[0];
           // Cleared so choosing the same file again still fires onChange.
           event.target.value = "";
-          if (file) void upload(file);
+          if (file) chooseFile(file);
         }}
       />
+      {pendingFile && <UploadConsentDialog file={pendingFile} onCancel={() => setPendingFile(null)}
+        onAccept={() => { const file = pendingFile; setPendingFile(null); void upload(file); }} />}
       {error && (
         <p
           role="alert"

@@ -4,7 +4,8 @@
 // `isUploadId` branch, which strips the prefix before calling this route).
 
 import { NextResponse } from "next/server";
-import { isValidHash16, readUploadMeta, uploadMetaToPaper } from "@/lib/papers/upload-store";
+import { isValidHash16, deleteUpload, uploadMetaToPaper } from "@/lib/papers/upload-store";
+import { ownedUpload, PRIVATE_UPLOAD_HEADERS, sameOriginUploadRequest } from "@/lib/papers/upload-access";
 
 export async function GET(
   _req: Request,
@@ -15,10 +16,19 @@ export async function GET(
     return NextResponse.json({ error: "Not a valid upload id." }, { status: 400 });
   }
 
-  const meta = await readUploadMeta(id);
+  const meta = await ownedUpload(id);
   if (!meta) {
     return NextResponse.json({ error: "Upload not found." }, { status: 404 });
   }
 
-  return NextResponse.json(uploadMetaToPaper(meta));
+  return NextResponse.json(uploadMetaToPaper(meta), { headers: PRIVATE_UPLOAD_HEADERS });
+}
+
+export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  if (!sameOriginUploadRequest(req)) return NextResponse.json({ error: "Cross-site deletion refused." }, { status: 403 });
+  const { id } = await params;
+  const meta = isValidHash16(id) ? await ownedUpload(id) : null;
+  if (!meta) return NextResponse.json({ error: "Upload not found." }, { status: 404, headers: PRIVATE_UPLOAD_HEADERS });
+  await deleteUpload(meta);
+  return NextResponse.json({ deleted: true, documentKey: meta.documentKey }, { headers: PRIVATE_UPLOAD_HEADERS });
 }

@@ -183,14 +183,15 @@ async function runExtractor(pdfPath: string): Promise<PdfExtractorOutput | null>
     { command: "py", args: ["-3"] },
   ];
 
-  // The helper writes its JSON to a file beside the PDF, not to stdout. Two
+  // The helper writes JSON to a unique private temp directory, not stdout. Two
   // real failures forced this (2026-09-13): PyMuPDF and MuPDF both print
   // warnings to stdout, so `JSON.parse(stdout)` threw on the first word; and
   // twelve rendered figures came to ~10 MB of base64, past the pipe's buffer.
   // stdout is still captured so a stray print cannot block the process.
-  const outputPath = path.join(path.dirname(pdfPath), "figures.json");
-
-  for (const runner of runners) {
+  const outputDir = await mkdtemp(path.join(tmpdir(), "peer-pdf-figures-"));
+  const outputPath = path.join(outputDir, "figures.json");
+  try {
+   for (const runner of runners) {
     try {
       await execFileAsync(
         runner.command,
@@ -219,9 +220,11 @@ async function runExtractor(pdfPath: string): Promise<PdfExtractorOutput | null>
       console.warn("[figures/pdf-extract] helper failed:", err);
       return null;
     }
+   }
+   return null;
+  } finally {
+    await rm(outputDir, { recursive: true, force: true });
   }
-
-  return null;
 }
 
 export async function tryPdfCandidates(

@@ -4,9 +4,12 @@ import type { PdfTextResult } from "./pdf-text";
 import type { SourceLink } from "./source-links";
 
 const mocks = vi.hoisted(() => ({
+  ownedUpload: vi.fn(async () => ({ ownerKey: "test" })),
   collectSourceLinks: vi.fn(),
   extractPdfTextFromPath: vi.fn(),
 }));
+
+vi.mock("./upload-access", () => ({ ownedUpload: mocks.ownedUpload }));
 
 vi.mock("./source-links", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./source-links")>();

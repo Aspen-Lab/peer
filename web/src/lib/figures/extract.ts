@@ -3,6 +3,7 @@ import { matchFigureSemantically } from "./semantic-match";
 import { matchFigureVisually } from "./vision-match";
 import { classifyHardAccessStatus } from "@/lib/papers/paywall-status";
 import { bareUploadId, pdfPath } from "@/lib/papers/upload-store";
+import { ownedUpload } from "@/lib/papers/upload-access";
 
 const FETCH_TIMEOUT_MS = 7_000;
 const MAX_BODY_BYTES = 2_500_000;
@@ -622,6 +623,7 @@ async function chooseCandidate(
   n: number,
   query?: string,
   paperTitle?: string,
+  allowModel = true,
 ): Promise<CandidateSelection> {
   const valid = candidates.filter((candidate) => !looksLikeLogo(candidate.imageUrl));
   if (valid.length === 0) {
@@ -679,6 +681,8 @@ async function chooseCandidate(
       matchedBy: "keyword",
     };
   }
+
+  if (!allowModel) return { candidate: bestQualityCandidate(valid) ?? valid[0], status: "found", matchedBy: "fallback" };
 
   const semantic = await matchFigureSemantically({
     paperTitle,
@@ -1381,6 +1385,11 @@ async function buildCandidatePool(input: ExtractInput): Promise<CachedPool> {
 }
 
 async function getCandidatePool(input: ExtractInput): Promise<CachedPool> {
+  if (input.itemId.startsWith("upload:")) {
+    const hash = bareUploadId(input.itemId);
+    if (!hash || !(await ownedUpload(hash))) throw new Error("Private upload unavailable");
+    return buildCandidatePool(input);
+  }
   const key = poolCacheKey(input);
   const existing = candidatePoolCache.get(key);
   if (existing) {
@@ -1503,7 +1512,7 @@ export async function extractFigure(input: ExtractInput): Promise<FigureResult> 
   const pool = await getCandidatePool(input);
 
   if (pool.candidates.length > 0) {
-    const selection = await chooseCandidate(pool.candidates, n, query, paperTitle);
+    const selection = await chooseCandidate(pool.candidates, n, query, paperTitle, !input.itemId.startsWith("upload:"));
     if (selection.status === "found") {
       return candidateResult(selection);
     }
@@ -1530,7 +1539,7 @@ export async function extractFigure(input: ExtractInput): Promise<FigureResult> 
   // candidate-pool path (same URL, same guard) had already rejected, which
   // would make the honesty guard inconsistent depending on which code path
   // happened to run.
-  if (!query?.trim() && input.url) {
+  if (!input.itemId.startsWith("upload:") && !query?.trim() && input.url) {
     // 5-06: compute this once per pool, then write the outcome back onto the
     // exact `pool` object `getCandidatePool` returned (the same reference
     // stored in `candidatePoolCache`) — a later query-less call for the same

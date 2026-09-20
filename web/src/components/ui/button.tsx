@@ -15,6 +15,7 @@ export const buttonVariants = cva(
   {
     variants: {
       tone: {
+        green: "bg-emerald-700 text-white shadow-card hover:bg-emerald-800",
         primary: "bg-accent text-bg shadow-card hover:bg-accent/90",
         soft: "bg-bg-secondary/60 shadow-card text-text-muted hover:text-heading hover:bg-surface-hover",
         surface:

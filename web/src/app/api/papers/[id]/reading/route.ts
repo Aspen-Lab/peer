@@ -11,7 +11,8 @@ import { fetchPaperById } from "@/lib/papers/fetch-by-id";
 import { getFullText, type FullTextResult } from "@/lib/papers/full-text";
 import { buildReading } from "@/lib/papers/reading";
 import { rawItemToPaper } from "@/lib/feed/mapper";
-import { bareUploadId, readUploadMeta, uploadMetaToPaper } from "@/lib/papers/upload-store";
+import { bareUploadId, uploadMetaToPaper } from "@/lib/papers/upload-store";
+import { ownedUpload, PRIVATE_UPLOAD_HEADERS } from "@/lib/papers/upload-access";
 
 /**
  * How long the route waits for the full text before answering with the
@@ -69,7 +70,7 @@ export async function GET(
   // provenance logic at all — confirmed by execution.
   const uploadHash16 = bareUploadId(decodedId);
   if (uploadHash16) {
-    const meta = await readUploadMeta(uploadHash16);
+    const meta = await ownedUpload(uploadHash16);
     if (!meta) {
       return NextResponse.json(
         { error: "Paper not found" },
@@ -90,7 +91,7 @@ export async function GET(
       uploadFullText.settled ? uploadFullText.result : null,
     );
     return NextResponse.json(uploadReading, {
-      headers: uploadFullText.settled && !refresh ? CACHE_HEADERS : NO_STORE_HEADERS,
+      headers: PRIVATE_UPLOAD_HEADERS,
     });
   }
 
@@ -102,6 +103,15 @@ export async function GET(
     );
   }
   const paper = rawItemToPaper(raw);
+
+  const supplement = req.nextUrl.searchParams.get("upload");
+  if (supplement) {
+    const hash = bareUploadId(supplement);
+    const meta = hash ? await ownedUpload(hash) : null;
+    if (!meta?.paperIds?.includes(paper.id)) return NextResponse.json({ error: "Upload not found." }, { status: 404, headers: PRIVATE_UPLOAD_HEADERS });
+    const fullText = await getFullText({ paperId: supplement });
+    return NextResponse.json(buildReading(paper, fullText), { headers: PRIVATE_UPLOAD_HEADERS });
+  }
 
   const fullText = await fullTextWithin(
     {

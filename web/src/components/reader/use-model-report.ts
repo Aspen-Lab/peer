@@ -23,9 +23,9 @@ import { reportProviderConfigured } from "@/components/reports/provider-configur
 // replaces .novelty) and deleted "why it fits you" — a v5 report still has
 // the old two-block/fit shape and would render it for up to DEEP_TTL_MS
 // after upgrade without this bump.
-const STORAGE_KEY = "peer-paper-report-v6";
+const STORAGE_KEY = "peer-paper-report-v7";
 /** The cache the old page kept, with its fabricated fallbacks inside. */
-const LEGACY_STORAGE_KEYS = ["peer-paper-report-cache-v3", "peer-paper-report-v4", "peer-paper-report-v5"];
+const LEGACY_STORAGE_KEYS = ["peer-paper-report-cache-v3", "peer-paper-report-v4", "peer-paper-report-v5", "peer-paper-report-v6"];
 const MAX_ENTRIES = 40;
 // A deep report stays well past a session; an abstract-tier one expires
 // sooner so a transient failure (paywall flap, model hiccup) self-heals on
@@ -155,13 +155,14 @@ export function useModelReport({
   // Deep is opt-in. Deployed copies require the user's own key; local next
   // dev may use the developer's explicit configuration.
   const deep =
-    Boolean(profile.deepReportEnabled) && (userProviderConfigured || localDeveloperProvider);
+    Boolean(profile.deepReportEnabled || paper?.fullTextUploadId) && (userProviderConfigured || localDeveloperProvider);
   const depth = deep ? "deep" : "abstract";
+  const privatePdf = !!paper?.fullTextUploadId || !!paper?.id.startsWith("upload:");
   const reportKey = paper
-    ? `${paper.id}|${depth}|${hash(project)}|${profile.feedAiProvider}`
+    ? `${paper.id}|${paper.fullTextUploadId ?? "public"}|${depth}|${hash(project)}|${profile.feedAiProvider}`
     : "";
 
-  const cached = useMemo(() => readCached(reportKey), [reportKey]);
+  const cached = useMemo(() => privatePdf ? null : readCached(reportKey), [reportKey, privatePdf]);
   const [result, setResult] = useState<Result | null>(null);
   const [buildup, setBuildup] = useState<{
     key: string;
@@ -239,7 +240,7 @@ export function useModelReport({
         return;
       }
       const shown = outcome === "shown" ? report : null;
-      if (shown) writeCached(reportKey, shown);
+      if (shown && !privatePdf) writeCached(reportKey, shown);
       setBuildup(null);
       setResult({ key: reportKey, report: shown, failed: false });
     };
@@ -309,6 +310,7 @@ export function useModelReport({
     return () => controller.abort();
   }, [
     reportKey,
+    privatePdf,
     cached,
     contextHint,
     project,

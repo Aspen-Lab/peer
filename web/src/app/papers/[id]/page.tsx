@@ -73,6 +73,10 @@ import { THUMB_BAR_PX, THUMB_BAR_QUERY } from "@/components/shell/thumb-bar";
 import { PAGE_CLASS, SPREAD_GRID } from "@/components/reader/spread";
 import { useReading } from "@/components/reader/use-reading";
 import { useModelReport } from "@/components/reader/use-model-report";
+import { usePrivateSupplement } from "@/components/reader/use-private-supplement";
+import { PrivatePdfStatus } from "@/components/reader/private-pdf-status";
+import { UploadButton } from "@/components/briefing/upload-button";
+import { useAuthUser } from "@/components/account/use-auth-user";
 import {
   NOT_FOUND,
   RAIL,
@@ -142,6 +146,9 @@ export default function PaperReadingPage({
   // store yet) the page would otherwise fall straight to the "not found"
   // branch below instead of ever fetching the record.
   const isUploadId = id.startsWith("upload:");
+  const auth = useAuthUser();
+  const accountScope = auth.kind === "signed-in" ? auth.user.id : auth.kind;
+  const fetchKey = `${accountScope}:${id}`;
 
   const feedPapers = useFeedStore((s) => s.papers);
   const savedPapers = useFeedStore((s) => s.savedPapers);
@@ -152,7 +159,7 @@ export default function PaperReadingPage({
     id: string;
     paper: Paper | null;
     done: boolean;
-  }>(() => ({ id, paper: null, done: false }));
+  }>(() => ({ id: fetchKey, paper: null, done: false }));
 
   // A skip removes the paper from both lists before the route changes. For
   // that render the pending dismissal still holds it, so the reader stays
@@ -169,9 +176,9 @@ export default function PaperReadingPage({
   // may have an empty summaryIntro. Then the API-fetched paper, which
   // enriches missing abstracts, is preferred.
   const storePaperIsEnriched = !!storePaper?.summaryIntro?.trim();
-  const fetchedPaperForId = fetchResult.id === id ? fetchResult.paper : null;
-  const fetchDoneForId = fetchResult.id === id && fetchResult.done;
-  const baseContent = storePaperIsEnriched
+  const fetchedPaperForId = fetchResult.id === fetchKey ? fetchResult.paper : null;
+  const fetchDoneForId = fetchResult.id === fetchKey && fetchResult.done;
+  const baseContent = isUploadId ? fetchedPaperForId ?? undefined : storePaperIsEnriched
     ? storePaper
     : (fetchedPaperForId ?? storePaper ?? undefined);
   // Live state from the store (save flag + feedback) merged onto the resolved
@@ -190,7 +197,7 @@ export default function PaperReadingPage({
     [baseContent, isSavedInStore, feedbackForId],
   );
   const shouldFetchById =
-    (isExternalId || isUploadId) && !storePaperIsEnriched && !fetchDoneForId && !pendingPaper;
+    (isExternalId || isUploadId) && (isUploadId || !storePaperIsEnriched) && !fetchDoneForId && !pendingPaper;
 
   useEffect(() => {
     if (!shouldFetchById) return;
@@ -201,15 +208,15 @@ export default function PaperReadingPage({
         : `/api/papers/${encodeURIComponent(id)}`,
     )
       .then((p) => {
-        if (!cancelled) setFetchResult({ id, paper: p, done: true });
+        if (!cancelled) setFetchResult({ id: fetchKey, paper: p, done: true });
       })
       .catch(() => {
-        if (!cancelled) setFetchResult({ id, paper: null, done: true });
+        if (!cancelled) setFetchResult({ id: fetchKey, paper: null, done: true });
       });
     return () => {
       cancelled = true;
     };
-  }, [id, shouldFetchById, isUploadId]);
+  }, [id, fetchKey, shouldFetchById, isUploadId]);
 
   if (!paper) {
     if (shouldFetchById) {
@@ -245,11 +252,11 @@ export default function PaperReadingPage({
   // The reason comes from the briefing's own copy, never the fetched one:
   // `/api/papers/[id]` stamps a deep-link line that is not a reason, and a
   // briefing paper with no abstract in the store is read from that route.
-  return <Reader paper={paper} reason={recommendationLine(storePaper?.relevanceReason)} />;
+  return <Reader key={`${accountScope}:${paper.id}`} paper={paper} reason={recommendationLine(storePaper?.relevanceReason)} />;
 }
 
 function Reader({
-  paper,
+  paper: originalPaper,
   reason,
 }: {
   paper: Paper;
@@ -257,6 +264,7 @@ function Reader({
   reason: string | null;
 }) {
   const router = useRouter();
+  const { paper, upload, ready, setUpload } = usePrivateSupplement(originalPaper);
   const profile = useProfileStore((s) => s.profile);
   const feedPapers = useFeedStore((s) => s.papers);
   const markRead = useFeedStore((s) => s.markRead);
@@ -299,7 +307,7 @@ function Reader({
   const nextPaper = nav.nextId ? (feedPapers.find((p) => p.id === nav.nextId) ?? null) : null;
 
   const { reading, fromServer } = useReading(paper);
-  const model = useModelReport({ paper, profile });
+  const model = useModelReport({ paper: ready ? paper : undefined, profile });
   const report = model.report;
 
   // S5: the "matrix" scramble reveal, restored. `revealingReportKey` is the
@@ -584,6 +592,7 @@ function Reader({
             <p className="font-reading text-lead leading-[1.6] text-text mt-6 reading-justify">
               {PDF_NO_TEXT_MESSAGE}
             </p>
+            {upload && <PrivatePdfStatus upload={upload} onDeleted={() => router.replace("/")} />}
             <BackToFeedLink
               onBack={() => router.back()}
               className="font-sans text-meta text-text-faint hover:text-heading mt-3 inline-block"
@@ -715,6 +724,11 @@ function Reader({
             onCopy={copy}
             onOpen={decide}
             onCopyDoi={copyDoi}
+            uploadAction={!paper.id.startsWith("upload:") ? <UploadButton targetPaper={paper} onUploaded={setUpload} /> : undefined}
+            uploadStatus={upload ? <PrivatePdfStatus upload={upload} onDeleted={() => {
+              setUpload(null);
+              if (paper.id.startsWith("upload:")) router.replace("/");
+            }} /> : undefined}
           />
         }
         additions={

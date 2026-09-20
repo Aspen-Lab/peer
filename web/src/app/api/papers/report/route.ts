@@ -17,6 +17,8 @@ import { getFullText } from "@/lib/papers/full-text";
 import { getFigurePool } from "@/lib/figures/extract";
 import type { ReportStreamEvent } from "@/lib/papers/report-stream";
 import { protectAiRequest } from "@/lib/security/ai-request";
+import { bareUploadId } from "@/lib/papers/upload-store";
+import { ownedUpload, PRIVATE_UPLOAD_HEADERS } from "@/lib/papers/upload-access";
 
 export const dynamic = "force-dynamic";
 // Deep reports (full-text fetch + two model passes + figure binding) have been
@@ -317,7 +319,7 @@ function streamReport(body: ExtendedRequest): Response {
           pct: 10,
         });
         const fullText = await getFullText({
-          paperId: body.paper.id,
+          paperId: body.paper.fullTextUploadId ?? body.paper.id,
           url: bestPaperUrl(body.paper),
           doi: body.paper.doi ?? null,
           arxivId: arxivIdFromPaper(body.paper),
@@ -364,7 +366,7 @@ function streamReport(body: ExtendedRequest): Response {
           pct: 35,
         });
         const figurePoolPromise = getFigurePool({
-          itemId: body.paper.id,
+          itemId: body.paper.fullTextUploadId ?? body.paper.id,
           url: bestPaperUrl(body.paper) ?? undefined,
           doi: body.paper.doi ?? undefined,
           paperTitle: body.paper.title,
@@ -438,7 +440,7 @@ function streamReport(body: ExtendedRequest): Response {
 
 // ── POST handler ─────────────────────────────────────────────────────
 
-export async function POST(req: NextRequest) {
+async function handlePost(req: NextRequest) {
   let body: ExtendedRequest;
   try {
     body = (await req.json()) as ExtendedRequest;
@@ -446,8 +448,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  if (!body.paper?.id || !body.paper.title) {
+  if (typeof body?.paper?.id !== "string" || !body.paper.id || typeof body.paper.title !== "string" || !body.paper.title) {
     return NextResponse.json({ error: "paper is required" }, { status: 400 });
+  }
+  const privateId = body.paper.fullTextUploadId ?? (body.paper.id.startsWith("upload:") ? body.paper.id : undefined);
+  if (privateId) {
+    const hash = typeof privateId === "string" ? bareUploadId(privateId) : null;
+    const meta = hash ? await ownedUpload(hash) : null;
+    if (!meta || (body.paper.fullTextUploadId && !meta.paperIds?.includes(body.paper.id))) {
+      return NextResponse.json({ error: "Upload not found." }, { status: 404 });
+    }
   }
 
   const provider = resolveProvider(body.llmOverride ?? null);
@@ -476,7 +486,7 @@ export async function POST(req: NextRequest) {
 
     try {
       const fullText = await getFullText({
-        paperId: body.paper.id,
+        paperId: body.paper.fullTextUploadId ?? body.paper.id,
         url: bestPaperUrl(body.paper),
         doi: body.paper.doi ?? null,
         arxivId: arxivIdFromPaper(body.paper),
@@ -518,7 +528,7 @@ export async function POST(req: NextRequest) {
           provider,
         }),
         getFigurePool({
-          itemId: body.paper.id,
+          itemId: body.paper.fullTextUploadId ?? body.paper.id,
           url: bestPaperUrl(body.paper) ?? undefined,
           doi: body.paper.doi ?? undefined,
           paperTitle: body.paper.title,
@@ -554,4 +564,12 @@ export async function POST(req: NextRequest) {
 
   // ── Shallow path (default) ──────────────────────────────────────
   return NextResponse.json(await generateShallowReport(body, body.llmOverride));
+}
+
+export async function POST(req: NextRequest) {
+  const response = await handlePost(req);
+  const streaming = response.headers.get("content-type")?.includes("ndjson");
+  for (const [key, value] of Object.entries(PRIVATE_UPLOAD_HEADERS)) response.headers.set(key, value);
+  if (streaming) response.headers.set("Cache-Control", "private, no-store, no-transform");
+  return response;
 }

@@ -15,6 +15,10 @@ vi.mock("@/lib/papers/upload-store", async (importOriginal) => {
 
 import { GET } from "./route";
 
+vi.mock("@/lib/papers/upload-access", async (original) => ({
+  ...await original<typeof import("@/lib/papers/upload-access")>(), ownedUpload: mocks.readUploadMeta,
+}));
+
 function call(id: string) {
   const req = new Request(`http://localhost/api/papers/upload/${id}`);
   return GET(req, { params: Promise.resolve({ id }) });

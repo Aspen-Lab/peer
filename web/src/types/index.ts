@@ -9,6 +9,7 @@ export type PreferenceConceptSource =
   | "openalex_keyword"
   | "openalex_concept"
   | "paper_keyword"
+  | "uploaded_article"
   | "job_tag"
   | "event_topic"
   | "opportunity_facet"
@@ -19,12 +20,15 @@ export interface PreferenceConcept {
   label: string;
   source: PreferenceConceptSource;
   confidence?: number;
+  /** Section where an uploaded article supplied this phrase. */
+  section?: string;
 }
 
 /** Which feed surface a piece of feedback came from. */
 export type FeedItemKind = "paper" | "event" | "job";
 
 export interface PreferenceLedgerEntry extends PreferenceConcept {
+  uploads?: Record<string, { at: string; weight: number }>;
   positive: number;
   negative: number;
   lastPositiveAt?: string;
@@ -50,6 +54,9 @@ export type PreferenceLedger = Record<string, PreferenceLedgerEntry>;
 
 export interface Paper {
   id: string;
+  /** Owner-only PDF supplement; the original paper ID/links stay intact. */
+  fullTextUploadId?: string;
+  uploadDocumentKey?: string;
   title: string;
   authors: string[];
   /** Where the first author works, when the record says so. */

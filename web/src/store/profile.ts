@@ -25,6 +25,8 @@ import { defaultProfile } from "@/types";
 import {
   applyOpportunityFacetPreferenceSignal,
   applyPreferenceSignal,
+  applyUploadPreferenceSignal,
+  removeUploadPreferenceSignal,
   conceptsFromEvent,
   conceptsFromJob,
   conceptsFromPaper,
@@ -36,6 +38,8 @@ type PersistedUserProfile = Omit<Partial<UserProfile>, "colorTheme"> & {
 };
 
 interface ProfileState {
+  recordUploadPreference: (paper: Paper) => void;
+  forgetUploadPreference: (documentKey: string) => void;
   profile: UserProfile;
   /** Replace the whole profile from an exported document. */
   importProfile: (document: unknown) => boolean;
@@ -330,6 +334,13 @@ export const useProfileStore = create<ProfileState>()(
   persist(
     (set) => ({
       profile: defaultProfile,
+      recordUploadPreference: (paper) => set((s) => ({ profile: { ...s.profile,
+        preferenceLedger: applyUploadPreferenceSignal(s.profile.preferenceLedger,
+          conceptsFromPaper(paper), paper.uploadDocumentKey ?? ""),
+      } })),
+      forgetUploadPreference: (key) => set((s) => ({ profile: { ...s.profile,
+        preferenceLedger: removeUploadPreferenceSignal(s.profile.preferenceLedger, key),
+      } })),
 
       updateDisplayName: (name) =>
         set((s) => ({

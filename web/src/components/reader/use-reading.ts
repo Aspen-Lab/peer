@@ -13,7 +13,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { Paper } from "@/types";
 import { buildReading, type PaperReading } from "@/lib/papers/reading";
 
-const STORAGE_KEY = "peer-reading-v1";
+const STORAGE_KEY = "peer-reading-v2";
 const MAX_ENTRIES = 40;
 const TTL_MS = 24 * 60 * 60 * 1000;
 /** The shape both gates below accept. Typed from the document itself, so
@@ -74,6 +74,13 @@ export function useReading(paper: Paper | undefined): {
   fromServer: boolean;
 } {
   const paperId = paper?.id;
+  useEffect(() => {
+    // v1 could persist private upload text from the old public reading route.
+    try { localStorage.removeItem("peer-reading-v1"); } catch { /* storage unavailable */ }
+  }, []);
+  const uploadId = paper?.fullTextUploadId;
+  const privatePdf = !!uploadId || !!paperId?.startsWith("upload:");
+  const readingKey = `${paperId ?? ""}|${uploadId ?? "public"}`;
 
   // Synchronous and complete: the page the reader sees before any request.
   const reading0 = useMemo(() => (paper ? buildReading(paper, null) : null), [paper]);
@@ -81,7 +88,7 @@ export function useReading(paper: Paper | undefined): {
   // Read once per paper. The server renders with no window and the first
   // client render has no paper yet (the store hydrates after mount), so the
   // two agree.
-  const cached = useMemo(() => (paperId ? readCached(paperId) : null), [paperId]);
+  const cached = useMemo(() => (paperId && !privatePdf ? readCached(paperId) : null), [paperId, privatePdf]);
 
   const [fetched, setFetched] = useState<Fetched | null>(null);
 
@@ -90,7 +97,7 @@ export function useReading(paper: Paper | undefined): {
     const controller = new AbortController();
     (async () => {
       try {
-        const res = await fetch(`/api/papers/${encodeURIComponent(paperId)}/reading`, {
+        const res = await fetch(`/api/papers/${encodeURIComponent(paperId)}/reading${uploadId ? `?upload=${encodeURIComponent(uploadId)}` : ""}`, {
           signal: controller.signal,
         });
         if (!res.ok) throw new Error(`reading HTTP ${res.status}`);
@@ -102,16 +109,16 @@ export function useReading(paper: Paper | undefined): {
         // hide the sections the next request gets. Follow the server's own
         // verdict on what is worth keeping.
         const cacheControl = res.headers.get("cache-control") ?? "";
-        if (!/\bno-store\b/i.test(cacheControl)) writeCached(paperId, reading);
-        setFetched({ id: paperId, reading });
+        if (!privatePdf && !/\bno-store\b/i.test(cacheControl)) writeCached(paperId, reading);
+        setFetched({ id: readingKey, reading });
       } catch {
-        if (!controller.signal.aborted) setFetched({ id: paperId, reading: null });
+        if (!controller.signal.aborted) setFetched({ id: readingKey, reading: null });
       }
     })();
     return () => controller.abort();
-  }, [paperId, cached]);
+  }, [paperId, cached, uploadId, privatePdf, readingKey]);
 
-  const server = fetched && fetched.id === paperId ? fetched.reading : null;
+  const server = fetched && fetched.id === readingKey ? fetched.reading : null;
   const reading = server ?? cached ?? reading0;
   return { reading, fromServer: Boolean(server ?? cached) };
 }

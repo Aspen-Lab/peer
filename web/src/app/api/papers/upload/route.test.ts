@@ -4,10 +4,18 @@ import type { ExtractedDocument } from "@/lib/papers/html-text";
 import type { PdfTextResult } from "@/lib/papers/pdf-text";
 
 const mocks = vi.hoisted(() => ({
+  uploadOwner: vi.fn<() => Promise<string | null>>(async () => "test-owner"),
+  attachUpload: vi.fn(async () => undefined),
   extractPdfTextFromPath: vi.fn(),
   writeUploadPdfIfAbsent: vi.fn(async () => undefined),
   writeUploadMeta: vi.fn(async () => undefined),
   resolveProvider: vi.fn(),
+}));
+
+vi.mock("@/lib/papers/upload-access", async (original) => ({
+  ...await original<typeof import("@/lib/papers/upload-access")>(),
+  uploadOwner: mocks.uploadOwner,
+  hostedUploadsEnabled: () => true,
 }));
 
 vi.mock("@/lib/papers/pdf-text", () => ({
@@ -20,6 +28,9 @@ vi.mock("@/lib/papers/upload-store", async (importOriginal) => {
     ...actual,
     writeUploadPdfIfAbsent: mocks.writeUploadPdfIfAbsent,
     writeUploadMeta: mocks.writeUploadMeta,
+    readUploadMeta: vi.fn(async () => null),
+    purgeExpiredUploads: vi.fn(async () => undefined),
+    attachUpload: mocks.attachUpload,
   };
 });
 
@@ -41,6 +52,7 @@ function pdfFile(bytes: Buffer, name = "paper.pdf"): File {
 
 function postWith(file: unknown): Promise<Response> {
   const form = new FormData();
+  form.set("rightsVersion", "2026-09-19");
   if (file !== undefined) form.set("file", file as Blob);
   const req = new Request("http://localhost/api/papers/upload", {
     method: "POST",
@@ -60,6 +72,8 @@ const emptyDoc: ExtractedDocument = {
 
 describe("POST /api/papers/upload", () => {
   beforeEach(() => {
+    mocks.uploadOwner.mockResolvedValue("test-owner");
+    mocks.attachUpload.mockClear();
     mocks.extractPdfTextFromPath.mockReset();
     mocks.writeUploadPdfIfAbsent.mockClear();
     mocks.writeUploadMeta.mockClear();
@@ -70,6 +84,50 @@ describe("POST /api/papers/upload", () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it("refuses uploads without an owner before storing or extracting anything", async () => {
+    mocks.uploadOwner.mockResolvedValue(null);
+    const res = await postWith(pdfFile(pdfBytes()));
+    expect(res.status).toBe(401);
+    expect(mocks.writeUploadPdfIfAbsent).not.toHaveBeenCalled();
+    expect(mocks.extractPdfTextFromPath).not.toHaveBeenCalled();
+  });
+
+  it("requires explicit current-version rights confirmation", async () => {
+    const form = new FormData(); form.set("file", pdfFile(pdfBytes()));
+    const res = await POST(new Request("http://localhost/api/papers/upload", { method: "POST", body: form }));
+    expect(res.status).toBe(400);
+    expect(mocks.writeUploadPdfIfAbsent).not.toHaveBeenCalled();
+    expect(mocks.extractPdfTextFromPath).not.toHaveBeenCalled();
+  });
+
+  it("attaches a matching full text to the original article and returns learning signals", async () => {
+    const title = "Solid electrolytes for lithium metal batteries";
+    mocks.extractPdfTextFromPath.mockResolvedValue({ ok: true, doc: { ...emptyDoc, title,
+      sections: [{ heading: "Abstract", canonical: "abstract", text: "Solid electrolytes improve lithium metal batteries. Solid electrolytes conduct lithium ions." }] } });
+    const form = new FormData(); form.set("file", pdfFile(pdfBytes()));
+    form.set("rightsVersion", "2026-09-19");
+    form.set("targetPaper", JSON.stringify({ id: "openalex:W123", title }));
+    const res = await POST(new Request("http://localhost/api/papers/upload", { method: "POST", body: form }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.paper.preferenceSignals.length).toBeGreaterThan(0);
+    expect(body.paper.uploadDocumentKey).toMatch(/^[a-f0-9]{64}$/);
+    expect(mocks.attachUpload).toHaveBeenCalledWith("test-owner", "openalex:W123", body.id.slice(7));
+    expect(mocks.writeUploadMeta).toHaveBeenCalledWith(body.id.slice(7), expect.objectContaining({ ownerKey: "test-owner", rightsVersion: "2026-09-19", paperIds: ["openalex:W123"] }));
+  });
+
+  it("does not persist or attach a wrong article", async () => {
+    mocks.extractPdfTextFromPath.mockResolvedValue({ ok: true, doc: { ...emptyDoc, title: "An unrelated marine biology paper", sections: [{ heading: "Body", canonical: "body", text: "Fish." }] } });
+    const form = new FormData(); form.set("file", pdfFile(pdfBytes()));
+    form.set("rightsVersion", "2026-09-19");
+    form.set("targetPaper", JSON.stringify({ id: "openalex:W123", title: "Solid electrolytes for lithium batteries" }));
+    const res = await POST(new Request("http://localhost/api/papers/upload", { method: "POST", body: form }));
+    expect(res.status).toBe(422);
+    expect(mocks.writeUploadPdfIfAbsent).not.toHaveBeenCalled();
+    expect(mocks.writeUploadMeta).not.toHaveBeenCalled();
+    expect(mocks.attachUpload).not.toHaveBeenCalled();
   });
 
   it("rejects a request with no file", async () => {
@@ -117,7 +175,7 @@ describe("POST /api/papers/upload", () => {
 
   it("accepts a real PDF, hashes it, and returns an upload: id with a mapped Paper", async () => {
     const bytes = pdfBytes();
-    const expectedHash16 = createHash("sha256").update(bytes).digest("hex").slice(0, 16);
+    const expectedHash16 = createHash("sha256").update("test-owner").update(bytes).digest("hex").slice(0, 16);
 
     const res = await postWith(pdfFile(bytes));
     expect(res.status).toBe(200);

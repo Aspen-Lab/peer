@@ -11,9 +11,9 @@
 
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile, readdir, unlink } from "node:fs/promises";
 import path from "node:path";
-import type { Paper } from "@/types";
+import type { Paper, PreferenceConcept } from "@/types";
 
 // Mirrors `papers/pdf-text.ts`'s `resolveHelperScript` dual-candidate cwd
 // resolution — the dev server and some test runners start from different
@@ -35,7 +35,7 @@ function resolveWebRoot(): string {
   return process.cwd();
 }
 
-export const UPLOAD_DIR = path.join(resolveWebRoot(), ".local-data", "uploads");
+export const UPLOAD_DIR = process.env.PEER_PRIVATE_UPLOAD_DIR || path.join(resolveWebRoot(), ".local-data", "uploads");
 
 /**
  * sha256 of the raw PDF bytes, first 16 hex chars — short enough for a URL
@@ -68,14 +68,24 @@ export function isValidHash16(value: string): boolean {
 }
 
 export function pdfPath(hash16: string): string {
+  if (!isValidHash16(hash16)) throw new Error("Invalid upload id");
   return path.join(UPLOAD_DIR, `${hash16}.pdf`);
 }
 
 export function metaPath(hash16: string): string {
+  if (!isValidHash16(hash16)) throw new Error("Invalid upload id");
   return path.join(UPLOAD_DIR, `${hash16}.json`);
 }
 
 export interface UploadMeta {
+  ownerKey?: string;
+  expiresAt?: string;
+  rightsVersion?: string;
+  rightsAcceptedAt?: string;
+  paperIds?: string[];
+  preferenceSignals?: PreferenceConcept[];
+  /** Stable within an owner; DOI when known, otherwise the PDF content hash. */
+  documentKey?: string;
   hash16: string;
   fileName: string;
   /** Largest-font first-page line, or the file name without its extension
@@ -101,7 +111,7 @@ export interface UploadMeta {
 }
 
 async function ensureUploadDir(): Promise<void> {
-  await mkdir(UPLOAD_DIR, { recursive: true });
+  await mkdir(UPLOAD_DIR, { recursive: true, mode: 0o700 });
 }
 
 export async function readUploadMeta(hash16: string): Promise<UploadMeta | null> {
@@ -115,7 +125,7 @@ export async function readUploadMeta(hash16: string): Promise<UploadMeta | null>
 
 export async function writeUploadMeta(hash16: string, meta: UploadMeta): Promise<void> {
   await ensureUploadDir();
-  await writeFile(metaPath(hash16), JSON.stringify(meta, null, 2), "utf-8");
+  await writeFile(metaPath(hash16), JSON.stringify(meta, null, 2), { encoding: "utf-8", mode: 0o600 });
 }
 
 export function uploadFileExists(hash16: string): boolean {
@@ -128,7 +138,7 @@ export function uploadFileExists(hash16: string): boolean {
 export async function writeUploadPdfIfAbsent(hash16: string, bytes: Buffer): Promise<void> {
   await ensureUploadDir();
   if (!uploadFileExists(hash16)) {
-    await writeFile(pdfPath(hash16), bytes);
+    await writeFile(pdfPath(hash16), bytes, { mode: 0o600 });
   }
 }
 
@@ -155,7 +165,9 @@ export function uploadMetaToPaper(meta: UploadMeta): Paper {
     venue: "",
     source: "other",
     summaryIntro: meta.summaryIntro ?? "",
-    summaryExperimentKeywords: [],
+    summaryExperimentKeywords: (meta.preferenceSignals ?? []).map((c) => c.label),
+    preferenceSignals: meta.preferenceSignals,
+    uploadDocumentKey: meta.documentKey,
     summaryResultDiscussion: "",
     linkPaper: `/api/papers/upload/${meta.hash16}/file`,
     doi: meta.doi,
@@ -163,4 +175,62 @@ export function uploadMetaToPaper(meta: UploadMeta): Paper {
     pageCount: meta.pageCount,
     textStatus: meta.textStatus,
   };
+}
+
+/** Content IDs are private to an owner, so another account cannot guess them
+ * from a publisher PDF's publicly known hash or reuse another reader's file. */
+export function privateUploadHash(ownerKey: string, bytes: Buffer): string {
+  return createHash("sha256").update(ownerKey).update(bytes).digest("hex").slice(0, 16);
+}
+
+function attachmentPath(ownerKey: string, paperId: string): string {
+  const key = createHash("sha256").update(`${ownerKey}\n${paperId}`).digest("hex");
+  return path.join(UPLOAD_DIR, `${key}.attachment.json`);
+}
+
+export async function attachUpload(ownerKey: string, paperId: string, hash16: string): Promise<void> {
+  await ensureUploadDir();
+  await writeFile(attachmentPath(ownerKey, paperId), JSON.stringify({ hash16 }), { mode: 0o600 });
+}
+
+export async function attachedUploadHash(ownerKey: string, paperId: string): Promise<string | null> {
+  try {
+    const value = JSON.parse(await readFile(attachmentPath(ownerKey, paperId), "utf-8"));
+    return typeof value.hash16 === "string" && isValidHash16(value.hash16) ? value.hash16 : null;
+  } catch { return null; }
+}
+
+export async function deleteUpload(meta: UploadMeta): Promise<void> {
+  // Remove permission/metadata first. No derived upload content is cached.
+  await unlink(metaPath(meta.hash16)).catch((error: NodeJS.ErrnoException) => {
+    if (error.code !== "ENOENT") throw error;
+  });
+  await unlink(pdfPath(meta.hash16)).catch((error: NodeJS.ErrnoException) => {
+    if (error.code !== "ENOENT") throw error;
+  });
+  for (const paperId of meta.paperIds ?? []) {
+    if (meta.ownerKey && await attachedUploadHash(meta.ownerKey, paperId) === meta.hash16) {
+      await unlink(attachmentPath(meta.ownerKey, paperId)).catch(() => undefined);
+    }
+  }
+}
+
+export async function purgeExpiredUploads(): Promise<void> {
+  const names = await readdir(UPLOAD_DIR).catch(() => [] as string[]);
+  for (const name of names) {
+    if (!/^[0-9a-f]{16}\.json$/.test(name)) continue;
+    const meta = await readUploadMeta(name.slice(0, 16));
+    if (meta?.expiresAt && Date.parse(meta.expiresAt) <= Date.now()) await deleteUpload(meta);
+  }
+}
+
+export async function listUploadMeta(ownerKey: string): Promise<UploadMeta[]> {
+  const names = await readdir(UPLOAD_DIR).catch(() => [] as string[]);
+  const out: UploadMeta[] = [];
+  for (const name of names) {
+    if (!/^[0-9a-f]{16}\.json$/.test(name)) continue;
+    const meta = await readUploadMeta(name.slice(0, 16));
+    if (meta?.ownerKey === ownerKey && meta.expiresAt && Date.parse(meta.expiresAt) > Date.now()) out.push(meta);
+  }
+  return out.sort((a, b) => b.uploadedAt.localeCompare(a.uploadedAt));
 }

@@ -17,6 +17,7 @@ import { classifyHardAccessStatus } from "./paywall-status";
 import { extractPdfTextFromPath, tryExtractPdfText } from "./pdf-text";
 import { collectSourceLinks, type SourceLink } from "./source-links";
 import { bareUploadId, pdfPath } from "./upload-store";
+import { ownedUpload } from "./upload-access";
 
 const FETCH_TIMEOUT_MS = 12_000;
 const MAX_HTML_BYTES = 4_000_000;
@@ -322,6 +323,12 @@ async function buildResult(input: FullTextInput): Promise<FullTextResult> {
  * the text came from HTML or PDF.
  */
 export async function getFullText(input: FullTextInput): Promise<FullTextResult> {
+  if (input.paperId.startsWith("upload:")) {
+    const hash = bareUploadId(input.paperId);
+    if (!hash || !(await ownedUpload(hash))) return { status: "source_unavailable", attempts: [], reason: "Private upload unavailable." };
+    // Authenticate before reading, and never put private text in shared caches.
+    return buildResult(input);
+  }
   const key = input.paperId;
   const cached = cache.get(key);
   if (cached) {

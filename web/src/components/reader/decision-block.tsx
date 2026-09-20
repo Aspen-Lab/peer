@@ -7,7 +7,7 @@
 // phone. The sentence is `describeAvailability`'s, never typed here.
 
 import Link from "next/link";
-import type { Ref } from "react";
+import type { Ref, ReactNode } from "react";
 import { buttonVariants, IconButton } from "@/components/ui/button";
 import { IconArrowUpRight, IconExpand, IconLink, IconMoon, IconSun } from "@/components/icons";
 import { Kbd } from "@/components/ui/kbd";
@@ -52,6 +52,8 @@ export function DecisionBlock({
   onCopy,
   onOpen,
   onCopyDoi,
+  uploadAction,
+  uploadStatus,
 }: {
   ref?: Ref<HTMLDivElement>;
   sentences: string[];
@@ -67,6 +69,8 @@ export function DecisionBlock({
   onCopy: () => void;
   onOpen: () => void;
   onCopyDoi: () => void;
+  uploadAction?: ReactNode;
+  uploadStatus?: ReactNode;
 }) {
   // S15: the font-size ladder — read here rather than threaded through
   // props, the same reasoning as `ReaderLayout`'s own `useReadingScale`
@@ -127,25 +131,29 @@ export function DecisionBlock({
           keeps the widths natural: grid items stretch to the track by
           default, which would set Skip as wide as the primary. Inert below
           xl. */}
-      <div className="flex flex-wrap gap-3 mt-5 xl:grid xl:grid-cols-[repeat(2,max-content)] xl:justify-items-start">
+      <div className="flex flex-wrap gap-3 mt-5">
+        <div className={uploadAction && source ? "flex w-full items-stretch gap-3" : "contents"}>
         {source && (
           <a
             href={source.url}
             target="_blank"
             rel="noopener noreferrer"
             onClick={onOpen}
-            className={cn(buttonVariants({ tone: "primary", size: "lg" }), COMMAND, TOUCH_TARGET)}
+            className={cn(buttonVariants({ tone: "primary", size: "lg" }), COMMAND, TOUCH_TARGET,
+              uploadAction && "min-w-0 flex-1 h-auto min-h-10 px-3 py-2 leading-tight")}
           >
             <Kbd pointerOnly className="mr-0.5">
               o
             </Kbd>
-            {source.label}
+            <span>{source.label}</span>
             {/* The one icon left on a command: it marks a destination — this
                 leaves the page — where the others only named their key back
                 to the reader. */}
             <IconArrowUpRight size={12} />
           </a>
         )}
+        {uploadAction}
+        </div>
         <button
           type="button"
           onClick={onSave}
@@ -182,6 +190,7 @@ export function DecisionBlock({
           {BUTTON.copy}
         </button>
       </div>
+      {uploadStatus}
 
       {/* S15/S16/S18/S21: font-size, day/night and fit controls, in the
           user's own order — A (big) · A (small) · sun · moon · fit. Sized

@@ -27,6 +27,10 @@ vi.mock("@/lib/papers/upload-store", async (importOriginal) => {
 
 import { GET } from "./route";
 
+vi.mock("@/lib/papers/upload-access", async (original) => ({
+  ...await original<typeof import("@/lib/papers/upload-access")>(), ownedUpload: mocks.readUploadMeta,
+}));
+
 const zenodoDoc = zenodoDocJson as unknown as ExtractedDocument;
 
 /** The Zenodo record as `fetchPaperById` returns it. */
