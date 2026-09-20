@@ -1277,6 +1277,68 @@ the choices the handoff leaves open, and how the loop maps onto it.
 
 ---
 
+## §1ad. RULING 23 — round 9 scope after A's measurement (manager, 2026-09-19) — BINDING
+
+A's 16 findings all stand and all are in scope. Rulings on shape, so B writes the guide and C
+does not re-decide:
+
+- **A9-01 (CSRF):** for POST/PUT/DELETE, a request with **neither** `Origin` nor
+  `Sec-Fetch-Site` is treated as cross-site and refused (browsers always send at least one;
+  tests and curl set the header explicitly). GET is unaffected. Unit test for the absent-header
+  branch.
+- **A9-15 / A9-13 / A9-10 (atomicity, in-flight, revision):** `UploadMeta` gains `status:
+  "pending" | "ready" | "deleted" | "blocked"` and `revision` (monotonic per owner+document).
+  Write order: meta `pending` → PDF bytes → meta `ready`; any failure removes both. Every private
+  read requires `ready`. The report/reading routes re-check `status === "ready"` and the same
+  `revision` **after** generation and before caching/returning; otherwise discard. Cache keys
+  (server pools, `useModelReport`, `useReading`) include `revision`.
+- **A9-03 (orphaned `figures.json`):** the manager authorises deleting exactly one file,
+  `web/.local-data/uploads/figures.json` (derived base64 images, not a user PDF); C does it and
+  logs it. The purge job also removes any stray file in the uploads dir that is not
+  `<hash16>.pdf|.json` — a **closed list of derived names** (`figures.json`, `*.tmp`, temp
+  dirs the extractor creates), never arbitrary files.
+- **A9-14 (chunked bodies):** the Next proxy's 30 MB body cap (round 5) is the streaming bound;
+  add the `Content-Length` pre-check when present and document the cap. No custom streaming
+  multipart parser this round.
+- **A9-05 (scheduler):** add a `vercel.json` `crons` entry calling `/api/jobs/purge-uploads`
+  daily with the `CRON_SECRET` bearer pattern, and an `npm run purge-uploads` script for
+  self-hosting; README says how each is enabled. **Never claim a scheduler runs on this
+  machine.**
+- **A9-06 (operator takedown):** an env-gated server route `POST /api/admin/uploads/block`
+  (bearer `ADMIN_TOKEN`; 404 when unset) that sets `status: "blocked"`, removes the bytes and
+  derived files, and retracts the evidence; documented as the operational takedown path.
+- **A9-02 / A9-07 (evidence): the upload asset's meta is the source of truth for evidence.**
+  The server records `{documentKey, concepts, recordedAt, revision}` on the meta; the client
+  ledger merges it **idempotently by documentKey** when the uploads list loads (and right after
+  an upload), so navigation/offline cannot lose it. Retraction reference-counts: evidence is
+  removed only when no other `ready` asset of the owner shares the `documentKey`. When Supabase
+  is configured the server also PUTs the merged ledger to the profile row (idempotent).
+- **A9-04 / A9-11 (Tier 0 quality + contract):** drop number words, single generic nouns and
+  anything on `term-expand.ts`'s generic list; keep a single token only if it is a known
+  domain term (the existing abbreviation/alias groups) — otherwise require ≥ 2 tokens; add
+  `facet` (rule-based: method / material / topic; default topic), `extractionVersion`, and the
+  `section` evidence (offsets optional). Protective tests with the handoff's §4.2 shapes
+  (materials paper, CS paper, a long wrapped title, a reference-list decoy).
+- **A9-12:** in "What Peer has learned", entries from uploads carry a "from your upload" label;
+  the profile's uploads list gets **"Forget what Peer learned from this"** separate from
+  **"Delete PDF"**.
+- **A9-09 (matching, Ruling 8 made concrete):** verified DOI → bind; normalised-title token
+  overlap ≥ 0.6 → bind and show "Attached to: <title>"; 0.35–0.6 → the client shows a confirm
+  dialog and re-submits with `confirm=1`; < 0.35 → refuse with the reason. Thresholds are
+  constants with tests on the three bands.
+- **A9-16:** theme tokens `--color-positive` / `--color-positive-strong` (green) in both
+  palettes; the `green` tone reads them.
+- **A9-08:** README section + `docs/PRIVATE_PDF_UPLOADS.md` restating handoff §6.1 in plain
+  words with the same links, the 30-day retention, the consent contents, and the §6.5 open
+  conditions; no "guaranteed legal" wording anywhere.
+
+**C's phases (one turn each, matrix rows named per item):** (1) boundary — A9-01, A9-15, A9-13,
+A9-10, A9-03, A9-14, A9-05, A9-06; (2) learning — A9-04, A9-11, A9-02, A9-07, A9-12; (3)
+supplement + docs — A9-09, A9-16, A9-08. A re-measures each phase's rows; the full matrix at the
+end.
+
+---
+
 ## §2. ROLES — DO ONLY YOUR OWN JOB
 
 ### Agent A — Reviewer
