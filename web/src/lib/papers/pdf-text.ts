@@ -1,62 +1,29 @@
-// Node-side wrapper around `extract_pdf_text.py`. Downloads the PDF, hands
-// the bytes to the Python helper, and normalizes the result into the same
-// shape as the HTML extractors.
+// Downloads a legal PDF and reads it into the same shape as the HTML
+// extractors.
+//
+// It used to hand the bytes to `scripts/extract_pdf_text.py`, which needs
+// Python and PyMuPDF — a compiled extension. A developer's machine has both;
+// a deployed Peer has neither, so every PDF-only paper read as "abstract
+// only" in production while reading fine locally, and the page had to say so
+// ("only a self-hosted Peer reads PDFs"). The reading is plain TypeScript
+// now — `pdf-outline.ts` over pdf.js's text layer — so one behaviour runs in
+// both places. What a scan (a PDF with no text layer) cannot give, it still
+// cannot give; that now reads as what it is.
 
-import { execFile } from "node:child_process";
-import { existsSync } from "node:fs";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import path from "node:path";
-import { promisify } from "node:util";
 import { cleanDisplayText } from "@/lib/text/clean";
+import { buildOutline, type PdfOutline, type PdfPageText } from "./pdf-outline";
 import { withInheritedBuckets } from "./html-text";
 import type { ExtractedDocument, ExtractedSection, ExtractedFigureCaption } from "./html-text";
 
-const execFileAsync = promisify(execFile);
-
 const FETCH_TIMEOUT_MS = 12_000;
 const MAX_PDF_BYTES = 18_000_000;
-const MAX_STDIO_BYTES = 18_000_000;
 const MAX_PDF_PAGES = 40;
 const FETCH_VERSION = "2026-05-01-pdf-text";
-
-interface ExtractorSection {
-  heading?: string;
-  canonical?: string;
-  page?: number;
-  text?: string;
-}
-
-interface ExtractorCaption {
-  ordinal?: number;
-  label?: string;
-  caption?: string;
-  page?: number;
-}
-
-interface ExtractorOutput {
-  title?: string | null;
-  sections?: ExtractorSection[];
-  figureCaptions?: ExtractorCaption[];
-  pageCount?: number;
-  reason?: string | null;
-}
 
 export interface PdfTextResult {
   ok: boolean;
   doc?: ExtractedDocument;
   reason?: string;
-}
-
-function resolveHelperScript(): string | null {
-  const candidates = [
-    path.join(process.cwd(), "scripts", "extract_pdf_text.py"),
-    path.join(process.cwd(), "web", "scripts", "extract_pdf_text.py"),
-  ];
-  for (const candidate of candidates) {
-    if (existsSync(candidate)) return candidate;
-  }
-  return null;
 }
 
 async function downloadPdf(url: string): Promise<{ bytes: Buffer; finalUrl: string } | { error: string }> {
@@ -93,59 +60,40 @@ async function downloadPdf(url: string): Promise<{ bytes: Buffer; finalUrl: stri
   }
 }
 
-/**
- * Why the helper did not run. `no-python` and `no-script` are the two the
- * reading page names: on Vercel no interpreter can be spawned, or the helper
- * script is missing from a function bundle it was not traced into, and the
- * page must say plainly that the PDF is there and this deployment cannot read
- * it, rather than "no full text" as if the paper had none. Both reach the
- * caller as a machine reason (`no-python` / `no-extractor`), never as prose.
- */
-type ExtractorFailure = "no-python" | "no-script" | "failed";
-
-async function runExtractor(
-  pdfPath: string,
-): Promise<{ output: ExtractorOutput } | { failure: ExtractorFailure }> {
-  const helperScript = resolveHelperScript();
-  if (!helperScript) return { failure: "no-script" };
-
-  // macOS and most Linux images ship `python3` and no `python`; the old list
-  // tried `python` then `py -3`, so on a Mac every PDF quietly yielded null.
-  const runners = [
-    ...(process.env.PYTHON_BIN
-      ? [{ command: process.env.PYTHON_BIN, args: [] as string[] }]
-      : []),
-    { command: "python3", args: [] as string[] },
-    { command: "python", args: [] as string[] },
-    { command: "py", args: ["-3"] },
-  ];
-
-  for (const runner of runners) {
-    try {
-      const { stdout } = await execFileAsync(
-        runner.command,
-        [
-          ...runner.args,
-          helperScript,
-          "--input",
-          pdfPath,
-          "--max-pages",
-          String(MAX_PDF_PAGES),
-        ],
-        { timeout: 45_000, maxBuffer: MAX_STDIO_BYTES },
-      );
-      return { output: JSON.parse(stdout) as ExtractorOutput };
-    } catch (err) {
-      const message = String(err);
-      if (/not recognized|ENOENT/i.test(message)) continue;
-      console.warn("[papers/pdf-text] extractor failed:", err);
-      return { failure: "failed" };
+/** The PDF's text layer, page by page, as `pdf-outline` wants it. */
+async function readPages(bytes: Buffer): Promise<PdfPageText[]> {
+  // `unpdf` ships pdf.js built for a server runtime: no worker, no canvas,
+  // no native code — the only build that runs unchanged in a function.
+  const { getDocumentProxy } = await import("unpdf");
+  const doc = await getDocumentProxy(new Uint8Array(bytes));
+  const pages: PdfPageText[] = [];
+  const count = Math.min(doc.numPages, MAX_PDF_PAGES);
+  for (let n = 1; n <= count; n++) {
+    const page = await doc.getPage(n);
+    const content = await page.getTextContent();
+    const items: PdfPageText["items"] = [];
+    for (const item of content.items) {
+      if (!("str" in item) || typeof item.str !== "string") continue;
+      const transform = item.transform as number[] | undefined;
+      if (!transform) continue;
+      // Sideways text is the page's, not the paper's: the arXiv stamp down
+      // the left margin is set larger than the title and read as one.
+      if (Math.abs(transform[1] ?? 0) > 0.1 || Math.abs(transform[2] ?? 0) > 0.1) continue;
+      items.push({
+        str: item.str,
+        height: typeof item.height === "number" && item.height > 0 ? item.height : Math.abs(transform[3] ?? 0),
+        width: typeof item.width === "number" ? item.width : 0,
+        fontName: String(item.fontName ?? ""),
+        x: transform[4] ?? 0,
+        y: transform[5] ?? 0,
+      });
     }
+    pages.push({ page: n, items });
   }
-  return { failure: "no-python" };
+  return pages;
 }
 
-function normalize(extractor: ExtractorOutput): ExtractedDocument {
+function normalize(extractor: PdfOutline): ExtractedDocument {
   // Numbered subsections inherit their parent's bucket here too — the Python
   // extractor buckets one heading at a time, the same way the HTML one did.
   const sections: ExtractedSection[] = withInheritedBuckets(
@@ -185,32 +133,17 @@ export async function tryExtractPdfText(url: string): Promise<PdfTextResult> {
     return { ok: false, reason: download.error };
   }
 
-  const tempDir = await mkdtemp(path.join(tmpdir(), "peer-pdftext-"));
-  const pdfPath = path.join(tempDir, "paper.pdf");
-
   try {
-    await writeFile(pdfPath, download.bytes);
-    const ran = await runExtractor(pdfPath);
-    if ("failure" in ran) {
-      return {
-        ok: false,
-        reason:
-          ran.failure === "no-python"
-            ? "no-python"
-            : ran.failure === "no-script"
-              ? "no-extractor"
-              : "PDF text extractor failed on this server.",
-      };
+    const pages = await readPages(download.bytes);
+    const outline = buildOutline(pages);
+    if (!outline.sections || outline.sections.length === 0) {
+      // A scan carries pictures of words, not words: say that, rather than
+      // "no full text" as if the paper had none.
+      return { ok: false, reason: outline.reason ?? "no-sections" };
     }
-    const extractor = ran.output;
-    if (extractor.reason && (!extractor.sections || extractor.sections.length === 0)) {
-      return { ok: false, reason: extractor.reason };
-    }
-    const doc = normalize(extractor);
-    return { ok: true, doc };
+    return { ok: true, doc: normalize(outline) };
   } catch (err) {
+    console.warn("[papers/pdf-text] read failed:", err);
     return { ok: false, reason: String(err) };
-  } finally {
-    await rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
   }
 }

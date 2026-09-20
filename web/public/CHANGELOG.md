@@ -2,6 +2,36 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.36.0 — 2026-09-20
+
+Peer reads PDFs — here, not only on a laptop.
+
+A paper whose full text is a PDF used to read as "abstract only" on
+peer.homes, with the page admitting why: "the PDF is there, but only a
+self-hosted Peer reads PDFs". The reading ran in a Python helper that needs
+PyMuPDF, a compiled extension; a developer's machine has it and a deployed
+one cannot. So the same paper read in full locally and not at all for anyone
+else — the worst kind of difference, because nothing was broken where anyone
+was looking.
+
+It is plain TypeScript now, over the text layer pdf.js hands back, and the
+same code runs in both places. A PDF gives words with a size, a face and a
+position; the structure is inferred from what the page shows and nothing else:
+
+- a heading is a line set larger than the body, or in its other face, or
+  numbered ("3.1 Encoder and Decoder Stacks") — never a display equation, a
+  caption, or prose that happens to open with a figure;
+- a paragraph is a break in the page's vertical rhythm, or an indent, and a
+  word the column broke is mended ("archi-/tecture");
+- a caption ("Figure 1: …") goes to the figure pool, not into the prose it
+  interrupts;
+- the cover — names, affiliations, the preprint stamp down the margin — is
+  not the paper, and the references are not its argument.
+
+On the paper this feature was tested against, the new reading finds ten
+sections where the old helper found two. A PDF that carries no text at all is
+a scan, and the page now says that instead of blaming the deployment.
+
 ## v0.35.3 — 2026-09-20
 
 The masthead's tools carry their glyphs.

@@ -5,9 +5,6 @@ import { tryExtractPdfText } from "./pdf-text";
 const PDF_BYTES = new TextEncoder().encode("%PDF-1.4\n%âã\n1 0 obj\n<< >>\nendobj\n");
 
 describe("tryExtractPdfText", () => {
-  const savedPath = process.env.PATH;
-  const savedPython = process.env.PYTHON_BIN;
-
   beforeEach(() => {
     vi.stubGlobal(
       "fetch",
@@ -15,21 +12,30 @@ describe("tryExtractPdfText", () => {
     );
   });
 
-  afterEach(() => {
-    vi.unstubAllGlobals();
-    process.env.PATH = savedPath;
-    if (savedPython === undefined) delete process.env.PYTHON_BIN;
-    else process.env.PYTHON_BIN = savedPython;
-  });
+  afterEach(() => vi.unstubAllGlobals());
 
-  it("reports no-python when no interpreter can be spawned", async () => {
-    // No PATH and a PYTHON_BIN that does not exist: every runner ENOENTs,
-    // which is what a Vercel function sees.
-    process.env.PATH = "";
-    process.env.PYTHON_BIN = "/nonexistent/python3";
-
+  it("says a PDF with nothing to read is unreadable, not missing", async () => {
+    // This used to be the `no-python` case — the reading ran in a helper that
+    // needed an interpreter, so a deployed Peer could never read any PDF. It
+    // reads PDFs in-process now; what is left is the file that carries no
+    // text, and the reading page names that rather than claiming no full text.
     const result = await tryExtractPdfText("https://example.org/paper.pdf");
 
-    expect(result).toEqual({ ok: false, reason: "no-python" });
+    expect(result.ok).toBe(false);
+    expect(result.reason).toMatch(/no-text-layer|no-sections|InvalidPDF|Invalid/i);
+  });
+
+  it("refuses a landing page dressed as a PDF link", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("<html><body>Sign in</body></html>", { status: 200 })),
+    );
+
+    const result = await tryExtractPdfText("https://example.org/paywall");
+
+    expect(result).toEqual({
+      ok: false,
+      reason: "Response was not a PDF (likely a landing/paywall page).",
+    });
   });
 });

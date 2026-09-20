@@ -40,7 +40,7 @@ export type OmitReason =
   | "not_in_abstract"
   /** Full text read; the paper has no such section, or nothing in it qualified. */
   | "no_section"
-  /** A PDF exists; only a self-hosted Peer reads PDFs. */
+  /** A PDF exists and carries no text layer — a scan. */
   | "pdf_only_hosted"
   /** The publisher blocked the full text. */
   | "paywalled"
@@ -422,16 +422,18 @@ function paywallHostOf(fullText: FullTextResult): string | undefined {
 }
 
 /**
- * On Vercel a PDF link is attempted and `pdf-text.ts` reports `no-python`
- * (no interpreter can be spawned) or `no-extractor` (the helper script is not
- * in the function bundle). Either is the one outcome the page must name
- * plainly: the PDF is there; this deployment cannot read it. Mapping only
- * one of them would tell a deployed reader the paper has no full text.
+ * A PDF whose words are pictures of words — a scan, or a file that carries no
+ * text layer — is the one outcome the page must name plainly: the PDF is
+ * there, and there is nothing in it to read. It used to mean something else
+ * (`no-python` / `no-extractor`: the deployment could not run the extractor
+ * at all), which is why the page once said "only a self-hosted Peer reads
+ * PDFs". Reading a PDF needs nothing special now; a scan still needs eyes.
  */
 function pdfUnreadableHere(fullText: FullTextResult): boolean {
   return fullText.attempts.some(
     (attempt) =>
-      attempt.link.kind === "pdf" && /\bno-(python|extractor)\b/.test(attempt.outcome),
+      attempt.link.kind === "pdf" &&
+      /\bno-(text-layer|sections|python|extractor)\b/.test(attempt.outcome),
   );
 }
 
@@ -718,7 +720,7 @@ function readingSentence(reading: PaperReading, providerConfigured: boolean): st
     return withKey(`${lead} ${sourcePhrase(provenance)}${qualifier}. ${presentSentence(reading)}`);
   }
   if (provenance.fullText === "pdf_unreadable_here") {
-    return withKey("Abstract only; the PDF is there, but only a self-hosted Peer reads PDFs.");
+    return withKey("Abstract only; the PDF carries no text to read — it looks scanned.");
   }
   if (provenance.fullText === "paywalled") {
     const host = provenance.paywallHost ?? "the publisher";
@@ -776,7 +778,7 @@ function fullTextClause(reading: PaperReading, report: AvailabilityReport): stri
     return ` Caveats and a next step need the full text — ${host} keeps it behind access.`;
   }
   if (provenance.fullText === "pdf_unreadable_here") {
-    return " Caveats and a next step need the full text; the PDF is there, but only a self-hosted Peer reads PDFs.";
+    return " Caveats and a next step need the full text; the PDF carries no text to read — it looks scanned.";
   }
   if (provenance.fullText === "html" || provenance.fullText === "pdf") {
     return " Caveats and a next step need the full text; your model's deep read of it did not finish.";

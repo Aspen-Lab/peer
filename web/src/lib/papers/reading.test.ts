@@ -525,7 +525,7 @@ describe("describeAvailability", () => {
     };
 
     expect(describeAvailability({ reading, ...noModel })).toEqual([
-      "Abstract only; the PDF is there, but only a self-hosted Peer reads PDFs. What it means for your project needs a key.",
+      "Abstract only; the PDF carries no text to read — it looks scanned. What it means for your project needs a key.",
     ]);
   });
 
@@ -623,7 +623,7 @@ describe("describeAvailability", () => {
       `${lead} Caveats and a next step need the full text — the publisher keeps it behind access.`,
     ]);
     expect(describeAvailability({ reading: at("pdf_unreadable_here"), ...withModel })).toEqual([
-      `${lead} Caveats and a next step need the full text; the PDF is there, but only a self-hosted Peer reads PDFs.`,
+      `${lead} Caveats and a next step need the full text; the PDF carries no text to read — it looks scanned.`,
     ]);
     expect(describeAvailability({ reading: at("none"), ...withModel })).toEqual([
       `${lead} Caveats and a next step need the full text, which Peer could not find.`,
