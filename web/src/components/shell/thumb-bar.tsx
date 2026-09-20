@@ -16,6 +16,7 @@ import Link from "next/link";
 import type { Route } from "next";
 import { usePathname, useRouter } from "next/navigation";
 import { useFeedStore } from "@/store/feed";
+import { RouteGlyph } from "@/components/shell/icons";
 import { BackToFeedLink } from "@/components/navigation/back-to-feed-link";
 import { RAIL } from "@/components/reader/copy";
 import { paperNav } from "@/lib/reader/paper-nav";
@@ -88,7 +89,7 @@ function Tabs({ route, savedCount }: { route: ShellRoute; savedCount: number }) 
               active ? "text-heading" : "text-text-faint"
             }`}
           >
-            <TabIcon route={tab.route} active={active} />
+            <RouteGlyph route={tab.route} strokeWidth={active ? 2 : 1.6} />
             <span>
               {tab.label}
               {tab.route === "saved" && savedCount > 0 && (
@@ -139,47 +140,3 @@ function Rail({
   );
 }
 
-// 22px, 1.6px strokes; 2px when active. Drawn once here — the phone bar is
-// the only place Peer uses a glyph for a page.
-function TabIcon({ route, active }: { route: ShellRoute; active: boolean }) {
-  const common = {
-    width: 22,
-    height: 22,
-    viewBox: "0 0 24 24",
-    fill: "none",
-    stroke: "currentColor",
-    strokeWidth: active ? 2 : 1.6,
-    strokeLinecap: "round" as const,
-    strokeLinejoin: "round" as const,
-    "aria-hidden": true,
-  };
-  switch (route) {
-    case "briefing":
-      return (
-        <svg {...common}>
-          <circle cx="12" cy="12" r="4.5" />
-          <path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M18.7 5.3l-2.1 2.1M7.4 16.6l-2.1 2.1" />
-        </svg>
-      );
-    case "search":
-      return (
-        <svg {...common}>
-          <circle cx="11" cy="11" r="6.5" />
-          <path d="M20 20l-4.2-4.2" />
-        </svg>
-      );
-    case "saved":
-      return (
-        <svg {...common}>
-          <path d="M6.5 3.5h11v17l-5.5-4-5.5 4z" />
-        </svg>
-      );
-    default:
-      return (
-        <svg {...common}>
-          <circle cx="12" cy="8.5" r="4" />
-          <path d="M4.5 20.5c1.2-4 4-6 7.5-6s6.3 2 7.5 6" />
-        </svg>
-      );
-  }
-}

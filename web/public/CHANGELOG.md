@@ -2,6 +2,22 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.35.3 — 2026-09-20
+
+The masthead's tools carry their glyphs.
+
+Write takes a pencil, Search a glass, Saved the bookmark the shelf has always
+been marked with, Profile a figure — and the shortcuts sheet, a question mark
+drawn on the same grid as the rest instead of typed as a character.
+
+They are the phone bar's own icons, which existed already: the two bars now
+draw from one family (`components/shell/icons`), the phone at 22px on a 1.6px
+stroke, the masthead at 13px on 1.3px. Signed in, your face stays the glyph on
+Profile.
+
+A glyph in this product names a place or an action in the shell, and nothing
+else — the content is still words, because there the words are the paper's.
+
 ## v0.35.2 — 2026-09-20
 
 A mark of its own.

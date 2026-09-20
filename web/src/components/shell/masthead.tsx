@@ -35,6 +35,7 @@ import { readerActions } from "@/lib/reader/reader-keys";
 import type { PaperNav } from "@/lib/reader/paper-nav";
 import { RAIL } from "@/components/reader/copy";
 import { WriteButton } from "@/components/shell/write-button";
+import { HelpGlyph, RouteGlyph } from "@/components/shell/icons";
 import {
   SHELL_LINKS,
   isActiveLink,
@@ -188,11 +189,15 @@ export function Masthead() {
                   active ? "text-heading" : ""
                 }`}
               >
-                <span className="relative inline-flex items-center px-2 py-1">
+                <span className="relative inline-flex items-center gap-1.5 px-2 py-1">
                   {isProfile && auth.kind === "signed-in" && avatar ? (
+                    // Signed in, your own face is the glyph.
                     <Avatar user={auth.user} size={22} />
                   ) : (
-                    link.label
+                    <>
+                      <RouteGlyph route={link.route} size={13} strokeWidth={1.3} />
+                      {link.label}
+                    </>
                   )}
                   {active && <Corners className="border-text-muted" />}
                 </span>
@@ -209,9 +214,9 @@ export function Masthead() {
             // The chip is gone: it was the one boxed object in a row of
             // words, which read as unfinished rather than as emphasis. It is
             // a link in the row like the rest, and its glyph is its name.
-            className="inline-flex h-12 items-center justify-center px-1 transition-colors hover:text-heading [@media(hover:none)]:min-w-11"
+            className="inline-flex h-12 items-center justify-center px-2 transition-colors hover:text-heading [@media(hover:none)]:min-w-11"
           >
-            ?
+            <HelpGlyph size={13} strokeWidth={1.3} />
           </button>
         </nav>
       </header>
