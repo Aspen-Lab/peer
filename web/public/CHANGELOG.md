@@ -2,6 +2,22 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.35.2 — 2026-09-20
+
+A mark of its own.
+
+The tab still carried a drawn, cream-and-orange creature from the app this
+one grew out of — an illustration, in a product that draws nothing it cannot
+justify. Peer's mark is now the geometry the interface is made of: a sheet,
+with one registered corner in the accent. The same corner the reading graph
+puts on the node you point at, a card grows under the pointer, and the
+masthead puts around the section you are in.
+
+- The mark sits beside the nameplate in the masthead — the chrome's one spot
+  of colour, and the same object the tab shows.
+- The tab icon is an SVG, so it stays crisp at any size; a 16/32/48 `.ico` is
+  there for the browsers that still ask for one.
+
 ## v0.35.1 — 2026-09-20
 
 The masthead, drawn.

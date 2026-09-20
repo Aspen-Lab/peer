@@ -73,6 +73,22 @@ function Corners({ className = "border-border-strong" }: { className?: string })
   );
 }
 
+/**
+ * Peer's mark, at the bar's size: the sheet with its registered corner, the
+ * same object the tab shows (app/icon.svg). The sheet takes the type's own
+ * colour, the corner the accent — the one place in the chrome that carries
+ * the hue, as the mark does on the tab and on a shared link's card.
+ */
+function Mark() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 64 64" aria-hidden className="shrink-0">
+      <rect x="4" y="4" width="56" height="56" fill="currentColor" />
+      <path d="M30 4h30v10H30z" fill="var(--color-accent)" />
+      <path d="M50 4h10v30H50z" fill="var(--color-accent)" />
+    </svg>
+  );
+}
+
 function openHelp() {
   window.dispatchEvent(new CustomEvent("peer:toggle-help"));
 }
@@ -126,7 +142,8 @@ export function Masthead() {
         />
 
         <div className="relative justify-self-start">
-          <Link href="/" className="group/mark relative inline-flex items-center px-2 py-1.5">
+          <Link href="/" className="group/mark relative inline-flex items-center gap-2 px-2 py-1.5 text-heading">
+            <Mark />
             <span className={WORDMARK_CLASS}>Peer</span>
             <Corners className="border-border-strong group-hover/mark:border-text-muted" />
           </Link>
