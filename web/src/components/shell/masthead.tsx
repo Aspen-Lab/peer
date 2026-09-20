@@ -34,6 +34,7 @@ import { useAuthUser, userAvatar } from "@/components/account/use-auth-user";
 import { readerActions } from "@/lib/reader/reader-keys";
 import type { PaperNav } from "@/lib/reader/paper-nav";
 import { RAIL } from "@/components/reader/copy";
+import { WriteButton } from "@/components/shell/write-button";
 import {
   SHELL_LINKS,
   isActiveLink,
@@ -124,6 +125,7 @@ export function Masthead() {
           // same object at the two edges of the window.
           className="justify-self-end inline-flex items-center eyebrow text-text-muted"
         >
+          <WriteButton />
           {SHELL_LINKS.map((link, i) => {
             const active = isActiveLink(link, route);
             const isProfile = link.route === "profile";

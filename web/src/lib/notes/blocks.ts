@@ -206,3 +206,12 @@ export function wordCount(note: Pick<Note, "blocks" | "sources">): number {
     .split(/\s+/)
     .filter(Boolean).length;
 }
+
+/** A note nobody has written in yet: no title, and nothing but empty text.
+ *  "Write" reuses one rather than leaving a trail of blank notes behind. */
+export function isUntouched(note: Pick<Note, "title" | "blocks">): boolean {
+  return (
+    !note.title.trim() &&
+    note.blocks.every((b) => isTextual(b.type) && b.type === "text" && !b.text.trim() && !b.cite)
+  );
+}

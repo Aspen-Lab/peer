@@ -68,7 +68,7 @@ import { COMMAND } from "@/components/ui/command";
 import { cn } from "@/lib/cn";
 import { caretCoords, caretLine, offsetFromPoint } from "./caret";
 import { InlineText } from "./inline-text";
-import { NotesRail } from "./notes-rail";
+import { EditorRail, type RailTab } from "./notes-rail";
 
 type Doc = { title: string; blocks: Block[]; sources: Record<string, Source> };
 type Caret = number | "start" | "end";
@@ -184,6 +184,7 @@ interface RowApi {
   handleCancel: () => void;
   noteId: (title: string) => string | null;
   missingNote: (title: string) => void;
+  citation: (key: string) => void;
 }
 
 interface RowProps {
@@ -300,7 +301,8 @@ const Row = memo(function Row({ block: b, first, number, editing, sources, dragg
         {b.type === "code" ? (
           <span data-inner={0}>{b.text}</span>
         ) : (
-          <InlineText text={b.text} sources={sources} noteId={api.current.noteId} onMissingNote={api.current.missingNote} />
+          <InlineText text={b.text} sources={sources} noteId={api.current.noteId}
+            onCitation={api.current.citation} onMissingNote={api.current.missingNote} />
         )}
         {hint && <span className="text-text-faint/70">{b.text.trim() ? ` ${hint}` : hint}</span>}
       </div>
@@ -435,6 +437,9 @@ export function NoteEditor({ note }: { note: Note }) {
   const [exportOpen, setExportOpen] = useState(false);
   /** The rail as a panel, where there is no room for it as a column. */
   const [railOpen, setRailOpen] = useState(false);
+  const [railTab, setRailTab] = useState<RailTab>("notes");
+  /** The paper whose record the rail is showing. */
+  const [preview, setPreview] = useState<string | null>(null);
   const [drag, setDrag] = useState<{ id: string; gap: number } | null>(null);
   /** The drag in progress, and the gap it would drop into now — read on
    *  release from here, not from state, which can be a move behind. */
@@ -491,7 +496,16 @@ export function NoteEditor({ note }: { note: Note }) {
   };
   useLayoutEffect(() => {
     const want = pendingFocus.current;
-    if (!want) return;
+    if (!want) {
+      // A block can lose the caret without a blur ever reaching React — a
+      // re-render that replaces its textarea drops focus on the floor, and
+      // the block would sit showing its Markdown with nothing focused. If
+      // nothing at all holds focus, it belongs back here.
+      const held = editing ? areas.current.get(editing) : null;
+      const active = document.activeElement;
+      if (held && (active === null || active === document.body)) held.focus({ preventScroll: true });
+      return;
+    }
     const el = areas.current.get(want.id);
     if (!el) return;
     pendingFocus.current = null;
@@ -706,6 +720,29 @@ export function NoteEditor({ note }: { note: Note }) {
     focusBlock(added.id, "end");
   };
 
+  /** The paper as a card, after the block last written in. */
+  const cardFromRail = (paper: Citable) => {
+    const sources = docRef.current.sources;
+    const key = keyFor(paper, sources);
+    if (!sources[key]) commit({ ...docRef.current, sources: { ...sources, [key]: sourceOf(paper, key) } });
+    const at = lastCaret.current ? indexOf(lastCaret.current.id) : -1;
+    const where = at === -1 ? docRef.current.blocks.length : at + 1;
+    const card = block("paper", "", { cite: key });
+    const after = block("text");
+    insertAt(where, card, after);
+    focusBlock(after.id, "start");
+  };
+
+  /** A citation in the text opens its paper's record in the rail, rather
+   *  than taking the writer out of the draft. */
+  const showPaper = (key: string) => {
+    const source = docRef.current.sources[key];
+    if (!source) return;
+    setPreview(source.paperId);
+    setRailTab("papers");
+    setRailOpen(true);
+  };
+
   // ── Row handlers, read through a ref so the rows can stay memoised ──
   const api = useRef<RowApi>(null as unknown as RowApi);
   api.current = {
@@ -740,6 +777,8 @@ export function NoteEditor({ note }: { note: Note }) {
       const t = title.trim().toLowerCase();
       return newestFirst(allNotes).find((n) => n.title.trim().toLowerCase() === t)?.id ?? null;
     },
+
+    citation: showPaper,
 
     missingNote: (title) => {
       const made = { ...blankNote(), title };
@@ -1124,19 +1163,23 @@ export function NoteEditor({ note }: { note: Note }) {
   // ── Derived ──
   const refs = useMemo(() => citedKeys(doc).map((k) => doc.sources[k]).filter((s): s is Source => Boolean(s)), [doc]);
   const words = useMemo(() => wordCount(doc), [doc]);
-  const uncitedSaved = useMemo(() => {
-    const cited = new Set(refs.map((s) => s.paperId));
-    return saved.filter((p) => !cited.has(p.id));
-  }, [saved, refs]);
-
   return (
     // Three columns where the window allows: the notes rail, the note, the
     // shelf to cite from. Below that the rail is a panel the bar opens, and
     // the shelf gives way to @.
-    <div className="lg:grid lg:grid-cols-[13rem_minmax(0,1fr)] lg:gap-10 xl:grid-cols-[13rem_minmax(0,1fr)_13rem] xl:gap-12">
+    <div className="lg:grid lg:grid-cols-[16rem_minmax(0,1fr)] lg:gap-12">
       <aside className="hidden lg:block">
         <div className="sticky top-24 flex max-h-[calc(100vh-8rem)] flex-col">
-          <NotesRail currentId={note.id} />
+          <EditorRail
+            currentId={note.id}
+            preview={preview}
+            onPreview={setPreview}
+            tab={railTab}
+            onTab={setRailTab}
+            onCite={citeFromRail}
+            onCard={cardFromRail}
+            sources={doc.sources}
+          />
         </div>
       </aside>
 
@@ -1166,7 +1209,23 @@ export function NoteEditor({ note }: { note: Note }) {
                 onClick={() => setRailOpen(false)}
               />
               <div className="absolute left-0 top-full z-30 mt-2 flex max-h-[70vh] w-[min(20rem,calc(100vw-3rem))] flex-col bg-surface p-3 shadow-card lg:hidden">
-                <NotesRail currentId={note.id} onPicked={() => setRailOpen(false)} />
+                <EditorRail
+                  currentId={note.id}
+                  preview={preview}
+                  onPreview={setPreview}
+                  tab={railTab}
+                  onTab={setRailTab}
+                  onCite={(paper) => {
+                    citeFromRail(paper);
+                    setRailOpen(false);
+                  }}
+                  onCard={(paper) => {
+                    cardFromRail(paper);
+                    setRailOpen(false);
+                  }}
+                  sources={doc.sources}
+                  onPicked={() => setRailOpen(false)}
+                />
               </div>
             </>
           )}
@@ -1355,39 +1414,6 @@ export function NoteEditor({ note }: { note: Note }) {
         </div>
       </div>
 
-      {/* The shelf, beside the draft: a click cites the paper where the caret
-          last was. Only where there is room for it; everywhere, @ does the
-          same from the keyboard. */}
-      <aside className="hidden xl:block">
-        <div className="sticky top-24">
-          <p className="eyebrow text-text-faint">Saved · click to cite</p>
-          {uncitedSaved.length === 0 ? (
-            <p className="annotation mt-3 text-text-faint">
-              {saved.length === 0 ? "Papers you save land here, ready to cite." : "Every saved paper is cited here."}
-            </p>
-          ) : (
-            <ul className="mt-3 max-h-[calc(100vh-10rem)] space-y-3 overflow-auto pr-1">
-              {uncitedSaved.map((p) => (
-                <li key={p.id}>
-                  <button
-                    type="button"
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => citeFromRail(citableFromPaper(p))}
-                    className="group block w-full text-left"
-                  >
-                    <span className="annotation block text-text-faint group-hover:text-text-muted">
-                      {authorYear(sourceOf(citableFromPaper(p), ""))}
-                    </span>
-                    <span className="line-clamp-3 font-reading text-body-sm leading-[1.4] text-text-muted group-hover:text-heading">
-                      {p.title}
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </aside>
     </div>
   );
 }

@@ -18,6 +18,7 @@ export function InlineText({
   sources,
   noteId,
   onMissingNote,
+  onCitation,
 }: {
   text: string;
   sources: Record<string, Source>;
@@ -25,6 +26,9 @@ export function InlineText({
   noteId: (title: string) => string | null;
   /** A link to a note that does not exist yet makes it, the way Obsidian does. */
   onMissingNote: (title: string) => void;
+  /** Where a citation leads while writing: the paper's record in the rail,
+   *  not a page away from the draft. Without it, the paper's page. */
+  onCitation?: (key: string) => void;
 }) {
   const tokens = useMemo(() => parseInline(text), [text]);
   return (
@@ -74,9 +78,20 @@ export function InlineText({
                     <Fragment key={key}>
                       {j > 0 && "; "}
                       {source ? (
-                        <Link href={`/papers/${source.paperId}`} title={source.title} className={`${LINK} decoration-dotted`}>
-                          {authorYear(source)}
-                        </Link>
+                        onCitation ? (
+                          <button
+                            type="button"
+                            title={source.title}
+                            onClick={() => onCitation(key)}
+                            className={`${LINK} decoration-dotted hover:text-heading`}
+                          >
+                            {authorYear(source)}
+                          </button>
+                        ) : (
+                          <Link href={`/papers/${source.paperId}`} title={source.title} className={`${LINK} decoration-dotted`}>
+                            {authorYear(source)}
+                          </Link>
+                        )
                       ) : (
                         <span title="No paper with this key in this note" className="text-text-faint">
                           @{key}

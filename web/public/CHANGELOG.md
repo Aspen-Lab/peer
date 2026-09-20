@@ -2,6 +2,32 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.35.0 — 2026-09-20
+
+Write, in the masthead. Your files, beside the draft.
+
+**Write** is now the one action in the top bar, set apart from the four words
+that are places: outlined at rest, filled while you are in a note. It opens a
+note to write in — and reuses an untouched blank one, so pressing it twice
+never leaves an empty note behind.
+
+The editor's rail became a cabinet with two drawers:
+
+- **Notes** — every note in this browser. Each row carries its own menu:
+  rename (in place), duplicate, export .md, delete.
+- **Papers** — your shelf, plus anything this note cites that has since left
+  it. Opening one shows the **record**: authors, venue and year, its own
+  abstract where the record has one (and it says so where it does not), and
+  four actions — **Cite** puts `[@key]` where the caret last was, **Card**
+  places the paper as a card, **Open** goes to the paper, **Source** to the
+  publisher. A paper you have taken notes on also offers those.
+
+And a citation in the draft now opens that paper's record in the rail instead
+of navigating away from what you were writing.
+
+Fixed: a block could keep showing its Markdown after losing the caret to a
+re-render — with nothing focused, the caret comes back to it.
+
 ## v0.34.1 — 2026-09-19
 
 A rail of your notes, beside the one you are writing.

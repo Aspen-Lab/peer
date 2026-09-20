@@ -7,6 +7,7 @@ import {
   citedKeys,
   excerpt,
   indentBlock,
+  isUntouched,
   listNumber,
   moveBlock,
   parseMarkdown,
@@ -179,6 +180,15 @@ describe("blocks", () => {
   it("lists cited keys in order of first appearance, paper cards included", () => {
     const note = { blocks: [block("paper", "", { cite: "b" }), block("text", "[@a] then [@b; @c]")] };
     expect(citedKeys(note)).toEqual(["b", "a", "c"]);
+  });
+
+  it("knows a note nobody has written in, so Write reuses it", () => {
+    expect(isUntouched({ title: "", blocks: [block("text")] })).toBe(true);
+    expect(isUntouched({ title: "", blocks: [block("text", "   ")] })).toBe(true);
+    expect(isUntouched({ title: "Draft", blocks: [block("text")] })).toBe(false);
+    expect(isUntouched({ title: "", blocks: [block("text", "a word")] })).toBe(false);
+    expect(isUntouched({ title: "", blocks: [block("paper", "", { cite: "k" })] })).toBe(false);
+    expect(isUntouched(readingNote(ROSE))).toBe(false);
   });
 
   it("excerpts the prose, not the headings, with citations read as authors", () => {
