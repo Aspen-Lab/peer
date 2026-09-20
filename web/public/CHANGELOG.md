@@ -2,6 +2,25 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.36.1 — 2026-09-20
+
+Read it here, said loudly.
+
+Peer read the paper and then whispered it: the loudest button on a paper's
+page was **Open the PDF**, which leaves Peer, while the text Peer had already
+extracted sat behind a grey line of type at the bottom of a block in the other
+column. That was a fair hierarchy while a deployed Peer could not read a PDF.
+It has not been one since yesterday.
+
+**Read it here** is now the first command in the decision block, filled, with
+the paper's key `t`; **Open the PDF** keeps its place as the second. Pressing
+it unrolls the paper's text and — only where the text is not already on the
+screen — scrolls to it, so on a phone you land on the first section and on a
+wide screen the page does not jump for a block you can already see.
+
+Where Peer holds no full text, nothing changes: the source is the first
+command again, because it is the only one.
+
 ## v0.36.0 — 2026-09-20
 
 Peer reads PDFs — here, not only on a laptop.

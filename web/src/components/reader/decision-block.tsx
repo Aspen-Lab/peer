@@ -40,6 +40,8 @@ export function DecisionBlock({
   ref,
   sentences,
   stage,
+  onRead,
+  readLabel,
   source,
   doi,
   isSaved,
@@ -54,6 +56,10 @@ export function DecisionBlock({
   sentences: string[];
   /** While the model works: the stream's stage under the sentence. */
   stage: { label: string; pct: number } | null;
+  /** The paper's own text, where Peer holds it: the command that keeps the
+   *  reader here rather than sending them to a PDF viewer. */
+  onRead?: () => void;
+  readLabel?: string;
   source: PaperReading["source"];
   doi?: string;
   isSaved: boolean;
@@ -112,13 +118,33 @@ export function DecisionBlock({
           default, which would set Skip as wide as the primary. Inert below
           xl. */}
       <div className="flex flex-wrap gap-3 mt-5 xl:grid xl:grid-cols-[repeat(2,max-content)] xl:justify-items-start">
+        {/* Where Peer has read the paper, reading it HERE is the first
+            command and the source is the second. The loudest button on this
+            page used to be the one that left it — a fair hierarchy while a
+            deployed Peer could not read a PDF, and backwards since it can. */}
+        {onRead && (
+          <button
+            type="button"
+            onClick={onRead}
+            className={cn(buttonVariants({ tone: "primary", size: "lg" }), COMMAND, TOUCH_TARGET)}
+          >
+            <Kbd pointerOnly className="mr-0.5">
+              t
+            </Kbd>
+            {readLabel ?? "Read it here"}
+          </button>
+        )}
         {source && (
           <a
             href={source.url}
             target="_blank"
             rel="noopener noreferrer"
             onClick={onOpen}
-            className={cn(buttonVariants({ tone: "primary", size: "lg" }), COMMAND, TOUCH_TARGET)}
+            className={cn(
+              buttonVariants({ tone: onRead ? "soft" : "primary", size: "lg" }),
+              COMMAND,
+              TOUCH_TARGET,
+            )}
           >
             <Kbd pointerOnly className="mr-0.5">
               o

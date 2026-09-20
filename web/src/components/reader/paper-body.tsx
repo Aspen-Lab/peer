@@ -53,17 +53,34 @@ function Section({ section }: { section: ReadingSection }) {
   );
 }
 
-export function PaperBody({ reading }: { reading: PaperReading }) {
+/** The anchor the decision block's "read it here" scrolls to. */
+export const PAPER_BODY_ID = "paper-body";
+
+export function PaperBody({
+  reading,
+  open: openFromPage,
+  onOpen,
+}: {
+  reading: PaperReading;
+  /** The page opens it too: the decision block's first command is "read it
+   *  here", and it lands on text that is already unrolled. */
+  open?: boolean;
+  onOpen?: () => void;
+}) {
   // `?? []`: the version gate above should mean this is always an array, and
   // a missing optional block is still not worth taking the page down for.
   const body = reading.body ?? [];
-  const [open, setOpen] = useState(false);
+  const [openHere, setOpenHere] = useState(false);
+  const open = openFromPage || openHere;
   if (body.length === 0) return null;
 
   const words = countWords(body);
   const shown = words <= ALWAYS_OPEN_WORDS || open;
 
   return (
+    // `scroll-mt`: the masthead is sticky, and a heading scrolled to the
+    // very top of the window lands under it.
+    <div id={PAPER_BODY_ID} className="scroll-mt-20">
     <Band label={BODY.heading}>
       {/* The contents: the sections Peer reached, in the paper's own order.
           It doubles as the statement of what it did not reach — a paper whose
@@ -80,7 +97,10 @@ export function PaperBody({ reading }: { reading: PaperReading }) {
       ) : (
         <button
           type="button"
-          onClick={() => setOpen(true)}
+          onClick={() => {
+            setOpenHere(true);
+            onOpen?.();
+          }}
           className="group inline-flex items-center gap-1.5 font-mono text-body-sm text-text-muted mt-5 hover:text-heading transition-colors [@media(hover:none)]:min-h-11"
         >
           {BODY.open}
@@ -90,5 +110,6 @@ export function PaperBody({ reading }: { reading: PaperReading }) {
         </button>
       )}
     </Band>
+    </div>
   );
 }

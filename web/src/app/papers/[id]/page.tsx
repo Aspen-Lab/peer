@@ -58,8 +58,10 @@ import { THUMB_BAR_PX, THUMB_BAR_QUERY } from "@/components/shell/thumb-bar";
 import { PAGE_CLASS, SPREAD_GRID } from "@/components/reader/spread";
 import { useReading } from "@/components/reader/use-reading";
 import { PaperNotes } from "@/components/notes/paper-notes";
+import { PAPER_BODY_ID } from "@/components/reader/paper-body";
 import { useModelReport } from "@/components/reader/use-model-report";
 import {
+  BODY,
   NOT_FOUND,
   RAIL,
   SWIPE,
@@ -250,6 +252,27 @@ function Reader({
 
   const { reading, fromServer } = useReading(paper);
   const model = useModelReport({ paper, profile });
+  // The paper's own text, unrolled from the decision block: where Peer has
+  // read the paper, reading it here is the first thing to offer.
+  const [bodyOpen, setBodyOpen] = useState(false);
+  const hasBody = (reading?.body?.length ?? 0) > 0;
+  const readHere = useCallback(() => {
+    setBodyOpen(true);
+    // After the block has unrolled and painted — one frame to render, one to
+    // lay out. And only where the text is not already on the screen: on the
+    // spread it sits in the right column beside the command that opened it,
+    // and scrolling then would throw the page for no reason.
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        const block = document.getElementById(PAPER_BODY_ID);
+        if (!block) return;
+        const top = block.getBoundingClientRect().top;
+        if (top < 0 || top > window.innerHeight * 0.75) {
+          block.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      }),
+    );
+  }, []);
   const report = model.report;
 
   // One tier: a signed-in reader has Peer's model; a reader with their own key has theirs.
@@ -491,6 +514,7 @@ function Reader({
       skip,
       like,
       undoOrToggleRead,
+      ...(hasBody ? { read: readHere } : {}),
       open,
       copy,
       back,
@@ -609,6 +633,8 @@ function Reader({
             onCopy={copy}
             onOpen={decide}
             onCopyDoi={copyDoi}
+            onRead={hasBody ? readHere : undefined}
+            readLabel={BODY.open}
           />
         }
         additions={
@@ -680,7 +706,7 @@ function Reader({
 
             {/* The paper, when Peer reached it: everything the extractor
                 read, under everything Peer had to say about it. */}
-            <PaperBody reading={reading} />
+            <PaperBody reading={reading} open={bodyOpen} onOpen={() => setBodyOpen(true)} />
 
             {/* Last, and always there: the facts that need no key. On a page with no model
                 page it is the only block under the abstract, which is the
