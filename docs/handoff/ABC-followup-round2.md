@@ -83,8 +83,10 @@ browser, run the reports), then report to the user in plain language and stop th
 ROUND:            8 (loop REOPENED by the manager 2026-09-19 — five user items, §1aa)
 WHOSE TURN:       B  (new features + one investigation; the manager recorded the current state)
 STOPPED BECAUSE:  —
-STATUS:           Round 8 open. Nothing landed yet. Another agent's figure-lightbox.* edits are
-                   still dirty in the tree — untouched, excluded.
+STATUS:           Round 8 open. B part 1 done: fix guide 8-01..8-04 written for S27/S24/S25/S26
+                   (§4). S28 investigation still pending — B continues this turn. Another agent's
+                   figure-lightbox.* edits (and unrelated upload-store.ts/types/index.ts/
+                   upload-access.ts changes) are still dirty in the tree — untouched, excluded.
 OPEN ITEMS:       S24 S25 S26 S27 S28 (§1aa)
 GATE (0 open):    NOT MET
 
@@ -11657,3 +11659,319 @@ of the outgoing diff for credential-shaped strings; the other agent's uncommitte
 
 User asked for five items (S24–S28, §1aa) via the ABC loop with the hourly clock. Current state
 recorded from the code; round starts at B. Clock re-created. B spawned.
+
+### Round 8 — Agent B, part 1 — fix guide (8-01..8-04)
+
+Branch confirmed `complimentary-enhancement-to-main-update` before reading anything.
+`figure-lightbox.tsx`/`.test.ts` and `web/src/lib/papers/upload-store.ts`/`web/src/types/index.ts`
+(also dirty this session, not named in the round-8 brief) and `web/src/lib/papers/upload-access.ts`
+(untracked) — another agent's, untouched. B changes no code this round; every item below is
+guide-only. Order per §1aa: **S27 → S24 → S25 → S26**, numbered `8-01..8-04` in that order.
+
+**A stale file pointer in the spec itself, found by reading (flagged, not silently corrected
+elsewhere):** §1aa's S27 text says `lib/shell/masthead.ts` exports `MASTHEAD` — the actual export
+is `SHELL_LINKS` (masthead.ts line 63). `MASTHEAD` does not exist anywhere in the file.
+
+#### 8-01 — S27: a "Main" link before Search in the masthead
+
+**Files**: `web/src/lib/shell/masthead.ts` (`SHELL_LINKS`, lines 63-67; `ShellLink`/`ShellRoute`
+types, lines 18-25/56-60 — already include `"briefing"`, used today by `THUMB_TABS`), the render
+site `web/src/components/shell/masthead.tsx` (lines 126-151, maps `SHELL_LINKS` generically —
+confirmed by reading, no per-link special-casing beyond the profile-avatar branch), the phone bar
+`web/src/components/shell/thumb-bar.tsx` (`THUMB_TABS`, `grid-cols-4` at line 78), the test
+`web/src/lib/shell/masthead.test.ts` (lines 91-100). **Classification: MISSING** — but note two
+things already partly cover this: the phone's `THUMB_TABS[0]` ("Today", route `"briefing"`)
+already links `/`, and a global keyboard chord `g h` → "Briefing" already exists
+(`lib/keys/help.ts` line 32, `keyboard.tsx`'s `awaitingG` branch) and works from anywhere. S27
+closes a **desktop-mouse-only** gap: nothing to click at `≥768px` besides the wordmark itself.
+
+**Fix direction**: add one entry, first in the array — `{ href: "/", label: "Main", route:
+"briefing" }` — to `SHELL_LINKS` (masthead.ts line 63). No type change (the enum already has
+`"briefing"`). `masthead.tsx`'s render loop (`{SHELL_LINKS.map((link, i) => ...)}`, the
+dot-separator logic `i > 0 && DOT`) needs no edit — it already generalizes to N links, confirmed
+by reading; a 4th item renders in the same style automatically.
+
+**Phone bar — do not touch, and say so explicitly (per §1aa's own fallback clause).**
+`thumb-bar.tsx`'s `Tabs` component is a hard-coded `grid-cols-4` (line 78), sized for exactly 4
+cells at ~93px each per the file's own header comment. A 5th cell would force `grid-cols-5`
+(~75px cells) or wrapping — real layout surgery for a destination the bar already reaches under
+"Today." Recommend: desktop-only, unchanged phone bar.
+
+**Honest edge state**: on the briefing itself, "Main" reads as active (`aria-current`,
+`text-heading`) via the same `isActiveLink`/`shellRoute` mechanism the phone's "Today" cell
+already uses for the identical route — not a conflict; the wordmark carries no active-state
+styling at all (confirmed by reading, it is a plain `<Link>`), so nothing doubles up visually.
+
+**Tests at risk (grepped, exact lines)**: `masthead.test.ts` line 93 —
+`expect(SHELL_LINKS.map((l) => l.label)).toEqual(["Search", "Saved", "Profile"]);` → must become
+`["Main", "Search", "Saved", "Profile"]`. Line 97 —
+`expect(SHELL_LINKS.some((l) => isActiveLink(l, "briefing"))).toBe(false);` → must flip to `true`
+(rewrite both assertions, comment "8-01/S27", never delete). No other file references
+`SHELL_LINKS`.
+
+**Blast radius**: one array entry using an already-valid route value. Zero changes to
+`masthead.tsx`, `thumb-bar.tsx`, `searchKeyTarget`, `shellRoute`, or `mastheadCentre`. No new CSS.
+
+---
+
+#### 8-02 — S24: two "Back to main" buttons on the persona result view
+
+**Files**: `web/src/components/persona/result.tsx` (`PersonaResult`, the only file that needs
+JSX changes — confirmed the "result view" is exactly this component: `quiz.tsx` renders
+`<PersonaResult>` only when `quizResultStore`'s snapshot is non-null, i.e. only once a quiz has
+been completed, never during a question step), `web/src/components/ui/button.tsx`
+(`buttonVariants`, the `size` cva variants at lines 27-31), `web/src/components/keyboard.tsx`
+(read in full — confirmed no existing Escape handling reaches `/persona`: the global handler's
+Escape branch checks `helpOpen`, then a typing-target blur, then `onPaperPage()`, then the
+briefing's focus-ring reset; none apply off those routes, so Escape on `/persona` today is a true
+no-op). **Classification: MISSING.**
+
+**Style, verified not assumed**: `buttonVariants({ tone: "primary", size: "lg" })` (button.tsx
+line 18) is the exact accent-filled pill already live on "Open the PDF"
+(`decision-block.tsx` line 137) — `bg-accent text-bg shadow-card hover:bg-accent/90`. `text-bg`
+resolves to `--color-bg` — `#fafafa` (near-white) in light mode, `#111111` (near-black) in dark —
+which is deliberately smarter than the round-8 text's own suggested `--color-fixed-white`: dark
+mode's accent swatches (`--seed-dark`, e.g. ember `#ff6a2b`, indigo `#7a90f2`) are mid-bright
+tones that read better with near-black text than white. **Recommend reusing `tone: "primary"`
+verbatim rather than hardcoding fixed-white** — flagged, not silently substituted, since the
+spec's own words named white.
+
+**Size**: `lg` is `h-10` (40px), under the spec's 44px floor. Recommend extending
+`buttonVariants`'s shared `size` variants (button.tsx lines 27-31) with one new option, `xl:
+"h-11 px-6 text-body-lg"` (44px) — additive to the cva enum; grepped every call site of
+`buttonVariants`/`Button` (`decision-block.tsx`, `app/page.tsx`, `app/welcome/page.tsx`,
+`account-section.tsx`) — none currently pass `size: "xl"`, so nothing existing is affected by
+adding the option. Smaller and more reusable than a one-off `h-11` className glued on per button.
+
+**Copy**: new local constant in `result.tsx` — `const BACK_TO_MAIN = "← Back to main";` — the
+arrow baked into the string, matching the one existing precedent for this exact idiom
+(`reader/copy.ts`'s `RAIL.back = "← Briefing"`), not a separate icon element.
+
+**Placement, concretely**: top instance as the very first child of `PersonaResult`'s returned
+JSX, before the `lg:grid-cols-[...]` two-column grid — reads as top-left of the whole view above
+`<header><h1>{persona.name}</h1></header>` at every width (below `lg` the grid collapses to a
+single stacked column in document order, so "before the grid" is still visually first). Bottom
+instance as a new sibling **after** the grid's closing tag (after the existing `<footer>`
+"Retake quiz" block, satisfying "after the last block"), wrapped in a new
+`<div className="flex justify-end mt-10">` — needed because `Link` alone won't right-align
+without a block-level flex parent; nothing existing already closes this role. Both:
+```
+<Link href="/" aria-label={BACK_TO_MAIN}
+      className={cn(buttonVariants({ tone: "primary", size: "xl" }), "hover:scale-125 active:scale-90")}>
+  {BACK_TO_MAIN}
+</Link>
+```
+(identical `aria-label` and visible text, per spec.)
+
+**Hover swell — flagged, not decided.** The repo's one existing swell idiom is literally
+`hover:scale-125 active:scale-90` (`iconButtonVariants`, `upload-button.tsx`), always on small
+(28-36px) square controls. Applying a literal 25% growth to a big, full-label pill sitting flush
+in a page corner risks visible clipping against the container edge or the paragraph above/below
+on hover. Recommend C implement the literal spec value first and eyeball it live; the documented
+fallback, if it clips, is this same codebase's other "big surface" swell
+(`app/profile/page.tsx` line 1734, `hover:scale-[1.04]`) — B's preference, not enforced.
+
+**Esc**: new component-local `useEffect` inside `PersonaResult` (mount/unmount-gated,
+`window.addEventListener("keydown", ...)`, bubble phase, no `stopPropagation` needed since
+nothing else on `/persona` listens) calling `router.push("/")` (new `useRouter` import from
+`next/navigation`) on `e.key === "Escape"`. Recommend **against** extending the shared
+`keyboard.tsx` global handler — smaller blast radius, no new pathname branch in a file every
+route already depends on, the same judgment call precedent 6-08h already made for the lightbox's
+own Escape guard.
+
+**Honest edge state**: during a question step (`PersonaQuiz` rendering the quiz UI, not
+`PersonaResult`), neither button nor the Escape binding exist — matches "only on the result
+view."
+
+**Tests at risk**: none — grepped, zero test files exist anywhere under `components/persona/` or
+`app/persona/` today. Recommend C add one minimal `result.test.tsx`
+(`renderToStaticMarkup`), matching this repo's ceiling for this class of UI (e.g.
+`app/saved/page.test.tsx`), asserting both `"Back to main"` occurrences and their `aria-label`s
+render.
+
+**Blast radius**: one new cva `size` option (additive, zero existing consumers). `result.tsx`
+gains two elements, one effect, one new import. Nothing else touched.
+
+---
+
+#### 8-03 — S25: collapsible "Abstract" toggle, collapsed by default
+
+**Files**: `web/src/components/reader/paper-words.tsx` (the `<Band label={ABSTRACT_LABEL}>` call
+and its children, lines 156-166), `web/src/components/reader/copy.ts` (`ABSTRACT_LABEL` line 59,
+`ABSTRACT_FOOTER` line 53), `web/src/components/ui/band.tsx` (read in full, **not touched** —
+shared by 7 other call sites: `app/page.tsx`, `block-heading.tsx` for all 5 report blocks,
+`paper-body.tsx`, `report-sections.tsx`'s own review heading, `lead-claim.tsx`,
+`record-block.tsx`), `web/src/app/papers/[id]/page.tsx` lines 441-475 (the "decided-read"
+`IntersectionObserver`), `web/src/components/icons.tsx` (no chevron exists yet — grepped every
+export). **Classification: MISSING**, with one interaction the spec text does not mention.
+
+**The load-bearing finding, verified by reading `page.tsx` line 445, not assumed.** The
+decided-read observer's target is chosen once as `spread ? (wordsEndRef.current ??
+decisionRef.current) : decisionRef.current` — `wordsEndRef` is the ref on the abstract's own
+closing `<p ref={endRef}>{ABSTRACT_FOOTER}</p>` (paper-words.tsx line 163). The two ways to build
+"collapsed by default" have **opposite** effects on this:
+- **Mount-and-CSS-hide** (e.g. the `grid-template-rows: 0fr/1fr` pattern the round-8 text itself
+  names as "the clean animatable pattern"): the footer stays in the DOM, just visually
+  zero-height. `wordsEndRef.current` is therefore non-null from first paint, so the observer
+  **locks onto a permanently invisible target** for as long as the reader leaves the abstract
+  collapsed — the new default — silently breaking "read means decided" on the two-column spread.
+  A real regression the spec text does not anticipate.
+- **Conditional render** (only mount the sentences + footer while `open`): `wordsEndRef.current`
+  stays `null` while collapsed, and the **existing** `?? decisionRef.current` fallback redirects
+  the observer to the Decision block — exactly the same, already-correct degradation this file
+  already uses for a paper with no abstract at all (`sentences.length === 0`, lines 133-146).
+  Zero changes needed to `page.tsx`.
+
+**Recommendation: conditional rendering, specifically because of this** — not the grid-rows
+technique. For the "welcome, not required" ease, reuse this file's own existing
+`animate-fade-in-up` class (already used by `Deck` in this same file) on the conditionally
+mounted block, matching the precedent at 6-08g (a fresh-mount CSS animation needs no JS trigger)
+and getting reduced-motion for free via the existing global rule (globals.css ~652) — no bespoke
+handling.
+
+**New component**: `web/src/components/reader/abstract-toggle.tsx`, exporting
+`AbstractToggle({ children }: { children: React.ReactNode })` — local `useState(false)`, static
+`id="abstract-panel"` (safe since at most one instance renders per reading page):
+```
+<button type="button" aria-expanded={open} aria-controls="abstract-panel"
+        onClick={() => setOpen(v => !v)}
+        className={cn(buttonVariants({ tone: "primary", size: "lg" }), "w-full justify-between")}>
+  {ABSTRACT_LABEL}
+  <IconChevronDown className={cn("transition-transform duration-150 ease-snap", open && "rotate-180")} />
+</button>
+{open && <div id="abstract-panel" className="animate-fade-in-up">{children}</div>}
+```
+Reuses `buttonVariants({ tone: "primary" })` for the same reason as 8-02 (already-proven,
+theme-correct accent fill, not a hand-rolled orange). "At least 48px tall" is one step past
+8-02's 44px floor — reuse the same new `xl` size token from 8-02 if that item lands first, or a
+local `h-12` override otherwise; whichever item C works second should reuse the other's token
+rather than defining a third.
+
+**Copy**: repoint `ABSTRACT_LABEL` (copy.ts line 59) from `"The abstract"` to `"Abstract"` in
+place — grepped, exactly one consumer today (paper-words.tsx line 156) — a same-size diff versus
+adding a second, barely-different constant, with no orphaned export left behind.
+
+**Icon**: add `IconChevronDown` to `icons.tsx` following its own `strokeProps` convention
+(`<polyline points="6 9 12 15 18 9" />`), rotated via a plain `rotate-180` class — no new
+dependency.
+
+**`Band`/`band.tsx` are not touched.** `paper-words.tsx` simply stops calling `<Band>` for the
+abstract specifically and calls `<AbstractToggle>` instead, wrapping the exact children it
+already builds today (the paragraph-splitting/inking `<div>` + the footer `<p ref={endRef}>`) —
+no change to that logic.
+
+**Honest edge state**: a paper with no abstract (`sentences.length === 0`, the TL;DR-only
+branch, lines 133-146) never reached `<Band>` today and won't reach `<AbstractToggle>` either —
+nothing to collapse where there is nothing to show.
+
+**Tests at risk**: none — grepped, no test file imports `paper-words.tsx`, `Band`, or references
+`ABSTRACT_LABEL`/`ABSTRACT_FOOTER` by string. Recommend a new `abstract-toggle.test.ts`
+(`renderToStaticMarkup`) asserting the closed-by-default render carries `aria-expanded="false"`
+and no `id="abstract-panel"` panel in the markup — matching this repo's ceiling (6-08's own
+precedent: assert the closed/default render only).
+
+**Blast radius**: one new file, one new icon export, one changed string value (one consumer),
+`paper-words.tsx`'s abstract branch only — the TL;DR branch, `Deck`, and `LeadClaim` above it are
+untouched. Zero changes to `page.tsx`, `band.tsx`, or `reading-markdown.ts` (a separate rendering
+path sharing none of these constants, confirmed by grep).
+
+---
+
+#### 8-04 — S26: "What they found, and how big" — boxed section, outlined results, dark ink
+
+**Files**: `web/src/components/reader/report-sections.tsx` (`CLAIM_CLASS`/`PULL_CLASS`/
+`FOOTER_CLASS` lines 37-40, `ResultsBlock` lines 232-307, the per-result `<div>` lines 268-302,
+the novelty paragraph lines 282-287), `web/src/components/reader/block-heading.tsx` (read, **not
+touched** — shared by `MethodBlock`/`CaveatsBlock`/`ForYouBlock`/`NextStepBlock`),
+`web/src/app/globals.css` (radius tokens lines 110-117, colour tokens lines 11-14/205-215/
+249-258). **Classification: WRONG SHAPE** — the right words, in the wrong container.
+
+**A standing, sitewide fact this fix must work with, not fight, verified by reading**: every
+radius token in this app is `0px` (globals.css lines 110-117 — "Nothing is round... squares
+every corner in the product at once"). `MattedFigure`'s own `rounded-2xl` (matted-figure.tsx line
+11) already renders with sharp square corners today, by deliberate design, not a bug. Whatever
+`rounded-*` class name is used below is a semantic label only — naming `rounded-2xl` (matching
+`MattedFigure`'s own choice, per the round-8 text's hint) is fine and consistent, but C should
+not expect, or debug the absence of, visible rounding.
+
+**The whole-section box.** Nest `ResultsBlock`'s children one level deeper:
+```
+<Section stagger={stagger}>
+  <div className="rounded-2xl bg-bg-secondary measure p-6">
+    <div className="-mt-8"><BlockHeading block="findings" /></div>
+    {summary && ...}
+    <div className="space-y-4">{results.map(...)}</div>
+  </div>
+</Section>
+```
+Token: **`bg-bg-secondary`**, full opacity (not the `/NN`-alpha fractions used for other "soft"
+surfaces elsewhere), in both modes — light `#f1f1f1` vs. page `#fafafa`; dark `#181818` vs. page
+`#111111` — this app's own existing "one step off the page" token, already used at full opacity
+for enclosing boxes elsewhere (`components/ui/kbd.tsx`, `decision-block.tsx`'s progress track).
+**Flagged, not silently decided**: the light-mode step is only a ~2% lightness change, subtler
+than a screenshot-driven request likely implies. If the manager's visual check finds it too weak,
+the documented fallback is a bespoke deeper value (the round-8 text's own example, `~#ececec`) or
+`--color-surface-hover` in dark mode specifically (`#242424`, a stronger ~13% step) — either is a
+one-line change once seen live.
+
+`measure` (the 28em reading-width clamp) moves from the inner results `<div>` (currently
+`"space-y-6 measure"`, line 265) up to the new outer box, matching "full column width" to the
+SAME width every other reading-prose block on this page already uses (`CLAIM_CLASS`/`PULL_CLASS`
+both already carry `measure`) rather than a wider, unclamped box with dead padding down one side.
+Drop the now-redundant `measure` from the inner div (line 265 → `"space-y-4"`, see below).
+
+`BlockHeading`'s own `mt-12` (48px, block-heading.tsx line 17) plus the new box's `p-6` (24px)
+would stack to ~72px of top whitespace before the label. `BlockHeading` takes no className
+override and is shared (untouchable). Fix: wrap it in `<div className="-mt-8">` inside the box —
+purely visual, zero behavior change; the exact offset is a number for C's own live check, not a
+hard requirement.
+
+**The opening paragraph (summary).** New constant near `CLAIM_CLASS`:
+`const RESULTS_SUMMARY_CLASS = "font-reading text-lead leading-[1.6] text-heading reading-justify";`
+— same size/leading/justify as `CLAIM_CLASS`, `text-heading` instead of `text-text`, per "dark...
+not muted." Replaces `PULL_CLASS` at lines 261/263 only. Grepped: `PULL_CLASS` (line 39) has
+**no other consumer** in this file or codebase — after this change it is fully unused. C's call
+whether to delete it (cleanup) or leave it defined for a future block; either is fine, name the
+choice in the commit.
+
+**Each result's outline box.** Per-result `<div key={...}>` (line 268) gains
+`className="rounded-md border border-heading/40 p-4"` (additive className, no structural
+change). `border-heading` is a first-time usage (grepped: zero existing call sites) but
+mechanically identical to `text-heading`/`bg-bg-secondary` — all generated by Tailwind v4 from
+the same `@theme`-registered `--color-heading`, not a novel mechanism. `/40` already encodes
+"moderate opacity" in both modes (near-black at 40% in light, the light heading colour at 40% in
+dark) — matches the spec's wording directly. Parent spacing `space-y-6` (line 265) → `space-y-4`
+(~16px) since the new per-item border+padding already adds visual separation, matching the
+spec's own "~16px" figure for item padding — flagged as a number to eyeball live, not a hard
+requirement.
+
+**The bold title** (`<b className="font-medium text-heading">{result.title}.</b>`, line 277) is
+already `text-heading` — untouched, already matches "the bold title stays bold."
+
+**"What is new here:"** (lines 282-287). Paragraph:
+`"font-reading text-body leading-[1.55] text-text-muted mt-2 reading-justify"` →
+`"font-reading text-lead leading-[1.6] text-heading mt-2 reading-justify"` (`text-body`→
+`text-lead` to match the result text's own size; `[1.55]`→`[1.6]` to match `CLAIM_CLASS`'s
+convention at that size; `text-text-muted`→`text-heading` per "dark"). Label span (line 284):
+`"font-mono text-meta text-text-faint mr-2"` → `"font-mono text-meta text-text mr-2"` (only the
+colour changes, per "may stay mono but... not faint").
+
+**Figures**: `{figures[i] ? <MattedFigure .../> : ...}` (lines 288-301) stays exactly where it
+is, inside the same per-result `<div>` that now gets the border — "inside the item boxes" by
+construction. No figure file touched.
+
+**Tests at risk: none.** Grepped exhaustively — zero test files anywhere reference
+`report-sections.tsx`, `ResultsBlock`, `CLAIM_CLASS`, `PULL_CLASS`, or `WHATS_NEW` by import or
+string (correcting the round-8 text's own speculative "any `report-sections` static-markup test
+asserting class strings" — no such test exists today). `reading-markdown.ts` (the Markdown-export
+path for the same report data) shares none of these class constants, confirmed by grep —
+genuinely unaffected.
+
+**Blast radius**: one new wrapper `<div>`, one moved `measure`, one new constant, two edited
+inline literals, all scoped inside `ResultsBlock`. `BlockHeading`/`Band` read but not edited.
+`MattedFigure` untouched.
+
+---
+
+Commit: this log entry, plus §1 edited in place (below), staging only
+`docs/handoff/ABC-followup-round2.md`.
