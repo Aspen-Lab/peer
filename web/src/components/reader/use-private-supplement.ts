@@ -2,10 +2,20 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { Paper } from "@/types";
+import { useProfileStore } from "@/store/profile";
 
 export function usePrivateSupplement(original: Paper) {
   const standalone = original.id.startsWith("upload:");
   const [state, setState] = useState<{ id: string; upload: Paper | null } | null>(null);
+  const recordUploadPreference = useProfileStore((s) => s.recordUploadPreference);
+  // 9-23 (A9-07): a standalone `upload:` paper never goes through the fetch
+  // effect below (it already IS its own upload record) — merge here so a
+  // cold load / reload / another device recovers the learning signal too,
+  // the same idempotent-per-documentKey path the uploads list uses.
+  useEffect(() => {
+    if (!standalone) return;
+    recordUploadPreference(original);
+  }, [standalone, original, recordUploadPreference]);
   useEffect(() => {
     if (standalone) return;
     const controller = new AbortController();

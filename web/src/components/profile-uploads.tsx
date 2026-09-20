@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import type { Paper } from "@/types";
 import { PrivatePdfStatus } from "@/components/reader/private-pdf-status";
 import { useAuthUser } from "@/components/account/use-auth-user";
+import { useProfileStore } from "@/store/profile";
 
 export function ProfileUploads() {
   const auth = useAuthUser();
@@ -15,14 +16,26 @@ export function ProfileUploads() {
 function UploadList() {
   const [uploads, setUploads] = useState<Array<{ paper: Paper; expiresAt: string }>>([]);
   const [error, setError] = useState(false);
+  const recordUploadPreference = useProfileStore((s) => s.recordUploadPreference);
   useEffect(() => {
     const controller = new AbortController();
     fetch("/api/papers/upload", { cache: "no-store", signal: controller.signal })
       .then(async (res) => { if (!res.ok) throw new Error("lookup"); return res.json(); })
-      .then((data) => { if (!controller.signal.aborted) setUploads(data.uploads ?? []); })
+      .then((data) => {
+        if (controller.signal.aborted) return;
+        const list: Array<{ paper: Paper; expiresAt: string }> = data.uploads ?? [];
+        setUploads(list);
+        // 9-23 (A9-07): the upload-button's own callback is a one-shot,
+        // browser-only write that a navigation/offline gap can lose before
+        // the profile ever syncs it. Re-merging here on every list load is
+        // idempotent per documentKey (`recordUploadPreference` ->
+        // `applyUploadPreferenceSignal`), so this recovers the signal just
+        // by opening the profile page — no double count on a repeat visit.
+        for (const { paper } of list) recordUploadPreference(paper);
+      })
       .catch(() => { if (!controller.signal.aborted) setError(true); });
     return () => controller.abort();
-  }, []);
+  }, [recordUploadPreference]);
   if (!uploads.length && !error) return null;
   return <section className="mt-8 border-t border-border pt-6">
     <h2 className="font-display text-body-lg text-heading">Your private PDFs</h2>

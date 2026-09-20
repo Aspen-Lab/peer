@@ -14373,3 +14373,81 @@ staging `web/src/lib/papers/upload-store.ts`, `web/src/lib/papers/upload-store.t
 `web/src/app/api/admin/uploads/block/route.ts`, `web/src/app/api/admin/uploads/block/route.test.ts`,
 `web/src/components/reader/private-pdf-status.tsx`, `docs/handoff/ABC-followup-round2.md`.
 
+### Round 9 — Agent C, phase 2, item 9-23 (A9-07 — server-recorded evidence + idempotent client merge, matrix A2/A7)
+
+Branch confirmed clean before touching anything. Baseline gate re-run cold: tsc clean, eslint
+clean, **vitest 2771/2771** (post-9-22).
+
+**Server record — mostly already landed by 9-21**: grepped first, per standing instruction.
+`UploadMeta.extractionVersion` and the "when preferenceSignals were computed" timestamp both
+already exist as of 9-21 (the latter as `preferenceSignalsRecordedAt`, added there since it sits
+on the exact same meta-construction line as `preferenceSignals`/`extractionVersion` and the
+guide's own phase-1 code already covers `revision`, 9-12). This item's own gap: neither field was
+exposed past the meta — `web/src/types/index.ts`'s `Paper` gains additive
+`preferenceSignalsRecordedAt?: string` / `extractionVersion?: number`, and
+`uploadMetaToPaper` (`upload-store.ts`) now passes both through, so a client (or the live check
+below) can actually see them, not just the server's own JSON file on disk.
+
+**Idempotent client merge (new call sites)**:
+- `web/src/components/profile-uploads.tsx`'s `UploadList`: the existing `GET /api/papers/upload`
+  list-load effect now calls `recordUploadPreference(paper)` for every returned upload, right
+  after `setUploads`. `recordUploadPreference` -> `applyUploadPreferenceSignal` was already
+  idempotent per `documentKey` (confirmed by reading, not assumed — the `if
+  (current?.uploads?.[documentKey]) continue` skip, pre-existing) — this is the recovery path
+  for the exact gap A9's part-1 measurement named: the upload-button's own success callback is a
+  one-shot, browser-only write that a navigation/offline gap between upload and the next profile
+  sync can lose entirely.
+- `web/src/components/reader/use-private-supplement.ts`: a standalone `upload:` paper (the
+  `Reader`'s own upload page, not a supplement to a foreign paper) never ran the hook's existing
+  fetch effect at all (`if (standalone) return`) — added a second, small effect that calls
+  `recordUploadPreference(original)` whenever `standalone` is true, so a cold load / reload /
+  another device recovers the same signal on the standalone reading page too, not only from the
+  profile's uploads list.
+
+**Tests** (`store/profile.test.ts`, 2 new describes):
+- "records twice yields one weight": calls `recordUploadPreference` twice under
+  `vi.useFakeTimers()` with the system clock explicitly advanced an hour between calls — plain
+  back-to-back calls in the same tick would produce two calls to `at = new
+  Date().toISOString()` close enough to coincidentally match, which would make the assertion
+  pass whether or not the dedup actually worked; advancing real wall time between calls is what
+  actually exercises the guarantee.
+- "ledger with uploads survives clean -> server -> hydrate": runs a raw ledger fixture through
+  `cleanPreferenceLedger` TWICE (mirroring `app/api/profile/route.ts`'s own PUT-then-GET
+  cleaning), then `hydrateFromRemote`, and asserts the `uploads` sub-object survives byte-for-byte.
+
+**Revert-proof**: both new tests reproduced a real, non-trivial authoring miss on the first pass
+— my first version of the fake-timer test used the SAME timestamp for the second call (a copy-
+paste of the first `vi.setSystemTime`), which passed even with the ledger's own dedup line
+(`if (current?.uploads?.[documentKey]) continue`) commented out, because an unconditional
+overwrite with an identical `{at, weight}` value is indistinguishable from a skip. Fixed by
+advancing the fake clock a full hour before the second call. Re-verified by commenting out that
+same dedup line again: both this test AND the pre-existing `upload-concepts.test.ts` "counts one
+document once" test now fail as expected; restored, both green. Separately reverted the
+`uploads` pass-through line in `cleanPreferenceLedger`
+(`...(entry.uploads ? { uploads: cleanUploadEvidence(entry.uploads) } : {})`): the new hydrate
+test failed exactly as expected (`uploads` came back `undefined`), along with three pre-existing
+tests in `upload-concepts.test.ts` that already depend on this same line — confirming it is
+broadly load-bearing, not just for this item. Restored; confirmed 133/133 files, 2773/2773 green.
+
+**Gate after this item**: tsc clean, eslint clean, **vitest 2773/2773** (2771 + 2).
+
+**Live check** (dev server `peer-web` on `:3000`, untouched): uploaded
+`web/.local-data/private-upload-test.pdf` via `curl` with a fresh cookie jar, then `GET
+/api/papers/upload` → the listed upload's `paper` object now carries
+`"preferenceSignalsRecordedAt":"2026-09-20T11:07:59.049Z"` and `"extractionVersion":1` alongside
+the pre-existing `preferenceSignals`/`revision` — the exact fields this item's own live-check
+line asked for. Deleted via the real `DELETE` route afterward
+(`{"deleted":true,...,"retractEvidence":true}` — 9-22 still correct for a lone copy);
+`.local-data/uploads/` back to its 12 pre-existing pairs.
+
+**Blast radius**: two additive `Paper` fields plus their one passthrough site
+(`uploadMetaToPaper`), two small new `useEffect` call sites (both calling an already-idempotent,
+unmodified store action), two new tests. No change to `recordUploadPreference`,
+`applyUploadPreferenceSignal`, `cleanPreferenceLedger`, or the server's `/api/profile` route
+itself.
+
+Commit: `feat(learning): recover upload evidence on list/reading-page load, expose recordedAt (9-23/A9-07)`,
+staging `web/src/types/index.ts`, `web/src/lib/papers/upload-store.ts`,
+`web/src/components/profile-uploads.tsx`, `web/src/components/reader/use-private-supplement.ts`,
+`web/src/store/profile.test.ts`, `docs/handoff/ABC-followup-round2.md`.
+

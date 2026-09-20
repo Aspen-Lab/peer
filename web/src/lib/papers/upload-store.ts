@@ -203,6 +203,8 @@ export function uploadMetaToPaper(meta: UploadMeta): Paper {
     preferenceSignals: meta.preferenceSignals,
     uploadDocumentKey: meta.documentKey,
     revision: meta.revision,
+    preferenceSignalsRecordedAt: meta.preferenceSignalsRecordedAt,
+    extractionVersion: meta.extractionVersion,
     summaryResultDiscussion: "",
     linkPaper: `/api/papers/upload/${meta.hash16}/file`,
     doi: meta.doi,

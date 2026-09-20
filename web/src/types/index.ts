@@ -120,6 +120,16 @@ export interface Paper {
    * the same paper apart after a replace, without changing `id`.
    */
   revision?: number;
+  /**
+   * 9-23 (A9-07): only ever set for an uploaded PDF's own asset record
+   * (`upload-store.ts`'s `uploadMetaToPaper`, from `UploadMeta`) — the
+   * server-recorded evidence audit fields beside `preferenceSignals`, so a
+   * client (or an operator) can see when/by which extraction pass this
+   * upload's learning signal was last computed. Neither participates in the
+   * ledger's own idempotency check (that stays keyed on `documentKey`).
+   */
+  preferenceSignalsRecordedAt?: string;
+  extractionVersion?: number;
 }
 
 // ── Event ──
