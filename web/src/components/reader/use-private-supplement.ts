@@ -19,6 +19,11 @@ export function usePrivateSupplement(original: Paper) {
   const paper = useMemo(() => upload && !standalone ? {
     ...original, fullTextUploadId: upload.id, uploadDocumentKey: upload.uploadDocumentKey,
     pageCount: upload.pageCount,
+    // 9-15 (A9-10): carried onto the merged paper so the report/reading
+    // cache keys (use-model-report.ts, use-reading.ts) and any per-figure
+    // request (paper-figure.tsx) can tell a delete-then-re-upload of the
+    // same-hash asset apart from the attachment they were built against.
+    revision: upload.revision,
   } : original, [original, upload, standalone]);
   return {
     paper, upload, ready: standalone || state?.id === original.id,

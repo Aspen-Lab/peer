@@ -131,6 +131,9 @@ function SectionFigure({
     query,
     paperTitle: paper.title,
     figureIndex: index,
+    // 9-15: undefined for every non-upload paper (the vast majority) —
+    // additive, no behavior change for them.
+    revision: paper.revision,
   });
   const url = figure.imageUrl && !figure.hideFigure && !bound.has(figure.imageUrl)
     ? figure.imageUrl

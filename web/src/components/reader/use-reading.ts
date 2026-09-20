@@ -22,6 +22,22 @@ const READING_VERSION: PaperReading["version"] = 4;
 
 type ReadingCache = Record<string, { reading: PaperReading; ts: number }>;
 
+/**
+ * 9-15 (A9-10): a pure function, same reasoning as use-model-report.ts's
+ * `buildReportKey` — testable without rendering the hook (no DOM in this
+ * project's Vitest config), and `revision` (9-12) tells a delete-then-
+ * re-upload of the identical bytes apart from the attachment a stale key
+ * was built against. `undefined` for every paper without a private
+ * attachment, so the key is unchanged for the vast majority of papers.
+ */
+export function buildReadingKey(
+  paperId: string | undefined,
+  uploadId: string | undefined,
+  revision: number | undefined,
+): string {
+  return `${paperId ?? ""}|${uploadId ?? "public"}|${revision ?? ""}`;
+}
+
 // Every touch of localStorage is wrapped: a private window, a full quota or
 // a corrupt entry must never cost the reader the page.
 function readCache(): ReadingCache {
@@ -80,7 +96,7 @@ export function useReading(paper: Paper | undefined): {
   }, []);
   const uploadId = paper?.fullTextUploadId;
   const privatePdf = !!uploadId || !!paperId?.startsWith("upload:");
-  const readingKey = `${paperId ?? ""}|${uploadId ?? "public"}`;
+  const readingKey = buildReadingKey(paperId, uploadId, paper?.revision);
 
   // Synchronous and complete: the page the reader sees before any request.
   const reading0 = useMemo(() => (paper ? buildReading(paper, null) : null), [paper]);

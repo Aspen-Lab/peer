@@ -13575,3 +13575,84 @@ Commit: `fix(upload): re-check status/revision after generation, before returnin
 staging `web/src/app/api/papers/report/route.ts`, `web/src/app/api/papers/report/route.test.ts`,
 `web/src/app/api/papers/[id]/reading/route.ts`, `web/src/app/api/papers/[id]/reading/route.test.ts`,
 `docs/handoff/ABC-followup-round2.md`.
+
+### Round 9 — Agent C, phase 1, item 9-15 (A9-10 — revision in the client/report cache keys, matrix B7)
+
+Branch confirmed clean before touching anything. Baseline gate re-run cold: tsc clean, eslint
+clean, **vitest 2737/2737** (post-9-14).
+
+**Why revision, when `fullTextUploadId`/`itemId` already changes on real content replacement**:
+a genuine "different PDF" always gets a different hash16 (content-addressed), so the id-based
+keys already bust naturally on a real replace. The gap `revision` closes is narrower and real:
+a **delete, then a re-upload of the byte-identical file** produces the *same* hash16 (a pure
+content hash) but is a *new lifecycle instance* — a fresh `status: "pending"→"ready"` write
+(9-13) with a `revision` chain restarted from that document's live siblings (9-12). Without
+`revision` in the key, a client's in-flight/settled figure request, or an in-memory report/reading
+result, keyed only on the old (now-reused) hash16 could not tell the old and new instances apart.
+
+**Change**:
+- `web/src/components/reader/use-model-report.ts`: extracted the inline `reportKey` expression
+  into an exported pure `buildReportKey(paper, depth, project, provider)` — this project's Vitest
+  runs in a plain Node environment (no DOM/`jsdom`/`happy-dom`, confirmed by reading
+  `vitest.config.ts`, and no `@testing-library/react`-equivalent in `package.json`), so a hook
+  itself cannot be rendered and unit-tested; extracting the key-building into a plain function is
+  what makes it testable at all without a new dependency. `revision` is now the third key segment.
+- `web/src/components/reader/use-reading.ts`: same extraction, `buildReadingKey(paperId,
+  uploadId, revision)`.
+- `web/src/components/reader/use-private-supplement.ts`: the merged paper (the object the two
+  hooks above actually receive for the supplement case) gained `revision: upload.revision` —
+  without this, `paper.revision` would stay `undefined` for every supplemented (non-standalone)
+  paper and the two key changes above would be inert for exactly the case matrix B7 cares about.
+  Not named in the phase-1 guide's file list, but structurally required for the fix to do
+  anything for a foreign paper's supplement rather than only a standalone `upload:` paper.
+- `web/src/components/paper-figure.tsx`: extracted `buildFigureRequestKey(args)` (same reasoning)
+  and added an optional `revision` field to `ResolveFigureArgs`, folded into both the
+  in-flight/settled map key and the outgoing `/api/figure` URL's new `rev=` param (the server
+  ignores it today — 9-14 already confirmed no server-side cache exists to key on it for
+  `upload:` ids — but the URL itself now documents which revision the request asked for).
+  `report-sections.tsx`'s figure call (the deep report's own per-index bound figures) now passes
+  `revision: paper.revision`.
+- **Deliberately NOT changed**: `app/papers/[id]/page.tsx`'s own `useResolvedFigure` call and
+  `components/cards/paper-plate.tsx` (off-limits per the standing constraints). The two are
+  explicitly designed to share one cache entry (`page.tsx`'s own comment: "The same args as the
+  card and the plate, so all three read the one `/api/figure` entry"); adding `revision` to only
+  one side would break that shared-key invariant and cause a duplicate fetch, a real regression,
+  for a narrow benefit that is already covered by the existing rule that `settled` never
+  memorizes an `upload:` result at all (`paper-figure.tsx`'s `remember` call, confirmed still
+  gated on `!itemId.startsWith("upload:")`) — only the in-flight coalescing window is at all
+  exposed here, and only during a request that is still pending. Recorded here rather than
+  widened inline, per the standard.
+
+**Tests**: three new `.test.ts` files (`use-model-report.test.ts`, `use-reading.test.ts`,
+`paper-figure.test.ts`, 12 cases total) against the three pure functions: unaffected when
+`revision` is absent/undefined (the vast majority of papers), differs when `revision` differs
+with everything else identical, and every pre-existing distinguishing field (paper id,
+`fullTextUploadId`, depth, provider / itemId, url, doi, query, paperTitle, figureIndex) still
+works as before.
+
+**Revert-proof**: reverted all three functions to drop `revision` from their return expressions;
+re-ran — 5 of the 12 new tests failed exactly as expected (the ones asserting a key changes when
+revision changes, or asserting the exact string shape with the new segment); the other 7
+(unaffected-when-absent, still-differs-on-other-fields) correctly stayed green since they do not
+exercise the reverted code path. Restored and confirmed 12/12 green again.
+
+**Gate after this item**: tsc clean, eslint clean, **vitest 2749/2749** (2737 + 12).
+
+**Live check**: `curl` against the running `peer-web` dev server's reading route for an
+unaffected public paper returned `200` after the hot-reload of all five touched files —
+confirms no runtime/import break, though a full browser check of the actual private-supplement
+cache-busting behavior (delete + identical re-upload + confirm the report/figure refetch) was
+not driven this round; that specific browser-only scenario is listed as **NEEDS BROWSER** for A.
+
+**Blast radius**: three small pure-function extractions (mechanical, same logic, now named and
+exported), one new field threaded through `ResolveFigureArgs`/`report-sections.tsx`, one field
+added to `use-private-supplement.ts`'s merge. No behavior change for any paper without a private
+upload attachment.
+
+Commit: `fix(reader): fold the upload revision into report/reading/figure cache keys (9-15/A9-10)`,
+staging `web/src/components/reader/use-model-report.ts`,
+`web/src/components/reader/use-model-report.test.ts`,
+`web/src/components/reader/use-reading.ts`, `web/src/components/reader/use-reading.test.ts`,
+`web/src/components/reader/use-private-supplement.ts`, `web/src/components/paper-figure.tsx`,
+`web/src/components/paper-figure.test.ts`, `web/src/components/reader/report-sections.tsx`,
+`docs/handoff/ABC-followup-round2.md`.

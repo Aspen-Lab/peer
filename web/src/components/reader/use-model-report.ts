@@ -85,6 +85,26 @@ function hash(text: string): string {
   return (h >>> 0).toString(36);
 }
 
+/**
+ * 9-15 (A9-10): a pure function so the key's shape — in particular, that
+ * `revision` (9-12) is part of it — can be tested without rendering the
+ * hook (this project's Vitest config runs in a plain Node environment, no
+ * DOM). `paper.revision` distinguishes a delete-then-re-upload of the
+ * identical bytes (the same hash16, hence the same `fullTextUploadId`
+ * string, but a fresh lifecycle instance) from the attachment a stale key
+ * was built against; `undefined` for every paper without a private
+ * attachment, so the key is unchanged for the vast majority of papers.
+ */
+export function buildReportKey(
+  paper: Pick<Paper, "id" | "fullTextUploadId" | "revision"> | undefined,
+  depth: "deep" | "abstract",
+  project: string,
+  provider: string,
+): string {
+  if (!paper) return "";
+  return `${paper.id}|${paper.fullTextUploadId ?? "public"}|${paper.revision ?? ""}|${depth}|${hash(project)}|${provider}`;
+}
+
 export interface ModelReportState {
   /** A verified, model-written report; null when there is no model layer. */
   report: PaperReport | null;
@@ -158,9 +178,7 @@ export function useModelReport({
     Boolean(profile.deepReportEnabled || paper?.fullTextUploadId) && (userProviderConfigured || localDeveloperProvider);
   const depth = deep ? "deep" : "abstract";
   const privatePdf = !!paper?.fullTextUploadId || !!paper?.id.startsWith("upload:");
-  const reportKey = paper
-    ? `${paper.id}|${paper.fullTextUploadId ?? "public"}|${depth}|${hash(project)}|${profile.feedAiProvider}`
-    : "";
+  const reportKey = buildReportKey(paper, depth, project, profile.feedAiProvider);
 
   const cached = useMemo(() => privatePdf ? null : readCached(reportKey), [reportKey, privatePdf]);
   const [result, setResult] = useState<Result | null>(null);
