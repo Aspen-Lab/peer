@@ -14686,3 +14686,69 @@ staging `web/src/lib/preferences/upload-concepts.ts`, `web/src/lib/preferences/u
 `web/src/components/reader/private-pdf-status.tsx`, `web/src/components/reader/private-pdf-status.test.tsx`,
 `web/src/app/papers/[id]/page.tsx`, `docs/handoff/ABC-followup-round2.md`.
 
+### Round 9 — Agent C, phase 3, item 9-32 (A9-16 — theme tokens for the green button, matrix B1)
+
+Branch confirmed clean before touching anything. Baseline gate re-run cold: tsc clean, eslint
+clean, **vitest 2786/2786** (post-9-31).
+
+**Change**:
+- `web/src/app/globals.css`: `--color-positive: #047857;` / `--color-positive-strong: #065f46;`
+  added to all three palette blocks — the light `:root`, the explicit dark `html[data-mode=
+  "dark"]`, and the system-dark `@media (prefers-color-scheme: dark) { html[data-mode="system"]
+  {` block — kept byte-identical across all three, matching this file's own "identical to the
+  block above; CSS has no mixins, keep the two [dark blocks] in sync" comment. The two hex
+  values are Tailwind's own `emerald-700`/`emerald-800` (what `bg-emerald-700`/`hover:bg-
+  emerald-800` already rendered) — this is a tokenization of the existing color, not a new design
+  choice or a visual change, since the raw Tailwind classes it replaces were never mode-adaptive
+  either.
+- `web/src/components/ui/button.tsx`: `buttonVariants`'s `tone: "green"` changed from
+  `"bg-emerald-700 text-white shadow-card hover:bg-emerald-800"` to
+  `"bg-[color:var(--color-positive)] text-[color:var(--color-fixed-white)] shadow-card
+  hover:bg-[color:var(--color-positive-strong)]"` — reads the new tokens (plus the existing
+  `--color-fixed-white`, already used elsewhere for text that must stay white regardless of
+  theme, e.g. `upload-button.tsx`'s own glyph) the same way every other `tone` in this file reads
+  its own `--color-*` custom properties.
+
+**Tests** (`globals.css.test.ts`, 4 new, following this file's own established source-text
+pattern from the pre-existing 6-09 tests — a computed-style assertion can't reliably resolve
+`color-mix`/custom-property cascade in `jsdom`, confirmed by that file's own comment): one case
+per palette block, slicing the file between that block's own start marker and the next section's
+comment, asserting `--color-positive`/`--color-positive-strong` both appear as valid 6-hex-digit
+declarations inside that slice (never trusting a whole-file `.toMatch`, which could pass on a
+declaration sitting in the WRONG block); one case reads `button.tsx`'s own source, finds the
+`green:` line, and asserts it references both `var(--color-positive)` tokens and contains no
+`emerald` substring at all.
+
+**Revert-proof**: reverted `button.tsx`'s `green` tone back to the raw `bg-emerald-700/
+hover:bg-emerald-800` string — the new "reads the tokens" test failed exactly as expected
+(found the reverted line, no `var(--color-positive)` in it); restored, 6/6 green. Separately
+removed just the light-palette block's two-line declaration (via a scoped `Edit`, not a
+find-and-replace-all, so the other two blocks' identical-looking lines were untouched) — only
+the light-palette-specific test failed (the two dark-palette tests, scoped to their own slices,
+correctly stayed green, proving the tests are genuinely block-scoped and not accidentally
+matching the wrong block); restored, 6/6 green again. (One aside, not part of the delivered
+change: an earlier attempt at this same revert-proof step used a Node one-liner with a
+mis-handled `indexOf` miss that duplicated the entire file's content; caught immediately by the
+line-count/`git diff --stat` sanity check below, restored from a copy taken before the edit, and
+redone with a scoped `Edit` tool call instead — recorded here only because a future agent
+touching this same file should prefer the `Edit` tool over ad-hoc string-splice scripts for
+exactly this reason.)
+
+**Gate after this item**: tsc clean, eslint clean, **vitest 2790/2790** (2786 + 4). `git diff
+--stat` on `globals.css` confirmed a clean `+17 insertions, 0 deletions` — no accidental
+duplication survived into the final diff.
+
+**No live check** — a pure CSS/token substitution that preserves the exact previously-rendered
+color (Tailwind's own emerald-700/800 hex values, unchanged), verified by the source-text tests
+above; B1's live "does the button still render green, still readable in dark mode" question is
+listed as **NEEDS BROWSER** for A, per this round's own standing note that A has no browser tool
+either — genuinely needs a human or the manager's own visible-pane check.
+
+**Blast radius**: two new CSS custom properties (additive, in three existing per-mode blocks),
+one Tailwind-class string in one `cva` variant. No other `tone` touched; no component other than
+the green-tone consumer (`upload-button.tsx`, itself unchanged this item) is affected.
+
+Commit: `fix(ui): tokenize the supplement-upload button's green tone (9-32/A9-16)`,
+staging `web/src/app/globals.css`, `web/src/components/ui/button.tsx`,
+`web/src/app/globals.css.test.ts`, `docs/handoff/ABC-followup-round2.md`.
+

@@ -15,7 +15,12 @@ export const buttonVariants = cva(
   {
     variants: {
       tone: {
-        green: "bg-emerald-700 text-white shadow-card hover:bg-emerald-800",
+        // 9-32 (A9-16): was a raw bg-emerald-700/800 wired to nothing in
+        // this app's own token system (globals.css defines every other
+        // tone's colors as --color-* custom properties, redefined per
+        // light/dark/data-theme) — now reads --color-positive(-strong) the
+        // same way every other tone reads its own tokens.
+        green: "bg-[color:var(--color-positive)] text-[color:var(--color-fixed-white)] shadow-card hover:bg-[color:var(--color-positive-strong)]",
         primary: "bg-accent text-bg shadow-card hover:bg-accent/90",
         soft: "bg-bg-secondary/60 shadow-card text-text-muted hover:text-heading hover:bg-surface-hover",
         surface:

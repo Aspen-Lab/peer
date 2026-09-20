@@ -224,6 +224,12 @@ html[data-accent="violet"]   { --seed: #7a3fd9; --seed-dark: #a078f0; }
   --color-relevance: var(--seed);
   --color-done: #666666;
   --color-done-dim: color-mix(in srgb, #1d1d1d 6%, transparent);
+  /* 9-32 (A9-16): the supplement-upload button's green tone, tokenized —
+     was a raw Tailwind bg-emerald-700/800 wired to nothing in this file.
+     Same rendered color as before (Tailwind's own emerald-700/800), so this
+     is a tokenization, not a visual change. */
+  --color-positive: #047857;
+  --color-positive-strong: #065f46;
   --color-border: color-mix(in srgb, var(--color-heading) 6%, transparent);
   --color-border-strong: color-mix(in srgb, var(--color-heading) 12%, transparent);
   --color-skeleton-base: color-mix(in srgb, var(--color-heading) 5%, transparent);
@@ -269,6 +275,13 @@ html[data-mode="dark"] {
   --color-relevance: var(--seed-dark);
   --color-done: #a9a9a9;
   --color-done-dim: rgba(255, 255, 255, 0.08);
+  /* 9-32 (A9-16): same rationale as the light palette above — kept
+     identical to the light value since Tailwind's raw emerald-700/800
+     classes it replaces were never mode-adaptive either; the two dark
+     blocks stay in sync with each other, as this file's own comment below
+     requires. */
+  --color-positive: #047857;
+  --color-positive-strong: #065f46;
   --color-border: rgba(255, 255, 255, 0.09);
   --color-border-strong: rgba(255, 255, 255, 0.17);
   --color-skeleton-base: rgba(255, 255, 255, 0.05);
@@ -316,6 +329,10 @@ html[data-mode="dark"] {
   --color-relevance: var(--seed-dark);
   --color-done: #a9a9a9;
   --color-done-dim: rgba(255, 255, 255, 0.08);
+  /* 9-32 (A9-16): kept in sync with the explicit-dark block above, per this
+     block's own "identical to the block above" comment. */
+  --color-positive: #047857;
+  --color-positive-strong: #065f46;
   --color-border: rgba(255, 255, 255, 0.09);
   --color-border-strong: rgba(255, 255, 255, 0.17);
   --color-skeleton-base: rgba(255, 255, 255, 0.05);
