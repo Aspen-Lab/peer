@@ -1181,6 +1181,34 @@ authorization).
 
 ---
 
+## §1ab. RULING 22 — round 8 with a second writer in the checkout (manager, 2026-09-19) — BINDING
+
+The other agent's work-in-progress now spans 34 modified + 11 untracked files (an upload /
+private-PDF feature: `button.tsx`, `decision-block.tsx`, `papers/[id]/page.tsx`, `profile.ts`,
+`types/index.ts`, `feed/pipeline.ts`, the upload routes, the figure files, …). The gate is green
+on that tree right now (tsc · eslint · vitest 2711/2711 — their added tests included), so C
+works in place under these rules:
+
+- **Never edit a file that `git status` shows dirty or untracked.** 8-02's `xl` size variant
+  does NOT go into `components/ui/button.tsx` (dirty): C puts the size classes in
+  `persona/result.tsx` (or a tiny `persona/back-button.tsx`) on top of `buttonVariants({tone:
+  "primary"})`, and if `buttonVariants` itself is unusable from the dirty file at commit time,
+  falls back to a self-contained class string with the accent tokens.
+- Our items' files must stay disjoint from the other agent's: `lib/shell/masthead.ts` (+ test),
+  `persona/result.tsx` (+ test), `reader/paper-words.tsx`, `reader/copy.ts`,
+  `reader/report-sections.tsx` (+ tests), `globals.css` if needed. If any of these turns dirty
+  before C edits it, C skips that item, logs `blocked: <file> dirty (other agent)`, and continues.
+- **Gate baseline for this round is the tree as it is: 2711/2711.** A red result confined to
+  files C never touched is reported, not fixed. Stage by explicit path; `git status` before every
+  commit.
+- 8-03: conditional rendering (B's landmine about the decided-read observer stands).
+- 8-04: no rounding expected (the app flattens radii sitewide); the box is the tint + padding.
+- S28: B's verdict is the deliverable (feedback-to-AI is dead code; `dislikedTopics` has no
+  writer; the ledger only re-ranks the fetched pool). 8-05/8-06 are informational — the user
+  chooses any follow-up. The manager relays.
+
+---
+
 ## §2. ROLES — DO ONLY YOUR OWN JOB
 
 ### Agent A — Reviewer
