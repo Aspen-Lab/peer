@@ -14191,3 +14191,92 @@ the consent dialog, `private-pdf-status.tsx`, README and the new doc for `guaran
 **Gate:** ≥ 2760 + new. A re-measures A1–A8 after phase 2 and B1–B6 + L1 after phase 3, then
 the full matrix.
 
+### Round 9 — Agent C, phase 2, item 9-21 (A9-04/A9-11 — Tier-0 quality + contract, matrix A1/A4)
+
+Branch confirmed `complimentary-enhancement-to-main-update` before touching anything. Baseline
+gate re-run cold: tsc clean, eslint clean, **vitest 2760/2760**.
+
+**Change**: `web/src/lib/preferences/upload-concepts.ts`. Grepped every consumer of
+`PreferenceConcept`/`UploadMeta` first (`ledger.ts`, `upload-store.ts`, `upload/route.ts`) before
+editing, per the standing "guide's pointers are hints" instruction.
+
+- **Candidate filter** (new `isAcceptableCandidate`/`isAcceptableSingleToken`, replacing the old
+  `length === 1 && parts[0].length < 5` continue): a candidate is rejected outright if ANY of its
+  tokens is a number word (`one`…`ten`, `first`…`tenth`) or a digit/unit token (`^\d+$`, a
+  glued `500nm`/`20wt` shape, or a bare unit word); a **single-token** candidate additionally
+  survives only if it is a known domain term — imported from `term-expand.ts`'s
+  `ABBREVIATION_GROUPS` (not duplicated; only the short forms are single-word after
+  canonicalization, e.g. `lco`/`xrd`/`dft`/`operando` — long forms all become multi-word since
+  canonicalization turns hyphens into spaces) — and is never `isGenericTerm` (also imported, not
+  reimplemented); a **multi-token** candidate is rejected only when every token is a stop or
+  generic word (`STOP` already structurally excludes any candidate containing one, so this
+  mainly catches all-generic phrases like "materials data").
+- **Facet** (new `classifyFacet`, rule-based, a short closed cue list local to this module, per
+  the guide): a method cue (`spectroscopy, diffraction, microscopy, simulation, deposition,
+  synthesis, model, algorithm, benchmark, dataset, chromatography, voltammetry, calorimetry,
+  titration, regression, embedding(s), network, imaging, transform`) in any token → `method`;
+  else a material cue (`alloy, oxide, perovskite, electrolyte, composite, polymer, ceramic,
+  catalyst, cathode, anode, nanoparticle(s)`), a chemical-formula-shaped token (`nmc811`,
+  `lifepo4` — letters then a digit), or a length-≥6 `-ide/-ate/-ite` suffix (the length floor
+  keeps "site"/"quite" from false-positiving) → `material`; else `topic`.
+- **`extractionVersion: 1`** (new exported `UPLOAD_CONCEPT_EXTRACTION_VERSION`) stamped on every
+  concept `extractUploadConcepts` produces, **and** on the `UploadMeta` record itself
+  (`upload-store.ts` gains `extractionVersion?: number`, set in `upload/route.ts` alongside the
+  existing `preferenceSignals` computation) — plus `preferenceSignalsRecordedAt` (a small piece
+  of 9-23's own ask, landed here since it sits on the same meta-construction line: "when this
+  record's `preferenceSignals` were last computed", not itself part of the ledger's
+  per-`documentKey` idempotency check). `section` evidence was already present and untouched.
+- **Type**: `web/src/types/index.ts`'s `PreferenceConcept` gains `facet?: "method" | "material" |
+  "topic"` (the guide's own narrower 3-way split, not the handoff's fuller 6-way taxonomy) and
+  `extractionVersion?: number`, both additive/optional. `ledger.ts`'s `normalizePreferenceConcepts`
+  and `cleanPreferenceLedger` both gained pass-through for the two new fields (grepped first —
+  neither previously carried `section` past a plain spread, so this follows that file's own
+  existing per-field allow-list pattern rather than a blind spread).
+
+**Tests** (`upload-concepts.test.ts`, 4 new, in a new `describe`): four self-made
+`ExtractedDocument` fixtures per the handoff §4.2 shapes — a materials paper (asserts `three`
+never survives anywhere in any label, `perovskite oxide cathodes` → `material`, `x-ray
+diffraction` → `method`, every concept carries `extractionVersion`), a CS paper (asserts neither
+`nodes` nor `four` survives anywhere in any label, `graph neural network` → `method` via the
+`network` cue, and the real 2-word `node classification` phrase survives distinctly from the
+rejected bare `nodes`), a long wrapped title (asserts `nickel rich cathode` keeps
+`section: "title"` and `facet: "material"`), and a reference-list decoy (asserts a term
+appearing only in `references` — `quantum computing` — never surfaces, while the real abstract
+term does).
+
+**Revert-proof**: the first version of the two number-word assertions was a false negative — my
+first materials/CS fixtures had "three"/"nodes"/"four" appear only once each, so the *pre-existing*
+`c.title || c.count >= 2` ranking gate already excluded them for an unrelated reason, and the
+test passed whether or not the new filter existed. Caught by deliberately reverting the new
+`.filter(([label]) => isAcceptableCandidate(label))` line and re-running: all 9 tests still
+passed. Fixed by repeating "three"/"four nodes" enough times in each fixture to clear the old
+count-based gate on their own (confirmed via a throwaway probe script, deleted before commit,
+that printed the actual surviving candidate list) — the real surviving candidates turned out to
+be `"three phases"` and `"four nodes"`, not the bare words, so the assertions were changed to
+`/\bthree\b/`/`/\bfour\b/`/`/\bnodes\b/` word-boundary regexes against every label rather than
+exact-string checks. Re-reverted the filter line with the corrected fixtures: both new tests now
+fail exactly as expected (`three phases`/`four nodes` present); restored and confirmed all 9
+`upload-concepts.test.ts` tests green again.
+
+**Gate after this item**: tsc clean, eslint clean, **vitest 2764/2764** (2760 + 4).
+
+**Live check** (dev server `peer-web` on `:3000`, untouched): uploaded
+`web/.local-data/private-upload-test.pdf` (self-made, pre-existing fixture) via `curl` with a
+fresh cookie jar → `200`, `upload:7f3fc578706a88c3`. Response `preferenceSignals`: `["graph
+embeddings" (method), "protein structure prediction" (topic), "synthetic graph" (topic),
+"embeddings represent" (method), "graph data" (topic)]` — no `three`/`nodes`, every entry carries
+`facet` and `extractionVersion: 1`. Deleted via the real `DELETE` route afterward
+(`{"deleted":true,...}`); `retractEvidence` is not yet in the response — that's 9-22, next.
+
+**Blast radius**: one module's candidate filter + a new facet classifier (`upload-concepts.ts`),
+two additive `PreferenceConcept` fields threaded through two ledger functions, two additive
+`UploadMeta` fields set at one write site (`upload/route.ts`). No behavior change for any
+non-upload preference source (OpenAlex/job/event concepts never carry `facet`/
+`extractionVersion`, and `normalizePreferenceConcepts`/`cleanPreferenceLedger`'s existing fields
+are untouched).
+
+Commit: `fix(learning): filter noise from upload concepts, add facet + extractionVersion (9-21/A9-04/A9-11)`,
+staging `web/src/lib/preferences/upload-concepts.ts`, `web/src/lib/preferences/upload-concepts.test.ts`,
+`web/src/lib/preferences/ledger.ts`, `web/src/types/index.ts`, `web/src/lib/papers/upload-store.ts`,
+`web/src/app/api/papers/upload/route.ts`, `docs/handoff/ABC-followup-round2.md`.
+

@@ -22,6 +22,20 @@ export interface PreferenceConcept {
   confidence?: number;
   /** Section where an uploaded article supplied this phrase. */
   section?: string;
+  /**
+   * 9-21 (A9-04/A9-11): rule-based classification, only ever set for an
+   * uploaded article's own extracted phrases — a closed 3-way split, not the
+   * handoff's fuller 6-way taxonomy. Undefined for every other concept
+   * source (OpenAlex tags already carry their own topic identity).
+   */
+  facet?: "method" | "material" | "topic";
+  /**
+   * 9-21 (A9-04/A9-11): the local extraction algorithm's own version,
+   * stamped on every concept `extractUploadConcepts` produces so a stored
+   * concept can be told apart from one a future rewrite of the candidate
+   * filter/facet rules would produce. Undefined for every non-upload source.
+   */
+  extractionVersion?: number;
 }
 
 /** Which feed surface a piece of feedback came from. */

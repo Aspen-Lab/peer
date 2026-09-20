@@ -111,6 +111,15 @@ export interface UploadMeta {
    *  `status: "blocked"` — an audit timestamp, never displayed to the owner
    *  as anything but "no longer available". */
   blockedAt?: string;
+  /** 9-21 (A9-04/A9-11): the `extractUploadConcepts` algorithm version that
+   * produced `preferenceSignals` below — mirrors the per-concept field of
+   * the same name (`UPLOAD_CONCEPT_EXTRACTION_VERSION`). */
+  extractionVersion?: number;
+  /** 9-23 (A9-07): when `preferenceSignals` was last (re)computed — the
+   * server-side audit timestamp a client's idempotent list-load merge can
+   * point back to. Not itself part of the idempotency check (that's still
+   * per-`documentKey`, in the ledger). */
+  preferenceSignalsRecordedAt?: string;
   hash16: string;
   fileName: string;
   /** Largest-font first-page line, or the file name without its extension

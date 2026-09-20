@@ -11,7 +11,7 @@ import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { hostedUploadsEnabled, ownedUpload, PRIVATE_UPLOAD_HEADERS, sameOriginUploadRequest, UPLOAD_RIGHTS_VERSION, uploadOwner } from "@/lib/papers/upload-access";
-import { extractUploadConcepts, matchesUploadedPaper } from "@/lib/preferences/upload-concepts";
+import { extractUploadConcepts, matchesUploadedPaper, UPLOAD_CONCEPT_EXTRACTION_VERSION } from "@/lib/preferences/upload-concepts";
 import { extractPdfTextFromPath } from "@/lib/papers/pdf-text";
 import { resolveProvider } from "@/lib/llm/providers/registry";
 import {
@@ -259,6 +259,13 @@ export async function POST(req: Request) {
     expiresAt: new Date(Date.now() + 30 * 86400_000).toISOString(),
     paperIds: [...new Set([...(previous?.paperIds ?? []), ...(target ? [target.id] : [])])],
     preferenceSignals: doc ? extractUploadConcepts(doc) : [],
+    // 9-21/9-23 (A9-04/A9-07): the extractor's own version and when this
+    // record's `preferenceSignals` were (re)computed — a re-upload that
+    // re-runs extraction updates both, without that re-extraction itself
+    // counting as a fresh expression of preference (that stays gated by the
+    // ledger's own per-documentKey idempotency, not by this timestamp).
+    extractionVersion: UPLOAD_CONCEPT_EXTRACTION_VERSION,
+    preferenceSignalsRecordedAt: now,
     documentKey,
     status: "ready",
     revision,

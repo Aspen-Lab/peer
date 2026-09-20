@@ -1,6 +1,13 @@
 import type { PreferenceConcept } from "@/types";
 import type { ExtractedDocument } from "@/lib/papers/html-text";
 import { normalizePreferenceLabel, preferenceKey } from "./ledger";
+import { ABBREVIATION_GROUPS, canonicalize, isGenericTerm } from "@/lib/scoring/term-expand";
+
+// 9-21 (A9-04/A9-11): the local extraction algorithm's own version. Bumped
+// whenever the candidate-filtering or facet rules change meaningfully, so a
+// concept already stored in a user's ledger/meta can be told apart from one
+// a future rewrite of this module would produce.
+export const UPLOAD_CONCEPT_EXTRACTION_VERSION = 1;
 
 // A conservative, local phrase extractor. No document text is sent to a model
 // for preference learning. References, author blocks and boilerplate are out.
@@ -12,6 +19,89 @@ const STOP = new Set(("a an the and or of for to in on at by from with without i
   "propose proposed present presents presented new novel high low large small significant significantly " +
   "however therefore respectively compared comparison introduction abstract conclusion conclusions " +
   "figure figures table supplementary copyright reserved rights publisher doi http https www et al").split(/\s+/));
+
+// 9-21 (A9-04): single-word candidates this module will keep. Long forms in
+// `ABBREVIATION_GROUPS` are all multi-word once canonicalized (hyphens become
+// spaces — "li-ion" -> "li ion"), so this only ever picks up the short forms
+// ("lco", "nmc", "xrd", "dft", "operando", …) — real domain vocabulary this
+// codebase already recognizes, never an ordinary prose noun like "nodes".
+const KNOWN_SINGLE_TOKEN_TERMS = new Set(
+  ABBREVIATION_GROUPS.flatMap((group) => group.map((form) => canonicalize(form)))
+    .filter((form) => form && !form.includes(" ")),
+);
+
+const NUMBER_WORDS = new Set([
+  "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
+  "first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth", "tenth",
+]);
+
+// Unit abbreviations that only ever show up glued to a number in scientific
+// prose ("500 nm", "20 wt%") — never a research concept on their own. Most
+// two-letter forms are already excluded by the token-length-3 floor below;
+// listed anyway for the 3+ letter ones and for defensiveness.
+const UNIT_WORDS = new Set([
+  "nm", "mm", "cm", "km", "mg", "kg", "ml", "hz", "khz", "mhz", "ghz",
+  "wh", "kwh", "mah", "ah", "ppm", "psi", "pa", "kpa", "mpa", "gpa",
+  "mv", "kv", "ma", "min", "hr", "wt",
+]);
+
+function isDigitOrUnitToken(token: string): boolean {
+  if (/^\d+$/.test(token)) return true;
+  if (UNIT_WORDS.has(token)) return true;
+  // A number immediately followed by a short unit suffix, glued into one
+  // token by the tokenizer ("500nm", "20wt").
+  return /^\d+[a-z]{1,4}$/.test(token);
+}
+
+function isAcceptableSingleToken(token: string): boolean {
+  if (isGenericTerm(token)) return false;
+  if (NUMBER_WORDS.has(token)) return false;
+  if (isDigitOrUnitToken(token)) return false;
+  return KNOWN_SINGLE_TOKEN_TERMS.has(token);
+}
+
+/** 9-21: candidate-level gate, applied after the n-gram builder's own
+ * per-token stop/length filter (which already keeps a STOP word out of any
+ * candidate). Rejects a bare number word or digit/unit token anywhere in the
+ * phrase, a single token that isn't a known domain term, and a multi-token
+ * phrase made entirely of generic words ("materials data"). */
+function isAcceptableCandidate(label: string): boolean {
+  const tokens = label.split(" ");
+  if (tokens.some((token) => NUMBER_WORDS.has(token) || isDigitOrUnitToken(token))) return false;
+  if (tokens.length === 1) return isAcceptableSingleToken(tokens[0]);
+  return !tokens.every((token) => STOP.has(token) || isGenericTerm(token));
+}
+
+// 9-21: rule-based facet classification (handoff §4.1's method/material/topic
+// split) — a short, closed cue list, never a model call or taxonomy lookup.
+const METHOD_CUES = new Set([
+  "spectroscopy", "diffraction", "microscopy", "simulation", "deposition",
+  "synthesis", "model", "algorithm", "benchmark", "dataset", "chromatography",
+  "voltammetry", "calorimetry", "titration", "regression", "embedding",
+  "embeddings", "network", "imaging", "transform",
+]);
+const MATERIAL_CUES = new Set([
+  "alloy", "oxide", "perovskite", "electrolyte", "composite", "polymer",
+  "ceramic", "catalyst", "cathode", "anode", "nanoparticle", "nanoparticles",
+]);
+// "-ide"/"-ate"/"-ite" suffix cue, guarded by a length floor so short,
+// unrelated words ("site", "quite") don't false-positive into "material".
+const MATERIAL_SUFFIX_RE = /(?:ide|ate|ite)$/;
+const MIN_SUFFIX_CUE_LENGTH = 6;
+// A chemical-formula-shaped token ("nmc811", "lifepo4") — letters then a
+// digit, glued into one word by the tokenizer.
+const CHEMICAL_FORMULA_RE = /^[a-z]{1,4}\d[a-z\d]*$/;
+
+function classifyFacet(label: string): NonNullable<PreferenceConcept["facet"]> {
+  const tokens = label.split(" ");
+  if (tokens.some((token) => METHOD_CUES.has(token))) return "method";
+  if (tokens.some((token) =>
+    MATERIAL_CUES.has(token) ||
+    CHEMICAL_FORMULA_RE.test(token) ||
+    (token.length >= MIN_SUFFIX_CUE_LENGTH && MATERIAL_SUFFIX_RE.test(token)),
+  )) return "material";
+  return "topic";
+}
 
 export function extractUploadConcepts(doc: ExtractedDocument): PreferenceConcept[] {
   const sections = [
@@ -26,7 +116,6 @@ export function extractUploadConcepts(doc: ExtractedDocument): PreferenceConcept
       for (let length = 1; length <= 3 && start + length <= tokens.length; length++) {
         const parts = tokens.slice(start, start + length);
         if (parts.some((t) => STOP.has(t) || !/\p{L}/u.test(t) || t.length < 3)) break;
-        if (length === 1 && parts[0].length < 5) continue;
         const label = normalizePreferenceLabel(parts.join(" "));
         const old = candidates.get(label);
         candidates.set(label, { count: (old?.count ?? 0) + 1,
@@ -36,11 +125,13 @@ export function extractUploadConcepts(doc: ExtractedDocument): PreferenceConcept
     }
   }
   const ranked = [...candidates].filter(([label, c]) => label.length <= 70 && (c.title || c.count >= 2))
+    .filter(([label]) => isAcceptableCandidate(label))
     .sort((a, b) => b[1].score - a[1].score || a[0].localeCompare(b[0]));
   const out: PreferenceConcept[] = [];
   for (const [label, c] of ranked) {
     if (out.some((p) => p.label.includes(label) || label.includes(p.label))) continue;
     out.push({ key: preferenceKey(label), label, source: "uploaded_article", section: c.section,
+      facet: classifyFacet(label), extractionVersion: UPLOAD_CONCEPT_EXTRACTION_VERSION,
       confidence: Math.min(0.95, (c.title ? 0.65 : 0.45) + Math.min(c.count, 5) * 0.06) });
     if (out.length === 12) break;
   }

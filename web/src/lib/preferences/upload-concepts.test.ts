@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { extractUploadConcepts, matchesUploadedPaper } from "./upload-concepts";
+import type { ExtractedDocument } from "@/lib/papers/html-text";
+import { extractUploadConcepts, matchesUploadedPaper, UPLOAD_CONCEPT_EXTRACTION_VERSION } from "./upload-concepts";
 import { applyUploadPreferenceSignal, applyPreferenceSignal, cleanPreferenceLedger, removeUploadPreferenceSignal, summarizePreferenceLedger, scorePreferenceMatch, prepareLedger } from "./ledger";
 import { compileSearchBrief } from "@/lib/feed/profile-compiler";
 import { derivePoolCacheKey } from "@/lib/opportunities/pool-cache";
@@ -55,5 +56,95 @@ describe("uploaded article learning", () => {
     expect(matchesUploadedPaper({ title: doc.title, doi: "10.1234/a" }, doc.title, "10.1234/b")).toBe(false);
     expect(matchesUploadedPaper({ title: doc.title }, "A marine biology investigation")).toBe(false);
     expect(matchesUploadedPaper({ title: doc.title }, "")).toBe(false);
+  });
+});
+
+// 9-21 (A9-04/A9-11): four self-made ExtractedDocument fixtures spanning the
+// handoff §4.2 shapes the draft's own live check missed — a materials paper,
+// a CS paper, a long wrapped title, and a reference-list decoy. Protective:
+// each pins down a real, execution-confirmed candidate list (captured by
+// running extractUploadConcepts directly, not guessed), so a future rewrite
+// of the filter/facet rules can't silently let "three"/"nodes" back in.
+describe("upload concept extraction quality (9-21)", () => {
+  const materialsDoc: ExtractedDocument = {
+    title: "Perovskite Oxide Cathodes for Solid State Batteries",
+    source: "pdf",
+    figureCaptions: [],
+    sections: [
+      { heading: "Abstract", canonical: "abstract", text: "Perovskite oxide cathodes improve solid state batteries. Perovskite oxide cathodes show high conductivity." },
+      { heading: "Methods", canonical: "methods", text: "X-ray diffraction confirms the perovskite oxide structure. X-ray diffraction measures three distinct phases. There are three phases in total; each of the three phases was indexed separately." },
+    ],
+  };
+
+  it("a materials paper: material/method facets, and a bare number word never survives", () => {
+    const concepts = extractUploadConcepts(materialsDoc);
+    // Repeated enough to have otherwise cleared the (title-or-count>=2) bar
+    // as "three phases" — a number word anywhere in the phrase is rejected.
+    expect(concepts.some((c) => /\bthree\b/.test(c.label))).toBe(false);
+    const perovskite = concepts.find((c) => c.label === "perovskite oxide cathodes");
+    expect(perovskite?.facet).toBe("material");
+    expect(perovskite?.section).toBe("title");
+    const diffraction = concepts.find((c) => c.label === "x-ray diffraction");
+    expect(diffraction?.facet).toBe("method");
+    expect(concepts.every((c) => c.extractionVersion === UPLOAD_CONCEPT_EXTRACTION_VERSION)).toBe(true);
+  });
+
+  const csDoc: ExtractedDocument = {
+    title: "Graph Neural Network Benchmark for Node Classification",
+    source: "pdf",
+    figureCaptions: [],
+    sections: [
+      { heading: "Abstract", canonical: "abstract", text: "Graph neural network models improve node classification. Graph neural network models beat prior benchmark algorithms." },
+      { heading: "Results", canonical: "results", text: "Our benchmark algorithm improves accuracy on four nodes. Each of the four nodes was tested twice; all four nodes converged. Nodes were checked for stability, and the nodes held up under load." },
+    ],
+  };
+
+  it("a CS paper: method facet from algorithm/benchmark/network cues, no bare 'nodes' or number word", () => {
+    const concepts = extractUploadConcepts(csDoc);
+    // "nodes" alone is a single generic noun, not a known domain term
+    // (term-expand.ts's abbreviation groups) — the exact A9-04 finding.
+    // Repeated enough to have otherwise cleared the (title-or-count>=2) bar
+    // as "nodes"/"four nodes" — neither may survive in any candidate.
+    expect(concepts.some((c) => /\bnodes\b/.test(c.label))).toBe(false);
+    expect(concepts.some((c) => /\bfour\b/.test(c.label))).toBe(false);
+    const network = concepts.find((c) => c.label === "graph neural network");
+    expect(network?.facet).toBe("method");
+    expect(network?.section).toBe("title");
+    // "node classification" (a real 2-word phrase from the title) survives
+    // distinctly from the rejected bare "nodes" single token.
+    expect(concepts.some((c) => c.label === "node classification")).toBe(true);
+  });
+
+  const wrappedTitleDoc: ExtractedDocument = {
+    title: "Thermal Stability And Long Term Cycling Performance Of Layered Nickel Rich Cathode Materials",
+    source: "pdf",
+    figureCaptions: [],
+    sections: [
+      { heading: "Abstract", canonical: "abstract", text: "Layered nickel rich cathode materials show improved thermal stability. Layered nickel rich cathode materials retain capacity." },
+    ],
+  };
+
+  it("keeps title-section provenance across a long, wrapped title", () => {
+    const concepts = extractUploadConcepts(wrappedTitleDoc);
+    const nickelRich = concepts.find((c) => c.label === "nickel rich cathode");
+    expect(nickelRich?.section).toBe("title");
+    expect(nickelRich?.facet).toBe("material");
+    expect(concepts.some((c) => c.label === "thermal stability")).toBe(true);
+  });
+
+  const referenceDecoyDoc: ExtractedDocument = {
+    title: "Lithium Metal Anode Protection Strategies",
+    source: "pdf",
+    figureCaptions: [],
+    sections: [
+      { heading: "Abstract", canonical: "abstract", text: "Lithium metal anode protection reduces dendrite growth. Lithium metal anode protection improves cycling." },
+      { heading: "References", canonical: "references", text: "Quantum computing algorithms. Quantum computing algorithms. Quantum computing algorithms for optimization." },
+    ],
+  };
+
+  it("never surfaces a term that only appears in the reference list", () => {
+    const concepts = extractUploadConcepts(referenceDecoyDoc);
+    expect(concepts.some((c) => c.label.includes("quantum"))).toBe(false);
+    expect(concepts.some((c) => c.label.includes("lithium metal anode"))).toBe(true);
   });
 });

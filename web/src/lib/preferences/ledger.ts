@@ -195,6 +195,9 @@ export function normalizePreferenceConcepts(
           ? clamp01(rawConcept.confidence)
           : undefined,
       ...(typeof rawConcept.section === "string" ? { section: rawConcept.section.slice(0, 80) } : {}),
+      ...(rawConcept.facet === "method" || rawConcept.facet === "material" || rawConcept.facet === "topic"
+        ? { facet: rawConcept.facet } : {}),
+      ...(typeof rawConcept.extractionVersion === "number" ? { extractionVersion: rawConcept.extractionVersion } : {}),
     };
     if (seen.has(normalized.key)) continue;
     seen.add(normalized.key);
@@ -359,6 +362,9 @@ export function cleanPreferenceLedger(
       label,
       source,
       ...(typeof entry.section === "string" ? { section: entry.section.slice(0, 80) } : {}),
+      ...(entry.facet === "method" || entry.facet === "material" || entry.facet === "topic"
+        ? { facet: entry.facet } : {}),
+      ...(typeof entry.extractionVersion === "number" ? { extractionVersion: entry.extractionVersion } : {}),
       confidence:
         typeof entry.confidence === "number"
           ? clamp01(entry.confidence)
