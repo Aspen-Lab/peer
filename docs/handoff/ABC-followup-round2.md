@@ -13432,3 +13432,62 @@ staging `web/src/lib/papers/upload-store.ts`, `web/src/lib/papers/upload-access.
 `web/src/types/index.ts`, `web/src/app/api/papers/upload/route.ts`,
 `web/src/lib/papers/upload-access.test.ts`, `web/src/app/api/papers/upload/route.test.ts`,
 `docs/handoff/ABC-followup-round2.md`.
+
+### Round 9 — Agent C, phase 1, item 9-13 (A9-15 — atomic write: pending -> bytes -> ready, matrix B7)
+
+Branch confirmed clean before touching anything. Baseline gate re-run cold: tsc clean, eslint
+clean, **vitest 2725/2725** (post-9-12).
+
+**Change**: `web/src/app/api/papers/upload/route.ts`'s two unconditional writes
+(`writeUploadPdfIfAbsent` then `writeUploadMeta`) are now branched on whether this hash16's
+PDF bytes already exist on disk (`uploadFileExists`, imported from `upload-store.ts`):
+- **A genuinely new asset** (bytes not yet on disk): meta written `status: "pending"` first,
+  then the PDF bytes, then meta rewritten to its real (`"ready"`) status — all three steps
+  inside one `try`. Any failure anywhere in that sequence calls `deleteUpload(meta)` (the same
+  function the owner-facing `DELETE` route already uses) to unlink both files, then returns
+  `500 { error: "Could not store the uploaded PDF. Try again." }` in the route's existing error
+  shape. No stuck `pending` record can survive a failed write — `ownedUpload` (9-12) already
+  refuses anything not `"ready"`, so a half-written asset was already invisible to every private
+  route; this item makes sure it doesn't linger as dead weight on disk either.
+- **An idempotent re-upload** (bytes already on disk, matrix B7's own words: "if a ready meta
+  exists, return it"): skips the `pending` phase entirely — the PDF bytes are already safely
+  stored, so a mid-refresh failure must never delete a still-good asset. A failed refresh write
+  here still 500s (the caller learns the refresh didn't happen) but never calls `deleteUpload`.
+
+**Tests** (`upload/route.test.ts`): mocked `uploadFileExists` and `deleteUpload` (added to the
+shared `mocks` object; `uploadFileExists` defaults `false` so every pre-existing test keeps
+exercising the "new asset" path exactly as before). Five new cases: (1) a fresh upload writes
+meta exactly twice, `pending` before `ready`, and the `pending` write's call order precedes the
+PDF write's; (2) a throwing `writeUploadPdfIfAbsent` on a fresh asset -> `500`, `deleteUpload`
+called once, `attachUpload` never called; (3) a throwing final (`ready`) meta write is also
+rolled back; (4) an idempotent re-upload (`uploadFileExists` -> `true`, a `ready` `previous`)
+never writes a `pending` status, exactly one `writeUploadMeta` call; (5) a failed refresh write
+on that same idempotent path -> `500` but `deleteUpload` is **never** called (the still-good
+asset survives). Also fixed two pre-existing TS mock-typing issues surfaced by adding
+positional-argument assertions (`writeUploadMeta`/`deleteUpload`/`writeUploadPdfIfAbsent` mocks
+had no parameter types, so `.mock.calls[n][m]` was untyped `[]`) — typed via `vi.fn<(...) =>
+...>` the same way `uploadOwner`'s mock already was, no behavior change.
+
+**Revert-proof**: reverted the branch back to the old two-unconditional-writes shape; re-ran —
+all 5 new tests failed (three as clean assertion failures, two as uncaught `Error: disk full`
+propagating straight out of the route with no `try/catch` to interrupt it, since the old code
+never wrapped these writes at all) — then restored and confirmed 33/33 green again in this file.
+
+**Gate after this item**: tsc clean, eslint clean, **vitest 2730/2730** (2725 + 5).
+
+**Live check** (dev server `peer-web` on `:3000`, untouched): a normal upload of the draft's own
+fixture PDF via `curl` still succeeds end-to-end through the new branch (confirmed via `curl -v`
+that the request/response cycle is unchanged) — `.local-data/uploads/<hash16>.json` on disk
+carries `"status": "ready"`, `"revision": 1`, confirming the fresh-asset branch's final state
+matches 9-12's contract exactly. Deleted via the real route afterward. (A live induced-failure
+test would require breaking the real filesystem mid-write, which is what the mocked unit tests
+above are for; not attempted against the running dev server.)
+
+**Blast radius**: one write sequence in `upload/route.ts`, two new imports (`deleteUpload`,
+`uploadFileExists`, both pre-existing exports of `upload-store.ts`), one test file's mock
+surface extended (two new mocked functions, two existing mocks given explicit parameter types).
+Nothing else touched.
+
+Commit: `fix(upload): make the new-asset write pending -> bytes -> ready, roll back on failure (9-13/A9-15)`,
+staging `web/src/app/api/papers/upload/route.ts`, `web/src/app/api/papers/upload/route.test.ts`,
+`docs/handoff/ABC-followup-round2.md`.

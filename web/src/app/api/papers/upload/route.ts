@@ -17,10 +17,12 @@ import { resolveProvider } from "@/lib/llm/providers/registry";
 import {
   attachUpload,
   attachedUploadHash,
+  deleteUpload,
   privateUploadHash,
   readUploadMeta,
   purgeExpiredUploads,
   listUploadMeta,
+  uploadFileExists,
   uploadId,
   uploadMetaToPaper,
   writeUploadMeta,
@@ -267,8 +269,27 @@ export async function POST(req: Request) {
     // report on.
     textStatus: (doc?.sections.length ?? 0) > 0 ? "ok" : "empty",
   };
-  await writeUploadPdfIfAbsent(hash16, bytes);
-  await writeUploadMeta(hash16, meta);
+  // 9-13 (A9-15): a genuinely new asset (this hash16 has no PDF bytes on disk
+  // yet) is written meta `pending` -> PDF bytes -> meta `ready`, so a crash or
+  // a throwing write partway through never leaves a stuck `pending` record
+  // that `ownedUpload` would otherwise refuse forever; on any failure in that
+  // sequence, both files are rolled back via the same `deleteUpload` the
+  // owner-facing DELETE route uses. An idempotent re-upload of bytes already
+  // on disk (`previous` existed as `ready`) skips the `pending` phase
+  // entirely and goes straight to the single ready write it always did — the
+  // PDF bytes are already safely stored, so there is nothing to roll back,
+  // and a failed refresh must never delete a still-good asset (matrix B7:
+  // "if a ready meta exists, return it").
+  const isNewAsset = !uploadFileExists(hash16);
+  try {
+    if (isNewAsset) await writeUploadMeta(hash16, { ...meta, status: "pending" });
+    await writeUploadPdfIfAbsent(hash16, bytes);
+    await writeUploadMeta(hash16, meta);
+  } catch (err) {
+    console.error("[upload] failed to store the uploaded PDF:", err);
+    if (isNewAsset) await deleteUpload(meta);
+    return NextResponse.json({ error: "Could not store the uploaded PDF. Try again." }, { status: 500, headers: PRIVATE_UPLOAD_HEADERS });
+  }
   if (target) await attachUpload(ownerKey, target.id, hash16);
   await purgeExpiredUploads();
 

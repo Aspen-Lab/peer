@@ -7,13 +7,19 @@ const mocks = vi.hoisted(() => ({
   uploadOwner: vi.fn<() => Promise<string | null>>(async () => "test-owner"),
   attachUpload: vi.fn(async () => undefined),
   extractPdfTextFromPath: vi.fn(),
-  writeUploadPdfIfAbsent: vi.fn(async () => undefined),
-  writeUploadMeta: vi.fn(async () => undefined),
+  writeUploadPdfIfAbsent: vi.fn<(hash16: string, bytes: Buffer) => Promise<void>>(async () => undefined),
+  writeUploadMeta: vi.fn<(hash16: string, meta: import("@/lib/papers/upload-store").UploadMeta) => Promise<void>>(async () => undefined),
   readUploadMeta: vi.fn<() => Promise<import("@/lib/papers/upload-store").UploadMeta | null>>(async () => null),
   // 9-12: the revision chain looks at this owner's other live assets — kept
   // empty by default (a mock, not a real disk read) so tests are isolated;
   // individual tests override it to exercise the chaining itself.
   listUploadMeta: vi.fn(async () => [] as import("@/lib/papers/upload-store").UploadMeta[]),
+  // 9-13: whether this hash16's PDF bytes are already on disk decides
+  // pending-phase vs. refresh — false (a fresh asset) by default; a test
+  // sets it true to exercise the idempotent-refresh branch without ever
+  // touching the real filesystem.
+  uploadFileExists: vi.fn(() => false),
+  deleteUpload: vi.fn<(meta: import("@/lib/papers/upload-store").UploadMeta) => Promise<void>>(async () => undefined),
   resolveProvider: vi.fn(),
 }));
 
@@ -35,6 +41,8 @@ vi.mock("@/lib/papers/upload-store", async (importOriginal) => {
     writeUploadMeta: mocks.writeUploadMeta,
     readUploadMeta: mocks.readUploadMeta,
     listUploadMeta: mocks.listUploadMeta,
+    uploadFileExists: mocks.uploadFileExists,
+    deleteUpload: mocks.deleteUpload,
     purgeExpiredUploads: vi.fn(async () => undefined),
     attachUpload: mocks.attachUpload,
   };
@@ -93,6 +101,10 @@ describe("POST /api/papers/upload", () => {
     mocks.readUploadMeta.mockResolvedValue(null);
     mocks.listUploadMeta.mockReset();
     mocks.listUploadMeta.mockResolvedValue([]);
+    mocks.uploadFileExists.mockReset();
+    mocks.uploadFileExists.mockReturnValue(false);
+    mocks.deleteUpload.mockReset();
+    mocks.deleteUpload.mockResolvedValue(undefined);
     mocks.resolveProvider.mockReset();
     mocks.resolveProvider.mockReturnValue(null); // no local dev provider unless a test opts in
     mocks.extractPdfTextFromPath.mockResolvedValue({ ok: true, doc: emptyDoc } satisfies PdfTextResult);
@@ -436,5 +448,71 @@ describe("POST /api/papers/upload", () => {
     const res = await postWith(pdfFile(pdfBytes()));
     const body = await res.json();
     expect(body.paper.revision).toBe(1);
+  });
+
+  it("9-13: writes meta 'pending' before the PDF bytes, then 'ready', for a fresh asset", async () => {
+    const res = await postWith(pdfFile(pdfBytes()));
+    expect(res.status).toBe(200);
+    expect(mocks.writeUploadMeta).toHaveBeenCalledTimes(2);
+    expect(mocks.writeUploadMeta.mock.calls[0][1]).toMatchObject({ status: "pending" });
+    expect(mocks.writeUploadMeta.mock.calls[1][1]).toMatchObject({ status: "ready" });
+    // The pending write must land before the PDF bytes are written.
+    const pendingOrder = mocks.writeUploadMeta.mock.invocationCallOrder[0];
+    const pdfOrder = mocks.writeUploadPdfIfAbsent.mock.invocationCallOrder[0];
+    expect(pendingOrder).toBeLessThan(pdfOrder);
+  });
+
+  it("9-13: a throwing PDF write on a fresh asset is rolled back (meta+pdf deleted), 500", async () => {
+    mocks.writeUploadPdfIfAbsent.mockRejectedValueOnce(new Error("disk full"));
+    const res = await postWith(pdfFile(pdfBytes()));
+    expect(res.status).toBe(500);
+    expect(mocks.deleteUpload).toHaveBeenCalledTimes(1);
+    // deleteUpload only needs hash16/ownerKey/paperIds to know what to
+    // unlink — it doesn't matter which status the object it's handed
+    // carries, only that it names the exact asset that was left half-written.
+    expect(mocks.deleteUpload.mock.calls[0][0]).toMatchObject({ ownerKey: "test-owner" });
+    expect(mocks.attachUpload).not.toHaveBeenCalled();
+  });
+
+  it("9-13: a throwing final meta write ('ready') on a fresh asset is also rolled back", async () => {
+    mocks.writeUploadMeta.mockImplementationOnce(async () => undefined) // the "pending" write succeeds
+      .mockRejectedValueOnce(new Error("disk full")); // the "ready" write fails
+    const res = await postWith(pdfFile(pdfBytes()));
+    expect(res.status).toBe(500);
+    expect(mocks.deleteUpload).toHaveBeenCalledTimes(1);
+  });
+
+  it("9-13: an idempotent re-upload (bytes already on disk) never writes a 'pending' status", async () => {
+    mocks.uploadFileExists.mockReturnValue(true);
+    mocks.readUploadMeta.mockResolvedValue({
+      hash16: "existing-hash16-",
+      fileName: "paper.pdf",
+      title: "A Real Paper",
+      uploadedAt: "2026-09-01T00:00:00.000Z",
+      textStatus: "ok",
+      status: "ready",
+      revision: 1,
+    });
+    const res = await postWith(pdfFile(pdfBytes()));
+    expect(res.status).toBe(200);
+    expect(mocks.writeUploadMeta).toHaveBeenCalledTimes(1);
+    expect(mocks.writeUploadMeta.mock.calls[0][1]).toMatchObject({ status: "ready" });
+  });
+
+  it("9-13: a failed refresh write on an idempotent re-upload is NOT rolled back (matrix B7: a still-good asset is preserved)", async () => {
+    mocks.uploadFileExists.mockReturnValue(true);
+    mocks.readUploadMeta.mockResolvedValue({
+      hash16: "existing-hash16-",
+      fileName: "paper.pdf",
+      title: "A Real Paper",
+      uploadedAt: "2026-09-01T00:00:00.000Z",
+      textStatus: "ok",
+      status: "ready",
+      revision: 1,
+    });
+    mocks.writeUploadMeta.mockRejectedValueOnce(new Error("disk full"));
+    const res = await postWith(pdfFile(pdfBytes()));
+    expect(res.status).toBe(500);
+    expect(mocks.deleteUpload).not.toHaveBeenCalled();
   });
 });
