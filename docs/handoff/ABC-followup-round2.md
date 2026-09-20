@@ -12392,3 +12392,20 @@ deleted one, two edited inline literals, all scoped inside `ResultsBlock`. `Bloc
 
 Commit: `feat(reader): box the findings section and outline each result (8-04/S26)`, staging only
 `web/src/components/reader/report-sections.tsx`, `docs/handoff/ABC-followup-round2.md`.
+
+### Round 8 — manager browser checks (2026-09-19, while A measures)
+
+On `/papers/openalex:W7207740551` (hydrated; DOM/computed-style reads — screenshots blank in the
+hidden pane after a scroll):
+- **S27:** masthead links read Peer · ← Briefing · Main · Search · Saved · Profile. **Seen.**
+- **S25:** the "Abstract" button: accent fill `rgb(255,82,13)` (= `--color-accent`), light text,
+  48 px tall × 712 px wide (full column), `aria-expanded="false"` on load with the abstract
+  region and the "From the abstract" footer absent from the DOM; click → `true` + region and
+  footer present; click → `false` + absent. **Closed.**
+- **S26:** the findings box: `rgb(241,241,241)` on a `rgb(250,250,250)` page (one step deeper),
+  24 px padding; 2 result items each with a 1-px solid border in the heading colour at 40 %;
+  summary paragraph 16.5 px in `#1d1d1d` (heading colour) — same size as the result text; the
+  "What is new here" line 16.5 px in the heading colour. **Closed in light mode**; dark-mode
+  shade left to the user's eyes.
+- **S24:** `/persona` streams (`loading.tsx`) and does not reveal in the hidden pane — the
+  manager relies on A's static-markup checks + the user's eyes.
