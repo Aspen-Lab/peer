@@ -81,19 +81,33 @@ browser, run the reports), then report to the user in plain language and stop th
 
 ```
 ROUND:            8 (loop REOPENED by the manager 2026-09-19 — five user items, §1aa)
-WHOSE TURN:       B  (new features + one investigation; the manager recorded the current state)
-STOPPED BECAUSE:  —
-STATUS:           Round 8 open. B part 1 done: fix guide 8-01..8-04 written for S27/S24/S25/S26
-                   (§4). S28 investigation still pending — B continues this turn. Another agent's
-                   figure-lightbox.* edits (and unrelated upload-store.ts/types/index.ts/
-                   upload-access.ts changes) are still dirty in the tree — untouched, excluded.
-OPEN ITEMS:       S24 S25 S26 S27 S28 (§1aa)
+WHOSE TURN:       C  (works the fix guide; S28 has no C step — informational only)
+STOPPED BECAUSE:  B finished the turn @ 2026-09-20 01:51 UTC
+STATUS:           Round 8: B's turn done, both parts. Fix guide 8-01..8-04 written for
+                   S27/S24/S25/S26 in C's stated order (§4). S28 investigated and answered in a
+                   table (§4) — real gap found and confirmed live (curl): /api/feedback and
+                   /api/saved both 500 right now (Supabase unconfigured); feedback_events is
+                   write-only (0 readers, grepped); dislikedTopics has 0 writers anywhere in the
+                   product. Two informational, NOT-this-round fix-guide entries recorded for
+                   those (8-05, 8-06) — S28 itself has no C step per §1aa, so C's queue is only
+                   8-01..8-04. Another agent's figure-lightbox.* edits (and a large, unrelated,
+                   actively-changing set: upload-store.ts, upload-access.ts, button.tsx,
+                   preferences/ledger.ts, feed/pipeline.ts, feed/profile-compiler.ts,
+                   store/profile.ts, types/index.ts, and more — an in-progress upload/private-PDF
+                   feature in the same checkout) are still dirty in the tree — untouched,
+                   excluded. B's citations into button.tsx/ledger.ts/pipeline.ts/profile.ts
+                   reflect what was on disk at read time; re-check line numbers before editing in
+                   case that concurrent work has moved since.
+OPEN ITEMS:       S24 S25 S26 S27 (S28 closed — informational, no C step)
 GATE (0 open):    NOT MET
 
-DONE:      rounds 1–7 (S3–S23 closed, pushed 2026-09-17). Round 8: nothing yet.
-GATE NOW:  tsc clean · eslint clean · vitest 2691/2691 (at round-7 close).
-TODO:      B designs S24–S27 and investigates S28; C implements S24–S27; A measures; manager
-           eyeballs; push at close (standing authorization from 2026-09-17 covers the branch).
+DONE:      rounds 1–7 (S3–S23 closed, pushed 2026-09-17). Round 8: B's fix guide + S28
+           investigation done (§4). Nothing implemented yet.
+GATE NOW:  tsc clean · eslint clean · vitest 2691/2691 (at round-7 close) — re-verify cold before
+           C's first edit; the concurrent upload work above has not been gated by this loop.
+TODO:      C works 8-01 (S27) → 8-02 (S24) → 8-03 (S25) → 8-04 (S26), one commit per item, gate
+           after each; then hand back to A. 8-05/8-06 (S28's two confirmed gaps) are informational
+           only this round — not C's queue, the manager/user chooses whether to open them later.
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
@@ -11972,6 +11986,94 @@ inline literals, all scoped inside `ResultsBlock`. `BlockHeading`/`Band` read bu
 `MattedFigure` untouched.
 
 ---
+
+Commit: this log entry, plus §1 edited in place (below), staging only
+`docs/handoff/ABC-followup-round2.md`.
+
+### Round 8 — Agent B, part 2 — S28 investigation (no code)
+
+**Method**: read `store/feed.ts` (1708 lines, in full), `store/profile.ts`'s preference actions,
+`lib/preferences/ledger.ts` (809 lines, in full), `lib/feed/pipeline.ts` (463 lines, in full),
+`lib/scoring/combine.ts`, `app/api/feedback/route.ts`, `app/api/saved/route.ts`,
+`lib/supabase/server.ts`, `types/index.ts`'s `UserProfile` shape, and exhaustive grep for every
+read/write site of `preferenceLedger`, `dislikedTopics`, `feedback_events`, `excludeIds`,
+`recentlyShownIds`. Confirmed live: two unauthenticated `curl` calls against the running dev
+server (`POST /api/feedback`, `GET /api/saved`, no body/session) both returned **HTTP 500** —
+Supabase is unconfigured on this box right now, so both routes throw inside `createClient()`
+before even reaching their own `if (!user) return 401` check. No env values read or printed; no
+paper text or third-party content quoted.
+
+**The one fact that answers the user's question before the table does.** The daily candidate
+pool (~200 papers, actually fetched by web/API search) is built **once per local day** from
+`topics`/`methods`/`venues`/`seedTexts` alone — `pipeline.ts` line 241's own comment: *"NEUTRAL
+SCORING, AND IT IS THE WHOLE REASON ONE POOL CAN SERVE A WHOLE DAY... `preferenceLedger` is
+deliberately absent here and supplied at read time instead."* `scorePaperCandidates` is called
+twice — once at build time with `includePreferenceLedger = false` (line 245), once at every read
+(cache hit or miss) with `= true` (line 350). Two consequences, both confirmed by reading, not
+inferred: **(1)** Save/Skip/Like can only re-rank or hide papers *already* in that day's pool —
+none of them can make Peer go fetch a genuinely new paper on a liked topic. **(2)** the Tier-2
+LLM step (`applyTier2Rerank`, the model that writes the digest/skim ordering and reasons) runs
+**only inside the pool build**, i.e. strictly *before* the ledger is ever consulted — so the
+model never sees a single Save, Skip, or Like, ever, by construction.
+
+| Action | What is recorded, and where | What it changes in tomorrow's briefing | Gap |
+|---|---|---|---|
+| **Save** (button / `s` key) | `profile.preferenceLedger` gets `+1 positive` on every concept/keyword tag the paper carries (`store/profile.ts` `recordPaperPreference` → `applyPreferenceSignal`, `lib/preferences/ledger.ts`). Persisted via zustand's own localStorage persist, and merged to/from the signed-in user's server profile row (`mergeRemoteProfile`). Also fires `POST /api/saved` (the bookmark list, cross-device) and `POST /api/feedback` (`feedback:"saved"`), both best-effort/fire-and-forget. | The ledger's positive vote **re-ranks** (boosts, `POSITIVE_BOOST_MAX` capped) future candidates sharing those concepts, applied at read time on every `/api/feed` call; decays with a 60-day half-life. | Works today, independent of Supabase/auth — the ledger never touches the network. `/api/saved` and `/api/feedback` both confirmed 500 live on this box (Supabase unconfigured); even when they succeed, `/api/feedback`'s write is never read back by anything (see gap row below). |
+| **Skip** (`x` key / swipe, 4s undo) | After the undo window, `-1 negative` on the same concepts (`commitDismiss` → `recordPaperPreference(..., "negative")`) plus the same best-effort `/api/feedback` (`feedback:"notInterested"`). The specific paper is also excluded from reappearing for 14 days (`recentlyShownIds` → `excludeIds`) — but that happens for **every** paper the feed ever displayed, Skip or not, so this part is not Skip-specific. | The ledger's negative vote suppresses (`NEGATIVE_PENALTY_MAX` capped, same decay) future candidates sharing those concepts. | Same network gap as Save. Additionally does **not** touch `dislikedTopics` (see below) — the coarser topic-string list stays empty regardless of how many papers on a topic get skipped. |
+| **Like / "more like this"** (`l` key — briefing card-focus only; no reading-page or mouse equivalent) | Identical mechanism to Save: `+1 positive` on the paper's concepts, via the same `recordPaperPreference`. No distinct weight — the ledger cannot tell "saved for later" from "I like this topic" apart. | Same boost mechanism as Save. | Reachable only by keyboard, only from the briefing. `IconThumbsUp`/`IconThumbsDown` are fully drawn in `components/icons.tsx` but have **zero consumers anywhere** — there is no dedicated "Dislike" distinct from Skip, and no Like control on `/papers/[id]` at all. |
+| **"Feedback to AI"** (not a separate control — the background `/api/feedback` call that Save/Skip/Like already fire) | Meant to append to a `feedback_events` Supabase table — the route file's own header comment: *"Append-only signal stream. Future Tier 1/2 re-ranking reads from here."* | **Nothing, today.** | Confirmed by exhaustive grep: `feedback_events` is written in exactly one file and **read in zero files**, anywhere. Even with Supabase fully configured and the user signed in, this call is pure telemetry with no consumer yet — the comment describes a future that was never built. This is the literal, verified answer to "does feedback to AI complete the loop": no: it is inert; the real loop runs entirely through the client-local `preferenceLedger` above, which needs neither this endpoint nor Supabase. |
+| **`dislikedTopics`** (a plain string list, distinct from the concept-level ledger) | Sent to `/api/feed` as `negativeTopics`, consumed by `lib/scoring/combine.ts` (`negativePenalty`/`legacyNegativeTopics`, string-matched against title/abstract/tags) at **both** pool-build and read time — fully wired, working scoring code, confirmed by reading. Persisted to Supabase's `disliked_topics` column via `/api/profile` when signed in. | Would suppress any paper whose text string-matches a disliked topic, at both stages (unlike the ledger, this one *can* shrink what gets fetched, since it is applied inside `scorePaperCandidates` even at build time). | **Nothing in the product ever writes to it.** Grepped the entire client — Profile page, onboarding wizard, every store action — zero setters; `types/index.ts` only ever defaults it to `[]`. Dead-but-wired: the gap is a missing input control, not missing pipeline logic. Confirmed a plain bug per this item's own criteria (a field the pipeline reads and the API persists that nothing in the UI ever produces) — fix-guide entry **8-06** below. |
+
+**Ranked improvements (at most three, per the brief; no code, effort estimates only):**
+
+1. **[M] Make `/api/feedback` real, or remove it.** Either wire `feedback_events` into
+   `scoreItems`/`prepareLedger` server-side (useful mainly if the goal becomes a server-side
+   source of truth independent of the client's own localStorage ledger, or faster cross-device
+   sync than the profile merge gives today), or delete the dead write path so it stops silently
+   500ing for every user without Supabase configured. Today it does neither job — it is confusing
+   dead weight either way, and the false comment ("Future Tier 1/2 re-ranking reads from here")
+   should not survive whichever is chosen.
+2. **[S] Wire up `dislikedTopics`.** The cheapest real improvement: one new "topics to avoid"
+   input on the Profile page (next to the existing preferred-topics/journals fields) plus one new
+   `updateDislikedTopics` profile-store action mirroring `updateFeedFocus`'s own shape. All
+   scoring-side wiring already exists and is exercised by tests today — this is a UI-only gap, not
+   a pipeline change.
+3. **[L] Let sustained Like/Save evidence expand tomorrow's *search*, not only today's ranking.**
+   The candidate pool's own search topics never grow from ordinary feedback — only explicit
+   uploads do, via `uploadInterestTerms`. Promoting the ledger's strongest, most decay-resistant
+   liked concepts (`summarizePreferenceLedger` already computes exactly this list, today only for
+   the Profile page's own display) into `softTopics`/explore seeds for the *next* day's pool build
+   would let genuinely sustained interest widen what Peer looks for, not just how it is sorted.
+   Larger: touches the daily pool's own cache key (`derivePoolCacheKey`) and needs guardrails
+   against topic drift, matching the care `pipeline.ts` already documents around cache-key
+   stability.
+
+**8-05 — `feedback_events` is write-only (informational, not scheduled this round).**
+**File**: `web/src/app/api/feedback/route.ts` (all 51 lines — the entire route). **Classification:
+EXTRA** (a fully-built code path with no consumer). Grepped `feedback_events` across `web/src`:
+two matches, both `INSERT` in this one file; zero `SELECT`/`.from("feedback_events")` reads
+anywhere. Fix direction (not this round's C queue — S28 has no C step per §1aa): either give it a
+reader (a server-side scoring input) or delete the route, its two `cloudFeedback` call sites in
+`store/feed.ts` (lines ~125-139, ~1291-1298), and its stale header comment. Tests at risk: none
+found referencing `/api/feedback` or `cloudFeedback`. Blast radius if deleted: `submitFeedback`
+(feed.ts line 1291) would become a local-only no-op-plus-log; every caller (`savePaper`,
+`notInterestedPaper` via `commitDismiss`, `moreLikePaper`, the event/job equivalents) already
+treats it as fire-and-forget, so nothing awaits or branches on its result.
+
+**8-06 — `dislikedTopics` has no writer anywhere in the product (informational, not scheduled
+this round).** **Files**: `web/src/types/index.ts` (`dislikedTopics?: string[]` line 394,
+defaulted `[]` line 519), `web/src/store/profile.ts` (no `updateDislikedTopics`-shaped action
+exists — grepped every exported action name), `web/src/app/profile/page.tsx` (zero references),
+`web/src/app/welcome/page.tsx` (the onboarding wizard — zero references). **Classification:
+MISSING** (the write side only; the read side — `store/feed.ts` line 255's `negativeTopics`
+filter, `lib/scoring/combine.ts`'s `negativePenalty`/`legacyNegativeTopics` — is intact and
+already covered by existing tests). Fix direction: one new profile-store action following
+`updateFeedFocus`'s exact shape (`store/profile.ts` ~line 477), one new input on the Profile page
+near the existing preferred-topics/journals fields, wired to `/api/profile`'s already-working
+`disliked_topics` column (`app/api/profile/route.ts` lines 65/106, unmodified). Tests at risk:
+none — no test exercises `dislikedTopics` as a settable field today (only as a read-only default/
+pass-through). Blast radius: additive store action + one new form field; the entire scoring side
+is untouched, since it already expects this field to sometimes be non-empty.
 
 Commit: this log entry, plus §1 edited in place (below), staging only
 `docs/handoff/ABC-followup-round2.md`.
