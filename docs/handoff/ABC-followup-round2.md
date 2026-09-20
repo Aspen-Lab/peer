@@ -13770,3 +13770,70 @@ by ruling, and the docs should say so plainly rather than imply a stronger guara
 
 Commit: this entry only (§4 append), staging `docs/handoff/ABC-followup-round2.md`. No product
 code touched — the check was already correct and unmodified.
+
+### Round 9 — Agent C, phase 1, item 9-18 (A9-05 — scheduler config, matrix C6)
+
+Branch confirmed clean before touching anything. Baseline gate re-run cold: tsc clean, eslint
+clean, **vitest 2752/2752** (post-9-17, unchanged from 9-16 since 9-17 touched no code).
+
+**`vercel.json` (new, repo root)**: `{"crons":[{"path":"/api/jobs/purge-uploads","schedule":
+"17 3 * * *"}]}`, exactly the phase-1 guide's own text. Confirmed none existed anywhere in the
+repo before this (`find` at repo root and `web/`). The existing route
+(`web/src/app/api/jobs/purge-uploads/route.ts`, unmodified by this item) already does a
+timing-safe `Authorization: Bearer $CRON_SECRET` check — Vercel sends that header automatically
+for every cron invocation once `CRON_SECRET` is set as a project environment variable; no route
+change needed.
+
+**`web/scripts/purge-uploads.mjs` (new)**: an HTTP call to the same route (with the bearer),
+not a second implementation of `purgeExpiredUploads` — the route already is that function. Chose
+this over `npx tsx` (the guide's first-choice option) after checking: `npx tsx --version` DOES
+run, but only by downloading a fresh copy on demand — `tsx` is listed in `package-lock.json` only
+as `vite`'s own OPTIONAL peer dependency, never actually resolved into `node_modules/.bin`
+(confirmed: no `tsx` binary present). Treating an on-demand `npx` download as a new dependency
+(matching the standing "no new npm dependencies" rule) ruled that option out; the guide's own
+fallback ("else a small `.mjs` that spawns the dev server's route with the bearer") is exactly
+this shape. Refuses locally with a clear message and exit code 1 if `CRON_SECRET` is unset,
+rather than sending an empty/undefined bearer; never prints the secret's value, only uses it in
+the header.
+
+**`web/package.json`**: `"purge-uploads": "node scripts/purge-uploads.mjs"`, added alongside the
+existing script list (matches the file's existing scripts' style — no new tooling, same as
+`kill-orphans`/`assert-byok-production-env`).
+
+**`web/.env.example`**: `CRON_SECRET=` declared as its own line (previously only mentioned
+inline in a comment above `PEER_UPLOADS_ENABLED`, never declared), with a comment naming both
+enablement paths and explicitly warning never to commit a real value.
+
+**README.md (repo root)**: new "Retention & cleanup (9-18)" paragraph directly under the
+existing upload paragraph, naming both enablement paths (Vercel cron via `vercel.json` +
+project env var; self-hosting via `npm run purge-uploads` + the operator's own OS scheduler) and
+stating plainly that **neither runs automatically in this local checkout** — matching Ruling 23's
+explicit "never claim a scheduler runs on this machine." Left the surrounding paragraph's stale
+ownership/persistence claims (A9-08, part 1: "an upload... is not visible from another... nothing
+here is persisted on Vercel") untouched — that full rewrite is explicitly phase 3's assigned
+scope (A9-08/`docs/PRIVATE_PDF_UPLOADS.md`), not this item's; touching it here risked
+pre-empting or conflicting with that later, more complete pass.
+
+**No product code changed** — `route.ts` (the auth/purge logic) is untouched; this item is
+entirely new config, a new operational script, and docs. No new `.test.ts` file: this repo's
+Vitest config (`include: ["src/**/*.test.{ts,tsx}"]`) does not cover `scripts/*.mjs`, and no
+existing script in `web/scripts/` has one either — the established pattern for this class of file
+in this codebase is direct execution, not a mocked unit test.
+
+**Live check** (dev server `peer-web` on `:3000`, untouched, no `CRON_SECRET` configured in this
+session's `.env.local` — deliberately left unset, same as the standing rule for 9-19's
+`ADMIN_TOKEN`): `node scripts/purge-uploads.mjs` with no `CRON_SECRET` in the environment ->
+refuses immediately, `exit 1`, without ever making a request. `CRON_SECRET=wrong-secret node
+scripts/purge-uploads.mjs` -> makes the request, route answers `401 Unauthorized` (timing-safe
+compare correctly rejects a mismatched bearer), script prints the error and exits 1. The
+authenticated-success path was not exercised live (would require a real `CRON_SECRET` in the
+running server's environment, which would need a restart this session may not perform) —
+covered instead by the route's own pre-existing, unmodified logic and the fact that
+`purgeExpiredUploads()` itself is already covered by 9-16's tests.
+
+**Gate**: tsc clean, eslint clean, **vitest 2752/2752** (unchanged — no application code, hence
+no new automated tests to add to the suite; script behavior proven by direct execution above).
+
+Commit: `chore(ops): add the daily purge-uploads scheduler config and local trigger script (9-18/A9-05)`,
+staging `vercel.json` (repo root), `web/scripts/purge-uploads.mjs`, `web/package.json`,
+`web/.env.example`, `README.md` (repo root), `docs/handoff/ABC-followup-round2.md`.

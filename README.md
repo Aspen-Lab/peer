@@ -303,6 +303,20 @@ here is persisted on Vercel.** `full-text.ts` and `lib/figures/extract.ts` both 
 needs no separate code path. A PDF with no extractable text (a scanned image, most often) still
 uploads successfully; the reading page says so plainly instead of pretending a report exists.
 
+**Retention & cleanup (9-18).** Private uploads expire after 30 days; access is refused past
+expiry immediately, but the bytes themselves are only physically removed by
+`GET /api/jobs/purge-uploads` (bearer `Authorization: Bearer <CRON_SECRET>`, timing-safe,
+401 with no/wrong secret) — every upload also sweeps expired records opportunistically, but that
+is a supplement to the scheduled job, not a substitute for one. Two ways to actually run it, and
+**neither runs automatically in this local checkout**:
+- **Vercel**: the repo-root [`vercel.json`](vercel.json) declares a daily cron
+  (`crons: [{ path: "/api/jobs/purge-uploads", schedule: "17 3 * * *" }]`); set `CRON_SECRET` in
+  the Vercel project's environment variables and Vercel calls the route with that bearer
+  automatically — nothing else to configure.
+- **Self-hosting**: `npm run purge-uploads` (`web/scripts/purge-uploads.mjs`) calls the same
+  route by HTTP against an already-running instance; point your own OS-level scheduler
+  (`cron`, Task Scheduler, etc.) at that command with `CRON_SECRET` set in its environment.
+
 > ⚠️ Deep reports burn tokens (small + large model **per paper**). They are gated behind
 > an explicit user toggle and require a resolvable key. Any LLM failure must return `null`
 > so the caller falls back to the abstract path. Preserve that.
