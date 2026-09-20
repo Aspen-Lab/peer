@@ -12144,3 +12144,76 @@ Nothing else touched.
 Commit: `feat(shell): add a "Main" link before Search in the masthead (8-01/S27)`, staging only
 `web/src/lib/shell/masthead.ts`, `web/src/lib/shell/masthead.test.ts`,
 `docs/handoff/ABC-followup-round2.md`.
+
+### Round 8 — Agent C, item 8-02 (S24 — two "Back to main" buttons on the persona result)
+
+Checked `web/src/components/persona/` and `web/src/components/keyboard.tsx` clean (not in the
+other agent's dirty/untracked set) before touching anything; `web/src/components/ui/button.tsx`
+confirmed dirty (`git diff` shows only a new `green` tone added — `buttonVariants`/`tone:
+"primary"`/the `size` cva untouched), so per Ruling 22 it is **imported, never edited**.
+
+**Change**: `web/src/components/persona/result.tsx`. Added a module-level `BACK_TO_MAIN_CLASS`
+built from `cn(buttonVariants({ tone: "primary", size: "lg" }), "h-11 px-6 text-body-lg
+hover:scale-125 active:scale-90")` — `cn`'s tailwind-merge resolves the `h-11/px-6/text-body-lg`
+override against `lg`'s own `h-10/px-5/text-body` the same way it resolves any other conflicting
+Tailwind classes, so the 44px floor is met without a new cva `size` variant in the dirty
+`button.tsx`. Two `<Link href="/" aria-label="← Back to main">` instances: one as the first
+child of the returned fragment (top-left, above the header at every width), one after the
+existing grid as a new `<div className="flex justify-end mt-10">` sibling (bottom-right, after
+the "Retake quiz" footer) — matches B's placement guide exactly. Added a component-local
+`useEffect` (mount/unmount-gated `window` keydown listener, `e.key === "Escape"` →
+`router.push("/")`, `useRouter` from `next/navigation`) — navigates only, sets no state, and
+confirmed by reading `keyboard.tsx` that its own Escape branch has no `/persona` case and no-ops
+there today, so the two listeners cannot fight.
+
+**Style verified, not guessed**: `tone: "primary"` is `bg-accent text-bg shadow-card
+hover:bg-accent/90` — the same accent-fill idiom already proven on "Open the PDF"
+(`decision-block.tsx`). Kept `text-bg` rather than switching to the spec's literal "white": in
+dark mode `--color-bg` is near-black (`#111`), which is the correct high-contrast ink against the
+mid-bright dark-mode accent swatches — confirmed live below, flagged in the code comment.
+
+**Tests**: added `web/src/components/persona/result.test.tsx` (new file — no test existed for
+this component before; `renderToStaticMarkup`, matching the repo's convention). Mocks
+`next/navigation`'s `useRouter` (confirmed by reading Next's own source, `useRouter` throws
+`"invariant expected app router to be mounted"` with no `AppRouterContext` provider — effects
+never run under `renderToStaticMarkup`, but the hook call itself still executes during render).
+Asserts exactly 2 anchors carry `aria-label="← Back to main"`, each with `href="/"`.
+**Revert-proof**: temporarily deleted the bottom button via a throwaway script, re-ran — failed
+exactly as expected (`expected 2 to be 4`, i.e. only one link's worth of substring hits), then
+restored and confirmed green again.
+
+**Gate after this item**: tsc clean, eslint clean, **vitest 2712/2712** (2711 baseline + this
+item's 1 new test file; masthead's rewritten assertions unchanged from 8-01).
+
+**Live checks** (Browser pane, fronted after screenshots first timed out hidden — `/persona`
+streams per the manager's own hidden-pane note, so the tab was fronted before relying on any
+DOM/style read): completed the 15-question quiz to reach the result view. `read_page`/
+`get_page_text` showed both "← Back to main" instances, top and bottom. Computed via
+`javascript_tool`: both anchors `href="/"`, `aria-label="← Back to main"`, height `44px`. Light
+mode: `background-color: rgb(255, 82, 13)` (`--color-accent` ember), text `rgb(250, 250, 250)`
+(near-white `--color-bg`). Dark mode — **verified via a real reload** (`localStorage`'s
+`peer-profile.state.profile.colorTheme` set to `"dark:ember"`, matching the app's own boot-script
+mechanism in `layout.tsx`, then reloaded and redid the quiz; a same-tab runtime
+`setAttribute("data-mode","dark")` without a reload gave a stale cached `background-color`
+reading in this automated pane — confirmed as a pane artifact, not a product bug, since a
+freshly-created scratch `.bg-accent` element in the same document immediately showed the correct
+dark value): `background-color: rgb(255, 106, 43)` (`--seed-dark` ember), text `rgb(17, 17, 17)`
+(near-black `--color-bg` dark) — exactly matching the "smarter than literal white" reasoning
+above. Esc: pressed on the result view, tab title changed from "Persona — Peer" to "Peer" and
+`window.location.pathname` became `"/"` — confirmed working. Hover-swell clipping risk (flagged
+by the fix guide, not decided): both buttons' bounding rects have well over 80px of clearance
+between the button's outer edge and the nearest viewport edge or content on every side at
+803×1278, so a 1.25× scale (max ~20px growth per side on a ~164×44 pill) has room; a literal
+hover screenshot could not be captured this session (the pane's screenshot call timed out even
+after fronting the tab — `"the page did not finish rendering in time"` — a pane limitation, not
+something this item's code controls), so this is reported as geometry-verified, not
+eyeball-verified; the documented fallback (`hover:scale-[1.04]`) remains available if a future
+visible-browser check finds clipping. `localStorage` reset to `"system:ember"` after the checks.
+
+**Blast radius**: one file gains imports/a module constant/two links/one effect
+(`persona/result.tsx`), one new test file. `button.tsx`, `keyboard.tsx`, `decision-block.tsx` —
+all read, none edited.
+
+Commit: `feat(persona): add two "Back to main" buttons and Esc-to-home on the result view
+(8-02/S24)`, staging only `web/src/components/persona/result.tsx`,
+`web/src/components/persona/result.test.tsx`, `docs/handoff/ABC-followup-round2.md`.
