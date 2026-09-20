@@ -146,6 +146,56 @@ describe("POST /api/papers/upload", () => {
     expect(mocks.writeUploadMeta).toHaveBeenCalledWith(body.id.slice(7), expect.objectContaining({ ownerKey: "test-owner", rightsVersion: "2026-09-19", paperIds: ["openalex:W123"] }));
   });
 
+  // 9-31 (A9-09): a partial-but-real title overlap (the "confirm" band, 0.35
+  // <= overlap < 0.6) neither binds silently nor refuses outright — it asks
+  // the client to confirm, and only writes anything once the client
+  // resubmits with `confirm=1`.
+  it("9-31: a partial title overlap needs explicit confirmation before binding", async () => {
+    // Shares only "solid"/"batteries" with the target's 5 content words
+    // (fraction 2/5 = 0.4) — the same fixture proven at unit level in
+    // upload-concepts.test.ts's "bands on title overlap alone".
+    const extractedTitle = "Solid state ionic conductors for advanced batteries";
+    mocks.extractPdfTextFromPath.mockResolvedValue({ ok: true, doc: { ...emptyDoc, title: extractedTitle,
+      sections: [{ heading: "Abstract", canonical: "abstract", text: "Solid state ionic conductors improve advanced batteries." }] } });
+    const targetTitle = "Solid electrolytes for lithium metal batteries";
+
+    const form1 = new FormData(); form1.set("file", pdfFile(pdfBytes()));
+    form1.set("rightsVersion", "2026-09-19");
+    form1.set("targetPaper", JSON.stringify({ id: "openalex:W123", title: targetTitle }));
+    const res1 = await POST(new Request("http://localhost/api/papers/upload", { method: "POST", headers: SAME_ORIGIN_HEADERS, body: form1 }));
+    expect(res1.status).toBe(409);
+    const body1 = await res1.json();
+    expect(body1.needsConfirmation).toBe(true);
+    expect(body1.band).toBe("confirm");
+    expect(body1.extractedTitle).toBe(extractedTitle);
+    expect(mocks.writeUploadMeta).not.toHaveBeenCalled();
+    expect(mocks.attachUpload).not.toHaveBeenCalled();
+
+    // Re-submit with confirm=1 — same file, now binds.
+    const form2 = new FormData(); form2.set("file", pdfFile(pdfBytes()));
+    form2.set("rightsVersion", "2026-09-19");
+    form2.set("targetPaper", JSON.stringify({ id: "openalex:W123", title: targetTitle }));
+    form2.set("confirm", "1");
+    const res2 = await POST(new Request("http://localhost/api/papers/upload", { method: "POST", headers: SAME_ORIGIN_HEADERS, body: form2 }));
+    expect(res2.status).toBe(200);
+    const body2 = await res2.json();
+    expect(body2.attached).toEqual({ title: targetTitle, band: "confirm" });
+    expect(mocks.attachUpload).toHaveBeenCalledWith("test-owner", "openalex:W123", body2.id.slice(7));
+  });
+
+  it("9-31: a strong/doi-verified match binds immediately and reports 'attached'", async () => {
+    const title = "Solid electrolytes for lithium metal batteries";
+    mocks.extractPdfTextFromPath.mockResolvedValue({ ok: true, doc: { ...emptyDoc, title,
+      sections: [{ heading: "Abstract", canonical: "abstract", text: "Solid electrolytes improve lithium metal batteries. Solid electrolytes conduct lithium ions." }] } });
+    const form = new FormData(); form.set("file", pdfFile(pdfBytes()));
+    form.set("rightsVersion", "2026-09-19");
+    form.set("targetPaper", JSON.stringify({ id: "openalex:W123", title }));
+    const res = await POST(new Request("http://localhost/api/papers/upload", { method: "POST", headers: SAME_ORIGIN_HEADERS, body: form }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.attached).toEqual({ title, band: "strong" });
+  });
+
   it("does not persist or attach a wrong article", async () => {
     mocks.extractPdfTextFromPath.mockResolvedValue({ ok: true, doc: { ...emptyDoc, title: "An unrelated marine biology paper", sections: [{ heading: "Body", canonical: "body", text: "Fish." }] } });
     const form = new FormData(); form.set("file", pdfFile(pdfBytes()));

@@ -48,3 +48,24 @@ describe("PrivatePdfStatus — two distinct actions (9-24)", () => {
     expect(html).toContain("Delete PDF");
   });
 });
+
+// 9-31 (A9-09): the supplement-attach flow's own status line, shown by the
+// same shared component (this is the reader page's `uploadStatus`, not a
+// separate one).
+describe("PrivatePdfStatus — 'Attached to' status line (9-31)", () => {
+  it("shows 'Attached to: <title>' when supplementing a foreign paper", () => {
+    const html = renderToStaticMarkup(
+      createElement(PrivatePdfStatus, {
+        upload, onDeleted: () => {}, attachedToTitle: "Solid Electrolytes for Lithium Metal Batteries",
+      }),
+    );
+    expect(html).toContain("Attached to: Solid Electrolytes for Lithium Metal Batteries");
+  });
+
+  it("omits the line for a standalone upload (nothing to be 'attached to')", () => {
+    const html = renderToStaticMarkup(
+      createElement(PrivatePdfStatus, { upload, onDeleted: () => {} }),
+    );
+    expect(html).not.toContain("Attached to:");
+  });
+});

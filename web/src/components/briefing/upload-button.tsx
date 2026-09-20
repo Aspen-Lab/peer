@@ -16,6 +16,7 @@ import { useRouter } from "next/navigation";
 import type { Paper } from "@/types";
 import { UPLOAD_BUTTON } from "@/lib/briefing/copy";
 import { UploadConsentDialog } from "./upload-consent-dialog";
+import { UploadMatchConfirmDialog } from "./upload-match-confirm-dialog";
 import { UPLOAD_RIGHTS_VERSION } from "@/lib/papers/upload-policy";
 import { useProfileStore } from "@/store/profile";
 import { buttonVariants } from "@/components/ui/button";
@@ -24,6 +25,17 @@ import { cn } from "@/lib/cn";
 interface UploadResponse {
   id: string;
   paper: Paper;
+  /** 9-31: only present when this upload bound to a `targetPaper`. */
+  attached?: { title: string; band: "doi" | "strong" | "confirm" };
+}
+
+/** 9-31 (A9-09): the "confirm" band's own 409 shape — a partial title
+ * overlap that needs an explicit yes before it binds. */
+interface NeedsConfirmationResponse {
+  needsConfirmation: true;
+  band: "confirm";
+  overlap: number;
+  extractedTitle: string;
 }
 
 // 5-03: mirrors MAX_UPLOAD_BYTES in api/papers/upload/route.ts — a plain
@@ -66,6 +78,10 @@ export function UploadButton({ className = "", targetPaper, onUploaded }: {
   const [isDragOver, setIsDragOver] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
+  // 9-31 (A9-09): the "confirm" band's own pending state — a partial title
+  // overlap that needs an explicit yes before the same file is re-submitted
+  // with `confirm=1`.
+  const [pendingMatch, setPendingMatch] = useState<{ file: File; extractedTitle: string } | null>(null);
   const recordUpload = useProfileStore((s) => s.recordUploadPreference);
 
   const chooseFile = (file: File) => {
@@ -75,7 +91,7 @@ export function UploadButton({ className = "", targetPaper, onUploaded }: {
     setPendingFile(file);
   };
 
-  const upload = async (file: File) => {
+  const upload = async (file: File, confirmMatch = false) => {
     setError(null);
     if (!looksLikePdf(file)) {
       setError(UPLOAD_BUTTON.error("That doesn't look like a PDF."));
@@ -95,11 +111,22 @@ export function UploadButton({ className = "", targetPaper, onUploaded }: {
       form.set("file", file);
       form.set("rightsVersion", UPLOAD_RIGHTS_VERSION);
       if (targetPaper) form.set("targetPaper", JSON.stringify({ id: targetPaper.id, title: targetPaper.title, doi: targetPaper.doi }));
+      if (confirmMatch) form.set("confirm", "1");
       // Not `apiFetch`: it sets `Content-Type: application/json` on any
       // request with a body that doesn't already carry one, which would
       // corrupt a multipart request — the browser must set its own
       // `Content-Type` (with the boundary) for a `FormData` body.
       const res = await fetch("/api/papers/upload", { method: "POST", body: form });
+      // 9-31: the "confirm" band — neither a success nor a hard failure.
+      // Show the dialog and stop; the button returns to normal so the
+      // reader can also just cancel and try a different file.
+      if (res.status === 409) {
+        const body: Partial<NeedsConfirmationResponse> = await res.json().catch(() => ({}));
+        if (body.needsConfirmation && typeof body.extractedTitle === "string") {
+          setPendingMatch({ file, extractedTitle: body.extractedTitle });
+          return;
+        }
+      }
       if (!res.ok) {
         setError(UPLOAD_BUTTON.error(await errorFromResponse(res)));
         return;
@@ -185,6 +212,14 @@ export function UploadButton({ className = "", targetPaper, onUploaded }: {
       />
       {pendingFile && <UploadConsentDialog file={pendingFile} onCancel={() => setPendingFile(null)}
         onAccept={() => { const file = pendingFile; setPendingFile(null); void upload(file); }} />}
+      {pendingMatch && targetPaper && (
+        <UploadMatchConfirmDialog
+          targetTitle={targetPaper.title}
+          extractedTitle={pendingMatch.extractedTitle}
+          onCancel={() => setPendingMatch(null)}
+          onConfirm={() => { const file = pendingMatch.file; setPendingMatch(null); void upload(file, true); }}
+        />
+      )}
       {error && (
         <p
           role="alert"

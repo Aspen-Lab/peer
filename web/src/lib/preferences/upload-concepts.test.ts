@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ExtractedDocument } from "@/lib/papers/html-text";
-import { extractUploadConcepts, matchesUploadedPaper, UPLOAD_CONCEPT_EXTRACTION_VERSION } from "./upload-concepts";
+import { extractUploadConcepts, matchUploadedPaper, UPLOAD_CONCEPT_EXTRACTION_VERSION } from "./upload-concepts";
 import { applyUploadPreferenceSignal, applyPreferenceSignal, cleanPreferenceLedger, removeUploadPreferenceSignal, summarizePreferenceLedger, scorePreferenceMatch, prepareLedger } from "./ledger";
 import { compileSearchBrief } from "@/lib/feed/profile-compiler";
 import { derivePoolCacheKey } from "@/lib/opportunities/pool-cache";
@@ -51,11 +51,35 @@ describe("uploaded article learning", () => {
     const common = { surface: "papers" as const, requiredTopics: ["batteries"] };
     expect(derivePoolCacheKey(common)).not.toBe(derivePoolCacheKey({ ...common, uploadInterests: ["solid electrolytes"] }));
   });
+  // 9-31 (A9-09): rewritten from a boolean `matchesUploadedPaper` to the
+  // three-band `matchUploadedPaper`; a verified DOI or a strong title
+  // overlap is now "doi"/"strong" (the old `true`), and a mismatched DOI or
+  // a weak/absent title overlap is "reject" (the old `false`) — same cases,
+  // read off the new `.band` field instead of a plain boolean.
   it("refuses a different DOI, unrelated title or unreadable title", () => {
-    expect(matchesUploadedPaper({ title: doc.title, doi: "10.1234/a" }, doc.title, "10.1234/a")).toBe(true);
-    expect(matchesUploadedPaper({ title: doc.title, doi: "10.1234/a" }, doc.title, "10.1234/b")).toBe(false);
-    expect(matchesUploadedPaper({ title: doc.title }, "A marine biology investigation")).toBe(false);
-    expect(matchesUploadedPaper({ title: doc.title }, "")).toBe(false);
+    expect(matchUploadedPaper({ title: doc.title, doi: "10.1234/a" }, doc.title, "10.1234/a").band).toBe("doi");
+    expect(matchUploadedPaper({ title: doc.title, doi: "10.1234/a" }, doc.title, "10.1234/b").band).toBe("reject");
+    expect(matchUploadedPaper({ title: doc.title }, "A marine biology investigation").band).toBe("reject");
+    expect(matchUploadedPaper({ title: doc.title }, "").band).toBe("reject");
+  });
+
+  it("9-31: bands on title overlap alone (no DOI on either side)", () => {
+    // Strong: every word overlaps.
+    expect(matchUploadedPaper({ title: doc.title }, doc.title).band).toBe("strong");
+    // Confirm: partial overlap — shares only "solid"/"batteries" (2 of the
+    // original's 5 content words, fraction 2/5 = 0.4, inside [0.35, 0.6)).
+    const confirmResult = matchUploadedPaper({ title: doc.title }, "Solid state ionic conductors for advanced batteries");
+    expect(confirmResult.band).toBe("confirm");
+    expect(confirmResult.overlap).toBeGreaterThanOrEqual(0.35);
+    expect(confirmResult.overlap).toBeLessThan(0.6);
+    // Reject: essentially no shared words.
+    expect(matchUploadedPaper({ title: doc.title }, "A marine biology investigation").overlap).toBeLessThan(0.35);
+  });
+
+  it("9-31: a mismatched DOI rejects even when the title overlap would otherwise be strong", () => {
+    // The exact case a title-only check would get wrong: identical titles,
+    // but the DOIs disagree — the DOI must win.
+    expect(matchUploadedPaper({ title: doc.title, doi: "10.1234/a" }, doc.title, "10.1234/different").band).toBe("reject");
   });
 });
 

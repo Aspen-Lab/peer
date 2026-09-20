@@ -11,7 +11,7 @@ import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { hostedUploadsEnabled, ownedUpload, PRIVATE_UPLOAD_HEADERS, sameOriginUploadRequest, UPLOAD_RIGHTS_VERSION, uploadOwner } from "@/lib/papers/upload-access";
-import { extractUploadConcepts, matchesUploadedPaper, UPLOAD_CONCEPT_EXTRACTION_VERSION } from "@/lib/preferences/upload-concepts";
+import { extractUploadConcepts, matchUploadedPaper, UPLOAD_CONCEPT_EXTRACTION_VERSION, type PaperMatchBand } from "@/lib/preferences/upload-concepts";
 import { extractPdfTextFromPath } from "@/lib/papers/pdf-text";
 import { resolveProvider } from "@/lib/llm/providers/registry";
 import {
@@ -224,8 +224,34 @@ export async function POST(req: Request) {
   const title = await resolveUploadTitle(doc?.title, extracted.page1Text, file.name);
 
   const doi = doiMatch ? stripTrailingPunctuation(doiMatch[0]) : undefined;
-  if (target && (!(doc?.sections.length) || !matchesUploadedPaper(target, title, doi))) {
-    return NextResponse.json({ error: "This PDF could not be verified as this article. Choose its full-text PDF with readable text; the existing report has been kept." }, { status: 422, headers: PRIVATE_UPLOAD_HEADERS });
+  // 9-31 (A9-09, Ruling 8): a three-band decision, never a blanket
+  // accept/reject. "doi"/"strong" bind outright; "confirm" asks the client
+  // to show an explicit "is this the right paper" dialog and re-submit with
+  // `confirm=1` before binding; "reject" (and no readable text at all,
+  // which can never be verified either way) refuses with the reason and the
+  // extracted title, so a genuine near-miss (a wrapped/garbled title) still
+  // has a path forward instead of a silent, permanent refusal.
+  let matchBand: PaperMatchBand | undefined;
+  if (target) {
+    if (!doc?.sections.length) {
+      return NextResponse.json({
+        error: "This PDF could not be verified as this article. Choose its full-text PDF with readable text; the existing report has been kept.",
+        extractedTitle: title,
+      }, { status: 422, headers: PRIVATE_UPLOAD_HEADERS });
+    }
+    const match = matchUploadedPaper(target, title, doi);
+    matchBand = match.band;
+    if (match.band === "reject") {
+      return NextResponse.json({
+        error: "This PDF does not appear to be the same article. Choose its own full-text PDF; the existing report has been kept.",
+        extractedTitle: title, overlap: match.overlap,
+      }, { status: 422, headers: PRIVATE_UPLOAD_HEADERS });
+    }
+    if (match.band === "confirm" && form.get("confirm") !== "1") {
+      return NextResponse.json({
+        needsConfirmation: true, band: match.band, overlap: match.overlap, extractedTitle: title,
+      }, { status: 409, headers: PRIVATE_UPLOAD_HEADERS });
+    }
   }
   const previous = await readUploadMeta(hash16);
   // 9-19 (A9-06): a blocked hash16 keeps a minimal meta specifically so it
@@ -307,7 +333,13 @@ export async function POST(req: Request) {
   if (target) await attachUpload(ownerKey, target.id, hash16);
   await purgeExpiredUploads();
 
-  return NextResponse.json({ id: uploadId(hash16), paper: uploadMetaToPaper(meta), expiresAt: meta.expiresAt }, { headers: PRIVATE_UPLOAD_HEADERS });
+  return NextResponse.json({
+    id: uploadId(hash16), paper: uploadMetaToPaper(meta), expiresAt: meta.expiresAt,
+    // 9-31: only present when this upload was bound to a `target` paper —
+    // the client's status line ("Attached to: <title>") reads this rather
+    // than re-deriving the bound title itself.
+    ...(target ? { attached: { title: target.title, band: matchBand } } : {}),
+  }, { headers: PRIVATE_UPLOAD_HEADERS });
 }
 
 /** The mapping itself is private: shared paper metadata never gains an upload. */

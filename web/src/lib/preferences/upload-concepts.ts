@@ -138,13 +138,40 @@ export function extractUploadConcepts(doc: ExtractedDocument): PreferenceConcept
   return out;
 }
 
-export function matchesUploadedPaper(target: { title: string; doi?: string }, title: string, doi?: string): boolean {
+// 9-31 (A9-09, Ruling 8 made concrete): three-band paper-attachment
+// matching, replacing the old binary `matchesUploadedPaper`. A verified DOI
+// (present and equal on both sides) always wins, positive or negative — a
+// mismatched DOI is an explicit, stronger signal than any amount of title
+// overlap and must never be second-guessed by a coincidentally similar
+// title. Absent a DOI on either side, normalized-title token overlap alone
+// decides which of the other three bands applies.
+export type PaperMatchBand = "doi" | "strong" | "confirm" | "reject";
+export interface PaperMatchResult {
+  band: PaperMatchBand;
+  /** Jaccard-shaped overlap fraction of normalized title tokens — always
+   * computed, even on a "doi" band, so a caller can log/display it. */
+  overlap: number;
+}
+
+/** ≥ this fraction (and ≥ 2 overlapping words — the old function's own
+ * floor, preserved) auto-binds with a one-line confirmation. */
+export const MATCH_STRONG_THRESHOLD = 0.6;
+/** ≥ this fraction (below `MATCH_STRONG_THRESHOLD`) asks the user to
+ * explicitly confirm before binding; below it, the attach is refused. */
+export const MATCH_CONFIRM_THRESHOLD = 0.35;
+
+export function matchUploadedPaper(target: { title: string; doi?: string }, title: string, doi?: string): PaperMatchResult {
   const normalizeDoi = (value: string) => value.toLowerCase().replace(/^https?:\/\/(?:dx\.)?doi.org\//, "").trim();
   const tokens = (value: string) => new Set(normalizePreferenceLabel(value).split(" ").filter((t) => t.length > 2 && !STOP.has(t)));
   const expected = tokens(target.title);
   const actual = tokens(title);
-  const overlap = [...expected].filter((word) => actual.has(word)).length;
-  const fraction = overlap / Math.max(1, Math.min(expected.size, actual.size));
-  if (target.doi && doi && normalizeDoi(target.doi) !== normalizeDoi(doi)) return false;
-  return overlap >= 2 && fraction >= 0.6;
+  const overlapCount = [...expected].filter((word) => actual.has(word)).length;
+  const overlap = overlapCount / Math.max(1, Math.min(expected.size, actual.size));
+
+  if (target.doi && doi) {
+    return { band: normalizeDoi(target.doi) === normalizeDoi(doi) ? "doi" : "reject", overlap };
+  }
+  if (overlapCount >= 2 && overlap >= MATCH_STRONG_THRESHOLD) return { band: "strong", overlap };
+  if (overlap >= MATCH_CONFIRM_THRESHOLD) return { band: "confirm", overlap };
+  return { band: "reject", overlap };
 }

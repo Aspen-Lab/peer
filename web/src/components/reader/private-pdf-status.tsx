@@ -4,12 +4,20 @@ import { useState } from "react";
 import type { Paper } from "@/types";
 import { useProfileStore } from "@/store/profile";
 
-export function PrivatePdfStatus({ upload, onDeleted }: { upload: Paper; onDeleted: () => void }) {
+export function PrivatePdfStatus({ upload, onDeleted, attachedToTitle }: {
+  upload: Paper; onDeleted: () => void;
+  /** 9-31 (A9-09): set only for the supplement case (this upload is
+   * attached to a foreign paper, not standalone) — the reader's own title,
+   * confirmed bound server-side. Renders "Attached to: <title>" ahead of
+   * the generic private-PDF line rather than in place of it. */
+  attachedToTitle?: string;
+}) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const forget = useProfileStore((s) => s.forgetUploadPreference);
   const documentKey = upload.uploadDocumentKey;
   return <div className="mt-3 font-sans text-caption text-text-muted">
+    {attachedToTitle && <p className="text-text">Attached to: {attachedToTitle}</p>}
     <p>Private PDF · retained for 30 days after upload · keywords inform your recommendations.</p>
     <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
       {/* 9-24 (A9-12): a ledger-only undo, separate from deleting the file —

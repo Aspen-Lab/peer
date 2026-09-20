@@ -725,10 +725,12 @@ function Reader({
             onOpen={decide}
             onCopyDoi={copyDoi}
             uploadAction={!paper.id.startsWith("upload:") ? <UploadButton targetPaper={paper} onUploaded={setUpload} /> : undefined}
-            uploadStatus={upload ? <PrivatePdfStatus upload={upload} onDeleted={() => {
-              setUpload(null);
-              if (paper.id.startsWith("upload:")) router.replace("/");
-            }} /> : undefined}
+            uploadStatus={upload ? <PrivatePdfStatus upload={upload}
+              attachedToTitle={!paper.id.startsWith("upload:") ? paper.title : undefined}
+              onDeleted={() => {
+                setUpload(null);
+                if (paper.id.startsWith("upload:")) router.replace("/");
+              }} /> : undefined}
           />
         }
         additions={

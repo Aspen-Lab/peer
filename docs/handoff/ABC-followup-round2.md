@@ -14591,3 +14591,98 @@ reference/generic/number-word noise no longer dominates), **A2** (9-23: server-r
 sync), **A6** (9-24: "from your upload" caption + the two-actions split), **A5**/**A8** (9-25:
 bounded, word-bounded ranking boost; retrieval capped/anchored; cache key isolation confirmed).
 
+### Round 9 — Agent C, phase 3, item 9-31 (A9-09 — three-band matching, matrix B3/B4/B5)
+
+Branch confirmed clean before touching anything. Baseline gate re-run cold: tsc clean, eslint
+clean, **vitest 2780/2780** (post-9-25, start of phase 3).
+
+**Change**:
+- `web/src/lib/preferences/upload-concepts.ts`: `matchesUploadedPaper` (a plain boolean) replaced
+  by `matchUploadedPaper(target, title, doi): { band: "doi" | "strong" | "confirm" | "reject";
+  overlap: number }`, with exported `MATCH_STRONG_THRESHOLD = 0.6` / `MATCH_CONFIRM_THRESHOLD =
+  0.35`. A verified DOI (present and equal on both sides) always decides first, positive or
+  negative — a mismatched DOI is `"reject"` even when the title overlap would otherwise be
+  `"strong"` (the old function's own defensive rule, preserved: a coincidentally similar title
+  must never override an explicit DOI disagreement). Absent a DOI on either side: overlap ≥ 0.6
+  (and ≥ 2 overlapping words — the old boolean's exact floor) → `"strong"`; ≥ 0.35 → `"confirm"`;
+  else `"reject"`.
+- `web/src/app/api/papers/upload/route.ts`: the single call site now branches on `.band` instead
+  of a boolean. No readable text at all (`!doc?.sections.length`) still refuses immediately (can
+  never be verified either way) — `422` with `extractedTitle`. `"reject"` → `422` with the reason,
+  `extractedTitle`, and `overlap`. `"confirm"` → `409 { needsConfirmation: true, band, overlap,
+  extractedTitle }` **unless** the request already carries `confirm=1` (a new form field), in
+  which case it proceeds exactly like `"doi"`/`"strong"`. On a successful bind (any of
+  `"doi"`/`"strong"`/a confirmed `"confirm"`), the response gains `attached: { title: target.title,
+  band }` — the client's own confirmation of what got bound, to what, and how.
+- `web/src/components/briefing/upload-match-confirm-dialog.tsx` (new): the `"confirm"` band's own
+  native `<dialog>`, same shape/pattern as the existing `UploadConsentDialog` (this repo's
+  established style — no new deps) — "Is this the right paper? Attach to '<target title>'? The
+  PDF's own title reads '<extracted title>'." with Cancel / "This is the right paper".
+- `web/src/components/briefing/upload-button.tsx`: `upload()` gains a `confirmMatch` parameter
+  (sets `confirm=1` on resubmission) and a `409` branch that stores `{ file, extractedTitle }` in
+  new `pendingMatch` state and renders the new dialog instead of the generic error path; the
+  dialog's Confirm re-calls `upload(file, true)` with the SAME file object (no re-picking).
+  Cancel just clears the pending state — no request, no side effect, matches "never a blanket
+  refusal, never a silent accept."
+- `web/src/components/reader/private-pdf-status.tsx`: new optional `attachedToTitle` prop,
+  rendered as a lead line "Attached to: <title>" ahead of the generic private-PDF blurb (never
+  replacing it). `web/src/app/papers/[id]/page.tsx` passes `paper.title` (the original,
+  already-in-scope foreign paper being supplemented) whenever `upload` is set and this is NOT the
+  standalone `upload:` page — the target's own confirmed title is already known client-side by
+  construction (it's the same `paper` the button was given), so no new state/plumbing of the
+  server's `attached` field was needed for this specific line.
+
+**Tests**:
+- `upload-concepts.test.ts`: the pre-existing "refuses a different DOI..." test REWRITTEN
+  (not deleted) to read `.band` off the new return shape instead of a boolean — same four cases,
+  same meaning (`"doi"`/`"strong"` stand in for the old `true`, `"reject"` for the old `false`).
+  Two new cases: all three bands reachable on title overlap alone (verified against real computed
+  overlap fractions via a throwaway probe script, deleted before commit, not guessed), and a
+  mismatched-DOI-beats-strong-title-overlap regression guard.
+- `route.test.ts`: two new cases — a `"confirm"`-band upload gets `409 { needsConfirmation: true,
+  band: "confirm", extractedTitle }` and writes nothing (`writeUploadMeta`/`attachUpload` never
+  called), then a resubmission with `confirm=1` binds (`200`, `attached: { title, band:
+  "confirm" }`); a `"strong"` match's `200` response is asserted to carry `attached: { title,
+  band: "strong" }`.
+- `private-pdf-status.test.tsx`: two new static-markup cases — `attachedToTitle` renders "Attached
+  to: <title>" when supplied; omitted entirely (not even an empty line) when absent (the
+  standalone-upload shape).
+
+**Revert-proof**: reverted the DOI-mismatch-wins branch and the `"confirm"` band's threshold
+check together (collapsing `matchUploadedPaper` to its old-boolean-shaped logic) — all 3 of the
+new/rewritten `upload-concepts.test.ts` cases failed exactly as expected (DOI mismatch read as
+`"strong"` instead of `"reject"`; the confirm-band fixture read as `"reject"` instead of
+`"confirm"`). Restored, 11/11 green. Separately reverted just the route's `409` gate (dropped the
+`if (match.band === "confirm" ...)` block entirely) — the new confirm-band route test failed
+exactly as expected (`200` where `409` was wanted); restored, 36/36 green. Separately
+short-circuited `attachedToTitle`'s render condition to `false && attachedToTitle` — the new
+"shows 'Attached to'" test failed exactly as expected; restored, 4/4 green in that file.
+
+**Gate after this item**: tsc clean, eslint clean, **vitest 2786/2786** (2780 + 6: 2
+upload-concepts + 2 route + 2 private-pdf-status).
+
+**Live check** (dev server `peer-web` on `:3000`, untouched): generated three self-made PDFs via
+the venv's `python.exe` + PyMuPDF (a near-identical title, a partial-overlap title, and an
+unrelated marine-biology title) against one target paper's title, in the session scratch
+directory — never committed. `curl`ed all three through the real attach path with one owner
+cookie jar: the near-identical title → `200`, `attached: {..., "band":"strong"}`; the
+partial-overlap title → `409 {"needsConfirmation":true,"band":"confirm","overlap":0.4,...}` on
+the first attempt, then `200`, `attached: {..., "band":"confirm"}` on resubmission with
+`confirm=1`; the unrelated title → `422 {"error":"This PDF does not appear to be the same
+article...","overlap":0}`. All three test uploads deleted via the real `DELETE` route afterward
+(`retractEvidence: true` both times — 9-22 still correct); `.local-data/uploads/` back to its 12
+pre-existing pairs.
+
+**Blast radius**: one function's return type changed (`matchesUploadedPaper` → `matchUploadedPaper`,
+its one call site updated), one route's target-matching branch, one new small dialog component,
+one existing dialog's parent (`upload-button.tsx`) gains a second dialog + a `confirmMatch`
+parameter, one status-line prop threaded through two files. No change to the DOI/title-extraction
+logic itself, the upload write path (9-12/9-13), or any non-`targetPaper` upload.
+
+Commit: `feat(upload): three-band paper-attachment matching with a confirm dialog (9-31/A9-09)`,
+staging `web/src/lib/preferences/upload-concepts.ts`, `web/src/lib/preferences/upload-concepts.test.ts`,
+`web/src/app/api/papers/upload/route.ts`, `web/src/app/api/papers/upload/route.test.ts`,
+`web/src/components/briefing/upload-match-confirm-dialog.tsx`, `web/src/components/briefing/upload-button.tsx`,
+`web/src/components/reader/private-pdf-status.tsx`, `web/src/components/reader/private-pdf-status.test.tsx`,
+`web/src/app/papers/[id]/page.tsx`, `docs/handoff/ABC-followup-round2.md`.
+
