@@ -1,12 +1,16 @@
-import { readFile, rm } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { readFile, rm, writeFile } from "node:fs/promises";
+import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   bareUploadId,
   metaPath,
   pdfPath,
+  purgeExpiredUploads,
   readUploadMeta,
   sha16,
   uploadFileExists,
+  UPLOAD_DIR,
   uploadId,
   uploadMetaToPaper,
   writeUploadMeta,
@@ -145,5 +149,73 @@ describe("uploadMetaToPaper — honesty of the mapped Paper record", () => {
 
     expect(uploadMetaToPaper(emptyMeta).textStatus).toBe("empty");
     expect(uploadMetaToPaper(okMeta).textStatus).toBe("ok");
+  });
+});
+
+// 9-16 (A9-03): purgeExpiredUploads sweeps a closed list of derived-file
+// names/patterns that do not belong in UPLOAD_DIR — never a wildcard, and
+// never anything that could match a real <hash16>.pdf/.json/.attachment.json.
+describe("purgeExpiredUploads — stray derived files (9-16)", () => {
+  it("removes a legacy figures.json and any *.tmp leftover, but leaves a live, unexpired upload alone", async () => {
+    const strayFiguresJson = path.join(UPLOAD_DIR, "figures.json");
+    const strayTmp = path.join(UPLOAD_DIR, "some-leftover.tmp");
+    await writeFile(strayFiguresJson, "stale derived image data — a fixture, not a real figure", "utf-8");
+    await writeFile(strayTmp, "stale temp data", "utf-8");
+
+    const liveHash = sha16(Buffer.from("purge fixture: still-live upload"));
+    writtenHashes.push(liveHash);
+    await writeUploadMeta(liveHash, {
+      hash16: liveHash,
+      fileName: "keep.pdf",
+      title: "Keep Me",
+      uploadedAt: new Date().toISOString(),
+      textStatus: "ok",
+      status: "ready",
+      revision: 1,
+      ownerKey: "owner",
+      expiresAt: new Date(Date.now() + 86_400_000).toISOString(),
+    });
+
+    try {
+      await purgeExpiredUploads();
+
+      expect(existsSync(strayFiguresJson)).toBe(false);
+      expect(existsSync(strayTmp)).toBe(false);
+      // Not a stray-pattern name and not expired — purgeExpiredUploads must
+      // never touch it.
+      expect(existsSync(metaPath(liveHash))).toBe(true);
+    } finally {
+      await rm(strayFiguresJson, { force: true });
+      await rm(strayTmp, { force: true });
+    }
+  });
+
+  it("the exact figures.json pattern never sweeps a merely-similar name", async () => {
+    // Regression guard for the stray-file branch's precision: the closed
+    // list matches exact names/suffixes only, never "contains figures.json"
+    // or "contains .tmp" as a substring anywhere in the name.
+    const nearMissNames = ["figures.json.bak", "notfigures.json", "figures.jsontmp"];
+    for (const name of nearMissNames) {
+      await writeFile(path.join(UPLOAD_DIR, name), "near-miss fixture", "utf-8");
+    }
+    try {
+      await purgeExpiredUploads();
+      for (const name of nearMissNames) {
+        expect(existsSync(path.join(UPLOAD_DIR, name))).toBe(true);
+      }
+    } finally {
+      for (const name of nearMissNames) await rm(path.join(UPLOAD_DIR, name), { force: true });
+    }
+  });
+
+  it("the .tmp pattern sweeps a leftover named like a real asset's temp file too", async () => {
+    const trickyTmp = path.join(UPLOAD_DIR, "abcdef0123456789.pdf.tmp");
+    await writeFile(trickyTmp, "leftover partial write", "utf-8");
+    try {
+      await purgeExpiredUploads();
+      expect(existsSync(trickyTmp)).toBe(false);
+    } finally {
+      await rm(trickyTmp, { force: true });
+    }
   });
 });

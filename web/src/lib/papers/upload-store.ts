@@ -237,9 +237,28 @@ export async function deleteUpload(meta: UploadMeta): Promise<void> {
   }
 }
 
+// 9-16 (A9-03): a closed list of derived-file names/patterns that do not
+// belong in `UPLOAD_DIR` at all — never a wildcard. `figures.json` was the
+// pre-fix (C4) shared intermediate file `figures/pdf-extract.ts` used to
+// write directly into this directory; that code path no longer exists (each
+// extraction now uses its own `mkdtemp` under the OS temp dir, cleaned up in
+// a `finally` block — confirmed by reading `pdf-extract.ts`, which never
+// writes into `UPLOAD_DIR` at all today), but a leftover from before that
+// fix, or any future regression that reintroduces the pattern, is still
+// worth sweeping. `*.tmp` is a defensive, generic leftover-write pattern.
+// There is no `extract-*` temp-DIRECTORY pattern to add here: the
+// extractor's temp dirs (`peer-pdf-figures-*`, `peer-pdf-*`) are created
+// under `tmpdir()`, never under `UPLOAD_DIR`, so they can never appear in
+// this listing regardless.
+const STRAY_UPLOAD_FILE_PATTERNS: RegExp[] = [/^figures\.json$/, /\.tmp$/];
+
 export async function purgeExpiredUploads(): Promise<void> {
   const names = await readdir(UPLOAD_DIR).catch(() => [] as string[]);
   for (const name of names) {
+    if (STRAY_UPLOAD_FILE_PATTERNS.some((pattern) => pattern.test(name))) {
+      await unlink(path.join(UPLOAD_DIR, name)).catch(() => undefined);
+      continue;
+    }
     if (!/^[0-9a-f]{16}\.json$/.test(name)) continue;
     const meta = await readUploadMeta(name.slice(0, 16));
     if (meta?.expiresAt && Date.parse(meta.expiresAt) <= Date.now()) await deleteUpload(meta);

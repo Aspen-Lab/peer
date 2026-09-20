@@ -13656,3 +13656,69 @@ staging `web/src/components/reader/use-model-report.ts`,
 `web/src/components/reader/use-private-supplement.ts`, `web/src/components/paper-figure.tsx`,
 `web/src/components/paper-figure.test.ts`, `web/src/components/reader/report-sections.tsx`,
 `docs/handoff/ABC-followup-round2.md`.
+
+### Round 9 — Agent C, phase 1, item 9-16 (A9-03 — orphaned derived files, matrix C4/C10)
+
+Branch confirmed clean before touching anything. Baseline gate re-run cold: tsc clean, eslint
+clean, **vitest 2749/2749** (post-9-15).
+
+**One-time deletion (manager-authorised, Ruling 23/§1ad item 3 and the phase-1 guide's own
+"9-16")**: `web/.local-data/uploads/figures.json` — **8,617,613 bytes** (confirmed via `ls -la`
+immediately before deletion, matching A's own part-2 finding exactly) — deleted. It predates
+this session (dated 2026-09-19, before this round's first commit) and is derived base64 image
+data from the pre-C4 shared-intermediate-file bug, never a user's own PDF.
+
+**Guide-vs-reality check (grepped before editing, per the standing instruction that the guide's
+line numbers are pointers, not truth)**: the guide's placeholder pattern for the third closed-list
+entry was `/^extract-[0-9a-f]+$/` (temp dirs "the extractor creates"). Reading
+`web/src/lib/figures/pdf-extract.ts` directly shows this does not correspond to anything real:
+its two `mkdtemp` calls (`peer-pdf-figures-`, `peer-pdf-`) both create their temp directories
+under `tmpdir()` — the OS temp directory — never under `UPLOAD_DIR`, and each is already cleaned
+up in its own `finally` block (confirmed by A's C4 measurement: "unique `mkdtemp` per call,
+`finally`-block cleanup"). Grepping every write into `UPLOAD_DIR` across `upload-store.ts` and
+the upload route confirms only `<hash16>.pdf` / `<hash16>.json` / `<hash>.attachment.json` are
+ever written there today. **There is no third pattern to add**: implemented the closed list as
+exactly `[/^figures\.json$/, /\.tmp$/]` — the confirmed legacy name, plus a defensive generic
+leftover-write suffix — and documented in a code comment why the guide's third entry does not
+exist in this codebase, rather than inventing a pattern that matches nothing (or worse, guessing
+one broad enough to risk matching a real asset file).
+
+**Change**: `web/src/lib/papers/upload-store.ts` `purgeExpiredUploads()` — before the existing
+per-record expiry sweep, every directory entry is checked against
+`STRAY_UPLOAD_FILE_PATTERNS` and unlinked (errors swallowed, matching this file's existing
+`deleteUpload` unlink-tolerance style) if it matches; the existing `<hash16>.json` branch is
+otherwise untouched. This function already runs after every upload (`upload/route.ts`'s
+`await purgeExpiredUploads()`) and is also 9-18's scheduled/manual entry point, so the sweep is
+covered by both triggers without new wiring.
+
+**Tests** (`upload-store.test.ts`, 3 new): a real stray `figures.json` and a real stray `*.tmp`
+file, written directly into the real `UPLOAD_DIR` (the same pattern this file's existing tests
+already use for real `.pdf`/`.json` fixtures) alongside one live, unexpired, real upload record —
+after `purgeExpiredUploads()`, both stray files are gone and the live record survives untouched;
+a precision guard confirms `figures.json.bak` / `notfigures.json` / `figures.jsontmp` are each
+left alone (the patterns are exact-name/suffix, never substring-contains); a third confirms the
+`.tmp` suffix still sweeps a name shaped like a real asset's own leftover
+(`abcdef0123456789.pdf.tmp`).
+
+**Revert-proof**: reverted `purgeExpiredUploads` to its pre-fix body (the stray-pattern branch
+removed entirely); re-ran — the two sweep-behavior tests failed exactly as expected (stray files
+still present after the call), the precision-guard test correctly stayed green (nothing to sweep
+either way for near-miss names). Restored and confirmed 13/13 green again.
+
+**Gate after this item**: tsc clean, eslint clean, **vitest 2752/2752** (2749 + 3).
+
+**Live check** (dev server `peer-web` on `:3000`, untouched): planted a fake 9-byte
+`.local-data/uploads/figures.json`, then performed a real upload of the draft's own fixture PDF
+via `curl` — the planted file was gone immediately after (confirmed by `ls` failing with "No such
+file or directory"), proving the sweep runs for real through the upload route's own
+`purgeExpiredUploads()` call, not just in the unit tests. Test upload deleted via the real route
+afterward.
+
+**Blast radius**: one function (`purgeExpiredUploads`), one new module-level constant
+(`STRAY_UPLOAD_FILE_PATTERNS`), one deleted stray file. No change to the per-record expiry logic
+or to any other export.
+
+Commit: `chore(upload): purge stray derived files (figures.json, *.tmp) from the uploads dir (9-16/A9-03)`,
+staging `web/src/lib/papers/upload-store.ts`, `web/src/lib/papers/upload-store.test.ts`,
+`docs/handoff/ABC-followup-round2.md` (the deleted `.local-data/uploads/figures.json` is
+gitignored, nothing to stage for it).
