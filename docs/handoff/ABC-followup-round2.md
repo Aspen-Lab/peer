@@ -12480,6 +12480,50 @@ flagged for the manager's visible-browser check as the brief itself anticipated)
 
 Commit: this entry, staging only `docs/handoff/ABC-followup-round2.md`.
 
+#### Part 3 — S25 (abstract toggle)
+
+**Code read**: `web/src/components/reader/abstract-toggle.tsx` — `AbstractToggle` is a plain
+`useState(false)` component; the panel (`<div id="abstract-panel">{children}</div>`) is
+conditionally rendered (`{open && (...)}`), not CSS-hidden — confirmed this is a real conditional
+mount, not a `grid-template-rows`/`hidden` trick. `paper-words.tsx` lines 156-166: the abstract's
+sentences-div and the footer `<p ref={endRef}>{ABSTRACT_FOOTER}</p>` are both inside
+`<AbstractToggle>`'s children, so both are absent from the DOM together while closed.
+`app/papers/[id]/page.tsx` lines 450-483 (dirty, the other agent's — read only, confirmed
+unedited by C's diff): the decided-read `IntersectionObserver`'s target is computed once per
+mount as `spread ? (wordsEndRef.current ?? decisionRef.current) : decisionRef.current`, dependency
+array `[decide, spread, reading]` — `open` (AbstractToggle's local state) is not a dependency, so
+this effect never re-runs when the reader opens/closes the abstract later; the target is decided
+once, at mount. Since the footer's `<p ref={endRef}>` is only rendered when `open === true`, and
+`open` starts `false` on every mount (not persisted), `wordsEndRef.current` is provably `null` at
+the moment this effect runs — the same `null` state a paper with no abstract at all already
+produces (lines 133-146), so the existing `??` fallback to `decisionRef.current` is not a new code
+path, just a newly-common one.
+
+**Live check** (Browser pane, `openalex:W7207740551`, resized to 1400×1000 to actually enter the
+two-column spread — `SPREAD_QUERY` is `min-width: 80rem`/1280px, the pane's default width is
+narrower and stays single-column): on load, `button[aria-controls="abstract-panel"]` present,
+`aria-expanded="false"`, height 48px, `background-color: rgb(255, 82, 13)` (accent), and
+`#abstract-panel` **absent from the DOM** — confirmed both the sentences and the footer are gone,
+not hidden. **The observer, proven live, not just reasoned**: with the abstract left closed,
+scrolled the reading column so "Open the PDF" (inside `DecisionBlock`, the `decisionRef` target)
+sat in the viewport, waited past the 1000 ms `DECIDED_MS` timer, then read `peer-feed`'s persisted
+`readItems` from `localStorage` — `readItems["openalex:W7207740551"]` flipped from `null` to
+`true`. This is the concrete confirmation the brief asked for: the decided-read mechanism is not
+frozen on an invisible target while the reader leaves the new default (closed) in place; it
+correctly marks the paper read off the Decision block, exactly as B predicted. Click → button
+`aria-expanded="true"`, `#abstract-panel` appears with the abstract's text, chevron class gains
+`rotate-180`. Click again → `aria-expanded="false"`, panel removed from the DOM. Opened once more,
+then reloaded the page (not a soft state change) → `aria-expanded="false"`, panel absent again —
+**not persisted**, matches "collapsed on every mount." `npx vitest run
+src/components/reader/abstract-toggle.test.ts` passes in isolation (1/1). `git diff
+881bd54..d47480b -- web/src/lib/papers/reading-markdown.ts` is empty, confirming the Markdown
+export path is untouched. Viewport reset to desktop after the checks.
+
+**Result: matches S25 exactly, including the one interaction the spec text itself did not
+anticipate (the decided-read observer). No difference found.**
+
+Commit: this entry, staging only `docs/handoff/ABC-followup-round2.md`.
+
 ### Round 8 — manager browser checks (2026-09-19, while A measures)
 
 On `/papers/openalex:W7207740551` (hydrated; DOM/computed-style reads — screenshots blank in the
