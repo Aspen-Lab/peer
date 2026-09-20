@@ -81,33 +81,76 @@ browser, run the reports), then report to the user in plain language and stop th
 
 ```
 ROUND:            8 (loop REOPENED by the manager 2026-09-19 — five user items, §1aa)
-WHOSE TURN:       C  (works the fix guide; S28 has no C step — informational only)
-STOPPED BECAUSE:  B finished the turn @ 2026-09-20 01:51 UTC
-STATUS:           Round 8: B's turn done, both parts. Fix guide 8-01..8-04 written for
-                   S27/S24/S25/S26 in C's stated order (§4). S28 investigated and answered in a
-                   table (§4) — real gap found and confirmed live (curl): /api/feedback and
-                   /api/saved both 500 right now (Supabase unconfigured); feedback_events is
-                   write-only (0 readers, grepped); dislikedTopics has 0 writers anywhere in the
-                   product. Two informational, NOT-this-round fix-guide entries recorded for
-                   those (8-05, 8-06) — S28 itself has no C step per §1aa, so C's queue is only
-                   8-01..8-04. Another agent's figure-lightbox.* edits (and a large, unrelated,
-                   actively-changing set: upload-store.ts, upload-access.ts, button.tsx,
-                   preferences/ledger.ts, feed/pipeline.ts, feed/profile-compiler.ts,
-                   store/profile.ts, types/index.ts, and more — an in-progress upload/private-PDF
-                   feature in the same checkout) are still dirty in the tree — untouched,
-                   excluded. B's citations into button.tsx/ledger.ts/pipeline.ts/profile.ts
-                   reflect what was on disk at read time; re-check line numbers before editing in
-                   case that concurrent work has moved since.
-OPEN ITEMS:       S24 S25 S26 S27 (S28 closed — informational, no C step)
-GATE (0 open):    NOT MET
+WHOSE TURN:       A
+STOPPED BECAUSE:  C finished the turn @ 2026-09-20 02:20 UTC
+STATUS:           Round 8: C worked all four fix-guide items in order, one commit each, gate green
+                   after every one — 8-01 (S27, "Main" link), 8-02 (S24, two "Back to main"
+                   buttons + Esc), 8-03 (S25, collapsible Abstract toggle), 8-04 (S26, boxed
+                   findings section). Every item confirmed live in the Browser pane (DOM/computed
+                   styles, not screenshots — see TODO's hidden-pane/screenshot note). S28 stays
+                   closed from B's turn (informational, no C step; 8-05/8-06 untouched, the
+                   manager/user's call). The other agent's upload/private-PDF work-in-progress is
+                   still dirty/untracked in the tree, all of it untouched by C (see TODO's file
+                   list) — one new untracked file appeared mid-round on their side,
+                   `docs/handoff/HANDOFF-upload-profile-fulltext-pdf.md`, also untouched.
+OPEN ITEMS:       S24 S25 S26 S27 — awaiting A's verification (S28 closed, no C step)
+GATE (0 open):    NOT MET (pending A's review)
 
 DONE:      rounds 1–7 (S3–S23 closed, pushed 2026-09-17). Round 8: B's fix guide + S28
-           investigation done (§4). Nothing implemented yet.
-GATE NOW:  tsc clean · eslint clean · vitest 2691/2691 (at round-7 close) — re-verify cold before
-           C's first edit; the concurrent upload work above has not been gated by this loop.
-TODO:      C works 8-01 (S27) → 8-02 (S24) → 8-03 (S25) → 8-04 (S26), one commit per item, gate
-           after each; then hand back to A. 8-05/8-06 (S28's two confirmed gaps) are informational
-           only this round — not C's queue, the manager/user chooses whether to open them later.
+           investigation done (§4). C implemented 8-01..8-04 (§4, four entries below B's), each
+           committed separately: 465b795 (8-01), c2741d5 (8-02), fed4e20 (8-03), 3610041 (8-04).
+GATE NOW:  tsc clean · eslint clean · vitest 2713/2713 (2711 baseline + 2 new test files from
+           8-02/8-03), re-run cold after all four items.
+TODO:      A verifies 8-01..8-04 against §1aa, item by item — C's own §4 entries name exactly what
+           was checked and how, so treat gaps between "C checked X" and "the spec asked for Y" as
+           the differences to report, not a restart from zero:
+             - 8-01: masthead shows Main first with aria-current on `/`, no double-active with the
+               wordmark; phone bar and `g h` chord deliberately untouched (say so, don't flag as
+               missed).
+             - 8-02: both buttons' href/aria-label/44px height/accent fill confirmed in light AND
+               dark (dark verified via a real theme reload, see below); Esc-to-home confirmed by
+               URL change. Hover-swell clipping was reasoned from bounding-rect geometry only, not
+               eyeballed on screen (the pane's screenshot call timed out every time it was tried,
+               hidden or fronted) — if A can get a real screenshot, that closes the one thing C
+               could not.
+             - 8-03: closed-by-default/open/closed cycle confirmed on `openalex:W7207740551`
+               (aria-expanded, panel presence, actual abstract text appearing/disappearing). The
+               decided-read-observer risk B flagged (a CSS-only collapse would freeze it) was
+               designed around, not just noted — worth A re-confirming the observer still fires
+               correctly when the abstract is left closed on the two-column spread, live.
+             - 8-04: box background/padding/border/summary+novelty color+size confirmed via
+               computed styles in both themes (dark via the same real-reload method). No new test
+               exists for this item (B did not recommend one; ResultsBlock's prop surface is
+               heavy) — if A wants stronger regression coverage here, that is a gap to name, not
+               an error to fix silently.
+           **Hidden-pane / hidden-tab trap, found firsthand this turn, broader than the manager's
+           own note:** this session's Browser pane started hidden. Screenshots timed out
+           consistently (`"the page did not finish rendering in time"`) both hidden and after
+           fronting the tab. Worse — a same-tab runtime `document.documentElement.setAttribute
+           ("data-mode", "dark")` gave a **stale cached `getComputedStyle` reading** on
+           already-painted elements (confirmed against a freshly-created scratch element in the
+           same document, which read correctly) — a real reload (setting `localStorage`'s
+           `peer-profile.state.profile.colorTheme` to `"dark:ember"`/`"system:ember"`, the app's
+           own boot-script mechanism in `layout.tsx`, then navigating) was the only reliable way to
+           read dark-mode styles this session. `/persona` and `/profile` still carry the
+           documented streamed-DOM trap (`div[hidden][id^="S:"]`) on top of this — check for it
+           before trusting any read there.
+           **Files that are the other agent's — do not flag as C's gap, do not edit:** `.env.example`,
+           `api/figure/route.ts`, `api/papers/[id]/reading/route.ts(+.test)`,
+           `api/papers/report/route.ts(+.test)`, `api/papers/upload/**` (all of it),
+           `app/papers/[id]/page.tsx`, `app/profile/page.tsx`, `briefing/upload-button.tsx`,
+           `paper-figure.tsx`, `reader/decision-block.tsx`, `reader/figure-lightbox.tsx(+.test)`,
+           `reader/use-model-report.ts`, `reader/use-reading.ts`, `ui/button.tsx` (only a `green`
+           tone added — `buttonVariants`/`tone:"primary"`/the `size` cva are stable, C imported
+           from it), `lib/feed/pipeline.ts`, `lib/feed/profile-compiler.ts`, `lib/figures/*`,
+           `lib/opportunities/pool-cache.ts`, `lib/papers/full-text.ts(+.test)`,
+           `lib/papers/upload-store.ts`, `lib/preferences/ledger.ts`, `store/profile.ts`,
+           `types/index.ts`, plus untracked: `api/jobs/purge-uploads/`,
+           `briefing/upload-consent-dialog.tsx`, `profile-uploads.tsx`,
+           `reader/private-pdf-status.tsx`, `reader/use-private-supplement.ts`,
+           `figures/private-pdf-extract.test.ts`, `lib/papers/upload-access.ts(+.test)`,
+           `lib/papers/upload-policy.ts`, `lib/preferences/upload-concepts.ts(+.test)`,
+           `docs/handoff/HANDOFF-upload-profile-fulltext-pdf.md`.
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
