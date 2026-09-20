@@ -14752,3 +14752,93 @@ Commit: `fix(ui): tokenize the supplement-upload button's green tone (9-32/A9-16
 staging `web/src/app/globals.css`, `web/src/components/ui/button.tsx`,
 `web/src/app/globals.css.test.ts`, `docs/handoff/ABC-followup-round2.md`.
 
+### Round 9 — Agent C, phase 3, item 9-33 (A9-08 — docs, matrix L1)
+
+Branch confirmed clean before touching anything. Baseline gate re-run cold: tsc clean, eslint
+clean, **vitest 2790/2790** (post-9-32).
+
+**Change**:
+- `docs/PRIVATE_PDF_UPLOADS.md` (new; `web/.env.example` already linked it, unmodified by this
+  item): plain-language restatement of handoff §6.1, covering — what gets stored and the owner
+  check every private route runs; the consent screen's exact asserted text (quoted, kept in sync
+  with `upload-consent-dialog.tsx` by cross-reference rather than by duplicating logic); the
+  30-day retention window and the explicit split between "access refused at expiry" vs. "physical
+  deletion by the scheduled job" vs. "learned-preference decay is a third, separate lifecycle";
+  the two owner-facing removal actions (`Delete PDF` vs. `Forget what Peer learned from this`,
+  including the reference-counted retraction rule from 9-22); what does and does not reach a
+  reader's configured AI provider; the operator takedown route (`POST /api/admin/uploads/block`,
+  9-19) and its env-gated existence-hiding; the two scheduler options (Vercel cron / `npm run
+  purge-uploads`, 9-18) and the standing "neither runs automatically" rule; the handoff's own
+  three link groups verbatim — fair use
+  ([copyright.gov/fair-use/more-info.html](https://www.copyright.gov/fair-use/more-info.html)),
+  section 512 (both
+  [copyright.gov/512](https://www.copyright.gov/512/) and
+  [17 U.S.C. §512](https://uscode.house.gov/view.xhtml?req=%28title%3A17+section%3A512+edition%3Aprelim%29)),
+  and PyMuPDF licensing (both
+  [github.com/pymupdf/PyMuPDF](https://github.com/pymupdf/PyMuPDF) and
+  [pypi.org/project/pymupdf](https://pypi.org/project/pymupdf/)) — and handoff §6.5's four
+  conditions, listed under an explicit "Open conditions — not yet resolved by this codebase"
+  heading, numbered exactly to those four points.
+- `README.md`: the "old ownerless description" (A9-08's own finding — the upload paragraph never
+  mentioned an owner, learning use, or AI-provider transfer) rewritten to state the owner check
+  plainly and point at the new doc; a new "Private PDF uploads: storage, consent, and legal
+  boundaries" paragraph added after the existing "Retention & cleanup (9-18)" paragraph (this
+  file's own convention is a bold lead-in per topic, not a new `###` heading for every one — the
+  Retention paragraph itself was added the same way), linking to `docs/PRIVATE_PDF_UPLOADS.md`
+  and stating plainly that owner isolation/retention/consent are risk-reduction engineering, not
+  a legal opinion.
+
+**Compliance check (the standing instruction)**: grepped `upload-consent-dialog.tsx`,
+`private-pdf-status.tsx`, `README.md`, and the new doc for
+`guarantee|guaranteed|免责|绝对|legal` — every match is either a plain topic word ("legal
+boundaries", "legal advice", "a qualified legal reviewer") or sits inside an explicit denial
+("nothing... guarantees", "not a legal opinion", "cannot promise", "does not currently claim");
+none promises legality. Read every match manually rather than trusting the grep count alone.
+
+**Test** (`web/src/components/briefing/upload-legal-wording.test.ts`, new file, 8 cases — 2 per
+file across the 4 named files): reads each file's source text and checks, at the SENTENCE level
+(split on sentence-ending punctuation and blank-line paragraph breaks, not a fixed character
+window), that (a) every sentence containing `guarantee`/`guaranteed`/免责/绝对 also contains an
+explicit negation in that same sentence, and (b) no sentence calls an upload/it/this "legal"
+without a denial in the same sentence.
+
+**Revert-proof, and a real miss caught along the way**: the FIRST version of this test used a
+fixed ±120-character window around each trigger word instead of sentence boundaries. Appending
+a genuinely bad sentence — "This upload is guaranteed to be legal." — right after the new doc's
+own negation-dense "open conditions" paragraph **did not fail either check**: the character
+window bled into the neighboring paragraph's "have not been resolved" text and found a false
+negation. This is exactly the class of test-authoring miss the standard's revert-proof step
+exists to catch — caught here by inspecting *why* a supposedly-bad injection passed, not by
+assuming a green run meant the test was sound. Rewrote both checks to scope negation-lookup to
+the actual sentence (split on `.`/`!`/`?` + trailing capital/markdown, and on blank lines) rather
+than a character count. Re-ran the same injected sentence against the fixed version: both checks
+failed exactly as expected, with the injected sentence quoted in the failure message. Restored
+the doc to its real content (confirmed via `git diff --stat`, clean); confirmed 8/8 green again
+on the real files.
+
+**Gate after this item**: tsc clean, eslint clean, **vitest 2798/2798** (2790 + 8).
+
+**No live check** — a docs-only item with one new source-text test; no route or component
+behavior changed. `web/.env.example`'s existing reference to `docs/PRIVATE_PDF_UPLOADS.md`
+(added before this round) now resolves to a real file for the first time.
+
+**Blast radius**: one new markdown file, two paragraphs in `README.md`, one new test file. No
+`.ts`/`.tsx` production file touched.
+
+Commit: `docs(upload): plain-language storage/retention/legal-boundary doc + README section (9-33/A9-08)`,
+staging `docs/PRIVATE_PDF_UPLOADS.md`, `README.md`,
+`web/src/components/briefing/upload-legal-wording.test.ts`, `docs/handoff/ABC-followup-round2.md`.
+
+**Phase 3 complete.** Items 9-31 through 9-33 all landed, one commit each, gate green after
+every one (final: tsc clean, eslint clean, vitest 2798/2798). Matrix rows this phase targets for
+A's re-measurement: **B3/B4/B5** (9-31: three-band matching, confirm dialog, attached-to status
+line — B4's "PDF uploaded but model fails" and B5's "wrong article/DOI mismatch/long title"
+rows both exercised live), **B1** (9-32: theme-token green button), **L1** (9-33: no
+guarantee-of-legality wording anywhere named, §6.5 conditions listed as open). **All of Round 9's
+phase 2 + phase 3 items (9-21 through 9-33) are now closed** — remaining open items are the ones
+this round's rulings explicitly scoped out (handoff §6.5: legal review, DMCA/takedown
+operations, production storage + scheduler load-testing, PyMuPDF licensing resolution) and the
+items A's own round-9 measurement already flagged as **NEEDS BROWSER**/**NEEDS BUILD-CHECK**
+(deepRequested copy-vs-behavior, full UI/build polish, the green button's actual rendered
+appearance in both themes).
+

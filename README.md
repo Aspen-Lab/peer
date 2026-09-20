@@ -296,12 +296,18 @@ extraction, semantic matching, and vision matching, then binding to report resul
 
 **Upload your own PDF** (the black square left of the front-page search box) reads a paper Peer
 never crawled: `POST /api/papers/upload` hashes the file (`upload-store.ts`, id `upload:<sha16>`,
-idempotent) and stores it under `web/.local-data/uploads/` — **gitignored and local to this
-machine only; an upload made in one `next dev`/deployment is not visible from another, and nothing
-here is persisted on Vercel.** `full-text.ts` and `lib/figures/extract.ts` both recognize an
-`upload:` id and read the stored file directly, so the rest of the deep-report/figure pipeline
-needs no separate code path. A PDF with no extractable text (a scanned image, most often) still
-uploads successfully; the reading page says so plainly instead of pretending a report exists.
+idempotent) and stores it under `web/.local-data/uploads/` — **gitignored, scoped to the
+uploading owner (the signed-in account, or a per-browser capability cookie in local dev — never
+a shared identity), and local to this machine only; an upload made in one `next dev`/deployment
+is not visible from another, and nothing here is persisted on Vercel.** Every private route
+(metadata, the raw file, reading, report generation, figures, the owner's own upload list,
+delete) checks that owner before touching disk. `full-text.ts` and `lib/figures/extract.ts` both
+recognize an `upload:` id and read the stored file directly, so the rest of the deep-report/figure
+pipeline needs no separate code path. A PDF with no extractable text (a scanned image, most often)
+still uploads successfully; the reading page says so plainly instead of pretending a report
+exists. Uploaded phrases also feed the ranking/recommendation ledger as their own evidence source
+(`lib/preferences/`) — see **Private PDF uploads** below for storage, retention, consent, and the
+legal boundaries this is not able to guarantee.
 
 **Retention & cleanup (9-18).** Private uploads expire after 30 days; access is refused past
 expiry immediately, but the bytes themselves are only physically removed by
@@ -316,6 +322,18 @@ is a supplement to the scheduled job, not a substitute for one. Two ways to actu
 - **Self-hosting**: `npm run purge-uploads` (`web/scripts/purge-uploads.mjs`) calls the same
   route by HTTP against an already-running instance; point your own OS-level scheduler
   (`cron`, Task Scheduler, etc.) at that command with `CRON_SECRET` set in its environment.
+
+**Private PDF uploads: storage, consent, and legal boundaries.** Full detail —
+exactly what the consent screen asserts, what "30 days" covers versus what it doesn't
+(file deletion and learned-preference decay are separate lifecycles), how content reaches a
+reader's own configured AI provider and never an operator-wide fallback, the operator takedown
+route (`POST /api/admin/uploads/block`), and the open legal/operational conditions this project
+has **not** resolved (jurisdiction, a real takedown process, PyMuPDF's own AGPL/commercial
+licensing) — lives in [`docs/PRIVATE_PDF_UPLOADS.md`](docs/PRIVATE_PDF_UPLOADS.md). Owner
+isolation, a stated retention window, and recorded consent are risk-reduction engineering, **not
+a legal opinion and not a guarantee that any given upload is lawful** — treat hosted uploads
+(`PEER_UPLOADS_ENABLED`) as off by default until that document's open conditions are actually
+resolved for your deployment.
 
 > ⚠️ Deep reports burn tokens (small + large model **per paper**). They are gated behind
 > an explicit user toggle and require a resolvable key. Any LLM failure must return `null`
