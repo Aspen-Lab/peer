@@ -12903,3 +12903,144 @@ of scope for a local dev review and correctly unclaimed.
 
 Commit: this entry only (§4 append), staging `docs/handoff/ABC-followup-round2.md`. No product
 code touched. §1 left untouched until part 4.
+
+### Round 9 — Agent A (part 2 of 4 — matrix rows by execution)
+
+Dev server `peer-web` on `:3000` (manager-owned, untouched). Two owner cookie jars minted for real
+via `POST /api/papers/upload` (`a.txt`, `b.txt`). Test material: the draft's own self-made fixture
+`web/.local-data/private-upload-test.pdf` ("Graph Embeddings for Protein Structure Prediction," a
+real drawn figure) plus a second self-made fixture generated with the same venv
+(`.local-data/pdf-runtime/Scripts/python.exe` + PyMuPDF) for the C4 concurrency row ("Impedance
+Spectroscopy of Solid State Battery Electrolytes," a different drawn figure) — both deleted via
+the real `DELETE` route before this commit, never the user's own PDFs.
+
+- **A1 — PASS.** Real upload via `curl` returned `title: "Graph Embeddings for Protein Structure
+  Prediction"` (extracted, matches the fixture exactly), `pageCount: 1`, `textStatus: "ok"`, 8
+  `preferenceSignals` with `section` provenance, no model key configured. Confirms the server
+  really runs `PYTHON_BIN` end-to-end (a route-level result, never printed an env value).
+- **A2 — PASS** (storage/id half). Re-uploading the identical bytes returned the same
+  `upload:74c54e7e55abf542` id and identical `paper`/`preferenceSignals`; only `expiresAt`
+  advanced (a refresh, not a new asset). Directory listing confirmed exactly one `.pdf`/`.json`
+  pair. Ledger-side no-double-count is unit-tested (`upload-concepts.test.ts`: `initial` ledger
+  equals itself after a second identical call) — not independently re-derived live since the
+  ledger write is client-only (see part 1, §4.3).
+- **A3 — FAIL, execution-confirmed.** Throwaway vitest repro (written, run once, deleted before
+  this commit — no test file added to the tree): two `applyUploadPreferenceSignal` calls sharing
+  one `documentKey` (the shape produced when two PDFs verify to the same DOI), then one
+  `removeUploadPreferenceSignal(documentKey)` call, erases the concept entirely even though a
+  second copy is still "live." See part 1 for the exact mechanism.
+- **A4 — FAIL, execution-confirmed.** See part 1: `"three"` / `"nodes"` in a real upload's
+  `preferenceSignals`.
+- **A5 — PASS** (by targeted unit test). `upload-concepts.test.ts`'s
+  "boosts a matching title even when the source has no taxonomy tags" test exercises exactly this
+  row (`score.boost` in `(0, 0.18]`, word-boundary match, no taxonomy tag involved) and passes.
+- **A6 — PARTIAL.** The 0.18 positive-gain cap is the pre-existing, untouched cap, reused
+  structurally (confirmed by reading `scorePreferenceMatch`); required-topic negative-feedback
+  protection is likewise pre-existing and untouched. Not independently re-run against a full live
+  feed pipeline call this round — **NEEDS BROWSER/full-pipeline run** for end-to-end confirmation,
+  though nothing in the diff appears to touch the cap or the protection logic itself.
+- **A7 — PARTIAL.** 60-day decay: unit-tested and passing (`later ≈ first / 2` after 60 days).
+  `cleanPreferenceLedger` demonstrably round-trips the new `uploads` field unchanged
+  (`cleanPreferenceLedger(initial)).toEqual(initial)`, unit-tested). Reset / export / import /
+  second-device sync of the field were **not** exercised live this round (no browser) — **NEEDS
+  BROWSER**.
+- **A8 — PASS** (structural/unit-tested). `derivePoolCacheKey` produces a different digest when
+  `uploadInterests` differs (unit test); private article text never enters any shared cache for
+  `upload:` ids (code-confirmed, part 1).
+- **B1 — PASS** (wiring), **NEEDS BROWSER** (visual position). `uploadAction` is attached
+  unconditionally whenever `!paper.id.startsWith("upload:")`, never gated on `depth`, so an
+  abstract-tier/paywalled report still gets the button (code-confirmed). The JSX places
+  `{uploadAction}` inside the same flex row as the publisher `source` link
+  (`decision-block.tsx` diff) — the literal on-screen "right of Open at the publisher" claim needs
+  eyes A does not have.
+- **B2 — PASS.** `uploadAction` is `undefined` whenever `paper.id.startsWith("upload:")`
+  (`page.tsx` diff) — confirmed no duplicate supplement button on a standalone upload's own page;
+  `PrivatePdfStatus` (view/delete) still renders there.
+- **B3 — PASS, execution-confirmed.** `POST /api/papers/upload` with a matching
+  `targetPaper.title` (exact fixture title) → `200`, same hash16 as the standalone upload,
+  `attachUpload()` records the target paper id (code-confirmed). `use-private-supplement.ts`
+  merges the result onto the *original* paper object (`original.id` untouched, only
+  `fullTextUploadId` gained) — stays at the original URL by construction.
+- **B4 — BLOCKED.** Not independently exercised this round (would require a full report
+  generation without a configured provider, spending real time/model budget A did not use
+  casually). Code reading: the shallow/no-provider report paths are pre-existing and untouched by
+  this draft, and `getFullText`/`buildReading` do not depend on a model to return real PDF text —
+  **NEEDS FOLLOW-UP**, not claimed passing.
+- **B5 — PASS, execution-confirmed.** Mismatched title (`"Quantum chemistry of superconducting
+  materials..."` against the fixture's real title) → `422`, message states the existing report is
+  kept, no new hash written (directory listing unchanged). A plain-text file renamed `.pdf` →
+  `415 "That file is not a PDF."` (magic-byte check). Scanned/encrypted-PDF sub-case not
+  independently tested this round (no such fixture on hand) — **NEEDS FOLLOW-UP** for that one
+  sub-case only.
+- **B6 — BLOCKED / NEEDS BROWSER.** Not independently exercised (multi-device/reopen simulation is
+  a browser concern). Code reading: owner resolution is re-derived server-side on every request
+  from the cookie/session, not cached client state, so it should reconstruct correctly in
+  principle — not proven live.
+- **B7 — FAIL.** Re-uploading identical bytes for the same owner correctly no-ops to the same
+  hash16 (confirmed). Replacing a target paper's attachment with a genuinely *different* PDF was
+  not exercised this round, but the code has **no `revision` field anywhere** —
+  `attachUpload()`/`attachmentPath()` hold exactly one current hash per owner+paperId and
+  overwrite it unconditionally (code-confirmed). The handoff's own `PaperSupplement` contract
+  (§3) explicitly asks for a `revision` field precisely so report/figure/reading never mix two
+  versions during a concurrent replace; it does not exist in this draft.
+- **C1 — PASS, execution-confirmed, extensively.** Metadata / PDF file / reading / figure /
+  delete / list all refused (`404`, or empty list) to (a) a cookie jar with no owner minted at
+  all, and (b) a second **real** owner (a distinct minted cookie with its own uploaded asset) —
+  both before and after warming A's own reading/figure caches for the same asset (re-tested
+  post-warm, still all `404`).
+- **C2 — PARTIAL.** Path traversal (`..%2f..%2f...`) → `400`; invalid id shapes (wrong length,
+  extra chars) → `404`; explicit cross-site `Origin: https://evil.example.com` (+
+  `Sec-Fetch-Site: cross-site`) on both `POST /api/papers/upload` and `DELETE
+  /api/papers/upload/[id]` → `403`. **Real gap, execution-confirmed:** a request with **no**
+  `Origin`/`Sec-Fetch-Site` header at all is treated as same-origin —
+  `sameOriginUploadRequest()`'s own `!origin` branch returns `true` — and a bare `curl DELETE`
+  with no such headers succeeded (`200`, asset actually deleted). The unit suite
+  (`upload-access.test.ts`, "refuses browser cross-origin mutations") only tests the explicit-
+  mismatch and explicit-match cases, never the no-header case, so this was never caught. No
+  route accepts a client-supplied `owner`/`ownerId` parameter at all, so the "fake owner param"
+  half of this row has no attack surface to test.
+- **C3 — PASS, execution-confirmed.** Byte-identical PDF uploaded by two different real owners
+  produced two different hash16 ids (`74c54e7e55abf542` vs `ac688389e2c7dab1`) — no shared object,
+  no cross-owner dedup, confirmed by `privateUploadHash(ownerKey, bytes)` being the actual hash
+  function the upload route calls.
+- **C4 — PASS, execution-confirmed with a genuine race.** Two different owners' distinct PDFs
+  (green-graph fixture vs. a second, blue-plot fixture) extracted via truly parallel `curl`
+  requests (backgrounded, `wait`ed) returned byte-different PNGs (25,199 vs 6,579 bytes total
+  response, differ from the first content byte) — no cross-contamination. `find
+  .local-data -name figures.json -newermt <session start>` found **zero** new leftovers after the
+  run. **New, live finding (not a regression of this fix):** a **pre-existing** 8.6 MB shared
+  `.local-data/uploads/figures.json`, dated well before this session, is still on disk and is
+  invisible to the purge job's filename filter (see part 1).
+- **C5 — BLOCKED.** Needs an in-flight-request timing harness beyond curl; not attempted.
+- **C6 — BLOCKED**, and the block *is* the finding: no scheduler exists to test cadence against
+  (part 1, §6.2 Retention row) — there is nothing to observe running.
+- **C7 — NEEDS BROWSER.** Logout/tab-switch localStorage clearing is a client-rendered concern;
+  code shows cache keys built from `paperId`/`fullTextUploadId` combinations that would naturally
+  miss on an owner switch, but the actual round-trip was not driven live.
+- **C8 — PASS, execution-confirmed.** A real pre-existing legacy upload from a prior round
+  (`.local-data/uploads/6422afa156f795d1.json`, `blank.pdf`, no `ownerKey` field, dated Sep 15,
+  not created by this session) returned `404` to a live owner's cookie on both metadata and file
+  routes — no preemptive-claim path exists.
+- **C9 — PASS, execution-confirmed.** No `rightsVersion` field → `400`
+  ("Confirm that you are authorized..."); stale `rightsVersion` (`2020-01-01`) → same `400`; a
+  real 27 MB PDF-shaped file → `413` ("larger than 25 MB") before any extraction ran. None of the
+  three created a new hash on disk (directory listing checked after each).
+- **C10 — PARTIAL.** Every response body captured this session (metadata/reading/figure/report)
+  contained only the deliberately-capped `summaryIntro` (400 chars) and base64 image data, never
+  raw full body text beyond that cap — no fresh leak found in this session's own traffic. The
+  pre-existing 8.6 MB `figures.json` (see C4) is exactly the shape of leftover this row exists to
+  catch, and it is still there today.
+- **L1 — PARTIAL.** Grepped `upload-consent-dialog.tsx`, `profile-uploads.tsx`,
+  `private-pdf-status.tsx`, `upload-policy.ts`, `upload-access.ts` and `README.md` for
+  legal/guarantee/免责/DMCA/safe-harbor language — **zero matches**, no "guaranteed legal" wording
+  anywhere in the shipped copy. **Fails the doc half**: no README section restating handoff §6.1
+  exists; `docs/PRIVATE_PDF_UPLOADS.md` (referenced by the new `.env.example` comment) does not
+  exist in the repo at all (confirmed by `find`); `README.md`'s existing upload section is stale
+  (pre-draft, ownerless behavior — see part 1, §6.3).
+
+Row tally: **13 PASS · 6 PARTIAL · 2 FAIL · 5 BLOCKED/NEEDS BROWSER**, of 26 scoreable rows
+(A1-A8, B1-B7, C1-C10, L1).
+
+Commit: this entry only (§4 append), staging `docs/handoff/ABC-followup-round2.md`. All test PDFs
+and cookie jars used for this part were deleted via the real routes / scratchpad before this
+commit (see part 4's cleanup note). No product code touched.
