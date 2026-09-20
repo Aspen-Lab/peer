@@ -14875,3 +14875,90 @@ collapsed — discarded):
   horizontal overflow. **Closed.**
 - The exact text `upload full article pdf` is rendered (the "o" prefix on the publisher label
   is its keyboard hint glyph).
+
+### Round 9 — Agent A (closing, part 1 of 4 — A1-A4 learning quality, dedupe, versions, noise)
+
+Branch confirmed `complimentary-enhancement-to-main-update`, tree clean, before touching
+anything. Read the full handoff, this file's §1/§1ac/§1ad/§2/§3, my own round-9 parts 1-4 and
+after-phase-1 parts 1-4, and C's phase-2/phase-3 entries (9-21..9-33) in full before measuring.
+Dev server `peer-web` on `:3000`, untouched. Self-made fixtures only, generated this turn with
+the venv (`web/.local-data/pdf-runtime/Scripts/python.exe` + PyMuPDF) in the session scratchpad,
+never committed: `materials.pdf`, `cs.pdf`, `wrapped_title.pdf`, `decoy.pdf`, and a same-DOI pair
+`doi_a.pdf`/`doi_b.pdf`. One fresh owner cookie jar per sub-test (never a shared `local-user`).
+
+**A1 (materials fixture).** `POST /api/papers/upload` → `200`, `upload:4a4938c0cc0079f6`, 8
+`preferenceSignals` (≤ 12): `perovskite oxide cathode` (material, abstract), `electrochemical
+impedance spectroscopy` (method, abstract), `ion battery electrolyte` (material, abstract),
+`sodium ion battery` (topic, abstract), `electrolyte interphase` (material, abstract), plus three
+`section: "title"` concepts (`battery electrolytes`, `oxide cathodes`, `sodium-ion battery`).
+Every entry carries `facet`, `section`, `extractionVersion: 1`. No number words, no single
+generic nouns, no reference-only terms (fixture has no references section) — **PASS**.
+
+**A1 (CS fixture, different paper).** `200`, `upload:8cdae6b9cb5bcb42`, 6 signals: `federated
+learning`/`anomaly detection`/`edge device` (topic, title), `learning algorithm`/`graph neural
+network` (method, abstract), `device anomaly` (topic, title). Genuinely different, sensible
+concepts from the materials fixture, correctly classified (the CS paper's own method terms
+picked up the `network`/`algorithm`/`model` cues from `classifyFacet`, not misread as
+material) — **PASS**.
+
+**A1 (long wrapped-title fixture).** First attempt exposed a **fixture-authoring bug, not a
+product bug**: a naive 2-line title split at fontsize 19 silently clipped mid-word at the
+595pt page's right margin (PyMuPDF's own `insert_text` behavior, confirmed by an isolated probe:
+a 62-character single line at fontsize 19 came back from the PDF as 60 characters, `"...Under
+High"` → `"...Under H"`) — not a defect in this codebase's extractor. Rebuilt the fixture as 3
+shorter same-size lines that fit the page width and re-uploaded: `200`, `upload:6a17c486e4f2df19`,
+full title recovered byte-for-byte (`"Nickel Rich Layered Cathode Degradation Mechanisms Under
+High Voltage Fast Charging Conditions For Electric Vehicle Battery Packs"`), 10 signals, 9 of 10
+carrying `section: "title"` (the extractor's max-font-line-join correctly re-joined all 3 lines)
+— **PASS**.
+
+**A4 (reference-list decoy fixture).** Abstract/methods/results describe thermal-runaway
+battery-module content; a `References` section cites two fake papers whose titles both contain
+"quantum computing" — a term that never otherwise appears anywhere in the document. `200`,
+`upload:53dbcaf14dfb380d`, 4 signals, all thermal-runaway/lithium-iron-phosphate terms; grepped
+the full JSON response for `quantum` — zero matches anywhere (not just absent from
+`preferenceSignals` — absent from the whole payload, confirming the decoy never survived
+extraction at all, both via `extract_pdf_text.py`'s own `TERMINAL_HEADINGS` cutoff at
+"References" and via `upload-concepts.ts`'s independent `reference|bibliograph|...` section
+filter — two independent gates, either one alone would have caught it) — **PASS**.
+
+**A2 (same PDF twice → same id, evidence recorded once).** First attempt showed a false
+alarm: uploading, editing the fixture script for the wrapped-title fix, then re-running it
+regenerated `materials.pdf` with different bytes (PyMuPDF does not produce byte-identical output
+across separate `save()` calls even for visually identical content — confirmed by `sha256sum`
+before/after a bare re-run of the generator with no content change), so the "same PDF" re-upload
+in that first pass legitimately hashed to a different id — a test-authoring mistake, not a
+finding. Redone cleanly: uploaded one fixed `materials.pdf` file twice in a row, verifying
+`sha256sum` was identical before and after both calls → **same id
+(`upload:825a7b9b25ccc724`) both times, `revision: 1` unchanged, no new asset written** (an
+idempotent refresh, matching 9-12/9-13's own design) — **PASS**. Evidence-recorded-once (the
+ledger side) is a client-only concern with no server-visible artifact besides the meta's own
+`preferenceSignalsRecordedAt`/`revision` fields (both confirmed present and stable across the
+repeat upload above); the actual dedup mechanism (`if (current?.uploads?.[documentKey])
+continue`) is independently covered by `store/profile.test.ts`'s "records twice yields one
+weight" test (9-23) — re-ran it cold, **passed**, and confirmed by reading that it advances the
+fake clock a full hour between the two calls specifically to rule out a same-tick false pass.
+
+**A3 (two PDFs sharing a DOI → one logical document).** Generated `doi_a.pdf`/`doi_b.pdf`:
+different titles/bodies ("Silicon Anode Volume Expansion..." / "Mechanical Fracture of Silicon
+Anodes..."), identical `DOI: 10.5555/peer-a9c-shared-doi-2026` line placed inside each PDF's own
+Abstract section text (the extractor drops anything before the first recognized heading, so a
+DOI on the title page proper would never be seen — placing it in the body is deliberate, not
+incidental). Uploaded both under one fresh owner: both matched the same DOI exactly (extracted
+`doi` field byte-identical on both). `DELETE` copy A (copy B still `ready`) →
+`{"deleted":true,"documentKey":"c4dcd8a2...","retractEvidence":false}`; `DELETE` copy B (the last
+live copy, same `documentKey`) → `{"deleted":true,"documentKey":"c4dcd8a2...","retractEvidence":
+true}` — exactly the task's stated expectation, and the exact fix 9-22 shipped for A9-02 — **PASS**.
+
+**Cleanup.** All 7 test uploads from this part (materials ×2 ids, CS, wrapped-title ×2 attempts,
+decoy, the doi pair already self-deleted by the A3 test above) deleted via the real `DELETE`
+route, not by hand; `.local-data/uploads/` confirmed back to the pre-existing 24-file (12
+`.pdf`/`.json` pairs) baseline; `git status` clean (fixtures live only in the session scratchpad,
+never under `web/.local-data/` or committed).
+
+**Verdict this part:** A1 PASS, A2 PASS, A3 PASS, A4 PASS. Zero differences found against 9-21's
+own claims — all four rows independently re-derived by execution with fresh, never-before-used
+fixtures, not trusted from C's log.
+
+Commit: this entry only (§4 append), staging `docs/handoff/ABC-followup-round2.md`. No product
+code touched.
