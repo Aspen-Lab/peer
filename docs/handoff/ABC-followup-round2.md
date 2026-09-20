@@ -12430,6 +12430,56 @@ assertions changed, no assertion removed.
 Commit: this entry, plus §1 STATUS untouched (round still open), staging only
 `docs/handoff/ABC-followup-round2.md`.
 
+#### Part 2 — S24 (persona back buttons)
+
+**Code read**: `web/src/components/persona/result.tsx` — two `<Link href="/"
+aria-label="← Back to main">` instances, identical `BACK_TO_MAIN_CLASS`. Top instance (line 97)
+is the first child of the returned fragment, before the two-column grid that opens with
+`<header><h1>{persona.name}</h1></header>` — reads first at every width. Bottom instance (line
+180) is a new sibling after the grid's closing tag, i.e. after the "Retake quiz" footer, wrapped in
+`<div className="flex justify-end mt-10">` for right-alignment. `BACK_TO_MAIN_CLASS` = `cn(
+buttonVariants({tone:"primary", size:"lg"}), "h-11 px-6 text-body-lg hover:scale-125
+active:scale-90")` — confirmed `git diff` on `web/src/components/ui/button.tsx` (dirty, the other
+agent's) shows only one added `tone: "green"` variant; `tone`/`size`/`buttonVariants` itself
+untouched, so importing it is safe per Ruling 22. `web/src/components/keyboard.tsx` (clean, not
+edited) read in full: its Escape branch (lines 104-127) checks `helpOpen` → typing-target blur →
+`onPaperPage()` → `focusedRef` reset, none of which apply on `/persona` — confirmed a genuine
+no-op there today, so `result.tsx`'s own local Escape listener (mount-gated `useEffect`,
+`router.push("/")`, no `stopPropagation`) cannot conflict with it. Esc effect navigates only, sets
+no state — matches the "no setState in effect" requirement.
+
+**Live check** (Browser pane, `/persona` — no `div[hidden][id^="S:"]` present, a persisted quiz
+result rendered immediately with no need to retake it): both links present, `href="/"`,
+`aria-label="← Back to main"`, bounding-rect height **44px** each, one near the top of the page
+(above the header) and one near the bottom (after "Retake quiz"). **Light mode**:
+`background-color: rgb(255, 82, 13)` (`--color-accent` ember), `color: rgb(250, 250, 250)`
+(near-white `--color-bg`). **Dark mode, verified via a real reload** (not a same-tab
+`data-mode` mutation — set `localStorage['peer-profile'].state.profile.colorTheme` to
+`"dark:ember"`, the app's own boot-script mechanism, then navigated fresh):
+`document.documentElement` carried `data-mode="dark"`, both links `background-color: rgb(255,
+106, 43)` (`--seed-dark` ember), `color: rgb(17, 17, 17)` (near-black `--color-bg` dark), height
+still 44px — reset `localStorage` back to `"system:ember"` afterward. **Esc**: pressed on the
+result view, `window.location.pathname` changed from `/persona` to `/` — confirmed working.
+`npx vitest run src/components/persona/result.test.tsx` passes in isolation (1/1).
+
+**Hover swell — still not eyeball-verified, same limitation C hit, independently confirmed, not
+closed.** A screenshot succeeded this session (unlike C's timeouts), but hovering
+programmatically (`computer` tool's `hover` action) at the button's coordinates did **not**
+trigger the CSS `:hover` pseudo-class — `element.matches(':hover')` read `false` immediately
+after, and the before/after screenshots are pixel-identical (no visible scale change), confirming
+the automated pane cannot dispatch a real hover state, not that the CSS is broken. Geometry
+re-confirmed independently: both buttons have ≥109px of clearance to the nearest viewport/content
+edge on every side, room for a 1.25× scale's ~20px-per-side growth. **This stays open as
+"not observable" — a pane/tooling limit, not a product defect** — the manager's own visible
+browser is the only way to close it, per the round-8 brief's own callout.
+
+**Result: matches S24 in every respect that can be measured this session. One standing gap,
+inherited from C, independently reproduced: hover-swell clipping is geometry-verified only, not
+eyeball-verified — not a new finding, not scored as a difference (POLICY-adjacent, not a defect;
+flagged for the manager's visible-browser check as the brief itself anticipated).**
+
+Commit: this entry, staging only `docs/handoff/ABC-followup-round2.md`.
+
 ### Round 8 — manager browser checks (2026-09-19, while A measures)
 
 On `/papers/openalex:W7207740551` (hydrated; DOM/computed-style reads — screenshots blank in the
