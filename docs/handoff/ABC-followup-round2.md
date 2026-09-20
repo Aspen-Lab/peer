@@ -13941,3 +13941,58 @@ every one. Matrix rows this phase targets for A's re-measurement: **C2** (9-11: 
 re-check, and operator takedown together), **C6** (9-18: the scheduler config), **C9** (9-17:
 confirmed, unchanged), **B7** (9-12/9-13/9-15: status+revision fields, atomic write, and
 revision-aware cache keys together).
+
+### Round 9 — Agent A (after phase 1, part 1 of 4 — C2/C9/B7 access & atomicity)
+
+Branch confirmed `complimentary-enhancement-to-main-update`, tree clean, before touching
+anything. Dev server `peer-web` on `:3000` (manager-owned, untouched). Read handoff §6.2/§9,
+this file's §1/§1ac/§1ad/§2/§3, my own round-9 parts 1-4, and C's phase-1 entries 9-11..9-19 in
+full before measuring — the guide's own line-number pointers were checked against the actual
+current code by grep, not trusted blind, matching the same discipline C itself used on the
+manager's guide.
+
+Fresh owner cookies minted via real uploads (never a shared `local-user`): one jar for owner A,
+one for owner B. Test material: the draft's own self-made fixture `private-upload-test.pdf`
+("Graph Embeddings for Protein Structure Prediction") as fixture A; two more self-made fixtures
+generated this round via the same venv (`.local-data/pdf-runtime/Scripts/python.exe` + PyMuPDF)
+for later parts — never the user's own PDFs.
+
+- Uploaded fixture A as owner A (`sec-fetch-site: same-origin`) → `200`, `upload:955597d0d271a5df`.
+  Read `.local-data/uploads/955597d0d271a5df.json` directly off disk: `"status": "ready"`,
+  `"revision": 1` — confirms 9-12's write shape, live, not just from the response body.
+- Re-uploaded the identical bytes, same owner → same id, `"revision":1` unchanged in the response
+  — confirms 9-12/9-13's idempotent-refresh path (a refresh never starts a new revision chain).
+- Header-less `DELETE` (no `Origin`, no `Sec-Fetch-Site`) on that asset →
+  `403 {"error":"Cross-site deletion refused."}` (was `200`, actually deleted, before 9-11 — the
+  exact live bug A9-01 reported). Metadata `GET` immediately after → still `200`, asset intact.
+- Explicit cross-site (`Origin: https://evil.example.com` + `Sec-Fetch-Site: cross-site`)
+  `DELETE` → same `403`; asset still intact after.
+- Path traversal / invalid id, against three routes: `..%2F..%2F..%2Fetc%2Fpasswd` on the
+  metadata route → `400 {"error":"Not a valid upload id."}`; on the `DELETE` route (valid
+  same-origin header) → `404 {"error":"Upload not found."}`; on the file-bytes route → `404` —
+  three different refusal shapes, but all before any filesystem call (`isValidHash16`'s
+  `^[0-9a-f]{16}$` regex is the one choke point in each route; no traversal is structurally
+  possible past it). A bare `..` in the URL is collapsed by ordinary URL normalization to
+  `/api/papers` (`308`) before it ever reaches this app's router — not a finding.
+- Malformed hash shapes (one char short; two extra trailing chars) on the metadata route → `400`
+  both times, no disk read attempted (same regex gate).
+- "Fake owner param": with **no** cookie at all, `GET`/`DELETE` on owner A's real hash16 with a
+  spoofed `?owner=`/`?ownerId=` query string and a spoofed `{"owner":...}` JSON body → `404` both
+  times, unaffected by any of the spoofed values — re-confirms no route anywhere reads a
+  client-supplied owner identity (grepped again this round; still true).
+- Oversized `Content-Length`: built a real 26 MB fake-PDF file (`%PDF-1.4` header + padding),
+  `POST`ed normally (curl computes a real `Content-Length` matching the actual body) →
+  `413 {"error":"That PDF is larger than 25 MB."}` in **0.124 s** — far too fast to have parsed a
+  26 MB multipart body, confirming the pre-`formData()` `Content-Length` check fired, not the
+  post-parse fallback.
+- The two other C9 sub-cases, re-confirmed live: missing `rightsVersion` → `400`; stale
+  `rightsVersion` (`2020-01-01`) → `400`; the uploads directory's `.pdf` count unchanged (12,
+  matching the pre-existing legacy baseline) after both rejected attempts — no new hash written
+  by a refused upload.
+
+All of the above matches 9-11/9-12/9-13/9-17's own log claims, independently re-derived by
+execution this round rather than trusted from the commit message.
+
+Commit: this entry only (§4 append), staging `docs/handoff/ABC-followup-round2.md`. No product
+code touched. Owner A's `upload:955597d0d271a5df` asset intentionally kept alive for part 2's
+C1/C5 tests (not cleaned up in this commit).
