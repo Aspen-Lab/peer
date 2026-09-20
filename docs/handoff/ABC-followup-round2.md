@@ -81,39 +81,19 @@ browser, run the reports), then report to the user in plain language and stop th
 
 ```
 ROUND:            9
-WHOSE TURN:       A
-STOPPED BECAUSE:  C finished phase 1 (9-11 .. 9-19), one commit each, gate green after every
-                   one @ 2026-09-20 06:35 UTC.
-STATUS:           A measured the draft: 13 PASS · 6 PARTIAL · 2 FAIL · 5 BLOCKED of 26 matrix
-                   rows; sixteen findings A9-01..A9-16; Ruling 23 fixed every fix's shape.
-                   Phase-1 guide 9-11..9-19 (manager-written) fully worked by C. Phases 2–3
-                   (learning: A9-04/A9-11/A9-02/A9-07/A9-12; supplement+docs: A9-09/A9-16/A9-08)
-                   still need a B turn to write their guides.
-DONE:      9-11 CSRF (absent Origin+Sec-Fetch-Site refused); 9-12 UploadMeta status+revision
-           fields, ownedUpload gated on status; 9-13 atomic pending->bytes->ready write with
-           rollback; 9-14 in-flight status/revision re-check before report/reading cache or
-           return (JSON+NDJSON+reading, both call sites); 9-15 revision folded into
-           report/reading/figure client cache keys (3 pure functions extracted + tested,
-           use-private-supplement.ts wired); 9-16 purged the pre-existing 8.6 MB orphaned
-           figures.json (one-time) + closed-list stray-file sweep in purgeExpiredUploads;
-           9-17 confirmed (no code change) the Content-Length pre-check bound still holds;
-           9-18 vercel.json cron + purge-uploads.mjs script + CRON_SECRET docs (no scheduler
-           claimed to run here); 9-19 operator takedown route (ADMIN_TOKEN, 404-when-unset)
-           + closed the blocked-hash re-claim gap in upload/route.ts. 47 new tests total
-           (2713->2760), every one revert-proven (source reverted, test watched fail,
-           restored). 9 commits, one per item, `docs/handoff/ABC-followup-round2.md` staged
-           with each.
-GATE (0 open):    NOT MET (phases 2-3 still open; A has not yet re-measured phase 1's rows)
+WHOSE TURN:       C (phase 2 — learning: 9-21 … 9-25; then phase 3: 9-31 … 9-33)
+STOPPED BECAUSE:  A's phase-1 re-measure banked by the manager (A died after part 3); phase-2/3
+                   guides written by the manager @ 2026-09-20 ~11:30 UTC.
+STATUS:           Phase 1 closed: C1 C2 C3 C4 C5 C6 C9 C10 B7 PASS. Open: A1–A8 (learning), B1–B6
+                   (supplement), L1 (docs). Server was down at the manager's check — restarted.
+OPEN ITEMS:       A9-02 A9-04 A9-07 A9-08 A9-09 A9-11 A9-12 A9-16
+GATE (0 open):    NOT MET
 
-GATE NOW:  tsc clean · eslint clean · vitest 2760/2760 (cold, re-run after 9-19).
-TODO:      A re-measures matrix rows C2, C4, C5, C6, C9, B7 (+ a C1/C3 regression check) against
-           phase 1's actual commits — C's own §4 entries name exactly which sub-behavior each
-           item addresses and what was NOT exercised live (mid-flight-race 410s, the
-           authenticated-cron-success path, the authenticated-admin-block-success path — all
-           three need a real second process/restart neither C's session nor a plain curl call
-           can produce, and are called out explicitly in the relevant log entries). Then B (or
-           the manager if B keeps dying) writes the phase-2 (learning) and phase-3
-           (supplement+docs) guides.
+DONE:      round 9: A's draft measurement; Ruling 23; phase 1 (9-11..9-19) landed and re-measured.
+GATE NOW:  tsc clean · eslint clean · vitest 2760/2760 (manager, cold).
+TODO:      C works 9-21 → 9-25 (phase 2), then 9-31 → 9-33 (phase 3) — one turn each if budget
+           allows, else stop at the phase boundary. A then measures A1–A8, B1–B6, L1 and the full
+           matrix.
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
@@ -14104,3 +14084,110 @@ not this session's to remove); `git status` confirmed clean.
 
 Commit: this entry only (§4 append), staging `docs/handoff/ABC-followup-round2.md`. No product
 code touched.
+
+### Round 9 — Agent A (after phase 1, part 4 — gate and verdict, banked by the MANAGER)
+
+A's session limit hit after parts 1–3 were committed. The manager ran the gate cold — tsc clean
+· eslint clean · vitest 2760/2760 — and records the verdict from A's own parts: **C2 PASS, C9
+PASS, B7 PASS (revision 1, idempotent refresh), C3 PASS (owner-salted ids), C1 PASS (cold and
+warm), C5 PASS (delete → 404 on every route, A explains 404-not-410 as the pre-existing
+ownership check firing first — acceptable), C4 PASS (no `figures.json`, concurrent extraction
+isolated), C6 PASS as config (cron entry + script + README; not claimed to run here), C10 PASS
+(no base64/PDF text in metadata or list responses).** Findings A9-01, A9-03, A9-05, A9-06,
+A9-10, A9-13, A9-14, A9-15 closed. Phase 2 next.
+
+### Round 9 — Agent B, phase 2 + 3 guides (written by the MANAGER, 2026-09-20)
+
+Written by the manager (B has died twice this round); C greps every pointer before editing.
+Phase 2 = learning (matrix A1–A8); phase 3 = supplement + docs (B1–B6, L1).
+
+**9-21 — A9-04 / A9-11, Tier-0 quality + contract (A1, A4).** `web/src/lib/preferences/upload-concepts.ts:16-48`
+`extractUploadConcepts`: today any 1–3-token run survives if it is not a STOP word and the
+single-token case is ≥ 5 chars — that is how "three"/"nodes" passed. Fix: (1) reject a
+single-token candidate unless it is a known domain term — in `ABBREVIATION_GROUPS` or an
+alias group of `web/src/lib/scoring/term-expand.ts` (import; do not duplicate lists) — and
+reject any token in `GENERIC_TERMS`, any number word (`one`…`ten`, `first`…`tenth`), any
+token that is all digits/units; (2) reject candidates whose every token is a stop/generic
+word; (3) add `facet` by rule: contains a method/instrument cue (`spectroscopy, diffraction,
+microscopy, simulation, deposition, synthesis, model, algorithm, benchmark, dataset …` — a
+short closed list in the module) → `method`; a chemical formula / element / `-ide/-ate/-ite`
+suffix / alloy-oxide cue → `material`; else `topic`; (4) `extractionVersion: 1` on every
+concept and on the meta; (5) `evidence: { section }` stays (offsets optional, skip). Protective
+tests with four self-made fixtures built in the test (no PDFs needed — `ExtractedDocument`
+objects): a materials paper (expects `material`/`method` facets, no "three"), a CS paper, a
+long wrapped title (title concepts have `section: "title"`), a reference-list decoy (a term only
+in `references` never surfaces). Cap stays 12; `confidence` formula unchanged.
+
+**9-22 — A9-02, reference-counted retraction (A3, A7).** `ledger.ts:323-331`
+`removeUploadPreferenceSignal(ledger, documentKey)` deletes the `uploads[documentKey]` evidence
+unconditionally. Fix: the caller (the delete route → client `forgetUploadPreference`, and the
+admin block route) decides by **counting live copies**: `listUploadMeta(owner)` filtered to
+`status === "ready"` with the same `documentKey` — if another copy remains, do not retract.
+Server side: the DELETE route (`upload/[id]/route.ts`) returns `{ retractEvidence: boolean,
+documentKey }` so the client calls `forgetUploadPreference` only when true; the block route
+applies the same rule. Test: two metas sharing a documentKey, delete one → `retractEvidence:
+false`; delete the last → `true`. Reproduce A's throwaway repro as a real test.
+
+**9-23 — A9-07, server-recorded evidence + idempotent client merge (A2, A7).** The upload
+route already computes `preferenceSignals` (meta) — that IS the server record (add
+`recordedAt`, `revision`, `extractionVersion` beside it). Client: `store/profile.ts:337`
+`recordUploadPreference(paper)` runs only from `upload-button.tsx:69` after a successful
+upload. Add a second, idempotent path: when `profile-uploads.tsx` loads the owner's list
+(`GET /api/papers/upload`, `route.ts:307`), it calls `recordUploadPreference` for every
+returned upload — `recordUploadPreferenceSignal` (`ledger.ts:306-320`) is already idempotent
+per `documentKey` (`if (current?.uploads?.[documentKey]) continue`), so repeats do not double
+count — cover that with a test that records twice and asserts one weight. Also call the same
+merge on the reading page when an `upload:` paper loads (`use-private-supplement.ts` or
+`page.tsx`'s upload branch). Supabase PUT when configured: `profile-sync.tsx` already diffs and
+PUTs the ledger — confirm `cleanPreferenceLedger` (`ledger.ts:395`) keeps `uploads` (it does —
+line 395) and add a test that a ledger with `uploads` survives clean → server → hydrate.
+
+**9-24 — A9-12, the learned list (A6, §4.4-5).** `app/profile/page.tsx:1152` "What Peer has
+learned": entries whose ledger entry has `uploads` get a mono caption "from your upload" (copy
+constant); `profile-uploads.tsx` gets two actions per upload: **"Forget what Peer learned from
+this"** (calls `forgetUploadPreference(documentKey)` only — PDF stays) and **"Delete PDF"**
+(existing; retraction per 9-22's flag). Static-markup tests for both.
+
+**9-25 — ranking/retrieval per Ruling 4 (A5, A8).** Confirm (read, then test) that
+`scorePreferenceMatch` already gives upload concepts a bounded boost (`ledger.ts:603` folds
+`uploads` weights into `positive` with decay) and that title/abstract matching uses word
+boundaries (`ledger.ts:666` `text.includes(\` ${label} \`)` — padded spaces; confirm the text is
+normalised the same way as labels). Retrieval: `lib/feed/profile-compiler.ts` — if the draft
+adds upload-derived queries, cap them at 3, anchor on declared topics, and make
+`lib/opportunities/pool-cache.ts`'s key include `uploadInterestDigest` (a short hash of the
+sorted concept keys); if the draft does NOT add queries, do nothing and say so — the shared
+pool stays untouched (Ruling 4 allows either, never a mix). Test: two profiles with different
+upload concepts → different pool keys iff queries differ.
+
+**9-31 — A9-09, three-band matching (B3, B4, B5).** `upload-concepts.ts:50`
+`matchesUploadedPaper` returns a boolean. Replace with `matchUploadedPaper(target, title, doi):
+{ band: "doi" | "strong" | "confirm" | "reject", overlap: number }` — DOI equal → `doi`;
+token-overlap (Jaccard on the normalised title tokens after STOP filtering) ≥ 0.6 → `strong`;
+≥ 0.35 → `confirm`; else `reject`. Constants exported; tests on the three bands + DOI. The
+attach path in `upload/route.ts` (the `targetPaper`/`paperId` branch): `doi`/`strong` → bind
+and return `{ attached: { title }, band }`; `confirm` → 409 `{ needsConfirmation: true, band,
+overlap, extractedTitle }` unless the request carries `confirm=1`, then bind; `reject` → 422 with
+the reason and the extracted title. Client (`use-private-supplement.ts` + the reader's status
+component): on 409 show a dialog "Attach to <paper title>? The PDF's title reads <extracted>"
+with Confirm / Cancel; Confirm re-submits with `confirm=1`. After a bind, the status line reads
+"Attached to: <title>".
+
+**9-32 — A9-16, theme tokens for green (B1).** `globals.css`: add `--color-positive` /
+`--color-positive-strong` to the light palette and both dark palettes (`html[data-mode="dark"]`
+and the `system` dark media block — keep the two dark blocks in sync as the file's comment
+says); `components/ui/button.tsx:18` `tone: "green"` uses `bg-[color:var(--color-positive)]
+hover:bg-[color:var(--color-positive-strong)] text-[color:var(--color-fixed-white)]`. Test:
+the source-text test pattern (the token names appear in all three palette blocks).
+
+**9-33 — A9-08, docs (L1).** `docs/PRIVATE_PDF_UPLOADS.md` (new; `.env.example` already links
+it): plain-language restatement of handoff §6.1 with the same three links (fair use, section
+512, PyMuPDF licence), the 30-day retention and what expiry means, exactly what the consent
+dialog asserts, the AI-provider transfer note, the operator takedown route, the scheduler
+(vercel cron / `npm run purge-uploads`) and the §6.5 open conditions listed as **open**. README:
+a "Private PDF uploads" subsection linking to it; the old ownerless description replaced. Grep
+the consent dialog, `private-pdf-status.tsx`, README and the new doc for `guarantee|guaranteed|
+免责|绝对|legal` and make sure no sentence promises legality.
+
+**Gate:** ≥ 2760 + new. A re-measures A1–A8 after phase 2 and B1–B6 + L1 after phase 3, then
+the full matrix.
+
