@@ -13044,3 +13044,30 @@ Row tally: **13 PASS · 6 PARTIAL · 2 FAIL · 5 BLOCKED/NEEDS BROWSER**, of 26 
 Commit: this entry only (§4 append), staging `docs/handoff/ABC-followup-round2.md`. All test PDFs
 and cookie jars used for this part were deleted via the real routes / scratchpad before this
 commit (see part 4's cleanup note). No product code touched.
+
+### Round 9 — Agent A (part 3 of 4 — the gate, cold)
+
+From `web/`, cold (no prior state assumed):
+
+```
+npx tsc --noEmit                                    → clean, zero errors
+npx eslint .                                         → clean, zero errors/warnings
+npx vitest run --exclude "**/benchmark.test.ts"      → 129 files / 2713 tests passed
+```
+
+Matches §1's expected baseline (`tsc clean · eslint clean · vitest 2713/2713 (with the draft)`)
+exactly — no regression from the draft's own commit message claim.
+
+Handoff §9.1's targeted command, also run cold:
+
+```
+npx vitest run src/lib/preferences src/lib/papers/upload-store.test.ts \
+  src/lib/papers/full-text.test.ts src/lib/figures/extract.test.ts \
+  src/lib/figures/pdf-extract.test.ts src/app/api/papers \
+  src/store/profile.test.ts src/store/profile-hydration.test.ts \
+  src/lib/feed/paper-daily-cache.test.ts
+                                                      → 14 files / 145 tests passed
+```
+
+Commit: this entry only (§4 append), staging `docs/handoff/ABC-followup-round2.md`. No product
+code touched.
