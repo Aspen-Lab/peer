@@ -13315,3 +13315,57 @@ and calls the evidence retraction path (phase 2 adds the reference count; for no
 **Gate for phase 1:** tsc · eslint clean; vitest ≥ 2713 + new; matrix rows C2, C4, C5, C6, C9,
 B7 re-measured by A next.
 
+
+### Round 9 — Agent C, phase 1, item 9-11 (A9-01 — CSRF: absent Origin AND absent Sec-Fetch-Site refused, matrix C2)
+
+Branch confirmed `complimentary-enhancement-to-main-update` before touching anything. Baseline
+gate re-run cold: tsc clean, eslint clean, **vitest 2713/2713** — matches §1's stated baseline.
+
+**Change**: `web/src/lib/papers/upload-access.ts` `sameOriginUploadRequest()` — grepped every
+call site first (`upload/route.ts:135` POST, `upload/[id]/route.ts:28` DELETE; no third
+PUT/POST attach route exists). Old logic: `(!origin || origin === self) && sec-fetch-site !==
+"cross-site"` — a request with **neither** header hit the `!origin` branch and was treated as
+same-origin. New logic: a request with neither header is refused outright; otherwise
+`Sec-Fetch-Site` (when present) decides via a closed safe set (`same-origin`, `same-site`,
+`none`); otherwise `Origin` must match. `cross-site` (or any other value) always refuses,
+matching-or-not.
+
+**Tests**: `upload-access.test.ts` gains 4 unit cases (no headers -> false; `sec-fetch-site:
+same-origin` alone -> true; `origin` = self alone -> true [separate from the pre-existing
+combined test]; explicit `sec-fetch-site: cross-site` with a matching `Origin` -> false, to
+pin down that Sec-Fetch-Site is authoritative when present). Route-level: `upload/route.test.ts`
+gained a `SAME_ORIGIN_HEADERS` constant added to every existing POST request that needs to pass
+the gate (the old tests all omitted the header and would now 403 on the CSRF check before
+reaching whatever they meant to test) plus one new test proving a header-less POST is refused
+403 before any write/extraction call. `upload/[id]/route.test.ts` had no DELETE test at all
+before this item (only GET) — added a `deleteCall()` helper defaulting to
+`sec-fetch-site: same-origin` and two new tests: a header-less DELETE refused 403 before
+`readUploadMeta`/`deleteUpload` are ever called, and a normal same-origin DELETE still deleting
+and returning the same body shape as before.
+
+**Revert-proof**: restored the pre-fix `sameOriginUploadRequest` body via `git show HEAD:...`,
+re-ran the three new/changed test files — all 3 new assertions failed exactly as expected (the
+unit test expected `false`, got `true`; the POST route test expected `403`, got `200`; the
+DELETE route test expected `403`, got `404` [continuing past the CSRF gate to a mocked-empty
+record]) — then restored the fix and confirmed all 39 tests in the three files green again.
+
+**Gate after this item**: tsc clean, eslint clean, **vitest 2720/2720** (2713 + 4 unit + 1 POST
+route + 2 DELETE route = 2720).
+
+**Live check** (dev server `peer-web` on `:3000`, untouched): uploaded the draft's own self-made
+fixture `web/.local-data/private-upload-test.pdf` via `curl` with a fresh cookie jar and
+`sec-fetch-site: same-origin` -> `200`, `upload:25b7809b236425ea`. A **header-less** `curl
+DELETE` on that same asset -> `{"error":"Cross-site deletion refused."}`, **403** (was `200`,
+actually deleted, before this fix — the exact live bug A9-01 reported). A same-origin `curl
+DELETE` (with `sec-fetch-site: same-origin`) on the same asset then succeeded, `200`,
+`{"deleted":true,...}` — used for cleanup, not a separate finding. Cookie jar and test upload
+removed after the check.
+
+**Blast radius**: one function body (`upload-access.ts`), three test files (one new describe
+block, two rewritten test bodies with added headers, five new test cases total). No other
+`sameOriginUploadRequest` call site exists to touch.
+
+Commit: `fix(upload): refuse a state-changing request with neither Origin nor Sec-Fetch-Site (9-11/A9-01)`,
+staging `web/src/lib/papers/upload-access.ts`, `web/src/lib/papers/upload-access.test.ts`,
+`web/src/app/api/papers/upload/route.test.ts`, `web/src/app/api/papers/upload/[id]/route.test.ts`,
+`docs/handoff/ABC-followup-round2.md`.

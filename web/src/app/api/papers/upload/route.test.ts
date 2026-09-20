@@ -50,12 +50,18 @@ function pdfFile(bytes: Buffer, name = "paper.pdf"): File {
   return new File([bytes as unknown as BlobPart], name, { type: "application/pdf" });
 }
 
+// 9-11: a real browser always sends this on a same-origin fetch/form submit;
+// every test below stands in for that unless it is specifically testing the
+// CSRF gate itself (which sends no headers at all).
+const SAME_ORIGIN_HEADERS = { "sec-fetch-site": "same-origin" };
+
 function postWith(file: unknown): Promise<Response> {
   const form = new FormData();
   form.set("rightsVersion", "2026-09-19");
   if (file !== undefined) form.set("file", file as Blob);
   const req = new Request("http://localhost/api/papers/upload", {
     method: "POST",
+    headers: SAME_ORIGIN_HEADERS,
     body: form,
   });
   return POST(req);
@@ -96,7 +102,7 @@ describe("POST /api/papers/upload", () => {
 
   it("requires explicit current-version rights confirmation", async () => {
     const form = new FormData(); form.set("file", pdfFile(pdfBytes()));
-    const res = await POST(new Request("http://localhost/api/papers/upload", { method: "POST", body: form }));
+    const res = await POST(new Request("http://localhost/api/papers/upload", { method: "POST", headers: SAME_ORIGIN_HEADERS, body: form }));
     expect(res.status).toBe(400);
     expect(mocks.writeUploadPdfIfAbsent).not.toHaveBeenCalled();
     expect(mocks.extractPdfTextFromPath).not.toHaveBeenCalled();
@@ -109,7 +115,7 @@ describe("POST /api/papers/upload", () => {
     const form = new FormData(); form.set("file", pdfFile(pdfBytes()));
     form.set("rightsVersion", "2026-09-19");
     form.set("targetPaper", JSON.stringify({ id: "openalex:W123", title }));
-    const res = await POST(new Request("http://localhost/api/papers/upload", { method: "POST", body: form }));
+    const res = await POST(new Request("http://localhost/api/papers/upload", { method: "POST", headers: SAME_ORIGIN_HEADERS, body: form }));
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.paper.preferenceSignals.length).toBeGreaterThan(0);
@@ -123,7 +129,7 @@ describe("POST /api/papers/upload", () => {
     const form = new FormData(); form.set("file", pdfFile(pdfBytes()));
     form.set("rightsVersion", "2026-09-19");
     form.set("targetPaper", JSON.stringify({ id: "openalex:W123", title: "Solid electrolytes for lithium batteries" }));
-    const res = await POST(new Request("http://localhost/api/papers/upload", { method: "POST", body: form }));
+    const res = await POST(new Request("http://localhost/api/papers/upload", { method: "POST", headers: SAME_ORIGIN_HEADERS, body: form }));
     expect(res.status).toBe(422);
     expect(mocks.writeUploadPdfIfAbsent).not.toHaveBeenCalled();
     expect(mocks.writeUploadMeta).not.toHaveBeenCalled();
@@ -138,9 +144,19 @@ describe("POST /api/papers/upload", () => {
   it("rejects a request where 'file' is not a File", async () => {
     const form = new FormData();
     form.set("file", "not-a-file");
-    const req = new Request("http://localhost/api/papers/upload", { method: "POST", body: form });
+    const req = new Request("http://localhost/api/papers/upload", { method: "POST", headers: SAME_ORIGIN_HEADERS, body: form });
     const res = await POST(req);
     expect(res.status).toBe(400);
+  });
+
+  it("9-11: refuses a POST with neither Origin nor Sec-Fetch-Site before storing or extracting anything", async () => {
+    // The live-confirmed CSRF gap (A9-01): a bare request with no browser
+    // fetch-metadata headers at all must be refused, not default-trusted.
+    const form = new FormData(); form.set("rightsVersion", "2026-09-19"); form.set("file", pdfFile(pdfBytes()));
+    const res = await POST(new Request("http://localhost/api/papers/upload", { method: "POST", body: form }));
+    expect(res.status).toBe(403);
+    expect(mocks.writeUploadPdfIfAbsent).not.toHaveBeenCalled();
+    expect(mocks.extractPdfTextFromPath).not.toHaveBeenCalled();
   });
 
   it("rejects a file over 25 MB before reading its bytes", async () => {
@@ -156,7 +172,7 @@ describe("POST /api/papers/upload", () => {
     const oversizeLength = 25 * 1024 * 1024 + 1;
     const req = new Request("http://localhost/api/papers/upload", {
       method: "POST",
-      headers: { "content-length": String(oversizeLength) },
+      headers: { "content-length": String(oversizeLength), ...SAME_ORIGIN_HEADERS },
       body: "irrelevant — never read",
     });
     const res = await POST(req);

@@ -60,4 +60,20 @@ describe("private upload authorization", () => {
     expect(sameOriginUploadRequest(new Request("http://localhost/api/papers/upload", { headers: { origin: "https://evil.example" } }))).toBe(false);
     expect(sameOriginUploadRequest(new Request("http://localhost/api/papers/upload", { headers: { origin: "http://localhost" } }))).toBe(true);
   });
+  // 9-11 (A9-01): a request with neither header is not something a real
+  // browser sends on a state-changing request — it must be refused, not
+  // default-trusted. Reproduces the live bug (a bare curl DELETE with no
+  // Origin/Sec-Fetch-Site headers previously succeeded).
+  it("refuses a request with neither Origin nor Sec-Fetch-Site", () => {
+    expect(sameOriginUploadRequest(new Request("http://localhost/api/papers/upload"))).toBe(false);
+  });
+  it("accepts Sec-Fetch-Site: same-origin alone, with no Origin header", () => {
+    expect(sameOriginUploadRequest(new Request("http://localhost/api/papers/upload", { headers: { "sec-fetch-site": "same-origin" } }))).toBe(true);
+  });
+  it("accepts a matching Origin alone, with no Sec-Fetch-Site header", () => {
+    expect(sameOriginUploadRequest(new Request("http://localhost/api/papers/upload", { headers: { origin: "http://localhost" } }))).toBe(true);
+  });
+  it("refuses an explicit Sec-Fetch-Site: cross-site even with a matching Origin", () => {
+    expect(sameOriginUploadRequest(new Request("http://localhost/api/papers/upload", { headers: { origin: "http://localhost", "sec-fetch-site": "cross-site" } }))).toBe(false);
+  });
 });

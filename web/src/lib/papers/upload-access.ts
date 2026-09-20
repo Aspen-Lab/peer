@@ -56,8 +56,20 @@ export async function ownedUpload(hash16: string, owner?: string | null): Promis
   return meta;
 }
 
+// Fetch Metadata values a same-origin browser request can carry. `cross-site`
+// is the only unsafe value; anything else (including an unrecognized future
+// value) falls through to the `Origin` check below rather than being trusted.
+const SAFE_SEC_FETCH_SITE = new Set(["same-origin", "same-site", "none"]);
+
+// 9-11 (A9-01): a real browser always sends at least one of `Origin` or
+// `Sec-Fetch-Site` on a state-changing request. A request with NEITHER is not
+// something a browser produces — treating it as same-origin (the previous
+// `!origin` branch) let a bare `curl DELETE` through with no headers at all,
+// execution-confirmed live. Absent both -> refuse.
 export function sameOriginUploadRequest(req: Request): boolean {
   const origin = req.headers.get("origin");
-  return (!origin || origin === new URL(req.url).origin)
-    && req.headers.get("sec-fetch-site") !== "cross-site";
+  const secFetchSite = req.headers.get("sec-fetch-site");
+  if (!origin && !secFetchSite) return false;
+  if (secFetchSite) return SAFE_SEC_FETCH_SITE.has(secFetchSite);
+  return origin === new URL(req.url).origin;
 }
