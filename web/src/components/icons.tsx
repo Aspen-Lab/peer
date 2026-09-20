@@ -233,3 +233,12 @@ export function IconQuote({ size = 13, strokeWidth = 1.8, className }: IconProps
     </svg>
   );
 }
+
+/** 8-03/S25: the abstract toggle's disclosure arrow — rotates 180deg open. */
+export function IconChevronDown({ size = 16, strokeWidth = 2, className }: IconProps) {
+  return (
+    <svg {...strokeProps(size, strokeWidth, className)}>
+      <polyline points="6 9 12 15 18 9" />
+    </svg>
+  );
+}

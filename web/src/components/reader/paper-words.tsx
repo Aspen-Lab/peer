@@ -10,10 +10,10 @@ import type { Ref } from "react";
 import type { Claim, PaperReportBasis } from "@/lib/papers/report";
 import type { PaperReading } from "@/lib/papers/reading";
 import { pickClaimMark } from "@/lib/papers/skim";
-import { Band } from "@/components/ui/band";
 import { ScrambleText } from "@/components/scramble-text";
+import { AbstractToggle } from "./abstract-toggle";
 import { LeadClaim } from "./lead-claim";
-import { ABSTRACT_FOOTER, ABSTRACT_LABEL, TLDR_LINE, attribution, skimFooter } from "./copy";
+import { ABSTRACT_FOOTER, TLDR_LINE, attribution, skimFooter } from "./copy";
 
 const FOOTER_CLASS = "font-mono text-caption text-text-faint mt-2";
 
@@ -153,7 +153,7 @@ export function PaperWords({
       {lead !== null && (
         <LeadClaim sentence={sentences[lead]} />
       )}
-      <Band label={ABSTRACT_LABEL} className="mt-12">
+      <AbstractToggle className="mt-12">
         <div className="font-reading text-lead leading-[1.6] text-text-muted measure mt-4 space-y-4 reading-justify">
           {split > 0 && <Paragraph sentences={sentences.slice(0, split)} from={0} inked={inked} />}
           {split < sentences.length && (
@@ -163,7 +163,7 @@ export function PaperWords({
         <p ref={endRef} className={FOOTER_CLASS}>
           {ABSTRACT_FOOTER}
         </p>
-      </Band>
+      </AbstractToggle>
     </>
   );
 }

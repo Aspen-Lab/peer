@@ -12217,3 +12217,70 @@ all read, none edited.
 Commit: `feat(persona): add two "Back to main" buttons and Esc-to-home on the result view
 (8-02/S24)`, staging only `web/src/components/persona/result.tsx`,
 `web/src/components/persona/result.test.tsx`, `docs/handoff/ABC-followup-round2.md`.
+
+### Round 8 — Agent C, item 8-03 (S25 — collapsible "Abstract" toggle, collapsed by default)
+
+Checked `paper-words.tsx`, `copy.ts`, `icons.tsx`, `band.tsx` all clean before touching anything
+(`app/papers/[id]/page.tsx` is dirty — the other agent's — but B's guide needs zero edits there,
+confirmed correct below).
+
+**Change**: new `web/src/components/reader/abstract-toggle.tsx`, exporting `AbstractToggle`
+— **conditional rendering**, per B's load-bearing finding: `page.tsx`'s decided-read
+`IntersectionObserver` targets `wordsEndRef.current ?? decisionRef.current`, and a CSS-only
+collapse (`grid-template-rows`) would leave that ref permanently non-null while collapsed,
+silently freezing the observer on an invisible target for as long as the reader leaves the new
+default (closed) in place. Conditional mounting keeps the ref `null` while closed, so the
+existing `??` fallback redirects to the Decision block automatically — the same path a paper
+with no abstract already takes (`paper-words.tsx` lines 133-146), zero changes to `page.tsx`
+needed. Local `useState(false)` — collapsed on every mount, i.e. every open of a report, matching
+"not persisted." `web/src/components/reader/copy.ts`'s `ABSTRACT_LABEL` repointed from "The
+abstract" to "Abstract" in place (grepped: exactly one consumer, now the button's own text — a
+same-size diff, no orphaned export). Added `IconChevronDown` to `web/src/components/icons.tsx`
+following the file's own `strokeProps` convention, rotated with a plain `rotate-180` class on
+open. `web/src/components/reader/paper-words.tsx`: the abstract's `<Band label={ABSTRACT_LABEL}>`
+call replaced with `<AbstractToggle>`, wrapping the exact same children (the paragraph
+split/inking `<div>` plus the footer `<p ref={endRef}>`) — `Band`/`band.tsx` untouched (still used
+by its other 7 call sites), the TL;DR branch and `Deck`/`LeadClaim` above it untouched. Dropped
+the now-unused `ABSTRACT_LABEL` from `paper-words.tsx`'s import line (moved to
+`abstract-toggle.tsx`).
+
+**Size/style**: `buttonVariants({ tone: "primary" })` (same proven accent-fill idiom as 8-02),
+`w-full justify-between h-12 px-6 text-body-lg` overriding the `md` default via `cn`'s
+tailwind-merge — 48px tall (one step past 8-02's 44px floor, matching B's own fallback
+instruction since no shared token was exported from 8-02), full row width. **Hover swell:**
+used `hover:scale-[1.04]` (the codebase's other "big surface" swell, already named as the
+documented fallback in 8-02's own log entry) rather than the small-controls' `hover:scale-125` —
+this button spans the full reading column, and B's own snippet for this item did not include a
+scale value; a 25% grow on a full-width element would clip against the surrounding prose, unlike
+8-02's compact pills. Flagged, not silently assumed. Chevron: `transition-transform duration-150
+ease-snap`, `rotate-180` when open — reuses the file's own `ease-snap` token, reduced-motion
+covered globally (no bespoke handling needed).
+
+**Tests**: added `web/src/components/reader/abstract-toggle.test.ts` (new file,
+`renderToStaticMarkup`, matching 6-08's own precedent of asserting the closed/default render
+only). Asserts `aria-expanded="false"`, no `id="abstract-panel"` in the markup, the children's
+text absent, and the label "Abstract" present. **Revert-proof**: temporarily changed
+`useState(false)` to `useState(true)`, re-ran — failed exactly as expected (`aria-expanded="true"`,
+panel present with the children's text rendered), then restored and confirmed green again.
+
+**Gate after this item**: tsc clean, eslint clean, **vitest 2713/2713** (2712 + this item's 1 new
+test file).
+
+**Live check** (Browser pane, `openalex:W7207740551` — not hidden-pane-trapped, the papers page
+is fine per the manager's own note): `find`/DOM query located `button "Abstract"`. Computed via
+`javascript_tool`: `aria-expanded="false"`, `aria-controls="abstract-panel"`, no
+`#abstract-panel` element in the DOM, button height `48px`, `background-color: rgb(255, 82, 13)`
+(accent). Clicked → `aria-expanded` flipped to `"true"`, `#abstract-panel` appeared containing
+the paper's actual abstract text (confirmed present, not quoted at length here per the standing
+no-large-third-party-text rule). Clicked again → `aria-expanded` back to `"false"`, panel removed
+from the DOM. All four states matched the spec exactly.
+
+**Blast radius**: one new file (`abstract-toggle.tsx`), one new icon export, one changed string
+value (`ABSTRACT_LABEL`, one consumer), `paper-words.tsx`'s abstract branch only. Zero changes to
+`page.tsx`, `band.tsx`, or `reading-markdown.ts` (confirmed by grep: the Markdown export path
+shares none of these constants) — Markdown export unchanged, per spec.
+
+Commit: `feat(reader): make the abstract a collapsed-by-default toggle (8-03/S25)`, staging only
+`web/src/components/reader/abstract-toggle.tsx`, `web/src/components/reader/abstract-toggle.test.ts`,
+`web/src/components/reader/copy.ts`, `web/src/components/reader/paper-words.tsx`,
+`web/src/components/icons.tsx`, `docs/handoff/ABC-followup-round2.md`.
