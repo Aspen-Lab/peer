@@ -1098,10 +1098,13 @@ function PreferenceChip({
   label,
   weight,
   tone,
+  fromUpload,
 }: {
   label: string;
   weight: number;
   tone: "accent" | "muted";
+  /** 9-24 (A9-12): this entry has ledger evidence from an uploaded PDF. */
+  fromUpload?: boolean;
 }) {
   // Decayed net strength → a subtle 1–3 intensity tier.
   const tier = weight >= 3 ? 2 : weight >= 1.5 ? 1 : 0;
@@ -1118,13 +1121,20 @@ function PreferenceChip({
           "bg-red/10 text-red/90 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-accent)_22%,transparent)]",
         ][tier];
   return (
-    <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-meta ${cls}`}>
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-meta ${cls}`}>
       {label}
+      {fromUpload && (
+        <span className="font-mono text-caption opacity-60" title="Learned from a PDF you uploaded">
+          from your upload
+        </span>
+      )}
     </span>
   );
 }
 
-function LearnedPreferences({
+// Exported for a static-markup test (9-24) — this component only ever reads
+// its own props, never the store directly, so it renders standalone.
+export function LearnedPreferences({
   profile,
   onReset,
 }: {
@@ -1198,7 +1208,7 @@ function LearnedPreferences({
                 </p>
                 <div className="flex flex-wrap gap-1.5">
                   {liked.map((row) => (
-                    <PreferenceChip key={`like-${row.label}`} label={row.label} weight={row.weight} tone="accent" />
+                    <PreferenceChip key={`like-${row.label}`} label={row.label} weight={row.weight} tone="accent" fromUpload={row.fromUpload} />
                   ))}
                 </div>
               </div>
@@ -1210,7 +1220,7 @@ function LearnedPreferences({
                 </p>
                 <div className="flex flex-wrap gap-1.5">
                   {disliked.map((row) => (
-                    <PreferenceChip key={`dis-${row.label}`} label={row.label} weight={row.weight} tone="muted" />
+                    <PreferenceChip key={`dis-${row.label}`} label={row.label} weight={row.weight} tone="muted" fromUpload={row.fromUpload} />
                   ))}
                 </div>
               </div>

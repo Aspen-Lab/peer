@@ -14451,3 +14451,69 @@ staging `web/src/types/index.ts`, `web/src/lib/papers/upload-store.ts`,
 `web/src/components/profile-uploads.tsx`, `web/src/components/reader/use-private-supplement.ts`,
 `web/src/store/profile.test.ts`, `docs/handoff/ABC-followup-round2.md`.
 
+### Round 9 — Agent C, phase 2, item 9-24 (A9-12 — the learned list caption, matrix A6/§4.4-5)
+
+Branch confirmed clean before touching anything. Baseline gate re-run cold: tsc clean, eslint
+clean, **vitest 2773/2773** (post-9-23).
+
+**Grepped first**: the two-actions half of this item ("Forget what Peer learned from this"
+separate from "Delete PDF") was already landed inside `private-pdf-status.tsx` as part of 9-22's
+own commit (both changes touch the same shared component, and 9-22's `retractEvidence` gating
+needed the same button split to have somewhere to put the ledger-only action) — confirmed by
+reading that file's current state rather than re-doing the work. This item's own remaining gap:
+the "from your upload" caption on individual learned-list entries, plus the static-markup tests
+for both halves (neither existed before this item).
+
+**Change**:
+- `web/src/lib/preferences/ledger.ts`: `LedgerSummaryRow` gains `fromUpload: boolean`.
+  `summarizePreferenceLedger`'s per-label aggregation (`byLabel`) now also ORs in
+  `Object.keys(entry.uploads ?? {}).length > 0` across every ledger entry that collapses into a
+  given label — a label can be reached by both an upload-sourced entry and an ordinary
+  like/save under the current cross-source label-bridging, and the caption should show if
+  ANY contributing entry has upload evidence, not just the first one visited.
+- `web/src/app/profile/page.tsx`: `PreferenceChip` gains an optional `fromUpload` prop, rendered
+  as a small `font-mono` "from your upload" caption inside the chip (a `title` attribute spells
+  out what it means). `LearnedPreferences` (now exported, for the test below — it already only
+  ever read its own props, never the store directly, so exporting it changes nothing about how
+  it's used from `ProfilePage`) threads `row.fromUpload` through on both the `liked` and
+  `disliked` maps.
+
+**Tests**:
+- `app/profile/page.test.tsx` (new describe, 2 cases): a hand-built ledger with one
+  upload-sourced entry and one ordinary like, rendered via `renderToStaticMarkup` (this repo's
+  established pattern for a component that takes props directly, per the file's own existing
+  `ColorThemePicker` tests and their comment about having no `@testing-library/react`) —
+  asserts the caption appears exactly once (on the upload entry, not the ordinary like); a
+  second case with no upload evidence anywhere asserts the caption never appears at all.
+- `components/reader/private-pdf-status.test.tsx` (new file, 2 cases): static-markup checks that
+  both actions render with their exact current text, that the old combined wording ("Delete PDF
+  and its learned signals") is gone, and that the "Forget" action is omitted when
+  `uploadDocumentKey` is absent (a shape the standalone-upload page's own status line — same
+  component — never actually produces, but a defensive case worth pinning down since the button
+  reads that field directly).
+
+**Revert-proof**: hardcoded `fromUpload = false` inside `summarizePreferenceLedger` — the new
+"captions only the entry with upload evidence" test failed exactly as expected (caption never
+appeared); restored, green again. Separately short-circuited the "Forget" button's render
+condition to `false && documentKey` in `private-pdf-status.tsx` — the new "shows a ledger-only
+forget action" test failed exactly as expected; restored, green again (confirmed 7/7 across both
+new/touched test files).
+
+**Gate after this item**: tsc clean, eslint clean, **vitest 2777/2777** (2773 + 4: 2 profile-page
++ 2 private-pdf-status).
+
+**No dedicated live check** — this item is a pure display change (a label string derived from
+existing, already-live-checked ledger data) with no new server route or response shape; covered
+by the static-markup tests above plus 9-22's own live-checked `retractEvidence` behavior that
+the shared "Delete PDF" button already relies on.
+
+**Blast radius**: one additive field on one shared type (`LedgerSummaryRow`), one prop on one
+presentational component (`PreferenceChip`), one export (`LearnedPreferences`, behavior
+unchanged). No change to `PrivatePdfStatus`'s actual logic in this item (already correct from
+9-22) — only new test coverage for it.
+
+Commit: `feat(learning): caption 'from your upload' entries in what Peer has learned (9-24/A9-12)`,
+staging `web/src/lib/preferences/ledger.ts`, `web/src/app/profile/page.tsx`,
+`web/src/app/profile/page.test.tsx`, `web/src/components/reader/private-pdf-status.test.tsx`,
+`docs/handoff/ABC-followup-round2.md`.
+

@@ -778,6 +778,12 @@ export interface LedgerSummaryRow {
   label: string;
   /** Decayed net strength (always positive in its list). */
   weight: number;
+  /**
+   * 9-24 (A9-12): true when at least one ledger entry aggregated into this
+   * row carries `uploads` evidence — the profile screen uses this to caption
+   * the entry "from your upload" so a signal's source is never a mystery.
+   */
+  fromUpload: boolean;
 }
 
 /**
@@ -791,26 +797,27 @@ export function summarizePreferenceLedger(
   limit = 6,
 ): { liked: LedgerSummaryRow[]; disliked: LedgerSummaryRow[] } {
   const clean = cleanPreferenceLedger(ledger);
-  const byLabel = new Map<string, { label: string; net: number }>();
+  const byLabel = new Map<string, { label: string; net: number; fromUpload: boolean }>();
   for (const entry of Object.values(clean)) {
     const key = normalizePreferenceLabel(entry.label);
     if (!key) continue;
     const { positive, negative } = decayedCounts(entry, now);
     const net = positive - negative;
+    const fromUpload = Object.keys(entry.uploads ?? {}).length > 0;
     const prev = byLabel.get(key);
-    if (prev) prev.net += net;
-    else byLabel.set(key, { label: entry.label, net });
+    if (prev) { prev.net += net; prev.fromUpload = prev.fromUpload || fromUpload; }
+    else byLabel.set(key, { label: entry.label, net, fromUpload });
   }
   const rows = Array.from(byLabel.values());
   const liked = rows
     .filter((r) => r.net > 0.05)
     .sort((a, b) => b.net - a.net)
     .slice(0, limit)
-    .map((r) => ({ label: r.label, weight: r.net }));
+    .map((r) => ({ label: r.label, weight: r.net, fromUpload: r.fromUpload }));
   const disliked = rows
     .filter((r) => r.net < -0.05)
     .sort((a, b) => a.net - b.net)
     .slice(0, limit)
-    .map((r) => ({ label: r.label, weight: -r.net }));
+    .map((r) => ({ label: r.label, weight: -r.net, fromUpload: r.fromUpload }));
   return { liked, disliked };
 }
