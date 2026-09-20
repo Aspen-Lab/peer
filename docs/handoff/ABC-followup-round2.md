@@ -80,28 +80,18 @@ browser, run the reports), then report to the user in plain language and stop th
 ## §1. CURRENT STATE — THE SOURCE OF TRUTH
 
 ```
-ROUND:            7 — LOOP CLOSED by the manager @ 2026-09-17
-WHOSE TURN:       nobody (closed)
-STOPPED BECAUSE:  finished — 7-07 landed (C's code, banked and corrected by the manager after C's
-                   session limit); manager re-measured the two A7b cases live.
-STATUS:           S20 page zoom · S21 Fit as a whole-page zoom (computed from the layout pair,
-                   never measured) · S22 0.3-s ease incl. zoom · S23 Semantic Scholar: figure
-                   branch removed (no `figures` field exists), one keyed paced client for
-                   search + enrich. Manager's live numbers on a fresh server at 2560 wide:
-                   Fit → zoom 1.813, 85.0 %; Larger text ×2 under Fit → zoom 1.659, still
-                   85.0 % (the 2xl pair 640 + 560 × 1.2); back → 85.0 %; at 1440 → zoom 1.224,
-                   85.0 %; back to 2560 → 85.0 %. Note: the Browser pane's viewport emulation
-                   did not fire `resize` on its own in the hidden pane — dispatching one did;
-                   a real window resize fires it.
-OPEN ITEMS:       none
-GATE (0 open):    MET
+ROUND:            8 (loop REOPENED by the manager 2026-09-19 — five user items, §1aa)
+WHOSE TURN:       B  (new features + one investigation; the manager recorded the current state)
+STOPPED BECAUSE:  —
+STATUS:           Round 8 open. Nothing landed yet. Another agent's figure-lightbox.* edits are
+                   still dirty in the tree — untouched, excluded.
+OPEN ITEMS:       S24 S25 S26 S27 S28 (§1aa)
+GATE (0 open):    NOT MET
 
-DONE:      rounds 1–7: S3–S23.
-GATE NOW:  tsc clean · eslint clean · vitest 2691/2691 (manager, cold, at close).
-TODO:      none for the loop. Push authorised (§1y) — done by the manager at close, figure files
-           of the other agent excluded. Leads (not authorised): tighten per-source figure
-           timeouts; html-text.ts caps; non-numeric figure cross-reference brackets; the dead
-           PaperFigureFrame exports; the feed's 8-s per-source wall (A7b-03).
+DONE:      rounds 1–7 (S3–S23 closed, pushed 2026-09-17). Round 8: nothing yet.
+GATE NOW:  tsc clean · eslint clean · vitest 2691/2691 (at round-7 close).
+TODO:      B designs S24–S27 and investigates S28; C implements S24–S27; A measures; manager
+           eyeballs; push at close (standing authorization from 2026-09-17 covers the branch).
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
@@ -1072,6 +1062,106 @@ Ruling — item **7-07**, C directly (the mechanism is fully specified; no B tur
 
 Then A re-measures only: Fit at 2560 with A/A changes under it (85 % held at every step), a
 resize 2560 → 1440 → 2560 while fitted (85 % each time), and the gate.
+
+---
+
+## §1aa. ROUND 8 SPEC — five user items from 2026-09-19 (manager) — BINDING
+
+User's words (Chinese; the manager's reading is binding). Figure files stay frozen (another
+agent). Stage by explicit path only.
+
+### S24 — Persona quiz result: two big "Back to main" buttons
+User: *"during walkthrough, when finishing research personality quiz, 缺少一个返回主页的
+button。需要在最后的 personality 分析的页面的左上角和右下角分别加上两个一样的返回主菜单的
+button。按钮要醒目，大，然后颜色就根据系统来。"*
+Current state: `web/src/app/persona/page.tsx` renders `components/persona/quiz.tsx`, whose
+result view is `components/persona/result.tsx` (`PersonaResult`); no link back to the briefing.
+- Two identical, prominent buttons on the result view: **top-left** (above the result's
+  heading) and **bottom-right** (after the last block). Label **"Back to main"**, an arrow glyph
+  (←) before the text, large (the page's `lg` button size or bigger — at least 44 px tall), filled
+  with the theme's accent (`--color-accent`, so it follows the system day/night and the reader's
+  accent), white/`--color-fixed-white` text, hover swell like the other buttons, `aria-label`
+  identical. Both go to `/` (the briefing). Keyboard: Enter/Space; Esc on that page also goes
+  home if the page has no other Esc binding (B checks `keyboard.tsx`).
+- Only on the **result** view, not on the question steps.
+
+### S25 — The abstract becomes a collapsible, collapsed by default
+User: *"把 deep report 的 abstract 变成一个可以折叠的 button，这个 button 要大一点，橙色的，写着
+abstract，颜色根据系统来走。点击以后会展开 abstract，再点击一下就收起。默认状态刚打开 report 的
+时候是折叠的。"*
+Current state: `components/reader/paper-words.tsx` ~line 156 renders `<Band label={ABSTRACT_LABEL}>`
+("The abstract") with the abstract sentences always visible; `ABSTRACT_LABEL`/`ABSTRACT_FOOTER`
+in `reader/copy.ts`.
+- Replace the band's static label with a **large button** labelled **"Abstract"** (copy
+  constant), filled with the theme accent (`--color-accent` — orange in the default accent,
+  follows day/night and the reader's accent choice), white text, full row width of the reading
+  column or at least 48 px tall × comfortable padding, a chevron that rotates when open,
+  `aria-expanded`, `aria-controls` on the abstract region. Hover swell like the other buttons.
+- **Collapsed by default on every open of a report** (component-local `useState(false)`; not
+  persisted). Click → the abstract sentences and the "From the abstract · …" footer appear;
+  click again → hidden. A short height/opacity ease (~200 ms, `ease-snap`, reduced-motion → none)
+  is welcome; not required.
+- The lead claim above it (the paper's own sentence) stays as is. Markdown export unchanged.
+
+### S26 — "What they found, and how big": boxed, readable, results outlined
+User: *"what they found and how big 这里排版有很大的问题。首先这部分需要被一个 solid box 框住作为
+背景，这样可以有别于其他的部分。比如按照图片里，就要用深灰色来作为背景。如果是黑夜模式就用浅灰色
+显示，但是要和文字有足够的 contrast，方便阅读。其次，这部分的起始段落是简介，应该字体和其他的内容
+部分一样大，并且要是深色字体而不是浅灰色。然后接下去的两个小段落应该被黑色的边框圈起来，比较细的
+黑色边框，这样区分重点。保留关键信息加粗的设置。WHAT IS NEW 这里需要同样的字体大小，然后也需要作为
+深黑色字体。"*
+Current state: `components/reader/report-sections.tsx` `ResultsBlock` (~lines 232–300): the
+summary uses `PULL_CLASS` (`text-title-lg`, `text-heading`), each result is a bare `<div>` with
+`CLAIM_CLASS`, its "What is new here:" line uses `text-body text-text-muted` with a mono faint
+label.
+- **The whole section sits in a solid box**: the section's background a step deeper than the
+  page — light mode: a **darker grey than the page ground** (e.g. `--color-bg-secondary` or one
+  step deeper, ~#ececec; NOT a dark box with light text — the user's "深灰色" is read as
+  "deeper than the page", and body text stays dark for contrast); dark mode: a **lighter grey
+  than the page** (`--color-surface`/`--color-surface-hover`, ~#242424) with the light text as
+  now. Rounded per the page's radius scale (the page's rule flattens `rounded-full`; use the
+  card radius the other cards use), padding ~24 px, full column width. B names the exact tokens
+  so the box follows the theme automatically.
+- **The opening paragraph (the summary)** is set like body text: `CLAIM_CLASS` size
+  (`text-lead`), **`text-heading` (dark)**, not `PULL_CLASS`, not muted.
+- **Each result item** gets a **thin dark outline box**: 1 px border in the theme's heading
+  colour at moderate opacity (light: near-black `--color-heading`; dark: the light heading
+  colour), small radius, padding ~16 px, spacing between items. The bold title stays bold.
+- **"What is new here:"** — the same body size as the result text (`text-lead`), **dark**
+  (`text-heading` for the sentence; the mono label may stay mono but in `text-text`, not faint).
+- Figures under results keep rendering inside the item boxes; **no figure file is edited**.
+- Justified prose (S8) continues to apply.
+
+### S27 — A "Main" link beside Search in the masthead
+User: *"在左右侧上方的 search 旁边加个 main，用来返回主页。"*
+Current state: `lib/shell/masthead.ts` `MASTHEAD` items are Search · Saved · Profile (desktop);
+the phone bar has four cells; the reading page carries "← Briefing" on the left.
+- Add **"Main"** as the first item, before Search, linking to `/` (`route: "briefing"`), same
+  style as its neighbours, active state when on `/`. Phone bar: add it as well only if the
+  four-cell layout has room without wrapping (B checks); otherwise desktop only and say so.
+- The wordmark "Peer" still links home; "← Briefing" on the reading page stays.
+
+### S28 — Investigation: do Save / Skip / feedback actually shape the AI's picks?
+User: *"调查一下 save/skip 还有 feedback to ai 来完善 ai 推送的机制吗？"*
+- **B answers by reading and execution, no code:** trace what the Save, Skip, Like/Dislike and
+  "feedback to AI" actions write (`store/feed.ts` `/api/saved`, `/api/feedback`,
+  `preferenceLedger`, `dislikedTopics`, `pendingDismissal`), what the feed request sends
+  (`paperFeedRequestBody`: `preferenceLedger`, `negativeTopics`, `seedTexts`), and what the
+  pipeline does with each (`lib/feed/pipeline.ts`, scoring, `applyJournalBoost`, the ledger's
+  weights, the digest/skim prompts). For each action: **does it change tomorrow's briefing, how
+  (which weight / which exclusion), and is the effect visible today** (e.g. is the ledger
+  persisted and re-sent; is `/api/feedback` stored anywhere with Supabase unconfigured)?
+- Deliverable: a plain-language table in §4 (action → what is recorded → what it changes → gap),
+  and a ranked list of at most three concrete improvements with effort estimates. **No fix
+  guide entries unless a gap is a plain bug** (e.g. a value recorded but never sent). The manager
+  relays the answer to the user; any follow-up work is a new item the user chooses.
+
+### Order and gate
+C's order: **S27 → S24 → S25 → S26** (S28 has no C step). Gate baseline: tsc clean · eslint
+clean · vitest 2691/2691. Figure files frozen; explicit-path staging. A measures by reading the
+served markup/computed styles (Browser pane; the persona route and `/profile` are streamed —
+mind the hidden-pane trap; the papers page and `/` are fine). Push at close (standing
+authorization).
 
 ---
 
@@ -11562,3 +11652,8 @@ Gate met after the manager's independent re-measure of A's two open cases. Hourl
 Branch pushed to origin (first push of `complimentary-enhancement-to-main-update`), after a scan
 of the outgoing diff for credential-shaped strings; the other agent's uncommitted
 `figure-lightbox.*` edits stay local and untracked by this push.
+
+### Round 8 — manager (2026-09-19, reopening)
+
+User asked for five items (S24–S28, §1aa) via the ABC loop with the hourly clock. Current state
+recorded from the code; round starts at B. Clock re-created. B spawned.
