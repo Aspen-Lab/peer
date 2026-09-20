@@ -12595,3 +12595,14 @@ hidden pane after a scroll):
   shade left to the user's eyes.
 - **S24:** `/persona` streams (`loading.tsx`) and does not reveal in the hidden pane — the
   manager relies on A's static-markup checks + the user's eyes.
+
+#### Part 5 — the gate, cold
+
+Re-ran from `web/`, cold, after all four items and all of A's live checks above (the other
+agent's tree still dirty/untracked throughout, untouched by any of A's reads):
+`npx tsc --noEmit` — clean. `npx eslint .` — clean. `npx vitest run --exclude
+"**/benchmark.test.ts"` — **2713/2713** (129 test files), matching the exact number C's own gate
+already reported after 8-03 and re-confirmed unchanged after 8-04. No regression anywhere in the
+suite, including the other agent's own added tests.
+
+Commit: this entry, staging only `docs/handoff/ABC-followup-round2.md`.
