@@ -12524,6 +12524,61 @@ anticipate (the decided-read observer). No difference found.**
 
 Commit: this entry, staging only `docs/handoff/ABC-followup-round2.md`.
 
+#### Part 4 — S26 (boxed findings)
+
+**Code read**: `web/src/components/reader/report-sections.tsx` `ResultsBlock` (lines 259-333) —
+one outer `<div className="rounded-2xl bg-bg-secondary measure p-6">` wraps `BlockHeading`
+(in a `-mt-8` wrapper), the summary paragraph, and the results list; `measure` moved here from
+the results list (now plain `space-y-4`). `RESULTS_SUMMARY_CLASS` (line 42) is `CLAIM_CLASS`
+(line 37) with `text-heading` swapped for `text-text` — same size/leading/justify. `PULL_CLASS`
+confirmed gone (grepped, no other consumer, matches C's stated choice to delete rather than leave
+dead). Each result's `<div>` (line 288-291) carries `rounded-md border border-heading/40 p-4`.
+The novelty paragraph (lines 309-312) is `text-lead`/`text-heading`, its mono label
+`text-text` (not `text-faint`). The bold title (`<b className="font-medium text-heading">`) is
+unchanged — already matched the spec before this item. Figures (`MattedFigure`/`SectionFigure`,
+lines 314-327) stay inside the same per-result `<div>`, now inside its border — confirmed by
+reading, no figure file in `git show --stat 3610041`. `globals.css`: light `--color-bg: #fafafa`
+vs `--color-bg-secondary: #f1f1f1` (deeper/darker — correct for light mode's "深灰色" reading);
+dark `--color-bg: #111111` vs `--color-bg-secondary: #181818` (lighter — correct direction for
+dark mode); `--color-heading` is `#1d1d1d` (light) / `#f3f3f3` (dark) in both palette blocks
+(lines 25/209 and 254/301) — dark ink on the light-mode box, light ink on the dark-mode box,
+matching "enough contrast to read."
+
+**Live check** (Browser pane, `openalex:W7207740551`, independently re-measured rather than
+trusting C's own numbers). **Light mode**: box (`.rounded-2xl.bg-bg-secondary`) computed
+`background-color: rgb(241, 241, 241)` (`#f1f1f1`) — `--color-bg`/`--color-bg-secondary` CSS
+variables read `#fafafa`/`#f1f1f1` directly off `document.documentElement`, confirming the box is
+the deeper token, not a guess from the rendered pixel alone. Padding `24px`. First result's
+computed `border-top`: `1px solid`, color at 40% alpha resolving from `--color-heading`. Summary
+paragraph: `font-size: 16.5px`, `color: rgb(29, 29, 29)` (`#1d1d1d`, `--color-heading`) — identical
+size to a result's own claim paragraph (also `16.5px`, whose own text runs in `rgb(40, 40, 40)`
+`--color-text`, with only the bold title portion in heading colour — correct, the claim's plain
+text was never specified to change). "What is new here:" paragraph: `font-size: 16.5px` (matches
+result text), `color: rgb(29, 29, 29)` (heading, dark); its mono label span: `rgb(40, 40, 40)`
+(`--color-text`, not faint). Bold title: `color: rgb(29, 29, 29)`, `font-weight: 500` — unchanged,
+already correct. **Dark mode, verified via a real reload** (`localStorage`'s
+`peer-profile.state.profile.colorTheme` set to `"dark:ember"`, then navigated fresh — not a
+same-tab mutation): `data-mode="dark"`, CSS variables read `--color-bg: #111`, `--color-bg-
+secondary: #181818`, `--color-heading: #f3f3f3` directly off the document; box
+`background-color: rgb(24, 24, 24)` (`#181818`) — **lighter** than the page background, correct
+direction; summary and novelty text both `rgb(243, 243, 243)` (heading, light-on-dark); the label
+`rgb(227, 227, 227)` (`--color-text` dark), visibly distinct from the heading-colour sentence
+beside it; first result's border resolved from the light heading colour at 40% opacity.
+`localStorage` reset to `"system:ember"` afterward. Grepped `web/src` for
+`report-sections|ResultsBlock|PULL_CLASS|CLAIM_CLASS|WHATS_NEW` under any `*.test.ts*` file —
+zero matches, confirming no test exists to run for this item, as B/C both stated.
+
+**Result: matches S26 exactly in both themes, independently re-measured (not just re-reading C's
+own numbers). No difference found.** No rounding visible in either mode, as expected — every
+radius token in this app is `0px` by the file's own stated sitewide rule, not investigated as a
+bug.
+
+**Note on this section's ordering**: the manager's own "Round 8 — manager browser checks" entry
+below was committed (aea2644) while this part was mid-flight; both stand, unedited, per the
+append-only rule — no overlap in claims, both agree.
+
+Commit: this entry, staging only `docs/handoff/ABC-followup-round2.md`.
+
 ### Round 8 — manager browser checks (2026-09-19, while A measures)
 
 On `/papers/openalex:W7207740551` (hydrated; DOM/computed-style reads — screenshots blank in the
