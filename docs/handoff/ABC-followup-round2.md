@@ -12105,3 +12105,42 @@ is untouched, since it already expects this field to sometimes be non-empty.
 
 Commit: this log entry, plus §1 edited in place (below), staging only
 `docs/handoff/ABC-followup-round2.md`.
+
+### Round 8 — Agent C, item 8-01 (S27 — "Main" link in the masthead)
+
+Branch confirmed `complimentary-enhancement-to-main-update` before touching anything. Baseline
+gate re-run cold on this tree (with the other agent's upload/private-PDF work still dirty,
+untouched): tsc clean, eslint clean, **vitest 2711/2711** — matches §1ab's stated baseline.
+
+**Change**: `web/src/lib/shell/masthead.ts` — added `{ href: "/", label: "Main", route:
+"briefing" }` as the first entry of `SHELL_LINKS`, per B's fix direction verbatim. No type
+change (`"briefing"` already existed in `ShellRoute`). `masthead.tsx`'s render loop needed no
+edit, confirmed by reading — it maps `SHELL_LINKS` generically and a 4th item renders in the same
+style automatically. Phone bar (`thumb-bar.tsx`) and the global `g h` chord left untouched, per
+B's own recommendation (a `grid-cols-4` bar sized for exactly 4 cells; "Today" already reaches
+`/`) — desktop-only, stated explicitly.
+
+**Tests**: rewrote the two assertions B named in `masthead.test.ts` (commented "8-01/S27",
+never deleted): `SHELL_LINKS.map((l) => l.label)` now expects `["Main", "Search", "Saved",
+"Profile"]`; `SHELL_LINKS.some((l) => isActiveLink(l, "briefing"))` now expects `true`.
+**Revert-proof**: reverted `SHELL_LINKS` to its pre-fix array via a throwaway script, re-ran the
+test file — it failed exactly as expected (`AssertionError: expected [...3 items] to deeply
+equal [...4 items]`), then restored the fix and confirmed green again. No other file references
+`SHELL_LINKS`.
+
+**Gate after this item**: tsc clean, eslint clean, **vitest 2711/2711** (no new test files;
+existing test file's assertion count unchanged, contents updated).
+
+**Live check** (Browser pane, not hidden-pane-trapped — `/` is fine): navigated to `/`, skipped
+onboarding to reach the briefing. `read_page` showed `link "Main" [ref] href="/"` first, before
+Search/Saved/Profile. Computed via `javascript_tool`: the `Main` anchor carries
+`aria-current="page"` and class `text-heading` (the active-link style), the other three do not;
+the wordmark ("Peer") link has no active-state class at all — confirmed no doubling. Matches
+B's "honest edge state" prediction exactly.
+
+**Blast radius**: one array entry (masthead.ts), two rewritten assertions (masthead.test.ts).
+Nothing else touched.
+
+Commit: `feat(shell): add a "Main" link before Search in the masthead (8-01/S27)`, staging only
+`web/src/lib/shell/masthead.ts`, `web/src/lib/shell/masthead.test.ts`,
+`docs/handoff/ABC-followup-round2.md`.

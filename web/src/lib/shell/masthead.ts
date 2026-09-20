@@ -59,8 +59,13 @@ export interface ShellLink {
   route: ShellRoute;
 }
 
-/** Search · Saved · Profile — weekly, weekly, rare; the daily surface is the wordmark. */
+/**
+ * Main · Search · Saved · Profile — a desktop-mouse click back to the
+ * briefing (8-01/S27): the phone's "Today" cell and the `g h` chord already
+ * reach it, but nothing on the masthead itself did.
+ */
 export const SHELL_LINKS: readonly ShellLink[] = [
+  { href: "/", label: "Main", route: "briefing" },
   { href: "/search", label: "Search", route: "search" },
   { href: "/saved", label: "Saved", route: "saved" },
   { href: "/profile", label: "Profile", route: "profile" },

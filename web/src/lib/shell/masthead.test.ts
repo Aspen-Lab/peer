@@ -90,11 +90,15 @@ describe("the centre cell", () => {
 
 describe("the right cell", () => {
   it("lights the current page's word and no other", () => {
-    expect(SHELL_LINKS.map((l) => l.label)).toEqual(["Search", "Saved", "Profile"]);
+    // 8-01/S27: "Main" leads the array now, linking back to the briefing —
+    // desktop had nothing to click for that besides the wordmark.
+    expect(SHELL_LINKS.map((l) => l.label)).toEqual(["Main", "Search", "Saved", "Profile"]);
     expect(SHELL_LINKS.filter((l) => isActiveLink(l, "saved")).map((l) => l.label)).toEqual([
       "Saved",
     ]);
-    expect(SHELL_LINKS.some((l) => isActiveLink(l, "briefing"))).toBe(false);
+    // 8-01/S27: "Main" is active on the briefing route, same mechanism the
+    // phone's "Today" cell already uses for the same route.
+    expect(SHELL_LINKS.some((l) => isActiveLink(l, "briefing"))).toBe(true);
     expect(SHELL_LINKS.some((l) => isActiveLink(l, "paper"))).toBe(false);
   });
 });
