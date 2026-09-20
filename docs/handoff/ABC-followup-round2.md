@@ -80,69 +80,19 @@ browser, run the reports), then report to the user in plain language and stop th
 ## §1. CURRENT STATE — THE SOURCE OF TRUTH
 
 ```
-ROUND:            8 (loop REOPENED by the manager 2026-09-19 — five user items, §1aa)
-WHOSE TURN:       manager
-STOPPED BECAUSE:  A finished the turn @ 2026-09-20 02:40 UTC — GATE MET, 0 open items
-STATUS:           Round 8: all four fix-guide items confirmed matching §1aa exactly, in the
-                   rendered/served result — 8-01 (S27, "Main" link), 8-02 (S24, two "Back to main"
-                   buttons + Esc), 8-03 (S25, collapsible Abstract toggle, including a live proof
-                   the decided-read observer still fires correctly off the Decision block while
-                   closed), 8-04 (S26, boxed findings section, independently re-measured in both
-                   themes). S28 stays closed from B's turn (informational, no C step; 8-05/8-06
-                   untouched, the manager/user's call). Gate re-run cold: tsc clean, eslint clean,
-                   vitest 2713/2713. The other agent's upload/private-PDF work-in-progress is
-                   still dirty/untracked in the tree, confirmed byte-identical to the round's
-                   starting `git status` after all of A's reads — untouched throughout.
-OPEN ITEMS:       0 — see §4 "Round 8 — Agent A" for the full difference list (none found) and the
-                   3 not-a-defect items flagged for the manager's own eyes (dark-mode persona
-                   buttons, the findings-box shade in both modes, hover-swell clipping — all three
-                   are tooling-limited or subtle-by-design, not execution-confirmed differences).
+ROUND:            8 — CLOSED by the manager @ 2026-09-19 (pushed). ROUND 9 opens next (§1ac).
+WHOSE TURN:       nobody (round 8 closed)
+STOPPED BECAUSE:  finished — A: GATE MET (2713/2713); manager saw S25/S26/S27 live.
+STATUS:           S24 persona back buttons · S25 collapsed abstract · S26 boxed findings · S27
+                   Main link · S28 investigation delivered (feedback-to-AI is dead code;
+                   dislikedTopics has no writer; the ledger only re-ranks the fetched pool).
+                   Left to the user's eyes: persona buttons in dark mode; the box shade.
+OPEN ITEMS:       none (round 8)
 GATE (0 open):    MET
 
-DONE:      rounds 1–7 (S3–S23 closed, pushed 2026-09-17). Round 8: B's fix guide + S28
-           investigation done (§4). C implemented 8-01..8-04 (§4, four entries below B's), each
-           committed separately: 465b795 (8-01), c2741d5 (8-02), fed4e20 (8-03), 3610041 (8-04).
-           A verified all four in 5 parts (§4 "Round 8 — Agent A"), gate re-run cold, GATE MET.
-GATE NOW:  tsc clean · eslint clean · vitest 2713/2713 (2711 baseline + 2 new test files from
-           8-02/8-03), re-run cold by A after all four items and all live checks.
-TODO:      **For the manager, not another agent turn** — three items worth a human eyeball, named
-           in A's own difference list, none of them execution-confirmed differences:
-             - The persona "Back to main" buttons in dark mode (confirmed via computed
-               `background-color`/`color` after a real theme reload; never seen by a human eye).
-             - The findings box's shade in light mode — B flagged this in the fix guide as only a
-               ~2% lightness step (`#fafafa` → `#f1f1f1`); computed-style-correct, but possibly
-               subtler than the user's screenshot-driven request implied. Fallback already named
-               (a bespoke deeper value, or `--color-surface-hover` in dark mode).
-             - Hover-swell clipping on 8-02/8-03's buttons — geometry-verified only, by both B/C
-               and A independently: the automated Browser pane's synthetic hover does not trigger
-               a real CSS `:hover` state in this environment (confirmed via
-               `element.matches(':hover')` reading `false` and pixel-identical before/after
-               screenshots), so this needs the manager's own real cursor to close.
-           **Hidden-pane / hidden-tab trap, found firsthand last turn, still worth knowing:** a
-           same-tab runtime `document.documentElement.setAttribute("data-mode", "dark")` gives a
-           **stale cached `getComputedStyle` reading** on already-painted elements — a real reload
-           (setting `localStorage`'s `peer-profile.state.profile.colorTheme` to
-           `"dark:ember"`/`"system:ember"`, the app's own boot-script mechanism in `layout.tsx`,
-           then navigating) is the only reliable way to read dark-mode styles. `/persona` and
-           `/profile` carry a streamed-DOM trap (`div[hidden][id^="S:"]`) on top of this — check
-           for it before trusting any read there (this round, `/persona` revealed cleanly with no
-           trap present, and a persisted quiz result meant the quiz never needed retaking).
-           **Files that are the other agent's — do not flag as C's gap, do not edit:** `.env.example`,
-           `api/figure/route.ts`, `api/papers/[id]/reading/route.ts(+.test)`,
-           `api/papers/report/route.ts(+.test)`, `api/papers/upload/**` (all of it),
-           `app/papers/[id]/page.tsx`, `app/profile/page.tsx`, `briefing/upload-button.tsx`,
-           `paper-figure.tsx`, `reader/decision-block.tsx`, `reader/figure-lightbox.tsx(+.test)`,
-           `reader/use-model-report.ts`, `reader/use-reading.ts`, `ui/button.tsx` (only a `green`
-           tone added — `buttonVariants`/`tone:"primary"`/the `size` cva are stable, C imported
-           from it), `lib/feed/pipeline.ts`, `lib/feed/profile-compiler.ts`, `lib/figures/*`,
-           `lib/opportunities/pool-cache.ts`, `lib/papers/full-text.ts(+.test)`,
-           `lib/papers/upload-store.ts`, `lib/preferences/ledger.ts`, `store/profile.ts`,
-           `types/index.ts`, plus untracked: `api/jobs/purge-uploads/`,
-           `briefing/upload-consent-dialog.tsx`, `profile-uploads.tsx`,
-           `reader/private-pdf-status.tsx`, `reader/use-private-supplement.ts`,
-           `figures/private-pdf-extract.test.ts`, `lib/papers/upload-access.ts(+.test)`,
-           `lib/papers/upload-policy.ts`, `lib/preferences/upload-concepts.ts(+.test)`,
-           `docs/handoff/HANDOFF-upload-profile-fulltext-pdf.md`.
+DONE:      rounds 1–8: S3–S28.
+GATE NOW:  tsc clean · eslint clean · vitest 2713/2713 (A, cold, with the upload draft present).
+TODO:      round 9 = docs/handoff/HANDOFF-upload-profile-fulltext-pdf.md (see §1ac).
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
@@ -12647,3 +12597,9 @@ read cannot fully replace:
    if needed.
 
 Commit: this entry, staging only `docs/handoff/ABC-followup-round2.md`.
+
+### Close — round 8 (manager, 2026-09-19)
+
+A met the gate; manager saw the Main link, the abstract toggle and the boxed findings live.
+Round 8's 16 commits pushed (credential scan clean; the upload draft's 45 dirty/untracked files
+excluded). Clock kept running for round 9.
