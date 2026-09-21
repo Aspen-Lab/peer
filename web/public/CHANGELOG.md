@@ -2,6 +2,28 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.36.3 — 2026-09-21
+
+The file rail, tidied.
+
+Six notes made a mess of the editor's rail. Three faults, all of them the
+rail's own:
+
+The two-line clamp on a title never clamped — a `block` sat beside it and won
+the display, so a paper title ran to five lines and the column lost its
+rhythm. It clamps now, on both tabs.
+
+The line under a title said the kind, and the kind was almost always the
+same: four reading notes in a row read "reading notes · 22h ago" four times.
+A reading note is *about a paper*, so it now says which paper — "Harris et
+al., 2009 · 23h" — and any other note says how much of other people's work is
+in it. A record with no authors names its venue rather than repeating the
+title back at itself, and the timestamp drops the word "ago", which never
+varied.
+
+Rows were separated by a gap, which is not enough when a row is two lines
+tall. They are separated by a hairline now, and sit a little deeper.
+
 ## v0.36.2 — 2026-09-21
 
 The paper is open, and the panel holds its contents.

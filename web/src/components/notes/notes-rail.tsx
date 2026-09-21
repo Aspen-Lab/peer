@@ -52,9 +52,35 @@ export interface RailProps {
   onPicked?: () => void;
 }
 
+/** What a row says under its title.
+ *
+ *  It used to say the kind — and four reading notes in a row read "reading
+ *  notes · 22h ago · reading notes · 22h ago", which is six words of nothing.
+ *  A reading note is about a paper, so it says which paper; any other note
+ *  says how much of other people's work is in it. The kind is already in the
+ *  title: for a reading note the title IS the paper. */
+function noteMeta(note: Note, cites: number): string {
+  const about = note.paperId
+    ? Object.values(note.sources).find((s) => s.paperId === note.paperId)
+    : undefined;
+  // `authorYear` falls back to the first words of the title when a record
+  // carries no authors — under the title itself that reads as a stutter, so
+  // an author-less paper says where it was published instead.
+  const first = about
+    ? about.authors.length > 0
+      ? authorYear(about)
+      : [about.venue, about.year].filter(Boolean).join(", ") || null
+    : cites > 0
+      ? `${cites} cited`
+      : null;
+  // "22h", not "22h ago": in a column of them the word never varies.
+  const edited = formatTimeAgo(note.updatedAt)?.replace(/ ago$/, "") ?? null;
+  return [first, edited].filter(Boolean).join(" \u00b7 ");
+}
+
 function rowClass(active: boolean): string {
   return cn(
-    "block w-full px-2 py-2 text-left transition-colors",
+    "block w-full px-2 py-2.5 text-left transition-colors",
     active
       ? "bg-bg-secondary text-heading shadow-[inset_2px_0_0_0_var(--color-text-muted)]"
       : "text-text-muted hover:bg-bg-secondary/60 hover:text-heading",
@@ -245,10 +271,9 @@ export function EditorRail({
               className="annotation w-full bg-transparent px-2 py-1 text-text shadow-[inset_0_0_0_1px_var(--color-border-strong)] outline-none placeholder:text-text-faint/70 focus:shadow-[inset_0_0_0_1px_var(--color-text-muted)]"
             />
           )}
-          <ul className="min-h-0 flex-1 space-y-1 overflow-auto">
+          <ul className="min-h-0 flex-1 divide-y divide-border/60 overflow-auto">
             {shown.map((note) => {
               const here = note.id === currentId;
-              const edited = formatTimeAgo(note.updatedAt);
               const cites = citedKeys(note).filter((k) => note.sources[k]).length;
               return (
                 <li key={note.id} className="group/row relative">
@@ -268,13 +293,11 @@ export function EditorRail({
                         aria-current={here ? "page" : undefined}
                         className={rowClass(here)}
                       >
-                        <span className="line-clamp-2 block pr-6 font-reading text-body-sm leading-[1.4]">
+                        <span className="line-clamp-2 pr-6 font-reading text-body-sm leading-[1.4]">
                           {note.title.trim() || "Untitled"}
                         </span>
-                        <span className="annotation mt-1 block text-text-faint">
-                          {[note.paperId ? "reading notes" : cites > 0 ? `${cites} cited` : null, edited]
-                            .filter(Boolean)
-                            .join(" · ")}
+                        <span className="annotation mt-1 block truncate text-text-faint">
+                          {noteMeta(note, cites)}
                         </span>
                       </Link>
                       <button
@@ -339,12 +362,12 @@ export function EditorRail({
           </ul>
         </>
       ) : (
-        <ul className="min-h-0 flex-1 space-y-1 overflow-auto">
+        <ul className="min-h-0 flex-1 divide-y divide-border/60 overflow-auto">
           {papers.map(({ citable: c, onShelf }) => (
             <li key={c.id}>
               <button type="button" onClick={() => onPreview?.(c.id)} className={rowClass(false)}>
-                <span className="line-clamp-2 block font-reading text-body-sm leading-[1.4]">{c.title}</span>
-                <span className="annotation mt-1 block text-text-faint">
+                <span className="line-clamp-2 font-reading text-body-sm leading-[1.4]">{c.title}</span>
+                <span className="annotation mt-1 block truncate text-text-faint">
                   {[
                     c.authors.length > 0
                       ? authorYear({ authors: c.authors, year: c.publishedDate ? Number(c.publishedDate.slice(0, 4)) : undefined, title: c.title })
