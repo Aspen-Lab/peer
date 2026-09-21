@@ -2,6 +2,34 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.38.0 — 2026-09-21
+
+A wider board, and a mark for what each paper is about.
+
+**The board fills the screen.** It was capped at 1280px and dealt three cards
+at every width above that, so a 1920 monitor spent a third of itself on empty
+margin and still read three abreast. The card is what should stay constant —
+about 400px, which is what a title and three lines of reason want — so the
+count is what grows: **four cards from 1700px, five from 2200px**, with the
+board widening to match. Below 1700 nothing moves at all.
+
+**Each card carries a small mark for its subject.** Ten cards in a briefing
+are ten grey rectangles that differ only in their words, and the words are all
+in the same face at the same size — there is nothing to sort by until you
+start reading, which is the opposite of what a board is for. The mark sits at
+the end of the filing line, in the meta line's own weight, and names a family:
+earth and agriculture, life and health, physical sciences, economy, security,
+images, language, geometry, networks — or, where the paper is not about a
+field but is a kind of reading, a course or survey, a toolkit, data, a model.
+Hover it and it says which.
+
+It is read off the paper's own title and the terms already cleaned for its
+plate — never the venue, because half of one real briefing came back "physical
+sciences" for being published on Zenodo, which CERN runs; and never the raw
+concept tags, which put "Computational Physics and Python Applications" on a
+textbook. It is a reading, not a record: it is drawn faint, nothing is filed
+by it, and nothing on the card depends on it.
+
 ## v0.37.0 — 2026-09-21
 
 Drag a paper into the draft.

@@ -18,7 +18,13 @@ export const pageContainer = cva("mx-auto w-full px-6", {
       // becomes the page's own margins.
       spread: "max-w-[760px] xl:max-w-[1000px] 2xl:max-w-[1200px]",
       content: "max-w-[820px]",  // home column, /privacy, /saved
-      board: "max-w-[1280px]",   // full-bleed feed board
+      // The feed board. It held 1280 at every width above 1280, so a 1920
+      // screen spent a third of itself on margins and still dealt three
+      // cards. The card is what should stay constant — about 400px, the
+      // width a title and three lines of reason want — so the board widens
+      // and the columns multiply instead. Four cards from 1700, five from
+      // 2200; below that nothing moves.
+      board: "max-w-[1280px] 3xl:max-w-[1760px] 4xl:max-w-[2200px]",
       // Narrows on small screens, widens at lg — /profile.
       contentResponsive: "max-w-[740px] lg:max-w-[820px]",
     },

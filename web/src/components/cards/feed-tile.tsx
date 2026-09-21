@@ -12,6 +12,8 @@ import { PaperPlate, shortVenue } from "@/components/cards/paper-plate";
 import { SwipeableCard } from "@/components/cards/swipe-card";
 import { cardShell } from "@/components/ui/card-shell";
 import { cn } from "@/lib/cn";
+import { topicMarkOf } from "@/lib/papers/topic-mark";
+import { TopicMark } from "./topic-mark";
 
 type FeedItem = { kind: "paper"; data: Paper };
 
@@ -142,6 +144,9 @@ function PaperTile({ paper, isRead, selected, plateTerms = [], line, index, tota
   };
 
   const kind = paperBadgeKind(paper);
+  // What the paper is about, read off its own words — see
+  // lib/papers/topic-mark.ts for why it is the subject and not the method.
+  const mark = topicMarkOf({ title: paper.title, terms: plateTerms });
   const authorLine =
     paper.authors.slice(0, 2).join(", ") +
     (paper.authors.length > 2 ? ` +${paper.authors.length - 2}` : "");
@@ -205,6 +210,11 @@ function PaperTile({ paper, isRead, selected, plateTerms = [], line, index, tota
           <span className="annotation text-text-faint truncate">
             {metaBits.join(" · ")}
           </span>
+          {/* The subject, at the far end of the filing line: the number and
+              the venue say where this card sits, the mark says what is in
+              it. Right-aligned so ten cards stack ten marks in a column the
+              eye can run down without reading a word. */}
+          <TopicMark topic={mark.key} label={mark.label} className="ml-auto text-text-faint/80" />
         </div>
         <h3 className="paper-line text-title-lg text-heading leading-[1.2] line-clamp-3">
           {paper.title}

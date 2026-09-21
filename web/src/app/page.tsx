@@ -229,7 +229,7 @@ function DailyBriefingPage() {
             grid either ragged-edges every row or reserves dead space on the
             six cards with no image. CSS columns let each card be its own
             height. */}
-        <div className="mt-4 columns-1 sm:columns-2 lg:columns-3 gap-4 [column-fill:_balance]">
+        <div className="mt-4 board-columns gap-4 [column-fill:_balance]">
           {papers.map((paper, index) => (
             <div
               key={paper.id}

@@ -525,7 +525,7 @@ export function LoadingSkeleton({
         </div>
       )}
 
-      <div className={`${label ? "mt-8" : "mt-2"} columns-1 sm:columns-2 lg:columns-3 gap-4 [column-fill:_balance]`}>
+      <div className={`${label ? "mt-8" : "mt-2"} board-columns gap-4 [column-fill:_balance]`}>
         {cards.map((card, i) => (
           <div
             key={i}

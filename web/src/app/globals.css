@@ -1,6 +1,19 @@
 @import "tailwindcss";
 
 @theme {
+  /* ── Screens above Tailwind's last one ──────────────────
+     `xl` is 80rem and `2xl` is 96rem, and the board runs out of named
+     screens well before a desk monitor runs out of pixels.
+
+     One thing to know before using them: Tailwind v4 emits a CUSTOM screen's
+     block BEFORE every built-in one, whatever its width. So `3xl:` beats an
+     unprefixed utility (`max-w-[1280px]`) but LOSES to `lg:` — measured, not
+     assumed: `3xl:columns-4` was emitted above `lg:columns-3` and never won.
+     Use these against unprefixed defaults only; where a ladder crosses the
+     built-in screens, write the ladder as a utility (`board-columns`). */
+  --breakpoint-3xl: 1700px;
+  --breakpoint-4xl: 2200px;
+
   /* Greyscale, and one hue.
      Every neutral here is a true grey; the accent seed is the only coloured
      thing the interface owns. These are the defaults Tailwind compiles the
@@ -361,6 +374,24 @@ html[data-mode="dark"] {
    The noise is one baked data-URI with its alpha already low, used as an
    ordinary background-image over the surface colour — no overlay element, so
    nothing new enters the stacking order and nothing can sit above a menu. */
+
+/* ── The briefing board's columns ───────────────────────
+   The card is the constant — about 400px, which is what a title and three
+   lines of reason want; the COUNT is what grows with the screen. Four cards
+   from 1700px and five from 2200px, where the board is allowed to widen to
+   match (`page-container.tsx`).
+
+   Written here rather than as `lg:columns-3 3xl:columns-4` at the call site
+   because of the emit order noted in `@theme` above: the custom screen loses
+   to the built-in one. Plain CSS rather than `@utility`, because a nested
+   `@media` inside one emitted nothing at all — the base declaration survived
+   and the board fell to a single 1712px column. Ascending order, by hand,
+   and nothing reorders it. ── */
+.board-columns { columns: 1; }
+@media (width >= 40rem)  { .board-columns { columns: 2; } }
+@media (width >= 64rem)  { .board-columns { columns: 3; } }
+@media (width >= 1700px) { .board-columns { columns: 4; } }
+@media (width >= 2200px) { .board-columns { columns: 5; } }
 
 @utility grain {
   /* The tile is mid-grey with a noisy alpha, so it lightens a dark surface and
