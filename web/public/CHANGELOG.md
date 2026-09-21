@@ -2,6 +2,31 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.39.0 — 2026-09-21
+
+The shelf and the profile: a narrow rail, a long column.
+
+Both pages were one 820px column down the middle of the window. On a wide
+screen that is a third of the page holding everything and two thirds holding
+nothing — and the page's own name, "Saved" or "Your signals", scrolled away
+with the first card.
+
+From xl they are two columns, and the proportion is the point: **the rail is
+narrow (240px) and the column takes every pixel the window adds.**
+
+**Saved** — the rail holds the name, the counts, and a way between the two
+halves of the shelf ("Notes 7", "Papers 4"), and it is sticky, so it is still
+there at the bottom of a long shelf. The column holds the cards, and takes a
+third card per row from 2xl.
+
+**Your signals** — the rail holds the name, the signals-set count and Edit.
+The column holds the account, the profile, the theme and the reading rhythm,
+each of them wider than it was.
+
+Below xl nothing moves: one column, the rail's contents first, exactly as
+before. The reading spread is untouched — it is sized by the measure, not by
+the window, and both of its columns hold reading.
+
 ## v0.38.0 — 2026-09-21
 
 A wider board, and a mark for what each paper is about.

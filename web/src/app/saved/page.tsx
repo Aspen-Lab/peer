@@ -27,6 +27,7 @@ import { PaperCard } from "@/components/cards/paper-card";
 import { NoteCard } from "@/components/notes/note-card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageContainer } from "@/components/ui/page-container";
+import { PageSpread, RailLink } from "@/components/ui/page-spread";
 import { Band } from "@/components/ui/band";
 import { COMMAND } from "@/components/ui/command";
 import { cn } from "@/lib/cn";
@@ -66,14 +67,28 @@ export function SavedPageView({
   ].filter(Boolean);
 
   return (
-    <PageContainer>
-      <header className="mb-10">
-        <h1 className="display-line text-display leading-[1.1] text-heading lg:text-display-lg">Saved</h1>
-        {/* A count is a machine fact, not a lede — it was set at 16.5px on a
-            measure written for prose, holding one number. */}
-        {counts.length > 0 && <p className="annotation text-meta text-text-faint mt-3">{counts.join(" · ")}</p>}
-      </header>
-
+    <PageContainer width="shelf">
+      <PageSpread
+        rail={
+          <header className="mb-10 xl:mb-0">
+            {/* `xl:text-display` — the rail is 240px, and the large display
+                size breaks "Saved" onto two lines inside it. */}
+            <h1 className="display-line text-display leading-[1.1] text-heading lg:text-display-lg xl:text-display">
+              Saved
+            </h1>
+            {/* A count is a machine fact, not a lede — it was set at 16.5px on a
+                measure written for prose, holding one number. */}
+            {counts.length > 0 && <p className="annotation text-meta text-text-faint mt-3">{counts.join(" · ")}</p>}
+            {/* The way between the two halves of the shelf. Only where the
+                rail exists: below xl they are already one after the other. */}
+            <nav className="mt-7 hidden border-t border-border pt-4 xl:block">
+              <RailLink href="#shelf-notes" label="Notes" count={list.length} />
+              <RailLink href="#shelf-papers" label="Papers" count={savedPapers.length} />
+            </nav>
+          </header>
+        }
+      >
+      <div id="shelf-notes" className="scroll-mt-20">
       <Band label="Notes" gap="none">
         <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2">
           <button type="button" className={COMMAND} onClick={onNewNote}>
@@ -86,14 +101,16 @@ export function SavedPageView({
           )}
         </div>
         {list.length > 0 && (
-          <div className="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-2">
+          <div className="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-2 2xl:grid-cols-3">
             {list.map((note) => (
               <NoteCard key={note.id} note={note} />
             ))}
           </div>
         )}
       </Band>
+      </div>
 
+      <div id="shelf-papers" className="scroll-mt-20">
       <Band label="Papers">
         {savedPapers.length === 0 ? (
           <div className="mt-6">
@@ -120,7 +137,7 @@ export function SavedPageView({
               </span>
             </div>
 
-            <div className="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-2">
+            <div className="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-2 2xl:grid-cols-3">
               {savedPapers.map((paper) => {
                 const on = picked.includes(paper.id);
                 const own = notesReady ? readingNoteFor(notes, paper.id) : undefined;
@@ -207,6 +224,8 @@ export function SavedPageView({
           </>
         )}
       </Band>
+      </div>
+      </PageSpread>
     </PageContainer>
   );
 }

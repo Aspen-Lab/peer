@@ -23,6 +23,7 @@ import { apiFetch } from "@/lib/api";
 import { SURFACE_TOPIC_DESCRIPTIONS } from "@/lib/profile/topic-copy";
 import { IconBook, IconBuilding, IconCheck } from "@/components/icons";
 import { PageContainer } from "@/components/ui/page-container";
+import { PageSpread } from "@/components/ui/page-spread";
 import { AccountSection } from "@/components/account/account-section";
 import { VersionLine } from "@/components/shell/version-line";
 import { AiKeyFields } from "@/components/profile/ai-setup";
@@ -145,17 +146,19 @@ export default function ProfilePage() {
   const total = signals.length;
 
   return (
-    <PageContainer width="contentResponsive">
-      {/* ── Header ── */}
-      <header className="mb-8">
+    <PageContainer width="shelf">
+      <PageSpread
+        rail={
+      /* ── Header ── */
+      <header className="mb-8 xl:mb-0">
         <p
           className="eyebrow text-text-faint mb-3"
         >
           Your profile
         </p>
-        <div className="flex items-start justify-between gap-6 flex-wrap">
+        <div className="flex items-start justify-between gap-6 flex-wrap xl:flex-col xl:gap-4">
           <h1
-            className="display-line text-display lg:text-display-lg text-heading leading-[1.05]"
+            className="display-line text-display lg:text-display-lg xl:text-display text-heading leading-[1.05]"
           >
             {firstName ? (
               <>
@@ -209,7 +212,8 @@ export default function ProfilePage() {
           </span>
         </div>
       </header>
-
+        }
+      >
       {/* ── Account — the app's only sign-in, so it is first, not 1700px
           down under every settings block. Only when Supabase is configured. ── */}
       <AccountSection className="mb-10 pb-8 border-b border-border" />
@@ -316,6 +320,7 @@ export default function ProfilePage() {
       </section>
 
       <VersionLine className="mt-10" />
+      </PageSpread>
     </PageContainer>
   );
 }

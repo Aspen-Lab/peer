@@ -27,6 +27,11 @@ export const pageContainer = cva("mx-auto w-full px-6", {
       board: "max-w-[1280px] 3xl:max-w-[1760px] 4xl:max-w-[2200px]",
       // Narrows on small screens, widens at lg — /profile.
       contentResponsive: "max-w-[740px] lg:max-w-[820px]",
+      // A page laid out as a rail and a column (`PageSpread`): one column at
+      // 820 until xl, then wide enough that the column beside a 240px rail is
+      // still worth two cards. Only the built-in screens — a custom one loses
+      // to them (see `@theme` in globals.css).
+      shelf: "max-w-[820px] xl:max-w-[1180px] 2xl:max-w-[1360px]",
     },
     rhythm: {
       page: "py-12 md:py-16 lg:py-24",  // 48 → 64 → 96, the section heartbeat
