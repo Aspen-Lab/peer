@@ -19,14 +19,9 @@
 // are the paper's too, so they are serif as well — the mono on this page is
 // Peer's voice, and none of this is Peer's.
 
-import { useState } from "react";
 import type { PaperReading, ReadingSection } from "@/lib/papers/reading";
 import { Band } from "@/components/ui/band";
-import { IconArrowRight } from "@/components/icons";
 import { BODY } from "./copy";
-
-/** Below this a paper is short enough that hiding it would be the ceremony. */
-const ALWAYS_OPEN_WORDS = 900;
 
 function countWords(body: ReadingSection[]): number {
   let words = 0;
@@ -38,9 +33,15 @@ function countWords(body: ReadingSection[]): number {
   return words;
 }
 
-function Section({ section }: { section: ReadingSection }) {
+/** Each section is a destination: the contents rail beside the page jumps
+ *  here, and `scroll-mt` keeps the heading clear of the sticky masthead. */
+export function sectionAnchor(index: number): string {
+  return `paper-section-${index}`;
+}
+
+function Section({ section, index }: { section: ReadingSection; index: number }) {
   return (
-    <section className="mt-8 first:mt-6">
+    <section id={sectionAnchor(index)} className="mt-8 scroll-mt-20 first:mt-6">
       <h3 className="font-reading font-medium text-heading text-title leading-[1.3] mb-2">
         {section.heading}
       </h3>
@@ -56,26 +57,13 @@ function Section({ section }: { section: ReadingSection }) {
 /** The anchor the decision block's "read it here" scrolls to. */
 export const PAPER_BODY_ID = "paper-body";
 
-export function PaperBody({
-  reading,
-  open: openFromPage,
-  onOpen,
-}: {
-  reading: PaperReading;
-  /** The page opens it too: the decision block's first command is "read it
-   *  here", and it lands on text that is already unrolled. */
-  open?: boolean;
-  onOpen?: () => void;
-}) {
+export function PaperBody({ reading }: { reading: PaperReading }) {
   // `?? []`: the version gate above should mean this is always an array, and
   // a missing optional block is still not worth taking the page down for.
   const body = reading.body ?? [];
-  const [openHere, setOpenHere] = useState(false);
-  const open = openFromPage || openHere;
   if (body.length === 0) return null;
 
   const words = countWords(body);
-  const shown = words <= ALWAYS_OPEN_WORDS || open;
 
   return (
     // `scroll-mt`: the masthead is sticky, and a heading scrolled to the
@@ -85,30 +73,16 @@ export function PaperBody({
       {/* The contents: the sections Peer reached, in the paper's own order.
           It doubles as the statement of what it did not reach — a paper whose
           extractor found four headings says so here and nowhere else. */}
-      <p className="annotation text-text-faint mt-4 measure-mono">
+      <p className="annotation text-text-faint mt-4 measure-mono xl:hidden">
         {body.map((section) => section.heading).join(" · ")}
       </p>
       <p className="annotation text-text-faint mt-1.5">
         {BODY.provenance(reading.provenance.sourceLabel, body.length, words)}
       </p>
 
-      {shown ? (
-        body.map((section) => <Section key={`${section.canonical}:${section.heading}`} section={section} />)
-      ) : (
-        <button
-          type="button"
-          onClick={() => {
-            setOpenHere(true);
-            onOpen?.();
-          }}
-          className="group inline-flex items-center gap-1.5 font-mono text-body-sm text-text-muted mt-5 hover:text-heading transition-colors [@media(hover:none)]:min-h-11"
-        >
-          {BODY.open}
-          <span className="transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none">
-            <IconArrowRight size={13} />
-          </span>
-        </button>
-      )}
+      {body.map((section, i) => (
+        <Section key={`${section.canonical}:${section.heading}`} section={section} index={i} />
+      ))}
     </Band>
     </div>
   );

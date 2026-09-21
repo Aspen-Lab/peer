@@ -59,6 +59,7 @@ import { PAGE_CLASS, SPREAD_GRID } from "@/components/reader/spread";
 import { useReading } from "@/components/reader/use-reading";
 import { PaperNotes } from "@/components/notes/paper-notes";
 import { PAPER_BODY_ID } from "@/components/reader/paper-body";
+import { PaperContents } from "@/components/reader/paper-contents";
 import { useModelReport } from "@/components/reader/use-model-report";
 import {
   BODY,
@@ -252,26 +253,18 @@ function Reader({
 
   const { reading, fromServer } = useReading(paper);
   const model = useModelReport({ paper, profile });
-  // The paper's own text, unrolled from the decision block: where Peer has
-  // read the paper, reading it here is the first thing to offer.
-  const [bodyOpen, setBodyOpen] = useState(false);
+  // Where Peer has read the paper, the text is already on the page — the
+  // command and the contents are ways down to it, not ways to open it.
   const hasBody = (reading?.body?.length ?? 0) > 0;
   const readHere = useCallback(() => {
-    setBodyOpen(true);
-    // After the block has unrolled and painted — one frame to render, one to
-    // lay out. And only where the text is not already on the screen: on the
-    // spread it sits in the right column beside the command that opened it,
-    // and scrolling then would throw the page for no reason.
-    requestAnimationFrame(() =>
-      requestAnimationFrame(() => {
-        const block = document.getElementById(PAPER_BODY_ID);
-        if (!block) return;
-        const top = block.getBoundingClientRect().top;
-        if (top < 0 || top > window.innerHeight * 0.75) {
-          block.scrollIntoView({ behavior: "smooth", block: "start" });
-        }
-      }),
-    );
+    const block = document.getElementById(PAPER_BODY_ID);
+    if (!block) return;
+    const top = block.getBoundingClientRect().top;
+    // Only where it is not already on the screen — scrolling to a block the
+    // reader is looking at throws the page for nothing.
+    if (top < 0 || top > window.innerHeight * 0.6) {
+      block.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
   }, []);
   const report = model.report;
 
@@ -637,6 +630,7 @@ function Reader({
             readLabel={BODY.open}
           />
         }
+        contents={<PaperContents reading={reading} />}
         additions={
           <>
             {/* The reader's own notes on this paper, and the way into them —
@@ -706,7 +700,7 @@ function Reader({
 
             {/* The paper, when Peer reached it: everything the extractor
                 read, under everything Peer had to say about it. */}
-            <PaperBody reading={reading} open={bodyOpen} onOpen={() => setBodyOpen(true)} />
+            <PaperBody reading={reading} />
 
             {/* Last, and always there: the facts that need no key. On a page with no model
                 page it is the only block under the abstract, which is the

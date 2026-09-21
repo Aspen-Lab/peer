@@ -2,6 +2,28 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.36.2 — 2026-09-21
+
+The paper is open, and the panel holds its contents.
+
+Yesterday's **Read it here** still asked for a click before the paper existed
+on the page. That is the wrong shape for a reader who has already chosen to
+read: the text Peer extracted is now simply there, under everything Peer has
+to say, with no button between it and the eye. The command stays — it is the
+way *down* to the text now, not the way *into* it — and the paper's sections
+are real anchors, so a link can point at §3.2 of a paper.
+
+Beside it, the left column of a wide screen no longer ends in air. Under the
+decision it now carries **the paper's contents**: where the text came from,
+how many sections and words Peer reached, and every heading in the paper's own
+order, indented as the paper numbers them, each one a jump. The panel is
+sticky, so the contents stay in view while the paper scrolls past them — the
+shape of a reading room rather than a landing page.
+
+On a phone nothing moves: one column, the contents printed as a strip at the
+head of the paper, exactly as before. Where Peer holds no full text there is
+no contents and no command, because there is nothing to point at.
+
 ## v0.36.1 — 2026-09-20
 
 Read it here, said loudly.
