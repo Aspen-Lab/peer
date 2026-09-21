@@ -59,6 +59,7 @@ import {
   wordCount,
 } from "@/lib/notes/blocks";
 import { authorYear, citableFromPaper, keyFor, sourceOf } from "@/lib/notes/cite";
+import { carriesPaper, gapAt, readPaperDrag } from "@/lib/notes/drag";
 import { plainInline } from "@/lib/notes/inline";
 import { fileName, reference, toBibtex, toMarkdown } from "@/lib/notes/export";
 import { blankNote } from "@/lib/notes/templates";
@@ -105,6 +106,11 @@ const SLASH: { id: BlockType | "cite"; label: string; hint: string; words: strin
   { id: "paper", label: "Paper card", hint: "", words: "paper card source" },
   { id: "cite", label: "Cite a paper", hint: "@", words: "cite citation reference" },
 ];
+
+/** The `drag.id` a paper dragged in from the rail carries. Block ids are
+ *  uuids, so no row ever matches it: nothing fades out as though it were
+ *  being moved, and only the gap line is drawn. */
+const FROM_RAIL = "rail";
 
 const TURN_INTO: BlockType[] = ["text", "h1", "h2", "h3", "bullet", "numbered", "todo", "quote", "code"];
 const TYPE_LABEL: Record<BlockType, string> = {
@@ -733,6 +739,29 @@ export function NoteEditor({ note }: { note: Note }) {
     focusBlock(after.id, "start");
   };
 
+  /** Every row the drop could land between, measured now — a drag from the
+   *  rail can start after a block has grown or the page has scrolled. */
+  const rowsNow = (): HTMLElement[] =>
+    Array.from(bodyRef.current?.querySelectorAll<HTMLElement>("[data-row]") ?? []);
+
+  /** A paper dragged out of the rail, put down in the gap the line marked.
+   *  The card goes exactly there — this gesture says *where*, which is the
+   *  whole reason to drag rather than press Card. */
+  const dropPaper = (paper: Citable, gap: number) => {
+    const sources = docRef.current.sources;
+    const key = keyFor(paper, sources);
+    if (!sources[key]) commit({ ...docRef.current, sources: { ...sources, [key]: sourceOf(paper, key) } });
+    const card = block("paper", "", { cite: key });
+    const blocks = docRef.current.blocks;
+    const next = blocks[gap];
+    // A card dropped at the end has nothing after it to write in, and one
+    // dropped above a card or a rule would leave no room between them.
+    const room = !next || !isTextual(next.type) ? block("text") : null;
+    if (room) insertAt(gap, card, room);
+    else insertAt(gap, card);
+    focusBlock((room ?? next).id, "start");
+  };
+
   /** A citation in the text opens its paper's record in the rail, rather
    *  than taking the writer out of the draft. */
   const showPaper = (key: string) => {
@@ -1285,7 +1314,29 @@ export function NoteEditor({ note }: { note: Note }) {
             </p>
           )}
 
-          <div ref={bodyRef} className="relative mt-6">
+          <div
+            ref={bodyRef}
+            // The whole column takes a paper, including the empty band under
+            // the last block — that band is where "put it at the end" is.
+            onDragOver={(e) => {
+              if (!carriesPaper(e.dataTransfer)) return;
+              e.preventDefault();
+              e.dataTransfer.dropEffect = "copy";
+              setDrag({ id: FROM_RAIL, gap: gapAt(rowsNow(), e.clientY) });
+            }}
+            onDragLeave={(e) => {
+              if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+              setDrag((d) => (d?.id === FROM_RAIL ? null : d));
+            }}
+            onDrop={(e) => {
+              const paper = readPaperDrag(e.dataTransfer);
+              setDrag(null);
+              if (!paper) return;
+              e.preventDefault();
+              dropPaper(paper, gapAt(rowsNow(), e.clientY));
+            }}
+            className="relative mt-6"
+          >
             {doc.blocks.map((b, i) => (
               <Row
                 key={b.id}
@@ -1408,7 +1459,7 @@ export function NoteEditor({ note }: { note: Note }) {
           )}
 
           <p className="annotation mt-12 pl-10 leading-[1.7] text-text-faint">
-            / blocks · @ cite a paper · [[ link a note · # - 1. [] &gt; ``` --- as you type · Tab nests · ⌘⇧↑↓ moves ·
+            / blocks · @ cite a paper, or drag one in from the rail · [[ link a note · # - 1. [] &gt; ``` --- as you type · Tab nests · ⌘⇧↑↓ moves ·
             ⌘B ⌘I ⌘E
           </p>
         </div>

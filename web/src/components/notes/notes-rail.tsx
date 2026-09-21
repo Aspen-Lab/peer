@@ -22,6 +22,7 @@ import { citedKeys, excerpt } from "@/lib/notes/blocks";
 import { authorYear, citableFromPaper } from "@/lib/notes/cite";
 import { blankNote } from "@/lib/notes/templates";
 import { fileName, toMarkdown } from "@/lib/notes/export";
+import { writePaperDrag } from "@/lib/notes/drag";
 import { newestFirst, readingNoteFor, useNotesStore } from "@/store/notes";
 import { useFeedStore } from "@/store/feed";
 import { formatTimeAgo } from "@/lib/format";
@@ -362,10 +363,28 @@ export function EditorRail({
           </ul>
         </>
       ) : (
+        <>
+          {/* The gesture is invisible until someone tries it, and nobody
+              tries what they have not been told about. Only where there is
+              something to drag, and only where there is room to drag it. */}
+          {papers.length > 0 && (
+            <p className="annotation hidden text-text-faint lg:block">
+              Drag one into the draft, or click it for its record.
+            </p>
+          )}
         <ul className="min-h-0 flex-1 divide-y divide-border/60 overflow-auto">
           {papers.map(({ citable: c, onShelf }) => (
             <li key={c.id}>
-              <button type="button" onClick={() => onPreview?.(c.id)} className={rowClass(false)}>
+              <button
+                type="button"
+                // The shelf is a place to pick things up from: a paper can be
+                // dragged straight into the draft, and a click still opens
+                // its record for the reader who would rather look first.
+                draggable
+                onDragStart={(e) => writePaperDrag(e.dataTransfer, c)}
+                onClick={() => onPreview?.(c.id)}
+                className={cn(rowClass(false), "cursor-grab active:cursor-grabbing")}
+              >
                 <span className="line-clamp-2 font-reading text-body-sm leading-[1.4]">{c.title}</span>
                 <span className="annotation mt-1 block truncate text-text-faint">
                   {[
@@ -386,6 +405,7 @@ export function EditorRail({
             </li>
           )}
         </ul>
+        </>
       )}
     </div>
   );

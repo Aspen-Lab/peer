@@ -2,6 +2,32 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.37.0 — 2026-09-21
+
+Drag a paper into the draft.
+
+The rail could already put a paper in a note two ways: **Cite** dropped
+`[@key]` where the caret was, **Card** placed the card after whatever you
+wrote in last. Both of them decide *where* for you, which is fine until you
+know exactly where you want it — between these two paragraphs, under that
+heading, at the end of the section you just finished.
+
+So the shelf can now be picked up. Drag a paper out of the rail's **Papers**
+tab and the draft draws the same line it draws when you move a block of your
+own; let go and the paper lands in that gap as a card. It brings its record
+with it, so the citation key is registered on the way in and the paper is in
+the note's References and its BibTeX export immediately — nothing to look up
+afterwards.
+
+A card dropped at the end of the note, or above another card, gets an empty
+paragraph after it, and the caret goes there: the gesture ends where writing
+resumes.
+
+Clicking a row still opens its record, and **Cite** and **Card** are still in
+it — dragging is the third way, not the only one. On a phone, where the rail
+is a panel over the draft rather than a column beside it, the two buttons
+remain the way in.
+
 ## v0.36.3 — 2026-09-21
 
 The file rail, tidied.
