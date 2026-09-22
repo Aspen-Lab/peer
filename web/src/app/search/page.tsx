@@ -15,7 +15,10 @@ import { SearchResultCard } from "@/components/cards/search-result-card";
 import { LoadingSkeleton } from "@/components/ui";
 import { PageContainer } from "@/components/ui/page-container";
 import { EmptyState } from "@/components/ui/empty-state";
+import { COMMAND } from "@/components/ui/command";
 import { FilterBar } from "@/components/search/filter-bar";
+import { SearchStarts } from "@/components/search/search-starts";
+import { readRecent, withRecent, writeRecent } from "@/lib/search/starts";
 import {
   DEFAULT_FILTERS,
   filtersFromUrlParams,
@@ -48,6 +51,9 @@ function SearchPage() {
   const [results, setResults] = useState<SearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
+  /** The search itself failed — OpenAlex did not answer. Not the same thing
+   *  as a search that answered with nothing, and never shown as one. */
+  const [failed, setFailed] = useState(false);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
@@ -86,6 +92,7 @@ function SearchPage() {
     const requestId = ++seqRef.current;
     setIsSearching(true);
     setResults([]);
+    setFailed(false);
     try {
       const apiParams = filtersToApiQuery(f);
       apiParams.set("q", q);
@@ -94,9 +101,18 @@ function SearchPage() {
         `/api/papers/search?${apiParams.toString()}`,
       );
       if (requestId !== seqRef.current) return;
-      setResults((data.results as SearchResult[]) || []);
+      const found = (data.results as SearchResult[]) || [];
+      setResults(found);
+      // A search that found something is worth offering again. One that
+      // found nothing is not remembered — a typo is not a start.
+      if (found.length > 0) {
+        writeRecent(window.localStorage, withRecent(readRecent(window.localStorage), q));
+      }
     } catch {
-      if (requestId === seqRef.current) setResults([]);
+      if (requestId === seqRef.current) {
+        setResults([]);
+        setFailed(true);
+      }
     } finally {
       if (requestId === seqRef.current) {
         setIsSearching(false);
@@ -123,6 +139,7 @@ function SearchPage() {
       setResults([]);
       setIsSearching(false);
       setHasSearched(false);
+      setFailed(false);
     }
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -155,9 +172,9 @@ function SearchPage() {
   }, [query, filters]);
 
   return (
-    <PageContainer width="board">
-      <div className="mx-auto max-w-[820px]">
-        <header className="mb-8">
+    <PageContainer width="shelf">
+      <div>
+        <header className="mb-6">
           <p className="eyebrow text-text-faint">Search</p>
           {/* Not "the whole record" — OpenAlex is 250M works, and a display
               line that overstates is worse than one that labels. */}
@@ -170,16 +187,22 @@ function SearchPage() {
           </p>
         </header>
 
-        {/* A field, not floating chrome. `glass` is documented in globals.css
+        {/* The one object the reader came here for, so it is the largest
+            thing on the page: the width of the page, display-size type, and
+            an accent rule under it while it has focus. It was a body-size
+            box at 820px under a headline twice its height — the page read as
+            a manifesto with a form field, not as a place to type.
+
+            A field, not floating chrome. `glass` is documented in globals.css
             as "floating chrome only … never on reading surfaces", and this
             page was blurring its own background behind the one object the
             reader came here to type into. */}
-        <div className="bg-surface shadow-well focus-within:shadow-card-hover transition-[box-shadow]">
+        <div className="relative bg-surface shadow-well transition-[box-shadow] focus-within:shadow-[inset_0_-2px_0_0_var(--color-accent),var(--shadow-well)]">
           <div className="relative">
             <svg
-              className="absolute left-4 top-1/2 -translate-y-1/2 text-text-faint pointer-events-none"
-              width="16"
-              height="16"
+              className="absolute left-5 top-1/2 -translate-y-1/2 text-text-faint pointer-events-none sm:left-6"
+              width="20"
+              height="20"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
@@ -205,14 +228,24 @@ function SearchPage() {
               }}
               placeholder="Title, author, venue, concept…"
               aria-label="Search papers"
-              className="w-full bg-transparent pl-11 pr-11 py-4 text-body-lg text-text placeholder:text-text-faint outline-none"
+              className="w-full bg-transparent py-5 pl-13 pr-14 text-title-lg text-text outline-none placeholder:text-text-faint sm:py-6 sm:pl-15 sm:text-display-xs"
             />
+            {/* The key that brings the pointer here from anywhere; shown only
+                while there is nothing typed, where the clear button will sit. */}
+            {query.length === 0 && (
+              <kbd
+                aria-hidden
+                className="pointer-events-none absolute right-5 top-1/2 hidden -translate-y-1/2 items-center justify-center px-2 py-0.5 font-mono text-caption text-text-faint shadow-[inset_0_0_0_1px_var(--color-border-strong)] sm:inline-flex"
+              >
+                /
+              </kbd>
+            )}
             {query.length > 0 && (
               <button
                 type="button"
                 onClick={() => setQuery("")}
                 aria-label="Clear search"
-                className="absolute right-4 top-1/2 -translate-y-1/2 inline-flex h-6 w-6 items-center justify-center rounded-full text-text-faint hover:bg-bg-secondary hover:text-text transition-colors"
+                className="absolute right-5 top-1/2 -translate-y-1/2 inline-flex h-7 w-7 items-center justify-center rounded-full text-text-faint hover:bg-bg-secondary hover:text-text transition-colors"
               >
                 <svg
                   width="11"
@@ -231,6 +264,15 @@ function SearchPage() {
           </div>
         </div>
 
+        {!isActive && (
+          <SearchStarts
+            onPick={(q) => {
+              setQuery(q);
+              inputRef.current?.focus();
+            }}
+          />
+        )}
+
         {isActive && (
           <FilterBar
             filters={filters}
@@ -245,11 +287,13 @@ function SearchPage() {
           <p className="text-meta text-text-faint mt-4">
             {isSearching
               ? "searching…"
-              : results.length > 0
-                ? `${results.length} ${results.length === 1 ? "result" : "results"} for “${normalizedQuery}”`
-                : hasSearched
-                  ? `no results for “${normalizedQuery}”`
-                  : ""}
+              : failed
+                ? "search did not answer"
+                : results.length > 0
+                  ? `${results.length} ${results.length === 1 ? "result" : "results"} for “${normalizedQuery}”`
+                  : hasSearched
+                    ? `no results for “${normalizedQuery}”`
+                    : ""}
           </p>
         )}
       </div>
@@ -262,7 +306,7 @@ function SearchPage() {
 
       {results.length > 0 && (
         <div className="mt-6">
-          <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4">
             {results.map((result) => (
               <SearchResultCard key={result.id} result={result as never} />
             ))}
@@ -270,12 +314,27 @@ function SearchPage() {
         </div>
       )}
 
-      {isActive && hasSearched && !isSearching && results.length === 0 && (
-        <div className="mx-auto max-w-[820px] mt-6">
+      {isActive && hasSearched && !isSearching && results.length === 0 && !failed && (
+        <div className="mt-6 max-w-[820px]">
           <EmptyState
             title="Nothing turned up."
             line="Try different keywords, or widen the year range and open-access filter."
           />
+        </div>
+      )}
+
+      {/* The index did not answer. Said as that, with the way to ask again —
+          this used to read "Nothing turned up", which blames the query for
+          the server's afternoon. */}
+      {isActive && failed && !isSearching && (
+        <div className="mt-6 max-w-[820px]">
+          <EmptyState
+            title="Search didn't answer."
+            line="OpenAlex did not respond. It usually does on the second try."
+          />
+          <button type="button" className={`${COMMAND} mt-4`} onClick={submit}>
+            Try again
+          </button>
         </div>
       )}
     </PageContainer>

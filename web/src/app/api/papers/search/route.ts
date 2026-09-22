@@ -6,6 +6,49 @@ import {
 import { cleanDisplayText } from "@/lib/text/clean";
 
 const OPENALEX_API = "https://api.openalex.org/works";
+/** The polite pool's address — the same `OPENALEX_EMAIL` every other OpenAlex
+ *  call in the codebase sends. This route alone had the placeholder written
+ *  in, so its requests went to the common pool whatever was configured. */
+const MAILTO = process.env.OPENALEX_EMAIL ?? "peer@example.com";
+
+const RETRY_AFTER_MS = 400;
+/** The longest a `Retry-After` header is honoured. Past this the reader has
+ *  already been told the search did not answer, and can ask again. */
+const RETRY_AFTER_MAX_MS = 2_000;
+
+/** Whether the answer is worth asking for again: a server error, or the rate
+ *  limit — OpenAlex's is ten a second per address, and a briefing's figure
+ *  lookups can spend that in one burst, so the search that follows them is
+ *  refused for a moment and fine right after. Any other 4xx is our request
+ *  being wrong, and asking twice will not make it right. */
+function retryable(res: Response): boolean {
+  return res.status >= 500 || res.status === 429;
+}
+
+function retryDelay(res: Response | null): number {
+  const header = Number(res?.headers.get("retry-after"));
+  if (Number.isFinite(header) && header > 0) return Math.min(header * 1000, RETRY_AFTER_MAX_MS);
+  return RETRY_AFTER_MS;
+}
+
+/** The upstream call, tried twice when the first answer is retryable.
+ *  `null` when even the retry could not connect. */
+async function fetchUpstream(url: string): Promise<Response | null> {
+  const attempt = () => fetch(url, { next: { revalidate: 300 } });
+  let first: Response | null = null;
+  try {
+    first = await attempt();
+    if (!retryable(first)) return first;
+  } catch {
+    first = null;
+  }
+  await new Promise((r) => setTimeout(r, retryDelay(first)));
+  try {
+    return await attempt();
+  } catch {
+    return first;
+  }
+}
 
 const SORT_MAP = {
   relevance: "relevance_score:desc",
@@ -110,17 +153,19 @@ export async function GET(req: NextRequest) {
     select:
       "id,title,publication_date,authorships,primary_location,open_access,abstract_inverted_index,cited_by_count,doi",
     sort,
-    mailto: "peer@example.com",
+    mailto: MAILTO,
   });
   if (clauses.length > 0) params.set("filter", clauses.join(","));
 
-  const res = await fetch(`${OPENALEX_API}?${params}`, {
-    next: { revalidate: 300 },
-  });
+  // The first request for a query came back 429 often enough to notice — on
+  // one afternoon, four of the first five searches, each answered in 150ms
+  // and each fine when asked again a moment later. One retry, after the
+  // pause the server names or a short one of our own.
+  const res = await fetchUpstream(`${OPENALEX_API}?${params}`);
 
-  if (!res.ok) {
+  if (!res || !res.ok) {
     return NextResponse.json(
-      { error: "OpenAlex API error", status: res.status },
+      { error: "OpenAlex API error", status: res?.status ?? 0 },
       { status: 502 },
     );
   }

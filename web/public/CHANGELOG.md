@@ -2,6 +2,40 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.40.0 — 2026-09-21
+
+Search: the field is the page, and the page knows you.
+
+**The field.** The one thing a reader comes to this page to touch was a
+body-size box at 820px under a headline twice its height — the page read as
+a manifesto with a form field. It is now the largest object on the page: the
+full width of it, display-size type, a search glyph to match, and an accent
+rule under it while it has focus. The `/` key that brings the pointer here
+from anywhere is printed at its right end until something is typed.
+
+**Before a word is typed.** The page used to end at the field. It now offers
+where a search can start from, drawn from what this browser already knows and
+fetched from nowhere: **your topics** (what you told Peer you work on), **from
+your reading** (the terms two or more of your papers shared, most-shared
+first, with the count), **people on your shelf** (the first authors of what
+you kept), and **you searched** (this browser's own recent queries, kept only
+when a search found something, cleared with one word). Each is a query
+waiting to be run; a tap runs it. A group with nothing in it is not drawn, so
+a fresh browser sees the field and one line about what it takes.
+
+**When the index does not answer.** OpenAlex refused the first request for a
+query with a 429 often enough to notice — four of the first five searches on
+one afternoon, each answered in 150ms and each fine a moment later — and the
+page said "Nothing turned up", which blames the query for the server's
+afternoon. The search route now asks once more, after the pause the server
+names or a short one of its own; and if the answer is still no, the page says
+**Search didn't answer**, with **Try again**, and remembers nothing. The route
+also now sends the configured `OPENALEX_EMAIL` like every other OpenAlex call
+in the codebase, instead of the placeholder it alone had written in.
+
+The results grid takes a fourth card from 2xl rather than xl, where the page
+is 1180px and a fourth card was 270px wide.
+
 ## v0.39.0 — 2026-09-21
 
 The shelf and the profile: a narrow rail, a long column.
