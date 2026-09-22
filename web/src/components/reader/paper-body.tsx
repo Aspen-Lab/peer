@@ -19,7 +19,8 @@
 // are the paper's too, so they are serif as well — the mono on this page is
 // Peer's voice, and none of this is Peer's.
 
-import type { PaperReading, ReadingSection } from "@/lib/papers/reading";
+import { useState } from "react";
+import type { PaperReading, ReadingFigure, ReadingSection } from "@/lib/papers/reading";
 import { Band } from "@/components/ui/band";
 import { BODY } from "./copy";
 
@@ -39,15 +40,68 @@ export function sectionAnchor(index: number): string {
   return `paper-section-${index}`;
 }
 
+/**
+ * The paper's figure, where the paper put it.
+ *
+ * The picture on the plate's mat, the caption under it in the record's mono
+ * — the paper's picture, Peer's filing of it. A picture that does not arrive
+ * (a PDF figure drawn as vector art has no raster to serve; a publisher's
+ * host may refuse the request) leaves the caption standing on its own, with
+ * the page it is on where the source was a PDF, so the reader knows what
+ * they are not seeing and where it is.
+ */
+function Figure({ figure }: { figure: ReadingFigure }) {
+  const [failed, setFailed] = useState(false);
+  const showImage = Boolean(figure.imageUrl) && !failed;
+  return (
+    <figure className="my-6">
+      {showImage && (
+        <div className="bg-[var(--plate-mat)] p-3 sm:p-4">
+          {/* A plain img: the picture lives on the source's host (or on our
+              own figure route), and `next/image` would need every host
+              listed in advance. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={figure.imageUrl}
+            alt={figure.caption}
+            loading="lazy"
+            decoding="async"
+            referrerPolicy="no-referrer"
+            onError={() => setFailed(true)}
+            className="mx-auto block h-auto max-h-[32rem] w-auto max-w-full object-contain"
+          />
+        </div>
+      )}
+      <figcaption className="annotation mt-2 leading-[1.6] text-text-faint measure-mono">
+        <span className="text-text-muted">{figure.label}</span>
+        {figure.caption ? ` \u00b7 ${figure.caption}` : ""}
+        {!showImage && typeof figure.page === "number" ? ` \u00b7 p.${figure.page} of the PDF` : ""}
+      </figcaption>
+    </figure>
+  );
+}
+
 function Section({ section, index }: { section: ReadingSection; index: number }) {
+  const figures = section.figures ?? [];
+  const before = figures.filter((f) => f.after < 0);
   return (
     <section id={sectionAnchor(index)} className="mt-8 scroll-mt-20 first:mt-6">
       <h3 className="font-reading font-medium text-heading text-title leading-[1.3] mb-2">
         {section.heading}
       </h3>
       <div className="font-reading text-title leading-[1.65] text-text-muted measure-paper space-y-4">
+        {before.map((f) => (
+          <Figure key={`${f.label}:${f.ordinal}`} figure={f} />
+        ))}
         {section.paragraphs.map((paragraph, i) => (
-          <p key={i}>{paragraph}</p>
+          <div key={i} className="space-y-4">
+            <p>{paragraph}</p>
+            {figures
+              .filter((f) => f.after === i)
+              .map((f) => (
+                <Figure key={`${f.label}:${f.ordinal}`} figure={f} />
+              ))}
+          </div>
         ))}
       </div>
     </section>

@@ -137,7 +137,7 @@ async function tryHtmlLink(link: SourceLink): Promise<{ status: FullTextStatus; 
     };
   }
   const extractor = chooseHtmlExtractor(fetched.finalUrl);
-  const doc = extractor(fetched.html);
+  const doc = extractor(fetched.html, fetched.finalUrl);
   if (!looksLikeFullText(doc)) {
     return {
       status: "no_full_text",

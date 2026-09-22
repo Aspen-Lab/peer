@@ -2,6 +2,34 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.42.0 — 2026-09-22
+
+The paper's figures, where the paper put them.
+
+**Read it here** rendered the paper's words and none of its pictures — the
+extractor had the captions all along and threw the figures away with them.
+Each figure now sits in the body **after the paragraph that first names it**
+("as Figure 3 shows" is the paper telling you to look now); a figure the
+prose never names lands at the end of the section where the paper printed
+it. Tables are not placed — a table's caption without its table is a
+sentence about nothing.
+
+**Where the source was HTML** (arXiv, ar5iv, PMC, bioRxiv, publishers),
+the figure's own picture comes with it, on the plate's mat, with the caption
+under it in the record's mono. Nothing is fetched to build the reading; the
+page asks for each picture as it comes into view.
+
+**Where the source was a PDF**, Peer knows the page each caption was read
+from, and a new route serves that page's embedded picture as a PNG — encoded
+by hand, because the deployed runtime has no image library. It is offered
+only when the page holds one figure and no other: a PDF's rasters come back
+without positions, and a wrong picture under a caption is worse than none. A
+figure drawn as vector art has no raster to serve; then the caption stands
+alone with its page number, which is the truth.
+
+The reading document is version 4; a reader's day-old cached version 3 is
+discarded and fetched fresh.
+
 ## v0.41.0 — 2026-09-21
 
 The subject mark on a card is a badge now.

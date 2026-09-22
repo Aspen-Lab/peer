@@ -24,6 +24,15 @@ export interface ExtractedFigureCaption {
   ordinal: number;
   label: string;
   caption: string;
+  /** The figure's own picture, absolute — HTML sources only, where the
+   *  caption sits in a `<figure>` with an `<img>`. */
+  imageUrl?: string;
+  /** PDFs only: the page the caption was read from. */
+  page?: number;
+  /** Where in the document the caption sits, 0–1: the character offset in
+   *  an HTML page, the page in a PDF. How a figure nobody mentions by number
+   *  still lands near the prose it belongs to. */
+  at?: number;
 }
 
 export type ExtractedSourceKind =
@@ -273,11 +282,91 @@ export function parseCaption(
   return { ordinal, label, caption };
 }
 
-function collectCaptions(html: string, captionRe: RegExp): ExtractedFigureCaption[] {
+/**
+ * The page's base for a relative `src`: its `<base href>` where it has one;
+ * otherwise the page's own URL, read as a directory when its last segment is
+ * not a file — arxiv.org/html/1706.03762v7 serves x1.png from under itself,
+ * and `new URL("x1.png", that)` without the slash would resolve to
+ * arxiv.org/html/x1.png.
+ */
+export function resolveBase(html: string, pageUrl: string | undefined): string | undefined {
+  const base = html.slice(0, 20_000).match(/<base\b[^>]*href=["']([^"']+)["']/i)?.[1];
+  if (base && pageUrl) {
+    try {
+      return new URL(base, pageUrl).toString();
+    } catch {
+      /* fall through to the page */
+    }
+  }
+  if (!pageUrl) return undefined;
+  try {
+    const u = new URL(pageUrl);
+    u.search = "";
+    u.hash = "";
+    const last = u.pathname.split("/").pop() ?? "";
+    if (last && !last.includes(".") && !u.pathname.endsWith("/")) u.pathname += "/";
+    return u.toString();
+  } catch {
+    return undefined;
+  }
+}
+
+/** The picture in a figure block, absolute. LaTeXML marks the figure's own
+ *  graphic `ltx_graphics`; elsewhere, the first `<img>` that is not inline
+ *  data. A figure drawn as SVG arrives as `<object type="image/svg+xml"
+ *  data=…>` rather than an `<img>` — arXiv's own HTML does this for every
+ *  plot — and a browser shows that file through `<img>` just the same.
+ *  Nothing is fetched. */
+function imageInBlock(block: string, baseUrl: string | undefined): string | undefined {
+  const imgs = block.match(/<img\b[^>]*>/gi) ?? [];
+  const pick =
+    imgs.find((tag) => /class=["'][^"']*ltx_graphics/i.test(tag)) ??
+    imgs.find((tag) => !/src=["']data:/i.test(tag));
+  let src =
+    pick?.match(/\bsrc=["']([^"']+)["']/i)?.[1] ??
+    pick?.match(/\bdata-src=["']([^"']+)["']/i)?.[1];
+  if (!src) {
+    const object = (block.match(/<object\b[^>]*>/gi) ?? []).find((tag) => /type=["']image\//i.test(tag));
+    src = object?.match(/\bdata=["']([^"']+)["']/i)?.[1];
+  }
+  if (!src || /^data:/i.test(src)) return undefined;
+  try {
+    return new URL(decodeEntities(src), baseUrl).toString();
+  } catch {
+    return undefined;
+  }
+}
+
+/** The `<figure>` (or figure-classed `<div>`) a caption sits in, so its
+ *  picture can be read from the same block. Bounded lookback: a caption is
+ *  never 40k characters from its figure's opening tag. */
+function figureBlockAround(html: string, captionIndex: number): string | null {
+  const from = Math.max(0, captionIndex - 40_000);
+  const before = html.slice(from, captionIndex);
+  const open = Math.max(
+    before.lastIndexOf("<figure"),
+    before.search(/<div\b[^>]*class=["'][^"']*\bfig(?:ure)?\b[^"']*["'][^>]*>(?![\s\S]*<div\b[^>]*class=["'][^"']*\bfig(?:ure)?\b)/i),
+  );
+  if (open < 0) return null;
+  const start = from + open;
+  const closeAt = html.indexOf("</figure>", captionIndex);
+  const end = closeAt < 0 ? Math.min(html.length, captionIndex + 20_000) : closeAt + "</figure>".length;
+  return html.slice(start, end);
+}
+
+function collectCaptions(html: string, captionRe: RegExp, baseUrl?: string): ExtractedFigureCaption[] {
   const captions: ExtractedFigureCaption[] = [];
   for (const match of html.matchAll(captionRe)) {
     const parsed = parseCaption(stripTags(match[1]), captions.length);
-    if (parsed) captions.push(parsed);
+    if (!parsed) continue;
+    const index = match.index ?? 0;
+    const block = figureBlockAround(html, index);
+    const imageUrl = block ? imageInBlock(block, baseUrl) : undefined;
+    captions.push({
+      ...parsed,
+      ...(imageUrl ? { imageUrl } : {}),
+      at: html.length > 0 ? index / html.length : 0,
+    });
   }
   return captions;
 }
@@ -313,7 +402,8 @@ function extractTitleFromHtml(html: string): string | null {
 const LATEXML_HEADING_RE =
   /<h([1-6])\b[^>]*class=["'][^"']*\bltx_title_(?:section|subsection|subsubsection|appendix)\b[^"']*["'][^>]*>([\s\S]*?)<\/h\1>/gi;
 
-function extractLatexml(html: string): ExtractedDocument {
+function extractLatexml(html: string, pageUrl?: string): ExtractedDocument {
+  const baseUrl = resolveBase(html, pageUrl);
   const sections: ExtractedSection[] = [];
 
   const abstractMatch = html.match(
@@ -351,6 +441,7 @@ function extractLatexml(html: string): ExtractedDocument {
     figureCaptions: collectCaptions(
       html,
       /<figcaption\b[^>]*class=["'][^"']*ltx_caption[^"']*["'][^>]*>([\s\S]*?)<\/figcaption>/gi,
+      baseUrl,
     ),
     source: "ar5iv",
   };
@@ -360,7 +451,8 @@ function extractLatexml(html: string): ExtractedDocument {
 // PMC uses JATS-flavored HTML. Body sections are <section class="tsec sec">
 // (rendered NXML) with <h2> or <h3> child headings.
 
-function extractPmc(html: string): ExtractedDocument {
+function extractPmc(html: string, pageUrl?: string): ExtractedDocument {
+  const baseUrl = resolveBase(html, pageUrl);
   const sections: ExtractedSection[] = [];
   // PMC body sections come in two shapes:
   //   <section id="sec1">...</section>          (new PMC layout)
@@ -389,7 +481,7 @@ function extractPmc(html: string): ExtractedDocument {
     title: extractTitleFromHtml(html),
     sections: trimToBudget(withInheritedBuckets(sections)),
     // <figcaption> or <div class="caption"> containing <p>Fig N. text</p>
-    figureCaptions: collectCaptions(html, /<figcaption\b[^>]*>([\s\S]*?)<\/figcaption>/gi),
+    figureCaptions: collectCaptions(html, /<figcaption\b[^>]*>([\s\S]*?)<\/figcaption>/gi, baseUrl),
     source: "pmc",
   };
 }
@@ -397,7 +489,8 @@ function extractPmc(html: string): ExtractedDocument {
 // ── bioRxiv / medRxiv (Highwire Press) ────────────────────────────────
 // Highwire templates use <div class="section" id="..."> with <h2 class="...">.
 
-function extractBiorxiv(html: string): ExtractedDocument {
+function extractBiorxiv(html: string, pageUrl?: string): ExtractedDocument {
+  const baseUrl = resolveBase(html, pageUrl);
   const sections: ExtractedSection[] = [];
   const sectionRe =
     /<div\b[^>]*class=["'][^"']*\bsection\b[^"']*["'][^>]*>([\s\S]*?)<\/div>(?=\s*<div[^>]*class=["'][^"']*\bsection\b|\s*<\/article|\s*<\/main)/gi;
@@ -433,6 +526,7 @@ function extractBiorxiv(html: string): ExtractedDocument {
     figureCaptions: collectCaptions(
       html,
       /<div\b[^>]*class=["'][^"']*\bfig-caption\b[^"']*["'][^>]*>([\s\S]*?)<\/div>/gi,
+      baseUrl,
     ),
     source: "biorxiv",
   };
@@ -482,7 +576,8 @@ function walkHeadings(html: string): ExtractedSection[] {
   return sections;
 }
 
-function extractGeneric(html: string): ExtractedDocument {
+function extractGeneric(html: string, pageUrl?: string): ExtractedDocument {
+  const baseUrl = resolveBase(html, pageUrl);
   const articleMatch = html.match(
     /<article\b[^>]*>([\s\S]*?)<\/article>|<main\b[^>]*>([\s\S]*?)<\/main>/i,
   );
@@ -491,14 +586,14 @@ function extractGeneric(html: string): ExtractedDocument {
   return {
     title: extractTitleFromHtml(html),
     sections: trimToBudget(withInheritedBuckets(sections)),
-    figureCaptions: collectCaptions(html, /<figcaption\b[^>]*>([\s\S]*?)<\/figcaption>/gi),
+    figureCaptions: collectCaptions(html, /<figcaption\b[^>]*>([\s\S]*?)<\/figcaption>/gi, baseUrl),
     source: "generic-html",
   };
 }
 
 // ── Public dispatch ───────────────────────────────────────────────────
 
-export function chooseHtmlExtractor(url: string): (html: string) => ExtractedDocument {
+export function chooseHtmlExtractor(url: string): (html: string, pageUrl?: string) => ExtractedDocument {
   try {
     const host = new URL(url).hostname.toLowerCase();
     if (/(^|\.)arxiv\.org$/.test(host)) return extractLatexml;

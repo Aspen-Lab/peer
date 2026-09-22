@@ -4,6 +4,7 @@ import {
   chooseHtmlExtractor,
   looksLikeFullText,
   parseCaption,
+  resolveBase,
   withInheritedBuckets,
   type ExtractedDocument,
 } from "./html-text";
@@ -144,10 +145,53 @@ describe("LaTeXML extractor", () => {
   });
 
   it("labels captions honestly and drops subfigure fragments", () => {
-    expect(doc.figureCaptions).toEqual([
+    expect(doc.figureCaptions).toMatchObject([
       { ordinal: 0, label: "Figure 1", caption: "Success rate per class." },
       { ordinal: 1, label: "Table 1", caption: "Metrics." },
     ]);
+    // Every caption knows where in the page it sat, in document order.
+    const at = doc.figureCaptions.map((c) => c.at ?? -1);
+    expect(at.every((x) => x >= 0 && x <= 1)).toBe(true);
+    expect([...at].sort((a, b) => a - b)).toEqual(at);
+  });
+
+  it("keeps the figure's own picture, absolute against the page it came from", () => {
+    const html = `<html><body>
+      <h2 class="ltx_title ltx_title_section">1 Introduction</h2><p>Words words words words.</p>
+      <figure class="ltx_figure"><img src="1234.5678v2/x1.png" class="ltx_graphics" alt="Refer to caption">
+        <figcaption class="ltx_caption">Figure 1: The model.</figcaption></figure>
+      <figure class="ltx_table"><table><tr><td>1</td></tr></table>
+        <figcaption class="ltx_caption">Table 1: Numbers.</figcaption></figure>
+    </body></html>`;
+    const out = chooseHtmlExtractor("https://arxiv.org/html/1234.5678")(html, "https://arxiv.org/html/1234.5678");
+    expect(out.figureCaptions[0]).toMatchObject({
+      label: "Figure 1",
+      imageUrl: "https://arxiv.org/html/1234.5678v2/x1.png",
+    });
+    // A table has no picture, and says so by having none.
+    expect(out.figureCaptions[1].imageUrl).toBeUndefined();
+  });
+
+  it("takes a figure drawn as SVG from its <object>, the way arXiv serves plots", () => {
+    const html = `<h2 class="ltx_title ltx_title_section">1 A</h2><p>Words words words words.</p>
+      <figure class="ltx_figure"><object type="image/svg+xml" data="1234.5678v2/plot.svg" class="ltx_graphics"></object>
+        <figcaption class="ltx_caption">Figure 3: Loss.</figcaption></figure>`;
+    const out = chooseHtmlExtractor("https://arxiv.org/html/1234.5678")(html, "https://arxiv.org/html/1234.5678");
+    expect(out.figureCaptions[0].imageUrl).toBe("https://arxiv.org/html/1234.5678v2/plot.svg");
+  });
+});
+
+describe("resolveBase", () => {
+  it("prefers the page's own <base href>", () => {
+    expect(resolveBase('<head><base href="/html/1706.03762/"></head>', "https://ar5iv.labs.arxiv.org/html/1706.03762"))
+      .toBe("https://ar5iv.labs.arxiv.org/html/1706.03762/");
+  });
+  it("reads a URL whose last segment is not a file as a directory", () => {
+    expect(resolveBase("", "https://example.org/articles/PMC123?x=1#y")).toBe("https://example.org/articles/PMC123/");
+    expect(resolveBase("", "https://example.org/a/paper.html")).toBe("https://example.org/a/paper.html");
+  });
+  it("gives nothing without a page", () => {
+    expect(resolveBase("", undefined)).toBeUndefined();
   });
 });
 

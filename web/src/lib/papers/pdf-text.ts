@@ -60,6 +60,29 @@ async function downloadPdf(url: string): Promise<{ bytes: Buffer; finalUrl: stri
   }
 }
 
+const BYTES_TTL_MS = 15 * 60 * 1000;
+const BYTES_KEEP = 6;
+const recentBytes = new Map<string, { bytes: Buffer; ts: number }>();
+
+/**
+ * The PDF at `url`, from the last quarter-hour's downloads where it was one
+ * of them. Six at most, oldest out first — a few megabytes each, on a
+ * function that also holds the text cache.
+ */
+export async function getPdfBytes(url: string): Promise<{ bytes: Buffer } | { error: string }> {
+  const hit = recentBytes.get(url);
+  if (hit && Date.now() - hit.ts < BYTES_TTL_MS) return { bytes: hit.bytes };
+  const download = await downloadPdf(url);
+  if ("error" in download) return download;
+  recentBytes.set(url, { bytes: download.bytes, ts: Date.now() });
+  while (recentBytes.size > BYTES_KEEP) {
+    const oldest = recentBytes.keys().next().value;
+    if (oldest === undefined) break;
+    recentBytes.delete(oldest);
+  }
+  return { bytes: download.bytes };
+}
+
 /** The PDF's text layer, page by page, as `pdf-outline` wants it. */
 async function readPages(bytes: Buffer): Promise<PdfPageText[]> {
   // `unpdf` ships pdf.js built for a server runtime: no worker, no canvas,
@@ -106,11 +129,16 @@ function normalize(extractor: PdfOutline): ExtractedDocument {
     .filter((section) => section.text.length > 0),
   );
 
+  const pageCount = typeof extractor.pageCount === "number" ? extractor.pageCount : undefined;
   const figureCaptions: ExtractedFigureCaption[] = (extractor.figureCaptions ?? [])
     .map((cap, index) => ({
       ordinal: typeof cap.ordinal === "number" ? cap.ordinal : index,
       label: cleanDisplayText(cap.label) || `Figure ${index + 1}`,
       caption: cleanDisplayText(cap.caption),
+      ...(typeof cap.page === "number" ? { page: cap.page } : {}),
+      // Its place in the document, so a figure the prose never names by
+      // number still lands near where the paper put it.
+      ...(typeof cap.page === "number" && pageCount ? { at: (cap.page - 0.5) / pageCount } : {}),
     }))
     .filter((cap) => cap.caption.length > 0);
 
@@ -119,7 +147,7 @@ function normalize(extractor: PdfOutline): ExtractedDocument {
     sections,
     figureCaptions,
     source: "pdf",
-    pageCount: typeof extractor.pageCount === "number" ? extractor.pageCount : undefined,
+    pageCount,
     reason: extractor.reason ?? null,
   };
 }
@@ -128,7 +156,7 @@ function normalize(extractor: PdfOutline): ExtractedDocument {
  * Download a legal PDF and extract sectioned text + figure captions.
  */
 export async function tryExtractPdfText(url: string): Promise<PdfTextResult> {
-  const download = await downloadPdf(url);
+  const download = await getPdfBytes(url);
   if ("error" in download) {
     return { ok: false, reason: download.error };
   }

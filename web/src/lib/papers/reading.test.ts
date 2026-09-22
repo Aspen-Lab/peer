@@ -1,3 +1,4 @@
+import { placeFigures, pdfFigureUrl } from "./reading";
 import { describe, expect, it } from "vitest";
 import type { Paper } from "@/types";
 import type { ExtractedDocument } from "./html-text";
@@ -284,7 +285,7 @@ describe("buildReading", () => {
   it("abstract only: marks set, section blocks omitted as not_in_abstract, model blocks as needs_key", () => {
     const reading = buildReading(normalPaper, null, NOW);
 
-    expect(reading.version).toBe(3);
+    expect(reading.version).toBe(4);
     expect(reading.paperId).toBe("openalex:W7204479535");
     expect(reading.builtAt).toBe("2026-09-06T12:00:00.000Z");
     expect(reading.provenance).toEqual({
@@ -707,5 +708,70 @@ describe("displayHeading", () => {
     expect(displayHeading("4.5 Limitations")).toBe("4.5 Limitations");
     expect(displayHeading("Results and Discussion")).toBe("Results and Discussion");
     expect(displayHeading("ReX")).toBe("ReX");
+  });
+});
+
+
+describe("placeFigures", () => {
+  const section = (heading: string, ...paragraphs: string[]) => ({ heading, canonical: "body", paragraphs });
+  const cap = (n: number, extra: Record<string, unknown> = {}) => ({
+    ordinal: n - 1,
+    label: `Figure ${n}`,
+    caption: `caption ${n}`,
+    ...extra,
+  });
+
+  it("puts a figure after the paragraph that first names it", () => {
+    const placed = placeFigures(
+      [section("Intro", "We begin.", "As Figure 2 shows, it works.", "Later."), section("Method", "Fig. 1 is the model.")],
+      [cap(1, { imageUrl: "https://x/1.png" }), cap(2, { imageUrl: "https://x/2.png" })],
+      null,
+    );
+    expect(placed[0].figures).toEqual([{ ordinal: 1, label: "Figure 2", caption: "caption 2", after: 1, imageUrl: "https://x/2.png" }]);
+    expect(placed[1].figures).toEqual([{ ordinal: 0, label: "Figure 1", caption: "caption 1", after: 0, imageUrl: "https://x/1.png" }]);
+  });
+
+  it("does not mistake Figure 12 for Figure 1", () => {
+    const placed = placeFigures([section("A", "See Figure 12."), section("B", "See Figure 1.")], [cap(1)], null);
+    expect(placed[0].figures).toBeUndefined();
+    expect(placed[1].figures?.[0].after).toBe(0);
+  });
+
+  it("lands an unmentioned figure at the end of the section where the caption sat", () => {
+    const placed = placeFigures(
+      [section("A", "a".repeat(100)), section("B", "b".repeat(100), "bb"), section("C", "c".repeat(100))],
+      [cap(7, { at: 0.5 })],
+      null,
+    );
+    expect(placed[1].figures?.[0]).toMatchObject({ label: "Figure 7", after: 1 });
+    expect(placed[0].figures).toBeUndefined();
+    expect(placed[2].figures).toBeUndefined();
+  });
+
+  it("leaves tables out: a table's caption without its table says nothing", () => {
+    const placed = placeFigures([section("A", "See Table 1 and Figure 1.")], [
+      { ordinal: 0, label: "Table 1", caption: "numbers" },
+      cap(1),
+    ], null);
+    expect(placed[0].figures?.map((f) => f.label)).toEqual(["Figure 1"]);
+  });
+
+  it("offers a PDF page's picture only when the page holds one figure", () => {
+    const placed = placeFigures(
+      [section("A", "Figure 1 and Figure 2 and Figure 3.")],
+      [cap(1, { page: 3 }), cap(2, { page: 5 }), cap(3, { page: 5 })],
+      { paperId: "openalex:W1" },
+    );
+    const byLabel = Object.fromEntries((placed[0].figures ?? []).map((f) => [f.label, f]));
+    expect(byLabel["Figure 1"].imageUrl).toBe(pdfFigureUrl("openalex:W1", 3));
+    expect(byLabel["Figure 1"].page).toBe(3);
+    expect(byLabel["Figure 2"].imageUrl).toBeUndefined();
+    expect(byLabel["Figure 3"].imageUrl).toBeUndefined();
+  });
+
+  it("places each figure once, and leaves a section without figures untouched", () => {
+    const placed = placeFigures([section("A", "Figure 1. Figure 1 again.")], [cap(1), cap(1)], null);
+    expect(placed[0].figures).toHaveLength(1);
+    expect("figures" in placeFigures([section("A", "nothing")], [], null)[0]).toBe(false);
   });
 });
