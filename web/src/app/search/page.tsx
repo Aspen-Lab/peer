@@ -197,7 +197,7 @@ function SearchPage() {
             as "floating chrome only … never on reading surfaces", and this
             page was blurring its own background behind the one object the
             reader came here to type into. */}
-        <div className="relative bg-surface shadow-well transition-[box-shadow] focus-within:shadow-[inset_0_-2px_0_0_var(--color-accent),var(--shadow-well)]">
+        <div className="cropmarks relative bg-surface grain shadow-well transition-[box-shadow] focus-within:shadow-[inset_0_-2px_0_0_var(--color-accent),var(--shadow-well)]">
           <div className="relative">
             <svg
               className="absolute left-5 top-1/2 -translate-y-1/2 text-text-faint pointer-events-none sm:left-6"
@@ -233,12 +233,26 @@ function SearchPage() {
             {/* The key that brings the pointer here from anywhere; shown only
                 while there is nothing typed, where the clear button will sit. */}
             {query.length === 0 && (
-              <kbd
+              <span
                 aria-hidden
-                className="pointer-events-none absolute right-5 top-1/2 hidden -translate-y-1/2 items-center justify-center px-2 py-0.5 font-mono text-caption text-text-faint shadow-[inset_0_0_0_1px_var(--color-border-strong)] sm:inline-flex"
+                className="pointer-events-none absolute right-5 top-1/2 hidden -translate-y-1/2 items-center gap-2 sm:inline-flex"
               >
-                /
-              </kbd>
+                <kbd className="inline-flex h-6 min-w-6 items-center justify-center px-1.5 font-mono text-caption text-text-faint shadow-[inset_0_0_0_1px_var(--color-border-strong)]">
+                  /
+                </kbd>
+                <span className="annotation text-text-faint">to search from anywhere</span>
+              </span>
+            )}
+            {query.length > 0 && (
+              <span
+                aria-hidden
+                className="pointer-events-none absolute right-14 top-1/2 hidden -translate-y-1/2 items-center gap-2 sm:inline-flex"
+              >
+                <kbd className="inline-flex h-6 items-center justify-center px-1.5 font-mono text-caption text-text-faint shadow-[inset_0_0_0_1px_var(--color-border-strong)]">
+                  ↵
+                </kbd>
+                <span className="annotation text-text-faint">search now</span>
+              </span>
             )}
             {query.length > 0 && (
               <button

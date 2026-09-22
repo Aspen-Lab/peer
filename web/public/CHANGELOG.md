@@ -2,6 +2,30 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.40.1 — 2026-09-21
+
+Search: the starts are plates, and the chips carry marks.
+
+v0.40.0 set the page's starts as bare words under eyebrows, and it read as
+a page nobody had designed — three columns of grey type with nothing to hold
+them. They are now the product's own components:
+
+Each group is a **plate**: a card in Peer's frame — the surface, the grain,
+the registration corners the notes and the briefing use — with a glyph in its
+header naming what kind of thing it holds (a hash for your topics, an open
+book for your reading, a person for your shelf, a clock for what you
+searched) and its count at the right.
+
+Each start is a **chip** with its own mark at the left: a term takes the
+subject mark a card would take for it, so the chips here and the marks on the
+briefing are one vocabulary; an author takes the person; a past search takes
+the clock. The mark goes accent on hover. A count sits in its own small
+square, a fact about the chip rather than part of its words.
+
+The field is framed with the same registration corners, and its key hints
+are now a pair: `/` “to search from anywhere” while it is empty, `↵` “search
+now” once something is typed.
+
 ## v0.40.0 — 2026-09-21
 
 Search: the field is the page, and the page knows you.
