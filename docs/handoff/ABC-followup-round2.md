@@ -36,7 +36,7 @@ you are the MANAGER. This section is your whole brief.**
 ### 1. Work out where things stand
 
 ```
-cd "D:\local files on this PC\Github\Peer\peer" && git log --oneline -8 && git status --short
+cd "D:\local files on this PC\Github\Peer\peer-followup" && git log --oneline -8 && git status --short
 ```
 
 Then read **§1** — the round, whose turn, and where the last agent stopped. Trust §1 over any
@@ -80,8 +80,13 @@ browser, run the reports), then report to the user in plain language and stop th
 ## §1. CURRENT STATE — THE SOURCE OF TRUTH
 
 ```
+WORKING FOLDER:   D:\local files on this PC\Github\Peer\peer-followup  (git worktree,
+                  branch complimentary-enhancement-to-main-update). The ORIGINAL folder
+                  ...\Github\Peer\peer is another agent's (ChatGPT, branch
+                  Jev-integration-and-sorting-filtering-enhancement) - never write there.
+                  See Ruling 24 (§1ae). No bare `git stash` - the stack is shared.
 ROUND:            9
-WHOSE TURN:       A
+WHOSE TURN:       A  (closing measurement, PART 2 onward)
 STOPPED BECAUSE:  C finished phase 2 (9-21..9-25) AND phase 3 (9-31..9-33) @ 2026-09-20 ~11:41 UTC.
                    Budget allowed the full remainder of round 9's C work in one sitting.
 STATUS:           Phase 1 closed (prior turn): C1 C2 C3 C4 C5 C6 C9 C10 B7 PASS. Phase 2 + 3 code
@@ -1351,6 +1356,39 @@ does not re-decide:
 A9-10, A9-03, A9-14, A9-05, A9-06; (2) learning — A9-04, A9-11, A9-02, A9-07, A9-12; (3)
 supplement + docs — A9-09, A9-16, A9-08. A re-measures each phase's rows; the full matrix at the
 end.
+
+---
+
+## §1ae. RULING 24 — the work moved to a second folder; the old folder belongs to another agent (manager, 2026-09-22) — BINDING
+
+**What happened.** The user put a second assistant (ChatGPT) to work on branch
+`Jev-integration-and-sorting-filtering-enhancement` **inside the original checkout**
+`D:\local files on this PC\Github\Peer\peer`. That checkout now has ~53 uncommitted files that
+belong to that other agent. Our branch cannot be checked out there without destroying their work.
+
+**The ruling.**
+
+1. This loop's working folder is now the git worktree
+   **`D:\local files on this PC\Github\Peer\peer-followup`**, checked out on
+   `complimentary-enhancement-to-main-update`. It was created from the same repository, so it
+   shares the same git history and the same `origin`; only the working files are separate.
+   It carries its own `node_modules` (`npm ci`, clean), its own `web/.env.local` (copied, never
+   printed, never committed) and its own `web/.local-data/` including the PDF runtime venv.
+2. **No agent of this loop may write anything in `...\Github\Peer\peer`.** Not a checkout, not a
+   commit, not a stage, not a stash, not an edit, not a `git restore`. Reading is also
+   unnecessary - everything we need exists in the worktree. Any brief that names a path must name
+   the `peer-followup` path.
+3. **Never use bare `git stash` / `git stash pop`.** The stash stack is shared across worktrees;
+   a bare pop can take the other agent's work. If work must be set aside, use a temporary WIP
+   commit on our own branch instead.
+4. Step (1) of every tick and every agent turn: in the worktree,
+   `git branch --show-current` must print `complimentary-enhancement-to-main-update`. If it does
+   not, stop and report - never fix it by force.
+5. The dev server for this loop runs from the worktree (`web/`, launch config `peer-web`,
+   `autoPort: true` so it steps off 3000 if the other agent is already there). Kill orphans
+   before starting, as always.
+6. Ruling 22's rule (stage by explicit path, never `git add -A`) is unchanged and now matters
+   more, not less.
 
 ---
 
