@@ -86,7 +86,11 @@ WORKING FOLDER:   D:\local files on this PC\Github\Peer\peer-followup  (git work
                   Jev-integration-and-sorting-filtering-enhancement) - never write there.
                   See Ruling 24 (§1ae). No bare `git stash` - the stack is shared.
 ROUND:            9
-WHOSE TURN:       manager  (round 9 A closing measurement is complete)
+WHOSE TURN:       A  (RE-measure the live-HTTP rows on :3100 - Ruling 25, §1af)
+DEV SERVER:       http://localhost:3100, started from the worktree by a background shell.
+                  `preview_start` BY NAME still launches the OTHER agent's checkout - do not use
+                  it. Confirm the serving process path contains `peer-followup` before trusting
+                  any live number.
 STOPPED BECAUSE:  A finished the full round-9 closing re-measurement (parts 1-4) @ 2026-09-22.
                    25/26 matrix rows PASS; 1 (B6) PARTIAL on two sub-cases this environment
                    structurally cannot exercise. Gate cold and green. Handing back to the manager
@@ -98,12 +102,18 @@ STATUS:           Round 9 fully re-measured, execution-confirmed, not trusted fr
                    cross-device continuity (a production-Supabase-auth concern, not configured in
                    this worktree) are NOT MEASURED, not failed — forbidden/out of this
                    environment's reach, not silently passed either.
-OPEN ITEMS:       B6's two NOT MEASURED sub-cases (server restart; true cross-device via
-                   production auth) — POLICY, manager decides whether to authorize a one-time
-                   dev-server restart test or accept as an out-of-local-dev-scope limitation and
-                   close the round anyway.
-GATE (0 open):    NOT MET — 25/26 rows PASS, 1 row (B6) PARTIAL for a POLICY reason (see above),
-                   0 FAIL, 0 BLOCKED. The code-level gate itself (tsc/eslint/vitest) is green.
+OPEN ITEMS:       (a) RULING 25: every row whose evidence was a live HTTP call was measured
+                   against the OTHER agent's checkout (our HEAD + ~53 of their uncommitted files,
+                   several touching the preference/learning paths). Those rows are re-opened and
+                   must be re-measured on :3100: the live parts of A1-A4 (fixtures), A7's
+                   export/import round-trip if it used HTTP, B4, B5, B7, C5, and 9-21/9-22's live
+                   checks. Rows proved by vitest/tsc/eslint or by reading worktree code are
+                   unaffected and stay PASS.
+                  (b) B6 server-restart: CLOSED PASS by the manager on :3100 (Ruling 25 §4).
+                  (c) B6 cross-device via production Supabase auth: NOT MEASURED, moved to the
+                   pre-launch conditions. Not a local-dev row; never to be recorded PASS here.
+GATE (0 open):    NOT MET — pending A's re-measurement of the live rows on :3100. The code-level
+                   gate itself (tsc/eslint/vitest) is green: 2798/2798.
 
 DONE:      round 9: A's draft measurement; Ruling 23; phase 1 (9-11..9-19); phase 2 (9-21 Tier-0
            quality/facet/extractionVersion, 9-22 reference-counted retraction, 9-23 server-
