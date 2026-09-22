@@ -2,6 +2,31 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.41.0 — 2026-09-21
+
+The subject mark on a card is a badge now.
+
+v0.38.0 gave each card a mark for its subject and drew it as a 13px stroke in
+the meta line's faint grey — correct, and invisible: at arm's length the
+board still read as ten grey rectangles. The mark now sits in a 28px tinted
+square at the top right of the card, the way the profile frames a signal's
+glyph, set a size larger and a shade darker, and it takes the accent when the
+card is hovered. Hover it and it still names the family.
+
+Two families join the set, because a machine-learning briefing meets them
+right after the sciences: **robotics and control** (a body on a base, and the
+arm it reaches with) and **hardware and systems** (a die and its pins).
+Fifteen marks in all.
+
+**The paper is wider.** The reading column set its prose at the book measure
+— 66 characters, 28em — which at 16.5px is 462px of text, a third of the
+column it sat in, with the rest of the page empty beside it. The abstract,
+the extracts and the paper's own body now share a long measure of 80
+characters (34em), and the body steps up a size, from 16.5px to 17.5px, with
+a little more air between paragraphs. On the two-column spread the column
+itself is the limit and nothing moves; below it, the paper fills the page it
+is on.
+
 ## v0.40.1 — 2026-09-21
 
 Search: the starts are plates, and the chips carry marks.

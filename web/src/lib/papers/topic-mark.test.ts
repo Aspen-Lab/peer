@@ -28,6 +28,11 @@ describe("the mark a paper gets", () => {
     expect(key("Neural networks for turbulent fluid simulation")).toBe("matter");
   });
 
+  it("knows the two families a machine-learning briefing meets most after the sciences", () => {
+    expect(key("Learning dexterous manipulation for a robot hand")).toBe("robot");
+    expect(key("An FPGA accelerator for sparse transformers")).toBe("chip");
+  });
+
   it("puts the subject before the genre", () => {
     // "Review" is true of it; "medical imaging" is what it is.
     expect(key("A review of deep learning in medical imaging")).toBe("life");

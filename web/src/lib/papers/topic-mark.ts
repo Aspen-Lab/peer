@@ -35,6 +35,8 @@ export type TopicKey =
   | "language"
   | "geometry"
   | "network"
+  | "robot"
+  | "chip"
   | "primer"
   | "tool"
   | "data"
@@ -102,6 +104,25 @@ const FAMILIES: { key: TopicKey; label: string; words: string[] }[] = [
       "security", "secure", "privacy", "private", "attack", "adversarial", "threat",
       "encrypt", "cryptograph", "malware", "intrusion", "fraud", "authenticat",
       "vulnerabilit", "federated", "differential privacy", "watermark",
+    ],
+  },
+  // Before the form families: "An FPGA accelerator for sparse transformers"
+  // is a hardware paper that mentions language models, and "vision-based
+  // grasping" is a robotics paper that uses a camera.
+  {
+    key: "robot",
+    label: "Robotics and control",
+    words: [
+      "robot", "robotic", "manipulat", "autonomous", "drone", "uav", "self-driving",
+      "control system", "motion planning", "locomotion", "actuator", "grasp", "slam",
+    ],
+  },
+  {
+    key: "chip",
+    label: "Hardware and systems",
+    words: [
+      "hardware", "fpga", "gpu", "accelerator", "circuit", "processor", "microcontroller",
+      "embedded", "edge device", "on-device", "memory bandwidth", "silicon", "asic", "compiler",
     ],
   },
   {

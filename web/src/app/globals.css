@@ -487,6 +487,19 @@ html[data-mode="dark"] {
   /* 66 characters of Newsreader — the reading measure. */
   max-width: 28em;
 }
+/* 80 characters of Newsreader — the long read. `measure` is a book's 66, and
+   a book's page is 5 inches wide; at 17.5px on a screen column, 66 characters
+   is 462px of text in a 760px column, and the paper looked starved beside its
+   own margins. The abstract, the extracts and the paper's body share this
+   edge, so the reading column has one.
+
+   Plain CSS, not `@utility`: declared as a utility it was never emitted —
+   after a full dev-server restart the compiled sheet still had `measure-lede`
+   beside it and no `.measure-paper` — and no one needs `sm:measure-paper`.
+   (`board-columns` above went the same way.) */
+.measure-paper {
+  max-width: 34em;
+}
 @utility measure-lede {
   /* 56 characters. A lede is set narrower than the text it opens. */
   max-width: 24em;

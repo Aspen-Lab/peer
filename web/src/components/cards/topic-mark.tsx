@@ -18,9 +18,14 @@ export function TopicMark({
   label,
   size = 13,
   strokeWidth = 1.4,
+  framed = false,
   className,
 }: {
   topic: TopicKey;
+  /** In a tinted square, the way the profile frames a signal's glyph: a badge
+   *  the eye finds from across the board, where the bare stroke was a
+   *  13px whisper nobody saw. */
+  framed?: boolean;
   /** Named on hover. The mark is a reading of the paper's words, so it is not
    *  announced as a fact: `aria-hidden`, and the card's own words carry the
    *  meaning for anyone not looking at it. */
@@ -45,7 +50,14 @@ export function TopicMark({
   // (`ml-auto` at the end of the meta line) and colours it, and a margin on
   // the svg inside a span moves nothing.
   return (
-    <span title={label} className={cn("shrink-0 leading-none", className)}>
+    <span
+      title={label}
+      className={cn(
+        "shrink-0 leading-none",
+        framed && "grid h-7 w-7 place-items-center bg-bg-secondary text-text-muted transition-colors",
+        className,
+      )}
+    >
       <svg {...common}>{PATHS[topic]}</svg>
     </span>
   );
@@ -90,6 +102,21 @@ const PATHS: Record<TopicKey, React.ReactNode> = {
   ),
   // Lines of type, the last one short.
   language: <path d="M4 7.5h16M4 12h16M4 16.5h9" />,
+  // A body on a base, and the arm it reaches with.
+  robot: (
+    <>
+      <rect x="6" y="9" width="12" height="9" rx="1.5" />
+      <path d="M12 9V5.5M9.5 21h5M9 13.5h.01M15 13.5h.01" />
+      <circle cx="12" cy="4.5" r="1.2" fill="currentColor" stroke="none" />
+    </>
+  ),
+  // A die and its pins.
+  chip: (
+    <>
+      <rect x="7" y="7" width="10" height="10" rx="1" />
+      <path d="M9.5 7V3.5M14.5 7V3.5M9.5 20.5V17M14.5 20.5V17M7 9.5H3.5M7 14.5H3.5M20.5 9.5H17M20.5 14.5H17" />
+    </>
+  ),
   // A figure with a centre.
   geometry: (
     <>

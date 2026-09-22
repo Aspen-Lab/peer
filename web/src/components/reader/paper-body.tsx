@@ -15,7 +15,7 @@
 // the section list, which is also the honest statement of how much of the
 // paper Peer reached.
 //
-// The paper's own words, so: the reading serif, at the measure. The headings
+// The paper's own words, so: the reading serif, at the long measure. The headings
 // are the paper's too, so they are serif as well — the mono on this page is
 // Peer's voice, and none of this is Peer's.
 
@@ -45,7 +45,7 @@ function Section({ section, index }: { section: ReadingSection; index: number })
       <h3 className="font-reading font-medium text-heading text-title leading-[1.3] mb-2">
         {section.heading}
       </h3>
-      <div className="font-reading text-lead leading-[1.6] text-text-muted measure space-y-3">
+      <div className="font-reading text-title leading-[1.65] text-text-muted measure-paper space-y-4">
         {section.paragraphs.map((paragraph, i) => (
           <p key={i}>{paragraph}</p>
         ))}

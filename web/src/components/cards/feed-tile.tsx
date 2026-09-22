@@ -184,7 +184,7 @@ function PaperTile({ paper, isRead, selected, plateTerms = [], line, index, tota
             peer-reviewed work. A "Paper" badge on every card of a papers-only
             feed said nothing, and it said it twice: `paper.source` repeated it
             at the bottom. */}
-        <div className="flex items-baseline gap-2 mb-2 min-w-0">
+        <div className="flex items-center gap-2 mb-2 min-w-0">
           {kind !== "paper" && <KindMark />}
           {/* The card's place in today's briefing. The masonry is column-major,
               so nothing else on screen says the reading order runs down column
@@ -214,7 +214,14 @@ function PaperTile({ paper, isRead, selected, plateTerms = [], line, index, tota
               the venue say where this card sits, the mark says what is in
               it. Right-aligned so ten cards stack ten marks in a column the
               eye can run down without reading a word. */}
-          <TopicMark topic={mark.key} label={mark.label} className="ml-auto text-text-faint/80" />
+          <TopicMark
+            topic={mark.key}
+            label={mark.label}
+            framed
+            size={15}
+            strokeWidth={1.5}
+            className="ml-auto -my-1 group-hover/tile:text-accent"
+          />
         </div>
         <h3 className="paper-line text-title-lg text-heading leading-[1.2] line-clamp-3">
           {paper.title}

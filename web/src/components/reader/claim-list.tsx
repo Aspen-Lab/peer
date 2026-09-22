@@ -15,7 +15,7 @@ import { MattedFigure } from "./matted-figure";
 import { projectAnchor } from "./copy";
 
 // The family, the size and the leading now come from the `reading-prose`
-// wrapper. Not cosmetic: `measure` is 28em and em is the element's OWN
+// wrapper. Not cosmetic: `measure-paper` is 34em and em is the element's OWN
 // font-size, so on a bare <div> that em was body's 17px — 476px against the
 // abstract's 462px, fourteen pixels of disagreement down a scroll, on a page
 // whose comments twice promise one right edge.
@@ -65,7 +65,7 @@ export function ClaimList({
       )}
       {/* The abstract's measure, so the column has one right edge. Five
           claims are ONE `.rv`: prose does not stagger against itself. */}
-      <div className="rv rv-late reading-prose space-y-4 measure">
+      <div className="rv rv-late reading-prose space-y-4 measure-paper">
         {claims.map((claim, i) => (
           // Keyed by position: a model can write the same sentence twice.
           <div key={`${i}:${claim.text}`}>
@@ -93,7 +93,7 @@ export function KeyResultList({
   return (
     <section data-reveal>
       <BlockHeading block="findings" className="rv" />
-      <div className="rv rv-late reading-prose space-y-4 measure">
+      <div className="rv rv-late reading-prose space-y-4 measure-paper">
         {results.map((result, i) => {
           const figure =
             result.figureImageUrl && !seen.has(result.figureImageUrl)

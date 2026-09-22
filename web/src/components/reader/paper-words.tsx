@@ -66,7 +66,7 @@ function Deck({
       className="animate-fade-in-up"
       style={{ "--i": 0 } as React.CSSProperties}
     >
-      <p className="font-reading text-title-lg leading-[1.45] text-heading measure mt-12 sm:mt-16">
+      <p className="font-reading text-title-lg leading-[1.45] text-heading measure-paper mt-12 sm:mt-16">
         {skim.map((claim) => claim.text).join(" ")}
       </p>
       {quoted.map((claim, i) => (
@@ -120,7 +120,7 @@ export function PaperWords({
     if (!tldr) return null;
     return (
       <div>
-        <p className="font-reading text-lead leading-[1.6] text-text-muted measure mt-10">
+        <p className="font-reading text-lead leading-[1.6] text-text-muted measure-paper mt-10">
           {tldr}
         </p>
         <p ref={endRef} className={FOOTER_CLASS}>
@@ -137,7 +137,7 @@ export function PaperWords({
         <LeadClaim sentence={sentences[lead]} />
       )}
       <Band label={ABSTRACT_LABEL}>
-        <div className="font-reading text-lead leading-[1.6] text-text-muted measure mt-4 space-y-4">
+        <div className="font-reading text-lead leading-[1.6] text-text-muted measure-paper mt-4 space-y-4">
           {split > 0 && <Paragraph sentences={sentences.slice(0, split)} from={0} inked={inked} />}
           {split < sentences.length && (
             <Paragraph sentences={sentences.slice(split)} from={split} inked={inked} />
