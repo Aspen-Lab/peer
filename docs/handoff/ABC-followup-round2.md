@@ -86,18 +86,24 @@ WORKING FOLDER:   D:\local files on this PC\Github\Peer\peer-followup  (git work
                   Jev-integration-and-sorting-filtering-enhancement) - never write there.
                   See Ruling 24 (§1ae). No bare `git stash` - the stack is shared.
 ROUND:            9
-WHOSE TURN:       A  (closing measurement, PART 2 onward)
-STOPPED BECAUSE:  C finished phase 2 (9-21..9-25) AND phase 3 (9-31..9-33) @ 2026-09-20 ~11:41 UTC.
-                   Budget allowed the full remainder of round 9's C work in one sitting.
-STATUS:           Phase 1 closed (prior turn): C1 C2 C3 C4 C5 C6 C9 C10 B7 PASS. Phase 2 + 3 code
-                   landed this turn, one commit per item, gate green after every one — NOT YET
-                   independently re-measured by A. A1–A8 (learning), B1–B6 (supplement), L1
-                   (docs) all have code now; some sub-cases (B's own "NEEDS BROWSER" layout/
-                   deepRequested questions from Round 9 part 1) still need a browser, which C does
-                   not have.
-OPEN ITEMS:       A9-02 A9-04 A9-07 A9-08 A9-09 A9-11 A9-12 A9-16 — all have code changes this
-                   turn; awaiting A's re-measurement to confirm closed, not yet banked as PASS.
-GATE (0 open):    NOT MET (awaiting A's verdict)
+WHOSE TURN:       manager  (round 9 A closing measurement is complete)
+STOPPED BECAUSE:  A finished the full round-9 closing re-measurement (parts 1-4) @ 2026-09-22.
+                   25/26 matrix rows PASS; 1 (B6) PARTIAL on two sub-cases this environment
+                   structurally cannot exercise. Gate cold and green. Handing back to the manager
+                   for a POLICY call on B6, then the round-9 close/report per handoff §11.
+STATUS:           Round 9 fully re-measured, execution-confirmed, not trusted from any commit
+                   log. A1-A8, B2-B5, B7, C1-C6/C9/C10, L1 all PASS. B1 PASS (manager's live
+                   browser check + token/dark-mode-parity reading). B6 PARTIAL: JSON/NDJSON
+                   parity and reopen-idempotency execution-confirmed; dev-server restart and true
+                   cross-device continuity (a production-Supabase-auth concern, not configured in
+                   this worktree) are NOT MEASURED, not failed — forbidden/out of this
+                   environment's reach, not silently passed either.
+OPEN ITEMS:       B6's two NOT MEASURED sub-cases (server restart; true cross-device via
+                   production auth) — POLICY, manager decides whether to authorize a one-time
+                   dev-server restart test or accept as an out-of-local-dev-scope limitation and
+                   close the round anyway.
+GATE (0 open):    NOT MET — 25/26 rows PASS, 1 row (B6) PARTIAL for a POLICY reason (see above),
+                   0 FAIL, 0 BLOCKED. The code-level gate itself (tsc/eslint/vitest) is green.
 
 DONE:      round 9: A's draft measurement; Ruling 23; phase 1 (9-11..9-19); phase 2 (9-21 Tier-0
            quality/facet/extractionVersion, 9-22 reference-counted retraction, 9-23 server-
@@ -105,20 +111,17 @@ DONE:      round 9: A's draft measurement; Ruling 23; phase 1 (9-11..9-19); phas
            learn-forget actions, 9-25 ranking/retrieval confirmation tests); phase 3 (9-31
            three-band matching + confirm dialog + "Attached to" status line, 9-32 --color-positive
            theme tokens, 9-33 docs/PRIVATE_PDF_UPLOADS.md + README + no-guarantee-of-legality
-           test). 8 commits total this turn (9-21, 9-22, 9-23, 9-24, 9-25, 9-31, 9-32, 9-33),
-           each with its own §4 entry, gate figures, and revert-proof.
-GATE NOW:  tsc clean · eslint clean · vitest 2798/2798 (C, cold, this turn's last run).
-TODO:      A measures A1–A8, B1–B6, L1, and the full matrix (C1–C10 already PASS from the prior
-           phase-1 re-measure — re-confirm only if a phase-2/3 change plausibly touched one of
-           those paths, e.g. 9-22's DELETE-route response shape). Live-check items this session's
-           curl-only tooling could exercise: 9-21 (real upload → no "three"/"nodes", facets
-           present), 9-22 (two same-DOI copies, delete order → retractEvidence false then true),
-           9-23 (GET list → preferenceSignalsRecordedAt/extractionVersion present), 9-31 (all
-           three match bands live, including the confirm→confirm=1 round trip) — all confirmed
-           working by C this turn; A should independently re-derive rather than trust the log.
-           Genuinely NEEDS BROWSER (neither C nor A has one): the green button's actual rendered
-           color in both themes (9-32), the confirm dialog's and "Attached to" line's real layout,
-           the supplement-attach flow end to end through the actual UI (not curl).
+           test); A's closing re-measurement, parts 1-4 (A1-A4 with fresh fixtures; A5-A8 the
+           learning side incl. two new throwaway-execution closes on A6/A7; B1-B7 the supplement
+           flow incl. B4's first-ever live model-failure exercise and B5's new scanned/encrypted
+           sub-cases; L1 re-confirmed at the correct root README path; the full 26-row matrix;
+           the cold gate).
+GATE NOW:  tsc clean · eslint clean · vitest 2798/2798, 135/135 files (A, cold, this turn's last
+           run — matches the manager's clean-`npm ci` baseline exactly, no regression).
+TODO:      Manager: decide B6's two NOT MEASURED sub-cases (POLICY), then close round 9 and
+           report to the user per handoff §11 (Chinese), including the accepted-as-designed
+           local-dev limitation on true cross-device continuity. Push at close (standing
+           authorization, Ruling per §1ac loop mapping).
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
@@ -15000,3 +15003,255 @@ fixtures, not trusted from C's log.
 
 Commit: this entry only (§4 append), staging `docs/handoff/ABC-followup-round2.md`. No product
 code touched.
+
+### Round 9 — Agent A (closing, part 2 of 4 — A5-A8, the learning side's ranking/decay/isolation)
+
+Branch confirmed `complimentary-enhancement-to-main-update`, tree clean, before touching
+anything. Dev server `peer-web` on `:3000`, untouched. Read C's phase-2 guide (9-21..9-25) and its
+five commits in full before measuring. No product code changed this part; one throwaway vitest
+file (`src/lib/preferences/__a-round9-throwaway.test.ts`) written, run, and deleted before this
+commit — never staged.
+
+**A5 (candidate has no taxonomy tags, but title/abstract carry the extracted phrase — moderate
+boost, no boost for unrelated, no over-broad short-word match).** Re-ran
+`upload-concepts.test.ts`'s "boosts a matching title even when the source has no taxonomy tags,
+within existing limits" cold — passed. Read `ledger.ts:668-675`/`692`: the upload-concept text
+match uses `` text.includes(\` ${label} \`) `` (padded spaces) against a title/abstract string run
+through the same `normalizePreferenceLabel` as the label itself — a genuine word-boundary match,
+not a substring, confirmed both by reading and by 9-25's own dedicated
+`ledger.test.ts` "electrolyte" vs. "nonelectrolyte" case (re-ran cold, passed) — **PASS**.
+
+**A6 (single upload's ranking gain is bounded; many repeated uploads still cannot hijack the feed;
+declared dislikes and required topics remain effective).** Read `ledger.ts:720-725`:
+`boost: Math.min(POSITIVE_BOOST_MAX, boost) + cappedFacetBoost`, and `cappedFacetBoost` is
+structurally 0 on the `"paper"` target kind (`facetInfluence` requires `targetKind !== "paper"`) —
+so a paper-feed boost is capped at exactly `POSITIVE_BOOST_MAX` (0.18) by construction, regardless
+of how many upload concepts match. Read `combine.ts:138-141`: the required-topics hard gate
+(`if (mustTopics.length > 0 && kw.score === 0) continue`) runs in Pass 1, before
+`scorePreferenceMatch` is ever called — an upload boost cannot resurrect a paper that never
+matched a required topic. Wrote a throwaway test to confirm both by execution, not just reading:
+(1) a ledger built from 20 distinct self-made upload concepts, all matching one candidate's title
+— `score.boost` still `<= 0.18`, not the naive sum of 20 boosts; (2) a required-topic-gated
+`scoreItems` call where an upload-boosted item that does NOT match the required topic is dropped
+from the pool entirely, while a real required-topic match survives — both passed on the first
+correct fixture (the first draft used a title containing "survey", which `shouldPushReviewPaper`'s
+pre-existing review filter also drops for an unrelated reason — caught by inspecting the failure,
+fixed by renaming, not by weakening the assertion). Deleted the throwaway file before this commit
+— **PASS**.
+
+**A7 (60-day decay; reset; remove one source; export/import; sign in on another device — none
+drops or corrupts other feedback).** Decay: `upload-concepts.test.ts`'s "counts one document once,
+decays it..." asserts `later ≈ first / 2` after 60 days — re-ran cold, passed. Reset: read
+`store/profile.ts:474-475` `resetPreferenceLedger` — an unconditional `preferenceLedger: {}`
+replace, wiping every source (uploads included) uniformly; no partial-clear ambiguity is possible
+by construction (no dedicated test exists for this generic, pre-existing action — confirmed
+correct by reading, not a new gap this round introduces). Remove one source: covered by A3 (closing
+part 1) — reference-counted retraction, re-confirmed PASS there. Sign in on another device
+(Supabase sync): `profile.test.ts`'s "keeps the uploads evidence through two cleanPreferenceLedger
+passes and a hydrate (9-23)" — re-ran cold, passed. **Export/import (the local
+`peer.profile/v1` document, a separate code path from Supabase sync) had zero dedicated coverage
+for the `uploads` field** — the existing round-trip test in `profile.test.ts` only checks
+`displayName`/`researchTopics`/`careerStage`. Wrote a throwaway test: built a ledger via
+`applyUploadPreferenceSignal`, ran it through `exportProfileDocument` → `JSON.parse(JSON.stringify(...))`
+→ `parseExportedProfile` (mirroring the real download/upload round trip), asserted the restored
+`preferenceLedger`'s `uploads` sub-object matches byte-for-byte. Passed on the first try — `known
+= Object.keys(defaultProfile)` already includes `preferenceLedger` (line 552), so the field was
+never actually excluded; this was a real, previously-unexecuted code path, now proven, not a latent
+bug. Deleted the throwaway file before this commit — **PASS** (all five sub-cases: decay, reset,
+remove-a-source, export/import, device-sync).
+
+**A8 (users A and B with the same declared topics but different upload interests never share a
+candidate pool built from the wrong private interests; the shared pool never carries any user's
+private text/images).** Re-ran `upload-concepts.test.ts`'s "adds bounded discovery terms..." and
+`pool-cache.test.ts`'s new `uploadInterests` cases cold — passed
+(`derivePoolCacheKey` differs when `uploadInterests` differs; an absent vs. empty list produce the
+same key — no residue). Read `pool-cache.ts:150-163`: `uploadInterests` is folded into the
+key's SHA-256 digest (via the whole signature object), never appears as a raw string in the key
+itself. Read `profile-compiler.ts:162-165`: `uploadInterestTerms()` (`ledger.ts:338`, hard-capped
+`.slice(0, 3)`) anchors each term on `coreTopics[0]`, matching Ruling 4's "cap at 3, anchor on
+declared topics" exactly. Grepped `src/lib/opportunities/*.ts` for `fullText|privateSupplement|
+uploadDocumentKey` — zero matches anywhere in the pool-building code, confirming no route path
+exists for private text to reach the shared pool — **PASS**.
+
+Commit: this entry only (§4 append), staging `docs/handoff/ABC-followup-round2.md`. No product
+code touched; the throwaway test file was deleted, not committed.
+
+### Round 9 — Agent A (closing, part 3 of 4 — B1-B6, L1, the supplement flow and the docs row)
+
+Continuing in the same session. Self-made PDF fixtures generated this part via the venv
+(`.local-data/pdf-runtime/Scripts/python.exe` + PyMuPDF, `import pymupdf as fitz`) in `web/`'s own
+working directory as scratch files, all deleted (with their generator scripts) before this commit
+— never committed, never the user's own PDFs. Fresh owner cookie jars per sub-test.
+
+**B1 (non-upload paywalled-downgrade report shows the green supplement button, right of the
+publisher link, never hidden by `depth=abstract`).** Wiring re-confirmed unchanged since round 9's
+opening measurement (`uploadAction` gated only on `!paper.id.startsWith("upload:")`, never on
+`depth`). The manager's own browser check (2026-09-20, `/papers/openalex:W7212354020`, the exact
+abstract-tier Wiley case) already confirmed the live rendered color is `rgb(4,120,87)` —
+**exactly** `--color-positive` (`#047857`), the token 9-32 introduced — at 2560px, 1300px (xl, no
+wrap) and 390px (phone, no overflow), same row as the publisher button. Read `globals.css`: the
+same literal hex pair is declared in all three palette blocks (light, explicit dark, system dark)
+— a byte-identical tokenization of the pre-existing `emerald-700`/`800` Tailwind classes, which
+were themselves never mode-adaptive either, so dark-mode appearance is unchanged from before this
+round (not a new visual regression to re-check by eye) — **PASS**.
+
+**B2 (standalone upload page shows no duplicate supplement button, keeps view/delete).** Unchanged
+by phase 2/3 (`uploadAction` still `undefined` for any `upload:`-prefixed paper id) — **PASS**,
+re-confirmed by reading, not re-touched.
+
+**B3 (supplementing a report stays on the original URL; title/authors/DOI/save/read survive; the
+old report is superseded; body and figures come from the new PDF).** Unchanged by phase 2/3
+(`use-private-supplement.ts` merges onto the original paper object) — **PASS**, re-confirmed by
+reading; execution-confirmed live in round 9's opening measurement, not re-run this part since
+9-31 only changed the matching bands, not this merge.
+
+**B4 (PDF uploads successfully but the model fails/has no key: keep the original report or a real
+deterministic reading, state the gap accurately, upload learning still saved idempotently) — now
+execution-confirmed live, closing the round's only remaining BLOCKED row on this side.** Generated
+a self-made fixture, uploaded and attached it to a fabricated target paper (`band: "strong"`, exact
+title match). Called `POST /api/papers/report` with `fullTextUploadId` set, `deepReport: true`, and
+a deliberately invalid `llmOverride` (a well-formed but fake API key — forces a real model-call
+failure without touching the server's own working provider or `.env.local`). The NDJSON stream
+showed `mode: tier2` → `stage: source` → **`stage: reading` (pct 35)** — proving the real private
+PDF's full text was genuinely fetched and read before the model was ever called — → `stage:
+writing` → a **`report` event with `"noLlm":true, "depth":"fallback"`, empty `skim`/`keyResults`
+(nothing invented) and `paywallNotice: "Peer downloaded the paper but the deep-read step failed.
+Showing an abstract-only report instead."`** — an honest, accurate description of exactly what
+happened, never a fabricated deep report. Separately called `GET
+/api/papers/upload:<hash>/reading` (no model involved by the route's own design — its file
+comment says so, confirmed) → a real, fully deterministic reading built from the uploaded PDF's
+actual extracted sections (`findings`, `body` paragraphs matching the fixture's real text
+verbatim), with the model-only blocks (`forYou`, `nextStep`) explicitly listed under
+`omitted: [{reason: "needs_key"}]` rather than silently missing or invented. Upload-evidence
+recording is decoupled from report success by construction (recorded at upload time, already
+confirmed in A1-A4/A2-A7) — deleted the test asset via the real `DELETE` route afterward
+(`retractEvidence: true`). **PASS.**
+
+**B5 (wrong article / DOI mismatch / long title / scanned / encrypted PDFs: never silently
+overwritten, error is recoverable, never a fake "full text read" claim, no orphaned unconfirmed
+asset).** Mismatched-title and non-PDF sub-cases already execution-confirmed in round 9's opening
+measurement, unchanged by phase 2/3 code paths (matching now flows through 9-31's bands but the
+final refusal shape is the same `422`). **New this part — the two sub-cases explicitly flagged
+NEEDS FOLLOW-UP before:** generated a self-made PDF with **no text layer at all** (a filled
+rectangle, no `insert_text` calls — simulates a scanned page) and a self-made PDF **encrypted**
+with a user password (`PDF_ENCRYPT_AES_256`, PyMuPDF). Standalone upload (no target) of the
+scanned PDF → `200`, `textStatus: "empty"`, empty `preferenceSignals` (no fabricated keywords),
+title falls back to the file name — matches the handoff's own "no OCR required this round; state
+the limitation, do not fake a summary." The SAME PDF uploaded again **with** a `targetPaper` →
+`422 "This PDF could not be verified as this article... the existing report has been kept"` — and
+the original standalone asset, re-fetched by its own hash afterward, is confirmed **untouched**
+(`revision: 1`, `textStatus: "empty"`, no `paperIds` gained) — no corruption, no silent bind. The
+encrypted PDF behaved identically in both cases (`textStatus: "empty"` standalone; `422` as a
+supplement attempt) — PyMuPDF's inability to read an encrypted stream degrades to the same honest
+"empty" shape, no crash, no 500. Both test assets deleted via the real `DELETE` route afterward.
+**PASS** (all named sub-cases, including the two previously-unexercised ones).
+
+**B6 (JSON, NDJSON, reopen, restart-server, another device all recover the same owner's
+attachment; no stale public report; no duplicate accumulated signal).** Uploaded and attached a
+fresh self-made fixture, then: called `POST /api/papers/report` once with `Accept: application/json`
+and once with `Accept: application/x-ndjson` against the **same** `fullTextUploadId` — both
+reports' generated text is visibly grounded in the same private fixture abstract (real model
+calls this time, no override), confirming JSON/NDJSON parity on the same owner attachment,
+execution-confirmed (not mocked). Simulated "reopen" with **three separate, fresh** `GET
+/api/papers/upload` list calls on the same cookie jar — byte-identical single-entry responses
+every time (`revision: 1`, same `preferenceSignals`, same `preferenceSignalsRecordedAt`) — no
+drift, no duplication, matching 9-23's idempotent-recovery design. **Two sub-cases remain
+genuinely unmeasured, not silently passed:** restarting the dev server is forbidden by this
+round's own ground rules (§3 "do not start, stop or restart it"), and true cross-device continuity
+in this codebase's design is a **production Supabase-session** concern — local-dev ownership is
+one capability cookie per browser by deliberate design (Ruling 23 item 3), so "another device"
+has no real local-dev analogue to execute against; both are **NOT MEASURED**, not assumed passing.
+**PARTIAL** — 3 of 5 named sub-cases execution-confirmed this part, 2 out of scope for this
+environment.
+
+**B7 (replace an attachment / concurrent upload: the final revision is unambiguous; report,
+figure and reading never mix two versions; file and index stay consistent) — re-confirmed per the
+task's own instruction, since 9-22 changed the DELETE route's response shape after B7 was first
+banked PASS in the phase-1 re-measure.** Uploaded self-made fixture A, attached to a fabricated
+target — `revision: 1`, `GET ?paperId=` resolves to A. Uploaded a **genuinely different** self-made
+fixture B (different body text, same title) to the **same** target — `200`, **`revision: 2`**,
+`GET ?paperId=` for the target now resolves to **B**, not A — the current-attachment pointer
+switched correctly and the revision counter is unambiguous. Re-fetched A **by its own hash**
+afterward: still `200`, `revision: 1` unchanged, `textStatus: "ok"` — A's own asset stays fully
+self-consistent on disk, neither corrupted nor silently deleted by the replace, satisfying "file
+and index stay consistent." Both assets' `DELETE` calls this part returned the current
+`{deleted, documentKey, retractEvidence}` shape correctly (re-exercising the exact 9-22-changed
+response shape the task flagged, four more times across this part's B4/B5/B6/B7 checks, all
+correct) — **PASS, re-confirmed live.**
+
+**L1 (no "guaranteed legal" wording anywhere; README + `docs/PRIVATE_PDF_UPLOADS.md` restate
+handoff §6.1 plainly; §6.5's open conditions listed as open).** Re-ran
+`upload-legal-wording.test.ts` cold — 8/8 passed. Independently grepped (not trusting the test
+alone) for `guarantee|guaranteed|免责|绝对|legal` (case-insensitive) across
+`docs/PRIVATE_PDF_UPLOADS.md`, the **root** `README.md` (first check mistakenly grepped
+`web/README.md`, which has no such section — the 9-33 commit's own diff confirms it touched the
+repository-root `README.md`; corrected and re-grepped the right file), `upload-consent-dialog.tsx`
+and `private-pdf-status.tsx`. Every match in the doc/README is explicitly hedged ("not legal
+advice, and nothing in it or in the product guarantees...", "not a legal opinion and not a
+guarantee that any given upload is lawful", "legal boundaries this is not able to guarantee") —
+none promises legality. The two component files have **zero** matches for any of those words at
+all. Confirmed `docs/PRIVATE_PDF_UPLOADS.md` exists (175 lines) and the root `README.md` links it
+under "Private PDF uploads: storage, consent, and legal boundaries," replacing the old ownerless
+description — **PASS**.
+
+Commit: this entry only (§4 append), staging `docs/handoff/ABC-followup-round2.md`. No product
+code touched. All test PDFs, generator scripts and cookie jars from this part deleted before this
+commit; `git status` confirmed clean.
+
+### Round 9 — Agent A (closing, part 4 of 4 — full matrix, cold gate, verdict)
+
+**Full A1-A8 / B1-B7 / C1-C10 / L1 matrix (26 scoreable rows):**
+
+| Row | Verdict | Evidence this round |
+|---|---|---|
+| A1 | PASS | Closing part 1: 3 fresh fixtures (materials, CS, wrapped-title), no noise terms, `facet`+`extractionVersion` on every concept |
+| A2 | PASS | Closing part 1: identical bytes re-uploaded twice → same id/revision; "records twice yields one weight" re-run cold |
+| A3 | PASS | Closing part 1: shared-DOI pair, delete-one → `retractEvidence:false`, delete-last → `true` |
+| A4 | PASS | Closing part 1: reference-list decoy — `quantum` (the decoy term) absent from the whole response, not just from signals |
+| A5 | PASS | This turn (part 2): word-boundary test re-run cold + code reading (`ledger.ts:668-675`) |
+| A6 | PASS | This turn (part 2): throwaway test — 20-concept upload still capped at 0.18; required-topic hard gate unaffected by upload boost |
+| A7 | PASS | This turn (part 2): decay/reset/remove/device-sync re-confirmed cold; export/import gap closed by a new throwaway execution |
+| A8 | PASS | This turn (part 2): pool-cache key isolation re-run cold; code-confirmed zero private-text path into the pool |
+| B1 | PASS | Manager's live browser check (2026-09-20) + this turn's token/dark-mode-parity reading |
+| B2 | PASS | Unchanged by phase 2/3; re-confirmed by reading |
+| B3 | PASS | Unchanged by phase 2/3; execution-confirmed in round 9's opening measurement |
+| B4 | PASS | This turn (part 3): live NDJSON stream — real full-text read, then honest no-LLM fallback report; deterministic reading route confirmed model-free |
+| B5 | PASS | This turn (part 3): mismatched-title/non-PDF (prior) + scanned/encrypted (new this turn), all honest, no corruption |
+| B6 | PARTIAL | This turn (part 3): JSON/NDJSON parity + reopen idempotency execution-confirmed; server-restart and true cross-device (production-auth-only) NOT MEASURED |
+| B7 | PASS | This turn (part 3): live replace — revision 1→2, current pointer switches, old asset stays consistent; re-confirmed per the 9-22 DELETE-shape instruction |
+| C1 | PASS | Phase-1 re-measure (after-phase-1 part 2): cold + warm cross-owner refusal, extensively |
+| C2 | PASS | Phase-1 re-measure (after-phase-1 part 1): header-less DELETE now refused; explicit cross-site refused; traversal refused |
+| C3 | PASS | Phase-1 re-measure (after-phase-1 part 2): owner-salted hash, no cross-owner dedup |
+| C4 | PASS | Phase-1 re-measure (after-phase-1 part 3): true concurrent extraction, no cross-contamination, no `figures.json` leftover |
+| C5 | PASS | Phase-1 re-measure, re-confirmed live this turn (part 3): DELETE's `retractEvidence`-bearing response shape exercised 6 more times across B4/B5/B6/B7 with correct results every time |
+| C6 | PASS | Phase-1 re-measure (after-phase-1 part 3): cron config + script + README, correctly never claims to run locally |
+| C9 | PASS | Phase-1 re-measure (after-phase-1 part 1): missing/stale rightsVersion, oversized Content-Length, all refused pre-extraction |
+| C10 | PASS | Phase-1 re-measure (after-phase-1 part 3): no base64/full text in metadata or list responses; the old `figures.json` leftover confirmed gone |
+| L1 | PASS | This turn (part 3): 8/8 test re-run cold + independent grep at the correct root `README.md` path |
+
+**Tally: 25 PASS, 1 PARTIAL (B6, two sub-cases out of this round's environment — dev-server
+restart forbidden by the ground rules, true cross-device continuity requires production Supabase
+auth not configured here), 0 FAIL, 0 BLOCKED.** Every row that this environment (a local dev
+server, curl, and vitest — no browser) can exercise has been exercised by execution this round,
+not trusted from any commit message.
+
+**The gate, cold, from `web/`:**
+
+```
+npx tsc --noEmit                                    → clean, zero errors
+npx eslint .                                         → clean, zero errors/warnings
+npx vitest run --exclude "**/benchmark.test.ts"      → 135 files / 2798 tests passed
+```
+
+Matches the manager's own from-clean-`npm ci` baseline exactly (tsc clean, eslint clean, 2798/2798,
+135/135 files) — no regression, unsurprising since this turn changed no product code (only §4 log
+entries, plus throwaway test files written and deleted within each part, never committed).
+
+**Cleanup confirmed:** every self-made PDF fixture, generator script, and cookie jar created across
+parts 2-3 of this turn was deleted before its own commit; `git status --short` clean immediately
+before this commit as well. `.local-data/uploads/` was not inspected this part (no new uploads were
+left live at any point — each part's own live checks deleted their assets via the real `DELETE`
+route before moving on).
+
+Commit: this entry only (§4 append) plus the §1 update below, staging
+`docs/handoff/ABC-followup-round2.md`. No product code touched this entire closing turn.
