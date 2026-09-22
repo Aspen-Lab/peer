@@ -86,34 +86,41 @@ WORKING FOLDER:   D:\local files on this PC\Github\Peer\peer-followup  (git work
                   Jev-integration-and-sorting-filtering-enhancement) - never write there.
                   See Ruling 24 (§1ae). No bare `git stash` - the stack is shared.
 ROUND:            9
-WHOSE TURN:       A  (RE-measure the live-HTTP rows on :3100 - Ruling 25, §1af)
+WHOSE TURN:       Manager (round 9 fully re-measured on :3100 under Ruling 25 - decide B6, then
+                  close and report)
 DEV SERVER:       http://localhost:3100, started from the worktree by a background shell.
                   `preview_start` BY NAME still launches the OTHER agent's checkout - do not use
                   it. Confirm the serving process path contains `peer-followup` before trusting
                   any live number.
-STOPPED BECAUSE:  A finished the full round-9 closing re-measurement (parts 1-4) @ 2026-09-22.
-                   25/26 matrix rows PASS; 1 (B6) PARTIAL on two sub-cases this environment
-                   structurally cannot exercise. Gate cold and green. Handing back to the manager
-                   for a POLICY call on B6, then the round-9 close/report per handoff §11.
-STATUS:           Round 9 fully re-measured, execution-confirmed, not trusted from any commit
-                   log. A1-A8, B2-B5, B7, C1-C6/C9/C10, L1 all PASS. B1 PASS (manager's live
-                   browser check + token/dark-mode-parity reading). B6 PARTIAL: JSON/NDJSON
-                   parity and reopen-idempotency execution-confirmed; dev-server restart and true
-                   cross-device continuity (a production-Supabase-auth concern, not configured in
-                   this worktree) are NOT MEASURED, not failed — forbidden/out of this
-                   environment's reach, not silently passed either.
-OPEN ITEMS:       (a) RULING 25: every row whose evidence was a live HTTP call was measured
-                   against the OTHER agent's checkout (our HEAD + ~53 of their uncommitted files,
-                   several touching the preference/learning paths). Those rows are re-opened and
-                   must be re-measured on :3100: the live parts of A1-A4 (fixtures), A7's
-                   export/import round-trip if it used HTTP, B4, B5, B7, C5, and 9-21/9-22's live
-                   checks. Rows proved by vitest/tsc/eslint or by reading worktree code are
-                   unaffected and stay PASS.
+STOPPED BECAUSE:  A re-measured every Ruling-25-tainted live row on :3100 @ 2026-09-22 (A1-A4,
+                  A3/C5/9-22's shared-DOI delete order, 9-21's noise-term check, B4, B5, B7 — all
+                  fresh self-made fixtures, all cleaned up, uploads dir back to the 24-file
+                  baseline). 25/26 matrix rows PASS; 1 (B6) PARTIAL, unchanged from before (one
+                  sub-case already closed PASS by the manager on :3100, one structurally
+                  NOT MEASURED in this environment). Gate cold and green, process re-confirmed as
+                  `peer-followup` immediately before running it. Handing back to the manager for
+                  the same POLICY call on B6 as before, then the round-9 close/report per handoff
+                  §11.
+STATUS:           Round 9 fully re-measured twice now — once against the wrong folder (Ruling 25),
+                  once correctly on :3100 this turn. A1-A8, B1-B5, B7, C1-C6/C9/C10, L1 all PASS,
+                  every live-HTTP row now carrying `:3100` evidence from this turn; every
+                  vitest/tsc/eslint/code-read row correctly left untouched (Ruling 25 never
+                  applied to those). B6 PARTIAL, unchanged: JSON/NDJSON parity and reopen-
+                  idempotency execution-confirmed pre-move; server-restart CLOSED PASS by the
+                  manager on :3100 (Ruling 25 §4); true cross-device continuity (a production-
+                  Supabase-auth concern, not configured in this worktree) is NOT MEASURED, not
+                  failed — forbidden/out of this environment's reach, not silently passed either.
+OPEN ITEMS:       (a) RULING 25 is now fully discharged: every row it re-opened has `:3100`
+                  evidence from this turn (A1-A4, A3/C5/9-22, B4, B5, B7). A7's export/import
+                  round-trip was checked and found to be an in-process vitest call, never HTTP —
+                  correctly left PASS, not re-run.
                   (b) B6 server-restart: CLOSED PASS by the manager on :3100 (Ruling 25 §4).
                   (c) B6 cross-device via production Supabase auth: NOT MEASURED, moved to the
                    pre-launch conditions. Not a local-dev row; never to be recorded PASS here.
-GATE (0 open):    NOT MET — pending A's re-measurement of the live rows on :3100. The code-level
-                   gate itself (tsc/eslint/vitest) is green: 2798/2798.
+GATE (0 open):    MET — every re-opened row now carries valid :3100 evidence; the code-level gate
+                  (tsc/eslint/vitest) is green: 2798/2798, matching baseline exactly. B6's one
+                  remaining PARTIAL is a recorded structural NOT MEASURED (POLICY, not a defect),
+                  not an open item blocking the gate.
 
 DONE:      round 9: A's draft measurement; Ruling 23; phase 1 (9-11..9-19); phase 2 (9-21 Tier-0
            quality/facet/extractionVersion, 9-22 reference-counted retraction, 9-23 server-
@@ -125,13 +132,17 @@ DONE:      round 9: A's draft measurement; Ruling 23; phase 1 (9-11..9-19); phas
            learning side incl. two new throwaway-execution closes on A6/A7; B1-B7 the supplement
            flow incl. B4's first-ever live model-failure exercise and B5's new scanned/encrypted
            sub-cases; L1 re-confirmed at the correct root README path; the full 26-row matrix;
-           the cold gate).
-GATE NOW:  tsc clean · eslint clean · vitest 2798/2798, 135/135 files (A, cold, this turn's last
-           run — matches the manager's clean-`npm ci` baseline exactly, no regression).
-TODO:      Manager: decide B6's two NOT MEASURED sub-cases (POLICY), then close round 9 and
-           report to the user per handoff §11 (Chinese), including the accepted-as-designed
-           local-dev limitation on true cross-device continuity. Push at close (standing
-           authorization, Ruling per §1ac loop mapping).
+           the cold gate); Ruling 24 (move to the peer-followup worktree); Ruling 25 (the
+           preview-tool bug and its consequence); A's full re-measurement of every Ruling-25-
+           tainted row on :3100 (A1-A4, A3/C5/9-22, B4, B5, B7), the full matrix rebuilt, the cold
+           gate re-run from the worktree.
+GATE NOW:  tsc clean · eslint clean · vitest 2798/2798, 135/135 files (A, cold, on :3100/the
+           worktree, this turn's last run — matches the manager's clean-`npm ci` baseline exactly,
+           no regression, process re-confirmed as `peer-followup` before the run).
+TODO:      Manager: decide B6's one remaining NOT MEASURED sub-case (POLICY — true cross-device
+           continuity via production Supabase auth), then close round 9 and report to the user
+           per handoff §11 (Chinese), including the accepted-as-designed local-dev limitation.
+           Push at close (standing authorization, Ruling per §1ac loop mapping).
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
@@ -153,6 +164,7 @@ part-way.
 | 7 (closing) | 2 (A7b-01, A7b-02; A7b-03 informational) | NOT MET — Ruling 19's own fix for A7-01/A7-02 confirmed closed, live, bit-for-bit (85.00% exact at 2560px; xl cap scales; both sticky-panel branches match, now against the real served CSS after the manager's cold restart, not an injected override). S22 and S20 confirmed no regression. S23 (Ruling 20) code matches spec exactly; live checks found 0 explicit 429s but 2 of 6 fresh `/api/feed` calls hit an 8s per-source timeout (A7b-03, informational). Two new, real, execution-confirmed gaps in Ruling 19's own composing/resize mechanism, neither a regression of anything closed before this round: `--page-zoom` does not recompute after "Larger text"/"Smaller text" while Fit is on and never self-corrects without an actual window resize, drifting the page to 88.97%/81.21% of the viewport instead of 85% (A7b-01, the easiest to trigger — no resize needed); a live window resize while already fitted can land on a self-inconsistent zoom that fills ~99% of the container instead of 85% of the viewport, because `offsetWidth` is zoom-invariant only in the max-width-bound regime B's own synthetic tests covered, not the width:100%-bound regime the xl breakpoint can enter (A7b-02, recoverable by toggling Fit off/on, confirmed). Gate clean (tsc/eslint/vitest 2687/2687, re-run cold by A). |
 | 8 | 0 | **MET** — all four of round 8's items (S24 S25 S26 S27) confirmed matching spec exactly in the rendered/served result: S27's masthead order/active-state/wordmark-non-doubling, S24's two 44px accent buttons in light AND dark (real reload) plus working Esc-to-home, S25's closed-by-default/open/close/not-persisted cycle plus a live-proved decided-read observer fallback (the round's own load-bearing risk, designed around correctly), S26's box/border/summary/novelty colors and sizes independently re-measured in both themes. Zero execution-confirmed differences. Three items flagged for the manager's own eyes, none of them defects: dark-mode persona buttons (computed-style-confirmed, never human-eyeballed), the findings box's light-mode shade (B's own flagged ~2% lightness step), and hover-swell clipping on both new buttons (geometry-verified only — the automated pane cannot trigger a real CSS `:hover` state, confirmed independently by both C and A). Gate clean (tsc/eslint/vitest 2713/2713, re-run cold by A). S28 (investigation, no C step) stays closed from B's turn. |
 | 9 | 16 (A9-01..A9-16) | NOT MET — new loop on the upload/learning/supplement handoff, measuring the pre-committed 73323bd draft rather than fresh code. Of 26 scoreable matrix rows: 13 PASS, 6 PARTIAL, 2 FAIL, 5 BLOCKED/NEEDS BROWSER. Two real, execution-confirmed problems rank above everything else: `sameOriginUploadRequest()` treats a request with no Origin/Sec-Fetch-Site header as same-origin, and a bare DELETE with neither header actually succeeded (A9-01/C2); and deleting one of two PDF copies that share a documentKey (the same-DOI-merge case) erases the only preference-ledger evidence for a document the user still has a live copy of, reproduced with a throwaway vitest repro (A9-02/A3). Also confirmed live: real upload output includes noise terms ("three", "nodes") as preference signals (A9-04/A4); a pre-existing 8.6 MB shared `figures.json` from before the per-request-temp-dir fix is invisible to the purge job's filename filter and will never be auto-purged (A9-03); no scheduler exists for the 30-day retention promise and no operator/admin block-or-remove path exists (A9-05, A9-06); the green supplement button uses a raw Tailwind color instead of the app's theme tokens (A9-16). Gate clean regardless (tsc/eslint/vitest 2713/2713, re-run cold by A, matching the draft's own claimed baseline). |
+| 9 (closing, Ruling 25 re-measure) | 0 scoreable (B6 PARTIAL is a recorded structural NOT MEASURED, not an open defect) | **MET** — all of round 9's items (9-11..9-33) confirmed landed and, after Ruling 24 moved the work to the `peer-followup` worktree and Ruling 25 caught the preview tool silently serving the other agent's checkout, every row whose evidence had been a live HTTP call was re-executed with fresh self-made fixtures on the worktree's own `:3100` server: A1-A4 (noise-term exclusion, idempotent re-upload, shared-DOI delete-order, reference-list decoy), 9-21/9-22's own live checks, B4 (a forced model-call failure still reads the real private PDF first, then an honest no-LLM fallback with nothing invented; the deterministic `/reading` route needs no model), B5 (non-PDF/mismatched-title/scanned/encrypted all degrade honestly, a rejected supplement never corrupts the existing standalone asset), and B7 (replacing an attachment bumps revision 1→2, the pointer switches, the superseded asset stays intact) — all PASS. A7's export/import row was checked and found to be an in-process test, never HTTP, so it stood unaffected. B6 stays PARTIAL exactly as before: its server-restart sub-case was already closed PASS by the manager on `:3100`, and true cross-device continuity via production Supabase auth remains a recorded, structural NOT MEASURED, not a defect. Gate clean (tsc/eslint/vitest 2798/2798, 135/135 files, re-run cold by A on the worktree, process re-confirmed as `peer-followup` before the run). |
 
 ---
 
@@ -15312,3 +15324,148 @@ route before moving on).
 
 Commit: this entry only (§4 append) plus the §1 update below, staging
 `docs/handoff/ABC-followup-round2.md`. No product code touched this entire closing turn.
+
+### Round 9 — Agent A (Ruling 25 re-measurement — every live row redone on :3100)
+
+Branch confirmed `complimentary-enhancement-to-main-update` in the worktree
+`D:\local files on this PC\Github\Peer\peer-followup`, tree clean, before touching anything.
+Confirmed the serving process by the exact command Ruling 25 (§1af) specifies — the command line
+contained `peer-followup\web\node_modules\next\dist\server\lib\start-server.js`, not
+`Peer\peer\web` — before trusting any number below, and again immediately before the closing gate
+run. `.local-data/uploads/` baseline confirmed at 24 files both before and after this turn. Every
+fixture below is self-made this turn with the venv (`.local-data/pdf-runtime/Scripts/python.exe` +
+PyMuPDF) in the session scratchpad, never committed, never the user's own PDFs; one fresh owner
+cookie jar per sub-test.
+
+**A1 / 9-21 (noise-term exclusion, facets present).** Uploaded a fresh fixture reproducing the
+exact "three graph nodes … two edges" generic-noun/number-word decoy text A9-04 originally found
+leaking into signals. `POST :3100/api/papers/upload` → `200`, `upload:5c35aa28ce62bab0`, 4
+preference signals, each carrying `facet`/`section`/`extractionVersion`; grepped the **entire**
+raw response body (not just `preferenceSignals`) for `three`/`nodes`/`two`/`edges` — zero matches
+anywhere. Deleted afterward (200, then a re-delete returned 404). **PASS.**
+
+**A2 (idempotent re-upload).** Uploaded one fixed fixture (sha256-confirmed identical bytes) twice
+in a row to the same fresh owner: both calls returned the same `upload:a9351e9b33468918`,
+`revision: 1` unchanged both times. Deleted afterward. **PASS.**
+
+**A3 / C5 / 9-22 (shared-DOI pair, delete-order-dependent `retractEvidence`).** Generated two PDFs
+with different titles/bodies and an identical DOI line embedded in each one's own Abstract-section
+body text (a title-page DOI is dropped by the extractor's own heading-cutoff, so this placement is
+deliberate). Both uploaded under one fresh owner matched the same `doi` and the same
+`uploadDocumentKey` byte-for-byte. `DELETE` copy A (copy B still `ready`) →
+`{"deleted":true,...,"retractEvidence":false}`; `DELETE` copy B (the last live copy) →
+`{"deleted":true,...,"retractEvidence":true}` — exactly the task's stated delete-order behaviour.
+**PASS.**
+
+**A4 (reference-list decoy).** Real content about thermal-runaway battery modules; a References
+section cites two fake "quantum computing" papers. `200`, 200 grepped the **whole** raw response
+for `quantum` (case-insensitive) — zero matches anywhere, confirming the decoy never survived
+extraction (both `extract_pdf_text.py`'s heading cutoff and `upload-concepts.ts`'s own reference-
+section filter). Deleted afterward. **PASS.**
+
+**B4 (model-failure honesty).** Uploaded a fixture as a supplement to a fabricated target
+(`band: "strong"`, exact-title match). Called `POST :3100/api/papers/report` with
+`fullTextUploadId` set, `deepReport: true`, `Accept: application/x-ndjson`, and a well-formed but
+fake `llmOverride` (`provider: "anthropic"`, an invalid `apiKey`) — forces a real model-call
+failure without touching the server's own working provider or `.env.local`. Stream:
+`stage: source` → **`stage: reading` (pct 35)** → `stage: writing` → a **`report` event with
+`"noLlm":true, "depth":"fallback"`, empty `skim`/`keyResults`** and
+`paywallNotice: "Peer downloaded the paper but the deep-read step failed. Showing an abstract-only
+report instead."` — proving the real private PDF was read before the model call failed, and that
+the fallback invented nothing. Separately called `GET :3100/api/papers/upload:<hash>/reading` (no
+model involved) → a real, fully deterministic reading whose `abstract`/`method`/`body` text
+matches the fixture's actual extracted sentences verbatim, with `forYou`/`nextStep` explicitly
+listed under `omitted: [{reason: "needs_key"}]` rather than missing or invented. Deleted the test
+asset afterward (`retractEvidence: true`). **PASS.**
+
+**B5 (mismatched title / non-PDF / scanned / encrypted, all honest; a rejected supplement never
+corrupts an existing standalone asset).** Four sub-cases, all fresh this turn:
+- **Non-PDF**: uploaded a plain-text file with a `.pdf` name → `415 "That file is not a PDF."`
+  (the magic-byte gate runs before any target/rightsVersion check) — no asset created.
+- **Mismatched title**: uploaded a real, readable PDF on a completely unrelated topic as a
+  supplement to a fabricated target → `422 "This PDF does not appear to be the same article...the
+  existing report has been kept."`, `overlap: 0` — honest reject band, nothing invented.
+- **Scanned (no text layer)**: standalone upload → `200`, `textStatus: "empty"`, empty
+  `preferenceSignals`, title falls back to the file name. The **same** PDF then submitted **again**
+  as a supplement to a (different) fabricated target → `422 "...could not be verified as this
+  article...the existing report has been kept."` Re-fetched the original standalone asset by its
+  own hash afterward: **byte-identical** (`revision: 1`, `textStatus: "empty"`, same
+  `uploadDocumentKey`) — the rejected supplement attempt left the standalone asset untouched.
+- **Encrypted** (AES-256, user password): standalone upload → `200`, `textStatus: "empty"` (same
+  honest degradation as scanned, no crash); as a supplement attempt → `422`, same shape.
+All four test assets deleted afterward. **PASS** (all four named sub-cases).
+
+**B7 (replace an attachment: revision bumps, pointer switches, old asset stays intact).** Uploaded
+fixture A as a supplement to a fresh fabricated target (exact-title match, `band: "strong"`) →
+`revision: 1`; `GET ?paperId=<target>` resolved to A. Uploaded a **genuinely different** fixture B
+(different body text, same title) to the **same** target → `200`, **`revision: 2`**; `GET
+?paperId=<target>` now resolves to **B**. Re-fetched **A by its own hash** afterward: still `200`,
+`revision: 1` unchanged, `textStatus: "ok"` — A's own asset stays fully self-consistent on disk,
+neither corrupted nor deleted by the replace. Both assets deleted afterward. **PASS.**
+
+**A7 export/import — checked, no redo needed.** Re-read the closing-part-2 entry's own evidence
+for this row: it built a ledger via `applyUploadPreferenceSignal` and ran it through
+`exportProfileDocument`/`parseExportedProfile` directly inside a throwaway vitest file — an
+in-process function-call test, never an HTTP request to any dev server. Ruling 25's contamination
+is specific to live HTTP calls; this row was never exposed to the wrong folder. **Left PASS,
+unchanged, not re-executed.**
+
+**Cleanup confirmed.** Every fixture, cookie jar and response file this turn lived only in the
+session scratchpad, never under `web/.local-data/` and never committed. `.local-data/uploads/`
+re-checked at exactly 24 files (the pre-existing baseline) after every sub-test's own `DELETE`
+call. `git status --short` clean immediately before this commit.
+
+**The gate, cold, from `web/`, process re-confirmed as `peer-followup` immediately before running
+it:**
+
+```
+npx tsc --noEmit                                    → clean, zero errors
+npx eslint .                                         → clean, zero errors/warnings
+npx vitest run --exclude "**/benchmark.test.ts"      → 135 files / 2798 tests passed
+```
+
+Matches the manager's clean-`npm ci` baseline and the prior (tainted-server) closing run's own
+figures exactly — no regression, unsurprising since no product code changed this turn, only this
+log and throwaway test/fixture files that were deleted, never committed.
+
+**Full A1-A8 / B1-B7 / C1-C10 / L1 matrix, current verdicts:**
+
+| Row | Verdict | Evidence |
+|---|---|---|
+| A1 | PASS | `:3100` live — fresh noise-decoy fixture, zero junk terms anywhere in the response, facets present |
+| A2 | PASS | `:3100` live — identical bytes uploaded twice → same id/revision |
+| A3 | PASS | `:3100` live — shared-DOI pair, delete-one → `false`, delete-last → `true` |
+| A4 | PASS | `:3100` live — reference-list decoy, `quantum` absent from the whole response |
+| A5 | PASS | vitest (re-run cold, closing part 2) + code read — unaffected by Ruling 25 |
+| A6 | PASS | vitest/throwaway test (closing part 2) + code read — unaffected by Ruling 25 |
+| A7 | PASS | decay/reset/remove/device-sync: vitest (closing part 2); export/import: in-process throwaway test, never HTTP — unaffected by Ruling 25, not re-run |
+| A8 | PASS | vitest (closing part 2) + code read — unaffected by Ruling 25 |
+| B1 | PASS | manager's live browser check (2026-09-20, pre-move) + code/token reading — unaffected by Ruling 25 |
+| B2 | PASS | code read — unaffected by Ruling 25 |
+| B3 | PASS | code read; execution-confirmed live pre-move (round 9 opening) — unaffected by Ruling 25 |
+| B4 | PASS | `:3100` live — real full-text read then honest no-LLM fallback; deterministic `/reading` route confirmed model-free |
+| B5 | PASS | `:3100` live — non-PDF, mismatched-title, scanned, encrypted; rejected supplement leaves standalone asset byte-identical |
+| B6 | PARTIAL | server-restart sub-case: `:3100` live, CLOSED PASS by the manager (Ruling 25 §4); cross-device-via-production-auth: NOT MEASURED, moved to pre-launch conditions |
+| B7 | PASS | `:3100` live — replace bumps revision 1→2, pointer switches, superseded asset stays intact |
+| C1 | PASS | vitest/code read (phase-1 re-measure, pre-move) — unaffected by Ruling 25 |
+| C2 | PASS | vitest/code read (phase-1 re-measure, pre-move) — unaffected by Ruling 25 |
+| C3 | PASS | vitest/code read (phase-1 re-measure, pre-move) — unaffected by Ruling 25 |
+| C4 | PASS | vitest/code read (phase-1 re-measure, pre-move) — unaffected by Ruling 25 |
+| C5 | PASS | `:3100` live — see A3 above; same `retractEvidence`-bearing DELETE shape exercised again in B4/B5/B7 |
+| C6 | PASS | code read (cron config, script, README) — unaffected by Ruling 25 |
+| C9 | PASS | vitest/code read (phase-1 re-measure, pre-move) — unaffected by Ruling 25 |
+| C10 | PASS | vitest/code read (phase-1 re-measure, pre-move) — unaffected by Ruling 25 |
+| L1 | PASS | vitest (8/8, re-run cold, closing part 3) + independent grep — unaffected by Ruling 25 |
+
+**Tally: 25 PASS, 1 PARTIAL (B6, two sub-cases — one already closed PASS by the manager on :3100
+per Ruling 25 §4, one genuinely NOT MEASURED and out of this local-dev environment's reach by
+design), 0 FAIL, 0 BLOCKED.** Every row whose evidence was a live HTTP call now carries `:3100`
+evidence from this turn; every row proved by `vitest`/`tsc`/`eslint`/code reading was left PASS,
+unchanged, per Ruling 25's own scope.
+
+**GATE MET** — 0 open items remain unexplained. B6's one remaining sub-case is a recorded,
+structural NOT MEASURED (production-Supabase-auth-only, no local-dev analogue), not a defect, and
+was already flagged for the manager's POLICY call before this turn.
+
+Commit: this entry only (§4 append) plus the §1 update below, staging
+`docs/handoff/ABC-followup-round2.md`. No product code touched. Push: no (manager's call, per §3).
