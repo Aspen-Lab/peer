@@ -1395,6 +1395,53 @@ belong to that other agent. Our branch cannot be checked out there without destr
 
 ---
 
+## §1af. RULING 25 — the preview tool still starts the OTHER agent's server; live checks run on :3100 (manager, 2026-09-22) — BINDING
+
+**What happened.** After the move to the worktree (Ruling 24), the harness's `preview_start` tool
+kept returning the same `previewId` and kept launching Next from
+`D:\local files on this PC\Github\Peer\peer\web` — the other agent's checkout — even though the
+session's project directory had moved and the worktree's own `.claude/launch.json` was renamed
+(`peer-web-followup`, port 3100). The preview registry is pinned to the project root this session
+started in. This was caught only because an uploaded fixture never appeared in the worktree's
+`.local-data/uploads`.
+
+**Consequence.** Every live-HTTP measurement taken before this ruling ran against the other
+agent's working tree — which is our HEAD `8fa4360` **plus ~53 of their uncommitted files**,
+including `store/profile.ts`, `lib/feed/profile-compiler.ts`, `lib/scoring/*` and `types/index.ts`.
+Those touch the preference/learning paths. Any row whose evidence was a live HTTP call is therefore
+**not trustworthy** and must be re-measured. Rows measured by `vitest`/`tsc`/`eslint` or by reading
+code in the worktree are unaffected — those always ran in the right folder.
+
+**No harm done to the other agent:** their `git status` is unchanged (53 entries, same branch, same
+HEAD) and the fixture upload was deleted again, leaving their `.local-data/uploads` at the same 24
+files. Only gitignored build output (`.next/`) was written there.
+
+**The ruling.**
+
+1. This loop's dev server runs **from the worktree on port 3100**, started with
+   `cd "D:\local files on this PC\Github\Peer\peer-followup\web" && PORT=3100 npm run dev` as a
+   background shell task. `preview_start` by name is **not** to be used for it until the harness
+   follows the directory change; `preview_start` with a `url` (to open a browser tab at
+   `http://localhost:3100`) is fine.
+2. **Before trusting any live measurement**, the agent must confirm the serving process:
+   ```
+   powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter \"Name='node.exe'\" | Where-Object { $_.CommandLine -like '*start-server*' } | ForEach-Object { $_.CommandLine }"
+   ```
+   The path must contain **`peer-followup`**. If it contains `Peer\peer\web`, stop: that is the
+   other agent's server. Do not measure against it and do not kill it — it may be theirs.
+3. Every live row re-measured under this ruling must say `:3100` in its evidence line.
+4. **B6's server-restart sub-case is now PASS** (manager, on :3100): a self-made 3-page fixture was
+   uploaded (`upload:af9200f1…`, revision 1, 1 preference signal), the server was killed and
+   restarted, and with the same capability cookie the metadata came back **byte-identical**, the
+   PDF came back **byte-identical** (2161 bytes), and a fresh cookie jar got **404** — persistence
+   without cross-owner leakage. The fixture was then deleted (200, then 404) and the uploads
+   directory returned to its original 24 files.
+5. B6's remaining sub-case — true cross-device continuity through production Supabase auth — stays
+   **NOT MEASURED** and moves to the pre-launch conditions. It cannot be exercised in a local dev
+   worktree and must not be recorded as PASS.
+
+---
+
 ## §2. ROLES — DO ONLY YOUR OWN JOB
 
 ### Agent A — Reviewer
