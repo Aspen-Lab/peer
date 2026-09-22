@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
+import { blockMarker } from "@/lib/text/math";
 import {
   bodyStyle,
   buildOutline,
+  equationOf,
   captionOf,
   furnitureOf,
   headingOf,
@@ -154,5 +156,53 @@ describe("the whole reading", () => {
     expect(outline.sections).toBeUndefined();
     expect(outline.reason).toBe("no-text-layer");
     expect(outline.pageCount).toBe(2);
+  });
+});
+
+
+describe("equations", () => {
+  it("knows a numbered equation, and keeps its number apart from its symbols", () => {
+    expect(equationOf(line("Attention(Q, K, V ) = softmax(QK T / √d k )V (1)"))).toEqual({
+      text: "Attention(Q, K, V ) = softmax(QK T / √d k )V",
+      number: "(1)",
+    });
+  });
+
+  it("knows an unnumbered equation by what it is made of", () => {
+    expect(equationOf(line("L = −∑ y_i log p_i + λ‖w‖^2"))).toEqual({ text: "L = −∑ y_i log p_i + λ‖w‖^2" });
+  });
+
+  it("refuses prose, a year in brackets, and a line too long to be one", () => {
+    expect(equationOf(line("The loss is defined as follows and then minimised."))).toBeNull();
+    expect(equationOf(line("as shown by Vaswani et al. (2017)"))).toBeNull();
+    expect(equationOf(line(("x = " + "a + ".repeat(60)).slice(0, 130)))).toBeNull();
+  });
+
+  it("stands an equation on a paragraph of its own inside the section", () => {
+    const outline = buildOutline([
+      {
+        page: 1,
+        // Enough prose that the page reads as a text layer, not a scan.
+        items: [
+          item("Attention Is All You Need", { height: 17, y: 700 }),
+          item("1 Introduction", { y: 680 }),
+          ...Array.from({ length: 6 }, (_, i) =>
+            item("Recurrent neural networks have long been established in sequence modelling and transduction.", { y: 666 - i * 12 }),
+          ),
+          item("The attention is computed as", { y: 590 }),
+          item("Attention(Q, K, V ) = softmax(QK T )V (1)", { y: 576 }),
+          item("where the keys have size d.", { y: 562 }),
+          ...Array.from({ length: 6 }, (_, i) =>
+            item("The encoder is composed of a stack of six identical layers, each with two sub-layers.", { y: 548 - i * 12 }),
+          ),
+        ],
+      },
+    ]);
+    expect(outline.equations).toEqual([{ text: "Attention(Q, K, V ) = softmax(QK T )V", number: "(1)" }]);
+    const paragraphs = (outline.sections?.[0].text ?? "").split("\n\n");
+    const at = paragraphs.indexOf(blockMarker(0));
+    expect(at).toBeGreaterThan(0);
+    expect(paragraphs[at - 1]).toMatch(/computed as$/);
+    expect(paragraphs[at + 1]).toMatch(/^where the keys/);
   });
 });

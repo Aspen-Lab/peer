@@ -2,6 +2,36 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.43.0 — 2026-09-22
+
+The paper's mathematics, drawn.
+
+A formula came through the extractor as the jumble its MathML flattens to
+— "Q K T d k" in the middle of a sentence, and a display equation as a line
+of the same, run into the paragraph before it. The paper's argument is often
+in those lines.
+
+**Display equations stand on their own.** Each one is lifted out of the
+prose and set apart on a line: the mathematics centred, the paper's own
+number for it at the right, a hairline at the left the way the reader marks
+any block set apart, and — on hover — **TeX**, which copies the source
+for a note or a draft. It goes exactly where the paper put it, after the
+paragraph it followed.
+
+**Inline mathematics is drawn in the text** — in the paper's body, in the
+abstract, in every quoted sentence — so “where dₖ is the key size” reads
+as the paper wrote it.
+
+Where the source was HTML (arXiv and the rest), the TeX comes from the page
+and KaTeX draws it, loaded once on the first formula and never on a page
+without one. Where it was a PDF, there is no TeX: a printed equation is
+still recognised — a line made of symbols, or one ending in the paper's
+“(3)” — and set apart in the mono as it was printed, with its number.
+Until the renderer arrives, and wherever it cannot parse a formula, the TeX
+itself is shown: readable, never blank.
+
+The reading document is version 5.
+
 ## v0.42.0 — 2026-09-22
 
 The paper's figures, where the paper put them.

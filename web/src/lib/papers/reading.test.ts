@@ -1,4 +1,5 @@
 import { placeFigures, pdfFigureUrl } from "./reading";
+import { blockMarker } from "@/lib/text/math";
 import { describe, expect, it } from "vitest";
 import type { Paper } from "@/types";
 import type { ExtractedDocument } from "./html-text";
@@ -285,7 +286,7 @@ describe("buildReading", () => {
   it("abstract only: marks set, section blocks omitted as not_in_abstract, model blocks as needs_key", () => {
     const reading = buildReading(normalPaper, null, NOW);
 
-    expect(reading.version).toBe(4);
+    expect(reading.version).toBe(5);
     expect(reading.paperId).toBe("openalex:W7204479535");
     expect(reading.builtAt).toBe("2026-09-06T12:00:00.000Z");
     expect(reading.provenance).toEqual({
@@ -773,5 +774,28 @@ describe("placeFigures", () => {
     const placed = placeFigures([section("A", "Figure 1. Figure 1 again.")], [cap(1), cap(1)], null);
     expect(placed[0].figures).toHaveLength(1);
     expect("figures" in placeFigures([section("A", "nothing")], [], null)[0]).toBe(false);
+  });
+});
+
+
+describe("equations in the body", () => {
+  it("stands a lifted equation after the paragraph it followed, and drops the marker", () => {
+    const doc = docWith([
+      { heading: "3 Attention", canonical: "methods", text: `We compute\n\n${blockMarker(0)}\n\nwhere d is the key size.\n\n${blockMarker(1)}` },
+    ]);
+    doc.equations = [{ latex: "\\mathrm{softmax}(QK^T)V", number: "(1)" }, { text: "L = a + b" }];
+    const reading = buildReading(normalPaper, fullTextOk(doc, ARXIV_HTML_LINK), NOW);
+    expect(reading.body[0].paragraphs).toEqual(["We compute", "where d is the key size."]);
+    expect(reading.body[0].equations).toEqual([
+      { latex: "\\mathrm{softmax}(QK^T)V", number: "(1)", after: 0 },
+      { text: "L = a + b", after: 1 },
+    ]);
+  });
+
+  it("keeps a marker with no equation behind it out of the text", () => {
+    const doc = docWith([{ heading: "A", canonical: "body", text: `Only words.\n\n${blockMarker(7)}` }]);
+    const reading = buildReading(normalPaper, fullTextOk(doc, ARXIV_HTML_LINK), NOW);
+    expect(reading.body[0].paragraphs).toEqual(["Only words."]);
+    expect(reading.body[0].equations).toBeUndefined();
   });
 });

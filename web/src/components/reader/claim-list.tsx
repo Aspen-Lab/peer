@@ -1,5 +1,7 @@
 "use client";
 
+import { MathText } from "./math";
+
 // Model claims with their receipts. Every claim here survived
 // `verifyReportEvidence`, so each carries one verbatim sentence: when that
 // sentence is one of the abstract's, it is set in ink up in the paper's words
@@ -69,7 +71,9 @@ export function ClaimList({
         {claims.map((claim, i) => (
           // Keyed by position: a model can write the same sentence twice.
           <div key={`${i}:${claim.text}`}>
-            <p className={CLAIM_CLASS}>{claim.text}</p>
+            <p className={CLAIM_CLASS}>
+              <MathText text={claim.text} />
+            </p>
             <Receipt claim={claim} abstractSentences={abstractSentences} />
           </div>
         ))}

@@ -15,6 +15,7 @@
 
 import type { Paper } from "@/types";
 import type { ExtractedFigureCaption } from "./html-text";
+import { parseBlockMarker } from "@/lib/text/math";
 import type { ExtractedDocument } from "./html-text";
 import type { FullTextResult } from "./full-text";
 import type { SourceLink } from "./source-links";
@@ -115,7 +116,7 @@ export interface PaperReading {
    * change with no new field, and without the bump every reader who had
    * opened the paper that day would have kept the worse one.
    */
-  version: 4;
+  version: 5;
   paperId: string;
   builtAt: string;
   provenance: ReadingProvenance;
@@ -155,6 +156,21 @@ export interface ReadingSection {
   /** The paper's figures that belong in this section, each after the
    *  paragraph that first names it. Absent when the section has none. */
   figures?: ReadingFigure[];
+  /** The paper's display equations in this section, each after the
+   *  paragraph it followed on the page. Absent when the section has none. */
+  equations?: ReadingEquation[];
+}
+
+/**
+ * A display equation, set apart. TeX where the source was HTML — the page
+ * draws it; the printed line where it was a PDF — the page sets it in mono.
+ * `after` is the paragraph it follows, -1 for the head of the section.
+ */
+export interface ReadingEquation {
+  latex?: string;
+  text?: string;
+  number?: string;
+  after: number;
 }
 
 /**
@@ -523,17 +539,42 @@ function pickSource(
  */
 function readableBody(doc: ExtractedDocument): ReadingSection[] {
   const out: ReadingSection[] = [];
+  const lifted = doc.equations ?? [];
   for (const section of doc.sections) {
     if (section.canonical === "abstract") continue;
-    const paragraphs = section.text
-      .split(/\n{2,}/)
-      .map((para) => para.replace(/\s+/g, " ").trim())
+    const paragraphs: string[] = [];
+    const equations: ReadingEquation[] = [];
+    for (const raw of section.text.split(/\n{2,}/)) {
+      const para = raw.replace(/\s+/g, " ").trim();
+      if (!para) continue;
+      // A marker paragraph is where a display equation stood: the equation
+      // goes after the paragraph before it, and the marker goes away.
+      const k = parseBlockMarker(para);
+      if (k !== null) {
+        const eq = lifted[k];
+        if (eq && (eq.latex || eq.text)) {
+          equations.push({
+            ...(eq.latex ? { latex: eq.latex } : {}),
+            ...(eq.text ? { text: eq.text } : {}),
+            ...(eq.number ? { number: eq.number } : {}),
+            after: paragraphs.length - 1,
+          });
+        }
+        continue;
+      }
       // A step number on its own line: LaTeXML renders an algorithm listing
       // one cell per line, so "1:" and "2:" arrive as paragraphs of their
       // own. Anything with no letter in it is the same kind of debris.
-      .filter((para) => para.length > 0 && !/^\d+[:.]?$/.test(para) && /\p{L}/u.test(para));
-    if (paragraphs.length === 0) continue;
-    out.push({ heading: section.heading, canonical: section.canonical, paragraphs });
+      if (/^\d+[:.]?$/.test(para) || !/\p{L}/u.test(para)) continue;
+      paragraphs.push(para);
+    }
+    if (paragraphs.length === 0 && equations.length === 0) continue;
+    out.push({
+      heading: section.heading,
+      canonical: section.canonical,
+      paragraphs,
+      ...(equations.length > 0 ? { equations } : {}),
+    });
   }
   return out;
 }
@@ -626,7 +667,11 @@ export function placeFigures(
     }
     (out[at.section].figures ??= []).push(figure);
   }
-  return out.map((s) => (s.figures ? s : { heading: s.heading, canonical: s.canonical, paragraphs: s.paragraphs }));
+  return out.map((s) => {
+    if (s.figures) return s;
+    const { figures: _none, ...rest } = s;
+    return rest;
+  });
 }
 
 export function buildReading(
@@ -677,7 +722,7 @@ export function buildReading(
   omitted.push({ block: "nextStep", reason: "needs_key" });
 
   return {
-    version: 4,
+    version: 5,
     paperId: paper.id,
     builtAt: now.toISOString(),
     provenance,

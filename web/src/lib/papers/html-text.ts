@@ -9,6 +9,7 @@
 //   - generic                    (last-resort: <article>/<main> walker)
 
 import { cleanDisplayText } from "@/lib/text/clean";
+import { blockMarker, inlineMath } from "@/lib/text/math";
 
 const MAX_SECTION_CHARS = 18_000;
 const MAX_TOTAL_CHARS = 90_000;
@@ -42,10 +43,23 @@ export type ExtractedSourceKind =
   | "generic-html"
   | "pdf";
 
+/**
+ * A display equation, lifted out of the prose. A paragraph reading
+ * `⟦#k⟧` (see `lib/text/math`) stands where the k-th one was. TeX from an
+ * HTML source; from a PDF, only the line as it was printed.
+ */
+export interface ExtractedEquation {
+  latex?: string;
+  text?: string;
+  /** "(3)", as the paper numbered it. */
+  number?: string;
+}
+
 export interface ExtractedDocument {
   title?: string | null;
   sections: ExtractedSection[];
   figureCaptions: ExtractedFigureCaption[];
+  equations?: ExtractedEquation[];
   source: ExtractedSourceKind;
   /** PDFs only: pages the extractor saw (capped at its page limit). */
   pageCount?: number;
@@ -399,11 +413,72 @@ function extractTitleFromHtml(html: string): string | null {
 // owns the text up to the next one, a parent keeps only its own preamble,
 // and nothing is counted twice.
 
+/**
+ * LaTeXML's mathematics, kept as TeX.
+ *
+ * A display equation is a `<table class="ltx_equation ltx_eqn_table">`, one
+ * `<tr>` per line of it, each with a `<math display="block" alttext="…">` and
+ * — where the paper numbered it — a `<span class="ltx_tag_equation">(3)</span>`.
+ * Each becomes an equation of its own, and a marker paragraph stands where
+ * the table was, so the words around it keep their order. Inline mathematics
+ * — `<math display="inline" alttext="h_{t}">` — becomes the TeX in the text,
+ * marked; `stripTags` would otherwise leave the flattened MathML, which
+ * reads as "h t".
+ */
+export function liftLatexmlMath(html: string): { html: string; equations: ExtractedEquation[] } {
+  const equations: ExtractedEquation[] = [];
+  // The TeX as the page wrote it, entities and all. NOT decoded here: the
+  // text this goes into is still HTML, and `stripTags` decodes it at the end.
+  // Decoded early, `alttext="k&lt;n"` became `k<n`, and the tag stripper took
+  // the `<` for a tag's opening and swallowed the sentence after it, up to
+  // the next `>` on the page. Quote-aware, because TeX carries apostrophes:
+  // `f'(x)` in a double-quoted attribute is the whole formula.
+  const alt = (tag: string) => {
+    const m = /\balttext=(?:"([^"]*)"|'([^']*)')/i.exec(tag);
+    return m ? (m[1] ?? m[2] ?? "").replace(/\s+/g, " ").trim() : "";
+  };
+
+  let out = html.replace(/<table\b[^>]*class=["'][^"']*\bltx_eqn_table\b[^"']*["'][^>]*>[\s\S]*?<\/table>/gi, (table) => {
+    const rows = table.match(/<tr\b[\s\S]*?<\/tr>/gi) ?? [table];
+    const markers: string[] = [];
+    for (const row of rows) {
+      const math = row.match(/<math\b[^>]*>/i)?.[0];
+      const latex = math ? alt(math) : "";
+      if (!latex) continue;
+      const number = row.match(/class=["'][^"']*ltx_tag_equation[^"']*["'][^>]*>([\s\S]*?)<\/span>/i)?.[1];
+      equations.push({
+        latex: decodeEntities(latex),
+        ...(number ? { number: decodeEntities(number.replace(/<[^>]+>/g, "")).trim() } : {}),
+      });
+      markers.push(blockMarker(equations.length - 1));
+    }
+    return markers.length > 0 ? `\n\n${markers.join("\n\n")}\n\n` : " ";
+  });
+
+  out = out.replace(/<math\b[^>]*>[\s\S]*?<\/math>/gi, (element) => {
+    const open = element.match(/<math\b[^>]*>/i)?.[0] ?? "";
+    const latex = alt(open);
+    if (!latex) return " ";
+    // A block that was not inside an equation table — LaTeXML's own display
+    // maths outside a numbered environment — is still a block.
+    if (/display=["']block["']/i.test(open)) {
+      equations.push({ latex: decodeEntities(latex) });
+      return `\n\n${blockMarker(equations.length - 1)}\n\n`;
+    }
+    return inlineMath(latex);
+  });
+
+  return { html: out, equations };
+}
+
 const LATEXML_HEADING_RE =
   /<h([1-6])\b[^>]*class=["'][^"']*\bltx_title_(?:section|subsection|subsubsection|appendix)\b[^"']*["'][^>]*>([\s\S]*?)<\/h\1>/gi;
 
-function extractLatexml(html: string, pageUrl?: string): ExtractedDocument {
-  const baseUrl = resolveBase(html, pageUrl);
+function extractLatexml(page: string, pageUrl?: string): ExtractedDocument {
+  const baseUrl = resolveBase(page, pageUrl);
+  // Mathematics first: the walk below flattens tags, and a formula flattened
+  // is a formula lost.
+  const { html, equations } = liftLatexmlMath(page);
   const sections: ExtractedSection[] = [];
 
   const abstractMatch = html.match(
@@ -444,6 +519,7 @@ function extractLatexml(html: string, pageUrl?: string): ExtractedDocument {
       baseUrl,
     ),
     source: "ar5iv",
+    ...(equations.length > 0 ? { equations } : {}),
   };
 }
 

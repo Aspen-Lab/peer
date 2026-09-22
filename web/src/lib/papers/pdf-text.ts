@@ -142,10 +142,15 @@ function normalize(extractor: PdfOutline): ExtractedDocument {
     }))
     .filter((cap) => cap.caption.length > 0);
 
+  const equations = (extractor.equations ?? [])
+    .map((eq) => ({ text: cleanDisplayText(eq.text), ...(eq.number ? { number: eq.number } : {}) }))
+    .filter((eq) => eq.text.length > 0);
+
   return {
     title: cleanDisplayText(extractor.title) || null,
     sections,
     figureCaptions,
+    ...(equations.length > 0 ? { equations } : {}),
     source: "pdf",
     pageCount,
     reason: extractor.reason ?? null,

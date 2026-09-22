@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { blockMarker, inlineMath } from "@/lib/text/math";
 import {
   canonicalizeHeading,
   chooseHtmlExtractor,
@@ -243,5 +244,46 @@ describe("looksLikeFullText", () => {
 
   it("still rejects thin pages", () => {
     expect(looksLikeFullText(doc([["introduction", 1200], ["results", 900]]))).toBe(false);
+  });
+});
+
+
+describe("liftLatexmlMath", () => {
+  it("lifts a numbered display equation into a marker paragraph and keeps its TeX", () => {
+    const html = `<h2 class="ltx_title ltx_title_section">3 Attention</h2><p>Words words words words.</p>
+      <table id="S3.E1" class="ltx_equation ltx_eqn_table"><tbody><tr class="ltx_equation ltx_eqn_row">
+        <td class="ltx_eqn_cell"><math class="ltx_Math" alttext="\\mathrm{softmax}(\\frac{QK^{T}}{\\sqrt{d_{k}}})V" display="block"><mi>Q</mi></math></td>
+        <td class="ltx_eqn_cell ltx_eqn_eqno"><span class="ltx_tag ltx_tag_equation">(1)</span></td></tr></tbody></table>
+      <p>More words words words.</p>`;
+    const out = chooseHtmlExtractor("https://arxiv.org/html/1.2")(html, "https://arxiv.org/html/1.2");
+    expect(out.equations).toEqual([{ latex: "\\mathrm{softmax}(\\frac{QK^{T}}{\\sqrt{d_{k}}})V", number: "(1)" }]);
+    const text = out.sections[0].text;
+    expect(text).toContain(blockMarker(0));
+    expect(text).not.toContain("Q");
+    // Its own paragraph: blank lines on both sides.
+    expect(text).toMatch(new RegExp(`\\n\\n${blockMarker(0).replace(/[#]/g, "#")}\\n\\n`));
+  });
+
+  it("keeps a formula with a less-than sign, and the sentence after it", () => {
+    // `alttext="k&lt;n"`: decoded before the tags were stripped, the `<`
+    // opened a phantom tag that ate the rest of the paragraph.
+    const html = `<h2 class="ltx_title ltx_title_section">4 Why</h2><p>a kernel width <math alttext="k&lt;n" display="inline"><mi>k</mi></math> does not connect all pairs, so <math alttext="f'(x)" display="inline"><mi>f</mi></math> is needed.</p>`;
+    const out = chooseHtmlExtractor("https://arxiv.org/html/1.2")(html, "https://arxiv.org/html/1.2");
+    expect(out.sections[0].text).toBe(`a kernel width ${inlineMath("k<n")} does not connect all pairs, so ${inlineMath("f'(x)")} is needed.`);
+  });
+
+  it("decodes the TeX of a lifted display equation, which leaves the HTML", () => {
+    const html = `<h2 class="ltx_title ltx_title_section">1 A</h2><p>Words words words words.</p>
+      <table class="ltx_equation ltx_eqn_table"><tr><td><math alttext="x &lt; y &amp; z" display="block"><mi>x</mi></math></td></tr></table>`;
+    const out = chooseHtmlExtractor("https://arxiv.org/html/1.2")(html, "https://arxiv.org/html/1.2");
+    expect(out.equations?.[0].latex).toBe("x < y & z");
+  });
+
+  it("keeps inline mathematics as marked TeX instead of flattened MathML", () => {
+    const html = `<h2 class="ltx_title ltx_title_section">1 A</h2><p>the key size <math alttext="d_{k}" display="inline"><msub><mi>d</mi><mi>k</mi></msub><annotation encoding="application/x-tex">d_{k}</annotation></math> matters here and here.</p>`;
+    const out = chooseHtmlExtractor("https://arxiv.org/html/1.2")(html, "https://arxiv.org/html/1.2");
+    expect(out.sections[0].text).toContain(`the key size ${inlineMath("d_{k}")} matters`);
+    expect(out.sections[0].text).not.toMatch(/\bd k\b/);
+    expect(out.equations).toBeUndefined();
   });
 });

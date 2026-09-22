@@ -27,6 +27,7 @@
     "fast-xml-parser": "^5.7.1",
     "google-auth-library": "^10.9.1",
     "js-yaml": "^5.2.1",
+    "katex": "^0.18.7",
     "next": "16.2.3",
     "react": "19.2.4",
     "react-dom": "19.2.4",
@@ -38,6 +39,7 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/d3-force": "^3.0.10",
+    "@types/katex": "^0.16.8",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",

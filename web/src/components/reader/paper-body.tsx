@@ -21,6 +21,7 @@
 
 import { useState } from "react";
 import type { PaperReading, ReadingFigure, ReadingSection } from "@/lib/papers/reading";
+import { Equation, MathText } from "./math";
 import { Band } from "@/components/ui/band";
 import { BODY } from "./copy";
 
@@ -83,24 +84,36 @@ function Figure({ figure }: { figure: ReadingFigure }) {
 
 function Section({ section, index }: { section: ReadingSection; index: number }) {
   const figures = section.figures ?? [];
-  const before = figures.filter((f) => f.after < 0);
+  const equations = section.equations ?? [];
+  // What follows paragraph `i` (-1: what opens the section): the equations
+  // the paper set there, then the figures it named there.
+  const following = (i: number) => (
+    <>
+      {equations
+        .filter((e) => e.after === i)
+        .map((e, k) => (
+          <Equation key={`eq:${i}:${k}`} equation={e} />
+        ))}
+      {figures
+        .filter((f) => f.after === i)
+        .map((f) => (
+          <Figure key={`${f.label}:${f.ordinal}`} figure={f} />
+        ))}
+    </>
+  );
   return (
     <section id={sectionAnchor(index)} className="mt-8 scroll-mt-20 first:mt-6">
       <h3 className="font-reading font-medium text-heading text-title leading-[1.3] mb-2">
-        {section.heading}
+        <MathText text={section.heading} />
       </h3>
       <div className="font-reading text-title leading-[1.65] text-text-muted measure-paper space-y-4">
-        {before.map((f) => (
-          <Figure key={`${f.label}:${f.ordinal}`} figure={f} />
-        ))}
+        {following(-1)}
         {section.paragraphs.map((paragraph, i) => (
           <div key={i} className="space-y-4">
-            <p>{paragraph}</p>
-            {figures
-              .filter((f) => f.after === i)
-              .map((f) => (
-                <Figure key={`${f.label}:${f.ordinal}`} figure={f} />
-              ))}
+            <p>
+              <MathText text={paragraph} />
+            </p>
+            {following(i)}
           </div>
         ))}
       </div>

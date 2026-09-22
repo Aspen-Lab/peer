@@ -22,6 +22,7 @@
 //               head, a folio, a preprint stamp. Dropped.
 // Nothing is guessed beyond that: a PDF with no text layer (a scan) yields
 // nothing, and says so, rather than inventing sections.
+import { blockMarker } from "@/lib/text/math";
 
 import { canonicalizeHeading } from "./html-text";
 
@@ -45,6 +46,9 @@ export interface PdfPageText {
 }
 
 export interface PdfLine {
+  /** A line that stands alone — a lifted equation's marker — and is never
+   *  joined to the prose around it. */
+  block?: true;
   page: number;
   text: string;
   x: number;
@@ -67,10 +71,18 @@ export interface OutlineCaption {
   page?: number;
 }
 
+/** A display equation as the PDF printed it: one line of symbols, and the
+ *  number the paper gave it. No TeX — a PDF has none. */
+export interface OutlineEquation {
+  text: string;
+  number?: string;
+}
+
 export interface PdfOutline {
   title?: string | null;
   sections?: OutlineSection[];
   figureCaptions?: OutlineCaption[];
+  equations?: OutlineEquation[];
   pageCount?: number;
   reason?: string | null;
 }
@@ -94,6 +106,34 @@ const FOLIO = /^(page\s*)?\d{1,4}$/i;
 /** A display equation is set apart like a heading and is not one: it carries
  *  operators, or the number the paper refers to it by. */
 const MATHS = /[=+×÷√∑∫∂≈≤≥∈±⟨⟩]|\(\d+\)\s*$/;
+/** What a display equation is made of. */
+const MATH_SYMBOL = /[=+×÷√∑∏∫∂≈≤≥∈∉±−·∞→←↔≡≠∇∆⊂⊆∪∩^_{}|]/g;
+/** An equation is one printed line; past this it is a paragraph with an
+ *  equals sign in it. */
+const EQUATION_MAX = 120;
+
+/**
+ * Whether a line is a display equation, printed on a line of its own.
+ *
+ * Numbered — ending in "(3)" — with a symbol anywhere; or unnumbered and
+ * made mostly of symbols: at least three of them, and fewer than half its
+ * characters in words of four letters or more. "softmax(QK^T/√d_k)V" passes;
+ * "the loss is defined as follows" does not, and neither does a sentence
+ * that happens to end in "(2020)", which has no symbol.
+ */
+export function equationOf(line: PdfLine): OutlineEquation | null {
+  const text = line.text.trim();
+  if (!text || text.length > EQUATION_MAX) return null;
+  const symbols = (text.match(MATH_SYMBOL) ?? []).length;
+  const numbered = /\((\d{1,3}[a-z]?)\)\s*$/.exec(text);
+  if (numbered && symbols >= 1) {
+    return { text: text.slice(0, numbered.index).trim(), number: `(${numbered[1]})` };
+  }
+  if (symbols < 3) return null;
+  const wordChars = (text.match(/[A-Za-z]{4,}/g) ?? []).join("").length;
+  if (wordChars / text.length >= 0.5) return null;
+  return { text };
+}
 
 function round(n: number): number {
   return Math.round(n * 10) / 10;
@@ -227,11 +267,18 @@ export function joinProse(lines: PdfLine[]): string {
   const left = lines.length > 0 ? Math.min(...lines.map((l) => l.x)) : 0;
 
   for (const line of lines) {
+    if (line.block) {
+      if (current.trim()) paragraphs.push(current.trim());
+      paragraphs.push(line.text);
+      current = "";
+      previous = line;
+      continue;
+    }
     const samePage = previous?.page === line.page;
     const gap = previous && samePage ? previous.y - line.y : 0;
     const breaks =
       previous !== null &&
-      ((pitch > 0 && samePage && gap > pitch * 1.6) || (samePage && line.x > left + 6));
+      ((pitch > 0 && samePage && gap > pitch * 1.6) || (samePage && line.x > left + 6) || previous?.block === true);
     if (breaks && current.trim()) {
       paragraphs.push(current.trim());
       current = "";
@@ -283,6 +330,7 @@ export function buildOutline(pages: PdfPageText[]): PdfOutline {
 
   const sections: OutlineSection[] = [];
   const figureCaptions: OutlineCaption[] = [];
+  const equations: OutlineEquation[] = [];
   let heading: string | null = null;
   let canonical = "body";
   let page = pages[0]?.page ?? 1;
@@ -317,6 +365,14 @@ export function buildOutline(pages: PdfPageText[]): PdfOutline {
     }
     if (done) continue;
     if (title && line.page === 1 && line.size > body.size * 1.25) continue;
+    const equation = equationOf(line);
+    if (equation) {
+      // The equation keeps its place in the prose as a marker paragraph,
+      // and its symbols go beside the sections rather than into them.
+      equations.push(equation);
+      held.push({ ...line, text: blockMarker(equations.length - 1), block: true });
+      continue;
+    }
     held.push(line);
   }
   flush();
@@ -325,6 +381,7 @@ export function buildOutline(pages: PdfPageText[]): PdfOutline {
     title,
     sections,
     figureCaptions,
+    ...(equations.length > 0 ? { equations } : {}),
     pageCount: pages.length,
     reason: sections.length === 0 ? "no-sections" : null,
   };
