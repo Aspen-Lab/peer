@@ -263,6 +263,17 @@ route behaviour, or grep result). Requirements are grouped; numbering is stable 
   **banned** — the operator funds no search, so a server Tavily key on a deployment is a spend risk
   and the build must refuse it, exactly as it refuses Brave. Required on Vercel is now **three**
   names: `GOOGLE_API_KEY`, `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`.
+  **Amendment 2026-09-22 (Ruling 29, binding — the owner's call):** `GOOGLE_API_KEY` moves from
+  **required** to **expected-but-warn**. A Vercel build missing it now prints
+  `formatWarningMessage` (names the variable, prints no value) and still ships; it no longer exits
+  1. Required on Vercel is now **two** names: `NEXT_PUBLIC_SUPABASE_URL`,
+  `SUPABASE_SERVICE_ROLE_KEY`. Reasoning, in the owner's words: a signed-in reader who loses the
+  model still gets a working no-AI briefing, not a broken product — the same experience every
+  signed-out reader already has — and a hard block on one unset variable is a worse failure than
+  shipping that briefing; a silent downgrade is also something the beta is supposed to surface, and
+  forcing it to always succeed would hide exactly the failure the beta period exists to catch. First
+  applied by Aspen Labs on 2026-09-16 (commit `cab43ae`, ahead of this amendment); the owner
+  confirmed it as intentional on 2026-09-22 rather than a change to revert.
 - **R-GUARD-2.** The message never prints a value.
 
 ### R-TEST — the gate
