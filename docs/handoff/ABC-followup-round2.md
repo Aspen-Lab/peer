@@ -85,64 +85,32 @@ WORKING FOLDER:   D:\local files on this PC\Github\Peer\peer-followup  (git work
                   ...\Github\Peer\peer is another agent's (ChatGPT, branch
                   Jev-integration-and-sorting-filtering-enhancement) - never write there.
                   See Ruling 24 (§1ae). No bare `git stash` - the stack is shared.
-ROUND:            9
-WHOSE TURN:       Manager (round 9 fully re-measured on :3100 under Ruling 25 - decide B6, then
-                  close and report)
-DEV SERVER:       http://localhost:3100, started from the worktree by a background shell.
-                  `preview_start` BY NAME still launches the OTHER agent's checkout - do not use
-                  it. Confirm the serving process path contains `peer-followup` before trusting
-                  any live number.
-STOPPED BECAUSE:  A re-measured every Ruling-25-tainted live row on :3100 @ 2026-09-22 (A1-A4,
-                  A3/C5/9-22's shared-DOI delete order, 9-21's noise-term check, B4, B5, B7 — all
-                  fresh self-made fixtures, all cleaned up, uploads dir back to the 24-file
-                  baseline). 25/26 matrix rows PASS; 1 (B6) PARTIAL, unchanged from before (one
-                  sub-case already closed PASS by the manager on :3100, one structurally
-                  NOT MEASURED in this environment). Gate cold and green, process re-confirmed as
-                  `peer-followup` immediately before running it. Handing back to the manager for
-                  the same POLICY call on B6 as before, then the round-9 close/report per handoff
-                  §11.
-STATUS:           Round 9 fully re-measured twice now — once against the wrong folder (Ruling 25),
-                  once correctly on :3100 this turn. A1-A8, B1-B5, B7, C1-C6/C9/C10, L1 all PASS,
-                  every live-HTTP row now carrying `:3100` evidence from this turn; every
-                  vitest/tsc/eslint/code-read row correctly left untouched (Ruling 25 never
-                  applied to those). B6 PARTIAL, unchanged: JSON/NDJSON parity and reopen-
-                  idempotency execution-confirmed pre-move; server-restart CLOSED PASS by the
-                  manager on :3100 (Ruling 25 §4); true cross-device continuity (a production-
-                  Supabase-auth concern, not configured in this worktree) is NOT MEASURED, not
-                  failed — forbidden/out of this environment's reach, not silently passed either.
-OPEN ITEMS:       (a) RULING 25 is now fully discharged: every row it re-opened has `:3100`
-                  evidence from this turn (A1-A4, A3/C5/9-22, B4, B5, B7). A7's export/import
-                  round-trip was checked and found to be an in-process vitest call, never HTTP —
-                  correctly left PASS, not re-run.
-                  (b) B6 server-restart: CLOSED PASS by the manager on :3100 (Ruling 25 §4).
-                  (c) B6 cross-device via production Supabase auth: NOT MEASURED, moved to the
-                   pre-launch conditions. Not a local-dev row; never to be recorded PASS here.
-GATE (0 open):    MET — every re-opened row now carries valid :3100 evidence; the code-level gate
-                  (tsc/eslint/vitest) is green: 2798/2798, matching baseline exactly. B6's one
-                  remaining PARTIAL is a recorded structural NOT MEASURED (POLICY, not a defect),
-                  not an open item blocking the gate.
+DEV SERVER:       http://localhost:3100, started from the worktree by a background shell
+                  (`cd ...\peer-followup\web && PORT=3100 npm run dev`). `preview_start` BY NAME
+                  still launches the OTHER agent's checkout - do not use it (Ruling 25, §1af).
+                  Confirm the serving process path contains `peer-followup` before trusting any
+                  live number.
+ROUND:            9 - CLOSED 2026-09-22 (Ruling 26, §1ag)
+WHOSE TURN:       nobody. The loop is idle. A new round only starts on a new user instruction.
+STATUS:           Round 9 complete. The upload / learning / supplement handoff
+                  (HANDOFF-upload-profile-fulltext-pdf.md) is delivered: phase 1 (owner boundary,
+                  lifecycle, legal wording), phase 2 (learning from an uploaded paper), phase 3
+                  (the green "upload full article pdf" supplement button + docs). Matrix:
+                  **25 PASS, 1 NOT MEASURED, 0 FAIL, 0 BLOCKED** over A1-A8, B1-B7, C1-C10, L1.
+                  Every live row was re-measured on :3100 after Ruling 25 found the harness had
+                  been serving the other agent's checkout; rows proved by vitest/tsc/eslint or by
+                  reading worktree code were unaffected.
+NOT MEASURED:     B6 cross-device continuity - needs production Supabase auth; this worktree
+                  identifies an owner by a per-browser capability cookie, so nothing here could
+                  make the row pass or fail. Added to the handoff's §6.5 pre-launch conditions.
+                  Never to be recorded PASS on the strength of a local run.
+GATE (0 open):    **MET** - 0 FAIL, 0 BLOCKED, the one open row explicitly NOT MEASURED with its
+                  reason recorded (Ruling 26 §2).
+GATE NOW:         tsc clean · eslint clean · vitest 135 files / 2798 tests passed - re-run cold by
+                  the MANAGER on 2026-09-22 after A's close, not taken from an agent's report.
 
-DONE:      round 9: A's draft measurement; Ruling 23; phase 1 (9-11..9-19); phase 2 (9-21 Tier-0
-           quality/facet/extractionVersion, 9-22 reference-counted retraction, 9-23 server-
-           recorded evidence + idempotent recovery merge, 9-24 "from your upload" caption + two
-           learn-forget actions, 9-25 ranking/retrieval confirmation tests); phase 3 (9-31
-           three-band matching + confirm dialog + "Attached to" status line, 9-32 --color-positive
-           theme tokens, 9-33 docs/PRIVATE_PDF_UPLOADS.md + README + no-guarantee-of-legality
-           test); A's closing re-measurement, parts 1-4 (A1-A4 with fresh fixtures; A5-A8 the
-           learning side incl. two new throwaway-execution closes on A6/A7; B1-B7 the supplement
-           flow incl. B4's first-ever live model-failure exercise and B5's new scanned/encrypted
-           sub-cases; L1 re-confirmed at the correct root README path; the full 26-row matrix;
-           the cold gate); Ruling 24 (move to the peer-followup worktree); Ruling 25 (the
-           preview-tool bug and its consequence); A's full re-measurement of every Ruling-25-
-           tainted row on :3100 (A1-A4, A3/C5/9-22, B4, B5, B7), the full matrix rebuilt, the cold
-           gate re-run from the worktree.
-GATE NOW:  tsc clean · eslint clean · vitest 2798/2798, 135/135 files (A, cold, on :3100/the
-           worktree, this turn's last run — matches the manager's clean-`npm ci` baseline exactly,
-           no regression, process re-confirmed as `peer-followup` before the run).
-TODO:      Manager: decide B6's one remaining NOT MEASURED sub-case (POLICY — true cross-device
-           continuity via production Supabase auth), then close round 9 and report to the user
-           per handoff §11 (Chinese), including the accepted-as-designed local-dev limitation.
-           Push at close (standing authorization, Ruling per §1ac loop mapping).
+EARLIER ROUNDS:   S3-S7 (round 1-4), S8-S11 (round 5), S12-S19 (round 6), S20-S23 (round 7),
+                  S24-S28 (round 8) - all closed. See §4.
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
@@ -1461,6 +1429,35 @@ files. Only gitignored build output (`.next/`) was written there.
 5. B6's remaining sub-case — true cross-device continuity through production Supabase auth — stays
    **NOT MEASURED** and moves to the pre-launch conditions. It cannot be exercised in a local dev
    worktree and must not be recorded as PASS.
+
+---
+
+## §1ag. RULING 26 — B6's cross-device sub-case is a pre-launch condition, not a round-9 failure; round 9 is CLOSED (manager, 2026-09-22) — BINDING
+
+**The policy call A asked for.** B6 has two halves. The dev-server-restart half is closed PASS
+(Ruling 25 §4, re-measured on :3100). The remaining half — the same upload following the same
+person from one device to another — depends on a real signed-in account, i.e. production Supabase
+auth. In this worktree the owner identity is a per-browser capability cookie by design, so the
+row is not merely inconvenient to test: **there is nothing here that could make it pass or fail.**
+
+**The ruling.**
+
+1. B6's cross-device sub-case is recorded **NOT MEASURED**, permanently for the local
+   environment, and is added to the handoff's **§6.5 pre-launch conditions** as a live-deployment
+   verification item. It must never be written as PASS on the strength of a local run.
+2. That one row does not hold round 9 open. Round 9's gate condition is read as: **0 FAIL, 0
+   BLOCKED, every row either PASS or explicitly NOT MEASURED with the reason recorded.** That is
+   met: 25 PASS, 1 NOT MEASURED, 0 FAIL.
+3. **Round 9 is CLOSED.**
+4. Manager's own independent re-verification before closing (not taken from any agent's report):
+   - serving process confirmed to be the worktree's, on :3100;
+   - the reference-counted retraction re-run from scratch — two different self-made PDFs sharing
+     one DOI (`10.9999/peer.manager.check.2026`) produced two distinct ids with **one shared
+     documentKey**; deleting the first returned `retractEvidence: false` and left the survivor
+     readable (200); deleting the second returned `retractEvidence: true`; both then 404;
+   - `.local-data/uploads` back to its original 24 files, both fixtures removed;
+   - the other agent's checkout still 53 uncommitted files, same branch, same HEAD;
+   - gate re-run cold by the manager: **tsc clean · eslint clean · 135 files / 2798 tests passed.**
 
 ---
 
@@ -15469,3 +15466,41 @@ was already flagged for the manager's POLICY call before this turn.
 
 Commit: this entry only (§4 append) plus the §1 update below, staging
 `docs/handoff/ABC-followup-round2.md`. No product code touched. Push: no (manager's call, per §3).
+
+### Round 9 — MANAGER CLOSE (2026-09-22)
+
+**Ruling 26 (§1ag) closes round 9.** Matrix: **25 PASS, 1 NOT MEASURED, 0 FAIL, 0 BLOCKED.**
+
+What the manager re-verified personally, on :3100, without taking any agent's word for it:
+
+1. **The serving process** — confirmed by reading the running node process's command line that the
+   server is the worktree's (`peer-followup`), not the other agent's. This check is now mandatory
+   before any live number (Ruling 25 §2).
+2. **B6, server-restart half** — a self-made 3-page fixture uploaded (`upload:af9200f1…`,
+   revision 1, 1 preference signal); the server killed and restarted; with the same capability
+   cookie the metadata came back **byte-identical** and the PDF came back **byte-identical**
+   (2161 bytes); a fresh cookie jar got **404**. Fixture deleted (200 → 404). PASS.
+3. **The reference-counted retraction (A3 / C5 / 9-22)** — the trickiest rule in round 9, re-run
+   from scratch: two *different* self-made PDFs carrying one DOI
+   (`10.9999/peer.manager.check.2026`) produced two distinct ids
+   (`upload:41e13d78…` rev 1, `upload:7f7ab8ef…` rev 2) sharing **one documentKey**
+   (`f3246d0ae419…`). Deleting the first returned `retractEvidence: false` and the survivor was
+   still readable (200). Deleting the second returned `retractEvidence: true`. Both then 404.
+   Exactly the specified behaviour, and exactly what A reported.
+4. **Cleanliness** — `.local-data/uploads` back to its original 24 files; every fixture removed
+   from the scratchpad; the worktree's tree clean.
+5. **The other agent's checkout untouched** — still 53 uncommitted files, still on
+   `Jev-integration-and-sorting-filtering-enhancement`, still at the same HEAD.
+6. **Gate, cold, run by the manager** — `npx tsc --noEmit` clean · `npx eslint .` clean ·
+   `npx vitest run --exclude "**/benchmark.test.ts"` → **135 files / 2798 tests passed.**
+
+**The one row that is not PASS:** B6's cross-device half. It needs production Supabase auth; this
+worktree identifies an owner by a per-browser capability cookie, so nothing local could make it
+pass or fail. Recorded NOT MEASURED and added to the handoff's §6.5 as pre-launch condition 5,
+with an explicit instruction never to write "cross-device verified" before a real signed-in test.
+
+**Process finding worth keeping:** the harness's `preview_start` kept serving the other agent's
+checkout for two full measurement turns after the working folder moved, and nothing in the tool's
+output said so. It was caught only because an uploaded fixture failed to appear where it should
+have. The cheap standing defence is Ruling 25 §2 — read the serving process's path before
+believing any live number.
