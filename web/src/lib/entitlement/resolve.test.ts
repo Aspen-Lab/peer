@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { resolveEntitlement, type EntitlementSupabaseClient } from "./resolve";
-import { ANONYMOUS_ENTITLEMENT } from "./types";
+import {
+  ANONYMOUS_ENTITLEMENT,
+  FREE_DEEP_REPORTS_PER_MONTH,
+  TRIAL_DEEP_REPORTS_TOTAL,
+} from "./types";
 
 /**
  * ABC-freemium 1-04 — the tests for 1-01 (R-ENT-2, R-ENT-5).
@@ -130,6 +134,109 @@ describe("resolveEntitlement", () => {
 
     expect(entitlement.effectivePlan).toBe("paid");
     expect(entitlement.deepReportsBudget).toBe(Number.POSITIVE_INFINITY);
+  });
+
+  describe("PEER_ENTITLEMENT_MODE=tiered (round 10 — the post-beta switch)", () => {
+    // Round 10. `one_tier` (every test above, and the default when this
+    // variable is unset) must keep reproducing beta exactly. These cases prove
+    // the OTHER side of the switch still exists: set to the one literal value
+    // "tiered", `fromStoredPlan` computes the nine-round free/trial/paid split
+    // instead of collapsing everything to `paid`.
+    afterEach(() => {
+      vi.unstubAllEnvs();
+    });
+
+    it("keeps a live trial as trial, budget 20, with its end date", async () => {
+      vi.stubEnv("PEER_ENTITLEMENT_MODE", "tiered");
+
+      const entitlement = await resolveEntitlement("user-1", NOW, {
+        client: clientReturning({
+          data: { plan: "trial", trial_ends_at: "2026-09-10T00:00:00.000Z" },
+          error: null,
+        }),
+      });
+
+      expect(entitlement.plan).toBe("trial");
+      expect(entitlement.effectivePlan).toBe("trial");
+      expect(entitlement.systemSearchAllowed).toBe(false);
+      expect(entitlement.poolRefreshAllowed).toBe(true);
+      expect(entitlement.deepReportsBudget).toBe(TRIAL_DEEP_REPORTS_TOTAL);
+      expect(entitlement.trialEndsAt).toBe("2026-09-10T00:00:00.000Z");
+    });
+
+    it("drops an expired trial to free at read time (D5), no write", async () => {
+      vi.stubEnv("PEER_ENTITLEMENT_MODE", "tiered");
+
+      const entitlement = await resolveEntitlement("user-1", NOW, {
+        client: clientReturning({
+          data: { plan: "trial", trial_ends_at: "2026-08-01T00:00:00.000Z" },
+          error: null,
+        }),
+      });
+
+      expect(entitlement.plan).toBe("trial");
+      expect(entitlement.effectivePlan).toBe("free");
+      expect(entitlement.poolRefreshAllowed).toBe(false);
+      expect(entitlement.deepReportsBudget).toBe(FREE_DEEP_REPORTS_PER_MONTH);
+      expect(entitlement.trialEndsAt).toBeNull();
+    });
+
+    it("gives a paid user unbounded deep reports, still no system search", async () => {
+      vi.stubEnv("PEER_ENTITLEMENT_MODE", "tiered");
+
+      const entitlement = await resolveEntitlement("user-1", NOW, {
+        client: clientReturning({ data: { plan: "paid" }, error: null }),
+      });
+
+      expect(entitlement.effectivePlan).toBe("paid");
+      expect(entitlement.systemSearchAllowed).toBe(false);
+      expect(entitlement.poolRefreshAllowed).toBe(true);
+      expect(entitlement.deepReportsBudget).toBe(Number.POSITIVE_INFINITY);
+    });
+
+    it("caps a free plan at 5 a month with no pool refresh", async () => {
+      vi.stubEnv("PEER_ENTITLEMENT_MODE", "tiered");
+
+      const entitlement = await resolveEntitlement("user-1", NOW, {
+        client: clientReturning({ data: { plan: "free" }, error: null }),
+      });
+
+      expect(entitlement.effectivePlan).toBe("free");
+      expect(entitlement.poolRefreshAllowed).toBe(false);
+      expect(entitlement.deepReportsBudget).toBe(FREE_DEEP_REPORTS_PER_MONTH);
+    });
+
+    it("still fails to free, not a throw, when the plan column is missing", async () => {
+      // Same fixture as the one_tier case above — the un-migrated-schema
+      // fallback is mode-independent: `plan` is never `null` going into
+      // `fromStoredPlan`, so `tiered` has nothing to branch on differently.
+      vi.stubEnv("PEER_ENTITLEMENT_MODE", "tiered");
+
+      const entitlement = await resolveEntitlement("user-1", NOW, {
+        client: clientReturning({
+          data: null,
+          error: { code: "42703", message: "column profiles.plan does not exist" },
+        }),
+      });
+
+      expect(entitlement.effectivePlan).toBe("free");
+      expect(entitlement.deepReportsBudget).toBe(FREE_DEEP_REPORTS_PER_MONTH);
+    });
+
+    it("is not activated by anything other than the exact string 'tiered'", async () => {
+      // Same rule asPlan() and the PEER_DEV_ENTITLEMENT tests already hold to:
+      // a typo must never silently grant the stronger mode.
+      vi.stubEnv("PEER_ENTITLEMENT_MODE", "Tiered");
+
+      const entitlement = await resolveEntitlement("user-1", NOW, {
+        client: clientReturning({
+          data: { plan: "trial", trial_ends_at: "2026-09-10T00:00:00.000Z" },
+          error: null,
+        }),
+      });
+
+      expect(entitlement.effectivePlan).toBe("paid");
+    });
   });
 
   describe("PEER_DEV_ENTITLEMENT (R-ENT-5)", () => {

@@ -80,6 +80,25 @@ function configuredAdminClient(): EntitlementSupabaseClient | null {
   }
 }
 
+/**
+ * The beta/post-beta switch. ABC-freemium round 10.
+ *
+ * **Default is `"one_tier"` — unset must reproduce exactly what shipped on
+ * 2026-09-14 (owner), because that is what beta is running on today and this
+ * flag must not change beta's behaviour by merely existing.** Only the literal
+ * value `"tiered"` restores the nine rounds of free/trial/paid work below;
+ * anything else — unset, a typo, an empty string — is `"one_tier"`. Same rule
+ * as `asPlan()`: a misspelling must never silently grant the stronger mode.
+ *
+ * Not read by the Vercel build guard, on purpose: this is an operator knob
+ * meant to be flipped after beta with no redeploy of logic, not a credential
+ * and not a spend risk by itself — the daily breaker (R-QUOTA-2) still caps
+ * real cost in both modes; `tiered` only changes who the cap is drawn per.
+ */
+export function entitlementMode(): "tiered" | "one_tier" {
+  return process.env.PEER_ENTITLEMENT_MODE === "tiered" ? "tiered" : "one_tier";
+}
+
 function deepReportBudget(effectivePlan: Plan): number {
   switch (effectivePlan) {
     case "paid":
@@ -116,15 +135,26 @@ function fromStoredPlan(
   const trialExpired =
     plan === "trial" &&
     (trialEndsAt === null || new Date(trialEndsAt).getTime() <= now.getTime());
-  // ONE TIER (owner, 2026-09-14). Peer has no users yet and ships a single
-  // plan: every signed-in reader gets the whole product — Peer's model, deep
+  // ONE TIER (owner, 2026-09-14) — REWRITTEN FOR A SWITCH, NOT REVERTED, in
+  // round 10. Original reasoning: Peer had no users yet and shipped a single
+  // plan — every signed-in reader gets the whole product — Peer's model, deep
   // reports with no monthly cap, and pool refresh — behind the daily circuit
-  // breaker that protects the wallet. The stored `plan` column and the trial
-  // arithmetic above are kept so the three-plan version is this one line.
-  void trialExpired;
-  // `as Plan`, not `: Plan` — a literal annotation narrows to "paid" and turns
-  // the plan checks below into compile errors instead of dead branches.
-  const effectivePlan = "paid" as Plan;
+  // breaker that protects the wallet. That reasoning's premise ("no users
+  // yet") stopped being true on 2026-09-14/15 (five real users migrated in),
+  // but the owner confirmed on 2026-09-22 that `one_tier` should stay the
+  // *default* through the end of the beta — see `entitlementMode()` above.
+  // `tiered` restores exactly the nine-round free/trial/paid computation this
+  // block held before 09-14: a live trial stays `trial`, an expired one reads
+  // `free` (D5), everything else passes the stored plan through unchanged.
+  const effectivePlan: Plan =
+    entitlementMode() === "tiered"
+      ? trialExpired
+        ? "free"
+        : plan
+      : // `as Plan`, not `: Plan` — a literal annotation narrows to "paid" and
+        // turns the plan checks below into compile errors instead of dead
+        // branches.
+        ("paid" as Plan);
 
   return {
     plan,
