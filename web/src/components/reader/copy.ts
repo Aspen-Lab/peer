@@ -37,6 +37,16 @@ export const BODY = {
   },
 } as const;
 
+/** The reader's own context for the paper: what they read or kept nearby. */
+export const LIBRARY = {
+  heading: "In your library",
+  none: "Nothing you have read or kept shares its topics yet.",
+  topics: "Its topics",
+  kind: { read: "Read", saved: "Kept" } as const,
+  shares: (topics: string[]) =>
+    topics.length === 1 ? `shares ${topics[0]}` : `shares ${topics.slice(0, 2).join(", ")}${topics.length > 2 ? ` +${topics.length - 2}` : ""}`,
+} as const;
+
 /** The record: the facts that are true with no key and no model. */
 export const RECORD = {
   heading: "The record",

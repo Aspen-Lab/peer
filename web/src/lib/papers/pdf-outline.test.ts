@@ -3,7 +3,9 @@ import { blockMarker } from "@/lib/text/math";
 import {
   bodyStyle,
   buildOutline,
+  continuesCaption,
   equationOf,
+  linePitch,
   captionOf,
   furnitureOf,
   headingOf,
@@ -204,5 +206,59 @@ describe("equations", () => {
     expect(at).toBeGreaterThan(0);
     expect(paragraphs[at - 1]).toMatch(/computed as$/);
     expect(paragraphs[at + 1]).toMatch(/^where the keys/);
+  });
+});
+
+
+describe("captions across lines", () => {
+  const BODY = { size: 10, font: "body" };
+
+  it("reads the line pitch of a block", () => {
+    const lines = [line("a", { y: 500 }), line("b", { y: 488 }), line("c", { y: 476 }), line("d", { y: 440 })];
+    expect(linePitch(lines)).toBe(12);
+    expect(linePitch([])).toBe(0);
+  });
+
+  it("knows the next line of a caption from the prose that resumes under the figure", () => {
+    const cap = line("Figure 1: Medical image analysis pipeline showing preprocessing,", { y: 300, size: 9 });
+    const second = line("segmentation and classification of the scan.", { y: 289, size: 9 });
+    const proseBack = line("The pipeline is trained end to end on the corpus.", { y: 270, size: 10 });
+    const afterGap = line("still small type, but a gap above it", { y: 262, size: 9 });
+    expect(continuesCaption(cap, second, 12, BODY, new Set())).toBe(true);
+    // The body's size is back: that is the paper again.
+    expect(continuesCaption(second, proseBack, 12, BODY, new Set())).toBe(false);
+    // Too far below the last line to be the same block.
+    expect(continuesCaption(second, afterGap, 12, BODY, new Set())).toBe(false);
+    // A new caption or a heading is never the tail of this one.
+    expect(continuesCaption(cap, line("Figure 2: Another.", { y: 289, size: 9 }), 12, BODY, new Set())).toBe(false);
+  });
+
+  it("keeps a two-line caption whole, and hands the prose back to the section", () => {
+    const filler = (y: number) => item("Recurrent neural networks have long been established in sequence modelling and transduction.", { y });
+    const outline = buildOutline([
+      {
+        page: 1,
+        items: [
+          item("A Paper", { height: 17, y: 760 }),
+          item("1 Introduction", { y: 740 }),
+          ...[726, 714, 702, 690, 678, 666].map(filler),
+          item("Figure 1: Medical image analysis pipeline showing preprocessing,", { y: 640, height: 9 }),
+          item("segmentation and classification of the scan.", { y: 629, height: 9 }),
+          item("The pipeline is trained end to end on the corpus of scans we collected.", { y: 605 }),
+          ...[593, 581, 569].map(filler),
+        ],
+      },
+    ]);
+    expect(outline.figureCaptions).toEqual([
+      {
+        ordinal: 1,
+        label: "Figure 1",
+        caption: "Medical image analysis pipeline showing preprocessing, segmentation and classification of the scan.",
+        page: 1,
+      },
+    ]);
+    const prose = (outline.sections ?? []).map((s) => s.text).join(" ");
+    expect(prose).toContain("trained end to end");
+    expect(prose).not.toContain("segmentation and classification");
   });
 });

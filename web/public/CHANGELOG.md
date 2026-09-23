@@ -2,6 +2,25 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.43.1 — 2026-09-23
+
+Where the column ended in air, and a caption cut off.
+
+**In your library.** A paper page that Peer could not read the full text of
+ended with the notes block, the record, and half a column of nothing. The
+column now ends with the reader's own context for the paper: what they have
+read or kept under the same topics, nearest first, each a link back into the
+reading, with the topics they share — and the paper's topics themselves,
+each a search. From this browser's library and shelf; no request is made. On
+a paper Peer could read, the same block is the way onward.
+
+**A PDF caption is as long as it was printed.** The extractor took the first
+line of a caption and stopped, so a figure arrived under “Medical image
+analysis pipeline showing preprocessing,” — a clause with its sentence cut
+off. It now reads the lines under the first at the line pitch, in the
+caption's own size, until the gap opens or the body's size returns, and
+hands what follows back to the prose.
+
 ## v0.43.0 — 2026-09-22
 
 The paper's mathematics, drawn.
