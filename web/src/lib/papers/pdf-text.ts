@@ -83,8 +83,9 @@ export async function getPdfBytes(url: string): Promise<{ bytes: Buffer } | { er
   return { bytes: download.bytes };
 }
 
-/** The PDF's text layer, page by page, as `pdf-outline` wants it. */
-async function readPages(bytes: Buffer): Promise<PdfPageText[]> {
+/** The PDF's text layer, page by page, as `pdf-outline` wants it. Exported
+ *  for the probes that look at a real PDF's lines when the outline misreads. */
+export async function readPages(bytes: Buffer): Promise<PdfPageText[]> {
   // `unpdf` ships pdf.js built for a server runtime: no worker, no canvas,
   // no native code — the only build that runs unchanged in a function.
   const { getDocumentProxy } = await import("unpdf");

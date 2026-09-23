@@ -13,6 +13,7 @@
 
 import type { Paper } from "@/types";
 import { filedUnder, type LibraryEntry } from "./graph";
+import { OFF_DOMAIN } from "@/lib/papers/plate-terms";
 
 export interface RelatedPaper {
   id: string;
@@ -38,6 +39,10 @@ export function topicsOf(paper: Pick<Paper, "preferenceSignals" | "summaryExperi
       .filter((s) => s.source === "openalex_concept" || s.source === "openalex_keyword")
       .map((s) => s.label),
   ]) {
+    // OpenAlex disambiguates into the wrong field often enough to matter:
+    // a protein paper filed under "Cleavage (geology)". The bracket is the
+    // tell, and `plate-terms` already keeps the list of fields that are it.
+    if (OFF_DOMAIN.test(label)) continue;
     const k = key(label);
     if (k.length >= 3 && !seen.has(k)) seen.set(k, label.trim());
   }

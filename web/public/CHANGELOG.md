@@ -2,6 +2,21 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.43.2 — 2026-09-23
+
+A caption's tail is told by its face.
+
+v0.43.1 read the lines under a caption by their size, and on a real PDF the
+caption and the body were both 12pt — so the fix passed its test and did
+nothing on the page. A caption is set in its own face; the lines under it in
+that same face are the caption, and the first line back in the body's face is
+the paper. “Medical image analysis pipeline showing preprocessing,” now ends
+“feature extraction, and classification stages”, as printed.
+
+**Its topics** leaves out a concept OpenAlex filed into the wrong field — a
+protein paper under “Cleavage (geology)” — by the bracket that marks it, the
+same list the briefing's plates already use.
+
 ## v0.43.1 — 2026-09-23
 
 Where the column ended in air, and a caption cut off.

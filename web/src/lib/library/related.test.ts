@@ -27,6 +27,13 @@ function entry(id: string, filed: string[], terms: string[] = [], readAt = "2026
 }
 
 describe("topicsOf", () => {
+  it("leaves out a concept disambiguated into the wrong field", () => {
+    expect(topicsOf(paper("p", ["Protein Structure and Dynamics"], ["Cleavage (geology)", "Gel electrophoresis"]))).toEqual([
+      "Protein Structure and Dynamics",
+      "Gel electrophoresis",
+    ]);
+  });
+
   it("collects filed topics and concepts once each, as the record spells them", () => {
     expect(topicsOf(paper("p", ["Machine Learning", "Protein folding"], ["machine learning", "Turbulence"]))).toEqual([
       "Machine Learning",

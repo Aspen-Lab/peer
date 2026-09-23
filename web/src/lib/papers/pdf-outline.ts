@@ -132,10 +132,15 @@ export function linePitch(lines: PdfLine[]): number {
 
 /**
  * Whether `next` is the next printed line of the caption `previous` is part
- * of: the same page, within a line pitch and a half below, the same size as
- * the caption (captions are set smaller than the body, and the body's size
- * returning is the prose resuming), and not itself a caption, a heading or
- * the page's furniture.
+ * of: the same page, within a line pitch and a half below, in the SAME FACE
+ * as the caption's last line, at its size, and not itself a caption, the
+ * page's furniture or a numbered heading.
+ *
+ * The face is the test, not the size: a caption is set in its own face — on
+ * one real PDF, `g_d0_f1` against the body's `g_d0_f8`, both at 12pt — so
+ * size told the two apart not at all, and the prose under the figure read
+ * as more caption. And `headingOf` is not consulted: it takes "in the other
+ * face" for a heading, which is exactly what a caption's second line is.
  */
 export function continuesCaption(
   previous: PdfLine,
@@ -148,11 +153,16 @@ export function continuesCaption(
   const gap = previous.y - next.y;
   if (gap <= 0) return false;
   if (pitch > 0 && gap > pitch * 1.5) return false;
+  if (next.font !== previous.font) return false;
   if (Math.abs(next.size - previous.size) > 0.6) return false;
-  if (!next.text.trim()) return false;
+  const text = next.text.trim();
+  if (!text) return false;
   if (isFurniture(next, furniture)) return false;
   if (captionOf(next)) return false;
-  if (headingOf(next, body)) return false;
+  if (NUMBERED_HEADING.test(text) && text.length <= HEADING_MAX) return false;
+  // `body` is kept in the signature for the callers that pass it; the face
+  // test above is what distinguishes caption from prose.
+  void body;
   return true;
 }
 

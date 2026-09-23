@@ -34,7 +34,7 @@ const MIN_TERM_CHARS = 6;
 const MAX_TERM_CHARS = 24;
 
 /** Concepts whose disambiguation bracket marks them as out-of-domain noise. */
-const OFF_DOMAIN = /\((?:politics|linguistics|psychology|philosophy|music|law|sociology|geology|literature|mathematics education)\)/i;
+export const OFF_DOMAIN = /\((?:politics|linguistics|psychology|philosophy|music|law|sociology|geology|literature|mathematics education)\)/i;
 
 function normalize(term: string): string {
   return term.trim().toLocaleLowerCase().replace(/\s+/g, " ");

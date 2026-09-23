@@ -220,17 +220,19 @@ describe("captions across lines", () => {
   });
 
   it("knows the next line of a caption from the prose that resumes under the figure", () => {
-    const cap = line("Figure 1: Medical image analysis pipeline showing preprocessing,", { y: 300, size: 9 });
-    const second = line("segmentation and classification of the scan.", { y: 289, size: 9 });
-    const proseBack = line("The pipeline is trained end to end on the corpus.", { y: 270, size: 10 });
-    const afterGap = line("still small type, but a gap above it", { y: 262, size: 9 });
-    expect(continuesCaption(cap, second, 12, BODY, new Set())).toBe(true);
-    // The body's size is back: that is the paper again.
-    expect(continuesCaption(second, proseBack, 12, BODY, new Set())).toBe(false);
+    // The real case: caption and body both 12pt, told apart by face alone.
+    const cap = line("Figure 1: Medical image analysis pipeline showing preprocessing,", { y: 330, size: 12, font: "caption" });
+    const second = line("feature extraction, and classification stages", { y: 314, size: 12, font: "caption" });
+    const proseBack = line("Drug Formation and Innovation:-The long and costly process", { y: 298, size: 12, font: "body" });
+    const afterGap = line("caption face again, but a gap above it", { y: 280, size: 12, font: "caption" });
+    expect(continuesCaption(cap, second, 16, BODY, new Set())).toBe(true);
+    // The body's face is back: that is the paper again.
+    expect(continuesCaption(second, proseBack, 16, BODY, new Set())).toBe(false);
     // Too far below the last line to be the same block.
-    expect(continuesCaption(second, afterGap, 12, BODY, new Set())).toBe(false);
-    // A new caption or a heading is never the tail of this one.
-    expect(continuesCaption(cap, line("Figure 2: Another.", { y: 289, size: 9 }), 12, BODY, new Set())).toBe(false);
+    expect(continuesCaption(second, afterGap, 16, BODY, new Set())).toBe(false);
+    // A new caption or a numbered heading is never the tail of this one.
+    expect(continuesCaption(cap, line("Figure 2: Another.", { y: 314, size: 12, font: "caption" }), 16, BODY, new Set())).toBe(false);
+    expect(continuesCaption(cap, line("2 Methods", { y: 314, size: 12, font: "caption" }), 16, BODY, new Set())).toBe(false);
   });
 
   it("keeps a two-line caption whole, and hands the prose back to the section", () => {
@@ -242,9 +244,9 @@ describe("captions across lines", () => {
           item("A Paper", { height: 17, y: 760 }),
           item("1 Introduction", { y: 740 }),
           ...[726, 714, 702, 690, 678, 666].map(filler),
-          item("Figure 1: Medical image analysis pipeline showing preprocessing,", { y: 640, height: 9 }),
-          item("segmentation and classification of the scan.", { y: 629, height: 9 }),
-          item("The pipeline is trained end to end on the corpus of scans we collected.", { y: 605 }),
+          item("Figure 1: Medical image analysis pipeline showing preprocessing,", { y: 640, fontName: "caption" }),
+          item("segmentation and classification of the scan.", { y: 628, fontName: "caption" }),
+          item("The pipeline is trained end to end on the corpus of scans we collected.", { y: 616 }),
           ...[593, 581, 569].map(filler),
         ],
       },
