@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { StateStorage } from "zustand/middleware";
 import { defaultProfile, type Paper, type UserProfile } from "@/types";
 import { cleanPreferenceLedger } from "@/lib/preferences/ledger";
+import { selectedSenseConcept } from "@/lib/feed/senses";
 import {
   exportProfileDocument,
   migrateProfileStore,
@@ -70,6 +71,22 @@ describe("profile per-surface topic setters", () => {
     );
     expectOnlyTopicFieldChanged("jobRequiredTopics", store.updateJobTopics);
     expectOnlyTopicFieldChanged("jobExploreTopics", store.updateJobSoftTopics);
+  });
+});
+
+describe("research-focus field presence", () => {
+  it("preserves an explicit project/challenge clear instead of collapsing it to omitted", () => {
+    useProfileStore.setState({
+      profile: { ...defaultProfile, currentProject: "Existing project", currentChallenges: "Existing challenge" },
+    });
+
+    useProfileStore.getState().updateCurrentProject("");
+    useProfileStore.getState().updateCurrentChallenges("");
+
+    expect(useProfileStore.getState().profile).toMatchObject({
+      currentProject: "",
+      currentChallenges: "",
+    });
   });
 });
 
@@ -363,6 +380,18 @@ describe("work authorisation persistence", () => {
 });
 
 describe("profile export and import", () => {
+  it("preserves a canonical explicit clear or selected-sense card while rejecting forged cards", () => {
+    const cleared = {
+      version: "feed-intent-v1" as const,
+      project: { presence: "explicit-empty" as const }, challenge: { presence: "omitted" as const },
+      requiredConcepts: [], preferredConcepts: [], exclusions: [], methods: [], selectedSenseConcepts: [],
+    };
+    expect(parseExportedProfile({ format: PROFILE_EXPORT_FORMAT, profile: { feedIntent: cleared } })?.feedIntent).toEqual(cleared);
+    const selected = { ...cleared, selectedSenseConcepts: [selectedSenseConcept("hr.role_conflict")] };
+    expect(parseExportedProfile({ format: PROFILE_EXPORT_FORMAT, profile: { feedIntent: selected } })?.feedIntent).toEqual(selected);
+    expect(parseExportedProfile({ format: PROFILE_EXPORT_FORMAT, profile: { feedIntent: { ...cleared, ownerId: "forged" }, plan: "paid", entitlement: {} } })).toBeNull();
+  });
+
   // A signed-out profile lives in one browser's localStorage and nowhere else.
   // Clearing site data or opening a different browser loses it with no warning,
   // so a local tester needs a way to carry settings across without an account.

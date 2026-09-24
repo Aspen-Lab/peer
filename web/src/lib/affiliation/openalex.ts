@@ -7,11 +7,29 @@
 // the feed never breaks if OpenAlex is slow or down (Tier-0 floor stays intact).
 
 import { sourceFetch } from "@/lib/sources/_fetch";
+import { searchHttpFailure } from "@/lib/sources/search-failure";
 import { openAlexWorkToRawItem, type OpenAlexWork } from "@/lib/utils/openalex";
 import type { RawItem } from "@/lib/sources/types";
 
 const OPENALEX = "https://api.openalex.org";
 const MAILTO = process.env.OPENALEX_EMAIL ?? "peer@example.com";
+
+/**
+ * P2-S4a (Round 3) — F-A-P2-04 (4h), ABC-JEV-INTEGRATION.md §1p.B(3).
+ * Optional server-only key, sent as `Authorization: Bearer <key>`, never a
+ * URL parameter.
+ *
+ * P2-S4a-FIX (Round 3) — F-A-P2S4a-01. This used to have its own local
+ * `openAlexFetch` wrapper that bypassed `sourceFetch` on the keyed path (a
+ * direct `fetch` call), silently dropping `revalidate` and the 429 retry.
+ * `sourceFetch` now takes an optional `headers` passthrough, so all 3 call
+ * sites below go through it directly — same revalidate, same retry, keyed
+ * or keyless.
+ */
+function openAlexAuthHeaders(): Record<string, string> | undefined {
+  const key = process.env.OPENALEX_API_KEY?.trim();
+  return key ? { Authorization: `Bearer ${key}` } : undefined;
+}
 
 const WORK_SELECT =
   "id,title,publication_date,authorships,primary_location,best_oa_location,open_access,abstract_inverted_index,cited_by_count,doi,topics,primary_topic,keywords,concepts,type_crossref";
@@ -132,6 +150,7 @@ async function searchAuthors(
     const res = await sourceFetch(`${OPENALEX}/authors?${params}`, {
       timeoutMs: 6000,
       revalidate: 86_400,
+      headers: openAlexAuthHeaders(),
     });
     if (!res.ok) return null;
     const data = (await res.json()) as { results?: OpenAlexAuthorResult[] };
@@ -229,6 +248,7 @@ export async function fetchAdvisorSeeds(
     const res = await sourceFetch(`${OPENALEX}/works?${params}`, {
       timeoutMs: 7000,
       revalidate: 86_400,
+      headers: openAlexAuthHeaders(),
     });
     if (!res.ok) return { workIds: [], texts: [] };
     const data = (await res.json()) as { results?: OpenAlexWork[] };
@@ -264,6 +284,22 @@ function relevance(item: RawItem, projTokens: Set<string>): number {
  * Expand seed works into a citation neighborhood: recent papers that *cite* the
  * seeds (newer work building on the advisor's research). This is the discovery
  * payload — external papers the user likely hasn't seen. Bounded + guarded.
+ *
+ * P2-S4a-FIX (Round 3) — F-A-P2S4a-02, ABC-JEV-INTEGRATION.md §1p.B(2).
+ * Failure contract now matches the rest of the OpenAlex adapters (P2-S2,
+ * reused by P2-S4a's semantic/topic-field adapters): THROWS on a real
+ * failure (non-2xx, network error); `[]` is reserved for a genuine
+ * "zero citing papers" result or an empty `seedWorkIds` input. Before this
+ * fix every failure was swallowed here to `[]`, indistinguishable from a
+ * quiet day — which meant `feed/pipeline.ts`'s `seed_citations` channel
+ * (a caller of this function) could never see a real outage no matter what
+ * it did with the returned promise. The two OTHER callers of this same
+ * function (`buildPaperPool`'s advisor `affiliationPromise`, and
+ * `fetchPositiveSeedCandidates`'s `citationPromise`) both already wrap
+ * every call in `.catch(() => [])`, so this is a pure visibility change for
+ * them — they still degrade to no candidates on failure exactly as before,
+ * they just do it by catching a real rejection instead of this function
+ * swallowing it internally.
  */
 export async function fetchCitationNeighborhood(
   seedWorkIds: string[],
@@ -290,11 +326,18 @@ export async function fetchCitationNeighborhood(
     const res = await sourceFetch(`${OPENALEX}/works?${params}`, {
       timeoutMs: 7000,
       revalidate: 21_600,
+      headers: openAlexAuthHeaders(),
     });
-    if (!res.ok) return [];
+    if (!res.ok) {
+      throw await searchHttpFailure("affiliation-openalex-citations", res);
+    }
     const data = (await res.json()) as { results?: OpenAlexWork[] };
     return (data.results ?? []).map(openAlexWorkToRawItem).slice(0, limit);
-  } catch {
-    return [];
+  } catch (err) {
+    console.error(
+      "[affiliation openalex] citation neighborhood fetch error:",
+      err instanceof Error ? err.message : err,
+    );
+    throw err;
   }
 }

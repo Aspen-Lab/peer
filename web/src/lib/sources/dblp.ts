@@ -1,6 +1,7 @@
 import type { SourceAdapter, SourceQuery, RawItem } from "./types";
 import { cleanDisplayText, cleanDisplayTextOrUndefined } from "@/lib/text/clean";
 import { sourceFetch } from "./_fetch";
+import { searchHttpFailure } from "./search-failure";
 
 const DBLP_API = "https://dblp.org/search/publ/api";
 const MAX_QUERIES = 2;
@@ -44,9 +45,18 @@ async function fetchImpl(query: SourceQuery): Promise<RawItem[]> {
     searchQueries.map((q) => fetchOne(q, perQuery)),
   );
 
+  // P2-S2 (Round 3) — F-A-P2-02, ABC-JEV-INTEGRATION.md §1p.B(2). Same rule
+  // as every other academic adapter: a partial failure still yields
+  // results, but if EVERY query for this source rejected, propagate that
+  // instead of quietly returning `[]`.
   const all: RawItem[] = [];
+  const failures: unknown[] = [];
   for (const r of results) {
     if (r.status === "fulfilled") all.push(...r.value);
+    else failures.push(r.reason);
+  }
+  if (results.length > 0 && failures.length === results.length) {
+    throw failures[0];
   }
   return uniqueById(all).slice(0, limit);
 }
@@ -64,8 +74,11 @@ async function fetchOne(searchQuery: string, perQuery: number): Promise<RawItem[
       revalidate: 900,
     });
     if (!res.ok) {
-      console.error("[dblp] non-ok response:", res.status);
-      return [];
+      // P2-S2 (Round 3) — F-A-P2-02. A non-2xx here used to be logged and
+      // swallowed to `[]`, indistinguishable from DBLP legitimately
+      // answering "nothing matched". Throw instead — `[]` is now reserved
+      // for a genuine 200-with-no-hits response.
+      throw await searchHttpFailure("dblp", res);
     }
     const data = (await res.json()) as DblpResponse;
     return toArray(data.result?.hits?.hit)
@@ -73,7 +86,7 @@ async function fetchOne(searchQuery: string, perQuery: number): Promise<RawItem[
       .filter((item): item is RawItem => item !== null);
   } catch (err) {
     console.error("[dblp] fetch error:", err instanceof Error ? err.message : err);
-    return [];
+    throw err;
   }
 }
 

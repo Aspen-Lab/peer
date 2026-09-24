@@ -7,6 +7,7 @@ import {
   type ReactNode,
 } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useProfileStore } from "@/store/profile";
 import { formatTimeAgo } from "@/lib/format";
 import { useFeedStore } from "@/store/feed";
@@ -29,6 +30,7 @@ import { VersionLine } from "@/components/shell/version-line";
 import { AiKeyFields } from "@/components/profile/ai-setup";
 import { Toggle } from "@/components/ui/toggle";
 import { feedsUseAi } from "@/lib/feed/ai-tier";
+import { entitlementGrants } from "@/lib/entitlement/allowance";
 import {
   type Tone,
   toneBadge,
@@ -46,6 +48,14 @@ import {
 } from "@/components/profile/field-kit";
 
 const DEFAULT_NAME = "Peer Member";
+
+export function DataSourcesLink() {
+  return (
+    <Link href="/data-sources" className="text-body text-accent underline underline-offset-4">
+      Vocabulary sources and licenses
+    </Link>
+  );
+}
 
 // Field option data, suggestion chips, and the interactive primitives
 // (ChipInput, ChoiceGroup, TogglePill, TopicsField) now live in
@@ -1370,6 +1380,9 @@ function EditView({
   updateCareerStage: (s: typeof profile.careerStage) => void;
   updateIndustryPreference: (s: typeof profile.industryVsAcademia) => void;
 }) {
+  const aiGrants = entitlementGrants(
+    useProfileStore((state) => state.entitlement),
+  );
   // Pulled straight from the store rather than threaded through this
   // component's already-long prop list.
   const updateFeedAiProvider = useProfileStore((s) => s.updateFeedAiProvider);
@@ -1597,6 +1610,15 @@ function EditView({
         </div>
       </EditRow>
 
+      <EditRow icon={<IconBook size={13} strokeWidth={1.9} />} tone="link" label="Data sources">
+        <div className="space-y-2">
+          <DataSourcesLink />
+          <p className="text-caption leading-relaxed text-text-muted">
+            Review the locally verified vocabulary assets Peer currently uses.
+          </p>
+        </div>
+      </EditRow>
+
       {/* Credentials and model settings. These had NO section on this page —
           they lived only in the one-time /welcome wizard and permanently
           pinned to the daily feed, which is why the feed ended up doing double
@@ -1630,15 +1652,15 @@ function EditView({
             <Toggle
               checked={profile.deepReportEnabled}
               onChange={(next) => updateDeepReportEnabled(next)}
-              disabled={!feedsUseAi(profile)}
+              disabled={!feedsUseAi(profile, aiGrants)}
               className="mt-0.5"
               aria-label="Deep report"
             />
           </div>
-          {!feedsUseAi(profile) && (
+          {!feedsUseAi(profile, aiGrants) && (
             <p className="text-micro leading-relaxed text-text-faint">
-              Add your own provider and key above first. Without one, Peer shows
-              the Tier 0 report and makes no AI model call.
+              Sign in first. Signed out, Peer shows the reading without a model
+              and makes no AI call.
             </p>
           )}
         </div>

@@ -3059,11 +3059,26 @@ describe("RULING 75 — jobweb provider resolution", () => {
   });
 
   // CREDIT MIGRATION — the new default, pinned beside the old one.
+  // REWRITTEN, NOT DELETED — UPSTREAM-01 Vertex slice (Round 3 F-M-UP-V1): Vertex Search now requires GOOGLE_VERTEX_SEARCH_PROJECT and no longer inherits GOOGLE_VERTEX_PROJECT.
   it("picks vertex on auto once a Search App is configured", () => {
     withoutKeys();
     vi.stubEnv("GOOGLE_VERTEX_PROJECT", "some-project");
+    vi.stubEnv("GOOGLE_VERTEX_SEARCH_PROJECT", "some-search-project");
     vi.stubEnv("GOOGLE_VERTEX_SEARCH_ENGINE_ID", "peer-web");
     expect(resolveSearchProvider(baseQuery)).toBe("vertex");
+  });
+
+  // UPSTREAM-01 Vertex slice (Round 3 F-M-UP-V1): a Search App id alone is no
+  // longer enough — without GOOGLE_VERTEX_SEARCH_PROJECT, isVertexSearchAvailable()
+  // is false (vertex-search.ts's vertexSearchProject() only reads
+  // GOOGLE_VERTEX_SEARCH_PROJECT and does not fall back to GOOGLE_VERTEX_PROJECT),
+  // so auto resolution falls through to the gemini grounding clause instead.
+  it("does not pick vertex on auto when only GOOGLE_VERTEX_PROJECT is set, without a Search project", () => {
+    withoutKeys();
+    vi.stubEnv("GOOGLE_VERTEX_PROJECT", "some-project");
+    vi.stubEnv("GOOGLE_VERTEX_SEARCH_ENGINE_ID", "peer-web");
+    expect(resolveSearchProvider(baseQuery)).not.toBe("vertex");
+    expect(resolveSearchProvider(baseQuery)).toBe("gemini");
   });
 
   it("still yields to a caller-supplied Tavily key", () => {

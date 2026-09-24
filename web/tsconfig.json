@@ -30,5 +30,11 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules"]
+  "exclude": [
+    "node_modules",
+    // Deno-only Edge Function code (P3-S4) — reads `Deno`, imports a bare
+    // https:// specifier, and is never built by Next. See
+    // web/supabase/functions/jev-broker/index.ts's module doc comment.
+    "supabase/functions"
+  ]
 }

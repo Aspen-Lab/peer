@@ -17,6 +17,12 @@ describe("emptyReason", () => {
     );
   });
 
+  it("keeps an invalid browser intent as a Research-focus requirement", () => {
+    expect(emptyReason({ ...base, intentRequired: true })).toBe(
+      "intent-required",
+    );
+  });
+
   it("reports a failed fetch as an error, not as an empty briefing", () => {
     // The live bug: a dead connection rendered as "0 papers today · synced
     // just now · Set up profile".

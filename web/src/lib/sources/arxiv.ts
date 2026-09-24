@@ -2,6 +2,7 @@ import { XMLParser } from "fast-xml-parser";
 import type { SourceAdapter, SourceQuery, RawItem } from "./types";
 import { cleanDisplayText, cleanDisplayTextOrUndefined } from "@/lib/text/clean";
 import { sourceFetch } from "./_fetch";
+import { searchHttpFailure } from "./search-failure";
 
 const ARXIV_API = "https://export.arxiv.org/api/query";
 const MAX_QUERIES = 3;
@@ -26,6 +27,13 @@ interface ArxivEntry {
   category?: ArxivCategory | ArxivCategory[];
   "arxiv:primary_category"?: ArxivCategory;
   link?: ArxivLink | ArxivLink[];
+  // P2-S1: arXiv's Atom response carries this extension element when an
+  // author has registered a published DOI against the listing — same
+  // namespace/shape as the already-used arxiv:primary_category above, no
+  // extra request parameter needed. Read defensively (optional): this
+  // session could not make a live call to confirm it on a real response, so
+  // treat its presence as a bonus, never a requirement.
+  "arxiv:doi"?: string;
 }
 
 function asArray<T>(v: T | T[] | undefined | null): T[] {
@@ -57,9 +65,18 @@ async function fetchImpl(query: SourceQuery): Promise<RawItem[]> {
     searchQueries.map((searchQuery) => fetchOne(query, searchQuery, perQuery)),
   );
 
+  // P2-S2 (Round 3) — F-A-P2-02, ABC-JEV-INTEGRATION.md §1p.B(2). Same rule
+  // as every other academic adapter: a partial failure still yields
+  // results, but if EVERY query for this source rejected, propagate that
+  // instead of quietly returning `[]`.
   const all: RawItem[] = [];
+  const failures: unknown[] = [];
   for (const r of results) {
     if (r.status === "fulfilled") all.push(...r.value);
+    else failures.push(r.reason);
+  }
+  if (results.length > 0 && failures.length === results.length) {
+    throw failures[0];
   }
   return uniqueById(all).slice(0, limit);
 }
@@ -83,8 +100,11 @@ async function fetchOne(
       revalidate: 300,
     });
     if (!res.ok) {
-      console.error("[arxiv] non-ok response:", res.status);
-      return [];
+      // P2-S2 (Round 3) — F-A-P2-02. A non-2xx here used to be logged and
+      // swallowed to `[]`, indistinguishable from arXiv legitimately
+      // answering "nothing matched". Throw instead — `[]` is now reserved
+      // for a genuine 200-with-empty-feed response.
+      throw await searchHttpFailure("arxiv", res);
     }
     const xml = await res.text();
     const parser = new XMLParser({
@@ -101,6 +121,7 @@ async function fetchOne(
       const links = asArray(e.link);
       const absLink =
         links.find((l) => l["@_rel"] === "alternate")?.["@_href"] ?? e.id;
+      const doi = cleanDisplayTextOrUndefined(e["arxiv:doi"]);
       return {
         id: `arxiv:${arxivId}`,
         source: "arxiv",
@@ -113,12 +134,16 @@ async function fetchOne(
         tags: categories.length > 0 ? categories : undefined,
         metadata: {
           arxivCategory: cleanDisplayTextOrUndefined(e["arxiv:primary_category"]?.["@_term"]),
+          // P2-S1: only populated when arXiv's response included a
+          // registered DOI for this listing (see the ArxivEntry comment).
+          doi,
+          externalIds: { doi, arxivId },
         },
       };
     });
   } catch (err) {
     console.error("[arxiv] fetch error:", err instanceof Error ? err.message : err);
-    return [];
+    throw err;
   }
 }
 

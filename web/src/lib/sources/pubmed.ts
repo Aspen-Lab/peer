@@ -1,6 +1,7 @@
 import type { SourceAdapter, SourceQuery, RawItem } from "./types";
 import { cleanDisplayText, cleanDisplayTextOrUndefined } from "@/lib/text/clean";
 import { sourceFetch } from "./_fetch";
+import { searchHttpFailure } from "./search-failure";
 
 const EUTILS = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils";
 const MAX_QUERIES = 2;
@@ -51,9 +52,18 @@ async function fetchImpl(query: SourceQuery): Promise<RawItem[]> {
     searchQueries.map((q) => fetchOne(q, perQuery, query.timeWindow)),
   );
 
+  // P2-S2 (Round 3) — F-A-P2-02, ABC-JEV-INTEGRATION.md §1p.B(2). Same rule
+  // as every other academic adapter: a partial failure still yields
+  // results, but if EVERY query for this source rejected, propagate that
+  // instead of quietly returning `[]`.
   const all: RawItem[] = [];
+  const failures: unknown[] = [];
   for (const r of results) {
     if (r.status === "fulfilled") all.push(...r.value);
+    else failures.push(r.reason);
+  }
+  if (results.length > 0 && failures.length === results.length) {
+    throw failures[0];
   }
   return uniqueById(all).slice(0, limit);
 }
@@ -63,13 +73,20 @@ async function fetchOne(
   perQuery: number,
   timeWindow: SourceQuery["timeWindow"],
 ): Promise<RawItem[]> {
+  // P2-S2 (Round 3) — F-A-P2-02. This used to catch EVERY failure from
+  // either call below (including a non-2xx, which `searchIds`/
+  // `fetchSummaries` themselves used to swallow to `[]` before this slice)
+  // and return `[]`, indistinguishable from PubMed legitimately answering
+  // "nothing matched". `[]` is now reserved for `searchIds` genuinely
+  // finding zero ids; every other failure below (including a network error
+  // thrown by `sourceFetch` itself) is logged and propagated instead.
   try {
     const ids = await searchIds(searchQuery, perQuery, timeWindow);
     if (ids.length === 0) return [];
     return await fetchSummaries(ids);
   } catch (err) {
     console.error("[pubmed] fetch error:", err instanceof Error ? err.message : err);
-    return [];
+    throw err;
   }
 }
 
@@ -91,8 +108,10 @@ async function searchIds(
     revalidate: 900,
   });
   if (!res.ok) {
-    console.error("[pubmed] search non-ok response:", res.status);
-    return [];
+    // P2-S2 (Round 3) — F-A-P2-02. Throw instead of swallowing to `[]`,
+    // which used to be indistinguishable from PubMed legitimately answering
+    // "nothing matched".
+    throw await searchHttpFailure("pubmed", res);
   }
   const data = (await res.json()) as PubMedSearchResponse;
   return data.esearchresult?.idlist ?? [];
@@ -110,8 +129,9 @@ async function fetchSummaries(ids: string[]): Promise<RawItem[]> {
     revalidate: 900,
   });
   if (!res.ok) {
-    console.error("[pubmed] summary non-ok response:", res.status);
-    return [];
+    // P2-S2 (Round 3) — F-A-P2-02. Same rule as `searchIds` above: throw
+    // instead of swallowing to `[]`.
+    throw await searchHttpFailure("pubmed", res);
   }
 
   const data = (await res.json()) as PubMedSummaryResponse;

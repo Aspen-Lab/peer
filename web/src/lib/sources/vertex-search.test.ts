@@ -10,6 +10,15 @@ import {
   type DiscoveryResult,
 } from "./vertex-search";
 
+const { searchGeminiMock } = vi.hoisted(() => ({
+  searchGeminiMock: vi.fn(),
+}));
+
+vi.mock("./gemini-search", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./gemini-search")>();
+  return { ...actual, searchGemini: searchGeminiMock };
+});
+
 // ═══════════════════════════════════════════════════════════════════════════
 // THE `vertex` PROVIDER — Vertex AI Search (Discovery Engine).
 //
@@ -58,6 +67,7 @@ afterEach(() => {
     else process.env[key] = value;
   }
   saved.clear();
+  searchGeminiMock.mockReset();
 });
 
 function websiteResult(
@@ -92,9 +102,18 @@ describe("isVertexSearchAvailable", () => {
     expect(isVertexSearchAvailable()).toBe(false);
   });
 
+  it("does not borrow the Gemini project when only a Search App is configured", () => {
+    setEnv({
+      GOOGLE_VERTEX_PROJECT: "peer-gemini-project",
+      GOOGLE_VERTEX_SEARCH_ENGINE_ID: "peer-web_123",
+    });
+    expect(isVertexSearchAvailable()).toBe(false);
+  });
+
   it("is true once both are configured", () => {
     setEnv({
       GOOGLE_VERTEX_PROJECT: "peer-dev",
+      GOOGLE_VERTEX_SEARCH_PROJECT: "peer-search",
       GOOGLE_VERTEX_SEARCH_ENGINE_ID: "peer-web_123",
     });
     expect(isVertexSearchAvailable()).toBe(true);
@@ -103,6 +122,7 @@ describe("isVertexSearchAvailable", () => {
   it("accepts a data-store id in place of an engine id", () => {
     setEnv({
       GOOGLE_VERTEX_PROJECT: "peer-dev",
+      GOOGLE_VERTEX_SEARCH_PROJECT: "peer-search",
       GOOGLE_VERTEX_SEARCH_DATA_STORE_ID: "peer-sites_123",
     });
     expect(isVertexSearchAvailable()).toBe(true);
@@ -113,10 +133,11 @@ describe("searchEndpoint", () => {
   it("uses the un-prefixed host for the global location", () => {
     setEnv({
       GOOGLE_VERTEX_PROJECT: "peer-dev",
+      GOOGLE_VERTEX_SEARCH_PROJECT: "peer-search",
       GOOGLE_VERTEX_SEARCH_ENGINE_ID: "peer-web_123",
     });
     expect(searchEndpoint()).toBe(
-      "https://discoveryengine.googleapis.com/v1/projects/peer-dev/locations/global" +
+      "https://discoveryengine.googleapis.com/v1/projects/peer-search/locations/global" +
         "/collections/default_collection/engines/peer-web_123" +
         "/servingConfigs/default_search:search",
     );
@@ -125,6 +146,7 @@ describe("searchEndpoint", () => {
   it("prefixes the host for a regional location", () => {
     setEnv({
       GOOGLE_VERTEX_PROJECT: "peer-dev",
+      GOOGLE_VERTEX_SEARCH_PROJECT: "peer-search",
       GOOGLE_VERTEX_SEARCH_ENGINE_ID: "peer-web_123",
       GOOGLE_VERTEX_SEARCH_LOCATION: "us",
     });
@@ -135,6 +157,7 @@ describe("searchEndpoint", () => {
   it("addresses a data store by its own collection path", () => {
     setEnv({
       GOOGLE_VERTEX_PROJECT: "peer-dev",
+      GOOGLE_VERTEX_SEARCH_PROJECT: "peer-search",
       GOOGLE_VERTEX_SEARCH_DATA_STORE_ID: "peer-sites_123",
     });
     expect(searchEndpoint()).toContain("/dataStores/peer-sites_123/");
@@ -298,6 +321,44 @@ describe("searchVertex", () => {
     expect(grounded).toBe(0);
   });
 
+  it("keeps under-filled Vertex rows without grounding unless fallback is explicitly enabled", async () => {
+    setEnv({
+      GOOGLE_VERTEX_PROJECT: "peer-gemini-project",
+      GOOGLE_VERTEX_SEARCH_PROJECT: "peer-search-project",
+      GOOGLE_VERTEX_SEARCH_ENGINE_ID: "peer-web_123",
+    });
+    const rows = await searchVertex("site-scoped result", {
+      search: search([websiteResult()]),
+      maxResults: 5,
+    });
+
+    expect(rows.map((row) => row.url)).toEqual([
+      "https://example.edu/workshop-2026",
+    ]);
+    expect(searchGeminiMock).not.toHaveBeenCalled();
+  });
+
+  it("uses grounding backfill only for the explicit on opt-in", async () => {
+    setEnv({
+      GOOGLE_VERTEX_PROJECT: "peer-gemini-project",
+      GOOGLE_VERTEX_SEARCH_FALLBACK: "on",
+    });
+    searchGeminiMock.mockResolvedValue([
+      { title: "Grounded", url: "https://example.edu/g", snippet: "s" },
+    ]);
+
+    const rows = await searchVertex("under-filled", {
+      search: search([websiteResult()]),
+      maxResults: 5,
+    });
+
+    expect(searchGeminiMock).toHaveBeenCalledTimes(1);
+    expect(rows.map((row) => row.url)).toEqual([
+      "https://example.edu/workshop-2026",
+      "https://example.edu/g",
+    ]);
+  });
+
   // CONTRACT RESTATED, not deleted. It read "returns an empty array when the
   // search itself throws" and asserted `rows` was `[]`. That is precisely the
   // silence a dead Tavily key hid behind for a full day on 2026-08-27: an empty
@@ -375,17 +436,17 @@ describe("resolveWebSearchProvider with vertex", () => {
 });
 
 describe("webSearchOptions", () => {
-  it("selects vertex when a Search App is configured", () => {
+  it("does not select vertex from configured credentials without a server-funded capability", () => {
     setEnv({
       GOOGLE_VERTEX_PROJECT: "peer-dev",
       GOOGLE_VERTEX_SEARCH_ENGINE_ID: "peer-web_123",
     });
-    expect(webSearchOptions(undefined)).toEqual({ provider: "vertex" });
+    expect(webSearchOptions(undefined)).toBeUndefined();
   });
 
-  it("falls back to gemini when only Vertex model credentials exist", () => {
+  it("does not select Gemini grounding from configured credentials without a server-funded capability", () => {
     setEnv({ GOOGLE_VERTEX_PROJECT: "peer-dev" });
-    expect(webSearchOptions(undefined)).toEqual({ provider: "gemini" });
+    expect(webSearchOptions(undefined)).toBeUndefined();
   });
 
   it("honours the existing gemini opt-out for both engines", () => {

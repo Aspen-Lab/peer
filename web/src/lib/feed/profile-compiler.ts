@@ -1,4 +1,6 @@
 import type { FeedRequest } from "./types";
+import { textValue } from "./intent";
+import { exactCanonicalSenseQueries } from "./senses";
 import { uploadInterestTerms } from "@/lib/preferences/ledger";
 
 export type FeedFocus = "tight" | "balanced" | "exploratory";
@@ -23,6 +25,9 @@ export interface FeedControls {
 
 export interface SearchBrief {
   coreTopics: string[];
+  /** Ordered, labeled intent fields; never reconstructed from positional seeds. */
+  project: string;
+  challenge: string;
   currentProjectSummary: string;
   activeQuestions: string[];
   mustInclude: string[];
@@ -124,18 +129,33 @@ function projectQueries(req: FeedRequest, controls: Required<FeedControls>): str
   const topics = req.topics ?? [];
   const methods = req.methods ?? [];
   const seedTexts = req.seedTexts ?? [];
-  const projectTerms = seedTexts.flatMap((seed) => phrasesFromText(seed, 5));
+  const project = textValue(req.intent?.project ?? { presence: "omitted" }) ?? req.project;
+  const challenge = textValue(req.intent?.challenge ?? { presence: "omitted" }) ?? req.challenge;
+  const projectTerms = cleanList([
+    project,
+    ...phrasesFromText(project, 5),
+    challenge,
+    ...phrasesFromText(challenge, 5),
+    ...seedTexts.flatMap((seed) => phrasesFromText(seed, 5)),
+  ]);
 
+  const exactSenseQueries = exactCanonicalSenseQueries(req.intent?.selectedSenseConcepts ?? []);
   const baseQueries = [
-    ...topics,
     ...projectTerms,
+    ...exactSenseQueries,
+    ...topics,
     ...topics.flatMap((topic) => methods.slice(0, 3).map((method) => `${topic} ${method}`)),
     ...topics.flatMap((topic) => projectTerms.slice(0, 3).map((term) => `${topic} ${term}`)),
   ];
 
   const focusQueries =
     controls.focus === "tight"
-      ? baseQueries.filter((q) => topics.some((topic) => q.toLowerCase().includes(topic.toLowerCase())))
+      ? topics.length === 0
+        ? baseQueries
+        : [
+            ...exactSenseQueries,
+            ...baseQueries.filter((q) => topics.some((topic) => q.toLowerCase().includes(topic.toLowerCase()))),
+          ]
       : controls.focus === "exploratory"
         ? [...baseQueries, ...topics.map((topic) => `${topic} applications`), ...topics.map((topic) => `${topic} limitations`)]
         : baseQueries;
@@ -149,7 +169,12 @@ export function compileSearchBrief(req: FeedRequest): SearchBrief {
     ...(req.controls ?? {}),
   };
 
-  const activeQuestions = phrasesFromText(req.seedTexts?.join(". "), 8);
+  const project = textValue(req.intent?.project ?? { presence: "omitted" }) ?? req.project ?? "";
+  const challenge = textValue(req.intent?.challenge ?? { presence: "omitted" }) ?? req.challenge ?? "";
+  const activeQuestions = cleanList([
+    ...phrasesFromText(challenge, 8),
+    ...phrasesFromText(req.seedTexts?.join(". "), 8),
+  ]);
   const methods = cleanList(req.methods ?? []);
   const coreTopics = cleanList(req.topics ?? []);
   const avoid = cleanList([
@@ -167,7 +192,9 @@ export function compileSearchBrief(req: FeedRequest): SearchBrief {
 
   return {
     coreTopics,
-    currentProjectSummary: req.seedTexts?.join(" ") ?? "",
+    project,
+    challenge,
+    currentProjectSummary: project || req.seedTexts?.join(" ") || "",
     activeQuestions,
     mustInclude: controls.focus === "tight" ? coreTopics.slice(0, 4) : [],
     niceToHave: cleanList([...methods, ...activeQuestions]).slice(0, 12),

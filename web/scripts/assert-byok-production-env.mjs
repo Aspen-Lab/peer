@@ -14,6 +14,12 @@ const OPERATOR_AI_ENV_NAMES = [
   "QWEN_API_KEY",
   "DASHSCOPE_API_KEY",
   "DEEPSEEK_API_KEY",
+  // Jev's key lives only as a Supabase Edge Function secret, never a
+  // Vercel/Next env var, and is never read anywhere under web/src (P3-S4,
+  // ABC-JEV-INTEGRATION.md §1p.H(3)/§1r.2). This entry is defense-in-depth
+  // against a future misconfiguration, exactly like every entry above it —
+  // the correct architecture never sets this on Vercel at all.
+  "JEV_API_KEY",
 ];
 
 function isVercelBuild(env) {

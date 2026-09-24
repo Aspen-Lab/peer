@@ -5,10 +5,12 @@ import {
   termOccurrences,
   termSpecificity,
 } from "./term-expand";
+import { resolveSenseEvidence, type SelectedSenseConcept } from "@/lib/feed/senses";
 
 export interface KeywordResult {
   score: number;
   matched: string[];
+  senseEvidence: ReturnType<typeof resolveSenseEvidence>[];
 }
 
 type KeywordScope = "all" | "titleAndSummary";
@@ -54,9 +56,9 @@ function groundingWeight(item: RawItem, canonicalTopic: string): number {
 export function scoreKeyword(
   item: RawItem,
   topics: string[],
-  opts: { scope?: KeywordScope; grounded?: boolean } = {},
+  opts: { scope?: KeywordScope; grounded?: boolean; selectedSenseConcepts?: SelectedSenseConcept[] } = {},
 ): KeywordResult {
-  if (topics.length === 0) return { score: 0, matched: [] };
+  if (topics.length === 0 && (opts.selectedSenseConcepts?.length ?? 0) === 0) return { score: 0, matched: [], senseEvidence: [] };
   const haystack = itemText(item, opts.scope ?? "all");
   const matched: string[] = [];
   const seen = new Set<string>();
@@ -71,8 +73,22 @@ export function scoreKeyword(
       raw += termSpecificity(canonicalTopic) * grounding;
     }
   }
+  const senseEvidence = (opts.selectedSenseConcepts ?? []).map((selected) =>
+    resolveSenseEvidence(selected, haystack),
+  );
+  for (const evidence of senseEvidence) {
+    const selected = opts.selectedSenseConcepts?.find((concept) => concept.senseId === evidence.senseId);
+    const canCount = evidence.kind === "exactAlias" ||
+      (evidence.kind === "closeAlias" && selected?.matchRequirement === "exact-or-close");
+    if (canCount && evidence.alias && !seen.has(evidence.alias)) {
+      seen.add(evidence.alias);
+      matched.push(evidence.alias);
+      raw += evidence.kind === "exactAlias" ? 1 : 0.65;
+    }
+  }
   return {
     score: Math.min(1, raw / 1.5),
     matched,
+    senseEvidence,
   };
 }

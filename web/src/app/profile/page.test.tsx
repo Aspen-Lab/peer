@@ -2,7 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { defaultProfile } from "@/types";
-import { ColorThemePicker, LearnedPreferences } from "./page";
+import { ColorThemePicker, DataSourcesLink, LearnedPreferences } from "./page";
 
 // 6-11/6-10 (Ruling 17): this repo has no @testing-library/react and no test
 // anywhere simulates a click (matching figure-lightbox.test.ts's own note),
@@ -100,5 +100,13 @@ describe("LearnedPreferences — 'from your upload' caption (9-24)", () => {
       createElement(LearnedPreferences, { profile, onReset: () => {} }),
     );
     expect(html).not.toContain("from your upload");
+  });
+});
+
+describe("DataSourcesLink", () => {
+  it("offers an accessible Profile/settings link to the visible data sources page", () => {
+    const html = renderToStaticMarkup(createElement(DataSourcesLink));
+    expect(html).toContain('href="/data-sources"');
+    expect(html).toContain("Vocabulary sources and licenses");
   });
 });

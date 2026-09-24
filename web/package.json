@@ -11,6 +11,7 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
+    "test:events-benchmark": "vitest run --config vitest.live-events.config.ts src/lib/events/benchmark.test.ts",
     "purge-uploads": "node scripts/purge-uploads.mjs"
   },
   "dependencies": {

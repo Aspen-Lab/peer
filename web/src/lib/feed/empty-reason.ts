@@ -7,15 +7,17 @@
 //
 // A user with a dead connection was being told to "set up your profile".
 
-export type EmptyReason = "no-topics" | "error" | "empty";
+export type EmptyReason = "intent-required" | "no-topics" | "error" | "empty";
 
 export function emptyReason(input: {
   isLoading: boolean;
   papersCount: number;
   topicsCount: number;
   feedError: string | null;
+  intentRequired?: boolean;
 }): EmptyReason | null {
   if (input.isLoading || input.papersCount > 0) return null;
+  if (input.intentRequired) return "intent-required";
   if (input.topicsCount === 0) return "no-topics";
   if (input.feedError) return "error";
   return "empty";

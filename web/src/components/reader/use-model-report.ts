@@ -17,7 +17,9 @@ import { apiFetch } from "@/lib/api";
 import type { PaperReport } from "@/lib/papers/report";
 import { streamPaperReport } from "@/lib/papers/report-stream";
 import { reportOutcome } from "@/lib/reader/report-outcome";
-import { reportProviderConfigured } from "@/components/reports/provider-configured";
+import { aiAvailability } from "@/lib/feed/ai-tier";
+import { entitlementGrants } from "@/lib/entitlement/allowance";
+import { useProfileStore } from "@/store/profile";
 
 // v6: S6 merged "what is new" into "what it proposes" (whatItProposes.newHere
 // replaces .novelty) and deleted "why it fits you" — a v5 report still has
@@ -169,13 +171,10 @@ export function useModelReport({
     ],
   );
 
-  const userProviderConfigured = reportProviderConfigured(profile);
-  const localDeveloperProvider =
-    process.env.NODE_ENV === "development" && profile.feedAiProvider === "default";
-  // Deep is opt-in. Deployed copies require the user's own key; local next
-  // dev may use the developer's explicit configuration.
-  const deep =
-    Boolean(profile.deepReportEnabled || paper?.fullTextUploadId) && (userProviderConfigured || localDeveloperProvider);
+  const entitlement = useProfileStore((s) => s.entitlement);
+  const aiMode = aiAvailability(profile, entitlementGrants(entitlement));
+  const userProviderConfigured = aiMode === "byok";
+  const deep = Boolean(profile.deepReportEnabled || paper?.fullTextUploadId) && aiMode !== "none";
   const depth = deep ? "deep" : "abstract";
   const privatePdf = !!paper?.fullTextUploadId || !!paper?.id.startsWith("upload:");
   const reportKey = buildReportKey(paper, depth, project, profile.feedAiProvider);

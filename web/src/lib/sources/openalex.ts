@@ -4,10 +4,31 @@ import {
   type OpenAlexWork,
 } from "@/lib/utils/openalex";
 import { sourceFetch } from "./_fetch";
+import { searchHttpFailure } from "./search-failure";
 
 const OPENALEX_API = "https://api.openalex.org/works";
 const MAILTO = process.env.OPENALEX_EMAIL ?? "peer@example.com";
 const MAX_QUERIES = 3;
+
+/**
+ * P2-S4a (Round 3) — F-A-P2-04 (4h), ABC-JEV-INTEGRATION.md §1p.B(3).
+ * Optional server-only key, sent as `Authorization: Bearer <key>` — never a
+ * URL parameter, so it can never leak into a logged URL. Absent (today's
+ * default, and every deployment until someone sets it): behaviour is
+ * byte-identical to before this slice.
+ *
+ * P2-S4a-FIX (Round 3) — F-A-P2S4a-01. This used to have its own local
+ * `openAlexFetch` wrapper that bypassed `sourceFetch` entirely on the keyed
+ * path (a direct `fetch` call), silently dropping `revalidate` and the 429
+ * retry `sourceFetch` already provides. `sourceFetch` now takes an optional
+ * `headers` passthrough, so the keyed path goes through the exact same
+ * function as the keyless path below — same revalidate, same retry, for
+ * both.
+ */
+function openAlexAuthHeaders(): Record<string, string> | undefined {
+  const key = process.env.OPENALEX_API_KEY?.trim();
+  return key ? { Authorization: `Bearer ${key}` } : undefined;
+}
 
 async function fetchImpl(query: SourceQuery): Promise<RawItem[]> {
   const { topics = [], queries = [], limit = 30 } = query;
@@ -22,9 +43,20 @@ async function fetchImpl(query: SourceQuery): Promise<RawItem[]> {
     ),
   );
 
+  // P2-S2 (Round 3) — F-A-P2-02, ABC-JEV-INTEGRATION.md §1p.B(2). One flaky
+  // query must never take the whole source down: keep whatever fulfilled.
+  // But if EVERY query for this source rejected, that is a real outage, not
+  // a quiet day — reject instead of quietly returning `[]`, so the
+  // pipeline's own `Promise.allSettled` over sources records it in
+  // `errors[sourceId]` rather than an indistinguishable empty fetch.
   const all: RawItem[] = [];
+  const failures: unknown[] = [];
   for (const r of results) {
     if (r.status === "fulfilled") all.push(...r.value);
+    else failures.push(r.reason);
+  }
+  if (results.length > 0 && failures.length === results.length) {
+    throw failures[0];
   }
   return uniqueById(all).slice(0, limit);
 }
@@ -56,20 +88,24 @@ async function fetchOne(
 
   const url = `${OPENALEX_API}?${params}`;
   try {
-    const res = await sourceFetch(url, { timeoutMs: 6000, revalidate: 300 });
+    const res = await sourceFetch(url, {
+      timeoutMs: 6000,
+      revalidate: 300,
+      headers: openAlexAuthHeaders(),
+    });
     if (!res.ok) {
-      const body = await res.text().catch(() => "");
-      console.error(
-        `[openalex] non-ok ${res.status} for search="${searchTerm}" — ${body.slice(0, 180)}`,
-      );
-      return [];
+      // P2-S2 (Round 3) — F-A-P2-02. A non-2xx here used to be logged and
+      // swallowed to `[]`, indistinguishable from OpenAlex legitimately
+      // answering "nothing matched". Throw instead — `[]` is now reserved
+      // for a genuine 200-with-zero-results response.
+      throw await searchHttpFailure("openalex", res);
     }
     const data = await res.json();
     const works: OpenAlexWork[] = data.results || [];
     return works.map(openAlexWorkToRawItem);
   } catch (err) {
     console.error("[openalex] fetch error:", err instanceof Error ? err.message : err);
-    return [];
+    throw err;
   }
 }
 

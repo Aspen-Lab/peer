@@ -1,4 +1,6 @@
 import type { Event, Job, UserAiProvider, UserProfile } from "@/types";
+import { aiAvailability } from "@/lib/feed/ai-tier";
+import { ANONYMOUS_ENTITLEMENT, type Entitlement } from "@/lib/entitlement/types";
 import { cleanOwnedEventReportSummary } from "@/lib/events/mapper";
 import type { ProviderOverrideConfig } from "@/lib/llm/providers/types";
 import {
@@ -972,10 +974,11 @@ export function loadConfiguredOpportunityEnrichment<T>(
   loader: (override?: ProviderOverrideConfig) => Promise<T | null>,
   nowMs = Date.now(),
   storage: Storage | undefined = browserStorage(),
+  entitlement: Pick<Entitlement, "userId"> = ANONYMOUS_ENTITLEMENT,
 ): Promise<T | null> {
   const provider = profile.feedAiProvider;
   const apiKey = profile.feedAiApiKey?.trim();
-  if (!canAttemptOpportunityEnrichment(profile)) return Promise.resolve(null);
+  if (!canAttemptOpportunityEnrichment(profile, entitlement)) return Promise.resolve(null);
   if (provider === "default") {
     return loadOpportunityEnrichment(
       cacheKey,
@@ -996,9 +999,7 @@ export function loadConfiguredOpportunityEnrichment<T>(
 
 export function canAttemptOpportunityEnrichment(
   profile: OpportunityProviderProfile,
+  entitlement: Pick<Entitlement, "userId"> = ANONYMOUS_ENTITLEMENT,
 ): boolean {
-  if (profile.feedAiProvider === "default") {
-    return process.env.NODE_ENV === "development";
-  }
-  return Boolean(profile.feedAiApiKey?.trim());
+  return aiAvailability(profile as UserProfile, entitlement) !== "none";
 }

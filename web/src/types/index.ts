@@ -1,3 +1,6 @@
+import type { SelectedSenseConcept } from "@/lib/feed/senses";
+import type { NormalizedFeedIntent } from "@/lib/feed/intent";
+
 // ── Paper ──
 
 export type PaperSource = "arxiv" | "neurIPS" | "iclr" | "icml" | "chi" | "other";
@@ -416,6 +419,10 @@ export interface UserProfile {
    * should rise to the top of the briefing.
    */
   currentChallenges?: string;
+  /** Local v1 selection metadata; profile API persistence remains a separate P1 item. */
+  selectedSenseConcepts?: SelectedSenseConcept[];
+  /** Canonical v1 retrieval card; server persistence is intentionally opt-in. */
+  feedIntent?: NormalizedFeedIntent;
   /**
    * Keywords from papers the user has explicitly disliked. Fed into the
    * scoring pipeline as a legacy negative signal so matching papers rank lower.

@@ -19,7 +19,6 @@ export const ABBREVIATION_GROUPS = [
   ["ssb", "solid state battery", "all solid state battery"],
   ["eis", "electrochemical impedance spectroscopy"],
   ["xrd", "x ray diffraction"],
-  ["sem", "scanning electron microscopy"],
   ["tem", "transmission electron microscopy"],
   ["xps", "x ray photoelectron spectroscopy"],
   ["dft", "density functional theory"],

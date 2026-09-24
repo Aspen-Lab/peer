@@ -8,6 +8,10 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import type { UserProfile } from "@/types";
 import { cleanPreferenceLedger } from "@/lib/preferences/ledger";
+import { resolveEntitlement } from "@/lib/entitlement/resolve";
+import { toClientEntitlement, type ClientEntitlement } from "@/lib/entitlement/allowance";
+import { deepReportMonthKey, deepReportTrialKey, getCounterStore } from "@/lib/usage/counters";
+import { normalizePersistedFeedIntent, textValue } from "@/lib/feed/intent";
 
 // ── DB ↔ client type mapping ────────────────────────────────────
 
@@ -26,6 +30,7 @@ interface ProfileRow {
   current_challenges: string | null;
   disliked_topics: string[];
   preference_ledger?: unknown;
+  feed_intent?: unknown;
   feed_focus: UserProfile["feedFocus"];
   feed_freshness: UserProfile["feedFreshness"];
   paper_count: UserProfile["paperCount"];
@@ -48,10 +53,13 @@ interface ProfileRow {
 }
 
 export function profileRowToProfile(row: ProfileRow): Partial<UserProfile> {
+  const storedIntent = row.feed_intent === undefined || row.feed_intent === null
+    ? undefined
+    : normalizePersistedFeedIntent(row.feed_intent);
+  if (storedIntent && !storedIntent.ok) throw new Error("invalid_feed_intent");
+  const intent = storedIntent?.ok ? storedIntent.intent : undefined;
   return {
     displayName: row.display_name ?? undefined,
-    researchTopics: row.research_topics,
-    preferredMethods: row.preferred_methods,
     locationPreferences: row.location_preferences,
     authorisedCountries: row.authorised_countries ?? [],
     careerStage: (row.career_stage ?? undefined) as UserProfile["careerStage"] | undefined,
@@ -60,9 +68,14 @@ export function profileRowToProfile(row: ProfileRow): Partial<UserProfile> {
       | undefined,
     phdYear: row.phd_year ?? undefined,
     school: row.school ?? undefined,
-    currentProject: row.current_project ?? undefined,
-    currentChallenges: row.current_challenges ?? undefined,
-    dislikedTopics: row.disliked_topics ?? [],
+    currentProject: intent ? (intent.project.presence === "explicit-empty" ? "" : textValue(intent.project)) : row.current_project ?? undefined,
+    currentChallenges: intent ? (intent.challenge.presence === "explicit-empty" ? "" : textValue(intent.challenge)) : row.current_challenges ?? undefined,
+    researchTopics: intent ? intent.requiredConcepts : row.research_topics,
+    preferredMethods: intent ? intent.methods : row.preferred_methods,
+    dislikedTopics: intent ? intent.exclusions.map((entry) => entry.value) : row.disliked_topics ?? [],
+    softTopics: intent?.preferredConcepts,
+    selectedSenseConcepts: intent?.selectedSenseConcepts,
+    feedIntent: intent,
     preferenceLedger: cleanPreferenceLedger(
       row.preference_ledger as UserProfile["preferenceLedger"],
     ),
@@ -126,7 +139,15 @@ export function profilePatchToRow(p: Partial<UserProfile>, userId: string) {
   if (p.digestEmail !== undefined) row.digest_email = p.digestEmail;
   if (p.digestFrequency !== undefined) row.digest_frequency = p.digestFrequency;
   if (p.colorTheme !== undefined) row.color_theme = p.colorTheme;
+  if (p.feedIntent !== undefined) row.feed_intent = p.feedIntent;
   return row;
+}
+
+function isMissingFeedIntentColumn(error: { message?: string; code?: string } | null): boolean {
+  if (!error) return false;
+  return error.code === "42703"
+    ? /feed_intent/i.test(error.message ?? "")
+    : /profiles/i.test(error.message ?? "") && /feed_intent/i.test(error.message ?? "");
 }
 
 // ── Handlers ────────────────────────────────────────────────────
@@ -150,9 +171,31 @@ export async function GET() {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({
-    profile: data ? profileRowToProfile(data as ProfileRow) : null,
-  });
+  try {
+    return NextResponse.json({
+      profile: data ? profileRowToProfile(data as ProfileRow) : null,
+      entitlement: await clientEntitlement(user.id),
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message === "invalid_feed_intent") {
+      return NextResponse.json({ error: "invalid_feed_intent" }, { status: 500 });
+    }
+    throw error;
+  }
+}
+
+async function clientEntitlement(userId: string): Promise<ClientEntitlement> {
+  const now = new Date();
+  const entitlement = await resolveEntitlement(userId);
+  const used = entitlement.effectivePlan === "paid"
+    ? { value: 0, ok: true }
+    : await getCounterStore().read(
+        entitlement.effectivePlan === "trial"
+          ? deepReportTrialKey(userId)
+          : deepReportMonthKey(userId, now),
+        now,
+      );
+  return toClientEntitlement(entitlement, used);
 }
 
 export async function PUT(request: NextRequest) {
@@ -165,6 +208,11 @@ export async function PUT(request: NextRequest) {
   }
 
   const body = (await request.json()) as Partial<UserProfile>;
+  if (Object.prototype.hasOwnProperty.call(body, "feedIntent")) {
+    const parsed = normalizePersistedFeedIntent(body.feedIntent);
+    if (!parsed.ok) return NextResponse.json({ error: "invalid_feed_intent" }, { status: 400 });
+    body.feedIntent = parsed.intent;
+  }
   const row = profilePatchToRow(body, user.id);
 
   let { data, error } = await supabase
@@ -172,6 +220,10 @@ export async function PUT(request: NextRequest) {
     .upsert(row, { onConflict: "user_id" })
     .select()
     .single();
+
+  if (error && "feed_intent" in row && isMissingFeedIntentColumn(error)) {
+    return NextResponse.json({ error: "feed_intent_schema_unavailable" }, { status: 409 });
+  }
 
   // Graceful fallback: if the optional digest_email column hasn't been added to
   // the DB yet (migration not run), drop it and retry so the rest of the profile
@@ -198,5 +250,12 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ profile: profileRowToProfile(data as ProfileRow) });
+  try {
+    return NextResponse.json({ profile: profileRowToProfile(data as ProfileRow) });
+  } catch (caught) {
+    if (caught instanceof Error && caught.message === "invalid_feed_intent") {
+      return NextResponse.json({ error: "invalid_feed_intent" }, { status: 500 });
+    }
+    throw caught;
+  }
 }

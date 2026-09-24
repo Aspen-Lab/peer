@@ -8,6 +8,7 @@ import { geminiProvider, createGeminiApiProvider } from "./gemini";
 import { openaiProvider, createOpenAIProvider } from "./openai";
 import { qwenProvider, createQwenProvider } from "./qwen";
 import { deepseekProvider, createDeepseekProvider } from "./deepseek";
+import { isLocalDevRuntime } from "@/lib/env/local-dev";
 
 const providers: Record<ProviderId, DigestProvider> = {
   anthropic: anthropicProvider,
@@ -32,11 +33,7 @@ const USER_PROVIDER_IDS = new Set<ProviderOverrideConfig["provider"]>([
  * deployed Peer instance can never spend the operator's model account.
  */
 export function canUseLocalServerProvider(): boolean {
-  return (
-    process.env.NODE_ENV === "development" &&
-    !process.env.VERCEL &&
-    !process.env.VERCEL_ENV
-  );
+  return isLocalDevRuntime();
 }
 
 export function hasUsableProviderOverride(

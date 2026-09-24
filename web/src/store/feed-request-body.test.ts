@@ -5,6 +5,7 @@ import {
   opportunityRequestBody,
   paperFeedRequestBody,
 } from "./feed";
+import { selectedSenseConcept } from "@/lib/feed/senses";
 
 const activeProfile: UserProfile = {
   ...defaultProfile,
@@ -136,5 +137,79 @@ describe("active feed request inputs", () => {
     expect(papers.topics).not.toEqual(
       activeProfile.activeSearchInputs?.jobs.required,
     );
+  });
+
+  it("keeps a project-only paper request usable and separately labeled", () => {
+    const profile: UserProfile = {
+      ...activeProfile,
+      researchTopics: [],
+      activeSearchInputs: { ...activeProfile.activeSearchInputs!, papers: { required: [], explore: [] } },
+      currentProject: "Reduce sulfide interface resistance",
+      currentChallenges: "Avoid dendrite formation",
+    };
+
+    expect(paperFeedRequestBody(profile, advisorSeeds)).toMatchObject({
+      topics: [],
+      project: "Reduce sulfide interface resistance",
+      challenge: "Avoid dendrite formation",
+      intent: {
+        version: "feed-intent-v1",
+        project: { presence: "value", value: "Reduce sulfide interface resistance" },
+        challenge: { presence: "value", value: "Avoid dendrite formation" },
+      },
+    });
+  });
+
+  it("keeps browser clears explicit and makes the paper current-key include intent", () => {
+    const withTopic: UserProfile = {
+      ...activeProfile,
+      currentProject: "",
+      currentChallenges: "",
+    };
+    const changedProject: UserProfile = {
+      ...activeProfile,
+      currentProject: "Investigate interface resistance",
+    };
+
+    expect(paperFeedRequestBody(withTopic, advisorSeeds)).toMatchObject({
+      intent: {
+        project: { presence: "explicit-empty" },
+        challenge: { presence: "explicit-empty" },
+      },
+    });
+    expect(activePaperTopicsKey(changedProject)).not.toBe(
+      activePaperTopicsKey(activeProfile),
+    );
+  });
+
+  it("keeps an empty browser intent out of the request path", () => {
+    const emptyBrowserProfile: UserProfile = {
+      ...activeProfile,
+      currentProject: "",
+      currentChallenges: "",
+      activeSearchInputs: {
+        ...activeProfile.activeSearchInputs!,
+        papers: { required: [], explore: [] },
+      },
+    };
+
+    expect(paperFeedRequestBody(emptyBrowserProfile, advisorSeeds)).toMatchObject({
+      topics: [],
+      intent: undefined,
+    });
+    expect(activePaperTopicsKey(emptyBrowserProfile)).toBe("");
+  });
+
+  it("carries an explicitly selected local sense in the browser v1 card without classifying legacy topics", () => {
+    const profile: UserProfile = {
+      ...activeProfile,
+      researchTopics: ["conflict"],
+      activeSearchInputs: { ...activeProfile.activeSearchInputs!, papers: { required: ["conflict"], explore: [] } },
+      selectedSenseConcepts: [selectedSenseConcept("hr.role_conflict")],
+    };
+
+    expect(paperFeedRequestBody(profile, advisorSeeds)).toMatchObject({
+      intent: { selectedSenseConcepts: [selectedSenseConcept("hr.role_conflict")] },
+    });
   });
 });

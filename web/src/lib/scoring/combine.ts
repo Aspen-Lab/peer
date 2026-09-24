@@ -13,6 +13,7 @@ import { scoreSource } from "./source-weight";
 import { generateReason } from "./reason";
 import { shouldPushReviewPaper } from "./review-policy";
 import { normalizePhrase } from "./tokenize";
+import { canonicalize } from "./term-expand";
 import {
   buildPreferenceDocumentFrequency,
   prepareLedger,
@@ -125,7 +126,15 @@ export function scoreItems(
   const preparedLedger = prepareLedger(profile.preferenceLedger);
 
   const mustTopics = profile.topics;
+  const selectedSenseConcepts = profile.selectedSenseConcepts ?? [];
+  // A bare conflict/SEM is user free text, not a selected global sense. Once
+  // a typed selection exists, do not let that ambiguous literal independently
+  // open the required gate for a competing domain.
+  const literalMustTopics = selectedSenseConcepts.length > 0
+    ? mustTopics.filter((topic) => !["conflict", "sem"].includes(canonicalize(topic)))
+    : mustTopics;
   const softTopics = profile.softTopics ?? [];
+  const exclusions = profile.exclusions ?? [];
 
   // Pass 1: everything that can be judged from the paper alone.
   const passed: {
@@ -135,9 +144,37 @@ export function scoreItems(
     tf: number;
   }[] = [];
   for (const item of items) {
-    const kw = scoreKeyword(item, mustTopics, { grounded: true });
-    // Hard gate: if required topics are set, the item must match at least one.
-    if (mustTopics.length > 0 && kw.score === 0) continue;
+    if (exclusions.some((term) => topicMatchesItem(item, term))) continue;
+    if (profile.minPublishedAt && item.publishedAt < profile.minPublishedAt) continue;
+    const kw = scoreKeyword(item, literalMustTopics, { grounded: true, selectedSenseConcepts });
+    // P2-S3 — UNION of the item-level tag and the older, request-scoped
+    // `profile.admissionChannels` lookup, not one overriding the other.
+    // The item-level tag travels WITH the item through dedupe and the
+    // cache, so it is still readable at a read-time rescore on a cache hit
+    // and from the scheduled-digest path, neither of which shares this
+    // call's `profile` with whichever build first tagged the item
+    // (ABC-JEV-INTEGRATION.md §1p.A/G, F-A-P2-03). It must be a union rather
+    // than "item-level wins, else profile": `buildPaperPool` now tags every
+    // plain keyword-source item "keyword" too (so a dedupe merge with a
+    // citation-admitted copy of the same paper keeps both channels — see
+    // dedup.ts) — if that were allowed to eclipse `profile.admissionChannels`
+    // entirely, an item a keyword source happened to fetch would silently
+    // lose a legitimate request-scoped semantic/positive-seed/topic-field
+    // tag declared for that same item id (regression caught by
+    // paper-daily-cache.test.ts's "applies typed sense admission..." case).
+    // Both sides are keyed by/attached to this exact item, so a union never
+    // admits a different item — it only ever adds true information about
+    // this one.
+    const channels = [
+      ...(item.admissionChannels ?? []),
+      ...(profile.admissionChannels?.[item.id] ?? []),
+    ];
+    const admittedByNonLiteralChannel = channels.some((channel) =>
+      channel === "semantic" || channel === "positive-seed" || channel === "citation" || channel === "topic-field",
+    );
+    // Required literals route/score candidate discovery. They cannot evict a
+    // candidate already admitted by another declared retrieval channel.
+    if ((literalMustTopics.length > 0 || selectedSenseConcepts.length > 0) && kw.score === 0 && !admittedByNonLiteralChannel) continue;
     passed.push({
       item,
       kw,

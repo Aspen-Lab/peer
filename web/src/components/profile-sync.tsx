@@ -20,9 +20,14 @@
 import { useEffect, useRef } from "react";
 import { create } from "zustand";
 import { apiFetch } from "@/lib/api";
+import {
+  ANONYMOUS_CLIENT_ENTITLEMENT,
+  type ClientEntitlement,
+} from "@/lib/entitlement/allowance";
 import { supabase } from "@/lib/supabase/client";
 import { useProfileStore } from "@/store/profile";
 import type { UserProfile } from "@/types";
+import { profileFeedIntentCard } from "@/lib/feed/intent";
 
 // Signals that the INITIAL remote pull has settled — success, failure, or
 // nothing-to-pull (signed out / no Supabase configured). FirstRunGate and the
@@ -30,8 +35,35 @@ import type { UserProfile } from "@/types";
 // returning user's synced topics land before any redirect or resume-position
 // choice. Never flips back to false: later auth changes re-sync data but the
 // first-load decision window is over.
-export const useSyncGate = create<{ settled: boolean }>(() => ({
+//
+// P4-S5b-FIX3 (Round 3) — ABC-JEV-INTEGRATION.md §4 "P4-S5b-FIX3 ruled and
+// assigned": `settled` above answers "has the PROFILE PULL finished" — a
+// real, possibly slow or failing network round trip (`apiFetch` in
+// web/src/lib/api.ts has no timeout anywhere). A consumer that only needs to
+// know WHICH ACCOUNT this device is currently acting as (feed.ts's
+// resolveOwnerKeyForLoad, picking a device-local delivery-history namespace)
+// does not need to wait for that — the AUTH CHECK itself
+// (`getUser()`/`onAuthStateChange`) resolves first and already answers that
+// question. `authUserId` is published the moment the auth check confirms a
+// real user, BEFORE the profile pull below even starts, and cleared back to
+// `null` on a confirmed sign-out. `authOutcome` distinguishes "genuinely
+// don't know yet" (`"unknown"`, the initial value — e.g. `getUser()` still
+// in flight, or it REJECTED: a rejected check is unknown, not signed-out)
+// from the two ways ownership becomes certain without a signed-in user
+// (`"signed-out"`, `"unconfigured"` — no Supabase configured at all) and
+// from `"signed-in"` (`authUserId` is set). Like `settled`, this never
+// reverts to `"unknown"` once resolved — a later sign-out moves it to
+// `"signed-out"`, not back to `"unknown"`.
+export type AuthOutcome = "unknown" | "signed-in" | "signed-out" | "unconfigured";
+
+export const useSyncGate = create<{
+  settled: boolean;
+  authUserId: string | null;
+  authOutcome: AuthOutcome;
+}>(() => ({
   settled: false,
+  authUserId: null,
+  authOutcome: "unknown",
 }));
 const markSyncSettled = () => useSyncGate.setState({ settled: true });
 
@@ -41,25 +73,34 @@ function hasAnySignal(p: UserProfile): boolean {
   return (
     p.researchTopics.length > 0 ||
     p.preferredMethods.length > 0 ||
-    p.locationPreferences.length > 0
+    p.locationPreferences.length > 0 ||
+    p.currentProject !== undefined ||
+    p.currentChallenges !== undefined ||
+    p.feedIntent !== undefined
   );
 }
 
-async function fetchRemote(): Promise<Partial<UserProfile> | null> {
+async function fetchRemote(): Promise<{
+  profile: Partial<UserProfile> | null;
+  entitlement: ClientEntitlement | null;
+}> {
   try {
-    const data = await apiFetch<{ profile: Partial<UserProfile> | null }>(
+    const data = await apiFetch<{
+      profile: Partial<UserProfile> | null;
+      entitlement?: ClientEntitlement;
+    }>(
       "/api/profile",
       { cache: "no-store" },
     );
-    return data.profile;
+    return { profile: data.profile, entitlement: data.entitlement ?? null };
   } catch (err) {
     console.warn("[ProfileSync] GET failed", err);
-    return null;
+    return { profile: null, entitlement: null };
   }
 }
 
 /** Local keys (BYOK API keys, Tavily) never leave the device. */
-function remoteProfilePayload(profile: UserProfile): Partial<UserProfile> {
+export function remoteProfilePayload(profile: UserProfile): Partial<UserProfile> {
   const {
     tavilyEnabled,
     tavilyApiKey,
@@ -71,7 +112,8 @@ function remoteProfilePayload(profile: UserProfile): Partial<UserProfile> {
   void tavilyApiKey;
   void feedAiProvider;
   void feedAiApiKey;
-  return rest;
+  const feedIntent = profileFeedIntentCard(profile);
+  return feedIntent ? { ...rest, feedIntent } : rest;
 }
 
 /** Fields in `next` whose serialized value differs from the baseline. */
@@ -108,6 +150,7 @@ async function pushRemote(patch: Partial<UserProfile>): Promise<boolean> {
 export function ProfileSync() {
   const profile = useProfileStore((s) => s.profile);
   const hydrateFromRemote = useProfileStore((s) => s.hydrateFromRemote);
+  const setEntitlement = useProfileStore((s) => s.setEntitlement);
   const isSignedInRef = useRef(false);
   const didInitialPullRef = useRef(false);
   const pullInFlightRef = useRef(false);
@@ -121,24 +164,48 @@ export function ProfileSync() {
   useEffect(() => {
     if (!supabase) {
       // No auth configured — local-only deployment, nothing will ever pull.
+      setEntitlement(ANONYMOUS_CLIENT_ENTITLEMENT);
+      // P4-S5b-FIX3 — distinct from "signed-out" in name only; both read as
+      // ANONYMOUS_OWNER_KEY in feed.ts's resolveOwnerKeyForLoad (the ruling:
+      // "anonymous ONLY when signed-out is confirmed or auth is not
+      // configured").
+      useSyncGate.setState({ authUserId: null, authOutcome: "unconfigured" });
       markSyncSettled();
       return;
     }
 
-    const onSession = async (signedIn: boolean) => {
+    const onSession = async (userId: string | null) => {
+      const signedIn = userId !== null;
       isSignedInRef.current = signedIn;
       if (!signedIn) {
         didInitialPullRef.current = false;
         lastPushedRef.current = null;
         // Signed out: there is no remote profile to wait for.
+        setEntitlement(ANONYMOUS_CLIENT_ENTITLEMENT);
+        // P4-S5b-FIX3 — a CONFIRMED sign-out (never a rejected/unresolved
+        // auth check — see the `.catch()` below, which deliberately leaves
+        // this untouched). Clears any previously-published id.
+        useSyncGate.setState({ authUserId: null, authOutcome: "signed-out" });
         markSyncSettled();
         return;
       }
+      // P4-S5b-FIX3 — publish the confirmed id THE MOMENT the auth check
+      // itself resolves, before the profile pull below even starts (and
+      // before the didInitialPullRef early-return just below, so a second
+      // onSession call for an already-pulled user still keeps this
+      // current). A consumer that only needs to know which account this
+      // device is acting as (feed.ts's resolveOwnerKeyForLoad) no longer
+      // has to wait for a full /api/profile round trip that might be slow
+      // or fail outright — see markSyncSettled in the `finally` below: a
+      // FAILED pull still settles, with `entitlement` staying null, which
+      // used to be indistinguishable from confirmed signed-out.
+      useSyncGate.setState({ authUserId: userId, authOutcome: "signed-in" });
       if (didInitialPullRef.current || pullInFlightRef.current) return;
       pullInFlightRef.current = true;
 
       try {
-        const remote = await fetchRemote();
+        const { profile: remote, entitlement } = await fetchRemote();
+        if (entitlement) setEntitlement(entitlement);
         const local = useProfileStore.getState().profile;
 
         if (!remote || !hasAnySignal({ ...local, ...remote } as UserProfile)) {
@@ -167,16 +234,22 @@ export function ProfileSync() {
 
     supabase.auth
       .getUser()
-      .then(({ data }) => onSession(!!data.user))
+      .then(({ data }) => onSession(data.user ? data.user.id : null))
+      // P4-S5b-FIX3 — a REJECTED getUser() leaves `authOutcome` at its
+      // "unknown" default (never set to "signed-out": we genuinely don't
+      // know). `settled` still becomes `true` here, unchanged from before
+      // this fix — feed.ts's resolveOwnerKeyForLoad no longer trusts
+      // `settled` alone for its anonymous fallback, precisely because of
+      // this case.
       .catch(() => markSyncSettled());
 
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "SIGNED_OUT") onSession(false);
-      else if (session?.user) onSession(true);
+      if (event === "SIGNED_OUT") onSession(null);
+      else if (session?.user) onSession(session.user.id);
     });
 
     return () => sub.subscription.unsubscribe();
-  }, [hydrateFromRemote]);
+  }, [hydrateFromRemote, setEntitlement]);
 
   // 2. Push local changes to server, debounced and diffed. Only when signed
   //    in and after the initial pull has settled.

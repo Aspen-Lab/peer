@@ -105,6 +105,11 @@ describe("canonicalize and termMatches", () => {
 });
 
 describe("expandTerm", () => {
+  it("does not globally expand ambiguous SEM outside a selected domain sense", () => {
+    expect(expandTerm("scanning electron microscopy")).not.toContain("sem");
+    expect(termMatches(canonicalize("SEM results"), "scanning electron microscopy")).toBe(false);
+  });
+
   it("inflects the final word in both directions", () => {
     expect(expandTerm("cathode")).toContain("cathodes");
     expect(expandTerm("batteries")).toContain("battery");

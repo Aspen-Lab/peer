@@ -16,12 +16,23 @@
 // It is now one thing: today's papers. Search lives at /search, events at
 // /events, jobs at /jobs, and every credential form lives on /profile.
 
-import { useEffect, useMemo, useState, useCallback, Suspense } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useCallback,
+  Suspense,
+} from "react";
 import Link from "next/link";
 import { activePaperTopicsKey, useFeedStore } from "@/store/feed";
+import { useBatchAcknowledgement } from "@/lib/dashboard/use-batch-acknowledgement";
 import { feedsUseAi } from "@/lib/feed/ai-tier";
+import { entitlementGrants } from "@/lib/entitlement/allowance";
 import { formatTimeAgo } from "@/lib/format";
 import { useProfileStore } from "@/store/profile";
+import { useSyncGate } from "@/components/profile-sync";
+import { AUTH_SETTLE_TIMEOUT_MS } from "@/lib/auth-settle-timeout";
 import { FeedTile } from "@/components/cards/feed-tile";
 import { DayStrip } from "@/components/briefing/day-strip";
 import { SearchBox } from "@/components/briefing/search-box";
@@ -62,6 +73,12 @@ function DailyBriefingPage() {
   const feedTopicsKey = useFeedStore((s) => s.feedTopicsKey);
   const feedError = useFeedStore((s) => s.feedError);
   const profile = useProfileStore((s) => s.profile);
+  const entitlement = useProfileStore((s) => s.entitlement);
+  // P4-S5a — acknowledges today's batch once its cards are actually in this
+  // render and the tab is visible (ABC-JEV-INTEGRATION.md §1p.C.7).
+  // `papers.length > 0` is the exact condition that gates the cards grid
+  // below, so this fires only once those cards are truly committed.
+  useBatchAcknowledgement(papers.length > 0);
 
   // Papers only. Events and jobs used to run on every home-page tick — the
   // progress bar labelled "Finding today's papers" was 30% driven by
@@ -75,16 +92,98 @@ function DailyBriefingPage() {
     [profile],
   );
 
+  // P4-S5b-FIX2 — ABC-JEV-INTEGRATION.md §1g/§1c, closing
+  // docs/jev-abc/P4-S5b-FIX-A-20260924T103406Z.md NEW FINDINGS #1: without
+  // this, the auto-load effect below could run before a signed-in user's
+  // `entitlement` resolves (profile rehydrates synchronously from
+  // localStorage; entitlement needs a real network round trip), silently
+  // building this device's delivered-history exclusions from the shared
+  // "anonymous" namespace instead of that user's own — a real re-delivery
+  // risk, not just a bookkeeping slip.
+  //
+  // P4-S5b-FIX3 — ABC-JEV-INTEGRATION.md §4 "P4-S5b-FIX3 ruled and
+  // assigned", closing two findings fresh A's review of FIX2 found
+  // (docs/jev-abc/P4-S5b-FIX2-A-20260924T111516Z.md): gating on `settled`
+  // (the PROFILE PULL finishing) was the wrong signal — `settled` has no
+  // bounded-time guarantee (web/src/lib/api.ts's apiFetch has no timeout
+  // anywhere), so a hanging pull meant this effect could wait forever and
+  // the feed would never auto-load at all this session (NEW FINDING #1);
+  // and a FAILED pull also settles `true` with `entitlement` staying null,
+  // which this gate alone could not tell apart from confirmed signed-out
+  // (NEW FINDING #2 — closed on the feed.ts side, see
+  // resolveOwnerKeyForLoad's own doc comment; this gate change removes the
+  // remaining availability risk).
+  //
+  // The owner id is knowable earlier than `settled`: profile-sync.tsx now
+  // publishes it (or a confirmed signed-out/not-configured outcome) the
+  // moment the auth check itself (`getUser()`/`onAuthStateChange`) resolves,
+  // before the profile pull even starts. `authOutcomeKnown` is that signal.
+  const authOutcomeKnown = useSyncGate((s) => s.authOutcome !== "unknown");
+  // Bounded fallback — same value as first-run.tsx's own dead-network
+  // fallback for the same underlying wait (AUTH_SETTLE_TIMEOUT_MS), so a
+  // stuck auth check can only delay, never permanently block, the first
+  // load. Once it fires, the load below proceeds with whatever
+  // resolveOwnerKeyForLoad (web/src/store/feed.ts) can determine — the
+  // unknown-owner union read, when the auth outcome is still not in yet.
+  const [authOutcomeTimedOut, setAuthOutcomeTimedOut] = useState(false);
   useEffect(() => {
+    if (authOutcomeKnown || authOutcomeTimedOut) return;
+    const timer = setTimeout(
+      () => setAuthOutcomeTimedOut(true),
+      AUTH_SETTLE_TIMEOUT_MS,
+    );
+    return () => clearTimeout(timer);
+  }, [authOutcomeKnown, authOutcomeTimedOut]);
+  const authReady = authOutcomeKnown || authOutcomeTimedOut;
+
+  // A load fired while the auth outcome was still unknown (the fallback
+  // above, not the normal path) used the unknown-owner union read
+  // (feed.ts), never the real owner's own exclusions. Once the real outcome
+  // becomes known, `feedTopicsKey === feedAutoLoadKey` (set by that
+  // provisional load, below) would otherwise silently suppress the
+  // correct-owner reload forever for the rest of this mount — this ref and
+  // the effect after the next one are the "trigger the correct-owner reload
+  // once the owner becomes known" half of the P4-S5b-FIX3 ruling (the
+  // alternative to "avoid the premature load", which the ruling does not
+  // leave available here: it requires loading after the bounded fallback
+  // even with an unknown owner). Reproduced and proven at the store level in
+  // web/src/store/feed.test.ts (no component-test harness exists in this
+  // repo for page.tsx itself — see this slice's checkpoint).
+  const provisionalOwnerLoadRef = useRef(false);
+
+  useEffect(() => {
+    if (!authReady) return;
     if (!feedAutoLoadKey || isLoading) return;
     // Reload when the loaded feed's active day-locked Papers topics differ.
     // Pending edits intentionally do not change this key until promotion on
     // the next local day.
     if (feedTopicsKey === feedAutoLoadKey) return;
+    if (!authOutcomeKnown) provisionalOwnerLoadRef.current = true;
     void loadFeed({ lanes: ["papers"] });
-  }, [feedAutoLoadKey, feedTopicsKey, isLoading, loadFeed]);
+  }, [
+    authReady,
+    authOutcomeKnown,
+    feedAutoLoadKey,
+    feedTopicsKey,
+    isLoading,
+    loadFeed,
+  ]);
 
-  const canUseAiTools = feedsUseAi(profile);
+  // The correction itself: fires at most once, exactly when
+  // `authOutcomeKnown` first flips true (it never flips back — same
+  // never-flips-back contract as `useSyncGate.settled`), and only if the
+  // load above actually was provisional. Deliberately does not check
+  // `feedTopicsKey`/`isLoading` — loadFeed's own requestId/feedLoadSeq
+  // staleness guard already makes a stale in-flight provisional response
+  // lose to this fresh call safely (see feed.ts's papersLane).
+  useEffect(() => {
+    if (!authOutcomeKnown) return;
+    if (!provisionalOwnerLoadRef.current) return;
+    provisionalOwnerLoadRef.current = false;
+    void loadFeed({ lanes: ["papers"] });
+  }, [authOutcomeKnown, loadFeed]);
+
+  const canUseAiTools = feedsUseAi(profile, entitlementGrants(entitlement));
   const shouldLoadPaperDigest = papers.length > 0 && canUseAiTools;
   const digestLlmOverride = useMemo(
     () =>
@@ -128,6 +227,7 @@ function DailyBriefingPage() {
     papersCount: papers.length,
     topicsCount: profile.researchTopics.length,
     feedError,
+    intentRequired: !feedAutoLoadKey,
   });
 
   return (
@@ -374,12 +474,16 @@ function BriefingEmpty({
   onRetry,
   onRefresh,
 }: {
-  reason: "no-topics" | "error" | "empty";
+  reason: "intent-required" | "no-topics" | "error" | "empty";
   errorDetail: string | null;
   onRetry: () => void;
   onRefresh: () => void;
 }) {
   const copy = {
+    "intent-required": {
+      title: "Set your Research focus.",
+      line: "Add a topic, project, or challenge so Peer can build your briefing.",
+    },
     "no-topics": {
       title: "What are you working on?",
       line: "Peer builds tomorrow’s briefing from your topics.",
@@ -401,7 +505,7 @@ function BriefingEmpty({
       </h2>
       <p className="mt-3 text-body-sm text-text-muted leading-relaxed">{copy.line}</p>
       <div className="mt-6 flex flex-wrap items-center gap-2.5">
-        {reason === "no-topics" && (
+        {(reason === "intent-required" || reason === "no-topics") && (
           <Link href="/profile" className={buttonVariants({ tone: "primary", size: "lg" })}>
             Set up profile
           </Link>

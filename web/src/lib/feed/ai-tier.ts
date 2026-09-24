@@ -1,4 +1,5 @@
 import type { UserProfile } from "@/types";
+import type { Entitlement } from "@/lib/entitlement/types";
 
 /**
  * RULING 66a / 68a — **THE ONE PREDICATE THAT DECIDES WHETHER THE JOB AND
@@ -39,12 +40,15 @@ export function hasUserLlmOverride(profile: UserProfile): boolean {
   );
 }
 
-/** A developer running locally against the machine's own provider. Never true in production. */
-export function hasLocalDeveloperProvider(profile: UserProfile): boolean {
-  return (
-    process.env.NODE_ENV === "development" &&
-    profile.feedAiProvider === "default"
-  );
+export type AiMode = "byok" | "system" | "none";
+
+/** The server-derived identity is the only system-AI authority. */
+export function aiAvailability(
+  profile: UserProfile,
+  entitlement: Pick<Entitlement, "userId">,
+): AiMode {
+  if (hasUserLlmOverride(profile)) return "byok";
+  return entitlement.userId !== null ? "system" : "none";
 }
 
 /**
@@ -52,8 +56,11 @@ export function hasLocalDeveloperProvider(profile: UserProfile): boolean {
  * and the request builder's `aiTier` are both this value** — that identity is
  * the fix, and `ai-tier.test.ts` asserts it rather than trusting it.
  */
-export function feedsUseAi(profile: UserProfile): boolean {
-  return hasUserLlmOverride(profile) || hasLocalDeveloperProvider(profile);
+export function feedsUseAi(
+  profile: UserProfile,
+  entitlement: Pick<Entitlement, "userId">,
+): boolean {
+  return aiAvailability(profile, entitlement) !== "none";
 }
 
 /**

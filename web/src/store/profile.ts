@@ -22,6 +22,8 @@ import type {
   FeedDiscoveryMode,
 } from "@/types";
 import { defaultProfile } from "@/types";
+import type { ClientEntitlement } from "@/lib/entitlement/allowance";
+import { normalizePersistedFeedIntent } from "@/lib/feed/intent";
 import {
   applyOpportunityFacetPreferenceSignal,
   applyPreferenceSignal,
@@ -41,6 +43,9 @@ interface ProfileState {
   recordUploadPreference: (paper: Paper) => void;
   forgetUploadPreference: (documentKey: string) => void;
   profile: UserProfile;
+  /** Server-authoritative and deliberately excluded from persisted state. */
+  entitlement: ClientEntitlement | null;
+  setEntitlement: (entitlement: ClientEntitlement | null) => void;
   /** Replace the whole profile from an exported document. */
   importProfile: (document: unknown) => boolean;
   updateDisplayName: (name: string) => void;
@@ -319,11 +324,17 @@ export function parseExportedProfile(
   }
   // Malformed input must leave the existing profile untouched, so only known
   // keys survive and anything else in the file is ignored.
-  const known = Object.keys(defaultProfile) as Array<keyof UserProfile>;
+  const known = [...Object.keys(defaultProfile), "feedIntent"] as Array<keyof UserProfile>;
   const source = profile as Record<string, unknown>;
   const result: Record<string, unknown> = {};
   for (const key of known) {
-    if (key in source) result[key] = source[key];
+    if (!(key in source)) continue;
+    if (key === "feedIntent") {
+      const intent = normalizePersistedFeedIntent(source[key]);
+      if (intent.ok) result[key] = intent.intent;
+      continue;
+    }
+    result[key] = source[key];
   }
   return Object.keys(result).length > 0
     ? (result as Partial<UserProfile>)
@@ -334,6 +345,8 @@ export const useProfileStore = create<ProfileState>()(
   persist(
     (set) => ({
       profile: defaultProfile,
+      entitlement: null,
+      setEntitlement: (entitlement) => set({ entitlement }),
       recordUploadPreference: (paper) => set((s) => ({ profile: { ...s.profile,
         preferenceLedger: applyUploadPreferenceSignal(s.profile.preferenceLedger,
           conceptsFromPaper(paper), paper.uploadDocumentKey ?? ""),
@@ -408,12 +421,14 @@ export const useProfileStore = create<ProfileState>()(
 
       updateCurrentProject: (text) =>
         set((s) => ({
-          profile: { ...s.profile, currentProject: text || undefined },
+          // Empty is a deliberate clear, not proof this field was never set.
+          profile: { ...s.profile, currentProject: text },
         })),
 
       updateCurrentChallenges: (text) =>
         set((s) => ({
-          profile: { ...s.profile, currentChallenges: text || undefined },
+          // Empty is a deliberate clear, not proof this field was never set.
+          profile: { ...s.profile, currentChallenges: text },
         })),
 
       recordPaperPreference: (paper, signal, at) =>
@@ -627,6 +642,7 @@ export const useProfileStore = create<ProfileState>()(
           if (remote.school !== undefined) merged.school = remote.school;
           if (remote.currentProject !== undefined) merged.currentProject = remote.currentProject;
           if (remote.currentChallenges !== undefined) merged.currentChallenges = remote.currentChallenges;
+          if (remote.feedIntent !== undefined) merged.feedIntent = remote.feedIntent;
           if (remote.dislikedTopics !== undefined) merged.dislikedTopics = remote.dislikedTopics;
           if (remote.preferenceLedger !== undefined) merged.preferenceLedger = remote.preferenceLedger;
           if (remote.softTopics !== undefined) merged.softTopics = remote.softTopics;
@@ -674,7 +690,7 @@ export const useProfileStore = create<ProfileState>()(
 
       logOut: () => {
         applyColorTheme(defaultProfile.colorTheme);
-        set({ profile: defaultProfile });
+        set({ profile: defaultProfile, entitlement: null });
       },
     }),
     // skipHydration: persisted state is rehydrated after mount via
@@ -693,6 +709,7 @@ export const useProfileStore = create<ProfileState>()(
       // hydration, so subscribers can never observe hydrated pending inputs
       // without the corresponding active inputs.
       merge: mergeHydratedProfileState,
+      partialize: (state) => ({ profile: state.profile }),
     }
   )
 );

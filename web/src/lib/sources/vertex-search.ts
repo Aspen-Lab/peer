@@ -12,6 +12,10 @@ import {
   type WebResult,
 } from "./gemini-search";
 import type { WebSearchProvider } from "./types";
+import {
+  hasCompanySpendCapability,
+  type CompanySpendCapability,
+} from "@/lib/security/company-spend";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // THE `vertex` WEB-SEARCH PROVIDER — VERTEX AI SEARCH (Discovery Engine).
@@ -175,11 +179,7 @@ export interface DiscoveryResult {
 // ───────────────────────────────────────────────────────────────────────────
 
 function vertexSearchProject(): string | undefined {
-  return (
-    process.env.GOOGLE_VERTEX_SEARCH_PROJECT?.trim() ||
-    process.env.GOOGLE_VERTEX_PROJECT?.trim() ||
-    undefined
-  );
+  return process.env.GOOGLE_VERTEX_SEARCH_PROJECT?.trim() || undefined;
 }
 
 function vertexSearchApp(): { kind: "engines" | "dataStores"; id: string } | null {
@@ -214,8 +214,10 @@ export function isVertexSearchAvailable(): boolean {
  */
 export function webSearchOptions(
   connectors: { gemini?: { enabled?: boolean } } | undefined,
+  capability?: CompanySpendCapability,
 ): { provider: WebSearchProvider } | undefined {
   if (connectors?.gemini?.enabled === false) return undefined;
+  if (!hasCompanySpendCapability(capability)) return undefined;
   if (isVertexSearchAvailable()) return { provider: "vertex" };
   return isGeminiSearchAvailable() ? { provider: "gemini" } : undefined;
 }
@@ -445,8 +447,7 @@ function fallbackMinResults(explicit: number | undefined): number {
 
 function fallbackEnabled(): boolean {
   const flag = process.env.GOOGLE_VERTEX_SEARCH_FALLBACK?.trim().toLowerCase();
-  if (flag === "off" || flag === "false" || flag === "0") return false;
-  return isGeminiSearchAvailable();
+  return (flag === "on" || flag === "true" || flag === "1") && isGeminiSearchAvailable();
 }
 
 /**
