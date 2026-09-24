@@ -210,7 +210,10 @@ function DailyBriefingPage() {
         ) : (
           <span aria-hidden />
         )}
-        <div className="flex items-start gap-2 sm:mt-2">
+        {/* `ml-auto`: `ReadingStrip` renders nothing for a reader with no
+            library yet, and a lone child under `justify-between` sits at the
+            START — the pair would jump left on exactly the first visit. */}
+        <div className="ml-auto flex items-start gap-2 sm:mt-2">
           <UploadButton />
           <SearchBox />
         </div>
