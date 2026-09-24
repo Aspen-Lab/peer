@@ -36,3 +36,16 @@ export const BRIEFING_EMPTY = {
     widen: "Widen topics",
   },
 };
+
+export const SEARCH_BOX = {
+  /** What the search page searches; the box promises no less and no more. */
+  placeholder: "Search all papers…",
+  label: "Search papers",
+};
+
+export const UPLOAD_BUTTON = {
+  label: "Upload a paper PDF",
+  /** Server and client rejection reasons are already plain sentences; this
+   *  just names the seam so every caller reads the same way. */
+  error: (reason: string) => reason,
+};

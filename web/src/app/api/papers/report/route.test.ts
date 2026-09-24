@@ -3,6 +3,7 @@ import { NextRequest } from "next/server";
 import type { PaperReport } from "@/lib/papers/report";
 
 const mocks = vi.hoisted(() => ({
+  ownedUpload: vi.fn(),
   resolveProvider: vi.fn(),
   generateDeepReport: vi.fn(),
   buildPaywalledFallback: vi.fn(),
@@ -20,6 +21,9 @@ vi.mock("@/lib/llm/providers/registry", async (importOriginal) => {
     await importOriginal<typeof import("@/lib/llm/providers/registry")>();
   return { ...actual, resolveProvider: mocks.resolveProvider };
 });
+vi.mock("@/lib/papers/upload-access", async (original) => ({
+  ...await original<typeof import("@/lib/papers/upload-access")>(), ownedUpload: mocks.ownedUpload,
+}));
 vi.mock("@/lib/papers/deep-report", () => ({
   generateDeepReport: mocks.generateDeepReport,
   buildPaywalledFallback: mocks.buildPaywalledFallback,
@@ -118,6 +122,99 @@ beforeEach(() => {
   // the sixth one is refused. Resetting it is what keeps each case independent.
   resetCounterStoreForTests();
   vi.clearAllMocks();
+  mocks.ownedUpload.mockResolvedValue(null);
+});
+
+describe("owner-only full article supplement", () => {
+  it.each(["application/json", "application/x-ndjson"])("uses the uploaded text and figures while retaining the original paper (%s)", async (accept) => {
+    const fullTextUploadId = "upload:0123456789abcdef";
+    mocks.ownedUpload.mockResolvedValue({ paperIds: [paper.id] });
+    mocks.resolveProvider.mockReturnValue({ generateJsonText: vi.fn() });
+    const doc = { title: paper.title, source: "pdf", sections: [{ heading: "Results", canonical: "results", text: "Full article results." }], figureCaptions: [] };
+    mocks.getFullText.mockResolvedValue({ status: "ok", doc, attempts: [] });
+    mocks.getFigurePool.mockResolvedValue({ entries: [{ imageUrl: "data:image/png;base64,test" }], attempted: true });
+    mocks.generateDeepReport.mockResolvedValue(generatedReport);
+    mocks.bindFiguresToReport.mockResolvedValue(generatedReport);
+    const response = await POST(request({ paper: { ...paper, fullTextUploadId }, deepReport: true }, accept));
+    if (accept.includes("ndjson")) await readEvents(response); else await response.json();
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toContain("private, no-store");
+    expect(mocks.getFullText).toHaveBeenCalledWith(expect.objectContaining({ paperId: fullTextUploadId }));
+    expect(mocks.getFigurePool).toHaveBeenCalledWith(expect.objectContaining({ itemId: fullTextUploadId }));
+    expect(mocks.generateDeepReport).toHaveBeenCalledWith(expect.objectContaining({ paper: expect.objectContaining({ id: paper.id }), doc }));
+  });
+  it("refuses another user's upload before any text, figure or model work", async () => {
+    const response = await POST(request({ paper: { ...paper, fullTextUploadId: "upload:0123456789abcdef" }, deepReport: true }));
+    expect(response.status).toBe(404);
+    expect(mocks.getFullText).not.toHaveBeenCalled();
+    expect(mocks.getFigurePool).not.toHaveBeenCalled();
+    expect(mocks.resolveProvider).not.toHaveBeenCalled();
+  });
+  it("refuses an owned PDF attached to a different article", async () => {
+    mocks.ownedUpload.mockResolvedValue({ paperIds: ["arxiv:different"] });
+    const response = await POST(request({ paper: { ...paper, fullTextUploadId: "upload:0123456789abcdef" } }));
+    expect(response.status).toBe(404);
+    expect(mocks.getFullText).not.toHaveBeenCalled();
+  });
+
+  // 9-14 (A9-13, matrix C5): the deep-report generation (full text + two
+  // model passes + figure binding) can run close to a minute; a
+  // delete/block/replace landing during that window must not let a stale
+  // report land.
+  it("returns 410 (JSON) when the upload's revision changed while the deep report was generating", async () => {
+    const fullTextUploadId = "upload:0123456789abcdef";
+    mocks.ownedUpload
+      .mockResolvedValueOnce({ paperIds: [paper.id], revision: 1 }) // the initial ownership check
+      .mockResolvedValueOnce({ paperIds: [paper.id], revision: 2 }); // the post-generation re-check
+    mocks.resolveProvider.mockReturnValue({ generateJsonText: vi.fn() });
+    const doc = { title: paper.title, source: "pdf", sections: [{ heading: "Results", canonical: "results", text: "Full article results." }], figureCaptions: [] };
+    mocks.getFullText.mockResolvedValue({ status: "ok", doc, attempts: [] });
+    mocks.getFigurePool.mockResolvedValue({ entries: [{ imageUrl: "data:image/png;base64,test" }], attempted: true });
+    mocks.generateDeepReport.mockResolvedValue(generatedReport);
+    mocks.bindFiguresToReport.mockResolvedValue(generatedReport);
+
+    const response = await POST(request({ paper: { ...paper, fullTextUploadId }, deepReport: true }, "application/json"));
+
+    expect(response.status).toBe(410);
+    const body = await response.json();
+    expect(body.error).toBe("Upload no longer available");
+  });
+
+  it("returns 410 (JSON) when the upload was deleted while the deep report was generating", async () => {
+    const fullTextUploadId = "upload:0123456789abcdef";
+    mocks.ownedUpload
+      .mockResolvedValueOnce({ paperIds: [paper.id], revision: 1 })
+      .mockResolvedValueOnce(null);
+    mocks.resolveProvider.mockReturnValue({ generateJsonText: vi.fn() });
+    const doc = { title: paper.title, source: "pdf", sections: [{ heading: "Results", canonical: "results", text: "Full article results." }], figureCaptions: [] };
+    mocks.getFullText.mockResolvedValue({ status: "ok", doc, attempts: [] });
+    mocks.getFigurePool.mockResolvedValue({ entries: [{ imageUrl: "data:image/png;base64,test" }], attempted: true });
+    mocks.generateDeepReport.mockResolvedValue(generatedReport);
+    mocks.bindFiguresToReport.mockResolvedValue(generatedReport);
+
+    const response = await POST(request({ paper: { ...paper, fullTextUploadId }, deepReport: true }, "application/json"));
+
+    expect(response.status).toBe(410);
+  });
+
+  it("emits an error event (NDJSON) instead of a stale report when the revision changed mid-flight", async () => {
+    const fullTextUploadId = "upload:0123456789abcdef";
+    mocks.ownedUpload
+      .mockResolvedValueOnce({ paperIds: [paper.id], revision: 1 })
+      .mockResolvedValueOnce({ paperIds: [paper.id], revision: 2 });
+    mocks.resolveProvider.mockReturnValue({ generateJsonText: vi.fn() });
+    const doc = { title: paper.title, source: "pdf", sections: [{ heading: "Results", canonical: "results", text: "Full article results." }], figureCaptions: [] };
+    mocks.getFullText.mockResolvedValue({ status: "ok", doc, attempts: [] });
+    mocks.getFigurePool.mockResolvedValue({ entries: [{ imageUrl: "data:image/png;base64,test" }], attempted: true });
+    mocks.generateDeepReport.mockResolvedValue(generatedReport);
+    mocks.bindFiguresToReport.mockResolvedValue(generatedReport);
+
+    const response = await POST(request({ paper: { ...paper, fullTextUploadId }, deepReport: true }, "application/x-ndjson"));
+    const events = await readEvents(response);
+
+    expect(events.some((e) => e.type === "error" && e.message === "Upload no longer available")).toBe(true);
+    expect(events.some((e) => e.type === "report")).toBe(false);
+  });
 });
 
 describe("POST /api/papers/report streaming", () => {
@@ -130,7 +227,7 @@ describe("POST /api/papers/report streaming", () => {
     expect(response.headers.get("content-type")).toContain(
       "application/x-ndjson",
     );
-    expect(response.headers.get("cache-control")).toBe("no-store, no-transform");
+    expect(response.headers.get("cache-control")).toBe("private, no-store, no-transform");
     expect(events).toEqual([
       { type: "mode", aiMode: "tier0" },
       {

@@ -99,7 +99,7 @@ The digest paragraph should populate within a few seconds of the feed loading, s
 
 ## Cost expectations
 
-- Gemini 2.0 Flash on Vertex: roughly **$0.0001 per 1K input tokens, $0.0004 per 1K output tokens** (check console for current pricing)
+- Gemini 3.1 Flash-Lite (the everyday model) lists at **$0.25 per 1M input tokens, $1.50 per 1M output**; Gemini 3.6 Flash (reports) at **$0.75 / $3.75** — check the console for current pricing
 - A daily digest of 10 papers consumes roughly 6-8K input tokens + 1-2K output ≈ **fractions of a cent per run**
 - Add a budget alert in GCP **Billing → Budgets & alerts** to cap monthly spend if you're cautious
 

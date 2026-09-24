@@ -1788,6 +1788,15 @@ export const useFeedStore = create<FeedState>()(
       // doesn't mismatch the server markup. See store/ui.ts for rationale.
       skipHydration: true,
       partialize: (state) => ({
+        // 5-04: today's briefing list, so a hard refresh / fresh tab / deep
+        // link finds a paper the reader only saw in today's feed (not yet
+        // saved) without a network round trip — see page.tsx's `storePaper`
+        // lookup, which already prefers this array over fetching by id, and
+        // only fails to find one today because it was never persisted.
+        // Bounded: the day's list, ~50 records, a snapshot that can go
+        // stale until the next feed fetch overwrites it (accepted cost;
+        // save/feedback fields are re-applied live on top regardless).
+        papers: state.papers,
         savedPapers: state.savedPapers,
         savedEvents: state.savedEvents,
         savedJobs: state.savedJobs,

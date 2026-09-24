@@ -11,6 +11,8 @@ import { fetchPaperById } from "@/lib/papers/fetch-by-id";
 import { getFullText, type FullTextResult } from "@/lib/papers/full-text";
 import { buildReading } from "@/lib/papers/reading";
 import { rawItemToPaper } from "@/lib/feed/mapper";
+import { bareUploadId, uploadMetaToPaper } from "@/lib/papers/upload-store";
+import { ownedUpload, PRIVATE_UPLOAD_HEADERS } from "@/lib/papers/upload-access";
 
 /**
  * How long the route waits for the full text before answering with the
@@ -57,6 +59,51 @@ export async function GET(
   const decodedId = decodeURIComponent(id);
   const refresh = req.nextUrl.searchParams.get("refresh") === "1";
 
+  // 2-05 (Ruling 4, §1e / bug B): `fetchPaperById` only ever recognizes an
+  // `openalex:`/`arxiv:` prefix and returns null for anything else — an
+  // uploaded PDF maps straight to a `Paper` (like `uploadMetaToPaper`
+  // already does elsewhere), skipping the RawItem shape entirely, rather
+  // than teaching `fetchPaperById` a RawItem-shaped lie about an upload.
+  // Before this branch existed this route 404'd for every `upload:` id
+  // (empty or not), so the client's useReading hook fell back to a
+  // client-only reading that never runs buildReading's real pdf_empty
+  // provenance logic at all — confirmed by execution.
+  const uploadHash16 = bareUploadId(decodedId);
+  if (uploadHash16) {
+    const meta = await ownedUpload(uploadHash16);
+    if (!meta) {
+      return NextResponse.json(
+        { error: "Paper not found" },
+        { status: 404, headers: NO_STORE_HEADERS },
+      );
+    }
+    // 9-14 (A9-13, matrix C5): captured before the (up to 8s) full-text wait.
+    const startRevision = meta.revision;
+    const uploadPaper = uploadMetaToPaper(meta);
+    const uploadFullText = await fullTextWithin(
+      {
+        paperId: uploadPaper.id,
+        url: uploadPaper.linkPaper ?? null,
+        doi: uploadPaper.doi ?? null,
+      },
+      FULL_TEXT_TIMEOUT_MS,
+    );
+    const uploadReading = buildReading(
+      uploadPaper,
+      uploadFullText.settled ? uploadFullText.result : null,
+    );
+    const stillCurrent = await ownedUpload(uploadHash16);
+    if (!stillCurrent || stillCurrent.revision !== startRevision) {
+      return NextResponse.json(
+        { error: "Upload no longer available" },
+        { status: 410, headers: PRIVATE_UPLOAD_HEADERS },
+      );
+    }
+    return NextResponse.json(uploadReading, {
+      headers: PRIVATE_UPLOAD_HEADERS,
+    });
+  }
+
   const raw = await fetchPaperById(decodedId);
   if (!raw) {
     return NextResponse.json(
@@ -65,6 +112,22 @@ export async function GET(
     );
   }
   const paper = rawItemToPaper(raw);
+
+  const supplement = req.nextUrl.searchParams.get("upload");
+  if (supplement) {
+    const hash = bareUploadId(supplement);
+    const meta = hash ? await ownedUpload(hash) : null;
+    if (!meta?.paperIds?.includes(paper.id)) return NextResponse.json({ error: "Upload not found." }, { status: 404, headers: PRIVATE_UPLOAD_HEADERS });
+    // 9-14 (A9-13, matrix C5): re-checked after getFullText, before this
+    // owner-supplied reading is ever returned.
+    const startRevision = meta.revision;
+    const fullText = await getFullText({ paperId: supplement });
+    const stillCurrent = hash ? await ownedUpload(hash) : null;
+    if (!stillCurrent || stillCurrent.revision !== startRevision) {
+      return NextResponse.json({ error: "Upload no longer available" }, { status: 410, headers: PRIVATE_UPLOAD_HEADERS });
+    }
+    return NextResponse.json(buildReading(paper, fullText), { headers: PRIVATE_UPLOAD_HEADERS });
+  }
 
   const fullText = await fullTextWithin(
     {

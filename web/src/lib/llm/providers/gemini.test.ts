@@ -11,7 +11,13 @@ vi.mock("@google/genai", async (importOriginal) => ({
   },
 }));
 
-import { createGeminiApiProvider, geminiProvider } from "./gemini";
+import {
+  createGeminiApiProvider,
+  GEMINI_API_CHAIN_IDS,
+  GEMINI_NO_THINKING_CONTROL,
+  geminiProvider,
+  THINKING_HEADROOM,
+} from "./gemini";
 import { PROVIDER_MODELS } from "../provider-models";
 import {
   setUsageEventsClientForTests,
@@ -117,10 +123,10 @@ describe("2-05 — a Gemini request's `ok` reflects what it returned", () => {
     // is asserted instead: the rows name the configured chain, in order, one
     // row per attempt. Read from the constant rather than retyped, so it stays
     // true whichever way the two tiers are configured.
-    expect(rows.map((r) => r.model)).toEqual([
-      PROVIDER_MODELS.gemini.small,
-      PROVIDER_MODELS.gemini.large,
-    ]);
+    // Merge note (2026-09-23): the reader's-key chain walks the small tier's
+    // two ids before the large tier's, so the first two attempts are the
+    // chain's first two ids — read from the exported chain, still not retyped.
+    expect(rows.map((r) => r.model)).toEqual(GEMINI_API_CHAIN_IDS.slice(0, 2));
   });
 
   it("writes ok:false when the request throws", async () => {
@@ -211,19 +217,26 @@ describe("6-02 — the Gemini thinking control is decided per model family", () 
       }),
     ).rejects.toThrow();
 
-    // Both chains were walked, so this is a real enumeration and not one id.
-    // Counted, never assumed unique: the two regional tiers name ONE id today,
-    // and assuming otherwise is the exact mistake that made the old ledger
-    // case red. Four attempts with three or more distinct ids can only happen
-    // if the global chain was reached as well as the regional one.
+    // The whole chain was walked, so this is a real enumeration and not one id.
+    // Merge note (2026-09-23): the chain is global-only (the founder's call,
+    // 2026-09-14) — four global ids, not a regional pair plus a global
+    // fallback — so the count is still four and at least three are distinct.
     expect(sentModels()).toHaveLength(4);
     expect(new Set(sentModels()).size).toBeGreaterThanOrEqual(3);
 
-    for (const config of sentConfigs()) {
+    const models = sentModels();
+    sentConfigs().forEach((config, i) => {
+      if (GEMINI_NO_THINKING_CONTROL.has(models[i])) {
+        // Measured to reject every thinking control: left thinking, and the
+        // cap carries headroom so its thinking cannot truncate the answer.
+        expect(config.thinkingConfig).toBeUndefined();
+        expect(config.maxOutputTokens).toBe(900 + THINKING_HEADROOM);
+        return;
+      }
       expect(config.thinkingConfig).toBeDefined();
       // No headroom: with thinking off, the caller's budget is the whole cap.
       expect(config.maxOutputTokens).toBe(900);
-    }
+    });
   });
 
   it("sends `thinkingLevel` to the Gemini 3 family — `thinkingBudget` is a 400 there", async () => {

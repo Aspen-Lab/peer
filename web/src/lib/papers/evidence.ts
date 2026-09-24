@@ -30,12 +30,76 @@ const SUFFIX_CHARS = 40;
 const CITATION_BRACKETS = /\s*\[\d+(?:\s*[-,]\s*\d+)*\]/g;
 
 /**
+ * `/` (ASCII slash) and `⁄` (U+2044, FRACTION SLASH). PyMuPDF's PDF text
+ * extraction reorders a stacked inline fraction like "L/d" into
+ * letters-then-fraction-slash ("Ld" + U+2044) when lifting text from the
+ * PDF's glyph layout, as its own free-floating token — "Ld ⁄ = 0.67" where
+ * the clean text reads "L/d = 0.67". A real extraction artifact, not a
+ * paraphrase.
+ *
+ * The slash and any whitespace immediately *after* it are dropped — not
+ * whitespace before it — so the artifact's own two added spaces (one on
+ * each side of the stray "⁄" token) collapse to the single natural space
+ * the clean text already has before whatever follows, while "L/d" (no
+ * space on either side) is untouched by that extra step and simply loses
+ * its slash. Both then normalise to "ld = 0.67" (applied to both the quote
+ * and the corpus, per this function's own symmetric-folding design). A
+ * cheap, auditable text-cleanup step, not a paraphrase-acceptance one:
+ * `evidenceSupported` still requires the folded strings to match exactly.
+ */
+const FRACTION_SLASHES = /[/⁄]\s*/g;
+
+/**
+ * A word that wraps across a PDF line break re-joins with a hyphen AND an
+ * inserted space ("high- energy") where the clean text has neither reason
+ * for one ("high-energy") — PyMuPDF's own extraction artifact, the same
+ * family as the fraction-slash case above (1-17). Folding any hyphen sitting
+ * directly between two letters — whether or not whitespace follows — makes
+ * both forms converge to the same normalized string.
+ *
+ * This is broader than the fraction-slash fold: it folds *every* inter-
+ * letter hyphen for matching purposes, including a normal compound word
+ * like "state-of-the-art", not only line-wrap artifacts — there is no cheap
+ * way to tell the two apart from the text alone, since the only structural
+ * difference (a space after the hyphen in the artifact, none in a clean
+ * compound) has to be erased on both sides to converge them. It still
+ * cannot turn a paraphrase into a match: two *different* hyphenated words
+ * fold to two different strings; only the *same* word's clean and
+ * line-wrapped spellings converge. Scoped to letters only (not digits) so a
+ * numeric range ("43-45 K") or a negative number is never joined. (2-02)
+ */
+const HYPHENATED_WORD_BREAK = /([A-Za-z])-\s*([A-Za-z])/g;
+
+/**
+ * U+200B (zero-width space), U+200C (zero-width non-joiner), U+200D
+ * (zero-width joiner), U+FEFF (zero-width no-break space / BOM). ar5iv's
+ * MathML-to-text rendering emits one of these where a genuine word-boundary
+ * space belongs (e.g. splitting a formula token from the prose around it) —
+ * the model's own copied quote has an ordinary space there instead. Folded
+ * to a literal **space**, not deleted: unlike the fraction-slash artifact
+ * above (a spurious extra token, correctly dropped), this character is
+ * doing the job of a word-boundary space in the source, so deleting it
+ * outright would erase a boundary the model's quote still has — an ar5iv
+ * MathML render of "4​e - 4" must fold to "4 e - 4", not "4e - 4".
+ * Placed before the `\s+` collapse below so the fold's own new space is
+ * normalised the same way as every other space. (U+FEFF alone is already
+ * matched by JS's `\s` in that collapse — ECMAScript's `WhiteSpace`
+ * production includes it — but it's named explicitly here too so the whole
+ * invisible-character story lives in one visible place rather than being
+ * split across an explicit fold and a regex quirk nobody would think to
+ * look for.) (4-02)
+ */
+const ZERO_WIDTH_CHARS = /[​‌‍﻿]/g;
+
+/**
  * Normalise for matching only — never for display. `cleanDisplayText` first,
  * so a quote that went through the sanitizer and a raw section text land in
  * the same alphabet (it already folds entities, mojibake, `×`, `±`, sub- and
  * superscripts). Then NFKC (ligatures `ﬁ` → `fi`), curly → straight quotes,
- * every dash → `-`, soft hyphens gone, citation brackets gone, lowercase,
- * whitespace collapsed.
+ * every dash → `-`, soft hyphens and zero-width characters gone (the latter
+ * folded to a space, not deleted — 4-02), citation brackets gone, both slash
+ * characters gone (1-17), a hyphenated line-break re-joined (2-02),
+ * lowercase, whitespace collapsed.
  */
 export function normalizeForMatch(s: string): string {
   return cleanDisplayText(s)
@@ -44,7 +108,10 @@ export function normalizeForMatch(s: string): string {
     .replace(/[“”„‟]/g, '"')
     .replace(/[‐‑‒–—―−]/g, "-")
     .replace(/\u00AD/g, "")
+    .replace(ZERO_WIDTH_CHARS, " ")
     .replace(CITATION_BRACKETS, "")
+    .replace(FRACTION_SLASHES, "")
+    .replace(HYPHENATED_WORD_BREAK, "$1$2")
     .toLowerCase()
     .replace(/\s+/g, " ")
     .trim();
@@ -90,6 +157,16 @@ function buildCorpus(corpus: { abstract: string; doc?: ExtractedDocument }): Cor
     const text = normalizeForMatch(section.text);
     if (!text) continue;
     entries.push({ where: section.heading.trim() || section.canonical, text });
+  }
+  // 1-17: figure captions are supplied text too — `buildPass2Prompt` hands
+  // the model `figureCaptions` alongside `body`, and the evidence rule says
+  // "one sentence copied character-for-character from the supplied text (or
+  // the abstract)" — a caption qualifies, but was never in the matchable
+  // corpus, so a genuine verbatim caption quote was dropped as unverifiable.
+  for (const cap of corpus.doc?.figureCaptions ?? []) {
+    const text = normalizeForMatch(cap.caption);
+    if (!text) continue;
+    entries.push({ where: cap.label.trim() || "figure", text });
   }
   return entries;
 }

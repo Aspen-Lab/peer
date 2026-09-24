@@ -10,9 +10,10 @@ import type { Ref } from "react";
 import type { Claim, PaperReportBasis } from "@/lib/papers/report";
 import type { PaperReading } from "@/lib/papers/reading";
 import { pickClaimMark } from "@/lib/papers/skim";
-import { Band } from "@/components/ui/band";
+import { ScrambleText } from "@/components/scramble-text";
+import { AbstractToggle } from "./abstract-toggle";
 import { LeadClaim } from "./lead-claim";
-import { ABSTRACT_FOOTER, ABSTRACT_LABEL, TLDR_LINE, attribution, skimFooter } from "./copy";
+import { ABSTRACT_FOOTER, TLDR_LINE, attribution, skimFooter } from "./copy";
 
 const FOOTER_CLASS = "annotation text-text-faint mt-2";
 
@@ -55,25 +56,36 @@ function Deck({
   skim,
   basis,
   quoted,
+  scramble,
 }: {
   skim: Claim[];
   basis: PaperReportBasis;
   /** Skim claims whose evidence is not in the abstract. */
   quoted: Claim[];
+  /** S5: true while this report is scrambling into place. */
+  scramble?: boolean;
 }) {
+  const skimLine = skim.map((claim) => claim.text).join(" ");
   return (
     <div
       className="animate-fade-in-up"
       style={{ "--i": 0 } as React.CSSProperties}
     >
-      <p className="font-reading text-title-lg leading-[1.45] text-heading measure-paper mt-12 sm:mt-16">
-        {skim.map((claim) => claim.text).join(" ")}
-      </p>
+      {scramble ? (
+        <ScrambleText
+          text={skimLine}
+          className="font-reading text-title-lg leading-[1.45] text-heading measure-paper mt-12 sm:mt-16 block"
+        />
+      ) : (
+        <p className="font-reading text-title-lg leading-[1.45] text-heading measure-paper mt-12 sm:mt-16">
+          {skimLine}
+        </p>
+      )}
       {quoted.map((claim, i) => (
         // Keyed by position: two skim lines may cite the same sentence.
         <p
           key={`${i}:${claim.evidence}`}
-          className="font-reading italic text-body leading-[1.55] text-text-muted pl-5 mt-1.5"
+          className="font-reading italic text-body leading-[1.55] text-text-muted pl-5 mt-1.5 reading-justify"
         >
           {claim.evidence}
           <span className="font-mono not-italic text-meta text-text-faint ml-2">
@@ -93,6 +105,7 @@ export function PaperWords({
   skim,
   basis,
   quotedSkim,
+  scramble,
 }: {
   /** The words' last line — the footer under the abstract (or the TL;DR).
    *  On the spread the decided-read observer watches this, not the
@@ -104,6 +117,8 @@ export function PaperWords({
   skim: Claim[];
   basis: PaperReportBasis | null;
   quotedSkim: Claim[];
+  /** S5: true while the report the skim deck came from is scrambling into place. */
+  scramble?: boolean;
 }) {
   const { sentences, introCount } = reading.abstract;
   // With a model, the deck above is the claim and the ink below is its
@@ -120,7 +135,7 @@ export function PaperWords({
     if (!tldr) return null;
     return (
       <div>
-        <p className="font-reading text-lead leading-[1.6] text-text-muted measure-paper mt-10">
+        <p className="font-reading text-lead leading-[1.6] text-text-muted measure-paper mt-10 reading-justify">
           {tldr}
         </p>
         <p ref={endRef} className={FOOTER_CLASS}>
@@ -132,12 +147,14 @@ export function PaperWords({
 
   return (
     <>
-      {skim.length > 0 && basis && <Deck skim={skim} basis={basis} quoted={quotedSkim} />}
+      {skim.length > 0 && basis && (
+        <Deck skim={skim} basis={basis} quoted={quotedSkim} scramble={scramble} />
+      )}
       {lead !== null && (
         <LeadClaim sentence={sentences[lead]} />
       )}
-      <Band label={ABSTRACT_LABEL}>
-        <div className="font-reading text-lead leading-[1.6] text-text-muted measure-paper mt-4 space-y-4">
+      <AbstractToggle className="mt-12">
+        <div className="font-reading text-lead leading-[1.6] text-text-muted measure-paper mt-4 space-y-4 reading-justify">
           {split > 0 && <Paragraph sentences={sentences.slice(0, split)} from={0} inked={inked} />}
           {split < sentences.length && (
             <Paragraph sentences={sentences.slice(split)} from={split} inked={inked} />
@@ -146,7 +163,7 @@ export function PaperWords({
         <p ref={endRef} className={FOOTER_CLASS}>
           {ABSTRACT_FOOTER}
         </p>
-      </Band>
+      </AbstractToggle>
     </>
   );
 }

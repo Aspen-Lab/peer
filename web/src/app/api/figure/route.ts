@@ -7,6 +7,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { extractFigure } from "@/lib/figures/extract";
 import { requireEntitledAiRequest } from "@/lib/security/ai-request";
+import { bareUploadId } from "@/lib/papers/upload-store";
+import { ownedUpload, PRIVATE_UPLOAD_HEADERS } from "@/lib/papers/upload-access";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 86_400;
@@ -22,6 +24,10 @@ export async function GET(req: NextRequest) {
   const figureIndex = idxParam !== null ? Math.max(0, parseInt(idxParam, 10) || 0) : 0;
   if (!id) {
     return NextResponse.json({ error: "id required" }, { status: 400 });
+  }
+  if (id.startsWith("upload:")) {
+    const hash = bareUploadId(id);
+    if (!hash || !(await ownedUpload(hash))) return NextResponse.json({ error: "Upload not found." }, { status: 404, headers: PRIVATE_UPLOAD_HEADERS });
   }
 
   // ABC-freemium 1-07 · R-SEC-1 — **this route had no authentication of any
@@ -49,13 +55,14 @@ export async function GET(req: NextRequest) {
     // holding one is the proof a check ran.
     ctx: { entitlement: gate.entitlement, byok: false },
   });
-  const cacheControl = result.imageUrl
+  const cacheControl = id.startsWith("upload:") ? "private, no-store" : result.imageUrl
     ? "public, s-maxage=86400, stale-while-revalidate=604800"
     : "no-store";
 
   return NextResponse.json(result, {
     headers: {
       "Cache-Control": cacheControl,
+      ...(id.startsWith("upload:") ? PRIVATE_UPLOAD_HEADERS : {}),
     },
   });
 }

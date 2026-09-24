@@ -3,10 +3,11 @@
 
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
+import { classifyHardAccessStatus } from "@/lib/papers/paywall-status";
 import { cleanDisplayText } from "@/lib/text/clean";
 
 const execFileAsync = promisify(execFile);
@@ -91,6 +92,21 @@ function paywallReason(url: string): string {
   }
 }
 
+/**
+ * 2-01 (Ruling 9, §1j): an aggregator/free host's own 401/402/403/451 is an
+ * anti-bot block, not a subscription gate — worded separately from
+ * `paywallReason` so figure-lookup honesty never claims a paywall on a host
+ * that was never a publisher in the first place.
+ */
+function blockedReason(url: string): string {
+  try {
+    const host = new URL(url).hostname.replace(/^www\./, "");
+    return `Peer reached ${host}, but that source blocked this request.`;
+  } catch {
+    return "Peer reached the source, but it blocked this request.";
+  }
+}
+
 function hostLooksOpenAccess(url: string): boolean {
   try {
     const host = new URL(url).hostname;
@@ -102,7 +118,6 @@ function hostLooksOpenAccess(url: string): boolean {
 
 function appearsPaywalled(res: Response, html: string): boolean {
   if (hostLooksOpenAccess(res.url)) return false;
-  if ([401, 402, 403, 451].includes(res.status)) return true;
   if (/captcha/i.test(html)) return true;
   const lowered = html.toLowerCase();
   const phrases = [
@@ -168,15 +183,25 @@ async function runExtractor(pdfPath: string): Promise<PdfExtractorOutput | null>
     { command: "py", args: ["-3"] },
   ];
 
-  for (const runner of runners) {
+  // The helper writes JSON to a unique private temp directory, not stdout. Two
+  // real failures forced this (2026-09-13): PyMuPDF and MuPDF both print
+  // warnings to stdout, so `JSON.parse(stdout)` threw on the first word; and
+  // twelve rendered figures came to ~10 MB of base64, past the pipe's buffer.
+  // stdout is still captured so a stray print cannot block the process.
+  const outputDir = await mkdtemp(path.join(tmpdir(), "peer-pdf-figures-"));
+  const outputPath = path.join(outputDir, "figures.json");
+  try {
+   for (const runner of runners) {
     try {
-      const { stdout } = await execFileAsync(
+      await execFileAsync(
         runner.command,
         [
           ...runner.args,
           helperScript,
           "--input",
           pdfPath,
+          "--output",
+          outputPath,
           "--max-pages",
           String(MAX_PDF_PAGES),
           "--max-figures",
@@ -187,17 +212,19 @@ async function runExtractor(pdfPath: string): Promise<PdfExtractorOutput | null>
           maxBuffer: MAX_STDIO_BYTES,
         },
       );
-      const parsed = JSON.parse(stdout) as PdfExtractorOutput;
-      return parsed;
+      const raw = await readFile(outputPath, "utf-8");
+      return JSON.parse(raw) as PdfExtractorOutput;
     } catch (err) {
       const message = String(err);
       if (/not recognized|ENOENT/i.test(message)) continue;
       console.warn("[figures/pdf-extract] helper failed:", err);
       return null;
     }
+   }
+   return null;
+  } finally {
+    await rm(outputDir, { recursive: true, force: true });
   }
-
-  return null;
 }
 
 export async function tryPdfCandidates(
@@ -206,6 +233,15 @@ export async function tryPdfCandidates(
 ): Promise<PdfAttemptResult> {
   const res = await fetchPdfResponse(url);
   if (!res || !res.ok) {
+    // 2-01 (Ruling 9, §1j): a hard 401/402/403/451 on an aggregator/free
+    // host is a block, not a paywall — the shared helper's own host list
+    // replaces this call site's narrower `hostLooksOpenAccess` guard (still
+    // used below by the phrase-based `appearsPaywalled`, unrelated to this).
+    if (res) {
+      const verdict = classifyHardAccessStatus(url, res.status);
+      if (verdict === "paywalled") return { status: "paywalled", candidates: [], reason: paywallReason(url) };
+      if (verdict === "blocked") return { status: "source_unavailable", candidates: [], reason: blockedReason(url) };
+    }
     return {
       status: "source_unavailable",
       candidates: [],
@@ -261,7 +297,35 @@ export async function tryPdfCandidates(
   const pdfPath = path.join(tempDir, "paper.pdf");
 
   try {
-    await writeFile(pdfPath, bytes);
+    try {
+      await writeFile(pdfPath, bytes);
+    } catch (err) {
+      console.warn("[figures/pdf-extract] failed:", err);
+      return {
+        status: "source_unavailable",
+        candidates: [],
+        reason: "Peer found a legal PDF, but could not finish extracting its figures.",
+      };
+    }
+    return await extractPdfCandidatesFromPath(pdfPath, source);
+  } finally {
+    await rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
+  }
+}
+
+/**
+ * Run the figure extractor against a PDF that already lives on disk. Split
+ * out of `tryPdfCandidates` (1-25, mirrors `papers/pdf-text.ts`'s 1-24) for
+ * an uploaded PDF: the file is already private, server-local storage, so
+ * there's no reason to copy it into a *second* temp path just to run the
+ * same extractor — the caller owns the file's lifetime, so this function has
+ * no temp-dir lifecycle of its own.
+ */
+export async function extractPdfCandidatesFromPath(
+  pdfPath: string,
+  source: FigureSource,
+): Promise<PdfAttemptResult> {
+  try {
     const extracted = await runExtractor(pdfPath);
     if (!extracted) {
       return {
@@ -306,7 +370,5 @@ export async function tryPdfCandidates(
       candidates: [],
       reason: "Peer found a legal PDF, but could not finish extracting its figures.",
     };
-  } finally {
-    await rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
   }
 }

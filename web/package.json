@@ -12,7 +12,8 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "check:providers": "node scripts/check-provider-models.mjs"
+    "check:providers": "node scripts/check-provider-models.mjs",
+    "purge-uploads": "node scripts/purge-uploads.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.91.1",

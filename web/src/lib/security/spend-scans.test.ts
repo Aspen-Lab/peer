@@ -464,16 +464,18 @@ describe("scan 5 — every route that can spend is behind requireEntitledAiReque
   });
 
   it("reports the guarded count, so a DROP is visible rather than silent", () => {
-    // A's standing tally as an assertion. Five routes carry the guard today —
+    // A's standing tally as an assertion. Six routes carry the guard today —
     // nine until the jobs and events feed/report routes were deleted with those
-    // surfaces. A
+    // surfaces; the sixth is `papers/upload` (merge of 2026-09-23), whose
+    // title fallback reaches a model and so passes the same check. A
     // route losing it would otherwise show up only as an absence, and an
     // absence is what nobody notices.
     const guarded = apiRouteFiles().filter((file) =>
       code(path.join(process.cwd(), file)).includes(GUARD),
     );
 
-    expect(guarded).toHaveLength(5);
+    expect(guarded).toContain("src/app/api/papers/upload/route.ts");
+    expect(guarded).toHaveLength(6);
   });
 });
 

@@ -2,27 +2,12 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "peer-web",
+      "name": "peer-web-followup",
       "cwd": "web",
       "runtimeExecutable": "npm",
-      "runtimeArgs": [
-        "run",
-        "dev",
-        "--",
-        "-p",
-        "3001"
-      ],
-      "port": 3001,
-      "autoPort": false
-    },
-    {
-      "name": "aspen-play",
-      "runtimeExecutable": "sh",
-      "runtimeArgs": [
-        "-c",
-        "cd /Users/aspenlabs_1/aspen-play-vercel && PORT=3010 npm run dev"
-      ],
-      "port": 3010
+      "runtimeArgs": ["run", "dev"],
+      "port": 3100,
+      "autoPort": true
     }
   ]
 }

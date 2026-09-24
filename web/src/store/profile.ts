@@ -26,6 +26,8 @@ import { type ClientEntitlement } from "@/lib/entitlement/allowance";
 import {
   applyOpportunityFacetPreferenceSignal,
   applyPreferenceSignal,
+  applyUploadPreferenceSignal,
+  removeUploadPreferenceSignal,
   conceptsFromEvent,
   conceptsFromJob,
   conceptsFromPaper,
@@ -39,6 +41,8 @@ type PersistedUserProfile = Omit<Partial<UserProfile>, "colorTheme"> & {
 };
 
 interface ProfileState {
+  recordUploadPreference: (paper: Paper) => void;
+  forgetUploadPreference: (documentKey: string) => void;
   profile: UserProfile;
   /**
    * ABC-freemium 1-14 · R-ENT-3 — what the server says this reader may use.
@@ -386,6 +390,14 @@ export const useProfileStore = create<ProfileState>()(
       entitlement: null,
 
       setEntitlement: (entitlement) => set({ entitlement }),
+
+      recordUploadPreference: (paper) => set((s) => ({ profile: { ...s.profile,
+        preferenceLedger: applyUploadPreferenceSignal(s.profile.preferenceLedger,
+          conceptsFromPaper(paper), paper.uploadDocumentKey ?? ""),
+      } })),
+      forgetUploadPreference: (key) => set((s) => ({ profile: { ...s.profile,
+        preferenceLedger: removeUploadPreferenceSignal(s.profile.preferenceLedger, key),
+      } })),
 
       updateDisplayName: (name) =>
         set((s) => ({

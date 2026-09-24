@@ -12,6 +12,10 @@ import {
   resolveWebSearchProvider,
   searchGemini,
 } from "./gemini-search";
+import {
+  collectSearchResults,
+  searchHttpFailure,
+} from "./search-failure";
 import { searchVertex } from "./vertex-search";
 
 interface BraveResult {
@@ -158,8 +162,11 @@ async function fetchImpl(query: SourceQuery): Promise<RawItem[]> {
         : fetchTavily(paperQuery, perQuery, tavilyKey, query.webSearch);
     }),
   );
-  for (const result of settled) {
-    if (result.status === "fulfilled") all.push(...result.value);
+  // Rejections used to be dropped here, which is how a provider that answered
+  // nothing but errors still looked like a quiet day on the web.
+  // `collectSearchResults` re-raises only when EVERY query failed.
+  for (const rows of collectSearchResults(provider, "web-search", settled)) {
+    all.push(...rows);
   }
 
   // 2-04 · R-METER-2 — the row this file never wrote, carrying the provider's
@@ -194,15 +201,12 @@ async function fetchBrave(query: string, limit: number, apiKey: string): Promise
       signal: AbortSignal.timeout(7000),
       next: { revalidate: 600 },
     });
-    if (!res.ok) {
-      console.error("[web-search] brave non-ok response:", res.status);
-      return [];
-    }
+    if (!res.ok) throw await searchHttpFailure("brave", res);
     const data = (await res.json()) as BraveResponse;
     return (data.web?.results ?? []).map((item) => braveToRawItem(item)).filter((item): item is RawItem => item !== null);
   } catch (err) {
     console.error("[web-search] brave fetch error:", err);
-    return [];
+    throw err;
   }
 }
 
@@ -231,15 +235,14 @@ async function fetchTavily(
       signal: AbortSignal.timeout(7000),
       next: { revalidate: 600 },
     });
-    if (!res.ok) {
-      console.error("[web-search] tavily non-ok response:", res.status);
-      return [];
-    }
+    if (!res.ok) throw await searchHttpFailure("tavily", res);
     const data = (await res.json()) as TavilyResponse;
     return (data.results ?? []).map((item) => tavilyToRawItem(item)).filter((item): item is RawItem => item !== null);
   } catch (err) {
+    // Rethrown, not swallowed — see sources/search-failure.ts. An empty array
+    // here is the paper surface saying "the web has nothing on this topic".
     console.error("[web-search] tavily fetch error:", err);
-    return [];
+    throw err;
   }
 }
 

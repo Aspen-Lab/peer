@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   applyOpportunityFacetPreferenceSignal,
   applyPreferenceSignal,
+  applyUploadPreferenceSignal,
   cleanPreferenceLedger,
   FACET_PREFERENCE_BOOST_MAX,
   facetPreferenceReason,
@@ -344,6 +345,33 @@ describe("scorePreferenceMatch", () => {
     );
 
     expect(jobResult.facetBoost).toBe(0);
+  });
+
+  // 9-25 (Ruling 4): confirm — an upload-sourced concept has no OpenAlex
+  // taxonomy id, so it can only ever match a candidate's title/abstract by
+  // its own literal words. That match must be word-bounded (padded-space
+  // `includes`, both sides run through the same `normalizePreferenceLabel`),
+  // never a substring hit inside an unrelated, longer word.
+  it("matches an upload-sourced concept's title text only at a word boundary, never inside a longer word", () => {
+    const documentKey = "c".repeat(64);
+    const ledger = applyUploadPreferenceSignal({}, [
+      { key: preferenceKey("electrolyte", "uploaded_article"), label: "electrolyte", source: "uploaded_article", confidence: 0.8 },
+    ], documentKey, T0);
+
+    const candidateWithWord: RawItem = {
+      id: "openalex:W2", source: "openalex", title: "A study of the electrolyte", authors: [],
+      url: "", publishedAt: "", metadata: {},
+    };
+    const candidateWithoutWord: RawItem = {
+      id: "openalex:W3", source: "openalex", title: "A study of a nonelectrolyte compound", authors: [],
+      url: "", publishedAt: "", metadata: {},
+    };
+    const hit = scorePreferenceMatch(candidateWithWord, prepareLedger(ledger), [], { now: T0_MS });
+    const miss = scorePreferenceMatch(candidateWithoutWord, prepareLedger(ledger), [], { now: T0_MS });
+    expect(hit.boost).toBeGreaterThan(0);
+    expect(hit.matchedPositive).toContain("electrolyte");
+    expect(miss.boost).toBe(0);
+    expect(miss.matchedPositive).toEqual([]);
   });
 });
 

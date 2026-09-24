@@ -194,6 +194,10 @@ export function normalizePreferenceConcepts(
         typeof rawConcept.confidence === "number"
           ? clamp01(rawConcept.confidence)
           : undefined,
+      ...(typeof rawConcept.section === "string" ? { section: rawConcept.section.slice(0, 80) } : {}),
+      ...(rawConcept.facet === "method" || rawConcept.facet === "material" || rawConcept.facet === "topic"
+        ? { facet: rawConcept.facet } : {}),
+      ...(typeof rawConcept.extractionVersion === "number" ? { extractionVersion: rawConcept.extractionVersion } : {}),
     };
     if (seen.has(normalized.key)) continue;
     seen.add(normalized.key);
@@ -295,6 +299,48 @@ function decayedEntry(
   };
 }
 
+function cleanUploadEvidence(input: PreferenceLedgerEntry["uploads"]): NonNullable<PreferenceLedgerEntry["uploads"]> {
+  return Object.fromEntries(Object.entries(input ?? {}).filter(([key, value]) =>
+    /^[a-f0-9]{64}$/.test(key) && value && Number.isFinite(Date.parse(value.at)) &&
+    Number.isFinite(value.weight) && value.weight > 0,
+  ).slice(-200).map(([key, value]) => [key, { at: value.at, weight: Math.min(2, value.weight) }]));
+}
+
+/** One document contributes once, including re-uploads and PDF supplements.
+ * The separate evidence can be removed without erasing likes or dislikes. */
+export function applyUploadPreferenceSignal(ledger: PreferenceLedger | undefined,
+  concepts: PreferenceConcept[], documentKey: string, at = new Date().toISOString()): PreferenceLedger {
+  const next = cleanPreferenceLedger(ledger);
+  if (!/^[a-f0-9]{64}$/.test(documentKey)) return next;
+  for (const concept of normalizePreferenceConcepts(concepts)) {
+    const current = next[concept.key];
+    if (current?.uploads?.[documentKey]) continue;
+    next[concept.key] = {
+      ...(current ?? { ...concept, positive: 0, negative: 0, lastSeenAt: at }),
+      uploads: { ...current?.uploads, [documentKey]: { at, weight: 2 * (concept.confidence ?? 0.5) } },
+    };
+  }
+  return next;
+}
+
+export function removeUploadPreferenceSignal(ledger: PreferenceLedger | undefined, documentKey: string): PreferenceLedger {
+  const next = cleanPreferenceLedger(ledger);
+  for (const [key, entry] of Object.entries(next)) {
+    if (!entry.uploads?.[documentKey]) continue;
+    const uploads = { ...entry.uploads };
+    delete uploads[documentKey];
+    if (!Object.keys(uploads).length && !entry.positive && !entry.negative && !entry.facetPositive) delete next[key];
+    else next[key] = { ...entry, uploads };
+  }
+  return next;
+}
+
+export function uploadInterestTerms(ledger: PreferenceLedger | undefined, now = Date.now()): string[] {
+  return Object.values(cleanPreferenceLedger(ledger)).filter((entry) => Object.keys(entry.uploads ?? {}).length > 0)
+    .map((entry) => ({ entry, net: decayedCounts(entry, now).positive - decayedCounts(entry, now).negative }))
+    .filter(({ net }) => net > 0.5).sort((a, b) => b.net - a.net).slice(0, 3).map(({ entry }) => entry.label);
+}
+
 export function cleanPreferenceLedger(
   input: PreferenceLedger | null | undefined,
 ): PreferenceLedger {
@@ -315,6 +361,10 @@ export function cleanPreferenceLedger(
       key: normalizedKey,
       label,
       source,
+      ...(typeof entry.section === "string" ? { section: entry.section.slice(0, 80) } : {}),
+      ...(entry.facet === "method" || entry.facet === "material" || entry.facet === "topic"
+        ? { facet: entry.facet } : {}),
+      ...(typeof entry.extractionVersion === "number" ? { extractionVersion: entry.extractionVersion } : {}),
       confidence:
         typeof entry.confidence === "number"
           ? clamp01(entry.confidence)
@@ -348,6 +398,7 @@ export function cleanPreferenceLedger(
         typeof entry.lastSeenAt === "string"
           ? entry.lastSeenAt
           : new Date().toISOString(),
+      ...(entry.uploads ? { uploads: cleanUploadEvidence(entry.uploads) } : {}),
       origin:
         entry.origin === "event" || entry.origin === "job"
           ? entry.origin
@@ -558,7 +609,8 @@ function decayedCounts(
 ): { positive: number; negative: number } {
   const factor = decayFactor(entry.lastSeenAt, nowMs);
   return {
-    positive: entry.positive * factor,
+    positive: entry.positive * factor + Object.values(entry.uploads ?? {}).reduce(
+      (total, evidence) => total + evidence.weight * decayFactor(evidence.at, nowMs), 0),
     negative: entry.negative * factor,
   };
 }
@@ -613,7 +665,18 @@ export function scorePreferenceMatch(
   const matchedFacetPositive = new Set<string>();
   const matchedNegative = new Set<string>();
 
-  for (const concept of conceptsFromRawItem(item)) {
+  const concepts = conceptsFromRawItem(item);
+  // Uploaded phrases have no OpenAlex taxonomy ID. Match their actual words
+  // in candidate titles/abstracts too, using boundaries rather than substrings.
+  const text = ` ${normalizePreferenceLabel([item.title, item.abstract, ...(item.tags ?? [])].filter(Boolean).join(" "))} `;
+  const seenLabels = new Set(concepts.map((c) => normalizePreferenceLabel(c.label)));
+  for (const entry of Object.values(prepared.byKey)) {
+    const label = normalizePreferenceLabel(entry.label);
+    if (entry.uploads && label && !seenLabels.has(label) && text.includes(` ${label} `)) {
+      concepts.push(entry); seenLabels.add(label);
+    }
+  }
+  for (const concept of concepts) {
     const entries = lookupLedgerEntries(prepared, concept);
     if (entries.length === 0) continue;
     const specificity = distinctiveness(
@@ -720,6 +783,12 @@ export interface LedgerSummaryRow {
   label: string;
   /** Decayed net strength (always positive in its list). */
   weight: number;
+  /**
+   * 9-24 (A9-12): true when at least one ledger entry aggregated into this
+   * row carries `uploads` evidence — the profile screen uses this to caption
+   * the entry "from your upload" so a signal's source is never a mystery.
+   */
+  fromUpload: boolean;
 }
 
 /**
@@ -733,27 +802,28 @@ export function summarizePreferenceLedger(
   limit = 6,
 ): { liked: LedgerSummaryRow[]; disliked: LedgerSummaryRow[] } {
   const clean = cleanPreferenceLedger(ledger);
-  const byLabel = new Map<string, { label: string; net: number }>();
+  const byLabel = new Map<string, { label: string; net: number; fromUpload: boolean }>();
   for (const entry of Object.values(clean)) {
     const key = normalizePreferenceLabel(entry.label);
     if (!key) continue;
     const { positive, negative } = decayedCounts(entry, now);
     const net = positive - negative;
+    const fromUpload = Object.keys(entry.uploads ?? {}).length > 0;
     const prev = byLabel.get(key);
-    if (prev) prev.net += net;
-    else byLabel.set(key, { label: entry.label, net });
+    if (prev) { prev.net += net; prev.fromUpload = prev.fromUpload || fromUpload; }
+    else byLabel.set(key, { label: entry.label, net, fromUpload });
   }
   const rows = Array.from(byLabel.values());
   const liked = rows
     .filter((r) => r.net > 0.05)
     .sort((a, b) => b.net - a.net)
     .slice(0, limit)
-    .map((r) => ({ label: r.label, weight: r.net }));
+    .map((r) => ({ label: r.label, weight: r.net, fromUpload: r.fromUpload }));
   const disliked = rows
     .filter((r) => r.net < -0.05)
     .sort((a, b) => a.net - b.net)
     .slice(0, limit)
-    .map((r) => ({ label: r.label, weight: -r.net }));
+    .map((r) => ({ label: r.label, weight: -r.net, fromUpload: r.fromUpload }));
   return { liked, disliked };
 }
 

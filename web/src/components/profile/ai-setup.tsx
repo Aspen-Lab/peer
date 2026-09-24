@@ -391,7 +391,11 @@ export function AiProviderGuide({ provider }: { provider: UserAiProvider }) {
             per-job; only the destination happens to coincide, so the honest
             version says exactly that.
           */}
-          {models.small === models.large ? (
+          {/* Merge note (2026-09-23): the follow-up line keeps Gemini's two tiers on
+              two ids (3.1 Flash-Lite / 3.6 Flash), so today no provider's tiers
+              coincide and the literal types stop overlapping. Compared as plain
+              strings so this still says "one model" the day two tiers match. */}
+          {(models.small as string) === models.large ? (
             <p className="text-caption leading-relaxed text-text-muted">
               <strong className="text-heading">Why one model?</strong> You
               provide one key. For this provider Peer sends both the frequent,

@@ -29,6 +29,40 @@ export const SPREAD_QUERY = "(min-width: 80rem)";
  *  (It was pt-16 when the shell was a fixed sidebar that took no height.) */
 export const PAGE_CLASS = "px-5 sm:px-6";
 
+// Ruling 21 (round 7, item 7-07): the pixel breakpoints and page-width caps
+// this reader's spread is built from, in one place so the CSS
+// (`page-container.tsx`'s `spread` variant calc pair, pinned against these
+// by that file's own test) and Fit's own zoom formula (`reading-prefs.ts`'s
+// `fitZoom`) cannot drift apart the way they did before A7b-01/A7b-02 (round
+// 7, closing) — those found Fit's old *measured* 1x width going stale after
+// "Larger/Smaller text" and non-zoom-invariant after a resize while already
+// fitted. `fitZoom` now *computes* the 1x width from these numbers instead
+// of measuring a live DOM element.
+//
+// 1280px/1536px are Tailwind's own default `xl`/`2xl` breakpoints (80rem/
+// 96rem at the browser's default 16px root — `SPREAD_QUERY` above is the
+// same 80rem as a media-query string); restated here as plain numbers
+// because `fitZoom` needs them as arithmetic, not as a CSS breakpoint.
+export const XL_BREAKPOINT_PX = 1280;
+export const TWO_XL_BREAKPOINT_PX = 1536;
+
+// The spread's 1x page-width cap at each breakpoint: `page-container.tsx`'s
+// `spread` variant reads `1000px` directly at xl
+// (`calc(1000px*var(--reading-scale,1))`) and `640px+560px` = `1200px` at
+// 2xl at the default (1x) reading scale
+// (`calc(640px+560px*var(--reading-scale,1))` — a fixed panel share plus a
+// flexible column share, not a flat `1200px*scale`, per S20's own comment on
+// that file). `fitZoom` evaluates the same pair (TWO_XL_PANEL_PX +
+// TWO_XL_COLUMN_PX * scale) so Fit lands on 85% at every A/A step.
+export const XL_CAP_PX = 1000;
+export const TWO_XL_CAP_PX = 1200;
+// At 2xl the cap is a linear pair, not a plain multiple: the panel's share
+// (640px) is fixed and only the 560px reading track scales with the A/A
+// step — `calc(640px + 560px * var(--reading-scale, 1))` in page-container.
+// TWO_XL_CAP_PX is that pair at 1x (640 + 560). fitZoom uses the pair.
+export const TWO_XL_PANEL_PX = 640;
+export const TWO_XL_COLUMN_PX = 560;
+
 /** 5/7 columns at xl, where the reading column lands on the measure with a
  *  rag margin and no more.
  *
@@ -38,7 +72,7 @@ export const PAGE_CLASS = "px-5 sm:px-6";
  *  there and every extra pixel goes to the panel, so a wide screen buys a
  *  bigger figure and a title with more room, not a longer line. */
 export const SPREAD_GRID =
-  "xl:grid xl:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] 2xl:grid-cols-[minmax(0,1fr)_560px] xl:gap-x-16 2xl:gap-x-24 xl:items-start";
+  "xl:grid xl:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] 2xl:grid-cols-[minmax(0,1fr)_calc(560px*var(--reading-scale,1))] xl:gap-x-16 2xl:gap-x-24 xl:items-start";
 
 /** The left panel: pinned while the reader scrolls the column (`reader-panel`
  *  in `globals.css`). */

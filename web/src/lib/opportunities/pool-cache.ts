@@ -114,6 +114,7 @@ export function isCachedJobPool(pool: CachedPool): pool is CachedJobPool {
 }
 
 export interface PoolCacheKeyInput {
+  uploadInterests?: string[];
   surface: OpportunitySurface;
   requiredTopics: string[];
   exploreTopics?: string[];
@@ -174,6 +175,7 @@ export function derivePoolCacheKey(input: PoolCacheKeyInput): string {
     careerStage: input.careerStage?.trim() ?? "",
     locationPreferences: normalizeSet(input.locationPreferences),
     aiTier: input.aiTier,
+    uploadInterests: input.uploadInterests?.length ? normalizeSet(input.uploadInterests) : undefined,
     date: period,
   });
   const digest = createHash("sha256").update(signature).digest("hex").slice(0, 32);

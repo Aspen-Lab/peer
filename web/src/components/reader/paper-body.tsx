@@ -106,7 +106,7 @@ function Section({ section, index }: { section: ReadingSection; index: number })
       <h3 className="font-reading font-medium text-heading text-title leading-[1.3] mb-2">
         <MathText text={section.heading} />
       </h3>
-      <div className="font-reading text-title leading-[1.65] text-text-muted measure-paper space-y-4">
+      <div className="font-reading text-title leading-[1.65] text-text-muted measure-paper space-y-4 reading-justify">
         {following(-1)}
         {section.paragraphs.map((paragraph, i) => (
           <div key={i} className="space-y-4">

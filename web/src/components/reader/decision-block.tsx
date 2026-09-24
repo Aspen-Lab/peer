@@ -8,14 +8,19 @@
 
 import Link from "next/link";
 import { UPGRADE_HREF } from "@/lib/navigation/upgrade-destination";
-import type { Ref } from "react";
-import { buttonVariants } from "@/components/ui/button";
-import { IconArrowUpRight, IconLink } from "@/components/icons";
+import type { Ref, ReactNode } from "react";
+import { buttonVariants, IconButton } from "@/components/ui/button";
+import { IconArrowUpRight, IconExpand, IconLink, IconMoon, IconSun } from "@/components/icons";
 import { Kbd } from "@/components/ui/kbd";
 import { cn } from "@/lib/cn";
 import { SECTION_GAP } from "@/components/ui/band";
 import type { PaperReading } from "@/lib/papers/reading";
-import { BUTTON, DOI, progressSuffix } from "./copy";
+import { withThemeTransition, withZoomTransition } from "@/lib/theme";
+import { useSpread } from "./reader-layout";
+import { useProfileStore } from "@/store/profile";
+import { READING_SCALE_STEPS, useReadingPrefsStore } from "@/store/reading-prefs";
+import type { ColorTheme, ThemeMode } from "@/types";
+import { BUTTON, DOI, PROGRESS_LABEL, progressSuffix } from "./copy";
 
 const TOUCH_TARGET = "[@media(hover:none)]:min-h-11";
 /**
@@ -51,6 +56,8 @@ export function DecisionBlock({
   onCopy,
   onOpen,
   onCopyDoi,
+  uploadAction,
+  uploadStatus,
 }: {
   ref?: Ref<HTMLDivElement>;
   sentences: string[];
@@ -70,7 +77,40 @@ export function DecisionBlock({
   onCopy: () => void;
   onOpen: () => void;
   onCopyDoi: () => void;
+  uploadAction?: ReactNode;
+  uploadStatus?: ReactNode;
 }) {
+  // S15: the font-size ladder — read here rather than threaded through
+  // props, the same reasoning as `ReaderLayout`'s own `useReadingScale`
+  // (see reader-layout.tsx): this is the one place both the buttons and
+  // the clamp state live.
+  const scaleIndex = useReadingPrefsStore((s) => s.scaleIndex);
+  const increaseScale = useReadingPrefsStore((s) => s.increaseScale);
+  const decreaseScale = useReadingPrefsStore((s) => s.decreaseScale);
+  const atMaxScale = scaleIndex >= READING_SCALE_STEPS.length - 1;
+  const atMinScale = scaleIndex <= 0;
+
+  // S21: Fit needs the two-column spread to have a panel and a column to
+  // balance — read the same hook `page.tsx` already owns via
+  // `reader-layout.tsx`, not threaded as a prop, the same "read the hook
+  // directly" idiom this file's own S15/S16 comments establish.
+  const spread = useSpread();
+  const fit = useReadingPrefsStore((s) => s.fit);
+  const setFit = useReadingPrefsStore((s) => s.setFit);
+
+  // S16: sun = system (the existing default), moon = night — the same
+  // `mode:accent` plumbing the Profile page's own picker already drives, so
+  // the two stay in sync through one source of truth (`profile.colorTheme`).
+  const colorTheme = useProfileStore((s) => s.profile.colorTheme);
+  const updateColorTheme = useProfileStore((s) => s.updateColorTheme);
+  const [mode, accent] = colorTheme.split(":") as [ThemeMode, string];
+  const setMode = (nextMode: "system" | "dark") => {
+    // S17: a click fades the palette over ~1s; hydration and background
+    // profile syncs (which also call updateColorTheme indirectly via
+    // ThemeSync) never go through this wrapper, so they stay instant.
+    withThemeTransition(() => updateColorTheme(`${nextMode}:${accent}` as ColorTheme));
+  };
+
   return (
     <div ref={ref}>
       <p className={cn("reading-prose text-text-muted measure-lede", SECTION_GAP)}>
@@ -92,23 +132,6 @@ export function DecisionBlock({
         )}
       </p>
 
-      {stage && (
-        // Two pixels of progress under the sentence — the only chrome the
-        // model gets, and only while it works.
-        <div
-          role="progressbar"
-          aria-valuenow={Math.round(stage.pct)}
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-label={stage.label}
-          className="h-[2px] mt-3 measure-lede overflow-hidden bg-bg-secondary"
-        >
-          <div
-            className="h-full bg-accent transition-[width] duration-[var(--dur-base)] ease-expo motion-reduce:transition-none"
-            style={{ width: `${Math.max(0, Math.min(100, stage.pct))}%` }}
-          />
-        </div>
-      )}
 
       {/* From xl the block lives in the spread's 400–503px panel: the four
           lg pills need ≈510px on one row and would wrap 3+1, so there they
@@ -134,6 +157,7 @@ export function DecisionBlock({
             {readLabel ?? "Read it here"}
           </button>
         )}
+        <div className={uploadAction && source ? "flex w-full items-stretch gap-3" : "contents"}>
         {source && (
           <a
             href={source.url}
@@ -144,18 +168,21 @@ export function DecisionBlock({
               buttonVariants({ tone: onRead ? "soft" : "primary", size: "lg" }),
               COMMAND,
               TOUCH_TARGET,
+              uploadAction && "min-w-0 flex-1 h-auto min-h-10 px-3 py-2 leading-tight",
             )}
           >
             <Kbd pointerOnly className="mr-0.5">
               o
             </Kbd>
-            {source.label}
+            <span>{source.label}</span>
             {/* The one icon left on a command: it marks a destination — this
                 leaves the page — where the others only named their key back
                 to the reader. */}
             <IconArrowUpRight size={12} />
           </a>
         )}
+        {uploadAction}
+        </div>
         <button
           type="button"
           onClick={onSave}
@@ -192,6 +219,63 @@ export function DecisionBlock({
           {BUTTON.copy}
         </button>
       </div>
+      {uploadStatus}
+
+      {/* S15/S16/S18/S21: font-size, day/night and fit controls, in the
+          user's own order — A (big) · A (small) · sun · moon · fit. Sized
+          with the panel's own (non-scaling) type steps, never the
+          --reading-scale-driven reading tokens: only the article text
+          these buttons control moves, not the controls themselves. */}
+      <div className="flex items-center gap-2 mt-5">
+        <IconButton
+          aria-label="Larger text"
+          // S22: every zoom change eases over ~0.3s instead of snapping,
+          // wrapped at the call site — the same idiom S17's setMode above
+          // already uses for withThemeTransition.
+          onClick={() => withZoomTransition(increaseScale)}
+          disabled={atMaxScale}
+          aria-disabled={atMaxScale}
+          className="font-reading text-body-lg font-semibold"
+        >
+          A
+        </IconButton>
+        <IconButton
+          aria-label="Smaller text"
+          onClick={() => withZoomTransition(decreaseScale)}
+          disabled={atMinScale}
+          aria-disabled={atMinScale}
+          className="font-reading text-meta font-semibold"
+        >
+          A
+        </IconButton>
+        <IconButton
+          aria-label="Day reading mode"
+          aria-pressed={mode === "system"}
+          tone={mode === "system" ? "soft" : "ghost"}
+          onClick={() => setMode("system")}
+        >
+          <IconSun size={14} />
+        </IconButton>
+        <IconButton
+          aria-label="Night reading mode"
+          aria-pressed={mode === "dark"}
+          tone={mode === "dark" ? "soft" : "ghost"}
+          onClick={() => setMode("dark")}
+        >
+          <IconMoon size={14} />
+        </IconButton>
+        <IconButton
+          aria-label={fit ? "Book layout" : "Fit to screen"}
+          aria-pressed={fit}
+          tone={fit ? "soft" : "ghost"}
+          disabled={!spread}
+          title={!spread ? "Fit needs the two-column layout" : undefined}
+          // S22: Fit on/off eases like every other zoom change.
+          onClick={() => withZoomTransition(() => setFit(!fit))}
+        >
+          <IconExpand size={14} />
+        </IconButton>
+      </div>
 
       {doi && (
         <button
@@ -211,6 +295,30 @@ export function DecisionBlock({
           <IconLink size={12} className="shrink-0 translate-y-[2px] mr-1.5" />
           doi:{doi}
         </button>
+      )}
+
+      {stage && (
+        // S19: the last thing in the panel while generating — moved off
+        // the sentence, widened, and labelled, so it reads as the whole
+        // panel's own progress rather than a thin accent under one line.
+        <>
+          <div
+            role="progressbar"
+            aria-valuenow={Math.round(stage.pct)}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label={stage.label}
+            className="h-[6px] mt-3 overflow-hidden rounded-full bg-bg-secondary"
+          >
+            <div
+              className="h-full rounded-full bg-accent transition-[width] duration-300 ease-snap motion-reduce:transition-none"
+              style={{ width: `${Math.max(0, Math.min(100, stage.pct))}%` }}
+            />
+          </div>
+          <p aria-live="polite" className="font-mono text-meta text-text-muted mt-1.5">
+            {PROGRESS_LABEL}
+          </p>
+        </>
       )}
     </div>
   );

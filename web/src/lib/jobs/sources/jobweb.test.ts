@@ -4108,15 +4108,24 @@ describe("2-04 — every operator-funded provider is charged and metered", () =>
       forcedRebuildDayKey("user-1", new Date()),
     );
 
-    await jobweb.fetch(
-      query({
-        webSearch: {
-          tavilyApiKey: "USER-NOT-A-KEY",
-          systemSearchAllowed: false,
-          userId: "user-1",
-        },
-      }),
-    );
+    // Merge note (2026-09-23): a key that fails on every query is now REPORTED,
+    // not handed back as an empty result (sources/search-failure.ts — a dead
+    // Tavily key hid behind "no results" for a day on 2026-08-27). The fake
+    // key here fails every query, so the fan-out rejects; what this case is
+    // about — no breaker charge and no row for the reader's own key — is
+    // asserted after it, unchanged.
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    await expect(
+      jobweb.fetch(
+        query({
+          webSearch: {
+            tavilyApiKey: "USER-NOT-A-KEY",
+            systemSearchAllowed: false,
+            userId: "user-1",
+          },
+        }),
+      ),
+    ).rejects.toThrow(/tavily web search failed for every query/);
 
     expect(rows).toHaveLength(0);
     expect(

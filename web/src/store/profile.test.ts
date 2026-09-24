@@ -6,7 +6,8 @@ import {
   ANONYMOUS_CLIENT_ENTITLEMENT,
   type ClientEntitlement,
 } from "@/lib/entitlement/allowance";
-import { defaultProfile, type UserProfile } from "@/types";
+import { defaultProfile, type Paper, type UserProfile } from "@/types";
+import { cleanPreferenceLedger } from "@/lib/preferences/ledger";
 import {
   exportProfileDocument,
   migrateProfileStore,
@@ -493,5 +494,85 @@ describe("the client entitlement's third state (6-04)", () => {
     expect(text).toMatch(
       /partialize:\s*\(state\)\s*=>\s*\(\{\s*profile:\s*state\.profile\s*\}\)/,
     );
+  });
+});
+
+// 9-23 (A9-07): the upload-button's own success callback is a one-shot,
+// browser-only write — a navigation or offline gap between a successful
+// upload and the next profile sync can lose it. The uploads-list load and
+// the standalone reading-page load both call `recordUploadPreference`
+// again as a recovery path; both rely on it being genuinely idempotent per
+// `documentKey`, not merely "probably fine to call twice".
+describe("recordUploadPreference — idempotent recovery merge (9-23)", () => {
+  const uploadedPaper: Paper = {
+    id: "upload:aaaa000000000000",
+    title: "A private upload",
+    authors: [],
+    relevanceReason: "",
+    venue: "",
+    source: "other",
+    summaryIntro: "",
+    summaryExperimentKeywords: ["solid electrolyte"],
+    preferenceSignals: [
+      { key: "text:solid electrolyte", label: "solid electrolyte", source: "uploaded_article", confidence: 0.8 },
+    ],
+    summaryResultDiscussion: "",
+    isSaved: false,
+    uploadDocumentKey: "a".repeat(64),
+  };
+
+  beforeEach(() => {
+    useProfileStore.setState({ profile: { ...defaultProfile, preferenceLedger: {} } });
+  });
+
+  it("recording the same upload twice (list load + button callback) yields one weight, not two", () => {
+    // Fake timers + an explicit time advance between the two calls: without
+    // this, `recordUploadPreference` computes `at` fresh via
+    // `new Date().toISOString()` inside the same test tick, so two calls
+    // can coincidentally produce byte-identical timestamps and pass even if
+    // the underlying per-documentKey dedup were broken. Advancing real wall
+    // time between calls is what actually exercises the guarantee.
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-09-19T00:00:00.000Z"));
+      useProfileStore.getState().recordUploadPreference(uploadedPaper);
+      const once = useProfileStore.getState().profile.preferenceLedger;
+
+      vi.setSystemTime(new Date("2026-09-19T01:00:00.000Z"));
+      useProfileStore.getState().recordUploadPreference(uploadedPaper);
+      const twice = useProfileStore.getState().profile.preferenceLedger;
+
+      const entry = twice?.["text:solid electrolyte"];
+      expect(entry?.uploads?.[uploadedPaper.uploadDocumentKey!]).toBeDefined();
+      expect(Object.keys(entry?.uploads ?? {})).toHaveLength(1);
+      expect(twice).toEqual(once);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+// 9-23 (A9-07): confirm the field survives the actual round trip the app
+// puts it through — the server cleans on PUT and again on GET
+// (`app/api/profile/route.ts`), and the client's own `hydrateFromRemote`
+// installs whatever comes back verbatim (no re-cleaning at hydrate time).
+describe("a ledger with uploads survives clean -> server -> hydrate (9-23)", () => {
+  it("keeps the uploads evidence through two cleanPreferenceLedger passes and a hydrate", () => {
+    const raw = {
+      "text:solid electrolyte": {
+        key: "text:solid electrolyte", label: "solid electrolyte", source: "uploaded_article" as const,
+        positive: 0, negative: 0, lastSeenAt: "2026-09-19T00:00:00.000Z",
+        uploads: { [("b").repeat(64)]: { at: "2026-09-19T00:00:00.000Z", weight: 1.6 } },
+      },
+    };
+    // PUT then GET, exactly as the server route does on each side of a sync.
+    const afterPut = cleanPreferenceLedger(raw);
+    const afterGet = cleanPreferenceLedger(afterPut);
+
+    useProfileStore.setState({ profile: { ...defaultProfile, preferenceLedger: {} } });
+    useProfileStore.getState().hydrateFromRemote({ preferenceLedger: afterGet });
+
+    const hydrated = useProfileStore.getState().profile.preferenceLedger;
+    expect(hydrated?.["text:solid electrolyte"]?.uploads).toEqual(raw["text:solid electrolyte"].uploads);
   });
 });

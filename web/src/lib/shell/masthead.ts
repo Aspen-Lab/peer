@@ -60,8 +60,13 @@ export interface ShellLink {
   route: ShellRoute;
 }
 
-/** Search · Saved · Profile — weekly, weekly, rare; the daily surface is the wordmark. */
+/**
+ * Main · Search · Saved · Profile — a desktop-mouse click back to the
+ * briefing (8-01/S27): the phone's "Today" cell and the `g h` chord already
+ * reach it, but nothing on the masthead itself did.
+ */
 export const SHELL_LINKS: readonly ShellLink[] = [
+  { href: "/", label: "Main", route: "briefing" },
   { href: "/search", label: "Search", route: "search" },
   { href: "/saved", label: "Saved", route: "saved" },
   { href: "/profile", label: "Profile", route: "profile" },
@@ -132,15 +137,21 @@ export function thumbBarMode(route: ShellRoute): ThumbBarMode {
 export type SearchKeyTarget = { action: "focus" } | { action: "push"; href: "/search" };
 
 /**
- * `/` is honest now: from any route it goes to Search; on Search it focuses
- * the box. The old handler only looked for `#peer-search`, which exists on
- * one route, so from the briefing the key did nothing while the help sheet
- * said "Anywhere".
+ * `/` is honest: where the page has a search box it focuses it; anywhere
+ * else it goes to Search, whose box focuses itself on arrival. The old
+ * handler only looked for `#peer-search` and did nothing where there was
+ * none, while the help sheet said "Anywhere" — the push is what fixed that.
+ * The box now stands on two routes, Search and the briefing, and the rule
+ * reads the page rather than naming them: a route that gains a box gains the
+ * key with it.
  */
 export function searchKeyTarget(
   pathname: string | null | undefined,
   hasSearchInput: boolean,
 ): SearchKeyTarget {
-  if (shellRoute(pathname) === "search" && hasSearchInput) return { action: "focus" };
+  const route = shellRoute(pathname);
+  if (hasSearchInput && (route === "search" || route === "briefing")) {
+    return { action: "focus" };
+  }
   return { action: "push", href: "/search" };
 }

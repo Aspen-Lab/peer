@@ -1,6 +1,10 @@
 import { fetchPagesConcurrently } from "@/lib/opportunities/page-fetch";
 import { cleanDisplayText } from "@/lib/text/clean";
 import {
+  searchHttpFailure,
+  WebSearchProviderError,
+} from "./search-failure";
+import {
   isGeminiSearchAvailable,
   isPreScreenedOut,
   pageDeclaresEventFromHtml,
@@ -344,7 +348,9 @@ async function searchDiscoveryEngine(
   const endpoint = searchEndpoint();
   if (!endpoint) return [];
   const token = await accessToken();
-  if (!token) return [];
+  if (!token) {
+    throw new Error("vertex credentials unavailable (see credential error above)");
+  }
   const project = vertexSearchProject();
 
   const res = await fetch(endpoint, {
@@ -368,13 +374,9 @@ async function searchDiscoveryEngine(
   });
 
   if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    console.error(
-      "[sources/vertex-search] non-ok response:",
-      res.status,
-      body.slice(0, 400),
-    );
-    return [];
+    const failure = await searchHttpFailure("vertex", res);
+    console.error("[sources/vertex-search] non-ok response:", failure.message);
+    throw failure;
   }
   const data = (await res.json()) as { results?: unknown };
   return Array.isArray(data.results) ? (data.results as DiscoveryResult[]) : [];
@@ -516,6 +518,11 @@ export async function searchVertex(
   const search = options.search ?? searchDiscoveryEngine;
 
   let rows: WebResult[] = [];
+  // Held rather than rethrown on the spot: a Vertex outage is exactly the case
+  // the grounding backfill below exists for, and failing here would disable the
+  // designed fallback. It is re-raised only if the backfill also came up empty
+  // — see the end of this function.
+  let searchError: unknown;
   try {
     const raw = await search(query, limit);
     const seen = new Set<string>();
@@ -530,6 +537,7 @@ export async function searchVertex(
     }
   } catch (err) {
     console.error("[sources/vertex-search] search error:", err);
+    searchError = err;
     rows = [];
   }
 
@@ -546,6 +554,13 @@ export async function searchVertex(
     deadlineAt - Date.now() > GROUNDING_BACKFILL_MIN_HEADROOM_MS
   ) {
     rows = await backfillWithGrounding(query, rows, limit, deadlineAt, options);
+  }
+
+  // Nothing survived AND the index call itself failed: report it. Without this
+  // the caller cannot tell a broken Search App from a query the web has no
+  // answer for, which is the ambiguity sources/search-failure.ts exists to end.
+  if (rows.length === 0 && searchError !== undefined) {
+    throw new WebSearchProviderError("vertex", searchError);
   }
 
   return rows.slice(0, limit);

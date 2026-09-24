@@ -3,6 +3,7 @@ import {
   hasUsableProviderOverride,
   resolveProvider,
 } from "@/lib/llm/providers/registry";
+import { reportModelTier } from "@/lib/llm/provider-models";
 import type { ProviderOverrideConfig } from "@/lib/llm/providers/types";
 import {
   emptyReport,
@@ -10,6 +11,7 @@ import {
   withoutFigures,
   type PaperReport,
   type PaperReportRequest,
+  reviewPaperLabel,
 } from "@/lib/papers/report";
 import { verifyReportEvidence } from "@/lib/papers/evidence";
 import { generateDeepReport, buildPaywalledFallback } from "@/lib/papers/deep-report";
@@ -24,6 +26,8 @@ import {
   consumeDeepReport,
   type DeepReportDecision,
 } from "@/lib/usage/deep-report-quota";
+import { bareUploadId } from "@/lib/papers/upload-store";
+import { ownedUpload, PRIVATE_UPLOAD_HEADERS } from "@/lib/papers/upload-access";
 
 export const dynamic = "force-dynamic";
 // Deep reports (full-text fetch + two model passes + figure binding) have been
@@ -103,9 +107,24 @@ function buildShallowPrompt(body: ExtendedRequest): string {
       }
     : {};
 
+  const isReview = reviewPaperLabel(paper) !== null;
+  const reviewSchema = isReview
+    ? {
+        reviewContents: {
+          sections: [
+            {
+              heading: "a major part of the review as the abstract names it",
+              summary: "1-2 sentences on what that part covers (only parts the abstract actually names; max 8)",
+            },
+          ],
+        },
+      }
+    : {};
+
   return JSON.stringify({
-    task:
-      "Create a structured Peer paper report from the paper's title and abstract. Every item carries an `evidence` sentence copied character-for-character from the abstract; omit any item you cannot support that way. Do not invent numbers.",
+    task: isReview
+      ? "Create a structured Peer paper report for a REVIEW or SURVEY from the paper's title and abstract. Every claim item carries an `evidence` sentence copied character-for-character from the abstract; omit any item you cannot support that way. Do not invent numbers."
+      : "Create a structured Peer paper report from the paper's title and abstract. Every claim item carries an `evidence` sentence copied character-for-character from the abstract; omit any item you cannot support that way. Every key result also carries a `novelty` line saying what is new about it compared to prior work. Do not invent numbers.",
     userContext: contextHint || "",
     ...(project ? { readerProject: project } : {}),
     paper: {
@@ -124,12 +143,15 @@ function buildShallowPrompt(body: ExtendedRequest): string {
         },
       ],
       whatItProposes: {
-        summary: "2-3 plain-English sentences describing the paper's proposal or scope. Do not include the method list here.",
+        summary: "one plain paragraph, at most 2 sentences, describing the paper's proposal or scope. Do not include the method list here.",
         methods: [
           {
             text: "one concrete method or experiment sentence naming the actual experiment, dataset, instrument, measurement, simulation, or evaluation the abstract states (max 4 items; empty when the abstract names none)",
             evidence: evidenceRule,
           },
+        ],
+        newHere: [
+          "a short 'new here' line — the novelty, stated only where it differs from `summary`, as the abstract states it; omit entirely if there is nothing to add beyond the summary (max 2 items)",
         ],
       },
       resultsAndSignificance: {
@@ -139,15 +161,20 @@ function buildShallowPrompt(body: ExtendedRequest): string {
             title: "short result label",
             detail: "one concrete result sentence grounded in the abstract",
             evidence: evidenceRule,
+            novelty: "one sentence saying what specifically is new about this result compared to prior work",
           },
         ],
       },
+      ...reviewSchema,
       ...relationSchema,
     },
     rules: [
       "Return ONLY valid JSON.",
       "`evidence` is one sentence copied character-for-character from the abstract. Do not paraphrase it, shorten it, or merge sentences.",
-      "Omit any item you cannot support with such a sentence. An empty array is correct when nothing qualifies.",
+      "Omit any claim item you cannot support with such a sentence. An empty array is correct when nothing qualifies.",
+      "`newHere` (proposal) and `novelty` (per result) are Peer's reading and carry no evidence sentence; keep them specific to this abstract, never generic.",
+      "Do not repeat a sentence from `summary` inside `newHere`; if the novelty is not separable from the summary, leave `newHere` empty.",
+      "No sentence in `summary` or `newHere` exceeds about 25 words; use plain, high-school-reading-level wording.",
       "Produce no limitations and no next step.",
       ...(project
         ? ["`relationToYourWork.basedOn` is the reader's project text copied back."]
@@ -160,7 +187,7 @@ const SHALLOW_SYSTEM = [
   "You are Peer, a careful research assistant.",
   "Write concise paper reports for researchers from the title and abstract alone.",
   "Every claim carries an `evidence` sentence copied character-for-character from the abstract; a claim without one is omitted.",
-  "Keep proposal and method separate: proposal says what the paper tries to do; methods say what experiments or evaluations the abstract states were used.",
+  "Keep proposal, method and novelty separate: proposal says what the paper tries to do; methods say what experiments or evaluations the abstract states were used; novelty says what is new against prior work.",
   "Do not fabricate experimental values, claims, or figures.",
   "Return only valid JSON.",
 ].join(" ");
@@ -219,7 +246,9 @@ async function generateShallowReport(
     const raw = await provider.generateJsonText({
       systemPrompt: SHALLOW_SYSTEM,
       userPrompt: buildShallowPrompt(body),
-      maxTokens: 1800,
+      // Room for the restored sections (new-here lines, review contents).
+      maxTokens: 2400,
+      tier: reportModelTier(),
     });
     const parsed = parseJsonObject(raw);
     if (!parsed) return emptyReport("fallback");
@@ -273,6 +302,33 @@ function bestPaperUrl(paper: PaperReportRequest["paper"]): string | null {
   return paper.linkPaper ?? paper.linkArxiv ?? null;
 }
 
+/** 9-14 (A9-13): the bare hash16 of this paper's private full-text
+ * supplement, if any — either the paper's own `upload:` id, or a
+ * `fullTextUploadId` attached to a foreign paper. `null` when nothing
+ * private is involved (nothing to guard against a mid-flight delete/block). */
+function paperPrivateUploadHash(paper: PaperReportRequest["paper"]): string | null {
+  const id = paper.fullTextUploadId ?? (paper.id?.startsWith("upload:") ? paper.id : undefined);
+  return typeof id === "string" ? bareUploadId(id) : null;
+}
+
+/**
+ * 9-14 (A9-13, matrix C5): re-reads the upload's own meta after the
+ * long-running full-text/model/figure work and refuses to let a report
+ * built from it land if the asset was deleted, blocked, or replaced by a
+ * newer revision while generation was running — `ownedUpload` (9-12) is the
+ * one place `status` is checked, and comparing the captured `revision`
+ * catches a same-owner replace that `status` alone would not (the new
+ * asset is also "ready"). `privateHash === null` means nothing private was
+ * involved at all; always safe to proceed.
+ */
+async function uploadStillCurrent(privateHash: string | null, startRevision: number | undefined): Promise<boolean> {
+  if (!privateHash) return true;
+  const current = await ownedUpload(privateHash);
+  return current !== null && current.revision === startRevision;
+}
+
+const UPLOAD_GONE_RESPONSE = { error: "Upload no longer available" } as const;
+
 /**
  * ABC-freemium 3-03 · R-QUOTA-1 · R-QUOTA-3 · Ruling 9 points 1-2.
  *
@@ -288,6 +344,8 @@ function streamReport(
   body: ExtendedRequest,
   ctx: ReportUsageCtx,
   quotaDecision: DeepReportDecision,
+  privateHash: string | null,
+  startRevision: number | undefined,
 ): Response {
   const readable = new ReadableStream<Uint8Array>({
     async start(controller) {
@@ -371,7 +429,7 @@ function streamReport(
           pct: 10,
         });
         const fullText = await getFullText({
-          paperId: body.paper.id,
+          paperId: body.paper.fullTextUploadId ?? body.paper.id,
           url: bestPaperUrl(body.paper),
           doi: body.paper.doi ?? null,
           arxivId: arxivIdFromPaper(body.paper),
@@ -418,7 +476,7 @@ function streamReport(
           pct: 35,
         });
         const figurePoolPromise = getFigurePool({
-          itemId: body.paper.id,
+          itemId: body.paper.fullTextUploadId ?? body.paper.id,
           url: bestPaperUrl(body.paper) ?? undefined,
           doi: body.paper.doi ?? undefined,
           paperTitle: body.paper.title,
@@ -466,6 +524,16 @@ function streamReport(
           figurePool,
         });
 
+        // 9-14 (A9-13, matrix C5): the full-text fetch, both model passes and
+        // figure binding above can together run close to a minute — re-check
+        // right before this report is ever sent or the client is told to
+        // cache it.
+        if (!(await uploadStillCurrent(privateHash, startRevision))) {
+          send({ type: "error", message: UPLOAD_GONE_RESPONSE.error });
+          close();
+          return;
+        }
+
         finish(bound);
       } catch (err) {
         console.error("[papers/report] streaming flow failed:", err);
@@ -492,7 +560,7 @@ function streamReport(
 
 // ── POST handler ─────────────────────────────────────────────────────
 
-export async function POST(req: NextRequest) {
+async function handlePost(req: NextRequest) {
   let body: ExtendedRequest;
   try {
     body = (await req.json()) as ExtendedRequest;
@@ -500,8 +568,21 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  if (!body.paper?.id || !body.paper.title) {
+  if (typeof body?.paper?.id !== "string" || !body.paper.id || typeof body.paper.title !== "string" || !body.paper.title) {
     return NextResponse.json({ error: "paper is required" }, { status: 400 });
+  }
+  // 9-14 (A9-13, matrix C5): the revision captured here, at the very start
+  // of the request, is what both the JSON deep path below and the NDJSON
+  // stream re-check against after their own long-running full-text/model
+  // work — before this specific generation is ever cached or returned.
+  const privateHash = paperPrivateUploadHash(body.paper);
+  let startRevision: number | undefined;
+  if (privateHash) {
+    const meta = await ownedUpload(privateHash);
+    if (!meta || (body.paper.fullTextUploadId && !meta.paperIds?.includes(body.paper.id))) {
+      return NextResponse.json({ error: "Upload not found." }, { status: 404 });
+    }
+    startRevision = meta.revision;
   }
 
   // ABC-freemium 1-06 · R-SEC-2 — **one entitlement check, before every
@@ -548,7 +629,7 @@ export async function POST(req: NextRequest) {
     req.headers.get("accept")?.includes("application/x-ndjson") === true ||
     body.stream === true;
   if (wantsStream) {
-    return streamReport(body, ctx, quotaDecision);
+    return streamReport(body, ctx, quotaDecision, privateHash, startRevision);
   }
 
   // ── Deep path ────────────────────────────────────────────────────
@@ -576,7 +657,7 @@ export async function POST(req: NextRequest) {
 
     try {
       const fullText = await getFullText({
-        paperId: body.paper.id,
+        paperId: body.paper.fullTextUploadId ?? body.paper.id,
         url: bestPaperUrl(body.paper),
         doi: body.paper.doi ?? null,
         arxivId: arxivIdFromPaper(body.paper),
@@ -618,7 +699,7 @@ export async function POST(req: NextRequest) {
           provider,
         }),
         getFigurePool({
-          itemId: body.paper.id,
+          itemId: body.paper.fullTextUploadId ?? body.paper.id,
           url: bestPaperUrl(body.paper) ?? undefined,
           doi: body.paper.doi ?? undefined,
           paperTitle: body.paper.title,
@@ -645,6 +726,13 @@ export async function POST(req: NextRequest) {
         figurePool,
       });
 
+      // 9-14 (A9-13, matrix C5): the full-text fetch, both model passes and
+      // figure binding above can together run close to a minute — re-check
+      // right before this report is ever sent or cached.
+      if (!(await uploadStillCurrent(privateHash, startRevision))) {
+        return NextResponse.json(UPLOAD_GONE_RESPONSE, { status: 410 });
+      }
+
       return NextResponse.json(bound);
     } catch (err) {
       console.error("[papers/report] deep flow failed:", err);
@@ -654,4 +742,12 @@ export async function POST(req: NextRequest) {
 
   // ── Shallow path (default) ──────────────────────────────────────
   return NextResponse.json(await generateShallowReport(body, body.llmOverride, ctx));
+}
+
+export async function POST(req: NextRequest) {
+  const response = await handlePost(req);
+  const streaming = response.headers.get("content-type")?.includes("ndjson");
+  for (const [key, value] of Object.entries(PRIVATE_UPLOAD_HEADERS)) response.headers.set(key, value);
+  if (streaming) response.headers.set("Cache-Control", "private, no-store, no-transform");
+  return response;
 }

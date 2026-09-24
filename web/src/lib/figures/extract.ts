@@ -1,7 +1,10 @@
-import { tryPdfCandidates } from "./pdf-extract";
+import { extractPdfCandidatesFromPath, tryPdfCandidates } from "./pdf-extract";
 import { matchFigureSemantically } from "./semantic-match";
 import type { FigureMatchContext } from "./match-context";
 import { matchFigureVisually } from "./vision-match";
+import { classifyHardAccessStatus } from "@/lib/papers/paywall-status";
+import { bareUploadId, pdfPath } from "@/lib/papers/upload-store";
+import { ownedUpload } from "@/lib/papers/upload-access";
 
 const FETCH_TIMEOUT_MS = 7_000;
 const MAX_BODY_BYTES = 2_500_000;
@@ -37,16 +40,34 @@ interface ExtractInput extends FigureSourceInput {
   ctx: FigureMatchContext;
 }
 
+// Ruling 20 (round 7, S23): "rate_limited" stays here even though nothing in
+// this file produces it any more (the Semantic Scholar figure branch below
+// is gone — the Graph API has no `figures` field, so every call to it was
+// always either a 400 or, when throttled, a 429; see the ruling). Kept
+// because `components/paper-figure.tsx` (frozen this round) narrows against
+// the exact `FigureStatus` union via its own `FigureState["status"]` field —
+// removing this member would make that file's own `status === "rate_limited"`
+// checks a compile error there, in a file this round must not touch.
 export type FigureStatus =
   | "found"
   | "paywalled"
   | "caption_mismatch"
   | "no_figures"
-  | "source_unavailable";
+  | "source_unavailable"
+  | "rate_limited";
 
 export interface FigureResult {
   imageUrl: string | null;
   caption?: string | null;
+  // Ruling 20: kept here despite nothing in THIS file producing
+  // "semantic-scholar" any more — `lib/figures/pdf-extract.ts` (frozen this
+  // round) independently declares its own `FigureSource` type with the same
+  // literal, and its exports (`extractPdfCandidatesFromPath`/
+  // `tryPdfCandidates`) return values typed against it that flow into this
+  // file's `FigureCandidate`/`AttemptResult`. Narrowing this union breaks
+  // that assignment without touching the frozen file — exactly the "stays
+  // in the type if other code reads it" case the ruling names, just via a
+  // structural type rather than a literal `===` check.
   source?: "semantic-scholar" | "ar5iv" | "publisher" | "open-access" | "og" | null;
   status: FigureStatus;
   reason?: string | null;
@@ -62,7 +83,14 @@ interface FigureCandidate {
   qualityHint?: "high" | "medium" | "low";
 }
 
-interface AttemptResult {
+// Exported for tests only (4-01) — lets a test build a specific attempts
+// array directly against `finalDiagnostic`'s precedence, without mocking the
+// several network branches that would otherwise be needed to produce one.
+// Ruling 20: "rate_limited" dropped here (unlike `FigureStatus` above) —
+// this is an internal, per-attempt status nothing outside this file reads,
+// and nothing produces it any more now that the Semantic Scholar branch is
+// gone, so keeping it would be a dead union member with no producer.
+export interface AttemptResult {
   status: "candidates" | "paywalled" | "no_figures" | "source_unavailable";
   candidates: FigureCandidate[];
   reason?: string;
@@ -177,11 +205,6 @@ function bareArxivId(itemId: string): string | null {
   return match ? match[1].replace(/^abs\//, "") : null;
 }
 
-function bareOpenAlexId(itemId: string): string | null {
-  const match = itemId.match(/^openalex:(.+)$/i);
-  return match ? match[1] : null;
-}
-
 function cleanDoi(doi: string): string {
   return doi.replace(/^https?:\/\/(?:dx\.)?doi\.org\//i, "").trim();
 }
@@ -233,6 +256,22 @@ const OPEN_ACCESS_HOST_PATTERNS = [
   /(^|\.)biorxiv\.org$/i,
   /(^|\.)medrxiv\.org$/i,
 ];
+// 1-19: a journal cover/masthead image is not caught by BAD_URL_PATTERNS's
+// logo/icon patterns above, but it is exactly the "never fabricate" case the
+// og:image honesty guard exists to reject — kept separate from the general
+// logo list rather than folded in, since it only matters for the og:image
+// fallback below, not the wider candidate-scoring code that reuses
+// BAD_URL_PATTERNS for other purposes.
+const COVER_IMAGE_URL_PATTERNS: RegExp[] = [
+  /\/covers?\//i,
+  /journal[-_]?cover/i,
+  /\bmasthead\b/i,
+  /\bbanner\b/i,
+];
+
+function looksLikeCoverImage(url: string): boolean {
+  return COVER_IMAGE_URL_PATTERNS.some((pattern) => pattern.test(url));
+}
 
 function looksLikeLogo(url: string): boolean {
   return BAD_URL_PATTERNS.some((pattern) => pattern.test(url));
@@ -528,6 +567,12 @@ function sourcePriority(source: FigureCandidate["source"]): number {
   if (source === "open-access") return 60;
   if (source === "ar5iv") return 56;
   if (source === "publisher") return 52;
+  // Ruling 20: never actually produced any more (the Semantic Scholar
+  // figure branch that used to return this source is gone), but the type
+  // still structurally allows it — see `FigureResult["source"]`'s own
+  // comment. Kept at its old, low priority rather than silently falling
+  // through to the same `return 0` as "og" for an input this function
+  // could still type-check against.
   if (source === "semantic-scholar") return 18;
   if (source === "og") return 0;
   return 0;
@@ -598,6 +643,7 @@ async function chooseCandidate(
   ctx: FigureMatchContext,
   query?: string,
   paperTitle?: string,
+  allowModel = true,
 ): Promise<CandidateSelection> {
   const valid = candidates.filter((candidate) => !looksLikeLogo(candidate.imageUrl));
   if (valid.length === 0) {
@@ -655,6 +701,8 @@ async function chooseCandidate(
       matchedBy: "keyword",
     };
   }
+
+  if (!allowModel) return { candidate: bestQualityCandidate(valid) ?? valid[0], status: "found", matchedBy: "fallback" };
 
   const semantic = await matchFigureSemantically({
     paperTitle,
@@ -754,47 +802,6 @@ function candidateResult(
   };
 }
 
-interface SSFigure {
-  caption?: string;
-  url?: string;
-}
-
-async function trySemanticScholarCandidates(ssPaperId: string): Promise<AttemptResult> {
-  const apiUrl =
-    `https://api.semanticscholar.org/graph/v1/paper/${encodeURIComponent(ssPaperId)}` +
-    "?fields=figures,title";
-  const res = await timedFetch(apiUrl, {
-    headers: {
-      Accept: "application/json",
-      ...(process.env.SEMANTIC_SCHOLAR_API_KEY
-        ? { "x-api-key": process.env.SEMANTIC_SCHOLAR_API_KEY }
-        : {}),
-    },
-  });
-  if (!res || !res.ok) return { status: "source_unavailable", candidates: [] };
-
-  try {
-    const data = (await res.json()) as { figures?: SSFigure[] };
-    const candidates = (data.figures ?? [])
-      .map((figure, ordinal): FigureCandidate | null => {
-        if (!figure.url || looksLikeLogo(figure.url)) return null;
-        return {
-          imageUrl: figure.url,
-          caption: figure.caption ?? null,
-          source: "semantic-scholar",
-          ordinal,
-          qualityHint: looksLowResUrl(figure.url) ? "low" : looksHighResUrl(figure.url) ? "high" : "medium",
-        };
-      })
-      .filter((candidate): candidate is FigureCandidate => candidate !== null);
-    return candidates.length > 0
-      ? { status: "candidates", candidates }
-      : { status: "no_figures", candidates: [], reason: "Semantic Scholar did not expose any paper figures for this record." };
-  } catch {
-    return { status: "source_unavailable", candidates: [] };
-  }
-}
-
 function isAr5ivErrorPage(html: string): boolean {
   return (
     /ar5iv\s+could\s+not\s+(?:generate|render|process)/i.test(html) ||
@@ -802,6 +809,51 @@ function isAr5ivErrorPage(html: string): boolean {
     /no\s+ar5iv\s+rendering\s+available/i.test(html) ||
     /conversion\s+to\s+html\s+had\s+a\s+fatal\s+error/i.test(html)
   );
+}
+
+function safeHostname(url: string): string | null {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return null;
+  }
+}
+
+// 2-04: a short, closed phrase list for a thin bot-mitigation/challenge stub
+// — broadened from 1-21's single "cookie" word after a Springer DOI
+// resolved to a `link.springer.com` "Client Challenge" page (a bare CSP/JS
+// challenge stub, no cookie wording at all, that a plain retry never
+// clears). Still a generic, content-shaped signature, never a host name —
+// per §1d, "one publisher-shaped fix that works across hosts beats
+// per-host patches." Kept short and closed on purpose: a stub shape none
+// of these phrases cover is a gap to record for A, not a reason to widen
+// this inline.
+const CHALLENGE_STUB_PHRASES =
+  /\bcookie\b|\bclient challenge\b|\bchecking your browser\b|\bjust a moment\b|\bverify you are human\b|\bddos protection by\b/i;
+
+// 1-21: a generic "this looks like a stub, not real content" check, the same
+// kind `isAr5ivErrorPage` above already is for a different stub — applies to
+// any publisher whose access gateway bounces an unauthenticated request
+// through an identity-check page rather than serving (or cleanly rejecting)
+// the article. Not a nature.com-specific branch (per §1d), even though
+// Nature is the only host this round observed it on.
+function looksLikeBouncePage(finalUrl: string, html: string): boolean {
+  const host = safeHostname(finalUrl);
+  const hostLooksLikeIdp = Boolean(host && /^idp\./i.test(host));
+  const pathLooksLikeTransit = /\/transit(?:[/?]|$)/i.test(finalUrl);
+  // 2-04: match against the full `html` (including <title>, where Springer's
+  // "Client Challenge" signal lives), not a stripped-tags body-text
+  // extraction, which would remove the very text this needs to see.
+  // 2-04: match against the full `html` (including <title>, where Springer's
+  // "Client Challenge" signal lives), not a stripped-tags body-text
+  // extraction, which would remove the very text this needs to see.
+  const looksLikeThinChallengeStub = html.length < 8_000 && CHALLENGE_STUB_PHRASES.test(html);
+  return hostLooksLikeIdp || pathLooksLikeTransit || looksLikeThinChallengeStub;
+}
+
+function bouncePageReason(finalUrl: string): string {
+  const host = safeHostname(finalUrl) ?? finalUrl;
+  return `Peer reached an access-check page at ${host}, not the article itself.`;
 }
 
 /**
@@ -975,9 +1027,23 @@ function paywallReason(url: string): string {
   }
 }
 
-function appearsPaywalled(url: string, res: Response, html: string): boolean {
+/**
+ * 2-01 (Ruling 9, §1j): an aggregator/free host's own 401/402/403/451 is an
+ * anti-bot block, not a subscription gate — worded separately from
+ * `paywallReason` so figure-lookup honesty never claims a paywall on a host
+ * that was never a publisher in the first place.
+ */
+function blockedReason(url: string): string {
+  try {
+    const host = new URL(url).hostname.replace(/^www\./, "");
+    return `Peer reached ${host}, but that source blocked this request.`;
+  } catch {
+    return "Peer reached the source, but it blocked this request.";
+  }
+}
+
+function appearsPaywalled(url: string, html: string): boolean {
   if (hostLooksOpenAccess(url)) return false;
-  if ([401, 402, 403, 451].includes(res.status)) return true;
   if (/captcha/i.test(html)) return true;
   const lowered = html.toLowerCase();
   const phrases = [
@@ -996,12 +1062,27 @@ function appearsPaywalled(url: string, res: Response, html: string): boolean {
   return phrases.some((phrase) => lowered.includes(phrase)) && !/creative commons|cc-by|free full text|open access/i.test(html);
 }
 
-async function tryHtmlCandidates(
+// Exported for tests only (1-22) — every other caller in this file reaches
+// it through `buildCandidatePool`/`getCandidatePool`.
+export async function tryHtmlCandidates(
   url: string,
   source: FigureCandidate["source"],
 ): Promise<AttemptResult> {
   const res = await timedFetch(url);
   if (!res || !res.ok) {
+    // 1-22: a hard 401/402/403/451 here is the same publisher access gate
+    // 1-16 fixed for the report's own full-text path — Wiley/ACS both
+    // hard-403 after their DOI redirect resolves correctly, and were
+    // reported as `source_unavailable` ("could not reach") instead.
+    // 2-01: except on an aggregator/free host (Ruling 9, §1j), where it's a
+    // block, not a paywall — the shared helper's own host list replaces this
+    // call site's narrower `hostLooksOpenAccess` guard (still used below by
+    // the phrase-based `appearsPaywalled`, unrelated to this check).
+    if (res) {
+      const verdict = classifyHardAccessStatus(url, res.status);
+      if (verdict === "paywalled") return { status: "paywalled", candidates: [], reason: paywallReason(url) };
+      if (verdict === "blocked") return { status: "source_unavailable", candidates: [], reason: blockedReason(url) };
+    }
     return {
       status: "source_unavailable",
       candidates: [],
@@ -1022,9 +1103,9 @@ async function tryHtmlCandidates(
     };
   }
 
-  const finalUrl = res.url || url;
-  const html = await readBoundedText(res);
-  if (appearsPaywalled(finalUrl, res, html)) {
+  let finalUrl = res.url || url;
+  let html = await readBoundedText(res);
+  if (appearsPaywalled(finalUrl, html)) {
     return {
       status: "paywalled",
       candidates: [],
@@ -1032,7 +1113,50 @@ async function tryHtmlCandidates(
     };
   }
 
+  // 1-21: a 2xx HTML response can still be an intermediate identity-check
+  // stub rather than the article — Nature's DOI resolution sends every
+  // unauthenticated request through one (`idp.nature.com/transit`, ~3KB,
+  // a "checking your browser" cookie notice). Reporting this as "reached
+  // the source page, but it did not expose extractable figures" (today's
+  // `no_figures` message, a few lines down) would be false — Peer never saw
+  // the article. One retry first: a generic "small bounce page" heuristic
+  // (not a nature.com-specific branch, per §1d) since some publishers' bounce
+  // is a one-off transient hiccup a plain retry clears. Live-verified against
+  // a real Nature.com DOI this round: for Nature specifically, neither a
+  // plain retry nor one that replayed the bounce page's own Set-Cookie header
+  // as a Cookie header got past it (both bounced again, with a fresh transit
+  // code each time) — so this gateway is not a transient/cookie-missing case
+  // a Node-side retry can clear, and no cookie-relay mechanism was added
+  // (nothing to commit to that was shown to work). The retry still runs
+  // because it is cheap and may help a different, genuinely transient bounce
+  // this round never observed; when it does not clear, the result is at
+  // least an honest `source_unavailable` instead of a false `no_figures`.
+  if (looksLikeBouncePage(finalUrl, html)) {
+    const retryRes = await timedFetch(url);
+    const retryFinalUrl = retryRes?.url || url;
+    const retryHtml = retryRes?.ok ? await readBoundedText(retryRes) : "";
+    if (retryRes?.ok && !looksLikeBouncePage(retryFinalUrl, retryHtml)) {
+      finalUrl = retryFinalUrl;
+      html = retryHtml;
+    } else {
+      return {
+        status: "source_unavailable",
+        candidates: [],
+        reason: bouncePageReason(finalUrl),
+      };
+    }
+  }
+
   const candidates = htmlFigureCandidates(html, finalUrl, source);
+  // 1-19: fold the graphical-abstract/og:image fallback in here (rather than
+  // only in `extractFigure`'s query-less last resort) so `getFigurePool` —
+  // used by every deep-report section's figure binding, and by `/api/figure`
+  // whenever a `query` is supplied — can reach it too. Pushed as one extra,
+  // low-priority candidate (`sourcePriority` already ranks "og" below every
+  // other source) so a real in-article figure still wins when both exist.
+  const ogCandidate = ogImageCandidate(html, finalUrl, candidates.length);
+  if (ogCandidate) candidates.push(ogCandidate);
+
   if (candidates.length === 0) {
     return {
       status: "no_figures",
@@ -1110,7 +1234,10 @@ async function collectSourceLinks(input: FigureSourceInput): Promise<SourceLink[
   });
 }
 
-function finalDiagnostic(
+// Exported for tests only (4-01) — see the `AttemptResult` export comment
+// above; every product call site still reaches this only through
+// `extractFigure`.
+export function finalDiagnostic(
   attempts: AttemptResult[],
   mismatchReason?: string,
 ): FigureResult {
@@ -1149,6 +1276,20 @@ function finalDiagnostic(
     };
   }
 
+  const sourceUnavailable = attempts.find((attempt) => attempt.status === "source_unavailable");
+  if (sourceUnavailable) {
+    return {
+      imageUrl: null,
+      source: null,
+      status: "source_unavailable",
+      reason:
+        sourceUnavailable.reason ??
+        "Peer could not reach a usable full-text source for this paper's figures.",
+      hideFigure: false,
+      matchedBy: null,
+    };
+  }
+
   return {
     imageUrl: null,
     source: null,
@@ -1172,8 +1313,22 @@ interface CachedPool {
   candidates: FigureCandidate[];
   attempts: AttemptResult[];
   ts: number;
+  /** 5-06: the query-less og:image last-resort outcome (see `extractFigure`'s
+   *  own fallback below), cached alongside the rest of the pool so a repeat
+   *  call within the same TTL window does not pay a second live fetch for a
+   *  URL `buildCandidatePool` most likely already tried and failed on (the
+   *  paywalled/bot-walled shape this fallback actually gets hit for in
+   *  practice). `undefined` = not yet tried; `null` = tried, found nothing;
+   *  a candidate = tried, found one. */
+  ogFallback?: FigureCandidate | null;
 }
 const CANDIDATE_CACHE_TTL_MS = 30 * 60 * 1000;
+// An EMPTY pool is remembered too, briefly: a paywalled or bot-walled paper
+// used to rebuild its whole pool — every branch, every queue wait — for the
+// hero figure, then again for each section's lookup, then again on the next
+// visit. Short, so a cleared throttle or a publisher that answers later gets
+// another chance within minutes.
+const EMPTY_POOL_CACHE_TTL_MS = 10 * 60 * 1000;
 const candidatePoolCache = new Map<string, CachedPool | Promise<CachedPool>>();
 
 function poolCacheKey(input: FigureSourceInput): string {
@@ -1184,27 +1339,28 @@ async function buildCandidatePool(input: FigureSourceInput): Promise<CachedPool>
   const attempts: AttemptResult[] = [];
   const candidates: FigureCandidate[] = [];
 
-  // Prefer original paper sources first. Semantic Scholar is useful, but its
-  // figure URLs are often thumbnails, so it should enrich the pool rather than
-  // short-circuit HTML/PDF extraction.
+  // 1-29: an uploaded PDF is already on this server — read it directly and
+  // skip every other branch below. "has figures attached for analysis" per
+  // the user's own words is satisfied by the PDF's own embedded images.
+  const uploadHash16 = bareUploadId(input.itemId);
+  if (uploadHash16) {
+    const attempt = await extractPdfCandidatesFromPath(pdfPath(uploadHash16), "publisher");
+    attempts.push(attempt);
+    const reordered: FigureCandidate[] = attempt.candidates
+      .filter((c) => !looksLikeLogo(c.imageUrl))
+      .map((c, i) => ({ ...c, ordinal: i }));
+    return { candidates: reordered, attempts, ts: Date.now() };
+  }
+
   const arxivId =
     bareArxivId(input.itemId) ??
     (input.doi ? arxivIdFromDoi(input.doi) : null) ??
     (input.url ? arxivIdFromUrl(input.url) : null);
-  const openAlexId = bareOpenAlexId(input.itemId);
 
   const originalTasks: Promise<AttemptResult>[] = [];
-  const semanticTasks: Promise<AttemptResult>[] = [];
   if (arxivId) {
     originalTasks.push(tryAr5ivCandidates(arxivId));
     originalTasks.push(tryPdfCandidates(`https://arxiv.org/pdf/${arxivId}`, "open-access"));
-    semanticTasks.push(trySemanticScholarCandidates(`arXiv:${arxivId}`));
-  }
-  if (openAlexId) {
-    semanticTasks.push(trySemanticScholarCandidates(`OpenAlex:${openAlexId}`));
-  }
-  if (input.doi) {
-    semanticTasks.push(trySemanticScholarCandidates(`DOI:${cleanDoi(input.doi)}`));
   }
 
   const originalSettled = await Promise.allSettled(originalTasks);
@@ -1234,22 +1390,12 @@ async function buildCandidatePool(input: FigureSourceInput): Promise<CachedPool>
       attempts.push(attempt);
       if (attempt.status === "candidates") {
         candidates.push(...attempt.candidates);
-        const originalCount = candidates.filter(
-          (candidate) => candidate.source !== "semantic-scholar",
-        ).length;
         const hasPdfCandidates = candidates.some((candidate) =>
           candidate.imageUrl.startsWith("data:image/"),
         );
-        if (originalCount >= 12 && hasPdfCandidates) break;
+        if (candidates.length >= 12 && hasPdfCandidates) break;
       }
     }
-  }
-
-  const semanticSettled = await Promise.allSettled(semanticTasks);
-  for (const r of semanticSettled) {
-    if (r.status !== "fulfilled") continue;
-    attempts.push(r.value);
-    if (r.value.status === "candidates") candidates.push(...r.value.candidates);
   }
 
   // Re-ordinalize so figure indices in the unified pool are stable 0..N-1.
@@ -1261,11 +1407,18 @@ async function buildCandidatePool(input: FigureSourceInput): Promise<CachedPool>
 }
 
 async function getCandidatePool(input: FigureSourceInput): Promise<CachedPool> {
+  if (input.itemId.startsWith("upload:")) {
+    const hash = bareUploadId(input.itemId);
+    if (!hash || !(await ownedUpload(hash))) throw new Error("Private upload unavailable");
+    return buildCandidatePool(input);
+  }
   const key = poolCacheKey(input);
   const existing = candidatePoolCache.get(key);
   if (existing) {
     const resolved = existing instanceof Promise ? await existing : existing;
-    if (Date.now() - resolved.ts <= CANDIDATE_CACHE_TTL_MS && resolved.candidates.length > 0) {
+    const ttl =
+      resolved.candidates.length > 0 ? CANDIDATE_CACHE_TTL_MS : EMPTY_POOL_CACHE_TTL_MS;
+    if (Date.now() - resolved.ts <= ttl) {
       return resolved;
     }
     // Expired or empty — fall through to rebuild.
@@ -1381,7 +1534,14 @@ export async function extractFigure(input: ExtractInput): Promise<FigureResult> 
   const pool = await getCandidatePool(input);
 
   if (pool.candidates.length > 0) {
-    const selection = await chooseCandidate(pool.candidates, n, input.ctx, query, paperTitle);
+    const selection = await chooseCandidate(
+      pool.candidates,
+      n,
+      input.ctx,
+      query,
+      paperTitle,
+      !input.itemId.startsWith("upload:"),
+    );
     if (selection.status === "found") {
       return candidateResult(selection);
     }
@@ -1400,21 +1560,39 @@ export async function extractFigure(input: ExtractInput): Promise<FigureResult> 
     }
   }
 
-  // Truly nothing available anywhere — preserve original OG-image fallback.
-  if (!query?.trim() && input.url) {
-    const res = await timedFetch(input.url);
-    if (res?.ok) {
-      const html = await readBoundedText(res);
-      const imageUrl = metaOgImage(html, res.url || input.url);
-      if (imageUrl) {
-        return {
-          imageUrl,
-          source: "og",
-          status: "found",
-          hideFigure: false,
-          matchedBy: "fallback",
-        };
+  // Truly nothing available anywhere — preserve the original OG-image
+  // fallback for shapes `buildCandidatePool` never fetches `input.url` for
+  // (e.g. an arXiv paper, which skips `collectSourceLinks` entirely). Reuses
+  // 1-19's guarded helper rather than the bare `metaOgImage` call this used
+  // to make directly — otherwise this path could accept an og:image the
+  // candidate-pool path (same URL, same guard) had already rejected, which
+  // would make the honesty guard inconsistent depending on which code path
+  // happened to run.
+  if (!input.itemId.startsWith("upload:") && !query?.trim() && input.url) {
+    // 5-06: compute this once per pool, then write the outcome back onto the
+    // exact `pool` object `getCandidatePool` returned (the same reference
+    // stored in `candidatePoolCache`) — a later query-less call for the same
+    // cache key reads `pool.ogFallback` directly, no new fetch, for as long
+    // as the pool entry itself stays cached (`EMPTY_POOL_CACHE_TTL_MS`
+    // governs this for free; no second TTL to keep in sync).
+    if (pool.ogFallback === undefined) {
+      const res = await timedFetch(input.url);
+      if (res?.ok) {
+        const html = await readBoundedText(res);
+        const finalUrl = res.url || input.url;
+        pool.ogFallback = ogImageCandidate(html, finalUrl, 0) ?? null;
+      } else {
+        pool.ogFallback = null;
       }
+    }
+    if (pool.ogFallback) {
+      return {
+        imageUrl: pool.ogFallback.imageUrl,
+        source: "og",
+        status: "found",
+        hideFigure: false,
+        matchedBy: "fallback",
+      };
     }
   }
 
@@ -1439,4 +1617,48 @@ function metaOgImage(html: string, baseUrl: string): string | null {
   }
 
   return null;
+}
+
+// 1-19: a publisher's og:image/twitter:image meta tag is often the article's
+// own graphical abstract, but the same tag is just as often a journal cover
+// or a generic social-share default. Ruling: only accept it when the image
+// URL itself carries an identifying path segment the article page's own URL
+// also carries — most publisher CDNs key a graphical abstract's filename by
+// the DOI suffix or article id, but a shared cover/masthead image does not.
+// No identifying segment to check against -> reject. Unsure is a reason to
+// show nothing, never a reason to guess (§1d, "never fabricate a figure").
+function articleSpecificToken(articleUrl: string): string | null {
+  try {
+    const segments = new URL(articleUrl).pathname.split("/").filter(Boolean);
+    // The DOI suffix (e.g. "adfm.78026") or a similarly-shaped last path
+    // segment is the part a publisher's own CDN is most likely to echo back
+    // in an image filename. Require some digits so a bare word like "full"
+    // or "abstract" never counts as identifying.
+    const candidate = segments[segments.length - 1];
+    if (candidate && candidate.length >= 4 && /\d/.test(candidate)) {
+      return candidate.toLowerCase();
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function ogImageCandidate(
+  html: string,
+  articleUrl: string,
+  ordinal: number,
+): FigureCandidate | null {
+  const imageUrl = metaOgImage(html, articleUrl);
+  if (!imageUrl) return null;
+  if (looksLikeCoverImage(imageUrl)) return null;
+  const token = articleSpecificToken(articleUrl);
+  if (!token || !imageUrl.toLowerCase().includes(token)) return null;
+  return {
+    imageUrl,
+    caption: null,
+    source: "og",
+    ordinal,
+    qualityHint: "low",
+  };
 }

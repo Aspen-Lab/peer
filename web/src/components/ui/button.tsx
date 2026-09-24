@@ -9,12 +9,18 @@ import { cn } from "@/lib/cn";
 export const buttonVariants = cva(
   [
     "inline-flex items-center justify-center gap-1.5 rounded-full font-medium",
-    "transition-[color,background-color,box-shadow,scale] duration-[180ms] ease-expo",
+    "transition-[color,background-color,box-shadow,transform] duration-150 ease-snap",
     "active:scale-[0.94] disabled:opacity-55 disabled:cursor-wait",
   ].join(" "),
   {
     variants: {
       tone: {
+        // 9-32 (A9-16): was a raw bg-emerald-700/800 wired to nothing in
+        // this app's own token system (globals.css defines every other
+        // tone's colors as --color-* custom properties, redefined per
+        // light/dark/data-theme) — now reads --color-positive(-strong) the
+        // same way every other tone reads its own tokens.
+        green: "bg-[color:var(--color-positive)] text-[color:var(--color-fixed-white)] shadow-card hover:bg-[color:var(--color-positive-strong)]",
         primary: "bg-accent text-bg shadow-card hover:bg-accent/90",
         soft: "bg-bg-secondary/60 shadow-card text-text-muted hover:text-heading hover:bg-surface-hover",
         surface:
@@ -40,8 +46,22 @@ export const buttonVariants = cva(
 export const iconButtonVariants = cva(
   [
     "inline-flex items-center justify-center rounded-full shrink-0",
-    "transition-[color,background-color,box-shadow,scale] duration-[180ms] ease-expo",
-    "active:scale-90 disabled:opacity-50 disabled:cursor-wait",
+    // S18: the hover swell shares this one bracket's 150ms with
+    // color/background-color/box-shadow rather than a separate
+    // transition-transform at the spec's literal 120ms — Tailwind's
+    // per-property transition-* utilities all set the single
+    // transition-property value outright, so a second declaration on the
+    // same element would replace this one's list, not merge with it (the
+    // same conflict upload-button.tsx's own hover swell, S13, traced and
+    // avoided the same way). A ~30ms difference is the accepted cost.
+    "transition-[color,background-color,box-shadow,transform] duration-150 ease-snap",
+    "hover:scale-125 active:scale-90",
+    "disabled:scale-100 disabled:opacity-50 disabled:cursor-wait",
+    // S15/S16's clamp/inactive state uses aria-disabled, not the native
+    // disabled attribute — Tailwind v4's aria-disabled: variant covers the
+    // case a button carries only that; the ones that also set the real
+    // `disabled` attribute (S15's clamp) get the block above for free too.
+    "aria-disabled:scale-100 aria-disabled:opacity-50 aria-disabled:cursor-not-allowed",
   ].join(" "),
   {
     variants: {

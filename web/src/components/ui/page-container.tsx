@@ -16,7 +16,15 @@ export const pageContainer = cva("mx-auto w-full px-6", {
       // empty gutter inside the reading column. Sized so the column is the
       // measure plus a rag margin, the two columns fill and the leftover
       // becomes the page's own margins.
-      spread: "max-w-[760px] xl:max-w-[1000px] 2xl:max-w-[1200px]",
+      // Round 7 (Ruling 19 / A7-02): the reading spread's caps grow with
+      // `--reading-scale` so the panel's share stays constant as the reader's
+      // font steps up. 2xl is a fixed-plus-flexible split (544 panel + 96 gap
+      // + 560*scale column = 640 + 560*scale; at scale 1 that is the old
+      // 1200). xl's grid is proportional (5fr/7fr), so it just fills whatever
+      // total this cap gives it. Keep the two `560`s and this `640` in step
+      // with `spread.ts`'s SPREAD_GRID.
+      spread:
+        "max-w-[760px] xl:max-w-[calc(1000px*var(--reading-scale,1))] 2xl:max-w-[calc(640px+560px*var(--reading-scale,1))]",
       content: "max-w-[820px]",  // home column, /privacy, /saved
       // The feed board. It held 1280 at every width above 1280, so a 1920
       // screen spent a third of itself on margins and still dealt three

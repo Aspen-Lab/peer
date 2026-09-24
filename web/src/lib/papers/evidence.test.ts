@@ -42,6 +42,36 @@ describe("normalizeForMatch", () => {
       normalizeForMatch("The ﬁrst “counter‐factual” — 12–15 %  gain­s [12], see [3–5]."),
     ).toBe(normalizeForMatch('The first "counter-factual" - 12-15 % gains, see.'));
   });
+
+  it("1-17: folds an inline fraction slash the same way on both sides of the PDF extraction artifact", () => {
+    // PyMuPDF reorders a stacked "L/d" into "Ld" + U+2044 (FRACTION SLASH)
+    // when lifting text from a PDF's glyph layout — a real paper's own
+    // wording, garbled by extraction, not a paraphrase.
+    expect(normalizeForMatch("L/d = 0.67")).toBe(normalizeForMatch("Ld ⁄ = 0.67"));
+    expect(normalizeForMatch("L/d = 0.67")).toBe("ld = 0.67");
+  });
+
+  it("2-02: folds a hyphenated PDF line-break the same way on both sides", () => {
+    // PyMuPDF re-joins a word that wrapped across a line break with a
+    // hyphen AND an inserted space ("high- energy") where the clean text
+    // has neither reason for one ("high-energy") — a real extraction
+    // artifact, not a paraphrase.
+    expect(normalizeForMatch("high-energy")).toBe(normalizeForMatch("high- energy"));
+    expect(normalizeForMatch("high-energy")).toBe("highenergy");
+  });
+
+  it("2-02: still tells two different hyphenated words apart", () => {
+    expect(normalizeForMatch("state-of-the-art")).not.toBe(normalizeForMatch("well-known"));
+  });
+
+  it("4-02: folds a zero-width space the same way on both sides of an ar5iv math-rendering artifact", () => {
+    // ar5iv's MathML-to-text rendering can emit U+200B where a genuine
+    // word-boundary space belongs, mid-token — the model's own copied
+    // quote has an ordinary space there instead.
+    expect(normalizeForMatch("learning rate of 4\u200Be - 4")).toBe(
+      normalizeForMatch("learning rate of 4 e - 4"),
+    );
+  });
 });
 
 describe("evidenceSupported", () => {
@@ -99,6 +129,76 @@ describe("evidenceSupported", () => {
     expect(corpus).toContain(short);
     expect(evidenceSupported(short, corpus)).toBe(false);
   });
+
+  it("1-17: a model's verbatim-correct quote matches a corpus garbled by the fraction-slash artifact", () => {
+    // The corpus is what PyMuPDF actually extracted from the PDF (the
+    // artifact); the quote is how a human — and the model — would
+    // transcribe the same sentence. Neither side is edited to make them
+    // match; normalizeForMatch's symmetric fold does that.
+    const garbledCorpus =
+      "we find that the ahts with ld ⁄ = 0.67 and 0.78 lie above el for all temperatures measured.";
+    const modelQuote =
+      "We find that the AHTS with L/d = 0.67 and 0.78 lie above EL for all temperatures measured.";
+    expect(evidenceSupported(modelQuote, garbledCorpus)).toBe(true);
+  });
+
+  it("1-17: the fraction fold does not turn a paraphrase into a match", () => {
+    const garbledCorpus =
+      "we find that the ahts with ld ⁄ = 0.67 and 0.78 lie above el for all temperatures measured.";
+    const paraphrase =
+      "The AHTS samples with a length-to-diameter ratio of 0.67 and 0.78 sit above the EL curve.";
+    expect(evidenceSupported(paraphrase, garbledCorpus)).toBe(false);
+  });
+
+  it("2-02: a model's clean quote matches a corpus garbled by a hyphenated PDF line-break", () => {
+    // Real defect found on openalex:W7207740551: PyMuPDF's extraction joins
+    // "high-energy" wrapped across a line break as "high- energy" (hyphen,
+    // then a space) — the model's own quote has no reason to reproduce that
+    // space, so the verbatim match must still be found.
+    const garbledCorpus =
+      "all four superlattices were grown by molecular beam epitaxy (mbe) on lasralo4 (001) " +
+      "substrates, with the assembly of each monolayer monitored in real time using reflection " +
+      "high- energy electron diffraction (rheed).";
+    const modelQuote =
+      "All four superlattices were grown by molecular beam epitaxy (MBE) on LaSrAlO4 (001) " +
+      "substrates, with the assembly of each monolayer monitored in real time using reflection " +
+      "high-energy electron diffraction (RHEED).";
+    expect(evidenceSupported(modelQuote, garbledCorpus)).toBe(true);
+  });
+
+  it("2-02: the hyphenation fold does not turn a paraphrase into a match", () => {
+    const garbledCorpus =
+      "all four superlattices were grown by molecular beam epitaxy (mbe) on lasralo4 (001) " +
+      "substrates, with the assembly of each monolayer monitored in real time using reflection " +
+      "high- energy electron diffraction (rheed).";
+    const paraphrase =
+      "Every superlattice sample was fabricated via MBE growth and checked in situ with RHEED.";
+    expect(evidenceSupported(paraphrase, garbledCorpus)).toBe(false);
+  });
+
+  it("4-02: a model's clean quote matches a corpus garbled by an ar5iv zero-width-space artifact", () => {
+    // ar5iv's MathML-to-text rendering emits a zero-width space (U+200B)
+    // where a genuine word-boundary space belongs, e.g. splitting a
+    // learning-rate value from the exponent notation around it — the
+    // model's own copied quote has an ordinary space there instead.
+    const garbledCorpus =
+      "we trained every model with a learning rate of 4\u200Be - 4 and a batch size of 32, " +
+      "annealed over 100 epochs using a cosine schedule.";
+    const modelQuote =
+      "We trained every model with a learning rate of 4 e - 4 and a batch size of 32, " +
+      "annealed over 100 epochs using a cosine schedule.";
+    expect(evidenceSupported(modelQuote, garbledCorpus)).toBe(true);
+  });
+
+  it("4-02: the zero-width-space fold does not turn a paraphrase into a match", () => {
+    const garbledCorpus =
+      "we trained every model with a learning rate of 4\u200Be - 4 and a batch size of 32, " +
+      "annealed over 100 epochs using a cosine schedule.";
+    const paraphrase =
+      "Training used a small learning rate and a moderate batch size, with a gradually " +
+      "decreasing schedule across the run.";
+    expect(evidenceSupported(paraphrase, garbledCorpus)).toBe(false);
+  });
 });
 
 describe("verifyReportEvidence", () => {
@@ -128,6 +228,36 @@ describe("verifyReportEvidence", () => {
       "Success rate",
       "No generator",
     ]);
+  });
+
+  it("1-17: a verbatim figure-caption quote is kept — buildCorpus now includes figureCaptions", () => {
+    // A minimal doc of our own (not the shared fixture): the caption
+    // sentence appears nowhere else, so this proves buildCorpus reads
+    // figureCaptions and not some other section that happens to repeat it.
+    const captionSentence =
+      "The superconducting dome narrows sharply as the layer ratio approaches its critical value.";
+    const miniDoc: ExtractedDocument = {
+      sections: [
+        { heading: "Introduction", canonical: "introduction", text: "This paper studies a layered superlattice." },
+      ],
+      figureCaptions: [{ ordinal: 0, label: "Figure 7", caption: captionSentence }],
+      source: "pdf",
+    };
+    const { report: verified, dropped } = verifyReportEvidence(
+      report({
+        resultsAndSignificance: {
+          summary: "",
+          keyResults: [
+            { title: "Dome narrowing", detail: "Seen in the figure.", evidence: captionSentence },
+          ],
+        },
+      }),
+      { abstract: "", doc: miniDoc },
+    );
+
+    expect(dropped).toBe(0);
+    expect(verified.resultsAndSignificance.keyResults).toHaveLength(1);
+    expect(verified.resultsAndSignificance.keyResults[0].evidenceWhere).toBe("Figure 7");
   });
 
   it("sets evidenceWhere to the section heading or to abstract", () => {

@@ -3,6 +3,8 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useFeedStore } from "@/store/feed";
+import { useReadingPrefsStore } from "@/store/reading-prefs";
+import { withZoomTransition } from "@/lib/theme";
 import { NONE, indexAfterRemoval, stepIndex } from "@/lib/navigation/card-focus";
 import { readerActions, resolvePaperKey } from "@/lib/reader/reader-keys";
 import { helpGroups } from "@/lib/keys/help";
@@ -126,6 +128,33 @@ export function KeyboardLayer() {
 
       // Don't hijack typing
       if (isTypingTarget(e.target)) return;
+
+      // S21: Ctrl/⌘ page-zoom chords — the reading page only. Checked
+      // above the blanket modifier bail-out just below, which would
+      // otherwise swallow these before they are ever inspected here and
+      // let the browser's own native page-zoom fire instead (the opposite
+      // of what preventDefault below is for). Order matters: after the
+      // typing-target guard (typing still wins), before the blanket
+      // return, so any Ctrl/⌘ combo this doesn't recognize — or any combo
+      // on any other page — falls through unchanged.
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && onPaperPage()) {
+        const prefs = useReadingPrefsStore.getState();
+        if (e.key === "=" || e.key === "+") {
+          withZoomTransition(prefs.increaseScale);
+          e.preventDefault();
+          return;
+        }
+        if (e.key === "-") {
+          withZoomTransition(prefs.decreaseScale);
+          e.preventDefault();
+          return;
+        }
+        if (e.key === "0") {
+          withZoomTransition(prefs.resetScale);
+          e.preventDefault();
+          return;
+        }
+      }
 
       // Ignore modifier combos
       if (e.metaKey || e.ctrlKey || e.altKey) return;

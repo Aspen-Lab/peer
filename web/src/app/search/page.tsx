@@ -51,8 +51,9 @@ function SearchPage() {
   const [results, setResults] = useState<SearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
-  /** The search itself failed — OpenAlex did not answer. Not the same thing
-   *  as a search that answered with nothing, and never shown as one. */
+  // A search that never completed is not a search with no results. OpenAlex
+  // rate-limits the shared pool (429 → our 502), and that used to render as
+  // "no results for …" — the reader would rephrase a query that was fine.
   const [failed, setFailed] = useState(false);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(
@@ -301,10 +302,10 @@ function SearchPage() {
           <p className="text-meta text-text-faint mt-4">
             {isSearching
               ? "searching…"
-              : failed
-                ? "search did not answer"
-                : results.length > 0
-                  ? `${results.length} ${results.length === 1 ? "result" : "results"} for “${normalizedQuery}”`
+              : results.length > 0
+                ? `${results.length} ${results.length === 1 ? "result" : "results"} for “${normalizedQuery}”`
+                : failed
+                  ? <span className="text-red">search failed — the paper index is busy, try again in a moment</span>
                   : hasSearched
                     ? `no results for “${normalizedQuery}”`
                     : ""}
@@ -328,12 +329,19 @@ function SearchPage() {
         </div>
       )}
 
-      {isActive && hasSearched && !isSearching && results.length === 0 && !failed && (
-        <div className="mt-6 max-w-[820px]">
-          <EmptyState
-            title="Nothing turned up."
-            line="Try different keywords, or widen the year range and open-access filter."
-          />
+      {isActive && hasSearched && !isSearching && results.length === 0 && (
+        <div className="mx-auto max-w-[820px] mt-6">
+          {failed ? (
+            <EmptyState
+              title="The search did not go through."
+              line="The paper index turned the request away; nothing is wrong with your words. Press Enter to try again."
+            />
+          ) : (
+            <EmptyState
+              title="Nothing turned up."
+              line="Try different keywords, or widen the year range and open-access filter."
+            />
+          )}
         </div>
       )}
 

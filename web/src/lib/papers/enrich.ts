@@ -8,6 +8,7 @@
 //      they don't license it to OpenAlex / Semantic Scholar.
 
 import { cleanDisplayText } from "@/lib/text/clean";
+import { fetchSemanticScholar } from "@/lib/sources/semantic-scholar-client";
 
 const TIMEOUT_MS = 6_000;
 const REVALIDATE_S = 86_400;
@@ -57,10 +58,15 @@ async function trySS(externalId: string): Promise<SemanticScholarText | null> {
   const url =
     `https://api.semanticscholar.org/graph/v1/paper/${encodeURIComponent(externalId)}` +
     `?fields=abstract,tldr`;
-  const text = await timedFetchText(url, { Accept: "application/json" });
-  if (!text) return null;
+  // Ruling 20 (S23): the shared, keyed, paced client — not `timedFetchText`
+  // above, which `tryCrossref`/`tryDoiPageMeta` keep using unchanged for
+  // their own, unrelated hosts — so this call queues and paces alongside
+  // `sources/semantic-scholar.ts`'s own search calls, and sends the API key
+  // when the deployment has one.
+  const res = await fetchSemanticScholar(url, { headers: { Accept: "application/json" } }, TIMEOUT_MS);
+  if (!res || !res.ok) return null;
   try {
-    const data = JSON.parse(text) as SSPaperData;
+    const data = (await res.json()) as SSPaperData;
     return {
       abstract: cleanDisplayText(data.abstract) || null,
       tldr: cleanDisplayText(data.tldr?.text) || null,

@@ -3,16 +3,13 @@ import { GoogleGenAI } from "@google/genai";
 import { PROVIDER_MODELS } from "@/lib/llm/provider-models";
 import { canUseLocalServerProvider } from "@/lib/llm/providers/registry";
 
-// ABC-freemium 6-02. De-duplicated because the two tiers now name ONE id, and
-// the results map below is keyed on `location/modelId`: without this, the
-// second probe silently overwrites the first and the diagnostic reports one
-// line where a reader counting models expects two — misleading in exactly the
-// situation this endpoint exists for. Probing the same endpoint twice tells
-// the operator nothing anyway.
-const REGIONAL_MODELS = [
+// The same order the provider walks: the chosen Gemini 3 pair on the global
+// endpoint, which is the only endpoint Peer uses. A Set, so a day the two
+// tiers name one id the probe runs it once (the results map is keyed on
+// `location/modelId` and a second probe would overwrite the first).
+const GLOBAL_MODELS = [
   ...new Set([PROVIDER_MODELS.gemini.small, PROVIDER_MODELS.gemini.large]),
 ];
-const GLOBAL_MODELS = ["gemini-3.5-flash-lite", "gemini-3.6-flash"];
 
 async function testModel(project: string, location: string, modelId: string): Promise<string> {
   const ai = new GoogleGenAI({
@@ -51,34 +48,12 @@ export async function GET() {
   const project = process.env.GOOGLE_VERTEX_PROJECT;
   const creds = process.env.GOOGLE_APPLICATION_CREDENTIALS;
   const regionalLocation = process.env.GOOGLE_VERTEX_LOCATION ?? "us-central1";
-  const allowGlobalFallback = process.env.GOOGLE_VERTEX_ALLOW_GLOBAL_FALLBACK === "true";
 
   if (!project) {
     return NextResponse.json({ error: "GOOGLE_VERTEX_PROJECT not set" });
   }
 
   const results: Record<string, string> = {};
-
-  for (const modelId of REGIONAL_MODELS) {
-    const key = `${regionalLocation}/${modelId}`;
-    try {
-      const text = await testModel(project, regionalLocation, modelId);
-      if (text) {
-        results[key] = "OK";
-        return NextResponse.json({
-          working: { location: regionalLocation, model: modelId, scope: "regional" },
-          credentials: creds ?? "not set",
-          configuredLocation: regionalLocation,
-          globalFallbackEnabled: allowGlobalFallback,
-          allResults: results,
-          note: "Peer now prefers the configured regional Vertex endpoint for local processing.",
-        });
-      }
-      results[key] = "Empty response";
-    } catch (err) {
-      results[key] = classifyError(err);
-    }
-  }
 
   for (const modelId of GLOBAL_MODELS) {
     const key = `global/${modelId}`;
@@ -90,9 +65,8 @@ export async function GET() {
           working: { location: "global", model: modelId, scope: "global" },
           credentials: creds ?? "not set",
           configuredLocation: regionalLocation,
-          globalFallbackEnabled: allowGlobalFallback,
           allResults: results,
-          note: "Regional models failed, but the same credentials work against a stable global Gemini endpoint.",
+          note: "Peer's Gemini 3 models answer from the global Vertex endpoint.",
         });
       }
       results[key] = "Empty response";
@@ -105,7 +79,6 @@ export async function GET() {
     working: null,
     credentials: creds ?? "not set",
     configuredLocation: regionalLocation,
-    globalFallbackEnabled: allowGlobalFallback,
     allResults: results,
     suggestion: "No working model found. Check that Vertex AI API is enabled, the service account has Vertex AI User, and the configured region supports Peer’s Gemini model pair.",
   });

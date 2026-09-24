@@ -27,6 +27,16 @@ import {
   splitSentences,
 } from "./skim";
 
+/**
+ * 2-05 (A2-02): the PDF read successfully but had nothing extractable
+ * (most likely scanned, no text layer). Shared with the reading page's own
+ * early branch (rendered straight from `paper.textStatus`, before a report
+ * would ever be requested) so the two paths — this module's own decision
+ * sentence below and the page's pre-report render — can never drift apart.
+ */
+export const PDF_NO_TEXT_MESSAGE =
+  "This PDF has no readable text — Peer could not extract anything from it.";
+
 export type ReadingBlock =
   | "skim"
   | "findings"
@@ -44,6 +54,9 @@ export type OmitReason =
   | "no_section"
   /** A PDF exists and carries no text layer — a scan. */
   | "pdf_only_hosted"
+  /** 1-28/1-31: the PDF itself has no extractable text (e.g. a scanned image
+   * with no text layer) — true on every deployment, not just this one. */
+  | "pdf_empty"
   /** The publisher blocked the full text. */
   | "paywalled"
   /** Model-only block. */
@@ -87,7 +100,7 @@ export interface ReadingProvenance {
   abstractSentences: number;
   /** Semantic Scholar's TLDR — labelled as such on the page, never merged into the abstract. */
   tldr?: string;
-  fullText: "none" | "html" | "pdf" | "pdf_unreadable_here" | "paywalled";
+  fullText: "none" | "html" | "pdf" | "pdf_unreadable_here" | "pdf_empty" | "paywalled";
   /** "arXiv HTML" | "Zenodo PDF" | "PMC" | "publisher page" … */
   sourceLabel?: string;
   /** PDFs only. */
@@ -475,6 +488,20 @@ function pdfUnreadableHere(fullText: FullTextResult): boolean {
   );
 }
 
+/**
+ * 1-28/1-31: the PDF itself had nothing extractable — most likely a scanned
+ * image with no text layer. `full-text.ts`'s upload branch (`tryUploadLink`)
+ * marks this exact reason so it's told apart from `pdfUnreadableHere` (a
+ * deployment that cannot run Python at all, a fact about *this server*, not
+ * the file) and from every other `no_full_text` cause (a source Peer never
+ * found, a fact about the *paper*, not a file already in hand).
+ */
+function pdfHasNoText(fullText: FullTextResult): boolean {
+  return fullText.attempts.some(
+    (attempt) => attempt.link.kind === "pdf" && /\bpdf-empty\b/.test(attempt.outcome),
+  );
+}
+
 function buildProvenance(
   paper: Paper,
   sentences: string[],
@@ -504,6 +531,7 @@ function buildProvenance(
     return base;
   }
   if (pdfUnreadableHere(fullText)) base.fullText = "pdf_unreadable_here";
+  else if (pdfHasNoText(fullText)) base.fullText = "pdf_empty";
   return base;
 }
 
@@ -709,6 +737,7 @@ export function buildReading(
   const sectionReason = (): OmitReason => {
     if (doc) return "no_section";
     if (provenance.fullText === "pdf_unreadable_here") return "pdf_only_hosted";
+    if (provenance.fullText === "pdf_empty") return "pdf_empty";
     if (provenance.fullText === "paywalled") return "paywalled";
     return provenance.abstract === "none" ? "no_abstract" : "not_in_abstract";
   };
@@ -882,6 +911,9 @@ function readingSentence(reading: PaperReading, providerConfigured: boolean): st
   if (provenance.fullText === "pdf_unreadable_here") {
     return withKey("Abstract only; the PDF carries no text to read — it looks scanned.");
   }
+  if (provenance.fullText === "pdf_empty") {
+    return PDF_NO_TEXT_MESSAGE;
+  }
   if (provenance.fullText === "paywalled") {
     const host = provenance.paywallHost ?? "the publisher";
     return withKey(`Abstract only — ${host} keeps the full text behind access.`);
@@ -939,6 +971,9 @@ function fullTextClause(reading: PaperReading, report: AvailabilityReport): stri
   }
   if (provenance.fullText === "pdf_unreadable_here") {
     return " Caveats and a next step need the full text; the PDF carries no text to read — it looks scanned.";
+  }
+  if (provenance.fullText === "pdf_empty") {
+    return " Caveats and a next step need the full text; this PDF has no readable text to read.";
   }
   if (provenance.fullText === "html" || provenance.fullText === "pdf") {
     return " Caveats and a next step need the full text; your model's deep read of it did not finish.";

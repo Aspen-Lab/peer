@@ -40,6 +40,17 @@
   --color-text-muted: #666666;
   --color-text-faint: #8e8e8e;
 
+  /* ── Fixed-contrast objects ─────────────────────────────
+     A small number of controls are deliberately NOT theme-adaptive: the PDF
+     upload button (briefing/upload-button.tsx) is a black square with a
+     white glyph in both light and dark mode — the user's own literal spec,
+     not "a dark surface that happens to match whichever theme is active."
+     Defined once here and never restated in the dark-mode block below (or
+     the `:root` restatement above it), so they hold their value when the
+     theme flips. */
+  --color-fixed-black: #1d1d1d;
+  --color-fixed-white: #ffffff;
+
   /* ── The hue ────────────────────────────────────────── */
   --color-accent: #ff520d;
   --color-accent-dim: rgba(255, 82, 13, 0.09);
@@ -175,11 +186,19 @@
   --text-meta--line-height: 1.45;
   --text-body-sm: 13.5px;    /* dense body, descriptions */
   --text-body-sm--line-height: 1.5;
-  --text-body: 14.5px;       /* controls, standard body */
+  /* S15 / 6-09: these three are also the reading prose's own sizes (the
+     nine sites the reading-justify work touched, plus the lede sentence and
+     abstract/paper body). A `calc()` on a custom property is resolved once,
+     at the property's OWN declaration site — here, `:root` — so a
+     `var(--reading-scale, 1)` inside these tokens can never see the value a
+     descendant sets; it permanently bakes in the `1` fallback. Tokens stay
+     plain px; the scale is applied at the USE site instead by three scoped
+     rules next to the `[class~="rounded-full"]` override below. */
+  --text-body: 14.5px;    /* controls, standard body */
   --text-body--line-height: 1.55;
-  --text-body-lg: 15.5px;    /* emphasized body, tile titles */
+  --text-body-lg: 15.5px; /* emphasized body, tile titles */
   --text-body-lg--line-height: 1.55;
-  --text-lead: 16.5px;       /* lede paragraphs, card titles */
+  --text-lead: 16.5px;    /* lede paragraphs, card titles */
   --text-lead--line-height: 1.6;
   --text-title: 17.5px;      /* section titles */
   --text-title--line-height: 1.4;
@@ -268,6 +287,12 @@ html[data-accent="violet"]   { --seed: #7a3fd9; --seed-dark: #a078f0; }
   --color-relevance: var(--seed);
   --color-done: #666666;
   --color-done-dim: color-mix(in srgb, #1d1d1d 6%, transparent);
+  /* 9-32 (A9-16): the supplement-upload button's green tone, tokenized —
+     was a raw Tailwind bg-emerald-700/800 wired to nothing in this file.
+     Same rendered color as before (Tailwind's own emerald-700/800), so this
+     is a tokenization, not a visual change. */
+  --color-positive: #047857;
+  --color-positive-strong: #065f46;
   --color-border: color-mix(in srgb, var(--color-heading) 6%, transparent);
   --color-border-strong: color-mix(in srgb, var(--color-heading) 12%, transparent);
   --color-skeleton-base: color-mix(in srgb, var(--color-heading) 5%, transparent);
@@ -305,6 +330,13 @@ html[data-mode="dark"] {
   --color-relevance: var(--seed-dark);
   --color-done: #a9a9a9;
   --color-done-dim: rgba(255, 255, 255, 0.08);
+  /* 9-32 (A9-16): same rationale as the light palette above — kept
+     identical to the light value since Tailwind's raw emerald-700/800
+     classes it replaces were never mode-adaptive either; the two dark
+     blocks stay in sync with each other, as this file's own comment below
+     requires. */
+  --color-positive: #047857;
+  --color-positive-strong: #065f46;
   --color-border: rgba(255, 255, 255, 0.09);
   --color-border-strong: rgba(255, 255, 255, 0.17);
   --color-skeleton-base: rgba(255, 255, 255, 0.05);
@@ -344,6 +376,10 @@ html[data-mode="dark"] {
   --color-relevance: var(--seed-dark);
   --color-done: #a9a9a9;
   --color-done-dim: rgba(255, 255, 255, 0.08);
+  /* 9-32 (A9-16): kept in sync with the explicit-dark block above, per this
+     block's own "identical to the block above" comment. */
+  --color-positive: #047857;
+  --color-positive-strong: #065f46;
   --color-border: rgba(255, 255, 255, 0.09);
   --color-border-strong: rgba(255, 255, 255, 0.17);
   --color-skeleton-base: rgba(255, 255, 255, 0.05);
@@ -458,7 +494,25 @@ html[data-mode="dark"] {
    min() resolve to 4rem — a plain top-stick, never a broken first paint.
    Desktop-only, so vh, no dvh. Any ancestor with an overflow other than
    visible silently kills the sticky — main, the article and the grid
-   wrapper must keep it. */
+   wrapper must keep it.
+
+   Ruling 19 (round 7, second pass): under Fit's whole-page `zoom`, a CSS
+   length declared inside a zoomed ancestor is resolved in that ancestor's
+   LOCAL (pre-zoom) space, then painted at `local × zoom` — so this panel's
+   own `top` would drift to `4rem × zoom` on screen unless divided back
+   down first (confirmed by execution: 4rem at zoom 1.8 painted at 115.2px,
+   not 64px, until divided). `--panel-h` needs NO such division: it is
+   written from `el.offsetHeight` (reader-layout.tsx), and `offsetWidth`/
+   `offsetHeight` already report the local, pre-zoom size on every element
+   regardless of its own or an ancestor's zoom — dividing it again would
+   under-compensate it. `100vh`, `--legend-h` and the flat margin DO need
+   dividing: each resolves (or is declared) in local space, then gets the
+   same ambient-zoom multiplication as everything else in the box when
+   painted, same as the 4rem case. Division binds tighter than subtraction
+   in CSS calc(), so this parses as intended with one outer calc() and no
+   nested wrappers. `--page-zoom` defaults to 1 (set on `page.tsx`'s
+   `<PageContainer data-zoom-root>`, Fit off or not applicable) so this
+   formula is byte-identical to the un-zoomed one whenever Fit is off. */
 :root {
   /* `KeyLegend` is `h-[var(--legend-h)]`; the panel reserves the same
      number. They were 28px and 24px, so at bottom-stick the DOI line sat 4px
@@ -469,7 +523,10 @@ html[data-mode="dark"] {
 
 @utility reader-panel {
   position: sticky;
-  top: min(4rem, calc(100vh - var(--panel-h, 0px) - var(--legend-h) - 1rem));
+  top: min(
+    calc(4rem / var(--page-zoom, 1)),
+    calc(100vh / var(--page-zoom, 1) - var(--panel-h, 0px) - var(--legend-h) / var(--page-zoom, 1) - 1rem / var(--page-zoom, 1))
+  );
 }
 
 /* ── The measure ──────────────────────────────────────────────────────
@@ -524,6 +581,31 @@ html[data-mode="dark"] {
   max-width: 14.5em;
 }
 
+/* 5-07 (S8): justified reading prose. Applied by adding this class name to
+   specific literals (report sections, quotes, abstract, paper body — see
+   each call site's own comment), never by a selector on `font-reading` or
+   `text-lead` generally — several of those classes are shared with
+   non-prose text (a paper title, a byline) that must stay left-aligned. */
+@utility reading-justify {
+  text-align: justify;
+  hyphens: auto;
+  text-wrap: pretty;
+}
+
+/* Ruling 13: while a `ScrambleText` reveal is still running, keep its
+   paragraph left-aligned — the random glyphs it swaps in vary in rendered
+   width, and under justify that variance would show up as inter-word
+   spacing pulses instead of the naturally-varying ragged right edge.
+   `ScrambleText` exposes `data-reveal="revealing"`/`"settled"` on its own
+   wrapper (derived from render state, never a `useEffect` setState); this
+   matches either that wrapper carrying `reading-justify` directly (the
+   common case) or an ancestor `reading-justify` paragraph wrapping an
+   unstyled `ScrambleText` span (report-sections' "What is new here" line). */
+.reading-justify[data-reveal="revealing"],
+.reading-justify:has(> [data-reveal="revealing"]) {
+  text-align: left;
+}
+
 /* Light is unconditional — no OS-preference dark mode. Dark mode would be a
    future explicit toggle on <html data-theme="dark">, not a reading-tool default. */
 
@@ -531,6 +613,21 @@ html[data-mode="dark"] {
    rule is unlayered, so it beats the utility whatever its specificity, and
    deleting these two lines brings the pills and the discs back. */
 [class~="rounded-full"] { border-radius: 0; }
+
+/* 6-09: the font-size controls' actual effect. `--text-lead`/`--text-body`/
+   `--text-body-lg` above are plain px again — a `calc()` inside a custom
+   property resolves at that property's own declaration site (`:root`), so
+   it can never see a `--reading-scale` a descendant sets. These three rules
+   apply the scale at the USE site instead, only inside `.reading-scaled`
+   (the two wrap points in reader-layout.tsx) — unlayered, so each beats the
+   Tailwind-generated utility whatever its specificity, matching the
+   `rounded-full` override just above. `[class~="text-body"]` cannot
+   false-match `text-body-lg`/`text-body-sm`: `~=` matches a whole
+   space-delimited class token, and `text-body-lg` is one token, not
+   `text-body` plus a suffix. */
+.reading-scaled [class~="text-lead"] { font-size: calc(var(--text-lead) * var(--reading-scale, 1)); }
+.reading-scaled [class~="text-body"] { font-size: calc(var(--text-body) * var(--reading-scale, 1)); }
+.reading-scaled [class~="text-body-lg"] { font-size: calc(var(--text-body-lg) * var(--reading-scale, 1)); }
 
 html[data-scroll-behavior="smooth"] { scroll-behavior: smooth; }
 
@@ -625,9 +722,31 @@ body {
    rule forbids, and it was the largest moving thing on a cold briefing. */
 .skeleton { background: var(--color-skeleton-base); }
 
+/* S12: the figure lightbox's own fade/scale-in — the repo's other two
+   entrance animations (fade-in-up, pop-in) run 250-260ms with bouncier
+   eases, not a match for the spec's explicit "150ms... ease-snap", so this
+   is a small new one rather than reusing either. Needs no JS
+   mount-trigger: the overlay's conditional render means the DOM node is
+   fresh every time it appears, the same reasoning HelpOverlay's own
+   animate-fade-in*classes already rely on. */
+@keyframes lightbox-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes stamp {
+  0%   { transform: scale(1) rotate(0); }
+  35%  { transform: scale(1.28) rotate(-6deg); }
+  60%  { transform: scale(0.92) rotate(4deg); }
+  85%  { transform: scale(1.12) rotate(-1deg); }
+  100% { transform: scale(1.1) rotate(0); }
+}
+
 .animate-fade-in-up { animation: fade-in-up 0.26s var(--ease-expo) both; }
 .animate-fade-in    { animation: fade-in 0.3s ease-out both; }
 .animate-pop-in     { animation: pop-in 0.25s var(--ease-expo) both; }
+.animate-lightbox-in { animation: lightbox-in 150ms var(--ease-snap, cubic-bezier(0.2, 0.9, 0.25, 1)) both; }
+.animate-stamp      { animation: stamp 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
 
 /* Tiny stagger: set --stagger on parent, N*i on children via style={{ "--i": i }}. */
 [style*="--i"] { animation-delay: calc(var(--i) * 40ms); }
@@ -1023,3 +1142,73 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .dot-pulse { animation: none; }
 }
+
+/* S17: the sun/moon switch (lib/theme.ts's `withThemeTransition`) adds this
+   class to <html> for ~1.1s so the palette eases instead of snapping.
+   Excludes every native button/link and every img: buttonVariants/
+   iconButtonVariants already declare their own 150ms
+   transition-[color,background-color,box-shadow,transform] (a single
+   transition-property value — stacking a second, unlayered rule on the
+   same property would replace it outright, not merge, per the same
+   conflict the upload button's own hover-swell fix (6-01) traced), so a
+   button a reader is actively touching keeps its normal snappy feel
+   instead of lagging behind the page; images/figures never fade, per the
+   spec. `prefers-reduced-motion` already forces every transition-duration
+   to 0.01ms above, which also collapses this one — no separate guard
+   needed here, though `withThemeTransition` itself also checks
+   `matchMedia` before ever adding the class, belt-and-suspenders. */
+.theme-transition,
+.theme-transition *:not(button):not(a):not(img) {
+  transition:
+    background-color 1s,
+    color 1s,
+    border-color 1s,
+    fill 1s,
+    stroke 1s;
+}
+
+/* S22 (round 7): the page zoom (S20) eases like the day/night fade above,
+   at 0.3s instead of 1s — `lib/theme.ts`'s `withZoomTransition` adds this
+   class to the reading page's own `[data-zoom-root]` element (not <html>:
+   the palette rule above must not fire) for ~350ms. Names exactly the
+   properties S20/S21's mechanism actually changes — font-size (the
+   `.reading-scaled [class~="text-*"]` rules above),
+   grid-template-columns (spread.ts's 2xl track) and max-width
+   (page-container.tsx's `spread` variant's xl/2xl caps) — not a wider menu
+   of candidates that would just be more properties for the browser to
+   watch for no visual gain. Same button/link/img exclusion as
+   `.theme-transition` and for the same reason (iconButtonVariants already
+   owns its own 150ms transition-[...] bracket; images are out of scope
+   this round).
+   Round 7, second pass (Ruling 19): Fit's own whole-page CSS `zoom` is a
+   fourth changing property (the article's `zoom` inline style, S21) and
+   the sticky panel's `top` (globals.css's `reader-panel` utility, now a
+   function of `--page-zoom`) is a fifth — both added below, or Fit would
+   visibly snap while everything around it eases. `top` on the broad
+   `*:not(button):not(a):not(img)` selector is safe to declare broadly:
+   `reader-panel` is the only positioned (sticky/absolute/fixed) element
+   under the reader surface, so this is inert everywhere else it is
+   declared, the same reasoning already accepted for font-size/max-width.
+   `grid-template-columns` animating at all is a real, browser-dependent
+   capability — where it is unsupported the grid snaps instantly while the
+   other properties still ease, a partial but non-crashing degradation,
+   accepted rather than fixed from CSS alone. `zoom` itself is legacy and
+   non-standard, but confirmed to animate smoothly under a transition in
+   this session's Chromium by direct execution (round-7-second-pass log,
+   frame-by-frame interpolation, not a snap); Firefox unverified (matches
+   Ruling 19's own claim); Safari's support for *transitioning* zoom
+   specifically is unknown and treated as an accepted degradation, the same
+   shape already accepted for `grid-template-columns`. `prefers-reduced-
+   motion` already forces every transition-duration to 0.01ms above, a
+   second, independent guard beneath `withZoomTransition`'s own
+   `matchMedia` check. */
+.zoom-transition,
+.zoom-transition *:not(button):not(a):not(img) {
+  transition:
+    font-size 0.3s var(--ease-snap),
+    max-width 0.3s var(--ease-snap),
+    grid-template-columns 0.3s var(--ease-snap),
+    zoom 0.3s var(--ease-snap),
+    top 0.3s var(--ease-snap);
+}
+

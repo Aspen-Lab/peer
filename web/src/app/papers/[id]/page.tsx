@@ -3,16 +3,19 @@
 // The reading surface — one paper, in a fixed order the reader learns once:
 // the plate and title, the abstract as written with the claim and the
 // numbers in ink, one sentence saying what Peer has and has not read, and
-// the decision. Everything below the decision is the paper's own sentences
-// (from the server reading) or a model claim carrying one (from the report);
-// both arrive after first paint and change nothing above.
+// the decision. Below the decision, first the report as it read before the
+// 2026-09 rewrite — the proposal (what is new, folded in — S6), how it was
+// done, the results with their figures, a review's contents, a glance, and
+// today's related papers (components/reader/report-sections.tsx) — and under
+// that the blocks the rewrite added: where it is thin, the next step, the
+// paper itself. Both arrive after first paint and change nothing above.
 //
 // The page holds the wiring — which paper, the store, the keys, the swipe,
 // when "read" happens — and the components in `components/reader/` hold the
 // blocks. No status string is typed here: the Decision sentence is
 // `describeAvailability`'s, the keys are `PAPER_KEYS`, absence is `omitted`.
 
-import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { use, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import type { Paper } from "@/types";
 import { useFeedStore } from "@/store/feed";
@@ -29,6 +32,7 @@ import { recommendationLine } from "@/lib/reader/recommendation";
 import { allocatePlateTerms } from "@/lib/papers/plate-terms";
 import { placeEvidence } from "@/lib/papers/evidence";
 import {
+  PDF_NO_TEXT_MESSAGE,
   describeAvailability,
   omittedForReader,
   sharedTerms,
@@ -49,11 +53,25 @@ import { RecordBlock } from "@/components/reader/record-block";
 import { KeyLegend } from "@/components/reader/key-legend";
 import { DecisionBlock } from "@/components/reader/decision-block";
 import { QuoteList } from "@/components/reader/quote-list";
-import { ClaimList, KeyResultList } from "@/components/reader/claim-list";
+import { ClaimList } from "@/components/reader/claim-list";
+import {
+  GlanceBlock,
+  ProposalBlock,
+  RelatedBlock,
+  ResultsBlock,
+  ReviewContentsBlock,
+  FigureRegistry,
+  pickRelated,
+} from "@/components/reader/report-sections";
 import { NextRow } from "@/components/reader/next-row";
 import { LoadingMat } from "@/components/reader/loading-mat";
 import { ReaderToast, useReaderToast } from "@/components/reader/reader-toast";
-import { ReaderLayout, useSpread } from "@/components/reader/reader-layout";
+import {
+  ReaderLayout,
+  usePageZoom,
+  useResolvedReadingScale,
+  useSpread,
+} from "@/components/reader/reader-layout";
 import { THUMB_BAR_PX, THUMB_BAR_QUERY } from "@/components/shell/thumb-bar";
 import { PAGE_CLASS, SPREAD_GRID } from "@/components/reader/spread";
 import { useReading } from "@/components/reader/use-reading";
@@ -61,6 +79,10 @@ import { PaperNotes } from "@/components/notes/paper-notes";
 import { PAPER_BODY_ID } from "@/components/reader/paper-body";
 import { PaperContents } from "@/components/reader/paper-contents";
 import { useModelReport } from "@/components/reader/use-model-report";
+import { usePrivateSupplement } from "@/components/reader/use-private-supplement";
+import { PrivatePdfStatus } from "@/components/reader/private-pdf-status";
+import { UploadButton } from "@/components/briefing/upload-button";
+import { useAuthUser } from "@/components/account/use-auth-user";
 import {
   BODY,
   NOT_FOUND,
@@ -126,6 +148,14 @@ export default function PaperReadingPage({
     }
   })();
   const isExternalId = id.startsWith("openalex:") || id.startsWith("arxiv:");
+  // 1-31: an uploaded paper's id matches neither prefix above, so on a cold
+  // load (a fresh tab on `/papers/upload:<hash16>`, nothing in the client
+  // store yet) the page would otherwise fall straight to the "not found"
+  // branch below instead of ever fetching the record.
+  const isUploadId = id.startsWith("upload:");
+  const auth = useAuthUser();
+  const accountScope = auth.kind === "signed-in" ? auth.user.id : auth.kind;
+  const fetchKey = `${accountScope}:${id}`;
 
   const feedPapers = useFeedStore((s) => s.papers);
   const savedPapers = useFeedStore((s) => s.savedPapers);
@@ -136,7 +166,7 @@ export default function PaperReadingPage({
     id: string;
     paper: Paper | null;
     done: boolean;
-  }>(() => ({ id, paper: null, done: false }));
+  }>(() => ({ id: fetchKey, paper: null, done: false }));
 
   // A skip removes the paper from both lists before the route changes. For
   // that render the pending dismissal still holds it, so the reader stays
@@ -153,9 +183,9 @@ export default function PaperReadingPage({
   // may have an empty summaryIntro. Then the API-fetched paper, which
   // enriches missing abstracts, is preferred.
   const storePaperIsEnriched = !!storePaper?.summaryIntro?.trim();
-  const fetchedPaperForId = fetchResult.id === id ? fetchResult.paper : null;
-  const fetchDoneForId = fetchResult.id === id && fetchResult.done;
-  const baseContent = storePaperIsEnriched
+  const fetchedPaperForId = fetchResult.id === fetchKey ? fetchResult.paper : null;
+  const fetchDoneForId = fetchResult.id === fetchKey && fetchResult.done;
+  const baseContent = isUploadId ? fetchedPaperForId ?? undefined : storePaperIsEnriched
     ? storePaper
     : (fetchedPaperForId ?? storePaper ?? undefined);
   // Live state from the store (save flag + feedback) merged onto the resolved
@@ -174,22 +204,26 @@ export default function PaperReadingPage({
     [baseContent, isSavedInStore, feedbackForId],
   );
   const shouldFetchById =
-    isExternalId && !storePaperIsEnriched && !fetchDoneForId && !pendingPaper;
+    (isExternalId || isUploadId) && (isUploadId || !storePaperIsEnriched) && !fetchDoneForId && !pendingPaper;
 
   useEffect(() => {
     if (!shouldFetchById) return;
     let cancelled = false;
-    apiFetch<Paper>(`/api/papers/${encodeURIComponent(id)}`)
+    apiFetch<Paper>(
+      isUploadId
+        ? `/api/papers/upload/${encodeURIComponent(id.slice("upload:".length))}`
+        : `/api/papers/${encodeURIComponent(id)}`,
+    )
       .then((p) => {
-        if (!cancelled) setFetchResult({ id, paper: p, done: true });
+        if (!cancelled) setFetchResult({ id: fetchKey, paper: p, done: true });
       })
       .catch(() => {
-        if (!cancelled) setFetchResult({ id, paper: null, done: true });
+        if (!cancelled) setFetchResult({ id: fetchKey, paper: null, done: true });
       });
     return () => {
       cancelled = true;
     };
-  }, [id, shouldFetchById]);
+  }, [id, fetchKey, shouldFetchById, isUploadId]);
 
   if (!paper) {
     if (shouldFetchById) {
@@ -225,11 +259,11 @@ export default function PaperReadingPage({
   // The reason comes from the briefing's own copy, never the fetched one:
   // `/api/papers/[id]` stamps a deep-link line that is not a reason, and a
   // briefing paper with no abstract in the store is read from that route.
-  return <Reader paper={paper} reason={recommendationLine(storePaper?.relevanceReason)} />;
+  return <Reader key={`${accountScope}:${paper.id}`} paper={paper} reason={recommendationLine(storePaper?.relevanceReason)} />;
 }
 
 function Reader({
-  paper,
+  paper: originalPaper,
   reason,
 }: {
   paper: Paper;
@@ -237,13 +271,41 @@ function Reader({
   reason: string | null;
 }) {
   const router = useRouter();
+  const { paper, upload, ready, setUpload } = usePrivateSupplement(originalPaper);
   const profile = useProfileStore((s) => s.profile);
   const feedPapers = useFeedStore((s) => s.papers);
   const markRead = useFeedStore((s) => s.markRead);
   const [now] = useState(() => Date.now());
+  // The sections' own figure claims, for the page's life; keyed by paper
+  // inside, so j/k to the next paper starts its claims fresh.
+  const [figureRegistry] = useState(() => new FigureRegistry());
   // ≥ xl: the spread. Owned here so the decided-read observer can follow the
   // DecisionBlock when the structure switches and it remounts.
   const spread = useSpread();
+  // S20/S21: the page-zoom multiplier, set on the one `<PageContainer>`
+  // below so its `max-w` (page-container.tsx's `spread` variant) and
+  // `SPREAD_GRID`'s 2xl column track (both `calc(... * var(--reading-scale,
+  // 1))`) scale together. `useResolvedReadingScale` — not the raw
+  // `scaleIndex` — because it must resolve to the SAME value
+  // `reader-layout.tsx` uses for the grid track, manual step or Fit's own,
+  // or the panel-width invariant those two calc()s are built on breaks
+  // while Fit is on (see that hook's own comment). The other 4
+  // `width="spread"` call sites in this file never set this variable, so
+  // `var(--reading-scale, 1)` falls back to `1` there — byte-identical to
+  // before S20.
+  const readingScale = useResolvedReadingScale();
+  // Ruling 19 (round 7, second pass): Fit's own whole-page CSS `zoom`,
+  // composing on top of `readingScale` above rather than replacing it —
+  // `usePageZoom` is 1 (no-op) unless Fit is on. `--page-zoom` mirrors the
+  // same number as a custom property so `globals.css`'s `reader-panel`
+  // utility (a descendant, however many levels down — custom properties
+  // inherit) can cancel the sticky `top` offset's own zoom-multiplication.
+  const pageZoom = usePageZoom();
+  const readingScaleStyle = {
+    "--reading-scale": readingScale,
+    zoom: pageZoom,
+    "--page-zoom": pageZoom,
+  } as CSSProperties;
 
   const nav = useMemo(
     () => paperNav(feedPapers.map((p) => p.id), paper.id),
@@ -252,7 +314,7 @@ function Reader({
   const nextPaper = nav.nextId ? (feedPapers.find((p) => p.id === nav.nextId) ?? null) : null;
 
   const { reading, fromServer } = useReading(paper);
-  const model = useModelReport({ paper, profile });
+  const model = useModelReport({ paper: ready ? paper : undefined, profile });
   // Where Peer has read the paper, the text is already on the page — the
   // command and the contents are ways down to it, not ways to open it.
   const hasBody = (reading?.body?.length ?? 0) > 0;
@@ -268,7 +330,41 @@ function Reader({
   }, []);
   const report = model.report;
 
+  // S5: the "matrix" scramble reveal, restored. `revealingReportKey` is the
+  // key of a report that just arrived fresh in this visit; while it matches
+  // the current report's key, every report-derived text block scrambles into
+  // place instead of rendering plainly. Cleared after REVEAL_DURATION_MS-scale
+  // time (immediately under reduced motion) so it never lingers and re-fires
+  // on an unrelated re-render.
+  //
+  // Setting it happens during render, not inside an effect: this is the
+  // "adjust state when a prop changes" pattern React's own docs recommend
+  // over an effect for exactly this shape (derive-and-store), and it is the
+  // only way to avoid the react-hooks/set-state-in-effect violation 1-01
+  // fixed elsewhere — an effect that calls setState unconditionally in its
+  // body is the same violation, model.fresh/model.reportKey as the "prop"
+  // that changed. The guard (`!== model.reportKey`) keeps this a one-time
+  // adjustment per fresh report, not a render loop.
+  const [revealingReportKey, setRevealingReportKey] = useState<string | null>(null);
+  if (model.fresh && model.reportKey && revealingReportKey !== model.reportKey) {
+    setRevealingReportKey(model.reportKey);
+  }
+  useEffect(() => {
+    if (!revealingReportKey) return;
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const t = window.setTimeout(
+      () => setRevealingReportKey((k) => (k === revealingReportKey ? null : k)),
+      reducedMotion ? 0 : 900,
+    );
+    return () => window.clearTimeout(t);
+  }, [revealingReportKey]);
+  const shouldScrambleReport = revealingReportKey === model.reportKey && model.fresh;
+
   // One tier: a signed-in reader has Peer's model; a reader with their own key has theirs.
+  // (2026-09-23 merge note: replaces a dangling call to `reportProviderConfigured`,
+  // whose file main deleted upstream of this branch's own last edit to it —
+  // `use-model-report.ts`'s own `userProviderConfigured` was already reconciled
+  // to this same `aiAvailability` call during this merge.)
   const entitlement = useProfileStore((s) => s.entitlement);
   const providerConfigured = aiAvailability(profile, entitlementGrants(entitlement)) !== "none";
   const projectText = useMemo(
@@ -517,6 +613,37 @@ function Reader({
 
   if (!reading) return null;
 
+  // S7(e) / 2-05 (A2-02): an uploaded PDF the extractor read successfully
+  // but found nothing in (most likely scanned, no text layer) gets this
+  // plain message, never a report — known instantly from the paper record
+  // itself (`paper.textStatus`), so this renders without waiting on
+  // `reading`'s own fetch to resolve the same fact through
+  // `provenance.fullText === "pdf_empty"`. `useModelReport`'s own effect
+  // never asks for a report for this paper either way (guarded there on
+  // the same field) — this is only about what the page shows.
+  if (paper.textStatus === "empty") {
+    return (
+      <PageContainer width="spread" rhythm="reader" className={PAGE_CLASS}>
+        <div className={SPREAD_GRID}>
+          <div>
+            <TitleBlock paper={paper} recommendation={null} now={now} />
+            <p className="font-reading text-lead leading-[1.6] text-text mt-6 reading-justify">
+              {PDF_NO_TEXT_MESSAGE}
+            </p>
+            {upload && <PrivatePdfStatus upload={upload} onDeleted={() => router.replace("/")} />}
+            <BackToFeedLink
+              onBack={() => router.back()}
+              className="font-sans text-meta text-text-faint hover:text-heading mt-3 inline-block"
+            >
+              {RAIL.back}
+            </BackToFeedLink>
+            <RecordBlock paper={paper} primaryUrl={reading.source?.url ?? null} />
+          </div>
+        </div>
+      </PageContainer>
+    );
+  }
+
   // Only a paper from today's briefing, and only when there are topics for
   // it to have matched; a deep link has no reason to show.
   const recommendation =
@@ -533,6 +660,23 @@ function Reader({
 
   const keyResults = report?.resultsAndSignificance.keyResults ?? [];
   const methods = report?.whatItProposes.methods ?? [];
+  // The report's bound figures, deduped in page order: the plate first, then
+  // the proposal's, then each result's. The binder can hand one figure to
+  // several places; it is shown once, at the first. Known in render, so a
+  // local set does it; only the figures the sections fetch for themselves
+  // need the registry.
+  const boundShown = new Set<string>(boundFigure?.imageUrl ? [boundFigure.imageUrl] : []);
+  const takeBound = (url: string | null | undefined, caption?: string | null) => {
+    if (!url || boundShown.has(url)) return null;
+    boundShown.add(url);
+    return { url, caption };
+  };
+  // S6: the proposal figure — the old "What is new" section's figure slot,
+  // now the merged proposal block's.
+  const proposalFigure = report
+    ? takeBound(report.whatItProposes.figureImageUrl, report.whatItProposes.figureCaption)
+    : null;
+  const resultFigures = keyResults.map((r) => takeBound(r.figureImageUrl, r.figureCaption));
   const limitations = report?.limitations ?? [];
   const relation = report?.relationToYourWork;
   const nextStep = report?.nextStep ?? null;
@@ -548,7 +692,11 @@ function Reader({
   const plateIsFigure =
     Boolean(boundFigure?.imageUrl) ||
     (Boolean(resolvedFigure.imageUrl) && !resolvedFigure.hideFigure);
-  const shownFigures = new Set(boundFigure ? [boundFigure.imageUrl] : []);
+  // Blocks that were not there at first paint fade in, staggered in order.
+  let stagger = 0;
+  const related = pickRelated(paper, feedPapers);
+  const reviewSections = report?.reviewContents?.sections ?? [];
+
   return (
     // `tabIndex={-1}`: Next's layout router focuses the segment's first
     // element after a client navigation, and an article that cannot take
@@ -563,6 +711,10 @@ function Reader({
       rhythm="reader"
       className={`${PAGE_CLASS} md:pb-16 outline-none`}
       tabIndex={-1}
+      style={readingScaleStyle}
+      // S22: withZoomTransition's own document.querySelector target — the
+      // element S20 already puts --reading-scale on.
+      data-zoom-root=""
       data-motion="reveal"
     >
       {/* The blocks, in the spec's order; `ReaderLayout` places them — one
@@ -591,6 +743,7 @@ function Reader({
                 terms={plateTerms}
                 figure={boundFigure}
                 imageAlt={caption ? "" : undefined}
+                lightbox
               />
             </SwipeableCard>
             {caption && (
@@ -610,6 +763,7 @@ function Reader({
             skim={report?.skim ?? []}
             basis={report?.provenance.basis ?? null}
             quotedSkim={quotedSkim}
+            scramble={shouldScrambleReport}
           />
         }
         decision={
@@ -628,6 +782,13 @@ function Reader({
             onCopyDoi={copyDoi}
             onRead={hasBody ? readHere : undefined}
             readLabel={BODY.open}
+            uploadAction={!paper.id.startsWith("upload:") ? <UploadButton targetPaper={paper} onUploaded={setUpload} /> : undefined}
+            uploadStatus={upload ? <PrivatePdfStatus upload={upload}
+              attachedToTitle={!paper.id.startsWith("upload:") ? paper.title : undefined}
+              onDeleted={() => {
+                setUpload(null);
+                if (paper.id.startsWith("upload:")) router.replace("/");
+              }} /> : undefined}
           />
         }
         contents={<PaperContents reading={reading} />}
@@ -637,16 +798,20 @@ function Reader({
                 first, because taking notes is what follows keeping it. */}
             <PaperNotes paper={paper} />
 
-            {keyResults.length > 0 ? (
-              <KeyResultList
-                results={keyResults}
-                abstractSentences={abstractSentences}
-                shownFigures={shownFigures}
+            {/* ── The report as it read before the rewrite, in its order ── */}
+
+            {/* S6: "What is new" merged into "What it proposes" — one block,
+                one figure slot. */}
+            {report && (
+              <ProposalBlock
+                report={report}
+                paper={paper}
+                figure={proposalFigure}
+                registry={figureRegistry}
+                bound={boundShown}
+                stagger={stagger++}
+                scramble={shouldScrambleReport}
               />
-            ) : (
-              fromServer && (
-                <QuoteList block="findings" quotes={reading.findings} />
-              )
             )}
 
             {methods.length > 0 ? (
@@ -654,6 +819,7 @@ function Reader({
                 block="method"
                 claims={methods}
                 abstractSentences={abstractSentences}
+                scramble={shouldScrambleReport}
               />
             ) : (
               fromServer && (
@@ -661,32 +827,68 @@ function Reader({
               )
             )}
 
-            {limitations.length > 0 ? (
-              <ClaimList
-                block="caveats"
-                claims={limitations}
+            {/* A review's contents stand where its results would; a research
+                paper's results carry the headline, each result's novelty
+                and its figure. Without a report, the paper's own sentences. */}
+            {reviewSections.length > 0 ? (
+              <ReviewContentsBlock
+                sections={reviewSections}
+                stagger={stagger++}
+                scramble={shouldScrambleReport}
+              />
+            ) : report && (keyResults.length > 0 || report.resultsAndSignificance.summary) ? (
+              <ResultsBlock
+                report={report}
+                paper={paper}
                 abstractSentences={abstractSentences}
+                figures={resultFigures}
+                registry={figureRegistry}
+                bound={boundShown}
+                stagger={stagger++}
+                scramble={shouldScrambleReport}
               />
             ) : (
               fromServer && (
-                <QuoteList block="caveats" quotes={reading.caveats} />
+                <QuoteList block="findings" quotes={reading.findings} />
               )
             )}
 
+            {/* S6 deleted "Why it fits you"; the rewrite's project relation,
+                then the shared terms line, stand in its place, as before. */}
             {relation && relation.items.length > 0 ? (
               <ClaimList
                 block="forYou"
                 claims={relation.items}
                 abstractSentences={abstractSentences}
                 anchor={relation.basedOn}
+                scramble={shouldScrambleReport}
               />
             ) : (
               shared.length > 0 && (
                 <section>
-                  <p className="font-reading text-lead leading-[1.6] text-text mt-12">
+                  <p className="font-reading text-lead leading-[1.6] text-text mt-12 reading-justify">
                     {sharedTermsLine(shared)}
                   </p>
                 </section>
+              )
+            )}
+
+            <GlanceBlock paper={paper} now={now} stagger={stagger++} />
+
+            <RelatedBlock related={related} now={now} stagger={stagger++} />
+
+            {/* ── The blocks the rewrite added, kept under the old report ── */}
+
+            {limitations.length > 0 ? (
+              <ClaimList
+                block="caveats"
+                claims={limitations}
+                abstractSentences={abstractSentences}
+                scramble={shouldScrambleReport}
+              />
+            ) : (
+              fromServer && (
+                <QuoteList block="caveats" quotes={reading.caveats} />
               )
             )}
 
@@ -695,6 +897,7 @@ function Reader({
                 block="nextStep"
                 claims={[nextStep]}
                 abstractSentences={abstractSentences}
+                scramble={shouldScrambleReport}
               />
             )}
 

@@ -24,6 +24,8 @@ export interface MarkdownClaim {
 export interface MarkdownKeyResult extends Omit<MarkdownClaim, "text"> {
   title: string;
   detail: string;
+  /** Restored: what is new about this result. Peer's line, no evidence. */
+  novelty?: string;
 }
 
 /**
@@ -33,8 +35,12 @@ export interface MarkdownKeyResult extends Omit<MarkdownClaim, "text"> {
  */
 export interface MarkdownReport {
   skim?: MarkdownClaim[];
-  whatItProposes?: { methods?: MarkdownClaim[] };
-  resultsAndSignificance?: { keyResults?: MarkdownKeyResult[] };
+  whatItProposes?: { summary?: string; methods?: MarkdownClaim[]; newHere?: string[] };
+  resultsAndSignificance?: { summary?: string; keyResults?: MarkdownKeyResult[] };
+  reviewContents?: { sections: { heading: string; summary: string }[] };
+  /** S6 (2026-09): removed from every new report; kept only so an old cached
+   *  wire shape still type-checks. Nothing reads it. */
+  whyItFitsYou?: { reasons: string[]; keywords: string[] };
   limitations?: MarkdownClaim[];
   relationToYourWork?: { basedOn: string; items: MarkdownClaim[] };
   nextStep?: MarkdownClaim | null;
@@ -74,6 +80,10 @@ const REASON_PHRASE: Record<OmitReason, { one: string; many: string }> = {
     one: "the PDF is readable only by a self-hosted Peer",
     many: "the PDF is readable only by a self-hosted Peer",
   },
+  pdf_empty: {
+    one: "this PDF has no readable text",
+    many: "this PDF has no readable text",
+  },
   paywalled: {
     one: "the full text is behind access",
     many: "the full text is behind access",
@@ -95,6 +105,7 @@ const REASON_ORDER: OmitReason[] = [
   "not_in_abstract",
   "no_section",
   "pdf_only_hosted",
+  "pdf_empty",
   "paywalled",
   "needs_full_text",
   "no_profile",
@@ -260,15 +271,25 @@ export function readingToMarkdown(
     lines.push(`## ${HEADING[block]}`, "", ...body, "");
     filled.add(block);
   };
+  // The restored sections have no slot in the omissions list: they are
+  // Peer's reading, present when the model wrote them and silent otherwise.
+  const extra = (heading: string, body: string[]) => {
+    if (body.length === 0) return;
+    lines.push(`## ${heading}`, "", ...body, "");
+  };
+  const PEERS = "*Peer's reading — not a quote*";
 
-  const keyResults = report?.resultsAndSignificance?.keyResults?.filter((r) => r.title || r.detail) ?? [];
-  if (keyResults.length > 0) {
-    section(
-      "findings",
-      spaced(keyResults.map((result) => claimBlock(`**${result.title}.** ${result.detail}`.trim(), result))),
+  // The page's order: the proposal (merged with the old "what is new"
+  // block — S6, they duplicated each other), the method, the results (or a
+  // review's contents), then the rewrite's own blocks. "Why it fits you" is
+  // deleted (S6).
+  const proposal = report?.whatItProposes?.summary?.trim();
+  const newHere = report?.whatItProposes?.newHere?.filter(Boolean) ?? [];
+  if (proposal) {
+    extra(
+      "What it proposes",
+      newHere.length > 0 ? [proposal, "", ...newHere, "", PEERS] : [proposal],
     );
-  } else {
-    section("findings", spaced(reading.findings.map((quote) => [quoteLine(quote)])));
   }
 
   const methods = report?.whatItProposes?.methods?.filter((claim) => claim.text) ?? [];
@@ -276,6 +297,28 @@ export function readingToMarkdown(
     section("method", spaced(methods.map((claim) => claimBlock(claim.text, claim))));
   } else {
     section("method", spaced(reading.method.map((quote) => [quoteLine(quote)])));
+  }
+
+  const reviewSections = report?.reviewContents?.sections ?? [];
+  const keyResults = report?.resultsAndSignificance?.keyResults?.filter((r) => r.title || r.detail) ?? [];
+  const headline = report?.resultsAndSignificance?.summary?.trim();
+  if (reviewSections.length > 0) {
+    extra(
+      "What the review covers",
+      spaced(reviewSections.map((entry) => [`**${entry.heading}**`, entry.summary])),
+    );
+  } else if (keyResults.length > 0 || headline) {
+    section("findings", [
+      ...(headline ? [headline, ""] : []),
+      ...spaced(
+        keyResults.map((result) => [
+          ...claimBlock(`**${result.title}.** ${result.detail}`.trim(), result),
+          ...(result.novelty ? [`What is new here: ${result.novelty}`] : []),
+        ]),
+      ),
+    ]);
+  } else {
+    section("findings", spaced(reading.findings.map((quote) => [quoteLine(quote)])));
   }
 
   const limitations = report?.limitations?.filter((claim) => claim.text) ?? [];

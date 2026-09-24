@@ -27,6 +27,17 @@ export interface ResolveFigureArgs {
   variant?: Variant;
   figureIndex?: number;
   hideOnMiss?: boolean;
+  /**
+   * 9-15 (A9-10): the owner's private-upload attachment revision (9-12),
+   * when known. Folded into both the in-flight/settled map key and the
+   * request itself, so a delete-then-re-upload of the identical bytes (the
+   * same `itemId` hash16, a fresh `revision`) never joins an in-flight
+   * request or reads a settled result left over from the asset's previous
+   * lifecycle. Optional and additive: a caller that never passes it (e.g. a
+   * non-upload paper, or a caller with no `Paper.revision` in hand) behaves
+   * exactly as before.
+   */
+  revision?: number;
 }
 
 // Default image box sizing. Compact report figures now get much more height
@@ -87,7 +98,7 @@ function remember(key: string, state: FigureState): void {
 /** The route's verdict for these args; throws on a transport failure. */
 async function fetchFigure(
   key: string,
-  { itemId, url, doi, query, paperTitle, figureIndex = 0 }: ResolveFigureArgs,
+  { itemId, url, doi, query, paperTitle, figureIndex = 0, revision }: ResolveFigureArgs,
   signal: AbortSignal,
 ): Promise<FigureState> {
   const params = new URLSearchParams({ id: itemId, v: "11" });
@@ -96,6 +107,13 @@ async function fetchFigure(
   if (query?.trim()) params.set("query", query.trim());
   if (paperTitle?.trim()) params.set("paperTitle", paperTitle.trim());
   if (figureIndex > 0) params.set("idx", String(figureIndex));
+  // 9-15: the server ignores this param today (it re-authenticates and
+  // reads fresh on every call for an `upload:` id regardless — 9-14
+  // confirmed no server-side cache exists to key on it) — carried here so
+  // the URL itself documents which revision this specific request asked
+  // for, and so two requests that otherwise look identical but differ only
+  // by revision are never coalesced by an intermediary that keys on the URL.
+  if (revision !== undefined) params.set("rev", String(revision));
 
   const data = (await apiFetch(`/api/figure?${params.toString()}`, {
     cache: "no-store",
@@ -135,7 +153,7 @@ function acquire(key: string, args: ResolveFigureArgs): InFlight {
     // session's, not the paper's, and the next asker may reach the route.
     created.promise = fetchFigure(key, args, controller.signal)
       .then((state) => {
-        remember(key, state);
+        if (!args.itemId.startsWith("upload:")) remember(key, state);
         return state;
       })
       .finally(() => {
@@ -175,6 +193,29 @@ function failureState(key: string, err: unknown): FigureState {
   };
 }
 
+/**
+ * 9-15 (A9-10): a pure function so the key's shape can be tested
+ * without rendering the hook (this project's Vitest config runs in a
+ * plain Node environment, no DOM). `revision`, when present, keeps a
+ * delete-then-re-upload of the identical bytes (the same `itemId`
+ * hash16, a fresh lifecycle instance) from joining an in-flight request
+ * or reading a settled result left over from the asset's previous
+ * instance. Absent for every caller that never passes one (the
+ * overwhelming majority - non-upload papers), so the key is unchanged
+ * for them.
+ */
+export function buildFigureRequestKey(args: ResolveFigureArgs): string {
+  return [
+    args.itemId,
+    args.url ?? "",
+    args.doi ?? "",
+    args.query ?? "",
+    args.paperTitle ?? "",
+    String(args.figureIndex ?? 0),
+    args.revision !== undefined ? String(args.revision) : "",
+  ].join("\u001f");
+}
+
 export function useResolvedFigure({
   itemId,
   url,
@@ -182,15 +223,9 @@ export function useResolvedFigure({
   query,
   paperTitle,
   figureIndex = 0,
+  revision,
 }: ResolveFigureArgs): FigureState {
-  const requestKey = [
-    itemId,
-    url ?? "",
-    doi ?? "",
-    query ?? "",
-    paperTitle ?? "",
-    String(figureIndex),
-  ].join("\u001f");
+  const requestKey = buildFigureRequestKey({ itemId, url, doi, query, paperTitle, figureIndex, revision });
 
   const [figure, setFigure] = useState<FigureState>(initialFigureState());
   // Derived, not set in an effect: a figure already settled for these args
@@ -203,7 +238,7 @@ export function useResolvedFigure({
   useEffect(() => {
     if (settled.has(requestKey)) return;
     let cancelled = false;
-    const entry = acquire(requestKey, { itemId, url, doi, query, paperTitle, figureIndex });
+    const entry = acquire(requestKey, { itemId, url, doi, query, paperTitle, figureIndex, revision });
     entry.promise.then(
       (state) => {
         if (!cancelled) setFigure(state);
@@ -220,7 +255,7 @@ export function useResolvedFigure({
       // figure request running.
       release(requestKey);
     };
-  }, [itemId, url, doi, query, paperTitle, figureIndex, requestKey]);
+  }, [itemId, url, doi, query, paperTitle, figureIndex, revision, requestKey]);
 
   return activeFigure;
 }
@@ -347,6 +382,7 @@ function noticeTitle(status: FigureState["status"]): string {
   if (status === "no_figures") return "No extractable figures found";
   if (status === "paywalled") return "Figure source unavailable";
   if (status === "source_unavailable") return "Figure source unavailable";
+  if (status === "rate_limited") return "Figure source rate-limited";
   return "No verified paper figure found";
 }
 
@@ -359,6 +395,9 @@ function defaultReason(status: FigureState["status"]): string {
   }
   if (status === "paywalled") {
     return "Peer reached the source, but figure access appears restricted.";
+  }
+  if (status === "rate_limited") {
+    return "A figure source rate-limited Peer's request; try again in a moment.";
   }
   return "Peer could not reach a usable figure source.";
 }

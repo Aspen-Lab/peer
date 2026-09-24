@@ -9,6 +9,7 @@ export type PreferenceConceptSource =
   | "openalex_keyword"
   | "openalex_concept"
   | "paper_keyword"
+  | "uploaded_article"
   | "job_tag"
   | "event_topic"
   | "opportunity_facet"
@@ -19,12 +20,29 @@ export interface PreferenceConcept {
   label: string;
   source: PreferenceConceptSource;
   confidence?: number;
+  /** Section where an uploaded article supplied this phrase. */
+  section?: string;
+  /**
+   * 9-21 (A9-04/A9-11): rule-based classification, only ever set for an
+   * uploaded article's own extracted phrases — a closed 3-way split, not the
+   * handoff's fuller 6-way taxonomy. Undefined for every other concept
+   * source (OpenAlex tags already carry their own topic identity).
+   */
+  facet?: "method" | "material" | "topic";
+  /**
+   * 9-21 (A9-04/A9-11): the local extraction algorithm's own version,
+   * stamped on every concept `extractUploadConcepts` produces so a stored
+   * concept can be told apart from one a future rewrite of the candidate
+   * filter/facet rules would produce. Undefined for every non-upload source.
+   */
+  extractionVersion?: number;
 }
 
 /** Which feed surface a piece of feedback came from. */
 export type FeedItemKind = "paper" | "event" | "job";
 
 export interface PreferenceLedgerEntry extends PreferenceConcept {
+  uploads?: Record<string, { at: string; weight: number }>;
   positive: number;
   negative: number;
   lastPositiveAt?: string;
@@ -60,6 +78,9 @@ export type PreferenceLedger = Record<string, PreferenceLedgerEntry>;
 
 export interface Paper {
   id: string;
+  /** Owner-only PDF supplement; the original paper ID/links stay intact. */
+  fullTextUploadId?: string;
+  uploadDocumentKey?: string;
   title: string;
   authors: string[];
   /** Where the first author works, when the record says so. */
@@ -83,6 +104,42 @@ export interface Paper {
   feedback?: ItemFeedback;
   relevanceScore?: number;
   preferenceSignals?: PreferenceConcept[];
+  /**
+   * 1-30: only ever set for an uploaded PDF (`upload-store.ts`'s
+   * `uploadMetaToPaper`) — the record block can show "N pages" the way it
+   * shows a fact for an authors list that has one. Ignored everywhere else;
+   * no other paper source populates it.
+   */
+  pageCount?: number;
+  /**
+   * A2-02 (2-05): only ever set for an uploaded PDF (`upload-store.ts`'s
+   * `uploadMetaToPaper`), same "upload-only" convention as `pageCount`
+   * above. "ok" when the extractor found real text; "empty" when the PDF
+   * read successfully but had nothing extractable (most likely scanned,
+   * no text layer) — the reading page uses this to skip straight to the
+   * plain "this PDF has no readable text" message instead of asking for a
+   * report. Optional (unlike `UploadMeta.textStatus`): every existing
+   * `Paper` literal from every other source simply never sets it.
+   */
+  textStatus?: "ok" | "empty";
+  /**
+   * 9-12: only ever set for an uploaded PDF's own asset record
+   * (`upload-store.ts`'s `uploadMetaToPaper`, from `UploadMeta.revision`) —
+   * monotonic per owner+document, starting at 1. Lets the reader/report
+   * caches (`use-model-report.ts`, `use-reading.ts`) tell two attachments of
+   * the same paper apart after a replace, without changing `id`.
+   */
+  revision?: number;
+  /**
+   * 9-23 (A9-07): only ever set for an uploaded PDF's own asset record
+   * (`upload-store.ts`'s `uploadMetaToPaper`, from `UploadMeta`) — the
+   * server-recorded evidence audit fields beside `preferenceSignals`, so a
+   * client (or an operator) can see when/by which extraction pass this
+   * upload's learning signal was last computed. Neither participates in the
+   * ledger's own idempotency check (that stays keyed on `documentKey`).
+   */
+  preferenceSignalsRecordedAt?: string;
+  extractionVersion?: number;
 }
 
 // ── Event ──

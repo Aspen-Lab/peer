@@ -26,6 +26,8 @@ import { useProfileStore } from "@/store/profile";
 import { FeedTile } from "@/components/cards/feed-tile";
 import { StarterStrip } from "@/components/briefing/starter-strip";
 import { STARTER_TOPICS, isStarterFeed } from "@/lib/feed/starter-topics";
+import { SearchBox } from "@/components/briefing/search-box";
+import { UploadButton } from "@/components/briefing/upload-button";
 import { Band } from "@/components/ui/band";
 import { PaperDigestLoader } from "@/components/digest/daily-digest";
 import { PageContainer } from "@/components/ui/page-container";
@@ -194,10 +196,25 @@ function DailyBriefingPage() {
       {/* The library first: what you have read, with today's papers placed
           against it — so the day's cards arrive already knowing where they
           sit. It used to close the page, below ten cards, where the one view
-          of everything read was the last thing on the screen anyone reached. */}
-      {papers.length > 0 && (
-        <ReadingStrip papers={papers} readerTopics={starter ? [] : profile.researchTopics} />
-      )}
+          of everything read was the last thing on the screen anyone reached.
+          At the right of the same line, the two ways out of it: upload your
+          own PDF, or leave for /search rather than searching here (see
+          briefing/search-box.tsx, briefing/upload-button.tsx). Both live in
+          their own wrapper so `justify-between` pushes the *pair* to the
+          right, not one to each end of the row. The pair stands even when
+          the strip does not; looking for a paper does not depend on having
+          read any yet. */}
+      <div className="mt-6 flex flex-wrap items-start justify-between gap-x-6 gap-y-4">
+        {papers.length > 0 ? (
+          <ReadingStrip papers={papers} readerTopics={starter ? [] : profile.researchTopics} />
+        ) : (
+          <span aria-hidden />
+        )}
+        <div className="flex items-start gap-2 sm:mt-2">
+          <UploadButton />
+          <SearchBox />
+        </div>
+      </div>
 
       {/* Setup, above the papers it is about — and only until it is done. */}
       {starter && <StarterStrip />}

@@ -8,6 +8,7 @@
 import { useState } from "react";
 import type { Paper } from "@/types";
 import { useResolvedFigure } from "@/components/paper-figure";
+import { FigureLightbox } from "@/components/reader/figure-lightbox";
 
 /**
  * Card venue label. OpenAlex returns the repository plus its host institution —
@@ -75,6 +76,7 @@ export function PaperPlate({
   figure: bound,
   imageAlt,
   className,
+  lightbox = false,
 }: {
   paper: Paper;
   terms?: string[];
@@ -85,6 +87,13 @@ export function PaperPlate({
    */
   imageAlt?: string;
   className?: string;
+  /**
+   * S12, Ruling 15: the reading page's own hero opts into the figure
+   * lightbox; the briefing feed's tiles (`feed-tile.tsx`) do not pass this
+   * and keep their existing click-to-open-paper behaviour untouched. Default
+   * off so every other caller is unaffected by construction.
+   */
+  lightbox?: boolean;
 }) {
   // The same args as the card, so the page and the card read one cache entry.
   const resolved = useResolvedFigure({
@@ -145,8 +154,27 @@ export function PaperPlate({
       className={className ? `${base} ${className}` : base}
     >
       {showFigure ? (
-        <>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
+        lightbox ? (
+          // S12, Ruling 15: the reading page's own hero, opted in. Same
+          // image classes, same cached-image/load/error handling as the
+          // plain branch below, composed through FigureLightbox's
+          // passthrough props rather than duplicated.
+          <FigureLightbox
+            src={src as string}
+            alt={imageAlt ?? caption ?? ""}
+            caption={caption}
+            wrapperClassName="h-full w-full"
+            imgRef={(node) => {
+              if (node?.complete && node.naturalWidth > 0) {
+                node.classList.remove("opacity-0");
+              }
+            }}
+            onLoad={(event) => event.currentTarget.classList.remove("opacity-0")}
+            onError={() => setFailedSrc(src)}
+            className="h-full w-full object-contain opacity-0 transition-opacity duration-[320ms] ease-snap"
+          />
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element
           <img
             src={src as string}
             alt={imageAlt ?? caption ?? ""}
@@ -164,7 +192,7 @@ export function PaperPlate({
             onError={() => setFailedSrc(src)}
             className="h-full w-full object-contain opacity-0 transition-opacity duration-[var(--dur-base)] ease-expo"
           />
-        </>
+        )
       ) : (
         <div className="flex h-full w-full flex-col justify-end px-[7%] pb-[7%] pt-3">
           {terms.length > 0 ? (

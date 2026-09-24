@@ -28,6 +28,10 @@ import {
   searchGemini,
 } from "@/lib/sources/gemini-search";
 import { searchVertex } from "@/lib/sources/vertex-search";
+import {
+  collectSearchResults,
+  searchHttpFailure,
+} from "@/lib/sources/search-failure";
 import { classifyEventType } from "../mapper";
 import { dateClaimEndMs } from "@/lib/format";
 
@@ -2628,7 +2632,7 @@ async function searchTavily(
       signal: AbortSignal.timeout(7000),
       next: { revalidate: 6 * 60 * 60 },
     });
-    if (!res.ok) return [];
+    if (!res.ok) throw await searchHttpFailure("tavily", res);
     const data = (await res.json()) as {
       results?: Array<{ title?: string; url?: string; content?: string }>;
     };
@@ -2638,8 +2642,11 @@ async function searchTavily(
       snippet: r.content,
     }));
   } catch (err) {
+    // Rethrown, not swallowed: `[]` here is indistinguishable from "the web has
+    // no such event", and that ambiguity is what hid a dead key for a whole
+    // day. See sources/search-failure.ts for the contract.
     console.error("[events/eventweb] tavily error:", err);
-    return [];
+    throw err;
   }
 }
 
@@ -2658,7 +2665,7 @@ async function searchBrave(
         next: { revalidate: 6 * 60 * 60 },
       },
     );
-    if (!res.ok) return [];
+    if (!res.ok) throw await searchHttpFailure("brave", res);
     const data = (await res.json()) as {
       web?: { results?: Array<{ title?: string; url?: string; description?: string }> };
     };
@@ -2669,7 +2676,7 @@ async function searchBrave(
     }));
   } catch (err) {
     console.error("[events/eventweb] brave error:", err);
-    return [];
+    throw err;
   }
 }
 
@@ -2829,15 +2836,23 @@ async function fetchImpl(query: EventsQuery): Promise<RawEventItem[]> {
   const deadlineAt = geminiSearchDeadline();
   // Run the daily allocation concurrently so the source's wall-clock timeout
   // cannot strand later, more specific queries.
-  const resultSets = await Promise.all(
-    searches.map((q) =>
-      provider === "vertex"
-        ? searchVertexEvents(q, query.limit, deadlineAt)
-        : provider === "gemini"
-          ? searchGeminiEvents(q, query.limit, deadlineAt)
-          : provider === "tavily"
-            ? searchTavily(q, keys.tavily!, perQuery)
-            : searchBrave(q, keys.brave!, perQuery),
+  // allSettled, not all: one failed query must not cost the whole allocation.
+  // `collectSearchResults` re-raises only when NOTHING came back, so a broken
+  // provider reaches the pipeline's `errors.eventweb` instead of masquerading
+  // as a day with no matching events.
+  const resultSets = collectSearchResults(
+    provider,
+    "events/eventweb",
+    await Promise.allSettled(
+      searches.map((q) =>
+        provider === "vertex"
+          ? searchVertexEvents(q, query.limit, deadlineAt)
+          : provider === "gemini"
+            ? searchGeminiEvents(q, query.limit, deadlineAt)
+            : provider === "tavily"
+              ? searchTavily(q, keys.tavily!, perQuery)
+              : searchBrave(q, keys.brave!, perQuery),
+      ),
     ),
   );
   // ABC-freemium 1-05 / 2-04 · R-METER-2 — one row per operator-funded fan-out,

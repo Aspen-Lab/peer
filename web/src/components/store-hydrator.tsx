@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useProfileStore } from "@/store/profile";
 import { useFeedStore } from "@/store/feed";
 import { useNotesStore } from "@/store/notes";
+import { useReadingPrefsStore } from "@/store/reading-prefs";
 
 // The zustand stores use `persist({ skipHydration: true })` so they do NOT
 // auto-load localStorage before React hydrates. That keeps the first client
@@ -18,6 +19,7 @@ export function StoreHydrator() {
     useProfileStore.persist.rehydrate();
     useFeedStore.persist.rehydrate();
     useNotesStore.persist.rehydrate();
+    useReadingPrefsStore.persist.rehydrate();
   }, []);
 
   return null;

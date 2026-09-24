@@ -19,6 +19,7 @@ import {
 } from "@/components/charts/reading-calendar";
 import { AdvisorField } from "@/components/profile/advisor-field";
 import { summarizePreferenceLedger } from "@/lib/preferences/ledger";
+import { ProfileUploads } from "@/components/profile-uploads";
 import { apiFetch } from "@/lib/api";
 import { SURFACE_TOPIC_DESCRIPTIONS } from "@/lib/profile/topic-copy";
 import { IconBook, IconBuilding, IconCheck } from "@/components/icons";
@@ -27,7 +28,6 @@ import { PageSpread } from "@/components/ui/page-spread";
 import { AccountSection } from "@/components/account/account-section";
 import { VersionLine } from "@/components/shell/version-line";
 import { AiKeyFields } from "@/components/profile/ai-setup";
-import { ConnectorPanel } from "@/components/profile/connector-panel";
 import { Toggle } from "@/components/ui/toggle";
 import { feedsUseAi } from "@/lib/feed/ai-tier";
 import { entitlementGrants } from "@/lib/entitlement/allowance";
@@ -235,6 +235,7 @@ export default function ProfilePage() {
             onReset={resetPreferenceLedger}
           />
           <PastBriefings />
+          <ProfileUploads />
         </>
       ) : (
         <EditView
@@ -994,10 +995,13 @@ function PreferenceChip({
   label,
   weight,
   tone,
+  fromUpload,
 }: {
   label: string;
   weight: number;
   tone: "accent" | "muted";
+  /** 9-24 (A9-12): this entry has ledger evidence from an uploaded PDF. */
+  fromUpload?: boolean;
 }) {
   // Decayed net strength → a subtle 1–3 intensity tier.
   const tier = weight >= 3 ? 2 : weight >= 1.5 ? 1 : 0;
@@ -1014,13 +1018,20 @@ function PreferenceChip({
           "bg-red/10 text-red/90 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-accent)_22%,transparent)]",
         ][tier];
   return (
-    <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-meta ${cls}`}>
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-meta ${cls}`}>
       {label}
+      {fromUpload && (
+        <span className="font-mono text-caption opacity-60" title="Learned from a PDF you uploaded">
+          from your upload
+        </span>
+      )}
     </span>
   );
 }
 
-function LearnedPreferences({
+// Exported for a static-markup test (9-24) — this component only ever reads
+// its own props, never the store directly, so it renders standalone.
+export function LearnedPreferences({
   profile,
   onReset,
 }: {
@@ -1080,7 +1091,7 @@ function LearnedPreferences({
       <div className="px-7 pb-6">
         {!hasAny ? (
           <p className="text-body-sm text-text-faint/80 leading-relaxed measure-ui">
-            Nothing learned yet. As you like, save, or dismiss papers, Peer builds a private
+            Nothing learned yet. As you upload, like, save, or dismiss papers, Peer builds a private
             taste profile here — quietly boosting topics you favor and easing off ones you skip.
             Like and Save count equally; dismissing eases a topic down.
           </p>
@@ -1093,7 +1104,7 @@ function LearnedPreferences({
                 </p>
                 <div className="flex flex-wrap gap-1.5">
                   {liked.map((row) => (
-                    <PreferenceChip key={`like-${row.label}`} label={row.label} weight={row.weight} tone="accent" />
+                    <PreferenceChip key={`like-${row.label}`} label={row.label} weight={row.weight} tone="accent" fromUpload={row.fromUpload} />
                   ))}
                 </div>
               </div>
@@ -1105,7 +1116,7 @@ function LearnedPreferences({
                 </p>
                 <div className="flex flex-wrap gap-1.5">
                   {disliked.map((row) => (
-                    <PreferenceChip key={`dis-${row.label}`} label={row.label} weight={row.weight} tone="muted" />
+                    <PreferenceChip key={`dis-${row.label}`} label={row.label} weight={row.weight} tone="muted" fromUpload={row.fromUpload} />
                   ))}
                 </div>
               </div>
@@ -1531,15 +1542,6 @@ function EditView({
         </div>
       </EditRow>
 
-      <EditRow icon={<IconGlobe />} tone="tag" label="Data APIs">
-        <div className="space-y-3">
-          <p className="text-caption leading-relaxed text-text-muted">
-            Optional third-party keys that widen coverage. All of Peer works
-            without them.
-          </p>
-          <ConnectorPanel />
-        </div>
-      </EditRow>
 
 
 
@@ -1552,15 +1554,6 @@ function IconKey() {
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
       <circle cx="8" cy="14" r="4" />
       <path d="M11 11l7-7M16 6l3 3M14 8l3 3" />
-    </svg>
-  );
-}
-
-function IconGlobe() {
-  return (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <circle cx="12" cy="12" r="9" />
-      <path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" />
     </svg>
   );
 }
@@ -1592,7 +1585,9 @@ function AppearanceCard({
   );
 }
 
-function ColorThemePicker({
+// Exported for tests only (6-11/Ruling 17) — every other caller reaches it
+// through `AppearanceCard`, like `trySemanticScholarCandidates`.
+export function ColorThemePicker({
   value,
   onChange,
 }: {

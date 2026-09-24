@@ -21,9 +21,13 @@ import { aiAvailability } from "@/lib/feed/ai-tier";
 import { entitlementGrants } from "@/lib/entitlement/allowance";
 import { useProfileStore } from "@/store/profile";
 
-const STORAGE_KEY = "peer-paper-report-v4";
+// v6: S6 merged "what is new" into "what it proposes" (whatItProposes.newHere
+// replaces .novelty) and deleted "why it fits you" — a v5 report still has
+// the old two-block/fit shape and would render it for up to DEEP_TTL_MS
+// after upgrade without this bump.
+const STORAGE_KEY = "peer-paper-report-v7";
 /** The cache the old page kept, with its fabricated fallbacks inside. */
-const LEGACY_STORAGE_KEY = "peer-paper-report-cache-v3";
+const LEGACY_STORAGE_KEYS = ["peer-paper-report-cache-v3", "peer-paper-report-v4", "peer-paper-report-v5", "peer-paper-report-v6"];
 const MAX_ENTRIES = 40;
 // A deep report stays well past a session; an abstract-tier one expires
 // sooner so a transient failure (paywall flap, model hiccup) self-heals on
@@ -83,6 +87,26 @@ function hash(text: string): string {
   return (h >>> 0).toString(36);
 }
 
+/**
+ * 9-15 (A9-10): a pure function so the key's shape — in particular, that
+ * `revision` (9-12) is part of it — can be tested without rendering the
+ * hook (this project's Vitest config runs in a plain Node environment, no
+ * DOM). `paper.revision` distinguishes a delete-then-re-upload of the
+ * identical bytes (the same hash16, hence the same `fullTextUploadId`
+ * string, but a fresh lifecycle instance) from the attachment a stale key
+ * was built against; `undefined` for every paper without a private
+ * attachment, so the key is unchanged for the vast majority of papers.
+ */
+export function buildReportKey(
+  paper: Pick<Paper, "id" | "fullTextUploadId" | "revision"> | undefined,
+  depth: "deep" | "abstract",
+  project: string,
+  provider: string,
+): string {
+  if (!paper) return "";
+  return `${paper.id}|${paper.fullTextUploadId ?? "public"}|${paper.revision ?? ""}|${depth}|${hash(project)}|${provider}`;
+}
+
 export interface ModelReportState {
   /** A verified, model-written report; null when there is no model layer. */
   report: PaperReport | null;
@@ -90,6 +114,16 @@ export interface ModelReportState {
   stage: { label: string; pct: number } | null;
   /** The model was asked and could not finish; the paper's own text stands. */
   failed: boolean;
+  /**
+   * S5: true when `report` just finished generating in this visit — a live
+   * model call settled, not a `readCached` hit on mount. The page uses this
+   * to decide whether the report's text scrambles into place (fresh) or
+   * renders plainly (a cache hit, including a page revisited later in the
+   * same session).
+   */
+  fresh: boolean;
+  /** The cache key this report was fetched/cached under — `""` with no paper. */
+  reportKey: string;
 }
 
 interface Result {
@@ -146,13 +180,12 @@ export function useModelReport({
   // server's dev entitlement stands in for this locally) or the reader's own key.
   // No NODE_ENV test here: AI availability is decided on the server.
   const deep =
-    Boolean(profile.deepReportEnabled) && aiMode !== "none";
+    Boolean(profile.deepReportEnabled || paper?.fullTextUploadId) && aiMode !== "none";
   const depth = deep ? "deep" : "abstract";
-  const reportKey = paper
-    ? `${paper.id}|${depth}|${hash(project)}|${profile.feedAiProvider}`
-    : "";
+  const privatePdf = !!paper?.fullTextUploadId || !!paper?.id.startsWith("upload:");
+  const reportKey = buildReportKey(paper, depth, project, profile.feedAiProvider);
 
-  const cached = useMemo(() => readCached(reportKey), [reportKey]);
+  const cached = useMemo(() => privatePdf ? null : readCached(reportKey), [reportKey, privatePdf]);
   const [result, setResult] = useState<Result | null>(null);
   const [buildup, setBuildup] = useState<{
     key: string;
@@ -165,7 +198,7 @@ export function useModelReport({
   // back.
   useEffect(() => {
     try {
-      localStorage.removeItem(LEGACY_STORAGE_KEY);
+      for (const key of LEGACY_STORAGE_KEYS) localStorage.removeItem(key);
     } catch {
       /* nothing to remove, or no storage */
     }
@@ -183,7 +216,13 @@ export function useModelReport({
 
   useEffect(() => {
     const current = paperRef.current;
-    if (!current || !reportKey || cached) return;
+    // 2-05 (A2-02): a paper whose record already says its PDF had nothing
+    // extractable (an uploaded, scanned PDF with no text layer) has no text
+    // for any tier to report on — asking anyway would waste a call to
+    // return the same honest emptiness the record's own textStatus already
+    // states. The reading page renders the plain "no readable text"
+    // sentence directly from `paper.textStatus` instead.
+    if (!current || !reportKey || cached || current.textStatus === "empty") return;
     const controller = new AbortController();
     const active = () => !controller.signal.aborted;
 
@@ -224,7 +263,7 @@ export function useModelReport({
         return;
       }
       const shown = outcome === "shown" ? report : null;
-      if (shown) writeCached(reportKey, shown);
+      if (shown && !privatePdf) writeCached(reportKey, shown);
       setBuildup(null);
       setResult({ key: reportKey, report: shown, failed: false });
     };
@@ -300,6 +339,7 @@ export function useModelReport({
     return () => controller.abort();
   }, [
     reportKey,
+    privatePdf,
     cached,
     contextHint,
     project,
@@ -313,5 +353,11 @@ export function useModelReport({
   const report = cached ?? settled?.report ?? null;
   const stage =
     !report && buildup?.key === reportKey ? { label: buildup.label, pct: buildup.pct } : null;
-  return { report, stage, failed: Boolean(settled?.failed) };
+  return {
+    report,
+    stage,
+    failed: Boolean(settled?.failed),
+    fresh: !cached && settled?.report != null,
+    reportKey,
+  };
 }

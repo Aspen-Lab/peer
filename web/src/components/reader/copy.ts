@@ -18,13 +18,48 @@ export const BLOCK_HEADING: Record<Exclude<ReadingBlock, "skim">, string> = {
   nextStep: "Next step",
 };
 
+/**
+ * The restored report sections, in the order the old report read them:
+ * proposal, results (or a review's contents), a glance, and what else
+ * today's briefing holds. Named in this page's voice — sentence case, what
+ * Peer did with the paper — not the old title-case labels.
+ *
+ * S6 (2026-09): "What is new" merged into "What it proposes" (they
+ * duplicated each other) and "Why it fits you" was deleted outright.
+ */
+export const REPORT_HEADING = {
+  proposal: "What it proposes",
+  review: "What the review covers",
+  glance: "At a glance",
+  related: "Related from your feed",
+} as const;
+
+/** Under a block Peer wrote with no sentence of the paper to show for it. */
+export const PEERS_READING = "Peer's reading — not a quote";
+
+/** Before a result's novelty line. */
+export const WHATS_NEW = "What is new here:";
+
+/** The glance facts. */
+export const GLANCE = {
+  preprint: "Preprint on arXiv",
+  journal: (venue: string) => `Published in ${venue}`,
+  code: "Code available",
+  match: (score: number) => `${Math.round(score * 100)}% match to your topics`,
+  team: (n: number) =>
+    n === 1 ? "Solo author" : n <= 3 ? `${n} authors · small team` : n <= 10 ? `${n} authors` : `${n} authors · large team`,
+} as const;
+
 export const ABSTRACT_FOOTER = "From the abstract · claim and numbers in ink";
 
 /** Under the lifted claim — whose sentence it is. It is chosen from the
  *  abstract's sentences, so it says the abstract whatever else Peer read. */
 export const LEAD_CLAIM = "The paper's own claim, from its abstract";
 export const LEAD_CLAIM_LABEL = "The claim";
-export const ABSTRACT_LABEL = "The abstract";
+// 8-03/S25: was "The abstract" (a Band section label). Now the visible text
+// of a button that opens/closes the abstract — "Abstract" alone reads right
+// in that role. One consumer (paper-words.tsx).
+export const ABSTRACT_LABEL = "Abstract";
 
 /** The paper itself, when the extractor reached it. */
 export const BODY = {
@@ -122,6 +157,10 @@ export const TOAST = {
 export function progressSuffix(stageLabel: string): string {
   return ` — ${stageLabel}…`;
 }
+
+/** S19: the fixed label under the relocated progress bar — always this
+ * exact string, never the pipeline-stage label `progressSuffix` names. */
+export const PROGRESS_LABEL = "loading report...";
 
 export const NOT_FOUND = "Paper not found.";
 

@@ -196,7 +196,7 @@ beyond normalization.
 | --- | --- | --- |
 | `openalex` | `openalex.ts` | Primary academic source (250M+ works). Also powers live search. |
 | `arxiv` | `arxiv.ts` | Preprints. |
-| `semantic_scholar` | `semantic-scholar.ts` | Optional `SEMANTIC_SCHOLAR_API_KEY` for figures. |
+| `semantic_scholar` | `semantic-scholar.ts` | Optional `SEMANTIC_SCHOLAR_API_KEY` raises its search/enrichment rate limit; the Graph API has no figures field, so it never supplies figures (see Ruling 20). |
 | `dblp` | `dblp.ts` | CS bibliography. |
 | `pubmed` | `pubmed.ts` | Biomedical. |
 | `web` | `web-search.ts` | Brave/Tavily-backed web scouting (non-paper context). |
@@ -294,6 +294,47 @@ Figures get their own subsystem ([`lib/figures/`](web/src/lib/figures/)): extrac
 extraction, semantic matching, and vision matching, then binding to report results
 ([`figure-binding.ts`](web/src/lib/papers/figure-binding.ts)).
 
+**Upload your own PDF** (the black square left of the front-page search box) reads a paper Peer
+never crawled: `POST /api/papers/upload` hashes the file (`upload-store.ts`, id `upload:<sha16>`,
+idempotent) and stores it under `web/.local-data/uploads/` — **gitignored, scoped to the
+uploading owner (the signed-in account, or a per-browser capability cookie in local dev — never
+a shared identity), and local to this machine only; an upload made in one `next dev`/deployment
+is not visible from another, and nothing here is persisted on Vercel.** Every private route
+(metadata, the raw file, reading, report generation, figures, the owner's own upload list,
+delete) checks that owner before touching disk. `full-text.ts` and `lib/figures/extract.ts` both
+recognize an `upload:` id and read the stored file directly, so the rest of the deep-report/figure
+pipeline needs no separate code path. A PDF with no extractable text (a scanned image, most often)
+still uploads successfully; the reading page says so plainly instead of pretending a report
+exists. Uploaded phrases also feed the ranking/recommendation ledger as their own evidence source
+(`lib/preferences/`) — see **Private PDF uploads** below for storage, retention, consent, and the
+legal boundaries this is not able to guarantee.
+
+**Retention & cleanup (9-18).** Private uploads expire after 30 days; access is refused past
+expiry immediately, but the bytes themselves are only physically removed by
+`GET /api/jobs/purge-uploads` (bearer `Authorization: Bearer <CRON_SECRET>`, timing-safe,
+401 with no/wrong secret) — every upload also sweeps expired records opportunistically, but that
+is a supplement to the scheduled job, not a substitute for one. Two ways to actually run it, and
+**neither runs automatically in this local checkout**:
+- **Vercel**: the repo-root [`vercel.json`](vercel.json) declares a daily cron
+  (`crons: [{ path: "/api/jobs/purge-uploads", schedule: "17 3 * * *" }]`); set `CRON_SECRET` in
+  the Vercel project's environment variables and Vercel calls the route with that bearer
+  automatically — nothing else to configure.
+- **Self-hosting**: `npm run purge-uploads` (`web/scripts/purge-uploads.mjs`) calls the same
+  route by HTTP against an already-running instance; point your own OS-level scheduler
+  (`cron`, Task Scheduler, etc.) at that command with `CRON_SECRET` set in its environment.
+
+**Private PDF uploads: storage, consent, and legal boundaries.** Full detail —
+exactly what the consent screen asserts, what "30 days" covers versus what it doesn't
+(file deletion and learned-preference decay are separate lifecycles), how content reaches a
+reader's own configured AI provider and never an operator-wide fallback, the operator takedown
+route (`POST /api/admin/uploads/block`), and the open legal/operational conditions this project
+has **not** resolved (jurisdiction, a real takedown process, PyMuPDF's own AGPL/commercial
+licensing) — lives in [`docs/PRIVATE_PDF_UPLOADS.md`](docs/PRIVATE_PDF_UPLOADS.md). Owner
+isolation, a stated retention window, and recorded consent are risk-reduction engineering, **not
+a legal opinion and not a guarantee that any given upload is lawful** — treat hosted uploads
+(`PEER_UPLOADS_ENABLED`) as off by default until that document's open conditions are actually
+resolved for your deployment.
+
 > ⚠️ Deep reports burn tokens (small + large model **per paper**). They are gated behind
 > an explicit user toggle and require a resolvable key. Any LLM failure must return `null`
 > so the caller falls back to the abstract path. Preserve that.
@@ -390,17 +431,28 @@ None are required for Tier 0 to function. Grouped by purpose:
 `SUPABASE_SERVICE_ROLE_KEY` (server/cron only).
 
 **Feed / tiers:** `PEER_FEED_AI_TIER` (0/1/2, default 0). `PEER_DIGEST_PROVIDER` is
-accepted only by local `next dev`.
+accepted only by local `next dev`. `PEER_REPORT_MODEL_TIER` (`large` default, or
+`small`) picks which Gemini tier writes the paper report; everything else runs small.
 
 **Local-development-only LLM provider keys:**
 `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GOOGLE_API_KEY`,
-`GOOGLE_VERTEX_PROJECT` / `GOOGLE_VERTEX_LOCATION` / `GOOGLE_APPLICATION_CREDENTIALS` /
-`GOOGLE_VERTEX_ALLOW_GLOBAL_FALLBACK`, `QWEN_API_KEY` (or `DASHSCOPE_API_KEY`), `DEEPSEEK_API_KEY`.
+`GOOGLE_VERTEX_PROJECT` / `GOOGLE_VERTEX_LOCATION` / `GOOGLE_APPLICATION_CREDENTIALS`
+(Gemini 3 models are served from Vertex's global endpoint; the configured region is only the
+last-resort fallback), `QWEN_API_KEY` (or `DASHSCOPE_API_KEY`), `DEEPSEEK_API_KEY`.
 Do not add these to Vercel. Preview/production builds fail when operator-funded model
 credentials are present; online users must supply their own key through the BYOK UI.
 
 **Search / enrichment:** `TAVILY_API_KEY`, `BRAVE_SEARCH_API_KEY`,
-`SEMANTIC_SCHOLAR_API_KEY`, `OPENALEX_EMAIL`, `UNPAYWALL_EMAIL` (polite-pool emails).
+`SEMANTIC_SCHOLAR_API_KEY` (one server-side key, shared by every reader of the deployment; free from
+semanticscholar.org/product/api — the Academic Graph API is the one Peer calls, for paper search
+(`sources/semantic-scholar.ts`) and abstract/TLDR enrichment (`papers/enrich.ts`) only. **Semantic
+Scholar does not supply figures**: the Graph API has no `figures` field, so a figure lookup there
+always failed — 400 unthrottled, 429 throttled — and Peer no longer attempts one (Ruling 20). A
+keyed account's published limit is 1 request per second, enforced with some burst memory in
+practice, so Peer's own shared client (`sources/semantic-scholar-client.ts`) paces keyed calls to
+one per 1.5 s (350 ms unkeyed) and retries a 429 with exponential backoff — 1 s, 2 s, 4 s — before
+giving up. Optional — without a key, search and enrichment still work, just slower and more likely
+to be throttled), `OPENALEX_EMAIL`, `UNPAYWALL_EMAIL` (polite-pool emails).
 
 **Jobs feed (all optional — Remotive/Arbeitnow/Himalayas run keyless):**
 `ADZUNA_APP_ID` + `ADZUNA_APP_KEY` (free at developer.adzuna.com; best industry

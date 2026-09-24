@@ -68,6 +68,37 @@ export function IconCalendar({ size = 12, strokeWidth = 2, className }: IconProp
   );
 }
 
+/** S16: day mode — the sun, one of the reader's two reading-mode buttons. */
+export function IconSun({ size = 12, strokeWidth = 2, className }: IconProps) {
+  return (
+    <svg {...strokeProps(size, strokeWidth, className)}>
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 3v2M12 19v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M3 12h2M19 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
+    </svg>
+  );
+}
+
+/** S16: night mode — the moon, the reader's other reading-mode button. */
+export function IconMoon({ size = 12, strokeWidth = 2, className }: IconProps) {
+  return (
+    <svg {...strokeProps(size, strokeWidth, className)}>
+      <path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5z" />
+    </svg>
+  );
+}
+
+/** S21: "Fit to screen" — four outward corner brackets, the reader's fifth
+ *  icon button after sun/moon. One `aria-pressed` state (filled vs outline
+ *  tone, matching sun/moon's own pairing) does the "on/off" telling, so one
+ *  glyph covers both Fit and Book layout. */
+export function IconExpand({ size = 12, strokeWidth = 2, className }: IconProps) {
+  return (
+    <svg {...strokeProps(size, strokeWidth, className)}>
+      <path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" />
+    </svg>
+  );
+}
+
 export function IconBullseye({ size = 12, strokeWidth = 2, className }: IconProps) {
   return (
     <svg {...strokeProps(size, strokeWidth, className)}>
@@ -199,6 +230,15 @@ export function IconQuote({ size = 13, strokeWidth = 1.8, className }: IconProps
     <svg {...strokeProps(size, strokeWidth, className)}>
       <path d="M9 6.5C6.2 7.6 4.5 10 4.5 13v4.5h6V11H7.6c.1-1.4.7-2.4 1.9-3z" />
       <path d="M19 6.5c-2.8 1.1-4.5 3.5-4.5 6.5v4.5h6V11h-2.9c.1-1.4.7-2.4 1.9-3z" />
+    </svg>
+  );
+}
+
+/** 8-03/S25: the abstract toggle's disclosure arrow — rotates 180deg open. */
+export function IconChevronDown({ size = 16, strokeWidth = 2, className }: IconProps) {
+  return (
+    <svg {...strokeProps(size, strokeWidth, className)}>
+      <polyline points="6 9 12 15 18 9" />
     </svg>
   );
 }

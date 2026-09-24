@@ -28,7 +28,11 @@ export type SourceLinkLabel =
   | "europepmc"
   | "input"
   | "doi"
-  | "derived";
+  | "derived"
+  /** 1-28: an `upload:` id's own stored file — not a fetched "link" in the
+   * usual sense, but the source-link shape is what `full-text.ts`'s callers
+   * (the reading page, figure binding) already know how to read. */
+  | "upload";
 
 export interface SourceLink {
   url: string;
@@ -98,7 +102,10 @@ export function cleanDoi(doi: string): string {
 }
 
 function inferKind(url: string): SourceLinkKind {
-  return /\.pdf(?:$|[?#])/i.test(url) ? "pdf" : "html";
+  // arXiv serves its PDFs at `/pdf/<id>` with no suffix; filing that as HTML
+  // let the caller's link outrank the builder's own PDF entry for the same
+  // URL and route it down the HTML path, which cannot read a PDF.
+  return /\.pdf(?:$|[?#])|arxiv\.org\/pdf\//i.test(url) ? "pdf" : "html";
 }
 
 function pmcIdFromUrl(url: string): string | null {

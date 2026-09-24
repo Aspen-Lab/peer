@@ -21,28 +21,44 @@ type ModelTarget = {
   tier: ModelTier;
 };
 
-const REGIONAL_MODEL_CHAIN = [
-  {
-    id: PROVIDER_MODELS.gemini.small,
-    location: "regional",
-    tier: "small",
-  },
-  {
-    id: PROVIDER_MODELS.gemini.large,
-    location: "regional",
-    tier: "large",
-  },
-] satisfies ModelTarget[];
-
-const GLOBAL_FALLBACK_CHAIN = [
+// The server's own Vertex project. Global endpoint only, by the founder's
+// call (2026-09-14): Gemini 3 is served from nowhere else — measured on this
+// project, every 3.x id answered 404 on us-central1 and 200 on global — and
+// the retired 2.5 family is not kept as a regional fallback. Small before
+// large: the digest walks the whole chain and takes the first model that
+// answers.
+const VERTEX_MODEL_CHAIN = [
+  { id: PROVIDER_MODELS.gemini.small, location: "global", tier: "small" },
   { id: "gemini-3.5-flash-lite", location: "global", tier: "small" },
-  { id: "gemini-3.6-flash", location: "global", tier: "large" },
+  { id: PROVIDER_MODELS.gemini.large, location: "global", tier: "large" },
+  { id: "gemini-3.8-flash", location: "global", tier: "large" },
 ] satisfies ModelTarget[];
 
+// The reader's own Gemini API key. Google retired the 2.5 family for accounts
+// created after their successors shipped (a fresh key answers `404 "no longer
+// available to new users"`, measured 2026-09-13), so no 2.5 id is tried here:
+// each would cost a new key a failed round-trip on every call. Each tier is
+// the chosen model, then the next one up the same line.
 const GEMINI_API_MODEL_CHAIN = [
   { id: PROVIDER_MODELS.gemini.small, location: "global", tier: "small" },
+  { id: "gemini-3.5-flash-lite", location: "global", tier: "small" },
   { id: PROVIDER_MODELS.gemini.large, location: "global", tier: "large" },
+  { id: "gemini-3.8-flash", location: "global", tier: "large" },
 ] satisfies ModelTarget[];
+
+/** The reader's-key chain, in walk order — for tests that assert "one ledger
+ *  row per attempt, naming the chain in order" without retyping the ids. */
+export const GEMINI_API_CHAIN_IDS: readonly string[] = GEMINI_API_MODEL_CHAIN.map((t) => t.id);
+
+/**
+ * Ids measured to accept NO thinking control — `thinkingBudget: 0` and
+ * `thinkingLevel: "minimal"` both answer 400 INVALID_ARGUMENT. They keep
+ * their default thinking and get `THINKING_HEADROOM` on the cap instead.
+ * Listed, not inferred: `gemini.test.ts` fails for any shipped id that is in
+ * neither a thinking family nor this set, so an unmeasured id still cannot
+ * slip in silently. `gemini-3.8-flash`: measured 2026-09-13.
+ */
+export const GEMINI_NO_THINKING_CONTROL: ReadonlySet<string> = new Set(["gemini-3.8-flash"]);
 
 // For tier-aware calls, narrow the chain to a single appropriate model. The
 // default chain stays economical-first for digests. `small`/`large` are
@@ -52,7 +68,7 @@ function chainForTier(chain: ModelTarget[], tier?: ModelTier): ModelTarget[] {
   return chain.filter((target) => target.tier === tier);
 }
 
-// ── Generation-config policy (the fix) ──────────────────────────────
+// ── Generation-config policy ─────────────────────────────────────
 //
 // Two Gemini-specific gotchas the old code ignored:
 //   1. It never forwarded the caller's `maxTokens`, so every call ran with an
@@ -81,18 +97,31 @@ function chainForTier(chain: ModelTarget[], tier?: ModelTier): ModelTarget[] {
 // `gemini-3.6-flash` billed 139 thought tokens for a one-line ping, so this is
 // a real charge on the fallback path and not a theoretical one.
 //
+// Merge note (2026-09-23): the follow-up branch measured ONE MORE id on
+// 2026-09-13 that this table never covered — `gemini-3.8-flash` — and found
+// it returns `400 INVALID_ARGUMENT` on `thinkingLevel: "minimal"` too. A broad
+// "every gemini-3.x-flash" regex would therefore silently break that model's
+// place in the fallback chain (VERTEX_MODEL_CHAIN's `large`-tier fallback), so
+// the Gemini-3 family match below is deliberately the narrow, fully-measured
+// list rather than a version-number pattern. Add an id here only after
+// measuring it, the same way these three and 3.8 were measured.
+//
 // A model no family matches keeps thinking ON and gets `THINKING_HEADROOM`, so
 // an unmeasured model costs money rather than 400-ing — and
 // `gemini.test.ts` fails the moment a chain gains an id no family covers,
 // which is the guard that stops the next swap re-opening this.
 
 const GEN_TIMEOUT_MS = 120_000; // generous per-attempt hang guard, not a latency cap
-const THINKING_HEADROOM = 4096;
+export const THINKING_HEADROOM = 4096;
 
 /** Gemini 2.5 Flash — the generation whose thinking control is `thinkingBudget`. */
 const GEMINI_2_5_FLASH_FAMILY = /gemini-2\.5-flash\b/;
-/** Gemini 3.x Flash — the generation whose thinking control is `thinkingLevel`. */
-const GEMINI_3_FLASH_FAMILY = /gemini-3(?:\.\d+)?-flash\b/;
+/**
+ * The Gemini 3 Flash ids actually measured to accept `thinkingLevel`. NOT a
+ * version-number pattern — `gemini-3.8-flash` looks like it belongs and does
+ * not: 400 INVALID_ARGUMENT, measured 2026-09-13 (see the note above).
+ */
+const GEMINI_3_FLASH_FAMILY = /^gemini-3\.[15]-flash-lite$|^gemini-3\.6-flash$/;
 
 type ThinkingOff =
   | { thinkingBudget: 0 }
@@ -116,7 +145,7 @@ function disableThinking(modelId: string): boolean {
   return thinkingOffConfig(modelId) !== undefined;
 }
 
-/** Output cap including thinking headroom where the model still thinks. */
+/** Output cap including thinking headroom wherever the model may still think. */
 function outputCap(modelId: string, maxTokens?: number): number | undefined {
   if (maxTokens == null) return undefined;
   return disableThinking(modelId) ? maxTokens : maxTokens + THINKING_HEADROOM;
@@ -184,10 +213,7 @@ const clients = new Map<string, GoogleGenAI>();
 const apiClients = new Map<string, GoogleGenAI>();
 
 function getModelChain(): ModelTarget[] {
-  if (process.env.GOOGLE_VERTEX_ALLOW_GLOBAL_FALLBACK === "true") {
-    return [...REGIONAL_MODEL_CHAIN, ...GLOBAL_FALLBACK_CHAIN];
-  }
-  return REGIONAL_MODEL_CHAIN;
+  return VERTEX_MODEL_CHAIN;
 }
 
 function getClient(location: string): GoogleGenAI | null {

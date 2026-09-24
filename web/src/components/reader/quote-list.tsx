@@ -19,8 +19,8 @@ export function QuoteList({ block, quotes }: { block: BlockName; quotes: Reading
       <ul className="rv rv-late reading-prose space-y-4 list-none measure-paper">
         {quotes.map((quote) => (
           <li
-            key={`${quote.from.heading}${quote.text}`}
-            className="text-text"
+            key={`${quote.from.heading}${quote.text}`}
+            className="font-reading text-lead leading-[1.6] text-text reading-justify"
           >
             <MathText text={quote.text} />
             <span className="annotation text-meta text-text-faint ml-2">

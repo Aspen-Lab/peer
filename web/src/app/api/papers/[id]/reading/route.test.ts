@@ -8,6 +8,7 @@ import zenodoDocJson from "@/lib/papers/__fixtures__/zenodo-W7208807247.doc.json
 const mocks = vi.hoisted(() => ({
   fetchPaperById: vi.fn(),
   getFullText: vi.fn(),
+  readUploadMeta: vi.fn(),
 }));
 
 vi.mock("@/lib/papers/fetch-by-id", () => ({
@@ -16,8 +17,19 @@ vi.mock("@/lib/papers/fetch-by-id", () => ({
 vi.mock("@/lib/papers/full-text", () => ({
   getFullText: mocks.getFullText,
 }));
+vi.mock("@/lib/papers/upload-store", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/papers/upload-store")>();
+  return {
+    ...actual,
+    readUploadMeta: mocks.readUploadMeta,
+  };
+});
 
 import { GET } from "./route";
+
+vi.mock("@/lib/papers/upload-access", async (original) => ({
+  ...await original<typeof import("@/lib/papers/upload-access")>(), ownedUpload: mocks.readUploadMeta,
+}));
 
 const zenodoDoc = zenodoDocJson as unknown as ExtractedDocument;
 
@@ -56,6 +68,7 @@ describe("GET /api/papers/[id]/reading", () => {
   beforeEach(() => {
     mocks.fetchPaperById.mockReset();
     mocks.getFullText.mockReset();
+    mocks.readUploadMeta.mockReset();
   });
 
   afterEach(() => {
@@ -73,6 +86,9 @@ describe("GET /api/papers/[id]/reading", () => {
       "public, s-maxage=86400, stale-while-revalidate=604800",
     );
     const body = await res.json();
+    // 1-28/1-31: PaperReading.version bumped 3 -> 4 for the new `pdf_empty`
+    // fullText state; 4 -> 5 is main's later math-rendering shape change,
+    // which this merge keeps (see reading.test.ts's own note).
     expect(body.version).toBe(5);
     expect(body.paperId).toBe("openalex:W7208807247");
     expect(body.provenance.fullText).toBe("pdf");
@@ -155,5 +171,151 @@ describe("GET /api/papers/[id]/reading", () => {
     expect(res.status).toBe(404);
     expect(res.headers.get("cache-control")).toBe("no-store");
     expect(mocks.getFullText).not.toHaveBeenCalled();
+  });
+});
+
+describe("GET /api/papers/[id]/reading — 2-05 (bug B): an upload: id never reaches fetchPaperById", () => {
+  beforeEach(() => {
+    mocks.fetchPaperById.mockReset();
+    mocks.getFullText.mockReset();
+    mocks.readUploadMeta.mockReset();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("404s, uncached, when no upload record exists for the hash — and never calls fetchPaperById", async () => {
+    mocks.readUploadMeta.mockResolvedValue(null);
+
+    const res = await call("upload:0000000000000000");
+
+    expect(res.status).toBe(404);
+    expect(res.headers.get("cache-control")).toBe("no-store");
+    expect(mocks.fetchPaperById).not.toHaveBeenCalled();
+  });
+
+  it("returns pdf_empty provenance for an upload whose PDF had no readable text", async () => {
+    mocks.readUploadMeta.mockResolvedValue({
+      hash16: "0000000000000001",
+      fileName: "scanned.pdf",
+      title: "scanned",
+      uploadedAt: "2026-09-15T00:00:00.000Z",
+      textStatus: "empty",
+    });
+    mocks.getFullText.mockResolvedValue({
+      status: "no_full_text",
+      reason: "pdf-empty: PDF text extractor produced no sections.",
+      attempts: [
+        {
+          link: { url: "/api/papers/upload/0000000000000001/file", kind: "pdf", label: "upload", rank: 0 },
+          outcome: "no_full_text: pdf-empty: PDF text extractor produced no sections.",
+        },
+      ],
+    } satisfies FullTextResult);
+
+    const res = await call("upload:0000000000000001");
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.provenance.fullText).toBe("pdf_empty");
+    expect(mocks.fetchPaperById).not.toHaveBeenCalled();
+  });
+
+  it("returns an ordinary pdf provenance for an upload with real sections — proving the wider 404 gap is closed, not just the empty case", async () => {
+    mocks.readUploadMeta.mockResolvedValue({
+      hash16: "0000000000000002",
+      fileName: "paper.pdf",
+      title: "A Real Uploaded Paper",
+      pageCount: 5,
+      uploadedAt: "2026-09-15T00:00:00.000Z",
+      textStatus: "ok",
+    });
+    mocks.getFullText.mockResolvedValue(zenodoFullText);
+
+    const res = await call("upload:0000000000000002");
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.provenance.fullText).toBe("pdf");
+    expect(body.paperId).toBe("upload:0000000000000002");
+    expect(mocks.fetchPaperById).not.toHaveBeenCalled();
+  });
+
+  // 9-14 (A9-13, matrix C5): the full-text wait can take up to 8s; a
+  // delete/block/replace landing during that window must not let a reading
+  // built from the old asset be returned.
+  it("9-14: returns 410 when the upload's revision changed while the full-text wait was in flight", async () => {
+    mocks.readUploadMeta
+      .mockResolvedValueOnce({
+        hash16: "0000000000000003", fileName: "paper.pdf", title: "A Real Uploaded Paper",
+        uploadedAt: "2026-09-15T00:00:00.000Z", textStatus: "ok", status: "ready", revision: 1,
+      })
+      .mockResolvedValueOnce({
+        hash16: "0000000000000003", fileName: "paper.pdf", title: "A Real Uploaded Paper",
+        uploadedAt: "2026-09-15T00:00:00.000Z", textStatus: "ok", status: "ready", revision: 2,
+      });
+    mocks.getFullText.mockResolvedValue(zenodoFullText);
+
+    const res = await call("upload:0000000000000003");
+
+    expect(res.status).toBe(410);
+    expect(res.headers.get("cache-control")).not.toContain("s-maxage");
+  });
+
+  it("9-14: returns 410 when the upload was deleted while the full-text wait was in flight", async () => {
+    mocks.readUploadMeta
+      .mockResolvedValueOnce({
+        hash16: "0000000000000004", fileName: "paper.pdf", title: "A Real Uploaded Paper",
+        uploadedAt: "2026-09-15T00:00:00.000Z", textStatus: "ok", status: "ready", revision: 1,
+      })
+      .mockResolvedValueOnce(null);
+    mocks.getFullText.mockResolvedValue(zenodoFullText);
+
+    const res = await call("upload:0000000000000004");
+
+    expect(res.status).toBe(410);
+  });
+});
+
+describe("GET /api/papers/[id]/reading — 9-14 (A9-13): the ?upload= supplement re-checks its revision too", () => {
+  beforeEach(() => {
+    mocks.fetchPaperById.mockReset();
+    mocks.getFullText.mockReset();
+    mocks.readUploadMeta.mockReset();
+  });
+
+  it("returns 410 when the attached upload's revision changed while getFullText was in flight", async () => {
+    mocks.fetchPaperById.mockResolvedValue(zenodoItem);
+    mocks.readUploadMeta
+      .mockResolvedValueOnce({
+        hash16: "0000000000000005", fileName: "paper.pdf", title: "A Real Uploaded Paper",
+        uploadedAt: "2026-09-15T00:00:00.000Z", textStatus: "ok", status: "ready", revision: 1,
+        paperIds: ["openalex:W7208807247"],
+      })
+      .mockResolvedValueOnce({
+        hash16: "0000000000000005", fileName: "paper.pdf", title: "A Real Uploaded Paper",
+        uploadedAt: "2026-09-15T00:00:00.000Z", textStatus: "ok", status: "ready", revision: 2,
+        paperIds: ["openalex:W7208807247"],
+      });
+    mocks.getFullText.mockResolvedValue(zenodoFullText);
+
+    const res = await call("openalex:W7208807247", "?upload=upload:0000000000000005");
+
+    expect(res.status).toBe(410);
+  });
+
+  it("still returns the reading normally when the revision is unchanged", async () => {
+    mocks.fetchPaperById.mockResolvedValue(zenodoItem);
+    mocks.readUploadMeta.mockResolvedValue({
+      hash16: "0000000000000006", fileName: "paper.pdf", title: "A Real Uploaded Paper",
+      uploadedAt: "2026-09-15T00:00:00.000Z", textStatus: "ok", status: "ready", revision: 1,
+      paperIds: ["openalex:W7208807247"],
+    });
+    mocks.getFullText.mockResolvedValue(zenodoFullText);
+
+    const res = await call("openalex:W7208807247", "?upload=upload:0000000000000006");
+
+    expect(res.status).toBe(200);
   });
 });

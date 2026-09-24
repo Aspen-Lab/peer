@@ -286,6 +286,12 @@ describe("buildReading", () => {
   it("abstract only: marks set, section blocks omitted as not_in_abstract, model blocks as needs_key", () => {
     const reading = buildReading(normalPaper, null, NOW);
 
+    // 1-28/1-31: bumped 3 -> 4 — a new `ReadingProvenance.fullText` value
+    // (`"pdf_empty"`) is a shape change per this field's own bump rule, even
+    // though no field was added. The follow-up branch made this identical
+    // change independently (same string, same reason); main's own later
+    // 4 -> 5 (math rendering) is the one this merge keeps, since the
+    // follow-up branch never touched that shape.
     expect(reading.version).toBe(5);
     expect(reading.paperId).toBe("openalex:W7204479535");
     expect(reading.builtAt).toBe("2026-09-06T12:00:00.000Z");
@@ -426,6 +432,25 @@ describe("buildReading", () => {
     expect(omittedReason(reading, "findings")).toBe("pdf_only_hosted");
   });
 
+  it("1-28/1-31: a PDF with genuinely no extractable text is named distinctly from 'unreadable here'", () => {
+    // Not a deployment limit (Python ran fine) and not "Peer never found a
+    // copy" — the file itself has no text layer, true on every deployment.
+    const fullText: FullTextResult = {
+      status: "no_full_text",
+      reason: "pdf-empty: PDF text extractor produced no sections.",
+      attempts: [{
+        link: { url: "/api/papers/upload/0123456789abcdef/file", kind: "pdf", label: "upload", rank: 0 },
+        outcome: "no_full_text: pdf-empty: PDF text extractor produced no sections.",
+      }],
+    };
+
+    const reading = buildReading(zenodoPaper, fullText, NOW);
+
+    expect(reading.provenance.fullText).toBe("pdf_empty");
+    expect(reading.provenance.fullText).not.toBe("pdf_unreadable_here");
+    expect(omittedReason(reading, "findings")).toBe("pdf_empty");
+  });
+
   it("a full-text attempt that found nothing leaves provenance at none", () => {
     const fullText: FullTextResult = {
       status: "no_full_text",
@@ -531,6 +556,20 @@ describe("describeAvailability", () => {
     ]);
   });
 
+  it("PDF has no readable text — no key clause, since a key cannot fix an empty file", () => {
+    const reading: PaperReading = {
+      ...abstractOnly,
+      provenance: { ...abstractOnly.provenance, fullText: "pdf_empty" },
+      omitted: abstractOnly.omitted.map((entry) =>
+        entry.reason === "not_in_abstract" ? { ...entry, reason: "pdf_empty" as const } : entry,
+      ),
+    };
+
+    expect(describeAvailability({ reading, ...noModel })).toEqual([
+      "This PDF has no readable text — Peer could not extract anything from it.",
+    ]);
+  });
+
   it("paywalled, with and without a known host", () => {
     const reading: PaperReading = {
       ...abstractOnly,
@@ -626,6 +665,9 @@ describe("describeAvailability", () => {
     ]);
     expect(describeAvailability({ reading: at("pdf_unreadable_here"), ...withModel })).toEqual([
       `${lead} Caveats and a next step need the full text; the PDF carries no text to read — it looks scanned.`,
+    ]);
+    expect(describeAvailability({ reading: at("pdf_empty"), ...withModel })).toEqual([
+      `${lead} Caveats and a next step need the full text; this PDF has no readable text to read.`,
     ]);
     expect(describeAvailability({ reading: at("none"), ...withModel })).toEqual([
       `${lead} Caveats and a next step need the full text, which Peer could not find.`,

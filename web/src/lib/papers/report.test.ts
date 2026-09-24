@@ -31,7 +31,7 @@ describe("sanitizePaperReport", () => {
         summary: "A result.",
         keyResults: [{ title: "Gain", detail: "12% better.", evidence }],
       },
-      whyItFitsYou: { reasons: ["an old field"], keywords: [] },
+      whyItFitsYou: { reasons: ["a restored field"], keywords: [] },
       noLlm: false,
       depth: "abstract",
     });
@@ -47,7 +47,12 @@ describe("sanitizePaperReport", () => {
     expect(report.provenance).toEqual({ basis: "model-abstract", droppedClaims: 0 });
     expect(report.depth).toBe("abstract");
     expect(report.noLlm).toBeUndefined();
-    expect("whyItFitsYou" in report).toBe(false);
+    // S6 (2026-09-15): "Why it fits you" is deleted from every new report and
+    // no prompt asks for it any more, but sanitizePaperReport still whitelists
+    // and caps the field when given one — the honest way to bound a v5-shaped
+    // report replayed from an old cache without widening what a *new* report
+    // can carry. Nothing on the page renders it any more.
+    expect(report.whyItFitsYou).toEqual({ reasons: ["a restored field"], keywords: [] });
     expect("unknownField" in report.whatItProposes).toBe(false);
   });
 
@@ -223,6 +228,98 @@ describe("sanitizePaperReport", () => {
     // evidenceWhere is verification's to set; the sanitizer does not keep a
     // model's own claim about where its sentence came from.
     expect(report.skim[0].evidenceWhere).toBeUndefined();
+  });
+});
+
+describe("sanitizePaperReport — the restored sections", () => {
+  // These existed before the 2026-09 reader rewrite dropped them, and were
+  // brought back on the founder's call. None carries an evidence sentence:
+  // they are Peer's reading, and the page labels them so. S6 (2026-09-15)
+  // merged the proposal's "novelty" into `newHere` and deleted the fit
+  // block from every *new* report — sanitizePaperReport still accepts an
+  // old-cached `whyItFitsYou` blob (see the "whitelists" test above) and a
+  // legacy `novelty` key (below), but nothing writes either any more.
+  it("keeps proposal newHere, per-result novelty and review contents", () => {
+    const report = sanitizePaperReport({
+      skim: [],
+      whatItProposes: {
+        summary: "A proposal.",
+        methods: [],
+        newHere: ["  First&nbsp;new thing. ", "Second new thing."],
+      },
+      resultsAndSignificance: {
+        summary: "",
+        keyResults: [
+          { title: "Gain", detail: "It gained.", evidence, novelty: " Nobody had measured it. " },
+        ],
+      },
+      reviewContents: {
+        sections: [
+          { heading: "2. Cathodes", summary: "What is known about cathodes." },
+          { heading: "", summary: "dropped: no heading" },
+          { heading: "3. Anodes", summary: "" },
+        ],
+      },
+    });
+    expect(report.whatItProposes.newHere).toEqual(["First new thing.", "Second new thing."]);
+    expect(report.resultsAndSignificance.keyResults[0].novelty).toBe("Nobody had measured it.");
+    expect(report.reviewContents).toEqual({
+      sections: [{ heading: "2. Cathodes", summary: "What is known about cathodes." }],
+    });
+  });
+
+  it("1-04: still reads a v5-shaped `novelty` key as `newHere`, for an old cached report", () => {
+    const report = sanitizePaperReport({
+      whatItProposes: { summary: "A proposal.", methods: [], novelty: ["Old-shaped field."] },
+      resultsAndSignificance: { summary: "", keyResults: [] },
+    });
+    expect(report.whatItProposes.newHere).toEqual(["Old-shaped field."]);
+  });
+
+  it("leaves the restored sections absent rather than empty", () => {
+    const report = sanitizePaperReport({
+      whatItProposes: { summary: "", methods: [], newHere: [] },
+      resultsAndSignificance: { summary: "", keyResults: [{ title: "T", detail: "D", evidence }] },
+      reviewContents: { sections: [] },
+    });
+    expect(report.whatItProposes).not.toHaveProperty("newHere");
+    expect(report.resultsAndSignificance.keyResults[0]).not.toHaveProperty("novelty");
+    expect(report).not.toHaveProperty("reviewContents");
+  });
+
+  it("caps them: newHere 2 × 320, review sections 8", () => {
+    const long = "x".repeat(1000);
+    const report = sanitizePaperReport({
+      whatItProposes: { summary: "", methods: [], newHere: [long, long, long] },
+      resultsAndSignificance: {
+        summary: "",
+        keyResults: [{ title: "T", detail: "D", evidence, novelty: long }],
+      },
+      reviewContents: {
+        sections: Array.from({ length: 12 }, (_, i) => ({ heading: `H${i}`, summary: long })),
+      },
+    });
+    expect(report.whatItProposes.newHere).toHaveLength(REPORT_CAPS.novelty);
+    expect(report.whatItProposes.newHere?.[0].length).toBe(REPORT_CAPS.noveltyChars);
+    expect(report.resultsAndSignificance.keyResults[0].novelty?.length).toBe(REPORT_CAPS.noveltyChars);
+    expect(report.reviewContents?.sections).toHaveLength(REPORT_CAPS.reviewSections);
+    expect(report.reviewContents?.sections[0].summary.length).toBe(REPORT_CAPS.reviewSummaryChars);
+  });
+
+  it("1-04: still caps a legacy whyItFitsYou blob (reasons 3 × 320, keywords 8 × 40) though nothing writes one any more", () => {
+    const long = "x".repeat(1000);
+    const report = sanitizePaperReport({
+      whatItProposes: { summary: "", methods: [] },
+      resultsAndSignificance: { summary: "", keyResults: [] },
+      whyItFitsYou: {
+        reasons: [long, long, long, long],
+        keywords: Array.from({ length: 12 }, (_, i) => `k${i}${long}`),
+      },
+    });
+    expect(report.whyItFitsYou?.reasons).toHaveLength(REPORT_CAPS.fitReasons);
+    expect(report.whyItFitsYou?.reasons[0].length).toBe(REPORT_CAPS.fitReasonChars);
+    expect(report.whyItFitsYou?.keywords).toHaveLength(REPORT_CAPS.fitKeywords);
+    expect(report.whyItFitsYou?.keywords[0].length).toBe(REPORT_CAPS.fitKeywordChars);
   });
 });
 

@@ -140,6 +140,27 @@ describe("daily opportunity pool cache key", () => {
     const lateLocal = new Date(2026, 6, 27, 23, 59, 0);
     expect(localCalendarDate(lateLocal)).toBe("2026-07-27");
   });
+
+  // 9-25 (Ruling 4): "two profiles with different upload concepts get
+  // different pool keys IFF the retrieval queries they generate differ" —
+  // the forward half (different concepts -> different key) is already
+  // covered in `upload-concepts.test.ts`; this file adds the reverse half
+  // right next to the rest of this key's own dimension tests.
+  it("folds uploadInterests into the key, order/case-insensitively, same as every other topic list", () => {
+    const papers: PoolCacheKeyInput = { ...base, surface: "papers" };
+    expect(derivePoolCacheKey({ ...papers, uploadInterests: ["solid electrolyte"] }))
+      .not.toBe(derivePoolCacheKey(papers));
+    expect(derivePoolCacheKey({ ...papers, uploadInterests: ["Solid Electrolyte"] }))
+      .toBe(derivePoolCacheKey({ ...papers, uploadInterests: ["solid electrolyte"] }));
+    expect(derivePoolCacheKey({ ...papers, uploadInterests: ["a", "b"] }))
+      .toBe(derivePoolCacheKey({ ...papers, uploadInterests: ["b", "a"] }));
+  });
+
+  it("an absent uploadInterests and an empty one produce the same key — no private-learning residue when nothing surfaced", () => {
+    const papers: PoolCacheKeyInput = { ...base, surface: "papers" };
+    expect(derivePoolCacheKey({ ...papers, uploadInterests: [] }))
+      .toBe(derivePoolCacheKey(papers));
+  });
 });
 
 // Compile-time contract guard: adapters may vary, but every implementation

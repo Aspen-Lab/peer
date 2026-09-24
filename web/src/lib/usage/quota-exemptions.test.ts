@@ -156,8 +156,10 @@ describe("R-QUOTA-3 — what must never be counted", () => {
     const source = read("src/app/api/papers/report/route.ts");
     const streamStart = source.indexOf("function streamReport(");
     // Bounded by the route handler, which follows it in the file and is where
-    // the one legitimate call lives.
-    const streamEnd = source.indexOf("export async function POST(");
+    // the one legitimate call lives. Merge note (2026-09-23): the handler body
+    // is `handlePost` now — `POST` wraps it only to stamp the private-upload
+    // headers on every response — so the bound is the handler, not the export.
+    const streamEnd = source.indexOf("async function handlePost(");
     expect(streamStart).toBeGreaterThan(-1);
     expect(streamEnd).toBeGreaterThan(streamStart);
     expect(source.slice(streamStart, streamEnd)).not.toContain(CONSUMER);

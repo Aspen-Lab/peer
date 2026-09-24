@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import {
   AXES,
   ZERO_SCORES,
@@ -21,47 +21,85 @@ interface QuizState {
   answers: Answers;
 }
 
+interface StoredResult {
+  scores: Scores;
+  persona: Persona;
+}
+
 // Bumped if Scores shape or AxisId set changes — old blobs are silently
 // dropped on hydrate.
 const STORAGE_KEY = "peer:persona:v1";
 
+/**
+ * The quiz's one persisted value — the last completed result — read through
+ * `useSyncExternalStore` rather than `useState` + a mount effect, so hydrating
+ * it never calls `setState` from inside an effect body (the same shape as
+ * `FigureRegistry` in reader/report-sections.tsx). We persist only scores;
+ * persona is re-derived via `pickPersona` on every read so persona-definition
+ * tweaks automatically reflect on next visit instead of getting frozen.
+ */
+class QuizResultStore {
+  private cachedRaw: string | null = null;
+  private cachedResult: StoredResult | null = null;
+  private listeners = new Set<() => void>();
+
+  private parse(raw: string | null): StoredResult | null {
+    if (!raw) return null;
+    try {
+      const parsed = JSON.parse(raw) as { scores?: Scores };
+      if (!parsed?.scores) return null;
+      return { scores: parsed.scores, persona: pickPersona(parsed.scores) };
+    } catch {
+      return null; // bad blob — fall through to a fresh quiz
+    }
+  }
+
+  getSnapshot = (): StoredResult | null => {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (raw !== this.cachedRaw) {
+      this.cachedRaw = raw;
+      this.cachedResult = this.parse(raw);
+    }
+    return this.cachedResult;
+  };
+
+  getServerSnapshot = (): StoredResult | null => null;
+
+  set(scores: Scores | null): void {
+    const raw = scores ? JSON.stringify({ scores }) : null;
+    try {
+      if (raw) window.localStorage.setItem(STORAGE_KEY, raw);
+      else window.localStorage.removeItem(STORAGE_KEY);
+    } catch {
+      // localStorage may be full, disabled, or unavailable (private mode) —
+      // the result still renders for this tab; it just won't survive a reload.
+    }
+    this.cachedRaw = raw;
+    this.cachedResult = scores ? { scores, persona: pickPersona(scores) } : null;
+    for (const listen of this.listeners) listen();
+  }
+
+  subscribe = (listen: () => void): (() => void) => {
+    this.listeners.add(listen);
+    // Other tabs writing the same key fire "storage" here; a same-tab write
+    // goes through set() above, which notifies directly.
+    window.addEventListener("storage", listen);
+    return () => {
+      this.listeners.delete(listen);
+      window.removeEventListener("storage", listen);
+    };
+  };
+}
+
+const quizResultStore = new QuizResultStore();
+
 export function PersonaQuiz() {
   const [state, setState] = useState<QuizState>({ step: 0, answers: {} });
-  const [result, setResult] = useState<{
-    scores: Scores;
-    persona: Persona;
-  } | null>(null);
-
-  // Hydrate last result from localStorage on mount. We persist only scores;
-  // persona is re-derived via pickPersona so persona-definition tweaks
-  // automatically reflect on next visit instead of getting frozen.
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      const raw = window.localStorage.getItem(STORAGE_KEY);
-      if (!raw) return;
-      const parsed = JSON.parse(raw) as { scores?: Scores };
-      if (!parsed?.scores) return;
-      const persona = pickPersona(parsed.scores);
-      setResult({ scores: parsed.scores, persona });
-    } catch {
-      // bad blob / quota / private mode — fall through to fresh quiz
-    }
-  }, []);
-
-  // Persist scores whenever a result lands.
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (!result) return;
-    try {
-      window.localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify({ scores: result.scores }),
-      );
-    } catch {
-      // ignore — localStorage may be full or disabled
-    }
-  }, [result]);
+  const stored = useSyncExternalStore(
+    quizResultStore.subscribe,
+    quizResultStore.getSnapshot,
+    quizResultStore.getServerSnapshot,
+  );
 
   const current = QUESTIONS[state.step];
   const total = QUESTIONS.length;
@@ -72,9 +110,7 @@ export function PersonaQuiz() {
     const nextStep = state.step + 1;
 
     if (nextStep >= total) {
-      const scores = compute(nextAnswers);
-      const persona = pickPersona(scores);
-      setResult({ scores, persona });
+      quizResultStore.set(compute(nextAnswers));
       return;
     }
 
@@ -87,22 +123,15 @@ export function PersonaQuiz() {
   };
 
   const restart = () => {
-    setResult(null);
+    quizResultStore.set(null);
     setState({ step: 0, answers: {} });
-    if (typeof window !== "undefined") {
-      try {
-        window.localStorage.removeItem(STORAGE_KEY);
-      } catch {
-        // ignore
-      }
-    }
   };
 
-  if (result) {
+  if (stored) {
     return (
       <PersonaResult
-        scores={result.scores}
-        persona={result.persona}
+        scores={stored.scores}
+        persona={stored.persona}
         onRestart={restart}
       />
     );
