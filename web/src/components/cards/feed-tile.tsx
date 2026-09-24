@@ -8,12 +8,12 @@ import Link from "next/link";
 import type { Paper } from "@/types";
 import { useFeedStore } from "@/store/feed";
 import { formatDayAge } from "@/lib/format";
-import { pickSkimSentence } from "@/lib/papers/skim";
 import { PaperPlate, shortVenue } from "@/components/cards/paper-plate";
 import { SwipeableCard } from "@/components/cards/swipe-card";
 import { cardShell } from "@/components/ui/card-shell";
 import { cn } from "@/lib/cn";
-import { chipTones } from "@/components/ui/chip";
+import { topicMarkOf } from "@/lib/papers/topic-mark";
+import { TopicMark } from "./topic-mark";
 
 type FeedItem = { kind: "paper"; data: Paper };
 
@@ -27,8 +27,11 @@ type FeedItem = { kind: "paper"; data: Paper };
  */
 function paperShellClass(isRead: boolean) {
   return cn(
-    cardShell({ radius: "2xl", padding: "none" }),
-    "group/tile relative overflow-hidden",
+    cardShell({ padding: "none", entrance: "none" }),
+    // The corner detail. Not a second ring inside the frame — the frame's own
+    // last 12px into each corner, stepped up from `--nm-frame` to
+    // `--nm-frame-hi`. See `@utility cropmarks` in globals.css.
+    "cropmarks group/tile relative overflow-hidden",
     isRead && "tile-read",
   );
 }
@@ -52,16 +55,6 @@ function paperBadgeKind(paper: Paper): BadgeKind {
 
 // ── Category icons (12px line, currentColor) ──────────────────
 
-function PaperIcon() {
-  return (
-    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
-      <path d="M14 3v5h5" />
-      <path d="M9 13h6M9 17h4" />
-    </svg>
-  );
-}
-
 function DiscussionIcon() {
   return (
     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -75,36 +68,18 @@ function DiscussionIcon() {
 
 // ── Inline metadata icons (10px) ──────────────────────────────
 
-// ── Badge / chip ──────────────────────────────────────────────
-
-const KIND_ICON: Record<BadgeKind, () => React.ReactElement> = {
-  paper: PaperIcon,
-  discussion: DiscussionIcon,
-};
-
-const KIND_LABEL: Record<BadgeKind, string> = {
-  paper: "Paper",
-  discussion: "Discussion",
-};
-
-const KIND_TONE: Record<BadgeKind, string> = {
-  paper: chipTones.accent,
-  discussion: "text-text-muted bg-bg-secondary/70",
-};
-
-
-function KindBadge({ kind }: { kind: BadgeKind }) {
-  const Icon = KIND_ICON[kind];
+// The kind mark. It used to be a tinted square box in tracked capitals at
+// weight 600 — a "chip" whose own radius token is 0 — sitting two lines above
+// a comment explaining that the venue line had been de-capitalised because it
+// was the last small-caps label in the product. It still was one.
+function KindMark() {
   return (
-    <span
-      className={`inline-flex items-center gap-1.5 text-micro font-semibold uppercase tracking-[0.14em] pl-1.5 pr-2 py-[3px] rounded-md ${KIND_TONE[kind]}`}
-    >
-      <Icon />
-      {KIND_LABEL[kind]}
+    <span className="eyebrow inline-flex items-center gap-1.5 text-text-muted shrink-0">
+      <DiscussionIcon />
+      Discussion
     </span>
   );
 }
-
 
 function SaveButton({
   isSaved,
@@ -123,7 +98,7 @@ function SaveButton({
       }}
       aria-label={isSaved ? "Unsave" : "Save"}
       className={[
-        "p-1.5 rounded-md transition-colors active:scale-90",
+        "p-1.5 rounded-md transition-[color,background-color,border-color,scale] active:scale-90",
         isSaved
           ? "text-accent bg-accent-dim/60 hover:bg-accent-dim"
           : "text-text-faint hover:text-heading hover:bg-bg-secondary/60",
@@ -153,39 +128,14 @@ function SaveButton({
 
 const SELECTED_BG = "color-mix(in srgb, var(--color-accent) 15%, var(--color-surface))";
 
-export function resolvePaperTileSummary(
-  paper: Pick<
-    Paper,
-    "summaryIntro" | "summaryResultDiscussion" | "relevanceReason"
-  >,
-  storedSummary?: string,
-): string {
-  // A real digest sentence still wins when a key is configured.
-  const digestSentence = storedSummary?.trim();
-  if (digestSentence) return digestSentence;
 
-  // Without one, read the whole abstract and pick the sentence that says what
-  // the paper did. This used to take `summaryIntro` — the first one or two
-  // sentences — which for an academic abstract is the motivation, and reads
-  // identically across every paper in a field.
-  const skim = pickSkimSentence(
-    paper.summaryIntro,
-    paper.summaryResultDiscussion,
-  );
-  if (skim) return skim;
-
-  return paper.relevanceReason.trim() || "Open this paper for details.";
-}
-
-function PaperTile({ paper, isRead, selected, plateTerms = [] }: { paper: Paper; isRead: boolean; selected?: boolean; plateTerms?: string[] }) {
+function PaperTile({ paper, isRead, selected, plateTerms = [], line, index, total = 0 }: { paper: Paper; isRead: boolean; selected?: boolean; plateTerms?: string[]; line?: string | null; index?: number; total?: number }) {
   const savePaper = useFeedStore((s) => s.savePaper);
   const unsavePaper = useFeedStore((s) => s.unsavePaper);
   const moreLikePaper = useFeedStore((s) => s.moreLikePaper);
   const notInterestedPaper = useFeedStore((s) => s.notInterestedPaper);
-  const storedSummary = useFeedStore((s) => s.paperSummaries[paper.id]);
 
   const isLiked = paper.feedback === "moreLikeThis" || paper.feedback === "liked";
-  const summary = resolvePaperTileSummary(paper, storedSummary);
 
   const stop = (fn: () => void) => (e: React.MouseEvent) => {
     e.preventDefault();
@@ -194,6 +144,9 @@ function PaperTile({ paper, isRead, selected, plateTerms = [] }: { paper: Paper;
   };
 
   const kind = paperBadgeKind(paper);
+  // What the paper is about, read off its own words — see
+  // lib/papers/topic-mark.ts for why it is the subject and not the method.
+  const mark = topicMarkOf({ title: paper.title, terms: plateTerms });
   const authorLine =
     paper.authors.slice(0, 2).join(", ") +
     (paper.authors.length > 2 ? ` +${paper.authors.length - 2}` : "");
@@ -215,10 +168,10 @@ function PaperTile({ paper, isRead, selected, plateTerms = [] }: { paper: Paper;
     >
       <Link
         href={`/papers/${paper.id}`}
-        className={paperShellClass(isRead)}
-        style={{
-          ...(selected ? { background: SELECTED_BG, transition: "background 0.3s" } : { transition: "background 0.3s" }),
-        }}
+        className={cn(paperShellClass(isRead), "transition-colors")}
+        // The transition belongs in the class string; only the tinted ground,
+        // which is computed from the palette, has to be inline.
+        style={selected ? { background: SELECTED_BG } : undefined}
       >
         <PaperPlate paper={paper} terms={plateTerms} />
         {/* `first:` — with no plate above it this block leads the card, and
@@ -231,28 +184,69 @@ function PaperTile({ paper, isRead, selected, plateTerms = [] }: { paper: Paper;
             peer-reviewed work. A "Paper" badge on every card of a papers-only
             feed said nothing, and it said it twice: `paper.source` repeated it
             at the bottom. */}
-        <div className="flex items-baseline gap-2 mb-2 min-w-0">
-          {kind !== "paper" && <KindBadge kind={kind} />}
+        <div className="flex items-center gap-2 mb-2 min-w-0">
+          {kind !== "paper" && <KindMark />}
+          {/* The card's place in today's briefing. The masonry is column-major,
+              so nothing else on screen says the reading order runs down column
+              one. A position, not a quality: `relevanceScore` is 55% a
+              within-day percentile, is overwritten by the rerank and reordered
+              past by `diversify`, so no percentage of it is a fact about this
+              paper. Outside the truncated span, because a long venue must not
+              eat it. */}
+          {typeof index === "number" && total > 1 && (
+            <>
+              <span className="annotation text-text-faint tabular-nums shrink-0">
+                {String(index + 1).padStart(2, "0")}
+              </span>
+              <span className="annotation text-text-faint shrink-0" aria-hidden>
+                ·
+              </span>
+            </>
+          )}
           {/* Sentence case, in the mono the reading page uses for the same
               fact. Set in tracked capitals this was the last small-caps label
               in the product, and it shouted the one line on the card that is
               pure filing. */}
-          <span className="font-mono text-caption text-text-faint truncate">
+          <span className="annotation text-text-faint truncate">
             {metaBits.join(" · ")}
           </span>
+          {/* The subject, at the far end of the filing line: the number and
+              the venue say where this card sits, the mark says what is in
+              it. Right-aligned so ten cards stack ten marks in a column the
+              eye can run down without reading a word. */}
+          <TopicMark
+            topic={mark.key}
+            label={mark.label}
+            framed
+            size={15}
+            strokeWidth={1.5}
+            className="ml-auto -my-1 group-hover/tile:text-accent"
+          />
         </div>
-        <h3 className="font-display text-title-lg font-normal text-heading leading-[1.2] tracking-[-0.015em] line-clamp-3">
+        <h3 className="paper-line text-title-lg text-heading leading-[1.2] line-clamp-3">
           {paper.title}
         </h3>
-        <p
-          className="text-body-sm sm:text-meta text-text-muted mt-2 leading-[1.6] sm:leading-[1.55] line-clamp-3 font-reading"
-        >
-          {summary}
-        </p>
+        {/* One size, not `text-body-sm sm:text-meta` — that SHRANK to 12.5px
+            at desktop width and sat a pixel above the 11.5px meta and author
+            lines, so four bands of one grey with nothing loud and nothing
+            quiet. The paper's own sentence stays in the paper's face; the
+            affiliation that stands in for it is a field of the record, so it
+            is Peer's. */}
+        {line ? (
+          <p className="text-body-sm text-text-muted mt-2 leading-[1.6] line-clamp-3 font-reading">
+            {line}
+          </p>
+        ) : paper.leadAffiliation ? (
+          <p className="text-body-sm text-text-faint mt-2 leading-[1.6] line-clamp-2">
+            {paper.leadAffiliation}
+          </p>
+        ) : null}
         <div className="tile-chrome mt-4 flex items-center gap-1 min-w-0">
-          <span className="text-caption text-text-faint truncate mr-1">
-            {authorLine}
-          </span>
+          {authorLine && (
+            <span className="text-caption text-text-faint truncate mr-1">
+              {authorLine}
+            </span>
+          )}
           <span className="flex-1" aria-hidden />
           <span className="tile-actions flex items-center gap-1">
 
@@ -264,7 +258,7 @@ function PaperTile({ paper, isRead, selected, plateTerms = [] }: { paper: Paper;
             aria-label="Like — show more like this"
             title="Like"
             className={[
-              "p-1.5 rounded-md transition-colors active:scale-90",
+              "p-1.5 rounded-md transition-[color,background-color,border-color,scale] active:scale-90",
               isLiked
                 ? "text-accent bg-accent-dim/60"
                 : "text-text-faint hover:text-accent hover:bg-accent-dim/60",
@@ -281,7 +275,7 @@ function PaperTile({ paper, isRead, selected, plateTerms = [] }: { paper: Paper;
             onClick={stop(() => notInterestedPaper(paper))}
             aria-label="Not interested — show less like this"
             title="Not interested"
-            className="p-1.5 rounded-md text-text-faint hover:text-red hover:bg-red/10 transition-colors active:scale-90"
+            className="p-1.5 rounded-md text-text-faint hover:text-red hover:bg-red/10 transition-[color,background-color,border-color,scale] active:scale-90"
           >
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
               <path d="M17 14V4a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-3zM17 14l-4 7a2 2 0 0 1-2-2v-3H5.5a2 2 0 0 1-2-2.3l1.2-7A2 2 0 0 1 6.7 5H17" />
@@ -311,11 +305,20 @@ export function FeedTile({
   item,
   selected,
   plateTerms,
+  line,
+  index,
+  total,
 }: {
   item: FeedItem;
   selected?: boolean;
   /** Allocated across the whole briefing — see lib/papers/plate-terms.ts. */
   plateTerms?: string[];
+  /** Position in today's briefing, and how many there are. */
+  index?: number;
+  total?: number;
+  /** Decided for the whole board — see lib/briefing/tile-lines.ts. A card
+   *  cannot see that two other cards are carrying its sentence. */
+  line?: string | null;
 }) {
   const isRead = useFeedStore((s) => !!s.readItems[item.data.id]);
   return (
@@ -324,6 +327,9 @@ export function FeedTile({
       isRead={isRead}
       selected={selected}
       plateTerms={plateTerms}
+      line={line}
+      index={index}
+      total={total}
     />
   );
 }

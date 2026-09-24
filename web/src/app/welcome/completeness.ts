@@ -5,6 +5,11 @@
 
 import type { UserProfile } from "@/types";
 import { defaultProfile } from "@/types";
+import { aiAvailability } from "@/lib/feed/ai-tier";
+import {
+  ANONYMOUS_ENTITLEMENT,
+  type Entitlement,
+} from "@/lib/entitlement/types";
 
 export type StepKey =
   | "basics"
@@ -12,6 +17,7 @@ export type StepKey =
   | "work"
   | "radar"
   | "ai"
+  | "connectors"
   | "persona";
 
 export const STEP_META: { key: StepKey; label: string }[] = [
@@ -20,6 +26,9 @@ export const STEP_META: { key: StepKey; label: string }[] = [
   { key: "work", label: "Work" },
   { key: "radar", label: "Radar" },
   { key: "ai", label: "AI" },
+  // "Data" matches the feed toolbar's "Data APIs" control; "Sources" would
+  // collide with the radar step's Sources field.
+  { key: "connectors", label: "Data" },
   { key: "persona", label: "Persona" },
 ];
 
@@ -45,10 +54,18 @@ const RADAR_FIELDS = [
   "feedAvoidBroadSurveys",
 ] as const;
 
+/** Whether the one remaining data connector (Tavily) is configured. */
+export function connectorCount(profile: UserProfile): number {
+  return profile.tavilyEnabled && profile.tavilyApiKey?.trim() ? 1 : 0;
+}
+
 export function isStepDone(
   key: StepKey,
   profile: UserProfile,
   personaDone: boolean,
+  // ABC-freemium 1-15 — only the `ai` step reads it. Defaults to anonymous so
+  // an unchanged caller sees the old answer for a signed-out reader.
+  entitlement: Pick<Entitlement, "userId"> = ANONYMOUS_ENTITLEMENT,
 ): boolean {
   switch (key) {
     case "basics":
@@ -76,12 +93,17 @@ export function isStepDone(
         (profile.preferredJournals?.length ?? 0) > 0
       );
     case "ai":
-      // Resetting the provider to default clears the key's meaning, so both
-      // halves are required.
-      return (
-        profile.feedAiProvider !== "default" &&
-        Boolean(profile.feedAiApiKey?.trim())
-      );
+      // ABC-freemium 1-15 · R-KEY-4 — **the two halves were required because
+      // `"default"` meant no AI.** Under D1 it means Peer's AI, so a signed-in
+      // reader who never opens the panel already has a model and the step is
+      // complete. Adding your own key stops being a prerequisite and becomes an
+      // upgrade — which is also why 1-25 rewrites the panel's copy.
+      //
+      // Stated rather than deleted: without this comment the next reader sees a
+      // removed check and reads it as a bug.
+      return aiAvailability(profile, entitlement) !== "none";
+    case "connectors":
+      return connectorCount(profile) > 0;
     case "persona":
       return personaDone;
   }
@@ -111,7 +133,10 @@ export function readPersonaDone(): boolean {
 export function firstIncompleteStep(
   profile: UserProfile,
   personaDone: boolean,
+  entitlement: Pick<Entitlement, "userId"> = ANONYMOUS_ENTITLEMENT,
 ): number {
-  const i = STEP_META.findIndex((m) => !isStepDone(m.key, profile, personaDone));
+  const i = STEP_META.findIndex(
+    (m) => !isStepDone(m.key, profile, personaDone, entitlement),
+  );
   return i === -1 ? STEP_META.length - 1 : i;
 }

@@ -22,6 +22,7 @@ import { useFeedStore } from "@/store/feed";
 import { useProfileStore } from "@/store/profile";
 import { apiFetch } from "@/lib/api";
 import { PageContainer } from "@/components/ui/page-container";
+import { useReveal } from "@/components/ui/reveal";
 import { BackToFeedLink } from "@/components/navigation/back-to-feed-link";
 import { hasImmediateFeedHistoryEntry } from "@/lib/navigation/feed-history";
 import { NONE } from "@/lib/navigation/card-focus";
@@ -39,7 +40,9 @@ import {
 } from "@/lib/papers/reading";
 import { readingToMarkdown } from "@/lib/papers/reading-markdown";
 import type { Claim, PaperReport } from "@/lib/papers/report";
-import { reportProviderConfigured } from "@/components/reports/provider-configured";
+import type { Route } from "next";
+import { aiAvailability } from "@/lib/feed/ai-tier";
+import { entitlementGrants } from "@/lib/entitlement/allowance";
 import { PaperPlate } from "@/components/cards/paper-plate";
 import { SwipeableCard } from "@/components/cards/swipe-card";
 import { useResolvedFigure } from "@/components/paper-figure";
@@ -47,6 +50,7 @@ import { TitleBlock } from "@/components/reader/title-block";
 import { PaperWords } from "@/components/reader/paper-words";
 import { PaperBody } from "@/components/reader/paper-body";
 import { RecordBlock } from "@/components/reader/record-block";
+import { InYourLibrary } from "@/components/reader/in-your-library";
 import { KeyLegend } from "@/components/reader/key-legend";
 import { DecisionBlock } from "@/components/reader/decision-block";
 import { QuoteList } from "@/components/reader/quote-list";
@@ -72,12 +76,16 @@ import {
 import { THUMB_BAR_PX, THUMB_BAR_QUERY } from "@/components/shell/thumb-bar";
 import { PAGE_CLASS, SPREAD_GRID } from "@/components/reader/spread";
 import { useReading } from "@/components/reader/use-reading";
+import { PaperNotes } from "@/components/notes/paper-notes";
+import { PAPER_BODY_ID } from "@/components/reader/paper-body";
+import { PaperContents } from "@/components/reader/paper-contents";
 import { useModelReport } from "@/components/reader/use-model-report";
 import { usePrivateSupplement } from "@/components/reader/use-private-supplement";
 import { PrivatePdfStatus } from "@/components/reader/private-pdf-status";
 import { UploadButton } from "@/components/briefing/upload-button";
 import { useAuthUser } from "@/components/account/use-auth-user";
 import {
+  BODY,
   NOT_FOUND,
   RAIL,
   SWIPE,
@@ -223,7 +231,7 @@ export default function PaperReadingPage({
       return (
         // The page's own container and grid, so from xl the mat stands in the
         // panel column at the plate's width and the plate replaces it in place.
-        <PageContainer width="spread" className={PAGE_CLASS}>
+        <PageContainer width="spread" rhythm="reader" className={PAGE_CLASS}>
           <div className={SPREAD_GRID}>
             <div>
               <LoadingMat />
@@ -233,7 +241,7 @@ export default function PaperReadingPage({
       );
     }
     return (
-      <PageContainer width="spread" className={PAGE_CLASS}>
+      <PageContainer width="spread" rhythm="reader" className={PAGE_CLASS}>
         <div className={SPREAD_GRID}>
           <div>
             <p className="font-reading text-lead text-text-muted">{NOT_FOUND}</p>
@@ -308,6 +316,19 @@ function Reader({
 
   const { reading, fromServer } = useReading(paper);
   const model = useModelReport({ paper: ready ? paper : undefined, profile });
+  // Where Peer has read the paper, the text is already on the page — the
+  // command and the contents are ways down to it, not ways to open it.
+  const hasBody = (reading?.body?.length ?? 0) > 0;
+  const readHere = useCallback(() => {
+    const block = document.getElementById(PAPER_BODY_ID);
+    if (!block) return;
+    const top = block.getBoundingClientRect().top;
+    // Only where it is not already on the screen — scrolling to a block the
+    // reader is looking at throws the page for nothing.
+    if (top < 0 || top > window.innerHeight * 0.6) {
+      block.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, []);
   const report = model.report;
 
   // S5: the "matrix" scramble reveal, restored. `revealingReportKey` is the
@@ -340,7 +361,13 @@ function Reader({
   }, [revealingReportKey]);
   const shouldScrambleReport = revealingReportKey === model.reportKey && model.fresh;
 
-  const providerConfigured = reportProviderConfigured(profile);
+  // One tier: a signed-in reader has Peer's model; a reader with their own key has theirs.
+  // (2026-09-23 merge note: replaces a dangling call to `reportProviderConfigured`,
+  // whose file main deleted upstream of this branch's own last edit to it —
+  // `use-model-report.ts`'s own `userProviderConfigured` was already reconciled
+  // to this same `aiAvailability` call during this merge.)
+  const entitlement = useProfileStore((s) => s.entitlement);
+  const providerConfigured = aiAvailability(profile, entitlementGrants(entitlement)) !== "none";
   const projectText = useMemo(
     () => [profile.currentProject, profile.currentChallenges].filter(Boolean).join("\n"),
     [profile.currentProject, profile.currentChallenges],
@@ -446,7 +473,7 @@ function Reader({
   // re-expressed, since in one column the decision sits under the abstract.
   // A page with no words (record only) falls back to the decision, which
   // keeps it read on open, as v0.13.1 says.
-  const decide = useCallback(() => markRead(paper.id), [markRead, paper.id]);
+  const decide = useCallback(() => markRead(paper.id, paper), [markRead, paper]);
   const decisionRef = useRef<HTMLDivElement>(null);
   const wordsEndRef = useRef<HTMLParagraphElement>(null);
   useEffect(() => {
@@ -482,6 +509,17 @@ function Reader({
     // re-attaches when the words (and their footer) arrive or change.
   }, [decide, spread, reading]);
 
+  // The approach. One observer for every `[data-reveal]` in the scope below.
+  // The deps are the two things that arrive after first paint — the server
+  // reading and the model report — plus the spread flip, which remounts the
+  // blocks. `useReveal` reveals anything already on screen synchronously, so
+  // neither page open nor the xl flip shows an animation.
+  //
+  // Never make `decisionRef`'s or `wordsEndRef`'s block a `[data-reveal]`
+  // host: IntersectionObserver reports geometry, not opacity, so a paper
+  // would be marked read from a block sitting at opacity 0.
+  useReveal([reading, report, spread]);
+
   // ── Actions ──
   // One set for the keys, the buttons and the swipe.
   const save = () => {
@@ -496,7 +534,7 @@ function Reader({
     const here = paperNav(store.papers.map((p) => p.id), paper.id);
     store.notInterestedPaper(paper);
     decide();
-    router.push(here.nextId ? paperHref(here.nextId) : "/");
+    router.push((here.nextId ? paperHref(here.nextId) : "/") as Route);
   };
   const like = () => {
     useFeedStore.getState().moreLikePaper(paper);
@@ -505,18 +543,18 @@ function Reader({
   const next = () => {
     if (!nav.nextId) return;
     decide();
-    router.push(paperHref(nav.nextId));
+    router.push(paperHref(nav.nextId) as Route);
   };
   const prev = () => {
     if (!nav.prevId) return;
     decide();
-    router.push(paperHref(nav.prevId));
+    router.push(paperHref(nav.prevId) as Route);
   };
   const undoOrToggleRead = () => {
     const store = useFeedStore.getState();
     if (store.pendingDismissal) store.undoDismiss();
     else if (store.readItems[paper.id]) store.markUnread(paper.id);
-    else store.markRead(paper.id);
+    else store.markRead(paper.id, paper);
   };
   const open = () => {
     if (!reading?.source) return;
@@ -566,6 +604,7 @@ function Reader({
       skip,
       like,
       undoOrToggleRead,
+      ...(hasBody ? { read: readHere } : {}),
       open,
       copy,
       back,
@@ -585,7 +624,7 @@ function Reader({
   // the same field) — this is only about what the page shows.
   if (paper.textStatus === "empty") {
     return (
-      <PageContainer width="spread" className={PAGE_CLASS}>
+      <PageContainer width="spread" rhythm="reader" className={PAGE_CLASS}>
         <div className={SPREAD_GRID}>
           <div>
             <TitleBlock paper={paper} recommendation={null} now={now} />
@@ -642,6 +681,18 @@ function Reader({
   const limitations = report?.limitations ?? [];
   const relation = report?.relationToYourWork;
   const nextStep = report?.nextStep ?? null;
+  // One boundary per object. `PaperPlate` draws `cropmarks` at a 6px inset on
+  // the figure branch, and the `:has(> .tile-cover[data-plate="figure"])`
+  // suppression in globals.css cannot reach it here — SwipeableCard's outer
+  // div and its translate div sit between. So a framed SwipeableCard around a
+  // marked plate is four hi-contrast corners inside a 1px rectangle twelve
+  // pixels further out: two frames saying one thing. The corners say more, so
+  // the rectangle goes. The TERMS plate keeps the frame: it is set on
+  // `--color-surface`, the card's own colour, and with no frame it would have
+  // no edge against the page at all.
+  const plateIsFigure =
+    Boolean(boundFigure?.imageUrl) ||
+    (Boolean(resolvedFigure.imageUrl) && !resolvedFigure.hideFigure);
   // Blocks that were not there at first paint fade in, staggered in order.
   let stagger = 0;
   const related = pickRelated(paper, feedPapers);
@@ -652,14 +703,20 @@ function Reader({
     // element after a client navigation, and an article that cannot take
     // focus makes that a no-op — j/k would change the paper without
     // assistive technology announcing anything.
+    // `data-motion="reveal"` is the switch for globals.css's approach rules
+    // and the ONLY place in the product that sets it. Static in JSX rather
+    // than written from an effect on purpose: written afterwards, the page
+    // would paint once at full opacity and then snap to hidden.
     <PageContainer
       width="spread"
+      rhythm="reader"
       className={`${PAGE_CLASS} md:pb-16 outline-none`}
       tabIndex={-1}
       style={readingScaleStyle}
       // S22: withZoomTransition's own document.querySelector target — the
       // element S20 already puts --reading-scale on.
       data-zoom-root=""
+      data-motion="reveal"
     >
       {/* The blocks, in the spec's order; `ReaderLayout` places them — one
           column below xl, the spread from it. Later-arriving content (the
@@ -680,7 +737,7 @@ function Reader({
               rightLabel={paper.isSaved ? SWIPE.unsave : SWIPE.save}
               leftLabel={SWIPE.notInterested}
               rightActive={paper.isSaved}
-              className="shadow-card"
+              className={plateIsFigure ? undefined : "shadow-card"}
             >
               <PaperPlate
                 paper={paper}
@@ -691,7 +748,7 @@ function Reader({
               />
             </SwipeableCard>
             {caption && (
-              <figcaption className="font-sans text-meta text-text-muted mt-2">
+              <figcaption className="font-reading text-body-sm text-text-muted mt-2">
                 {caption}
               </figcaption>
             )}
@@ -724,6 +781,8 @@ function Reader({
             onCopy={copy}
             onOpen={decide}
             onCopyDoi={copyDoi}
+            onRead={hasBody ? readHere : undefined}
+            readLabel={BODY.open}
             uploadAction={!paper.id.startsWith("upload:") ? <UploadButton targetPaper={paper} onUploaded={setUpload} /> : undefined}
             uploadStatus={upload ? <PrivatePdfStatus upload={upload}
               attachedToTitle={!paper.id.startsWith("upload:") ? paper.title : undefined}
@@ -733,8 +792,13 @@ function Reader({
               }} /> : undefined}
           />
         }
+        contents={<PaperContents reading={reading} />}
         additions={
           <>
+            {/* The reader's own notes on this paper, and the way into them —
+                first, because taking notes is what follows keeping it. */}
+            <PaperNotes paper={paper} />
+
             {/* ── The report as it read before the rewrite, in its order ── */}
 
             {/* S6: "What is new" merged into "What it proposes" — one block,
@@ -756,12 +820,11 @@ function Reader({
                 block="method"
                 claims={methods}
                 abstractSentences={abstractSentences}
-                stagger={stagger++}
                 scramble={shouldScrambleReport}
               />
             ) : (
               fromServer && (
-                <QuoteList block="method" quotes={reading.method} stagger={stagger++} />
+                <QuoteList block="method" quotes={reading.method} />
               )
             )}
 
@@ -787,7 +850,7 @@ function Reader({
               />
             ) : (
               fromServer && (
-                <QuoteList block="findings" quotes={reading.findings} stagger={stagger++} />
+                <QuoteList block="findings" quotes={reading.findings} />
               )
             )}
 
@@ -798,7 +861,6 @@ function Reader({
                 block="forYou"
                 claims={relation.items}
                 abstractSentences={abstractSentences}
-                stagger={stagger++}
                 anchor={relation.basedOn}
                 scramble={shouldScrambleReport}
               />
@@ -823,12 +885,11 @@ function Reader({
                 block="caveats"
                 claims={limitations}
                 abstractSentences={abstractSentences}
-                stagger={stagger++}
                 scramble={shouldScrambleReport}
               />
             ) : (
               fromServer && (
-                <QuoteList block="caveats" quotes={reading.caveats} stagger={stagger++} />
+                <QuoteList block="caveats" quotes={reading.caveats} />
               )
             )}
 
@@ -837,7 +898,6 @@ function Reader({
                 block="nextStep"
                 claims={[nextStep]}
                 abstractSentences={abstractSentences}
-                stagger={stagger++}
                 scramble={shouldScrambleReport}
               />
             )}
@@ -846,11 +906,17 @@ function Reader({
                 read, under everything Peer had to say about it. */}
             <PaperBody reading={reading} />
 
-            {/* Last, and always there: the facts that need no key. On a Tier 0
+            {/* Last, and always there: the facts that need no key. On a page with no model
                 page it is the only block under the abstract, which is the
                 point — the column used to end at the abstract's footer with
                 half the page under it. */}
             <RecordBlock paper={paper} primaryUrl={reading.source?.url ?? null} />
+
+            {/* And last, the reader's own context: what they read or kept
+                under the same topics, and the topics as searches. On a paper
+                with no full text this stands where the column used to end
+                in air. */}
+            <InYourLibrary paper={paper} />
           </>
         }
         next={<NextRow nav={nav} next={nextPaper} />}

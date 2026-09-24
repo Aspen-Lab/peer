@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
+import { blockMarker, inlineMath } from "@/lib/text/math";
 import {
   canonicalizeHeading,
   chooseHtmlExtractor,
   looksLikeFullText,
   parseCaption,
+  resolveBase,
   withInheritedBuckets,
   type ExtractedDocument,
 } from "./html-text";
@@ -144,10 +146,53 @@ describe("LaTeXML extractor", () => {
   });
 
   it("labels captions honestly and drops subfigure fragments", () => {
-    expect(doc.figureCaptions).toEqual([
+    expect(doc.figureCaptions).toMatchObject([
       { ordinal: 0, label: "Figure 1", caption: "Success rate per class." },
       { ordinal: 1, label: "Table 1", caption: "Metrics." },
     ]);
+    // Every caption knows where in the page it sat, in document order.
+    const at = doc.figureCaptions.map((c) => c.at ?? -1);
+    expect(at.every((x) => x >= 0 && x <= 1)).toBe(true);
+    expect([...at].sort((a, b) => a - b)).toEqual(at);
+  });
+
+  it("keeps the figure's own picture, absolute against the page it came from", () => {
+    const html = `<html><body>
+      <h2 class="ltx_title ltx_title_section">1 Introduction</h2><p>Words words words words.</p>
+      <figure class="ltx_figure"><img src="1234.5678v2/x1.png" class="ltx_graphics" alt="Refer to caption">
+        <figcaption class="ltx_caption">Figure 1: The model.</figcaption></figure>
+      <figure class="ltx_table"><table><tr><td>1</td></tr></table>
+        <figcaption class="ltx_caption">Table 1: Numbers.</figcaption></figure>
+    </body></html>`;
+    const out = chooseHtmlExtractor("https://arxiv.org/html/1234.5678")(html, "https://arxiv.org/html/1234.5678");
+    expect(out.figureCaptions[0]).toMatchObject({
+      label: "Figure 1",
+      imageUrl: "https://arxiv.org/html/1234.5678v2/x1.png",
+    });
+    // A table has no picture, and says so by having none.
+    expect(out.figureCaptions[1].imageUrl).toBeUndefined();
+  });
+
+  it("takes a figure drawn as SVG from its <object>, the way arXiv serves plots", () => {
+    const html = `<h2 class="ltx_title ltx_title_section">1 A</h2><p>Words words words words.</p>
+      <figure class="ltx_figure"><object type="image/svg+xml" data="1234.5678v2/plot.svg" class="ltx_graphics"></object>
+        <figcaption class="ltx_caption">Figure 3: Loss.</figcaption></figure>`;
+    const out = chooseHtmlExtractor("https://arxiv.org/html/1234.5678")(html, "https://arxiv.org/html/1234.5678");
+    expect(out.figureCaptions[0].imageUrl).toBe("https://arxiv.org/html/1234.5678v2/plot.svg");
+  });
+});
+
+describe("resolveBase", () => {
+  it("prefers the page's own <base href>", () => {
+    expect(resolveBase('<head><base href="/html/1706.03762/"></head>', "https://ar5iv.labs.arxiv.org/html/1706.03762"))
+      .toBe("https://ar5iv.labs.arxiv.org/html/1706.03762/");
+  });
+  it("reads a URL whose last segment is not a file as a directory", () => {
+    expect(resolveBase("", "https://example.org/articles/PMC123?x=1#y")).toBe("https://example.org/articles/PMC123/");
+    expect(resolveBase("", "https://example.org/a/paper.html")).toBe("https://example.org/a/paper.html");
+  });
+  it("gives nothing without a page", () => {
+    expect(resolveBase("", undefined)).toBeUndefined();
   });
 });
 
@@ -199,5 +244,46 @@ describe("looksLikeFullText", () => {
 
   it("still rejects thin pages", () => {
     expect(looksLikeFullText(doc([["introduction", 1200], ["results", 900]]))).toBe(false);
+  });
+});
+
+
+describe("liftLatexmlMath", () => {
+  it("lifts a numbered display equation into a marker paragraph and keeps its TeX", () => {
+    const html = `<h2 class="ltx_title ltx_title_section">3 Attention</h2><p>Words words words words.</p>
+      <table id="S3.E1" class="ltx_equation ltx_eqn_table"><tbody><tr class="ltx_equation ltx_eqn_row">
+        <td class="ltx_eqn_cell"><math class="ltx_Math" alttext="\\mathrm{softmax}(\\frac{QK^{T}}{\\sqrt{d_{k}}})V" display="block"><mi>Q</mi></math></td>
+        <td class="ltx_eqn_cell ltx_eqn_eqno"><span class="ltx_tag ltx_tag_equation">(1)</span></td></tr></tbody></table>
+      <p>More words words words.</p>`;
+    const out = chooseHtmlExtractor("https://arxiv.org/html/1.2")(html, "https://arxiv.org/html/1.2");
+    expect(out.equations).toEqual([{ latex: "\\mathrm{softmax}(\\frac{QK^{T}}{\\sqrt{d_{k}}})V", number: "(1)" }]);
+    const text = out.sections[0].text;
+    expect(text).toContain(blockMarker(0));
+    expect(text).not.toContain("Q");
+    // Its own paragraph: blank lines on both sides.
+    expect(text).toMatch(new RegExp(`\\n\\n${blockMarker(0).replace(/[#]/g, "#")}\\n\\n`));
+  });
+
+  it("keeps a formula with a less-than sign, and the sentence after it", () => {
+    // `alttext="k&lt;n"`: decoded before the tags were stripped, the `<`
+    // opened a phantom tag that ate the rest of the paragraph.
+    const html = `<h2 class="ltx_title ltx_title_section">4 Why</h2><p>a kernel width <math alttext="k&lt;n" display="inline"><mi>k</mi></math> does not connect all pairs, so <math alttext="f'(x)" display="inline"><mi>f</mi></math> is needed.</p>`;
+    const out = chooseHtmlExtractor("https://arxiv.org/html/1.2")(html, "https://arxiv.org/html/1.2");
+    expect(out.sections[0].text).toBe(`a kernel width ${inlineMath("k<n")} does not connect all pairs, so ${inlineMath("f'(x)")} is needed.`);
+  });
+
+  it("decodes the TeX of a lifted display equation, which leaves the HTML", () => {
+    const html = `<h2 class="ltx_title ltx_title_section">1 A</h2><p>Words words words words.</p>
+      <table class="ltx_equation ltx_eqn_table"><tr><td><math alttext="x &lt; y &amp; z" display="block"><mi>x</mi></math></td></tr></table>`;
+    const out = chooseHtmlExtractor("https://arxiv.org/html/1.2")(html, "https://arxiv.org/html/1.2");
+    expect(out.equations?.[0].latex).toBe("x < y & z");
+  });
+
+  it("keeps inline mathematics as marked TeX instead of flattened MathML", () => {
+    const html = `<h2 class="ltx_title ltx_title_section">1 A</h2><p>the key size <math alttext="d_{k}" display="inline"><msub><mi>d</mi><mi>k</mi></msub><annotation encoding="application/x-tex">d_{k}</annotation></math> matters here and here.</p>`;
+    const out = chooseHtmlExtractor("https://arxiv.org/html/1.2")(html, "https://arxiv.org/html/1.2");
+    expect(out.sections[0].text).toContain(`the key size ${inlineMath("d_{k}")} matters`);
+    expect(out.sections[0].text).not.toMatch(/\bd k\b/);
+    expect(out.equations).toBeUndefined();
   });
 });

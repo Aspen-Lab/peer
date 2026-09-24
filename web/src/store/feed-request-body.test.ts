@@ -6,6 +6,7 @@ import {
   paperFeedRequestBody,
 } from "./feed";
 import { selectedSenseConcept } from "@/lib/feed/senses";
+import { STARTER_TOPICS, STARTER_TOPICS_KEY } from "@/lib/feed/starter-topics";
 
 const activeProfile: UserProfile = {
   ...defaultProfile,
@@ -148,8 +149,17 @@ describe("active feed request inputs", () => {
       currentChallenges: "Avoid dendrite formation",
     };
 
+    // CHANGED (FIRST-VISIT RULING, see the next test's comment for the full
+    // citation): the literal `topics` field is a separate, supplementary
+    // signal from `project`/`challenge`/`intent` -- it is not the gate. With
+    // no literal topics declared, `paperFeedRequestBody` now fills it from
+    // the same starter list a genuinely-empty reader gets (`topicsOrStarter`,
+    // main-authored), rather than leaving it empty. This is harmless: the
+    // request is still driven primarily by `project`/`challenge`/`intent`
+    // below (acceptance 1 -- "no dummy-keyword requirement"), which are
+    // asserted unchanged.
     expect(paperFeedRequestBody(profile, advisorSeeds)).toMatchObject({
-      topics: [],
+      topics: [...STARTER_TOPICS],
       project: "Reduce sulfide interface resistance",
       challenge: "Avoid dendrite formation",
       intent: {
@@ -182,7 +192,19 @@ describe("active feed request inputs", () => {
     );
   });
 
-  it("keeps an empty browser intent out of the request path", () => {
+  it("sends the starter sample, not an empty request, for a genuinely empty browser intent", () => {
+    // CHANGED (ABC-JEV-INTEGRATION.md §4 Round 3 "MERGE-B-FEED complete" FIRST-VISIT
+    // RULING (a)): this used to assert `topics: []` / `activePaperTopicsKey === ""`
+    // for a reader with nothing declared, on the theory that Jev should "ask
+    // first" rather than guess. The merge adopts main's zero-setup first-run
+    // design instead: a reader with NO declared project, challenge or topic at
+    // all gets main's curated starter sample (never a blocking message), and
+    // `activePaperTopicsKey` now falls back to `STARTER_TOPICS_KEY` rather than
+    // the empty string so the auto-load effect in page.tsx actually fires. A
+    // reader who HAS declared a project/challenge/topic still gets their own
+    // intent-driven request, never the sample -- see the next test file's
+    // "posts a 'project'-only..." case, and empty-reason.ts's `intentRequired`
+    // guard, for the half of the ruling this file doesn't cover.
     const emptyBrowserProfile: UserProfile = {
       ...activeProfile,
       currentProject: "",
@@ -194,10 +216,10 @@ describe("active feed request inputs", () => {
     };
 
     expect(paperFeedRequestBody(emptyBrowserProfile, advisorSeeds)).toMatchObject({
-      topics: [],
+      topics: [...STARTER_TOPICS],
       intent: undefined,
     });
-    expect(activePaperTopicsKey(emptyBrowserProfile)).toBe("");
+    expect(activePaperTopicsKey(emptyBrowserProfile)).toBe(STARTER_TOPICS_KEY);
   });
 
   it("carries an explicitly selected local sense in the browser v1 card without classifying legacy topics", () => {
@@ -211,5 +233,60 @@ describe("active feed request inputs", () => {
     expect(paperFeedRequestBody(profile, advisorSeeds)).toMatchObject({
       intent: { selectedSenseConcepts: [selectedSenseConcept("hr.role_conflict")] },
     });
+  });
+});
+
+/**
+ * ABC-freemium 6-03 — **the ask itself, which nothing had ever exercised.**
+ *
+ * B grepped this while writing 6-03's guide and found the gap: every existing
+ * call in this file uses the three-argument form, and `store/feed.test.ts` never
+ * calls `loadFeed` with `poolRefresh`, so `feed.ts`'s
+ * `poolRefresh: poolRefresh || undefined` had **never once been evaluated with
+ * `true`** in the whole suite. The refusal now has a message on screen, so the
+ * request that provokes it is worth pinning.
+ *
+ * The `|| undefined` is the part that matters and it is not tidiness: the route
+ * reads `body.poolRefresh === true`, so an explicit `false` on the wire would be
+ * a field that says something about a request that is not asking for anything.
+ * Absent means "not asking".
+ */
+describe("the forced-rebuild ask (6-03)", () => {
+  it("sends poolRefresh only when the reader actually asked", () => {
+    for (const surface of ["events", "jobs"] as const) {
+      const asked = opportunityRequestBody(
+        activeProfile,
+        surface,
+        [],
+        undefined,
+        true,
+      );
+      expect(asked.poolRefresh).toBe(true);
+    }
+  });
+
+  it("omits the field entirely on an ordinary load, never sending false", () => {
+    for (const surface of ["events", "jobs"] as const) {
+      const ordinary = opportunityRequestBody(activeProfile, surface, []);
+      expect(ordinary.poolRefresh).toBeUndefined();
+      // Not merely falsy — absent. The route tests `=== true`, and a `false` on
+      // the wire is a claim about a request that made no claim.
+      expect(Object.values(ordinary)).not.toContain(false);
+    }
+  });
+
+  it("is only an ASK — the client never decides whether it is granted", () => {
+    // The entitlement is the server's business (`feed.ts`'s own docblock says
+    // so). A free reader's request carries the same `poolRefresh: true` as a
+    // paid reader's; the route is what refuses. This is why 6-03's notice reads
+    // the entitlement rather than the response.
+    const asked = opportunityRequestBody(
+      activeProfile,
+      "jobs",
+      [],
+      null,
+      true,
+    );
+    expect(asked.poolRefresh).toBe(true);
   });
 });

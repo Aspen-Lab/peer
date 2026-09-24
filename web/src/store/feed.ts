@@ -15,6 +15,7 @@ import type {
 // fallback when the real API returned 0 results, which silently surfaced
 // battery-research demo data as the user's feed. Removed.
 import { apiFetch, ApiError } from "@/lib/api";
+import { libraryEntryOf, type LibraryEntry } from "@/lib/library/graph";
 import { useProfileStore } from "@/store/profile";
 // P4-S5b-FIX2/FIX3 (Round 3) — read-only use of profile-sync.tsx's exported
 // auth signals (see resolveOwnerKeyForLoad below): `settled` (FIX2,
@@ -24,8 +25,12 @@ import { useProfileStore } from "@/store/profile";
 // directly (a separate file in the same change), not through this import.
 import { useSyncGate } from "@/components/profile-sync";
 import { scoredItemToPaper } from "@/lib/feed/mapper";
-import { feedsUseAi, hasUserLlmOverride } from "@/lib/feed/ai-tier";
-import { aiAvailability } from "@/lib/feed/ai-tier";
+import { STARTER_TOPICS_KEY, topicsOrStarter } from "@/lib/feed/starter-topics";
+import {
+  aiAvailability,
+  feedsUseAi,
+  hasUserLlmOverride,
+} from "@/lib/feed/ai-tier";
 import { entitlementGrants, type ClientEntitlement } from "@/lib/entitlement/allowance";
 import type { FeedResponse, FeedMeta } from "@/lib/feed/types";
 import { localCalendarDate } from "@/lib/local-calendar-date";
@@ -462,9 +467,18 @@ function activePaperIntent(profile: UserProfile) {
   });
 }
 
+// FIRST-VISIT RULING (ABC-JEV-INTEGRATION.md §4 Round 3 "MERGE-B-FEED complete"):
+// a visitor with NO declared intent at all (no project, challenge or topic,
+// legacy or modern) gets main's starter sample, not a blocking message — so
+// the fallback below is `STARTER_TOPICS_KEY`, never the empty string. The
+// empty string used to mean "nothing to load" at the page's auto-load effect,
+// which is exactly what kept a new visitor paperless before main's starter
+// feed existed. Any declared project/challenge/topic still routes through
+// Jev's fuller `activePaperIntent` — never the sample — per acceptance 1 (no
+// keyword-only requirement).
 export function activePaperTopicsKey(profile: UserProfile): string {
   const intent = activePaperIntent(profile);
-  return intent ? serializeFeedIntent(intent) : "";
+  return intent ? serializeFeedIntent(intent) : STARTER_TOPICS_KEY;
 }
 
 export function paperFeedRequestBody(
@@ -472,9 +486,15 @@ export function paperFeedRequestBody(
   advisorSeeds: { seedTexts: string[]; seedWorkIds: string[] },
   aiPaperSearchEnabled = false,
   excludeIds: string[] = [],
+  // ABC-freemium 1-14 — passed in rather than read from the store inside, so a
+  // test can construct any persona. Defaults to anonymous (null), which is
+  // the safe direction: no entitlement means no AI. Converted to the
+  // `Pick<Entitlement, "userId">` shape internally via `entitlementGrants`
+  // (below), matching every other caller in this file.
   entitlement: ClientEntitlement | null = null,
 ): Record<string, unknown> {
-  const { topics, softTopics } = activeSurfaceTopics(profile, "papers");
+  const { topics: ownTopics, softTopics } = activeSurfaceTopics(profile, "papers");
+  const topics = topicsOrStarter(ownTopics);
   const seedTexts = [
     profile.currentProject,
     profile.currentChallenges,
@@ -488,6 +508,13 @@ export function paperFeedRequestBody(
   const challenge = profile.currentChallenges?.trim() || undefined;
   const intent = activePaperIntent(profile);
   const feedAiApiKey = profile.feedAiApiKey?.trim();
+  // ABC-freemium 1-14 · R-ENT-3 — **this used to re-implement both halves of
+  // the shared predicate inline, and the local `hasUserLlmOverride` SHADOWED the
+  // imported function of the same name.** So the papers request builder never
+  // called the shared predicate at all, and the leftover copy was invisible to
+  // anyone grepping for callers. It now reads `aiAvailability` like everything
+  // else; the papers toggle stays ANDed on top, because that is a separate
+  // choice the reader makes about this surface.
   const aiMode = aiAvailability(profile, entitlementGrants(entitlement));
   const paperAiAvailable = aiPaperSearchEnabled && aiMode !== "none";
   const useOwnKey = aiPaperSearchEnabled && aiMode === "byok";
@@ -543,6 +570,9 @@ export function paperFeedRequestBody(
       avoidBroadSurveys: profile.feedAvoidBroadSurveys,
     },
     excludeIds: excludeIds.length > 0 ? excludeIds : undefined,
+    // ABC-freemium 1-18 — **no `poolRefresh` here, deliberately.** D3 keeps the
+    // papers pool daily and never refreshed on demand; it is built from free
+    // academic sources, so there is no paid fan-out to force.
   };
 }
 
@@ -564,7 +594,15 @@ async function fetchRealFeed(
   excludeIds: string[] = [],
   entitlement: ClientEntitlement | null = null,
 ): Promise<RealFeedResult> {
-  if (!activePaperIntent(profile)) return { papers: [] };
+  // FIRST-VISIT RULING (ABC-JEV-INTEGRATION.md §4 Round 3 "MERGE-B-FEED
+  // complete"): no guard on an absent intent any more. It used to return
+  // `{ papers: [] }` before the request, which is what made a reader with no
+  // declared project/challenge/topic see an empty page: the starter sample is
+  // built into `activePaperTopicsKey`/`paperFeedRequestBody`
+  // (`STARTER_TOPICS_KEY` fallback), and it never gets the chance to be sent
+  // if this returns early first. A reader with a declared project, challenge
+  // or topic still gets their OWN briefing — `activePaperTopicsKey` only
+  // falls back to the starter key when `activePaperIntent` is null.
 
   // Advisor / PI discovery seeds (recomputed monthly). Their text biases TF-IDF
   // scoring; their work IDs anchor the citation-neighborhood pull in the pipeline.
@@ -578,6 +616,11 @@ async function fetchRealFeed(
           advisorSeeds,
           aiPaperSearchEnabled,
           excludeIds,
+          // ABC-freemium 6-04 — the request builders ask a CAPABILITY
+          // question (which AI tier to ask for). While the plan is unknown the
+          // anonymous view is the honest answer and it asks for less, never
+          // more; the server re-resolves the entitlement anyway and is the
+          // authority. Never the place to decide an upsell.
           entitlement,
         ),
       ),
@@ -602,6 +645,7 @@ export function opportunityRequestBody(
   surface: "events" | "jobs",
   excludeIds: string[],
   entitlement: ClientEntitlement | null = null,
+  poolRefresh = false,
 ): Record<string, unknown> {
   const { topics, softTopics } = activeSurfaceTopics(profile, surface);
   const activeInputs = profile.activeSearchInputs;
@@ -649,6 +693,8 @@ export function opportunityRequestBody(
       ? { provider: profile.feedAiProvider, apiKey: feedAiApiKey }
       : undefined,
     excludeIds: excludeIds.length > 0 ? excludeIds : undefined,
+    // ABC-freemium 1-18 · R-POOL-2 — an ask, not a grant. See `FeedLoadOptions`.
+    poolRefresh: poolRefresh || undefined,
   };
 }
 
@@ -656,6 +702,7 @@ async function fetchRealEvents(
   profile: UserProfile,
   excludeIds: string[] = [],
   entitlement: ClientEntitlement | null = null,
+  poolRefresh = false,
 ): Promise<OpportunityClientPool<Event>> {
   if (activeSurfaceTopics(profile, "events").topics.length === 0) {
     return emptyOpportunityClientPool<Event>();
@@ -665,7 +712,13 @@ async function fetchRealEvents(
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(
-        opportunityRequestBody(profile, "events", excludeIds, entitlement),
+        opportunityRequestBody(
+          profile,
+          "events",
+          excludeIds,
+          entitlement,
+          poolRefresh,
+        ),
       ),
     });
     if (!res.ok) {
@@ -688,6 +741,7 @@ async function fetchRealJobs(
   profile: UserProfile,
   excludeIds: string[] = [],
   entitlement: ClientEntitlement | null = null,
+  poolRefresh = false,
 ): Promise<OpportunityClientPool<Job>> {
   if (activeSurfaceTopics(profile, "jobs").topics.length === 0) {
     return emptyOpportunityClientPool<Job>();
@@ -696,7 +750,15 @@ async function fetchRealJobs(
     const res = await fetch("/api/jobs/feed", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(opportunityRequestBody(profile, "jobs", excludeIds, entitlement)),
+      body: JSON.stringify(
+        opportunityRequestBody(
+          profile,
+          "jobs",
+          excludeIds,
+          entitlement,
+          poolRefresh,
+        ),
+      ),
     });
     if (!res.ok) {
       console.error("[feed] /api/jobs/feed returned", res.status);
@@ -792,6 +854,20 @@ export interface FeedLoadOptions {
    * Omitted means all three, so existing callers keep their behaviour.
    */
   lanes?: FeedLane[];
+  /**
+   * ABC-freemium 1-18 · R-POOL-2 — ask for a forced pool rebuild on the jobs and
+   * events surfaces.
+   *
+   * **This is what keeps the existing "Refresh now" button honest after 1-17.**
+   * Those pools now rebuild weekly, so a plain refetch reads the same cached
+   * pool all week and the button would do nothing visible. Asking for a rebuild
+   * makes it mean what it says.
+   *
+   * Only an ASK: the route forwards it only when `entitlement.poolRefreshAllowed`
+   * is true, and a free user is refused by being served the pool that is already
+   * there — no error, no empty surface.
+   */
+  poolRefresh?: boolean;
 }
 
 interface FeedState {
@@ -837,6 +913,21 @@ interface FeedState {
    * needs to remember.
    */
   readAt: Record<string, string>;
+  /**
+   * What Peer keeps about each paper once it is read: its title, venue, day
+   * and cleaned terms. `readItems` and `readAt` are ids and dates only, and a
+   * paper's record leaves the store the moment it leaves the day's briefing,
+   * so without this the library graph could draw yesterday's reading as
+   * nothing but a count. Local-first like `readAt`; a few hundred bytes each.
+   */
+  library: Record<string, LibraryEntry>;
+  /**
+   * Whose account the data in this browser was last synced from; null when it
+   * was made signed out. It is what tells a reader's own local data (kept
+   * across reloads) from an account's copy (cleared when that session ends).
+   * See lib/feed/session-step.ts.
+   */
+  syncedUserId: string | null;
   appliedAt: Record<string, string>;
   registeredAt: Record<string, string>;
   submittedAt: Record<string, string>;
@@ -1015,7 +1106,10 @@ interface FeedState {
     feedback: ItemFeedback,
     payload?: unknown,
   ) => void;
-  markRead: (id: string) => void;
+  /** `paper` when the caller has it (the reading page always does), so a
+   *  paper opened from search or a link still enters the library. */
+  markRead: (id: string, paper?: Paper) => void;
+  setSyncedUserId: (id: string | null) => void;
   markUnread: (id: string) => void;
   setJobApplied: (job: Job, applied: boolean, at?: string) => void;
   setEventRegistered: (
@@ -1076,6 +1170,8 @@ export const useFeedStore = create<FeedState>()(
       aiPaperSearchEnabled: false,
       readItems: {},
       readAt: {},
+      library: {},
+      syncedUserId: null,
       appliedAt: {},
       registeredAt: {},
       submittedAt: {},
@@ -1205,6 +1301,8 @@ export const useFeedStore = create<FeedState>()(
         const wantsPapers = lanes.includes("papers");
         const wantsEvents = lanes.includes("events");
         const wantsJobs = lanes.includes("jobs");
+        // ABC-freemium 1-18 · R-POOL-2 — only ever an ask; the route decides.
+        const poolRefresh = options?.poolRefresh === true;
         // P4-S5b-FIX (Round 3) — ABC-JEV-INTEGRATION.md §1c, closing finding
         // (b). Resolve and "touch" (MRU-bump, evict beyond
         // MAX_DELIVERED_LOCAL_OWNERS) the CURRENT owner's deliveredLocal
@@ -1516,7 +1614,12 @@ export const useFeedStore = create<FeedState>()(
         const eventsLane = (async () => {
           if (!wantsEvents) return;
           try {
-            const realEvents = await fetchRealEvents(profile, dismissedEventIds, useProfileStore.getState().entitlement);
+            const realEvents = await fetchRealEvents(
+              profile,
+              dismissedEventIds,
+              useProfileStore.getState().entitlement,
+              poolRefresh,
+            );
             if (requestId !== feedLoadSeq) return;
             set((state) => {
               const currentSavedIds = new Set(
@@ -1556,7 +1659,12 @@ export const useFeedStore = create<FeedState>()(
         const jobsLane = (async () => {
           if (!wantsJobs) return;
           try {
-            const realJobs = await fetchRealJobs(profile, dismissedJobIds, useProfileStore.getState().entitlement);
+            const realJobs = await fetchRealJobs(
+              profile,
+              dismissedJobIds,
+              useProfileStore.getState().entitlement,
+              poolRefresh,
+            );
             if (requestId !== feedLoadSeq) return;
             set((state) => {
               const currentSavedIds = new Set(
@@ -1983,19 +2091,28 @@ export const useFeedStore = create<FeedState>()(
         if (kind) cloudFeedback(itemId, kind, feedback, payload);
       },
 
-      markRead: (id) => {
-        set((s) =>
-          s.readItems[id]
-            ? s
-            : {
-                readItems: { ...s.readItems, [id]: true },
-                // The first read is the one the chart plots; re-opening a
-                // paper a week later does not move the day it was read.
-                readAt: { ...s.readAt, [id]: new Date().toISOString().slice(0, 10) },
-              },
-        );
+      markRead: (id, paper) => {
+        set((s) => {
+          if (s.readItems[id]) return s;
+          // The first read is the one the chart plots; re-opening a paper a
+          // week later does not move the day it was read.
+          const day = new Date().toISOString().slice(0, 10);
+          const record =
+            paper ??
+            s.papers.find((p) => p.id === id) ??
+            s.savedPapers.find((p) => p.id === id);
+          return {
+            readItems: { ...s.readItems, [id]: true },
+            readAt: { ...s.readAt, [id]: day },
+            library: record
+              ? { ...s.library, [id]: libraryEntryOf(record, day) }
+              : s.library,
+          };
+        });
         cloudMarkRead(id);
       },
+
+      setSyncedUserId: (id) => set({ syncedUserId: id }),
 
       markUnread: (id) => {
         set((s) => {
@@ -2004,7 +2121,9 @@ export const useFeedStore = create<FeedState>()(
           delete next[id];
           const nextAt = { ...s.readAt };
           delete nextAt[id];
-          return { readItems: next, readAt: nextAt };
+          const nextLibrary = { ...s.library };
+          delete nextLibrary[id];
+          return { readItems: next, readAt: nextAt, library: nextLibrary };
         });
         cloudMarkUnread(id);
       },
@@ -2328,6 +2447,14 @@ export const useFeedStore = create<FeedState>()(
           savedEvents: [],
           savedJobs: [],
           readItems: {},
+          // The three are one record — `markRead` writes them together and
+          // `markUnread` deletes them together — so a reset clears all three.
+          // This is safe only because the reset now runs when a session has
+          // really ended (lib/feed/session-step.ts); it used to run on every
+          // signed-out page load.
+          readAt: {},
+          library: {},
+          syncedUserId: null,
           appliedAt: {},
           registeredAt: {},
           submittedAt: {},
@@ -2395,6 +2522,8 @@ export const useFeedStore = create<FeedState>()(
         savedJobs: state.savedJobs,
         readItems: state.readItems,
         readAt: state.readAt,
+        library: state.library,
+        syncedUserId: state.syncedUserId,
         appliedAt: state.appliedAt,
         registeredAt: state.registeredAt,
         submittedAt: state.submittedAt,

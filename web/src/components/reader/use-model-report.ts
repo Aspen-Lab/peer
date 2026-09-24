@@ -171,10 +171,16 @@ export function useModelReport({
     ],
   );
 
+  // One tier: signed in means Peer's model; the reader's own key, when set, wins.
+  // `userProviderConfigured` keeps its meaning — only a BYOK reader sends a key.
   const entitlement = useProfileStore((s) => s.entitlement);
   const aiMode = aiAvailability(profile, entitlementGrants(entitlement));
   const userProviderConfigured = aiMode === "byok";
-  const deep = Boolean(profile.deepReportEnabled || paper?.fullTextUploadId) && aiMode !== "none";
+  // Deep is opt-in, and needs a model from anywhere: Peer's (signed in — the
+  // server's dev entitlement stands in for this locally) or the reader's own key.
+  // No NODE_ENV test here: AI availability is decided on the server.
+  const deep =
+    Boolean(profile.deepReportEnabled || paper?.fullTextUploadId) && aiMode !== "none";
   const depth = deep ? "deep" : "abstract";
   const privatePdf = !!paper?.fullTextUploadId || !!paper?.id.startsWith("upload:");
   const reportKey = buildReportKey(paper, depth, project, profile.feedAiProvider);
@@ -313,6 +319,12 @@ export function useModelReport({
           if (event.type === "report") {
             settled = true;
             settle(event.report, asked);
+            return;
+          }
+          if (event.type === "quota") {
+            // The daily breaker tripped: no model report today, and not a failure.
+            settled = true;
+            settle(null, false);
             return;
           }
           throw new Error(event.message);

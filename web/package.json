@@ -1,6 +1,7 @@
 {
   "name": "web",
   "version": "0.1.0",
+  "license": "MIT",
   "private": true,
   "scripts": {
     "predev": "node scripts/kill-dev-orphans.mjs",
@@ -12,6 +13,7 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:events-benchmark": "vitest run --config vitest.live-events.config.ts src/lib/events/benchmark.test.ts",
+    "check:providers": "node scripts/check-provider-models.mjs",
     "purge-uploads": "node scripts/purge-uploads.mjs"
   },
   "dependencies": {
@@ -20,20 +22,26 @@
     "@supabase/ssr": "^0.10.2",
     "@supabase/supabase-js": "^2.104.0",
     "@types/js-yaml": "^4.0.9",
+    "@vercel/analytics": "^2.0.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "d3-force": "^3.0.0",
     "fast-xml-parser": "^5.7.1",
     "google-auth-library": "^10.9.1",
     "js-yaml": "^5.2.1",
+    "katex": "^0.18.7",
     "next": "16.2.3",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "resend": "^6.12.2",
     "tailwind-merge": "^3.6.0",
+    "unpdf": "^1.8.1",
     "zustand": "^5.0.12"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/d3-force": "^3.0.10",
+    "@types/katex": "^0.16.8",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",

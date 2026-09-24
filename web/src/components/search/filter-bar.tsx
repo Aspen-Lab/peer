@@ -137,7 +137,7 @@ export function FilterBar({ filters, onChange, onReset }: FilterBarProps) {
           className={[
             "group inline-flex items-center h-10 rounded-full px-4 gap-1.5",
             "text-body-sm font-medium tracking-[-0.005em]",
-            "transition-all duration-200 ease-out active:scale-[0.97]",
+            "transition-all ease-out active:scale-[0.97]",
             moreActive
               ? "bg-[color:var(--color-accent-dim)] text-[color:var(--color-accent)] shadow-card hover:shadow-card-hover"
               : "bg-surface text-text shadow-card hover:shadow-card-hover hover:-translate-y-[0.5px] hover:text-heading",
@@ -147,7 +147,7 @@ export function FilterBar({ filters, onChange, onReset }: FilterBarProps) {
           <span
             aria-hidden
             className={[
-              "inline-block text-micro transition-transform duration-200",
+              "inline-block text-micro transition-transform ",
               moreOpen ? "rotate-180" : "",
               moreActive ? "opacity-70" : "opacity-50",
             ].join(" ")}

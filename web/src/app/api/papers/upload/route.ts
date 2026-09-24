@@ -14,6 +14,8 @@ import { hostedUploadsEnabled, ownedUpload, PRIVATE_UPLOAD_HEADERS, sameOriginUp
 import { extractUploadConcepts, matchUploadedPaper, UPLOAD_CONCEPT_EXTRACTION_VERSION, type PaperMatchBand } from "@/lib/preferences/upload-concepts";
 import { extractPdfTextFromPath } from "@/lib/papers/pdf-text";
 import { resolveProvider } from "@/lib/llm/providers/registry";
+import { requireEntitledAiRequest } from "@/lib/security/ai-request";
+import { entitledContext } from "@/lib/security/entitled-context";
 import {
   attachUpload,
   attachedUploadHash,
@@ -79,17 +81,19 @@ function looksLikeUsableTitle(title: string): boolean {
 /**
  * Step (b): a small-tier-model re-check, only reached when step (a) —
  * extract_pdf_text.py's own largest-font-line join — did not produce a
- * usable title. Uses the same no-override `resolveProvider(null)` pattern
- * `report/route.ts` already uses: a real model call locally (dev
- * credentials via `resolveLocalServerProvider`), inert on a deployed
- * instance with no operator key (`canUseLocalServerProvider`'s existing,
- * deliberate fail-closed rule — a stranger's upload never spends the
- * operator's account). Never invents a title: a missing/unusable model
- * answer falls through to step (c), the file name.
+ * usable title. A no-override provider — Peer's own model, never a key the
+ * uploader sent — behind the same entitlement check every other route that
+ * reaches a model now passes (main's ABC-freemium R-SEC-2: `resolveProvider`
+ * requires proof of whose request it is). A caller the check turns away, or
+ * a rate limit, simply skips this step. Never invents a title: a
+ * missing/unusable model answer falls through to step (c), the file name.
  */
 async function modelTitleFallback(page1Text: string): Promise<string | null> {
-  const provider = resolveProvider(null);
-  if (!provider?.generateJsonText || !page1Text.trim()) return null;
+  if (!page1Text.trim()) return null;
+  const gate = await requireEntitledAiRequest("paper-upload-title", 20);
+  if (gate instanceof NextResponse) return null;
+  const provider = resolveProvider(null, entitledContext(gate.entitlement, "paper-upload-title", false));
+  if (!provider?.generateJsonText) return null;
   try {
     const raw = await provider.generateJsonText({
       systemPrompt:

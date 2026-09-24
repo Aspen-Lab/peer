@@ -5,6 +5,10 @@ import {
   consumeDeepReport,
   quotaMessage,
 } from "./deep-report-quota";
+import {
+  FORCED_REBUILDS_PER_DAY,
+  consumeForcedRebuild,
+} from "./rebuild-breaker";
 import { getCounterStore, resetCounterStoreForTests } from "./counters";
 import { setUsageEventsClientForTests, type UsageEventRow } from "./events";
 import { ANONYMOUS_ENTITLEMENT, type Entitlement } from "@/lib/entitlement/types";
@@ -271,6 +275,29 @@ describe("the house ceiling (launch, 2026-09-17)", () => {
   });
 });
 
+describe("the forced-rebuild breaker (R-QUOTA-2)", () => {
+  it("allows the day's rebuild units and refuses the one past the cap", async () => {
+    expect(
+      await consumeForcedRebuild("user-1", FORCED_REBUILDS_PER_DAY, NOW),
+    ).toBe(true);
+
+    expect(await consumeForcedRebuild("user-1", 1, NOW)).toBe(false);
+    expect(rows).toHaveLength(1);
+    // 6-01 — the recorded path follows the counter. REWRITTEN to the new
+    // contract, never deleted: this is the only fixture in the tree that
+    // asserts the value, so deleting it would leave the audit row unasserted.
+    expect(rows[0]).toMatchObject({ kind: "breaker", path: "forced-rebuild" });
+  });
+
+  it("charges the whole fan-out, not one per call", async () => {
+    // A fan-out of twelve queries costs twelve, or the 500/day cap would mean
+    // 500 fan-outs rather than 500 searches.
+    await consumeForcedRebuild("user-1", FORCED_REBUILDS_PER_DAY - 5, NOW);
+
+    expect(await consumeForcedRebuild("user-1", 12, NOW)).toBe(false);
+  });
+});
+
 describe("the two failure directions", () => {
   /** Point the store at a URL no admin client can be built from in-process. */
   function breakTheStore(): void {
@@ -344,6 +371,18 @@ describe("the two failure directions", () => {
 
     await consumeDeepReport(PAID, NOW);
     expect(storeUnavailableLines()).toHaveLength(2);
+  });
+
+  it("the forced-rebuild breaker does the same (2-02)", async () => {
+    // `consumeForcedRebuild` had the identical shape: an outage fabricated a
+    // `kind:"breaker"` row and an error line claiming the
+    // 500/day cap tripped. Same fix, same ruling.
+    breakTheStore();
+
+    expect(await consumeForcedRebuild("user-1", 3, NOW)).toBe(false);
+
+    expect(rows).toHaveLength(0);
+    expect(storeUnavailableLines()).toHaveLength(1);
   });
 });
 

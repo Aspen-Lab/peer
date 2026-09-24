@@ -15,7 +15,7 @@ import { AbstractToggle } from "./abstract-toggle";
 import { LeadClaim } from "./lead-claim";
 import { ABSTRACT_FOOTER, TLDR_LINE, attribution, skimFooter } from "./copy";
 
-const FOOTER_CLASS = "font-mono text-caption text-text-faint mt-2";
+const FOOTER_CLASS = "annotation text-text-faint mt-2";
 
 function Paragraph({
   sentences,
@@ -74,10 +74,10 @@ function Deck({
       {scramble ? (
         <ScrambleText
           text={skimLine}
-          className="font-reading text-title-lg leading-[1.45] text-heading measure mt-10 block"
+          className="font-reading text-title-lg leading-[1.45] text-heading measure-paper mt-12 sm:mt-16 block"
         />
       ) : (
-        <p className="font-reading text-title-lg leading-[1.45] text-heading measure mt-10">
+        <p className="font-reading text-title-lg leading-[1.45] text-heading measure-paper mt-12 sm:mt-16">
           {skimLine}
         </p>
       )}
@@ -135,7 +135,7 @@ export function PaperWords({
     if (!tldr) return null;
     return (
       <div>
-        <p className="font-reading text-lead leading-[1.6] text-text-muted measure mt-10 reading-justify">
+        <p className="font-reading text-lead leading-[1.6] text-text-muted measure-paper mt-10 reading-justify">
           {tldr}
         </p>
         <p ref={endRef} className={FOOTER_CLASS}>
@@ -154,7 +154,7 @@ export function PaperWords({
         <LeadClaim sentence={sentences[lead]} />
       )}
       <AbstractToggle className="mt-12">
-        <div className="font-reading text-lead leading-[1.6] text-text-muted measure mt-4 space-y-4 reading-justify">
+        <div className="font-reading text-lead leading-[1.6] text-text-muted measure-paper mt-4 space-y-4 reading-justify">
           {split > 0 && <Paragraph sentences={sentences.slice(0, split)} from={0} inked={inked} />}
           {split < sentences.length && (
             <Paragraph sentences={sentences.slice(split)} from={split} inked={inked} />

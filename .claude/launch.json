@@ -2,11 +2,11 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "peer-web",
+      "name": "peer-web-followup",
       "cwd": "web",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
-      "port": 3000,
+      "port": 3100,
       "autoPort": true
     }
   ]

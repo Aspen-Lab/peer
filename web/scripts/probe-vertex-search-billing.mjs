@@ -14,9 +14,19 @@
 
 import { GoogleAuth } from "google-auth-library";
 
-const PROJECT =
-  process.env.GOOGLE_VERTEX_SEARCH_PROJECT?.trim() ||
-  process.env.GOOGLE_VERTEX_PROJECT?.trim();
+// ── The search project ─────────────────────────────────────────────────────
+// ABC-freemium 9-01 · Ruling 21 point 2, Ruling 26 point 4.
+//
+// **Reads `GOOGLE_VERTEX_SEARCH_PROJECT` and nothing else — the same single
+// expression `vertexSearchProject()` uses in `src/lib/sources/vertex-search.ts`.**
+//
+// The old `GOOGLE_VERTEX_PROJECT` fallback mattered more here than anywhere
+// else: this script spends about $4 of real money per run, and the fallback
+// pointed that spend at the **models** project — measuring a bill for a project
+// the app never queries. An answer about the wrong project is worse than no
+// answer, because it is believed.
+const PROJECT = process.env.GOOGLE_VERTEX_SEARCH_PROJECT?.trim();
+const LEGACY_MODELS_PROJECT = process.env.GOOGLE_VERTEX_PROJECT?.trim();
 const ENGINE_ID = process.env.GOOGLE_VERTEX_SEARCH_ENGINE_ID?.trim() || "peer-web";
 const COUNT = Number(process.argv[2] ?? 1000);
 const CONCURRENCY = 8;
@@ -30,7 +40,26 @@ const BATCH_PAUSE_MS = 62_000;
 const PRICE_PER_1000 = 4; // Enterprise-tier search request, list price.
 
 if (!PROJECT) {
-  console.error("GOOGLE_VERTEX_PROJECT is not set.");
+  console.error("GOOGLE_VERTEX_SEARCH_PROJECT is not set.");
+  if (LEGACY_MODELS_PROJECT) {
+    // The loud half. Never print the VALUE.
+    console.error("");
+    console.error(
+      "GOOGLE_VERTEX_PROJECT is set, and it is deliberately NOT read here.",
+    );
+    console.error(
+      "That name is the MODELS project. Vertex AI Search is configured",
+    );
+    console.error("separately, and the app reads GOOGLE_VERTEX_SEARCH_PROJECT.");
+    console.error("");
+    console.error("Add this line to web/.env.local with the SAME project id:");
+    console.error("  GOOGLE_VERTEX_SEARCH_PROJECT=<the same project id>");
+    console.error("");
+    console.error(
+      "An index already built under the old name does NOT move and is NOT",
+    );
+    console.error("rebuilt — the same index is reachable under the new name.");
+  }
   process.exit(1);
 }
 

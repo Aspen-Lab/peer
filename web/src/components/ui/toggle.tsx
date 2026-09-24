@@ -28,7 +28,7 @@ export function Toggle({
       onClick={() => onChange(!checked)}
       className={cn(
         "relative inline-flex h-5 w-9 shrink-0 items-center rounded-full",
-        "transition-[background-color] duration-150 ease-snap",
+        "transition-[background-color] ",
         "disabled:opacity-50 disabled:cursor-wait",
         checked ? "bg-accent" : "bg-heading/15",
         className,
@@ -38,7 +38,7 @@ export function Toggle({
         aria-hidden
         className={cn(
           "absolute h-4 w-4 rounded-full bg-bg shadow-card",
-          "transition-transform duration-150 ease-snap",
+          "transition-transform ",
           checked ? "translate-x-[18px]" : "translate-x-[2px]",
         )}
       />

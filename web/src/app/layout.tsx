@@ -1,11 +1,14 @@
 import type { Metadata } from "next";
 import {
+  Host_Grotesk,
   Inter,
   Newsreader,
   Noto_Sans_SC,
   Roboto_Mono,
 } from "next/font/google";
 import "./globals.css";
+import { Analytics } from "@vercel/analytics/next";
+import { SITE_URL } from "@/lib/site";
 import { Masthead } from "@/components/shell/masthead";
 import { ThumbBar } from "@/components/shell/thumb-bar";
 import { UndoToast } from "@/components/undo-toast";
@@ -17,6 +20,17 @@ import { FirstRunGate } from "@/components/first-run";
 import { StoreHydrator } from "@/components/store-hydrator";
 
 // Primary UI sans — Delphi-style interface text
+// Peer's own voice: the dateline, the page titles, every label and control.
+// Host Grotesk is the open face Latent name as their own fallback, and the
+// reason to take it rather than Inter is the shape of a display line at
+// weight 400 with -0.03em tracking — Inter goes soft there and needs weight
+// to hold, which is the look this moves away from.
+const hostGrotesk = Host_Grotesk({
+  subsets: ["latin"],
+  variable: "--font-grotesk",
+  display: "swap",
+});
+
 const inter = Inter({
   subsets: ["latin"],
   variable: "--font-inter",
@@ -49,8 +63,23 @@ const notoSansSC = Noto_Sans_SC({
 });
 
 export const metadata: Metadata = {
+  // Every link to Peer renders somewhere before it renders here: a chat, a
+  // post, a message. Until launch that arrived as a bare URL.
+  metadataBase: new URL(SITE_URL),
   title: "Peer",
   description: "Today's papers, chosen for your work.",
+  openGraph: {
+    type: "website",
+    siteName: "Peer",
+    title: "Peer",
+    description: "Ten papers a day, chosen for your work. No feed, no backlog.",
+    url: SITE_URL,
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Peer",
+    description: "Ten papers a day, chosen for your work. No feed, no backlog.",
+  },
 };
 
 export default function RootLayout({
@@ -67,7 +96,7 @@ export default function RootLayout({
       // The boot script below rewrites data-mode/data-accent before
       // hydration; suppress the expected server/client attribute mismatch.
       suppressHydrationWarning
-      className={`${inter.variable} ${robotoMono.variable} ${newsreader.variable} ${notoSansSC.variable} h-full`}
+      className={`${hostGrotesk.variable} ${inter.variable} ${robotoMono.variable} ${newsreader.variable} ${notoSansSC.variable} h-full`}
     >
       <body className="min-h-full flex flex-col antialiased">
         {/* Pre-paint theme boot: apply the persisted mode+accent before first
@@ -93,7 +122,10 @@ export default function RootLayout({
         <ProfileSync />
         <FeedSync />
         <FirstRunGate />
-      </body>
+              {/* Page counts only — how many people arrived and where they
+            landed. It records the page, never who was on it. */}
+        <Analytics />
+</body>
     </html>
   );
 }

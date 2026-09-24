@@ -1,49 +1,55 @@
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/cn";
 
-// One page column instead of seven hand-typed max-w values. Vertical
-// rhythm stays per-page (pass py-* via className).
+// One page column and one page rhythm. Override the rhythm with `rhythm=`,
+// never with a raw `py-*` — seven different vertical recipes across fifteen
+// route files is what the old "rhythm stays per-page" comment produced, and
+// the one value Latent actually beats time on (96px) survived only on the
+// four pages nobody designs: 500, 404, the auth error, and a footer.
 
 export const pageContainer = cva("mx-auto w-full px-6", {
   variants: {
     width: {
-      narrow: "max-w-[720px]",   // event detail, not-found
-      detail: "max-w-[760px]",   // paper/job detail
       // Paper reading: one column, a two-column spread from xl. The spread's
       // width is set by the measure, not by the window — at 1320 the 7fr
       // column was 681px holding a 462px line, so a fifth of the page was an
       // empty gutter inside the reading column. Sized so the column is the
       // measure plus a rag margin, the two columns fill and the leftover
       // becomes the page's own margins.
-      //
-      // S20: the 2xl cap grows in lockstep with the reading column
-      // (`spread.ts`'s `SPREAD_GRID`, same `560px` base, same
-      // `--reading-scale`) so the panel's `1fr` share stays numerically
-      // constant at every step — 544px panel + 96px 2xl gap + 560px*scale
-      // column = 640 + 560*scale. At scale 1: 640+560=1200, byte-identical
-      // to before this item. Keep the two `560`s and this `640` in step —
-      // same "two places, one query" risk spread.ts's own header names.
-      //
-      // Ruling 19 / A7-02 (round 7, second pass): the xl term gets the same
-      // treatment — `1000 * var(--reading-scale, 1)`. Unlike 2xl's fixed-
-      // plus-flexible split, xl's grid (spread.ts's `SPREAD_GRID`) is
-      // proportional (`minmax(0,5fr)_minmax(0,7fr)`), so it fills whatever
-      // total width this cap gives it with no separate wiring — the panel
-      // is NOT width-invariant at xl the way it is at 2xl (both panel and
-      // column grow, in a fixed 5:12 share), which is what Ruling 19's own
-      // text asks for ("the 5fr/7fr grid then fills it"), not an oversight.
+      // Round 7 (Ruling 19 / A7-02): the reading spread's caps grow with
+      // `--reading-scale` so the panel's share stays constant as the reader's
+      // font steps up. 2xl is a fixed-plus-flexible split (544 panel + 96 gap
+      // + 560*scale column = 640 + 560*scale; at scale 1 that is the old
+      // 1200). xl's grid is proportional (5fr/7fr), so it just fills whatever
+      // total this cap gives it. Keep the two `560`s and this `640` in step
+      // with `spread.ts`'s SPREAD_GRID.
       spread:
         "max-w-[760px] xl:max-w-[calc(1000px*var(--reading-scale,1))] 2xl:max-w-[calc(640px+560px*var(--reading-scale,1))]",
-      content: "max-w-[820px]",  // home column
-      wide: "max-w-[920px]",     // saved grid (lg)
-      board: "max-w-[1280px]",   // full-bleed feed board
-      // Pages that narrow on small screens, widen at lg
-      contentResponsive: "max-w-[740px] lg:max-w-[820px]", // profile
-      wideResponsive: "max-w-[740px] lg:max-w-[920px]",    // saved
+      content: "max-w-[820px]",  // home column, /privacy, /saved
+      // The feed board. It held 1280 at every width above 1280, so a 1920
+      // screen spent a third of itself on margins and still dealt three
+      // cards. The card is what should stay constant — about 400px, the
+      // width a title and three lines of reason want — so the board widens
+      // and the columns multiply instead. Four cards from 1700, five from
+      // 2200; below that nothing moves.
+      board: "max-w-[1280px] 3xl:max-w-[1760px] 4xl:max-w-[2200px]",
+      // Narrows on small screens, widens at lg — /profile.
+      contentResponsive: "max-w-[740px] lg:max-w-[820px]",
+      // A page laid out as a rail and a column (`PageSpread`): one column at
+      // 820 until xl, then wide enough that the column beside a 240px rail is
+      // still worth two cards. Only the built-in screens — a custom one loses
+      // to them (see `@theme` in globals.css).
+      shelf: "max-w-[820px] xl:max-w-[1180px] 2xl:max-w-[1360px]",
+    },
+    rhythm: {
+      page: "py-12 md:py-16 lg:py-24",  // 48 → 64 → 96, the section heartbeat
+      reader: "py-8 sm:py-12 xl:pt-4",  // the spread keeps its own top
+      none: "",
     },
   },
   defaultVariants: {
     width: "content",
+    rhythm: "page",
   },
 });
 
@@ -55,10 +61,9 @@ type PageContainerProps = React.HTMLAttributes<HTMLElement> &
 export function PageContainer({
   className,
   width,
+  rhythm,
   as: Tag = "article",
   ...props
 }: PageContainerProps) {
-  return (
-    <Tag className={cn(pageContainer({ width }), className)} {...props} />
-  );
+  return <Tag className={cn(pageContainer({ width, rhythm }), className)} {...props} />;
 }

@@ -308,7 +308,14 @@ describe("POST /api/feed AI tier gate", () => {
 
     await POST(request({ topics: ["battery"], aiTier: 2, llmOverride }));
 
-    expect(mocks.resolveProvider).toHaveBeenCalledWith(llmOverride);
+    // MERGE-B-SEC / MERGE C semantic fix (ABC-JEV-INTEGRATION.md §1s.2):
+    // resolveProvider now requires a ProviderContext as its 2nd argument --
+    // the branded context this route builds from the entitlement gate above.
+    expect(mocks.resolveProvider).toHaveBeenCalledWith(llmOverride, {
+      userId: "server-user",
+      byok: true,
+      path: "paper-feed",
+    });
     expect(mocks.runFeedPipeline).toHaveBeenCalledWith(
       expect.objectContaining({ aiTier: 2, llmOverride }),
       expect.anything(),

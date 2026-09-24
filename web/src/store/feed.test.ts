@@ -45,6 +45,7 @@ import {
   ANONYMOUS_CLIENT_ENTITLEMENT,
   type ClientEntitlement,
 } from "@/lib/entitlement/allowance";
+import { STARTER_TOPICS, STARTER_TOPICS_KEY } from "@/lib/feed/starter-topics";
 
 // A signed-in fixture for tests that need a real owner id — everything
 // else about the entitlement is irrelevant to these tests, so it borrows
@@ -389,13 +390,27 @@ describe("feed lane loading", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(requestPath(fetchMock.mock.calls[0]![0] as string | URL | Request)).toBe("/api/feed");
     const request = JSON.parse(String((fetchMock.mock.calls[0]![1] as RequestInit).body));
-    expect(request).toMatchObject({ topics: [] });
+    // CHANGED (FIRST-VISIT RULING, ABC-JEV-INTEGRATION.md §4 Round 3
+    // "MERGE-B-FEED complete"): the literal `topics` field is a separate,
+    // supplementary signal from `intent` -- with no literal topics declared it
+    // now fills from the same starter list a genuinely-empty reader gets
+    // (`topicsOrStarter`), never a gate. The request is still driven primarily
+    // by `intent` below (acceptance 1 -- no dummy-keyword requirement).
+    expect(request).toMatchObject({ topics: [...STARTER_TOPICS] });
     expect(request.intent).toMatchObject({ version: "feed-intent-v1" });
     expect(request.intent[kind]).toMatchObject({ presence: "value", value });
     expect(useFeedStore.getState().feedTopicsKey).toBe(activePaperTopicsKey(profile));
   });
 
-  it("does not call a provider route for an empty browser research focus", async () => {
+  it("sends the starter sample for a genuinely empty browser research focus, never a blocked/silent load", async () => {
+    // CHANGED (ABC-JEV-INTEGRATION.md §4 Round 3 "MERGE-B-FEED complete" FIRST-VISIT
+    // RULING (a)): this used to assert NO fetch at all for a reader with
+    // nothing declared ("ask first"). The merge adopts main's zero-setup
+    // first-run design instead: a reader with no project, challenge, topic or
+    // sense declared gets main's curated starter sample -- a real request with
+    // `STARTER_TOPICS_KEY` and the starter topic list, never silence and never
+    // a blocking message. A reader who HAS declared something still gets their
+    // own intent-driven request (see the `it.each` case above).
     const profile = {
       ...defaultProfile,
       currentProject: "",
@@ -409,13 +424,16 @@ describe("feed lane loading", () => {
       },
     };
     useProfileStore.setState({ profile });
+    enqueueResolved("/api/feed", { items: [], meta: {} });
 
     await useFeedStore.getState().loadFeed({ lanes: ["papers"] });
 
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const request = JSON.parse(String((fetchMock.mock.calls[0]![1] as RequestInit).body));
+    expect(request).toMatchObject({ topics: [...STARTER_TOPICS] });
     expect(useFeedStore.getState()).toMatchObject({
       feedError: null,
-      feedTopicsKey: "",
+      feedTopicsKey: STARTER_TOPICS_KEY,
       papersLoading: false,
     });
   });
@@ -441,8 +459,14 @@ describe("feed lane loading", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const request = JSON.parse(String((fetchMock.mock.calls[0]![1] as RequestInit).body));
+    // `topics` (CHANGED, see the empty-focus test above for the full FIRST-VISIT
+    // RULING citation): a real declared sense is a real intent -- this request
+    // is intent-driven, not the starter sample -- but the LITERAL `topics`
+    // field still falls back to the starter list because no literal topic was
+    // declared either. `intent`/`feedTopicsKey` below (the real signal here)
+    // are unaffected.
     expect(request).toMatchObject({
-      topics: [],
+      topics: [...STARTER_TOPICS],
       intent: {
         version: "feed-intent-v1",
         selectedSenseConcepts: [expect.objectContaining({ senseId: "materials.scanning_electron_microscopy" })],

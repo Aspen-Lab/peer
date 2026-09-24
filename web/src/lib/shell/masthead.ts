@@ -34,7 +34,8 @@ export function shellRoute(pathname: string | null | undefined): ShellRoute {
   if (under(pathname, "/welcome")) return "welcome";
   if (pathname.startsWith("/papers/")) return "paper";
   if (under(pathname, "/search")) return "search";
-  if (under(pathname, "/saved")) return "saved";
+  // A note is written from the shelf, so the shell keeps Saved lit on it.
+  if (under(pathname, "/saved") || under(pathname, "/notes")) return "saved";
   if (under(pathname, "/profile")) return "profile";
   return "other";
 }

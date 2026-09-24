@@ -63,6 +63,11 @@ export interface EventsQuery {
     // ruling's "all three surfaces uniform" requires it to start.
     provider?: WebSearchProvider;
     tavilyApiKey?: string;
+    // ABC-freemium 1-05 · R-KEY-3 — see the identical block in `jobs/types.ts`.
+    // **Absent means `false`.**
+    systemSearchAllowed?: boolean;
+    // ABC-freemium 1-05 · R-METER-2 — attribution for a system search.
+    userId?: string | null;
   };
 }
 
@@ -90,6 +95,20 @@ export interface EventsFeedRequest {
   aiTier?: 0 | 1 | 2;
   searchConnectors?: SearchConnectors;
   llmOverride?: ProviderOverrideConfig;
+  /**
+   * ABC-freemium 1-05 · R-KEY-3 — set by the route from
+   * `entitlement.systemSearchAllowed`, never parsed from a request body.
+   * **Absent means `false`.**
+   */
+  systemSearchAllowed?: boolean;
+  /** ABC-freemium 1-05 · R-METER-2 — attribution for a system search. */
+  userId?: string | null;
+  /**
+   * ABC-freemium 1-18 · R-POOL-2 — "refresh now". Set by the route from
+   * `entitlement.poolRefreshAllowed`; a body that asks for it without the
+   * entitlement gets nothing, because the route never forwards it.
+   */
+  poolRefresh?: boolean;
 }
 
 export interface EventsFeedMeta {

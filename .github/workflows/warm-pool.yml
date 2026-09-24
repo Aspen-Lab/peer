@@ -1,0 +1,38 @@
+# The day's first reader should not pay for the day's first build.
+#
+# Peer builds one paper pool per UTC day and caches it; the request that finds
+# the cache empty waits for the sources, which measured 20–30s on a cold
+# morning against 0.4s once the pool is warm. That cost lands on whoever
+# arrives first — at launch, plausibly the first person who clicks a shared
+# link. This spends it instead, a few minutes after midnight UTC and again in
+# the European and US mornings.
+#
+# It asks for the starter sample (the topics a reader with no profile gets),
+# because that is what a first-time visitor loads.
+name: Warm the daily pool
+
+on:
+  schedule:
+    - cron: "7 0,6,13 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: warm-pool
+  cancel-in-progress: false
+
+jobs:
+  warm:
+    runs-on: ubuntu-latest
+    steps:
+      - name: POST /api/feed with the starter topics
+        run: |
+          status=$(curl -sS -o /tmp/body.json -w '%{http_code}' -m 300 \
+            -X POST "https://hermes-flax-six.vercel.app/api/feed" \
+            -H 'content-type: application/json' \
+            -d '{"topics":["machine learning","neuroscience","molecular biology","materials science","climate science","quantum computing"]}')
+          echo "HTTP ${status}"
+          head -c 400 /tmp/body.json || true
+          if [ "${status}" != "200" ]; then
+            echo "::error::warm-up returned HTTP ${status}"
+            exit 1
+          fi

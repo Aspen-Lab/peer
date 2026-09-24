@@ -11,7 +11,7 @@ import { PAGE_CLASS, SPREAD_GRID } from "@/components/reader/spread";
 // before this item, on purpose, not an oversight.
 export default function Loading() {
   return (
-    <PageContainer width="spread" className={PAGE_CLASS}>
+    <PageContainer width="spread" rhythm="reader" className={PAGE_CLASS}>
       <div className={SPREAD_GRID}>
         <div>
           <LoadingMat />

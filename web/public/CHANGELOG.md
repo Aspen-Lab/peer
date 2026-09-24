@@ -2,6 +2,1084 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.43.2 — 2026-09-23
+
+A caption's tail is told by its face.
+
+v0.43.1 read the lines under a caption by their size, and on a real PDF the
+caption and the body were both 12pt — so the fix passed its test and did
+nothing on the page. A caption is set in its own face; the lines under it in
+that same face are the caption, and the first line back in the body's face is
+the paper. “Medical image analysis pipeline showing preprocessing,” now ends
+“feature extraction, and classification stages”, as printed.
+
+**Its topics** leaves out a concept OpenAlex filed into the wrong field — a
+protein paper under “Cleavage (geology)” — by the bracket that marks it, the
+same list the briefing's plates already use.
+
+## v0.43.1 — 2026-09-23
+
+Where the column ended in air, and a caption cut off.
+
+**In your library.** A paper page that Peer could not read the full text of
+ended with the notes block, the record, and half a column of nothing. The
+column now ends with the reader's own context for the paper: what they have
+read or kept under the same topics, nearest first, each a link back into the
+reading, with the topics they share — and the paper's topics themselves,
+each a search. From this browser's library and shelf; no request is made. On
+a paper Peer could read, the same block is the way onward.
+
+**A PDF caption is as long as it was printed.** The extractor took the first
+line of a caption and stopped, so a figure arrived under “Medical image
+analysis pipeline showing preprocessing,” — a clause with its sentence cut
+off. It now reads the lines under the first at the line pitch, in the
+caption's own size, until the gap opens or the body's size returns, and
+hands what follows back to the prose.
+
+## v0.43.0 — 2026-09-22
+
+The paper's mathematics, drawn.
+
+A formula came through the extractor as the jumble its MathML flattens to
+— "Q K T d k" in the middle of a sentence, and a display equation as a line
+of the same, run into the paragraph before it. The paper's argument is often
+in those lines.
+
+**Display equations stand on their own.** Each one is lifted out of the
+prose and set apart on a line: the mathematics centred, the paper's own
+number for it at the right, a hairline at the left the way the reader marks
+any block set apart, and — on hover — **TeX**, which copies the source
+for a note or a draft. It goes exactly where the paper put it, after the
+paragraph it followed.
+
+**Inline mathematics is drawn in the text** — in the paper's body, in the
+abstract, in every quoted sentence — so “where dₖ is the key size” reads
+as the paper wrote it.
+
+Where the source was HTML (arXiv and the rest), the TeX comes from the page
+and KaTeX draws it, loaded once on the first formula and never on a page
+without one. Where it was a PDF, there is no TeX: a printed equation is
+still recognised — a line made of symbols, or one ending in the paper's
+“(3)” — and set apart in the mono as it was printed, with its number.
+Until the renderer arrives, and wherever it cannot parse a formula, the TeX
+itself is shown: readable, never blank.
+
+The reading document is version 5.
+
+## v0.42.0 — 2026-09-22
+
+The paper's figures, where the paper put them.
+
+**Read it here** rendered the paper's words and none of its pictures — the
+extractor had the captions all along and threw the figures away with them.
+Each figure now sits in the body **after the paragraph that first names it**
+("as Figure 3 shows" is the paper telling you to look now); a figure the
+prose never names lands at the end of the section where the paper printed
+it. Tables are not placed — a table's caption without its table is a
+sentence about nothing.
+
+**Where the source was HTML** (arXiv, ar5iv, PMC, bioRxiv, publishers),
+the figure's own picture comes with it, on the plate's mat, with the caption
+under it in the record's mono. Nothing is fetched to build the reading; the
+page asks for each picture as it comes into view.
+
+**Where the source was a PDF**, Peer knows the page each caption was read
+from, and a new route serves that page's embedded picture as a PNG — encoded
+by hand, because the deployed runtime has no image library. It is offered
+only when the page holds one figure and no other: a PDF's rasters come back
+without positions, and a wrong picture under a caption is worse than none. A
+figure drawn as vector art has no raster to serve; then the caption stands
+alone with its page number, which is the truth.
+
+The reading document is version 4; a reader's day-old cached version 3 is
+discarded and fetched fresh.
+
+## v0.41.0 — 2026-09-21
+
+The subject mark on a card is a badge now.
+
+v0.38.0 gave each card a mark for its subject and drew it as a 13px stroke in
+the meta line's faint grey — correct, and invisible: at arm's length the
+board still read as ten grey rectangles. The mark now sits in a 28px tinted
+square at the top right of the card, the way the profile frames a signal's
+glyph, set a size larger and a shade darker, and it takes the accent when the
+card is hovered. Hover it and it still names the family.
+
+Two families join the set, because a machine-learning briefing meets them
+right after the sciences: **robotics and control** (a body on a base, and the
+arm it reaches with) and **hardware and systems** (a die and its pins).
+Fifteen marks in all.
+
+**The paper is wider.** The reading column set its prose at the book measure
+— 66 characters, 28em — which at 16.5px is 462px of text, a third of the
+column it sat in, with the rest of the page empty beside it. The abstract,
+the extracts and the paper's own body now share a long measure of 80
+characters (34em), and the body steps up a size, from 16.5px to 17.5px, with
+a little more air between paragraphs. On the two-column spread the column
+itself is the limit and nothing moves; below it, the paper fills the page it
+is on.
+
+## v0.40.1 — 2026-09-21
+
+Search: the starts are plates, and the chips carry marks.
+
+v0.40.0 set the page's starts as bare words under eyebrows, and it read as
+a page nobody had designed — three columns of grey type with nothing to hold
+them. They are now the product's own components:
+
+Each group is a **plate**: a card in Peer's frame — the surface, the grain,
+the registration corners the notes and the briefing use — with a glyph in its
+header naming what kind of thing it holds (a hash for your topics, an open
+book for your reading, a person for your shelf, a clock for what you
+searched) and its count at the right.
+
+Each start is a **chip** with its own mark at the left: a term takes the
+subject mark a card would take for it, so the chips here and the marks on the
+briefing are one vocabulary; an author takes the person; a past search takes
+the clock. The mark goes accent on hover. A count sits in its own small
+square, a fact about the chip rather than part of its words.
+
+The field is framed with the same registration corners, and its key hints
+are now a pair: `/` “to search from anywhere” while it is empty, `↵` “search
+now” once something is typed.
+
+## v0.40.0 — 2026-09-21
+
+Search: the field is the page, and the page knows you.
+
+**The field.** The one thing a reader comes to this page to touch was a
+body-size box at 820px under a headline twice its height — the page read as
+a manifesto with a form field. It is now the largest object on the page: the
+full width of it, display-size type, a search glyph to match, and an accent
+rule under it while it has focus. The `/` key that brings the pointer here
+from anywhere is printed at its right end until something is typed.
+
+**Before a word is typed.** The page used to end at the field. It now offers
+where a search can start from, drawn from what this browser already knows and
+fetched from nowhere: **your topics** (what you told Peer you work on), **from
+your reading** (the terms two or more of your papers shared, most-shared
+first, with the count), **people on your shelf** (the first authors of what
+you kept), and **you searched** (this browser's own recent queries, kept only
+when a search found something, cleared with one word). Each is a query
+waiting to be run; a tap runs it. A group with nothing in it is not drawn, so
+a fresh browser sees the field and one line about what it takes.
+
+**When the index does not answer.** OpenAlex refused the first request for a
+query with a 429 often enough to notice — four of the first five searches on
+one afternoon, each answered in 150ms and each fine a moment later — and the
+page said "Nothing turned up", which blames the query for the server's
+afternoon. The search route now asks once more, after the pause the server
+names or a short one of its own; and if the answer is still no, the page says
+**Search didn't answer**, with **Try again**, and remembers nothing. The route
+also now sends the configured `OPENALEX_EMAIL` like every other OpenAlex call
+in the codebase, instead of the placeholder it alone had written in.
+
+The results grid takes a fourth card from 2xl rather than xl, where the page
+is 1180px and a fourth card was 270px wide.
+
+## v0.39.0 — 2026-09-21
+
+The shelf and the profile: a narrow rail, a long column.
+
+Both pages were one 820px column down the middle of the window. On a wide
+screen that is a third of the page holding everything and two thirds holding
+nothing — and the page's own name, "Saved" or "Your signals", scrolled away
+with the first card.
+
+From xl they are two columns, and the proportion is the point: **the rail is
+narrow (240px) and the column takes every pixel the window adds.**
+
+**Saved** — the rail holds the name, the counts, and a way between the two
+halves of the shelf ("Notes 7", "Papers 4"), and it is sticky, so it is still
+there at the bottom of a long shelf. The column holds the cards, and takes a
+third card per row from 2xl.
+
+**Your signals** — the rail holds the name, the signals-set count and Edit.
+The column holds the account, the profile, the theme and the reading rhythm,
+each of them wider than it was.
+
+Below xl nothing moves: one column, the rail's contents first, exactly as
+before. The reading spread is untouched — it is sized by the measure, not by
+the window, and both of its columns hold reading.
+
+## v0.38.0 — 2026-09-21
+
+A wider board, and a mark for what each paper is about.
+
+**The board fills the screen.** It was capped at 1280px and dealt three cards
+at every width above that, so a 1920 monitor spent a third of itself on empty
+margin and still read three abreast. The card is what should stay constant —
+about 400px, which is what a title and three lines of reason want — so the
+count is what grows: **four cards from 1700px, five from 2200px**, with the
+board widening to match. Below 1700 nothing moves at all.
+
+**Each card carries a small mark for its subject.** Ten cards in a briefing
+are ten grey rectangles that differ only in their words, and the words are all
+in the same face at the same size — there is nothing to sort by until you
+start reading, which is the opposite of what a board is for. The mark sits at
+the end of the filing line, in the meta line's own weight, and names a family:
+earth and agriculture, life and health, physical sciences, economy, security,
+images, language, geometry, networks — or, where the paper is not about a
+field but is a kind of reading, a course or survey, a toolkit, data, a model.
+Hover it and it says which.
+
+It is read off the paper's own title and the terms already cleaned for its
+plate — never the venue, because half of one real briefing came back "physical
+sciences" for being published on Zenodo, which CERN runs; and never the raw
+concept tags, which put "Computational Physics and Python Applications" on a
+textbook. It is a reading, not a record: it is drawn faint, nothing is filed
+by it, and nothing on the card depends on it.
+
+## v0.37.0 — 2026-09-21
+
+Drag a paper into the draft.
+
+The rail could already put a paper in a note two ways: **Cite** dropped
+`[@key]` where the caret was, **Card** placed the card after whatever you
+wrote in last. Both of them decide *where* for you, which is fine until you
+know exactly where you want it — between these two paragraphs, under that
+heading, at the end of the section you just finished.
+
+So the shelf can now be picked up. Drag a paper out of the rail's **Papers**
+tab and the draft draws the same line it draws when you move a block of your
+own; let go and the paper lands in that gap as a card. It brings its record
+with it, so the citation key is registered on the way in and the paper is in
+the note's References and its BibTeX export immediately — nothing to look up
+afterwards.
+
+A card dropped at the end of the note, or above another card, gets an empty
+paragraph after it, and the caret goes there: the gesture ends where writing
+resumes.
+
+Clicking a row still opens its record, and **Cite** and **Card** are still in
+it — dragging is the third way, not the only one. On a phone, where the rail
+is a panel over the draft rather than a column beside it, the two buttons
+remain the way in.
+
+## v0.36.3 — 2026-09-21
+
+The file rail, tidied.
+
+Six notes made a mess of the editor's rail. Three faults, all of them the
+rail's own:
+
+The two-line clamp on a title never clamped — a `block` sat beside it and won
+the display, so a paper title ran to five lines and the column lost its
+rhythm. It clamps now, on both tabs.
+
+The line under a title said the kind, and the kind was almost always the
+same: four reading notes in a row read "reading notes · 22h ago" four times.
+A reading note is *about a paper*, so it now says which paper — "Harris et
+al., 2009 · 23h" — and any other note says how much of other people's work is
+in it. A record with no authors names its venue rather than repeating the
+title back at itself, and the timestamp drops the word "ago", which never
+varied.
+
+Rows were separated by a gap, which is not enough when a row is two lines
+tall. They are separated by a hairline now, and sit a little deeper.
+
+## v0.36.2 — 2026-09-21
+
+The paper is open, and the panel holds its contents.
+
+Yesterday's **Read it here** still asked for a click before the paper existed
+on the page. That is the wrong shape for a reader who has already chosen to
+read: the text Peer extracted is now simply there, under everything Peer has
+to say, with no button between it and the eye. The command stays — it is the
+way *down* to the text now, not the way *into* it — and the paper's sections
+are real anchors, so a link can point at §3.2 of a paper.
+
+Beside it, the left column of a wide screen no longer ends in air. Under the
+decision it now carries **the paper's contents**: where the text came from,
+how many sections and words Peer reached, and every heading in the paper's own
+order, indented as the paper numbers them, each one a jump. The panel is
+sticky, so the contents stay in view while the paper scrolls past them — the
+shape of a reading room rather than a landing page.
+
+On a phone nothing moves: one column, the contents printed as a strip at the
+head of the paper, exactly as before. Where Peer holds no full text there is
+no contents and no command, because there is nothing to point at.
+
+## v0.36.1 — 2026-09-20
+
+Read it here, said loudly.
+
+Peer read the paper and then whispered it: the loudest button on a paper's
+page was **Open the PDF**, which leaves Peer, while the text Peer had already
+extracted sat behind a grey line of type at the bottom of a block in the other
+column. That was a fair hierarchy while a deployed Peer could not read a PDF.
+It has not been one since yesterday.
+
+**Read it here** is now the first command in the decision block, filled, with
+the paper's key `t`; **Open the PDF** keeps its place as the second. Pressing
+it unrolls the paper's text and — only where the text is not already on the
+screen — scrolls to it, so on a phone you land on the first section and on a
+wide screen the page does not jump for a block you can already see.
+
+Where Peer holds no full text, nothing changes: the source is the first
+command again, because it is the only one.
+
+## v0.36.0 — 2026-09-20
+
+Peer reads PDFs — here, not only on a laptop.
+
+A paper whose full text is a PDF used to read as "abstract only" on
+peer.homes, with the page admitting why: "the PDF is there, but only a
+self-hosted Peer reads PDFs". The reading ran in a Python helper that needs
+PyMuPDF, a compiled extension; a developer's machine has it and a deployed
+one cannot. So the same paper read in full locally and not at all for anyone
+else — the worst kind of difference, because nothing was broken where anyone
+was looking.
+
+It is plain TypeScript now, over the text layer pdf.js hands back, and the
+same code runs in both places. A PDF gives words with a size, a face and a
+position; the structure is inferred from what the page shows and nothing else:
+
+- a heading is a line set larger than the body, or in its other face, or
+  numbered ("3.1 Encoder and Decoder Stacks") — never a display equation, a
+  caption, or prose that happens to open with a figure;
+- a paragraph is a break in the page's vertical rhythm, or an indent, and a
+  word the column broke is mended ("archi-/tecture");
+- a caption ("Figure 1: …") goes to the figure pool, not into the prose it
+  interrupts;
+- the cover — names, affiliations, the preprint stamp down the margin — is
+  not the paper, and the references are not its argument.
+
+On the paper this feature was tested against, the new reading finds ten
+sections where the old helper found two. A PDF that carries no text at all is
+a scan, and the page now says that instead of blaming the deployment.
+
+## v0.35.3 — 2026-09-20
+
+The masthead's tools carry their glyphs.
+
+Write takes a pencil, Search a glass, Saved the bookmark the shelf has always
+been marked with, Profile a figure — and the shortcuts sheet, a question mark
+drawn on the same grid as the rest instead of typed as a character.
+
+They are the phone bar's own icons, which existed already: the two bars now
+draw from one family (`components/shell/icons`), the phone at 22px on a 1.6px
+stroke, the masthead at 13px on 1.3px. Signed in, your face stays the glyph on
+Profile.
+
+A glyph in this product names a place or an action in the shell, and nothing
+else — the content is still words, because there the words are the paper's.
+
+## v0.35.2 — 2026-09-20
+
+A mark of its own.
+
+The tab still carried a drawn, cream-and-orange creature from the app this
+one grew out of — an illustration, in a product that draws nothing it cannot
+justify. Peer's mark is now the geometry the interface is made of: a sheet,
+with one registered corner in the accent. The same corner the reading graph
+puts on the node you point at, a card grows under the pointer, and the
+masthead puts around the section you are in.
+
+- The mark sits beside the nameplate in the masthead — the chrome's one spot
+  of colour, and the same object the tab shows.
+- The tab icon is an SVG, so it stays crisp at any size; a 16/32/48 `.ico` is
+  there for the browsers that still ask for one.
+
+## v0.35.1 — 2026-09-20
+
+The masthead, drawn.
+
+It was four words and a button on an empty rule. It is now the instrument's
+own bezel, in marks this product already owns:
+
+- **The nameplate is registered** — four 1px corners around "Peer", the mark
+  the reading graph puts on the node you point at and a card grows under the
+  pointer. They brighten when you point at it.
+- **The section you are in wears the same corners**, so where you are is said
+  with a mark instead of a slightly brighter grey.
+- **Hairlines instead of middots** between the words, and in the paper rail's
+  row: the machine's own line, the one the bands, the graph's key and every
+  plate edge already use.
+- **Scrolled, the glass takes the product's tooth** — the grain every card
+  surface carries. On its own layer, because `glass-bar` sets `background` as
+  a shorthand and would have wiped an image off the bar.
+
+Write keeps the one closed box in the row: a place is registered, an action is
+boxed.
+
+## v0.35.0 — 2026-09-20
+
+Write, in the masthead. Your files, beside the draft.
+
+**Write** is now the one action in the top bar, set apart from the four words
+that are places: outlined at rest, filled while you are in a note. It opens a
+note to write in — and reuses an untouched blank one, so pressing it twice
+never leaves an empty note behind.
+
+The editor's rail became a cabinet with two drawers:
+
+- **Notes** — every note in this browser. Each row carries its own menu:
+  rename (in place), duplicate, export .md, delete.
+- **Papers** — your shelf, plus anything this note cites that has since left
+  it. Opening one shows the **record**: authors, venue and year, its own
+  abstract where the record has one (and it says so where it does not), and
+  four actions — **Cite** puts `[@key]` where the caret last was, **Card**
+  places the paper as a card, **Open** goes to the paper, **Source** to the
+  publisher. A paper you have taken notes on also offers those.
+
+And a citation in the draft now opens that paper's record in the rail instead
+of navigating away from what you were writing.
+
+Fixed: a block could keep showing its Markdown after losing the caret to a
+re-render — with nothing focused, the caret comes back to it.
+
+## v0.34.1 — 2026-09-19
+
+A rail of your notes, beside the one you are writing.
+
+Every note in this browser is listed down the left of the editor, newest
+first, with the open one marked — Obsidian's file list, Notion's sidebar.
+Switching notes is a click instead of a trip back to the shelf, and "+ New"
+starts one from where you are. Past seven notes the rail carries a filter,
+which reads titles and text. Where the window is too narrow for a column, the
+bar's "Notes" button opens the same list as a panel.
+
+It is the editor's rail, not the shell's: Peer's chrome is still the masthead.
+
+## v0.34.0 — 2026-09-18
+
+Notes: what you saved, turned into writing.
+
+Saved is now where reading becomes writing. It holds two things: **Notes**,
+your own, newest first, and **Papers**, the shelf as before. From the shelf:
+
+- **Take notes** on any paper opens its reading notes — made the first time
+  from the paper's record: its card, the opening of its abstract in its own
+  words, and four headings to answer under (what it claims, how, what you
+  think, questions). The prompts are placeholders, never text.
+- **Draft from papers** lets you pick several and start a **related-work
+  section** (one paragraph per paper, each opening on its citation) or a
+  **paper outline** (abstract to conclusion, the papers already cited under
+  related work).
+- **+ New note** starts blank.
+
+The editor works in blocks, the way Notion and Logseq do, over Markdown, the
+way Obsidian keeps a note. The block you are typing in shows its source; the
+rest read rendered.
+
+- `/` opens the block menu: headings, lists, to-do, quote, code, divider,
+  paper card. Markdown typed at a block's start converts it: `# `, `- `,
+  `1. `, `[] `, `> `, three backticks, `---`.
+- `@` (or `[[`) cites a paper you saved, read or have in today's briefing. It
+  reads as "(Rose et al., 2024)" and links to the paper; `[[` also links your
+  other notes by title.
+- Enter splits a block, Backspace at its start joins it back, the arrows move
+  between blocks, Tab nests, ⌘⇧↑↓ moves a block, ⌘B ⌘I ⌘E format. Drag a
+  block by its grip; click the grip to turn it into another kind, duplicate or
+  delete it (with undo). Pasted Markdown arrives as blocks, and text copied
+  out of a PDF has its broken lines mended.
+- A **References** list builds itself from what you cite, in the order you
+  first cite it.
+- **Export** as Markdown (front matter, `[@key]` citations Pandoc reads, a
+  references list) or as a `.bib` with the same keys — `pandoc draft.md
+  --citeproc --bibliography draft.bib` turns a draft into a formatted paper.
+
+A paper's own page now says which of your notes cite it, with the way into its
+reading notes.
+
+Notes are kept in this browser, the way Obsidian keeps a vault on your disk:
+Peer never uploads them, and signing out leaves them where they are. /privacy
+says so. Export a note to keep a copy elsewhere.
+
+Two fixes the editor turned up: a class merge was dropping the display type
+sizes whenever a colour sat beside one — a heading set at body size — and a
+phone-only rule pinned every text field to 16px, which shrank the note's title
+below its own sections. Both now hold.
+
+## v0.33.1 — 2026-09-18
+
+The bar chart above today's papers is gone.
+
+"Today's papers" opens on the cards now, the way "Your reading" opens on the
+graph. The strip of ten bars — each paper's match against the day's best — was
+meant to show the shape of the day: two strong papers, a flat middle, a tail.
+On most days it showed ten bars of nearly the same height, and its key ("The
+dim ones are read") repeated what the deck already says in words. Each bar was
+also a link to its card, which nothing on the page ever said.
+
+## v0.33.0 — 2026-09-18
+
+Steer the briefing from your reading graph.
+
+Click a term in the graph and it stays picked up; the readout in the plate's
+corner carries its full name, where it came from, and three buttons:
+
+- **+ More / − Less.** A deliberate lean on the term, written to the same
+  preference ledger your saves and dismissals feed. Today's papers re-rank at
+  once, right below: the day's pool is already built and your preferences are
+  applied when it is read, so the board simply re-reads it — no new search, no
+  model call. Press the same button again and the lean comes off. The chip says
+  what is set: `ALGORITHMS +`.
+- **Follow.** The term joins the explore topics the briefing searches alongside
+  your own. Topics move into the search once a day, so a follow shows in
+  tomorrow's briefing. A followed chip is filled, a step dimmer than your own
+  topics, and the key gains a "followed" swatch.
+
+Before you press anything, the readout says which lever works when; after, it
+says what the press did.
+
+A lean on a term inside one of your own topics counts. "Machine Learning and
+Data Classification" sits under "machine learning", and dislikes of anything
+carrying your topic's words are normally ignored, so one bad paper cannot bury
+your field — but a lean set on purpose is not a stray dislike, and it applies.
+
+A click on a paper now picks it up too, instead of opening it; "Open →" in the
+readout opens it, and Enter still opens it straight from the keyboard. Tab
+reaches every term; Enter or Space picks it up, Escape puts it down.
+
+The graph makes room for what you hold. If the term is under the readout, the
+plate slides down just far enough to show it — or, with no room below, fits the
+whole library into the space left — and the key steps aside until you put the
+term down. Only a click moves it; pointing never does.
+
+And it keeps its shape when the day changes under it. A lean that moves a paper
+into today's ten or out of it rebuilds the graph, and that used to re-deal the
+whole layout: the term in your hand jumped across the plate. Now everything
+already on the plate holds still, and only the paper that arrived finds its
+place.
+
+## v0.32.5 — 2026-09-18
+
+The reading calendar is off the briefing.
+
+"Your reading" is the library graph now, and nothing under it — the eight-week
+grid of reading days and its "1 day read in the last 8 weeks" line are gone. It
+answered "which days", which the graph does not need to be read and the briefing
+did not need either, and it was one more small chart between the library and
+today's papers. /profile keeps its own labelled calendar, and the briefing no
+longer asks the server for the reading history it no longer draws.
+
+## v0.32.4 — 2026-09-18
+
+Pointing at a card, its corners close in.
+
+The corners used to grow along the card's edge and take the accent. Now they
+also come off the edge — 6px inside it, legs 16px — like a viewfinder locking
+on, in the same 180ms the frame takes to brighten, and ease back out when the
+pointer leaves. Off the edge they no longer have to fight the brightened frame
+to be seen.
+
+## v0.32.3 — 2026-09-18
+
+The space between your reading and today's papers, tidied.
+
+Three things used to sit between the reading graph and the cards, each lined up
+with nothing: the graph's key along the bottom of the reading calendar, the
+calendar floating right of centre with its sentence at the far edge, and the
+day's bar chart on a line of its own below, belonging to neither side.
+
+Now the page is two sections, each under its band:
+
+- **Your reading.** The graph carries its own key, in the plate's bottom-left
+  corner — the instrument's key sits inside the instrument, the way its readout
+  sits in the top-left. Under the plate, the reading calendar, left-aligned,
+  with its sentence beside it.
+- **Today's papers.** The day's bar chart, then the cards it describes. Same
+  arrangement as the calendar — chart, then its sentence — so the two charts on
+  the page read as one system.
+
+The bar chart's key said "grey is read", and every bar is grey; the read ones
+are the dimmer grey. It says that now, on its own line.
+
+## v0.32.2 — 2026-09-18
+
+Pointing at the reading graph no longer makes it twitch.
+
+**Moving between two nodes flashed the whole graph.** Pointing lifts one
+neighbourhood and lets the rest recede, and it was set on every enter and
+cleared on every leave — so going from a node to its neighbour passed through
+"pointing at nothing", and every node on the plate flashed back to full and down
+again in the space of one move. A sweep across the plate strobed it. Now the
+pointer has to rest on a node for a moment before anything recedes, moves
+straight from one node to the next with no flash between, and waits a beat on
+leaving so it can reach the next one.
+
+**An invisible title was catching the pointer.** A paper's title that was
+dropped for overprinting was transparent, not gone, and papers are drawn over
+the chips — so pointing at a chip under an invisible title kept handing the
+pointer to the paper and back. Titles are labels now, never targets.
+
+**And the marker no longer flashes in the corner.** The four accent corners were
+positioned a frame after they appeared, so they were painted once at the plate's
+top-left and then jumped to the node. They are placed on the frame that draws
+them.
+
+## v0.32.1 — 2026-09-18
+
+Your saves and your reading now survive a reload when you are not signed in.
+
+**What was happening.** Every page load for a visitor who was not signed in ran
+the sign-out reset. The sign-in bridge asked "is anyone signed in?" on arrival,
+got "no", and treated that as "someone just signed out" — so a signed-out
+reader's saved papers and read marks were wiped on every reload. The briefing
+said "ten unread" for papers you had already read that morning, and /profile
+said "Read 0" beside a calendar showing the days you read, because the reading
+dates were the one thing the reset forgot. It forgot them on a real sign-out
+too, which left the last account's reading on a shared machine.
+
+**What happens now.** Peer tells apart the two kinds of data a browser can hold.
+What you made while signed out is yours: it stays until you clear site data,
+which is what /privacy has always said. What came down from an account is that
+account's copy: it goes when that session ends — on sign-out, or when the
+session is found to have ended while the tab was closed — and it is never pushed
+up into a different account that signs in on the same browser. A reset now
+clears the whole reading record: the marks, the days and the library behind the
+reading graph.
+
+**And a network failure is not a sign-out.** Finding out who is signed in is a
+request to the sign-in service. Only a definite "there is no session" counts as
+signed out; if the request fails, Peer does nothing, so being offline when the
+page loads can never wipe anything.
+
+/privacy now says what the reading graph keeps in your browser, and that signing
+out clears it — it lives only in this browser, so it does not come back when you
+sign in again.
+
+## v0.32.0 — 2026-09-18
+
+Your library opens the briefing, and the cards arrive.
+
+**"Your reading" is at the top.** It used to close the page, below ten cards,
+so the one view of everything you have read was the last thing on the screen
+anyone reached. It now sits directly under the date: the library first, with
+today's papers already placed against it, then the day's cards.
+
+**The cards arrive as you reach them.** The reading page's approach is on the
+board now. The mount fade it replaces played all ten on load, so the cards below
+the fold had finished arriving before anyone scrolled to them. The first
+screenful is still dealt in order, 40ms apart; everything after that comes up as
+it approaches, about a sixth of a screen early, so a card is never still moving
+while you read it.
+
+**Pointing at a card registers it.** Its corners reach further in, from 12px to
+18px, and take your accent, in the time the frame takes to brighten. They had to
+change: a hovered frame steps up to the corners' own resting value, so corners
+that stayed put dissolved into the edge at the exact moment the card was being
+looked at. The action row's buttons now arrive in order — like, dislike, save —
+40ms apart.
+
+**Every press now animates, as it was always written to.** Tailwind compiles
+`active:scale-*` to the `scale` property, not `transform`, and the transition
+lists named `transform` — so every button press in the product snapped straight
+to its pressed size. Twenty-six press sites were affected; the button bases
+every pill and icon button derives from were two of them.
+
+**Fixed: a figure plate's corner marks were invisible.** The marks' utility
+declared its defaults on the mark itself, which overrides whatever the host
+sets, so the plate's own ink and its inset never reached its corners: they were
+drawn 40% white on a near-white mat. The defaults are fallbacks now, and a
+figure plate is registered in its own ink, 6px in.
+
+## v0.31.0 — 2026-09-18
+
+Your reading, drawn as a library: every paper you have read or kept, and the
+terms that join them.
+
+**What it is.** At the foot of the briefing, the "Your reading" band is now a
+graph. A square is a paper — filled once read, outlined while it is one of
+today's and still waiting. A filled chip is one of your own topics; an outlined
+chip is a term two or more of your papers share. Today's unread papers are in it
+on purpose, and only when they connect to something: the library is most useful
+the morning a new paper turns out to sit next to three you have already read.
+Point at anything and its neighbourhood lifts while the rest recedes, a readout
+in the plate's corner says what it is, and four corners in your accent register
+it. Click a paper to open it; drag anything and the graph re-settles around it.
+
+**Every line is a fact from the paper's own record.** No similarity score, no
+embedding, no "related" guess — two papers are near each other only because
+their records say the same thing. A term comes from one of two places, and the
+readout names which: OpenAlex filed the work under it, from a curated taxonomy
+of about 4,500 topics assigned to the whole work — which is what joins the books
+that ship no abstract — or it is in the paper's own title or abstract, under the
+same rules the card's plate uses, which is what keeps the older tagger's
+"Identity (music)" on a crowdsourcing paper out. A label that contains one of
+your topics — "Machine Learning and Data Classification" under "machine
+learning" — hangs beneath it on a solid line instead of being merged into it, so
+two corners of one field stay two corners, and its chip names only what
+differs: DATA CLASSIFICATION.
+
+**How it moves.** Most of the layout is found before the first paint, so it
+opens on the library's shape rather than a tangle unknotting; then about a
+second and a half of the terms drawing their papers in, topics first, papers
+after, the lines last, and the titles only once it is still — placed like town
+names on a map, most-linked first, and dropped wherever they would overprint.
+The camera follows the settle so nothing leaves the plate. It is a simulation
+that cools and stops, not a loop. Reduced motion draws it already still, and so
+does a briefing opened in a background tab, which has no one to play it to.
+
+**The library needed somewhere to live.** A read paper used to leave the store
+the day it left the briefing — Peer kept its id and the date, nothing you could
+draw. It now keeps the title, the venue, the day and the paper's cleaned terms,
+a few hundred bytes each, in this browser. Papers read before today are not in
+it; everything from here on is.
+
+## v0.30.1 — 2026-09-18
+
+The reading calendar, drawn at the size of what it says.
+
+**It was sized by its container.** The columns were fractions of the width and
+every cell was a square, so on the briefing's 1232px board eight weeks made
+cells 150px on a side and seven rows of them a thousand pixels tall. The
+fifty-five days a new reader had not read were drawn in a grey two percent off
+the page, so the grid itself vanished, and the one day read was a white slab in
+the corner of an empty field. The day-strip above it had already been through
+exactly this and wrote down the lesson in its own header; the calendar had not.
+
+It now uses the day-strip's unit — 12px marks, 3px apart — so the two charts on
+one board read as one system, and the grid is exactly as wide as its weeks.
+**A day with nothing read is an empty slot**, outlined and unfilled, rather than
+the palest step of the ramp, because a day with nothing read is not a small
+amount of reading; the slots are what give a filled day somewhere to be. On the
+briefing the sentence sits beside the chart instead of above a field: "1 day
+read in the last 8 weeks".
+
+**The weekdays were wrong.** The grid ended on today in the bottom row whatever
+day today was, so on a Thursday the row /profile labels "Mon" was a Saturday —
+on the one chart whose own comment says the weekday pattern is the whole point.
+Columns are now calendar weeks, Sunday at the top, and the days of this week
+that have not happened are not drawn, so the ragged last column is where "now"
+is. A week that is still in progress no longer breaks a streak before you have
+had the chance to read in it.
+
+## v0.30.0 — 2026-09-17
+
+Corner marks, an approach, and the sentence three cards were sharing.
+
+**The corner detail.** Latent registers a plate with L-brackets at its corners —
+a printer's mark that says "this is the whole plate, not a crop". Peer's card
+already had a 1px frame, and a second ring inside it would be two frames saying
+one thing, so the marks ARE the frame: the edge stays at `--nm-frame` and the
+last 12px into each corner steps up to `--nm-frame-hi`. Nothing is added.
+
+The paper's extracted figure gets the same marks in its own ink, because a
+figure is genuinely a reproduction — and there the marks replace the rectangle
+rather than joining it. The typographic term plate gets none: a crop mark says
+"cropped from a larger original", and those words are Peer's own composition,
+so nothing was cropped. Where a figure's light mat covers the card's top edge
+the card drops that pair, because white marks on a near-white mat are not marks.
+
+**Peer's blocks arrive as you reach them; the paper's own words are already
+there.** That division is the reason this page has motion at all. The mechanism
+is Latent's and it is the good part: the animation lives on the child and is
+paused by a custom property it inherits from the section, so one observer adding
+one class runs a whole group with no per-element JavaScript. Three things are
+not theirs — no blur, because a sentence you are about to read must not arrive
+out of focus; 360ms rather than 500 or 720; and it fires 15% of a screen *early*,
+so a block is never still moving while its first line is being read.
+
+What this replaces had never once been seen. Five blocks carried a mount fade
+that fired when the model's report landed — roughly 900px below the fold, while
+the reader is still on the abstract — so by the time anyone scrolled down it was
+long over, and its 40ms stagger ran between blocks that are never on screen
+together. Reduced motion lifts the pause rather than keeping it; so does
+printing, since a paused animation prints blank.
+
+**The card was pale, and the largest cause was one string.** The sentence under
+a card's title fell through to "Matches your interest in <your topic>", which
+for a reader with one topic is the same sentence on every paper of the day —
+three cards carrying it carry no bits each. It is out of the chain. The line is
+now decided for the whole board at once, the way the plate's words already were,
+because a card cannot see that two other cards are saying what it says: any
+sentence more than half the day is carrying is suppressed everywhere it appears.
+With no abstract and no model, the card says the lead author's institution, or
+nothing. "Open this paper for details." is deleted — it described the link the
+reader was already looking at.
+
+**And the ground it sat on.** The card surface was 1.12:1 against the page and
+the two radial washes over the grain were viewport-fixed, so a card's separation
+from the ground *changed as it scrolled* and almost vanished in one corner. The
+washes are gone, the surface goes to #232323 (1.24:1) and the frame to 30%, and
+the faint tone to #8d8d8d, which was already under AA and would have fallen
+further. Light is untouched. The eight slab tokens that survived the TUI pass
+with zero consumers — highlight, shade, rim, bevel, key, ambient, underside —
+are deleted, 25 declarations, nothing rendered differently.
+
+**Instrument marks, where the numbers are real.** The day strip draws its zero,
+at the chart's own width and no wider, so the bars are measured against
+something rather than floating; its caption now says they are drawn against
+today's best match, because the tallest bar is full height every single day and
+the old wording implied today's top paper was a perfect one. Each card takes its
+position — `01`, `02` — in the mono row it already had. Not a percentage: the
+match score is largely a within-day percentile, is overwritten by the rerank and
+reordered past by diversification, so no percentage of it is a fact about one
+paper. The position is a fact, and the masonry is column-major, so nothing else
+on screen said the reading order runs down column one.
+
+**Smaller.** A focus ring, on every control the keys reach — the product had one
+`:focus-visible` rule in the whole of `src/`, a Tailwind variant, on a page whose
+own comment calls it keyboard-first. A selection you can see: it was the badge
+ground at 9%, which over a grained page is inside the noise. `reading-prose` and
+`measure-mono`, because `measure` is in `em` and on a wrapper that declared no
+size it was resolving against the body's 17px — fourteen pixels of disagreement
+down a column that promises one right edge twice in its own comments. And the
+key legend and the panel that reserves room for it now read the same token;
+they were 28px and 24px, so the DOI line sat 4px behind a blurred bar.
+
+## v0.29.0 — 2026-09-17
+
+The design pass Latent's own stylesheet argued for: one label, one gap, one
+curve, and one animation that actually loops.
+
+**The dark card frame, which has been missing since the day it shipped.**
+`--nm-frame` was declared for the explicit dark theme and never for the dark
+palette that follows the OS — and following the OS is the default, because the
+boot script throws on a first visit before it can write anything else. So every
+card frame on the first briefing Peer ever showed a dark-OS reader resolved
+from the light value and came out 28% fainter than the drawn one. Two lines.
+
+**One repeating animation, as the file claimed twice and broke five times.**
+Eighty skeleton blocks swept at once on a cold briefing; the loading header
+stacked `animate-pulse` and `animate-ping` on the same 6px disc that the
+claim's dot owns; the refresh icon spun. Skeletons are now still, the header is
+an ordinary band, and the refresh state is a word — `syncing…` — beside the
+other three. The only thing that loops anywhere is the accent dot.
+
+Reduced motion now stops loops properly: `animation-duration: 0.01ms` alone
+does not stop an infinite animation, it *strobes* it. And it stopped killing
+one-shots — flattening every transition to 0.01ms teleported the swipe card
+while its removal timeout still waited 180ms.
+
+**One curve, from the one place it is set.** 56 transitions declared no
+duration and silently took Tailwind's 150ms on a third curve nobody chose, so
+the largest motion decision in the product was made by a default. Two theme
+lines move all of them to Peer's own 180ms on the expo-out. `ease-snap` is now
+a press curve only, and says so.
+
+**One label.** `eyebrow` gained the weight it was missing, `sectionLabel` and
+its four tracking tiers are deleted, and the 57 hand-rolled
+`uppercase tracking-[…]` strings — six tiers, none of them the token, 44 of
+them bold — are one form. The last two `font-bold` in the product were on two
+field labels at 10.5px; they are gone.
+
+**One gap, one page rhythm.** `Band` owns the pause above a section (48 on a
+phone, 64 above it) instead of nine call sites typing 32, 40, 48, 56 and 64 for
+the same figure. `PageContainer` owns the page's top and bottom; 96px, Latent's
+actual heartbeat, appeared five times before this and every one was on a page
+nobody designs.
+
+**One display voice.** `display-line` for Peer's own sentences, the new
+`paper-line` for the paper's. /profile narrated the reader's own behaviour in
+Newsreader italic; the changelog set its title in grotesk and every entry in
+serif; `text-text-heading` is not a token and had been silently doing nothing
+on four of the changelog's selectors. The claim keeps its weight, and the file
+now says why.
+
+**One empty state**, shared by the briefing, /saved, /search, /error and
+/not-found, which were three different products. /search printed its result
+count twice, 60px apart, in two treatments.
+
+**Things that were claims Peer could not support.** The profile drew
+"EVENTS 0 / JOBS 0" under "What you save" for every reader, though neither can
+ever be saved. The briefing had a "no topics" branch that could not fire. Two
+gradient washes had painted nothing since they shipped — `color-mix(in_srgb,…)`
+inside a real `style` attribute never gets Tailwind's underscore conversion.
+The card stagger had never run: the delay was on the wrapper and the animation
+two levels down, and `animation-delay` does not inherit.
+
+**Smaller, and visible.** The record is keyed in words, not pictures — the
+venue had no key at all, only a 13px building glyph. The day-strip's caption
+moved beside its chart, where 1,085px of that row was empty. Figure captions
+went back to the paper's serif; they are the paper's own words. The reading
+heatmap stopped spending 126 accent cells on data, which is the rule the
+day-strip twenty pixels away states in its own comment. The keyboard-focused
+card stopped jumping 2px on every `j`. The crash screen is no longer the last
+cream page in a greyscale product. The `radius` variant, whose three options
+all compiled to 0, is gone.
+
+**And a guard, so this is the last sweep.** ESLint now warns on off-scale
+spacing and errors on any `rounded-[…]` or inline `borderRadius` — the two
+mechanisms that let a round corner survive a squaring. Every previous
+systematization here was a one-time pass with no enforcement, and the files
+record the decay in their own comments.
+
+## v0.28.0 — 2026-09-17
+
+MIT, a page counter, and a page that says what Peer keeps.
+
+**MIT.** The repository was public with no licence, which means nobody could
+legally use or fork it — the opposite of what a public repository is for.
+
+**A page counter.** Vercel Analytics, one component. It records which page was
+opened, not who opened it, and it is the only third-party script on the site.
+
+**And the page that says so.** Written from the code rather than from a
+template: every claim on it points at a table in `schema.sql`, a fetch in
+`lib/sources/`, or a line in `profile-sync.tsx`. What it says, in short —
+
+- Signed out, nothing about you reaches Peer's servers; your browser keeps
+  your topics and today's papers, and clearing site data ends it.
+- Signed in, the account, the profile you type, what you save, what you open
+  and what you like are stored, because that is what makes tomorrow's briefing
+  different from today's.
+- **Your own model key never leaves your browser.** The sync deliberately
+  drops it, and the line that does so is there for a future edit to trip over.
+- The usage rows that record what a model call cost hold no paper text, no
+  prompt, no answer and no credential — the table has no column that could.
+- Deleting a signed-in account is a request today, not a button. The page says
+  that plainly instead of implying otherwise.
+
+It is linked from the one place a reader is asked for an account, and it is in
+the sitemap.
+
+## v0.27.0 — 2026-09-17
+
+Launch preparation: a ceiling, a card, and a warm pool.
+
+**A house ceiling on spend.** The daily breaker capped one reader at 200 deep
+reports; it said nothing about what a hundred readers cost together, and the
+model key is the operator's. With sign-up open that is the whole of the
+financial risk at launch, so there is now a second counter — every reader,
+one UTC day, 1,000 deep reports — and either one can refuse. It is a round
+number on purpose: a launch that goes unexpectedly well should cost a known
+amount. Raising it is one constant.
+
+**A card for every shared link.** Peer had no Open Graph image, so a link
+posted anywhere arrived as a bare URL. The card is the briefing's own front at
+1200×630: the eyebrow, the headline, and the day-shape bars. Drawn in the
+runtime's own face rather than Host Grotesk deliberately — an image route that
+fetches a font at request time fails on a cold edge, and no card is worse than
+a card in the wrong face.
+
+**The day's first reader no longer builds the day.** Peer caches one paper pool
+per UTC day; the request that finds it empty waits for the sources — 20–30
+seconds measured cold, against 0.4s warm. That bill landed on whoever arrived
+first. A scheduled job now pays it three times a day, asking for the starter
+sample, which is what a first-time visitor loads.
+
+**Indexing, on purpose.** `robots.txt` and a sitemap: the briefing and the
+changelog are worth finding; `/api`, `/auth`, `/profile`, `/saved` and the
+wizard are not. The canonical host reads from one place, so pointing a domain
+at Peer is a Vercel variable rather than an edit.
+
+## v0.26.0 — 2026-09-17
+
+A grotesk for Peer's own voice, and two curves.
+
+After latenthealth.com — read from its own stylesheet rather than from a
+screenshot, which is where the tokens below come from.
+
+**The face.** Latent sets everything in FK Grotesk, which is licensed; the
+fallback they name in their own token is **Host Grotesk**, which is open, so
+that is what Peer takes. It replaces Inter for everything that is *Peer*
+talking: the dateline, the deck, page titles, labels, controls. Inter stays
+loaded behind it, so a failed font fetch degrades to yesterday's page rather
+than to Helvetica.
+
+**The paper still speaks serif.** Newsreader keeps the paper's title, its
+claim, its abstract and its body — the rule that has held since the reading
+page was built. What changed is only the other half of the conversation.
+
+**A display line at weight 400.** Peer's page titles were semibold with
+-0.02em tracking; they are now regular at -0.03em, which is the whole of the
+look being borrowed. Inter needs weight to hold that line, which is the real
+reason the face changed.
+
+**Labels became eyebrows.** Mono, uppercase, opened out to +0.06em, with a
+6px mark in front: `● THE CLAIM`, `● THE RECORD`, `● A SAMPLE, UNTIL YOU SAY
+OTHERWISE`. The masthead's nav and the reading page's commands are the same
+object — `[O] OPEN ON ARXIV`. **This overrides the "nothing uppercase" rule**
+set with the masthead: that rule was about shouty small-caps buttons, and this
+is its opposite, a label so quiet it needs the tracking to be read at all.
+
+**Two curves, three durations, one animation.** `cubic-bezier(0.16, 1, 0.3, 1)`
+for anything that enters or changes colour, `cubic-bezier(0.65, 0, 0.35, 1)`
+for anything that returns; 180 / 360 / 720ms. Latent's whole site has two
+keyframe animations and Peer now has one: the accent dot on the claim breathes
+at 2.4s and nothing else repeats. A second pulsing thing would make both of
+them ornament. It stops under reduced motion.
+
+## v0.25.1 — 2026-09-16
+
+A missing model key no longer holds the site back.
+
+The build refused to deploy without `GOOGLE_API_KEY`, on the reasoning that a
+deployment with no model ships "a product whose AI silently does nothing". Half
+of that is right and the conclusion was wrong: Peer without a model is not
+broken — it is the same briefing every signed-out reader gets, and it is what
+this deployment served for months. Refusing to ship it kept the live site
+several versions behind over one unset variable.
+
+The key is now **warned, not required**: the build names it, says the AI half
+is off, and ships. The two Supabase settings stay required — without them the
+server cannot tell who a request is for at all, which is a real break.
+
+## v0.25.0 — 2026-09-16
+
+Open on a paper, not a form.
+
+A first visit used to be a seven-step wizard. Peer asked for your research
+topics, your project, your methods, your sources and a model key before it
+would show you a single paper — the one screen that says what the product *is*
+came last, and only to the people who finished the form.
+
+**The first visit is now a briefing.** No profile, no sign-in, nothing typed:
+ten real papers from today, sampled across six broad fields, with the day's
+shape and the reading surface exactly as a set-up reader sees them.
+
+**And the sample says it is a sample.** A strip above the cards names what it
+is — "these are real papers, across a few broad fields" — because ten papers
+that look chosen for you and were chosen for nobody is the dishonest version of
+this idea. The deck does not claim the sample's fields as your interests, the
+plates do not headline them (that is the "your own query, read back at you"
+failure the plate rules exist to prevent), and a card with no abstract says
+"Open this paper for details" instead of "Matches your interest in molecular
+biology".
+
+**Setup happens against the papers, one choice at a time.** Tap the field you
+work in — or type your own — and the sample becomes your briefing on that tap:
+the topic is promoted immediately rather than waiting for the next day's
+day-lock, the strip goes away, and the deck starts naming your topic. Project,
+methods, sources and your own model key are all still there, in the long form,
+now linked rather than imposed.
+
+**The wizard no longer intercepts anyone.** `/welcome` is a page you can visit,
+not a gate you must pass. The only thing the first-run code still does is
+backfill the local flag for a returning reader whose synced profile already has
+topics.
+
+One line had to go with it: the feed store returned an empty list, before the
+request, whenever the profile had no topics — which is exactly the reader this
+release is for.
+
+## v0.24.0 — 2026-09-14
+
+One plan, on Peer's model.
+
+The freemium branch is merged, and then cut down to what Peer needs with no
+users yet: **one tier**. Every signed-in reader gets the whole product on
+Peer's own Gemini key — AI ranking, relevance reasons, the model report and
+deep reports with no monthly cap — behind the daily circuit breaker that
+protects the bill. A reader who adds their own key uses it instead. Signed out,
+Peer still works without a model, as before. The free / trial / paid machinery
+stays in the code and the database, resolved to a single plan in one line of
+`lib/entitlement/resolve.ts`, so three plans are one edit away.
+
+**The build now requires `GOOGLE_API_KEY` on Vercel.** It used to ban it: the
+guard kept deployments BYOK-only. A deployment without the key is refused at
+build time rather than shipping a product whose AI silently does nothing.
+
+**Every AI route is behind one entitlement check**, meters its spend into
+`usage_events`, and counts deep reports and rate limits in `usage_counters` —
+tables that exist in production as of today.
+
+**The profile grant is the one that works.** The branch's migration revoked
+UPDATE on the four plan columns, which on Supabase does nothing while the
+table-level grant stands — a signed-in user could have set their own plan. The
+migration file now says what production actually ran: table-level write
+revoked, every other column granted back to `authenticated`.
+
+The merge kept main's side wherever the two had diverged: the papers-only
+briefing and the reading page stay as they are, and the branch's work on the
+jobs and events surfaces — deleted from main — went with them. Typed routes
+are on, so a dead internal link is a compile error. The profile page no longer
+says "Tier 0".
+
 ## v0.23.0 — 2026-09-09
 
 The day has a shape, and now you can see it.

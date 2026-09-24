@@ -85,7 +85,7 @@ export function UndoToast() {
             strokeWidth="2"
             strokeLinecap="round"
             strokeLinejoin="round"
-            className="transition-transform duration-200 ease-out group-hover:-translate-x-[1px]"
+            className="transition-transform ease-out group-hover:-translate-x-[1px]"
             aria-hidden
           >
             <path d="M3 12h13a5 5 0 0 1 0 10h-3" />

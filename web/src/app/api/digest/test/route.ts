@@ -4,8 +4,12 @@ import { PROVIDER_MODELS } from "@/lib/llm/provider-models";
 import { canUseLocalServerProvider } from "@/lib/llm/providers/registry";
 
 // The same order the provider walks: the chosen Gemini 3 pair on the global
-// endpoint, which is the only endpoint Peer uses.
-const GLOBAL_MODELS = [PROVIDER_MODELS.gemini.small, PROVIDER_MODELS.gemini.large];
+// endpoint, which is the only endpoint Peer uses. A Set, so a day the two
+// tiers name one id the probe runs it once (the results map is keyed on
+// `location/modelId` and a second probe would overwrite the first).
+const GLOBAL_MODELS = [
+  ...new Set([PROVIDER_MODELS.gemini.small, PROVIDER_MODELS.gemini.large]),
+];
 
 async function testModel(project: string, location: string, modelId: string): Promise<string> {
   const ai = new GoogleGenAI({

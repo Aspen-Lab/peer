@@ -10,6 +10,7 @@ vi.mock("./pdf-extract", async (importOriginal) => {
 });
 
 import { extractFigure, finalDiagnostic, getFigurePool, tryHtmlCandidates } from "./extract";
+import { ANONYMOUS_ENTITLEMENT } from "@/lib/entitlement/types";
 
 describe("tryHtmlCandidates — 1-22, a hard 401/402/403/451 is reported as paywalled", () => {
   const originalFetch = globalThis.fetch;
@@ -354,7 +355,13 @@ describe("extractFigure — 5-06, the query-less og:image last resort is cached 
     });
     globalThis.fetch = vi.fn(async () => new Response("", { status: 404 })) as unknown as typeof fetch;
 
-    const input = { itemId: "upload:00000000000000f6", url: "https://example.com/paper-5-06" };
+    // `extractFigure` now requires whose request it is (main's R-SEC-1); the
+    // same anonymous context main's own figure tests use.
+    const input = {
+      itemId: "upload:00000000000000f6",
+      url: "https://example.com/paper-5-06",
+      ctx: { entitlement: ANONYMOUS_ENTITLEMENT, byok: false },
+    };
 
     const first = await extractFigure(input);
     const second = await extractFigure(input);

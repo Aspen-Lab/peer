@@ -1,6 +1,19 @@
 @import "tailwindcss";
 
 @theme {
+  /* ── Screens above Tailwind's last one ──────────────────
+     `xl` is 80rem and `2xl` is 96rem, and the board runs out of named
+     screens well before a desk monitor runs out of pixels.
+
+     One thing to know before using them: Tailwind v4 emits a CUSTOM screen's
+     block BEFORE every built-in one, whatever its width. So `3xl:` beats an
+     unprefixed utility (`max-w-[1280px]`) but LOSES to `lg:` — measured, not
+     assumed: `3xl:columns-4` was emitted above `lg:columns-3` and never won.
+     Use these against unprefixed defaults only; where a ladder crosses the
+     built-in screens, write the ladder as a utility (`board-columns`). */
+  --breakpoint-3xl: 1700px;
+  --breakpoint-4xl: 2200px;
+
   /* Greyscale, and one hue.
      Every neutral here is a true grey; the accent seed is the only coloured
      thing the interface owns. These are the defaults Tailwind compiles the
@@ -101,6 +114,34 @@
      into — what it has is a selected state, and this is it. */
   --shadow-well-soft: 0 0 0 1px var(--color-accent);
 
+  /* ── Motion ────────────────────────────────────────────────────────
+     Two curves and three durations, taken from Latent's own tokens. The
+     expo-out is what makes a 180ms colour change read as deliberate rather
+     than as a flicker; `ease-snap` stays for the press, which wants the
+     shorter tail, and only on a press — see `@utility ease-snap` below.
+     One thing in the whole interface repeats: the accent dot on the claim's
+     band. Everything else is a one-shot. Before you add a second loop, read
+     the census in CHANGELOG v0.29.0 — there were five. */
+  --ease-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-inout: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-fast: 180ms;
+  --dur-base: 360ms;
+  --dur-slow: 720ms;
+
+  /* Every `transition-*` that names no duration and no curve — 56 of them —
+     was silently taking Tailwind's 150ms on `cubic-bezier(.4,0,.2,1)`, a
+     third curve nobody chose. These two lines move all of them onto Peer's
+     own, and are why most class strings below no longer say `duration-*`. */
+  --default-transition-duration: var(--dur-fast);
+  --default-transition-timing-function: var(--ease-expo);
+
+  /* ── Tracking ──────────────────────────────────────────────────────
+     A display line closes up as it grows; a mono label opens out. Both are
+     the grotesk look and both are wrong at the other's size. */
+  --tracking-display: -0.02em;
+  --tracking-h1: -0.03em;
+  --tracking-mono: 0.06em;
+
   /* ── Nothing is round ──────────────────────────────────────────────
      Tailwind compiles `rounded-md` … `rounded-4xl` from these, so setting
      them to zero squares every corner in the product at once. `rounded-full`
@@ -115,6 +156,22 @@
   --radius-2xl: 0px;
   --radius-3xl: 0px;
   --radius-4xl: 0px;
+
+  /* ── Space ─────────────────────────────────────────────────────────
+     Two named steps, for the two gaps that were being retyped per call site.
+     A census of the tree found 418 vertical spacing utilities across 19
+     distinct steps and no token anywhere — the same "continuum is not a scale"
+     the type block below was written to end. These are the two that carry
+     meaning: the pause above a section, and the page's own top and bottom.
+     Everything smaller stays on Tailwind's 4px steps; Latent's scale has no
+     half-steps and neither should new work.
+
+     Permitted: 1 2 3 4 5 6 8 10 12 16 20 24 32
+     BANNED → replacement:  0.5→1  1.5→2  2.5→2|3  3.5→4  7→6|8  14→12|16
+     `eslint.config.mjs` warns on the banned steps. It is a warning while the
+     101 existing sites are cleared, and then it becomes an error. */
+  --spacing-band: 4rem;   /* 64 — above a section's eyebrow */
+  --spacing-page: 6rem;   /* 96 — a page's top and bottom, from lg up */
 
   /* ── Type scale — 9 steps covering the 10–20px working range.
      Changing the app's type system = editing THIS block. Display sizes
@@ -177,8 +234,14 @@
         closest open relative), one serif family for display AND prose ── */
   --font-reading: var(--font-newsreader), "Iowan Old Style", Georgia, "Times New Roman", serif;
   --font-mono: var(--font-roboto-mono), ui-monospace, SFMono-Regular, monospace;
-  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
-               "Segoe UI", var(--font-noto-sc), "PingFang SC", "Helvetica Neue", sans-serif;
+  /* Peer's own voice — labels, controls, the dateline, every page title. The
+     grotesk replaced Inter here (2026-09-17, after latenthealth.com): the look
+     being taken is a display line at weight 400 with tight tracking, and Inter
+     needs weight to hold that line. Inter stays loaded as the fallback so a
+     failed font fetch degrades to what shipped yesterday, not to Helvetica. */
+  --font-sans: var(--font-grotesk), var(--font-inter), ui-sans-serif, system-ui,
+               -apple-system, BlinkMacSystemFont, "Segoe UI", var(--font-noto-sc),
+               "PingFang SC", "Helvetica Neue", sans-serif;
   --font-display: var(--font-newsreader), Georgia, serif;
 }
 
@@ -234,16 +297,8 @@ html[data-accent="violet"]   { --seed: #7a3fd9; --seed-dark: #a078f0; }
   --color-border-strong: color-mix(in srgb, var(--color-heading) 12%, transparent);
   --color-skeleton-base: color-mix(in srgb, var(--color-heading) 5%, transparent);
   --color-skeleton-highlight: color-mix(in srgb, var(--color-heading) 11%, transparent);
-  --nm-highlight: rgba(255, 255, 255, 0.9);
-  --nm-shade: color-mix(in srgb, var(--color-heading) 12%, transparent);
-  --nm-shade-deep: color-mix(in srgb, var(--color-heading) 18%, transparent);
-  --nm-rim: color-mix(in srgb, var(--color-heading) 7%, transparent);
-  --nm-rim-hi: color-mix(in srgb, var(--color-heading) 11%, transparent);
   --nm-frame: color-mix(in srgb, var(--color-heading) 13%, transparent);
   --nm-frame-hi: color-mix(in srgb, var(--color-heading) 30%, transparent);
-  --nm-key: color-mix(in srgb, var(--color-heading) 12%, transparent);
-  --nm-ambient: color-mix(in srgb, var(--color-heading) 15%, transparent);
-  --nm-bevel: rgba(255, 255, 255, 0.8);
   --plate-mat: #efefef;
   --plate-ink: #1d1d1d;
   --plate-ink-muted: #666666;
@@ -255,12 +310,12 @@ html[data-accent="violet"]   { --seed: #7a3fd9; --seed-dark: #a078f0; }
 html[data-mode="dark"] {
   --color-bg: #111111;
   --color-bg-secondary: #181818;
-  --color-surface: #1d1d1d;
-  --color-surface-hover: #242424;
+  --color-surface: #232323;
+  --color-surface-hover: #2b2b2b;
   --color-heading: #f3f3f3;
   --color-text: #e3e3e3;
   --color-text-muted: #a9a9a9;
-  --color-text-faint: #838383;
+  --color-text-faint: #8d8d8d;
   --color-accent: var(--seed-dark);
   --color-accent-dim: color-mix(in srgb, var(--seed-dark) 14%, transparent);
   --color-link: var(--seed-dark);
@@ -286,16 +341,8 @@ html[data-mode="dark"] {
   --color-border-strong: rgba(255, 255, 255, 0.17);
   --color-skeleton-base: rgba(255, 255, 255, 0.05);
   --color-skeleton-highlight: rgba(255, 255, 255, 0.12);
-  --nm-highlight: rgba(255, 255, 255, 0.045);
-  --nm-shade: rgba(0, 0, 0, 0.45);
-  --nm-shade-deep: rgba(0, 0, 0, 0.6);
-  --nm-rim: rgba(255, 255, 255, 0.09);
-  --nm-rim-hi: rgba(255, 255, 255, 0.16);
-  --nm-frame: rgba(255, 255, 255, 0.18);
+  --nm-frame: rgba(255, 255, 255, 0.3);
   --nm-frame-hi: rgba(255, 255, 255, 0.4);
-  --nm-key: rgba(0, 0, 0, 0.55);
-  --nm-ambient: rgba(0, 0, 0, 0.45);
-  --nm-bevel: rgba(255, 255, 255, 0.06);
   --plate-mat: #e5e5e5;
   --plate-ink: #232323;
   --plate-ink-muted: #606060;
@@ -309,12 +356,12 @@ html[data-mode="dark"] {
   html[data-mode="system"] {
   --color-bg: #111111;
   --color-bg-secondary: #181818;
-  --color-surface: #1d1d1d;
-  --color-surface-hover: #242424;
+  --color-surface: #232323;
+  --color-surface-hover: #2b2b2b;
   --color-heading: #f3f3f3;
   --color-text: #e3e3e3;
   --color-text-muted: #a9a9a9;
-  --color-text-faint: #838383;
+  --color-text-faint: #8d8d8d;
   --color-accent: var(--seed-dark);
   --color-accent-dim: color-mix(in srgb, var(--seed-dark) 14%, transparent);
   --color-link: var(--seed-dark);
@@ -337,14 +384,14 @@ html[data-mode="dark"] {
   --color-border-strong: rgba(255, 255, 255, 0.17);
   --color-skeleton-base: rgba(255, 255, 255, 0.05);
   --color-skeleton-highlight: rgba(255, 255, 255, 0.12);
-  --nm-highlight: rgba(255, 255, 255, 0.045);
-  --nm-shade: rgba(0, 0, 0, 0.45);
-  --nm-shade-deep: rgba(0, 0, 0, 0.6);
-  --nm-rim: rgba(255, 255, 255, 0.09);
-  --nm-rim-hi: rgba(255, 255, 255, 0.16);
-  --nm-key: rgba(0, 0, 0, 0.55);
-  --nm-ambient: rgba(0, 0, 0, 0.45);
-  --nm-bevel: rgba(255, 255, 255, 0.06);
+  /* These two were declared in `html[data-mode="dark"]` and nowhere else, so a
+     reader on a dark OS who never touched the theme switch — the default path —
+     got `--shadow-card` resolved from the LIGHT value: every card frame on the
+     first briefing Peer ever showed them was 28% fainter than the drawn one.
+     The dark palette is written twice; anything added to one half has to be
+     added to the other. */
+  --nm-frame: rgba(255, 255, 255, 0.3);
+  --nm-frame-hi: rgba(255, 255, 255, 0.4);
   --plate-mat: #e5e5e5;
   --plate-ink: #232323;
   --plate-ink-muted: #606060;
@@ -364,6 +411,24 @@ html[data-mode="dark"] {
    ordinary background-image over the surface colour — no overlay element, so
    nothing new enters the stacking order and nothing can sit above a menu. */
 
+/* ── The briefing board's columns ───────────────────────
+   The card is the constant — about 400px, which is what a title and three
+   lines of reason want; the COUNT is what grows with the screen. Four cards
+   from 1700px and five from 2200px, where the board is allowed to widen to
+   match (`page-container.tsx`).
+
+   Written here rather than as `lg:columns-3 3xl:columns-4` at the call site
+   because of the emit order noted in `@theme` above: the custom screen loses
+   to the built-in one. Plain CSS rather than `@utility`, because a nested
+   `@media` inside one emitted nothing at all — the base declaration survived
+   and the board fell to a single 1712px column. Ascending order, by hand,
+   and nothing reorders it. ── */
+.board-columns { columns: 1; }
+@media (width >= 40rem)  { .board-columns { columns: 2; } }
+@media (width >= 64rem)  { .board-columns { columns: 3; } }
+@media (width >= 1700px) { .board-columns { columns: 4; } }
+@media (width >= 2200px) { .board-columns { columns: 5; } }
+
 @utility grain {
   /* The tile is mid-grey with a noisy alpha, so it lightens a dark surface and
      darkens a light one. That asymmetry is why it has to stay this faint: at
@@ -373,16 +438,13 @@ html[data-mode="dark"] {
   background-repeat: repeat;
 }
 
-/* A slab has a lit top edge and a shaded bottom one. The card shadow already
-   carried the top bevel; the underside is what makes it read as having
-   thickness rather than as a lighter rectangle. */
-:root {
-  --nm-underside: color-mix(in srgb, var(--color-heading) 5%, transparent);
-}
-html[data-mode="dark"] { --nm-underside: rgba(0, 0, 0, 0.34); }
-@media (prefers-color-scheme: dark) {
-  html[data-mode="system"] { --nm-underside: rgba(0, 0, 0, 0.34); }
-}
+/* The slab vocabulary — a lit top edge, a shaded underside, a bevel, a rim —
+   was retired by the TUI pass, which made a card a flat rectangle with one
+   frame. Eight tokens outlived it in all three palette blocks with zero
+   consumers: `grep -rn "var(--nm-" src/` resolves only to `--nm-frame` and
+   `--nm-frame-hi`. Twenty-five declarations deleted, nothing rendered
+   differently. If depth ever comes back, it comes back as a decision, not as
+   a token nobody removed. */
 
 /* A mat is cut, and the picture sits below the cut. The inset catches on the
    window's top and left, which is where a light from the upper left would
@@ -393,7 +455,10 @@ html[data-mode="dark"] { --nm-underside: rgba(0, 0, 0, 0.34); }
     inset 0 0 0 1px color-mix(in srgb, #000 6%, transparent);
 }
 
-/* ── Motion — fast-start easing so presses track the hand ── */
+/* ── Motion — fast-start easing so a press tracks the hand.
+      PRESSES ONLY. Everything that hovers, focuses, tints or lifts is on
+      `--ease-expo`; a press is the one gesture that wants the short tail,
+      because the finger is already there. One caller: `card-shell.tsx`. ── */
 :root { --ease-snap: cubic-bezier(0.2, 0.9, 0.25, 1); }
 
 @utility ease-snap {
@@ -440,20 +505,27 @@ html[data-mode="dark"] { --nm-underside: rgba(0, 0, 0, 0.34); }
    written from `el.offsetHeight` (reader-layout.tsx), and `offsetWidth`/
    `offsetHeight` already report the local, pre-zoom size on every element
    regardless of its own or an ancestor's zoom — dividing it again would
-   under-compensate it. `100vh` and the `1.5rem` margin DO need dividing:
-   `vh` resolves against the true viewport even when read inside a zoomed
-   box, then gets the same ambient-zoom multiplication as everything else
-   in the box when painted, same as the 4rem case. Division binds tighter
-   than subtraction in CSS calc(), so this parses as intended with one
-   outer calc() and no nested wrappers. `--page-zoom` defaults to 1 (set on
-   `page.tsx`'s `<PageContainer data-zoom-root>`, Fit off or not applicable)
-   so this formula is byte-identical to the un-zoomed one above whenever
-   Fit is off. */
+   under-compensate it. `100vh`, `--legend-h` and the flat margin DO need
+   dividing: each resolves (or is declared) in local space, then gets the
+   same ambient-zoom multiplication as everything else in the box when
+   painted, same as the 4rem case. Division binds tighter than subtraction
+   in CSS calc(), so this parses as intended with one outer calc() and no
+   nested wrappers. `--page-zoom` defaults to 1 (set on `page.tsx`'s
+   `<PageContainer data-zoom-root>`, Fit off or not applicable) so this
+   formula is byte-identical to the un-zoomed one whenever Fit is off. */
+:root {
+  /* `KeyLegend` is `h-[var(--legend-h)]`; the panel reserves the same
+     number. They were 28px and 24px, so at bottom-stick the DOI line sat 4px
+     behind an 18px-blur glass bar — the normal state at 1280x800, not an
+     edge case. */
+  --legend-h: 1.75rem;
+}
+
 @utility reader-panel {
   position: sticky;
   top: min(
     calc(4rem / var(--page-zoom, 1)),
-    calc(100vh / var(--page-zoom, 1) - var(--panel-h, 0px) - 1.5rem / var(--page-zoom, 1))
+    calc(100vh / var(--page-zoom, 1) - var(--panel-h, 0px) - var(--legend-h) / var(--page-zoom, 1) - 1rem / var(--page-zoom, 1))
   );
 }
 
@@ -472,6 +544,19 @@ html[data-mode="dark"] { --nm-underside: rgba(0, 0, 0, 0.34); }
   /* 66 characters of Newsreader — the reading measure. */
   max-width: 28em;
 }
+/* 80 characters of Newsreader — the long read. `measure` is a book's 66, and
+   a book's page is 5 inches wide; at 17.5px on a screen column, 66 characters
+   is 462px of text in a 760px column, and the paper looked starved beside its
+   own margins. The abstract, the extracts and the paper's body share this
+   edge, so the reading column has one.
+
+   Plain CSS, not `@utility`: declared as a utility it was never emitted —
+   after a full dev-server restart the compiled sheet still had `measure-lede`
+   beside it and no `.measure-paper` — and no one needs `sm:measure-paper`.
+   (`board-columns` above went the same way.) */
+.measure-paper {
+  max-width: 34em;
+}
 @utility measure-lede {
   /* 56 characters. A lede is set narrower than the text it opens. */
   max-width: 24em;
@@ -479,6 +564,17 @@ html[data-mode="dark"] { --nm-underside: rgba(0, 0, 0, 0.34); }
 @utility measure-ui {
   /* 60 characters of Inter — descriptions, help text, empty states. */
   max-width: 28.5em;
+}
+
+@utility measure-mono {
+  /* 66 characters of Roboto Mono — the same count as `measure`, so a mono
+     note under a serif column shares its right edge.
+
+     In `ch`, not `em`, and the note above says why: `ch` is the advance of
+     "0", which in a monospaced family IS every character's advance.
+     `measure-ui`'s em figure is 60 characters OF INTER; on the `annotation`
+     face at 11.5px it set a 47-character line. */
+  max-width: 66ch;
 }
 @utility measure-title {
   /* 34 characters of Newsreader. A title turns before the text does. */
@@ -551,20 +647,35 @@ body {
      viewport (long unbreakable strings, raw figure HTML) gets clipped
      instead of pushing the page out. */
   overflow-x: hidden;
-  /* Paper grain, and a light coming from off the top right.
+  /* Paper grain.
      The tile carries both lighter and darker speckles, so the same image reads
      as texture on the ivory ground and on the dark one — the old tile was
      near-black noise, which on #111 was noise nobody could see. Fixed
      attachment so the grain stays put under the scroll, like paper. */
+  /* One layer. The two radial washes that used to sit above the noise were
+     `background-attachment: fixed` like it, so they did not move with the
+     page — a card's separation from the ground changed as it scrolled and
+     collapsed to almost nothing in the bottom-left corner, which is half of
+     why the board read flat. The other half is the surface step below. */
   background-image:
-    radial-gradient(1200px 600px at 85% -10%, color-mix(in srgb, var(--color-accent) 4%, transparent), transparent 60%),
-    radial-gradient(900px 500px at -10% 110%, color-mix(in srgb, var(--color-heading) 5%, transparent), transparent 60%),
     url("data:image/svg+xml,<svg%20xmlns='http://www.w3.org/2000/svg'%20width='180'%20height='180'><filter%20id='g'><feTurbulence%20type='fractalNoise'%20baseFrequency='0.7'%20numOctaves='3'%20seed='3'%20stitchTiles='stitch'/><feColorMatrix%20type='saturate'%20values='0'/><feComponentTransfer><feFuncA%20type='linear'%20slope='0.09'/></feComponentTransfer></filter><rect%20width='100%'%20height='100%'%20filter='url(%23g)'/></svg>");
   background-attachment: fixed;
 }
 
+/* Selecting the paper's sentences is the reading page's own gesture — it is
+   how a quote leaves Peer. `--color-accent-dim` is a badge ground (9% light,
+   14% dark); as a selection over a grained, gradient-washed page it is inside
+   the noise. Its own token, so the badge fill and the selection can move
+   apart, built from `--color-accent` — which is already restated correctly in
+   all three theme blocks — so ONE line is correct in all ten palettes and in
+   both dark paths. Declaring it three times off `--seed` is the bug class
+   v0.29.0 shipped a fix for. Transient: it exists only while held, so it does
+   not spend the one-accent-at-rest budget, the same argument
+   `--shadow-well-soft` makes for a held control. */
+:root { --selection-bg: color-mix(in srgb, var(--color-accent) 22%, transparent); }
+
 ::selection {
-  background: var(--color-accent-dim);
+  background: var(--selection-bg);
   color: var(--color-heading);
 }
 
@@ -574,9 +685,16 @@ body {
 ::-webkit-scrollbar-thumb:hover { background: rgba(24, 24, 27, 0.2); }
 
 /* iOS safari auto-zooms any input whose font-size < 16px on focus. Pin to 16px
-   on mobile so form fields never trigger the zoom-in-then-snap-back dance. */
+   on mobile so form fields never trigger the zoom-in-then-snap-back dance.
+
+   The note editor's fields are exempt (`data-typeset`): each is set in the
+   type of the block it edits — 16.5px prose, 22px headings, a 31px title —
+   and pinned to 16px a heading shrank the moment it was tapped, a title sat
+   smaller than its own sections. Nothing there is under 16px on a phone
+   (code is raised to 16px there, typed and read alike), so the zoom this
+   rule prevents cannot happen in them. */
 @media (max-width: 640px) {
-  input, textarea, select { font-size: 16px !important; }
+  input, textarea:not([data-typeset]), select { font-size: 16px !important; }
 }
 
 /* ── Motion ─────────────────────────────────────────────
@@ -584,7 +702,7 @@ body {
    and short duration. Respect reduced-motion. */
 
 @keyframes fade-in-up {
-  from { opacity: 0; transform: translateY(6px); }
+  from { opacity: 0; transform: translateY(var(--ry, 6px)); }
   to   { opacity: 1; transform: translateY(0); }
 }
 
@@ -598,6 +716,11 @@ body {
   60%  { opacity: 1; transform: scale(1.02); }
   100% { transform: scale(1); }
 }
+
+/* A loading slot says "a figure goes here". The shape already says it; a
+   sweep across eighty of them at once is the ornament this product's own
+   rule forbids, and it was the largest moving thing on a cold briefing. */
+.skeleton { background: var(--color-skeleton-base); }
 
 /* S12: the figure lightbox's own fade/scale-in — the repo's other two
    entrance animations (fade-in-up, pop-in) run 250-260ms with bouncier
@@ -619,40 +742,70 @@ body {
   100% { transform: scale(1.1) rotate(0); }
 }
 
-@keyframes tab-burst {
-  0%   { opacity: 0.6; transform: scale(0.4); }
-  100% { opacity: 0; transform: scale(2.4); }
-}
-
-@keyframes shimmer {
-  0%   { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
-}
-
-.skeleton-shimmer {
-  background: linear-gradient(
-    100deg,
-    var(--color-skeleton-base) 20%,
-    var(--color-skeleton-highlight) 45%,
-    var(--color-skeleton-base) 70%
-  );
-  background-size: 200% 100%;
-  animation: shimmer 1.6s ease-in-out infinite;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .skeleton-shimmer { animation: none; background: var(--color-skeleton-base); }
-}
-
-.animate-fade-in-up { animation: fade-in-up 0.26s var(--ease-snap, cubic-bezier(0.2, 0.9, 0.25, 1)) both; }
+.animate-fade-in-up { animation: fade-in-up 0.26s var(--ease-expo) both; }
 .animate-fade-in    { animation: fade-in 0.3s ease-out both; }
-.animate-pop-in     { animation: pop-in 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+.animate-pop-in     { animation: pop-in 0.25s var(--ease-expo) both; }
 .animate-lightbox-in { animation: lightbox-in 150ms var(--ease-snap, cubic-bezier(0.2, 0.9, 0.25, 1)) both; }
 .animate-stamp      { animation: stamp 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
-.animate-tab-burst  { animation: tab-burst 0.55s ease-out both; }
 
 /* Tiny stagger: set --stagger on parent, N*i on children via style={{ "--i": i }}. */
 [style*="--i"] { animation-delay: calc(var(--i) * 40ms); }
+
+/* ── The approach ─────────────────────────────────────────────────────
+   Latent's MECHANISM, not their settings: the animation lives on the child
+   and is paused by a custom property the child INHERITS from the host, so
+   one class toggled on one section by one observer runs a whole group —
+   no per-element JS, no wrapper component. `both` fill means nothing
+   flashes before it runs.
+
+   Three departures from their stylesheet:
+
+   1. No blur. Latent open on `filter: blur(.25em)`, which is right for a
+      five-word hero and wrong for a sentence somebody is about to read.
+      So there is no second keyframe: this is `fade-in-up` with the rise
+      made a variable.
+   2. 360ms (`--dur-base`), not their 500 or 720. A scroll reveal covers
+      more distance than the mount fade and must still be finished before
+      the eye lands on the first line.
+   3. Scoped. These rules do NOTHING until an ancestor carries
+      `data-motion="reveal"`, which only the reading page sets. An ungated
+      `--rp: paused` is a blank article on /privacy and the briefing.
+
+   `.rv` is placed BY HAND, one element at a time. A `[data-reveal] > *`
+   child selector looks like less work and is the wrong trade: it animates
+   whatever happens to be a direct child, which on `PaperBody`'s band is
+   every section of a four-thousand-word paper. Which things arrive is a
+   design decision, so it is written down per element.
+
+   What arrives: Peer's claims about the paper. What never does: the paper's
+   own words. That division is the reason this page has motion at all, and
+   it replaces the old meaning of `animate-fade-in-up` here, which fired
+   below the fold to an empty room on every paper and was never once seen. */
+[data-motion="reveal"] [data-reveal]       { --rp: paused; }
+[data-motion="reveal"] [data-reveal].is-in { --rp: running; }
+
+[data-motion="reveal"] .rv {
+  /* 8px, the spacing scale's own step. 6 (the mount value) reads as a
+     twitch; 16 is a visible slide, and a reading column that slides says
+     the page is still laying out. */
+  --ry: 8px;
+  /* Two delays that add: `--rdl` is the host's place in the first screenful
+     (written by `useReveal`, inherited), `--rv-step` is this element's place
+     inside its host. Were they one variable, the later one would REPLACE the
+     other and a block's content could arrive before its own label. */
+  animation: fade-in-up var(--dur-base) var(--ease-expo)
+    calc(var(--rdl, 0ms) + var(--rv-step, 0ms)) both;
+  animation-play-state: var(--rp, running);
+}
+/* The one step — Latent's own first nav interval (60/100/140/…). The label
+   and its rule lead; the block's content follows. Two steps, never a
+   cascade: prose does not stagger against itself. */
+[data-motion="reveal"] .rv-late { --rv-step: 60ms; }
+
+/* A paused `both`-filled animation prints at opacity 0. This is a tool for
+   reading papers; a printed paper with four blank blocks in it is not a
+   motion bug, it is a lost page. */
+@media print { [data-reveal] { --rp: running; } }
 
 /* The plate's mat. A scientific figure is usually drawn on white; dropped
    straight onto a dark card it glares like a lightbox. On dark the figure is
@@ -668,7 +821,7 @@ body {
   /* The card's own surface, not transparency: on a card the seam disappears
      (the card is this colour), and on the reading page, where the plate sits
      framed by its own shadow, it stays a sheet rather than an empty frame. */
-  background: var(--color-surface);
+  background-color: var(--color-surface);
   --plate-ink: var(--color-heading);
   --plate-ink-muted: var(--color-text-muted);
   --plate-ink-faint: var(--color-text-faint);
@@ -677,8 +830,8 @@ body {
 /* A read paper still has to be readable. `tile-read` recedes the COVER and the
    chrome and leaves the title and the summary at full strength; the old
    blanket opacity-70 on the whole card faded the words too. */
-.tile-read .tile-cover[data-plate="figure"] { opacity: 0.45; transition: opacity 300ms var(--ease-snap); }
-.tile-read .tile-cover[data-plate="terms"] { opacity: 0.55; transition: opacity 300ms var(--ease-snap); }
+.tile-read .tile-cover[data-plate="figure"] { opacity: 0.45; transition: opacity var(--dur-base) var(--ease-expo); }
+.tile-read .tile-cover[data-plate="terms"] { opacity: 0.55; transition: opacity var(--dur-base) var(--ease-expo); }
 .tile-read:hover .tile-cover { opacity: 1; }
 .tile-read .tile-chrome { opacity: 0.6; }
 
@@ -694,6 +847,24 @@ body {
 }
 .group\/tile:hover .tile-actions,
 .group\/tile:focus-within .tile-actions { opacity: 1; transition-delay: 0ms; }
+/* And the buttons inside it arrive in order — like, dislike, save — 40ms
+   apart, Latent's own nav interval. Each button owns its fade, because the
+   row's opacity is shared and a delay on a child of a fading parent changes
+   nothing. Opacity only: they appear, they do not travel. Leaving, they go
+   together, with no delay. */
+.tile-actions > * {
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-expo);
+}
+.group\/tile:hover .tile-actions > *,
+.group\/tile:focus-within .tile-actions > *,
+[data-paper-id][data-focused="true"] .tile-actions > * { opacity: 1; }
+.group\/tile:hover .tile-actions > :nth-child(2) { transition-delay: 40ms; }
+.group\/tile:hover .tile-actions > :nth-child(3) { transition-delay: 80ms; }
+.group\/tile:hover .tile-actions > :nth-child(n + 4) { transition-delay: 120ms; }
+/* Where the row is always shown, its buttons are too. */
+@media (hover: none) { .tile-actions > * { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .tile-actions > * { opacity: 1; } }
 /* On a touchscreen the card is swiped, not clicked: right saves, left
    dismisses. The buttons stay in the DOM for assistive technology — VoiceOver
    and switch users navigate by control, not by gesture — but leave the
@@ -720,18 +891,256 @@ body {
   outline: 2px solid var(--color-accent);
   outline-offset: 3px;
   box-shadow: var(--shadow-card-hover);
-  transform: translateY(-2px);
+  /* No lift. The anchor's transition list is box-shadow and background only,
+     so a `translateY(-2px)` here was an instant jump on every j and every k,
+     in a masonry column — and `card-shell.tsx` had already retired the lift
+     on the grounds that a terminal's surfaces do not move. The 2px outline at
+     a 3px offset is the mark. */
 }
 [data-paper-id][data-focused="true"] .tile-actions { opacity: 1; transition-delay: 0ms; }
+
+/* The keyboard's mark, everywhere it is missing. The briefing's focused card
+   has drawn a 2px accent outline at a 3px offset since the keyboard layer
+   shipped (above); every other control in a keyboard-first product fell
+   through to the user agent's own ring — `grep -rn "focus-visible" src/`
+   returned exactly one hit in the whole repo, and it was a Tailwind variant.
+
+   In `@layer base` on purpose. Tailwind emits `@layer theme, base,
+   components, utilities;`, and v4's `outline-none` compiles to
+   `outline-style: none` inside `@layer utilities` — so a base-layer rule
+   ALWAYS loses to it, whatever the specificity. That is what keeps the
+   sixteen `focus:outline-none focus:ring-*` form fields winning as they do
+   today. Drop the wrapper and this reverses; the same mechanism is stated
+   in the `[class~="rounded-full"]` comment below.
+
+   `[tabindex="-1"]` is excluded structurally rather than being spared by an
+   `outline-none` somebody has to remember: the reading article carries
+   `tabIndex={-1}` because the router focuses it after every `j` and `k`, and
+   that must never draw a ring. */
+@layer base {
+  :where(a, button, [tabindex]:not([tabindex="-1"])):focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 3px;
+  }
+}
 
 @media (prefers-reduced-motion: reduce) {
   .animate-fade-in-up,
   .animate-fade-in,
   .animate-pop-in { animation: none; }
+  /* The GATE, not the one-shot. The `animation-duration` below already
+     flattens the reveal; what must not survive is the PAUSE, which would
+     leave a reader who asked for less motion looking at an empty column
+     until an observer got to it. */
+  [data-reveal] { --rp: running; }
+  /* Loops stop. `animation-duration` alone does not stop an infinite
+     animation — it runs one cycle per 0.01ms, i.e. it strobes — so the
+     iteration count is the half that does the work.
+
+     `transition-duration` is deliberately NOT here. Peer's rule is that
+     reduced motion kills loops, never an intentional one-shot: flattening
+     every transition to 0.01ms teleported the swipe card while its removal
+     timeout still waited 180ms. The four hand-placed
+     `motion-reduce:transition-none` guards are the per-case answer. */
   *, *::before, *::after {
-    transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
   }
+}
+
+/* ── The grotesk look ────────────────────────────────────────────────
+   Three utilities, so the treatment lives in one place rather than in a
+   dozen class strings.
+
+   `eyebrow` is the mono label: uppercase, opened out, small. **It overrides
+   the "nothing uppercase" rule** set with the masthead — that rule was about
+   shouty small-caps buttons, and this is the opposite, a label so quiet it
+   needs the tracking to be legible at all.
+
+   `dot-pulse` is the one repeating animation in the product. It is on the
+   accent mark and nowhere else: a second pulsing thing would make both
+   ornament. */
+@utility ease-expo {
+  transition-timing-function: var(--ease-expo);
+}
+
+@utility eyebrow {
+  font-family: var(--font-mono);
+  /* The weight is stated, not inherited. Without it, `cn(buttonVariants(…),
+     "eyebrow")` rendered at 500 from the button's own `font-medium`, and the
+     first workaround was a `font-normal` pasted beside the utility. */
+  font-weight: 400;
+  font-size: var(--text-caption);
+  line-height: 1.4;
+  letter-spacing: var(--tracking-mono);
+  text-transform: uppercase;
+}
+
+@utility annotation {
+  /* The other mono form: a sentence-case note, not a label. The triple
+     `font-mono text-caption text-text-faint` was retyped 18 times at two
+     sizes with nothing saying which case took which; two files had already
+     hoisted it into a local constant, the same instinct arrived at twice and
+     shared zero times. No colour and no margin — both belong to the call
+     site, and a margin inside a v4 utility collides with the `mt-*` the five
+     reader sites each need differently. */
+  font-family: var(--font-mono);
+  font-size: var(--text-caption);
+  line-height: 1.4;
+}
+
+/* ── Registration marks ─────────────────────────────────────
+   The corner detail. Latent draws `.ltv2-cropframe` as two 14px L-brackets at
+   opposite corners of a plate; on their video frame it is four, sitting off the
+   image with a gap. It is a printer's mark: it says "this is the whole plate,
+   registered, not a crop".
+
+   Peer's card already carries a 1px frame (`--shadow-card`), and a second ring
+   inside it would be two frames saying one thing — the ornament trap this
+   product deletes things for. So the marks ARE the frame: the edge stays at
+   `--nm-frame`, and the last 12px into each corner steps up to `--nm-frame-hi`.
+   One line, registered at the corners, nothing added.
+
+   Drawn as eight background slices on one pseudo-element rather than with
+   `::before`/`::after` corners, because two pseudo-elements can only make two
+   corners and the tile needs both of its own for other work. `inset: 0` keeps
+   it inside the tile's `overflow: hidden`; a negative inset would be clipped.
+
+   Override per call site with `[--cm-len:…]`, `[--cm-w:…]`, `[--cm-c:…]`,
+   `[--cm-inset:…]`. */
+@utility cropmarks {
+  position: relative;
+
+  &::after {
+    content: "";
+    position: absolute;
+    inset: var(--cm-inset, 0px);
+    pointer-events: none;
+    z-index: 1;
+    /* Defaults are FALLBACKS, never declarations. The first version declared
+       `--cm-c` and `--cm-inset` right here, on the pseudo-element — which
+       overrides whatever the host sets, so every `[--cm-c:…]` at a call site
+       did nothing: the figure plate's marks were 40% white on a near-white
+       mat, i.e. absent, and never inset. A value set on the host now reaches
+       the marks by inheritance, and only the fallback applies when it is not.
+
+       The colour is this box's own `color`, painted with `currentColor`. A
+       custom property inside a gradient cannot transition; `color` can, and
+       every gradient drawn in `currentColor` follows it frame by frame. */
+    color: var(--cm-c, var(--nm-frame-hi));
+    --cm-l: var(--cm-len, 12px);
+    --cm-s: var(--cm-w, 1px);
+    background-repeat: no-repeat;
+    background-image:
+      linear-gradient(currentColor, currentColor), linear-gradient(currentColor, currentColor),
+      linear-gradient(currentColor, currentColor), linear-gradient(currentColor, currentColor),
+      linear-gradient(currentColor, currentColor), linear-gradient(currentColor, currentColor),
+      linear-gradient(currentColor, currentColor), linear-gradient(currentColor, currentColor);
+    background-size:
+      var(--cm-l) var(--cm-s), var(--cm-s) var(--cm-l),
+      var(--cm-l) var(--cm-s), var(--cm-s) var(--cm-l),
+      var(--cm-l) var(--cm-s), var(--cm-s) var(--cm-l),
+      var(--cm-l) var(--cm-s), var(--cm-s) var(--cm-l);
+    background-position:
+      left top, left top,
+      right top, right top,
+      left bottom, left bottom,
+      right bottom, right bottom;
+    transition:
+      color var(--dur-fast) var(--ease-expo),
+      background-size var(--dur-fast) var(--ease-expo),
+      top var(--dur-fast) var(--ease-expo),
+      right var(--dur-fast) var(--ease-expo),
+      bottom var(--dur-fast) var(--ease-expo),
+      left var(--dur-fast) var(--ease-expo);
+  }
+}
+
+/* A full-bleed FIGURE plate covers the card's top edge with a light mat, and
+   the card's own marks are white at 40% — invisible on it. So the card drops
+   the two corners that mat covers and the plate draws its own up there, in its
+   own ink: an object draws its own corners, minus the ones another object's
+   mat covers.
+
+   Scoped to `[data-plate="figure"]` on purpose. The terms plate is set on
+   `--color-surface`, the card's own colour, so nothing of the card's is hidden
+   under it and all four of its corners stay. */
+.cropmarks:has(> .tile-cover[data-plate="figure"])::after {
+  background-size:
+    0 0, 0 0,
+    0 0, 0 0,
+    var(--cm-l) var(--cm-s), var(--cm-s) var(--cm-l),
+    var(--cm-l) var(--cm-s), var(--cm-s) var(--cm-l);
+}
+
+/* Pointing at a card registers it: the corners close in — off the edge and
+   6px inside it, like a viewfinder locking on — and take the accent, in the
+   time the frame takes to brighten. They have to move: the hovered frame steps
+   up to `--nm-frame-hi`, the corners' own resting value, so corners that
+   stayed on the edge would dissolve into it at the exact moment the card is
+   being looked at. Transient, like selection and focus, so it does not spend
+   the accent at rest. Pointer only: a keyboard-focused card already carries
+   the focus outline in the same hue. */
+@media (hover: hover) {
+  a.cropmarks:hover::after {
+    --cm-len: 16px;
+    inset: 6px;
+    color: var(--color-accent);
+  }
+}
+
+@utility reading-prose {
+  /* The prose voice of the reading column — the serif twin of `paper-line`,
+     which stops at display size. Below it six sites each retyped
+     `font-reading text-lead leading-[1.6]`, and that leading restates
+     `--text-lead--line-height` verbatim, so a retune of the token would have
+     been ignored at all six. (`decision-block.tsx` already omits it and
+     renders identically — proof the literal was never doing anything.)
+
+     It states the SIZE, and that is the load-bearing part: `measure` is 28em
+     and em is the element's own font-size, so `measure` on a wrapper that
+     declares no size resolved against body's 17px. Putting the size and the
+     measure on one element is the only thing that makes the measure block
+     above true.
+
+     Named for the column, not the paper: it carries the abstract and the
+     body, which are the paper's words, and the model's claims, which are
+     not. No colour and no margin — both belong to the call site, same rule
+     as `annotation`. No `hyphens` and no `text-wrap`: a hyphen is a glyph
+     that is not in the paper, and a wrap mode is a per-site decision.
+
+     Never pair it with a `text-*` size: custom utilities are emitted before
+     the core ones in the same layer, so the core class would silently win. */
+  font-family: var(--font-reading);
+  font-size: var(--text-lead);
+  line-height: var(--text-lead--line-height);
+}
+
+@utility paper-line {
+  /* The serif twin of `display-line`: the paper's own words, wherever they
+     are set at display size. The tracking token existed and had no consumer,
+     so the paper's title was set at five different values across nine sites. */
+  font-family: var(--font-display);
+  font-weight: 400;
+  letter-spacing: var(--tracking-display);
+}
+
+@utility display-line {
+  font-family: var(--font-sans);
+  font-weight: 400;
+  letter-spacing: var(--tracking-h1);
+}
+
+@keyframes dot-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.55; transform: scale(0.82); }
+}
+
+@utility dot-pulse {
+  animation: dot-pulse 2.4s var(--ease-inout) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .dot-pulse { animation: none; }
 }
 
 /* S17: the sun/moon switch (lib/theme.ts's `withThemeTransition`) adds this

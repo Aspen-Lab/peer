@@ -92,7 +92,7 @@ export function FilterChip({
         className={[
           "group relative inline-flex items-center h-10 rounded-full px-4 gap-1.5",
           "text-body-sm font-medium tracking-[-0.005em]",
-          "transition-all duration-200 ease-out active:scale-[0.97]",
+          "transition-all ease-out active:scale-[0.97]",
           active
             ? "bg-[color:var(--color-accent-dim)] text-[color:var(--color-accent)] shadow-card hover:shadow-card-hover"
             : "bg-surface text-text shadow-card hover:shadow-card-hover hover:-translate-y-[0.5px] hover:text-heading",
@@ -117,7 +117,7 @@ export function FilterChip({
             <span
               aria-hidden
               className={[
-                "inline-block text-micro transition-transform duration-200",
+                "inline-block text-micro transition-transform ",
                 open ? "rotate-180" : "",
                 active ? "opacity-70" : "opacity-50",
               ].join(" ")}
@@ -179,7 +179,7 @@ export function RadioList<T extends string | number>({
             onClick={() => onChange(opt.value)}
             className={[
               "flex items-center justify-between gap-3 px-3 py-2 rounded-lg text-body-sm text-left",
-              "transition-colors duration-150",
+              "transition-colors ",
               active
                 ? "bg-[color:var(--color-accent-dim)] text-[color:var(--color-accent)]"
                 : "text-text hover:bg-[color:var(--color-bg-secondary)]",

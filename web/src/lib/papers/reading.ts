@@ -14,6 +14,8 @@
 // Decision block shows. Nothing else on the page hand-writes a status string.
 
 import type { Paper } from "@/types";
+import type { ExtractedFigureCaption } from "./html-text";
+import { parseBlockMarker } from "@/lib/text/math";
 import type { ExtractedDocument } from "./html-text";
 import type { FullTextResult } from "./full-text";
 import type { SourceLink } from "./source-links";
@@ -50,7 +52,7 @@ export type OmitReason =
   | "not_in_abstract"
   /** Full text read; the paper has no such section, or nothing in it qualified. */
   | "no_section"
-  /** A PDF exists; only a self-hosted Peer reads PDFs. */
+  /** A PDF exists and carries no text layer — a scan. */
   | "pdf_only_hosted"
   /** 1-28/1-31: the PDF itself has no extractable text (e.g. a scanned image
    * with no text layer) — true on every deployment, not just this one. */
@@ -127,7 +129,7 @@ export interface PaperReading {
    * change with no new field, and without the bump every reader who had
    * opened the paper that day would have kept the worse one.
    */
-  version: 4;
+  version: 5;
   paperId: string;
   builtAt: string;
   provenance: ReadingProvenance;
@@ -164,6 +166,42 @@ export interface ReadingSection {
   /** introduction | methods | results | discussion | conclusion | body | … */
   canonical: string;
   paragraphs: string[];
+  /** The paper's figures that belong in this section, each after the
+   *  paragraph that first names it. Absent when the section has none. */
+  figures?: ReadingFigure[];
+  /** The paper's display equations in this section, each after the
+   *  paragraph it followed on the page. Absent when the section has none. */
+  equations?: ReadingEquation[];
+}
+
+/**
+ * A display equation, set apart. TeX where the source was HTML — the page
+ * draws it; the printed line where it was a PDF — the page sets it in mono.
+ * `after` is the paragraph it follows, -1 for the head of the section.
+ */
+export interface ReadingEquation {
+  latex?: string;
+  text?: string;
+  number?: string;
+  after: number;
+}
+
+/**
+ * A figure, placed. The paper's own picture where the source was HTML; for a
+ * PDF, the page the caption was read from, and — when that page holds one
+ * figure and no other — the route that serves the page's embedded picture.
+ * Neither is fetched to build the reading; the page asks for the picture when
+ * it comes into view, and shows the caption alone if there is none.
+ */
+export interface ReadingFigure {
+  ordinal: number;
+  /** "Figure 3" */
+  label: string;
+  caption: string;
+  imageUrl?: string;
+  page?: number;
+  /** Index of the paragraph this figure follows; -1 puts it before the first. */
+  after: number;
 }
 
 /**
@@ -435,16 +473,18 @@ function paywallHostOf(fullText: FullTextResult): string | undefined {
 }
 
 /**
- * On Vercel a PDF link is attempted and `pdf-text.ts` reports `no-python`
- * (no interpreter can be spawned) or `no-extractor` (the helper script is not
- * in the function bundle). Either is the one outcome the page must name
- * plainly: the PDF is there; this deployment cannot read it. Mapping only
- * one of them would tell a deployed reader the paper has no full text.
+ * A PDF whose words are pictures of words — a scan, or a file that carries no
+ * text layer — is the one outcome the page must name plainly: the PDF is
+ * there, and there is nothing in it to read. It used to mean something else
+ * (`no-python` / `no-extractor`: the deployment could not run the extractor
+ * at all), which is why the page once said "only a self-hosted Peer reads
+ * PDFs". Reading a PDF needs nothing special now; a scan still needs eyes.
  */
 function pdfUnreadableHere(fullText: FullTextResult): boolean {
   return fullText.attempts.some(
     (attempt) =>
-      attempt.link.kind === "pdf" && /\bno-(python|extractor)\b/.test(attempt.outcome),
+      attempt.link.kind === "pdf" &&
+      /\bno-(text-layer|sections|python|extractor)\b/.test(attempt.outcome),
   );
 }
 
@@ -527,19 +567,139 @@ function pickSource(
  */
 function readableBody(doc: ExtractedDocument): ReadingSection[] {
   const out: ReadingSection[] = [];
+  const lifted = doc.equations ?? [];
   for (const section of doc.sections) {
     if (section.canonical === "abstract") continue;
-    const paragraphs = section.text
-      .split(/\n{2,}/)
-      .map((para) => para.replace(/\s+/g, " ").trim())
+    const paragraphs: string[] = [];
+    const equations: ReadingEquation[] = [];
+    for (const raw of section.text.split(/\n{2,}/)) {
+      const para = raw.replace(/\s+/g, " ").trim();
+      if (!para) continue;
+      // A marker paragraph is where a display equation stood: the equation
+      // goes after the paragraph before it, and the marker goes away.
+      const k = parseBlockMarker(para);
+      if (k !== null) {
+        const eq = lifted[k];
+        if (eq && (eq.latex || eq.text)) {
+          equations.push({
+            ...(eq.latex ? { latex: eq.latex } : {}),
+            ...(eq.text ? { text: eq.text } : {}),
+            ...(eq.number ? { number: eq.number } : {}),
+            after: paragraphs.length - 1,
+          });
+        }
+        continue;
+      }
       // A step number on its own line: LaTeXML renders an algorithm listing
       // one cell per line, so "1:" and "2:" arrive as paragraphs of their
       // own. Anything with no letter in it is the same kind of debris.
-      .filter((para) => para.length > 0 && !/^\d+[:.]?$/.test(para) && /\p{L}/u.test(para));
-    if (paragraphs.length === 0) continue;
-    out.push({ heading: section.heading, canonical: section.canonical, paragraphs });
+      if (/^\d+[:.]?$/.test(para) || !/\p{L}/u.test(para)) continue;
+      paragraphs.push(para);
+    }
+    if (paragraphs.length === 0 && equations.length === 0) continue;
+    out.push({
+      heading: section.heading,
+      canonical: section.canonical,
+      paragraphs,
+      ...(equations.length > 0 ? { equations } : {}),
+    });
   }
   return out;
+}
+
+/** The route that serves a PDF page's embedded picture. Relative: the page
+ *  that renders the reading is the origin that built it. */
+export function pdfFigureUrl(paperId: string, page: number): string {
+  return `/api/papers/${encodeURIComponent(paperId)}/figure-image?page=${page}`;
+}
+
+function figureNumber(label: string): number | null {
+  const m = /^fig(?:ure)?\.?\s*S?(\d+)/i.exec(label.trim());
+  return m ? Number(m[1]) : null;
+}
+
+/**
+ * Where each figure goes.
+ *
+ * A figure belongs after the paragraph that first names it — "as Figure 3
+ * shows" is the paper telling the reader to look now. A figure the prose
+ * never names lands at the end of the section that sits where the caption
+ * sat in the document (its `at`), so it stays near the words it was printed
+ * beside. Tables are not placed: a table's caption without its table is a
+ * sentence about nothing.
+ *
+ * For a PDF, the picture is offered only when its page carries exactly one
+ * figure caption: `extractImages` returns a page's rasters with no positions,
+ * so with two figures on a page the route could not say which is which, and
+ * a wrong picture under a caption is worse than none.
+ */
+export function placeFigures(
+  sections: ReadingSection[],
+  captions: ExtractedFigureCaption[],
+  pdf: { paperId: string } | null,
+): ReadingSection[] {
+  if (sections.length === 0 || captions.length === 0) return sections;
+  const out = sections.map((section) => ({ ...section, figures: undefined as ReadingFigure[] | undefined }));
+
+  const perPage = new Map<number, number>();
+  for (const c of captions) {
+    if (typeof c.page === "number") perPage.set(c.page, (perPage.get(c.page) ?? 0) + 1);
+  }
+
+  // Cumulative text fraction at the end of each section, for the fallback.
+  const lengths = out.map((s) => s.paragraphs.reduce((n, p) => n + p.length, 0));
+  const total = lengths.reduce((a, b) => a + b, 0) || 1;
+  const ends: number[] = [];
+  let run = 0;
+  for (const len of lengths) {
+    run += len;
+    ends.push(run / total);
+  }
+
+  const seen = new Set<string>();
+  for (const c of captions) {
+    if (!/^fig/i.test(c.label)) continue;
+    if (seen.has(c.label)) continue;
+    seen.add(c.label);
+
+    let at: { section: number; after: number } | null = null;
+    const n = figureNumber(c.label);
+    if (n !== null) {
+      const mention = new RegExp(`\\bfig(?:ure|s?\\.)?\\s*${n}(?![\\d.])`, "i");
+      outer: for (let si = 0; si < out.length; si++) {
+        for (let pi = 0; pi < out[si].paragraphs.length; pi++) {
+          if (mention.test(out[si].paragraphs[pi])) {
+            at = { section: si, after: pi };
+            break outer;
+          }
+        }
+      }
+    }
+    if (!at) {
+      const frac = typeof c.at === "number" ? c.at : 1;
+      let si = ends.findIndex((end) => frac <= end);
+      if (si < 0) si = out.length - 1;
+      at = { section: si, after: out[si].paragraphs.length - 1 };
+    }
+
+    const figure: ReadingFigure = {
+      ordinal: c.ordinal,
+      label: c.label,
+      caption: c.caption,
+      after: at.after,
+      ...(typeof c.page === "number" ? { page: c.page } : {}),
+    };
+    if (c.imageUrl) figure.imageUrl = c.imageUrl;
+    else if (pdf && typeof c.page === "number" && perPage.get(c.page) === 1) {
+      figure.imageUrl = pdfFigureUrl(pdf.paperId, c.page);
+    }
+    (out[at.section].figures ??= []).push(figure);
+  }
+  return out.map((s) => {
+    if (s.figures) return s;
+    const { figures: _none, ...rest } = s;
+    return rest;
+  });
 }
 
 export function buildReading(
@@ -556,7 +716,9 @@ export function buildReading(
   const provenance = buildProvenance(paper, sentences, fullText);
   const doc = fullText?.status === "ok" ? fullText.doc : undefined;
 
-  const body = doc ? readableBody(doc) : [];
+  const body = doc
+    ? placeFigures(readableBody(doc), doc.figureCaptions, doc.source === "pdf" ? { paperId: paper.id } : null)
+    : [];
   // In order, each block excluding what the ones before it took: the three
   // pools overlap now that `body` is a last resort for two of them, and one
   // sentence quoted under two headings is Peer saying two different things
@@ -589,7 +751,7 @@ export function buildReading(
   omitted.push({ block: "nextStep", reason: "needs_key" });
 
   return {
-    version: 4,
+    version: 5,
     paperId: paper.id,
     builtAt: now.toISOString(),
     provenance,
@@ -747,7 +909,7 @@ function readingSentence(reading: PaperReading, providerConfigured: boolean): st
     return withKey(`${lead} ${sourcePhrase(provenance)}${qualifier}. ${presentSentence(reading)}`);
   }
   if (provenance.fullText === "pdf_unreadable_here") {
-    return withKey("Abstract only; the PDF is there, but only a self-hosted Peer reads PDFs.");
+    return withKey("Abstract only; the PDF carries no text to read — it looks scanned.");
   }
   if (provenance.fullText === "pdf_empty") {
     return PDF_NO_TEXT_MESSAGE;
@@ -808,7 +970,7 @@ function fullTextClause(reading: PaperReading, report: AvailabilityReport): stri
     return ` Caveats and a next step need the full text — ${host} keeps it behind access.`;
   }
   if (provenance.fullText === "pdf_unreadable_here") {
-    return " Caveats and a next step need the full text; the PDF is there, but only a self-hosted Peer reads PDFs.";
+    return " Caveats and a next step need the full text; the PDF carries no text to read — it looks scanned.";
   }
   if (provenance.fullText === "pdf_empty") {
     return " Caveats and a next step need the full text; this PDF has no readable text to read.";

@@ -160,7 +160,7 @@ export function SearchResultCard({ result }: { result: SearchResult }) {
           {badge && (
             <span
               className={[
-                "inline-flex items-center gap-1 px-1.5 py-[3px] rounded text-micro font-semibold uppercase tracking-[0.12em]",
+                "eyebrow inline-flex items-center gap-1 px-1.5 py-[3px] rounded",
                 badge.className,
               ].join(" ")}
             >
@@ -169,7 +169,7 @@ export function SearchResultCard({ result }: { result: SearchResult }) {
             </span>
           )}
           {result.isOpenAccess && (
-            <span className="inline-flex items-center gap-1 px-1.5 py-[3px] rounded text-micro font-semibold uppercase tracking-[0.12em] text-peach bg-peach-dim">
+            <span className="eyebrow inline-flex items-center gap-1 px-1.5 py-[3px] rounded text-peach bg-peach-dim">
               <LockOpenIcon />
               Open access
             </span>

@@ -9,6 +9,7 @@
 // account to speak of and must not reserve a section for one.
 
 import { useState } from "react";
+import Link from "next/link";
 import { buttonVariants } from "@/components/ui/button";
 import { signInWithGitHub, useAuthUser, userAvatar, userName } from "./use-auth-user";
 
@@ -58,6 +59,16 @@ export function AccountSection({ className = "" }: { className?: string }) {
           </form>
         </div>
       )}
+      {/* The one place a reader is asked to hand over an account is the one
+          place the page that says what happens to it has to be reachable. */}
+      <p className="mt-4 text-caption text-text-faint">
+        <Link
+          href="/privacy"
+          className="underline decoration-border-strong underline-offset-4 hover:text-heading transition-colors duration-[180ms] ease-expo"
+        >
+          What Peer keeps
+        </Link>
+      </p>
     </section>
   );
 }

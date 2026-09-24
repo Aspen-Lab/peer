@@ -37,7 +37,7 @@ export function ProgressBar({ pct, label, className }: ProgressBarProps) {
       </div>
       <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-bg-secondary">
         <div
-          className="h-full rounded-full bg-accent transition-[width] duration-300 ease-snap motion-reduce:transition-none"
+          className="h-full rounded-full bg-accent transition-[width] duration-[var(--dur-base)] ease-expo motion-reduce:transition-none"
           style={{ width: `${value}%` }}
         />
       </div>

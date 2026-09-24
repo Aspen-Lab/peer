@@ -1,14 +1,28 @@
-// Node-side wrapper around `extract_pdf_text.py`. Downloads the PDF, hands
-// the bytes to the Python helper, and normalizes the result into the same
-// shape as the HTML extractors.
+// Downloads a legal PDF and reads it into the same shape as the HTML
+// extractors.
+//
+// The URL path used to hand the bytes to `scripts/extract_pdf_text.py`,
+// which needs Python and PyMuPDF — a compiled extension. A developer's
+// machine has both; a deployed Peer has neither, so every PDF-only paper
+// read as "abstract only" in production while reading fine locally, and the
+// page had to say so ("only a self-hosted Peer reads PDFs"). That reading is
+// plain TypeScript now — `pdf-outline.ts` over pdf.js's text layer — so one
+// behaviour runs in both places. What a scan (a PDF with no text layer)
+// cannot give, it still cannot give; that now reads as what it is.
+//
+// Merge note (2026-09-23): `extractPdfTextFromPath` — the private-upload
+// feature's from-disk path (an uploaded PDF already on this server's own
+// disk, see `papers/upload-store.ts`) — still runs the Python helper. That
+// feature is already documented (HANDOFF-upload-profile-fulltext-pdf.md
+// §6.5) as not yet production-storage-ready, so porting it off Python is
+// separate follow-up work, not something to fold in silently here.
 
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { cleanDisplayText } from "@/lib/text/clean";
+import { buildOutline, type PdfOutline, type PdfPageText } from "./pdf-outline";
 import { withInheritedBuckets } from "./html-text";
 import type { ExtractedDocument, ExtractedSection, ExtractedFigureCaption } from "./html-text";
 
@@ -19,8 +33,10 @@ const MAX_PDF_BYTES = 18_000_000;
 const MAX_STDIO_BYTES = 18_000_000;
 // S3 (2026-09-15 ruling): 100 pages, up from 40 — a full paper's text reaching
 // pass 1 needs the extractor to see the whole PDF, not the first 40 pages.
-// Extracted text (no embedded images, unlike extract_pdf_figures.py) stays
-// well under MAX_STDIO_BYTES even at 100 pages.
+// Shared by both extraction paths below (the pdf.js page loop and the
+// Python helper's `--max-pages`) so neither quietly reads a shorter paper
+// than the other. Extracted text (no embedded images, unlike
+// extract_pdf_figures.py) stays well under MAX_STDIO_BYTES even at 100 pages.
 const MAX_PDF_PAGES = 100;
 const FETCH_VERSION = "2026-05-01-pdf-text";
 
@@ -67,17 +83,6 @@ export interface PdfTextResult {
   page1Text?: string;
 }
 
-function resolveHelperScript(): string | null {
-  const candidates = [
-    path.join(process.cwd(), "scripts", "extract_pdf_text.py"),
-    path.join(process.cwd(), "web", "scripts", "extract_pdf_text.py"),
-  ];
-  for (const candidate of candidates) {
-    if (existsSync(candidate)) return candidate;
-  }
-  return null;
-}
-
 async function downloadPdf(
   url: string,
 ): Promise<{ bytes: Buffer; finalUrl: string } | { error: string; status?: number }> {
@@ -119,6 +124,131 @@ async function downloadPdf(
   }
 }
 
+const BYTES_TTL_MS = 15 * 60 * 1000;
+const BYTES_KEEP = 6;
+const recentBytes = new Map<string, { bytes: Buffer; ts: number }>();
+
+/**
+ * The PDF at `url`, from the last quarter-hour's downloads where it was one
+ * of them. Six at most, oldest out first — a few megabytes each, on a
+ * function that also holds the text cache.
+ */
+export async function getPdfBytes(url: string): Promise<{ bytes: Buffer } | { error: string; status?: number }> {
+  const hit = recentBytes.get(url);
+  if (hit && Date.now() - hit.ts < BYTES_TTL_MS) return { bytes: hit.bytes };
+  const download = await downloadPdf(url);
+  if ("error" in download) return download;
+  recentBytes.set(url, { bytes: download.bytes, ts: Date.now() });
+  while (recentBytes.size > BYTES_KEEP) {
+    const oldest = recentBytes.keys().next().value;
+    if (oldest === undefined) break;
+    recentBytes.delete(oldest);
+  }
+  return { bytes: download.bytes };
+}
+
+/** The PDF's text layer, page by page, as `pdf-outline` wants it. Exported
+ *  for the probes that look at a real PDF's lines when the outline misreads. */
+export async function readPages(bytes: Buffer): Promise<PdfPageText[]> {
+  // `unpdf` ships pdf.js built for a server runtime: no worker, no canvas,
+  // no native code — the only build that runs unchanged in a function.
+  const { getDocumentProxy } = await import("unpdf");
+  const doc = await getDocumentProxy(new Uint8Array(bytes));
+  const pages: PdfPageText[] = [];
+  const count = Math.min(doc.numPages, MAX_PDF_PAGES);
+  for (let n = 1; n <= count; n++) {
+    const page = await doc.getPage(n);
+    const content = await page.getTextContent();
+    const items: PdfPageText["items"] = [];
+    for (const item of content.items) {
+      if (!("str" in item) || typeof item.str !== "string") continue;
+      const transform = item.transform as number[] | undefined;
+      if (!transform) continue;
+      // Sideways text is the page's, not the paper's: the arXiv stamp down
+      // the left margin is set larger than the title and read as one.
+      if (Math.abs(transform[1] ?? 0) > 0.1 || Math.abs(transform[2] ?? 0) > 0.1) continue;
+      items.push({
+        str: item.str,
+        height: typeof item.height === "number" && item.height > 0 ? item.height : Math.abs(transform[3] ?? 0),
+        width: typeof item.width === "number" ? item.width : 0,
+        fontName: String(item.fontName ?? ""),
+        x: transform[4] ?? 0,
+        y: transform[5] ?? 0,
+      });
+    }
+    pages.push({ page: n, items });
+  }
+  return pages;
+}
+
+function normalize(extractor: PdfOutline): ExtractedDocument {
+  // Numbered subsections inherit their parent's bucket here too — the same
+  // one-heading-at-a-time bucketing the HTML extractor and the Python path's
+  // own `normalizePythonOutput` (below) both use.
+  const sections: ExtractedSection[] = withInheritedBuckets(
+    (extractor.sections ?? [])
+    .map((section) => ({
+      heading: cleanDisplayText(section.heading) || "Body",
+      canonical: section.canonical || "body",
+      text: cleanDisplayText(section.text),
+    }))
+    .filter((section) => section.text.length > 0),
+  );
+
+  const pageCount = typeof extractor.pageCount === "number" ? extractor.pageCount : undefined;
+  const figureCaptions: ExtractedFigureCaption[] = (extractor.figureCaptions ?? [])
+    .map((cap, index) => ({
+      ordinal: typeof cap.ordinal === "number" ? cap.ordinal : index,
+      label: cleanDisplayText(cap.label) || `Figure ${index + 1}`,
+      caption: cleanDisplayText(cap.caption),
+      ...(typeof cap.page === "number" ? { page: cap.page } : {}),
+      // Its place in the document, so a figure the prose never names by
+      // number still lands near where the paper put it.
+      ...(typeof cap.page === "number" && pageCount ? { at: (cap.page - 0.5) / pageCount } : {}),
+    }))
+    .filter((cap) => cap.caption.length > 0);
+
+  const equations = (extractor.equations ?? [])
+    .map((eq) => ({ text: cleanDisplayText(eq.text), ...(eq.number ? { number: eq.number } : {}) }))
+    .filter((eq) => eq.text.length > 0);
+
+  return {
+    title: cleanDisplayText(extractor.title) || null,
+    sections,
+    figureCaptions,
+    ...(equations.length > 0 ? { equations } : {}),
+    source: "pdf",
+    pageCount,
+    reason: extractor.reason ?? null,
+  };
+}
+
+/**
+ * Download a legal PDF and extract sectioned text + figure captions. The
+ * URL path: pdf.js over a server-safe build (`unpdf`), so it reads the same
+ * way on a developer's machine and on a deployed Peer.
+ */
+export async function tryExtractPdfText(url: string): Promise<PdfTextResult> {
+  const download = await getPdfBytes(url);
+  if ("error" in download) {
+    return { ok: false, reason: download.error, status: download.status };
+  }
+
+  try {
+    const pages = await readPages(download.bytes);
+    const outline = buildOutline(pages);
+    if (!outline.sections || outline.sections.length === 0) {
+      // A scan carries pictures of words, not words: say that, rather than
+      // "no full text" as if the paper had none.
+      return { ok: false, reason: outline.reason ?? "no-sections" };
+    }
+    return { ok: true, doc: normalize(outline) };
+  } catch (err) {
+    console.warn("[papers/pdf-text] read failed:", err);
+    return { ok: false, reason: String(err) };
+  }
+}
+
 /**
  * Why the helper did not run. `no-python` and `no-script` are the two the
  * reading page names: on Vercel no interpreter can be spawned, or the helper
@@ -128,6 +258,17 @@ async function downloadPdf(
  * caller as a machine reason (`no-python` / `no-extractor`), never as prose.
  */
 type ExtractorFailure = "no-python" | "no-script" | "failed";
+
+function resolveHelperScript(): string | null {
+  const candidates = [
+    path.join(process.cwd(), "scripts", "extract_pdf_text.py"),
+    path.join(process.cwd(), "web", "scripts", "extract_pdf_text.py"),
+  ];
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) return candidate;
+  }
+  return null;
+}
 
 async function runExtractor(
   pdfPath: string,
@@ -183,7 +324,7 @@ async function runExtractor(
   return { failure: "no-python" };
 }
 
-function normalize(extractor: ExtractorOutput): ExtractedDocument {
+function normalizePythonOutput(extractor: ExtractorOutput): ExtractedDocument {
   // Numbered subsections inherit their parent's bucket here too — the Python
   // extractor buckets one heading at a time, the same way the HTML one did.
   const sections: ExtractedSection[] = withInheritedBuckets(
@@ -216,14 +357,18 @@ function normalize(extractor: ExtractorOutput): ExtractedDocument {
 
 /**
  * Run the Python extractor against a PDF that already lives on disk, and
- * normalize its output. Split out of `tryExtractPdfText` (1-24) for an
- * uploaded PDF (`web/.local-data/uploads/<hash16>.pdf`, see
+ * normalize its output. Split out of the old `tryExtractPdfText` (1-24) for
+ * an uploaded PDF (`web/.local-data/uploads/<hash16>.pdf`, see
  * `papers/upload-store.ts`): the file is already private, server-local
  * storage, so there is no reason to download it again or copy it into a
  * *second* temp path only to run the same extractor — the caller owns the
  * file's lifetime (for an upload, that's "as long as the upload exists on
  * disk", not "for the duration of this one extraction"), so this function
  * has no temp-dir lifecycle of its own.
+ *
+ * Still Python-based (see the merge note at the top of this file) — the
+ * URL path above moved to pdf.js in production; this from-disk path has
+ * not, because the feature that calls it is not yet deployed.
  */
 export async function extractPdfTextFromPath(pdfPath: string): Promise<PdfTextResult> {
   const ran = await runExtractor(pdfPath);
@@ -242,28 +387,6 @@ export async function extractPdfTextFromPath(pdfPath: string): Promise<PdfTextRe
   if (extractor.reason && (!extractor.sections || extractor.sections.length === 0)) {
     return { ok: false, reason: extractor.reason };
   }
-  const doc = normalize(extractor);
+  const doc = normalizePythonOutput(extractor);
   return { ok: true, doc, page1Text: extractor.page1Text };
-}
-
-/**
- * Download a legal PDF and extract sectioned text + figure captions.
- */
-export async function tryExtractPdfText(url: string): Promise<PdfTextResult> {
-  const download = await downloadPdf(url);
-  if ("error" in download) {
-    return { ok: false, reason: download.error, status: download.status };
-  }
-
-  const tempDir = await mkdtemp(path.join(tmpdir(), "peer-pdftext-"));
-  const pdfPath = path.join(tempDir, "paper.pdf");
-
-  try {
-    await writeFile(pdfPath, download.bytes);
-    return await extractPdfTextFromPath(pdfPath);
-  } catch (err) {
-    return { ok: false, reason: String(err) };
-  } finally {
-    await rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
-  }
 }

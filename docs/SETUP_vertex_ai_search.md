@@ -222,25 +222,39 @@ and let the observed hosts be a cross-check that the patterns cover them.
 ## Step 3 — Configure the environment — DONE
 
 Copy the **App ID** from the app's list row (it looks like `peer-web_1234567890`)
-and add to `web/.env.local`:
+and add **both** of these lines to `web/.env.local`:
 
 ```
+GOOGLE_VERTEX_SEARCH_PROJECT=<the project the Search App lives in>
 GOOGLE_VERTEX_SEARCH_ENGINE_ID=peer-web_1234567890
 ```
 
-That single line switches all three surfaces over. The rest are optional
-overrides:
+**Both lines are required, and one on its own does nothing.** The provider is
+chosen only when a project *and* an app id are configured — the same condition
+already stated at the top of this file. Setting the engine id alone leaves the
+provider off, silently: every surface keeps the provider it has today and
+nothing is printed.
+
+**`GOOGLE_VERTEX_PROJECT` is not read here.** That name is the **models**
+project, and it is a different capability on purpose. There is no fallback and
+no default: from ABC-freemium 9-01, both operator scripts **exit 1** naming
+`GOOGLE_VERTEX_SEARCH_PROJECT` if only the old name is set. If you already built
+an index while the old name was the only one set, nothing has to be rebuilt —
+set `GOOGLE_VERTEX_SEARCH_PROJECT` to that same project id and the identical
+index is reachable.
+
+The rest are optional overrides:
 
 | Variable | Default | What it does |
 | --- | --- | --- |
-| `GOOGLE_VERTEX_SEARCH_ENGINE_ID` | — | The Search App id. **Setting this is what turns the provider on.** |
-| `GOOGLE_VERTEX_SEARCH_DATA_STORE_ID` | — | Query a data store directly instead of an app. Ignored when an engine id is set. |
-| `GOOGLE_VERTEX_SEARCH_PROJECT` | `GOOGLE_VERTEX_PROJECT` | Only needed if the Search App lives in a different project from the models. |
+| `GOOGLE_VERTEX_SEARCH_PROJECT` | **none — required** | The project the Search App lives in. One of the two signals that turn the provider on. |
+| `GOOGLE_VERTEX_SEARCH_ENGINE_ID` | **none — required** | The Search App id. The other signal. Either one missing leaves the provider off. |
+| `GOOGLE_VERTEX_SEARCH_DATA_STORE_ID` | — | Query a data store directly instead of an app. Ignored when an engine id is set; satisfies the app-id half if the engine id is absent. |
 | `GOOGLE_VERTEX_SEARCH_LOCATION` | `global` | Region of the data store. `global` is the un-prefixed hostname; anything else prefixes it. |
 | `GOOGLE_VERTEX_SEARCH_COLLECTION` | `default_collection` | Rarely changed. |
 | `GOOGLE_VERTEX_SEARCH_SERVING_CONFIG` | `default_search` | Rarely changed. |
 | `GOOGLE_VERTEX_SEARCH_MIN_RESULTS` | `3` | Below this many rows, one grounding call tops the query up. `0` disables the backfill. |
-| `GOOGLE_VERTEX_SEARCH_FALLBACK` | on | Set to `off` to forbid grounding backfill entirely — pure credit spend, thinner coverage. |
+| `GOOGLE_VERTEX_SEARCH_FALLBACK` | **off** | Set to `on` (or `true`/`1`) to **arm** the grounding backfill. Grounding is ~$35/1,000 queries and is **not** covered by the GenAI App Builder credit, so it is off unless you deliberately turn it on. Changed by ABC-freemium 8-01(b); this row used to say the default was `on`, which was backwards. |
 
 The credential is the one you already have: the service-account JSON at
 `GOOGLE_APPLICATION_CREDENTIALS`. **No new secret** — only the extra IAM role

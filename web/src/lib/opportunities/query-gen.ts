@@ -301,6 +301,19 @@ function parseQueryArray(raw: string, limit: number): string[] {
  * no provider resolves, the provider lacks generateJsonText, or output is
  * unparseable.
  */
+/**
+ * ABC-freemium 3-02 · Ruling 9 point 5 — see the matching note in
+ * `feed/tier2-rerank.ts`. Same shape, same reason: this runs inside a pool build
+ * with no entitled request in scope, and its guard is a numeric tier ceiling
+ * rather than the chokepoint. `generateSearchQueries` is reached only when
+ * `(req.aiTier ?? 0) >= 2` (`jobs/pipeline.ts:137`, `events/pipeline.ts:161`),
+ * where the default is a literal 0.
+ */
+const QUERY_GEN_JUSTIFICATION = {
+  kind: "entitlement-proved-by-tier-ceiling",
+  where: "jobs|events/pipeline.ts — (req.aiTier ?? 0) >= 2, default 0",
+} as const;
+
 export async function generateSearchQueries(
   kind: "jobs" | "events",
   profile: QueryGenProfile,
@@ -316,7 +329,7 @@ export async function generateSearchQueries(
 
   let provider;
   try {
-    provider = resolveProvider(llmOverride);
+    provider = resolveProvider(llmOverride, QUERY_GEN_JUSTIFICATION);
   } catch {
     return fallback;
   }

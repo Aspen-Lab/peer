@@ -10,6 +10,7 @@ import {
   entitledAiTier,
   requireEntitledAiRequest,
 } from "@/lib/security/ai-request";
+import { entitledContext } from "@/lib/security/entitled-context";
 import {
   createTrustedPaperCacheScope,
   type TrustedPaperCacheScope,
@@ -694,7 +695,17 @@ export async function POST(req: NextRequest) {
   });
   if (gate instanceof NextResponse) return gate;
   const entitledTier = entitledAiTier(requestedAiTier, gate.entitlement);
-  const aiProvider = entitledTier >= 2 ? resolveProvider(llmOverride) : null;
+  // MERGE-B-SEC / MERGE C semantic fix (ABC-JEV-INTEGRATION.md §1s.2, MANAGER
+  // RE-CHECKS): resolveProvider now REQUIRES a ProviderContext — the
+  // entitlement check above already ran (`gate`), so this constructs the
+  // branded context from it rather than calling resolveProvider bare.
+  const aiProvider =
+    entitledTier >= 2
+      ? resolveProvider(
+          llmOverride,
+          entitledContext(gate.entitlement, "paper-feed", Boolean(llmOverride)),
+        )
+      : null;
   const aiTier = entitledTier >= 2 && !aiProvider ? 0 : entitledTier;
 
   const project = textValue(intent.project);

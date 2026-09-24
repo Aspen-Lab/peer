@@ -1,8 +1,23 @@
 "use client";
 
 // Root-level crash screen. This replaces the entire root layout, so
-// globals.css and next/font are NOT available here — plain inline styles
-// with the cream-theme defaults are the only safe option.
+// globals.css and next/font are NOT available here — the palette is restated
+// inline, and this file is the one place in the product where that is allowed.
+//
+// It is the last page a reader sees on their worst visit, and it was the last
+// cream page in a greyscale product: #fdf6ee on #2a2722, two weight-600
+// headings, a 999px pill in #ff520d. The values below are the live greyscale
+// (globals.css `:root`), square, at 400.
+//
+// Deliberately light-only. Peer's dark mode is `html[data-mode="dark"]`, and
+// only `data-mode="system"` follows the OS, so a `prefers-color-scheme` block
+// here would hand a dark crash screen to a reader who chose light.
+const INK = "#1d1d1d";
+const BODY = "#282828";
+const MUTED = "#666666";
+const FAINT = "#8e8e8e";
+const GROUND = "#fafafa";
+
 export default function GlobalError({
   error,
   reset,
@@ -16,8 +31,8 @@ export default function GlobalError({
         style={{
           margin: 0,
           minHeight: "100vh",
-          background: "#fdf6ee",
-          color: "#2a2722",
+          background: GROUND,
+          color: BODY,
           fontFamily:
             'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
         }}
@@ -25,26 +40,20 @@ export default function GlobalError({
         <div style={{ maxWidth: 560, margin: "0 auto", padding: "18vh 24px 0" }}>
           <p
             style={{
-              fontSize: 11,
-              fontWeight: 600,
-              letterSpacing: "0.16em",
+              fontSize: 11.5,
+              fontWeight: 400,
+              letterSpacing: "0.06em",
               textTransform: "uppercase",
-              color: "#94877c",
+              fontFamily: "ui-monospace, SFMono-Regular, monospace",
+              color: FAINT,
             }}
           >
             Error
           </p>
-          <h1
-            style={{
-              margin: "12px 0 0",
-              fontSize: 22,
-              fontWeight: 600,
-              color: "#2b180a",
-            }}
-          >
+          <h1 style={{ margin: "12px 0 0", fontSize: 22, fontWeight: 400, color: INK }}>
             Peer hit an unexpected error.
           </h1>
-          <p style={{ margin: "8px 0 0", fontSize: 14, lineHeight: 1.6, color: "#6b6156" }}>
+          <p style={{ margin: "8px 0 0", fontSize: 14, lineHeight: 1.6, color: MUTED }}>
             Reloading usually clears it. Your profile and saved items are
             stored locally and in your account.
           </p>
@@ -54,19 +63,28 @@ export default function GlobalError({
               marginTop: 28,
               height: 40,
               padding: "0 20px",
-              borderRadius: 999,
+              borderRadius: 0,
               border: "none",
-              background: "#ff520d",
-              color: "#fdf6ee",
+              // `--shadow-card`'s shape, which is the product's only frame.
+              boxShadow: `0 0 0 1px ${INK}`,
+              background: "transparent",
+              color: INK,
               fontSize: 14,
-              fontWeight: 500,
+              fontWeight: 400,
               cursor: "pointer",
             }}
           >
             Reload
           </button>
           {error?.digest ? (
-            <p style={{ marginTop: 32, fontSize: 12, color: "#94877c", fontFamily: "monospace" }}>
+            <p
+              style={{
+                marginTop: 32,
+                fontSize: 12,
+                color: FAINT,
+                fontFamily: "ui-monospace, SFMono-Regular, monospace",
+              }}
+            >
               ref {error.digest}
             </p>
           ) : null}

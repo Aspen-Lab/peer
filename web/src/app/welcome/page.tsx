@@ -20,6 +20,8 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import { useProfileStore } from "@/store/profile";
+import type { Entitlement } from "@/lib/entitlement/types";
+import { entitlementGrants } from "@/lib/entitlement/allowance";
 import { careerStages, industryPreferences } from "@/types";
 import type { UserProfile } from "@/types";
 import {
@@ -45,16 +47,18 @@ import {
 } from "@/components/profile/ai-setup";
 import { SchoolAutocomplete } from "@/components/profile/school-autocomplete";
 import { AdvisorField } from "@/components/profile/advisor-field";
+import { ConnectorPanel } from "@/components/profile/connector-panel";
 import { useProfileSettled } from "@/components/first-run";
 import { Callout } from "@/components/ui";
 import { buttonVariants } from "@/components/ui/button";
-import { sectionLabel } from "@/components/ui/section-label";
 import { cardShell } from "@/components/ui/card-shell";
 import { cn } from "@/lib/cn";
 import { SURFACE_TOPIC_DESCRIPTIONS } from "@/lib/profile/topic-copy";
+import { ProPlanSummary } from "@/components/plan/pro-plan-summary";
 import {
   STEP_META,
   type StepKey,
+  connectorCount,
   firstIncompleteStep,
   isStepDone,
   readPersonaDone,
@@ -81,6 +85,13 @@ const readRequestedStep = () => {
 export default function WelcomePage() {
   const router = useRouter();
   const profile = useProfileStore((s) => s.profile);
+  // ABC-freemium 1-15 — the `ai` step is complete when the reader has AI at all.
+  // ABC-freemium 6-04 — a capability question, so the anonymous view while the
+  // plan is unknown: the step reads as not-yet-done rather than done, which is
+  // the direction that shows the reader the step instead of hiding it.
+  const entitlement = entitlementGrants(
+    useProfileStore((s) => s.entitlement),
+  );
   const store = useProfileStore();
   const topicMirroringRef = useRef<TopicMirroringController | null>(null);
   const completeOnboarding = useProfileStore((s) => s.completeOnboarding);
@@ -114,7 +125,7 @@ export default function WelcomePage() {
   if (settled && autoStart === null) {
     setAutoStart(
       stepIndexFromKey(requestedStep) ??
-        firstIncompleteStep(profile, readPersonaDone()),
+        firstIncompleteStep(profile, readPersonaDone(), entitlement),
     );
   }
   const step = manualStep ?? autoStart;
@@ -134,9 +145,12 @@ export default function WelcomePage() {
   const done = useMemo(
     () =>
       Object.fromEntries(
-        STEP_META.map((m) => [m.key, isStepDone(m.key, profile, personaDone)]),
+        STEP_META.map((m) => [
+          m.key,
+          isStepDone(m.key, profile, personaDone, entitlement),
+        ]),
       ) as Record<StepKey, boolean>,
-    [profile, personaDone],
+    [profile, personaDone, entitlement],
   );
 
   // Jumping is free among the first steps and everywhere once the topics
@@ -415,14 +429,52 @@ export default function WelcomePage() {
                 <StepFrame
                   kicker="Optional power-up"
                   title="Connect an AI key (optional)."
-                  subtitle="Peer works fully free with zero setup. Adding a key unlocks sharper, AI-written briefings and Deep report — and you can always do this later."
+                  subtitle="Peer works fully free with zero setup, and its AI is included. Adding your own key is optional — it sends the model calls to your account instead, and you can always do this later."
                 >
+                  {/* ABC-freemium 1-24 · R-UI-1, D1 — this said a key is what
+                      unlocks AI. Peer's AI is included now, so a key is an
+                      alternative rather than an unlock. */}
                   <Callout variant="accent">
-                    <strong>Peer runs significantly better with an API key.</strong>{" "}
-                    One key powers smarter Tier 1/2 ranking and full Deep reports
-                    across Papers, Events, and Jobs. Without one, you still get a
-                    complete free Tier 0 briefing.
+                    <strong>Peer&apos;s AI is included — no key needed.</strong>{" "}
+                    Ranking, summaries and Deep reports across Papers, Events and
+                    Jobs all run on it. Adding your own key sends those calls to
+                    your own account instead, on whichever model you prefer.
                   </Callout>
+                  {/* ABC-freemium 7-02(b) · D7 · Ruling 19 points 1-2 — **this
+                      is the half of the fix that makes the link honest.**
+
+                      Every upsell call to action in the app now resolves here
+                      (`UPGRADE_HREF`), and one of them reads *"See what Pro
+                      adds"*. Round-7 B drove all six entitlement states through
+                      this page and found ZERO plan or pricing words on any of
+                      them: the link resolved, rendered, stayed put, and had
+                      nothing to do with paying. A control that resolves and
+                      does not answer its own promise is still a broken promise.
+
+                      **Every string below already shipped elsewhere and is
+                      imported from `plan-copy.ts`, not retyped** — Ruling 19
+                      point 2(b) requires the exact existing sentences, so no
+                      new copy is written here and no editorial call is being
+                      taken. The labels travel with their sentences on purpose:
+                      without "Deep reports" above it, *"the monthly limit"* has
+                      no referent, and without the weekly sentence before it,
+                      *"refreshes them"* has no antecedent.
+
+                      **D7 — display only. No checkout link, and do not add
+                      one:** payment is out of scope (spec §3) and a dead link
+                      is worse than none. That rule travelled with the copy.
+
+                      Placed directly under the intro and above the key fields
+                      because a reader who arrived from the upsell came for
+                      this; a reader who arrived from onboarding scrolls one
+                      block to reach the panel they came for.
+
+                      A component rather than inline JSX so it can be rendered
+                      and asserted on its own — this page is a 970-line client
+                      component with a store graph a suite would have to fake
+                      wholesale, and that cost is exactly why nothing here was
+                      ever checked against what the CTAs promise. */}
+                  <ProPlanSummary />
                   <div className="mt-4 space-y-3">
                     <ApiKeyHelp provider={profile.feedAiProvider} />
                     <AiProviderRecommendation />
@@ -448,6 +500,39 @@ export default function WelcomePage() {
                 </StepFrame>
               )}
 
+              {key === "connectors" && (
+                <StepFrame
+                  kicker="Optional power-up"
+                  title="Turn on Events & Jobs for your field."
+                  subtitle="Papers work out of the box. Events and jobs need a data source — the free curated feeds only cover CS/AI, so for every other field these three free keys are what make your Events and Jobs tabs fill up."
+                >
+                  <Callout variant="accent">
+                    <strong>Why this matters:</strong> a materials-science conference or a
+                    battery-lab postdoc never appears in a CS-only feed. These sources search
+                    the whole web and every major job board for <em>your</em> topics — all free,
+                    all stored only in your browser.
+                  </Callout>
+
+                  <div className="space-y-2.5">
+                    <ApiIntro
+                      name="Tavily"
+                      tag="Web discovery · optional"
+                      why="Widens the daily paper search beyond the academic APIs. Peer works without it."
+                      how="Free — 1,000 searches/month. Sign up, copy the key from your dashboard."
+                      href="https://tavily.com"
+                    />
+                  </div>
+
+                  <div data-enter-scope className="rounded-xl bg-surface shadow-well overflow-hidden">
+                    <ConnectorPanel />
+                  </div>
+                  <p className="text-caption leading-relaxed text-text-faint">
+                    Add any or none now — you can paste keys later from the “Data APIs” button in
+                    the search bar. Keys never leave your browser.
+                  </p>
+                </StepFrame>
+              )}
+
               {key === "persona" && (
                 <StepFrame
                   kicker="One more thing"
@@ -465,7 +550,7 @@ export default function WelcomePage() {
                       <p className="text-body-lg font-medium text-heading">
                         Academic persona quiz
                         {personaDone && (
-                          <span className={cn(sectionLabel({ tone: "accent", tracking: "tight" }), "ml-2 align-middle")}>
+                          <span className={cn("eyebrow text-accent", "ml-2 align-middle")}>
                             Completed
                           </span>
                         )}
@@ -484,7 +569,11 @@ export default function WelcomePage() {
                     </div>
                   </div>
 
-                  <ReviewList profile={profile} onJump={setStep} />
+                  <ReviewList
+                    profile={profile}
+                    entitlement={entitlement}
+                    onJump={setStep}
+                  />
                 </StepFrame>
               )}
             </div>
@@ -583,7 +672,7 @@ function StepRail({
                 <span
                   className={cn(
                     "flex h-[26px] w-[26px] items-center justify-center rounded-full text-micro font-semibold tabular-nums",
-                    "transition-[background-color,color,transform,box-shadow] duration-150 ease-snap",
+                    "transition-[background-color,color,scale,box-shadow]",
                     isCurrent
                       ? "bg-accent text-bg shadow-card scale-110"
                       : isDone
@@ -602,7 +691,7 @@ function StepRail({
                 </span>
                 <span
                   className={cn(
-                    sectionLabel({ tracking: "tight" }),
+                    "eyebrow text-text-faint",
                     "hidden sm:block",
                     isCurrent ? "text-heading" : isDone ? "text-text-muted" : "text-text-faint/80",
                   )}
@@ -630,25 +719,27 @@ function StepRail({
 // confirms at a glance instead of paging back through steps.
 function ReviewList({
   profile,
+  entitlement,
   onJump,
 }: {
   profile: UserProfile;
+  entitlement: Pick<Entitlement, "userId">;
   onJump: (i: number) => void;
 }) {
   const rows = STEP_META.slice(0, -1).map((m, i) => ({
     index: i,
     label: m.label,
-    summary: summarizeStep(m.key, profile),
+    summary: summarizeStep(m.key, profile, entitlement),
   }));
   return (
     <div>
-      <p className={cn(sectionLabel({ tracking: "tight" }), "text-text-faint/80 mb-2")}>
+      <p className={cn("eyebrow text-text-faint", "text-text-faint/80 mb-2")}>
         What Peer knows so far
       </p>
-      <div className={cn(cardShell({ interactive: false, entrance: "none", padding: "none", radius: "xl" }), "divide-y divide-border/60")}>
+      <div className={cn(cardShell({ interactive: false, entrance: "none", padding: "none" }), "divide-y divide-border/60")}>
         {rows.map((row) => (
           <div key={row.label} className="flex items-center gap-3 px-4 py-2.5">
-            <span className={cn(sectionLabel({ tracking: "tight" }), "w-[72px] shrink-0")}>
+            <span className={cn("eyebrow text-text-faint", "w-[72px] shrink-0")}>
               {row.label}
             </span>
             <span className="flex-1 min-w-0 truncate text-meta text-text-muted">
@@ -669,7 +760,11 @@ function ReviewList({
   );
 }
 
-function summarizeStep(key: StepKey, profile: UserProfile): string {
+function summarizeStep(
+  key: StepKey,
+  profile: UserProfile,
+  entitlement: Pick<Entitlement, "userId">,
+): string {
   switch (key) {
     case "basics": {
       const name =
@@ -698,15 +793,58 @@ function summarizeStep(key: StepKey, profile: UserProfile): string {
     case "radar":
       return isStepDone("radar", profile, false) ? "Customized" : "Defaults";
     case "ai":
-      return isStepDone("ai", profile, false)
+      return isStepDone("ai", profile, false, entitlement)
         ? `${providerShortLabel(profile.feedAiProvider)} key connected`
         : "Not connected — works free";
+    case "connectors": {
+      const n = connectorCount(profile);
+      return n > 0 ? `${n} of 3 sources connected` : "None connected yet";
+    }
     case "persona":
       return "";
   }
 }
 
 // ── Small layout helpers ───────────────────────────────────────
+
+// Compact "what this API is and why it's worth 2 minutes" card, used in the
+// connectors onboarding step.
+function ApiIntro({
+  name,
+  tag,
+  why,
+  how,
+  href,
+}: {
+  name: string;
+  tag: string;
+  why: string;
+  how: string;
+  href: string;
+}) {
+  return (
+    <div className="rounded-xl bg-bg-secondary/40 px-4 py-3">
+      <div className="flex items-baseline justify-between gap-3 mb-1">
+        <span className="text-body-sm font-semibold text-heading">{name}</span>
+        <span className={cn("eyebrow text-accent", "text-right")}>
+          {tag}
+        </span>
+      </div>
+      <p className="text-meta leading-relaxed text-text-muted">{why}</p>
+      <p className="text-caption leading-relaxed text-text-faint mt-1.5">
+        {how}{" "}
+        <a
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-accent hover:underline"
+        >
+          Get a key ↗
+        </a>
+      </p>
+    </div>
+  );
+}
 
 function StepFrame({
   kicker,
@@ -721,14 +859,13 @@ function StepFrame({
 }) {
   return (
     <div>
-      <p className={cn(sectionLabel({ tone: "accent", tracking: "wider" }), "mb-2.5 flex items-center gap-2")}>
-        <span aria-hidden className="inline-block w-4 h-[1.5px] bg-accent/70" />
+      <p className={cn("eyebrow text-text-faint", "mb-2.5 flex items-center gap-2")}>
         {kicker}
       </p>
       <h1
         tabIndex={-1}
         data-step-heading
-        className="font-display font-light text-display-sm lg:text-display tracking-[-0.015em] leading-[1.1] text-heading outline-none"
+        className="display-line text-display-sm lg:text-display leading-[1.1] text-balance text-heading outline-none"
       >
         {title}
       </h1>
@@ -751,7 +888,7 @@ function Field({
 }) {
   return (
     <div>
-      <p className={cn(sectionLabel({ tracking: "tight" }), "text-text-faint/80 mb-1.5 block")}>
+      <p className={cn("eyebrow text-text-faint", "text-text-faint/80 mb-1.5 block")}>
         {label}
       </p>
       {children}
@@ -780,7 +917,7 @@ function PillGroup({
             key={o.value}
             type="button"
             onClick={() => onChange(o.value)}
-            className={`text-meta px-2.5 py-1 rounded-full transition-all duration-200 ease-out active:scale-[0.94] ${
+            className={`text-meta px-2.5 py-1 rounded-full transition-all ease-out active:scale-[0.94] ${
               active
                 ? "bg-accent-dim text-accent shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-accent)_30%,transparent)] scale-[1.03]"
                 : "text-text-faint hover:text-text-muted bg-bg-secondary/40 hover:bg-bg-secondary/70"

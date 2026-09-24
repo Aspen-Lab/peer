@@ -36,7 +36,7 @@ you are the MANAGER. This section is your whole brief.**
 ### 1. Work out where things stand
 
 ```
-cd "D:\local files on this PC\Github\Peer\peer" && git log --oneline -8 && git status --short
+cd "D:\local files on this PC\Github\Peer\peer-followup" && git log --oneline -8 && git status --short
 ```
 
 Then read **§1** — the round, whose turn, and where the last agent stopped. Trust §1 over any
@@ -80,40 +80,37 @@ browser, run the reports), then report to the user in plain language and stop th
 ## §1. CURRENT STATE — THE SOURCE OF TRUTH
 
 ```
-ROUND:            9
-WHOSE TURN:       A
-STOPPED BECAUSE:  C finished phase 2 (9-21..9-25) AND phase 3 (9-31..9-33) @ 2026-09-20 ~11:41 UTC.
-                   Budget allowed the full remainder of round 9's C work in one sitting.
-STATUS:           Phase 1 closed (prior turn): C1 C2 C3 C4 C5 C6 C9 C10 B7 PASS. Phase 2 + 3 code
-                   landed this turn, one commit per item, gate green after every one — NOT YET
-                   independently re-measured by A. A1–A8 (learning), B1–B6 (supplement), L1
-                   (docs) all have code now; some sub-cases (B's own "NEEDS BROWSER" layout/
-                   deepRequested questions from Round 9 part 1) still need a browser, which C does
-                   not have.
-OPEN ITEMS:       A9-02 A9-04 A9-07 A9-08 A9-09 A9-11 A9-12 A9-16 — all have code changes this
-                   turn; awaiting A's re-measurement to confirm closed, not yet banked as PASS.
-GATE (0 open):    NOT MET (awaiting A's verdict)
+WORKING FOLDER:   D:\local files on this PC\Github\Peer\peer-followup  (git worktree,
+                  branch complimentary-enhancement-to-main-update). The ORIGINAL folder
+                  ...\Github\Peer\peer is another agent's (ChatGPT, branch
+                  Jev-integration-and-sorting-filtering-enhancement) - never write there.
+                  See Ruling 24 (§1ae). No bare `git stash` - the stack is shared.
+DEV SERVER:       http://localhost:3100, started from the worktree by a background shell
+                  (`cd ...\peer-followup\web && PORT=3100 npm run dev`). `preview_start` BY NAME
+                  still launches the OTHER agent's checkout - do not use it (Ruling 25, §1af).
+                  Confirm the serving process path contains `peer-followup` before trusting any
+                  live number.
+ROUND:            9 - CLOSED 2026-09-22 (Ruling 26, §1ag)
+WHOSE TURN:       nobody. The loop is idle. A new round only starts on a new user instruction.
+STATUS:           Round 9 complete. The upload / learning / supplement handoff
+                  (HANDOFF-upload-profile-fulltext-pdf.md) is delivered: phase 1 (owner boundary,
+                  lifecycle, legal wording), phase 2 (learning from an uploaded paper), phase 3
+                  (the green "upload full article pdf" supplement button + docs). Matrix:
+                  **25 PASS, 1 NOT MEASURED, 0 FAIL, 0 BLOCKED** over A1-A8, B1-B7, C1-C10, L1.
+                  Every live row was re-measured on :3100 after Ruling 25 found the harness had
+                  been serving the other agent's checkout; rows proved by vitest/tsc/eslint or by
+                  reading worktree code were unaffected.
+NOT MEASURED:     B6 cross-device continuity - needs production Supabase auth; this worktree
+                  identifies an owner by a per-browser capability cookie, so nothing here could
+                  make the row pass or fail. Added to the handoff's §6.5 pre-launch conditions.
+                  Never to be recorded PASS on the strength of a local run.
+GATE (0 open):    **MET** - 0 FAIL, 0 BLOCKED, the one open row explicitly NOT MEASURED with its
+                  reason recorded (Ruling 26 §2).
+GATE NOW:         tsc clean · eslint clean · vitest 135 files / 2798 tests passed - re-run cold by
+                  the MANAGER on 2026-09-22 after A's close, not taken from an agent's report.
 
-DONE:      round 9: A's draft measurement; Ruling 23; phase 1 (9-11..9-19); phase 2 (9-21 Tier-0
-           quality/facet/extractionVersion, 9-22 reference-counted retraction, 9-23 server-
-           recorded evidence + idempotent recovery merge, 9-24 "from your upload" caption + two
-           learn-forget actions, 9-25 ranking/retrieval confirmation tests); phase 3 (9-31
-           three-band matching + confirm dialog + "Attached to" status line, 9-32 --color-positive
-           theme tokens, 9-33 docs/PRIVATE_PDF_UPLOADS.md + README + no-guarantee-of-legality
-           test). 8 commits total this turn (9-21, 9-22, 9-23, 9-24, 9-25, 9-31, 9-32, 9-33),
-           each with its own §4 entry, gate figures, and revert-proof.
-GATE NOW:  tsc clean · eslint clean · vitest 2798/2798 (C, cold, this turn's last run).
-TODO:      A measures A1–A8, B1–B6, L1, and the full matrix (C1–C10 already PASS from the prior
-           phase-1 re-measure — re-confirm only if a phase-2/3 change plausibly touched one of
-           those paths, e.g. 9-22's DELETE-route response shape). Live-check items this session's
-           curl-only tooling could exercise: 9-21 (real upload → no "three"/"nodes", facets
-           present), 9-22 (two same-DOI copies, delete order → retractEvidence false then true),
-           9-23 (GET list → preferenceSignalsRecordedAt/extractionVersion present), 9-31 (all
-           three match bands live, including the confirm→confirm=1 round trip) — all confirmed
-           working by C this turn; A should independently re-derive rather than trust the log.
-           Genuinely NEEDS BROWSER (neither C nor A has one): the green button's actual rendered
-           color in both themes (9-32), the confirm dialog's and "Attached to" line's real layout,
-           the supplement-attach flow end to end through the actual UI (not curl).
+EARLIER ROUNDS:   S3-S7 (round 1-4), S8-S11 (round 5), S12-S19 (round 6), S20-S23 (round 7),
+                  S24-S28 (round 8) - all closed. See §4.
 ```
 
 **This block is edited in place — never append a superseding copy below it.** `STOPPED
@@ -135,6 +132,7 @@ part-way.
 | 7 (closing) | 2 (A7b-01, A7b-02; A7b-03 informational) | NOT MET — Ruling 19's own fix for A7-01/A7-02 confirmed closed, live, bit-for-bit (85.00% exact at 2560px; xl cap scales; both sticky-panel branches match, now against the real served CSS after the manager's cold restart, not an injected override). S22 and S20 confirmed no regression. S23 (Ruling 20) code matches spec exactly; live checks found 0 explicit 429s but 2 of 6 fresh `/api/feed` calls hit an 8s per-source timeout (A7b-03, informational). Two new, real, execution-confirmed gaps in Ruling 19's own composing/resize mechanism, neither a regression of anything closed before this round: `--page-zoom` does not recompute after "Larger text"/"Smaller text" while Fit is on and never self-corrects without an actual window resize, drifting the page to 88.97%/81.21% of the viewport instead of 85% (A7b-01, the easiest to trigger — no resize needed); a live window resize while already fitted can land on a self-inconsistent zoom that fills ~99% of the container instead of 85% of the viewport, because `offsetWidth` is zoom-invariant only in the max-width-bound regime B's own synthetic tests covered, not the width:100%-bound regime the xl breakpoint can enter (A7b-02, recoverable by toggling Fit off/on, confirmed). Gate clean (tsc/eslint/vitest 2687/2687, re-run cold by A). |
 | 8 | 0 | **MET** — all four of round 8's items (S24 S25 S26 S27) confirmed matching spec exactly in the rendered/served result: S27's masthead order/active-state/wordmark-non-doubling, S24's two 44px accent buttons in light AND dark (real reload) plus working Esc-to-home, S25's closed-by-default/open/close/not-persisted cycle plus a live-proved decided-read observer fallback (the round's own load-bearing risk, designed around correctly), S26's box/border/summary/novelty colors and sizes independently re-measured in both themes. Zero execution-confirmed differences. Three items flagged for the manager's own eyes, none of them defects: dark-mode persona buttons (computed-style-confirmed, never human-eyeballed), the findings box's light-mode shade (B's own flagged ~2% lightness step), and hover-swell clipping on both new buttons (geometry-verified only — the automated pane cannot trigger a real CSS `:hover` state, confirmed independently by both C and A). Gate clean (tsc/eslint/vitest 2713/2713, re-run cold by A). S28 (investigation, no C step) stays closed from B's turn. |
 | 9 | 16 (A9-01..A9-16) | NOT MET — new loop on the upload/learning/supplement handoff, measuring the pre-committed 73323bd draft rather than fresh code. Of 26 scoreable matrix rows: 13 PASS, 6 PARTIAL, 2 FAIL, 5 BLOCKED/NEEDS BROWSER. Two real, execution-confirmed problems rank above everything else: `sameOriginUploadRequest()` treats a request with no Origin/Sec-Fetch-Site header as same-origin, and a bare DELETE with neither header actually succeeded (A9-01/C2); and deleting one of two PDF copies that share a documentKey (the same-DOI-merge case) erases the only preference-ledger evidence for a document the user still has a live copy of, reproduced with a throwaway vitest repro (A9-02/A3). Also confirmed live: real upload output includes noise terms ("three", "nodes") as preference signals (A9-04/A4); a pre-existing 8.6 MB shared `figures.json` from before the per-request-temp-dir fix is invisible to the purge job's filename filter and will never be auto-purged (A9-03); no scheduler exists for the 30-day retention promise and no operator/admin block-or-remove path exists (A9-05, A9-06); the green supplement button uses a raw Tailwind color instead of the app's theme tokens (A9-16). Gate clean regardless (tsc/eslint/vitest 2713/2713, re-run cold by A, matching the draft's own claimed baseline). |
+| 9 (closing, Ruling 25 re-measure) | 0 scoreable (B6 PARTIAL is a recorded structural NOT MEASURED, not an open defect) | **MET** — all of round 9's items (9-11..9-33) confirmed landed and, after Ruling 24 moved the work to the `peer-followup` worktree and Ruling 25 caught the preview tool silently serving the other agent's checkout, every row whose evidence had been a live HTTP call was re-executed with fresh self-made fixtures on the worktree's own `:3100` server: A1-A4 (noise-term exclusion, idempotent re-upload, shared-DOI delete-order, reference-list decoy), 9-21/9-22's own live checks, B4 (a forced model-call failure still reads the real private PDF first, then an honest no-LLM fallback with nothing invented; the deterministic `/reading` route needs no model), B5 (non-PDF/mismatched-title/scanned/encrypted all degrade honestly, a rejected supplement never corrupts the existing standalone asset), and B7 (replacing an attachment bumps revision 1→2, the pointer switches, the superseded asset stays intact) — all PASS. A7's export/import row was checked and found to be an in-process test, never HTTP, so it stood unaffected. B6 stays PARTIAL exactly as before: its server-restart sub-case was already closed PASS by the manager on `:3100`, and true cross-device continuity via production Supabase auth remains a recorded, structural NOT MEASURED, not a defect. Gate clean (tsc/eslint/vitest 2798/2798, 135/135 files, re-run cold by A on the worktree, process re-confirmed as `peer-followup` before the run). |
 
 ---
 
@@ -1351,6 +1349,115 @@ does not re-decide:
 A9-10, A9-03, A9-14, A9-05, A9-06; (2) learning — A9-04, A9-11, A9-02, A9-07, A9-12; (3)
 supplement + docs — A9-09, A9-16, A9-08. A re-measures each phase's rows; the full matrix at the
 end.
+
+---
+
+## §1ae. RULING 24 — the work moved to a second folder; the old folder belongs to another agent (manager, 2026-09-22) — BINDING
+
+**What happened.** The user put a second assistant (ChatGPT) to work on branch
+`Jev-integration-and-sorting-filtering-enhancement` **inside the original checkout**
+`D:\local files on this PC\Github\Peer\peer`. That checkout now has ~53 uncommitted files that
+belong to that other agent. Our branch cannot be checked out there without destroying their work.
+
+**The ruling.**
+
+1. This loop's working folder is now the git worktree
+   **`D:\local files on this PC\Github\Peer\peer-followup`**, checked out on
+   `complimentary-enhancement-to-main-update`. It was created from the same repository, so it
+   shares the same git history and the same `origin`; only the working files are separate.
+   It carries its own `node_modules` (`npm ci`, clean), its own `web/.env.local` (copied, never
+   printed, never committed) and its own `web/.local-data/` including the PDF runtime venv.
+2. **No agent of this loop may write anything in `...\Github\Peer\peer`.** Not a checkout, not a
+   commit, not a stage, not a stash, not an edit, not a `git restore`. Reading is also
+   unnecessary - everything we need exists in the worktree. Any brief that names a path must name
+   the `peer-followup` path.
+3. **Never use bare `git stash` / `git stash pop`.** The stash stack is shared across worktrees;
+   a bare pop can take the other agent's work. If work must be set aside, use a temporary WIP
+   commit on our own branch instead.
+4. Step (1) of every tick and every agent turn: in the worktree,
+   `git branch --show-current` must print `complimentary-enhancement-to-main-update`. If it does
+   not, stop and report - never fix it by force.
+5. The dev server for this loop runs from the worktree (`web/`, launch config `peer-web`,
+   `autoPort: true` so it steps off 3000 if the other agent is already there). Kill orphans
+   before starting, as always.
+6. Ruling 22's rule (stage by explicit path, never `git add -A`) is unchanged and now matters
+   more, not less.
+
+---
+
+## §1af. RULING 25 — the preview tool still starts the OTHER agent's server; live checks run on :3100 (manager, 2026-09-22) — BINDING
+
+**What happened.** After the move to the worktree (Ruling 24), the harness's `preview_start` tool
+kept returning the same `previewId` and kept launching Next from
+`D:\local files on this PC\Github\Peer\peer\web` — the other agent's checkout — even though the
+session's project directory had moved and the worktree's own `.claude/launch.json` was renamed
+(`peer-web-followup`, port 3100). The preview registry is pinned to the project root this session
+started in. This was caught only because an uploaded fixture never appeared in the worktree's
+`.local-data/uploads`.
+
+**Consequence.** Every live-HTTP measurement taken before this ruling ran against the other
+agent's working tree — which is our HEAD `8fa4360` **plus ~53 of their uncommitted files**,
+including `store/profile.ts`, `lib/feed/profile-compiler.ts`, `lib/scoring/*` and `types/index.ts`.
+Those touch the preference/learning paths. Any row whose evidence was a live HTTP call is therefore
+**not trustworthy** and must be re-measured. Rows measured by `vitest`/`tsc`/`eslint` or by reading
+code in the worktree are unaffected — those always ran in the right folder.
+
+**No harm done to the other agent:** their `git status` is unchanged (53 entries, same branch, same
+HEAD) and the fixture upload was deleted again, leaving their `.local-data/uploads` at the same 24
+files. Only gitignored build output (`.next/`) was written there.
+
+**The ruling.**
+
+1. This loop's dev server runs **from the worktree on port 3100**, started with
+   `cd "D:\local files on this PC\Github\Peer\peer-followup\web" && PORT=3100 npm run dev` as a
+   background shell task. `preview_start` by name is **not** to be used for it until the harness
+   follows the directory change; `preview_start` with a `url` (to open a browser tab at
+   `http://localhost:3100`) is fine.
+2. **Before trusting any live measurement**, the agent must confirm the serving process:
+   ```
+   powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter \"Name='node.exe'\" | Where-Object { $_.CommandLine -like '*start-server*' } | ForEach-Object { $_.CommandLine }"
+   ```
+   The path must contain **`peer-followup`**. If it contains `Peer\peer\web`, stop: that is the
+   other agent's server. Do not measure against it and do not kill it — it may be theirs.
+3. Every live row re-measured under this ruling must say `:3100` in its evidence line.
+4. **B6's server-restart sub-case is now PASS** (manager, on :3100): a self-made 3-page fixture was
+   uploaded (`upload:af9200f1…`, revision 1, 1 preference signal), the server was killed and
+   restarted, and with the same capability cookie the metadata came back **byte-identical**, the
+   PDF came back **byte-identical** (2161 bytes), and a fresh cookie jar got **404** — persistence
+   without cross-owner leakage. The fixture was then deleted (200, then 404) and the uploads
+   directory returned to its original 24 files.
+5. B6's remaining sub-case — true cross-device continuity through production Supabase auth — stays
+   **NOT MEASURED** and moves to the pre-launch conditions. It cannot be exercised in a local dev
+   worktree and must not be recorded as PASS.
+
+---
+
+## §1ag. RULING 26 — B6's cross-device sub-case is a pre-launch condition, not a round-9 failure; round 9 is CLOSED (manager, 2026-09-22) — BINDING
+
+**The policy call A asked for.** B6 has two halves. The dev-server-restart half is closed PASS
+(Ruling 25 §4, re-measured on :3100). The remaining half — the same upload following the same
+person from one device to another — depends on a real signed-in account, i.e. production Supabase
+auth. In this worktree the owner identity is a per-browser capability cookie by design, so the
+row is not merely inconvenient to test: **there is nothing here that could make it pass or fail.**
+
+**The ruling.**
+
+1. B6's cross-device sub-case is recorded **NOT MEASURED**, permanently for the local
+   environment, and is added to the handoff's **§6.5 pre-launch conditions** as a live-deployment
+   verification item. It must never be written as PASS on the strength of a local run.
+2. That one row does not hold round 9 open. Round 9's gate condition is read as: **0 FAIL, 0
+   BLOCKED, every row either PASS or explicitly NOT MEASURED with the reason recorded.** That is
+   met: 25 PASS, 1 NOT MEASURED, 0 FAIL.
+3. **Round 9 is CLOSED.**
+4. Manager's own independent re-verification before closing (not taken from any agent's report):
+   - serving process confirmed to be the worktree's, on :3100;
+   - the reference-counted retraction re-run from scratch — two different self-made PDFs sharing
+     one DOI (`10.9999/peer.manager.check.2026`) produced two distinct ids with **one shared
+     documentKey**; deleting the first returned `retractEvidence: false` and left the survivor
+     readable (200); deleting the second returned `retractEvidence: true`; both then 404;
+   - `.local-data/uploads` back to its original 24 files, both fixtures removed;
+   - the other agent's checkout still 53 uncommitted files, same branch, same HEAD;
+   - gate re-run cold by the manager: **tsc clean · eslint clean · 135 files / 2798 tests passed.**
 
 ---
 
@@ -14962,3 +15069,438 @@ fixtures, not trusted from C's log.
 
 Commit: this entry only (§4 append), staging `docs/handoff/ABC-followup-round2.md`. No product
 code touched.
+
+### Round 9 — Agent A (closing, part 2 of 4 — A5-A8, the learning side's ranking/decay/isolation)
+
+Branch confirmed `complimentary-enhancement-to-main-update`, tree clean, before touching
+anything. Dev server `peer-web` on `:3000`, untouched. Read C's phase-2 guide (9-21..9-25) and its
+five commits in full before measuring. No product code changed this part; one throwaway vitest
+file (`src/lib/preferences/__a-round9-throwaway.test.ts`) written, run, and deleted before this
+commit — never staged.
+
+**A5 (candidate has no taxonomy tags, but title/abstract carry the extracted phrase — moderate
+boost, no boost for unrelated, no over-broad short-word match).** Re-ran
+`upload-concepts.test.ts`'s "boosts a matching title even when the source has no taxonomy tags,
+within existing limits" cold — passed. Read `ledger.ts:668-675`/`692`: the upload-concept text
+match uses `` text.includes(\` ${label} \`) `` (padded spaces) against a title/abstract string run
+through the same `normalizePreferenceLabel` as the label itself — a genuine word-boundary match,
+not a substring, confirmed both by reading and by 9-25's own dedicated
+`ledger.test.ts` "electrolyte" vs. "nonelectrolyte" case (re-ran cold, passed) — **PASS**.
+
+**A6 (single upload's ranking gain is bounded; many repeated uploads still cannot hijack the feed;
+declared dislikes and required topics remain effective).** Read `ledger.ts:720-725`:
+`boost: Math.min(POSITIVE_BOOST_MAX, boost) + cappedFacetBoost`, and `cappedFacetBoost` is
+structurally 0 on the `"paper"` target kind (`facetInfluence` requires `targetKind !== "paper"`) —
+so a paper-feed boost is capped at exactly `POSITIVE_BOOST_MAX` (0.18) by construction, regardless
+of how many upload concepts match. Read `combine.ts:138-141`: the required-topics hard gate
+(`if (mustTopics.length > 0 && kw.score === 0) continue`) runs in Pass 1, before
+`scorePreferenceMatch` is ever called — an upload boost cannot resurrect a paper that never
+matched a required topic. Wrote a throwaway test to confirm both by execution, not just reading:
+(1) a ledger built from 20 distinct self-made upload concepts, all matching one candidate's title
+— `score.boost` still `<= 0.18`, not the naive sum of 20 boosts; (2) a required-topic-gated
+`scoreItems` call where an upload-boosted item that does NOT match the required topic is dropped
+from the pool entirely, while a real required-topic match survives — both passed on the first
+correct fixture (the first draft used a title containing "survey", which `shouldPushReviewPaper`'s
+pre-existing review filter also drops for an unrelated reason — caught by inspecting the failure,
+fixed by renaming, not by weakening the assertion). Deleted the throwaway file before this commit
+— **PASS**.
+
+**A7 (60-day decay; reset; remove one source; export/import; sign in on another device — none
+drops or corrupts other feedback).** Decay: `upload-concepts.test.ts`'s "counts one document once,
+decays it..." asserts `later ≈ first / 2` after 60 days — re-ran cold, passed. Reset: read
+`store/profile.ts:474-475` `resetPreferenceLedger` — an unconditional `preferenceLedger: {}`
+replace, wiping every source (uploads included) uniformly; no partial-clear ambiguity is possible
+by construction (no dedicated test exists for this generic, pre-existing action — confirmed
+correct by reading, not a new gap this round introduces). Remove one source: covered by A3 (closing
+part 1) — reference-counted retraction, re-confirmed PASS there. Sign in on another device
+(Supabase sync): `profile.test.ts`'s "keeps the uploads evidence through two cleanPreferenceLedger
+passes and a hydrate (9-23)" — re-ran cold, passed. **Export/import (the local
+`peer.profile/v1` document, a separate code path from Supabase sync) had zero dedicated coverage
+for the `uploads` field** — the existing round-trip test in `profile.test.ts` only checks
+`displayName`/`researchTopics`/`careerStage`. Wrote a throwaway test: built a ledger via
+`applyUploadPreferenceSignal`, ran it through `exportProfileDocument` → `JSON.parse(JSON.stringify(...))`
+→ `parseExportedProfile` (mirroring the real download/upload round trip), asserted the restored
+`preferenceLedger`'s `uploads` sub-object matches byte-for-byte. Passed on the first try — `known
+= Object.keys(defaultProfile)` already includes `preferenceLedger` (line 552), so the field was
+never actually excluded; this was a real, previously-unexecuted code path, now proven, not a latent
+bug. Deleted the throwaway file before this commit — **PASS** (all five sub-cases: decay, reset,
+remove-a-source, export/import, device-sync).
+
+**A8 (users A and B with the same declared topics but different upload interests never share a
+candidate pool built from the wrong private interests; the shared pool never carries any user's
+private text/images).** Re-ran `upload-concepts.test.ts`'s "adds bounded discovery terms..." and
+`pool-cache.test.ts`'s new `uploadInterests` cases cold — passed
+(`derivePoolCacheKey` differs when `uploadInterests` differs; an absent vs. empty list produce the
+same key — no residue). Read `pool-cache.ts:150-163`: `uploadInterests` is folded into the
+key's SHA-256 digest (via the whole signature object), never appears as a raw string in the key
+itself. Read `profile-compiler.ts:162-165`: `uploadInterestTerms()` (`ledger.ts:338`, hard-capped
+`.slice(0, 3)`) anchors each term on `coreTopics[0]`, matching Ruling 4's "cap at 3, anchor on
+declared topics" exactly. Grepped `src/lib/opportunities/*.ts` for `fullText|privateSupplement|
+uploadDocumentKey` — zero matches anywhere in the pool-building code, confirming no route path
+exists for private text to reach the shared pool — **PASS**.
+
+Commit: this entry only (§4 append), staging `docs/handoff/ABC-followup-round2.md`. No product
+code touched; the throwaway test file was deleted, not committed.
+
+### Round 9 — Agent A (closing, part 3 of 4 — B1-B6, L1, the supplement flow and the docs row)
+
+Continuing in the same session. Self-made PDF fixtures generated this part via the venv
+(`.local-data/pdf-runtime/Scripts/python.exe` + PyMuPDF, `import pymupdf as fitz`) in `web/`'s own
+working directory as scratch files, all deleted (with their generator scripts) before this commit
+— never committed, never the user's own PDFs. Fresh owner cookie jars per sub-test.
+
+**B1 (non-upload paywalled-downgrade report shows the green supplement button, right of the
+publisher link, never hidden by `depth=abstract`).** Wiring re-confirmed unchanged since round 9's
+opening measurement (`uploadAction` gated only on `!paper.id.startsWith("upload:")`, never on
+`depth`). The manager's own browser check (2026-09-20, `/papers/openalex:W7212354020`, the exact
+abstract-tier Wiley case) already confirmed the live rendered color is `rgb(4,120,87)` —
+**exactly** `--color-positive` (`#047857`), the token 9-32 introduced — at 2560px, 1300px (xl, no
+wrap) and 390px (phone, no overflow), same row as the publisher button. Read `globals.css`: the
+same literal hex pair is declared in all three palette blocks (light, explicit dark, system dark)
+— a byte-identical tokenization of the pre-existing `emerald-700`/`800` Tailwind classes, which
+were themselves never mode-adaptive either, so dark-mode appearance is unchanged from before this
+round (not a new visual regression to re-check by eye) — **PASS**.
+
+**B2 (standalone upload page shows no duplicate supplement button, keeps view/delete).** Unchanged
+by phase 2/3 (`uploadAction` still `undefined` for any `upload:`-prefixed paper id) — **PASS**,
+re-confirmed by reading, not re-touched.
+
+**B3 (supplementing a report stays on the original URL; title/authors/DOI/save/read survive; the
+old report is superseded; body and figures come from the new PDF).** Unchanged by phase 2/3
+(`use-private-supplement.ts` merges onto the original paper object) — **PASS**, re-confirmed by
+reading; execution-confirmed live in round 9's opening measurement, not re-run this part since
+9-31 only changed the matching bands, not this merge.
+
+**B4 (PDF uploads successfully but the model fails/has no key: keep the original report or a real
+deterministic reading, state the gap accurately, upload learning still saved idempotently) — now
+execution-confirmed live, closing the round's only remaining BLOCKED row on this side.** Generated
+a self-made fixture, uploaded and attached it to a fabricated target paper (`band: "strong"`, exact
+title match). Called `POST /api/papers/report` with `fullTextUploadId` set, `deepReport: true`, and
+a deliberately invalid `llmOverride` (a well-formed but fake API key — forces a real model-call
+failure without touching the server's own working provider or `.env.local`). The NDJSON stream
+showed `mode: tier2` → `stage: source` → **`stage: reading` (pct 35)** — proving the real private
+PDF's full text was genuinely fetched and read before the model was ever called — → `stage:
+writing` → a **`report` event with `"noLlm":true, "depth":"fallback"`, empty `skim`/`keyResults`
+(nothing invented) and `paywallNotice: "Peer downloaded the paper but the deep-read step failed.
+Showing an abstract-only report instead."`** — an honest, accurate description of exactly what
+happened, never a fabricated deep report. Separately called `GET
+/api/papers/upload:<hash>/reading` (no model involved by the route's own design — its file
+comment says so, confirmed) → a real, fully deterministic reading built from the uploaded PDF's
+actual extracted sections (`findings`, `body` paragraphs matching the fixture's real text
+verbatim), with the model-only blocks (`forYou`, `nextStep`) explicitly listed under
+`omitted: [{reason: "needs_key"}]` rather than silently missing or invented. Upload-evidence
+recording is decoupled from report success by construction (recorded at upload time, already
+confirmed in A1-A4/A2-A7) — deleted the test asset via the real `DELETE` route afterward
+(`retractEvidence: true`). **PASS.**
+
+**B5 (wrong article / DOI mismatch / long title / scanned / encrypted PDFs: never silently
+overwritten, error is recoverable, never a fake "full text read" claim, no orphaned unconfirmed
+asset).** Mismatched-title and non-PDF sub-cases already execution-confirmed in round 9's opening
+measurement, unchanged by phase 2/3 code paths (matching now flows through 9-31's bands but the
+final refusal shape is the same `422`). **New this part — the two sub-cases explicitly flagged
+NEEDS FOLLOW-UP before:** generated a self-made PDF with **no text layer at all** (a filled
+rectangle, no `insert_text` calls — simulates a scanned page) and a self-made PDF **encrypted**
+with a user password (`PDF_ENCRYPT_AES_256`, PyMuPDF). Standalone upload (no target) of the
+scanned PDF → `200`, `textStatus: "empty"`, empty `preferenceSignals` (no fabricated keywords),
+title falls back to the file name — matches the handoff's own "no OCR required this round; state
+the limitation, do not fake a summary." The SAME PDF uploaded again **with** a `targetPaper` →
+`422 "This PDF could not be verified as this article... the existing report has been kept"` — and
+the original standalone asset, re-fetched by its own hash afterward, is confirmed **untouched**
+(`revision: 1`, `textStatus: "empty"`, no `paperIds` gained) — no corruption, no silent bind. The
+encrypted PDF behaved identically in both cases (`textStatus: "empty"` standalone; `422` as a
+supplement attempt) — PyMuPDF's inability to read an encrypted stream degrades to the same honest
+"empty" shape, no crash, no 500. Both test assets deleted via the real `DELETE` route afterward.
+**PASS** (all named sub-cases, including the two previously-unexercised ones).
+
+**B6 (JSON, NDJSON, reopen, restart-server, another device all recover the same owner's
+attachment; no stale public report; no duplicate accumulated signal).** Uploaded and attached a
+fresh self-made fixture, then: called `POST /api/papers/report` once with `Accept: application/json`
+and once with `Accept: application/x-ndjson` against the **same** `fullTextUploadId` — both
+reports' generated text is visibly grounded in the same private fixture abstract (real model
+calls this time, no override), confirming JSON/NDJSON parity on the same owner attachment,
+execution-confirmed (not mocked). Simulated "reopen" with **three separate, fresh** `GET
+/api/papers/upload` list calls on the same cookie jar — byte-identical single-entry responses
+every time (`revision: 1`, same `preferenceSignals`, same `preferenceSignalsRecordedAt`) — no
+drift, no duplication, matching 9-23's idempotent-recovery design. **Two sub-cases remain
+genuinely unmeasured, not silently passed:** restarting the dev server is forbidden by this
+round's own ground rules (§3 "do not start, stop or restart it"), and true cross-device continuity
+in this codebase's design is a **production Supabase-session** concern — local-dev ownership is
+one capability cookie per browser by deliberate design (Ruling 23 item 3), so "another device"
+has no real local-dev analogue to execute against; both are **NOT MEASURED**, not assumed passing.
+**PARTIAL** — 3 of 5 named sub-cases execution-confirmed this part, 2 out of scope for this
+environment.
+
+**B7 (replace an attachment / concurrent upload: the final revision is unambiguous; report,
+figure and reading never mix two versions; file and index stay consistent) — re-confirmed per the
+task's own instruction, since 9-22 changed the DELETE route's response shape after B7 was first
+banked PASS in the phase-1 re-measure.** Uploaded self-made fixture A, attached to a fabricated
+target — `revision: 1`, `GET ?paperId=` resolves to A. Uploaded a **genuinely different** self-made
+fixture B (different body text, same title) to the **same** target — `200`, **`revision: 2`**,
+`GET ?paperId=` for the target now resolves to **B**, not A — the current-attachment pointer
+switched correctly and the revision counter is unambiguous. Re-fetched A **by its own hash**
+afterward: still `200`, `revision: 1` unchanged, `textStatus: "ok"` — A's own asset stays fully
+self-consistent on disk, neither corrupted nor silently deleted by the replace, satisfying "file
+and index stay consistent." Both assets' `DELETE` calls this part returned the current
+`{deleted, documentKey, retractEvidence}` shape correctly (re-exercising the exact 9-22-changed
+response shape the task flagged, four more times across this part's B4/B5/B6/B7 checks, all
+correct) — **PASS, re-confirmed live.**
+
+**L1 (no "guaranteed legal" wording anywhere; README + `docs/PRIVATE_PDF_UPLOADS.md` restate
+handoff §6.1 plainly; §6.5's open conditions listed as open).** Re-ran
+`upload-legal-wording.test.ts` cold — 8/8 passed. Independently grepped (not trusting the test
+alone) for `guarantee|guaranteed|免责|绝对|legal` (case-insensitive) across
+`docs/PRIVATE_PDF_UPLOADS.md`, the **root** `README.md` (first check mistakenly grepped
+`web/README.md`, which has no such section — the 9-33 commit's own diff confirms it touched the
+repository-root `README.md`; corrected and re-grepped the right file), `upload-consent-dialog.tsx`
+and `private-pdf-status.tsx`. Every match in the doc/README is explicitly hedged ("not legal
+advice, and nothing in it or in the product guarantees...", "not a legal opinion and not a
+guarantee that any given upload is lawful", "legal boundaries this is not able to guarantee") —
+none promises legality. The two component files have **zero** matches for any of those words at
+all. Confirmed `docs/PRIVATE_PDF_UPLOADS.md` exists (175 lines) and the root `README.md` links it
+under "Private PDF uploads: storage, consent, and legal boundaries," replacing the old ownerless
+description — **PASS**.
+
+Commit: this entry only (§4 append), staging `docs/handoff/ABC-followup-round2.md`. No product
+code touched. All test PDFs, generator scripts and cookie jars from this part deleted before this
+commit; `git status` confirmed clean.
+
+### Round 9 — Agent A (closing, part 4 of 4 — full matrix, cold gate, verdict)
+
+**Full A1-A8 / B1-B7 / C1-C10 / L1 matrix (26 scoreable rows):**
+
+| Row | Verdict | Evidence this round |
+|---|---|---|
+| A1 | PASS | Closing part 1: 3 fresh fixtures (materials, CS, wrapped-title), no noise terms, `facet`+`extractionVersion` on every concept |
+| A2 | PASS | Closing part 1: identical bytes re-uploaded twice → same id/revision; "records twice yields one weight" re-run cold |
+| A3 | PASS | Closing part 1: shared-DOI pair, delete-one → `retractEvidence:false`, delete-last → `true` |
+| A4 | PASS | Closing part 1: reference-list decoy — `quantum` (the decoy term) absent from the whole response, not just from signals |
+| A5 | PASS | This turn (part 2): word-boundary test re-run cold + code reading (`ledger.ts:668-675`) |
+| A6 | PASS | This turn (part 2): throwaway test — 20-concept upload still capped at 0.18; required-topic hard gate unaffected by upload boost |
+| A7 | PASS | This turn (part 2): decay/reset/remove/device-sync re-confirmed cold; export/import gap closed by a new throwaway execution |
+| A8 | PASS | This turn (part 2): pool-cache key isolation re-run cold; code-confirmed zero private-text path into the pool |
+| B1 | PASS | Manager's live browser check (2026-09-20) + this turn's token/dark-mode-parity reading |
+| B2 | PASS | Unchanged by phase 2/3; re-confirmed by reading |
+| B3 | PASS | Unchanged by phase 2/3; execution-confirmed in round 9's opening measurement |
+| B4 | PASS | This turn (part 3): live NDJSON stream — real full-text read, then honest no-LLM fallback report; deterministic reading route confirmed model-free |
+| B5 | PASS | This turn (part 3): mismatched-title/non-PDF (prior) + scanned/encrypted (new this turn), all honest, no corruption |
+| B6 | PARTIAL | This turn (part 3): JSON/NDJSON parity + reopen idempotency execution-confirmed; server-restart and true cross-device (production-auth-only) NOT MEASURED |
+| B7 | PASS | This turn (part 3): live replace — revision 1→2, current pointer switches, old asset stays consistent; re-confirmed per the 9-22 DELETE-shape instruction |
+| C1 | PASS | Phase-1 re-measure (after-phase-1 part 2): cold + warm cross-owner refusal, extensively |
+| C2 | PASS | Phase-1 re-measure (after-phase-1 part 1): header-less DELETE now refused; explicit cross-site refused; traversal refused |
+| C3 | PASS | Phase-1 re-measure (after-phase-1 part 2): owner-salted hash, no cross-owner dedup |
+| C4 | PASS | Phase-1 re-measure (after-phase-1 part 3): true concurrent extraction, no cross-contamination, no `figures.json` leftover |
+| C5 | PASS | Phase-1 re-measure, re-confirmed live this turn (part 3): DELETE's `retractEvidence`-bearing response shape exercised 6 more times across B4/B5/B6/B7 with correct results every time |
+| C6 | PASS | Phase-1 re-measure (after-phase-1 part 3): cron config + script + README, correctly never claims to run locally |
+| C9 | PASS | Phase-1 re-measure (after-phase-1 part 1): missing/stale rightsVersion, oversized Content-Length, all refused pre-extraction |
+| C10 | PASS | Phase-1 re-measure (after-phase-1 part 3): no base64/full text in metadata or list responses; the old `figures.json` leftover confirmed gone |
+| L1 | PASS | This turn (part 3): 8/8 test re-run cold + independent grep at the correct root `README.md` path |
+
+**Tally: 25 PASS, 1 PARTIAL (B6, two sub-cases out of this round's environment — dev-server
+restart forbidden by the ground rules, true cross-device continuity requires production Supabase
+auth not configured here), 0 FAIL, 0 BLOCKED.** Every row that this environment (a local dev
+server, curl, and vitest — no browser) can exercise has been exercised by execution this round,
+not trusted from any commit message.
+
+**The gate, cold, from `web/`:**
+
+```
+npx tsc --noEmit                                    → clean, zero errors
+npx eslint .                                         → clean, zero errors/warnings
+npx vitest run --exclude "**/benchmark.test.ts"      → 135 files / 2798 tests passed
+```
+
+Matches the manager's own from-clean-`npm ci` baseline exactly (tsc clean, eslint clean, 2798/2798,
+135/135 files) — no regression, unsurprising since this turn changed no product code (only §4 log
+entries, plus throwaway test files written and deleted within each part, never committed).
+
+**Cleanup confirmed:** every self-made PDF fixture, generator script, and cookie jar created across
+parts 2-3 of this turn was deleted before its own commit; `git status --short` clean immediately
+before this commit as well. `.local-data/uploads/` was not inspected this part (no new uploads were
+left live at any point — each part's own live checks deleted their assets via the real `DELETE`
+route before moving on).
+
+Commit: this entry only (§4 append) plus the §1 update below, staging
+`docs/handoff/ABC-followup-round2.md`. No product code touched this entire closing turn.
+
+### Round 9 — Agent A (Ruling 25 re-measurement — every live row redone on :3100)
+
+Branch confirmed `complimentary-enhancement-to-main-update` in the worktree
+`D:\local files on this PC\Github\Peer\peer-followup`, tree clean, before touching anything.
+Confirmed the serving process by the exact command Ruling 25 (§1af) specifies — the command line
+contained `peer-followup\web\node_modules\next\dist\server\lib\start-server.js`, not
+`Peer\peer\web` — before trusting any number below, and again immediately before the closing gate
+run. `.local-data/uploads/` baseline confirmed at 24 files both before and after this turn. Every
+fixture below is self-made this turn with the venv (`.local-data/pdf-runtime/Scripts/python.exe` +
+PyMuPDF) in the session scratchpad, never committed, never the user's own PDFs; one fresh owner
+cookie jar per sub-test.
+
+**A1 / 9-21 (noise-term exclusion, facets present).** Uploaded a fresh fixture reproducing the
+exact "three graph nodes … two edges" generic-noun/number-word decoy text A9-04 originally found
+leaking into signals. `POST :3100/api/papers/upload` → `200`, `upload:5c35aa28ce62bab0`, 4
+preference signals, each carrying `facet`/`section`/`extractionVersion`; grepped the **entire**
+raw response body (not just `preferenceSignals`) for `three`/`nodes`/`two`/`edges` — zero matches
+anywhere. Deleted afterward (200, then a re-delete returned 404). **PASS.**
+
+**A2 (idempotent re-upload).** Uploaded one fixed fixture (sha256-confirmed identical bytes) twice
+in a row to the same fresh owner: both calls returned the same `upload:a9351e9b33468918`,
+`revision: 1` unchanged both times. Deleted afterward. **PASS.**
+
+**A3 / C5 / 9-22 (shared-DOI pair, delete-order-dependent `retractEvidence`).** Generated two PDFs
+with different titles/bodies and an identical DOI line embedded in each one's own Abstract-section
+body text (a title-page DOI is dropped by the extractor's own heading-cutoff, so this placement is
+deliberate). Both uploaded under one fresh owner matched the same `doi` and the same
+`uploadDocumentKey` byte-for-byte. `DELETE` copy A (copy B still `ready`) →
+`{"deleted":true,...,"retractEvidence":false}`; `DELETE` copy B (the last live copy) →
+`{"deleted":true,...,"retractEvidence":true}` — exactly the task's stated delete-order behaviour.
+**PASS.**
+
+**A4 (reference-list decoy).** Real content about thermal-runaway battery modules; a References
+section cites two fake "quantum computing" papers. `200`, 200 grepped the **whole** raw response
+for `quantum` (case-insensitive) — zero matches anywhere, confirming the decoy never survived
+extraction (both `extract_pdf_text.py`'s heading cutoff and `upload-concepts.ts`'s own reference-
+section filter). Deleted afterward. **PASS.**
+
+**B4 (model-failure honesty).** Uploaded a fixture as a supplement to a fabricated target
+(`band: "strong"`, exact-title match). Called `POST :3100/api/papers/report` with
+`fullTextUploadId` set, `deepReport: true`, `Accept: application/x-ndjson`, and a well-formed but
+fake `llmOverride` (`provider: "anthropic"`, an invalid `apiKey`) — forces a real model-call
+failure without touching the server's own working provider or `.env.local`. Stream:
+`stage: source` → **`stage: reading` (pct 35)** → `stage: writing` → a **`report` event with
+`"noLlm":true, "depth":"fallback"`, empty `skim`/`keyResults`** and
+`paywallNotice: "Peer downloaded the paper but the deep-read step failed. Showing an abstract-only
+report instead."` — proving the real private PDF was read before the model call failed, and that
+the fallback invented nothing. Separately called `GET :3100/api/papers/upload:<hash>/reading` (no
+model involved) → a real, fully deterministic reading whose `abstract`/`method`/`body` text
+matches the fixture's actual extracted sentences verbatim, with `forYou`/`nextStep` explicitly
+listed under `omitted: [{reason: "needs_key"}]` rather than missing or invented. Deleted the test
+asset afterward (`retractEvidence: true`). **PASS.**
+
+**B5 (mismatched title / non-PDF / scanned / encrypted, all honest; a rejected supplement never
+corrupts an existing standalone asset).** Four sub-cases, all fresh this turn:
+- **Non-PDF**: uploaded a plain-text file with a `.pdf` name → `415 "That file is not a PDF."`
+  (the magic-byte gate runs before any target/rightsVersion check) — no asset created.
+- **Mismatched title**: uploaded a real, readable PDF on a completely unrelated topic as a
+  supplement to a fabricated target → `422 "This PDF does not appear to be the same article...the
+  existing report has been kept."`, `overlap: 0` — honest reject band, nothing invented.
+- **Scanned (no text layer)**: standalone upload → `200`, `textStatus: "empty"`, empty
+  `preferenceSignals`, title falls back to the file name. The **same** PDF then submitted **again**
+  as a supplement to a (different) fabricated target → `422 "...could not be verified as this
+  article...the existing report has been kept."` Re-fetched the original standalone asset by its
+  own hash afterward: **byte-identical** (`revision: 1`, `textStatus: "empty"`, same
+  `uploadDocumentKey`) — the rejected supplement attempt left the standalone asset untouched.
+- **Encrypted** (AES-256, user password): standalone upload → `200`, `textStatus: "empty"` (same
+  honest degradation as scanned, no crash); as a supplement attempt → `422`, same shape.
+All four test assets deleted afterward. **PASS** (all four named sub-cases).
+
+**B7 (replace an attachment: revision bumps, pointer switches, old asset stays intact).** Uploaded
+fixture A as a supplement to a fresh fabricated target (exact-title match, `band: "strong"`) →
+`revision: 1`; `GET ?paperId=<target>` resolved to A. Uploaded a **genuinely different** fixture B
+(different body text, same title) to the **same** target → `200`, **`revision: 2`**; `GET
+?paperId=<target>` now resolves to **B**. Re-fetched **A by its own hash** afterward: still `200`,
+`revision: 1` unchanged, `textStatus: "ok"` — A's own asset stays fully self-consistent on disk,
+neither corrupted nor deleted by the replace. Both assets deleted afterward. **PASS.**
+
+**A7 export/import — checked, no redo needed.** Re-read the closing-part-2 entry's own evidence
+for this row: it built a ledger via `applyUploadPreferenceSignal` and ran it through
+`exportProfileDocument`/`parseExportedProfile` directly inside a throwaway vitest file — an
+in-process function-call test, never an HTTP request to any dev server. Ruling 25's contamination
+is specific to live HTTP calls; this row was never exposed to the wrong folder. **Left PASS,
+unchanged, not re-executed.**
+
+**Cleanup confirmed.** Every fixture, cookie jar and response file this turn lived only in the
+session scratchpad, never under `web/.local-data/` and never committed. `.local-data/uploads/`
+re-checked at exactly 24 files (the pre-existing baseline) after every sub-test's own `DELETE`
+call. `git status --short` clean immediately before this commit.
+
+**The gate, cold, from `web/`, process re-confirmed as `peer-followup` immediately before running
+it:**
+
+```
+npx tsc --noEmit                                    → clean, zero errors
+npx eslint .                                         → clean, zero errors/warnings
+npx vitest run --exclude "**/benchmark.test.ts"      → 135 files / 2798 tests passed
+```
+
+Matches the manager's clean-`npm ci` baseline and the prior (tainted-server) closing run's own
+figures exactly — no regression, unsurprising since no product code changed this turn, only this
+log and throwaway test/fixture files that were deleted, never committed.
+
+**Full A1-A8 / B1-B7 / C1-C10 / L1 matrix, current verdicts:**
+
+| Row | Verdict | Evidence |
+|---|---|---|
+| A1 | PASS | `:3100` live — fresh noise-decoy fixture, zero junk terms anywhere in the response, facets present |
+| A2 | PASS | `:3100` live — identical bytes uploaded twice → same id/revision |
+| A3 | PASS | `:3100` live — shared-DOI pair, delete-one → `false`, delete-last → `true` |
+| A4 | PASS | `:3100` live — reference-list decoy, `quantum` absent from the whole response |
+| A5 | PASS | vitest (re-run cold, closing part 2) + code read — unaffected by Ruling 25 |
+| A6 | PASS | vitest/throwaway test (closing part 2) + code read — unaffected by Ruling 25 |
+| A7 | PASS | decay/reset/remove/device-sync: vitest (closing part 2); export/import: in-process throwaway test, never HTTP — unaffected by Ruling 25, not re-run |
+| A8 | PASS | vitest (closing part 2) + code read — unaffected by Ruling 25 |
+| B1 | PASS | manager's live browser check (2026-09-20, pre-move) + code/token reading — unaffected by Ruling 25 |
+| B2 | PASS | code read — unaffected by Ruling 25 |
+| B3 | PASS | code read; execution-confirmed live pre-move (round 9 opening) — unaffected by Ruling 25 |
+| B4 | PASS | `:3100` live — real full-text read then honest no-LLM fallback; deterministic `/reading` route confirmed model-free |
+| B5 | PASS | `:3100` live — non-PDF, mismatched-title, scanned, encrypted; rejected supplement leaves standalone asset byte-identical |
+| B6 | PARTIAL | server-restart sub-case: `:3100` live, CLOSED PASS by the manager (Ruling 25 §4); cross-device-via-production-auth: NOT MEASURED, moved to pre-launch conditions |
+| B7 | PASS | `:3100` live — replace bumps revision 1→2, pointer switches, superseded asset stays intact |
+| C1 | PASS | vitest/code read (phase-1 re-measure, pre-move) — unaffected by Ruling 25 |
+| C2 | PASS | vitest/code read (phase-1 re-measure, pre-move) — unaffected by Ruling 25 |
+| C3 | PASS | vitest/code read (phase-1 re-measure, pre-move) — unaffected by Ruling 25 |
+| C4 | PASS | vitest/code read (phase-1 re-measure, pre-move) — unaffected by Ruling 25 |
+| C5 | PASS | `:3100` live — see A3 above; same `retractEvidence`-bearing DELETE shape exercised again in B4/B5/B7 |
+| C6 | PASS | code read (cron config, script, README) — unaffected by Ruling 25 |
+| C9 | PASS | vitest/code read (phase-1 re-measure, pre-move) — unaffected by Ruling 25 |
+| C10 | PASS | vitest/code read (phase-1 re-measure, pre-move) — unaffected by Ruling 25 |
+| L1 | PASS | vitest (8/8, re-run cold, closing part 3) + independent grep — unaffected by Ruling 25 |
+
+**Tally: 25 PASS, 1 PARTIAL (B6, two sub-cases — one already closed PASS by the manager on :3100
+per Ruling 25 §4, one genuinely NOT MEASURED and out of this local-dev environment's reach by
+design), 0 FAIL, 0 BLOCKED.** Every row whose evidence was a live HTTP call now carries `:3100`
+evidence from this turn; every row proved by `vitest`/`tsc`/`eslint`/code reading was left PASS,
+unchanged, per Ruling 25's own scope.
+
+**GATE MET** — 0 open items remain unexplained. B6's one remaining sub-case is a recorded,
+structural NOT MEASURED (production-Supabase-auth-only, no local-dev analogue), not a defect, and
+was already flagged for the manager's POLICY call before this turn.
+
+Commit: this entry only (§4 append) plus the §1 update below, staging
+`docs/handoff/ABC-followup-round2.md`. No product code touched. Push: no (manager's call, per §3).
+
+### Round 9 — MANAGER CLOSE (2026-09-22)
+
+**Ruling 26 (§1ag) closes round 9.** Matrix: **25 PASS, 1 NOT MEASURED, 0 FAIL, 0 BLOCKED.**
+
+What the manager re-verified personally, on :3100, without taking any agent's word for it:
+
+1. **The serving process** — confirmed by reading the running node process's command line that the
+   server is the worktree's (`peer-followup`), not the other agent's. This check is now mandatory
+   before any live number (Ruling 25 §2).
+2. **B6, server-restart half** — a self-made 3-page fixture uploaded (`upload:af9200f1…`,
+   revision 1, 1 preference signal); the server killed and restarted; with the same capability
+   cookie the metadata came back **byte-identical** and the PDF came back **byte-identical**
+   (2161 bytes); a fresh cookie jar got **404**. Fixture deleted (200 → 404). PASS.
+3. **The reference-counted retraction (A3 / C5 / 9-22)** — the trickiest rule in round 9, re-run
+   from scratch: two *different* self-made PDFs carrying one DOI
+   (`10.9999/peer.manager.check.2026`) produced two distinct ids
+   (`upload:41e13d78…` rev 1, `upload:7f7ab8ef…` rev 2) sharing **one documentKey**
+   (`f3246d0ae419…`). Deleting the first returned `retractEvidence: false` and the survivor was
+   still readable (200). Deleting the second returned `retractEvidence: true`. Both then 404.
+   Exactly the specified behaviour, and exactly what A reported.
+4. **Cleanliness** — `.local-data/uploads` back to its original 24 files; every fixture removed
+   from the scratchpad; the worktree's tree clean.
+5. **The other agent's checkout untouched** — still 53 uncommitted files, still on
+   `Jev-integration-and-sorting-filtering-enhancement`, still at the same HEAD.
+6. **Gate, cold, run by the manager** — `npx tsc --noEmit` clean · `npx eslint .` clean ·
+   `npx vitest run --exclude "**/benchmark.test.ts"` → **135 files / 2798 tests passed.**
+
+**The one row that is not PASS:** B6's cross-device half. It needs production Supabase auth; this
+worktree identifies an owner by a per-browser capability cookie, so nothing local could make it
+pass or fail. Recorded NOT MEASURED and added to the handoff's §6.5 as pre-launch condition 5,
+with an explicit instruction never to write "cross-device verified" before a real signed-in test.
+
+**Process finding worth keeping:** the harness's `preview_start` kept serving the other agent's
+checkout for two full measurement turns after the working folder moved, and nothing in the tool's
+output said so. It was caught only because an uploaded fixture failed to appear where it should
+have. The cheap standing defence is Ruling 25 §2 — read the serving process's path before
+believing any live number.

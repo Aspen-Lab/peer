@@ -19,6 +19,16 @@
 
 export const SPREAD_QUERY = "(min-width: 80rem)";
 
+/** The reader's horizontal inset. The vertical half moved to
+ *  `PageContainer`'s `rhythm="reader"` (`py-8 sm:py-12 xl:pt-4`) — the same
+ *  three values, in the component that owns every other page's rhythm.
+ *
+ *  That `xl:pt-4` is load-bearing: from xl the 48px masthead sits in flow
+ *  above the article, and 48 + 16 = the panel's sticky top (4rem), so the
+ *  stuck position is the first-paint position and the panel never slides.
+ *  (It was pt-16 when the shell was a fixed sidebar that took no height.) */
+export const PAGE_CLASS = "px-5 sm:px-6";
+
 // Ruling 21 (round 7, item 7-07): the pixel breakpoints and page-width caps
 // this reader's spread is built from, in one place so the CSS
 // (`page-container.tsx`'s `spread` variant calc pair, pinned against these
@@ -52,12 +62,6 @@ export const TWO_XL_CAP_PX = 1200;
 // TWO_XL_CAP_PX is that pair at 1x (640 + 560). fitZoom uses the pair.
 export const TWO_XL_PANEL_PX = 640;
 export const TWO_XL_COLUMN_PX = 560;
-
-/** The article's padding. From xl the 48px masthead sits in flow above the
- *  article, and 48 + 16 = the panel's sticky top (4rem), so the stuck position
- *  is the first-paint position and the panel never slides. (It was pt-16 when
- *  the shell was a fixed sidebar that took no height.) */
-export const PAGE_CLASS = "px-5 sm:px-6 py-8 sm:py-12 xl:pt-4";
 
 /** 5/7 columns at xl, where the reading column lands on the measure with a
  *  rag margin and no more.

@@ -34,21 +34,25 @@ import { useProfileStore } from "@/store/profile";
 import { useSyncGate } from "@/components/profile-sync";
 import { AUTH_SETTLE_TIMEOUT_MS } from "@/lib/auth-settle-timeout";
 import { FeedTile } from "@/components/cards/feed-tile";
-import { DayStrip } from "@/components/briefing/day-strip";
+import { StarterStrip } from "@/components/briefing/starter-strip";
+import { STARTER_TOPICS, STARTER_TOPICS_KEY } from "@/lib/feed/starter-topics";
 import { SearchBox } from "@/components/briefing/search-box";
 import { UploadButton } from "@/components/briefing/upload-button";
 import { Band } from "@/components/ui/band";
-import {
-  ReadingCalendar,
-  daysRead,
-  streakWeeks,
-  useReadingDays,
-} from "@/components/charts/reading-calendar";
 import { PaperDigestLoader } from "@/components/digest/daily-digest";
+import { PageContainer } from "@/components/ui/page-container";
+import { useReveal } from "@/components/ui/reveal";
 import { LoadingSkeleton } from "@/components/ui";
 import { buttonVariants } from "@/components/ui/button";
 import { emptyReason } from "@/lib/feed/empty-reason";
 import { briefingDeck } from "@/lib/briefing/deck";
+import { briefingTileLines } from "@/lib/briefing/tile-lines";
+import { buildLibraryGraph } from "@/lib/library/graph";
+import type { Paper } from "@/types";
+import { LibraryGraph, type GraphSteer } from "@/components/charts/library-graph";
+import { termLean } from "@/lib/preferences/ledger";
+import { SYNC, BRIEFING_EMPTY } from "@/lib/briefing/copy";
+import { EmptyState } from "@/components/ui/empty-state";
 import { dayLine } from "@/lib/shell/masthead";
 import { allocatePlateTerms } from "@/lib/papers/plate-terms";
 
@@ -62,14 +66,14 @@ export default function DailyBriefingPageWrapper() {
 
 function DailyBriefingPage() {
   const papers = useFeedStore((s) => s.papers);
+  // The cards arrive as they are reached. `papers` is what changes which
+  // cards exist; a card already revealed is never hidden again.
+  useReveal([papers]);
   const isLoading = useFeedStore((s) => s.isLoading);
   const papersLoading = useFeedStore((s) => s.papersLoading);
   const lastRefresh = useFeedStore((s) => s.lastRefresh);
   const loadFeed = useFeedStore((s) => s.loadFeed);
   const readItems = useFeedStore((s) => s.readItems);
-  // One clock per mount — the reading page's pattern. `Date.now()` in render
-  // is impure and re-reads on every re-render.
-  const [now] = useState(() => Date.now());
   const feedTopicsKey = useFeedStore((s) => s.feedTopicsKey);
   const feedError = useFeedStore((s) => s.feedError);
   const profile = useProfileStore((s) => s.profile);
@@ -216,16 +220,48 @@ function DailyBriefingPage() {
   // Allocated once across the whole briefing, not per card: the source field is
   // `matchedKeywords ∪ tags`, so per-card selection would put the reader's own
   // query on all ten plates and let one concept headline half of them.
+  // The banned list is "the query, read back at the reader". In starter mode
+  // the query is the sample's own fields, so they are what must not headline
+  // every card — without this each plate said "molecular biology".
+  // Nothing chosen yet: the briefing is the starter sample, and the strip below
+  // the dateline is where it becomes the reader's own.
+  //
+  // FIRST-VISIT RULING (ABC-JEV-INTEGRATION.md §4 Round 3 "MERGE-B-FEED
+  // complete" / "MERGE-B-APP complete"): main's own `isStarterFeed` only
+  // checks the legacy `researchTopics` field, which would show the generic
+  // sample to a reader who declared a project or challenge but no literal
+  // topic — reintroducing exactly the keyword-only requirement acceptance 1
+  // forbids. Gated here on `feedAutoLoadKey` instead (Jev's fuller intent
+  // check via `activePaperTopicsKey`/`activePaperIntent` — project, challenge,
+  // topics, senses, everything), which resolves to `STARTER_TOPICS_KEY`
+  // exactly when nothing at all is declared and to the reader's own
+  // serialized intent otherwise.
+  const starter = feedAutoLoadKey === STARTER_TOPICS_KEY;
+
   const plateTerms = useMemo(
-    () => allocatePlateTerms(papers, profile.researchTopics),
-    [papers, profile.researchTopics],
+    () =>
+      allocatePlateTerms(
+        papers,
+        starter ? [...STARTER_TOPICS] : profile.researchTopics,
+      ),
+    [papers, starter, profile.researchTopics],
+  );
+
+  // The card's sentence, decided for the whole board: a sentence more than
+  // half the day is carrying is suppressed everywhere it appears. See
+  // lib/briefing/tile-lines.ts.
+  const paperSummaries = useFeedStore((s) => s.paperSummaries);
+  const tileLines = useMemo(
+    () => briefingTileLines(papers, paperSummaries),
+    [papers, paperSummaries],
   );
 
   const unreadCount = papers.filter((p) => !readItems[p.id]).length;
+  // Nothing chosen yet: the briefing is the starter sample, and the strip below
+  // the dateline is where it becomes the reader's own.
   const empty = emptyReason({
     isLoading,
     papersCount: papers.length,
-    topicsCount: profile.researchTopics.length,
     feedError,
     intentRequired: !feedAutoLoadKey,
   });
@@ -235,7 +271,16 @@ function DailyBriefingPage() {
     // 2000px display it sits 360px from both edges. The page opens with its
     // own front — the dateline and the deck — and the masthead states nothing
     // here, so the day is said once, at display size.
-    <article className="mx-auto max-w-[1280px] px-6 pt-0 md:pt-5 pb-16 lg:pb-20">
+    // The board is the one documented exception to `PageContainer`'s page
+    // rhythm: its top is the masthead's own edge and its sections are
+    // heterogeneous, so the gaps belong to the container. `space-y-*`
+    // compiles to `> * + * { margin-top }` — do not restate it as a class.
+    <PageContainer
+      width="board"
+      rhythm="none"
+      className="pt-0 md:pt-5 pb-16 lg:pb-20 space-y-8 sm:space-y-10 lg:space-y-12"
+      data-motion="reveal"
+    >
       <PaperDigestLoader
         papers={papers}
         contextHint={digestContextHint}
@@ -247,7 +292,9 @@ function DailyBriefingPage() {
         date={dayLine(new Date())}
         total={papers.length}
         unread={unreadCount}
-        topics={profile.researchTopics}
+        // The sample's fields are not the reader's interests, so the deck
+        // does not name them. The strip below says what they are.
+        topics={starter ? [] : profile.researchTopics}
         loading={papersLoading && papers.length === 0}
         failed={Boolean(feedError)}
         lastRefresh={lastRefresh}
@@ -255,25 +302,34 @@ function DailyBriefingPage() {
         isRefreshing={isLoading}
       />
 
-      {/* The day's shape, between the sentence that says what today is and
-          the cards that are it — and, at the right of the same line, the two
-          ways out of it: upload your own PDF, or leave for /search rather
-          than searching here (see briefing/search-box.tsx,
-          briefing/upload-button.tsx). Both live in their own wrapper so
-          `justify-between` pushes the *pair* to the right, not one to each
-          end of the row. The pair stands even when the strip does not;
-          looking for a paper does not depend on today having ten. */}
+      {/* The library first: what you have read, with today's papers placed
+          against it — so the day's cards arrive already knowing where they
+          sit. It used to close the page, below ten cards, where the one view
+          of everything read was the last thing on the screen anyone reached.
+          At the right of the same line, the two ways out of it: upload your
+          own PDF, or leave for /search rather than searching here (see
+          briefing/search-box.tsx, briefing/upload-button.tsx). Both live in
+          their own wrapper so `justify-between` pushes the *pair* to the
+          right, not one to each end of the row. The pair stands even when
+          the strip does not; looking for a paper does not depend on having
+          read any yet. */}
       <div className="mt-6 flex flex-wrap items-start justify-between gap-x-6 gap-y-4">
         {papers.length > 0 ? (
-          <DayStrip papers={papers} readIds={readItems} now={now} />
+          <ReadingStrip papers={papers} readerTopics={starter ? [] : profile.researchTopics} />
         ) : (
           <span aria-hidden />
         )}
-        <div className="flex items-start gap-2 sm:mt-2">
+        {/* `ml-auto`: `ReadingStrip` renders nothing for a reader with no
+            library yet, and a lone child under `justify-between` sits at the
+            START — the pair would jump left on exactly the first visit. */}
+        <div className="ml-auto flex items-start gap-2 sm:mt-2">
           <UploadButton />
           <SearchBox />
         </div>
       </div>
+
+      {/* Setup, above the papers it is about — and only until it is done. */}
+      {starter && <StarterStrip />}
 
       {/* The deck already says what is being looked for. */}
       {papersLoading && papers.length === 0 && <LoadingSkeleton label={null} />}
@@ -290,75 +346,123 @@ function DailyBriefingPage() {
       )}
 
       {papers.length > 0 && (
-        // Masonry, not a fixed grid. Roughly four papers in ten carry an
-        // extractable figure, so card heights genuinely differ; a uniform grid
-        // either ragged-edges every row or reserves dead space on the six cards
-        // with no image. CSS columns let each card be its own height.
-        <div className="mt-8 columns-1 sm:columns-2 lg:columns-3 gap-4 [column-fill:_balance]">
+        // Two sections, each under its band: what you have read (above), and
+        // today's papers — the cards, straight under their band the way the
+        // graph sits under its own. A bar chart of the day's match scores
+        // stood between them until v0.33.1: ten near-equal grey bars whose
+        // "shape of the day" was flat on most days, and whose "dim ones are
+        // read" the deck already says in words.
+        <Band label={TODAY.heading} gap="none">
+        {/* Masonry, not a fixed grid. Roughly four papers in ten carry an
+            extractable figure, so card heights genuinely differ; a uniform
+            grid either ragged-edges every row or reserves dead space on the
+            six cards with no image. CSS columns let each card be its own
+            height. */}
+        <div className="mt-4 board-columns gap-4 [column-fill:_balance]">
           {papers.map((paper, index) => (
             <div
               key={paper.id}
               id={`paper-${paper.id}`}
               data-paper-id={paper.id}
-              // Today's papers arrive as a stack dealt in reading order. All
-              // ten used to fade up on the identical frame, which reads as the
-              // page reflowing rather than as a delivery. globals.css already
-              // carried the plumbing — `[style*="--i"]` at :375 — and the feed
-              // had never used it. Capped at 9 so the tail never exceeds 360ms.
-              style={{ "--i": Math.min(index, 9) } as React.CSSProperties}
-              className="mb-4 break-inside-avoid rounded-3xl transition-shadow"
+              // Each card arrives as it is reached — the reading page's approach
+              // (globals.css, "The approach"), now on the board. The mount fade
+              // it replaces played all ten on load, so the cards below the fold
+              // had finished arriving before anyone scrolled to them. The first
+              // screenful is still dealt in order, 40ms apart: `useReveal`
+              // staggers the hosts that are already on screen when it runs.
+              data-reveal
+              className="rv mb-4 break-inside-avoid"
             >
               <FeedTile
                 item={{ kind: "paper", data: paper }}
                 plateTerms={plateTerms[paper.id]}
+                line={tileLines[paper.id] ?? null}
+                index={index}
+                total={papers.length}
               />
             </div>
           ))}
         </div>
+        </Band>
       )}
-
-      {/* After the day's papers, not before them: the brief opens on what
-          there is to read and closes on what has been read. */}
-      {papers.length > 0 && <ReadingStrip />}
-    </article>
+    </PageContainer>
   );
 }
 
-/** Eight weeks: two months is enough to see a habit and short enough to sit
- *  under the day's papers without becoming a second page. */
-const STRIP_WEEKS = 8;
+/** The day's section: its cards. */
+const TODAY = { heading: "Today's papers" };
 
-const READING_STRIP = {
-  heading: "Your reading",
-  summary: (days: number, of: number, streak: number) =>
-    `${days} of the last ${of} days` +
-    (streak > 0 ? ` \u00b7 ${streak}-week streak` : ""),
-};
+const READING_STRIP = { heading: "Your reading" };
 
 /**
- * Peer's own chart, at the foot of the brief — the eight weeks behind today.
+ * Your reading: the library graph — every paper read or kept, the terms that
+ * join them, and today's papers placed against it.
  *
- * The briefing had no chart at all and the profile had the only one, which is
- * the wrong way round: the reading habit belongs on the page you open every
- * day, and the profile is where you go to change a setting. It is the same
- * component the profile draws, at eight weeks instead of eighteen and with
- * its rules off.
+ * The eight-week reading calendar that sat under it is gone from the
+ * briefing: it answered "which days", which the graph does not need and the
+ * briefing did not either. /profile keeps its own, labelled version.
  *
- * Renders nothing until something has been read — never a placeholder grid,
- * and never a streak counted off invented weeks.
+ * Renders nothing until something has been read or kept — never a
+ * placeholder.
  */
-function ReadingStrip() {
-  const cells = useReadingDays(STRIP_WEEKS);
-  if (!cells) return null;
-  const days = daysRead(cells);
-  const streak = streakWeeks(cells, STRIP_WEEKS);
+function ReadingStrip({ papers, readerTopics }: { papers: Paper[]; readerTopics: string[] }) {
+  const library = useFeedStore((s) => s.library);
+  const savedPapers = useFeedStore((s) => s.savedPapers);
+  const readItems = useFeedStore((s) => s.readItems);
+  // Steering from the graph — a lean on a term (the preference ledger, which
+  // re-ranks today's papers at once) or following it (explore topics, from
+  // tomorrow's search).
+  const ledger = useProfileStore((s) => s.profile.preferenceLedger);
+  const softTopics = useProfileStore((s) => s.profile.softTopics);
+  const leanOnTerm = useProfileStore((s) => s.leanOnTerm);
+  const followTerm = useProfileStore((s) => s.followTerm);
+  const loadFeed = useFeedStore((s) => s.loadFeed);
+  // A lean answers on the board below, not tomorrow: the day's pool is
+  // already built and the ledger is applied when it is read, so a plain load
+  // re-ranks it — no search, no model call. Pressed three times in a second,
+  // it loads once.
+  const rerank = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (rerank.current) clearTimeout(rerank.current);
+    },
+    [],
+  );
+  const steer = useMemo<GraphSteer>(
+    () => ({
+      leanOf: (label) => termLean(ledger, label),
+      followed: (label) =>
+        (softTopics ?? []).some((t) => t.trim().toLowerCase() === label.trim().toLowerCase()),
+      lean: (label, lean) => {
+        leanOnTerm(label, lean);
+        if (rerank.current) clearTimeout(rerank.current);
+        rerank.current = setTimeout(() => void loadFeed({ lanes: ["papers"] }), 400);
+      },
+      follow: followTerm,
+    }),
+    [ledger, softTopics, leanOnTerm, followTerm, loadFeed],
+  );
+  // The library as a graph: what has been read or kept, joined wherever two
+  // papers carry the same term — and today's papers placed against it. See
+  // lib/library/graph.ts for what an edge is allowed to mean.
+  const graph = useMemo(
+    () =>
+      buildLibraryGraph({
+        library: Object.values(library ?? {}),
+        saved: savedPapers,
+        today: papers,
+        readIds: readItems,
+        readerTopics,
+      }),
+    [library, savedPapers, papers, readItems, readerTopics],
+  );
+  if (graph.counts.read + graph.counts.saved === 0) return null;
 
   return (
-    <Band label={READING_STRIP.heading} className="mt-16">
-      <p className="font-mono text-caption text-text-faint mt-3 mb-3">
-        {READING_STRIP.summary(days, STRIP_WEEKS * 7, streak)}
-      </p>
-      <ReadingCalendar cells={cells} weeks={STRIP_WEEKS} labels={false} />
+    <Band label={READING_STRIP.heading} gap="none">
+      <div className="mt-4">
+        <LibraryGraph graph={graph} steer={steer} />
+      </div>
     </Band>
   );
 }
@@ -398,30 +502,33 @@ function BriefingHead({
     // on a phone the dateline takes the whole width (beside a 150px status
     // cluster it broke into three lines), the deck follows, and the status
     // closes the front on its own line at the right.
-    <header className="mt-2 md:mt-4 flex flex-wrap items-end gap-x-4">
+    <header className="flex flex-wrap items-end gap-x-4">
       {/* The date is computed on the server too; the timezones can differ
           around midnight, and a warning would not change what is shown. */}
       <h1
         suppressHydrationWarning
-        className="w-full sm:w-auto sm:min-w-0 font-display font-normal text-display sm:text-display-lg leading-[1.05] tracking-[-0.02em] text-heading text-balance"
+        className="w-full sm:w-auto sm:min-w-0 display-line text-display sm:text-display-lg leading-[1.05] text-heading text-balance"
       >
         {date}
       </h1>
-      <div className="order-3 sm:order-none ml-auto mt-3 sm:mt-0 flex shrink-0 items-center gap-1 sm:pb-1 font-mono text-meta text-text-faint whitespace-nowrap">
-          {failed ? (
-            <span className="text-red">sync failed</span>
+      <div className="order-3 sm:order-none ml-auto mt-3 sm:mt-0 flex shrink-0 items-center gap-1 sm:pb-1 annotation text-meta text-text-faint whitespace-nowrap">
+          {isRefreshing ? (
+            <span>{SYNC.syncing}</span>
+          ) : failed ? (
+            <span className="text-red">{SYNC.failed}</span>
           ) : lastRefresh ? (
-            <span>synced {formatTimeAgo(lastRefresh)}</span>
+            <span>{SYNC.synced(formatTimeAgo(lastRefresh))}</span>
           ) : (
-            <span>not synced yet</span>
+            <span>{SYNC.never}</span>
           )}
           <button
             type="button"
             onClick={onRefresh}
             disabled={isRefreshing}
+            aria-busy={isRefreshing}
             aria-label="Refresh briefing"
             title="Refresh briefing (r)"
-            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-text-faint hover:bg-bg-secondary/80 hover:text-text transition-[color,background-color,transform] duration-150 ease-snap active:scale-90 disabled:opacity-50 disabled:cursor-wait"
+            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-text-faint hover:bg-bg-secondary/80 hover:text-text transition-[color,background-color,transform,scale] active:scale-90 disabled:opacity-50 disabled:cursor-wait"
           >
             <svg
               width="15"
@@ -433,7 +540,6 @@ function BriefingHead({
               strokeLinecap="round"
               strokeLinejoin="round"
               aria-hidden
-              className={isRefreshing ? "animate-spin" : ""}
             >
               <path d="M21 12a9 9 0 1 1-3-6.7" />
               <path d="M21 4v6h-6" />
@@ -448,7 +554,7 @@ function BriefingHead({
         // `w-full` on the paragraph, the measure on a span inside it: a
         // max-width on the flex item itself caps its hypothetical size, and
         // at 62ch it no longer forced a new row — it slid up beside the date.
-        <p className="order-2 sm:order-none w-full mt-3 font-display text-title-lg leading-[1.4] text-text-muted">
+        <p className="order-2 sm:order-none w-full mt-3 font-sans text-title-lg leading-[1.45] tracking-[-0.01em] text-text-muted">
           <span className="block measure text-balance">
             {deck.map((segment, i) => (
               <span key={i} className={segment.tone === "heading" ? "text-heading" : undefined}>
@@ -462,55 +568,41 @@ function BriefingHead({
   );
 }
 
-// Nothing to show — and three different reasons for it, each with its own
-// answer. This replaces a single "Your briefing is still waking up… Set up
-// profile" that was shown for all three, including to a reader whose topics
-// were set and whose connection had simply dropped. Display serif, one line,
-// a real button; left-aligned in the header's column rather than floating in
-// the middle of an empty page.
+// Nothing to show — and two different reasons for it, each with its own
+// answer. This replaced a single "Your briefing is still waking up… Set up
+// profile" shown for both, including to a reader whose topics were set and
+// whose connection had simply dropped. The words live in `copy.ts` with the
+// rest of the briefing's fixed words; the shape is the product's one empty
+// state, shared with /saved, /search, /error and /not-found.
 function BriefingEmpty({
   reason,
   errorDetail,
   onRetry,
   onRefresh,
 }: {
-  reason: "intent-required" | "no-topics" | "error" | "empty";
+  // FIRST-VISIT RULING (ABC-JEV-INTEGRATION.md §4 Round 3 "MERGE-B-FEED
+  // complete"): "intent-required" stays as a value (it is a real, distinct
+  // EmptyReason — see lib/feed/empty-reason.ts), but it is not a second
+  // onboarding message: it renders through the exact same branch as "empty"
+  // below (refresh, or a link to /profile to widen/declare a focus), because
+  // by the time this component can even be reached with nothing declared,
+  // store/feed.ts's starter-topics fallback has already tried to fill the
+  // page with a sample — this is the rare edge where even that failed to
+  // produce a card, not the ordinary first-visit path (that path never
+  // reaches this component at all: `papers.length > 0` from the sample).
+  // "no-topics" is retired — see empty-reason.ts's header comment.
+  reason: "intent-required" | "error" | "empty";
   errorDetail: string | null;
   onRetry: () => void;
   onRefresh: () => void;
 }) {
-  const copy = {
-    "intent-required": {
-      title: "Set your Research focus.",
-      line: "Add a topic, project, or challenge so Peer can build your briefing.",
-    },
-    "no-topics": {
-      title: "What are you working on?",
-      line: "Peer builds tomorrow’s briefing from your topics.",
-    },
-    error: {
-      title: "Couldn’t reach the paper sources.",
-      line: "Check your connection, then try again.",
-    },
-    empty: {
-      title: "Nothing new for these topics today.",
-      line: "Peer only sends what is new and relevant. Refresh to look again, or widen your topics.",
-    },
-  }[reason];
-
+  const copy = BRIEFING_EMPTY[reason === "intent-required" ? "empty" : reason];
   return (
-    <section className="mt-16 measure">
-      <h2 className="font-display text-display-sm font-normal leading-[1.15] tracking-[-0.015em] text-heading text-balance">
-        {copy.title}
-      </h2>
-      <p className="mt-3 text-body-sm text-text-muted leading-relaxed">{copy.line}</p>
-      <div className="mt-6 flex flex-wrap items-center gap-2.5">
-        {(reason === "intent-required" || reason === "no-topics") && (
-          <Link href="/profile" className={buttonVariants({ tone: "primary", size: "lg" })}>
-            Set up profile
-          </Link>
-        )}
-        {reason === "error" && (
+    <EmptyState
+      title={copy.title}
+      line={copy.line}
+      actions={
+        reason === "error" ? (
           <>
             <button
               type="button"
@@ -518,28 +610,27 @@ function BriefingEmpty({
               title={errorDetail ?? undefined}
               className={buttonVariants({ tone: "primary", size: "lg" })}
             >
-              Try again
+              {BRIEFING_EMPTY.error.retry}
             </button>
             <Link href="/profile" className={buttonVariants({ tone: "ghost", size: "lg" })}>
-              Edit topics
+              {BRIEFING_EMPTY.error.edit}
             </Link>
           </>
-        )}
-        {reason === "empty" && (
+        ) : (
           <>
             <button
               type="button"
               onClick={onRefresh}
               className={buttonVariants({ tone: "primary", size: "lg" })}
             >
-              Refresh
+              {BRIEFING_EMPTY.empty.refresh}
             </button>
             <Link href="/profile" className={buttonVariants({ tone: "ghost", size: "lg" })}>
-              Widen topics
+              {BRIEFING_EMPTY.empty.widen}
             </Link>
           </>
-        )}
-      </div>
-    </section>
+        )
+      }
+    />
   );
 }

@@ -16,6 +16,7 @@ export type ReaderAction =
   | "skip"
   | "like"
   | "undoOrToggleRead"
+  | "read"
   | "open"
   | "copy"
   | "back";
@@ -44,6 +45,8 @@ export const PAPER_KEYS: readonly PaperKey[] = [
     label: "Undo a dismiss, else mark unread / read",
     short: "undo",
   },
+  // `t` for the text: `r` is the briefing's own key and stays global.
+  { keys: ["t"], action: "read", label: "Read the paper here", short: "read" },
   { keys: ["o", "Enter"], action: "open", label: "Open at the source", short: "open" },
   { keys: ["c"], action: "copy", label: "Copy as Markdown", short: "copy" },
   {

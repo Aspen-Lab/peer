@@ -19,19 +19,19 @@ import { BandRule } from "@/components/ui/band";
 import { NEXT_ROW } from "./copy";
 
 const ROW_CLASS =
-  "group block mt-16 -mx-3 px-3 pt-5 pb-4 hover:bg-bg-secondary/50 transition-colors duration-150 ease-snap";
-const LABEL_CLASS = "font-mono text-meta text-text-faint";
+  "group block -mx-3 px-3 pt-5 pb-4 hover:bg-bg-secondary/50 transition-colors ";
+const LABEL_CLASS = "annotation text-meta text-text-faint";
 const TITLE_CLASS =
   "font-display text-display-xs leading-[1.25] text-heading mt-1.5 line-clamp-2 measure-lede";
 const GO_CLASS =
-  "inline-flex items-center gap-1.5 font-sans text-body-sm text-text-muted mt-3 group-hover:text-heading transition-colors duration-150 ease-snap";
+  "inline-flex items-center gap-1.5 font-sans text-body-sm text-text-muted mt-3 group-hover:text-heading transition-colors ";
 
 /** The arrow travels a couple of pixels under a pointer — the band's own tell. */
 function Go({ label }: { label: string }) {
   return (
     <span className={GO_CLASS}>
       {label}
-      <span className="transition-transform duration-150 ease-snap group-hover:translate-x-0.5 motion-reduce:transition-none">
+      <span className="transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none">
         <IconArrowRight size={13} />
       </span>
     </span>
@@ -42,8 +42,8 @@ export function NextRow({ nav, next }: { nav: PaperNav; next: Paper | null }) {
   if (nav.index === NONE) {
     return (
       <>
-        <BandRule className="mt-16" />
-        <Link href="/" className={ROW_CLASS.replace("mt-16 ", "")}>
+        <BandRule />
+        <Link href="/" className={ROW_CLASS}>
           <Go label={NEXT_ROW.deepLink} />
         </Link>
       </>
@@ -52,8 +52,8 @@ export function NextRow({ nav, next }: { nav: PaperNav; next: Paper | null }) {
   if (!nav.nextId || !next) {
     return (
       <>
-        <BandRule className="mt-16" />
-        <Link href="/" className={ROW_CLASS.replace("mt-16 ", "")}>
+        <BandRule />
+        <Link href="/" className={ROW_CLASS}>
           <Go label={NEXT_ROW.last} />
         </Link>
       </>
@@ -62,8 +62,8 @@ export function NextRow({ nav, next }: { nav: PaperNav; next: Paper | null }) {
   const venue = shortVenue(next.venue);
   return (
     <>
-      <BandRule className="mt-16" />
-      <Link href={`/papers/${nav.nextId}`} className={ROW_CLASS.replace("mt-16 ", "")}>
+      <BandRule />
+      <Link href={`/papers/${nav.nextId}`} className={ROW_CLASS}>
       <span className={LABEL_CLASS}>
         {NEXT_ROW.next(nav.index + 1, nav.total)}
         {venue ? ` \u00b7 ${venue}` : ""}

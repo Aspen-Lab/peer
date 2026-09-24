@@ -216,23 +216,34 @@ export function resolveWebSearchProvider(
   if (preferred === "tavily") {
     return availability.tavilyKeyPresent ? "tavily" : null;
   }
-  // Auto. Gemini only displaces the shipped order when Tavily is NOT enabled,
-  // which is precisely Ruling 75's wording.
+  // Auto — REWRITTEN by ABC-freemium 2-04 (Ruling 5 point 2, R-KEY-3 as amended
+  // 2026-09-05). The two clauses that used to jump Vertex and grounding ahead
+  // of everything are gone.
   //
-  // THE CREDIT MIGRATION ADDS ONE CLAUSE AHEAD OF IT, ON THE SAME CONDITION.
-  // Vertex AI Search and grounding are both spent from the server's own Vertex
-  // project, so they sit in the same slot of the order; when BOTH are wired,
-  // the one the trial credit pays for wins. An explicit `provider: "gemini"`
-  // still reaches grounding — this changes the DEFAULT, not the capability.
-  if (availability.vertexAvailable && !availability.requestTavilyKeyPresent) {
-    return "vertex";
-  }
-  if (availability.geminiAvailable && !availability.requestTavilyKeyPresent) {
-    return "gemini";
-  }
+  // The old order let an **uncounted, unmetered** provider outrank the gated,
+  // metered one: Vertex and grounding were chosen first whenever the server had
+  // a Vertex project, and neither charged the breaker nor wrote a usage row. The
+  // spend order is now the arrow chain R-KEY-3 states, cheapest-to-the-owner
+  // first:
+  //
+  //   1. the reader's OWN Tavily key — costs the operator nothing;
+  //   2. the system Tavily key — gated AND metered, so a spend is visible;
+  //   3. Brave / Vertex / grounding — local-only (all three are banned on
+  //      Vercel by the build guard), in the order Ruling 5 point 2 writes them;
+  //   4. nothing, and the surface serves its free structured sources.
+  //
+  // Every one of these is now charged and metered by `isOperatorFundedSearch`
+  // at the adapters, so the principle "an uncounted provider never outranks the
+  // gated, metered one" holds under any order within group 3.
+  //
+  // Note there is no longer a `!requestTavilyKeyPresent` condition anywhere: a
+  // reader with their own key now simply wins outright, which is what clause 1
+  // says and is simpler than the three-way interaction it replaces.
   if (availability.requestTavilyKeyPresent) return "tavily";
-  if (availability.braveKeyPresent) return "brave";
   if (availability.tavilyKeyPresent) return "tavily";
+  if (availability.braveKeyPresent) return "brave";
+  if (availability.vertexAvailable) return "vertex";
+  if (availability.geminiAvailable) return "gemini";
   return null;
 }
 
