@@ -1,0 +1,16 @@
+web/src/lib/entitlement/allowance.test.ts
+web/src/lib/entitlement/allowance.ts
+web/src/lib/entitlement/plan-copy.ts
+web/src/lib/entitlement/resolve.test.ts
+web/src/lib/entitlement/resolve.ts
+web/src/lib/entitlement/types.ts
+web/src/lib/env/local-dev.ts
+web/src/lib/env/no-client-dev-flags.test.ts
+web/src/lib/usage/context.ts
+web/src/lib/usage/counters.test.ts
+web/src/lib/usage/counters.ts
+web/src/lib/usage/deep-report-quota.ts
+web/src/lib/usage/events.ts
+web/supabase/migrations/20260904000000_usage_counters.sql
+web/supabase/migrations/20260904000100_usage_events.sql
+web/supabase/migrations/20260904000200_profile_plan.sql
