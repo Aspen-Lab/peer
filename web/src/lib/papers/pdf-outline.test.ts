@@ -3,7 +3,9 @@ import { blockMarker } from "@/lib/text/math";
 import {
   bodyStyle,
   buildOutline,
+  continuesCaption,
   equationOf,
+  linePitch,
   captionOf,
   furnitureOf,
   headingOf,
@@ -204,5 +206,61 @@ describe("equations", () => {
     expect(at).toBeGreaterThan(0);
     expect(paragraphs[at - 1]).toMatch(/computed as$/);
     expect(paragraphs[at + 1]).toMatch(/^where the keys/);
+  });
+});
+
+
+describe("captions across lines", () => {
+  const BODY = { size: 10, font: "body" };
+
+  it("reads the line pitch of a block", () => {
+    const lines = [line("a", { y: 500 }), line("b", { y: 488 }), line("c", { y: 476 }), line("d", { y: 440 })];
+    expect(linePitch(lines)).toBe(12);
+    expect(linePitch([])).toBe(0);
+  });
+
+  it("knows the next line of a caption from the prose that resumes under the figure", () => {
+    // The real case: caption and body both 12pt, told apart by face alone.
+    const cap = line("Figure 1: Medical image analysis pipeline showing preprocessing,", { y: 330, size: 12, font: "caption" });
+    const second = line("feature extraction, and classification stages", { y: 314, size: 12, font: "caption" });
+    const proseBack = line("Drug Formation and Innovation:-The long and costly process", { y: 298, size: 12, font: "body" });
+    const afterGap = line("caption face again, but a gap above it", { y: 280, size: 12, font: "caption" });
+    expect(continuesCaption(cap, second, 16, BODY, new Set())).toBe(true);
+    // The body's face is back: that is the paper again.
+    expect(continuesCaption(second, proseBack, 16, BODY, new Set())).toBe(false);
+    // Too far below the last line to be the same block.
+    expect(continuesCaption(second, afterGap, 16, BODY, new Set())).toBe(false);
+    // A new caption or a numbered heading is never the tail of this one.
+    expect(continuesCaption(cap, line("Figure 2: Another.", { y: 314, size: 12, font: "caption" }), 16, BODY, new Set())).toBe(false);
+    expect(continuesCaption(cap, line("2 Methods", { y: 314, size: 12, font: "caption" }), 16, BODY, new Set())).toBe(false);
+  });
+
+  it("keeps a two-line caption whole, and hands the prose back to the section", () => {
+    const filler = (y: number) => item("Recurrent neural networks have long been established in sequence modelling and transduction.", { y });
+    const outline = buildOutline([
+      {
+        page: 1,
+        items: [
+          item("A Paper", { height: 17, y: 760 }),
+          item("1 Introduction", { y: 740 }),
+          ...[726, 714, 702, 690, 678, 666].map(filler),
+          item("Figure 1: Medical image analysis pipeline showing preprocessing,", { y: 640, fontName: "caption" }),
+          item("segmentation and classification of the scan.", { y: 628, fontName: "caption" }),
+          item("The pipeline is trained end to end on the corpus of scans we collected.", { y: 616 }),
+          ...[593, 581, 569].map(filler),
+        ],
+      },
+    ]);
+    expect(outline.figureCaptions).toEqual([
+      {
+        ordinal: 1,
+        label: "Figure 1",
+        caption: "Medical image analysis pipeline showing preprocessing, segmentation and classification of the scan.",
+        page: 1,
+      },
+    ]);
+    const prose = (outline.sections ?? []).map((s) => s.text).join(" ");
+    expect(prose).toContain("trained end to end");
+    expect(prose).not.toContain("segmentation and classification");
   });
 });

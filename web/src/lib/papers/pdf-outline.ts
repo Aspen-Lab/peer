@@ -111,6 +111,60 @@ const MATH_SYMBOL = /[=+×÷√∑∏∫∂≈≤≥∈∉±−·∞→←↔≡
 /** An equation is one printed line; past this it is a paragraph with an
  *  equals sign in it. */
 const EQUATION_MAX = 120;
+/** A caption stops being a caption somewhere; past this it is the prose
+ *  under the figure that never opened a gap. */
+const CAPTION_MAX = 700;
+
+/** The 25th-percentile gap between consecutive same-page lines — the pitch
+ *  of a block of text, as `joinProse` reads it. 0 when there is nothing to
+ *  measure. */
+export function linePitch(lines: PdfLine[]): number {
+  const gaps: number[] = [];
+  for (let i = 1; i < lines.length; i++) {
+    if (lines[i - 1].page !== lines[i].page) continue;
+    const gap = lines[i - 1].y - lines[i].y;
+    if (gap > 0) gaps.push(gap);
+  }
+  if (gaps.length === 0) return 0;
+  gaps.sort((a, b) => a - b);
+  return gaps[Math.floor(gaps.length * 0.25)];
+}
+
+/**
+ * Whether `next` is the next printed line of the caption `previous` is part
+ * of: the same page, within a line pitch and a half below, in the SAME FACE
+ * as the caption's last line, at its size, and not itself a caption, the
+ * page's furniture or a numbered heading.
+ *
+ * The face is the test, not the size: a caption is set in its own face — on
+ * one real PDF, `g_d0_f1` against the body's `g_d0_f8`, both at 12pt — so
+ * size told the two apart not at all, and the prose under the figure read
+ * as more caption. And `headingOf` is not consulted: it takes "in the other
+ * face" for a heading, which is exactly what a caption's second line is.
+ */
+export function continuesCaption(
+  previous: PdfLine,
+  next: PdfLine,
+  pitch: number,
+  body: { size: number; font: string },
+  furniture: Set<string>,
+): boolean {
+  if (next.page !== previous.page) return false;
+  const gap = previous.y - next.y;
+  if (gap <= 0) return false;
+  if (pitch > 0 && gap > pitch * 1.5) return false;
+  if (next.font !== previous.font) return false;
+  if (Math.abs(next.size - previous.size) > 0.6) return false;
+  const text = next.text.trim();
+  if (!text) return false;
+  if (isFurniture(next, furniture)) return false;
+  if (captionOf(next)) return false;
+  if (NUMBERED_HEADING.test(text) && text.length <= HEADING_MAX) return false;
+  // `body` is kept in the signature for the callers that pass it; the face
+  // test above is what distinguishes caption from prose.
+  void body;
+  return true;
+}
 
 /**
  * Whether a line is a display equation, printed on a line of its own.
@@ -345,12 +399,33 @@ export function buildOutline(pages: PdfPageText[]): PdfOutline {
     held = [];
   };
 
-  for (const line of read) {
+  // The line pitch across the paper — the gap between consecutive lines of
+  // one block — so a caption's second line can be told from the prose that
+  // resumes under the figure by the space above it.
+  const pitch = linePitch(read);
+
+  for (let i = 0; i < read.length; i++) {
+    const line = read[i];
     if (isFurniture(line, furniture)) continue;
     const caption = captionOf(line);
     if (caption) {
       // A caption belongs to the figure pool, not to the prose it interrupts.
-      if (caption.caption && caption.caption.length > 0) figureCaptions.push(caption);
+      // It is as many lines as it was printed on: the lines under it at the
+      // line pitch, in its own size, until the gap opens or the prose's size
+      // returns. The old reading took the first line and stopped, and a
+      // caption arrived as "Medical image analysis pipeline showing
+      // preprocessing," — a clause with its sentence cut off.
+      const rest: string[] = [];
+      let previous = line;
+      while (i + 1 < read.length) {
+        const nextLine = read[i + 1];
+        if (!continuesCaption(previous, nextLine, pitch, body, furniture)) break;
+        rest.push(nextLine.text.trim());
+        previous = nextLine;
+        i++;
+      }
+      const full = [caption.caption ?? "", ...rest].join(" ").replace(/\s+/g, " ").trim().slice(0, CAPTION_MAX);
+      if (full.length > 0) figureCaptions.push({ ...caption, caption: full });
       continue;
     }
     const next = headingOf(line, body);

@@ -50,6 +50,7 @@ import { TitleBlock } from "@/components/reader/title-block";
 import { PaperWords } from "@/components/reader/paper-words";
 import { PaperBody } from "@/components/reader/paper-body";
 import { RecordBlock } from "@/components/reader/record-block";
+import { InYourLibrary } from "@/components/reader/in-your-library";
 import { KeyLegend } from "@/components/reader/key-legend";
 import { DecisionBlock } from "@/components/reader/decision-block";
 import { QuoteList } from "@/components/reader/quote-list";
@@ -910,6 +911,12 @@ function Reader({
                 point — the column used to end at the abstract's footer with
                 half the page under it. */}
             <RecordBlock paper={paper} primaryUrl={reading.source?.url ?? null} />
+
+            {/* And last, the reader's own context: what they read or kept
+                under the same topics, and the topics as searches. On a paper
+                with no full text this stands where the column used to end
+                in air. */}
+            <InYourLibrary paper={paper} />
           </>
         }
         next={<NextRow nav={nav} next={nextPaper} />}
