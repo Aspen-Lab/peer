@@ -2,6 +2,15 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.43.4 — 2026-09-25
+
+The tab's mark follows the browser's light and dark, as the masthead's does.
+
+On a dark tab strip the black sheet sank into the bar and only its corner
+showed. The sheet now takes the heading ink of whichever scheme the browser
+is in — near-black on light, near-white on dark — and the corner the
+accent's matching shade, exactly as the masthead's mark does on the page.
+
 ## v0.43.3 — 2026-09-25
 
 The tab shows the mark the masthead shows.

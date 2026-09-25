@@ -1,10 +1,21 @@
 <svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
   <!-- Peer's mark, exactly as the masthead draws it (components/shell/
        masthead.tsx, Mark): the sheet with its registered corner in the
-       accent. The masthead's sheet takes currentColor; the tab has no
-       colour to inherit, so it is the fixed black the chrome's ink sits on. -->
-  <rect x="4" y="4" width="56" height="56" fill="#1d1d1d" />
-  <g fill="#ff520d">
+       accent. The masthead's sheet takes currentColor from `text-heading`;
+       the tab has no colour to inherit, so the sheet and corner follow the
+       same tokens by hand (globals.css: color-heading, and the ember accent's
+       seed / seed-dark), flipping with the browser's colour scheme. An XML
+       comment may not contain a double hyphen, so the names drop theirs. -->
+  <style>
+    .sheet { fill: #1d1d1d; }
+    .corner { fill: #ff520d; }
+    @media (prefers-color-scheme: dark) {
+      .sheet { fill: #f3f3f3; }
+      .corner { fill: #ff6a2b; }
+    }
+  </style>
+  <rect class="sheet" x="4" y="4" width="56" height="56" />
+  <g class="corner">
     <path d="M30 4h30v10H30z" />
     <path d="M50 4h10v30H50z" />
   </g>
