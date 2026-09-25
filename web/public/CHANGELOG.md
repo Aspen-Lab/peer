@@ -2,6 +2,16 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.43.3 — 2026-09-25
+
+The tab shows the mark the masthead shows.
+
+The browser tab still carried the black pear: two lines of work each redrew
+the site icon, and when they were merged the older one won. The tab icon is
+now the masthead's mark, drawn from the same geometry — the black sheet with
+its registered corner in the accent — and `favicon.ico`, for the browsers
+that ask for one by name, is rasterised from it at 16, 32 and 48 pixels.
+
 ## v0.43.2 — 2026-09-23
 
 A caption's tail is told by its face.

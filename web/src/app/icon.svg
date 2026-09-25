@@ -1,4 +1,11 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-  <path fill="#000" d="M50 30c-8 0-12 8-14 16-2 8-8 12-10 22-2 14 10 24 24 24s26-10 24-24c-2-10-8-14-10-22-2-8-6-16-14-16z"/>
-  <path fill="none" stroke="#000" stroke-width="4.5" stroke-linecap="round" d="M50 30c0-6 2-10 7-13"/>
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Peer's mark, exactly as the masthead draws it (components/shell/
+       masthead.tsx, Mark): the sheet with its registered corner in the
+       accent. The masthead's sheet takes currentColor; the tab has no
+       colour to inherit, so it is the fixed black the chrome's ink sits on. -->
+  <rect x="4" y="4" width="56" height="56" fill="#1d1d1d" />
+  <g fill="#ff520d">
+    <path d="M30 4h30v10H30z" />
+    <path d="M50 4h10v30H50z" />
+  </g>
 </svg>
