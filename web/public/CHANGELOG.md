@@ -2,6 +2,19 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.43.5 — 2026-09-25
+
+A figure the paper printed stretched is shown in its own proportions.
+
+Some PDFs place a picture wider or taller than the picture is — an image
+pulled to the column's width in a word processor, its circles drawn as ovals
+and its lettering widened. Peer copied the page as printed, so the card
+copied the stretch. When a figure is one embedded picture printed more than
+6% off its own shape, it is now rendered back to that shape, by lengthening
+the squeezed side so no detail is lost. The card mats it at its true ratio
+and leaves the rest of the window empty rather than fill it. Figures printed
+as drawn — every figure in the arXiv papers checked — come out unchanged.
+
 ## v0.43.4 — 2026-09-25
 
 The tab's mark follows the browser's light and dark, as the masthead's does.

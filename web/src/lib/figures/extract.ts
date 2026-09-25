@@ -10,8 +10,9 @@ const FETCH_TIMEOUT_MS = 7_000;
 const MAX_BODY_BYTES = 2_500_000;
 // Part of the candidate cache key (`cacheKey`), so bumping it is how a
 // change to what this module extracts reaches a reader who already has a
-// figure cached — the captions stopped carrying LaTeXML's duplicate TeX.
-const FETCH_VERSION = "2026-09-08-caption-annotation";
+// figure cached — the captions stopped carrying LaTeXML's duplicate TeX;
+// 09-25, a PDF raster the page printed stretched is rendered un-stretched.
+const FETCH_VERSION = "2026-09-25-pdf-unstretch";
 
 /**
  * Everything the deterministic half needs: which paper, and where to look. No
