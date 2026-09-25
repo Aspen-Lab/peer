@@ -948,9 +948,23 @@ describe("P2-S4b positive-seed channels — flagged on (F-A-P2-04 4c/4d)", () =>
   it("a seed-channel candidate already covered by ledgerExclusions or excludeIds never re-enters the pool", async () => {
     vi.stubEnv("PEER_CHANNEL_S2_RECOMMENDATIONS", "on");
     bySourceId.openalex.fetch = vi.fn(async () => []);
-    const ledgerHit = recommendedPaper("semantic_scholar:rec-ledger-excluded");
-    const excludeIdHit = recommendedPaper("semantic_scholar:rec-excludeid-excluded");
-    const survivor = recommendedPaper("semantic_scholar:rec-survives");
+    // DEDUP-FIX (version rule, ABC-JEV-INTEGRATION.md §4 Round 3 "manager
+    // smoke check... version rule ruled", 2026-09-24T20:30:13Z): these three
+    // candidates used to share `recommendedPaper()`'s one canned
+    // title/author/date (only `id` varies) — harmless before this fix, since
+    // three different native ids with no shared id-form key never merged
+    // regardless of title. Per the version rule, an identical title + same
+    // first-author surname + same year now merges different-native-id items
+    // as VERSIONS of one work, which would wrongly fold these three
+    // deliberately-unrelated stand-in candidates into a single record (and
+    // the survivor would then be swept into the same ledger-excluded group
+    // as `ledgerHit`). Each gets its own distinct title so they stay the
+    // three separate candidates this test's exclusion-ordering assertions
+    // actually intend — no real recommendation API returns three different
+    // papers with byte-identical titles, authors, and dates.
+    const ledgerHit = { ...recommendedPaper("semantic_scholar:rec-ledger-excluded"), title: "A Recommended Paper Already In The Delivery Ledger" };
+    const excludeIdHit = { ...recommendedPaper("semantic_scholar:rec-excludeid-excluded"), title: "A Recommended Paper Already In This Request's ExcludeIds" };
+    const survivor = { ...recommendedPaper("semantic_scholar:rec-survives"), title: "A Recommended Paper With Neither Exclusion Applied" };
     fetchSemanticScholarRecommendationsMock.mockResolvedValue([ledgerHit, excludeIdHit, survivor]);
     const cache = new MemoryPoolCache();
     const ledgerKey = identityForRawItem(ledgerHit).key;

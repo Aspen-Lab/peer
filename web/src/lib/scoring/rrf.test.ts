@@ -242,7 +242,16 @@ describe("scoring/rrf — fuseRankings", () => {
       expect(result[0].channels.map((c) => c.channel).sort()).toEqual(["arxiv", "pubmed"]);
     });
 
-    it("a genuine conflict (differing DOIs sharing a title) is never merged", () => {
+    // DEDUP-FIX (version rule, ABC-JEV-INTEGRATION.md §4 Round 3 "manager
+    // smoke check... version rule ruled", 2026-09-24T20:30:13Z, revising
+    // §1p.A(1)/§1p.G(2)): this test used to assert that a differing DOI
+    // alone kept a same-title/year/author pair as 2 separate fused works
+    // ("a genuine conflict... never merged"). The ruling revises that: a DOI
+    // mismatch alone is no longer a conflict once title+alias+author+year
+    // already match, so this pair is now a VERSION match and fuses into ONE
+    // work crediting both channels — the same outcome as the
+    // different-id-form-TYPES case just above.
+    it("a same-title/year/author pair with two different DOIs is a version match and fuses into ONE work crediting both channels", () => {
       const preprint: RRFCandidate = {
         title: "Diffusion Models For Battery Electrolyte Discovery",
         year: 2026,
@@ -259,7 +268,9 @@ describe("scoring/rrf — fuseRankings", () => {
       const channelB: RRFChannelInput = { channel: "openalex", queries: [[published]] };
 
       const result = fuseRankings([channelA, channelB]);
-      expect(result).toHaveLength(2); // kept distinct, never guessed
+      expect(result).toHaveLength(1); // fused into ONE work, not two
+      expect(result[0].fusedScore).toBeCloseTo(1 / 61 + 1 / 61, 12);
+      expect(result[0].channels.map((c) => c.channel).sort()).toEqual(["arxiv", "openalex"]);
     });
   });
 });

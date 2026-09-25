@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { runFeedPipeline } from "./pipeline";
+import { dedupItems } from "./dedup";
+import { identityForRawItem } from "./paper-identity";
 import { resolveProvider } from "@/lib/llm/providers/registry";
 import { bySourceId } from "@/lib/sources";
 import type { RawItem } from "@/lib/sources/types";
@@ -340,6 +342,66 @@ describe("pipeline ledger exclusion (P4-S2, F-A-P4-01)", () => {
 
     const ids = result.items.map((item) => item.id);
     expect(ids).not.toContain(mergedSurvivor.id);
+    expect(ids).toContain(freshPaper.id);
+  });
+
+  // DEDUP-FIX (version rule, ABC-JEV-INTEGRATION.md §4 Round 3 "manager
+  // smoke check... version rule ruled", 2026-09-24T20:30:13Z) — acceptance
+  // 16, delivery identity: two records that are VERSIONS of the same work
+  // (identical title/year/first-author, different DOIs — e.g. a Zenodo
+  // record re-minted under a new DOI) are now ONE dedupe survivor carrying
+  // BOTH DOIs as aliases (metadata.mergedAliases). Once that survivor is
+  // served+acknowledged into the real delivery ledger under its own
+  // identity, a LATER pipeline read whose source now returns only the
+  // losing version's own record (as if a re-crawl only turned up that copy)
+  // must still be excluded — its own canonical key is one of the survivor's
+  // aliases, not a coincidence the exclusion path has to guess at.
+  it("excludes a later-arriving paper version (a different DOI) once the merged survivor carrying both DOIs was already delivered", async () => {
+    const versionA: RawItem = {
+      ...basePaper,
+      id: "openalex:zenodo-version-a",
+      title: "Interfacial Degradation Pathways In Garnet Type Solid Electrolytes",
+      authors: ["Priya Rao"],
+      publishedAt: "2026-03-01",
+      url: "https://openalex.org/W-zenodo-a",
+      metadata: { doi: "10.9000/zenodo-version-a" },
+    };
+    const versionB: RawItem = {
+      ...basePaper,
+      id: "openalex:zenodo-version-b",
+      title: "Interfacial Degradation Pathways In Garnet Type Solid Electrolytes",
+      authors: ["Priya Rao"],
+      publishedAt: "2026-03-01",
+      url: "https://openalex.org/W-zenodo-b",
+      metadata: { doi: "10.9001/zenodo-version-b" },
+    };
+
+    // Step 1: the real dedupe merge (exercises dedup.ts + paper-identity.ts
+    // directly, not a hand-typed stand-in) — both versions were seen on an
+    // earlier day and merged into one survivor.
+    const [survivor] = dedupItems([versionA, versionB]);
+    expect(survivor.metadata.mergedAliases).toEqual(
+      expect.arrayContaining(["doi:10.9000/zenodo-version-a", "doi:10.9001/zenodo-version-b"]),
+    );
+
+    // Step 2: that survivor's own re-derivable identity (the SAME helper P4
+    // delivery uses, §1p.G(4)) is what gets served + acknowledged into the
+    // real ledger.
+    const survivorIdentity = identityForRawItem(survivor);
+    const ledgerExclusions = await deliveredKeysFor(survivorIdentity);
+
+    // Step 3: a LATER pipeline read where the source now returns only the
+    // losing version (versionB) alone, unmerged — simulating a fresh fetch
+    // that only turned up that one copy.
+    stubSources([versionB, freshPaper]);
+    const now = new Date(2026, 6, 29, 9, 0);
+    const result = await runFeedPipeline(
+      { ...baseRequest, excludeIds: [] },
+      { now, ledgerExclusions },
+    );
+
+    const ids = result.items.map((item) => item.id);
+    expect(ids).not.toContain(versionB.id);
     expect(ids).toContain(freshPaper.id);
   });
 });

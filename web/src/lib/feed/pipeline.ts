@@ -43,7 +43,11 @@ import {
 } from "@/lib/opportunities/private-paper-cache";
 import { uploadInterestTerms } from "@/lib/preferences/ledger";
 import { isDeliveredIdentity } from "@/lib/utils/canonical-identity";
-import { identityForRawItem } from "@/lib/feed/paper-identity";
+import {
+  firstAuthorSurnameOf,
+  identityForRawItem,
+  publishedYearOf,
+} from "@/lib/feed/paper-identity";
 import { getCounterStore, type CounterStore } from "@/lib/usage/counters";
 import { MAX_SHADOW_CANDIDATES, type ShadowCandidate } from "@/lib/decisions/shadow";
 import { fuseRankings, type RRFCandidate, type RRFChannelInput } from "@/lib/scoring/rrf";
@@ -115,63 +119,43 @@ interface RRFItemProvenance {
 }
 
 // P2-S6-FIX (Round 3) — F-A-P2S6-01, docs/jev-abc/P2-S6-A-20260924T145415Z.md
-// NEW FINDING #1. Byte-for-byte mirrors of `@/lib/feed/dedup.ts`'s own
-// PRIVATE `publishedYearOf`/`firstAuthorSurnameOf` helpers (dedup.ts is
-// outside this slice's allowed-file list and exports neither, so they are
-// duplicated here rather than imported — the two copies must stay in sync
-// by inspection, which is exactly why both live right next to the RRF
-// candidate builder that depends on them matching). Without this, RRF's own
-// weak-link tier (title+year+first-author, `clusterCanonicalWorks`) could
-// never fire for a candidate `toRRFCandidate` built — `RRFCandidate.year`/
-// `.authors` were always omitted — even though dedupe's OWN clustering,
-// fed these same two fields correctly all along, could and does weak-link
-// the identical pair. See `pipeline.rrf.test.ts`'s "weak-link
-// channel-balance matches dedupe" block for the reproduction.
-function publishedYearOf(item: RawItem): number | undefined {
-  const m = /^(\d{4})/.exec(item.publishedAt ?? "");
-  return m ? Number(m[1]) : undefined;
-}
-
-/**
- * Best-effort surname of the first listed author — same "First Last" /
- * "Last, First" handling as dedup.ts's own helper of this name. `RRFCandidate.
- * authors[0]` is consumed directly as `firstAuthorSurname` inside
- * `scoring/rrf.ts` (no further parsing there), so THIS function must do the
- * surname extraction itself — passing the raw, un-extracted author string
- * through would silently fail to match two sources that format the same
- * author differently (e.g. arXiv's "Jane Doe" vs dblp's "Doe, Jane"), which
- * would defeat the point of mirroring dedup.ts at all.
- */
-function firstAuthorSurnameOf(item: RawItem): string | undefined {
-  const first = item.authors?.[0]?.trim();
-  if (!first) return undefined;
-  if (first.includes(",")) {
-    const surname = first.split(",")[0]?.trim();
-    return surname || undefined;
-  }
-  const parts = first.split(/\s+/).filter(Boolean);
-  return parts.length > 0 ? parts[parts.length - 1] : undefined;
-}
+// NEW FINDING #1. `year`/`authors` must be forwarded onto the RRF candidate
+// below using the SAME derivation `dedup.ts` uses, or RRF's own weak-link
+// tier (title+year+first-author, `clusterCanonicalWorks`) could never fire
+// for a candidate `toRRFCandidate` built — `RRFCandidate.year`/`.authors`
+// were always omitted — even though dedupe's OWN clustering, fed these same
+// two fields correctly all along, could and does weak-link the identical
+// pair. See `pipeline.rrf.test.ts`'s "weak-link channel-balance matches
+// dedupe" block for the reproduction. R3-CLEANUP-3 (ABC-JEV-INTEGRATION.md
+// §4 Round 3 "DEDUP-FIX fresh A: FAILED_REVIEW... narrowed conflict rule
+// ruled", 2026-09-24T21:21:36Z): this file used to carry its own private
+// byte-for-byte mirror of `dedup.ts`'s `publishedYearOf`/
+// `firstAuthorSurnameOf` (kept in sync "by inspection," since at the time
+// dedup.ts exported neither) — both are now imported from
+// `@/lib/feed/paper-identity`, the one shared implementation `dedup.ts` and
+// `channel-comparison.ts` also use, so the "stay in sync by inspection" risk
+// this comment used to warn about no longer exists.
 
 /**
  * A RawItem's identity fields in the shape `@/lib/scoring/rrf`'s
  * `RRFCandidate` needs — never rank/order, which the caller (position in
  * its query array) already supplies. `year`/`authors` are forwarded using
- * the SAME derivation dedup.ts uses (above), so RRF's weak-link tier
- * behaves identically to dedupe's for the same input — a candidate with no
- * shared id-form key across the channels that found it can still fuse into
- * one work here exactly as it already merges into one survivor there,
- * instead of silently splitting its vote (F-A-P2S6-01).
+ * the SAME shared helpers `dedup.ts` uses (`@/lib/feed/paper-identity`'s
+ * `publishedYearOf`/`firstAuthorSurnameOf`), so RRF's weak-link tier behaves
+ * identically to dedupe's for the same input — a candidate with no shared
+ * id-form key across the channels that found it can still fuse into one
+ * work here exactly as it already merges into one survivor there, instead
+ * of silently splitting its vote (F-A-P2S6-01).
  */
 function toRRFCandidate(item: RawItem): RRFCandidate {
-  const surname = firstAuthorSurnameOf(item);
+  const surname = firstAuthorSurnameOf(item.authors);
   return {
     source: item.source,
     id: item.id,
     doi: item.metadata?.doi,
     title: item.title,
     externalIds: item.metadata?.externalIds,
-    year: publishedYearOf(item),
+    year: publishedYearOf(item.publishedAt),
     authors: surname ? [surname] : undefined,
   };
 }

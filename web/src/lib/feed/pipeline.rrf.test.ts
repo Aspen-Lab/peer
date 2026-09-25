@@ -138,17 +138,22 @@ function bridgePairItems(): { dblp: RawItem; arxiv: RawItem } {
   };
 }
 
-// A REAL conflict, same shape as the bridge pair above but with two
-// DIFFERENT DOIs: same title/year/author-surname, but a confirmed,
-// disagreeing external identity on each side. `clusterCanonicalWorks`
-// (paper-identity.ts, untouched by this slice) must keep these separate
-// even after F-A-P2S6-01's fix populates year/authors — a same-type
-// id-form conflict (doi vs doi) always blocks a weak-link collapse,
-// regardless of title/year/author agreement. This is a safety-net proving
-// the fix doesn't overreach into merging genuinely different papers, not a
-// RED/GREEN pair by itself (dedupe already kept these separate before this
-// fix too, for an unrelated reason — RRF's own weak-link tier simply never
-// fired at all without year/authors).
+// Same shape as the bridge pair above but with two DIFFERENT DOIs: same
+// title/year/author-surname, but a confirmed, disagreeing external identity
+// on each side.
+//
+// DEDUP-FIX (version rule, ABC-JEV-INTEGRATION.md §4 Round 3 "manager smoke
+// check... version rule ruled", 2026-09-24T20:30:13Z, revising §1p.A(1)/
+// §1p.G(2)): this fixture originally existed as a safety net proving
+// F-A-P2S6-01's fix didn't overreach into merging genuinely different
+// papers — before this ruling, a same-type id-form conflict (doi vs doi)
+// always blocked a weak-link collapse regardless of title/year/author
+// agreement, so `clusterCanonicalWorks` kept this pair separate. The ruling
+// revises that: a DOI mismatch alone is no longer a conflict once
+// title+alias+author+year already match, so this pair is now itself a
+// version match — dedupe merges it (arxiv wins SOURCE_PRIORITY over dblp)
+// and RRF fuses it into one work crediting both channels, the same outcome
+// as the bridge pair test above.
 function conflictPairItems(): { dblp: RawItem; arxiv: RawItem } {
   const title = "Grain Boundary Impedance In Garnet Solid Electrolytes";
   const shared = {
@@ -419,7 +424,7 @@ describe("pipeline.ts — P2-S6 reciprocal rank fusion (PEER_RANK_FUSION)", () =
       expect(provenance.fusedScore).toBeCloseTo(2 / 61, 10);
     });
 
-    it("a same-title/year/author pair with two DIFFERENT DOIs is a real conflict and stays two separate items/provenance entries (safety net — not overridden by this fix)", async () => {
+    it("DEDUP-FIX: a same-title/year/author pair with two different DOIs is a version match — dedupe merges it and RRF fuses it into one work crediting both channels", async () => {
       vi.stubEnv("PEER_RANK_FUSION", "on");
       const { dblp, arxiv } = conflictPairItems();
       bySourceId.dblp.fetch = vi.fn(async () => [dblp]);
@@ -430,18 +435,20 @@ describe("pipeline.ts — P2-S6 reciprocal rank fusion (PEER_RANK_FUSION)", () =
         now: FIXED_NOW,
       });
 
-      expect(new Set(result.items.map((i) => i.id))).toEqual(
-        new Set(["arxiv:conflict1", "dblp:conflict1"]),
-      );
+      // Dedupe merges this pair now (arxiv beats dblp on SOURCE_PRIORITY),
+      // same as the bridge pair above — see conflictPairItems's own doc
+      // comment for why this flipped from the pre-DEDUP-FIX "2 separate
+      // items" outcome.
+      expect(result.items.map((i) => i.id)).toEqual(["arxiv:conflict1"]);
+
       expect(result.meta.rrf).toBeDefined();
-      expect(result.meta.rrf!["arxiv:conflict1"]).toEqual({
-        fusedScore: 1 / 61,
-        channels: [{ channel: "arxiv", rank: 1 }],
-      });
-      expect(result.meta.rrf!["dblp:conflict1"]).toEqual({
-        fusedScore: 1 / 61,
-        channels: [{ channel: "dblp", rank: 1 }],
-      });
+      const provenance = result.meta.rrf!["arxiv:conflict1"];
+      expect(provenance).toBeDefined();
+      expect(provenance.channels).toEqual([
+        { channel: "arxiv", rank: 1 },
+        { channel: "dblp", rank: 1 },
+      ]);
+      expect(provenance.fusedScore).toBeCloseTo(2 / 61, 10);
     });
   });
 

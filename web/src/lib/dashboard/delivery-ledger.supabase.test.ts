@@ -45,6 +45,13 @@ type LedgerClient = ConstructorParameters<typeof SupabaseDashboardDeliveryLedger
 function chainableSelect(result: { data: unknown; error: unknown }) {
   const node = {
     eq: () => node,
+    // P4-S9 -- passthroughs for listServedBatchDates' extra chain methods
+    // (.in/.order/.limit), so every existing caller of this helper (getBatch,
+    // listDelivered, listServedUnacknowledged) keeps working unchanged while
+    // the same double can also back the new method's longer chain.
+    in: () => node,
+    order: () => node,
+    limit: () => node,
     maybeSingle: () => Promise.resolve(result),
     then: (
       onFulfilled: (value: typeof result) => unknown,
@@ -52,6 +59,56 @@ function chainableSelect(result: { data: unknown; error: unknown }) {
     ) => Promise.resolve(result).then(onFulfilled, onRejected),
   };
   return node;
+}
+
+/**
+ * P4-S9 -- records the exact chain calls listServedBatchDates issues
+ * (select columns, eq/in filters, order, limit), so the query SHAPE itself
+ * (not just its resolved result) can be asserted directly -- same
+ * discipline as fakeMarkServedClient's eqCalls recorder above.
+ */
+function fakeDatesQueryClient(result: { data: unknown; error: unknown }) {
+  const calls: {
+    select?: string;
+    eq: Array<[string, string]>;
+    in: Array<[string, readonly string[]]>;
+    order?: [string, { ascending: boolean }];
+    limit?: number;
+  } = { eq: [], in: [] };
+  const node = {
+    eq: (column: string, value: string) => {
+      calls.eq.push([column, value]);
+      return node;
+    },
+    in: (column: string, values: readonly string[]) => {
+      calls.in.push([column, values]);
+      return node;
+    },
+    order: (column: string, options: { ascending: boolean }) => {
+      calls.order = [column, options];
+      return node;
+    },
+    limit: (count: number) => {
+      calls.limit = count;
+      return node;
+    },
+    then: (
+      onFulfilled: (value: typeof result) => unknown,
+      onRejected?: (reason: unknown) => unknown,
+    ) => Promise.resolve(result).then(onFulfilled, onRejected),
+  };
+  const client = {
+    from: (table: string) => {
+      if (table !== "dashboard_batches") throw new Error(`fakeDatesQueryClient: unexpected table ${table}`);
+      return {
+        select: (columns: string) => {
+          calls.select = columns;
+          return node;
+        },
+      };
+    },
+  } as unknown as LedgerClient;
+  return { client, calls };
 }
 
 function fakeSelectOnlyClient(
@@ -292,6 +349,46 @@ describe("read-error degrade behaviour (configured client)", () => {
 
     expect(await ledger.getBatch("owner-1", "2026-09-24")).toBeNull();
   });
+
+  it("listServedBatchDates resolves to an empty array on a configured-client error (fails open, P4-S9)", async () => {
+    const client = fakeSelectOnlyClient("dashboard_batches", {
+      data: null,
+      error: { message: "connection reset" },
+    });
+    const ledger = new SupabaseDashboardDeliveryLedger(client);
+
+    expect(await ledger.listServedBatchDates("owner-1", 30)).toEqual([]);
+  });
+});
+
+describe("SupabaseDashboardDeliveryLedger.listServedBatchDates (configured client, P4-S9)", () => {
+  it("queries dashboard_batches filtered by owner + status in [served, acknowledged], ordered by local_date desc, bounded by limit", async () => {
+    const { client, calls } = fakeDatesQueryClient({
+      data: [{ local_date: "2026-09-24" }, { local_date: "2026-09-22" }],
+      error: null,
+    });
+    const ledger = new SupabaseDashboardDeliveryLedger(client);
+
+    const result = await ledger.listServedBatchDates("owner-1", 30);
+
+    expect(result).toEqual(["2026-09-24", "2026-09-22"]);
+    expect(calls.select).toBe("local_date, status");
+    expect(calls.eq).toEqual([["owner_id", "owner-1"]]);
+    expect(calls.in).toEqual([["status", ["served", "acknowledged"]]]);
+    expect(calls.order).toEqual(["local_date", { ascending: false }]);
+    expect(calls.limit).toBe(30);
+  });
+
+  it("resolves to an empty array when the client throws synchronously (fails open, not throws)", async () => {
+    const client = {
+      from: () => {
+        throw new Error("network down");
+      },
+    } as unknown as LedgerClient;
+    const ledger = new SupabaseDashboardDeliveryLedger(client);
+
+    await expect(ledger.listServedBatchDates("owner-1", 30)).resolves.toEqual([]);
+  });
 });
 
 describe("SupabaseDashboardDeliveryLedger.acknowledgeBatch RPC (configured client)", () => {
@@ -331,6 +428,7 @@ describe("full read/write asymmetry on one always-erroring configured client (fo
     await expect(ledger.listDelivered("owner-1")).resolves.toEqual(new Set());
     await expect(ledger.listServedUnacknowledged("owner-1")).resolves.toEqual(new Set());
     await expect(ledger.getBatch("owner-1", "2026-09-24")).resolves.toBeNull();
+    await expect(ledger.listServedBatchDates("owner-1", 30)).resolves.toEqual([]);
 
     await expect(ledger.prepareBatch("owner-1", "2026-09-24", [paper("doi:a")])).rejects.toThrow();
     await expect(ledger.markServed("owner-1", "batch-1")).rejects.toThrow();

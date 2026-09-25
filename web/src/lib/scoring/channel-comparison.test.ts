@@ -135,17 +135,23 @@ function buildFixture(): ChannelRun[] {
 /**
  * F-M-P2S5-01 (Round 3) — the bridge-conflict reproduction from
  * ABC-JEV-INTEGRATION.md §1p.G: paper A (channel "s2", DOI 10.1111/aaa) and
- * paper C (channel "openalex", DOI 10.2222/ccc — a DIFFERENT, genuinely
- * conflicting DOI) share the exact same title/year/first-author. A third
- * channel ("dblp-keyword") returns an ID-less record B carrying that same
- * title/year/first-author, matching BOTH A and C on the weak (title+year+
- * author) tier alone. A private per-item union-find would transitively merge
- * A and C into one work via two separate pairwise unions through B, even
- * though comparing A and C directly correctly refuses to merge (they carry
- * conflicting real id-form keys). The corrected shared `clusterCanonicalWorks`
- * must keep all three as SEPARATE works instead: A and C's pass-1 clusters
- * conflict (both carry an id-form key of type "doi", different values), so
- * the whole weak-linked component (A, B, C) is blocked from merging at all.
+ * paper C (channel "openalex", DOI 10.2222/ccc — a DIFFERENT DOI) share the
+ * exact same title/year/first-author. A third channel ("dblp-keyword")
+ * returns an ID-less record B carrying that same title/year/first-author,
+ * matching BOTH A and C on the weak (title+year+author) tier alone.
+ *
+ * DEDUP-FIX (version rule, ABC-JEV-INTEGRATION.md §4 Round 3 "manager smoke
+ * check... version rule ruled", 2026-09-24T20:30:13Z, revising §1p.A(1)/
+ * §1p.G(2)): this fixture originally proved A and C's differing DOIs were a
+ * genuine conflict that blocked the WHOLE weak-linked component (A, B, C)
+ * from merging — the tests below used to assert 3 separate works. The
+ * ruling revises that: a DOI mismatch alone is no longer a conflict once
+ * title+alias+author+year already match, so A, B and C are now versions of
+ * the SAME work and collapse into ONE. The fixture name/shape is kept
+ * unchanged (only the outcome it demonstrates flipped) because it still
+ * proves the shared `clusterCanonicalWorks` correctly chains a bridging,
+ * ID-less record into a version group instead of only pairwise-matching it
+ * against one side.
  */
 function buildBridgeConflictFixture(): ChannelRun[] {
   return [
@@ -436,38 +442,21 @@ describe("compareChannels", () => {
     expect(JSON.stringify(a)).toBe(JSON.stringify(b));
   });
 
-  it("F-M-P2S5-01: keeps two conflicting-DOI papers as DIFFERENT works even when a third, ID-less channel record title-matches both (no transitive bridge merge through a shared union-find)", () => {
+  it("DEDUP-FIX: merges two same-title/year/author papers with different DOIs, plus their ID-less bridging channel record, into ONE work crediting all three channels (version rule; was F-M-P2S5-01's conflict reproduction)", () => {
     const result = compareChannels(buildBridgeConflictFixture());
     expect(result.availability).toBe("ok");
     if (result.availability !== "ok") return;
 
-    // Three separate works: the s2 copy (DOI aaa), the openalex copy (DOI
-    // ccc), and the ID-less dblp-keyword bridge record. None may merge with
-    // either of the other two: A and C's pass-1 clusters conflict (both
-    // carry a real "doi" id-form key, with different values), so per
-    // §1p.G(3) the WHOLE weak-linked component (A, B, C all share the same
-    // title+year+author) is blocked from merging — never just two of the
-    // three pairwise-outvoting the conflict.
-    expect(result.works).toHaveLength(3);
-
-    const workWithS2 = result.works.find((w) => w.channels.includes("s2"));
-    const workWithOpenalex = result.works.find((w) => w.channels.includes("openalex"));
-    const workWithBridge = result.works.find((w) => w.channels.includes("dblp-keyword"));
-    expect(workWithS2).toBeDefined();
-    expect(workWithOpenalex).toBeDefined();
-    expect(workWithBridge).toBeDefined();
-
-    // The required assertion: A (s2 / DOI aaa) and C (openalex / DOI ccc)
-    // are never the same work.
-    expect(workWithS2).not.toBe(workWithOpenalex);
-    expect(workWithS2?.channels).toEqual(["s2"]);
-    expect(workWithOpenalex?.channels).toEqual(["openalex"]);
-    expect(workWithBridge?.channels).toEqual(["dblp-keyword"]);
+    // ONE work now, crediting all three channels — see buildBridgeConflictFixture's
+    // own doc comment for why this flipped from the pre-DEDUP-FIX "3
+    // separate works" outcome.
+    expect(result.works).toHaveLength(1);
+    expect(result.works[0].channels).toEqual(["dblp-keyword", "openalex", "s2"]);
 
     expect(find(result.perChannel, "s2").uniqueWorkCount).toBe(1);
     expect(find(result.perChannel, "openalex").uniqueWorkCount).toBe(1);
     expect(find(result.perChannel, "dblp-keyword").uniqueWorkCount).toBe(1);
-    expect(result.union.totalUniqueWorkCount).toBe(3);
+    expect(result.union.totalUniqueWorkCount).toBe(1);
   });
 
   it("F-M-P2S5-01: the bridge-conflict fixture produces byte-identical output regardless of channel/item order", () => {
@@ -483,7 +472,9 @@ describe("compareChannels", () => {
 
     expect(a.availability).toBe("ok");
     if (a.availability !== "ok") return;
-    expect(a.works).toHaveLength(3);
+    // DEDUP-FIX: was 3 (pre-version-rule conflict blocked the merge); see
+    // buildBridgeConflictFixture's own doc comment.
+    expect(a.works).toHaveLength(1);
   });
 
   it("F-M-P2S5-01: unifies a preprint and its later, retitled published version across two channels via a shared arXiv id alone (strong link), even though titles differ and years are one apart", () => {

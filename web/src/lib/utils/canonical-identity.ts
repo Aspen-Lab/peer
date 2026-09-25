@@ -13,17 +13,29 @@
 // "Editorial" gets no title alias, so it can't become a false matching hook).
 //
 // Two different rules read this identity, deliberately asymmetric:
-//   1. Dedupe (`sameCanonicalWork`, below) merges only on a shared REAL
-//      id-form key, or on normalized-title + year(+-1) + first-author
-//      surname — and never merges on title alone when both sides ALSO carry
-//      a real id-form key that conflicts (e.g. a preprint DOI vs a journal
-//      DOI on the same title): a false merge silently deletes a paper, so
-//      dedupe stays conservative.
+//   1. Dedupe (`feed/paper-identity.ts`'s `clusterCanonicalWorks` — NOT this
+//      file; see R3-CLEANUP-3 below) merges pass-1 clusters transitively on
+//      a shared REAL id-form key; a weak-linked component of clusters
+//      (normalized-title + year(+-1) + first-author surname) then collapses
+//      into one survivor only if every cross-cluster pair in it directly
+//      satisfies that weak-link test — ids play no part in the decision
+//      (DEDUP-FIX3, ABC-JEV-INTEGRATION.md §4 Round 3 "structural pairwise
+//      rule ruled", 2026-09-24T22:06:02Z): a false merge silently deletes a
+//      paper, so dedupe stays conservative about anything that isn't
+//      directly a version pair, while still merging genuine versions of one
+//      work minted under different DOIs (e.g. Zenodo).
 //   2. `isDeliveredIdentity` (for P4) is deliberately looser: key OR ANY
 //      alias intersecting the owner's ledger is enough, specifically so a
 //      preprint shown once can't resurface as the published version under a
 //      different DOI once the title matches. A false exclusion there only
 //      loses one candidate; a false re-delivery breaks the user's hard rule.
+//
+// R3-CLEANUP-3 (Round 3, same ruling as above, "remove the unused
+// sameCanonicalWork"): this file used to also export a per-pair
+// `sameCanonicalWork` encoding rule 1's ORIGINAL, since-twice-superseded
+// form. It had zero production callers (dedupe's actual clustering needs a
+// cluster-level, not pairwise, conflict check) and was removed as dead code
+// — see `feed/paper-identity.ts` for the real dedupe rule.
 
 export interface CanonicalPaperExternalIds {
   doi?: string;
@@ -196,40 +208,17 @@ export function titleFormOf(identity: CanonicalIdentity): string | undefined {
   return identity.aliases.find((a) => a.startsWith("title:"));
 }
 
-function normalizeSurname(s: string | undefined): string | undefined {
-  const t = s?.trim().toLowerCase();
-  return t || undefined;
-}
-
-/**
- * Dedupe's own matching rule (§1p.A(1)): true if both records share a real
- * id-form key, OR their normalized titles are equal (and qualify for a
- * title alias) with published years within 1 of each other and the same
- * first-author surname. If BOTH records carry a real id-form key and none
- * matched, that's a conflict (e.g. a preprint DOI vs a journal DOI sharing a
- * title) — title/year/author is never allowed to override two confirmed,
- * disagreeing external identities, so this returns false rather than
- * guessing which one is "right."
- */
-export function sameCanonicalWork(a: WorkMatchInput, b: WorkMatchInput): boolean {
-  const aIds = idFormKeys(a.identity);
-  const bIds = idFormKeys(b.identity);
-  const bIdSet = new Set(bIds);
-  for (const k of aIds) {
-    if (bIdSet.has(k)) return true;
-  }
-  if (aIds.length > 0 && bIds.length > 0) return false;
-
-  const aTitle = titleFormOf(a.identity);
-  const bTitle = titleFormOf(b.identity);
-  if (!aTitle || !bTitle || aTitle !== bTitle) return false;
-
-  if (a.publishedYear == null || b.publishedYear == null) return false;
-  if (Math.abs(a.publishedYear - b.publishedYear) > 1) return false;
-
-  const aSurname = normalizeSurname(a.firstAuthorSurname);
-  const bSurname = normalizeSurname(b.firstAuthorSurname);
-  if (!aSurname || !bSurname || aSurname !== bSurname) return false;
-
-  return true;
-}
+// R3-CLEANUP-3 (Round 3, ABC-JEV-INTEGRATION.md §4 Round 3 "DEDUP-FIX fresh
+// A: FAILED_REVIEW... narrowed conflict rule ruled", 2026-09-24T21:21:36Z,
+// "remove the unused sameCanonicalWork"): this file used to export
+// `sameCanonicalWork(a, b)`, a per-PAIR match rule (shared id-form key, or
+// title+year(±1)+first-author-surname with neither side carrying a
+// conflicting id) that encoded the ORIGINAL §1p.A(1) prose verbatim.
+// Grep-confirmed zero production callers (by this C, and independently by
+// both the prior DEDUP-FIX C and the fresh DEDUP-FIX-A review before it):
+// `feed/paper-identity.ts`'s `clusterCanonicalWorks` deliberately does NOT
+// reuse it — clustering needs to evaluate the weak-link rule at the CLUSTER
+// level (now `clustersFullyMatch`/`weakPairMatch`, DEDUP-FIX3's structural
+// pairwise rule — ids play no part), not as a single pairwise predicate —
+// and nothing else in the codebase ever called it. Removed as dead code,
+// along with the `normalizeSurname` helper that existed only to support it.

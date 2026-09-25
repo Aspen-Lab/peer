@@ -164,6 +164,26 @@ export interface DashboardDeliveryLedger {
   /** This owner's batch row for `localDate`, if one already exists. */
   getBatch(ownerId: string, localDate: string): Promise<DashboardBatch | null>;
   /**
+   * P4-S9 (acceptance 16 "archive access" subcase, ABC-JEV-INTEGRATION.md §4
+   * "Round 3 — END-OF-ROUND RE-MEASUREMENT part 2" RULING (archive); §3c
+   * "Archive is explicit old-batch access, not a new recommendation").
+   * Bounded, most-recent-first list of this owner's local dates that have a
+   * SERVED or ACKNOWLEDGED batch -- never a `'prepared'`-only date, since a
+   * batch nobody has been sent yet was never "archived." Read-only: never
+   * mints, never mutates.
+   *
+   * Fails open to `[]` on a configured-client error -- the SAME "a ledger
+   * outage is a miss, not a broken feed" contract as
+   * `listDelivered`/`listServedUnacknowledged` (see this module's "two
+   * failure rules" comment above). This method has no `"unavailable"` state
+   * of its own. A caller that must distinguish "genuinely nothing" from
+   * "the read failed" checks `readExclusions`'s status first, exactly like
+   * `runLedgerAwareFeed` in `web/src/app/api/feed/route.ts` already does
+   * before trusting `getBatch`'s own fail-open `null` — see
+   * `web/src/app/api/feed/archive/route.ts`, the only caller.
+   */
+  listServedBatchDates(ownerId: string, limit: number): Promise<string[]>;
+  /**
    * Creates the batch row for `ownerId`/`localDate` with status 'prepared'.
    * Idempotent: if a batch already exists for that owner+date (a race, a
    * duplicate call, a retried request), returns the EXISTING batch unchanged
@@ -280,6 +300,19 @@ export class MemoryDashboardDeliveryLedger implements DashboardDeliveryLedger {
     return batch ? freeze(batch) : null;
   }
 
+  async listServedBatchDates(ownerId: string, limit: number): Promise<string[]> {
+    const dates: string[] = [];
+    for (const batch of this.batchesById.values()) {
+      if (batch.ownerId !== ownerId) continue;
+      if (batch.status !== "served" && batch.status !== "acknowledged") continue;
+      dates.push(batch.localDate);
+    }
+    // YYYY-MM-DD sorts lexicographically = chronologically; descending gives
+    // most-recent-first without needing a separate Date parse.
+    dates.sort((a, b) => (a < b ? 1 : a > b ? -1 : 0));
+    return dates.slice(0, Math.max(0, limit));
+  }
+
   async prepareBatch(
     ownerId: string,
     localDate: string,
@@ -385,6 +418,12 @@ interface DeliveryRow {
  */
 interface SelectQuery<Row> extends PromiseLike<{ data: Row[] | null; error: unknown }> {
   eq(column: string, value: string): SelectQuery<Row>;
+  /** P4-S9 -- listServedBatchDates' status-in-set filter. */
+  in(column: string, values: readonly string[]): SelectQuery<Row>;
+  /** P4-S9 -- listServedBatchDates' most-recent-first ordering. */
+  order(column: string, options: { ascending: boolean }): SelectQuery<Row>;
+  /** P4-S9 -- listServedBatchDates' bound. */
+  limit(count: number): SelectQuery<Row>;
   maybeSingle(): Promise<{ data: Row | null; error: unknown }>;
 }
 
@@ -528,6 +567,28 @@ export class SupabaseDashboardDeliveryLedger implements DashboardDeliveryLedger 
       return rowToBatch(data);
     } catch {
       return null;
+    }
+  }
+
+  async listServedBatchDates(ownerId: string, limit: number): Promise<string[]> {
+    if (!this.client) return this.fallback.listServedBatchDates(ownerId, limit);
+    try {
+      const { data, error } = await this.client
+        .from("dashboard_batches")
+        .select("local_date, status")
+        .eq("owner_id", ownerId)
+        .in("status", ["served", "acknowledged"])
+        .order("local_date", { ascending: false })
+        .limit(limit);
+      if (error || !data) return [];
+      return data.map((row) => row.local_date);
+    } catch {
+      // Same fail-open reasoning as listDelivered/listServedUnacknowledged
+      // above -- a read outage here degrades to "no archived dates found",
+      // never a thrown error. The route's own readExclusions probe is what
+      // turns a genuine outage into a truthful 503; see this method's own
+      // doc comment on the interface.
+      return [];
     }
   }
 

@@ -571,3 +571,71 @@ describe("servedItems (P4-S3)", () => {
     expect(Object.prototype.hasOwnProperty.call(insertCalls[0] as object, "served_items")).toBe(false);
   });
 });
+
+// P4-S9 (Round 3) -- ABC-JEV-INTEGRATION.md §4 "Round 3 — END-OF-ROUND
+// RE-MEASUREMENT part 2" RULING (archive), §3c "Archive is explicit
+// old-batch access, not a new recommendation." The one new read-only method
+// this slice adds to the ledger contract: a bounded, most-recent-first list
+// of an owner's local dates that have a SERVED or ACKNOWLEDGED batch --
+// never a 'prepared'-only date, since a batch nobody has been sent yet was
+// never "archived." web/src/app/api/feed/archive/route.ts is the only
+// caller. Same "reads fail open" convention as listDelivered/
+// listServedUnacknowledged (see the module's "two failure rules" comment)
+// -- the route itself gets its fail-CLOSED 503 guarantee by checking
+// readExclusions' status first, not from this method, so this method has no
+// "unavailable" state of its own (see delivery-ledger.supabase.test.ts for
+// the configured-client query-shape and fail-open tests).
+describe("listServedBatchDates (P4-S9)", () => {
+  describe("MemoryDashboardDeliveryLedger", () => {
+    it("returns only served/acknowledged dates, most-recent-first, never a prepared-only date", async () => {
+      const ledger = new MemoryDashboardDeliveryLedger();
+      await ledger.prepareBatch("owner-1", "2026-09-22", [paper("doi:prepared-only")]); // left 'prepared' -- never served
+      const served = await ledger.prepareBatch("owner-1", "2026-09-23", [paper("doi:served")]);
+      await ledger.markServed("owner-1", served.id);
+      const acked = await ledger.prepareBatch("owner-1", "2026-09-24", [paper("doi:acked")]);
+      await ledger.acknowledgeBatch("owner-1", acked.id);
+
+      expect(await ledger.listServedBatchDates("owner-1", 30)).toEqual(["2026-09-24", "2026-09-23"]);
+    });
+
+    it("is bounded by the given limit, keeping the most recent dates", async () => {
+      const ledger = new MemoryDashboardDeliveryLedger();
+      for (const localDate of ["2026-09-20", "2026-09-21", "2026-09-22", "2026-09-23", "2026-09-24"]) {
+        const batch = await ledger.prepareBatch("owner-1", localDate, [paper(`doi:${localDate}`)]);
+        await ledger.markServed("owner-1", batch.id);
+      }
+
+      expect(await ledger.listServedBatchDates("owner-1", 2)).toEqual(["2026-09-24", "2026-09-23"]);
+    });
+
+    it("is empty for an owner with no served/acknowledged batches at all", async () => {
+      const ledger = new MemoryDashboardDeliveryLedger();
+      await ledger.prepareBatch("owner-1", "2026-09-24", [paper("doi:prepared-only")]); // never served
+
+      expect(await ledger.listServedBatchDates("owner-1", 30)).toEqual([]);
+    });
+
+    it("never mixes another owner's dates in", async () => {
+      const ledger = new MemoryDashboardDeliveryLedger();
+      const mine = await ledger.prepareBatch("owner-1", "2026-09-24", [paper("doi:mine")]);
+      await ledger.markServed("owner-1", mine.id);
+      const theirs = await ledger.prepareBatch("owner-2", "2026-09-24", [paper("doi:theirs")]);
+      await ledger.markServed("owner-2", theirs.id);
+
+      expect(await ledger.listServedBatchDates("owner-1", 30)).toEqual(["2026-09-24"]);
+      expect(await ledger.listServedBatchDates("owner-nobody", 30)).toEqual([]);
+    });
+  });
+
+  describe("SupabaseDashboardDeliveryLedger, unconfigured (delegates to the same fallback as every other method)", () => {
+    it("returns [] with no batches prepared, and the right dates once some are served, via the null-client fallback", async () => {
+      const ledger = new SupabaseDashboardDeliveryLedger(null);
+      expect(await ledger.listServedBatchDates("owner-1", 30)).toEqual([]);
+
+      const batch = await ledger.prepareBatch("owner-1", "2026-09-24", [paper("doi:a")]);
+      await ledger.markServed("owner-1", batch.id);
+
+      expect(await ledger.listServedBatchDates("owner-1", 30)).toEqual(["2026-09-24"]);
+    });
+  });
+});

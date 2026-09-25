@@ -201,9 +201,14 @@ export function fuseRankings(
 
   if (resolved.length === 0) return [];
 
-  // Group into canonical works with the SAME shared, order-independent,
-  // conflict-aware clustering `feed/dedup.ts` and `channel-comparison.ts`
-  // use — see file header.
+  // Group into canonical works with the SAME shared, order-independent
+  // clustering `feed/dedup.ts` and `channel-comparison.ts` use — see file
+  // header. DEDUP-FIX3 (ABC-JEV-INTEGRATION.md §4 Round 3 "structural
+  // pairwise rule ruled", 2026-09-24T22:06:02Z): a weak-linked component of
+  // pass-1 clusters collapses into one work only if every pair of records
+  // drawn from different clusters in it directly satisfies the
+  // title+year+author weak-link test below; ids play no part in that
+  // decision. Pass-1 strong links (shared real id-form key) are unchanged.
   const groups = clusterCanonicalWorks(resolved.map((r) => r.matchInput));
 
   const workGroups: WorkGroup[] = groups.map((idxs) => {

@@ -6,7 +6,7 @@ import {
   type CanonicalPaperExternalIds,
   type WorkMatchInput,
 } from "@/lib/utils/canonical-identity";
-import { clusterCanonicalWorks } from "@/lib/feed/paper-identity";
+import { clusterCanonicalWorks, firstAuthorSurnameOf } from "@/lib/feed/paper-identity";
 
 // P2-S5 (Round 3) — F-A-P2-04f / acceptance 4f, per
 // ABC-JEV-INTEGRATION.md §1c/§1f/§3e and docs/jev-abc/P2-B-20260924T0345Z.md.
@@ -28,20 +28,24 @@ import { clusterCanonicalWorks } from "@/lib/feed/paper-identity";
 // (e.g. an S2 id and an OpenAlex W-id) must count as one work, not two, or
 // every overlap/union number here would be silently wrong. Clustering itself
 // delegates to `feed/paper-identity.ts`'s shared `clusterCanonicalWorks`
-// (F-M-P2S5-01, per ABC-JEV-INTEGRATION.md §1p.G) — the SAME corrected,
-// conflict-aware function `feed/dedup.ts` uses, not a private copy: strong
-// links on any shared real id-form key (DOI/S2/OpenAlex/arXiv/PMID) union
-// transitively first; a title+year(±1)+first-author-surname weak link is
-// then evaluated only BETWEEN the resulting pass-1 clusters, and a
-// weak-linked component of clusters collapses into one work only if no two
-// clusters anywhere in it conflict (share an id-form TYPE with differing
-// values). This module used to carry its own, older two-pass union-find that
-// unioned matching PAIRS of items directly, which let an ID-less "bridge"
-// record transitively merge two otherwise-conflicting, ID-bearing works
-// through two separate pairwise unions, even though comparing those two
-// works directly correctly refused to merge them — see
-// `channel-comparison.test.ts`'s "bridge conflict" fixture for the exact
-// reproduction this now fixes.
+// (F-M-P2S5-01, per ABC-JEV-INTEGRATION.md §1p.G) — the SAME function
+// `feed/dedup.ts` uses, not a private copy: strong links on any shared real
+// id-form key (DOI/S2/OpenAlex/arXiv/PMID) union transitively first; a
+// title+year(±1)+first-author-surname weak link is then evaluated only
+// BETWEEN the resulting pass-1 clusters, and a weak-linked component of
+// clusters collapses into one work only if every pair of records drawn from
+// different clusters in it directly satisfies that weak-link test — ids
+// play no part in the decision, and any failing cross-cluster pair keeps
+// every cluster in the component separate (DEDUP-FIX3,
+// ABC-JEV-INTEGRATION.md §4 Round 3 "structural pairwise rule ruled",
+// 2026-09-24T22:06:02Z). This replaced an older per-pair union-find where an
+// ID-less "bridge" record could transitively merge two works a direct
+// comparison would have kept apart — see `channel-comparison.test.ts`'s
+// "bridge conflict" fixture for the reproduction this fixed. R3-CLEANUP-3:
+// this file's own `firstAuthorSurnameOf` used to be a private, duplicated copy of
+// the same logic `feed/dedup.ts`/`feed/pipeline.ts` each also carried; all
+// three now import the one shared implementation from
+// `feed/paper-identity.ts`.
 //
 // Never-fabricate rules this module enforces structurally, not just by
 // convention:
@@ -229,24 +233,6 @@ export type ChannelComparisonResult = ChannelComparisonResultOk | ChannelCompari
 const NO_CHANNEL_INPUT_REASON = "no data: zero channel inputs provided";
 const NO_USABLE_CHANNEL_REASON = "no data: every channel's status was failed or not_run";
 
-/**
- * Best-effort surname of the first listed author, for the title+year+author
- * match fallback only — mirrors `feed/dedup.ts`'s own helper of the same
- * name so the two modules treat "First Last" / "Last, First" identically;
- * duplicated rather than imported because `dedup.ts` is outside this slice's
- * allowed-file list and the function is tiny/pure.
- */
-function firstAuthorSurnameOf(authors: string[] | undefined): string | undefined {
-  const first = authors?.[0]?.trim();
-  if (!first) return undefined;
-  if (first.includes(",")) {
-    const surname = first.split(",")[0]?.trim();
-    return surname || undefined;
-  }
-  const parts = first.split(/\s+/).filter(Boolean);
-  return parts.length > 0 ? parts[parts.length - 1] : undefined;
-}
-
 function resolveIdentity(item: ChannelComparisonItem): CanonicalIdentity {
   if (item.identity) return item.identity;
   return canonicalPaperKey({
@@ -286,22 +272,23 @@ interface WorkGroup {
 }
 
 /**
- * Groups resolved items into canonical works using the SHARED, corrected
- * clustering function (F-M-P2S5-01, per ABC-JEV-INTEGRATION.md §1p.G):
+ * Groups resolved items into canonical works using the SHARED clustering
+ * function (F-M-P2S5-01, per ABC-JEV-INTEGRATION.md §1p.G):
  * `clusterCanonicalWorks` unions strong (shared id-form key) links
  * transitively first, then evaluates weak (title+year±1+first-author) links
  * BETWEEN the resulting pass-1 clusters — collapsing a weak-linked component
- * into one work only when no two clusters anywhere in it conflict (share an
- * id-form TYPE with differing values). This replaces a private copy of the
- * OLD, buggy per-item union-find this file used to carry: that version could
- * let an ID-less "bridge" record (matching two otherwise-conflicting,
- * ID-bearing items by title+year+author alone) transitively merge them into
- * one work via two separate pairwise unions, even though comparing the two
- * conflicting items directly would correctly refuse to merge them. Using the
- * same function `feed/dedup.ts` uses keeps this harness's cross-channel
- * matching and the live pipeline's own dedupe from ever silently drifting
- * apart. Order-independent: the partition never depends on the order
- * `resolved` was built in (`clusterCanonicalWorks`'s own guarantee).
+ * into one work only when every pair of records drawn from different
+ * clusters in it directly satisfies that weak-link test; ids play no part in
+ * the decision, and any failing cross-cluster pair keeps every cluster in
+ * the component separate (DEDUP-FIX3, ABC-JEV-INTEGRATION.md §4 Round 3
+ * "structural pairwise rule ruled", 2026-09-24T22:06:02Z). This replaced an
+ * older per-item union-find that could let an ID-less "bridge" record
+ * transitively merge two works a direct comparison would have kept apart.
+ * Using the same function `feed/dedup.ts` uses keeps this harness's
+ * cross-channel matching and the live pipeline's own dedupe from ever
+ * silently drifting apart. Order-independent: the partition never depends on
+ * the order `resolved` was built in (`clusterCanonicalWorks`'s own
+ * guarantee).
  */
 function groupIntoWorks(resolved: ResolvedItem[]): WorkGroup[] {
   if (resolved.length === 0) return [];

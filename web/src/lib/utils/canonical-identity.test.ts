@@ -5,7 +5,6 @@ import {
   isDeliveredIdentity,
   normalizeDoi,
   normalizeTitle,
-  sameCanonicalWork,
   type CanonicalIdentity,
 } from "./canonical-identity";
 
@@ -261,116 +260,15 @@ describe("idFormKeys", () => {
   });
 });
 
-describe("sameCanonicalWork", () => {
-  it("is true when both items share a real id-form key", () => {
-    const a = canonicalPaperKey({
-      source: "openalex",
-      id: "openalex:W1",
-      doi: "10.1000/shared",
-      title: "Neural Networks For Climate Modeling A Survey",
-    });
-    const b = canonicalPaperKey({
-      source: "semantic_scholar",
-      id: "semantic_scholar:S2X",
-      doi: "10.1000/SHARED",
-      title: "Neural networks for climate modeling — a survey (extended)",
-    });
-    expect(
-      sameCanonicalWork({ identity: a }, { identity: b }),
-    ).toBe(true);
-  });
-
-  it("is false on conflicting dois even when title/year/author all match (preprint vs published)", () => {
-    const a = canonicalPaperKey({
-      source: "arxiv",
-      id: "arxiv:2409.11111",
-      doi: "10.48550/arxiv.2409.11111",
-      title: "Efficient Transformer Architectures For Long Context Reasoning",
-    });
-    const b = canonicalPaperKey({
-      source: "openalex",
-      id: "openalex:W999",
-      doi: "10.1109/tpami.2024.123456",
-      title: "Efficient Transformer Architectures For Long Context Reasoning",
-    });
-    expect(
-      sameCanonicalWork(
-        { identity: a, publishedYear: 2024, firstAuthorSurname: "Third" },
-        { identity: b, publishedYear: 2024, firstAuthorSurname: "Third" },
-      ),
-    ).toBe(false);
-  });
-
-  it("is true via normalized title + year within 1 + same first-author surname when neither has an id", () => {
-    const a = canonicalPaperKey({
-      source: "dblp",
-      id: "dblp:x/1",
-      title: "Scalable Graph Neural Networks For Molecular Property Prediction",
-    });
-    const b = canonicalPaperKey({
-      source: "openalex",
-      id: "openalex:W2",
-      title: "Scalable Graph Neural Networks For Molecular Property Prediction",
-    });
-    expect(
-      sameCanonicalWork(
-        { identity: a, publishedYear: 2022, firstAuthorSurname: "Fifth" },
-        { identity: b, publishedYear: 2023, firstAuthorSurname: "Fifth" },
-      ),
-    ).toBe(true);
-  });
-
-  it("is false when the year gap exceeds 1", () => {
-    const a = canonicalPaperKey({
-      source: "dblp",
-      id: "dblp:x/1",
-      title: "Comprehensive Review Of Battery Degradation Mechanisms",
-    });
-    const b = canonicalPaperKey({
-      source: "openalex",
-      id: "openalex:W2",
-      title: "Comprehensive Review Of Battery Degradation Mechanisms",
-    });
-    expect(
-      sameCanonicalWork(
-        { identity: a, publishedYear: 2015, firstAuthorSurname: "First" },
-        { identity: b, publishedYear: 2023, firstAuthorSurname: "Second" },
-      ),
-    ).toBe(false);
-  });
-
-  it("is false when the first-author surname differs", () => {
-    const a = canonicalPaperKey({
-      source: "dblp",
-      id: "dblp:x/1",
-      title: "Comprehensive Review Of Battery Degradation Mechanisms",
-    });
-    const b = canonicalPaperKey({
-      source: "openalex",
-      id: "openalex:W2",
-      title: "Comprehensive Review Of Battery Degradation Mechanisms",
-    });
-    expect(
-      sameCanonicalWork(
-        { identity: a, publishedYear: 2021, firstAuthorSurname: "First" },
-        { identity: b, publishedYear: 2021, firstAuthorSurname: "Second" },
-      ),
-    ).toBe(false);
-  });
-
-  it("is false when the title has too few qualifying tokens to alias, even with matching year/author", () => {
-    const a = canonicalPaperKey({ source: "dblp", id: "dblp:x/1", title: "Editorial" });
-    const b = canonicalPaperKey({ source: "openalex", id: "openalex:W2", title: "Editorial" });
-    expect(
-      sameCanonicalWork(
-        { identity: a, publishedYear: 2021, firstAuthorSurname: "Same" },
-        { identity: b, publishedYear: 2021, firstAuthorSurname: "Same" },
-      ),
-    ).toBe(false);
-  });
-
-  it("never throws on empty inputs", () => {
-    const empty = canonicalPaperKey({});
-    expect(() => sameCanonicalWork({ identity: empty }, { identity: empty })).not.toThrow();
-  });
-});
+// R3-CLEANUP-3 (Round 3, ABC-JEV-INTEGRATION.md §4 Round 3 "DEDUP-FIX fresh
+// A: FAILED_REVIEW... narrowed conflict rule ruled", 2026-09-24T21:21:36Z,
+// "remove the unused sameCanonicalWork"): the `describe("sameCanonicalWork",
+// ...)` block that used to live here (7 tests) tested a function removed as
+// dead code from canonical-identity.ts — grep-confirmed zero production
+// callers, independently by three separate checkpoints (DEDUP-FIX C,
+// DEDUP-FIX fresh A, and this C). The dedupe rule it encoded is superseded
+// three times over (DEDUP-FIX, then DEDUP-FIX2, then DEDUP-FIX3's structural
+// pairwise rule) and now lives, correctly, in feed/paper-identity.ts's
+// `clusterCanonicalWorks`/`weakPairMatch`/`clustersFullyMatch`
+// — see paper-identity.test.ts and dedup.test.ts for its equivalent, current
+// coverage (the DEDUP-FIX3-tagged cases there specifically).

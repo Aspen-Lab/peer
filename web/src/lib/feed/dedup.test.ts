@@ -10,6 +10,19 @@ import type { RawItem, SourceId } from "@/lib/sources/types";
 // to share that truncated token set. This file first reproduces that bug
 // (scenario "a", asserted RED against the pre-fix implementation), then
 // pins down the full replacement policy.
+//
+// DEDUP-FIX (Round 3, ABC-JEV-INTEGRATION.md §4 Round 3 "manager smoke
+// check... version rule ruled", 2026-09-24T20:30:13Z, revising §1p.A(1)/
+// §1p.G(2)): a production smoke check found real duplicate feed items —
+// e.g. two Zenodo records of the same paper, one DOI per version. The
+// ruling: two records with equal normalized full titles, a qualifying
+// (>=4-token) title alias, the same first-author surname, and published
+// years within +-1 are VERSIONS of one work and now merge even when their
+// DOIs/native ids differ — a DOI/id mismatch alone is no longer a conflict.
+// Tests below tagged `DEDUP-FIX` either rewrite a case that used to assert
+// the old "DOI mismatch => keep both" outcome, or are new cases pinning the
+// rule's boundaries (different author / short title / no authors still keep
+// both; a version chain merges; shuffled order is unaffected).
 
 function item(overrides: Partial<RawItem> & { id: string; source: SourceId; title: string }): RawItem {
   return {
@@ -99,12 +112,16 @@ describe("dedupItems", () => {
     expect(result).toHaveLength(2);
   });
 
-  // (d) Preprint vs published, different DOIs, same title -> 2, documented.
-  // §1p.A's accepted cost: this pair survives as two pool entries; P4's
-  // delivery exclusion (not dedupe) is what later recognizes them as the
-  // same work via the shared title alias, per the deliberately asymmetric
-  // isDeliveredIdentity rule in canonical-identity.ts.
-  it("keeps a preprint and its published version apart when their DOIs differ, even with the same title/year/author", () => {
+  // (d) DEDUP-FIX (version rule): this test used to assert that a preprint
+  // and its published version stayed 2 separate items whenever their DOIs
+  // differed, even with the same title/year/author — the exact shape of the
+  // production regression the ruling reproduces (repositories like Zenodo
+  // mint a new DOI per version). Per the version rule, a DOI mismatch alone
+  // is no longer a conflict once title+alias+author+year already match:
+  // this pair is now a VERSION of one work and merges, with the survivor
+  // carrying BOTH DOIs as re-derivable aliases (via identityForRawItem, the
+  // same helper P4's delivery-exclusion path uses).
+  it("merges a preprint and its published version sharing title/year/author despite different DOIs (version rule)", () => {
     const preprint = item({
       id: "arxiv:2409.11111",
       source: "arxiv",
@@ -123,6 +140,90 @@ describe("dedupItems", () => {
     });
 
     const result = dedupItems([preprint, published]);
+    expect(result).toHaveLength(1);
+    expect(result[0].source).toBe("arxiv"); // SOURCE_PRIORITY: arxiv(4) > openalex(3)
+
+    const identity = identityForRawItem(result[0]);
+    const allForms = [identity.key, ...identity.aliases];
+    expect(allForms).toEqual(
+      expect.arrayContaining(["doi:10.48550/arxiv.2409.11111", "doi:10.1109/tpami.2024.123456"]),
+    );
+  });
+
+  // DEDUP-FIX (version rule) boundary case: same title/year, DIFFERENT
+  // first-author surname, different DOIs -> stays 2. The version rule's
+  // "same first-author surname" condition is not met, so this never reaches
+  // even the now-conflict-free weak-link merge path.
+  it("keeps two same-title/year items with different DOIs apart when the first-author surname differs (version rule boundary)", () => {
+    const a = item({
+      id: "openalex:WAUTHORDIFF1",
+      source: "openalex",
+      title: "Divergent Authorship Boundary Case For The Version Rule",
+      publishedAt: "2022-05-01",
+      authors: ["Irene First"],
+      metadata: { doi: "10.7000/author-diff-one" },
+    });
+    const b = item({
+      id: "openalex:WAUTHORDIFF2",
+      source: "openalex",
+      title: "Divergent Authorship Boundary Case For The Version Rule",
+      publishedAt: "2022-05-01",
+      authors: ["Jonas Second"],
+      metadata: { doi: "10.7001/author-diff-two" },
+    });
+
+    const result = dedupItems([a, b]);
+    expect(result).toHaveLength(2);
+  });
+
+  // DEDUP-FIX (version rule) boundary case: a short/generic title (no
+  // qualifying title alias) never weak-links at all, so two different DOIs
+  // stay 2 even with the same author/year — the ruling's own named
+  // "short/generic title" exception.
+  it("keeps two same-year/author items with different DOIs apart when the shared title is too short/generic to alias (version rule boundary)", () => {
+    const a = item({
+      id: "dblp:editorial1",
+      source: "dblp",
+      title: "Editorial",
+      publishedAt: "2023-01-01",
+      authors: ["Kim Editor"],
+      metadata: { doi: "10.7100/editorial-one" },
+    });
+    const b = item({
+      id: "openalex:WEDITORIAL2",
+      source: "openalex",
+      title: "Editorial",
+      publishedAt: "2023-01-01",
+      authors: ["Kim Editor"],
+      metadata: { doi: "10.7101/editorial-two" },
+    });
+
+    const result = dedupItems([a, b]);
+    expect(result).toHaveLength(2);
+  });
+
+  // DEDUP-FIX (version rule) boundary case: one side has NO authors at all
+  // -> no first-author surname to match, so it never weak-links regardless
+  // of title/year/DOI.
+  it("keeps two same-title/year items with different DOIs apart when one side has no authors at all (version rule boundary)", () => {
+    const withAuthor = item({
+      id: "openalex:WNOAUTHOR1",
+      source: "openalex",
+      title: "Missing Author Boundary Case For The Version Rule Test",
+      publishedAt: "2022-08-01",
+      authors: ["Lena Third"],
+      metadata: { doi: "10.7200/no-author-one" },
+    });
+    const noAuthor = item({
+      id: "openalex:WNOAUTHOR2",
+      source: "openalex",
+      title: "Missing Author Boundary Case For The Version Rule Test",
+      publishedAt: "2022-08-01",
+      authors: [],
+      metadata: { doi: "10.7201/no-author-two" },
+    });
+
+    const result = dedupItems([withAuthor, noAuthor]);
     expect(result).toHaveLength(2);
   });
 
@@ -213,17 +314,21 @@ describe("dedupItems", () => {
   // — none of them exercises 3+ items sharing a title/year/author bucket,
   // which is exactly where the old transitive union-find bug lived, so none
   // needed rewriting under the `// P2-S1-FIX (Round 3): ...` convention.
+  // Several of the cases below WERE later rewritten under DEDUP-FIX (Round
+  // 3, version rule) — see each one's own comment.
   // ---------------------------------------------------------------------
 
-  // (a) The independent reviewer's exact reproduction (TRANSITIVITY CHECK):
-  // two openalex items with different DOIs but identical title/year/author
-  // (a real, direct conflict — correctly kept apart pairwise), bridged by a
-  // third, ID-less dblp record that title/year/author-matches both. The old
-  // union-find silently merged all 3 into 1, discarding one of A/C. Per
-  // §1p.G(3): the weak-link component {A,B,C} contains a conflict (A and C
-  // both carry a "doi" id-type, with different values) somewhere inside it,
-  // so NO weak link in the component applies — all 3 stay separate.
-  it("never puts two directly-conflicting DOIs in the same survivor even when a third ID-less record bridges them (the reviewer's A~B~C reproduction)", () => {
+  // (a) DEDUP-FIX (version rule): the independent reviewer's original bridge
+  // reproduction (TRANSITIVITY CHECK) — two openalex items with different
+  // DOIs but identical title/year/author, bridged by a third, ID-less dblp
+  // record that title/year/author-matches both. Before this fix, A and C's
+  // differing DOIs were a genuine conflict that blocked the WHOLE
+  // weak-linked component {A,B,C} from merging (all 3 kept separate — this
+  // test used to assert exactly that). Per the version rule, a DOI mismatch
+  // alone is no longer a conflict once title+alias+author+year already
+  // match: A, B and C are all versions of the SAME work and merge into one
+  // survivor, which carries every member's DOI as a re-derivable alias.
+  it("merges two same-title/year/author items with different DOIs, plus their ID-less bridge record, into one survivor (version rule; the reviewer's A~B~C case)", () => {
     const a = item({
       id: "openalex:WBRIDGE_A",
       source: "openalex",
@@ -249,23 +354,21 @@ describe("dedupItems", () => {
     });
 
     const result = dedupItems([a, b, c]);
-    expect(result).toHaveLength(3);
-    const ids = result.map((r) => r.id);
-    expect(ids).toEqual(
-      expect.arrayContaining(["openalex:WBRIDGE_A", "dblp:bridge/1", "openalex:WBRIDGE_C"]),
-    );
-    // No survivor's mergedFrom mixes A and C's ids together.
-    for (const r of result) {
-      const mergedIds = (r.metadata.mergedFrom ?? []).map((m) => m.id);
-      const hasA = r.id === "openalex:WBRIDGE_A" || mergedIds.includes("openalex:WBRIDGE_A");
-      const hasC = r.id === "openalex:WBRIDGE_C" || mergedIds.includes("openalex:WBRIDGE_C");
-      expect(hasA && hasC).toBe(false);
-    }
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe("openalex:WBRIDGE_A"); // tie-break: same priority/idFormKeys count as C, smaller id wins
+    const mergedIds = (result[0].metadata.mergedFrom ?? []).map((m) => m.id);
+    expect(mergedIds).toEqual(expect.arrayContaining(["dblp:bridge/1", "openalex:WBRIDGE_C"]));
+
+    const identity = identityForRawItem(result[0]);
+    const allForms = [identity.key, ...identity.aliases];
+    expect(allForms).toEqual(expect.arrayContaining(["doi:10.1111/aaa", "doi:10.2222/ccc"]));
   });
 
-  // (b) Same A, B, C inputs in every permutation -> identical output (as a
-  // set of ids; §1p.G requires group membership be provably order-independent).
-  it("produces the same set of survivor ids for every permutation of the A~B~C bridge inputs", () => {
+  // (b) DEDUP-FIX (version rule): same A, B, C shape as above, in every
+  // permutation -> now ONE merged survivor (not three separate items), and
+  // that outcome is identical regardless of input order (§1p.G's
+  // order-independence guarantee still holds after the version-rule fix).
+  it("merges the A~B~C version trio into the same single survivor for every permutation of the inputs", () => {
     const a = item({
       id: "openalex:WPERM_A",
       source: "openalex",
@@ -300,7 +403,8 @@ describe("dedupItems", () => {
     });
     const distinct = new Set(signatures);
     expect(distinct.size).toBe(1);
-    expect(signatures[0].split("|")).toHaveLength(3);
+    expect(signatures[0].split("|")).toHaveLength(1);
+    expect(signatures[0]).toBe("openalex:WPERM_A");
   });
 
   // (c) Preprint + published sharing an arXiv id but with different DOIs ->
@@ -338,10 +442,16 @@ describe("dedupItems", () => {
     );
   });
 
-  // (d) Two conflicting DOIs, same title/year/author, no bridge record
-  // present at all -> 2 (the simplest, 2-cluster shape of the conflict
-  // rule, with no third record's connectivity to reason about).
-  it("keeps two directly-conflicting-DOI items apart with no bridge record present", () => {
+  // (d) DEDUP-FIX (version rule): two items with the same title/year/author
+  // but different DOIs, with NO bridge record present at all — the
+  // simplest 2-cluster shape, and the closest direct reproduction of the
+  // production regression (two Zenodo-style records, same title/author/
+  // year, different DOIs AND different native/OpenAlex ids). This test used
+  // to assert the old "DOI mismatch = conflict, keep both" rule; per the
+  // version rule a DOI mismatch alone is no longer a conflict once
+  // title+alias+author+year already match, so this pair merges into one
+  // survivor carrying both DOIs as aliases.
+  it("merges two same-title/year/author items with different DOIs and no bridge record (version rule; direct production-regression reproduction)", () => {
     const d1 = item({
       id: "openalex:WCONFLICT1",
       source: "openalex",
@@ -360,7 +470,536 @@ describe("dedupItems", () => {
     });
 
     const result = dedupItems([d1, d2]);
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe("openalex:WCONFLICT1");
+    const identity = identityForRawItem(result[0]);
+    const allForms = [identity.key, ...identity.aliases];
+    expect(allForms).toEqual(
+      expect.arrayContaining(["doi:10.5555/conflict-one", "doi:10.6666/conflict-two"]),
+    );
+  });
+
+  // DEDUP-FIX (version rule): a three-version chain — v1, v2, v3 all share
+  // the same title/first-author, each with its OWN distinct DOI (no
+  // ID-less bridge record involved this time) -> 1 survivor carrying all
+  // three DOIs as aliases, for every permutation of the input order.
+  it("merges a three-version chain (v1/v2/v3, each with its own distinct DOI) into one survivor carrying all three DOIs, regardless of input order", () => {
+    const v1 = item({
+      id: "openalex:VCHAIN1",
+      source: "openalex",
+      title: "Three Version Chain Case For The Dedup Fix Version Rule",
+      publishedAt: "2020-01-01",
+      authors: ["Marco Chain"],
+      metadata: { doi: "10.7300/chain-v1" },
+    });
+    const v2 = item({
+      id: "openalex:VCHAIN2",
+      source: "openalex",
+      title: "Three Version Chain Case For The Dedup Fix Version Rule",
+      publishedAt: "2020-06-01",
+      authors: ["Marco Chain"],
+      metadata: { doi: "10.7301/chain-v2" },
+    });
+    const v3 = item({
+      id: "openalex:VCHAIN3",
+      source: "openalex",
+      title: "Three Version Chain Case For The Dedup Fix Version Rule",
+      publishedAt: "2021-01-01",
+      authors: ["Marco Chain"],
+      metadata: { doi: "10.7302/chain-v3" },
+    });
+
+    for (const ordered of permutations3(v1, v2, v3)) {
+      const result = dedupItems(ordered);
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe("openalex:VCHAIN1"); // deterministic: same priority/idFormKeys count, smallest id wins
+      const identity = identityForRawItem(result[0]);
+      const allForms = [identity.key, ...identity.aliases];
+      expect(allForms).toEqual(
+        expect.arrayContaining(["doi:10.7300/chain-v1", "doi:10.7301/chain-v2", "doi:10.7302/chain-v3"]),
+      );
+    }
+  });
+
+  // ---------------------------------------------------------------------
+  // DEDUP-FIX2 (Round 3, superseded by DEDUP-FIX3 below — kept for history,
+  // ABC-JEV-INTEGRATION.md §4 Round 3 "DEDUP-FIX fresh A: FAILED_REVIEW
+  // (scoped...); narrowed conflict rule ruled; DEDUP-FIX2 C (+ R3-CLEANUP-3)
+  // assigned", 2026-09-24T21:21:36Z): a fresh independent review of
+  // DEDUP-FIX (docs/jev-abc/DEDUP-FIX-A-20260924T205613Z.md) found its full
+  // removal of the id-type conflict check went wider than the version rule
+  // intended, and narrowed it back in: two pass-1 clusters conflicted only
+  // when some member-pair between them shared a real id-form TYPE with
+  // differing values AND that SPECIFIC pair did not itself directly satisfy
+  // the version rule (weakPairMatch).
+  //
+  // DEDUP-FIX3 (Round 3, ABC-JEV-INTEGRATION.md §4 Round 3 "DEDUP-FIX2 fresh
+  // A: FAILED_REVIEW (scoped; R3-CLEANUP-3 VERIFIED); whack-a-mole stop;
+  // structural pairwise rule ruled; DEDUP-FIX3 C assigned", 2026-09-24T22:
+  // 06:02Z): a SECOND fresh independent review
+  // (docs/jev-abc/DEDUP-FIX2-A-20260924T214311Z.md) found DEDUP-FIX2's
+  // id-TYPE-comparison mechanism itself had a blind spot: it can only detect
+  // a conflict when BOTH sides of the disputed pair carry a real id of the
+  // SAME type. A record that only ever weak-links on title (no id at all,
+  // or an id of a different type than the cluster it's disputing) got NO
+  // protection — exactly the ordinary shape for something that only ever
+  // matches by title in the first place. Two consecutive per-instance
+  // patches for the same slot is this project's own stop signal for
+  // whack-a-mole fixing, so the manager ruled a STRUCTURAL replacement
+  // instead, independent of ids entirely: a weak-linked component of pass-1
+  // clusters collapses into one group ONLY IF every pair of records drawn
+  // from DIFFERENT pass-1 clusters in that component directly satisfies
+  // `weakPairMatch` — checked over the FULL member cross-product of every
+  // pair of clusters in the component (not just the pair that happened to
+  // create a link). If even one cross-cluster pair fails, NO weak link in
+  // the component is applied — every pass-1 cluster in it stays its own
+  // separate group. Ids play no part in the decision at all (a DOI/id
+  // mismatch between two records that themselves directly satisfy
+  // `weakPairMatch` is still allowed — that's a genuine version pair).
+  //
+  // The four tests immediately below are still tagged DEDUP-FIX2 in their
+  // titles because they reproduce DEDUP-FIX2-A's own named shapes and their
+  // ASSERTED OUTCOME is unchanged by DEDUP-FIX3 (every fixture here happens
+  // to give its conflicting/disputed member a real, same-type id, which is
+  // exactly the coincidence DEDUP-FIX2-A's review caught — the new pairwise
+  // rule reaches the identical verdict without ever consulting that id).
+  // Their body comments below are rewritten to explain why under the actual
+  // (ids-play-no-part) mechanism, not the superseded id-type one. The new
+  // DEDUP-FIX3 section further below adds the shapes that DEDUP-FIX2 could
+  // NOT see (zero-id chain, zero-id hub, mixed-id-type hub) plus
+  // permutation and false-split-guard coverage.
+  // ---------------------------------------------------------------------
+
+  // DEDUP-FIX2/DEDUP-FIX3: the reviewer's own transitivity-chain
+  // reproduction. A(2020) and C(2022) are the chain's two ends — 2 years
+  // apart, so A and C do NOT themselves satisfy `weakPairMatch` (title+alias
+  // +author match, but the year gap exceeds +-1), even though each is
+  // exactly 1 year from the bridge B(2021). Under DEDUP-FIX3's pairwise
+  // rule: the component {A, B, C} collapses only if EVERY cross-cluster
+  // pair directly satisfies weakPairMatch — A-B and B-C do, but A-C does
+  // not, so the whole component stays uncollapsed and A, B, C all stay
+  // separate (the accepted "ambiguous weak component" cost, §1p.G(3)). This
+  // holds regardless of whether A/C carry ids at all — see the zero-id
+  // variant of this same shape in the DEDUP-FIX3 section below, which
+  // DEDUP-FIX2's id-type mechanism could NOT catch but this one does.
+  it("does NOT merge a transitive-only chain whose two ID-bearing ends are more than 1 year apart (DEDUP-FIX2; the reviewer's A~B~C chain)", () => {
+    const a = item({
+      id: "openalex:CHAINFAIL_A",
+      source: "openalex",
+      title: "Reviewer Chain Reproduction Case For The Narrowed Conflict Rule",
+      publishedAt: "2020-01-01",
+      authors: ["Chain Reviewer"],
+      metadata: { doi: "10.9100/chain-x" },
+    });
+    const b = item({
+      id: "dblp:chainfail/1",
+      source: "dblp",
+      title: "Reviewer Chain Reproduction Case For The Narrowed Conflict Rule",
+      publishedAt: "2021-01-01",
+      authors: ["Chain Reviewer"],
+    });
+    const c = item({
+      id: "openalex:CHAINFAIL_C",
+      source: "openalex",
+      title: "Reviewer Chain Reproduction Case For The Narrowed Conflict Rule",
+      publishedAt: "2022-01-01",
+      authors: ["Chain Reviewer"],
+      metadata: { doi: "10.9100/chain-z" },
+    });
+
+    const result = dedupItems([a, b, c]);
+    expect(result).toHaveLength(3);
+    expect(result.map((r) => r.id).sort()).toEqual([
+      "dblp:chainfail/1",
+      "openalex:CHAINFAIL_A",
+      "openalex:CHAINFAIL_C",
+    ]);
+  });
+
+  // DEDUP-FIX2/DEDUP-FIX3: a longer, 5-hop version of the same shape
+  // (2020..2024, each ADJACENT pair exactly 1 year apart, but every
+  // non-adjacent pair further apart), each with its own distinct DOI. Under
+  // DEDUP-FIX3's pairwise rule, every non-adjacent cross-cluster pair (e.g.
+  // v1-v3, v1-v5, v2-v5, ...) fails `weakPairMatch` on the year gap alone,
+  // so the whole 5-cluster component never collapses and stays 5 separate
+  // items — the DOIs here are along for the ride; see the zero-id variant
+  // of this exact shape in the DEDUP-FIX3 section below, which fails
+  // differently (silently merges to 1) under DEDUP-FIX2's superseded
+  // id-type mechanism precisely because it has no ids to compare.
+  it("does NOT merge a longer 5-hop chain spanning more than 1 total year, even though every adjacent pair is within 1 year (DEDUP-FIX2)", () => {
+    const years = [2020, 2021, 2022, 2023, 2024];
+    const versions = years.map((year, i) =>
+      item({
+        id: `openalex:HOP${i + 1}`,
+        source: "openalex",
+        title: "Five Hop Chain Reproduction Case For The Narrowed Conflict Rule",
+        publishedAt: `${year}-01-01`,
+        authors: ["Hop Reviewer"],
+        metadata: { doi: `10.9101/hop-${i + 1}` },
+      }),
+    );
+
+    const result = dedupItems(versions);
+    expect(result).toHaveLength(5);
+  });
+
+  // DEDUP-FIX2/DEDUP-FIX3: the reviewer's own hub-cluster reproduction. P1
+  // and P2 share one exact DOI (a metadata anomaly, but the clustering code
+  // must still handle it safely) despite having completely unrelated
+  // titles — pass 1 unions on exact id-form keys only, never title. Z
+  // shares P1's title/year/author exactly (a weak link) but carries its OWN
+  // different DOI and has nothing to do with P2's unrelated title. Under
+  // DEDUP-FIX3's pairwise rule, the component {P1,P2}~Z has exactly one
+  // cross-cluster cluster-pair to check ({P1,P2} vs {Z}), and that check
+  // requires EVERY member pair to satisfy weakPairMatch: P1-Z does, but
+  // P2-Z does not (different titles) — one failing pair is enough to block
+  // the whole component, so {P1, P2} stay merged with each other (their own
+  // strong DOI link, from pass 1, is unaffected by anything found in pass
+  // 2) while Z stays its own separate item. Nothing about this reasoning
+  // touches ids — see the zero-id and mismatched-id-type variants of this
+  // exact shape in the DEDUP-FIX3 section below, which DEDUP-FIX2's
+  // id-type mechanism could NOT catch but this one does, and the
+  // false-split guard further below, which confirms the same mechanism
+  // correctly ALLOWS the merge when P2 (not just P1) also matches Z.
+  it("keeps an unrelated record separate from a strong-link cluster it only matches through one member (DEDUP-FIX2; hub fixture)", () => {
+    const p1 = item({
+      id: "openalex:HUB_P1",
+      source: "openalex",
+      title: "Hub Hazard Hidden Beneath A Shared Identifier Case One",
+      publishedAt: "2023-01-01",
+      authors: ["Hub Match"],
+      metadata: { doi: "10.9200/hub-shared" },
+    });
+    const p2 = item({
+      id: "openalex:HUB_P2",
+      source: "openalex",
+      title: "Completely Unrelated Retitled Paper About Something Else Entirely",
+      publishedAt: "2023-01-01",
+      authors: ["Someone Else"],
+      metadata: { doi: "10.9200/hub-shared" }, // SAME DOI as p1 -> strong pass-1 link
+    });
+    const z = item({
+      id: "openalex:HUB_Z",
+      source: "openalex",
+      title: "Hub Hazard Hidden Beneath A Shared Identifier Case One", // matches p1 only
+      publishedAt: "2023-06-01",
+      authors: ["Hub Match"],
+      metadata: { doi: "10.9200/hub-independent-z" }, // its OWN, different DOI
+    });
+
+    const result = dedupItems([p1, p2, z]);
     expect(result).toHaveLength(2);
+
+    const mergedSurvivor = result.find((r) => r.id === "openalex:HUB_P1");
+    expect(mergedSurvivor).toBeDefined();
+    const mergedIds = (mergedSurvivor!.metadata.mergedFrom ?? []).map((m) => m.id);
+    expect(mergedIds).toContain("openalex:HUB_P2");
+    expect(mergedIds).not.toContain("openalex:HUB_Z");
+
+    const zStandalone = result.find((r) => r.id === "openalex:HUB_Z");
+    expect(zStandalone).toBeDefined();
+  });
+
+  // DEDUP-FIX2/DEDUP-FIX3: pins the ruling's explicitly ACCEPTED COST (the
+  // "recurring-title series" escape-clause candidate DEDUP-FIX-A's NEW
+  // FINDING 3 raised) at its exact boundary — a direct 2-cluster pair (no
+  // bridge record) with different DOIs, ONE YEAR apart (not the same year,
+  // unlike every other direct-pair test above). Two distinct annual works
+  // by the same author with an identical long title would ALSO match this
+  // shape and be swept together; both the DEDUP-FIX2 and DEDUP-FIX3 rulings
+  // explicitly accepted that cost rather than require a real disambiguating
+  // signal (venue/DOI prefix), because with only 2 pass-1 clusters in the
+  // component, "every cross-cluster pair" is just this one direct pair,
+  // which already satisfies weakPairMatch by construction — DEDUP-FIX3's
+  // own restated accepted cost: "same-author consecutive-year recurring
+  // titles still merge (a direct pair)".
+  it("merges a direct (no-bridge) pair one year apart with different DOIs — the accepted 'recurring annual work' cost, pinned at the +-1 boundary (DEDUP-FIX2)", () => {
+    const x = item({
+      id: "openalex:RECURRING_X",
+      source: "openalex",
+      title: "Annual Status Report On A Recurring Long Running Research Program",
+      publishedAt: "2021-01-01",
+      authors: ["Regular Author"],
+      metadata: { doi: "10.9300/recurring-2021" },
+    });
+    const y = item({
+      id: "openalex:RECURRING_Y",
+      source: "openalex",
+      title: "Annual Status Report On A Recurring Long Running Research Program",
+      publishedAt: "2022-01-01",
+      authors: ["Regular Author"],
+      metadata: { doi: "10.9300/recurring-2022" },
+    });
+
+    const result = dedupItems([x, y]);
+    expect(result).toHaveLength(1);
+    const identity = identityForRawItem(result[0]);
+    const allForms = [identity.key, ...identity.aliases];
+    expect(allForms).toEqual(
+      expect.arrayContaining(["doi:10.9300/recurring-2021", "doi:10.9300/recurring-2022"]),
+    );
+  });
+
+  // ---------------------------------------------------------------------
+  // DEDUP-FIX3 (Round 3, ABC-JEV-INTEGRATION.md §4 Round 3 "DEDUP-FIX2
+  // fresh A: FAILED_REVIEW (scoped; R3-CLEANUP-3 VERIFIED); whack-a-mole
+  // stop; structural pairwise rule ruled; DEDUP-FIX3 C assigned",
+  // 2026-09-24T22:06:02Z): DEDUP-FIX2-A's own review
+  // (docs/jev-abc/DEDUP-FIX2-A-20260924T214311Z.md) found 3 concrete shapes
+  // its id-type mechanism could not catch, all reproduced directly below:
+  // a chain/hub whose disputed member carries no id at all, and a hub whose
+  // disputed member carries an id of a DIFFERENT type than the cluster it's
+  // disputing. The fix replaces id-type comparison entirely: a weak-linked
+  // component collapses only if EVERY pair of records drawn from different
+  // pass-1 clusters in it directly satisfies `weakPairMatch` — checked over
+  // the full member cross-product of every pair of clusters in the
+  // component. One failing cross-cluster pair blocks the WHOLE component.
+  // ---------------------------------------------------------------------
+
+  // DEDUP-FIX3 (probe 2b): the exact same 5-hop chain shape as the "5-hop
+  // chain" test above, but with ZERO id-form keys anywhere — no source in
+  // this fixture resolves a DOI/S2/OpenAlex/arXiv/PMID id at all, only a
+  // shared title/author. DEDUP-FIX2's `pairConflicts` required BOTH sides
+  // of a compared pair to carry a real id of the SAME type before it could
+  // even ask whether they satisfied `weakPairMatch`; with zero ids
+  // anywhere, every pair short-circuited to "no conflict," so the whole
+  // chain collapsed to 1 survivor spanning 2020-2024 — silently merging 5
+  // distinct papers. DEDUP-FIX3 never looks at ids: the non-adjacent pairs
+  // (v1-v3, v1-v4, v1-v5, v2-v4, v2-v5, v3-v5) still fail `weakPairMatch` on
+  // the year gap alone, so the chain correctly stays 5 separate items, id
+  // or no id.
+  it("does NOT merge a 5-hop chain spanning more than 1 total year when NO member carries any id-form key at all (DEDUP-FIX3; probe 2b)", () => {
+    const years = [2020, 2021, 2022, 2023, 2024];
+    const versions = years.map((year, i) =>
+      item({
+        id: `web:idless-hop-${i + 1}`,
+        source: "web",
+        title: "Id Less Five Hop Chain Reproduction Case For The Pairwise Rule",
+        publishedAt: `${year}-01-01`,
+        authors: ["Idless Reviewer"],
+        // Deliberately no metadata.doi/externalIds anywhere in this fixture.
+      }),
+    );
+
+    const result = dedupItems(versions);
+    expect(result).toHaveLength(5);
+    expect(new Set(result.map((r) => r.id)).size).toBe(5);
+  });
+
+  // DEDUP-FIX3 (probe 3b): the same hub shape as the "hub fixture" test
+  // above (P1 and P2 share one exact DOI despite unrelated titles; Z
+  // matches P1 only, by title/year/author), but Z carries NO id-form key AT
+  // ALL. Under DEDUP-FIX2, `pairConflicts` returned false immediately
+  // whenever either side had zero id-form types (`aTypes.size === 0`), so
+  // P2-Z was never even evaluated as a conflict and all three swept into
+  // one survivor. Under DEDUP-FIX3, the {P1,P2} vs {Z} cluster-pair check
+  // still requires P2-Z to satisfy weakPairMatch (it does not — different
+  // titles), so the component correctly stays split: {P1,P2} merged, Z
+  // alone.
+  it("keeps an unrelated record separate from a strong-link cluster it only matches through one member, when that record carries NO id at all (DEDUP-FIX3; probe 3b)", () => {
+    const p1 = item({
+      id: "openalex:IDLESSHUB_P1",
+      source: "openalex",
+      title: "Id Less Hub Hazard Case For The Pairwise Rule",
+      publishedAt: "2023-01-01",
+      authors: ["Hub Match"],
+      metadata: { doi: "10.9220/idless-hub-shared" },
+    });
+    const p2 = item({
+      id: "openalex:IDLESSHUB_P2",
+      source: "openalex",
+      title: "Completely Unrelated Retitled Paper Sharing Only A Doi",
+      publishedAt: "2023-01-01",
+      authors: ["Someone Else"],
+      metadata: { doi: "10.9220/idless-hub-shared" }, // SAME DOI as p1 -> strong pass-1 link
+    });
+    const z = item({
+      id: "web:idless-hub-z",
+      source: "web",
+      title: "Id Less Hub Hazard Case For The Pairwise Rule", // matches p1 only
+      publishedAt: "2023-06-01",
+      authors: ["Hub Match"],
+      // Deliberately no metadata.doi/externalIds at all.
+    });
+
+    const result = dedupItems([p1, p2, z]);
+    expect(result).toHaveLength(2);
+
+    const mergedSurvivor = result.find((r) => r.id === "openalex:IDLESSHUB_P1");
+    expect(mergedSurvivor).toBeDefined();
+    const mergedIds = (mergedSurvivor!.metadata.mergedFrom ?? []).map((m) => m.id);
+    expect(mergedIds).toContain("openalex:IDLESSHUB_P2");
+    expect(mergedIds).not.toContain("web:idless-hub-z");
+
+    const zStandalone = result.find((r) => r.id === "web:idless-hub-z");
+    expect(zStandalone).toBeDefined();
+  });
+
+  // DEDUP-FIX3 (probe 3c): the same hub shape again, but Z now carries a
+  // REAL id-form key of a DIFFERENT type (arXiv) than {P1,P2}'s shared type
+  // (DOI). Under DEDUP-FIX2, `pairConflicts` required the SAME type on both
+  // sides to fire at all (`sharesType` check) — an arXiv-vs-DOI pair never
+  // shared a type, so P2-Z was never flagged as conflicting and all three
+  // swept into one survivor despite Z demonstrably having its own,
+  // independent, verifiable identity. Under DEDUP-FIX3, id TYPE is
+  // irrelevant: P2-Z simply fails weakPairMatch on title, exactly as in the
+  // no-id case above, so the component stays split.
+  it("keeps an unrelated record separate from a strong-link cluster it only matches through one member, when that record carries an id of a DIFFERENT type (DEDUP-FIX3; probe 3c)", () => {
+    const p1 = item({
+      id: "openalex:MIXEDHUB_P1",
+      source: "openalex",
+      title: "Mixed Id Type Hub Hazard Case For The Pairwise Rule",
+      publishedAt: "2023-01-01",
+      authors: ["Hub Match"],
+      metadata: { doi: "10.9230/mixed-hub-shared" },
+    });
+    const p2 = item({
+      id: "openalex:MIXEDHUB_P2",
+      source: "openalex",
+      title: "Completely Unrelated Retitled Paper Sharing Only A Doi Two",
+      publishedAt: "2023-01-01",
+      authors: ["Someone Else"],
+      metadata: { doi: "10.9230/mixed-hub-shared" }, // SAME DOI as p1 -> strong pass-1 link
+    });
+    const z = item({
+      id: "web:mixed-hub-z",
+      source: "web",
+      title: "Mixed Id Type Hub Hazard Case For The Pairwise Rule", // matches p1 only
+      publishedAt: "2023-06-01",
+      authors: ["Hub Match"],
+      metadata: { externalIds: { arxivId: "2306.54321" } }, // real id, but type "arxiv" != p1/p2's "doi"
+    });
+
+    const result = dedupItems([p1, p2, z]);
+    expect(result).toHaveLength(2);
+
+    const mergedSurvivor = result.find((r) => r.id === "openalex:MIXEDHUB_P1");
+    expect(mergedSurvivor).toBeDefined();
+    const mergedIds = (mergedSurvivor!.metadata.mergedFrom ?? []).map((m) => m.id);
+    expect(mergedIds).toContain("openalex:MIXEDHUB_P2");
+    expect(mergedIds).not.toContain("web:mixed-hub-z");
+
+    const zStandalone = result.find((r) => r.id === "web:mixed-hub-z");
+    expect(zStandalone).toBeDefined();
+  });
+
+  // DEDUP-FIX3: false-split guard — the mirror image of the hub tests
+  // above. {P1,P2} again share one exact DOI (a pass-1 strong link), but
+  // this time P1 and P2 ALSO share the identical title/year/author as EACH
+  // OTHER (not unrelated titles), and Z is a direct version match to P1 AND
+  // to P2 individually. Every cross-cluster member pair ({P1,P2} vs {Z})
+  // now satisfies weakPairMatch, so the pairwise rule must correctly ALLOW
+  // the merge — this guards against an implementation that over-blocks
+  // merges whenever a strong-link cluster has more than one member,
+  // regardless of whether every member actually matches.
+  it("merges a strong-link cluster into a weak-linked version when EVERY member of the cluster (not just one) directly matches it (DEDUP-FIX3; false-split guard)", () => {
+    const p1 = item({
+      id: "openalex:GUARD_P1",
+      source: "openalex",
+      title: "Consistent Multi Member Match Case For The False Split Guard",
+      publishedAt: "2023-01-01",
+      authors: ["Guard Author"],
+      metadata: { doi: "10.9240/guard-shared" },
+    });
+    const p2 = item({
+      id: "dblp:guard-p2",
+      source: "dblp",
+      title: "Consistent Multi Member Match Case For The False Split Guard", // SAME title as p1
+      publishedAt: "2023-01-01",
+      authors: ["Guard Author"],
+      metadata: { doi: "10.9240/guard-shared" }, // SAME DOI as p1 -> strong pass-1 link
+    });
+    const z = item({
+      id: "openalex:GUARD_Z",
+      source: "openalex",
+      title: "Consistent Multi Member Match Case For The False Split Guard", // matches BOTH p1 and p2
+      publishedAt: "2023-06-01",
+      authors: ["Guard Author"],
+      metadata: { doi: "10.9241/guard-independent-z" }, // its OWN, different DOI
+    });
+
+    const result = dedupItems([p1, p2, z]);
+    expect(result).toHaveLength(1);
+    const identity = identityForRawItem(result[0]);
+    const allForms = [identity.key, ...identity.aliases];
+    expect(allForms).toEqual(
+      expect.arrayContaining(["doi:10.9240/guard-shared", "doi:10.9241/guard-independent-z"]),
+    );
+  });
+
+  // DEDUP-FIX3: shuffled input produces the identical outcome for the
+  // zero-id 5-hop chain (probe 2b, above) — a representative sample of
+  // orderings (not all 120 permutations), matching this file's existing
+  // order-independence convention for larger fixtures.
+  it("produces the same 5-separate-items outcome for every tested ordering of the zero-id 5-hop chain", () => {
+    const years = [2020, 2021, 2022, 2023, 2024];
+    const versions = years.map((year, i) =>
+      item({
+        id: `web:idless-shuffle-${i + 1}`,
+        source: "web",
+        title: "Id Less Shuffle Order Independence Chain Case For The Pairwise Rule",
+        publishedAt: `${year}-01-01`,
+        authors: ["Shuffle Reviewer"],
+      }),
+    );
+    const orderings = [
+      versions,
+      versions.slice().reverse(),
+      [versions[2], versions[0], versions[4], versions[1], versions[3]],
+      [versions[4], versions[3], versions[2], versions[1], versions[0]],
+      [versions[1], versions[4], versions[0], versions[3], versions[2]],
+    ];
+
+    for (const ordered of orderings) {
+      const result = dedupItems(ordered);
+      expect(result).toHaveLength(5);
+      expect(new Set(result.map((r) => r.id)).size).toBe(5);
+    }
+  });
+
+  // DEDUP-FIX3: shuffled input produces the identical partition for the hub
+  // shape — every permutation of the 3 inputs merges {P1,P2} and keeps Z
+  // separate, the same order-independence guarantee §1p.G always made,
+  // reverified under the new pairwise mechanism.
+  it("produces the same hub partition (P1+P2 merged, Z separate) for every ordering of the hub inputs", () => {
+    const p1 = item({
+      id: "openalex:HUBPERM_P1",
+      source: "openalex",
+      title: "Hub Permutation Order Independence Case For The Pairwise Rule",
+      publishedAt: "2023-01-01",
+      authors: ["Perm Match"],
+      metadata: { doi: "10.9250/hubperm-shared" },
+    });
+    const p2 = item({
+      id: "openalex:HUBPERM_P2",
+      source: "openalex",
+      title: "Completely Unrelated Retitled Paper For Hub Permutation Case",
+      publishedAt: "2023-01-01",
+      authors: ["Someone Else"],
+      metadata: { doi: "10.9250/hubperm-shared" },
+    });
+    const z = item({
+      id: "openalex:HUBPERM_Z",
+      source: "openalex",
+      title: "Hub Permutation Order Independence Case For The Pairwise Rule",
+      publishedAt: "2023-06-01",
+      authors: ["Perm Match"],
+      metadata: { doi: "10.9251/hubperm-independent-z" },
+    });
+
+    for (const ordered of permutations3(p1, p2, z)) {
+      const result = ordered.slice();
+      const dedupResult = dedupItems(result);
+      expect(dedupResult).toHaveLength(2);
+      const merged = dedupResult.find((r) => r.id === "openalex:HUBPERM_P1" || (r.metadata.mergedFrom ?? []).some((m) => m.id === "openalex:HUBPERM_P1"));
+      expect(merged).toBeDefined();
+      const mergedIds = new Set([merged!.id, ...((merged!.metadata.mergedFrom ?? []).map((m) => m.id))]);
+      expect(mergedIds.has("openalex:HUBPERM_P1")).toBe(true);
+      expect(mergedIds.has("openalex:HUBPERM_P2")).toBe(true);
+      expect(mergedIds.has("openalex:HUBPERM_Z")).toBe(false);
+      const zStandalone = dedupResult.find((r) => r.id === "openalex:HUBPERM_Z");
+      expect(zStandalone).toBeDefined();
+    }
   });
 
   // (e) Conflict-free weak component of three (two with no id-form key at

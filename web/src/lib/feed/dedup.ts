@@ -1,6 +1,11 @@
 import type { RawItem, SourceId } from "@/lib/sources/types";
 import { idFormKeys, normalizeDoi, type WorkMatchInput } from "@/lib/utils/canonical-identity";
-import { clusterCanonicalWorks, identityForRawItem } from "@/lib/feed/paper-identity";
+import {
+  clusterCanonicalWorks,
+  firstAuthorSurnameOf,
+  identityForRawItem,
+  publishedYearOf,
+} from "@/lib/feed/paper-identity";
 import type { FeedAdmissionChannel } from "@/lib/scoring/types";
 
 // P2-S1 (Round 3): F-A-P2-01 fix, per ABC-JEV-INTEGRATION.md §1p.A and
@@ -21,13 +26,34 @@ import type { FeedAdmissionChannel } from "@/lib/scoring/types";
 // third, ID-less, title/year/author-matching record transitively bridge two
 // items that directly, correctly conflict (different DOIs) into one silent
 // merge — see docs/jev-abc/P2-S1-A-20260924T0438Z.md's TRANSITIVITY CHECK.
-// The actual clustering (strong links, then weak links evaluated BETWEEN
-// pass-1 clusters with a conflict-aware component collapse) now lives in
-// `@/lib/feed/paper-identity`'s `clusterCanonicalWorks` — a reusable pure
-// function over `WorkMatchInput[]`, so other slices (e.g. the S2-vs-OpenAlex
-// channel-comparison harness) can share the identical, provably
-// order-independent rule instead of keeping their own copy. This file's own
-// remaining job is RawItem-specific:
+// The actual clustering now lives in `@/lib/feed/paper-identity`'s
+// `clusterCanonicalWorks` — a reusable pure function over `WorkMatchInput[]`,
+// so other slices (e.g. the S2-vs-OpenAlex channel-comparison harness) can
+// share the identical, provably order-independent rule instead of keeping
+// their own copy: strong links (shared id-form key) union transitively
+// first, then weak links (title+year+author) are evaluated BETWEEN the
+// resulting pass-1 clusters. DEDUP-FIX3 (ABC-JEV-INTEGRATION.md §4 Round 3
+// "DEDUP-FIX2 fresh A: FAILED_REVIEW (scoped; R3-CLEANUP-3 VERIFIED);
+// whack-a-mole stop; structural pairwise rule ruled; DEDUP-FIX3 C assigned",
+// 2026-09-24T22:06:02Z, replacing DEDUP-FIX2's id-form-TYPE-based conflict
+// check, which two independent reviews found still missed false merges
+// whenever the disputed record carried no id or an id of the wrong type): a
+// weak-linked component of clusters collapses into one group only if EVERY
+// pair of records drawn from DIFFERENT pass-1 clusters in that component
+// directly satisfies the weak-link test — checked over the full member
+// cross-product of every pair of clusters in the component, with ids never
+// consulted at all. One failing cross-cluster pair blocks the WHOLE
+// component, so a genuine version pair (the observed Zenodo regression)
+// still merges (a direct pair trivially satisfies "every" pair, since
+// there's only one), while a purely transitive bridge or an unrelated
+// record swept in through only one member of a strong-link cluster is
+// caught regardless of what ids either side happens to carry — see
+// `clusterCanonicalWorks`'s own doc comment for the full mechanism.
+// R3-CLEANUP-3: `publishedYearOf`/`firstAuthorSurnameOf`
+// (used just below, in `matchInputs`) are imported from that same module
+// rather than defined here, so this file, `pipeline.ts` and
+// `channel-comparison.ts` share one implementation instead of three copies.
+// This file's own remaining job is RawItem-specific:
 //   - survivor selection: highest SOURCE_PRIORITY, then more of the item's
 //     OWN id-form keys, then lexicographically smallest item id — a total
 //     order, so a same-priority tie (e.g. dblp vs pubmed, both weight 2) no
@@ -51,29 +77,6 @@ const SOURCE_PRIORITY: Record<SourceId, number> = {
   hn: 1,
 };
 
-function publishedYearOf(item: RawItem): number | undefined {
-  const m = /^(\d{4})/.exec(item.publishedAt ?? "");
-  return m ? Number(m[1]) : undefined;
-}
-
-/**
- * Best-effort surname of the first listed author, for the title+year+author
- * dedupe fallback only (not part of canonical-identity.ts, since P4's
- * delivery-exclusion reuse of that module never needs author parsing).
- * Handles "First Last" and "Last, First" shapes; anything else falls back to
- * the last whitespace-separated token.
- */
-function firstAuthorSurnameOf(item: RawItem): string | undefined {
-  const first = item.authors?.[0]?.trim();
-  if (!first) return undefined;
-  if (first.includes(",")) {
-    const surname = first.split(",")[0]?.trim();
-    return surname || undefined;
-  }
-  const parts = first.split(/\s+/).filter(Boolean);
-  return parts.length > 0 ? parts[parts.length - 1] : undefined;
-}
-
 /**
  * Raw (un-normalized) DOI string a RawItem carries, checking both places
  * canonical-identity.ts itself accepts one from (own `.doi`, or a
@@ -91,8 +94,8 @@ export function dedupItems(items: RawItem[]): RawItem[] {
   const identities = items.map((item) => identityForRawItem(item));
   const matchInputs: WorkMatchInput[] = items.map((item, i) => ({
     identity: identities[i],
-    publishedYear: publishedYearOf(item),
-    firstAuthorSurname: firstAuthorSurnameOf(item),
+    publishedYear: publishedYearOf(item.publishedAt),
+    firstAuthorSurname: firstAuthorSurnameOf(item.authors),
   }));
 
   const finalGroups = clusterCanonicalWorks(matchInputs);
