@@ -120,10 +120,11 @@ get the final say on the order when the time comes.
 ### What needs your decision
 
 When this document was last written, one of six original choices had been made. Since
-then, two more got decided (3 and 5, both below), and this round surfaced one brand-new
-choice (7, also below) while researching one of the others. That makes three decided out
-of seven tracked choices, with four still waiting on you. None of the open ones are
-technical — they're about risk, cost, and privacy trade-offs that only you can weigh:
+then, three more got decided (3, 5, and a brand-new one this document calls 7, which
+surfaced while researching one of the others and which you then told us to go ahead and
+build). That makes four decided out of seven tracked choices, with three still waiting on
+you. None of the open ones are technical — they're about risk, cost, and privacy
+trade-offs that only you can weigh:
 
 1. **Who pays for AI calls, and how — NOW DECIDED.** You chose to let Peer's own
    infrastructure cover some AI costs under a new shared spending limit, the same way
@@ -194,25 +195,62 @@ technical — they're about risk, cost, and privacy trade-offs that only you can
    mentioned below). The rule is: two people who did not write any of Peer's search or
    ranking code, working independently, plus a named tie-breaker for when they disagree.
    We need you to say who those three people are.
-7. **New this round: whether to bring back the on-screen controls for email** — turning
-   it on, and picking a send time, a time zone, and an address. Right now nobody can do
-   any of that from the app, not because it was never built, but because it was
-   deliberately taken away. The full story is right below.
+7. **Bring back the on-screen controls for email — NOW DECIDED, and built this round.**
+   You said yes: build the screen. It's done, pending one more independent check before
+   anyone actually uses it. Turning it on, and picking a send time, a time zone, and an
+   address, was possible once, then deliberately taken away; it is possible again now,
+   the same way it worked before. **Nothing changes for anyone until they personally
+   switch it on** — every signed-in reader keeps getting today's quiet in-app update
+   only, exactly as now, unless they visit their own profile page and flip their own
+   switch. Four things worth knowing plainly:
+   - **It is per person, not a company-wide switch.** Each reader decides for themselves,
+     from their own profile page. Nobody is opted in by this.
+   - **A brand-new "try it" button.** Before turning the daily email on for real, a
+     reader can ask for one email right now, to see it land in their inbox. This is
+     capped at three tries per person per day, and — a deliberate, cautious choice for a
+     brand-new sending feature — if the day's cap were ever unreadable due to a hiccup on
+     Peer's side, the button refuses rather than risking an unlimited number of emails
+     going out. That is the opposite of how most limits in this app behave (they normally
+     let you through rather than block you during a hiccup); this one specifically
+     protects against runaway sending.
+   - **Choosing a different address than the one you signed in with needs one extra
+     step**, on purpose: a confirmation link is emailed to the new address first, and
+     nothing is sent there until that link is opened. This stops someone from typing in a
+     stranger's address by mistake, or on purpose, and having Peer email them. Your own
+     sign-in address never needs this extra step.
+   - **The once-a-day promise has an honest caveat, explained in full just below.**
 
-**What the existing, once-an-hour check already does today — found while answering
-decision 3, and worth knowing on its own.** Peer already runs an automatic check every
-hour, and this is not new — none of the switches described above change it. On
-2026-04-27, the on-screen control that let someone turn their own email on, and choose
-when and where it went, was deliberately removed from the app. The code that actually
-sends that email was not deleted — it was left in place, switched off, ready to come
-back later. Today, that hourly check still quietly builds a fresh, personal daily update
-for every signed-in reader by default, every morning at eight o'clock, world standard
-time — the only time anyone has told it to use, since no screen lets a person pick their
-own. That update does not go out as email. Instead it sits inside the app itself, under a
-"Past briefings" list on your profile page, waiting to be opened. Whether to bring the
-on-screen controls back — so a person could choose their own time, time zone, and
-whether they want email at all — is the new, open decision 7 above, not something the
-code needs more work to support.
+   Sending a real email still needs two simple things set up on this project's side first:
+   an account with an outside email-delivery service, and one address to send from. Until
+   those are in place, every switch and every button above still works exactly as
+   described, but any attempt to actually send says so honestly ("this isn't set up yet")
+   instead of silently failing or pretending to have worked.
+
+**What the existing, once-an-hour check already does today, and what "once a day" really
+means now that email can be switched on — found while answering decision 3, worth knowing
+in full.** Peer already runs an automatic check every hour, and this is not new — none of
+the switches described above change it. On 2026-04-27, the on-screen control that let
+someone turn their own email on, and choose when and where it went, was deliberately
+removed from the app. The code that actually sends that email was not deleted — it was
+left in place, switched off, ready to come back later, and decision 7 above is that
+switch coming back. Today, that hourly check still quietly builds a fresh, personal daily
+update for every signed-in reader by default, every morning at eight o'clock, world
+standard time, unless a reader's own profile page says otherwise (which it now can, once
+they visit it). For a reader who has not switched email on, that update still only sits
+inside the app itself, under a "Past briefings" list on their profile page, exactly as
+before.
+
+For a reader who HAS switched email on: the normal, expected case is exactly one email a
+day, at whatever hour they picked. The honest exception, worth stating plainly rather than
+overselling the guarantee: the check that stops a second email going out the same day is,
+today, a soft one — a look-back over the last few hours, not an ironclad lock. Under the
+normal once-an-hour schedule this soft check is enough, and nobody sees a duplicate. But
+if the automatic check were ever run again by hand on the same day, or if someone changed
+their send time partway through a day that had already sent, a second email that same day
+is possible, though never more than that — it can't spiral into many. Closing this
+honestly-stated gap for good needs one specific, already-written database change to be
+put in place and its own separate switch turned on; neither has happened yet, and both
+remain this project's own next step, not something a reader needs to do anything about.
 
 ### What has NOT been tested live
 
@@ -1150,7 +1188,7 @@ change after it.
   (4691), 0 failed; `npx tsc --noEmit` exit 0; `npx eslint .` 0 errors, 149 warnings**
   (independently re-run by `docs/jev-abc/R4-DOCS-A-20260925T064252Z.md`).
 
-### 8. User decisions — 4 still open (#2, #4, #6, #7); #1, #3, #5 now RESOLVED
+### 8. User decisions — 3 still open (#2, #4, #6); #1, #3, #5, #7 now RESOLVED
 
 1. **Company-funded AI option — RESOLVED this pass (§0b/§1s), in main's favour.** The
    user authorized merging `origin/main`, which adopts main's company-funded AI rules
@@ -1225,18 +1263,70 @@ change after it.
    this round's own internal live evaluation (item 4/§1u)** — that smaller sample needs
    only the user's own honest labels, not a named independent labeller or tie-breaker;
    it is not a substitute for naming the three people this decision asks for.
-7. **New this round: bring back the on-screen controls for email delivery** (on/off, send
-   time, time zone, address). A manager fact-check (`ABC-JEV-INTEGRATION.md` §1x,
-   correcting an error in §1v) found that the scheduled digest job already runs, hourly,
-   for every signed-in reader by default, and already produces a real result each
-   morning — but only as an in-app "Past briefings" entry (`GET /api/briefings`), never
-   an email, because the screen that used to expose the delivery-channel choice (and the
-   send hour and time zone with it) was deliberately removed on 2026-04-27. The
-   underlying send code (Resend integration, the cron path) was kept, unmodified,
-   dormant — not deleted. Whether to bring those on-screen controls back, and on what
-   timeline, is a new, open product decision, not a technical one.
+7. **Bring back the on-screen controls for email delivery — RESOLVED this pass, built,
+   pending A's independent review (item EMAIL-SETTINGS).** A manager fact-check
+   (`ABC-JEV-INTEGRATION.md` §1x, correcting an error in §1v) found that the scheduled
+   digest job already runs, hourly, for every signed-in reader by default, and already
+   produces a real result each morning — but only as an in-app "Past briefings" entry
+   (`GET /api/briefings`), never an email, because the screen that used to expose the
+   delivery-channel choice (and the send hour and time zone with it) was deliberately
+   removed on 2026-04-27. The underlying send code (Resend integration, the cron path)
+   was kept, unmodified, dormant. The user then decided, in chat (`ABC-JEV-INTEGRATION.md`
+   §1y point 2): build it. B investigated and designed
+   (`docs/jev-abc/EMAIL-SETTINGS-B-20260926T142832Z.md`), the manager ruled on B's open
+   questions (§1z), and C implemented against those rulings
+   (`docs/jev-abc/EMAIL-SETTINGS-C-*.md`). Built, in full:
+   - A profile-page section (default: nothing changes for anyone until they switch their
+     own `digest_channel` to `'both'` and, with it, `digest_frequency` to `'daily'` —
+     §1z P5): daily on/off, send hour, the browser's own detected time zone (saved
+     automatically, no picker), and one destination address defaulting to the account
+     email.
+   - A new, stateless, signed (HMAC) confirmation-link flow for any address other than
+     the signed-in account's own — no schema change (`src/lib/email/confirm-token.ts`,
+     `POST`/`GET /api/profile/confirm-email`). 24h TTL, re-use allowed by design (a
+     confirmation link is conventionally multi-use within its expiry, unlike a
+     password-reset token — §1z P4).
+   - A **required** write-path guard on `PUT /api/profile`: a client-sent `digestEmail`
+     is rejected with `400 { error: "digest_email_requires_confirmation" }` unless it
+     equals the account email or the value already stored — closing the gap where a
+     confirmation *screen* could otherwise be bypassed by a direct write (F4/§2.3).
+   - A new "Send test email" button (`POST /api/profile/send-test-email`), aiTier 0,
+     never reaching `resolveProvider` — mirrors the existing dev-only `test-digest` route's
+     budget precedent, but works in production, targets only the reader's own confirmed
+     address, and is capped **3 per user per day**. The confirmation-request send is
+     separately capped **5 per user per day** (§1z P3 — a bigger abuse surface, since it
+     reaches an arbitrary typed address). **Both new caps fail CLOSED** on an unreadable
+     counter store (§1z P1) — the opposite of this codebase's ordinary rate-limit
+     convention, deliberately, because these protect the send budget.
+   - `DIGEST_EMAIL_CONFIRM_SECRET` (new, independent of `CRON_SECRET` — a different trust
+     boundary). Unset: confirming a DIFFERENT address is unavailable with an honest
+     message; the signed-in account's own email still works for everything (§1z P6).
+   - `RESEND_API_KEY` / `DIGEST_FROM_EMAIL` — already read by `sendDigestEmail()`, now
+     finally documented in `web/.env.example` (previously a genuine gap, not new).
 
-**Adjacent, not separately tallied in the 7 numbered items above (4 open + #1/#3/#5
+   **The once-per-day guarantee itself is UNCHANGED by this item, and still soft off the
+   default flag.** `PEER_DIGEST_DEDUPE` stays off; its migration
+   (`20260924000300_briefing_deliveries_dedupe.sql`) is authored but not applied to the
+   real database. The flag-off path (`dispatch-digests/route.ts`'s 6-hour look-back
+   `insert`, no `local_date`, no `ON CONFLICT`) is a check-then-act race, not atomic —
+   sufficient under the real hourly-cron schedule (which can only match one
+   `digest_hour_local` per day), but a manual/duplicate trigger of the same route, or a
+   same-day change to `digest_hour_local`, can produce a second send. The atomic,
+   proven-by-test alternative (`claim_briefing_delivery`, exercised by
+   `dispatch-digests/route.test.ts`'s true-concurrency case) requires the user to apply
+   that migration to production and then set `PEER_DIGEST_DEDUPE=on` — an explicit,
+   separate action this item does not take and does not change the status of. See the
+   Part 1 account of this same fact in plain words, right after item 7's own list above.
+
+   **Activation steps, in order, once A's review is done:** (1) set `RESEND_API_KEY` and
+   `DIGEST_FROM_EMAIL` in the real deployment's environment (a local `web/.env.local` for
+   the user's own first test); (2) optionally set `DIGEST_EMAIL_CONFIRM_SECRET` if
+   confirming a non-account address is wanted immediately (otherwise add it whenever,
+   with zero effect on anything already working); (3) nothing else is required — the
+   per-reader switch on the profile page is the only remaining step, and it is each
+   reader's own choice, not a global rollout switch.
+
+**Adjacent, not separately tallied in the 7 numbered items above (3 open + #1/#3/#5/#7
 resolved):** the `private_paper_pools` retention period (§3.2) is functionally the same
 kind of decision (a separately approved retention/backup plan under the campaign's
 evaluation-and-release rules) but was raised after the numbered items above were already

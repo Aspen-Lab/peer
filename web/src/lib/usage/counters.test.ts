@@ -13,6 +13,8 @@ import {
   rateKey,
   resetCounterStoreForTests,
   forcedRebuildDayKey,
+  testEmailDayKey,
+  confirmEmailRequestDayKey,
   underLimit,
   type CounterSupabaseClient,
 } from "./counters";
@@ -46,6 +48,12 @@ describe("counter keys", () => {
     // says so. Free to change: migrations unapplied, no users, nothing orphaned.
     expect(forcedRebuildDayKey("u1", NOW)).toBe(
       "forced_rebuilds_today:u1:2026-09-04",
+    );
+    // EMAIL-SETTINGS (§1z P1) — same UTC-day shape as deepReportDayKey; both
+    // are wallet/abuse-budget breakers (fail CLOSED), not UX rate limits.
+    expect(testEmailDayKey("u1", NOW)).toBe("test_email:u1:2026-09-04");
+    expect(confirmEmailRequestDayKey("u1", NOW)).toBe(
+      "confirm_email:u1:2026-09-04",
     );
   });
 

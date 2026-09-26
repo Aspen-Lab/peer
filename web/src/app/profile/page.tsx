@@ -6,13 +6,14 @@ import {
   useEffect,
   type ReactNode,
 } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useProfileStore } from "@/store/profile";
 import { formatTimeAgo } from "@/lib/format";
 import { useFeedStore } from "@/store/feed";
-import { careerStages, industryPreferences, themeAccentOptions, themeModeOptions, type ColorTheme, type ThemeAccent, type ThemeMode } from "@/types";
+import { careerStages, industryPreferences, themeAccentOptions, themeModeOptions, type ColorTheme, type DigestChannel, type DigestFrequency, type ThemeAccent, type ThemeMode, type UserProfile } from "@/types";
 import { SchoolAutocomplete } from "@/components/profile/school-autocomplete";
+import { useAuthUser } from "@/components/account/use-auth-user";
 import {
   ReadingCalendar,
   streakWeeks,
@@ -244,6 +245,7 @@ export default function ProfilePage() {
             onReset={resetPreferenceLedger}
           />
           <PastBriefings />
+          <EmailSettings />
           <ProfileUploads />
         </>
       ) : (
@@ -1221,6 +1223,369 @@ function PastBriefings() {
         })}
       </ul>
     </section>
+  );
+}
+
+// ── Daily email settings (EMAIL-SETTINGS) ──────────────────────
+//
+// ABC-JEV-INTEGRATION.md §1y point 2 / §1z. Guide
+// docs/jev-abc/EMAIL-SETTINGS-B-20260926T142832Z.md §2.4.
+//
+// Split in two on purpose. `EmailSettingsView` is presentational and takes
+// every value as a prop — no `useAuthUser`/`useProfileStore`/`useRouter`/
+// `useSearchParams` inside it — so it renders with plain
+// `renderToStaticMarkup` in tests, the same way `ColorThemePicker` and
+// `LearnedPreferences` above do (this repo has no @testing-library/react and
+// no test simulates a click — see page.test.tsx's own header note).
+// `EmailSettings` is the thin hook-wired wrapper actually rendered on the
+// page; it is not unit-tested directly (same as `PastBriefings` above),
+// because `useRouter`/`useSearchParams` need a real Next.js App Router tree
+// that a bare static render does not provide.
+
+/** §1z P5 — turning ON sets channel 'both' AND frequency 'daily' (the
+ * manager's addition to the user's spec, to protect the "fixed DAILY" promise
+ * even for a hypothetical pre-existing non-daily row this screen never shows).
+ * Turning OFF sets 'inapp' and leaves frequency untouched. A pure function so
+ * the mapping is testable without rendering or simulating a click. */
+export function digestToggleUpdate(
+  next: boolean,
+): { channel: DigestChannel; frequency?: DigestFrequency } {
+  return next ? { channel: "both", frequency: "daily" } : { channel: "inapp" };
+}
+
+function formatHourLabel(hour: number): string {
+  const period = hour < 12 ? "AM" : "PM";
+  const displayHour = hour % 12 === 0 ? 12 : hour % 12;
+  return `${displayHour}:00 ${period}`;
+}
+
+export interface EmailSettingsViewProps {
+  signedIn: boolean;
+  digestChannel: DigestChannel;
+  digestHourLocal: number;
+  digestTimezone: string;
+  accountEmail: string;
+  addressDraft: string;
+  pendingAddress: string | null;
+  confirmedBanner: boolean;
+  confirmMessage: string | null;
+  confirmBusy: boolean;
+  testMessage: string | null;
+  testBusy: boolean;
+  onToggleEmail: (next: boolean) => void;
+  onHourChange: (hour: number) => void;
+  onAddressDraftChange: (value: string) => void;
+  onAddressSubmit: () => void;
+  onSendTest: () => void;
+}
+
+export function EmailSettingsView({
+  signedIn,
+  digestChannel,
+  digestHourLocal,
+  digestTimezone,
+  accountEmail,
+  addressDraft,
+  pendingAddress,
+  confirmedBanner,
+  confirmMessage,
+  confirmBusy,
+  testMessage,
+  testBusy,
+  onToggleEmail,
+  onHourChange,
+  onAddressDraftChange,
+  onAddressSubmit,
+  onSendTest,
+}: EmailSettingsViewProps) {
+  // Constraint (i)/(vii) — signed-out visitors see no controls at all, not
+  // just a visually-hidden section (RED #12).
+  if (!signedIn) return null;
+
+  const emailOn = digestChannel === "both";
+  const normalizedDraft = addressDraft.trim().toLowerCase();
+  const isAccountEmail =
+    normalizedDraft.length > 0 && normalizedDraft === accountEmail.trim().toLowerCase();
+  const destination = addressDraft.trim() || accountEmail;
+
+  return (
+    <section className="mt-8 rounded-2xl bg-surface shadow-card overflow-hidden">
+      <div className="px-7 pt-6 pb-4 flex items-start justify-between gap-4">
+        <div>
+          <p className="eyebrow text-text-faint mb-2">Daily email</p>
+          <p className="text-body-sm text-text-faint/80 leading-relaxed measure-ui">
+            {emailOn
+              ? `Sending daily at ${formatHourLabel(digestHourLocal)} (${digestTimezone}) to ${destination || "—"}.`
+              : "Get your daily paper briefing by email, in addition to the in-app Past briefings."}
+          </p>
+        </div>
+        <Toggle
+          checked={emailOn}
+          onChange={onToggleEmail}
+          aria-label="Daily email"
+          className="mt-1 shrink-0"
+        />
+      </div>
+
+      <div className="px-7 pb-6 space-y-4">
+        <label className="block">
+          <span className="text-caption text-text-faint">Send time</span>
+          <select
+            value={digestHourLocal}
+            onChange={(e) => onHourChange(Number(e.target.value))}
+            className="mt-1 block w-full rounded-lg border border-border bg-surface px-3 py-2 text-body-sm"
+          >
+            {Array.from({ length: 24 }, (_, hour) => (
+              <option key={hour} value={hour}>
+                {formatHourLabel(hour)}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <p className="text-caption text-text-faint">Detected: {digestTimezone}</p>
+
+        <label className="block">
+          <span className="text-caption text-text-faint">Send to</span>
+          <input
+            type="email"
+            value={addressDraft}
+            onChange={(e) => onAddressDraftChange(e.target.value)}
+            className="mt-1 block w-full rounded-lg border border-border bg-surface px-3 py-2 text-body-sm"
+          />
+          <span className="mt-1 block text-caption text-text-faint">
+            {isAccountEmail
+              ? "Uses your account email."
+              : pendingAddress
+                ? `Check ${pendingAddress} for a confirmation link. Until you click it, nothing is sent there.`
+                : "Confirm to start sending here."}
+          </span>
+        </label>
+        {!isAccountEmail && (
+          <button
+            type="button"
+            onClick={onAddressSubmit}
+            disabled={confirmBusy}
+            className="text-body-sm font-medium text-accent hover:text-accent/80 disabled:opacity-50 transition-colors"
+          >
+            {confirmBusy ? "Sending…" : "Confirm address"}
+          </button>
+        )}
+        {confirmedBanner && (
+          <p className="text-caption text-accent">
+            Confirmed — daily emails will go to {addressDraft}.
+          </p>
+        )}
+        {confirmMessage && <p className="text-caption text-text-faint">{confirmMessage}</p>}
+
+        <div className="pt-3 border-t border-border/70">
+          <button
+            type="button"
+            onClick={onSendTest}
+            disabled={testBusy}
+            className="text-body-sm font-medium text-heading hover:text-accent disabled:opacity-50 transition-colors"
+          >
+            {testBusy ? "Sending…" : "Send test email"}
+          </button>
+          {testMessage && (
+            <p className="mt-2 text-caption text-text-faint">{testMessage}</p>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function EmailSettings() {
+  const auth = useAuthUser();
+  const profile = useProfileStore((s) => s.profile);
+  const updateDigestChannel = useProfileStore((s) => s.updateDigestChannel);
+  const updateDigestFrequency = useProfileStore((s) => s.updateDigestFrequency);
+  const updateDigestHourLocal = useProfileStore((s) => s.updateDigestHourLocal);
+  const updateDigestTimezone = useProfileStore((s) => s.updateDigestTimezone);
+  const updateDigestEmail = useProfileStore((s) => s.updateDigestEmail);
+  const hydrateFromRemote = useProfileStore((s) => s.hydrateFromRemote);
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  const signedIn = auth.kind === "signed-in";
+  const accountEmail = auth.kind === "signed-in" ? auth.user.email ?? "" : "";
+
+  const [addressDraft, setAddressDraft] = useState(profile.digestEmail || accountEmail);
+  const [pendingAddress, setPendingAddress] = useState<string | null>(null);
+  const [confirmedBanner, setConfirmedBanner] = useState(false);
+  const [confirmMessage, setConfirmMessage] = useState<string | null>(null);
+  const [confirmBusy, setConfirmBusy] = useState(false);
+  const [testMessage, setTestMessage] = useState<string | null>(null);
+  const [testBusy, setTestBusy] = useState(false);
+
+  // The browser's own time zone — detected, shown, and saved automatically
+  // (spec point 2.i); no picker.
+  useEffect(() => {
+    if (!signedIn) return;
+    const detected = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (detected && detected !== profile.digestTimezone) {
+      updateDigestTimezone(detected);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signedIn]);
+
+  // Fills the address field once the account email / a synced digest_email
+  // becomes known (both `useAuthUser` and the profile pull settle
+  // asynchronously, after this component's first render) — but only while
+  // the reader hasn't already got something in the field, so this never
+  // clobbers what they are actively typing or already confirmed.
+  useEffect(() => {
+    if (!signedIn || addressDraft) return;
+    const fallback = profile.digestEmail || accountEmail;
+    if (fallback) setAddressDraft(fallback);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signedIn, accountEmail, profile.digestEmail]);
+
+  // The confirm-email GET route's redirect flags — never the address itself
+  // (constraint vii: never log/expose an email address in a URL).
+  useEffect(() => {
+    if (!signedIn) return;
+    const confirmed = searchParams.get("digest_email_confirmed");
+    const confirmFlag = searchParams.get("digest_email_confirm");
+    if (!confirmed && !confirmFlag) return;
+    let cancelled = false;
+
+    (async () => {
+      if (confirmed) {
+        try {
+          const data = await apiFetch<{ profile: Partial<UserProfile> | null }>(
+            "/api/profile",
+            { cache: "no-store" },
+          );
+          if (!cancelled && data.profile) {
+            hydrateFromRemote(data.profile);
+            setConfirmedBanner(true);
+            setPendingAddress(null);
+          }
+        } catch {
+          // Best-effort — the banner simply does not appear.
+        }
+      } else {
+        const messages: Record<string, string> = {
+          signin_required: "Sign in, then open the link again.",
+          wrong_account: "That confirmation link isn't for this account.",
+          unavailable: "Confirming a different email isn't available right now.",
+          invalid_link: "That confirmation link didn't work. Request a new one.",
+        };
+        if (!cancelled) {
+          setConfirmMessage(messages[confirmFlag ?? ""] ?? messages.invalid_link);
+        }
+      }
+      if (!cancelled) {
+        const params = new URLSearchParams(Array.from(searchParams.entries()));
+        params.delete("digest_email_confirmed");
+        params.delete("digest_email_confirm");
+        const qs = params.toString();
+        router.replace(qs ? `/profile?${qs}` : "/profile");
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signedIn]);
+
+  function handleToggleEmail(next: boolean) {
+    const update = digestToggleUpdate(next);
+    updateDigestChannel(update.channel);
+    if (update.frequency) updateDigestFrequency(update.frequency);
+  }
+
+  async function handleAddressSubmit() {
+    const candidate = addressDraft.trim();
+    if (!candidate) return;
+    if (accountEmail && candidate.toLowerCase() === accountEmail.trim().toLowerCase()) {
+      // Already "confirmed" — no token flow needed (guide §2.2).
+      updateDigestEmail(candidate);
+      setPendingAddress(null);
+      setConfirmMessage(null);
+      setConfirmedBanner(false);
+      return;
+    }
+    setConfirmBusy(true);
+    setConfirmMessage(null);
+    try {
+      const res = await fetch("/api/profile/confirm-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: candidate }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { confirmed?: boolean };
+      if (res.status === 429) {
+        setConfirmMessage("Too many requests today. Try again tomorrow.");
+      } else if (res.status === 500) {
+        setConfirmMessage("Confirming a different email isn't available right now.");
+      } else if (res.status === 400) {
+        setConfirmMessage("That doesn't look like a valid email address.");
+      } else if (res.ok && data.confirmed) {
+        updateDigestEmail(candidate);
+        setPendingAddress(null);
+      } else if (res.ok) {
+        setPendingAddress(candidate);
+      } else {
+        setConfirmMessage("Couldn't send the confirmation link. Try again.");
+      }
+    } catch {
+      setConfirmMessage("Couldn't reach Peer. Check your connection and try again.");
+    } finally {
+      setConfirmBusy(false);
+    }
+  }
+
+  async function handleSendTest() {
+    setTestBusy(true);
+    setTestMessage(null);
+    try {
+      const res = await fetch("/api/profile/send-test-email", { method: "POST" });
+      const data = (await res.json().catch(() => ({}))) as {
+        sent?: boolean;
+        to?: string;
+        reason?: string;
+        error?: string;
+      };
+      if (data.reason === "rate_limited") {
+        setTestMessage("You've used today's 3 test sends. Try again tomorrow.");
+      } else if (data.reason === "no_address") {
+        setTestMessage("Add an email above first.");
+      } else if (res.ok && data.sent) {
+        setTestMessage(`Sent just now to ${data.to ?? "your address"}.`);
+      } else {
+        setTestMessage(`Couldn't send: ${data.error ?? "unknown error"}.`);
+      }
+    } catch {
+      setTestMessage("Couldn't reach Peer. Check your connection and try again.");
+    } finally {
+      setTestBusy(false);
+    }
+  }
+
+  return (
+    <EmailSettingsView
+      signedIn={signedIn}
+      digestChannel={profile.digestChannel}
+      digestHourLocal={profile.digestHourLocal}
+      digestTimezone={profile.digestTimezone}
+      accountEmail={accountEmail}
+      addressDraft={addressDraft}
+      pendingAddress={pendingAddress}
+      confirmedBanner={confirmedBanner}
+      confirmMessage={confirmMessage}
+      confirmBusy={confirmBusy}
+      testMessage={testMessage}
+      testBusy={testBusy}
+      onToggleEmail={handleToggleEmail}
+      onHourChange={updateDigestHourLocal}
+      onAddressDraftChange={setAddressDraft}
+      onAddressSubmit={handleAddressSubmit}
+      onSendTest={handleSendTest}
+    />
   );
 }
 

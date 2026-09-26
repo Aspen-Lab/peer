@@ -131,6 +131,29 @@ export function deepReportDayKey(userId: string, now: Date): string {
 }
 
 /**
+ * EMAIL-SETTINGS · ABC-JEV-INTEGRATION.md §1z P1 — the "Send test email"
+ * button's own per-user daily cap (3/day). Same UTC-day shape as
+ * `deepReportDayKey` above. **Fails CLOSED** (`breakerTripped`, not
+ * `underLimit`): this exists to protect the send budget and stop the button
+ * being used to spam, which the manager ruled follows the wallet-breaker
+ * precedent, not the ordinary UX rate-limit one.
+ */
+export function testEmailDayKey(userId: string, now: Date): string {
+  return `test_email:${userId}:${utcDaySegment(now)}`;
+}
+
+/**
+ * EMAIL-SETTINGS · ABC-JEV-INTEGRATION.md §1z P1/P3 — the confirm-a-new-
+ * address request's own per-user daily cap (5/day, one higher than the test
+ * email's 3 because this reaches an arbitrary address the user types, a
+ * bigger abuse surface). Same shape and **fails CLOSED**, same reasoning as
+ * `testEmailDayKey` above.
+ */
+export function confirmEmailRequestDayKey(userId: string, now: Date): string {
+  return `confirm_email:${userId}:${utcDaySegment(now)}`;
+}
+
+/**
  * R-QUOTA-2 — the 20-report trial cap.
  *
  * **No date segment, and that is not an oversight.** The cap is 20 over the

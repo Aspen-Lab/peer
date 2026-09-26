@@ -156,6 +156,146 @@ describe("profile route work-authorisation mapping", () => {
 });
 
 /**
+ * EMAIL-SETTINGS — F4/§2.3: `PUT /api/profile` must reject a client-sent
+ * `digestEmail` unless it equals the account email or the value already
+ * stored for that user. Without this, a confirmation flow bolted on only at
+ * a separate confirm-email route would do nothing — a client could still
+ * PUT an unconfirmed address directly. Confirming a genuinely new address
+ * only ever happens through GET /api/profile/confirm-email's own write
+ * (tested in that route's own suite), never through this one.
+ */
+describe("PUT /api/profile — the digest_email confirmation guard (F4)", () => {
+  function fromStub(opts: {
+    existingDigestEmail?: string | null;
+    existingSelectError?: string;
+  }) {
+    const maybeSingle = vi.fn(async () =>
+      opts.existingSelectError
+        ? { data: null, error: { message: opts.existingSelectError } }
+        : {
+            data:
+              opts.existingDigestEmail === undefined
+                ? null
+                : { digest_email: opts.existingDigestEmail },
+            error: null,
+          },
+    );
+    const upsert = vi.fn(() => ({
+      select: () => ({
+        single: async () => ({
+          data: { ...rowFixture, digest_email: "written@example.test" },
+          error: null,
+        }),
+      }),
+    }));
+    return {
+      select: () => ({ eq: () => ({ maybeSingle }) }),
+      upsert,
+    };
+  }
+
+  function putWithDigestEmail(digestEmail: string) {
+    return PUT(
+      new NextRequest("http://peer.test/api/profile", {
+        method: "PUT",
+        body: JSON.stringify({ digestEmail }),
+      }),
+    );
+  }
+
+  it("accepts a value equal to the account email (case/whitespace-insensitive) and normalizes it before storing", async () => {
+    const stub = fromStub({ existingDigestEmail: null });
+    mocks.createClient.mockResolvedValueOnce({
+      auth: { getUser: async () => ({ data: { user: { id: "user-1", email: "Person@Example.test" } } }) },
+      from: () => stub,
+    });
+
+    const response = await putWithDigestEmail("  person@EXAMPLE.test  ");
+
+    expect(response.status).toBe(200);
+    expect(stub.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ digest_email: "person@example.test" }),
+      { onConflict: "user_id" },
+    );
+  });
+
+  it("accepts a value equal to the currently-stored digest_email", async () => {
+    const stub = fromStub({ existingDigestEmail: "already@example.test" });
+    mocks.createClient.mockResolvedValueOnce({
+      auth: { getUser: async () => ({ data: { user: { id: "user-1", email: "person@example.test" } } }) },
+      from: () => stub,
+    });
+
+    const response = await putWithDigestEmail("Already@Example.test");
+
+    expect(response.status).toBe(200);
+    expect(stub.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ digest_email: "already@example.test" }),
+      { onConflict: "user_id" },
+    );
+  });
+
+  it("rejects a value that is neither the account email nor the stored value; the row is unchanged", async () => {
+    const stub = fromStub({ existingDigestEmail: "already@example.test" });
+    mocks.createClient.mockResolvedValueOnce({
+      auth: { getUser: async () => ({ data: { user: { id: "user-1", email: "person@example.test" } } }) },
+      from: () => stub,
+    });
+
+    const response = await putWithDigestEmail("someone-else@example.test");
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({ error: "digest_email_requires_confirmation" });
+    expect(stub.upsert).not.toHaveBeenCalled();
+  });
+
+  it("allows clearing the field to empty unconditionally (nothing to confirm when removing a destination)", async () => {
+    const stub = fromStub({ existingDigestEmail: "already@example.test" });
+    mocks.createClient.mockResolvedValueOnce({
+      auth: { getUser: async () => ({ data: { user: { id: "user-1", email: "person@example.test" } } }) },
+      from: () => stub,
+    });
+
+    const response = await putWithDigestEmail("");
+
+    expect(response.status).toBe(200);
+    expect(stub.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ digest_email: "" }),
+      { onConflict: "user_id" },
+    );
+  });
+
+  it("a patch that never mentions digestEmail never reads the existing row (no added cost to other fields)", async () => {
+    const upsert = vi.fn(() => ({ select: () => ({ single: async () => ({ data: rowFixture, error: null }) }) }));
+    const select = vi.fn();
+    mocks.createClient.mockResolvedValueOnce({
+      auth: { getUser: async () => ({ data: { user: { id: "user-1", email: "person@example.test" } } }) },
+      from: () => ({ select, upsert }),
+    });
+
+    const response = await PUT(
+      new NextRequest("http://peer.test/api/profile", { method: "PUT", body: JSON.stringify({ displayName: "New Name" }) }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(select).not.toHaveBeenCalled();
+  });
+
+  it("surfaces a failed pre-check read as a 500 without writing", async () => {
+    const stub = fromStub({ existingSelectError: "database unavailable" });
+    mocks.createClient.mockResolvedValueOnce({
+      auth: { getUser: async () => ({ data: { user: { id: "user-1", email: "person@example.test" } } }) },
+      from: () => stub,
+    });
+
+    const response = await putWithDigestEmail("someone-else@example.test");
+
+    expect(response.status).toBe(500);
+    expect(stub.upsert).not.toHaveBeenCalled();
+  });
+});
+
+/**
  * ABC-freemium 1-16 · R-ENT-1, R-ENT-3, R-TEST-1.
  *
  * The two halves of "the plan is the server's, not the browser's". The read

@@ -19,6 +19,7 @@ import {
 import type { UserProfile } from "@/types";
 import { cleanPreferenceLedger } from "@/lib/preferences/ledger";
 import { normalizePersistedFeedIntent, textValue } from "@/lib/feed/intent";
+import { normalizeEmailAddress } from "@/lib/email/confirm-token";
 
 // ── DB ↔ client type mapping ────────────────────────────────────
 
@@ -261,6 +262,50 @@ export async function PUT(request: NextRequest) {
     if (!parsed.ok) return NextResponse.json({ error: "invalid_feed_intent" }, { status: 400 });
     body.feedIntent = parsed.intent;
   }
+
+  // EMAIL-SETTINGS · F4/§2.3 (guide docs/jev-abc/EMAIL-SETTINGS-B-20260926T142832Z.md) —
+  // a client may only ever PUT a digestEmail equal to the account email or
+  // the value already stored for this user. A genuinely NEW address only
+  // ever becomes one of those two allowed values through
+  // GET /api/profile/confirm-email's own write, never through this route —
+  // without this guard, that confirmation flow would be a UI nicety a
+  // client could simply bypass by PUTting an unconfirmed address directly.
+  // Only reads the existing row when the patch actually touches this field
+  // (no added cost to any other field's update). Clearing the field to ""
+  // is always allowed unconditionally — there is nothing to confirm when
+  // REMOVING a destination, only when adding/changing one.
+  if (Object.prototype.hasOwnProperty.call(body, "digestEmail") && body.digestEmail !== undefined) {
+    const candidate = normalizeEmailAddress(body.digestEmail);
+    if (candidate !== "") {
+      const accountEmail = user.email ? normalizeEmailAddress(user.email) : null;
+      let allowed = accountEmail !== null && candidate === accountEmail;
+      if (!allowed) {
+        const { data: existingRow, error: existingError } = await supabase
+          .from("profiles")
+          .select("digest_email")
+          .eq("user_id", user.id)
+          .maybeSingle();
+        if (existingError) {
+          return NextResponse.json({ error: existingError.message }, { status: 500 });
+        }
+        const storedEmail = existingRow?.digest_email
+          ? normalizeEmailAddress(existingRow.digest_email)
+          : null;
+        allowed = storedEmail !== null && candidate === storedEmail;
+      }
+      if (!allowed) {
+        return NextResponse.json(
+          { error: "digest_email_requires_confirmation" },
+          { status: 400 },
+        );
+      }
+    }
+    // Always store the normalized form — whichever path wrote digest_email
+    // (this echo-write, or confirm-email's own write), the stored value is
+    // always trim+lowercase.
+    body.digestEmail = candidate;
+  }
+
   const row = profilePatchToRow(body, user.id);
 
   let { data, error } = await supabase
