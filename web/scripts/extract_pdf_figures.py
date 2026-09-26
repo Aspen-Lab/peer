@@ -38,6 +38,16 @@ MAX_PIXELS = 4_500_000
 # ~200 DPI, which is visibly sharp on retina displays without ballooning size.
 DEFAULT_SCALE = 2.8
 MIN_SCALE = 1.6
+# A raster the page prints at other proportions than its own pixels is a
+# figure the author stretched in their word processor — circles drawn as
+# ovals, lettering widened. The clip reproduces the page, so it reproduced the
+# stretch. Past this tolerance the render is un-stretched back to the image's
+# own shape; inside it, the difference is rounding in the layout, not intent.
+STRETCH_TOLERANCE = 1.06
+# Outside this band the "stretch" is not a figure squeezed to fit a column —
+# it is a strip, a rule or a tiled background, and correcting it would only
+# distort the clip around it.
+MAX_STRETCH_CORRECTION = 4.0
 
 
 @dataclass
@@ -53,6 +63,15 @@ class RegionCandidate:
     kind: str
     caption: str | None
     explicit_caption: bool
+    # Printed width-to-height over the image's own; 1.0 = drawn as it is.
+    stretch: float = 1.0
+
+
+@dataclass
+class PlacedImage:
+    rect: fitz.Rect
+    pixels: int
+    stretch: float
 
 
 def normalize_text(text: str) -> str:
@@ -148,10 +167,67 @@ def best_caption_for_region(region: fitz.Rect, blocks: list[TextBlock]) -> tuple
     return None, False
 
 
+def placed_image(block: dict) -> PlacedImage | None:
+    """An image block's printed box, pixel count, and how far the page
+    stretched it. None for a rotated or sheared placement, whose box says
+    nothing about the image's proportions."""
+    rect = fitz.Rect(block.get("bbox", (0, 0, 0, 0)))
+    width, height = block.get("width") or 0, block.get("height") or 0
+    if rect.is_empty or rect.height <= 0 or width <= 0 or height <= 0:
+        return None
+    a, b, c, d = (block.get("transform") or (1, 0, 0, 1, 0, 0))[:4]
+    scale = max(abs(a), abs(d), 1e-9)
+    if abs(b) > scale * 1e-3 or abs(c) > scale * 1e-3 or abs(a) < 1e-9 or abs(d) < 1e-9:
+        return None
+    # The image's own shape, in its own resolution: a scan stored at unequal
+    # horizontal and vertical DPI is not square-pixelled.
+    xres, yres = block.get("xres") or 0, block.get("yres") or 0
+    own_ratio = (width / xres) / (height / yres) if xres > 0 and yres > 0 else width / height
+    return PlacedImage(
+        rect=rect,
+        pixels=int(width * height),
+        stretch=(rect.width / rect.height) / own_ratio,
+    )
+
+
+def region_stretch(region: fitz.Rect, images: list[PlacedImage]) -> float:
+    """How far to un-stretch this region: the stretch of the raster that IS
+    the figure — the one with the most pixels among those filling most of the
+    region, so a drop-shadow or frame image laid under it does not decide.
+    A region the raster only partly fills (vector labels, a panel beside it)
+    is left as printed; un-stretching it would distort the rest."""
+    best: PlacedImage | None = None
+    region_area = area(region)
+    if region_area <= 0:
+        return 1.0
+    for image in images:
+        if area(image.rect & region) / region_area < 0.6:
+            continue
+        if best is None or image.pixels > best.pixels:
+            best = image
+    if best is None:
+        return 1.0
+    stretch = best.stretch
+    if 1 / STRETCH_TOLERANCE <= stretch <= STRETCH_TOLERANCE:
+        return 1.0
+    if not 1 / MAX_STRETCH_CORRECTION <= stretch <= MAX_STRETCH_CORRECTION:
+        return 1.0
+    return stretch
+
+
 def candidate_regions(page: fitz.Page, blocks: list[TextBlock]) -> list[RegionCandidate]:
     candidates: list[RegionCandidate] = []
 
     page_dict = page.get_text("dict")
+    images = [
+        image
+        for image in (
+            placed_image(block)
+            for block in page_dict.get("blocks", [])
+            if block.get("type") == 1
+        )
+        if image is not None
+    ]
     for block in page_dict.get("blocks", []):
         if block.get("type") != 1:
             continue
@@ -218,10 +294,13 @@ def candidate_regions(page: fitz.Page, blocks: list[TextBlock]) -> list[RegionCa
         if keep:
             deduped.append(candidate)
 
+    for candidate in deduped:
+        candidate.stretch = region_stretch(candidate.rect, images)
+
     return deduped
 
 
-def clip_png_base64(page: fitz.Page, rect: fitz.Rect) -> str | None:
+def clip_png_base64(page: fitz.Page, rect: fitz.Rect, stretch: float = 1.0) -> str | None:
     clip = fitz.Rect(
         max(page.rect.x0, rect.x0 - CLIP_PADDING),
         max(page.rect.y0, rect.y0 - CLIP_PADDING),
@@ -231,14 +310,24 @@ def clip_png_base64(page: fitz.Page, rect: fitz.Rect) -> str | None:
     if clip.is_empty or clip.width <= 1 or clip.height <= 1:
         return None
 
+    # Un-stretching lengthens the squeezed side rather than shortening the
+    # stretched one, so no printed detail is thrown away: printed too wide
+    # (stretch > 1) renders taller, printed too tall renders wider.
+    x_gain, y_gain = (1.0, stretch) if stretch >= 1 else (1 / stretch, 1.0)
+
     # Start at the high-DPI default; drop only when the area would exceed the
     # safety ceiling. Most figures clear DEFAULT_SCALE comfortably.
     scale = DEFAULT_SCALE
-    while clip.width * clip.height * (scale**2) > MAX_PIXELS and scale > MIN_SCALE:
+    while (
+        clip.width * clip.height * x_gain * y_gain * (scale**2) > MAX_PIXELS
+        and scale > MIN_SCALE
+    ):
         scale -= 0.2
     scale = max(MIN_SCALE, scale)
 
-    pix = page.get_pixmap(clip=clip, matrix=fitz.Matrix(scale, scale), alpha=False)
+    pix = page.get_pixmap(
+        clip=clip, matrix=fitz.Matrix(scale * x_gain, scale * y_gain), alpha=False
+    )
     png_bytes = pix.tobytes("png")
     if not png_bytes:
         return None
@@ -257,7 +346,7 @@ def extract_figures(pdf_path: str, max_pages: int, max_figures: int) -> dict:
             page = doc[page_index]
             blocks = collect_text_blocks(page)
             for candidate in candidate_regions(page, blocks):
-                data_base64 = clip_png_base64(page, candidate.rect)
+                data_base64 = clip_png_base64(page, candidate.rect, candidate.stretch)
                 if not data_base64:
                     continue
                 figures.append(

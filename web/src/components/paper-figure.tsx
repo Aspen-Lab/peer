@@ -101,7 +101,10 @@ async function fetchFigure(
   { itemId, url, doi, query, paperTitle, figureIndex = 0, revision }: ResolveFigureArgs,
   signal: AbortSignal,
 ): Promise<FigureState> {
-  const params = new URLSearchParams({ id: itemId, v: "11" });
+  // `v` is part of the URL the route's day-long edge cache keys on; bump it
+  // when what the route returns for the same paper changes (12: a PDF figure
+  // the page printed stretched is now un-stretched to its own proportions).
+  const params = new URLSearchParams({ id: itemId, v: "12" });
   if (url) params.set("url", url);
   if (doi) params.set("doi", doi);
   if (query?.trim()) params.set("query", query.trim());
