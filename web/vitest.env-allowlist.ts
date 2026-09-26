@@ -2,14 +2,22 @@
  * ABC-freemium 1-00 (Ruling 3 point 3) — the **only** environment variables
  * `vitest.config.ts` may copy out of `.env.local` into the test process.
  *
- * These three are what a live Vertex grounding call needs, and they are the
- * three the config's own comment was written for. The list used to be the
- * prefix `GOOGLE_`, which also matched `GOOGLE_API_KEY` — the operator's
- * spendable AI Studio key. See `src/test-support/env-isolation.test.ts` for why
- * that mattered and what asserts it now.
+ * This file now holds TWO independent exact-name allow-lists, one per opt-in
+ * live config — never merged into one list, and never widened to a prefix:
  *
- * **Do not replace this with a prefix.** Do not add a name without saying which
- * test needs it and what it costs when spent.
+ *   - `VITEST_INJECTED_ENV_NAMES` / `selectLiveEventsEnv` — what a live
+ *     Vertex grounding call needs (`vitest.live-events.config.ts`). The list
+ *     used to be the prefix `GOOGLE_`, which also matched `GOOGLE_API_KEY` —
+ *     the operator's spendable AI Studio key. See
+ *     `src/test-support/env-isolation.test.ts` for why that mattered and
+ *     what asserts it now.
+ *   - `LIVE_CHANNELS_ENV_NAMES` / `selectLiveChannelsEnv` — what the live
+ *     Semantic Scholar / OpenAlex channel-comparison runner needs
+ *     (`vitest.live-channels.config.ts`, LIVE-EVAL-4, per
+ *     ABC-JEV-INTEGRATION.md §1u/§1w).
+ *
+ * **Do not replace either list with a prefix.** Do not add a name to either
+ * list without saying which test needs it and what it costs when spent.
  *
  * It lives in its own module rather than in `vitest.config.ts` so the config
  * keeps a single default export — a config file with both a default and a named
@@ -40,4 +48,36 @@ export function selectLiveEventsEnv(
       return value === undefined ? [] : [[name, value]];
     }),
   ) as Partial<Record<LiveEventsEnvName, string>>;
+}
+
+/**
+ * LIVE-EVAL-4 (ABC-JEV-INTEGRATION.md §1u.2) — the exact three credential
+ * names the opt-in live S2/OpenAlex channel-comparison runner may read from
+ * `.env.local`. `SEMANTIC_SCHOLAR_API_KEY`/`OPENALEX_API_KEY` are optional on
+ * both providers (a keyless request is still real and live — see that guide's
+ * Finding C1a for why this gate does not also require one to be present);
+ * `OPENALEX_EMAIL` is the polite-pool contact address OpenAlex's docs ask for.
+ */
+export const LIVE_CHANNELS_ENV_NAMES = [
+  "SEMANTIC_SCHOLAR_API_KEY",
+  "OPENALEX_API_KEY",
+  "OPENALEX_EMAIL",
+] as const;
+
+export type LiveChannelsEnvName = (typeof LIVE_CHANNELS_ENV_NAMES)[number];
+
+/**
+ * Used by `vitest.live-channels.config.ts` to inject exactly these names —
+ * and nothing else — into that one config's own `test.env`, mirroring
+ * `selectLiveEventsEnv` above.
+ */
+export function selectLiveChannelsEnv(
+  source: Record<string, string | undefined>,
+): Partial<Record<LiveChannelsEnvName, string>> {
+  return Object.fromEntries(
+    LIVE_CHANNELS_ENV_NAMES.flatMap((name) => {
+      const value = source[name];
+      return value === undefined ? [] : [[name, value]];
+    }),
+  ) as Partial<Record<LiveChannelsEnvName, string>>;
 }

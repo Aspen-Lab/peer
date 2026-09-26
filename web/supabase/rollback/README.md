@@ -71,6 +71,13 @@ the file (nobody should run any of them without a separately approved plan first
    backup" rule as a blanket policy, not because any one of them alone is catastrophic.
    The newest of the four (`dashboard_prepare_jobs`) is the lowest-stakes of all seven
    files — nothing calls this table's feature yet, so there is nothing live to interrupt.
+5. **`20260925000000_company_spend_budget_rollback.sql`** — regenerable and low-stakes,
+   same class as row 4: both tables hold only operator-set configuration (two dollar
+   ceilings, a per-model price list), never user data. The one thing worth knowing before
+   running it: unlike the other tables in this list, `company_model_prices` has **no
+   code-level default** — losing its rows while the spend cap is switched on makes the
+   cap MORE restrictive (every priced call fails closed until rows are re-entered), never
+   less. See that file's own SPEND-SAFETY NOTE.
 
 ## Known open item: `private_paper_pools` has no retention policy at all
 
@@ -87,7 +94,7 @@ See `docs/JEV-RELEASE-READINESS.md` for the full writeup; see
 `20260922000000_private_paper_pools_rollback.sql`'s own header for how this affects that
 one file specifically.
 
-## The seven files
+## The eight files
 
 | Rollback file | Reverses | Destroys |
 |---|---|---|
@@ -97,4 +104,5 @@ one file specifically.
 | `20260924000300_briefing_deliveries_dedupe_rollback.sql` | `briefing_deliveries.local_date` column + index + `claim_briefing_delivery` function | Additive on an **already-live production table** |
 | `20260924000400_private_decisions_rollback.sql` | `private_decisions` table | Regenerable (Jev decision cache; reapply causes a cache-miss cost burst, see file) |
 | `20260924000500_dashboard_rollover_rollback.sql` | `dashboard_rollover_candidates` table + `upsert_rollover_candidates` function | Regenerable (rollover candidates recompute from the next pipeline run) |
-| `20260924000600_dashboard_prepare_jobs_rollback.sql` | `dashboard_prepare_jobs` table + its 5 job-queue functions | Regenerable and lowest-stakes of the seven — a prepare job is only a scheduling note for work not yet done, never a record of anything that already happened; nothing triggers this queue yet |
+| `20260924000600_dashboard_prepare_jobs_rollback.sql` | `dashboard_prepare_jobs` table + its 5 job-queue functions | Regenerable and lowest-stakes of the first seven — a prepare job is only a scheduling note for work not yet done, never a record of anything that already happened; nothing triggers this queue yet |
+| `20260925000000_company_spend_budget_rollback.sql` | `company_spend_caps` + `company_model_prices` tables | Regenerable — operator-set configuration only, never user data. `company_model_prices` has no code-level default, so losing it while the spend cap is on makes the cap MORE restrictive, not less — see that file's own SPEND-SAFETY NOTE and row 5 above. |

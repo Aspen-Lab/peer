@@ -1,10 +1,14 @@
 import { describe, expect, it } from "vitest";
 import defaultConfig from "../../vitest.config";
 import liveEventsConfig from "../../vitest.live-events.config";
+import liveChannelsConfig from "../../vitest.live-channels.config";
 import {
   VITEST_INJECTED_ENV_NAMES,
   selectLiveEventsEnv,
+  LIVE_CHANNELS_ENV_NAMES,
+  selectLiveChannelsEnv,
 } from "../../vitest.env-allowlist";
+import { shouldStripLiveChannelsEnv } from "../../vitest.setup";
 
 /**
  * ABC-freemium 1-00 (Ruling 3 point 3) — **THE MONEY LOCK.**
@@ -78,5 +82,83 @@ describe("Vitest provider environment isolation", () => {
           ),
       ),
     ).toBe(true);
+  });
+});
+
+/**
+ * LIVE-EVAL-4 (ABC-JEV-INTEGRATION.md §1u.2/§1u.6, §1w P4) — the sibling
+ * money lock for the live Semantic Scholar / OpenAlex channel-comparison
+ * runner (`docs/jev-abc/LIVE-EVAL-4-B-20260925T044015Z.md` Finding C1e).
+ * Same reasoning as the suite above: every independent layer — the
+ * allow-list, the dedicated config's own env/include, and the conditional
+ * second-layer lock in `vitest.setup.ts` — must fail the moment any one of
+ * them is weakened, rather than letting the meter turn on quietly.
+ */
+describe("Live channels (S2/OpenAlex) evaluation environment isolation", () => {
+  it("re-asserts the default suite still injects no env at all", () => {
+    // A regression introduced by touching vitest.env-allowlist.ts or
+    // vitest.setup.ts for this item specifically must fail HERE too, not
+    // only in the older Vertex-focused describe block above.
+    expect(defaultConfig.test?.env).toBeUndefined();
+  });
+
+  it("allows only the exact three S2/OpenAlex credential names", () => {
+    expect([...LIVE_CHANNELS_ENV_NAMES]).toEqual([
+      "SEMANTIC_SCHOLAR_API_KEY",
+      "OPENALEX_API_KEY",
+      "OPENALEX_EMAIL",
+    ]);
+    expect(
+      selectLiveChannelsEnv({
+        SEMANTIC_SCHOLAR_API_KEY: "dummy-s2-key",
+        SEMANTIC_SCHOLAR_API_KEY_EXTRA: "must-not-pass",
+        OPENALEX_API_KEY: "dummy-openalex-key",
+        OPENALEX_EMAIL: "dummy@example.com",
+        GOOGLE_API_KEY: "must-not-pass",
+        TAVILY_API_KEY: "must-not-pass",
+        GOOGLE_VERTEX_PROJECT: "must-not-pass",
+      }),
+    ).toEqual({
+      SEMANTIC_SCHOLAR_API_KEY: "dummy-s2-key",
+      OPENALEX_API_KEY: "dummy-openalex-key",
+      OPENALEX_EMAIL: "dummy@example.com",
+    });
+  });
+
+  it("injects the opt-in literal and only allow-listed names into the live-channels config", () => {
+    expect(liveChannelsConfig.test?.env).toMatchObject({
+      PEER_RUN_LIVE_CHANNELS_EVAL: "1",
+    });
+    expect(
+      Object.keys(liveChannelsConfig.test?.env ?? []).every(
+        (name) =>
+          name === "PEER_RUN_LIVE_CHANNELS_EVAL" ||
+          LIVE_CHANNELS_ENV_NAMES.includes(
+            name as (typeof LIVE_CHANNELS_ENV_NAMES)[number],
+          ),
+      ),
+    ).toBe(true);
+  });
+
+  it("pins the live-channels config to exactly one test file, never a glob", () => {
+    // Guards against someone widening this config's scope later — a
+    // credential-bearing config must only ever collect the one file it was
+    // built for, even invoked with no path argument.
+    expect(liveChannelsConfig.test?.include).toEqual([
+      "src/lib/evaluation/live-channels/live-channels.test.ts",
+    ]);
+  });
+
+  it('strips the S2/OpenAlex credentials from process.env unless the live-channels opt-in literal is exactly "1"', () => {
+    expect(shouldStripLiveChannelsEnv({})).toBe(true);
+    expect(shouldStripLiveChannelsEnv({ PEER_RUN_LIVE_CHANNELS_EVAL: "0" })).toBe(
+      true,
+    );
+    expect(
+      shouldStripLiveChannelsEnv({ PEER_RUN_LIVE_CHANNELS_EVAL: "true" }),
+    ).toBe(true);
+    expect(
+      shouldStripLiveChannelsEnv({ PEER_RUN_LIVE_CHANNELS_EVAL: "1" }),
+    ).toBe(false);
   });
 });

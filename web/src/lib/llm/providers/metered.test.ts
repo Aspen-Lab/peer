@@ -5,6 +5,15 @@ import {
   setUsageEventsClientForTests,
   type UsageEventRow,
 } from "@/lib/usage/events";
+import { InMemoryCounterStore, getCounterStore, resetCounterStoreForTests } from "@/lib/usage/counters";
+import {
+  CompanySpendCapRefusedError,
+  companySpendGlobalDayKey,
+  companySpendPerUserDayKey,
+  readCompanyBudgetConfig,
+  resetCompanyBudgetConfigCacheForTests,
+  type CompanyBudgetSupabaseClient,
+} from "@/lib/usage/company-budget";
 import type { DigestProvider, DigestResult } from "./types";
 
 /**
@@ -423,5 +432,182 @@ describe("2-05 — at least one row per call, on both exits", () => {
     ]);
     // Both attributed to the same user, so the owner can see the retry cost.
     expect(new Set(rows.map((r) => r.user_id))).toEqual(new Set(["u1"]));
+  });
+});
+
+/**
+ * SPEND-CAP (ABC-JEV-INTEGRATION.md §1v). The R9/R10 wiring at `meterCall`'s
+ * own integration level — `company-budget.test.ts` covers the pure reserve/
+ * settle/estimate logic directly; this covers `meterCall` actually calling it
+ * at the right moment, under the right gate, and settling exactly once.
+ */
+describe("SPEND-CAP — meterCall's reservation/settlement wiring", () => {
+  const GENEROUS_PRICES = [
+    { model_id: "gemini-3.1-flash-lite", input_usd_per_million_tokens: 1, output_usd_per_million_tokens: 1, vision_tokens_per_image: null },
+    { model_id: "gemini-3.5-flash-lite", input_usd_per_million_tokens: 1, output_usd_per_million_tokens: 1, vision_tokens_per_image: null },
+    { model_id: "gemini-3.6-flash", input_usd_per_million_tokens: 1, output_usd_per_million_tokens: 1, vision_tokens_per_image: null },
+    { model_id: "gemini-3.8-flash", input_usd_per_million_tokens: 1, output_usd_per_million_tokens: 1, vision_tokens_per_image: null },
+  ];
+
+  function fakeClient(caps: Array<{ cap_key: string; amount_usd: number }>, prices = GENEROUS_PRICES): CompanyBudgetSupabaseClient {
+    return {
+      from: (table: unknown) => ({
+        select: async () => (table === "company_spend_caps" ? { data: caps, error: null } : { data: prices, error: null }),
+      }),
+    } as unknown as CompanyBudgetSupabaseClient;
+  }
+
+  const GENEROUS_CAPS = [
+    { cap_key: "global_daily_usd", amount_usd: 1000 },
+    { cap_key: "per_user_daily_usd", amount_usd: 1000 },
+  ];
+  const ZERO_CAPS = [
+    { cap_key: "global_daily_usd", amount_usd: 0 },
+    { cap_key: "per_user_daily_usd", amount_usd: 0 },
+  ];
+
+  beforeEach(() => {
+    resetCounterStoreForTests();
+    resetCompanyBudgetConfigCacheForTests();
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    resetCounterStoreForTests();
+    resetCompanyBudgetConfigCacheForTests();
+  });
+
+  it("R9 — flag OFF (the default): the reservation path is never entered, even against a config that would refuse everything", async () => {
+    vi.stubEnv("PEER_COMPANY_SPEND_CAP", "");
+    await readCompanyBudgetConfig(new Date(), fakeClient(ZERO_CAPS, [])); // no price rows either — would refuse or fail closed on every possible reason
+    const incrementSpy = vi.spyOn(InMemoryCounterStore.prototype, "increment");
+
+    const wrapped = meterProvider(
+      baseProvider({ id: "gemini", generateJsonText: () => Promise.resolve("{}") }),
+      { userId: "user-off", byok: false },
+    );
+
+    await expect(
+      wrapped.generateJsonText?.({ systemPrompt: "s", userPrompt: "u", maxTokens: 10, tier: "small" }),
+    ).resolves.toBe("{}");
+    expect(incrementSpy).not.toHaveBeenCalled();
+  });
+
+  it("BYOK is never gated (guide item 6) — the reservation path is skipped even with a guaranteed-refusal config", async () => {
+    vi.stubEnv("PEER_COMPANY_SPEND_CAP", "on");
+    await readCompanyBudgetConfig(new Date(), fakeClient(ZERO_CAPS));
+
+    const wrapped = meterProvider(
+      baseProvider({ id: "gemini", generateJsonText: () => Promise.resolve("{}") }),
+      { userId: "user-byok", byok: true },
+    );
+
+    await expect(
+      wrapped.generateJsonText?.({ systemPrompt: "s", userPrompt: "u", maxTokens: 10, tier: "small" }),
+    ).resolves.toBe("{}");
+  });
+
+  it("a refused reservation throws CompanySpendCapRefusedError — a real Error every existing catch(err) already handles — and writes a breaker usage row", async () => {
+    vi.stubEnv("PEER_COMPANY_SPEND_CAP", "on");
+    await readCompanyBudgetConfig(new Date(), fakeClient(ZERO_CAPS));
+
+    const wrapped = meterProvider(
+      baseProvider({ id: "gemini", generateJsonText: () => Promise.resolve("{}") }),
+      { userId: "user-refused", byok: false },
+    );
+
+    let caught: unknown;
+    try {
+      await wrapped.generateJsonText?.({ systemPrompt: "s", userPrompt: "u", maxTokens: 10, tier: "small" });
+    } catch (err) {
+      caught = err;
+    }
+    await flush();
+
+    expect(caught).toBeInstanceOf(CompanySpendCapRefusedError);
+    expect((caught as CompanySpendCapRefusedError).reason).toBe("per_user_cap_exceeded");
+    expect(rows.some((r) => r.kind === "breaker" && String(r.path).startsWith("company-spend:"))).toBe(true);
+  });
+
+  it("R10 — a successful call reserves the worst case, attaches to scope, and settles to the REAL usage after every attempt finishes", async () => {
+    vi.stubEnv("PEER_COMPANY_SPEND_CAP", "on");
+    await readCompanyBudgetConfig(new Date(), fakeClient(GENEROUS_CAPS));
+    const store = getCounterStore();
+
+    const wrapped = meterProvider(
+      baseProvider({
+        id: "gemini",
+        generateJsonText: () => {
+          logLlmUsage({
+            provider: "gemini",
+            model: "gemini-3.1-flash-lite",
+            inputTokens: 10,
+            outputTokens: 5,
+            latencyMs: 1,
+            ok: true,
+          });
+          return Promise.resolve("{}");
+        },
+      }),
+      { userId: "user-spend", byok: false },
+    );
+
+    // small tier -> 2 candidate models (3.1-flash-lite, 3.5-flash-lite), both
+    // measured to disable thinking, so outputCap == maxTokens exactly (100).
+    // Worst-case reservation = 2 x ((1 input tok x $1/M) + (100 out tok x
+    // $1/M)) = 2 x 101 = 202 microUSD. Actual attempt: 10 in + 5 out = 15
+    // microUSD. Refund = 202 - 15 = 187. Final = 15, on BOTH keys.
+    await wrapped.generateJsonText?.({ systemPrompt: "s", userPrompt: "u", maxTokens: 100, tier: "small" });
+    await flush();
+
+    await expect(store.read(companySpendPerUserDayKey("user-spend", new Date()))).resolves.toEqual({ value: 15, ok: true });
+    await expect(store.read(companySpendGlobalDayKey(new Date()))).resolves.toEqual({ value: 15, ok: true });
+  });
+
+  it("R10 — TWO chain attempts (one failed, one succeeded) settle ONCE, refunding against the SUM of both actual costs, not per attempt", async () => {
+    vi.stubEnv("PEER_COMPANY_SPEND_CAP", "on");
+    await readCompanyBudgetConfig(new Date(), fakeClient(GENEROUS_CAPS));
+    const store = getCounterStore();
+
+    const wrapped = meterProvider(
+      baseProvider({
+        id: "gemini",
+        generateJsonText: () => {
+          // Attempt 1: reported usage but "failed" (empty text) — still a
+          // real, billed provider request.
+          logLlmUsage({ provider: "gemini", model: "gemini-3.1-flash-lite", inputTokens: 10, outputTokens: 5, latencyMs: 1, ok: false });
+          // Attempt 2: the chain's next model, which produced real output.
+          logLlmUsage({ provider: "gemini", model: "gemini-3.5-flash-lite", inputTokens: 8, outputTokens: 4, latencyMs: 1, ok: true });
+          return Promise.resolve("{}");
+        },
+      }),
+      { userId: "user-spend-2", byok: false },
+    );
+
+    await wrapped.generateJsonText?.({ systemPrompt: "s", userPrompt: "u", maxTokens: 100, tier: "small" });
+    await flush();
+
+    // Reservation is still 202 (same worst-case chain as the single-attempt
+    // test above). Actual = (10+5) + (8+4) = 27 microUSD. Refund = 175.
+    await expect(store.read(companySpendPerUserDayKey("user-spend-2", new Date()))).resolves.toEqual({ value: 27, ok: true });
+  });
+
+  it("R2 — a call reached with no userId (e.g. tier2-rerank's SpendJustification path) reserves the global key only", async () => {
+    vi.stubEnv("PEER_COMPANY_SPEND_CAP", "on");
+    await readCompanyBudgetConfig(new Date(), fakeClient(GENEROUS_CAPS));
+    const store = getCounterStore();
+    const incrementSpy = vi.spyOn(store, "increment");
+
+    const wrapped = meterProvider(
+      baseProvider({ id: "gemini", generateJsonText: () => Promise.resolve("{}") }),
+      { userId: null, byok: false },
+    );
+
+    await wrapped.generateJsonText?.({ systemPrompt: "s", userPrompt: "u", maxTokens: 100, tier: "small" });
+    await flush();
+
+    const keys = incrementSpy.mock.calls.map(([key]) => String(key));
+    expect(keys.length).toBeGreaterThan(0);
+    expect(keys.every((k) => k === companySpendGlobalDayKey(new Date()))).toBe(true);
   });
 });

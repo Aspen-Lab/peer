@@ -13,6 +13,7 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:events-benchmark": "vitest run --config vitest.live-events.config.ts src/lib/events/benchmark.test.ts",
+    "test:live-channels": "vitest run --config vitest.live-channels.config.ts",
     "check:providers": "node scripts/check-provider-models.mjs",
     "purge-uploads": "node scripts/purge-uploads.mjs"
   },

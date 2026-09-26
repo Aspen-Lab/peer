@@ -24,6 +24,7 @@ import type { FeedRequest } from "@/lib/feed/types";
 import type { ScoredItem } from "@/lib/scoring/types";
 import { normalizeFeedIntent, textValue } from "@/lib/feed/intent";
 import { dateInTimezone, hourInTimezone, weekdayInTimezone } from "@/lib/dashboard/timezone";
+import { handleConflictingEmailClaim, persistDigestEmailAttempt } from "@/lib/email/digest-retry";
 
 // P4-S7-IDEM (Round 3) -- ABC-JEV-INTEGRATION.md §4 "P4-S7-IDEM B complete"
 // ruling; design doc docs/jev-abc/P4-S7-IDEM-B-20260924T113658Z.md. Renders
@@ -49,145 +50,16 @@ export function digestIdempotencyKey(userId: string, localDate: string): string 
   return createHash("sha256").update(material).digest("hex");
 }
 
-// Inside Resend's 24h idempotency-key window (B3) with a 1h safety margin,
-// so a retry is never attempted right at the edge of the key silently
-// expiring and becoming a genuinely new send.
-const IDEMPOTENCY_REPLAY_WINDOW_MS = 23 * 60 * 60 * 1000;
-
-type PendingDigestEmail = {
-  idempotencyKey: string;
-  to: string;
-  subject: string;
-  html: string;
-  text: string;
-  attemptedAt: string;
-};
-type ConfirmedDigestEmail = { sent: true; sentAt: string };
-type DigestEmailRecord = PendingDigestEmail | ConfirmedDigestEmail;
-
-// Best-effort bookkeeping only. Per the B guide's own C7 reasoning: Resend's
-// idempotency key (not this local write) is the actual safety net against a
-// double send, so a failure HERE must never block the send itself and must
-// never promote the row into this invocation's `failed` bucket -- it only
-// costs this one row its ability to be usefully replayed if the send also
-// then fails, which degrades to exactly the pre-existing F-A-P4S7-01
-// trade-off, never to a new failure mode.
-async function persistDigestEmailAttempt(
-  admin: AdminClient,
-  deliveryId: number,
-  currentPayload: Record<string, unknown> | null | undefined,
-  email: DigestEmailRecord,
-): Promise<void> {
-  try {
-    await admin
-      .from("briefing_deliveries")
-      .update({ payload: { ...(currentPayload ?? {}), email } })
-      .eq("id", deliveryId);
-  } catch {
-    // Swallowed deliberately -- see comment above.
-  }
-}
-
-type ConflictOutcome =
-  | { kind: "sent"; messageId?: string }
-  | { kind: "failed"; error: string }
-  | { kind: "skip"; reason: string };
-
-// P4-S7-IDEM conflict-branch decision ladder (§4 ruling, binding):
-//   1. row/sub-object unreadable or absent (legacy/pre-change row, or the
-//      read itself failed) -> treat as already sent -> skip, UNCHANGED
-//      reason string (every pre-existing route.test.ts assertion for this
-//      branch keeps passing byte for byte).
-//   2. payload.email.sent === true -> skip, new distinguishing reason.
-//   3. unsent, has a full stored body, attemptedAt <= 23h -> replay
-//      VERBATIM with the same recomputed key.
-//   4. unsent, attemptedAt > 23h -> do not send; report expired-unsent.
-// Never risks a double send: the only way this function calls Resend at all
-// is case 3, always with the SAME deterministic key and the SAME
-// byte-for-byte stored payload every time.
-type ExistingBriefingRow = {
-  id: number;
-  payload: { email?: Partial<PendingDigestEmail> & { sent?: boolean } };
-};
-
-async function handleConflictingEmailClaim(params: {
-  admin: AdminClient;
-  userId: string;
-  localDate: string;
-  idempotencyKey: string;
-  now: Date;
-}): Promise<ConflictOutcome> {
-  const { admin, userId, localDate, idempotencyKey, now } = params;
-  const LEGACY_SKIP: ConflictOutcome = {
-    kind: "skip",
-    reason: "digest already claimed for this local date",
-  };
-
-  let existing: ExistingBriefingRow | null = null;
-  try {
-    const { data, error } = await admin
-      .from("briefing_deliveries")
-      .select("id, payload")
-      .eq("user_id", userId)
-      .eq("local_date", localDate)
-      .limit(1);
-    if (!error && Array.isArray(data) && data.length > 0) {
-      existing = data[0] as ExistingBriefingRow;
-    }
-  } catch {
-    existing = null;
-  }
-
-  const email = existing?.payload?.email;
-  if (!existing || !email) {
-    return LEGACY_SKIP; // never risk a double send on an unreadable/legacy row
-  }
-  if (email.sent === true) {
-    return { kind: "skip", reason: "digest already sent for this local date" };
-  }
-  if (!email.subject || !email.html || !email.text || !email.to || !email.attemptedAt) {
-    return LEGACY_SKIP; // shape we don't recognize -- fail safe, same as legacy
-  }
-  const attemptedAtMs = Date.parse(email.attemptedAt);
-  const ageMs = now.getTime() - attemptedAtMs;
-  if (!Number.isFinite(attemptedAtMs) || ageMs > IDEMPOTENCY_REPLAY_WINDOW_MS) {
-    return { kind: "skip", reason: "digest email attempt expired unsent (>23h, not retried)" };
-  }
-
-  const result = await sendDigestEmail({
-    to: email.to,
-    items: [],
-    originUrl: "",
-    idempotencyKey,
-    render: { subject: email.subject, html: email.html, text: email.text },
-  });
-
-  if (result.sent) {
-    await persistDigestEmailAttempt(admin, existing.id, existing.payload, {
-      sent: true,
-      sentAt: new Date().toISOString(),
-    });
-    return { kind: "sent", messageId: result.messageId };
-  }
-  if (result.errorCode === "concurrent_idempotent_requests") {
-    // Another attempt is genuinely in flight elsewhere -- safe to retry
-    // later (B6); not our failure to report as one, and the stored row is
-    // deliberately left untouched.
-    return {
-      kind: "skip",
-      reason: "digest email retry already in progress (concurrent idempotent request)",
-    };
-  }
-  // Generic failure OR `invalid_idempotent_request` (payload-mismatch 409):
-  // both fall into the same reported bucket, carrying Resend's own message.
-  // "Never resend" (the §4 ruling's words for the invalid_idempotent_request
-  // case) is satisfied structurally, not by extra suppression state: this
-  // function never regenerates the key and never re-renders on retry, so
-  // the ONLY way it can legitimately reach that specific error is if
-  // something outside this design reused the same key with different
-  // content -- an anomaly this slice cannot repair without guessing.
-  return { kind: "failed", error: result.error ?? "unknown" };
-}
+// TRIGGER-A (ABC-JEV-INTEGRATION.md §1x) -- `handleConflictingEmailClaim`,
+// `persistDigestEmailAttempt`, `ExistingBriefingRow`,
+// `IDEMPOTENCY_REPLAY_WINDOW_MS` moved to web/src/lib/email/digest-retry.ts
+// (byte-identical bodies -- see that module's header) so the new
+// GET /api/jobs/prepare-dashboards route's email-retry phase can reuse this
+// exact decision ladder instead of a second copy. This route now imports
+// `handleConflictingEmailClaim` back; every other symbol below is unchanged.
+// route.test.ts / idempotency.test.ts import only `GET`/`digestIdempotencyKey`
+// from this file (never these moved symbols directly), so this extraction
+// needed no test-file edit and both suites pass unchanged.
 
 // P4-S7-IDEM first-attempt path (claim just succeeded, this is the FIRST
 // time this (user_id, local_date) email is being attempted). Renders once,
@@ -250,7 +122,11 @@ function originUrlFor(req: NextRequest): string {
 export const dynamic = "force-dynamic";
 export const maxDuration = 300; // 5 minutes — digest runs may hit multiple source APIs
 
-interface ProfileRow {
+// TRIGGER-A -- `export` added (purely additive, zero behaviour change) so
+// web/src/app/api/jobs/prepare-dashboards/route.ts can reuse this exact
+// shape/logic instead of a second copy — same treatment
+// `digestFeedRequestFromProfile` itself already got "for reuse".
+export interface ProfileRow {
   user_id: string;
   display_name: string | null;
   research_topics: string[];
@@ -301,11 +177,11 @@ interface ProfileRow {
 // convention (web/src/app/api/feed/route.ts) — see that file for the
 // precedent; this route never reads or imports that flag or module (§1p.C.2:
 // email and dashboard delivery state stay fully independent).
-function isDigestDedupeEnabled(): boolean {
+export function isDigestDedupeEnabled(): boolean {
   return process.env.PEER_DIGEST_DEDUPE?.trim().toLowerCase() === "on";
 }
 
-function frequencyAdmitsToday(
+export function frequencyAdmitsToday(
   frequency: ProfileRow["digest_frequency"],
   weekday: number,
 ): boolean {
@@ -316,13 +192,13 @@ function frequencyAdmitsToday(
   return false;
 }
 
-function seedTextsFromRow(row: ProfileRow): string[] {
+export function seedTextsFromRow(row: ProfileRow): string[] {
   return [row.current_project, row.current_challenges]
     .map((text) => text?.trim())
     .filter((text): text is string => Boolean(text));
 }
 
-function feedControlsFromRow(row: ProfileRow): FeedControls {
+export function feedControlsFromRow(row: ProfileRow): FeedControls {
   return {
     focus: row.feed_focus ?? undefined,
     freshness: row.feed_freshness ?? undefined,

@@ -227,8 +227,14 @@ export type BootstrapResult =
  * dependency). NOT cryptographically secure; used only so the same seed
  * always reproduces the same resample sequence. Returns a function producing
  * floats in [0, 1).
+ *
+ * Exported (LIVE-EVAL-4, ABC-JEV-INTEGRATION.md §1u/§1w, guide Finding C7
+ * item 5) so the live-channels blinded label sheet's deterministic sample/
+ * shuffle reuses this SAME generator instead of a second copy —
+ * `web/src/lib/evaluation/live-channels/blinded-sheet.ts` is the only
+ * outside importer. No other change to this module.
  */
-function mulberry32(seed: number): () => number {
+export function mulberry32(seed: number): () => number {
   let a = seed >>> 0;
   return function next(): number {
     a |= 0;

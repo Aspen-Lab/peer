@@ -1,0 +1,37 @@
+-- NOT A MIGRATION — NEVER APPLIED AUTOMATICALLY.
+-- Nothing in this repository reads this file. No Supabase CLI migration
+-- runner, script, or CI step ever executes it. A human may run it by hand
+-- (psql / the Supabase SQL editor) ONLY after a separately approved
+-- retention/backup plan exists for the data it destroys, per
+-- ABC-JEV-INTEGRATION.md §3e ("Do not drop old tables until a separately
+-- approved retention/migration plan; snapshots and stored reading history
+-- preserved."). See web/supabase/rollback/README.md for the full policy.
+--
+-- Reverses: web/supabase/migrations/20260925000000_company_spend_budget.sql
+--
+-- Destroys: every row in public.company_spend_caps and
+-- public.company_model_prices — operator-set configuration only (the two
+-- dollar ceilings and the per-model price table), never user data.
+-- Regenerable: losing these rows costs nothing but re-entry — the app's
+-- documented code-level defaults apply to company_spend_caps the moment its
+-- rows are absent again (R1: $5.00/day global, $0.50/day per user).
+--
+-- SPEND-SAFETY NOTE (not merely a generic caution — a concrete, bounded
+-- behavior consequence): company_model_prices has NO code-level default.
+-- Running this rollback while PEER_COMPANY_SPEND_CAP is "on" does not
+-- silently loosen anything — it makes the cap MORE restrictive, not less:
+-- every company-funded call that needs a price fails closed
+-- (`price_unreadable`) the instant its price row is gone, degrading to the
+-- same no-LLM fallback every one of this feature's 9 call sites already has.
+-- Re-applying the forward migration and re-entering price rows restores
+-- normal operation; the current-day counters in `usage_counters` (a
+-- different table, untouched by this rollback) are unaffected either way.
+--
+-- Order constraint: two independent tables, no FK between them or to
+-- anything else in this schema — order between the two DROPs does not matter,
+-- but company_model_prices is dropped first for consistency with this
+-- folder's "reverse dependency order" convention (prices are the more
+-- narrowly-scoped of the two).
+
+drop table if exists public.company_model_prices;
+drop table if exists public.company_spend_caps;

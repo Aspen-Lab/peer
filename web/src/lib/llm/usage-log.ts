@@ -11,6 +11,7 @@
 
 import { recordUsageEvent } from "@/lib/usage/events";
 import { currentUsageContext } from "@/lib/usage/context";
+import { cachedCompanyBudgetPrices, recordCompanySpendAttempt } from "@/lib/usage/company-budget";
 
 export interface LlmUsage {
   provider: string;
@@ -49,6 +50,21 @@ export function logLlmUsage(u: LlmUsage): void {
   // is told a row exists so it does not write a second one.
   const ctx = currentUsageContext();
   if (ctx) ctx.recorded = true;
+
+  // SPEND-CAP · R10 — accumulate THIS attempt's actual cost onto the
+  // reservation `meterCall` attached to the scope; settlement itself fires
+  // exactly once, from `meterCall`'s `finally`, after every attempt for this
+  // call has run. Never touches the counter store directly — this function
+  // stays synchronous and side-effect-free beyond the existing console line
+  // and usage-event write below.
+  if (ctx?.companyReservation) {
+    recordCompanySpendAttempt(
+      ctx.companyReservation,
+      { model: u.model, inputTokens: u.inputTokens, outputTokens: u.outputTokens, thinkingTokens: u.thinkingTokens },
+      cachedCompanyBudgetPrices(new Date()),
+    );
+  }
+
   recordUsageEvent({
     user_id: ctx?.userId ?? null,
     kind: "llm",

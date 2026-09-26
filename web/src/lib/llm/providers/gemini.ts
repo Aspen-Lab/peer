@@ -15,7 +15,7 @@ import { DIGEST_SYSTEM_PROMPT, buildUserPrompt, safeParseDigest } from "./types"
 import { logLlmUsage, now } from "../usage-log";
 import { PROVIDER_MODELS } from "../provider-models";
 
-type ModelTarget = {
+export type ModelTarget = {
   id: string;
   location: "regional" | "global";
   tier: ModelTier;
@@ -39,7 +39,12 @@ const VERTEX_MODEL_CHAIN = [
 // available to new users"`, measured 2026-09-13), so no 2.5 id is tried here:
 // each would cost a new key a failed round-trip on every call. Each tier is
 // the chosen model, then the next one up the same line.
-const GEMINI_API_MODEL_CHAIN = [
+//
+// SPEND-CAP — exported so `usage/company-budget.ts` can size a worst-case
+// reservation against the REAL chain (today's only reachable
+// `resolveSystemProvider()` branch, per that design's own documented,
+// tested assumption) instead of a duplicated list that could drift.
+export const GEMINI_API_MODEL_CHAIN = [
   { id: PROVIDER_MODELS.gemini.small, location: "global", tier: "small" },
   { id: "gemini-3.5-flash-lite", location: "global", tier: "small" },
   { id: PROVIDER_MODELS.gemini.large, location: "global", tier: "large" },
@@ -63,7 +68,11 @@ export const GEMINI_NO_THINKING_CONTROL: ReadonlySet<string> = new Set(["gemini-
 // For tier-aware calls, narrow the chain to a single appropriate model. The
 // default chain stays economical-first for digests. `small`/`large` are
 // explicit roles rather than guesses from model-name suffixes.
-function chainForTier(chain: ModelTarget[], tier?: ModelTier): ModelTarget[] {
+//
+// SPEND-CAP — exported so `usage/company-budget.ts`'s reservation estimator
+// can size a worst-case chain the exact same way a real call resolves one,
+// instead of a second copy of "2 or 4" that could drift.
+export function chainForTier(chain: ModelTarget[], tier?: ModelTier): ModelTarget[] {
   if (!tier) return chain;
   return chain.filter((target) => target.tier === tier);
 }
@@ -140,13 +149,25 @@ function thinkingOffConfig(modelId: string): ThinkingOff | undefined {
   return undefined;
 }
 
-/** True when this model's thinking can be turned off, so its cap needs no headroom. */
-function disableThinking(modelId: string): boolean {
+/**
+ * True when this model's thinking can be turned off, so its cap needs no
+ * headroom. SPEND-CAP — exported alongside `outputCap` per the design guide,
+ * even though the estimator only calls `outputCap` directly today.
+ */
+export function disableThinking(modelId: string): boolean {
   return thinkingOffConfig(modelId) !== undefined;
 }
 
-/** Output cap including thinking headroom wherever the model may still think. */
-function outputCap(modelId: string, maxTokens?: number): number | undefined {
+/**
+ * Output cap including thinking headroom wherever the model may still think.
+ *
+ * SPEND-CAP — exported so the company-spend estimator prices EXACTLY the cap
+ * a real call would send, including headroom, rather than a second guess at
+ * it. Returns `undefined` when `maxTokens` itself is `undefined` — callers
+ * that need a bounded estimate must treat that as "no honest ceiling", not as
+ * "no cap" (see `company-budget.ts`'s "UNESTIMABLE CALL SHAPES" note).
+ */
+export function outputCap(modelId: string, maxTokens?: number): number | undefined {
   if (maxTokens == null) return undefined;
   return disableThinking(modelId) ? maxTokens : maxTokens + THINKING_HEADROOM;
 }

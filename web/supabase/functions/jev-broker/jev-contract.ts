@@ -93,20 +93,29 @@ export interface TruncationEvent {
 
 /** Conservative slice of the 32k state+longest-question ceiling reserved just for the abstract. */
 const ABSTRACT_TOKEN_BUDGET = 3000;
-/** Conservative average characters per token for Latin-script text. */
-const LATIN_CHARS_PER_TOKEN = 4;
+/**
+ * Conservative average characters per token for Latin-script text.
+ *
+ * SPEND-CAP — exported so `usage/company-budget.ts`'s token estimator reuses
+ * this EXACT ratio instead of inventing a second CJK-aware heuristic for the
+ * same problem (ABC-JEV-INTEGRATION.md §1v guide, §2.4).
+ */
+export const LATIN_CHARS_PER_TOKEN = 4;
 /**
  * Conservative characters per token for CJK-dense text (ABC-JEV-
  * INTEGRATION.md §1p.H(9): the truncation budget must be conservative for
  * CJK, i.e. more tokens per character). A Han/Kana/Hangul character is
  * commonly its own token or more, so budget four times tighter per
  * character than Latin text gets.
+ *
+ * SPEND-CAP — exported for the same reason as `LATIN_CHARS_PER_TOKEN` above.
  */
-const CJK_CHARS_PER_TOKEN = 1;
+export const CJK_CHARS_PER_TOKEN = 1;
 const CJK_DENSITY_THRESHOLD = 0.3;
 const CJK_PATTERN = /[㐀-鿿぀-ヿ가-힯]/gu;
 
-function isCjkHeavy(text: string): boolean {
+/** SPEND-CAP — exported so the company-spend token estimator shares this exact test rather than a second copy. */
+export function isCjkHeavy(text: string): boolean {
   if (text.length === 0) return false;
   const matches = text.match(CJK_PATTERN);
   const count = matches ? matches.length : 0;

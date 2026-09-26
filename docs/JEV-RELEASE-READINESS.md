@@ -3,12 +3,16 @@
 **What this document is:** a plain-language explanation of where this project stands,
 followed by a precise technical appendix for whoever does the actual switching-on work.
 
-**What this document is not:** proof that anything has been tested with real users or
-real data. Nothing in this campaign has made a single live call to any outside AI or
-search service yet. Every number, every "it works," and every test result described
-below comes from offline checks only — code read carefully, and run against fake or
-recorded data, never real traffic. Anywhere this document says something passed a check,
-it means "passed an offline check," never "proven in the real world."
+**What this document is not:** proof that anything has been tested with real users, or
+that Peer's actual product has been tested with real data. One narrow exception happened
+this round: a bounded, budget-capped test that called two outside paper-search services
+directly, for comparison only, never through the product itself and never seen by any
+real user (see "What has NOT been tested live" below for exactly what it found).
+Everything else in this document — every other number, every "it works," and every other
+test result — still comes from offline checks only: code read carefully, and run against
+fake or recorded data, never real product traffic. Anywhere this document says something
+passed a check, it means "passed an offline check," never "proven in the real world,"
+unless that one exception is named explicitly.
 
 ---
 
@@ -43,6 +47,23 @@ them still hold. Joining the two together also meant the first decision below ("
 for AI calls") got made: Peer's own infrastructure now covers some AI costs, the same
 way the rest of Peer already works. What that costs and risks is explained under that
 decision below.
+
+**A spending limit for Peer's own AI use has now been built.** When the two lines of work
+were joined together, Peer's built-in AI started covering more of its own costs — good for
+you, but it meant there was no overall dollar ceiling on that spending, only a couple of
+narrower limits on specific expensive features. That gap is now closed: Peer can now be
+told "never spend more than this many dollars in one day," with one limit for everybody
+combined and a smaller one for each person, both resetting every night. It is careful about
+running out of money by accident — if it ever can't tell how much has been spent so far, it
+stops spending rather than guessing and risking a surprise bill. It also needs one more
+piece of information before it can actually enforce anything: roughly how much each AI
+model it can use actually costs, entered by hand in a simple table. Until that table has at
+least some numbers in it, this whole safety feature simply refuses to let the built-in AI
+run at all — which is the safe direction to fail in, but worth knowing, since it means this
+feature isn't truly "on" until both the switch AND the price table are set up. This new
+limit is switched off by default, like every other new ability in this project, and the two
+starting dollar amounts are conservative placeholders — you get the final say on the real
+numbers before this is relied on for real use.
 
 **A real bug slipped through, and a person caught it — not an automated check.** Right
 after joining the two lines of work together, someone opened Peer and looked at the
@@ -98,55 +119,129 @@ get the final say on the order when the time comes.
 
 ### What needs your decision
 
-One of six original choices has now been made — joining the two lines of work together
-counted as choosing it, and it's recorded below. Five are still waiting on you. None of
-them are technical — they're about risk, cost, and privacy trade-offs that only you can
-weigh:
+When this document was last written, one of six original choices had been made. Since
+then, two more got decided (3 and 5, both below), and this round surfaced one brand-new
+choice (7, also below) while researching one of the others. That makes three decided out
+of seven tracked choices, with four still waiting on you. None of the open ones are
+technical — they're about risk, cost, and privacy trade-offs that only you can weigh:
 
 1. **Who pays for AI calls, and how — NOW DECIDED.** You chose to let Peer's own
    infrastructure cover some AI costs under a new shared spending limit, the same way
    the rest of Peer already works, rather than keep the older, stricter rule. What this
    buys you: a few abilities that would otherwise have quietly turned off stay on. What
-   it costs: today that shared spending limit only actually puts a ceiling on two
+   it cost, until now: that shared spending limit only actually put a ceiling on two
    specific expensive actions — a full in-depth report, and a costly full rebuild of
    your results. Everything else that calls on an AI — a quick re-ranking of your
-   papers, a short summary, a background double-check — is watched and written down, but
-   has no overall dollar limit or call-count ceiling of its own yet. That gap is the
-   single biggest open cost risk in Peer today, worth knowing even though the decision
-   itself is already made. This same choice also decides whether a backup AI opinion —
-   one that only ever runs quietly in the background, never something you see directly —
-   can ever switch on at all, since it's built to only spend Peer's own money, never
-   yours; making that part actually able to run still needs its own separate wiring work
-   first.
+   papers, a short summary, a background double-check — was watched and written down, but
+   had no overall dollar limit or call-count ceiling of its own. That was the
+   single biggest open cost risk in Peer. **It now has a fix, built but not yet turned
+   on** (see "What changed" above): an overall daily dollar ceiling that covers every one
+   of those AI actions, not just the two big ones, with one number for everybody combined
+   and a smaller number per person. Two things about it still need you specifically,
+   separate from the "who pays" choice you already made: first, the two starting dollar
+   amounts are placeholders — reasonable but not yet checked against what you're actually
+   comfortable spending, so confirm or change them before this is relied on for real use;
+   second, like every other switch in this document, turning it on is your call, not
+   something built automatically because it exists. This same original choice also
+   decides whether a backup AI opinion — one that only ever runs quietly in the
+   background, never something you see directly — can ever switch on at all, since it's
+   built to only spend Peer's own money, never yours; making that part actually able to
+   run still needs its own separate wiring work first, including giving it a spending
+   limit of its own before it may ever be turned on.
 2. **Should email and the in-app dashboard share one "already shown" memory**, or stay
    fully separate, as they do today? Right now if a paper shows up in your email, it can
    still show up on the dashboard too.
 3. **Who or what is allowed to trigger the scheduled email digest** (and also a
    "get things ready a bit before you check in" helper, which has now actually been
-   built and tested — it just isn't switched on) **on a timer.** Nobody has wired up an
-   automatic trigger yet, on purpose — this is a production change nobody should make
-   without asking you first.
+   built and tested — it just isn't switched on) **on a timer — NOW DECIDED.** You
+   already answered this one: the same once-an-hour automatic check that already sends
+   the scheduled digest now also runs the "get ready ahead of time" helper and the retry
+   described in decision 5 below, as extra steps of that same timer — nothing new to
+   schedule separately. A second, independent pass re-checked the work this round and
+   confirmed it does what it claims. Three things worth knowing about what that means in
+   practice, in plain terms: first, **nothing new runs yet** — this only takes effect
+   once the change itself has been looked over and turned on for real, which is still a
+   separate yes from you, on top of two more switches (both off by default) that must
+   both be turned on before the new helper does anything at all; second, **the clock it
+   uses is the world clock, not yours** — until some screen lets a person set their own
+   time zone, "shortly before you check in" is worked out as if every single account
+   checks in at eight in the morning, world standard time, because that is the one
+   time-related number every account actually has today; third, it is built so it can
+   never get a day's result ready twice over for the same person — repeating the timer
+   early or overlapping two runs by accident costs nothing and breaks nothing. (What the
+   EXISTING, already-running hourly check does TODAY, before any of this new helper is
+   switched on, is a separate and rather surprising story — see the new note right after
+   decision 7 below.)
 4. **How much real, paid use of outside search and AI services to authorize**, and for
-   what scope. Nothing has made a real paid call yet. This same decision also tells us
-   whether one specific paper-search service still works without a paid key at all — we
-   genuinely don't know right now, and checking requires making one real request.
-5. **Whether a failed digest email should be automatically retried later.** A safe,
-   one-time retry already exists in the code. Turning that into an automatic recurring
-   sweep would itself be a new scheduled job, so it needs the same sign-off as decision 3.
+   what scope, still needs your answer — the one-off comparison test described below
+   does not count as that authorization; it was a separate, narrower, already-approved
+   exception. **One small piece of this question got answered as a side effect of that
+   test, though: one specific paper-search service (OpenAlex) does still work without
+   paying for a key** — the test used the free, no-key option throughout, and every
+   request it made was accepted; some individual searches still failed to respond in
+   time (see below), but never because a key was missing.
+5. **Whether a failed digest email should be automatically retried later — NOW DECIDED,
+   folded into decision 3's answer above.** A safe, one-time-per-day retry now runs as
+   one more step of the same once-an-hour timer described in decision 3, behind its own
+   separate switch that is also off by default. Worth knowing plainly: today this piece
+   would find nothing to do, for a specific reason explained in full right after decision
+   7 below — in short, nobody can turn email delivery on for their own account from the
+   app at all right now, so there are no failed emails anywhere waiting to be retried.
+   This is ready for the day email delivery itself comes back; it changes nothing about
+   email today.
 6. **Who reviews and labels the ~200 test papers** used to measure whether the new
-   ranking is actually better. The rule is: two people who did not write any of Peer's
-   search or ranking code, working independently, plus a named tie-breaker for when they
-   disagree. We need you to say who those people are.
+   ranking is actually better (a separate, much larger batch than the 40-paper sample
+   mentioned below). The rule is: two people who did not write any of Peer's search or
+   ranking code, working independently, plus a named tie-breaker for when they disagree.
+   We need you to say who those three people are.
+7. **New this round: whether to bring back the on-screen controls for email** — turning
+   it on, and picking a send time, a time zone, and an address. Right now nobody can do
+   any of that from the app, not because it was never built, but because it was
+   deliberately taken away. The full story is right below.
+
+**What the existing, once-an-hour check already does today — found while answering
+decision 3, and worth knowing on its own.** Peer already runs an automatic check every
+hour, and this is not new — none of the switches described above change it. On
+2026-04-27, the on-screen control that let someone turn their own email on, and choose
+when and where it went, was deliberately removed from the app. The code that actually
+sends that email was not deleted — it was left in place, switched off, ready to come
+back later. Today, that hourly check still quietly builds a fresh, personal daily update
+for every signed-in reader by default, every morning at eight o'clock, world standard
+time — the only time anyone has told it to use, since no screen lets a person pick their
+own. That update does not go out as email. Instead it sits inside the app itself, under a
+"Past briefings" list on your profile page, waiting to be opened. Whether to bring the
+on-screen controls back — so a person could choose their own time, time zone, and
+whether they want email at all — is the new, open decision 7 above, not something the
+code needs more work to support.
 
 ### What has NOT been tested live
 
-Nothing. To be specific: no real call has been made to Semantic Scholar, OpenAlex, or
-Jev by this campaign. No comparison between "old Peer" and "new Peer" has been run on
-real papers. No cost number, no accuracy number, and no speed number in this project is
-a measurement — every number you may see quoted elsewhere is an estimate, clearly
-labeled as such, never a result. The plan for how that testing will eventually happen is
-in the technical appendix, but the test itself has not started, and the pass/fail bar
-for it has not even been set yet.
+Almost nothing, with one bounded exception this round. With your permission, a one-off
+test made real calls to two of the outside paper-search services Peer plans to use —
+Semantic Scholar and OpenAlex — purely to compare them against each other, side by side,
+on the same handful of search topics. It cost under three cents, well inside the free
+allowance both services offer, and it never touched Peer's actual product, any real
+reader, or any of Peer's own data. Jev, the paid AI reviewer, was not part of this test —
+it still has zero live calls, of any kind.
+
+Here is what that one test found, in plain terms. First, the two search services barely
+agree with each other: for the same search topic, they mostly return different papers,
+not the same ones in a different order — so using only one of them, instead of both,
+would mean missing a lot of what the other finds. Second, one particular way of searching
+OpenAlex — a "meaning-based" search, rather than a plain keyword one — failed to respond
+in time fairly often during this test; the plain keyword search on both services worked
+every single time. Third, and most important: **this test cannot yet say which service
+finds better, more relevant papers** — only that they find different ones. Answering that
+needs a person to look at a shuffled, unlabeled sample of the results and judge them
+without knowing which service found what, and that labeling has not happened yet; a
+40-paper sample for exactly that purpose is ready and waiting on you.
+
+Beyond that one test: no comparison between "old Peer" and "new Peer" has been run on
+real papers, through the actual product, for a real reader. No cost number, no accuracy
+number, and no speed number for the product itself is a measurement yet — every such
+number you may see quoted elsewhere is an estimate, clearly labeled as such, never a
+result. The plan for how that fuller testing will eventually happen is in the technical
+appendix, but it has not started, and the pass/fail bar for it has not even been set yet.
 
 ### A safety net that's already in place
 
@@ -289,6 +384,44 @@ section's own note.
   outside AI/search provider, or an actual end-to-end browser run — every result
   anywhere in this document remains an offline-only check, and five of the six user
   decisions (§8) are still open.
+- **Updated again by R4-DOCS (Round 4, 2026-09-25).** Since P5-S5, the user made
+  several decisions in chat (`ABC-JEV-INTEGRATION.md` §1t): the Round 3 post-merge work
+  was committed locally (`e6a42030`, still not pushed); decision #3 (who/what triggers
+  the scheduled jobs) resolved to **option A** (§1v) — the trigger piggybacks on the
+  existing hourly GitHub Actions workflow rather than a new schedule, which also settles
+  decision #5 (email retry); a bounded, $0, internal live evaluation of Semantic
+  Scholar vs. OpenAlex was authorized (§1u, "做内部测评"); and a new item — an
+  adjustable daily dollar cap on Peer's own company-funded AI spending
+  ("SPEND-CAP") — was authorized with a concrete design (§1v R1-R11). Three lanes ran
+  this round, each B → C → fresh A: **SPEND-CAP** (§1v rulings; built, independently
+  VERIFIED_OFFLINE_BOUNDED, `docs/jev-abc/SPEND-CAP-A-20260925T052950Z.md`, 13/13
+  checks, 4 mutations caught and restored); **TRIGGER-A** (§1x rulings P1-P11; the
+  prepare-ahead worker and email-retry phase wired to the existing hourly cron;
+  independently VERIFIED_OFFLINE_BOUNDED, `docs/jev-abc/TRIGGER-A-A-20260925T060520Z.md`,
+  14 checks incl. a 672-combination lead-time probe and a 9-case cross-timezone probe,
+  one finding — F-TRIGGERA-A-01 — accepted as **P7b**, a narrower sibling of P7:
+  `buildPool` never reads the rollover pool either, not only never writing to it,
+  now with its own protective test); and **LIVE-EVAL-4** (§1w rulings + AMENDMENT; a
+  live-call harness against Semantic Scholar and OpenAlex, independently
+  VERIFIED_OFFLINE_BOUNDED both before and after a fix for a too-blunt stop rule,
+  `docs/jev-abc/LIVE-EVAL-4-A-20260925T052639Z.md` +
+  `docs/jev-abc/LIVE-EVAL-4-FIX-A-20260925T055351Z.md` — the first full run stopped at
+  call 2 on a real Semantic Scholar 429 with zero comparison data; the amended,
+  re-verified run completed all 7 inputs on 46/150 calls, ≈$0.024). Separately, a
+  manager fact-check (`ABC-JEV-INTEGRATION.md` §1x) **corrected a wrong claim from
+  §1v**: the scheduled daily email is not simply unreachable because nothing writes its
+  settings — the app actively removed the on/off control from its screens on
+  2026-04-27 while leaving the underlying send code running dormant; the hourly job
+  runs for every signed-in reader by default regardless (producing an in-app "Past
+  briefings" entry, never an email — see the new Part 1 paragraph) but never emails
+  because nothing sets the send channel to email. This pass (R4-DOCS) folds all of the
+  above into acceptance rows 4, 12, 13/14/15 (§6), Part 1's plain-language account, and
+  §8's open-decisions list (new #7; #3 and #5 marked decided). **Overall release gate:
+  still NOT MET** — three of seven tracked user decisions are now resolved (#1, #3, #5),
+  four remain open (§8), and nothing in this campaign has been verified against a real
+  database or an actual end-to-end browser run; the one live-provider exception (the
+  bounded Semantic-Scholar/OpenAlex comparison above) supplies real overlap/reliability
+  data but not yet a relevance verdict, and never touched the product itself.
 
 ### 0b. The merge with origin/main — local only, not pushed (new this pass, P5-S4)
 
@@ -367,13 +500,15 @@ seconds apart. Re-grep the function name if you need an exact line.
 |---|---|---|---|---|
 | `PEER_DASHBOARD_LEDGER` | Off (today's behavior) | literal `"on"` only | function `dashboardLedgerEnabled()`, `web/src/lib/dashboard/ledger-flag.ts` | Built, code-reviewed offline. **Pre-flip HARD THRESHOLD (new):** if this ever ships turned off in production (the batchless path, which is the real one today), an "unattributed pending delivery" reconcile — merging a not-yet-attributed pending delivery into the right owner's bucket once that owner becomes known within the same visit — must be built first. See §2 Group A1. |
 | `PEER_DIGEST_DEDUPE` | Off (old 6-hour window) | literal `"on"` only | function `isDigestDedupeEnabled()`, `web/src/app/api/jobs/dispatch-digests/route.ts` | Built, code-reviewed offline. (Its cited line number has moved twice since this document was first written — this is exactly why it's now cited by function name instead.) |
+| `PEER_DASHBOARD_PREPARE` | Off (nothing scheduled or built ahead of time) | literal `"on"` only | function `dashboardPrepareEnabled()`, `web/src/app/api/jobs/prepare-dashboards/route.ts` | TRIGGER-A. Built, code-reviewed offline. Master switch for phases 1+2 (due-selection/enqueue + drain) of the new endpoint below. **Hard-depends on `PEER_DASHBOARD_LEDGER` above, enforced in code, not just documented order:** on with the ledger flag off reports a truthful `"ledger_disabled"` no-op rather than silently wasting a prepare build (protective test in `web/src/app/api/jobs/prepare-dashboards/route.test.ts`). No effect until `.github/workflows/digest-cron.yml`'s new `prepare` job is pushed/merged to main AND this flag is on. |
+| `PEER_DIGEST_EMAIL_RETRY` | Off (an unsent claimed email is never revisited sooner than the next daily hour-match) | literal `"on"` only | function `digestEmailRetryEnabled()`, `web/src/app/api/jobs/prepare-dashboards/route.ts` | TRIGGER-A. Built, code-reviewed offline. Gates phase 3 (email retry) of the new endpoint below, in ADDITION to `PEER_DIGEST_DEDUPE` above (no `payload.email` attempt records exist to retry when dedupe's claim path is off — structural no-op without both). Reuses `handleConflictingEmailClaim` (now `web/src/lib/email/digest-retry.ts`, extracted unmodified from dispatch-digests/route.ts) unchanged, so a retried send can never double-send by anything this flag adds. Structurally a no-op today regardless, since nothing in the app can set a profile's digest channel to email/both yet (see the §1x correction above) — turning this on before email delivery itself returns changes nothing observable. |
 | `PEER_JEV_BROKER` | Off | literal `"on"` only | function `jevBrokerEnabled()`, `web/src/lib/decisions/broker-client.ts` | Built; nothing calls it in production yet |
 | `PEER_JEV_BROKER_URL` | unset | server URL string (secret-adjacent) | function `readJevShadowConfig()`, `web/src/lib/decisions/flag.ts` | Built |
 | `PEER_JEV_BROKER_SECRET` | unset | credential string | Next: function `readJevShadowConfig()`, `flag.ts`; Edge: the request handler in `web/supabase/functions/jev-broker/index.ts` | Built |
 | `PEER_JEV_PER_USER_DAILY_CAP` | 50/day (constant `DEFAULT_JEV_PER_USER_DAILY_CAP`, `flag.ts`) | integer | Next: function `readJevShadowConfig()`, `flag.ts`; Edge: function `envNumber()`, `jev-broker/index.ts` | Built — **see §4 caution: must be set to the same number on both sides** |
 | `PEER_JEV_GLOBAL_DAILY_CAP` | 2000/day (constant `DEFAULT_JEV_GLOBAL_DAILY_CAP`, `flag.ts`) | integer | same as above | Built — same caution |
 | `PEER_JEV_SHADOW` | Off | literal `"on"` only | function `jevShadowEnabled()`, `web/src/lib/decisions/flag.ts` | Built. **Now has its own independent fresh review** (it did not, as of the last version of this document) — offline-verified: eligibility gate, cache wiring, and a privacy probe (8 sentinel strings never reach a log line) all checked. **New recommendation:** the feed route sets no explicit `maxDuration` today; the platform default is 300 s and the shadow's own worst-case run is ~60 s, which fits, but the two numbers were never explicitly pinned against each other in code. Set an explicit `maxDuration` on the feed route before turning this on. See §2 Group B7. |
-| `PEER_JEV_GEMINI_FALLBACK` | Off | literal `"on"` only | function `geminiFallbackEnabled()`, `web/src/lib/decisions/flag.ts` | **Now built** (was "not built yet" in the prior version of this document). Code-reviewed offline. Structurally inert regardless of this flag's value: nothing anywhere in the codebase mints or injects the company-funded capability this feature requires, so it cannot fire even when "on" — see §2 Group B8 and user decision 1. |
+| `PEER_JEV_GEMINI_FALLBACK` | Off | literal `"on"` only | function `geminiFallbackEnabled()`, `web/src/lib/decisions/flag.ts` | **Now built** (was "not built yet" in the prior version of this document). Code-reviewed offline. Structurally inert regardless of this flag's value: nothing anywhere in the codebase mints or injects the company-funded capability this feature requires, so it cannot fire even when "on" — see §2 Group B8 and user decision 1. **New pre-flip condition (SPEND-CAP · R3):** before this path is ever activated, whoever wires it up must (1) add a real `maxTokens` ceiling to its one model call (`decisions/gemini-fallback.ts`'s `runDecisionFallback`, which today sends none — structurally unbounded output, the same shape flagged for the dormant `testConnection` method) and (2) route that call through the company-spend reservation this pass built (it bypasses `meterProvider`/`resolveProvider` entirely today, by construction — it takes an injected capability, never a `resolveProvider()`-returned provider). Neither is done in this pass; recorded so the next round doesn't activate this path without both. |
 | `PEER_JEV_GEMINI_FALLBACK_PER_USER_DAILY_CAP` | 10/day (constant `DEFAULT_JEV_GEMINI_FALLBACK_PER_USER_DAILY_CAP`, `flag.ts`) — **PROPOSED, not sourced from any vendor number** | integer | function `readGeminiFallbackConfig()`, `flag.ts` | Built. A separate, code-level (not env-configurable) ceiling of at most 5 calls per shadow run also applies — that number is a manager ruling, not a proposed default. |
 | `PEER_JEV_GEMINI_FALLBACK_GLOBAL_DAILY_CAP` | 200/day (constant `DEFAULT_JEV_GEMINI_FALLBACK_GLOBAL_DAILY_CAP`, `flag.ts`) — **PROPOSED** | integer | function `readGeminiFallbackConfig()`, `flag.ts` | Built |
 | `PEER_RANK_FUSION` | Off | literal `"on"` only | function `rankFusionEnabled()`, `web/src/lib/feed/pipeline.ts` | Built — this is the hybrid-retrieval-ranking (RRF) feature. The flag-off state (nothing changes) is code-reviewed offline. Flag-on found 2 accuracy gaps in review; **both fixes now VERIFIED** by a fresh, independent review (`docs/jev-abc/P2-S6-FIX-A-20260924T153735Z.md`, VERIFIED_OFFLINE_BOUNDED — reproduced RED-before/GREEN-after, both required mutations independently re-run, flag-off path re-confirmed byte-identical). **Still ships off in production** — a separate, deliberate gate (the §5 evaluation must inform the production default, per §1p.B(1)), not an unresolved defect. See §2 Group A6. |
@@ -394,6 +529,90 @@ seconds apart. Re-grep the function name if you need an exact line.
 | `PEER_PRIVATE_UPLOAD_DIR` | unset | absolute path | function `hostedUploadsEnabled()` and constant `UPLOAD_DIR`, `papers/upload-access.ts` / `papers/upload-store.ts` | Pre-existing, unrelated |
 | `PEER_UPLOADS_ENABLED` | `false` | exactly `"true"` | function `hostedUploadsEnabled()`, `papers/upload-access.ts` | Pre-existing, unrelated |
 | `JEV_API_KEY` | unset | the real Jev provider credential | Edge only, inside the request handler in `jev-broker/index.ts` | Never read on the Next/Vercel side at all (confirmed by this session's own grep of `web/src` — zero hits) |
+| `PEER_COMPANY_SPEND_CAP` | Off | literal `"on"` only | function `companySpendCapEnabled()`, `web/src/lib/usage/company-budget.ts` | **New this pass (SPEND-CAP).** Built, with a dedicated test suite (`company-budget.test.ts`, `metered.test.ts`, `route.test.ts`) plus RED-before-GREEN evidence for the highest-risk behaviors (see that item's own checkpoint). Off by default = exactly today's behavior, no config read, no counter call at all — protected by its own test. See §1's SPEND-CAP knob row (added below) for the full activation order and what each of the two new config tables controls. |
+
+#### 1a. SPEND-CAP knob — the shared AI dollar budget (new this pass)
+
+Unlike every other row in the table above, this knob is not read from an environment
+variable at all (beyond the one on/off switch, `PEER_COMPANY_SPEND_CAP`) — its two numbers
+live in the database, in two new tables an operator edits directly in the Supabase
+dashboard's table editor, because they are meant to be tuned without a redeploy.
+
+| Table | Columns | What it holds | Default when a row is absent |
+|---|---|---|---|
+| `company_spend_caps` | `cap_key` (`'global_daily_usd'` \| `'per_user_daily_usd'`), `amount_usd` | The two dollar ceilings, reset at UTC midnight | **R1 ruling:** `global_daily_usd` = $5.00, `per_user_daily_usd` = $0.50 — conservative code-level fallbacks. B's guide proposed $30/$1.50 with worked arithmetic (§2.1 of the design doc); that arithmetic is kept there as the scaling reference, not shipped as the default. The migration seeds NO rows — this default state is normal, not an error. |
+| `company_model_prices` | `model_id`, `input_usd_per_million_tokens`, `output_usd_per_million_tokens`, `vision_tokens_per_image` (nullable), `source_note` | Per-Gemini-model prices the estimator needs to price a reservation | **No code-level default.** A model with no price row simply cannot be priced, and every call that would need it fails closed (`price_unreadable`). This is the one place this knob is NOT optional — see the activation order below. |
+
+**Activation order (R9):** because the mechanism fails closed, order matters.
+(1) Apply the `company_spend_budget` migration (authored, never applied by this
+campaign — see §3.2). (2) Enter at least one price row per model actually reachable
+through `resolveSystemProvider()`'s system branch — today that's the 4 ids in
+`GEMINI_API_MODEL_CHAIN` (`web/src/lib/llm/providers/gemini.ts`): `gemini-3.1-flash-lite`,
+`gemini-3.5-flash-lite`, `gemini-3.6-flash`, `gemini-3.8-flash`. The `company_spend_caps`
+rows are optional (safe built-in defaults apply when absent). (3) Only then set
+`PEER_COMPANY_SPEND_CAP=on`. Flipping the flag on before any price rows exist does not
+loosen anything — it makes every company-funded call refuse (visible as `kind: "breaker"`
+rows in `usage_events`, `path` prefixed `company-spend:`), because a call with no known
+price cannot be honestly estimated, by design.
+
+**Vision price default (R8):** `vision_tokens_per_image` has no code-level fallback either
+(same reasoning as the two token prices), but B's guide's placeholder of 300 was replaced by
+the manager with 1,500 — a deliberately conservative OVER-estimate, not a best guess: the
+reservation may over-reserve for an image-heavy call, but settlement always refunds down to
+the model's own actually-reported usage (which already includes image tokens), so the
+placeholder only affects the size of the temporary hold, never the final charged amount.
+
+**R6 — the fail-closed/fail-open asymmetry, stated precisely:** this new dollar cap fails
+CLOSED (an unreadable cap/price/counter refuses the call). The pre-existing hourly
+request-count limit (`requireEntitledAiRequest`) keeps failing OPEN, unchanged, on the very
+same request. Plain-language consequence: with this switch on, a Supabase outage pauses
+Peer's own built-in AI (the reader still gets the deterministic, no-model version of
+whatever they asked for) while every other rate-limited feature keeps working as normal.
+This is the intended final state, not an oversight — a wallet-protecting breaker and a
+availability-protecting rate limit are different tools solving different problems, and this
+codebase's existing two-rule convention (`usage/counters.ts`'s own header) already draws
+this same line everywhere else.
+
+**R11 — coverage and worst-case burst against the default cap:**
+
+- *Coverage:* every method on the `DigestProvider` interface `meterProvider` returns is
+  wrapped by `meterCall`, unconditionally for `generateDigest`/`testConnection` and
+  conditionally (only when the underlying provider actually has the method) for
+  `generateJsonText`/`generateVisionJsonText` — confirmed by reading `metered.ts` directly
+  and by the existing `metered.test.ts` case "covers EVERY wrapped method, so a fifth cannot
+  be added unmetered." No streaming method exists on this interface today, so there is no
+  such escape to check. One genuine gap found and recorded, not silently patched around:
+  `testConnection` has no production call site anywhere in this codebase (confirmed by
+  grep — only test files call it), but IS wrapped, and its own implementation sends no
+  output-token ceiling at all (the exact same structurally-unbounded shape already flagged
+  for the dormant Gemini decision-fallback path). If a future round ever wires a real caller
+  onto it in a non-BYOK context, this design fails it closed (a new `unestimable_call`
+  reason) rather than silently pricing it at $0 or guessing — whoever activates that path
+  must give it a bounded output cap first, the same precondition already written for the
+  Gemini decision-fallback below.
+- *Digest dispatcher concurrency:* the hourly cron (`api/jobs/dispatch-digests/route.ts`)
+  processes every enrolled, due-this-hour user in a single sequential `for` loop with an
+  `await` inside it — confirmed by reading the route directly — never `Promise.all`. So the
+  cron itself can never race itself: each user's digest call reserves, waits its turn, and
+  the day's running total is exact by the time the next user's reservation is checked. Real
+  concurrency against the shared global counter comes only from ordinary overlapping web
+  traffic (multiple readers' feed/report requests at once), which the atomic
+  `increment_usage_counter` RPC already serializes correctly — no two concurrent
+  reservations can both observe a stale pre-increment value.
+- *Worst-case burst vs. the $5.00/day default global cap:* the single most expensive call in
+  the system is the digest (no tier filter, so the FULL 4-model chain is tried worst-case)
+  against a full 20-paper input — B's own worked arithmetic (design doc §2.1) puts this
+  around $0.15/call using the sourced/proposed per-model prices. At the default $5.00/day
+  global cap, that bounds any single accepted reservation from overshooting the cap by more
+  than roughly one worst-case call's width (≈3% of the daily cap) — the atomic per-request
+  check means once the running total crosses the cap, every subsequent reservation refuses;
+  it does not mean the cap can never be exceeded by exactly one in-flight call that started
+  just under it, which is the standard, accepted "close the barn door after the last cow"
+  behaviour of a reserve-then-check breaker (the same shape `reserveJevCall`'s own global
+  counter already has). Cheaper call sites (the other 8) have a proportionally smaller
+  worst-case overshoot. At $5.00/day, this bounds the system to roughly 33 worst-case digest
+  calls before the breaker trips for the rest of the UTC day — a number the operator can
+  raise by editing `company_spend_caps.amount_usd` directly, with no redeploy.
 
 **Corrections/confirmations versus the prior version of this document:**
 `PEER_JEV_SHADOW` now has an independent fresh review (it did not before) — see its row
@@ -449,6 +668,7 @@ unset.
 | A4 | The 4 read-time recommendation channels: `PEER_CHANNEL_S2_RECOMMENDATIONS`, `PEER_CHANNEL_OPENALEX_SEED_SIMILARITY`, `PEER_CHANNEL_POSITIVE_SEED_CITATIONS`, `PEER_CHANNEL_OPENALEX_TOPIC` | **Precondition status UPDATED this pass (P5-S4): now VERIFIED.** The per-owner daily channel-candidate cache (design name: P2-S4d) that all four need is built (`web/src/lib/opportunities/channel-candidate-cache.ts`) and its independent review has landed: `docs/jev-abc/P2-S4cd-A-20260924T152147Z.md` (VERIFIED_OFFLINE_BOUNDED for the topic-id resolution, the advisor-citation channel, the cache itself, and the S2 both-sides rule) and `docs/jev-abc/P2-S4d-FIX-A-20260924T164212Z.md` (VERIFIED_OFFLINE_BOUNDED for the specific fix this precondition needed — a genuine storage outage is now correctly told apart from an ordinary first-time miss, so an outage degrades to "skip this channel, say so truthfully" instead of silently fetching live on every request). Reason the precondition existed (manager finding F-M-P2-02, confirmed by direct code read): before this cache, these channels "are never cached... they simply re-run and re-report on every request" — with any of them on, every page open or refresh in the normal (non-ledger) mode fired all enabled channels fresh, unbounded by anything except ordinary request volume. `PEER_CHANNEL_OPENALEX_TOPIC` is no longer a guaranteed no-op (see §1) — it now shares this same precondition, also verified. Also implemented and verified: the "both-sides" conflict rule (a paper id in both the positive and negative seed lists is sent as neither); a related, smaller gap (the same 200-row seed-history window can in theory be exhausted by roughly 200 toggles on one paper) is an ACCEPTED COST, not a blocker — it degrades to fewer seeds, never to a wrong one. **One disclosed, accepted, low-severity open item from the fresh review (not a blocker):** in the older, non-default "frozen batch" delivery mode, a narrow legacy-only code path (batches saved before a since-added storage column existed) can still let the topic channel make one live call per owner per day, bounded by this same cache — but it structurally cannot let a new paper appear inside an already-frozen list, only refresh an already-shown entry's own content. Recorded as an open item, not fixed, because fixing it would either widen an already-legacy-only path or touch a file outside this precondition's own scope. | Any of the four channels observed firing live calls on a simple page reopen once "on," or a genuinely new paper appearing inside an already-frozen batch — either would mean this precondition's own guarantee has broken. |
 | A5 | `PEER_CHANNEL_OPENALEX_SEMANTIC` | None beyond code; already code-reviewed offline. | Any live comparison being treated as authoritative before user decision 4. |
 | A6 | `PEER_RANK_FUSION` (hybrid retrieval ranking / RRF) | Not part of the original guide — added when the feature was first built. Ships flag-off by design. Before ever turning this on in production: (1) **both pre-flip fixes are now DONE and independently VERIFIED** (`docs/jev-abc/P2-S6-FIX-A-20260924T153735Z.md`, VERIFIED_OFFLINE_BOUNDED — both fixes reproduced RED-before/GREEN-after, both required mutations independently re-run, flag-off path re-confirmed byte-identical to today's behavior); (2) the Section 5 evaluation should still inform the production default, per §1p.B(1) — this is the one remaining, deliberate gate, not an unresolved defect. Fixes that landed: (a) the fused-ranking candidates now carry the same publication-year/first-author-surname information the plain de-duplication path uses, so a pair that de-duplication merges into one paper is credited to both search channels in the fused ranking, not silently only one; (b) the fused-ranking result now survives being served from the same-day cache, not only a freshly-built response — a same-day cache read no longer loses that ranking's supporting detail. **Non-blocking follow-up recommendation from the same fresh review:** it flagged the small year/first-author helper as duplicated a third time across three files (non-blocking — the three copies were byte-identical and could not disagree on any input). A later, same-day implementation pass (`docs/jev-abc/DEDUP-FIX2-C-20260924T212607Z.md`, bundled with the version-rule fix in §2b) consolidated all three into one shared, exported helper. **Corrected (was stale):** this consolidation is R3-CLEANUP-3, independently VERIFIED_OFFLINE_BOUNDED (byte-identical to the three old copies it replaced) per `docs/jev-abc/DEDUP-FIX2-A-20260924T214311Z.md` — confirmed even though that same review round separately FAILED the version-matching logic bundled alongside it; see §2b for that logic's own, later, separately-verified history. | Any user-visible fused ranking before the §1p.B(1) evaluation sign-off; a same-day cache read that silently drops the fused-ranking detail. |
+| A7 | `PEER_COMPANY_SPEND_CAP` (the shared daily dollar cap on Peer's own AI spending, §1a) — new this pass | Independent of the Jev broker path entirely — this caps the SYSTEM Gemini key across all 9 real call sites, never a reader's own key. (1) Apply the `company_spend_budget` migration. (2) Enter at least the 4 model price rows in the Supabase dashboard (mandatory — no code default). (3) Optionally set the two dollar ceilings (safe $5.00/$0.50 defaults apply otherwise — MANAGER/USER SHOULD CONFIRM the real numbers before relying on the defaults for real traffic, per R1). Only then flip the flag. | Turning the flag on before step (2) — every company-funded call refuses (visible as `kind:"breaker"` `usage_events` rows), by design, not a bug — see §1a. |
 
 #### Group B — the Jev path (strictly sequential; each step gated on the previous being clean)
 
@@ -461,7 +681,7 @@ unset.
 | B5 | Turn on `PEER_JEV_BROKER`. | B4. Confirm the route wiring that actually calls this path has landed and passed an independent review — otherwise this flag has no observable effect yet, which is safe but proves nothing. | Any caller reaching the broker before that wiring has an independent review. |
 | B6 | One bounded, explicitly user-approved-spend smoke test of a real Jev call, end to end. | B5, user decision 4 (scope, volume, budget), and a separately approved spend ceiling. This is the first live verification of anything in this campaign. | Any live call attempted without an explicit, dated, in-chat spend approval naming the ceiling. |
 | B7 | Turn on `PEER_JEV_SHADOW`. | B6 passed clean. `PEER_JEV_SHADOW`'s own code now HAS an independent fresh review (this was still outstanding in the prior version of this document — now closed: eligibility gate, cache wiring, and a privacy probe with a planted-leak control all checked offline). **New precondition added this pass:** set an explicit `maxDuration` on the feed route first — it has none today; the platform default is 300 s and the shadow's own worst-case run is ~60 s, comfortably inside that default, but the two numbers were never pinned against each other in code, only reasoned about after the fact. Its own eligibility gate (all of: broker on, signed-in owner matches the cache-scope owner, paid plan, AI tier ≥ 2, a structured intent present, broker URL+secret configured) is a structural filter, not an adjustable rollout percentage — the safe "how many users" number is however many real users currently satisfy every one of those conditions, which should be estimated (read-only) before flipping, since that number IS the blast radius. | Any evidence the shadow hook is awaited by the main request path, or that it fires on a cache hit or a retry. |
-| B8 | `PEER_JEV_GEMINI_FALLBACK` (the background-only backup opinion, invisible to the reader, that can weigh in when Jev itself is unsure) | **Now built** (was "not built" in the prior version of this document): its own flag, daily caps, validation, and a hard per-run ceiling of 5 calls are all code-reviewed offline. Structurally inert regardless of rollout step: it only ever runs on an injected, company-funded capability, and nothing anywhere mints or injects one today — so there is no live rollout step to take yet. Unblocking this requires (1) user decision 1 resolved toward the company-funded option, and (2) that capability actually being wired up (a follow-on implementation step, not authorized by decision 1 alone). Its daily-cap numbers are PROPOSED, not sourced from any vendor figure — confirm before any live rollout. | Any live Gemini call before both the capability exists and decision 1 has been made. |
+| B8 | `PEER_JEV_GEMINI_FALLBACK` (the background-only backup opinion, invisible to the reader, that can weigh in when Jev itself is unsure) | **Now built** (was "not built" in the prior version of this document): its own flag, daily caps, validation, and a hard per-run ceiling of 5 calls are all code-reviewed offline. Structurally inert regardless of rollout step: it only ever runs on an injected, company-funded capability, and nothing anywhere mints or injects one today — so there is no live rollout step to take yet. Unblocking this requires (1) user decision 1 resolved toward the company-funded option, and (2) that capability actually being wired up (a follow-on implementation step, not authorized by decision 1 alone). Its daily-cap numbers are PROPOSED, not sourced from any vendor figure — confirm before any live rollout. **New pre-flip condition (SPEND-CAP · R3):** step (2)'s wiring must also give this call a bounded `maxTokens` (it has none today — unbounded output) and route it through the new company-spend reservation (§1a) — it bypasses that mechanism entirely today by construction. Both conditions are unmet as of this pass. | Any live Gemini call before the capability exists, decision 1 has been made, a `maxTokens` ceiling exists, AND the call is routed through the company-spend reservation. |
 
 **Known code-level cost bug (F-B-P4S8-01) — now FIXED and independently verified.**
 Signed-in users on a cold cache used to not get deduplicated — two tabs, or a fast
@@ -474,21 +694,39 @@ concurrent requests, both same-owner (coalesces to 1 fetch) and different-owner/
 -intent (never share a flight). This is not itself gated by any flag — it is always on —
 but it lowers the real cost of turning any of the flags above on.
 
-**The related "get results ready ahead of time" feature — also now built, still fully
-disconnected.** A 15-minute cooldown between manual refreshes, plus a durable queue that
+**The related "get results ready ahead of time" feature — TRIGGER-A: now reachable, still
+off by default.** A 15-minute cooldown between manual refreshes, plus a durable queue that
 would let Peer prepare a reader's results shortly before they're expected to check in,
-have both been built and independently code-reviewed offline (see acceptance 13/14/15 in
-§6): due-time and retry/backoff math, the cooldown check itself, and a job-queue
-repository with both an in-memory and a real-database-backed implementation all exist and
-pass their offline tests. **Nothing calls any of it.** It is not reachable from any route
-today, so it has no effect at all, on or off. Turning it into something real needs (1)
-user decision 3 (who/what may trigger this kind of scheduled background work), and (2) a
-proof that the queue behaves correctly under real concurrent database access (two workers
-racing to claim the same job, a crash mid-job, a real retry) — that proof needs an actual
-database, which this campaign does not have. The lead time (45 minutes before a reader's
-expected check-in) and the retry/backoff timing are PROPOSED, not sourced from any
-external requirement; only the 15-minute cooldown length itself is sourced (from the
-original engineering plan).
+were built and independently code-reviewed offline (see acceptance 13/14/15 in §6):
+due-time and retry/backoff math, the cooldown check itself, and a job-queue repository
+with both an in-memory and a real-database-backed implementation all exist and pass their
+offline tests. User decision 3 was answered — GitHub Actions, the same mechanism the
+scheduled digest already uses — and this pass wired the queue to it: a new endpoint
+(`GET /api/jobs/prepare-dashboards`, `web/src/app/api/jobs/prepare-dashboards/route.ts`)
+now selects due-soon readers, enqueues their prepare job, and drains the queue (bounded to
+10 jobs and roughly 200 of the endpoint's 300-second budget per run, so one slow run can
+never eat the whole window), and a SECOND, independent job inside the existing
+`.github/workflows/digest-cron.yml` calls it every hour alongside the existing digest
+dispatch. **Still no effect at all today**, on three separate counts: the workflow change
+itself is not yet pushed/merged (a separate explicit yes); the master switch
+(`PEER_DASHBOARD_PREPARE`) defaults off; and turning that switch on with the dashboard
+ledger switch still off degrades to a truthful no-op rather than wasted work (see the flag
+table above). The lead time was raised from the earlier PROPOSED 45 minutes to 90 minutes
+this pass — 45 could, and sometimes would, put a "prepared" result minutes AFTER a
+reader's expected check-in rather than before it, once GitHub's own once-an-hour timing is
+accounted for; 90 guarantees at least 30 minutes of genuine head start in the worst case.
+Also fixed this pass: a prepared result is now filed under the same day-key a real visit
+would look it up under (previously, for anyone whose expected check-in time crosses a
+world-clock midnight relative to their own local day, a prepared result could have been
+filed under a day nobody ever reads — latent today only because no account has its own
+time zone set yet, see decision 3 above). A cooldown-gated MANUAL "prepare mine sooner"
+request (as opposed to the automatic once-an-hour scheduling above) remains deliberately
+unwired this pass — item 15 stays Partial for that one path specifically; the retry/backoff
+timing itself is still PROPOSED, not sourced from any external requirement; only the
+15-minute cooldown length itself is sourced (from the original engineering plan). Proof
+that the queue behaves correctly under real concurrent database access (two workers racing
+to claim the same job, a crash mid-job, a real retry) still needs an actual database,
+which this campaign does not have, and stays blocked regardless of any of the above.
 
 ### 2b. Version rule for duplicate-paper detection — new this pass (P5-S4)
 
@@ -655,15 +893,15 @@ not treated as a blocker.
 | `PEER_JEV_GEMINI_FALLBACK` | Shadow runs Jev only, exactly as if this flag never existed — same construction as `PEER_JEV_SHADOW` above | Any already-written fallback-sourced answers stay (regenerable, non-guarantee-bearing, same as above) |
 | The 5 channel flags | Pool-cache entries simply stop including that channel's candidates | No persisted state of their own |
 | `PEER_RANK_FUSION` | Reverts to the plain, pre-fusion ranking exactly, by construction | The optional fused-ranking provenance field on a cached pool is simply absent again; old and new cached pools both stay valid either way |
+| `PEER_COMPANY_SPEND_CAP` | Reverts to exactly today's behavior: no reservation, no settlement, no config read, no counter call — protected by its own test (`metered.test.ts`) | The `company_spend:*` counter rows already written stay (harmless, UTC-day-scoped, regenerable); a `CompanySpendCapRefusedError` simply stops being thrown, so every one of the 9 call sites' EXISTING degrade paths stop seeing it |
 
 #### 3.2 Rollback SQL — one authored file per migration
 
-**Seven files now exist** at `web/supabase/rollback/*_rollback.sql` (was six as of the
-last version of this document — a 7th migration, `20260924000600_dashboard_prepare_jobs.sql`,
-landed since, for the offline-only "get results ready ahead of time" job queue described
-in §2, and it has its own rollback file), one per file currently in
+**Eight files now exist** at `web/supabase/rollback/*_rollback.sql` (was seven as of the
+last version of this document — an 8th migration, `20260925000000_company_spend_budget.sql`
+(SPEND-CAP, §1a), landed since, and has its own rollback file), one per file currently in
 `web/supabase/migrations/2026092*.sql`, plus `web/supabase/rollback/README.md`
-explaining the folder's convention. **None of these seven files is ever applied
+explaining the folder's convention. **None of these eight files is ever applied
 automatically by anything** — confirmed by this session's own gate sweep (§7). Each
 file's header states, verbatim: it is not a migration and is never applied
 automatically; which forward migration it reverses; exactly what it destroys; whether
@@ -680,13 +918,17 @@ Ranked highest caution first (see the README for the full reasoning):
 3. `20260924000300_briefing_deliveries_dedupe_rollback.sql` — touches an
    already-applied, already-live production table.
 4. `20260922000000_private_paper_pools_rollback.sql`, `20260924000400_private_decisions_rollback.sql`,
-   `20260924000500_dashboard_rollover_rollback.sql`, `20260924000600_dashboard_prepare_jobs_rollback.sql`
-   — all four regenerable/cache-or-queue-like, still covered by the same "never without a
-   backup" rule as a blanket policy. The newest of the four (the job-queue table) is
-   lowest-stakes of all seven: by design nothing in it is a record of anything that
-   already happened, only a scheduling note for work not yet done, and nothing triggers
-   that queue at all yet (§2) — so today there is nothing live for this rollback to
-   actually interrupt.
+   `20260924000500_dashboard_rollover_rollback.sql`, `20260924000600_dashboard_prepare_jobs_rollback.sql`,
+   `20260925000000_company_spend_budget_rollback.sql`
+   — all five regenerable/cache-or-config-like, still covered by the same "never without a
+   backup" rule as a blanket policy. The job-queue table remains lowest-stakes of the eight:
+   by design nothing in it is a record of anything that already happened, only a scheduling
+   note for work not yet done, and nothing triggers that queue at all yet (§2) — so today
+   there is nothing live for this rollback to actually interrupt. The newest one
+   (SPEND-CAP's two tables) is regenerable operator configuration only, with one asymmetry
+   worth knowing before running it: the price table has no code-level default, so losing it
+   while the spend cap is switched on makes the cap MORE restrictive, never less — see that
+   file's own SPEND-SAFETY NOTE.
 
 **Open item folded into this document (manager addition):** `private_paper_pools` has no
 retention or cleanup policy at all today — rows accumulate indefinitely. This applies
@@ -808,7 +1050,7 @@ change after it.
 | 1 | Project/challenge preserved, no dummy-keyword requirement | Passed offline check | 2026-09-24, P1 baseline; re-confirmed in the end-of-round re-measurement, `docs/jev-abc/FINAL-A-P1-20260924T2230Z.md` |
 | 2 | Domain senses/aliases kept separate (HR conflict, conflict-of-interest text, software conflict, statistical/material meaning) | Passed offline check | 2026-09-24, P1 baseline; re-confirmed in the end-of-round re-measurement, `docs/jev-abc/FINAL-A-P1-20260924T2230Z.md` |
 | 3 | License ledger and visible attributions; no unapproved dictionary import | **Corrected (was stale — this read as a flat failure; the mechanism itself passes):** the license ledger, source allow-list, and checksum/verification mechanism are independently VERIFIED offline (26/26 tests). Zero real licensed vocabulary is imported — correctly so, since this campaign is explicitly forbidden from fetching one without further user authorization; that is the intended state, not a failure. | 2026-09-24, P1; re-confirmed in the end-of-round re-measurement, `docs/jev-abc/FINAL-A-P1-20260924T2230Z.md` |
-| 4 | All 5 candidate channels demonstrated; live comparison honestly reported | Partial — the topic-based channel's wiring to a real source of topic ids, the advisor-citation channel, the per-owner daily cache, and the S2 both-sides conflict rule are now independently VERIFIED offline (one disclosed, accepted, low-severity open item — see §2 Group A4); live comparison itself still blocked on user decision 4 | 2026-09-24, P2 baseline; updated P5-S3 from P2-S4c+d C; updated P5-S4 from P2-S4cd fresh A + P2-S4d-FIX fresh A; re-confirmed in the end-of-round re-measurement, `docs/jev-abc/FINAL-A-P1-20260924T2230Z.md` |
+| 4 | All 5 candidate channels demonstrated; live comparison honestly reported | Partial — the topic-based channel's wiring to a real source of topic ids, the advisor-citation channel, the per-owner daily cache, and the S2 both-sides conflict rule remain independently VERIFIED offline (one disclosed, accepted, low-severity open item — see §2 Group A4). **New this round: the live comparison itself has real data for the first time**, from one internal evaluation authorized by the user (§1u) and run twice. The first full run stopped at call 2 on a genuine Semantic Scholar rate limit (429), producing zero comparison data; the stop rule was amended (§1w AMENDMENT — a single S2 429 now gets a cool-off and one retry, a second blocks only further S2 calls, an OpenAlex 429 still stops everything) and independently re-verified, then re-run once more. That second run completed all 7 inputs on 46 of a 150-call ceiling (≈$0.024 of OpenAlex's free daily allowance; Semantic Scholar is free). Per-channel reliability: the keyword search on both providers and the OpenAlex topic-field channel succeeded on every one of the 7 inputs; the OpenAlex semantic-search channel timed out (not rate-limited) on 3 of 7; the two seed-based channels only had seeds to run on the one synthetic battery-materials profile — the Semantic Scholar seed-recommendation channel succeeded (20 results), the OpenAlex seed-similarity channel timed out both attempts, and 2 of its 3 named seed DOIs resolved (the third: a genuine Semantic Scholar data gap — HTTP 404 — not a rate limit). Semantic Scholar and OpenAlex keyword results overlap very little on every input (0-12 works shared out of 50-108 unique total per input) — a large mutual union gain, meaning most of what either provider finds, the other one doesn't. **Relevance is still NOT MEASURED** — no label has been invented; a 40-row blinded sample (channel names hidden) is ready and was sent to the user to label. This item stays Partial for two reasons: relevance judging hasn't happened yet, and one internal run across 7 inputs is a harness shakedown, not a benchmark. | 2026-09-24, P2 baseline; updated P5-S3 from P2-S4c+d C; updated P5-S4 from P2-S4cd fresh A + P2-S4d-FIX fresh A; re-confirmed in the end-of-round re-measurement, `docs/jev-abc/FINAL-A-P1-20260924T2230Z.md`; **updated R4-DOCS (Round 4) from `docs/jev-abc/LIVE-EVAL-4-A-20260925T052639Z.md` + `docs/jev-abc/LIVE-EVAL-4-FIX-A-20260925T055351Z.md`** |
 | 5 | A zero-literal-match positive result survives every path; exclusions still work | Passed offline check | 2026-09-24, P2; re-confirmed in the end-of-round re-measurement, `docs/jev-abc/FINAL-A-P1-20260924T2230Z.md` |
 | 6 | Duplicate-paper detection preserves origin and handles edge cases safely | **Corrected (was stale — this read as a failing, in-progress review; it has since passed):** Passed offline check. A live smoke check of the merged code (not any automated test) found 3 duplicated pairs in a real 10-paper list; two narrower, id-based fixes each failed their own independent review in a new shape (first: merged genuinely different papers in rare chain/hub cases; second: still missed chains and hubs where a bridging paper had no id at all, or an id of a different kind). A third, structural fix — checking every paper in a suspected group directly against every other paper in it, never comparing ids at all — closed the whole class and was independently VERIFIED from 41 freshly-built adversarial test cases, zero mismatches found. See §2b for the full three-round account. | 2026-09-24, P2 baseline (offline-only fixtures); regression found and fixed across three rounds (`docs/jev-abc/DEDUP-FIX-C-*`, `DEDUP-FIX-A-*`, `DEDUP-FIX2-C-*`, `DEDUP-FIX2-A-*`, `DEDUP-FIX3-C-*`); independently VERIFIED `docs/jev-abc/DEDUP-FIX3-A-20260924T222925Z.md`; re-confirmed in the end-of-round re-measurement `docs/jev-abc/FINAL-A-P1-20260924T2230Z.md` |
 | 7 | Hybrid ranking (RRF) deterministic, balanced, capped, diverse | Passed offline check — the feature is built; its flag-off state (nothing changes) is independently verified offline; the ranking computation is code-reviewed and its shipped shape is deterministic/capped as designed; the 2 accuracy gaps review found are now both fixed and independently VERIFIED (`docs/jev-abc/P2-S6-FIX-A-20260924T153735Z.md`). Flag stays off in production pending the separate §1p.B(1) evaluation sign-off — a deliberate gate, not an unresolved defect | 2026-09-24, P2 baseline; updated P5-S3 from P2-S6 fresh A; updated P5-S4 from P2-S6-FIX fresh A ("acceptance 7 PASS offline as implemented"); re-confirmed in the end-of-round re-measurement, `docs/jev-abc/FINAL-A-P1-20260924T2230Z.md` |
@@ -816,10 +1058,10 @@ change after it.
 | 9 | Personal data fully isolated between users, including adversarial two-user tests | **Blocked** — offline mechanics pass; the real two-user database proof needs a database this campaign does not have | 2026-09-24, P0; re-confirmed in the end-of-round re-measurement, `docs/jev-abc/FINAL-A-P1-20260924T2230Z.md` |
 | 10 | Jev's data format, typed unknowns, score checks, version pinning, fault handling | Passed offline check (no live Jev call has ever been made) | 2026-09-24, P3; re-confirmed in the end-of-round re-measurement, `docs/jev-abc/FINAL-A-P2-20260924T222946Z.md` |
 | 11 | Unchanged input reuses cache; changed input invalidates only the right layer | **Partial** — the cache-key invalidation rule itself (owner+project+intent+content+provider+model+rubric, no date/clock in the key) is independently VERIFIED offline and is wired into the shadow-decision runner; nothing reaches it live yet because the Jev shadow and broker flags both stay off by default, not because the wiring is incomplete. A separate cache layer for full report content was not independently re-verified this round — open item, not a failure | 2026-09-24, P3; refined by the end-of-round re-measurement, `docs/jev-abc/FINAL-A-P2-20260924T222946Z.md` |
-| 12 | Company keys never reach the client or logs; spend limits are atomic and can't be doubled | **Corrected (was stale — an unqualified pass overstated this): Partial.** The Jev/broker path itself passes offline: ordered atomic per-user/global daily-call reservation (the double-counting bug above is fixed and independently verified), the company AI key never reaches the client or logs, and the Edge side uses its own separate counter namespace. But main's GENERAL company-funded AI (ordinary feed re-ranking, short reports, query generation, figure matching — not just Jev) has only a per-hour request-count limit that fails open on an outage, not a dollar or call-count ceiling — so "atomic budgets prevent overspend" holds for the Jev/broker path specifically, not campaign-wide. The Edge Function's own entitlement/tier check is also still absent (accepted cost, §1p.I, with a hard threshold before company-funded Jev may be enabled anywhere live). | 2026-09-24 (Jev-path fix verified 11:52 UTC); re-scoped by the end-of-round re-measurement and manager reading, `docs/jev-abc/FINAL-A-P2-20260924T222946Z.md` |
-| 13 | A durable delivery queue survives duplicate sends, two workers, crashes, timeouts | Partial — an offline job-queue engine (due-time math, retry/backoff, a memory-backed and a real-database-backed repository, fencing against stale data) is now built and independently code-reviewed; nothing in the app calls it yet, so it changes nothing live today; proof under real concurrent database access (two workers racing for the same job, a crash mid-job) remains blocked — this campaign has no database to test against; the trigger itself is a separate open user decision | 2026-09-24, updated P5-S3 from P4-S8b fresh A; re-confirmed in the end-of-round re-measurement, `docs/jev-abc/FINAL-A-P2-20260924T222946Z.md` |
-| 14 | Scheduled feed ready ahead of your reading time; time-zone-safe; honest status | Partial — the time-zone math for the existing scheduled email remains proven correct; the engine for having results ready a bit early (see item 13) is now built and offline-verified but connected to nothing live yet | 2026-09-24, updated P5-S3 from P4-S8b fresh A; re-confirmed in the end-of-round re-measurement, `docs/jev-abc/FINAL-A-P2-20260924T222946Z.md` |
-| 15 | Manual refresh doesn't waste work; cooldowns and budgets work; just opening the app never triggers AI calls | Partial, most of the way closed — opening the app / checking status never triggers an AI call (confirmed, unchanged); the double-work-on-concurrent-refresh bug (see §2) is now fixed and independently proven under real concurrent requests; a manual-refresh cooldown is now built and offline-verified but not wired to any live refresh path yet — that wiring arrives together with item 13's queue, gated on the same trigger decision | 2026-09-24, updated P5-S3 from P4-S8a + P4-S8b fresh A's; re-confirmed in the end-of-round re-measurement, `docs/jev-abc/FINAL-A-P2-20260924T222946Z.md` |
+| 12 | Company keys never reach the client or logs; spend limits are atomic and can't be doubled | **Updated this pass (SPEND-CAP built; still Partial, for a narrower reason than before).** The Jev/broker path itself passes offline: ordered atomic per-user/global daily-call reservation, the company AI key never reaches the client or logs, and the Edge side uses its own separate counter namespace. The general-AI gap this row used to flag ("no dollar or call-count ceiling on ordinary feed re-ranking, short reports, query generation, figure matching") now HAS a built mechanism — an atomic, ordered (per-user then global, mirroring the Jev path's own fix) reservation covering all 9 real company-funded call sites, with settlement to actual usage and its own dedicated, independently-runnable test suite (`company-budget.test.ts`, `metered.test.ts`, `route.test.ts`). **Still Partial, because:** (1) it ships OFF by default (`PEER_COMPANY_SPEND_CAP`, §1a) — today's real, deployed behavior is unchanged until an operator flips it; (2) the two dollar numbers are conservative code-level placeholders ($5.00/$0.50/day) the user has not yet confirmed as the real intended ceilings; (3) **Corrected (was stale — this used to read "it has not been independently reviewed... not something C can self-certify"): a fresh, independent reviewer has since checked it (13 of 13 checks PASS, each with its own evidence — direct code reads, from-scratch probes, and 4 deliberately-broken-then-restored mutations spanning the flag gate, reservation order, settlement accumulation, and null-owner scoping, `docs/jev-abc/SPEND-CAP-A-20260925T052950Z.md`, VERIFIED_OFFLINE_BOUNDED).** What independent review cannot close: like every other item in this campaign, this has only ever run against fake/recorded data — proof against a REAL, live database (the migration actually applied, real concurrent writers, a real outage) stays BLOCKED, because this campaign has no database to test against (§1k), unchanged from every other offline slice; (4) one narrow, disclosed gap remains by manager ruling, not by oversight — one call site (the feed's Tier-2 re-ranking step, plus any other call reached without a signed-in owner attached) counts only against the shared global ceiling, never a specific person's, because threading an owner id that deep risks changing a shared cache key elsewhere in the pipeline; this is accepted as low-risk (sub-cent worst case per call, already bounded by an existing hourly count limit) rather than fixed inline. The Edge Function's own entitlement/tier check is also still absent (accepted cost, §1p.I, unchanged from before). **Activation, in order, still needs:** the migration applied to a real Supabase database (never done by this campaign), at least the required per-model price rows entered by hand (mandatory, no code default), the two dollar ceilings optionally confirmed or changed, and the flag switched on — and before any of that can reach production, this branch's Round 4 work merged to main, which it is not: SPEND-CAP's changes are not yet even committed locally (unlike Round 3's `e6a42030`), per SPEND-CAP-A's own checkpoint. | 2026-09-24 (Jev-path fix verified 11:52 UTC); re-scoped by the end-of-round re-measurement and manager reading, `docs/jev-abc/FINAL-A-P2-20260924T222946Z.md`; updated 2026-09-25 by SPEND-CAP's own checkpoint; **independently VERIFIED_OFFLINE_BOUNDED the same day, `docs/jev-abc/SPEND-CAP-A-20260925T052950Z.md`** |
+| 13 | A durable delivery queue survives duplicate sends, two workers, crashes, timeouts | Partial, reachability gap now closed — the offline job-queue engine (due-time math, retry/backoff, a memory-backed and a real-database-backed repository, fencing against stale data) is now driven by a new, default-off endpoint (`GET /api/jobs/prepare-dashboards`) called every hour by a second job in the existing digest-cron workflow, gated behind `PEER_DASHBOARD_PREPARE` (also hard-depends on `PEER_DASHBOARD_LEDGER`) — see the flag table above and TRIGGER-A's own checkpoint, `docs/jev-abc/TRIGGER-A-C-20260925T053859Z.md`, now **independently VERIFIED_OFFLINE_BOUNDED** by a fresh A (`docs/jev-abc/TRIGGER-A-A-20260925T060520Z.md`, 14 checks incl. a 672-combination lead-time probe, a 9-case cross-timezone date-alignment probe, and 3 restored mutations). Two overlapping runs sharing one durable queue were proven offline to never double-prepare (the worker's own already-prepared short-circuit). **Accepted cost P7b (named this pass):** the same review found that `buildPool` never reads yesterday's rollover pool either, not only never writing to it (the existing P7 accepted cost) — so a prepared batch's candidate pool is always a strict subset of what a same-moment real visit could mint: narrower only, never wider, never re-delivering a paper already shown; now guarded by its own dedicated protective test (`web/src/lib/dashboard/prepare-pool.test.ts`). What remains Partial: proof under REAL concurrent database access (two workers racing for the same job, a crash mid-job) stays blocked — this campaign has no database to test against; the cooldown-gated MANUAL "prepare sooner" path (as opposed to the automatic hourly scheduling) remains deliberately unwired — see item 15 | 2026-09-24, updated P5-S3 from P4-S8b fresh A; reachability closed by TRIGGER-A, `docs/jev-abc/TRIGGER-A-C-20260925T053859Z.md`; **independently VERIFIED_OFFLINE_BOUNDED 2026-09-25, `docs/jev-abc/TRIGGER-A-A-20260925T060520Z.md`; P7b protective test added by R4-DOCS** |
+| 14 | Scheduled feed ready ahead of your reading time; time-zone-safe; honest status | Partial, reachability gap now closed — the time-zone math for the existing scheduled email remains proven correct; the "get results ready ahead of time" engine (see item 13) is now reachable via the same hourly trigger, with the lead time raised from a PROPOSED 45 minutes to 90 (45 could realize a NEGATIVE lead — a result ready minutes after, not before, a reader's expected check-in — once the hourly grid is accounted for; 90 guarantees at least 30 real minutes ahead) and a fix ensuring a prepared result is filed under the exact day-key a real visit will look it up under (previously could disagree once a reader's own time zone differs from the server's, latent today since no account has one set) — this lead-time bound and the date-alignment fix are now **independently VERIFIED** by a fresh A's own from-scratch probes (672 combinations across 7 zones for lead time; 9 cross-timezone cases incl. a real DST transition for date alignment; zero violations either way), `docs/jev-abc/TRIGGER-A-A-20260925T060520Z.md`. **Trade-off told to the user plainly (P8):** a prepared batch is always built at AI tier 0 (deterministic ranking only, never the paid AI re-ranking, matching main's own rule that a reader who hasn't visited yet must cost nothing beyond fetching sources) — confirmed by the same review, by direct code read, that a later real visit's existing-batch path serves that prepared batch completely unchanged, with no tier comparison anywhere in that path. So a reader entitled to the paid AI re-ranking who opens a day's feed for the first time via a prepared batch sees the plain, non-AI-ranked version for that whole day, not the AI-ranked version a fresh visit-time build would have given them. Still off by default (both the workflow push/merge and the flag are separate, unmade decisions), and still honest either way: a flag-off or ledger-off run reports a truthful no-op reason rather than pretending to have done something | 2026-09-24, updated P5-S3 from P4-S8b fresh A; reachability + lead-time + date-alignment fixes by TRIGGER-A, `docs/jev-abc/TRIGGER-A-C-20260925T053859Z.md`; **independently VERIFIED_OFFLINE_BOUNDED 2026-09-25 (incl. the P8 tier-trade-off record and the P11 date-alignment fix, each with the reviewer's own from-scratch evidence), `docs/jev-abc/TRIGGER-A-A-20260925T060520Z.md`** |
+| 15 | Manual refresh doesn't waste work; cooldowns and budgets work; just opening the app never triggers AI calls | Partial, most of the way closed — opening the app / checking status never triggers an AI call (confirmed, unchanged); the double-work-on-concurrent-refresh bug (see §2) is now fixed and independently proven under real concurrent requests; the SCHEDULER side of the shared prepare-job queue (item 13) is now wired and draining every hour, bounded to 10 jobs and roughly 200 of the endpoint's 300-second budget per run so one slow run can't consume the whole window — the drain ceiling (own dedicated 15-seeded-jobs test: 10 drained then the remaining 5) and the wall-clock guard (own dedicated test, plus mutation-tested — disabling the check made it drain 10 instead of stopping at 2, exactly as expected) are both **independently VERIFIED**, `docs/jev-abc/TRIGGER-A-A-20260925T060520Z.md`. A manual-refresh cooldown is built and offline-verified but STILL not wired to any live "refresh now" path — a deliberate choice this pass, not an oversight (recorded as POLICY item 5 in TRIGGER-A's own guide): the shared queue's drain side needed no separate code to also serve a future manual path, but building the user-facing trigger itself was left for a later round. This item therefore stays Partial specifically for the manual path; the automatic scheduling half moved from disconnected to reachable-but-off | 2026-09-24, updated P5-S3 from P4-S8a + P4-S8b fresh A's; scheduler-side wiring by TRIGGER-A, `docs/jev-abc/TRIGGER-A-C-20260925T053859Z.md`; **independently VERIFIED_OFFLINE_BOUNDED 2026-09-25, `docs/jev-abc/TRIGGER-A-A-20260925T060520Z.md`** |
 | 16 | Only never-before-shown papers compete the next day, across ~20 named edge cases | Partial — the core mechanism passes offline with two small, accepted, documented trade-offs. **Corrected (was stale):** the two "signed in with no batch yet" edge cases are no longer being worked on — both are now fixed and independently verified; what remains is one narrow, named, accepted gap with its own hard threshold before any batchless-mode launch (see the `PEER_DASHBOARD_LEDGER` row in §1). **New this pass:** explicit access to a past day's already-sent batch ("archive") is now built and independently offline-verified, sitting behind the same `PEER_DASHBOARD_LEDGER` switch as the rest of this item — it only ever reads a batch that was already sent to that person, in the exact order it was sent, and never re-picks, re-sends, or records anything. It never mints a batch and never marks one as acknowledged. Where in the product a person would actually reach this (a page, a button, a settings entry) is still an open decision, not settled by this pass. | 2026-09-24, P4 baseline; edge-case fix independently VERIFIED (P4-S5b-FIX3, 14:23 UTC); archive access built + offline-verified this pass (P4-S9); independently VERIFIED, `docs/jev-abc/P4-S9-A-20260924T230835Z.md` |
 | 17 | Pool and daily-brief size limits respected; brief vs. deep report kept separate; the no-AI-keys mode still works | Passed offline check | 2026-09-24, P4; re-confirmed in the end-of-round re-measurement, `docs/jev-abc/FINAL-A-P2-20260924T222946Z.md` |
 | 18 | Paired quality/cost evidence, multilingual cases, an independent reviewer, a tested rollback, no invented numbers | **Corrected (was stale — labelled "Not started," which undersold real, verified progress): Partial.** The metric instruments themselves — precision/recall/nDCG, a bootstrap confidence interval (with a guard fix independently verified), and a lifetime-duplicate-count auditor reusing the exact same identity check the live exclusion path uses — are built and independently VERIFIED offline. Multilingual handling is confirmed at the underlying data-truncation layer. Rollback files and their 1:1 match with migrations are confirmed. But the actual deliverable — a paired comparison of the three arms on real project data, with real labels — has genuinely not started: no dataset, no labellers named, no pre-registered quality/budget thresholds, and no held-out result exist anywhere in this campaign yet. No fabricated uplift or savings number was found anywhere. | 2026-09-24 — this document; re-scoped by the end-of-round re-measurement, `docs/jev-abc/FINAL-A-P2-20260924T222946Z.md` |
@@ -873,18 +1115,52 @@ change after it.
   explicit opt-in flag — not a new gap). **This pass (P5-S5) is doc-only and did not
   itself run any test/build command** — the numbers above are cited from the sources
   named, not re-executed here.
+- **SPEND-CAP's own gate sweep**, from `web/`, 2026-09-25T00:20-00:22Z (full detail and
+  RED-evidence log in `docs/jev-abc/SPEND-CAP-C-20260925T044800Z.md`): `npx vitest run`
+  first hit a transient Windows worker-spawn error (`spawn UNKNOWN`, an OS/process-level
+  flake, not a test failure) on two unrelated files; an immediate clean re-run gave **254
+  passed test files + 2 skipped (256), 4628 passed tests + 5 skipped (4633), 0 failed,
+  exit 0**. This total includes a concurrent writer's own in-flight work (a live-evaluation
+  test harness — confirmed via `git status`, not this item's files); SPEND-CAP's own net
+  contribution is +1 new test file (`company-budget.test.ts`, 50 passed + 3 skipped — the
+  3 are the documented-BLOCKED SQL-constraint check, no live Postgres reachable here) plus
+  +11 tests added to two existing files (`metered.test.ts` +6, `route.test.ts` +5), all
+  passing. `npx tsc --noEmit` **exit 0, 0 errors**. `npx eslint .` **exit 0, 0 errors, 149
+  warnings** - byte-identical to the P5-S4 baseline above; SPEND-CAP added no new warning.
+  `npm run build` **exit 0**, same single pre-existing non-fatal Turbopack NFT warning
+  (`pdf-text.ts`, unrelated to this item, present before this pass). One real,
+  pre-existing-convention test failure was found and fixed during this pass, not silently
+  worked around: exporting three identifiers from `decisions/jev-contract.ts` (needed to
+  reuse its CJK-aware token-ratio logic, per this item's own design) broke
+  `broker-parity.test.ts`, which requires `supabase/functions/jev-broker/jev-contract.ts`
+  to stay byte-identical to its source (that Edge Function's real runtime is blocked in
+  every environment this campaign has had, so this parity test is its only verification).
+  Fixed by mirroring the identical, export-only edit into the copy file - not a deploy, not
+  a database touch, just keeping two checked-in source files in sync as the existing
+  convention requires.
+- **Round 4 final gates** (added by the manager after `docs/jev-abc/R4-DOCS-A-20260925T064252Z.md`
+  flagged that this ledger stopped at SPEND-CAP's mid-round sweep; the numbers below are
+  copied from the named independent runs, not re-executed for this bullet). Later runs, in
+  order, each including every concurrent writer's work on disk at the time:
+  LIVE-EVAL-4-FIX C **256 files + 2 skipped, 4662 passed + 5 skipped, 0 failed**
+  (`docs/jev-abc/LIVE-EVAL-4-FIX-C-20260925T054542Z.md`); TRIGGER-A C and TRIGGER-A A
+  **257 files + 2 skipped, 4685 passed + 5 skipped, 0 failed**, `npm run build` exit 0 with
+  `/api/jobs/prepare-dashboards` in the route table (`docs/jev-abc/TRIGGER-A-A-20260925T060520Z.md`);
+  final, after the P7b protective test: **257 files + 2 skipped (259), 4686 passed + 5 skipped
+  (4691), 0 failed; `npx tsc --noEmit` exit 0; `npx eslint .` 0 errors, 149 warnings**
+  (independently re-run by `docs/jev-abc/R4-DOCS-A-20260925T064252Z.md`).
 
-### 8. User decisions — 5 still open; #1 now RESOLVED
+### 8. User decisions — 4 still open (#2, #4, #6, #7); #1, #3, #5 now RESOLVED
 
 1. **Company-funded AI option — RESOLVED this pass (§0b/§1s), in main's favour.** The
    user authorized merging `origin/main`, which adopts main's company-funded AI rules
    (every model-reaching route requires a `ProviderContext`; `requireEntitledAiRequest`
    gates 6 routes; deep reports counted once via `consumeDeepReport`) in place of the
-   Jev branch's own stricter, keys-only rule. **The recorded risk stands and is restated
-   here because it is now live, not hypothetical:** main's rule caps only two specific
-   expensive actions — deep reports and forced full rebuilds — with **no general LLM
-   spend cap** on anything else that reaches a model (feed re-ranking, short reports,
-   query generation, figure matching). This is now the single largest open billing
+   Jev branch's own stricter, keys-only rule. **The recorded risk stood and is restated
+   here because it was live, not hypothetical, at the time:** main's rule capped only two
+   specific expensive actions — deep reports and forced full rebuilds — with **no general
+   LLM spend cap** on anything else that reaches a model (feed re-ranking, short reports,
+   query generation, figure matching). This was the single largest open billing
    exposure in the merged system (independently restated as NEW FINDING 1 in
    `docs/jev-abc/MERGE-A-20260924T203103Z.md`). **Now also un-gates (but does not by
    itself complete) the background-only backup opinion**
@@ -892,27 +1168,78 @@ change after it.
    structurally inert until the company-funded capability it depends on is actually
    wired up — a separate, not-yet-started implementation step, not something this
    resolution alone finishes.
+   **SPEND-CAP built this pass (§1a) — the general-cap gap above now has a mechanism,
+   still needs the user's numbers.** An atomic, ordered, settle-to-actual-usage dollar
+   reservation now covers all 9 real company-funded call sites, ships OFF by default
+   (`PEER_COMPANY_SPEND_CAP`), and fails closed on any config/counter problem once on.
+   Two things still need the user, not the code: (a) confirm or adjust the two
+   conservative placeholder ceilings ($5.00/day total, $0.50/day per signed-in person —
+   edited directly in the Supabase dashboard, no redeploy, §1a) before relying on them for
+   real traffic; (b) authorize actually flipping the switch, on the same "your explicit
+   go-ahead" basis every other flag in this document needs. **Corrected (was stale — this
+   used to say independent review was still pending): a fresh, independent reviewer has
+   since checked this build and found it correct (13/13 checks, 4 restored mutations,
+   `docs/jev-abc/SPEND-CAP-A-20260925T052950Z.md`, VERIFIED_OFFLINE_BOUNDED) — see
+   acceptance item 12. That review cannot substitute for the real-database proof (a),
+   (b), and the migration itself still need; nothing here is live.**
 2. **Cross-channel dedupe policy.** Should email and dashboard delivery share one
    "already shown" record, or stay fully independent as today?
-3. **Who/what triggers the scheduled digest send** — and now also the already-built
-   "prepare results ahead of time" job queue and its 15-minute manual-refresh cooldown
-   (§2): both exist in code and pass their offline tests, but neither is connected to
-   anything, specifically because this decision has not been made. A production
-   scheduling change nobody but the user may authorize.
-4. **Live call authorization** — exact scope, volume, and budget for real calls to
-   Semantic Scholar, OpenAlex, and Jev. Also answers whether one specific paper-search
-   service still works without a paid key. Unblocks acceptance items 4 and 18 and the
-   entire evaluation pilot in §5.
-5. **Automatic email-retry sweep.** A safe one-time retry exists in the code today; a
-   recurring automatic sweep would be a new schedule, needing the same authorization as
-   decision 3.
+3. **Who/what triggers the scheduled digest send — RESOLVED this pass: option A
+   (§1v).** The user chose to extend the existing once-an-hour GitHub Actions workflow
+   that already sends the scheduled digest, rather than create a new schedule: the same
+   hourly trigger now also runs the already-built "prepare results ahead of time" job
+   queue (acceptance 13/14) and retries a failed digest send (acceptance 15, this also
+   resolves decision 5 below), as two new, independent jobs. Both pieces exist in code,
+   pass their offline tests, and are independently VERIFIED_OFFLINE_BOUNDED
+   (`docs/jev-abc/TRIGGER-A-A-20260925T060520Z.md`). **What choosing the mechanism does
+   NOT yet do:** the workflow file change itself has not been pushed or merged to the
+   production branch, and its own switches (`PEER_DASHBOARD_PREPARE`,
+   `PEER_DIGEST_EMAIL_RETRY`) both still default off — turning any of this on for real
+   still needs the same explicit go-ahead every other switch in this document needs.
+4. **Live call authorization — still open, though part of its scope has now been
+   used.** The user separately authorized (§1u, $0/free-tier only) a bounded INTERNAL
+   evaluation comparing Semantic Scholar and OpenAlex on this machine; that evaluation
+   ran twice (see acceptance item 4) and made real API calls, but this is explicitly NOT
+   the same thing as authorizing live calls inside the product for real users, and it did
+   not include Jev at all (no key/broker exists yet). What remains genuinely open: exact
+   scope, volume, and a real budget for calls made BY the live product (not a one-off
+   internal comparison test), for all three of Semantic Scholar, OpenAlex, and Jev.
+   **One sub-question is now answered, as a side effect of that evaluation:** OpenAlex's
+   keyless path (`OPENALEX_API_KEY` unset) was used throughout and every request was
+   accepted — confirmed by both live-eval A's own credential-presence record
+   (`openAlexKey: false`) and by the successful keyword/topic call counts in §6 row 4.
+   Unblocks acceptance item 4 fully, item 18, and the entire evaluation pilot in §5.
+5. **Automatic email-retry sweep — RESOLVED this pass, folded into decision 3's answer
+   (§1v).** A safe one-time retry now runs as one more step of the same hourly timer,
+   behind its own separate off-by-default switch. **Corrected (was stale — the manager's
+   own §1v write-up first claimed nothing writes the digest email settings and that the
+   job finds nobody to send to; a fuller, uncapped grep found this wrong, see §1x):**
+   today this step finds nothing to retry not because nobody is enrolled — by default
+   every signed-in reader is — but because the on-screen control that would switch a
+   reader's own delivery channel to email was deliberately removed from the app on
+   2026-04-27 (the sending code itself was kept, dormant); see the new decision 7 and
+   the matching Part 1 note for the full account.
 6. **Who labels the ~200-pair pilot** — two independent domain labellers plus a named
-   tie-breaker, none of whom wrote Peer's retrieval or ranking code (§5).
+   tie-breaker, none of whom wrote Peer's retrieval or ranking code (§5). **Accurate note
+   (R4-DOCS): this is separate from, and much larger than, the 40-row blinded sample from
+   this round's own internal live evaluation (item 4/§1u)** — that smaller sample needs
+   only the user's own honest labels, not a named independent labeller or tie-breaker;
+   it is not a substitute for naming the three people this decision asks for.
+7. **New this round: bring back the on-screen controls for email delivery** (on/off, send
+   time, time zone, address). A manager fact-check (`ABC-JEV-INTEGRATION.md` §1x,
+   correcting an error in §1v) found that the scheduled digest job already runs, hourly,
+   for every signed-in reader by default, and already produces a real result each
+   morning — but only as an in-app "Past briefings" entry (`GET /api/briefings`), never
+   an email, because the screen that used to expose the delivery-channel choice (and the
+   send hour and time zone with it) was deliberately removed on 2026-04-27. The
+   underlying send code (Resend integration, the cron path) was kept, unmodified,
+   dormant — not deleted. Whether to bring those on-screen controls back, and on what
+   timeline, is a new, open product decision, not a technical one.
 
-**Adjacent, not separately tallied in the 6 numbered items above (5 open + #1
+**Adjacent, not separately tallied in the 7 numbered items above (4 open + #1/#3/#5
 resolved):** the `private_paper_pools` retention period (§3.2) is functionally the same
 kind of decision (a separately approved retention/backup plan under the campaign's
-evaluation-and-release rules) but was raised after the 6 above were already counted, so
-it is recorded here rather than renumbering.
+evaluation-and-release rules) but was raised after the numbered items above were already
+counted, so it is recorded here rather than renumbering.
 Semantic Scholar's own commercial-use confirmation is treated as folded into decision 4
 (both gate "live Semantic Scholar use") and is likewise not separately tallied.

@@ -47,6 +47,7 @@ import {
   resetCounterStoreForTests,
 } from "@/lib/usage/counters";
 import { PAID_DEEP_REPORTS_PER_DAY } from "@/lib/usage/deep-report-quota";
+import { CompanySpendCapRefusedError } from "@/lib/usage/company-budget";
 import type { ReportStreamEvent } from "@/lib/papers/report-stream";
 
 const paper = {
@@ -677,5 +678,81 @@ describe("POST /api/papers/report — the quota is REACHABLE on the streamed sha
 
     expect(afterStream).toBe(1);
     expect(deepKeys(increments)).toHaveLength(2);
+  });
+});
+
+/**
+ * SPEND-CAP · R7 (ABC-JEV-INTEGRATION.md §1v) — the one route that catches
+ * `CompanySpendCapRefusedError` specifically and extends `QuotaSignal` with
+ * `kind: "company_budget"`. Also covers the guide's RED-list item 14 for this
+ * route: the refusal reaches the caller as a thrown error, and the route's
+ * EXISTING degrade path still returns its existing shape (200, `noLlm: true`)
+ * rather than a 500 or an unhandled rejection.
+ */
+describe("POST /api/papers/report — SPEND-CAP company_budget quota signal (R7)", () => {
+  beforeEach(() => {
+    mocks.getFigurePool.mockResolvedValue(null);
+    mocks.resolveProvider.mockReturnValue({
+      generateJsonText: vi.fn().mockRejectedValue(new CompanySpendCapRefusedError("global_cap_exceeded")),
+    });
+  });
+
+  it("a shallow (non-deep) JSON request keeps its existing empty-report shape AND carries the company_budget quota", async () => {
+    const response = await POST(request({ paper }, "application/json"));
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as PaperReport;
+
+    expect(body.noLlm).toBe(true); // existing degrade shape, unchanged
+    expect(body.quota).toEqual(expect.objectContaining({ kind: "company_budget", reason: "exhausted" }));
+  });
+
+  it("the streamed shallow path sends a quota event immediately before the report event, and the report itself keeps its existing degraded shape", async () => {
+    const events = await readEvents(await POST(request({ paper })));
+
+    expect(events).toContainEqual({ type: "mode", aiMode: "tier1" });
+    const quotaIndex = events.findIndex((e) => e.type === "quota");
+    const reportIndex = events.findIndex((e) => e.type === "report");
+    expect(quotaIndex).toBeGreaterThanOrEqual(0);
+    expect(reportIndex).toBeGreaterThan(quotaIndex);
+
+    const report = reportEvent(events);
+    expect(report.noLlm).toBe(true);
+    expect(report.quota).toEqual(expect.objectContaining({ kind: "company_budget", reason: "exhausted" }));
+  });
+
+  it("reason 'unavailable' for a non-cap-exceeded refusal — the same two-value vocabulary the deep-report kind already uses", async () => {
+    mocks.resolveProvider.mockReturnValue({
+      generateJsonText: vi.fn().mockRejectedValue(new CompanySpendCapRefusedError("cap_config_unreadable")),
+    });
+
+    const response = await POST(request({ paper }, "application/json"));
+    const body = (await response.json()) as PaperReport;
+
+    expect(body.quota).toEqual(expect.objectContaining({ kind: "company_budget", reason: "unavailable" }));
+  });
+
+  it("item 14 — a DEEP request whose deep attempt is refused still falls back to the EXISTING shallow degrade shape, 200, never a 500 or unhandled rejection", async () => {
+    mocks.getFullText.mockResolvedValue({ status: "ok", doc: { text: "Body." } });
+    mocks.generateDeepReport.mockRejectedValue(new CompanySpendCapRefusedError("global_cap_exceeded"));
+
+    const response = await POST(request({ paper, deepReport: true }, "application/json"));
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as PaperReport;
+
+    expect(body.noLlm).toBe(true); // the SAME shape any other deep-flow failure already produces
+    expect(body.quota).toEqual(expect.objectContaining({ kind: "company_budget" }));
+    expect(mocks.bindFiguresToReport).not.toHaveBeenCalled();
+  });
+
+  it("the other 8 company-funded call sites are untouched — a plain (non-CompanySpendCapRefusedError) failure keeps the existing silent degrade, no quota field at all", async () => {
+    mocks.resolveProvider.mockReturnValue({
+      generateJsonText: vi.fn().mockRejectedValue(new Error("upstream 500")),
+    });
+
+    const response = await POST(request({ paper }, "application/json"));
+    const body = (await response.json()) as PaperReport;
+
+    expect(body.noLlm).toBe(true);
+    expect(body.quota).toBeUndefined();
   });
 });

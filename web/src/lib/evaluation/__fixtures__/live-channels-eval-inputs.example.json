@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "inputs": [
+    { "id": "starter-machine-learning", "topics": ["machine learning"], "seedDois": [], "topicIds": [] },
+    { "id": "starter-neuroscience", "topics": ["neuroscience"], "seedDois": [], "topicIds": [] },
+    { "id": "starter-molecular-biology", "topics": ["molecular biology"], "seedDois": [], "topicIds": [] },
+    { "id": "starter-materials-science", "topics": ["materials science"], "seedDois": [], "topicIds": [] },
+    { "id": "starter-climate-science", "topics": ["climate science"], "seedDois": [], "topicIds": [] },
+    { "id": "starter-quantum-computing", "topics": ["quantum computing"], "seedDois": [], "topicIds": [] },
+    {
+      "id": "battery-materials-profile",
+      "topics": ["battery materials", "solid-state electrolytes"],
+      "seedDois": ["10.1021/cm901452z", "10.1038/451652a", "10.1038/35104644"],
+      "topicIds": []
+    }
+  ]
+}
