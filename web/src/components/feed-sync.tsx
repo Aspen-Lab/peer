@@ -14,13 +14,22 @@
 // Mount once, near the root, alongside <ProfileSync />.
 
 import { useEffect, useRef } from "react";
-import { create } from "zustand";
 import { isAuthSessionMissingError } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase/client";
 import { sessionStep } from "@/lib/feed/session-step";
 import { useFeedStore } from "@/store/feed";
 import type { Paper, Event, Job } from "@/types";
 import { apiFetch } from "@/lib/api";
+import {
+  useFeedSyncStatus,
+  replaceFeedPendingKeys,
+} from "@/lib/feed/sync-status";
+
+// Re-exported so every existing `import { useFeedSyncStatus } from
+// "@/components/feed-sync"` (account-section.tsx, app/profile/page.tsx)
+// keeps working unchanged — see lib/feed/sync-status.ts for why the flag
+// itself now lives there (FEED-SYNC-FLAG, ABC-JEV-INTEGRATION.md §5).
+export { useFeedSyncStatus };
 
 /**
  * SIGNIN-MERGE (ABC-JEV-INTEGRATION.md §1af/§1aj, ruling P3) — "a failed push
@@ -34,16 +43,45 @@ import { apiFetch } from "@/lib/api";
  * queue built here (recorded, not hidden, in the SIGNIN-MERGE checkpoint):
  * the item stays saved on THIS device either way (a failed push never
  * deletes anything locally), only the account's copy of it lags.
+ *
+ * FEED-SYNC-FLAG (ABC-JEV-INTEGRATION.md §5, following POLISH-1-SYNC-A's
+ * MEDIUM finding) — this migration batch used to be the ONLY place that ever
+ * set/cleared this flag, so an ordinary mid-session save/unsave/mark-read/
+ * mark-unread/feedback push that failed (web/src/store/feed.ts's cloud*
+ * helpers) stayed invisible to the P6 warning below. The set/clear helpers
+ * now live in lib/feed/sync-status.ts precisely so store/feed.ts can
+ * set/clear the SAME flag too, without importing it from this file (which
+ * would be circular — this file already imports `useFeedStore` FROM
+ * store/feed.ts).
+ *
+ * FEED-SYNC-FLAG round 2 (ABC-JEV-INTEGRATION.md §1aq) — round 1 (previous
+ * paragraph) made the flag one shared boolean; reviewer A proved by
+ * execution that an unrelated success could erase a genuine failure (see
+ * docs/jev-abc/FEED-SYNC-FLAG-A-20260928T180309Z.md's S1/S2). Now a set of
+ * per-dimension pending keys (store/feed.ts's `pendingSavedKey`/
+ * `pendingReadKey`/`pendingFeedbackKey`). This migration batch's OWN
+ * success/failure is applied through ONE store action,
+ * `useFeedStore.getState().applyMigrationPushResult`, which also mirrors
+ * the result into `pendingPushByOwner` (persisted, per owner) — see that
+ * field's doc comment on FeedState for why: unlike a profile PUT, this
+ * batch's own retry (the next reload) does not cover every failure mode
+ * (an unsave/mark-unread already-removed locally, or any feedback failure,
+ * are never retried by anything), so the in-memory flag alone would not
+ * survive a reload for those cases. `replaceFeedPendingKeys` (imported
+ * above) is used once per `onSession` call, to SEED that in-memory flag
+ * from this device's own persisted record for whichever owner is now
+ * current — see the call below, right after the reset-handling block.
+ *
+ * §1aq CORRECTION — `applyMigrationPushResult` originally cleared an
+ * owner's WHOLE pending record on a fully successful batch ("it pushed
+ * everything"). The RELOAD HONESTY finding above shows that premise was
+ * wrong: the batch below only re-POSTs items CURRENTLY in
+ * `local.savedPapers`/`savedEvents`/`savedJobs`/`readItems` — never a
+ * delete, never feedback — so `applyMigrationPushResult` now takes exactly
+ * those four arrays/keys (`pushed`, below) and clears ONLY the matching
+ * keys; a pending unsave/mark-unread or any feedback key survives a
+ * successful batch, same as it always survived a failed one.
  */
-export const useFeedSyncStatus = create<{ pushFailed: boolean }>(() => ({
-  pushFailed: false,
-}));
-function markFeedPushFailed() {
-  useFeedSyncStatus.setState({ pushFailed: true });
-}
-function clearFeedPushFailed() {
-  useFeedSyncStatus.setState({ pushFailed: false });
-}
 
 interface SavedApiRow {
   itemId: string;
@@ -140,6 +178,23 @@ export function FeedSync() {
         store.resetLocal();
         if (step === "reset") return;
       }
+      // FEED-SYNC-FLAG round 2 (§1aq point 2, "reload honesty") — reached
+      // whenever `userId` is real (sessionStep never returns "sync"/
+      // "reset-then-sync" otherwise), which includes a PLAIN RELOAD of an
+      // already-signed-in session, not only first sign-in (sessionStep
+      // returns "sync" whenever `syncedUserId === userId`, and
+      // `didInitialSyncRef` is a per-mount ref — see the doc comment above
+      // this function). The in-memory pending-push flag
+      // (lib/feed/sync-status.ts) is NOT itself persisted and starts empty
+      // on every fresh page load, so it must be seeded here, from this
+      // device's own persisted, per-owner record, BEFORE anything below
+      // reads it — reads a FRESH `useFeedStore.getState()`, not the `store`
+      // const captured above, since `resetLocal()` may just have run.
+      if (userId) {
+        replaceFeedPendingKeys(
+          useFeedStore.getState().pendingPushByOwner[userId] ?? {},
+        );
+      }
       if (!userId || didInitialSyncRef.current) return;
       didInitialSyncRef.current = true;
 
@@ -163,8 +218,20 @@ export function FeedSync() {
         const anyFailed = pushResults.some(
           (result) => result.status === "rejected" || (result.status === "fulfilled" && result.value === false),
         );
-        if (anyFailed) markFeedPushFailed();
-        else clearFeedPushFailed();
+        // §1aq CORRECTION — pass exactly what this batch attempted to push
+        // (the same four sources `localPushes` above was built from), so a
+        // full success clears only the matching keys, never a pending
+        // unsave/mark-unread or any feedback key (see the doc comment above).
+        useFeedStore.getState().applyMigrationPushResult(
+          userId,
+          {
+            savedPapers: local.savedPapers,
+            savedEvents: local.savedEvents,
+            savedJobs: local.savedJobs,
+            readIds: Object.keys(local.readItems),
+          },
+          !anyFailed,
+        );
       }
 
       // 2. Now pull the merged server state and hydrate.

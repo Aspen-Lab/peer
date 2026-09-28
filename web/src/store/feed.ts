@@ -24,6 +24,17 @@ import { useProfileStore } from "@/store/profile";
 // file only reads them; profile-sync.tsx is edited by the FIX3 slice
 // directly (a separate file in the same change), not through this import.
 import { useSyncGate } from "@/components/profile-sync";
+// FEED-SYNC-FLAG (ABC-JEV-INTEGRATION.md §5, following POLISH-1-SYNC-A's
+// MEDIUM finding) — the same feed push-failed flag feed-sync.tsx's one-time
+// sign-in migration batch sets/clears, now also set/cleared by the
+// steady-state cloud* helpers below (see updateFeedPushFailedFlag). Lives in
+// this shared module, not in feed-sync.tsx, so importing it here is not a
+// circular import (feed-sync.tsx imports `useFeedStore` FROM this file).
+import {
+  markFeedPendingKey,
+  clearFeedPendingKey,
+  replaceFeedPendingKeys,
+} from "@/lib/feed/sync-status";
 import { scoredItemToPaper } from "@/lib/feed/mapper";
 import { STARTER_TOPICS_KEY, topicsOrStarter } from "@/lib/feed/starter-topics";
 import {
@@ -99,45 +110,177 @@ function completionMap<TItem extends { id: string }>(
   return entries;
 }
 
+// FEED-SYNC-FLAG (ABC-JEV-INTEGRATION.md §5 row FEED-SYNC-FLAG, following
+// POLISH-1-SYNC-A's MEDIUM finding,
+// docs/jev-abc/POLISH-1-SYNC-A-20260928T163023Z.md) — every cloud* helper
+// below used to swallow a failure with `console.warn` only, so the P6
+// sign-out warning (account-section.tsx, reading
+// useFeedSyncStatus().pushFailed) could see a failed push ONLY from the
+// one-time sign-in migration batch in feed-sync.tsx, never from an ordinary
+// mid-session save/unsave/mark-read/mark-unread/feedback push.
+//
+// ROUND 2 (ABC-JEV-INTEGRATION.md §1aq) — round 1 (the paragraph above) made
+// this ONE shared boolean, cleared by ANY of the 5 helpers' success.
+// Reviewer A proved, by execution against the real, unmodified store, that
+// this erases a genuine failure the moment anything else succeeds
+// afterward — see docs/jev-abc/FEED-SYNC-FLAG-A-20260928T180309Z.md's S1 (a
+// different item's markRead clearing THIS item's still-unsynced save) and
+// S2 (the SAME savePaper's own concurrent cloudFeedback success clearing
+// its own cloudSave's failure). Fixed: each of the 5 helpers below now
+// tracks its OWN write against a DIMENSION key —
+// `saved:<itemKind>:<itemId>` (cloudSave/cloudUnsave), `read:<itemId>`
+// (cloudMarkRead/cloudMarkUnread), `feedback:<itemKind>:<itemId>`
+// (cloudFeedback) — via lib/feed/sync-status.ts's
+// `markFeedPendingKey`/`clearFeedPendingKey`. A failure adds that key; a
+// LATER success on the SAME dimension of the SAME item removes ONLY that
+// key. `useFeedSyncStatus.pushFailed` (unchanged read API — the two outside
+// consumers, account-section.tsx and app/profile/page.tsx, need no edit) is
+// derived: true whenever the set is non-empty. This closes both S1 (Y's
+// markRead only ever touches `read:Y`, never `saved:paper:X`) and S2
+// (cloudFeedback only ever touches `feedback:paper:X`, never
+// `saved:paper:X` — the two dimensions of the same item X are tracked, and
+// cleared, independently).
+//
+// Gated on being signed in (`useSyncGate`'s `authUserId`, the same "is this
+// device currently acting as a real account" signal `resolveOwnerKeyForLoad`
+// above already reads): every route these helpers call requires a session
+// and 401s without one (api/saved/route.ts, api/read/route.ts,
+// api/feedback/route.ts), so a signed-out write always "fails" for a reason
+// that has nothing to do with unsynced ACCOUNT data — P6 exists to warn
+// about losing an account's own unsynced changes before sign-out, not to
+// flag a signed-out visitor's writes. A signed-out write must never set OR
+// clear this flag (proven by test).
+//
+// RELOAD HONESTY (§1aq point 2) — a plain reload of an already-signed-in
+// session DOES re-run feed-sync.tsx's migration batch (`sessionStep`
+// returns "sync", not "keep", whenever `syncedUserId === userId`, which is
+// true on every reload of an already-signed-in session, not only first
+// sign-in — lib/feed/session-step.ts L46-57), but that batch only ever
+// re-POSTs whatever is CURRENTLY PRESENT in local state (feed-sync.tsx
+// L162-165) — never a DELETE, and never feedback at all. So:
+//   - a failed cloudSave/cloudMarkRead (item still present locally) IS
+//     retried by the next reload's migration batch;
+//   - a failed cloudUnsave/cloudMarkUnread (item already absent locally —
+//     that is what unsave/unread means) is NEVER retried by anything;
+//   - a failed cloudFeedback is NEVER retried by anything (feedback is
+//     push-only — §1aj finding (d) — the migration batch never touches
+//     paperFeedback/eventFeedback/jobFeedback).
+// The in-memory pending set (lib/feed/sync-status.ts) is NOT itself
+// persisted and starts empty on every page load, so without mirroring it
+// somewhere durable, a reload would silently drop the P6 warning for
+// exactly the cases above that nothing ever retries. Every one of the 5
+// helpers below mirrors its key into `pendingPushByOwner` (a new
+// persisted, per-owner field on FeedState — see its own doc comment) via
+// `setPendingPushPersisted`, not only the ones a reload happens to retry:
+// persisting a key that WILL be retried is harmless (the retry's own
+// success clears it, same as any other write); persisting one that never
+// will is what actually fixes the reload gap.
+function pendingSavedKey(itemKind: ItemKind, itemId: string): string {
+  return `saved:${itemKind}:${itemId}`;
+}
+function pendingReadKey(itemId: string): string {
+  return `read:${itemId}`;
+}
+function pendingFeedbackKey(itemKind: ItemKind, itemId: string): string {
+  return `feedback:${itemKind}:${itemId}`;
+}
+
+// A coarse, synthetic key (none of the 3 real dimensions above can ever
+// collide with it — none is the bare string "migration") for
+// `applyMigrationPushResult`'s failure branch. See that action's own doc
+// comment on FeedState for why the migration batch stays coarse here
+// instead of matching the steady-state helpers' per-item precision.
+const MIGRATION_PENDING_KEY = "migration";
+
+// Mirrors one dimension key into this device's persisted, per-owner record
+// (see FeedState's `pendingPushByOwner`) — the RELOAD HONESTY comment above
+// explains why every key needs this, not only the ones a reload would
+// retry anyway. Keyed by `useSyncGate`'s `authUserId` directly (the exact
+// signal `updateFeedPushFailedFlag` below already gates on), not
+// `currentOwnerKey()`/`entitlement.userId`, which can still read `null` for
+// a moment after `authUserId` is already set (NEW FINDING #2's own
+// resolution-order gap, above) — using the same signal as the gate check
+// avoids re-introducing that class of bug here.
+function setPendingPushPersisted(
+  ownerId: string,
+  key: string,
+  pending: boolean,
+) {
+  const current = useFeedStore.getState().pendingPushByOwner[ownerId] ?? {};
+  if (Boolean(current[key]) === pending) return;
+  const next = { ...current };
+  if (pending) next[key] = true;
+  else delete next[key];
+  useFeedStore.setState((s) => ({
+    pendingPushByOwner: { ...s.pendingPushByOwner, [ownerId]: next },
+  }));
+}
+
+function updateFeedPushFailedFlag(ok: boolean, key: string) {
+  const ownerId = useSyncGate.getState().authUserId;
+  if (!ownerId) return;
+  if (ok) clearFeedPendingKey(key);
+  else markFeedPendingKey(key);
+  setPendingPushPersisted(ownerId, key, !ok);
+}
+
 async function cloudSave(itemId: string, itemKind: ItemKind, payload: unknown) {
+  const key = pendingSavedKey(itemKind, itemId);
   try {
     await apiFetch("/api/saved", {
       method: "POST",
       body: JSON.stringify({ itemId, itemKind, payload }),
     });
+    updateFeedPushFailedFlag(true, key);
   } catch (err) {
     console.warn("[feed] cloudSave failed", err);
+    updateFeedPushFailedFlag(false, key);
   }
 }
 
-async function cloudUnsave(itemId: string) {
+async function cloudUnsave(itemId: string, itemKind: ItemKind) {
+  // ROUND 2 (§1aq) — `itemKind` is a NEW parameter (round 1 only took
+  // `itemId`). Needed so an unsave's key matches the SAME item's save key
+  // exactly (`saved:<itemKind>:<itemId>`) — "a failed save followed by a
+  // successful unsave is consistent" (§1aq point 1) only holds if both
+  // helpers compute the identical key for that item. All 4 call sites
+  // (unsavePaper/unsaveEvent/unsaveJob/commitDismiss) already know the kind.
+  const key = pendingSavedKey(itemKind, itemId);
   try {
     await apiFetch(`/api/saved?itemId=${encodeURIComponent(itemId)}`, {
       method: "DELETE",
     });
+    updateFeedPushFailedFlag(true, key);
   } catch (err) {
     console.warn("[feed] cloudUnsave failed", err);
+    updateFeedPushFailedFlag(false, key);
   }
 }
 
 async function cloudMarkRead(itemId: string) {
+  const key = pendingReadKey(itemId);
   try {
     await apiFetch("/api/read", {
       method: "POST",
       body: JSON.stringify({ itemId }),
     });
+    updateFeedPushFailedFlag(true, key);
   } catch (err) {
     console.warn("[feed] cloudMarkRead failed", err);
+    updateFeedPushFailedFlag(false, key);
   }
 }
 
 async function cloudMarkUnread(itemId: string) {
+  const key = pendingReadKey(itemId);
   try {
     await apiFetch(`/api/read?itemId=${encodeURIComponent(itemId)}`, {
       method: "DELETE",
     });
+    updateFeedPushFailedFlag(true, key);
   } catch (err) {
     console.warn("[feed] cloudMarkUnread failed", err);
+    updateFeedPushFailedFlag(false, key);
   }
 }
 
@@ -147,13 +290,16 @@ async function cloudFeedback(
   feedback: ItemFeedback,
   payload?: unknown,
 ) {
+  const key = pendingFeedbackKey(itemKind, itemId);
   try {
     await apiFetch("/api/feedback", {
       method: "POST",
       body: JSON.stringify({ itemId, itemKind, feedback, payload }),
     });
+    updateFeedPushFailedFlag(true, key);
   } catch (err) {
     console.warn("[feed] cloudFeedback failed", err);
+    updateFeedPushFailedFlag(false, key);
   }
 }
 
@@ -1071,6 +1217,48 @@ interface FeedState {
    */
   deliveredLocalOwnerOrder: string[];
   /**
+   * FEED-SYNC-FLAG round 2 (ABC-JEV-INTEGRATION.md §1aq) — this device's own
+   * durable copy of "which dimension keys does THIS owner have an unsynced
+   * feed write for" (see store/feed.ts's `pendingSavedKey`/`pendingReadKey`/
+   * `pendingFeedbackKey` for the key format), mirroring
+   * `lib/feed/sync-status.ts`'s in-memory `useFeedSyncStatus.pendingKeys`
+   * for exactly ONE reason: that in-memory store is NOT itself persisted,
+   * so without a durable copy a reload would silently lose the P6 warning
+   * for whichever pending keys a reload's own migration-batch retry does
+   * not happen to fix (see the RELOAD HONESTY comment above `cloudSave` for
+   * the file:line evidence — unsave/mark-unread failures and ALL feedback
+   * failures are never retried by anything, reload included).
+   *
+   * Namespaced by owner (`useSyncGate`'s `authUserId` — the same signal
+   * every write into this map already gates on) so a different signed-in
+   * owner on a shared device never inherits another owner's pending
+   * record — read/written only through its own key, the same isolation
+   * principle `deliveredLocalByOwner` above already established for a
+   * different kind of per-owner memory.
+   *
+   * Deliberately UNBOUNDED by owner count this round (unlike
+   * `deliveredLocalByOwner`, which caps at `MAX_DELIVERED_LOCAL_OWNERS`
+   * because it can accumulate real data — hundreds of delivered paper ids
+   * per owner). A pending-push entry is a handful of short strings at most,
+   * self-cleaning the moment its own dimension next succeeds OR the next
+   * fully-successful migration batch clears whichever of that owner's keys
+   * the batch actually re-pushed (see `applyMigrationPushResult` — §1aq
+   * CORRECTION: NOT the owner's whole record; a pending unsave/mark-unread
+   * or feedback key survives a successful batch, since the batch never
+   * re-pushes those) — a materially smaller and slower-accruing footprint.
+   * Not adding a parallel eviction mechanism for it is a deliberate, named
+   * scope decision for this round, not an oversight.
+   *
+   * `resetLocal` (sign-out) DOES clear the LEAVING owner's own entry here
+   * (unlike `deliveredLocalByOwner`, which deliberately survives sign-out) —
+   * necessary BECAUSE this map is now persisted: resetLocal wipes the local
+   * saved/read/feedback data a pending key would be tracking, so leaving a
+   * stale entry behind would wrongly reappear as "you have unsynced
+   * changes" if that same owner signs back into this device later, with
+   * nothing left locally for it to honestly refer to.
+   */
+  pendingPushByOwner: Record<string, Record<string, true>>;
+  /**
    * P4-S5b — the ids from the most recent successful BATCHLESS render,
    * armed in the SAME `set()` call as `papers`/`renderedBatchId` itself
    * (`papersLane` below), awaiting the same render + visibility
@@ -1190,6 +1378,52 @@ interface FeedState {
     savedJobs?: Job[];
     readItems?: Record<string, true>;
   }) => void;
+  /**
+   * FEED-SYNC-FLAG round 2 (§1aq point 1, last sentence) — called by
+   * feed-sync.tsx once its migration batch's `Promise.allSettled` result is
+   * known. `pushed` is exactly what that batch attempted to push: every
+   * item CURRENTLY in `savedPapers`/`savedEvents`/`savedJobs` (it always
+   * POSTs "this is saved", never a DELETE) and every id CURRENTLY in
+   * `readItems` (same — POST only). It never includes feedback; the batch
+   * does not touch feedback at all.
+   *
+   * §1aq CORRECTION (manager, after reviewing this file's own RELOAD
+   * HONESTY finding above `cloudSave`) — round 1 of this ruling said a
+   * fully successful batch "may clear the whole set... it pushed
+   * everything." That premise was wrong: the batch only re-POSTs items
+   * CURRENTLY PRESENT locally, so a pending UNSAVE/MARK-UNREAD (the item is
+   * — correctly — already absent locally, so the batch never re-sends a
+   * delete for it) and EVERY feedback key (the batch never touches
+   * feedback, full stop) are not things this batch actually confirmed, and
+   * clearing them anyway would be exactly the over-clearing S1/S2 already
+   * ruled out for the steady-state helpers, just moved into this one
+   * instead. `fullySucceeded` true now clears ONLY the keys built from
+   * `pushed` (`saved:<kind>:<id>` for each item in
+   * savedPapers/savedEvents/savedJobs, `read:<id>` for each id in readIds)
+   * plus the coarse `MIGRATION_PENDING_KEY` — never any OTHER pending key
+   * (in-memory AND the persisted `pendingPushByOwner` entry, in lockstep).
+   * Every other pending key (an absent-locally saved/unsave key, or any
+   * feedback key) survives until a later write on ITS OWN dimension
+   * succeeds — same rule the steady-state helpers already follow.
+   *
+   * `fullySucceeded` false ("a failed batch keeps/sets it as today" — NOT
+   * corrected, this half of the original ruling stands) adds ONE coarse,
+   * synthetic key (`MIGRATION_PENDING_KEY`) rather than attributing the
+   * failure to one specific item — that per-item precision is what the
+   * steady-state helpers below already do, and is what S1/S2 were actually
+   * about; this batch pushes many items at once and the ruling does not
+   * ask for the same precision on ITS failure path.
+   */
+  applyMigrationPushResult: (
+    ownerId: string,
+    pushed: {
+      savedPapers: { id: string }[];
+      savedEvents: { id: string }[];
+      savedJobs: { id: string }[];
+      readIds: string[];
+    },
+    fullySucceeded: boolean,
+  ) => void;
   /** Reset local state — called on sign-out so the next user starts clean. */
   resetLocal: () => void;
 }
@@ -1247,6 +1481,7 @@ export const useFeedStore = create<FeedState>()(
       pendingBatchAck: null,
       deliveredLocalByOwner: {},
       deliveredLocalOwnerOrder: [],
+      pendingPushByOwner: {},
       pendingLocalDelivery: null,
 
       acknowledgePendingBatch: async () => {
@@ -2059,7 +2294,7 @@ export const useFeedStore = create<FeedState>()(
             paperFeedback: nextFeedback,
           };
         });
-        cloudUnsave(id);
+        cloudUnsave(id, "paper");
       },
 
       unsaveEvent: (id) => {
@@ -2100,7 +2335,7 @@ export const useFeedStore = create<FeedState>()(
             submittedAt: nextSubmittedAt,
           };
         });
-        cloudUnsave(id);
+        cloudUnsave(id, "event");
       },
 
       unsaveJob: (id) => {
@@ -2138,7 +2373,7 @@ export const useFeedStore = create<FeedState>()(
             appliedAt: nextAppliedAt,
           };
         });
-        cloudUnsave(id);
+        cloudUnsave(id, "job");
       },
 
       submitFeedback: (itemId, type, feedback, payload) => {
@@ -2375,7 +2610,7 @@ export const useFeedStore = create<FeedState>()(
             feedbackSnapshotForJob(job),
           );
         }
-        if (pending.wasSaved) cloudUnsave(pending.id);
+        if (pending.wasSaved) cloudUnsave(pending.id, pending.kind);
         set((s) => {
           if (pending.kind === "event") {
             const nextRegisteredAt = { ...s.registeredAt };
@@ -2495,9 +2730,61 @@ export const useFeedStore = create<FeedState>()(
         });
       },
 
+      applyMigrationPushResult: (ownerId, pushed, fullySucceeded) => {
+        if (fullySucceeded) {
+          // §1aq CORRECTION — clear ONLY the keys this batch actually
+          // re-pushed (every item it iterated over — see `pushed`, built by
+          // feed-sync.tsx from the SAME local.savedPapers/savedEvents/
+          // savedJobs/readItems it just POSTed), plus the coarse key. Any
+          // OTHER pending key (an absent-locally saved/unsave key, or any
+          // feedback key) is left exactly as is — see this action's own
+          // doc comment on FeedState for why.
+          const pushedKeys = [
+            ...pushed.savedPapers.map((p) => pendingSavedKey("paper", p.id)),
+            ...pushed.savedEvents.map((e) => pendingSavedKey("event", e.id)),
+            ...pushed.savedJobs.map((j) => pendingSavedKey("job", j.id)),
+            ...pushed.readIds.map((id) => pendingReadKey(id)),
+          ];
+          for (const key of pushedKeys) clearFeedPendingKey(key);
+          clearFeedPendingKey(MIGRATION_PENDING_KEY);
+          set((s) => {
+            const next = { ...(s.pendingPushByOwner[ownerId] ?? {}) };
+            for (const key of pushedKeys) delete next[key];
+            delete next[MIGRATION_PENDING_KEY];
+            return {
+              pendingPushByOwner: { ...s.pendingPushByOwner, [ownerId]: next },
+            };
+          });
+          return;
+        }
+        markFeedPendingKey(MIGRATION_PENDING_KEY);
+        set((s) => ({
+          pendingPushByOwner: {
+            ...s.pendingPushByOwner,
+            [ownerId]: {
+              ...(s.pendingPushByOwner[ownerId] ?? {}),
+              [MIGRATION_PENDING_KEY]: true,
+            },
+          },
+        }));
+      },
+
       resetLocal: () => {
         feedLoadSeq += 1;
+        // FEED-SYNC-FLAG round 2 (§1aq) — read BEFORE the reset below wipes
+        // `syncedUserId`: this is the owner whose local saved/read/feedback
+        // data is about to be destroyed, so it is also the owner whose
+        // `pendingPushByOwner` entry (if any) is about to become stale —
+        // see that field's own doc comment for why leaving it behind would
+        // be a NEW bug (a false "you have unsynced changes" on this same
+        // owner's later sign-in, for data that no longer exists locally).
+        const resettingOwnerId = get().syncedUserId;
+        const pendingPushByOwner = resettingOwnerId
+          ? { ...get().pendingPushByOwner, [resettingOwnerId]: {} }
+          : get().pendingPushByOwner;
+        replaceFeedPendingKeys({});
         set({
+          pendingPushByOwner,
           papers: [],
           events: [],
           jobs: [],
@@ -2620,6 +2907,21 @@ export const useFeedStore = create<FeedState>()(
         // order (effectively Object.keys order) on every reload.
         deliveredLocalByOwner: state.deliveredLocalByOwner,
         deliveredLocalOwnerOrder: state.deliveredLocalOwnerOrder,
+        // FEED-SYNC-FLAG round 2 (§1aq point 2) — the whole point: this
+        // must survive a reload, or the P6 warning silently loses exactly
+        // the cases a reload does not otherwise retry (see the RELOAD
+        // HONESTY comment above `cloudSave`, and this field's own doc
+        // comment on FeedState). No `version` bump needed for this addition
+        // — verified against the installed zustand's actual default
+        // `merge` (node_modules/zustand/esm/middleware.mjs L333-336:
+        // `{...currentState, ...persistedState}`): an old blob simply lacks
+        // this key, so the fresh initial-state default (`{}`) wins for it,
+        // exactly like every other brand-new key would. A version bump is
+        // for RESHAPING an existing key's stored value (see
+        // `deliveredLocalByOwner`'s own v2→v3 bump above and its `migrate`
+        // step below) — not required here, since nothing existing changes
+        // shape.
+        pendingPushByOwner: state.pendingPushByOwner,
       }),
       migrate: (persistedState, version) => {
         const persisted = persistedState as Partial<FeedState> & {

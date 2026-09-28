@@ -34,6 +34,10 @@ import { useProfileStore } from "@/store/profile";
 // setting it here, in a test, is the same read-only use feed.ts itself
 // makes; profile-sync.tsx is not edited by this fix.
 import { useSyncGate } from "@/components/profile-sync";
+// FEED-SYNC-FLAG — the same shared flag store feed-sync.tsx's migration
+// batch and this file's cloud* helpers both set/clear (see feed.ts's own
+// import of this module and its updateFeedPushFailedFlag).
+import { useFeedSyncStatus } from "@/lib/feed/sync-status";
 import { selectedSenseConcept } from "@/lib/feed/senses";
 import { localCalendarDate } from "@/lib/local-calendar-date";
 // P4-S5b-FIX (Round 3) — the same already-resolved ClientEntitlement the
@@ -267,6 +271,11 @@ describe("feed lane loading", () => {
       deliveredLocalByOwner: {},
       deliveredLocalOwnerOrder: [],
       pendingLocalDelivery: null,
+      // FEED-SYNC-FLAG round 2 (§1aq) — same reasoning as the other P4-S5
+      // resets above: a new persisted field, every pre-existing test
+      // predates it, explicit reset keeps one test's pending-push record
+      // from leaking into the next.
+      pendingPushByOwner: {},
     });
   });
 
@@ -796,6 +805,784 @@ describe("feed lane loading", () => {
     expect(restored.submittedAt[event.id]).toBe(
       "2026-07-30T17:00:00.000Z",
     );
+  });
+
+  // FEED-SYNC-FLAG (ABC-JEV-INTEGRATION.md §5 row FEED-SYNC-FLAG, following
+  // POLISH-1-SYNC-A's MEDIUM finding,
+  // docs/jev-abc/POLISH-1-SYNC-A-20260928T163023Z.md) — the P6 sign-out
+  // warning (account-section.tsx) reads useFeedSyncStatus().pushFailed, but
+  // that flag used to be set/cleared ONLY by feed-sync.tsx's one-time
+  // sign-in migration batch; an ordinary mid-session cloudSave/cloudUnsave/
+  // cloudMarkRead/cloudMarkUnread failure (this file's own helpers) was
+  // swallowed by `console.warn` alone and never reached it. These tests
+  // prove the fix directly against the store, the same boundary the
+  // hydrateFromRemote tests below use for SIGNIN-MERGE.
+  //
+  // `cloudFeedback` (exercised here via `moreLikePaper`, which calls only
+  // `submitFeedback` → `cloudFeedback`, never `cloudSave`) is included as a
+  // sibling on the exact same try/apiFetch/catch(console.warn) pattern,
+  // beyond the reviewer's literal 4-function list — `resetLocal()` (sign-out)
+  // wipes `paperFeedback`/`eventFeedback`/`jobFeedback` alongside saved/read
+  // state, so an unsynced feedback push is the same P6 data-loss risk.
+  //
+  // ROUND 2 (ABC-JEV-INTEGRATION.md §1aq, ruling on
+  // docs/jev-abc/FEED-SYNC-FLAG-A-20260928T180309Z.md's FAILED_REVIEW) —
+  // round 1's own tests above this comment proved the WRONG contract: they
+  // pre-set the shared boolean directly (`useFeedSyncStatus.setState({
+  // pushFailed: true })`, with no notion of which item/dimension it was
+  // "for") and then accepted ANY helper's success clearing it. That is
+  // exactly S1/S2. Per this task's brief ("existing round-1 tests... must be
+  // REWRITTEN to the new contract... never deleted"), the "success clears a
+  // previously-set flag" tests below are rewritten to pre-set the SPECIFIC
+  // dimension key that helper's own success is supposed to clear, alongside
+  // an UNRELATED key that must survive — the direct, minimal reproduction of
+  // what round 1 got wrong. The "failure sets the flag" tests keep their
+  // original shape (a failure setting `pushFailed` true is unchanged
+  // behaviour) but now also assert the exact key, since "true" alone no
+  // longer proves WHICH write the flag is about.
+  describe("feed push-failed flag (FEED-SYNC-FLAG)", () => {
+    const flagPaper: Paper = {
+      id: "paper-flag",
+      title: "Flag paper",
+      authors: ["Researcher"],
+      relevanceReason: "Matches materials.",
+      venue: "Example Journal",
+      source: "other",
+      summaryIntro: "Intro.",
+      summaryExperimentKeywords: [],
+      summaryResultDiscussion: "Result.",
+      isSaved: false,
+    };
+
+    beforeEach(() => {
+      // The outer beforeEach (this describe's parent) already resets
+      // useFeedStore (incl. pendingPushByOwner) / useProfileStore and
+      // defaults useSyncGate to signed-out — this only resets the flag
+      // store, which lives outside both. Round 2: resets BOTH fields —
+      // `pendingKeys` is now the primary state, `pushFailed` derived.
+      useFeedSyncStatus.setState({ pendingKeys: {}, pushFailed: false });
+    });
+
+    function signIn() {
+      useSyncGate.setState({
+        settled: true,
+        authUserId: "user-flag",
+        authOutcome: "signed-in",
+      });
+    }
+
+    it("a failed cloudSave (savePaper) sets the flag when signed in, keyed by item+kind", async () => {
+      signIn();
+      // savePaper also fires cloudFeedback (POST /api/feedback) via
+      // submitFeedback — cloudFeedback's OWN success/failure handling is
+      // covered in isolation below (via moreLikePaper, which triggers only
+      // cloudFeedback). To make THIS test sensitive to cloudSave's own
+      // try/catch alone (not a race between the two helpers' resolution
+      // order), /api/saved is the only path that ever resolves; every other
+      // path (i.e. /api/feedback) hangs for the life of the test.
+      fetchMock.mockImplementation((input: string | URL | Request) => {
+        const path = requestPath(input);
+        if (path === "/api/saved") {
+          return Promise.resolve(jsonResponse({ error: "boom" }, 500));
+        }
+        return new Promise<Response>(() => {});
+      });
+      useFeedStore.getState().savePaper(flagPaper);
+      await vi.waitFor(() => {
+        expect(
+          useFeedSyncStatus.getState().pendingKeys["saved:paper:paper-flag"],
+        ).toBe(true);
+      });
+      expect(useFeedSyncStatus.getState().pushFailed).toBe(true);
+    });
+
+    it("a failed cloudUnsave (unsavePaper) sets the flag when signed in, keyed by item+kind", async () => {
+      signIn();
+      fetchMock.mockImplementation(async () => jsonResponse({ error: "boom" }, 500));
+      useFeedStore.getState().unsavePaper(flagPaper.id);
+      await vi.waitFor(() => {
+        expect(
+          useFeedSyncStatus.getState().pendingKeys["saved:paper:paper-flag"],
+        ).toBe(true);
+      });
+      expect(useFeedSyncStatus.getState().pushFailed).toBe(true);
+    });
+
+    it("a failed cloudMarkRead (markRead) sets the flag when signed in, keyed by item", async () => {
+      signIn();
+      fetchMock.mockImplementation(async () => jsonResponse({ error: "boom" }, 500));
+      useFeedStore.getState().markRead("paper-mark-read-fail");
+      await vi.waitFor(() => {
+        expect(
+          useFeedSyncStatus.getState().pendingKeys["read:paper-mark-read-fail"],
+        ).toBe(true);
+      });
+      expect(useFeedSyncStatus.getState().pushFailed).toBe(true);
+    });
+
+    it("a failed cloudMarkUnread (markUnread) sets the flag when signed in, keyed by item", async () => {
+      signIn();
+      fetchMock.mockImplementation(async () => jsonResponse({ error: "boom" }, 500));
+      useFeedStore.getState().markUnread("paper-mark-unread-fail");
+      await vi.waitFor(() => {
+        expect(
+          useFeedSyncStatus.getState().pendingKeys["read:paper-mark-unread-fail"],
+        ).toBe(true);
+      });
+      expect(useFeedSyncStatus.getState().pushFailed).toBe(true);
+    });
+
+    it("a failed cloudFeedback (moreLikePaper, the sibling write) sets the flag when signed in, keyed by item+kind", async () => {
+      signIn();
+      fetchMock.mockImplementation(async () => jsonResponse({ error: "boom" }, 500));
+      useFeedStore.getState().moreLikePaper(flagPaper);
+      await vi.waitFor(() => {
+        expect(
+          useFeedSyncStatus.getState().pendingKeys["feedback:paper:paper-flag"],
+        ).toBe(true);
+      });
+      expect(useFeedSyncStatus.getState().pushFailed).toBe(true);
+    });
+
+    // Per-helper success-path coverage, ROUND 2 CONTRACT (§1aq). Each test
+    // pre-sets the EXACT dimension key that helper's own success is
+    // supposed to clear, PLUS an unrelated key from a different
+    // item/dimension that must survive untouched — the direct reproduction
+    // of what round 1's version of these tests got wrong (pre-setting the
+    // bare shared boolean, with no notion of "whose" failure it was, so ANY
+    // success cleared it — exactly S1/S2). A mutant that goes back to
+    // clearing the WHOLE flag/set on any success — not just this helper's
+    // own key — turns the "unrelated key survives" assertion red.
+    it("a successful cloudSave clears ONLY saved:paper:<id> — an unrelated pending key survives", async () => {
+      signIn();
+      useFeedSyncStatus.setState({
+        pendingKeys: {
+          "saved:paper:paper-flag": true,
+          "read:paper-unrelated": true,
+        },
+        pushFailed: true,
+      });
+      fetchMock.mockImplementation((input: string | URL | Request) => {
+        const path = requestPath(input);
+        if (path === "/api/saved") return Promise.resolve(jsonResponse({ ok: true }));
+        return new Promise<Response>(() => {});
+      });
+      useFeedStore.getState().savePaper(flagPaper);
+      await vi.waitFor(() => {
+        expect(
+          useFeedSyncStatus.getState().pendingKeys["saved:paper:paper-flag"],
+        ).toBeUndefined();
+      });
+      expect(useFeedSyncStatus.getState().pendingKeys["read:paper-unrelated"]).toBe(
+        true,
+      );
+      expect(useFeedSyncStatus.getState().pushFailed).toBe(true);
+    });
+
+    it("a successful cloudUnsave clears ONLY saved:paper:<id> — an unrelated pending key survives", async () => {
+      signIn();
+      useFeedSyncStatus.setState({
+        pendingKeys: {
+          "saved:paper:paper-flag": true,
+          "feedback:paper:paper-unrelated": true,
+        },
+        pushFailed: true,
+      });
+      fetchMock.mockImplementation(async () => jsonResponse({ ok: true }));
+      useFeedStore.getState().unsavePaper(flagPaper.id);
+      await vi.waitFor(() => {
+        expect(
+          useFeedSyncStatus.getState().pendingKeys["saved:paper:paper-flag"],
+        ).toBeUndefined();
+      });
+      expect(
+        useFeedSyncStatus.getState().pendingKeys["feedback:paper:paper-unrelated"],
+      ).toBe(true);
+      expect(useFeedSyncStatus.getState().pushFailed).toBe(true);
+    });
+
+    it("a successful cloudMarkRead clears ONLY read:<id> — an unrelated pending key survives", async () => {
+      signIn();
+      useFeedSyncStatus.setState({
+        pendingKeys: {
+          "read:paper-mark-read-ok": true,
+          "saved:paper:paper-unrelated": true,
+        },
+        pushFailed: true,
+      });
+      fetchMock.mockImplementation(async () => jsonResponse({ ok: true }));
+      useFeedStore.getState().markRead("paper-mark-read-ok");
+      await vi.waitFor(() => {
+        expect(
+          useFeedSyncStatus.getState().pendingKeys["read:paper-mark-read-ok"],
+        ).toBeUndefined();
+      });
+      expect(
+        useFeedSyncStatus.getState().pendingKeys["saved:paper:paper-unrelated"],
+      ).toBe(true);
+      expect(useFeedSyncStatus.getState().pushFailed).toBe(true);
+    });
+
+    it("a successful cloudMarkUnread clears ONLY read:<id> — an unrelated pending key survives", async () => {
+      signIn();
+      useFeedSyncStatus.setState({
+        pendingKeys: {
+          "read:paper-mark-unread-ok": true,
+          "saved:paper:paper-unrelated": true,
+        },
+        pushFailed: true,
+      });
+      fetchMock.mockImplementation(async () => jsonResponse({ ok: true }));
+      useFeedStore.getState().markUnread("paper-mark-unread-ok");
+      await vi.waitFor(() => {
+        expect(
+          useFeedSyncStatus.getState().pendingKeys["read:paper-mark-unread-ok"],
+        ).toBeUndefined();
+      });
+      expect(
+        useFeedSyncStatus.getState().pendingKeys["saved:paper:paper-unrelated"],
+      ).toBe(true);
+      expect(useFeedSyncStatus.getState().pushFailed).toBe(true);
+    });
+
+    it("a successful cloudFeedback (moreLikePaper) clears ONLY feedback:paper:<id> — an unrelated pending key survives", async () => {
+      signIn();
+      useFeedSyncStatus.setState({
+        pendingKeys: {
+          "feedback:paper:paper-flag": true,
+          "saved:paper:paper-unrelated": true,
+        },
+        pushFailed: true,
+      });
+      fetchMock.mockImplementation(async () => jsonResponse({ ok: true }));
+      useFeedStore.getState().moreLikePaper(flagPaper);
+      await vi.waitFor(() => {
+        expect(
+          useFeedSyncStatus.getState().pendingKeys["feedback:paper:paper-flag"],
+        ).toBeUndefined();
+      });
+      expect(
+        useFeedSyncStatus.getState().pendingKeys["saved:paper:paper-unrelated"],
+      ).toBe(true);
+      expect(useFeedSyncStatus.getState().pushFailed).toBe(true);
+    });
+
+    // Separate from the five above: proves a successful write never sets a
+    // flag that started false to true either (the "wrong direction" bug the
+    // five tests above cannot see, since they all start from true).
+    // `unsavePaper` fires exactly one cloud call (cloudUnsave alone, no
+    // cloudFeedback) — nothing else in flight to race against. `vi.waitFor`
+    // only proves the request was made — its promise chain (apiFetch's own
+    // awaits, then updateFeedPushFailedFlag) still needs a real macrotask
+    // tick to finish running, hence the explicit flush before the final
+    // assertion (a bare `toHaveBeenCalled` check can pass on the very
+    // first, synchronous poll, before that chain settles).
+    it("a successful write does not set the flag", async () => {
+      signIn();
+      fetchMock.mockImplementation(async () => jsonResponse({ ok: true }));
+      useFeedStore.getState().unsavePaper(flagPaper.id);
+      await vi.waitFor(() => {
+        expect(fetchMock).toHaveBeenCalled();
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(useFeedSyncStatus.getState().pendingKeys).toEqual({});
+      expect(useFeedSyncStatus.getState().pushFailed).toBe(false);
+    });
+
+    it("a signed-out write's failure never sets the flag (no cloud to speak of)", async () => {
+      // useSyncGate is signed-out by default (this file's outer beforeEach);
+      // signIn() is deliberately not called. Signed-out short-circuits
+      // BEFORE the ok/fail branch (see updateFeedPushFailedFlag), so
+      // cloudSave and cloudFeedback racing each other here is harmless —
+      // both are no-ops on the flag either way; only the timing flush (see
+      // the test above) matters.
+      fetchMock.mockImplementation(async () => jsonResponse({ error: "unauthenticated" }, 401));
+      useFeedStore.getState().savePaper(flagPaper);
+      await vi.waitFor(() => {
+        expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(2);
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(useFeedSyncStatus.getState().pendingKeys).toEqual({});
+      expect(useFeedSyncStatus.getState().pushFailed).toBe(false);
+      // Round 2: a signed-out write must never even create an owner
+      // namespace in the persisted record (there is no owner to key it by).
+      expect(useFeedStore.getState().pendingPushByOwner).toEqual({});
+    });
+
+    it("a signed-out write's success never clears a previously-set flag either", async () => {
+      useFeedSyncStatus.setState({
+        pendingKeys: { "saved:paper:paper-flag": true },
+        pushFailed: true,
+      });
+      fetchMock.mockImplementation(async () => jsonResponse({ ok: true }));
+      useFeedStore.getState().savePaper(flagPaper);
+      await vi.waitFor(() => {
+        expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(2);
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      // Unchanged — a signed-out write must never touch this flag either way.
+      expect(useFeedSyncStatus.getState().pendingKeys["saved:paper:paper-flag"]).toBe(
+        true,
+      );
+      expect(useFeedSyncStatus.getState().pushFailed).toBe(true);
+    });
+
+    // ROUND 2 (§1aq) — the two scenarios the FAILED_REVIEW reproduced BY
+    // EXECUTION against the round-1 code
+    // (docs/jev-abc/FEED-SYNC-FLAG-A-20260928T180309Z.md). Kept as permanent
+    // regression tests, in the same shape A's temporary scenario file used.
+    describe("S1/S2 regressions (§1aq) — an unrelated success must never erase a real, still-unsynced failure", () => {
+      it("S1 — a DIFFERENT item's successful markRead never clears THIS item's still-unsynced failed save", async () => {
+        signIn();
+        fetchMock.mockImplementation((input: string | URL | Request) => {
+          const path = requestPath(input);
+          if (path === "/api/saved") {
+            return Promise.resolve(jsonResponse({ error: "boom" }, 500));
+          }
+          if (path === "/api/read") return Promise.resolve(jsonResponse({ ok: true }));
+          return new Promise<Response>(() => {}); // hang /api/feedback — isolates cloudSave
+        });
+
+        useFeedStore.getState().savePaper(flagPaper); // X's cloudSave fails
+        await vi.waitFor(() => {
+          expect(
+            useFeedSyncStatus.getState().pendingKeys["saved:paper:paper-flag"],
+          ).toBe(true);
+        });
+        expect(useFeedSyncStatus.getState().pushFailed).toBe(true);
+
+        useFeedStore.getState().markRead("paper-flag-other"); // Y — unrelated, succeeds
+        await vi.waitFor(() => {
+          expect(
+            fetchMock.mock.calls.some((c) => requestPath(c[0] as string) === "/api/read"),
+          ).toBe(true);
+        });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        // The core S1 claim: X's real, still-unsynced failure is still visible.
+        expect(
+          useFeedSyncStatus.getState().pendingKeys["saved:paper:paper-flag"],
+        ).toBe(true);
+        expect(useFeedSyncStatus.getState().pushFailed).toBe(true);
+        // And Y's own successful read was never pending in the first place.
+        expect(
+          useFeedSyncStatus.getState().pendingKeys["read:paper-flag-other"],
+        ).toBeUndefined();
+      });
+
+      it("S2 — the SAME savePaper call's own concurrent cloudFeedback success never clears its own cloudSave failure", async () => {
+        signIn();
+        fetchMock.mockImplementation((input: string | URL | Request) => {
+          const path = requestPath(input);
+          if (path === "/api/saved") {
+            return Promise.resolve(jsonResponse({ error: "boom" }, 500));
+          }
+          if (path === "/api/feedback") return Promise.resolve(jsonResponse({ ok: true }));
+          return new Promise<Response>(() => {});
+        });
+
+        useFeedStore.getState().savePaper(flagPaper); // fires cloudSave (fails) + cloudFeedback (succeeds)
+        await vi.waitFor(() => {
+          expect(
+            fetchMock.mock.calls.some((c) => requestPath(c[0] as string) === "/api/feedback"),
+          ).toBe(true);
+        });
+        await vi.waitFor(() => {
+          expect(
+            fetchMock.mock.calls.some((c) => requestPath(c[0] as string) === "/api/saved"),
+          ).toBe(true);
+        });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        // Exactly the save's own key remains — the feedback key, having
+        // succeeded, was never added (or was added and cleared) either way.
+        expect(useFeedSyncStatus.getState().pendingKeys).toEqual({
+          "saved:paper:paper-flag": true,
+        });
+        expect(useFeedSyncStatus.getState().pushFailed).toBe(true);
+      });
+    });
+
+    describe("same-item / per-dimension isolation (§1aq point 1)", () => {
+      it("a failed save followed by a successful unsave of the SAME item is consistent — the account's last-known state is honestly reflected", async () => {
+        signIn();
+        fetchMock.mockImplementation((input: string | URL | Request) => {
+          const path = requestPath(input);
+          if (path === "/api/saved") {
+            return Promise.resolve(jsonResponse({ error: "boom" }, 500));
+          }
+          return new Promise<Response>(() => {}); // hang feedback
+        });
+        useFeedStore.getState().savePaper(flagPaper);
+        await vi.waitFor(() => {
+          expect(
+            useFeedSyncStatus.getState().pendingKeys["saved:paper:paper-flag"],
+          ).toBe(true);
+        });
+
+        fetchMock.mockImplementation(async () => jsonResponse({ ok: true }));
+        useFeedStore.getState().unsavePaper(flagPaper.id);
+        await vi.waitFor(() => {
+          expect(useFeedSyncStatus.getState().pushFailed).toBe(false);
+        });
+        expect(useFeedSyncStatus.getState().pendingKeys).toEqual({});
+      });
+
+      it("the SAME item's failed save and failed read are tracked, and cleared, independently", async () => {
+        signIn();
+        fetchMock.mockImplementation((input: string | URL | Request) => {
+          const path = requestPath(input);
+          if (path === "/api/saved" || path === "/api/read") {
+            return Promise.resolve(jsonResponse({ error: "boom" }, 500));
+          }
+          return new Promise<Response>(() => {}); // hang feedback
+        });
+        useFeedStore.getState().savePaper(flagPaper);
+        useFeedStore.getState().markRead(flagPaper.id);
+        await vi.waitFor(() => {
+          expect(useFeedSyncStatus.getState().pendingKeys).toMatchObject({
+            "saved:paper:paper-flag": true,
+            "read:paper-flag": true,
+          });
+        });
+
+        // Only the read now succeeds.
+        fetchMock.mockImplementation((input: string | URL | Request) => {
+          const path = requestPath(input);
+          if (path === "/api/read") return Promise.resolve(jsonResponse({ ok: true }));
+          return new Promise<Response>(() => {});
+        });
+        useFeedStore.getState().markRead(flagPaper.id);
+        await vi.waitFor(() => {
+          expect(
+            useFeedSyncStatus.getState().pendingKeys["read:paper-flag"],
+          ).toBeUndefined();
+        });
+        // The save's own failure, on the SAME item, is untouched.
+        expect(
+          useFeedSyncStatus.getState().pendingKeys["saved:paper:paper-flag"],
+        ).toBe(true);
+        expect(useFeedSyncStatus.getState().pushFailed).toBe(true);
+      });
+    });
+
+    // ROUND 2 (§1aq point 2, "reload honesty") — pendingPushByOwner is this
+    // device's persisted mirror of the in-memory set above (see its doc
+    // comment on FeedState for the file:line evidence that a reload does
+    // NOT always retry a failed write). Tested directly against the store,
+    // the same boundary feed-sync.tsx's own SSR-only test file already
+    // documents as this repo's limit for anything living inside a
+    // useEffect (web/src/components/feed-sync.test.tsx's header note: no
+    // @testing-library/react, no test mounts a live effect) — the seeding
+    // call itself (`onSession` → `replaceFeedPendingKeys`) is a 3-line thin
+    // wrapper around the same store state proven here, exactly like
+    // hydrateFromRemote's own wiring into onSession is untested at that
+    // layer for the identical, pre-existing reason.
+    describe("pendingPushByOwner — persisted, per owner (§1aq point 2)", () => {
+      it("mirrors a failed write into pendingPushByOwner, keyed by the signed-in owner, and a matching success clears it there too", async () => {
+        signIn(); // authUserId: "user-flag"
+        fetchMock.mockImplementation((input: string | URL | Request) => {
+          const path = requestPath(input);
+          if (path === "/api/saved") {
+            return Promise.resolve(jsonResponse({ error: "boom" }, 500));
+          }
+          return new Promise<Response>(() => {});
+        });
+        useFeedStore.getState().savePaper(flagPaper);
+        await vi.waitFor(() => {
+          expect(useFeedStore.getState().pendingPushByOwner["user-flag"]).toEqual({
+            "saved:paper:paper-flag": true,
+          });
+        });
+
+        fetchMock.mockImplementation(async () => jsonResponse({ ok: true }));
+        useFeedStore.getState().unsavePaper(flagPaper.id);
+        await vi.waitFor(() => {
+          expect(useFeedStore.getState().pendingPushByOwner["user-flag"]).toEqual({});
+        });
+      });
+
+      it("never leaks one owner's pending record into a different owner's", async () => {
+        useSyncGate.setState({
+          settled: true,
+          authUserId: "user-a",
+          authOutcome: "signed-in",
+        });
+        fetchMock.mockImplementation((input: string | URL | Request) => {
+          const path = requestPath(input);
+          if (path === "/api/saved") {
+            return Promise.resolve(jsonResponse({ error: "boom" }, 500));
+          }
+          return new Promise<Response>(() => {});
+        });
+        useFeedStore.getState().savePaper(flagPaper);
+        await vi.waitFor(() => {
+          expect(useFeedStore.getState().pendingPushByOwner["user-a"]).toEqual({
+            "saved:paper:paper-flag": true,
+          });
+        });
+
+        // A different owner is now current on this device. Their own record
+        // — which does not exist yet — must read as empty, never user-a's.
+        useSyncGate.setState({
+          settled: true,
+          authUserId: "user-b",
+          authOutcome: "signed-in",
+        });
+        expect(useFeedStore.getState().pendingPushByOwner["user-b"]).toBeUndefined();
+
+        // And user-b's own failed write must never touch user-a's record.
+        fetchMock.mockImplementation(async () => jsonResponse({ error: "boom" }, 500));
+        useFeedStore.getState().markRead("paper-owner-b");
+        await vi.waitFor(() => {
+          expect(useFeedStore.getState().pendingPushByOwner["user-b"]).toEqual({
+            "read:paper-owner-b": true,
+          });
+        });
+        expect(useFeedStore.getState().pendingPushByOwner["user-a"]).toEqual({
+          "saved:paper:paper-flag": true,
+        });
+      });
+
+      it("is included in the persisted (partialize) snapshot", () => {
+        useFeedStore.setState({
+          pendingPushByOwner: {
+            "user-flag": { "saved:paper:paper-flag": true },
+          },
+        });
+        expect(persistenceCapture.partialize).toBeTypeOf("function");
+        const persisted = persistenceCapture.partialize?.(useFeedStore.getState());
+        expect(persisted).toMatchObject({
+          pendingPushByOwner: { "user-flag": { "saved:paper:paper-flag": true } },
+        });
+      });
+
+      it("resetLocal clears the LEAVING owner's own entry and the in-memory flag, but never a different owner's", () => {
+        useFeedStore.setState({
+          syncedUserId: "user-a",
+          pendingPushByOwner: {
+            "user-a": { "saved:paper:paper-flag": true },
+            "user-b": { "read:paper-b": true },
+          },
+        });
+        useFeedSyncStatus.setState({
+          pendingKeys: { "saved:paper:paper-flag": true },
+          pushFailed: true,
+        });
+
+        useFeedStore.getState().resetLocal();
+
+        expect(useFeedStore.getState().pendingPushByOwner).toEqual({
+          "user-a": {},
+          "user-b": { "read:paper-b": true },
+        });
+        expect(useFeedSyncStatus.getState().pendingKeys).toEqual({});
+        expect(useFeedSyncStatus.getState().pushFailed).toBe(false);
+      });
+
+      it("resetLocal is a no-op on pendingPushByOwner when nobody was synced (signed-out reload)", () => {
+        useFeedStore.setState({
+          syncedUserId: null,
+          pendingPushByOwner: { "user-a": { "read:paper-b": true } },
+        });
+
+        useFeedStore.getState().resetLocal();
+
+        // No owner WAS synced, so there is no "leaving owner" entry to
+        // clear — a different owner's own record (from a previous session
+        // on this device) is left exactly as is.
+        expect(useFeedStore.getState().pendingPushByOwner).toEqual({
+          "user-a": { "read:paper-b": true },
+        });
+      });
+    });
+
+    describe("applyMigrationPushResult (§1aq point 1, last sentence — CORRECTED, see §1aq CORRECTION)", () => {
+      const nothingPushed = {
+        savedPapers: [] as { id: string }[],
+        savedEvents: [] as { id: string }[],
+        savedJobs: [] as { id: string }[],
+        readIds: [] as string[],
+      };
+
+      // §1aq CORRECTION (manager, after reviewing this file's own RELOAD
+      // HONESTY finding) — round 1 of this ruling said a fully successful
+      // batch clears the WHOLE pending record ("it pushed everything").
+      // That premise was wrong: the batch only re-POSTs items CURRENTLY
+      // PRESENT locally, never a delete, never feedback. This test —
+      // REWRITTEN, not deleted, per the brief — now proves the corrected
+      // behaviour directly: only the keys for items the batch actually
+      // re-pushed (`pushed`, below) are cleared; a pending unsave (item
+      // absent locally) and a feedback key (never pushed by this batch at
+      // all) both survive.
+      it("a fully successful batch clears ONLY the keys it actually re-pushed, plus the coarse key — an unsave-pending key and a feedback key both survive", () => {
+        useFeedStore.setState({
+          pendingPushByOwner: {
+            "user-flag": {
+              "saved:paper:paper-pushed": true, // still saved locally — this batch re-POSTed it
+              "saved:paper:paper-unsaved": true, // absent locally (unsave-pending) — never re-pushed
+              "feedback:paper:paper-flag": true, // batch never touches feedback at all
+              migration: true,
+            },
+          },
+        });
+        useFeedSyncStatus.setState({
+          pendingKeys: {
+            "saved:paper:paper-pushed": true,
+            "saved:paper:paper-unsaved": true,
+            "feedback:paper:paper-flag": true,
+            migration: true,
+          },
+          pushFailed: true,
+        });
+
+        useFeedStore.getState().applyMigrationPushResult(
+          "user-flag",
+          { ...nothingPushed, savedPapers: [{ id: "paper-pushed" }] },
+          true,
+        );
+
+        const survivors = {
+          "saved:paper:paper-unsaved": true,
+          "feedback:paper:paper-flag": true,
+        };
+        expect(useFeedStore.getState().pendingPushByOwner["user-flag"]).toEqual(
+          survivors,
+        );
+        expect(useFeedSyncStatus.getState().pendingKeys).toEqual(survivors);
+        expect(useFeedSyncStatus.getState().pushFailed).toBe(true);
+      });
+
+      it("a batch with any failure adds one coarse key, without touching an existing unrelated pending key", () => {
+        useFeedStore.setState({
+          pendingPushByOwner: {
+            "user-flag": { "feedback:paper:paper-flag": true },
+          },
+        });
+        useFeedSyncStatus.setState({
+          pendingKeys: { "feedback:paper:paper-flag": true },
+          pushFailed: true,
+        });
+
+        useFeedStore.getState().applyMigrationPushResult("user-flag", nothingPushed, false);
+
+        expect(useFeedStore.getState().pendingPushByOwner["user-flag"]).toEqual({
+          "feedback:paper:paper-flag": true,
+          migration: true,
+        });
+        expect(useFeedSyncStatus.getState().pendingKeys).toEqual({
+          "feedback:paper:paper-flag": true,
+          migration: true,
+        });
+        expect(useFeedSyncStatus.getState().pushFailed).toBe(true);
+      });
+
+      it("a fully successful batch for one owner never touches a different owner's record", () => {
+        useFeedStore.setState({
+          pendingPushByOwner: {
+            "user-a": { "saved:paper:paper-a": true },
+            "user-b": { "read:paper-b": true },
+          },
+        });
+
+        useFeedStore.getState().applyMigrationPushResult(
+          "user-a",
+          { ...nothingPushed, savedPapers: [{ id: "paper-a" }] },
+          true,
+        );
+
+        expect(useFeedStore.getState().pendingPushByOwner).toEqual({
+          "user-a": {},
+          "user-b": { "read:paper-b": true },
+        });
+      });
+    });
+
+    // §1aq CORRECTION — the manager's own three named scenarios, each
+    // combining a REAL failure (mocked fetch, the actual store action) with
+    // a direct call to `applyMigrationPushResult` to simulate "a fully
+    // successful migration batch just ran" (FeedSync's own onSession is
+    // untestable at this layer — see the pendingPushByOwner describe's own
+    // header note).
+    describe("S3/S4/S5 (§1aq CORRECTION) — a fully successful batch must not clear a key it never actually re-pushed", () => {
+      it("S3 — a failed cloudFeedback for Z survives a fully successful batch (the batch never touches feedback)", async () => {
+        signIn();
+        fetchMock.mockImplementation(async () => jsonResponse({ error: "boom" }, 500));
+        useFeedStore.getState().moreLikePaper(flagPaper); // Z = flagPaper; cloudFeedback fails
+        await vi.waitFor(() => {
+          expect(
+            useFeedSyncStatus.getState().pendingKeys["feedback:paper:paper-flag"],
+          ).toBe(true);
+        });
+
+        useFeedStore.getState().applyMigrationPushResult(
+          "user-flag",
+          { savedPapers: [], savedEvents: [], savedJobs: [], readIds: [] },
+          true,
+        );
+
+        expect(
+          useFeedSyncStatus.getState().pendingKeys["feedback:paper:paper-flag"],
+        ).toBe(true);
+        expect(useFeedSyncStatus.getState().pushFailed).toBe(true);
+      });
+
+      it("S4 — a failed cloudUnsave for X survives a fully successful batch (X is absent locally, so the batch never re-pushes a delete for it)", async () => {
+        signIn();
+        fetchMock.mockImplementation(async () => jsonResponse({ error: "boom" }, 500));
+        useFeedStore.getState().unsavePaper(flagPaper.id); // X — already removed locally; cloudUnsave fails
+        await vi.waitFor(() => {
+          expect(
+            useFeedSyncStatus.getState().pendingKeys["saved:paper:paper-flag"],
+          ).toBe(true);
+        });
+
+        // X is NOT in savedPapers (it was unsaved locally already), so a
+        // real batch could not possibly have re-pushed it either.
+        useFeedStore.getState().applyMigrationPushResult(
+          "user-flag",
+          { savedPapers: [], savedEvents: [], savedJobs: [], readIds: [] },
+          true,
+        );
+
+        expect(
+          useFeedSyncStatus.getState().pendingKeys["saved:paper:paper-flag"],
+        ).toBe(true);
+        expect(useFeedSyncStatus.getState().pushFailed).toBe(true);
+      });
+
+      it("S5 — a failed cloudSave for X IS cleared by a fully successful batch that re-pushed X (X is still saved locally)", async () => {
+        signIn();
+        fetchMock.mockImplementation((input: string | URL | Request) => {
+          const path = requestPath(input);
+          if (path === "/api/saved") {
+            return Promise.resolve(jsonResponse({ error: "boom" }, 500));
+          }
+          return new Promise<Response>(() => {}); // hang feedback — isolates cloudSave
+        });
+        useFeedStore.getState().savePaper(flagPaper); // X — still saved locally; cloudSave fails
+        await vi.waitFor(() => {
+          expect(
+            useFeedSyncStatus.getState().pendingKeys["saved:paper:paper-flag"],
+          ).toBe(true);
+        });
+
+        // X IS in savedPapers, so the batch DID re-push it.
+        useFeedStore.getState().applyMigrationPushResult(
+          "user-flag",
+          { savedPapers: [flagPaper], savedEvents: [], savedJobs: [], readIds: [] },
+          true,
+        );
+
+        expect(
+          useFeedSyncStatus.getState().pendingKeys["saved:paper:paper-flag"],
+        ).toBeUndefined();
+        // Nothing else was ever added (cloudFeedback is still hung, never
+        // settled) — pushFailed goes all the way back to false.
+        expect(useFeedSyncStatus.getState().pendingKeys).toEqual({});
+        expect(useFeedSyncStatus.getState().pushFailed).toBe(false);
+      });
+    });
   });
 
   // SIGNIN-MERGE (ABC-JEV-INTEGRATION.md §1af/§1aj, ruling P2/P3) — "saved
