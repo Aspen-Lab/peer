@@ -279,7 +279,10 @@ describe("GET /api/jobs/dispatch-digests -- P4-S7-IDEM Resend idempotency key + 
     expect(postEmail).not.toHaveProperty("text");
     expect(postEmail.sentAt).toEqual(expect.any(String));
 
-    expect(body.emails_sent).toContainEqual({ user_id: "user-1", messageId: "msg-abc" });
+    // EMAIL-TOKEN-PRIVACY (§1as): a count only, no per-reader messageId list
+    // — the stronger assertion (the right key/render/to reached
+    // sendDigestEmail) is already checked above via the mock's own call args.
+    expect(body.emails_sent_count).toBe(1);
   });
 
   it("flag on, claim conflict, existing row unsent with a stored body within 23h: replays the EXACT stored bytes and the SAME key, using the STORED `to` (not a freshly resolved one)", async () => {
@@ -320,8 +323,9 @@ describe("GET /api/jobs/dispatch-digests -- P4-S7-IDEM Resend idempotency key + 
     expect(post.deliveryId).toBe(777);
     expect(post.payload).toMatchObject({ email: { sent: true } });
 
-    expect(body.emails_sent).toContainEqual({ user_id: "user-1", messageId: "retry-msg" });
-    expect(body.dispatched).toEqual([]); // §4 ruling: retry bookkeeping does not re-add to `dispatched`
+    // EMAIL-TOKEN-PRIVACY (§1as): counts only, no per-reader user_id/messageId list.
+    expect(body.emails_sent_count).toBe(1);
+    expect(body.dispatched_count).toBe(0); // §4 ruling: retry bookkeeping does not re-add to `dispatched`
   });
 
   it("flag on, claim conflict, existing row already payload.email.sent === true: skips, never calls sendDigestEmail again", async () => {
@@ -337,7 +341,8 @@ describe("GET /api/jobs/dispatch-digests -- P4-S7-IDEM Resend idempotency key + 
     const body = await response.json();
 
     expect(mocks.sendDigestEmail).not.toHaveBeenCalled();
-    expect(body.skipped).toContainEqual({ user_id: "user-1", reason: "digest already sent for this local date" });
+    // EMAIL-TOKEN-PRIVACY (§1as): fixed-code tally, not a {user_id,reason} list.
+    expect(body.skipped_reasons).toEqual({ already_sent: 1 });
   });
 
   it("flag on, claim conflict, row has NO send status at all (legacy/pre-change row): treated as sent, skipped with the UNCHANGED original reason, never risks a double send", async () => {
@@ -353,7 +358,8 @@ describe("GET /api/jobs/dispatch-digests -- P4-S7-IDEM Resend idempotency key + 
     const body = await response.json();
 
     expect(mocks.sendDigestEmail).not.toHaveBeenCalled();
-    expect(body.skipped).toContainEqual({ user_id: "user-1", reason: "digest already claimed for this local date" });
+    // EMAIL-TOKEN-PRIVACY (§1as): fixed-code tally, not a {user_id,reason} list.
+    expect(body.skipped_reasons).toEqual({ already_claimed: 1 });
   });
 
   it("flag on, claim conflict, the conflict-row SELECT itself errors: fails safe to the same legacy/no-status treatment, never crashes the row into `failed`, never sends", async () => {
@@ -369,8 +375,10 @@ describe("GET /api/jobs/dispatch-digests -- P4-S7-IDEM Resend idempotency key + 
     const body = await response.json();
 
     expect(mocks.sendDigestEmail).not.toHaveBeenCalled();
-    expect(body.failed).toEqual([]);
-    expect(body.skipped).toContainEqual({ user_id: "user-1", reason: "digest already claimed for this local date" });
+    // EMAIL-TOKEN-PRIVACY (§1as): counts/fixed-code tally, not raw arrays —
+    // also proves the raw "connection reset" DB message never surfaces here.
+    expect(body.failed_count).toBe(0);
+    expect(body.skipped_reasons).toEqual({ already_claimed: 1 });
   });
 
   it("flag on, claim conflict, row is channel inapp: the pre-existing unconditional skip still fires, no conflict-row SELECT, no send call", async () => {
@@ -386,7 +394,8 @@ describe("GET /api/jobs/dispatch-digests -- P4-S7-IDEM Resend idempotency key + 
 
     expect(conflictSelectFn).not.toHaveBeenCalled();
     expect(mocks.sendDigestEmail).not.toHaveBeenCalled();
-    expect(body.skipped).toContainEqual({ user_id: "user-1", reason: "digest already claimed for this local date" });
+    // EMAIL-TOKEN-PRIVACY (§1as): fixed-code tally, not a {user_id,reason} list.
+    expect(body.skipped_reasons).toEqual({ already_claimed: 1 });
   });
 
   it("flag on, claim conflict, stored attemptedAt is OLDER than 23h: does not send, reports expired-unsent, does not touch the stored row", async () => {
@@ -411,13 +420,11 @@ describe("GET /api/jobs/dispatch-digests -- P4-S7-IDEM Resend idempotency key + 
 
     expect(mocks.sendDigestEmail).not.toHaveBeenCalled();
     expect(updateFn).not.toHaveBeenCalled();
-    expect(body.skipped).toContainEqual({
-      user_id: "user-1",
-      reason: "digest email attempt expired unsent (>23h, not retried)",
-    });
+    // EMAIL-TOKEN-PRIVACY (§1as): fixed-code tally, not a {user_id,reason} list.
+    expect(body.skipped_reasons).toEqual({ retry_expired: 1 });
   });
 
-  it("409 concurrent_idempotent_requests on retry: treated as in-progress, lands in `skipped` (not `emails_failed`), row left untouched for a later run", async () => {
+  it("409 concurrent_idempotent_requests on retry: treated as in-progress, lands in the skip tally (not emails_failed), row left untouched for a later run", async () => {
     vi.stubEnv("PEER_DIGEST_DEDUPE", "on");
     const key = expectedKey("user-1", "2026-09-24");
     const attemptedAt = new Date("2026-09-24T14:00:00.000Z").toISOString();
@@ -439,14 +446,13 @@ describe("GET /api/jobs/dispatch-digests -- P4-S7-IDEM Resend idempotency key + 
     const response = await GET(authedRequest());
     const body = await response.json();
 
-    expect(body.emails_failed).toEqual([]);
-    expect(body.skipped).toContainEqual(
-      expect.objectContaining({ user_id: "user-1", reason: expect.stringContaining("concurrent") }),
-    );
+    // EMAIL-TOKEN-PRIVACY (§1as): counts/fixed-code tally, not raw arrays.
+    expect(body.emails_failed_count).toBe(0);
+    expect(body.skipped_reasons).toEqual({ retry_in_progress: 1 });
     expect(updateFn).not.toHaveBeenCalled();
   });
 
-  it("409 invalid_idempotent_request on retry: recorded in `emails_failed` with Resend's own message, never resent under a different key/payload", async () => {
+  it("409 invalid_idempotent_request on retry: recorded in emails_failed with a fixed code, Resend's own message never in the response, never resent under a different key/payload", async () => {
     vi.stubEnv("PEER_DIGEST_DEDUPE", "on");
     const key = expectedKey("user-1", "2026-09-24");
     const attemptedAt = new Date("2026-09-24T14:00:00.000Z").toISOString();
@@ -468,10 +474,12 @@ describe("GET /api/jobs/dispatch-digests -- P4-S7-IDEM Resend idempotency key + 
     const response = await GET(authedRequest());
     const body = await response.json();
 
-    expect(body.emails_failed).toContainEqual({
-      user_id: "user-1",
-      error: "this idempotency key has already been used on a request that had a different payload",
-    });
+    // EMAIL-TOKEN-PRIVACY (§1as): a fixed code only -- Resend's own message
+    // never reaches the response (digest-retry.ts's ConflictOutcome carries
+    // no errorCode, so this retry path always classifies to the generic
+    // code, same as a direct-send failure with no recognized pattern).
+    expect(body.emails_failed_reasons).toEqual({ send_failed: 1 });
+    expect(JSON.stringify(body)).not.toContain("idempotency key has already been used");
   });
 
   it("REGRESSION PIN: a retry made hours later, across a UTC calendar-date boundary (while still the OWNER's same local day, so the claim still conflicts on the same row/key), replays byte-identical content -- proves no re-render happened despite the clock moving", async () => {

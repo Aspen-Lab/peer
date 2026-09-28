@@ -25,11 +25,15 @@ import { randomUUID } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
+  bumpReason,
+  conflictSkipReasonCode,
   digestFeedRequestFromProfile,
   digestIdempotencyKey,
   isDigestDedupeEnabled,
+  logJobIssue,
   type ProfileRow,
 } from "@/app/api/jobs/dispatch-digests/route";
+import { classifySendFailure } from "@/lib/email/send-failure";
 import { serializeFeedIntent } from "@/lib/feed/intent";
 import { dashboardLedgerEnabled } from "@/lib/dashboard/ledger-flag";
 import { isOwnerDueForPrepare, PREPARE_LEAD_MINUTES, PREPARE_LOOKAHEAD_MS } from "@/lib/dashboard/due-owners";
@@ -110,13 +114,24 @@ export interface PrepareCycleDeps {
   admin: AdminClient;
 }
 
+// EMAIL-TOKEN-PRIVACY (ABC-JEV-INTEGRATION.md §1as): same rule as
+// dispatch-digests/route.ts's own response (see that file's header note) —
+// this route's response is likewise printed whole into the (now-public
+// repo) GitHub Actions log every hour, so every per-reader field below is a
+// count or a fixed-code tally, never a `{user_id, ...}` list. `outcomes`
+// (already a `Record<code, count>`) was always compliant and is unchanged;
+// `error`/`drain_error` are single orchestration-crash messages with no
+// user_id attached and no email-provider content (Supabase/RPC failures),
+// so they stay as-is — changing them is outside this ruling's scope.
 export interface PrepareCyclePhaseReport {
   enabled: boolean;
   reason?: "flag_off" | "ledger_disabled" | "dedupe_disabled" | "admin_unavailable";
   due_checked?: number;
   enqueued?: number;
-  enqueue_failed?: { user_id: string; error: string }[];
-  skipped?: { user_id: string; reason: string }[];
+  enqueue_failed_count?: number;
+  enqueue_failed_reasons?: Record<string, number>;
+  skipped_count?: number;
+  skipped_reasons?: Record<string, number>;
   error?: string;
   drained?: number;
   outcomes?: Record<string, number>;
@@ -124,8 +139,9 @@ export interface PrepareCyclePhaseReport {
   backlog_likely_remaining?: boolean;
   drain_error?: string;
   candidates_checked?: number;
-  sent?: { user_id: string; messageId?: string }[];
-  failed?: { user_id: string; error: string }[];
+  sent_count?: number;
+  failed_count?: number;
+  failed_reasons?: Record<string, number>;
 }
 
 export interface PrepareCycleReport {
@@ -193,12 +209,17 @@ async function fetchEmailRetryCandidatesReal(admin: AdminClient): Promise<RawEma
 async function runDueSelectionAndEnqueue(
   deps: PrepareCycleDeps,
   now: Date,
-): Promise<Pick<PrepareCyclePhaseReport, "due_checked" | "enqueued" | "enqueue_failed" | "skipped">> {
+): Promise<
+  Pick<
+    PrepareCyclePhaseReport,
+    "due_checked" | "enqueued" | "enqueue_failed_count" | "enqueue_failed_reasons" | "skipped_count" | "skipped_reasons"
+  >
+> {
   const rows = await deps.fetchDueProfiles();
   let dueChecked = 0;
   let enqueued = 0;
-  const enqueueFailed: { user_id: string; error: string }[] = [];
-  const skipped: { user_id: string; reason: string }[] = [];
+  const enqueueFailedReasons: Record<string, number> = {};
+  const skippedReasons: Record<string, number> = {};
 
   for (const row of rows) {
     dueChecked++;
@@ -208,12 +229,14 @@ async function runDueSelectionAndEnqueue(
       { leadMinutes: PREPARE_LEAD_MINUTES, lookaheadMs: PREPARE_LOOKAHEAD_MS },
     );
     if (!dueCheck.due) {
-      skipped.push({ user_id: row.user_id, reason: dueCheck.reason });
+      // `dueCheck.reason` is already a closed union ("timezone_unresolved" |
+      // "outside_window") -- already a fixed code, just moved into a tally.
+      bumpReason(skippedReasons, dueCheck.reason);
       continue;
     }
     const normalized = digestFeedRequestFromProfile(row);
     if (!normalized.ok || !normalized.request.intent) {
-      skipped.push({ user_id: row.user_id, reason: "intent_required" });
+      bumpReason(skippedReasons, "intent_required");
       continue;
     }
     try {
@@ -230,11 +253,24 @@ async function runDueSelectionAndEnqueue(
       );
       enqueued++;
     } catch (err) {
-      enqueueFailed.push({ user_id: row.user_id, error: err instanceof Error ? err.message : String(err) });
+      bumpReason(enqueueFailedReasons, "enqueue_error");
+      logJobIssue(
+        "jobs/prepare-dashboards",
+        row.user_id,
+        "enqueue_error",
+        err instanceof Error ? err.message : String(err),
+      );
     }
   }
 
-  return { due_checked: dueChecked, enqueued, enqueue_failed: enqueueFailed, skipped };
+  return {
+    due_checked: dueChecked,
+    enqueued,
+    enqueue_failed_count: Object.values(enqueueFailedReasons).reduce((a, b) => a + b, 0),
+    enqueue_failed_reasons: enqueueFailedReasons,
+    skipped_count: Object.values(skippedReasons).reduce((a, b) => a + b, 0),
+    skipped_reasons: skippedReasons,
+  };
 }
 
 /** Phase 2 (guide §2.1/§2.5, P2) — drain with a per-run ceiling AND a wall-clock guard. See PREPARE_DRAIN_MAX_JOBS_PER_RUN's own doc comment above for why this loops `drainPrepareQueue` at maxJobs:1 rather than modifying its signature. */
@@ -290,17 +326,19 @@ async function runDrainPhase(
 async function runEmailRetryPhase(
   deps: PrepareCycleDeps,
   now: Date,
-): Promise<Pick<PrepareCyclePhaseReport, "candidates_checked" | "sent" | "failed" | "skipped">> {
+): Promise<
+  Pick<PrepareCyclePhaseReport, "candidates_checked" | "sent_count" | "failed_count" | "failed_reasons" | "skipped_count" | "skipped_reasons">
+> {
   const rawCandidates = await deps.fetchEmailRetryCandidates();
-  const sent: { user_id: string; messageId?: string }[] = [];
-  const failed: { user_id: string; error: string }[] = [];
-  const skipped: { user_id: string; reason: string }[] = [];
+  let sentCount = 0;
+  const failedReasons: Record<string, number> = {};
+  const skippedReasons: Record<string, number> = {};
   let checked = 0;
 
   for (const row of rawCandidates) {
     checked++;
     if (!isEmailRetryEligible(row.attemptedAt, now)) {
-      skipped.push({ user_id: row.userId, reason: "outside_retry_window" });
+      bumpReason(skippedReasons, "outside_retry_window");
       continue;
     }
     try {
@@ -313,18 +351,31 @@ async function runEmailRetryPhase(
         now,
       });
       if (outcome.kind === "sent") {
-        sent.push({ user_id: row.userId, messageId: outcome.messageId });
+        sentCount += 1;
       } else if (outcome.kind === "failed") {
-        failed.push({ user_id: row.userId, error: outcome.error });
+        // EMAIL-TOKEN-PRIVACY: same treatment as dispatch-digests/route.ts's
+        // own retry branch -- `outcome.error` can carry Resend's raw text.
+        const code = classifySendFailure({ error: outcome.error });
+        bumpReason(failedReasons, code);
+        logJobIssue("jobs/prepare-dashboards", row.userId, code, outcome.error);
       } else {
-        skipped.push({ user_id: row.userId, reason: outcome.reason });
+        bumpReason(skippedReasons, conflictSkipReasonCode(outcome.reason));
       }
     } catch (err) {
-      failed.push({ user_id: row.userId, error: err instanceof Error ? err.message : String(err) });
+      const message = err instanceof Error ? err.message : String(err);
+      bumpReason(failedReasons, "retry_error");
+      logJobIssue("jobs/prepare-dashboards", row.userId, "retry_error", message);
     }
   }
 
-  return { candidates_checked: checked, sent, failed, skipped };
+  return {
+    candidates_checked: checked,
+    sent_count: sentCount,
+    failed_count: Object.values(failedReasons).reduce((a, b) => a + b, 0),
+    failed_reasons: failedReasons,
+    skipped_count: Object.values(skippedReasons).reduce((a, b) => a + b, 0),
+    skipped_reasons: skippedReasons,
+  };
 }
 
 /**

@@ -25,6 +25,64 @@ import type { ScoredItem } from "@/lib/scoring/types";
 import { normalizeFeedIntent, textValue } from "@/lib/feed/intent";
 import { dateInTimezone, hourInTimezone, weekdayInTimezone } from "@/lib/dashboard/timezone";
 import { handleConflictingEmailClaim, persistDigestEmailAttempt } from "@/lib/email/digest-retry";
+import {
+  classifySendFailure,
+  describeSendFailureForLog,
+  redactEmailAddresses,
+} from "@/lib/email/send-failure";
+
+// EMAIL-TOKEN-PRIVACY (ABC-JEV-INTEGRATION.md §1as, folding in B's adjacent
+// findings P15/P16/P18): this route's JSON response is what
+// .github/workflows/digest-cron.yml prints into its (now-public repo) GitHub
+// Actions run log every hour. The response must therefore carry ONLY counts
+// and a fixed, closed vocabulary of reason codes — never a raw provider
+// error message (which, per EMAIL-SETTINGS-B F7, can itself name an email
+// address in Resend's sandbox-sender case) and never a per-reader user_id
+// list (skipped/failed/dispatched/emails_sent/emails_failed were all
+// previously arrays of `{user_id, ...}`). Per-reader detail — which user,
+// which exact reason — still goes to the server's own (private) log via
+// `logJobIssue` below, redacted with the same POLISH-1 helpers
+// confirm-email/route.ts and send-test-email/route.ts already use. Mirrors
+// the tally shape `runDrainPhase` in prepare-dashboards/route.ts already
+// uses for `outcomes` (Record<code, count>) — same convention, applied here
+// too. Exported (like `digestFeedRequestFromProfile`/`digestIdempotencyKey`/
+// `isDigestDedupeEnabled` above them) so prepare-dashboards/route.ts's own
+// email-retry phase — which reuses `handleConflictingEmailClaim` from
+// digest-retry.ts and faces the exact same response-shaping requirement —
+// applies the identical fixed-code vocabulary instead of a second,
+// drift-prone copy.
+export function bumpReason(tally: Record<string, number>, code: string): void {
+  tally[code] = (tally[code] ?? 0) + 1;
+}
+
+/** One private (server-log-only) line per per-reader issue. Never reaches
+ * the HTTP response. `detail` is redacted defensively even for non-email
+ * errors (a DB/RPC error message is not expected to contain an address, but
+ * redaction is cheap and this costs nothing to apply uniformly). */
+export function logJobIssue(route: string, userId: string, code: string, detail: string): void {
+  console.warn(`[${route}] user ${userId} ${code}: ${redactEmailAddresses(detail)}`);
+}
+
+/** Fixed-code classification for a digest-retry.ts `ConflictOutcome` whose
+ * `kind` is "skip" — its `reason` field is always one of a small closed set
+ * of strings this module itself produces (never attacker- or
+ * provider-controlled), listed exhaustively below; the default case only
+ * guards against this file and digest-retry.ts drifting apart, and is never
+ * expected to fire. */
+export function conflictSkipReasonCode(reason: string): string {
+  switch (reason) {
+    case "digest already claimed for this local date":
+      return "already_claimed";
+    case "digest already sent for this local date":
+      return "already_sent";
+    case "digest email attempt expired unsent (>23h, not retried)":
+      return "retry_expired";
+    case "digest email retry already in progress (concurrent idempotent request)":
+      return "retry_in_progress";
+    default:
+      return "retry_skipped_other";
+  }
+}
 
 // P4-S7-IDEM (Round 3) -- ABC-JEV-INTEGRATION.md §4 "P4-S7-IDEM B complete"
 // ruling; design doc docs/jev-abc/P4-S7-IDEM-B-20260924T113658Z.md. Renders
@@ -268,27 +326,27 @@ export async function GET(req: NextRequest) {
   }
 
   const rows = (data ?? []) as ProfileRow[];
-  const dispatched: string[] = [];
-  const skipped: { user_id: string; reason: string }[] = [];
-  const failed: { user_id: string; error: string }[] = [];
-  const emailsSent: { user_id: string; messageId?: string }[] = [];
-  const emailsFailed: { user_id: string; error: string }[] = [];
+  let dispatchedCount = 0;
+  let emailsSentCount = 0;
+  const skippedReasons: Record<string, number> = {};
+  const failedReasons: Record<string, number> = {};
+  const emailsFailedReasons: Record<string, number> = {};
   const originUrl = originUrlFor(req);
 
   for (const row of rows) {
     const hour = hourInTimezone(now, row.digest_timezone);
     if (hour !== row.digest_hour_local) {
-      skipped.push({ user_id: row.user_id, reason: `hour ${hour} != ${row.digest_hour_local}` });
+      bumpReason(skippedReasons, "hour_mismatch");
       continue;
     }
     const weekday = weekdayInTimezone(now, row.digest_timezone);
     if (!frequencyAdmitsToday(row.digest_frequency, weekday)) {
-      skipped.push({ user_id: row.user_id, reason: `frequency ${row.digest_frequency} skips today` });
+      bumpReason(skippedReasons, "frequency_skip");
       continue;
     }
     const normalizedFeed = digestFeedRequestFromProfile(row);
     if (!normalizedFeed.ok) {
-      skipped.push({ user_id: row.user_id, reason: "intent_required" });
+      bumpReason(skippedReasons, "intent_required");
       continue;
     }
 
@@ -302,7 +360,7 @@ export async function GET(req: NextRequest) {
         .gte("delivered_at", sixHoursAgo)
         .limit(1);
       if (recent && recent.length > 0) {
-        skipped.push({ user_id: row.user_id, reason: "recent delivery" });
+        bumpReason(skippedReasons, "recent_delivery");
         continue;
       }
 
@@ -368,7 +426,7 @@ export async function GET(req: NextRequest) {
         // guard.
         const localDate = dateInTimezone(now, row.digest_timezone);
         if (!localDate) {
-          failed.push({ user_id: row.user_id, error: "local_date_unavailable" });
+          bumpReason(failedReasons, "local_date_unavailable");
           continue;
         }
         // P4-S7-IDEM: pure function of (user_id, local_date) -- computed
@@ -388,16 +446,14 @@ export async function GET(req: NextRequest) {
           },
         );
         if (claimErr) {
-          failed.push({ user_id: row.user_id, error: claimErr.message });
+          bumpReason(failedReasons, "claim_error");
+          logJobIssue("jobs/dispatch-digests", row.user_id, "claim_error", claimErr.message);
           continue;
         }
         if (!claimed || claimed.length === 0) {
           if (!isEmailChannel) {
             // Unchanged: an in-app-only row has no email leg to retry.
-            skipped.push({
-              user_id: row.user_id,
-              reason: "digest already claimed for this local date",
-            });
+            bumpReason(skippedReasons, "already_claimed");
             continue;
           }
           // P4-S7-IDEM: this user/day was already claimed by an earlier
@@ -412,11 +468,17 @@ export async function GET(req: NextRequest) {
             now,
           });
           if (outcome.kind === "sent") {
-            emailsSent.push({ user_id: row.user_id, messageId: outcome.messageId });
+            emailsSentCount += 1;
           } else if (outcome.kind === "failed") {
-            emailsFailed.push({ user_id: row.user_id, error: outcome.error });
+            // EMAIL-TOKEN-PRIVACY: `outcome.error` may carry Resend's own
+            // raw message (can name an address in the sandbox-sender case,
+            // same as the direct send path below) -- classified to a fixed
+            // code for the response, raw text only to the private log.
+            const code = classifySendFailure({ error: outcome.error });
+            bumpReason(emailsFailedReasons, code);
+            logJobIssue("jobs/dispatch-digests", row.user_id, code, outcome.error);
           } else {
-            skipped.push({ user_id: row.user_id, reason: outcome.reason });
+            bumpReason(skippedReasons, conflictSkipReasonCode(outcome.reason));
           }
           continue;
         }
@@ -435,12 +497,13 @@ export async function GET(req: NextRequest) {
           });
 
         if (insertErr) {
-          failed.push({ user_id: row.user_id, error: insertErr.message });
+          bumpReason(failedReasons, "insert_error");
+          logJobIssue("jobs/dispatch-digests", row.user_id, "insert_error", insertErr.message);
           continue;
         }
       }
 
-      dispatched.push(row.user_id);
+      dispatchedCount += 1;
 
       // Email delivery — fire only when user picked email or both.
       // Never block the cron loop on mail failures; they're reported out
@@ -454,7 +517,7 @@ export async function GET(req: NextRequest) {
           to = userData?.user?.email ?? null;
         }
         if (!to) {
-          emailsFailed.push({ user_id: row.user_id, error: "no email on auth user" });
+          bumpReason(emailsFailedReasons, "no_email");
         } else {
           const firstName = row.display_name?.trim().split(/\s+/)[0] || undefined;
           const result =
@@ -471,38 +534,41 @@ export async function GET(req: NextRequest) {
                 })
               : await sendDigestEmail({ to, firstName, items: freshItems, originUrl });
           if (result.sent) {
-            emailsSent.push({ user_id: row.user_id, messageId: result.messageId });
+            emailsSentCount += 1;
           } else {
-            emailsFailed.push({ user_id: row.user_id, error: result.error ?? "unknown" });
+            // EMAIL-TOKEN-PRIVACY (§1as, folding in B's P15/P16): Resend's
+            // raw error text can name an address (EMAIL-SETTINGS-B F7's
+            // sandbox-sender case) -- classified to a fixed code for the
+            // response, same as confirm-email/route.ts and
+            // send-test-email/route.ts already do; raw text only to the
+            // private server log.
+            const code = classifySendFailure(result);
+            bumpReason(emailsFailedReasons, code);
+            logJobIssue("jobs/dispatch-digests", row.user_id, code, describeSendFailureForLog(result));
           }
         }
       }
     } catch (err) {
-      failed.push({
-        user_id: row.user_id,
-        error: err instanceof Error ? err.message : String(err),
-      });
+      const message = err instanceof Error ? err.message : String(err);
+      bumpReason(failedReasons, "pipeline_error");
+      logJobIssue("jobs/dispatch-digests", row.user_id, "pipeline_error", message);
     }
   }
 
   return NextResponse.json({
     ran_at: now.toISOString(),
-    dispatched_count: dispatched.length,
-    dispatched,
-    skipped_count: skipped.length,
-    // P4-S7 (Round 3): the array itself was missing here (every other
-    // tracked list -- dispatched/failed/emails_sent/emails_failed -- already
-    // exposed both its count AND its contents; skipped only exposed the
-    // count). Additive, backward compatible: existing consumers reading
-    // `skipped_count` are unaffected. Needed so a caller (and this file's
-    // own tests) can see the reason a user was skipped, e.g. F-A-P4-07's
-    // "digest already claimed for this local date".
-    skipped,
-    failed_count: failed.length,
-    failed,
-    emails_sent_count: emailsSent.length,
-    emails_sent: emailsSent,
-    emails_failed_count: emailsFailed.length,
-    emails_failed: emailsFailed,
+    // EMAIL-TOKEN-PRIVACY (ABC-JEV-INTEGRATION.md §1as): counts and fixed
+    // reason-code tallies only -- no per-reader user_id list and no raw
+    // provider/DB error text (this response is what the public-repo GitHub
+    // Actions log prints every hour). Per-reader detail is in the server's
+    // own private log (see `logJobIssue` above).
+    dispatched_count: dispatchedCount,
+    skipped_count: Object.values(skippedReasons).reduce((a, b) => a + b, 0),
+    skipped_reasons: skippedReasons,
+    failed_count: Object.values(failedReasons).reduce((a, b) => a + b, 0),
+    failed_reasons: failedReasons,
+    emails_sent_count: emailsSentCount,
+    emails_failed_count: Object.values(emailsFailedReasons).reduce((a, b) => a + b, 0),
+    emails_failed_reasons: emailsFailedReasons,
   });
 }

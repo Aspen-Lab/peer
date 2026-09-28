@@ -212,7 +212,8 @@ describe("GET /api/jobs/dispatch-digests -- PEER_DIGEST_DEDUPE (P4-S7)", () => {
       item_ids: [],
       payload: { items: [] },
     });
-    expect(body.dispatched).toEqual(["user-1"]);
+    // EMAIL-TOKEN-PRIVACY (§1as): a count only, not a per-reader user_id list.
+    expect(body.dispatched_count).toBe(1);
     expect(mocks.sendDigestEmail).toHaveBeenCalledTimes(1);
   });
 
@@ -242,13 +243,11 @@ describe("GET /api/jobs/dispatch-digests -- PEER_DIGEST_DEDUPE (P4-S7)", () => {
 
     expect(rpcFn).toHaveBeenCalledTimes(2);
     expect(mocks.sendDigestEmail).toHaveBeenCalledTimes(1);
-    expect(firstBody.dispatched).toEqual(["user-1"]);
-    expect(secondBody.dispatched).toEqual([]);
-    expect(secondBody.failed).toEqual([]);
-    expect(secondBody.skipped).toContainEqual({
-      user_id: "user-1",
-      reason: "digest already claimed for this local date",
-    });
+    // EMAIL-TOKEN-PRIVACY (§1as): counts/fixed-code tally, not per-reader arrays.
+    expect(firstBody.dispatched_count).toBe(1);
+    expect(secondBody.dispatched_count).toBe(0);
+    expect(secondBody.failed_count).toBe(0);
+    expect(secondBody.skipped_reasons).toEqual({ already_claimed: 1 });
   });
 
   it("flag on: a claim conflict (RPC returns zero rows) is skipped, not counted as a failure, and sends no email", async () => {
@@ -262,12 +261,10 @@ describe("GET /api/jobs/dispatch-digests -- PEER_DIGEST_DEDUPE (P4-S7)", () => {
     const response = await GET(authedRequest());
     const body = await response.json();
 
-    expect(body.failed).toEqual([]);
-    expect(body.dispatched).toEqual([]);
-    expect(body.skipped).toContainEqual({
-      user_id: "user-1",
-      reason: "digest already claimed for this local date",
-    });
+    // EMAIL-TOKEN-PRIVACY (§1as): counts/fixed-code tally, not per-reader arrays.
+    expect(body.failed_count).toBe(0);
+    expect(body.dispatched_count).toBe(0);
+    expect(body.skipped_reasons).toEqual({ already_claimed: 1 });
     expect(mocks.sendDigestEmail).not.toHaveBeenCalled();
   });
 
@@ -282,8 +279,12 @@ describe("GET /api/jobs/dispatch-digests -- PEER_DIGEST_DEDUPE (P4-S7)", () => {
     const response = await GET(authedRequest());
     const body = await response.json();
 
-    expect(body.failed).toEqual([{ user_id: "user-1", error: "connection reset" }]);
-    expect(body.dispatched).toEqual([]);
+    // EMAIL-TOKEN-PRIVACY (§1as): a fixed code in the response; the raw DB
+    // error text ("connection reset") goes only to the private server log
+    // (see the console.warn assertion further down this file).
+    expect(body.failed_reasons).toEqual({ claim_error: 1 });
+    expect(JSON.stringify(body)).not.toContain("connection reset");
+    expect(body.dispatched_count).toBe(0);
     expect(mocks.sendDigestEmail).not.toHaveBeenCalled();
   });
 
@@ -334,6 +335,100 @@ describe("GET /api/jobs/dispatch-digests -- PEER_DIGEST_DEDUPE (P4-S7)", () => {
       "PEER_DASHBOARD_LEDGER",
     ]) {
       expect(source).not.toContain(forbidden);
+    }
+  });
+});
+
+// ── EMAIL-TOKEN-PRIVACY (ABC-JEV-INTEGRATION.md §1as) — the response is
+// printed whole into the (now-public repo) GitHub Actions log every hour:
+// counts and fixed reason codes only, no raw provider text, no per-reader
+// user_id list. Per-reader detail goes to the private server log instead. ──
+describe("GET /api/jobs/dispatch-digests -- EMAIL-TOKEN-PRIVACY response privacy", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubEnv("CRON_SECRET", "test-secret");
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-24T15:00:00.000Z"));
+    mocks.runFeedPipeline.mockResolvedValue({ items: [], meta: {} });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("a Resend sandbox failure naming an address classifies to the fixed code, never appears in the JSON response, and reaches only the private log redacted", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    mocks.sendDigestEmail.mockResolvedValue({
+      sent: false,
+      errorCode: "validation_error",
+      error: "You can only send testing emails to your own email address (owner@example.test).",
+    });
+    const { client } = makeAdminClient({ profiles: [profileRow()] });
+    mocks.createAdminClient.mockReturnValue(client);
+
+    const response = await GET(authedRequest());
+    const body = await response.json();
+
+    expect(body.emails_failed_reasons).toEqual({ sender_not_verified: 1 });
+    expect(body.emails_failed_count).toBe(1);
+    expect(JSON.stringify(body)).not.toContain("owner@example.test");
+    expect(JSON.stringify(body)).not.toContain("@");
+
+    const logged = warnSpy.mock.calls.map((args) => args.join(" ")).join("\n");
+    expect(logged).toContain("user-1");
+    expect(logged).toContain("sender_not_verified");
+    expect(logged).toContain("[email]");
+    expect(logged).not.toContain("owner@example.test");
+    warnSpy.mockRestore();
+  });
+
+  it("an unrecognized send failure classifies to the generic fixed code, never guessed further", async () => {
+    mocks.sendDigestEmail.mockResolvedValue({ sent: false, errorCode: "validation_error", error: "Invalid `to` field." });
+    const { client } = makeAdminClient({ profiles: [profileRow()] });
+    mocks.createAdminClient.mockReturnValue(client);
+
+    const response = await GET(authedRequest());
+    const body = await response.json();
+
+    expect(body.emails_failed_reasons).toEqual({ send_failed: 1 });
+  });
+
+  it("no address on file at all (neither digest_email nor the auth user's email) -> the fixed 'no_email' code, never sends", async () => {
+    const { client } = makeAdminClient({
+      profiles: [profileRow({ digest_email: null })],
+      getUserById: { data: { user: { email: null } }, error: null },
+    });
+    mocks.createAdminClient.mockReturnValue(client);
+
+    const response = await GET(authedRequest());
+    const body = await response.json();
+
+    expect(body.emails_failed_reasons).toEqual({ no_email: 1 });
+    expect(mocks.sendDigestEmail).not.toHaveBeenCalled();
+  });
+
+  it("regression guard: the response never carries the old per-reader arrays, only counts and *_reasons tallies", async () => {
+    mocks.sendDigestEmail.mockResolvedValue({ sent: true, messageId: "msg-1" });
+    const { client } = makeAdminClient({ profiles: [profileRow()] });
+    mocks.createAdminClient.mockReturnValue(client);
+
+    const response = await GET(authedRequest());
+    const body = await response.json();
+
+    for (const forbiddenKey of ["dispatched", "skipped", "failed", "emails_sent", "emails_failed"]) {
+      expect(body).not.toHaveProperty(forbiddenKey);
+    }
+    for (const requiredKey of [
+      "dispatched_count",
+      "skipped_count",
+      "skipped_reasons",
+      "failed_count",
+      "failed_reasons",
+      "emails_sent_count",
+      "emails_failed_count",
+      "emails_failed_reasons",
+    ]) {
+      expect(body).toHaveProperty(requiredKey);
     }
   });
 });
@@ -479,18 +574,23 @@ describe("GET /api/jobs/dispatch-digests -- PEER_DIGEST_DEDUPE hardening (P4-S7-
     expect(rpcFn).toHaveBeenCalledTimes(2);
     expect(claimedKeys.size).toBe(1); // exactly one claim row, ever
 
-    const totalDispatched = firstBody.dispatched.length + secondBody.dispatched.length;
-    const totalFailed = firstBody.failed.length + secondBody.failed.length;
+    // EMAIL-TOKEN-PRIVACY (§1as): summed from the *_count/*_reasons fields —
+    // there is no per-reader array left to read a user_id off of here.
+    const totalDispatched = firstBody.dispatched_count + secondBody.dispatched_count;
+    const totalFailed = firstBody.failed_count + secondBody.failed_count;
     const totalEmails = mocks.sendDigestEmail.mock.calls.length;
 
     expect(totalDispatched).toBe(1);
     expect(totalEmails).toBe(1);
     expect(totalFailed).toBe(0); // neither invocation counts the other's loss as a failure
 
-    const skippedReasons = [...firstBody.skipped, ...secondBody.skipped].map(
-      (s: { reason: string }) => s.reason,
-    );
-    expect(skippedReasons).toContain("digest already claimed for this local date");
+    const combinedSkipReasons: Record<string, number> = {};
+    for (const body of [firstBody, secondBody]) {
+      for (const [code, count] of Object.entries(body.skipped_reasons as Record<string, number>)) {
+        combinedSkipReasons[code] = (combinedSkipReasons[code] ?? 0) + (count as number);
+      }
+    }
+    expect(combinedSkipReasons.already_claimed).toBe(1);
   });
 
   it("DST spring-forward boundary (America/Chicago, 2026-03-08): local_date stays the owner's correct calendar date across the transition instant", async () => {
@@ -573,11 +673,14 @@ describe("GET /api/jobs/dispatch-digests -- PEER_DIGEST_DEDUPE hardening (P4-S7-
     const second = await GET(authedRequest());
     const secondBody = await second.json();
 
-    // Claim succeeded (`dispatched.push` runs before the email block), then
-    // the email threw -- the per-row try/catch catches it, so the user
-    // lands in BOTH `dispatched` AND `failed` for this first invocation.
-    expect(firstBody.dispatched).toEqual(["user-1"]);
-    expect(firstBody.failed).toEqual([{ user_id: "user-1", error: "smtp down" }]);
+    // Claim succeeded (`dispatchedCount` is bumped before the email block),
+    // then the email threw -- the per-row try/catch catches it, so the user
+    // is counted in BOTH `dispatched_count` AND `failed_reasons` for this
+    // first invocation. EMAIL-TOKEN-PRIVACY (§1as): the raw thrown message
+    // ("smtp down") goes only to the private server log, never the response.
+    expect(firstBody.dispatched_count).toBe(1);
+    expect(firstBody.failed_reasons).toEqual({ pipeline_error: 1 });
+    expect(JSON.stringify(firstBody)).not.toContain("smtp down");
 
     // ACCEPTED TRADE-OFF, documented as CURRENT behaviour (F-A-P4S7-01,
     // docs/jev-abc/P4-S7-A-20260924T0522Z.md): the claim itself already
@@ -593,12 +696,10 @@ describe("GET /api/jobs/dispatch-digests -- PEER_DIGEST_DEDUPE hardening (P4-S7-
     // two states and re-attempt only the email leg without re-claiming or
     // double-sending.
     expect(rpcFn).toHaveBeenCalledTimes(2);
-    expect(secondBody.dispatched).toEqual([]);
-    expect(secondBody.failed).toEqual([]);
-    expect(secondBody.skipped).toContainEqual({
-      user_id: "user-1",
-      reason: "digest already claimed for this local date",
-    });
+    // EMAIL-TOKEN-PRIVACY (§1as): counts/fixed-code tally, not per-reader arrays.
+    expect(secondBody.dispatched_count).toBe(0);
+    expect(secondBody.failed_count).toBe(0);
+    expect(secondBody.skipped_reasons).toEqual({ already_claimed: 1 });
     expect(mocks.sendDigestEmail).toHaveBeenCalledTimes(1); // never retried
   });
 
@@ -618,7 +719,8 @@ describe("GET /api/jobs/dispatch-digests -- PEER_DIGEST_DEDUPE hardening (P4-S7-
 
     expect(rpcFn).not.toHaveBeenCalled();
     expect(insertFn).toHaveBeenCalledTimes(1);
-    expect(body.dispatched).toEqual(["user-1"]);
+    // EMAIL-TOKEN-PRIVACY (§1as): a count only, not a per-reader user_id list.
+    expect(body.dispatched_count).toBe(1);
   });
 });
 

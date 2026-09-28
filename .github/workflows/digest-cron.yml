@@ -33,7 +33,12 @@ jobs:
             "${ENDPOINT}")
           echo "HTTP ${status}"
           if [ -s /tmp/body.json ]; then
-            jq . /tmp/body.json 2>/dev/null || cat /tmp/body.json
+            # EMAIL-TOKEN-PRIVACY (ABC-JEV-INTEGRATION.md §1as): this repo is
+            # public, so this run log is public too. Print only the numeric
+            # counts the route's response carries -- never the full body,
+            # which can otherwise include a reason-code tally or (before this
+            # fix) a raw provider error message that names an address.
+            jq -c '{dispatched_count, skipped_count, failed_count, emails_sent_count, emails_failed_count}' /tmp/body.json 2>/dev/null || echo "(summary unavailable)"
           fi
           if [ "${status}" != "200" ]; then
             echo "::error::dispatch returned HTTP ${status}"
@@ -91,7 +96,12 @@ jobs:
             "${ENDPOINT}")
           echo "HTTP ${status}"
           if [ -s /tmp/prepare-body.json ]; then
-            jq . /tmp/prepare-body.json 2>/dev/null || cat /tmp/prepare-body.json
+            # EMAIL-TOKEN-PRIVACY (ABC-JEV-INTEGRATION.md §1as) -- same rule
+            # as the dispatch job above: counts only, never the full body.
+            jq -c '{
+              prepare: (.prepare // {} | {enabled, due_checked, enqueued, enqueue_failed_count, skipped_count, drained, stopped_reason, backlog_likely_remaining}),
+              email_retry: (.email_retry // {} | {enabled, candidates_checked, sent_count, failed_count, skipped_count})
+            }' /tmp/prepare-body.json 2>/dev/null || echo "(summary unavailable)"
           fi
           if [ "${status}" != "200" ]; then
             echo "::error::prepare-dashboards returned HTTP ${status}"

@@ -397,7 +397,17 @@ describe("runDashboardPrepareCycle — phase independence", () => {
     const report = await runDashboardPrepareCycle(deps, deps.now());
     expect(report.prepare.error).toContain("profiles table unreachable");
     expect(report.prepare.drained).toBe(0); // phase 2 still ran (empty queue), not skipped
-    expect(report.email_retry).toEqual({ enabled: true, candidates_checked: 0, sent: [], failed: [], skipped: [] });
+    // EMAIL-TOKEN-PRIVACY (§1as): counts/tallies replace the old
+    // sent/failed/skipped arrays — see this file's header comment.
+    expect(report.email_retry).toEqual({
+      enabled: true,
+      candidates_checked: 0,
+      sent_count: 0,
+      failed_count: 0,
+      failed_reasons: {},
+      skipped_count: 0,
+      skipped_reasons: {},
+    });
   });
 
   it("phase 2 (drain) throwing does not prevent phase 3 (email retry) from running", async () => {
@@ -415,7 +425,17 @@ describe("runDashboardPrepareCycle — phase independence", () => {
 
     const report = await runDashboardPrepareCycle(deps, deps.now());
     expect(report.prepare.drain_error).toContain("lease claim RPC failed");
-    expect(report.email_retry).toEqual({ enabled: true, candidates_checked: 0, sent: [], failed: [], skipped: [] });
+    // EMAIL-TOKEN-PRIVACY (§1as): counts/tallies replace the old
+    // sent/failed/skipped arrays — see this file's header comment.
+    expect(report.email_retry).toEqual({
+      enabled: true,
+      candidates_checked: 0,
+      sent_count: 0,
+      failed_count: 0,
+      failed_reasons: {},
+      skipped_count: 0,
+      skipped_reasons: {},
+    });
   });
 });
 
@@ -466,11 +486,43 @@ describe("runDashboardPrepareCycle — digest email retry (P10; structural no-op
 
     const report = await runDashboardPrepareCycle(deps, now);
 
-    expect(report.email_retry.sent).toEqual([{ user_id: "user-1", messageId: "msg-1" }]);
+    // EMAIL-TOKEN-PRIVACY (§1as): no per-reader user_id/messageId list in
+    // the response — a count only. The stronger, still-precise assertion
+    // (this really was user-1's retry, with the right key) is the
+    // sendDigestEmail call-args check right below, unchanged.
+    expect(report.email_retry.sent_count).toBe(1);
     expect(mocks.sendDigestEmail).toHaveBeenCalledTimes(1);
     expect(mocks.sendDigestEmail).toHaveBeenCalledWith(
       expect.objectContaining({ idempotencyKey: digestIdempotencyKey("user-1", "2026-09-24") }),
     );
+  });
+
+  it("EMAIL-TOKEN-PRIVACY: a provider error naming an address never reaches the JSON response — only a fixed code", async () => {
+    enableRetry();
+    const now = new Date("2026-09-24T13:00:00.000Z");
+    const attemptedAt = new Date(now.getTime() - 30 * 60_000).toISOString();
+    const candidate: RawEmailRetryCandidate = { userId: "user-1", localDate: "2026-09-24", attemptedAt };
+    const admin = makeEmailAdmin({
+      id: 42,
+      payload: { email: { to: "owner@example.test", subject: "S", html: "<p>H</p>", text: "T", attemptedAt } },
+    });
+    mocks.sendDigestEmail.mockResolvedValueOnce({
+      sent: false,
+      errorCode: "validation_error",
+      error: "You can only send testing emails to your own email address (owner@example.test).",
+    });
+
+    const deps = makeDeps({ now: () => now, admin, fetchEmailRetryCandidates: vi.fn(async () => [candidate]) });
+    const report = await runDashboardPrepareCycle(deps, now);
+
+    expect(report.email_retry.failed_count).toBe(1);
+    // digest-retry.ts's ConflictOutcome carries no errorCode, so the retry
+    // path's classification always lands on the generic fixed code (never
+    // guessed further from message text alone) — see this route's own
+    // classifySendFailure({error: outcome.error}) call.
+    expect(report.email_retry.failed_reasons).toEqual({ send_failed: 1 });
+    expect(JSON.stringify(report)).not.toContain("owner@example.test");
+    expect(JSON.stringify(report)).not.toContain("@");
   });
 
   it("a row already marked sent is skipped, never re-sent (a second hourly pass finding zero live candidates for it)", async () => {
@@ -483,10 +535,13 @@ describe("runDashboardPrepareCycle — digest email retry (P10; structural no-op
     const deps = makeDeps({ now: () => now, admin, fetchEmailRetryCandidates: vi.fn(async () => [candidate]) });
     const report = await runDashboardPrepareCycle(deps, now);
 
-    expect(report.email_retry.sent).toEqual([]);
-    expect(report.email_retry.skipped).toEqual([
-      { user_id: "user-1", reason: "digest already sent for this local date" },
-    ]);
+    // EMAIL-TOKEN-PRIVACY (§1as): a count, not a per-reader user_id list.
+    expect(report.email_retry.sent_count).toBe(0);
+    // EMAIL-TOKEN-PRIVACY (§1as): digest-retry.ts's own "digest already sent
+    // for this local date" reason maps to the fixed code "already_sent"
+    // (conflictSkipReasonCode, dispatch-digests/route.ts) before it ever
+    // reaches this response.
+    expect(report.email_retry.skipped_reasons).toEqual({ already_sent: 1 });
     expect(mocks.sendDigestEmail).not.toHaveBeenCalled();
   });
 
@@ -500,7 +555,8 @@ describe("runDashboardPrepareCycle — digest email retry (P10; structural no-op
     const deps = makeDeps({ now: () => now, admin, fetchEmailRetryCandidates: vi.fn(async () => [candidate]) });
     const report = await runDashboardPrepareCycle(deps, now);
 
-    expect(report.email_retry.skipped).toEqual([{ user_id: "user-1", reason: "outside_retry_window" }]);
+    // EMAIL-TOKEN-PRIVACY (§1as): fixed-code tally, not a {user_id,reason} list.
+    expect(report.email_retry.skipped_reasons).toEqual({ outside_retry_window: 1 });
     expect(mocks.sendDigestEmail).not.toHaveBeenCalled();
   });
 
@@ -514,7 +570,8 @@ describe("runDashboardPrepareCycle — digest email retry (P10; structural no-op
     const deps = makeDeps({ now: () => now, admin, fetchEmailRetryCandidates: vi.fn(async () => [candidate]) });
     const report = await runDashboardPrepareCycle(deps, now);
 
-    expect(report.email_retry.skipped).toEqual([{ user_id: "user-1", reason: "outside_retry_window" }]);
+    // EMAIL-TOKEN-PRIVACY (§1as): fixed-code tally, not a {user_id,reason} list.
+    expect(report.email_retry.skipped_reasons).toEqual({ outside_retry_window: 1 });
     expect(mocks.sendDigestEmail).not.toHaveBeenCalled();
   });
 });

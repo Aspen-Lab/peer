@@ -116,6 +116,31 @@ describe("POST validation (P9)", () => {
     // Does not write digest_email yet — nothing is written until the link is clicked.
     expect(mocks.upsert).not.toHaveBeenCalled();
   });
+
+  it("EMAIL-TOKEN-PRIVACY: the confirm URL sent to the reader never contains the address — plain, base64, or URL-encoded", async () => {
+    const email = "new@example.test";
+    await POST(postRequest({ email }));
+
+    const call = mocks.sendDigestEmail.mock.calls[0][0];
+    const localPart = email.split("@")[0];
+    const variants = [
+      email,
+      encodeURIComponent(email),
+      localPart,
+      Buffer.from(email, "utf8").toString("base64"),
+      Buffer.from(email, "utf8").toString("base64url"),
+    ];
+    for (const text of [call.render.html, call.render.text] as string[]) {
+      for (const variant of variants) {
+        expect(text).not.toContain(variant);
+      }
+      // The domain alone is deliberately not checked here: "example.test" is
+      // also the Peer brand/link domain in this test fixture, so asserting
+      // its absence would be a false requirement — the local-part and
+      // whole-address checks above are what actually catch a reintroduced
+      // leak.
+    }
+  });
 });
 
 describe("the confirmation send itself fails (§1al POLISH-1-EMAIL (f))", () => {
@@ -327,5 +352,37 @@ describe("GET — token verification (re-uses confirm-token.ts, tested there in 
     const response = await GET(getRequest());
     expect(locationQuery(response)).toBe("digest_email_confirm=invalid_link");
     expect(mocks.upsert).not.toHaveBeenCalled();
+  });
+});
+
+// EMAIL-TOKEN-PRIVACY (ABC-JEV-INTEGRATION.md §1as, guide §4 test 11) — a
+// regression guard, not just a point-in-time check: every `profileRedirect`
+// call site's query string must be one of a fixed, closed set of keys and
+// must never contain "@". Reads the route's own source rather than driving
+// every branch through GET/POST (some outcomes, like a DB write failure,
+// are already covered behaviourally above; this test's job is to catch a
+// FUTURE call site that adds a stray `email`/`address` key, not to
+// re-prove today's branches).
+describe("EMAIL-TOKEN-PRIVACY: redirect query allow-list (regression guard)", () => {
+  it("every profileRedirect(...) literal query string is an allow-listed key, never an address", async () => {
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const source = fs.readFileSync(
+      path.join(process.cwd(), "src/app/api/profile/confirm-email/route.ts"),
+      "utf8",
+    );
+    const ALLOWED = new Set([
+      "digest_email_confirm=signin_required",
+      "digest_email_confirm=invalid_link",
+      "digest_email_confirm=unavailable",
+      "digest_email_confirm=wrong_account",
+      "digest_email_confirmed=1",
+    ]);
+    const calls = [...source.matchAll(/profileRedirect\(req,\s*"([^"]*)"\)/g)].map((m) => m[1]);
+    expect(calls.length).toBeGreaterThan(0); // sanity: the regex actually matched every call site
+    for (const query of calls) {
+      expect(query).not.toContain("@");
+      expect(ALLOWED.has(query)).toBe(true);
+    }
   });
 });
