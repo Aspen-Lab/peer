@@ -2,8 +2,9 @@
  * ABC-freemium 1-00 (Ruling 3 point 3) — the **only** environment variables
  * `vitest.config.ts` may copy out of `.env.local` into the test process.
  *
- * This file now holds TWO independent exact-name allow-lists, one per opt-in
- * live config — never merged into one list, and never widened to a prefix:
+ * This file now holds THREE independent exact-name allow-lists, one per
+ * opt-in live config — never merged into one list, and never widened to a
+ * prefix:
  *
  *   - `VITEST_INJECTED_ENV_NAMES` / `selectLiveEventsEnv` — what a live
  *     Vertex grounding call needs (`vitest.live-events.config.ts`). The list
@@ -15,6 +16,9 @@
  *     Semantic Scholar / OpenAlex channel-comparison runner needs
  *     (`vitest.live-channels.config.ts`, LIVE-EVAL-4, per
  *     ABC-JEV-INTEGRATION.md §1u/§1w).
+ *   - `JEV_SMOKE_ENV_NAMES` / `selectJevSmokeEnv` — what the opt-in live Jev
+ *     smoke runner needs (`vitest.jev-smoke.config.ts`, JEV-DIRECT, per
+ *     ABC-JEV-INTEGRATION.md §1aa point 6).
  *
  * **Do not replace either list with a prefix.** Do not add a name to either
  * list without saying which test needs it and what it costs when spent.
@@ -80,4 +84,33 @@ export function selectLiveChannelsEnv(
       return value === undefined ? [] : [[name, value]];
     }),
   ) as Partial<Record<LiveChannelsEnvName, string>>;
+}
+
+/**
+ * JEV-DIRECT (§1aa point 6) — the one credential name the opt-in live Jev
+ * smoke runner may read from `.env.local`. Exact-name allow-list, never a
+ * prefix — same rule as `LIVE_CHANNELS_ENV_NAMES` above. Deliberately its
+ * own list, not merged into `LIVE_CHANNELS_ENV_NAMES`: they gate two
+ * unrelated opt-in configs, and merging them would mean the S2/OpenAlex
+ * runner's process could see `JEV_API_KEY` (and vice versa) with no
+ * connection between the two.
+ */
+export const JEV_SMOKE_ENV_NAMES = ["JEV_API_KEY"] as const;
+
+export type JevSmokeEnvName = (typeof JEV_SMOKE_ENV_NAMES)[number];
+
+/**
+ * Used by `vitest.jev-smoke.config.ts` to inject exactly this one name —
+ * and nothing else — into that one config's own `test.env`, mirroring
+ * `selectLiveChannelsEnv` above.
+ */
+export function selectJevSmokeEnv(
+  source: Record<string, string | undefined>,
+): Partial<Record<JevSmokeEnvName, string>> {
+  return Object.fromEntries(
+    JEV_SMOKE_ENV_NAMES.flatMap((name) => {
+      const value = source[name];
+      return value === undefined ? [] : [[name, value]];
+    }),
+  ) as Partial<Record<JevSmokeEnvName, string>>;
 }

@@ -66,10 +66,13 @@ const FORBIDDEN_NAMES = [
   // Brave is, and the build must refuse it.
   "TAVILY_API_KEY",
   "PEER_DEV_ENTITLEMENT",
-  // Jev's key lives only as a Supabase Edge Function secret, never a
-  // Vercel/Next env var, and is never read anywhere under web/src (P3-S4,
-  // ABC-JEV-INTEGRATION.md S1p.H(3)/S1r.2).
-  "JEV_API_KEY",
+  // JEV-DIRECT (§1aa) — `JEV_API_KEY` LEFT this fixture, the same direction
+  // it left the guard's own FORBIDDEN_ON_VERCEL: the user moved the key into
+  // Vercel on purpose, reversing §1r's Supabase-only instruction. It is now
+  // ALLOWED and SILENT (manager ruling §1ab P1) — joins neither this list
+  // nor ALL_EXPECTED below. See the dedicated cases near the bottom of this
+  // file (`"no longer bans JEV_API_KEY"` / `"stays silent about JEV_API_KEY
+  // whether it is set or not"`).
 ] as const;
 
 /**
@@ -281,6 +284,25 @@ describe("assert-byok-production-env", () => {
       // would have exited 1.
       const { status } = runGuard({ VERCEL: "1", ...ALL_REQUIRED });
       expect(status).toBe(0);
+    });
+
+    it("no longer bans JEV_API_KEY — JEV-DIRECT (§1aa) moved the key into Vercel on purpose; setting it builds cleanly", () => {
+      // This is the assertion that would have caught the old guard: before
+      // this item, setting JEV_API_KEY on a Vercel build (which is exactly
+      // what the user now does) would have exited 1.
+      const { status, output } = runGuard({ VERCEL: "1", ...ALL_REQUIRED, ...ALL_EXPECTED, JEV_API_KEY: SENTINEL });
+      expect(status).toBe(0);
+      expect(output).not.toContain("JEV_API_KEY");
+    });
+
+    it("stays silent about JEV_API_KEY whether it is set or not (manager ruling §1ab P1: ALLOWED and SILENT, not merely allowed-with-a-warning like GOOGLE_API_KEY)", () => {
+      const withKey = runGuard({ VERCEL: "1", ...ALL_REQUIRED, ...ALL_EXPECTED, JEV_API_KEY: SENTINEL });
+      const withoutKey = runGuard({ VERCEL: "1", ...ALL_REQUIRED, ...ALL_EXPECTED });
+
+      expect(withKey.status).toBe(0);
+      expect(withoutKey.status).toBe(0);
+      expect(withKey.output).not.toContain("JEV_API_KEY");
+      expect(withoutKey.output).not.toContain("JEV_API_KEY");
     });
   });
 

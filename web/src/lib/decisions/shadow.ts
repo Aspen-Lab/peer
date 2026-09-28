@@ -8,19 +8,21 @@
  *
  * For each of up to `MAX_SHADOW_CANDIDATES` candidates: derive the decision
  * cache key, check the cache first (a hit costs nothing — no reservation, no
- * broker call), and on a miss call the broker
- * (`decisions/broker-client.ts`'s `callJevViaBroker`, which itself owns the
- * budget reservation via `security/jev-broker-auth.ts` — this module never
+ * Jev call), and on a miss dispatch the call
+ * (`decisions/jev-dispatch.ts`'s `dispatchJevCall`, JEV-DIRECT §1aa — routes
+ * to whichever transport `options.transport` names, `callJevViaBroker` or
+ * `callJevDirect`; either way the budget reservation is owned by
+ * `security/jev-broker-auth.ts`'s `reserveJevCall` — this module never
  * touches a counter directly). An `ok` result is written to the cache; every
  * other outcome is left uncached so the next request tries again. Every
  * candidate attempt gets exactly one `logDecisionUsage()` line.
  *
  * SAFETY: this function never throws, no matter what the cache or the
- * broker do — every failure becomes a typed per-candidate status folded
- * into the returned summary's `byStatus` counts. For the MAIN Jev call, it
- * never reads `process.env` itself (all config — flag state, broker
- * URL/secret, caps — is resolved by `decisions/flag.ts` and handed in by
- * the caller).
+ * dispatched call do — every failure becomes a typed per-candidate status
+ * folded into the returned summary's `byStatus` counts. For the MAIN Jev
+ * call, it never reads `process.env` itself (all config — transport, flag
+ * state, broker URL/secret, caps — is resolved by `decisions/flag.ts` and
+ * handed in by the caller).
  *
  * P3-S6 addition (ABC-JEV-INTEGRATION.md §4 "P3-S6 RULING",
  * 2026-09-24T14:35:58Z): after an `ok` Jev result with >=1 `unknown`
@@ -40,13 +42,10 @@
  * from anything; this summary carries no candidate list at all.
  */
 
-import {
-  callJevViaBroker,
-  type BrokerCallResult,
-  type BrokerFetchLike,
-} from "./broker-client";
+import type { BrokerCallResult, BrokerFetchLike } from "./broker-client";
 import { DECISION_CACHE_PROVIDER, deriveDecisionCacheKey, type DecisionCache } from "./decision-cache";
-import { MAX_GEMINI_FALLBACK_PER_RUN, readGeminiFallbackConfig } from "./flag";
+import { MAX_GEMINI_FALLBACK_PER_RUN, readGeminiFallbackConfig, type JevTransport } from "./flag";
+import { dispatchJevCall } from "./jev-dispatch";
 import {
   runDecisionFallback,
   type GeminiFallbackProviderCapability,
@@ -92,8 +91,17 @@ export interface ShadowRunnerOptions {
   /** Up to `MAX_SHADOW_CANDIDATES`; extra entries are dropped, never processed. */
   candidates: readonly ShadowCandidate[];
   cache: DecisionCache;
-  brokerUrl: string;
-  brokerSecret: string;
+  /**
+   * JEV-DIRECT (§1aa) — which transport `dispatchJevCall` should use for
+   * every candidate this run. Resolved ONCE by the caller
+   * (`app/api/feed/route.ts`, via `flag.ts`'s `resolveJevTransport()`) and
+   * handed in here, same as every other piece of config on this options
+   * object — this module still never reads `process.env` itself.
+   */
+  transport: JevTransport;
+  /** Broker-only. Required in practice when `transport` is `"broker"`; unused for `"direct"`/`"disabled"`. */
+  brokerUrl?: string;
+  brokerSecret?: string;
   perUserCap: number;
   globalCap: number;
   store: CounterStore;
@@ -328,7 +336,8 @@ export async function runJevShadow(options: ShadowRunnerOptions): Promise<Shadow
         const startedAt = clock().getTime();
         let result: BrokerCallResult;
         try {
-          result = await callJevViaBroker(request, {
+          result = await dispatchJevCall(request, {
+            transport: options.transport,
             ownerId: options.ownerId,
             entitled: options.entitled,
             brokerUrl: options.brokerUrl,
@@ -341,8 +350,9 @@ export async function runJevShadow(options: ShadowRunnerOptions): Promise<Shadow
             timeoutMs: options.brokerTimeoutMs,
           });
         } catch {
-          // callJevViaBroker is documented never-throwing; this is the final
-          // safety net so a truly unanticipated failure can never escape.
+          // dispatchJevCall (and both transports it can call) is documented
+          // never-throwing; this is the final safety net so a truly
+          // unanticipated failure can never escape.
           result = { status: "network_error" };
         }
         const latencyMs = clock().getTime() - startedAt;

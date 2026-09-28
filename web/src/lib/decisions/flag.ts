@@ -17,6 +17,9 @@
  * browser bundle).
  */
 
+import { jevBrokerEnabled } from "./broker-client";
+import { jevDirectConfigured } from "./jev-direct-client";
+
 /** ABC-JEV-INTEGRATION.md §1p.H(1) — the default daily count-based caps. */
 export const DEFAULT_JEV_PER_USER_DAILY_CAP = 50;
 export const DEFAULT_JEV_GLOBAL_DAILY_CAP = 2000;
@@ -61,6 +64,14 @@ function parseCap(value: string | undefined, fallback: number): number {
  * itself never lives anywhere in `web/` at all (§1p.H(3)) — only the
  * broker secret (this server's credential to ITS OWN Supabase Edge
  * Function) is read here.
+ *
+ * JEV-DIRECT (§1aa) note: this function's OWN caps fields stay exactly as
+ * they were — still bundled inside the `"configured"` branch, still
+ * requiring the broker URL+secret to be set. That is correct for a caller
+ * that specifically wants the BROKER's config. A caller that just wants the
+ * caps, regardless of transport, should use `readJevCaps()` below instead —
+ * that is the one this item's direct path (and the transport-agnostic hook
+ * input in `route.ts`) actually uses.
  */
 export function readJevShadowConfig(): JevShadowConfig {
   const brokerUrl = process.env.PEER_JEV_BROKER_URL?.trim();
@@ -73,6 +84,89 @@ export function readJevShadowConfig(): JevShadowConfig {
     perUserDailyCap: parseCap(process.env.PEER_JEV_PER_USER_DAILY_CAP, DEFAULT_JEV_PER_USER_DAILY_CAP),
     globalDailyCap: parseCap(process.env.PEER_JEV_GLOBAL_DAILY_CAP, DEFAULT_JEV_GLOBAL_DAILY_CAP),
   };
+}
+
+export interface JevCapsConfig {
+  perUserDailyCap: number;
+  globalDailyCap: number;
+}
+
+/**
+ * JEV-DIRECT (§1aa point 2) — the Jev daily caps, readable regardless of
+ * transport. `readJevShadowConfig()` above only exposes caps bundled inside
+ * its `"configured"` branch, which requires the broker URL+secret to be
+ * set — a direct-only deployment (key set in Vercel, broker URL/secret never
+ * set) would then have no way to read the real caps at all, and the shadow
+ * hook could never build. This reads the SAME two env vars with the SAME
+ * `parseCap` fallback and the SAME defaults — generalizing WHO can reach the
+ * caps, never what they are or how they are enforced (`reserveJevCall`'s
+ * per-user-then-global order and fail-closed behaviour are untouched by this
+ * item — ABC-JEV-INTEGRATION.md §1aa point 2: "stay exactly as they are").
+ */
+export function readJevCaps(): JevCapsConfig {
+  return {
+    perUserDailyCap: parseCap(process.env.PEER_JEV_PER_USER_DAILY_CAP, DEFAULT_JEV_PER_USER_DAILY_CAP),
+    globalDailyCap: parseCap(process.env.PEER_JEV_GLOBAL_DAILY_CAP, DEFAULT_JEV_GLOBAL_DAILY_CAP),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// JEV-DIRECT (§1aa) — the transport switch. Decides which of the two
+// independently-gated paths (broker: `PEER_JEV_BROKER` + broker URL/secret;
+// direct: `JEV_API_KEY`) a Jev call should use. `PEER_JEV_BROKER`'s existing
+// meaning is untouched — it still only means "the broker path may be used at
+// all"; this switch decides which of the two reachable paths wins.
+// Design: docs/jev-abc/JEV-DIRECT-B-20260927T013846Z.md §3.
+// ---------------------------------------------------------------------------
+
+export type JevTransport = "direct" | "broker" | "disabled";
+
+/** `"direct"`/`"broker"` (trimmed, case-insensitive) only — anything else (unset, blank, a typo) is "no override," never a crash and never a silent third meaning. */
+function normalizedTransportOverride(): "direct" | "broker" | null {
+  const raw = process.env.PEER_JEV_TRANSPORT?.trim().toLowerCase();
+  return raw === "direct" || raw === "broker" ? raw : null;
+}
+
+function brokerReachable(): boolean {
+  return jevBrokerEnabled() && readJevShadowConfig().status === "configured";
+}
+
+/**
+ * Resolves from `process.env` only, once per call. Callers (`route.ts`
+ * today) call this ONCE per request and thread the result down through
+ * `ShadowRunnerOptions.transport`/`dispatchJevCall`'s options rather than
+ * having a deeper layer (`shadow.ts`, `jev-dispatch.ts`) re-read the
+ * environment itself — `shadow.ts`'s own module doc comment already commits
+ * to "never reads `process.env` itself... resolved by `flag.ts` and handed
+ * in by the caller," and this preserves that for the transport decision too
+ * (see this item's checkpoint for why re-resolving internally would also
+ * have broken `shadow.test.ts`'s existing broker-transport fixtures, which
+ * set `PEER_JEV_BROKER="on"` and pass `brokerUrl`/`brokerSecret` as plain
+ * options without ever setting the two broker env vars).
+ *
+ * No override -> `"direct"` when `JEV_API_KEY` is set (§1aa point 3's own
+ * stated default), else `"broker"` when `PEER_JEV_BROKER` is `"on"` AND
+ * `readJevShadowConfig()` reports `"configured"` (URL+secret both present),
+ * else `"disabled"`.
+ *
+ * An explicit `PEER_JEV_TRANSPORT` override forces one of the two transports
+ * but can never FABRICATE its prerequisite: overriding to `"direct"` with no
+ * key is still `"disabled"`; overriding to `"broker"` with the broker
+ * unconfigured is still `"disabled"`. This lets an operator force the
+ * dormant broker path back on during an incident without having to unset
+ * `JEV_API_KEY` in Vercel (ABC-JEV-INTEGRATION.md §1ab P3).
+ */
+export function resolveJevTransport(): JevTransport {
+  const override = normalizedTransportOverride();
+  if (override === "direct") {
+    return jevDirectConfigured() ? "direct" : "disabled";
+  }
+  if (override === "broker") {
+    return brokerReachable() ? "broker" : "disabled";
+  }
+  if (jevDirectConfigured()) return "direct";
+  if (brokerReachable()) return "broker";
+  return "disabled";
 }
 
 // ---------------------------------------------------------------------------

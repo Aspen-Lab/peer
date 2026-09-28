@@ -300,6 +300,35 @@ describe("scan 3 — every operator search credential is read in one place", () 
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// SCAN 7 — JEV_API_KEY is read in exactly one place (JEV-DIRECT §1aa)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("scan 7 — JEV_API_KEY is read in exactly one file (JEV-DIRECT §1aa)", () => {
+  /**
+   * JEV-DIRECT (§1aa) REVERSES §1r: the user moved the Jev key into Vercel
+   * alongside every other provider key, so Peer now calls Jev directly
+   * instead of through the (still-present, still-dormant) Supabase broker.
+   * Every scan/test that used to assert "JEV_API_KEY is never read anywhere
+   * in web/" is rewritten, never deleted (§1aa point 4) — this scan is the
+   * POSITIVE half of that old claim: exactly one file reads the key, and it
+   * is the expected one. `broker-client.test.ts`'s own structural check
+   * ("never references JEV_API_KEY... in its own source") is unaffected and
+   * stays green unchanged — the broker path is a different transport and
+   * must still never see the raw key.
+   */
+  const GATE = "src/lib/decisions/jev-direct-client.ts";
+
+  it(`reads process.env.JEV_API_KEY only inside ${GATE}`, () => {
+    const readers = filesMatching(/process\.env\.JEV_API_KEY\b/);
+    expect(readers).toEqual([GATE]);
+  });
+
+  it("the gate module actually exists (a rename would otherwise show up as an empty result, not a failure naming why)", () => {
+    expect(fs.existsSync(path.join(process.cwd(), GATE))).toBe(true);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // SCAN 4 — no `resolveProvider()` without a usage context
 // ─────────────────────────────────────────────────────────────────────────────
 

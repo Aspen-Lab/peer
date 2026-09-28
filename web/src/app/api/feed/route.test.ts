@@ -1499,6 +1499,15 @@ describe("/api/feed Jev shadow wiring (P3-S5)", () => {
     vi.stubEnv("PEER_JEV_BROKER_SECRET", "test-broker-secret-do-not-use");
   }
 
+  /** JEV-DIRECT (§1aa) — the direct-transport sibling of `stubShadowConfig()` above: JEV_API_KEY set, broker left deliberately unconfigured (direct must not need it). */
+  function stubDirectShadowConfig() {
+    vi.stubEnv("PEER_JEV_SHADOW", "on");
+    vi.stubEnv("JEV_API_KEY", "jev-test-FAKE-KEY-do-not-use-1234567890abcdef");
+    vi.stubEnv("PEER_JEV_BROKER", "off");
+    vi.stubEnv("PEER_JEV_BROKER_URL", "");
+    vi.stubEnv("PEER_JEV_BROKER_SECRET", "");
+  }
+
   function stubEntitledSignedInTier2(ownerId: string) {
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://example.supabase.co");
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "public-test-key");
@@ -1536,6 +1545,37 @@ describe("/api/feed Jev shadow wiring (P3-S5)", () => {
     hook([{ id: "p1", title: "A Paper", abstract: null }]);
 
     expect(mocks.after).toHaveBeenCalledTimes(1);
+  });
+
+  it('JEV-DIRECT (§1aa): transport "direct" (JEV_API_KEY set, broker left unconfigured), every other condition true — passes onFreshShortlist to runFeedPipeline, and invoking it schedules exactly one after() call', async () => {
+    stubDirectShadowConfig();
+    stubEntitledSignedInTier2("owner-shadow-direct-1");
+
+    const response = await POST(request({ topics: ["battery"], aiTier: 2 }));
+
+    expect(response.status).toBe(200);
+    const options = lastPipelineOptions();
+    expect(typeof options?.onFreshShortlist).toBe("function");
+    expect(mocks.after).not.toHaveBeenCalled(); // not scheduled merely by building the hook
+
+    const hook = options!.onFreshShortlist as (shortlist: ReadonlyArray<ShadowCandidate>) => void;
+    hook([{ id: "p1", title: "A Paper", abstract: null }]);
+
+    expect(mocks.after).toHaveBeenCalledTimes(1);
+  });
+
+  it("JEV-DIRECT (§1aa): transport fully disabled (no JEV_API_KEY, broker unconfigured) — onFreshShortlist is absent, re-expressed through resolveJevTransport() instead of the old jevBrokerEnabled()", async () => {
+    vi.stubEnv("PEER_JEV_SHADOW", "on");
+    vi.stubEnv("JEV_API_KEY", "");
+    vi.stubEnv("PEER_JEV_BROKER", "off");
+    vi.stubEnv("PEER_JEV_BROKER_URL", "");
+    vi.stubEnv("PEER_JEV_BROKER_SECRET", "");
+    stubEntitledSignedInTier2("owner-shadow-both-off");
+
+    const response = await POST(request({ topics: ["battery"], aiTier: 2 }));
+
+    expect(response.status).toBe(200);
+    expect(lastPipelineOptions()?.onFreshShortlist).toBeUndefined();
   });
 
   it("a hook that schedules via after() never throws even though after() itself throws (no request scope) — mirrors production's real after()", async () => {

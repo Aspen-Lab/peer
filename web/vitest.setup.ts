@@ -80,7 +80,36 @@ function deleteLiveChannelsKeysUnlessOptedIn(): void {
   }
 }
 
+/**
+ * JEV-DIRECT (§1aa point 6) — the sibling conditional second-layer lock for
+ * the opt-in live Jev smoke runner, mirroring
+ * `LIVE_CHANNELS_KEYS_FORBIDDEN_UNLESS_OPTED_IN`/`shouldStripLiveChannelsEnv`
+ * above exactly. `JEV_API_KEY` cannot be unconditionally deleted the way
+ * `GOOGLE_API_KEY`/`TAVILY_API_KEY` are (that would strip it from the
+ * opt-in smoke config's own process too, which injects exactly this one
+ * name into `test.env`) — so it is stripped everywhere EXCEPT where the
+ * SAME opt-in literal the smoke config sets (`PEER_RUN_JEV_SMOKE === "1"`)
+ * is already present. Own name, never reusing
+ * `PEER_RUN_LIVE_CHANNELS_EVAL` — the two opt-in evaluations are unrelated.
+ */
+const JEV_SMOKE_KEYS_FORBIDDEN_UNLESS_OPTED_IN = ["JEV_API_KEY"] as const;
+
+export function shouldStripJevSmokeEnv(
+  env: Record<string, string | undefined>,
+): boolean {
+  return env.PEER_RUN_JEV_SMOKE !== "1";
+}
+
+function deleteJevSmokeKeysUnlessOptedIn(): void {
+  if (!shouldStripJevSmokeEnv(process.env)) return;
+  for (const name of JEV_SMOKE_KEYS_FORBIDDEN_UNLESS_OPTED_IN) {
+    delete process.env[name];
+  }
+}
+
 deleteSpendableKeys();
 deleteLiveChannelsKeysUnlessOptedIn();
+deleteJevSmokeKeysUnlessOptedIn();
 beforeEach(deleteSpendableKeys);
 beforeEach(deleteLiveChannelsKeysUnlessOptedIn);
+beforeEach(deleteJevSmokeKeysUnlessOptedIn);

@@ -8,7 +8,9 @@ import {
   geminiFallbackEnabled,
   jevShadowEnabled,
   readGeminiFallbackConfig,
+  readJevCaps,
   readJevShadowConfig,
+  resolveJevTransport,
 } from "./flag";
 
 // P3-S5 — ABC-JEV-INTEGRATION.md §4 Round 3 "P3-S5 DESIGN RULING" +
@@ -271,5 +273,154 @@ describe("readGeminiFallbackConfig — enabled, with cap parsing", () => {
   it("never shares its cap defaults with the main Jev shadow caps", () => {
     expect(DEFAULT_JEV_GEMINI_FALLBACK_PER_USER_DAILY_CAP).not.toBe(DEFAULT_JEV_PER_USER_DAILY_CAP);
     expect(DEFAULT_JEV_GEMINI_FALLBACK_GLOBAL_DAILY_CAP).not.toBe(DEFAULT_JEV_GLOBAL_DAILY_CAP);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// JEV-DIRECT (§1aa) — the transport switch. ABC-JEV-INTEGRATION.md §1ab P3:
+// keep the explicit override (auto-detect by default; PEER_JEV_TRANSPORT
+// forces one). Design: docs/jev-abc/JEV-DIRECT-B-20260927T013846Z.md §3.
+// ---------------------------------------------------------------------------
+
+describe("resolveJevTransport", () => {
+  function stubBrokerConfigured(configured: boolean): void {
+    if (configured) {
+      vi.stubEnv("PEER_JEV_BROKER", "on");
+      vi.stubEnv("PEER_JEV_BROKER_URL", "https://example.supabase.co/functions/v1/jev-broker");
+      vi.stubEnv("PEER_JEV_BROKER_SECRET", "a-real-secret");
+    } else {
+      vi.stubEnv("PEER_JEV_BROKER", "off");
+      vi.stubEnv("PEER_JEV_BROKER_URL", undefined as unknown as string);
+      vi.stubEnv("PEER_JEV_BROKER_SECRET", undefined as unknown as string);
+      delete process.env.PEER_JEV_BROKER_URL;
+      delete process.env.PEER_JEV_BROKER_SECRET;
+    }
+  }
+
+  function clearOverride(): void {
+    vi.stubEnv("PEER_JEV_TRANSPORT", undefined as unknown as string);
+    delete process.env.PEER_JEV_TRANSPORT;
+  }
+
+  function clearKey(): void {
+    vi.stubEnv("JEV_API_KEY", undefined as unknown as string);
+    delete process.env.JEV_API_KEY;
+  }
+
+  it("no override, no key, no broker config -> disabled", () => {
+    clearOverride();
+    clearKey();
+    stubBrokerConfigured(false);
+    expect(resolveJevTransport()).toBe("disabled");
+  });
+
+  it("no override, key set (broker state irrelevant, even fully configured) -> direct", () => {
+    clearOverride();
+    vi.stubEnv("JEV_API_KEY", "jev-test-FAKE-KEY-do-not-use");
+    stubBrokerConfigured(true);
+    expect(resolveJevTransport()).toBe("direct");
+  });
+
+  it("no override, no key, broker fully configured -> broker", () => {
+    clearOverride();
+    clearKey();
+    stubBrokerConfigured(true);
+    expect(resolveJevTransport()).toBe("broker");
+  });
+
+  it('override "broker", key set, broker NOT configured -> disabled (an override cannot fabricate a broker config)', () => {
+    vi.stubEnv("PEER_JEV_TRANSPORT", "broker");
+    vi.stubEnv("JEV_API_KEY", "jev-test-FAKE-KEY-do-not-use");
+    stubBrokerConfigured(false);
+    expect(resolveJevTransport()).toBe("disabled");
+  });
+
+  it('override "direct", key unset -> disabled (an override cannot fabricate a key)', () => {
+    vi.stubEnv("PEER_JEV_TRANSPORT", "direct");
+    clearKey();
+    stubBrokerConfigured(true);
+    expect(resolveJevTransport()).toBe("disabled");
+  });
+
+  it("a garbage/typo override value is treated as no override, never throws", () => {
+    vi.stubEnv("PEER_JEV_TRANSPORT", "brokerr");
+    clearKey();
+    stubBrokerConfigured(true);
+    expect(() => resolveJevTransport()).not.toThrow();
+    expect(resolveJevTransport()).toBe("broker"); // falls through to the no-override logic
+  });
+
+  it('override "direct", key set -> direct', () => {
+    vi.stubEnv("PEER_JEV_TRANSPORT", "direct");
+    vi.stubEnv("JEV_API_KEY", "jev-test-FAKE-KEY-do-not-use");
+    stubBrokerConfigured(false);
+    expect(resolveJevTransport()).toBe("direct");
+  });
+
+  it('override "broker", key set, broker configured -> broker (the override beats the no-override "direct wins" priority — this is the whole point of keeping an override, per §1ab P3: fast rollback to the dormant broker without touching the Vercel key)', () => {
+    vi.stubEnv("PEER_JEV_TRANSPORT", "broker");
+    vi.stubEnv("JEV_API_KEY", "jev-test-FAKE-KEY-do-not-use");
+    stubBrokerConfigured(true);
+    expect(resolveJevTransport()).toBe("broker");
+  });
+
+  it("the override is trimmed and case-insensitive, same convention as every other flag in this file", () => {
+    vi.stubEnv("PEER_JEV_TRANSPORT", " DIRECT ");
+    vi.stubEnv("JEV_API_KEY", "jev-test-FAKE-KEY-do-not-use");
+    expect(resolveJevTransport()).toBe("direct");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// JEV-DIRECT (§1aa point 2) — caps must be readable regardless of transport,
+// unlike `readJevShadowConfig()` above, whose caps are bundled inside its
+// `"configured"` branch (which requires the broker URL+secret to be set). A
+// direct-only deployment never sets those two, so it needs its own way to
+// reach the SAME numbers, same defaults, same parseCap fallback behaviour.
+// ---------------------------------------------------------------------------
+
+describe("readJevCaps — available regardless of broker configuration", () => {
+  it("defaults both caps when unset", () => {
+    vi.stubEnv("PEER_JEV_PER_USER_DAILY_CAP", undefined as unknown as string);
+    vi.stubEnv("PEER_JEV_GLOBAL_DAILY_CAP", undefined as unknown as string);
+    delete process.env.PEER_JEV_PER_USER_DAILY_CAP;
+    delete process.env.PEER_JEV_GLOBAL_DAILY_CAP;
+
+    expect(readJevCaps()).toEqual({
+      perUserDailyCap: DEFAULT_JEV_PER_USER_DAILY_CAP,
+      globalDailyCap: DEFAULT_JEV_GLOBAL_DAILY_CAP,
+    });
+  });
+
+  it("parses valid explicit caps", () => {
+    vi.stubEnv("PEER_JEV_PER_USER_DAILY_CAP", "12");
+    vi.stubEnv("PEER_JEV_GLOBAL_DAILY_CAP", "999");
+
+    expect(readJevCaps()).toEqual({ perUserDailyCap: 12, globalDailyCap: 999 });
+  });
+
+  it("falls back to the documented defaults for invalid values, same parseCap convention as readJevShadowConfig", () => {
+    vi.stubEnv("PEER_JEV_PER_USER_DAILY_CAP", "not-a-number");
+    vi.stubEnv("PEER_JEV_GLOBAL_DAILY_CAP", "-5");
+
+    expect(readJevCaps()).toEqual({
+      perUserDailyCap: DEFAULT_JEV_PER_USER_DAILY_CAP,
+      globalDailyCap: DEFAULT_JEV_GLOBAL_DAILY_CAP,
+    });
+  });
+
+  it("reads the SAME numbers with NO broker config at all — the reason this function exists", () => {
+    vi.stubEnv("PEER_JEV_BROKER_URL", undefined as unknown as string);
+    vi.stubEnv("PEER_JEV_BROKER_SECRET", undefined as unknown as string);
+    delete process.env.PEER_JEV_BROKER_URL;
+    delete process.env.PEER_JEV_BROKER_SECRET;
+    vi.stubEnv("PEER_JEV_PER_USER_DAILY_CAP", "7");
+    vi.stubEnv("PEER_JEV_GLOBAL_DAILY_CAP", "70");
+
+    // readJevShadowConfig would report "unconfigured" here and expose no caps at all.
+    expect(readJevShadowConfig()).toEqual({ status: "unconfigured" });
+    // readJevCaps still returns the real numbers — a direct-only deployment
+    // (no broker URL/secret ever set) must still reserve against the real caps.
+    expect(readJevCaps()).toEqual({ perUserDailyCap: 7, globalDailyCap: 70 });
   });
 });

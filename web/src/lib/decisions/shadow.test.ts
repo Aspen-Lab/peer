@@ -166,6 +166,13 @@ function baseShadowOptions(overrides: Partial<ShadowRunnerOptions> = {}): Shadow
     senseConcepts: [],
     candidates: [candidate("p1")],
     cache: new RecordingCache(),
+    // JEV-DIRECT (§1aa): every existing test below re-runs unchanged with the
+    // broker transport by default (this beforeEach already sets
+    // PEER_JEV_BROKER="on") — the new "direct transport" describe block near
+    // the end of this file overrides `transport` to re-run the same
+    // eligibility/cache/deadline/concurrency/gemini-fallback-merge table
+    // against the direct path instead (RED list F5).
+    transport: "broker",
     brokerUrl: BROKER_URL,
     brokerSecret: BROKER_SECRET,
     perUserCap: 100,
@@ -483,6 +490,7 @@ describe("runJevShadow — gemini fallback is structurally unreachable today", (
       senseConcepts: [],
       candidates: [candidate("p1")],
       cache,
+      transport: "broker",
       brokerUrl: BROKER_URL,
       brokerSecret: BROKER_SECRET,
       perUserCap: 100,
@@ -686,5 +694,224 @@ describe("runJevShadow — gemini fallback never filters a candidate (P3-S6 prot
     expect(Object.keys(summary).sort()).toEqual(
       ["attempted", "byStatus", "cacheHits", "deadlineExceeded", "geminiFallback", "totalCandidates"].sort(),
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// JEV-DIRECT (§1aa) — RED list F5: "shadow.ts's existing eligibility/cache/
+// deadline/concurrency/Gemini-fallback-merge test table re-run with
+// transport 'direct' as well as 'broker' — same outcomes either way." Every
+// case below is the SAME behaviour already proven for the broker transport
+// above, re-run with `transport: "direct"` and `JEV_API_KEY` stubbed instead
+// of the broker env/options — a representative subset of that table (not a
+// line-for-line duplicate of every one of the ~30 cases above), chosen to
+// cover each DIMENSION once: cache hit, cache miss ok, a fault status,
+// entitlement, deadline, concurrency, and one gemini-fallback-merge case.
+//
+// IMPORTANT — a DIFFERENT fixture shape than `okBody()`/
+// `okBodyWithUnknownProjectHelp()` above. Those are the BROKER's
+// already-validated `JevCallResult` shape (`status`/`modelId`/`answers` as
+// an ARRAY/`usage.inputTokens`) — `callJevViaBroker` trusts the Edge
+// Function already ran `jev-contract.ts`'s validator server-side, so
+// `broker-client.ts` never re-validates. The direct path has no such hop:
+// `callJevDirect` -> `callJev` -> `jev-contract.ts`'s `validateJevResponse`
+// runs INSIDE this process, against the RAW Jev wire-response shape
+// (`answers` keyed by question id, `model`, snake_case `usage`) — so this
+// block's fixtures (`okWireBody()`/`okWireBodyWithUnknownProjectHelp()`)
+// are wire-shaped, covering both question ids a default candidate always
+// asks (`core_vs_background` + `project_help`).
+// ---------------------------------------------------------------------------
+
+/** The RAW Jev wire-response shape — see the block comment above for why this differs from `okBody()`. */
+function okWireBody() {
+  return {
+    model: "jev-1.13.0",
+    answers: {
+      core_vs_background: {
+        type: "choice",
+        choice: "core",
+        probabilities: { core: 0.9, background: 0.08, insufficient_information: 0.02 },
+        confidence: 0.9,
+      },
+      project_help: {
+        type: "score",
+        score: 2,
+        legend: { "0": "a", "1": "b", "2": "c", "3": "d" },
+        probabilities: { "0": 0.05, "1": 0.05, "2": 0.8, "3": 0.1 },
+        confidence: 0.8,
+      },
+    },
+    usage: { input_tokens: 40, output_tokens: 0 },
+  };
+}
+
+/** Same as `okWireBody()` but `project_help` comes back low-confidence — the ONE condition that may trigger the gemini fallback, mirroring `okBodyWithUnknownProjectHelp()` above in the wire shape the direct path actually validates. Confidence 0.3 < `UNKNOWN_CONFIDENCE_THRESHOLD` (0.5) -> `unknown: true`. */
+function okWireBodyWithUnknownProjectHelp() {
+  return {
+    model: "jev-1.13.0",
+    answers: {
+      core_vs_background: {
+        type: "choice",
+        choice: "core",
+        probabilities: { core: 0.9, background: 0.08, insufficient_information: 0.02 },
+        confidence: 0.9,
+      },
+      project_help: {
+        type: "score",
+        score: 1,
+        legend: { "0": "a", "1": "b", "2": "c", "3": "d" },
+        probabilities: { "0": 0.3, "1": 0.3, "2": 0.2, "3": 0.2 },
+        confidence: 0.3,
+      },
+    },
+    usage: { input_tokens: 40, output_tokens: 0 },
+  };
+}
+
+describe("runJevShadow — direct transport (JEV-DIRECT §1aa, RED list F5)", () => {
+  beforeEach(() => {
+    vi.stubEnv("JEV_API_KEY", "jev-test-FAKE-KEY-do-not-use-1234567890abcdef");
+  });
+
+  it("cache hit: zero reservations, zero fetch calls, cache.set never called", async () => {
+    const store = new InMemoryCounterStore();
+    const incrementSpy = vi.spyOn(store, "increment");
+    const fetchImpl = vi.fn(async () => jsonResponse(200, okWireBody()));
+    const cachedResult: DecisionResult = { paperId: "p1", answers: [], usage: null, modelId: "jev-1.13.0" };
+    const cache = new AlwaysHitCache(cachedResult);
+
+    const summary = await runJevShadow(
+      baseShadowOptions({ transport: "direct", cache, fetchImpl, store, candidates: [candidate("p1")] }),
+    );
+
+    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(incrementSpy).not.toHaveBeenCalled();
+    expect(cache.setCalls).toBe(0);
+    expect(summary.byStatus.cache_hit).toBe(1);
+  });
+
+  it("cache miss, ok: calls Jev directly exactly once and writes the validated result to the cache — the counter store increments exactly twice, never four times", async () => {
+    const cache = new RecordingCache();
+    const store = new InMemoryCounterStore();
+    const incrementSpy = vi.spyOn(store, "increment");
+    const fetchImpl = vi.fn(async () => jsonResponse(200, okWireBody()));
+
+    const summary = await runJevShadow(
+      baseShadowOptions({ transport: "direct", cache, store, fetchImpl, candidates: [candidate("p1")] }),
+    );
+
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(incrementSpy).toHaveBeenCalledTimes(2);
+    expect(cache.setCalls).toHaveLength(1);
+    expect(cache.setCalls[0]?.result).toMatchObject({ paperId: "p1", modelId: "jev-1.13.0" });
+    expect(summary.attempted).toBe(1);
+    expect(summary.byStatus.ok).toBe(1);
+  });
+
+  it("unauthorized (401): one attempt, nothing cached", async () => {
+    const cache = new RecordingCache();
+    const fetchImpl = vi.fn(async () => new Response("", { status: 401 }));
+
+    const summary = await runJevShadow(baseShadowOptions({ transport: "direct", cache, fetchImpl, candidates: [candidate("p1")] }));
+
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(cache.setCalls).toHaveLength(0);
+    expect(summary.byStatus.unauthorized).toBe(1);
+  });
+
+  it("not_entitled: zero counter increments, zero fetch, nothing cached — same as the broker path", async () => {
+    const store = new InMemoryCounterStore();
+    const incrementSpy = vi.spyOn(store, "increment");
+    const cache = new RecordingCache();
+    const fetchImpl = vi.fn(async () => jsonResponse(200, okWireBody()));
+
+    const summary = await runJevShadow(
+      baseShadowOptions({ transport: "direct", entitled: false, store, cache, fetchImpl, candidates: [candidate("p1")] }),
+    );
+
+    expect(incrementSpy).not.toHaveBeenCalled();
+    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(cache.setCalls).toHaveLength(0);
+    expect(summary.byStatus.not_entitled).toBe(1);
+  });
+
+  it("deadline: stops starting new calls once the deadline passes; already-started calls still finish", async () => {
+    let currentMs = 0;
+    const clock = () => new Date(currentMs);
+    const cache = new RecordingCache();
+    const fetchImpl = vi.fn(async () => {
+      currentMs += 100;
+      return jsonResponse(200, okWireBody());
+    });
+    const candidates = [candidate("p1"), candidate("p2"), candidate("p3"), candidate("p4"), candidate("p5")];
+
+    const summary = await runJevShadow(
+      baseShadowOptions({
+        transport: "direct",
+        cache,
+        fetchImpl,
+        candidates,
+        clock,
+        concurrencyLimit: 1,
+        deadlineMs: 250,
+      }),
+    );
+
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+    expect(summary.deadlineExceeded).toBe(true);
+    expect(summary.attempted).toBe(3);
+  });
+
+  it("concurrency: never runs more than the requested limit at once", async () => {
+    let inFlight = 0;
+    let maxInFlight = 0;
+    const cache: DecisionCache = {
+      get: async () => {
+        inFlight += 1;
+        maxInFlight = Math.max(maxInFlight, inFlight);
+        await new Promise((resolve) => setTimeout(resolve, 15));
+        inFlight -= 1;
+        return null;
+      },
+      set: async () => {},
+    };
+    const fetchImpl = vi.fn(async () => jsonResponse(200, okWireBody()));
+    const candidates = Array.from({ length: 12 }, (_, i) => candidate(`p${i}`));
+
+    await runJevShadow(baseShadowOptions({ transport: "direct", cache, fetchImpl, candidates, concurrencyLimit: 4 }));
+
+    expect(maxInFlight).toBeLessThanOrEqual(4);
+    expect(maxInFlight).toBeGreaterThan(1);
+  });
+
+  it("gemini fallback merge: caches the ok fallback answer tagged 'gemini-fallback', and the untouched Jev answer tagged 'jev'", async () => {
+    vi.stubEnv("PEER_JEV_GEMINI_FALLBACK", "on");
+    const cache = new RecordingCache();
+    const fetchImpl = vi.fn(async () => jsonResponse(200, okWireBodyWithUnknownProjectHelp()));
+    const provider = mintGeminiFallbackProviderCapability(async () => fallbackAnswerJsonForProjectHelp());
+
+    await runJevShadow(
+      baseShadowOptions({ transport: "direct", cache, fetchImpl, candidates: [candidate("p1")], geminiFallbackProvider: provider }),
+    );
+
+    expect(cache.setCalls).toHaveLength(1);
+    const stored = (cache.setCalls[0]?.result.answers ?? []) as SourcedDecisionAnswer[];
+    const coreAnswer = stored.find((a) => a.questionId === "core_vs_background");
+    const helpAnswer = stored.find((a) => a.questionId === "project_help");
+    expect(coreAnswer?.source).toBe("jev");
+    expect(helpAnswer?.source).toBe("gemini-fallback");
+    expect(helpAnswer?.value).toBe(3);
+    expect(helpAnswer?.unknown).toBe(false);
+  });
+
+  it("never sends more than 50 candidates even if handed more", async () => {
+    const cache = new RecordingCache();
+    const fetchImpl = vi.fn(async () => jsonResponse(200, okWireBody()));
+    const candidates = Array.from({ length: 65 }, (_, i) => candidate(`p${i}`));
+
+    const summary = await runJevShadow(baseShadowOptions({ transport: "direct", cache, fetchImpl, candidates }));
+
+    expect(summary.totalCandidates).toBe(50);
+    expect(fetchImpl).toHaveBeenCalledTimes(50);
   });
 });

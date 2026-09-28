@@ -43,8 +43,13 @@ import {
   channelS2RecommendationsEnabled,
   type ResolvedPositiveSeed,
 } from "@/lib/preferences/positive-seeds";
-import { jevShadowEnabled, readJevShadowConfig, type JevShadowConfig } from "@/lib/decisions/flag";
-import { jevBrokerEnabled } from "@/lib/decisions/broker-client";
+import {
+  jevShadowEnabled,
+  readJevCaps,
+  readJevShadowConfig,
+  resolveJevTransport,
+  type JevTransport,
+} from "@/lib/decisions/flag";
 import { runJevShadow, type ShadowCandidate } from "@/lib/decisions/shadow";
 import { PrivateDecisionCache } from "@/lib/decisions/private-decision-cache";
 import { getCounterStore } from "@/lib/usage/counters";
@@ -467,7 +472,18 @@ interface JevShadowHookInput {
   entitled: boolean;
   intent: NormalizedFeedIntent;
   senseConcepts: readonly SelectedSenseConcept[];
-  config: Extract<JevShadowConfig, { status: "configured" }>;
+  /**
+   * JEV-DIRECT (§1aa) — resolved ONCE by the gate below via
+   * `resolveJevTransport()` and threaded through unchanged; `runJevShadow`
+   * never re-reads `process.env` for this (see `shadow.ts`'s own doc
+   * comment and this item's checkpoint, design decision 2).
+   */
+  transport: JevTransport;
+  perUserCap: number;
+  globalCap: number;
+  /** Broker-only. Present (from `readJevShadowConfig()`) only when `transport` is `"broker"`; absent and unused for `"direct"`. */
+  brokerUrl?: string;
+  brokerSecret?: string;
 }
 
 /**
@@ -489,10 +505,11 @@ async function runJevShadowSafely(
       senseConcepts: input.senseConcepts,
       candidates: shortlist,
       cache: new PrivateDecisionCache(input.ownerId),
-      brokerUrl: input.config.brokerUrl,
-      brokerSecret: input.config.brokerSecret,
-      perUserCap: input.config.perUserDailyCap,
-      globalCap: input.config.globalDailyCap,
+      transport: input.transport,
+      brokerUrl: input.brokerUrl,
+      brokerSecret: input.brokerSecret,
+      perUserCap: input.perUserCap,
+      globalCap: input.globalCap,
       store: getCounterStore(),
     });
   } catch {
@@ -736,11 +753,24 @@ export async function POST(req: NextRequest) {
   // `if` (not a boolean stored then reused) is deliberate: it is what lets
   // TypeScript actually narrow `paperCacheScope`/`gate.user` at the point
   // `.ownerId`/`.id` are read below, rather than merely asserting it.
+  //
+  // JEV-DIRECT (§1aa): the one changed condition is `jevBrokerEnabled()` ->
+  // `resolveJevTransport() !== "disabled"` — the switch that picks between
+  // the direct and broker transports (or neither). Unlike the old
+  // `jevBrokerEnabled()` condition, building the hook no longer also
+  // requires `readJevShadowConfig().status === "configured"`: that check
+  // only means something for the broker transport (it only reports
+  // "configured" once the broker URL+secret are both set) and would
+  // wrongly block a direct-only deployment, which never sets those two.
+  // Caps (`readJevCaps()`) are read regardless of transport — see
+  // `flag.ts`'s own doc comment on why `readJevShadowConfig()`'s caps
+  // are NOT reused here.
   let onFreshShortlist: FeedPipelineOptions["onFreshShortlist"];
   const shadowEntitled = gate.entitlement.effectivePlan !== "free";
+  const jevTransport = resolveJevTransport();
   if (
     jevShadowEnabled() &&
-    jevBrokerEnabled() &&
+    jevTransport !== "disabled" &&
     paperCacheScope !== undefined &&
     gate.user?.id !== undefined &&
     gate.user.id === paperCacheScope.ownerId &&
@@ -748,16 +778,19 @@ export async function POST(req: NextRequest) {
     aiTier >= 2 &&
     Boolean(intent)
   ) {
+    const caps = readJevCaps();
     const shadowConfig = readJevShadowConfig();
-    if (shadowConfig.status === "configured") {
-      onFreshShortlist = buildJevShadowHook({
-        ownerId: paperCacheScope.ownerId,
-        entitled: shadowEntitled,
-        intent,
-        senseConcepts: intent.selectedSenseConcepts,
-        config: shadowConfig,
-      });
-    }
+    onFreshShortlist = buildJevShadowHook({
+      ownerId: paperCacheScope.ownerId,
+      entitled: shadowEntitled,
+      intent,
+      senseConcepts: intent.selectedSenseConcepts,
+      transport: jevTransport,
+      perUserCap: caps.perUserDailyCap,
+      globalCap: caps.globalDailyCap,
+      brokerUrl: shadowConfig.status === "configured" ? shadowConfig.brokerUrl : undefined,
+      brokerSecret: shadowConfig.status === "configured" ? shadowConfig.brokerSecret : undefined,
+    });
   }
 
   const now = new Date();

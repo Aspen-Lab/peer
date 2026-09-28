@@ -2,13 +2,16 @@ import { describe, expect, it } from "vitest";
 import defaultConfig from "../../vitest.config";
 import liveEventsConfig from "../../vitest.live-events.config";
 import liveChannelsConfig from "../../vitest.live-channels.config";
+import jevSmokeConfig from "../../vitest.jev-smoke.config";
 import {
   VITEST_INJECTED_ENV_NAMES,
   selectLiveEventsEnv,
   LIVE_CHANNELS_ENV_NAMES,
   selectLiveChannelsEnv,
+  JEV_SMOKE_ENV_NAMES,
+  selectJevSmokeEnv,
 } from "../../vitest.env-allowlist";
-import { shouldStripLiveChannelsEnv } from "../../vitest.setup";
+import { shouldStripLiveChannelsEnv, shouldStripJevSmokeEnv } from "../../vitest.setup";
 
 /**
  * ABC-freemium 1-00 (Ruling 3 point 3) — **THE MONEY LOCK.**
@@ -160,5 +163,70 @@ describe("Live channels (S2/OpenAlex) evaluation environment isolation", () => {
     expect(
       shouldStripLiveChannelsEnv({ PEER_RUN_LIVE_CHANNELS_EVAL: "1" }),
     ).toBe(false);
+  });
+});
+
+/**
+ * JEV-DIRECT (§1aa point 6) — the sibling money lock for the opt-in live Jev
+ * smoke runner, built to mirror LIVE-EVAL-4's own pattern exactly (guide,
+ * `docs/jev-abc/JEV-DIRECT-B-20260927T013846Z.md` §6): a CONDITIONAL
+ * second-layer lock, since `JEV_API_KEY` cannot be unconditionally deleted
+ * the way `GOOGLE_API_KEY`/`TAVILY_API_KEY` are — that would strip it from
+ * the opt-in smoke config's own process too. Same reasoning as the describe
+ * block above: every independent layer — the allow-list, the dedicated
+ * config's own env/include, and the conditional second-layer lock in
+ * `vitest.setup.ts` — must fail the moment any one of them is weakened.
+ */
+describe("Jev smoke evaluation environment isolation (JEV-DIRECT §1aa point 6)", () => {
+  it("re-asserts the default suite still injects no env at all", () => {
+    // A regression introduced by touching vitest.env-allowlist.ts or
+    // vitest.setup.ts for this item specifically must fail HERE too, not
+    // only in the older describe blocks above.
+    expect(defaultConfig.test?.env).toBeUndefined();
+  });
+
+  it("allows only the exact one JEV_API_KEY credential name, never a prefix", () => {
+    expect([...JEV_SMOKE_ENV_NAMES]).toEqual(["JEV_API_KEY"]);
+    expect(
+      selectJevSmokeEnv({
+        JEV_API_KEY: "dummy-jev-key",
+        JEV_API_KEY_EXTRA: "must-not-pass",
+        GOOGLE_API_KEY: "must-not-pass",
+        TAVILY_API_KEY: "must-not-pass",
+        SEMANTIC_SCHOLAR_API_KEY: "must-not-pass",
+        OPENALEX_API_KEY: "must-not-pass",
+      }),
+    ).toEqual({
+      JEV_API_KEY: "dummy-jev-key",
+    });
+  });
+
+  it("injects the opt-in literal and only the allow-listed name into the jev-smoke config", () => {
+    expect(jevSmokeConfig.test?.env).toMatchObject({
+      PEER_RUN_JEV_SMOKE: "1",
+    });
+    expect(
+      Object.keys(jevSmokeConfig.test?.env ?? []).every(
+        (name) =>
+          name === "PEER_RUN_JEV_SMOKE" ||
+          JEV_SMOKE_ENV_NAMES.includes(name as (typeof JEV_SMOKE_ENV_NAMES)[number]),
+      ),
+    ).toBe(true);
+  });
+
+  it("pins the jev-smoke config to exactly one test file, never a glob", () => {
+    // Guards against someone widening this config's scope later — a
+    // credential-bearing config must only ever collect the one file it was
+    // built for, even invoked with no path argument.
+    expect(jevSmokeConfig.test?.include).toEqual([
+      "src/lib/evaluation/jev-smoke/jev-smoke.test.ts",
+    ]);
+  });
+
+  it('strips JEV_API_KEY from process.env unless the smoke opt-in literal is exactly "1"', () => {
+    expect(shouldStripJevSmokeEnv({})).toBe(true);
+    expect(shouldStripJevSmokeEnv({ PEER_RUN_JEV_SMOKE: "0" })).toBe(true);
+    expect(shouldStripJevSmokeEnv({ PEER_RUN_JEV_SMOKE: "true" })).toBe(true);
+    expect(shouldStripJevSmokeEnv({ PEER_RUN_JEV_SMOKE: "1" })).toBe(false);
   });
 });

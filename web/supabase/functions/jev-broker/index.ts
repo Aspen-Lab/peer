@@ -1,6 +1,11 @@
 /**
- * Thin Supabase Edge Function entry — the ONLY place in this whole codebase
- * that ever reads a real Jev API key. Everything it needs to actually MAKE
+ * Thin Supabase Edge Function entry — the Edge-side reader of the real Jev
+ * API key, used only when Peer's transport switch selects the broker. Since
+ * the user's 2026-09-26 reversal (ABC-JEV-INTEGRATION.md §1aa) the Next
+ * server can also read the key itself, in web/src/lib/decisions/
+ * jev-direct-client.ts (the default transport); this function stays in the
+ * tree, dormant until selected. JEV-DIRECT (§1aa): comment corrected,
+ * behaviour unchanged. Everything it needs to actually MAKE
  * the call is imported from the byte-parity copies alongside this file
  * (types.ts / rubric.ts / jev-contract.ts / jev-client.ts — see
  * ../../../src/lib/decisions/broker-parity.test.ts, which proves those

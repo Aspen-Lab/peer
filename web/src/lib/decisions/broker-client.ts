@@ -1,8 +1,12 @@
 /**
- * The Next-side broker client. This is the ONLY production path that can
- * ever reach a real Jev call in this codebase (ABC-JEV-INTEGRATION.md
- * §1p.H(3), BINDING: "NO direct-key path anywhere in web/" — `jev-client.ts`
- * is exercised in `web/` by tests only). This file never reads the raw Jev
+ * The Next-side broker client — one of the two transports that can reach a
+ * real Jev call. It used to be the only one (ABC-JEV-INTEGRATION.md
+ * §1p.H(3): "NO direct-key path anywhere in web/"); the user reversed that
+ * on 2026-09-26 (§1aa), so the default transport is now the server-only
+ * direct client in `jev-direct-client.ts`, and this broker path stays
+ * selectable through the transport switch (`resolveJevTransport()`,
+ * §1ab P3). JEV-DIRECT (§1aa): comment corrected, behaviour unchanged.
+ * This file never reads the raw Jev
  * provider credential (that name is deliberately not spelled out even in
  * this comment — a structural test asserts the substring is absent from
  * this file's own text, not merely "not read") and never references Jev's

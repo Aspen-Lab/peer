@@ -14,6 +14,7 @@
     "test": "vitest run",
     "test:events-benchmark": "vitest run --config vitest.live-events.config.ts src/lib/events/benchmark.test.ts",
     "test:live-channels": "vitest run --config vitest.live-channels.config.ts",
+    "test:jev-smoke": "vitest run --config vitest.jev-smoke.config.ts",
     "check:providers": "node scripts/check-provider-models.mjs",
     "purge-uploads": "node scripts/purge-uploads.mjs"
   },
@@ -35,6 +36,7 @@
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "resend": "^6.12.2",
+    "server-only": "^0.0.1",
     "tailwind-merge": "^3.6.0",
     "unpdf": "^1.8.1",
     "zustand": "^5.0.12"
