@@ -7,9 +7,23 @@
 //
 // Rendered only when Supabase is configured: a self-hosted Peer has no
 // account to speak of and must not reserve a section for one.
+//
+// POLISH-1-SYNC (ABC-JEV-INTEGRATION.md §1al (c), ruling §1aj P6) — split in
+// two on purpose, the same pattern as `EmailSettingsView` in
+// web/src/app/profile/page.tsx. `AccountSectionView` is presentational and
+// takes every value as a prop — no `useAuthUser`/sync-status hooks inside it
+// — so it renders with plain `renderToStaticMarkup` in tests, exactly like
+// `EmailSettingsView`/`ColorThemePicker` (this repo has no
+// @testing-library/react and no test simulates a click — see
+// account-section.test.tsx's own header note). `AccountSection` is the thin
+// hook-wired wrapper actually rendered on the page; it is not unit-tested
+// beyond its pre-existing coverage, since the interesting new logic (the
+// warn-before-sign-out decision) is pulled out into the pure
+// `shouldWarnBeforeSignOut` below instead.
 
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import Link from "next/link";
+import type { User } from "@supabase/supabase-js";
 import { buttonVariants } from "@/components/ui/button";
 import {
   signInWithGitHub,
@@ -17,13 +31,72 @@ import {
   useAuthUser,
   userAvatar,
   userName,
+  type AuthState,
 } from "./use-auth-user";
+import { useProfileSyncStatus } from "@/components/profile-sync";
+import { useFeedSyncStatus } from "@/components/feed-sync";
 
-export function AccountSection({ className = "" }: { className?: string }) {
-  const auth = useAuthUser();
-  const [busy, setBusy] = useState(false);
+/**
+ * P6 (ABC-JEV-INTEGRATION.md §1aj, ruled in full at §1al (c)) — Sign out
+ * used to wipe this device's only copy of anything that never reached the
+ * account (feed-sync.tsx's `resetLocal()` runs on every `SIGNED_OUT`), with
+ * no warning at all: a push that failed earlier in the session — profile OR
+ * feed, both fail the same silent way, see `useProfileSyncStatus` and
+ * `useFeedSyncStatus` — meant that data simply disappeared the moment the
+ * reader signed out, with nothing said about it first.
+ *
+ * A pure function so the one real decision here (warn first, or let today's
+ * plain sign-out proceed untouched) is unit-tested without rendering or
+ * simulating a click — `confirmingSignOut` is "the warning is already up
+ * (the reader clicked once already)", so a second click — "Sign out
+ * anyway" — must never re-arm the same warning.
+ */
+export function shouldWarnBeforeSignOut(
+  hasUnsyncedChanges: boolean,
+  confirmingSignOut: boolean,
+): boolean {
+  return hasUnsyncedChanges && !confirmingSignOut;
+}
 
-  if (auth.kind === "unconfigured" || auth.kind === "loading") return null;
+/** "Unsynced" means EITHER sync flag is currently failed — profile-sync.tsx
+ *  and feed-sync.tsx fail independently (a profile edit and a saved paper
+ *  can each fail to reach the account on their own), so either one alone is
+ *  enough to warn. A pure function so this OR is unit-tested on its own,
+ *  independent of which store either flag happens to live in. */
+export function hasUnsyncedChanges(profilePushFailed: boolean, feedPushFailed: boolean): boolean {
+  return profilePushFailed || feedPushFailed;
+}
+
+export interface AccountSectionViewProps {
+  className?: string;
+  authKind: AuthState["kind"];
+  user: User | null;
+  busy: boolean;
+  /** True once "Sign out" has been pressed while unsynced changes exist —
+   *  swaps the sign-out control for the warning + two-button choice. */
+  confirmingSignOut: boolean;
+  onSignInGitHub: () => void;
+  onSignInGoogle: () => void;
+  /** Wired to the plain "Sign out" form's `onSubmit`. Whether it actually
+   *  intercepts the submit (vs. letting the real `POST /auth/signout` go
+   *  through, unchanged from today) is entirely the wrapper's decision —
+   *  this view only renders what it's told to. */
+  onSignOutSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onStaySignedIn: () => void;
+}
+
+export function AccountSectionView({
+  className = "",
+  authKind,
+  user,
+  busy,
+  confirmingSignOut,
+  onSignInGitHub,
+  onSignInGoogle,
+  onSignOutSubmit,
+  onStaySignedIn,
+}: AccountSectionViewProps) {
+  if (authKind === "unconfigured" || authKind === "loading") return null;
 
   return (
     <section className={className} aria-labelledby="account-heading">
@@ -31,7 +104,7 @@ export function AccountSection({ className = "" }: { className?: string }) {
         Account
       </h2>
 
-      {auth.kind === "signed-out" ? (
+      {authKind === "signed-out" ? (
         <>
           <p className="mt-1 text-meta text-text-muted max-w-[52ch]">
             Sign in with GitHub or Google to sync saves and reads across your devices.
@@ -39,10 +112,7 @@ export function AccountSection({ className = "" }: { className?: string }) {
           <div className="mt-4 flex flex-wrap gap-2">
             <button
               type="button"
-              onClick={() => {
-                setBusy(true);
-                void signInWithGitHub();
-              }}
+              onClick={onSignInGitHub}
               disabled={busy}
               className={buttonVariants({ tone: "surface", size: "md" })}
             >
@@ -51,10 +121,7 @@ export function AccountSection({ className = "" }: { className?: string }) {
             </button>
             <button
               type="button"
-              onClick={() => {
-                setBusy(true);
-                void signInWithGoogle();
-              }}
+              onClick={onSignInGoogle}
               disabled={busy}
               className={buttonVariants({ tone: "surface", size: "md" })}
             >
@@ -63,22 +130,46 @@ export function AccountSection({ className = "" }: { className?: string }) {
             </button>
           </div>
         </>
-      ) : (
+      ) : user ? (
         <div className="mt-3 flex items-center gap-3 flex-wrap">
-          <Avatar user={auth.user} size={32} />
+          <Avatar user={user} size={32} />
           <div className="min-w-0">
-            <p className="text-meta text-heading font-medium truncate">{userName(auth.user)}</p>
-            {auth.user.email && (
-              <p className="text-caption text-text-faint truncate">{auth.user.email}</p>
+            <p className="text-meta text-heading font-medium truncate">{userName(user)}</p>
+            {user.email && (
+              <p className="text-caption text-text-faint truncate">{user.email}</p>
             )}
           </div>
-          <form method="POST" action="/auth/signout" className="ml-auto">
-            <button type="submit" className={buttonVariants({ tone: "dangerSoft", size: "sm" })}>
-              Sign out
-            </button>
-          </form>
+          {confirmingSignOut ? (
+            <div className="ml-auto flex flex-col items-end gap-2" role="alert">
+              <p className="text-caption text-text-muted text-right max-w-[32ch]">
+                Some changes on this device haven&rsquo;t reached your account yet. Signing out removes them from this device.
+              </p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={onStaySignedIn}
+                  className={buttonVariants({ tone: "surface", size: "sm" })}
+                >
+                  Stay signed in
+                </button>
+                {/* Today's exact mechanism (P6): a real POST, no fetch/JS
+                    required for the sign-out itself to work. */}
+                <form method="POST" action="/auth/signout">
+                  <button type="submit" className={buttonVariants({ tone: "dangerSoft", size: "sm" })}>
+                    Sign out anyway
+                  </button>
+                </form>
+              </div>
+            </div>
+          ) : (
+            <form method="POST" action="/auth/signout" className="ml-auto" onSubmit={onSignOutSubmit}>
+              <button type="submit" className={buttonVariants({ tone: "dangerSoft", size: "sm" })}>
+                Sign out
+              </button>
+            </form>
+          )}
         </div>
-      )}
+      ) : null}
       {/* The one place a reader is asked to hand over an account is the one
           place the page that says what happens to it has to be reachable. */}
       <p className="mt-4 text-caption text-text-faint">
@@ -90,6 +181,44 @@ export function AccountSection({ className = "" }: { className?: string }) {
         </Link>
       </p>
     </section>
+  );
+}
+
+export function AccountSection({ className = "" }: { className?: string }) {
+  const auth = useAuthUser();
+  const [busy, setBusy] = useState(false);
+  const [confirmingSignOut, setConfirmingSignOut] = useState(false);
+  const profilePushFailed = useProfileSyncStatus((s) => s.pushFailed);
+  const feedPushFailed = useFeedSyncStatus((s) => s.pushFailed);
+  const unsynced = hasUnsyncedChanges(profilePushFailed, feedPushFailed);
+
+  function handleSignOutSubmit(event: FormEvent<HTMLFormElement>) {
+    if (shouldWarnBeforeSignOut(unsynced, confirmingSignOut)) {
+      // Not today's sign-out yet — show the warning instead of navigating.
+      event.preventDefault();
+      setConfirmingSignOut(true);
+    }
+    // Otherwise: a real form submit, exactly as today.
+  }
+
+  return (
+    <AccountSectionView
+      className={className}
+      authKind={auth.kind}
+      user={auth.kind === "signed-in" ? auth.user : null}
+      busy={busy}
+      confirmingSignOut={confirmingSignOut}
+      onSignInGitHub={() => {
+        setBusy(true);
+        void signInWithGitHub();
+      }}
+      onSignInGoogle={() => {
+        setBusy(true);
+        void signInWithGoogle();
+      }}
+      onSignOutSubmit={handleSignOutSubmit}
+      onStaySignedIn={() => setConfirmingSignOut(false)}
+    />
   );
 }
 

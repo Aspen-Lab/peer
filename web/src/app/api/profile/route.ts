@@ -263,22 +263,42 @@ export async function PUT(request: NextRequest) {
     body.feedIntent = parsed.intent;
   }
 
+  // POLISH-1-SYNC (ABC-JEV-INTEGRATION.md §1al (b)) — fields this PUT
+  // could not honour are DROPPED, never allowed to fail the whole save.
+  // Reported back so the client can tell the reader their edit to THIS
+  // field specifically didn't take, instead of silently vanishing or
+  // (the old behaviour, see below) taking every other edited field down
+  // with it.
+  const ignored: string[] = [];
+
   // EMAIL-SETTINGS · F4/§2.3 (guide docs/jev-abc/EMAIL-SETTINGS-B-20260926T142832Z.md) —
   // a client may only ever PUT a digestEmail equal to the account email or
   // the value already stored for this user. A genuinely NEW address only
   // ever becomes one of those two allowed values through
-  // GET /api/profile/confirm-email's own write, never through this route —
-  // without this guard, that confirmation flow would be a UI nicety a
-  // client could simply bypass by PUTting an unconfirmed address directly.
+  // GET /api/profile/confirm-email's own write, never through this route.
   // Only reads the existing row when the patch actually touches this field
   // (no added cost to any other field's update). Clearing the field to ""
   // is always allowed unconditionally — there is nothing to confirm when
   // REMOVING a destination, only when adding/changing one.
+  //
+  // POLISH-1-SYNC (§1al (b)) — a candidate this guard doesn't trust used to
+  // 400 the ENTIRE save (every other edited field lost alongside it: the
+  // same "one bad optional field blocks everything" defect SIGNIN-MERGE's
+  // §1aj fix already closed below for a missing feed_intent/
+  // preference_ledger COLUMN). A rejected digestEmail isn't a missing
+  // column, so it never hit those retries. Now: drop just this field —
+  // never WRITE it, the security property this guard exists for is
+  // unchanged, only the failure mode is — let the rest of the patch
+  // through, and report the drop in `ignored`. A failed guard READ (the
+  // SELECT below erroring) is treated the same way: an error is not
+  // evidence the candidate is safe, so it drops the field too instead of
+  // failing the whole save with a 500.
   if (Object.prototype.hasOwnProperty.call(body, "digestEmail") && body.digestEmail !== undefined) {
     const candidate = normalizeEmailAddress(body.digestEmail);
-    if (candidate !== "") {
+    let allowed = candidate === "";
+    if (!allowed) {
       const accountEmail = user.email ? normalizeEmailAddress(user.email) : null;
-      let allowed = accountEmail !== null && candidate === accountEmail;
+      allowed = accountEmail !== null && candidate === accountEmail;
       if (!allowed) {
         const { data: existingRow, error: existingError } = await supabase
           .from("profiles")
@@ -286,24 +306,24 @@ export async function PUT(request: NextRequest) {
           .eq("user_id", user.id)
           .maybeSingle();
         if (existingError) {
-          return NextResponse.json({ error: existingError.message }, { status: 500 });
+          allowed = false;
+        } else {
+          const storedEmail = existingRow?.digest_email
+            ? normalizeEmailAddress(existingRow.digest_email)
+            : null;
+          allowed = storedEmail !== null && candidate === storedEmail;
         }
-        const storedEmail = existingRow?.digest_email
-          ? normalizeEmailAddress(existingRow.digest_email)
-          : null;
-        allowed = storedEmail !== null && candidate === storedEmail;
-      }
-      if (!allowed) {
-        return NextResponse.json(
-          { error: "digest_email_requires_confirmation" },
-          { status: 400 },
-        );
       }
     }
-    // Always store the normalized form — whichever path wrote digest_email
-    // (this echo-write, or confirm-email's own write), the stored value is
-    // always trim+lowercase.
-    body.digestEmail = candidate;
+    if (allowed) {
+      // Always store the normalized form — whichever path wrote
+      // digest_email (this echo-write, or confirm-email's own write), the
+      // stored value is always trim+lowercase.
+      body.digestEmail = candidate;
+    } else {
+      delete body.digestEmail;
+      ignored.push("digestEmail");
+    }
   }
 
   const row = profilePatchToRow(body, user.id);
@@ -358,7 +378,10 @@ export async function PUT(request: NextRequest) {
   }
 
   try {
-    return NextResponse.json({ profile: profileRowToProfile(data as ProfileRow) });
+    return NextResponse.json({
+      profile: profileRowToProfile(data as ProfileRow),
+      ignored,
+    });
   } catch (caught) {
     if (caught instanceof Error && caught.message === "invalid_feed_intent") {
       return NextResponse.json({ error: "invalid_feed_intent" }, { status: 500 });

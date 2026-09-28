@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
@@ -94,5 +95,27 @@ describe("ReadingStrip row width (HOME-READING-LAYOUT)", () => {
     );
 
     expect(html).toBe("");
+  });
+});
+
+// POLISH-1-SYNC (ABC-JEV-INTEGRATION.md §1al (d), HOME-READING-LAYOUT-A
+// finding 1): both tests above render `ReadingStrip` directly with a
+// HARD-CODED `className` prop, so they stay green even if page.tsx's own
+// call site regresses to the pre-fix bare `<ReadingStrip papers={...}
+// readerTopics={...} />` (no className at all) — exactly the change that
+// collapsed the row to a shrink-to-fit strip in the first place (see the
+// HOME-READING-LAYOUT-C checkpoint). Only a source-text check on page.tsx
+// itself, independent of anything rendered, closes that gap. Same technique
+// as web/src/app/layout-icon.test.ts and globals.css.test.ts: read the file
+// as text via `import.meta.url` rather than `process.cwd()`, since this repo
+// has no harness for rendering the whole (effectful, data-fetching)
+// DailyBriefingPage — see this file's own header comment above.
+describe("page.tsx source — ReadingStrip call site keeps its width classes (§1al POLISH-1-SYNC (d))", () => {
+  it('passes className="flex-auto min-w-0" at the call site', () => {
+    const source = readFileSync(new URL("./page.tsx", import.meta.url), "utf8");
+    const start = source.indexOf("<ReadingStrip");
+    expect(start).toBeGreaterThan(-1);
+    const callSite = source.slice(start, source.indexOf("/>", start) + 2);
+    expect(callSite).toContain('className="flex-auto min-w-0"');
   });
 });

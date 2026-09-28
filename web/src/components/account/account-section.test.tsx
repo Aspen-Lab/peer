@@ -33,7 +33,13 @@ vi.mock("./use-auth-user", () => ({
   signInWithGoogle: vi.fn(),
 }));
 
-import { AccountSection } from "./account-section";
+import {
+  AccountSection,
+  AccountSectionView,
+  hasUnsyncedChanges,
+  shouldWarnBeforeSignOut,
+  type AccountSectionViewProps,
+} from "./account-section";
 
 function render(state: AuthState): string {
   mocks.authState = state;
@@ -103,16 +109,107 @@ describe("AccountSection — signed-out", () => {
     // already uses for a claim rendered output alone can't prove. A fast
     // double-click firing two concurrent OAuth redirects (guide §5.2) is
     // exactly what two independently-tracked flags would allow.
+    //
+    // POLISH-1-SYNC (ABC-JEV-INTEGRATION.md §1al (c)) — the slice markers
+    // below were rewritten for the presentational-view split: the ternary
+    // now reads on a flat `authKind` prop (was `auth.kind`, read straight
+    // off the hook inside one combined component) and its signed-out branch
+    // is now followed by a second `user ? (` branch rather than a bare
+    // `: (` — the PROPERTY under test (one shared `disabled={busy}`
+    // expression) is unchanged, only the source text it's sliced from.
     const source = readFileSync(
       join(process.cwd(), "src", "components", "account", "account-section.tsx"),
       "utf8",
     );
     const signedOutBranch = source.slice(
-      source.indexOf('auth.kind === "signed-out" ? ('),
-      source.indexOf(") : ("),
+      source.indexOf('authKind === "signed-out" ? ('),
+      source.indexOf(") : user ? ("),
     );
     const disabledExprs = signedOutBranch.match(/disabled=\{[^}]*\}/g) ?? [];
     expect(disabledExprs).toEqual(["disabled={busy}", "disabled={busy}"]);
+  });
+});
+
+describe("shouldWarnBeforeSignOut / hasUnsyncedChanges — the P6 decision, pulled out pure (§1al (c))", () => {
+  it("warns when there are unsynced changes and no warning is showing yet", () => {
+    expect(shouldWarnBeforeSignOut(true, false)).toBe(true);
+  });
+
+  it("does not re-arm once the warning is already showing (a second click is 'Sign out anyway', not another warning)", () => {
+    expect(shouldWarnBeforeSignOut(true, true)).toBe(false);
+  });
+
+  it("never warns when nothing is unsynced", () => {
+    expect(shouldWarnBeforeSignOut(false, false)).toBe(false);
+    expect(shouldWarnBeforeSignOut(false, true)).toBe(false);
+  });
+
+  it("hasUnsyncedChanges is true when EITHER the profile push or the feed push has failed", () => {
+    expect(hasUnsyncedChanges(false, false)).toBe(false);
+    expect(hasUnsyncedChanges(true, false)).toBe(true);
+    expect(hasUnsyncedChanges(false, true)).toBe(true);
+    expect(hasUnsyncedChanges(true, true)).toBe(true);
+  });
+});
+
+// P6 (ABC-JEV-INTEGRATION.md §1aj, ruled at §1al (c)): pressing "Sign out"
+// while something hasn't reached the account yet must warn first, inside
+// the Account section, instead of silently wiping this device's only copy
+// (feed-sync.tsx's resetLocal() on SIGNED_OUT). This repo has no
+// @testing-library/react and no test simulates a click (see this file's own
+// header note above), so `AccountSectionView` — the presentational half of
+// the §1al (c) split, same pattern as `EmailSettingsView` in
+// web/src/app/profile/page.tsx — is rendered directly with
+// `confirmingSignOut` set by hand, covering both branches the wrapper's
+// click handler can switch between.
+function renderAccountView(overrides: Partial<AccountSectionViewProps> = {}): string {
+  const props: AccountSectionViewProps = {
+    authKind: "signed-in",
+    user: fakeUser("person@example.test"),
+    busy: false,
+    confirmingSignOut: false,
+    onSignInGitHub: () => {},
+    onSignInGoogle: () => {},
+    onSignOutSubmit: () => {},
+    onStaySignedIn: () => {},
+    ...overrides,
+  };
+  return renderToStaticMarkup(createElement(AccountSectionView, props));
+}
+
+describe("AccountSectionView — P6 sign-out warning, both branches by props (§1al (c))", () => {
+  it("nothing unsynced (confirmingSignOut=false): Sign out works exactly as today — one plain form, no warning text", () => {
+    const html = renderAccountView({ confirmingSignOut: false });
+
+    expect(html).not.toContain("haven’t reached your account yet");
+    expect(html).not.toContain("Stay signed in");
+    expect(html).not.toContain("Sign out anyway");
+    expect((html.match(/<form/g) ?? []).length).toBe(1);
+    expect(html).toMatch(
+      /<form[^>]*action="\/auth\/signout"[^>]*method="POST"[^>]*><button type="submit"[^>]*>Sign out<\/button><\/form>/,
+    );
+  });
+
+  it("a pending warning (confirmingSignOut=true): shows the exact sentence and both buttons instead of the plain Sign out control", () => {
+    const html = renderAccountView({ confirmingSignOut: true });
+
+    expect(html).toContain(
+      "Some changes on this device haven’t reached your account yet. Signing out removes them from this device.",
+    );
+    // Still exactly one form — "Sign out anyway" posts to the real
+    // endpoint, today's exact mechanism, just reached one click later;
+    // "Stay signed in" is a plain button, not a second form.
+    expect((html.match(/<form/g) ?? []).length).toBe(1);
+    expect(html).toMatch(
+      /<form[^>]*action="\/auth\/signout"[^>]*method="POST"[^>]*><button type="submit"[^>]*>Sign out anyway<\/button><\/form>/,
+    );
+    expect(html).toMatch(/<button type="button"[^>]*>Stay signed in<\/button>/);
+  });
+
+  it("the warning is announced (role=alert), not just styled", () => {
+    const html = renderAccountView({ confirmingSignOut: true });
+    expect(html).toMatch(/role="alert"/);
+    expect(renderAccountView({ confirmingSignOut: false })).not.toMatch(/role="alert"/);
   });
 });
 

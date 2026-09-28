@@ -76,7 +76,7 @@ function Corners({ className = "border-border-strong" }: { className?: string })
 
 /**
  * Peer's mark, at the bar's size: the sheet with its registered corner, the
- * same object the tab shows (app/icon.svg). The sheet takes the type's own
+ * same object the tab shows (public/icon.svg). The sheet takes the type's own
  * colour, the corner the accent — the one place in the chrome that carries
  * the hue, as the mark does on the tab and on a shared link's card.
  */

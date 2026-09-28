@@ -226,7 +226,21 @@ describe("PUT /api/profile — the digest_email confirmation guard (F4)", () => 
             error: null,
           },
     );
-    const upsert = vi.fn(() => ({
+    // Explicit `vi.fn<Signature>()` type argument, same convention as
+    // src/app/api/jobs/dispatch-digests/route.test.ts's own mocks (see its
+    // comment): the real `.upsert(row, {onConflict})` call site passes two
+    // arguments, but a bare `() => ({...})` factory would leave
+    // `.mock.calls[0]` typed as the empty tuple `[]` (TS infers a mock's
+    // argument type from its implementation, not from how the route
+    // actually calls it) — that's enough for the pre-existing
+    // `toHaveBeenCalledWith` assertions below (loosely typed by vitest) but
+    // not for indexing the written row directly, which the new
+    // drop-not-reject tests (POLISH-1-SYNC §1al (b)) need to do.
+    const upsert = vi.fn<
+      (row: Record<string, unknown>, opts?: { onConflict: string }) => {
+        select: () => { single: () => Promise<{ data: unknown; error: null }> };
+      }
+    >(() => ({
       select: () => ({
         single: async () => ({
           data: { ...rowFixture, digest_email: "written@example.test" },
@@ -281,7 +295,12 @@ describe("PUT /api/profile — the digest_email confirmation guard (F4)", () => 
     );
   });
 
-  it("rejects a value that is neither the account email nor the stored value; the row is unchanged", async () => {
+  it("POLISH-1-SYNC (ABC-JEV-INTEGRATION.md §1al (b)): drops a value that is neither the account email nor the stored value, instead of rejecting the whole save", async () => {
+    // Superseded contract (was: 400 `digest_email_requires_confirmation`,
+    // upsert never called at all — so every OTHER field in the same PUT was
+    // lost too). §1al (b) rules the field alone must be dropped, not the
+    // whole save; the security property (never WRITE an unconfirmed
+    // address) is unchanged — see the `not.toHaveProperty` assertion below.
     const stub = fromStub({ existingDigestEmail: "already@example.test" });
     mocks.createClient.mockResolvedValueOnce({
       auth: { getUser: async () => ({ data: { user: { id: "user-1", email: "person@example.test" } } }) },
@@ -290,9 +309,35 @@ describe("PUT /api/profile — the digest_email confirmation guard (F4)", () => 
 
     const response = await putWithDigestEmail("someone-else@example.test");
 
-    expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toEqual({ error: "digest_email_requires_confirmation" });
-    expect(stub.upsert).not.toHaveBeenCalled();
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ ignored: ["digestEmail"] });
+    expect(stub.upsert).toHaveBeenCalledTimes(1);
+    const [writtenRow] = stub.upsert.mock.calls[0];
+    expect(writtenRow).not.toHaveProperty("digest_email");
+  });
+
+  it("POLISH-1-SYNC (§1al (b)): the rest of a multi-field patch still saves when digestEmail is dropped", async () => {
+    const stub = fromStub({ existingDigestEmail: "already@example.test" });
+    mocks.createClient.mockResolvedValueOnce({
+      auth: { getUser: async () => ({ data: { user: { id: "user-1", email: "person@example.test" } } }) },
+      from: () => stub,
+    });
+
+    const response = await PUT(
+      new NextRequest("http://peer.test/api/profile", {
+        method: "PUT",
+        body: JSON.stringify({ digestEmail: "someone-else@example.test", displayName: "New Name" }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ ignored: ["digestEmail"] });
+    expect(stub.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ display_name: "New Name" }),
+      { onConflict: "user_id" },
+    );
+    const [writtenRow] = stub.upsert.mock.calls[0];
+    expect(writtenRow).not.toHaveProperty("digest_email");
   });
 
   it("allows clearing the field to empty unconditionally (nothing to confirm when removing a destination)", async () => {
@@ -327,7 +372,11 @@ describe("PUT /api/profile — the digest_email confirmation guard (F4)", () => 
     expect(select).not.toHaveBeenCalled();
   });
 
-  it("surfaces a failed pre-check read as a 500 without writing", async () => {
+  it("POLISH-1-SYNC (§1al (b)): a failed pre-check read drops the field too, instead of failing the whole save with a 500", async () => {
+    // Superseded contract (was: 500, upsert never called). §1al (b): a
+    // failed guard read is not evidence the candidate is safe, so it is
+    // treated exactly like an untrusted one — dropped, not written, save
+    // continues.
     const stub = fromStub({ existingSelectError: "database unavailable" });
     mocks.createClient.mockResolvedValueOnce({
       auth: { getUser: async () => ({ data: { user: { id: "user-1", email: "person@example.test" } } }) },
@@ -336,8 +385,25 @@ describe("PUT /api/profile — the digest_email confirmation guard (F4)", () => 
 
     const response = await putWithDigestEmail("someone-else@example.test");
 
-    expect(response.status).toBe(500);
-    expect(stub.upsert).not.toHaveBeenCalled();
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ ignored: ["digestEmail"] });
+    expect(stub.upsert).toHaveBeenCalledTimes(1);
+    const [writtenRow] = stub.upsert.mock.calls[0];
+    expect(writtenRow).not.toHaveProperty("digest_email");
+  });
+
+  it("a patch that never mentions digestEmail reports nothing ignored", async () => {
+    const upsert = vi.fn(() => ({ select: () => ({ single: async () => ({ data: rowFixture, error: null }) }) }));
+    mocks.createClient.mockResolvedValueOnce({
+      auth: { getUser: async () => ({ data: { user: { id: "user-1", email: "person@example.test" } } }) },
+      from: () => ({ select: vi.fn(), upsert }),
+    });
+
+    const response = await PUT(
+      new NextRequest("http://peer.test/api/profile", { method: "PUT", body: JSON.stringify({ displayName: "New Name" }) }),
+    );
+
+    await expect(response.json()).resolves.toMatchObject({ ignored: [] });
   });
 });
 
