@@ -69,3 +69,24 @@ export async function signInWithGitHub(): Promise<void> {
     options: { redirectTo: `${origin}/auth/callback` },
   });
 }
+
+/**
+ * Google OAuth; same shared callback as GitHub. `prompt: "select_account"`
+ * asks Google for its account chooser instead of a silent, possibly-wrong
+ * auto-pick when the browser is already signed into more than one Google
+ * account (documented parameter, values none/consent/select_account:
+ * https://developers.google.com/identity/protocols/oauth2/web-server). No
+ * `access_type`/`offline` — Peer never calls a Google API again after
+ * sign-in, so there is no refresh token to ask for.
+ */
+export async function signInWithGoogle(): Promise<void> {
+  if (!supabase) return;
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: {
+      redirectTo: `${origin}/auth/callback`,
+      queryParams: { prompt: "select_account" },
+    },
+  });
+}
