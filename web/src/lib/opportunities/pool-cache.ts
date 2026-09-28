@@ -205,10 +205,24 @@ export interface PoolCacheKeyInput {
 const CACHE_KEY_VERSION = 6;
 // Papers stay on their own version number, bumped independently for P0-01
 // (owner/intent scoping joined the hashed signature — an old v5 papers-cache
-// row must never be read back as if it already had that scope). This bump
-// shares the number 6 with `CACHE_KEY_VERSION` above by coincidence, not by
-// a shared cause — see `derivePoolCacheKey` below for how each is selected.
-const PAPER_CACHE_KEY_VERSION = 6;
+// row must never be read back as if it already had that scope). v7 —
+// ABC-JEV-INTEGRATION.md §1ao.9/REQUIRED-GATE
+// (docs/jev-abc/REQUIRED-GATE-B-20260928T160542Z.md): the Required-topic
+// gate changed from a literal whole-phrase match to a T1-T4 qualification
+// union, so a v6 pool scored under the old literal-only rule must never be
+// served as if it reflects the new one. This bump shares the number with
+// `CACHE_KEY_VERSION` above by coincidence, not by a shared cause — see
+// `derivePoolCacheKey` below for how each is selected.
+const PAPER_CACHE_KEY_VERSION = 7;
+/**
+ * SINGLE SOURCE OF TRUTH for the literal key prefix a durable papers-pool
+ * store may accept, derived from `PAPER_CACHE_KEY_VERSION` rather than
+ * hand-copied — `private-paper-cache.ts` imports this instead of keeping its
+ * own hard-coded prefix string, which is exactly what let that file's guard
+ * fall out of sync with this constant when v6 first shipped (REQUIRED-GATE
+ * phase 1 finding, ABC-JEV-INTEGRATION.md §1ao addendum, 2026-09-28).
+ */
+export const PAPER_POOL_KEY_PREFIX = `peer-pool-v${PAPER_CACHE_KEY_VERSION}-papers-`;
 
 function normalizeSet(values: string[] | undefined): string[] {
   return Array.from(

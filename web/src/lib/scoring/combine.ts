@@ -13,12 +13,28 @@ import { scoreSource } from "./source-weight";
 import { generateReason } from "./reason";
 import { shouldPushReviewPaper } from "./review-policy";
 import { normalizePhrase } from "./tokenize";
-import { canonicalize } from "./term-expand";
+import { canonicalize, termSpecificity } from "./term-expand";
 import {
   buildPreferenceDocumentFrequency,
   prepareLedger,
   scorePreferenceMatch,
 } from "@/lib/preferences/ledger";
+
+/**
+ * T4 (REQUIRED-GATE, ABC-JEV-INTEGRATION.md §1ao.1/§1ao.3) — tag-anchored
+ * topical-similarity floors and ranking weight for the case where a
+ * candidate matches no Required tag by T1 (literal)/T2 (self-declared
+ * abbreviation)/T3 (source subject tag). Named and grep-able per the
+ * ruling. Measured starting point (docs/jev-abc/REQUIRED-GATE-B-20260928T160542Z.md
+ * §2.4, re-confirmed with tag-anchoring in
+ * docs/jev-abc/REQUIRED-GATE-C-20260928T163436Z.md §1): at these floors the
+ * EMPTY-HOME-diagnosed case goes from 4/27 to 17/27 qualifying and the
+ * measured biofilm/clinical false positive (an unanchored `simProject`
+ * alone would have admitted it) is rejected.
+ */
+export const REQUIRED_TAG_SIMILARITY_FLOOR_TOPIC = 0.15;
+export const REQUIRED_TAG_SIMILARITY_FLOOR_PROJECT = 0.05;
+export const REQUIRED_TAG_T4_WEIGHT = 0.3;
 
 function profileText(profile: ScoringProfile): string {
   return [
@@ -146,7 +162,15 @@ export function scoreItems(
   for (const item of items) {
     if (exclusions.some((term) => topicMatchesItem(item, term))) continue;
     if (profile.minPublishedAt && item.publishedAt < profile.minPublishedAt) continue;
-    const kw = scoreKeyword(item, literalMustTopics, { grounded: true, selectedSenseConcepts });
+    let kw = scoreKeyword(item, literalMustTopics, {
+      grounded: true,
+      selectedSenseConcepts,
+      // REQUIRED-GATE §1ao — T2/T3 on for the Required gate only (never for
+      // softTopics below, which is a ranking bonus, not the qualification
+      // screen). See keyword.ts's own doc comment on this flag for why it
+      // must default off for every other `scoreKeyword` caller.
+      extendedRequiredMatch: true,
+    });
     // P2-S3 — UNION of the item-level tag and the older, request-scoped
     // `profile.admissionChannels` lookup, not one overriding the other.
     // The item-level tag travels WITH the item through dedupe and the
@@ -172,6 +196,53 @@ export function scoreItems(
     const admittedByNonLiteralChannel = channels.some((channel) =>
       channel === "semantic" || channel === "positive-seed" || channel === "citation" || channel === "topic-field",
     );
+    // T4 (REQUIRED-GATE §1ao.1) — tag-anchored topical-similarity fallback,
+    // tried only when T1/T2/T3 found nothing for every Required tag (T4
+    // only ever ADDS candidates, never subtracts — it cannot lower a score
+    // T1/T2/T3 already set). Reuses the SAME pool-wide `index` and `pText`
+    // already built once per call above, at negligible extra cost.
+    // TAG-ANCHORED: a paper needs at least some similarity to the tag
+    // ITSELF (`simTopic > 0`) before general project-text similarity can
+    // help it qualify — an unanchored version let a biofilm/clinical paper
+    // into a battery "electrolyte" pool on generic scientific-vocabulary
+    // overlap with the project text alone (the measured false positive;
+    // confirmed rejected under this anchored rule,
+    // docs/jev-abc/REQUIRED-GATE-C-20260928T163436Z.md §1). A T4-only
+    // qualification adds NOTHING to `kw.matched` (§1ao.8 — never claim a
+    // keyword the paper does not contain): only `kw.score` moves, and it
+    // moves through the SAME raw/1.5 scale `scoreKeyword` itself uses, so a
+    // full-strength T1 hit always outranks a full-strength T4-only hit at
+    // equal specificity (mutation-tested, required-gate.test.ts).
+    if (literalMustTopics.length > 0 && kw.score === 0) {
+      let bestT4Score = 0;
+      for (const topic of literalMustTopics) {
+        const canonicalTopic = canonicalize(topic);
+        if (!canonicalTopic) continue;
+        const simTopic = scoreTfidf(item.id, topic, index);
+        const simProject = scoreTfidf(item.id, pText, index);
+        // "margin = max over the admitting path(s)" (§1ao ruling 3) — only a
+        // path that actually cleared its own floor contributes a margin.
+        const margins: number[] = [];
+        if (simTopic >= REQUIRED_TAG_SIMILARITY_FLOOR_TOPIC) {
+          margins.push(
+            (simTopic - REQUIRED_TAG_SIMILARITY_FLOOR_TOPIC) / (1 - REQUIRED_TAG_SIMILARITY_FLOOR_TOPIC),
+          );
+        }
+        if (simTopic > 0 && simProject >= REQUIRED_TAG_SIMILARITY_FLOOR_PROJECT) {
+          margins.push(
+            (simProject - REQUIRED_TAG_SIMILARITY_FLOOR_PROJECT) / (1 - REQUIRED_TAG_SIMILARITY_FLOOR_PROJECT),
+          );
+        }
+        if (margins.length === 0) continue; // neither path anchored/admitted this tag
+        const margin = clamp01(Math.max(...margins));
+        const candidateScore = Math.min(
+          1,
+          (REQUIRED_TAG_T4_WEIGHT * termSpecificity(canonicalTopic) * margin) / 1.5,
+        );
+        if (candidateScore > bestT4Score) bestT4Score = candidateScore;
+      }
+      if (bestT4Score > 0) kw = { ...kw, score: bestT4Score };
+    }
     // Required literals route/score candidate discovery. They cannot evict a
     // candidate already admitted by another declared retrieval channel.
     if ((literalMustTopics.length > 0 || selectedSenseConcepts.length > 0) && kw.score === 0 && !admittedByNonLiteralChannel) continue;

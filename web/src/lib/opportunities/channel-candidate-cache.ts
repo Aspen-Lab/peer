@@ -73,11 +73,13 @@ export interface ChannelCandidateCache {
 
 /**
  * Deliberately distinct from `PrivatePaperPoolCache`'s own
- * `"peer-pool-v6-papers-"` prefix (private-paper-cache.ts) — the two
- * classes share the SAME `private_paper_pools` table but each refuses any
- * key not carrying its own prefix, so a channel-candidate row and a
- * day-pool row can never be confused for one another in either direction.
- * No migration: the table's `payload jsonb` column is already generic.
+ * `PAPER_POOL_KEY_PREFIX` (private-paper-cache.ts, imported from
+ * pool-cache.ts — currently `"peer-pool-v7-papers-"`, bumped from v6 by
+ * REQUIRED-GATE, ABC-JEV-INTEGRATION.md §1ao.9) — the two classes share the
+ * SAME `private_paper_pools` table but each refuses any key not carrying
+ * its own prefix, so a channel-candidate row and a day-pool row can never
+ * be confused for one another in either direction. No migration: the
+ * table's `payload jsonb` column is already generic.
  */
 const SCOPE_KEY_PREFIX = "peer-channels-v1-";
 
@@ -139,7 +141,8 @@ export class PrivateChannelCandidateCache implements ChannelCandidateCache {
    * instruction, which cases count as unavailable vs miss):
    *  - owner/prefix guard mismatch -> MISS. This call was never meant for
    *    this instance (wrong owner, or a key belonging to a different scope
-   *    prefix, e.g. the day-pool's own `"peer-pool-v6-papers-"` rows) — a
+   *    prefix, e.g. the day-pool's own `PAPER_POOL_KEY_PREFIX` rows,
+   *    currently `"peer-pool-v7-papers-"`) — a
    *    routing guard against a caller bug, not a storage failure. Nothing
    *    was actually read, so reporting "unavailable" here would be both
    *    misleading and wrong: it would make the resolver SKIP live legs for

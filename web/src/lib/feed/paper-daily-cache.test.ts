@@ -4,6 +4,7 @@ import { resolveProvider } from "@/lib/llm/providers/registry";
 import { bySourceId, webSearch } from "@/lib/sources";
 import type { RawItem } from "@/lib/sources/types";
 import type { CachedPool, PoolCache } from "@/lib/opportunities/pool-cache";
+import { PAPER_POOL_KEY_PREFIX } from "@/lib/opportunities/pool-cache";
 import { createTrustedPaperCacheScope } from "@/lib/opportunities/private-paper-cache";
 import { normalizeFeedIntent } from "./intent";
 import { selectedSenseConcept } from "./senses";
@@ -211,7 +212,7 @@ describe("daily paper pool", () => {
     );
   });
 
-  it("refuses an injected v5 paper payload and rebuilds only inside the v6 private scope", async () => {
+  it("refuses an injected v5 paper payload and rebuilds only inside the v7 private scope", async () => {
     const { academicFetch } = stubSources();
     const cache = new MemoryPoolCache();
     const now = new Date(2026, 6, 29, 9, 0);
@@ -256,7 +257,7 @@ describe("daily paper pool", () => {
     expect([...cache.values.keys()]).toEqual(
       expect.arrayContaining(["peer-pool-v5-papers-2026-07-29-unsafe"]),
     );
-    expect([...cache.values.keys()].some((key) => key.startsWith("peer-pool-v6-papers-"))).toBe(true);
+    expect([...cache.values.keys()].some((key) => key.startsWith(PAPER_POOL_KEY_PREFIX))).toBe(true);
   });
 
   it("keeps Tier-0 usable when a private cache store is unavailable", async () => {

@@ -5,6 +5,7 @@ import {
   isCachedPaperPool,
   isCachedPool,
   localCalendarDate,
+  PAPER_POOL_KEY_PREFIX,
   type CachedPaperPool,
   type CachedPool,
   type PoolCache,
@@ -43,7 +44,7 @@ describe("daily opportunity pool cache key", () => {
     const monday = new Date(2026, 6, 27, 12, 0, 0);
     expect(
       derivePoolCacheKey({ ...base, surface: "papers", now: monday }),
-    ).toMatch(/^peer-pool-v6-papers-2026-07-27-[a-f0-9]{32}$/);
+    ).toMatch(new RegExp(`^${PAPER_POOL_KEY_PREFIX}2026-07-27-[a-f0-9]{32}$`));
     expect(derivePoolCacheKey({ ...base, surface: "jobs", now: monday })).toMatch(
       /^peer-pool-v6-jobs-2026-W31-[a-f0-9]{32}$/,
     );
@@ -79,9 +80,14 @@ describe("daily opportunity pool cache key", () => {
 
   it("no longer produces a v5-shaped key", () => {
     // The bump is not cosmetic: a v5 daily key and a v6 weekly key would
-    // otherwise collide in the shared `opportunity_pools` table.
+    // otherwise collide in the shared `opportunity_pools` table. Asserted as
+    // "not v5" rather than "is v6" so this test does not go stale on its own
+    // the next time either version constant moves independently — papers is
+    // now v7 (REQUIRED-GATE, ABC-JEV-INTEGRATION.md §1ao.9; see the
+    // papers-specific PAPER_POOL_KEY_PREFIX assertion above) while events and
+    // jobs stay on CACHE_KEY_VERSION 6.
     for (const surface of ["papers", "events", "jobs"] as const) {
-      expect(derivePoolCacheKey({ ...base, surface })).toMatch(/^peer-pool-v6-/);
+      expect(derivePoolCacheKey({ ...base, surface })).not.toMatch(/^peer-pool-v5-/);
     }
   });
 

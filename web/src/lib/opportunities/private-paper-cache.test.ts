@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { CachedPaperPool } from "./pool-cache";
+import { PAPER_POOL_KEY_PREFIX } from "./pool-cache";
 import {
   createTrustedPaperCacheScope,
   isTrustedPaperCacheScope,
@@ -58,20 +59,33 @@ describe("PrivatePaperPoolCache", () => {
     const fake = fakeClient();
     const scope = createTrustedPaperCacheScope({ ownerId: "owner-a", aiTier: 0 });
     const cache = new PrivatePaperPoolCache(scope, fake.client as never);
+    const currentKey = `${PAPER_POOL_KEY_PREFIX}private`;
 
-    await expect(cache.get("peer-pool-v6-papers-private")).resolves.toEqual(pool);
+    await expect(cache.get(currentKey)).resolves.toEqual(pool);
     expect(fake.from).toHaveBeenCalledWith("private_paper_pools");
     expect(fake.select).toHaveBeenCalledWith("payload");
     expect(fake.firstEq).toHaveBeenCalledWith("owner_id", "owner-a");
-    expect(fake.secondEq).toHaveBeenCalledWith("scope_key", "peer-pool-v6-papers-private");
+    expect(fake.secondEq).toHaveBeenCalledWith("scope_key", currentKey);
 
-    await cache.set("peer-pool-v6-papers-private", pool);
+    await cache.set(currentKey, pool);
     expect(fake.upsert).toHaveBeenCalledWith(
-      expect.objectContaining({ owner_id: "owner-a", scope_key: "peer-pool-v6-papers-private", payload: pool }),
+      expect.objectContaining({ owner_id: "owner-a", scope_key: currentKey, payload: pool }),
       { onConflict: "owner_id,scope_key" },
     );
 
     await expect(cache.get("peer-pool-v5-papers-unsafe")).resolves.toBeNull();
     expect(fake.from).toHaveBeenCalledTimes(2);
+  });
+
+  it("rejects a stale v6 papers key now that the prefix has moved to v7 (REQUIRED-GATE, ABC-JEV-INTEGRATION.md §1ao.9 — a pool scored under the old literal-only gate must never be served as current)", async () => {
+    const fake = fakeClient();
+    const scope = createTrustedPaperCacheScope({ ownerId: "owner-a", aiTier: 0 });
+    const cache = new PrivatePaperPoolCache(scope, fake.client as never);
+
+    await expect(cache.get("peer-pool-v6-papers-stale")).resolves.toBeNull();
+    expect(fake.from).not.toHaveBeenCalled();
+
+    await cache.set("peer-pool-v6-papers-stale", pool);
+    expect(fake.from).not.toHaveBeenCalled();
   });
 });

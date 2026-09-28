@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { CachedPaperPool, PoolCache } from "./pool-cache";
+import { PAPER_POOL_KEY_PREFIX } from "./pool-cache";
 import { serializeFeedIntent, type NormalizedFeedIntent } from "@/lib/feed/intent";
 
 /**
@@ -131,7 +132,7 @@ export class PrivatePaperPoolCache implements PoolCache {
   }
 
   async get(key: string): Promise<CachedPaperPool | null> {
-    if (!this.client || !key.startsWith("peer-pool-v6-papers-")) return null;
+    if (!this.client || !key.startsWith(PAPER_POOL_KEY_PREFIX)) return null;
     try {
       const { data, error } = await this.client
         .from("private_paper_pools")
@@ -155,7 +156,7 @@ export class PrivatePaperPoolCache implements PoolCache {
   }
 
   async set(key: string, pool: CachedPaperPool): Promise<void> {
-    if (!this.client || !key.startsWith("peer-pool-v6-papers-")) return;
+    if (!this.client || !key.startsWith(PAPER_POOL_KEY_PREFIX)) return;
     try {
       await this.client.from("private_paper_pools").upsert(
         {

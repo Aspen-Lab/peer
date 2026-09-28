@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createTrustedPaperCacheScope } from "./private-paper-cache";
+import { PAPER_POOL_KEY_PREFIX } from "./pool-cache";
 import {
   MemoryChannelCandidateCache,
   PrivateChannelCandidateCache,
@@ -12,8 +13,9 @@ import {
 // signature of (positive seeds, negative seeds, topic ids, enabled legs).
 // Reuses the EXISTING `private_paper_pools` table under its OWN
 // `"peer-channels-v1-"` scope-key prefix — never `PrivatePaperPoolCache`
-// itself, which hard-codes the day-pool's own `"peer-pool-v6-papers-"`
-// prefix/surface guard (see docs/jev-abc/P2-S4c-B-20260924T113605Z.md
+// itself, which imports `PAPER_POOL_KEY_PREFIX` (pool-cache.ts, currently
+// `"peer-pool-v7-papers-"`, bumped by REQUIRED-GATE §1ao.9) for its own
+// day-pool prefix/surface guard (see docs/jev-abc/P2-S4c-B-20260924T113605Z.md
 // D-ADD.2) — so a channel-cache row and a day-pool row can never collide in
 // either direction, with no migration.
 
@@ -100,10 +102,11 @@ describe("PrivateChannelCandidateCache", () => {
 
     // Deliberately using the DAY-POOL's own prefix, to prove the two caches'
     // rows can never be confused for one another in either direction.
-    await expect(cache.get("owner-a", "peer-pool-v6-papers-2026-09-24-abc")).resolves.toEqual({ status: "miss" });
+    const dayPoolKey = `${PAPER_POOL_KEY_PREFIX}2026-09-24-abc`;
+    await expect(cache.get("owner-a", dayPoolKey)).resolves.toEqual({ status: "miss" });
     expect(fake.from).not.toHaveBeenCalled();
 
-    await cache.set("owner-a", "peer-pool-v6-papers-2026-09-24-abc", value);
+    await cache.set("owner-a", dayPoolKey, value);
     expect(fake.from).not.toHaveBeenCalled();
   });
 

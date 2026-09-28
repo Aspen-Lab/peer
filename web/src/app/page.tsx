@@ -203,7 +203,7 @@ function DailyBriefingPage() {
     () =>
       [
         profile.researchTopics.length > 0
-          ? `Required interests (every paper below matches at least one — name the matching one in your sentence): ${profile.researchTopics.join(", ")}`
+          ? `Required interests (each paper below relates to at least one — name the one it relates to in your sentence): ${profile.researchTopics.join(", ")}`
           : "",
         profile.currentProject,
         profile.currentChallenges,
