@@ -18,9 +18,13 @@
 // spend — the opposite direction of this codebase's ordinary UX rate limits
 // (see counters.ts's own header on the two failure rules).
 //
-// Order of checks (cheapest / least user-penalizing first, per guide §2.1):
+// Order of checks (cheapest / least user-penalizing first, per guide §2.1;
+// reordered by ABC-JEV-INTEGRATION.md §1al POLISH-1-EMAIL (e), 2026-09-28 —
+// the profile-shape checks now run BEFORE the counter is touched, so a
+// reader who fails one of them for free never burns one of today's 3 tries):
 // signed in? -> Resend configured at all? -> resolve destination address ->
-// increment-then-compare the daily counter -> run the pipeline -> send.
+// research focus present? -> increment-then-compare the daily counter ->
+// run the pipeline -> send.
 //
 // Deliberately duplicates two small profile-shape helpers
 // (seedTextsFromProfile / feedControlsFromProfile) and the profile select
@@ -38,6 +42,10 @@ import { createClient } from "@/lib/supabase/server";
 import { runFeedPipeline } from "@/lib/feed/pipeline";
 import type { FeedControls } from "@/lib/feed/profile-compiler";
 import { sendDigestEmail } from "@/lib/email/send-digest";
+import {
+  classifySendFailure,
+  describeSendFailureForLog,
+} from "@/lib/email/send-failure";
 import { cleanPreferenceLedger } from "@/lib/preferences/ledger";
 import type { PreferenceLedger } from "@/types";
 import { testDigestFeedRequestFromProfile } from "@/app/api/test-digest/route";
@@ -158,6 +166,18 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // §1al POLISH-1-EMAIL (e) — this cheap, profile-shape check now runs
+  // BEFORE the daily counter is touched: a reader with no research focus
+  // yet must not burn one of today's 3 tries on a failure that cost
+  // nothing to detect. The counter itself stays fail-closed, unchanged.
+  const normalizedFeed = testDigestFeedRequestFromProfile(typedProfile);
+  if (!normalizedFeed.ok) {
+    return NextResponse.json(
+      { sent: false, reason: "intent_required", error: "Add a research focus first." },
+      { status: 400 },
+    );
+  }
+
   const now = new Date();
   const reading = await getCounterStore().increment(
     testEmailDayKey(user.id, now),
@@ -173,14 +193,6 @@ export async function POST(req: NextRequest) {
         error: "You've used today's 3 test sends. Try again tomorrow.",
       },
       { status: 429 },
-    );
-  }
-
-  const normalizedFeed = testDigestFeedRequestFromProfile(typedProfile);
-  if (!normalizedFeed.ok) {
-    return NextResponse.json(
-      { sent: false, reason: "intent_required", error: "Add a research focus first." },
-      { status: 400 },
     );
   }
 
@@ -202,9 +214,18 @@ export async function POST(req: NextRequest) {
     originUrl: originUrlFor(req),
   });
 
-  return NextResponse.json({
-    sent: result.sent,
-    to: normalizedDestination,
-    error: result.sent ? undefined : result.error,
-  });
+  if (!result.sent) {
+    // §1al POLISH-1-EMAIL (g) — never the provider's raw text, in the
+    // response or the log; the page owns every sentence, keyed by `reason`
+    // alone. No counter refund (the daily send was already spent above).
+    console.error(
+      `[profile/send-test-email] send failed: ${describeSendFailureForLog(result)}`,
+    );
+    return NextResponse.json(
+      { sent: false, reason: classifySendFailure(result) },
+      { status: 502 },
+    );
+  }
+
+  return NextResponse.json({ sent: true, to: normalizedDestination });
 }

@@ -1285,6 +1285,102 @@ function formatHourLabel(hour: number): string {
   return `${displayHour}:00 ${period}`;
 }
 
+/** POST /api/profile/confirm-email's response, mapped to one plain sentence
+ * (or none, for the two outcomes that carry their own UI instead — see
+ * `pending`/`confirmed`). ABC-JEV-INTEGRATION.md §1al POLISH-1-EMAIL (a)/(f).
+ * Status is checked before body content: several failure classes (503
+ * "unavailable", a genuine 500 database error, the two 502 send failures)
+ * are not otherwise distinguishable from the body alone. A pure function so
+ * every status is unit-tested without rendering or a real fetch. */
+export interface ConfirmAddressOutcome {
+  message: string | null;
+  confirmed: boolean;
+  pending: boolean;
+}
+
+export function confirmAddressMessage(
+  status: number,
+  body: { confirmed?: boolean; error?: string },
+): ConfirmAddressOutcome {
+  if (status === 429) {
+    return { message: "Too many requests today. Try again tomorrow.", confirmed: false, pending: false };
+  }
+  if (status === 503) {
+    // (a) — no DIGEST_EMAIL_CONFIRM_SECRET configured (was 500).
+    return {
+      message: "Confirming a different email isn't available right now.",
+      confirmed: false,
+      pending: false,
+    };
+  }
+  if (status === 502) {
+    // (f) — the confirmation email itself failed to send.
+    return body.error === "sender_not_verified"
+      ? {
+          message: "Peer's email sender isn't set up to reach that address yet.",
+          confirmed: false,
+          pending: false,
+        }
+      : {
+          message: "Couldn't send the confirmation email. Try again later.",
+          confirmed: false,
+          pending: false,
+        };
+  }
+  if (status === 400) {
+    return { message: "That doesn't look like a valid email address.", confirmed: false, pending: false };
+  }
+  if (status >= 200 && status < 300) {
+    return body.confirmed
+      ? { message: null, confirmed: true, pending: false }
+      : { message: null, confirmed: false, pending: true };
+  }
+  // A genuine 500 (database read/write error) and anything else unmapped.
+  return { message: "Couldn't send the confirmation link. Try again.", confirmed: false, pending: false };
+}
+
+/** POST /api/profile/send-test-email's response, mapped to one plain
+ * sentence keyed by `reason` alone — never the server's raw text (that was
+ * the doubled-period bug: "…first.."). ABC-JEV-INTEGRATION.md §1al
+ * POLISH-1-EMAIL (g). A pure function, unit-tested for every reason plus
+ * success. */
+export interface TestSendOutcome {
+  message: string;
+  success: boolean;
+}
+
+export function testSendMessage(
+  status: number,
+  body: { sent?: boolean; to?: string; reason?: string },
+): TestSendOutcome {
+  switch (body.reason) {
+    case "unavailable":
+      return { message: "Email sending isn't configured yet.", success: false };
+    case "no_address":
+      return { message: "Add an email above first.", success: false };
+    case "intent_required":
+      return { message: "Add a research focus first.", success: false };
+    case "rate_limited":
+      return { message: "You've used today's 3 test sends. Try again tomorrow.", success: false };
+    case "sender_not_verified":
+      return {
+        message: "Peer's email sender isn't set up to reach this address yet.",
+        success: false,
+      };
+    case "send_failed":
+      return { message: "Couldn't send the test email. Try again later.", success: false };
+    default:
+      break;
+  }
+  if (status >= 200 && status < 300 && body.sent) {
+    return { message: `Sent just now to ${body.to ?? "your address"}.`, success: true };
+  }
+  // Defensive fallback for a shape this function doesn't otherwise
+  // recognize — never a raw provider string (g); the same generic text
+  // `classifySendFailure` itself falls back to server-side.
+  return { message: "Couldn't send the test email. Try again later.", success: false };
+}
+
 export interface EmailSettingsViewProps {
   signedIn: boolean;
   digestChannel: DigestChannel;
@@ -1543,21 +1639,20 @@ function EmailSettings() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: candidate }),
       });
-      const data = (await res.json().catch(() => ({}))) as { confirmed?: boolean };
-      if (res.status === 429) {
-        setConfirmMessage("Too many requests today. Try again tomorrow.");
-      } else if (res.status === 500) {
-        setConfirmMessage("Confirming a different email isn't available right now.");
-      } else if (res.status === 400) {
-        setConfirmMessage("That doesn't look like a valid email address.");
-      } else if (res.ok && data.confirmed) {
+      const data = (await res.json().catch(() => ({}))) as { confirmed?: boolean; error?: string };
+      const outcome = confirmAddressMessage(res.status, data);
+      if (outcome.confirmed) {
         updateDigestEmail(candidate);
         setPendingAddress(null);
-      } else if (res.ok) {
+      } else if (outcome.pending) {
         setPendingAddress(candidate);
-      } else {
-        setConfirmMessage("Couldn't send the confirmation link. Try again.");
+      } else if (pendingAddress === candidate) {
+        // §1al (f) — a retry for the address we were already waiting on
+        // just failed to send (sender_not_verified/confirmation_send_failed);
+        // stop showing "Check <address>..." for a send that didn't go out.
+        setPendingAddress(null);
       }
+      setConfirmMessage(outcome.message);
     } catch {
       setConfirmMessage("Couldn't reach Peer. Check your connection and try again.");
     } finally {
@@ -1574,17 +1669,8 @@ function EmailSettings() {
         sent?: boolean;
         to?: string;
         reason?: string;
-        error?: string;
       };
-      if (data.reason === "rate_limited") {
-        setTestMessage("You've used today's 3 test sends. Try again tomorrow.");
-      } else if (data.reason === "no_address") {
-        setTestMessage("Add an email above first.");
-      } else if (res.ok && data.sent) {
-        setTestMessage(`Sent just now to ${data.to ?? "your address"}.`);
-      } else {
-        setTestMessage(`Couldn't send: ${data.error ?? "unknown error"}.`);
-      }
+      setTestMessage(testSendMessage(res.status, data).message);
     } catch {
       setTestMessage("Couldn't reach Peer. Check your connection and try again.");
     } finally {

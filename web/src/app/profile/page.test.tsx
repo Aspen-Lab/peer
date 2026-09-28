@@ -8,6 +8,8 @@ import {
   LearnedPreferences,
   EmailSettingsView,
   digestToggleUpdate,
+  confirmAddressMessage,
+  testSendMessage,
   type EmailSettingsViewProps,
 } from "./page";
 
@@ -225,5 +227,156 @@ describe("EmailSettingsView — signed-out visitors see no controls (RED #12)", 
       }),
     );
     expect(html).toContain("Sent just now to person@example.test.");
+  });
+});
+
+// ABC-JEV-INTEGRATION.md §1al POLISH-1-EMAIL (a)/(f)/(g) — the two
+// response -> sentence mappings, extracted to pure functions so every
+// status/reason is unit-tested without rendering or a real fetch (same
+// "no click simulation" constraint noted at the top of this file).
+describe("confirmAddressMessage — POST /api/profile/confirm-email's response (§1al (a)/(f))", () => {
+  it("429 rate_limited", () => {
+    expect(confirmAddressMessage(429, {})).toEqual({
+      message: "Too many requests today. Try again tomorrow.",
+      confirmed: false,
+      pending: false,
+    });
+  });
+
+  it("503 — no DIGEST_EMAIL_CONFIRM_SECRET configured (was 500 — (a))", () => {
+    expect(confirmAddressMessage(503, { error: "email_confirmation_unavailable" })).toEqual({
+      message: "Confirming a different email isn't available right now.",
+      confirmed: false,
+      pending: false,
+    });
+  });
+
+  it("502 sender_not_verified — the confirmation send failed at Peer's sender ((f))", () => {
+    expect(confirmAddressMessage(502, { error: "sender_not_verified" })).toEqual({
+      message: "Peer's email sender isn't set up to reach that address yet.",
+      confirmed: false,
+      pending: false,
+    });
+  });
+
+  it("502 confirmation_send_failed — any other send failure ((f))", () => {
+    expect(confirmAddressMessage(502, { error: "confirmation_send_failed" })).toEqual({
+      message: "Couldn't send the confirmation email. Try again later.",
+      confirmed: false,
+      pending: false,
+    });
+  });
+
+  it("502 with an unrecognized error string still falls back to the generic send-failed sentence", () => {
+    expect(confirmAddressMessage(502, { error: "something_new" })).toEqual({
+      message: "Couldn't send the confirmation email. Try again later.",
+      confirmed: false,
+      pending: false,
+    });
+  });
+
+  it("500 — a genuine database read/write error", () => {
+    expect(confirmAddressMessage(500, { error: "boom" })).toEqual({
+      message: "Couldn't send the confirmation link. Try again.",
+      confirmed: false,
+      pending: false,
+    });
+  });
+
+  it("400 — invalid email format", () => {
+    expect(confirmAddressMessage(400, {})).toEqual({
+      message: "That doesn't look like a valid email address.",
+      confirmed: false,
+      pending: false,
+    });
+  });
+
+  it("200 confirmed:true — the already-confirmed short-circuit, no message needed", () => {
+    expect(confirmAddressMessage(200, { confirmed: true })).toEqual({
+      message: null,
+      confirmed: true,
+      pending: false,
+    });
+  });
+
+  it("200 confirmed:false — a new address, confirmation email sent, now pending", () => {
+    expect(confirmAddressMessage(200, { confirmed: false })).toEqual({
+      message: null,
+      confirmed: false,
+      pending: true,
+    });
+  });
+
+  it("an unmapped status falls back to the same generic message as a genuine 500", () => {
+    expect(confirmAddressMessage(599, {})).toEqual({
+      message: "Couldn't send the confirmation link. Try again.",
+      confirmed: false,
+      pending: false,
+    });
+  });
+});
+
+describe("testSendMessage — POST /api/profile/send-test-email's response (§1al (g))", () => {
+  it("unavailable — Resend isn't configured", () => {
+    expect(testSendMessage(200, { sent: false, reason: "unavailable" })).toEqual({
+      message: "Email sending isn't configured yet.",
+      success: false,
+    });
+  });
+
+  it("no_address", () => {
+    expect(testSendMessage(400, { sent: false, reason: "no_address" })).toEqual({
+      message: "Add an email above first.",
+      success: false,
+    });
+  });
+
+  it("intent_required — this is the doubled-period bug's old case ('…first..')", () => {
+    expect(testSendMessage(400, { sent: false, reason: "intent_required" })).toEqual({
+      message: "Add a research focus first.",
+      success: false,
+    });
+  });
+
+  it("rate_limited", () => {
+    expect(testSendMessage(429, { sent: false, reason: "rate_limited" })).toEqual({
+      message: "You've used today's 3 test sends. Try again tomorrow.",
+      success: false,
+    });
+  });
+
+  it("sender_not_verified — never Resend's raw sandbox text", () => {
+    expect(testSendMessage(502, { sent: false, reason: "sender_not_verified" })).toEqual({
+      message: "Peer's email sender isn't set up to reach this address yet.",
+      success: false,
+    });
+  });
+
+  it("send_failed — the generic fallback reason, never a raw provider string", () => {
+    expect(testSendMessage(502, { sent: false, reason: "send_failed" })).toEqual({
+      message: "Couldn't send the test email. Try again later.",
+      success: false,
+    });
+  });
+
+  it("success names the destination address", () => {
+    expect(testSendMessage(200, { sent: true, to: "person@example.test" })).toEqual({
+      message: "Sent just now to person@example.test.",
+      success: true,
+    });
+  });
+
+  it("success with no address on the body still produces a plain sentence", () => {
+    expect(testSendMessage(200, { sent: true })).toEqual({
+      message: "Sent just now to your address.",
+      success: true,
+    });
+  });
+
+  it("an unrecognized shape falls back to the generic message, never undefined", () => {
+    expect(testSendMessage(500, {})).toEqual({
+      message: "Couldn't send the test email. Try again later.",
+      success: false,
+    });
   });
 });

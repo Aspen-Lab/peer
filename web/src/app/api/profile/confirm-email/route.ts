@@ -48,6 +48,10 @@ import {
 } from "@/lib/email/confirm-email-template";
 import { sendDigestEmail } from "@/lib/email/send-digest";
 import {
+  classifySendFailure,
+  describeSendFailureForLog,
+} from "@/lib/email/send-failure";
+import {
   breakerTripped,
   confirmEmailRequestDayKey,
   endOfUtcDay,
@@ -156,10 +160,13 @@ export async function POST(req: NextRequest) {
   const secret = getConfirmSecret();
   if (!secret) {
     // §1z P6 — confirming a DIFFERENT address is unavailable with an honest
-    // message; the account's own email (handled above) still works.
+    // message; the account's own email (handled above) still works. §1al
+    // POLISH-1-EMAIL (a) — 503 (a configuration state, not a server fault),
+    // not the old 500; the page maps 503 to a plain "not available right
+    // now" sentence and reserves 500 for a genuine database error below.
     return NextResponse.json(
       { error: "email_confirmation_unavailable" },
-      { status: 500 },
+      { status: 503 },
     );
   }
 
@@ -181,7 +188,7 @@ export async function POST(req: NextRequest) {
 
   // Same "empty items + render override" trick handleConflictingEmailClaim
   // already uses — send-digest.ts needs no change at all.
-  await sendDigestEmail({
+  const result = await sendDigestEmail({
     to: candidate,
     items: [],
     originUrl: "",
@@ -192,8 +199,29 @@ export async function POST(req: NextRequest) {
     },
   });
 
+  // §1al POLISH-1-EMAIL (f) — this route now checks the send result instead
+  // of discarding it. Safe to be specific about WHY it failed: this POST
+  // handler has exactly one send branch, so a failure here reflects Peer's
+  // own sender setup (or a transient provider outage) — never whether
+  // `candidate` belongs to someone else's account. No enumeration risk, and
+  // no counter refund (the daily request was already spent above).
+  if (!result.sent) {
+    console.error(
+      `[profile/confirm-email] confirmation send failed: ${describeSendFailureForLog(result)}`,
+    );
+    const reason = classifySendFailure(result);
+    return NextResponse.json(
+      { error: reason === "sender_not_verified" ? "sender_not_verified" : "confirmation_send_failed" },
+      { status: 502 },
+    );
+  }
+
   // Generic response either way — this route never states whether the
-  // address exists elsewhere or whether the send technically succeeded.
+  // address exists elsewhere (P9's enumeration protection: a request for an
+  // address already used elsewhere looks identical to a request for a
+  // brand-new one). It DOES now state whether the send itself technically
+  // succeeded (§1al (f) above) — that is a separate, safe distinction, not
+  // an enumeration leak.
   return NextResponse.json({ ok: true, confirmed: false });
 }
 

@@ -118,6 +118,64 @@ describe("POST validation (P9)", () => {
   });
 });
 
+describe("the confirmation send itself fails (§1al POLISH-1-EMAIL (f))", () => {
+  it("Resend's sandbox sender-not-allowed wording -> 502 sender_not_verified, no raw text", async () => {
+    mocks.sendDigestEmail.mockResolvedValue({
+      sent: false,
+      errorCode: "validation_error",
+      error:
+        "You can only send testing emails to your own email address (owner@example.test). To send emails to other recipients, please verify a domain at resend.com/domains.",
+    });
+
+    const response = await POST(postRequest({ email: "new@example.test" }));
+
+    expect(response.status).toBe(502);
+    expect(await response.json()).toEqual({ error: "sender_not_verified" });
+    expect(mocks.upsert).not.toHaveBeenCalled();
+  });
+
+  it("any other send failure -> 502 confirmation_send_failed, no raw text", async () => {
+    mocks.sendDigestEmail.mockResolvedValue({
+      sent: false,
+      errorCode: "validation_error",
+      error: "Invalid `to` field.",
+    });
+
+    const response = await POST(postRequest({ email: "new@example.test" }));
+
+    expect(response.status).toBe(502);
+    expect(await response.json()).toEqual({ error: "confirmation_send_failed" });
+  });
+
+  it("does not refund the daily confirmation-request counter on a send failure", async () => {
+    mocks.sendDigestEmail.mockResolvedValue({ sent: false, error: "boom" });
+
+    for (let i = 0; i < 5; i += 1) {
+      const response = await POST(postRequest({ email: `new${i}@example.test` }));
+      expect(response.status).toBe(502);
+    }
+    const sixth = await POST(postRequest({ email: "new5@example.test" }));
+    expect(sixth.status).toBe(429);
+  });
+
+  it("logs the provider's error name + message with the address redacted, never a raw address", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    mocks.sendDigestEmail.mockResolvedValue({
+      sent: false,
+      errorCode: "validation_error",
+      error: "You can only send testing emails to your own email address (owner@example.test).",
+    });
+
+    await POST(postRequest({ email: "new@example.test" }));
+
+    const logged = errorSpy.mock.calls.map((args) => args.join(" ")).join("\n");
+    expect(logged).toContain("validation_error");
+    expect(logged).toContain("[email]");
+    expect(logged).not.toContain("owner@example.test");
+    errorSpy.mockRestore();
+  });
+});
+
 describe("already-confirmed short-circuit (§2.2)", () => {
   it("account's own email: writes directly, no token, no email sent", async () => {
     const response = await POST(postRequest({ email: "Account@Example.test" }));
@@ -159,12 +217,12 @@ describe("already-confirmed short-circuit (§2.2)", () => {
 });
 
 describe("DIGEST_EMAIL_CONFIRM_SECRET unset — a DIFFERENT address is unavailable (§1z P6)", () => {
-  it("POST: honest 500, no email sent, no counter spent", async () => {
+  it("POST: honest 503 — not 500 (§1al POLISH-1-EMAIL (a)) — no email sent, no counter spent", async () => {
     vi.stubEnv("DIGEST_EMAIL_CONFIRM_SECRET", "");
 
     const response = await POST(postRequest({ email: "new@example.test" }));
 
-    expect(response.status).toBe(500);
+    expect(response.status).toBe(503);
     expect(await response.json()).toEqual({ error: "email_confirmation_unavailable" });
     expect(mocks.sendDigestEmail).not.toHaveBeenCalled();
   });

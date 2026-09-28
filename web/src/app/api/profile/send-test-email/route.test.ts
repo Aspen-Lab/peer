@@ -133,6 +133,120 @@ describe("destination resolution", () => {
   });
 });
 
+describe("no_address / intent_required never touch the counter (§1al POLISH-1-EMAIL (e))", () => {
+  it("5 intent_required failures spend nothing: the profile then gaining a focus still gets all 3 real sends", async () => {
+    mocks.maybeSingle.mockResolvedValue({
+      data: {
+        display_name: null, research_topics: [], preferred_methods: [],
+        current_project: null, current_challenges: null, disliked_topics: [],
+        preference_ledger: null, paper_count: 10, digest_email: "confirmed@example.test",
+      },
+      error: null,
+    });
+    for (let i = 0; i < 5; i += 1) {
+      const response = await POST(request());
+      const body = await response.json();
+      expect(response.status).toBe(400);
+      expect(body.reason).toBe("intent_required");
+    }
+    expect(mocks.runFeedPipeline).not.toHaveBeenCalled();
+
+    // The profile now has a research focus — if any of the 5 calls above
+    // had touched the daily counter, fewer than 3 of these would succeed.
+    mocks.maybeSingle.mockResolvedValue({
+      data: {
+        display_name: "Person Example", research_topics: [], preferred_methods: [],
+        current_project: "Stabilize sulfide electrolytes", current_challenges: null,
+        disliked_topics: [], preference_ledger: null, paper_count: 10,
+        digest_email: "confirmed@example.test",
+      },
+      error: null,
+    });
+    for (let i = 0; i < 3; i += 1) {
+      const response = await POST(request());
+      expect(response.status).toBe(200);
+    }
+    const fourth = await POST(request());
+    expect(fourth.status).toBe(429);
+  });
+
+  it("no_address failures spend nothing either", async () => {
+    mocks.getUser.mockResolvedValue({ data: { user: { id: "user-1", email: undefined } } });
+    mocks.maybeSingle.mockResolvedValue({
+      data: {
+        display_name: null, research_topics: [], preferred_methods: [],
+        current_project: "x", current_challenges: null, disliked_topics: [],
+        preference_ledger: null, paper_count: 10, digest_email: null,
+      },
+      error: null,
+    });
+    for (let i = 0; i < 5; i += 1) {
+      const response = await POST(request());
+      const body = await response.json();
+      expect(response.status).toBe(400);
+      expect(body.reason).toBe("no_address");
+    }
+    expect(mocks.runFeedPipeline).not.toHaveBeenCalled();
+  });
+});
+
+describe("the send itself fails (§1al POLISH-1-EMAIL (g))", () => {
+  it("Resend's sandbox sender-not-allowed wording -> reason sender_not_verified, status 502, no raw text", async () => {
+    mocks.sendDigestEmail.mockResolvedValue({
+      sent: false,
+      errorCode: "validation_error",
+      error: "You can only send testing emails to your own email address (owner@example.test).",
+    });
+
+    const response = await POST(request());
+    const body = await response.json();
+
+    expect(response.status).toBe(502);
+    expect(body).toEqual({ sent: false, reason: "sender_not_verified" });
+  });
+
+  it("any other send failure -> reason send_failed, status 502, no raw text", async () => {
+    mocks.sendDigestEmail.mockResolvedValue({
+      sent: false,
+      errorCode: "validation_error",
+      error: "Invalid `to` field.",
+    });
+
+    const response = await POST(request());
+    const body = await response.json();
+
+    expect(response.status).toBe(502);
+    expect(body).toEqual({ sent: false, reason: "send_failed" });
+  });
+
+  it("logs the provider's error name + message with addresses redacted, never a raw address", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    mocks.sendDigestEmail.mockResolvedValue({
+      sent: false,
+      errorCode: "validation_error",
+      error: "You can only send testing emails to your own email address (owner@example.test).",
+    });
+
+    await POST(request());
+
+    const logged = errorSpy.mock.calls.map((args) => args.join(" ")).join("\n");
+    expect(logged).toContain("validation_error");
+    expect(logged).toContain("[email]");
+    expect(logged).not.toContain("owner@example.test");
+    errorSpy.mockRestore();
+  });
+
+  it("still spends today's counter on a send failure (no refund)", async () => {
+    mocks.sendDigestEmail.mockResolvedValue({ sent: false, error: "boom" });
+    for (let i = 0; i < 3; i += 1) {
+      const response = await POST(request());
+      expect(response.status).toBe(502);
+    }
+    const fourth = await POST(request());
+    expect(fourth.status).toBe(429);
+  });
+});
+
 describe("Tier-0 / BYOK untouched (RED #11)", () => {
   it("calls runFeedPipeline with aiTier 0 and no systemSearchAllowed key at all", async () => {
     await POST(request());
