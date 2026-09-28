@@ -12,8 +12,9 @@ import {
   scoreKeyword,
   REQUIRED_TAG_T2_GROUNDING,
   REQUIRED_TAG_T3_GROUNDING,
+  SENSE_CONTEXT_DEMOTED_GROUNDING,
 } from "./keyword";
-import { canonicalize } from "./term-expand";
+import { canonicalize, termSpecificity } from "./term-expand";
 import { selectedSenseConcept } from "@/lib/feed/senses";
 
 // REQUIRED-GATE (ABC-JEV-INTEGRATION.md §1ao/§1an) — tests 2-10 of
@@ -238,24 +239,46 @@ describe("T4 — tag-anchored topical similarity", () => {
   );
 });
 
-describe("wrong-sense trap — documents today's baseline, not a fix (queued: SENSE-CONTEXT)", () => {
-  it("a constructed clinical 'electrolyte' paper still qualifies via T1, unchanged from before this task", () => {
-    // §1ao.2 — BINDING: clinical/other wrong-sense hits on a single literal
-    // word are explicitly NOT fixed by this item; the gap equals today's
-    // baseline (T1 unchanged) and is queued as SENSE-CONTEXT. This test
-    // documents that honestly rather than silently shipping a behavior
-    // change no one decided on. If SENSE-CONTEXT ships, THIS test flips to
-    // asserting rejection and becomes that item's acceptance test — do not
-    // delete it, rewrite its expectation.
+describe("wrong-sense trap — SENSE-CONTEXT (§1ap) now demotes it; rewritten, not deleted", () => {
+  it("a constructed clinical 'electrolyte' paper is DEMOTED (stays qualified, lower grounding), not dropped, once a battery context is declared", () => {
+    // §1ap.3 — BINDING. This is the SAME fixture a previous version of this
+    // test (pre-SENSE-CONTEXT) used to document an honest, un-fixed gap:
+    // "clinical/other wrong-sense hits on a single literal word are
+    // explicitly NOT fixed by REQUIRED-GATE (§1ao.2)... If SENSE-CONTEXT
+    // ships, THIS test flips to asserting rejection and becomes that item's
+    // acceptance test — do not delete it, rewrite its expectation." Per
+    // §1ap.3 the flip is DEMOTE, not DROP: the tag genuinely is present, so
+    // it stays in `matchedKeywords` (§1ao.8 — never state a false match:
+    // the word really is there), but its grounding drops to
+    // `SENSE_CONTEXT_DEMOTED_GROUNDING` because a battery-materials
+    // reader's OTHER declared context (their project text) shares no real
+    // vocabulary with a clinical electrolyte-imbalance paper once
+    // "electrolyte" itself is stripped from both sides (§1ap.2). A
+    // profile with NO declared context (as the original test had) would
+    // instead bypass — see the cold-start test in sense-context.test.ts —
+    // so this rewrite adds `seedTexts` to actually exercise the gate.
     const clinicalPaper = item("clinical-electrolyte", {
       title: "Serum electrolyte imbalance in critically ill patients: a retrospective cohort study",
       abstract:
         "We evaluated the prevalence of serum electrolyte imbalance among critically ill patients " +
         "admitted to intensive care.",
     });
-    const scored = scoreItems([clinicalPaper], { topics: ["electrolyte"] }, undefined, now);
+    const scored = scoreItems(
+      [clinicalPaper],
+      { topics: ["electrolyte"], seedTexts: [BATTERY_PROJECT_TEXT] },
+      undefined,
+      now,
+    );
     expect(scored.map((s) => s.id)).toEqual(["clinical-electrolyte"]);
     expect(scored[0].matchedKeywords).toEqual(["electrolyte"]);
+    // Demoted grounding, not the full T1 title-match grounding (1) this
+    // exact fixture would otherwise get (it names "electrolyte" in its
+    // title).
+    const specificity = termSpecificity(canonicalize("electrolyte"));
+    const demotedScore = (specificity * SENSE_CONTEXT_DEMOTED_GROUNDING) / 1.5;
+    const fullGroundingScore = (specificity * 1) / 1.5;
+    expect(scored[0].scoreBreakdown.keyword).toBeCloseTo(demotedScore, 4);
+    expect(scored[0].scoreBreakdown.keyword).toBeLessThan(fullGroundingScore);
   });
 });
 

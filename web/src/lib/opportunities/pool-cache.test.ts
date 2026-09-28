@@ -83,9 +83,10 @@ describe("daily opportunity pool cache key", () => {
     // otherwise collide in the shared `opportunity_pools` table. Asserted as
     // "not v5" rather than "is v6" so this test does not go stale on its own
     // the next time either version constant moves independently — papers is
-    // now v7 (REQUIRED-GATE, ABC-JEV-INTEGRATION.md §1ao.9; see the
-    // papers-specific PAPER_POOL_KEY_PREFIX assertion above) while events and
-    // jobs stay on CACHE_KEY_VERSION 6.
+    // now v9 (SENSE-CONTEXT round 2, ABC-JEV-INTEGRATION.md §1ap AMENDMENT 4;
+    // previously v8 via SENSE-CONTEXT round 1, before that v7 via
+    // REQUIRED-GATE §1ao.9; see the papers-specific PAPER_POOL_KEY_PREFIX
+    // assertion above) while events and jobs stay on CACHE_KEY_VERSION 6.
     for (const surface of ["papers", "events", "jobs"] as const) {
       expect(derivePoolCacheKey({ ...base, surface })).not.toMatch(/^peer-pool-v5-/);
     }

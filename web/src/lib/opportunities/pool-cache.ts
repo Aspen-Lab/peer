@@ -210,10 +210,24 @@ const CACHE_KEY_VERSION = 6;
 // (docs/jev-abc/REQUIRED-GATE-B-20260928T160542Z.md): the Required-topic
 // gate changed from a literal whole-phrase match to a T1-T4 qualification
 // union, so a v6 pool scored under the old literal-only rule must never be
-// served as if it reflects the new one. This bump shares the number with
-// `CACHE_KEY_VERSION` above by coincidence, not by a shared cause — see
-// `derivePoolCacheKey` below for how each is selected.
-const PAPER_CACHE_KEY_VERSION = 7;
+// served as if it reflects the new one. v8 — ABC-JEV-INTEGRATION.md
+// §1ap/SENSE-CONTEXT (docs/jev-abc/SENSE-CONTEXT-B-20260928T173815Z.md): a
+// short/ambiguous Required tag's T1-T3 literal hits can now be DEMOTED and
+// T4's (similarity-only) admission of such a tag now additionally requires
+// a context-agreement gate, so a v7 pool that admitted a wrong-domain paper
+// at full grounding, or through T4 alone, must never be served as if it
+// already reflects the gate. v9 — ABC-JEV-INTEGRATION.md §1ap AMENDMENT 4
+// (docs/jev-abc/SENSE-CONTEXT-C2-20260928T205712Z.md): the context-agreement
+// gate itself changed from a pool-relative measure (whose verdict on the
+// SAME paper could depend on how many other items were fetched that day) to
+// a pool-independent one built on a fixed shipped table, and a paper that
+// self-declares a conflicting abbreviation expansion is now a hard
+// non-match — a v8 pool scored under the old pool-relative gate (or without
+// the self-declared-expansion rule) must never be served as if it reflects
+// either change. These bumps share their numbers with `CACHE_KEY_VERSION`
+// above by coincidence, not by a shared cause — see `derivePoolCacheKey`
+// below for how each is selected.
+const PAPER_CACHE_KEY_VERSION = 9;
 /**
  * SINGLE SOURCE OF TRUTH for the literal key prefix a durable papers-pool
  * store may accept, derived from `PAPER_CACHE_KEY_VERSION` rather than

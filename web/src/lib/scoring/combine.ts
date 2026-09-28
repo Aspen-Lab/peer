@@ -6,7 +6,13 @@ import type {
   ScoreBreakdown,
 } from "./types";
 import { DEFAULT_WEIGHTS } from "./types";
-import { scoreKeyword } from "./keyword";
+import {
+  scoreKeyword,
+  isShortOrAmbiguous,
+  senseContextGate,
+  selfDeclaresDifferentSense,
+  SENSE_CONTEXT_DEMOTED_GROUNDING,
+} from "./keyword";
 import { buildIndex, scoreTfidf } from "./tfidf";
 import { scoreRecency } from "./recency";
 import { scoreSource } from "./source-weight";
@@ -39,6 +45,31 @@ export const REQUIRED_TAG_T4_WEIGHT = 0.3;
 function profileText(profile: ScoringProfile): string {
   return [
     ...profile.topics,
+    ...(profile.methods ?? []),
+    ...(profile.venues ?? []),
+    ...(profile.seedTexts ?? []),
+  ].join(" ");
+}
+
+/**
+ * SENSE-CONTEXT (ABC-JEV-INTEGRATION.md §1ap AMENDMENT 2(i)) — the reader's
+ * declared WORK only: project/challenge/advisor seed texts (`seedTexts`),
+ * `methods`, `venues`. Deliberately excludes `profile.topics` — a reader's
+ * OTHER Required tags must never count as each other's context. A real
+ * regression, found live in ranking.test.ts, motivated this: with two
+ * short, topically unrelated Required tags and no project text declared,
+ * `profileText()` (above) made each tag the other's only "context," so
+ * genuine matches for one topic got demoted for not relating to the other.
+ * Also excludes `softTopics` (Explore tags) — never wired into the papers
+ * `ScoringProfile` at all (confirmed by reading `pipeline.ts` in the
+ * SENSE-CONTEXT investigation), so there is nothing to exclude in code, only
+ * to not add. Reused by both `scoreKeyword`'s `senseContext` opts (below)
+ * and the T4 loop's own gate check — the SAME text, so a tag's demote
+ * threshold and its T4 admission threshold are judged against identical
+ * context.
+ */
+function senseContextText(profile: ScoringProfile): string {
+  return [
     ...(profile.methods ?? []),
     ...(profile.venues ?? []),
     ...(profile.seedTexts ?? []),
@@ -136,6 +167,7 @@ export function scoreItems(
   const w = normalizeWeights(weights);
   const index = buildIndex(items);
   const pText = profileText(profile);
+  const workText = senseContextText(profile);
   const preferenceDocumentFrequency = buildPreferenceDocumentFrequency(items);
   // Clean + index the ledger once for the whole batch (was re-cleaned + scanned
   // per item before).
@@ -170,6 +202,16 @@ export function scoreItems(
       // screen). See keyword.ts's own doc comment on this flag for why it
       // must default off for every other `scoreKeyword` caller.
       extendedRequiredMatch: true,
+      // SENSE-CONTEXT §1ap + AMENDMENT 2(i)/4 — `workText` (declared work
+      // only — NOT `pText`, which also carries every other Required topic
+      // and would let a reader's own unrelated tags count against each
+      // other). AMENDMENT 4: the gate itself is pool-independent now (a
+      // fixed shipped table, not this file's pool-wide `index`), so no
+      // index is passed here any more. keyword.ts's own bypass logic
+      // handles a reader who has declared no work text at all (today's
+      // behaviour). See keyword.ts's doc comment for why this is scoped to
+      // this ONE call.
+      senseContext: { contextText: workText },
     });
     // P2-S3 — UNION of the item-level tag and the older, request-scoped
     // `profile.admissionChannels` lookup, not one overriding the other.
@@ -218,6 +260,32 @@ export function scoreItems(
       for (const topic of literalMustTopics) {
         const canonicalTopic = canonicalize(topic);
         if (!canonicalTopic) continue;
+        // SENSE-CONTEXT rule (c) (§1ap AMENDMENT 4 ruling 4 / AMENDMENT 5 finding 1)
+        // — runs FIRST, ahead of the statistical gate below, same order keyword.ts's
+        // T1/T2/T3 path uses. AMENDMENT 5 HIGH-1: T4 runs precisely when
+        // `kw.score === 0`, which is exactly the state rule (c) leaves an item in
+        // when it fires on every literal Required tag — an item rule (c) correctly
+        // flags as the wrong sense could fall straight through to T4 for the SAME
+        // tag and be admitted there at full strength (confirmed by live execution,
+        // A2's review, before this fix: a constructed self-declared "light cycle oil
+        // (LCO)" item that also cleared the statistical gate was admitted with
+        // score=0.6807, matchedKeywords=[] — a silent full-strength admission).
+        // AMENDMENT 4.4's "contributes nothing for that paper" covers every tier,
+        // not just the literal one — this closes that off for T4 too.
+        if (selfDeclaresDifferentSense(item, topic).differs) continue;
+        // SENSE-CONTEXT §1ap.4 — T4 has no literal evidence to soften, so a
+        // short/ambiguous tag's admission is GATED here, not demoted: if
+        // the stripped-context check fails (and isn't bypassed for a
+        // reader with no other declared context), this topic contributes
+        // nothing to T4. Long/specific tags are completely unaffected —
+        // same gate keyword.ts's own T1/T2/T3 demote step uses, so a tag
+        // that would fail here is exactly the tag whose literal hit (if
+        // any) would already be demoted rather than trusted at face value.
+        // AMENDMENT 4 — pool-independent now, so no `index` argument.
+        if (isShortOrAmbiguous(topic)) {
+          const gate = senseContextGate(item, topic, workText); // AMENDMENT 2(i) — workText, not pText
+          if (!gate.bypass && !gate.pass) continue;
+        }
         const simTopic = scoreTfidf(item.id, topic, index);
         const simProject = scoreTfidf(item.id, pText, index);
         // "margin = max over the admitting path(s)" (§1ao ruling 3) — only a
@@ -285,8 +353,21 @@ export function scoreItems(
     // float above equal-relevance papers that lack those terms.
     const softBonus = softTopics.length > 0 ? softKw.score * 0.18 : 0;
     const base = w.keyword * kw.score + w.tfidf * tp + w.recency * rc + w.source * sr;
+    // SENSE-CONTEXT (§1ap AMENDMENT 2(ii)) — when EVERY Required-tag match
+    // this item has failed its context check (`kw.fullyDemoted`), the
+    // keyword-level demotion alone is not enough: an unstripped topicality
+    // score can still be high (a paper that is centrally, extensively about
+    // the ambiguous tag's own words shares heavy raw vocabulary with a
+    // pText that repeats those same words) and rescue the item's overall
+    // rank even though it has zero genuine context-agreeing evidence. This
+    // additional penalty applies to `base` only — the same place
+    // policyPenalty/legacyPenalty/preference.penalty already apply — never
+    // to softBonus/preference.boost, which come from an unrelated signal
+    // (Explore topics, the preference ledger) this item's Required-tag
+    // demotion says nothing about.
+    const senseContextPenalty = kw.fullyDemoted ? SENSE_CONTEXT_DEMOTED_GROUNDING : 1;
     const combined = clamp01(
-      base * policyPenalty * legacyPenalty * preference.penalty +
+      base * policyPenalty * legacyPenalty * preference.penalty * senseContextPenalty +
         softBonus +
         preference.boost,
     );
