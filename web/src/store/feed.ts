@@ -817,6 +817,53 @@ function restoreByScore<TItem extends { id: string; relevanceScore?: number }>(
   );
 }
 
+/**
+ * SIGNIN-MERGE (ABC-JEV-INTEGRATION.md §1af/§1aj, ruling P2) — union by id,
+ * never replace. `undefined` means "nothing to merge from" (the field was
+ * omitted, or — see feed-sync.tsx's own fix — a pull that FAILED is now
+ * passed through as `undefined` rather than coalesced to `[]`) and leaves
+ * `local` completely untouched: this is what makes a failed or empty pull
+ * safe (P3 — it can never shrink local data). A genuinely successful pull
+ * that returns a real, smaller list than local still cannot drop anything,
+ * because `local`'s own entries are unioned back in below, never discarded.
+ *
+ * A shared id keeps LOCAL's own copy of the item — the guide's own note
+ * (docs/jev-abc/SIGNIN-MERGE-B-20260928T025444Z.md §4a) calls choosing which
+ * side's copy of a duplicate wins "cosmetic, low stakes", not escalated by
+ * the manager's ruling, so the simplest safe choice is taken here rather
+ * than inventing a tie-break the ruling never asked for. Ordering: the
+ * account's own order first (a returning device's list doesn't visually
+ * reshuffle), then any local-only additions appended after.
+ */
+function unionById<TItem extends { id: string }>(
+  remote: TItem[] | undefined,
+  local: TItem[],
+): TItem[] {
+  if (remote === undefined) return local;
+  const localById = new Map(local.map((item) => [item.id, item] as const));
+  const seen = new Set<string>();
+  const out: TItem[] = [];
+  for (const item of remote) {
+    if (seen.has(item.id)) continue;
+    seen.add(item.id);
+    out.push(localById.get(item.id) ?? item);
+  }
+  for (const item of local) {
+    if (seen.has(item.id)) continue;
+    seen.add(item.id);
+    out.push(item);
+  }
+  return out;
+}
+
+/** Same union-never-replace rule as `unionById`, for the boolean read-id set. */
+function unionReadItems(
+  remote: Record<string, true> | undefined,
+  local: Record<string, true>,
+): Record<string, true> {
+  return remote === undefined ? local : { ...remote, ...local };
+}
+
 function syncSavedState<
   TItem extends { id: string; isSaved?: boolean; feedback?: ItemFeedback },
 >(
@@ -1121,9 +1168,21 @@ interface FeedState {
   undoDismiss: () => void;
   commitDismiss: () => void;
   /**
-   * Replace saved lists and readItems with a server snapshot. Called by
-   * FeedSync on login. Local-only changes that haven't been flushed yet
-   * are merged in (see FeedSync for the merge pass).
+   * Union saved lists and readItems with a server snapshot — never a
+   * replace (SIGNIN-MERGE, ABC-JEV-INTEGRATION.md §1aj ruling P2: "saved
+   * papers / reading history / feedback: always union, never replace —
+   * mandatory"). Called by FeedSync on login. `undefined` for a field means
+   * "nothing to merge from" (the pull failed, or the field was omitted) and
+   * leaves that field's local data completely untouched — see `unionById`/
+   * `unionReadItems`'s own doc comments for the full reasoning, and
+   * feed-sync.tsx for why a failed pull now actually reaches this as
+   * `undefined` instead of being coalesced to `[]` first.
+   *
+   * Trade-off, deliberate and ruled (recorded for a reviewer, not hidden): an
+   * item removed on a DIFFERENT device no longer disappears here via this
+   * sign-in sync path, because nothing local is ever dropped by a pull
+   * anymore. An explicit unsave on THIS device is unaffected — that goes
+   * through its own direct store action, not through this function.
    */
   hydrateFromRemote: (remote: {
     savedPapers?: Paper[];
@@ -2343,9 +2402,15 @@ export const useFeedStore = create<FeedState>()(
 
       hydrateFromRemote: (remote) => {
         set((s) => {
-          const nextSavedPapers = remote.savedPapers ?? s.savedPapers;
-          const nextSavedEvents = remote.savedEvents ?? s.savedEvents;
-          const nextSavedJobs = remote.savedJobs ?? s.savedJobs;
+          // SIGNIN-MERGE (§1aj P2) — union, never replace. See `unionById`'s
+          // own doc comment: this is the fix for "saved papers gone the
+          // instant sign-in completes" (§1.2/§1.3 of the SIGNIN-MERGE
+          // guide) — a failed or empty pull can no longer make a locally
+          // saved item disappear, regardless of which HTTP failure caused
+          // it, because local's own entries are always unioned back in.
+          const nextSavedPapers = unionById(remote.savedPapers, s.savedPapers);
+          const nextSavedEvents = unionById(remote.savedEvents, s.savedEvents);
+          const nextSavedJobs = unionById(remote.savedJobs, s.savedJobs);
           const savedPaperIds = new Set(
             nextSavedPapers.map((paper) => paper.id),
           );
@@ -2413,7 +2478,7 @@ export const useFeedStore = create<FeedState>()(
             paperFeedback: nextPaperFeedback,
             eventFeedback: nextEventFeedback,
             jobFeedback: nextJobFeedback,
-            readItems: remote.readItems ?? s.readItems,
+            readItems: unionReadItems(remote.readItems, s.readItems),
             appliedAt:
               remote.savedJobs === undefined
                 ? s.appliedAt

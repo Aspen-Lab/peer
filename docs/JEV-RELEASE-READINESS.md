@@ -113,6 +113,46 @@ switched off, in case it's ever wanted again later — nothing about it was torn
 daily spending limits on Jev are exactly the same as before; this change only affects
 where the password is kept and how directly Peer reaches Jev, not how much it can spend.
 
+**You can now sign in with Google, not just GitHub.** A second button sits next to the
+existing one, wherever signing in already happened. If the email address on your GitHub
+account is the same as the one on your Google account, the two are treated as exactly
+the same person the moment you use the new button — one saved profile, one reading
+history, one set of email settings, automatically, with nothing for you to turn on. If
+the two addresses are genuinely different, signing in with the other one today starts a
+second, separate account rather than joining the first one — there is no button yet that
+lets you say "these are both me" after the fact, and building one is a known, separate
+piece of future work, not something this round tried to solve. A one-time setup (a few
+minutes, in Google's and your database provider's own dashboards, never inside this
+project's own files) is needed before the new button works at all, and a short walk-
+through for it, plus the one quick check you can do yourself to confirm the "same person,
+one account" behavior actually holds for your own two accounts, was written alongside
+this round's other notes.
+
+**Signing in used to silently lose what was already on your device — that is fixed, and
+a way to bring back an old backup now exists.** Until now, the very first time someone
+signed in, whatever they had already typed into their profile — research interests,
+current project, and more — could fail to reach their account at all, and in some cases
+could be replaced by whatever the account already held, even if that was nothing. Two
+separate causes were found and closed. First, one technical gap meant every save to at
+least one real account was silently failing, so nothing that person set ever reached
+their profile at all; that is now fixed, though one more small step on the database
+side (already asked for) is needed before every field saves with full fidelity. Second,
+and for everyone going forward: the moment of signing in now genuinely combines what is
+on this device with whatever the account already holds, rather than letting either one
+silently overwrite the other. Research topics and saved papers from both sides are kept,
+never dropped; if a plain setting like your name or school disagrees between the two,
+whichever this device currently shows wins, once, right at sign-in, and ordinary syncing
+continues normally after that. Saved papers and reading history now follow the same
+"never silently drop something" rule on every sign-in and every sync afterward, not only
+the first one. If a save to your account ever fails after that — a connection hiccup,
+for instance — you are now told so, in plain words, on your profile page, instead of the
+failure staying invisible; nothing on your own device is lost either way while that gets
+sorted out. Separately, a quiet "Restore from a backup file" control now sits on the
+profile page, for anyone holding an old exported copy of their profile: it brings back
+what that file contains without erasing anything added since, and it never uploads a
+small number of old, no-longer-used outside-service passwords the file might still
+contain.
+
 ### What's safe today
 
 Every switch, when off, leaves Peer working exactly like it does right now — this has

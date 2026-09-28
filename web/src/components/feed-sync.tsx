@@ -14,12 +14,36 @@
 // Mount once, near the root, alongside <ProfileSync />.
 
 import { useEffect, useRef } from "react";
+import { create } from "zustand";
 import { isAuthSessionMissingError } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase/client";
 import { sessionStep } from "@/lib/feed/session-step";
 import { useFeedStore } from "@/store/feed";
 import type { Paper, Event, Job } from "@/types";
 import { apiFetch } from "@/lib/api";
+
+/**
+ * SIGNIN-MERGE (ABC-JEV-INTEGRATION.md §1af/§1aj, ruling P3) — "a failed push
+ * is retried on the next change and shown to the user once in plain words."
+ * `console.warn` alone (the old behaviour, on every push helper below) never
+ * reached the user. `web/src/app/profile/page.tsx` shows a small, calm line
+ * while `pushFailed` is true. Unlike profile's steady-state push (a single
+ * diffed PUT with a natural "next change" to retry on), this migration push
+ * is a one-time, per-item batch run once at sign-in for whatever was saved
+ * locally before the account existed — there is no equivalent per-item retry
+ * queue built here (recorded, not hidden, in the SIGNIN-MERGE checkpoint):
+ * the item stays saved on THIS device either way (a failed push never
+ * deletes anything locally), only the account's copy of it lags.
+ */
+export const useFeedSyncStatus = create<{ pushFailed: boolean }>(() => ({
+  pushFailed: false,
+}));
+function markFeedPushFailed() {
+  useFeedSyncStatus.setState({ pushFailed: true });
+}
+function clearFeedPushFailed() {
+  useFeedSyncStatus.setState({ pushFailed: false });
+}
 
 interface SavedApiRow {
   itemId: string;
@@ -61,25 +85,29 @@ async function pushSaved(
   itemId: string,
   itemKind: "paper" | "event" | "job",
   payload: unknown,
-) {
+): Promise<boolean> {
   try {
     await apiFetch("/api/saved", {
       method: "POST",
       body: JSON.stringify({ itemId, itemKind, payload }),
     });
+    return true;
   } catch (err) {
     console.warn("[FeedSync] push saved failed", err);
+    return false;
   }
 }
 
-async function pushRead(itemId: string) {
+async function pushRead(itemId: string): Promise<boolean> {
   try {
     await apiFetch("/api/read", {
       method: "POST",
       body: JSON.stringify({ itemId }),
     });
+    return true;
   } catch (err) {
     console.warn("[FeedSync] push read failed", err);
+    return false;
   }
 }
 
@@ -119,26 +147,58 @@ export function FeedSync() {
       //    truth from this point — but we don't want to drop anything the
       //    user saved while signed out.
       const local = useFeedStore.getState();
-      const localPushes: Promise<void>[] = [];
+      const localPushes: Promise<boolean>[] = [];
       for (const p of local.savedPapers) localPushes.push(pushSaved(p.id, "paper", p));
       for (const e of local.savedEvents) localPushes.push(pushSaved(e.id, "event", e));
       for (const j of local.savedJobs) localPushes.push(pushSaved(j.id, "job", j));
       for (const id of Object.keys(local.readItems)) localPushes.push(pushRead(id));
-      await Promise.allSettled(localPushes);
+      const pushResults = await Promise.allSettled(localPushes);
+      // SIGNIN-MERGE (§1aj P3) — this batch's result WAS never inspected
+      // before (the guide's §1's own finding); now a single failure anywhere
+      // in it surfaces once, in plain words, instead of only a console.warn.
+      // Nothing here is destructive either way: a failed push leaves the
+      // item exactly as saved on this device (see pushSaved/pushRead —
+      // neither ever removes anything locally).
+      if (pushResults.length > 0) {
+        const anyFailed = pushResults.some(
+          (result) => result.status === "rejected" || (result.status === "fulfilled" && result.value === false),
+        );
+        if (anyFailed) markFeedPushFailed();
+        else clearFeedPushFailed();
+      }
 
       // 2. Now pull the merged server state and hydrate.
       const [savedRows, readRows] = await Promise.all([fetchSaved(), fetchRead()]);
 
-      const savedPapers: Paper[] = [];
-      const savedEvents: Event[] = [];
-      const savedJobs: Job[] = [];
-      for (const row of savedRows ?? []) {
-        if (row.itemKind === "paper") savedPapers.push(row.payload as Paper);
-        else if (row.itemKind === "event") savedEvents.push(row.payload as Event);
-        else if (row.itemKind === "job") savedJobs.push(row.payload as Job);
+      // SIGNIN-MERGE (§1aj P2/P3) — `null` (the pull FAILED) and `[]` (the
+      // pull succeeded and the account genuinely holds zero rows) must reach
+      // `hydrateFromRemote` as different values. `undefined` is what its
+      // union helpers (store/feed.ts's `unionById`/`unionReadItems`) treat as
+      // "nothing to merge from — leave local exactly as it is"; a concrete
+      // (possibly empty) array is a real answer to union against. Coalescing
+      // both cases to `[]` here, before hydrateFromRemote ever saw the
+      // difference, is exactly what let a failed pull silently wipe local
+      // saves the instant sign-in completed (§1.2/§1.3 of the SIGNIN-MERGE
+      // guide) — `hydrateFromRemote` already had a `?? local` fallback for
+      // this, but it could only ever engage on a literal `undefined`, which
+      // never reached it from here.
+      let savedPapers: Paper[] | undefined;
+      let savedEvents: Event[] | undefined;
+      let savedJobs: Job[] | undefined;
+      if (savedRows !== null) {
+        savedPapers = [];
+        savedEvents = [];
+        savedJobs = [];
+        for (const row of savedRows) {
+          if (row.itemKind === "paper") savedPapers.push(row.payload as Paper);
+          else if (row.itemKind === "event") savedEvents.push(row.payload as Event);
+          else if (row.itemKind === "job") savedJobs.push(row.payload as Job);
+        }
       }
-      const readItems: Record<string, true> = {};
-      for (const r of readRows ?? []) readItems[r.itemId] = true;
+      const readItems: Record<string, true> | undefined =
+        readRows === null
+          ? undefined
+          : Object.fromEntries(readRows.map((row) => [row.itemId, true as const]));
 
       useFeedStore.getState().hydrateFromRemote({
         savedPapers,

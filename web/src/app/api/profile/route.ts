@@ -314,8 +314,22 @@ export async function PUT(request: NextRequest) {
     .select()
     .single();
 
+  // SIGNIN-MERGE (§1aj) — mirror the digest_email/preference_ledger branches
+  // right below: an optional column that hasn't been migrated in yet must
+  // never fail the WHOLE upsert. Before this fix, ANY PUT carrying feedIntent
+  // (i.e. almost every real save — remoteProfilePayload attaches it whenever
+  // the profile has any real content) 409'd atomically while the column was
+  // missing, and NONE of the legacy flat columns (research_topics,
+  // current_project, digest_*, …) reached the account either — an upsert
+  // that errors writes nothing. feedIntent fidelity is still lost until the
+  // migration lands, but every other field now saves regardless.
   if (error && "feed_intent" in row && isMissingFeedIntentColumn(error)) {
-    return NextResponse.json({ error: "feed_intent_schema_unavailable" }, { status: 409 });
+    delete row.feed_intent;
+    ({ data, error } = await supabase
+      .from("profiles")
+      .upsert(row, { onConflict: "user_id" })
+      .select()
+      .single());
   }
 
   // Graceful fallback: if the optional digest_email column hasn't been added to

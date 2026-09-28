@@ -118,14 +118,60 @@ describe("profile route work-authorisation mapping", () => {
     expect(upsert).not.toHaveBeenCalled();
   });
 
-  it("reports a precise feed_intent schema error after one write and never delete-retries it", async () => {
-    const upsert = vi.fn(() => ({ select: () => ({ single: async () => ({ data: null, error: { message: "Could not find the 'feed_intent' column of 'profiles' in the schema cache" } }) }) }));
+  // SIGNIN-MERGE (§1aj) — rewritten, not deleted: the OLD behaviour this test
+  // asserted (a bare 409, no retry) was the root cause of "every profile save
+  // fails" (ABC-JEV-INTEGRATION.md §1ah/§1aj) — a feed_intent-carrying PUT is
+  // almost every real save, since remoteProfilePayload attaches feedIntent
+  // whenever the profile has any real content, so this atomically failed the
+  // WHOLE upsert on every save for any account whose Supabase project lags the
+  // feed_intent migration. The route must now mirror its digest_email/
+  // preference_ledger siblings: strip the unavailable field and retry once, so
+  // the legacy flat columns (research_topics, current_project, digest_*, …)
+  // still reach the account.
+  it("degrades gracefully when feed_intent's column is missing: strips it and retries so the rest of the profile still saves", async () => {
+    const firstError = { message: "Could not find the 'feed_intent' column of 'profiles' in the schema cache" };
+    // The route mutates its own `row` object in place before retrying
+    // (`delete row.feed_intent`), so `upsert.mock.calls` would show the SAME
+    // (already-mutated) object for both calls if read after the fact — each
+    // call is snapshotted (shallow-copied) here, at the moment it happens,
+    // to see what the first attempt actually sent.
+    const seenRows: Record<string, unknown>[] = [];
+    const upsert = vi.fn((row: Record<string, unknown>) => {
+      seenRows.push({ ...row });
+      return seenRows.length === 1
+        ? { select: () => ({ single: async () => ({ data: null, error: firstError }) }) }
+        : { select: () => ({ single: async () => ({ data: { ...rowFixture, research_topics: ["solid-state battery"] }, error: null }) }) };
+    });
+    mocks.createClient.mockResolvedValueOnce({ auth: { getUser: async () => ({ data: { user: { id: "user-1" } } }) }, from: () => ({ upsert }) });
+    const response = await PUT(
+      new NextRequest("http://peer.test/api/profile", {
+        method: "PUT",
+        body: JSON.stringify({ feedIntent: explicitEmptyIntent, researchTopics: ["solid-state battery"] }),
+      }),
+    );
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      profile: { researchTopics: ["solid-state battery"] },
+    });
+    expect(upsert).toHaveBeenCalledTimes(2);
+    // First attempt carried feed_intent…
+    expect(seenRows[0]).toHaveProperty("feed_intent");
+    // …the retry dropped it but kept every other field.
+    expect(seenRows[1]).not.toHaveProperty("feed_intent");
+    expect(seenRows[1]).toMatchObject({ research_topics: ["solid-state battery"] });
+  });
+
+  it("still reports feed_intent_schema_unavailable when the retry itself fails for an unrelated reason", async () => {
+    const firstError = { message: "Could not find the 'feed_intent' column of 'profiles' in the schema cache" };
+    const secondError = { message: "connection reset" };
+    const upsert = vi
+      .fn()
+      .mockReturnValueOnce({ select: () => ({ single: async () => ({ data: null, error: firstError }) }) })
+      .mockReturnValueOnce({ select: () => ({ single: async () => ({ data: null, error: secondError }) }) });
     mocks.createClient.mockResolvedValueOnce({ auth: { getUser: async () => ({ data: { user: { id: "user-1" } } }) }, from: () => ({ upsert }) });
     const response = await PUT(new NextRequest("http://peer.test/api/profile", { method: "PUT", body: JSON.stringify({ feedIntent: explicitEmptyIntent }) }));
-    expect(response.status).toBe(409);
-    await expect(response.json()).resolves.toEqual({ error: "feed_intent_schema_unavailable" });
-    expect(upsert).toHaveBeenCalledTimes(1);
-    expect((upsert.mock.calls as unknown[][])[0]?.[0]).toHaveProperty("feed_intent");
+    expect(response.status).toBe(500);
+    expect(upsert).toHaveBeenCalledTimes(2);
   });
   it("reads authorised countries from a remote profile row", () => {
     expect(profileRowToProfile(rowFixture).authorisedCountries).toEqual([
@@ -501,5 +547,103 @@ describe("GET /api/profile delivers a real allowance (R-ENT-3)", () => {
     const { profile } = (await body()) as { profile: Record<string, unknown> };
 
     expect(Object.keys(profile).filter((k) => /plan|trial/i.test(k))).toEqual([]);
+  });
+
+  /**
+   * GOOGLE-SIGNIN (ABC-JEV-INTEGRATION.md §1ad/§1ai) — the guide's "Peer's
+   * own code identity-linking guarantee" (§0.3, §3): this route must never
+   * key a lookup off provider identity, only off the session's `user.id`.
+   * The mocked `eq()` in this file's shared `createClient` stub ignores its
+   * arguments (matching every other test above), so what this actually
+   * proves is narrower and honest: a session `user` object shaped like a
+   * real Google sign-in (user_metadata/app_metadata present, provider
+   * fields, no GitHub-only fields) maps to the exact same profile as every
+   * GitHub-shaped test above — nothing here branches on, or trips over,
+   * that shape. The write-side guarantee (the actual `user_id` reaching the
+   * database) is proved directly below, where the mock DOES capture the
+   * upsert argument.
+   */
+  it("GOOGLE-SIGNIN — maps the profile identically for a session user carrying Google-shaped user_metadata/app_metadata", async () => {
+    mocks.getUser.mockResolvedValue({
+      data: {
+        user: {
+          id: "user-1",
+          email: "reader@gmail.com",
+          user_metadata: {
+            full_name: "Ada Lovelace",
+            name: "Ada Lovelace",
+            avatar_url: "https://lh3.googleusercontent.com/a/avatar.jpg",
+            picture: "https://lh3.googleusercontent.com/a/avatar.jpg",
+          },
+          app_metadata: { provider: "google", providers: ["google", "github"] },
+        },
+      },
+      error: null,
+    });
+    mocks.maybeSingle.mockResolvedValue({ data: rowFixture, error: null });
+
+    const { profile } = (await body()) as { profile: Record<string, unknown> };
+
+    expect(profile.authorisedCountries).toEqual(["United States", "Canada"]);
+    expect(profile.displayName).toBe(rowFixture.display_name);
+  });
+});
+
+/**
+ * GOOGLE-SIGNIN (ABC-JEV-INTEGRATION.md §1ad/§1ai) — the write-side half of
+ * the same guarantee, where the mock captures the actual upsert argument:
+ * `profilePatchToRow(body, user.id)` takes `user.id` as a separate function
+ * argument derived from `supabase.auth.getUser()`, never from the request
+ * body — this route's own header comment already states the rule ("we
+ * still derive user_id from the session server-side so clients can't claim
+ * someone else's row"). These two tests are new evidence for that existing
+ * rule under a Google-shaped session and a body that tries to smuggle an
+ * identity-looking field, not a new mechanism.
+ */
+describe("GOOGLE-SIGNIN — PUT /api/profile derives user_id only from the session (identity-linking guarantee)", () => {
+  it("upserts under the session's real user.id even when that session user is Google-shaped, and drops a forged user_id/provider from the body", async () => {
+    const upsert = vi.fn(() => ({
+      select: () => ({ single: async () => ({ data: rowFixture, error: null }) }),
+    }));
+    mocks.createClient.mockResolvedValueOnce({
+      auth: {
+        getUser: async () => ({
+          data: {
+            user: {
+              id: "user-1",
+              email: "reader@gmail.com",
+              user_metadata: {
+                full_name: "Ada Lovelace",
+                avatar_url: "https://lh3.googleusercontent.com/a/avatar.jpg",
+              },
+              app_metadata: { provider: "google", providers: ["google", "github"] },
+            },
+          },
+        }),
+      },
+      from: () => ({ upsert }),
+    });
+
+    const response = await PUT(
+      new NextRequest("http://peer.test/api/profile", {
+        method: "PUT",
+        body: JSON.stringify({
+          displayName: "Ada",
+          // Neither field is a real UserProfile key — profilePatchToRow maps
+          // a fixed, named set of fields and would drop these even if the
+          // route never separately re-derived user.id; asserted anyway as
+          // belt-and-braces evidence, matching "the plan is server-owned"'s
+          // own style above.
+          user_id: "someone-elses-id",
+          provider: "google",
+        } as never),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    const written = (upsert.mock.calls as unknown[][])[0]?.[0] as Record<string, unknown>;
+    expect(written.user_id).toBe("user-1");
+    expect(written.display_name).toBe("Ada");
+    expect(Object.keys(written)).not.toContain("provider");
   });
 });

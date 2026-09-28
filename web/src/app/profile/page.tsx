@@ -28,6 +28,9 @@ import { IconBook, IconBuilding, IconCheck } from "@/components/icons";
 import { PageContainer } from "@/components/ui/page-container";
 import { PageSpread } from "@/components/ui/page-spread";
 import { AccountSection } from "@/components/account/account-section";
+import { RestoreFromBackup } from "@/components/profile/restore-backup";
+import { useProfileSyncStatus } from "@/components/profile-sync";
+import { useFeedSyncStatus } from "@/components/feed-sync";
 import { VersionLine } from "@/components/shell/version-line";
 import { AiKeyFields } from "@/components/profile/ai-setup";
 import { Toggle } from "@/components/ui/toggle";
@@ -65,6 +68,27 @@ export function DataSourcesLink() {
 // wizard share one source of truth.
 
 // ── Icons ───────────────────────────────────────────────────────
+
+/**
+ * SIGNIN-MERGE (ABC-JEV-INTEGRATION.md §1af/§1aj, ruling P3) — "a failed
+ * push is retried on the next change and shown to the user once in plain
+ * words." Both profile-sync.tsx and feed-sync.tsx used to only
+ * `console.warn` a failed save; this is the one calm, honest line that
+ * covers both — the smallest change that makes the failure visible, reusing
+ * the page's existing plain-inline-message style (see e.g.
+ * ProfileUploads' own `role="alert"` line) rather than inventing a new
+ * notice/toast component this codebase doesn't otherwise have.
+ */
+function SyncStatusNotice() {
+  const profilePushFailed = useProfileSyncStatus((s) => s.pushFailed);
+  const feedPushFailed = useFeedSyncStatus((s) => s.pushFailed);
+  if (!profilePushFailed && !feedPushFailed) return null;
+  return (
+    <p role="alert" className="mb-8 -mt-4 text-body-sm text-text-muted leading-relaxed measure-ui">
+      Couldn&rsquo;t save to your account — your changes are kept on this device.
+    </p>
+  );
+}
 
 function IconUser() {
   return (
@@ -227,6 +251,7 @@ export default function ProfilePage() {
       {/* ── Account — the app's only sign-in, so it is first, not 1700px
           down under every settings block. Only when Supabase is configured. ── */}
       <AccountSection className="mb-10 pb-8 border-b border-border" />
+      <SyncStatusNotice />
 
       {mode === "view" ? (
         <>
@@ -294,6 +319,7 @@ export default function ProfilePage() {
           </svg>
           Replay walkthrough
         </button>
+        <RestoreFromBackup />
         {!showLogout ? (
           <button
             onClick={() => setShowLogout(true)}

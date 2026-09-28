@@ -26,7 +26,7 @@ vi.mock("zustand/middleware", () => ({
   },
 }));
 
-import { defaultProfile, type Event, type Job } from "@/types";
+import { defaultProfile, type Event, type Job, type Paper } from "@/types";
 import { activePaperTopicsKey, useFeedStore } from "@/store/feed";
 import { useProfileStore } from "@/store/profile";
 // P4-S5b-FIX2 (Round 3) — the same already-exported "has the initial auth
@@ -796,6 +796,114 @@ describe("feed lane loading", () => {
     expect(restored.submittedAt[event.id]).toBe(
       "2026-07-30T17:00:00.000Z",
     );
+  });
+
+  // SIGNIN-MERGE (ABC-JEV-INTEGRATION.md §1af/§1aj, ruling P2/P3) — "saved
+  // papers / reading history / feedback: always union, never replace —
+  // mandatory" + "a failed or empty pull may never shrink local data."
+  // Direct regression tests for §1.2/§1.3 of
+  // docs/jev-abc/SIGNIN-MERGE-B-20260928T025444Z.md ("saved papers gone the
+  // instant sign-in completes") — proven at the store boundary, where the
+  // actual merge decision lives. `feed-sync.tsx` is a thin wrapper that now
+  // passes a field through as `undefined` when ITS pull failed, rather than
+  // coalescing to `[]` first (see that file's own comment) — these tests
+  // exercise `hydrateFromRemote` directly with exactly the shapes it now
+  // actually receives from both a failed and a successful-but-empty pull.
+  describe("hydrateFromRemote — union, never replace (SIGNIN-MERGE §1aj P2/P3)", () => {
+    const localOnlyPaper: Paper = {
+      id: "paper-local-only",
+      title: "A paper saved only on this device",
+      authors: [],
+      relevanceReason: "",
+      venue: "Venue",
+      source: "other",
+      summaryIntro: "",
+      summaryExperimentKeywords: [],
+      summaryResultDiscussion: "",
+      isSaved: true,
+    };
+    const accountPaper: Paper = {
+      id: "paper-from-account",
+      title: "A paper this account already had saved",
+      authors: [],
+      relevanceReason: "",
+      venue: "Venue",
+      source: "other",
+      summaryIntro: "",
+      summaryExperimentKeywords: [],
+      summaryResultDiscussion: "",
+      isSaved: true,
+    };
+
+    it("a locally-saved item survives a real pull that doesn't happen to include it (union, not replace)", () => {
+      useFeedStore.setState({
+        savedPapers: [localOnlyPaper],
+        paperFeedback: { [localOnlyPaper.id]: "saved" },
+      });
+      useFeedStore.getState().hydrateFromRemote({ savedPapers: [accountPaper] });
+      const ids = useFeedStore.getState().savedPapers.map((p) => p.id);
+      expect(ids).toContain(localOnlyPaper.id);
+      expect(ids).toContain(accountPaper.id);
+      // The prune-on-unsave loop must not have deleted this local save's
+      // feedback either — it is still genuinely saved on this device.
+      expect(useFeedStore.getState().paperFeedback[localOnlyPaper.id]).toBe("saved");
+    });
+
+    it("saved papers survive sign-in when the pull fails (savedPapers left undefined, never coalesced to [])", () => {
+      useFeedStore.setState({ savedPapers: [localOnlyPaper] });
+      // A failed pull, exactly as feed-sync.tsx now passes it through: the
+      // field is simply absent, never a bare `[]`.
+      useFeedStore.getState().hydrateFromRemote({});
+      // `syncSavedState` annotates every saved item with a computed
+      // isSaved/feedback pair on the way out (existing, unrelated
+      // behaviour) — what this test proves is survival, so it compares the
+      // id and the source fields the fixture itself set, not the whole
+      // object shape.
+      expect(useFeedStore.getState().savedPapers).toMatchObject([
+        { id: localOnlyPaper.id, title: localOnlyPaper.title },
+      ]);
+    });
+
+    it("saved papers survive sign-in when the pull succeeds empty — a genuinely-empty account must not erase local either", () => {
+      useFeedStore.setState({ savedPapers: [localOnlyPaper] });
+      useFeedStore.getState().hydrateFromRemote({ savedPapers: [] });
+      expect(useFeedStore.getState().savedPapers).toMatchObject([
+        { id: localOnlyPaper.id, title: localOnlyPaper.title },
+      ]);
+    });
+
+    it("readItems: a locally-read id survives when the pull fails (readItems left undefined)", () => {
+      useFeedStore.setState({ readItems: { "paper-read-locally": true } });
+      useFeedStore.getState().hydrateFromRemote({});
+      expect(useFeedStore.getState().readItems).toEqual({ "paper-read-locally": true });
+    });
+
+    it("readItems: unions rather than replaces when the pull succeeds with a different set", () => {
+      useFeedStore.setState({ readItems: { "paper-read-locally": true } });
+      useFeedStore.getState().hydrateFromRemote({ readItems: { "paper-read-on-account": true } });
+      expect(useFeedStore.getState().readItems).toEqual({
+        "paper-read-locally": true,
+        "paper-read-on-account": true,
+      });
+    });
+
+    it("orders the account's own list first, then local-only additions", () => {
+      useFeedStore.setState({ savedPapers: [localOnlyPaper] });
+      useFeedStore.getState().hydrateFromRemote({ savedPapers: [accountPaper] });
+      expect(useFeedStore.getState().savedPapers.map((p) => p.id)).toEqual([
+        accountPaper.id,
+        localOnlyPaper.id,
+      ]);
+    });
+
+    it("keeps local's own copy of an item that exists on both sides, rather than the account's", () => {
+      const localCopy: Paper = { ...accountPaper, title: "Locally edited title" };
+      useFeedStore.setState({ savedPapers: [localCopy] });
+      useFeedStore.getState().hydrateFromRemote({ savedPapers: [accountPaper] });
+      expect(useFeedStore.getState().savedPapers).toMatchObject([
+        { id: accountPaper.id, title: "Locally edited title" },
+      ]);
+    });
   });
 
   // P4-S5a (Round 3) — ABC-JEV-INTEGRATION.md §1p.C.7, F-A-P4-02/-05 client
