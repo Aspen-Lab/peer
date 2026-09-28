@@ -315,7 +315,31 @@ function DailyBriefingPage() {
           read any yet. */}
       <div className="mt-6 flex flex-wrap items-start justify-between gap-x-6 gap-y-4">
         {papers.length > 0 ? (
-          <ReadingStrip papers={papers} readerTopics={starter ? [] : profile.researchTopics} />
+          // `flex-auto min-w-0` (§1ag): with no width of its own this flex
+          // item fell back to shrink-to-fit, which collapsed to the width of
+          // the "Your reading" label itself — the only thing here that
+          // cannot shrink to nothing once the hairline rule beside it
+          // (`flex-1`) and the graph wrapper (unmeasured, so ~0px) give way.
+          // `LibraryGraph` then measured *that* collapsed width from its own
+          // wrapper (a ResizeObserver on clientWidth) and rendered its graph
+          // at the same narrow size: a min-content trap, not a deliberate
+          // small graph. `flex-auto` (`flex: 1 1 auto`, NOT the bare
+          // `flex-1` utility, which is `flex: 1 1 0%`) gives it the row's
+          // real leftover width to measure on a wide screen, while keeping
+          // its content (the label) as its flex-basis — a bare `flex-1`'s
+          // zero basis reads as "needs no room at all" for `flex-wrap`'s own
+          // per-line fit test, so on a phone the upload/search pair no
+          // longer wrapped to its own line below and instead squeezed onto
+          // the graph's line, crushing the graph to 0px wide (verified by
+          // execution, not just read — see the checkpoint). `min-w-0` lets
+          // it still shrink below the label's own width when there IS room
+          // to share a line at some in-between width, without changing
+          // whether that line is shared in the first place.
+          <ReadingStrip
+            papers={papers}
+            readerTopics={starter ? [] : profile.researchTopics}
+            className="flex-auto min-w-0"
+          />
         ) : (
           <span aria-hidden />
         )}
@@ -405,7 +429,17 @@ const READING_STRIP = { heading: "Your reading" };
  * Renders nothing until something has been read or kept — never a
  * placeholder.
  */
-function ReadingStrip({ papers, readerTopics }: { papers: Paper[]; readerTopics: string[] }) {
+export function ReadingStrip({
+  papers,
+  readerTopics,
+  className,
+}: {
+  papers: Paper[];
+  readerTopics: string[];
+  /** The row's own width classes (page.tsx) — forwarded to `Band` so the
+   *  graph inside gets a real width to measure instead of shrink-to-fit. */
+  className?: string;
+}) {
   const library = useFeedStore((s) => s.library);
   const savedPapers = useFeedStore((s) => s.savedPapers);
   const readItems = useFeedStore((s) => s.readItems);
@@ -459,7 +493,7 @@ function ReadingStrip({ papers, readerTopics }: { papers: Paper[]; readerTopics:
   if (graph.counts.read + graph.counts.saved === 0) return null;
 
   return (
-    <Band label={READING_STRIP.heading} gap="none">
+    <Band label={READING_STRIP.heading} gap="none" className={className}>
       <div className="mt-4">
         <LibraryGraph graph={graph} steer={steer} />
       </div>
