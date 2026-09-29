@@ -5,6 +5,8 @@
 // the boring path that renders everywhere.
 
 import type { ScoredItem } from "@/lib/scoring/types";
+import { FEED_EMPTY_REASON_CODES, type FeedEmptyReasonCode } from "@/lib/feed/types";
+import { DIGEST_EMPTY, type DigestEmptyEntry } from "@/lib/briefing/copy";
 
 // Brand palette — mirrors the web app.
 const BRAND = {
@@ -51,6 +53,29 @@ export interface DigestTemplateInput {
   firstName?: string;
   items: ScoredItem[];
   originUrl: string; // e.g. https://hermes-flax-six.vercel.app
+  /**
+   * EMPTY-EMAIL-REASON (ABC-JEV-INTEGRATION.md §1bj) — forwarded verbatim
+   * from `FeedMeta.emptyReasonCode` (feed/pipeline.ts's
+   * `computeEmptyReasonCode`) by every caller. Only ever consulted when
+   * `items.length === 0`; ignored otherwise (§4 test 4 below pins this).
+   * Structurally optional/absent, exactly like the field it's forwarded
+   * from — never invented when the pipeline didn't resolve one.
+   */
+  emptyReasonCode?: FeedEmptyReasonCode;
+}
+
+/**
+ * EMPTY-EMAIL-REASON — one source of truth for "does this empty-case code
+ * have ruled copy", read by BOTH `renderDigestHtml` and
+ * `renderDigestPlaintext` below so the two can never independently drift.
+ * Checked against `FEED_EMPTY_REASON_CODES` membership (never bare
+ * truthiness) — the same discipline `feed/empty-reason.ts` already applies
+ * on the client — so a missing OR an unrecognized code (an older caller, or
+ * a future server value this build doesn't know yet) both fall through to
+ * `null`, meaning "use today's generic sentence", never a guess.
+ */
+function resolvedEmptyEntry(code: FeedEmptyReasonCode | undefined): DigestEmptyEntry | null {
+  return code && FEED_EMPTY_REASON_CODES.includes(code) ? DIGEST_EMPTY[code] : null;
 }
 
 export function renderDigestSubject(items: ScoredItem[]): string {
@@ -64,8 +89,39 @@ export function renderDigestSubject(items: ScoredItem[]): string {
   return `${lead} · Peer briefing ${dateStr}`;
 }
 
+/**
+ * EMPTY-EMAIL-REASON — the plaintext counterpart of `renderDigestHtml`'s
+ * generic empty-state row (below), so the fallback sentence exists in BOTH
+ * parts, not just HTML (§1.6 of the B guide: before this item, plaintext had
+ * no empty-case explanation at all — just "Here are 0 items..." and
+ * silence). Content matches the HTML generic sentence; the link is a plain
+ * URL in parentheses, not markup — plaintext has no `<a>`.
+ */
+function genericEmptyPlaintext(originUrl: string): string {
+  return `No items matched your topics today. Try adjusting your signals (${originUrl}/profile).`;
+}
+
+/**
+ * Renders one `DigestEmptyEntry` as plain text: the sentence, then its
+ * optional link rendered as `text (url)` — never an HTML anchor.
+ *
+ * EMPTY-EMAIL-REASON (§1bj.10) — round 2 (§1bj.8) briefly needed this to
+ * tolerate an empty `entry.sentence` (a link-only sentence, for the
+ * already-delivered case of that round); §1bj.10 reworded that entry back
+ * to a plain, link-free sentence, so every `DIGEST_EMPTY` entry has a
+ * non-empty `sentence` again and this simple form (always a separator space
+ * before a present `link`) is sufficient — simplified back from round 2's
+ * generalization, which is no longer reachable through any real entry or
+ * covered by any test.
+ */
+function reasonEmptyPlaintext(entry: DigestEmptyEntry, originUrl: string): string {
+  const link = entry.link;
+  const linkPart = link ? ` ${link.before}${link.text} (${originUrl}${link.path})${link.after}` : "";
+  return `${entry.sentence}${linkPart}`;
+}
+
 export function renderDigestPlaintext(input: DigestTemplateInput): string {
-  const { firstName, items, originUrl } = input;
+  const { firstName, items, originUrl, emptyReasonCode } = input;
   const greet = firstName ? `Hi ${firstName},` : "Hi,";
   const today = formatDate(new Date());
   const lines: string[] = [
@@ -76,6 +132,11 @@ export function renderDigestPlaintext(input: DigestTemplateInput): string {
     `Here are ${items.length} items worth your attention today.`,
     "",
   ];
+  if (items.length === 0) {
+    const entry = resolvedEmptyEntry(emptyReasonCode);
+    lines.push(entry ? reasonEmptyPlaintext(entry, originUrl) : genericEmptyPlaintext(originUrl));
+    lines.push("");
+  }
   items.forEach((item, idx) => {
     lines.push(`${idx + 1}. ${item.title}`);
     if (item.authors && item.authors.length > 0) {
@@ -136,16 +197,45 @@ function renderItemRow(item: ScoredItem, originUrl: string): string {
 </tr>`;
 }
 
+/**
+ * Renders one `DigestEmptyEntry` as HTML: the escaped sentence, then its
+ * optional link as a real `<a>` — same visual treatment as the generic
+ * sentence's own "signals" link below.
+ *
+ * EMPTY-EMAIL-REASON (§1bj.10) — see `reasonEmptyPlaintext`'s doc comment:
+ * simplified back from round 2's (§1bj.8) empty-sentence generalization,
+ * which §1bj.10's rewording of `already-delivered` made unreachable through
+ * any real `DIGEST_EMPTY` entry and untested.
+ */
+function reasonEmptyHtml(entry: DigestEmptyEntry, originUrl: string): string {
+  const link = entry.link;
+  const linkHtml = link
+    ? ` ${esc(link.before)}<a href="${originUrl}${link.path}" style="color: ${BRAND.accent};">${esc(link.text)}</a>${esc(link.after)}`
+    : "";
+  return `${esc(entry.sentence)}${linkHtml}`;
+}
+
 export function renderDigestHtml(input: DigestTemplateInput): string {
-  const { firstName, items, originUrl } = input;
+  const { firstName, items, originUrl, emptyReasonCode } = input;
   const greet = firstName ? `Hi ${esc(firstName)},` : "Hi,";
   const today = formatDate(new Date());
 
   const rows = items.map((i) => renderItemRow(i, originUrl)).join("");
 
+  // EMPTY-EMAIL-REASON — `reasonEntry` is only ever looked up when there are
+  // zero items (an `emptyReasonCode` on a non-empty response is a
+  // should-never-happen shape from an upstream caller, and is ignored here
+  // exactly like `resolvedEmptyEntry`'s own doc comment says). When it IS
+  // empty but no known code resolved, `emptyBody` falls back to the EXACT
+  // pre-existing literal sentence, unchanged byte-for-byte — never a guess.
+  const reasonEntry = items.length === 0 ? resolvedEmptyEntry(emptyReasonCode) : null;
+  const emptyBody = reasonEntry
+    ? reasonEmptyHtml(reasonEntry, originUrl)
+    : `No items matched your topics today. Try adjusting your <a href="${originUrl}/profile" style="color: ${BRAND.accent};">signals</a>.`;
+
   const empty =
     items.length === 0
-      ? `<tr><td style="padding: 30px 24px; text-align: center; font-family: -apple-system, sans-serif; color: ${BRAND.muted}; font-size: 14px;">No items matched your topics today. Try adjusting your <a href="${originUrl}/profile" style="color: ${BRAND.accent};">signals</a>.</td></tr>`
+      ? `<tr><td style="padding: 30px 24px; text-align: center; font-family: -apple-system, sans-serif; color: ${BRAND.muted}; font-size: 14px;">${emptyBody}</td></tr>`
       : "";
 
   return `<!doctype html>

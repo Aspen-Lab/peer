@@ -20,7 +20,7 @@ import { useRouter } from "next/navigation";
 import type { Paper } from "@/types";
 import { useFeedStore } from "@/store/feed";
 import { useProfileStore } from "@/store/profile";
-import { apiFetch } from "@/lib/api";
+import { ApiError, apiFetch } from "@/lib/api";
 import { PageContainer } from "@/components/ui/page-container";
 import { useReveal } from "@/components/ui/reveal";
 import { BackToFeedLink } from "@/components/navigation/back-to-feed-link";
@@ -37,6 +37,7 @@ import {
   omittedForReader,
   sharedTerms,
   type AvailabilityReport,
+  type PaperReading,
 } from "@/lib/papers/reading";
 import { readingToMarkdown } from "@/lib/papers/reading-markdown";
 import type { Claim, PaperReport } from "@/lib/papers/report";
@@ -84,12 +85,17 @@ import { usePrivateSupplement } from "@/components/reader/use-private-supplement
 import { PrivatePdfStatus } from "@/components/reader/private-pdf-status";
 import { UploadButton } from "@/components/briefing/upload-button";
 import { useAuthUser } from "@/components/account/use-auth-user";
+import { useUploadsAvailable, uploadsReady } from "@/lib/papers/use-uploads-available";
 import {
   BODY,
   NOT_FOUND,
   RAIL,
+  RETRY_LABEL,
   SWIPE,
   TOAST,
+  UPLOAD_RETRY_EMPTY_MESSAGE,
+  UPLOAD_TRANSIENT_MESSAGE,
+  UPLOAD_UNAVAILABLE_MESSAGE,
   plateCaption,
   sharedTermsLine,
 } from "@/components/reader/copy";
@@ -134,6 +140,219 @@ function clipboard(): Clipboard | undefined {
   return typeof navigator !== "undefined" ? navigator.clipboard : undefined;
 }
 
+/**
+ * UPLOAD-404 (§1bi): true once the live fetch for this uploaded paper's
+ * record or file has actually settled with nothing — any cause at all
+ * (expired, wrong owner, purged, a different machine, a synced pointer —
+ * `ownedUpload`'s single 404 hides which one), never while it is still in
+ * flight or has not been attempted yet. Pure and exported so this decision
+ * is directly testable: this file has no component-render harness (`Reader`
+ * below reaches `useRouter`, several Zustand stores and
+ * `IntersectionObserver`) — the same reason the sibling `app/page.tsx`
+ * extracts `shouldAttemptBatchAcknowledgement` instead of rendering its own
+ * whole effectful page.
+ */
+export function isUploadFetchFailure(
+  isUploadId: boolean,
+  fetchDoneForId: boolean,
+  fetchedPaperForId: Paper | null,
+): boolean {
+  return isUploadId && fetchDoneForId && !fetchedPaperForId;
+}
+
+/**
+ * UPLOAD-404 (§1bi.8b): whether a failed record fetch is permanent (a 404 —
+ * `ownedUpload` found nothing, for any of guide B's causes) or transient (a
+ * 5xx, a dropped connection, a timeout — the server or the network, not the
+ * record itself). `apiFetch` (`lib/api.ts`, unchanged) throws `ApiError`
+ * with a `.status` for any non-2xx HTTP response and a plain `Error`/
+ * `TypeError` for a network failure — both distinguishable, which is what
+ * this function reads. Pure and exported for the same testability reason
+ * as `isUploadFetchFailure` above.
+ */
+export function uploadFetchErrorKind(error: unknown): "not-found" | "transient" {
+  return error instanceof ApiError && error.status === 404 ? "not-found" : "transient";
+}
+
+/**
+ * UPLOAD-404 (§1bi): the saved copy to render instead of a dead end, with
+ * the one field that only ever points at THIS SAME upload's now-unreachable
+ * file-bytes route removed — every place that would otherwise open it (the
+ * decision block's "open" action via `pickSource`, the record block's
+ * "Publisher" door, the plate) must not offer a link that fails the exact
+ * same way the record fetch just did. `undefined` when there is nothing
+ * saved either — the page's existing, unchanged "not found" stands then.
+ */
+export function resolveUploadFallback(storePaper: Paper | undefined): Paper | undefined {
+  return storePaper ? { ...storePaper, linkPaper: undefined } : undefined;
+}
+
+/** What `resolveUploadPageState` decides the page should do, for an upload id. */
+export interface UploadPageDecision {
+  /** True whenever the honest-unavailable view (or the no-content retry
+   *  view) should show instead of the normal render. */
+  unavailable: boolean;
+  /** The content to show inside the honest-unavailable view; `undefined`
+   *  means there is nothing at all (the plain not-found / retry-empty
+   *  states, distinguished by `transient`). */
+  fallbackPaper: Paper | undefined;
+  /** Only meaningful while `unavailable` is true: a momentary failure (5xx,
+   *  network, timeout) rather than a definite fact (a 404, or a 200 whose
+   *  file bytes are specifically missing). */
+  transient: boolean;
+}
+
+/**
+ * UPLOAD-404 (§1bi/§1bi.8): the one place that combines every signal the
+ * page has about an uploaded paper's own id into what to actually show.
+ * Pure and exported, the same testability reason as the other functions in
+ * this group — every combination (file missing, a 404, a transient
+ * failure, with and without a saved copy) is directly testable here with
+ * plain values, with no fetch, no timers and no component render involved.
+ */
+export function resolveUploadPageState(args: {
+  isUploadId: boolean;
+  fetchDoneForId: boolean;
+  fetchedPaperForId: Paper | null;
+  errorKind: "none" | "not-found" | "transient";
+  storePaper: Paper | undefined;
+}): UploadPageDecision {
+  // §1bi.8a: the record fetch succeeded, but this record's own PDF bytes
+  // are separately missing — the freshly-fetched record is still the best
+  // content to show (fresher than whatever might also be saved), and this
+  // is always a definite fact: re-fetching the same successful record
+  // would report the same missing bytes, so it is never "transient".
+  const fileMissing =
+    args.isUploadId && !!args.fetchedPaperForId && args.fetchedPaperForId.fileAvailable === false;
+  const fetchFailed = isUploadFetchFailure(args.isUploadId, args.fetchDoneForId, args.fetchedPaperForId);
+  return {
+    unavailable: fileMissing || fetchFailed,
+    fallbackPaper: fileMissing
+      ? resolveUploadFallback(args.fetchedPaperForId ?? undefined)
+      : fetchFailed
+        ? resolveUploadFallback(args.storePaper)
+        : undefined,
+    // §1bi.8b: only a genuinely failed fetch can be transient.
+    transient: fetchFailed && args.errorKind === "transient",
+  };
+}
+
+/**
+ * UPLOAD-404 (§1bi): the reading page's honest-unavailable view — shown for
+ * a fetch that settled with nothing (any cause) AND for a fetch that
+ * succeeded but whose PDF bytes are separately missing (§1bi.8a) — same
+ * component, same content shape, either way; `paper` is already whichever
+ * content the caller resolved (the freshly-fetched record when only the
+ * file is the problem, else the saved copy) with `linkPaper` already
+ * stripped by `resolveUploadFallback`. Exported (the same reason
+ * `BriefingEmpty`/`ReadingStrip` are, in the sibling `app/page.tsx`) so it
+ * is directly render-testable with `renderToStaticMarkup` (this file's own
+ * test uses the same technique as `private-pdf-status.test.tsx`). Takes
+ * plain `onBack`/`onRetry` callbacks rather than calling `useRouter()`
+ * itself, for the same testability reason.
+ *
+ * Modelled on the `paper.textStatus === "empty"` branch further down in
+ * `Reader`: the title, then one honest sentence, no Decision block (no
+ * report is requested, no PDF-only action is offered) and no
+ * `PrivatePdfStatus` (its "retained for 30 days" line would be false here —
+ * this state means the opposite, for the same reason whether the record
+ * itself is gone or just its bytes). Unlike that branch, this one has an
+ * abstract to show (the resolved content almost always carries one —
+ * `PaperWords` itself renders nothing when it truly does not) and the
+ * reader's own notes, both named explicitly in the ruling.
+ *
+ * §1bi.8b: `transient` is true only for a 5xx/network/timeout failure — a
+ * momentary blip, not a definite fact — so it alone gets a different,
+ * non-permanent sentence and a Try again control. A 404 and a file
+ * specifically missing are both definite (retrying would give the same
+ * answer), so they share `UPLOAD_UNAVAILABLE_MESSAGE` with no retry offered.
+ */
+export function UploadFallbackReading({
+  paper,
+  reading,
+  now,
+  onBack,
+  transient = false,
+  onRetry,
+}: {
+  paper: Paper;
+  reading: PaperReading;
+  now: number;
+  onBack: () => void;
+  transient?: boolean;
+  /** Only rendered (and only meaningful) while `transient` is true. */
+  onRetry?: () => void;
+}) {
+  return (
+    <PageContainer width="spread" rhythm="reader" className={PAGE_CLASS}>
+      <div className={SPREAD_GRID}>
+        <div>
+          <TitleBlock paper={paper} recommendation={null} now={now} />
+          <PaperWords reading={reading} marks={reading.abstract.marks} skim={[]} basis={null} quotedSkim={[]} />
+          <p className="font-reading text-lead leading-[1.6] text-text mt-6 reading-justify">
+            {transient ? UPLOAD_TRANSIENT_MESSAGE : UPLOAD_UNAVAILABLE_MESSAGE}
+          </p>
+          {transient && onRetry && (
+            <button
+              type="button"
+              onClick={onRetry}
+              className="font-sans text-meta text-text-faint hover:text-heading mt-2 underline underline-offset-4"
+            >
+              {RETRY_LABEL}
+            </button>
+          )}
+          <PaperNotes paper={paper} />
+          <BackToFeedLink
+            onBack={onBack}
+            className="font-sans text-meta text-text-faint hover:text-heading mt-3 inline-block"
+          >
+            {RAIL.back}
+          </BackToFeedLink>
+          <RecordBlock paper={paper} primaryUrl={reading.source?.url ?? null} />
+        </div>
+      </div>
+    </PageContainer>
+  );
+}
+
+/**
+ * UPLOAD-404 (§1bi.8b): the reading page's own transient-failure empty
+ * state — no content at all (no live record, no saved copy) but the
+ * failure itself was momentary, so this is NOT `NOT_FOUND` (which claims a
+ * permanent fact this page cannot back up). Exported for the same
+ * render-testability reason as `UploadFallbackReading` above; same
+ * plain-callback shape.
+ */
+export function UploadRetryEmpty({
+  onBack,
+  onRetry,
+}: {
+  onBack: () => void;
+  onRetry: () => void;
+}) {
+  return (
+    <PageContainer width="spread" rhythm="reader" className={PAGE_CLASS}>
+      <div className={SPREAD_GRID}>
+        <div>
+          <p className="font-reading text-lead text-text-muted">{UPLOAD_RETRY_EMPTY_MESSAGE}</p>
+          <div className="mt-3 flex items-center gap-4">
+            <button
+              type="button"
+              onClick={onRetry}
+              className="font-sans text-meta text-text-faint hover:text-heading underline underline-offset-4"
+            >
+              {RETRY_LABEL}
+            </button>
+            <BackToFeedLink onBack={onBack} className="font-sans text-meta text-text-faint hover:text-heading inline-block">
+              {RAIL.back}
+            </BackToFeedLink>
+          </div>
+        </div>
+      </div>
+    </PageContainer>
+  );
+}
+
 export default function PaperReadingPage({
   params,
 }: {
@@ -167,7 +386,11 @@ export default function PaperReadingPage({
     id: string;
     paper: Paper | null;
     done: boolean;
-  }>(() => ({ id: fetchKey, paper: null, done: false }));
+    // UPLOAD-404 (§1bi.8b): which kind of nothing a failed fetch settled
+    // with — "none" on a success (or before any attempt), so a stale kind
+    // from an earlier attempt is never read for a fresh one.
+    errorKind: "none" | "not-found" | "transient";
+  }>(() => ({ id: fetchKey, paper: null, done: false, errorKind: "none" }));
 
   // A skip removes the paper from both lists before the route changes. For
   // that render the pending dismissal still holds it, so the reader stays
@@ -186,9 +409,24 @@ export default function PaperReadingPage({
   const storePaperIsEnriched = !!storePaper?.summaryIntro?.trim();
   const fetchedPaperForId = fetchResult.id === fetchKey ? fetchResult.paper : null;
   const fetchDoneForId = fetchResult.id === fetchKey && fetchResult.done;
-  const baseContent = isUploadId ? fetchedPaperForId ?? undefined : storePaperIsEnriched
-    ? storePaper
-    : (fetchedPaperForId ?? storePaper ?? undefined);
+  const fetchErrorKindForId = fetchResult.id === fetchKey ? fetchResult.errorKind : "none";
+  // UPLOAD-404 (§1bi/§1bi.8): every signal this page has about an upload id,
+  // combined in one pure, directly-tested place — see
+  // `resolveUploadPageState`'s own doc comment.
+  const uploadPageState = resolveUploadPageState({
+    isUploadId,
+    fetchDoneForId,
+    fetchedPaperForId,
+    errorKind: fetchErrorKindForId,
+    storePaper,
+  });
+  const uploadUnavailable = uploadPageState.unavailable;
+  const uploadTransient = uploadPageState.transient;
+  const baseContent = isUploadId
+    ? (uploadUnavailable ? uploadPageState.fallbackPaper : fetchedPaperForId) ?? undefined
+    : storePaperIsEnriched
+      ? storePaper
+      : (fetchedPaperForId ?? storePaper ?? undefined);
   // Live state from the store (save flag + feedback) merged onto the resolved
   // content, so a fetched paper reflects save/like clicks. Memoised so the
   // `paper` reference is stable when nothing material changed.
@@ -216,15 +454,24 @@ export default function PaperReadingPage({
         : `/api/papers/${encodeURIComponent(id)}`,
     )
       .then((p) => {
-        if (!cancelled) setFetchResult({ id: fetchKey, paper: p, done: true });
+        if (!cancelled) setFetchResult({ id: fetchKey, paper: p, done: true, errorKind: "none" });
       })
-      .catch(() => {
-        if (!cancelled) setFetchResult({ id: fetchKey, paper: null, done: true });
+      .catch((err: unknown) => {
+        if (!cancelled) setFetchResult({ id: fetchKey, paper: null, done: true, errorKind: uploadFetchErrorKind(err) });
       });
     return () => {
       cancelled = true;
     };
   }, [id, fetchKey, shouldFetchById, isUploadId]);
+
+  // UPLOAD-404 (§1bi.8b): the one way any failed fetch is retried — resets
+  // this id's own result back to "not done", which re-arms `shouldFetchById`
+  // above (already gated on `!fetchDoneForId`) so the SAME effect fires
+  // again with no separate retry effect needed. The reader sees the
+  // existing loading state in between, then whatever the new attempt earns.
+  const retryUploadFetch = useCallback(() => {
+    setFetchResult({ id: fetchKey, paper: null, done: false, errorKind: "none" });
+  }, [fetchKey, setFetchResult]);
 
   if (!paper) {
     if (shouldFetchById) {
@@ -239,6 +486,12 @@ export default function PaperReadingPage({
           </div>
         </PageContainer>
       );
+    }
+    // UPLOAD-404 (§1bi.8b): nothing to show AND the failure was momentary —
+    // never the permanent NOT_FOUND wording for a state that might well
+    // resolve on its own next time.
+    if (isUploadId && uploadTransient) {
+      return <UploadRetryEmpty onBack={() => router.back()} onRetry={retryUploadFetch} />;
     }
     return (
       <PageContainer width="spread" rhythm="reader" className={PAGE_CLASS}>
@@ -260,19 +513,46 @@ export default function PaperReadingPage({
   // The reason comes from the briefing's own copy, never the fetched one:
   // `/api/papers/[id]` stamps a deep-link line that is not a reason, and a
   // briefing paper with no abstract in the store is read from that route.
-  return <Reader key={`${accountScope}:${paper.id}`} paper={paper} reason={recommendationLine(storePaper?.relevanceReason)} />;
+  return (
+    <Reader
+      key={`${accountScope}:${paper.id}`}
+      paper={paper}
+      reason={recommendationLine(storePaper?.relevanceReason)}
+      uploadUnavailable={uploadUnavailable}
+      uploadTransient={uploadTransient}
+      onRetryUpload={retryUploadFetch}
+    />
+  );
 }
 
 function Reader({
   paper: originalPaper,
   reason,
+  uploadUnavailable,
+  uploadTransient,
+  onRetryUpload,
 }: {
   paper: Paper;
   /** The briefing's `relevanceReason`, already known to be a real one; null otherwise. */
   reason: string | null;
+  /** UPLOAD-404 (§1bi/§1bi.8a): `paper` is `PaperReadingPage`'s own
+   *  fallback content — either the live fetch settled with nothing (any
+   *  cause) and this is the saved copy, or the fetch succeeded but the PDF
+   *  bytes are separately missing and this is the freshly-fetched record. */
+  uploadUnavailable: boolean;
+  /** §1bi.8b: only true for a 5xx/network/timeout failure — never for a
+   *  file specifically missing (that is always a definite fact). */
+  uploadTransient: boolean;
+  onRetryUpload: () => void;
 }) {
   const router = useRouter();
   const { paper, upload, ready, setUpload } = usePrivateSupplement(originalPaper);
+  // UPLOAD-404 (§1bi.2): whether the server can even store a NEW private PDF
+  // right now — gates only the "upload a PDF" entry point below, never an
+  // existing saved upload's own view/delete actions (those never call
+  // `hostedUploadsEnabled()`). Skipped entirely on an upload's own page,
+  // where that entry point never renders anyway (see `uploadAction` below).
+  const uploadsAvailable = uploadsReady(useUploadsAvailable(!originalPaper.id.startsWith("upload:")));
   const profile = useProfileStore((s) => s.profile);
   const feedPapers = useFeedStore((s) => s.papers);
   const markRead = useFeedStore((s) => s.markRead);
@@ -614,6 +894,31 @@ function Reader({
 
   if (!reading) return null;
 
+  // UPLOAD-404 (§1bi/§1bi.8a): either the live fetch for this uploaded
+  // paper's record came back empty (any cause — expired, wrong owner,
+  // purged, a different machine, a synced pointer — `ownedUpload` hides
+  // which one behind a single 404, so this page cannot and does not guess)
+  // and `paper` is `PaperReadingPage`'s own fallback onto the saved copy —
+  // or the record fetch succeeded but the PDF bytes are separately missing,
+  // and `paper` is that same freshly-fetched record. Either way nothing
+  // below claims the file itself is still reachable. Checked BEFORE the
+  // narrower `textStatus === "empty"` branch just below: content with no
+  // extractable text either still gets this honest "unavailable" treatment,
+  // not the unrelated "no readable text" wording (which would equally imply
+  // a live file that no longer exists).
+  if (uploadUnavailable) {
+    return (
+      <UploadFallbackReading
+        paper={paper}
+        reading={reading}
+        now={now}
+        onBack={() => router.back()}
+        transient={uploadTransient}
+        onRetry={uploadTransient ? onRetryUpload : undefined}
+      />
+    );
+  }
+
   // S7(e) / 2-05 (A2-02): an uploaded PDF the extractor read successfully
   // but found nothing in (most likely scanned, no text layer) gets this
   // plain message, never a report — known instantly from the paper record
@@ -783,7 +1088,7 @@ function Reader({
             onCopyDoi={copyDoi}
             onRead={hasBody ? readHere : undefined}
             readLabel={BODY.open}
-            uploadAction={!paper.id.startsWith("upload:") ? <UploadButton targetPaper={paper} onUploaded={setUpload} /> : undefined}
+            uploadAction={!paper.id.startsWith("upload:") && uploadsAvailable ? <UploadButton targetPaper={paper} onUploaded={setUpload} /> : undefined}
             uploadStatus={upload ? <PrivatePdfStatus upload={upload}
               attachedToTitle={!paper.id.startsWith("upload:") ? paper.title : undefined}
               onDeleted={() => {

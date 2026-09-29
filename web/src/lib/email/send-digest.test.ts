@@ -86,6 +86,46 @@ describe("sendDigestEmail -- P4-S7-IDEM idempotency key + render replay", () => 
     expect(mocks.renderDigestPlaintext).toHaveBeenCalledTimes(1);
   });
 
+  // EMPTY-EMAIL-REASON (ABC-JEV-INTEGRATION.md §1bj) -- sendDigestEmail
+  // itself does no branching on emptyReasonCode; it just needs to forward
+  // whatever it was given into the (real, unmocked in digest-template.
+  // test.ts) template functions, the same way it already forwards
+  // firstName/items/originUrl by passing the whole `input` object through.
+  it("emptyReasonCode given: forwarded into renderDigestHtml AND renderDigestPlaintext, not into renderDigestSubject", async () => {
+    await sendDigestEmail({ ...baseInput(), emptyReasonCode: "no-required-match" });
+
+    expect(mocks.renderDigestHtml).toHaveBeenCalledWith(
+      expect.objectContaining({ emptyReasonCode: "no-required-match" }),
+    );
+    expect(mocks.renderDigestPlaintext).toHaveBeenCalledWith(
+      expect.objectContaining({ emptyReasonCode: "no-required-match" }),
+    );
+    // renderDigestSubject's contract is `(items: ScoredItem[])` -- a single
+    // positional array argument, structurally unable to carry the code.
+    expect(mocks.renderDigestSubject).toHaveBeenCalledWith(baseInput().items);
+  });
+
+  it("emptyReasonCode omitted: the template functions receive it as undefined, same as before this item", async () => {
+    await sendDigestEmail(baseInput());
+
+    const htmlArg = mocks.renderDigestHtml.mock.calls[0][0];
+    const textArg = mocks.renderDigestPlaintext.mock.calls[0][0];
+    expect(htmlArg.emptyReasonCode).toBeUndefined();
+    expect(textArg.emptyReasonCode).toBeUndefined();
+  });
+
+  it("render override given: emptyReasonCode is irrelevant -- the template functions are never called at all", async () => {
+    await sendDigestEmail({
+      ...baseInput(),
+      emptyReasonCode: "sources-unreachable",
+      idempotencyKey: "retry-key",
+      render: { subject: "S", html: "H", text: "T" },
+    });
+
+    expect(mocks.renderDigestHtml).not.toHaveBeenCalled();
+    expect(mocks.renderDigestPlaintext).not.toHaveBeenCalled();
+  });
+
   it("idempotencyKey given: calls emails.send with a SECOND argument carrying exactly that key", async () => {
     await sendDigestEmail({ ...baseInput(), idempotencyKey: "abc123key" });
 

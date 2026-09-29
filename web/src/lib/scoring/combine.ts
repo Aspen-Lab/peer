@@ -168,9 +168,10 @@ export function scoreItems(
   const index = buildIndex(items);
   // TOKENIZE-PLURALS (ABC-JEV-INTEGRATION.md §1be point 5, Option B split
   // — the item shipped the T4 fold only; keyword.ts's SENSE-CONTEXT short-
-  // tag context check stays unfolded, moved to the new item
-  // SENSE-CONTEXT-EVIDENCE) — a second, parallel index built with the
-  // plural-folding tokenizer, used ONLY by the T4 block's own
+  // tag context check stayed unfolded at the time, moved to the follow-up
+  // item SENSE-CONTEXT-EVIDENCE, which has SINCE folded it too, §1bg — see
+  // keyword.ts's own `senseContextGate`) — a second, parallel index built
+  // with the plural-folding tokenizer, used ONLY by the T4 block's own
   // simTopic/simProject below. `index` above (and the `topicality`/`tp`
   // ranking signal every scored item gets from it, pass 2) stays built
   // from the real, unfolded `tokenize()` — unconditional build, same

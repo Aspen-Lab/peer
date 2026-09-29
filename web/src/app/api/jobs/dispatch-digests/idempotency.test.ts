@@ -285,6 +285,60 @@ describe("GET /api/jobs/dispatch-digests -- P4-S7-IDEM Resend idempotency key + 
     expect(body.emails_sent_count).toBe(1);
   });
 
+  // EMPTY-EMAIL-REASON (ABC-JEV-INTEGRATION.md §1bj) -- this file is the one
+  // place in the suite where `@/lib/email/digest-template` is NOT mocked
+  // (see the file header comment), so it is the right place for a genuine
+  // end-to-end proof that the code reaches the REAL rendered bytes -- not a
+  // mock standing in for the renderer, the actual `renderDigestHtml`/
+  // `renderDigestPlaintext`. Modeled on the "first-ever attempt" test above;
+  // only the pipeline's resolved meta and the content assertions differ.
+  it("flag on, first-ever attempt, empty result with a reason code: the REAL rendered html/text (persisted before send, and handed to sendDigestEmail) contains the code's own sentence (EMPTY-EMAIL-REASON §1bj)", async () => {
+    vi.stubEnv("PEER_DIGEST_DEDUPE", "on");
+    mocks.runFeedPipeline.mockResolvedValue({
+      items: [],
+      meta: { emptyReasonCode: "no-required-match" },
+    });
+    const { client, updateCalls } = makeAdminClient({
+      profiles: [profileRow()],
+      rpc: { data: [{ id: 777 }], error: null },
+    });
+    mocks.createAdminClient.mockReturnValue(client);
+    mocks.sendDigestEmail.mockResolvedValue({ sent: true, messageId: "msg-real" });
+
+    await GET(authedRequest());
+
+    expect(mocks.sendDigestEmail).toHaveBeenCalledTimes(1);
+    const sendArg = mocks.sendDigestEmail.mock.calls[0][0];
+    // The real renderer's escaped HTML sentence, and the real plaintext
+    // sentence (unescaped, link as a plain URL) -- digest-template.test.ts
+    // has the exhaustive per-code/per-renderer assertions; this test only
+    // proves these are the bytes that actually reached the send step here.
+    expect(sendArg.render.html).toContain(
+      "None of today&#39;s papers passed your Required topics and filters.",
+    );
+    expect(sendArg.render.html).toContain("Profile</a>");
+    expect(sendArg.render.text).toContain(
+      "None of today's papers passed your Required topics and filters.",
+    );
+    expect(sendArg.render.text).toContain("Profile (");
+    // Never the generic sentence -- proves the code actually changed the
+    // output, not just that SOME empty-case text is present.
+    expect(sendArg.render.text).not.toContain("No items matched your topics today.");
+    expect(sendArg.render.html).not.toContain("No items matched your topics today.");
+
+    // The exact same bytes were persisted BEFORE the send (pre-send write,
+    // the first update call) -- same pattern the "first-ever attempt" test
+    // above checks for the plain case.
+    const pre = updateCalls[0];
+    expect(pre.deliveryId).toBe(777);
+    expect((pre.payload as { email: { html: string; text: string } }).email.html).toBe(
+      sendArg.render.html,
+    );
+    expect((pre.payload as { email: { html: string; text: string } }).email.text).toBe(
+      sendArg.render.text,
+    );
+  });
+
   it("flag on, claim conflict, existing row unsent with a stored body within 23h: replays the EXACT stored bytes and the SAME key, using the STORED `to` (not a freshly resolved one)", async () => {
     vi.stubEnv("PEER_DIGEST_DEDUPE", "on");
     const key = expectedKey("user-1", "2026-09-24");

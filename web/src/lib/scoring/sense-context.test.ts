@@ -6,10 +6,13 @@ import {
   isShortOrAmbiguous,
   senseContextGate,
   selfDeclaresDifferentSense,
+  matchesFullNameOrFormula,
   SENSE_CONTEXT_DEMOTED_GROUNDING,
   SENSE_CONTEXT_FIXED_FLOOR,
   SENSE_CONTEXT_OVERLAP_FLOOR,
   SENSE_CONTEXT_FIXED_RESCUE,
+  SENSE_CONTEXT_OVERLAP_DOCFREQ_CUT_PERCENTILE,
+  SENSE_CONTEXT_OVERLAP_DOCFREQ_CUT_WEIGHT,
   REQUIRED_TAG_T2_GROUNDING,
   REQUIRED_TAG_T3_GROUNDING,
 } from "./keyword";
@@ -718,6 +721,52 @@ describe("test 15 — G3 combined-gate components are each load-bearing (§1ap A
     });
     const gate = senseContextGate(rescued, "LCO", BATTERY_PROJECT_TEXT);
     expect(gate.bypass).toBe(false);
+    // SENSE-CONTEXT-EVIDENCE (§1bg) — REWRITTEN: the document-frequency cut
+    // (SENSE_CONTEXT_OVERLAP_DOCFREQ_CUT_WEIGHT) removes common connector
+    // words from BOTH sides of the overlap axis, which shrinks its
+    // denominator (the smaller token set) enough that this fixture's own
+    // overlap ratio now ALSO clears the floor — it no longer isolates the
+    // rescue path alone the way it did before this item. The item still
+    // passes at full strength via BOTH paths now (a strictly SAFER outcome,
+    // not a weaker one); the next test proves the rescue floor is still
+    // independently load-bearing elsewhere in the real system.
+    expect(gate.overlapSim).toBeGreaterThanOrEqual(SENSE_CONTEXT_OVERLAP_FLOOR);
+    expect(gate.fixedSim).toBeGreaterThanOrEqual(SENSE_CONTEXT_FIXED_RESCUE); // the rescue path still clears on its own
+    expect(gate.pass).toBe(true); // shipped verdict: full strength, undemoted
+  });
+
+  it("SENSE-CONTEXT-EVIDENCE (§1bg): the fixed-rescue path is still independently load-bearing under the new axis (real solid-state positive)", () => {
+    // Real arXiv item (arxiv:2604.26545), from this item's own saved
+    // out/raw-P2.json pool. SENSE-CONTEXT-EVIDENCE (§1bg point 12) —
+    // REPLACED again: the P=25 fixture (arxiv:2606.31261) stopped isolating
+    // this property once the cut narrowed to P=10 (a gentler cut keeps MORE
+    // words on the overlap axis, so that fixture's own overlapSim rose to
+    // 0.231 -- above the floor, the AND path clears it too now). This
+    // fixture's overlap-axis token set still shares only a small remainder
+    // with the battery-project context under P=10 (overlapSim 0.077, below
+    // the 0.10 floor -- the AND path's own floor still cannot clear it),
+    // while its fixed-table cosine clears the rescue floor comfortably on
+    // its own (0.248) -- verified directly against the real exported gate
+    // before trusting it, same discipline as every prior swap of this test.
+    const rescued = item("solid-state-rescue-only", {
+      source: "arxiv",
+      title: "Physics-based modeling of cyclic and calendar aging of LIBs with Si-Gr composite anodes",
+      abstract:
+        "Higher energy density and longer lifetime are the requirements for next-generation lithium-ion " +
+        "batteries. A promising anode material is silicon, which offers high specific capacity, but its " +
+        "significant volume change during lithiation and delithiation enormously reduces battery " +
+        "lifetime. A physical understanding of the processes degrading the battery is key to mitigate " +
+        "this effect and advance in the field. We develop a physics-based model to describe degradation " +
+        "during battery cycling under various protocols and storage conditions, with varying check-up " +
+        "(CU) frequencies. The model can disentangle basic degradation mechanisms, such as the growth of " +
+        "the Solid-Electrolyte Interphase (SEI), from silicon mechanisms, such as particle cracking, SEI " +
+        "growth on cracks, and loss of active material (LAM). We investigate the impact of CUs on the " +
+        "observed storage degradation and the reason behind the increased degradation in batteries, " +
+        "including silicon in the anode. Additionally, we relate the observed degradation to operating " +
+        "conditions, enabling future optimization of battery use and design.",
+    });
+    const gate = senseContextGate(rescued, "solid state", BATTERY_PROJECT_TEXT);
+    expect(gate.bypass).toBe(false);
     expect(gate.overlapSim).toBeLessThan(SENSE_CONTEXT_OVERLAP_FLOOR); // the AND-only path would reject it
     expect(gate.fixedSim).toBeGreaterThanOrEqual(SENSE_CONTEXT_FIXED_RESCUE); // the rescue path alone saves it
     expect(gate.pass).toBe(true); // shipped verdict: full strength, undemoted
@@ -935,27 +984,567 @@ describe("test 17 — SENSE-CONTEXT-R3 (§1ax ruling 1): the strip set also remo
     expect(gate.pass).toBe(false); // demoted -- the hyphenated tag name is stripped, no vocabulary left to agree on
   });
 
-  it("protective: an unrelated hyphenated word sharing the tag's own token as a mere PREFIX ('state-of-the-art') is not stripped -- exact-token membership, not substring", () => {
+  it("protective: an unrelated hyphenated word sharing the tag's own token as a mere PREFIX ('state-dependent') is not stripped -- exact-token membership, not substring", () => {
     // If the strip set matched by substring/prefix instead of exact tokens,
-    // "state-of-the-art" (tag "solid state" contributes the token "state")
-    // would be wrongly removed too, silently discarding real shared
-    // vocabulary and making an unrelated paper's context agreement look
-    // weaker than it truly is. Proven by direct substitution: swapping the
-    // shared phrase for an unrelated control of the same shape must LOWER
-    // both metrics -- if "state-of-the-art" were being stripped, its
-    // presence or absence would make no difference at all.
-    const context = "Our lab pursues a state-of-the-art approach to catalysis research and reaction engineering.";
-    const withSharedPhrase = item("state-of-the-art-shared", {
+    // a hyphenated word built from the tag's own token ("solid state"
+    // contributes "state") would be wrongly removed too, silently
+    // discarding real shared vocabulary and making an unrelated paper's
+    // context agreement look weaker than it truly is. Proven by direct
+    // substitution: swapping the shared phrase for an unrelated control of
+    // the same shape must LOWER both metrics -- if the phrase were being
+    // stripped, its presence or absence would make no difference at all.
+    //
+    // SENSE-CONTEXT-EVIDENCE (§1bg) — REWRITTEN fixture: the original used
+    // "state-of-the-art" and a short, plain control sentence, but
+    // "state-of-the-art" itself (6.561) sat just BELOW the document-
+    // frequency cut as first shipped (P=25, 6.784) -- excluded from the
+    // overlap axis either way, so its presence/absence stopped moving
+    // `overlapSim` at all, and (in this short a fixture) both sides'
+    // remaining vocabulary happened to fully overlap regardless, saturating
+    // the ratio at 1.0 either way. (The cut has SINCE narrowed to P=10,
+    // 5.742 -- §1bg point 12 -- under which "state-of-the-art" would stay
+    // on the axis; kept on "state-dependent" anyway, below, since an unseen
+    // token is immune to any future table or percentile change.)
+    // Replaced with "state-dependent" (not in the shipped table, so it
+    // keeps the table's own max weight and reliably stays ON the axis) and
+    // gave each side one piece of its OWN exclusive, high-weight vocabulary
+    // ("thermodynamics" only in the context; "crystallography" only in the
+    // items) so neither side's overlap set is trivially a full subset of
+    // the other's -- verified directly against the real exported gate
+    // (0.667 vs 0.5 overlap, 0.576 vs 0.415 fixed) before trusting it.
+    const context =
+      "Our lab pursues a state-dependent approach to catalysis and thermodynamics for reaction engineering.";
+    const withSharedPhrase = item("state-dependent-shared", {
       title: "Reaction Engineering Advances",
-      abstract: "This work applies a state-of-the-art approach to catalysis in reaction engineering.",
+      abstract:
+        "This work applies a state-dependent approach to catalysis and crystallography for reaction engineering.",
     });
-    const withoutSharedPhrase = item("state-of-the-art-control", {
+    const withoutSharedPhrase = item("state-dependent-control", {
       title: "Reaction Engineering Advances",
-      abstract: "This work applies a completely conventional approach to catalysis in reaction engineering.",
+      abstract:
+        "This work applies a completely conventional approach to catalysis and crystallography for reaction engineering.",
     });
     const gateWith = senseContextGate(withSharedPhrase, "solid state", context);
     const gateWithout = senseContextGate(withoutSharedPhrase, "solid state", context);
     expect(gateWith.fixedSim).toBeGreaterThan(gateWithout.fixedSim);
     expect(gateWith.overlapSim).toBeGreaterThan(gateWithout.overlapSim);
+  });
+});
+
+// SENSE-CONTEXT-EVIDENCE (ABC-JEV-INTEGRATION.md §1bg) — the fold TOKENIZE-PLURALS
+// built and reverted (§1be) is now shipped, TOGETHER with a document-frequency cut
+// on the overlap axis (the reader's own filler words, e.g. "while"/"focused", drop
+// out of it) and a skip rule for a literal match that came through a tag's full
+// spelled-out name or chemical formula rather than its bare abbreviation. Guide:
+// docs/jev-abc/SENSE-CONTEXT-EVIDENCE-B-20260929T163908Z.md.
+
+describe("test 18 — the 3 parked TOKENIZE-PLURALS-EVIDENCE specs, re-targeted at the shipped fix (§1bg point 8)", () => {
+  // Real OpenAlex item (openalex:W7202367926), from B's saved out/raw-P4.json
+  // (title only -- this source record carries no abstract). Verbatim from
+  // docs/jev-abc/TOKENIZE-PLURALS-C-20260929T141909Z.md's "Deferred specs"
+  // section, re-confirmed here against the shipped mechanism (fold + cut),
+  // not the naive fold-only version that checkpoint measured.
+  const hydrogelElectrolyte = item("plural-only-hydrogel-electrolyte", {
+    title:
+      "Anti‑freezing cyclodextrin‑modified cellulose eutectic hydrogel electrolytes for ultralong " +
+      "cycling low‑temperature zinc‑ion batteries",
+    abstract: "",
+  });
+  // Real PubMed item (pubmed:39215244), from B's saved
+  // out/sc-neg-electrolyte-clinical-pubmed.json -- a genuinely wrong-domain
+  // (clinical, not battery) real negative that must stay rejected either way.
+  const clinicalElectrolyteDisorders = item("plural-only-clinical-electrolyte-disorders", {
+    title: "Electrolyte disorders related emergencies in children.",
+    abstract:
+      "This article provides a comprehensive overview of electrolyte and water homeostasis in pediatric " +
+      "patients, focusing on some of the common serum electrolyte abnormalities encountered in clinical " +
+      "practice. We will discuss the pathophysiology, clinical manifestations, diagnostic approaches, and " +
+      "treatment strategies for each electrolyte disorder. This article aims to enhance the clinical " +
+      "approach to pediatric patients with electrolyte imbalance-related emergencies.",
+  });
+
+  it("the genuine hydrogel-electrolyte paper now passes the context check (was demoted)", () => {
+    const gate = senseContextGate(hydrogelElectrolyte, "electrolyte", BATTERY_PROJECT_TEXT);
+    expect(gate.bypass).toBe(false);
+    expect(gate.pass).toBe(true);
+  });
+
+  it("the real clinical-electrolyte negative STILL fails the context check -- the fold is not a general loosening", () => {
+    const gate = senseContextGate(clinicalElectrolyteDisorders, "electrolyte", BATTERY_PROJECT_TEXT);
+    expect(gate.bypass).toBe(false);
+    expect(gate.pass).toBe(false);
+  });
+
+  it("end to end: the hydrogel paper is no longer fully demoted in the final blended score", () => {
+    const scored = scoreItems(
+      [hydrogelElectrolyte],
+      { topics: ["electrolyte"], seedTexts: [BATTERY_PROJECT_TEXT] },
+      undefined,
+      now,
+    );
+    expect(scored.map((s) => s.id)).toEqual([hydrogelElectrolyte.id]);
+    expect(scored[0].matchedKeywords).toEqual(["electrolyte"]);
+    const specificity = termSpecificity(canonicalize("electrolyte"));
+    const fullGroundingScore = (specificity * 1) / 1.5; // T1 title match, undemoted
+    expect(scored[0].scoreBreakdown.keyword).toBeCloseTo(fullGroundingScore, 4);
+  });
+
+  // Honest finding from mutation-testing this item: the 3 specs above (kept
+  // verbatim from the deferred checkpoint) turn out to ALSO pass without the
+  // fold once the document-frequency cut is active -- the hydrogel paper's
+  // one strong shared word with BATTERY_PROJECT_TEXT ("batteries") already
+  // matches identically in both texts without folding, so the cut alone
+  // (not uniquely the fold) explains their post-fix numbers. Constructed to
+  // isolate the fold itself, with no other confound: the ONLY word the two
+  // texts share is the same root in different grammatical number, chosen
+  // above the document-frequency cut so folding -- not the cut -- is what
+  // decides it. Verified directly (fixedSim/overlapSim 0/0 unfolded, 0.341/1
+  // folded).
+  it("the fold itself is load-bearing, isolated from the cut and the skip rule", () => {
+    const context = "Our lab investigates cathode stability under cycling.";
+    const pluralOnly = item("fold-isolated-cathodes", {
+      title: "A survey of cathodes reported across the literature",
+      abstract: "",
+    });
+    const gate = senseContextGate(pluralOnly, "electrolyte", context);
+    expect(gate.bypass).toBe(false);
+    expect(gate.pass).toBe(true);
+  });
+});
+
+describe("test 19 — the overlap-axis document-frequency cut is pinned (§1bg points 1-2, narrowed to P=10 by §1bg point 12)", () => {
+  it("today's cut is the table's 10th-percentile weight, 5.742 -- a table rebuild must trip this and force a re-measure", () => {
+    // Narrowed from the original P=25 (6.784): a real-paper SET diff (not a
+    // count diff) found genuine electrolyte papers demoted at p25; the
+    // manager's sweep of {5,8,10,12,15,20,25} picked P=10 as the point
+    // nearest the middle of the table's own gap between this reader's
+    // non-topical words (at/below "focused" 5.126) and domain words (from
+    // "electrode" 6.091) -- see keyword.ts's own doc comment for the full
+    // reasoning and the accepted cost this still carries.
+    expect(SENSE_CONTEXT_OVERLAP_DOCFREQ_CUT_PERCENTILE).toBe(10);
+    expect(SENSE_CONTEXT_OVERLAP_DOCFREQ_CUT_WEIGHT).toBeCloseTo(5.742, 3);
+  });
+});
+
+describe("test 20 — SENSE-CONTEXT-EVIDENCE's target defect: a full-name match skips the check (§1bg point 3)", () => {
+  // Real OpenAlex item (openalex:W7213893763), from the live LCO response this
+  // item exists to fix (<scratchpad>/prod-lco-resp-3.json) -- matched via the
+  // spelled-out full name "lithium cobalt oxide" (title and abstract both),
+  // never demoted before this fix despite being unambiguously the right sense.
+  const rightSenseFullName = item("lco-full-name-live-defect", {
+    title:
+      "A Proof-of-Concept Study on Leaching of Lithium Cobalt Oxide with Electrogenerated Leaching Agents " +
+      "from CO2, O2, and H2O",
+    abstract:
+      "Abstract To leach the metals from lithium cobalt oxide (LCO) from batteries more sustainably, the " +
+      "application of electrochemically generated leaching agents from mainly CO2, O2, and H2O is " +
+      "presented. Therefore, CO2 was reduced to formic acid/formate and O2 was reduced to H2O2, each with " +
+      "high Faradaic efficiency (> 85%) at gas diffusion electrodes. Formate and H2O2 were used " +
+      "individually or together to leach lithium and cobalt from LCO. When used together, mainly lithium " +
+      "was extracted while cobalt precipitated as insoluble cobalt phosphate, which allows efficient " +
+      "separation. Furthermore, lithium and cobalt could be leached almost quantitatively (Co: 99.6 +/- " +
+      "2.2%, Li: 92.7 +/- 1.7%) by acidification with remarkably low amounts of sulfuric acid. In " +
+      "summary, this innovative feasibility study demonstrates that electrochemically generated leaching " +
+      "agents from air and water are a promising alternative to the conventional leaching methods.",
+    tags: [
+      "Cobalt", "Leaching (pedology)", "Cobalt oxide", "Sulfuric acid", "Formate", "Formic acid", "Oxide",
+      "Lithium cobalt oxide", "Extraction and Separation Processes", "Metal Extraction and Bioleaching",
+    ],
+  });
+  // Real arXiv item (arxiv:2608.18563), same live response -- a completely
+  // different compound (the La2CuO4 cuprate) that also happens to abbreviate
+  // to "LCO" and must stay demoted: it never spells out "lithium cobalt
+  // oxide" or "LiCoO2" anywhere, so the skip rule must not touch it.
+  const wrongSenseCuprate = item("lco-cuprate-stays-demoted", {
+    source: "arxiv",
+    title: "Magnetism and Electrical Conduction in Lightly-Doped Single-Layer High-Tc Cuprate La2CuO4+δ",
+    abstract:
+      "The temperature dependences of magnetization and electrical resistivity as well as their magnetic " +
+      "field dependences have been examined in lightly-doped single-layer cuprate La2CuO4+δ (LCO, " +
+      "hole-doping level p (2δ) cong 0.03) single crystals, in comparison with those in the extremely low " +
+      "doping region of p lesssim 0.015 to uncover the intrinsic magnetism and electrical conduction of " +
+      "the Cu-O plane that exhibits both antiferromagnetic (AF) and superconducting (SC) orders " +
+      "simultaneously. In p cong 0.03 SC LCO, the sub-lattice moments on Cu sites and their AF couplings " +
+      "are only sim 15% smaller than those of the Mott-insulator parent material, suggesting that the " +
+      "localization of Cu 3d electrons remains very strong. Furthermore, we report that in the SC LCO, " +
+      "two-dimensional AF spin correlations develop rapidly from T* cong 280 K towards Neel temperature " +
+      "TN = 266 K, where the out-of-plane resistivity starts to decrease largely. This might be " +
+      "responsible for the AF ordering at such a high temperature in the SC single-layer cuprate with p " +
+      "cong 0.03.",
+    tags: ["cond-mat.supr-con"],
+  });
+
+  it("the right-sense paper reaches FULL STRENGTH (the live defect this item exists to fix)", () => {
+    const scored = scoreItems([rightSenseFullName], { topics: ["LCO"], seedTexts: [BATTERY_PROJECT_TEXT] }, undefined, now);
+    const bypassed = scoreItems([rightSenseFullName], { topics: ["LCO"] }, undefined, now);
+    expect(scored.map((s) => s.id)).toEqual([rightSenseFullName.id]);
+    expect(scored[0].matchedKeywords).toEqual(["LCO"]);
+    // Full strength = identical to the no-context-declared (bypass) baseline.
+    expect(scored[0].scoreBreakdown.keyword).toBeCloseTo(bypassed[0].scoreBreakdown.keyword, 4);
+    expect(matchesFullNameOrFormula(rightSenseFullName, "LCO")).toBe(true);
+    // Honest note, found by execution while mutation-testing this item: for
+    // THIS specific real paper, the skip rule is not the only thing that now
+    // rescues it -- once folded and cut, its own statistical gate also
+    // independently clears the AND path (fixedSim 0.0496 >= 0.015, overlapSim
+    // 0.1111 >= 0.10), so removing the skip rule alone does not flip THIS
+    // fixture (both mechanisms happen to agree on this one real paper). The
+    // next test uses a minimal, deliberately thin-vocabulary fixture that
+    // isolates the skip rule as the ONLY thing keeping it undemoted.
+  });
+
+  it("SENSE-CONTEXT-EVIDENCE (§1bg): a minimal full-name/formula-only match, with no other shared vocabulary, is rescued ONLY by the skip rule", () => {
+    // Constructed to isolate the skip rule: a single full-name mention and
+    // nothing else that overlaps BATTERY_PROJECT_TEXT at all (verified
+    // directly: senseContextGate on this fixture is fixedSim=0, overlapSim=0
+    // -- the statistical gate fails outright, so ONLY the skip rule can save
+    // it). This is the fixture the skip-rule mutation must flip.
+    const minimalFullName = item("lco-minimal-full-name", {
+      title: "Structural analysis of lithium cobalt oxide thin films",
+      abstract: "",
+    });
+    const minimalFormula = item("lco-minimal-formula", {
+      title: "Structural analysis of LiCoO2 thin films by electron diffraction",
+      abstract: "",
+    });
+    for (const paper of [minimalFullName, minimalFormula]) {
+      const gate = senseContextGate(paper, "LCO", BATTERY_PROJECT_TEXT);
+      expect(gate.pass).toBe(false); // the statistical axis alone would demote it
+      const scored = scoreItems([paper], { topics: ["LCO"], seedTexts: [BATTERY_PROJECT_TEXT] }, undefined, now);
+      const bypassed = scoreItems([paper], { topics: ["LCO"] }, undefined, now);
+      expect(scored[0].matchedKeywords).toEqual(["LCO"]);
+      expect(scored[0].scoreBreakdown.keyword).toBeCloseTo(bypassed[0].scoreBreakdown.keyword, 4); // full strength
+    }
+  });
+
+  it("the wrong-sense cuprate STAYS demoted -- the skip rule never fires for it (bare-form-only match)", () => {
+    expect(matchesFullNameOrFormula(wrongSenseCuprate, "LCO")).toBe(false);
+    const scored = scoreItems([wrongSenseCuprate], { topics: ["LCO"], seedTexts: [BATTERY_PROJECT_TEXT] }, undefined, now);
+    const bypassed = scoreItems([wrongSenseCuprate], { topics: ["LCO"] }, undefined, now);
+    expect(scored.map((s) => s.id)).toEqual([wrongSenseCuprate.id]);
+    expect(scored[0].matchedKeywords).toEqual(["LCO"]); // demoted, not dropped
+    expect(scored[0].scoreBreakdown.keyword).toBeLessThan(bypassed[0].scoreBreakdown.keyword);
+  });
+});
+
+describe("test 21 — skip-rule classifier: matchesFullNameOrFormula (§1bg point 3)", () => {
+  it("a bare-form-only match does NOT skip the check", () => {
+    const bareOnly = item("lco-bare-only", {
+      title: "A degradation study of the LCO cathode under fast-charging conditions",
+      abstract: "We cycle LCO cathodes at high rate and report capacity fade for the LCO cell chemistry.",
+    });
+    expect(matchesFullNameOrFormula(bareOnly, "LCO")).toBe(false);
+  });
+
+  it("a full-name-only match (never the bare abbreviation) skips", () => {
+    const fullNameOnly = item("lco-full-name-only", {
+      title: "Degradation of lithium cobalt oxide cathodes under fast-charging conditions",
+      abstract: "We cycle lithium cobalt oxide cathodes at high rate and report capacity fade.",
+    });
+    expect(matchesFullNameOrFormula(fullNameOnly, "LCO")).toBe(true);
+  });
+
+  it("a chemical-formula-only match (LiCoO2, never 'LCO' or the full name) skips", () => {
+    const formulaOnly = item("lco-formula-only", {
+      title: "Degradation of LiCoO2 cathodes under fast-charging conditions",
+      abstract: "We cycle LiCoO2 cathodes at high rate and report capacity fade for this cell chemistry.",
+    });
+    expect(matchesFullNameOrFormula(formulaOnly, "LCO")).toBe(true);
+  });
+
+  it("a real petroleum 'light cycle oil (LCO)' negative is never classified full-form for the battery tag", () => {
+    // Real OpenAlex item (openalex:W2897424722), the same real text test 6
+    // uses -- self-declares an abbreviation pair, but "light cycle oil" is
+    // not one of LCO's known expansions, so it must never be misread as
+    // agreeing evidence by this classifier either.
+    const petroleum = item("petroleum-lco-classifier", {
+      title: "Separation of aromatic components from light cycle oil by solvent extraction",
+      abstract:
+        "To improve the versatility of light cycle oil (LCO), separation of aromatic compounds from LCO " +
+        "by solvent extraction was investigated. LCO was analyzed to identify 35 components: 19 aromatics " +
+        "and 16 alkanes.",
+    });
+    expect(matchesFullNameOrFormula(petroleum, "LCO")).toBe(false);
+  });
+
+  it("is inert for tags with no catalogued abbreviation (electrolyte, solid state)", () => {
+    const paper = item("no-abbreviation-tag-skip-rule", {
+      title: "Serum electrolyte imbalance and solid state physics have nothing to do with lithium cobalt oxide",
+      abstract: "",
+    });
+    expect(matchesFullNameOrFormula(paper, "electrolyte")).toBe(false);
+    expect(matchesFullNameOrFormula(paper, "solid state")).toBe(false);
+  });
+
+  it("rule (c) keeps precedence: a self-declared DIFFERENT expansion is a hard non-match even when the tag's true full name also appears elsewhere in the same paper", () => {
+    // Constructed: the paper self-declares "light cycle oil (LCO)" (rule (c)
+    // fires -- a disagreeing expansion) AND separately mentions "lithium
+    // cobalt oxide" elsewhere (which would, on its own, satisfy the skip
+    // rule). Rule (c) runs first and unconditionally `continue`s past the
+    // topic in scoreKeyword's loop, so the skip rule never gets a chance to
+    // run at all -- the item contributes nothing, exactly as rule (c) alone
+    // would produce.
+    const both = item("rule-c-precedence", {
+      title: "Comparing light cycle oil (LCO) refining byproducts against lithium cobalt oxide battery scrap",
+      abstract:
+        "This survey contrasts petroleum light cycle oil (LCO) composition with unrelated lithium cobalt " +
+        "oxide battery recycling streams, two unconnected industrial byproduct classes.",
+    });
+    expect(selfDeclaresDifferentSense(both, "LCO").differs).toBe(true);
+    expect(matchesFullNameOrFormula(both, "LCO")).toBe(true); // the classifier alone WOULD skip
+    const result = scoreKeyword(both, ["LCO"], {
+      grounded: true,
+      extendedRequiredMatch: true,
+      senseContext: { contextText: BATTERY_PROJECT_TEXT },
+    });
+    expect(result.matched).toEqual([]); // rule (c) wins: contributes nothing, not even demoted
+    expect(result.score).toBe(0);
+  });
+});
+
+describe("test 22 — a sampled negatives tripwire, one real negative per tag (§1bg point 8)", () => {
+  it("a real clinical-electrolyte negative still fails the context check", () => {
+    // Real PubMed item (pubmed:18486713), from out/sc-neg-electrolyte-clinical-pubmed.json.
+    const paper = item("neg-sample-electrolyte", {
+      source: "pubmed",
+      title: "Approach to fluid and electrolyte disorders and acid-base problems.",
+      abstract:
+        "Employing a systematic approach to the interpretation of serum chemistries is the most effective " +
+        "way to ensure abnormalities are detected and correctly interpreted. This article reviews a " +
+        "series of steps that can be used in both the outpatient and inpatient settings. These steps " +
+        "will help to ensure the clinician identifies not only overt abnormalities but also subtle " +
+        "disturbances that may lay hidden in a routine set of serum chemistry values.",
+      tags: [
+        "Acid-Base Imbalance", "Acute Disease", "Chlorides", "Chronic Disease", "Humans", "Hyperkalemia",
+        "Hypernatremia", "Hypokalemia", "Hyponatremia", "Water-Electrolyte Balance", "Water-Electrolyte Imbalance",
+      ],
+    });
+    const gate = senseContextGate(paper, "electrolyte", BATTERY_PROJECT_TEXT);
+    expect(gate.bypass).toBe(false);
+    expect(gate.pass).toBe(false);
+  });
+
+  it("a real physics 'solid state' negative still fails the context check", () => {
+    // Real OpenAlex item (openalex:W1639895858), from out/sc-neg-solid-state-openalex.json.
+    const paper = item("neg-sample-solid-state", {
+      title: "Valence-Bond-Solid state entanglement in a 2-D Cayley tree",
+      abstract:
+        "The Valence-Bond-Solid (VBS) states are in general ground states for certain gapped models. We " +
+        "consider the entanglement of VBS states on a two-dimensional Cayley tree. We show that the " +
+        "entropy of the reduced density operator does not depend on the whole size of the Cayley tree. We " +
+        "also show that asymptotically, the entropy is liearly proportional to the number of singlet " +
+        "states cut by the reduced density operator of the VBS state.",
+      tags: [
+        "Quantum entanglement", "Singlet state", "Operator (biology)", "Valence bond theory",
+        "Entropy (arrow of time)", "Valence (chemistry)", "Physics", "Quantum mechanics", "Mathematics", "Quantum",
+      ],
+    });
+    const gate = senseContextGate(paper, "solid state", BATTERY_PROJECT_TEXT);
+    expect(gate.bypass).toBe(false);
+    expect(gate.pass).toBe(false);
+  });
+
+  it("a real petroleum 'LCO' negative still fails the context check (same real text as test 6/14)", () => {
+    // Real OpenAlex item (openalex:W2897424722), from out/sc-neg-lco-openalex.json.
+    const paper = item("neg-sample-lco", {
+      title: "Separation of aromatic components from light cycle oil by solvent extraction",
+      abstract:
+        "To improve the versatility of light cycle oil (LCO), separation of aromatic compounds from LCO " +
+        "by solvent extraction was investigated. LCO was analyzed to identify 35 components: 19 aromatics " +
+        "and 16 alkanes. The batch liquid–liquid equilibrium extraction of LCO was performed using " +
+        "furfural, sulfolane, and methanol as extraction solvents.",
+      tags: ["Sulfolane", "Chemistry", "Solvent", "Extraction (chemistry)", "Light crude oil", "Solvent extraction"],
+    });
+    // Direct axis check -- independent of rule (c), which already separately
+    // intercepts this exact fixture (test 6/14).
+    const gate = senseContextGate(paper, "LCO", BATTERY_PROJECT_TEXT);
+    expect(gate.bypass).toBe(false);
+    expect(gate.pass).toBe(false);
+  });
+});
+
+// SENSE-CONTEXT-EVIDENCE (§1bg point 12) — the cut narrowed from P=25 to
+// P=10 after a real-paper SET diff (not the count diff test 18-22 above
+// were written against) found genuine electrolyte papers demoted at p25.
+// Reader context throughout: the SAME `BATTERY_PROJECT_TEXT` constant every
+// other electrolyte test in this file already uses (not the enriched
+// solid-state-specific seed-text list test 17 builds for the R3 residuals).
+
+describe("test 23 — P=10 protective tests from real saved papers (§1bg point 12c)", () => {
+  it("openalex:W7172267740 (PVA gel polymer electrolytes) stays at full strength at P=10", () => {
+    // Real OpenAlex item, title-only (no abstract in the saved record). The
+    // one genuine core-topic loss the manager's sweep found at p20/p25 --
+    // must stay undemoted at the shipped P=10.
+    const paper = item("p10-protective-w7172267740", {
+      title:
+        "Size-dependent ionic mobility enhancement in graphene-oxide-doped PVA gel polymer electrolytes: " +
+        "a generalized transport model",
+      abstract: "",
+    });
+    const scored = scoreItems([paper], { topics: ["electrolyte"], seedTexts: [BATTERY_PROJECT_TEXT] }, undefined, now);
+    const bypassed = scoreItems([paper], { topics: ["electrolyte"] }, undefined, now);
+    expect(scored.map((s) => s.id)).toEqual([paper.id]);
+    expect(scored[0].matchedKeywords).toEqual(["electrolyte"]);
+    expect(scored[0].scoreBreakdown.keyword).toBeCloseTo(bypassed[0].scoreBreakdown.keyword, 4);
+  });
+
+  it("openalex:W7204716846 (electrolytic plasma treatment of metals) stays demoted at P=10 -- never promoted to a wrong-field full-strength gain", () => {
+    // Real OpenAlex item -- metallurgy/surface-finishing, not battery
+    // materials. One of the 2 wrong-field papers the manager's sweep found
+    // promoted to full strength at p20/p25; must stay demoted at p10 (0
+    // wrong-field gains is one of the confirmed bars for this cut).
+    const paper = item("p10-protective-w7204716846", {
+      title: "Effect of Electrolyte Composition on Electrolytic Plasma Treatment of Metals",
+      abstract:
+        "Abstract Experimental studies and analysis of the results of electrolyte-plasma treatment of " +
+        "copper, steel, and brass products using an electric discharge with weak and strong electrolytes " +
+        "were conducted. The samples were treated by immersing a metal anode (the product being treated) " +
+        "in a liquid (non-metallic) cathode. The surfaces of the metals were analyzed before and after " +
+        "treatment with various electrolyte solutions.",
+    });
+    const scored = scoreItems([paper], { topics: ["electrolyte"], seedTexts: [BATTERY_PROJECT_TEXT] }, undefined, now);
+    const bypassed = scoreItems([paper], { topics: ["electrolyte"] }, undefined, now);
+    expect(scored.map((s) => s.id)).toEqual([paper.id]);
+    expect(scored[0].matchedKeywords).toEqual(["electrolyte"]);
+    expect(scored[0].scoreBreakdown.keyword).toBeLessThan(bypassed[0].scoreBreakdown.keyword);
+  });
+
+  it("arxiv:2608.14351 (propylene epoxidation electrocatalysts) stays demoted at P=10 -- never promoted to a wrong-field full-strength gain", () => {
+    // Real arXiv item -- industrial catalysis, not battery materials. The
+    // other of the 2 wrong-field papers the manager's sweep found promoted
+    // to full strength at p20/p25; must stay demoted at p10.
+    const paper = item("p10-protective-arxiv260814351", {
+      source: "arxiv",
+      title: "Multidimensional Design of Metal-Nitrogen-Carbon Electrocatalysts for Direct Propylene Epoxidation",
+      abstract:
+        "Propylene oxide is a major industrial chemical whose production currently relies on hazardous " +
+        "chlorine- or peroxide-based oxidants. Direct electrochemical epoxidation using water as the " +
+        "oxygen source offers a sustainable alternative, but controlling oxygen-atom transfer against the " +
+        "competing oxygen evolution reaction remains a fundamental challenge. Here, we show that propylene " +
+        "epoxidation selectivity cannot be described by oxygen binding energy alone, but is jointly " +
+        "governed by oxygen adsorption, the potential of zero charge, and applied potential. By combining " +
+        "theoretical calculations with pH-field-coupled microkinetic modeling across 41 metal-nitrogen-" +
+        "carbon single-atom catalysts, we first identified an optimal oxygen-binding window and Co as the " +
+        "most favorable metal center. We then found that peripheral substituents can tune the PZC while " +
+        "largely preserving the optimal oxygen adsorption energetics, thereby providing an independent " +
+        "design dimension to further optimize the already favorable Co active site. This sequential, " +
+        "multidimensional design strategy identified CoPc-NH2-CNT as the optimal catalyst, delivering a " +
+        "record PO Faradaic efficiency of 70-80 percent for direct propylene epoxidation in aqueous " +
+        "electrolyte under ambient conditions. These results establish interfacial electrostatics as an " +
+        "independently tunable design dimension for controlling selective oxygen-atom transfer in " +
+        "electrocatalysis.",
+    });
+    const scored = scoreItems([paper], { topics: ["electrolyte"], seedTexts: [BATTERY_PROJECT_TEXT] }, undefined, now);
+    const bypassed = scoreItems([paper], { topics: ["electrolyte"] }, undefined, now);
+    expect(scored.map((s) => s.id)).toEqual([paper.id]);
+    expect(scored[0].matchedKeywords).toEqual(["electrolyte"]);
+    expect(scored[0].scoreBreakdown.keyword).toBeLessThan(bypassed[0].scoreBreakdown.keyword);
+  });
+
+  it("arxiv:2609.08721 (TEMPO catholytes) stays DEMOTED at P=10 -- accepted cost, §1bg.12b", () => {
+    // Real arXiv item -- a genuine aqueous redox-flow battery electrolyte-
+    // degradation paper, adjacent to but not the reader's own solid-state
+    // chemistry. This is the ONE named, accepted cost of shipping P=10
+    // (keyword.ts's own doc comment on SENSE_CONTEXT_OVERLAP_DOCFREQ_CUT_PERCENTILE
+    // gives the full reasoning and the threshold for B to revisit). A T1
+    // literal hit is never dropped -- it stays qualified, just demoted.
+    // Tripwire, not a claim of correctness: if this ever asserts full
+    // strength again without a deliberate axis redesign, the cut has
+    // silently moved and needs the same re-measurement this ruling required.
+    const paper = item("p10-accepted-cost-arxiv260908721", {
+      source: "arxiv",
+      title: "Competing Ring-Opening and Hofmann Elimination Pathways in Aqueous TEMPO Catholytes: A First-Principles Study",
+      abstract:
+        "Aqueous redox-flow batteries based on TEMPO derivatives are promising for large-scale energy " +
+        "storage, but their practical use is limited by the chemical instability of the oxidized N " +
+        "-oxoammonium state. In this work, we investigate the degradation of five TEMPO derivatives using " +
+        "ab initio molecular dynamics combined with enhanced sampling. Two proposed degradation " +
+        "mechanisms, ring opening and Hofmann elimination, are examined and their corresponding " +
+        "activation free energies are compared. For all derivatives considered, ring opening exhibits a " +
+        "lower activation free energy than Hofmann elimination, identifying it as the kinetically " +
+        "preferred degradation pathway. The magnitude of the ring-opening barrier, however, varies " +
+        "significantly between molecules, showing that different functionalizations strongly influence " +
+        "its stability toward degradation. The predicted preference for ring opening is consistent with " +
+        "available experimental studies, which have identified or inferred ring-opening degradation for " +
+        "several TEMPO-based catholytes. These results provide an atomistic picture of degradation " +
+        "pathways that are difficult to resolve experimentally and highlight the importance of molecular " +
+        "structure in controlling the kinetic stability of TEMPO derivatives in aqueous electrolytes.",
+    });
+    const scored = scoreItems([paper], { topics: ["electrolyte"], seedTexts: [BATTERY_PROJECT_TEXT] }, undefined, now);
+    const bypassed = scoreItems([paper], { topics: ["electrolyte"] }, undefined, now);
+    expect(scored.map((s) => s.id)).toEqual([paper.id]); // qualified, not dropped
+    expect(scored[0].matchedKeywords).toEqual(["electrolyte"]);
+    expect(scored[0].scoreBreakdown.keyword).toBeLessThan(bypassed[0].scoreBreakdown.keyword); // demoted
+  });
+
+  it("openalex:W7203865202 (proton-conducting electrolytes for reversible solid oxide cells) stays DEMOTED at P=10 -- accepted cost 2, §1bg.13c", () => {
+    // Real OpenAlex item -- a genuine electrolyte-materials review, but for a
+    // fuel-cell/electrolyzer device class (protons, 400-600 C ceramics), not
+    // the reader's own lithium/sodium-ion battery focus. A third real loss a
+    // fresh A2 found by execution that this file's own tooling (the STOP
+    // round's sweep script) had silently dropped from its loss/gain tables
+    // instead of flagging -- see keyword.ts's own doc comment on
+    // SENSE_CONTEXT_OVERLAP_DOCFREQ_CUT_PERCENTILE for the full accepted-cost
+    // reasoning and the §1bg.12b threshold this does NOT cross (an adjacent
+    // device class, not the reader's own core topic). Same treatment as the
+    // arxiv:2609.08721 tripwire above: a T1 literal hit is never dropped, it
+    // stays qualified, just demoted. Tripwire, not a claim of correctness --
+    // if this ever asserts full strength again without a deliberate axis
+    // redesign, the cut has silently moved and needs the same re-measurement
+    // this ruling required.
+    const paper = item("p10-accepted-cost2-w7203865202", {
+      title: "Recent Advances and Future Perspectives of Proton-Conducting Electrolytes for Reversible Solid Oxide Cells",
+      abstract:
+        "Proton-conducting reversible solid oxide cells (P-RSOCs) are emerging as a transformative " +
+        "platform for efficient and flexible conversion between electricity and chemical fuels, " +
+        "including hydrogen and syngas. Their intermediate-temperature operation (400-600 °C) offers " +
+        "a compelling combination of high energy efficiency, rapid reaction kinetics, and strong " +
+        "compatibility with renewable electricity and industrial waste heat, positioning P-RSOCs as a " +
+        "promising technology for a carbon-neutral energy future. At the heart of these devices lies " +
+        "the proton-conducting electrolyte, which governs proton transport, chemical stability, " +
+        "interfacial compatibility, and long-term durability. Despite remarkable advances in " +
+        "electrolyte development, fundamental challenges in understanding and controlling proton " +
+        "transport, chemical stability, and electrode-electrolyte interactions continue to constrain " +
+        "practical deployment. This review presents a comprehensive and critical assessment of the " +
+        "current state of proton-conducting electrolytes for P-RSOCs, with emphasis on proton " +
+        "transport mechanisms, composition-structure-property relationships, stability limitations, " +
+        "and interfacial compatibility. We examine advances in perovskite-based and emerging " +
+        "alternative electrolyte families, while highlighting key strategies─including aliovalent " +
+        "doping, interfacial engineering, microstructure design, and advanced fabrication─for " +
+        "overcoming persistent limitations. Emerging operando characterization and computational " +
+        "approaches are further discussed as powerful tools for uncovering dynamic transport and " +
+        "degradation mechanisms and accelerating materials discovery. By integrating fundamental " +
+        "insights with materials-design strategies, this review identifies critical knowledge gaps " +
+        "and opportunities to guide the development of robust, high-performance electrolytes. " +
+        "Ultimately, we envision that such advances will help unlock the full potential of P-RSOCs as " +
+        "a versatile platform for sustainable energy conversion, storage, and renewable-fuel " +
+        "production.",
+    });
+    // METHOD NOTE (§1bg.13a): this is a real REVIEW-type paper (its own
+    // title says "Review"), and the sibling tests' bypass technique
+    // (`scoreItems([paper], {topics:["electrolyte"]})` with no seedTexts)
+    // silently returns an EMPTY array for it -- combine.ts's own
+    // `shouldPushReviewPaper` pass-2 filter reads that same (here, empty)
+    // `seedTexts` field for an unrelated purpose and drops review-flagged
+    // items unless they directly match real declared project text. This is
+    // exactly the confound A2 found in the implementer's own measurement
+    // tooling (§1bg.13, Findings) -- reproduced live here by this very
+    // fixture. Fixed the same way A2 fixed it: compare via `scoreKeyword()`
+    // DIRECTLY (the function the fold/cut/skip-rule actually live inside),
+    // never through `combine.ts`, so `shouldPushReviewPaper` never runs.
+    const scored = scoreItems([paper], { topics: ["electrolyte"], seedTexts: [BATTERY_PROJECT_TEXT] }, undefined, now);
+    const direct = scoreKeyword(paper, ["electrolyte"], {
+      grounded: true,
+      extendedRequiredMatch: true,
+      senseContext: { contextText: BATTERY_PROJECT_TEXT },
+    });
+    const ceiling = scoreKeyword(paper, ["electrolyte"], {
+      grounded: true,
+      extendedRequiredMatch: true,
+      senseContext: { contextText: "" }, // empty context -> senseContextGate's own bypass path, full grounding
+    });
+    expect(scored.map((s) => s.id)).toEqual([paper.id]); // qualified, not dropped from the real pipeline
+    expect(scored[0].matchedKeywords).toEqual(["electrolyte"]);
+    expect(scored[0].scoreBreakdown.keyword).toBeCloseTo(direct.score, 10); // scoreItems agrees with the direct call
+    expect(direct.score).toBeLessThan(ceiling.score); // demoted
   });
 });

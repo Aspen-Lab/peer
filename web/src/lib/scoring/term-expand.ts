@@ -147,6 +147,15 @@ const SINGULARIZE_PROTECTED_SUFFIX = /(?:ics|sis|xis|itis|osis|opsis)$/u;
  *    under-fold, not a false merge, and exactly today's shipped behaviour
  *    for them either way (both the old, pre-item code and the plain "-s"
  *    rule already mishandle the unrelated "focus"/"virus" the same way).
+ *    A fourth, previously undocumented accepted under-fold, owed by
+ *    TOKENIZE-PLURALS-A's own review (LOW finding 1) and closed here
+ *    (SENSE-CONTEXT-EVIDENCE, §1bg point 8): "ions"→"ions" (unchanged) —
+ *    the plain "-s" rule's `length > 4` guard excludes this 4-letter
+ *    plural, so `ion`/`ions` (both real, separate reference-table keys)
+ *    never merge. Safe for the same reason as gases/biases/lenses (nothing
+ *    false-merges), just a small, named T4/context-check recall gap for a
+ *    tag whose only mismatch with a candidate paper is this word's
+ *    grammatical number.
  * 2. The irregular map's own "pick the shorter form" test
  *    (`form.length < word.length`) can never select a same-length pair —
  *    which is exactly the "analysis"/"analyses" entry (7 → 8 hides the
@@ -244,6 +253,25 @@ export function expandTerm(term: string): string[] {
 const WORD_CHAR = "\\p{L}\\p{N}\\p{M}";
 
 /**
+ * Whole-word match of ONE already-canonical variant (no expansion) against a
+ * canonicalized haystack. Extracted from `termMatches` below (SENSE-CONTEXT-EVIDENCE,
+ * ABC-JEV-INTEGRATION.md §1bg point 3) so a caller that needs to test a SINGLE
+ * member of a term's expansion — not "does the haystack agree with the term at
+ * all" — has a primitive that will not silently re-expand that member back out
+ * to the whole group. Calling `expandTerm` on a single already-known variant is
+ * NOT equivalent to testing that variant alone: `expandTerm` returns the same
+ * whole-group closure no matter which member it starts from (see keyword.ts's
+ * `matchesFullNameOrFormula`, which exists because of exactly this trap).
+ * `termMatches` itself is unchanged behaviourally — it is now a thin loop over
+ * this helper instead of inlining the same regex construction.
+ */
+export function termVariantMatches(canonicalHaystack: string, variant: string): boolean {
+  const escaped = variant.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const re = new RegExp(`(?<![${WORD_CHAR}])${escaped}(?![${WORD_CHAR}])`, "u");
+  return re.test(canonicalHaystack);
+}
+
+/**
  * Whole-word match against a canonicalized haystack. Call `canonicalize`
  * before invoking directly; scoreKeyword does this once per item.
  *
@@ -256,15 +284,7 @@ const WORD_CHAR = "\\p{L}\\p{N}\\p{M}";
  * gate on their own.
  */
 export function termMatches(canonicalHaystack: string, term: string): boolean {
-  for (const variant of expandTerm(term)) {
-    const escaped = variant.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const re = new RegExp(
-      `(?<![${WORD_CHAR}])${escaped}(?![${WORD_CHAR}])`,
-      "u",
-    );
-    if (re.test(canonicalHaystack)) return true;
-  }
-  return false;
+  return expandTerm(term).some((variant) => termVariantMatches(canonicalHaystack, variant));
 }
 
 /**

@@ -4,7 +4,7 @@
 // `isUploadId` branch, which strips the prefix before calling this route).
 
 import { NextResponse } from "next/server";
-import { isValidHash16, deleteUpload, hasOtherReadyDocumentCopy, uploadMetaToPaper } from "@/lib/papers/upload-store";
+import { isValidHash16, deleteUpload, hasOtherReadyDocumentCopy, uploadFileExists, uploadMetaToPaper } from "@/lib/papers/upload-store";
 import { ownedUpload, PRIVATE_UPLOAD_HEADERS, sameOriginUploadRequest } from "@/lib/papers/upload-access";
 
 export async function GET(
@@ -21,7 +21,18 @@ export async function GET(
     return NextResponse.json({ error: "Upload not found." }, { status: 404 });
   }
 
-  return NextResponse.json(uploadMetaToPaper(meta), { headers: PRIVATE_UPLOAD_HEADERS });
+  // UPLOAD-404 (§1bi.8a): the record and the PDF bytes are two separate
+  // files (upload-store.ts) — a crash can in principle leave one without
+  // the other. Only the file-bytes route checked for the bytes before this;
+  // a reader whose record was fine but whose file was separately gone got a
+  // normal-looking page with a "retained for 30 days" claim and an "Open
+  // the source" action that 404s in raw JSON. Additive field, everything
+  // else about this response unchanged, so the page can tell the two states
+  // apart and treat both honestly.
+  return NextResponse.json(
+    { ...uploadMetaToPaper(meta), fileAvailable: uploadFileExists(id) },
+    { headers: PRIVATE_UPLOAD_HEADERS },
+  );
 }
 
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {

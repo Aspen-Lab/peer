@@ -401,6 +401,110 @@ describe("GET /api/jobs/dispatch-digests -- PEER_DIGEST_DEDUPE (P4-S7)", () => {
   });
 });
 
+// ── EMPTY-EMAIL-REASON (ABC-JEV-INTEGRATION.md §1bj) — the scheduled sender
+// must forward the pipeline's own `meta.emptyReasonCode` through to
+// `sendDigestEmail` unchanged on the flag-off default path (the P4-S7-IDEM
+// first-attempt path is covered separately, with REAL rendering, in
+// idempotency.test.ts — `sendDigestEmail` is a bare mock in THIS file, see
+// the module-level `vi.mock` at the top, so these tests prove only this
+// route's own plumbing; the rendered-sentence behaviour is covered by
+// digest-template.test.ts and send-digest.test.ts). ──────────────────────
+describe("GET /api/jobs/dispatch-digests -- passes feed.meta.emptyReasonCode through (EMPTY-EMAIL-REASON)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubEnv("CRON_SECRET", "test-secret");
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-24T15:00:00.000Z"));
+    mocks.sendDigestEmail.mockResolvedValue({ sent: true, messageId: "msg-1" });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("forwards a real code when the pipeline resolves one", async () => {
+    mocks.runFeedPipeline.mockResolvedValue({
+      items: [],
+      meta: { emptyReasonCode: "no-required-match" },
+    });
+    const { client } = makeAdminClient({ profiles: [profileRow()] });
+    mocks.createAdminClient.mockReturnValue(client);
+
+    await GET(authedRequest());
+
+    expect(mocks.sendDigestEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ emptyReasonCode: "no-required-match" }),
+    );
+  });
+
+  it("forwards undefined when the pipeline returned no code (today's only-tested shape, now also checked on this field)", async () => {
+    mocks.runFeedPipeline.mockResolvedValue({ items: [], meta: {} });
+    const { client } = makeAdminClient({ profiles: [profileRow()] });
+    mocks.createAdminClient.mockReturnValue(client);
+
+    await GET(authedRequest());
+
+    const call = mocks.sendDigestEmail.mock.calls[0][0];
+    expect(call.emptyReasonCode).toBeUndefined();
+  });
+});
+
+// ── EMPTY-EMAIL-REASON / §1bj.5 pin — the guide's §1.4 proved by execution
+// that the dispatcher's OWN post-pipeline 30-day re-filter (route.ts, the
+// `freshItems = feed.items.filter((i) => !seenIds.has(i.id))` line right
+// after the `runFeedPipeline` call) is a no-op today, because the SAME
+// `seenIds` set already went into the pipeline call as `excludeIds` — but
+// that invariant had no test (the route's own tests, above, all mock
+// `runFeedPipeline` directly and never exercise a non-empty `feed.items`).
+// Regression-pins that the redundant filter removes nothing beyond what the
+// pipeline (here: a realistic mock standing in for it) already excluded. ──
+describe("GET /api/jobs/dispatch-digests -- the redundant 30-day re-filter removes nothing extra (§1bj.5)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubEnv("CRON_SECRET", "test-secret");
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-24T15:00:00.000Z"));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("a non-excluded item survives when a DIFFERENT item is in the 30-day set (a realistic already-filtered pipeline stub)", async () => {
+    // "past" (the 30-day briefing_deliveries lookback) returns paper A's id.
+    // A real pipeline call passes that same set as `excludeIds` and so can
+    // never return paper A (proven by the B guide §1.4/§2.1-2.2 against the
+    // REAL pipeline) -- this mock reflects that already-filtered reality:
+    // feed.items holds only the non-excluded paper B.
+    const { client } = makeAdminClient({
+      profiles: [profileRow()],
+      past: { data: [{ item_ids: ["openalex:paper-a"] }], error: null },
+    });
+    mocks.createAdminClient.mockReturnValue(client);
+    mocks.runFeedPipeline.mockResolvedValue({
+      items: [{ id: "openalex:paper-b", title: "Paper B" }],
+      meta: {},
+    });
+    mocks.sendDigestEmail.mockResolvedValue({ sent: true, messageId: "msg-1" });
+
+    const response = await GET(authedRequest());
+    const body = await response.json();
+
+    // Mutation-catching: if the route's own `.filter(i => !seenIds.has(i.id))`
+    // were changed to filter against a DIFFERENT set (e.g. cleared, or one
+    // that happens to also cover paper B), paper B would be wrongly dropped
+    // and this assertion would go red.
+    expect(mocks.sendDigestEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        items: [expect.objectContaining({ id: "openalex:paper-b" })],
+      }),
+    );
+    // Not treated as an empty send.
+    expect(body.dispatched_count).toBe(1);
+    expect(body.emails_sent_count).toBe(1);
+  });
+});
+
 // ── EMAIL-TOKEN-PRIVACY (ABC-JEV-INTEGRATION.md §1as) — the response is
 // printed whole into the (now-public repo) GitHub Actions log every hour:
 // counts and fixed reason codes only, no raw provider text, no per-reader

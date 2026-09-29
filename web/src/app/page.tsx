@@ -38,6 +38,7 @@ import { StarterStrip } from "@/components/briefing/starter-strip";
 import { STARTER_TOPICS, STARTER_TOPICS_KEY } from "@/lib/feed/starter-topics";
 import { SearchBox } from "@/components/briefing/search-box";
 import { UploadButton } from "@/components/briefing/upload-button";
+import { useUploadsAvailable, uploadsReady } from "@/lib/papers/use-uploads-available";
 import { Band } from "@/components/ui/band";
 import { PaperDigestLoader } from "@/components/digest/daily-digest";
 import { PageContainer } from "@/components/ui/page-container";
@@ -82,6 +83,11 @@ function DailyBriefingPage() {
   const emptyReasonCode = useFeedStore((s) => s.emptyReasonCode);
   const profile = useProfileStore((s) => s.profile);
   const entitlement = useProfileStore((s) => s.entitlement);
+  // UPLOAD-404 (§1bi.2): the upload button is only offered once the server
+  // has actually confirmed it can store a new private PDF right now — see
+  // use-uploads-available.ts for why "unknown" (the value before this
+  // resolves) reads the same as "unavailable".
+  const uploadsAvailable = uploadsReady(useUploadsAvailable());
   // P4-S5a — acknowledges today's batch once its cards are actually in this
   // render and the tab is visible (ABC-JEV-INTEGRATION.md §1p.C.7).
   // `papers.length > 0` is the exact condition that gates the cards grid
@@ -352,7 +358,7 @@ function DailyBriefingPage() {
             library yet, and a lone child under `justify-between` sits at the
             START — the pair would jump left on exactly the first visit. */}
         <div className="ml-auto flex items-start gap-2 sm:mt-2">
-          <UploadButton />
+          {uploadsAvailable && <UploadButton />}
           <SearchBox />
         </div>
       </div>

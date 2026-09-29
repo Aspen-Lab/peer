@@ -319,10 +319,28 @@ const CACHE_KEY_VERSION = 6;
 // reference table are unchanged. This changes pool MEMBERSHIP (T4 can newly
 // admit a plural-only paraphrase), so a v16 pool built under the old,
 // plural-blind T4 comparison must never be served as if it already reflects
-// the fix. These bumps share their numbers
+// the fix. v18 — ABC-JEV-INTEGRATION.md §1bg/SENSE-CONTEXT-EVIDENCE
+// (docs/jev-abc/SENSE-CONTEXT-EVIDENCE-B-20260929T163908Z.md): keyword.ts's
+// SENSE-CONTEXT short-tag context check (`senseContextGate`/
+// `senseContextStripSet`) now folds plurals too (the fold v17's own comment
+// said stayed out, moved here after its own defect was fixed) AND drops,
+// from its overlap axis only, every token whose shipped-reference-table
+// weight sits below the table's own Pth-percentile weight (P = 10 as
+// shipped, narrowed from an original P = 25 by §1bg point 12 after a real-
+// paper regression — see keyword.ts's own
+// `SENSE_CONTEXT_OVERLAP_DOCFREQ_CUT_PERCENTILE` doc comment for the full
+// history and today's pinned value rather than restating the number here);
+// separately, a literal Required-tag match that came through the tag's own full spelled-
+// out name or chemical formula (not its bare abbreviation) now skips the
+// context check entirely. Together these change which short/ambiguous-tag
+// matches pass the context gate — full-strength vs. demoted, and (for the
+// formerly-gated T4-only path) admitted vs. not — so a v17 pool scored
+// under the old, unfolded/uncut/no-skip-rule context check must never be
+// served as if it already reflects any of the three changes. These bumps
+// share their numbers
 // with `CACHE_KEY_VERSION` above by coincidence, not by a shared cause — see
 // `derivePoolCacheKey` below for how each is selected.
-const PAPER_CACHE_KEY_VERSION = 17;
+const PAPER_CACHE_KEY_VERSION = 18;
 /**
  * SINGLE SOURCE OF TRUTH for the literal key prefix a durable papers-pool
  * store may accept, derived from `PAPER_CACHE_KEY_VERSION` rather than

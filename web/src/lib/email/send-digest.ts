@@ -5,6 +5,7 @@
 
 import { Resend } from "resend";
 import type { ScoredItem } from "@/lib/scoring/types";
+import type { FeedEmptyReasonCode } from "@/lib/feed/types";
 import {
   renderDigestHtml,
   renderDigestPlaintext,
@@ -16,6 +17,15 @@ export interface SendDigestInput {
   firstName?: string;
   items: ScoredItem[];
   originUrl: string;
+  /**
+   * EMPTY-EMAIL-REASON (ABC-JEV-INTEGRATION.md §1bj) — forwarded straight
+   * into `renderDigestHtml`/`renderDigestPlaintext` below (both read the
+   * whole `input` object already, so this field reaches them with no other
+   * change here). Every real sender fills this from
+   * `feed.meta.emptyReasonCode`; unused when `render` (below) is supplied,
+   * since a replayed attempt never re-renders.
+   */
+  emptyReasonCode?: FeedEmptyReasonCode;
   /**
    * P4-S7-IDEM (Round 3) -- ABC-JEV-INTEGRATION.md §4 "P4-S7-IDEM B
    * complete" ruling. Forwarded verbatim as the Resend SDK's second

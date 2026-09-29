@@ -341,6 +341,42 @@ describe("emptyReasonCode waterfall (EMPTY-STATE-REASON)", () => {
     expect(result.meta.emptyReasonCode).toBe("already-delivered");
   });
 
+  // EMPTY-EMAIL-REASON (ABC-JEV-INTEGRATION.md §1bj.5) -- accepted, §1bj.5
+  // (paperCount is 5 | 10). computeEmptyReasonCode never sees `topN`; it only
+  // reads `sourceStatus`/`inWindow.length`/`scored.length` (pipeline.ts,
+  // this file's own describe-block header comment). When a candidate clears
+  // every gate (`scored.length > 0`) but `topN` is 0, `returned` is sliced to
+  // `[]` regardless, and the waterfall's 4th branch fires: "already-
+  // delivered" -- even though nothing was ever actually excluded by
+  // `excludeIds`/`ledgerExclusions`. `FeedControls.paperCount` is typed
+  // `5 | 10` at the TypeScript level (profile-compiler.ts) and no live UI
+  // path is known to write 0, so this is a named, accepted risk in the
+  // shared waterfall function, pinned here rather than fixed (manager
+  // ruling, not this test's call) -- a future partial fix must be a
+  // deliberate, visible change to this assertion, not a silent one.
+  it("topN 0 mislabels an otherwise-qualifying candidate as already-delivered, with NO exclusion supplied anywhere (accepted, §1bj.5 (paperCount is 5 | 10))", async () => {
+    const paper = matchingPaper("topn-zero-1");
+    bySourceId.openalex.fetch = vi.fn(async () => [paper]);
+    const cache = new MemoryPoolCache();
+    const now = new Date(2026, 6, 29, 9, 0);
+
+    const result = await runFeedPipeline(
+      {
+        topics: ["solid-state battery"],
+        sources: ["openalex"],
+        aiTier: 0,
+        paperCacheScope: scopeFor("owner-esr-topn0"),
+        topN: 0,
+        // Deliberately no excludeIds/ledgerExclusions -- the mislabel is
+        // that "already-delivered" fires anyway.
+      },
+      { cache, now },
+    );
+
+    expect(result.items).toEqual([]);
+    expect(result.meta.emptyReasonCode).toBe("already-delivered");
+  });
+
   it("non-empty regression: a response with items never carries emptyReasonCode, and every existing meta field is unaffected", async () => {
     bySourceId.openalex.fetch = vi.fn(async () => [matchingPaper("present-1")]);
     const cache = new MemoryPoolCache();
