@@ -224,10 +224,16 @@ const CACHE_KEY_VERSION = 6;
 // self-declares a conflicting abbreviation expansion is now a hard
 // non-match — a v8 pool scored under the old pool-relative gate (or without
 // the self-declared-expansion rule) must never be served as if it reflects
-// either change. These bumps share their numbers with `CACHE_KEY_VERSION`
-// above by coincidence, not by a shared cause — see `derivePoolCacheKey`
-// below for how each is selected.
-const PAPER_CACHE_KEY_VERSION = 9;
+// either change. v10 — ABC-JEV-INTEGRATION.md §1au/LCO-FORMULA
+// (docs/jev-abc/LCO-FORMULA-B-20260928T234855Z.md): `ABBREVIATION_GROUPS`
+// gained a bare chemical-formula alias for LCO ("licoo2") and LFP
+// ("lifepo4"), so a paper that only ever spells the formula (never the
+// abbreviation or the spelled-out name) now qualifies those Required tags
+// through T1 — a v9 pool built under the old, formula-blind vocabulary must
+// never be served as if it already reflects the wider match. These bumps
+// share their numbers with `CACHE_KEY_VERSION` above by coincidence, not by
+// a shared cause — see `derivePoolCacheKey` below for how each is selected.
+const PAPER_CACHE_KEY_VERSION = 10;
 /**
  * SINGLE SOURCE OF TRUTH for the literal key prefix a durable papers-pool
  * store may accept, derived from `PAPER_CACHE_KEY_VERSION` rather than
