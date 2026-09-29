@@ -212,6 +212,10 @@ export async function POST(req: NextRequest) {
     firstName,
     items: feed.items,
     originUrl: originUrlFor(req),
+    // EMPTY-EMAIL-REASON (ABC-JEV-INTEGRATION.md §1bj) -- forwarded through
+    // unchanged when the pipeline returned items; only read by the template
+    // when `items` is empty.
+    emptyReasonCode: feed.meta.emptyReasonCode,
   });
 
   if (!result.sent) {

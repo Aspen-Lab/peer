@@ -247,6 +247,35 @@ describe("the send itself fails (§1al POLISH-1-EMAIL (g))", () => {
   });
 });
 
+// EMPTY-EMAIL-REASON (ABC-JEV-INTEGRATION.md §1bj) -- this sender must pass
+// the pipeline's own emptyReasonCode through to sendDigestEmail unchanged;
+// the actual rendered-sentence behaviour is covered by digest-template.
+// test.ts (real renderer) and send-digest.test.ts (forwarding into the
+// renderers) -- this test only proves THIS route's own plumbing.
+describe("passes feed.meta.emptyReasonCode through to sendDigestEmail (EMPTY-EMAIL-REASON)", () => {
+  it("forwards a real code when the pipeline resolves one", async () => {
+    mocks.runFeedPipeline.mockResolvedValue({
+      items: [],
+      meta: { emptyReasonCode: "no-required-match" },
+    });
+
+    await POST(request());
+
+    expect(mocks.sendDigestEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ emptyReasonCode: "no-required-match" }),
+    );
+  });
+
+  it("forwards undefined when the pipeline returned items (no code to resolve)", async () => {
+    mocks.runFeedPipeline.mockResolvedValue({ items: [], meta: {} });
+
+    await POST(request());
+
+    const call = mocks.sendDigestEmail.mock.calls[0][0];
+    expect(call.emptyReasonCode).toBeUndefined();
+  });
+});
+
 describe("Tier-0 / BYOK untouched (RED #11)", () => {
   it("calls runFeedPipeline with aiTier 0 and no systemSearchAllowed key at all", async () => {
     await POST(request());

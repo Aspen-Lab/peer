@@ -185,6 +185,35 @@ describe("POST /api/test-digest intent transport", () => {
   });
 });
 
+// EMPTY-EMAIL-REASON (ABC-JEV-INTEGRATION.md §1bj) -- this sender must pass
+// the pipeline's own emptyReasonCode through to sendDigestEmail unchanged;
+// the rendered-sentence behaviour itself is covered by digest-template.
+// test.ts (real renderer) and send-digest.test.ts (forwarding into the
+// renderers) -- this test only proves THIS route's own plumbing.
+describe("passes feed.meta.emptyReasonCode through to sendDigestEmail (EMPTY-EMAIL-REASON)", () => {
+  it("forwards a real code when the pipeline resolves one", async () => {
+    mocks.runFeedPipeline.mockResolvedValue({
+      items: [],
+      meta: { emptyReasonCode: "sources-unreachable" },
+    });
+
+    await POST(request());
+
+    expect(mocks.sendDigestEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ emptyReasonCode: "sources-unreachable" }),
+    );
+  });
+
+  it("forwards undefined when the pipeline returned items (no code to resolve)", async () => {
+    mocks.runFeedPipeline.mockResolvedValue({ items: [], meta: {} });
+
+    await POST(request());
+
+    const call = mocks.sendDigestEmail.mock.calls[0][0];
+    expect(call.emptyReasonCode).toBeUndefined();
+  });
+});
+
 // P3-S5 (Round 3) — ABC-JEV-INTEGRATION.md §4 "P3-S5 DESIGN RULING": the
 // Jev shadow's `onFreshShortlist` hook is wired ONLY in
 // app/api/feed/route.ts's POST handler — this route is never edited by

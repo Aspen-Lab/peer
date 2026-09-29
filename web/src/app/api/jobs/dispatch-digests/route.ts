@@ -29,7 +29,7 @@ import {
 } from "@/lib/email/digest-template";
 import { cleanPreferenceLedger } from "@/lib/preferences/ledger";
 import type { PreferenceLedger } from "@/types";
-import type { FeedRequest } from "@/lib/feed/types";
+import type { FeedRequest, FeedEmptyReasonCode } from "@/lib/feed/types";
 import type { ScoredItem } from "@/lib/scoring/types";
 import { normalizeFeedIntent, textValue } from "@/lib/feed/intent";
 import { dateInTimezone, hourInTimezone, weekdayInTimezone } from "@/lib/dashboard/timezone";
@@ -145,13 +145,18 @@ async function sendFirstDigestAttemptWithIdempotency(params: {
   items: ScoredItem[];
   originUrl: string;
   idempotencyKey: string;
+  // EMPTY-EMAIL-REASON (ABC-JEV-INTEGRATION.md §1bj) -- this path renders
+  // directly (not through sendDigestEmail's own default-render branch, see
+  // the P4-S7-IDEM header comment above), so it needs its own copy of the
+  // code to pass to the template functions below.
+  emptyReasonCode?: FeedEmptyReasonCode;
 }) {
-  const { admin, deliveryId, currentPayload, to, firstName, items, originUrl, idempotencyKey } = params;
+  const { admin, deliveryId, currentPayload, to, firstName, items, originUrl, idempotencyKey, emptyReasonCode } = params;
 
   const render = {
     subject: renderDigestSubject(items),
-    html: renderDigestHtml({ firstName, items, originUrl }),
-    text: renderDigestPlaintext({ firstName, items, originUrl }),
+    html: renderDigestHtml({ firstName, items, originUrl, emptyReasonCode }),
+    text: renderDigestPlaintext({ firstName, items, originUrl, emptyReasonCode }),
   };
   const attemptedAt = new Date().toISOString();
 
@@ -661,8 +666,15 @@ export async function GET(req: NextRequest) {
                   items: freshItems,
                   originUrl,
                   idempotencyKey: idempotencyKeyForEmail,
+                  emptyReasonCode: feed.meta.emptyReasonCode,
                 })
-              : await sendDigestEmail({ to, firstName, items: freshItems, originUrl });
+              : await sendDigestEmail({
+                  to,
+                  firstName,
+                  items: freshItems,
+                  originUrl,
+                  emptyReasonCode: feed.meta.emptyReasonCode,
+                });
           if (result.sent) {
             emailsSentCount += 1;
           } else {

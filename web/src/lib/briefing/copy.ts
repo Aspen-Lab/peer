@@ -1,5 +1,7 @@
 // The briefing's fixed words.
 
+import type { FeedEmptyReasonCode } from "@/lib/feed/types";
+
 /** The setup strip above a sample briefing. */
 export const STARTER = {
   label: "A sample, until you say otherwise",
@@ -83,6 +85,85 @@ export const BRIEFING_EMPTY = {
   "already-delivered": {
     title: "You're caught up on these topics.",
     line: "Every match for today was already in your feed. Check back after it refreshes, or widen your topics.",
+  },
+};
+
+/**
+ * EMPTY-EMAIL-REASON (ABC-JEV-INTEGRATION.md §1bj) — the digest EMAIL's own
+ * wording for the same four `FeedEmptyReasonCode` values `BRIEFING_EMPTY`
+ * above covers for the page. A separate table, not a reuse of
+ * `BRIEFING_EMPTY`, because two of the page's sentences assume a page the
+ * reader is looking at right now ("Refresh to try again", "Check back after
+ * it refreshes") — a dangling instruction in an email, which has no Refresh
+ * button (§1bj ruling 1). Kept next to `BRIEFING_EMPTY` so the two are
+ * reviewed together whenever either changes (§1bj ruling 4).
+ *
+ * Pure text — no HTML markup lives here. `no-required-match` is currently
+ * the only code carrying a `link` (a second, trailing sentence — `sentence`
+ * is the whole first sentence, `link` a separate one after it); `link`
+ * names the pieces so `digest-template.ts` can render the clickable word as
+ * a real `<a>` in the HTML part and as `text (url)` in the plaintext part
+ * (§1bj.3 — "links as plain URLs"), from the exact same source strings
+ * either way.
+ *
+ * EMPTY-EMAIL-REASON (§1bj.10 SECOND CORRECTION): `already-delivered` used
+ * to point at Past briefings (§1bj.8), but that page renders only its
+ * newest 20 rows while the exclusion this code describes reads every row
+ * across 30 days — so the link could point at a page that does NOT show the
+ * paper for a daily reader's days 21–30. Reworded to a plain sentence that
+ * claims only what is true and points nowhere (no `link`) — so `link` is,
+ * for now, exercised by exactly one code again, same as when this table was
+ * first shipped.
+ *
+ * A missing or unrecognized code is never looked up here at all — the
+ * template checks membership in `FEED_EMPTY_REASON_CODES` first and falls
+ * back to its own pre-existing generic sentence, never a guess (§1bj.1).
+ */
+export interface DigestEmptyLink {
+  /** Text immediately before the clickable word, same sentence. */
+  before: string;
+  /** The clickable word/phrase itself. */
+  text: string;
+  /** Appended to `originUrl` to build the href, e.g. "/profile". */
+  path: string;
+  /** Text immediately after the clickable word, closes the sentence. */
+  after: string;
+}
+
+export interface DigestEmptyEntry {
+  sentence: string;
+  link?: DigestEmptyLink;
+}
+
+export const DIGEST_EMPTY: Record<FeedEmptyReasonCode, DigestEmptyEntry> = {
+  "sources-unreachable": {
+    sentence: "Couldn't reach today's paper sources. The next email will try again.",
+  },
+  "no-results": {
+    sentence: "Nothing new for these topics today.",
+  },
+  "no-required-match": {
+    sentence: "None of today's papers passed your Required topics and filters.",
+    link: {
+      before: "To see more, try a broader Required topic in ",
+      text: "Profile",
+      path: "/profile",
+      after: ".",
+    },
+  },
+  // EMPTY-EMAIL-REASON (§1bj.10 SECOND CORRECTION, after the fresh A's
+  // re-check FAILED, docs/jev-abc/EMPTY-EMAIL-REASON-A-20260929T214827Z.md):
+  // §1bj.8's "linking to Past briefings" wording was itself untrue for some
+  // readers — that page renders only its newest 20 rows
+  // (app/profile/page.tsx:1226, `slice(0, 20)`) while this code's own 30-day
+  // exclusion window reads every row in that range, so a daily reader's
+  // matches from 21–30 days ago are excluded but not on the visible list.
+  // Reworded to state only the fact that's always true (the 30-day
+  // exclusion itself) and to point nowhere, rather than link to a page that
+  // may not show the paper.
+  "already-delivered": {
+    sentence:
+      "You're caught up: every paper that matched today was already picked for you in the past 30 days.",
   },
 };
 
