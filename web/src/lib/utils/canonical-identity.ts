@@ -74,6 +74,48 @@ const DOI_PREFIX_RE = /^(?:https?:\/\/(?:dx\.)?doi\.org\/|doi:\s*)/i;
 // guessed at.
 const DOI_SHAPE_RE = /^10\.\d{4,9}\/\S+$/;
 
+// DEDUP-ANGEW (ABC-JEV-INTEGRATION.md §1aw,
+// docs/jev-abc/DEDUP-ANGEW-B-20260929T064532Z.md): Wiley mints two parallel
+// DOIs for the SAME peer-reviewed Angewandte Chemie article — one under the
+// International Edition's "anie" code, one under the German-language
+// original's "ange" code — sharing the article's numeric suffix
+// (e.g. 10.1002/anie.5600863 / 10.1002/ange.5600863). A production smoke
+// check found the two editions shown as separate feed cards: they weak-match
+// each other on title/author/date, but in the real candidate pool the anie
+// record had already been pass-1 strong-linked (by a real shared DOI) to an
+// unrelated PubMed record whose own fields don't weak-match the ange record
+// — DEDUP-FIX3's `clustersFullyMatch` (paper-identity.ts) correctly requires
+// EVERY cross-cluster pair to weak-match before a component collapses, so
+// the split stood. Finite, hardcoded, one-directional alias: an "ange" DOI
+// gets ONE extra `doi:` alias pointing at its "anie" sibling's OWN key value
+// — the exact string that sibling's `canonicalPaperKey` call already uses as
+// `key` — so pass-1's existing shared-id-form-key union (unchanged) merges
+// the two editions transitively, the same already-hardened path that
+// already merges e.g. two Zenodo DOIs sharing one arXiv id. Purely additive:
+// nothing in paper-identity.ts (clustering/weak-link code DEDUP-FIX3
+// hardened) is touched. Only the 10.1002 registrant, only an exact "ange."
+// journal-code segment, only a numeric suffix (a trailing-letter suffix,
+// e.g. a supporting-information DOI, is an accepted, safe-direction miss —
+// it stays unmerged, never a false merge).
+const DUAL_EDITION_DOI_RE = /^10\.1002\/ange\.(\d+)$/;
+
+/**
+ * For a normalized DOI (already run through `normalizeDoi`, so lowercase and
+ * prefix-stripped) shaped exactly `10.1002/ange.<digits>`, returns the
+ * `doi:` id-form of its Angewandte Chemie International Edition sibling —
+ * `doi:10.1002/anie.<digits>` — the literal value that sibling record's own
+ * `canonicalPaperKey` call already uses as `key`. Returns `undefined` for
+ * every other DOI, including an already-"anie" one (nothing to alias to), a
+ * non-1002 registrant, a DOI where "ange" is only a substring of a longer
+ * journal code (e.g. "orange"), and a suffix with anything but digits. Never
+ * throws.
+ */
+function dualEditionDoiAlias(doiValue: string): string | undefined {
+  const m = DUAL_EDITION_DOI_RE.exec(doiValue);
+  if (!m) return undefined;
+  return `doi:10.1002/anie.${m[1]}`;
+}
+
 /**
  * Lowercase, strip a `https://doi.org/`, `http://dx.doi.org/` (any http(s)/dx
  * combination) or `doi:` prefix, and trim. Returns undefined — never throws —
@@ -147,6 +189,10 @@ function resolveIdTier(
 export function canonicalPaperKey(input: CanonicalPaperInput): CanonicalIdentity {
   const doiValue = normalizeDoi(input.doi ?? input.externalIds?.doi);
   const doiCandidate = doiValue ? `doi:${doiValue}` : undefined;
+  // DEDUP-ANGEW: an "ange" DOI's extra alias toward its "anie" sibling — see
+  // DUAL_EDITION_DOI_RE's doc comment above. Computed from doiValue (not
+  // doiCandidate) since dualEditionDoiAlias expects the bare normalized DOI.
+  const dualEditionAlias = doiValue ? dualEditionDoiAlias(doiValue) : undefined;
   const s2Candidate = resolveIdTier(input, "semantic_scholar", "s2", "s2Id");
   const openalexCandidate = resolveIdTier(input, "openalex", "openalex", "openalexId");
   const arxivCandidate = resolveIdTier(input, "arxiv", "arxiv", "arxivId", true);
@@ -173,6 +219,12 @@ export function canonicalPaperKey(input: CanonicalPaperInput): CanonicalIdentity
     // unconditionally").
     key = `item:${input.id ?? input.source ?? "unknown"}`;
   }
+
+  // DEDUP-ANGEW: added last, unconditionally — whenever dualEditionAlias is
+  // present, doiValue (hence doiCandidate) was present too, so `key` is
+  // always doiCandidate itself (DOI is priority 1) and can never equal this
+  // alias (an "ange" key vs. an "anie" alias are always different strings).
+  if (dualEditionAlias) aliasSet.add(dualEditionAlias);
 
   return { key, keyVersion: 1, aliases: Array.from(aliasSet) };
 }

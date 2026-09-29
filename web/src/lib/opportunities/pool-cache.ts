@@ -246,11 +246,21 @@ const CACHE_KEY_VERSION = 6;
 // no longer floors a shown item at exactly 0 — both change a paper's
 // `score`/`scoreBreakdown`/order without changing pool membership, so a v11
 // pool scored under the old double-penalty/hard-floor must never be served
-// as if it already reflects the fix. These
+// as if it already reflects the fix. v13 — ABC-JEV-INTEGRATION.md
+// §1aw/DEDUP-ANGEW (docs/jev-abc/DEDUP-ANGEW-B-20260929T064532Z.md):
+// `canonical-identity.ts`'s `canonicalPaperKey` now gives a
+// 10.1002/ange.<N> DOI (Angewandte Chemie's German-language edition) an
+// extra alias toward its 10.1002/anie.<N> sibling (the International
+// Edition), so the two editions of the same article — previously shown as
+// two separate cards whenever the anie copy was already strong-linked to an
+// unrelated record — now merge into one via dedupe's existing pass-1 rule.
+// This changes pool MEMBERSHIP (a v12 pool built under the old, alias-blind
+// identity may still carry both editions as separate items), so a v12 pool
+// must never be served as if it already reflects the merge. These
 // bumps share their numbers with `CACHE_KEY_VERSION` above by coincidence,
 // not by a shared cause — see `derivePoolCacheKey` below for how each is
 // selected.
-const PAPER_CACHE_KEY_VERSION = 12;
+const PAPER_CACHE_KEY_VERSION = 13;
 /**
  * SINGLE SOURCE OF TRUTH for the literal key prefix a durable papers-pool
  * store may accept, derived from `PAPER_CACHE_KEY_VERSION` rather than
