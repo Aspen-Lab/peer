@@ -237,6 +237,71 @@ describe("T4 — tag-anchored topical similarity", () => {
       expect(REQUIRED_TAG_SIMILARITY_FLOOR_PROJECT).toBe(0.05);
     },
   );
+
+  describe("TOKENIZE-PLURALS (§1bd) — the fold applies at T4's own comparison", () => {
+    // Real OpenAlex items (openalex:W4416056717, openalex:W7197006276),
+    // verified in docs/jev-abc/TOKENIZE-PLURALS-B-20260929T141359Z.md §3.1
+    // and independently re-measured through the real exported scoreItems
+    // against the full saved P1 pool (27 in-window items) before shipping
+    // this fix: both went from rejected (T4 simTopic 0, since neither paper
+    // ever says "electrolyte" singular or "battery" at all — only the
+    // plural "electrolytes") to admitted once the T4 comparison folds
+    // plurals. Full real title+abstract text (not a trimmed excerpt) so the
+    // fixture is exactly what was measured.
+    const fastIonTransport = item("plural-only-fast-ion-transport", {
+      title: "Microstructural insights into fast ion transport in solid electrolytes via multiscale modeling",
+      abstract:
+        "Abstract Improving solid electrolytes is critical for high-performance all-solid-state batteries, " +
+        "yet the microstructural features that enable fast ion transport remain poorly understood. Here, we " +
+        "use multiscale modeling to resolve polycrystalline ion transport from atomic-scale hopping at grain " +
+        "boundaries to continuum-scale percolation, thereby providing insights into realistic solid-electrolyte " +
+        "microstructures. Accurate lightweight machine-learning potentials are employed to integrate molecular " +
+        "dynamics with finite element simulations. Grain boundaries exert opposite effects depending on the " +
+        "bulk: enhancing ion diffusion in low-diffusivity phases but suppressing it in fast-diffusing ones. Our " +
+        "results clarify the pivotal role of grain boundaries in ion transport and guide a priori microstructural " +
+        "design of advanced solid electrolytes.",
+    });
+    const ramanLlzo = item("plural-only-raman-llzo", {
+      title:
+        "Raman Signatures of Lithium Ion Dynamics in LLZO Garnet Electrolytes: Atomistic Insights from MD-Raman Calculations",
+      abstract:
+        "Lithium lanthanum zirconate (LLZO) garnets are among the most promising solid electrolytes for " +
+        "next-generation batteries owing to their high ionic conductivity, chemical stability, and " +
+        "compatibility with lithium metal. Raman spectroscopy is commonly employed to distinguish the highly " +
+        "conductive cubic phase from the poorly conductive tetragonal phase of LLZO. We show that the " +
+        "contrasting ionic transport behavior across these LLZO variants is encoded in the vibrational " +
+        "dynamics of the lithium sublattice, connecting Raman signatures to Li-ion dynamics in lithium garnet " +
+        "electrolytes.",
+    });
+    const filler = item("filler-unrelated-astronomy", {
+      title: "A catalog of exoplanet transit timing variations from wide-field photometric surveys",
+      abstract:
+        "We present a statistical survey of transit timing variations across a large sample of " +
+        "exoplanets, using ground-based photometric monitoring and orbital dynamics modeling.",
+    });
+
+    it.each([
+      ["plural-only-fast-ion-transport", fastIonTransport],
+      ["plural-only-raman-llzo", ramanLlzo],
+    ])(
+      "%s: says 'electrolytes' (plural) only, never 'electrolyte' or 'battery' contiguous with the tag's other " +
+        "words — T1/T2/T3 all miss; only T4 can admit it, and only once the fold lets 'electrolytes' agree with " +
+        "the tag's singular 'electrolyte'",
+      (_name, paper) => {
+        const scored = scoreItems(
+          [paper, filler],
+          { topics: ["solid-state battery electrolyte"], seedTexts: [BATTERY_PROJECT_TEXT] },
+          undefined,
+          now,
+        );
+        expect(scored.map((s) => s.id)).toEqual([paper.id]);
+        // §1ao.8 — still a T4-only qualification: no textual evidence, so
+        // the card must not claim a keyword the paper does not contain.
+        expect(scored[0].matchedKeywords).toEqual([]);
+        expect(scored[0].score).toBeGreaterThan(0);
+      },
+    );
+  });
 });
 
 describe("wrong-sense trap — SENSE-CONTEXT (§1ap) now demotes it; rewritten, not deleted", () => {

@@ -307,10 +307,22 @@ const CACHE_KEY_VERSION = 6;
 // source adapter's own truncation, which changes pool MEMBERSHIP (a v15 pool
 // built under the old ordering/fixed caps may be missing candidates the
 // reordered/wider retrieval would have fetched), so a v15 pool must never be
-// served as if it already reflects the fix. These bumps share their numbers
+// served as if it already reflects the fix. v17 — ABC-JEV-INTEGRATION.md
+// §1be point 5/TOKENIZE-PLURALS (docs/jev-abc/TOKENIZE-PLURALS-B-20260929T141359Z.md;
+// split from the original guide's wider recommendation after folding
+// exposed a pre-existing path defect in the context check, moved to the new
+// item SENSE-CONTEXT-EVIDENCE): combine.ts's T4 (Required-gate similarity)
+// comparison now folds plurals (e.g. a paper that only ever says
+// "electrolytes" now agrees with the Required tag "electrolyte") before
+// comparing; `tokenize()` itself, the pool-wide topicality index,
+// keyword.ts's SENSE-CONTEXT short-tag context check, rerank.ts, and the
+// reference table are unchanged. This changes pool MEMBERSHIP (T4 can newly
+// admit a plural-only paraphrase), so a v16 pool built under the old,
+// plural-blind T4 comparison must never be served as if it already reflects
+// the fix. These bumps share their numbers
 // with `CACHE_KEY_VERSION` above by coincidence, not by a shared cause — see
 // `derivePoolCacheKey` below for how each is selected.
-const PAPER_CACHE_KEY_VERSION = 16;
+const PAPER_CACHE_KEY_VERSION = 17;
 /**
  * SINGLE SOURCE OF TRUTH for the literal key prefix a durable papers-pool
  * store may accept, derived from `PAPER_CACHE_KEY_VERSION` rather than
