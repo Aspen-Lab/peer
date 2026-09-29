@@ -61,6 +61,25 @@ export interface SourceStatusEntry {
    * fresh build response would, not just the bare word "failed".
    */
   lastErrorMessage?: string;
+  /**
+   * DBLP-BOTWALL (ABC-JEV-INTEGRATION.md §1ba, ruling 2). Only meaningful
+   * when `status` is "failed": true when that failure was classified as an
+   * anti-automation challenge page rather than an ordinary outage (today,
+   * only `sources/dblp.ts`'s `DblpBotCheckError`, via `feed/pipeline.ts`'s
+   * `isEligibleForRetry`). Such a failure is not retried for the rest of the
+   * local day regardless of `retryCount`/the 30-minute window — the source
+   * is explicitly asking automated clients to stop, so spending more of the
+   * day's retry budget on it just repeats the same wasted, unwanted request.
+   * It still self-heals the next local day for free: a new local day is a
+   * new pool cache key and therefore a fresh `sourceStatus` (see
+   * `SOURCE_RETRY_INTERVAL_MS`'s own doc comment in `feed/pipeline.ts`), so
+   * this field needs no reset logic of its own. Absent (or false) on every
+   * ordinary failure and on every pool built before this field existed —
+   * both read as "not blocked" — so this is purely additive: no migration
+   * and no `PAPER_CACHE_KEY_VERSION` bump, matching this same doc comment's
+   * own reasoning for `lastErrorMessage`/`sourceStatus` above.
+   */
+  retryBlockedToday?: boolean;
 }
 
 export interface CachedPaperPool extends CachedPoolBase {
@@ -246,11 +265,52 @@ const CACHE_KEY_VERSION = 6;
 // no longer floors a shown item at exactly 0 — both change a paper's
 // `score`/`scoreBreakdown`/order without changing pool membership, so a v11
 // pool scored under the old double-penalty/hard-floor must never be served
-// as if it already reflects the fix. These
-// bumps share their numbers with `CACHE_KEY_VERSION` above by coincidence,
-// not by a shared cause — see `derivePoolCacheKey` below for how each is
-// selected.
-const PAPER_CACHE_KEY_VERSION = 12;
+// as if it already reflects the fix. v13 — ABC-JEV-INTEGRATION.md
+// §1aw/DEDUP-ANGEW (docs/jev-abc/DEDUP-ANGEW-B-20260929T064532Z.md):
+// `canonical-identity.ts`'s `canonicalPaperKey` now gives a
+// 10.1002/ange.<N> DOI (Angewandte Chemie's German-language edition) an
+// extra alias toward its 10.1002/anie.<N> sibling (the International
+// Edition), so the two editions of the same article — previously shown as
+// two separate cards whenever the anie copy was already strong-linked to an
+// unrelated record — now merge into one via dedupe's existing pass-1 rule.
+// This changes pool MEMBERSHIP (a v12 pool built under the old, alias-blind
+// identity may still carry both editions as separate items), so a v12 pool
+// must never be served as if it already reflects the merge. v14 —
+// ABC-JEV-INTEGRATION.md §1ax/SENSE-CONTEXT-R3
+// (docs/jev-abc/SENSE-CONTEXT-R3-B-20260929T075345Z.md): `keyword.ts`'s
+// `senseContextStripSet` now also strips each Required tag's hyphen-joined
+// spelling (e.g. "solid-state" for the tag "solid state"), closing a leak
+// where that ordinary orthographic form of the tag's own name survived
+// tokenization as one token and counted as unrelated "agreeing" vocabulary.
+// This changes which short/ambiguous-tag matches pass the context gate —
+// a paper's `score`/`scoreBreakdown`/grounding can change without its
+// pool MEMBERSHIP changing (same shape as v12/SCORE-ZERO above), so a v13
+// pool scored under the old, hyphen-blind strip set must never be served
+// as if it already reflects the fix. v15 — ABC-JEV-INTEGRATION.md
+// §1ay/QUERY-QUALITY (docs/jev-abc/QUERY-QUALITY-B-20260929T084721Z.md):
+// `profile-compiler.ts`'s `projectQueries` no longer sends a reader's whole
+// multi-sentence project/challenge text as one literal query (only text
+// already short enough to BE a phrase, <=6 words, is still sent verbatim —
+// its derived phrases are sent either way), and `phrasesFromText` now also
+// splits on commas so real 2-6 word phrases survive instead of the branch
+// starving and falling back to single generic words. This changes pool
+// MEMBERSHIP (a v14 pool built under the old raw-paragraph-plus-single-word
+// queries may be missing candidates the corrected phrase queries would have
+// fetched), so a v14 pool must never be served as if it already reflects
+// the fix. v16 — ABC-JEV-INTEGRATION.md §1az/QUERY-BUDGET
+// (docs/jev-abc/QUERY-BUDGET-B-20260929T094059Z.md): `profile-compiler.ts`'s
+// `projectQueries` now orders queries into tiers (Required tags, then exact-
+// sense queries, then bare project phrases, then tag+phrase combinations,
+// then bare single words, then the rest) instead of one flat concatenation,
+// and `dblp.ts`/`pubmed.ts` now raise their own query cap when a reader
+// declares more than 2 Required tags. Both change which queries survive each
+// source adapter's own truncation, which changes pool MEMBERSHIP (a v15 pool
+// built under the old ordering/fixed caps may be missing candidates the
+// reordered/wider retrieval would have fetched), so a v15 pool must never be
+// served as if it already reflects the fix. These bumps share their numbers
+// with `CACHE_KEY_VERSION` above by coincidence, not by a shared cause — see
+// `derivePoolCacheKey` below for how each is selected.
+const PAPER_CACHE_KEY_VERSION = 16;
 /**
  * SINGLE SOURCE OF TRUTH for the literal key prefix a durable papers-pool
  * store may accept, derived from `PAPER_CACHE_KEY_VERSION` rather than

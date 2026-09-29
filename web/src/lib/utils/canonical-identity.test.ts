@@ -211,6 +211,105 @@ describe("canonicalPaperKey — title alias rules", () => {
   });
 });
 
+// DEDUP-ANGEW (ABC-JEV-INTEGRATION.md §1aw,
+// docs/jev-abc/DEDUP-ANGEW-B-20260929T064532Z.md): Wiley mints two parallel
+// DOIs for the same peer-reviewed Angewandte Chemie article — an
+// International Edition "anie" code and a German-language "ange" code,
+// sharing the article's numeric suffix. Unit tests for the helper alone;
+// the end-to-end merge (through dedupItems/clusterCanonicalWorks) is covered
+// by dedup.test.ts's own DEDUP-ANGEW section.
+describe("canonicalPaperKey — dual-edition Angewandte DOI alias (DEDUP-ANGEW)", () => {
+  const LONG_TITLE = "Efficient Transformer Architectures For Long Context Reasoning";
+
+  it("gives an ange DOI an extra doi: alias pointing at its anie sibling, without changing key", () => {
+    const id = canonicalPaperKey({
+      source: "openalex",
+      id: "openalex:W_ANGE",
+      doi: "10.1002/ange.5600863",
+      title: LONG_TITLE,
+    });
+    expect(id.key).toBe("doi:10.1002/ange.5600863");
+    expect(id.aliases).toContain("doi:10.1002/anie.5600863");
+  });
+
+  it("adds no self-alias for an anie DOI — nothing to alias an anie record to", () => {
+    const id = canonicalPaperKey({
+      source: "openalex",
+      id: "openalex:W_ANIE",
+      doi: "10.1002/anie.5600863",
+      title: LONG_TITLE,
+    });
+    expect(id.key).toBe("doi:10.1002/anie.5600863");
+    expect(id.aliases).not.toContain("doi:10.1002/anie.5600863");
+    expect(id.aliases.some((a) => a.startsWith("doi:"))).toBe(false);
+  });
+
+  it("does not alias when the registrant is not 10.1002, even with the exact ange.<digits> shape", () => {
+    const id = canonicalPaperKey({
+      source: "openalex",
+      id: "openalex:W_WRONG_REGISTRANT",
+      doi: "10.9999/ange.5600863",
+      title: LONG_TITLE,
+    });
+    expect(id.key).toBe("doi:10.9999/ange.5600863");
+    expect(id.aliases.some((a) => a.startsWith("doi:"))).toBe(false);
+  });
+
+  it('does not alias a DOI where "ange" is only a substring of a longer journal code', () => {
+    const id = canonicalPaperKey({
+      source: "openalex",
+      id: "openalex:W_SUBSTRING",
+      doi: "10.1002/orange.5600863",
+      title: LONG_TITLE,
+    });
+    expect(id.key).toBe("doi:10.1002/orange.5600863");
+    expect(id.aliases.some((a) => a.startsWith("doi:"))).toBe(false);
+  });
+
+  it("does not alias a suffix with a trailing non-digit (e.g. a supporting-information DOI) — accepted limitation, not a bug", () => {
+    const id = canonicalPaperKey({
+      source: "openalex",
+      id: "openalex:W_SUPP_INFO",
+      doi: "10.1002/ange.5600863.s1",
+      title: LONG_TITLE,
+    });
+    expect(id.key).toBe("doi:10.1002/ange.5600863.s1");
+    expect(id.aliases.some((a) => a.startsWith("doi:"))).toBe(false);
+  });
+
+  it("two different Angewandte papers (different numeric suffixes) never alias to each other", () => {
+    const first = canonicalPaperKey({
+      source: "openalex",
+      id: "openalex:W_N1",
+      doi: "10.1002/ange.111111",
+      title: LONG_TITLE,
+    });
+    const second = canonicalPaperKey({
+      source: "openalex",
+      id: "openalex:W_N2",
+      doi: "10.1002/anie.222222",
+      title: LONG_TITLE,
+    });
+    expect(first.aliases).toContain("doi:10.1002/anie.111111");
+    expect(first.aliases).not.toContain("doi:10.1002/anie.222222");
+    expect(second.key).toBe("doi:10.1002/anie.222222");
+    expect(new Set([first.key, ...first.aliases])).not.toEqual(
+      expect.arrayContaining([second.key]),
+    );
+  });
+
+  it("is applied AFTER normalizeDoi, so an uppercase/prefixed input still aliases correctly (case/prefix-insensitive)", () => {
+    const id = canonicalPaperKey({
+      source: "openalex",
+      id: "openalex:W_UPPER",
+      doi: "https://doi.org/10.1002/ANGE.5600863",
+      title: LONG_TITLE,
+    });
+    expect(id.key).toBe("doi:10.1002/ange.5600863");
+    expect(id.aliases).toContain("doi:10.1002/anie.5600863");
+  });
+});
+
 describe("isDeliveredIdentity", () => {
   const identity: CanonicalIdentity = {
     key: "doi:10.1000/aaa",

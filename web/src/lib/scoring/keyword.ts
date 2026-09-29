@@ -266,11 +266,32 @@ export function isShortOrAmbiguous(tag: string): boolean {
  * (via the reader's own topics) also repeats that same word. Measured
  * load-bearing, not cosmetic (guide §3.5: stripping catches materially
  * more real wrong-domain negatives than leaving the tag's own words in).
+ *
+ * SENSE-CONTEXT-R3 (§1ax ruling 1, docs/jev-abc/SENSE-CONTEXT-R3-B-20260929T075345Z.md
+ * §1): `expandTerm` always canonicalizes first, and `canonicalize` turns hyphens into
+ * spaces — so every variant it returns is space-joined ("solid state", not
+ * "solid-state"). `tokenize()`, run on the RAW item/context text below, does NOT split
+ * on hyphens (it only splits on whitespace), so an ordinary hyphenated English
+ * spelling of a multi-word tag ("solid-state materials", "li-ion battery") survives
+ * tokenization as ONE token that is not a member of the space-split set above, and
+ * leaks through the context check as if it were unrelated shared vocabulary — even
+ * though it is just the tag's own name in a different, ordinary orthographic form.
+ * Also stripping whatever `tokenize()` yields for each variant's hyphen-joined
+ * spelling closes this for every multi-word tag, not only "solid state" (measured:
+ * resolves both real live residuals, docs/jev-abc/SENSE-CONTEXT-R3-C-* re-measurement).
+ * A single-word variant has no space to hyphenate, so this is a no-op for it —
+ * exact-token membership, never substring matching, so an unrelated word that merely
+ * starts with one of the tag's tokens (e.g. "state-of-the-art" for tag "solid state")
+ * is untouched.
  */
 function senseContextStripSet(tag: string): Set<string> {
   const stripSet = new Set<string>();
   for (const variant of expandTerm(tag)) {
     for (const token of tokenize(variant)) stripSet.add(token);
+    const hyphenJoined = variant.replace(/\s+/g, "-");
+    if (hyphenJoined !== variant) {
+      for (const token of tokenize(hyphenJoined)) stripSet.add(token);
+    }
   }
   return stripSet;
 }

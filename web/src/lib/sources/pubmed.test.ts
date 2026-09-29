@@ -96,3 +96,51 @@ describe("pubmed adapter — failure visibility (P2-S2)", () => {
     expect(items.map((item) => item.id)).toEqual(["pubmed:222"]);
   });
 });
+
+// QUERY-BUDGET (ABC-JEV-INTEGRATION.md §1az, docs/jev-abc/QUERY-BUDGET-B-20260929T094059Z.md
+// §2.4). With more than 2 Required tags, this source's cap rises so a tag past today's fixed
+// MAX_QUERIES=2 is no longer silently dropped from every fetch — bounded so an unusual tag count
+// cannot open the budget unboundedly (never more than RISE_CEILING=3 above MAX_QUERIES).
+describe("pubmed adapter — query cap (QUERY-BUDGET)", () => {
+  const originalFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    vi.restoreAllMocks();
+  });
+
+  async function fetchAndRecordQueries(query: Parameters<typeof pubmed.fetch>[0]): Promise<string[]> {
+    const seenQueries: string[] = [];
+    globalThis.fetch = vi.fn(async (url: string | URL) => {
+      // No timeWindow is passed, so dateScopedQuery leaves `term` as the bare query — every
+      // call here is an esearch call, and an empty idlist means fetchOne never reaches esummary.
+      seenQueries.push(new URL(String(url)).searchParams.get("term") ?? "");
+      return esearchResponse([]);
+    }) as unknown as typeof fetch;
+    await pubmed.fetch(query);
+    return seenQueries;
+  }
+
+  it("raises the cap above 2 once a reader declares more than 2 Required tags, bounded at MAX_QUERIES+3", async () => {
+    // A query pool bigger than every cap under test (8), so the number of calls made IS the
+    // effective cap, independent of how many candidate queries exist.
+    const pool = Array.from({ length: 8 }, (_, i) => `query${i}`);
+
+    const oneTag = await fetchAndRecordQueries({ topics: ["tag0"], queries: pool, limit: 10 });
+    expect(oneTag).toHaveLength(2); // unchanged baseline: <=2 tags never raises the cap
+
+    const threeTags = await fetchAndRecordQueries({
+      topics: ["tag0", "tag1", "tag2"],
+      queries: pool,
+      limit: 10,
+    });
+    expect(threeTags).toHaveLength(3); // 3 tags: cap rises 2 -> 3
+
+    const sixTags = await fetchAndRecordQueries({
+      topics: ["tag0", "tag1", "tag2", "tag3", "tag4", "tag5"],
+      queries: pool,
+      limit: 10,
+    });
+    expect(sixTags).toHaveLength(5); // 6 tags: cap rises 2 -> 5, the +3 ceiling (1 of 6 tags lost)
+  });
+});

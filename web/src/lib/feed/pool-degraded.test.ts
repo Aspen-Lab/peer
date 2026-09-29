@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { runFeedPipeline } from "./pipeline";
 import { bySourceId } from "@/lib/sources";
+import { DblpBotCheckError } from "@/lib/sources/dblp";
 import type { RawItem } from "@/lib/sources/types";
 import type { CachedPaperPool, CachedPool, PoolCache } from "@/lib/opportunities/pool-cache";
 import { isCachedPaperPool } from "@/lib/opportunities/pool-cache";
@@ -91,10 +92,12 @@ const paperFrom = (source: RawItem["source"], id: string, label: string): RawIte
 
 const originalOpenalexFetch = bySourceId.openalex.fetch;
 const originalS2Fetch = bySourceId.semantic_scholar.fetch;
+const originalDblpFetch = bySourceId.dblp.fetch;
 
 afterEach(() => {
   bySourceId.openalex.fetch = originalOpenalexFetch;
   bySourceId.semantic_scholar.fetch = originalS2Fetch;
+  bySourceId.dblp.fetch = originalDblpFetch;
   vi.unstubAllEnvs();
   vi.restoreAllMocks();
 });
@@ -283,6 +286,88 @@ describe("degraded paper pools — visibility + retry (P2-S2)", () => {
     const stored = cache.onlyPool();
     expect(stored.sourceStatus?.openalex?.retryCount).toBe(3);
     expect(stored.sourceStatus?.openalex?.status).toBe("failed");
+  });
+
+  // DBLP-BOTWALL (ABC-JEV-INTEGRATION.md §1ba). dblp.org sometimes answers a
+  // plain HTTP 200 whose body is an anti-automation challenge page instead
+  // of data; `sources/dblp.ts` now recognizes this and throws the named
+  // `DblpBotCheckError` instead of a bare JSON-parse `SyntaxError`. These
+  // two cases prove the pipeline-level half of that fix: the failure stays
+  // isolated to dblp exactly like any other source's failure already does
+  // (`Promise.allSettled`), and ruling 2's back-off — no same-day retry for
+  // a failure classified as the challenge, while an ordinary failure on
+  // another source keeps today's normal retry behaviour.
+  it("(DBLP-BOTWALL) a bot-check failure on one source does not affect a concurrently succeeding source — pool-level isolation", async () => {
+    bySourceId.dblp.fetch = vi.fn(async () => {
+      throw new DblpBotCheckError("text/html; charset=utf-8");
+    });
+    bySourceId.openalex.fetch = vi.fn(async () => [
+      paperFrom("openalex", "ok-1", "A Paper That Came Through"),
+    ]);
+    const cache = new MemoryPoolCache();
+    const now = new Date(2026, 6, 29, 9, 0);
+
+    const result = await runFeedPipeline(
+      {
+        topics: ["solid-state battery"],
+        sources: ["dblp", "openalex"],
+        aiTier: 0,
+        paperCacheScope: scopeFor("owner-degraded-dblp-1"),
+      },
+      { cache, now },
+    );
+
+    expect(result.meta.errors.dblp).toMatch(/bot-check page/i);
+    expect(result.items.map((item) => item.id)).toEqual(["openalex:ok-1"]);
+
+    const stored = cache.onlyPool();
+    expect(stored.sourceStatus?.dblp?.status).toBe("failed");
+    expect(stored.sourceStatus?.dblp?.retryBlockedToday).toBe(true);
+    expect(stored.sourceStatus?.openalex?.status).toBe("ok");
+  });
+
+  it("(DBLP-BOTWALL) a bot-challenge failure is not retried the same day, while an ordinary failure on another source still is", async () => {
+    bySourceId.dblp.fetch = vi.fn(async () => {
+      throw new DblpBotCheckError("text/html; charset=utf-8");
+    });
+    bySourceId.openalex.fetch = vi.fn(async () => {
+      throw new Error("openalex: still down");
+    });
+    bySourceId.semantic_scholar.fetch = vi.fn(async () => [
+      paperFrom("semantic_scholar", "ok-1", "A Paper That Came Through"),
+    ]);
+    const cache = new MemoryPoolCache();
+    const scope = scopeFor("owner-degraded-dblp-2");
+    const req = {
+      topics: ["solid-state battery"],
+      sources: ["dblp" as const, "openalex" as const, "semantic_scholar" as const],
+      aiTier: 0 as const,
+      paperCacheScope: scope,
+    };
+
+    await runFeedPipeline(req, { cache, now: new Date(2026, 6, 29, 9, 0) });
+    expect(bySourceId.dblp.fetch).toHaveBeenCalledTimes(1);
+    expect(bySourceId.openalex.fetch).toHaveBeenCalledTimes(1);
+
+    // 31 minutes later both failures are old enough, and under the 3/day cap,
+    // by the ORDINARY rule — but dblp's is a bot-challenge failure, so only
+    // openalex is retried.
+    await runFeedPipeline(req, { cache, now: new Date(2026, 6, 29, 9, 31) });
+    expect(bySourceId.dblp.fetch).toHaveBeenCalledTimes(1);
+    expect(bySourceId.openalex.fetch).toHaveBeenCalledTimes(2);
+
+    // Two more eligible windows the same local day: openalex keeps retrying
+    // up to its normal 3-per-day cap; dblp never fires again.
+    await runFeedPipeline(req, { cache, now: new Date(2026, 6, 29, 10, 2) });
+    await runFeedPipeline(req, { cache, now: new Date(2026, 6, 29, 10, 33) });
+    expect(bySourceId.dblp.fetch).toHaveBeenCalledTimes(1);
+    expect(bySourceId.openalex.fetch).toHaveBeenCalledTimes(4);
+
+    const stored = cache.onlyPool();
+    expect(stored.sourceStatus?.dblp?.status).toBe("failed");
+    expect(stored.sourceStatus?.dblp?.retryCount).toBe(0);
+    expect(stored.sourceStatus?.dblp?.retryBlockedToday).toBe(true);
+    expect(stored.sourceStatus?.openalex?.retryCount).toBe(3);
   });
 });
 

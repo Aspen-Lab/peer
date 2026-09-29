@@ -1177,6 +1177,311 @@ describe("dedupItems", () => {
     expect(result).toHaveLength(1);
     expect(result[0].admissionChannels).toBeUndefined();
   });
+
+  // DEDUP-ANGEW (ABC-JEV-INTEGRATION.md §1aw,
+  // docs/jev-abc/DEDUP-ANGEW-B-20260929T064532Z.md): a production smoke
+  // check on https://peer.homes found the SAME Angewandte Chemie article
+  // shown as two separate feed cards — Wiley mints one DOI under the
+  // International Edition's "anie" code and a second, parallel DOI under
+  // the German-language original's "ange" code, for identical
+  // peer-reviewed content. Root cause, reproduced by B's investigation: the
+  // two editions weak-match each other directly (byte-identical title/
+  // author/date), but in the real candidate pool the anie record (A below)
+  // had ALREADY been pass-1 strong-linked (real shared DOI) to an unrelated
+  // PubMed record (X below) whose own title/author formatting doesn't
+  // weak-match the ange record (B below) — DEDUP-FIX3's `clustersFullyMatch`
+  // then correctly requires EVERY cross-cluster pair in the component to
+  // weak-match before it may collapse, and the X-B pair fails, so the WHOLE
+  // component (not just X) stayed split, leaving A and B as two cards. The
+  // fix (canonical-identity.ts's `dualEditionDoiAlias`) gives B's own "ange"
+  // DOI an extra alias toward A's real "anie" DOI, so A/X/B now share one
+  // id-form key directly and merge in PASS 1 (strong link) — before pass 2's
+  // weak-link/clustersFullyMatch machinery (DEDUP-FIX3, untouched by this
+  // fix) is even reached for this trio.
+  describe("dual-edition Angewandte DOI alias (DEDUP-ANGEW)", () => {
+    // A and B's title/authors/publishedAt/DOI are copied verbatim (shortest
+    // fields that reproduce the bug — no abstract/venue/tags/score, none of
+    // which feed identity or clustering) from the real live-response capture
+    // saved at <scratchpad>/prod-lco-resp.json: openalex:W7213890479 (the
+    // anie/International-Edition card) and openalex:W7213912992 (the
+    // ange/German-language card).
+    const A_TITLE =
+      "Beyond Physical Protection Paradigm: Surface-bonded Molecular Integration for Durable High-voltage LiCoO2";
+    const A_AUTHORS = [
+      "Tian Xie",
+      "Wenxin Liu",
+      "Jiancong Cheng",
+      "Yidi Jiang",
+      "Ruming Yuan",
+      "Jingmin Fan",
+      "Dong-Liang Peng",
+      "Mingsen Zheng",
+      "Quanfeng Dong",
+    ];
+    const PUBLISHED_AT = "2026-09-21";
+    // Fix round (ABC-JEV-INTEGRATION.md §1aw AMENDMENT,
+    // docs/jev-abc/DEDUP-ANGEW-A-20260929T070428Z.md Check 3): A's own url
+    // is the direct PDF link, B's is a bare DOI redirect; A's venue names
+    // the International Edition explicitly, B's does not — both copied
+    // verbatim from <scratchpad>/prod-lco-resp.json, same as every other
+    // field here. Round 1's fixture omitted these two fields entirely (used
+    // the shared test-helper's placeholder url, no venue at all), which is
+    // exactly why the survivor-quality regression here went uncaught until
+    // A's independent review added them.
+    const ANIE_URL = "https://onlinelibrary.wiley.com/doi/pdfdirect/10.1002/anie.5600863";
+    const ANIE_VENUE = "Angewandte Chemie International Edition";
+    const ANGE_URL = "https://doi.org/10.1002/ange.5600863";
+    const ANGE_VENUE = "Angewandte Chemie";
+
+    function realAnieRecord(): RawItem {
+      return item({
+        id: "openalex:W7213890479",
+        source: "openalex",
+        title: A_TITLE,
+        authors: A_AUTHORS,
+        publishedAt: PUBLISHED_AT,
+        url: ANIE_URL,
+        venue: ANIE_VENUE,
+        metadata: { doi: "10.1002/anie.5600863" },
+      });
+    }
+
+    function realAngeRecord(): RawItem {
+      return item({
+        id: "openalex:W7213912992",
+        source: "openalex",
+        title: A_TITLE,
+        authors: A_AUTHORS,
+        publishedAt: PUBLISHED_AT,
+        url: ANGE_URL,
+        venue: ANGE_VENUE,
+        metadata: { doi: "10.1002/ange.5600863" },
+      });
+    }
+
+    // X is SYNTHETIC (not from any saved capture) — it stands in for the
+    // real PubMed twin B's investigation proved exists (A's own
+    // `metadata.mergedFrom` in the saved capture names
+    // `{"source":"pubmed","id":"pubmed:42765143"}`) but whose exact fields
+    // were never fetched (outside that investigation's allowed external
+    // calls). Built the same way B's own temporary probe built it: same real
+    // "anie" DOI as A (so it strong-links to A in pass 1, exactly as
+    // production's PubMed record did), but title/author formatting typical
+    // of a PubMed record (sentence case, no colon, abbreviated author
+    // names) that does NOT satisfy weakPairMatch against B — normalized
+    // titles must be EXACTLY equal for a weak link (the first, decisive
+    // check in weakPairMatch), and PubMed's own indexing conventions
+    // commonly differ this way from OpenAlex's; the author field's exact
+    // parse doesn't matter here since the title mismatch alone already
+    // decides it.
+    function syntheticPubmedTwin(): RawItem {
+      return item({
+        id: "pubmed:42765143",
+        source: "pubmed",
+        title:
+          "Surface-bonded molecular integration for durable high-voltage LiCoO2 cathodes",
+        authors: ["Xie T", "Dong Q"],
+        publishedAt: PUBLISHED_AT,
+        metadata: { doi: "10.1002/anie.5600863" },
+      });
+    }
+
+    it("collapses the production shape A + X + B into one survivor (RED without the alias — see the mutation test below)", () => {
+      const a = realAnieRecord();
+      const x = syntheticPubmedTwin();
+      const b = realAngeRecord();
+
+      // Sanity precondition, proven directly rather than assumed: without X,
+      // A and B alone already merge on the bare weak-link rule (byte-
+      // identical title/author/date) — so X is what makes this fixture
+      // actually exercise the bug (matches B's own investigation finding).
+      expect(dedupItems([a, b])).toHaveLength(1);
+
+      const result = dedupItems([a, x, b]);
+      expect(result).toHaveLength(1);
+
+      const survivor = result[0];
+      const identity = identityForRawItem(survivor);
+      const allForms = [identity.key, ...identity.aliases];
+      expect(allForms).toEqual(
+        expect.arrayContaining([
+          "doi:10.1002/anie.5600863",
+          "doi:10.1002/ange.5600863",
+        ]),
+      );
+      // All three inputs are accounted for — either AS the survivor or as a
+      // recorded loser. This test intentionally does not itself pin down
+      // WHICH one wins survivor selection — that precise, order-independent
+      // claim (the anie record, always, with its own venue/url) has its own
+      // dedicated tests just below, covering all 4 arrival orders. (History:
+      // before the fix round below, the extra alias alone gave B one more
+      // id-form than A, so B won this tie unconditionally — the exact HIGH
+      // finding in A's review, docs/jev-abc/DEDUP-ANGEW-A-20260929T070428Z.md
+      // Check 3 — fixed by `dedup.ts`'s new `dualEditionSurvivorCandidates`.)
+      const mergedIds = (survivor.metadata.mergedFrom ?? []).map((m) => m.id);
+      const allAccountedFor = new Set([survivor.id, ...mergedIds]);
+      expect(allAccountedFor).toEqual(
+        new Set(["openalex:W7213890479", "pubmed:42765143", "openalex:W7213912992"]),
+      );
+    });
+
+    // Fix round (ABC-JEV-INTEGRATION.md §1aw AMENDMENT, after A
+    // FAILED_REVIEW — docs/jev-abc/DEDUP-ANGEW-A-20260929T070428Z.md Check
+    // 3, HIGH): the round-1 alias is one-directional (only B/"ange" gains an
+    // extra id-form), so B always won dedup.ts's SOURCE_PRIORITY-tied
+    // idFormKeys-count tie-break — in EVERY arrival order, not an
+    // order-dependent accident (A confirmed this with its own 4-order probe
+    // and live on the running dev server). The reader's card showed B's bare
+    // DOI-redirect url and its more ambiguous venue name instead of A's
+    // direct-PDF url and its unambiguous "International Edition" venue name.
+    // `dedup.ts`'s new, named, additive `dualEditionSurvivorCandidates`
+    // narrows survivor selection to the anie-DOI-holding member(s) whenever
+    // a group holds both editions — these 4 tests are the exact reproduction
+    // of A's own probe (same shape, same 4 distinguishable orders it used),
+    // now as permanent regression coverage.
+    describe("survivor preference — the anie (International Edition) member always wins (DEDUP-ANGEW fix round)", () => {
+      const ANIE_ID = "openalex:W7213890479";
+      const ANGE_ID = "openalex:W7213912992";
+      const PUBMED_ID = "pubmed:42765143";
+
+      function expectAnieSurvives(arrival: RawItem[]) {
+        const result = dedupItems(arrival);
+        expect(result).toHaveLength(1);
+
+        const survivor = result[0];
+        expect(survivor.id).toBe(ANIE_ID);
+        expect(survivor.venue).toBe(ANIE_VENUE);
+        expect(survivor.url).toBe(ANIE_URL);
+
+        // mergedFrom still accounts for all three — the ange record and the
+        // PubMed twin are demoted to losers, never dropped.
+        const mergedIds = (survivor.metadata.mergedFrom ?? []).map((m) => m.id);
+        expect(new Set([survivor.id, ...mergedIds])).toEqual(
+          new Set([ANIE_ID, ANGE_ID, PUBMED_ID]),
+        );
+      }
+
+      it("order: A, X, B", () => {
+        expectAnieSurvives([realAnieRecord(), syntheticPubmedTwin(), realAngeRecord()]);
+      });
+
+      it("order: B, X, A", () => {
+        expectAnieSurvives([realAngeRecord(), syntheticPubmedTwin(), realAnieRecord()]);
+      });
+
+      it("order: X, B, A", () => {
+        expectAnieSurvives([syntheticPubmedTwin(), realAngeRecord(), realAnieRecord()]);
+      });
+
+      it("order: B, A, X", () => {
+        expectAnieSurvives([realAngeRecord(), realAnieRecord(), syntheticPubmedTwin()]);
+      });
+    });
+
+    // Protective: a merged group with no dual-edition pair at all must keep
+    // TODAY's ordinary SOURCE_PRIORITY survivor rule completely unchanged —
+    // proves `dualEditionSurvivorCandidates` returns null (falls through to
+    // the unrestricted candidate list) rather than misfiring on an unrelated
+    // merge. Deliberately a fresh, non-Wiley fixture (not a reuse of
+    // realAnieRecord/realAngeRecord), so this test's outcome cannot depend
+    // on anything about the Angewandte pair.
+    it("a group with no dual-edition pair keeps today's survivor rule unchanged (protective)", () => {
+      const lowerPriority = item({
+        id: "pubmed:PLAIN_LOW",
+        source: "pubmed", // SOURCE_PRIORITY 2
+        title: "An Entirely Ordinary Merge With No Angewandte Doi Involved",
+        publishedAt: "2026-04-01",
+        authors: ["Epsilon Author"],
+        metadata: { doi: "10.3000/plain-merge-test" },
+      });
+      const higherPriority = item({
+        id: "openalex:PLAIN_HIGH",
+        source: "openalex", // SOURCE_PRIORITY 3 — wins on today's rule alone
+        title: "An Entirely Ordinary Merge With No Angewandte Doi Involved",
+        publishedAt: "2026-04-01",
+        authors: ["Epsilon Author"],
+        metadata: { doi: "10.3000/plain-merge-test" }, // SAME doi -> strong link
+      });
+
+      // Both arrival orders, since the whole point is order-independence.
+      for (const arrival of [
+        [lowerPriority, higherPriority],
+        [higherPriority, lowerPriority],
+      ]) {
+        const result = dedupItems(arrival);
+        expect(result).toHaveLength(1);
+        expect(result[0].id).toBe("openalex:PLAIN_HIGH");
+      }
+    });
+
+    it("never merges two different Angewandte papers (different numeric suffixes)", () => {
+      const anie1 = item({
+        id: "openalex:W_DIFF_N_ANIE",
+        source: "openalex",
+        title: "First Distinct Angewandte Article About Something Specific",
+        publishedAt: "2026-01-01",
+        authors: ["Alpha Author"],
+        metadata: { doi: "10.1002/anie.111111" },
+      });
+      const ange2 = item({
+        id: "openalex:W_DIFF_N_ANGE",
+        source: "openalex",
+        title: "Second Distinct Angewandte Article About Something Else",
+        publishedAt: "2026-01-01",
+        authors: ["Beta Author"],
+        metadata: { doi: "10.1002/ange.222222" },
+      });
+
+      const result = dedupItems([anie1, ange2]);
+      expect(result).toHaveLength(2);
+      expect(result.map((r) => r.id).sort()).toEqual(
+        ["openalex:W_DIFF_N_ANGE", "openalex:W_DIFF_N_ANIE"].sort(),
+      );
+    });
+
+    it("the alias applies only under the 10.1002 prefix — a same-suffix DOI under a different registrant never merges with the real anie record", () => {
+      // Deliberately a DIFFERENT title/author from A, so the ONLY possible
+      // merge path for this pair is a successful dual-edition DOI alias
+      // (pass 1) — the pre-existing weak-link rule (pass 2) never forms a
+      // candidate pair for them at all, isolating this test to the ID
+      // mechanism specifically, the same way the "different N" test above
+      // does.
+      const anie = realAnieRecord();
+      const wrongRegistrant = item({
+        id: "openalex:W_WRONG_REGISTRANT",
+        source: "openalex",
+        title: "An Unrelated Paper That Only Shares A Coincidental DOI Suffix",
+        publishedAt: "2026-03-01",
+        authors: ["Delta Author"],
+        metadata: { doi: "10.9999/ange.5600863" }, // same suffix number, NOT Wiley's registrant
+      });
+
+      expect(identityForRawItem(wrongRegistrant).aliases.some((a) => a.startsWith("doi:"))).toBe(
+        false,
+      );
+
+      const result = dedupItems([anie, wrongRegistrant]);
+      expect(result).toHaveLength(2);
+    });
+
+    it('a non-Wiley DOI merely containing the substring "ange" is untouched', () => {
+      const unrelated = item({
+        id: "openalex:W_UNRELATED_ANGE_SUBSTRING",
+        source: "openalex",
+        title: "An Entirely Unrelated Paper About Orange Peel Chemistry Methods",
+        publishedAt: "2026-02-01",
+        authors: ["Gamma Author"],
+        metadata: { doi: "10.5555/orange-chemistry.789" },
+      });
+
+      const identity = identityForRawItem(unrelated);
+      expect(identity.key).toBe("doi:10.5555/orange-chemistry.789");
+      expect(identity.aliases.some((a) => a.startsWith("doi:"))).toBe(false);
+
+      const result = dedupItems([unrelated, realAnieRecord()]);
+      expect(result).toHaveLength(2);
+    });
+  });
 });
 
 function permutations3<T>(a: T, b: T, c: T): T[][] {

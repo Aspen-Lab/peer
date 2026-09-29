@@ -88,6 +88,73 @@ function rawDoiOf(item: RawItem): string | undefined {
   return item.metadata?.doi ?? item.metadata?.externalIds?.doi;
 }
 
+// DEDUP-ANGEW fix round (ABC-JEV-INTEGRATION.md §1aw AMENDMENT,
+// docs/jev-abc/DEDUP-ANGEW-A-20260929T070428Z.md Check 3, HIGH): the
+// dual-edition DOI alias (canonical-identity.ts's `dualEditionDoiAlias`) is
+// deliberately one-directional — only a "10.1002/ange.N" record gains the
+// extra `doi:10.1002/anie.N` alias, an "anie" record gets no reciprocal
+// alias — so the "ange" record always carries one MORE id-form key
+// (`idFormKeys(identity).length`) than its "anie" sibling. That silently
+// made the German-language "ange" edition always win `isBetterSurvivor`'s
+// SOURCE_PRIORITY-tied tie-break, in every arrival order (both editions are
+// typically the same source, e.g. openalex): the reader's card showed the
+// "ange" edition's bare `doi.org/10.1002/ange.N` redirect link and its more
+// ambiguous venue name ("Angewandte Chemie") instead of the International
+// Edition's direct PDF link and its clearer venue name ("Angewandte
+// Chemie International Edition") — confirmed live and by a 4-arrival-order
+// probe in A's review. Named, additive survivor preference, ADDED ON TOP OF
+// `isBetterSurvivor` rather than folded into it: within one merged group, if
+// some member's OWN doi is exactly "10.1002/anie.<N>" and some OTHER
+// member's OWN doi is exactly "10.1002/ange.<N>" for that SAME N, survivor
+// selection is narrowed to just the member(s) that directly carry that
+// literal anie DOI — e.g. the real anie record AND a strong-linked PubMed
+// twin that also happens to carry the same anie DOI both qualify, and
+// `isBetterSurvivor` (unchanged) then picks among only THOSE exactly as it
+// always has, so a genuine multi-source report of the SAME anie DOI still
+// resolves exactly as before. The "ange" member and any other member are
+// simply never eligible to win in this case — never a tie-break preference
+// that could still lose, an outright restriction of the candidate pool.
+// Returns `null` (falls through to today's unrestricted candidate list)
+// whenever no such pair exists in the group, so a group with no dual-edition
+// pair is completely unaffected — provably, not just tested (every existing
+// dedup.test.ts fixture before this fix round used DOIs that can never match
+// either pattern below, and this function's only observable effect is
+// narrowing the CANDIDATE SET passed into the existing, untouched
+// `isBetterSurvivor` loop; `loserIdxs`, hence `mergedFrom`/`mergedAliases`/
+// `channelUnion`/DOI-backfill below, still runs over the FULL group either
+// way). Order-independent by construction, not by luck: `anieDoiOwners`/the
+// returned Set are built from group MEMBERSHIP, never from scan order, and
+// `isBetterSurvivor`'s own max-selection loop already converges to the same
+// unique winner regardless of visiting order (a strict total order — unique
+// `id`s make the final lexicographic step a true tie-breaker) — restricting
+// its input to an order-independent subset preserves that same property.
+// Neither `dualEditionDoiAlias` (canonical-identity.ts) nor
+// `paper-identity.ts`'s clustering/weak-link code is touched by this.
+const ANGE_DOI_RE = /^10\.1002\/ange\.(\d+)$/;
+
+function dualEditionSurvivorCandidates(items: RawItem[], idxs: number[]): number[] | null {
+  const anieDoiOwners = new Map<string, number[]>(); // normalized doi -> member idxs whose OWN doi is exactly this
+  for (const i of idxs) {
+    const doi = normalizeDoi(rawDoiOf(items[i]));
+    if (!doi) continue;
+    const owners = anieDoiOwners.get(doi);
+    if (owners) owners.push(i);
+    else anieDoiOwners.set(doi, [i]);
+  }
+
+  const preferred = new Set<number>();
+  for (const i of idxs) {
+    const doi = normalizeDoi(rawDoiOf(items[i]));
+    const m = doi ? ANGE_DOI_RE.exec(doi) : null;
+    if (!m) continue;
+    const anieSibling = `10.1002/anie.${m[1]}`;
+    const owners = anieDoiOwners.get(anieSibling);
+    if (owners) for (const j of owners) preferred.add(j);
+  }
+
+  return preferred.size > 0 ? Array.from(preferred) : null;
+}
+
 export function dedupItems(items: RawItem[]): RawItem[] {
   if (items.length === 0) return [];
 
@@ -117,8 +184,12 @@ export function dedupItems(items: RawItem[]): RawItem[] {
       continue;
     }
 
-    let survivorIdx = idxs[0];
-    for (const i of idxs) {
+    // DEDUP-ANGEW fix round: narrowed to the anie side of a dual-edition
+    // pair when one is present in this group; unrestricted (`idxs`)
+    // otherwise — see `dualEditionSurvivorCandidates`'s own doc comment.
+    const survivorCandidates = dualEditionSurvivorCandidates(items, idxs) ?? idxs;
+    let survivorIdx = survivorCandidates[0];
+    for (const i of survivorCandidates) {
       if (isBetterSurvivor(i, survivorIdx)) survivorIdx = i;
     }
     const survivor = items[survivorIdx];

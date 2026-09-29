@@ -181,7 +181,17 @@ describe("compileSearchBrief ABBREV-RECALL: Required tags survive the adapters' 
   // Mutation guard, computed from the HEAD code (before this fix) via direct execution so the
   // pinned arrays are exact, not hand-derived. If a future edit puts `...topics` back after the
   // project phrases, these two go red without needing the 1-tag/3-tag tests above to catch it.
-  it("leaves the zero-topic tight-focus project lane byte-identical to before this fix", () => {
+  //
+  // QUERY-QUALITY (ABC-JEV-INTEGRATION.md §1ay, docs/jev-abc/QUERY-QUALITY-B-20260929T084721Z.md)
+  // REWROTE both pinned arrays below — a deliberate second contract change, not a weakening of
+  // this guard. BATTERY_PROJECT_TEXT is a 2-sentence, 40+-word paragraph, so it no longer
+  // qualifies as its own literal query (profile-compiler.ts's literalQueryIfShort, <=6 words);
+  // only its derived phrases still appear. phrasesFromText now also splits on commas, so the
+  // paragraph's one comma turns its first sentence's run-on clause into a real 6-word phrase
+  // ("PhD research on solid-state battery materials") that leads the list, pushing the 5th bare
+  // keyword ("focused") past the max=5 cap on this call. Recomputed by direct execution against
+  // the NEW code, same discipline ABBREV-RECALL used against the OLD code.
+  it("leaves the zero-topic tight-focus project lane pinned to the QUERY-QUALITY-fixed output", () => {
     const brief = compileSearchBrief({
       topics: [],
       project: BATTERY_PROJECT_TEXT,
@@ -189,16 +199,15 @@ describe("compileSearchBrief ABBREV-RECALL: Required tags survive the adapters' 
     });
 
     expect(brief.generatedQueries).toEqual([
-      BATTERY_PROJECT_TEXT,
+      "PhD research on solid-state battery materials",
       "research",
       "solid-state",
       "battery",
       "materials",
-      "focused",
     ]);
   });
 
-  it("leaves tight focus with a topic present byte-identical to before this fix", () => {
+  it("leaves tight focus with a topic present pinned to the QUERY-QUALITY-fixed output", () => {
     const brief = compileSearchBrief({
       topics: ["LCO"],
       project: BATTERY_PROJECT_TEXT,
@@ -207,9 +216,192 @@ describe("compileSearchBrief ABBREV-RECALL: Required tags survive the adapters' 
 
     expect(brief.generatedQueries).toEqual([
       "LCO",
-      `LCO ${BATTERY_PROJECT_TEXT}`,
+      "LCO PhD research on solid-state battery materials",
       "LCO research",
       "LCO solid-state",
     ]);
+  });
+});
+
+// QUERY-QUALITY (ABC-JEV-INTEGRATION.md §1ay, docs/jev-abc/QUERY-QUALITY-B-20260929T084721Z.md):
+// B found that projectQueries put the reader's ENTIRE, verbatim, multi-sentence project/challenge
+// paragraph into generatedQueries as one search string (what earlier docs called "fulltext"), and
+// that phrasesFromText never split on commas, so a real, comma-joined research sentence almost
+// never produced a genuine phrase — every non-tag query slot on every source fell back to either
+// that whole raw paragraph or a single generic word. Measured live: the wasted single-word slot
+// pulled 117,064 in-window OpenAlex candidates with a 0/25 sampled qualify rate for the reader's
+// own Required tag; a real short phrase scored 40-100% on the same sample. The fix is two parts:
+// (F) a project/challenge text longer than 6 words is never itself a query (its derived phrases
+// still are); a text of 6 words or fewer already IS a phrase and stays as one query. (N)
+// phrasesFromText also splits on commas, so real 2-6 word phrases can form and sort ahead of bare
+// single words (they already led the concatenation order; they just didn't exist before).
+describe("compileSearchBrief QUERY-QUALITY: project/challenge text no longer floods a query slot", () => {
+  it("never sends the whole raw project paragraph as its own query, in the default (non-tight) focus", () => {
+    const brief = compileSearchBrief({ topics: ["LCO"], project: BATTERY_PROJECT_TEXT });
+
+    expect(brief.generatedQueries).not.toContain(BATTERY_PROJECT_TEXT);
+    expect(brief.generatedQueries).toContain("LCO");
+  });
+
+  it("never sends the whole raw challenge paragraph as its own query", () => {
+    const brief = compileSearchBrief({ topics: ["LCO"], challenge: BATTERY_PROJECT_TEXT });
+
+    expect(brief.generatedQueries).not.toContain(BATTERY_PROJECT_TEXT);
+  });
+
+  it("splits comma-separated clauses into real multi-word phrases, not just bare single words", () => {
+    const commaHeavyProject =
+      "silicon anode degradation, fast-charging protocols, electrolyte additive screening, capacity fade at high rates";
+    const brief = compileSearchBrief({ topics: [], project: commaHeavyProject });
+
+    const multiWordPhrases = brief.generatedQueries.filter((q) => {
+      const words = q.trim().split(/\s+/).length;
+      return words >= 2 && words <= 6;
+    });
+    expect(multiWordPhrases.length).toBeGreaterThan(0);
+    expect(brief.generatedQueries).toContain("silicon anode degradation");
+    expect(brief.generatedQueries).toContain("fast-charging protocols");
+  });
+
+  it("keeps a project text at the 6-word floor as one literal query, but drops it at 7 words (its derived phrase still survives)", () => {
+    // Both fixtures share a leading comma-separated clause ("silicon anode") so the derived
+    // phrase is identical either side of the floor — only the FULL literal string's presence
+    // should flip when word count crosses 6, isolating literalQueryIfShort from phrasesFromText.
+    const sixWords = "silicon anode, capacity fade at scale"; // 6 words
+    const sevenWords = "silicon anode, capacity fade at scale now"; // 7 words
+
+    const atFloor = compileSearchBrief({ topics: [], project: sixWords });
+    const overFloor = compileSearchBrief({ topics: [], project: sevenWords });
+
+    expect(atFloor.generatedQueries).toContain(sixWords);
+    expect(overFloor.generatedQueries).not.toContain(sevenWords);
+    // The derived sub-phrase from the comma split survives on both sides of the floor.
+    expect(atFloor.generatedQueries).toContain("silicon anode");
+    expect(overFloor.generatedQueries).toContain("silicon anode");
+  });
+});
+
+// QUERY-BUDGET (ABC-JEV-INTEGRATION.md §1az, docs/jev-abc/QUERY-BUDGET-B-20260929T094059Z.md):
+// even with Required tags ahead of project phrases (ABBREV-RECALL) and no raw paragraph flooding
+// a slot (QUERY-QUALITY), two problems survived: (1) 2+ selected senses could still push a
+// Required tag out of a small source's cap — measured live, 2 senses + 2 tags sent dblp/pubmed
+// (cap 2) "role conflict"/"conflict of interest", 0 of 2 tags; (2) a bare generic single word
+// (e.g. "research", measured at 0% qualify across ~10^5 in-window candidates) still filled a cap
+// slot ahead of a genuine project phrase or a tag-anchored combination (measured 12-44% qualify).
+// The fix tiers baseQueries — Required tags, then exact-sense queries (Tier 0, guarantees
+// min(tagCount, cap) tags survive any source); bare project phrases (Tier 1); one
+// tag+strongest-phrase combination per tag (Tier 1b, kept behind the bare phrase as the
+// risk-averse default — a live measurement found this can either sharpen a source's results or
+// collapse them to almost nothing); bare single words (Tier 2); the rest (Tier 3) — reordering
+// the exact same strings baseQueries already produced. Nothing is invented or dropped, and every
+// pre-existing pin above stays byte-identical (traced by hand before this change, re-proven by
+// this file staying green).
+describe("compileSearchBrief QUERY-BUDGET: tiering keeps a tag's cap-window free of low-value fallbacks", () => {
+  it("keeps every cap=3 slot free of a bare single-word projectTerms entry once a tag and a project phrase both exist, and lands the tag+phrase combo inside that window", () => {
+    const brief = compileSearchBrief({ topics: ["LCO"], project: BATTERY_PROJECT_TEXT });
+    const window = brief.generatedQueries.slice(0, 3);
+
+    for (const bareWord of ["research", "solid-state", "battery", "materials"]) {
+      expect(window).not.toContain(bareWord);
+    }
+    expect(window).toContain("LCO PhD research on solid-state battery materials");
+  });
+
+  // A project text with TWO genuine comma-derived long phrases (each <=10 words) ahead of its
+  // leftover single keywords, the same shape BATTERY_PROJECT_TEXT has with one phrase instead of
+  // two — isolates which phrase Tier 1b spends on the combo from what stays a bare Tier 1 phrase.
+  const TWO_PHRASE_PROJECT_TEXT =
+    "Investigating solid-state electrolyte interfaces, improving lithium-ion transport pathways, " +
+    "testing conductivity under high pressure conditions across many samples";
+
+  it("pairs the tag+phrase combination with the FIRST (strongest) project phrase specifically", () => {
+    const brief = compileSearchBrief({ topics: ["LCO"], project: TWO_PHRASE_PROJECT_TEXT });
+
+    const firstPhraseCombo = brief.generatedQueries.indexOf(
+      "LCO Investigating solid-state electrolyte interfaces",
+    );
+    const secondPhraseCombo = brief.generatedQueries.indexOf(
+      "LCO improving lithium-ion transport pathways",
+    );
+
+    expect(firstPhraseCombo).toBeGreaterThanOrEqual(0);
+    expect(secondPhraseCombo).toBeGreaterThanOrEqual(0);
+    // Tier 1b (the privileged tag+phrase slot) only ever pairs the tag with projectTerms[0]; a
+    // combo using the second phrase still exists (Tier 3), but ranks behind it.
+    expect(firstPhraseCombo).toBeLessThan(secondPhraseCombo);
+    // Tier 1b itself outranks Tier 2's bare single words — with 3 real phrases feeding both a
+    // bare-phrase and a combo slot, this is the one assertion in this fixture that actually
+    // distinguishes the tiered order from today's flat concatenation (where this combo would
+    // fall after every bare keyword instead of before them).
+    for (const keyword of ["investigating", "solid-state"]) {
+      expect(firstPhraseCombo).toBeLessThan(brief.generatedQueries.indexOf(keyword));
+    }
+  });
+
+  it("still ranks the SECOND project phrase (not spent on the tag combo) ahead of every bare single keyword", () => {
+    const brief = compileSearchBrief({ topics: ["LCO"], project: TWO_PHRASE_PROJECT_TEXT });
+
+    const secondPhraseIndex = brief.generatedQueries.indexOf("improving lithium-ion transport pathways");
+    expect(secondPhraseIndex).toBeGreaterThanOrEqual(0);
+    for (const keyword of ["investigating", "solid-state"]) {
+      const keywordIndex = brief.generatedQueries.indexOf(keyword);
+      expect(keywordIndex).toBeGreaterThanOrEqual(0);
+      expect(secondPhraseIndex).toBeLessThan(keywordIndex);
+    }
+  });
+
+  it("guarantees min(tagCount, cap) Required tags survive a 2-slot source even with 2 selected senses (R2)", () => {
+    const normalized = normalizeFeedIntent({
+      topics: ["LCO", "LFP"],
+      intent: {
+        version: "feed-intent-v1",
+        selectedSenseConcepts: [
+          selectedSenseConcept("hr.role_conflict"),
+          selectedSenseConcept("compliance.conflict_of_interest"),
+        ],
+      },
+    });
+    if (!normalized.ok) throw new Error("fixture must be valid");
+
+    // Default (non-tight) focus deliberately: tight reconstructs its own list independently of
+    // this tiering (unaffected either way), so only balanced/exploratory exercise Tier 0 directly.
+    const brief = compileSearchBrief({ topics: ["LCO", "LFP"], intent: normalized.intent });
+
+    expect(brief.generatedQueries.slice(0, 2)).toEqual(["LCO", "LFP"]);
+    expect(brief.generatedQueries.indexOf("role conflict")).toBeGreaterThanOrEqual(2);
+    expect(brief.generatedQueries.indexOf("conflict of interest")).toBeGreaterThanOrEqual(2);
+  });
+
+  it("claims the contested first window for the tag ahead of the sense, for 1 tag + 1 sense", () => {
+    const normalized = normalizeFeedIntent({
+      topics: ["LCO"],
+      intent: {
+        version: "feed-intent-v1",
+        selectedSenseConcepts: [selectedSenseConcept("hr.role_conflict")],
+      },
+    });
+    if (!normalized.ok) throw new Error("fixture must be valid");
+
+    const brief = compileSearchBrief({ topics: ["LCO"], intent: normalized.intent });
+
+    expect(brief.generatedQueries[0]).toBe("LCO");
+    expect(brief.generatedQueries[1]).toBe("role conflict");
+  });
+
+  it("a zero-tag, default-focus profile with selected senses still emits exactly the sense queries (Tier 0 with no tags to interleave)", () => {
+    const normalized = normalizeFeedIntent({
+      intent: {
+        version: "feed-intent-v1",
+        selectedSenseConcepts: [
+          selectedSenseConcept("hr.role_conflict"),
+          selectedSenseConcept("compliance.conflict_of_interest"),
+        ],
+      },
+    });
+    if (!normalized.ok) throw new Error("fixture must be valid");
+
+    const brief = compileSearchBrief({ topics: [], intent: normalized.intent });
+
+    expect(brief.generatedQueries).toEqual(["role conflict", "conflict of interest"]);
   });
 });
