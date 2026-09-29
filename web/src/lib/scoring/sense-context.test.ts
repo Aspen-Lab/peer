@@ -778,3 +778,184 @@ describe("test 16 — rule (c) also applies on the T4 path (§1ap AMENDMENT 5 fi
     expect(scored[0].matchedKeywords).toEqual(["LCO"]); // real textual evidence claimed
   });
 });
+
+describe("test 17 — SENSE-CONTEXT-R3 (§1ax ruling 1): the strip set also removes a tag's hyphen-joined spelling", () => {
+  // Two live wrong-domain "solid state" residuals the pre-fix strip set let
+  // through at full strength (real evidence, docs/jev-abc/SENSE-CONTEXT-R3-B-
+  // 20260929T075345Z.md §1 + this item's own checkpoint re-measurement): both
+  // papers share their heaviest token with the reader's own project text,
+  // "solid-state" (an ordinary hyphenated English adjective), but the pre-fix
+  // strip set only ever held the SPACE-joined forms {"solid","state","states"}
+  // (`expandTerm` canonicalizes first, and canonicalization turns hyphens into
+  // spaces) -- so "solid-state" tokenized as ONE token and was never removed,
+  // inflating the context-agreement gate as if it were genuine shared
+  // vocabulary. The enriched seed-text list below is the reader's REAL,
+  // deduped `seedTexts` (`briefToSeedTexts` -> the private `cleanList`,
+  // combine.ts's private `senseContextText`) for a request with the battery
+  // project text and Required tag "solid state" -- reproduced byte-for-byte
+  // (independently verified against the live recorded kwScores, 0.6 and
+  // 0.4667, and against the guide's own counterfactual fixedSim/overlapSim
+  // values before trusting it). Plain BATTERY_PROJECT_TEXT alone is NOT
+  // enough to reproduce this residual -- its similarity to these two papers
+  // is already below the rescue floor without the extra generated-query-style
+  // repetition real production adds, so a test built on it would pass even
+  // without this fix and would not actually be regression-testing anything.
+  const ENRICHED_SOLID_STATE_SEED_TEXTS = [
+    BATTERY_PROJECT_TEXT,
+    "solid state",
+    "research",
+    "solid-state",
+    "battery",
+    "materials",
+    "focused",
+    `solid state ${BATTERY_PROJECT_TEXT}`,
+    "solid state research",
+    "solid state solid-state",
+  ];
+
+  it("real residual: a molecular quantum-optical-storage paper (arxiv:2609.28271) is demoted, not admitted at full strength", () => {
+    const paper = item("quantum-storage-r3", {
+      source: "arxiv",
+      title: "Broadband Quantum Optical Storage with Chemically Engineered Molecular Eu^3+ Complex",
+      abstract:
+        "Broadband quantum memory devices are essential elements for future quantum networks. Here we " +
+        "propose a broadband quantum memory scheme called Hole Anti-hole Grating Echo Memory (HAGEM) for " +
+        "rare-earth ions in solids. We provide a Eu^3+ molecular complex with special hyperfine level " +
+        "structures of which the hyperfine level separations are in a specific mathematical correlation " +
+        "that can be obtained by harnessing chemical engineering. Using the memory protocol and material, " +
+        "we experimentally demonstrate a quantum optical storage efficiency of 14.9% and a memory " +
+        "bandwidth of 200MHz, which can easily be extended to a few GHz. With this demonstration, we show " +
+        "the first quantum application enabled by molecular engineering which cannot be achieved by any " +
+        "other existing Eu^3+ solid-state materials. In addition, we provide a framework for the chemical " +
+        "engineering of solid-state materials with rare-earth ions for quantum applications consisting of " +
+        "material design, synthesis & characterization techniques, and analytical methods for the quantum " +
+        "properties of rare-earth (RE) ions in solids. This work establishes a new direction in which " +
+        "molecular rare-earth ions can be used for a wide range of quantum applications, which cannot be " +
+        "realized by existing solid-state materials. This will greatly facilitate the development of " +
+        "molecular quantum emitter systems for real world applications.",
+      tags: ["quant-ph", "physics.chem-ph"],
+    });
+    const scored = scoreItems(
+      [paper],
+      { topics: ["solid state"], seedTexts: ENRICHED_SOLID_STATE_SEED_TEXTS },
+      undefined,
+      now,
+    );
+    expect(scored.map((s) => s.id)).toEqual(["quantum-storage-r3"]); // stays qualified (DEMOTE, not DROP)
+    expect(scored[0].matchedKeywords).toEqual(["solid state"]);
+    const specificity = termSpecificity(canonicalize("solid state"));
+    expect(scored[0].scoreBreakdown.keyword).toBeCloseTo((specificity * SENSE_CONTEXT_DEMOTED_GROUNDING) / 1.5, 4);
+  });
+
+  it("real residual: a Thorium-229 phonomagnetometer paper (arxiv:2609.30901) is demoted, not admitted at full strength", () => {
+    const paper = item("phonomagnetometer-r3", {
+      source: "arxiv",
+      title: "Thorium-229 as a Phonomagnetometer",
+      abstract:
+        "Thorium-229 possesses the only known low-energy nuclear transition suitable for spectroscopy " +
+        "with narrowband VUV lasers. While previous experiments have focused on application as a nuclear " +
+        "clock, this transition also offers a route to high-accuracy magnetometry. Experimental " +
+        "observations of magnetic fields generated by phonons carrying angular momentum remain " +
+        "inconclusive, highlighting the need for quantitative tests of the underlying physical " +
+        "mechanisms. In this article, we propose doping thorium-229 into a solid-state host to probe " +
+        "phonomagnetic fields in situ. We identify Na2ThF6, a chiral stoichiometric thorium compound, as " +
+        "a promising host material and evaluate its spectroscopic sensitivity to magnetic interactions " +
+        "under two excitation schemes: driving degenerate phonon modes with a circularly polarized " +
+        "laser, and applying a temperature gradient. Density functional theory simulations combined with " +
+        "quantitative estimates suggest that the temperature-gradient scheme yields a magnetic signal " +
+        "that appears too weak to be measurable, while a circularly polarized, high-intensity THz/VUV " +
+        "pump-probe driven phonomagnetic response may approach the shot-noise-limited detection " +
+        "threshold. While experimental challenges remain, the unique suitability of thorium-229 provides " +
+        "a testable pathway toward detecting phonomagnetic fields in a solid-state platform.",
+      tags: ["cond-mat.mtrl-sci"],
+    });
+    const scored = scoreItems(
+      [paper],
+      { topics: ["solid state"], seedTexts: ENRICHED_SOLID_STATE_SEED_TEXTS },
+      undefined,
+      now,
+    );
+    expect(scored.map((s) => s.id)).toEqual(["phonomagnetometer-r3"]);
+    expect(scored[0].matchedKeywords).toEqual(["solid state"]);
+    const specificity = termSpecificity(canonicalize("solid state"));
+    expect(scored[0].scoreBreakdown.keyword).toBeCloseTo((specificity * SENSE_CONTEXT_DEMOTED_GROUNDING) / 1.5, 4);
+  });
+
+  it("protective: a genuine short real solid-state-battery paper that writes bare 'solid-state' (not 'all-solid-state') stays at full strength", () => {
+    // Real OpenAlex item (openalex:W7212228226), from this item's own saved
+    // positive set -- picked because it is short and writes the BARE
+    // hyphenated adjective ("Solid-State Batteries" in the title, "solid-state
+    // batteries" in the abstract), unlike test 3's fixture, which only ever
+    // writes the longer "all-solid-state" token -- a different token the
+    // pre-fix strip set already missed too, so it never exercised this fix
+    // either way and cannot stand in for this protective case.
+    const paper = item("genuine-bare-hyphen-r3", {
+      title:
+        "Lithium Metal Electroplating Kinetics in Porous Anodes for Lithium-Reservoir-Free Solid-State Batteries",
+      abstract:
+        "Li-reservoir-free (anode-free) solid-state batteries store no excess Li, so the cell can " +
+        "exhibit high energy density compared to Li ion batteries, but cycle life is determined by the " +
+        "reversibility of Li plating and stripping.Because the cathode is the only Li source, an average " +
+        "Coulombic efficiency short of 100% causes rapid",
+    });
+    const scored = scoreItems(
+      [paper],
+      { topics: ["solid state"], seedTexts: [BATTERY_PROJECT_TEXT] },
+      undefined,
+      now,
+    );
+    expect(scored.map((s) => s.id)).toEqual(["genuine-bare-hyphen-r3"]);
+    expect(scored[0].matchedKeywords).toEqual(["solid state"]);
+    const specificity = termSpecificity(canonicalize("solid state"));
+    expect(scored[0].scoreBreakdown.keyword).toBeCloseTo(specificity / 1.5, 4); // undemoted, full T1 strength
+  });
+
+  it("generalizes to another multi-word tag: a synthetic 'machine learning' tag closes the identical hyphen leak", () => {
+    // Constructed, not real (no catalogued real residual for this tag exists
+    // -- the point is to prove the fix lives in the general strip-set
+    // builder, not a "solid state"-only patch). The wrong-domain paper is
+    // genuinely about land-tenure/wildlife-survey methodology and shares NO
+    // vocabulary with the reader's machine-learning research context except
+    // the incidental, hyphenated mention of the tag's own name -- verified
+    // directly (this item's checkpoint) that this exact pair clears the
+    // gate's rescue AND overlap floors BEFORE the fix (fixedSim 0.122,
+    // overlapSim 0.143 -- wrongly undemoted) and drops to zero shared
+    // vocabulary AFTER it (fixedSim 0, overlapSim 0).
+    const context = "PhD research on machine-learning methods for protein folding prediction.";
+    const wrongDomain = item("machine-learning-wrong-domain", {
+      title: "Automated Bird Species Identification from Citizen-Science Photographs",
+      abstract:
+        "We built a machine-learning photograph classifier to identify bird species from " +
+        "citizen-science submissions across several national parks and coastal wetlands.",
+    });
+    const gate = senseContextGate(wrongDomain, "machine learning", context);
+    expect(gate.bypass).toBe(false);
+    expect(gate.fixedSim).toBe(0);
+    expect(gate.overlapSim).toBe(0);
+    expect(gate.pass).toBe(false); // demoted -- the hyphenated tag name is stripped, no vocabulary left to agree on
+  });
+
+  it("protective: an unrelated hyphenated word sharing the tag's own token as a mere PREFIX ('state-of-the-art') is not stripped -- exact-token membership, not substring", () => {
+    // If the strip set matched by substring/prefix instead of exact tokens,
+    // "state-of-the-art" (tag "solid state" contributes the token "state")
+    // would be wrongly removed too, silently discarding real shared
+    // vocabulary and making an unrelated paper's context agreement look
+    // weaker than it truly is. Proven by direct substitution: swapping the
+    // shared phrase for an unrelated control of the same shape must LOWER
+    // both metrics -- if "state-of-the-art" were being stripped, its
+    // presence or absence would make no difference at all.
+    const context = "Our lab pursues a state-of-the-art approach to catalysis research and reaction engineering.";
+    const withSharedPhrase = item("state-of-the-art-shared", {
+      title: "Reaction Engineering Advances",
+      abstract: "This work applies a state-of-the-art approach to catalysis in reaction engineering.",
+    });
+    const withoutSharedPhrase = item("state-of-the-art-control", {
+      title: "Reaction Engineering Advances",
+      abstract: "This work applies a completely conventional approach to catalysis in reaction engineering.",
+    });
+    const gateWith = senseContextGate(withSharedPhrase, "solid state", context);
+    const gateWithout = senseContextGate(withoutSharedPhrase, "solid state", context);
+    expect(gateWith.fixedSim).toBeGreaterThan(gateWithout.fixedSim);
+    expect(gateWith.overlapSim).toBeGreaterThan(gateWithout.overlapSim);
+  });
+});

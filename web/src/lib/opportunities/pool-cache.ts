@@ -256,11 +256,21 @@ const CACHE_KEY_VERSION = 6;
 // unrelated record — now merge into one via dedupe's existing pass-1 rule.
 // This changes pool MEMBERSHIP (a v12 pool built under the old, alias-blind
 // identity may still carry both editions as separate items), so a v12 pool
-// must never be served as if it already reflects the merge. These
-// bumps share their numbers with `CACHE_KEY_VERSION` above by coincidence,
-// not by a shared cause — see `derivePoolCacheKey` below for how each is
-// selected.
-const PAPER_CACHE_KEY_VERSION = 13;
+// must never be served as if it already reflects the merge. v14 —
+// ABC-JEV-INTEGRATION.md §1ax/SENSE-CONTEXT-R3
+// (docs/jev-abc/SENSE-CONTEXT-R3-B-20260929T075345Z.md): `keyword.ts`'s
+// `senseContextStripSet` now also strips each Required tag's hyphen-joined
+// spelling (e.g. "solid-state" for the tag "solid state"), closing a leak
+// where that ordinary orthographic form of the tag's own name survived
+// tokenization as one token and counted as unrelated "agreeing" vocabulary.
+// This changes which short/ambiguous-tag matches pass the context gate —
+// a paper's `score`/`scoreBreakdown`/grounding can change without its
+// pool MEMBERSHIP changing (same shape as v12/SCORE-ZERO above), so a v13
+// pool scored under the old, hyphen-blind strip set must never be served
+// as if it already reflects the fix. These bumps share their numbers with
+// `CACHE_KEY_VERSION` above by coincidence, not by a shared cause — see
+// `derivePoolCacheKey` below for how each is selected.
+const PAPER_CACHE_KEY_VERSION = 14;
 /**
  * SINGLE SOURCE OF TRUTH for the literal key prefix a durable papers-pool
  * store may accept, derived from `PAPER_CACHE_KEY_VERSION` rather than
