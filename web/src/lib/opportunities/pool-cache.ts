@@ -238,11 +238,19 @@ const CACHE_KEY_VERSION = 6;
 // survives every source adapter's own MAX_QUERIES truncation instead of
 // being silently crowded out — a v10 pool built under the old, tag-last
 // ordering may be missing candidates the corrected retrieval would have
-// fetched and must never be served as if it already reflects the fix. These
+// fetched and must never be served as if it already reflects the fix. v12 —
+// ABC-JEV-INTEGRATION.md §1at/SCORE-ZERO
+// (docs/jev-abc/SCORE-ZERO-B-20260928T234238Z.md): `negativePenalty` no
+// longer receives the system's default avoid-review words (only the
+// reader's own declared dislikes), and `rerank.ts`'s review/avoid demotion
+// no longer floors a shown item at exactly 0 — both change a paper's
+// `score`/`scoreBreakdown`/order without changing pool membership, so a v11
+// pool scored under the old double-penalty/hard-floor must never be served
+// as if it already reflects the fix. These
 // bumps share their numbers with `CACHE_KEY_VERSION` above by coincidence,
 // not by a shared cause — see `derivePoolCacheKey` below for how each is
 // selected.
-const PAPER_CACHE_KEY_VERSION = 11;
+const PAPER_CACHE_KEY_VERSION = 12;
 /**
  * SINGLE SOURCE OF TRUTH for the literal key prefix a durable papers-pool
  * store may accept, derived from `PAPER_CACHE_KEY_VERSION` rather than

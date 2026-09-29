@@ -38,6 +38,23 @@ function sourceLaneBoost(item: ScoredItem, brief: SearchBrief): number {
   return codeBoost;
 }
 
+/**
+ * SCORE-ZERO (ABC-JEV-INTEGRATION.md §1at ruling 3) — the review/avoid
+ * demotion below (`avoid * 0.2 + reviewPenalty`) must never, by itself, sink
+ * a shown item's score below this fraction of its OWN pre-rerank
+ * (combine.ts) score. Mirrors SENSE-CONTEXT's own demotion-floor precedent
+ * (`SENSE_CONTEXT_DEMOTED_GROUNDING`, keyword.ts): demotion is a ranking
+ * preference, not a verdict that the paper has no relevance, so a demoted
+ * item keeps a nonzero, visible relevance badge. The floor is proportional
+ * to each item's own pre-rerank score (not a flat number), so several
+ * demoted items still order among themselves the way their pre-rerank
+ * scores did. `methodPenalty` below is a separate, pre-existing mechanism —
+ * a reader-declared "must match method" control — and keeps its full,
+ * unfloored power to reach exactly 0; only the review/avoid terms are
+ * bounded by this floor.
+ */
+const REVIEW_AVOID_DEMOTION_FLOOR = 0.25;
+
 function localScore(item: ScoredItem, brief: SearchBrief): number {
   const text = itemText(item);
   const must = overlapScore(text, brief.mustInclude);
@@ -66,20 +83,26 @@ function localScore(item: ScoredItem, brief: SearchBrief): number {
         ? nice * 0.08 + sourceLaneBoost(item, brief)
         : must * 0.1 + nice * 0.08 + question * 0.08;
 
-  return Math.max(
-    0,
-    Math.min(
-      1,
-      item.score +
-        focusBoost +
-        methodBoost +
-        citationBoost +
-        sourceLaneBoost(item, brief) -
-        avoid * 0.2 -
-        reviewPenalty -
-        methodPenalty,
-    ),
+  // Everything except the review/avoid demotion — methodPenalty (a distinct,
+  // reader-declared mechanism) keeps its own unrestricted floor of 0 here.
+  const beforeReviewAvoidDemotion =
+    item.score +
+    focusBoost +
+    methodBoost +
+    citationBoost +
+    sourceLaneBoost(item, brief) -
+    methodPenalty;
+  const reviewAvoidDemotion = avoid * 0.2 + reviewPenalty;
+  // Cap how much of THAT demotion may apply, so it alone never crosses the
+  // floor. When there is no review/avoid signal (reviewAvoidDemotion === 0)
+  // this caps at 0 and the result is byte-identical to the un-floored
+  // formula — non-review, non-avoid items are unaffected.
+  const cappedDemotion = Math.min(
+    reviewAvoidDemotion,
+    Math.max(0, beforeReviewAvoidDemotion - REVIEW_AVOID_DEMOTION_FLOOR * item.score),
   );
+
+  return Math.max(0, Math.min(1, beforeReviewAvoidDemotion - cappedDemotion));
 }
 
 export function applyTier1Rerank(items: ScoredItem[], brief: SearchBrief): ScoredItem[] {
