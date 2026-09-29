@@ -83,7 +83,8 @@ describe("daily opportunity pool cache key", () => {
     // otherwise collide in the shared `opportunity_pools` table. Asserted as
     // "not v5" rather than "is v6" so this test does not go stale on its own
     // the next time either version constant moves independently — papers is
-    // now v17 (TOKENIZE-PLURALS, ABC-JEV-INTEGRATION.md §1be; previously v16
+    // now v18 (SENSE-CONTEXT-EVIDENCE, ABC-JEV-INTEGRATION.md §1bg; previously
+    // v17 via TOKENIZE-PLURALS §1be, before that v16
     // via QUERY-BUDGET, before that v15 via QUERY-QUALITY, before that v14
     // via SENSE-CONTEXT-R3, before that v13 via DEDUP-ANGEW, before that v12
     // via SCORE-ZERO, before that v11 via ABBREV-RECALL, before that v10 via

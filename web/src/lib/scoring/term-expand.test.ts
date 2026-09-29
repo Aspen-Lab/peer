@@ -264,6 +264,17 @@ describe("singularize — protected words (guide §2.4)", () => {
   it("gases is an accepted under-fold, not 'gas' (§1be AMENDMENT g)", () => {
     expect(singularize("gases")).toBe("gase");
   });
+
+  // SENSE-CONTEXT-EVIDENCE (§1bg point 8) — owed by TOKENIZE-PLURALS-A's own
+  // independent review (LOW finding 1): "ion"/"ions" are both real, separate
+  // reference-table keys, but the plain "-s" rule's `length > 4` guard
+  // excludes this 4-letter plural, so they never merge. Safe for the same
+  // reason as gases/biases/lenses (an under-fold, never a false merge) — a
+  // small, now-named T4/context-check recall gap for a tag whose only
+  // mismatch with a candidate paper is this word's grammatical number.
+  it("ions is an accepted under-fold, not 'ion' (owed by TOKENIZE-PLURALS-A, closed in §1bg)", () => {
+    expect(singularize("ions")).toBe("ions");
+  });
 });
 
 // §1be AMENDMENT g — a census of the shipped reference-idf.json's 17,489

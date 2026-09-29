@@ -7,8 +7,9 @@ import {
   termMatches,
   termOccurrences,
   termSpecificity,
+  termVariantMatches,
 } from "./term-expand";
-import { tokenize } from "./tokenize";
+import { tokenizeFolded } from "./tokenize";
 import { resolveSenseEvidence, type SelectedSenseConcept } from "@/lib/feed/senses";
 import referenceIdfTable from "./reference-idf.json";
 
@@ -211,6 +212,36 @@ export function matchesSourceTag(item: RawItem, canonicalTopic: string): boolean
 // task 3). `SENSE_CONTEXT_FIXED_FLOOR`/`SENSE_CONTEXT_OVERLAP_FLOOR`/
 // `SENSE_CONTEXT_FIXED_RESCUE` are that measured, pre-set point — not
 // independently retunable without re-running the same grid.
+//
+// SENSE-CONTEXT-EVIDENCE (ABC-JEV-INTEGRATION.md §1bg, docs/jev-abc/
+// SENSE-CONTEXT-EVIDENCE-B-20260929T163908Z.md): the OVERLAP axis (Option 2)
+// counted every shared token that was not a stopword and not in the small,
+// closed `GENERIC_TERMS` list — including a reader's own non-topical filler
+// words ("while", "focused", "research", "improving", "between"). That was
+// harmless while the axis compared UNFOLDED text, but folding plurals in (see
+// `tokenizeFolded` above) shrinks the context text's token count enough to
+// tip a real wrong-domain residual (a Thorium-229 physics paper sharing only
+// "while"/"focused" with the reader) over the floor — the exact defect
+// TOKENIZE-PLURALS hit and stopped for. THIS item's fix: the overlap axis
+// ALSO drops every token whose weight in the shipped reference table is
+// below its own Pth-percentile weight (P = 10 as shipped — see
+// `SENSE_CONTEXT_OVERLAP_DOCFREQ_CUT_PERCENTILE`'s own doc comment for the
+// full history, including the §1bg point 12 narrowing from an original
+// P = 25 after a real-paper regression) — the table's own most-common words
+// leave the axis, the same shape as `GENERIC_TERMS` but continuous and
+// data-derived instead of a hand-curated 11-word list (see
+// `SENSE_CONTEXT_OVERLAP_DOCFREQ_CUT_WEIGHT` below). Shipped TOGETHER with
+// the fold (the fold alone is known-bad; the cut alone was unmeasured) and
+// with a second, independent fix: a literal Required-tag match that came
+// through the tag's own full spelled-out name or chemical formula (not its
+// bare abbreviation) skips the context check entirely — see
+// `matchesFullNameOrFormula` below — because that is much stronger,
+// unambiguous evidence than the bare, ambiguous short form the check exists
+// to double-check. Accepted cost, named rather than hidden (§1bg point
+// 12b): even at the narrowed P = 10, one genuine but chemistry-adjacent
+// paper (`arxiv:2609.08721`) sits below the cut on its own shared
+// vocabulary and stays demoted — see the full reasoning and threshold on
+// `SENSE_CONTEXT_OVERLAP_DOCFREQ_CUT_PERCENTILE`'s own doc comment.
 export const SENSE_CONTEXT_DEMOTED_GROUNDING = 0.25;
 /** Fixed-reference-table cosine floor (Option 1). */
 export const SENSE_CONTEXT_FIXED_FLOOR = 0.015;
@@ -238,6 +269,55 @@ const REFERENCE_IDF_MAX_WEIGHT = Math.max(...Object.values(REFERENCE_IDF_TABLE))
 function referenceIdfWeight(token: string): number {
   return REFERENCE_IDF_TABLE[token] ?? REFERENCE_IDF_MAX_WEIGHT;
 }
+
+/**
+ * SENSE-CONTEXT-EVIDENCE (§1bg points 1-2, narrowed by §1bg point 12 after a
+ * fresh A found real SET losses at the original p25) — document-frequency
+ * cut for the OVERLAP axis only (never `fixedSim`, which is unchanged by
+ * this item). Percentile definition, stated exactly: every token's weight in
+ * the shipped table, sorted ascending; the Pth-percentile weight is the
+ * value at the 0-indexed position `floor(P/100 * n)`, where `n` is the
+ * table's own key count. Computed from the table ITSELF at module load —
+ * the same way `REFERENCE_IDF_MAX_WEIGHT` above is — so a table rebuild
+ * recomputes this rather than silently drifting from a stale hard-coded
+ * number.
+ *
+ * `P = 10` (moved down from the original P = 25 after a real-paper set-diff,
+ * not a count-diff, showed p25 demoting genuine electrolyte papers — B's
+ * original grid only ever swept UP from 25). §1bg point 12's own sweep of
+ * {5, 8, 10, 12, 15, 20, 25} on the real reference table found: p5–p12 tie
+ * on losses (one wrong-field paper correctly demoted, one genuine paper —
+ * `arxiv:2609.08721`, an adjacent battery-electrolyte chemistry — an
+ * accepted cost, below) and promote no wrong-field paper to full strength;
+ * p15 loses 3 genuine papers; p20/p25 lose a genuine core-topic paper
+ * (`openalex:W7172267740`) and promote 2 wrong-field papers. P10 was chosen
+ * within the tying band as the point nearest the middle of the table's own
+ * observed gap between this reader's non-topical filler words (at/below
+ * "focused" 5.126) and domain words (from "electrode" 6.091) — a small
+ * table shift cannot flip either family — while p5 (5.110) would keep
+ * "focused" itself on the axis. Today's table gives 5.742, pinned by a
+ * test — a changed value means the table changed shape and the grid must be
+ * re-measured before shipping, not silently trusted.
+ *
+ * ACCEPTED COST (§1bg point 12b): `arxiv:2609.08721` ("Competing Ring-
+ * Opening and Hofmann Elimination Pathways in Aqueous TEMPO Catholytes" — a
+ * genuine aqueous redox-flow battery electrolyte-degradation paper, adjacent
+ * to but not the reader's own solid-state chemistry) is DEMOTED at P = 10,
+ * not dropped — a T1 literal hit is never removed from `matched`, only
+ * scored lower. It also has a NON-MONOTONE recovery: full strength again at
+ * p20, because the overlap coefficient's denominator (the smaller of the two
+ * token sets) does not shrink or grow monotonically as more words leave the
+ * axis — noted for whoever next redesigns this axis, not re-solved here.
+ * Threshold: one live genuine paper in the reader's own CORE topic (a
+ * solid-state battery electrolyte paper, not an adjacent chemistry) demoted
+ * by the cut → B revisits (leads: require two shared content words, not
+ * one; a product-vocabulary supplement to the general-science table).
+ */
+export const SENSE_CONTEXT_OVERLAP_DOCFREQ_CUT_PERCENTILE = 10;
+export const SENSE_CONTEXT_OVERLAP_DOCFREQ_CUT_WEIGHT = (() => {
+  const sorted = Object.values(REFERENCE_IDF_TABLE).sort((a, b) => a - b);
+  return sorted[Math.floor((SENSE_CONTEXT_OVERLAP_DOCFREQ_CUT_PERCENTILE / 100) * sorted.length)];
+})();
 
 /**
  * Option C (§1ap.1, measured docs/jev-abc/SENSE-CONTEXT-B-20260928T173815Z.md
@@ -283,14 +363,27 @@ export function isShortOrAmbiguous(tag: string): boolean {
  * exact-token membership, never substring matching, so an unrelated word that merely
  * starts with one of the tag's tokens (e.g. "state-of-the-art" for tag "solid state")
  * is untouched.
+ *
+ * SENSE-CONTEXT-EVIDENCE (ABC-JEV-INTEGRATION.md §1bg point 1) — tokenized with
+ * `tokenizeFolded`, not plain `tokenize()`: TOKENIZE-PLURALS (§1be) built and then
+ * reverted this exact fold after it exposed a pre-existing defect in the OVERLAP
+ * axis below (non-topical shared words such as "while"/"focused" counting as
+ * agreement); that defect is fixed by the document-frequency cut on the overlap
+ * axis (see `SENSE_CONTEXT_OVERLAP_DOCFREQ_CUT_WEIGHT` below), which is what makes
+ * shipping the fold finally safe (0/150 real negatives, both R3 residuals still
+ * demoted — measured, docs/jev-abc/SENSE-CONTEXT-EVIDENCE-B-20260929T163908Z.md).
+ * Folding here (the STRIP set) matters for the same reason the un-folded strip set
+ * mattered before: a paper that only ever writes a tag's PLURAL form ("electrolytes")
+ * must still have that word removed from both sides, or it counts as unrelated
+ * shared vocabulary instead of the tag's own name.
  */
 function senseContextStripSet(tag: string): Set<string> {
   const stripSet = new Set<string>();
   for (const variant of expandTerm(tag)) {
-    for (const token of tokenize(variant)) stripSet.add(token);
+    for (const token of tokenizeFolded(variant)) stripSet.add(token);
     const hyphenJoined = variant.replace(/\s+/g, "-");
     if (hyphenJoined !== variant) {
-      for (const token of tokenize(hyphenJoined)) stripSet.add(token);
+      for (const token of tokenizeFolded(hyphenJoined)) stripSet.add(token);
     }
   }
   return stripSet;
@@ -378,21 +471,36 @@ export interface SenseContextGateResult {
  * — the measured point, `docs/jev-abc/SENSE-CONTEXT-C2-20260928T205712Z.md` task 3.
  * Exported for direct testing and for combine.ts's T4 loop to share the exact same
  * logic rather than duplicating it.
+ *
+ * SENSE-CONTEXT-EVIDENCE (§1bg point 1) — both sides are tokenized with
+ * `tokenizeFolded` (plural-folded), not plain `tokenize()`: this is what
+ * TOKENIZE-PLURALS built and reverted, now shipped together with the
+ * document-frequency cut on the overlap axis (below) that makes it safe.
  */
 export function senseContextGate(item: RawItem, tag: string, contextText: string): SenseContextGateResult {
   const stripSet = senseContextStripSet(tag);
-  const contextTokens = tokenize(contextText).filter((token) => !stripSet.has(token));
+  const contextTokens = tokenizeFolded(contextText).filter((token) => !stripSet.has(token));
   if (contextTokens.length === 0) return { bypass: true, pass: true, fixedSim: 0, overlapSim: 0 };
-  const itemTokens = tokenize(senseContextItemText(item)).filter((token) => !stripSet.has(token));
+  const itemTokens = tokenizeFolded(senseContextItemText(item)).filter((token) => !stripSet.has(token));
 
   const fixedSim = cosine(toReferenceVector(itemTokens), toReferenceVector(contextTokens));
 
   // Overlap axis additionally drops GENERIC_TERMS (a closed list over an open class
   // of "uninformative but common" words — a known, accepted limitation, not a bug;
   // docs/jev-abc/SENSE-CONTEXT-B2-20260928T202118Z.md §2.2/POLICY 4) so neither pool
-  // size nor corpus choice can move this axis either.
-  const itemTokensForOverlap = new Set(itemTokens.filter((token) => !isGenericTerm(token)));
-  const contextTokensForOverlap = new Set(contextTokens.filter((token) => !isGenericTerm(token)));
+  // size nor corpus choice can move this axis either. SENSE-CONTEXT-EVIDENCE
+  // (§1bg point 2) additionally drops every token below
+  // `SENSE_CONTEXT_OVERLAP_DOCFREQ_CUT_WEIGHT` (a token the table never saw keeps
+  // the table's max weight via `referenceIdfWeight`, so an unseen token always
+  // stays on the axis) — this is what makes the fold above safe: a reader's own
+  // filler words ("while", "focused") sit well below the cut and no longer count
+  // as agreement, closing the defect TOKENIZE-PLURALS's fold alone exposed.
+  const itemTokensForOverlap = new Set(
+    itemTokens.filter((token) => !isGenericTerm(token) && referenceIdfWeight(token) >= SENSE_CONTEXT_OVERLAP_DOCFREQ_CUT_WEIGHT),
+  );
+  const contextTokensForOverlap = new Set(
+    contextTokens.filter((token) => !isGenericTerm(token) && referenceIdfWeight(token) >= SENSE_CONTEXT_OVERLAP_DOCFREQ_CUT_WEIGHT),
+  );
   const overlapSim = overlapCoefficient(itemTokensForOverlap, contextTokensForOverlap);
 
   const pass =
@@ -489,6 +597,46 @@ export function selfDeclaresDifferentSense(item: RawItem, tag: string): SelfDecl
   return { applies: declaredAny, differs: false };
 }
 
+// ── SENSE-CONTEXT-EVIDENCE — full-name/formula skip rule (§1bg point 3) ──
+//
+// A short/ambiguous tag's literal match is exactly the low-information evidence
+// the context check exists to double-check when it comes through the tag's own
+// BARE abbreviation ("LCO") — that is the one spelling a wrong-domain paper could
+// plausibly share by coincidence. A match that came through the group's full
+// spelled-out name ("lithium cobalt oxide") or a chemical formula ("LiCoO2")
+// instead is much stronger, unambiguous evidence of the right sense — not
+// something a wrong-domain paper would accidentally also write — so the context
+// check is skipped entirely for that tag on that paper (today's full grounding,
+// no demotion), the same exemption a long/specific tag already gets structurally.
+// A paper containing BOTH the bare form and a full-name/formula variant still
+// skips (the presence of the stronger evidence is what matters, not exclusivity).
+//
+// "Bare form" = the short/ambiguous tag's OWN canonical spelling (this is only
+// ever called from inside the `isShortOrAmbiguous` branch below, so the tag
+// itself is already short). Every OTHER member of `expandTerm`'s closure — the
+// full name, a formula, and their plurals — counts as "not the bare form." This
+// MUST be a set-difference over the closure, never a re-expansion of one member:
+// `expandTerm(anyMember)` returns the SAME WHOLE-GROUP closure no matter which
+// member it starts from (a hard-earned correction from the guide, §3 — an early
+// version called `expandTerm` on the bare form alone expecting just its own
+// forms back and silently got the whole group, wrongly treating every bare "LCO"
+// mention as also "matched via full name"). Inert (false) for a tag with no
+// catalogued `ABBREVIATION_GROUPS` entry — most short tags ("electrolyte",
+// "solid state") have none, so this never fires for them, exactly as measured.
+//
+// Rule (c) (`selfDeclaresDifferentSense` above) keeps its existing precedence:
+// it runs first, unconditionally, in `scoreKeyword`'s loop below, and a fired
+// rule (c) already `continue`s past the topic entirely before this is ever
+// reached — an explicit self-declared DISAGREEMENT is stronger evidence than
+// this rule's agreement-by-presence, so it wins outright, unchanged.
+export function matchesFullNameOrFormula(item: RawItem, tag: string): boolean {
+  const canonicalTag = canonicalize(tag);
+  if (!hasKnownAbbreviationExpansion(canonicalTag)) return false;
+  const haystack = itemText(item, "all");
+  const otherVariants = expandTerm(canonicalTag).filter((variant) => variant !== canonicalTag);
+  return otherVariants.some((variant) => termVariantMatches(haystack, variant));
+}
+
 export function scoreKeyword(
   item: RawItem,
   topics: string[],
@@ -562,9 +710,12 @@ export function scoreKeyword(
     // SENSE-CONTEXT (§1ap.3) — DEMOTE, not drop: a short/ambiguous tag's
     // literal hit that fails the context gate keeps its `matched` entry
     // (the tag genuinely IS present) but contributes at the much lower
-    // demoted grounding instead of T1/T2/T3's own.
+    // demoted grounding instead of T1/T2/T3's own. SENSE-CONTEXT-EVIDENCE
+    // (§1bg point 3) — a match that came through the tag's own full name or
+    // chemical formula (not its bare abbreviation) skips the gate entirely;
+    // see `matchesFullNameOrFormula`'s own doc comment.
     let demoted = false;
-    if (opts.senseContext && isShortOrAmbiguous(topic)) {
+    if (opts.senseContext && isShortOrAmbiguous(topic) && !matchesFullNameOrFormula(item, topic)) {
       const gate = senseContextGate(item, topic, opts.senseContext.contextText);
       if (!gate.bypass && !gate.pass) { demoted = true; grounding = SENSE_CONTEXT_DEMOTED_GROUNDING; }
     }
