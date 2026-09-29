@@ -104,7 +104,14 @@ function cleanList(values: (string | undefined)[]): string[] {
 function phrasesFromText(text: string | undefined, max = 8): string[] {
   if (!text) return [];
   const chunks = text
-    .split(/[.;:\n]|(?:\s+-\s+)/)
+    // QUERY-QUALITY (ABC-JEV-INTEGRATION.md §1ay): also split on commas so a
+    // real, comma-joined research sentence ("X, focused on Y and Z...")
+    // yields actual 2-6 word phrases instead of starving this branch and
+    // falling back to single generic words. Measured before this change: 0
+    // of 3 fixtures produced a single multi-word phrase — every sentence ran
+    // past the word cap below without a comma to break on (see
+    // docs/jev-abc/QUERY-QUALITY-B-20260929T084721Z.md §2a).
+    .split(/[.,;:\n]|(?:\s+-\s+)/)
     .map((part) => part.trim())
     .filter((part) => part.length >= 4);
 
@@ -125,6 +132,24 @@ function phrasesFromText(text: string | undefined, max = 8): string[] {
   return cleanList([...longPhrases, ...keywords]).slice(0, max);
 }
 
+// QUERY-QUALITY (ABC-JEV-INTEGRATION.md §1ay): a reader's project/challenge
+// text can be a whole multi-sentence paragraph. Sending that entire paragraph
+// to a source adapter as one literal query wastes a query slot on every
+// source that keeps only its first 2-3 queries (MAX_QUERIES, web/src/lib/
+// sources/*.ts) — measured live at 117,064 in-window OpenAlex candidates
+// with a 0/25 sampled qualify rate for the reader's own Required tag, versus
+// 40-100% for a real short phrase (docs/jev-abc/QUERY-QUALITY-B-20260929T084721Z.md
+// §2b). Only text that is already short enough to BE a phrase is worth
+// sending verbatim; anything longer relies entirely on its own derived
+// phrases (phrasesFromText) instead.
+const MAX_LITERAL_QUERY_WORDS = 6;
+
+function literalQueryIfShort(text: string | undefined): string | undefined {
+  const trimmed = (text ?? "").trim();
+  if (!trimmed) return undefined;
+  return trimmed.split(/\s+/).length <= MAX_LITERAL_QUERY_WORDS ? trimmed : undefined;
+}
+
 function projectQueries(req: FeedRequest, controls: Required<FeedControls>): string[] {
   const topics = req.topics ?? [];
   const methods = req.methods ?? [];
@@ -132,9 +157,9 @@ function projectQueries(req: FeedRequest, controls: Required<FeedControls>): str
   const project = textValue(req.intent?.project ?? { presence: "omitted" }) ?? req.project;
   const challenge = textValue(req.intent?.challenge ?? { presence: "omitted" }) ?? req.challenge;
   const projectTerms = cleanList([
-    project,
+    literalQueryIfShort(project),
     ...phrasesFromText(project, 5),
-    challenge,
+    literalQueryIfShort(challenge),
     ...phrasesFromText(challenge, 5),
     ...seedTexts.flatMap((seed) => phrasesFromText(seed, 5)),
   ]);

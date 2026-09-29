@@ -267,10 +267,21 @@ const CACHE_KEY_VERSION = 6;
 // a paper's `score`/`scoreBreakdown`/grounding can change without its
 // pool MEMBERSHIP changing (same shape as v12/SCORE-ZERO above), so a v13
 // pool scored under the old, hyphen-blind strip set must never be served
-// as if it already reflects the fix. These bumps share their numbers with
+// as if it already reflects the fix. v15 — ABC-JEV-INTEGRATION.md
+// §1ay/QUERY-QUALITY (docs/jev-abc/QUERY-QUALITY-B-20260929T084721Z.md):
+// `profile-compiler.ts`'s `projectQueries` no longer sends a reader's whole
+// multi-sentence project/challenge text as one literal query (only text
+// already short enough to BE a phrase, <=6 words, is still sent verbatim —
+// its derived phrases are sent either way), and `phrasesFromText` now also
+// splits on commas so real 2-6 word phrases survive instead of the branch
+// starving and falling back to single generic words. This changes pool
+// MEMBERSHIP (a v14 pool built under the old raw-paragraph-plus-single-word
+// queries may be missing candidates the corrected phrase queries would have
+// fetched), so a v14 pool must never be served as if it already reflects
+// the fix. These bumps share their numbers with
 // `CACHE_KEY_VERSION` above by coincidence, not by a shared cause — see
 // `derivePoolCacheKey` below for how each is selected.
-const PAPER_CACHE_KEY_VERSION = 14;
+const PAPER_CACHE_KEY_VERSION = 15;
 /**
  * SINGLE SOURCE OF TRUTH for the literal key prefix a durable papers-pool
  * store may accept, derived from `PAPER_CACHE_KEY_VERSION` rather than
