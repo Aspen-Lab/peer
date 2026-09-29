@@ -1,8 +1,17 @@
 // GET /api/jobs/dispatch-digests
 //
-// Cron-triggered hourly. For each enabled user whose local hour matches
-// the current hour in their timezone (and whose frequency rule admits
-// today), runs the feed pipeline and writes a `briefing_deliveries` row.
+// Cron-triggered hourly. For each enabled user whose local hour is AT OR
+// AFTER their chosen local hour on TODAY's local date (and whose frequency
+// rule admits today, and who has not already received a digest on this
+// same local date), runs the feed pipeline and writes a `briefing_deliveries`
+// row. DIGEST-CATCHUP (ABC-JEV-INTEGRATION.md §1bf): GitHub Actions only
+// runs this route's own schedule 3-7 times a real UTC day, not the nominal
+// 24, so the previous exact-hour-match rule silently skipped most readers
+// most days (proven by B's execution against real run history). This
+// "due since, same local date, not yet delivered" rule catches a reader up
+// the first time a run actually lands at or after their chosen hour, and
+// never crosses local midnight to do it -- a reader who is never reached
+// before their local midnight is simply skipped that day, same as today.
 //
 // Triggered by Vercel Cron per vercel.json. Every invocation must carry the
 // shared CRON_SECRET. Merely claiming to be a cron request is not trusted.
@@ -180,6 +189,24 @@ function originUrlFor(req: NextRequest): string {
 export const dynamic = "force-dynamic";
 export const maxDuration = 300; // 5 minutes — digest runs may hit multiple source APIs
 
+// DIGEST-CATCHUP (ABC-JEV-INTEGRATION.md §1bf point 3) -- mirrors
+// prepare-dashboards/route.ts's own PREPARE_DRAIN_WALL_CLOCK_BUDGET_MS
+// (named constant, same "about N seconds of maxDuration" style; that route
+// also confirms this one's maxDuration convention). A run that catches up a
+// real backlog (several readers all newly "due since" at once, after a long
+// gap between GitHub Actions runs -- B measured gaps up to 8.49h) must stop
+// STARTING new readers with enough of the 300s maxDuration left for the
+// reader already in flight to finish and this route to still return a
+// response, instead of being killed mid-loop with no response at all. Every
+// reader not started this run is tallied `deferred_time_budget` below and
+// stays due -- nothing is claimed or written for it -- so the very next run
+// (hourly, or a same-local-date catch-up run later that day) picks it back
+// up; safe by construction, never a duplicate. Checked with a fresh
+// `Date.now()` read each time, deliberately NOT the fixed `now` this route
+// computes once below for hour/date/frequency decisions -- that value must
+// stay pinned for the whole run; this is real elapsed wall-clock time.
+export const DISPATCH_WALL_CLOCK_BUDGET_MS = 240_000; // ~240s of the 300s maxDuration
+
 // TRIGGER-A -- `export` added (purely additive, zero behaviour change) so
 // web/src/app/api/jobs/prepare-dashboards/route.ts can reuse this exact
 // shape/logic instead of a second copy — same treatment
@@ -250,6 +277,34 @@ export function frequencyAdmitsToday(
   return false;
 }
 
+// DIGEST-CATCHUP (ABC-JEV-INTEGRATION.md §1bf point 1) -- pure so it has
+// direct unit tests, independent of any DB mock shape. `today`/each
+// delivered-at value are compared through the SAME `dateInTimezone` helper
+// every other local-date decision in this file already uses (imported
+// above) -- never hand-rolled offset math, per the ruling. An unresolvable
+// timezone makes `dateInTimezone` return null for BOTH `now` and every
+// delivered-at value (same reason -- the Intl formatter itself fails to
+// construct, regardless of instant), so this defensively returns false
+// rather than treat two nulls as equal; in practice this path is already
+// unreachable in the caller below, because an invalid timezone makes
+// `hourInTimezone` return -1, which is always < any valid chosen hour and
+// skips at the hour gate first -- this is a second, independent safety net,
+// not the only one.
+export function hasDeliveryOnLocalDate(
+  deliveredAtValues: (string | null | undefined)[],
+  now: Date,
+  tz: string,
+): boolean {
+  const today = dateInTimezone(now, tz);
+  if (!today) return false;
+  return deliveredAtValues.some((value) => {
+    if (!value) return false;
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return false;
+    return dateInTimezone(parsed, tz) === today;
+  });
+}
+
 export function seedTextsFromRow(row: ProfileRow): string[] {
   return [row.current_project, row.current_challenges]
     .map((text) => text?.trim())
@@ -310,6 +365,7 @@ export async function GET(req: NextRequest) {
 
   const admin = createAdminClient();
   const now = new Date();
+  const startedAtMs = Date.now();
 
   // Only fetch profiles that might fire today — rough pre-filter on
   // digest_enabled + frequency != off. Hour/timezone check happens per row.
@@ -334,9 +390,19 @@ export async function GET(req: NextRequest) {
   const originUrl = originUrlFor(req);
 
   for (const row of rows) {
+    // DIGEST-CATCHUP (§1bf point 1): skip ONLY while this reader's current
+    // local hour has not yet reached their chosen hour -- `<`, never `!==`,
+    // so a later run the same local date catches them up instead of
+    // silently skipping (today's bug: GitHub only runs this route's
+    // schedule 3-7 times a real day, so an exact-hour match was rare).
+    // `hourInTimezone` returns -1 for an unresolvable timezone (fail-safe
+    // sentinel, timezone.ts), and -1 is < every valid digest_hour_local
+    // (0-23 inclusive, so chosen hour 0 is also covered -- this is a
+    // strict numeric compare, never a truthiness check), so an invalid
+    // timezone always lands here and never reaches the send path below.
     const hour = hourInTimezone(now, row.digest_timezone);
-    if (hour !== row.digest_hour_local) {
-      bumpReason(skippedReasons, "hour_mismatch");
+    if (hour < row.digest_hour_local) {
+      bumpReason(skippedReasons, "before_chosen_hour");
       continue;
     }
     const weekday = weekdayInTimezone(now, row.digest_timezone);
@@ -347,6 +413,19 @@ export async function GET(req: NextRequest) {
     const normalizedFeed = digestFeedRequestFromProfile(row);
     if (!normalizedFeed.ok) {
       bumpReason(skippedReasons, "intent_required");
+      continue;
+    }
+
+    // DIGEST-CATCHUP (§1bf point 3): this reader is due and is about to
+    // start real work (DB reads + a feed-pipeline build + possibly an email
+    // send) below -- stop STARTING that work once the run has used most of
+    // its wall-clock budget, so the reader already in flight can finish and
+    // this route can still respond. Checked here (after the cheap gates,
+    // before any per-reader DB call) so a reader who was never going to be
+    // processed this run anyway still reports their TRUE reason above,
+    // regardless of how much budget is left.
+    if (Date.now() - startedAtMs >= DISPATCH_WALL_CLOCK_BUDGET_MS) {
+      bumpReason(skippedReasons, "deferred_time_budget");
       continue;
     }
 
@@ -362,6 +441,57 @@ export async function GET(req: NextRequest) {
       if (recent && recent.length > 0) {
         bumpReason(skippedReasons, "recent_delivery");
         continue;
+      }
+
+      // DIGEST-CATCHUP (§1bf point 1), flag-off path ONLY: the flag-on
+      // path's per-(user_id, local_date) claim RPC (below) is already the
+      // race-proof guarantee, so adding this there too would be redundant
+      // work on that path -- the ruling says explicitly not to. On the
+      // flag-off path (today's actual production default) the 6-hour
+      // lookback above is no longer a safe same-day guard once a catch-up
+      // send can land hours after the reader's chosen hour (DIGEST-CATCHUP
+      // B §2.3: 8 of 66 real gaps between GitHub runs exceeded 6h) -- so
+      // read a wider 26h window and compare LOCAL CALENDAR DATES (via
+      // `hasDeliveryOnLocalDate`, which reuses the same `dateInTimezone`
+      // helper every other local-date decision in this file already calls,
+      // never hand-rolled offset math), not a rolling clock window. Runs
+      // BEFORE the feed pipeline below, same as the 6-hour check above, so
+      // a reader who already got today's email costs nothing extra this
+      // run. A separate query from the 6-hour check above (different
+      // columns/window), per the ruling's explicit allowance -- the 6-hour
+      // check's own shape is untouched.
+      //
+      // DIGEST-CATCHUP §1bf point 9 (AMENDMENT) -- FAILS CLOSED on a read
+      // error: an unchecked `error` here would make a DB hiccup look
+      // identical to "no delivery today" (an empty `data`), which is the
+      // one thing this guard exists to rule out -- a later run in the same
+      // invocation window could then send a real SECOND email the same
+      // local day, exactly the double-send this item was built to close.
+      // So an error is treated as "cannot prove this reader is safe to
+      // process right now", not as "proceed" -- tallied as a failure (never
+      // a skip, since nothing about the reader's own eligibility was
+      // decided), raw DB text only to the private log
+      // (EMAIL-TOKEN-PRIVACY), no pipeline call, no insert, no email. The
+      // reader stays due and is simply re-evaluated fresh next run.
+      if (!isDigestDedupeEnabled()) {
+        const twentySixHoursAgo = new Date(now.getTime() - 26 * 60 * 60 * 1000).toISOString();
+        const { data: recentForDate, error: recentForDateErr } = await admin
+          .from("briefing_deliveries")
+          .select("delivered_at")
+          .eq("user_id", row.user_id)
+          .gte("delivered_at", twentySixHoursAgo);
+        if (recentForDateErr) {
+          bumpReason(failedReasons, "delivery_check_error");
+          logJobIssue("jobs/dispatch-digests", row.user_id, "delivery_check_error", recentForDateErr.message);
+          continue;
+        }
+        const deliveredAtValues = (recentForDate ?? []).map(
+          (d) => (d as { delivered_at?: string }).delivered_at,
+        );
+        if (hasDeliveryOnLocalDate(deliveredAtValues, now, row.digest_timezone)) {
+          bumpReason(skippedReasons, "already_delivered_today");
+          continue;
+        }
       }
 
       // Collect paper IDs delivered to this user in the past 30 days so we
