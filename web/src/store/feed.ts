@@ -185,6 +185,51 @@ function pendingFeedbackKey(itemKind: ItemKind, itemId: string): string {
   return `feedback:${itemKind}:${itemId}`;
 }
 
+// OUTBOX-RETRY (ABC-JEV-INTEGRATION.md §1bc; guide's §2.8 "key-parser
+// helpers, inverse of pendingSavedKey/pendingReadKey/pendingFeedbackKey").
+// `itemId` can itself contain colons — a paper id is "source:nativeId",
+// e.g. "openalex:W2005027801" (api/feedback/route.ts's own
+// resolvedIdsFromItemId splits on the FIRST colon only) — so
+// `pendingSavedKey("paper","openalex:W123")` is 4 colon-separated segments,
+// not 3. A blind `key.split(":")` would truncate the id. Each branch below
+// strips only its own fixed prefix, then (for saved/feedback) splits only
+// on the ONE further colon that ends the kind segment — everything after
+// that is the id, verbatim, however many colons it holds.
+type ParsedPendingKey =
+  | { dimension: "saved"; itemKind: ItemKind; itemId: string }
+  | { dimension: "read"; itemId: string }
+  | { dimension: "feedback"; itemKind: ItemKind; itemId: string };
+
+function isItemKind(value: string): value is ItemKind {
+  return value === "paper" || value === "event" || value === "job";
+}
+
+function parseKindedPendingKey(
+  dimension: "saved" | "feedback",
+  rest: string,
+): ParsedPendingKey | null {
+  const sep = rest.indexOf(":");
+  if (sep < 0) return null;
+  const itemKind = rest.slice(0, sep);
+  const itemId = rest.slice(sep + 1);
+  if (!isItemKind(itemKind) || !itemId) return null;
+  return { dimension, itemKind, itemId };
+}
+
+function parsePendingPushKey(key: string): ParsedPendingKey | null {
+  if (key.startsWith("saved:")) {
+    return parseKindedPendingKey("saved", key.slice("saved:".length));
+  }
+  if (key.startsWith("feedback:")) {
+    return parseKindedPendingKey("feedback", key.slice("feedback:".length));
+  }
+  if (key.startsWith("read:")) {
+    const itemId = key.slice("read:".length);
+    return itemId ? { dimension: "read", itemId } : null;
+  }
+  return null;
+}
+
 // A coarse, synthetic key (none of the 3 real dimensions above can ever
 // collide with it — none is the bare string "migration") for
 // `applyMigrationPushResult`'s failure branch. See that action's own doc
@@ -216,12 +261,70 @@ function setPendingPushPersisted(
   }));
 }
 
+// OUTBOX-RETRY (§1bc point 2; guide §2.3) — the `{title, concepts}` payload
+// a failed `cloudFeedback` attempted, captured at the moment of that
+// failure because it cannot always be reconstructed later (an event/job
+// that was never saved has no persisted pool to look it up in after a
+// reload). Same owner-resolution shape as `setPendingPushPersisted` above,
+// but a separate map rather than widening that one's value type — its
+// value is read/spread/deleted as bare `true` in several places today, so
+// a new field only `cloudFeedback` + `retryPendingPushes` + `resetLocal` +
+// `partialize` need to know about is the smaller, more localized diff.
+function setPendingFeedbackPayload(ownerId: string, key: string, payload: unknown) {
+  useFeedStore.setState((s) => ({
+    pendingFeedbackPayloadByOwner: {
+      ...s.pendingFeedbackPayloadByOwner,
+      [ownerId]: { ...(s.pendingFeedbackPayloadByOwner[ownerId] ?? {}), [key]: payload },
+    },
+  }));
+}
+
+// The matching key resolved — either a later write on the same dimension
+// succeeded, or `cloudFeedback`/`retryPendingPushes` gave up on it (a 4xx,
+// or nothing local left to say — see §2.2). Either way the captured
+// payload no longer describes an outstanding write, so it goes with the
+// key. A no-op if nothing was ever captured for it.
+function clearPendingFeedbackPayload(ownerId: string, key: string) {
+  const current = useFeedStore.getState().pendingFeedbackPayloadByOwner[ownerId];
+  if (!current || !(key in current)) return;
+  const next = { ...current };
+  delete next[key];
+  useFeedStore.setState((s) => ({
+    pendingFeedbackPayloadByOwner: { ...s.pendingFeedbackPayloadByOwner, [ownerId]: next },
+  }));
+}
+
 function updateFeedPushFailedFlag(ok: boolean, key: string) {
   const ownerId = useSyncGate.getState().authUserId;
   if (!ownerId) return;
   if (ok) clearFeedPendingKey(key);
   else markFeedPendingKey(key);
   setPendingPushPersisted(ownerId, key, !ok);
+}
+
+// OUTBOX-RETRY (§1bc AMENDMENT, 2026-09-29T19:0xZ, after fresh A's HIGH
+// finding) — mirrors this file's OWN existing precedent for exactly this
+// question, `acknowledgePendingBatch`'s ApiError handling below (its
+// `err.status === 401 || err.status === 503` branch, which keeps pending
+// for "retry once signed in" / "retry once the server can read the ledger
+// again", versus its 400/404 fallthrough, "retrying this exact call can
+// never succeed differently" — see that action's own try/catch), rather
+// than treating every 4xx alike. Generalized here to the fuller set of
+// codes that are plausibly TRANSIENT (can succeed on a later attempt,
+// nothing wrong with the request itself): 401 (session cookie not yet
+// propagated / a brief refresh gap — acknowledgePendingBatch's own case),
+// 403 (a permission check that can resolve, e.g. after a role or
+// entitlement refresh), 408 (request timeout) and 429 (rate limited) — all
+// four KEEP the key, exactly like a 5xx or a network error already do.
+// Only an ApiError OUTSIDE this allow-list is treated as PERMANENT
+// ("wrong, not just not-yet") — in practice, for this route, a 400
+// (api/feedback/route.ts's only other 4xx path: a missing required
+// field).
+const RETRYABLE_FEEDBACK_STATUS = new Set([401, 403, 408, 429]);
+function isPermanentFeedbackFailure(err: unknown): err is ApiError {
+  if (!(err instanceof ApiError)) return false; // a network error — always transient
+  if (err.status >= 500) return false; // 5xx — always transient
+  return !RETRYABLE_FEEDBACK_STATUS.has(err.status);
 }
 
 async function cloudSave(itemId: string, itemKind: ItemKind, payload: unknown) {
@@ -297,9 +400,35 @@ async function cloudFeedback(
       body: JSON.stringify({ itemId, itemKind, feedback, payload }),
     });
     updateFeedPushFailedFlag(true, key);
+    // OUTBOX-RETRY (guide §2.3) — the write reached the account; whatever a
+    // PRIOR failed attempt captured for this key describes a write that no
+    // longer exists.
+    const ownerId = useSyncGate.getState().authUserId;
+    if (ownerId) clearPendingFeedbackPayload(ownerId, key);
   } catch (err) {
     console.warn("[feed] cloudFeedback failed", err);
+    const ownerId = useSyncGate.getState().authUserId;
+    // §1bc AMENDMENT — give up ONLY on a permanent failure (see
+    // isPermanentFeedbackFailure's own doc comment for the exact
+    // classification, mirrored from acknowledgePendingBatch). A 401/403/
+    // 408/429/5xx/network failure falls through to the same "keep pending"
+    // branch every other status already used before this item existed.
+    if (isPermanentFeedbackFailure(err)) {
+      console.warn(
+        "[feed] cloudFeedback got a permanent client error, giving up on this write",
+        key,
+        err.status,
+      );
+      updateFeedPushFailedFlag(true, key);
+      if (ownerId) clearPendingFeedbackPayload(ownerId, key);
+      return;
+    }
     updateFeedPushFailedFlag(false, key);
+    // OUTBOX-RETRY (guide §2.3) — capture the payload now, while it's still
+    // in scope, so a later retry can resend it even if the item that
+    // produced it (an unsaved event/job — its pool is not persisted) is
+    // gone from local state by the time the retry runs.
+    if (ownerId) setPendingFeedbackPayload(ownerId, key, payload);
   }
 }
 
@@ -732,6 +861,10 @@ interface RealFeedResult {
   papers: Paper[];
   batchId?: string;
   batchStatus?: FeedMeta["batchStatus"];
+  /** EMPTY-STATE-REASON — undefined for every response that predates this
+   *  field, is non-empty, or is a frozen-batch replay with no live reason to
+   *  report; the caller treats "undefined" as "show the generic empty copy". */
+  emptyReasonCode?: FeedMeta["emptyReasonCode"];
 }
 
 async function fetchRealFeed(
@@ -775,6 +908,7 @@ async function fetchRealFeed(
       papers: data.items.map(scoredItemToPaper),
       batchId: data.meta?.batchId,
       batchStatus: data.meta?.batchStatus,
+      emptyReasonCode: data.meta?.emptyReasonCode,
     };
   } catch (err) {
     console.error("[feed] fetch failed:", err);
@@ -1090,6 +1224,17 @@ interface FeedState {
    * Transient: not persisted.
    */
   feedError: string | null;
+  /**
+   * EMPTY-STATE-REASON — ABC-JEV-INTEGRATION.md §1bb. The server's own
+   * honest reason for the last empty paper response, forwarded from
+   * `FeedMeta.emptyReasonCode`. Same transience/atomicity discipline as
+   * `feedError` right above: reset before a papers load starts, set in the
+   * SAME `set()` call as `papers` itself on success, `null` whenever the
+   * response carried none (a non-empty response, a frozen-batch replay, or a
+   * response built before this field existed) — never read stale across
+   * loads.
+   */
+  emptyReasonCode: FeedMeta["emptyReasonCode"] | null;
   /** The required-topics signature the current `papers` were built from. When
    *  it diverges from the profile's topics, the feed page reloads automatically. */
   feedTopicsKey: string | null;
@@ -1259,6 +1404,34 @@ interface FeedState {
    */
   pendingPushByOwner: Record<string, Record<string, true>>;
   /**
+   * OUTBOX-RETRY (ABC-JEV-INTEGRATION.md §1bc point 2; guide's §2.3) — the
+   * `{title, concepts}` payload a failed `cloudFeedback` attempted, one
+   * entry per pending `feedback:<kind>:<id>` key, captured at the moment of
+   * that failure (inside `cloudFeedback`'s own catch branch — see
+   * `setPendingFeedbackPayload`) because it cannot always be reconstructed
+   * later: `<kind>Feedback[id]` (the VALUE) survives a reload, but this
+   * snapshot does not, and for an item that was never saved (`events`/
+   * `jobs`/`eventPool`/`jobPool` are not persisted) nothing else can
+   * recompute it after one. Cleared together with its key, whether that key
+   * resolves by a later success or by `retryPendingPushes`/`cloudFeedback`
+   * giving up on it (§2.2 / §1bc point 3).
+   *
+   * Same owner-namespaced shape and isolation rule as `pendingPushByOwner`
+   * (read/written only through the signed-in owner's own key), but a
+   * separate map rather than widening that one's value type from `true` to
+   * `true | {payload}` — that shared set's value is read/spread/deleted as
+   * bare `true` in `setPendingPushPersisted`, `applyMigrationPushResult`,
+   * and every existing test; a new field only `cloudFeedback` +
+   * `retryPendingPushes` + `resetLocal` + `partialize` need to know about is
+   * the smaller, more localized diff. No version bump needed — a brand-new
+   * key merges in fine under the installed zustand's default `merge`, same
+   * reasoning already recorded next to `pendingPushByOwner` in `partialize`
+   * below. `resetLocal` clears the LEAVING owner's own entry here, for the
+   * identical reason it already clears that owner's `pendingPushByOwner`
+   * entry.
+   */
+  pendingFeedbackPayloadByOwner: Record<string, Record<string, unknown>>;
+  /**
    * P4-S5b — the ids from the most recent successful BATCHLESS render,
    * armed in the SAME `set()` call as `papers`/`renderedBatchId` itself
    * (`papersLane` below), awaiting the same render + visibility
@@ -1426,6 +1599,67 @@ interface FeedState {
   ) => void;
   /** Reset local state — called on sign-out so the next user starts clean. */
   resetLocal: () => void;
+  /**
+   * OUTBOX-RETRY (ABC-JEV-INTEGRATION.md §1bc) — closes the gap the §1aq
+   * CORRECTION named: a reload's migration batch above only ever re-POSTs
+   * items CURRENTLY present in local state, so a pending unsave, mark-
+   * unread, or feedback write (see the RELOAD HONESTY comment above
+   * `cloudSave`) is never retried by anything else. Walks the signed-in
+   * owner's own `pendingPushByOwner` record and, per key, calls the
+   * matching existing `cloudSave`/`cloudUnsave`/`cloudMarkRead`/
+   * `cloudMarkUnread`/`cloudFeedback` helper unchanged — this action's only
+   * job is picking WHICH one to call, and with what arguments; the helpers
+   * themselves already clear their own key on success exactly as they do
+   * for an interactive click.
+   *
+   * Direction is read from CURRENT local state, never from what originally
+   * failed: a `saved:<kind>:<id>` key resends a save when the item is
+   * currently saved, or an unsave when it is currently absent — the same
+   * "latest local state wins" rule for read/unread; a `feedback:<kind>:
+   * <id>` key resends the CURRENT `<kind>Feedback[id]` value, or is DROPPED
+   * (no network call) when nothing is currently asserted for that item.
+   * Resending whatever the ORIGINAL failed write was could resurrect a
+   * state the reader has since reversed — never done here.
+   *
+   * A no-op when signed out. Only ever reads/clears the ONE signed-in
+   * owner's own `pendingPushByOwner`/`pendingFeedbackPayloadByOwner`
+   * entries — never a different owner's. The coarse `MIGRATION_PENDING_KEY`
+   * is left untouched (a full reload already re-attempts that whole batch).
+   * Concurrent calls collapse into the one already running (module-level
+   * `pendingRetryInFlight` guard, mirroring `pendingAckInFlight` above).
+   *
+   * §1bc AMENDMENT (fresh A FAILED_REVIEW, HIGH) — the owner is captured
+   * ONCE at the top of this action, but `resetLocal` (fired by a concurrent
+   * sign-out elsewhere in feed-sync.tsx) is fully synchronous and can land
+   * BETWEEN two keys in the same pass, wiping the local state a later key's
+   * direction check would read while that captured owner is now stale.
+   * Before every key, the pass re-checks — fresh — that the signed-in owner
+   * is still the one it started with AND that the key is still listed as
+   * pending for that owner; either one failing stops the WHOLE pass right
+   * there, never guessing a direction from data that may already belong to
+   * a different owner or an account that was just wiped. An already
+   * in-flight call for an earlier key is left to finish on its own — only
+   * keys not yet started are affected.
+   *
+   * A feedback resend's payload comes ONLY from the captured map
+   * (`pendingFeedbackPayloadByOwner`) — never reconstructed from whatever
+   * the item currently looks like. A key with nothing captured for it (it
+   * predates that capture, or the capture was already cleared) resends
+   * with no payload, the same total loss the write already had before this
+   * item existed.
+   *
+   * A feedback write's own failure is only ever given up on for a
+   * PERMANENT status (see `isPermanentFeedbackFailure`, mirrored from
+   * `acknowledgePendingBatch`'s own precedent) — a 401/403/408/429/5xx/
+   * network failure always keeps the key, exactly like a save/unsave/read/
+   * unread failure already does.
+   *
+   * Called from feed-sync.tsx's `onSession`, right after it seeds the
+   * in-memory pending-key mirror from this device's own persisted record —
+   * so it rides the SAME cadence (mount + every Supabase auth event that
+   * carries a session, including `TOKEN_REFRESHED`) with no new timer.
+   */
+  retryPendingPushes: () => Promise<void>;
 }
 
 // Monotonic token so overlapping loadFeed calls (refresh + topics auto-load +
@@ -1440,6 +1674,33 @@ let feedLoadSeq = 0;
 // same batch. Always reset to null once the in-flight call settles, success
 // or failure, so the next genuinely new call starts fresh.
 let pendingAckInFlight: Promise<void> | null = null;
+
+// OUTBOX-RETRY — module-level guard mirroring `pendingAckInFlight` just
+// above: two overlapping retry passes (e.g. a `TOKEN_REFRESHED` landing
+// while the mount-time retry is still in flight) collapse into the one
+// already running rather than firing duplicate HTTP requests per pending
+// key. Always reset to null once the in-flight pass settles.
+let pendingRetryInFlight: Promise<void> | null = null;
+
+function findSavedItem(
+  state: FeedState,
+  kind: ItemKind,
+  id: string,
+): Paper | Event | Job | undefined {
+  if (kind === "paper") return state.savedPapers.find((p) => p.id === id);
+  if (kind === "event") return state.savedEvents.find((e) => e.id === id);
+  return state.savedJobs.find((j) => j.id === id);
+}
+
+function currentFeedbackValue(
+  state: FeedState,
+  kind: ItemKind,
+  id: string,
+): ItemFeedback | undefined {
+  if (kind === "paper") return state.paperFeedback[id];
+  if (kind === "event") return state.eventFeedback[id];
+  return state.jobFeedback[id];
+}
 
 export const useFeedStore = create<FeedState>()(
   persist(
@@ -1472,6 +1733,7 @@ export const useFeedStore = create<FeedState>()(
       recentlyShownIds: {},
       pendingDismissal: null,
       feedError: null,
+      emptyReasonCode: null,
       paperFeedback: {},
       eventFeedback: {},
       jobFeedback: {},
@@ -1482,6 +1744,7 @@ export const useFeedStore = create<FeedState>()(
       deliveredLocalByOwner: {},
       deliveredLocalOwnerOrder: [],
       pendingPushByOwner: {},
+      pendingFeedbackPayloadByOwner: {},
       pendingLocalDelivery: null,
 
       acknowledgePendingBatch: async () => {
@@ -1642,7 +1905,11 @@ export const useFeedStore = create<FeedState>()(
           papersLoading: wantsPapers,
           eventsLoading: wantsEvents,
           jobsLoading: wantsJobs,
-          ...(wantsPapers ? { feedError: null } : {}),
+          // EMPTY-STATE-REASON — reset alongside feedError, for the same
+          // reason: a stale reason from a previous empty load must not
+          // survive into a load that might succeed with papers, fail
+          // outright, or come back empty for a different reason.
+          ...(wantsPapers ? { feedError: null, emptyReasonCode: null } : {}),
           deliveredLocalOwnerOrder: touchedOwnerOrder,
           deliveredLocalByOwner: touchedByOwner,
         });
@@ -1793,6 +2060,14 @@ export const useFeedStore = create<FeedState>()(
                 batchId: renderedBatchId,
                 batchStatus: realFeed.batchStatus ?? null,
                 renderedBatchId,
+                // EMPTY-STATE-REASON — set in this SAME set() call as
+                // `papers` itself, the same atomicity discipline
+                // `renderedBatchId` above already documents. `null` for
+                // every response that carried none (non-empty, a frozen-
+                // batch replay, or a pre-this-field response) — never left
+                // stale from an earlier load (see this field's own doc
+                // comment on FeedState).
+                emptyReasonCode: realFeed.emptyReasonCode ?? null,
                 // P4-S5b — armed in this SAME set() call, the same
                 // atomicity guarantee `renderedBatchId` itself relies on
                 // (see that field's own comment above). A batched response
@@ -2782,9 +3057,16 @@ export const useFeedStore = create<FeedState>()(
         const pendingPushByOwner = resettingOwnerId
           ? { ...get().pendingPushByOwner, [resettingOwnerId]: {} }
           : get().pendingPushByOwner;
+        // OUTBOX-RETRY — same reasoning, same shape: the leaving owner's
+        // captured feedback payloads describe local data that is about to
+        // be wiped below, same as their pendingPushByOwner entry just above.
+        const pendingFeedbackPayloadByOwner = resettingOwnerId
+          ? { ...get().pendingFeedbackPayloadByOwner, [resettingOwnerId]: {} }
+          : get().pendingFeedbackPayloadByOwner;
         replaceFeedPendingKeys({});
         set({
           pendingPushByOwner,
+          pendingFeedbackPayloadByOwner,
           papers: [],
           events: [],
           jobs: [],
@@ -2843,6 +3125,93 @@ export const useFeedStore = create<FeedState>()(
           // the same device restores it untouched.
           pendingLocalDelivery: null,
         });
+      },
+
+      retryPendingPushes: async () => {
+        // See this action's own doc comment on FeedState for the full
+        // design reasoning (direction-from-current-state, why the 5 cloud*
+        // helpers are reused unchanged, the concurrency guard).
+        const ownerId = useSyncGate.getState().authUserId;
+        if (!ownerId) return;
+        if (pendingRetryInFlight) return pendingRetryInFlight;
+
+        const run = async () => {
+          const owner = get().pendingPushByOwner[ownerId] ?? {};
+          const keys = Object.keys(owner);
+          for (const key of keys) {
+            // §1bc AMENDMENT (fresh A's HIGH finding) — `resetLocal` (fired
+            // by a concurrent SIGNED_OUT elsewhere in feed-sync.tsx) is
+            // fully synchronous and can run BETWEEN two already-awaited
+            // keys in this same pass, wiping the very local state the next
+            // key's direction check would read (savedPapers/readItems/
+            // paperFeedback etc. and this owner's own pendingPushByOwner
+            // entry) while `ownerId` above stays the STALE, captured-once
+            // value. Re-check both, fresh, before every key: a different
+            // owner now signed in (including nobody), OR this key no
+            // longer even listed as pending for the captured owner (e.g.
+            // resetLocal already cleared the whole record) — either one
+            // stops the WHOLE pass here. Never guess a direction from data
+            // that may already describe a different owner or one just
+            // wiped; an already-in-flight call for an EARLIER key (started
+            // before either of these could have changed) is left to finish
+            // on its own — only keys not yet started are affected.
+            if (useSyncGate.getState().authUserId !== ownerId) break;
+            if (!(key in (get().pendingPushByOwner[ownerId] ?? {}))) break;
+            // POLICY 1 — the coarse migration key is covered by the next
+            // reload's own batch, never retried here.
+            if (key === MIGRATION_PENDING_KEY) continue;
+            const parsed = parsePendingPushKey(key);
+            if (!parsed) {
+              console.warn(
+                "[feed] retryPendingPushes: unrecognized pending key, leaving it untouched",
+                key,
+              );
+              continue;
+            }
+            // Read fresh, per key: an earlier await in this same pass could
+            // have raced against a genuinely new interactive action.
+            const state = get();
+            if (parsed.dimension === "saved") {
+              const item = findSavedItem(state, parsed.itemKind, parsed.itemId);
+              if (item) await cloudSave(parsed.itemId, parsed.itemKind, item);
+              else await cloudUnsave(parsed.itemId, parsed.itemKind);
+            } else if (parsed.dimension === "read") {
+              if (state.readItems[parsed.itemId]) await cloudMarkRead(parsed.itemId);
+              else await cloudMarkUnread(parsed.itemId);
+            } else {
+              const value = currentFeedbackValue(state, parsed.itemKind, parsed.itemId);
+              if (value === undefined) {
+                // §2.2 — nothing local left to assert for this item's
+                // feedback (e.g. it was unsaved after the save-feedback
+                // write failed, deleting paperFeedback[id]). Resending the
+                // old value would resurrect a state the reader already
+                // reversed — drop the key (and its captured payload)
+                // instead, without any network call.
+                updateFeedPushFailedFlag(true, key);
+                clearPendingFeedbackPayload(ownerId, key);
+                continue;
+              }
+              // §1bc AMENDMENT (MEDIUM-HIGH finding) — the captured map is
+              // the ONLY source for the payload; no best-effort recompute
+              // from current item data (that contradicted point 2's "retry
+              // never reconstructs it from item data that may be gone").
+              // A key that predates the capture-at-fail-time code (or whose
+              // capture was already cleared) resends with NO payload —
+              // `undefined`, the same total loss today's code already has
+              // for that case — never a guess built from whatever the item
+              // currently looks like.
+              const capturedPayloads =
+                get().pendingFeedbackPayloadByOwner[ownerId] ?? {};
+              const payload = capturedPayloads[key];
+              await cloudFeedback(parsed.itemId, parsed.itemKind, value, payload);
+            }
+          }
+        };
+
+        pendingRetryInFlight = run().finally(() => {
+          pendingRetryInFlight = null;
+        });
+        return pendingRetryInFlight;
       },
     }),
     {
@@ -2922,6 +3291,11 @@ export const useFeedStore = create<FeedState>()(
         // step below) — not required here, since nothing existing changes
         // shape.
         pendingPushByOwner: state.pendingPushByOwner,
+        // OUTBOX-RETRY — same reasoning as pendingPushByOwner just above,
+        // and the same no-version-bump note applies (a brand-new key; the
+        // installed zustand's default `merge` backfills the fresh `{}`
+        // default for any blob persisted before this field existed).
+        pendingFeedbackPayloadByOwner: state.pendingFeedbackPayloadByOwner,
       }),
       migrate: (persistedState, version) => {
         const persisted = persistedState as Partial<FeedState> & {

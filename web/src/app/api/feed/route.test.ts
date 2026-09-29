@@ -831,6 +831,127 @@ describe("/api/feed batch minting (P4-S3)", () => {
   });
 });
 
+// EMPTY-STATE-REASON (ABC-JEV-INTEGRATION.md §1bb) — "live requests only
+// now" (guide §3 option (a), explicitly the option ruled, NOT "(b) persist
+// on DashboardBatch"): there is no new column on `DashboardBatch`, so a
+// same-day replay of an already-minted batch can never recover what the
+// original mint's own live pipeline call computed. Mirrors this file's own
+// "batch minting (P4-S3)" describe block's helpers and "no pipeline call on
+// replay" assertion style (e.g. the F-A-P4S3-02 test above).
+describe("/api/feed empty-reason-code on the ledger-aware path (EMPTY-STATE-REASON, §1bb.3)", () => {
+  function stubSignedInSupabase(userId: string) {
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://example.supabase.co");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "public-test-key");
+    mocks.getUser.mockResolvedValue({ data: { user: { id: userId } } });
+  }
+
+  function workingLedgerBackedByMemory(): MemoryDashboardDeliveryLedger {
+    const ledger = new MemoryDashboardDeliveryLedger();
+    mocks.SupabaseDashboardDeliveryLedgerCtor.mockImplementation(function () {
+      return ledger;
+    });
+    return ledger;
+  }
+
+  it("the first mint of an empty day's batch carries the live-computed emptyReasonCode", async () => {
+    vi.stubEnv("PEER_DASHBOARD_LEDGER", "on");
+    stubSignedInSupabase("owner-esr-mint");
+    workingLedgerBackedByMemory();
+    mocks.runFeedPipeline.mockResolvedValue({
+      items: [],
+      meta: { ...baseMeta(), emptyReasonCode: "no-required-match" },
+    });
+
+    const response = await POST(request({ topics: ["battery"] }));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.items).toEqual([]);
+    expect(body.meta.emptyReasonCode).toBe("no-required-match");
+    expect(mocks.runFeedPipeline).toHaveBeenCalledTimes(1);
+  });
+
+  it("a same-day replay of an existing empty batch never carries emptyReasonCode, even though the original mint's own pipeline call computed one — no DashboardBatch column exists for it", async () => {
+    vi.stubEnv("PEER_DASHBOARD_LEDGER", "on");
+    stubSignedInSupabase("owner-esr-replay");
+    workingLedgerBackedByMemory();
+    mocks.runFeedPipeline.mockResolvedValue({
+      items: [],
+      meta: { ...baseMeta(), emptyReasonCode: "already-delivered" },
+    });
+
+    const first = await POST(request({ topics: ["battery"] }));
+    const firstBody = await first.json();
+    expect(firstBody.meta.emptyReasonCode).toBe("already-delivered"); // sanity: the mint itself carried it
+
+    const second = await POST(request({ topics: ["battery"] }));
+    const secondBody = await second.json();
+
+    expect(mocks.runFeedPipeline).toHaveBeenCalledTimes(1); // NOT called again for the replay
+    expect(secondBody.meta.batchId).toBe(firstBody.meta.batchId);
+    expect(secondBody.meta).not.toHaveProperty("emptyReasonCode");
+  });
+
+  // A request that LOSES the mint race must never donate its OWN pipeline
+  // result's emptyReasonCode to the response — that response is built from
+  // the WINNER's frozen items (`resolveServedItems`/`frozenFeedResponse`),
+  // and a losing call's own live result reflects candidates/exclusions that
+  // are not necessarily what the winner's frozen batch actually is. This is
+  // the exact same "possibly-different winner" reasoning `frozenFeedResponse`
+  // already documents for fetched/errors/searchBrief/aiTierUsed.
+  //
+  // Deterministic by construction, unlike a real `Promise.all` race (whose
+  // winner is genuine, uncontrolled non-determinism — see the existing
+  // "(16m-batch/d) two concurrent first requests" test, which only asserts
+  // consistency, never which side wins): mocking `prepareBatch`'s individual
+  // methods (rather than backing the ledger with a real one) lets this call
+  // reach the mint branch (`getBatch` -> null) while `prepareBatch` reports
+  // back a batch whose `papers` do NOT match what THIS call itself submitted
+  // (empty, since its own `result.items` is `[]`) — exactly what a real
+  // insert-conflict-then-getBatch-retry loss looks like from route.ts's own
+  // point of view, and precisely the shape `wonMintRace` (route.ts) is
+  // computed from.
+  it("a request that loses the mint race does not leak its own pipeline's emptyReasonCode onto the winner's frozen response", async () => {
+    vi.stubEnv("PEER_DASHBOARD_LEDGER", "on");
+    stubSignedInSupabase("owner-esr-race");
+    mocks.SupabaseDashboardDeliveryLedgerCtor.mockImplementation(function () {
+      return {
+        readExclusions: mocks.readExclusions,
+        getBatch: mocks.getBatch,
+        prepareBatch: mocks.prepareBatch,
+        markServed: mocks.markServed,
+      };
+    });
+    mocks.getBatch.mockResolvedValue(null);
+    mocks.readExclusions.mockResolvedValue({ status: "ok", keys: new Set() });
+    // THIS call's own pipeline result: genuinely empty, with a code.
+    mocks.runFeedPipeline.mockResolvedValue({
+      items: [],
+      meta: { ...baseMeta(), emptyReasonCode: "sources-unreachable" },
+    });
+    // ...but prepareBatch reports the OTHER request's already-committed,
+    // non-empty batch as the winner (papers != this call's own []).
+    mocks.prepareBatch.mockResolvedValue({
+      id: "batch-other-winner",
+      ownerId: "owner-esr-race",
+      localDate: localCalendarDate(new Date()),
+      papers: [{ key: "winner-key", aliases: [] }],
+      status: "served" as const,
+      createdAt: new Date().toISOString(),
+      servedItems: [scoredItem("winner-paper")],
+    });
+    mocks.markServed.mockResolvedValue(undefined);
+
+    const response = await POST(request({ topics: ["battery"] }));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.items.map((i: { id: string }) => i.id)).toEqual(["winner-paper"]); // the winner's items, not this call's own []
+    expect(body.meta.batchId).toBe("batch-other-winner");
+    expect(body.meta).not.toHaveProperty("emptyReasonCode"); // this call's own code must not leak onto the winner's response
+  });
+});
+
 describe("/api/feed rollover (P4-S6, F-A-P4-08 remainder, ABC-JEV-INTEGRATION.md §1g/§1p.C.4)", () => {
   function stubSignedInSupabase(userId: string) {
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://example.supabase.co");

@@ -44,7 +44,7 @@ import { PageContainer } from "@/components/ui/page-container";
 import { useReveal } from "@/components/ui/reveal";
 import { LoadingSkeleton } from "@/components/ui";
 import { buttonVariants } from "@/components/ui/button";
-import { emptyReason } from "@/lib/feed/empty-reason";
+import { emptyReason, type EmptyReason } from "@/lib/feed/empty-reason";
 import { briefingDeck } from "@/lib/briefing/deck";
 import { briefingTileLines } from "@/lib/briefing/tile-lines";
 import { buildLibraryGraph } from "@/lib/library/graph";
@@ -76,6 +76,10 @@ function DailyBriefingPage() {
   const readItems = useFeedStore((s) => s.readItems);
   const feedTopicsKey = useFeedStore((s) => s.feedTopicsKey);
   const feedError = useFeedStore((s) => s.feedError);
+  // EMPTY-STATE-REASON (ABC-JEV-INTEGRATION.md §1bb) — the server's own
+  // honest reason for the last empty paper response, threaded into
+  // `emptyReason()` below.
+  const emptyReasonCode = useFeedStore((s) => s.emptyReasonCode);
   const profile = useProfileStore((s) => s.profile);
   const entitlement = useProfileStore((s) => s.entitlement);
   // P4-S5a — acknowledges today's batch once its cards are actually in this
@@ -264,6 +268,7 @@ function DailyBriefingPage() {
     papersCount: papers.length,
     feedError,
     intentRequired: !feedAutoLoadKey,
+    reasonCode: emptyReasonCode ?? undefined,
   });
 
   return (
@@ -608,7 +613,12 @@ function BriefingHead({
 // whose connection had simply dropped. The words live in `copy.ts` with the
 // rest of the briefing's fixed words; the shape is the product's one empty
 // state, shared with /saved, /search, /error and /not-found.
-function BriefingEmpty({
+// EMPTY-STATE-REASON — exported (was module-private) purely so it is
+// directly render-testable, the same reason `ReadingStrip` below is already
+// exported: `page.test.tsx`'s own header comment documents that this repo
+// has no harness for rendering the whole, effectful `DailyBriefingPage`, so
+// individual components are rendered directly instead. No behavior change.
+export function BriefingEmpty({
   reason,
   errorDetail,
   onRetry,
@@ -625,7 +635,17 @@ function BriefingEmpty({
   // produce a card, not the ordinary first-visit path (that path never
   // reaches this component at all: `papers.length > 0` from the sample).
   // "no-topics" is retired — see empty-reason.ts's header comment.
-  reason: "intent-required" | "error" | "empty";
+  //
+  // EMPTY-STATE-REASON — widened from the 3-literal union to the full
+  // `EmptyReason` (adds the 4 server-computed codes). The lookup just below
+  // still only branches on "intent-required" vs everything else: every new
+  // code falls straight into the `else` arm like "empty" already does, and
+  // `BRIEFING_EMPTY`'s 4 new keys supply that arm's title/line per code —
+  // see copy.ts. The action buttons stay untouched by this widening (see the
+  // `actions` prop below): they are keyed only on `reason === "error"`, never
+  // on the specific non-error reason, so ruling §1bb.6 ("buttons stay wired
+  // exactly as today for every non-error reason") holds by construction.
+  reason: EmptyReason;
   errorDetail: string | null;
   onRetry: () => void;
   onRefresh: () => void;

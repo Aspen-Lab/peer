@@ -18,7 +18,7 @@ import { scoreRecency } from "./recency";
 import { scoreSource } from "./source-weight";
 import { generateReason } from "./reason";
 import { shouldPushReviewPaper } from "./review-policy";
-import { normalizePhrase } from "./tokenize";
+import { normalizePhrase, tokenizeFolded } from "./tokenize";
 import { canonicalize, termSpecificity } from "./term-expand";
 import {
   buildPreferenceDocumentFrequency,
@@ -166,6 +166,18 @@ export function scoreItems(
   if (items.length === 0) return [];
   const w = normalizeWeights(weights);
   const index = buildIndex(items);
+  // TOKENIZE-PLURALS (ABC-JEV-INTEGRATION.md §1be point 5, Option B split
+  // — the item shipped the T4 fold only; keyword.ts's SENSE-CONTEXT short-
+  // tag context check stays unfolded, moved to the new item
+  // SENSE-CONTEXT-EVIDENCE) — a second, parallel index built with the
+  // plural-folding tokenizer, used ONLY by the T4 block's own
+  // simTopic/simProject below. `index` above (and the `topicality`/`tp`
+  // ranking signal every scored item gets from it, pass 2) stays built
+  // from the real, unfolded `tokenize()` — unconditional build, same
+  // pattern as `index`: measured no runtime cost (guide §3, "well under
+  // half a second including test-harness overhead" building 2-3 such
+  // indices per profile).
+  const foldedIndex = buildIndex(items, tokenizeFolded);
   const pText = profileText(profile);
   const workText = senseContextText(profile);
   const preferenceDocumentFrequency = buildPreferenceDocumentFrequency(items);
@@ -286,8 +298,14 @@ export function scoreItems(
           const gate = senseContextGate(item, topic, workText); // AMENDMENT 2(i) — workText, not pText
           if (!gate.bypass && !gate.pass) continue;
         }
-        const simTopic = scoreTfidf(item.id, topic, index);
-        const simProject = scoreTfidf(item.id, pText, index);
+        // TOKENIZE-PLURALS (§1be point 5) — folded on both sides (the query text AND
+        // the pool index it's compared against), never mixed: `foldedIndex`
+        // was built with the SAME `tokenizeFolded` passed here, so a plural
+        // mismatch (tag "electrolyte" vs. a paper that only ever says
+        // "electrolytes") now shares a dimension instead of silently
+        // scoring 0 overlap on that word.
+        const simTopic = scoreTfidf(item.id, topic, foldedIndex, tokenizeFolded);
+        const simProject = scoreTfidf(item.id, pText, foldedIndex, tokenizeFolded);
         // "margin = max over the admitting path(s)" (§1ao ruling 3) — only a
         // path that actually cleared its own floor contributes a margin.
         const margins: number[] = [];

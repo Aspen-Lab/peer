@@ -6,6 +6,7 @@ import {
   ABBREVIATION_GROUPS,
   canonicalize,
   expandTerm,
+  singularize,
   termMatches,
   termSpecificity,
 } from "./term-expand";
@@ -205,5 +206,119 @@ describe("scoreKeyword", () => {
       }).matched,
     ).toEqual(["electrochemistry"]);
     expect(scoreKeyword(item, ["battery"]).matched).toEqual(["battery"]);
+  });
+});
+
+// TOKENIZE-PLURALS (ABC-JEV-INTEGRATION.md §1be point 5) — `singularize` was
+// a private helper behind `isGenericTerm` until this item; it is now also
+// reused (exported, not copied) by tokenize.ts's `tokenizeFolded`, applied
+// to arbitrary document text at the Required-gate T4 comparison ONLY (the
+// item shipped Option B's T4 half; the SENSE-CONTEXT short-tag context
+// check stays unfolded — folding it exposed a separate, pre-existing path
+// defect, moved to the new item SENSE-CONTEXT-EVIDENCE). These tests pin
+// the guide's §2.4 validated rule directly, independent of any one T4
+// fixture.
+describe("singularize — protected words (guide §2.4)", () => {
+  it.each(["physics", "mathematics", "kinetics", "ceramics", "electronics", "optics"])(
+    "does not fold a science-writing '-ics' word that only looks plural: %s",
+    (word) => {
+      expect(singularize(word)).toBe(word);
+    },
+  );
+
+  it.each(["arthritis", "osmosis", "synopsis"])(
+    "does not fold a '-itis/-osis/-opsis' word: %s",
+    (word) => {
+      expect(singularize(word)).toBe(word);
+    },
+  );
+
+  it("does not fold 'species' to the nonsense 'specy'", () => {
+    expect(singularize("species")).toBe("species");
+  });
+
+  it("does not fold a short acronym+s form ('sems', from tokenized 'SEMs')", () => {
+    expect(singularize("sems")).toBe("sems");
+  });
+
+  it("still folds a genuine plural to its singular (protection is not over-broad)", () => {
+    expect(singularize("glasses")).toBe("glass");
+    expect(singularize("electrolytes")).toBe("electrolyte");
+    expect(singularize("cathodes")).toBe("cathode");
+  });
+
+  it("leaves an already-singular bare word untouched (too short to trigger the guard)", () => {
+    expect(singularize("gas")).toBe("gas");
+    expect(singularize("glass")).toBe("glass");
+  });
+
+  // §1be AMENDMENT g — "gases"/"biases"/"lenses" are the 3 real "-es"
+  // (not plain "-s") plurals the plain "-s" rule cannot reach once "-ses"
+  // no longer strips 2 for a single "s". Tripwire, not a claim of
+  // correctness: this is a named, ACCEPTED under-fold (stays unmerged,
+  // never a false merge) — today's shipped behaviour either way, since the
+  // plain "-s" rule already mishandles the unrelated "focus"/"virus" the
+  // same way. If this ever starts asserting "gas" again, the "-ses" rule
+  // has silently widened back to swallowing single-s "-ses" words, which
+  // is exactly the false-merge bug this amendment fixed (doses -> "dos").
+  it("gases is an accepted under-fold, not 'gas' (§1be AMENDMENT g)", () => {
+    expect(singularize("gases")).toBe("gase");
+  });
+});
+
+// §1be AMENDMENT g — a census of the shipped reference-idf.json's 17,489
+// keys found 68 real "-ses" keys; the OLD "-ses -> strip 2" rule was wrong
+// for 46 of them (a plain, silent-e "-s" plural only ever needs 1 stripped)
+// and created 5 real false merges (a DIFFERENT, unrelated key existed at
+// the over-stripped form). Only a true double-consonant "-sses" strips 2.
+describe("singularize — the '-ses' regression (§1be AMENDMENT g, found by a whole-table census)", () => {
+  it.each([
+    ["phases", "phase"],
+    ["cases", "case"],
+    ["responses", "response"],
+  ])("folds the plain '-ses' plural %s to %s (strip 1, not 2)", (plural, singular) => {
+    expect(singularize(plural)).toBe(singular);
+  });
+
+  it("folds 'doses' to 'dose' — never the false merge 'dos' (the density-of-states abbreviation)", () => {
+    expect(singularize("doses")).toBe("dose");
+  });
+
+  it("still strips 2 for a true double-consonant '-sses' plural", () => {
+    expect(singularize("processes")).toBe("process");
+    expect(singularize("glasses")).toBe("glass");
+  });
+});
+
+// §1be AMENDMENT h — the irregular map's own "pick the shorter form" test
+// can never select "analysis" for "analyses" (same length, 8 == 8); fixed
+// by also accepting a same-length irregular target ending in "sis".
+describe("singularize — 'analyses' -> 'analysis' (§1be AMENDMENT h)", () => {
+  it("folds the irregular round-trip pair correctly in both directions", () => {
+    expect(singularize("analyses")).toBe("analysis");
+    expect(singularize("analysis")).toBe("analysis"); // already singular, protected-suffix guard
+  });
+});
+
+describe("singularize — the '-izes/-yzes' regression (guide §2.4, a real bug B found and fixed)", () => {
+  // A bare `(?:ch|sh|x|z)es$` -> strip-2 rule cannot distinguish a true
+  // double-consonant plural ("buzz"+"es"="buzzes") from a silent-e verb
+  // ("analyze"+"s"="analyzes") — both end in "zes". Stripping 2 off the
+  // second family produces a broken fragment instead of the real singular.
+  it.each([
+    ["analyzes", "analyze"],
+    ["optimizes", "optimize"],
+    ["synthesizes", "synthesize"],
+    ["utilizes", "utilize"],
+    ["recognizes", "recognize"],
+    ["characterizes", "characterize"],
+  ])("folds the silent-e '-izes' verb %s to %s, not a broken fragment", (plural, singular) => {
+    const folded = singularize(plural);
+    expect(folded).toBe(singular);
+    expect(folded).not.toBe(plural.slice(0, -2)); // the old bug's output (stripped 2, not 1)
+  });
+
+  it("still folds a true double-consonant '-zzes' plural by stripping 2 (buzz-class)", () => {
+    expect(singularize("buzzes")).toBe("buzz");
   });
 });

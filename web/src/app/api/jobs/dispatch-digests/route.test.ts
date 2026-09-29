@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
-import { GET, digestFeedRequestFromProfile } from "./route";
+import { GET, digestFeedRequestFromProfile, hasDeliveryOnLocalDate } from "./route";
 import { selectedSenseConcept } from "@/lib/feed/senses";
 
 // P4-S7 (Round 3) -- F-A-P4-07 (double-send race) / F-A-P4-04 (dashboard
@@ -71,6 +71,55 @@ describe("GET /api/jobs/dispatch-digests", () => {
   });
 });
 
+// DIGEST-CATCHUP (ABC-JEV-INTEGRATION.md §1bf point 1) -- direct unit tests
+// for the new pure helper, independent of any DB mock shape.
+describe("hasDeliveryOnLocalDate (pure)", () => {
+  it("true when a delivered-at value falls on the same local date as now", () => {
+    const now = new Date("2026-09-24T20:00:00.000Z"); // 2026-09-24 in UTC
+    const deliveredAt = new Date("2026-09-24T09:00:00.000Z").toISOString(); // same UTC date, 11h earlier
+    expect(hasDeliveryOnLocalDate([deliveredAt], now, "UTC")).toBe(true);
+  });
+
+  it("false when every delivered-at value falls on a different local date", () => {
+    const now = new Date("2026-09-24T09:00:00.000Z");
+    const deliveredAt = new Date("2026-09-23T09:00:00.000Z").toISOString();
+    expect(hasDeliveryOnLocalDate([deliveredAt], now, "UTC")).toBe(false);
+  });
+
+  it("compares LOCAL dates, not raw UTC dates: a delivery just after UTC midnight can still be 'yesterday' in a negative-offset zone", () => {
+    // 2026-09-24T02:00:00Z is 2026-09-23 19:00 in America/Los_Angeles
+    // (PDT, UTC-7) -- still the PREVIOUS owner-local day.
+    const now = new Date("2026-09-24T20:00:00.000Z"); // 13:00 PDT, 2026-09-24 locally
+    const deliveredAt = "2026-09-24T02:00:00.000Z"; // 19:00 PDT, 2026-09-23 locally
+    expect(hasDeliveryOnLocalDate([deliveredAt], now, "America/Los_Angeles")).toBe(false);
+  });
+
+  it("empty input is never treated as a match", () => {
+    expect(hasDeliveryOnLocalDate([], new Date("2026-09-24T12:00:00.000Z"), "UTC")).toBe(false);
+  });
+
+  it("null/undefined entries in the list are skipped safely, never thrown", () => {
+    const now = new Date("2026-09-24T12:00:00.000Z");
+    expect(() => hasDeliveryOnLocalDate([null, undefined], now, "UTC")).not.toThrow();
+    expect(hasDeliveryOnLocalDate([null, undefined], now, "UTC")).toBe(false);
+  });
+
+  it("one matching value among several non-matching ones is enough", () => {
+    const now = new Date("2026-09-24T12:00:00.000Z");
+    const values = [
+      new Date("2026-09-20T12:00:00.000Z").toISOString(),
+      new Date("2026-09-22T12:00:00.000Z").toISOString(),
+      new Date("2026-09-24T01:00:00.000Z").toISOString(), // same UTC date as now
+    ];
+    expect(hasDeliveryOnLocalDate(values, now, "UTC")).toBe(true);
+  });
+
+  it("an unresolvable timezone returns false defensively (never a false 'already delivered' block)", () => {
+    const now = new Date("2026-09-24T12:00:00.000Z");
+    expect(hasDeliveryOnLocalDate([now.toISOString()], now, "Not/A_Zone")).toBe(false);
+  });
+});
+
 // ── P4-S7 (Round 3) -- F-A-P4-07 double-send close + F-A-P4-04 dashboard-
 // ledger independence, ABC-JEV-INTEGRATION.md §1p.C.10 ────────────────────
 //
@@ -94,6 +143,13 @@ function makeAdminClient(options: {
   profiles: unknown[];
   recent?: { data: unknown; error: unknown };
   past?: { data: unknown; error: unknown };
+  /** DIGEST-CATCHUP (§1bf point 1): the new 26h same-local-date guard's own
+   * query (`select("delivered_at")`), kept distinct from `recent` (the
+   * pre-existing 6h `select("id")` lookback) and `past` (the pre-existing
+   * 30-day `select("item_ids")` exclusion) so a test can set each
+   * independently. Defaults to empty, same as the other two -- a test that
+   * doesn't care about this guard sees no behaviour change. */
+  sameDate?: { data: unknown; error: unknown };
   insert?: { data: unknown; error: unknown };
   rpc?: { data: unknown; error: unknown };
   getUserById?: { data: unknown; error: unknown };
@@ -119,6 +175,15 @@ function makeAdminClient(options: {
         },
       ),
   );
+  // DIGEST-CATCHUP: wrapped as a spy (was a plain arrow function) so a test
+  // can assert WHICH `briefing_deliveries` column sets were actually
+  // queried -- in particular, that the new 26h same-date guard's
+  // `"delivered_at"` select is never issued on the flag-on path.
+  const selectFn = vi.fn((cols: string) => {
+    if (cols === "id") return chain(options.recent ?? { data: [], error: null });
+    if (cols === "delivered_at") return chain(options.sameDate ?? { data: [], error: null });
+    return chain(options.past ?? { data: [], error: null });
+  });
   const client = {
     from: (table: string) => {
       if (table === "profiles") {
@@ -132,10 +197,7 @@ function makeAdminClient(options: {
       }
       if (table === "briefing_deliveries") {
         return {
-          select: (cols: string) =>
-            cols === "id"
-              ? chain(options.recent ?? { data: [], error: null })
-              : chain(options.past ?? { data: [], error: null }),
+          select: selectFn,
           insert: insertFn,
         };
       }
@@ -144,7 +206,7 @@ function makeAdminClient(options: {
     rpc: rpcFn,
     auth: { admin: { getUserById: getUserByIdFn } },
   };
-  return { client, insertFn, rpcFn, getUserByIdFn };
+  return { client, insertFn, rpcFn, getUserByIdFn, selectFn };
 }
 
 function profileRow(overrides: Record<string, unknown> = {}) {
@@ -758,5 +820,303 @@ describe("GET /api/jobs/dispatch-digests -- never schedules the Jev shadow (P3-S
       expect(call).toHaveLength(1);
       expect((call[0] as Record<string, unknown>)).not.toHaveProperty("onFreshShortlist");
     }
+  });
+});
+
+// ── DIGEST-CATCHUP (ABC-JEV-INTEGRATION.md §1bf) ──────────────────────────
+// GitHub Actions only runs this route's own schedule 3-7 times per real UTC
+// day (B's execution against real run history), so the old exact-hour-match
+// rule silently skipped most readers most days. This block covers the new
+// "due since, same local date, not yet delivered" rule: the hour gate
+// (`<` instead of `!==`, reason `before_chosen_hour`), the flag-off-only
+// same-local-date guard (`already_delivered_today`, a separate 26h query
+// from the pre-existing 6h lookback), and the wall-clock time budget
+// (`deferred_time_budget`, mirroring prepare-dashboards/route.ts's own
+// named-constant pattern). Reuses this file's own `makeAdminClient`/
+// `profileRow`/`authedRequest`/`chain` helpers, extended additively above
+// (a `sameDate` mock option + `selectFn` returned as a spy) -- every
+// existing caller of `makeAdminClient` in this file is unaffected, since
+// both additions default to empty/unused.
+describe("GET /api/jobs/dispatch-digests -- DIGEST-CATCHUP (§1bf): catch-up hour rule + same-date guard + time budget", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubEnv("CRON_SECRET", "test-secret");
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-24T15:00:00.000Z"));
+    mocks.runFeedPipeline.mockResolvedValue({ items: [], meta: {} });
+    mocks.sendDigestEmail.mockResolvedValue({ sent: true, messageId: "msg-1" });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("a reader due earlier today (current local hour > chosen hour) is caught up and sent on a later run", async () => {
+    const { client, insertFn } = makeAdminClient({
+      profiles: [profileRow({ digest_hour_local: 9 })],
+    });
+    mocks.createAdminClient.mockReturnValue(client);
+    vi.setSystemTime(new Date("2026-09-24T15:00:00.000Z")); // chosen 9, run lands at local hour 15
+
+    const response = await GET(authedRequest());
+    const body = await response.json();
+
+    expect(body.dispatched_count).toBe(1);
+    expect(insertFn).toHaveBeenCalledTimes(1);
+    expect(mocks.sendDigestEmail).toHaveBeenCalledTimes(1);
+    expect(body.skipped_reasons.before_chosen_hour).toBeUndefined();
+  });
+
+  it("a reader whose local hour has not reached their chosen hour yet is skipped before_chosen_hour, never sent", async () => {
+    const { client, insertFn } = makeAdminClient({
+      profiles: [profileRow({ digest_hour_local: 20 })],
+    });
+    mocks.createAdminClient.mockReturnValue(client);
+    vi.setSystemTime(new Date("2026-09-24T15:00:00.000Z")); // chosen 20, run at local hour 15 -- not yet due
+
+    const response = await GET(authedRequest());
+    const body = await response.json();
+
+    expect(body.skipped_reasons).toEqual({ before_chosen_hour: 1 });
+    expect(body.dispatched_count).toBe(0);
+    expect(insertFn).not.toHaveBeenCalled();
+    expect(mocks.sendDigestEmail).not.toHaveBeenCalled();
+  });
+
+  it("a second run on the same local date is skipped already_delivered_today even when it comes MORE than 6 hours after the first send", async () => {
+    const first = makeAdminClient({ profiles: [profileRow({ digest_hour_local: 9 })] });
+    mocks.createAdminClient.mockReturnValue(first.client);
+    vi.setSystemTime(new Date("2026-09-24T09:00:00.000Z")); // exact-hour match -- sends
+    const firstDeliveredAt = new Date("2026-09-24T09:00:00.000Z").toISOString();
+
+    const firstResponse = await GET(authedRequest());
+    const firstBody = await firstResponse.json();
+    expect(firstBody.dispatched_count).toBe(1);
+    expect(first.insertFn).toHaveBeenCalledTimes(1);
+
+    // 9 hours later -- past the 6-hour lookback, still the same UTC calendar
+    // date (09:00Z -> 18:00Z is still 2026-09-24).
+    vi.setSystemTime(new Date("2026-09-24T18:00:00.000Z"));
+    const second = makeAdminClient({
+      profiles: [profileRow({ digest_hour_local: 9 })],
+      recent: { data: [], error: null }, // > 6h ago: the OLD 6h guard finds nothing
+      sameDate: { data: [{ delivered_at: firstDeliveredAt }], error: null },
+    });
+    mocks.createAdminClient.mockReturnValue(second.client);
+
+    const secondResponse = await GET(authedRequest());
+    const secondBody = await secondResponse.json();
+
+    expect(secondBody.dispatched_count).toBe(0);
+    expect(secondBody.skipped_reasons).toEqual({ already_delivered_today: 1 });
+    expect(second.insertFn).not.toHaveBeenCalled();
+    expect(mocks.sendDigestEmail).toHaveBeenCalledTimes(1); // only the first run's send
+  });
+
+  it("two runs close together (< 6h apart, same date): the 6-hour lookback still wins over the new same-date guard", async () => {
+    const first = makeAdminClient({ profiles: [profileRow({ digest_hour_local: 9 })] });
+    mocks.createAdminClient.mockReturnValue(first.client);
+    vi.setSystemTime(new Date("2026-09-24T09:00:00.000Z"));
+    await GET(authedRequest());
+
+    vi.setSystemTime(new Date("2026-09-24T11:00:00.000Z")); // 2h later, same date
+    const second = makeAdminClient({
+      profiles: [profileRow({ digest_hour_local: 9 })],
+      recent: { data: [{ id: 1 }], error: null }, // within 6h: the OLD guard fires
+      sameDate: { data: [{ delivered_at: "2026-09-24T09:00:00.000Z" }], error: null }, // also true, must not win
+    });
+    mocks.createAdminClient.mockReturnValue(second.client);
+
+    const response = await GET(authedRequest());
+    const body = await response.json();
+
+    expect(body.skipped_reasons).toEqual({ recent_delivery: 1 });
+    expect(second.insertFn).not.toHaveBeenCalled();
+  });
+
+  // DIGEST-CATCHUP §1bf point 9 (AMENDMENT) -- the manager's diff read found
+  // the 26h same-date read originally ignored its own `error`, so a DB
+  // hiccup looked identical to "no delivery today" and would let a later
+  // run send a real second email the same local day (fails OPEN). Fixed to
+  // fail CLOSED: an error here means "cannot prove this reader is safe",
+  // not "proceed".
+  it("the 26h same-date read failing (a DB error) fails CLOSED: no pipeline call, no insert, no email, tallied delivery_check_error, no raw error text in the response", async () => {
+    const { client, insertFn } = makeAdminClient({
+      profiles: [profileRow({ digest_hour_local: 9 })],
+      sameDate: { data: null, error: { message: "connection reset" } },
+    });
+    mocks.createAdminClient.mockReturnValue(client);
+    vi.setSystemTime(new Date("2026-09-24T15:00:00.000Z")); // chosen 9, run at 15 -- due, reaches the guard
+
+    const response = await GET(authedRequest());
+    const body = await response.json();
+
+    expect(mocks.runFeedPipeline).not.toHaveBeenCalled();
+    expect(insertFn).not.toHaveBeenCalled();
+    expect(mocks.sendDigestEmail).not.toHaveBeenCalled();
+    expect(body.failed_reasons).toEqual({ delivery_check_error: 1 });
+    expect(body.dispatched_count).toBe(0);
+    // EMAIL-TOKEN-PRIVACY: the raw DB error text goes only to the private
+    // server log (logJobIssue), never the response.
+    expect(JSON.stringify(body)).not.toContain("connection reset");
+  });
+
+  it("the first run after local midnight sends for an early-hour reader while a late-hour (23) reader stays before_chosen_hour -- no cross-midnight leak from 'yesterday'", async () => {
+    const rows = [
+      profileRow({ user_id: "user-early", digest_email: "early@example.test", digest_hour_local: 1 }),
+      profileRow({ user_id: "user-late", digest_email: "late@example.test", digest_hour_local: 23 }),
+    ];
+    const { client, insertFn } = makeAdminClient({ profiles: rows });
+    mocks.createAdminClient.mockReturnValue(client);
+    vi.setSystemTime(new Date("2026-09-25T02:00:00.000Z")); // 02:00 UTC -- a new local date
+
+    const response = await GET(authedRequest());
+    const body = await response.json();
+
+    expect(body.dispatched_count).toBe(1); // only user-early
+    expect(insertFn).toHaveBeenCalledTimes(1);
+    expect(insertFn.mock.calls[0]?.[0]).toMatchObject({ user_id: "user-early" });
+    // user-late is simply "not yet due TODAY" -- never a retroactive send for
+    // whatever they may have missed yesterday, and never a distinct reason.
+    expect(body.skipped_reasons).toEqual({ before_chosen_hour: 1 });
+  });
+
+  it("chosen hour 0 (the falsy trap) sends once the reader's local hour reaches 0 -- a strict numeric compare, never a truthiness check", async () => {
+    const { client, insertFn } = makeAdminClient({
+      profiles: [profileRow({ digest_hour_local: 0 })],
+    });
+    mocks.createAdminClient.mockReturnValue(client);
+    vi.setSystemTime(new Date("2026-09-24T00:00:00.000Z")); // local hour 0, exact match
+
+    const response = await GET(authedRequest());
+    const body = await response.json();
+
+    expect(body.dispatched_count).toBe(1);
+    expect(insertFn).toHaveBeenCalledTimes(1);
+    expect(body.skipped_reasons.before_chosen_hour).toBeUndefined();
+  });
+
+  it("DST spring-forward day (America/Chicago, 2026-03-08): a chosen local hour that never literally occurs that day (the clock jumps 01:59:59 CST -> 03:00:00 CDT, skipping 02:00-02:59) is still caught up by the first later run", async () => {
+    const { client, insertFn } = makeAdminClient({
+      profiles: [profileRow({ digest_timezone: "America/Chicago", digest_hour_local: 2 })],
+    });
+    mocks.createAdminClient.mockReturnValue(client);
+    vi.setSystemTime(new Date("2026-03-08T08:01:00.000Z")); // 03:01 CDT (this file's own established DST fixture)
+
+    const response = await GET(authedRequest());
+    const body = await response.json();
+
+    expect(body.dispatched_count).toBe(1);
+    expect(insertFn).toHaveBeenCalledTimes(1);
+  });
+
+  it("a weekly reader caught up on a non-Monday is still skipped by the frequency gate, never sent", async () => {
+    const { client, insertFn } = makeAdminClient({
+      profiles: [profileRow({ digest_frequency: "weekly", digest_hour_local: 9 })],
+    });
+    mocks.createAdminClient.mockReturnValue(client);
+    vi.setSystemTime(new Date("2026-03-10T15:00:00.000Z")); // Tuesday (2026-03-09 is the established Monday fixture), hour 15 -- "due" by the new hour rule alone
+
+    const response = await GET(authedRequest());
+    const body = await response.json();
+
+    expect(body.skipped_reasons).toEqual({ frequency_skip: 1 });
+    expect(insertFn).not.toHaveBeenCalled();
+  });
+
+  it("a weekdays reader caught up on a Saturday is still skipped by the frequency gate, never sent", async () => {
+    const { client, insertFn } = makeAdminClient({
+      profiles: [profileRow({ digest_frequency: "weekdays", digest_hour_local: 9 })],
+    });
+    mocks.createAdminClient.mockReturnValue(client);
+    vi.setSystemTime(new Date("2026-03-14T15:00:00.000Z")); // Saturday, hour 15
+
+    const response = await GET(authedRequest());
+    const body = await response.json();
+
+    expect(body.skipped_reasons).toEqual({ frequency_skip: 1 });
+    expect(insertFn).not.toHaveBeenCalled();
+  });
+
+  it("flag-on path: the catch-up hour rule composes with the existing claim/already_claimed ladder unchanged; the new same-date query is never issued", async () => {
+    vi.stubEnv("PEER_DIGEST_DEDUPE", "on");
+    const { client, rpcFn, selectFn } = makeAdminClient({
+      profiles: [profileRow({ digest_hour_local: 9 })],
+    });
+    rpcFn
+      .mockResolvedValueOnce({ data: [{ id: 301 }], error: null }) // first run claims it
+      .mockResolvedValueOnce({ data: [], error: null }); // second run: already claimed
+    mocks.createAdminClient.mockReturnValue(client);
+    vi.setSystemTime(new Date("2026-09-24T15:00:00.000Z")); // chosen 9, run at 15 -- catch-up
+
+    const first = await GET(authedRequest());
+    const firstBody = await first.json();
+    const second = await GET(authedRequest());
+    const secondBody = await second.json();
+
+    expect(firstBody.dispatched_count).toBe(1);
+    expect(secondBody.skipped_reasons).toEqual({ already_claimed: 1 });
+    expect(mocks.sendDigestEmail).toHaveBeenCalledTimes(1);
+    // DIGEST-CATCHUP point 1: "Do NOT add it to the flag-on path."
+    expect(selectFn.mock.calls.some((call) => call[0] === "delivered_at")).toBe(false);
+  });
+
+  it("the wall-clock budget defers the remaining readers with an exact per-reader tally once real elapsed time crosses the budget", async () => {
+    const rows = [
+      profileRow({ user_id: "user-a", digest_email: "a@example.test" }),
+      profileRow({ user_id: "user-b", digest_email: "b@example.test" }),
+      profileRow({ user_id: "user-c", digest_email: "c@example.test" }),
+    ]; // all default digest_hour_local:15, matching the system time below -- all due
+    const { client } = makeAdminClient({ profiles: rows });
+    mocks.createAdminClient.mockReturnValue(client);
+    vi.setSystemTime(new Date("2026-09-24T15:00:00.000Z"));
+
+    // Simulate a slow first pipeline build that eats almost the whole
+    // wall-clock budget in real elapsed time -- by the time row 2 is
+    // considered, DISPATCH_WALL_CLOCK_BUDGET_MS (240_000ms) has already
+    // passed. `vi.advanceTimersByTime` moves the fake `Date.now()` without
+    // touching the already-captured logical `now` used for hour/date
+    // decisions (verified above: row 1 through row 3 all still evaluate the
+    // SAME hour/frequency/intent gates correctly).
+    mocks.runFeedPipeline.mockImplementationOnce(async () => {
+      vi.advanceTimersByTime(250_000);
+      return { items: [], meta: {} };
+    });
+
+    const response = await GET(authedRequest());
+    const body = await response.json();
+
+    expect(mocks.runFeedPipeline).toHaveBeenCalledTimes(1); // rows 2 & 3 never started
+    expect(body.dispatched_count).toBe(1);
+    expect(body.skipped_reasons).toEqual({ deferred_time_budget: 2 });
+    expect(mocks.sendDigestEmail).toHaveBeenCalledTimes(1);
+  });
+
+  it("an invalid timezone never sends, for any chosen hour including 0 -- hourInTimezone's fail-safe -1 sentinel is always < a valid chosen hour", async () => {
+    const rows = [
+      profileRow({
+        user_id: "user-x",
+        digest_email: "x@example.test",
+        digest_timezone: "Not/A_Zone",
+        digest_hour_local: 0,
+      }),
+      profileRow({
+        user_id: "user-y",
+        digest_email: "y@example.test",
+        digest_timezone: "Not/A_Zone",
+        digest_hour_local: 12,
+      }),
+    ];
+    const { client, insertFn } = makeAdminClient({ profiles: rows });
+    mocks.createAdminClient.mockReturnValue(client);
+    vi.setSystemTime(new Date("2026-09-24T15:00:00.000Z"));
+
+    const response = await GET(authedRequest());
+    const body = await response.json();
+
+    expect(body.skipped_reasons).toEqual({ before_chosen_hour: 2 });
+    expect(body.dispatched_count).toBe(0);
+    expect(insertFn).not.toHaveBeenCalled();
+    expect(mocks.sendDigestEmail).not.toHaveBeenCalled();
   });
 });

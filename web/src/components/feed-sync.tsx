@@ -194,6 +194,15 @@ export function FeedSync() {
         replaceFeedPendingKeys(
           useFeedStore.getState().pendingPushByOwner[userId] ?? {},
         );
+        // OUTBOX-RETRY (ABC-JEV-INTEGRATION.md §1bc) — rides this SAME
+        // cadence (mount + every Supabase auth event that carries a
+        // session, including TOKEN_REFRESHED — see this function's own doc
+        // comment) to retry whatever the seed above just showed is still
+        // outstanding: an unsave/mark-unread/feedback failure the batch
+        // below never covers (it only ever re-POSTs items CURRENTLY
+        // present locally). Fire-and-forget, like every cloud* push in this
+        // file; no new timer or schedule.
+        void useFeedStore.getState().retryPendingPushes();
       }
       if (!userId || didInitialSyncRef.current) return;
       didInitialSyncRef.current = true;

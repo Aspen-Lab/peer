@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse, after } from "next/server";
 import { runFeedPipeline, type FeedPipelineOptions } from "@/lib/feed/pipeline";
-import type { FeedRequest, FeedResponse, SearchConnectors } from "@/lib/feed/types";
+import type { FeedRequest, FeedResponse, FeedEmptyReasonCode, SearchConnectors } from "@/lib/feed/types";
 import type { ProviderOverrideConfig } from "@/lib/llm/providers/types";
 import type { SourceId } from "@/lib/sources/types";
 import type { ScoredItem } from "@/lib/scoring/types";
@@ -92,6 +92,18 @@ const RECONSTRUCTION_TOP_N = 200;
  * was actually served. `items.length` stands in for
  * beforeDedup/afterDedup/returned — this is a replay of an already-decided
  * batch, not necessarily a fresh build on this exact request.
+ *
+ * EMPTY-STATE-REASON — ABC-JEV-INTEGRATION.md §1bb ("live requests only
+ * now"; guide §3 option (a)). `emptyReasonCode` is optional and, for the
+ * exact same "possibly-different winner" reason as every other diagnostic
+ * this function already omits, must only ever be passed by a caller that
+ * just froze ITS OWN fresh pipeline result (the mint path, and only when
+ * this call actually won the mint race) — never by a replay of an
+ * already-existing batch, which has no fresh pipeline run of its own to
+ * draw from. There is deliberately no `DashboardBatch` column for this: a
+ * second-and-later same-day load of the same batch always omits it, even
+ * though the original mint's own pipeline call did compute one — that is
+ * the accepted cost of "live-only" (no schema change, no migration).
  */
 function frozenFeedResponse(
   batch: DashboardBatch,
@@ -99,6 +111,7 @@ function frozenFeedResponse(
   items: ScoredItem[],
   reconstructed: boolean,
   startedAt: number,
+  emptyReasonCode?: FeedEmptyReasonCode,
 ): FeedResponse {
   return {
     items,
@@ -113,6 +126,7 @@ function frozenFeedResponse(
       batchId: batch.id,
       batchStatus: status,
       ...(reconstructed ? { batchReconstructed: true as const } : {}),
+      ...(emptyReasonCode ? { emptyReasonCode } : {}),
     },
   };
 }
@@ -402,7 +416,22 @@ async function runLedgerAwareFeed(
 
   const finalStatus: DashboardBatchStatus = minted.status === "prepared" ? "served" : minted.status;
   const { items, reconstructed } = await resolveServedItems(minted, pipelineReq, now);
-  return { response: frozenFeedResponse(minted, finalStatus, items, reconstructed, startedAt) };
+  // EMPTY-STATE-REASON — only THIS call's own fresh `result` may donate its
+  // `emptyReasonCode` to the response, and only when it actually won the
+  // mint race (`wonMintRace`, computed above): a losing call's `result` was
+  // computed against candidates/exclusions that are not necessarily what the
+  // WINNER's frozen `items` above actually reflect, exactly like this
+  // function already refuses to attach a losing call's fetched/errors/etc.
+  return {
+    response: frozenFeedResponse(
+      minted,
+      finalStatus,
+      items,
+      reconstructed,
+      startedAt,
+      wonMintRace ? result.meta.emptyReasonCode : undefined,
+    ),
+  };
 }
 
 /**

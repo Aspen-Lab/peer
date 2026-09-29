@@ -60,8 +60,16 @@ export interface TfidfIndex {
   itemVectors: Map<string, TermVector>;
 }
 
-export function buildIndex(items: RawItem[]): TfidfIndex {
-  const docs = items.map((i) => tokenize(itemDocText(i)));
+/**
+ * `tokenizeFn` defaults to the real, plural-blind `tokenize` so every
+ * existing caller (this file's own pool-wide topicality index, jobs/events
+ * scoring) is byte-for-byte unaffected. TOKENIZE-PLURALS (ABC-JEV-INTEGRATION.md
+ * §1be point 5, Option B split) passes `tokenizeFolded` here ONLY to build
+ * combine.ts's second, parallel T4 index — never the shared one every
+ * scored item's topicality comes from.
+ */
+export function buildIndex(items: RawItem[], tokenizeFn: (text: string) => string[] = tokenize): TfidfIndex {
+  const docs = items.map((i) => tokenizeFn(itemDocText(i)));
   const idf = buildIdf(docs);
   const itemVectors = new Map<string, TermVector>();
   items.forEach((item, i) => {
@@ -75,10 +83,11 @@ export function scoreTfidf(
   itemId: string,
   profileText: string,
   index: TfidfIndex,
+  tokenizeFn: (text: string) => string[] = tokenize,
 ): number {
   const itemVec = index.itemVectors.get(itemId);
   if (!itemVec) return 0;
-  const profileTf = termFrequency(tokenize(profileText));
+  const profileTf = termFrequency(tokenizeFn(profileText));
   const profileVec = toTfidf(profileTf, index.idf);
   return cosine(itemVec, profileVec);
 }
