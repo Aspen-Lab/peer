@@ -276,6 +276,9 @@ describe("feed lane loading", () => {
       // predates it, explicit reset keeps one test's pending-push record
       // from leaking into the next.
       pendingPushByOwner: {},
+      // OUTBOX-RETRY — same reasoning: a new persisted field, reset here so
+      // one test's captured feedback payloads can't leak into the next.
+      pendingFeedbackPayloadByOwner: {},
     });
   });
 
@@ -1581,6 +1584,535 @@ describe("feed lane loading", () => {
         // settled) — pushFailed goes all the way back to false.
         expect(useFeedSyncStatus.getState().pendingKeys).toEqual({});
         expect(useFeedSyncStatus.getState().pushFailed).toBe(false);
+      });
+    });
+
+    // OUTBOX-RETRY (ABC-JEV-INTEGRATION.md §1bc; guide
+    // docs/jev-abc/OUTBOX-RETRY-B-20260929T125345Z.md) — closes the gap the
+    // §1aq CORRECTION named: a reload's migration batch only ever re-POSTs
+    // items CURRENTLY present locally, so a pending unsave/mark-unread/
+    // feedback write is never retried by anything else. These tests call
+    // `retryPendingPushes()` directly on the store, the same pattern this
+    // file already uses for `applyMigrationPushResult` — `feed-sync.tsx`'s
+    // own one-line wiring into `onSession` is untestable at this layer for
+    // the pre-existing reason the `pendingPushByOwner` describe block above
+    // already documents (no @testing-library/react, no test mounts a live
+    // effect).
+    describe("retryPendingPushes (OUTBOX-RETRY)", () => {
+      it("a failed unsave retried clears its key (item absent locally → DELETE)", async () => {
+        signIn();
+        useFeedStore.setState({
+          pendingPushByOwner: { "user-flag": { "saved:paper:paper-flag": true } },
+        });
+        useFeedSyncStatus.setState({
+          pendingKeys: { "saved:paper:paper-flag": true },
+          pushFailed: true,
+        });
+        fetchMock.mockImplementation((input: string | URL | Request) => {
+          const path = requestPath(input);
+          if (path.startsWith("/api/saved")) {
+            return Promise.resolve(jsonResponse({ ok: true }));
+          }
+          return new Promise<Response>(() => {});
+        });
+
+        await useFeedStore.getState().retryPendingPushes();
+
+        const call = fetchMock.mock.calls.find((c) =>
+          requestPath(c[0] as string).startsWith("/api/saved"),
+        );
+        expect(call).toBeDefined();
+        expect((call![1] as RequestInit | undefined)?.method).toBe("DELETE");
+        expect(useFeedStore.getState().pendingPushByOwner["user-flag"]).toEqual({});
+        expect(
+          useFeedSyncStatus.getState().pendingKeys["saved:paper:paper-flag"],
+        ).toBeUndefined();
+        expect(useFeedSyncStatus.getState().pushFailed).toBe(false);
+      });
+
+      // Mirror of the test above: same pending key, but the item IS
+      // currently saved (re-saved after the original unsave failed) — a
+      // POST fires instead, never a DELETE. Direction comes from current
+      // state alone, so these two tests together prove it is symmetric.
+      it("a newer local save supersedes a pending unsave (item present locally → POST, not DELETE)", async () => {
+        signIn();
+        useFeedStore.setState({
+          savedPapers: [flagPaper],
+          pendingPushByOwner: { "user-flag": { "saved:paper:paper-flag": true } },
+        });
+        useFeedSyncStatus.setState({
+          pendingKeys: { "saved:paper:paper-flag": true },
+          pushFailed: true,
+        });
+        fetchMock.mockImplementation((input: string | URL | Request) => {
+          const path = requestPath(input);
+          if (path === "/api/saved") return Promise.resolve(jsonResponse({ ok: true }));
+          return new Promise<Response>(() => {});
+        });
+
+        await useFeedStore.getState().retryPendingPushes();
+
+        const call = fetchMock.mock.calls.find(
+          (c) => requestPath(c[0] as string) === "/api/saved",
+        );
+        expect(call).toBeDefined();
+        expect((call![1] as RequestInit | undefined)?.method).toBe("POST");
+        expect(
+          fetchMock.mock.calls.some(
+            (c) => (c[1] as RequestInit | undefined)?.method === "DELETE",
+          ),
+        ).toBe(false);
+        expect(useFeedStore.getState().pendingPushByOwner["user-flag"]).toEqual({});
+      });
+
+      it("feedback retry sends the CURRENT value, not whatever originally failed", async () => {
+        signIn();
+        useFeedStore.setState({
+          paperFeedback: { "paper-flag": "moreLikeThis" },
+          pendingPushByOwner: { "user-flag": { "feedback:paper:paper-flag": true } },
+        });
+        useFeedSyncStatus.setState({
+          pendingKeys: { "feedback:paper:paper-flag": true },
+          pushFailed: true,
+        });
+        fetchMock.mockImplementation(async () => jsonResponse({ ok: true }));
+
+        await useFeedStore.getState().retryPendingPushes();
+
+        const call = fetchMock.mock.calls.find(
+          (c) => requestPath(c[0] as string) === "/api/feedback",
+        );
+        expect(call).toBeDefined();
+        const body = JSON.parse(String((call![1] as RequestInit).body));
+        expect(body.feedback).toBe("moreLikeThis");
+        expect(useFeedStore.getState().pendingPushByOwner["user-flag"]).toEqual({});
+      });
+
+      it("never touches a different owner's pending keys (owner isolation)", async () => {
+        useSyncGate.setState({
+          settled: true,
+          authUserId: "user-a",
+          authOutcome: "signed-in",
+        });
+        useFeedStore.setState({
+          readItems: { "paper-a": true },
+          pendingPushByOwner: {
+            "user-a": { "read:paper-a": true },
+            "user-b": { "read:paper-b": true },
+          },
+        });
+        useFeedSyncStatus.setState({
+          pendingKeys: { "read:paper-a": true },
+          pushFailed: true,
+        });
+        const ownerBBefore = useFeedStore.getState().pendingPushByOwner["user-b"];
+        fetchMock.mockImplementation(async () => jsonResponse({ ok: true }));
+
+        await useFeedStore.getState().retryPendingPushes();
+
+        expect(useFeedStore.getState().pendingPushByOwner["user-a"]).toEqual({});
+        // Reference equality, not just deep equality — proves owner b's
+        // entry was never read into a new object, i.e. never touched.
+        expect(useFeedStore.getState().pendingPushByOwner["user-b"]).toBe(ownerBBefore);
+        expect(fetchMock.mock.calls.length).toBe(1);
+      });
+
+      it("does nothing when signed out", async () => {
+        // authUserId defaults to null after the outer beforeEach.
+        useFeedStore.setState({
+          pendingPushByOwner: { "user-flag": { "read:paper-flag": true } },
+        });
+        useFeedSyncStatus.setState({
+          pendingKeys: { "read:paper-flag": true },
+          pushFailed: true,
+        });
+        fetchMock.mockImplementation(async () => jsonResponse({ ok: true }));
+
+        await useFeedStore.getState().retryPendingPushes();
+
+        expect(fetchMock).not.toHaveBeenCalled();
+        expect(useFeedStore.getState().pendingPushByOwner["user-flag"]).toEqual({
+          "read:paper-flag": true,
+        });
+        expect(useFeedSyncStatus.getState().pendingKeys).toEqual({
+          "read:paper-flag": true,
+        });
+      });
+
+      it("a moot feedback key (current value now undefined) is dropped, not resent", async () => {
+        signIn();
+        fetchMock.mockImplementation((input: string | URL | Request) => {
+          const path = requestPath(input);
+          if (path === "/api/saved") return Promise.resolve(jsonResponse({ ok: true }));
+          if (path === "/api/feedback") {
+            return Promise.resolve(jsonResponse({ error: "boom" }, 500));
+          }
+          return new Promise<Response>(() => {});
+        });
+
+        // Real actions, not a hand-set fixture — exercises unsavePaper's
+        // actual paperFeedback[id] === "saved" deletion path (L2308-2310).
+        useFeedStore.getState().savePaper(flagPaper);
+        await vi.waitFor(() => {
+          expect(
+            useFeedSyncStatus.getState().pendingKeys["feedback:paper:paper-flag"],
+          ).toBe(true);
+        });
+        expect(
+          useFeedStore.getState().pendingFeedbackPayloadByOwner["user-flag"]?.[
+            "feedback:paper:paper-flag"
+          ],
+        ).toBeDefined();
+
+        useFeedStore.getState().unsavePaper(flagPaper.id);
+        await vi.waitFor(() => {
+          expect(
+            fetchMock.mock.calls.some(
+              (c) =>
+                requestPath(c[0] as string).startsWith("/api/saved") &&
+                (c[1] as RequestInit | undefined)?.method === "DELETE",
+            ),
+          ).toBe(true);
+        });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        expect(useFeedStore.getState().paperFeedback["paper-flag"]).toBeUndefined();
+
+        const feedbackCallsBefore = fetchMock.mock.calls.filter(
+          (c) => requestPath(c[0] as string) === "/api/feedback",
+        ).length;
+
+        await useFeedStore.getState().retryPendingPushes();
+
+        const feedbackCallsAfter = fetchMock.mock.calls.filter(
+          (c) => requestPath(c[0] as string) === "/api/feedback",
+        ).length;
+        expect(feedbackCallsAfter).toBe(feedbackCallsBefore);
+        expect(
+          useFeedStore.getState().pendingPushByOwner["user-flag"]?.[
+            "feedback:paper:paper-flag"
+          ],
+        ).toBeUndefined();
+        expect(
+          useFeedSyncStatus.getState().pendingKeys["feedback:paper:paper-flag"],
+        ).toBeUndefined();
+        expect(
+          useFeedStore.getState().pendingFeedbackPayloadByOwner["user-flag"]?.[
+            "feedback:paper:paper-flag"
+          ],
+        ).toBeUndefined();
+      });
+
+      it("a colon-in-id key round-trips the FULL id, not a truncated substring", async () => {
+        signIn();
+        const idWithColon = "openalex:W2005027801";
+        useFeedStore.setState({
+          pendingPushByOwner: {
+            "user-flag": { [`saved:paper:${idWithColon}`]: true },
+          },
+        });
+        useFeedSyncStatus.setState({
+          pendingKeys: { [`saved:paper:${idWithColon}`]: true },
+          pushFailed: true,
+        });
+        fetchMock.mockImplementation((input: string | URL | Request) => {
+          const path = requestPath(input);
+          if (path.startsWith("/api/saved")) {
+            return Promise.resolve(jsonResponse({ ok: true }));
+          }
+          return new Promise<Response>(() => {});
+        });
+
+        await useFeedStore.getState().retryPendingPushes();
+
+        const call = fetchMock.mock.calls.find((c) =>
+          requestPath(c[0] as string).startsWith("/api/saved"),
+        );
+        expect(call).toBeDefined();
+        expect((call![1] as RequestInit | undefined)?.method).toBe("DELETE");
+        const url = new URL(call![0] as string, "http://localhost");
+        expect(url.searchParams.get("itemId")).toBe(idWithColon);
+        expect(useFeedStore.getState().pendingPushByOwner["user-flag"]).toEqual({});
+      });
+
+      it("read direction flip: currently read → POST, not DELETE", async () => {
+        signIn();
+        useFeedStore.setState({
+          readItems: { "paper-read-flip": true },
+          pendingPushByOwner: { "user-flag": { "read:paper-read-flip": true } },
+        });
+        useFeedSyncStatus.setState({
+          pendingKeys: { "read:paper-read-flip": true },
+          pushFailed: true,
+        });
+        fetchMock.mockImplementation(async () => jsonResponse({ ok: true }));
+
+        await useFeedStore.getState().retryPendingPushes();
+
+        const call = fetchMock.mock.calls.find(
+          (c) => requestPath(c[0] as string) === "/api/read",
+        );
+        expect(call).toBeDefined();
+        expect((call![1] as RequestInit | undefined)?.method).toBe("POST");
+        expect(useFeedStore.getState().pendingPushByOwner["user-flag"]).toEqual({});
+      });
+
+      it("a captured feedback payload survives and is resent, even after the source item is gone from every pool", async () => {
+        signIn();
+        fetchMock.mockImplementation(async () => jsonResponse({ error: "boom" }, 500));
+
+        // flagPaper is never added to `papers`/`savedPapers` — moreLikePaper
+        // only needs the object passed in, so this already models "an item
+        // that was never saved", exactly the case §2.3 says recomputation
+        // cannot cover (its pool is not persisted).
+        useFeedStore.getState().moreLikePaper(flagPaper);
+        await vi.waitFor(() => {
+          expect(
+            useFeedSyncStatus.getState().pendingKeys["feedback:paper:paper-flag"],
+          ).toBe(true);
+        });
+        const captured =
+          useFeedStore.getState().pendingFeedbackPayloadByOwner["user-flag"]?.[
+            "feedback:paper:paper-flag"
+          ];
+        expect(captured).toMatchObject({ title: flagPaper.title });
+        expect(
+          useFeedStore.getState().papers.some((p) => p.id === flagPaper.id),
+        ).toBe(false);
+        expect(
+          useFeedStore.getState().savedPapers.some((p) => p.id === flagPaper.id),
+        ).toBe(false);
+
+        fetchMock.mockImplementation(async () => jsonResponse({ ok: true }));
+        await useFeedStore.getState().retryPendingPushes();
+
+        const retryCall = fetchMock.mock.calls
+          .filter((c) => requestPath(c[0] as string) === "/api/feedback")
+          .pop();
+        expect(retryCall).toBeDefined();
+        const body = JSON.parse(String((retryCall![1] as RequestInit).body));
+        expect(body.payload).toEqual(captured);
+        expect(body.payload.title).toBe(flagPaper.title);
+      });
+
+      it("the coarse migration key is left alone — never parsed, never retried", async () => {
+        signIn();
+        useFeedStore.setState({
+          pendingPushByOwner: { "user-flag": { migration: true } },
+        });
+        useFeedSyncStatus.setState({ pendingKeys: { migration: true }, pushFailed: true });
+        fetchMock.mockImplementation(async () => jsonResponse({ ok: true }));
+
+        await useFeedStore.getState().retryPendingPushes();
+
+        expect(fetchMock).not.toHaveBeenCalled();
+        expect(useFeedStore.getState().pendingPushByOwner["user-flag"]).toEqual({
+          migration: true,
+        });
+      });
+
+      it("resetLocal clears the LEAVING owner's own pendingFeedbackPayloadByOwner entry, but never a different owner's", () => {
+        useFeedStore.setState({
+          syncedUserId: "user-a",
+          pendingFeedbackPayloadByOwner: {
+            "user-a": { "feedback:paper:paper-a": { title: "A", concepts: [] } },
+            "user-b": { "feedback:paper:paper-b": { title: "B", concepts: [] } },
+          },
+        });
+
+        useFeedStore.getState().resetLocal();
+
+        expect(useFeedStore.getState().pendingFeedbackPayloadByOwner).toEqual({
+          "user-a": {},
+          "user-b": { "feedback:paper:paper-b": { title: "B", concepts: [] } },
+        });
+      });
+
+      it("a PERMANENT 4xx (400, malformed body) on a feedback write drops the key and its payload — never resent (§1bc point 3)", async () => {
+        signIn();
+        useFeedStore.setState({
+          paperFeedback: { "paper-flag": "moreLikeThis" },
+          pendingPushByOwner: { "user-flag": { "feedback:paper:paper-flag": true } },
+          pendingFeedbackPayloadByOwner: {
+            "user-flag": {
+              "feedback:paper:paper-flag": { title: "Flag paper", concepts: [] },
+            },
+          },
+        });
+        useFeedSyncStatus.setState({
+          pendingKeys: { "feedback:paper:paper-flag": true },
+          pushFailed: true,
+        });
+        fetchMock.mockImplementation(async () =>
+          jsonResponse({ error: "invalid body" }, 400),
+        );
+
+        await useFeedStore.getState().retryPendingPushes();
+
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        expect(useFeedStore.getState().pendingPushByOwner["user-flag"]).toEqual({});
+        expect(
+          useFeedSyncStatus.getState().pendingKeys["feedback:paper:paper-flag"],
+        ).toBeUndefined();
+        expect(useFeedSyncStatus.getState().pushFailed).toBe(false);
+        expect(
+          useFeedStore.getState().pendingFeedbackPayloadByOwner["user-flag"],
+        ).toEqual({});
+      });
+
+      // §1bc AMENDMENT (fresh A's HIGH finding) — a 401 is TRANSIENT (the
+      // same file's acknowledgePendingBatch already treats it as "retry
+      // once signed in"), unlike a genuinely malformed 400 body. It must
+      // keep the key and its captured payload, not drop them.
+      it("a TRANSIENT 401 on a feedback write keeps the key and its payload — retried later, never dropped", async () => {
+        signIn();
+        useFeedStore.setState({
+          paperFeedback: { "paper-flag": "moreLikeThis" },
+          pendingPushByOwner: { "user-flag": { "feedback:paper:paper-flag": true } },
+          pendingFeedbackPayloadByOwner: {
+            "user-flag": {
+              "feedback:paper:paper-flag": { title: "Flag paper", concepts: [] },
+            },
+          },
+        });
+        useFeedSyncStatus.setState({
+          pendingKeys: { "feedback:paper:paper-flag": true },
+          pushFailed: true,
+        });
+        fetchMock.mockImplementation(async () =>
+          jsonResponse({ error: "unauthenticated" }, 401),
+        );
+
+        await useFeedStore.getState().retryPendingPushes();
+
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        expect(useFeedStore.getState().pendingPushByOwner["user-flag"]).toEqual({
+          "feedback:paper:paper-flag": true,
+        });
+        expect(
+          useFeedSyncStatus.getState().pendingKeys["feedback:paper:paper-flag"],
+        ).toBe(true);
+        expect(useFeedSyncStatus.getState().pushFailed).toBe(true);
+        expect(
+          useFeedStore.getState().pendingFeedbackPayloadByOwner["user-flag"]?.[
+            "feedback:paper:paper-flag"
+          ],
+        ).toEqual({ title: "Flag paper", concepts: [] });
+      });
+
+      it("a feedback retry with no captured payload sends without one — never reconstructed from current item data (§1bc AMENDMENT)", async () => {
+        signIn();
+        useFeedStore.setState({
+          paperFeedback: { "paper-flag": "moreLikeThis" },
+          // Deliberately present in savedPapers: if a recompute fallback
+          // still existed, it would find this and build a real payload from
+          // it. No pendingFeedbackPayloadByOwner entry is set for this key,
+          // so a correct implementation must send `payload: undefined`
+          // rather than reconstructing one from this item.
+          savedPapers: [flagPaper],
+          pendingPushByOwner: { "user-flag": { "feedback:paper:paper-flag": true } },
+        });
+        useFeedSyncStatus.setState({
+          pendingKeys: { "feedback:paper:paper-flag": true },
+          pushFailed: true,
+        });
+        fetchMock.mockImplementation(async () => jsonResponse({ ok: true }));
+
+        await useFeedStore.getState().retryPendingPushes();
+
+        const call = fetchMock.mock.calls.find(
+          (c) => requestPath(c[0] as string) === "/api/feedback",
+        );
+        expect(call).toBeDefined();
+        const body = JSON.parse(String((call![1] as RequestInit).body));
+        expect(body.payload).toBeUndefined();
+        expect(useFeedStore.getState().pendingPushByOwner["user-flag"]).toEqual({});
+      });
+
+      // §1bc AMENDMENT (fresh A's HIGH finding) — resetLocal (fired by a
+      // concurrent sign-out) is fully synchronous and can land BETWEEN two
+      // keys in the same pass. The pass must stop immediately once it
+      // detects this, never using the wiped state for a key it had not yet
+      // started.
+      it("a concurrent sign-out (resetLocal) mid-pass stops the pass immediately — no further cloud calls", async () => {
+        signIn();
+        useFeedStore.setState({
+          syncedUserId: "user-flag",
+          readItems: { "paper-1": true, "paper-2": true },
+          pendingPushByOwner: {
+            "user-flag": { "read:paper-1": true, "read:paper-2": true },
+          },
+        });
+        useFeedSyncStatus.setState({
+          pendingKeys: { "read:paper-1": true, "read:paper-2": true },
+          pushFailed: true,
+        });
+        const firstResponse = deferred<Response>();
+        fetchMock.mockImplementation((input: string | URL | Request) => {
+          const path = requestPath(input);
+          if (path === "/api/read") return firstResponse.promise;
+          return new Promise<Response>(() => {});
+        });
+
+        const pass = useFeedStore.getState().retryPendingPushes();
+        await vi.waitFor(() => {
+          expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(1);
+        });
+
+        // Simulate a concurrent SIGNED_OUT landing mid-pass: both stores
+        // update, the same as the real onSession(null, true) path would
+        // trigger (a separate ProfileSync-driven auth transition plus
+        // FeedSync's own resetLocal, unrelated to this in-flight pass).
+        useSyncGate.setState({
+          settled: true,
+          authUserId: null,
+          authOutcome: "signed-out",
+        });
+        useFeedStore.getState().resetLocal();
+
+        firstResponse.resolve(jsonResponse({ ok: true }));
+        await pass;
+
+        // Only the ALREADY-in-flight first call ever fired — the second
+        // key's cloud call never happened.
+        expect(fetchMock.mock.calls.length).toBe(1);
+        const call = fetchMock.mock.calls[0]!;
+        const body = JSON.parse(String((call[1] as RequestInit).body));
+        expect(body.itemId).toBe("paper-1");
+      });
+
+      // POLICY 4 — required. Mirrors pendingAckInFlight's own existing
+      // guard idiom (see acknowledgePendingBatch's tests elsewhere in this
+      // file for the same deferred-response shape).
+      it("two overlapping retryPendingPushes() calls fire exactly one request per pending key", async () => {
+        signIn();
+        useFeedStore.setState({
+          readItems: { "paper-concurrent": true },
+          pendingPushByOwner: { "user-flag": { "read:paper-concurrent": true } },
+        });
+        useFeedSyncStatus.setState({
+          pendingKeys: { "read:paper-concurrent": true },
+          pushFailed: true,
+        });
+        const readResponse = deferred<Response>();
+        fetchMock.mockImplementation((input: string | URL | Request) => {
+          const path = requestPath(input);
+          if (path === "/api/read") return readResponse.promise;
+          return new Promise<Response>(() => {});
+        });
+
+        const first = useFeedStore.getState().retryPendingPushes();
+        const second = useFeedStore.getState().retryPendingPushes();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        readResponse.resolve(jsonResponse({ ok: true }));
+        await Promise.all([first, second]);
+
+        const readCalls = fetchMock.mock.calls.filter(
+          (c) => requestPath(c[0] as string) === "/api/read",
+        );
+        expect(readCalls.length).toBe(1);
+        expect(
+          useFeedSyncStatus.getState().pendingKeys["read:paper-concurrent"],
+        ).toBeUndefined();
       });
     });
   });
