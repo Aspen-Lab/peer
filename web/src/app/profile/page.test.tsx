@@ -2,7 +2,16 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { defaultProfile } from "@/types";
-import { ColorThemePicker, LearnedPreferences } from "./page";
+import {
+  ColorThemePicker,
+  DataSourcesLink,
+  LearnedPreferences,
+  EmailSettingsView,
+  digestToggleUpdate,
+  confirmAddressMessage,
+  testSendMessage,
+  type EmailSettingsViewProps,
+} from "./page";
 
 // 6-11/6-10 (Ruling 17): this repo has no @testing-library/react and no test
 // anywhere simulates a click (matching figure-lightbox.test.ts's own note),
@@ -100,5 +109,274 @@ describe("LearnedPreferences — 'from your upload' caption (9-24)", () => {
       createElement(LearnedPreferences, { profile, onReset: () => {} }),
     );
     expect(html).not.toContain("from your upload");
+  });
+});
+
+describe("DataSourcesLink", () => {
+  it("offers an accessible Profile/settings link to the visible data sources page", () => {
+    const html = renderToStaticMarkup(createElement(DataSourcesLink));
+    expect(html).toContain('href="/data-sources"');
+    expect(html).toContain("Vocabulary sources and licenses");
+  });
+});
+
+// EMAIL-SETTINGS — no @testing-library/react and no click simulation exists
+// in this repo (see the note at the top of this file), so the toggle's
+// business-logic mapping is a pure, directly-tested function, and the
+// section's own signed-out gate is proven on the presentational,
+// prop-driven EmailSettingsView (same pattern as ColorThemePicker/
+// LearnedPreferences above) — never on the hook-wired EmailSettings wrapper,
+// which calls useAuthUser/useProfileStore/useRouter/useSearchParams and so
+// cannot render outside a real Next.js tree.
+
+describe("digestToggleUpdate — the 'both'/'inapp' + 'daily' mapping (ABC-JEV-INTEGRATION.md §1z P5)", () => {
+  it("turning ON sets channel 'both' AND frequency 'daily'", () => {
+    expect(digestToggleUpdate(true)).toEqual({ channel: "both", frequency: "daily" });
+  });
+
+  it("turning OFF sets channel 'inapp' and leaves frequency untouched", () => {
+    expect(digestToggleUpdate(false)).toEqual({ channel: "inapp" });
+  });
+});
+
+describe("EmailSettingsView — signed-out visitors see no controls (RED #12)", () => {
+  const baseProps: EmailSettingsViewProps = {
+    signedIn: false,
+    digestChannel: "inapp",
+    digestHourLocal: 8,
+    digestTimezone: "UTC",
+    accountEmail: "person@example.test",
+    addressDraft: "person@example.test",
+    pendingAddress: null,
+    confirmedBanner: false,
+    confirmMessage: null,
+    confirmBusy: false,
+    testMessage: null,
+    testBusy: false,
+    onToggleEmail: () => {},
+    onHourChange: () => {},
+    onAddressDraftChange: () => {},
+    onAddressSubmit: () => {},
+    onSendTest: () => {},
+  };
+
+  it("renders NOTHING (not just visually hidden) when signed out, unconfigured, or still loading", () => {
+    const html = renderToStaticMarkup(createElement(EmailSettingsView, { ...baseProps, signedIn: false }));
+    expect(html).toBe("");
+  });
+
+  it("renders the section once signed in", () => {
+    const html = renderToStaticMarkup(createElement(EmailSettingsView, { ...baseProps, signedIn: true }));
+    expect(html).not.toBe("");
+    expect(html).toContain("Daily email");
+    expect(html).toContain("Send test email");
+  });
+
+  it("shows the toggle-off helper copy when the channel is 'inapp'", () => {
+    const html = renderToStaticMarkup(
+      createElement(EmailSettingsView, { ...baseProps, signedIn: true, digestChannel: "inapp" }),
+    );
+    expect(html).toContain("in addition to the in-app Past briefings");
+  });
+
+  it("shows the sending sentence with hour/timezone/address when the channel is 'both'", () => {
+    const html = renderToStaticMarkup(
+      createElement(EmailSettingsView, {
+        ...baseProps,
+        signedIn: true,
+        digestChannel: "both",
+        digestHourLocal: 8,
+        digestTimezone: "America/Chicago",
+        addressDraft: "person@example.test",
+      }),
+    );
+    expect(html).toContain("8:00 AM");
+    expect(html).toContain("America/Chicago");
+    expect(html).toContain("person@example.test");
+  });
+
+  it("shows the pending-confirmation banner with the requested address", () => {
+    // In real use the draft and the pending address are the same string
+    // until the reader edits the field further — set both here, matching
+    // how EmailSettings (the hook-wired wrapper) actually drives this prop.
+    const html = renderToStaticMarkup(
+      createElement(EmailSettingsView, {
+        ...baseProps,
+        signedIn: true,
+        addressDraft: "new@example.test",
+        pendingAddress: "new@example.test",
+      }),
+    );
+    expect(html).toContain("new@example.test");
+    expect(html).toContain("confirmation link");
+  });
+
+  it("shows the confirmed banner after a successful redirect", () => {
+    const html = renderToStaticMarkup(
+      createElement(EmailSettingsView, { ...baseProps, signedIn: true, confirmedBanner: true }),
+    );
+    expect(html.toLowerCase()).toContain("confirmed");
+  });
+
+  it("shows the test-email result message when present", () => {
+    const html = renderToStaticMarkup(
+      createElement(EmailSettingsView, {
+        ...baseProps,
+        signedIn: true,
+        testMessage: "Sent just now to person@example.test.",
+      }),
+    );
+    expect(html).toContain("Sent just now to person@example.test.");
+  });
+});
+
+// ABC-JEV-INTEGRATION.md §1al POLISH-1-EMAIL (a)/(f)/(g) — the two
+// response -> sentence mappings, extracted to pure functions so every
+// status/reason is unit-tested without rendering or a real fetch (same
+// "no click simulation" constraint noted at the top of this file).
+describe("confirmAddressMessage — POST /api/profile/confirm-email's response (§1al (a)/(f))", () => {
+  it("429 rate_limited", () => {
+    expect(confirmAddressMessage(429, {})).toEqual({
+      message: "Too many requests today. Try again tomorrow.",
+      confirmed: false,
+      pending: false,
+    });
+  });
+
+  it("503 — no DIGEST_EMAIL_CONFIRM_SECRET configured (was 500 — (a))", () => {
+    expect(confirmAddressMessage(503, { error: "email_confirmation_unavailable" })).toEqual({
+      message: "Confirming a different email isn't available right now.",
+      confirmed: false,
+      pending: false,
+    });
+  });
+
+  it("502 sender_not_verified — the confirmation send failed at Peer's sender ((f))", () => {
+    expect(confirmAddressMessage(502, { error: "sender_not_verified" })).toEqual({
+      message: "Peer's email sender isn't set up to reach that address yet.",
+      confirmed: false,
+      pending: false,
+    });
+  });
+
+  it("502 confirmation_send_failed — any other send failure ((f))", () => {
+    expect(confirmAddressMessage(502, { error: "confirmation_send_failed" })).toEqual({
+      message: "Couldn't send the confirmation email. Try again later.",
+      confirmed: false,
+      pending: false,
+    });
+  });
+
+  it("502 with an unrecognized error string still falls back to the generic send-failed sentence", () => {
+    expect(confirmAddressMessage(502, { error: "something_new" })).toEqual({
+      message: "Couldn't send the confirmation email. Try again later.",
+      confirmed: false,
+      pending: false,
+    });
+  });
+
+  it("500 — a genuine database read/write error", () => {
+    expect(confirmAddressMessage(500, { error: "boom" })).toEqual({
+      message: "Couldn't send the confirmation link. Try again.",
+      confirmed: false,
+      pending: false,
+    });
+  });
+
+  it("400 — invalid email format", () => {
+    expect(confirmAddressMessage(400, {})).toEqual({
+      message: "That doesn't look like a valid email address.",
+      confirmed: false,
+      pending: false,
+    });
+  });
+
+  it("200 confirmed:true — the already-confirmed short-circuit, no message needed", () => {
+    expect(confirmAddressMessage(200, { confirmed: true })).toEqual({
+      message: null,
+      confirmed: true,
+      pending: false,
+    });
+  });
+
+  it("200 confirmed:false — a new address, confirmation email sent, now pending", () => {
+    expect(confirmAddressMessage(200, { confirmed: false })).toEqual({
+      message: null,
+      confirmed: false,
+      pending: true,
+    });
+  });
+
+  it("an unmapped status falls back to the same generic message as a genuine 500", () => {
+    expect(confirmAddressMessage(599, {})).toEqual({
+      message: "Couldn't send the confirmation link. Try again.",
+      confirmed: false,
+      pending: false,
+    });
+  });
+});
+
+describe("testSendMessage — POST /api/profile/send-test-email's response (§1al (g))", () => {
+  it("unavailable — Resend isn't configured", () => {
+    expect(testSendMessage(200, { sent: false, reason: "unavailable" })).toEqual({
+      message: "Email sending isn't configured yet.",
+      success: false,
+    });
+  });
+
+  it("no_address", () => {
+    expect(testSendMessage(400, { sent: false, reason: "no_address" })).toEqual({
+      message: "Add an email above first.",
+      success: false,
+    });
+  });
+
+  it("intent_required — this is the doubled-period bug's old case ('…first..')", () => {
+    expect(testSendMessage(400, { sent: false, reason: "intent_required" })).toEqual({
+      message: "Add a research focus first.",
+      success: false,
+    });
+  });
+
+  it("rate_limited", () => {
+    expect(testSendMessage(429, { sent: false, reason: "rate_limited" })).toEqual({
+      message: "You've used today's 3 test sends. Try again tomorrow.",
+      success: false,
+    });
+  });
+
+  it("sender_not_verified — never Resend's raw sandbox text", () => {
+    expect(testSendMessage(502, { sent: false, reason: "sender_not_verified" })).toEqual({
+      message: "Peer's email sender isn't set up to reach this address yet.",
+      success: false,
+    });
+  });
+
+  it("send_failed — the generic fallback reason, never a raw provider string", () => {
+    expect(testSendMessage(502, { sent: false, reason: "send_failed" })).toEqual({
+      message: "Couldn't send the test email. Try again later.",
+      success: false,
+    });
+  });
+
+  it("success names the destination address", () => {
+    expect(testSendMessage(200, { sent: true, to: "person@example.test" })).toEqual({
+      message: "Sent just now to person@example.test.",
+      success: true,
+    });
+  });
+
+  it("success with no address on the body still produces a plain sentence", () => {
+    expect(testSendMessage(200, { sent: true })).toEqual({
+      message: "Sent just now to your address.",
+      success: true,
+    });
+  });
+
+  it("an unrecognized shape falls back to the generic message, never undefined", () => {
+    expect(testSendMessage(500, {})).toEqual({
+      message: "Couldn't send the test email. Try again later.",
+      success: false,
+    });
   });
 });

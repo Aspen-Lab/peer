@@ -33,9 +33,77 @@ jobs:
             "${ENDPOINT}")
           echo "HTTP ${status}"
           if [ -s /tmp/body.json ]; then
-            jq . /tmp/body.json 2>/dev/null || cat /tmp/body.json
+            # EMAIL-TOKEN-PRIVACY (ABC-JEV-INTEGRATION.md §1as): this repo is
+            # public, so this run log is public too. Print only the numeric
+            # counts the route's response carries -- never the full body,
+            # which can otherwise include a reason-code tally or (before this
+            # fix) a raw provider error message that names an address.
+            jq -c '{dispatched_count, skipped_count, failed_count, emails_sent_count, emails_failed_count}' /tmp/body.json 2>/dev/null || echo "(summary unavailable)"
           fi
           if [ "${status}" != "200" ]; then
             echo "::error::dispatch returned HTTP ${status}"
+            exit 1
+          fi
+
+  # TRIGGER-A (ABC-JEV-INTEGRATION.md §1x P9, BINDING: "two GitHub Actions
+  # jobs in digest-cron.yml (independent timeout/concurrency/status); never
+  # touch vercel.json"). A SECOND, independent job in the SAME workflow file
+  # (same `on: schedule`/`workflow_dispatch` trigger, so both run on the
+  # same hourly cadence without a second cron string to keep in sync) —
+  # never a second step inside `dispatch` above. GitHub Actions jobs (unlike
+  # steps) get independent timeout-minutes, independent concurrency groups
+  # and independent pass/fail status by construction: a slow or failing
+  # `prepare` run can never skip or fail `dispatch`'s own steps, and vice
+  # versa, with no `if: always()` bookkeeping required anywhere.
+  #
+  # No effect at all until (1) this file is pushed/merged to main (a
+  # separate explicit user yes) AND (2) PEER_DASHBOARD_PREPARE and
+  # PEER_DASHBOARD_LEDGER are both turned on in Vercel's env vars — see
+  # web/.env.example and docs/JEV-RELEASE-READINESS.md.
+  #
+  # Known, named, accepted trade-off (recorded in the C checkpoint,
+  # docs/jev-abc/TRIGGER-A-C-*.md): this job's OWN `concurrency` group below
+  # prevents two overlapping runs of THIS job from piling up, but the
+  # EXISTING top-level `concurrency: {group: digest-cron}` above (left
+  # untouched deliberately — see the checkpoint) still serializes entire
+  # WORKFLOW RUNS across scheduled triggers, so a slow `dispatch` run in one
+  # trigger's run can still delay the NEXT trigger's `prepare` job from
+  # starting. This costs timeliness only, never correctness (the debounced,
+  # idempotent enqueue design self-heals against a delayed run by
+  # construction — see web/src/lib/dashboard/due-owners.ts's own header) —
+  # not fixed here because it would require restructuring the EXISTING,
+  # live `dispatch` job's concurrency setup, which is outside this item's
+  # additive scope.
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    concurrency:
+      group: dashboard-prepare-cron
+      cancel-in-progress: false
+    steps:
+      - name: GET /api/jobs/prepare-dashboards
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          ENDPOINT: https://hermes-flax-six.vercel.app/api/jobs/prepare-dashboards
+        run: |
+          set -euo pipefail
+          if [ -z "${CRON_SECRET:-}" ]; then
+            echo "::error::CRON_SECRET secret not set in repo Actions secrets"
+            exit 1
+          fi
+          status=$(curl -sS -o /tmp/prepare-body.json -w '%{http_code}' -m 360 \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            "${ENDPOINT}")
+          echo "HTTP ${status}"
+          if [ -s /tmp/prepare-body.json ]; then
+            # EMAIL-TOKEN-PRIVACY (ABC-JEV-INTEGRATION.md §1as) -- same rule
+            # as the dispatch job above: counts only, never the full body.
+            jq -c '{
+              prepare: (.prepare // {} | {enabled, due_checked, enqueued, enqueue_failed_count, skipped_count, drained, stopped_reason, backlog_likely_remaining}),
+              email_retry: (.email_retry // {} | {enabled, candidates_checked, sent_count, failed_count, skipped_count})
+            }' /tmp/prepare-body.json 2>/dev/null || echo "(summary unavailable)"
+          fi
+          if [ "${status}" != "200" ]; then
+            echo "::error::prepare-dashboards returned HTTP ${status}"
             exit 1
           fi

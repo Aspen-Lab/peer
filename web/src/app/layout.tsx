@@ -16,6 +16,7 @@ import { KeyboardLayer } from "@/components/keyboard";
 import { ProfileSync } from "@/components/profile-sync";
 import { FeedSync } from "@/components/feed-sync";
 import { ThemeSync } from "@/components/theme-sync";
+import { TabIconSync } from "@/components/tab-icon-sync";
 import { FirstRunGate } from "@/components/first-run";
 import { StoreHydrator } from "@/components/store-hydrator";
 
@@ -119,6 +120,32 @@ export default function RootLayout({
         <KeyboardLayer />
         <StoreHydrator />
         <ThemeSync />
+        {/* TAB-ICON-THEME round 2 (ABC-JEV-INTEGRATION.md §1ak). Hand-authored
+            here, outside Next's file-based `icon.svg` metadata: that system
+            re-renders its <link> from a Server Component keyed by a fresh
+            per-request id on every client-side navigation
+            (generateDynamicRSCPayload -> getFlightMetadataKey), so React
+            mounts a brand-new, un-themed <link> instead of reusing the one
+            tab-icon.ts paints, and the two are never deduped (a rel="icon"
+            <link> is a plain Hoistable in React 19, not a deduped Resource
+            the way rel="stylesheet"+precedence is - confirmed by reading
+            react-dom's isHostHoistableType). This tag lives in the root
+            layout's own returned JSX instead, which this exact app only ever
+            renders once per tab (never re-keyed or remounted by navigation),
+            so there is nothing left to compete with it. React still hoists
+            it into <head> wherever it is written in this tree, same
+            Hoistable mechanism, just with only one instance in existence.
+            web/public/icon.svg (moved out of app/ so Next no longer treats
+            it as metadata) is the plain static resource this points at and
+            the no-JS / first-paint fallback; tab-icon.ts repaints THIS
+            element in place, by id, and never creates a second one. */}
+        <link
+          rel="icon"
+          id="peer-tab-icon"
+          href="/icon.svg"
+          type="image/svg+xml"
+        />
+        <TabIconSync />
         <ProfileSync />
         <FeedSync />
         <FirstRunGate />

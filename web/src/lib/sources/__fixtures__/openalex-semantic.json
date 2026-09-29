@@ -1,0 +1,56 @@
+{
+  "results": [
+    {
+      "id": "https://openalex.org/W4400000001",
+      "title": "Semantic Match On Solid Electrolyte Grain Boundaries",
+      "publication_date": "2026-08-02",
+      "authorships": [
+        {
+          "author_position": "first",
+          "author": { "display_name": "S. First" },
+          "institutions": [{ "display_name": "Example Institute" }]
+        }
+      ],
+      "primary_location": { "source": { "display_name": "Journal of Fixture Materials" } },
+      "best_oa_location": null,
+      "open_access": { "is_oa": false },
+      "abstract_inverted_index": { "A": [0], "fixture": [1], "abstract.": [2] },
+      "cited_by_count": 4,
+      "doi": "10.9999/semantic-fixture-1",
+      "topics": [
+        { "id": "https://openalex.org/T10001", "display_name": "Solid State Electrolytes", "score": 0.91 }
+      ],
+      "primary_topic": {
+        "id": "https://openalex.org/T10001",
+        "display_name": "Solid State Electrolytes",
+        "score": 0.91
+      },
+      "keywords": [],
+      "concepts": [],
+      "type_crossref": "journal-article"
+    },
+    {
+      "id": "https://openalex.org/W4400000002",
+      "title": "A Second Semantic Fixture Result On Cathode Interfaces",
+      "publication_date": "2026-07-15",
+      "authorships": [
+        {
+          "author_position": "first",
+          "author": { "display_name": "T. Second" },
+          "institutions": []
+        }
+      ],
+      "primary_location": null,
+      "best_oa_location": null,
+      "open_access": { "is_oa": false },
+      "abstract_inverted_index": null,
+      "cited_by_count": 1,
+      "doi": null,
+      "topics": [],
+      "primary_topic": null,
+      "keywords": [],
+      "concepts": [],
+      "type_crossref": "posted-content"
+    }
+  ]
+}

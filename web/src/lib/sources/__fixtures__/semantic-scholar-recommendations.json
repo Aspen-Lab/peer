@@ -1,0 +1,34 @@
+{
+  "recommendedPapers": [
+    {
+      "paperId": "rec-paper-1",
+      "corpusId": 1111,
+      "title": "Recommended Paper On Solid Electrolyte Interfaces",
+      "abstract": "An invented abstract for a recommended paper, for fixture testing only.",
+      "authors": [{ "name": "R. Ecommend" }],
+      "year": 2025,
+      "publicationDate": "2025-03-01",
+      "venue": "Journal of Fixture Testing",
+      "citationCount": 12,
+      "url": "https://www.semanticscholar.org/paper/rec-paper-1",
+      "externalIds": { "DOI": "10.1234/rec-paper-1", "ArXiv": "2503.00001" },
+      "openAccessPdf": { "url": null },
+      "fieldsOfStudy": ["Materials Science"]
+    },
+    {
+      "paperId": "rec-paper-2",
+      "corpusId": 2222,
+      "title": "A Second Recommended Paper, Also Invented",
+      "abstract": null,
+      "authors": [{ "name": "S. Econd" }, { "name": "A. Uthor" }],
+      "year": 2024,
+      "publicationDate": null,
+      "venue": null,
+      "citationCount": 3,
+      "url": null,
+      "externalIds": { "PubMed": "99999999" },
+      "openAccessPdf": null,
+      "fieldsOfStudy": []
+    }
+  ]
+}

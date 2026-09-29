@@ -12,6 +12,10 @@ import {
   type WebResult,
 } from "./gemini-search";
 import type { WebSearchProvider } from "./types";
+import {
+  hasCompanySpendCapability,
+  type CompanySpendCapability,
+} from "@/lib/security/company-spend";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // THE `vertex` WEB-SEARCH PROVIDER — VERTEX AI SEARCH (Discovery Engine).
@@ -243,8 +247,10 @@ export function isVertexSearchAvailable(): boolean {
  */
 export function webSearchOptions(
   connectors: { gemini?: { enabled?: boolean } } | undefined,
+  capability?: CompanySpendCapability,
 ): { provider: WebSearchProvider } | undefined {
   if (connectors?.gemini?.enabled === false) return undefined;
+  if (!hasCompanySpendCapability(capability)) return undefined;
   if (isVertexSearchAvailable()) return { provider: "vertex" };
   return isGeminiSearchAvailable() ? { provider: "gemini" } : undefined;
 }

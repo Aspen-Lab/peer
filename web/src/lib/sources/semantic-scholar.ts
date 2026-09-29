@@ -1,6 +1,7 @@
 import type { SourceAdapter, SourceQuery, RawItem } from "./types";
 import { cleanDisplayText, cleanDisplayTextOrUndefined } from "@/lib/text/clean";
 import { fetchSemanticScholar } from "./semantic-scholar-client";
+import { searchHttpFailure } from "./search-failure";
 
 const S2_API = "https://api.semanticscholar.org/graph/v1/paper/search";
 const MAX_QUERIES = 3;
@@ -42,9 +43,18 @@ async function fetchImpl(query: SourceQuery): Promise<RawItem[]> {
     searchQueries.map((q) => fetchOne(q, perQuery)),
   );
 
+  // P2-S2 (Round 3) — F-A-P2-02, ABC-JEV-INTEGRATION.md §1p.B(2). Same rule
+  // as every other academic adapter: a partial failure still yields
+  // results, but if EVERY query for this source rejected, propagate that
+  // instead of quietly returning `[]`.
   const all: RawItem[] = [];
+  const failures: unknown[] = [];
   for (const r of results) {
     if (r.status === "fulfilled") all.push(...r.value);
+    else failures.push(r.reason);
+  }
+  if (results.length > 0 && failures.length === results.length) {
+    throw failures[0];
   }
   return uniqueById(all).slice(0, limit);
 }
@@ -67,15 +77,23 @@ async function fetchOne(searchQuery: string, perQuery: number): Promise<RawItem[
       { next: { revalidate: 300 } },
       6000,
     );
-    if (!res || !res.ok) {
-      console.error("[semantic-scholar] non-ok response:", res?.status);
-      return [];
+    // P2-S2 (Round 3) — F-A-P2-02. `fetchSemanticScholar` returns `null` on
+    // a network error (its own "never throws" contract) and otherwise hands
+    // back whatever `Response` it got, ok or not. Both used to be logged and
+    // swallowed to `[]` here, indistinguishable from S2 legitimately
+    // answering "nothing matched". Throw instead in both cases — `[]` is now
+    // reserved for a genuine 200-with-zero-results response.
+    if (!res) {
+      throw new Error("semantic_scholar: request failed (network error or timeout)");
+    }
+    if (!res.ok) {
+      throw await searchHttpFailure("semantic_scholar", res);
     }
     const data = (await res.json()) as { data?: S2Paper[] };
     return (data.data ?? []).map(paperToRawItem);
   } catch (err) {
     console.error("[semantic-scholar] fetch error:", err instanceof Error ? err.message : err);
-    return [];
+    throw err;
   }
 }
 
@@ -105,6 +123,15 @@ function paperToRawItem(paper: S2Paper): RawItem {
       citationCount: paper.citationCount ?? 0,
       doi,
       semanticScholarId: paper.paperId,
+      // P2-S1: S2's `fields=...,externalIds,...` request (already sent,
+      // unchanged) returns these cross-source ids today; they were fetched
+      // and silently discarded before this change.
+      externalIds: {
+        doi,
+        arxivId: paper.externalIds?.ArXiv,
+        pmid: paper.externalIds?.PubMed,
+        s2Id: paper.paperId,
+      },
     },
   };
 }

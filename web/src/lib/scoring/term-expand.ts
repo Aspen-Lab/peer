@@ -13,13 +13,12 @@
  */
 export const ABBREVIATION_GROUPS = [
   ["li ion", "lithium ion", "lithium-ion"],
-  ["lco", "lithium cobalt oxide"],
+  ["lco", "lithium cobalt oxide", "licoo2"],
   ["nmc", "nickel manganese cobalt oxide"],
-  ["lfp", "lithium iron phosphate"],
+  ["lfp", "lithium iron phosphate", "lifepo4"],
   ["ssb", "solid state battery", "all solid state battery"],
   ["eis", "electrochemical impedance spectroscopy"],
   ["xrd", "x ray diffraction"],
-  ["sem", "scanning electron microscopy"],
   ["tem", "transmission electron microscopy"],
   ["xps", "x ray photoelectron spectroscopy"],
   ["dft", "density functional theory"],

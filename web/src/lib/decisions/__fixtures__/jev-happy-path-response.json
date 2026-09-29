@@ -1,0 +1,66 @@
+{
+  "model": "jev-1.13.0",
+  "answers": {
+    "sense_match": {
+      "type": "choice",
+      "choice": "matches_target_sense",
+      "probabilities": {
+        "matches_target_sense": 0.86,
+        "different_sense": 0.11,
+        "insufficient_information": 0.03
+      },
+      "confidence": 0.86
+    },
+    "core_vs_background": {
+      "type": "choice",
+      "choice": "core",
+      "probabilities": {
+        "core": 0.79,
+        "background": 0.17,
+        "insufficient_information": 0.04
+      },
+      "confidence": 0.79
+    },
+    "population_match": {
+      "type": "choice",
+      "choice": "population_match",
+      "probabilities": {
+        "population_match": 0.81,
+        "population_mismatch": 0.13,
+        "insufficient_information": 0.06
+      },
+      "confidence": 0.81
+    },
+    "method_outcome_match": {
+      "type": "choice",
+      "choice": "method_match",
+      "probabilities": {
+        "method_match": 0.74,
+        "method_mismatch": 0.18,
+        "insufficient_information": 0.08
+      },
+      "confidence": 0.74
+    },
+    "project_help": {
+      "type": "score",
+      "score": 3,
+      "legend": {
+        "0": "not helpful - unrelated to the project",
+        "1": "slightly helpful - tangential background",
+        "2": "moderately helpful - relevant supporting evidence or method",
+        "3": "directly helpful - central to advancing the project"
+      },
+      "probabilities": {
+        "0": 0.02,
+        "1": 0.05,
+        "2": 0.15,
+        "3": 0.78
+      },
+      "confidence": 0.78
+    }
+  },
+  "usage": {
+    "input_tokens": 812,
+    "output_tokens": 0
+  }
+}

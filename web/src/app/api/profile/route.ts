@@ -18,6 +18,8 @@ import {
 } from "@/lib/usage/counters";
 import type { UserProfile } from "@/types";
 import { cleanPreferenceLedger } from "@/lib/preferences/ledger";
+import { normalizePersistedFeedIntent, textValue } from "@/lib/feed/intent";
+import { normalizeEmailAddress } from "@/lib/email/confirm-token";
 
 // ── DB ↔ client type mapping ────────────────────────────────────
 
@@ -36,6 +38,7 @@ interface ProfileRow {
   current_challenges: string | null;
   disliked_topics: string[];
   preference_ledger?: unknown;
+  feed_intent?: unknown;
   feed_focus: UserProfile["feedFocus"];
   feed_freshness: UserProfile["feedFreshness"];
   paper_count: UserProfile["paperCount"];
@@ -58,10 +61,13 @@ interface ProfileRow {
 }
 
 export function profileRowToProfile(row: ProfileRow): Partial<UserProfile> {
+  const storedIntent = row.feed_intent === undefined || row.feed_intent === null
+    ? undefined
+    : normalizePersistedFeedIntent(row.feed_intent);
+  if (storedIntent && !storedIntent.ok) throw new Error("invalid_feed_intent");
+  const intent = storedIntent?.ok ? storedIntent.intent : undefined;
   return {
     displayName: row.display_name ?? undefined,
-    researchTopics: row.research_topics,
-    preferredMethods: row.preferred_methods,
     locationPreferences: row.location_preferences,
     authorisedCountries: row.authorised_countries ?? [],
     careerStage: (row.career_stage ?? undefined) as UserProfile["careerStage"] | undefined,
@@ -70,9 +76,14 @@ export function profileRowToProfile(row: ProfileRow): Partial<UserProfile> {
       | undefined,
     phdYear: row.phd_year ?? undefined,
     school: row.school ?? undefined,
-    currentProject: row.current_project ?? undefined,
-    currentChallenges: row.current_challenges ?? undefined,
-    dislikedTopics: row.disliked_topics ?? [],
+    currentProject: intent ? (intent.project.presence === "explicit-empty" ? "" : textValue(intent.project)) : row.current_project ?? undefined,
+    currentChallenges: intent ? (intent.challenge.presence === "explicit-empty" ? "" : textValue(intent.challenge)) : row.current_challenges ?? undefined,
+    researchTopics: intent ? intent.requiredConcepts : row.research_topics,
+    preferredMethods: intent ? intent.methods : row.preferred_methods,
+    dislikedTopics: intent ? intent.exclusions.map((entry) => entry.value) : row.disliked_topics ?? [],
+    softTopics: intent?.preferredConcepts,
+    selectedSenseConcepts: intent?.selectedSenseConcepts,
+    feedIntent: intent,
     preferenceLedger: cleanPreferenceLedger(
       row.preference_ledger as UserProfile["preferenceLedger"],
     ),
@@ -136,7 +147,15 @@ export function profilePatchToRow(p: Partial<UserProfile>, userId: string) {
   if (p.digestEmail !== undefined) row.digest_email = p.digestEmail;
   if (p.digestFrequency !== undefined) row.digest_frequency = p.digestFrequency;
   if (p.colorTheme !== undefined) row.color_theme = p.colorTheme;
+  if (p.feedIntent !== undefined) row.feed_intent = p.feedIntent;
   return row;
+}
+
+function isMissingFeedIntentColumn(error: { message?: string; code?: string } | null): boolean {
+  if (!error) return false;
+  return error.code === "42703"
+    ? /feed_intent/i.test(error.message ?? "")
+    : /profiles/i.test(error.message ?? "") && /feed_intent/i.test(error.message ?? "");
 }
 
 // ── Handlers ────────────────────────────────────────────────────
@@ -172,10 +191,21 @@ export async function GET() {
   // the browser as part of the entitlement and nowhere else, and 1-13's column
   // grants mean a browser could not write it back even if it tried. See the
   // matching note on `profilePatchToRow`.
-  return NextResponse.json({
-    profile: data ? profileRowToProfile(data as ProfileRow) : null,
-    entitlement: await clientEntitlement(user.id),
-  });
+  //
+  // Wrapped in try/catch because `profileRowToProfile` (P1 §1l) can throw
+  // `invalid_feed_intent` when the stored `feed_intent` column is malformed —
+  // theirs' version of this route never had that failure mode.
+  try {
+    return NextResponse.json({
+      profile: data ? profileRowToProfile(data as ProfileRow) : null,
+      entitlement: await clientEntitlement(user.id),
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message === "invalid_feed_intent") {
+      return NextResponse.json({ error: "invalid_feed_intent" }, { status: 500 });
+    }
+    throw error;
+  }
 }
 
 /**
@@ -227,6 +257,75 @@ export async function PUT(request: NextRequest) {
   }
 
   const body = (await request.json()) as Partial<UserProfile>;
+  if (Object.prototype.hasOwnProperty.call(body, "feedIntent")) {
+    const parsed = normalizePersistedFeedIntent(body.feedIntent);
+    if (!parsed.ok) return NextResponse.json({ error: "invalid_feed_intent" }, { status: 400 });
+    body.feedIntent = parsed.intent;
+  }
+
+  // POLISH-1-SYNC (ABC-JEV-INTEGRATION.md §1al (b)) — fields this PUT
+  // could not honour are DROPPED, never allowed to fail the whole save.
+  // Reported back so the client can tell the reader their edit to THIS
+  // field specifically didn't take, instead of silently vanishing or
+  // (the old behaviour, see below) taking every other edited field down
+  // with it.
+  const ignored: string[] = [];
+
+  // EMAIL-SETTINGS · F4/§2.3 (guide docs/jev-abc/EMAIL-SETTINGS-B-20260926T142832Z.md) —
+  // a client may only ever PUT a digestEmail equal to the account email or
+  // the value already stored for this user. A genuinely NEW address only
+  // ever becomes one of those two allowed values through
+  // GET /api/profile/confirm-email's own write, never through this route.
+  // Only reads the existing row when the patch actually touches this field
+  // (no added cost to any other field's update). Clearing the field to ""
+  // is always allowed unconditionally — there is nothing to confirm when
+  // REMOVING a destination, only when adding/changing one.
+  //
+  // POLISH-1-SYNC (§1al (b)) — a candidate this guard doesn't trust used to
+  // 400 the ENTIRE save (every other edited field lost alongside it: the
+  // same "one bad optional field blocks everything" defect SIGNIN-MERGE's
+  // §1aj fix already closed below for a missing feed_intent/
+  // preference_ledger COLUMN). A rejected digestEmail isn't a missing
+  // column, so it never hit those retries. Now: drop just this field —
+  // never WRITE it, the security property this guard exists for is
+  // unchanged, only the failure mode is — let the rest of the patch
+  // through, and report the drop in `ignored`. A failed guard READ (the
+  // SELECT below erroring) is treated the same way: an error is not
+  // evidence the candidate is safe, so it drops the field too instead of
+  // failing the whole save with a 500.
+  if (Object.prototype.hasOwnProperty.call(body, "digestEmail") && body.digestEmail !== undefined) {
+    const candidate = normalizeEmailAddress(body.digestEmail);
+    let allowed = candidate === "";
+    if (!allowed) {
+      const accountEmail = user.email ? normalizeEmailAddress(user.email) : null;
+      allowed = accountEmail !== null && candidate === accountEmail;
+      if (!allowed) {
+        const { data: existingRow, error: existingError } = await supabase
+          .from("profiles")
+          .select("digest_email")
+          .eq("user_id", user.id)
+          .maybeSingle();
+        if (existingError) {
+          allowed = false;
+        } else {
+          const storedEmail = existingRow?.digest_email
+            ? normalizeEmailAddress(existingRow.digest_email)
+            : null;
+          allowed = storedEmail !== null && candidate === storedEmail;
+        }
+      }
+    }
+    if (allowed) {
+      // Always store the normalized form — whichever path wrote
+      // digest_email (this echo-write, or confirm-email's own write), the
+      // stored value is always trim+lowercase.
+      body.digestEmail = candidate;
+    } else {
+      delete body.digestEmail;
+      ignored.push("digestEmail");
+    }
+  }
+
   const row = profilePatchToRow(body, user.id);
 
   let { data, error } = await supabase
@@ -234,6 +333,24 @@ export async function PUT(request: NextRequest) {
     .upsert(row, { onConflict: "user_id" })
     .select()
     .single();
+
+  // SIGNIN-MERGE (§1aj) — mirror the digest_email/preference_ledger branches
+  // right below: an optional column that hasn't been migrated in yet must
+  // never fail the WHOLE upsert. Before this fix, ANY PUT carrying feedIntent
+  // (i.e. almost every real save — remoteProfilePayload attaches it whenever
+  // the profile has any real content) 409'd atomically while the column was
+  // missing, and NONE of the legacy flat columns (research_topics,
+  // current_project, digest_*, …) reached the account either — an upsert
+  // that errors writes nothing. feedIntent fidelity is still lost until the
+  // migration lands, but every other field now saves regardless.
+  if (error && "feed_intent" in row && isMissingFeedIntentColumn(error)) {
+    delete row.feed_intent;
+    ({ data, error } = await supabase
+      .from("profiles")
+      .upsert(row, { onConflict: "user_id" })
+      .select()
+      .single());
+  }
 
   // Graceful fallback: if the optional digest_email column hasn't been added to
   // the DB yet (migration not run), drop it and retry so the rest of the profile
@@ -260,5 +377,15 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ profile: profileRowToProfile(data as ProfileRow) });
+  try {
+    return NextResponse.json({
+      profile: profileRowToProfile(data as ProfileRow),
+      ignored,
+    });
+  } catch (caught) {
+    if (caught instanceof Error && caught.message === "invalid_feed_intent") {
+      return NextResponse.json({ error: "invalid_feed_intent" }, { status: 500 });
+    }
+    throw caught;
+  }
 }

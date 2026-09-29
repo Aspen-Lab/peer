@@ -16,16 +16,26 @@
 // It is now one thing: today's papers. Search lives at /search, events at
 // /events, jobs at /jobs, and every credential form lives on /profile.
 
-import { useEffect, useMemo, useRef, useCallback, Suspense } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useCallback,
+  Suspense,
+} from "react";
 import Link from "next/link";
 import { activePaperTopicsKey, useFeedStore } from "@/store/feed";
+import { useBatchAcknowledgement } from "@/lib/dashboard/use-batch-acknowledgement";
 import { feedsUseAi } from "@/lib/feed/ai-tier";
 import { entitlementGrants } from "@/lib/entitlement/allowance";
 import { formatTimeAgo } from "@/lib/format";
 import { useProfileStore } from "@/store/profile";
+import { useSyncGate } from "@/components/profile-sync";
+import { AUTH_SETTLE_TIMEOUT_MS } from "@/lib/auth-settle-timeout";
 import { FeedTile } from "@/components/cards/feed-tile";
 import { StarterStrip } from "@/components/briefing/starter-strip";
-import { STARTER_TOPICS, isStarterFeed } from "@/lib/feed/starter-topics";
+import { STARTER_TOPICS, STARTER_TOPICS_KEY } from "@/lib/feed/starter-topics";
 import { SearchBox } from "@/components/briefing/search-box";
 import { UploadButton } from "@/components/briefing/upload-button";
 import { Band } from "@/components/ui/band";
@@ -68,6 +78,11 @@ function DailyBriefingPage() {
   const feedError = useFeedStore((s) => s.feedError);
   const profile = useProfileStore((s) => s.profile);
   const entitlement = useProfileStore((s) => s.entitlement);
+  // P4-S5a — acknowledges today's batch once its cards are actually in this
+  // render and the tab is visible (ABC-JEV-INTEGRATION.md §1p.C.7).
+  // `papers.length > 0` is the exact condition that gates the cards grid
+  // below, so this fires only once those cards are truly committed.
+  useBatchAcknowledgement(papers.length > 0);
 
   // Papers only. Events and jobs used to run on every home-page tick — the
   // progress bar labelled "Finding today's papers" was 30% driven by
@@ -81,14 +96,96 @@ function DailyBriefingPage() {
     [profile],
   );
 
+  // P4-S5b-FIX2 — ABC-JEV-INTEGRATION.md §1g/§1c, closing
+  // docs/jev-abc/P4-S5b-FIX-A-20260924T103406Z.md NEW FINDINGS #1: without
+  // this, the auto-load effect below could run before a signed-in user's
+  // `entitlement` resolves (profile rehydrates synchronously from
+  // localStorage; entitlement needs a real network round trip), silently
+  // building this device's delivered-history exclusions from the shared
+  // "anonymous" namespace instead of that user's own — a real re-delivery
+  // risk, not just a bookkeeping slip.
+  //
+  // P4-S5b-FIX3 — ABC-JEV-INTEGRATION.md §4 "P4-S5b-FIX3 ruled and
+  // assigned", closing two findings fresh A's review of FIX2 found
+  // (docs/jev-abc/P4-S5b-FIX2-A-20260924T111516Z.md): gating on `settled`
+  // (the PROFILE PULL finishing) was the wrong signal — `settled` has no
+  // bounded-time guarantee (web/src/lib/api.ts's apiFetch has no timeout
+  // anywhere), so a hanging pull meant this effect could wait forever and
+  // the feed would never auto-load at all this session (NEW FINDING #1);
+  // and a FAILED pull also settles `true` with `entitlement` staying null,
+  // which this gate alone could not tell apart from confirmed signed-out
+  // (NEW FINDING #2 — closed on the feed.ts side, see
+  // resolveOwnerKeyForLoad's own doc comment; this gate change removes the
+  // remaining availability risk).
+  //
+  // The owner id is knowable earlier than `settled`: profile-sync.tsx now
+  // publishes it (or a confirmed signed-out/not-configured outcome) the
+  // moment the auth check itself (`getUser()`/`onAuthStateChange`) resolves,
+  // before the profile pull even starts. `authOutcomeKnown` is that signal.
+  const authOutcomeKnown = useSyncGate((s) => s.authOutcome !== "unknown");
+  // Bounded fallback — same value as first-run.tsx's own dead-network
+  // fallback for the same underlying wait (AUTH_SETTLE_TIMEOUT_MS), so a
+  // stuck auth check can only delay, never permanently block, the first
+  // load. Once it fires, the load below proceeds with whatever
+  // resolveOwnerKeyForLoad (web/src/store/feed.ts) can determine — the
+  // unknown-owner union read, when the auth outcome is still not in yet.
+  const [authOutcomeTimedOut, setAuthOutcomeTimedOut] = useState(false);
   useEffect(() => {
+    if (authOutcomeKnown || authOutcomeTimedOut) return;
+    const timer = setTimeout(
+      () => setAuthOutcomeTimedOut(true),
+      AUTH_SETTLE_TIMEOUT_MS,
+    );
+    return () => clearTimeout(timer);
+  }, [authOutcomeKnown, authOutcomeTimedOut]);
+  const authReady = authOutcomeKnown || authOutcomeTimedOut;
+
+  // A load fired while the auth outcome was still unknown (the fallback
+  // above, not the normal path) used the unknown-owner union read
+  // (feed.ts), never the real owner's own exclusions. Once the real outcome
+  // becomes known, `feedTopicsKey === feedAutoLoadKey` (set by that
+  // provisional load, below) would otherwise silently suppress the
+  // correct-owner reload forever for the rest of this mount — this ref and
+  // the effect after the next one are the "trigger the correct-owner reload
+  // once the owner becomes known" half of the P4-S5b-FIX3 ruling (the
+  // alternative to "avoid the premature load", which the ruling does not
+  // leave available here: it requires loading after the bounded fallback
+  // even with an unknown owner). Reproduced and proven at the store level in
+  // web/src/store/feed.test.ts (no component-test harness exists in this
+  // repo for page.tsx itself — see this slice's checkpoint).
+  const provisionalOwnerLoadRef = useRef(false);
+
+  useEffect(() => {
+    if (!authReady) return;
     if (!feedAutoLoadKey || isLoading) return;
     // Reload when the loaded feed's active day-locked Papers topics differ.
     // Pending edits intentionally do not change this key until promotion on
     // the next local day.
     if (feedTopicsKey === feedAutoLoadKey) return;
+    if (!authOutcomeKnown) provisionalOwnerLoadRef.current = true;
     void loadFeed({ lanes: ["papers"] });
-  }, [feedAutoLoadKey, feedTopicsKey, isLoading, loadFeed]);
+  }, [
+    authReady,
+    authOutcomeKnown,
+    feedAutoLoadKey,
+    feedTopicsKey,
+    isLoading,
+    loadFeed,
+  ]);
+
+  // The correction itself: fires at most once, exactly when
+  // `authOutcomeKnown` first flips true (it never flips back — same
+  // never-flips-back contract as `useSyncGate.settled`), and only if the
+  // load above actually was provisional. Deliberately does not check
+  // `feedTopicsKey`/`isLoading` — loadFeed's own requestId/feedLoadSeq
+  // staleness guard already makes a stale in-flight provisional response
+  // lose to this fresh call safely (see feed.ts's papersLane).
+  useEffect(() => {
+    if (!authOutcomeKnown) return;
+    if (!provisionalOwnerLoadRef.current) return;
+    provisionalOwnerLoadRef.current = false;
+    void loadFeed({ lanes: ["papers"] });
+  }, [authOutcomeKnown, loadFeed]);
 
   const canUseAiTools = feedsUseAi(profile, entitlementGrants(entitlement));
   const shouldLoadPaperDigest = papers.length > 0 && canUseAiTools;
@@ -106,7 +203,7 @@ function DailyBriefingPage() {
     () =>
       [
         profile.researchTopics.length > 0
-          ? `Required interests (every paper below matches at least one — name the matching one in your sentence): ${profile.researchTopics.join(", ")}`
+          ? `Required interests (each paper below relates to at least one — name the one it relates to in your sentence): ${profile.researchTopics.join(", ")}`
           : "",
         profile.currentProject,
         profile.currentChallenges,
@@ -128,7 +225,18 @@ function DailyBriefingPage() {
   // every card — without this each plate said "molecular biology".
   // Nothing chosen yet: the briefing is the starter sample, and the strip below
   // the dateline is where it becomes the reader's own.
-  const starter = isStarterFeed(profile.researchTopics);
+  //
+  // FIRST-VISIT RULING (ABC-JEV-INTEGRATION.md §4 Round 3 "MERGE-B-FEED
+  // complete" / "MERGE-B-APP complete"): main's own `isStarterFeed` only
+  // checks the legacy `researchTopics` field, which would show the generic
+  // sample to a reader who declared a project or challenge but no literal
+  // topic — reintroducing exactly the keyword-only requirement acceptance 1
+  // forbids. Gated here on `feedAutoLoadKey` instead (Jev's fuller intent
+  // check via `activePaperTopicsKey`/`activePaperIntent` — project, challenge,
+  // topics, senses, everything), which resolves to `STARTER_TOPICS_KEY`
+  // exactly when nothing at all is declared and to the reader's own
+  // serialized intent otherwise.
+  const starter = feedAutoLoadKey === STARTER_TOPICS_KEY;
 
   const plateTerms = useMemo(
     () =>
@@ -155,6 +263,7 @@ function DailyBriefingPage() {
     isLoading,
     papersCount: papers.length,
     feedError,
+    intentRequired: !feedAutoLoadKey,
   });
 
   return (
@@ -206,7 +315,31 @@ function DailyBriefingPage() {
           read any yet. */}
       <div className="mt-6 flex flex-wrap items-start justify-between gap-x-6 gap-y-4">
         {papers.length > 0 ? (
-          <ReadingStrip papers={papers} readerTopics={starter ? [] : profile.researchTopics} />
+          // `flex-auto min-w-0` (§1ag): with no width of its own this flex
+          // item fell back to shrink-to-fit, which collapsed to the width of
+          // the "Your reading" label itself — the only thing here that
+          // cannot shrink to nothing once the hairline rule beside it
+          // (`flex-1`) and the graph wrapper (unmeasured, so ~0px) give way.
+          // `LibraryGraph` then measured *that* collapsed width from its own
+          // wrapper (a ResizeObserver on clientWidth) and rendered its graph
+          // at the same narrow size: a min-content trap, not a deliberate
+          // small graph. `flex-auto` (`flex: 1 1 auto`, NOT the bare
+          // `flex-1` utility, which is `flex: 1 1 0%`) gives it the row's
+          // real leftover width to measure on a wide screen, while keeping
+          // its content (the label) as its flex-basis — a bare `flex-1`'s
+          // zero basis reads as "needs no room at all" for `flex-wrap`'s own
+          // per-line fit test, so on a phone the upload/search pair no
+          // longer wrapped to its own line below and instead squeezed onto
+          // the graph's line, crushing the graph to 0px wide (verified by
+          // execution, not just read — see the checkpoint). `min-w-0` lets
+          // it still shrink below the label's own width when there IS room
+          // to share a line at some in-between width, without changing
+          // whether that line is shared in the first place.
+          <ReadingStrip
+            papers={papers}
+            readerTopics={starter ? [] : profile.researchTopics}
+            className="flex-auto min-w-0"
+          />
         ) : (
           <span aria-hidden />
         )}
@@ -296,7 +429,17 @@ const READING_STRIP = { heading: "Your reading" };
  * Renders nothing until something has been read or kept — never a
  * placeholder.
  */
-function ReadingStrip({ papers, readerTopics }: { papers: Paper[]; readerTopics: string[] }) {
+export function ReadingStrip({
+  papers,
+  readerTopics,
+  className,
+}: {
+  papers: Paper[];
+  readerTopics: string[];
+  /** The row's own width classes (page.tsx) — forwarded to `Band` so the
+   *  graph inside gets a real width to measure instead of shrink-to-fit. */
+  className?: string;
+}) {
   const library = useFeedStore((s) => s.library);
   const savedPapers = useFeedStore((s) => s.savedPapers);
   const readItems = useFeedStore((s) => s.readItems);
@@ -350,7 +493,7 @@ function ReadingStrip({ papers, readerTopics }: { papers: Paper[]; readerTopics:
   if (graph.counts.read + graph.counts.saved === 0) return null;
 
   return (
-    <Band label={READING_STRIP.heading} gap="none">
+    <Band label={READING_STRIP.heading} gap="none" className={className}>
       <div className="mt-4">
         <LibraryGraph graph={graph} steer={steer} />
       </div>
@@ -471,12 +614,23 @@ function BriefingEmpty({
   onRetry,
   onRefresh,
 }: {
-  reason: "error" | "empty";
+  // FIRST-VISIT RULING (ABC-JEV-INTEGRATION.md §4 Round 3 "MERGE-B-FEED
+  // complete"): "intent-required" stays as a value (it is a real, distinct
+  // EmptyReason — see lib/feed/empty-reason.ts), but it is not a second
+  // onboarding message: it renders through the exact same branch as "empty"
+  // below (refresh, or a link to /profile to widen/declare a focus), because
+  // by the time this component can even be reached with nothing declared,
+  // store/feed.ts's starter-topics fallback has already tried to fill the
+  // page with a sample — this is the rare edge where even that failed to
+  // produce a card, not the ordinary first-visit path (that path never
+  // reaches this component at all: `papers.length > 0` from the sample).
+  // "no-topics" is retired — see empty-reason.ts's header comment.
+  reason: "intent-required" | "error" | "empty";
   errorDetail: string | null;
   onRetry: () => void;
   onRefresh: () => void;
 }) {
-  const copy = BRIEFING_EMPTY[reason];
+  const copy = BRIEFING_EMPTY[reason === "intent-required" ? "empty" : reason];
   return (
     <EmptyState
       title={copy.title}

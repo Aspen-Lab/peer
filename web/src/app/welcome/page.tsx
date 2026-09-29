@@ -297,7 +297,7 @@ export default function WelcomePage() {
                 <StepFrame
                   kicker="The one that matters"
                   title="What should Peer track for you?"
-                  subtitle="This is the heart of your briefing. Add at least one Required topic — every paper in your feed must match one of these. Type a topic and press comma or Enter to turn it into a tag; drag a tag between columns to re-rank it."
+                  subtitle="This is the heart of your briefing. Add at least one Required topic. Peer looks for papers about these topics, even when they use different words, and ranks the closest matches first. Type a topic and press comma or Enter to turn it into a tag; drag a tag between columns to re-rank it."
                 >
                   <Field
                     label="Papers"

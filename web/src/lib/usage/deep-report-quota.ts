@@ -46,6 +46,7 @@ import {
   logStoreUnavailable,
 } from "./counters";
 import { recordUsageEventAwaited } from "./events";
+import type { CompanySpendCapRefusalReason } from "./company-budget";
 
 /**
  * The ceiling across every reader for one UTC day (launch, 2026-09-17).
@@ -68,10 +69,16 @@ export { FORCED_REBUILDS_PER_DAY };
  */
 export interface QuotaSignal {
   /**
-   * **Which cap said no** — the monthly/trial allowance, or the daily wallet
-   * breaker.
+   * **Which cap said no** — the monthly/trial allowance, the daily wallet
+   * breaker, or (SPEND-CAP, ABC-JEV-INTEGRATION.md §1v R7) the shared
+   * company-funded AI dollar budget refusing THIS specific call. The company
+   * budget kind is populated only by `app/api/papers/report/route.ts` today —
+   * the other 8 company-funded call sites keep their existing silent degrade,
+   * per the manager's ruling ("smallest reuse": this route already threads a
+   * `QuotaSignal` end to end; the other 8 have never surfaced a machine
+   * -readable reason and don't grow one just for this ticket).
    */
-  kind: "deep_report" | "breaker";
+  kind: "deep_report" | "breaker" | "company_budget";
   /**
    * **How we know** (ABC-freemium 2-02 · Ruling 4 point 2 · Ruling 6 point 1).
    *
@@ -101,6 +108,30 @@ export interface DeepReportDecision {
 }
 
 /**
+ * SPEND-CAP · R7 (ABC-JEV-INTEGRATION.md §1v) — maps a refused company-spend
+ * reservation's reason onto this file's two-value `QuotaSignal` vocabulary.
+ * `per_user_cap_exceeded` / `global_cap_exceeded` are a real, known cap
+ * tripping (`exhausted`); every other reason means the mechanism itself
+ * could not be read (cap/price config unreadable, an unrecognized provider,
+ * an unestimable call shape, or the counter store itself unreadable) — all
+ * of those are `unavailable`, the same "we don't know" bucket this file's
+ * own store-outage branches already use, and for the same reason: promising
+ * a reset time for a state that isn't a real cap would be a second lie.
+ */
+export function companyBudgetQuotaSignal(
+  reason: CompanySpendCapRefusalReason,
+  now: Date,
+): QuotaSignal {
+  const exhausted = reason === "per_user_cap_exceeded" || reason === "global_cap_exceeded";
+  return {
+    kind: "company_budget",
+    reason: exhausted ? "exhausted" : "unavailable",
+    remaining: 0,
+    resetsAt: endOfUtcDay(now).toISOString(),
+  };
+}
+
+/**
  * R-QUOTA-1's UI string, in English (Ruling 3 point 1 — the original Chinese was
  * the manager's shorthand, and the product has no other CJK text in it).
  *
@@ -108,6 +139,18 @@ export interface DeepReportDecision {
  * testable without rendering anything.
  */
 export function quotaMessage(quota: QuotaSignal, now = new Date()): string {
+  // SPEND-CAP · R7 — checked before `reason` and before the rest of this
+  // function: the shared `reason === "unavailable"` sentence just below is
+  // deep-report-specific wording ("Deep reports are..."), which would be
+  // wrong for a refusal that has nothing to do with the deep-report cap. This
+  // kind gets its own two-value branch, mirroring the same copy PATTERN
+  // ("Peer is at today's limit for X. Resets in Y.") rather than reusing the
+  // literal sentence.
+  if (quota.kind === "company_budget") {
+    return quota.reason === "unavailable"
+      ? "Peer's shared AI budget check is temporarily unavailable — nothing was spent. Try again shortly."
+      : `Peer is at today's limit for its shared AI budget. Resets in ${resetsIn(quota, now)}.`;
+  }
   // `reason` is tested BEFORE `kind` (2-02). An outage is not a cap, so it must
   // never borrow a cap's wording — and it happens on both `kind` paths, so a
   // `kind` test could not have caught it. The copy is Ruling 4 point 2's,

@@ -1,11 +1,18 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { WebResult } from "./gemini-search";
 
 // ABC-freemium 8-01(b). `searchGemini` is the ONLY thing the grounding
 // backfill can reach, so standing in for it is the only way to assert that a
 // configured Vertex Search App does not reach grounding. Everything else in
 // the module — `isGeminiSearchAvailable`, `resolveWebSearchProvider` — stays
 // real, because those are the subject of the other half of this item.
-const searchGeminiMock = vi.hoisted(() => vi.fn(async () => []));
+//
+// Explicit `Promise<WebResult[]>` return type: without it the `async () =>
+// []` empty-array literal infers as `never[]`, which locks the mock's type
+// and makes every `.mockResolvedValue([...])` below a type error.
+const searchGeminiMock = vi.hoisted(() =>
+  vi.fn(async (): Promise<WebResult[]> => []),
+);
 vi.mock("./gemini-search", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./gemini-search")>()),
   searchGemini: searchGeminiMock,
@@ -70,6 +77,7 @@ afterEach(() => {
     else process.env[key] = value;
   }
   saved.clear();
+  searchGeminiMock.mockReset();
 });
 
 function websiteResult(
@@ -101,6 +109,14 @@ describe("isVertexSearchAvailable", () => {
 
   it("is false with a search app but no project", () => {
     setEnv({ GOOGLE_VERTEX_SEARCH_ENGINE_ID: "peer-web_123" });
+    expect(isVertexSearchAvailable()).toBe(false);
+  });
+
+  it("does not borrow the Gemini project when only a Search App is configured", () => {
+    setEnv({
+      GOOGLE_VERTEX_PROJECT: "peer-gemini-project",
+      GOOGLE_VERTEX_SEARCH_ENGINE_ID: "peer-web_123",
+    });
     expect(isVertexSearchAvailable()).toBe(false);
   });
 
@@ -310,6 +326,44 @@ describe("searchVertex", () => {
     expect(grounded).toBe(0);
   });
 
+  it("keeps under-filled Vertex rows without grounding unless fallback is explicitly enabled", async () => {
+    setEnv({
+      GOOGLE_VERTEX_PROJECT: "peer-gemini-project",
+      GOOGLE_VERTEX_SEARCH_PROJECT: "peer-search-project",
+      GOOGLE_VERTEX_SEARCH_ENGINE_ID: "peer-web_123",
+    });
+    const rows = await searchVertex("site-scoped result", {
+      search: search([websiteResult()]),
+      maxResults: 5,
+    });
+
+    expect(rows.map((row) => row.url)).toEqual([
+      "https://example.edu/workshop-2026",
+    ]);
+    expect(searchGeminiMock).not.toHaveBeenCalled();
+  });
+
+  it("uses grounding backfill only for the explicit on opt-in", async () => {
+    setEnv({
+      GOOGLE_VERTEX_PROJECT: "peer-gemini-project",
+      GOOGLE_VERTEX_SEARCH_FALLBACK: "on",
+    });
+    searchGeminiMock.mockResolvedValue([
+      { title: "Grounded", url: "https://example.edu/g", snippet: "s" },
+    ]);
+
+    const rows = await searchVertex("under-filled", {
+      search: search([websiteResult()]),
+      maxResults: 5,
+    });
+
+    expect(searchGeminiMock).toHaveBeenCalledTimes(1);
+    expect(rows.map((row) => row.url)).toEqual([
+      "https://example.edu/workshop-2026",
+      "https://example.edu/g",
+    ]);
+  });
+
   // CONTRACT RESTATED, not deleted. It read "returns an empty array when the
   // search itself throws" and asserted `rows` was `[]`. That is precisely the
   // silence a dead Tavily key hid behind for a full day on 2026-08-27: an empty
@@ -504,17 +558,17 @@ describe("resolveWebSearchProvider with vertex", () => {
 });
 
 describe("webSearchOptions", () => {
-  it("selects vertex when a Search App is configured", () => {
+  it("does not select vertex from configured credentials without a server-funded capability", () => {
     setEnv({
       GOOGLE_VERTEX_SEARCH_PROJECT: "peer-dev",
       GOOGLE_VERTEX_SEARCH_ENGINE_ID: "peer-web_123",
     });
-    expect(webSearchOptions(undefined)).toEqual({ provider: "vertex" });
+    expect(webSearchOptions(undefined)).toBeUndefined();
   });
 
-  it("falls back to gemini when only Vertex model credentials exist", () => {
+  it("does not select Gemini grounding from configured credentials without a server-funded capability", () => {
     setEnv({ GOOGLE_VERTEX_PROJECT: "peer-dev" });
-    expect(webSearchOptions(undefined)).toEqual({ provider: "gemini" });
+    expect(webSearchOptions(undefined)).toBeUndefined();
   });
 
   it("honours the existing gemini opt-out for both engines", () => {

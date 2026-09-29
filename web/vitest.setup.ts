@@ -40,5 +40,76 @@ function deleteSpendableKeys(): void {
   }
 }
 
+/**
+ * LIVE-EVAL-4 (ABC-JEV-INTEGRATION.md §1w P4, guide Finding C1c) — a second,
+ * CONDITIONAL layer for the three S2/OpenAlex live-channels credentials.
+ *
+ * Unlike the two names above, these three cannot be deleted unconditionally:
+ * this same file runs (via `sharedVitestConfig.test.setupFiles`) under EVERY
+ * config, including `vitest.live-channels.config.ts` itself — which injects
+ * exactly these three names into `test.env` so its one opt-in test file can
+ * make a real call. An unconditional delete here would strip the very
+ * credentials that config just injected, before every test, every run.
+ *
+ * So the deletion is conditional on the SAME opt-in literal that config sets
+ * (`PEER_RUN_LIVE_CHANNELS_EVAL === "1"`): everywhere else (the ~default
+ * suite, a developer shell that happens to export one, a CI runner with one
+ * in the environment) it is stripped exactly like `GOOGLE_API_KEY`/
+ * `TAVILY_API_KEY` above; only inside the live-channels config's own process,
+ * where the opt-in literal is already `"1"`, does it survive. The predicate
+ * is exported as a pure function (not inlined) so it is directly testable
+ * without mutating global `process.env` in the test itself — see
+ * `src/test-support/env-isolation.test.ts`.
+ */
+const LIVE_CHANNELS_KEYS_FORBIDDEN_UNLESS_OPTED_IN = [
+  "SEMANTIC_SCHOLAR_API_KEY",
+  "OPENALEX_API_KEY",
+  "OPENALEX_EMAIL",
+] as const;
+
+export function shouldStripLiveChannelsEnv(
+  env: Record<string, string | undefined>,
+): boolean {
+  return env.PEER_RUN_LIVE_CHANNELS_EVAL !== "1";
+}
+
+function deleteLiveChannelsKeysUnlessOptedIn(): void {
+  if (!shouldStripLiveChannelsEnv(process.env)) return;
+  for (const name of LIVE_CHANNELS_KEYS_FORBIDDEN_UNLESS_OPTED_IN) {
+    delete process.env[name];
+  }
+}
+
+/**
+ * JEV-DIRECT (§1aa point 6) — the sibling conditional second-layer lock for
+ * the opt-in live Jev smoke runner, mirroring
+ * `LIVE_CHANNELS_KEYS_FORBIDDEN_UNLESS_OPTED_IN`/`shouldStripLiveChannelsEnv`
+ * above exactly. `JEV_API_KEY` cannot be unconditionally deleted the way
+ * `GOOGLE_API_KEY`/`TAVILY_API_KEY` are (that would strip it from the
+ * opt-in smoke config's own process too, which injects exactly this one
+ * name into `test.env`) — so it is stripped everywhere EXCEPT where the
+ * SAME opt-in literal the smoke config sets (`PEER_RUN_JEV_SMOKE === "1"`)
+ * is already present. Own name, never reusing
+ * `PEER_RUN_LIVE_CHANNELS_EVAL` — the two opt-in evaluations are unrelated.
+ */
+const JEV_SMOKE_KEYS_FORBIDDEN_UNLESS_OPTED_IN = ["JEV_API_KEY"] as const;
+
+export function shouldStripJevSmokeEnv(
+  env: Record<string, string | undefined>,
+): boolean {
+  return env.PEER_RUN_JEV_SMOKE !== "1";
+}
+
+function deleteJevSmokeKeysUnlessOptedIn(): void {
+  if (!shouldStripJevSmokeEnv(process.env)) return;
+  for (const name of JEV_SMOKE_KEYS_FORBIDDEN_UNLESS_OPTED_IN) {
+    delete process.env[name];
+  }
+}
+
 deleteSpendableKeys();
+deleteLiveChannelsKeysUnlessOptedIn();
+deleteJevSmokeKeysUnlessOptedIn();
 beforeEach(deleteSpendableKeys);
+beforeEach(deleteLiveChannelsKeysUnlessOptedIn);
+beforeEach(deleteJevSmokeKeysUnlessOptedIn);

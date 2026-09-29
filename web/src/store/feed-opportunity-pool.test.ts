@@ -290,20 +290,47 @@ describe("feed opportunity pools", () => {
       savedEvents: [event],
       savedJobs: [job],
     });
-    let state = useFeedStore.getState();
+    const state = useFeedStore.getState();
     expect(state.events[0].isSaved).toBe(true);
     expect(state.eventPool[0].isSaved).toBe(true);
     expect(state.jobs[0].isSaved).toBe(true);
     expect(state.jobPool[0].isSaved).toBe(true);
+  });
 
+  // SIGNIN-MERGE (ABC-JEV-INTEGRATION.md §1af/§1aj, ruling P2) — rewritten,
+  // not deleted: this test used to hydrate save state in, then hydrate a
+  // SECOND, empty remote snapshot in and assert the item went back to
+  // isSaved: false. That was the old "replace" behaviour P2 overturns —
+  // "saved papers / reading history / feedback: always union, never
+  // replace — mandatory." A later pull reporting the account has zero
+  // saved events/jobs is now treated the same as any other pull result:
+  // it can only ADD to what is locally saved, never take away an item this
+  // device already holds as saved (see store/feed.ts's `unionById` and
+  // `hydrateFromRemote`'s own doc comment for the full reasoning and the
+  // trade-off this accepts — an unsave made on a different device no
+  // longer reaches this device via this path).
+  it("a later pull reporting zero saved events/jobs does not un-save an item this device already holds as saved (SIGNIN-MERGE §1aj P2)", () => {
+    const event = eventFixture("event:remote-save", 84);
+    const job = jobFixture("job:remote-save", 83);
+    useFeedStore.setState({
+      events: [event],
+      eventPool: [event],
+      jobs: [job],
+      jobPool: [job],
+    });
+
+    useFeedStore.getState().hydrateFromRemote({
+      savedEvents: [event],
+      savedJobs: [job],
+    });
     useFeedStore.getState().hydrateFromRemote({
       savedEvents: [],
       savedJobs: [],
     });
-    state = useFeedStore.getState();
-    expect(state.events[0].isSaved).toBe(false);
-    expect(state.eventPool[0].isSaved).toBe(false);
-    expect(state.jobs[0].isSaved).toBe(false);
-    expect(state.jobPool[0].isSaved).toBe(false);
+    const state = useFeedStore.getState();
+    expect(state.events[0].isSaved).toBe(true);
+    expect(state.eventPool[0].isSaved).toBe(true);
+    expect(state.jobs[0].isSaved).toBe(true);
+    expect(state.jobPool[0].isSaved).toBe(true);
   });
 });

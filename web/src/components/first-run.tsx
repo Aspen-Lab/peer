@@ -18,6 +18,11 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import { usePathname } from "next/navigation";
 import { useProfileStore } from "@/store/profile";
 import { useSyncGate } from "@/components/profile-sync";
+// P4-S5b-FIX3 — the literal 4000 below is now sourced from here so it can't
+// silently drift from page.tsx's own auth-outcome fallback, which waits on
+// the same underlying ProfileSync state. The value and this hook's own
+// behaviour are unchanged by the extraction.
+import { AUTH_SETTLE_TIMEOUT_MS } from "@/lib/auth-settle-timeout";
 
 // True once the profile store has rehydrated from localStorage. The store uses
 // `skipHydration` and is rehydrated after mount by <StoreHydrator/>, so before
@@ -45,7 +50,7 @@ export function useProfileSettled(): boolean {
 
   useEffect(() => {
     if (!hydrated || syncSettled || timedOut) return;
-    const timer = setTimeout(() => setTimedOut(true), 4000);
+    const timer = setTimeout(() => setTimedOut(true), AUTH_SETTLE_TIMEOUT_MS);
     return () => clearTimeout(timer);
   }, [hydrated, syncSettled, timedOut]);
 

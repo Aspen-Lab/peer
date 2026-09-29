@@ -25,6 +25,7 @@ import { GEMINI_SOURCE_TIMEOUT_MS } from "@/lib/sources/gemini-search";
 import { bySourceId, webSearch } from "@/lib/sources";
 import type { RawItem } from "@/lib/sources/types";
 import type { CachedPool, PoolCache } from "@/lib/opportunities/pool-cache";
+import { createTrustedPaperCacheScope } from "@/lib/opportunities/private-paper-cache";
 
 class MemoryPoolCache implements PoolCache {
   private readonly values = new Map<string, CachedPool>();
@@ -73,7 +74,7 @@ afterEach(() => {
 // that missing assertion as well as this item's.
 // ═══════════════════════════════════════════════════════════════════════════
 
-describe("RULING 79c — the papers web source gets the gemini budget", () => {
+describe("P0-02 — papers web source stays server-funded-disabled without a capability", () => {
   async function run(connectors: Record<string, unknown> | undefined) {
     bySourceId.openalex.fetch = vi.fn(async () => [paper]);
     webSearch.fetch = vi.fn(async () => []);
@@ -83,6 +84,11 @@ describe("RULING 79c — the papers web source gets the gemini budget", () => {
         topics: ["molten salt"],
         sources: ["openalex" as const, "web" as const],
         aiTier: 0 as const,
+        paperCacheScope: createTrustedPaperCacheScope({
+          ownerId: "timeout-test-owner",
+          topics: ["molten salt"],
+          aiTier: 0,
+        }),
         ...(connectors ? { searchConnectors: connectors } : {}),
       } as Parameters<typeof runFeedPipeline>[0],
       // A private cache per run. The daily pool would otherwise serve the
@@ -98,17 +104,17 @@ describe("RULING 79c — the papers web source gets the gemini budget", () => {
     );
   }
 
-  it("hands the web source 25 s on gemini and every other source the default", async () => {
+  it("does not arm a server-funded web timeout from configured credentials", async () => {
     vi.stubEnv("GOOGLE_VERTEX_PROJECT", "some-project");
     const budgets = await run(undefined);
-    expect(budgets.get("web")).toBe(GEMINI_SOURCE_TIMEOUT_MS);
+    expect(budgets.get("web")).toBeUndefined();
     // THE OVERRIDE IS PER-SOURCE, NEVER A GLOBAL DEFAULT CHANGE. Every other
     // paper source keeps the 8 s it has always had, so the 25 s is only ever
     // paid when the web source is genuinely slow.
     expect(budgets.get("openalex")).toBeUndefined();
   });
 
-  it("is unaffected by the Tavily connector, because papers never use it", async () => {
+  it("does not let a connector body value re-enable server-funded web search", async () => {
     // THIS TEST USED TO ASSERT THE OPPOSITE, and the change of premise is the
     // point: a Tavily key once selected a Tavily provider for this source and
     // kept it on the 8 s default. The paper surface no longer spends the
@@ -120,7 +126,7 @@ describe("RULING 79c — the papers web source gets the gemini budget", () => {
     });
     const without = await run(undefined);
     expect([...withTavily.entries()]).toEqual([...without.entries()]);
-    expect(withTavily.get("web")).toBe(GEMINI_SOURCE_TIMEOUT_MS);
+    expect(withTavily.get("web")).toBeUndefined();
   });
 
   it("does not raise the wall when no Vertex project is configured", async () => {

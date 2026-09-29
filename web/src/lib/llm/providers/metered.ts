@@ -44,14 +44,66 @@
  * `resolveProvider` stays **synchronous**: this is pure object construction and
  * the recording inside `logLlmUsage` is fire-and-forget, so nothing becomes
  * async and none of the eleven un-awaited call sites change.
+ *
+ * ── SPEND-CAP — the reservation hook (ABC-JEV-INTEGRATION.md §1v R9) ────────
+ *
+ * For a non-BYOK call, and only when `PEER_COMPANY_SPEND_CAP` is `"on"`,
+ * `meterCall` reserves an estimated worst-case cost BEFORE `fn.apply` and
+ * settles it once, in `finally`, after every chain attempt inside `fn` has
+ * finished (see `usage/company-budget.ts`'s header for the full design and
+ * why settlement cannot live inside `logLlmUsage` itself). Default OFF is
+ * exactly today's code path: the `if` below is never entered, so there is no
+ * config read and no counter call at all — a protective test in
+ * `metered.test.ts` asserts this directly.
  */
-import { recordUsageEvent } from "@/lib/usage/events";
+import { recordUsageEvent, recordUsageEventAwaited } from "@/lib/usage/events";
 import {
   withUsageContext,
   type UsageCallScope,
   type UsageContext,
 } from "@/lib/usage/context";
+import {
+  companySpendCapEnabled,
+  reserveCompanySpendForCall,
+  settleCompanySpend,
+  CompanySpendCapRefusedError,
+  type CompanyBudgetCallShape,
+} from "@/lib/usage/company-budget";
+import type { ModelTier } from "./types";
 import type { DigestProvider } from "./types";
+
+/**
+ * Builds the estimator's call shape from the exact arguments a call site
+ * passed, keyed off `fallbackPath` (`meterProvider`'s own per-method literal:
+ * `"digest"`, `"json"`, `"vision"`, or `"test-connection"`) — measured from
+ * the real, already-built prompt, never a second hand-maintained ceiling.
+ */
+function companyBudgetShapeFor(fallbackPath: string, args: unknown[]): CompanyBudgetCallShape {
+  const opts = (args[0] ?? {}) as Record<string, unknown>;
+  switch (fallbackPath) {
+    case "digest":
+      return { method: "digest", papers: opts.papers, contextHint: opts.contextHint };
+    case "json":
+      return {
+        method: "json",
+        systemPrompt: typeof opts.systemPrompt === "string" ? opts.systemPrompt : "",
+        userPrompt: typeof opts.userPrompt === "string" ? opts.userPrompt : "",
+        maxTokens: typeof opts.maxTokens === "number" ? opts.maxTokens : undefined,
+        tier: opts.tier as ModelTier | undefined,
+      };
+    case "vision":
+      return {
+        method: "vision",
+        systemPrompt: typeof opts.systemPrompt === "string" ? opts.systemPrompt : "",
+        userPrompt: typeof opts.userPrompt === "string" ? opts.userPrompt : "",
+        maxTokens: typeof opts.maxTokens === "number" ? opts.maxTokens : undefined,
+        tier: opts.tier as ModelTier | undefined,
+        imageCount: Array.isArray(opts.images) ? opts.images.length : 0,
+      };
+    default:
+      return { method: "test-connection" };
+  }
+}
 
 function meterCall<A extends unknown[], R>(
   provider: DigestProvider,
@@ -61,6 +113,30 @@ function meterCall<A extends unknown[], R>(
 ): (...args: A) => Promise<R> {
   return async (...args: A): Promise<R> => {
     const scope: UsageCallScope = { ...ctx, recorded: false };
+
+    // SPEND-CAP · R9 — default OFF short-circuits this whole block: no config
+    // read, no counter call, `scope.companyReservation` stays undefined.
+    if (!ctx.byok && companySpendCapEnabled()) {
+      const shape = companyBudgetShapeFor(fallbackPath, args);
+      const reservation = await reserveCompanySpendForCall(shape, provider.id, ctx.userId, new Date());
+      if (!reservation.ok) {
+        // §2.7 — the audit trail for a spend cap, awaited like every other
+        // breaker row in this codebase (`deep-report-quota.ts`,
+        // `rebuild-breaker.ts`): losing it to a cold shutdown would leave a
+        // trip with no record. Reuses the existing free-text `path` field
+        // rather than a new column.
+        await recordUsageEventAwaited({
+          user_id: ctx.userId,
+          kind: "breaker",
+          path: `company-spend:${reservation.reason}`,
+          ok: false,
+          byok: ctx.byok,
+        });
+        throw new CompanySpendCapRefusedError(reservation.reason);
+      }
+      scope.companyReservation = reservation.reservation;
+    }
+
     const started = Date.now();
     let ok = false;
     try {
@@ -103,6 +179,16 @@ function meterCall<A extends unknown[], R>(
           ok,
           byok: ctx.byok,
         });
+      }
+
+      // SPEND-CAP · R10 — settle EXACTLY ONCE per call, after every chain
+      // attempt inside `fn` has already accumulated its actual cost onto
+      // `scope.companyReservation.settlement` (from `logLlmUsage`). Never
+      // awaited: a slow settlement write must not add latency to a request
+      // that already has its answer, matching `recordUsageEvent`'s own
+      // fire-and-forget contract one block above.
+      if (scope.companyReservation) {
+        void settleCompanySpend(scope.companyReservation, new Date());
       }
     }
   };

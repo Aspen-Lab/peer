@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { NextRequest } from "next/server";
 import {
   deployedRuntimeEnv,
   signedIn,
@@ -10,11 +11,20 @@ import {
   resetCounterStoreForTests,
 } from "@/lib/usage/counters";
 import { ANONYMOUS_ENTITLEMENT, type Entitlement } from "@/lib/entitlement/types";
+import { selectedSenseConcept } from "@/lib/feed/senses";
 
 const mocks = vi.hoisted(() => ({
   getUser: vi.fn(),
   maybeSingle: vi.fn(),
   resolveEntitlement: vi.fn(),
+  // Jev's own PUT-path tests need to install a different `createClient` shape
+  // (one with `.upsert`) per test; theirs' GET-path tests below need the
+  // fixed select-only shape. One overridable mock serves both: this file's
+  // own default install (right after the `vi.mock` call) covers every test
+  // that does not call `mockResolvedValueOnce` itself, and `mockResolvedValueOnce`
+  // self-clears after one call so a PUT test's override can never leak into a
+  // later test regardless of run order.
+  createClient: vi.fn(),
 }));
 
 // ABC-freemium 2-03 — the GET half of this route had no coverage at all, which
@@ -22,14 +32,17 @@ const mocks = vi.hoisted(() => ({
 // reader's allowance arriving as a bare `null`. The handler is driven for real;
 // only the session, the profile row and the plan lookup are stubbed.
 vi.mock("@/lib/supabase/server", () => ({
-  createClient: () =>
-    Promise.resolve({
-      auth: { getUser: mocks.getUser },
-      from: () => ({
-        select: () => ({ eq: () => ({ maybeSingle: mocks.maybeSingle }) }),
-      }),
-    }),
+  createClient: mocks.createClient,
 }));
+
+mocks.createClient.mockImplementation(() =>
+  Promise.resolve({
+    auth: { getUser: mocks.getUser },
+    from: () => ({
+      select: () => ({ eq: () => ({ maybeSingle: mocks.maybeSingle }) }),
+    }),
+  }),
+);
 
 // Stubbed so each plan can be driven directly. The resolver's own behaviour is
 // `resolve.test.ts`'s subject; what is under test here is what the DELIVERY
@@ -37,8 +50,13 @@ vi.mock("@/lib/supabase/server", () => ({
 vi.mock("@/lib/entitlement/resolve", () => ({
   resolveEntitlement: mocks.resolveEntitlement,
 }));
+// Deliberately NOT mocked: "@/lib/entitlement/allowance" and
+// "@/lib/usage/counters" — theirs' GET tests below need the real arithmetic
+// (`toClientEntitlement`, real counter increments), and `PUT` never calls
+// either module at all, so ours' PUT tests have nothing to lose by leaving
+// them real too.
 
-import { GET, profilePatchToRow, profileRowToProfile } from "./route";
+import { GET, PUT, profilePatchToRow, profileRowToProfile } from "./route";
 
 const rowFixture = {
   user_id: "user-1",
@@ -75,8 +93,86 @@ const rowFixture = {
   color_theme: "system:ember" as const,
   updated_at: "2026-07-31T00:00:00.000Z",
 };
+const explicitEmptyIntent = {
+  version: "feed-intent-v1" as const,
+  project: { presence: "explicit-empty" as const }, challenge: { presence: "omitted" as const },
+  requiredConcepts: [], preferredConcepts: [], exclusions: [], methods: [], selectedSenseConcepts: [],
+};
 
 describe("profile route work-authorisation mapping", () => {
+  it("omits an absent intent but round-trips canonical empty/value cards without administrative fields", () => {
+    expect(profilePatchToRow({ displayName: "Only this" }, "user-1")).not.toHaveProperty("feed_intent");
+    expect(profilePatchToRow({ feedIntent: explicitEmptyIntent }, "user-1")).toMatchObject({ feed_intent: explicitEmptyIntent });
+    const valued = { ...explicitEmptyIntent, project: { presence: "value" as const, value: "Battery", provenance: "user" as const }, selectedSenseConcepts: [selectedSenseConcept("hr.role_conflict")] };
+    expect(profileRowToProfile({ ...rowFixture, feed_intent: valued }).feedIntent).toEqual(valued);
+    expect(profileRowToProfile({ ...rowFixture, feed_intent: explicitEmptyIntent }).currentProject).toBe("");
+    expect(profilePatchToRow({ plan: "paid", entitlement: { forged: true } } as never, "user-1")).toEqual({ user_id: "user-1" });
+  });
+
+  it("rejects an invalid supplied card before any upsert", async () => {
+    const upsert = vi.fn();
+    mocks.createClient.mockResolvedValueOnce({ auth: { getUser: async () => ({ data: { user: { id: "user-1" } } }) }, from: () => ({ upsert }) });
+    const response = await PUT(new NextRequest("http://peer.test/api/profile", { method: "PUT", body: JSON.stringify({ feedIntent: { version: "not-v1" } }) }));
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({ error: "invalid_feed_intent" });
+    expect(upsert).not.toHaveBeenCalled();
+  });
+
+  // SIGNIN-MERGE (§1aj) — rewritten, not deleted: the OLD behaviour this test
+  // asserted (a bare 409, no retry) was the root cause of "every profile save
+  // fails" (ABC-JEV-INTEGRATION.md §1ah/§1aj) — a feed_intent-carrying PUT is
+  // almost every real save, since remoteProfilePayload attaches feedIntent
+  // whenever the profile has any real content, so this atomically failed the
+  // WHOLE upsert on every save for any account whose Supabase project lags the
+  // feed_intent migration. The route must now mirror its digest_email/
+  // preference_ledger siblings: strip the unavailable field and retry once, so
+  // the legacy flat columns (research_topics, current_project, digest_*, …)
+  // still reach the account.
+  it("degrades gracefully when feed_intent's column is missing: strips it and retries so the rest of the profile still saves", async () => {
+    const firstError = { message: "Could not find the 'feed_intent' column of 'profiles' in the schema cache" };
+    // The route mutates its own `row` object in place before retrying
+    // (`delete row.feed_intent`), so `upsert.mock.calls` would show the SAME
+    // (already-mutated) object for both calls if read after the fact — each
+    // call is snapshotted (shallow-copied) here, at the moment it happens,
+    // to see what the first attempt actually sent.
+    const seenRows: Record<string, unknown>[] = [];
+    const upsert = vi.fn((row: Record<string, unknown>) => {
+      seenRows.push({ ...row });
+      return seenRows.length === 1
+        ? { select: () => ({ single: async () => ({ data: null, error: firstError }) }) }
+        : { select: () => ({ single: async () => ({ data: { ...rowFixture, research_topics: ["solid-state battery"] }, error: null }) }) };
+    });
+    mocks.createClient.mockResolvedValueOnce({ auth: { getUser: async () => ({ data: { user: { id: "user-1" } } }) }, from: () => ({ upsert }) });
+    const response = await PUT(
+      new NextRequest("http://peer.test/api/profile", {
+        method: "PUT",
+        body: JSON.stringify({ feedIntent: explicitEmptyIntent, researchTopics: ["solid-state battery"] }),
+      }),
+    );
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      profile: { researchTopics: ["solid-state battery"] },
+    });
+    expect(upsert).toHaveBeenCalledTimes(2);
+    // First attempt carried feed_intent…
+    expect(seenRows[0]).toHaveProperty("feed_intent");
+    // …the retry dropped it but kept every other field.
+    expect(seenRows[1]).not.toHaveProperty("feed_intent");
+    expect(seenRows[1]).toMatchObject({ research_topics: ["solid-state battery"] });
+  });
+
+  it("still reports feed_intent_schema_unavailable when the retry itself fails for an unrelated reason", async () => {
+    const firstError = { message: "Could not find the 'feed_intent' column of 'profiles' in the schema cache" };
+    const secondError = { message: "connection reset" };
+    const upsert = vi
+      .fn()
+      .mockReturnValueOnce({ select: () => ({ single: async () => ({ data: null, error: firstError }) }) })
+      .mockReturnValueOnce({ select: () => ({ single: async () => ({ data: null, error: secondError }) }) });
+    mocks.createClient.mockResolvedValueOnce({ auth: { getUser: async () => ({ data: { user: { id: "user-1" } } }) }, from: () => ({ upsert }) });
+    const response = await PUT(new NextRequest("http://peer.test/api/profile", { method: "PUT", body: JSON.stringify({ feedIntent: explicitEmptyIntent }) }));
+    expect(response.status).toBe(500);
+    expect(upsert).toHaveBeenCalledTimes(2);
+  });
   it("reads authorised countries from a remote profile row", () => {
     expect(profileRowToProfile(rowFixture).authorisedCountries).toEqual([
       "United States",
@@ -102,6 +198,212 @@ describe("profile route work-authorisation mapping", () => {
       user_id: "user-1",
       authorised_countries: ["Germany"],
     });
+  });
+});
+
+/**
+ * EMAIL-SETTINGS — F4/§2.3: `PUT /api/profile` must reject a client-sent
+ * `digestEmail` unless it equals the account email or the value already
+ * stored for that user. Without this, a confirmation flow bolted on only at
+ * a separate confirm-email route would do nothing — a client could still
+ * PUT an unconfirmed address directly. Confirming a genuinely new address
+ * only ever happens through GET /api/profile/confirm-email's own write
+ * (tested in that route's own suite), never through this one.
+ */
+describe("PUT /api/profile — the digest_email confirmation guard (F4)", () => {
+  function fromStub(opts: {
+    existingDigestEmail?: string | null;
+    existingSelectError?: string;
+  }) {
+    const maybeSingle = vi.fn(async () =>
+      opts.existingSelectError
+        ? { data: null, error: { message: opts.existingSelectError } }
+        : {
+            data:
+              opts.existingDigestEmail === undefined
+                ? null
+                : { digest_email: opts.existingDigestEmail },
+            error: null,
+          },
+    );
+    // Explicit `vi.fn<Signature>()` type argument, same convention as
+    // src/app/api/jobs/dispatch-digests/route.test.ts's own mocks (see its
+    // comment): the real `.upsert(row, {onConflict})` call site passes two
+    // arguments, but a bare `() => ({...})` factory would leave
+    // `.mock.calls[0]` typed as the empty tuple `[]` (TS infers a mock's
+    // argument type from its implementation, not from how the route
+    // actually calls it) — that's enough for the pre-existing
+    // `toHaveBeenCalledWith` assertions below (loosely typed by vitest) but
+    // not for indexing the written row directly, which the new
+    // drop-not-reject tests (POLISH-1-SYNC §1al (b)) need to do.
+    const upsert = vi.fn<
+      (row: Record<string, unknown>, opts?: { onConflict: string }) => {
+        select: () => { single: () => Promise<{ data: unknown; error: null }> };
+      }
+    >(() => ({
+      select: () => ({
+        single: async () => ({
+          data: { ...rowFixture, digest_email: "written@example.test" },
+          error: null,
+        }),
+      }),
+    }));
+    return {
+      select: () => ({ eq: () => ({ maybeSingle }) }),
+      upsert,
+    };
+  }
+
+  function putWithDigestEmail(digestEmail: string) {
+    return PUT(
+      new NextRequest("http://peer.test/api/profile", {
+        method: "PUT",
+        body: JSON.stringify({ digestEmail }),
+      }),
+    );
+  }
+
+  it("accepts a value equal to the account email (case/whitespace-insensitive) and normalizes it before storing", async () => {
+    const stub = fromStub({ existingDigestEmail: null });
+    mocks.createClient.mockResolvedValueOnce({
+      auth: { getUser: async () => ({ data: { user: { id: "user-1", email: "Person@Example.test" } } }) },
+      from: () => stub,
+    });
+
+    const response = await putWithDigestEmail("  person@EXAMPLE.test  ");
+
+    expect(response.status).toBe(200);
+    expect(stub.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ digest_email: "person@example.test" }),
+      { onConflict: "user_id" },
+    );
+  });
+
+  it("accepts a value equal to the currently-stored digest_email", async () => {
+    const stub = fromStub({ existingDigestEmail: "already@example.test" });
+    mocks.createClient.mockResolvedValueOnce({
+      auth: { getUser: async () => ({ data: { user: { id: "user-1", email: "person@example.test" } } }) },
+      from: () => stub,
+    });
+
+    const response = await putWithDigestEmail("Already@Example.test");
+
+    expect(response.status).toBe(200);
+    expect(stub.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ digest_email: "already@example.test" }),
+      { onConflict: "user_id" },
+    );
+  });
+
+  it("POLISH-1-SYNC (ABC-JEV-INTEGRATION.md §1al (b)): drops a value that is neither the account email nor the stored value, instead of rejecting the whole save", async () => {
+    // Superseded contract (was: 400 `digest_email_requires_confirmation`,
+    // upsert never called at all — so every OTHER field in the same PUT was
+    // lost too). §1al (b) rules the field alone must be dropped, not the
+    // whole save; the security property (never WRITE an unconfirmed
+    // address) is unchanged — see the `not.toHaveProperty` assertion below.
+    const stub = fromStub({ existingDigestEmail: "already@example.test" });
+    mocks.createClient.mockResolvedValueOnce({
+      auth: { getUser: async () => ({ data: { user: { id: "user-1", email: "person@example.test" } } }) },
+      from: () => stub,
+    });
+
+    const response = await putWithDigestEmail("someone-else@example.test");
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ ignored: ["digestEmail"] });
+    expect(stub.upsert).toHaveBeenCalledTimes(1);
+    const [writtenRow] = stub.upsert.mock.calls[0];
+    expect(writtenRow).not.toHaveProperty("digest_email");
+  });
+
+  it("POLISH-1-SYNC (§1al (b)): the rest of a multi-field patch still saves when digestEmail is dropped", async () => {
+    const stub = fromStub({ existingDigestEmail: "already@example.test" });
+    mocks.createClient.mockResolvedValueOnce({
+      auth: { getUser: async () => ({ data: { user: { id: "user-1", email: "person@example.test" } } }) },
+      from: () => stub,
+    });
+
+    const response = await PUT(
+      new NextRequest("http://peer.test/api/profile", {
+        method: "PUT",
+        body: JSON.stringify({ digestEmail: "someone-else@example.test", displayName: "New Name" }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ ignored: ["digestEmail"] });
+    expect(stub.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ display_name: "New Name" }),
+      { onConflict: "user_id" },
+    );
+    const [writtenRow] = stub.upsert.mock.calls[0];
+    expect(writtenRow).not.toHaveProperty("digest_email");
+  });
+
+  it("allows clearing the field to empty unconditionally (nothing to confirm when removing a destination)", async () => {
+    const stub = fromStub({ existingDigestEmail: "already@example.test" });
+    mocks.createClient.mockResolvedValueOnce({
+      auth: { getUser: async () => ({ data: { user: { id: "user-1", email: "person@example.test" } } }) },
+      from: () => stub,
+    });
+
+    const response = await putWithDigestEmail("");
+
+    expect(response.status).toBe(200);
+    expect(stub.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ digest_email: "" }),
+      { onConflict: "user_id" },
+    );
+  });
+
+  it("a patch that never mentions digestEmail never reads the existing row (no added cost to other fields)", async () => {
+    const upsert = vi.fn(() => ({ select: () => ({ single: async () => ({ data: rowFixture, error: null }) }) }));
+    const select = vi.fn();
+    mocks.createClient.mockResolvedValueOnce({
+      auth: { getUser: async () => ({ data: { user: { id: "user-1", email: "person@example.test" } } }) },
+      from: () => ({ select, upsert }),
+    });
+
+    const response = await PUT(
+      new NextRequest("http://peer.test/api/profile", { method: "PUT", body: JSON.stringify({ displayName: "New Name" }) }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(select).not.toHaveBeenCalled();
+  });
+
+  it("POLISH-1-SYNC (§1al (b)): a failed pre-check read drops the field too, instead of failing the whole save with a 500", async () => {
+    // Superseded contract (was: 500, upsert never called). §1al (b): a
+    // failed guard read is not evidence the candidate is safe, so it is
+    // treated exactly like an untrusted one — dropped, not written, save
+    // continues.
+    const stub = fromStub({ existingSelectError: "database unavailable" });
+    mocks.createClient.mockResolvedValueOnce({
+      auth: { getUser: async () => ({ data: { user: { id: "user-1", email: "person@example.test" } } }) },
+      from: () => stub,
+    });
+
+    const response = await putWithDigestEmail("someone-else@example.test");
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ ignored: ["digestEmail"] });
+    expect(stub.upsert).toHaveBeenCalledTimes(1);
+    const [writtenRow] = stub.upsert.mock.calls[0];
+    expect(writtenRow).not.toHaveProperty("digest_email");
+  });
+
+  it("a patch that never mentions digestEmail reports nothing ignored", async () => {
+    const upsert = vi.fn(() => ({ select: () => ({ single: async () => ({ data: rowFixture, error: null }) }) }));
+    mocks.createClient.mockResolvedValueOnce({
+      auth: { getUser: async () => ({ data: { user: { id: "user-1", email: "person@example.test" } } }) },
+      from: () => ({ select: vi.fn(), upsert }),
+    });
+
+    const response = await PUT(
+      new NextRequest("http://peer.test/api/profile", { method: "PUT", body: JSON.stringify({ displayName: "New Name" }) }),
+    );
+
+    await expect(response.json()).resolves.toMatchObject({ ignored: [] });
   });
 });
 
@@ -311,5 +613,103 @@ describe("GET /api/profile delivers a real allowance (R-ENT-3)", () => {
     const { profile } = (await body()) as { profile: Record<string, unknown> };
 
     expect(Object.keys(profile).filter((k) => /plan|trial/i.test(k))).toEqual([]);
+  });
+
+  /**
+   * GOOGLE-SIGNIN (ABC-JEV-INTEGRATION.md §1ad/§1ai) — the guide's "Peer's
+   * own code identity-linking guarantee" (§0.3, §3): this route must never
+   * key a lookup off provider identity, only off the session's `user.id`.
+   * The mocked `eq()` in this file's shared `createClient` stub ignores its
+   * arguments (matching every other test above), so what this actually
+   * proves is narrower and honest: a session `user` object shaped like a
+   * real Google sign-in (user_metadata/app_metadata present, provider
+   * fields, no GitHub-only fields) maps to the exact same profile as every
+   * GitHub-shaped test above — nothing here branches on, or trips over,
+   * that shape. The write-side guarantee (the actual `user_id` reaching the
+   * database) is proved directly below, where the mock DOES capture the
+   * upsert argument.
+   */
+  it("GOOGLE-SIGNIN — maps the profile identically for a session user carrying Google-shaped user_metadata/app_metadata", async () => {
+    mocks.getUser.mockResolvedValue({
+      data: {
+        user: {
+          id: "user-1",
+          email: "reader@gmail.com",
+          user_metadata: {
+            full_name: "Ada Lovelace",
+            name: "Ada Lovelace",
+            avatar_url: "https://lh3.googleusercontent.com/a/avatar.jpg",
+            picture: "https://lh3.googleusercontent.com/a/avatar.jpg",
+          },
+          app_metadata: { provider: "google", providers: ["google", "github"] },
+        },
+      },
+      error: null,
+    });
+    mocks.maybeSingle.mockResolvedValue({ data: rowFixture, error: null });
+
+    const { profile } = (await body()) as { profile: Record<string, unknown> };
+
+    expect(profile.authorisedCountries).toEqual(["United States", "Canada"]);
+    expect(profile.displayName).toBe(rowFixture.display_name);
+  });
+});
+
+/**
+ * GOOGLE-SIGNIN (ABC-JEV-INTEGRATION.md §1ad/§1ai) — the write-side half of
+ * the same guarantee, where the mock captures the actual upsert argument:
+ * `profilePatchToRow(body, user.id)` takes `user.id` as a separate function
+ * argument derived from `supabase.auth.getUser()`, never from the request
+ * body — this route's own header comment already states the rule ("we
+ * still derive user_id from the session server-side so clients can't claim
+ * someone else's row"). These two tests are new evidence for that existing
+ * rule under a Google-shaped session and a body that tries to smuggle an
+ * identity-looking field, not a new mechanism.
+ */
+describe("GOOGLE-SIGNIN — PUT /api/profile derives user_id only from the session (identity-linking guarantee)", () => {
+  it("upserts under the session's real user.id even when that session user is Google-shaped, and drops a forged user_id/provider from the body", async () => {
+    const upsert = vi.fn(() => ({
+      select: () => ({ single: async () => ({ data: rowFixture, error: null }) }),
+    }));
+    mocks.createClient.mockResolvedValueOnce({
+      auth: {
+        getUser: async () => ({
+          data: {
+            user: {
+              id: "user-1",
+              email: "reader@gmail.com",
+              user_metadata: {
+                full_name: "Ada Lovelace",
+                avatar_url: "https://lh3.googleusercontent.com/a/avatar.jpg",
+              },
+              app_metadata: { provider: "google", providers: ["google", "github"] },
+            },
+          },
+        }),
+      },
+      from: () => ({ upsert }),
+    });
+
+    const response = await PUT(
+      new NextRequest("http://peer.test/api/profile", {
+        method: "PUT",
+        body: JSON.stringify({
+          displayName: "Ada",
+          // Neither field is a real UserProfile key — profilePatchToRow maps
+          // a fixed, named set of fields and would drop these even if the
+          // route never separately re-derived user.id; asserted anyway as
+          // belt-and-braces evidence, matching "the plan is server-owned"'s
+          // own style above.
+          user_id: "someone-elses-id",
+          provider: "google",
+        } as never),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    const written = (upsert.mock.calls as unknown[][])[0]?.[0] as Record<string, unknown>;
+    expect(written.user_id).toBe("user-1");
+    expect(written.display_name).toBe("Ada");
+    expect(Object.keys(written)).not.toContain("provider");
   });
 });

@@ -24,9 +24,9 @@ const SECTIONS = [
     ],
   },
   {
-    label: "If you sign in with GitHub",
+    label: "If you sign in",
     body: [
-      "Signing in is GitHub OAuth through Supabase. Peer receives the account id and email address GitHub returns, and stores them in its own database.",
+      "Signing in is GitHub or Google OAuth through Supabase. Peer receives the account id and email address the provider returns, and stores them in its own database.",
       "From then on these are stored against your account: the topics, methods, journals, school and lab you enter; the free-text project and challenges you write; your feed and digest settings; papers you save; papers you open; likes and dismissals; and digests that were sent to you.",
       "A like or a dismissal is kept as a small ledger of concepts, which is what makes tomorrow's briefing different from today's.",
       "Signing in carries what you had saved and opened in this browser into your account. Signing out clears this browser's copy, including the reading graph — which is kept only in this browser, never on Peer's servers, so it does not come back when you sign in again.",

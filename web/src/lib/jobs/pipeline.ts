@@ -280,7 +280,11 @@ export async function buildDailyJobPool(
       };
     },
     // ABC-freemium 1-18 · R-POOL-2 — the route decides this from the
-    // entitlement and the forced-rebuild breaker, never from the request body alone.
+    // entitlement and the forced-rebuild breaker, never from the request body
+    // alone. `forceRebuild` moved to parameter 6 in the merged
+    // `getOrBuildCachedPool` (P2-S2's `shouldPersist` took position 5) —
+    // this surface never gates persistence, so `undefined` there is correct.
+    undefined,
     forceRebuild,
   );
 

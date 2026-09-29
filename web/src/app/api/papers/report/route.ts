@@ -24,8 +24,10 @@ import { entitledContext } from "@/lib/security/entitled-context";
 import type { Entitlement } from "@/lib/entitlement/types";
 import {
   consumeDeepReport,
+  companyBudgetQuotaSignal,
   type DeepReportDecision,
 } from "@/lib/usage/deep-report-quota";
+import { CompanySpendCapRefusedError } from "@/lib/usage/company-budget";
 import { bareUploadId } from "@/lib/papers/upload-store";
 import { ownedUpload, PRIVATE_UPLOAD_HEADERS } from "@/lib/papers/upload-access";
 
@@ -281,6 +283,16 @@ async function generateShallowReport(
       provenance: { ...verified.report.provenance, basis: "model-abstract" },
     };
   } catch (err) {
+    // SPEND-CAP · R7 (ABC-JEV-INTEGRATION.md §1v) — the one degrade path on
+    // this route that also names WHY, when the reason is the shared AI
+    // dollar budget refusing this call. Every other error here keeps the
+    // plain silent degrade exactly as before: `emptyReport("fallback")` with
+    // no `quota` field, so a reader whose model call failed for any other
+    // reason sees nothing new.
+    if (err instanceof CompanySpendCapRefusedError) {
+      console.warn("[papers/report] shallow generation refused by the company AI budget:", err.reason);
+      return { ...emptyReport("fallback"), quota: companyBudgetQuotaSignal(err.reason, new Date()) };
+    }
     console.error("[papers/report] shallow generation failed:", err);
     return emptyReport("fallback");
   }
@@ -365,6 +377,14 @@ function streamReport(
         }
       };
       const finish = (report: PaperReport) => {
+        // SPEND-CAP · R7 — mirrors the EXISTING `quotaDecision.quota` wiring
+        // just below (a separate `type: "quota"` event, same shape), the only
+        // difference being WHEN it's known: the deep-report quota is decided
+        // before generation starts, so it goes out first; this one is only
+        // known once `generateShallowReport` has actually tried and been
+        // refused, so it goes out immediately before the report it accompanies
+        // — "the notice beside it, not instead of it", same as that one.
+        if (report.quota) send({ type: "quota", quota: report.quota });
         send({ type: "report", report });
         send({ type: "stage", stage: "done", label: "Report ready", pct: 100 });
         close();

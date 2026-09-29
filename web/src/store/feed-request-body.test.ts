@@ -5,6 +5,8 @@ import {
   opportunityRequestBody,
   paperFeedRequestBody,
 } from "./feed";
+import { selectedSenseConcept } from "@/lib/feed/senses";
+import { STARTER_TOPICS, STARTER_TOPICS_KEY } from "@/lib/feed/starter-topics";
 
 const activeProfile: UserProfile = {
   ...defaultProfile,
@@ -137,6 +139,101 @@ describe("active feed request inputs", () => {
       activeProfile.activeSearchInputs?.jobs.required,
     );
   });
+
+  it("keeps a project-only paper request usable and separately labeled", () => {
+    const profile: UserProfile = {
+      ...activeProfile,
+      researchTopics: [],
+      activeSearchInputs: { ...activeProfile.activeSearchInputs!, papers: { required: [], explore: [] } },
+      currentProject: "Reduce sulfide interface resistance",
+      currentChallenges: "Avoid dendrite formation",
+    };
+
+    // CHANGED (FIRST-VISIT RULING, see the next test's comment for the full
+    // citation): the literal `topics` field is a separate, supplementary
+    // signal from `project`/`challenge`/`intent` -- it is not the gate. With
+    // no literal topics declared, `paperFeedRequestBody` now fills it from
+    // the same starter list a genuinely-empty reader gets (`topicsOrStarter`,
+    // main-authored), rather than leaving it empty. This is harmless: the
+    // request is still driven primarily by `project`/`challenge`/`intent`
+    // below (acceptance 1 -- "no dummy-keyword requirement"), which are
+    // asserted unchanged.
+    expect(paperFeedRequestBody(profile, advisorSeeds)).toMatchObject({
+      topics: [...STARTER_TOPICS],
+      project: "Reduce sulfide interface resistance",
+      challenge: "Avoid dendrite formation",
+      intent: {
+        version: "feed-intent-v1",
+        project: { presence: "value", value: "Reduce sulfide interface resistance" },
+        challenge: { presence: "value", value: "Avoid dendrite formation" },
+      },
+    });
+  });
+
+  it("keeps browser clears explicit and makes the paper current-key include intent", () => {
+    const withTopic: UserProfile = {
+      ...activeProfile,
+      currentProject: "",
+      currentChallenges: "",
+    };
+    const changedProject: UserProfile = {
+      ...activeProfile,
+      currentProject: "Investigate interface resistance",
+    };
+
+    expect(paperFeedRequestBody(withTopic, advisorSeeds)).toMatchObject({
+      intent: {
+        project: { presence: "explicit-empty" },
+        challenge: { presence: "explicit-empty" },
+      },
+    });
+    expect(activePaperTopicsKey(changedProject)).not.toBe(
+      activePaperTopicsKey(activeProfile),
+    );
+  });
+
+  it("sends the starter sample, not an empty request, for a genuinely empty browser intent", () => {
+    // CHANGED (ABC-JEV-INTEGRATION.md §4 Round 3 "MERGE-B-FEED complete" FIRST-VISIT
+    // RULING (a)): this used to assert `topics: []` / `activePaperTopicsKey === ""`
+    // for a reader with nothing declared, on the theory that Jev should "ask
+    // first" rather than guess. The merge adopts main's zero-setup first-run
+    // design instead: a reader with NO declared project, challenge or topic at
+    // all gets main's curated starter sample (never a blocking message), and
+    // `activePaperTopicsKey` now falls back to `STARTER_TOPICS_KEY` rather than
+    // the empty string so the auto-load effect in page.tsx actually fires. A
+    // reader who HAS declared a project/challenge/topic still gets their own
+    // intent-driven request, never the sample -- see the next test file's
+    // "posts a 'project'-only..." case, and empty-reason.ts's `intentRequired`
+    // guard, for the half of the ruling this file doesn't cover.
+    const emptyBrowserProfile: UserProfile = {
+      ...activeProfile,
+      currentProject: "",
+      currentChallenges: "",
+      activeSearchInputs: {
+        ...activeProfile.activeSearchInputs!,
+        papers: { required: [], explore: [] },
+      },
+    };
+
+    expect(paperFeedRequestBody(emptyBrowserProfile, advisorSeeds)).toMatchObject({
+      topics: [...STARTER_TOPICS],
+      intent: undefined,
+    });
+    expect(activePaperTopicsKey(emptyBrowserProfile)).toBe(STARTER_TOPICS_KEY);
+  });
+
+  it("carries an explicitly selected local sense in the browser v1 card without classifying legacy topics", () => {
+    const profile: UserProfile = {
+      ...activeProfile,
+      researchTopics: ["conflict"],
+      activeSearchInputs: { ...activeProfile.activeSearchInputs!, papers: { required: ["conflict"], explore: [] } },
+      selectedSenseConcepts: [selectedSenseConcept("hr.role_conflict")],
+    };
+
+    expect(paperFeedRequestBody(profile, advisorSeeds)).toMatchObject({
+      intent: { selectedSenseConcepts: [selectedSenseConcept("hr.role_conflict")] },
+    });
+  });
 });
 
 /**
@@ -187,7 +284,7 @@ describe("the forced-rebuild ask (6-03)", () => {
       activeProfile,
       "jobs",
       [],
-      { userId: null },
+      null,
       true,
     );
     expect(asked.poolRefresh).toBe(true);

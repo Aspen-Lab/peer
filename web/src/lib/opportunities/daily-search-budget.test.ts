@@ -13,6 +13,7 @@ import {
   JOB_QUERY_BUDGET,
 } from "./query-budget";
 import type { CachedPool, PoolCache } from "./pool-cache";
+import { createTrustedPaperCacheScope } from "./private-paper-cache";
 
 class MemoryPoolCache implements PoolCache {
   readonly values = new Map<string, CachedPool>();
@@ -86,6 +87,11 @@ describe("combined daily search budget", () => {
       sources: ["openalex" as const],
       aiTier: 1 as const,
       searchConnectors,
+      paperCacheScope: createTrustedPaperCacheScope({
+        ownerId: "daily-budget-owner",
+        topics,
+        aiTier: 1,
+      }),
     };
 
     await buildDailyEventPool(eventRequest, { cache, now });

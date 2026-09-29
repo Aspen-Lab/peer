@@ -19,6 +19,7 @@
  * `node:async_hooks` is available.
  */
 import { AsyncLocalStorage } from "node:async_hooks";
+import type { CompanySpendReservation } from "./company-budget";
 
 export interface UsageContext {
   /** From `supabase.auth.getUser()` only. Null for a library-level call. */
@@ -37,6 +38,14 @@ export interface UsageContext {
  */
 export interface UsageCallScope extends UsageContext {
   recorded: boolean;
+  /**
+   * SPEND-CAP — set by `metered.ts`'s `meterCall` when a non-BYOK reservation
+   * succeeded (R9 flag on). `logLlmUsage` accumulates each chain attempt's
+   * actual cost onto its mutable `settlement`; `meterCall`'s `finally` settles
+   * it exactly once (R10). Absent whenever the flag is off, the call is BYOK,
+   * or the provider is not the recognized company-funded one.
+   */
+  companyReservation?: CompanySpendReservation;
 }
 
 const storage = new AsyncLocalStorage<UsageCallScope>();

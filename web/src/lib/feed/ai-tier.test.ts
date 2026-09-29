@@ -6,6 +6,10 @@ import {
   type Entitlement,
 } from "@/lib/entitlement/types";
 import {
+  toClientEntitlement,
+  type ClientEntitlement,
+} from "@/lib/entitlement/allowance";
+import {
   aiAvailability,
   aiModeChip,
   feedsUseAi,
@@ -46,12 +50,25 @@ const NO_KEY: UserProfile = {
  * if a later change tightens the predicate to `effectivePlan`, these tests go
  * red.
  */
-const SIGNED_IN: Entitlement = {
+const SIGNED_IN_RAW: Entitlement = {
   ...ANONYMOUS_ENTITLEMENT,
   userId: "user-1",
   deepReportsBudget: 5,
 };
-const SIGNED_OUT: Entitlement = ANONYMOUS_ENTITLEMENT;
+// The request builders in `@/store/feed` (`opportunityRequestBody`,
+// `paperFeedRequestBody`) take a `ClientEntitlement | null` — the browser's
+// own delivered shape, not the server-only raw `Entitlement` — so every
+// fixture used at those call sites is the client-facing conversion. Also
+// satisfies `Pick<Entitlement, "userId">` for `aiAvailability`/`feedsUseAi`
+// directly, so one pair of constants covers every call site in this file.
+const SIGNED_IN: ClientEntitlement = toClientEntitlement(SIGNED_IN_RAW, {
+  value: 0,
+  ok: true,
+});
+const SIGNED_OUT: ClientEntitlement = toClientEntitlement(
+  ANONYMOUS_ENTITLEMENT,
+  { value: 0, ok: true },
+);
 
 const ADVISOR_SEEDS = { seedTexts: [], seedWorkIds: [] };
 

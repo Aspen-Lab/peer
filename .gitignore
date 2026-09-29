@@ -34,3 +34,12 @@ dist/
 # profile dirs left behind by debug scripts). These are local-only and
 # should never be committed.
 .tmp-*
+
+# Generated output (e.g. output/pdf/, output/live-eval/ raw evaluation
+# results) — never committed. LIVE-EVAL-4 (ABC-JEV-INTEGRATION.md §1w
+# "Fix now"): this was untracked only by omission before this line existed.
+/output/
+# The live-channels runner executes from web/, so its raw results land in
+# web/output/live-eval/ — ignored for the same reason (manager fix after the
+# LIVE-EVAL-4 C smoke run showed web/output/ untracked and NOT ignored).
+/web/output/

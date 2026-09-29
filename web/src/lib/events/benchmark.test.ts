@@ -8,6 +8,7 @@ import { scoredEventToEvent } from "./mapper";
 import { MIN_SCORE } from "./scoring";
 import type { EventsFeedRequest } from "./types";
 import { DENY_HOSTS } from "./sources/eventweb";
+import { canRunLiveEventsBenchmark } from "./benchmark-live-gate";
 
 interface ProfileSnapshot {
   researchTopics?: string[];
@@ -53,7 +54,8 @@ const profile = fs.existsSync(profilePath)
 const tavilySearchLive =
   Boolean(profile?.tavilyApiKey?.trim()) && profile?.tavilyEnabled !== false;
 const geminiSearchLive = Boolean(process.env.GOOGLE_VERTEX_PROJECT);
-const hasLiveSearchPath = tavilySearchLive || geminiSearchLive;
+const hasLiveSearchPath =
+  canRunLiveEventsBenchmark() && (tavilySearchLive || geminiSearchLive);
 
 function hostname(url: string | undefined): string {
   if (!url) return "";

@@ -300,6 +300,35 @@ describe("scan 3 — every operator search credential is read in one place", () 
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// SCAN 7 — JEV_API_KEY is read in exactly one place (JEV-DIRECT §1aa)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("scan 7 — JEV_API_KEY is read in exactly one file (JEV-DIRECT §1aa)", () => {
+  /**
+   * JEV-DIRECT (§1aa) REVERSES §1r: the user moved the Jev key into Vercel
+   * alongside every other provider key, so Peer now calls Jev directly
+   * instead of through the (still-present, still-dormant) Supabase broker.
+   * Every scan/test that used to assert "JEV_API_KEY is never read anywhere
+   * in web/" is rewritten, never deleted (§1aa point 4) — this scan is the
+   * POSITIVE half of that old claim: exactly one file reads the key, and it
+   * is the expected one. `broker-client.test.ts`'s own structural check
+   * ("never references JEV_API_KEY... in its own source") is unaffected and
+   * stays green unchanged — the broker path is a different transport and
+   * must still never see the raw key.
+   */
+  const GATE = "src/lib/decisions/jev-direct-client.ts";
+
+  it(`reads process.env.JEV_API_KEY only inside ${GATE}`, () => {
+    const readers = filesMatching(/process\.env\.JEV_API_KEY\b/);
+    expect(readers).toEqual([GATE]);
+  });
+
+  it("the gate module actually exists (a rename would otherwise show up as an empty result, not a failure naming why)", () => {
+    expect(fs.existsSync(path.join(process.cwd(), GATE))).toBe(true);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // SCAN 4 — no `resolveProvider()` without a usage context
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -587,20 +616,34 @@ describe("the scans' coverage boundary (9-04)", () => {
     // `process.env[name]`, is invisible to all of them, and no amount of
     // widening the walk changes that.
     //
-    // Rather than leave that as an unstated limit, the sites are enumerated. The
-    // census is TWO, both inside `check-provider-models.mjs`, and both are the
-    // live provider check reading MODEL keys (`GOOGLE_API_KEY`, `OPENAI_API_KEY`
-    // and the BYOK vendors) from its own `keyNames` lists — no search key is
+    // Rather than leave that as an unstated limit, the sites are enumerated.
+    //
+    // Two of the census are inside `check-provider-models.mjs`: the live
+    // provider check reading MODEL keys (`GOOGLE_API_KEY`, `OPENAI_API_KEY` and
+    // the BYOK vendors) from its own `keyNames` lists — no search key is
     // reachable through them.
     //
-    // A third site, or a site outside that file, is a place a search credential
-    // could be read without any scan in this file seeing it. That is a finding
-    // for the round it appears in, not a silent pass.
+    // MERGE C (ABC-JEV-INTEGRATION.md §4 Round 3 "MERGE-B-FEED complete"): the
+    // Jev integration adds a third, `src/lib/preferences/positive-seeds.ts`'s
+    // `flagOn(name)` — read directly, not assumed: it is
+    // `process.env[name]?.trim().toLowerCase() === "on"`, a boolean
+    // feature-flag reader for Jev's own `PEER_CHANNEL_*` on/off flags
+    // (`channelS2RecommendationsEnabled` and its siblings). It returns only a
+    // boolean, never the string value, so no key — search, model, or
+    // otherwise — is reachable through it either. Genuinely a new site, not
+    // silently dropped; genuinely benign, checked rather than assumed.
+    //
+    // A fourth site, or a site outside these two files, is a place a search
+    // credential could be read without any scan in this file seeing it. That
+    // is a finding for the round it appears in, not a silent pass.
     const computedReaders = scannedFiles()
       .filter((file) => /process\.env\[/.test(code(file)))
       .map(relative)
       .sort();
 
-    expect(computedReaders).toEqual(["scripts/check-provider-models.mjs"]);
+    expect(computedReaders).toEqual([
+      "scripts/check-provider-models.mjs",
+      "src/lib/preferences/positive-seeds.ts",
+    ]);
   });
 });

@@ -62,6 +62,19 @@ const EXPECTED_ON_VERCEL = ["GOOGLE_API_KEY"];
  * server never reads it and a deployment that carries it can only be a mistake
  * or a leak. **A Vercel project that still has the variable set will now FAIL
  * the build** — by design; the variable must be removed before deploying.
+ *
+ * **JEV-DIRECT (§1aa) — `JEV_API_KEY` LEFT THIS LIST, the opposite direction
+ * from every name above.** The user moved the Jev key into Vercel on purpose
+ * (ABC-JEV-INTEGRATION.md §1aa: "the Jev key goes to Vercel; Peer calls Jev
+ * directly"), reversing the prior instruction that kept it Supabase-only
+ * (§1r). Manager ruling (§1ab P1): Jev is an optional, default-off feature, so
+ * the key is ALLOWED and SILENT — it joins neither this list nor
+ * `EXPECTED_ON_VERCEL` below; a deployment builds identically whether the key
+ * is set, unset, or blank, with no message either way (a warning on every
+ * build without an optional key would just teach people to ignore warnings).
+ * The one file allowed to read it is `src/lib/decisions/jev-direct-client.ts`
+ * — enforced by `src/lib/security/spend-scans.test.ts`'s placement scan, not
+ * by this guard.
  */
 const FORBIDDEN_ON_VERCEL = [
   "PEER_DIGEST_PROVIDER",

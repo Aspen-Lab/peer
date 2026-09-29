@@ -1,5 +1,6 @@
 import type { RawItem, SourceId } from "@/lib/sources/types";
 import type { PreferenceLedger } from "@/types";
+import type { SelectedSenseConcept } from "@/lib/feed/senses";
 
 export interface ScoringProfile {
   topics: string[];
@@ -12,7 +13,17 @@ export interface ScoringProfile {
   negativeTopics?: string[];
   legacyNegativeTopics?: string[];
   sourceWeights?: Partial<Record<SourceId, number>>;
+  /** How a candidate entered the pool, preserved so non-literal channels survive Tier 0. */
+  admissionChannels?: Partial<Record<string, FeedAdmissionChannel[]>>;
+  /** Explicit user exclusions are hard eligibility, unlike legacy dislike feedback. */
+  exclusions?: string[];
+  /** Optional ISO lower date boundary for direct scoring callers. */
+  minPublishedAt?: string;
+  /** Explicit domain sense selections; bare legacy topic strings stay untyped. */
+  selectedSenseConcepts?: SelectedSenseConcept[];
 }
+
+export type FeedAdmissionChannel = "keyword" | "semantic" | "positive-seed" | "citation" | "topic-field";
 
 export interface ScoreWeights {
   keyword: number;

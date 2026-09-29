@@ -3091,6 +3091,7 @@ describe("RULING 75 — jobweb provider resolution", () => {
     // order at all.
     withoutKeys();
     vi.stubEnv("GOOGLE_VERTEX_PROJECT", "some-project");
+    vi.stubEnv("GOOGLE_VERTEX_SEARCH_PROJECT", "some-search-project");
     vi.stubEnv("GOOGLE_VERTEX_SEARCH_ENGINE_ID", "peer-web");
 
     for (const provider of ["gemini", "vertex"] as const) {
@@ -3127,6 +3128,28 @@ describe("RULING 75 — jobweb provider resolution", () => {
     vi.stubEnv("GOOGLE_VERTEX_PROJECT", "some-project");
     vi.stubEnv("GOOGLE_VERTEX_SEARCH_ENGINE_ID", "peer-web");
     expect(resolveSearchProvider(entitledQuery)).toBeNull();
+    expect(resolveSearchProvider(baseQuery)).toBeNull();
+  });
+
+  // UPSTREAM-01 Vertex slice (Round 3 F-M-UP-V1) ORIGINALLY read: "a Search
+  // App id alone is no longer enough... so auto resolution falls through to
+  // the gemini grounding clause instead." CHANGED, NOT DELETED — MERGE C
+  // (ABC-JEV-INTEGRATION.md §4 Round 3 "MERGE-B-FEED complete"): 5-04 · D2a
+  // landed after this case was written and closes the fallthrough this case
+  // asserted. `operatorSearchAvailability` (`@/lib/search/system-key.ts`) is
+  // now FROZEN to `{geminiAvailable: false, vertexAvailable: false}`
+  // unconditionally — confirmed by reading its body directly: the
+  // `systemSearchAllowed` input is accepted but never read. So neither vertex
+  // NOR gemini can be auto-selected any more, entitled or not, matching the
+  // "picks NOTHING on auto, entitled or not" case above. Still worth its own
+  // case: it proves the GOOGLE_VERTEX_SEARCH_PROJECT requirement from the
+  // UPSTREAM-01 slice doesn't quietly resurrect a gemini fallback now that
+  // vertex alone is unreachable.
+  it("does not pick vertex OR fall through to gemini when only GOOGLE_VERTEX_PROJECT is set, without a Search project", () => {
+    withoutKeys();
+    vi.stubEnv("GOOGLE_VERTEX_PROJECT", "some-project");
+    vi.stubEnv("GOOGLE_VERTEX_SEARCH_ENGINE_ID", "peer-web");
+    expect(resolveSearchProvider(baseQuery)).not.toBe("vertex");
     expect(resolveSearchProvider(baseQuery)).toBeNull();
   });
 
