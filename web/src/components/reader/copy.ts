@@ -174,6 +174,40 @@ export const PROGRESS_LABEL = "loading report...";
 
 export const NOT_FOUND = "Paper not found.";
 
+/**
+ * UPLOAD-404 (§1bi): the live copy of an uploaded paper could not be
+ * fetched — any cause (expired, wrong owner, purged, a different machine, a
+ * synced pointer) — but this reader already has it saved. Cause-agnostic on
+ * purpose: the client cannot tell these apart (`ownedUpload` hides which one
+ * behind a single 404), and naming one would be a guess this page cannot
+ * back up.
+ */
+export const UPLOAD_UNAVAILABLE_MESSAGE =
+  "This PDF is not available here anymore — here is what was saved of it.";
+
+/**
+ * UPLOAD-404 (§1bi.8b): a TRANSIENT failure (a 5xx, a dropped connection, a
+ * timeout) — never shown for a 404, which is `UPLOAD_UNAVAILABLE_MESSAGE`'s
+ * job. Pairs with a Try again control; never used alone with no way to
+ * retry (see `UPLOAD_RETRY_EMPTY_MESSAGE` for the no-saved-copy case).
+ */
+export const UPLOAD_TRANSIENT_MESSAGE =
+  "This PDF could not be loaded right now — here is what was saved of it.";
+
+/**
+ * UPLOAD-404 (§1bi.8b): the same transient failure as
+ * `UPLOAD_TRANSIENT_MESSAGE`, but with no saved copy to show either — never
+ * `NOT_FOUND`, which would wrongly claim the paper is permanently gone
+ * rather than momentarily unreachable. Also pairs with a Try again control.
+ */
+export const UPLOAD_RETRY_EMPTY_MESSAGE = "Could not load this paper right now.";
+
+/** UPLOAD-404 (§1bi.8b): the one retry control's label, both places it can
+ *  appear (a saved copy shown with a transient sentence, or no content at
+ *  all) — same word `BRIEFING_EMPTY.error.retry` already uses on the home
+ *  page's own error state, for the same action in the reader's voice. */
+export const RETRY_LABEL = "Try again";
+
 /** ≤140 chars under the plate, when the resolver returned a caption. */
 export const CAPTION_CHARS = 140;
 

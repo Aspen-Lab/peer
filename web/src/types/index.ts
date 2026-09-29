@@ -126,6 +126,19 @@ export interface Paper {
    */
   textStatus?: "ok" | "empty";
   /**
+   * UPLOAD-404 (§1bi.8a): only ever set by `GET /api/papers/upload/[id]`
+   * (the reading page's own record route) — whether the PDF bytes are
+   * still on disk, independent of whether the record itself was found. The
+   * record and the bytes are two separate files (`upload-store.ts`); a
+   * crash can in principle leave one without the other, and only the
+   * file-bytes route itself (`.../[id]/file/route.ts`) checked for that
+   * before this. Undefined everywhere else: every other paper source, and
+   * even a `Paper` built by `uploadMetaToPaper` directly for the POST,
+   * list or supplement-lookup routes, never sets it — they don't carry
+   * this signal today.
+   */
+  fileAvailable?: boolean;
+  /**
    * 9-12: only ever set for an uploaded PDF's own asset record
    * (`upload-store.ts`'s `uploadMetaToPaper`, from `UploadMeta.revision`) —
    * monotonic per owner+document, starting at 1. Lets the reader/report

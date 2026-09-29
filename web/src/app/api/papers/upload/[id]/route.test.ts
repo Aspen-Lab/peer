@@ -11,6 +11,11 @@ const mocks = vi.hoisted(() => ({
   // not a function's own in-module calls). Default true (no sibling), the
   // common case; per-test overrides cover the reference-counted branch.
   hasOtherReadyDocumentCopy: vi.fn(async () => false),
+  // UPLOAD-404 (§1bi.8a): defaults to true (the ordinary case — the record
+  // and its bytes both exist) so every pre-existing test below keeps its
+  // same real-filesystem-independent behaviour; the new tests override this
+  // per-call with `mockReturnValueOnce`.
+  uploadFileExists: vi.fn(() => true),
 }));
 
 vi.mock("@/lib/papers/upload-store", async (importOriginal) => {
@@ -20,6 +25,7 @@ vi.mock("@/lib/papers/upload-store", async (importOriginal) => {
     readUploadMeta: mocks.readUploadMeta,
     deleteUpload: mocks.deleteUpload,
     hasOtherReadyDocumentCopy: mocks.hasOtherReadyDocumentCopy,
+    uploadFileExists: mocks.uploadFileExists,
   };
 });
 
@@ -68,6 +74,53 @@ describe("GET /api/papers/upload/[id]", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.id).toBe("upload:0123456789abcdef");
+    expect(body.title).toBe("A Real Paper");
+  });
+
+  // UPLOAD-404 (§1bi.8a): the record and the PDF bytes are two separate
+  // files; a record can be found and owned while the bytes are separately
+  // gone (guide B's Task-1 branch 2g). `fileAvailable` is the additive
+  // signal the reading page needs to tell that apart from the ordinary
+  // case — proven here by mirroring `uploadFileExists` directly, in both
+  // directions, with every other field on the response unchanged.
+  it("§1bi.8a: fileAvailable mirrors uploadFileExists() — true when the bytes are on disk", async () => {
+    const meta: UploadMeta = {
+      hash16: "0123456789abcdef",
+      fileName: "paper.pdf",
+      title: "A Real Paper",
+      uploadedAt: "2026-09-15T00:00:00.000Z",
+      textStatus: "ok",
+    };
+    mocks.readUploadMeta.mockResolvedValueOnce(meta);
+    mocks.uploadFileExists.mockReturnValueOnce(true);
+
+    const res = await call("0123456789abcdef");
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(mocks.uploadFileExists).toHaveBeenCalledWith("0123456789abcdef");
+    expect(body.fileAvailable).toBe(true);
+    // Every existing field still present, byte-identical shape otherwise.
+    expect(body.id).toBe("upload:0123456789abcdef");
+    expect(body.title).toBe("A Real Paper");
+  });
+
+  it("§1bi.8a: fileAvailable mirrors uploadFileExists() — false when the record is fine but the bytes are gone", async () => {
+    const meta: UploadMeta = {
+      hash16: "0123456789abcdef",
+      fileName: "paper.pdf",
+      title: "A Real Paper",
+      uploadedAt: "2026-09-15T00:00:00.000Z",
+      textStatus: "ok",
+    };
+    mocks.readUploadMeta.mockResolvedValueOnce(meta);
+    mocks.uploadFileExists.mockReturnValueOnce(false);
+
+    const res = await call("0123456789abcdef");
+    // Still 200 — the RECORD is fine; only the bytes are missing. A raw
+    // 404 here would be the old, undetected failure mode this fixes.
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.fileAvailable).toBe(false);
     expect(body.title).toBe("A Real Paper");
   });
 });
