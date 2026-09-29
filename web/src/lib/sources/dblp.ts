@@ -6,6 +6,22 @@ import { searchHttpFailure } from "./search-failure";
 const DBLP_API = "https://dblp.org/search/publ/api";
 const MAX_QUERIES = 2;
 
+// QUERY-BUDGET (ABC-JEV-INTEGRATION.md §1az, ruling 3;
+// docs/jev-abc/QUERY-BUDGET-B-20260929T094059Z.md §2.4). A reader who
+// declares more Required tags than MAX_QUERIES silently loses every tag past
+// the cut on this source, every day. The cap rises with the reader's own
+// Required-tag count, bounded so an unusual tag count cannot open the budget
+// unboundedly: never more than RISE_CEILING above MAX_QUERIES. Only dblp and
+// pubmed rise (both already the smallest, cheapest caps); openalex/
+// semantic_scholar/arxiv stay fixed at 3 — this investigation hit the
+// keyless OpenAlex rate limit twice while measuring under this exact
+// constraint, so their own call-count is left alone for now.
+const RISE_CEILING = 3;
+
+function effectiveQueryCap(tagCount: number): number {
+  return Math.min(MAX_QUERIES + Math.max(0, tagCount - MAX_QUERIES), MAX_QUERIES + RISE_CEILING);
+}
+
 interface DblpAuthor {
   text?: string;
 }
@@ -120,7 +136,10 @@ function hitToRawItem(hit: DblpHit): RawItem | null {
 
 function buildSearchQueries(query: SourceQuery): string[] {
   const source = query.queries?.length ? query.queries : query.topics;
-  return Array.from(new Set(source.map((q) => q.trim()).filter(Boolean))).slice(0, MAX_QUERIES);
+  return Array.from(new Set(source.map((q) => q.trim()).filter(Boolean))).slice(
+    0,
+    effectiveQueryCap(query.topics.length),
+  );
 }
 
 function toArray<T>(value: T | T[] | undefined): T[] {

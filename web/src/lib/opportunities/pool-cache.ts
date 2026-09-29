@@ -278,10 +278,20 @@ const CACHE_KEY_VERSION = 6;
 // MEMBERSHIP (a v14 pool built under the old raw-paragraph-plus-single-word
 // queries may be missing candidates the corrected phrase queries would have
 // fetched), so a v14 pool must never be served as if it already reflects
-// the fix. These bumps share their numbers with
-// `CACHE_KEY_VERSION` above by coincidence, not by a shared cause — see
+// the fix. v16 — ABC-JEV-INTEGRATION.md §1az/QUERY-BUDGET
+// (docs/jev-abc/QUERY-BUDGET-B-20260929T094059Z.md): `profile-compiler.ts`'s
+// `projectQueries` now orders queries into tiers (Required tags, then exact-
+// sense queries, then bare project phrases, then tag+phrase combinations,
+// then bare single words, then the rest) instead of one flat concatenation,
+// and `dblp.ts`/`pubmed.ts` now raise their own query cap when a reader
+// declares more than 2 Required tags. Both change which queries survive each
+// source adapter's own truncation, which changes pool MEMBERSHIP (a v15 pool
+// built under the old ordering/fixed caps may be missing candidates the
+// reordered/wider retrieval would have fetched), so a v15 pool must never be
+// served as if it already reflects the fix. These bumps share their numbers
+// with `CACHE_KEY_VERSION` above by coincidence, not by a shared cause — see
 // `derivePoolCacheKey` below for how each is selected.
-const PAPER_CACHE_KEY_VERSION = 15;
+const PAPER_CACHE_KEY_VERSION = 16;
 /**
  * SINGLE SOURCE OF TRUTH for the literal key prefix a durable papers-pool
  * store may accept, derived from `PAPER_CACHE_KEY_VERSION` rather than

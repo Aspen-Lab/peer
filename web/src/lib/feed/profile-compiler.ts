@@ -164,23 +164,58 @@ function projectQueries(req: FeedRequest, controls: Required<FeedControls>): str
     ...seedTexts.flatMap((seed) => phrasesFromText(seed, 5)),
   ]);
 
-  // ABBREV-RECALL (ABC-JEV-INTEGRATION.md §1av): exact-sense queries, then the
-  // reader's own Required tags, then project/challenge phrases, then the
-  // topic+method / topic+phrase combinations. A Required tag (e.g. "LCO")
-  // that the reader's free-text project/challenge never happens to restate
-  // must still earn a query slot ahead of every source adapter's own
-  // MAX_QUERIES truncation (2-3, see web/src/lib/sources/*.ts) — otherwise a
-  // long project description silently crowds the tag out of every fetch,
-  // every day, with no error and no visible warning. This restores the order
-  // origin/main (the live site) already used before this branch's P1 sense
-  // work reordered it; it only changes ORDER, not which queries exist.
+  // ABBREV-RECALL (ABC-JEV-INTEGRATION.md §1av) put the reader's own Required
+  // tags ahead of project/challenge phrases so a tag (e.g. "LCO") that the
+  // free-text project never happens to restate still earns a query slot
+  // ahead of every source adapter's own MAX_QUERIES truncation (2-3, see
+  // web/src/lib/sources/*.ts). QUERY-BUDGET (ABC-JEV-INTEGRATION.md §1az,
+  // docs/jev-abc/QUERY-BUDGET-B-20260929T094059Z.md) goes further: it found
+  // that even with tags ahead of phrases, (a) 2+ selected senses could still
+  // push a Required tag out of a 2-slot source (measured: 2 senses + 2 tags
+  // sent dblp/pubmed 0 of 2 tags), and (b) a bare generic single word (e.g.
+  // "research") was filling a slot ahead of a genuine project phrase or a
+  // tag-anchored combination, at ~0% measured qualify rate versus 12-44% for
+  // a real phrase. The fix is a strict tier order — every tier fully spent
+  // before the next is considered — built from the exact same query strings
+  // as before (nothing invented, nothing dropped, no stop-list):
+  //
+  //   Tier 0  Required tags, then exact-sense queries. Tags lead every
+  //           sense, so any source's cap, however small, is filled by tags
+  //           first — min(tagCount, cap) tags survive every source, every
+  //           time, even when senses exist (ruling 1, "R2").
+  //   Tier 1  bare project phrases (projectTerms' own multi-word entries,
+  //           original relative order).
+  //   Tier 1b one `${tag} ${strongest phrase}` combination per tag, using
+  //           projectTerms[0] — kept BEHIND the bare phrase (Tier 1), not
+  //           ahead of it: a live measurement on 2 fixtures found this can
+  //           either sharpen a source's results (nearly 4x the bare
+  //           phrase's own qualify rate) or collapse them to almost nothing,
+  //           and the collapse is the costlier failure to risk by default
+  //           (ruling 2; follow-up QUERY-COMBO-MEASURE may revisit this with
+  //           more evidence).
+  //   Tier 2  bare single-word projectTerms entries (today's fallback,
+  //           unchanged content — this is where "research" lives; it only
+  //           moves later, out of every source's cap window whenever a
+  //           phrase or a tag exists to fill it instead).
+  //   Tier 3  the remaining combinations: topic+method (unchanged), then the
+  //           topic+projectTerm combos beyond the one Tier 1b already spent.
+  //
+  // Focus modes (below) are untouched: tight focus reconstructs its own list
+  // independently of this internal order, and exploratory's extra per-topic
+  // queries are appended after every tier either way.
   const exactSenseQueries = exactCanonicalSenseQueries(req.intent?.selectedSenseConcepts ?? []);
+  const isMultiWord = (term: string) => term.trim().split(/\s+/).length > 1;
+  const phraseTerms = projectTerms.filter(isMultiWord);
+  const wordTerms = projectTerms.filter((term) => !isMultiWord(term));
+  const strongestPhrase = projectTerms[0];
   const baseQueries = [
-    ...exactSenseQueries,
     ...topics,
-    ...projectTerms,
+    ...exactSenseQueries,
+    ...phraseTerms,
+    ...(strongestPhrase ? topics.map((topic) => `${topic} ${strongestPhrase}`) : []),
+    ...wordTerms,
     ...topics.flatMap((topic) => methods.slice(0, 3).map((method) => `${topic} ${method}`)),
-    ...topics.flatMap((topic) => projectTerms.slice(0, 3).map((term) => `${topic} ${term}`)),
+    ...topics.flatMap((topic) => projectTerms.slice(1, 3).map((term) => `${topic} ${term}`)),
   ];
 
   const focusQueries =
