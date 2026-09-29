@@ -732,6 +732,10 @@ interface RealFeedResult {
   papers: Paper[];
   batchId?: string;
   batchStatus?: FeedMeta["batchStatus"];
+  /** EMPTY-STATE-REASON — undefined for every response that predates this
+   *  field, is non-empty, or is a frozen-batch replay with no live reason to
+   *  report; the caller treats "undefined" as "show the generic empty copy". */
+  emptyReasonCode?: FeedMeta["emptyReasonCode"];
 }
 
 async function fetchRealFeed(
@@ -775,6 +779,7 @@ async function fetchRealFeed(
       papers: data.items.map(scoredItemToPaper),
       batchId: data.meta?.batchId,
       batchStatus: data.meta?.batchStatus,
+      emptyReasonCode: data.meta?.emptyReasonCode,
     };
   } catch (err) {
     console.error("[feed] fetch failed:", err);
@@ -1090,6 +1095,17 @@ interface FeedState {
    * Transient: not persisted.
    */
   feedError: string | null;
+  /**
+   * EMPTY-STATE-REASON — ABC-JEV-INTEGRATION.md §1bb. The server's own
+   * honest reason for the last empty paper response, forwarded from
+   * `FeedMeta.emptyReasonCode`. Same transience/atomicity discipline as
+   * `feedError` right above: reset before a papers load starts, set in the
+   * SAME `set()` call as `papers` itself on success, `null` whenever the
+   * response carried none (a non-empty response, a frozen-batch replay, or a
+   * response built before this field existed) — never read stale across
+   * loads.
+   */
+  emptyReasonCode: FeedMeta["emptyReasonCode"] | null;
   /** The required-topics signature the current `papers` were built from. When
    *  it diverges from the profile's topics, the feed page reloads automatically. */
   feedTopicsKey: string | null;
@@ -1472,6 +1488,7 @@ export const useFeedStore = create<FeedState>()(
       recentlyShownIds: {},
       pendingDismissal: null,
       feedError: null,
+      emptyReasonCode: null,
       paperFeedback: {},
       eventFeedback: {},
       jobFeedback: {},
@@ -1642,7 +1659,11 @@ export const useFeedStore = create<FeedState>()(
           papersLoading: wantsPapers,
           eventsLoading: wantsEvents,
           jobsLoading: wantsJobs,
-          ...(wantsPapers ? { feedError: null } : {}),
+          // EMPTY-STATE-REASON — reset alongside feedError, for the same
+          // reason: a stale reason from a previous empty load must not
+          // survive into a load that might succeed with papers, fail
+          // outright, or come back empty for a different reason.
+          ...(wantsPapers ? { feedError: null, emptyReasonCode: null } : {}),
           deliveredLocalOwnerOrder: touchedOwnerOrder,
           deliveredLocalByOwner: touchedByOwner,
         });
@@ -1793,6 +1814,14 @@ export const useFeedStore = create<FeedState>()(
                 batchId: renderedBatchId,
                 batchStatus: realFeed.batchStatus ?? null,
                 renderedBatchId,
+                // EMPTY-STATE-REASON — set in this SAME set() call as
+                // `papers` itself, the same atomicity discipline
+                // `renderedBatchId` above already documents. `null` for
+                // every response that carried none (non-empty, a frozen-
+                // batch replay, or a pre-this-field response) — never left
+                // stale from an earlier load (see this field's own doc
+                // comment on FeedState).
+                emptyReasonCode: realFeed.emptyReasonCode ?? null,
                 // P4-S5b — armed in this SAME set() call, the same
                 // atomicity guarantee `renderedBatchId` itself relies on
                 // (see that field's own comment above). A batched response

@@ -111,7 +111,46 @@ export interface FeedMeta {
    * same-shaped object with fabricated/zero values.
    */
   rrf?: Record<string, { fusedScore: number; channels: { channel: string; rank: number }[] }>;
+  /**
+   * EMPTY-STATE-REASON — ABC-JEV-INTEGRATION.md §1bb. Why `items` is empty,
+   * computed once at the tail of `runFeedPipeline` from facts the read-time
+   * chain already has (never a guess) — see that function's own doc comment
+   * next to `computeEmptyReasonCode`. Present only when `returned.length ===
+   * 0` and the waterfall resolved; structurally absent otherwise (same
+   * conditional-spread convention `rrf`/`finalPool` already use), including
+   * on every frozen-batch REPLAY (route.ts's `frozenFeedResponse`) — this is
+   * a per-reader, per-read computation, never stored in the shared day-pool
+   * or on the `DashboardBatch` row (§1bb.3: "live requests only now").
+   */
+  emptyReasonCode?: FeedEmptyReasonCode;
 }
+
+/**
+ * EMPTY-STATE-REASON — ABC-JEV-INTEGRATION.md §1bb. The closed, fixed set of
+ * reasons a paper feed request can come back with nothing — named once here
+ * so both the server (`FeedMeta.emptyReasonCode` above) and the client
+ * (`empty-reason.ts`'s `EmptyReason`) declare the four strings a single time.
+ */
+export type FeedEmptyReasonCode =
+  | "sources-unreachable"
+  | "no-results"
+  | "no-required-match"
+  | "already-delivered";
+
+/**
+ * Runtime-checkable twin of `FeedEmptyReasonCode`, for the client: an HTTP
+ * JSON response is `unknown` at runtime no matter what the type annotation
+ * says, so a value this exact build doesn't recognize (an older client
+ * talking to a newer server that has since added a 5th code, or any other
+ * malformed value) must be detected, not just trusted — see
+ * `empty-reason.ts`'s use of this array.
+ */
+export const FEED_EMPTY_REASON_CODES: readonly FeedEmptyReasonCode[] = [
+  "sources-unreachable",
+  "no-results",
+  "no-required-match",
+  "already-delivered",
+];
 
 export interface FeedResponse {
   items: ScoredItem[];

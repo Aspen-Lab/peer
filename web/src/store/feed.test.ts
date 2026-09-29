@@ -1996,6 +1996,61 @@ describe("feed lane loading", () => {
     });
   });
 
+  // EMPTY-STATE-REASON (ABC-JEV-INTEGRATION.md §1bb) — the server's own
+  // honest reason for an empty paper response, forwarded from
+  // `FeedMeta.emptyReasonCode` into the SAME store field the home page reads
+  // (page.tsx). Same "capture alongside papers, in one set() call, never
+  // read stale" discipline this file already proves for
+  // batchId/batchStatus/renderedBatchId just above.
+  describe("EMPTY-STATE-REASON: emptyReasonCode capture", () => {
+    it("captures the server's emptyReasonCode in the same set() call as papers", async () => {
+      enqueueResolved("/api/feed", {
+        items: [],
+        meta: { emptyReasonCode: "already-delivered" },
+      });
+      enqueueResolved("/api/events/feed", eventsFeedResponse());
+      enqueueResolved("/api/jobs/feed", jobsFeedResponse());
+
+      await useFeedStore.getState().loadFeed();
+
+      expect(useFeedStore.getState().emptyReasonCode).toBe("already-delivered");
+    });
+
+    it("stays null, never crashes or invents a value, when the response carries no emptyReasonCode (a non-empty response, a frozen-batch replay, or an older server)", async () => {
+      enqueueResolved("/api/feed", {
+        items: paperFeedResponse("paper-1").items,
+        meta: {},
+      });
+      enqueueResolved("/api/events/feed", eventsFeedResponse());
+      enqueueResolved("/api/jobs/feed", jobsFeedResponse());
+
+      await useFeedStore.getState().loadFeed();
+
+      expect(useFeedStore.getState().emptyReasonCode).toBeNull();
+    });
+
+    it("clears a previous load's emptyReasonCode before a new load starts, so a failure never shows a stale reason from an earlier empty load", async () => {
+      // First load: genuinely empty with a code.
+      enqueueResolved("/api/feed", { items: [], meta: { emptyReasonCode: "no-results" } });
+      enqueueResolved("/api/events/feed", eventsFeedResponse());
+      enqueueResolved("/api/jobs/feed", jobsFeedResponse());
+      await useFeedStore.getState().loadFeed();
+      expect(useFeedStore.getState().emptyReasonCode).toBe("no-results");
+
+      // Second load: the fetch itself throws (a dead connection) — feedError
+      // takes over as the visible reason (empty-reason.ts's own precedence),
+      // and the stale "no-results" from the first load must not linger.
+      const failingFetch = enqueue("/api/feed");
+      failingFetch.reject(new Error("network down"));
+      enqueueResolved("/api/events/feed", eventsFeedResponse());
+      enqueueResolved("/api/jobs/feed", jobsFeedResponse());
+      await useFeedStore.getState().loadFeed();
+
+      expect(useFeedStore.getState().feedError).toBeTruthy();
+      expect(useFeedStore.getState().emptyReasonCode).toBeNull();
+    });
+  });
+
   // P4-S5a — the store action `useBatchAcknowledgement` and loadFeed's own
   // retry step both call. Tested directly (no DOM/hook mount needed — this
   // repo has no @testing-library/react and no test anywhere mounts a live

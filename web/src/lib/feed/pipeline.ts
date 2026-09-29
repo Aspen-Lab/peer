@@ -15,7 +15,7 @@ import { dedupItems } from "./dedup";
 import { applyTier1Rerank } from "./rerank";
 import { applyRerankOrder, applyTier2Rerank } from "./tier2-rerank";
 import { briefToSeedTexts, compileSearchBrief } from "./profile-compiler";
-import type { FeedRequest, FeedResponse } from "./types";
+import type { FeedRequest, FeedResponse, FeedEmptyReasonCode } from "./types";
 import { fetchCitationNeighborhood } from "@/lib/affiliation/openalex";
 import { fetchOpenAlexSemantic } from "@/lib/sources/openalex-semantic";
 import { fetchOpenAlexTopicField } from "@/lib/sources/openalex-topic";
@@ -1061,6 +1061,43 @@ function errorsFromSourceStatus(
     }
   }
   return errors;
+}
+
+/**
+ * EMPTY-STATE-REASON — ABC-JEV-INTEGRATION.md §1bb. Called ONLY when the
+ * final `returned` list is empty (see the call site at the tail of
+ * `runFeedPipeline`). A strict, first-match-wins waterfall over facts the
+ * read-time chain already computed for THIS request — never a guess, never a
+ * count on the wire (§1bb.2):
+ *
+ *   1. every registered academic source this build attempted failed
+ *      (`everySourceFailed` — already scoped to `ACADEMIC_PAPER_SOURCES`,
+ *      reused rather than re-derived) -> "sources-unreachable"
+ *   2. else nothing came back, or nothing survived the freshness ceiling
+ *      (`inWindowCount === 0`) -> "no-results"
+ *   3. else nothing cleared the Required-topic gate, the reader's own
+ *      exclusions, or the review-paper filter — all three already fold into
+ *      one `scored` count (`scoredCount === 0`) -> "no-required-match"
+ *   4. else `scoredCount > 0` but `returned` is still empty — the only way
+ *      that happens is every matching candidate was already delivered
+ *      (`excludeIds`/`ledgerExclusions` removed it after scoring, before the
+ *      final slice) -> "already-delivered"
+ *
+ * This if/else-if/else-if/else chain is exhaustive by construction — every
+ * call returns one of the four literal codes, so there is no path that could
+ * fall through and need to "throw or default to a specific code" (§2's
+ * defensive requirement is met by the chain's own shape, not by a fifth
+ * branch that could never run).
+ */
+function computeEmptyReasonCode(
+  sourceStatus: Partial<Record<SourceId | FeedChannelId, SourceStatusEntry>> | undefined,
+  inWindowCount: number,
+  scoredCount: number,
+): FeedEmptyReasonCode {
+  if (everySourceFailed(sourceStatus)) return "sources-unreachable";
+  if (inWindowCount === 0) return "no-results";
+  if (scoredCount === 0) return "no-required-match";
+  return "already-delivered";
 }
 
 /**
@@ -2118,6 +2155,16 @@ export async function runFeedPipeline(
     ...channelErrors,
   };
 
+  // EMPTY-STATE-REASON — ABC-JEV-INTEGRATION.md §1bb. Only ever computed
+  // when there is genuinely nothing to show; `pool.sourceStatus` survives a
+  // cache hit (see `errorsFromSourceStatus` above, reused here for the same
+  // reason), and `inWindow`/`scored` are fresh on every read regardless of
+  // cache state (computed above, every call, cache hit or miss).
+  const emptyReasonCode =
+    returned.length === 0
+      ? computeEmptyReasonCode(pool.sourceStatus, inWindow.length, scored.length)
+      : undefined;
+
   return {
     items: returned,
     meta: {
@@ -2146,6 +2193,11 @@ export async function runFeedPipeline(
       // off, no RRF computation ran, or the pool predates this field, via
       // the same conditional-spread idiom `finalPool` below already uses.
       ...(pool.rrf ? { rrf: pool.rrf } : {}),
+      // EMPTY-STATE-REASON — same conditional-spread idiom as `rrf`/
+      // `finalPool`: structurally absent, not merely undefined-valued, so
+      // `expect(result.meta).not.toHaveProperty("emptyReasonCode")` is a
+      // real assertion on any non-empty response.
+      ...(emptyReasonCode ? { emptyReasonCode } : {}),
     },
     // P4-S6 — conditional spread so the KEY itself is structurally absent
     // (not merely undefined-valued) when not requested, directly testable
