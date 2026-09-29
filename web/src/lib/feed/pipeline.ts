@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { bySourceId } from "@/lib/sources";
 import type { SourceId, RawItem } from "@/lib/sources/types";
+import { DblpBotCheckError } from "@/lib/sources/dblp";
 import { GEMINI_SOURCE_TIMEOUT_MS } from "@/lib/sources/gemini-search";
 import {
   needsVertexSourceTimeout,
@@ -770,6 +771,11 @@ async function buildPaperPool(
 
   const fetched: Partial<Record<SourceId, number>> = {};
   const errors: Partial<Record<SourceId | FeedChannelId, string>> = {};
+  // DBLP-BOTWALL — the raw rejection reason per failed source, kept
+  // alongside `errors`'s already-stringified copy so the `sourceStatus` loop
+  // below can classify the failure (`isBotChallengeFailure`) without losing
+  // type information to `String(...)`.
+  const failureReasons: Partial<Record<SourceId | FeedChannelId, unknown>> = {};
   const allItems: RawItem[] = [];
 
   fetchResults.forEach((result, i) => {
@@ -785,6 +791,7 @@ async function buildPaperPool(
       allItems.push(...tagAdmissionChannel(result.value, "keyword"));
     } else {
       errors[sourceId] = String(result.reason);
+      failureReasons[sourceId] = result.reason;
       fetched[sourceId] = 0;
     }
   });
@@ -804,6 +811,11 @@ async function buildPaperPool(
           lastAttemptAt: attemptedAt,
           retryCount: 0,
           lastErrorMessage: errors[sourceId],
+          // DBLP-BOTWALL (§1ba ruling 2) — only ever true for dblp today;
+          // see `isBotChallengeFailure`'s own doc comment.
+          ...(isBotChallengeFailure(failureReasons[sourceId])
+            ? { retryBlockedToday: true }
+            : {}),
         }
       : {
           status: (fetched[sourceId] ?? 0) > 0 ? "ok" : "empty",
@@ -973,11 +985,29 @@ async function buildPaperPool(
 const SOURCE_RETRY_INTERVAL_MS = 30 * 60 * 1000;
 const MAX_SOURCE_RETRIES_PER_DAY = 3;
 
+// DBLP-BOTWALL (ABC-JEV-INTEGRATION.md §1ba, ruling 2). Classifies a
+// rejection reason as dblp's anti-automation challenge page rather than an
+// ordinary source failure. Only `sources/dblp.ts`'s `DblpBotCheckError` is
+// ever recognized, so this is inert (always false) for every other source's
+// failures and for a JSON-content-type dblp response that merely failed to
+// parse (that stays an ordinary failure — see `dblp.ts`'s own `fetchOne`).
+function isBotChallengeFailure(reason: unknown): boolean {
+  return reason instanceof DblpBotCheckError;
+}
+
 function isEligibleForRetry(
   entry: SourceStatusEntry | undefined,
   now: Date,
 ): boolean {
   if (!entry || entry.status !== "failed") return false;
+  // DBLP-BOTWALL (§1ba ruling 2) — a failure classified as the bot
+  // challenge is not retried for the rest of the local day, regardless of
+  // `retryCount`/the 30-minute window: the source is explicitly asking
+  // automated clients to stop, so retrying it just spends more requests it
+  // is guaranteed to fail again today. It still self-heals the next local
+  // day for free (see `retryBlockedToday`'s own doc comment on
+  // `SourceStatusEntry`).
+  if (entry.retryBlockedToday) return false;
   if (entry.retryCount >= MAX_SOURCE_RETRIES_PER_DAY) return false;
   const last = Date.parse(entry.lastAttemptAt);
   if (!Number.isFinite(last)) return true;
@@ -1250,6 +1280,17 @@ async function retryFailedSources(
           lastAttemptAt: attemptedAt,
           retryCount: priorCount + 1,
           lastErrorMessage: String(result.reason),
+          // DBLP-BOTWALL (§1ba ruling 2) — a retry can itself land back on
+          // the bot-check page (dblp never actually recovered); classifying
+          // it here too, not only at the original build, blocks any
+          // remaining same-day retries symmetrically. In practice this
+          // branch is normally unreachable for an already-blocked source —
+          // `isEligibleForRetry` keeps it out of `eligible`/`claimed` in the
+          // first place — this only matters when THIS attempt is the one
+          // that first discovers the challenge (e.g. the original build
+          // failed for an ordinary reason and a later retry is the one that
+          // hits the wall).
+          ...(isBotChallengeFailure(result.reason) ? { retryBlockedToday: true } : {}),
         };
       }
     });

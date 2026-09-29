@@ -61,6 +61,25 @@ export interface SourceStatusEntry {
    * fresh build response would, not just the bare word "failed".
    */
   lastErrorMessage?: string;
+  /**
+   * DBLP-BOTWALL (ABC-JEV-INTEGRATION.md §1ba, ruling 2). Only meaningful
+   * when `status` is "failed": true when that failure was classified as an
+   * anti-automation challenge page rather than an ordinary outage (today,
+   * only `sources/dblp.ts`'s `DblpBotCheckError`, via `feed/pipeline.ts`'s
+   * `isEligibleForRetry`). Such a failure is not retried for the rest of the
+   * local day regardless of `retryCount`/the 30-minute window — the source
+   * is explicitly asking automated clients to stop, so spending more of the
+   * day's retry budget on it just repeats the same wasted, unwanted request.
+   * It still self-heals the next local day for free: a new local day is a
+   * new pool cache key and therefore a fresh `sourceStatus` (see
+   * `SOURCE_RETRY_INTERVAL_MS`'s own doc comment in `feed/pipeline.ts`), so
+   * this field needs no reset logic of its own. Absent (or false) on every
+   * ordinary failure and on every pool built before this field existed —
+   * both read as "not blocked" — so this is purely additive: no migration
+   * and no `PAPER_CACHE_KEY_VERSION` bump, matching this same doc comment's
+   * own reasoning for `lastErrorMessage`/`sourceStatus` above.
+   */
+  retryBlockedToday?: boolean;
 }
 
 export interface CachedPaperPool extends CachedPoolBase {

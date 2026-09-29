@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { dblp } from "./dblp";
+import { dblp, DblpBotCheckError } from "./dblp";
 
 // P2-S2 (Round 3) — F-A-P2-02. Same fix as every other academic adapter:
 // `fetchOne` used to catch a non-2xx response or a thrown network error and
@@ -78,6 +78,77 @@ describe("dblp adapter — failure visibility (P2-S2)", () => {
       limit: 10,
     });
     expect(items.map((item) => item.id)).toEqual(["dblp:123"]);
+  });
+});
+
+// DBLP-BOTWALL (ABC-JEV-INTEGRATION.md §1ba; docs/jev-abc/DBLP-BOTWALL-B-
+// 20260929T110302Z.md). dblp.org sits behind a third-party anti-automation
+// product that sometimes answers a plain search request with HTTP 200 whose
+// body is a static "Making sure you're not a bot!" challenge page, not the
+// requested JSON. `res.ok` was already true for that response, so the
+// non-2xx branch above never saw it, and handing the HTML to `res.json()`
+// used to throw a bare `SyntaxError` ("Unexpected token '<'") that named the
+// parse SYMPTOM, never dblp's real answer.
+describe("dblp adapter — bot-check response (DBLP-BOTWALL)", () => {
+  const originalFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    vi.restoreAllMocks();
+  });
+
+  it("rejects with a clear, named error — not a raw SyntaxError — when dblp answers 200 with an HTML bot-check page", async () => {
+    const challengePage =
+      "<!doctype html><html><head><title>Making sure you're not a bot!</title></head><body></body></html>";
+    globalThis.fetch = vi.fn(
+      async () =>
+        new Response(challengePage, {
+          status: 200,
+          headers: { "content-type": "text/html; charset=utf-8" },
+        }),
+    ) as unknown as typeof fetch;
+
+    let rejection: unknown = null;
+    try {
+      await dblp.fetch({ topics: ["solid-state batteries"], limit: 10 });
+    } catch (err) {
+      rejection = err;
+    }
+
+    expect(rejection).not.toBeNull();
+    // Mutation check: remove the content-type gate and `res.json()` still
+    // throws on this same HTML body — a bare SyntaxError — so a plain
+    // `.rejects.toThrow()` alone would stay green whether or not the fix
+    // exists. Only the specific class and message below tell "fixed" apart
+    // from "not fixed".
+    expect(rejection).toBeInstanceOf(DblpBotCheckError);
+    expect((rejection as Error).name).toBe("DblpBotCheckError");
+    expect((rejection as Error).message).toContain("bot-check page");
+    expect((rejection as Error).message).not.toMatch(/unexpected token/i);
+  });
+
+  it("keeps today's behaviour when the content type says JSON but the body is malformed — an ordinary parse failure, not the bot-check error", async () => {
+    globalThis.fetch = vi.fn(
+      async () =>
+        new Response("this is not valid JSON {{{", {
+          status: 200,
+          headers: { "content-type": "application/json; charset=utf-8" },
+        }),
+    ) as unknown as typeof fetch;
+
+    let rejection: unknown = null;
+    try {
+      await dblp.fetch({ topics: ["solid-state batteries"], limit: 10 });
+    } catch (err) {
+      rejection = err;
+    }
+
+    // Still fails honestly (unchanged P2-S2 throw contract) — just not
+    // reclassified as the bot-check error, so this shape can never silently
+    // start skipping same-day retries the way DBLP-BOTWALL ruling 2 reserves
+    // for an actual challenge-page response.
+    expect(rejection).not.toBeNull();
+    expect(rejection).not.toBeInstanceOf(DblpBotCheckError);
   });
 });
 
