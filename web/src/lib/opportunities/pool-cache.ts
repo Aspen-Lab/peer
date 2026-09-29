@@ -230,10 +230,19 @@ const CACHE_KEY_VERSION = 6;
 // ("lifepo4"), so a paper that only ever spells the formula (never the
 // abbreviation or the spelled-out name) now qualifies those Required tags
 // through T1 — a v9 pool built under the old, formula-blind vocabulary must
-// never be served as if it already reflects the wider match. These bumps
-// share their numbers with `CACHE_KEY_VERSION` above by coincidence, not by
-// a shared cause — see `derivePoolCacheKey` below for how each is selected.
-const PAPER_CACHE_KEY_VERSION = 10;
+// never be served as if it already reflects the wider match. v11 —
+// ABC-JEV-INTEGRATION.md §1av/ABBREV-RECALL
+// (docs/jev-abc/ABBREV-RECALL-B-20260929T004152Z.md): `profile-compiler.ts`'s
+// projectQueries now puts a reader's Required tags ahead of their project/
+// challenge phrases, so a tag that free text never restates (e.g. "LCO")
+// survives every source adapter's own MAX_QUERIES truncation instead of
+// being silently crowded out — a v10 pool built under the old, tag-last
+// ordering may be missing candidates the corrected retrieval would have
+// fetched and must never be served as if it already reflects the fix. These
+// bumps share their numbers with `CACHE_KEY_VERSION` above by coincidence,
+// not by a shared cause — see `derivePoolCacheKey` below for how each is
+// selected.
+const PAPER_CACHE_KEY_VERSION = 11;
 /**
  * SINGLE SOURCE OF TRUTH for the literal key prefix a durable papers-pool
  * store may accept, derived from `PAPER_CACHE_KEY_VERSION` rather than

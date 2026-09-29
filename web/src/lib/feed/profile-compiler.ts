@@ -139,11 +139,21 @@ function projectQueries(req: FeedRequest, controls: Required<FeedControls>): str
     ...seedTexts.flatMap((seed) => phrasesFromText(seed, 5)),
   ]);
 
+  // ABBREV-RECALL (ABC-JEV-INTEGRATION.md §1av): exact-sense queries, then the
+  // reader's own Required tags, then project/challenge phrases, then the
+  // topic+method / topic+phrase combinations. A Required tag (e.g. "LCO")
+  // that the reader's free-text project/challenge never happens to restate
+  // must still earn a query slot ahead of every source adapter's own
+  // MAX_QUERIES truncation (2-3, see web/src/lib/sources/*.ts) — otherwise a
+  // long project description silently crowds the tag out of every fetch,
+  // every day, with no error and no visible warning. This restores the order
+  // origin/main (the live site) already used before this branch's P1 sense
+  // work reordered it; it only changes ORDER, not which queries exist.
   const exactSenseQueries = exactCanonicalSenseQueries(req.intent?.selectedSenseConcepts ?? []);
   const baseQueries = [
-    ...projectTerms,
     ...exactSenseQueries,
     ...topics,
+    ...projectTerms,
     ...topics.flatMap((topic) => methods.slice(0, 3).map((method) => `${topic} ${method}`)),
     ...topics.flatMap((topic) => projectTerms.slice(0, 3).map((term) => `${topic} ${term}`)),
   ];
