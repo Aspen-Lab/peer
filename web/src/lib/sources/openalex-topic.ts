@@ -29,7 +29,11 @@
 // empty result or a genuinely empty `topicIds` input.
 
 import type { RawItem } from "./types";
-import { openAlexWorkToRawItem, type OpenAlexWork } from "@/lib/utils/openalex";
+import {
+  isExcludedOpenAlexType,
+  openAlexWorkToRawItem,
+  type OpenAlexWork,
+} from "@/lib/utils/openalex";
 import { searchHttpFailure } from "./search-failure";
 import { sourceFetch } from "./_fetch";
 
@@ -44,7 +48,7 @@ const OPENALEX_TOPIC_MAX_RESULTS = 50;
 const MAX_TOPIC_IDS_PER_CALL = 5;
 
 const WORK_SELECT =
-  "id,title,publication_date,authorships,primary_location,best_oa_location,open_access,abstract_inverted_index,cited_by_count,doi,topics,primary_topic,keywords,concepts,type_crossref";
+  "id,title,publication_date,authorships,primary_location,best_oa_location,open_access,abstract_inverted_index,cited_by_count,doi,topics,primary_topic,keywords,concepts,type,type_crossref";
 
 /** Bare an id that may arrive as a full OpenAlex URL ("https://openalex.org/T10001") or already-bare ("T10001"). */
 function bareTopicId(id: string): string {
@@ -114,7 +118,12 @@ export async function fetchOpenAlexTopicField(
     }
     const data = await res.json();
     const works: OpenAlexWork[] = data.results || [];
-    return works.slice(0, limit).map(openAlexWorkToRawItem);
+    // DATASET-RECORDS (§1bl) — same non-paper-type exclusion as the other two
+    // OpenAlex adapters; see utils/openalex.ts's isExcludedOpenAlexType.
+    return works
+      .filter((w) => !isExcludedOpenAlexType(w))
+      .slice(0, limit)
+      .map(openAlexWorkToRawItem);
   } catch (err) {
     console.error(
       "[openalex-topic] fetch error:",

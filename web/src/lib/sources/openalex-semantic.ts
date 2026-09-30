@@ -21,7 +21,11 @@
 // indistinguishable from a quiet day.
 
 import type { RawItem } from "./types";
-import { openAlexWorkToRawItem, type OpenAlexWork } from "@/lib/utils/openalex";
+import {
+  isExcludedOpenAlexType,
+  openAlexWorkToRawItem,
+  type OpenAlexWork,
+} from "@/lib/utils/openalex";
 import { searchHttpFailure } from "./search-failure";
 import { sourceFetch } from "./_fetch";
 
@@ -36,7 +40,7 @@ export const OPENALEX_SEMANTIC_MAX_RESULTS = 50;
 const DEFAULT_LIMIT = 20;
 
 const WORK_SELECT =
-  "id,title,publication_date,authorships,primary_location,best_oa_location,open_access,abstract_inverted_index,cited_by_count,doi,topics,primary_topic,keywords,concepts,type_crossref";
+  "id,title,publication_date,authorships,primary_location,best_oa_location,open_access,abstract_inverted_index,cited_by_count,doi,topics,primary_topic,keywords,concepts,type,type_crossref";
 
 /**
  * Deterministic truncation: always the FIRST `OPENALEX_SEMANTIC_MAX_QUERY_CHARS`
@@ -115,7 +119,12 @@ export async function fetchOpenAlexSemantic(
     }
     const data = await res.json();
     const works: OpenAlexWork[] = data.results || [];
-    return works.slice(0, limit).map(openAlexWorkToRawItem);
+    // DATASET-RECORDS (§1bl) — same non-paper-type exclusion as the other two
+    // OpenAlex adapters; see utils/openalex.ts's isExcludedOpenAlexType.
+    return works
+      .filter((w) => !isExcludedOpenAlexType(w))
+      .slice(0, limit)
+      .map(openAlexWorkToRawItem);
   } catch (err) {
     console.error(
       "[openalex-semantic] fetch error:",
