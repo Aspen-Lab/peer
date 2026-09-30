@@ -124,39 +124,34 @@ function topicMatchesItem(item: RawItem, topic: string): boolean {
   return haystack.includes(needle);
 }
 
-function isProtectedRequiredTopic(topic: string, requiredTopics: string[]): boolean {
-  const needle = normalizePhrase(topic);
-  if (!needle) return false;
-  return requiredTopics.some((requiredTopic) => {
-    const required = normalizePhrase(requiredTopic);
-    return Boolean(
-      required &&
-        (needle === required ||
-          needle.includes(required) ||
-          required.includes(needle)),
-    );
-  });
-}
-
-function negativePenalty(item: RawItem, negativeTopics: string[]): number {
-  if (negativeTopics.length === 0) return 1;
-  const hit = negativeTopics.some((t) => topicMatchesItem(item, t));
-  return hit ? 0.15 : 1;
-}
-
-function legacyDislikePenalty(
-  item: RawItem,
-  legacyNegativeTopics: string[],
-  requiredTopics: string[],
-): number {
-  if (legacyNegativeTopics.length === 0) return 1;
-  const hit = legacyNegativeTopics.some((t) => {
-    if (isProtectedRequiredTopic(t, requiredTopics)) return false;
-    return topicMatchesItem(item, t);
-  });
-  return hit ? 0.65 : 1;
-}
-
+// DISLIKE-CHANNEL (ABC-JEV-INTEGRATION.md §1br,
+// docs/jev-abc/DISLIKE-CHANNEL-B-20260930T083933Z.md): this file used to
+// also carry `isProtectedRequiredTopic`, `negativePenalty` (a reader-dislike
+// ×0.15 cut) and `legacyDislikePenalty` (×0.65), fed by
+// `ScoringProfile.negativeTopics`/`legacyNegativeTopics` (see
+// feed/pipeline.ts's `scorePaperCandidates`, which used to map
+// `req.negativeTopics` onto both). The investigation traced every
+// production "less of this" action (7 entry points across Home, Saved, and
+// the paper detail page, all funnelling into one store action,
+// `notInterestedPaper`) and found, by execution, that neither penalty could
+// ever fire on a reader's own dislike in a real request, for two
+// independent reasons: (1) nothing in the product writes
+// `profile.dislikedTopics` — the only field either one's request-time
+// wiring ever read (no entry point, and no Profile page UI, has ever
+// written it — confirmed against this repo's full git history); (2) even
+// if it were written, the identical declared term always also reaches
+// `exclusions` below FIRST — the same hard-drop filter this function
+// already runs, which removes the item before either penalty is ever
+// evaluated (this was already established, for the reachable-if-written
+// case, by the SCORE-ZERO CORRECTION, ABC-JEV-INTEGRATION.md §1at). Both
+// dead functions, their `ScoringProfile` fields, and their `pipeline.ts`
+// wiring were deleted; deleting them changes no real request's score (the
+// removed factors were always exactly 1 in every real request — proven by
+// a before/after run over the saved pools, see this item's checkpoint).
+// `negative-penalty.test.ts` (rewritten to the new contract, not deleted)
+// and `pipeline.score-zero.test.ts` (needed no change — it already tests
+// the real, live `exclusions` path, never the deleted functions by name)
+// keep this covered.
 export function scoreItems(
   items: RawItem[],
   profile: ScoringProfile,
@@ -195,6 +190,22 @@ export function scoreItems(
     ? mustTopics.filter((topic) => !["conflict", "sem"].includes(canonicalize(topic)))
     : mustTopics;
   const softTopics = profile.softTopics ?? [];
+  // DISLIKE-CHANNEL (ABC-JEV-INTEGRATION.md §1br): a substring hard drop —
+  // any candidate whose title/abstract/tags contain one of these terms is
+  // removed from the pool outright, with no decay and no concept scoping.
+  // Correct for a reader's own explicit exclusions, but NEVER wire a
+  // one-click "less of this" action (a "Not interested"/"Dislike"/"Skip"
+  // button, swipe, or key — see store/feed.ts's `notInterestedPaper`, the
+  // single store action every such entry point calls) to this list: a
+  // constructed case in the investigation above proved one such click
+  // would also remove a different, unrelated, independently on-topic paper
+  // that merely shares one common word with the dismissed one, forever,
+  // with no way back short of editing the exclusion list itself. Reader
+  // "less of this" goes through the gradual, decaying preference ledger
+  // instead (`useProfileStore`'s `recordPaperPreference`) — see
+  // feed.test.ts's DISLIKE-CHANNEL tripwire test, which pins that
+  // `notInterestedPaper` writes only there, never here, and goes red if
+  // that is ever wired differently.
   const exclusions = profile.exclusions ?? [];
 
   // Pass 1: everything that can be judged from the paper alone.
@@ -352,12 +363,6 @@ export function scoreItems(
     const tp = topicality[i];
     const rc = clamp01(scoreRecency(item.publishedAt, now));
     const sr = clamp01(scoreSource(item.source, profile.sourceWeights));
-    const policyPenalty = negativePenalty(item, profile.negativeTopics ?? []);
-    const legacyPenalty = legacyDislikePenalty(
-      item,
-      profile.legacyNegativeTopics ?? [],
-      mustTopics,
-    );
     const preference = scorePreferenceMatch(
       item,
       preparedLedger,
@@ -380,15 +385,13 @@ export function scoreItems(
     // pText that repeats those same words) and rescue the item's overall
     // rank even though it has zero genuine context-agreeing evidence. This
     // additional penalty applies to `base` only — the same place
-    // policyPenalty/legacyPenalty/preference.penalty already apply — never
-    // to softBonus/preference.boost, which come from an unrelated signal
+    // preference.penalty already applies — never to softBonus/
+    // preference.boost, which come from an unrelated signal
     // (Explore topics, the preference ledger) this item's Required-tag
     // demotion says nothing about.
     const senseContextPenalty = kw.fullyDemoted ? SENSE_CONTEXT_DEMOTED_GROUNDING : 1;
     const combined = clamp01(
-      base * policyPenalty * legacyPenalty * preference.penalty * senseContextPenalty +
-        softBonus +
-        preference.boost,
+      base * preference.penalty * senseContextPenalty + softBonus + preference.boost,
     );
     const breakdown: ScoreBreakdown = {
       keyword: kw.score,

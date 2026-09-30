@@ -1357,19 +1357,23 @@ async function retryFailedSources(
 /**
  * Shared by the build and every read, so the two cannot score differently.
  *
- * SCORE-ZERO (ABC-JEV-INTEGRATION.md §1at ruling 2): `negativeTopics` (→
- * `combine.ts`'s `negativePenalty`, a harsh ×0.15 cut) used to be fed
- * `policyAvoidTopics` — `brief.avoid` filtered down to (almost entirely) the
- * system's own "avoid reviews/surveys" defaults, not the reader's own
- * dislikes that penalty's name promises. That let every review-shaped paper
- * take a second, uncoordinated review penalty on top of `rerank.ts`'s
- * purpose-built one, occasionally stacking to exactly 0 with no visible
- * relevance signal (docs/jev-abc/SCORE-ZERO-B-20260928T234238Z.md). Only a
- * genuine reader-declared dislike (`userNegativeTopics`, already the value
- * `legacyNegativeTopics` gets) may reach `negativePenalty` now. The system's
- * review/survey defaults keep affecting ranking exactly once, through
- * `rerank.ts` (`brief.avoid`'s own overlap term and `reviewPenalty`), which
- * already runs unconditionally at every tier.
+ * DISLIKE-CHANNEL (ABC-JEV-INTEGRATION.md §1br,
+ * docs/jev-abc/DISLIKE-CHANNEL-B-20260930T083933Z.md): this function used to
+ * also map `req.negativeTopics` onto `ScoringProfile.negativeTopics`/
+ * `legacyNegativeTopics`. SCORE-ZERO's own fix (§1at ruling 2, kept in git
+ * history) had already narrowed what reached that wiring to a genuine
+ * reader-declared dislike, never the system's own "avoid reviews/surveys"
+ * defaults. DISLIKE-CHANNEL found, by execution, that the wiring was ALWAYS
+ * dead in production regardless: nothing writes `profile.dislikedTopics`
+ * (the field `req.negativeTopics` is derived from), and even a constructed
+ * dislike reaches `exclusions` below FIRST — the same hard-drop filter,
+ * which runs before either penalty ever could. Both `ScoringProfile` fields
+ * and `combine.ts`'s `negativePenalty`/`legacyDislikePenalty` were deleted;
+ * `exclusions` (from `req.intent.exclusions`, below) is the one live
+ * mechanism for a reader's own declared dislike. The system's review/survey
+ * defaults still affect ranking exactly once, through `rerank.ts`
+ * (`brief.avoid`'s own overlap term and `reviewPenalty`), unrelated to this
+ * removal — that path is untouched.
  */
 function scorePaperCandidates(
   items: RawItem[],
@@ -1377,7 +1381,6 @@ function scorePaperCandidates(
   brief: SearchBriefFor,
   includePreferenceLedger: boolean,
 ): ScoredItem[] {
-  const userNegativeTopics = req.negativeTopics ?? [];
   return scoreItems(
     items,
     {
@@ -1388,8 +1391,6 @@ function scorePaperCandidates(
       preferenceLedger: includePreferenceLedger
         ? req.preferenceLedger
         : undefined,
-      negativeTopics: userNegativeTopics,
-      legacyNegativeTopics: userNegativeTopics,
       sourceWeights: req.sourceWeights,
       admissionChannels: req.admissionChannels,
       exclusions: req.intent?.exclusions.map((entry) => entry.value),
