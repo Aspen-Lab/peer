@@ -170,6 +170,77 @@ function containsCjkCharacter(text: string): boolean {
   return CJK_CHARACTER.test(text);
 }
 
+// QUERY-GENERIC-WORDS (ABC-JEV-INTEGRATION.md §1bs.1,
+// docs/jev-abc/QUERY-GENERIC-WORDS-B-20260930T090811Z.md §5(b)/Q1 note 1):
+// a bare 4-digit year ("2024") or a joined number+unit token ("500Wh/kg",
+// "3.7V", "45mA") reaches the keyword tier with ~0 selectivity as a search
+// query — the guide's own set-diff measured this narrow filter clean (0
+// domain words, 0 generic words lost) over a 62-text corpus, unlike any
+// percentile cut of the reference-idf table (which lost real domain words,
+// e.g. "gene"/"protein", starting at its gentlest tested cut). A token
+// STARTS with an optional sign and one or more digits, optionally with a
+// decimal fraction — this is what separates a UNIT/YEAR/DECIMAL token
+// (always digit-FIRST) from a domain formula or designation that merely
+// CONTAINS a digit ("LiCoO2", "NMC811", "GPT-4", "316L", "1T-MoS2" all
+// start with a letter and never match this).
+const LEADING_NUMBER = /^([+-]?\d+(?:\.\d+)?)(.*)$/;
+
+// Closed list of measurement-unit suffixes (§1bs.1's own example list),
+// lowercased for comparison since this filter runs after the keyword
+// step's own `.toLowerCase()` below. A deliberately FINITE, curated set —
+// units are a finite vocabulary, the same reasoning DEDUP-ANGEW's DOI
+// alias and LCO-FORMULA's formula list already used for their own closed
+// lists elsewhere in this codebase — never inferred or open-ended,  and
+// never extended without a real example the way those two were. Bare "l"
+// and "m" are deliberately NOT members (so "316L" — a stainless-steel
+// designation — and a bare "...M" designation both survive); only the
+// specific compound spellings below (mL, µL, mM, µM, ...) are members, and
+// "mm"/"µm" cover BOTH of the case-variant unit pairs the ruling's own list
+// names (millimeter/millimolar and micrometer/micromolar) once lowercased
+// — a deliberate, harmless collapse: either original unit is real
+// measurement noise this filter should remove either way. A Celsius
+// temperature reaches this step as e.g. "40c" (no degree sign): "°" is not
+// `\p{L}`/`\p{N}` and is already blanked to whitespace by this function's
+// keyword branch below before this filter ever runs (splitting "40°C" into
+// two SEPARATE too-short tokens that never reach here at all), so "c"
+// stands in for "°C" only for the case where the source text had no degree
+// sign to begin with (e.g. "-40C", typed plainly) — the shape the guide's
+// own corpus produced. "k" likewise stands in for the bare Kelvin unit
+// "K" — a short, occasionally ambiguous letter (a shorthand for "1000"
+// elsewhere, e.g. "500k") that is an accepted cost of following the
+// ruling's own example list verbatim, the same spirit as the "1000" noise
+// §1bs.1 already accepts for a bare non-year integer.
+const CLOSED_MEASUREMENT_UNITS = new Set([
+  "v", "mv", "a", "ma", "mah", "ah", "wh", "kwh", "wh/kg", "w", "kw",
+  "hz", "k", "c", "nm", "µm", "mm", "cm", "g", "mg", "kg", "ml", "µl",
+  "mm", "µm", "%", "h", "min", "s", "ms", "ppm", "ev", "gpa", "mpa",
+  "s/cm", "b",
+]);
+
+// A standalone 4-digit year, 1900-2099 — the range a project/challenge
+// text's own calendar years realistically fall in.
+const STANDALONE_YEAR = /^(?:19|20)\d{2}$/;
+
+// True for a token this filter removes: (i) a standalone year, (ii) a
+// number whose unit suffix is in the closed list above, (iii) a decimal
+// number with no letters at all. Every other token — including a bare
+// non-year integer ("18650", "1000") — returns false and stays; that
+// residual noise is an ACCEPTED COST per §1bs.1, harmless at the bottom of
+// the query budget (QUERY-BUDGET, §1az, already keeps every bare
+// single-word entry, numeric or not, behind every phrase and tag).
+function isGenericNumericToken(token: string): boolean {
+  if (STANDALONE_YEAR.test(token)) return true;
+  const match = token.match(LEADING_NUMBER);
+  if (!match) return false;
+  const [, numberPart, suffix] = match;
+  if (!suffix) {
+    // A pure number with no suffix at all: only a DECIMAL (contains ".")
+    // is removed by rule (iii); a bare integer ("18650", "1000") stays.
+    return numberPart.includes(".");
+  }
+  return CLOSED_MEASUREMENT_UNITS.has(suffix);
+}
+
 function phrasesFromText(text: string | undefined, max = 8): string[] {
   if (!text) return [];
   const chunks = text
@@ -197,7 +268,18 @@ function phrasesFromText(text: string | undefined, max = 8): string[] {
     // of 3 fixtures produced a single multi-word phrase — every sentence ran
     // past the word cap below without a comma to break on (see
     // docs/jev-abc/QUERY-QUALITY-B-20260929T084721Z.md §2a).
-    .split(/[.,;:\n]|(?:\s+-\s+)/)
+    // QUERY-GENERIC-WORDS (§1bs.2): a period between two digits never
+    // splits a chunk, so a decimal number or a version string stays whole
+    // ("3.7V", "99.9%", "GPT-3.5") instead of being corrupted into two
+    // fragments mid-number (docs/jev-abc/QUERY-GENERIC-WORDS-B-
+    // 20260930T090811Z.md Q1 note 3); every other period (preceded or
+    // followed by a non-digit — an ordinary sentence-ending period, in
+    // particular) still splits exactly as before.
+    // QUERY-GENERIC-WORDS (§1bs.3 / §1bo.9(a)): the em dash (U+2014), en
+    // dash (U+2013) and ellipsis (U+2026) act as delimiters like a comma or
+    // colon, so "——solid-state electrolyte" yields "solid-state
+    // electrolyte" and an English phrase splits at an em dash too.
+    .split(/[,;:\n\u2013\u2014\u2026]|(?<!\d)\.|\.(?!\d)|(?:\s+-\s+)/)
     .map((part) => part.trim())
     .filter((part) => part.length >= 4);
 
@@ -235,7 +317,15 @@ function phrasesFromText(text: string | undefined, max = 8): string[] {
         // punctuation allowance as before (+, -, /, .).
         .replace(/[^\p{L}\p{N}+\-/.\s]/gu, " ")
         .split(/\s+/)
-        .filter((token) => token.length >= 4 && !STOPWORDS.has(token)),
+        .filter(
+          (token) =>
+            token.length >= 4 &&
+            !STOPWORDS.has(token) &&
+            // QUERY-GENERIC-WORDS (§1bs.1): a standalone year, a
+            // number+unit token, or a bare decimal — see
+            // isGenericNumericToken's own doc comment above.
+            !isGenericNumericToken(token),
+        ),
     ),
   ).slice(0, max);
 

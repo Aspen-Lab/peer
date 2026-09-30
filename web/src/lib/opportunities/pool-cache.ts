@@ -377,10 +377,29 @@ const CACHE_KEY_VERSION = 6;
 // ASCII-only/whitespace-boundary/Han-only behaviour must never be served as
 // if it already reflects any of this. (§1bo.8 landed before v20 ever
 // shipped — round 1's v19->v20 bump and this refinement are ONE cache
-// generation, not two; there is no v21 for this item.) These bumps share
-// their numbers with `CACHE_KEY_VERSION` above by coincidence, not by a
-// shared cause — see `derivePoolCacheKey` below for how each is selected.
-const PAPER_CACHE_KEY_VERSION = 20;
+// generation, not two.) v21 — ABC-JEV-INTEGRATION.md §1bs/QUERY-GENERIC-WORDS
+// (docs/jev-abc/QUERY-GENERIC-WORDS-B-20260930T090811Z.md): profile-compiler.ts's
+// `phrasesFromText` keyword step no longer emits a standalone 4-digit year
+// (1900-2099), a number+unit token whose unit is in a closed, curated list
+// (e.g. "3.7V", "45mA", "500Wh/kg" — bare "L"/"M" stay off the list, so a
+// designation like "316L" is unaffected), or a bare decimal with no letters
+// ("99.9") — every other token, including a non-year bare integer
+// ("18650"), is unchanged. Separately, its chunk splitter no longer splits a
+// chunk at a period between two digits (so "3.7V"/"99.9%"/"GPT-3.5" survive
+// as one chunk instead of two corrupted fragments), and the em dash
+// (U+2014), en dash (U+2013) and ellipsis (U+2026) now act as chunk
+// delimiters alongside the existing comma/semicolon/colon/newline (folding
+// in §1bo.9(a)). Both the query path (`projectQueries`) and the seed-text
+// path (`activeQuestions`/`briefToSeedTexts`) read this one shared function,
+// so this changes pool MEMBERSHIP for any reader whose Project/Challenge
+// text (or an uploaded seed text) contains a year, a joined unit+number
+// token, a bare decimal, or one of the three new dash/ellipsis delimiters —
+// a v20 pool built under the old, number/unit-blind keyword step and the
+// old decimal-splitting chunker must never be served as if it already
+// reflects any of these changes. These bumps share their numbers with
+// `CACHE_KEY_VERSION` above by coincidence, not by a shared cause — see
+// `derivePoolCacheKey` below for how each is selected.
+const PAPER_CACHE_KEY_VERSION = 21;
 /**
  * SINGLE SOURCE OF TRUTH for the literal key prefix a durable papers-pool
  * store may accept, derived from `PAPER_CACHE_KEY_VERSION` rather than

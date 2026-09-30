@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { normalizeFeedIntent } from "./intent";
-import { compileSearchBrief } from "./profile-compiler";
+import { briefToSeedTexts, compileSearchBrief } from "./profile-compiler";
 import { selectedSenseConcept } from "./senses";
 
 // Reused verbatim from sense-context.test.ts / docs/jev-abc/ABBREV-RECALL-B-20260929T004152Z.md
@@ -705,5 +705,234 @@ describe("compileSearchBrief NON-ASCII-TEXT round 2 (§1bo.8): mixed CJK+Latin t
     for (const query of brief.generatedQueries) {
       expect(NONLATIN_LETTER.test(query)).toBe(false);
     }
+  });
+});
+
+// QUERY-GENERIC-WORDS (ABC-JEV-INTEGRATION.md §1bs,
+// docs/jev-abc/QUERY-GENERIC-WORDS-B-20260930T090811Z.md): a bare 4-digit
+// year, a number+unit token from a closed list, or a bare decimal with no
+// letters reached both generatedQueries and activeQuestions/seedTexts as
+// its own near-useless single-word entry. The fix lives entirely inside
+// phrasesFromText's keyword step, so both call sites change from one edit;
+// every other token — including a non-year bare integer ("18650") — is
+// unchanged (an accepted cost, per the ruling). Folded into the SAME
+// function: the phrase/chunk splitter no longer splits at a period between
+// two digits, and the em dash / en dash / ellipsis now act as chunk
+// delimiters (§1bo.9(a)).
+describe("compileSearchBrief QUERY-GENERIC-WORDS (§1bs): years, units, and bare decimals never become their own query", () => {
+  it("removes a standalone 4-digit year from the keyword tier while keeping the tag and other words", () => {
+    // The guide's own measured fixture (§1 note 1): a project/challenge text
+    // short enough to also be its own literal query — the literal string
+    // (which happens to CONTAIN "2024" as a substring) is unrelated to this
+    // filter and stays; only the STANDALONE "2024"/"500wh/kg" keyword
+    // entries are removed.
+    const YEAR_UNIT_TEXT = "battery target 500Wh/kg by 2024";
+    const brief = compileSearchBrief({ topics: [], project: YEAR_UNIT_TEXT });
+
+    expect(brief.generatedQueries).toContain(YEAR_UNIT_TEXT);
+    expect(brief.generatedQueries).toContain("battery");
+    expect(brief.generatedQueries).toContain("target");
+    // MUTATION CHECK (§1bs.1): dropping the year branch of the filter turns
+    // this red.
+    expect(brief.generatedQueries).not.toContain("2024");
+    // MUTATION CHECK (§1bs.1): dropping the number+unit branch turns this
+    // red.
+    expect(brief.generatedQueries).not.toContain("500wh/kg");
+  });
+
+  it("removes a number+unit token for several units from the closed list", () => {
+    const brief = compileSearchBrief({
+      topics: [],
+      challenge:
+        "Measured performance at 3.7V nominal voltage with 45mA current draw across many repeated trials for validation",
+    });
+
+    expect(brief.generatedQueries).not.toContain("3.7v");
+    expect(brief.generatedQueries).not.toContain("45ma");
+    expect(brief.generatedQueries).toContain("measured");
+    expect(brief.generatedQueries).toContain("performance");
+    expect(brief.generatedQueries).toContain("nominal");
+    expect(brief.generatedQueries).toContain("voltage");
+    expect(brief.generatedQueries).toContain("current");
+  });
+
+  it("removes a bare decimal number with no letters", () => {
+    const text =
+      "Improving capacity retention to reach 99.9 percent after extended cycling degradation testing programs";
+    const brief = compileSearchBrief({ topics: [], challenge: text });
+
+    // MUTATION CHECK (§1bs.1): dropping the decimal branch turns this red.
+    expect(brief.generatedQueries).not.toContain("99.9");
+    expect(brief.activeQuestions).not.toContain("99.9");
+    expect(brief.generatedQueries).toContain("capacity");
+    expect(brief.generatedQueries).toContain("retention");
+    // "cycling"/"degradation" sit past generatedQueries' own narrower
+    // per-field cap (5) on this text but within activeQuestions' wider one
+    // (8) — both are still real, un-dropped survivors of the SAME fix.
+    expect(brief.activeQuestions).toContain("cycling");
+    expect(brief.activeQuestions).toContain("degradation");
+  });
+
+  it("leaves a short numeric/unit fragment under 4 characters exactly as before (pins the pre-existing, unrelated length gate)", () => {
+    const brief = compileSearchBrief({
+      topics: [],
+      challenge: "Reduce interfacial resistance below 20 ohm cm2 across many devices under test",
+    });
+
+    // "20", "ohm", "cm2" are all under 4 characters and were already
+    // excluded by the pre-existing length filter, independent of this fix.
+    expect(brief.generatedQueries).not.toContain("20");
+    expect(brief.generatedQueries).not.toContain("ohm");
+    expect(brief.generatedQueries).not.toContain("cm2");
+    expect(brief.generatedQueries).toContain("interfacial");
+    expect(brief.generatedQueries).toContain("resistance");
+  });
+
+  // §1bs.1's own closed unit list deliberately excludes bare "L"/"M" so a
+  // digit-first alloy/battery-cell/cathode DESIGNATION is never mistaken
+  // for a number+unit token; every one of these must still reach the
+  // query/seed-text output exactly as before. Each fixture is a long,
+  // comma-free run-on sentence (>10 words) so the phrase/chunk tier's own
+  // word-count cap empties it out, isolating the keyword tier — where this
+  // filter actually lives — as the only path a survivor can take; grouped
+  // (not all 10 in one sentence) so every designation still lands within
+  // that tier's own sentence-position cap instead of being crowded out by
+  // an unrelated, pre-existing budget limit this item does not change.
+  it.each([
+    [
+      "18650, 21700 (cell formats), 7075, 316L (alloys)",
+      "18650 and 21700 and 7075 and 316L cell and alloy designations appear throughout the published literature",
+      ["18650", "21700", "7075", "316l"],
+    ],
+    [
+      "LiCoO2, NMC811 (cathode formulas), GPT-4 (model name)",
+      "LiCoO2 and NMC811 and GPT-4 cathode and model output designations appear throughout recent published studies",
+      ["licoo2", "nmc811", "gpt-4"],
+    ],
+    [
+      "1T-MoS2, 4H-SiC (polytype designations), CR2032 (cell)",
+      "1T-MoS2 and 4H-SiC and CR2032 phase and substrate and coin cell designations appear throughout many reports",
+      ["1t-mos2", "4h-sic", "cr2032"],
+    ],
+  ])("keeps every cell-format, alloy, and formula designation: %s", (_label, text, survivors) => {
+    const brief = compileSearchBrief({ topics: [], challenge: text });
+    const lower = brief.activeQuestions.map((q) => q.toLowerCase());
+
+    for (const survivor of survivors) {
+      expect(lower).toContain(survivor);
+    }
+  });
+
+  it("keeps a non-year bare integer as an accepted cost (the ruling's own example, '1000')", () => {
+    const brief = compileSearchBrief({
+      topics: [],
+      challenge: "Cycling stability was confirmed for 1000 repeated charge and discharge test cycles",
+    });
+
+    expect(brief.generatedQueries).toContain("1000");
+  });
+
+  it("never splits a chunk at a period between two digits, so a decimal, percentage, or version string stays whole", () => {
+    const brief = compileSearchBrief({
+      topics: [],
+      project:
+        "Cells reached 3.7V nominal voltage, showed 99.9% coulombic efficiency, and we compared GPT-4 and GPT-3.5 outputs",
+    });
+
+    expect(brief.generatedQueries).toContain("Cells reached 3.7V nominal voltage");
+    expect(brief.generatedQueries).toContain("showed 99.9% coulombic efficiency");
+    expect(brief.generatedQueries).toContain("and we compared GPT-4 and GPT-3.5 outputs");
+    // MUTATION CHECK (§1bs.2): splitting on every period again reproduces
+    // these two corrupted fragments (both survive the pre-existing longPhrases
+    // caps under the old, decimal-blind splitter) and turns this red.
+    expect(brief.generatedQueries).not.toContain("Cells reached 3");
+    expect(brief.generatedQueries).not.toContain("7V nominal voltage");
+  });
+
+  // §1bo.9(a), folded into this item (§1bs.3).
+  it("splits at an em dash, per the ruling's own example ('——solid-state electrolyte' -> 'solid-state electrolyte')", () => {
+    const brief = compileSearchBrief({
+      topics: [],
+      project: "——solid-state electrolyte interfaces for advanced battery systems",
+    });
+
+    expect(brief.generatedQueries).toContain(
+      "solid-state electrolyte interfaces for advanced battery systems",
+    );
+  });
+
+  it("splits an English phrase at a mid-sentence em dash", () => {
+    const brief = compileSearchBrief({
+      topics: [],
+      project: "Solid-state electrolyte design — improving ionic conductivity for battery applications",
+    });
+
+    expect(brief.generatedQueries).toContain("Solid-state electrolyte design");
+    expect(brief.generatedQueries).toContain("improving ionic conductivity for battery applications");
+    expect(brief.generatedQueries).not.toContain(
+      "Solid-state electrolyte design — improving ionic conductivity for battery applications",
+    );
+  });
+
+  it("splits at an en dash", () => {
+    const brief = compileSearchBrief({
+      topics: [],
+      project: "Improving electrode stability – a persistent challenge for silicon anode materials in commercial cells",
+    });
+
+    expect(brief.generatedQueries).toContain("Improving electrode stability");
+    expect(brief.generatedQueries).toContain(
+      "a persistent challenge for silicon anode materials in commercial cells",
+    );
+  });
+
+  it("splits at an ellipsis", () => {
+    const brief = compileSearchBrief({
+      topics: [],
+      project: "Exploring dendrite suppression mechanisms… particularly at high current densities for extended cycling",
+    });
+
+    expect(brief.generatedQueries).toContain("Exploring dendrite suppression mechanisms");
+    expect(brief.generatedQueries).toContain(
+      "particularly at high current densities for extended cycling",
+    );
+  });
+
+  // The shared-function placement itself (Q4 of the guide): the SAME fixture
+  // passed as `challenge` shows no bare year/unit in activeQuestions/seedTexts
+  // either — both the query path and the seed-text path change from one edit.
+  it("also strips a standalone year/unit from activeQuestions and seedTexts when the text is the challenge field", () => {
+    const req = { topics: [], challenge: "battery target 500Wh/kg by 2024" };
+    const brief = compileSearchBrief(req);
+
+    expect(brief.activeQuestions).not.toContain("2024");
+    expect(brief.activeQuestions).not.toContain("500wh/kg");
+    expect(brief.activeQuestions).toContain("battery");
+    expect(brief.activeQuestions).toContain("target");
+
+    const seedTexts = briefToSeedTexts(req, brief);
+    expect(seedTexts).not.toContain("2024");
+    expect(seedTexts).not.toContain("500wh/kg");
+  });
+
+  // Regression guarantee (§1bs, tests 6/point): every existing pinned array
+  // in this file stays byte-identical — none contains a bare number/year/
+  // unit token, confirmed by inspection of the pinned arrays above. Re-run
+  // here as an explicit, named assertion rather than only relying on the
+  // rest of this file's own describe blocks staying green.
+  it("leaves the pre-existing QUERY-BUDGET/ABBREV-RECALL pinned output byte-identical (no number/year/unit token in it to remove)", () => {
+    const brief = compileSearchBrief({
+      topics: [],
+      project: BATTERY_PROJECT_TEXT,
+      controls: { focus: "tight" },
+    });
+
+    expect(brief.generatedQueries).toEqual([
+      "PhD research on solid-state battery materials",
+      "research",
+      "solid-state",
+      "battery",
+      "materials",
+    ]);
   });
 });
