@@ -295,6 +295,66 @@ async function pushRemote(patch: Partial<UserProfile>): Promise<boolean> {
   }
 }
 
+/** The `lastSynced`/`lastPushedRef` pair a sync attempt leaves behind. */
+export interface SyncBaselines {
+  lastSynced: Partial<UserProfile> | null;
+  lastPushed: Partial<UserProfile> | null;
+}
+
+/**
+ * PROFILE-SYNC-RETRY-TEST (§1bk.9a) — the one decision both push sites make
+ * after attempting to reconcile with the account: "after this attempt, what
+ * are the new sync baselines?" This is SIGNIN-MERGE's P3 guard (§1aj — "a
+ * failed push is retried on the next change") pulled out of the `onSession`
+ * and debounced-push closures into its own pure, directly-testable function.
+ * Neither closure can be mounted by this repo's test harness (no
+ * `@testing-library/react`-style effect runner — see this file's test
+ * header), which is exactly why the FAILURE side had no test at all before
+ * this item (PROFILE-SYNC review, docs/jev-abc/PROFILE-SYNC-A-20260930T023227Z.md,
+ * finding (a)): the guard was correct but unreachable by anything that
+ * exists in this suite.
+ *
+ *  - `succeeded` true (a push landed, or there was nothing to push — the
+ *    "nothing to push" branch in `onSession` is ALSO a confirmed sync) →
+ *    both baselines advance to `profile`'s own current state, i.e. "the
+ *    pushed state": `lastSynced` becomes the single-value snapshot
+ *    (`singleValueSnapshot`) and `lastPushed` becomes the full remote-shaped
+ *    payload (`remoteProfilePayload`, so credential redaction applies here
+ *    too).
+ *  - `succeeded` false → `previous` comes back UNCHANGED (the same object,
+ *    not a copy) — every field that was dirty stays dirty, so the next
+ *    local edit's diff, or the next sign-in reconcile, includes it again.
+ *    That is the whole of P3's retry promise; there is nothing else to do
+ *    on this path. The failure notice (`markProfilePushFailed`) stays a
+ *    separate call at each call site, unchanged by this function.
+ *
+ * The `succeeded: true` overload gives both call sites (which only ever
+ * call this after they already know the attempt succeeded) a non-nullable
+ * return, matching `setLastSynced`'s own non-nullable parameter — no cast
+ * needed.
+ */
+export function nextSyncBaselines(
+  succeeded: true,
+  profile: UserProfile,
+  previous: SyncBaselines,
+): { lastSynced: Partial<UserProfile>; lastPushed: Partial<UserProfile> };
+export function nextSyncBaselines(
+  succeeded: boolean,
+  profile: UserProfile,
+  previous: SyncBaselines,
+): SyncBaselines;
+export function nextSyncBaselines(
+  succeeded: boolean,
+  profile: UserProfile,
+  previous: SyncBaselines,
+): SyncBaselines {
+  if (!succeeded) return previous;
+  return {
+    lastSynced: singleValueSnapshot(profile),
+    lastPushed: remoteProfilePayload(profile),
+  };
+}
+
 export function ProfileSync() {
   const profile = useProfileStore((s) => s.profile);
   const setEntitlement = useProfileStore((s) => s.setEntitlement);
@@ -403,22 +463,27 @@ export function ProfileSync() {
         // attempt when local actually has something worth carrying up.
         const shouldAttemptSync = remote ? true : hasAnySignal(local);
         if (shouldAttemptSync) {
-          if (Object.keys(pushPayload).length === 0) {
-            // PROFILE-SYNC (§1bk ruling 3) — "a pull that needed no push":
-            // every dirty field already agreed with the account and no list
-            // union added anything new, so there is nothing to send. Still
-            // a successful, confirmed sync — record it.
-            useProfileStore.getState().setLastSynced(singleValueSnapshot(merged));
-            lastPushedRef.current = remoteProfilePayload(merged);
-            clearProfilePushFailed();
-          } else if (await pushRemote(pushPayload)) {
-            useProfileStore.getState().setLastSynced(singleValueSnapshot(merged));
-            lastPushedRef.current = remoteProfilePayload(merged);
+          // PROFILE-SYNC (§1bk ruling 3) — "a pull that needed no push" is
+          // still a confirmed sync (every dirty field already agreed with
+          // the account and no list union added anything new), so it
+          // advances the baselines exactly like a real push's success.
+          // `nextSyncBaselines` (§1bk.9a) makes that one decision either
+          // way, so it is not duplicated inline here.
+          const pushed =
+            Object.keys(pushPayload).length === 0 || (await pushRemote(pushPayload));
+          if (pushed) {
+            const baselines = nextSyncBaselines(true, merged, {
+              lastSynced,
+              lastPushed: lastPushedRef.current,
+            });
+            useProfileStore.getState().setLastSynced(baselines.lastSynced);
+            lastPushedRef.current = baselines.lastPushed;
             clearProfilePushFailed();
           } else {
-            // P3 — leaving lastSynced/lastPushedRef unset means the dirty
-            // fields stay dirty and the next local edit's diff still
-            // includes them: the retry P3 requires, with no extra
+            // P3 — `nextSyncBaselines` is deliberately not called on this
+            // path: lastSynced/lastPushedRef stay exactly as they are, so
+            // the dirty fields stay dirty and the next local edit's diff
+            // still includes them — the retry P3 requires, with no extra
             // bookkeeping needed here.
             markProfilePushFailed();
           }
@@ -461,20 +526,26 @@ export function ProfileSync() {
       const patch = diffPayload(payload, lastPushedRef.current);
       if (Object.keys(patch).length === 0) return;
       if (await pushRemote(patch)) {
-        lastPushedRef.current = { ...lastPushedRef.current, ...patch };
         // PROFILE-SYNC (§1bk ruling 3) — "after every successful push...
         // lastSynced becomes the resulting snapshot." Uses the `profile`
         // this effect closed over (the same snapshot `payload` was built
-        // from), restricted to the 14 single-value fields, so a reload
-        // correctly remembers this push even though the reconcile-cycle
-        // update in onSession only fires once, at sign-in.
-        useProfileStore.getState().setLastSynced(singleValueSnapshot(profile));
+        // from), so a reload correctly remembers this push even though the
+        // reconcile-cycle update in onSession only fires once, at sign-in.
+        // `nextSyncBaselines` (§1bk.9a) makes the same advance-on-success
+        // decision as the sign-in reconcile above, so it lives in one
+        // place, not two.
+        const baselines = nextSyncBaselines(true, profile, {
+          lastSynced: useProfileStore.getState().lastSynced,
+          lastPushed: lastPushedRef.current,
+        });
+        lastPushedRef.current = baselines.lastPushed;
+        useProfileStore.getState().setLastSynced(baselines.lastSynced);
         clearProfilePushFailed();
       } else {
         // P3 — visible, not console-only; see useProfileSyncStatus above.
-        // lastPushedRef (and lastSynced) deliberately left unadvanced, so
-        // the next edit's diff still includes this one and the retry
-        // happens naturally.
+        // `nextSyncBaselines` is deliberately not called here: lastPushedRef
+        // (and lastSynced) stay exactly as they are, so the next edit's
+        // diff still includes this one and the retry happens naturally.
         markProfilePushFailed();
       }
     }, DEBOUNCE_MS);

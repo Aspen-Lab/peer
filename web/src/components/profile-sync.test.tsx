@@ -1,13 +1,17 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { defaultProfile, type UserProfile } from "@/types";
-import { dirtySingleValueFields } from "@/lib/profile/merge";
+import { dirtySingleValueFields, singleValueSnapshot } from "@/lib/profile/merge";
 import {
   ProfileSync,
   remoteProfilePayload,
   reconcilePushPayload,
   planReconcile,
+  nextSyncBaselines,
+  type SyncBaselines,
   useProfileSyncStatus,
 } from "./profile-sync";
 
@@ -415,5 +419,129 @@ describe("planReconcile — the sign-in reconcile decision, headlessly (§1bk)",
     const { pushPayload } = planReconcile(local, remote, lastSynced);
     expect(pushPayload.currentProject).toBeUndefined(); // not dirty, correctly not pushed
     expect(pushPayload.feedIntent?.project).toMatchObject({ presence: "value", value: "New project text" });
+  });
+});
+
+// PROFILE-SYNC-RETRY-TEST (ABC-JEV-INTEGRATION.md §1bk.9a) — the PROFILE-SYNC
+// review (docs/jev-abc/PROFILE-SYNC-A-20260930T023227Z.md, finding (a), MEDIUM)
+// found that no test — shipped or its own 13-scenario probe — catches a
+// failed push advancing `lastSynced`/`lastPushedRef`, because that guard lived
+// only inside the `onSession`/debounced-push closures, which this repo's
+// harness cannot mount (no @testing-library/react — see this file's header).
+// `nextSyncBaselines` pulls the guard out into its own pure function so it is
+// testable the same way `planReconcile`/`reconcilePushPayload` already are.
+// "Both call shapes" below means: inputs shaped like `onSession`'s call
+// (a freshly merged profile, no pre-existing lastPushed baseline) and inputs
+// shaped like the debounced push's call (an ordinary profile edit, a
+// lastPushed baseline already set by an earlier sync) — success and failure
+// for each.
+describe("nextSyncBaselines — the P3 retry guard as one pure function (§1bk.9a)", () => {
+  it("(onSession shape) on success, both baselines advance to the profile's own pushed state", () => {
+    const merged: UserProfile = { ...defaultProfile, displayName: "Alice Chen", paperCount: 5 };
+    const previous: SyncBaselines = { lastSynced: null, lastPushed: null };
+    const result = nextSyncBaselines(true, merged, previous);
+    expect(result.lastSynced).toEqual(singleValueSnapshot(merged));
+    expect(result.lastPushed).toEqual(remoteProfilePayload(merged));
+    expect(result.lastSynced.displayName).toBe("Alice Chen");
+    expect(result.lastPushed.paperCount).toBe(5);
+  });
+
+  it("(onSession shape) on failure, both baselines come back unchanged — the SAME object, not a copy", () => {
+    const merged: UserProfile = { ...defaultProfile, displayName: "Alice Chen" };
+    const previous: SyncBaselines = {
+      lastSynced: { displayName: "Old value" },
+      lastPushed: { displayName: "Old value" },
+    };
+    const result = nextSyncBaselines(false, merged, previous);
+    expect(result).toBe(previous);
+    expect(result.lastSynced).toBe(previous.lastSynced);
+    expect(result.lastPushed).toBe(previous.lastPushed);
+  });
+
+  it("(debounced-push shape) on success, both baselines advance even when a lastPushed baseline already existed", () => {
+    const profile: UserProfile = { ...defaultProfile, paperCount: 5 };
+    const previous: SyncBaselines = {
+      lastSynced: singleValueSnapshot(defaultProfile),
+      lastPushed: remoteProfilePayload(defaultProfile),
+    };
+    const result = nextSyncBaselines(true, profile, previous);
+    expect(result.lastSynced.paperCount).toBe(5);
+    expect(result.lastPushed.paperCount).toBe(5);
+  });
+
+  it("(debounced-push shape) on failure, a fresh device's null baselines stay null — never invented from a partial attempt", () => {
+    const profile: UserProfile = { ...defaultProfile, displayName: "Alice Chen" };
+    const previous: SyncBaselines = { lastSynced: null, lastPushed: null };
+    const result = nextSyncBaselines(false, profile, previous);
+    expect(result.lastSynced).toBeNull();
+    expect(result.lastPushed).toBeNull();
+  });
+
+  // The exact shape of PROFILE-SYNC-A's mutation 5 ("let a failed push
+  // advance lastSynced anyway") — a device edits a field, the push for it
+  // fails, and the OLD confirmed baseline must survive untouched so the new
+  // edit stays dirty and is retried on the next attempt (§1aj P3).
+  it("on failure, a profile that has since diverged from the last confirmed sync does not leak into the baselines (P3 — mutation guard)", () => {
+    const previous: SyncBaselines = {
+      lastSynced: { displayName: "Alice" },
+      lastPushed: { displayName: "Alice" },
+    };
+    const editedButNotYetSynced: UserProfile = { ...defaultProfile, displayName: "Alice V2" };
+    const result = nextSyncBaselines(false, editedButNotYetSynced, previous);
+    expect(result.lastSynced).toEqual({ displayName: "Alice" });
+    expect(result.lastPushed).toEqual({ displayName: "Alice" });
+  });
+
+  it("on success, lastPushed still excludes credentials — reuses remoteProfilePayload's redaction (§1aj)", () => {
+    const profile: UserProfile = {
+      ...defaultProfile,
+      tavilyApiKey: "tvly-secret",
+      feedAiApiKey: "sk-secret",
+    };
+    const result = nextSyncBaselines(true, profile, { lastSynced: null, lastPushed: null });
+    expect(result.lastPushed).not.toHaveProperty("tavilyApiKey");
+    expect(result.lastPushed).not.toHaveProperty("feedAiApiKey");
+  });
+});
+
+// Source-text checks — this repo's own technique for effectful code it
+// cannot mount (see store/profile.test.ts's `partialize` regex test and this
+// file's own header note). Confirms BOTH push closures actually call
+// `nextSyncBaselines` (rather than the pure-function tests above proving a
+// property nothing in production uses), and that neither closure sets
+// `lastSynced` any other way — i.e. `setLastSynced` is called exactly once
+// in each, and that one call is fed by `nextSyncBaselines`'s own result.
+describe("ProfileSync's closures actually use nextSyncBaselines (§1bk.9a) — source-text checks", () => {
+  const source = readFileSync(
+    join(process.cwd(), "src/components/profile-sync.tsx"),
+    "utf8",
+  );
+
+  function closureBody(startMarker: string, endMarker: string): string {
+    const start = source.indexOf(startMarker);
+    expect(start).toBeGreaterThan(-1); // marker itself must exist in the file
+    const end = source.indexOf(endMarker, start + startMarker.length);
+    expect(end).toBeGreaterThan(start);
+    return source.slice(start, end);
+  }
+
+  it("the sign-in reconcile (onSession) calls nextSyncBaselines, and its only setLastSynced call is fed by it", () => {
+    const body = closureBody(
+      "const onSession = async (userId: string | null) => {",
+      "supabase.auth",
+    );
+    expect(body).toMatch(/nextSyncBaselines\(/);
+    expect(body.match(/setLastSynced\(/g) ?? []).toHaveLength(1);
+    expect(body).toMatch(/setLastSynced\(\s*baselines\.lastSynced\s*\)/);
+  });
+
+  it("the steady-state debounced push calls nextSyncBaselines, and its only setLastSynced call is fed by it", () => {
+    const body = closureBody(
+      "debounceRef.current = setTimeout(async () => {",
+      "}, DEBOUNCE_MS);",
+    );
+    expect(body).toMatch(/nextSyncBaselines\(/);
+    expect(body.match(/setLastSynced\(/g) ?? []).toHaveLength(1);
+    expect(body).toMatch(/setLastSynced\(\s*baselines\.lastSynced\s*\)/);
   });
 });
