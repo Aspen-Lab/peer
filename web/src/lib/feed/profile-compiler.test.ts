@@ -350,6 +350,26 @@ describe("compileSearchBrief QUERY-BUDGET: tiering keeps a tag's cap-window free
     }
   });
 
+  // QUERY-COMBO-MEASURE (ABC-JEV-INTEGRATION.md §1bw, docs/jev-abc/QUERY-COMBO-MEASURE-B-20260930T153533Z.md)
+  // — a live measurement kept today's order (bare project phrases before the tag+phrase
+  // combination): combinations won on-topic top-10 in 1 of 5 comparable profiles and collapsed
+  // the LCO fixture's pool from 59 to 1. This pins the cap windows so flipping the order is a
+  // deliberate, re-measured decision, never a drift. Added by the manager (disclosed in §1bw.1).
+  it("keeps the bare phrases ahead of the tag+phrase combination inside the cap windows: cap 3 = [tag, phrase 1, phrase 2], cap 2 = [tag, phrase 1] (§1bw)", () => {
+    const brief = compileSearchBrief({ topics: ["LCO"], project: TWO_PHRASE_PROJECT_TEXT });
+
+    expect(brief.generatedQueries.slice(0, 3)).toEqual([
+      "LCO",
+      "Investigating solid-state electrolyte interfaces",
+      "improving lithium-ion transport pathways",
+    ]);
+    expect(brief.generatedQueries.slice(0, 2)).toEqual([
+      "LCO",
+      "Investigating solid-state electrolyte interfaces",
+    ]);
+    expect(brief.generatedQueries.indexOf("LCO Investigating solid-state electrolyte interfaces")).toBeGreaterThan(2);
+  });
+
   it("guarantees min(tagCount, cap) Required tags survive a 2-slot source even with 2 selected senses (R2)", () => {
     const normalized = normalizeFeedIntent({
       topics: ["LCO", "LFP"],
