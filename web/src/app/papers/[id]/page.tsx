@@ -104,6 +104,19 @@ import {
 const DECIDED_VISIBLE = 0.6;
 const DECIDED_MS = 1000;
 
+/**
+ * UPLOAD-FETCH-TIMEOUT: how long the fetch effect below waits on an uploaded
+ * paper's own record before giving up and treating a hung server the same
+ * as any other transient failure (§1bi.8b) — never the permanent 404
+ * outcome (`uploadFetchErrorKind` already classifies an aborted fetch as
+ * "transient" by construction: it is never an `ApiError` with
+ * `status === 404`). Without this, a server that never answers leaves the
+ * reader on `LoadingMat` forever instead of ever reaching the transient
+ * "Try again" state. Only the upload id's own fetch gets this timeout — a
+ * non-upload paper's fetch (`isExternalId`) is unchanged, as before.
+ */
+const UPLOAD_FETCH_TIMEOUT_MS = 15000;
+
 function paperHref(id: string): string {
   return `/papers/${id}`;
 }
@@ -448,19 +461,33 @@ export default function PaperReadingPage({
   useEffect(() => {
     if (!shouldFetchById) return;
     let cancelled = false;
+    // UPLOAD-FETCH-TIMEOUT: only the upload id's own record fetch gets a
+    // timeout — mirrors this repo's own AbortController-based-timeout idiom
+    // (lib/decisions/jev-client.ts's attemptFetch). The non-upload branch
+    // below is untouched: no controller, no signal, exactly as before.
+    const controller = isUploadId ? new AbortController() : undefined;
+    const timer = controller
+      ? window.setTimeout(() => controller.abort(), UPLOAD_FETCH_TIMEOUT_MS)
+      : undefined;
     apiFetch<Paper>(
       isUploadId
         ? `/api/papers/upload/${encodeURIComponent(id.slice("upload:".length))}`
         : `/api/papers/${encodeURIComponent(id)}`,
+      controller ? { signal: controller.signal } : undefined,
     )
       .then((p) => {
         if (!cancelled) setFetchResult({ id: fetchKey, paper: p, done: true, errorKind: "none" });
       })
       .catch((err: unknown) => {
         if (!cancelled) setFetchResult({ id: fetchKey, paper: null, done: true, errorKind: uploadFetchErrorKind(err) });
+      })
+      .finally(() => {
+        if (timer !== undefined) window.clearTimeout(timer);
       });
     return () => {
       cancelled = true;
+      if (timer !== undefined) window.clearTimeout(timer);
+      controller?.abort();
     };
   }, [id, fetchKey, shouldFetchById, isUploadId]);
 
