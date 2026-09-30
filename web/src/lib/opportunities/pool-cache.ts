@@ -396,10 +396,38 @@ const CACHE_KEY_VERSION = 6;
 // token, a bare decimal, or one of the three new dash/ellipsis delimiters —
 // a v20 pool built under the old, number/unit-blind keyword step and the
 // old decimal-splitting chunker must never be served as if it already
-// reflects any of these changes. These bumps share their numbers with
-// `CACHE_KEY_VERSION` above by coincidence, not by a shared cause — see
-// `derivePoolCacheKey` below for how each is selected.
-const PAPER_CACHE_KEY_VERSION = 21;
+// reflects any of these changes. v22 — ABC-JEV-INTEGRATION.md
+// §1bu/NMC-HYPONYM (docs/jev-abc/NMC-HYPONYM-B-20260930T111311Z.md), two
+// unrelated fixes landed together in one C round: (a) "ncm" joins
+// `ABBREVIATION_GROUPS`' existing "nmc" entry as a pure synonym, and
+// keyword.ts gains a one-way family->member glued-digit admission (a
+// Required tag "NMC"/"NCM" now also qualifies a paper that only ever writes
+// a glued stoichiometry like "NMC811"/"NCM622" — never the reverse — with
+// its own SENSE-CONTEXT skip, the same precedent `matchesFullNameOrFormula`
+// already has) plus a digit-preserving member<->member synonym inside
+// `expandTerm` (a reader's own "NMC811" tag also matches "NCM811", never a
+// different stoichiometry or the bare family form); this changes pool
+// MEMBERSHIP for any reader with an "NMC"/"NCM"-family or specific-member
+// Required tag. AMENDMENT (§1bu.9, after review): the same
+// `matchesFullNameOrFormula` change also reaches this file's own pre-existing
+// formula tags "licoo2"/"lifepo4" — a bare-acronym-only ("LCO"/"LFP") match
+// against those tags now runs the SENSE-CONTEXT check instead of always
+// skipping it, RANKING only (pool membership unchanged, since the bare
+// acronym already admits via T1 through the same group closure either way).
+// (b) §1bu.8 (folded in from the §1bs.8 findings):
+// profile-compiler.ts's shared year/unit/decimal filter now also strips a
+// trailing sentence-final period before testing a token ("2024.", "99.9.",
+// "4.2v." are now removed, not just their bare forms) and applies the SAME
+// filter to a phrase/chunk that collapses to a single token ("…, 500Wh/kg,
+// …" is now removed via that branch too) — this changes pool MEMBERSHIP for
+// any reader whose Project/Challenge/seed text has a year/unit/decimal
+// immediately followed by a sentence-ending period, or as its own
+// comma/dash/etc.-delimited single-word clause. Neither v21 pool build
+// reflects either fix, so it must never be served as if it does. These
+// bumps share their numbers with `CACHE_KEY_VERSION` above by coincidence,
+// not by a shared cause — see `derivePoolCacheKey` below for how each is
+// selected.
+const PAPER_CACHE_KEY_VERSION = 22;
 /**
  * SINGLE SOURCE OF TRUTH for the literal key prefix a durable papers-pool
  * store may accept, derived from `PAPER_CACHE_KEY_VERSION` rather than

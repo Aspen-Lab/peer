@@ -16,6 +16,8 @@ import {
 } from "./keyword";
 import { canonicalize, termSpecificity } from "./term-expand";
 import { selectedSenseConcept } from "@/lib/feed/senses";
+import { buildIndex, scoreTfidf } from "./tfidf";
+import { tokenizeFolded } from "./tokenize";
 
 // REQUIRED-GATE (ABC-JEV-INTEGRATION.md §1ao/§1an) — tests 2-10 of
 // docs/jev-abc/REQUIRED-GATE-B-20260928T160542Z.md §4.1 (test 1, "T1
@@ -459,4 +461,101 @@ describe("ranking order — T1 outranks a T4-only qualification at equal specifi
     expect(t1Score).toBeGreaterThan(t4Score);
     expect(scored.find((s) => s.id === "t4-scattered-match")!.matchedKeywords).toEqual([]);
   });
+});
+
+// REQUIRED-GATE-FLOOR-TEST (ABC-JEV-INTEGRATION.md §1bu.5, folded into the
+// NMC-HYPONYM item; original finding REQUIRED-GATE-A F1, docs/jev-abc/
+// NMC-HYPONYM-B-20260930T111311Z.md Q5): nothing in the suite before this
+// exercised REQUIRED_TAG_SIMILARITY_FLOOR_PROJECT's own boundary in
+// isolation from the topic-anchor floor — setting it to 0 changed no
+// behavioural test, only a constant-value check. This fixture isolates it:
+// a topic that misses T1/T2/T3 entirely, a small pool, and two seedTexts
+// rows that differ by exactly one added dilution word, chosen (by running
+// the real scoreTfidf/scoreItems against this exact fixture — not copied
+// from the guide's own, textually different fixture) so that `simTopic`
+// stays FIXED across both rows and sits strictly inside
+// `0 < simTopic < REQUIRED_TAG_SIMILARITY_FLOOR_TOPIC` — so the topic-floor
+// branch never independently admits the item in either row — while only
+// `simProject` crosses `REQUIRED_TAG_SIMILARITY_FLOOR_PROJECT` (0.05).
+describe("REQUIRED-GATE-FLOOR-TEST (§1bu.5) — an isolated boundary fixture for REQUIRED_TAG_SIMILARITY_FLOOR_PROJECT", () => {
+  const topic = "graphene electrode fabrication";
+
+  // Never says "electrode" or "fabrication" at all, and "graphene" appears
+  // exactly once — T1/T2/T3 all miss (confirmed below: matchedKeywords is
+  // empty on the admitted row, so only T4 ever qualifies this item).
+  const target = item("floor-test-bridge-graphene", {
+    title: "Long-term structural health monitoring of highway composite bridge decks",
+    abstract:
+      "Sensor networks track strain and corrosion across several instrumented spans over a decade of service, " +
+      "combining fiber optic strain gauges with periodic visual inspection records and weigh-in-motion traffic " +
+      "counts to build a maintenance history for each span. Seasonal thermal cycling and freeze-thaw exposure " +
+      "were logged alongside deicing salt application schedules provided by the regional highway authority. " +
+      "A graphene coating trialled on one span among several candidate protective coatings showed reduced " +
+      "chloride ingress compared to the untreated control deck, and the resulting inspection dataset is used " +
+      "to update the long-term deterioration model for the whole bridge inventory.",
+  });
+  // Three unrelated civil-engineering filler items so the pool-wide TF-IDF
+  // index isn't degenerate at N=1, and so the profile's seedTexts below draw
+  // from real, present pool vocabulary (a word absent from every pooled
+  // item is silently dropped by scoreTfidf's own `toTfidf`, never counted).
+  const filler1 = item("floor-test-filler-carbonation", {
+    title: "Carbonation-induced deterioration of reinforced concrete highway structures",
+    abstract:
+      "Field surveys measured carbonation depth in reinforced concrete highway bridge piers over twenty years " +
+      "of exposure, linking depth to cover thickness and traffic-related carbon dioxide levels.",
+  });
+  const filler2 = item("floor-test-filler-climate-design", {
+    title: "Climate-resilient design of coastal transportation infrastructure",
+    abstract:
+      "A design framework for coastal roadway and bridge infrastructure incorporates projected climate " +
+      "scenarios, sea level rise, and storm surge into structural sizing decisions.",
+  });
+  const filler3 = item("floor-test-filler-aerodynamic-damping", {
+    title: "Aerodynamic damping of long-span suspension bridges under wind-induced vibration",
+    abstract:
+      "Wind tunnel tests quantify aerodynamic damping ratios for long-span suspension bridge deck sections " +
+      "under buffeting and vortex-induced vibration, informing damper sizing for vibration control.",
+  });
+  const pool = [target, filler1, filler2, filler3];
+
+  it("just above the floor (simProject 0.0514 >= 0.05): admitted, T4-only (matchedKeywords empty)", () => {
+    const scored = scoreItems(pool, { topics: [topic], seedTexts: ["concrete", "carbonation", "reinforced"] }, undefined, now);
+    expect(scored.map((s) => s.id)).toEqual([target.id]);
+    expect(scored[0].matchedKeywords).toEqual([]);
+    expect(scored[0].score).toBeGreaterThan(0);
+  });
+
+  it("just below the floor (simProject 0.0460 < 0.05): excluded entirely — one added dilution word (\"climate\") is the only difference from the admitted row above", () => {
+    const scored = scoreItems(
+      pool,
+      { topics: [topic], seedTexts: ["concrete", "carbonation", "reinforced", "climate"] },
+      undefined,
+      now,
+    );
+    expect(scored).toEqual([]);
+  });
+
+  it(
+    "pins the exact executed pair so the boundary itself — not just the outcome — is a regression target " +
+      "(mutation target: FLOOR_PROJECT -> 0 makes simProject >= 0 always true, so BOTH rows admit)",
+    () => {
+      const foldedIndex = buildIndex(pool, tokenizeFolded);
+      const above = scoreTfidf(target.id, topic, foldedIndex, tokenizeFolded);
+      const belowSameTopic = scoreTfidf(target.id, topic, foldedIndex, tokenizeFolded);
+      // simTopic does not depend on pText/seedTexts at all — fixed across both rows.
+      expect(above).toBeCloseTo(0.1028, 4);
+      expect(belowSameTopic).toBeCloseTo(0.1028, 4);
+      expect(above).toBeGreaterThan(0);
+      expect(above).toBeLessThan(REQUIRED_TAG_SIMILARITY_FLOOR_TOPIC);
+
+      const admittedProjectText = [topic, "concrete", "carbonation", "reinforced"].join(" ");
+      const excludedProjectText = [topic, "concrete", "carbonation", "reinforced", "climate"].join(" ");
+      const simProjectAdmitted = scoreTfidf(target.id, admittedProjectText, foldedIndex, tokenizeFolded);
+      const simProjectExcluded = scoreTfidf(target.id, excludedProjectText, foldedIndex, tokenizeFolded);
+      expect(simProjectAdmitted).toBeCloseTo(0.05142, 5);
+      expect(simProjectExcluded).toBeCloseTo(0.04599, 5);
+      expect(simProjectAdmitted).toBeGreaterThanOrEqual(REQUIRED_TAG_SIMILARITY_FLOOR_PROJECT);
+      expect(simProjectExcluded).toBeLessThan(REQUIRED_TAG_SIMILARITY_FLOOR_PROJECT);
+    },
+  );
 });

@@ -101,18 +101,18 @@ describe("daily opportunity pool cache key", () => {
     }
   });
 
-  // QUERY-GENERIC-WORDS (ABC-JEV-INTEGRATION.md §1bs) — REWRITTEN, NOT
-  // DELETED (was NON-ASCII-TEXT §1bo's v20 pin): pins the EXACT current
-  // papers version, unlike the "not v5" check above (which only rules out
-  // the pre-ABC-freemium shape and would stay green through any later
-  // bump). A pool built before this fix must not be read back as if it
-  // already reflects the narrowed number/year/unit filter, the
-  // decimal-safe chunk splitter, or the new dash/ellipsis delimiters —
-  // this test is what actually breaks if a future edit forgets to bump
-  // PAPER_CACHE_KEY_VERSION.
-  it("is on papers cache version 21 (QUERY-GENERIC-WORDS, §1bs)", () => {
-    expect(PAPER_POOL_KEY_PREFIX).toBe("peer-pool-v21-papers-");
-    expect(derivePoolCacheKey({ ...base, surface: "papers" })).toMatch(/^peer-pool-v21-papers-/);
+  // NMC-HYPONYM (ABC-JEV-INTEGRATION.md §1bu) — REWRITTEN, NOT DELETED (was
+  // QUERY-GENERIC-WORDS §1bs's v21 pin): pins the EXACT current papers
+  // version, unlike the "not v5" check above (which only rules out the
+  // pre-ABC-freemium shape and would stay green through any later bump). A
+  // pool built before this fix must not be read back as if it already
+  // reflects the "ncm" synonym, the one-way family->member glued admission,
+  // the digit-preserving member<->member synonym, or (§1bu.8) the trailing-
+  // sentence-period strip / single-token chunk filter — this test is what
+  // actually breaks if a future edit forgets to bump PAPER_CACHE_KEY_VERSION.
+  it("is on papers cache version 22 (NMC-HYPONYM, §1bu)", () => {
+    expect(PAPER_POOL_KEY_PREFIX).toBe("peer-pool-v22-papers-");
+    expect(derivePoolCacheKey({ ...base, surface: "papers" })).toMatch(/^peer-pool-v22-papers-/);
   });
 
   it("ignores aiTier on surfaces that never send it", () => {
