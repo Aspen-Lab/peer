@@ -34,6 +34,8 @@ import { useFeedSyncStatus } from "@/components/feed-sync";
 import { VersionLine } from "@/components/shell/version-line";
 import { AiKeyFields } from "@/components/profile/ai-setup";
 import { Toggle } from "@/components/ui/toggle";
+import { FEED_EMPTY_REASON_CODES } from "@/lib/feed/types";
+import { TEST_EMAIL_EMPTY, TEST_EMAIL_EMPTY_GENERIC } from "@/lib/briefing/copy";
 import { feedsUseAi } from "@/lib/feed/ai-tier";
 import { entitlementGrants } from "@/lib/entitlement/allowance";
 import {
@@ -1351,7 +1353,7 @@ export interface TestSendOutcome {
 
 export function testSendMessage(
   status: number,
-  body: { sent?: boolean; to?: string; reason?: string },
+  body: { sent?: boolean; to?: string; reason?: string; emptyReasonCode?: string },
 ): TestSendOutcome {
   switch (body.reason) {
     case "unavailable":
@@ -1369,6 +1371,23 @@ export function testSendMessage(
       };
     case "send_failed":
       return { message: "Couldn't send the test email. Try again later.", success: false };
+    case "empty_result": {
+      // EMAIL-DEST-UX + EMPTY-TEST-EMAIL (§1bm point 3) — the route already
+      // spent one of today's 3 tries (the counter runs before the pipeline,
+      // unchanged) but sent nothing because the pipeline came back with
+      // zero papers. Same "checked membership before indexing the typed
+      // table" guard as digest-template.ts's resolvedEmptyEntry — a code
+      // this build doesn't recognize (or none at all) never guesses.
+      const code = body.emptyReasonCode;
+      const why =
+        code && FEED_EMPTY_REASON_CODES.includes(code as (typeof FEED_EMPTY_REASON_CODES)[number])
+          ? TEST_EMAIL_EMPTY[code as (typeof FEED_EMPTY_REASON_CODES)[number]].sentence
+          : TEST_EMAIL_EMPTY_GENERIC;
+      return {
+        message: `No test email was sent: ${why} This used one of today's 3 test sends.`,
+        success: false,
+      };
+    }
     default:
       break;
   }
@@ -1379,6 +1398,35 @@ export function testSendMessage(
   // recognize — never a raw provider string (g); the same generic text
   // `classifySendFailure` itself falls back to server-side.
   return { message: "Couldn't send the test email. Try again later.", success: false };
+}
+
+/** The address "Send test email" and the daily email actually use right
+ * now — mirrors the server's own resolution exactly: the confirmed digest
+ * address, else the account email (send-test-email/route.ts:161,
+ * dispatch-digests/route.ts:648-653) — NEVER the live text box.
+ * ABC-JEV-INTEGRATION.md §1bm point 1. A pure function so the three copy
+ * spots below (the daily summary, the Send-test-email caption and the
+ * confirmed banner) can share one value and cannot drift apart. */
+export function resolveActiveEmailDestination(confirmedEmail: string, accountEmail: string): string {
+  return confirmedEmail.trim() || accountEmail.trim();
+}
+
+/** ONE sentence, reused next to "Send test email" and in the daily-email
+ * summary (§1bm point 2), so the two can never say something different
+ * about the same fact. States where email goes right now; when the typed
+ * address differs from that (case-insensitively), says plainly the typed
+ * address is not used until it is confirmed. `activeDestination` is
+ * `resolveActiveEmailDestination`'s result. */
+export function emailDestinationSentence(activeDestination: string, addressDraft: string): string {
+  const active = activeDestination.trim();
+  const draft = addressDraft.trim();
+  if (!active) {
+    return "Add an email above to start sending.";
+  }
+  if (draft && draft.toLowerCase() !== active.toLowerCase()) {
+    return `Email goes to ${active} right now. ${draft} won't be used until it's confirmed.`;
+  }
+  return `Email goes to ${active} right now.`;
 }
 
 export interface EmailSettingsViewProps {
@@ -1394,6 +1442,11 @@ export interface EmailSettingsViewProps {
   confirmBusy: boolean;
   testMessage: string | null;
   testBusy: boolean;
+  /** The server's current `digest_email` — i.e. `profile.digestEmail`. The
+   * confirmed, active address; empty when none has ever been confirmed.
+   * NEVER the live draft — see `resolveActiveEmailDestination`.
+   * ABC-JEV-INTEGRATION.md §1bm point 1. */
+  confirmedEmail: string;
   onToggleEmail: (next: boolean) => void;
   onHourChange: (hour: number) => void;
   onAddressDraftChange: (value: string) => void;
@@ -1414,6 +1467,7 @@ export function EmailSettingsView({
   confirmBusy,
   testMessage,
   testBusy,
+  confirmedEmail,
   onToggleEmail,
   onHourChange,
   onAddressDraftChange,
@@ -1428,7 +1482,18 @@ export function EmailSettingsView({
   const normalizedDraft = addressDraft.trim().toLowerCase();
   const isAccountEmail =
     normalizedDraft.length > 0 && normalizedDraft === accountEmail.trim().toLowerCase();
-  const destination = addressDraft.trim() || accountEmail;
+  // §1bm point 1 — every destination sentence below is sourced from here,
+  // never from `addressDraft` (the text box the reader is still typing in).
+  const activeDestination = resolveActiveEmailDestination(confirmedEmail, accountEmail);
+  const destinationSentence = emailDestinationSentence(activeDestination, addressDraft);
+  // §1bm point 1, copy bug 3 — an address already confirmed and active gets
+  // its own caption state below, instead of falling through to "Confirm to
+  // start sending here." on every subsequent page load.
+  const isConfirmedActive =
+    !isAccountEmail &&
+    normalizedDraft.length > 0 &&
+    confirmedEmail.trim().length > 0 &&
+    normalizedDraft === confirmedEmail.trim().toLowerCase();
 
   return (
     <section className="mt-8 rounded-2xl bg-surface shadow-card overflow-hidden">
@@ -1437,7 +1502,7 @@ export function EmailSettingsView({
           <p className="eyebrow text-text-faint mb-2">Daily email</p>
           <p className="text-body-sm text-text-faint/80 leading-relaxed measure-ui">
             {emailOn
-              ? `Sending daily at ${formatHourLabel(digestHourLocal)} (${digestTimezone}) to ${destination || "—"}.`
+              ? `Sending daily at ${formatHourLabel(digestHourLocal)} (${digestTimezone}). ${destinationSentence}`
               : "Get your daily paper briefing by email, in addition to the in-app Past briefings."}
           </p>
         </div>
@@ -1480,7 +1545,9 @@ export function EmailSettingsView({
               ? "Uses your account email."
               : pendingAddress
                 ? `Check ${pendingAddress} for a confirmation link. Until you click it, nothing is sent there.`
-                : "Confirm to start sending here."}
+                : isConfirmedActive
+                  ? "Confirmed — daily emails already go here."
+                  : "Confirm to start sending here."}
           </span>
         </label>
         {!isAccountEmail && (
@@ -1495,7 +1562,7 @@ export function EmailSettingsView({
         )}
         {confirmedBanner && (
           <p className="text-caption text-accent">
-            Confirmed — daily emails will go to {addressDraft}.
+            Confirmed — daily emails will go to {activeDestination}.
           </p>
         )}
         {confirmMessage && <p className="text-caption text-text-faint">{confirmMessage}</p>}
@@ -1509,6 +1576,7 @@ export function EmailSettingsView({
           >
             {testBusy ? "Sending…" : "Send test email"}
           </button>
+          <p className="mt-1 text-caption text-text-faint">{destinationSentence}</p>
           {testMessage && (
             <p className="mt-2 text-caption text-text-faint">{testMessage}</p>
           )}
@@ -1669,6 +1737,7 @@ function EmailSettings() {
         sent?: boolean;
         to?: string;
         reason?: string;
+        emptyReasonCode?: string;
       };
       setTestMessage(testSendMessage(res.status, data).message);
     } catch {
@@ -1685,6 +1754,7 @@ function EmailSettings() {
       digestHourLocal={profile.digestHourLocal}
       digestTimezone={profile.digestTimezone}
       accountEmail={accountEmail}
+      confirmedEmail={profile.digestEmail || ""}
       addressDraft={addressDraft}
       pendingAddress={pendingAddress}
       confirmedBanner={confirmedBanner}

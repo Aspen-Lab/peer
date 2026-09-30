@@ -10,6 +10,8 @@ import {
   digestToggleUpdate,
   confirmAddressMessage,
   testSendMessage,
+  resolveActiveEmailDestination,
+  emailDestinationSentence,
   type EmailSettingsViewProps,
 } from "./page";
 
@@ -146,6 +148,10 @@ describe("EmailSettingsView — signed-out visitors see no controls (RED #12)", 
     digestHourLocal: 8,
     digestTimezone: "UTC",
     accountEmail: "person@example.test",
+    // EMAIL-DEST-UX (§1bm) — the realistic starting state: no custom digest
+    // address confirmed yet, so every destination falls back to the account
+    // email. Tests that need a confirmed custom address override this.
+    confirmedEmail: "",
     addressDraft: "person@example.test",
     pendingAddress: null,
     confirmedBanner: false,
@@ -218,6 +224,131 @@ describe("EmailSettingsView — signed-out visitors see no controls (RED #12)", 
     expect(html.toLowerCase()).toContain("confirmed");
   });
 
+  // EMAIL-DEST-UX (§1bm) — guide bug #2 (page.tsx:1498 read live addressDraft
+  // instead of the value that was actually just confirmed). Constructed so
+  // addressDraft has changed since the confirm-redirect landed (the reader
+  // kept typing) — the banner must still name the CONFIRMED address, not
+  // whatever is currently sitting in the box.
+  it("the confirmed banner names the value that was confirmed, not a draft edited afterward", () => {
+    const html = renderToStaticMarkup(
+      createElement(EmailSettingsView, {
+        ...baseProps,
+        signedIn: true,
+        confirmedEmail: "justconfirmed@example.test",
+        addressDraft: "typed-after-redirect@example.test",
+        confirmedBanner: true,
+      }),
+    );
+    // The draft legitimately appears elsewhere on the page too (the "Send
+    // to" input's own value, and the mismatch clause of the destination
+    // sentence near "Send test email" — both correctly reflect what the
+    // reader is currently typing). Only the banner paragraph itself
+    // (class "text-caption text-accent", distinct from every other caption
+    // in this view) must never pick up the live draft — isolate it first.
+    const bannerMatch = html.match(/<p class="text-caption text-accent">([^<]*)<\/p>/);
+    if (!bannerMatch) throw new Error(`confirmed banner paragraph not found in: ${html}`);
+    const bannerText = bannerMatch[1];
+    expect(bannerText).toContain("justconfirmed@example.test");
+    expect(bannerText).not.toContain("typed-after-redirect@example.test");
+  });
+
+  // EMAIL-DEST-UX (§1bm) — guide bug #1 (page.tsx:1431/1440 read the
+  // unconfirmed text box). A confirmed custom address plus a still-different
+  // draft must state the ACTIVE (confirmed) address, and only the active
+  // one, in the "Sending daily" summary.
+  it("the daily summary states the confirmed address, never the unconfirmed draft, when the channel is 'both'", () => {
+    const html = renderToStaticMarkup(
+      createElement(EmailSettingsView, {
+        ...baseProps,
+        signedIn: true,
+        digestChannel: "both",
+        confirmedEmail: "confirmed@example.test",
+        addressDraft: "still-typing@example.test",
+      }),
+    );
+    expect(html).toContain("confirmed@example.test");
+    expect(html).toContain("still-typing@example.test");
+    // React escapes `'` to `&#x27;` in rendered text (see page.test.tsx's
+    // own note) — this substring is specific to the mismatch clause and
+    // deliberately stops short of either apostrophe, so it matches the
+    // real markup either way.
+    expect(html).toContain("be used until it");
+  });
+
+  // EMAIL-DEST-UX (§1bm point 2) — the previously-missing destination line
+  // next to "Send test email" (guide option a+b, unified). Must be present
+  // and true even when the daily toggle is OFF — the test-send button works
+  // regardless of the toggle.
+  it("names the active destination next to Send test email even when the daily toggle is off", () => {
+    const html = renderToStaticMarkup(
+      createElement(EmailSettingsView, {
+        ...baseProps,
+        signedIn: true,
+        digestChannel: "inapp",
+        confirmedEmail: "",
+        accountEmail: "account@example.test",
+        addressDraft: "account@example.test",
+      }),
+    );
+    expect(html).toContain("Email goes to account@example.test");
+  });
+
+  // EMAIL-DEST-UX (§1bm point 1, copy bug 3) — a confirmed, ALREADY ACTIVE
+  // address must stop showing "Confirm to start sending here." on every
+  // subsequent page load (guide Task 1 finding #3, state 4 in its table).
+  it("gives a confirmed, already-active custom address its own caption (not 'Confirm to start sending here.')", () => {
+    const html = renderToStaticMarkup(
+      createElement(EmailSettingsView, {
+        ...baseProps,
+        signedIn: true,
+        accountEmail: "account@example.test",
+        confirmedEmail: "work@example.test",
+        addressDraft: "work@example.test",
+        pendingAddress: null,
+      }),
+    );
+    expect(html).not.toContain("Confirm to start sending here.");
+    expect(html.toLowerCase()).toContain("confirmed");
+  });
+
+  // Guide table state 5 — "changed after confirming": a second, different
+  // candidate is pending while the FIRST confirmed address is still the one
+  // actually receiving mail. The destination line must keep naming the old
+  // (still active) address, not the new pending one.
+  it("state 5 (changed after confirming): the destination line still names the first confirmed address while a second is pending", () => {
+    const html = renderToStaticMarkup(
+      createElement(EmailSettingsView, {
+        ...baseProps,
+        signedIn: true,
+        accountEmail: "account@example.test",
+        confirmedEmail: "first-confirmed@example.test",
+        addressDraft: "second-candidate@example.test",
+        pendingAddress: "second-candidate@example.test",
+      }),
+    );
+    expect(html).toContain("Email goes to first-confirmed@example.test");
+    // Apostrophe-free substring — see the note above.
+    expect(html).toContain("second-candidate@example.test won");
+    expect(html).toContain("be used until it");
+  });
+
+  // Guide table state 1 — "empty": neither a confirmed address nor an
+  // account email exists yet (a transient state). Must render a graceful
+  // sentence, never a bare "Email goes to ." or a crash.
+  it("state 1 (empty): with no confirmed address and no account email, the sentence names none instead of a blank", () => {
+    const html = renderToStaticMarkup(
+      createElement(EmailSettingsView, {
+        ...baseProps,
+        signedIn: true,
+        accountEmail: "",
+        confirmedEmail: "",
+        addressDraft: "",
+      }),
+    );
+    expect(html).toContain("Add an email above to start sending.");
+    expect(html).not.toContain("Email goes to");
+  });
+
   it("shows the test-email result message when present", () => {
     const html = renderToStaticMarkup(
       createElement(EmailSettingsView, {
@@ -227,6 +358,85 @@ describe("EmailSettingsView — signed-out visitors see no controls (RED #12)", 
       }),
     );
     expect(html).toContain("Sent just now to person@example.test.");
+  });
+});
+
+// EMAIL-DEST-UX (ABC-JEV-INTEGRATION.md §1bm) — the destination-resolution
+// and one-sentence helpers, pure and unit-tested the same way as
+// digestToggleUpdate/confirmAddressMessage/testSendMessage above, covering
+// every address state from the guide's table (docs/jev-abc/EMAIL-DEST-UX-B-
+// 20260930T041204Z.md, Task 1's state table).
+describe("resolveActiveEmailDestination — the confirmed digest address, else the account email, NEVER the draft (§1bm point 1)", () => {
+  it("prefers the confirmed digest address when one exists", () => {
+    expect(resolveActiveEmailDestination("confirmed@example.test", "account@example.test")).toBe(
+      "confirmed@example.test",
+    );
+  });
+
+  it("falls back to the account email when nothing is confirmed", () => {
+    expect(resolveActiveEmailDestination("", "account@example.test")).toBe("account@example.test");
+  });
+
+  it("trims whitespace on both inputs", () => {
+    expect(resolveActiveEmailDestination("  ", "  account@example.test  ")).toBe(
+      "account@example.test",
+    );
+  });
+
+  it("state 1 (empty): neither a confirmed address nor an account email yields an empty string, never a crash", () => {
+    expect(resolveActiveEmailDestination("", "")).toBe("");
+  });
+});
+
+describe("emailDestinationSentence — ONE sentence reused next to Send test email and in the daily summary (§1bm point 2)", () => {
+  it("state 4 (confirmed, matches the draft): states the destination with no mismatch clause", () => {
+    expect(emailDestinationSentence("confirmed@example.test", "confirmed@example.test")).toBe(
+      "Email goes to confirmed@example.test right now.",
+    );
+  });
+
+  it("an empty draft (not yet filled in) is not treated as a mismatch", () => {
+    expect(emailDestinationSentence("confirmed@example.test", "")).toBe(
+      "Email goes to confirmed@example.test right now.",
+    );
+  });
+
+  it("a draft that differs only by case/whitespace is not treated as a mismatch", () => {
+    expect(emailDestinationSentence("confirmed@example.test", "  Confirmed@Example.Test  ")).toBe(
+      "Email goes to confirmed@example.test right now.",
+    );
+  });
+
+  // State 2 ("typed, unconfirmed") and state 3 ("confirmation pending") are
+  // identical from the sentence's point of view — both are "an address the
+  // server has not confirmed yet" — and both must be true either way.
+  it("state 2/3 (typed-unconfirmed or pending): names the active address AND says the draft is not used yet", () => {
+    expect(emailDestinationSentence("account@example.test", "work@example.test")).toBe(
+      "Email goes to account@example.test right now. work@example.test won't be used until it's confirmed.",
+    );
+  });
+
+  it("state 5 (changed after confirming): the FIRST confirmed address stays active while a second candidate is pending", () => {
+    expect(
+      emailDestinationSentence("first-confirmed@example.test", "second-candidate@example.test"),
+    ).toBe(
+      "Email goes to first-confirmed@example.test right now. second-candidate@example.test won't be used until it's confirmed.",
+    );
+  });
+
+  it("state 1 (empty): no active destination at all names none, rather than a blank address", () => {
+    expect(emailDestinationSentence("", "")).toBe("Add an email above to start sending.");
+  });
+
+  it("MUTATION GUARD: reading the draft as the destination (reverting §1bm) would make this false for a mismatched draft", () => {
+    // Pins the exact bug the guide reproduced: page.tsx used to render
+    // `addressDraft.trim() || accountEmail` as "the" destination. If a
+    // future edit reads `addressDraft` here again, this active/draft pair
+    // (mismatched) would silently swap which one appears first — this test
+    // exists specifically to go red in that case.
+    const sentence = emailDestinationSentence("account@example.test", "typed-not-confirmed@example.test");
+    expect(sentence.startsWith("Email goes to account@example.test")).toBe(true);
+    expect(sentence).not.toContain("Email goes to typed-not-confirmed@example.test");
   });
 });
 
@@ -357,6 +567,61 @@ describe("testSendMessage — POST /api/profile/send-test-email's response (§1a
       message: "Couldn't send the test email. Try again later.",
       success: false,
     });
+  });
+
+  // EMAIL-DEST-UX + EMPTY-TEST-EMAIL (§1bm point 3) — one case per
+  // FeedEmptyReasonCode, mirroring how EMPTY-EMAIL-REASON's own tests are
+  // structured (lib/briefing/copy.test.ts): every code renders its adapted,
+  // link-free sentence, plus the try-used sentence, plus a generic fallback
+  // for a missing/unrecognized code — never a guess.
+  it.each([
+    ["sources-unreachable", "Couldn't reach today's paper sources."],
+    ["no-results", "Nothing new for these topics today."],
+    ["no-required-match", "None of today's papers passed your Required topics and filters."],
+    [
+      "already-delivered",
+      "Every paper that matched today was already picked for you in the past 30 days.",
+    ],
+  ])("empty_result with reason code %s", (code, sentence) => {
+    const result = testSendMessage(200, { sent: false, reason: "empty_result", emptyReasonCode: code });
+    expect(result.success).toBe(false);
+    expect(result.message).toBe(
+      `No test email was sent: ${sentence} This used one of today's 3 test sends.`,
+    );
+  });
+
+  it("empty_result with no emptyReasonCode at all falls back to the generic sentence, never a guess", () => {
+    expect(testSendMessage(200, { sent: false, reason: "empty_result" })).toEqual({
+      message:
+        "No test email was sent: No new papers matched this time. This used one of today's 3 test sends.",
+      success: false,
+    });
+  });
+
+  it("empty_result with a code this build doesn't recognize falls back to the generic sentence", () => {
+    expect(
+      testSendMessage(200, { sent: false, reason: "empty_result", emptyReasonCode: "a-future-code" }),
+    ).toEqual({
+      message:
+        "No test email was sent: No new papers matched this time. This used one of today's 3 test sends.",
+      success: false,
+    });
+  });
+
+  // No link anywhere — POLICY 5 (guide §4): the reader who clicked "Send
+  // test email" is already on the Profile page.
+  it("empty_result sentences never contain a link back to Profile", () => {
+    for (const code of [
+      undefined,
+      "sources-unreachable",
+      "no-results",
+      "no-required-match",
+      "already-delivered",
+    ]) {
+      const { message } = testSendMessage(200, { sent: false, reason: "empty_result", emptyReasonCode: code });
+      expect(message).not.toContain("/profile");
+      expect(message).not.toContain("<a ");
+    }
   });
 
   it("success names the destination address", () => {
