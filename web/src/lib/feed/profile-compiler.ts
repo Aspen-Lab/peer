@@ -241,6 +241,38 @@ function isGenericNumericToken(token: string): boolean {
   return CLOSED_MEASUREMENT_UNITS.has(suffix);
 }
 
+// QUERY-GENERIC-WORDS part 3 (ABC-JEV-INTEGRATION.md §1bu.8, the §1bs.8
+// findings 1-2 from the fresh A's VERIFIED review, docs/jev-abc/
+// QUERY-DISLIKE-A-20260930T111400Z.md): two gaps against §1bs's own intent,
+// found after that item shipped, both closed here by ONE shared check
+// reused at both call sites below (finding 2 is literally "apply the same
+// filter" to a second place, so this is deliberately not two separate
+// functions that could drift apart):
+//
+// Finding 1 — a year/unit/decimal token followed by a SENTENCE-FINAL period
+// ("2024.", "99.9.", "4.2v.") kept the period and escaped
+// `isGenericNumericToken` above: `STANDALONE_YEAR` and `LEADING_NUMBER`'s
+// own suffix check are both anchored at the token's own end, and a bare "."
+// is neither a digit nor a member of `CLOSED_MEASUREMENT_UNITS`. Stripped
+// ONLY for this filter's own test, never from the token/chunk a caller
+// keeps: an ordinary word that happens to end a sentence ("team.") is a
+// completely different case (not a year/unit/decimal to begin with) and is
+// untouched either way — this function only ever decides removal, never
+// reshapes what survives.
+//
+// Finding 2 — a number+unit token that is its OWN comma/dash/etc.-delimited
+// clause ("…, 500Wh/kg, …") reached `phrasesFromText`'s `longPhrases`
+// (chunk/phrase) branch whole, because that branch's only filters were a
+// word-count cap and the CJK backstop — it never ran the year/unit/decimal
+// check `keywords` (below) already had. A chunk that is a SINGLE token (no
+// internal whitespace) now gets that SAME check; a genuine multi-word
+// PHRASE that merely CONTAINS such a token ("99.9 percent efficiency") is
+// untouched — only a chunk that collapses to exactly one generic token is
+// removed.
+function isGenericNumericFragment(raw: string): boolean {
+  return isGenericNumericToken(raw.toLowerCase().replace(/\.+$/, ""));
+}
+
 function phrasesFromText(text: string | undefined, max = 8): string[] {
   if (!text) return [];
   const chunks = text
@@ -289,6 +321,14 @@ function phrasesFromText(text: string | undefined, max = 8): string[] {
     // isCjkOnlyText's own comment for why the delimiter step above already
     // makes this filter provably redundant in the common case.
     .filter((part) => !isCjkOnlyText(part))
+    // QUERY-GENERIC-WORDS (§1bu.8 finding 2): a chunk that is a single token
+    // (no internal whitespace) gets the same year/unit/decimal filter the
+    // keyword tier below already applies — see isGenericNumericFragment's
+    // own doc comment. A multi-word chunk (a genuine phrase) is untouched.
+    .filter((part) => {
+      const words = part.split(/\s+/).filter(Boolean);
+      return words.length !== 1 || !isGenericNumericFragment(words[0]);
+    })
     .slice(0, Math.ceil(max / 2));
 
   const keywords = Array.from(
@@ -321,10 +361,11 @@ function phrasesFromText(text: string | undefined, max = 8): string[] {
           (token) =>
             token.length >= 4 &&
             !STOPWORDS.has(token) &&
-            // QUERY-GENERIC-WORDS (§1bs.1): a standalone year, a
-            // number+unit token, or a bare decimal — see
-            // isGenericNumericToken's own doc comment above.
-            !isGenericNumericToken(token),
+            // QUERY-GENERIC-WORDS (§1bs.1, and §1bu.8 finding 1 for a
+            // sentence-final period glued to the token): a standalone
+            // year, a number+unit token, or a bare decimal — see
+            // isGenericNumericFragment's own doc comment above.
+            !isGenericNumericFragment(token),
         ),
     ),
   ).slice(0, max);

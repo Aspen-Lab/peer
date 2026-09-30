@@ -936,3 +936,101 @@ describe("compileSearchBrief QUERY-GENERIC-WORDS (§1bs): years, units, and bare
     ]);
   });
 });
+
+// QUERY-GENERIC-WORDS part 3 (ABC-JEV-INTEGRATION.md §1bu.8, the §1bs.8
+// findings 1-2 from the fresh A's VERIFIED review, docs/jev-abc/
+// QUERY-DISLIKE-A-20260930T111400Z.md): two gaps against §1bs's own intent,
+// found after that item shipped, both folded into this item as part 3. (1)
+// a year/unit/decimal token glued to a SENTENCE-FINAL period ("2024.",
+// "99.9.", "4.2v.") escaped isGenericNumericToken, because STANDALONE_YEAR/
+// LEADING_NUMBER are anchored at the token's own end and a period is
+// neither a digit nor a known unit suffix. (2) a number+unit token that is
+// its OWN comma/dash/etc.-delimited clause ("…, 500Wh/kg, …") reached the
+// phrase/chunk branch (`longPhrases`) whole, because that branch never ran
+// the year/unit/decimal check at all.
+describe("compileSearchBrief QUERY-GENERIC-WORDS part 3 (§1bu.8): a trailing sentence period, and a single-token phrase chunk", () => {
+  it('a year glued to a sentence-final period ("2024.") produces no such query, in either the punctuated or bare form', () => {
+    const brief = compileSearchBrief({
+      topics: [],
+      project:
+        "Our development roadmap was set for 2024. The team then shifted focus toward pilot-scale manufacturing trials.",
+    });
+    const all = [...brief.generatedQueries, ...brief.activeQuestions].map((q) => q.toLowerCase());
+    // MUTATION CHECK (§1bu.8 finding 1): skipping the trailing-punctuation
+    // strip turns this red ("2024." survives, escaping the filter).
+    expect(all).not.toContain("2024.");
+    expect(all).not.toContain("2024");
+    expect(brief.generatedQueries).toContain("development");
+    expect(brief.generatedQueries).toContain("roadmap");
+  });
+
+  it('a decimal glued to a sentence-final period ("99.9.") produces no such query', () => {
+    const brief = compileSearchBrief({
+      topics: [],
+      challenge:
+        "In pilot testing the process reached 99.9. Next steps focus on scaling to full production volume.",
+    });
+    const all = [...brief.generatedQueries, ...brief.activeQuestions].map((q) => q.toLowerCase());
+    expect(all).not.toContain("99.9.");
+    expect(all).not.toContain("99.9");
+    expect(brief.activeQuestions).toContain("pilot");
+    expect(brief.activeQuestions).toContain("testing");
+  });
+
+  it('a number+unit token glued to a sentence-final period ("4.2v.") produces no such query', () => {
+    const brief = compileSearchBrief({
+      topics: [],
+      challenge:
+        "The pack was charged to 4.2v. Subsequent cycling measured capacity fade across repeated charge trials.",
+    });
+    const all = [...brief.generatedQueries, ...brief.activeQuestions].map((q) => q.toLowerCase());
+    expect(all).not.toContain("4.2v.");
+    expect(all).not.toContain("4.2v");
+    expect(brief.activeQuestions).toContain("pack");
+    expect(brief.activeQuestions).toContain("charged");
+  });
+
+  it('a number+unit token that is its own comma-delimited clause ("…, 500Wh/kg, …") produces no such query', () => {
+    const brief = compileSearchBrief({
+      topics: [],
+      challenge:
+        "Our next-generation pouch cell chemistry, 500Wh/kg, remains under evaluation for commercial viability " +
+        "across several supplier partnerships.",
+    });
+    const all = [...brief.generatedQueries, ...brief.activeQuestions].map((q) => q.toLowerCase());
+    // MUTATION CHECK (§1bu.8 finding 2): skipping the single-token chunk
+    // filter turns this red ("500Wh/kg" survives whole via longPhrases).
+    expect(all).not.toContain("500wh/kg");
+    expect(brief.activeQuestions).toContain("pouch");
+    expect(brief.activeQuestions).toContain("chemistry");
+  });
+
+  // Grouped into separate, shorter texts (not all 10 in one sentence),
+  // matching the pre-existing §1bs designation test's own reasoning just
+  // above: so every designation lands within its tier's own per-field cap
+  // instead of being crowded out by an unrelated, pre-existing budget limit
+  // this item does not change.
+  it.each([
+    [
+      "cell formats/alloys at a sentence-ending period",
+      "Testing used coin cells in the CR2032 format. Structural samples included 18650 cylinders and 21700 cylinders.",
+      ["cr2032", "18650", "21700"],
+    ],
+    [
+      "alloy/formula designations as their own comma-delimited clause",
+      "Fixture materials, 7075 and 316L, were paired with a LiCoO2 reference electrode for baseline comparison.",
+      ["7075", "316l", "licoo2"],
+    ],
+    [
+      "formula/model/polytype designations as their own comma-delimited clause",
+      "Benchmarked chemistries, NMC811 and GPT-4-assisted analysis, alongside 1T-MoS2 and 4H-SiC substrates.",
+      ["nmc811", "gpt-4", "1t-mos2", "4h-sic"],
+    ],
+  ])("every §1bs.6 designation still survives: %s", (_label, text, survivors) => {
+    const brief = compileSearchBrief({ topics: [], challenge: text });
+    const lower = brief.activeQuestions.map((q) => q.toLowerCase());
+    for (const survivor of survivors) {
+      expect(lower.some((q) => q.includes(survivor))).toBe(true);
+    }
+  });
+});
