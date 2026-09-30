@@ -99,6 +99,29 @@ interface ProfileState {
   /** Replace the whole snapshot — never a per-field merge; see the field
    *  doc above and §1bk ruling 3 ("becomes the resulting snapshot"). */
   setLastSynced: (snapshot: Partial<UserProfile>) => void;
+  /**
+   * ACCOUNT-SWITCH (ABC-JEV-INTEGRATION.md §1bt point 1) — the account id
+   * this device last confirmed sign-in with, mirroring the feed store's
+   * already-shipped `syncedUserId` (store/feed.ts). `null` means "no owner
+   * yet" — a fresh device, or a pre-§1bt blob that simply lacks the key
+   * (the same "widen, don't rename" migration precedent `lastSynced`
+   * itself used at v5/v6: no migration step writes a default, the missing
+   * key IS the honest "no owner yet" answer). Set eagerly, the moment
+   * `profile-sync.tsx`'s `onSession` confirms a real user id — before the
+   * pull/merge/push even starts, same timing as that file's own
+   * `authUserId` publish. A DIFFERENT non-null value at the next sign-in
+   * means a different real person is now using this device/browser; that
+   * comparison is what gates whether `logOut()` runs before today's
+   * reconcile (see `onSession`, not this file — this field is only the
+   * durable half of the mechanism). Persisted alongside `profile`/
+   * `lastSynced` (see `partialize`) — an in-memory-only value would forget
+   * the owner on every reload and never catch a switch that happens across
+   * two separate visits.
+   */
+  syncedAccountId: string | null;
+  /** Record the account id this device just confirmed sign-in with. See
+   *  the field doc above; `logOut()` is what resets it back to null. */
+  setSyncedAccountId: (id: string | null) => void;
   /** Replace the whole profile from an exported document. */
   importProfile: (document: unknown) => boolean;
   updateDisplayName: (name: string) => void;
@@ -414,9 +437,13 @@ export const useProfileStore = create<ProfileState>()(
       // PROFILE-SYNC (§1bk) — never confirmed anything with any account yet;
       // see the field doc above.
       lastSynced: null,
+      // ACCOUNT-SWITCH (§1bt point 1) — no owner recorded yet; see the
+      // field doc above.
+      syncedAccountId: null,
 
       setEntitlement: (entitlement) => set({ entitlement }),
       setLastSynced: (snapshot) => set({ lastSynced: snapshot }),
+      setSyncedAccountId: (id) => set({ syncedAccountId: id }),
 
       recordUploadPreference: (paper) => set((s) => ({ profile: { ...s.profile,
         preferenceLedger: applyUploadPreferenceSignal(s.profile.preferenceLedger,
@@ -816,7 +843,20 @@ export const useProfileStore = create<ProfileState>()(
         // sign-in (the same person signing back in, or — a shared computer
         // — someone else), reintroducing the overwrite bug through a
         // different door. Reset together, same as entitlement.
-        set({ profile: defaultProfile, entitlement: null, lastSynced: null });
+        // ACCOUNT-SWITCH (§1bt point 1) — syncedAccountId resets together
+        // with them: a stale owner id surviving a wipe would make the very
+        // next sign-in (even the SAME account signing back in) look like a
+        // no-op "same owner" match against a profile that is actually
+        // already clean, which is harmless, OR — if logOut() ran for a
+        // reason other than a confirmed switch — would leave the wrong
+        // owner recorded. Simplest correct rule: nobody is confirmed to
+        // own this device's data the instant it is wiped.
+        set({
+          profile: defaultProfile,
+          entitlement: null,
+          lastSynced: null,
+          syncedAccountId: null,
+        });
       },
     }),
     // skipHydration: persisted state is rehydrated after mount via
@@ -830,8 +870,15 @@ export const useProfileStore = create<ProfileState>()(
       // downgrade — deliberately excluded, same as always. PROFILE-SYNC
       // (§1bk) — `lastSynced` is now ALSO deliberately persisted alongside
       // `profile`: an in-memory-only baseline is exactly the ping-pong bug
-      // this field exists to fix.
-      partialize: (state) => ({ profile: state.profile, lastSynced: state.lastSynced }) as ProfileState,
+      // this field exists to fix. ACCOUNT-SWITCH (§1bt point 1) —
+      // `syncedAccountId` joins them for the same reason: an in-memory-only
+      // owner id would forget who this device belongs to on every reload,
+      // and never catch a switch spanning two separate visits.
+      partialize: (state) => ({
+        profile: state.profile,
+        lastSynced: state.lastSynced,
+        syncedAccountId: state.syncedAccountId,
+      }) as ProfileState,
       // v2: colorTheme became a "mode:accent" composite.
       // v3: Events and Jobs gained independent Required/Explore topic fields.
       // v4: work-authorisation countries became a persisted profile signal.
@@ -851,7 +898,17 @@ export const useProfileStore = create<ProfileState>()(
       //     i.e. plain union, once, automatically, per list field, per
       //     device — the same "whichever loads first after the fix wins,
       //     once" transition §1bk.3 already shipped for scalars.
-      version: 6,
+      // v7: ACCOUNT-SWITCH (§1bt point 1) — syncedAccountId, the device's
+      //     recorded owner. The migration adds none for a pre-v7 blob — a
+      //     missing key reads as "no owner yet" (mergeHydratedProfileState
+      //     spreads the persisted object over the creator's own initial
+      //     `syncedAccountId: null`, so an absent key simply leaves that
+      //     null in place — the same widen-don't-rename shape v5/v6 used),
+      //     which is exactly correct: a device already mid-session under
+      //     the old code has not "switched" accounts merely because this
+      //     fix shipped, so its very next sign-in must not be treated as
+      //     one.
+      version: 7,
       migrate: (persisted, version) =>
         migrateProfileStore(persisted, version) as ProfileState,
       // Build the promoted snapshot as part of the state installed by

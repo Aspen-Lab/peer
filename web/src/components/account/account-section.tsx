@@ -21,7 +21,7 @@
 // warn-before-sign-out decision) is pulled out into the pure
 // `shouldWarnBeforeSignOut` below instead.
 
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import type { User } from "@supabase/supabase-js";
 import { buttonVariants } from "@/components/ui/button";
@@ -33,7 +33,7 @@ import {
   userName,
   type AuthState,
 } from "./use-auth-user";
-import { useProfileSyncStatus } from "@/components/profile-sync";
+import { requestProfileFlush } from "@/components/profile-sync";
 import { useFeedSyncStatus } from "@/components/feed-sync";
 
 /**
@@ -65,6 +65,60 @@ export function shouldWarnBeforeSignOut(
  *  independent of which store either flag happens to live in. */
 export function hasUnsyncedChanges(profilePushFailed: boolean, feedPushFailed: boolean): boolean {
   return profilePushFailed || feedPushFailed;
+}
+
+/** What `handleSignOutSubmitCore` needs, every side effect injected — same
+ *  DI shape this codebase already uses throughout profile-sync.tsx
+ *  (`PullBeforePushDeps`, `FlushBeforeSignOutDeps`) — so the re-entrancy
+ *  guard and the flush-then-decide sequence are directly testable without
+ *  a DOM or a click simulator. */
+export interface SignOutSubmitDeps {
+  requestFlush: () => Promise<boolean>;
+  feedPushFailed: boolean;
+  confirmingSignOut: boolean;
+  onWarn: () => void;
+  onSubmitForm: () => void;
+}
+
+/** A plain mutable flag shaped like a React ref (`{ current }`), so the
+ *  real component can pass its own `useRef(false)` directly and a test can
+ *  pass a bare `{ current: false }` object. */
+export interface SignOutGuard {
+  current: boolean;
+}
+
+/**
+ * ACCOUNT-SWITCH (ABC-JEV-INTEGRATION.md §1bt.8 AMENDMENT (c)) — the fresh
+ * review (CHECK 3 / finding 3) proved a fast double-click on "Sign out"
+ * fires this sequence twice, concurrently, before the first
+ * `requestFlush()` resolves — for a scalar-only pending edit this sent two
+ * real, identical `PUT /api/profile` calls (harmless, since idempotent,
+ * but a wasted duplicate request). `guard` makes a second call, arriving
+ * while the first is still in flight, a complete no-op: it returns before
+ * `requestFlush` is even called, so there is exactly one flush attempt and
+ * exactly one eventual `onSubmitForm`/warning outcome, no matter how many
+ * times this fires while one is already running. The guard resets once the
+ * in-flight attempt settles (success, warning, or otherwise), so a LATER,
+ * separate click — e.g. after "Stay signed in" — is never permanently
+ * blocked by an earlier one that already finished.
+ */
+export async function handleSignOutSubmitCore(
+  deps: SignOutSubmitDeps,
+  guard: SignOutGuard,
+): Promise<void> {
+  if (guard.current) return; // a flush is already running — ignore this duplicate submit
+  guard.current = true;
+  try {
+    const profileFlushed = await deps.requestFlush();
+    const stillUnsynced = hasUnsyncedChanges(!profileFlushed, deps.feedPushFailed);
+    if (shouldWarnBeforeSignOut(stillUnsynced, deps.confirmingSignOut)) {
+      deps.onWarn();
+      return;
+    }
+    deps.onSubmitForm();
+  } finally {
+    guard.current = false;
+  }
 }
 
 export interface AccountSectionViewProps {
@@ -163,7 +217,13 @@ export function AccountSectionView({
             </div>
           ) : (
             <form method="POST" action="/auth/signout" className="ml-auto" onSubmit={onSignOutSubmit}>
-              <button type="submit" className={buttonVariants({ tone: "dangerSoft", size: "sm" })}>
+              {/* ACCOUNT-SWITCH (§1bt.8 AMENDMENT (c)) — disabled while the
+                  flush from an already-in-flight submit is running, so a
+                  fast second click cannot fire a second flush/POST. The
+                  logical guard (one flush, one POST even without a
+                  re-render in between) lives in handleSignOutSubmitCore's
+                  own ref check below — this is the visible half. */}
+              <button type="submit" disabled={busy} className={buttonVariants({ tone: "dangerSoft", size: "sm" })}>
                 Sign out
               </button>
             </form>
@@ -188,17 +248,47 @@ export function AccountSection({ className = "" }: { className?: string }) {
   const auth = useAuthUser();
   const [busy, setBusy] = useState(false);
   const [confirmingSignOut, setConfirmingSignOut] = useState(false);
-  const profilePushFailed = useProfileSyncStatus((s) => s.pushFailed);
   const feedPushFailed = useFeedSyncStatus((s) => s.pushFailed);
-  const unsynced = hasUnsyncedChanges(profilePushFailed, feedPushFailed);
+  // ACCOUNT-SWITCH (§1bt.8 AMENDMENT (c)) — the LOGICAL half of the
+  // double-submit guard; a ref (not state) because it must be correct
+  // synchronously across two calls that can both start before React
+  // re-renders — see handleSignOutSubmitCore's own doc comment. A plain
+  // `useRef(false)` already has exactly the `{ current: boolean }` shape
+  // `SignOutGuard` needs — passed directly below, not `.current`.
+  const signOutGuardRef = useRef(false);
 
-  function handleSignOutSubmit(event: FormEvent<HTMLFormElement>) {
-    if (shouldWarnBeforeSignOut(unsynced, confirmingSignOut)) {
-      // Not today's sign-out yet — show the warning instead of navigating.
-      event.preventDefault();
-      setConfirmingSignOut(true);
+  // ACCOUNT-SWITCH (ABC-JEV-INTEGRATION.md §1bt point 3) — "flush first,
+  // warn only on failure." Always intercepts: whether anything on the
+  // profile side is unsynced can only be answered by asking
+  // profile-sync.tsx (a live edit still inside its own 700ms debounce is
+  // invisible to this component otherwise — the exact scenario the P6
+  // warning used to miss). requestProfileFlush() itself resolves
+  // immediately, with no delay, when nothing is unsynced (§1bt point 3 —
+  // "nothing unsynced → sign out immediately"); otherwise it cancels the
+  // debounce and makes one bounded attempt before answering. The feed side
+  // has no flush of its own (the feed store already clears correctly on
+  // sign-out — no privacy leak there to close — so an already-failed feed
+  // push only ever affects THIS warning, unchanged from before this item).
+  async function handleSignOutSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    setBusy(true); // §1bt.8 AMENDMENT (c) — the VISIBLE half of the guard
+    try {
+      await handleSignOutSubmitCore(
+        {
+          requestFlush: requestProfileFlush,
+          feedPushFailed,
+          confirmingSignOut,
+          onWarn: () => setConfirmingSignOut(true),
+          // form.submit() (never .requestSubmit()) does not re-fire this
+          // handler, so this cannot loop.
+          onSubmitForm: () => form.submit(),
+        },
+        signOutGuardRef,
+      );
+    } finally {
+      setBusy(false);
     }
-    // Otherwise: a real form submit, exactly as today.
   }
 
   return (

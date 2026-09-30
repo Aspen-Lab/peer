@@ -26,7 +26,7 @@ import {
 } from "@/lib/entitlement/allowance";
 import { supabase } from "@/lib/supabase/client";
 import { useProfileStore } from "@/store/profile";
-import type { UserProfile } from "@/types";
+import { defaultProfile, type UserProfile } from "@/types";
 import { profileFeedIntentCard } from "@/lib/feed/intent";
 import {
   mergeProfileAtSignIn,
@@ -315,6 +315,51 @@ export function planReconcile(
   return { patch, pushPayload, merged };
 }
 
+/**
+ * ACCOUNT-SWITCH (ABC-JEV-INTEGRATION.md §1bt point 1) — true when this
+ * device's recorded owner is a REAL, DIFFERENT account than the one that
+ * just confirmed sign-in. `null` ("no owner yet" — a fresh device, or a
+ * pre-§1bt blob) is never a switch: that is exactly §1bk's existing
+ * bootstrap case, which must keep merging normally. Pure, so the decision
+ * itself is testable without a DOM (this file's own "no
+ * @testing-library/react" constraint — see this file's test header).
+ */
+export function isAccountSwitch(
+  syncedAccountId: string | null,
+  userId: string,
+): boolean {
+  return syncedAccountId !== null && syncedAccountId !== userId;
+}
+
+/**
+ * ACCOUNT-SWITCH (§1bt point 1) — the sign-in reconcile decision WITH the
+ * owner-key gate composed in, pure, for direct testing without mounting a
+ * real store. Production (`onSession` below) reaches the identical outcome
+ * a different way: on a genuine switch it calls the REAL `logOut()` action
+ * first — a store side effect (profile/lastSynced/entitlement/
+ * syncedAccountId all reset together, `logOut`'s own contract) — so by the
+ * time it reads `local`/`lastSynced` back from the store they are ALREADY
+ * `defaultProfile`/`null`. Calling `planReconcile(local, remote,
+ * lastSynced)` at that point is algebraically identical to this function's
+ * switch branch (`planReconcile(defaultProfile, remote, null)`) — the same
+ * "clean profile, B starts like a fresh device" outcome Q2 scenario (d)
+ * already proves is safe. This function exists so that equivalence, and
+ * the decision itself, is provable head-on rather than only by reading the
+ * two code paths side by side.
+ */
+export function planReconcileForSignIn(
+  syncedAccountId: string | null,
+  userId: string,
+  local: UserProfile,
+  remote: Partial<UserProfile> | null,
+  lastSynced: Partial<UserProfile> | null,
+): ReconcilePlan {
+  if (isAccountSwitch(syncedAccountId, userId)) {
+    return planReconcile(defaultProfile, remote, null);
+  }
+  return planReconcile(local, remote, lastSynced);
+}
+
 async function pushRemote(patch: Partial<UserProfile>): Promise<boolean> {
   try {
     await apiFetch("/api/profile", {
@@ -522,6 +567,255 @@ function listPullDeps(lastPushedRef: { current: Partial<UserProfile> | null }): 
   };
 }
 
+/**
+ * ACCOUNT-SWITCH (§1bt point 4; the guide's Q4) — the mutable flags
+ * `runSyncSerialized` reads and writes across calls, shaped like a React
+ * ref (`{ current }`) so a component can pass its own `useRef` directly
+ * and a test can pass a plain `{ current: false }` object with no DOM
+ * involved. `current` holds the in-progress sequence's own promise, so a
+ * caller that COALESCES into an already-running sequence (rather than
+ * starting one) can still await genuine completion — see
+ * `runSyncSerialized`'s own doc comment for why this matters.
+ */
+export interface SyncSerializationFlags {
+  inFlight: { current: boolean };
+  queued: { current: boolean };
+  current: { current: Promise<void> | null };
+}
+
+/**
+ * ACCOUNT-SWITCH (§1bt point 4; the guide's Q4) — serializes
+ * `pullMergeAndPush`: an in-flight guard plus ONE coalesced follow-up, so
+ * two sync sequences never run concurrently. Closes §1bq.6(b) MEDIUM: a
+ * successful `pullMergeAndPush` always installs a new `profile` object
+ * (`applyPatch`), which re-arms `ProfileSync`'s own debounced-push effect
+ * (it depends on `[profile]` by reference) — without this guard, that
+ * self-rearm starts a second, fully independent, OVERLAPPING
+ * `pullMergeAndPush` call whenever a round trip exceeds the 700ms
+ * debounce, roughly doubling exposure to the already-accepted "third push
+ * lands in the gap" window (§1bq.3). With the guard: the common (fast)
+ * case is unchanged (the self-rearm's call arrives after the first has
+ * already finished, so it just runs once more and — per
+ * `pullMergeAndPush`'s own contract, it re-reads live state — usually
+ * finds nothing left to push); the slow case now QUEUES instead of
+ * overlapping, and the queued run's own fresh pull/merge/push closes the
+ * gap the same way a second unguarded call would have, just never at the
+ * same time as the first.
+ *
+ * Deliberately returns a promise that resolves once the WHOLE serialized
+ * sequence this call is part of has actually settled — including a
+ * coalesced follow-up — even when this particular call only coalesced
+ * into an already-running one rather than starting it. `ProfileSync`'s own
+ * fire-and-forget caller does not need that (a `useEffect` cannot `await`
+ * across renders anyway), but the flush path (§1bt point 3) does: it must
+ * know the account is genuinely caught up before it lets sign-out proceed,
+ * not merely that an attempt was kicked off. One function serves both
+ * callers correctly rather than two subtly different ones.
+ */
+export function runSyncSerialized(
+  deps: PullBeforePushDeps,
+  flags: SyncSerializationFlags,
+): Promise<void> {
+  if (flags.inFlight.current) {
+    flags.queued.current = true; // coalesce: at most ONE extra run, however
+    return flags.current.current ?? Promise.resolve(); // many callers arrive while busy
+  }
+  flags.inFlight.current = true;
+  const run = (async () => {
+    try {
+      do {
+        flags.queued.current = false;
+        await pullMergeAndPush(deps); // unchanged — re-reads live state via
+        // its own readLocal()/getRemote(), so a queued run genuinely
+        // re-checks rather than replaying a stale decision.
+      } while (flags.queued.current);
+    } finally {
+      flags.inFlight.current = false;
+      flags.current.current = null;
+    }
+  })();
+  flags.current.current = run;
+  return run;
+}
+
+// ACCOUNT-SWITCH (§1bt.8 AMENDMENT (b)) — must match
+// web/src/app/auth/signout/route.ts's SIGNED_OUT_COOKIE_NAME exactly; see
+// that file's own comment on why this is one literal per file rather than
+// a shared import.
+export const SIGN_OUT_COOKIE_NAME = "peer_signed_out";
+
+/**
+ * ACCOUNT-SWITCH (§1bt.8 AMENDMENT (b)) — true only when the sign-out
+ * route's own short-lived, first-party cookie is present in
+ * `document.cookie`. REPLACES the §1bt.7 AMENDMENT's URL parameter
+ * (`hasSignedOutMarker`/`?signed-out=1`, now removed): a URL can be
+ * forged, shared, or bookmarked — a link alone could trigger the same
+ * clear a real sign-out does (the fresh review's MEDIUM finding, CHECK 4).
+ * A cookie can only be created by a same-origin Set-Cookie response header
+ * (route.ts actually running), never by a URL a browser merely navigates
+ * to. Exact match on `"1"`, not mere presence, so a future unrelated
+ * cookie sharing a prefix cannot be misread.
+ */
+export function hasSignOutCookie(cookieString: string): boolean {
+  return cookieString
+    .split(";")
+    .map((part) => part.trim())
+    .some((part) => part === `${SIGN_OUT_COOKIE_NAME}=1`);
+}
+
+/** Sets `document.cookie` so the browser deletes the cookie (matching
+ *  path, so it actually removes it rather than creating an unrelated
+ *  expired one) — called once the cookie has been READ, so it can never
+ *  be read a second time by a later, unrelated page load this session. */
+export function deleteSignOutCookie(): void {
+  document.cookie = `${SIGN_OUT_COOKIE_NAME}=; Path=/; Max-Age=0; SameSite=Lax`;
+}
+
+/**
+ * ACCOUNT-SWITCH (§1bt.8 AMENDMENT (b)) — whether a CONFIRMED sign-out
+ * should clear local profile state. ALL THREE must hold: the cookie is
+ * present (this load followed a real `POST /auth/signout`, not a forged
+ * link); `authOutcome` is the CONFIRMED `"signed-out"` value — never
+ * `"unknown"` (an unresolved or rejected auth check) or `"unconfigured"`
+ * or `"signed-in"`; and this device actually has an owner recorded (a
+ * guest whose `syncedAccountId` is already `null` has nothing to clear
+ * either way — checked explicitly, the same reasoning §1bt.7's own
+ * `shouldClearOnThisLoad` used, rather than relying on `logOut()` being a
+ * harmless no-op). Pure, so every combination is testable without a DOM.
+ */
+export function shouldClearOnConfirmedSignOut(
+  cookiePresent: boolean,
+  authOutcome: AuthOutcome,
+  syncedAccountId: string | null,
+): boolean {
+  return cookiePresent && authOutcome === "signed-out" && syncedAccountId !== null;
+}
+
+export interface ProcessConfirmedSignOutCookieDeps {
+  cookiePresent: boolean;
+  authOutcome: AuthOutcome;
+  syncedAccountId: string | null;
+  logOut: () => void;
+  deleteCookie: () => void;
+}
+
+/**
+ * ACCOUNT-SWITCH (§1bt.8 AMENDMENT (b)) — the whole "a confirmed sign-out
+ * just happened, should it clear local state" sequence, pure/DI-only (same
+ * shape as `PullBeforePushDeps`/`FlushBeforeSignOutDeps`) so it is
+ * directly testable with fakes, no DOM required. No cookie → does
+ * nothing at all (not even a delete — nothing was read). A cookie IS
+ * present → decide via `shouldClearOnConfirmedSignOut`, clear if
+ * warranted, THEN always consume (delete) the cookie regardless of that
+ * decision — a guest's browser must not keep carrying a stale cookie into
+ * a LATER sign-in this same session.
+ */
+export function processConfirmedSignOutCookie(deps: ProcessConfirmedSignOutCookieDeps): void {
+  if (!deps.cookiePresent) return;
+  if (shouldClearOnConfirmedSignOut(deps.cookiePresent, deps.authOutcome, deps.syncedAccountId)) {
+    deps.logOut();
+  }
+  deps.deleteCookie();
+}
+
+/**
+ * ACCOUNT-SWITCH (§1bt point 3) — what `account-section.tsx`'s sign-out
+ * form needs from this file, as a small function with every side effect
+ * injected — the same DI shape as `PullBeforePushDeps` — so it is testable
+ * without a DOM. "Anything unsynced" is `pendingPatch()` non-empty (this
+ * IS the widened signal POLICY 2 asked for: it is non-empty for BOTH named
+ * triggers — an already-failed push left its field(s) dirty against the
+ * last-confirmed baseline, since `nextSyncBaselines` never advances that
+ * baseline on failure §1bk.9a, and a live edit still inside the debounce
+ * has, by definition, already changed the diff away from it — one check
+ * instead of two flags to keep in sync) OR `pushFailed` (kept as its own
+ * input too, belt-and-suspenders, for the theoretical edge where a
+ * profile reverted back to matching the stale baseline after a failure —
+ * see the checkpoint for why this is intentionally conservative).
+ */
+export interface FlushBeforeSignOutDeps {
+  /** The existing push-failed status. */
+  pushFailed: boolean;
+  /** What a push attempted right now would need to send — the same diff
+   *  the debounced effect itself computes. */
+  pendingPatch: () => Partial<UserProfile>;
+  /** Cancel the live 700ms debounce timer, if one is armed, so it can
+   *  never race this flush's own immediate attempt. */
+  cancelDebounce: () => void;
+  /** Attempt the push this instant, through whichever path is required
+   *  (list vs scalar — the same functions the debounced effect itself
+   *  calls). Resolves once settled; this function races it against the
+   *  time bound, it does not invent its own retry. */
+  attemptPush: () => Promise<void>;
+  /** Re-read after `attemptPush` settles or times out: true when
+   *  something is still dirty against the last-confirmed baseline — i.e.
+   *  the account is NOT genuinely caught up. */
+  stillDirty: () => boolean;
+}
+
+/**
+ * ACCOUNT-SWITCH (§1bt point 3) — "flush first, warn only on failure."
+ * Nothing unsynced → resolves `true` immediately (sign out proceeds with
+ * no delay at all — `cancelDebounce`/`attemptPush` are never called).
+ * Otherwise: cancel the debounce (so it can never fire a second, racing
+ * attempt), make one bounded attempt, and report whether the account is
+ * caught up afterward. A timeout is not a special case here — it simply
+ * means `stillDirty()` is still checked after the SAME bound either way,
+ * so a slow-but-eventually-successful push and a genuinely hung one are
+ * told apart by the one signal that actually matters (did it land),
+ * without this function needing its own notion of "did I time out".
+ */
+export async function flushBeforeSignOut(
+  deps: FlushBeforeSignOutDeps,
+  timeoutMs: number,
+): Promise<boolean> {
+  if (!deps.pushFailed && Object.keys(deps.pendingPatch()).length === 0) {
+    return true;
+  }
+  deps.cancelDebounce();
+  await raceWithTimeout(deps.attemptPush(), timeoutMs);
+  return !deps.stillDirty();
+}
+
+function raceWithTimeout(promise: Promise<void>, ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      resolve();
+    };
+    const timer = setTimeout(finish, ms);
+    promise.then(() => {
+      clearTimeout(timer);
+      finish();
+    }, () => {
+      // attemptPush's own real implementation never rejects (every push
+      // helper in this file returns a boolean, never throws) — this catch
+      // exists only so a fake in a test, or a future change, cannot make
+      // this function itself hang or throw past its time bound.
+      clearTimeout(timer);
+      finish();
+    });
+  });
+}
+
+/**
+ * ACCOUNT-SWITCH (§1bt point 3) — the bridge `account-section.tsx` actually
+ * calls. `flushBeforeSignOut` above stays pure/DI-only and testable with
+ * fakes; this function supplies its REAL dependencies against whichever
+ * `ProfileSync` is currently mounted (exactly one, app-wide — see this
+ * file's header). If none is mounted yet (a render before the first
+ * effect has run) there is nothing to flush and nothing would be lost by
+ * proceeding, so this resolves `true` — sign-out must never hang on a
+ * component that was never there to answer.
+ */
+export function requestProfileFlush(): Promise<boolean> {
+  return activeFlush ? activeFlush() : Promise.resolve(true);
+}
+
+let activeFlush: (() => Promise<boolean>) | null = null;
+
 export function ProfileSync() {
   const profile = useProfileStore((s) => s.profile);
   const setEntitlement = useProfileStore((s) => s.setEntitlement);
@@ -533,6 +827,13 @@ export function ProfileSync() {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
   );
+  // ACCOUNT-SWITCH (§1bt point 4) — runSyncSerialized's own flags. Exactly
+  // one ProfileSync is ever mounted (this file's own header note), so a
+  // useRef here is the same singleton scope module-level state would give,
+  // without widening every existing ref in this component to module scope.
+  const syncInFlightRef = useRef(false);
+  const syncQueuedRef = useRef(false);
+  const syncCurrentRef = useRef<Promise<void> | null>(null);
 
   // 1. React to auth changes — pull on sign-in, reset state on sign-out.
   useEffect(() => {
@@ -570,6 +871,24 @@ export function ProfileSync() {
         // auth check — see the `.catch()` below, which deliberately leaves
         // this untouched). Clears any previously-published id.
         useSyncGate.setState({ authUserId: null, authOutcome: "signed-out" });
+        // ACCOUNT-SWITCH (§1bt.8 AMENDMENT (b)) — checked exactly here:
+        // the one moment `authOutcome` becomes the CONFIRMED "signed-out"
+        // value (never reached for an unresolved or rejected auth check —
+        // see the `.catch()` below, same as the comment just above). A
+        // forged/shared/bookmarked link cannot fake the cookie this reads
+        // (only a same-origin Set-Cookie response from route.ts can set
+        // it) — this is the whole fix for the fresh review's MEDIUM
+        // finding; the old URL-parameter marker is gone, not merely
+        // bypassed.
+        if (typeof document !== "undefined") {
+          processConfirmedSignOutCookie({
+            cookiePresent: hasSignOutCookie(document.cookie),
+            authOutcome: "signed-out",
+            syncedAccountId: useProfileStore.getState().syncedAccountId,
+            logOut: () => useProfileStore.getState().logOut(),
+            deleteCookie: deleteSignOutCookie,
+          });
+        }
         markSyncSettled();
         return;
       }
@@ -584,6 +903,39 @@ export function ProfileSync() {
       // FAILED pull still settles, with `entitlement` staying null, which
       // used to be indistinguishable from confirmed signed-out.
       useSyncGate.setState({ authUserId: userId, authOutcome: "signed-in" });
+
+      // ACCOUNT-SWITCH (§1bt point 1) — before today's existing
+      // pull/merge/push logic runs at all, check whose data this device is
+      // currently holding. A DIFFERENT real owner than last confirmed here
+      // means a different person has signed in on this browser: wipe this
+      // device's local profile/lastSynced FIRST (the already-shipped
+      // logOut(), unchanged), so the merge below reconciles B's account
+      // against a clean profile instead of A's leftovers — never against
+      // A's local data, synced or not (closes the HIGH privacy leak: A's
+      // unsynced topic/project/ledger entries, and even a fully-synced
+      // ledger entry, must never reach B). The SAME owner, or no owner
+      // recorded yet (a fresh device — §1bk's own bootstrap case), changes
+      // nothing here; today's code runs exactly as it did before this item.
+      if (isAccountSwitch(useProfileStore.getState().syncedAccountId, userId)) {
+        useProfileStore.getState().logOut();
+        // Defensive: didInitialPullRef only ever reaches this closure
+        // already `true` if an EARLIER signed-in session on this same
+        // mount already completed a pull — which the existing signed-out
+        // branch above already resets to `false`, so a genuine switch
+        // without an intervening sign-out is not a shape this codebase's
+        // own auth events produce today. Resetting it here anyway costs
+        // nothing on the ordinary path (it is already false) and
+        // guarantees the "clean profile" reconcile below actually runs
+        // even if that assumption ever stops holding.
+        didInitialPullRef.current = false;
+      }
+      // Eager, unconditional publish — mirrors authUserId just above.
+      // Records the CURRENT sign-in as this device's owner regardless of
+      // whether it matched, switched, or was previously unset, so the
+      // NEXT sign-in (same or different) always has a real value to
+      // compare against.
+      useProfileStore.getState().setSyncedAccountId(userId);
+
       if (didInitialPullRef.current || pullInFlightRef.current) return;
       pullInFlightRef.current = true;
 
@@ -704,7 +1056,14 @@ export function ProfileSync() {
         Object.prototype.hasOwnProperty.call(patch, key),
       );
       if (carriesListChange) {
-        await pullMergeAndPush(listPullDeps(lastPushedRef));
+        // ACCOUNT-SWITCH (§1bt point 4) — serialized: never two sync
+        // sequences at once (§1bq.6(b) MEDIUM — see runSyncSerialized's
+        // own doc comment for the exact race this closes).
+        await runSyncSerialized(listPullDeps(lastPushedRef), {
+          inFlight: syncInFlightRef,
+          queued: syncQueuedRef,
+          current: syncCurrentRef,
+        });
         return;
       }
 
@@ -736,6 +1095,68 @@ export function ProfileSync() {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
   }, [profile]);
+
+  // 3. ACCOUNT-SWITCH (§1bt point 3) — register this mount's own flush
+  // implementation for account-section.tsx's sign-out form to call through
+  // requestProfileFlush(). Registered once (this component mounts exactly
+  // once, app-wide — see this file's header); the function itself always
+  // reads live state (useProfileStore.getState(), the refs above) at CALL
+  // time, so it needs no re-registration when profile/props change.
+  useEffect(() => {
+    async function requestFlush(): Promise<boolean> {
+      return flushBeforeSignOut(
+        {
+          pushFailed: useProfileSyncStatus.getState().pushFailed,
+          pendingPatch: () =>
+            diffPayload(remoteProfilePayload(useProfileStore.getState().profile), lastPushedRef.current),
+          cancelDebounce: () => {
+            if (debounceRef.current) {
+              clearTimeout(debounceRef.current);
+              debounceRef.current = undefined;
+            }
+          },
+          attemptPush: async () => {
+            const payload = remoteProfilePayload(useProfileStore.getState().profile);
+            const patch = diffPayload(payload, lastPushedRef.current);
+            const carriesListChange = LIST_FIELDS.some((key) =>
+              Object.prototype.hasOwnProperty.call(patch, key),
+            );
+            if (carriesListChange) {
+              // Same serialized path the debounced effect itself uses —
+              // never races a concurrent pullMergeAndPush (§1bt point 4).
+              await runSyncSerialized(listPullDeps(lastPushedRef), {
+                inFlight: syncInFlightRef,
+                queued: syncQueuedRef,
+                current: syncCurrentRef,
+              });
+              return;
+            }
+            if (Object.keys(patch).length === 0) return; // nothing left to push
+            if (await pushRemote(patch)) {
+              const baselines = nextSyncBaselines(true, useProfileStore.getState().profile, {
+                lastSynced: useProfileStore.getState().lastSynced,
+                lastPushed: lastPushedRef.current,
+              });
+              lastPushedRef.current = baselines.lastPushed;
+              useProfileStore.getState().setLastSynced(baselines.lastSynced);
+              clearProfilePushFailed();
+            } else {
+              markProfilePushFailed();
+            }
+          },
+          stillDirty: () =>
+            Object.keys(
+              diffPayload(remoteProfilePayload(useProfileStore.getState().profile), lastPushedRef.current),
+            ).length > 0,
+        },
+        2000,
+      );
+    }
+    activeFlush = requestFlush;
+    return () => {
+      if (activeFlush === requestFlush) activeFlush = null;
+    };
+  }, []);
 
   return null;
 }
