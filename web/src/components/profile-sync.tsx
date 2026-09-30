@@ -28,7 +28,16 @@ import { supabase } from "@/lib/supabase/client";
 import { useProfileStore } from "@/store/profile";
 import type { UserProfile } from "@/types";
 import { profileFeedIntentCard } from "@/lib/feed/intent";
-import { mergeProfileAtSignIn } from "@/lib/profile/merge";
+import {
+  mergeProfileAtSignIn,
+  dirtySingleValueFields,
+  listUnionChanged,
+  preferenceLedgerChanged,
+  singleValueSnapshot,
+  SINGLE_VALUE_FIELDS,
+  LIST_FIELDS,
+  type SingleValueField,
+} from "@/lib/profile/merge";
 
 // Signals that the INITIAL remote pull has settled — success, failure, or
 // nothing-to-pull (signed out / no Supabase configured). FirstRunGate and the
@@ -190,6 +199,88 @@ function diffPayload(
   return out as Partial<UserProfile>;
 }
 
+/**
+ * PROFILE-SYNC (§1bk ruling 2, widened by §1bk.8 AMENDMENT) — what the
+ * reconcile push (right after the sign-in merge) actually sends:
+ *  - the dirty `SINGLE_VALUE_FIELDS` — originally §1aj's 14, now also the
+ *    §1bk.8 AMENDMENT's 11 feed knobs (feedFocus, feedFreshness, paperCount,
+ *    feedSourceMix, feedImportance, feedMethodMode, feedDiscoveryMode, the
+ *    three feedAvoid* switches) and digestEnabled — every one of them a
+ *    scalar with a real server column that an unconditional push could
+ *    overwrite, enumerated by actually running `remoteProfilePayload` on a
+ *    fully populated profile rather than assumed (checkpoint §11.1);
+ *  - any `LIST_FIELDS` entry whose union genuinely added something new;
+ *  - `preferenceLedger`, only when it genuinely differs from remote's own
+ *    (checkpoint §11.3 — the merge itself can never shrink it, so this is a
+ *    resend-avoidance filter, not a safety one).
+ * `feedIntent` is deliberately left exactly as `remoteProfilePayload`
+ * computes it (conditionally included when non-null) — it is 100% derived
+ * from fields already covered above (project/challenge from the
+ * single-value fields, requiredConcepts/preferredConcepts/exclusions from
+ * the union-safe list fields), so its safety is inherited, not independent;
+ * adding a second "did feedIntent itself change" filter would compare a
+ * value that only ever changes when its own already-safe inputs do —
+ * redundant, and one more place to get a comparison wrong (checkpoint
+ * §11.3). Every field with NO server column at all (activeSearchInputs,
+ * selectedSenseConcepts, the advisor* local-only fields, onboardedAt,
+ * deepReportEnabled) is also left unconditional — pushing them changes
+ * nothing on the account, since the server-side `profilePatchToRow` never
+ * writes them to any column (checkpoint §11.1's classification table).
+ */
+export function reconcilePushPayload(
+  merged: UserProfile,
+  remote: Partial<UserProfile> | null,
+  dirty: ReadonlySet<SingleValueField>,
+): Partial<UserProfile> {
+  const payload = remoteProfilePayload(merged) as Record<string, unknown>;
+  for (const key of SINGLE_VALUE_FIELDS) {
+    if (!dirty.has(key)) delete payload[key];
+  }
+  for (const key of LIST_FIELDS) {
+    if (!listUnionChanged(remote?.[key], merged[key])) delete payload[key];
+  }
+  if (!preferenceLedgerChanged(remote?.preferenceLedger, merged.preferenceLedger)) {
+    delete payload.preferenceLedger;
+  }
+  return payload as Partial<UserProfile>;
+}
+
+export interface ReconcilePlan {
+  /** Apply to the local store exactly as `mergeProfileAtSignIn`'s patch. */
+  patch: Partial<UserProfile>;
+  /** Send to `PUT /api/profile` — empty means nothing needs sending. */
+  pushPayload: Partial<UserProfile>;
+  /** `local` with `patch` applied. The caller uses this to build the new
+   *  `lastSynced`/`lastPushedRef` baseline once (if `pushPayload` is
+   *  non-empty) the push is confirmed. */
+  merged: UserProfile;
+}
+
+/**
+ * PROFILE-SYNC (§1bk) — the entire sign-in reconcile decision, pure and
+ * headless — `onSession` below becomes a thin wrapper that applies `patch`,
+ * awaits `pushRemote(pushPayload)` when non-empty, and advances
+ * `lastSynced`/`lastPushedRef` on success. Lives here (not in
+ * lib/profile/merge.ts) because it needs `remoteProfilePayload`'s
+ * credential redaction + feedIntent computation. `dirtySingleValueFields`
+ * is computed here (once) from `local`/`lastSynced` regardless of whether
+ * `remote` is null — it does not depend on `remote` — and reused for both
+ * the merge decision (inside `mergeProfileAtSignIn`, which recomputes it
+ * identically: pure and deterministic, so this is zero-drift-risk, not
+ * duplicated bookkeeping) and this payload filter.
+ */
+export function planReconcile(
+  local: UserProfile,
+  remote: Partial<UserProfile> | null,
+  lastSynced: Partial<UserProfile> | null,
+): ReconcilePlan {
+  const dirty = dirtySingleValueFields(local, lastSynced);
+  const { patch } = mergeProfileAtSignIn(local, remote, lastSynced);
+  const merged: UserProfile = { ...local, ...patch };
+  const pushPayload = reconcilePushPayload(merged, remote, dirty);
+  return { patch, pushPayload, merged };
+}
+
 async function pushRemote(patch: Partial<UserProfile>): Promise<boolean> {
   try {
     await apiFetch("/api/profile", {
@@ -278,22 +369,26 @@ export function ProfileSync() {
         // signed-in reader whose plan we simply could not read.
         if (entitlement) setEntitlement(entitlement);
         const local = useProfileStore.getState().profile;
+        const lastSynced = useProfileStore.getState().lastSynced;
 
-        // SIGNIN-MERGE (§1af/§1ah/§1aj) — a real per-field merge (P1), never
-        // a blanket "remote wins" hydrate. See lib/profile/merge.ts for the
-        // full rules and why the old `hasAnySignal({ ...local, ...remote })`
-        // boundary was unsafe: `profileRowToProfile` always returns every
-        // checked key as an OWN property (even when `undefined`), so the
-        // spread always let remote's values win that check regardless of
-        // what local held — "does local have signal remote lacks" could
-        // never be answered truthfully, and the blanket hydrate that
-        // followed could overwrite a populated local field with an emptier
-        // or older remote one. `patch` only ever contains fields this merge
-        // has an opinion on; setState below installs them exactly as given,
-        // including an explicit `feedIntent: undefined` when present (a
-        // real assignment, unlike the old `hydrateFromRemote`'s "install
-        // only if defined" pattern, which cannot express a clear).
-        const { patch } = mergeProfileAtSignIn(local, remote);
+        // SIGNIN-MERGE (§1af/§1ah/§1aj) + PROFILE-SYNC (§1bk) — a real
+        // per-field merge (P1) that also knows which of THIS device's
+        // single-value fields are a genuine pending edit ("dirty" — differ
+        // from what it last confirmed with the account, or from
+        // defaultProfile when it has never confirmed anything yet) versus a
+        // stale or untouched copy — see lib/profile/merge.ts for the full
+        // rules and why the old boundary (and, later, the bare "local wins
+        // once" single-value rule) was unsafe. `planReconcile` computes the
+        // entire decision in one pure call (unit-tested headlessly, same
+        // convention as `mergeProfileAtSignIn` itself): which fields this
+        // device's own edit wins outright, and exactly what — if anything —
+        // needs to reach the account for them. `patch` only ever contains
+        // fields this merge has an opinion on; setState below installs them
+        // exactly as given, including an explicit `feedIntent: undefined`
+        // when present (a real assignment, unlike the old
+        // `hydrateFromRemote`'s "install only if defined" pattern, which
+        // cannot express a clear).
+        const { patch, pushPayload, merged } = planReconcile(local, remote, lastSynced);
         if (Object.keys(patch).length > 0) {
           useProfileStore.setState((s) => ({ profile: { ...s.profile, ...patch } }));
         }
@@ -304,18 +399,27 @@ export function ProfileSync() {
         // against is safe — this is what closes §0/§1ah's "nothing the user
         // sets ever reaches the account" for good, not just for the very
         // first sign-in. When there is no account row at all yet (brand new
-        // — or the pull itself failed, §1's `remote === null`), only push
-        // when local actually has something worth carrying up.
-        const shouldPush = remote ? true : hasAnySignal(local);
-        if (shouldPush) {
-          const payload = remoteProfilePayload(useProfileStore.getState().profile);
-          if (await pushRemote(payload)) {
-            lastPushedRef.current = payload;
+        // — or the pull itself failed, §1's `remote === null`), only
+        // attempt when local actually has something worth carrying up.
+        const shouldAttemptSync = remote ? true : hasAnySignal(local);
+        if (shouldAttemptSync) {
+          if (Object.keys(pushPayload).length === 0) {
+            // PROFILE-SYNC (§1bk ruling 3) — "a pull that needed no push":
+            // every dirty field already agreed with the account and no list
+            // union added anything new, so there is nothing to send. Still
+            // a successful, confirmed sync — record it.
+            useProfileStore.getState().setLastSynced(singleValueSnapshot(merged));
+            lastPushedRef.current = remoteProfilePayload(merged);
+            clearProfilePushFailed();
+          } else if (await pushRemote(pushPayload)) {
+            useProfileStore.getState().setLastSynced(singleValueSnapshot(merged));
+            lastPushedRef.current = remoteProfilePayload(merged);
             clearProfilePushFailed();
           } else {
-            // P3 — leaving lastPushedRef unset means the next local edit's
-            // diffPayload(next, null) resends the full payload: the retry
-            // P3 requires, with no extra bookkeeping needed here.
+            // P3 — leaving lastSynced/lastPushedRef unset means the dirty
+            // fields stay dirty and the next local edit's diff still
+            // includes them: the retry P3 requires, with no extra
+            // bookkeeping needed here.
             markProfilePushFailed();
           }
         }
@@ -358,11 +462,19 @@ export function ProfileSync() {
       if (Object.keys(patch).length === 0) return;
       if (await pushRemote(patch)) {
         lastPushedRef.current = { ...lastPushedRef.current, ...patch };
+        // PROFILE-SYNC (§1bk ruling 3) — "after every successful push...
+        // lastSynced becomes the resulting snapshot." Uses the `profile`
+        // this effect closed over (the same snapshot `payload` was built
+        // from), restricted to the 14 single-value fields, so a reload
+        // correctly remembers this push even though the reconcile-cycle
+        // update in onSession only fires once, at sign-in.
+        useProfileStore.getState().setLastSynced(singleValueSnapshot(profile));
         clearProfilePushFailed();
       } else {
         // P3 — visible, not console-only; see useProfileSyncStatus above.
-        // lastPushedRef is deliberately left unadvanced, so the next edit's
-        // diff still includes this one and the retry happens naturally.
+        // lastPushedRef (and lastSynced) deliberately left unadvanced, so
+        // the next edit's diff still includes this one and the retry
+        // happens naturally.
         markProfilePushFailed();
       }
     }, DEBOUNCE_MS);

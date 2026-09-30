@@ -385,6 +385,87 @@ describe("work authorisation persistence", () => {
   });
 });
 
+// PROFILE-SYNC (ABC-JEV-INTEGRATION.md §1bk) — lastSynced, a per-device
+// snapshot of the single-value fields' last-confirmed values (store version
+// 4 → 5). Same rehydration pattern as "work authorisation persistence"
+// above: a real localStorage-backed round trip, not just the pure
+// migrateProfileStore function in isolation, since the property being
+// proven ("survives a reload") is specifically about the persist pipeline.
+describe("lastSynced (§1bk, store version 4 → 5)", () => {
+  it("a pre-v5 blob has no lastSynced after rehydration — the bootstrap rule applies on its first post-fix sync", async () => {
+    let stored = JSON.stringify({
+      state: { profile: { ...defaultProfile, displayName: "Alice Chen" } },
+      version: 4,
+    });
+    const storage: StateStorage = {
+      getItem: () => stored,
+      setItem: (_name, value) => {
+        stored = value;
+      },
+      removeItem: () => {
+        stored = "";
+      },
+    };
+    vi.stubGlobal("window", { localStorage: storage });
+    try {
+      vi.resetModules();
+      const mod = await import("./profile");
+      await mod.useProfileStore.persist.rehydrate();
+      expect(mod.useProfileStore.getState().lastSynced).toBeFalsy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("survives a reload once set (persistence round-trip)", async () => {
+    let stored = JSON.stringify({ state: { profile: defaultProfile }, version: 5 });
+    const storage: StateStorage = {
+      getItem: () => stored,
+      setItem: (_name, value) => {
+        stored = value;
+      },
+      removeItem: () => {
+        stored = "";
+      },
+    };
+    vi.stubGlobal("window", { localStorage: storage });
+    try {
+      vi.resetModules();
+      const firstModule = await import("./profile");
+      await firstModule.useProfileStore.persist.rehydrate();
+      firstModule.useProfileStore.getState().setLastSynced({ displayName: "Alice Chen" });
+      expect(
+        (
+          JSON.parse(stored) as {
+            state: { lastSynced?: Partial<UserProfile> };
+          }
+        ).state.lastSynced,
+      ).toEqual({ displayName: "Alice Chen" });
+
+      vi.resetModules();
+      const secondModule = await import("./profile");
+      await secondModule.useProfileStore.persist.rehydrate();
+      expect(secondModule.useProfileStore.getState().lastSynced).toEqual({
+        displayName: "Alice Chen",
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("setLastSynced replaces the previous snapshot rather than merging into it", () => {
+    useProfileStore.getState().setLastSynced({ displayName: "Alice", careerStage: "Postdoc" });
+    useProfileStore.getState().setLastSynced({ displayName: "Alice V2" });
+    expect(useProfileStore.getState().lastSynced).toEqual({ displayName: "Alice V2" });
+  });
+
+  it("logOut() also clears lastSynced, so a later sign-in starts from the bootstrap rule, not a stale snapshot", () => {
+    useProfileStore.getState().setLastSynced({ displayName: "Alice Chen" });
+    useProfileStore.getState().logOut();
+    expect(useProfileStore.getState().lastSynced).toBeNull();
+  });
+});
+
 describe("profile export and import", () => {
   it("preserves a canonical explicit clear or selected-sense card while rejecting forged cards", () => {
     const cleared = {
@@ -507,21 +588,24 @@ describe("the client entitlement's third state (6-04)", () => {
     expect(held?.poolRefreshAllowed).toBe(false);
   });
 
-  it("still writes only the profile to storage (the entitlement never persists)", () => {
-    // Unchanged contract, re-asserted at the point the type changed: a cached
-    // `paid` would survive a downgrade, and a cached `null` would be a lie the
-    // moment the reader signed in on another tab. A source assertion because
-    // `partialize` is a persist-middleware option with no runtime seam here;
-    // whitespace-tolerant because the tree is CRLF on disk (Ruling 10 point 2c).
+  it("still writes only the profile and lastSynced to storage (the entitlement never persists) [PROFILE-SYNC (§1bk): lastSynced added to the persisted shape]", () => {
+    // Unchanged contract for `entitlement`: a cached `paid` would survive a
+    // downgrade, and a cached `null` would be a lie the moment the reader
+    // signed in on another tab — still deliberately excluded. `lastSynced`
+    // is now ALSO deliberately persisted (PROFILE-SYNC, §1bk): an
+    // in-memory-only baseline is exactly the ping-pong bug it exists to fix.
+    // A source assertion because `partialize` is a persist-middleware option
+    // with no runtime seam here; whitespace-tolerant because the tree is
+    // CRLF on disk (Ruling 10 point 2c).
     const text = readFileSync(
       join(process.cwd(), "src/store/profile.ts"),
       "utf8",
     );
-    // The positive form is the whole guard: `profile` is the ONLY key in the
-    // persisted object, so adding `entitlement` to it cannot help but change
-    // this shape and redden this line.
+    // The positive form is the whole guard: `profile` and `lastSynced` are
+    // the ONLY keys in the persisted object, so adding `entitlement` to it
+    // cannot help but change this shape and redden this line.
     expect(text).toMatch(
-      /partialize:\s*\(state\)\s*=>\s*\(\{\s*profile:\s*state\.profile\s*\}\)/,
+      /partialize:\s*\(state\)\s*=>\s*\(\{\s*profile:\s*state\.profile,\s*lastSynced:\s*state\.lastSynced\s*\}\)/,
     );
   });
 });

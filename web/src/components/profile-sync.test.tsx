@@ -1,8 +1,15 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { defaultProfile } from "@/types";
-import { ProfileSync, remoteProfilePayload, useProfileSyncStatus } from "./profile-sync";
+import { defaultProfile, type UserProfile } from "@/types";
+import { dirtySingleValueFields } from "@/lib/profile/merge";
+import {
+  ProfileSync,
+  remoteProfilePayload,
+  reconcilePushPayload,
+  planReconcile,
+  useProfileSyncStatus,
+} from "./profile-sync";
 
 // SIGNIN-MERGE (ABC-JEV-INTEGRATION.md §1af/§1ah/§1aj) — this repo has no
 // @testing-library/react and no test anywhere mounts a live effect (see
@@ -20,6 +27,164 @@ import { ProfileSync, remoteProfilePayload, useProfileSyncStatus } from "./profi
 describe("ProfileSync — SSR safety", () => {
   it("renders to nothing without throwing", () => {
     expect(() => renderToStaticMarkup(createElement(ProfileSync))).not.toThrow();
+  });
+});
+
+// PROFILE-SYNC (§1bk.8 AMENDMENT) — the manager's check of round 1 found
+// reconcilePushPayload only filtered the 14 SINGLE_VALUE_FIELDS + LIST_FIELDS
+// and left every other scalar (the feed knobs) unconditionally in the
+// payload. This enumerates EVERY key remoteProfilePayload actually emits for
+// a fully populated profile — not just the UserProfile type on paper — so
+// the classification in the checkpoint is grounded in real output, not
+// memory. `fullyPopulatedProfile` gives every field (including the ones
+// `defaultProfile` leaves genuinely absent: school, currentProject,
+// currentChallenges, advisorName/advisorAuthorId/advisorAuthorLabel/
+// advisorSeedWorkIds/advisorSeedTexts/advisorSeedsRefreshedAt,
+// selectedSenseConcepts, activeSearchInputs) a real, non-default value, so
+// no key is missing from the enumeration merely for being unset here.
+const fullyPopulatedProfile: UserProfile = {
+  ...defaultProfile,
+  displayName: "Alice Chen",
+  researchTopics: ["battery materials"],
+  eventRequiredTopics: ["conference-topic"],
+  eventExploreTopics: ["conference-explore"],
+  jobRequiredTopics: ["job-topic"],
+  jobExploreTopics: ["job-explore"],
+  activeSearchInputs: {
+    papers: { required: ["battery materials"], explore: [] },
+    events: { required: ["conference-topic"], explore: ["conference-explore"] },
+    jobs: { required: ["job-topic"], explore: ["job-explore"] },
+    careerStage: "Postdoc",
+    locationPreferences: ["Chicago"],
+    promotedOn: "2026-09-29",
+  },
+  careerStage: "Postdoc",
+  industryVsAcademia: "academia",
+  locationPreferences: ["Chicago"],
+  authorisedCountries: ["Canada"],
+  preferredMethods: ["DFT"],
+  phdYear: 5,
+  school: "Example University",
+  currentProject: "Fast-charging anodes",
+  currentChallenges: "Dendrite suppression",
+  selectedSenseConcepts: [],
+  dislikedTopics: ["unrelated topic"],
+  preferenceLedger: {
+    "concept:a": {
+      key: "concept:a",
+      label: "A",
+      source: "openalex_topic",
+      positive: 1,
+      negative: 0,
+      lastSeenAt: "2026-09-01T00:00:00.000Z",
+    },
+  },
+  softTopics: ["catalysis"],
+  preferredJournals: ["Advanced Materials"],
+  feedFocus: "tight",
+  feedFreshness: "month",
+  paperCount: 5,
+  feedSourceMix: "preprints",
+  feedImportance: "highlyCited",
+  feedMethodMode: "mustMatch",
+  feedDiscoveryMode: "adjacent",
+  feedAvoidReviews: false,
+  feedAvoidOldPapers: true,
+  feedAvoidBroadSurveys: false,
+  advisorName: "Dr. Morgan Example",
+  advisorAuthorId: "A5012345678",
+  advisorAuthorLabel: "Dr. Morgan Example (Example University)",
+  advisorSeedWorkIds: ["W123"],
+  advisorSeedTexts: ["seed text"],
+  advisorSeedsRefreshedAt: "2026-09-01T00:00:00.000Z",
+  digestEnabled: true,
+  digestHourLocal: 19,
+  digestTimezone: "America/Chicago",
+  digestChannel: "email",
+  digestFrequency: "weekly",
+  digestEmail: "alice@example.edu",
+  tavilyEnabled: true,
+  tavilyApiKey: "tvly-secret",
+  adzunaAppId: "adzuna-id",
+  adzunaAppKey: "adzuna-secret",
+  usajobsApiKey: "usajobs-secret",
+  usajobsUserAgent: "me@example.test",
+  feedAiProvider: "openai",
+  feedAiApiKey: "sk-secret",
+  deepReportEnabled: true,
+  colorTheme: "dark:rose",
+  onboardedAt: "2026-08-01T00:00:00.000Z",
+};
+
+describe("remoteProfilePayload — full field enumeration (§1bk.8 AMENDMENT)", () => {
+  it("pins the exact key set emitted for a fully populated profile, so the classification table in the checkpoint is grounded in real output", () => {
+    const payload = remoteProfilePayload(fullyPopulatedProfile);
+    expect(Object.keys(payload).sort()).toEqual(
+      [
+        "activeSearchInputs",
+        "advisorAuthorId",
+        "advisorAuthorLabel",
+        "advisorName",
+        "advisorSeedTexts",
+        "advisorSeedWorkIds",
+        "advisorSeedsRefreshedAt",
+        "authorisedCountries",
+        "careerStage",
+        "colorTheme",
+        "currentChallenges",
+        "currentProject",
+        "deepReportEnabled",
+        "digestChannel",
+        "digestEmail",
+        "digestEnabled",
+        "digestFrequency",
+        "digestHourLocal",
+        "digestTimezone",
+        "dislikedTopics",
+        "displayName",
+        "eventExploreTopics",
+        "eventRequiredTopics",
+        "feedAvoidBroadSurveys",
+        "feedAvoidOldPapers",
+        "feedAvoidReviews",
+        "feedDiscoveryMode",
+        "feedFocus",
+        "feedFreshness",
+        "feedImportance",
+        "feedIntent",
+        "feedMethodMode",
+        "feedSourceMix",
+        "industryVsAcademia",
+        "jobExploreTopics",
+        "jobRequiredTopics",
+        "locationPreferences",
+        "onboardedAt",
+        "paperCount",
+        "phdYear",
+        "preferenceLedger",
+        "preferredJournals",
+        "preferredMethods",
+        "researchTopics",
+        "school",
+        "selectedSenseConcepts",
+        "softTopics",
+      ].sort(),
+    );
+    // Never present, regardless of how populated the profile is — the eight
+    // fields remoteProfilePayload destructures out before recomputing
+    // feedIntent (§1aj credential redaction, unaffected by this amendment).
+    for (const credentialKey of [
+      "tavilyEnabled",
+      "tavilyApiKey",
+      "adzunaAppId",
+      "adzunaAppKey",
+      "usajobsApiKey",
+      "usajobsUserAgent",
+      "feedAiProvider",
+      "feedAiApiKey",
+    ]) {
+      expect(payload).not.toHaveProperty(credentialKey);
+    }
   });
 });
 
@@ -66,5 +231,189 @@ describe("remoteProfilePayload — credential redaction (§1aj)", () => {
 describe("useProfileSyncStatus (P3 — a failed push must be visible, not console-only)", () => {
   it("starts with pushFailed false", () => {
     expect(useProfileSyncStatus.getState().pushFailed).toBe(false);
+  });
+});
+
+// PROFILE-SYNC (ABC-JEV-INTEGRATION.md §1bk) — same headless-testing
+// convention as merge.test.ts (this repo has no @testing-library/react and
+// no test mounts a live effect): the reconcile push's DECISION is pulled
+// out into pure, exported functions (reconcilePushPayload, planReconcile),
+// so it is proven directly rather than by mounting <ProfileSync/> and
+// intercepting fetch.
+
+describe("reconcilePushPayload — only dirty fields (plus a genuinely changed list) reach the account (§1bk ruling 2)", () => {
+  it("includes a dirty single-value field and excludes every non-dirty one, even though several differ from an absent remote value — the exact original bug, generalized", () => {
+    const merged: UserProfile = { ...defaultProfile, displayName: "Alice Chen" }; // only displayName is a real edit
+    const remote: Partial<UserProfile> = {}; // the account row has nothing for these columns yet
+    const payload = reconcilePushPayload(merged, remote, new Set(["displayName"]));
+    expect(payload.displayName).toBe("Alice Chen");
+    // MUTATION GUARD: without dirty-filtering, careerStage ("PhD Year 3"),
+    // industryVsAcademia ("both"), phdYear (3), colorTheme, digestHourLocal,
+    // digestChannel, digestFrequency would ALL differ from remote's missing
+    // values too, and leak into the payload.
+    for (const key of [
+      "careerStage",
+      "industryVsAcademia",
+      "phdYear",
+      "colorTheme",
+      "digestHourLocal",
+      "digestChannel",
+      "digestFrequency",
+    ]) {
+      expect(payload).not.toHaveProperty(key);
+    }
+  });
+
+  it("includes a list field only when the union actually added something new", () => {
+    const remote: Partial<UserProfile> = { researchTopics: ["battery materials"] };
+    const changed: UserProfile = { ...defaultProfile, researchTopics: ["battery materials", "new topic"] };
+    expect(reconcilePushPayload(changed, remote, new Set()).researchTopics).toEqual([
+      "battery materials",
+      "new topic",
+    ]);
+    const unchanged: UserProfile = { ...defaultProfile, researchTopics: ["battery materials"] };
+    expect(reconcilePushPayload(unchanged, remote, new Set())).not.toHaveProperty("researchTopics");
+  });
+
+  it("with remote === null (first-ever sync), still sends only the dirty fields and real list content — never the untouched defaults", () => {
+    const local: UserProfile = {
+      ...defaultProfile,
+      displayName: "Alice Chen",
+      researchTopics: ["battery materials"],
+    };
+    const dirty = dirtySingleValueFields(local, null);
+    const payload = reconcilePushPayload(local, null, dirty);
+    expect(payload.displayName).toBe("Alice Chen");
+    expect(payload.researchTopics).toEqual(["battery materials"]);
+    expect(payload).not.toHaveProperty("careerStage");
+    expect(payload).not.toHaveProperty("colorTheme");
+  });
+
+  // PROFILE-SYNC (§1bk.8 AMENDMENT) — the exact leak the manager's check
+  // found: a non-dirty feed knob must be excluded even though it differs
+  // from an absent remote value, the same shape as the original-14 proof
+  // above, now for the amendment's fields.
+  it("(§1bk.8 AMENDMENT) excludes every non-dirty feed knob, even though several differ from an absent remote value", () => {
+    const merged: UserProfile = { ...defaultProfile, paperCount: 5 }; // only paperCount is a real edit
+    const remote: Partial<UserProfile> = {}; // the account row has nothing for these columns yet
+    const payload = reconcilePushPayload(merged, remote, new Set(["paperCount"]));
+    expect(payload.paperCount).toBe(5);
+    // MUTATION GUARD: without the amendment's widened dirty set, feedFocus
+    // ("balanced"), feedFreshness ("week"), feedSourceMix ("balanced"),
+    // feedImportance ("new"), feedMethodMode ("relatedOk"),
+    // feedDiscoveryMode ("core"), feedAvoidReviews (true),
+    // feedAvoidOldPapers (false), feedAvoidBroadSurveys (true), and
+    // digestEnabled (true) would ALL differ from remote's missing values
+    // too, and leak into the payload exactly like the original bug.
+    for (const key of [
+      "feedFocus",
+      "feedFreshness",
+      "feedSourceMix",
+      "feedImportance",
+      "feedMethodMode",
+      "feedDiscoveryMode",
+      "feedAvoidReviews",
+      "feedAvoidOldPapers",
+      "feedAvoidBroadSurveys",
+      "digestEnabled",
+    ]) {
+      expect(payload).not.toHaveProperty(key);
+    }
+  });
+
+  it("(§1bk.8 AMENDMENT) includes preferenceLedger only when it genuinely differs from remote's own", () => {
+    const remoteLedger = {
+      "concept:a": {
+        key: "concept:a",
+        label: "A",
+        source: "openalex_topic" as const,
+        positive: 1,
+        negative: 0,
+        lastSeenAt: "2026-09-01T00:00:00.000Z",
+      },
+    };
+    const remote: Partial<UserProfile> = { preferenceLedger: remoteLedger };
+
+    const unchanged: UserProfile = { ...defaultProfile, preferenceLedger: { ...remoteLedger } };
+    expect(reconcilePushPayload(unchanged, remote, new Set())).not.toHaveProperty("preferenceLedger");
+
+    const changed: UserProfile = {
+      ...defaultProfile,
+      preferenceLedger: {
+        ...remoteLedger,
+        "concept:b": {
+          key: "concept:b",
+          label: "B",
+          source: "openalex_topic" as const,
+          positive: 1,
+          negative: 0,
+          lastSeenAt: "2026-09-02T00:00:00.000Z",
+        },
+      },
+    };
+    expect(reconcilePushPayload(changed, remote, new Set())).toHaveProperty("preferenceLedger");
+  });
+});
+
+describe("planReconcile — the sign-in reconcile decision, headlessly (§1bk)", () => {
+  it("(a) fresh device: patch adopts the account's real values; pushPayload is empty for them", () => {
+    const local: UserProfile = { ...defaultProfile };
+    const remote: Partial<UserProfile> = { displayName: "Alice Chen", careerStage: "Postdoc" };
+    const { patch, pushPayload } = planReconcile(local, remote, null);
+    expect(patch.displayName).toBe("Alice Chen");
+    expect(pushPayload).not.toHaveProperty("displayName");
+    expect(pushPayload).not.toHaveProperty("careerStage");
+  });
+
+  it("(b) stale device: patch adopts the account's newer value; pushPayload does not resend the stale one", () => {
+    const local: UserProfile = { ...defaultProfile, displayName: "Alice", digestChannel: "email" };
+    const lastSynced: Partial<UserProfile> = { displayName: "Alice", digestChannel: "email" };
+    const remote: Partial<UserProfile> = { displayName: "Alice V2", digestChannel: "both" };
+    const { patch, pushPayload } = planReconcile(local, remote, lastSynced);
+    expect(patch.displayName).toBe("Alice V2");
+    expect(patch.digestChannel).toBe("both");
+    expect(pushPayload).not.toHaveProperty("displayName");
+    expect(pushPayload).not.toHaveProperty("digestChannel");
+  });
+
+  it("(c) edits made while signed out (remote null, no lastSynced): the real edit reaches pushPayload", () => {
+    const local: UserProfile = { ...defaultProfile, displayName: "Alice Chen" };
+    expect(planReconcile(local, null, null).pushPayload.displayName).toBe("Alice Chen");
+  });
+
+  it("(d) two devices, different fields: this device's own edit is pushed, the other device's field is adopted but not re-pushed", () => {
+    const local: UserProfile = { ...defaultProfile, displayName: "Alice V2", digestChannel: "email" };
+    const lastSynced: Partial<UserProfile> = { displayName: "Alice", digestChannel: "email" };
+    const remote: Partial<UserProfile> = { displayName: "Alice", digestChannel: "both" };
+    const { patch, pushPayload } = planReconcile(local, remote, lastSynced);
+    expect(patch.displayName).toBe("Alice V2");
+    expect(patch.digestChannel).toBe("both");
+    expect(pushPayload.displayName).toBe("Alice V2");
+    expect(pushPayload).not.toHaveProperty("digestChannel");
+  });
+
+  it("merged is local with patch applied — the exact snapshot the caller persists as lastSynced on success", () => {
+    const local: UserProfile = { ...defaultProfile, displayName: "Alice" };
+    const remote: Partial<UserProfile> = { careerStage: "Postdoc" };
+    const { merged } = planReconcile(local, remote, null);
+    expect(merged.displayName).toBe("Alice"); // dirty, kept
+    expect(merged.careerStage).toBe("Postdoc"); // not dirty, adopted
+  });
+
+  // PROFILE-SYNC (§1bk.8 AMENDMENT) — "prove... that a stale device cannot
+  // shrink or roll back the account's copy" for feedIntent specifically.
+  // feedIntent is never merged as its own structure; mergeProfileAtSignIn
+  // clears it (patch.feedIntent = undefined) whenever an intent-input field
+  // is touched, forcing remoteProfilePayload to recompute it fresh from
+  // the JUST-reconciled flat fields via profileFeedIntentCard — so a stale
+  // device's OWN stale currentProject text can never leak into what gets
+  // pushed, once currentProject itself reconciles correctly (§1aj, round 1).
+  it("(§1bk.8 AMENDMENT) a stale device's recomputed feedIntent reflects the account's newer project text, not this device's own stale one", () => {
+    const local: UserProfile = { ...defaultProfile, currentProject: "Old project text" };
+    const lastSynced: Partial<UserProfile> = { currentProject: "Old project text" }; // this device's own last-confirmed value
+    const remote: Partial<UserProfile> = { currentProject: "New project text" }; // another device's newer edit, already on the account
+    const { pushPayload } = planReconcile(local, remote, lastSynced);
+    expect(pushPayload.currentProject).toBeUndefined(); // not dirty, correctly not pushed
+    expect(pushPayload.feedIntent?.project).toMatchObject({ presence: "value", value: "New project text" });
   });
 });
