@@ -8,6 +8,7 @@ import {
   LearnedPreferences,
   EmailSettingsView,
   digestToggleUpdate,
+  confirmFlagMessage,
   confirmAddressMessage,
   testSendMessage,
   resolveActiveEmailDestination,
@@ -437,6 +438,50 @@ describe("emailDestinationSentence — ONE sentence reused next to Send test ema
     const sentence = emailDestinationSentence("account@example.test", "typed-not-confirmed@example.test");
     expect(sentence.startsWith("Email goes to account@example.test")).toBe(true);
     expect(sentence).not.toContain("Email goes to typed-not-confirmed@example.test");
+  });
+});
+
+// ABC-JEV-INTEGRATION.md §1bn EMAIL-TOKEN-REPLAY — the GET redirect flag ->
+// sentence mapping, extracted to a pure function for the same reason as
+// confirmAddressMessage/testSendMessage just below (the wrapper component
+// that reads this flag needs a real Next.js router/search-params tree, so
+// this repo tests the mapping itself instead — see this file's top note).
+describe("confirmFlagMessage — GET /api/profile/confirm-email's redirect flag (§1bn)", () => {
+  it("signin_required", () => {
+    expect(confirmFlagMessage("signin_required")).toBe("Sign in, then open the link again.");
+  });
+
+  it("wrong_account", () => {
+    expect(confirmFlagMessage("wrong_account")).toBe("That confirmation link isn't for this account.");
+  });
+
+  it("unavailable", () => {
+    expect(confirmFlagMessage("unavailable")).toBe(
+      "Confirming a different email isn't available right now.",
+    );
+  });
+
+  it("invalid_link", () => {
+    expect(confirmFlagMessage("invalid_link")).toBe("That confirmation link didn't work. Request a new one.");
+  });
+
+  // EMAIL-TOKEN-REPLAY (§1bn) — the new outcome this item adds: an old link
+  // that was otherwise valid but the address it names is no longer the
+  // question, because something else already changed it. The sentence must
+  // say that plainly and point at the fix (request a new link) — the same
+  // two-part shape as invalid_link's own sentence.
+  it("stale_link — the new EMAIL-TOKEN-REPLAY outcome", () => {
+    expect(confirmFlagMessage("stale_link")).toBe(
+      "Your email settings changed since that link was sent. Request a new confirmation link.",
+    );
+  });
+
+  it("an unrecognized flag falls back to the same generic sentence as invalid_link", () => {
+    expect(confirmFlagMessage("something_new")).toBe(confirmFlagMessage("invalid_link"));
+  });
+
+  it("a null flag (no query param at all) also falls back to invalid_link's sentence", () => {
+    expect(confirmFlagMessage(null)).toBe(confirmFlagMessage("invalid_link"));
   });
 });
 

@@ -76,6 +76,15 @@ export function isValidEmailFormat(email: string): boolean {
 interface ConfirmTokenPayload {
   uid: string;
   email: string;
+  // EMAIL-TOKEN-REPLAY (ABC-JEV-INTEGRATION.md §1bn): the digest address the
+  // profile held at the moment THIS token was minted — "" when none was set
+  // yet. Compared against the live digest_email at verify time (the GET
+  // handler in confirm-email/route.ts) so an old, superseded token can no
+  // longer silently re-apply once something else has changed the address.
+  // A pre-fix token that decrypts without this field fails the shape check
+  // below and is rejected as malformed — no dual-format fallback, same
+  // discipline as §1as point 2.
+  priorEmail: string;
   exp: number; // unix seconds
 }
 
@@ -115,26 +124,30 @@ function deriveKey(secret: string): Buffer {
 /**
  * Mint a confirmation token for `uid` + `email` (normalized before signing —
  * the verified email a caller gets back is always the normalized form).
- * `now` is the caller's clock (2-01 convention); `ttlMs` defaults to the
- * standard 24h.
+ * `priorEmail` is the digest address the profile held right now, at mint
+ * time (EMAIL-TOKEN-REPLAY, §1bn) — pass "" when none is set yet; callers
+ * normalize it the same way `email` is normalized here. `now` is the
+ * caller's clock (2-01 convention); `ttlMs` defaults to the standard 24h.
  *
  * AES-256-GCM authenticated encryption, keyed from DIGEST_EMAIL_CONFIRM_SECRET
  * via HKDF-SHA256 (fixed context label above). A fresh random 96-bit IV is
  * drawn per call — never reused with the same key — so two tokens minted for
- * the identical (uid, email, exp) still differ byte-for-byte. GCM's own
- * 128-bit authentication tag is the sole integrity/tamper check (see
- * `verifyConfirmToken` below) — no second HMAC composed on top.
+ * the identical (uid, email, priorEmail, exp) still differ byte-for-byte.
+ * GCM's own 128-bit authentication tag is the sole integrity/tamper check
+ * (see `verifyConfirmToken` below) — no second HMAC composed on top.
  */
 export function signConfirmToken(
   secret: string,
   uid: string,
   email: string,
+  priorEmail: string,
   now: Date,
   ttlMs: number = CONFIRM_TOKEN_TTL_MS,
 ): string {
   const payload: ConfirmTokenPayload = {
     uid,
     email: normalizeEmailAddress(email),
+    priorEmail: normalizeEmailAddress(priorEmail),
     exp: Math.floor((now.getTime() + ttlMs) / 1000),
   };
   const key = deriveKey(secret);
@@ -150,7 +163,7 @@ export function signConfirmToken(
 }
 
 export type VerifyConfirmTokenResult =
-  | { ok: true; uid: string; email: string }
+  | { ok: true; uid: string; email: string; priorEmail: string }
   | { ok: false; reason: "malformed" | "tampered" | "expired" };
 
 /**
@@ -219,14 +232,22 @@ export function verifyConfirmToken(
     typeof parsed !== "object" ||
     typeof (parsed as Record<string, unknown>).uid !== "string" ||
     typeof (parsed as Record<string, unknown>).email !== "string" ||
+    // EMAIL-TOKEN-REPLAY (§1bn): same strict-shape discipline as uid/email/
+    // exp above. A token minted before this field existed decrypts fine
+    // (same AES-256-GCM/HKDF, same "v2." prefix — this is not a version
+    // bump) but its plaintext has no priorEmail, so it fails here and lands
+    // on the ordinary "malformed" outcome — never a crash, never silently
+    // treated as "nothing has changed". No dual-format fallback, same as
+    // §1as point 2.
+    typeof (parsed as Record<string, unknown>).priorEmail !== "string" ||
     typeof (parsed as Record<string, unknown>).exp !== "number"
   ) {
     return { ok: false, reason: "malformed" };
   }
 
-  const { uid, email, exp } = parsed as ConfirmTokenPayload;
+  const { uid, email, priorEmail, exp } = parsed as ConfirmTokenPayload;
   if (exp < Math.floor(now.getTime() / 1000)) {
     return { ok: false, reason: "expired" };
   }
-  return { ok: true, uid, email };
+  return { ok: true, uid, email, priorEmail };
 }
