@@ -423,11 +423,28 @@ const CACHE_KEY_VERSION = 6;
 // any reader whose Project/Challenge/seed text has a year/unit/decimal
 // immediately followed by a sentence-ending period, or as its own
 // comma/dash/etc.-delimited single-word clause. Neither v21 pool build
-// reflects either fix, so it must never be served as if it does. These
+// reflects either fix, so it must never be served as if it does. v23 —
+// ABC-JEV-INTEGRATION.md §1bv/T2-EXTRACTOR (docs/jev-abc/
+// T2-EXTRACTOR-B-20260930T151003Z.md): `selfDeclaredAbbreviationPairs`
+// (keyword.ts) now also reads a comma-form self-declared pair packed
+// together on the SAME side of one parenthetical — "(light cycle oil,
+// LCO)" and "(LCO, light cycle oil)", both orderings, searched inside each
+// already-matched "(...)" span rather than anchored to its boundary. This
+// only ever feeds rule (c) (`selfDeclaresDifferentSense`): a paper that
+// declares a DIFFERENT sense in exactly that comma style is now a hard
+// non-match for that Required tag, at every admitting tier (T1-T3 in
+// keyword.ts, T4 in combine.ts), where before it was invisible to rule (c)
+// and — for a reader who has declared no other project/work text — admitted
+// at full strength with no protection at all. Admission-layer membership
+// for a GENUINE comma-form paper is unaffected (measured at zero benefit,
+// 700 real items, guide §Q2: canonicalize() already turns the comma into
+// whitespace before T1 ever runs, so a genuine paper was always admitted via
+// the bare token regardless of T2). A v22 (or older) pool build never ran
+// the comma-form check, so it must never be served as if it does. These
 // bumps share their numbers with `CACHE_KEY_VERSION` above by coincidence,
 // not by a shared cause — see `derivePoolCacheKey` below for how each is
 // selected.
-const PAPER_CACHE_KEY_VERSION = 22;
+const PAPER_CACHE_KEY_VERSION = 23;
 /**
  * SINGLE SOURCE OF TRUTH for the literal key prefix a durable papers-pool
  * store may accept, derived from `PAPER_CACHE_KEY_VERSION` rather than

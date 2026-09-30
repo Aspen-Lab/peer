@@ -83,8 +83,9 @@ describe("daily opportunity pool cache key", () => {
     // otherwise collide in the shared `opportunity_pools` table. Asserted as
     // "not v5" rather than "is v6" so this test does not go stale on its own
     // the next time either version constant moves independently — papers is
-    // now v21 (QUERY-GENERIC-WORDS, ABC-JEV-INTEGRATION.md §1bs; previously
-    // v20 via NON-ASCII-TEXT §1bo — before that v19 via DATASET-RECORDS
+    // now v23 (T2-EXTRACTOR, ABC-JEV-INTEGRATION.md §1bv; previously v22 via
+    // NMC-HYPONYM §1bu — before that v21 via QUERY-GENERIC-WORDS §1bs —
+    // before that v20 via NON-ASCII-TEXT §1bo — before that v19 via DATASET-RECORDS
     // §1bl — CORRECTION, NON-ASCII-TEXT (§1bo): this comment had not been
     // updated when that bump shipped and still named v18 here — before
     // that v18 via SENSE-CONTEXT-EVIDENCE §1bg, before
@@ -101,18 +102,18 @@ describe("daily opportunity pool cache key", () => {
     }
   });
 
-  // NMC-HYPONYM (ABC-JEV-INTEGRATION.md §1bu) — REWRITTEN, NOT DELETED (was
-  // QUERY-GENERIC-WORDS §1bs's v21 pin): pins the EXACT current papers
-  // version, unlike the "not v5" check above (which only rules out the
+  // T2-EXTRACTOR (ABC-JEV-INTEGRATION.md §1bv) — REWRITTEN, NOT DELETED (was
+  // NMC-HYPONYM §1bu's v22 pin): pins the EXACT current papers version,
+  // unlike the "not v5" check above (which only rules out the
   // pre-ABC-freemium shape and would stay green through any later bump). A
   // pool built before this fix must not be read back as if it already
-  // reflects the "ncm" synonym, the one-way family->member glued admission,
-  // the digit-preserving member<->member synonym, or (§1bu.8) the trailing-
-  // sentence-period strip / single-token chunk filter — this test is what
-  // actually breaks if a future edit forgets to bump PAPER_CACHE_KEY_VERSION.
-  it("is on papers cache version 22 (NMC-HYPONYM, §1bu)", () => {
-    expect(PAPER_POOL_KEY_PREFIX).toBe("peer-pool-v22-papers-");
-    expect(derivePoolCacheKey({ ...base, surface: "papers" })).toMatch(/^peer-pool-v22-papers-/);
+  // reflects the comma-form self-declared-pair reading in rule (c) — see
+  // this constant's own doc comment in pool-cache.ts for the full v23
+  // description — this test is what actually breaks if a future edit
+  // forgets to bump PAPER_CACHE_KEY_VERSION.
+  it("is on papers cache version 23 (T2-EXTRACTOR, §1bv)", () => {
+    expect(PAPER_POOL_KEY_PREFIX).toBe("peer-pool-v23-papers-");
+    expect(derivePoolCacheKey({ ...base, surface: "papers" })).toMatch(/^peer-pool-v23-papers-/);
   });
 
   it("ignores aiTier on surfaces that never send it", () => {

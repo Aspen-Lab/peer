@@ -124,6 +124,40 @@ function selfDeclaredAbbreviationPairs(
   let match: RegExpExecArray | null;
   while ((match = longFirst.exec(rawText))) pairs.push({ longForm: match[1], abbr: match[2] });
   while ((match = abbrFirst.exec(rawText))) pairs.push({ longForm: match[2], abbr: match[1] });
+  // T2-EXTRACTOR (ABC-JEV-INTEGRATION.md §1bv) -- a pair packed together on
+  // the SAME side of one parenthetical ("(light cycle oil, LCO)", "(LCO,
+  // light cycle oil)", "(i.e. light cycle oil, LCO)") satisfies neither
+  // pattern above: both anchor the long-form/abbreviation split AT the
+  // parenthesis boundary itself (one side immediately outside "(" / ")",
+  // the other immediately inside) -- a pair sitting together on ONE side
+  // never matches either shape. Searched separately, INSIDE each
+  // already-matched "(...)" span (not anchored to the boundary the way the
+  // two patterns above are), reusing the EXISTING long-form phrase class
+  // (2-6 whitespace-joined words) and the EXISTING abbreviation class
+  // verbatim -- a closed set: punctuation inside one parenthetical has
+  // exactly two orderings around one separator (long-first / abbr-first),
+  // and the separator itself (comma) is the one new fact. This also
+  // catches, for free, an "i.e."-style prefix inside the parens (nothing
+  // anchors the pattern to skip it -- the guide's docs/jev-abc/
+  // T2-EXTRACTOR-B-20260930T151003Z.md §Q4 prototype, validated against
+  // every real Q2 hit and every protective string, is reused verbatim
+  // below), and a semicolon-joined multi-pair span (the real
+  // "(local field potentials, LFP; electrocorticographical signals,
+  // ECoG)" fragment) yields BOTH pairs, since each comma-pair is found
+  // independently within the same span -- the semicolon needs no special
+  // handling, it simply isn't part of either match. The bare no-parens
+  // semicolon form and "@"-joint-coinages ("NCO@LCO") are deliberately
+  // NOT read here (§1bv.3 -- 0 real instances / a different, unsolved
+  // compound-identity problem respectively; see the guide's Q2/Q3).
+  const parenSpan = /\(([^()]{1,160})\)/g;
+  let spanMatch: RegExpExecArray | null;
+  while ((spanMatch = parenSpan.exec(rawText))) {
+    const inner = spanMatch[1];
+    const commaLongFirst = /((?:[A-Za-z][\w-]*\s+){1,5}[A-Za-z][\w-]*),\s*([A-Z][A-Za-z0-9]{1,7})/g;
+    const commaAbbrFirst = /\b([A-Z][A-Za-z0-9]{1,7}),\s*((?:[A-Za-z][\w-]*\s+){1,5}[A-Za-z][\w-]*)/g;
+    while ((match = commaLongFirst.exec(inner))) pairs.push({ longForm: match[1], abbr: match[2] });
+    while ((match = commaAbbrFirst.exec(inner))) pairs.push({ longForm: match[2], abbr: match[1] });
+  }
   return pairs;
 }
 
@@ -640,9 +674,14 @@ export interface SelfDeclaredDifferentSenseResult {
 
 /**
  * Rule (c) itself. Reuses the already-private `selfDeclaredAbbreviationPairs` above
- * (the same T2 extractor, unchanged this round — the comma-parenthetical form,
- * `"(light cycle oil, LCO)"`, is deliberately NOT added to it; that is its own,
- * separately-measured follow-up, T2-COMMA-PAREN).
+ * (the same T2 extractor). T2-EXTRACTOR (ABC-JEV-INTEGRATION.md §1bv, superseding the
+ * note this comment used to carry): the comma-parenthetical form,
+ * `"(light cycle oil, LCO)"` / `"(LCO, light cycle oil)"`, is now read by that
+ * extractor too (both comma orderings, inside one parenthetical span) — this is what
+ * closes the real gap named in docs/jev-abc/T2-EXTRACTOR-B-20260930T151003Z.md: a
+ * paper that declares a DIFFERENT sense in exactly that comma style was previously
+ * invisible to this rule and, for a reader with no other declared context, admitted
+ * at full strength.
  */
 export function selfDeclaresDifferentSense(item: RawItem, tag: string): SelfDeclaredDifferentSenseResult {
   const canonicalTag = canonicalize(tag);
