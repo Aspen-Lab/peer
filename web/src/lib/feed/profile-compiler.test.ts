@@ -405,3 +405,305 @@ describe("compileSearchBrief QUERY-BUDGET: tiering keeps a tag's cap-window free
     expect(brief.generatedQueries).toEqual(["role conflict", "conflict of interest"]);
   });
 });
+
+// NON-ASCII-TEXT (ABC-JEV-INTEGRATION.md §1bo,
+// docs/jev-abc/NON-ASCII-TEXT-B-20260930T071406Z.md): the free-text keyword
+// regex used to be ASCII-only, so it deleted every CJK character and, worse,
+// CORRUPTED an adjacent accented Latin letter into a wrong fragment
+// ("Müller"->"ller", proven by execution in the guide's Task 2 T4).
+// Separately, both the phrase-chunk splitter and literalQueryIfShort counted
+// "words" by ASCII whitespace, so an entire unspaced/fullwidth-punctuated
+// Chinese paragraph counted as "1 word" and leaked through as one giant,
+// low-value query (guide's Task 2 T2/T5). The fix: Unicode letters/digits
+// are kept whole in the keyword branch; a CJK-only segment is excluded
+// outright everywhere a query can be derived from free text; a Latin-script
+// term or chemical formula embedded in Chinese prose is still extracted
+// (guide's Task 2 T3) — this file's other describe blocks above stay
+// byte-identical proof that fixing this did not touch the tag-first tiering
+// those items shipped.
+describe("compileSearchBrief NON-ASCII-TEXT: accented Latin kept whole, CJK-only text yields no query", () => {
+  it("keeps accented Latin words whole in the keyword branch instead of corrupting them into wrong fragments", () => {
+    const brief = compileSearchBrief({
+      topics: [],
+      project:
+        "Müller reports improved électrolyte performance across broad battery cathode structural testing samples now.",
+    });
+
+    // The OLD ASCII-only regex turned the accented letter into a space,
+    // corrupting each word into an unrecognizable fragment.
+    expect(brief.generatedQueries).not.toContain("ller");
+    expect(brief.generatedQueries).not.toContain("lectrolyte");
+    expect(brief.generatedQueries).toContain("müller");
+    expect(brief.generatedQueries).toContain("électrolyte");
+  });
+
+  it("does not let an accent-corrupted split word waste an extra keyword slot and evict a genuine later word", () => {
+    const brief = compileSearchBrief({
+      topics: [],
+      project:
+        "Schrödinger equation models predict lithium battery cathode diffusion kinetics precisely across many samples.",
+    });
+
+    // The accent sits in the MIDDLE of "Schrödinger". The old ASCII-only
+    // regex turned it into a word-breaking space, so ONE word produced TWO
+    // surviving 4+ character fragments ("schr", "dinger") — consuming an
+    // extra slot in the first-5-matches keyword cutoff and pushing the next
+    // genuine word ("lithium") out before it ever got a chance.
+    expect(brief.generatedQueries).not.toContain("schr");
+    expect(brief.generatedQueries).not.toContain("dinger");
+    expect(brief.generatedQueries).toContain("schrödinger");
+    expect(brief.generatedQueries).toContain("lithium");
+  });
+
+  it("reproduces the guide's T4 fixture verbatim: every accented word survives correctly spelled, never as the old corrupted fragment", () => {
+    const brief = compileSearchBrief({
+      topics: [],
+      project:
+        "Étude du transport ionique dans les électrolytes solides à base de pérovskite de type Müller pour batteries au lithium.",
+    });
+
+    // docs/jev-abc/NON-ASCII-TEXT-B-20260930T071406Z.md Task 2 T4's OLD,
+    // measured output was exactly ["tude", "transport", "ionique", "dans",
+    // "lectrolytes"] — every accented word turned into an unrecognizable
+    // fragment. None of those corrupted spellings may appear now. (The
+    // first-5-matches positional cutoff itself is unchanged by this item —
+    // "batteries"/"lithium" still fall past it here, same as before, since
+    // fixing the corruption does not change how many WHOLE words come
+    // before them in this particular sentence; see the dedicated
+    // "Schrödinger" case above for a sentence where the fix does free up a
+    // slot.)
+    for (const corrupted of ["tude", "lectrolytes", "rovskite", "ller"]) {
+      expect(brief.generatedQueries).not.toContain(corrupted);
+    }
+    expect(brief.generatedQueries).toContain("étude");
+    expect(brief.generatedQueries).toContain("électrolytes");
+  });
+
+  it("derives no query at all from a long pure-Chinese project paragraph (guide's T2 fixture)", () => {
+    const brief = compileSearchBrief({
+      topics: [],
+      project:
+        "我们正在研究高比能锂离子电池正极材料，重点关注固态电解质界面的稳定性和枝晶抑制机制。",
+    });
+
+    // OLD behaviour leaked the entire untouched paragraph as one literal
+    // query (docs/jev-abc/NON-ASCII-TEXT-B-20260930T071406Z.md Task 2 T2).
+    expect(brief.generatedQueries).toEqual([]);
+  });
+
+  it("derives no query from a SHORT pure-Chinese project text either — not just a long paragraph", () => {
+    // Short enough (4 characters) that a naive character-count guard alone
+    // could still mistake it for "short enough to send verbatim"; point 2's
+    // "yields no derived or literal query from its Chinese text" is
+    // unconditional, not just for long paragraphs.
+    const brief = compileSearchBrief({ topics: [], project: "电池研究" });
+
+    expect(brief.generatedQueries).toEqual([]);
+  });
+
+  it("derives no query from the guide's T5 fixture (short Chinese with fullwidth punctuation)", () => {
+    const brief = compileSearchBrief({
+      topics: [],
+      project: "电池研究：提高电池寿命和安全性。",
+    });
+
+    expect(brief.generatedQueries).toEqual([]);
+  });
+
+  it("still puts a Required tag first even when the project text itself is pure Chinese and yields nothing on its own", () => {
+    const brief = compileSearchBrief({
+      topics: ["battery"],
+      project: "电池研究：提高电池寿命和安全性。",
+    });
+
+    expect(brief.generatedQueries).toEqual(["battery"]);
+  });
+
+  it("keeps Latin-script terms and chemical formulas embedded in Chinese prose (guide's T3 fixture, protective)", () => {
+    const brief = compileSearchBrief({
+      topics: [],
+      project:
+        "我们的项目专注于 LiCoO2 正极材料和 solid-state electrolyte 的界面工程，并测试 NMC811 材料的循环稳定性。",
+    });
+
+    // NON-ASCII-TEXT (§1bo.8): round 2's CJK-run chunk delimiter now also
+    // isolates "LiCoO2" as its OWN chunk (original case, from
+    // phrasesFromText's longPhrases branch), which wins cleanList's
+    // case-insensitive dedup over the lowercase "licoo2" the keyword branch
+    // separately produces — a real, verified-by-execution behaviour change
+    // (round 1 only ever produced the lowercase keyword-branch form here).
+    // Asserting the ORIGINAL-CASE formula is equally correct and, if
+    // anything, closer to what a source's own index expects for a chemical
+    // formula. See the round 2 describe block below for the full mixed-text
+    // coverage this fixture is now also part of.
+    expect(brief.generatedQueries).toContain("LiCoO2");
+    expect(brief.generatedQueries).toContain("solid-state");
+    expect(brief.generatedQueries).toContain("electrolyte");
+    // NON-ASCII-TEXT (§1bo.8): same original-case reasoning as LiCoO2 above.
+    expect(brief.generatedQueries).toContain("NMC811");
+  });
+
+  it("a pure-Chinese CHALLENGE text also yields no query (not just project)", () => {
+    const brief = compileSearchBrief({
+      topics: [],
+      challenge:
+        "我们正在研究高比能锂离子电池正极材料，重点关注固态电解质界面的稳定性和枝晶抑制机制。",
+    });
+
+    expect(brief.generatedQueries).toEqual([]);
+  });
+
+  // Mutation guard (revert either fix and this goes red): the whole raw
+  // paragraph, byte for byte, must never appear as a query string, whether
+  // via literalQueryIfShort or via the phrase-chunk branch.
+  it("mutation guard: the whole raw Chinese paragraph never appears verbatim as a query", () => {
+    const chineseProject =
+      "我们正在研究高比能锂离子电池正极材料，重点关注固态电解质界面的稳定性和枝晶抑制机制。";
+    const brief = compileSearchBrief({ topics: ["battery"], project: chineseProject });
+
+    expect(brief.generatedQueries).not.toContain(chineseProject);
+  });
+});
+
+// NON-ASCII-TEXT ROUND 2 (ABC-JEV-INTEGRATION.md §1bo.8, AMENDMENT): the
+// manager's own check found round 1's fix covered PURE Chinese only —
+// MIXED Chinese-plus-Latin text (the ordinary case for a Chinese materials
+// researcher) still leaked the whole raw paragraph as a query, because
+// phrasesFromText's longPhrases branch has the exact same no-spaces blind
+// spot round 1 fixed in literalQueryIfShort, and round 1's CJK-only filter
+// deliberately did not touch a MIXED chunk. Separately, round 1 checked
+// Han script only, so Japanese Hiragana/Katakana and Korean Hangul passed
+// straight through untouched. The INVARIANT this round ships: no query
+// built from free text contains a CJK character (Han, Hiragana, Katakana,
+// Hangul) at all; a CJK run (or CJK/fullwidth punctuation) now acts as a
+// chunk delimiter, so an embedded Latin phrase survives as one phrase and a
+// formula survives even with zero surrounding whitespace, while every CJK
+// part of the same text contributes nothing. Fixture texts below are the
+// manager's own constructed probes (docs/jev-abc/NON-ASCII-TEXT-C-
+// 20260930T075350Z.md ROUND 2 section), reused verbatim for traceability.
+describe("compileSearchBrief NON-ASCII-TEXT round 2 (§1bo.8): mixed CJK+Latin text and all four CJK scripts", () => {
+  const NONLATIN_LETTER = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u;
+
+  const M1_GUIDE_T3 =
+    "我们的项目专注于 LiCoO2 正极材料和 solid-state electrolyte 的界面工程，并测试 NMC811 材料的循环稳定性。";
+  const M2_DIGITS_NO_SPACES =
+    "我们在2024年开始研究固态电池，目标是把能量密度提高到500Wh/kg，并降低界面阻抗。";
+  const M3_FORMULA_NO_SPACES =
+    "本项目研究LiCoO2正极在高电压下的结构衰减机制，以及表面包覆对循环寿命的影响。";
+  const M4_ASCII_PUNCT_MIXED =
+    "研究方向: NMC811 cathode degradation; 固态电解质界面 (SEI) 的形成机制.";
+  const M5_JAPANESE_KANA =
+    "リチウムイオン電池の正極材料における劣化メカニズムを研究しています。";
+  const M6_KOREAN_HANGUL = "리튬 이온 배터리 양극 소재의 열화 메커니즘을 연구합니다";
+
+  it.each([
+    ["M1 guide T3 (Han + Latin phrase + formulas)", M1_GUIDE_T3],
+    ["M2 digits, no spaces around the CJK run", M2_DIGITS_NO_SPACES],
+    ["M3 a formula glued directly onto surrounding Chinese, zero spaces", M3_FORMULA_NO_SPACES],
+    ["M4 ASCII-colon/semicolon-punctuated mixed text", M4_ASCII_PUNCT_MIXED],
+    ["M5 Japanese (Han + Hiragana + an embedded formula)", M5_JAPANESE_KANA],
+    ["M6 Korean (pure Hangul)", M6_KOREAN_HANGUL],
+  ])("no generated query contains a CJK character: %s", (_label, text) => {
+    const brief = compileSearchBrief({ topics: [], project: text });
+    const offenders = brief.generatedQueries.filter((q) => NONLATIN_LETTER.test(q));
+
+    expect(offenders).toEqual([]);
+  });
+
+  it("keeps the guide's T3 embedded Latin phrase 'solid-state electrolyte' as ONE phrase, plus its bare formulas", () => {
+    const brief = compileSearchBrief({ topics: [], project: M1_GUIDE_T3 });
+
+    expect(brief.generatedQueries).toContain("solid-state electrolyte");
+    expect(brief.generatedQueries).toContain("LiCoO2");
+    expect(brief.generatedQueries).toContain("NMC811");
+  });
+
+  it("isolates a formula glued directly onto surrounding Chinese with NO whitespace at all", () => {
+    const brief = compileSearchBrief({ topics: [], project: M3_FORMULA_NO_SPACES });
+
+    expect(brief.generatedQueries).toContain("LiCoO2");
+  });
+
+  it("keeps the ASCII-punctuated fixture's 'NMC811 cathode degradation' as ONE phrase (already worked pre-round-2 for THIS chunk, protective) and isolates '(SEI)' out of the CJK-adjacent chunk", () => {
+    const brief = compileSearchBrief({ topics: [], project: M4_ASCII_PUNCT_MIXED });
+
+    expect(brief.generatedQueries).toContain("NMC811 cathode degradation");
+    // "(SEI)" sits inside "固态电解质界面 (SEI) 的形成机制" — a chunk that is
+    // bounded by ASCII ';' and '.', but is CJK-on-both-sides internally.
+    // Round 1 left the whole mixed chunk intact (not CJK-only); round 2's
+    // delimiter isolates the Latin fragment out of it instead.
+    const hasSei = brief.generatedQueries.some((q) => q.toUpperCase().includes("SEI"));
+    expect(hasSei).toBe(true);
+  });
+
+  it("derives no query from a Japanese paragraph mixing Han, Hiragana and an embedded formula", () => {
+    const brief = compileSearchBrief({ topics: [], project: M5_JAPANESE_KANA });
+    const offenders = brief.generatedQueries.filter((q) => NONLATIN_LETTER.test(q));
+
+    expect(offenders).toEqual([]);
+  });
+
+  it("derives no query at all from a pure-Korean (Hangul) paragraph", () => {
+    const brief = compileSearchBrief({ topics: [], project: M6_KOREAN_HANGUL });
+
+    expect(brief.generatedQueries).toEqual([]);
+  });
+
+  it("still puts a Required tag first even when the project text is Japanese and yields nothing on its own", () => {
+    const brief = compileSearchBrief({ topics: ["battery"], project: M6_KOREAN_HANGUL });
+
+    expect(brief.generatedQueries).toEqual(["battery"]);
+  });
+
+  // Protective (§1bo.8(b)): pure-ASCII text must be completely unaffected by
+  // the new CJK-delimiter step — it requires at least one CJK-range
+  // codepoint to match anything, so a hyphenated, comma-punctuated English
+  // fixture keeps behaving exactly as phrasesFromText already did.
+  it("protective: a fresh pure-ASCII fixture with hyphens and commas is untouched by the CJK delimiter", () => {
+    const brief = compileSearchBrief({
+      topics: [],
+      project: "high-throughput screening of anode binders, focused on silicon-graphite composites and cycle life",
+    });
+
+    expect(brief.generatedQueries).toContain("high-throughput screening of anode binders");
+    expect(brief.generatedQueries).toContain("focused on silicon-graphite composites and cycle life");
+  });
+
+  // Round 1's own pinned fixtures stay byte-identical (protective, not a
+  // new assertion — re-run here so a regression in the shared CJK
+  // constants shows up in THIS describe block too, not only round 1's).
+  it("protective: round 1's ABBREV-RECALL/QUERY-QUALITY pinned outputs are unaffected", () => {
+    const brief = compileSearchBrief({
+      topics: [],
+      project: BATTERY_PROJECT_TEXT,
+      controls: { focus: "tight" },
+    });
+
+    expect(brief.generatedQueries).toEqual([
+      "PhD research on solid-state battery materials",
+      "research",
+      "solid-state",
+      "battery",
+      "materials",
+    ]);
+  });
+
+  // Mutation guard 1 (§1bo.8(g)): remove the CJK-delimiter step and this
+  // goes red — without it, the mixed chunk survives as one blob again.
+  it("mutation guard: the whole raw mixed paragraph (M1) never appears verbatim as a query", () => {
+    const brief = compileSearchBrief({ topics: ["LCO"], project: M1_GUIDE_T3 });
+
+    expect(brief.generatedQueries).not.toContain(M1_GUIDE_T3);
+  });
+
+  // Mutation guard 2 (§1bo.8(g)): narrow CJK_SCRIPT_CLASS to Han-only and
+  // this goes red — a pure-Hiragana/Katakana run would then pass straight
+  // through the keyword branch as a bogus token.
+  it("mutation guard: no bogus kana keyword token survives a Japanese project text", () => {
+    const brief = compileSearchBrief({ topics: [], project: M5_JAPANESE_KANA });
+
+    for (const query of brief.generatedQueries) {
+      expect(NONLATIN_LETTER.test(query)).toBe(false);
+    }
+  });
+});

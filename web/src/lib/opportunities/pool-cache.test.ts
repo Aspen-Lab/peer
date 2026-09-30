@@ -83,8 +83,11 @@ describe("daily opportunity pool cache key", () => {
     // otherwise collide in the shared `opportunity_pools` table. Asserted as
     // "not v5" rather than "is v6" so this test does not go stale on its own
     // the next time either version constant moves independently — papers is
-    // now v18 (SENSE-CONTEXT-EVIDENCE, ABC-JEV-INTEGRATION.md §1bg; previously
-    // v17 via TOKENIZE-PLURALS §1be, before that v16
+    // now v20 (NON-ASCII-TEXT, ABC-JEV-INTEGRATION.md §1bo; previously v19
+    // via DATASET-RECORDS §1bl — CORRECTION, NON-ASCII-TEXT (§1bo): this
+    // comment had not been updated when that bump shipped and still named
+    // v18 here — before that v18 via SENSE-CONTEXT-EVIDENCE §1bg, before
+    // that v17 via TOKENIZE-PLURALS §1be, before that v16
     // via QUERY-BUDGET, before that v15 via QUERY-QUALITY, before that v14
     // via SENSE-CONTEXT-R3, before that v13 via DEDUP-ANGEW, before that v12
     // via SCORE-ZERO, before that v11 via ABBREV-RECALL, before that v10 via
@@ -95,6 +98,18 @@ describe("daily opportunity pool cache key", () => {
     for (const surface of ["papers", "events", "jobs"] as const) {
       expect(derivePoolCacheKey({ ...base, surface })).not.toMatch(/^peer-pool-v5-/);
     }
+  });
+
+  // NON-ASCII-TEXT (ABC-JEV-INTEGRATION.md §1bo point 5): pins the EXACT
+  // current papers version, unlike the "not v5" check above (which only
+  // rules out the pre-ABC-freemium shape and would stay green through any
+  // later bump). A pool built before this fix must not be read back as if
+  // it already reflects the fixed free-text query derivation and CJK
+  // containment match — this test is what actually breaks if a future edit
+  // forgets to bump PAPER_CACHE_KEY_VERSION.
+  it("is on papers cache version 20 (NON-ASCII-TEXT, §1bo)", () => {
+    expect(PAPER_POOL_KEY_PREFIX).toBe("peer-pool-v20-papers-");
+    expect(derivePoolCacheKey({ ...base, surface: "papers" })).toMatch(/^peer-pool-v20-papers-/);
   });
 
   it("ignores aiTier on surfaces that never send it", () => {

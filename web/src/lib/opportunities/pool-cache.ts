@@ -351,10 +351,36 @@ const CACHE_KEY_VERSION = 6;
 // dataset-shaped repository record, could also change scoring/review
 // classification (workType is no longer a dead field), so a v18 pool built
 // under the old, type-blind fetch/mapping must never be served as if it
-// already reflects any of these changes. These bumps share their numbers
-// with `CACHE_KEY_VERSION` above by coincidence, not by a shared cause — see
-// `derivePoolCacheKey` below for how each is selected.
-const PAPER_CACHE_KEY_VERSION = 19;
+// already reflects any of these changes. v20 — ABC-JEV-INTEGRATION.md
+// §1bo/NON-ASCII-TEXT (docs/jev-abc/NON-ASCII-TEXT-B-20260930T071406Z.md,
+// AMENDMENT §1bo.8): profile-compiler.ts's free-text query derivation
+// (phrasesFromText, literalQueryIfShort) now keeps Unicode letters/digits
+// instead of an ASCII-only character class (an accented Latin word like
+// "électrolytes" no longer corrupts into a wrong fragment) and never
+// derives a query containing a CJK character (Han, Hiragana, Katakana or
+// Hangul) — a pure-CJK Project/Challenge field yields no query at all
+// instead of leaking its whole untouched paragraph as one giant literal/
+// phrase query, AND (§1bo.8) a MIXED CJK-plus-Latin field (the ordinary
+// case for a non-English materials researcher) no longer leaks its raw
+// blob either: a CJK run now acts as a chunk delimiter, so an embedded
+// Latin phrase ("solid-state electrolyte") or a formula glued directly
+// onto surrounding CJK text with no space at all ("LiCoO2") survives as
+// its own query while the CJK parts of the same field contribute nothing;
+// separately, term-expand.ts's termVariantMatches (and, for ranking,
+// termOccurrences) now matches a CJK-only Required-tag variant — of ANY of
+// the four scripts, not Chinese alone — by plain substring containment
+// instead of the whitespace-anchored word-boundary regex, which never
+// matched continuous, unspaced CJK prose. Together these change pool
+// MEMBERSHIP (different/fewer/better-targeted queries reach each source)
+// and T1 gate outcomes for a CJK Required tag (newly admits a paper it used
+// to miss, in any of the four scripts), so a v19 pool built under the old
+// ASCII-only/whitespace-boundary/Han-only behaviour must never be served as
+// if it already reflects any of this. (§1bo.8 landed before v20 ever
+// shipped — round 1's v19->v20 bump and this refinement are ONE cache
+// generation, not two; there is no v21 for this item.) These bumps share
+// their numbers with `CACHE_KEY_VERSION` above by coincidence, not by a
+// shared cause — see `derivePoolCacheKey` below for how each is selected.
+const PAPER_CACHE_KEY_VERSION = 20;
 /**
  * SINGLE SOURCE OF TRUTH for the literal key prefix a durable papers-pool
  * store may accept, derived from `PAPER_CACHE_KEY_VERSION` rather than

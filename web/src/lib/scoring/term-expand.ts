@@ -252,6 +252,46 @@ export function expandTerm(term: string): string[] {
 
 const WORD_CHAR = "\\p{L}\\p{N}\\p{M}";
 
+// NON-ASCII-TEXT (ABC-JEV-INTEGRATION.md §1bo point 3,
+// docs/jev-abc/NON-ASCII-TEXT-B-20260930T071406Z.md §1.3): written Chinese
+// has no spaces between words, so the whitespace-anchored word-boundary
+// regex below never matches a CJK Required tag against ordinary Chinese
+// prose containing it — proven false, by execution, at the start, middle
+// and end of a sentence (only the whole-string and explicit space-delimited
+// cases passed). A variant made ENTIRELY of CJK-script characters uses
+// plain substring containment instead, which IS the correct notion of
+// "whole word" in a script that does not delimit words with whitespace.
+// Scoped to CJK-ONLY variants so every Latin-script and mixed-script
+// variant keeps the exact same regex path, unchanged — a Latin substring
+// inside a longer Latin word (e.g. "cat" inside "category") must still not
+// match, which only the boundary regex enforces.
+//
+// NON-ASCII-TEXT ROUND 2 (§1bo.8, AMENDMENT): "CJK" widened from Han only
+// to Han, Hiragana, Katakana and Hangul — a Japanese or Korean Required tag
+// has exactly the same no-whitespace-word-boundary problem as Chinese, and
+// round 1's Han-only check silently left them on the old (never-matching)
+// regex path.
+const CJK_SCRIPT_CLASS =
+  "\\p{Script=Han}\\p{Script=Hiragana}\\p{Script=Katakana}\\p{Script=Hangul}";
+const CJK_CHARACTER = new RegExp(`[${CJK_SCRIPT_CLASS}]`, "u");
+
+// NON-ASCII-TEXT ROUND 2 (§1bo.8): "has a CJK character AND no Latin letter
+// or digit" (the same shape profile-compiler.ts's isCjkOnlyText already
+// used), not "every character positively matches one of the four Script
+// properties." Found by execution: a real katakana word like "バッテリー"
+// (battery) includes U+30FC, the katakana-hiragana PROLONGED SOUND MARK —
+// used in the large majority of katakana loanwords — which Unicode
+// classifies as Script=Common, not Script=Katakana (it is shared punctuation,
+// not letters of any one script). An earlier version of this check required
+// EVERY character to match one of the four scripts and so wrongly rejected
+// "バッテリー" as not CJK-only, silently falling through to the
+// never-matching boundary regex for the most common shape of katakana word
+// there is. This version only asks "is there a disqualifying Latin letter or
+// digit," which a shared punctuation mark like U+30FC is not.
+function isCjkOnlyVariant(variant: string): boolean {
+  return CJK_CHARACTER.test(variant) && !/[\p{Script=Latin}\p{N}]/u.test(variant);
+}
+
 /**
  * Whole-word match of ONE already-canonical variant (no expansion) against a
  * canonicalized haystack. Extracted from `termMatches` below (SENSE-CONTEXT-EVIDENCE,
@@ -264,8 +304,14 @@ const WORD_CHAR = "\\p{L}\\p{N}\\p{M}";
  * `matchesFullNameOrFormula`, which exists because of exactly this trap).
  * `termMatches` itself is unchanged behaviourally — it is now a thin loop over
  * this helper instead of inlining the same regex construction.
+ *
+ * NON-ASCII-TEXT (§1bo point 3): a CJK-only variant skips the word-boundary
+ * regex below entirely (see `isCjkOnlyVariant`'s own comment) — every other
+ * variant runs the exact same code that ran before this change, byte for
+ * byte.
  */
 export function termVariantMatches(canonicalHaystack: string, variant: string): boolean {
+  if (isCjkOnlyVariant(variant)) return canonicalHaystack.includes(variant);
   const escaped = variant.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const re = new RegExp(`(?<![${WORD_CHAR}])${escaped}(?![${WORD_CHAR}])`, "u");
   return re.test(canonicalHaystack);
@@ -296,11 +342,26 @@ export function termMatches(canonicalHaystack: string, term: string): boolean {
  * How many times a term occurs in an already-canonicalised haystack, counting
  * every variant `termMatches` would accept. `termMatches` answers whether a
  * paper says the word at all; this answers how much it has to say about it.
+ *
+ * NON-ASCII-TEXT ROUND 2 (§1bo.8(c)): gets the SAME CJK-containment branch
+ * `termVariantMatches` has, gated on the same `isCjkOnlyVariant` predicate
+ * ("guard the path" — one shared classification, not two that could drift
+ * apart). Before this, a CJK-only variant fell all the way through to the
+ * boundary regex here even after round 1 fixed the actual gate
+ * (`termMatches`/`termVariantMatches`), so a CJK Required tag that legitimately
+ * passed the gate was still silently counted as "0 mentions" by
+ * `groundingWeight` (keyword.ts) — its RANKING weight never matched its
+ * ADMISSION. This is a ranking-only fix: `termOccurrences` has no gate role
+ * of its own.
  */
 export function termOccurrences(canonicalHaystack: string, term: string): number {
   let count = 0;
   for (const variant of expandTerm(term)) {
     const escaped = variant.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    if (isCjkOnlyVariant(variant)) {
+      count += (canonicalHaystack.match(new RegExp(escaped, "gu")) ?? []).length;
+      continue;
+    }
     const re = new RegExp(
       `(?<![${WORD_CHAR}])${escaped}(?![${WORD_CHAR}])`,
       "gu",
