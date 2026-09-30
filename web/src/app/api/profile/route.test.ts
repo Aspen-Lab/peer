@@ -12,6 +12,9 @@ import {
 } from "@/lib/usage/counters";
 import { ANONYMOUS_ENTITLEMENT, type Entitlement } from "@/lib/entitlement/types";
 import { selectedSenseConcept } from "@/lib/feed/senses";
+import { defaultProfile } from "@/types";
+import { useProfileStore } from "@/store/profile";
+import { remoteProfilePayload } from "@/components/profile-sync";
 
 const mocks = vi.hoisted(() => ({
   getUser: vi.fn(),
@@ -198,6 +201,82 @@ describe("profile route work-authorisation mapping", () => {
       user_id: "user-1",
       authorised_countries: ["Germany"],
     });
+  });
+});
+
+// PROFILE-UNSYNCED-FIELDS (§1bp.2) — the feed-intent staleness bug, proved
+// through the REAL store + remoteProfilePayload + profilePatchToRow +
+// profileRowToProfile (not a hand-rolled stand-in), per the brief's own
+// instruction. `hydrateFromRemote` is the one production trigger that
+// installs a defined `feedIntent` (the Profile page's email-confirm
+// redirect); before this fix, `profileFeedIntentCard` (lib/feed/intent.ts)
+// would re-validate that stale card forever instead of recomputing it from
+// a same-session edit. Placed here (not store/profile.test.ts) so it can
+// reuse the existing `rowFixture` for the GET half of the round trip.
+describe("PROFILE-UNSYNCED-FIELDS (§1bp.2) — feed-intent staleness, through the real store", () => {
+  // researchTopics stays non-empty throughout (a realistic profile has
+  // Required topics alongside Explore ones) so `profileFeedIntentCard`
+  // always has SOME signal to build a card from, even in the removal test
+  // below where softTopics itself ends up empty — otherwise
+  // `profileFeedIntentCard`'s own `hasAnyField` gate would correctly
+  // produce no card at all (nothing to declare), which is right but would
+  // test the wrong thing here: the point is to prove the REMOVAL reaches
+  // the card's `preferredConcepts`, not to re-prove the empty-profile case.
+  const staleCard = {
+    version: "feed-intent-v1" as const,
+    project: { presence: "omitted" as const },
+    challenge: { presence: "omitted" as const },
+    requiredConcepts: ["required-topic"],
+    preferredConcepts: ["old topic"],
+    exclusions: [],
+    methods: [],
+    selectedSenseConcepts: [],
+  };
+
+  beforeEach(() => {
+    useProfileStore.setState({
+      profile: { ...defaultProfile, researchTopics: ["required-topic"], softTopics: ["old topic"] },
+      lastSynced: null,
+    });
+  });
+
+  it("control (no hydrate this session): editing softTopics directly still reaches the push's feedIntent, as always", () => {
+    useProfileStore.getState().updateSoftTopics(["old topic", "brand-new topic"]);
+    const payload = remoteProfilePayload(useProfileStore.getState().profile);
+    expect(payload.feedIntent?.preferredConcepts).toEqual(["old topic", "brand-new topic"]);
+  });
+
+  it("addition after hydrateFromRemote installs a defined card: the new topic reaches the push, the row, and a fresh GET", () => {
+    useProfileStore.getState().hydrateFromRemote({ softTopics: ["old topic"], feedIntent: staleCard });
+    useProfileStore.getState().updateSoftTopics(["old topic", "brand-new topic"]);
+
+    const payload = remoteProfilePayload(useProfileStore.getState().profile);
+    expect(payload.feedIntent?.preferredConcepts).toEqual(["old topic", "brand-new topic"]);
+
+    const row = profilePatchToRow(payload, "construction-user-c1");
+    expect(row).toHaveProperty("feed_intent");
+    expect((row.feed_intent as { preferredConcepts: string[] }).preferredConcepts).toEqual([
+      "old topic",
+      "brand-new topic",
+    ]);
+
+    const remoteAfterGet = profileRowToProfile({ ...rowFixture, feed_intent: row.feed_intent });
+    expect(remoteAfterGet.softTopics).toEqual(["old topic", "brand-new topic"]);
+  });
+
+  it("removal after hydrateFromRemote installs a defined card: the removal reaches the push, the row, and a fresh GET — never silently kept", () => {
+    useProfileStore.getState().hydrateFromRemote({ softTopics: ["old topic"], feedIntent: staleCard });
+    useProfileStore.getState().updateSoftTopics([]);
+
+    const payload = remoteProfilePayload(useProfileStore.getState().profile);
+    expect(payload.feedIntent?.preferredConcepts).toEqual([]);
+
+    const row = profilePatchToRow(payload, "construction-user-c1");
+    const rowIntent = row.feed_intent as { preferredConcepts: string[] } | undefined;
+    expect(rowIntent?.preferredConcepts).toEqual([]);
+
+    const remoteAfterGet = profileRowToProfile({ ...rowFixture, feed_intent: row.feed_intent });
+    expect(remoteAfterGet.softTopics).toEqual([]);
   });
 });
 

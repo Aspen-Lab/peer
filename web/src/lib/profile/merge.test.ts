@@ -9,6 +9,8 @@ import {
   singleValueSnapshot,
   listUnionChanged,
   preferenceLedgerChanged,
+  threeWayMergeList,
+  LIST_FIELDS,
 } from "./merge";
 
 // SIGNIN-MERGE (ABC-JEV-INTEGRATION.md §1af/§1ah/§1aj) — RED list §5.1/§5.2
@@ -325,6 +327,124 @@ describe("mergeProfileAtSignIn — dirty-tracked merge (§1bk, supersedes the ba
   });
 });
 
+// LIST-REMOVAL-SYNC (ABC-JEV-INTEGRATION.md §1bq) — a removal on one device
+// must stick across every other device instead of coming back through plain
+// union the moment another device that still holds the old item loads.
+// `threeWayMergeList`'s own decision table proven directly first (the 7-row
+// table in its own doc comment), then through the real `mergeProfileAtSignIn`.
+describe("threeWayMergeList (§1bq.1)", () => {
+  it("keeps an item present in base, remote and local — untouched by anyone", () => {
+    expect(threeWayMergeList(["a"], ["a"], ["a"])).toEqual(["a"]);
+  });
+
+  it("drops an item removed HERE (in base and remote, not local)", () => {
+    expect(threeWayMergeList(["a", "b"], ["a"], ["a", "b"])).toEqual(["a"]);
+  });
+
+  it("drops an item removed ELSEWHERE (in base and local, not remote) — adopts the other side's removal instead of resurrecting it", () => {
+    expect(threeWayMergeList(["a"], ["a", "b"], ["a", "b"])).toEqual(["a"]);
+  });
+
+  it("keeps an item missing from base but present on remote only", () => {
+    expect(threeWayMergeList(["a", "new-remote"], ["a"], ["a"])).toEqual(["a", "new-remote"]);
+  });
+
+  it("keeps an item missing from base but present on local only — a genuine new addition", () => {
+    expect(threeWayMergeList(["a"], ["a", "new-local"], ["a"])).toEqual(["a", "new-local"]);
+  });
+
+  it("with no base at all, reduces to exactly plain union — the accepted cost, with no special-case branch needed", () => {
+    expect(threeWayMergeList(["a", "b"], ["b", "c"], undefined)).toEqual(["a", "b", "c"]);
+    expect(threeWayMergeList(["a", "b"], ["b", "c"], [])).toEqual(["a", "b", "c"]);
+  });
+
+  it("order: remote's own order first, then local's genuinely-new items in local's own order — unchanged from unionStrings", () => {
+    expect(threeWayMergeList(["z", "a"], ["a", "m"], ["a"])).toEqual(["z", "a", "m"]);
+  });
+
+  it("compares by the same normalized key unionStrings uses (trim + toLocaleLowerCase) — for keeping AND for dropping", () => {
+    expect(
+      threeWayMergeList(
+        ["Solid-State Electrolytes"],
+        ["  solid-state electrolytes  "],
+        ["Solid-State Electrolytes"],
+      ),
+    ).toEqual(["Solid-State Electrolytes"]);
+    // A case/whitespace-only difference is the SAME item for a REMOVAL too —
+    // dropped from remote's own base-held copy, not treated as two items.
+    expect(threeWayMergeList([], ["  Solid-State Electrolytes "], ["solid-state electrolytes"])).toEqual([]);
+  });
+
+  it("a stale, UNEDITED device (local === base) never shrinks the account's newer, longer list (§1bk.8's guarantee, extended to lists)", () => {
+    const base = ["a", "b"];
+    const local = ["a", "b"]; // this device never touched the list since its last sync
+    const remote = ["a", "b", "c"]; // another device added "c" since
+    expect(threeWayMergeList(remote, local, base)).toEqual(["a", "b", "c"]);
+  });
+});
+
+describe("mergeProfileAtSignIn — three-way list merge (§1bq)", () => {
+  it("a removal on THIS device sticks on its own next load — the account already reflects it, this device's push already confirmed it", () => {
+    const local = profile({ researchTopics: ["alpha"] }); // this device already removed "beta" itself
+    const remote: Partial<UserProfile> = { researchTopics: ["alpha"] }; // the account already reflects the removal (this device's own earlier push)
+    const lastSynced: Partial<UserProfile> = { researchTopics: ["alpha", "beta"] }; // this device's own last-confirmed snapshot, from before the removal
+    const { patch } = mergeProfileAtSignIn(local, remote, lastSynced);
+    expect(patch.researchTopics).toEqual(["alpha"]);
+  });
+
+  it("device 2 (still holding a since-removed item, never edited it) adopts the removal instead of resurrecting it on load — the exact bug LIST-REMOVAL-SYNC fixes", () => {
+    const local = profile({ researchTopics: ["alpha", "beta"] }); // device 2 never touched this list
+    const remote: Partial<UserProfile> = { researchTopics: ["alpha"] }; // device 1 removed "beta" and pushed
+    const lastSynced: Partial<UserProfile> = { researchTopics: ["alpha", "beta"] }; // device 2's own last sync, before the removal
+    const { patch } = mergeProfileAtSignIn(local, remote, lastSynced);
+    expect(patch.researchTopics).toEqual(["alpha"]); // NOT ["alpha", "beta"] — the old (plain-union) bug
+  });
+
+  it("an addition still reaches a device that has not edited this field — unchanged direction, still safe", () => {
+    const local = profile({ researchTopics: ["alpha"] });
+    const remote: Partial<UserProfile> = { researchTopics: ["alpha", "gamma"] }; // another device added "gamma"
+    const lastSynced: Partial<UserProfile> = { researchTopics: ["alpha"] };
+    const { patch } = mergeProfileAtSignIn(local, remote, lastSynced);
+    expect(patch.researchTopics).toEqual(["alpha", "gamma"]);
+  });
+
+  // LIST-REMOVAL-SYNC (§1bq.2) — MANAGER ADDITION, binding: "no information"
+  // is not "empty". softTopics is derived only from feed_intent — a row
+  // with no card returns it as an own property with value `undefined` (not
+  // an array; profileRowToProfile always assigns the key). Neither must be
+  // treated as a confirmed-empty remote list, or a naive three-way merge
+  // would classify every base-held item as "removed elsewhere" and wipe it.
+  it("(§1bq.2) softTopics on a row with no feed_intent card is 'no information' — local survives untouched, even with a base that once held less", () => {
+    const local = profile({ softTopics: ["catalysis", "battery recycling"] });
+    // hasOwnProperty is true, value is undefined — exactly profileRowToProfile's
+    // shape (route.ts: `softTopics: intent?.preferredConcepts`) when no card exists.
+    const remote = { softTopics: undefined } as unknown as Partial<UserProfile>;
+    const lastSynced: Partial<UserProfile> = { softTopics: ["catalysis"] }; // this device's own prior, smaller base
+    const { patch } = mergeProfileAtSignIn(local, remote, lastSynced);
+    expect(patch).not.toHaveProperty("softTopics"); // left out entirely — local's CURRENT value survives as-is, nothing dropped
+  });
+
+  it("(§1bq.2) preferredJournals with no column at all (never an own property on remote) survives a second AND a third load", () => {
+    const local = profile({ preferredJournals: ["Advanced Materials", "Nature Energy"] });
+    const remote: Partial<UserProfile> = {}; // remote never mentions preferredJournals — no column, per route.ts (profileRowToProfile never assigns this key)
+    const lastSynced: Partial<UserProfile> = { preferredJournals: ["Advanced Materials"] };
+    const second = mergeProfileAtSignIn(local, remote, lastSynced);
+    expect(second.patch).not.toHaveProperty("preferredJournals");
+    const third = mergeProfileAtSignIn(local, remote, lastSynced); // same inputs again — nothing about the account ever changes this field, since it has no column
+    expect(third.patch).not.toHaveProperty("preferredJournals");
+  });
+
+  it("all 7 LIST_FIELDS behave the same way — table-driven over the exported array, not just researchTopics/softTopics", () => {
+    for (const field of LIST_FIELDS) {
+      const local = profile({ [field]: ["kept-item"] } as Partial<UserProfile>);
+      const remote = { [field]: ["kept-item"] } as Partial<UserProfile>;
+      const lastSynced = { [field]: ["kept-item", "removed-elsewhere"] } as Partial<UserProfile>;
+      const { patch } = mergeProfileAtSignIn(local, remote, lastSynced);
+      expect((patch as Record<string, unknown>)[field]).toEqual(["kept-item"]);
+    }
+  });
+});
+
 describe("listUnionChanged (§1bk ruling 2)", () => {
   it("is false when the union added nothing beyond remote's own list", () => {
     expect(listUnionChanged(["a", "b"], ["a", "b"])).toBe(false);
@@ -338,7 +458,7 @@ describe("listUnionChanged (§1bk ruling 2)", () => {
   });
 });
 
-describe("singleValueSnapshot (§1bk, widened by §1bk.8 AMENDMENT)", () => {
+describe("singleValueSnapshot (§1bk, widened by §1bk.8 AMENDMENT and again by LIST-REMOVAL-SYNC §1bq.1)", () => {
   it("picks exactly SINGLE_VALUE_FIELDS — the original 14 plus the amendment's 11 feed knobs/digestEnabled — nothing else", () => {
     const snap = singleValueSnapshot(
       profile({ researchTopics: ["x"], displayName: "Alice", feedFocus: "tight", digestEnabled: false }),
@@ -350,11 +470,40 @@ describe("singleValueSnapshot (§1bk, widened by §1bk.8 AMENDMENT)", () => {
     // which the amendment overturns).
     expect(snap.feedFocus).toBe("tight");
     expect(snap.digestEnabled).toBe(false);
-    expect(snap).not.toHaveProperty("researchTopics"); // a list field, not single-value
+    // LIST-REMOVAL-SYNC (§1bq.1) — CHANGED: `singleValueSnapshot` now folds
+    // in every LIST_FIELDS key too (the three-way merge's own per-device
+    // "base"), so this is the exact REVERSE of the old assertion here
+    // (`not.toHaveProperty("researchTopics")`) — deliberately overturned,
+    // not weakened: the new assertion is strictly more specific (an exact
+    // value, not just presence).
+    expect(snap.researchTopics).toEqual(["x"]);
     expect(snap).not.toHaveProperty("preferenceLedger"); // its own structure, not single-value
     // deepReportEnabled has no server column at all (checkpoint §11.1) —
     // genuinely outside SINGLE_VALUE_FIELDS, not merely unset here.
     expect(snap).not.toHaveProperty("deepReportEnabled");
+  });
+
+  // LIST-REMOVAL-SYNC (§1bq.1) — the new behaviour, proven directly: every
+  // LIST_FIELDS key is captured verbatim, not just researchTopics above.
+  it("(§1bq.1) also captures every LIST_FIELDS key verbatim — the three-way merge's per-device base", () => {
+    const snap = singleValueSnapshot(
+      profile({
+        researchTopics: ["required-a"],
+        softTopics: ["explore-a"],
+        preferredMethods: ["DFT"],
+        locationPreferences: ["Chicago"],
+        authorisedCountries: ["Canada"],
+        dislikedTopics: ["avoid-a"],
+        preferredJournals: ["Advanced Materials"],
+      }),
+    );
+    expect(snap.researchTopics).toEqual(["required-a"]);
+    expect(snap.softTopics).toEqual(["explore-a"]);
+    expect(snap.preferredMethods).toEqual(["DFT"]);
+    expect(snap.locationPreferences).toEqual(["Chicago"]);
+    expect(snap.authorisedCountries).toEqual(["Canada"]);
+    expect(snap.dislikedTopics).toEqual(["avoid-a"]);
+    expect(snap.preferredJournals).toEqual(["Advanced Materials"]);
   });
 });
 
@@ -498,6 +647,25 @@ describe("mergeProfileFromBackup", () => {
     const local = profile({ researchTopics: ["battery materials", "added after the backup"] });
     const { patch } = mergeProfileFromBackup(local, { researchTopics: ["battery materials", "from the backup"] });
     expect(patch.researchTopics).toEqual(["battery materials", "from the backup", "added after the backup"]);
+  });
+
+  // LIST-REMOVAL-SYNC (§1bq) — pins the direction a restore depends on that
+  // is the exact OPPOSITE of the three-way merge's "removed here" rule: an
+  // item present ONLY in the backup (not in the live local profile at all —
+  // e.g. removed on purpose sometime after the backup was taken) must come
+  // BACK. `mergeProfileFromBackup` is NOT routed through `threeWayMergeList`
+  // (see this function's own header note, restated above the describe
+  // block) — if it ever were, using this device's own `lastSynced` as a
+  // base, this exact item would be classified "removed HERE" and dropped,
+  // defeating the whole point of "restore."
+  it("(§1bq) restores an item present only in the backup, even though it is NOT in the live local profile at all", () => {
+    const local = profile({ researchTopics: ["kept-locally"] }); // "from the backup" was deliberately removed locally sometime after the backup was taken
+    const { patch } = mergeProfileFromBackup(local, { researchTopics: ["from the backup"] });
+    // Backup wins outright for list order too (P4's own convention, unlike
+    // P1's account-order-first rule): the backup's own list first, then
+    // local's own additions since — matching the pre-existing "does not
+    // silently drop a topic added since" test's order immediately above.
+    expect(patch.researchTopics).toEqual(["from the backup", "kept-locally"]);
   });
 
   it("unions preferenceLedger per key, same recency rule as the sign-in merge", () => {

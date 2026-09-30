@@ -2032,6 +2032,12 @@ function EditView({
               papers (+1/3 of the score) so they rise to the top — though an exceptionally
               on-target paper from elsewhere can still win.
             </p>
+            {/* PROFILE-UNSYNCED-FIELDS (§1bp.3) — preferredJournals has no
+                account column yet (device-only by current design); said
+                honestly, in the field's own existing hint style. */}
+            <p className="mt-2 px-1 text-micro leading-snug text-text-faint/70">
+              Saved on this device only.
+            </p>
           </div>
           <ChoiceGroup
             label="Importance"
@@ -2123,6 +2129,13 @@ function EditView({
               and makes no AI call.
             </p>
           )}
+          {/* PROFILE-UNSYNCED-FIELDS (§1bp.3) — deepReportEnabled has no
+              account column yet (device-only by current design); said
+              honestly, unconditionally (true regardless of AI availability),
+              in the same hint style as the sentence just above. */}
+          <p className="text-micro leading-relaxed text-text-faint">
+            Saved on this device only.
+          </p>
         </div>
       </EditRow>
 

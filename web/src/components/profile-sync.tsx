@@ -125,6 +125,34 @@ async function fetchRemote(): Promise<{
 }
 
 /**
+ * LIST-REMOVAL-SYNC (§1bq.3) — `pullMergeAndPush`'s own GET, deliberately
+ * separate from `fetchRemote` above. `fetchRemote` collapses "the fetch
+ * failed" and "the account genuinely has no row yet" into the same
+ * `{ profile: null }` shape — safe for the sign-in reconcile, because
+ * `mergeProfileAtSignIn` treats a null remote as "nothing to merge from,
+ * local stays exactly as it is" either way (§1af P3). It is NOT safe here: a
+ * genuinely failed pull must never let a list push go out merged against
+ * nothing, or it could silently drop whatever the account actually holds.
+ * `ok: false` means the fetch itself failed; `ok: true, profile: null` is
+ * the honest "no account row yet" case, which IS safe to merge against
+ * (mergeProfileAtSignIn's own null-remote branch already handles it).
+ */
+async function fetchRemoteForSync(): Promise<
+  { ok: true; profile: Partial<UserProfile> | null } | { ok: false }
+> {
+  try {
+    const data = await apiFetch<{ profile: Partial<UserProfile> | null }>(
+      "/api/profile",
+      { cache: "no-store" },
+    );
+    return { ok: true, profile: data.profile };
+  } catch (err) {
+    console.warn("[ProfileSync] GET (pull-before-push) failed", err);
+    return { ok: false };
+  }
+}
+
+/**
  * Local keys (BYOK API keys, Tavily, and — SIGNIN-MERGE §1aj — the
  * events/jobs-era Adzuna/USAJobs credentials) never leave the device.
  *
@@ -209,7 +237,13 @@ function diffPayload(
  *    scalar with a real server column that an unconditional push could
  *    overwrite, enumerated by actually running `remoteProfilePayload` on a
  *    fully populated profile rather than assumed (checkpoint §11.1);
- *  - any `LIST_FIELDS` entry whose union genuinely added something new;
+ *  - any `LIST_FIELDS` entry whose merge genuinely changed — LIST-REMOVAL-SYNC
+ *    (§1bq) POLICY 3: this used to say "union genuinely added something
+ *    new," accurate when the only merge shape was a plain union; the
+ *    three-way merge can now also genuinely DROP an item (a removal that
+ *    should stick), which `listUnionChanged` already reports correctly
+ *    (position/length inequality — a shrink included — confirmed unchanged
+ *    by this item, see its own doc comment in lib/profile/merge.ts);
  *  - `preferenceLedger`, only when it genuinely differs from remote's own
  *    (checkpoint §11.3 — the merge itself can never shrink it, so this is a
  *    resend-avoidance filter, not a safety one).
@@ -352,6 +386,139 @@ export function nextSyncBaselines(
   return {
     lastSynced: singleValueSnapshot(profile),
     lastPushed: remoteProfilePayload(profile),
+  };
+}
+
+/**
+ * LIST-REMOVAL-SYNC (§1bq.3) — the lost-update mitigation's own dependency
+ * seam. Every side effect `pullMergeAndPush` needs is injected, so the
+ * whole pull → merge → apply → push sequence is directly testable with
+ * fakes (this repo has no `@testing-library/react`-style harness — see this
+ * file's own header note) — the same technique `nextSyncBaselines` already
+ * uses for the narrower "what are the new baselines" decision.
+ */
+export interface PullBeforePushDeps {
+  /** GET /api/profile, fresh. See `fetchRemoteForSync`'s own header note on
+   *  why a genuine fetch failure (`ok: false`) must never be confused with
+   *  a genuinely row-less account (`ok: true, profile: null` — safe to
+   *  merge against). */
+  getRemote: () => Promise<
+    { ok: true; profile: Partial<UserProfile> | null } | { ok: false }
+  >;
+  /** The local profile and its sync baselines, read at the moment they're
+   *  actually needed — never a value captured before the GET above, so an
+   *  edit typed while the GET was in flight is never missed or overwritten. */
+  readLocal: () => { profile: UserProfile; lastSynced: Partial<UserProfile> | null };
+  /** Install a merge patch on the local store — same "apply exactly as
+   *  given, including an explicit feedIntent: undefined" contract as
+   *  `ProfileMergeOutcome.patch` (lib/profile/merge.ts). */
+  applyPatch: (patch: Partial<UserProfile>) => void;
+  /** PUT /api/profile; resolves true on success. */
+  push: (payload: Partial<UserProfile>) => Promise<boolean>;
+  /** Persist the new sync baselines after a confirmed success (a real push,
+   *  or a pull that needed no push — §1bk ruling 3, same as `onSession`). */
+  setBaselines: (baselines: { lastSynced: Partial<UserProfile>; lastPushed: Partial<UserProfile> }) => void;
+  /** The visible push-failed status (P3) — set whenever this attempt cannot
+   *  safely complete (the pull failed, or the push itself failed). */
+  markPushFailed: () => void;
+  /** Cleared once a push (or a no-push-needed pull) actually lands. */
+  clearPushFailed: () => void;
+  /** This device's diff baseline for the NEXT push — same role as
+   *  `lastPushedRef.current`. */
+  getLastPushed: () => Partial<UserProfile> | null;
+}
+
+export type PullMergeAndPushOutcome =
+  | { status: "pulled-and-pushed" }
+  | { status: "synced-no-push-needed" }
+  | { status: "pull-failed" }
+  | { status: "push-failed" };
+
+/**
+ * LIST-REMOVAL-SYNC (§1bq.3) — called instead of a bare push any time the
+ * steady-state debounced push's pending patch carries a `LIST_FIELDS`
+ * change (wired in `ProfileSync` below). Pulls the account fresh, re-runs
+ * the SAME merge the page-load reconcile uses (`planReconcile` — one merge
+ * path, two call sites) against local state read AFTER the pull resolves
+ * (`readLocal`, never a value captured before the `await` above — so a
+ * concurrent edit typed during the pull is captured, not clobbered),
+ * applies the result to the local store in the same synchronous step the
+ * merge itself runs in (no `await` between `readLocal` and `applyPatch`),
+ * and pushes the merged profile through `planReconcile`'s own
+ * `pushPayload` — built from `remoteProfilePayload`, so `feedIntent` is
+ * always recomputed fresh from the merged inputs, never a bare list key
+ * (docs/jev-abc/LIST-REMOVAL-SYNC-B-20260930T082019Z.md Q3's own second
+ * finding: a bare list-key push silently reintroduces the §1bp.2 staleness
+ * bug through this second push site). A failed pull never pushes blind: it
+ * marks the existing push-failed status and stops, so the very next local
+ * change retries the whole sequence — the same P3 retry guarantee every
+ * other push path in this file already gives. `lastSynced`/the push
+ * baseline advance only once a push has actually landed, OR once a pull
+ * needed no push at all (§1bk ruling 3 — a confirmed sync either way).
+ *
+ * Scope: only a push that carries a list change calls this — see
+ * `ProfileSync`'s own `carriesListChange` note for why an ordinary
+ * scalar-only push does not pull first.
+ */
+export async function pullMergeAndPush(deps: PullBeforePushDeps): Promise<PullMergeAndPushOutcome> {
+  const pulled = await deps.getRemote();
+  if (!pulled.ok) {
+    deps.markPushFailed();
+    return { status: "pull-failed" };
+  }
+  // No `await` between here and `applyPatch` — see this function's own
+  // header note.
+  const { profile: local, lastSynced } = deps.readLocal();
+  const { patch, pushPayload, merged } = planReconcile(local, pulled.profile, lastSynced);
+  if (Object.keys(patch).length > 0) {
+    deps.applyPatch(patch);
+  }
+  const nothingToPush = Object.keys(pushPayload).length === 0;
+  const pushed = nothingToPush || (await deps.push(pushPayload));
+  if (!pushed) {
+    deps.markPushFailed();
+    return { status: "push-failed" };
+  }
+  const baselines = nextSyncBaselines(true, merged, {
+    lastSynced,
+    lastPushed: deps.getLastPushed(),
+  });
+  deps.setBaselines(baselines);
+  deps.clearPushFailed();
+  return nothingToPush ? { status: "synced-no-push-needed" } : { status: "pulled-and-pushed" };
+}
+
+/**
+ * LIST-REMOVAL-SYNC (§1bq.3) — the steady-state debounced push's own
+ * dependency wiring for `pullMergeAndPush`, factored out to a NAMED
+ * top-level function rather than an inline object literal inside the
+ * debounced-push closure. This is a wiring constraint, not a style choice:
+ * profile-sync.test.tsx's pre-existing "closures actually use
+ * nextSyncBaselines" source-text check requires that closure's own source
+ * to contain exactly ONE literal `setLastSynced(` call (the ordinary,
+ * non-list push path's). Building this function's `setBaselines` callback
+ * inline inside that closure would add a second literal `setLastSynced(`
+ * occurrence to the SAME marked region and redden that pre-existing test;
+ * defining it here instead keeps the closure's own source at exactly the
+ * one call the existing test expects.
+ */
+function listPullDeps(lastPushedRef: { current: Partial<UserProfile> | null }): PullBeforePushDeps {
+  return {
+    getRemote: fetchRemoteForSync,
+    readLocal: () => ({
+      profile: useProfileStore.getState().profile,
+      lastSynced: useProfileStore.getState().lastSynced,
+    }),
+    applyPatch: (patch) =>
+      useProfileStore.setState((s) => ({ profile: { ...s.profile, ...patch } })),
+    push: pushRemote,
+    setBaselines: (baselines) => {
+      lastPushedRef.current = baselines.lastPushed;
+      useProfileStore.getState().setLastSynced(baselines.lastSynced);
+    },
+    markPushFailed: markProfilePushFailed,
+    clearPushFailed: clearProfilePushFailed,
+    getLastPushed: () => lastPushedRef.current,
   };
 }
 
@@ -525,6 +692,22 @@ export function ProfileSync() {
       const payload = remoteProfilePayload(profile);
       const patch = diffPayload(payload, lastPushedRef.current);
       if (Object.keys(patch).length === 0) return;
+
+      // LIST-REMOVAL-SYNC (§1bq.3) — only a push that carries a LIST_FIELDS
+      // change pulls first: scalars are last-write-wins by design (§1bk)
+      // and never merge, so pulling before an ordinary scalar-only push
+      // would add a network round trip with no safety benefit. A list
+      // field MERGES (three-way), so pushing this device's possibly-stale
+      // copy blind can silently erase a concurrent addition from another
+      // device — the lost-update race `pullMergeAndPush` exists to close.
+      const carriesListChange = LIST_FIELDS.some((key) =>
+        Object.prototype.hasOwnProperty.call(patch, key),
+      );
+      if (carriesListChange) {
+        await pullMergeAndPush(listPullDeps(lastPushedRef));
+        return;
+      }
+
       if (await pushRemote(patch)) {
         // PROFILE-SYNC (§1bk ruling 3) — "after every successful push...
         // lastSynced becomes the resulting snapshot." Uses the `profile`

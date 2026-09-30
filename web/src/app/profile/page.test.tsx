@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
@@ -688,5 +689,43 @@ describe("testSendMessage — POST /api/profile/send-test-email's response (§1a
       message: "Couldn't send the test email. Try again later.",
       success: false,
     });
+  });
+});
+
+// PROFILE-UNSYNCED-FIELDS (§1bp.3) — preferredJournals and deepReportEnabled
+// are device-only for now (no account column), said honestly on the page
+// itself. Source-text check (acceptable for page copy, as elsewhere in this
+// repo — e.g. app/papers/[id]/page.test.tsx's own call-site checks) since
+// this repo has no harness to render the whole effectful page.
+describe("page.tsx source — the device-only hint lines (§1bp.3)", () => {
+  const source = readFileSync(new URL("./page.tsx", import.meta.url), "utf8");
+  const SENTENCE = "Saved on this device only.";
+
+  it("appears exactly twice in the page, verbatim", () => {
+    const matches = source.match(/Saved on this device only\./g) ?? [];
+    expect(matches).toHaveLength(2);
+  });
+
+  it("the line next to Preferred journals is reachable from that field's own call site", () => {
+    const fieldStart = source.indexOf("Preferred journals");
+    expect(fieldStart).toBeGreaterThan(-1);
+    const nextSentenceAt = source.indexOf(SENTENCE, fieldStart);
+    expect(nextSentenceAt).toBeGreaterThan(-1);
+    // Reachable within the SAME field block — before the next EditRow starts.
+    const nextEditRowAt = source.indexOf("<EditRow", fieldStart + "Preferred journals".length);
+    expect(nextSentenceAt).toBeLessThan(nextEditRowAt);
+  });
+
+  it("the line next to the Deep report toggle is reachable from that toggle's own call site", () => {
+    const toggleStart = source.indexOf('aria-label="Deep report"');
+    expect(toggleStart).toBeGreaterThan(-1);
+    const nextSentenceAt = source.indexOf(SENTENCE, toggleStart);
+    expect(nextSentenceAt).toBeGreaterThan(-1);
+    const nextEditRowAt = source.indexOf("<EditRow", toggleStart);
+    // The sentence sits before this EditRow closes — no later EditRow's
+    // opening tag appears in between (or there is no later one at all).
+    if (nextEditRowAt !== -1) {
+      expect(nextSentenceAt).toBeLessThan(nextEditRowAt);
+    }
   });
 });

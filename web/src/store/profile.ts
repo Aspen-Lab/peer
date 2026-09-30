@@ -434,11 +434,25 @@ export const useProfileStore = create<ProfileState>()(
           },
         })),
 
+      // PROFILE-UNSYNCED-FIELDS (§1bp.2) — every setter below that changes
+      // an intent input (researchTopics/softTopics/preferredMethods/
+      // currentProject/currentChallenges — the fields lib/profile/merge.ts's
+      // INTENT_LIST_FIELDS/INTENT_SINGLE_FIELDS name) also clears feedIntent
+      // in the SAME set(), so the next push recomputes it fresh instead of
+      // `profileFeedIntentCard` (lib/feed/intent.ts) re-validating a stale
+      // stored card. Without this, an edit made after `hydrateFromRemote`
+      // installs a defined feedIntent (the one production trigger: the
+      // Profile page's email-confirm redirect) never reaches the account
+      // this session — proved by docs/jev-abc/PROFILE-UNSYNCED-FIELDS-B-20260930T074850Z.md
+      // Q2b. Enumerated by grepping this file for every `set()` call that
+      // writes one of these five field names — not copied from that
+      // investigation's own list, which missed `followTerm` below (it also
+      // writes softTopics, independently of updateSoftTopics).
       updateTopics: (topics) =>
-        set((s) => ({ profile: { ...s.profile, researchTopics: topics } })),
+        set((s) => ({ profile: { ...s.profile, researchTopics: topics, feedIntent: undefined } })),
 
       updateSoftTopics: (topics) =>
-        set((s) => ({ profile: { ...s.profile, softTopics: topics } })),
+        set((s) => ({ profile: { ...s.profile, softTopics: topics, feedIntent: undefined } })),
 
       updateEventTopics: (topics) =>
         set((s) => ({
@@ -482,7 +496,8 @@ export const useProfileStore = create<ProfileState>()(
 
       updateMethods: (methods) =>
         set((s) => ({
-          profile: { ...s.profile, preferredMethods: methods },
+          // PROFILE-UNSYNCED-FIELDS (§1bp.2) — see updateTopics's note above.
+          profile: { ...s.profile, preferredMethods: methods, feedIntent: undefined },
         })),
 
       updateSchool: (school) =>
@@ -493,13 +508,15 @@ export const useProfileStore = create<ProfileState>()(
       updateCurrentProject: (text) =>
         set((s) => ({
           // Empty is a deliberate clear, not proof this field was never set.
-          profile: { ...s.profile, currentProject: text },
+          // PROFILE-UNSYNCED-FIELDS (§1bp.2) — see updateTopics's note above.
+          profile: { ...s.profile, currentProject: text, feedIntent: undefined },
         })),
 
       updateCurrentChallenges: (text) =>
         set((s) => ({
           // Empty is a deliberate clear, not proof this field was never set.
-          profile: { ...s.profile, currentChallenges: text },
+          // PROFILE-UNSYNCED-FIELDS (§1bp.2) — see updateTopics's note above.
+          profile: { ...s.profile, currentChallenges: text, feedIntent: undefined },
         })),
 
       recordPaperPreference: (paper, signal, at) =>
@@ -580,6 +597,13 @@ export const useProfileStore = create<ProfileState>()(
               softTopics: follow
                 ? [...current, label.trim()]
                 : current.filter((t) => t.trim().toLowerCase() !== key),
+              // PROFILE-UNSYNCED-FIELDS (§1bp.2) — this setter also writes
+              // softTopics (alongside updateSoftTopics above), found by
+              // grepping this file rather than trusting the investigation
+              // guide's own enumeration, which missed it. See updateTopics's
+              // note above; the early return two lines up already covers
+              // the "nothing actually changed" no-op case.
+              feedIntent: undefined,
             },
           };
         }),
@@ -817,7 +841,17 @@ export const useProfileStore = create<ProfileState>()(
       //     dirtySingleValueFields's bootstrap rule): its first sync under
       //     the fixed code compares against defaultProfile instead of
       //     assuming everything is already synced.
-      version: 5,
+      // v6: LIST-REMOVAL-SYNC (§1bq) — lastSynced ALSO folds in each
+      //     LIST_FIELDS entry now (the widened singleValueSnapshot), the
+      //     per-device "base" the three-way list merge compares against.
+      //     Same reasoning as v5, extended to lists: the migration adds
+      //     none for a pre-v6 blob — a device with a real v5 lastSynced but
+      //     no list-field entries in it yet reads as "no baseline for this
+      //     list on this device" (threeWayMergeList's own no-base case),
+      //     i.e. plain union, once, automatically, per list field, per
+      //     device — the same "whichever loads first after the fix wins,
+      //     once" transition §1bk.3 already shipped for scalars.
+      version: 6,
       migrate: (persisted, version) =>
         migrateProfileStore(persisted, version) as ProfileState,
       // Build the promoted snapshot as part of the state installed by

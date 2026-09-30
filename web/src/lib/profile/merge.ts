@@ -156,10 +156,23 @@ export function dirtySingleValueFields(
  * whichever fields happened to be dirty this time — that is what lets the
  * NEXT load correctly recognize "nothing changed here since" for every
  * field, dirty or not.
+ *
+ * LIST-REMOVAL-SYNC (§1bq.1) — WIDENED to also fold in every `LIST_FIELDS`
+ * key: this is the SAME `lastSynced` object `threeWayMergeList`'s `base`
+ * argument reads from (one snapshot, one write path, one failure rule —
+ * `nextSyncBaselines`'s existing "advance on success, leave untouched on
+ * failure" contract needed no change to cover lists too). The name predates
+ * this widening (kept, not renamed — same "widen the constant, don't rename
+ * the function" precedent `SINGLE_VALUE_FIELDS` itself already set growing
+ * from 14 to 25 fields at §1bk.8); the type (`Partial<UserProfile>`) already
+ * accepts array-valued keys with no change.
  */
 export function singleValueSnapshot(profile: UserProfile): Partial<UserProfile> {
   const snapshot: Record<string, unknown> = {};
   for (const key of SINGLE_VALUE_FIELDS) {
+    snapshot[key] = profile[key];
+  }
+  for (const key of LIST_FIELDS) {
     snapshot[key] = profile[key];
   }
   return snapshot as Partial<UserProfile>;
@@ -205,7 +218,10 @@ function asStringArray(value: unknown): string[] {
 
 /** Union, deduped case-insensitively, account's own order first, then local's
  *  additions — mirrors the dedupe convention already used for
- *  `authorisedCountries` in `migrateProfileStore` (store/profile.ts). */
+ *  `authorisedCountries` in `migrateProfileStore` (store/profile.ts). Still
+ *  used, unchanged, by `mergeProfileFromBackup` below (P4 restore keeps
+ *  plain union, deliberately — see that function's own header note) and as
+ *  `threeWayMergeList`'s own no-baseline fallback shape. */
 function unionStrings(remoteList: unknown, localList: unknown): string[] {
   const remote = asStringArray(remoteList);
   const local = asStringArray(localList);
@@ -221,12 +237,75 @@ function unionStrings(remoteList: unknown, localList: unknown): string[] {
 }
 
 /**
- * PROFILE-SYNC (§1bk ruling 2) — true when the union produced something
- * beyond remote's own list, i.e. local genuinely contributed a new entry
- * ("list fields whose union changed"). `unionStrings` above always puts
- * remote's own list first, unchanged, then local's new entries, so "nothing
- * added" is exactly "same length, same order as remote's own (deduped)
- * list".
+ * LIST-REMOVAL-SYNC (§1bq.1) — the three-way list merge that replaces a bare
+ * `unionStrings` call inside `mergeProfileAtSignIn`'s LIST_FIELDS loop (and,
+ * via `planReconcile`, the pull-before-push mitigation in profile-sync.tsx —
+ * one merge path, two call sites). `base` is THIS DEVICE's own last-synced
+ * snapshot of this same list (folded into `lastSynced` by the widened
+ * `singleValueSnapshot` below). Per item, compared by the same normalized
+ * key `unionStrings` uses (trim + toLocaleLowerCase):
+ *
+ *   | in base? | in remote? | in local? | outcome |
+ *   |----------|------------|-----------|---------|
+ *   |   yes    |    yes     |    yes    | keep — untouched by anyone |
+ *   |   yes    |    yes     |    no     | drop — removed HERE |
+ *   |   yes    |    no      |    yes    | drop — removed ELSEWHERE, adopt it |
+ *   |   yes    |    no      |    no     | drop (already gone both sides) |
+ *   |   no     |    yes     |  yes/no   | keep — remote's presence is enough |
+ *   |   no     |    no      |    yes    | keep — a genuine new local addition |
+ *   |   no     |    no      |    no     | n/a — never enumerated |
+ *
+ * which collapses to: `keep = (inRemote && inLocal) || (!inBase && (inRemote
+ * || inLocal))`. With no base at all (`undefined`/empty — a device that has
+ * never confirmed this list field, including every device on its first sync
+ * after this feature ships), `baseKeys` is empty, so `keep` reduces to
+ * `inRemote || inLocal` for every item — algebraically identical to
+ * `unionStrings`'s own output (verified against merge.test.ts's pre-existing
+ * "unions list fields" case, which calls `mergeProfileAtSignIn` with no
+ * `lastSynced` argument). This IS "today's plain union, once — the accepted
+ * cost" (§1bk.3, extended to lists by §1bq.1): no separate bootstrap branch
+ * is needed, the general rule already produces it.
+ *
+ * Order: remote's own order first (for items this merge keeps), then
+ * local's genuinely-new items in local's own order — the same convention
+ * `unionStrings` already implements, so a reader's list never visibly
+ * reorders because of this fix.
+ */
+export function threeWayMergeList(remoteList: unknown, localList: unknown, base: unknown): string[] {
+  const remote = asStringArray(remoteList);
+  const local = asStringArray(localList);
+  const baseKeys = new Set(asStringArray(base).map((entry) => entry.trim().toLocaleLowerCase()));
+  const remoteKeys = new Set(remote.map((entry) => entry.trim().toLocaleLowerCase()));
+  const localKeys = new Set(local.map((entry) => entry.trim().toLocaleLowerCase()));
+  const keep = (key: string): boolean =>
+    (remoteKeys.has(key) && localKeys.has(key)) ||
+    (!baseKeys.has(key) && (remoteKeys.has(key) || localKeys.has(key)));
+
+  const kept = remote.filter((entry) => keep(entry.trim().toLocaleLowerCase()));
+  const seen = new Set(kept.map((entry) => entry.trim().toLocaleLowerCase()));
+  const additions: string[] = [];
+  for (const entry of local) {
+    const key = entry.trim().toLocaleLowerCase();
+    if (seen.has(key) || !keep(key)) continue;
+    seen.add(key);
+    additions.push(entry);
+  }
+  return [...kept, ...additions];
+}
+
+/**
+ * PROFILE-SYNC (§1bk ruling 2) — true when the merge produced something
+ * beyond remote's own list, i.e. local genuinely contributed a new entry OR
+ * (LIST-REMOVAL-SYNC, §1bq) the three-way merge above genuinely dropped one
+ * ("list fields whose merge changed" — this function's name predates the
+ * three-way merge but its own logic already covers both directions, see
+ * below). `unionStrings`/`threeWayMergeList` above always put remote's own
+ * (kept) items first, in remote's own order, then local's new entries, so
+ * "nothing changed" is exactly "same length, same order as remote's own
+ * (deduped) list" — a plain position/length inequality check, which already
+ * reports `true` for a SHRINK exactly as it does for a growth (confirmed by
+ * execution, docs/jev-abc/LIST-REMOVAL-SYNC-B-20260930T082019Z.md Q2), so
+ * this function needed no logic change for the three-way merge to be safe.
  */
 export function listUnionChanged(remoteValue: unknown, unionedValue: unknown): boolean {
   const remoteList = asStringArray(remoteValue);
@@ -361,7 +440,23 @@ export function mergeProfileAtSignIn(
 
   for (const key of LIST_FIELDS) {
     if (!Object.prototype.hasOwnProperty.call(remote, key)) continue;
-    (patch as Record<string, unknown>)[key] = unionStrings(remote[key], local[key]);
+    // LIST-REMOVAL-SYNC (§1bq.2) — MANAGER ADDITION, binding: "no
+    // information" is not "empty". `remote[key]` can be present as an own
+    // property with value `undefined` (e.g. softTopics on a row with no
+    // feed_intent card — profileRowToProfile always assigns the key) or
+    // simply never set at all (e.g. preferredJournals — no server column).
+    // Neither means the account confirmed an empty list; a three-way merge
+    // that treated either as `[]` would classify every one of this device's
+    // own base-held items as "removed elsewhere" and silently WIPE them on
+    // this device's very next load. Only an array the account actually
+    // holds — including a real, confirmed `[]` — takes part in the merge;
+    // "no information" leaves this key out of the patch entirely, so local
+    // survives untouched (not even a plain union — there is nothing on the
+    // remote side to union with).
+    if (!Array.isArray(remote[key])) continue;
+    const hasBase = lastSynced != null && Object.prototype.hasOwnProperty.call(lastSynced, key);
+    const base = hasBase ? (lastSynced as Record<string, unknown>)[key] : undefined;
+    (patch as Record<string, unknown>)[key] = threeWayMergeList(remote[key], local[key], base);
     if (INTENT_LIST_FIELDS.has(key)) touchedIntentInputs = true;
   }
 

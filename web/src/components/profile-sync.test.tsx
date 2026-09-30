@@ -11,7 +11,9 @@ import {
   reconcilePushPayload,
   planReconcile,
   nextSyncBaselines,
+  pullMergeAndPush,
   type SyncBaselines,
+  type PullBeforePushDeps,
   useProfileSyncStatus,
 } from "./profile-sync";
 
@@ -504,6 +506,212 @@ describe("nextSyncBaselines — the P3 retry guard as one pure function (§1bk.9
   });
 });
 
+// LIST-REMOVAL-SYNC (§1bq.3) — `pullMergeAndPush` is the lost-update
+// mitigation for the steady-state debounced push. Tested with fakes,
+// headlessly, same convention as `planReconcile`/`nextSyncBaselines` above.
+describe("pullMergeAndPush — the lost-update mitigation (§1bq.3)", () => {
+  interface FakeResult {
+    deps: PullBeforePushDeps;
+    pushedPayloads: Partial<UserProfile>[];
+    appliedPatches: Partial<UserProfile>[];
+    baselineCalls: SyncBaselines[];
+    failedCount: () => number;
+    clearedCount: () => number;
+  }
+
+  function fakeDeps(opts: {
+    remote: { ok: true; profile: Partial<UserProfile> | null } | { ok: false };
+    local: UserProfile;
+    lastSynced: Partial<UserProfile> | null;
+    lastPushed?: Partial<UserProfile> | null;
+    pushResult?: boolean;
+  }): FakeResult {
+    const pushedPayloads: Partial<UserProfile>[] = [];
+    const appliedPatches: Partial<UserProfile>[] = [];
+    const baselineCalls: SyncBaselines[] = [];
+    let failed = 0;
+    let cleared = 0;
+    let lastPushed = opts.lastPushed ?? null;
+    const deps: PullBeforePushDeps = {
+      getRemote: async () => opts.remote,
+      readLocal: () => ({ profile: opts.local, lastSynced: opts.lastSynced }),
+      applyPatch: (patch) => {
+        appliedPatches.push(patch);
+      },
+      push: async (payload) => {
+        pushedPayloads.push(payload);
+        return opts.pushResult ?? true;
+      },
+      setBaselines: (baselines) => {
+        baselineCalls.push(baselines);
+        lastPushed = baselines.lastPushed;
+      },
+      markPushFailed: () => {
+        failed += 1;
+      },
+      clearPushFailed: () => {
+        cleared += 1;
+      },
+      getLastPushed: () => lastPushed,
+    };
+    return {
+      deps,
+      pushedPayloads,
+      appliedPatches,
+      baselineCalls,
+      failedCount: () => failed,
+      clearedCount: () => cleared,
+    };
+  }
+
+  // docs/jev-abc/LIST-REMOVAL-SYNC-B-20260930T082019Z.md Q3's exact race:
+  // device 1 already added "device1-addition" and pushed successfully (the
+  // account AND device 1's own base both hold it). Device 2 never reloaded,
+  // so it does not know about it; it independently removed a different,
+  // pre-existing item ("device2-removed") and its own debounced push now
+  // fires. WITHOUT the mitigation (a bare push of device 2's stale list),
+  // the addition is silently lost. WITH it, both survive correctly.
+  it("WITH the mitigation: keeps another device's concurrent addition AND still drops this device's own genuine removal — never a bare list key", async () => {
+    const { deps, pushedPayloads, baselineCalls } = fakeDeps({
+      remote: { ok: true, profile: { researchTopics: ["kept-a", "kept-b", "device1-addition"] } },
+      local: { ...defaultProfile, researchTopics: ["kept-a"] }, // device 2 deliberately removed "kept-b"
+      lastSynced: { researchTopics: ["kept-a", "kept-b"] }, // device 2's own base — predates device 1's addition
+    });
+
+    const outcome = await pullMergeAndPush(deps);
+
+    expect(outcome).toEqual({ status: "pulled-and-pushed" });
+    expect(pushedPayloads).toHaveLength(1);
+    // Device 1's concurrent addition survives...
+    expect(pushedPayloads[0].researchTopics).toEqual(["kept-a", "device1-addition"]);
+    // ...and device 2's own genuine removal of "kept-b" still sticks.
+    expect(pushedPayloads[0].researchTopics).not.toContain("kept-b");
+    // Never a bare list key: feedIntent is recomputed fresh from the SAME
+    // merged list (researchTopics is an INTENT_LIST_FIELDS member), proving
+    // the push went through remoteProfilePayload/reconcilePushPayload, not
+    // a hand-rolled `{ researchTopics: [...] }` patch.
+    expect(pushedPayloads[0].feedIntent?.requiredConcepts).toEqual(["kept-a", "device1-addition"]);
+    expect(baselineCalls).toHaveLength(1);
+    expect(baselineCalls[0].lastSynced?.researchTopics).toEqual(["kept-a", "device1-addition"]);
+  });
+
+  it("a failed pull never pushes blind: marks push-failed and pushes nothing, so the next change retries", async () => {
+    const { deps, pushedPayloads, failedCount } = fakeDeps({
+      remote: { ok: false },
+      local: { ...defaultProfile, researchTopics: ["kept-a"] },
+      lastSynced: { researchTopics: ["kept-a", "kept-b"] },
+    });
+
+    const outcome = await pullMergeAndPush(deps);
+
+    expect(outcome).toEqual({ status: "pull-failed" });
+    expect(pushedPayloads).toHaveLength(0);
+    expect(failedCount()).toBe(1);
+  });
+
+  // `authorisedCountries` (not an INTENT_LIST_FIELDS member, unlike
+  // researchTopics/softTopics) isolates "nothing NEW for this list" from
+  // feedIntent's own unconditional-resend policy (reconcilePushPayload's
+  // own doc comment: feedIntent "inherits safety... left unconditional" —
+  // proven separately by the mitigation test above). A REAL, empty
+  // `reconcilePushPayload` output is not reachable with a real
+  // `defaultProfile`-shaped profile (PROFILE-SYNC-A's own Check 3 finding:
+  // several no-server-column fields, e.g. eventRequiredTopics/
+  // deepReportEnabled/onboardedAt, are always present, harmlessly, in every
+  // payload) — so this proves the REACHABLE half of "nothing to push" (the
+  // list itself is excluded) rather than a literal `{}`, and the baselines
+  // still advance exactly like a real push's success (§1bk ruling 3, same
+  // as onSession).
+  it("when the merge finds nothing new for a list, that list is not resent — though the call still completes (the always-present no-column fields go out harmlessly) and baselines advance", async () => {
+    const { deps, pushedPayloads, baselineCalls, clearedCount } = fakeDeps({
+      remote: { ok: true, profile: { authorisedCountries: ["Canada"] } },
+      local: { ...defaultProfile, authorisedCountries: ["Canada"] },
+      lastSynced: { authorisedCountries: ["Canada"] },
+    });
+
+    const outcome = await pullMergeAndPush(deps);
+
+    expect(outcome.status).toBe("pulled-and-pushed");
+    expect(pushedPayloads).toHaveLength(1);
+    expect(pushedPayloads[0]).not.toHaveProperty("authorisedCountries");
+    expect(pushedPayloads[0]).not.toHaveProperty("feedIntent"); // nothing intent-related touched either
+    expect(baselineCalls).toHaveLength(1);
+    expect(clearedCount()).toBe(1);
+  });
+
+  it("the account genuinely has no row yet (first-ever sync): still merges and pushes local's own list, nothing to merge against", async () => {
+    const { deps, pushedPayloads } = fakeDeps({
+      remote: { ok: true, profile: null },
+      local: { ...defaultProfile, researchTopics: ["brand-new"] },
+      lastSynced: null,
+    });
+
+    const outcome = await pullMergeAndPush(deps);
+
+    expect(outcome).toEqual({ status: "pulled-and-pushed" });
+    expect(pushedPayloads[0].researchTopics).toEqual(["brand-new"]);
+  });
+
+  it("a push failure after a successful pull marks push-failed and never advances the baselines", async () => {
+    const { deps, baselineCalls, failedCount } = fakeDeps({
+      remote: { ok: true, profile: { researchTopics: ["kept-a", "device1-addition"] } },
+      local: { ...defaultProfile, researchTopics: ["kept-a"] },
+      lastSynced: { researchTopics: ["kept-a", "kept-b"] },
+      pushResult: false,
+    });
+
+    const outcome = await pullMergeAndPush(deps);
+
+    expect(outcome).toEqual({ status: "push-failed" });
+    expect(baselineCalls).toHaveLength(0);
+    expect(failedCount()).toBe(1);
+  });
+
+  // The guide's own long-open-tab scenario (§1bq.4 test 7 / the manager's
+  // Q4 addition): computer 2 loaded BEFORE computer 1's addition (so its own
+  // base predates it), then edits the same list — the addition must survive
+  // on the account AND on computer 1's next load. Chains the real
+  // `planReconcile` (computer 1's push) with `pullMergeAndPush` (computer
+  // 2's mitigated push) against one shared in-memory "account".
+  it("long-open-tab: computer 2 (loaded before computer 1's addition) edits the same list — the addition survives on the account and on computer 1's next load", async () => {
+    let account: Partial<UserProfile> = { researchTopics: ["shared-a", "shared-b"] };
+
+    // Computer 1: fresh sync, adds "computer1-topic", pushes for real
+    // (mirrors onSession's own sequence with the real planReconcile).
+    const computer1Local: UserProfile = {
+      ...defaultProfile,
+      researchTopics: ["shared-a", "shared-b", "computer1-topic"],
+    };
+    const computer1LastSynced: Partial<UserProfile> = { researchTopics: ["shared-a", "shared-b"] };
+    const plan1 = planReconcile(computer1Local, account, computer1LastSynced);
+    account = { ...account, researchTopics: plan1.pushPayload.researchTopics };
+    expect(account.researchTopics).toEqual(["shared-a", "shared-b", "computer1-topic"]);
+
+    // Computer 2: its OWN base predates computer 1's addition (it loaded
+    // earlier and has not reloaded since) — then it removes "shared-b".
+    const computer2 = fakeDeps({
+      remote: { ok: true, profile: account },
+      local: { ...defaultProfile, researchTopics: ["shared-a"] }, // "shared-b" deliberately removed
+      lastSynced: { researchTopics: ["shared-a", "shared-b"] }, // predates computer 1's addition
+    });
+    const outcome2 = await pullMergeAndPush(computer2.deps);
+    expect(outcome2).toEqual({ status: "pulled-and-pushed" });
+    account = { ...account, researchTopics: computer2.pushedPayloads[0].researchTopics };
+    // Computer 1's addition survives on the account, AND computer 2's own
+    // removal of "shared-b" sticks.
+    expect(account.researchTopics).toEqual(["shared-a", "computer1-topic"]);
+
+    // Computer 1's NEXT load: sees "shared-b" gone (computer 2's removal)
+    // and its own addition still present.
+    const plan1Next = planReconcile(
+      { ...defaultProfile, researchTopics: ["shared-a", "shared-b", "computer1-topic"] },
+      account,
+      { researchTopics: ["shared-a", "shared-b", "computer1-topic"] }, // computer 1's own base, from its earlier push
+    );
+    expect(plan1Next.patch.researchTopics).toEqual(["shared-a", "computer1-topic"]);
+  });
+});
+
 // Source-text checks — this repo's own technique for effectful code it
 // cannot mount (see store/profile.test.ts's `partialize` regex test and this
 // file's own header note). Confirms BOTH push closures actually call
@@ -543,5 +751,25 @@ describe("ProfileSync's closures actually use nextSyncBaselines (§1bk.9a) — s
     expect(body).toMatch(/nextSyncBaselines\(/);
     expect(body.match(/setLastSynced\(/g) ?? []).toHaveLength(1);
     expect(body).toMatch(/setLastSynced\(\s*baselines\.lastSynced\s*\)/);
+  });
+
+  // LIST-REMOVAL-SYNC (§1bq.3) — the debounced-push closure must route a
+  // list-carrying patch through `pullMergeAndPush` BEFORE it would ever
+  // reach the ordinary bare `pushRemote(patch)` call a few lines below (the
+  // one the test above pins). `listPullDeps` is deliberately a NAMED
+  // top-level function (see its own header note) precisely so this
+  // wiring adds no second `setLastSynced(` text inside the closure region —
+  // confirmed by the test above still passing unmodified.
+  it("the steady-state debounced push routes a list-carrying patch through pullMergeAndPush, before the ordinary push path", () => {
+    const body = closureBody(
+      "debounceRef.current = setTimeout(async () => {",
+      "}, DEBOUNCE_MS);",
+    );
+    expect(body).toMatch(/carriesListChange/);
+    expect(body).toMatch(/pullMergeAndPush\(\s*listPullDeps\(lastPushedRef\)\s*\)/);
+    // The list-carrying branch returns before the ordinary push path, so
+    // pullMergeAndPush's call site textually precedes the bare pushRemote
+    // call this describe block's other test pins.
+    expect(body.indexOf("pullMergeAndPush(")).toBeLessThan(body.indexOf("if (await pushRemote(patch))"));
   });
 });
