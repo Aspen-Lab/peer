@@ -116,6 +116,51 @@ function dualEditionDoiAlias(doiValue: string): string | undefined {
   return `doi:10.1002/anie.${m[1]}`;
 }
 
+// DATASET-RECORDS (ABC-JEV-INTEGRATION.md §1bl,
+// docs/jev-abc/DATASET-RECORDS-B-20260930T030544Z.md): Figshare mints a
+// SEPARATE OpenAlex Work per version of the same deposited record, appending
+// a plain textual ".v<N>" suffix onto the SAME base DOI for every version
+// after the first (e.g. base 10.6084/m9.figshare.33608659, version 4
+// 10.6084/m9.figshare.33608659.v4 — confirmed live on both openalex:
+// W7212231591 and W7214074445, the reproduced "O2-LCO-DATA" pair shown twice
+// in one feed response). Same shape and same fix pattern as
+// `dualEditionDoiAlias` above (DEDUP-ANGEW, §1aw): a small, additive, named,
+// one-directional regex alias — only the VERSIONED record gains an extra
+// `doi:` alias pointing at its base (unversioned) sibling's OWN key value —
+// so pass-1's existing shared-id-form-key union (unchanged) merges the two
+// versions transitively, the same already-hardened path DEDUP-ANGEW already
+// reuses. Purely additive: nothing in paper-identity.ts (clustering/weak-link
+// code) or dedup.ts's own survivor-selection loop is touched by this.
+//
+// Scoped tightly to the evidence, same discipline as DEDUP-ANGEW's own
+// registrant scoping: only the 10.6084 registrant (Figshare's own, confirmed
+// live and by the B investigation's local-sample DOI-prefix table — Zenodo,
+// Dryad, Mendeley Data and OSF each have their OWN, unverified-here version
+// conventions and are deliberately out of scope, per §1bl.3's own ruling: "
+// Zenodo's unrelated per-version DOIs out of scope"), and only a trailing
+// ".v" + digits suffix immediately at the end of the string — a suffix that
+// merely CONTAINS something shaped like a version marker without that exact
+// trailing ".v<digits>" shape (e.g. a hyphen-joined "-v4-experiment", or a
+// dotless "v4") is an accepted, safe-direction miss: it stays unmerged, never
+// a false merge, the same accepted trade-off `dualEditionDoiAlias` and
+// arXiv's own `stripVersionSuffix` already make.
+const FIGSHARE_VERSION_DOI_RE = /^(10\.6084\/\S+)\.v\d+$/i;
+
+/**
+ * For a normalized DOI (already run through `normalizeDoi`) shaped exactly
+ * `10.6084/<suffix>.v<digits>`, returns the `doi:` id-form of its own base
+ * (unversioned) sibling — `doi:10.6084/<suffix>` — the literal value that
+ * base record's own `canonicalPaperKey` call already uses as `key`. Returns
+ * `undefined` for every other DOI, including an already-unversioned Figshare
+ * DOI (nothing to alias to), a non-6084 registrant, and a suffix whose
+ * trailing characters aren't exactly ".v" followed by digits. Never throws.
+ */
+function figshareVersionDoiAlias(doiValue: string): string | undefined {
+  const m = FIGSHARE_VERSION_DOI_RE.exec(doiValue);
+  if (!m) return undefined;
+  return `doi:${m[1]}`;
+}
+
 /**
  * Lowercase, strip a `https://doi.org/`, `http://dx.doi.org/` (any http(s)/dx
  * combination) or `doi:` prefix, and trim. Returns undefined — never throws —
@@ -193,6 +238,11 @@ export function canonicalPaperKey(input: CanonicalPaperInput): CanonicalIdentity
   // DUAL_EDITION_DOI_RE's doc comment above. Computed from doiValue (not
   // doiCandidate) since dualEditionDoiAlias expects the bare normalized DOI.
   const dualEditionAlias = doiValue ? dualEditionDoiAlias(doiValue) : undefined;
+  // DATASET-RECORDS (§1bl): a Figshare ".vN" versioned DOI's extra alias
+  // toward its own base (unversioned) sibling — see FIGSHARE_VERSION_DOI_RE's
+  // doc comment above. Same computed-from-doiValue reasoning as the alias
+  // just above.
+  const figshareAlias = doiValue ? figshareVersionDoiAlias(doiValue) : undefined;
   const s2Candidate = resolveIdTier(input, "semantic_scholar", "s2", "s2Id");
   const openalexCandidate = resolveIdTier(input, "openalex", "openalex", "openalexId");
   const arxivCandidate = resolveIdTier(input, "arxiv", "arxiv", "arxivId", true);
@@ -225,6 +275,12 @@ export function canonicalPaperKey(input: CanonicalPaperInput): CanonicalIdentity
   // always doiCandidate itself (DOI is priority 1) and can never equal this
   // alias (an "ange" key vs. an "anie" alias are always different strings).
   if (dualEditionAlias) aliasSet.add(dualEditionAlias);
+  // DATASET-RECORDS (§1bl): same reasoning — whenever figshareAlias is
+  // present, doiValue was present too (it's derived from doiValue), so `key`
+  // is always doiCandidate itself, and a versioned DOI's own key can never
+  // equal the base DOI alias it points at (the base string is always
+  // strictly shorter — it has the ".vN" suffix stripped).
+  if (figshareAlias) aliasSet.add(figshareAlias);
 
   return { key, keyVersion: 1, aliases: Array.from(aliasSet) };
 }

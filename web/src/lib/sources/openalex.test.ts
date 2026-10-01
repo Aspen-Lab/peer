@@ -147,4 +147,104 @@ describe("openalex adapter — failure visibility (P2-S2)", () => {
     });
     expect(items.map((item) => item.id)).toEqual(["openalex:W1"]);
   });
+
+  // DATASET-RECORDS (ABC-JEV-INTEGRATION.md §1bl,
+  // docs/jev-abc/DATASET-RECORDS-B-20260930T030544Z.md): a signed-out Papers
+  // feed showed one Figshare DATASET record twice, because nothing ever
+  // checked OpenAlex's own work `type`. Mutation target: dropping the
+  // `.filter((w) => !isExcludedOpenAlexType(w))` call in fetchOne turns the
+  // first test in this block red.
+  describe("drops clearly non-paper OpenAlex types after fetch (DATASET-RECORDS)", () => {
+    function workResult(overrides: Record<string, unknown>) {
+      return {
+        id: `https://openalex.org/${overrides.id ?? "W1"}`,
+        title: overrides.title ?? "A Fixture Work",
+        publication_date: "2026-01-01",
+        authorships: [],
+        doi: null,
+        ...overrides,
+      };
+    }
+
+    it("a dataset-typed work never reaches the feed", async () => {
+      globalThis.fetch = vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              results: [
+                workResult({ id: "W_DATASET", title: "O2-LCO-DATA", type: "dataset" }),
+              ],
+            }),
+            { status: 200 },
+          ),
+      ) as unknown as typeof fetch;
+
+      const items = await openalex.fetch({ topics: ["solid-state batteries"], limit: 10 });
+      expect(items).toEqual([]);
+    });
+
+    it("reproduces the exact live bug shape end-to-end through the adapter + filter: the O2-LCO-DATA base/.v4 pair, both dataset-typed, both gone before dedup ever runs", async () => {
+      globalThis.fetch = vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              results: [
+                workResult({
+                  id: "W7212231591",
+                  title: "O2-LCO-DATA",
+                  type: "dataset",
+                  doi: "10.6084/m9.figshare.33608659",
+                }),
+                workResult({
+                  id: "W7214074445",
+                  title: "O2-LCO-DATA",
+                  type: "dataset",
+                  doi: "10.6084/m9.figshare.33608659.v4",
+                }),
+              ],
+            }),
+            { status: 200 },
+          ),
+      ) as unknown as typeof fetch;
+
+      const items = await openalex.fetch({ topics: ["LCO"], limit: 10 });
+      expect(items).toEqual([]);
+    });
+
+    it("an article-typed, a preprint-typed, and a review-typed work all survive unchanged", async () => {
+      globalThis.fetch = vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              results: [
+                workResult({ id: "W_ARTICLE", title: "A Real Article", type: "article" }),
+                workResult({ id: "W_PREPRINT", title: "A Real Preprint", type: "preprint" }),
+                workResult({ id: "W_REVIEW", title: "A Real Review", type: "review" }),
+              ],
+            }),
+            { status: 200 },
+          ),
+      ) as unknown as typeof fetch;
+
+      const items = await openalex.fetch({ topics: ["solid-state batteries"], limit: 10 });
+      expect(items.map((item) => item.id).sort()).toEqual([
+        "openalex:W_ARTICLE",
+        "openalex:W_PREPRINT",
+        "openalex:W_REVIEW",
+      ]);
+    });
+
+    it("sends `type` in the select parameter (so the field this filter reads is actually fetched)", async () => {
+      let capturedUrl = "";
+      globalThis.fetch = vi.fn(async (url: string) => {
+        capturedUrl = String(url);
+        return new Response(JSON.stringify({ results: [] }), { status: 200 });
+      }) as unknown as typeof fetch;
+
+      await openalex.fetch({ topics: ["solid-state batteries"], limit: 10 });
+
+      const select = new URL(capturedUrl).searchParams.get("select") ?? "";
+      expect(select.split(",")).toContain("type");
+    });
+  });
 });

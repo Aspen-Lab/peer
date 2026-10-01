@@ -83,6 +83,22 @@ interface ProfileState {
    */
   entitlement: ClientEntitlement | null;
   setEntitlement: (entitlement: ClientEntitlement) => void;
+  /**
+   * PROFILE-SYNC (ABC-JEV-INTEGRATION.md §1bk) — per device, the
+   * single-value profile fields this device last actually confirmed with
+   * the account (the result of its own most recent successful
+   * sign-in-reconcile or steady-state push). `null` means never confirmed
+   * anything — `dirtySingleValueFields` (lib/profile/merge.ts) then
+   * compares against `defaultProfile` instead (the bootstrap rule).
+   * Persisted alongside `profile` (see `partialize`) — an in-memory ref
+   * would reset on every reload and reintroduce the exact ping-pong bug
+   * this field exists to fix (a stale device's own old value overwriting a
+   * newer real edit made elsewhere, on every load).
+   */
+  lastSynced: Partial<UserProfile> | null;
+  /** Replace the whole snapshot — never a per-field merge; see the field
+   *  doc above and §1bk ruling 3 ("becomes the resulting snapshot"). */
+  setLastSynced: (snapshot: Partial<UserProfile>) => void;
   /** Replace the whole profile from an exported document. */
   importProfile: (document: unknown) => boolean;
   updateDisplayName: (name: string) => void;
@@ -395,8 +411,12 @@ export const useProfileStore = create<ProfileState>()(
       // server's answer, or with `ANONYMOUS_CLIENT_ENTITLEMENT` once it has
       // established there is no session to ask about.
       entitlement: null,
+      // PROFILE-SYNC (§1bk) — never confirmed anything with any account yet;
+      // see the field doc above.
+      lastSynced: null,
 
       setEntitlement: (entitlement) => set({ entitlement }),
+      setLastSynced: (snapshot) => set({ lastSynced: snapshot }),
 
       recordUploadPreference: (paper) => set((s) => ({ profile: { ...s.profile,
         preferenceLedger: applyUploadPreferenceSignal(s.profile.preferenceLedger,
@@ -765,7 +785,14 @@ export const useProfileStore = create<ProfileState>()(
 
       logOut: () => {
         applyColorTheme(defaultProfile.colorTheme);
-        set({ profile: defaultProfile, entitlement: null });
+        // PROFILE-SYNC (§1bk) — lastSynced describes what THIS account
+        // confirmed with THIS device; once profile itself resets to
+        // defaultProfile, a stale lastSynced from the previous account
+        // would make every default look "dirty" relative to it on the next
+        // sign-in (the same person signing back in, or — a shared computer
+        // — someone else), reintroducing the overwrite bug through a
+        // different door. Reset together, same as entitlement.
+        set({ profile: defaultProfile, entitlement: null, lastSynced: null });
       },
     }),
     // skipHydration: persisted state is rehydrated after mount via
@@ -776,13 +803,21 @@ export const useProfileStore = create<ProfileState>()(
       skipHydration: true,
       // ABC-freemium 1-14 — the entitlement is server-authoritative and must
       // NOT be written to localStorage; a cached `paid` would survive a
-      // downgrade. This is byte-identical to what was persisted before, because
-      // `profile` was already the only non-function field in the state.
-      partialize: (state) => ({ profile: state.profile }) as ProfileState,
+      // downgrade — deliberately excluded, same as always. PROFILE-SYNC
+      // (§1bk) — `lastSynced` is now ALSO deliberately persisted alongside
+      // `profile`: an in-memory-only baseline is exactly the ping-pong bug
+      // this field exists to fix.
+      partialize: (state) => ({ profile: state.profile, lastSynced: state.lastSynced }) as ProfileState,
       // v2: colorTheme became a "mode:accent" composite.
       // v3: Events and Jobs gained independent Required/Explore topic fields.
       // v4: work-authorisation countries became a persisted profile signal.
-      version: 4,
+      // v5: PROFILE-SYNC (§1bk) — lastSynced, a per-device snapshot of the
+      //     single-value fields' last-confirmed values. The migration adds
+      //     none for a pre-v5 blob (deliberately — see
+      //     dirtySingleValueFields's bootstrap rule): its first sync under
+      //     the fixed code compares against defaultProfile instead of
+      //     assuming everything is already synced.
+      version: 5,
       migrate: (persisted, version) =>
         migrateProfileStore(persisted, version) as ProfileState,
       // Build the promoted snapshot as part of the state installed by

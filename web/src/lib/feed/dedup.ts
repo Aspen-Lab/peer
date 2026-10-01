@@ -1,5 +1,6 @@
 import type { RawItem, SourceId } from "@/lib/sources/types";
 import { idFormKeys, normalizeDoi, type WorkMatchInput } from "@/lib/utils/canonical-identity";
+import { isExcludedOpenAlexRawItem } from "@/lib/utils/openalex";
 import {
   clusterCanonicalWorks,
   firstAuthorSurnameOf,
@@ -156,6 +157,22 @@ function dualEditionSurvivorCandidates(items: RawItem[], idxs: number[]): number
 }
 
 export function dedupItems(items: RawItem[]): RawItem[] {
+  if (items.length === 0) return [];
+
+  // DATASET-RECORDS (ABC-JEV-INTEGRATION.md §1bl.8 AMENDMENT) — THE single
+  // pipeline choke point: every OpenAlex-derived candidate passes through
+  // `dedupItems` before dedup/scoring, whichever channel (a source adapter,
+  // the advisor/citation-neighbourhood channel, a liked-paper seed citation,
+  // a future channel not yet written) produced it, and whether or not that
+  // channel remembered to filter itself — this is what closes the gap a
+  // fresh A found in `affiliation/openalex.ts`'s `fetchCitationNeighborhood`,
+  // which has no filter of its own by design (see that file's own comment).
+  // Non-OpenAlex items are always left untouched (isExcludedOpenAlexRawItem
+  // returns false immediately for any other source, e.g. DBLP/PubMed, whose
+  // own `workType` vocabularies are unrelated and out of scope — see that
+  // function's own doc comment). The 3 adapter-level filters (round 1) stay
+  // as defence in depth, not as the only protection.
+  items = items.filter((item) => !isExcludedOpenAlexRawItem(item));
   if (items.length === 0) return [];
 
   const identities = items.map((item) => identityForRawItem(item));

@@ -31,8 +31,22 @@ function openAlexAuthHeaders(): Record<string, string> | undefined {
   return key ? { Authorization: `Bearer ${key}` } : undefined;
 }
 
+// DATASET-RECORDS (ABC-JEV-INTEGRATION.md §1bl.8 AMENDMENT): a fresh A found
+// this file feeds the exact same scored Papers candidate pool the three
+// source adapters feed (fetchCitationNeighborhood — the advisor citation
+// neighbourhood at build time, pipeline.ts's affiliationPromise, and the
+// liked-paper "positive seed" citation neighbourhood at read time,
+// pipeline.ts's fetchSeedCitationsLeg) but never fetched OpenAlex's own
+// `type`, so metadata.workType stayed a dead field for every item this file
+// produces. `type` added here so it's populated the same way the three
+// adapters' own selects are; no filter is applied in THIS file — the single
+// pipeline choke point (feed/dedup.ts's dedupItems, via
+// isExcludedOpenAlexRawItem) is what excludes a non-paper record reached
+// through this path, deliberately not a fourth adapter-level filter (see
+// that function's own doc comment for why "one choke point" beats another
+// copy of the same check).
 const WORK_SELECT =
-  "id,title,publication_date,authorships,primary_location,best_oa_location,open_access,abstract_inverted_index,cited_by_count,doi,topics,primary_topic,keywords,concepts,type_crossref";
+  "id,title,publication_date,authorships,primary_location,best_oa_location,open_access,abstract_inverted_index,cited_by_count,doi,topics,primary_topic,keywords,concepts,type,type_crossref";
 
 export interface ResolvedAuthor {
   /** Bare OpenAlex author id, e.g. "A5012345678". */

@@ -1494,3 +1494,223 @@ function permutations3<T>(a: T, b: T, c: T): T[][] {
     [c, b, a],
   ];
 }
+
+// DATASET-RECORDS (ABC-JEV-INTEGRATION.md §1bl,
+// docs/jev-abc/DATASET-RECORDS-B-20260930T030544Z.md): a signed-out Papers
+// feed showed one Figshare DATASET record ("O2-LCO-DATA") twice — the base
+// work openalex:W7212231591 (DOI 10.6084/m9.figshare.33608659) and
+// openalex:W7214074445 (the same DOI with a ".v4" suffix, OpenAlex's own
+// version convention for Figshare deposits). Reproduced here with the real
+// ids/DOIs/venue (title/type are the only fields the real record needs for
+// this test, since neither feeds identity/clustering beyond what's used
+// below). The fix: canonical-identity.ts's `figshareVersionDoiAlias` — see
+// that file's own DATASET-RECORDS section for the unit-level coverage of the
+// alias itself; this section covers the end-to-end merge through
+// `dedupItems`/`clusterCanonicalWorks`, the same split B's own investigation
+// used for DEDUP-ANGEW.
+describe("Figshare version-DOI alias — end-to-end merge (DATASET-RECORDS)", () => {
+  // "O2-LCO-DATA" normalizes to 2 qualifying (>=3-char) tokens ("lco",
+  // "data" — "o2" is only 2 chars), under computeTitleAlias's >=4-token bar.
+  // So titleFormOf is undefined for both records and weakPairMatch's first
+  // check fails immediately — the pair CANNOT merge via the pre-existing
+  // weak-link rule at all, only via a shared strong id-form key. This is the
+  // exact reason the live duplicate was never caught before this fix (B's
+  // own investigation, Task 1).
+  const TITLE = "O2-LCO-DATA";
+
+  function baseRecord(): RawItem {
+    return item({
+      id: "openalex:W7212231591",
+      source: "openalex",
+      title: TITLE,
+      venue: "Figshare",
+      metadata: { doi: "10.6084/m9.figshare.33608659" },
+    });
+  }
+
+  function versionedRecord(): RawItem {
+    return item({
+      id: "openalex:W7214074445",
+      source: "openalex",
+      title: TITLE,
+      venue: "Figshare",
+      metadata: { doi: "10.6084/m9.figshare.33608659.v4" },
+    });
+  }
+
+  it("merges the O2-LCO-DATA-shaped pair into one survivor (mutation target: removing the alias wiring turns this red — expect(result).toHaveLength(1) would fail with 2)", () => {
+    const result = dedupItems([baseRecord(), versionedRecord()]);
+    expect(result).toHaveLength(1);
+
+    const survivor = result[0];
+    const mergedIds = (survivor.metadata.mergedFrom ?? []).map((m) => m.id);
+    expect(new Set([survivor.id, ...mergedIds])).toEqual(
+      new Set(["openalex:W7212231591", "openalex:W7214074445"]),
+    );
+  });
+
+  it("merges regardless of arrival order", () => {
+    const result = dedupItems([versionedRecord(), baseRecord()]);
+    expect(result).toHaveLength(1);
+  });
+
+  it("keeps two different (unrelated) Figshare DOIs apart, versioned or not", () => {
+    const a = item({
+      id: "openalex:W_FIG_1",
+      source: "openalex",
+      title: TITLE,
+      metadata: { doi: "10.6084/m9.figshare.11111" },
+    });
+    const b = item({
+      id: "openalex:W_FIG_2",
+      source: "openalex",
+      title: TITLE,
+      metadata: { doi: "10.6084/m9.figshare.22222.v1" },
+    });
+    const result = dedupItems([a, b]);
+    expect(result).toHaveLength(2);
+  });
+
+  it("leaves a non-Figshare (e.g. Zenodo) versioned-looking DOI pair unmerged — out of scope per §1bl.3", () => {
+    const a = item({
+      id: "openalex:W_ZEN_1",
+      source: "openalex",
+      title: TITLE,
+      metadata: { doi: "10.5281/zenodo.99999" },
+    });
+    const b = item({
+      id: "openalex:W_ZEN_2",
+      source: "openalex",
+      title: TITLE,
+      metadata: { doi: "10.5281/zenodo.99999.v2" },
+    });
+    const result = dedupItems([a, b]);
+    expect(result).toHaveLength(2);
+  });
+});
+
+// DATASET-RECORDS (ABC-JEV-INTEGRATION.md §1bl.8 AMENDMENT,
+// docs/jev-abc/DATASET-RECORDS-A-20260930T041130Z.md Finding 1, HIGH): round 1
+// only filtered the 3 source adapters. A fresh A found a live, unaddressed
+// path into this SAME candidate pool — `affiliation/openalex.ts`'s
+// `fetchCitationNeighborhood`, which feeds both the advisor citation
+// neighbourhood (build time, pipeline.ts's `affiliationPromise`) and the
+// liked-paper "positive seed" citation neighbourhood (read time, pipeline.ts's
+// `fetchSeedCitationsLeg`) — with no filter of its own by design (see that
+// file's own DATASET-RECORDS test section). `dedupItems` is THE single
+// pipeline choke point every one of these channels' output passes through
+// before scoring, regardless of which channel produced it (see the comment
+// at the top of `dedupItems` and `isExcludedOpenAlexRawItem`'s own doc
+// comment in utils/openalex.ts). These tests exercise each of the three real
+// entry paths by the exact RawItem shape/admissionChannel tag its real
+// caller in pipeline.ts gives it: "keyword" for a plain source-adapter
+// result, "citation" for BOTH the advisor-neighbourhood and the liked-paper
+// seed-citation channel (mechanically identical at this point — both real
+// call sites push into an array that reaches this same `dedupItems` call).
+describe("the pipeline choke point excludes non-paper OpenAlex types on every entry path (DATASET-RECORDS §1bl.8)", () => {
+  function channelItem(
+    admissionChannel: "keyword" | "citation",
+    overrides: Partial<RawItem> & { id: string; title: string },
+  ): RawItem {
+    return item({
+      source: "openalex",
+      admissionChannels: [admissionChannel],
+      ...overrides,
+    });
+  }
+
+  it("adapter entry path (admissionChannel: keyword) — a dataset-typed item never survives dedupItems", () => {
+    const result = dedupItems([
+      channelItem("keyword", {
+        id: "openalex:W_ADAPTER_DATASET",
+        title: "O2-LCO-DATA",
+        metadata: { workType: "dataset" },
+      }),
+    ]);
+    expect(result).toEqual([]);
+  });
+
+  it("adapter entry path (admissionChannel: keyword) — an article-typed item survives unchanged", () => {
+    const result = dedupItems([
+      channelItem("keyword", {
+        id: "openalex:W_ADAPTER_ARTICLE",
+        title: "A Real Article",
+        metadata: { workType: "article" },
+      }),
+    ]);
+    expect(result.map((r) => r.id)).toEqual(["openalex:W_ADAPTER_ARTICLE"]);
+  });
+
+  it("advisor-neighbourhood entry path (admissionChannel: citation, build time) — a dataset-typed item never survives dedupItems", () => {
+    const result = dedupItems([
+      channelItem("citation", {
+        id: "openalex:W_ADVISOR_DATASET",
+        title: "O2-LCO-DATA",
+        metadata: { workType: "dataset" },
+      }),
+    ]);
+    expect(result).toEqual([]);
+  });
+
+  it("advisor-neighbourhood entry path (admissionChannel: citation, build time) — an article-typed item survives unchanged", () => {
+    const result = dedupItems([
+      channelItem("citation", {
+        id: "openalex:W_ADVISOR_ARTICLE",
+        title: "A Paper Citing The Advisor's Work",
+        metadata: { workType: "article" },
+      }),
+    ]);
+    expect(result.map((r) => r.id)).toEqual(["openalex:W_ADVISOR_ARTICLE"]);
+  });
+
+  it("liked-paper seed-citation entry path (admissionChannel: citation, read time) — a dataset-typed item never survives dedupItems", () => {
+    // Same mechanism as the advisor-neighbourhood test above by construction
+    // — pipeline.ts's fetchSeedCitationsLeg (read time) and affiliationPromise
+    // (build time) both call the SAME fetchCitationNeighborhood and both tag
+    // their output "citation" before it reaches this same dedupItems call;
+    // kept as its own named test to cover both real call sites explicitly.
+    const result = dedupItems([
+      channelItem("citation", {
+        id: "openalex:W_SEED_DATASET",
+        title: "O2-LCO-DATA",
+        metadata: { workType: "dataset" },
+      }),
+    ]);
+    expect(result).toEqual([]);
+  });
+
+  it("liked-paper seed-citation entry path (admissionChannel: citation, read time) — an article-typed item survives unchanged", () => {
+    const result = dedupItems([
+      channelItem("citation", {
+        id: "openalex:W_SEED_ARTICLE",
+        title: "A Paper Citing A Liked Paper",
+        metadata: { workType: "article" },
+      }),
+    ]);
+    expect(result.map((r) => r.id)).toEqual(["openalex:W_SEED_ARTICLE"]);
+  });
+
+  it("a mixed pool: only the openalex dataset is dropped, everything else (including a non-openalex item sharing a coincidental workType string) survives", () => {
+    const result = dedupItems([
+      channelItem("keyword", {
+        id: "openalex:W_MIX_ARTICLE",
+        title: "A Kept OpenAlex Article",
+        metadata: { workType: "article" },
+      }),
+      channelItem("citation", {
+        id: "openalex:W_MIX_DATASET",
+        title: "O2-LCO-DATA",
+        metadata: { workType: "dataset" },
+      }),
+      item({
+        id: "pubmed:MIX_1",
+        source: "pubmed",
+        title: "A PubMed Item Whose Own pubtype Happens To Say Dataset",
+        metadata: { workType: "Dataset" },
+      }),
+    ]);
+    expect(result.map((r) => r.id).sort()).toEqual(
+      ["openalex:W_MIX_ARTICLE", "pubmed:MIX_1"].sort(),
+    );
+  });
+});

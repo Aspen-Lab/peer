@@ -53,7 +53,16 @@ beforeEach(() => {
     },
     error: null,
   });
-  mocks.runFeedPipeline.mockResolvedValue({ items: [], meta: {} });
+  // EMAIL-DEST-UX (§1bm) — a NON-empty default. Every test in this file that
+  // doesn't care about item count (destination resolution, the rate limit,
+  // send-failure handling, Tier-0 plumbing) relies on this default reaching
+  // sendDigestEmail exactly as it did before the empty-result short-circuit
+  // existed; the empty-specific describe block below overrides this back to
+  // `items: []` deliberately, per case.
+  mocks.runFeedPipeline.mockResolvedValue({
+    items: [{ id: "paper-1", title: "Example paper" }],
+    meta: {},
+  });
   mocks.sendDigestEmail.mockResolvedValue({ sent: true, messageId: "msg-1" });
 });
 
@@ -247,32 +256,70 @@ describe("the send itself fails (§1al POLISH-1-EMAIL (g))", () => {
   });
 });
 
-// EMPTY-EMAIL-REASON (ABC-JEV-INTEGRATION.md §1bj) -- this sender must pass
-// the pipeline's own emptyReasonCode through to sendDigestEmail unchanged;
-// the actual rendered-sentence behaviour is covered by digest-template.
-// test.ts (real renderer) and send-digest.test.ts (forwarding into the
-// renderers) -- this test only proves THIS route's own plumbing.
-describe("passes feed.meta.emptyReasonCode through to sendDigestEmail (EMPTY-EMAIL-REASON)", () => {
-  it("forwards a real code when the pipeline resolves one", async () => {
+// EMPTY-EMAIL-REASON (ABC-JEV-INTEGRATION.md §1bj) established that
+// sendDigestEmail accepts an emptyReasonCode and renders it when items is
+// empty. EMAIL-DEST-UX + EMPTY-TEST-EMAIL (§1bm) changed THIS route
+// specifically (not dispatch-digests, which still sends on an empty day per
+// §1bj ruling 1): a zero-item test result no longer reaches sendDigestEmail
+// at all, so it can never carry an emptyReasonCode any more. The two cases
+// below used to assert forwarding with an `items: []` fixture in both
+// branches -- under the new contract that fixture means "do not send", so
+// both are rewritten to their correct, current behaviour.
+// EMAIL-DEST-UX (§1bm).
+describe("an empty pipeline result sends nothing (EMAIL-DEST-UX + EMPTY-TEST-EMAIL, §1bm)", () => {
+  it("does not call sendDigestEmail, and returns the pipeline's reason code reason-coded, no raw text — EMAIL-DEST-UX (§1bm)", async () => {
     mocks.runFeedPipeline.mockResolvedValue({
       items: [],
       meta: { emptyReasonCode: "no-required-match" },
     });
 
-    await POST(request());
+    const response = await POST(request());
+    const body = await response.json();
 
-    expect(mocks.sendDigestEmail).toHaveBeenCalledWith(
-      expect.objectContaining({ emptyReasonCode: "no-required-match" }),
-    );
+    expect(mocks.sendDigestEmail).not.toHaveBeenCalled();
+    expect(response.status).toBe(200);
+    expect(body).toEqual({ sent: false, reason: "empty_result", emptyReasonCode: "no-required-match" });
   });
 
-  it("forwards undefined when the pipeline returned items (no code to resolve)", async () => {
+  it("an empty result with no reason code at all omits the emptyReasonCode key entirely (never a guess) — EMAIL-DEST-UX (§1bm)", async () => {
     mocks.runFeedPipeline.mockResolvedValue({ items: [], meta: {} });
+
+    const response = await POST(request());
+    const body = await response.json();
+
+    expect(mocks.sendDigestEmail).not.toHaveBeenCalled();
+    expect(body).toEqual({ sent: false, reason: "empty_result" });
+    expect(body).not.toHaveProperty("emptyReasonCode");
+  });
+
+  it("a genuinely non-empty pipeline result still forwards emptyReasonCode as undefined (it is only ever set when items is empty) — EMAIL-DEST-UX (§1bm)", async () => {
+    mocks.runFeedPipeline.mockResolvedValue({
+      items: [{ id: "paper-1", title: "Example paper" }],
+      meta: {},
+    });
 
     await POST(request());
 
+    expect(mocks.sendDigestEmail).toHaveBeenCalledTimes(1);
     const call = mocks.sendDigestEmail.mock.calls[0][0];
     expect(call.emptyReasonCode).toBeUndefined();
+  });
+
+  it("still spends the daily counter on an empty result, exactly as on a real send (§1bm point 3) — EMAIL-DEST-UX (§1bm)", async () => {
+    mocks.runFeedPipeline.mockResolvedValue({ items: [], meta: { emptyReasonCode: "no-results" } });
+
+    for (let i = 0; i < 3; i += 1) {
+      const response = await POST(request());
+      const body = await response.json();
+      expect(response.status).toBe(200);
+      expect(body.sent).toBe(false);
+      expect(body.reason).toBe("empty_result");
+    }
+    const fourth = await POST(request());
+    const body = await fourth.json();
+    expect(fourth.status).toBe(429);
+    expect(body.reason).toBe("rate_limited");
+    expect(mocks.sendDigestEmail).not.toHaveBeenCalled();
   });
 });
 

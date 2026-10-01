@@ -310,6 +310,99 @@ describe("canonicalPaperKey — dual-edition Angewandte DOI alias (DEDUP-ANGEW)"
   });
 });
 
+// DATASET-RECORDS (ABC-JEV-INTEGRATION.md §1bl,
+// docs/jev-abc/DATASET-RECORDS-B-20260930T030544Z.md): Figshare mints a
+// separate OpenAlex Work per version of the same deposited record, appending
+// a plain textual ".v<N>" suffix onto the SAME base DOI. Unit tests for the
+// helper alone; the end-to-end merge (through dedupItems/clusterCanonicalWorks)
+// is covered by dedup.test.ts's own DATASET-RECORDS section.
+describe("canonicalPaperKey — Figshare version-DOI alias (DATASET-RECORDS)", () => {
+  const SHORT_TITLE = "O2-LCO-DATA";
+
+  it("gives a versioned Figshare DOI an extra doi: alias pointing at its base sibling, without changing key", () => {
+    const id = canonicalPaperKey({
+      source: "openalex",
+      id: "openalex:W_VERSIONED",
+      doi: "10.6084/m9.figshare.33608659.v4",
+      title: SHORT_TITLE,
+    });
+    expect(id.key).toBe("doi:10.6084/m9.figshare.33608659.v4");
+    expect(id.aliases).toContain("doi:10.6084/m9.figshare.33608659");
+  });
+
+  it("adds no self-alias for an already-base (unversioned) Figshare DOI — nothing to alias it to", () => {
+    const id = canonicalPaperKey({
+      source: "openalex",
+      id: "openalex:W_BASE",
+      doi: "10.6084/m9.figshare.33608659",
+      title: SHORT_TITLE,
+    });
+    expect(id.key).toBe("doi:10.6084/m9.figshare.33608659");
+    expect(id.aliases.some((a) => a.startsWith("doi:"))).toBe(false);
+  });
+
+  it("does not alias when the registrant is not 10.6084, even with the exact .vN suffix shape", () => {
+    const id = canonicalPaperKey({
+      source: "openalex",
+      id: "openalex:W_WRONG_REGISTRANT",
+      doi: "10.5281/zenodo.22813654.v2",
+      title: SHORT_TITLE,
+    });
+    expect(id.key).toBe("doi:10.5281/zenodo.22813654.v2");
+    expect(id.aliases.some((a) => a.startsWith("doi:"))).toBe(false);
+  });
+
+  it("two different (unrelated) Figshare works never alias to each other", () => {
+    const first = canonicalPaperKey({
+      source: "openalex",
+      id: "openalex:W_F1",
+      doi: "10.6084/m9.figshare.11111.v1",
+      title: SHORT_TITLE,
+    });
+    const second = canonicalPaperKey({
+      source: "openalex",
+      id: "openalex:W_F2",
+      doi: "10.6084/m9.figshare.22222",
+      title: SHORT_TITLE,
+    });
+    expect(first.aliases).toContain("doi:10.6084/m9.figshare.11111");
+    expect(first.aliases).not.toContain("doi:10.6084/m9.figshare.22222");
+    expect(second.key).toBe("doi:10.6084/m9.figshare.22222");
+    expect(new Set([first.key, ...first.aliases])).not.toEqual(
+      expect.arrayContaining([second.key]),
+    );
+  });
+
+  it('does not alias a suffix that only LOOKS like a version marker without the exact ".v<digits>" trailing shape (accepted, safe-direction miss)', () => {
+    const hyphenJoined = canonicalPaperKey({
+      source: "openalex",
+      id: "openalex:W_HYPHEN",
+      doi: "10.6084/m9.figshare.12345-v4-experiment",
+      title: SHORT_TITLE,
+    });
+    expect(hyphenJoined.aliases.some((a) => a.startsWith("doi:"))).toBe(false);
+
+    const dotless = canonicalPaperKey({
+      source: "openalex",
+      id: "openalex:W_DOTLESS",
+      doi: "10.6084/m9.figshare.12345v4",
+      title: SHORT_TITLE,
+    });
+    expect(dotless.aliases.some((a) => a.startsWith("doi:"))).toBe(false);
+  });
+
+  it("is applied AFTER normalizeDoi, so an uppercase/prefixed input still aliases correctly (case/prefix-insensitive)", () => {
+    const id = canonicalPaperKey({
+      source: "openalex",
+      id: "openalex:W_UPPER",
+      doi: "https://doi.org/10.6084/M9.FIGSHARE.33608659.V4",
+      title: SHORT_TITLE,
+    });
+    expect(id.key).toBe("doi:10.6084/m9.figshare.33608659.v4");
+    expect(id.aliases).toContain("doi:10.6084/m9.figshare.33608659");
+  });
+});
+
 describe("isDeliveredIdentity", () => {
   const identity: CanonicalIdentity = {
     key: "doi:10.1000/aaa",

@@ -191,4 +191,70 @@ describe("openalex-semantic adapter", () => {
     expect(call).toBe(2);
     expect(items).toEqual([]);
   });
+
+  // DATASET-RECORDS (ABC-JEV-INTEGRATION.md §1bl,
+  // docs/jev-abc/DATASET-RECORDS-B-20260930T030544Z.md). Mutation target:
+  // dropping the `.filter((w) => !isExcludedOpenAlexType(w))` call turns the
+  // first test in this block red.
+  describe("drops clearly non-paper OpenAlex types after fetch (DATASET-RECORDS)", () => {
+    function workResult(overrides: Record<string, unknown>) {
+      return {
+        id: `https://openalex.org/${overrides.id ?? "W1"}`,
+        title: overrides.title ?? "A Fixture Work",
+        publication_date: "2026-01-01",
+        authorships: [],
+        doi: null,
+        ...overrides,
+      };
+    }
+
+    it("a dataset-typed work never reaches the feed", async () => {
+      globalThis.fetch = vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              results: [workResult({ id: "W_DATASET", title: "O2-LCO-DATA", type: "dataset" })],
+            }),
+            { status: 200 },
+          ),
+      ) as unknown as typeof fetch;
+
+      const items = await fetchOpenAlexSemantic("solid-state batteries");
+      expect(items).toEqual([]);
+    });
+
+    it("an article-typed and a preprint-typed work both survive unchanged", async () => {
+      globalThis.fetch = vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              results: [
+                workResult({ id: "W_ARTICLE", title: "A Real Article", type: "article" }),
+                workResult({ id: "W_PREPRINT", title: "A Real Preprint", type: "preprint" }),
+              ],
+            }),
+            { status: 200 },
+          ),
+      ) as unknown as typeof fetch;
+
+      const items = await fetchOpenAlexSemantic("solid-state batteries");
+      expect(items.map((item) => item.id).sort()).toEqual([
+        "openalex:W_ARTICLE",
+        "openalex:W_PREPRINT",
+      ]);
+    });
+
+    it("sends `type` in the select parameter", async () => {
+      let capturedUrl = "";
+      globalThis.fetch = vi.fn(async (url: string) => {
+        capturedUrl = String(url);
+        return new Response(JSON.stringify({ results: [] }), { status: 200 });
+      }) as unknown as typeof fetch;
+
+      await fetchOpenAlexSemantic("solid-state batteries");
+
+      const select = new URL(capturedUrl).searchParams.get("select") ?? "";
+      expect(select.split(",")).toContain("type");
+    });
+  });
 });

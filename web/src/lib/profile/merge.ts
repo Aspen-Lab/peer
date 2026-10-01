@@ -49,10 +49,11 @@
 // here, matching the binding "never part of any merge direction".
 
 import type { PreferenceLedger, PreferenceLedgerEntry, UserProfile } from "@/types";
+import { defaultProfile } from "@/types";
 import { cleanPreferenceLedger } from "@/lib/preferences/ledger";
 
 /** §1aj — union, deduped, account order first then local additions. */
-const LIST_FIELDS = [
+export const LIST_FIELDS = [
   "researchTopics",
   "softTopics",
   "preferredMethods",
@@ -62,8 +63,31 @@ const LIST_FIELDS = [
   "preferredJournals",
 ] as const;
 
-/** §1aj — non-empty beats empty; local wins once on a genuine conflict. */
-const SINGLE_VALUE_FIELDS = [
+/**
+ * §1aj's original 14 fields the sign-in merge treats as single-value
+ * scalars, PLUS the §1bk.8 AMENDMENT's 11 more: the manager's check of
+ * round 1 found that `reconcilePushPayload` only filtered these 14 (plus
+ * LIST_FIELDS), so every OTHER scalar `remoteProfilePayload` carries — the
+ * feed knobs (feedFocus, feedFreshness, paperCount, feedSourceMix,
+ * feedImportance, feedMethodMode, feedDiscoveryMode, the three
+ * `feedAvoid*` switches) and `digestEnabled` (found only by actually
+ * enumerating `remoteProfilePayload`'s output against
+ * `web/src/app/api/profile/route.ts`'s `profilePatchToRow` — which columns
+ * a PUT really writes — rather than trusting the ruling's illustrative
+ * list; see the PROFILE-SYNC checkpoint §11.1) — was still pushed
+ * unconditionally on every load, and the merge never reconciled it either.
+ * All 23 fields here are plain scalars (string | string-literal union |
+ * number | number-literal union | boolean | undefined) with a REAL server
+ * column, so `dirtySingleValueFields`'s comparison expresses dirtiness for
+ * every one of them; none needs per-setter bookkeeping instead. Fields
+ * that reach the outgoing payload but have NO server column at all
+ * (activeSearchInputs, selectedSenseConcepts, the advisor* local-only
+ * fields, onboardedAt, deepReportEnabled) are deliberately NOT here — they
+ * structurally cannot overwrite anything on the account, so widening this
+ * set to include them would not fix a real bug (see the checkpoint §11.1's
+ * classification table for the full accounting).
+ */
+export const SINGLE_VALUE_FIELDS = [
   "currentProject",
   "currentChallenges",
   "displayName",
@@ -78,10 +102,68 @@ const SINGLE_VALUE_FIELDS = [
   "digestChannel",
   "digestFrequency",
   "digestEmail",
+  // §1bk.8 AMENDMENT — the feed knobs and digestEnabled.
+  "digestEnabled",
+  "feedFocus",
+  "feedFreshness",
+  "paperCount",
+  "feedSourceMix",
+  "feedImportance",
+  "feedMethodMode",
+  "feedDiscoveryMode",
+  "feedAvoidReviews",
+  "feedAvoidOldPapers",
+  "feedAvoidBroadSurveys",
 ] as const;
 
-type ListField = (typeof LIST_FIELDS)[number];
-type SingleValueField = (typeof SINGLE_VALUE_FIELDS)[number];
+export type ListField = (typeof LIST_FIELDS)[number];
+export type SingleValueField = (typeof SINGLE_VALUE_FIELDS)[number];
+
+/**
+ * PROFILE-SYNC (§1bk, widened by §1bk.8) — which of the `SINGLE_VALUE_FIELDS`
+ * THIS DEVICE is the source of truth for right now: local's current value
+ * has moved on from what it last confirmed with the account (`lastSynced`),
+ * or — with no confirmation yet — from `defaultProfile`'s own value (the
+ * bootstrap rule: a truly untouched device is never "dirty" merely for
+ * holding the factory default). Pure comparison, no side effects — see the
+ * field-by-field type check in `SINGLE_VALUE_FIELDS`'s own doc comment for
+ * why every one of its fields is expressible this way, with no per-setter
+ * bookkeeping needed.
+ */
+export function dirtySingleValueFields(
+  local: UserProfile,
+  lastSynced: Partial<UserProfile> | null | undefined,
+): Set<SingleValueField> {
+  const dirty = new Set<SingleValueField>();
+  for (const key of SINGLE_VALUE_FIELDS) {
+    const localValue: unknown = local[key];
+    const hasBaseline =
+      lastSynced != null && Object.prototype.hasOwnProperty.call(lastSynced, key);
+    const baseline: unknown = hasBaseline
+      ? (lastSynced as Record<string, unknown>)[key]
+      : defaultProfile[key];
+    if ((localValue ?? null) !== (baseline ?? null)) {
+      dirty.add(key);
+    }
+  }
+  return dirty;
+}
+
+/**
+ * PROFILE-SYNC (§1bk ruling 3) — the full `SINGLE_VALUE_FIELDS` snapshot to
+ * persist as the new `lastSynced` baseline once a sync (a push, or a pull
+ * that needed no push) is confirmed. Always the WHOLE set, not just
+ * whichever fields happened to be dirty this time — that is what lets the
+ * NEXT load correctly recognize "nothing changed here since" for every
+ * field, dirty or not.
+ */
+export function singleValueSnapshot(profile: UserProfile): Partial<UserProfile> {
+  const snapshot: Record<string, unknown> = {};
+  for (const key of SINGLE_VALUE_FIELDS) {
+    snapshot[key] = profile[key];
+  }
+  return snapshot as Partial<UserProfile>;
+}
 
 /** The flat fields `profileFeedIntentCard` (lib/feed/intent.ts) recomputes
  *  `feedIntent` from when `feedIntent` itself is undefined. Merging any of
@@ -138,21 +220,36 @@ function unionStrings(remoteList: unknown, localList: unknown): string[] {
   return [...remote, ...additions];
 }
 
-function mergeSingleValue(
-  remoteValue: unknown,
-  localValue: unknown,
-): unknown {
-  // Never overwrite a non-empty local value with an empty remote one — this
-  // covers both "remote omitted the field" and "remote explicitly holds an
-  // empty string", the same way for both.
+/**
+ * PROFILE-SYNC (§1bk ruling 2) — true when the union produced something
+ * beyond remote's own list, i.e. local genuinely contributed a new entry
+ * ("list fields whose union changed"). `unionStrings` above always puts
+ * remote's own list first, unchanged, then local's new entries, so "nothing
+ * added" is exactly "same length, same order as remote's own (deduped)
+ * list".
+ */
+export function listUnionChanged(remoteValue: unknown, unionedValue: unknown): boolean {
+  const remoteList = asStringArray(remoteValue);
+  const unionedList = asStringArray(unionedValue);
+  if (remoteList.length !== unionedList.length) return true;
+  return remoteList.some((value, index) => value !== unionedList[index]);
+}
+
+/**
+ * PROFILE-SYNC (§1bk) — supersedes the bare "non-empty beats empty, else
+ * local wins once" rule. `isDirty` (from `dirtySingleValueFields`) is now
+ * the ONLY thing that lets local win a real conflict: it means this
+ * device's own value has moved on from what it last confirmed with the
+ * account (or, with no confirmation yet, from the factory default) — a
+ * real pending edit, not just an untouched or stale copy. When local is NOT
+ * dirty, the account's value wins outright whenever it has one; "remote is
+ * empty" is the only case local's value (dirty or not) survives, which is
+ * also what keeps a still-blank field blank on both sides.
+ */
+function mergeSingleValue(remoteValue: unknown, localValue: unknown, isDirty: boolean): unknown {
+  if (isDirty) return localValue;
   if (isEmptyValue(remoteValue)) return localValue;
-  if (isEmptyValue(localValue)) return remoteValue;
-  if (remoteValue === localValue) return remoteValue;
-  // Both sides hold a real, different value: a genuine conflict. Local wins
-  // ONCE, on this first post-sign-in reconciliation — the person is actively
-  // using this browser right now. Ordinary last-write-wins debounced sync
-  // resumes for every edit after this.
-  return localValue;
+  return remoteValue;
 }
 
 function ledgerEntryTimestamp(entry: PreferenceLedgerEntry): number | null {
@@ -193,6 +290,43 @@ export function mergePreferenceLedger(
 }
 
 /**
+ * PROFILE-SYNC (§1bk.8 AMENDMENT) — true when the merged ledger differs
+ * from remote's own, i.e. this sync actually contributed something (a new
+ * key, or a genuinely more recent entry for a shared key) — mirrors
+ * `listUnionChanged`'s role for list fields, so `reconcilePushPayload` can
+ * leave `preferenceLedger` out of the push whenever this device has
+ * nothing to add, the same "never rewrite a field it did not change"
+ * principle §1bk ruling 2 already applies to lists.
+ *
+ * `mergePreferenceLedger` can only ADD to or update an entry, never delete
+ * one already in `remoteClean` (see its own body: it starts from
+ * `{ ...remoteClean }`), so the merged ledger is always a superset of
+ * remote's own keys — this function's `false` case can therefore never
+ * hide a real shrink; the comparison exists to skip a redundant resend,
+ * not to protect data (mutation guard, not a safety guard).
+ *
+ * Compared structurally (sorted by key, each entry via `JSON.stringify`),
+ * not by reference — a false "changed" merely costs one extra, harmless
+ * PUT of an unchanged value; a false "unchanged" would wrongly withhold a
+ * real update, so every comparison here is deliberately biased toward
+ * "changed" (documented, not a bug): `JSON.stringify` is sensitive to an
+ * entry's OWN internal key order, but every entry in this codebase is
+ * constructed by the same fixed-shape helpers in lib/preferences/ledger.ts,
+ * so this is a practical non-issue in exchange for a much simpler
+ * comparison than a full recursive deep-equal.
+ */
+export function preferenceLedgerChanged(
+  remote: PreferenceLedger | null | undefined,
+  merged: PreferenceLedger | null | undefined,
+): boolean {
+  const sortedEntries = (ledger: PreferenceLedger | null | undefined) =>
+    Object.entries(cleanPreferenceLedger(ledger)).sort(([a], [b]) =>
+      a < b ? -1 : a > b ? 1 : 0,
+    );
+  return JSON.stringify(sortedEntries(remote)) !== JSON.stringify(sortedEntries(merged));
+}
+
+/**
  * The sign-in reconciliation merge (P1). Called once, at sign-in, with the
  * local (pre-sign-in, possibly-just-restored-from-localStorage) profile and
  * whatever `GET /api/profile` returned (`null` when the pull failed OR the
@@ -202,15 +336,26 @@ export function mergePreferenceLedger(
 export function mergeProfileAtSignIn(
   local: UserProfile,
   remote: Partial<UserProfile> | null,
+  lastSynced?: Partial<UserProfile> | null,
 ): ProfileMergeOutcome {
   if (!remote) {
     // P3 — a failed or empty pull may never shrink local data. There is
     // nothing to merge FROM; local stays exactly as it is and the caller is
     // free to push it up (safe either way: pushing can only ADD to the
     // account, never destroy anything locally).
+    //
+    // PROFILE-SYNC (§1bk) — `dirtySingleValueFields` is deliberately NOT
+    // computed or returned here: it does not depend on `remote` at all, so
+    // profile-sync.tsx's caller (`planReconcile`) computes it separately,
+    // once, from `local`/`lastSynced`, whether or not `remote` is null, and
+    // reuses that same value for the reconcile push payload. Keeping this
+    // early return's shape (`{ patch: {} }`) unchanged also means the
+    // pre-existing "makes no change when there is no account row" test
+    // needs no edit.
     return { patch: {} };
   }
 
+  const dirty = dirtySingleValueFields(local, lastSynced);
   const patch: Partial<UserProfile> = {};
   let touchedIntentInputs = false;
 
@@ -222,7 +367,7 @@ export function mergeProfileAtSignIn(
 
   for (const key of SINGLE_VALUE_FIELDS) {
     if (!Object.prototype.hasOwnProperty.call(remote, key)) continue;
-    (patch as Record<string, unknown>)[key] = mergeSingleValue(remote[key], local[key]);
+    (patch as Record<string, unknown>)[key] = mergeSingleValue(remote[key], local[key], dirty.has(key));
     if (INTENT_SINGLE_FIELDS.has(key)) touchedIntentInputs = true;
   }
 

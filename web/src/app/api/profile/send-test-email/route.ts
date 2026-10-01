@@ -26,6 +26,15 @@
 // research focus present? -> increment-then-compare the daily counter ->
 // run the pipeline -> send.
 //
+// EMAIL-DEST-UX + EMPTY-TEST-EMAIL (ABC-JEV-INTEGRATION.md §1bm, 2026-09-30)
+// -- the counter above still runs BEFORE the pipeline, unchanged (§1bm.3:
+// "keeping the counter before the pipeline preserves today's cap on real
+// source calls" -- a refund would let a reader trigger unlimited empty
+// pipeline runs). What changed: once the pipeline has run, a ZERO-item
+// result no longer reaches `sendDigestEmail` at all -- it answers with a
+// fixed reason code (never raw pipeline internals, per EMAIL-TOKEN-PRIVACY
+// §1as) and the try already spent above is not refunded.
+//
 // Deliberately duplicates two small profile-shape helpers
 // (seedTextsFromProfile / feedControlsFromProfile) and the profile select
 // strings instead of importing them from api/test-digest/route.ts. That
@@ -205,6 +214,25 @@ export async function POST(req: NextRequest) {
     controls: feedControlsFromProfile(typedProfile),
   });
 
+  // EMAIL-DEST-UX + EMPTY-TEST-EMAIL (§1bm point 3) -- an empty test result
+  // sends nothing. The try above is already spent; this only stops a
+  // 0-item email from going out and tells the reader why, reason-coded only
+  // (feed.meta.emptyReasonCode is set exactly when feed.items is empty --
+  // see runFeedPipeline's own emptyReasonCode computation -- or a generic,
+  // never-a-guess fallback on the client when a test fixture or an older
+  // pipeline build leaves it unset). Mirrors the existing 502 send-failure
+  // branch below: `reason` only, no `error` string, no raw pipeline text.
+  if (feed.items.length === 0) {
+    return NextResponse.json(
+      {
+        sent: false,
+        reason: "empty_result",
+        ...(feed.meta.emptyReasonCode ? { emptyReasonCode: feed.meta.emptyReasonCode } : {}),
+      },
+      { status: 200 },
+    );
+  }
+
   const firstName = typedProfile?.display_name?.trim().split(/\s+/)[0] || undefined;
   const normalizedDestination = normalizeEmailAddress(destination);
   const result = await sendDigestEmail({
@@ -212,9 +240,11 @@ export async function POST(req: NextRequest) {
     firstName,
     items: feed.items,
     originUrl: originUrlFor(req),
-    // EMPTY-EMAIL-REASON (ABC-JEV-INTEGRATION.md §1bj) -- forwarded through
-    // unchanged when the pipeline returned items; only read by the template
-    // when `items` is empty.
+    // EMPTY-EMAIL-REASON (ABC-JEV-INTEGRATION.md §1bj) -- kept for shape
+    // parity with the other `sendDigestEmail` callers. Always undefined
+    // here now: the empty-result branch above (§1bm) already returns before
+    // this point whenever `feed.items` is empty, which is the only case
+    // `feed.meta.emptyReasonCode` is ever set.
     emptyReasonCode: feed.meta.emptyReasonCode,
   });
 

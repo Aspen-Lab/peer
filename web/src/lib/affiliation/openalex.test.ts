@@ -289,3 +289,92 @@ describe("affiliation/openalex — key handling and fetch mechanics (P2-S4a-FIX)
     });
   });
 });
+
+// DATASET-RECORDS (ABC-JEV-INTEGRATION.md §1bl.8 AMENDMENT,
+// docs/jev-abc/DATASET-RECORDS-A-20260930T041130Z.md Finding 1): a fresh A
+// found this file feeds the same scored Papers candidate pool the three
+// source adapters feed (fetchCitationNeighborhood — the advisor citation
+// neighbourhood at build time, and the liked-paper seed citation
+// neighbourhood at read time), but its own WORK_SELECT never fetched
+// OpenAlex's own `type` and it applied no filter — so a dataset reached the
+// feed through this path exactly as before the round-1 fix.
+describe("affiliation/openalex — DATASET-RECORDS (§1bl.8 AMENDMENT)", () => {
+  const originalFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  function datasetWorksFixture(type: string) {
+    return {
+      results: [
+        {
+          id: "https://openalex.org/W_DATASET_PROBE",
+          title: "O2-LCO-DATA",
+          publication_date: "2026-01-01",
+          authorships: [],
+          doi: "10.6084/m9.figshare.33608659",
+          type,
+        },
+      ],
+    };
+  }
+
+  it("sends `type` in fetchCitationNeighborhood's select parameter", async () => {
+    let capturedUrl = "";
+    globalThis.fetch = vi.fn(async (url: string) => {
+      capturedUrl = String(url);
+      return new Response(JSON.stringify({ results: [] }), { status: 200 });
+    }) as unknown as typeof fetch;
+
+    await fetchCitationNeighborhood(["W1"]);
+
+    const select = new URL(capturedUrl).searchParams.get("select") ?? "";
+    expect(select.split(",")).toContain("type");
+  });
+
+  it("sends `type` in fetchAdvisorSeeds's select parameter too (same shared WORK_SELECT)", async () => {
+    let capturedUrl = "";
+    globalThis.fetch = vi.fn(async (url: string) => {
+      capturedUrl = String(url);
+      return new Response(JSON.stringify(worksFixture), { status: 200 });
+    }) as unknown as typeof fetch;
+
+    await fetchAdvisorSeeds("A123", "battery interfaces");
+
+    const select = new URL(capturedUrl).searchParams.get("select") ?? "";
+    expect(select.split(",")).toContain("type");
+  });
+
+  it("populates metadata.workType from the fetched `type` on a citation-neighbourhood item", async () => {
+    globalThis.fetch = vi.fn(
+      async () => new Response(JSON.stringify(datasetWorksFixture("dataset")), { status: 200 }),
+    ) as unknown as typeof fetch;
+
+    const items = await fetchCitationNeighborhood(["W1"]);
+    expect(items).toHaveLength(1);
+    expect(items[0].metadata.workType).toBe("dataset");
+  });
+
+  // Deliberately pinning the DESIGN CHOICE, not a bug: this file applies no
+  // filter of its own (§1bl.8 AMENDMENT's ruling (c) — "the exclusion is
+  // applied at ONE pipeline choke point," not a fourth adapter-level copy).
+  // A dataset-typed item survives THIS function unfiltered; it is
+  // `feed/dedup.ts`'s `dedupItems` (via `isExcludedOpenAlexRawItem`) that
+  // excludes it before the candidate ever reaches scoring — see
+  // `dedup.test.ts`'s own "DATASET-RECORDS §1bl.8" section for that half of
+  // the proof. If this test ever needs to change to assert exclusion
+  // HERE instead, that is a deliberate architecture change, not a drive-by
+  // fix — update the choke-point comments in this file, utils/openalex.ts
+  // and feed/dedup.ts together.
+  it("does NOT filter a dataset-typed item itself — the pipeline choke point downstream is what excludes it", async () => {
+    globalThis.fetch = vi.fn(
+      async () => new Response(JSON.stringify(datasetWorksFixture("dataset")), { status: 200 }),
+    ) as unknown as typeof fetch;
+
+    const items = await fetchCitationNeighborhood(["W1"]);
+    expect(items.map((i) => i.id)).toEqual(["openalex:W_DATASET_PROBE"]);
+  });
+});

@@ -336,11 +336,25 @@ const CACHE_KEY_VERSION = 6;
 // matches pass the context gate — full-strength vs. demoted, and (for the
 // formerly-gated T4-only path) admitted vs. not — so a v17 pool scored
 // under the old, unfolded/uncut/no-skip-rule context check must never be
-// served as if it already reflects any of the three changes. These bumps
-// share their numbers
+// served as if it already reflects any of the three changes. v19 —
+// ABC-JEV-INTEGRATION.md §1bl/DATASET-RECORDS
+// (docs/jev-abc/DATASET-RECORDS-B-20260930T030544Z.md): every OpenAlex
+// adapter now fetches OpenAlex's own `type` (metadata.workType prefers it,
+// falling back to the legacy, in-practice-dead `type_crossref`), and each
+// adapter drops a small, named set of clearly non-paper OpenAlex types (e.g.
+// "dataset") right after fetching, before scoring/dedupe ever sees them;
+// separately, canonical-identity.ts's `canonicalPaperKey` gives a Figshare
+// ".vN" versioned DOI an extra alias toward its own base (unversioned)
+// sibling, so the two versions merge via dedupe's existing pass-1 rule. Both
+// changes alter pool MEMBERSHIP (excluded records are gone; a version pair
+// that used to survive as two cards now merges into one) and, for a
+// dataset-shaped repository record, could also change scoring/review
+// classification (workType is no longer a dead field), so a v18 pool built
+// under the old, type-blind fetch/mapping must never be served as if it
+// already reflects any of these changes. These bumps share their numbers
 // with `CACHE_KEY_VERSION` above by coincidence, not by a shared cause — see
 // `derivePoolCacheKey` below for how each is selected.
-const PAPER_CACHE_KEY_VERSION = 18;
+const PAPER_CACHE_KEY_VERSION = 19;
 /**
  * SINGLE SOURCE OF TRUTH for the literal key prefix a durable papers-pool
  * store may accept, derived from `PAPER_CACHE_KEY_VERSION` rather than

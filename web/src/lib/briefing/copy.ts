@@ -167,6 +167,42 @@ export const DIGEST_EMPTY: Record<FeedEmptyReasonCode, DigestEmptyEntry> = {
   },
 };
 
+/**
+ * EMAIL-DEST-UX + EMPTY-TEST-EMAIL (ABC-JEV-INTEGRATION.md §1bm) — the
+ * "Send test email" button's own wording for the same four
+ * `FeedEmptyReasonCode` values `DIGEST_EMPTY`/`BRIEFING_EMPTY` above cover.
+ * A third table, not a reuse of either: `DIGEST_EMPTY`'s `no-required-match`
+ * entry links to Profile, but the reader who clicked this button is already
+ * on Profile — a link back to the page they're already reading (§1bm point
+ * 3 POLICY 5) — and `BRIEFING_EMPTY`'s copy assumes the main feed page
+ * ("Refresh", "Widen topics" buttons that don't exist here). Kept next to
+ * both so all three are reviewed together whenever one changes.
+ *
+ * Plain sentences only, no link field — the caller (page.tsx's
+ * `testSendMessage`) states separately, in its own fixed wording, that
+ * nothing was sent and that one of today's 3 test sends was used; this
+ * table supplies only the "why".
+ */
+export const TEST_EMAIL_EMPTY: Record<FeedEmptyReasonCode, { sentence: string }> = {
+  "sources-unreachable": {
+    sentence: "Couldn't reach today's paper sources.",
+  },
+  "no-results": {
+    sentence: "Nothing new for these topics today.",
+  },
+  "no-required-match": {
+    sentence: "None of today's papers passed your Required topics and filters.",
+  },
+  "already-delivered": {
+    sentence: "Every paper that matched today was already picked for you in the past 30 days.",
+  },
+};
+
+/** A missing or unrecognized reason code (never guessed) — the same
+ * "generic, never a guess" rule as `DIGEST_EMPTY`'s own template fallback
+ * (digest-template.ts's `resolvedEmptyEntry`). */
+export const TEST_EMAIL_EMPTY_GENERIC = "No new papers matched this time.";
+
 export const SEARCH_BOX = {
   /** What the search page searches; the box promises no less and no more. */
   placeholder: "Search all papers…",

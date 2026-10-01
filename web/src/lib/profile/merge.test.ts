@@ -5,6 +5,10 @@ import {
   mergePreferenceLedger,
   mergeProfileFromBackup,
   stripCredentialFields,
+  dirtySingleValueFields,
+  singleValueSnapshot,
+  listUnionChanged,
+  preferenceLedgerChanged,
 } from "./merge";
 
 // SIGNIN-MERGE (ABC-JEV-INTEGRATION.md §1af/§1ah/§1aj) — RED list §5.1/§5.2
@@ -75,11 +79,22 @@ describe("mergeProfileAtSignIn", () => {
     expect(patch).not.toHaveProperty("displayName");
   });
 
-  it("stays out of feed-tuning knobs not named in the §1aj single-value list — existing install-if-defined behaviour is untouched here", () => {
-    const local = profile({ feedFocus: "tight" });
-    const remote: Partial<UserProfile> = { feedFocus: "balanced" };
+  // PROFILE-SYNC (§1bk.8 AMENDMENT): this used to prove feedFocus (a "feed
+  // knob") stayed OUTSIDE the single-value merge. That premise is exactly
+  // what the amendment overturns — feedFocus is now IN SINGLE_VALUE_FIELDS
+  // (it has a real server column an unconditional push could overwrite),
+  // so it is covered by the "(a) fresh device"/"(d) two devices" tests
+  // below instead. What genuinely stays outside the merge is a field with
+  // NO server column at all — deepReportEnabled, confirmed absent from both
+  // ProfileRow and profilePatchToRow in web/src/app/api/profile/route.ts
+  // (checkpoint §11.1) — so pushing it unconditionally cannot overwrite
+  // anything on the account, and the existing install-if-defined behaviour
+  // for it is genuinely untouched.
+  it("stays out of the single-value merge when a field has no server column at all to protect (deepReportEnabled) — existing install-if-defined behaviour is untouched there", () => {
+    const local = profile({ deepReportEnabled: false });
+    const remote: Partial<UserProfile> = { deepReportEnabled: true };
     const { patch } = mergeProfileAtSignIn(local, remote);
-    expect(patch).not.toHaveProperty("feedFocus");
+    expect(patch).not.toHaveProperty("deepReportEnabled");
   });
 
   it("never reads a credential field off remote even if somehow present — structurally excluded from every list", () => {
@@ -122,6 +137,227 @@ describe("mergeProfileAtSignIn", () => {
   });
 });
 
+// PROFILE-SYNC (ABC-JEV-INTEGRATION.md §1bk) — the FOLLOW-UP section of
+// docs/jev-abc/ACCOUNT-SESSION-SYNC-B-20260929T220146Z.md proved the merge
+// above ping-pongs a stale device's OWN old value back over a newer real
+// account edit, on every reload — "local wins once" was a per-call rule,
+// not a per-account rule. `defaultProfile` ships non-empty placeholders for
+// 8 single-value fields (displayName "Peer Member", careerStage
+// "PhD Year 3", industryVsAcademia "both", phdYear 3, colorTheme
+// "system:ember", digestHourLocal 8, digestChannel "inapp", digestFrequency
+// "daily"), which the old rule could not tell apart from a genuine edit.
+// These cases are built on the REAL `defaultProfile` (the existing suite's
+// blind spot per B's Task 2 finding: every prior "local wins" case above
+// uses a field whose factory default is empty/undefined, never the actual
+// untouched defaultProfile object).
+
+describe("dirtySingleValueFields (§1bk)", () => {
+  it("is empty for a completely untouched profile — a fresh device has nothing dirty to push", () => {
+    expect(dirtySingleValueFields(defaultProfile, null).size).toBe(0);
+  });
+
+  it("bootstrap rule (no lastSynced yet): local differs from defaultProfile → dirty", () => {
+    const local = profile({ displayName: "Alice Chen" });
+    expect(dirtySingleValueFields(local, null).has("displayName")).toBe(true);
+  });
+
+  it("bootstrap rule (no lastSynced yet): local equals defaultProfile → not dirty", () => {
+    const local = profile({ displayName: defaultProfile.displayName });
+    expect(dirtySingleValueFields(local, null).has("displayName")).toBe(false);
+  });
+
+  it("with a lastSynced entry: local still equals what it last confirmed → not dirty, even though it differs from defaultProfile", () => {
+    const local = profile({ careerStage: "Postdoc" });
+    expect(dirtySingleValueFields(local, { careerStage: "Postdoc" }).has("careerStage")).toBe(false);
+  });
+
+  it("with a lastSynced entry: local has moved on from what it last confirmed → dirty", () => {
+    const local = profile({ careerStage: "Postdoc" });
+    expect(dirtySingleValueFields(local, { careerStage: "PhD Year 5" }).has("careerStage")).toBe(true);
+  });
+
+  it("judges each field independently", () => {
+    const local = profile({ displayName: "Alice Chen", careerStage: "Postdoc" });
+    const lastSynced: Partial<UserProfile> = { displayName: "Alice Chen", careerStage: "PhD Year 5" };
+    const dirty = dirtySingleValueFields(local, lastSynced);
+    expect(dirty.has("displayName")).toBe(false);
+    expect(dirty.has("careerStage")).toBe(true);
+  });
+
+  it("a lastSynced object with no entry at all for a field falls back to the bootstrap rule for that field specifically", () => {
+    const local = profile({ displayName: "Alice Chen", careerStage: defaultProfile.careerStage });
+    const dirty = dirtySingleValueFields(local, { displayName: "Alice Chen" }); // no careerStage entry
+    expect(dirty.has("displayName")).toBe(false); // matches its own lastSynced entry
+    expect(dirty.has("careerStage")).toBe(false); // matches defaultProfile — bootstrap, not dirty
+  });
+});
+
+describe("mergeProfileAtSignIn — dirty-tracked merge (§1bk, supersedes the bare 'local wins once' rule)", () => {
+  it("(a) fresh device with factory defaults takes the account's real values for every originally-affected field", () => {
+    const local = { ...defaultProfile };
+    const remote: Partial<UserProfile> = {
+      displayName: "Alice Chen",
+      careerStage: "Postdoc",
+      industryVsAcademia: "academia",
+      phdYear: 5,
+      colorTheme: "dark:rose",
+      digestHourLocal: 19,
+      digestChannel: "email",
+      digestFrequency: "weekly",
+    };
+    const { patch } = mergeProfileAtSignIn(local, remote, null);
+    expect(patch.displayName).toBe("Alice Chen");
+    expect(patch.careerStage).toBe("Postdoc");
+    expect(patch.industryVsAcademia).toBe("academia");
+    expect(patch.phdYear).toBe(5);
+    expect(patch.colorTheme).toBe("dark:rose");
+    expect(patch.digestHourLocal).toBe(19);
+    expect(patch.digestChannel).toBe("email");
+    expect(patch.digestFrequency).toBe("weekly");
+  });
+
+  it("(a continued) — dirtySingleValueFields confirms nothing on this device was ever dirty, i.e. nothing above was a device edit to protect", () => {
+    expect(dirtySingleValueFields(defaultProfile, null).size).toBe(0);
+  });
+
+  it("(b) a stale previously-synced device takes the account's newer value instead of ping-ponging its own old one back", () => {
+    const local = profile({ displayName: "Alice", digestChannel: "email" });
+    const lastSynced: Partial<UserProfile> = { displayName: "Alice", digestChannel: "email" }; // this device's own last-confirmed values
+    const remote: Partial<UserProfile> = { displayName: "Alice V2", digestChannel: "both" };
+    const { patch } = mergeProfileAtSignIn(local, remote, lastSynced);
+    expect(patch.displayName).toBe("Alice V2");
+    expect(patch.digestChannel).toBe("both");
+  });
+
+  it("(b continued) repeating the same stale call again still adopts the account's value — no ping-pong across repeated loads", () => {
+    const local = profile({ displayName: "Alice" });
+    const lastSynced: Partial<UserProfile> = { displayName: "Alice" };
+    const remote: Partial<UserProfile> = { displayName: "Alice V2" };
+    expect(mergeProfileAtSignIn(local, remote, lastSynced).patch.displayName).toBe("Alice V2");
+    expect(mergeProfileAtSignIn(local, remote, lastSynced).patch.displayName).toBe("Alice V2");
+  });
+
+  it("a genuine, not-yet-synced local edit still wins over whatever the account currently has (dirty relative to lastSynced)", () => {
+    const local = profile({ displayName: "Alice V3" }); // edited on this device since its last sync
+    const lastSynced: Partial<UserProfile> = { displayName: "Alice" }; // what this device last confirmed
+    const remote: Partial<UserProfile> = { displayName: "Alice V2" }; // a DIFFERENT device's edit, already on the account
+    expect(mergeProfileAtSignIn(local, remote, lastSynced).patch.displayName).toBe("Alice V3");
+  });
+
+  it("(d) two devices editing different fields both land — this device's own dirty field wins, the field it never touched takes the account's value", () => {
+    const local = profile({ displayName: "Alice V2", digestChannel: "email" });
+    const lastSynced: Partial<UserProfile> = { displayName: "Alice", digestChannel: "email" };
+    const remote: Partial<UserProfile> = { displayName: "Alice", digestChannel: "both" }; // the OTHER device's edit
+    const { patch } = mergeProfileAtSignIn(local, remote, lastSynced);
+    expect(patch.displayName).toBe("Alice V2");
+    expect(patch.digestChannel).toBe("both");
+  });
+
+  it("(e) the same field edited on two devices — whichever device's sync completes last wins (matches today's steady-state last-write-wins, not a regression)", () => {
+    // Device X already pushed "Bob". Device Y is about to reconcile with
+    // its own, more recent, not-yet-confirmed edit "Carol".
+    const local = profile({ displayName: "Carol" });
+    const lastSynced: Partial<UserProfile> = { displayName: "Alice" }; // device Y's own last-confirmed value, before ITS edit
+    const remote: Partial<UserProfile> = { displayName: "Bob" }; // device X's edit, already on the account
+    expect(mergeProfileAtSignIn(local, remote, lastSynced).patch.displayName).toBe("Carol");
+  });
+
+  it("(transition, recovery) a device still holding the real value restores it over a default-corrupted account, on its first post-fix load", () => {
+    const local = profile({ displayName: "Alice Chen" }); // real value, never yet run through the fixed code (no lastSynced)
+    const remote: Partial<UserProfile> = { displayName: defaultProfile.displayName }; // corrupted to the placeholder by the old bug
+    expect(mergeProfileAtSignIn(local, remote, null).patch.displayName).toBe("Alice Chen");
+  });
+
+  it("(transition, default-only device) a device that never edited anything never disturbs a value another device just restored", () => {
+    const local = { ...defaultProfile }; // never touched, no lastSynced
+    const remote: Partial<UserProfile> = { displayName: "Alice Chen" }; // just restored by the other device
+    expect(mergeProfileAtSignIn(local, remote, null).patch.displayName).toBe("Alice Chen");
+  });
+
+  // PROFILE-SYNC (§1bk.8 AMENDMENT) — the manager's check of round 1: the
+  // dirty rule covered only the original 14 single-value fields, so a
+  // fresh or stale device could still overwrite the account's feed knobs
+  // (feedFocus, feedFreshness, paperCount, feedSourceMix, feedImportance,
+  // feedMethodMode, feedDiscoveryMode, the three feedAvoid* switches) and
+  // digestEnabled. These mirror scenarios (a)/(b) above exactly, for the
+  // amendment's 11 fields.
+  it("(amendment, fresh device) a fresh device with default feed knobs takes the account's real values for them", () => {
+    const local = { ...defaultProfile };
+    const remote: Partial<UserProfile> = {
+      paperCount: 5,
+      feedAvoidReviews: false,
+      digestEnabled: false,
+      feedFocus: "tight",
+      feedFreshness: "month",
+      feedSourceMix: "preprints",
+      feedImportance: "highlyCited",
+      feedMethodMode: "mustMatch",
+      feedDiscoveryMode: "adjacent",
+      feedAvoidOldPapers: true,
+      feedAvoidBroadSurveys: false,
+    };
+    const { patch } = mergeProfileAtSignIn(local, remote, null);
+    expect(patch.paperCount).toBe(5);
+    expect(patch.feedAvoidReviews).toBe(false);
+    expect(patch.digestEnabled).toBe(false);
+    expect(patch.feedFocus).toBe("tight");
+    expect(patch.feedFreshness).toBe("month");
+    expect(patch.feedSourceMix).toBe("preprints");
+    expect(patch.feedImportance).toBe("highlyCited");
+    expect(patch.feedMethodMode).toBe("mustMatch");
+    expect(patch.feedDiscoveryMode).toBe("adjacent");
+    expect(patch.feedAvoidOldPapers).toBe(true);
+    expect(patch.feedAvoidBroadSurveys).toBe(false);
+  });
+
+  it("(amendment, stale device) a stale device with an older paperCount/feedAvoidReviews takes the account's newer value instead of ping-ponging its own old one back", () => {
+    const local = profile({ paperCount: 10, feedAvoidReviews: true }); // this device's old values
+    const lastSynced: Partial<UserProfile> = { paperCount: 10, feedAvoidReviews: true }; // what it last confirmed
+    const remote: Partial<UserProfile> = { paperCount: 5, feedAvoidReviews: false }; // the account's newer values
+    const { patch } = mergeProfileAtSignIn(local, remote, lastSynced);
+    expect(patch.paperCount).toBe(5);
+    expect(patch.feedAvoidReviews).toBe(false);
+    // Neither field is dirty relative to lastSynced, so neither would be
+    // pushed back at the account — proven directly on the dirty set too.
+    const dirty = dirtySingleValueFields(local, lastSynced);
+    expect(dirty.has("paperCount")).toBe(false);
+    expect(dirty.has("feedAvoidReviews")).toBe(false);
+  });
+});
+
+describe("listUnionChanged (§1bk ruling 2)", () => {
+  it("is false when the union added nothing beyond remote's own list", () => {
+    expect(listUnionChanged(["a", "b"], ["a", "b"])).toBe(false);
+  });
+  it("is true when the union added a genuinely new local entry", () => {
+    expect(listUnionChanged(["a"], ["a", "b"])).toBe(true);
+  });
+  it("treats a missing/null remote as empty — any local content counts as a change; no local content does not", () => {
+    expect(listUnionChanged(undefined, ["a"])).toBe(true);
+    expect(listUnionChanged(null, [])).toBe(false);
+  });
+});
+
+describe("singleValueSnapshot (§1bk, widened by §1bk.8 AMENDMENT)", () => {
+  it("picks exactly SINGLE_VALUE_FIELDS — the original 14 plus the amendment's 11 feed knobs/digestEnabled — nothing else", () => {
+    const snap = singleValueSnapshot(
+      profile({ researchTopics: ["x"], displayName: "Alice", feedFocus: "tight", digestEnabled: false }),
+    );
+    expect(snap.displayName).toBe("Alice");
+    // PROFILE-SYNC (§1bk.8 AMENDMENT): feedFocus/digestEnabled are now
+    // tracked single-value fields — this assertion is the exact reverse of
+    // round 1's (round 1 asserted `not.toHaveProperty("digestEnabled")`,
+    // which the amendment overturns).
+    expect(snap.feedFocus).toBe("tight");
+    expect(snap.digestEnabled).toBe(false);
+    expect(snap).not.toHaveProperty("researchTopics"); // a list field, not single-value
+    expect(snap).not.toHaveProperty("preferenceLedger"); // its own structure, not single-value
+    // deepReportEnabled has no server column at all (checkpoint §11.1) —
+    // genuinely outside SINGLE_VALUE_FIELDS, not merely unset here.
+    expect(snap).not.toHaveProperty("deepReportEnabled");
+  });
+});
+
 describe("mergePreferenceLedger", () => {
   it("unions per key — a key on only one side survives untouched", () => {
     const merged = mergePreferenceLedger(
@@ -148,6 +384,71 @@ describe("mergePreferenceLedger", () => {
     const remote = { key: "concept:a", label: "A", source: "openalex_topic" as const, positive: 1, negative: 0, lastSeenAt: "" };
     const local = { key: "concept:a", label: "A", source: "openalex_topic" as const, positive: 9, negative: 0, lastSeenAt: "" };
     expect(mergePreferenceLedger({ "concept:a": remote }, { "concept:a": local })["concept:a"]).toEqual(local);
+  });
+
+  // PROFILE-SYNC (§1bk.8 AMENDMENT) — "prove with a test that a stale
+  // device cannot shrink or roll back the account's copy." A stale/
+  // incomplete local ledger (missing keys the account already has, and
+  // holding only an OLDER entry for a key both sides share) must never
+  // cause the merge OUTPUT to lose any of the account's own entries.
+  it("(§1bk.8 AMENDMENT) a stale, incomplete local ledger never drops a key present in the account's copy — the merge output is always a superset of remote's keys", () => {
+    const remoteLedger = {
+      "concept:a": { key: "concept:a", label: "A", source: "openalex_topic" as const, positive: 5, negative: 0, lastSeenAt: "2026-09-20T00:00:00.000Z" },
+      "concept:b": { key: "concept:b", label: "B", source: "openalex_topic" as const, positive: 3, negative: 0, lastSeenAt: "2026-09-15T00:00:00.000Z" },
+      "concept:c": { key: "concept:c", label: "C", source: "openalex_topic" as const, positive: 1, negative: 0, lastSeenAt: "2026-09-10T00:00:00.000Z" },
+    };
+    // Device Y is stale: it never learned about "concept:c" at all, and
+    // its own "concept:a" entry is an OLDER snapshot than the account's.
+    const staleLocalLedger = {
+      "concept:a": { key: "concept:a", label: "A", source: "openalex_topic" as const, positive: 1, negative: 0, lastSeenAt: "2026-09-01T00:00:00.000Z" },
+    };
+    const merged = mergePreferenceLedger(remoteLedger, staleLocalLedger);
+    expect(Object.keys(merged).sort()).toEqual(["concept:a", "concept:b", "concept:c"]);
+    expect(merged["concept:a"].positive).toBe(5); // the account's newer entry, not the stale one
+    expect(merged["concept:b"]).toEqual(remoteLedger["concept:b"]); // untouched, survives
+    expect(merged["concept:c"]).toEqual(remoteLedger["concept:c"]); // untouched, survives
+  });
+});
+
+describe("preferenceLedgerChanged (§1bk.8 AMENDMENT)", () => {
+  const entryA = { key: "concept:a", label: "A", source: "openalex_topic" as const, positive: 5, negative: 0, lastSeenAt: "2026-09-20T00:00:00.000Z" };
+
+  it("is false when the merged ledger equals remote's own — nothing to push", () => {
+    expect(preferenceLedgerChanged({ "concept:a": entryA }, { "concept:a": entryA })).toBe(false);
+  });
+
+  it("is false for two structurally-empty ledgers, regardless of null/undefined/{}", () => {
+    expect(preferenceLedgerChanged(undefined, {})).toBe(false);
+    expect(preferenceLedgerChanged(null, undefined)).toBe(false);
+  });
+
+  it("is true when local contributed a genuinely new key beyond remote's own", () => {
+    const entryB = { key: "concept:b", label: "B", source: "openalex_topic" as const, positive: 1, negative: 0, lastSeenAt: "2026-09-01T00:00:00.000Z" };
+    expect(
+      preferenceLedgerChanged({ "concept:a": entryA }, { "concept:a": entryA, "concept:b": entryB }),
+    ).toBe(true);
+  });
+
+  it("is true when a shared key's entry actually differs (a genuinely more recent local update)", () => {
+    const updated = { ...entryA, positive: 9, lastSeenAt: "2026-09-25T00:00:00.000Z" };
+    expect(preferenceLedgerChanged({ "concept:a": entryA }, { "concept:a": updated })).toBe(true);
+  });
+
+  it("(§1bk.8 AMENDMENT) after a stale device's merge, the RESULT differs from remote (so it correctly gets pushed) even though the merge itself never lost any of remote's keys", () => {
+    const remoteLedger = { "concept:a": entryA };
+    const staleLocalLedger = {
+      "concept:a": { key: "concept:a", label: "A", source: "openalex_topic" as const, positive: 1, negative: 0, lastSeenAt: "" },
+      "concept:new": { key: "concept:new", label: "New", source: "openalex_topic" as const, positive: 1, negative: 0, lastSeenAt: "2026-09-26T00:00:00.000Z" },
+    };
+    const merged = mergePreferenceLedger(remoteLedger, staleLocalLedger);
+    expect(preferenceLedgerChanged(remoteLedger, merged)).toBe(true); // concept:new is real, local-only content
+  });
+
+  it("after a device that contributed NOTHING new reconciles, the result equals remote — correctly excluded from the push", () => {
+    const remoteLedger = { "concept:a": entryA };
+    const local = { "concept:a": { ...entryA } }; // identical, nothing new or newer
+    const merged = mergePreferenceLedger(remoteLedger, local);
+    expect(preferenceLedgerChanged(remoteLedger, merged)).toBe(false);
   });
 });
 

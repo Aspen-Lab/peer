@@ -1,5 +1,6 @@
 import type { SourceAdapter, SourceQuery, RawItem } from "./types";
 import {
+  isExcludedOpenAlexType,
   openAlexWorkToRawItem,
   type OpenAlexWork,
 } from "@/lib/utils/openalex";
@@ -70,7 +71,7 @@ async function fetchOne(
     search: quoteImportantTerms(searchTerm),
     per_page: String(perQuery),
     select:
-      "id,title,publication_date,authorships,primary_location,best_oa_location,open_access,abstract_inverted_index,cited_by_count,doi,topics,primary_topic,keywords,concepts,type_crossref",
+      "id,title,publication_date,authorships,primary_location,best_oa_location,open_access,abstract_inverted_index,cited_by_count,doi,topics,primary_topic,keywords,concepts,type,type_crossref",
     sort: "relevance_score:desc",
     mailto: MAILTO,
   });
@@ -102,7 +103,10 @@ async function fetchOne(
     }
     const data = await res.json();
     const works: OpenAlexWork[] = data.results || [];
-    return works.map(openAlexWorkToRawItem);
+    // DATASET-RECORDS (§1bl) — drop clearly non-paper OpenAlex types (e.g.
+    // "dataset") right here, before mapping/scoring; see isExcludedOpenAlexType
+    // in utils/openalex.ts for the full excluded-type table and reasoning.
+    return works.filter((w) => !isExcludedOpenAlexType(w)).map(openAlexWorkToRawItem);
   } catch (err) {
     console.error("[openalex] fetch error:", err instanceof Error ? err.message : err);
     throw err;
