@@ -112,17 +112,19 @@ describe("the upsell destination answers the promise (7-02b)", () => {
     expect(html).not.toMatch(/checkout|stripe|billing|subscribe/i);
   });
 
-  it("is rendered by the AI step, which is where every upsell now lands", () => {
-    // The component answering the promise is worth nothing if the destination
-    // does not render it. Sliced to the AI step so a match cannot leak in from
-    // another step of the wizard.
-    expect(aiStepSource()).toMatch(/<\s*ProPlanSummary\s*\/>/);
+  it("is NOT rendered by the AI step while the paid tier is switched off", () => {
+    // Peer is free and runs in one-tier mode, so no onboarding step may show a
+    // plan or a price. The card stays in the codebase for a future tiered mode;
+    // this pins that it is not on the step until then. Sliced to the AI step so
+    // a match cannot leak in from another step of the wizard.
+    // Matches the JSX element only, so the step's own comment may still name it.
+    expect(aiStepSource()).not.toMatch(/<\s*ProPlanSummary\b/);
   });
 
   it("lands on the step the shared destination names", () => {
-    // Closes the loop: the constant all three CTAs render points at the wizard
-    // with `step=ai`, and the block above lives on that step. Whitespace
-    // tolerant because the tree is CRLF on disk.
+    // The constant the "Add a key" link renders points at the wizard with
+    // `step=ai`, the key step. Whitespace tolerant because the tree is CRLF on
+    // disk.
     expect(UPGRADE_HREF).toMatch(/^\/welcome\?step=ai$/);
     expect(welcomeSource()).toMatch(/\{\s*key\s*===\s*"ai"\s*&&/);
   });
