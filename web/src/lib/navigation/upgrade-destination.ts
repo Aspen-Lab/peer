@@ -29,9 +29,11 @@
  * Ruling 19 point 1: **the destination must answer the promise the control
  * made.** Resolving to a real page is necessary and not sufficient — a button
  * reading *"See what Pro adds"* that lands on a page never mentioning Pro is
- * still a broken promise, it just returns 200. That is why 7-02(b) put the plan
- * copy on the AI step: `/welcome?step=ai` renders the key panel **and** what
- * Pro costs and adds, so all three promises are kept there.
+ * still a broken promise, it just returns 200. 7-02(b) put the plan copy on the
+ * AI step for that reason. It was taken off again when the paid tier was
+ * switched off (one-tier mode: Peer is free and shows no plan or price), so
+ * `/welcome?step=ai` now renders the key panel only. If a tiered mode returns,
+ * `ProPlanSummary` goes back on that step together with whatever links here.
  *
  * If a later round ever needs a destination that has not been built, the honest
  * shape is to let the call to action be **omitted** — the type becomes nullable
