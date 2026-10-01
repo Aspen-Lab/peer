@@ -1,8 +1,8 @@
 // POST /api/profile/confirm-email — request a confirmation link for a NEW
 //   (non-account) digest_email address. Stateless: nothing is written until
 //   the link is clicked (GET below).
-// GET  /api/profile/confirm-email — the clicked link: verify the token,
-//   write digest_email, redirect back to /profile.
+// GET  /api/profile/confirm-email — the clicked link: verify the token, check
+//   it isn't STALE, write digest_email, redirect back to /profile.
 //
 // EMAIL-SETTINGS — ABC-JEV-INTEGRATION.md §1y point 2.iii, §1z. Guide
 // docs/jev-abc/EMAIL-SETTINGS-B-20260926T142832Z.md §2.1/§2.2.
@@ -16,6 +16,14 @@
 //    succeed. A confirmation link is conventionally multi-use within its
 //    expiry (unlike a password reset, there is nothing to "spend" here) —
 //    see confirm-token.ts's own header for the mail-gateway-prefetch reason.
+//  - EMAIL-TOKEN-REPLAY (ABC-JEV-INTEGRATION.md §1bn, guide
+//    docs/jev-abc/EMAIL-TOKEN-REPLAY-B-20260930T055356Z.md): being within the
+//    24h TTL isn't enough — an old link is STALE once something else has
+//    moved digest_email on (a newer confirmation, the short-circuit above,
+//    or a PUT /api/profile write). GET now reads the live digest_email
+//    (currentDigestEmail, reused from POST) and writes only if it still
+//    equals the token's own `priorEmail` snapshot or its target address;
+//    otherwise nothing is written and the reader sees `stale_link`.
 //  - **GET redirects rather than returning a bare 401 when nobody is signed
 //    in.** This is a deliberate reading of a real conflict in this item's
 //    own inputs: the guide's RED list #1 says "both methods... return 401",
@@ -183,7 +191,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "rate_limited" }, { status: 429 });
   }
 
-  const token = signConfirmToken(secret, user.id, candidate, now);
+  // EMAIL-TOKEN-REPLAY (§1bn): snapshot what digest_email holds RIGHT NOW
+  // (already read above as `storedEmail`, no extra query) inside the token
+  // itself, so the GET handler below can tell whether anything else has
+  // changed the address since this specific link was minted.
+  const token = signConfirmToken(secret, user.id, candidate, storedEmail ?? "", now);
   const confirmUrl = `${originUrlFor(req)}/api/profile/confirm-email?token=${encodeURIComponent(token)}`;
 
   // Same "empty items + render override" trick handleConflictingEmailClaim
@@ -257,6 +269,28 @@ export async function GET(req: NextRequest) {
     // "This confirmation link isn't for your account" — critically, the
     // SIGNED-IN user's own digest_email is not touched either.
     return profileRedirect(req, "digest_email_confirm=wrong_account");
+  }
+
+  // EMAIL-TOKEN-REPLAY (§1bn): a token that is still within its 24h TTL can
+  // still be STALE — something else (a newer confirmation, the account-email
+  // short-circuit, or a direct PUT /api/profile write) may have moved
+  // digest_email on since this exact link was minted. Reusing the same
+  // currentDigestEmail helper POST already calls (never duplicating the
+  // query) instead of tracking every write site separately means a future
+  // fourth place that changes digest_email is automatically covered too.
+  // Write only if nothing has changed since mint (current === priorEmail)
+  // or this exact link already applied (current === its own target address
+  // — keeps the same link opened twice harmless, which mail-gateway
+  // link-prefetching depends on, confirm-token.ts's own header). A failed
+  // read falls back to the same generic outcome the write-failure branch
+  // below already uses, rather than inventing a second error path.
+  const current = await currentDigestEmail(supabase, user.id);
+  if (!current.ok) {
+    return profileRedirect(req, "digest_email_confirm=invalid_link");
+  }
+  const currentValue = current.value ? normalizeEmailAddress(current.value) : "";
+  if (currentValue !== result.priorEmail && currentValue !== result.email) {
+    return profileRedirect(req, "digest_email_confirm=stale_link");
   }
 
   const write = await writeConfirmedDigestEmail(supabase, user.id, result.email);

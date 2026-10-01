@@ -10,8 +10,6 @@ export interface ScoringProfile {
   venues?: string[];
   seedTexts?: string[];
   preferenceLedger?: PreferenceLedger;
-  negativeTopics?: string[];
-  legacyNegativeTopics?: string[];
   sourceWeights?: Partial<Record<SourceId, number>>;
   /** How a candidate entered the pool, preserved so non-literal channels survive Tier 0. */
   admissionChannels?: Partial<Record<string, FeedAdmissionChannel[]>>;

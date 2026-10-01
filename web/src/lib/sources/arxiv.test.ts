@@ -21,6 +21,35 @@ function feedWithOneEntry(): string {
 </feed>`;
 }
 
+// ARXIV-PHRASE-QUERY (ABC-JEV-INTEGRATION.md §1bx, docs/jev-abc/ARXIV-PHRASE-QUERY-B-20260930T160159Z.md)
+// — a live measurement kept the exact-phrase form: an all-terms form added on-topic papers for
+// 1 of 6 profiles and flooded the rest with 70-984 unrelated papers, and a phrase-slop suffix
+// matched ~359,000. This pins the form so any loosening is a deliberate, re-measured decision.
+// Added by the manager (disclosed in §1bx.1).
+describe("arxiv adapter — query form (§1bx)", () => {
+  const originalFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    vi.restoreAllMocks();
+  });
+
+  it("sends a multi-word phrase as one exact phrase, (all:\"…\"), never an all-terms or slop form", async () => {
+    const urls: string[] = [];
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      urls.push(String(input));
+      return new Response(EMPTY_FEED, { status: 200 });
+    }) as unknown as typeof fetch;
+
+    await arxiv.fetch({ topics: ["solid state electrolyte interface"], limit: 10 });
+
+    expect(urls).toHaveLength(1);
+    expect(new URL(urls[0]).searchParams.get("search_query")).toBe(
+      '(all:"solid state electrolyte interface")',
+    );
+  });
+});
+
 describe("arxiv adapter — failure visibility (P2-S2)", () => {
   const originalFetch = globalThis.fetch;
 

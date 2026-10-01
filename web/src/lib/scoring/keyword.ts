@@ -4,6 +4,7 @@ import {
   canonicalize,
   expandTerm,
   isGenericTerm,
+  isKnownShortForm,
   termMatches,
   termOccurrences,
   termSpecificity,
@@ -86,6 +87,22 @@ function groundingWeight(item: RawItem, canonicalTopic: string): number {
 // counts, not ranking quality).
 export const REQUIRED_TAG_T2_GROUNDING = 0.85;
 export const REQUIRED_TAG_T3_GROUNDING = 0.6;
+/**
+ * NMC-HYPONYM (ABC-JEV-INTEGRATION.md §1bu) — grounding for a family->member
+ * glued-digit match (`matchesFamilyMember` below), e.g. Required tag "NMC"
+ * admitted by a paper that only ever writes "NMC811". Provisional, same as
+ * T2/T3's own weights above (not re-tuned by measurement — the guide
+ * measured admission counts, not ranking quality). Set above T2/T3: per
+ * §1bu ruling 3, a composition glued to the family acronym is MORE specific,
+ * less ambiguous evidence than either an inferred self-declared pair (T2) or
+ * a source-provided subject tag (T3) — it is the reader's own family tag's
+ * prefix, found directly in the paper's own text, immediately next to a
+ * valid 3-digit stoichiometry suffix. Kept below 1 so a T1 exact-phrase
+ * match (the strongest, least-approximated evidence) still always outranks
+ * it at equal specificity, the same invariant already pinned for T2/T3/T4
+ * (required-gate.test.ts, "ranking order").
+ */
+export const REQUIRED_TAG_FAMILY_MEMBER_GROUNDING = 0.9;
 
 /**
  * T2 — pairs a paper declares about ITSELF, e.g. "lithium cobalt oxide
@@ -107,6 +124,40 @@ function selfDeclaredAbbreviationPairs(
   let match: RegExpExecArray | null;
   while ((match = longFirst.exec(rawText))) pairs.push({ longForm: match[1], abbr: match[2] });
   while ((match = abbrFirst.exec(rawText))) pairs.push({ longForm: match[2], abbr: match[1] });
+  // T2-EXTRACTOR (ABC-JEV-INTEGRATION.md §1bv) -- a pair packed together on
+  // the SAME side of one parenthetical ("(light cycle oil, LCO)", "(LCO,
+  // light cycle oil)", "(i.e. light cycle oil, LCO)") satisfies neither
+  // pattern above: both anchor the long-form/abbreviation split AT the
+  // parenthesis boundary itself (one side immediately outside "(" / ")",
+  // the other immediately inside) -- a pair sitting together on ONE side
+  // never matches either shape. Searched separately, INSIDE each
+  // already-matched "(...)" span (not anchored to the boundary the way the
+  // two patterns above are), reusing the EXISTING long-form phrase class
+  // (2-6 whitespace-joined words) and the EXISTING abbreviation class
+  // verbatim -- a closed set: punctuation inside one parenthetical has
+  // exactly two orderings around one separator (long-first / abbr-first),
+  // and the separator itself (comma) is the one new fact. This also
+  // catches, for free, an "i.e."-style prefix inside the parens (nothing
+  // anchors the pattern to skip it -- the guide's docs/jev-abc/
+  // T2-EXTRACTOR-B-20260930T151003Z.md §Q4 prototype, validated against
+  // every real Q2 hit and every protective string, is reused verbatim
+  // below), and a semicolon-joined multi-pair span (the real
+  // "(local field potentials, LFP; electrocorticographical signals,
+  // ECoG)" fragment) yields BOTH pairs, since each comma-pair is found
+  // independently within the same span -- the semicolon needs no special
+  // handling, it simply isn't part of either match. The bare no-parens
+  // semicolon form and "@"-joint-coinages ("NCO@LCO") are deliberately
+  // NOT read here (§1bv.3 -- 0 real instances / a different, unsolved
+  // compound-identity problem respectively; see the guide's Q2/Q3).
+  const parenSpan = /\(([^()]{1,160})\)/g;
+  let spanMatch: RegExpExecArray | null;
+  while ((spanMatch = parenSpan.exec(rawText))) {
+    const inner = spanMatch[1];
+    const commaLongFirst = /((?:[A-Za-z][\w-]*\s+){1,5}[A-Za-z][\w-]*),\s*([A-Z][A-Za-z0-9]{1,7})/g;
+    const commaAbbrFirst = /\b([A-Z][A-Za-z0-9]{1,7}),\s*((?:[A-Za-z][\w-]*\s+){1,5}[A-Za-z][\w-]*)/g;
+    while ((match = commaLongFirst.exec(inner))) pairs.push({ longForm: match[1], abbr: match[2] });
+    while ((match = commaAbbrFirst.exec(inner))) pairs.push({ longForm: match[2], abbr: match[1] });
+  }
   return pairs;
 }
 
@@ -167,6 +218,62 @@ export function matchesSourceTag(item: RawItem, canonicalTopic: string): boolean
     if (termMatches(canonicalize(tag), canonicalTopic)) return true;
   }
   return false;
+}
+
+// ── NMC-HYPONYM (ABC-JEV-INTEGRATION.md §1bu) — family -> member match ───
+//
+// NMC811/NMC622/NCM523/... are specific COMPOSITIONS (hyponyms) of the
+// "nmc"/"ncm" family, not spellings of it — unlike "ncm" itself (added to
+// ABBREVIATION_GROUPS as a plain synonym of "nmc", term-expand.ts), a member
+// composition must NEVER join that group: `expandTerm`'s closure is
+// bidirectional by construction, so adding e.g. "nmc811" there would also
+// let a reader's OWN "NMC811" Required tag silently widen to match every
+// generic "NMC" paper — the exact widening AGENTS.md's "User-declared intent
+// over guessed preference" and §1au.2 both rule out. This is therefore a
+// separate, small, ONE-WAY function, parallel to T2/T3 above, not a change
+// to ABBREVIATION_GROUPS/expandTerm.
+//
+// Reachable ONLY when the Required tag's own canonical form is itself a bare
+// family form — "nmc", "ncm", the group's spelled-out name, or a trivial
+// inflection of it, i.e. any member of `expandTerm("nmc")` (see
+// `isNmcFamilyTag`). A member tag such as "NMC811" can never satisfy this:
+// "nmc811" is not, and never was, a member of the "nmc" GROUP's own
+// closure (that group has no stoichiometry entries at all) — so a member
+// tag structurally cannot reach this function as its own topic string,
+// regardless of what any paper says. This also makes cross-member
+// independence free: tag "NMC811" can never match text containing only
+// "NMC622", because `isNmcFamilyTag("nmc811")` is false and this function
+// returns false immediately, before the text is even examined. Digit-
+// preserving member<->member synonymy (NMC811<->NCM811) is a SEPARATE,
+// ordinary bidirectional rule inside term-expand.ts's own `expandTerm`
+// (`nmcMemberSibling`) — not provided here.
+function isNmcFamilyTag(canonicalTopic: string): boolean {
+  return expandTerm("nmc").includes(canonicalTopic);
+}
+
+// Manually-anchored word-boundary style, matching term-expand.ts's own
+// `termVariantMatches` exactly, so a "category"-shaped false containment
+// stays impossible by the same construction as every other check in this
+// file. EXACTLY 3 digits (§1bu ruling 2 — the guide's measured evidence is
+// 3-digit compositions only: 811/622/532/111): the trailing negative
+// lookahead means a 4th digit (or any other word character) right after the
+// three fails the whole match at that position, so a glued year or
+// meeting-name shape ("NMC2019") never matches — enforced by construction,
+// not by a separate length check.
+const NMC_FAMILY_MEMBER_RE = /(?<![\p{L}\p{N}\p{M}])(?:nmc|ncm)\d{3}(?![\p{L}\p{N}\p{M}])/u;
+
+/**
+ * NMC-HYPONYM (§1bu rulings 1-2) — does the item's own canonical text (title
+ * + abstract/summary + tags — `itemText(item, "all")`, the same full-text
+ * scope `matchesFullNameOrFormula` below uses) contain a GLUED family+3-digit
+ * composition (e.g. "nmc811", "ncm622"), for a Required tag that is itself a
+ * bare family form? Exported for direct testing, matching T2/T3's own
+ * precedent. Gated by callers behind `opts.extendedRequiredMatch` — never
+ * reachable for softTopics/events/jobs, the same scoping T2/T3 already use.
+ */
+export function matchesFamilyMember(item: RawItem, canonicalTopic: string): boolean {
+  if (!isNmcFamilyTag(canonicalTopic)) return false;
+  return NMC_FAMILY_MEMBER_RE.test(itemText(item, "all"));
 }
 
 // ── SENSE-CONTEXT (ABC-JEV-INTEGRATION.md §1ap + AMENDMENTs) ─────────────
@@ -567,9 +674,14 @@ export interface SelfDeclaredDifferentSenseResult {
 
 /**
  * Rule (c) itself. Reuses the already-private `selfDeclaredAbbreviationPairs` above
- * (the same T2 extractor, unchanged this round — the comma-parenthetical form,
- * `"(light cycle oil, LCO)"`, is deliberately NOT added to it; that is its own,
- * separately-measured follow-up, T2-COMMA-PAREN).
+ * (the same T2 extractor). T2-EXTRACTOR (ABC-JEV-INTEGRATION.md §1bv, superseding the
+ * note this comment used to carry): the comma-parenthetical form,
+ * `"(light cycle oil, LCO)"` / `"(LCO, light cycle oil)"`, is now read by that
+ * extractor too (both comma orderings, inside one parenthetical span) — this is what
+ * closes the real gap named in docs/jev-abc/T2-EXTRACTOR-B-20260930T151003Z.md: a
+ * paper that declares a DIFFERENT sense in exactly that comma style was previously
+ * invisible to this rule and, for a reader with no other declared context, admitted
+ * at full strength.
  */
 export function selfDeclaresDifferentSense(item: RawItem, tag: string): SelfDeclaredDifferentSenseResult {
   const canonicalTag = canonicalize(tag);
@@ -629,11 +741,30 @@ export function selfDeclaresDifferentSense(item: RawItem, tag: string): SelfDecl
 // rule (c) already `continue`s past the topic entirely before this is ever
 // reached — an explicit self-declared DISAGREEMENT is stronger evidence than
 // this rule's agreement-by-presence, so it wins outright, unchanged.
+//
+// NMC-HYPONYM (ABC-JEV-INTEGRATION.md §1bu ruling 4) — "not the bare form"
+// now also excludes every OTHER bare short form in the group
+// (`isKnownShortForm`), not just the literal `canonicalTag` string. Every
+// group before this item had exactly one short acronym alias, so "not
+// literally the queried tag" and "not a bare short form" were the same
+// test; the "nmc"/"ncm" pair this item adds is the first group with TWO —
+// without this, a reader tagged "NMC" whose paper contains only the bare
+// (non-glued) word "ncm" would wrongly skip the context check, because
+// "ncm" is, structurally, just as short and ambiguous as "nmc" itself, not
+// stronger evidence — exactly the case §1bu's own ruling text requires to
+// stay protected ("the bare-acronym path keeps the context check
+// unchanged"). Provably a no-op for every pre-existing group: `isKnownShortForm`
+// is true only for a single-word alias of at most 4 characters, and every
+// other group's non-tag variants are either multi-word (the spelled-out
+// name) or a single-word formula over that length ("licoo2", "lifepo4" —
+// LCO-FORMULA's own case, deliberately still classified as strong evidence).
 export function matchesFullNameOrFormula(item: RawItem, tag: string): boolean {
   const canonicalTag = canonicalize(tag);
   if (!hasKnownAbbreviationExpansion(canonicalTag)) return false;
   const haystack = itemText(item, "all");
-  const otherVariants = expandTerm(canonicalTag).filter((variant) => variant !== canonicalTag);
+  const otherVariants = expandTerm(canonicalTag).filter(
+    (variant) => variant !== canonicalTag && !isKnownShortForm(variant),
+  );
   return otherVariants.some((variant) => termVariantMatches(haystack, variant));
 }
 
@@ -698,6 +829,12 @@ export function scoreKeyword(
       grounding = REQUIRED_TAG_T2_GROUNDING;
     } else if (opts.extendedRequiredMatch && matchesSourceTag(item, canonicalTopic)) {
       grounding = REQUIRED_TAG_T3_GROUNDING;
+    } else if (opts.extendedRequiredMatch && matchesFamilyMember(item, canonicalTopic)) {
+      // NMC-HYPONYM (§1bu ruling 1) — a glued family+3-digit composition
+      // ("NMC811") admits a bare family Required tag ("NMC"); see
+      // `matchesFamilyMember`'s own doc comment for the one-way structural
+      // guarantee that a member tag can never reach this branch itself.
+      grounding = REQUIRED_TAG_FAMILY_MEMBER_GROUNDING;
     }
     if (grounding === undefined) continue;
     // SENSE-CONTEXT rule (c) (§1ap AMENDMENT 4 ruling 4) — runs FIRST, ahead
@@ -713,9 +850,22 @@ export function scoreKeyword(
     // demoted grounding instead of T1/T2/T3's own. SENSE-CONTEXT-EVIDENCE
     // (§1bg point 3) — a match that came through the tag's own full name or
     // chemical formula (not its bare abbreviation) skips the gate entirely;
-    // see `matchesFullNameOrFormula`'s own doc comment.
+    // see `matchesFullNameOrFormula`'s own doc comment. NMC-HYPONYM (§1bu
+    // ruling 4) extends the SAME precedent to a glued family-member match
+    // (`matchesFamilyMember`) — a composition glued to the family acronym is
+    // more specific, unambiguous evidence than the bare word, and no
+    // measured collision has that shape (§1bu.3); a paper containing BOTH
+    // the bare form and a glued member still skips, matching
+    // `matchesFullNameOrFormula`'s own "presence, not exclusivity" rule. The
+    // BARE-acronym path (plain T1 "nmc"/"ncm" as its own word) keeps going
+    // through the context check exactly as before, unchanged.
     let demoted = false;
-    if (opts.senseContext && isShortOrAmbiguous(topic) && !matchesFullNameOrFormula(item, topic)) {
+    if (
+      opts.senseContext &&
+      isShortOrAmbiguous(topic) &&
+      !matchesFullNameOrFormula(item, topic) &&
+      !matchesFamilyMember(item, canonicalTopic)
+    ) {
       const gate = senseContextGate(item, topic, opts.senseContext.contextText);
       if (!gate.bypass && !gate.pass) { demoted = true; grounding = SENSE_CONTEXT_DEMOTED_GROUNDING; }
     }

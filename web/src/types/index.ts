@@ -447,11 +447,23 @@ export interface UserProfile {
   /** Canonical v1 retrieval card; server persistence is intentionally opt-in. */
   feedIntent?: NormalizedFeedIntent;
   /**
-   * Keywords from papers the user has explicitly disliked. Fed into the
-   * scoring pipeline as a legacy negative signal so matching papers rank lower.
-   * New feedback uses `preferenceLedger`, which tracks positive and negative
-   * evidence per concept instead of treating every disliked keyword as a hard
-   * blacklist.
+   * DISLIKE-CHANNEL (ABC-JEV-INTEGRATION.md §1br): reader-declared exclusion
+   * terms — converted into `NormalizedFeedIntent.exclusions` and, from
+   * there, into `combine.ts`'s hard substring drop: a matching paper is
+   * removed from the pool entirely, not ranked lower. (This field used to
+   * also feed a legacy ×0.65 rank-lower penalty; that penalty was deleted
+   * as dead code once execution proved this field's own hard drop always
+   * ran first on the identical term — see combine.ts's `exclusions` doc
+   * comment.) No product UI writes this field today — confirmed against
+   * this repo's full history — so it exists for a possible future explicit
+   * "exclude this term" feature, not for one-click reader feedback. NEVER
+   * wire a "Not interested"/"Dislike"/"Skip" action, or any other one-click
+   * "less of this" signal, to this field: a substring hard drop, with no
+   * decay and no concept scoping, would silently and permanently remove
+   * other, unrelated, on-topic papers that merely share one common word
+   * with whatever was disliked. Reader "less of this" belongs in
+   * `preferenceLedger` below instead (see store/feed.ts's
+   * `notInterestedPaper`, and feed.test.ts's DISLIKE-CHANNEL tripwire test).
    */
   dislikedTopics?: string[];
   /**

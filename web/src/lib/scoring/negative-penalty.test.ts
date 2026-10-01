@@ -2,34 +2,33 @@ import { describe, expect, it } from "vitest";
 import type { RawItem } from "@/lib/sources/types";
 import { scoreItems } from "./combine";
 
-// SCORE-ZERO (ABC-JEV-INTEGRATION.md §1at ruling 2,
-// docs/jev-abc/SCORE-ZERO-B-20260928T234238Z.md). `negativePenalty`
-// (combine.ts) is meant for a reader's OWN declared dislikes, a harsh ×0.15
-// cut — not the softer ×0.65 `legacyDislikePenalty` gets. Before this fix,
-// `web/src/lib/feed/pipeline.ts` fed it the system's own default
-// "avoid reviews/surveys" words instead of (or as well as) genuine reader
-// dislikes, so every review-shaped paper took a second, uncoordinated review
-// penalty stacked on top of `rerank.ts`'s purpose-built one — see
-// pipeline.score-zero.test.ts for that wiring-level regression net. This
-// file locks down `negativePenalty`'s own contract in isolation, independent
-// of wiring: it fires exactly and only on a `profile.negativeTopics` text
-// match, at exactly ×0.15, regardless of whether the matched item happens to
-// look like a review.
+// DISLIKE-CHANNEL (ABC-JEV-INTEGRATION.md §1br,
+// docs/jev-abc/DISLIKE-CHANNEL-B-20260930T083933Z.md) — REWRITTEN, NOT
+// DELETED. This file used to unit-test combine.ts's `negativePenalty` (a
+// reader-dislike ×0.15 rank-lower cut) in isolation from `profile.exclusions`,
+// the hard drop that — in every real request — always ALSO matches the
+// identical declared term and removes the item before `negativePenalty`
+// could ever run (the SCORE-ZERO CORRECTION, ABC-JEV-INTEGRATION.md §1at).
+// DISLIKE-CHANNEL's own investigation, by fresh execution, confirmed this
+// is not merely "usually unreachable" but ALWAYS unreachable: nothing in
+// the product writes `profile.dislikedTopics` at all (the only field
+// `negativeTopics`/`legacyNegativeTopics` were ever fed from), so
+// `negativePenalty` and its sibling `legacyDislikePenalty` were deleted as
+// dead code — no behaviour change, since the removed factors were always
+// exactly 1 in every real request (proven with a before/after run over the
+// saved pools, recorded in this item's checkpoint).
 //
-// UNIT-LEVEL ONLY — not a claim about production behavior for reader
-// dislikes. FIX ROUND (manager, after A's FAILED_REVIEW,
-// docs/jev-abc/SCORE-ZERO-A-20260929T015211Z.md Check 2 / HIGH finding):
-// in every real request, the reader's own declared dislike terms ALSO reach
-// `profile.exclusions` (`combine.ts:195`), a hard drop that runs FIRST,
-// through the exact same text-match function this file exercises — so in
-// production a paper a reader's dislike matches is removed from the pool
-// entirely, and `negativePenalty`'s ×0.15 never gets the chance to run on
-// it. This file still calls `scoreItems` directly with `profile.negativeTopics`
-// set by hand (bypassing `pipeline.ts`'s request-shape wiring and the
-// exclusion filter both), so `negativePenalty`'s own math stays covered
-// should that channel ever become reachable, or be reused elsewhere — see
-// `pipeline.score-zero.test.ts` for the real, end-to-end behavior (the
-// paper is absent, not demoted).
+// This file now pins the SAME "reader's own declared dislike" scenario
+// against the mechanism that actually governs it, `profile.exclusions` — a
+// hard drop, not a score cut. Checked for overlap before adding:
+// admission.test.ts already covers `profile.exclusions` as a hard drop, on
+// a different fixture domain (solid electrolyte / conflict-of-interest);
+// pipeline.score-zero.test.ts covers the full end-to-end REAL request shape
+// (through the real `intent.exclusions` wiring, via `runFeedPipeline`) —
+// this file stays a `scoreItems`-level unit test, calling
+// `profile.exclusions` directly, the same level its predecessor tested
+// `negativeTopics` at, with its own (battery/cobalt-sourcing) fixtures kept
+// for continuity with this file's history.
 const now = Date.parse("2026-09-28T00:00:00Z");
 
 function paper(overrides: Partial<RawItem> = {}): RawItem {
@@ -49,36 +48,45 @@ function paper(overrides: Partial<RawItem> = {}): RawItem {
 
 const TOPIC = "battery electrolyte transport";
 
-function scoreAlone(negativeTopics: string[]) {
-  const [scored] = scoreItems(
+function scoreAlone(exclusions: string[]) {
+  return scoreItems(
     [paper()],
-    { topics: [TOPIC], negativeTopics },
+    { topics: [TOPIC], exclusions },
     undefined,
     now,
   );
-  return scored;
 }
 
-describe("negativePenalty — SCORE-ZERO", () => {
-  it("cuts an item matching the reader's own declared dislike to exactly 0.15x its undisliked score", () => {
+describe("profile.exclusions — DISLIKE-CHANNEL (§1br)", () => {
+  // DISLIKE-CHANNEL (§1br): rewritten from "cuts ... to exactly 0.15x" —
+  // the reachable, real-request contract is a hard drop, not a score cut.
+  it("removes an item matching the reader's own declared dislike entirely, rather than scoring it down", () => {
     const undisliked = scoreAlone([]);
     const disliked = scoreAlone(["cobalt sourcing"]);
 
-    expect(undisliked.score).toBeGreaterThan(0);
-    expect(disliked.score).toBeGreaterThan(0);
-    // MUTATION CHECK (SCORE-ZERO): weakening/removing the ×0.15 cut turns
-    // this red.
-    expect(disliked.score / undisliked.score).toBeCloseTo(0.15, 5);
+    expect(undisliked).toHaveLength(1);
+    expect(undisliked[0]!.score).toBeGreaterThan(0);
+    // MUTATION CHECK (DISLIKE-CHANNEL §1br): weakening the hard drop back
+    // into a score cut (or removing it) turns this red — the item must be
+    // ABSENT, not merely demoted.
+    expect(disliked).toHaveLength(0);
   });
 
+  // DISLIKE-CHANNEL (§1br): same assertion shape as the predecessor test,
+  // ported from `negativeTopics` to `exclusions`.
   it("does not fire on a declared term that does not match the item's text", () => {
     const clean = scoreAlone([]);
     const unmatched = scoreAlone(["nonexistent unrelated phrase"]);
 
-    expect(unmatched.score).toBe(clean.score);
+    expect(unmatched).toHaveLength(1);
+    expect(unmatched[0]!.score).toBe(clean[0]!.score);
   });
 
-  it("a review-shaped item is only cut when review words are actually in the reader's own declared negativeTopics — not merely for being review-shaped", () => {
+  // DISLIKE-CHANNEL (§1br): rewritten from "cut to exactly 0.15x" —
+  // preserves the ORIGINAL point of this scenario (a review-shaped item is
+  // only affected when the reader ACTUALLY declared a matching term, never
+  // merely for looking like a review) under the new hard-drop contract.
+  it("a review-shaped item is only excluded when a matching term is actually in the reader's own declared exclusions — not merely for being review-shaped", () => {
     const reviewShaped = paper({
       title: "A review of battery electrolyte transport",
       abstract:
@@ -89,26 +97,21 @@ describe("negativePenalty — SCORE-ZERO", () => {
     // `shouldPushReviewPaper` leniency filter either way — not what this
     // test exercises.
     const seedTexts = ["battery electrolyte transport review study"];
-    const profile = (negativeTopics: string[]) => ({
+    const profile = (exclusions: string[]) => ({
       topics: [TOPIC],
-      negativeTopics,
+      exclusions,
       seedTexts,
     });
 
-    const [undeclared] = scoreItems([reviewShaped], profile([]), undefined, now);
-    const [declared] = scoreItems(
-      [reviewShaped],
-      profile(["review"]),
-      undefined,
-      now,
-    );
+    const undeclared = scoreItems([reviewShaped], profile([]), undefined, now);
+    const declared = scoreItems([reviewShaped], profile(["review"]), undefined, now);
 
-    expect(undeclared).toBeDefined();
-    expect(undeclared.score).toBeGreaterThan(0);
-    // MUTATION CHECK (SCORE-ZERO): if pipeline.ts ever again feeds the
-    // system's own "avoid reviews" default into profile.negativeTopics
-    // (rather than only a reader's own declared dislike), `undeclared`
-    // would be cut too and this ratio would collapse to 1.
-    expect(declared.score / undeclared.score).toBeCloseTo(0.15, 5);
+    expect(undeclared).toHaveLength(1);
+    expect(undeclared[0]!.score).toBeGreaterThan(0);
+    // MUTATION CHECK (DISLIKE-CHANNEL §1br): if the system's own default
+    // "avoid reviews" words were ever fed into `exclusions` (rather than
+    // only a reader's own declared dislike), `undeclared` would be removed
+    // too and this would go empty regardless of the declared term.
+    expect(declared).toHaveLength(0);
   });
 });

@@ -130,6 +130,18 @@ describe("uploadFetchErrorKind (§1bi.8b)", () => {
     expect(uploadFetchErrorKind("a plain string, not even an Error")).toBe("transient");
     expect(uploadFetchErrorKind(undefined)).toBe("transient");
   });
+
+  // UPLOAD-FETCH-TIMEOUT: an aborted/timed-out fetch rejects with a
+  // DOMException named "AbortError" (the Fetch spec's own shape, in both
+  // the browser and Node's fetch) — never an ApiError, so this is already
+  // "transient" by construction. Pinned explicitly (rather than relying on
+  // the catch-all case above) so a future change cannot special-case a
+  // timeout into the permanent branch without this test going red.
+  it("is 'transient' for an aborted/timed-out fetch, never the permanent 404 outcome", () => {
+    expect(
+      uploadFetchErrorKind(new DOMException("The operation was aborted.", "AbortError")),
+    ).toBe("transient");
+  });
 });
 
 describe("resolveUploadFallback (§1bi)", () => {
@@ -478,5 +490,68 @@ describe("page.tsx source — retry wiring stays connected (§1bi.8b)", () => {
     const callSite = source.slice(start, source.indexOf("/>", start) + 2);
     expect(callSite).toContain("transient={uploadTransient}");
     expect(callSite).toContain("onRetry={uploadTransient ? onRetryUpload : undefined}");
+  });
+});
+
+// UPLOAD-FETCH-TIMEOUT: the record fetch effect itself has no render
+// harness (same reason as every other check in this file that reads the
+// source directly) and no test environment can wait out a real 15s timer,
+// so this proves the wiring the same way page.test.tsx already proves the
+// retry wiring above — by reading the actual effect's source text, not by
+// re-describing it from memory.
+describe("page.tsx source — the upload record fetch has a timeout (UPLOAD-FETCH-TIMEOUT)", () => {
+  function fetchEffectBody(source: string): string {
+    // A marker with no embedded newline, so it matches regardless of this
+    // file's own line-ending convention (CRLF here, per `git ls-files --eol`).
+    const start = source.indexOf("if (!shouldFetchById) return;");
+    expect(start).toBeGreaterThan(-1);
+    const end = source.indexOf("}, [id, fetchKey, shouldFetchById, isUploadId]);", start);
+    expect(end).toBeGreaterThan(start);
+    return source.slice(start, end);
+  }
+
+  it("defines a named ~15s timeout constant, used by the effect", async () => {
+    const { readFileSync } = await import("node:fs");
+    const source = readFileSync(new URL("./page.tsx", import.meta.url), "utf8");
+    expect(source).toMatch(/const UPLOAD_FETCH_TIMEOUT_MS = 15000;/);
+    expect(fetchEffectBody(source)).toContain("UPLOAD_FETCH_TIMEOUT_MS");
+  });
+
+  it("creates an AbortController and aborts it after the timeout, only for the upload id", async () => {
+    const { readFileSync } = await import("node:fs");
+    const source = readFileSync(new URL("./page.tsx", import.meta.url), "utf8");
+    const body = fetchEffectBody(source);
+    // Scoped: the controller only exists when isUploadId is true, so a
+    // non-upload (external-id) fetch is never given a signal at all.
+    expect(body).toContain("isUploadId ? new AbortController()");
+    expect(body).toContain("window.setTimeout(() => controller.abort(), UPLOAD_FETCH_TIMEOUT_MS)");
+    expect(body).toContain("controller ? { signal: controller.signal } : undefined");
+  });
+
+  it("clears the timer once the fetch settles, so it never fires after a normal finish", async () => {
+    const { readFileSync } = await import("node:fs");
+    const source = readFileSync(new URL("./page.tsx", import.meta.url), "utf8");
+    const body = fetchEffectBody(source);
+    const finallyStart = body.indexOf(".finally(");
+    expect(finallyStart).toBeGreaterThan(-1);
+    expect(body.slice(finallyStart)).toContain("window.clearTimeout(timer)");
+  });
+
+  it("the cleanup aborts the controller and clears the timer, alongside the existing no-state-after-unmount guard", async () => {
+    const { readFileSync } = await import("node:fs");
+    const source = readFileSync(new URL("./page.tsx", import.meta.url), "utf8");
+    const body = fetchEffectBody(source);
+    const cleanupStart = body.lastIndexOf("return () => {");
+    expect(cleanupStart).toBeGreaterThan(-1);
+    const cleanup = body.slice(cleanupStart);
+    // The pre-existing guard (UPLOAD-404's own effect already had this):
+    // flips first, so neither `.then` nor `.catch` can set state after
+    // unmount/id-change, for either branch (upload or non-upload).
+    expect(cleanup).toContain("cancelled = true");
+    // New in this item: also clear the timer and actually abort the
+    // in-flight request for the upload branch (a no-op when `controller`
+    // is undefined, i.e. the non-upload branch — unchanged there).
+    expect(cleanup).toContain("window.clearTimeout(timer)");
+    expect(cleanup).toContain("controller?.abort()");
   });
 });

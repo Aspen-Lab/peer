@@ -3891,4 +3891,69 @@ describe("feed lane loading", () => {
       });
     });
   });
+
+  // DISLIKE-CHANNEL (ABC-JEV-INTEGRATION.md §1br,
+  // docs/jev-abc/DISLIKE-CHANNEL-B-20260930T083933Z.md) — tripwire. The
+  // investigation traced all 7 production "less of this" entry points
+  // (Home grid button/swipe/key, Saved page dismiss, paper detail page
+  // Skip/swipe/key) to this ONE store action — none of them has any
+  // separate logic of its own, so pinning this action's write targets pins
+  // every entry point at once. The point of this test: a reader's one-click
+  // "less of this" must only ever teach the gradual, decaying preference
+  // ledger — never the blunt, permanent `dislikedTopics`/exclusion-list
+  // channel (see combine.ts's own doc comment on `exclusions` and
+  // types/index.ts's on `dislikedTopics` for why: a plain substring hard
+  // drop, with no decay and no concept scoping, would silently and
+  // permanently remove unrelated on-topic papers sharing one common word —
+  // measured by construction in the investigation's own Q3).
+  describe("DISLIKE-CHANNEL (§1br) — notInterestedPaper writes only to the preference ledger", () => {
+    const dismissedPaper: Paper = {
+      id: "paper-dislike-tripwire",
+      title: "Dismissal tripwire fixture paper",
+      authors: ["Researcher"],
+      relevanceReason: "Matches materials.",
+      venue: "Example Journal",
+      source: "other",
+      summaryIntro: "Intro.",
+      // Deliberately unrelated to the outer beforeEach's own
+      // researchTopics (["materials"]) so the ledger's Required-topic
+      // protection (applyPreferenceSignal, "dismissing your own declared
+      // topic never teaches the ledger to avoid it") does not swallow this
+      // signal and produce a false pass.
+      summaryExperimentKeywords: ["tripwire probe concept"],
+      summaryResultDiscussion: "Result.",
+      isSaved: false,
+    };
+
+    it("commits the ledger's own gradual negative signal and never touches dislikedTopics or any exclusion list", () => {
+      fetchMock.mockImplementation(async () => jsonResponse({ ok: true }));
+      expect(useProfileStore.getState().profile.dislikedTopics).toEqual([]);
+
+      // notInterestedPaper + commitDismiss reproduce the real trace exactly
+      // (store/feed.ts:2327/2857): the 4-second undo window is a UI-layer
+      // timer, not something the store itself waits on, so calling
+      // commitDismiss directly is the same "the undo window closed" state
+      // a real dismissal reaches, deterministically.
+      useFeedStore.getState().notInterestedPaper(dismissedPaper);
+      useFeedStore.getState().commitDismiss();
+
+      // Never wired to the hard-exclusion channel.
+      expect(useProfileStore.getState().profile.dislikedTopics).toEqual([]);
+
+      // DID reach the preference ledger — so the assertion above is a real
+      // "never", not merely "nothing happened at all".
+      const ledger = useProfileStore.getState().profile.preferenceLedger ?? {};
+      const entries = Object.values(ledger);
+      expect(entries.length).toBeGreaterThan(0);
+      expect(
+        entries.some((entry) => entry.negative > 0 && Boolean(entry.lastNegativeAt)),
+      ).toBe(true);
+    });
+
+    // MUTATION CHECK (DISLIKE-CHANNEL §1br): if notInterestedPaper (or
+    // commitDismiss) is ever changed to also append the dismissed paper's
+    // own concept to `dislikedTopics`, this test goes red. Verified by
+    // temporarily making that exact change and re-running this file; not
+    // committed here (see this item's checkpoint for the restore proof).
+  });
 });

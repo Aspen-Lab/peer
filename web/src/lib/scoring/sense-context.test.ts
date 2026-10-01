@@ -6,6 +6,7 @@ import {
   isShortOrAmbiguous,
   senseContextGate,
   selfDeclaresDifferentSense,
+  matchesSelfDeclaredAbbreviation,
   matchesFullNameOrFormula,
   SENSE_CONTEXT_DEMOTED_GROUNDING,
   SENSE_CONTEXT_FIXED_FLOOR,
@@ -659,6 +660,154 @@ describe("test 14 — rule (c): self-declared different expansion (§1ap AMENDME
     });
     expect(result.matched).toEqual([]); // non-match, not even a demoted entry
     expect(result.score).toBe(0);
+  });
+});
+
+describe("T2-EXTRACTOR (§1bv): comma-form self-declared pairs inside one parenthetical", () => {
+  it("FIRES on the real petroleum comma-form negative, openalex:W1972001745 (previously MISSED -- guide Q1 shape 1 / Q2)", () => {
+    // Real OpenAlex item (openalex:W1972001745), title verbatim from
+    // <scratchpad>/r3-lco-negatives.json (no abstract was saved for this
+    // item -- the title alone already carries the comma-form declaration).
+    // Before this item: selfDeclaresDifferentSense(..., "LCO") returned
+    // {applies:false, differs:false} -- the comma form "(light cycle oil,
+    // LCO)" was invisible to rule (c) because both pre-existing patterns
+    // anchor the long-form/abbreviation split AT the parenthesis boundary,
+    // and a pair packed together on the SAME side of one parenthetical
+    // satisfies neither.
+    const paper = item("t2x-lco-comma-w1972001745", {
+      title:
+        "New materials as FCC active matrix components for maximizing diesel (light cycle oil, LCO) and " +
+        "minimizing its aromatic content",
+      abstract: "",
+    });
+    expect(selfDeclaresDifferentSense(paper, "LCO").differs).toBe(true);
+  });
+
+  it("FIRES on the real neuroscience comma-form negative, openalex:W2949450205, and extracts BOTH semicolon-joined pairs independently (§1bv.1)", () => {
+    // Real OpenAlex item (openalex:W2949450205). Abstract fragment is a
+    // verbatim, contiguous substring (shortest form that makes the point)
+    // of the real abstract, reconstructed from its OpenAlex
+    // abstract_inverted_index (<scratchpad>/out/t2x-q2-lfp-collision-raw.json)
+    // -- not retyped or paraphrased.
+    const paper = item("t2x-lfp-comma-w2949450205", {
+      title: "Multimodal Modeling of Neural Network Activity: Computing LFP, ECoG, EEG, and MEG Signals With LFPy 2.0",
+      abstract:
+        "compute in vivo-like extracellular potentials (local field potentials, LFP; electrocorticographical " +
+        "signals, ECoG) and corresponding current dipole moments.",
+    });
+    expect(selfDeclaresDifferentSense(paper, "LFP").differs).toBe(true);
+    // Each comma pair inside the ONE parenthetical is found independently,
+    // proven directly via the second pair's own abbreviation, "ECoG" (not a
+    // catalogued ABBREVIATION_GROUPS entry, so rule (c) itself is inert for
+    // it -- matchesSelfDeclaredAbbreviation is the direct probe for
+    // extraction, same convention required-gate.test.ts already uses).
+    expect(matchesSelfDeclaredAbbreviation(paper, canonicalize("ECoG"))).toBe(true);
+  });
+
+  it("order-reversed construction fires the same as the long-first order: 'LCO, light cycle oil'", () => {
+    const paper = item("t2x-lco-comma-reversed", {
+      title: "A study of catalytic cracking additives (LCO, light cycle oil) for refinery yield improvement",
+      abstract: "",
+    });
+    expect(selfDeclaresDifferentSense(paper, "LCO").differs).toBe(true);
+  });
+
+  it("an 'i.e.'-style prefix inside the parens does not block extraction: 'i.e. light cycle oil, LCO'", () => {
+    // Free consequence of not anchoring to the parenthesis boundary (§Q4) --
+    // pins that this stays true.
+    const paper = item("t2x-lco-comma-ie-prefix", {
+      title: "Upgrading heavy fractions (i.e. light cycle oil, LCO) recovered from the fluid catalytic cracker",
+      abstract: "",
+    });
+    expect(selfDeclaresDifferentSense(paper, "LCO").differs).toBe(true);
+  });
+
+  it("protective -- a genuine sense in comma form never fires: 'lithium cobalt oxide, LCO'", () => {
+    const paper = item("t2x-lco-comma-genuine", {
+      title: "A high-rate cathode material (lithium cobalt oxide, LCO) for portable electronics",
+      abstract: "",
+    });
+    expect(selfDeclaresDifferentSense(paper, "LCO")).toEqual({ applies: true, differs: false });
+  });
+
+  it("protective -- the standing AMENDMENT-4 counterexample stays unextracted under the NEW patterns too (no comma): 'high-voltage LiCoO2 (LCO)'", () => {
+    // Proves the widening is additive, not a replacement: the pre-existing,
+    // already-tested behavior for a comma-FREE parenthetical is untouched
+    // (this exact fixture/assertion already exists above, test 14 -- this
+    // is a second, direct pin scoped to this describe block so the
+    // T2-EXTRACTOR suite is self-contained and does not rely on reading a
+    // different describe block to know it holds).
+    const paper = item("t2x-lco-no-comma-counterexample", {
+      title: "We report a high-voltage LiCoO2 (LCO) cathode with a stable interface.",
+      abstract: "",
+    });
+    expect(selfDeclaresDifferentSense(paper, "LCO").differs).toBe(false);
+  });
+
+  it("protective -- a plain list of abbreviations extracts an inert spurious pair, never a false match (the LOW finding, §Q4; MUTATION TARGET for the tag-scoping)", () => {
+    // Reconstructed from the real detector hit on openalex:W3186319380
+    // ("(LFP, NMC, LMO, and NCA)" inside its title) -- CONSTRUCTED
+    // surrounding sentence (the guide's own Q4 prototype validation used
+    // the identical text). The abbr-first pattern extracts a
+    // semantically-empty pair {abbr:"LMO", longForm:"and NCA"} from this
+    // list (the long-form phrase class cannot tell an ordinary word from
+    // another all-caps abbreviation sitting in list position) -- inert only
+    // because selfDeclaresDifferentSense separately requires the extracted
+    // abbreviation to canonically match the QUERIED tag ("lmo" matches
+    // neither "lfp" nor "nmc"). Asserting the full result (not just
+    // `differs`) so this test is sensitive to weakening that per-tag
+    // scoping even where the run-length check would also happen to save
+    // `differs` on its own -- see this round's checkpoint for the executed
+    // mutation result.
+    const paper = item("t2x-list-false-positive", {
+      title: "Comparative Study of Four Common Lithium-Ion Batteries (LFP, NMC, LMO, and NCA)",
+      abstract: "",
+    });
+    expect(selfDeclaresDifferentSense(paper, "LFP")).toEqual({ applies: false, differs: false });
+    expect(selfDeclaresDifferentSense(paper, "NMC")).toEqual({ applies: false, differs: false });
+  });
+
+  it("admission for a genuine comma-form paper is unchanged in outcome: still full T1 grounding, never routed through T2", () => {
+    // canonicalize() turns the comma into whitespace before T1 ever runs
+    // (docs/jev-abc/T2-EXTRACTOR-B-20260930T151003Z.md Q1), so a genuine
+    // comma-form paper was ALREADY admitted via the bare "lco" token before
+    // this item, not via T2 -- confirmed unchanged here: this widening only
+    // ever affects rule (c), never admission (the guide's own measured
+    // "ADMISSION benefit of any widening is 0" across 700 real items, Q2).
+    const paper = item("t2x-lco-comma-genuine-admission", {
+      title: "A high-rate cathode material (lithium cobalt oxide, LCO) for portable electronics",
+      abstract: "",
+    });
+    const result = scoreKeyword(paper, ["LCO"], {
+      grounded: true,
+      extendedRequiredMatch: true,
+      senseContext: { contextText: "" },
+    });
+    expect(result.matched).toEqual(["LCO"]);
+    const specificity = termSpecificity(canonicalize("LCO"));
+    expect(result.score).toBeCloseTo(specificity / 1.5, 4); // full, undemoted T1 grounding
+  });
+
+  it("end-to-end through the real gate: a no-context reader with tag 'LCO' no longer sees the real petroleum paper admitted", () => {
+    // Same real item as the first test above (openalex:W1972001745). Before
+    // this item: {bypass:true, pass:true} at the statistical gate (no
+    // declared project text to check against) AND rule (c) missed the
+    // comma form -- so this paper was admitted at FULL STRENGTH for a
+    // reader who has declared only the tag "LCO" and nothing else (a
+    // normal, common way to use the product, not an edge case -- see the
+    // guide's Q5 severity statement). After this item: rule (c) now reads
+    // the comma form and fires first (scoreKeyword runs rule (c) before the
+    // statistical gate), so the item qualifies through NO Required-tag
+    // channel and combine.ts's own required-topics gate excludes it from
+    // the pool entirely.
+    const paper = item("t2x-lco-comma-w1972001745-e2e", {
+      title:
+        "New materials as FCC active matrix components for maximizing diesel (light cycle oil, LCO) and " +
+        "minimizing its aromatic content",
+      abstract: "",
+    });
+    const scored = scoreItems([paper], { topics: ["LCO"] }, undefined, now);
+    expect(scored).toEqual([]);
   });
 });
 

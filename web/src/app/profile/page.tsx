@@ -1287,6 +1287,31 @@ function formatHourLabel(hour: number): string {
   return `${displayHour}:00 ${period}`;
 }
 
+/** GET /api/profile/confirm-email's redirect flag (the `?digest_email_confirm=`
+ * query param the clicked link comes back with), mapped to one plain
+ * sentence. ABC-JEV-INTEGRATION.md §1bn EMAIL-TOKEN-REPLAY — same "page owns
+ * the sentence" pattern as `confirmAddressMessage`/`testSendMessage` below,
+ * extracted for the same reason: the wrapper component that reads this flag
+ * calls useRouter/useSearchParams and isn't unit-tested directly (see this
+ * section's header note above), so the mapping itself is a pure function
+ * instead. An unrecognized or missing flag falls back to the generic
+ * `invalid_link` sentence — never a blank message. */
+export function confirmFlagMessage(flag: string | null): string {
+  const messages: Record<string, string> = {
+    signin_required: "Sign in, then open the link again.",
+    wrong_account: "That confirmation link isn't for this account.",
+    unavailable: "Confirming a different email isn't available right now.",
+    invalid_link: "That confirmation link didn't work. Request a new one.",
+    // EMAIL-TOKEN-REPLAY (§1bn): the link was valid and not expired, but the
+    // digest address moved on for some other reason since it was sent (a
+    // newer confirmation, the account-email short-circuit, or a direct
+    // profile save) — an honest "this is stale, not broken" sentence, same
+    // voice as invalid_link's.
+    stale_link: "Your email settings changed since that link was sent. Request a new confirmation link.",
+  };
+  return messages[flag ?? ""] ?? messages.invalid_link;
+}
+
 /** POST /api/profile/confirm-email's response, mapped to one plain sentence
  * (or none, for the two outcomes that carry their own UI instead — see
  * `pending`/`confirmed`). ABC-JEV-INTEGRATION.md §1al POLISH-1-EMAIL (a)/(f).
@@ -1657,14 +1682,8 @@ function EmailSettings() {
           // Best-effort — the banner simply does not appear.
         }
       } else {
-        const messages: Record<string, string> = {
-          signin_required: "Sign in, then open the link again.",
-          wrong_account: "That confirmation link isn't for this account.",
-          unavailable: "Confirming a different email isn't available right now.",
-          invalid_link: "That confirmation link didn't work. Request a new one.",
-        };
         if (!cancelled) {
-          setConfirmMessage(messages[confirmFlag ?? ""] ?? messages.invalid_link);
+          setConfirmMessage(confirmFlagMessage(confirmFlag));
         }
       }
       if (!cancelled) {
@@ -2013,6 +2032,12 @@ function EditView({
               papers (+1/3 of the score) so they rise to the top — though an exceptionally
               on-target paper from elsewhere can still win.
             </p>
+            {/* PROFILE-UNSYNCED-FIELDS (§1bp.3) — preferredJournals has no
+                account column yet (device-only by current design); said
+                honestly, in the field's own existing hint style. */}
+            <p className="mt-2 px-1 text-micro leading-snug text-text-faint/70">
+              Saved on this device only.
+            </p>
           </div>
           <ChoiceGroup
             label="Importance"
@@ -2104,6 +2129,13 @@ function EditView({
               and makes no AI call.
             </p>
           )}
+          {/* PROFILE-UNSYNCED-FIELDS (§1bp.3) — deepReportEnabled has no
+              account column yet (device-only by current design); said
+              honestly, unconditionally (true regardless of AI availability),
+              in the same hint style as the sentence just above. */}
+          <p className="text-micro leading-relaxed text-text-faint">
+            Saved on this device only.
+          </p>
         </div>
       </EditRow>
 

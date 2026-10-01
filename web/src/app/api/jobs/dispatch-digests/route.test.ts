@@ -1223,4 +1223,184 @@ describe("GET /api/jobs/dispatch-digests -- DIGEST-CATCHUP (§1bf): catch-up hou
     expect(insertFn).not.toHaveBeenCalled();
     expect(mocks.sendDigestEmail).not.toHaveBeenCalled();
   });
+
+  // ── DIGEST-CATCHUP-TRIPWIRES (ABC-JEV-INTEGRATION.md §1bf.10a) ──────────
+  // The fresh A review (docs/jev-abc/DIGEST-CATCHUP-A-20260929T161325Z.md)
+  // proved three behaviours only in a probe test file it wrote and then
+  // deleted at the end of its own review (its "Cleanup proof" section) --
+  // so none of them had a permanent, in-repo test. §1bf.10a accepted the
+  // timezone-change finding (F1) as a COST, not a bug to fix here, and
+  // named all three as a "tripwire owed": the next C on this route adds
+  // permanent tests pinning them, so a future change to any one of them is
+  // a conscious decision, not a silent regression.
+  it("accepted cost, §1bf.10a -- pins today's behaviour so a change to it is a conscious decision: a reader who changes timezone after a send gets one more email for the new local date, then nothing more that Tokyo day", async () => {
+    // Reader receives today's digest in America/Chicago, chosen hour 9.
+    const chicago = makeAdminClient({
+      profiles: [profileRow({ digest_timezone: "America/Chicago", digest_hour_local: 9 })],
+    });
+    mocks.createAdminClient.mockReturnValue(chicago.client);
+    vi.setSystemTime(new Date("2026-09-24T14:05:00.000Z")); // 09:05 CDT, local date 2026-09-24
+    const firstBody = await (await GET(authedRequest())).json();
+    expect(firstBody.dispatched_count).toBe(1);
+    expect(mocks.sendDigestEmail).toHaveBeenCalledTimes(1);
+    const firstDeliveredAt = new Date("2026-09-24T14:05:00.000Z").toISOString();
+
+    // The reader's profile timezone changes to Asia/Tokyo before the next
+    // run (chosen hour unchanged). ~10.4h later -- past the 6h guard, a NEW
+    // local date in Tokyo, and at/after the chosen hour there.
+    vi.setSystemTime(new Date("2026-09-25T00:30:00.000Z")); // 09:30 JST, local date 2026-09-25
+    const tokyoRun2 = makeAdminClient({
+      profiles: [profileRow({ digest_timezone: "Asia/Tokyo", digest_hour_local: 9 })],
+      recent: { data: [], error: null }, // > 6h since the Chicago send: the old guard is silent
+      sameDate: { data: [{ delivered_at: firstDeliveredAt }], error: null }, // still inside the 26h window
+    });
+    mocks.createAdminClient.mockReturnValue(tokyoRun2.client);
+    const secondBody = await (await GET(authedRequest())).json();
+
+    // ACCEPTED COST (§1bf.10a / review finding F1): the guard judges "today"
+    // in the reader's CURRENT (Tokyo) timezone and reinterprets the
+    // Chicago-send instant in that same zone -- 2026-09-24T14:05:00Z reads
+    // as 23:05 on 2026-09-24 in Tokyo, a different local date than this
+    // run's 2026-09-25, so the guard does not recognize "already sent
+    // today" and a genuine second email goes out.
+    expect(secondBody.dispatched_count).toBe(1);
+    expect(secondBody.skipped_reasons.already_delivered_today).toBeUndefined();
+    expect(mocks.sendDigestEmail).toHaveBeenCalledTimes(2); // one more email
+    const secondDeliveredAt = new Date("2026-09-25T00:30:00.000Z").toISOString();
+
+    // A further run the SAME Tokyo local date sends nothing: the guard now
+    // sees a delivery (the Tokyo run's own insert) that DOES fall on
+    // today's Tokyo local date.
+    vi.setSystemTime(new Date("2026-09-25T08:00:00.000Z")); // 17:00 JST, still local date 2026-09-25
+    const tokyoRun3 = makeAdminClient({
+      profiles: [profileRow({ digest_timezone: "Asia/Tokyo", digest_hour_local: 9 })],
+      recent: { data: [], error: null },
+      sameDate: {
+        data: [{ delivered_at: firstDeliveredAt }, { delivered_at: secondDeliveredAt }],
+        error: null,
+      },
+    });
+    mocks.createAdminClient.mockReturnValue(tokyoRun3.client);
+    const thirdBody = await (await GET(authedRequest())).json();
+
+    expect(thirdBody.dispatched_count).toBe(0);
+    expect(thirdBody.skipped_reasons).toEqual({ already_delivered_today: 1 });
+    expect(mocks.sendDigestEmail).toHaveBeenCalledTimes(2); // no further email
+  });
+
+  it("DST fall-back day (America/Chicago, 2026-11-01, when 01:00-01:59 happens twice): both occurrences of the repeated hour plus a later same-day run add up to exactly one send", async () => {
+    const tz = "America/Chicago";
+    const chosenHour = 1;
+
+    // First occurrence: 01:15 CDT (pre-transition, UTC-5) -- due, sends.
+    const runA = makeAdminClient({
+      profiles: [profileRow({ digest_timezone: tz, digest_hour_local: chosenHour })],
+    });
+    mocks.createAdminClient.mockReturnValue(runA.client);
+    vi.setSystemTime(new Date("2026-11-01T06:15:00.000Z"));
+    const bodyA = await (await GET(authedRequest())).json();
+    expect(bodyA.dispatched_count).toBe(1);
+    const deliveredAtA = new Date("2026-11-01T06:15:00.000Z").toISOString();
+
+    // Second occurrence of the SAME local hour: 01:45 CST (post-transition,
+    // UTC-6), 1.5h of real time after the first send -- still inside the
+    // pre-existing 6-hour lookback, so the OLD guard fires first.
+    const runB = makeAdminClient({
+      profiles: [profileRow({ digest_timezone: tz, digest_hour_local: chosenHour })],
+      recent: { data: [{ id: 1 }], error: null },
+      sameDate: { data: [{ delivered_at: deliveredAtA }], error: null },
+    });
+    mocks.createAdminClient.mockReturnValue(runB.client);
+    vi.setSystemTime(new Date("2026-11-01T07:45:00.000Z"));
+    const bodyB = await (await GET(authedRequest())).json();
+    expect(bodyB.dispatched_count).toBe(0);
+    expect(bodyB.skipped_reasons).toEqual({ recent_delivery: 1 });
+
+    // A later run the SAME local day (08:00 CST, 7h45 after the first
+    // send): past the 6-hour window, but the NEW same-local-date guard
+    // catches it.
+    const runC = makeAdminClient({
+      profiles: [profileRow({ digest_timezone: tz, digest_hour_local: chosenHour })],
+      recent: { data: [], error: null },
+      sameDate: { data: [{ delivered_at: deliveredAtA }], error: null },
+    });
+    mocks.createAdminClient.mockReturnValue(runC.client);
+    vi.setSystemTime(new Date("2026-11-01T14:00:00.000Z"));
+    const bodyC = await (await GET(authedRequest())).json();
+    expect(bodyC.dispatched_count).toBe(0);
+    expect(bodyC.skipped_reasons).toEqual({ already_delivered_today: 1 });
+
+    expect(mocks.sendDigestEmail).toHaveBeenCalledTimes(1); // exactly one send across all 3 runs
+  });
+
+  it("two runs 20 minutes apart, both after the chosen hour: exactly one send, and the second is skipped by the pre-existing 6-hour guard, not the new same-date guard", async () => {
+    const first = makeAdminClient({ profiles: [profileRow({ digest_hour_local: 9 })] });
+    mocks.createAdminClient.mockReturnValue(first.client);
+    vi.setSystemTime(new Date("2026-09-24T09:10:00.000Z")); // local hour 9 (UTC), due
+    const firstBody = await (await GET(authedRequest())).json();
+    expect(firstBody.dispatched_count).toBe(1);
+    const firstDeliveredAt = new Date("2026-09-24T09:10:00.000Z").toISOString();
+
+    vi.setSystemTime(new Date("2026-09-24T09:30:00.000Z")); // 20 minutes later, same date
+    const second = makeAdminClient({
+      profiles: [profileRow({ digest_hour_local: 9 })],
+      recent: { data: [{ id: 1 }], error: null }, // within 6h: the OLD guard fires first
+      sameDate: { data: [{ delivered_at: firstDeliveredAt }], error: null }, // also true, must not be the credited reason
+    });
+    mocks.createAdminClient.mockReturnValue(second.client);
+    const secondBody = await (await GET(authedRequest())).json();
+
+    expect(secondBody.dispatched_count).toBe(0);
+    // Which guard is credited matters: the pre-existing 6-hour lookback,
+    // not the new same-local-date guard, even though both would fire here.
+    expect(secondBody.skipped_reasons).toEqual({ recent_delivery: 1 });
+    expect(second.insertFn).not.toHaveBeenCalled();
+    expect(mocks.sendDigestEmail).toHaveBeenCalledTimes(1); // exactly one send across both runs
+  });
+
+  // DIGEST-CATCHUP-TRIPWIRES addendum (review finding TW-F1,
+  // docs/jev-abc/DIGEST-CATCHUP-TRIPWIRES-A-20260930T055418Z.md): none of
+  // the three tests above have a delivery/run pair whose LOCAL dates
+  // differ while their UTC calendar dates coincide, so none of them can
+  // tell "compares local dates" apart from "compares UTC dates" -- a
+  // mutation swapping in a hardcoded "UTC" at the guard's call site turned
+  // no test red. This one closes that gap directly.
+  it("UTC-vs-local-date tripwire (review TW-F1): a Chicago reader's previous delivery shares the new run's UTC calendar date but not its local one -- the guard compares LOCAL dates, so this run still sends", async () => {
+    const tz = "America/Chicago";
+    const chosenHour = 8;
+
+    // Day D, 23:30 CDT -- America/Chicago LOCAL date 2026-09-24, but
+    // already 2026-09-25 in UTC (04:30Z). Verified with Node's Intl
+    // before writing this test (see the checkpoint doc's addendum).
+    const first = makeAdminClient({
+      profiles: [profileRow({ digest_timezone: tz, digest_hour_local: chosenHour })],
+    });
+    mocks.createAdminClient.mockReturnValue(first.client);
+    vi.setSystemTime(new Date("2026-09-25T04:30:00.000Z"));
+    const firstBody = await (await GET(authedRequest())).json();
+    expect(firstBody.dispatched_count).toBe(1);
+    const firstDeliveredAt = new Date("2026-09-25T04:30:00.000Z").toISOString();
+
+    // Day D+1, 08:00 CDT -- LOCAL date 2026-09-25 (a genuinely new local
+    // day), and ALSO 2026-09-25 in UTC (13:00Z) -- the SAME UTC calendar
+    // date as the first delivery, even though the local dates differ.
+    // 8.5h of real elapsed time: past the 6-hour guard, so that guard is
+    // not what decides this run either way.
+    const second = makeAdminClient({
+      profiles: [profileRow({ digest_timezone: tz, digest_hour_local: chosenHour })],
+      recent: { data: [], error: null }, // > 6h: the old guard is silent
+      sameDate: { data: [{ delivered_at: firstDeliveredAt }], error: null },
+    });
+    mocks.createAdminClient.mockReturnValue(second.client);
+    vi.setSystemTime(new Date("2026-09-25T13:00:00.000Z"));
+    const secondBody = await (await GET(authedRequest())).json();
+
+    // The guard must judge "today" in the READER's own local zone: local
+    // dates 2026-09-24 vs 2026-09-25 differ, so this is genuinely a new
+    // day and the run sends. A guard that instead compared UTC dates
+    // would see 2026-09-25 == 2026-09-25 and wrongly block it (TW-F1).
+    expect(secondBody.dispatched_count).toBe(1);
+    expect(secondBody.skipped_reasons.already_delivered_today).toBeUndefined();
+    expect(mocks.sendDigestEmail).toHaveBeenCalledTimes(2);
+  });
 });

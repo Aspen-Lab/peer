@@ -60,6 +60,18 @@ export interface FeedRequest extends ScoringProfile {
   /** User-declared context; used only in the server-derived private identity. */
   project?: string;
   challenge?: string;
+  /**
+   * DISLIKE-CHANNEL (ABC-JEV-INTEGRATION.md §1br): declared HERE, not
+   * inherited from `ScoringProfile` any more — this field used to reach
+   * `ScoringProfile.negativeTopics`/`legacyNegativeTopics` too (both since
+   * deleted as dead code; see combine.ts), but it was, and still is,
+   * genuinely read by a separate, live mechanism:
+   * `profile-compiler.ts`'s `compileSearchBrief` folds it into
+   * `SearchBrief.avoid` (system + reader-declared terms `rerank.ts` demotes
+   * on, never a hard drop). Request shapes stay accepted — an older
+   * client/job/digest sending this field must not fail validation.
+   */
+  negativeTopics?: string[];
   /** Server-minted only; route bodies and query strings never populate this. */
   paperCacheScope?: TrustedPaperCacheScope;
   /** Server-only lease; never parsed from HTTP requests. */

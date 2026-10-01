@@ -14,7 +14,18 @@
 export const ABBREVIATION_GROUPS = [
   ["li ion", "lithium ion", "lithium-ion"],
   ["lco", "lithium cobalt oxide", "licoo2"],
-  ["nmc", "nickel manganese cobalt oxide"],
+  // NMC-HYPONYM (ABC-JEV-INTEGRATION.md §1bu ruling 1(a)) — "ncm" is a pure
+  // synonym of "nmc" (the SAME compound class, LiNixMnyCozO2, spelled with
+  // its metals in a different letter order), not a hyponym/member — the
+  // identical shape LCO-FORMULA already shipped for "lco"/"licoo2" just
+  // above. It never joins the group's specific stoichiometry members
+  // ("NMC811", "NCM622", ...): those are compositions of this family, not
+  // spellings of it, and deliberately stay OUT of this symmetric group (see
+  // keyword.ts's `matchesFamilyMember` and this file's own
+  // `nmcMemberSibling`, both added by the same item) — adding one here
+  // would let a reader's own specific "NMC811" tag silently widen to match
+  // every generic NMC paper, the exact widening this item exists to avoid.
+  ["nmc", "ncm", "nickel manganese cobalt oxide"],
   ["lfp", "lithium iron phosphate", "lifepo4"],
   ["ssb", "solid state battery", "all solid state battery"],
   ["eis", "electrochemical impedance spectroscopy"],
@@ -70,6 +81,29 @@ for (const rawGroup of ABBREVIATION_GROUPS) {
     ABBREVIATION_INDEX.set(form, group);
     if (!form.includes(" ") && form.length <= 4) KNOWN_SHORT_FORMS.add(form);
   }
+}
+
+/**
+ * True when a term's own canonical form is itself a short, bare abbreviation
+ * alias registered in `ABBREVIATION_GROUPS` (e.g. "nmc", "ncm", "lco", "ssb")
+ * — as opposed to a spelled-out full name ("nickel manganese cobalt oxide")
+ * or a chemical formula long enough not to be a bare alias ("licoo2",
+ * "lifepo4" — both single-word but over the 4-character short-form cutoff,
+ * so NOT members of this set; LCO-FORMULA's whole point is that those two
+ * count as STRONG evidence, unaffected by this export).
+ *
+ * Exported for NMC-HYPONYM (ABC-JEV-INTEGRATION.md §1bu): keyword.ts's
+ * `matchesFullNameOrFormula` needs this the moment one group can hold MORE
+ * THAN ONE such bare short form — the "nmc"/"ncm" pair this item adds is the
+ * first. Before that, every group had exactly one bare short form, so "not
+ * literally the queried tag itself" and "not a bare short form" were the
+ * same test and the distinction never mattered; now that a reader's tag
+ * ("NMC") and a DIFFERENT bare synonym in the same group ("ncm") can both be
+ * short/ambiguous acronyms, only the latter, narrower test still means
+ * "stronger, unambiguous evidence."
+ */
+export function isKnownShortForm(canonicalTerm: string): boolean {
+  return KNOWN_SHORT_FORMS.has(canonicalTerm);
 }
 
 const IRREGULAR_INFLECTIONS = new Map<string, string[]>([
@@ -228,6 +262,40 @@ function inflectedForms(phrase: string): string[] {
   return variants.map((variant) => [...prefix, variant].join(" "));
 }
 
+// NMC-HYPONYM (ABC-JEV-INTEGRATION.md §1bu ruling 1(c)) — a digit-preserving
+// MEMBER<->MEMBER synonym: "nmc811" and "ncm811" name the SAME stoichiometry,
+// just with its three metals abbreviated in the two orders real authors use
+// (Q2 of docs/jev-abc/NMC-HYPONYM-B-20260930T111311Z.md) — a plain synonym
+// between two members, not a family/member (hyponym) relationship, so unlike
+// the one-way family->member check in keyword.ts (`matchesFamilyMember`,
+// gated behind the Required-gate-only `extendedRequiredMatch` flag), this
+// belongs here, inside expandTerm's own ordinary bidirectional closure —
+// exactly like every other ABBREVIATION_GROUPS-driven expansion.
+//
+// EXACTLY 3 digits (matching this item's other ruling on digit count,
+// §1bu ruling 2) and anchored at both ends (`^...$` against the ALREADY
+// canonicalized, single-token term): it can therefore never produce the
+// bare family form ("nmc"/"ncm" alone never has a 3-digit suffix to match)
+// and never a DIFFERENT composition (the captured digits are reused
+// unchanged, never re-derived or widened) — so a reader's own "NMC811" tag
+// gains "ncm811" (and vice versa) but can never widen to plain "NMC"/"NCM"
+// or to a different stoichiometry such as "NMC622". A separated spelling
+// ("NMC 811") canonicalizes to a two-token string ("nmc 811") and never
+// matches this pattern at all — unrelated to this rule, already covered by
+// plain T1 word matching on the bare family tag (Q1 of the guide).
+const NMC_MEMBER_SIBLING_RE = /^(nmc|ncm)(\d{3})$/;
+
+/** The digit-preserving sibling of an already-canonical "nmc"/"ncm" + 3-digit
+ * token (e.g. "nmc811" -> "ncm811"), or null when `canonical` is not that
+ * shape. Not itself an export — only ever reached through `expandTerm`'s own
+ * queue below, the same way every other expansion source here is. */
+function nmcMemberSibling(canonical: string): string | null {
+  const match = NMC_MEMBER_SIBLING_RE.exec(canonical);
+  if (!match) return null;
+  const [, prefix, digits] = match;
+  return (prefix === "nmc" ? "ncm" : "nmc") + digits;
+}
+
 /** Canonical, morphological, and abbreviation-equivalent forms for a term. */
 export function expandTerm(term: string): string[] {
   const canonical = canonicalize(term);
@@ -246,11 +314,57 @@ export function expandTerm(term: string): string[] {
     for (const equivalent of ABBREVIATION_INDEX.get(current) ?? []) {
       if (!expanded.has(equivalent)) queue.push(equivalent);
     }
+    // NMC-HYPONYM (§1bu ruling 1(c)) — additive to this existing queue-based
+    // closure algorithm, not a rewrite of it; see `nmcMemberSibling`'s own
+    // doc comment above for why this can never leak into the bare family
+    // form or a different composition.
+    const sibling = nmcMemberSibling(current);
+    if (sibling && !expanded.has(sibling)) queue.push(sibling);
   }
   return Array.from(expanded);
 }
 
 const WORD_CHAR = "\\p{L}\\p{N}\\p{M}";
+
+// NON-ASCII-TEXT (ABC-JEV-INTEGRATION.md §1bo point 3,
+// docs/jev-abc/NON-ASCII-TEXT-B-20260930T071406Z.md §1.3): written Chinese
+// has no spaces between words, so the whitespace-anchored word-boundary
+// regex below never matches a CJK Required tag against ordinary Chinese
+// prose containing it — proven false, by execution, at the start, middle
+// and end of a sentence (only the whole-string and explicit space-delimited
+// cases passed). A variant made ENTIRELY of CJK-script characters uses
+// plain substring containment instead, which IS the correct notion of
+// "whole word" in a script that does not delimit words with whitespace.
+// Scoped to CJK-ONLY variants so every Latin-script and mixed-script
+// variant keeps the exact same regex path, unchanged — a Latin substring
+// inside a longer Latin word (e.g. "cat" inside "category") must still not
+// match, which only the boundary regex enforces.
+//
+// NON-ASCII-TEXT ROUND 2 (§1bo.8, AMENDMENT): "CJK" widened from Han only
+// to Han, Hiragana, Katakana and Hangul — a Japanese or Korean Required tag
+// has exactly the same no-whitespace-word-boundary problem as Chinese, and
+// round 1's Han-only check silently left them on the old (never-matching)
+// regex path.
+const CJK_SCRIPT_CLASS =
+  "\\p{Script=Han}\\p{Script=Hiragana}\\p{Script=Katakana}\\p{Script=Hangul}";
+const CJK_CHARACTER = new RegExp(`[${CJK_SCRIPT_CLASS}]`, "u");
+
+// NON-ASCII-TEXT ROUND 2 (§1bo.8): "has a CJK character AND no Latin letter
+// or digit" (the same shape profile-compiler.ts's isCjkOnlyText already
+// used), not "every character positively matches one of the four Script
+// properties." Found by execution: a real katakana word like "バッテリー"
+// (battery) includes U+30FC, the katakana-hiragana PROLONGED SOUND MARK —
+// used in the large majority of katakana loanwords — which Unicode
+// classifies as Script=Common, not Script=Katakana (it is shared punctuation,
+// not letters of any one script). An earlier version of this check required
+// EVERY character to match one of the four scripts and so wrongly rejected
+// "バッテリー" as not CJK-only, silently falling through to the
+// never-matching boundary regex for the most common shape of katakana word
+// there is. This version only asks "is there a disqualifying Latin letter or
+// digit," which a shared punctuation mark like U+30FC is not.
+function isCjkOnlyVariant(variant: string): boolean {
+  return CJK_CHARACTER.test(variant) && !/[\p{Script=Latin}\p{N}]/u.test(variant);
+}
 
 /**
  * Whole-word match of ONE already-canonical variant (no expansion) against a
@@ -264,8 +378,14 @@ const WORD_CHAR = "\\p{L}\\p{N}\\p{M}";
  * `matchesFullNameOrFormula`, which exists because of exactly this trap).
  * `termMatches` itself is unchanged behaviourally — it is now a thin loop over
  * this helper instead of inlining the same regex construction.
+ *
+ * NON-ASCII-TEXT (§1bo point 3): a CJK-only variant skips the word-boundary
+ * regex below entirely (see `isCjkOnlyVariant`'s own comment) — every other
+ * variant runs the exact same code that ran before this change, byte for
+ * byte.
  */
 export function termVariantMatches(canonicalHaystack: string, variant: string): boolean {
+  if (isCjkOnlyVariant(variant)) return canonicalHaystack.includes(variant);
   const escaped = variant.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const re = new RegExp(`(?<![${WORD_CHAR}])${escaped}(?![${WORD_CHAR}])`, "u");
   return re.test(canonicalHaystack);
@@ -296,11 +416,26 @@ export function termMatches(canonicalHaystack: string, term: string): boolean {
  * How many times a term occurs in an already-canonicalised haystack, counting
  * every variant `termMatches` would accept. `termMatches` answers whether a
  * paper says the word at all; this answers how much it has to say about it.
+ *
+ * NON-ASCII-TEXT ROUND 2 (§1bo.8(c)): gets the SAME CJK-containment branch
+ * `termVariantMatches` has, gated on the same `isCjkOnlyVariant` predicate
+ * ("guard the path" — one shared classification, not two that could drift
+ * apart). Before this, a CJK-only variant fell all the way through to the
+ * boundary regex here even after round 1 fixed the actual gate
+ * (`termMatches`/`termVariantMatches`), so a CJK Required tag that legitimately
+ * passed the gate was still silently counted as "0 mentions" by
+ * `groundingWeight` (keyword.ts) — its RANKING weight never matched its
+ * ADMISSION. This is a ranking-only fix: `termOccurrences` has no gate role
+ * of its own.
  */
 export function termOccurrences(canonicalHaystack: string, term: string): number {
   let count = 0;
   for (const variant of expandTerm(term)) {
     const escaped = variant.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    if (isCjkOnlyVariant(variant)) {
+      count += (canonicalHaystack.match(new RegExp(escaped, "gu")) ?? []).length;
+      continue;
+    }
     const re = new RegExp(
       `(?<![${WORD_CHAR}])${escaped}(?![${WORD_CHAR}])`,
       "gu",

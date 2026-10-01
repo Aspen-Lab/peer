@@ -44,6 +44,16 @@ function locationQuery(response: Response): string {
   return location.includes("?") ? location.slice(location.indexOf("?") + 1) : "";
 }
 
+// EMAIL-TOKEN-REPLAY (§1bn): priorEmail defaults to "" (nothing stored yet
+// at mint time) so every call site that never passed one keeps minting a
+// token whose priorEmail matches this file's default mock
+// (`mocks.maybeSingle` -> `digest_email: null`, see beforeEach). Module
+// scope (not just inside one describe block) so both the ordinary GET tests
+// and the EMAIL-TOKEN-REPLAY describe block below can mint tokens.
+function tokenFor(uid: string, email: string, now = new Date(), priorEmail = ""): string {
+  return signConfirmToken(SECRET, uid, email, priorEmail, now);
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   resetCounterStoreForTests();
@@ -289,11 +299,11 @@ describe("rate limit — 5/day, fails CLOSED (§1z P1/P3)", () => {
 });
 
 describe("GET — token verification (re-uses confirm-token.ts, tested there in isolation)", () => {
-  function tokenFor(uid: string, email: string, now = new Date()): string {
-    return signConfirmToken(SECRET, uid, email, now);
-  }
-
   it("valid token for the signed-in user: writes digest_email, redirects to the confirmed outcome", async () => {
+    // Also the "ordinary case" for EMAIL-TOKEN-REPLAY (§1bn): nothing else
+    // happened since mint (the default mock's digest_email is null, and
+    // tokenFor's default priorEmail is "") — proves the new current-address
+    // check has no false positive on a plain first confirmation.
     const token = tokenFor("user-1", "new@example.test");
 
     const response = await GET(getRequest(token));
@@ -355,6 +365,159 @@ describe("GET — token verification (re-uses confirm-token.ts, tested there in 
   });
 });
 
+// EMAIL-TOKEN-REPLAY (ABC-JEV-INTEGRATION.md §1bn, guide
+// docs/jev-abc/EMAIL-TOKEN-REPLAY-B-20260930T055356Z.md). A token inside its
+// 24h TTL can still be STALE once the live digest_email has moved on for a
+// different reason. Every scenario here reconfigures `mocks.maybeSingle`
+// (the mocked `currentDigestEmail`/`profiles.select` read) to represent
+// "what the DB holds right now" at the moment of each GET — the mock has no
+// real persistence of its own, so each step states explicitly what the
+// column holds at that point, the same way `mocks.maybeSingle.mockResolvedValue`
+// is already used elsewhere in this file to represent DB state.
+describe("EMAIL-TOKEN-REPLAY (§1bn): a token that is still valid can still be stale", () => {
+  it("the exact item scenario: mint A, mint B (nothing stored at either mint), confirm B, then click the OLD A link -> stale_link, digest_email stays B, nothing written", async () => {
+    const tokenA = tokenFor("user-1", "a@example.test");
+    const tokenB = tokenFor("user-1", "b@example.test");
+
+    // Nothing stored yet when B is confirmed.
+    mocks.maybeSingle.mockResolvedValue({ data: { digest_email: null }, error: null });
+    const confirmB = await GET(getRequest(tokenB));
+    expect(locationQuery(confirmB)).toBe("digest_email_confirmed=1");
+
+    // The DB now holds B when the stale A link is clicked.
+    mocks.maybeSingle.mockResolvedValue({ data: { digest_email: "b@example.test" }, error: null });
+    mocks.upsert.mockClear();
+    const clickA = await GET(getRequest(tokenA));
+
+    // MUTATION ANCHOR: deleting the current-address comparison in route.ts's
+    // GET handler turns this assertion red (the old A link would silently
+    // succeed and overwrite B back to A instead).
+    expect(locationQuery(clickA)).toBe("digest_email_confirm=stale_link");
+    expect(mocks.upsert).not.toHaveBeenCalled();
+  });
+
+  it("the account-email short-circuit variant: mint for A, the address is now the account email (short-circuit, no token), click A -> stale_link, digest_email stays the account email", async () => {
+    const tokenA = tokenFor("user-1", "a@example.test");
+
+    // The account's own email already went through the POST short-circuit
+    // (§2.2) by the time this old A link is clicked.
+    mocks.maybeSingle.mockResolvedValue({ data: { digest_email: "account@example.test" }, error: null });
+    mocks.upsert.mockClear();
+
+    const response = await GET(getRequest(tokenA));
+
+    expect(locationQuery(response)).toBe("digest_email_confirm=stale_link");
+    expect(mocks.upsert).not.toHaveBeenCalled();
+  });
+
+  it("the same link opened twice with the DB reflecting the first write in between (a mail-gateway prefetch, then the reader's own click) -- both succeed", async () => {
+    const token = tokenFor("user-1", "new@example.test");
+
+    // First open: nothing stored yet -- matches via priorEmail.
+    mocks.maybeSingle.mockResolvedValueOnce({ data: { digest_email: null }, error: null });
+    const first = await GET(getRequest(token));
+    expect(locationQuery(first)).toBe("digest_email_confirmed=1");
+
+    // Second open: the DB now already holds the token's own target address
+    // -- matches via "this exact link already applied", not priorEmail.
+    mocks.maybeSingle.mockResolvedValueOnce({ data: { digest_email: "new@example.test" }, error: null });
+    const second = await GET(getRequest(token));
+    expect(locationQuery(second)).toBe("digest_email_confirmed=1");
+
+    expect(mocks.upsert).toHaveBeenCalledTimes(2);
+  });
+
+  it("re-requesting an address superseded earlier: a fresh token (new priorEmail snapshot) succeeds; the original stale token is a harmless no-op while its target is still current, then rejected once a third address supersedes it", async () => {
+    const staleTokenA = tokenFor("user-1", "a@example.test"); // minted while nothing was stored
+    const tokenB = tokenFor("user-1", "b@example.test");
+
+    // Confirm B.
+    mocks.maybeSingle.mockResolvedValue({ data: { digest_email: null }, error: null });
+    await GET(getRequest(tokenB));
+
+    // Re-request A: the fresh token snapshots today's current value (B).
+    const freshTokenA = tokenFor("user-1", "a@example.test", new Date(), "b@example.test");
+
+    // Confirm the fresh A token -> succeeds, current becomes A.
+    mocks.maybeSingle.mockResolvedValue({ data: { digest_email: "b@example.test" }, error: null });
+    mocks.upsert.mockClear();
+    const confirmFreshA = await GET(getRequest(freshTokenA));
+    expect(locationQuery(confirmFreshA)).toBe("digest_email_confirmed=1");
+
+    // The ORIGINAL, now-doubly-stale A token: current is already A (its own
+    // target) -> a harmless idempotent no-op, not stale.
+    mocks.maybeSingle.mockResolvedValue({ data: { digest_email: "a@example.test" }, error: null });
+    mocks.upsert.mockClear();
+    const staleClickWhileStillA = await GET(getRequest(staleTokenA));
+    expect(locationQuery(staleClickWhileStillA)).toBe("digest_email_confirmed=1");
+
+    // A third address (e.g. via PUT /api/profile, or another confirm)
+    // supersedes A -> the original stale token is now rejected.
+    mocks.maybeSingle.mockResolvedValue({ data: { digest_email: "c@example.test" }, error: null });
+    mocks.upsert.mockClear();
+    const staleClickAfterC = await GET(getRequest(staleTokenA));
+    expect(locationQuery(staleClickAfterC)).toBe("digest_email_confirm=stale_link");
+    expect(mocks.upsert).not.toHaveBeenCalled();
+  });
+
+  it("error precedence: an expired token still reports invalid_link (verifyConfirmToken's own expiry check runs first), never stale_link, even though the address has also changed since", async () => {
+    const token = tokenFor("user-1", "a@example.test", new Date(0)); // long expired
+    mocks.maybeSingle.mockResolvedValue({ data: { digest_email: "b@example.test" }, error: null }); // address moved on too
+    mocks.upsert.mockClear();
+
+    const response = await GET(getRequest(token));
+
+    expect(locationQuery(response)).toBe("digest_email_confirm=invalid_link");
+    expect(mocks.upsert).not.toHaveBeenCalled();
+  });
+
+  it("a live digest_email read failure falls back to the same generic invalid_link outcome as a write failure, never a crash and never a write", async () => {
+    const token = tokenFor("user-1", "a@example.test");
+    mocks.maybeSingle.mockResolvedValue({ data: null, error: { message: "boom" } });
+
+    const response = await GET(getRequest(token));
+
+    expect(locationQuery(response)).toBe("digest_email_confirm=invalid_link");
+    expect(mocks.upsert).not.toHaveBeenCalled();
+  });
+
+  it("ACCEPTED COST (§1bn.7b): a mint-time snapshot is a VALUE, not a history of events — a link minted for A while no address was set, then B confirmed, then the address cleared (PUT allows clearing without confirmation), then the old A link clicked -> it confirms A (writes)", async () => {
+    // accepted cost, §1bn.7b — pins today's behaviour so a change is a
+    // conscious decision. The staleness check compares the LIVE address
+    // against the token's mint-time snapshot value; it has no memory of
+    // events in between. If the live value round-trips back to that exact
+    // snapshot — here, by clearing the field back to "" after a real,
+    // deliberate change to B — an old, long-abandoned token silently looks
+    // indistinguishable from "nothing has changed since mint" and fires.
+    // Closing this needs per-user state (a generation counter or column),
+    // out of this item's no-migration scope (§1bn point 4); threshold for
+    // revisiting: one real report.
+    const tokenA = tokenFor("user-1", "a@example.test"); // priorEmail "" — nothing stored at mint
+    const tokenB = tokenFor("user-1", "b@example.test");
+
+    // B is confirmed.
+    mocks.maybeSingle.mockResolvedValue({ data: { digest_email: null }, error: null });
+    await GET(getRequest(tokenB));
+
+    // The field is cleared — PUT /api/profile allows this unconditionally,
+    // no confirmation needed (route.ts:296-327: `let allowed = candidate ===
+    // ""`). profilePatchToRow writes digest_email as the literal empty
+    // string for a cleared field (route.ts:147, `row.digest_email =
+    // p.digestEmail`), simulated here by the live column reading back "" —
+    // which happens to equal tokenA's mint-time priorEmail snapshot.
+    mocks.maybeSingle.mockResolvedValue({ data: { digest_email: "" }, error: null });
+    mocks.upsert.mockClear();
+
+    const clickA = await GET(getRequest(tokenA));
+
+    expect(locationQuery(clickA)).toBe("digest_email_confirmed=1");
+    expect(mocks.upsert).toHaveBeenCalledWith(
+      { user_id: "user-1", digest_email: "a@example.test" },
+      { onConflict: "user_id" },
+    );
+  });
+});
+
 // EMAIL-TOKEN-PRIVACY (ABC-JEV-INTEGRATION.md §1as, guide §4 test 11) — a
 // regression guard, not just a point-in-time check: every `profileRedirect`
 // call site's query string must be one of a fixed, closed set of keys and
@@ -376,6 +539,10 @@ describe("EMAIL-TOKEN-PRIVACY: redirect query allow-list (regression guard)", ()
       "digest_email_confirm=invalid_link",
       "digest_email_confirm=unavailable",
       "digest_email_confirm=wrong_account",
+      // stale_link added — EMAIL-TOKEN-REPLAY (§1bn): a real new outcome,
+      // not an address, so it belongs on this allow-list like every other
+      // outcome above.
+      "digest_email_confirm=stale_link",
       "digest_email_confirmed=1",
     ]);
     const calls = [...source.matchAll(/profileRedirect\(req,\s*"([^"]*)"\)/g)].map((m) => m[1]);

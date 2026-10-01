@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
@@ -8,6 +9,7 @@ import {
   LearnedPreferences,
   EmailSettingsView,
   digestToggleUpdate,
+  confirmFlagMessage,
   confirmAddressMessage,
   testSendMessage,
   resolveActiveEmailDestination,
@@ -440,6 +442,50 @@ describe("emailDestinationSentence — ONE sentence reused next to Send test ema
   });
 });
 
+// ABC-JEV-INTEGRATION.md §1bn EMAIL-TOKEN-REPLAY — the GET redirect flag ->
+// sentence mapping, extracted to a pure function for the same reason as
+// confirmAddressMessage/testSendMessage just below (the wrapper component
+// that reads this flag needs a real Next.js router/search-params tree, so
+// this repo tests the mapping itself instead — see this file's top note).
+describe("confirmFlagMessage — GET /api/profile/confirm-email's redirect flag (§1bn)", () => {
+  it("signin_required", () => {
+    expect(confirmFlagMessage("signin_required")).toBe("Sign in, then open the link again.");
+  });
+
+  it("wrong_account", () => {
+    expect(confirmFlagMessage("wrong_account")).toBe("That confirmation link isn't for this account.");
+  });
+
+  it("unavailable", () => {
+    expect(confirmFlagMessage("unavailable")).toBe(
+      "Confirming a different email isn't available right now.",
+    );
+  });
+
+  it("invalid_link", () => {
+    expect(confirmFlagMessage("invalid_link")).toBe("That confirmation link didn't work. Request a new one.");
+  });
+
+  // EMAIL-TOKEN-REPLAY (§1bn) — the new outcome this item adds: an old link
+  // that was otherwise valid but the address it names is no longer the
+  // question, because something else already changed it. The sentence must
+  // say that plainly and point at the fix (request a new link) — the same
+  // two-part shape as invalid_link's own sentence.
+  it("stale_link — the new EMAIL-TOKEN-REPLAY outcome", () => {
+    expect(confirmFlagMessage("stale_link")).toBe(
+      "Your email settings changed since that link was sent. Request a new confirmation link.",
+    );
+  });
+
+  it("an unrecognized flag falls back to the same generic sentence as invalid_link", () => {
+    expect(confirmFlagMessage("something_new")).toBe(confirmFlagMessage("invalid_link"));
+  });
+
+  it("a null flag (no query param at all) also falls back to invalid_link's sentence", () => {
+    expect(confirmFlagMessage(null)).toBe(confirmFlagMessage("invalid_link"));
+  });
+});
+
 // ABC-JEV-INTEGRATION.md §1al POLISH-1-EMAIL (a)/(f)/(g) — the two
 // response -> sentence mappings, extracted to pure functions so every
 // status/reason is unit-tested without rendering or a real fetch (same
@@ -643,5 +689,43 @@ describe("testSendMessage — POST /api/profile/send-test-email's response (§1a
       message: "Couldn't send the test email. Try again later.",
       success: false,
     });
+  });
+});
+
+// PROFILE-UNSYNCED-FIELDS (§1bp.3) — preferredJournals and deepReportEnabled
+// are device-only for now (no account column), said honestly on the page
+// itself. Source-text check (acceptable for page copy, as elsewhere in this
+// repo — e.g. app/papers/[id]/page.test.tsx's own call-site checks) since
+// this repo has no harness to render the whole effectful page.
+describe("page.tsx source — the device-only hint lines (§1bp.3)", () => {
+  const source = readFileSync(new URL("./page.tsx", import.meta.url), "utf8");
+  const SENTENCE = "Saved on this device only.";
+
+  it("appears exactly twice in the page, verbatim", () => {
+    const matches = source.match(/Saved on this device only\./g) ?? [];
+    expect(matches).toHaveLength(2);
+  });
+
+  it("the line next to Preferred journals is reachable from that field's own call site", () => {
+    const fieldStart = source.indexOf("Preferred journals");
+    expect(fieldStart).toBeGreaterThan(-1);
+    const nextSentenceAt = source.indexOf(SENTENCE, fieldStart);
+    expect(nextSentenceAt).toBeGreaterThan(-1);
+    // Reachable within the SAME field block — before the next EditRow starts.
+    const nextEditRowAt = source.indexOf("<EditRow", fieldStart + "Preferred journals".length);
+    expect(nextSentenceAt).toBeLessThan(nextEditRowAt);
+  });
+
+  it("the line next to the Deep report toggle is reachable from that toggle's own call site", () => {
+    const toggleStart = source.indexOf('aria-label="Deep report"');
+    expect(toggleStart).toBeGreaterThan(-1);
+    const nextSentenceAt = source.indexOf(SENTENCE, toggleStart);
+    expect(nextSentenceAt).toBeGreaterThan(-1);
+    const nextEditRowAt = source.indexOf("<EditRow", toggleStart);
+    // The sentence sits before this EditRow closes — no later EditRow's
+    // opening tag appears in between (or there is no later one at all).
+    if (nextEditRowAt !== -1) {
+      expect(nextSentenceAt).toBeLessThan(nextEditRowAt);
+    }
   });
 });

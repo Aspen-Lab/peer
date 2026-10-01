@@ -351,10 +351,100 @@ const CACHE_KEY_VERSION = 6;
 // dataset-shaped repository record, could also change scoring/review
 // classification (workType is no longer a dead field), so a v18 pool built
 // under the old, type-blind fetch/mapping must never be served as if it
-// already reflects any of these changes. These bumps share their numbers
-// with `CACHE_KEY_VERSION` above by coincidence, not by a shared cause — see
-// `derivePoolCacheKey` below for how each is selected.
-const PAPER_CACHE_KEY_VERSION = 19;
+// already reflects any of these changes. v20 — ABC-JEV-INTEGRATION.md
+// §1bo/NON-ASCII-TEXT (docs/jev-abc/NON-ASCII-TEXT-B-20260930T071406Z.md,
+// AMENDMENT §1bo.8): profile-compiler.ts's free-text query derivation
+// (phrasesFromText, literalQueryIfShort) now keeps Unicode letters/digits
+// instead of an ASCII-only character class (an accented Latin word like
+// "électrolytes" no longer corrupts into a wrong fragment) and never
+// derives a query containing a CJK character (Han, Hiragana, Katakana or
+// Hangul) — a pure-CJK Project/Challenge field yields no query at all
+// instead of leaking its whole untouched paragraph as one giant literal/
+// phrase query, AND (§1bo.8) a MIXED CJK-plus-Latin field (the ordinary
+// case for a non-English materials researcher) no longer leaks its raw
+// blob either: a CJK run now acts as a chunk delimiter, so an embedded
+// Latin phrase ("solid-state electrolyte") or a formula glued directly
+// onto surrounding CJK text with no space at all ("LiCoO2") survives as
+// its own query while the CJK parts of the same field contribute nothing;
+// separately, term-expand.ts's termVariantMatches (and, for ranking,
+// termOccurrences) now matches a CJK-only Required-tag variant — of ANY of
+// the four scripts, not Chinese alone — by plain substring containment
+// instead of the whitespace-anchored word-boundary regex, which never
+// matched continuous, unspaced CJK prose. Together these change pool
+// MEMBERSHIP (different/fewer/better-targeted queries reach each source)
+// and T1 gate outcomes for a CJK Required tag (newly admits a paper it used
+// to miss, in any of the four scripts), so a v19 pool built under the old
+// ASCII-only/whitespace-boundary/Han-only behaviour must never be served as
+// if it already reflects any of this. (§1bo.8 landed before v20 ever
+// shipped — round 1's v19->v20 bump and this refinement are ONE cache
+// generation, not two.) v21 — ABC-JEV-INTEGRATION.md §1bs/QUERY-GENERIC-WORDS
+// (docs/jev-abc/QUERY-GENERIC-WORDS-B-20260930T090811Z.md): profile-compiler.ts's
+// `phrasesFromText` keyword step no longer emits a standalone 4-digit year
+// (1900-2099), a number+unit token whose unit is in a closed, curated list
+// (e.g. "3.7V", "45mA", "500Wh/kg" — bare "L"/"M" stay off the list, so a
+// designation like "316L" is unaffected), or a bare decimal with no letters
+// ("99.9") — every other token, including a non-year bare integer
+// ("18650"), is unchanged. Separately, its chunk splitter no longer splits a
+// chunk at a period between two digits (so "3.7V"/"99.9%"/"GPT-3.5" survive
+// as one chunk instead of two corrupted fragments), and the em dash
+// (U+2014), en dash (U+2013) and ellipsis (U+2026) now act as chunk
+// delimiters alongside the existing comma/semicolon/colon/newline (folding
+// in §1bo.9(a)). Both the query path (`projectQueries`) and the seed-text
+// path (`activeQuestions`/`briefToSeedTexts`) read this one shared function,
+// so this changes pool MEMBERSHIP for any reader whose Project/Challenge
+// text (or an uploaded seed text) contains a year, a joined unit+number
+// token, a bare decimal, or one of the three new dash/ellipsis delimiters —
+// a v20 pool built under the old, number/unit-blind keyword step and the
+// old decimal-splitting chunker must never be served as if it already
+// reflects any of these changes. v22 — ABC-JEV-INTEGRATION.md
+// §1bu/NMC-HYPONYM (docs/jev-abc/NMC-HYPONYM-B-20260930T111311Z.md), two
+// unrelated fixes landed together in one C round: (a) "ncm" joins
+// `ABBREVIATION_GROUPS`' existing "nmc" entry as a pure synonym, and
+// keyword.ts gains a one-way family->member glued-digit admission (a
+// Required tag "NMC"/"NCM" now also qualifies a paper that only ever writes
+// a glued stoichiometry like "NMC811"/"NCM622" — never the reverse — with
+// its own SENSE-CONTEXT skip, the same precedent `matchesFullNameOrFormula`
+// already has) plus a digit-preserving member<->member synonym inside
+// `expandTerm` (a reader's own "NMC811" tag also matches "NCM811", never a
+// different stoichiometry or the bare family form); this changes pool
+// MEMBERSHIP for any reader with an "NMC"/"NCM"-family or specific-member
+// Required tag. AMENDMENT (§1bu.9, after review): the same
+// `matchesFullNameOrFormula` change also reaches this file's own pre-existing
+// formula tags "licoo2"/"lifepo4" — a bare-acronym-only ("LCO"/"LFP") match
+// against those tags now runs the SENSE-CONTEXT check instead of always
+// skipping it, RANKING only (pool membership unchanged, since the bare
+// acronym already admits via T1 through the same group closure either way).
+// (b) §1bu.8 (folded in from the §1bs.8 findings):
+// profile-compiler.ts's shared year/unit/decimal filter now also strips a
+// trailing sentence-final period before testing a token ("2024.", "99.9.",
+// "4.2v." are now removed, not just their bare forms) and applies the SAME
+// filter to a phrase/chunk that collapses to a single token ("…, 500Wh/kg,
+// …" is now removed via that branch too) — this changes pool MEMBERSHIP for
+// any reader whose Project/Challenge/seed text has a year/unit/decimal
+// immediately followed by a sentence-ending period, or as its own
+// comma/dash/etc.-delimited single-word clause. Neither v21 pool build
+// reflects either fix, so it must never be served as if it does. v23 —
+// ABC-JEV-INTEGRATION.md §1bv/T2-EXTRACTOR (docs/jev-abc/
+// T2-EXTRACTOR-B-20260930T151003Z.md): `selfDeclaredAbbreviationPairs`
+// (keyword.ts) now also reads a comma-form self-declared pair packed
+// together on the SAME side of one parenthetical — "(light cycle oil,
+// LCO)" and "(LCO, light cycle oil)", both orderings, searched inside each
+// already-matched "(...)" span rather than anchored to its boundary. This
+// only ever feeds rule (c) (`selfDeclaresDifferentSense`): a paper that
+// declares a DIFFERENT sense in exactly that comma style is now a hard
+// non-match for that Required tag, at every admitting tier (T1-T3 in
+// keyword.ts, T4 in combine.ts), where before it was invisible to rule (c)
+// and — for a reader who has declared no other project/work text — admitted
+// at full strength with no protection at all. Admission-layer membership
+// for a GENUINE comma-form paper is unaffected (measured at zero benefit,
+// 700 real items, guide §Q2: canonicalize() already turns the comma into
+// whitespace before T1 ever runs, so a genuine paper was always admitted via
+// the bare token regardless of T2). A v22 (or older) pool build never ran
+// the comma-form check, so it must never be served as if it does. These
+// bumps share their numbers with `CACHE_KEY_VERSION` above by coincidence,
+// not by a shared cause — see `derivePoolCacheKey` below for how each is
+// selected.
+const PAPER_CACHE_KEY_VERSION = 23;
 /**
  * SINGLE SOURCE OF TRUTH for the literal key prefix a durable papers-pool
  * store may accept, derived from `PAPER_CACHE_KEY_VERSION` rather than

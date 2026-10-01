@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { RawItem } from "@/lib/sources/types";
 import { scoreItems } from "./combine";
-import { scoreKeyword, selfDeclaresDifferentSense } from "./keyword";
+import { matchesFullNameOrFormula, scoreKeyword, selfDeclaresDifferentSense } from "./keyword";
 import { canonicalize, termMatches } from "./term-expand";
 
 // LCO-FORMULA (ABC-JEV-INTEGRATION.md §1au, ruling on
@@ -157,5 +157,135 @@ describe("protective — the new formula aliases do not widen any unrelated matc
     });
     expect(scoreKeyword(paper, ["LCO"]).score).toBe(0);
     expect(termMatches(canonicalize(paper.title), "lco")).toBe(false);
+  });
+});
+
+// NMC-HYPONYM ROUND 2 AMENDMENT (ABC-JEV-INTEGRATION.md §1bu.9, after the
+// fresh A's FAILED_REVIEW, docs/jev-abc/NMC-HYPONYM-A-20260930T141756Z.md
+// Check 1) — a side effect of that item's `matchesFullNameOrFormula`
+// generalization (keyword.ts + term-expand.ts's `isKnownShortForm`, added
+// to make the "nmc"/"ncm" pair's bare-acronym path correctly keep the
+// context check): the SAME narrowing is also production-reachable for
+// THIS file's own two formula tags, "licoo2" and "lifepo4" — the only two
+// pre-existing `ABBREVIATION_GROUPS` tags besides "nmc"/"ncm" that are
+// themselves single-token (so `isShortOrAmbiguous` is true for them,
+// unlike a group's 3-4 word spelled-out name). Before this change, a
+// Required tag "licoo2" (or "lifepo4") admitted via ONLY the bare acronym
+// ("LCO"/"LFP" — itself a valid T1 variant of the formula tag, through the
+// same group closure) unconditionally SKIPPED the SENSE-CONTEXT check,
+// because the bare acronym counted as "not the literal queried tag" and
+// therefore "strong evidence." That was never correct: a bare, ambiguous
+// acronym is exactly the LOW-information evidence the check exists to
+// double-check (§1bg point 3's own stated purpose; §1bu.3 states the same
+// principle for the nmc/ncm case). Ruling: KEEP (safe, monotonic narrowing
+// — 0 gained matches anywhere, pool MEMBERSHIP unchanged, only ranking for
+// a disagreeing-context paper) — these tests close the "untested" half of
+// the reviewer's finding. Constructed text: the reviewer's own cited real
+// fragment (openalex:W7213392907) is a "NCM622" mention in the SAME
+// sentence as a bare "LCO" word, about a DIFFERENT compound's formula, not
+// LCO's own full name/formula — it does not give a minimal, isolated
+// "bare-LCO-only, nothing else" fixture to reuse, so constructed text is
+// used instead (the task's own stated alternative).
+describe("NMC-HYPONYM ROUND 2 (§1bu.9) — the matchesFullNameOrFormula narrowing reaches \"licoo2\"/\"lifepo4\" as Required tags", () => {
+  const AGREEING_CONTEXT =
+    "PhD research on solid-state battery materials, focused on lithium and sodium-ion cathode and " +
+    "electrolyte interfaces for electric-vehicle batteries. Improving ionic conductivity and " +
+    "interfacial stability between solid electrolytes and electrode materials while suppressing " +
+    "dendrite growth.";
+  // Deliberately shares zero vocabulary with a battery-cathode paper (the
+  // same isolation shape sense-context.test.ts's own fixtures use).
+  const DISAGREEING_CONTEXT =
+    "A study of migratory patterns among monarch butterflies across seasonal climate zones and wind currents.";
+
+  describe('tag "licoo2" — bare "LCO" is the ONLY group evidence in the item text', () => {
+    const bareOnly = item("licoo2-bare-only", {
+      title: "Cycling performance of LCO cathodes under fast-charge protocols",
+      abstract: "LCO cells were benchmarked against several alternative chemistries.",
+    });
+    const withLongName = item("licoo2-with-long-name", {
+      title: "Cycling performance of LCO cathodes under fast-charge protocols",
+      abstract: "LCO, also known as lithium cobalt oxide, was benchmarked against several alternative chemistries.",
+    });
+    const bareOnlyAgreeing = item("licoo2-bare-only-agreeing", {
+      title: "Cycling performance of LCO cathodes under fast-charge protocols",
+      abstract:
+        "LCO cathode materials were paired with solid electrolyte interfaces to evaluate ionic conductivity " +
+        "and interfacial stability while suppressing dendrite growth in lithium-ion batteries.",
+    });
+
+    it("(a) a disagreeing declared context now runs the check and DEMOTES the item, not drops it", () => {
+      expect(matchesFullNameOrFormula(bareOnly, "licoo2")).toBe(false);
+      const scored = scoreItems([bareOnly], { topics: ["licoo2"], seedTexts: [DISAGREEING_CONTEXT] }, undefined, now);
+      const bypassed = scoreItems([bareOnly], { topics: ["licoo2"] }, undefined, now);
+      expect(scored.map((s) => s.id)).toEqual([bareOnly.id]); // still admitted -- demoted, never dropped
+      expect(scored[0].matchedKeywords).toEqual(["licoo2"]);
+      // MUTATION CHECK (§1bu.9): restoring HEAD's literal-tag-only exclusion
+      // makes matchesFullNameOrFormula(bareOnly, "licoo2") true again (the
+      // bare "lco" variant would count as "not the literal tag" = strong
+      // evidence), the skip fires, and this assertion goes red (full
+      // strength instead of demoted).
+      expect(scored[0].scoreBreakdown.keyword).toBeLessThan(bypassed[0].scoreBreakdown.keyword);
+    });
+
+    it("(b) the SAME shape but with the long name (\"lithium cobalt oxide\") also present still SKIPS (full strength)", () => {
+      expect(matchesFullNameOrFormula(withLongName, "licoo2")).toBe(true);
+      const scored = scoreItems([withLongName], { topics: ["licoo2"], seedTexts: [DISAGREEING_CONTEXT] }, undefined, now);
+      const bypassed = scoreItems([withLongName], { topics: ["licoo2"] }, undefined, now);
+      expect(scored.map((s) => s.id)).toEqual([withLongName.id]);
+      expect(scored[0].matchedKeywords).toEqual(["licoo2"]);
+      expect(scored[0].scoreBreakdown.keyword).toBeCloseTo(bypassed[0].scoreBreakdown.keyword, 4);
+    });
+
+    it("(c) the SAME bare-only shape under an AGREEING context stays at full strength (demotion is not indiscriminate)", () => {
+      const scored = scoreItems([bareOnlyAgreeing], { topics: ["licoo2"], seedTexts: [AGREEING_CONTEXT] }, undefined, now);
+      const bypassed = scoreItems([bareOnlyAgreeing], { topics: ["licoo2"] }, undefined, now);
+      expect(scored.map((s) => s.id)).toEqual([bareOnlyAgreeing.id]);
+      expect(scored[0].matchedKeywords).toEqual(["licoo2"]);
+      expect(scored[0].scoreBreakdown.keyword).toBeCloseTo(bypassed[0].scoreBreakdown.keyword, 4);
+    });
+  });
+
+  describe('tag "lifepo4" — bare "LFP" is the ONLY group evidence in the item text', () => {
+    const bareOnly = item("lifepo4-bare-only", {
+      title: "Rate capability of LFP cathodes at high current density",
+      abstract: "LFP electrodes were cycled at various C-rates to assess capacity retention.",
+    });
+    const withLongName = item("lifepo4-with-long-name", {
+      title: "Rate capability of LFP cathodes at high current density",
+      abstract: "LFP, or lithium iron phosphate, electrodes were cycled at various C-rates to assess capacity retention.",
+    });
+    const bareOnlyAgreeing = item("lifepo4-bare-only-agreeing", {
+      title: "Rate capability of LFP cathodes at high current density",
+      abstract:
+        "LFP cathode materials were paired with solid electrolyte interfaces to evaluate ionic conductivity " +
+        "and interfacial stability while suppressing dendrite growth in lithium-ion batteries.",
+    });
+
+    it("(a) a disagreeing declared context now runs the check and DEMOTES the item, not drops it", () => {
+      expect(matchesFullNameOrFormula(bareOnly, "lifepo4")).toBe(false);
+      const scored = scoreItems([bareOnly], { topics: ["lifepo4"], seedTexts: [DISAGREEING_CONTEXT] }, undefined, now);
+      const bypassed = scoreItems([bareOnly], { topics: ["lifepo4"] }, undefined, now);
+      expect(scored.map((s) => s.id)).toEqual([bareOnly.id]);
+      expect(scored[0].matchedKeywords).toEqual(["lifepo4"]);
+      // MUTATION CHECK (§1bu.9): same as the licoo2 case above.
+      expect(scored[0].scoreBreakdown.keyword).toBeLessThan(bypassed[0].scoreBreakdown.keyword);
+    });
+
+    it("(b) the SAME shape but with the long name (\"lithium iron phosphate\") also present still SKIPS (full strength)", () => {
+      expect(matchesFullNameOrFormula(withLongName, "lifepo4")).toBe(true);
+      const scored = scoreItems([withLongName], { topics: ["lifepo4"], seedTexts: [DISAGREEING_CONTEXT] }, undefined, now);
+      const bypassed = scoreItems([withLongName], { topics: ["lifepo4"] }, undefined, now);
+      expect(scored.map((s) => s.id)).toEqual([withLongName.id]);
+      expect(scored[0].matchedKeywords).toEqual(["lifepo4"]);
+      expect(scored[0].scoreBreakdown.keyword).toBeCloseTo(bypassed[0].scoreBreakdown.keyword, 4);
+    });
+
+    it("(c) the SAME bare-only shape under an AGREEING context stays at full strength (demotion is not indiscriminate)", () => {
+      const scored = scoreItems([bareOnlyAgreeing], { topics: ["lifepo4"], seedTexts: [AGREEING_CONTEXT] }, undefined, now);
+      const bypassed = scoreItems([bareOnlyAgreeing], { topics: ["lifepo4"] }, undefined, now);
+      expect(scored.map((s) => s.id)).toEqual([bareOnlyAgreeing.id]);
+      expect(scored[0].matchedKeywords).toEqual(["lifepo4"]);
+      expect(scored[0].scoreBreakdown.keyword).toBeCloseTo(bypassed[0].scoreBreakdown.keyword, 4);
+    });
   });
 });

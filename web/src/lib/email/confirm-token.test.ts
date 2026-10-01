@@ -100,54 +100,60 @@ function legacyTokenForTest(secret: string, uid: string, email: string, exp: num
 
 describe("signConfirmToken / verifyConfirmToken — round trip", () => {
   it("verifies a freshly signed token and returns the normalized uid/email", () => {
-    const token = signConfirmToken(SECRET, "user-1", "Person@Example.com", NOW);
+    const token = signConfirmToken(SECRET, "user-1", "Person@Example.com", "", NOW);
     const result = verifyConfirmToken(SECRET, token, NOW);
+    // priorEmail added to the expected shape — EMAIL-TOKEN-REPLAY (§1bn).
     expect(result).toEqual({
       ok: true,
       uid: "user-1",
       email: "person@example.com",
+      priorEmail: "",
     });
   });
 
   it("round-trips a realistic long address and a UUID-shaped uid", () => {
     const uid = "11111111-2222-3333-4444-555555555555";
     const longAddress = "a.very.long.local.part.for.testing+tag@sub.department.example-university.edu";
-    const token = signConfirmToken(SECRET, uid, longAddress, NOW);
+    const token = signConfirmToken(SECRET, uid, longAddress, "", NOW);
+    // priorEmail added to the expected shape — EMAIL-TOKEN-REPLAY (§1bn).
     expect(verifyConfirmToken(SECRET, token, NOW)).toEqual({
       ok: true,
       uid,
       email: longAddress,
+      priorEmail: "",
     });
   });
 
   it("re-use is allowed: verifying the same still-valid token twice both succeed identically (no single-use state)", () => {
-    const token = signConfirmToken(SECRET, "user-1", "person@example.com", NOW);
+    const token = signConfirmToken(SECRET, "user-1", "person@example.com", "", NOW);
     const first = verifyConfirmToken(SECRET, token, NOW);
     const second = verifyConfirmToken(SECRET, token, NOW);
-    expect(first).toEqual({ ok: true, uid: "user-1", email: "person@example.com" });
+    // priorEmail added to the expected shape — EMAIL-TOKEN-REPLAY (§1bn).
+    expect(first).toEqual({ ok: true, uid: "user-1", email: "person@example.com", priorEmail: "" });
     expect(second).toEqual(first);
   });
 
   it("token format: version prefix + exactly one further dot-free base64url blob", () => {
-    const token = signConfirmToken(SECRET, "user-1", "person@example.com", NOW);
+    const token = signConfirmToken(SECRET, "user-1", "person@example.com", "", NOW);
     expect(token.startsWith("v2.")).toBe(true);
     expect(token.split(".")).toHaveLength(2);
     expect(token.slice(3)).toMatch(/^[A-Za-z0-9_-]+$/); // pure base64url, no "."
   });
 
-  it("mints a different token every time, even for the identical (uid, email, exp) — a fresh random IV per call (nonce/IV uniqueness)", () => {
-    const first = signConfirmToken(SECRET, "user-1", "person@example.com", NOW);
-    const second = signConfirmToken(SECRET, "user-1", "person@example.com", NOW);
+  it("mints a different token every time, even for the identical (uid, email, priorEmail, exp) — a fresh random IV per call (nonce/IV uniqueness)", () => {
+    const first = signConfirmToken(SECRET, "user-1", "person@example.com", "", NOW);
+    const second = signConfirmToken(SECRET, "user-1", "person@example.com", "", NOW);
     expect(first).not.toBe(second);
     // Both remain independently valid — uniqueness isn't achieved by
-    // breaking verification.
-    expect(verifyConfirmToken(SECRET, first, NOW)).toEqual({ ok: true, uid: "user-1", email: "person@example.com" });
-    expect(verifyConfirmToken(SECRET, second, NOW)).toEqual({ ok: true, uid: "user-1", email: "person@example.com" });
+    // breaking verification. priorEmail added to the expected shape —
+    // EMAIL-TOKEN-REPLAY (§1bn).
+    expect(verifyConfirmToken(SECRET, first, NOW)).toEqual({ ok: true, uid: "user-1", email: "person@example.com", priorEmail: "" });
+    expect(verifyConfirmToken(SECRET, second, NOW)).toEqual({ ok: true, uid: "user-1", email: "person@example.com", priorEmail: "" });
   });
 
   it("never contains the address in the clear, base64, or base64url — plain or URL-encoded — anywhere in the token", () => {
     const email = "reader@example.test";
-    const token = signConfirmToken(SECRET, "user-1", email, NOW);
+    const token = signConfirmToken(SECRET, "user-1", email, "", NOW);
     const encodedToken = encodeURIComponent(token);
     const [localPart, domain] = email.split("@");
     const variants = [
@@ -165,10 +171,26 @@ describe("signConfirmToken / verifyConfirmToken — round trip", () => {
   });
 
   it("rejects a token tampered inside the ciphertext/tag region without parsing the payload as meaningful", () => {
-    const token = signConfirmToken(SECRET, "user-1", "person@example.com", NOW);
-    const lastChar = token[token.length - 1];
-    const flipped = lastChar === "a" ? "b" : "a"; // last base64url char falls inside the GCM tag
-    const tampered = token.slice(0, -1) + flipped;
+    // EMAIL-TOKEN-REPLAY (§1bn.7a): this used to flip only the LAST
+    // base64url CHARACTER of the token ('a'/'b'). That was non-deterministic
+    // once priorEmail grew the plaintext from 62 to 78 bytes (blob 90 -> 106
+    // bytes): 90 % 3 === 0 (HEAD) is a full base64 group, so every bit of the
+    // last character is decoded and the flip always changes a byte; 106 % 3
+    // === 1 is a PARTIAL trailing group, so only the last character's top 2
+    // of 6 bits actually survive decoding — the low bits the 'a'/'b' flip
+    // lives in are silently discarded for ~25% of the random IVs this test
+    // draws, producing byte-identical "tampered" ciphertext that still
+    // verifies fine (proven by A's review, reproduced: ~25% flaky). Fixed by
+    // flipping a DECODED byte before re-encoding instead of a post-encoding
+    // character, so the change is always real regardless of base64
+    // alignment: XOR the blob's LAST byte (deep inside the 16-byte GCM tag —
+    // still squarely "the ciphertext/tag region") with 0xff, which is
+    // guaranteed to differ from the original for every possible byte value.
+    const token = signConfirmToken(SECRET, "user-1", "person@example.com", "", NOW);
+    const blob = Buffer.from(token.slice(TOKEN_VERSION_PREFIX.length), "base64url");
+    const tamperedBlob = Buffer.from(blob);
+    tamperedBlob[tamperedBlob.length - 1] ^= 0xff;
+    const tampered = `${TOKEN_VERSION_PREFIX}${tamperedBlob.toString("base64url")}`;
     expect(verifyConfirmToken(SECRET, tampered, NOW)).toEqual({
       ok: false,
       reason: "tampered",
@@ -176,7 +198,7 @@ describe("signConfirmToken / verifyConfirmToken — round trip", () => {
   });
 
   it("rejects a token tampered right after the version prefix, inside the IV region", () => {
-    const token = signConfirmToken(SECRET, "user-1", "person@example.com", NOW);
+    const token = signConfirmToken(SECRET, "user-1", "person@example.com", "", NOW);
     const ivChar = token[3]; // first char after "v2." falls inside the IV
     const flipped = ivChar === "a" ? "b" : "a";
     const tampered = token.slice(0, 3) + flipped + token.slice(4);
@@ -198,7 +220,7 @@ describe("signConfirmToken / verifyConfirmToken — round trip", () => {
   });
 
   it("rejects a token whose signature was made with a different secret", () => {
-    const token = signConfirmToken("OTHER-SECRET", "user-1", "person@example.com", NOW);
+    const token = signConfirmToken("OTHER-SECRET", "user-1", "person@example.com", "", NOW);
     expect(verifyConfirmToken(SECRET, token, NOW)).toEqual({
       ok: false,
       reason: "tampered",
@@ -206,7 +228,7 @@ describe("signConfirmToken / verifyConfirmToken — round trip", () => {
   });
 
   it("rejects an expired token (pinned clock, not real sleep)", () => {
-    const token = signConfirmToken(SECRET, "user-1", "person@example.com", NOW, CONFIRM_TOKEN_TTL_MS);
+    const token = signConfirmToken(SECRET, "user-1", "person@example.com", "", NOW, CONFIRM_TOKEN_TTL_MS);
     const justAfterExpiry = new Date(NOW.getTime() + CONFIRM_TOKEN_TTL_MS + 1000);
     expect(verifyConfirmToken(SECRET, token, justAfterExpiry)).toEqual({
       ok: false,
@@ -215,7 +237,7 @@ describe("signConfirmToken / verifyConfirmToken — round trip", () => {
   });
 
   it("accepts a token right at the TTL boundary (not yet expired)", () => {
-    const token = signConfirmToken(SECRET, "user-1", "person@example.com", NOW, CONFIRM_TOKEN_TTL_MS);
+    const token = signConfirmToken(SECRET, "user-1", "person@example.com", "", NOW, CONFIRM_TOKEN_TTL_MS);
     const justBeforeExpiry = new Date(NOW.getTime() + CONFIRM_TOKEN_TTL_MS - 1000);
     expect(verifyConfirmToken(SECRET, token, justBeforeExpiry).ok).toBe(true);
   });
@@ -286,5 +308,99 @@ describe("legacy (pre-EMAIL-TOKEN-PRIVACY) tokens are never accepted", () => {
     const tampered = `${payload}.${flipped}`;
     expect(() => verifyConfirmToken(SECRET, tampered, NOW)).not.toThrow();
     expect(verifyConfirmToken(SECRET, tampered, NOW)).toEqual({ ok: false, reason: "malformed" });
+  });
+});
+
+// EMAIL-TOKEN-REPLAY (ABC-JEV-INTEGRATION.md §1bn, guide
+// docs/jev-abc/EMAIL-TOKEN-REPLAY-B-20260930T055356Z.md). `priorEmail` is the
+// digest address the profile held at mint time — the route-level replay
+// scenarios themselves (old link clicked after a newer confirm, the
+// short-circuit variant, re-use, re-request-after-supersession, error
+// precedence) live in confirm-email/route.test.ts, which owns the current-
+// address comparison; this file only pins the token's own shape/crypto
+// contract for the new field, the same split already used for every other
+// claim in this token.
+describe("priorEmail — the digest address the profile held when this token was minted (§1bn)", () => {
+  it("round-trips through sign/verify like uid/email do today", () => {
+    const token = signConfirmToken(SECRET, "user-1", "new@example.com", "old@example.com", NOW);
+    expect(verifyConfirmToken(SECRET, token, NOW)).toEqual({
+      ok: true,
+      uid: "user-1",
+      email: "new@example.com",
+      priorEmail: "old@example.com",
+    });
+  });
+
+  it("is normalized (trim + lowercase) the same way email is, regardless of how the caller cased/spaced it", () => {
+    const token = signConfirmToken(SECRET, "user-1", "new@example.com", "  Old@Example.COM  ", NOW);
+    expect(verifyConfirmToken(SECRET, token, NOW)).toEqual({
+      ok: true,
+      uid: "user-1",
+      email: "new@example.com",
+      priorEmail: "old@example.com",
+    });
+  });
+
+  it('a token minted while digest_email was empty carries priorEmail: "" — the "never set" sentinel', () => {
+    const token = signConfirmToken(SECRET, "user-1", "new@example.com", "", NOW);
+    expect(verifyConfirmToken(SECRET, token, NOW)).toEqual({
+      ok: true,
+      uid: "user-1",
+      email: "new@example.com",
+      priorEmail: "",
+    });
+  });
+
+  it("never contains the priorEmail address in the clear, base64, or base64url — plain or URL-encoded — anywhere in the token", () => {
+    const priorEmail = "old-address@example.test";
+    const token = signConfirmToken(SECRET, "user-1", "new@example.com", priorEmail, NOW);
+    const encodedToken = encodeURIComponent(token);
+    const [localPart, domain] = priorEmail.split("@");
+    const variants = [
+      priorEmail,
+      encodeURIComponent(priorEmail),
+      localPart,
+      domain,
+      Buffer.from(priorEmail, "utf8").toString("base64"),
+      Buffer.from(priorEmail, "utf8").toString("base64url"),
+    ];
+    for (const variant of variants) {
+      expect(token).not.toContain(variant);
+      expect(encodedToken).not.toContain(variant);
+    }
+  });
+
+  it("tamper inside the ciphertext is caught the same way regardless of where priorEmail's own bytes fall — GCM authenticates the whole payload, not per-field", () => {
+    const token = signConfirmToken(SECRET, "user-1", "new@example.com", "old@example.com", NOW);
+    const midpoint = Math.floor(token.length / 2); // inside the ciphertext region, not the IV or the trailing tag
+    const midChar = token[midpoint];
+    const flipped = midChar === "a" ? "b" : "a";
+    const tampered = token.slice(0, midpoint) + flipped + token.slice(midpoint + 1);
+    expect(verifyConfirmToken(SECRET, tampered, NOW)).toEqual({ ok: false, reason: "tampered" });
+  });
+
+  // Transition cost (§1bn point 3, guide Task 3 Option (d)): a token minted
+  // by the PRE-fix code decrypts fine (same AES-256-GCM/HKDF, same "v2."
+  // prefix) but its plaintext has {uid, email, exp} with no priorEmail at
+  // all — exactly what encryptRawForTest constructs here without the module
+  // itself ever being able to produce it (no secret, no way to reach this
+  // shape otherwise). MUTATION ANCHOR: removing the priorEmail shape check in
+  // verifyConfirmToken (confirm-token.ts) turns this test red — the old-shape
+  // token would then be accepted as ok:true with priorEmail undefined.
+  it("a token minted before this fix shipped (old shape — uid/email/exp, no priorEmail) is rejected as malformed, never silently accepted", () => {
+    const oldShapePayload = JSON.stringify({ uid: "user-1", email: "person@example.com", exp: 9999999999 });
+    const token = encryptRawForTest(SECRET, oldShapePayload);
+    expect(verifyConfirmToken(SECRET, token, NOW)).toEqual({ ok: false, reason: "malformed" });
+  });
+
+  it("rejects priorEmail of the wrong type — proves the shape check inspects it, not just its presence", () => {
+    const badShapePayload = JSON.stringify({
+      uid: "user-1",
+      email: "person@example.com",
+      priorEmail: 12345,
+      exp: 9999999999,
+    });
+    const token = encryptRawForTest(SECRET, badShapePayload);
+    expect(verifyConfirmToken(SECRET, token, NOW)).toEqual({ ok: false, reason: "malformed" });
   });
 });

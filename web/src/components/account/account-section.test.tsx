@@ -38,7 +38,10 @@ import {
   AccountSectionView,
   hasUnsyncedChanges,
   shouldWarnBeforeSignOut,
+  handleSignOutSubmitCore,
   type AccountSectionViewProps,
+  type SignOutSubmitDeps,
+  type SignOutGuard,
 } from "./account-section";
 
 function render(state: AuthState): string {
@@ -149,6 +152,219 @@ describe("shouldWarnBeforeSignOut / hasUnsyncedChanges — the P6 decision, pull
     expect(hasUnsyncedChanges(true, false)).toBe(true);
     expect(hasUnsyncedChanges(false, true)).toBe(true);
     expect(hasUnsyncedChanges(true, true)).toBe(true);
+  });
+});
+
+// ACCOUNT-SWITCH (ABC-JEV-INTEGRATION.md §1bt point 3, widened by §1bt.8
+// AMENDMENT (c)) — the interesting decision sequence (flush, decide,
+// warn-or-submit, and now the double-submit guard) was pulled out of the
+// component wrapper into the exported, DI-only `handleSignOutSubmitCore`
+// (below), so it is proven directly with fakes — same convention as
+// profile-sync.tsx's `flushBeforeSignOut`/`pullMergeAndPush` — rather than
+// only by source text. `handleSignOutSubmit` itself (inside
+// `AccountSection`, the hook-wired wrapper) keeps only the thin,
+// React-specific glue (preventDefault, busy, building the deps, passing
+// the ref) and is still checked by source text, this file's own
+// established technique for effectful wrapper code with no DOM harness.
+// CHANGED ASSERTIONS below (comment "ACCOUNT-SWITCH (§1bt.8)"): the old
+// direct checks for "awaits requestProfileFlush()" and "submits only after
+// the flush" inside `handleSignOutSubmit`'s own body no longer apply —
+// that sequence now lives in `handleSignOutSubmitCore`, proven by the
+// behavioural tests in the next describe block instead; the SAME
+// properties (flush before decide, submit only after) are still proven,
+// just at the more precise location and with real function calls instead
+// of a regex.
+describe("AccountSection's handleSignOutSubmit wrapper wiring (§1bt point 3, §1bt.8 AMENDMENT (c)) — source-text check", () => {
+  const source = readFileSync(
+    join(process.cwd(), "src", "components", "account", "account-section.tsx"),
+    "utf8",
+  );
+  const start = source.indexOf("async function handleSignOutSubmit(event: FormEvent<HTMLFormElement>) {");
+  const end = source.indexOf("  return (", start);
+
+  it("markers exist and are in the right order", () => {
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    expect(source.indexOf("export async function handleSignOutSubmitCore(")).toBeGreaterThan(-1);
+  });
+
+  const body = source.slice(start, end);
+
+  it("always calls preventDefault() first, before delegating to the guarded core — the plain POST is intercepted unconditionally, not only when already known to be unsynced", () => {
+    const preventDefaultIdx = body.indexOf("event.preventDefault()");
+    const coreCallIdx = body.indexOf("handleSignOutSubmitCore(");
+    expect(preventDefaultIdx).toBeGreaterThan(-1);
+    expect(coreCallIdx).toBeGreaterThan(preventDefaultIdx);
+  });
+
+  // (ACCOUNT-SWITCH §1bt.8) CHANGED — was "awaits requestProfileFlush()
+  // before deciding whether to warn or submit", checking handleSignOutSubmit's
+  // own body directly; that sequencing now lives in handleSignOutSubmitCore
+  // (proven by real calls in the next describe block). This checks the
+  // WRAPPER's own new responsibility instead: it builds requestFlush from
+  // the real requestProfileFlush and hands it to the core unchanged.
+  it("wires requestFlush to the real requestProfileFlush (not a reimplementation) when calling the core", () => {
+    expect(body).toMatch(/requestFlush:\s*requestProfileFlush/);
+  });
+
+  // (ACCOUNT-SWITCH §1bt.8) CHANGED — was "submits the real form only AFTER
+  // the flush decision", checking a literal form.submit() call site inside
+  // handleSignOutSubmit's own body; form.submit() is now inside the
+  // onSubmitForm CALLBACK passed to the core, so the ordering guarantee
+  // itself is now handleSignOutSubmitCore's own (proven directly below) —
+  // this checks the wrapper correctly builds that callback and passes the
+  // real guard, not a fresh one created per call (which would defeat the
+  // guard across renders).
+  it("passes a form.submit()-calling onSubmitForm callback, and the STABLE signOutGuardRef (not a fresh object), to the core", () => {
+    expect(body).toMatch(/onSubmitForm:\s*\(\)\s*=>\s*form\.submit\(\)/);
+    expect(body).toMatch(/handleSignOutSubmitCore\(\s*\{[\s\S]*?\},\s*signOutGuardRef,?\s*\)/);
+  });
+
+  // ACCOUNT-SWITCH (§1bt.8) — added by the manager after the re-check's LOW
+  // finding: the round-2 refactor proved the core calls onWarn, but nothing
+  // pinned that the WRAPPER's onWarn actually opens the "Stay signed in" /
+  // "Sign out anyway" confirmation (a no-op onWarn passed the whole suite).
+  it("wires onWarn to open the existing sign-out confirmation (setConfirmingSignOut(true))", () => {
+    expect(body).toMatch(/onWarn:\s*\(\)\s*=>\s*setConfirmingSignOut\(true\)/);
+  });
+
+  it("(ACCOUNT-SWITCH §1bt.8) sets busy(true) before delegating to the core, and busy(false) in a finally — the VISIBLE half of the double-submit guard, so a stuck flush never leaves the button disabled forever", () => {
+    const busyTrueIdx = body.indexOf("setBusy(true)");
+    const coreCallIdx = body.indexOf("handleSignOutSubmitCore(");
+    const finallyIdx = body.indexOf("finally");
+    const busyFalseIdx = body.indexOf("setBusy(false)");
+    expect(busyTrueIdx).toBeGreaterThan(-1);
+    expect(coreCallIdx).toBeGreaterThan(busyTrueIdx);
+    expect(finallyIdx).toBeGreaterThan(coreCallIdx);
+    expect(busyFalseIdx).toBeGreaterThan(finallyIdx);
+  });
+});
+
+// ACCOUNT-SWITCH (§1bt point 3, §1bt.8 AMENDMENT (c)) — the actual
+// flush-then-decide sequence AND the double-submit guard, proven directly
+// with fakes (no DOM, no click simulator — a plain async function call).
+describe("handleSignOutSubmitCore — flush, decide, and the double-submit guard (§1bt point 3, §1bt.8 AMENDMENT (c))", () => {
+  function fakeDeps(overrides: Partial<SignOutSubmitDeps> = {}) {
+    let warnCalls = 0;
+    let submitCalls = 0;
+    const deps: SignOutSubmitDeps = {
+      requestFlush: async () => true,
+      feedPushFailed: false,
+      confirmingSignOut: false,
+      onWarn: () => {
+        warnCalls += 1;
+      },
+      onSubmitForm: () => {
+        submitCalls += 1;
+      },
+      ...overrides,
+    };
+    return { deps, warnCalls: () => warnCalls, submitCalls: () => submitCalls };
+  }
+
+  it("nothing unsynced (flush resolves true, feed not failed) → submits immediately, never warns", async () => {
+    const { deps, warnCalls, submitCalls } = fakeDeps();
+    await handleSignOutSubmitCore(deps, { current: false });
+    expect(submitCalls()).toBe(1);
+    expect(warnCalls()).toBe(0);
+  });
+
+  it("the profile flush fails (resolves false) → warns, does not submit", async () => {
+    const { deps, warnCalls, submitCalls } = fakeDeps({ requestFlush: async () => false });
+    await handleSignOutSubmitCore(deps, { current: false });
+    expect(warnCalls()).toBe(1);
+    expect(submitCalls()).toBe(0);
+  });
+
+  it("the feed push already failed, independent of the profile flush → warns too", async () => {
+    const { deps, warnCalls, submitCalls } = fakeDeps({ feedPushFailed: true });
+    await handleSignOutSubmitCore(deps, { current: false });
+    expect(warnCalls()).toBe(1);
+    expect(submitCalls()).toBe(0);
+  });
+
+  // The exact property the round-1 source-text tests used to pin
+  // ("submits only after the flush decision"), now proven by a REAL call
+  // instead of a regex: requestFlush is awaited to completion before
+  // either onWarn or onSubmitForm ever runs.
+  it("requestFlush is awaited to completion before either onWarn or onSubmitForm runs", async () => {
+    const callOrder: string[] = [];
+    const deps: SignOutSubmitDeps = {
+      requestFlush: async () => {
+        callOrder.push("flush");
+        return true;
+      },
+      feedPushFailed: false,
+      confirmingSignOut: false,
+      onWarn: () => callOrder.push("warn"),
+      onSubmitForm: () => callOrder.push("submit"),
+    };
+    await handleSignOutSubmitCore(deps, { current: false });
+    expect(callOrder).toEqual(["flush", "submit"]);
+  });
+
+  // §1bt.8 AMENDMENT (c)'s own required test. MUTATION GUARD (drop the
+  // busy/guard check): removing the `if (guard.current) return;` line
+  // would let the second call also reach requestFlush, making
+  // flushCalls() 2 instead of 1 — this test goes red.
+  it("a double submit during the flush → one flush, one POST", async () => {
+    let flushCalls = 0;
+    let submitCalls = 0;
+    let resolveFlush: ((v: boolean) => void) | null = null;
+    const deps: SignOutSubmitDeps = {
+      requestFlush: () => {
+        flushCalls += 1;
+        return new Promise<boolean>((resolve) => {
+          resolveFlush = resolve;
+        });
+      },
+      feedPushFailed: false,
+      confirmingSignOut: false,
+      onWarn: () => {},
+      onSubmitForm: () => {
+        submitCalls += 1;
+      },
+    };
+    const guard: SignOutGuard = { current: false };
+    const first = handleSignOutSubmitCore(deps, guard);
+    // Arrives while the first call is still awaiting requestFlush.
+    const second = handleSignOutSubmitCore(deps, guard);
+    expect(flushCalls).toBe(1); // the second call never even reaches requestFlush
+    resolveFlush!(true);
+    await Promise.all([first, second]);
+    expect(flushCalls).toBe(1);
+    expect(submitCalls).toBe(1);
+  });
+
+  it("the guard resets once an attempt completes, so a LATER, separate click is its own independent attempt (never permanently blocked)", async () => {
+    let flushCalls = 0;
+    const guard: SignOutGuard = { current: false };
+    const deps: SignOutSubmitDeps = {
+      requestFlush: async () => {
+        flushCalls += 1;
+        return true;
+      },
+      feedPushFailed: false,
+      confirmingSignOut: false,
+      onWarn: () => {},
+      onSubmitForm: () => {},
+    };
+    await handleSignOutSubmitCore(deps, guard);
+    await handleSignOutSubmitCore(deps, guard);
+    expect(flushCalls).toBe(2);
+    expect(guard.current).toBe(false);
+  });
+});
+
+describe("the Sign out button is visually disabled while busy (§1bt.8 AMENDMENT (c) — the visible half of the double-submit guard)", () => {
+  it("busy=true adds a real disabled attribute to the Sign out button", () => {
+    const html = renderAccountView({ busy: true, confirmingSignOut: false });
+    expect(html).toMatch(/<button type="submit" disabled=""[^>]*>Sign out<\/button>/);
+  });
+
+  it("busy=false (the default/at-rest state) carries no disabled attribute", () => {
+    const html = renderAccountView({ busy: false, confirmingSignOut: false });
+    expect(html).not.toContain('disabled=""');
   });
 });
 
