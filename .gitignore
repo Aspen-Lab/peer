@@ -1,10 +1,6 @@
 # macOS
 .DS_Store
 
-# Xcode user data
-*.xcuserdatad/
-xcuserdata/
-
 # Python
 __pycache__/
 *.py[cod]
