@@ -42,7 +42,6 @@
   - [Environment variables](#environment-variables)
   - [Running the web app](#running-the-web-app)
 - [The Python CLI](#the-python-cli)
-- [The iOS app](#the-ios-app)
 - [Invariants — do not break these](#invariants--do-not-break-these)
 - [Contributing & git workflow](#contributing--git-workflow)
 - [License](#license)
@@ -58,14 +57,13 @@ removes duplicates, and surfaces a short daily briefing of the most relevant pap
 (plus events and jobs). Named after the Greek messenger god — it is the user's personal
 messenger for their field.
 
-There are **three surfaces in one repo**. They are *parallel implementations of the same
+There are **two surfaces in one repo**. They are *parallel implementations of the same
 idea*, not shared code:
 
 | Surface | Path | Status | What it is |
 | --- | --- | --- | --- |
 | **Web app** | [`web/`](web/) | **Most active — start here** | Next.js dashboard deployed on Vercel. Full pipeline + onboarding + personalization + email digests. |
 | **Python CLI** | [`python/`](python/) | Original MVP, stable | Local-first CLI (`peer init`, `peer run --once`). Pure Tier 0. Markdown output. |
-| **iOS app** | [`Peer/`](Peer/), `Peer.xcodeproj` | UI scaffolding | SwiftUI app. Not yet wired to the backend. |
 
 > ⚠️ **The Python and TypeScript pipelines are separate codebases.** Fixing scoring in
 > one does **not** fix it in the other. When someone says "the pipeline," confirm which
@@ -102,9 +100,7 @@ Full detail: [`docs/PRODUCT_DIRECTION.md`](docs/PRODUCT_DIRECTION.md) and [`VISI
 ├── assets/              ← shared brand assets (logo)
 ├── docs/                ← architecture & product blueprints (see below)
 ├── python/              ← Python CLI surface
-├── web/                 ← Next.js web app surface (primary)
-├── Peer/              ← SwiftUI iOS sources
-└── Peer.xcodeproj/    ← Xcode project
+└── web/                 ← Next.js web app surface (primary)
 ```
 
 Key docs in [`docs/`](docs/):
@@ -521,14 +517,6 @@ python/src/peer_news/
 
 > This is a **separate implementation** from `web/`. The two do not share code. Keep the
 > Tier 0 contract (works with no keys) here too.
-
-## The iOS app
-
-SwiftUI sources in [`Peer/`](Peer/), project in `Peer.xcodeproj`. Currently **UI
-scaffolding** — Models (`Paper`, `Event`, `Job`, `UserProfile`), state (`FeedState`,
-`ProfileState`), discovery/detail/profile views, a theme, and a `RecommendationService`.
-It is **not yet wired to the web backend**; treat it as a design prototype until that
-integration lands. Open in Xcode to build.
 
 ---
 
