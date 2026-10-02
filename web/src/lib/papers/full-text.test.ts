@@ -6,10 +6,16 @@ import type { SourceLink } from "./source-links";
 const mocks = vi.hoisted(() => ({
   ownedUpload: vi.fn(async () => ({ ownerKey: "test" })),
   collectSourceLinks: vi.fn(),
-  extractPdfTextFromPath: vi.fn(),
+  extractPdfTextFromBytes: vi.fn(),
+  readUploadPdf: vi.fn<(hash16: string) => Promise<Buffer | null>>(async () => Buffer.from("%PDF-1.4 fixture")),
 }));
 
 vi.mock("./upload-access", () => ({ ownedUpload: mocks.ownedUpload }));
+
+vi.mock("./upload-store", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./upload-store")>();
+  return { ...actual, readUploadPdf: mocks.readUploadPdf };
+});
 
 vi.mock("./source-links", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./source-links")>();
@@ -18,7 +24,7 @@ vi.mock("./source-links", async (importOriginal) => {
 
 vi.mock("./pdf-text", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./pdf-text")>();
-  return { ...actual, extractPdfTextFromPath: mocks.extractPdfTextFromPath };
+  return { ...actual, extractPdfTextFromBytes: mocks.extractPdfTextFromBytes };
 });
 
 // Mocked after source-links so `pdf-text.ts`'s own network call (a real
@@ -97,7 +103,7 @@ describe("getFullText — 1-16, a hard 401/402/403/451 is reported as paywalled"
   });
 });
 
-describe("getFullText — 1-28, an upload: id reads the local file, never collectSourceLinks", () => {
+describe("getFullText — 1-28, an upload: id reads its stored PDF, never collectSourceLinks", () => {
   const emptyDoc: ExtractedDocument = {
     title: "An Uploaded Paper",
     sections: [{ heading: "Body", canonical: "body", text: "Real body text." }],
@@ -109,16 +115,20 @@ describe("getFullText — 1-28, an upload: id reads the local file, never collec
 
   beforeEach(() => {
     mocks.collectSourceLinks.mockReset();
-    mocks.extractPdfTextFromPath.mockReset();
+    mocks.extractPdfTextFromBytes.mockReset();
+    mocks.readUploadPdf.mockReset();
+    mocks.readUploadPdf.mockResolvedValue(Buffer.from("%PDF-1.4 fixture"));
   });
 
-  it("reads the local PDF directly and never calls collectSourceLinks", async () => {
-    mocks.extractPdfTextFromPath.mockResolvedValue({ ok: true, doc: emptyDoc } satisfies PdfTextResult);
+  it("reads the stored PDF directly and never calls collectSourceLinks", async () => {
+    mocks.extractPdfTextFromBytes.mockResolvedValue({ ok: true, doc: emptyDoc } satisfies PdfTextResult);
 
     const result = await getFullText({ paperId: "upload:0000000000000001" });
 
     expect(result.status).toBe("ok");
     expect(result.doc).toEqual(emptyDoc);
+    expect(mocks.readUploadPdf).toHaveBeenCalledWith("0000000000000001");
+    expect(mocks.extractPdfTextFromBytes.mock.calls[0][0].toString()).toBe("%PDF-1.4 fixture");
     expect(result.sourceLink).toEqual({
       url: "/api/papers/upload/0000000000000001/file",
       kind: "pdf",
@@ -128,11 +138,8 @@ describe("getFullText — 1-28, an upload: id reads the local file, never collec
     expect(mocks.collectSourceLinks).not.toHaveBeenCalled();
   });
 
-  it("marks a genuinely empty PDF distinctly (pdf-empty), not as a generic failure", async () => {
-    mocks.extractPdfTextFromPath.mockResolvedValue({
-      ok: false,
-      reason: "PDF text extractor produced no sections.",
-    } satisfies PdfTextResult);
+  it("marks a PDF with no text layer (a scan) distinctly (pdf-empty), not as a generic failure", async () => {
+    mocks.extractPdfTextFromBytes.mockResolvedValue({ ok: false, reason: "no-text-layer" } satisfies PdfTextResult);
 
     const result = await getFullText({ paperId: "upload:0000000000000002" });
 
@@ -140,15 +147,19 @@ describe("getFullText — 1-28, an upload: id reads the local file, never collec
     expect(result.attempts[0].outcome).toContain("pdf-empty");
   });
 
-  it("2-05 (A2-02): a real empty/scanned PDF — which extracts as ok:true with zero sections, not ok:false — is still marked pdf-empty", async () => {
-    // The shape above (`ok: false, reason: "...produced no sections"`)
-    // guards a real but different Python-side failure (a totally unreadable
-    // file). A truly blank PDF instead reads *successfully*: the Python
-    // extractor still returns one real (empty-text) "Body" section, which
-    // pdf-text.ts's normalize() then filters out — producing exactly this
-    // shape, confirmed by executing extractPdfTextFromPath against a real
-    // blank PDF built with PyMuPDF.
-    mocks.extractPdfTextFromPath.mockResolvedValue({
+  it("marks a PDF whose text formed no section distinctly (pdf-empty) too", async () => {
+    mocks.extractPdfTextFromBytes.mockResolvedValue({ ok: false, reason: "no-sections" } satisfies PdfTextResult);
+
+    const result = await getFullText({ paperId: "upload:0000000000000005" });
+
+    expect(result.status).toBe("no_full_text");
+    expect(result.attempts[0].outcome).toContain("pdf-empty");
+  });
+
+  it("2-05 (A2-02): a reading that succeeds with zero sections is still marked pdf-empty", async () => {
+    // Guarded structurally: whatever the reader says, a document with no
+    // section has nothing to report on.
+    mocks.extractPdfTextFromBytes.mockResolvedValue({
       ok: true,
       doc: {
         title: null,
@@ -166,12 +177,23 @@ describe("getFullText — 1-28, an upload: id reads the local file, never collec
     expect(result.attempts[0].outcome).toContain("pdf-empty");
   });
 
-  it("marks a no-python/no-extractor failure the same way a normal PDF link would", async () => {
-    mocks.extractPdfTextFromPath.mockResolvedValue({ ok: false, reason: "no-python" } satisfies PdfTextResult);
+  it("passes any other reading failure through as its own reason, never as pdf-empty", async () => {
+    mocks.extractPdfTextFromBytes.mockResolvedValue({ ok: false, reason: "Error: Invalid PDF structure" } satisfies PdfTextResult);
 
     const result = await getFullText({ paperId: "upload:0000000000000003" });
 
     expect(result.status).toBe("no_full_text");
-    expect(result.attempts[0].outcome).toContain("no-python");
+    expect(result.attempts[0].outcome).toContain("Invalid PDF structure");
+    expect(result.attempts[0].outcome).not.toContain("pdf-empty");
+  });
+
+  it("says plainly when the stored PDF is gone, without trying to read anything", async () => {
+    mocks.readUploadPdf.mockResolvedValue(null);
+
+    const result = await getFullText({ paperId: "upload:0000000000000006" });
+
+    expect(result.status).toBe("no_full_text");
+    expect(result.attempts[0].outcome).toContain("no longer stored");
+    expect(mocks.extractPdfTextFromBytes).not.toHaveBeenCalled();
   });
 });

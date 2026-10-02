@@ -21,6 +21,7 @@ import { UPLOAD_RIGHTS_VERSION } from "@/lib/papers/upload-policy";
 import { useProfileStore } from "@/store/profile";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
+import { supabase } from "@/lib/supabase/client";
 
 interface UploadResponse {
   id: string;
@@ -69,6 +70,42 @@ async function errorFromResponse(res: Response): Promise<string> {
   return `Upload failed (${res.status}).`;
 }
 
+/** `POST /api/papers/upload/ticket`'s answer: send the file in the form, or
+ * put it straight into the server's private bucket first. */
+type UploadTicket =
+  | { mode: "form" }
+  | { mode: "direct"; bucket: string; path: string; token: string };
+
+/**
+ * Puts the PDF into `form` and returns null, or returns why it could not.
+ * Where the server keeps uploads in its Supabase bucket, the browser puts
+ * the file there itself and the form only names it — a Vercel function will
+ * not take a request body much over 4 MB, and a paper's PDF is often larger.
+ * Otherwise the file goes in the form, as it always has.
+ */
+async function attachPdf(form: FormData, file: File): Promise<string | null> {
+  const res = await fetch("/api/papers/upload/ticket", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ size: file.size }),
+  });
+  if (!res.ok) return errorFromResponse(res);
+  const ticket = (await res.json()) as UploadTicket;
+  if (ticket.mode !== "direct") {
+    form.set("file", file);
+    return null;
+  }
+  if (!supabase) return "Upload failed — this site cannot reach its file storage.";
+  // Typed explicitly: some systems give a PDF no MIME type at all, and the
+  // bucket takes only PDFs.
+  const pdf = new File([file], file.name, { type: "application/pdf" });
+  const { error } = await supabase.storage.from(ticket.bucket).uploadToSignedUrl(ticket.path, ticket.token, pdf);
+  if (error) return "Upload failed — check your connection and try again.";
+  form.set("staged", ticket.path);
+  form.set("fileName", file.name);
+  return null;
+}
+
 export function UploadButton({ className = "", targetPaper, onUploaded }: {
   className?: string; targetPaper?: Paper; onUploaded?: (paper: Paper) => void;
 }) {
@@ -108,7 +145,11 @@ export function UploadButton({ className = "", targetPaper, onUploaded }: {
     setIsUploading(true);
     try {
       const form = new FormData();
-      form.set("file", file);
+      const attachError = await attachPdf(form, file);
+      if (attachError) {
+        setError(UPLOAD_BUTTON.error(attachError));
+        return;
+      }
       form.set("rightsVersion", UPLOAD_RIGHTS_VERSION);
       if (targetPaper) form.set("targetPaper", JSON.stringify({ id: targetPaper.id, title: targetPaper.title, doi: targetPaper.doi }));
       if (confirmMatch) form.set("confirm", "1");

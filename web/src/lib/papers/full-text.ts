@@ -14,9 +14,9 @@ import {
   type ExtractedDocument,
 } from "./html-text";
 import { classifyHardAccessStatus } from "./paywall-status";
-import { extractPdfTextFromPath, tryExtractPdfText } from "./pdf-text";
+import { extractPdfTextFromBytes, tryExtractPdfText } from "./pdf-text";
 import { collectSourceLinks, type SourceLink } from "./source-links";
-import { bareUploadId, pdfPath } from "./upload-store";
+import { bareUploadId, readUploadPdf } from "./upload-store";
 import { ownedUpload } from "./upload-access";
 
 const FETCH_TIMEOUT_MS = 12_000;
@@ -215,42 +215,37 @@ function blockedReason(url: string): string {
   }
 }
 
+const UPLOAD_EMPTY_REASON = "pdf-empty: PDF text extractor produced no sections.";
+
 /**
- * 1-28: an uploaded PDF already lives on this server (`upload-store.ts`), so
- * reading it is a local file read, not a fetch — no `collectSourceLinks`
- * walk, no network attempt, no paywall to hit. Mirrors `tryPdfLink`'s
- * shape/reasoning so `buildResult`'s single `attempts` entry reads the same
- * way a normal PDF attempt would.
+ * 1-28: an uploaded PDF is already in Peer's own private storage
+ * (`upload-store.ts`), so reading it is a storage read, not a fetch — no
+ * `collectSourceLinks` walk, no network attempt, no paywall to hit. Mirrors
+ * `tryPdfLink`'s shape/reasoning so `buildResult`'s single `attempts` entry
+ * reads the same way a normal PDF attempt would.
  */
 async function tryUploadLink(hash16: string): Promise<{ status: FullTextStatus; doc?: ExtractedDocument; reason?: string }> {
-  const result = await extractPdfTextFromPath(pdfPath(hash16));
+  const bytes = await readUploadPdf(hash16).catch((error) => {
+    console.warn("[papers/full-text] could not read an uploaded PDF:", error);
+    return null;
+  });
+  if (!bytes) return { status: "no_full_text", reason: "The uploaded PDF is no longer stored." };
+  const result = await extractPdfTextFromBytes(bytes);
   if (result.ok && result.doc) {
-    // A2-02 (2-05): a truly empty/scanned PDF reads *successfully* — the
-    // Python extractor still returns one real (empty-text) "Body" section
-    // rather than failing outright, so `result.ok` is `true` here even
-    // though there is nothing to report on. Confirmed by execution against
-    // a real blank PDF: `{ ok: true, doc: { sections: [] } }`, never the
-    // `ok: false` shape the branch below was written for. Catch it here,
-    // structurally, rather than trusting an unconditional "it's ok."
+    // A2-02 (2-05): a reading that succeeded but found no section is the
+    // same fact as a scan — nothing to report on. Caught structurally rather
+    // than trusting an unconditional "it's ok."
     if (result.doc.sections.length === 0) {
-      return { status: "no_full_text", reason: "pdf-empty: PDF text extractor produced no sections." };
+      return { status: "no_full_text", reason: UPLOAD_EMPTY_REASON };
     }
     return { status: "ok", doc: result.doc };
   }
-  if (result.reason === "no-python" || result.reason === "no-extractor") {
-    // Same "the file is there, this deployment cannot read it" fact
-    // `pdfUnreadableHere` (reading.ts) already detects for a normal PDF
-    // link — kept as the exact same reason string so that detector needs no
-    // upload-specific branch of its own.
-    return { status: "no_full_text", reason: result.reason };
-  }
-  if (result.reason && /produced no sections/i.test(result.reason)) {
-    // Python ran fine and read every page; there was simply no text to find
-    // (most likely a scanned PDF with no text layer). A genuinely different
-    // fact from every other `no_full_text` reason here — reading.ts's
-    // `pdfHasNoText` looks for this exact marker so the reading page can say
-    // "this PDF has no readable text" instead of a generic "no full text."
-    return { status: "no_full_text", reason: `pdf-empty: ${result.reason}` };
+  if (result.reason === "no-text-layer" || result.reason === "no-sections") {
+    // Every page was read; there was simply no text to find (most likely a
+    // scanned PDF). reading.ts's `pdfHasNoText` looks for this exact
+    // `pdf-empty` marker so the reading page can say "this PDF has no
+    // readable text" instead of a generic "no full text."
+    return { status: "no_full_text", reason: UPLOAD_EMPTY_REASON };
   }
   return { status: "no_full_text", reason: result.reason ?? "PDF text extractor failed on this server." };
 }

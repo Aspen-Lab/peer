@@ -1,41 +1,28 @@
 // 1-23: everything the upload route (`app/api/papers/upload`) and the two
 // `upload:`-aware pipeline branches (`full-text.ts`, `figures/extract.ts`)
-// need to agree on about an uploaded PDF's id scheme and on-disk layout,
+// need to agree on about an uploaded PDF's id scheme and storage layout,
 // defined exactly once — per Ruling 4 (§1e).
 //
-// Storage: `web/.local-data/uploads/<hash16>.pdf` + `<hash16>.json`, already
-// covered by `web/.gitignore`'s `/.local-data` (confirmed — nothing here is
-// ever committed). Id: `upload:<hash16>`. Idempotent on re-upload — the same
-// bytes hash to the same id, so a repeat upload is a no-op write, not a
-// duplicate paper.
+// Storage: `<hash16>.pdf` + `<hash16>.json` (+ `<sha256>.attachment.json`
+// for a PDF supplementing another paper), held by `upload-backend.ts` —
+// `web/.local-data/uploads/` locally (covered by `web/.gitignore`'s
+// `/.local-data`, never committed), `PEER_PRIVATE_UPLOAD_DIR` when
+// self-hosting, or a private Supabase Storage bucket when
+// `PEER_UPLOAD_BUCKET` is set. The bucket also keeps
+// `owners/<ownerKey>/<hash16>` markers, so one reader's list never reads
+// every reader's records, and `incoming/<ownerKey>/` for PDFs the browser
+// put there directly (see `createStagedUpload`). Id: `upload:<hash16>`.
+// Idempotent on re-upload — the same bytes hash to the same id, so a repeat
+// upload is a no-op write, not a duplicate paper.
 
-import { createHash } from "node:crypto";
-import { existsSync } from "node:fs";
-import { mkdir, readFile, writeFile, readdir, unlink } from "node:fs/promises";
+import { createHash, randomUUID } from "node:crypto";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import type { Paper, PreferenceConcept } from "@/types";
+import { createSignedUploadTicket, UPLOAD_DIR, uploadBackend } from "./upload-backend";
 
-// Mirrors `papers/pdf-text.ts`'s `resolveHelperScript` dual-candidate cwd
-// resolution — the dev server and some test runners start from different
-// working directories (repo root vs. `web/`). Anchored on a file that is
-// always checked into the repo (the Python PDF-text helper), not on
-// `.local-data/uploads` itself: that directory is gitignored and may not
-// exist yet on a fresh checkout, so there's nothing to `existsSync` an
-// upload directory against before the very first upload. Whichever root the
-// Python helper resolves from is also the root the server actually runs
-// from, so anchoring here keeps uploads and the extractor that reads them
-// from ever silently splitting across two directories.
-function resolveWebRoot(): string {
-  const candidates = [process.cwd(), path.join(process.cwd(), "web")];
-  for (const candidate of candidates) {
-    if (existsSync(path.join(candidate, "scripts", "extract_pdf_text.py"))) {
-      return candidate;
-    }
-  }
-  return process.cwd();
-}
-
-export const UPLOAD_DIR = process.env.PEER_PRIVATE_UPLOAD_DIR || path.join(resolveWebRoot(), ".local-data", "uploads");
+export { UPLOAD_DIR } from "./upload-backend";
 
 /**
  * sha256 of the raw PDF bytes, first 16 hex chars — short enough for a URL
@@ -75,6 +62,25 @@ export function pdfPath(hash16: string): string {
 export function metaPath(hash16: string): string {
   if (!isValidHash16(hash16)) throw new Error("Invalid upload id");
   return path.join(UPLOAD_DIR, `${hash16}.json`);
+}
+
+function pdfName(hash16: string): string {
+  if (!isValidHash16(hash16)) throw new Error("Invalid upload id");
+  return `${hash16}.pdf`;
+}
+
+function metaName(hash16: string): string {
+  if (!isValidHash16(hash16)) throw new Error("Invalid upload id");
+  return `${hash16}.json`;
+}
+
+/** Owner keys are sha256 hex; nothing else ever becomes a folder name. */
+function isValidOwnerKey(value: string): boolean {
+  return /^[0-9a-f]{64}$/.test(value);
+}
+
+function ownerMarkerName(ownerKey: string, hash16: string): string | null {
+  return isValidOwnerKey(ownerKey) && isValidHash16(hash16) ? `owners/${ownerKey}/${hash16}` : null;
 }
 
 export interface UploadMeta {
@@ -144,36 +150,110 @@ export interface UploadMeta {
   textStatus: "ok" | "empty";
 }
 
-async function ensureUploadDir(): Promise<void> {
-  await mkdir(UPLOAD_DIR, { recursive: true, mode: 0o700 });
-}
-
 export async function readUploadMeta(hash16: string): Promise<UploadMeta | null> {
   try {
-    const raw = await readFile(metaPath(hash16), "utf-8");
-    return JSON.parse(raw) as UploadMeta;
+    const raw = await uploadBackend().read(metaName(hash16));
+    return raw ? JSON.parse(raw.toString("utf-8")) as UploadMeta : null;
   } catch {
     return null;
   }
 }
 
 export async function writeUploadMeta(hash16: string, meta: UploadMeta): Promise<void> {
-  await ensureUploadDir();
-  await writeFile(metaPath(hash16), JSON.stringify(meta, null, 2), { encoding: "utf-8", mode: 0o600 });
+  const backend = uploadBackend();
+  await backend.write(metaName(hash16), JSON.stringify(meta, null, 2), "application/json");
+  // The bucket lists one owner's records through these markers; the disk
+  // backend scans its one directory instead (see `candidateHashes`).
+  const marker = backend.kind === "supabase" && meta.ownerKey ? ownerMarkerName(meta.ownerKey, hash16) : null;
+  if (marker) await backend.write(marker, "", "text/plain");
 }
 
-export function uploadFileExists(hash16: string): boolean {
-  return existsSync(pdfPath(hash16));
+export async function uploadFileExists(hash16: string): Promise<boolean> {
+  return uploadBackend().exists(pdfName(hash16));
+}
+
+/** The stored PDF's bytes, or null when they are gone. */
+export async function readUploadPdf(hash16: string): Promise<Buffer | null> {
+  return uploadBackend().read(pdfName(hash16));
+}
+
+/** Removes only the PDF bytes (the operator takedown keeps a minimal record). */
+export async function removeUploadPdf(hash16: string): Promise<void> {
+  await uploadBackend().remove([pdfName(hash16)]);
+}
+
+/**
+ * Runs `read` with a local file path to the stored PDF, for the one reader
+ * that needs a path rather than bytes (the figure extractor, a separate
+ * process). On disk that is the stored file itself — no second copy; from
+ * the bucket it is a private temp copy, removed once `read` settles. Null
+ * when the PDF is gone.
+ */
+export async function withUploadPdfFile<T>(hash16: string, read: (filePath: string) => Promise<T>): Promise<T | null> {
+  const backend = uploadBackend();
+  if (backend.kind === "disk") {
+    return (await backend.exists(pdfName(hash16))) ? read(pdfPath(hash16)) : null;
+  }
+  const bytes = await backend.read(pdfName(hash16));
+  if (!bytes) return null;
+  const dir = await mkdtemp(path.join(tmpdir(), "peer-upload-read-"));
+  try {
+    const filePath = path.join(dir, "paper.pdf");
+    await writeFile(filePath, bytes, { mode: 0o600 });
+    return await read(filePath);
+  } finally {
+    await rm(dir, { recursive: true, force: true }).catch(() => undefined);
+  }
 }
 
 /** Writes the PDF bytes only if this hash isn't already stored — the actual
  * idempotency guarantee (a repeat upload of the same file is a no-op here,
  * not a duplicate write). */
 export async function writeUploadPdfIfAbsent(hash16: string, bytes: Buffer): Promise<void> {
-  await ensureUploadDir();
-  if (!uploadFileExists(hash16)) {
-    await writeFile(pdfPath(hash16), bytes, { mode: 0o600 });
+  if (!(await uploadFileExists(hash16))) {
+    await uploadBackend().write(pdfName(hash16), bytes, "application/pdf");
   }
+}
+
+// ── Direct-to-bucket uploads ─────────────────────────────────────────
+// A Vercel function refuses a request body much over 4 MB, and a paper's
+// PDF is often larger. So with the bucket, the browser puts the PDF in
+// `incoming/<ownerKey>/` itself, then names it to the upload route, which
+// reads it back and files it like any other upload. The route removes a
+// staged object as soon as it is done with it; `purgeExpiredUploads` sweeps
+// any left behind for more than a day.
+
+const STAGED_NAME_RE = /^incoming\/([0-9a-f]{64})\/[0-9a-f-]{36}\.pdf$/;
+const STAGED_MAX_AGE_MS = 24 * 3600_000;
+
+/** True when uploads go through the bucket, so the browser should stage. */
+export function stagedUploadsAvailable(): boolean {
+  return uploadBackend().kind === "supabase";
+}
+
+/** A one-time ticket for the browser to put one PDF in this owner's folder. */
+export async function createStagedUpload(ownerKey: string): Promise<{ bucket: string; path: string; token: string }> {
+  if (!isValidOwnerKey(ownerKey)) throw new Error("Invalid owner");
+  return createSignedUploadTicket(`incoming/${ownerKey}/${randomUUID()}.pdf`);
+}
+
+/** Whether `name` is a staged object inside this owner's own folder. */
+export function isOwnStagedUpload(ownerKey: string, name: string): boolean {
+  const match = name.match(STAGED_NAME_RE);
+  return !!match && match[1] === ownerKey;
+}
+
+/** The staged PDF's bytes, or null when it is missing or not this owner's. */
+export async function readStagedUpload(ownerKey: string, name: string): Promise<Buffer | null> {
+  if (!stagedUploadsAvailable() || !isOwnStagedUpload(ownerKey, name)) return null;
+  return uploadBackend().read(name);
+}
+
+export async function removeStagedUpload(ownerKey: string, name: string): Promise<void> {
+  if (!stagedUploadsAvailable() || !isOwnStagedUpload(ownerKey, name)) return;
+  await uploadBackend().remove([name]).catch((error) => {
+    console.warn("[upload] could not remove a staged PDF:", error);
+  });
 }
 
 /**
@@ -220,36 +300,36 @@ export function privateUploadHash(ownerKey: string, bytes: Buffer): string {
   return createHash("sha256").update(ownerKey).update(bytes).digest("hex").slice(0, 16);
 }
 
-function attachmentPath(ownerKey: string, paperId: string): string {
+function attachmentName(ownerKey: string, paperId: string): string {
   const key = createHash("sha256").update(`${ownerKey}\n${paperId}`).digest("hex");
-  return path.join(UPLOAD_DIR, `${key}.attachment.json`);
+  return `${key}.attachment.json`;
 }
 
 export async function attachUpload(ownerKey: string, paperId: string, hash16: string): Promise<void> {
-  await ensureUploadDir();
-  await writeFile(attachmentPath(ownerKey, paperId), JSON.stringify({ hash16 }), { mode: 0o600 });
+  await uploadBackend().write(attachmentName(ownerKey, paperId), JSON.stringify({ hash16 }), "application/json");
 }
 
 export async function attachedUploadHash(ownerKey: string, paperId: string): Promise<string | null> {
   try {
-    const value = JSON.parse(await readFile(attachmentPath(ownerKey, paperId), "utf-8"));
+    const raw = await uploadBackend().read(attachmentName(ownerKey, paperId));
+    if (!raw) return null;
+    const value = JSON.parse(raw.toString("utf-8"));
     return typeof value.hash16 === "string" && isValidHash16(value.hash16) ? value.hash16 : null;
   } catch { return null; }
 }
 
 export async function deleteUpload(meta: UploadMeta): Promise<void> {
+  const backend = uploadBackend();
   // Remove permission/metadata first. No derived upload content is cached.
-  await unlink(metaPath(meta.hash16)).catch((error: NodeJS.ErrnoException) => {
-    if (error.code !== "ENOENT") throw error;
-  });
-  await unlink(pdfPath(meta.hash16)).catch((error: NodeJS.ErrnoException) => {
-    if (error.code !== "ENOENT") throw error;
-  });
+  await backend.remove([metaName(meta.hash16)]);
+  await backend.remove([pdfName(meta.hash16)]);
   for (const paperId of meta.paperIds ?? []) {
     if (meta.ownerKey && await attachedUploadHash(meta.ownerKey, paperId) === meta.hash16) {
-      await unlink(attachmentPath(meta.ownerKey, paperId)).catch(() => undefined);
+      await backend.remove([attachmentName(meta.ownerKey, paperId)]).catch(() => undefined);
     }
   }
+  const marker = backend.kind === "supabase" && meta.ownerKey ? ownerMarkerName(meta.ownerKey, meta.hash16) : null;
+  if (marker) await backend.remove([marker]).catch(() => undefined);
 }
 
 // 9-16 (A9-03): a closed list of derived-file names/patterns that do not
@@ -268,24 +348,58 @@ export async function deleteUpload(meta: UploadMeta): Promise<void> {
 const STRAY_UPLOAD_FILE_PATTERNS: RegExp[] = [/^figures\.json$/, /\.tmp$/];
 
 export async function purgeExpiredUploads(): Promise<void> {
-  const names = await readdir(UPLOAD_DIR).catch(() => [] as string[]);
-  for (const name of names) {
+  const backend = uploadBackend();
+  const objects = await backend.list("").catch(() => []);
+  for (const { name } of objects) {
     if (STRAY_UPLOAD_FILE_PATTERNS.some((pattern) => pattern.test(name))) {
-      await unlink(path.join(UPLOAD_DIR, name)).catch(() => undefined);
+      await backend.remove([name]).catch(() => undefined);
       continue;
     }
     if (!/^[0-9a-f]{16}\.json$/.test(name)) continue;
     const meta = await readUploadMeta(name.slice(0, 16));
     if (meta?.expiresAt && Date.parse(meta.expiresAt) <= Date.now()) await deleteUpload(meta);
   }
+  if (backend.kind === "supabase") await purgeAbandonedStagedUploads();
+}
+
+/** Staged PDFs the browser put in the bucket that no upload ever claimed. */
+async function purgeAbandonedStagedUploads(): Promise<void> {
+  const backend = uploadBackend();
+  const owners = (await backend.listFolders("incoming").catch(() => [])).filter(isValidOwnerKey);
+  for (const owner of owners) {
+    const staged = await backend.list(`incoming/${owner}`).catch(() => []);
+    const stale = staged
+      .filter((entry) => !entry.createdAt || Date.now() - Date.parse(entry.createdAt) > STAGED_MAX_AGE_MS)
+      .map((entry) => `incoming/${owner}/${entry.name}`)
+      .filter((name) => STAGED_NAME_RE.test(name));
+    if (stale.length > 0) await backend.remove(stale).catch(() => undefined);
+  }
+}
+
+/**
+ * The hash16 of every record worth reading for `ownerKey`. A superset is
+ * fine — `listUploadMeta` still checks each record's own `ownerKey` — but
+ * the bucket narrows to the owner's markers so one reader's list never
+ * downloads every reader's records; the disk backend scans its directory.
+ */
+async function candidateHashes(ownerKey: string): Promise<string[]> {
+  const backend = uploadBackend();
+  if (backend.kind === "supabase") {
+    if (!isValidOwnerKey(ownerKey)) return [];
+    const markers = await backend.list(`owners/${ownerKey}`).catch(() => []);
+    return markers.map((entry) => entry.name).filter(isValidHash16);
+  }
+  const objects = await backend.list("").catch(() => []);
+  return objects
+    .map((entry) => entry.name)
+    .filter((name) => /^[0-9a-f]{16}\.json$/.test(name))
+    .map((name) => name.slice(0, 16));
 }
 
 export async function listUploadMeta(ownerKey: string): Promise<UploadMeta[]> {
-  const names = await readdir(UPLOAD_DIR).catch(() => [] as string[]);
   const out: UploadMeta[] = [];
-  for (const name of names) {
-    if (!/^[0-9a-f]{16}\.json$/.test(name)) continue;
-    const meta = await readUploadMeta(name.slice(0, 16));
+  for (const hash16 of await candidateHashes(ownerKey)) {
+    const meta = await readUploadMeta(hash16);
     if (meta?.ownerKey === ownerKey && meta.expiresAt && Date.parse(meta.expiresAt) > Date.now()) out.push(meta);
   }
   return out.sort((a, b) => b.uploadedAt.localeCompare(a.uploadedAt));

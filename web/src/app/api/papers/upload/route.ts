@@ -4,15 +4,18 @@
 // (idempotent — the same bytes always hash to the same id) and derives
 // title/DOI/abstract/page-count honestly from whatever the PDF text
 // extractor could read; never invents a field it could not find.
+//
+// The PDF arrives one of two ways: as the form's `file` (local development
+// and self-hosting), or — when uploads live in the Supabase bucket — already
+// put there by the browser and named by the form's `staged` field (see
+// `upload/ticket/route.ts`; a Vercel function will not take a request body
+// much over 4 MB). Either way the same checks run on the same bytes.
 
 import { NextResponse } from "next/server";
 import { createHash } from "node:crypto";
-import { mkdtemp, writeFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import path from "node:path";
 import { hostedUploadsEnabled, ownedUpload, PRIVATE_UPLOAD_HEADERS, sameOriginUploadRequest, UPLOAD_RIGHTS_VERSION, uploadOwner } from "@/lib/papers/upload-access";
 import { extractUploadConcepts, matchUploadedPaper, UPLOAD_CONCEPT_EXTRACTION_VERSION, type PaperMatchBand } from "@/lib/preferences/upload-concepts";
-import { extractPdfTextFromPath } from "@/lib/papers/pdf-text";
+import { extractPdfTextFromBytes } from "@/lib/papers/pdf-text";
 import { resolveProvider } from "@/lib/llm/providers/registry";
 import { requireEntitledAiRequest } from "@/lib/security/ai-request";
 import { entitledContext } from "@/lib/security/entitled-context";
@@ -24,6 +27,8 @@ import {
   readUploadMeta,
   purgeExpiredUploads,
   listUploadMeta,
+  readStagedUpload,
+  removeStagedUpload,
   uploadFileExists,
   uploadId,
   uploadMetaToPaper,
@@ -33,8 +38,7 @@ import {
 } from "@/lib/papers/upload-store";
 
 export const dynamic = "force-dynamic";
-// PDF text extraction (Python/PyMuPDF) can take up to ~100s for a full-length
-// paper (see `pdf-text.ts`'s own execFile timeout) — give the route the same
+// Reading a full-length PDF's text takes a while — give the route the same
 // headroom the report route gives deep-report generation.
 export const maxDuration = 120;
 
@@ -137,7 +141,22 @@ async function resolveUploadTitle(
 
 const OVER_CAP_RESPONSE = { error: "That PDF is larger than 25 MB." } as const;
 
+type StagedRef = { current: { ownerKey: string; name: string } | null };
+
 export async function POST(req: Request) {
+  const staged: StagedRef = { current: null };
+  try {
+    return await handleUpload(req, staged);
+  } finally {
+    // A staged PDF has done its job once this request is over, whatever the
+    // answer was: stored as its own `<hash16>.pdf`, or refused. A "confirm"
+    // answer has the browser send the file again, so nothing staged is ever
+    // needed twice.
+    if (staged.current) await removeStagedUpload(staged.current.ownerKey, staged.current.name);
+  }
+}
+
+async function handleUpload(req: Request, staged: StagedRef): Promise<Response> {
   if (!sameOriginUploadRequest(req)) return NextResponse.json({ error: "Cross-site upload refused." }, { status: 403 });
   if (!hostedUploadsEnabled()) return NextResponse.json({ error: "Private PDF storage is not configured on this server." }, { status: 503 });
   const ownerKey = await uploadOwner(true);
@@ -160,17 +179,38 @@ export async function POST(req: Request) {
   }
 
   const file = form.get("file");
-  if (!(file instanceof File)) {
+  const stagedName = form.get("staged");
+  let bytes: Buffer;
+  let fileName: string;
+  if (file instanceof File) {
+    // 5-02: same message and status as the pre-parse gate above — this is the
+    // fallback for a request whose Content-Length was absent or understated,
+    // not a different failure mode the client should be able to tell apart.
+    if (file.size > MAX_UPLOAD_BYTES) {
+      return NextResponse.json(OVER_CAP_RESPONSE, { status: 413 });
+    }
+    bytes = Buffer.from(await file.arrayBuffer());
+    fileName = file.name;
+  } else if (typeof stagedName === "string" && stagedName) {
+    staged.current = { ownerKey, name: stagedName };
+    // Only ever this owner's own staging folder (`readStagedUpload` checks).
+    const stagedBytes = await readStagedUpload(ownerKey, stagedName).catch((err) => {
+      console.error("[upload] could not read the staged PDF:", err);
+      return null;
+    });
+    if (!stagedBytes) {
+      return NextResponse.json({ error: "No PDF file was attached." }, { status: 400 });
+    }
+    if (stagedBytes.byteLength > MAX_UPLOAD_BYTES) {
+      return NextResponse.json(OVER_CAP_RESPONSE, { status: 413 });
+    }
+    bytes = stagedBytes;
+    const nameValue = form.get("fileName");
+    fileName = typeof nameValue === "string" && nameValue.trim() ? nameValue.trim().slice(0, 255) : "paper.pdf";
+  } else {
     return NextResponse.json({ error: "No PDF file was attached." }, { status: 400 });
   }
-  // 5-02: same message and status as the pre-parse gate above — this is the
-  // fallback for a request whose Content-Length was absent or understated,
-  // not a different failure mode the client should be able to tell apart.
-  if (file.size > MAX_UPLOAD_BYTES) {
-    return NextResponse.json(OVER_CAP_RESPONSE, { status: 413 });
-  }
 
-  const bytes = Buffer.from(await file.arrayBuffer());
   if (bytes.byteLength === 0) {
     return NextResponse.json({ error: "The uploaded file was empty." }, { status: 400 });
   }
@@ -196,20 +236,11 @@ export async function POST(req: Request) {
   const hash16 = privateUploadHash(ownerKey, bytes);
 
   // Extract text now to derive title/DOI/abstract/page count. A failure here
-  // (no Python on this machine, the extractor errored, a scanned PDF with no
-  // text layer) does not fail the upload — the file is still valid and
-  // downloadable either way; the reading page is what tells the reader their
-  // PDF has no readable text (1-28), not this route.
-  const temporary = await mkdtemp(path.join(tmpdir(), "peer-upload-"));
-  const temporaryPdf = path.join(temporary, "source.pdf");
-  const extracted = await (async () => {
-    try {
-      await writeFile(temporaryPdf, bytes, { mode: 0o600 });
-      return await extractPdfTextFromPath(temporaryPdf);
-    } finally {
-      await rm(temporary, { recursive: true, force: true });
-    }
-  })();
+  // (the reader errored, a scanned PDF with no text layer) does not fail the
+  // upload — the file is still valid and downloadable either way; the
+  // reading page is what tells the reader their PDF has no readable text
+  // (1-28), not this route.
+  const extracted = await extractPdfTextFromBytes(bytes);
   const doc = extracted.ok ? extracted.doc : undefined;
 
   const bodyText = (doc?.sections ?? [])
@@ -225,7 +256,7 @@ export async function POST(req: Request) {
   // text (inert without a local dev provider — see `modelTitleFallback`);
   // else (c) the file name. Never a guessed title, never a half title,
   // never a stamp.
-  const title = await resolveUploadTitle(doc?.title, extracted.page1Text, file.name);
+  const title = await resolveUploadTitle(doc?.title, extracted.page1Text, fileName);
 
   const doi = doiMatch ? stripTrailingPunctuation(doiMatch[0]) : undefined;
   // 9-31 (A9-09, Ruling 8): a three-band decision, never a blanket
@@ -300,7 +331,7 @@ export async function POST(req: Request) {
     status: "ready",
     revision,
     hash16,
-    fileName: file.name,
+    fileName,
     title,
     doi,
     pageCount: doc?.pageCount,
@@ -324,7 +355,7 @@ export async function POST(req: Request) {
   // PDF bytes are already safely stored, so there is nothing to roll back,
   // and a failed refresh must never delete a still-good asset (matrix B7:
   // "if a ready meta exists, return it").
-  const isNewAsset = !uploadFileExists(hash16);
+  const isNewAsset = !(await uploadFileExists(hash16));
   try {
     if (isNewAsset) await writeUploadMeta(hash16, { ...meta, status: "pending" });
     await writeUploadPdfIfAbsent(hash16, bytes);

@@ -3,7 +3,7 @@ import { matchFigureSemantically } from "./semantic-match";
 import type { FigureMatchContext } from "./match-context";
 import { matchFigureVisually } from "./vision-match";
 import { classifyHardAccessStatus } from "@/lib/papers/paywall-status";
-import { bareUploadId, pdfPath } from "@/lib/papers/upload-store";
+import { bareUploadId, withUploadPdfFile } from "@/lib/papers/upload-store";
 import { ownedUpload } from "@/lib/papers/upload-access";
 
 const FETCH_TIMEOUT_MS = 7_000;
@@ -1340,12 +1340,17 @@ async function buildCandidatePool(input: FigureSourceInput): Promise<CachedPool>
   const attempts: AttemptResult[] = [];
   const candidates: FigureCandidate[] = [];
 
-  // 1-29: an uploaded PDF is already on this server — read it directly and
-  // skip every other branch below. "has figures attached for analysis" per
-  // the user's own words is satisfied by the PDF's own embedded images.
+  // 1-29: an uploaded PDF is already in Peer's own private storage — read it
+  // directly and skip every other branch below. "has figures attached for
+  // analysis" per the user's own words is satisfied by the PDF's own
+  // embedded images.
   const uploadHash16 = bareUploadId(input.itemId);
   if (uploadHash16) {
-    const attempt = await extractPdfCandidatesFromPath(pdfPath(uploadHash16), "publisher");
+    const attempt = (await withUploadPdfFile(uploadHash16, (filePath) => extractPdfCandidatesFromPath(filePath, "publisher"))) ?? {
+      status: "source_unavailable" as const,
+      candidates: [],
+      reason: "The uploaded PDF is no longer stored.",
+    };
     attempts.push(attempt);
     const reordered: FigureCandidate[] = attempt.candidates
       .filter((c) => !looksLikeLogo(c.imageUrl))
