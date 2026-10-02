@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import path from "node:path";
 import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
+import { supabaseUploadStorageConfigured } from "./upload-backend";
 import { readUploadMeta, type UploadMeta } from "./upload-store";
 
 export const PRIVATE_UPLOAD_HEADERS = {
@@ -15,10 +16,14 @@ const LOCAL_COOKIE = "peer-private-uploads";
 
 export function hostedUploadsEnabled(): boolean {
   if (process.env.NODE_ENV !== "production" && !process.env.VERCEL && !process.env.VERCEL_ENV) return true;
+  if (process.env.PEER_UPLOADS_ENABLED !== "true") return false;
+  // Hosted storage is an explicit operator choice: a private Supabase bucket
+  // (the one that survives a Vercel deployment), or a durable directory
+  // outside the served app when self-hosting.
+  if (supabaseUploadStorageConfigured()) return true;
   const root = process.env.PEER_PRIVATE_UPLOAD_DIR;
-  // Hosted storage is an explicit operator choice, outside the served app.
   const relative = root ? path.relative(process.cwd(), path.resolve(root)) : "";
-  return process.env.PEER_UPLOADS_ENABLED === "true" && !!root && path.isAbsolute(root)
+  return !!root && path.isAbsolute(root)
     && (relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative));
 }
 

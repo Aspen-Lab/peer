@@ -10,12 +10,10 @@
 // behaviour runs in both places. What a scan (a PDF with no text layer)
 // cannot give, it still cannot give; that now reads as what it is.
 //
-// Merge note (2026-09-23): `extractPdfTextFromPath` — the private-upload
-// feature's from-disk path (an uploaded PDF already on this server's own
-// disk, see `papers/upload-store.ts`) — still runs the Python helper. That
-// feature is already documented (HANDOFF-upload-profile-fulltext-pdf.md
-// §6.5) as not yet production-storage-ready, so porting it off Python is
-// separate follow-up work, not something to fold in silently here.
+// Private uploads read the same way (`extractPdfTextFromBytes`), from
+// whichever storage holds them (`papers/upload-store.ts`). The Python
+// helper's own entry point, `extractPdfTextFromPath`, is no longer called by
+// the app; it stays only for the tests that pin that helper's behaviour.
 
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
@@ -250,6 +248,27 @@ export async function tryExtractPdfText(url: string): Promise<PdfTextResult> {
 }
 
 /**
+ * The same reading as `tryExtractPdfText`, for a PDF already in hand — a
+ * private upload, read from its storage. Also hands back page 1's raw text,
+ * which the upload route's title fallback reads: `sections` drops everything
+ * before the first heading, where a title is printed.
+ */
+export async function extractPdfTextFromBytes(bytes: Buffer): Promise<PdfTextResult> {
+  try {
+    const pages = await readPages(bytes);
+    const page1Text = (pages[0]?.items ?? []).map((item) => item.str).join(" ").replace(/\s+/g, " ").trim();
+    const outline = buildOutline(pages);
+    if (!outline.sections || outline.sections.length === 0) {
+      return { ok: false, reason: outline.reason ?? "no-sections", page1Text: page1Text || undefined };
+    }
+    return { ok: true, doc: normalize(outline), page1Text: page1Text || undefined };
+  } catch (err) {
+    console.warn("[papers/pdf-text] read failed:", err);
+    return { ok: false, reason: String(err) };
+  }
+}
+
+/**
  * Why the helper did not run. `no-python` and `no-script` are the two the
  * reading page names: on Vercel no interpreter can be spawned, or the helper
  * script is missing from a function bundle it was not traced into, and the
@@ -366,9 +385,8 @@ function normalizePythonOutput(extractor: ExtractorOutput): ExtractedDocument {
  * disk", not "for the duration of this one extraction"), so this function
  * has no temp-dir lifecycle of its own.
  *
- * Still Python-based (see the merge note at the top of this file) — the
- * URL path above moved to pdf.js in production; this from-disk path has
- * not, because the feature that calls it is not yet deployed.
+ * Still Python-based, and no longer called by the app: uploads read through
+ * `extractPdfTextFromBytes` (pdf.js) now, which runs where Peer is deployed.
  */
 export async function extractPdfTextFromPath(pdfPath: string): Promise<PdfTextResult> {
   const ran = await runExtractor(pdfPath);
