@@ -165,16 +165,45 @@ export interface RouteResult {
 const MIN_SPECIFIC_TERMS = 2;
 
 /**
+ * P1-02b (§1f.15): words a question is made of that say nothing about what
+ * it asks. `tokenize`'s own stoplist (`lib/scoring/tokenize.ts`) is shared
+ * with feed scoring and has neither group, so it is left alone and the route
+ * keeps its own list here:
+ * - question and function words ("how", "what", "does", "about", …) — routed
+ *   on, "What is LCO?" matched every section that says "what";
+ * - words that name a part of any paper rather than its content ("method",
+ *   "conclusions", "results", "gist", …) — every paper has them, so they
+ *   point nowhere. The generic chips ("Can I use this method in my own
+ *   work?", "Do the conclusions hold up?") are vague at Tier 0, which is
+ *   honest: word matching cannot answer them, and the map's roles already
+ *   show where the method and the conclusions are.
+ * Compared on the canonical form.
+ */
+const ROUTE_STOPLIST: ReadonlySet<string> = new Set([
+  // Question and function words.
+  "how", "what", "why", "which", "when", "where", "who", "whom", "whose",
+  "does", "do", "did", "can", "could", "should", "would", "will", "may", "might",
+  "about", "during", "between", "than", "this", "that", "these", "those",
+  // Not in §1f.15's list, added so its own requirement holds: without them
+  // the chip "Just get the gist" keeps the terms `just`, `get` and is routed.
+  "just", "get",
+  // Words naming a part of any paper.
+  "paper", "study", "work", "own", "use", "used", "using", "differ", "differs",
+  "different", "difference", "hold", "holds", "conclusion", "conclusions",
+  "result", "results", "method", "methods", "approach", "finding", "findings", "gist",
+]);
+
+/**
  * §1f.6: the question's tokens (`tokenize`: lower-cased, stopwords and short
- * tokens already gone), one per canonical form, without the generic ones.
- * Each is kept as the reader typed it.
+ * tokens already gone), one per canonical form, without the generic ones and
+ * without `ROUTE_STOPLIST` (P1-02b). Each is kept as the reader typed it.
  */
 export function specificTerms(question: string): string[] {
   const seen = new Set<string>();
   const terms: string[] = [];
   for (const token of tokenize(question)) {
     const canonical = canonicalize(token);
-    if (!canonical || seen.has(canonical) || isGenericTerm(token)) continue;
+    if (!canonical || seen.has(canonical) || isGenericTerm(token) || ROUTE_STOPLIST.has(canonical)) continue;
     seen.add(canonical);
     terms.push(token);
   }

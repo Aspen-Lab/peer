@@ -4,7 +4,7 @@ import { blockMarker } from "@/lib/text/math";
 import { withSectionIds, type DraftSection, type ExtractedDocument } from "./html-text";
 import type { FullTextResult } from "./full-text";
 import { buildReading } from "./reading";
-import { buildReadingMap, routeByQuestions, type ReadingMap } from "./reading-map";
+import { buildReadingMap, routeByQuestions, specificTerms, type ReadingMap } from "./reading-map";
 import arxivHtmlDocJson from "./__fixtures__/arxiv-2609.02697.doc.json";
 import arxivPdfDocJson from "./__fixtures__/arxiv-2609.02113.doc.json";
 import zenodoDocJson from "./__fixtures__/zenodo-W7208807247.doc.json";
@@ -450,5 +450,42 @@ describe("routeByQuestions — the committed fixtures", () => {
     });
     // The question finds something in its own paper.
     expect(Object.values(entry.sections).some((s) => s.tier !== "none")).toBe(true);
+  });
+});
+
+// P1-02b (§1f.15): question words and words that name a part of any paper
+// ("method", "conclusions", "results") are not route terms — `tokenize`'s
+// stoplist has neither, and word matching on them routes a question to
+// every section that says "what" or "results".
+describe("specificTerms — question words and paper-structure words (P1-02b)", () => {
+  const sectionDoc = doc([{ text: "The LCO cathode degrades fastest at high voltage. What we found is that the method holds." }]);
+
+  it("drops the question word: 'How does LCO degrade?' is lco and degrade", () => {
+    expect(specificTerms("How does LCO degrade?")).toEqual(["lco", "degrade"]);
+  });
+
+  it("calls 'What is LCO?' vague", () => {
+    expect(specificTerms("What is LCO?")).toEqual(["lco"]);
+    expect(route(sectionDoc, ["What is LCO?"]).byQuestion[0].vague).toBe(true);
+  });
+
+  it.each([
+    "Can I use this method in my own work?",
+    "Do the conclusions hold up?",
+    "How does this differ from X?",
+    "Just get the gist",
+  ])("calls the generic chip %j vague", (chip) => {
+    const result = route(sectionDoc, [chip]);
+
+    expect(result.byQuestion[0].vague).toBe(true);
+    expect(result.vague).toBe(true);
+  });
+
+  it("keeps a content question's own terms around a structure word", () => {
+    const terms = specificTerms("Which cathode material degrades fastest?");
+
+    expect(terms).toEqual(["cathode", "material", "degrades", "fastest"]);
+    expect(terms.length).toBeGreaterThanOrEqual(2);
+    expect(specificTerms("Which methods reduce LCO cathode cracking?")).toEqual(["reduce", "lco", "cathode", "cracking"]);
   });
 });
