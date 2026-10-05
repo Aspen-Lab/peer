@@ -53,6 +53,9 @@ const PASS1_TRIGGER_CHARS = 10_000;
 // buckets and this one wasn't among them).
 const PASS1_MAX_INPUT_CHARS = 400_000;
 const PASS2_MAX_INPUT_CHARS = 24_000;
+/** §1g.10 (a): the question evidence's own budget in Pass 2, serialised —
+ *  on top of the body's `PASS2_MAX_INPUT_CHARS`, never out of it. */
+const PASS2_QUESTION_EVIDENCE_CHARS = 12_000;
 /** §1g.1: the question pass reads at most this much body (the serialised sections). */
 const PASS1Q_MAX_BODY_CHARS = 60_000;
 /** §1g.1: sentences kept per question. */
@@ -161,16 +164,47 @@ function fitTexts<T>(
   size: (built: T) => number,
   budget: number,
 ): T {
-  const whole = build([...texts]);
-  if (size(whole) <= budget) return whole;
+  return build(fitCut(texts, (cut) => size(build(cut)), budget));
+}
+
+/** `fitTexts`' cut itself: the body's units as they fit `budget` under `size`. */
+function fitCut(texts: readonly string[], size: (texts: string[]) => number, budget: number): string[] {
+  if (size([...texts]) <= budget) return [...texts];
   let lo = 0;
   let hi = texts.reduce((longest, text) => Math.max(longest, text.length), 0);
   while (lo < hi) {
     const cap = Math.ceil((lo + hi) / 2);
-    if (size(build(texts.map((text) => cutTo(text, cap)))) <= budget) lo = cap;
+    if (size(texts.map((text) => cutTo(text, cap))) <= budget) lo = cap;
     else hi = cap - 1;
   }
-  return build(texts.map((text) => cutTo(text, lo)));
+  return texts.map((text) => cutTo(text, lo));
+}
+
+/**
+ * §1g.10 (a): Pass 1q's sentences within their own budget. While the
+ * serialised block is over it, the question whose list is longest loses its
+ * last sentence — whole sentences only, never a cut inside one — so the
+ * lists come down together from the longest; a list left empty goes.
+ */
+function fitRelevant(relevant: QuestionRelevant, budget: number = PASS2_QUESTION_EVIDENCE_CHARS): QuestionRelevant {
+  const lists = new Map(Object.entries(relevant).map(([key, list]) => [key, [...list]]));
+  const size = () => JSON.stringify(Object.fromEntries(lists)).length;
+  while (lists.size > 0 && size() > budget) {
+    let longestKey: string | undefined;
+    let longest = -1;
+    for (const [key, list] of lists) {
+      const weight = JSON.stringify(list).length;
+      if (weight > longest) {
+        longest = weight;
+        longestKey = key;
+      }
+    }
+    if (longestKey === undefined) break;
+    const list = lists.get(longestKey) ?? [];
+    list.pop();
+    if (list.length === 0) lists.delete(longestKey);
+  }
+  return Object.fromEntries(lists) as QuestionRelevant;
 }
 
 function sha256(text: string): string {
@@ -528,10 +562,11 @@ function buildPass2Prompt(args: {
   signal: CompressedSignal | null;
   isReview: boolean;
   /** P2-01 (§1g.1): the reader's questions, and Pass 1q's sentences for them
-   *  by question index. Inputs only — the schema that answers them is
-   *  P2-02's. Absent without questions. */
+   *  by question index — absent on a short paper, where Pass 1q does not run
+   *  and the whole body is here (§1g.10 b). P2-02 (§1g.3): with questions the
+   *  schema asks for the answers. */
   questions: readonly string[];
-  questionRelevant: QuestionRelevant;
+  questionRelevant?: QuestionRelevant;
 }): string {
   const { paper, contextHint, project, doc, signal, isReview, questions, questionRelevant } = args;
   const sections = bodySections(doc);
@@ -602,7 +637,53 @@ function buildPass2Prompt(args: {
       }
     : {};
 
-  const assemble = (texts: string[]) => JSON.stringify({
+  // P2-02 (§1g.3): asked only when the reader asked — the
+  // `relationToYourWork` pattern. Without questions none of this is in the
+  // prompt, and a report the model volunteers it in drops it (sanitizer).
+  const asking = questions.length > 0;
+  const evidenceBlock = questionRelevant ? fitRelevant(questionRelevant) : undefined;
+  const questionSchema = {
+    forYourQuestions: [
+      {
+        question: "the reader's question, copied back — one entry per question in `readerQuestions`, in the same order",
+        verdict: "answered | partly | not_addressed — whether THIS paper answers the question",
+        answers: [
+          {
+            text: "one plain sentence answering the question from this paper (max 3 items)",
+            evidence: evidenceRule,
+            sectionId: "the `id` of the section the evidence sentence is from",
+          },
+        ],
+        readNext: [
+          {
+            sectionId: "the `id` of a section to read for this question (max 4 items)",
+            why: "one line, at most 160 characters, on what the reader finds there",
+            kind: "answer | background",
+          },
+        ],
+      },
+    ],
+    terms: [
+      {
+        term: "a term the reader needs to follow these answers (max 8 items)",
+        definition: "one plain sentence, at most 160 characters",
+        evidence: "the paper's own sentence defining the term, copied character-for-character; omit the key when the paper does not define it",
+      },
+    ],
+  };
+  const questionRules = [
+    "`forYourQuestions` has one entry per question in `readerQuestions`, in the same order, with `question` copied back.",
+    "Each answer's `evidence` is one sentence copied character-for-character from the supplied text; omit an answer you cannot support that way.",
+    "Each `sectionId` is the `id` of a section of the paper as given in `body`.",
+    "`verdict` is `not_addressed` when this paper does not address the question; its `answers` is then empty.",
+    '`readNext.kind` is "answer" for a section that answers the question, and "background" for a section needed to understand an answer though it does not mention the question.',
+    "A term's `definition` is the paper's own where the paper defines the term, with that sentence as `evidence`; otherwise it is Peer's own words and carries no `evidence`.",
+    evidenceBlock
+      ? "`questionRelevant` holds sentences of the paper chosen for each question, by its index in `readerQuestions`; quote from them or from `body`."
+      : "The whole paper is in `body`; quote from there.",
+  ];
+
+  const assemble = (texts: string[], asked: boolean) => JSON.stringify({
     task: isReview
       ? "Create a structured Peer DEEP paper report for a REVIEW or SURVEY from the supplied paper body (or compressed signal) and abstract. List the body's major sections in `reviewContents.sections` using the paper's own section names. Every claim item carries an `evidence` sentence copied character-for-character from the supplied text; omit any item you cannot support that way. Do not fabricate numbers."
       : "Create a structured Peer DEEP paper report from the supplied paper body (or compressed signal) and abstract. Every claim item carries an `evidence` sentence copied character-for-character from the supplied text; omit any item you cannot support that way. Every key result also carries a `novelty` line saying what is new about THIS result compared to prior approaches. Do not fabricate numbers; if a number is not in the supplied text, omit it.",
@@ -617,7 +698,7 @@ function buildPass2Prompt(args: {
     },
     body: bodyOf(texts),
     figureCaptions,
-    ...(questions.length > 0 ? { readerQuestions: questions, questionRelevant } : {}),
+    ...(asked ? { readerQuestions: questions, ...(evidenceBlock ? { questionRelevant: evidenceBlock } : {}) } : {}),
     outputSchema: {
       skim: [
         {
@@ -661,6 +742,7 @@ function buildPass2Prompt(args: {
         evidence: evidenceRule,
       },
       ...relationSchema,
+      ...(asked ? questionSchema : {}),
     },
     rules: [
       "Return ONLY valid JSON.",
@@ -673,11 +755,15 @@ function buildPass2Prompt(args: {
       ...(project
         ? ["`relationToYourWork.basedOn` is the reader's project text copied back."]
         : []),
+      ...(asked ? questionRules : []),
     ],
   });
-  // §1g.2: the body is cut to fit; the schema, the rules and the questions
-  // are appended whole.
-  return fitTexts(units.map((unit) => unit.text), assemble, (prompt) => prompt.length, PASS2_MAX_INPUT_CHARS);
+  // §1g.2: the body is cut to fit; the schema and the rules are appended
+  // whole. §1g.10 (a): the body's budget is measured as if there were no
+  // questions, so they never cost it a character; the questions, their
+  // schema and rules, and the question evidence (its own 12 000) come on top.
+  const cut = fitCut(units.map((unit) => unit.text), (texts) => assemble(texts, false).length, PASS2_MAX_INPUT_CHARS);
+  return assemble(cut, asking);
 }
 
 const PASS2_SYSTEM = [
@@ -697,7 +783,7 @@ async function runPass2(args: {
   doc: ExtractedDocument;
   signal: CompressedSignal | null;
   questions: readonly string[];
-  questionRelevant: QuestionRelevant;
+  questionRelevant?: QuestionRelevant;
   provider: DigestProvider;
 }): Promise<PaperReport | null> {
   if (!args.provider.generateJsonText) return null;
@@ -722,7 +808,8 @@ async function runPass2(args: {
   });
   const parsed = safeJson(raw);
   if (!parsed) return null;
-  return sanitizePaperReport(parsed);
+  // §1g.3: the answers are kept only against the request's own questions.
+  return sanitizePaperReport(parsed, { questions: args.questions });
 }
 
 /**
@@ -741,15 +828,18 @@ export async function generateDeepReport(
   try {
     const bodyChars = totalBodyChars(doc);
     const runsPass1 = bodyChars > PASS1_TRIGGER_CHARS;
+    // §1g.10 (b): on a short paper Pass 2 reads every sentence, so there is
+    // no question pass either; the server verifies the answers anyway.
+    const runsQuestionPass = runsPass1 && questions.length > 0;
     // §1g.4: the memory's key — the document itself, nothing about the reader.
-    const docHash = runsPass1 || questions.length > 0 ? sha256(JSON.stringify(doc)) : "";
+    const docHash = runsPass1 ? sha256(JSON.stringify(doc)) : "";
     // Independent of each other, so side by side: Pass 1 never sees a
     // question, Pass 1q runs only when there is one.
     const [signal, questionRelevant] = await Promise.all([
       runsPass1 ? runPass1(paper, doc, provider, docHash) : Promise.resolve(null),
-      questions.length > 0
+      runsQuestionPass
         ? runQuestionPass({ paper, doc, questions, provider, docHash })
-        : Promise.resolve<QuestionRelevant>({}),
+        : Promise.resolve(undefined),
     ]);
 
     const report = await runPass2({

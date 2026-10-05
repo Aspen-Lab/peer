@@ -471,3 +471,169 @@ describe("the caches (§1g.4, §3d 11) — a counting provider", () => {
     expect(stub.count("pass1")).toBe(2);
   });
 });
+
+// ── P2-02 (§1g.3, §1g.10; acceptance §3d 9, 10) ──────────────────────
+
+/** A paper short enough for Pass 2 to read whole (Pass 1 skipped). */
+function shortDoc(): ExtractedDocument {
+  return {
+    source: "pdf",
+    pageCount: 4,
+    figureCaptions: [],
+    sections: [
+      { id: "s0", heading: "Abstract", canonical: "abstract", text: "We charged quillwort cells fast and opened them." },
+      { id: "s1", heading: "1 Introduction", canonical: "introduction", text: SENT.intro, page: 1 },
+      { id: "s2", heading: "2 Methods", canonical: "methods", text: SENT.methods, page: 2 },
+      { id: "s3", heading: "3 Results", canonical: "results", text: SENT.results, page: 4 },
+    ],
+  };
+}
+
+const QUESTION_KEYS = ["forYourQuestions", "terms"];
+const QUESTION_WORDS = /forYourQuestions|readNext|terms|readerQuestions|questionRelevant|whole paper is in/;
+
+describe("Pass 2 asks for answers only when the reader asked (§1g.3)", () => {
+  it("without questions: no forYourQuestions or terms in the schema, and no rule about them", async () => {
+    const stub = countingProvider();
+    await generateDeepReport({ paper, doc: shortDoc(), provider: stub.provider });
+    await generateDeepReport({ paper, doc: bigDoc("schema-none"), provider: stub.provider });
+
+    for (const call of stub.calls.filter((c) => c.kind === "pass2")) {
+      const prompt = call.prompt as { outputSchema: Record<string, unknown>; rules: string[] };
+      for (const key of QUESTION_KEYS) expect(prompt.outputSchema).not.toHaveProperty(key);
+      for (const rule of prompt.rules) expect(rule).not.toMatch(QUESTION_WORDS);
+    }
+  });
+
+  it("with questions: the schema asks for forYourQuestions (verdict, ≤3 answers with evidence and sectionId, ≤4 readNext with kind) and ≤8 terms; the rules say how", async () => {
+    const stub = countingProvider();
+    await generateDeepReport({ paper, doc: bigDoc("schema-q"), provider: stub.provider, questions: ["Does cracking rise with the charge rate?"] });
+
+    const prompt = stub.last("pass2")!.prompt as { outputSchema: Record<string, unknown>; rules: string[] };
+    const fyq = (prompt.outputSchema.forYourQuestions as Array<Record<string, unknown>>)[0];
+    expect(Object.keys(fyq)).toEqual(["question", "verdict", "answers", "readNext"]);
+    expect(String(fyq.verdict)).toMatch(/answered.*partly.*not_addressed/);
+    expect(Object.keys((fyq.answers as Array<Record<string, unknown>>)[0])).toEqual(["text", "evidence", "sectionId"]);
+    expect(Object.keys((fyq.readNext as Array<Record<string, unknown>>)[0])).toEqual(["sectionId", "why", "kind"]);
+    expect(JSON.stringify(fyq)).toMatch(/max 3/);
+    expect(JSON.stringify(fyq.readNext)).toMatch(/max 4/);
+    expect(Object.keys((prompt.outputSchema.terms as Array<Record<string, unknown>>)[0])).toEqual(["term", "definition", "evidence"]);
+    expect(JSON.stringify(prompt.outputSchema.terms)).toMatch(/max 8/);
+    const rules = prompt.rules.join("\n");
+    expect(rules).toMatch(/character-for-character/);
+    expect(rules).toMatch(/`sectionId` is the `id` of a section/);
+    expect(rules).toMatch(/"background"/);
+    expect(rules).toMatch(/Peer's own words/);
+    expect(Object.keys(prompt).slice(-2)).toEqual(["outputSchema", "rules"]);
+  });
+
+  it("returns the answers with the request's question, verified, placed and paged", async () => {
+    const question = "Does cracking rise with the charge rate?";
+    const stub = countingProvider({
+      pass2: JSON.stringify({
+        ...JSON.parse(PASS2_REPLY),
+        forYourQuestions: [
+          {
+            question: "the model's own wording",
+            verdict: "answered",
+            answers: [
+              { text: "Yes, in every cell.", evidence: SENT.results, sectionId: "s2" },
+              { text: "Invented.", evidence: "Cracking fell sharply once the charge rate passed a threshold value.", sectionId: "s3" },
+            ],
+            readNext: [{ sectionId: "s3", why: "The counts per cell.", kind: "answer" }, { sectionId: "s77", why: "Nowhere.", kind: "answer" }],
+          },
+        ],
+        terms: [{ term: "charge rate", definition: "How fast a cell is charged." }],
+      }),
+    });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const report = await generateDeepReport({ paper, doc: shortDoc(), provider: stub.provider, questions: [question] });
+
+    expect(report?.forYourQuestions).toEqual([
+      {
+        question,
+        verdict: "answered",
+        answers: [{ text: "Yes, in every cell.", evidence: SENT.results, evidenceWhere: "3 Results", sectionId: "s3", page: 4 }],
+        readNext: [{ sectionId: "s3", why: "The counts per cell.", kind: "answer" }],
+      },
+    ]);
+    expect(report?.terms).toEqual([{ term: "charge rate", definition: "How fast a cell is charged.", peer: true }]);
+    expect(report?.provenance.droppedClaims).toBe(2);
+    for (const line of warn.mock.calls.map((args) => args.join(" "))) expect(line).not.toContain(question);
+  });
+});
+
+describe("the question evidence has its own budget (§1g.10 a)", () => {
+  it("five questions with eight long sentences each: the evidence fits 12 000 characters by whole sentences, and the body is no shorter than without questions", async () => {
+    // 40 distinct sentences of ~330 characters, all in the paper.
+    const sentence = (q: number, i: number) =>
+      `Observation ${q}-${i} records that quillwort cell number ${q * 10 + i} cracked along its grain boundaries after charging, ` +
+      "and the crack length grew with every further cycle at the faster rate, which the authors measured under the microscope in the same warm room each week, " +
+      "always by the same two people.";
+    const doc = bigDoc("budget");
+    const all = Array.from({ length: 5 }, (_, q) => Array.from({ length: 8 }, (_, i) => sentence(q, i)));
+    doc.sections[3] = { ...doc.sections[3], text: `${all.flat().join(" ")} ${doc.sections[3].text}` };
+    const questions = ["Q1 about cracks?", "Q2 about cycles?", "Q3 about rates?", "Q4 about rooms?", "Q5 about weeks?"];
+    // A long abstract so the body is at Pass 2's edge without questions.
+    const longPaper = { ...paper, summaryIntro: PAD.repeat(180) };
+    const pass1 = JSON.stringify({
+      noveltyClaims: all[0].slice(0, 6),
+      keyResults: all[1].slice(0, 6),
+      methodHighlights: all[2].slice(0, 6),
+      priorWorkComparisons: all[3].slice(0, 6),
+    });
+    const stub = countingProvider({
+      pass1,
+      pass1q: JSON.stringify({ questionRelevant: Object.fromEntries(all.map((list, q) => [q, list.map((text) => ({ text, sectionId: "s3" }))])) }),
+    });
+    await generateDeepReport({ paper: longPaper, doc, provider: stub.provider });
+    const without = stub.last("pass2")!.prompt as { body: Record<string, Array<{ text: string }>> };
+    await generateDeepReport({ paper: longPaper, doc, provider: stub.provider, questions });
+    const withQ = stub.last("pass2")!.prompt as { body: Record<string, Array<{ text: string }>>; questionRelevant: Record<string, Array<{ text: string }>> };
+
+    const bodyChars = (body: Record<string, Array<{ text: string }>>) =>
+      ["noveltyClaims", "keyResults", "methodHighlights", "priorWorkComparisons"].reduce((sum, key) => sum + body[key].reduce((s, item) => s + item.text.length, 0), 0);
+    // The body was cut to fit even without questions — it is at the edge.
+    const signalChars = all.slice(0, 4).reduce((sum, list) => sum + list.slice(0, 6).join("").length, 0);
+    expect(bodyChars(without.body)).toBeLessThan(signalChars);
+    expect(bodyChars(withQ.body)).toBeGreaterThanOrEqual(bodyChars(without.body));
+    expect(withQ.body).toEqual(without.body);
+
+    const evidence = withQ.questionRelevant;
+    expect(JSON.stringify(evidence).length).toBeLessThanOrEqual(12_000);
+    // Whole sentences only, each the paper's, and every question keeps some.
+    const kept = Object.values(evidence).flat();
+    expect(kept.length).toBeLessThan(40);
+    for (const item of kept) expect(all.flat()).toContain(item.text);
+    // Sorted: Q1…Q5 sort as typed, so the model's 0…4 are the request's 0…4.
+    const counts = Object.keys(evidence).sort().map((key) => evidence[key].length);
+    expect(counts).toHaveLength(5);
+    expect(Math.max(...counts) - Math.min(...counts)).toBeLessThanOrEqual(1);
+    for (const key of Object.keys(evidence)) {
+      const q = Number(key);
+      expect(evidence[key].map((item) => item.text)).toEqual(all[q].slice(0, evidence[key].length));
+    }
+  });
+});
+
+describe("no Pass 1q on a short paper (§1g.10 b)", () => {
+  it("questions on a short document: Pass 1 0, Pass 1q 0, Pass 2 1; no questionRelevant; the rules say the whole paper is there", async () => {
+    const stub = countingProvider();
+    await generateDeepReport({ paper, doc: shortDoc(), provider: stub.provider, questions: ["Does cracking rise with the charge rate?"] });
+
+    expect([stub.count("pass1"), stub.count("pass1q"), stub.count("pass2")]).toEqual([0, 0, 1]);
+    const prompt = stub.last("pass2")!.prompt as { readerQuestions: string[]; rules: string[] };
+    expect(prompt).not.toHaveProperty("questionRelevant");
+    expect(prompt.readerQuestions).toEqual(["Does cracking rise with the charge rate?"]);
+    expect(prompt.rules.join("\n")).toMatch(/The whole paper is in `body`; quote from there\./);
+  });
+
+  it("a long paper keeps Pass 1q and its evidence", async () => {
+    const stub = countingProvider();
+    await generateDeepReport({ paper, doc: bigDoc("long-keeps-1q"), provider: stub.provider, questions: ["Does cracking rise with the charge rate?"] });
+
+    expect([stub.count("pass1"), stub.count("pass1q"), stub.count("pass2")]).toEqual([1, 1, 1]);
+    expect(stub.last("pass2")!.prompt).toHaveProperty("questionRelevant");
+    expect((stub.last("pass2")!.prompt.rules as string[]).join("\n")).not.toMatch(/whole paper is in/);
+  });
+});

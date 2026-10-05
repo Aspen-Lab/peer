@@ -12,7 +12,7 @@
 
 import { cleanDisplayText } from "@/lib/text/clean";
 import type { ExtractedDocument } from "./html-text";
-import type { Claim, PaperReport, PaperReportKeyResult } from "./report";
+import type { Claim, PaperReport, PaperReportKeyResult, PaperTerm, QuestionAnswers } from "./report";
 
 /**
  * Shortest quote worth trusting. Below this a match says nothing — "we show
@@ -142,6 +142,10 @@ export function evidenceSupported(quote: string, corpus: string): boolean {
 interface CorpusEntry {
   where: string;
   text: string;
+  /** P2-02: a section's id (`s<index>` when it has none) and page; absent
+   *  for the abstract and the figure captions. */
+  sectionId?: string;
+  page?: number;
 }
 
 /**
@@ -153,11 +157,16 @@ function buildCorpus(corpus: { abstract: string; doc?: ExtractedDocument }): Cor
   const entries: CorpusEntry[] = [];
   const abstract = normalizeForMatch(corpus.abstract);
   if (abstract) entries.push({ where: "abstract", text: abstract });
-  for (const section of corpus.doc?.sections ?? []) {
+  (corpus.doc?.sections ?? []).forEach((section, index) => {
     const text = normalizeForMatch(section.text);
-    if (!text) continue;
-    entries.push({ where: section.heading.trim() || section.canonical, text });
-  }
+    if (!text) return;
+    entries.push({
+      where: section.heading.trim() || section.canonical,
+      text,
+      sectionId: section.id ?? `s${index}`,
+      ...(typeof section.page === "number" ? { page: section.page } : {}),
+    });
+  });
   // 1-17: figure captions are supplied text too — `buildPass2Prompt` hands
   // the model `figureCaptions` alongside `body`, and the evidence rule says
   // "one sentence copied character-for-character from the supplied text (or
@@ -172,11 +181,35 @@ function buildCorpus(corpus: { abstract: string; doc?: ExtractedDocument }): Cor
 }
 
 function locate(evidence: string, entries: CorpusEntry[]): string | null {
+  return locateEntry(evidence, entries)?.where ?? null;
+}
+
+/**
+ * The corpus entry that holds `evidence`: the section named `preferId` first
+ * when it holds it (P2-02 — the model's own `sectionId`, kept when right),
+ * then in corpus order — the abstract, the sections, the captions — as
+ * `locate` always has.
+ */
+function locateEntry(evidence: string, entries: CorpusEntry[], preferId?: string): CorpusEntry | null {
   const quote = normalizeForMatch(evidence);
+  if (preferId) {
+    const preferred = entries.find((entry) => entry.sectionId === preferId);
+    if (preferred && supportedIn(quote, preferred.text)) return preferred;
+  }
   for (const entry of entries) {
-    if (supportedIn(quote, entry.text)) return entry.where;
+    if (supportedIn(quote, entry.text)) return entry;
   }
   return null;
+}
+
+/** Where a verified quote sits: its heading, and — in a section — the
+ *  section's id and page. Any id the model gave is replaced by this. */
+function placed(entry: CorpusEntry): { evidenceWhere: string; sectionId?: string; page?: number } {
+  return {
+    evidenceWhere: entry.where,
+    ...(entry.sectionId ? { sectionId: entry.sectionId } : {}),
+    ...(typeof entry.page === "number" ? { page: entry.page } : {}),
+  };
 }
 
 /** A document section, normalised once for matching, under its id. */
@@ -271,6 +304,56 @@ export function verifyReportEvidence(
     const kept = keepClaim(report.nextStep);
     if (kept) verified.nextStep = kept;
     else delete verified.nextStep;
+  }
+
+  // P2-02 (§1g.3): the answers to the reader's questions, held to the same
+  // standard — and the sections they point at, to the document.
+  if (report.forYourQuestions) {
+    const bodyIds = new Set(
+      (corpus.doc?.sections ?? [])
+        .map((section, index) => (section.canonical === "abstract" ? null : section.id ?? `s${index}`))
+        .filter((id): id is string => id !== null),
+    );
+    const keepAnswer = (answer: Claim): Claim | null => {
+      const entry = locateEntry(answer.evidence, entries, answer.sectionId);
+      if (!entry) {
+        dropped += 1;
+        return null;
+      }
+      return { text: answer.text, evidence: answer.evidence, ...placed(entry) };
+    };
+    verified.forYourQuestions = report.forYourQuestions.map((entry): QuestionAnswers => {
+      // "Not addressed" is one sentence on the page: it carries no answers.
+      const answers =
+        entry.verdict === "not_addressed"
+          ? []
+          : entry.answers.map(keepAnswer).filter((answer): answer is Claim => answer !== null);
+      const readNext = entry.readNext.filter((item) => {
+        if (bodyIds.has(item.sectionId)) return true;
+        dropped += 1;
+        return false;
+      });
+      // Nothing verifiable was found for it: the paper, as far as Peer can
+      // show, does not address the question.
+      const verdict = entry.verdict !== "not_addressed" && answers.length === 0 ? "not_addressed" : entry.verdict;
+      return { ...entry, verdict, answers, readNext };
+    });
+  }
+
+  if (report.terms) {
+    const terms = report.terms
+      .map((term): PaperTerm | null => {
+        if (term.evidence === undefined) return term;
+        const entry = locateEntry(term.evidence, entries, term.sectionId);
+        if (!entry) {
+          dropped += 1;
+          return null;
+        }
+        return { term: term.term, definition: term.definition, evidence: term.evidence, ...placed(entry) };
+      })
+      .filter((term): term is PaperTerm => term !== null);
+    if (terms.length > 0) verified.terms = terms;
+    else delete verified.terms;
   }
 
   verified.provenance = { ...report.provenance, droppedClaims: dropped };

@@ -28,6 +28,45 @@ export interface Claim {
   text: string;
   evidence: string;
   evidenceWhere?: string;
+  /** P2-02 (§1g.3): an answer's section — the id of the section that holds
+   *  its evidence, set by `verifyReportEvidence` (absent for the abstract). */
+  sectionId?: string;
+  /** P2-02: that section's page, PDFs only. */
+  page?: number;
+}
+
+/** P2-02 (§1g.3): whether THIS paper answers one of the reader's questions. */
+export type QuestionVerdict = "answered" | "partly" | "not_addressed";
+
+/** A section to read for a question: one that answers it, or `background`
+ *  needed to understand an answer though it does not mention the question. */
+export interface ReadNextItem {
+  sectionId: string;
+  why: string;
+  kind: "answer" | "background";
+}
+
+/** Pass 2's answer to one of the reader's questions. `question` is always the
+ *  reader's own text (the server's, by index — never the model's echo). */
+export interface QuestionAnswers {
+  question: string;
+  verdict: QuestionVerdict;
+  /** ≤3, each carrying a verbatim sentence of the paper. */
+  answers: Claim[];
+  /** ≤4, each naming a section of the paper's body. */
+  readNext: ReadNextItem[];
+}
+
+/** A term the reader needs for the answers: the paper's own definition
+ *  (`evidence`, verified), or Peer's words (`peer: true`, no evidence). */
+export interface PaperTerm {
+  term: string;
+  definition: string;
+  evidence?: string;
+  evidenceWhere?: string;
+  sectionId?: string;
+  page?: number;
+  peer?: true;
 }
 
 export interface PaperReportKeyResult {
@@ -136,6 +175,14 @@ export interface PaperReport {
   relationToYourWork?: { basedOn: string; items: Claim[] };
   /** Deep only: one concrete experiment or check the reader could run next. */
   nextStep?: Claim | null;
+  /**
+   * P2-02 (§1g.3): only when the reader asked questions — one entry per
+   * question, by the request's index. Absent otherwise (the
+   * `relationToYourWork` pattern: never asked, never kept).
+   */
+  forYourQuestions?: QuestionAnswers[];
+  /** P2-02: ≤8 terms the answers need; only with questions. */
+  terms?: PaperTerm[];
   provenance: PaperReportProvenance;
   /** True when no model produced this report; the page shows no model layer. */
   noLlm?: boolean;
@@ -188,6 +235,15 @@ export const REPORT_CAPS = {
   reviewSections: 8,
   reviewHeadingChars: 120,
   reviewSummaryChars: 400,
+  // P2-02 (§1g.3, D7): the answers to the reader's questions.
+  questions: 5,
+  answers: 3,
+  answerChars: 360,
+  readNext: 4,
+  whyChars: 160,
+  terms: 8,
+  termChars: 60,
+  definitionChars: 160,
 } as const;
 
 /**
@@ -377,6 +433,88 @@ export function withoutFigures(report: PaperReport): PaperReport {
   };
 }
 
+// ── The answers to the reader's questions (P2-02, §1g.3) ───────────────
+
+const VERDICTS: readonly QuestionVerdict[] = ["answered", "partly", "not_addressed"];
+const READ_NEXT_KINDS: readonly ReadNextItem["kind"][] = ["answer", "background"];
+
+/** A section id as the prompt gave it (`s3`, or an extractor's own). */
+function sectionIdOf(value: unknown): string | undefined {
+  return typeof value === "string" && /^[\w.:-]{1,60}$/.test(value.trim()) ? value.trim() : undefined;
+}
+
+function answerClaims(value: unknown): Claim[] {
+  if (!Array.isArray(value)) return [];
+  const out: Claim[] = [];
+  for (const item of value) {
+    const c = claim(item, REPORT_CAPS.answerChars);
+    if (!c) continue;
+    const sectionId = isRecord(item) ? sectionIdOf(item.sectionId) : undefined;
+    out.push({ ...c, ...(sectionId ? { sectionId } : {}) });
+    if (out.length >= REPORT_CAPS.answers) break;
+  }
+  return out;
+}
+
+function readNextItems(value: unknown): ReadNextItem[] {
+  if (!Array.isArray(value)) return [];
+  const out: ReadNextItem[] = [];
+  for (const item of value) {
+    if (!isRecord(item)) continue;
+    const sectionId = sectionIdOf(item.sectionId);
+    const why = text(item.why, REPORT_CAPS.whyChars);
+    const kind = item.kind as ReadNextItem["kind"];
+    if (!sectionId || !why || !READ_NEXT_KINDS.includes(kind)) continue;
+    out.push({ sectionId, why, kind });
+    if (out.length >= REPORT_CAPS.readNext) break;
+  }
+  return out;
+}
+
+/**
+ * One entry per question of the request, by index: the model's i-th entry
+ * answers the request's i-th question, and its `question` is overwritten with
+ * the request's own text. Entries past the request's count are dropped; an
+ * entry with a verdict the schema does not name is dropped (the question then
+ * has no entry — nothing is said for it rather than a verdict invented).
+ */
+function questionAnswers(value: unknown, questions: readonly string[]): QuestionAnswers[] {
+  if (!Array.isArray(value)) return [];
+  const out: QuestionAnswers[] = [];
+  const count = Math.min(value.length, questions.length, REPORT_CAPS.questions);
+  for (let i = 0; i < count; i += 1) {
+    const item = value[i];
+    if (!isRecord(item)) continue;
+    const verdict = item.verdict as QuestionVerdict;
+    if (!VERDICTS.includes(verdict)) continue;
+    out.push({
+      question: questions[i],
+      verdict,
+      answers: answerClaims(item.answers),
+      readNext: readNextItems(item.readNext),
+    });
+  }
+  return out;
+}
+
+/** ≤8 terms. One with an `evidence` sentence is the paper's definition (the
+ *  verifier holds it to that); one without is Peer's words, and says so. */
+function paperTerms(value: unknown): PaperTerm[] {
+  if (!Array.isArray(value)) return [];
+  const out: PaperTerm[] = [];
+  for (const item of value) {
+    if (!isRecord(item)) continue;
+    const term = text(item.term, REPORT_CAPS.termChars);
+    const definition = text(item.definition, REPORT_CAPS.definitionChars);
+    if (!term || !definition) continue;
+    const evidence = text(item.evidence, REPORT_CAPS.evidenceChars);
+    const sectionId = sectionIdOf(item.sectionId);
+    out.push(evidence ? { term, definition, evidence, ...(sectionId ? { sectionId } : {}) } : { term, definition, peer: true });
+    if (out.length >= REPORT_CAPS.terms) break;
+  }
+  return out;
+}
+
 const DEPTHS: readonly PaperReportDepth[] = ["deep", "abstract", "fallback"];
 const BASES: readonly PaperReportBasis[] = ["model-abstract", "model-fulltext"];
 
@@ -391,8 +529,16 @@ const BASES: readonly PaperReportBasis[] = ["model-abstract", "model-fulltext"];
  * `generateDeepReport` know what the model read); the sanitizer only carries
  * a valid one through, and otherwise marks the abstract basis with zero drops
  * so the shape is complete for `verifyReportEvidence` to count into.
+ *
+ * P2-02 (§1g.3): `forYourQuestions` and `terms` are kept only when the
+ * request carried `questions` — the model was asked for them then and only
+ * then — with each entry's `question` the request's own text by index. With
+ * no questions both are dropped, so such a report is exactly what it was.
  */
-export function sanitizePaperReport(raw: unknown): PaperReport {
+export function sanitizePaperReport(
+  raw: unknown,
+  options: { questions?: readonly string[] } = {},
+): PaperReport {
   const r = isRecord(raw) ? raw : {};
   const proposes = isRecord(r.whatItProposes) ? r.whatItProposes : {};
   const results = isRecord(r.resultsAndSignificance) ? r.resultsAndSignificance : {};
@@ -471,6 +617,14 @@ export function sanitizePaperReport(raw: unknown): PaperReport {
   }
   if (nextStep) report.nextStep = nextStep;
   else if (r.nextStep === null) report.nextStep = null;
+
+  const questions = options.questions ?? [];
+  if (questions.length > 0) {
+    const answered = questionAnswers(r.forYourQuestions, questions);
+    if (answered.length > 0) report.forYourQuestions = answered;
+    const terms = paperTerms(r.terms);
+    if (terms.length > 0) report.terms = terms;
+  }
 
   if (r.noLlm === true) report.noLlm = true;
   if (DEPTHS.includes(r.depth as PaperReportDepth)) report.depth = r.depth as PaperReportDepth;
