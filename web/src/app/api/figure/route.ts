@@ -7,7 +7,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { extractFigure } from "@/lib/figures/extract";
 import { requireEntitledAiRequest } from "@/lib/security/ai-request";
-import { bareUploadId } from "@/lib/papers/upload-store";
+import { bareUploadId, claimsUploadId } from "@/lib/papers/upload-store";
 import { ownedUpload, PRIVATE_UPLOAD_HEADERS } from "@/lib/papers/upload-access";
 
 export const dynamic = "force-dynamic";
@@ -25,7 +25,10 @@ export async function GET(req: NextRequest) {
   if (!id) {
     return NextResponse.json({ error: "id required" }, { status: 400 });
   }
-  if (id.startsWith("upload:")) {
+  // P0-08 (§1e.8): any spelling of the prefix is a claim; only the canonical
+  // id of an upload the caller owns gets past it.
+  const privateUpload = claimsUploadId(id);
+  if (privateUpload) {
     const hash = bareUploadId(id);
     if (!hash || !(await ownedUpload(hash))) return NextResponse.json({ error: "Upload not found." }, { status: 404, headers: PRIVATE_UPLOAD_HEADERS });
   }
@@ -55,14 +58,14 @@ export async function GET(req: NextRequest) {
     // holding one is the proof a check ran.
     ctx: { entitlement: gate.entitlement, byok: false },
   });
-  const cacheControl = id.startsWith("upload:") ? "private, no-store" : result.imageUrl
+  const cacheControl = privateUpload ? "private, no-store" : result.imageUrl
     ? "public, s-maxage=86400, stale-while-revalidate=604800"
     : "no-store";
 
   return NextResponse.json(result, {
     headers: {
       "Cache-Control": cacheControl,
-      ...(id.startsWith("upload:") ? PRIVATE_UPLOAD_HEADERS : {}),
+      ...(privateUpload ? PRIVATE_UPLOAD_HEADERS : {}),
     },
   });
 }

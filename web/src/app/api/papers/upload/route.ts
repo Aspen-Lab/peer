@@ -21,6 +21,7 @@ import {
   attachedUploadHash,
   deleteUpload,
   privateUploadHash,
+  claimsUploadId,
   readUploadMeta,
   purgeExpiredUploads,
   listUploadMeta,
@@ -187,7 +188,7 @@ export async function POST(req: Request) {
   if (targetValue !== null) {
     try {
       target = JSON.parse(String(targetValue));
-      if (!target || typeof target.id !== "string" || target.id.length > 200 || !target.id.trim() || target.id.startsWith("upload:") ||
+      if (!target || typeof target.id !== "string" || target.id.length > 200 || !target.id.trim() || claimsUploadId(target.id) ||
           typeof target.title !== "string" || !target.title.trim() || target.title.length > 1000 ||
           (target.doi !== undefined && typeof target.doi !== "string")) throw new Error("invalid");
     } catch { return NextResponse.json({ error: "Invalid paper to supplement." }, { status: 400 }); }

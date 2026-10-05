@@ -146,6 +146,23 @@ describe("POST /api/papers/upload", () => {
     expect(mocks.writeUploadMeta).toHaveBeenCalledWith(body.id.slice(7), expect.objectContaining({ ownerKey: "test-owner", rightsVersion: "2026-09-19", paperIds: ["openalex:W123"] }));
   });
 
+  // P0-08 (§1e.8): an attachment target that claims to be an upload is
+  // refused in any spelling — the check used `startsWith("upload:")`, so
+  // `UPLOAD:<hash16>` was accepted as an ordinary paper to attach to.
+  it("refuses an attachment target that claims to be an upload, in any spelling", async () => {
+    for (const id of ["upload:0123456789abcdef", "UPLOAD:0123456789abcdef", "Upload:0123456789abcdef", " upload:0123456789abcdef"]) {
+      const form = new FormData(); form.set("file", pdfFile(pdfBytes()));
+      form.set("rightsVersion", "2026-09-19");
+      form.set("targetPaper", JSON.stringify({ id, title: "Solid electrolytes for lithium metal batteries" }));
+      const res = await POST(new Request("http://localhost/api/papers/upload", { method: "POST", headers: SAME_ORIGIN_HEADERS, body: form }));
+      expect(res.status).toBe(400);
+      expect(await res.json()).toEqual({ error: "Invalid paper to supplement." });
+    }
+    expect(mocks.extractPdfTextFromPath).not.toHaveBeenCalled();
+    expect(mocks.writeUploadPdfIfAbsent).not.toHaveBeenCalled();
+    expect(mocks.attachUpload).not.toHaveBeenCalled();
+  });
+
   // 9-31 (A9-09): a partial-but-real title overlap (the "confirm" band, 0.35
   // <= overlap < 0.6) neither binds silently nor refuses outright — it asks
   // the client to confirm, and only writes anything once the client

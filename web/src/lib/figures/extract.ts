@@ -3,7 +3,7 @@ import { matchFigureSemantically } from "./semantic-match";
 import type { FigureMatchContext } from "./match-context";
 import { matchFigureVisually } from "./vision-match";
 import { classifyHardAccessStatus } from "@/lib/papers/paywall-status";
-import { bareUploadId, pdfPath } from "@/lib/papers/upload-store";
+import { bareUploadId, claimsUploadId, pdfPath } from "@/lib/papers/upload-store";
 import { ownedUpload } from "@/lib/papers/upload-access";
 
 const FETCH_TIMEOUT_MS = 7_000;
@@ -1408,7 +1408,9 @@ async function buildCandidatePool(input: FigureSourceInput): Promise<CachedPool>
 }
 
 async function getCandidatePool(input: FigureSourceInput): Promise<CachedPool> {
-  if (input.itemId.startsWith("upload:")) {
+  // P0-08 (§1e.8): any spelling of the prefix is a claim, refused unless it
+  // is the canonical id of an upload the caller owns — never a public pool.
+  if (claimsUploadId(input.itemId)) {
     const hash = bareUploadId(input.itemId);
     if (!hash || !(await ownedUpload(hash))) throw new Error("Private upload unavailable");
     return buildCandidatePool(input);
@@ -1541,7 +1543,7 @@ export async function extractFigure(input: ExtractInput): Promise<FigureResult> 
       input.ctx,
       query,
       paperTitle,
-      !input.itemId.startsWith("upload:"),
+      !claimsUploadId(input.itemId),
     );
     if (selection.status === "found") {
       return candidateResult(selection);
@@ -1569,7 +1571,7 @@ export async function extractFigure(input: ExtractInput): Promise<FigureResult> 
   // candidate-pool path (same URL, same guard) had already rejected, which
   // would make the honesty guard inconsistent depending on which code path
   // happened to run.
-  if (!input.itemId.startsWith("upload:") && !query?.trim() && input.url) {
+  if (!claimsUploadId(input.itemId) && !query?.trim() && input.url) {
     // 5-06: compute this once per pool, then write the outcome back onto the
     // exact `pool` object `getCandidatePool` returned (the same reference
     // stored in `candidatePoolCache`) — a later query-less call for the same

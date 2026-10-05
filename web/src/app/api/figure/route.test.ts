@@ -99,6 +99,23 @@ describe("GET /api/figure", () => {
     expect(outgoing).toEqual([]);
   });
 
+  // P0-08 (§1e.8): only the canonical `upload:<hash16>` is an upload id. A
+  // malformed claim (`UPLOAD:<hash16>`) skipped the route's owner check,
+  // which tested `startsWith("upload:")`, and was served as a public id with
+  // a public cache header; it is not found now, before any work.
+  it("answers a malformed upload claim 404, privately, before any lookup or fetch", async () => {
+    mocks.getUser.mockResolvedValue(signedIn("reader-1"));
+
+    for (const id of ["UPLOAD:0123456789abcdef", "Upload:0123456789abcdef", "upload:0123456789ABCDEF"]) {
+      const response = await GET(request({ id, url: "https://example.org/p" }));
+      expect(response.status).toBe(404);
+      expect(await response.json()).toEqual({ error: "Upload not found." });
+      expect(response.headers.get("Cache-Control")).toBe("private, no-store");
+    }
+    expect(mocks.getUser).not.toHaveBeenCalled();
+    expect(outgoing).toEqual([]);
+  });
+
   it("serves a signed-in reader without making a model call", async () => {
     // The degraded figure path is a real answer, not an error: with no provider
     // available the matchers return null and the deterministic extractor decides
