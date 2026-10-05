@@ -106,9 +106,10 @@ export type ReadingRole = "setup" | "method" | "evidence" | "interpretation" | "
 export interface ReadingMapParagraph {
   /** The paragraph's index in the body section — `ReadingSection.paragraphs[index]`. */
   index: number;
-  /** The paragraph's first sentence of 40+ characters that is not boilerplate,
-   *  cut at a word boundary to ≤160 characters — always a verbatim substring
-   *  of the paragraph — or null when it has none. */
+  /** The first non-boilerplate sentence and, while needed, its following
+   *  sentences. It is cut at a word boundary to ≤160 characters only when
+   *  that first sentence itself is too long; always a verbatim paragraph
+   *  substring, or null when no non-boilerplate sentence exists. */
   opening: string | null;
 }
 
@@ -158,28 +159,64 @@ function wordCount(paragraph: string): number {
   return paragraph.split(/\s+/).length;
 }
 
+/** Escape a sentence for a whitespace-flexible source lookup. `splitSentences`
+ * trims sentences (and can join a lower-case continuation), so this locates
+ * the exact source span without rebuilding it or losing its separators. */
+function sentenceSourceSpan(paragraph: string, sentence: string, from: number): [number, number] | null {
+  const source = sentence
+    .split(/\s+/)
+    .map((piece) => piece.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    .join("\\s+");
+  const match = new RegExp(source).exec(paragraph.slice(from));
+  if (!match || match.index === undefined) return null;
+  const start = from + match.index;
+  return [start, start + match[0].length];
+}
+
+/** The first sentence may exceed the opening cap; keep a whole final word
+ * when one fits, as before, while returning the original source slice. */
+function cutFirstSentence(paragraph: string, start: number, end: number): string {
+  if (end - start <= OPENING_MAX) return paragraph.slice(start, end);
+  const maximum = start + OPENING_MAX;
+  for (let index = maximum; index > start; index--) {
+    if (/\s/.test(paragraph[index])) return paragraph.slice(start, index);
+  }
+  // A single unbroken run (for example, a URL) has no word boundary before
+  // the cap. A hard cut is still an exact paragraph substring.
+  return paragraph.slice(start, maximum);
+}
+
 /**
- * §1f.4: the paragraph's first sentence of ≥40 characters that is not
- * boilerplate. Longer than 160 characters, it is cut at the last whitespace
- * at or before character 160 and trimmed — nothing appended, so it stays a
- * verbatim substring (the page may draw the ellipsis).
+ * §1f.21 (P1-10): start with the paragraph's first non-boilerplate sentence,
+ * then extend through following complete sentences only until it reaches 40
+ * characters or the next sentence would exceed 160. The span comes directly
+ * from the paragraph: separators are preserved and sentence strings are never
+ * joined. A later long sentence therefore cannot replace a short opening.
  */
 export function openingOf(paragraph: string): string | null {
-  const sentence = splitSentences(paragraph).find(
-    (candidate) => candidate.length >= OPENING_MIN && !isBoilerplate(candidate),
-  );
-  if (!sentence) return null;
-  if (sentence.length <= OPENING_MAX) return sentence;
-  let cut = -1;
-  for (let i = OPENING_MAX; i > 0; i--) {
-    if (/\s/.test(sentence[i])) {
-      cut = i;
-      break;
+  let cursor = 0;
+  let start: number | null = null;
+  let end: number | null = null;
+
+  for (const sentence of splitSentences(paragraph)) {
+    const span = sentenceSourceSpan(paragraph, sentence, cursor);
+    if (!span) return null;
+    const [sentenceStart, sentenceEnd] = span;
+    cursor = sentenceEnd;
+
+    if (start === null) {
+      if (isBoilerplate(sentence)) continue;
+      start = sentenceStart;
+      end = sentenceEnd;
+      if (end - start > OPENING_MAX) return cutFirstSentence(paragraph, start, end);
+      continue;
     }
+
+    if (end! - start >= OPENING_MIN || sentenceEnd - start > OPENING_MAX) break;
+    end = sentenceEnd;
   }
-  // One unbroken run of 160+ characters (a URL, a formula): a hard cut, still
-  // a substring.
-  return (cut > 0 ? sentence.slice(0, cut) : sentence.slice(0, OPENING_MAX)).trim();
+
+  return start === null || end === null ? null : paragraph.slice(start, end);
 }
 
 /** The map of sections already split for the body (`readableSections`) —

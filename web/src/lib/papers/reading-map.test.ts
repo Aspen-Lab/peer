@@ -4,7 +4,8 @@ import { blockMarker } from "@/lib/text/math";
 import { withSectionIds, type DraftSection, type ExtractedDocument } from "./html-text";
 import type { FullTextResult } from "./full-text";
 import { buildReading } from "./reading";
-import { buildReadingMap, gistRoute, routeByQuestions, specificTerms, type ReadingMap } from "./reading-map";
+import { buildReadingMap, gistRoute, openingOf, routeByQuestions, specificTerms, type ReadingMap } from "./reading-map";
+import { isBoilerplate, splitSentences } from "./skim";
 import arxivHtmlDocJson from "./__fixtures__/arxiv-2609.02697.doc.json";
 import arxivPdfDocJson from "./__fixtures__/arxiv-2609.02113.doc.json";
 import zenodoDocJson from "./__fixtures__/zenodo-W7208807247.doc.json";
@@ -64,19 +65,33 @@ describe("buildReadingMap — the committed fixtures", () => {
     expect(map.totalMinutes).toBe(Math.ceil(total / 180));
   });
 
-  it.each(FIXTURES)("%s: every opening is a verbatim piece of its paragraph, 40–160 characters, or null", (_name, doc) => {
+  it.each(FIXTURES)("%s: each paragraph has one opening line, starting at its first non-boilerplate sentence", (_name, doc) => {
     const map = buildReadingMap(doc);
     const body = buildReading(paper, okFullText(doc)).body;
     let openings = 0;
 
     map.sections.forEach((row, k) => {
+      expect(row.paragraphs).toHaveLength(body[k].paragraphs.length);
       for (const line of row.paragraphs) {
-        if (line.opening === null) continue;
+        const paragraph = body[k].paragraphs[line.index];
+        const firstNonBoilerplate = splitSentences(paragraph).find((sentence) => !isBoilerplate(sentence));
+        const hasNonBoilerplateSentence = firstNonBoilerplate !== undefined;
+        if (line.opening === null) {
+          expect(hasNonBoilerplateSentence).toBe(false);
+          continue;
+        }
         openings += 1;
-        expect(body[k].paragraphs[line.index].includes(line.opening)).toBe(true);
+        expect(hasNonBoilerplateSentence).toBe(true);
+        // P1-10: an opening is a paragraph prefix from its first kept sentence,
+        // never a later pick. Boilerplate before that sentence is deliberately
+        // not attributed to the paragraph's central idea.
+        const firstKeptOffset = paragraph.indexOf(firstNonBoilerplate!);
+        expect(paragraph.includes(line.opening)).toBe(true);
+        expect(paragraph.slice(firstKeptOffset).startsWith(line.opening)).toBe(true);
+        if (!isBoilerplate(splitSentences(paragraph)[0])) {
+          expect(paragraph.startsWith(line.opening)).toBe(true);
+        }
         expect(line.opening.length).toBeLessThanOrEqual(160);
-        expect(line.opening.length).toBeGreaterThanOrEqual(40);
-        expect(line.opening).toBe(line.opening.trim());
       }
     });
     expect(openings).toBeGreaterThan(0);
@@ -122,21 +137,33 @@ function doc(sections: Array<Partial<DraftSection> & { text: string }>, extra: P
 /** `n` words of filler, as one paragraph. */
 const filler = (n: number) => Array.from({ length: n }, (_, i) => `word${i}`).join(" ");
 
-describe("buildReadingMap — openings (§1f.4)", () => {
+describe("buildReadingMap — openings (§1f.21, P1-10)", () => {
   it("skips a boilerplate first sentence and takes the next one", () => {
-    const map = buildReadingMap(doc([{ canonical: "introduction", text:
+    const paragraph =
       "Protein structure prediction has attracted enormous attention across many fields. " +
-      "We show that a graph embedding recovers the fold from sequence alone in most cases." }]));
+      "We show that a graph embedding recovers the fold from sequence alone in most cases.";
+    const map = buildReadingMap(doc([{ canonical: "introduction", text: paragraph }]));
+    const opening = map.sections[0].paragraphs[0].opening;
 
-    expect(map.sections[0].paragraphs[0].opening).toBe(
+    expect(opening).toBe(
       "We show that a graph embedding recovers the fold from sequence alone in most cases.",
     );
+    expect(paragraph.startsWith(opening!)).toBe(false);
+    expect(paragraph.slice(paragraph.indexOf(opening!))).toBe(opening);
   });
 
-  it("is null when no sentence is long enough and not boilerplate", () => {
-    const map = buildReadingMap(doc([{ text: "Short one. Another short one. In recent years this field has grown faster than anyone expected it would." }]));
+  it("grows from short first sentences into a paragraph prefix", () => {
+    const paragraph = "Short one. Another short one. This third sentence gives the paragraph enough substance to stand on its own.";
+    const map = buildReadingMap(doc([{ text: paragraph }]));
 
-    expect(map.sections[0].paragraphs).toEqual([{ index: 0, opening: null }]);
+    expect(map.sections[0].paragraphs).toEqual([{ index: 0, opening: paragraph }]);
+    expect(paragraph.startsWith(map.sections[0].paragraphs[0].opening ?? "")).toBe(true);
+  });
+
+  it("keeps the paragraph's original separators while it grows", () => {
+    const paragraph = "Short one.\tAnother short one.\nThis sentence completes the opening without changing its separators.";
+
+    expect(openingOf(paragraph)).toBe(paragraph);
   });
 
   it("cuts a sentence longer than 160 characters at the last space before 160, without adding anything", () => {
@@ -155,6 +182,32 @@ describe("buildReadingMap — openings (§1f.4)", () => {
     expect(paragraph[opening.length]).toBe(" ");
     expect(opening).toBe(opening.trim());
     expect(opening.endsWith("…")).toBe(false);
+  });
+
+  it("keeps a short first sentence when the following long sentence cannot fit", () => {
+    const first = "Brief lead.";
+    const long = `This later sentence ${"keeps going ".repeat(20)}beyond the opening limit.`;
+    const paragraph = `${first} ${long}`;
+
+    expect(buildReadingMap(doc([{ text: paragraph }])).sections[0].paragraphs[0].opening).toBe(first);
+  });
+
+  it("grows only through the 160-character boundary and never adds the following sentence", () => {
+    const first = "Short opening explains context.";
+    const second = `${"x".repeat(160 - first.length - 2)}.`;
+    const paragraph = `${first} ${second} A later sentence must stay out.`;
+    const expected = `${first} ${second}`;
+
+    expect(expected).toHaveLength(160);
+    expect(buildReadingMap(doc([{ text: paragraph }])).sections[0].paragraphs[0].opening).toBe(expected);
+  });
+
+  it("returns null only when every sentence is boilerplate", () => {
+    const paragraph =
+      "In recent years this field has grown rapidly across many disciplines. " +
+      "Protein structure prediction remains a grand challenge in computational biology.";
+
+    expect(openingOf(paragraph)).toBeNull();
   });
 
   it("keeps the sentence's own punctuation, untouched", () => {
