@@ -74,6 +74,12 @@ GATE BASELINE:    manager, ed189e1, 16:2xZ–16:3xZ: lint 0 errors / 151 warning
 - Every A checkpoint reports each §3d item in scope as PASS / FAIL / BLOCKED with the reproduction, never a fix.
 - The draft PR for this branch stays a draft until the user says otherwise. Nobody merges.
 
+### §1d. BINDING — P0 scope rulings on C's policy questions — 2026-10-05T16:3xZ
+
+1. `ExtractedSection.id` is required (§3c). C may edit test fixtures in `app/api/papers/upload/route.test.ts`, `lib/papers/deep-report.test.ts`, `evidence.test.ts`, `reading.test.ts`, `lib/preferences/upload-concepts.test.ts` for section literals only (`id: "sN"` in document order), with no assertion changes and no deleted tests; each file and its literal count is listed in the checkpoint.
+2. P0-02 includes the one-line sidecar removal in `app/api/admin/uploads/block/route.ts`, with a test asserting a blocked upload loses its sidecar.
+3. P0-03 includes the `pdfUnreadableHere` regex and comment in `lib/papers/reading.ts` (the `no-python` / `no-extractor` reasons disappear); the `pdf-empty:` detection stays; tests that asserted the old wording are rewritten to the new contract.
+
 ## §2. Roles
 
 ### A — reviewer (read-only on production code)
