@@ -16,7 +16,7 @@
 import type { Paper } from "@/types";
 import type { ExtractedFigureCaption } from "./html-text";
 import { parseBlockMarker } from "@/lib/text/math";
-import type { ExtractedDocument } from "./html-text";
+import type { ExtractedDocument, ExtractedEquation, ExtractedSection } from "./html-text";
 import type { FullTextResult } from "./full-text";
 import type { SourceLink } from "./source-links";
 import { claimsUploadId } from "./upload-id";
@@ -564,53 +564,80 @@ function pickSource(
  * reading arrives. `now` exists so tests can pin `builtAt`.
  */
 /**
- * The document, split into paragraphs for the page.
+ * One section's text, split into the paragraphs the page renders.
+ *
+ * A marker paragraph is where a display equation stood: the equation goes
+ * after the paragraph before it, and the marker goes away. A step number on
+ * its own line — LaTeXML renders an algorithm listing one cell per line, so
+ * "1:" and "2:" arrive as paragraphs of their own — and anything with no
+ * letter in it is debris, and goes too. Each paragraph is whitespace-
+ * normalised.
+ *
+ * P1-01 (§1f.1): exported so the reading map enumerates exactly these
+ * paragraphs, with exactly these indices — a map line ↔
+ * `ReadingSection.paragraphs[index]`.
+ */
+export function sectionParagraphs(
+  section: Pick<ExtractedSection, "text">,
+  lifted: readonly ExtractedEquation[],
+): { paragraphs: string[]; equations: ReadingEquation[] } {
+  const paragraphs: string[] = [];
+  const equations: ReadingEquation[] = [];
+  for (const raw of section.text.split(/\n{2,}/)) {
+    const para = raw.replace(/\s+/g, " ").trim();
+    if (!para) continue;
+    const k = parseBlockMarker(para);
+    if (k !== null) {
+      const eq = lifted[k];
+      if (eq && (eq.latex || eq.text)) {
+        equations.push({
+          ...(eq.latex ? { latex: eq.latex } : {}),
+          ...(eq.text ? { text: eq.text } : {}),
+          ...(eq.number ? { number: eq.number } : {}),
+          after: paragraphs.length - 1,
+        });
+      }
+      continue;
+    }
+    if (/^\d+[:.]?$/.test(para) || !/\p{L}/u.test(para)) continue;
+    paragraphs.push(para);
+  }
+  return { paragraphs, equations };
+}
+
+/**
+ * The sections the page renders, in order, each with its paragraphs.
  *
  * The abstract is dropped: the page sets it from the record, sentence by
  * sentence, with the ink on it, and the extractor's copy is the same text
  * without the marks. A section with nothing under its heading is dropped too
  * — an extractor artefact, not a part of the paper.
+ *
+ * P1-01 (§1f.1): exported so the reading map and the body are one list —
+ * map row k ↔ body section k.
  */
-function readableBody(doc: ExtractedDocument): ReadingSection[] {
-  const out: ReadingSection[] = [];
+export function readableSections(
+  doc: ExtractedDocument,
+): Array<{ section: ExtractedSection; paragraphs: string[]; equations: ReadingEquation[] }> {
+  const out: Array<{ section: ExtractedSection; paragraphs: string[]; equations: ReadingEquation[] }> = [];
   const lifted = doc.equations ?? [];
   for (const section of doc.sections) {
     if (section.canonical === "abstract") continue;
-    const paragraphs: string[] = [];
-    const equations: ReadingEquation[] = [];
-    for (const raw of section.text.split(/\n{2,}/)) {
-      const para = raw.replace(/\s+/g, " ").trim();
-      if (!para) continue;
-      // A marker paragraph is where a display equation stood: the equation
-      // goes after the paragraph before it, and the marker goes away.
-      const k = parseBlockMarker(para);
-      if (k !== null) {
-        const eq = lifted[k];
-        if (eq && (eq.latex || eq.text)) {
-          equations.push({
-            ...(eq.latex ? { latex: eq.latex } : {}),
-            ...(eq.text ? { text: eq.text } : {}),
-            ...(eq.number ? { number: eq.number } : {}),
-            after: paragraphs.length - 1,
-          });
-        }
-        continue;
-      }
-      // A step number on its own line: LaTeXML renders an algorithm listing
-      // one cell per line, so "1:" and "2:" arrive as paragraphs of their
-      // own. Anything with no letter in it is the same kind of debris.
-      if (/^\d+[:.]?$/.test(para) || !/\p{L}/u.test(para)) continue;
-      paragraphs.push(para);
-    }
+    const { paragraphs, equations } = sectionParagraphs(section, lifted);
     if (paragraphs.length === 0 && equations.length === 0) continue;
-    out.push({
-      heading: section.heading,
-      canonical: section.canonical,
-      paragraphs,
-      ...(equations.length > 0 ? { equations } : {}),
-    });
+    out.push({ section, paragraphs, equations });
   }
   return out;
+}
+
+/** The document, split into paragraphs for the page. */
+function readableBody(doc: ExtractedDocument): ReadingSection[] {
+  return readableSections(doc).map(({ section, paragraphs, equations }) => ({
+    heading: section.heading,
+    canonical: section.canonical,
+    paragraphs,
+    ...(equations.length > 0 ? { equations } : {}),
+  }));
 }
 
 /** The route that serves a PDF page's embedded picture. Relative: the page
