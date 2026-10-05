@@ -40,13 +40,13 @@ Container note: `npm ci` in `web/` first failed with E403 because `package-lock.
 ## §1. CURRENT STATE
 
 ```text
-ROUND:            0 — campaign set up by the manager 2026-10-05. Spec approved by the user; ledger built; no code item started.
-BRANCH:           deep-report-reading-helper-enhancement (created from claude/sleepy-sagan-oo1aon @ 539ae8c, which carries the blueprint commits)
-HELD BY:          manager (Fable, cloud session)
-CURRENT ITEM:     P0-01 (next to assign to C)
-NEXT TURN:        C implements P0-01, P0-02, P0-03 in order (one commit + push each), writes its checkpoint, returns; then fresh A measures P0 against §3d items 1–3 and 16–17.
+ROUND:            1 — P0 foundation. C (Opus) assigned 2026-10-05T16:4xZ for P0-01 → P0-02 → P0-03, one commit + push each.
+BRANCH:           deep-report-reading-helper-enhancement (created from claude/sleepy-sagan-oo1aon @ 539ae8c, which carries the blueprint commits); head at assignment 74e81ae
+HELD BY:          C (Opus subagent) on web/src/lib/papers/*, upload route, reader hooks — manager (Fable) holds this file
+CURRENT ITEM:     P0-01 (IN_PROGRESS)
+NEXT TURN:        when C returns: manager verifies each checkpoint (re-read files, re-run gates), updates §5, then assigns fresh A (Opus) to measure P0 against §3d items 1–3 and 16–17.
 STOPPED BECAUSE:  — (running)
-GATE BASELINE:    not yet measured on this branch — C's first action is to record it (§3a) before any edit.
+GATE BASELINE:    manager's independent run on 74e81ae started 16:4xZ (lint, tsc, vitest); C records its own before its first edit.
 ```
 
 ### §1a. BINDING — user decisions 2026-10-05 (from the chat replies on the blueprint)
