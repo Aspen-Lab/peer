@@ -1,6 +1,26 @@
 import { existsSync } from "node:fs";
 import { rm, writeFile } from "node:fs/promises";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
+
+// P1-03b (§1f.16): this file writes its fixtures straight into the upload
+// directory, which a fresh checkout does not have, so it passed or failed
+// depending on whether another test file had created the shared one first.
+// It gets its own directory, set before `upload-store` reads it — the same
+// shape `lib/papers/full-text.test.ts` uses — and removes it afterwards, so
+// it neither depends on nor writes into `.local-data/uploads`.
+const uploadDir = await vi.hoisted(async () => {
+  const { mkdtempSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const dir = mkdtempSync(join(tmpdir(), "peer-block-route-test-"));
+  process.env.PEER_PRIVATE_UPLOAD_DIR = dir;
+  return dir;
+});
+
+afterAll(async () => {
+  delete process.env.PEER_PRIVATE_UPLOAD_DIR;
+  await rm(uploadDir, { recursive: true, force: true });
+});
 import { docPath, metaPath, pdfPath, readUploadDoc, readUploadMeta, sha16, uploadDocKey, writeUploadDoc, writeUploadMeta } from "@/lib/papers/upload-store";
 import { ownedUpload } from "@/lib/papers/upload-access";
 
