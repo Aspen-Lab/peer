@@ -84,7 +84,7 @@ import { QuestionField, focusFirstEmptyQuestion } from "@/components/reader/ques
 import { ReadingMapView, readingRoute } from "@/components/reader/reading-map";
 import { SectionLinks } from "@/components/reader/evidence-quote";
 import { settledQuestions, useReadingQuestionsHydrated, useReadingQuestionsStore } from "@/store/reading-questions";
-import { phrasesFromText } from "@/lib/feed/profile-compiler";
+import { exampleQuestions } from "@/lib/reader/question-examples";
 import { useModelReport } from "@/components/reader/use-model-report";
 import { usePrivateSupplement } from "@/components/reader/use-private-supplement";
 import { PrivatePdfStatus } from "@/components/reader/private-pdf-status";
@@ -740,12 +740,14 @@ function Reader({
     return allocatePlateTerms(pool, profile.researchTopics)[paper.id] ?? [];
   }, [feedPapers, nav.index, paper, profile.researchTopics]);
   const shared = useMemo(() => sharedTerms(plateTerms, projectText), [plateTerms, projectText]);
-  // P1-03 (§1f.10): the reader's challenges are offered as questions only
-  // where this paper shares terms with what the reader works on — a chip
-  // for an unrelated paper would be a question about something else.
-  const challengeChips = useMemo(
-    () => (shared.length > 0 ? phrasesFromText(profile.currentChallenges, 8) : []),
-    [shared, profile.currentChallenges],
+  // P1-09 (user decision §1a.7, §1f.20): the example tags under the
+  // question field — the reader's questions on earlier papers, and their
+  // profile asked as questions. No shared-terms gate: the profile group
+  // shows whenever the profile has something in it.
+  const askedByPaper = useReadingQuestionsStore((state) => state.byPaper);
+  const examples = useMemo(
+    () => exampleQuestions({ profile, byPaper: askedByPaper, paperId: paper.id }),
+    [profile, askedByPaper, paper.id],
   );
   // The questions are read once the stores have loaded, so the field starts
   // from what this browser kept.
@@ -1127,7 +1129,7 @@ function Reader({
           hasBody ? (
             <>
               {questionsHydrated && (
-                <QuestionField key={paper.id} paperId={paper.id} challenges={challengeChips} vague={route?.vague ?? false} />
+                <QuestionField key={paper.id} paperId={paper.id} examples={examples} vague={route?.vague ?? false} />
               )}
               {reading.map && <ReadingMapView key={`map:${paper.id}`} map={reading.map} route={route} />}
             </>

@@ -8,11 +8,15 @@
 // is the page it was. Up to five questions, one per line; Enter adds a line.
 // The chips are suggestions, shown while the field has focus or holds a
 // question, and they only ever fill a line when clicked — never by
-// themselves.
+// themselves. P1-09 (§1a.7, §1f.20): they are the reader's own — questions
+// from earlier papers, and the profile asked as questions — built by the
+// page (`lib/reader/question-examples.ts`); "Just get the gist" sits after
+// them as a reading mode of its own.
 //
-// The questions are kept in this browser (`store/reading-questions.ts`) and
-// go nowhere: the route that reads them (`lib/papers/reading-map.ts`) runs
-// on this page. The field keeps its lines in local state and writes them
+// The questions are kept in this browser (`store/reading-questions.ts`); the
+// route that reads them (`lib/papers/reading-map.ts`) runs on this page, and
+// the settled ones travel with the one deep-report request that answers
+// them (P2-03, §1g.11). The field keeps its lines in local state and writes them
 // through; it reads the store once, when it mounts (the page mounts it per
 // paper, after the stores have loaded).
 //
@@ -20,29 +24,27 @@
 // rendering it, and what its handlers do through the pure functions below.
 
 import { useEffect, useRef, useState } from "react";
-import {
-  MAX_QUESTION_CHARS,
-  MAX_QUESTIONS,
-  useReadingQuestionsStore,
-  type PaperQuestions,
-} from "@/store/reading-questions";
+import { MAX_QUESTION_CHARS, MAX_QUESTIONS, useReadingQuestionsStore } from "@/store/reading-questions";
 import { ASK, ROUTE } from "./copy";
 
 /** Past this many characters a line shows its count. */
 const COUNTER_FROM = 160;
 
-export type ChipKind = "fill" | "prefix" | "gist";
-
+/** An example tag: a click puts `text` on the next empty line. */
 export interface Chip {
   label: string;
-  kind: ChipKind;
-  /** What a click puts on the next empty line (none for the gist). */
   text: string;
 }
 
 export interface ChipGroup {
   label: string;
   chips: Chip[];
+}
+
+/** P1-09 (§1f.20): the example groups the page builds (`exampleQuestions`). */
+export interface ExampleGroupProp {
+  label: string;
+  items: readonly string[];
 }
 
 /** While the field has focus, holds a question, or the gist is chosen. */
@@ -86,37 +88,14 @@ export function fillNextLine(lines: readonly string[], text: string): { lines: s
   return { lines: copy, focus: copy.length - 1 };
 }
 
-/** The chip groups, in order: the last paper's questions, the common
- *  questions, the reader's challenges; an empty group is left out. */
-export function chipGroups({
-  paperId,
-  byPaper,
-  previousPaperId,
-  challenges,
-}: {
-  paperId: string;
-  byPaper: Readonly<Record<string, PaperQuestions>>;
-  previousPaperId: string | null;
-  challenges: readonly string[];
-}): ChipGroup[] {
-  const groups: ChipGroup[] = [];
-  const previous = previousPaperId && previousPaperId !== paperId ? byPaper[previousPaperId]?.items ?? [] : [];
-  if (previous.length > 0) {
-    groups.push({ label: ASK.groups.last, chips: previous.map((text) => ({ label: text, kind: "fill", text })) });
-  }
-  groups.push({
-    label: ASK.groups.common,
-    chips: [
-      { label: ASK.chips.method, kind: "fill", text: ASK.chips.method },
-      { label: ASK.chips.conclusions, kind: "fill", text: ASK.chips.conclusions },
-      { label: ASK.chips.differ, kind: "prefix", text: ASK.differPrefix },
-      { label: ASK.chips.gist, kind: "gist", text: "" },
-    ],
-  });
-  if (challenges.length > 0) {
-    groups.push({ label: ASK.groups.challenges, chips: challenges.map((text) => ({ label: text, kind: "fill", text })) });
-  }
-  return groups;
+/** The chip groups, in the page's order (the reader's earlier questions,
+ *  then the profile's); an empty group is left out. P1-09 (§1a.7): every
+ *  example is the reader's own — there are no generic chips — and the gist
+ *  is not among them (it is a reading mode, a control of its own). */
+export function chipGroups(examples: readonly ExampleGroupProp[]): ChipGroup[] {
+  return examples
+    .filter((group) => group.items.length > 0)
+    .map((group) => ({ label: group.label, chips: group.items.map((text) => ({ label: text, text })) }));
 }
 
 /**
@@ -178,25 +157,24 @@ export function focusFirstEmptyQuestion(): void {
 
 export function QuestionField({
   paperId,
-  challenges,
+  examples,
   vague = false,
 }: {
   paperId: string;
-  challenges: readonly string[];
+  /** P1-09 (§1f.20): the example tags, from the reader's earlier questions
+   *  and profile only. */
+  examples: readonly ExampleGroupProp[];
   /** P1-05 (§1f.6, §1f.13): every question is too vague to route — the page
    *  tints nothing and the field says what would help. */
   vague?: boolean;
 }) {
   // Read once, at mount: the page mounts this per paper, after the stores
-  // have loaded. The last paper is the one asked about before this visit.
+  // have loaded.
   const [initial] = useState(() => {
-    const state = useReadingQuestionsStore.getState();
-    const own = state.byPaper[paperId];
+    const own = useReadingQuestionsStore.getState().byPaper[paperId];
     return {
       lines: own && own.items.length > 0 ? [...own.items] : [""],
       gist: own?.gist ?? false,
-      previousPaperId: state.lastPaperId !== paperId ? state.lastPaperId : null,
-      byPaper: state.byPaper,
     };
   });
   const [lines, setLines] = useState<string[]>(initial.lines);
@@ -228,18 +206,18 @@ export function QuestionField({
     if (settlesQuestions(event)) useReadingQuestionsStore.getState().settle(paperId);
   };
 
+  // The gist is a reading mode: it changes no line and settles nothing.
+  const onGist = () => commit(lines, !gist);
+  // An example fills the next empty line and focuses it; like typing, it
+  // settles when the reader leaves that line or presses Enter in it.
   const onChip = (chip: Chip) => {
-    if (chip.kind === "gist") {
-      commit(lines, !gist);
-      return;
-    }
     const filled = fillNextLine(lines, chip.text);
     if (filled.focus < 0) return;
     pendingFocus.current = { index: filled.focus, caretAtEnd: true };
     commit(filled.lines, nextGist(gist, filled.lines));
   };
 
-  const groups = chipGroups({ paperId, byPaper: initial.byPaper, previousPaperId: initial.previousPaperId, challenges });
+  const groups = chipGroups(examples);
   const chipsShown = showChips({ focused, lines, gist });
   const full = lines.length >= MAX_QUESTIONS && lines.every((line) => line.trim() !== "");
 
@@ -330,26 +308,32 @@ export function QuestionField({
             <div key={group.label}>
               <p className="annotation text-text-faint">{group.label}</p>
               <div className="mt-1 flex flex-wrap gap-2">
-                {group.chips.map((chip) => {
-                  const selected = chip.kind === "gist" && gist;
-                  return (
-                    <button
-                      key={`${chip.kind}:${chip.label}`}
-                      type="button"
-                      onClick={() => onChip(chip)}
-                      disabled={chip.kind !== "gist" && full}
-                      {...(chip.kind === "gist" ? { "aria-pressed": selected } : {})}
-                      className={`annotation rounded-full border px-3 py-1 transition-colors disabled:opacity-50 ${
-                        selected ? "border-heading text-heading" : "border-border text-text-muted hover:text-heading"
-                      }`}
-                    >
-                      {chip.label}
-                    </button>
-                  );
-                })}
+                {group.chips.map((chip) => (
+                  <button
+                    key={chip.label}
+                    type="button"
+                    onClick={() => onChip(chip)}
+                    disabled={full}
+                    className="annotation rounded-full border border-border px-3 py-1 text-text-muted transition-colors hover:text-heading disabled:opacity-50"
+                  >
+                    {chip.label}
+                  </button>
+                ))}
               </div>
             </div>
           ))}
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={onGist}
+              aria-pressed={gist}
+              className={`annotation rounded-full border px-3 py-1 transition-colors ${
+                gist ? "border-heading text-heading" : "border-border text-text-muted hover:text-heading"
+              }`}
+            >
+              {ASK.chips.gist}
+            </button>
+          </div>
         </div>
       )}
     </section>

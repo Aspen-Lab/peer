@@ -19,6 +19,9 @@ import { QuestionField, settlesQuestions } from "./question-field";
 
 const PAPER = "openalex:W1";
 const AT = "2026-10-05T00:00:00.000Z";
+/** P1-09 (§1f.20): the page's example groups. */
+const EXAMPLE = "Does this help with dendrite growth?";
+const EXAMPLES = [{ label: ASK.fromProfile, items: [EXAMPLE] }];
 
 type Props = Record<string, unknown> & { children?: ReactNode };
 
@@ -32,7 +35,7 @@ function elements(node: ReactNode): ReactElement<Props>[] {
 }
 
 async function field() {
-  const mounted = await hookRuntime.mount(() => QuestionField({ paperId: PAPER, challenges: [] }));
+  const mounted = await hookRuntime.mount(() => QuestionField({ paperId: PAPER, examples: EXAMPLES }));
   const all = elements(mounted.value);
   const inputs = all.filter((el) => "data-ask-line" in el.props);
   const button = (label: string) => all.find((el) => el.type === "button" && (el.props["aria-label"] === label || el.props.children === label));
@@ -101,17 +104,29 @@ describe("the field settles the questions (P2-03)", () => {
     mounted.unmount();
   });
 
-  it("a chip that leaves the caret in its line settles nothing until that line's blur", async () => {
+  it("an example chip fills the next line and settles nothing until that line's blur or Enter (P1-09)", async () => {
     const { button, mounted } = await field();
-    (button(ASK.chips.differ)?.props.onClick as () => void)();
-    expect(stored().items).toEqual(["Does tungsten delay rafting?", ASK.differPrefix.trim()]);
+    (button(EXAMPLE)?.props.onClick as () => void)();
+    expect(stored().items).toEqual(["Does tungsten delay rafting?", EXAMPLE]);
     expect(stored().settled).toBeUndefined();
     mounted.unmount();
 
-    // The reader finishes the line and leaves it.
+    // The reader leaves the line the chip filled.
     const again = await field();
     (again.inputs[1].props.onBlur as () => void)();
-    expect(stored().settled).toEqual(["Does tungsten delay rafting?", ASK.differPrefix.trim()]);
+    expect(stored().settled).toEqual(["Does tungsten delay rafting?", EXAMPLE]);
     again.mounted.unmount();
+
+    // Or presses Enter in it.
+    useReadingQuestionsStore.setState({ byPaper: {}, lastPaperId: null });
+    useReadingQuestionsStore.getState().set(PAPER, ["Does tungsten delay rafting?"], false, AT);
+    const third = await field();
+    (third.button(EXAMPLE)?.props.onClick as () => void)();
+    expect(stored().settled).toBeUndefined();
+    third.mounted.unmount();
+    const fourth = await field();
+    (fourth.inputs[1].props.onKeyDown as (e: unknown) => void)({ key: "Enter", preventDefault: () => {} });
+    expect(stored().settled).toEqual(["Does tungsten delay rafting?", EXAMPLE]);
+    fourth.mounted.unmount();
   });
 });

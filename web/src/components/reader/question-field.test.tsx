@@ -26,10 +26,17 @@ import {
 // handlers call.
 
 const PAPER = "openalex:W1";
-const OTHER = "openalex:W2";
 
-function render(paperId = PAPER, challenges: string[] = []): string {
-  return renderToStaticMarkup(createElement(QuestionField, { paperId, challenges }));
+/** P1-09 (§1f.20): the example groups the page builds (`exampleQuestions`). */
+const EXAMPLES = [
+  { label: ASK.fromEarlier, items: ["Why does the anode crack?"] },
+  { label: ASK.fromProfile, items: ["Does this help with dendrite growth?", "Could I use XRD here?"] },
+];
+/** The three generic blueprint chips P1-09 removed (§1a.7). */
+const GENERIC = ["Can I use this method in my own work?", "Do the conclusions hold up?", "How does this differ from X?"];
+
+function render(paperId = PAPER, examples: typeof EXAMPLES = []): string {
+  return renderToStaticMarkup(createElement(QuestionField, { paperId, examples }));
 }
 
 describe("QuestionField — what it shows", () => {
@@ -43,10 +50,12 @@ describe("QuestionField — what it shows", () => {
     expect(html.match(/<input/g)).toHaveLength(1);
     expect(html).not.toContain("<button");
     expect(html).not.toContain(ASK.hint);
-    expect(html).not.toContain(ASK.groups.common);
+    expect(html).not.toContain(ASK.chips.gist);
+    // Examples wait for focus or a question, like every chip.
+    expect(render(PAPER, EXAMPLES)).not.toContain(ASK.fromProfile);
   });
 
-  it("with a question, shows its line with a remove control, the hint and the common chips in order", () => {
+  it("with a question, shows its line with a remove control, the hint and the gist control — and no generic chip", () => {
     useReadingQuestionsStore.setState({
       byPaper: { [PAPER]: { items: ["How does LCO degrade?"], gist: false, updatedAt: "2026-10-05T00:00:00.000Z" } },
       lastPaperId: PAPER,
@@ -56,41 +65,38 @@ describe("QuestionField — what it shows", () => {
     expect(html).toContain('value="How does LCO degrade?"');
     expect(html).toContain(`aria-label="${ASK.remove(1)}"`);
     expect(html).toContain(ASK.hint);
-    const order = [ASK.chips.method, ASK.chips.conclusions, ASK.chips.differ, ASK.chips.gist].map((chip) => html.indexOf(chip));
-    expect(order.every((at) => at > 0)).toBe(true);
-    expect([...order].sort((a, b) => a - b)).toEqual(order);
-    // No previous paper and no challenges: those groups are absent.
-    expect(html).not.toContain(ASK.groups.last);
-    expect(html).not.toContain(ASK.groups.challenges);
+    expect(html).toContain(ASK.chips.gist);
+    for (const chip of GENERIC) expect(html).not.toContain(chip);
+    // No examples from the page: no group heading.
+    expect(html).not.toContain(ASK.fromEarlier);
+    expect(html).not.toContain(ASK.fromProfile);
   });
 
-  it("offers the challenge chips only when the page passes some", () => {
+  it("offers the example groups only when the page passes some (P1-09)", () => {
     useReadingQuestionsStore.setState({
       byPaper: { [PAPER]: { items: ["How does LCO degrade?"], gist: false, updatedAt: "2026-10-05T00:00:00.000Z" } },
       lastPaperId: PAPER,
     });
 
-    expect(render(PAPER, [])).not.toContain(ASK.groups.challenges);
-    const html = render(PAPER, ["dendrite growth in lithium metal anodes"]);
-    expect(html).toContain(ASK.groups.challenges);
-    expect(html).toContain("dendrite growth in lithium metal anodes");
+    expect(render(PAPER, [])).not.toContain(ASK.fromProfile);
+    const html = render(PAPER, [EXAMPLES[1]]);
+    expect(html).toContain(ASK.fromProfile);
+    expect(html).toContain(">Does this help with dendrite growth?<");
+    expect(html).not.toContain(ASK.fromEarlier);
   });
 
-  it("offers the last paper's questions only when the last paper is another one", () => {
+  it("renders both groups in order, each example a button, and the gist control after them (P1-09)", () => {
     useReadingQuestionsStore.setState({
-      byPaper: {
-        [OTHER]: { items: ["Why does the anode crack?"], gist: false, updatedAt: "2026-10-04T00:00:00.000Z" },
-        [PAPER]: { items: ["How does LCO degrade?"], gist: false, updatedAt: "2026-10-03T00:00:00.000Z" },
-      },
-      lastPaperId: OTHER,
+      byPaper: { [PAPER]: { items: ["How does LCO degrade?"], gist: false, updatedAt: "2026-10-05T00:00:00.000Z" } },
+      lastPaperId: PAPER,
     });
-    const html = render(PAPER);
-    expect(html).toContain(ASK.groups.last);
-    expect(html).toContain("Why does the anode crack?");
-    expect(html.indexOf(ASK.groups.last)).toBeLessThan(html.indexOf(ASK.groups.common));
+    const html = render(PAPER, EXAMPLES);
 
-    useReadingQuestionsStore.setState({ lastPaperId: PAPER });
-    expect(render(PAPER)).not.toContain(ASK.groups.last);
+    const order = [ASK.fromEarlier, "Why does the anode crack?", ASK.fromProfile, "Does this help with dendrite growth?", "Could I use XRD here?", ASK.chips.gist].map((text) => html.indexOf(text));
+    expect(order.every((at) => at > 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+    expect(html).toMatch(/<button type="button"[^>]*>Why does the anode crack\?<\/button>/);
+    for (const chip of GENERIC) expect(html).not.toContain(chip);
   });
 
   it("shows a chosen gist as a selected chip, not as a line", () => {
@@ -130,16 +136,16 @@ describe("QuestionField — the vague hint (P1-05)", () => {
   );
 
   it("shows the hint when the route is vague, under the question lines", () => {
-    const html = renderToStaticMarkup(createElement(QuestionField, { paperId: PAPER, challenges: [], vague: true }));
+    const html = renderToStaticMarkup(createElement(QuestionField, { paperId: PAPER, examples: [], vague: true }));
 
     expect(ROUTE.vague).toBe("Ask something more specific and Peer can point you to the right sections.");
     expect(html).toContain(ROUTE.vague);
     expect(html.indexOf(ROUTE.vague)).toBeGreaterThan(html.lastIndexOf("<input"));
-    expect(html.indexOf(ROUTE.vague)).toBeLessThan(html.indexOf(ASK.groups.common));
+    expect(html.indexOf(ROUTE.vague)).toBeLessThan(html.indexOf(ASK.chips.gist));
   });
 
   it("shows no hint for a route that points somewhere, or with no route", () => {
-    expect(renderToStaticMarkup(createElement(QuestionField, { paperId: PAPER, challenges: [], vague: false }))).not.toContain(ROUTE.vague);
+    expect(renderToStaticMarkup(createElement(QuestionField, { paperId: PAPER, examples: [], vague: false }))).not.toContain(ROUTE.vague);
     expect(render()).not.toContain(ROUTE.vague);
   });
 });
@@ -178,7 +184,7 @@ describe("QuestionField — the hint waits for a settled line (P1-07)", () => {
       byPaper: { [PAPER]: { items: ["What is it?"], gist: false, updatedAt: "2026-10-05T00:00:00.000Z" } },
       lastPaperId: PAPER,
     });
-    const html = renderToStaticMarkup(createElement(QuestionField, { paperId: PAPER, challenges: [], vague: true }));
+    const html = renderToStaticMarkup(createElement(QuestionField, { paperId: PAPER, examples: [], vague: true }));
 
     expect(html).toContain(ROUTE.vague);
   });
@@ -205,37 +211,32 @@ describe("QuestionField — what the handlers do", () => {
   });
 
   it("fills the next empty line with a chip, never more than five, and never by itself", () => {
-    expect(fillNextLine([""], ASK.chips.method)).toEqual({ lines: [ASK.chips.method], focus: 0 });
-    expect(fillNextLine(["A", ""], ASK.chips.method)).toEqual({ lines: ["A", ASK.chips.method], focus: 1 });
-    expect(fillNextLine(["A"], ASK.chips.method)).toEqual({ lines: ["A", ASK.chips.method], focus: 1 });
+    const example = "Does this help with dendrite growth?";
+    expect(fillNextLine([""], example)).toEqual({ lines: [example], focus: 0 });
+    expect(fillNextLine(["A", ""], example)).toEqual({ lines: ["A", example], focus: 1 });
+    expect(fillNextLine(["A"], example)).toEqual({ lines: ["A", example], focus: 1 });
     expect(fillNextLine(["1", "2", "3", "4", "5"], "Six")).toEqual({ lines: ["1", "2", "3", "4", "5"], focus: -1 });
   });
 
-  it("fills only the start of 'How does this differ from X?', for the reader to finish", () => {
-    const groups = chipGroups({ paperId: PAPER, byPaper: {}, previousPaperId: null, challenges: [] });
-    const differ = groups.flatMap((g) => g.chips).find((chip) => chip.label === ASK.chips.differ);
-
-    expect(differ).toEqual({ label: ASK.chips.differ, kind: "prefix", text: "How does this differ from " });
-    expect(fillNextLine([""], differ!.text).lines).toEqual(["How does this differ from "]);
+  it("offers none of the three generic blueprint chips: every example is the reader's own (P1-09, §1a.7)", () => {
+    const chips = chipGroups(EXAMPLES).flatMap((group) => group.chips.map((chip) => chip.label));
+    expect(chips).toEqual(["Why does the anode crack?", "Does this help with dendrite growth?", "Could I use XRD here?"]);
+    for (const chip of GENERIC) expect(chips).not.toContain(chip);
+    expect(JSON.stringify(ASK)).not.toMatch(/Can I use this method|Do the conclusions hold up|How does this differ from/);
   });
 
-  it("'Just get the gist' is a toggle, and typing any question turns it off", () => {
-    const groups = chipGroups({ paperId: PAPER, byPaper: {}, previousPaperId: null, challenges: [] });
-    expect(groups.flatMap((g) => g.chips).find((chip) => chip.label === ASK.chips.gist)?.kind).toBe("gist");
+  it("'Just get the gist' is a toggle of its own, not an example, and typing any question turns it off", () => {
+    expect(chipGroups(EXAMPLES).flatMap((group) => group.chips).some((chip) => chip.label === ASK.chips.gist)).toBe(false);
     expect(nextGist(true, [""])).toBe(true);
     expect(nextGist(true, ["A question"])).toBe(false);
     expect(nextGist(false, [""])).toBe(false);
   });
 
-  it("orders the chip groups: last paper, common, challenges — and leaves out an empty one", () => {
-    const byPaper = { [OTHER]: { items: ["Why does the anode crack?"], gist: false, updatedAt: "2026-10-04T00:00:00.000Z" } };
-
-    expect(chipGroups({ paperId: PAPER, byPaper, previousPaperId: OTHER, challenges: ["dendrite growth"] }).map((g) => g.label))
-      .toEqual([ASK.groups.last, ASK.groups.common, ASK.groups.challenges]);
-    expect(chipGroups({ paperId: PAPER, byPaper, previousPaperId: null, challenges: [] }).map((g) => g.label))
-      .toEqual([ASK.groups.common]);
-    expect(chipGroups({ paperId: PAPER, byPaper, previousPaperId: PAPER, challenges: [] }).map((g) => g.label))
-      .toEqual([ASK.groups.common]);
+  it("keeps the page's groups in order, each example a fill chip, and leaves out an empty group", () => {
+    expect(chipGroups(EXAMPLES).map((group) => group.label)).toEqual([ASK.fromEarlier, ASK.fromProfile]);
+    expect(chipGroups([{ label: ASK.fromEarlier, items: [] }, EXAMPLES[1]]).map((group) => group.label)).toEqual([ASK.fromProfile]);
+    expect(chipGroups([])).toEqual([]);
+    expect(chipGroups(EXAMPLES)[0].chips[0]).toEqual({ label: "Why does the anode crack?", text: "Why does the anode crack?" });
   });
 });
 

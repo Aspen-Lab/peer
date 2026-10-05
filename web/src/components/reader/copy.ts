@@ -73,26 +73,30 @@ export const BODY = {
 } as const;
 
 /**
- * P1-03 (§1f.10): "Before you read" — the question field. The four common
- * questions are the blueprint's own (§3.1). "How does this differ from X?"
- * fills only its start, for the reader to finish.
+ * P1-03 (§1f.10): "Before you read" — the question field.
+ *
+ * P1-09 (user decision §1a.7, ruling §1f.20): the example tags come only from
+ * the reader — questions they wrote on earlier papers, and their profile
+ * turned into questions by the templates below. The blueprint's generic
+ * chips are gone. "Just get the gist" is a reading mode, not an example, and
+ * stays as a control of its own.
  */
 export const ASK = {
   heading: "Before you read",
   placeholder: "What do you want this paper to answer?",
   hint: "Up to five questions. Peer points you to the sections that mention them.",
-  groups: {
-    last: "From your last paper",
-    common: "Common questions",
-    challenges: "From your challenges",
+  fromEarlier: "From your earlier questions",
+  fromProfile: "From your profile",
+  /** The profile, asked as questions (`lib/reader/question-examples.ts`). */
+  examples: {
+    challenge: (phrase: string) => `Does this help with ${phrase}?`,
+    project: (phrase: string) => `How does this relate to ${phrase}?`,
+    topic: (topic: string) => `What does it say about ${topic}?`,
+    method: (method: string) => `Could I use ${method} here?`,
   },
   chips: {
-    method: "Can I use this method in my own work?",
-    conclusions: "Do the conclusions hold up?",
-    differ: "How does this differ from X?",
     gist: "Just get the gist",
   },
-  differPrefix: "How does this differ from ",
   line: (n: number) => `Question ${n}`,
   remove: (n: number) => `Remove question ${n}`,
   counter: (n: number) => `${n}/200`,
