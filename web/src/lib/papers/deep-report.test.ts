@@ -89,13 +89,17 @@ describe("generateDeepReport — pass 1 reads every canonical bucket (1-14)", ()
     const report = await generateDeepReport({ paper, doc: doc(), provider });
 
     expect(calls).toHaveLength(2);
-    const pass1Prompt = JSON.parse(calls[0].userPrompt) as { sections: Record<string, string> };
+    // P2-01 (§1g.1): Pass 1 now reads `[{ id, heading, text }]` in document
+    // order instead of `{ canonical: text }` buckets; the 1-14 guarantee is
+    // asserted on that shape — every section reaches Pass 1.
+    const pass1Prompt = JSON.parse(calls[0].userPrompt) as { sections: Array<{ id: string; heading: string; text: string }> };
+    const sent = (heading: string) => pass1Prompt.sections.find((section) => section.heading === heading)?.text;
     // The bug (pre-1-14): buildPass1Prompt only ever read introduction/
     // methods/results/discussion, so a paper's conclusion bucket never
     // reached the model asked to extract signal from it.
-    expect(pass1Prompt.sections.conclusion).toContain(CONCLUSION_MARKER);
-    expect(pass1Prompt.sections.methods).toContain("standard protocol");
-    expect(pass1Prompt.sections.results).toContain("main result");
+    expect(sent("Conclusion")).toContain(CONCLUSION_MARKER);
+    expect(sent("Methods")).toContain("standard protocol");
+    expect(sent("Results")).toContain("main result");
 
     // And the claim quoting the conclusion sentence survives the evidence
     // checker — it's genuinely in doc.sections, just previously never shown

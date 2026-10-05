@@ -4,8 +4,10 @@ import type { ExtractedDocument } from "./html-text";
 import type { PaperReport } from "./report";
 import {
   evidenceSupported,
+  locateSection,
   normalizeForMatch,
   placeEvidence,
+  sectionCorpus,
   verifyReportEvidence,
 } from "./evidence";
 
@@ -340,5 +342,38 @@ describe("placeEvidence", () => {
     expect(placeEvidence("requires no generative model.", ABSTRACT_SENTENCES)).toEqual({
       kind: "quote",
     });
+  });
+});
+
+// P2-01 (§1g.1): the question pass's sentences are checked against the
+// document by section — the same forgiving verbatim match, answering with
+// the id of the section that holds the sentence.
+describe("locateSection — which section holds a verbatim sentence (P2-01)", () => {
+  const small: ExtractedDocument = {
+    source: "pdf",
+    figureCaptions: [],
+    sections: [
+      { id: "s0", heading: "Abstract", canonical: "abstract", text: "We charged quillwort cells fast and opened every one of them." },
+      { id: "s1", heading: "1 Methods", canonical: "methods", text: "We cycled twelve quillwort cells at three charge rates for one month." },
+      { id: "s2", heading: "2 Results", canonical: "results", text: "Cracking along the grain boundaries rose with the charge rate [4] in every cell." },
+    ],
+  };
+  const corpus = sectionCorpus(small);
+
+  it("finds the section, preferring the one the model named when it holds the sentence", () => {
+    expect(locateSection("We cycled twelve quillwort cells at three charge rates for one month.", corpus)).toBe("s1");
+    expect(locateSection("Cracking along the grain boundaries rose with the charge rate in every cell.", corpus, "s2")).toBe("s2");
+    // A wrong id is corrected by where the sentence actually is.
+    expect(locateSection("We cycled twelve quillwort cells at three charge rates for one month.", corpus, "s2")).toBe("s1");
+  });
+
+  it("finds nothing for a paraphrase or a fragment too short to trust", () => {
+    expect(locateSection("We cycled a dozen cells at several rates for about a month.", corpus)).toBeNull();
+    expect(locateSection("Cracking rose.", corpus)).toBeNull();
+  });
+
+  it("names a section that has no id the way withSectionIds would", () => {
+    const noIds = { ...small, sections: small.sections.map(({ heading, canonical, text }) => ({ heading, canonical, text })) } as unknown as ExtractedDocument;
+    expect(locateSection("We cycled twelve quillwort cells at three charge rates for one month.", sectionCorpus(noIds))).toBe("s1");
   });
 });

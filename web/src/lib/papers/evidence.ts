@@ -179,6 +179,44 @@ function locate(evidence: string, entries: CorpusEntry[]): string | null {
   return null;
 }
 
+/** A document section, normalised once for matching, under its id. */
+export interface SectionCorpusEntry {
+  id: string;
+  text: string;
+}
+
+/**
+ * P2-01 (§1g.1): every section of the document, normalised for matching, by
+ * id — the section's own, or the one `withSectionIds` would give it
+ * (`s<index>`). The question pass's sentences are checked against this.
+ */
+export function sectionCorpus(doc: ExtractedDocument): SectionCorpusEntry[] {
+  return doc.sections.map((section, index) => ({
+    id: section.id ?? `s${index}`,
+    text: normalizeForMatch(section.text),
+  }));
+}
+
+/**
+ * The id of the section that holds `quote` verbatim (the same forgiving match
+ * as `evidenceSupported`), trying `preferId` first — the section the model
+ * named — so a correct id costs one comparison and a wrong one is corrected.
+ * Null when no section holds it: the sentence is not the paper's.
+ */
+export function locateSection(
+  quote: string,
+  entries: readonly SectionCorpusEntry[],
+  preferId?: string,
+): string | null {
+  const normalized = normalizeForMatch(quote);
+  const preferred = preferId ? entries.find((entry) => entry.id === preferId) : undefined;
+  if (preferred && supportedIn(normalized, preferred.text)) return preferred.id;
+  for (const entry of entries) {
+    if (entry !== preferred && supportedIn(normalized, entry.text)) return entry.id;
+  }
+  return null;
+}
+
 /**
  * Drop — never flag — every skim sentence, method, key result, limitation,
  * relation item or next step whose evidence is not in the corpus; set
