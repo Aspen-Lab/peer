@@ -68,7 +68,7 @@ GATE BASELINE:    manager, ed189e1, 16:2xZ–16:3xZ: lint 0 errors / 151 warning
 
 ### §1c. BINDING — git and evidence protocol for this campaign
 
-- One commit per ledger item, message `feat|fix|test|docs(reader): …`, pushed immediately. The commit body ends with the two attribution lines the session uses (`Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>` and the `Claude-Session:` line).
+- One commit per ledger item, message `feat|fix|test|docs(reader): …`, pushed immediately. The commit body ends with the attribution lines the committing agent's own harness mandates (a `Co-Authored-By:` line naming that agent's model, plus the `Claude-Session:` line): Opus for commits authored by C/A/B subagents, Fable for the manager's. Clarified 2026-10-05T16:5xZ after C correctly declined to attribute its code to the manager's model.
 - Never delete a test to pass. Rewrite the assertion to the new contract and cite the ledger item in a comment.
 - Every C checkpoint records: files changed, the four gate commands with exit codes and counts, a before/after for the item's acceptance check, and the model it ran on.
 - Every A checkpoint reports each §3d item in scope as PASS / FAIL / BLOCKED with the reproduction, never a fix.
