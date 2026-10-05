@@ -695,7 +695,13 @@ export function placeFigures(
       ...(typeof c.page === "number" ? { page: c.page } : {}),
     };
     if (c.imageUrl) figure.imageUrl = c.imageUrl;
-    else if (pdf && typeof c.page === "number" && perPage.get(c.page) === 1) {
+    // P0-07 (§1e.5): no page picture for an uploaded PDF. The page-image
+    // route resolves public papers only and answers 404 for an `upload:` id,
+    // so the URL was a wasted request per figure; the caption and its page
+    // stand alone ("caption · p.N") until BACKLOG-01 serves uploads. The test
+    // is `claimsUploadId`'s rule (`upload-store.ts` is server-only; this file
+    // also runs in the browser).
+    else if (pdf && !/^\s*upload:/i.test(pdf.paperId) && typeof c.page === "number" && perPage.get(c.page) === 1) {
       figure.imageUrl = pdfFigureUrl(pdf.paperId, c.page);
     }
     (out[at.section].figures ??= []).push(figure);

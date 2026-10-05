@@ -851,6 +851,38 @@ describe("placeFigures", () => {
     expect(byLabel["Figure 3"].imageUrl).toBeUndefined();
   });
 
+  // P0-07 (§1e.5, A's F5): an uploaded PDF's captions carry pages since
+  // P0-03, and the page-image route serves public papers only — for an
+  // `upload:` id it answers 404, a wasted request per figure. Until
+  // BACKLOG-01 serves uploads, an upload's figure is its caption and page,
+  // with no picture URL; the page already sets that as "caption · p.N".
+  it("offers no page picture for an uploaded PDF — the caption and its page stand alone", () => {
+    const uploadPaper = { ...normalPaper, id: "upload:0123456789abcdef" } as Paper;
+    const doc = docWith(
+      [{ id: "s0", heading: "1 Results", canonical: "results", text: "Figure 1 shows the creep rate against boundary density." }],
+      [{ ordinal: 1, label: "Figure 1", caption: "Creep rate against boundary density.", page: 2, at: 0.5 }],
+    );
+    const pdfDoc = { ...doc, source: "pdf" as const, pageCount: 4 };
+    const uploadLink = { url: "/api/papers/upload/0123456789abcdef/file", kind: "pdf" as const, label: "upload" as const, rank: 0 };
+
+    const uploaded = buildReading(uploadPaper, fullTextOk(pdfDoc, uploadLink), NOW);
+    const figure = uploaded.body[0].figures?.[0];
+
+    expect(figure).toMatchObject({ label: "Figure 1", caption: "Creep rate against boundary density.", page: 2 });
+    expect(figure?.imageUrl).toBeUndefined();
+    expect(JSON.stringify(uploaded.body)).not.toContain("figure-image");
+
+    // Directly: an upload id gets no picture; a public paper's PDF still does.
+    const placed = placeFigures(
+      [section("A", "Figure 1 is here.")],
+      [cap(1, { page: 2 })],
+      { paperId: "upload:0123456789abcdef" },
+    );
+    expect(placed[0].figures?.[0].imageUrl).toBeUndefined();
+    expect(placeFigures([section("A", "Figure 1 is here.")], [cap(1, { page: 2 })], { paperId: "openalex:W1" })[0].figures?.[0].imageUrl)
+      .toBe(pdfFigureUrl("openalex:W1", 2));
+  });
+
   it("places each figure once, and leaves a section without figures untouched", () => {
     const placed = placeFigures([section("A", "Figure 1. Figure 1 again.")], [cap(1), cap(1)], null);
     expect(placed[0].figures).toHaveLength(1);
