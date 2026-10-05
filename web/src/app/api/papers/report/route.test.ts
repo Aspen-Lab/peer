@@ -151,6 +151,35 @@ describe("owner-only full article supplement", () => {
     expect(mocks.getFigurePool).not.toHaveBeenCalled();
     expect(mocks.resolveProvider).not.toHaveBeenCalled();
   });
+  // P0-05 (§1e.1, A's F1): only the canonical `upload:<hash16>` is an
+  // upload id. A case variant used to skip this route's owner check (it
+  // tested `startsWith("upload:")`) while the full-text reader still read
+  // the PDF; it is now refused as "not found" before any text, figure or
+  // model work — on both transports, and even where the owner check would
+  // pass for the canonical id.
+  it.each(["application/json", "application/x-ndjson"])("refuses a non-canonical upload id with 404 before any work (%s)", async (accept) => {
+    mocks.ownedUpload.mockResolvedValue({ paperIds: [paper.id], revision: 1 });
+    mocks.resolveProvider.mockReturnValue({ generateJsonText: vi.fn() });
+    const hash = "0123456789abcdef";
+    const bodies = [
+      { paper: { ...paper, id: `UPLOAD:${hash}` }, deepReport: true },
+      { paper: { ...paper, id: `Upload:${hash}` }, deepReport: true },
+      { paper: { ...paper, id: `upload:${hash.toUpperCase()}` }, deepReport: true },
+      { paper: { ...paper, fullTextUploadId: `UPLOAD:${hash}` }, deepReport: true },
+      { paper: { ...paper, fullTextUploadId: "" }, deepReport: true },
+    ];
+    for (const body of bodies) {
+      const response = await POST(request(body, accept));
+      expect(response.status).toBe(404);
+      expect(await response.json()).toEqual({ error: "Upload not found." });
+    }
+    expect(mocks.ownedUpload).not.toHaveBeenCalled();
+    expect(mocks.getFullText).not.toHaveBeenCalled();
+    expect(mocks.getFigurePool).not.toHaveBeenCalled();
+    expect(mocks.resolveProvider).not.toHaveBeenCalled();
+    expect(mocks.generateDeepReport).not.toHaveBeenCalled();
+  });
+
   it("refuses an owned PDF attached to a different article", async () => {
     mocks.ownedUpload.mockResolvedValue({ paperIds: ["arxiv:different"] });
     const response = await POST(request({ paper: { ...paper, fullTextUploadId: "upload:0123456789abcdef" } }));

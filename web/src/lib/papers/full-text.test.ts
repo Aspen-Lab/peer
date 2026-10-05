@@ -3,7 +3,7 @@ import { rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ExtractedDocument } from "./html-text";
-import { minimalPdf } from "./minimal-pdf.test-helper";
+import { minimalPdf, prose } from "./minimal-pdf.test-helper";
 import type { PdfTextResult } from "./pdf-text";
 import type { SourceLink } from "./source-links";
 import type { UploadMeta } from "./upload-store";
@@ -29,7 +29,20 @@ const mocks = vi.hoisted(() => ({
   ownedUpload: vi.fn(async (): Promise<Partial<UploadMeta> | null> => ({ ownerKey: "test" })),
   collectSourceLinks: vi.fn(),
   extractPdfTextFromPath: vi.fn(),
+  pdfOpens: { n: 0 },
 }));
+
+// P0-05: every PDF pdf.js opens in this file is counted — a pass-through.
+vi.mock("unpdf", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("unpdf")>();
+  return {
+    ...actual,
+    getDocumentProxy: (...args: Parameters<typeof actual.getDocumentProxy>) => {
+      mocks.pdfOpens.n += 1;
+      return actual.getDocumentProxy(...args);
+    },
+  };
+});
 
 vi.mock("./upload-access", () => ({ ownedUpload: mocks.ownedUpload }));
 
@@ -333,5 +346,86 @@ describe("getFullText — P0-03, an uploaded scan read by pdf.js", () => {
     );
     expect(reading.provenance.fullText).toBe("pdf_empty");
     expect(existsSync(path.join(uploadDir, "00000000000000b1.doc.json"))).toBe(false);
+  });
+});
+
+// P0-05 (§1e.1, A's F1, privacy): only the canonical `upload:<hash16>` is an
+// upload id, and an upload is read from disk only after its owner check. A
+// case variant (`UPLOAD:<hash16>`) used to skip the check — `getFullText`
+// tested `startsWith("upload:")` while `buildResult` read anything
+// `bareUploadId` matched case-insensitively — and the private text then sat
+// in the shared full-text cache for an hour under the variant id.
+describe("getFullText — P0-05, a non-canonical upload id is refused, never read", () => {
+  const SECRET = "Quillwortane";
+  const privatePdf = minimalPdf([
+    [
+      ["A Private Paper About Creep", 72, 80, 18],
+      ["1 Introduction", 72, 130, 11],
+      ...prose(
+        [
+          `We measure creep in ${SECRET} alloys with many grain boundaries per cubic micron.`,
+          "Boundary density sets the creep rate across three decades of applied stress.",
+          "Grain boundaries are where most of the creep strain is thought to happen.",
+        ],
+        150,
+      ),
+    ],
+  ]);
+  const unavailable = { status: "source_unavailable", attempts: [], reason: "Private upload unavailable." };
+
+  beforeEach(async () => {
+    mocks.collectSourceLinks.mockReset();
+    mocks.collectSourceLinks.mockResolvedValue([]);
+    mocks.extractPdfTextFromPath.mockReset();
+    const actual = await vi.importActual<typeof import("./pdf-text")>("./pdf-text");
+    mocks.extractPdfTextFromPath.mockImplementation(actual.extractPdfTextFromPath);
+    mocks.pdfOpens.n = 0;
+  });
+
+  afterEach(() => {
+    mocks.ownedUpload.mockImplementation(async () => ({ ownerKey: "test" }));
+    mocks.extractPdfTextFromPath.mockReset();
+  });
+
+  it("refuses a case-variant id even where the owner check would pass: no disk read, no pdf.js, no public lookup", async () => {
+    const hash = "00000000000000c1";
+    await writeFile(path.join(uploadDir, `${hash}.pdf`), privatePdf);
+    // An owner check that would let anyone through, so only the id rule
+    // can be what refuses.
+    mocks.ownedUpload.mockImplementation(async () => ({ ownerKey: "owner-c", revision: 1 }));
+
+    for (const id of [`UPLOAD:${hash}`, `Upload:${hash}`, `upload:${hash.toUpperCase()}`, ` upload:${hash}`]) {
+      const result = await getFullText({ paperId: id });
+      expect(result).toEqual(unavailable);
+      expect(JSON.stringify(result)).not.toContain(SECRET);
+    }
+    expect(mocks.extractPdfTextFromPath).not.toHaveBeenCalled();
+    expect(mocks.pdfOpens.n).toBe(0);
+    // The shared path — the only one that fills the shared cache — never
+    // ran for them either: it starts with `collectSourceLinks`.
+    expect(mocks.collectSourceLinks).not.toHaveBeenCalled();
+
+    // Control: the canonical id is read, so the fixture was readable.
+    const owned = await getFullText({ paperId: `upload:${hash}` });
+    expect(owned.status).toBe("ok");
+    expect(JSON.stringify(owned.doc)).toContain(SECRET);
+    expect(mocks.pdfOpens.n).toBe(1);
+  });
+
+  it("with the owner check refusing, a case-variant id is unavailable on every call — nothing was cached for it", async () => {
+    const hash = "00000000000000c2";
+    await writeFile(path.join(uploadDir, `${hash}.pdf`), privatePdf);
+    mocks.ownedUpload.mockImplementation(async () => null);
+
+    const first = await getFullText({ paperId: `UPLOAD:${hash}` });
+    // Gone from disk: a result served now could only come from a cache.
+    await rm(path.join(uploadDir, `${hash}.pdf`), { force: true });
+    const second = await getFullText({ paperId: `UPLOAD:${hash}` });
+
+    expect(first).toEqual(unavailable);
+    expect(second).toEqual(unavailable);
+    expect(mocks.extractPdfTextFromPath).not.toHaveBeenCalled();
+    expect(mocks.collectSourceLinks).not.toHaveBeenCalled();
+    expect(mocks.pdfOpens.n).toBe(0);
   });
 });

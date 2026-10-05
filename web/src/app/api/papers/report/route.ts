@@ -28,7 +28,7 @@ import {
   type DeepReportDecision,
 } from "@/lib/usage/deep-report-quota";
 import { CompanySpendCapRefusedError } from "@/lib/usage/company-budget";
-import { bareUploadId } from "@/lib/papers/upload-store";
+import { bareUploadId, claimsUploadId } from "@/lib/papers/upload-store";
 import { ownedUpload, PRIVATE_UPLOAD_HEADERS } from "@/lib/papers/upload-access";
 
 export const dynamic = "force-dynamic";
@@ -319,8 +319,23 @@ function bestPaperUrl(paper: PaperReportRequest["paper"]): string | null {
  * `fullTextUploadId` attached to a foreign paper. `null` when nothing
  * private is involved (nothing to guard against a mid-flight delete/block). */
 function paperPrivateUploadHash(paper: PaperReportRequest["paper"]): string | null {
-  const id = paper.fullTextUploadId ?? (paper.id?.startsWith("upload:") ? paper.id : undefined);
+  // P0-05 (§1e.1): `bareUploadId` is the one rule, and it is exact; a public
+  // id simply is not one.
+  const id = paper.fullTextUploadId ?? paper.id;
   return typeof id === "string" ? bareUploadId(id) : null;
+}
+
+/**
+ * P0-05 (§1e.1, A's F1): a request that names an upload in a spelling
+ * `bareUploadId` does not accept — `UPLOAD:<hash16>`, upper-case hex, an
+ * empty or non-string `fullTextUploadId` — is refused as "not found". It used
+ * to slip past the owner check below (which only saw the lower-case prefix)
+ * while the full-text reader still read the file.
+ */
+function malformedUploadClaim(paper: PaperReportRequest["paper"]): boolean {
+  if (typeof paper.id === "string" && claimsUploadId(paper.id) && !bareUploadId(paper.id)) return true;
+  const attached: unknown = paper.fullTextUploadId;
+  return attached !== undefined && attached !== null && (typeof attached !== "string" || !bareUploadId(attached));
 }
 
 /**
@@ -595,6 +610,9 @@ async function handlePost(req: NextRequest) {
   // of the request, is what both the JSON deep path below and the NDJSON
   // stream re-check against after their own long-running full-text/model
   // work — before this specific generation is ever cached or returned.
+  if (malformedUploadClaim(body.paper)) {
+    return NextResponse.json({ error: "Upload not found." }, { status: 404 });
+  }
   const privateHash = paperPrivateUploadHash(body.paper);
   let startRevision: number | undefined;
   if (privateHash) {

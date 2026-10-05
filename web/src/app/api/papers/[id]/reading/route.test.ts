@@ -195,6 +195,32 @@ describe("GET /api/papers/[id]/reading — 2-05 (bug B): an upload: id never rea
     expect(mocks.fetchPaperById).not.toHaveBeenCalled();
   });
 
+  // P0-05 (§1e.1, A's F1): only the canonical `upload:<hash16>` is an
+  // upload id. A case variant is refused as not found — never looked up as
+  // an upload (even one whose owner check would pass), never handed to the
+  // public paper lookup, never read.
+  it("404s a non-canonical upload id, in the path or as ?upload=, without any lookup or read", async () => {
+    mocks.readUploadMeta.mockResolvedValue({
+      hash16: "0000000000000005", fileName: "paper.pdf", title: "A Real Uploaded Paper",
+      uploadedAt: "2026-09-15T00:00:00.000Z", textStatus: "ok", paperIds: ["openalex:W7208807247"],
+    });
+    mocks.fetchPaperById.mockResolvedValue(zenodoItem);
+    mocks.getFullText.mockResolvedValue(zenodoFullText);
+
+    for (const id of ["UPLOAD:0000000000000005", "Upload:0000000000000005", "upload:00000000000000AB"]) {
+      const res = await call(id);
+      expect(res.status).toBe(404);
+      expect(res.headers.get("cache-control")).toBe("no-store");
+    }
+    const supplement = await call("openalex:W7208807247", "?upload=UPLOAD%3A0000000000000005");
+    expect(supplement.status).toBe(404);
+
+    expect(mocks.readUploadMeta).not.toHaveBeenCalled();
+    expect(mocks.getFullText).not.toHaveBeenCalled();
+    expect(mocks.fetchPaperById).toHaveBeenCalledTimes(1);
+    expect(mocks.fetchPaperById).toHaveBeenCalledWith("openalex:W7208807247");
+  });
+
   it("returns pdf_empty provenance for an upload whose PDF had no readable text", async () => {
     mocks.readUploadMeta.mockResolvedValue({
       hash16: "0000000000000001",

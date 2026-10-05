@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { ExtractedDocument } from "./html-text";
 import {
   bareUploadId,
+  claimsUploadId,
   deleteUpload,
   docPath,
   hasOtherReadyDocumentCopy,
@@ -160,6 +161,25 @@ describe("sha16 / uploadId / bareUploadId", () => {
   it("rejects an id that isn't upload-shaped", () => {
     expect(bareUploadId("openalex:W123")).toBeNull();
     expect(bareUploadId("upload:tooshort")).toBeNull();
+  });
+
+  // P0-05 (§1e.1, A's F1): one rule decides "is this an upload id", and it
+  // is exact. `bareUploadId` used to match case-insensitively while the
+  // owner check in front of it tested `startsWith("upload:")`, so
+  // `UPLOAD:<hash16>` skipped the check and was still read from disk. Only
+  // the canonical id — the lower-case prefix and lower-case hex `sha16`
+  // produces — is an upload; any other spelling of the prefix is a claim to
+  // be refused (`claimsUploadId`), never a public id.
+  it("accepts only the canonical lower-case id, and knows a non-canonical spelling claims to be one", () => {
+    const hash16 = sha16(Buffer.from("p0-05 canonical id"));
+    expect(bareUploadId(`upload:${hash16}`)).toBe(hash16);
+    for (const variant of [`UPLOAD:${hash16}`, `Upload:${hash16}`, `upload:${hash16.toUpperCase()}`, ` upload:${hash16}`, `upload:${hash16} `]) {
+      expect(bareUploadId(variant)).toBeNull();
+      expect(claimsUploadId(variant)).toBe(true);
+    }
+    expect(claimsUploadId(`upload:${hash16}`)).toBe(true);
+    expect(claimsUploadId("openalex:W123")).toBe(false);
+    expect(claimsUploadId("arxiv:2401.00001")).toBe(false);
   });
 });
 
