@@ -24,13 +24,28 @@ import {
  * would catch a regression.
  */
 
-const mocks = vi.hoisted(() => ({ getUser: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  getUser: vi.fn(),
+  // P0-10: the owner check and the extractor are observable; by default the
+  // owner check finds nothing (no upload exists) and the extractor is the
+  // real one, so the public tests below run exactly as before.
+  ownedUpload: vi.fn(),
+  extractFigure: vi.fn(),
+}));
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: () => Promise.resolve(supabaseServerStub(mocks.getUser)),
 }));
+vi.mock("@/lib/papers/upload-access", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/papers/upload-access")>()),
+  ownedUpload: mocks.ownedUpload,
+}));
+vi.mock("@/lib/figures/extract", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/figures/extract")>()),
+  extractFigure: mocks.extractFigure,
+}));
 
-import { GET } from "./route";
+import { GET, POST } from "./route";
 
 const outgoing: string[] = [];
 
@@ -58,8 +73,11 @@ function request(params: Record<string, string>): NextRequest {
   return new NextRequest(url, { method: "GET" });
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   vi.clearAllMocks();
+  const actual = await vi.importActual<typeof import("@/lib/figures/extract")>("@/lib/figures/extract");
+  mocks.extractFigure.mockImplementation(actual.extractFigure);
+  mocks.ownedUpload.mockResolvedValue(null);
   outgoing.length = 0;
   deleteSpendableKeys();
   vi.stubGlobal("fetch", recordingFetch());
@@ -134,3 +152,117 @@ describe("GET /api/figure", () => {
     ).toEqual([]);
   });
 });
+
+// P0-10 (§1e.10, A's F7, privacy): an upload's figure request never carries
+// private text in a URL. The page used to ask
+// `GET /api/figure?id=upload:<h>&query=<report text>&paperTitle=<the PDF's
+// title>`, and the server's request log printed both. An upload's request is
+// a POST now, its title is taken from the owner-checked record on the
+// server, and a GET that carries either for an upload is refused before any
+// work, so a client regression fails loudly instead of leaking quietly.
+describe("POST /api/figure — an upload's figure request (P0-10)", () => {
+  const HASH = "0123456789abcdef";
+  const RECORD_TITLE = "A Title Only The Owner's Record Holds";
+  const FOUND = {
+    imageUrl: "data:image/png;base64,AAAA",
+    caption: "Figure 1",
+    source: "publisher",
+    status: "found",
+    reason: null,
+    hideFigure: false,
+    matchedBy: "keyword",
+  };
+
+  function post(body: unknown): NextRequest {
+    return new NextRequest("http://localhost/api/figure", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  }
+
+  beforeEach(() => {
+    mocks.getUser.mockResolvedValue(signedIn("reader-1"));
+    mocks.extractFigure.mockResolvedValue(FOUND);
+  });
+
+  it("serves the owner, privately, with the record's title — never a title the client sent", async () => {
+    mocks.ownedUpload.mockResolvedValue({ hash16: HASH, title: RECORD_TITLE, ownerKey: "owner", revision: 1 });
+
+    const response = await POST(post({
+      id: `upload:${HASH}`, v: "12", url: `/api/papers/upload/${HASH}/file`,
+      query: "words from the report", idx: 1, rev: 1, paperTitle: "a title the client made up",
+    }));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual(FOUND);
+    expect(response.headers.get("Cache-Control")).toBe("private, no-store");
+    expect(mocks.ownedUpload).toHaveBeenCalledWith(HASH);
+    expect(mocks.extractFigure).toHaveBeenCalledTimes(1);
+    expect(mocks.extractFigure).toHaveBeenCalledWith(expect.objectContaining({
+      itemId: `upload:${HASH}`,
+      url: `/api/papers/upload/${HASH}/file`,
+      query: "words from the report",
+      paperTitle: RECORD_TITLE,
+      figureIndex: 1,
+    }));
+  });
+
+  it("answers anyone else 404, privately, before the extractor", async () => {
+    mocks.ownedUpload.mockResolvedValue(null);
+
+    const response = await POST(post({ id: `upload:${HASH}`, v: "12", query: "words" }));
+
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({ error: "Upload not found." });
+    expect(response.headers.get("Cache-Control")).toBe("private, no-store");
+    expect(mocks.extractFigure).not.toHaveBeenCalled();
+  });
+
+  it("answers a malformed upload claim 404 without an owner lookup", async () => {
+    mocks.ownedUpload.mockResolvedValue({ hash16: HASH, title: RECORD_TITLE, ownerKey: "owner" });
+
+    for (const id of [`UPLOAD:${HASH}`, `upload:${HASH.toUpperCase()}`]) {
+      const response = await POST(post({ id, query: "words" }));
+      expect(response.status).toBe(404);
+      expect(response.headers.get("Cache-Control")).toBe("private, no-store");
+    }
+    expect(mocks.ownedUpload).not.toHaveBeenCalled();
+    expect(mocks.extractFigure).not.toHaveBeenCalled();
+  });
+
+  it("refuses a body that is not JSON, or has no id", async () => {
+    const notJson = await POST(new NextRequest("http://localhost/api/figure", { method: "POST", body: "id=upload:x" }));
+    const noId = await POST(post({ query: "words" }));
+
+    expect(notJson.status).toBe(400);
+    expect(noId.status).toBe(400);
+    expect(mocks.extractFigure).not.toHaveBeenCalled();
+  });
+
+  it("refuses a GET for an upload that carries a query or a title: 400 before the owner check, the gate or any fetch", async () => {
+    for (const params of [
+      { id: `upload:${HASH}`, query: "words from the report" } as Record<string, string>,
+      { id: `upload:${HASH}`, paperTitle: "The PDF's Own Title" },
+      { id: `UPLOAD:${HASH}`, query: "words" },
+    ]) {
+      const response = await GET(request(params));
+      expect(response.status).toBe(400);
+      expect(response.headers.get("Cache-Control")).toBe("private, no-store");
+    }
+    expect(mocks.ownedUpload).not.toHaveBeenCalled();
+    expect(mocks.getUser).not.toHaveBeenCalled();
+    expect(mocks.extractFigure).not.toHaveBeenCalled();
+    expect(outgoing).toEqual([]);
+  });
+
+  it("keeps a public paper's GET as it was, query and title included", async () => {
+    const response = await GET(request({ id: "openalex:W1", url: "https://example.org/p", query: "words", paperTitle: "A Public Title" }));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Cache-Control")).toBe("public, s-maxage=86400, stale-while-revalidate=604800");
+    expect(mocks.ownedUpload).not.toHaveBeenCalled();
+    expect(mocks.extractFigure).toHaveBeenCalledWith(expect.objectContaining({ itemId: "openalex:W1", query: "words", paperTitle: "A Public Title" }));
+  });
+});
+

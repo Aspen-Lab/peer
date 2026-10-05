@@ -1,8 +1,17 @@
 // GET /api/figure?id=<itemId>&url=<originUrl>
+// POST /api/figure  { id, url, doi, query, idx, rev, v }   (an upload's figure)
 //
 // Lazy figure resolver — hit per-card after feed loads. CDN-cached for
 // 24h so the same paper id only triggers an upstream fetch at most once
 // per user-day across all readers.
+//
+// P0-10 (§1e.10, A's F7): an uploaded PDF's figure request never carries
+// private text in a URL. The page used to send the PDF's own title
+// (`paperTitle`) and Peer's words about it (`query`) as GET parameters, and
+// the request log printed them. An upload's request is a POST now; its
+// title comes from the owner-checked record, never from the client; and a
+// GET for an upload that still carries either is refused before any work.
+// A public paper keeps its GET and the day-long edge cache unchanged.
 
 import { NextResponse, type NextRequest } from "next/server";
 import { extractFigure } from "@/lib/figures/extract";
@@ -14,23 +23,33 @@ export const dynamic = "force-dynamic";
 export const revalidate = 86_400;
 export const runtime = "nodejs";
 
-export async function GET(req: NextRequest) {
-  const id = req.nextUrl.searchParams.get("id");
-  const url = req.nextUrl.searchParams.get("url") ?? undefined;
-  const doi = req.nextUrl.searchParams.get("doi") ?? undefined;
-  const query = req.nextUrl.searchParams.get("query") ?? undefined;
-  const paperTitle = req.nextUrl.searchParams.get("paperTitle") ?? undefined;
-  const idxParam = req.nextUrl.searchParams.get("idx");
-  const figureIndex = idxParam !== null ? Math.max(0, parseInt(idxParam, 10) || 0) : 0;
-  if (!id) {
-    return NextResponse.json({ error: "id required" }, { status: 400 });
-  }
+interface FigureRequest {
+  id: string;
+  url?: string;
+  doi?: string;
+  query?: string;
+  /** Public papers only; an upload's title is read from its record. */
+  paperTitle?: string;
+  figureIndex: number;
+}
+
+function figureIndexOf(value: unknown): number {
+  if (value === null || value === undefined) return 0;
+  return Math.max(0, parseInt(String(value), 10) || 0);
+}
+
+/** One implementation for both methods. */
+async function answer(input: FigureRequest): Promise<Response> {
   // P0-08 (§1e.8): any spelling of the prefix is a claim; only the canonical
   // id of an upload the caller owns gets past it.
-  const privateUpload = claimsUploadId(id);
+  const privateUpload = claimsUploadId(input.id);
+  let paperTitle = input.paperTitle;
   if (privateUpload) {
-    const hash = bareUploadId(id);
-    if (!hash || !(await ownedUpload(hash))) return NextResponse.json({ error: "Upload not found." }, { status: 404, headers: PRIVATE_UPLOAD_HEADERS });
+    const hash = bareUploadId(input.id);
+    const meta = hash ? await ownedUpload(hash) : null;
+    if (!meta) return NextResponse.json({ error: "Upload not found." }, { status: 404, headers: PRIVATE_UPLOAD_HEADERS });
+    // P0-10: the owner's own record, not anything the client sent.
+    paperTitle = meta.title?.trim() || undefined;
   }
 
   // ABC-freemium 1-07 · R-SEC-1 — **this route had no authentication of any
@@ -45,12 +64,12 @@ export async function GET(req: NextRequest) {
   if (gate instanceof NextResponse) return gate;
 
   const result = await extractFigure({
-    itemId: id,
-    url,
-    doi,
-    query,
+    itemId: input.id,
+    url: input.url,
+    doi: input.doi,
+    query: input.query,
     paperTitle,
-    figureIndex,
+    figureIndex: input.figureIndex,
     // No BYOK override reaches this route — figures are requested by the card,
     // which carries no key — so `byok` is false and the matchers fall to the
     // system provider or to null.
@@ -67,5 +86,56 @@ export async function GET(req: NextRequest) {
       "Cache-Control": cacheControl,
       ...(privateUpload ? PRIVATE_UPLOAD_HEADERS : {}),
     },
+  });
+}
+
+export async function GET(req: NextRequest) {
+  const params = req.nextUrl.searchParams;
+  const id = params.get("id");
+  if (!id) {
+    return NextResponse.json({ error: "id required" }, { status: 400 });
+  }
+  // P0-10: an upload's report words and title never travel in a URL. A GET
+  // that carries them for an upload is a client regression; refuse it before
+  // the owner check, the gate or any fetch, so it fails where it can be seen.
+  if (claimsUploadId(id) && (params.has("query") || params.has("paperTitle"))) {
+    return NextResponse.json(
+      { error: "An upload's figure request is a POST." },
+      { status: 400, headers: PRIVATE_UPLOAD_HEADERS },
+    );
+  }
+  return answer({
+    id,
+    url: params.get("url") ?? undefined,
+    doi: params.get("doi") ?? undefined,
+    query: params.get("query") ?? undefined,
+    paperTitle: params.get("paperTitle") ?? undefined,
+    figureIndex: figureIndexOf(params.get("idx")),
+  });
+}
+
+/** The same request in a JSON body, for an upload: `{ id, url, doi, query,
+ *  idx, rev, v }`. `rev` and `v` only keep two requests apart; a
+ *  `paperTitle` in the body is never read. */
+export async function POST(req: NextRequest) {
+  let body: Record<string, unknown>;
+  try {
+    const parsed: unknown = await req.json();
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("not an object");
+    body = parsed as Record<string, unknown>;
+  } catch {
+    return NextResponse.json({ error: "Expected a JSON body." }, { status: 400, headers: PRIVATE_UPLOAD_HEADERS });
+  }
+  const text = (value: unknown) => (typeof value === "string" && value ? value : undefined);
+  const id = text(body.id);
+  if (!id) {
+    return NextResponse.json({ error: "id required" }, { status: 400, headers: PRIVATE_UPLOAD_HEADERS });
+  }
+  return answer({
+    id,
+    url: text(body.url),
+    doi: text(body.doi),
+    query: text(body.query),
+    figureIndex: figureIndexOf(body.idx),
   });
 }

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { FigureStatus } from "@/lib/figures/extract";
 import { ApiError, apiFetch } from "@/lib/api";
+import { claimsUploadId } from "@/lib/papers/upload-id";
 
 type Variant = "hero" | "compact";
 
@@ -104,24 +105,51 @@ async function fetchFigure(
   // `v` is part of the URL the route's day-long edge cache keys on; bump it
   // when what the route returns for the same paper changes (12: a PDF figure
   // the page printed stretched is now un-stretched to its own proportions).
-  const params = new URLSearchParams({ id: itemId, v: "12" });
-  if (url) params.set("url", url);
-  if (doi) params.set("doi", doi);
-  if (query?.trim()) params.set("query", query.trim());
-  if (paperTitle?.trim()) params.set("paperTitle", paperTitle.trim());
-  if (figureIndex > 0) params.set("idx", String(figureIndex));
-  // 9-15: the server ignores this param today (it re-authenticates and
-  // reads fresh on every call for an `upload:` id regardless — 9-14
-  // confirmed no server-side cache exists to key on it) — carried here so
-  // the URL itself documents which revision this specific request asked
-  // for, and so two requests that otherwise look identical but differ only
-  // by revision are never coalesced by an intermediary that keys on the URL.
-  if (revision !== undefined) params.set("rev", String(revision));
+  const version = "12";
+  // P0-10 (§1e.10, A's F7): an upload's figure request is a POST. Its
+  // `query` is Peer's words about the private paper and its title is the
+  // PDF's own; in a GET both sat in the URL, and the server's request log
+  // printed them. The body carries the query; the title is not sent at all —
+  // the route reads it from the owner's record. A public paper's GET below
+  // is unchanged, byte for byte.
+  let path: string;
+  let init: RequestInit;
+  if (claimsUploadId(itemId)) {
+    path = "/api/figure";
+    init = {
+      method: "POST",
+      body: JSON.stringify({
+        id: itemId,
+        v: version,
+        ...(url ? { url } : {}),
+        ...(doi ? { doi } : {}),
+        ...(query?.trim() ? { query: query.trim() } : {}),
+        ...(figureIndex > 0 ? { idx: figureIndex } : {}),
+        // 9-15: see `rev` below.
+        ...(revision !== undefined ? { rev: revision } : {}),
+      }),
+      cache: "no-store",
+      signal,
+    };
+  } else {
+    const params = new URLSearchParams({ id: itemId, v: version });
+    if (url) params.set("url", url);
+    if (doi) params.set("doi", doi);
+    if (query?.trim()) params.set("query", query.trim());
+    if (paperTitle?.trim()) params.set("paperTitle", paperTitle.trim());
+    if (figureIndex > 0) params.set("idx", String(figureIndex));
+    // 9-15: the server ignores this param today (it re-authenticates and
+    // reads fresh on every call for an `upload:` id regardless — 9-14
+    // confirmed no server-side cache exists to key on it) — carried here so
+    // the URL itself documents which revision this specific request asked
+    // for, and so two requests that otherwise look identical but differ only
+    // by revision are never coalesced by an intermediary that keys on the URL.
+    if (revision !== undefined) params.set("rev", String(revision));
+    path = `/api/figure?${params.toString()}`;
+    init = { cache: "no-store", signal };
+  }
 
-  const data = (await apiFetch(`/api/figure?${params.toString()}`, {
-    cache: "no-store",
-    signal,
-  })) as Omit<FigureState, "key"> & {
+  const data = (await apiFetch(path, init)) as Omit<FigureState, "key"> & {
     imageUrl: string | null;
     caption?: string | null;
     source?: string | null;
