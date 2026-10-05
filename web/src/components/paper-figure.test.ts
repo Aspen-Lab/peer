@@ -10,6 +10,8 @@ vi.mock("react", async (importOriginal) => {
 
 import { hookRuntime } from "@/test-support/hook-runtime";
 import { buildFigureRequestKey, useResolvedFigure, type ResolveFigureArgs } from "./paper-figure";
+import { rawItemToPaper } from "@/lib/feed/mapper";
+import { uploadMetaToPaper } from "@/lib/papers/upload-store";
 
 // 9-15 (A9-10): `buildFigureRequestKey` is a pure extraction of the
 // in-flight/settled map key so it can be unit-tested without rendering the
@@ -96,7 +98,61 @@ describe("useResolvedFigure — the figure request (P0-10)", () => {
     expect(figure.status).toBe("found");
   });
 
-  it("keeps a public paper's GET exactly as it was", async () => {
+  // P0-11 (§1e.11): a public paper with a private PDF attached asks for its
+  // section figures with `query` = text from the deep report, which was
+  // built from the private PDF. That is per-user text about private content,
+  // so it travels in a body too. `revision` is the signal: only a paper with
+  // a private attachment carries one (asserted below).
+  it("posts for a public paper with a private attachment (it carries a revision): no report text in the URL", async () => {
+    await resolve({
+      itemId: "openalex:W7000000003",
+      url: "https://example.org/a-public-paper",
+      doi: "10.1000/public",
+      query: "  Peer's words from the deep report on the attached PDF  ",
+      paperTitle: "The Public Paper's Title",
+      figureIndex: 3,
+      revision: 2,
+    });
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0].method).toBe("POST");
+    expect(calls[0].url).toBe("/api/figure");
+    expect(calls[0].cache).toBe("no-store");
+    expect(JSON.parse(calls[0].body ?? "null")).toEqual({
+      id: "openalex:W7000000003",
+      v: "12",
+      url: "https://example.org/a-public-paper",
+      doi: "10.1000/public",
+      query: "Peer's words from the deep report on the attached PDF",
+      paperTitle: "The Public Paper's Title",
+      idx: 3,
+      rev: 2,
+    });
+  });
+
+  it("only a paper with a private attachment carries a revision", () => {
+    // The two places a Paper gets one: the upload's own record, and the
+    // supplement merge (`use-private-supplement.ts`, `revision:
+    // upload.revision`). A paper from a source never does.
+    const fromSource = rawItemToPaper({
+      id: "openalex:W7000000004",
+      source: "openalex",
+      title: "A Paper From A Source",
+      authors: [],
+      url: "https://example.org/p",
+      publishedAt: "2026-09-01",
+      metadata: {},
+    });
+    const fromUpload = uploadMetaToPaper({
+      hash16: "0123456789abcdef", fileName: "paper.pdf", title: "An Upload", uploadedAt: "2026-09-15T00:00:00.000Z",
+      textStatus: "ok", revision: 1,
+    });
+
+    expect(fromSource.revision).toBeUndefined();
+    expect(fromUpload.revision).toBe(1);
+  });
+
+  it("keeps a public paper's GET exactly as it was (no attachment, so no revision)", async () => {
     await resolve({
       itemId: "arxiv:2607.00001",
       url: "https://arxiv.org/abs/2607.00001",

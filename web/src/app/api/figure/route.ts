@@ -1,5 +1,6 @@
 // GET /api/figure?id=<itemId>&url=<originUrl>
-// POST /api/figure  { id, url, doi, query, idx, rev, v }   (an upload's figure)
+// POST /api/figure  { id, url, doi, query, paperTitle, idx, rev, v }
+//   (an upload's figure, or a figure of a paper with a private attachment)
 //
 // Lazy figure resolver — hit per-card after feed loads. CDN-cached for
 // 24h so the same paper id only triggers an upstream fetch at most once
@@ -11,7 +12,10 @@
 // the request log printed them. An upload's request is a POST now; its
 // title comes from the owner-checked record, never from the client; and a
 // GET for an upload that still carries either is refused before any work.
-// A public paper keeps its GET and the day-long edge cache unchanged.
+// P0-11 (§1e.11): a public paper with a private PDF attached posts too — its
+// `query` is text from the deep report on that PDF — and every POST answer
+// is `private, no-store`. A public paper with no attachment keeps its GET
+// and the day-long edge cache unchanged.
 
 import { NextResponse, type NextRequest } from "next/server";
 import { extractFigure } from "@/lib/figures/extract";
@@ -38,8 +42,9 @@ function figureIndexOf(value: unknown): number {
   return Math.max(0, parseInt(String(value), 10) || 0);
 }
 
-/** One implementation for both methods. */
-async function answer(input: FigureRequest): Promise<Response> {
+/** One implementation for both methods. `privately` marks an answer that
+ *  must never be cached on the way: an upload's, and every POST's. */
+async function answer(input: FigureRequest, { privately = false } = {}): Promise<Response> {
   // P0-08 (§1e.8): any spelling of the prefix is a claim; only the canonical
   // id of an upload the caller owns gets past it.
   const privateUpload = claimsUploadId(input.id);
@@ -77,14 +82,15 @@ async function answer(input: FigureRequest): Promise<Response> {
     // holding one is the proof a check ran.
     ctx: { entitlement: gate.entitlement, byok: false },
   });
-  const cacheControl = privateUpload ? "private, no-store" : result.imageUrl
+  const isPrivate = privateUpload || privately;
+  const cacheControl = isPrivate ? "private, no-store" : result.imageUrl
     ? "public, s-maxage=86400, stale-while-revalidate=604800"
     : "no-store";
 
   return NextResponse.json(result, {
     headers: {
       "Cache-Control": cacheControl,
-      ...(privateUpload ? PRIVATE_UPLOAD_HEADERS : {}),
+      ...(isPrivate ? PRIVATE_UPLOAD_HEADERS : {}),
     },
   });
 }
@@ -114,9 +120,11 @@ export async function GET(req: NextRequest) {
   });
 }
 
-/** The same request in a JSON body, for an upload: `{ id, url, doi, query,
- *  idx, rev, v }`. `rev` and `v` only keep two requests apart; a
- *  `paperTitle` in the body is never read. */
+/** The same request in a JSON body: `{ id, url, doi, query, paperTitle,
+ *  idx, rev, v }` — for an upload (P0-10) and for a public paper with a
+ *  private attachment (P0-11). `rev` and `v` only keep two requests apart.
+ *  `paperTitle` is read only for a public id; an upload's comes from its
+ *  record. Every answer is `private, no-store`. */
 export async function POST(req: NextRequest) {
   let body: Record<string, unknown>;
   try {
@@ -136,6 +144,7 @@ export async function POST(req: NextRequest) {
     url: text(body.url),
     doi: text(body.doi),
     query: text(body.query),
+    paperTitle: claimsUploadId(id) ? undefined : text(body.paperTitle),
     figureIndex: figureIndexOf(body.idx),
-  });
+  }, { privately: true });
 }

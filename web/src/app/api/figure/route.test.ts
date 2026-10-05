@@ -231,6 +231,27 @@ describe("POST /api/figure — an upload's figure request (P0-10)", () => {
     expect(mocks.extractFigure).not.toHaveBeenCalled();
   });
 
+  // P0-11 (§1e.11): a public paper with a private attachment posts too, so
+  // its report text stays out of a URL. Its title is public and comes from
+  // the body; the answer is private like every POST's.
+  it("serves a public paper's POST with the body's title, privately", async () => {
+    const response = await POST(post({
+      id: "openalex:W7000000003", v: "12", url: "https://example.org/a-public-paper",
+      query: "words from the deep report on the attached PDF", paperTitle: "The Public Paper's Title", idx: 2, rev: 2,
+    }));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual(FOUND);
+    expect(response.headers.get("Cache-Control")).toBe("private, no-store");
+    expect(mocks.ownedUpload).not.toHaveBeenCalled();
+    expect(mocks.extractFigure).toHaveBeenCalledWith(expect.objectContaining({
+      itemId: "openalex:W7000000003",
+      query: "words from the deep report on the attached PDF",
+      paperTitle: "The Public Paper's Title",
+      figureIndex: 2,
+    }));
+  });
+
   it("refuses a body that is not JSON, or has no id", async () => {
     const notJson = await POST(new NextRequest("http://localhost/api/figure", { method: "POST", body: "id=upload:x" }));
     const noId = await POST(post({ query: "words" }));

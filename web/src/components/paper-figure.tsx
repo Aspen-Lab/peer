@@ -109,12 +109,22 @@ async function fetchFigure(
   // P0-10 (§1e.10, A's F7): an upload's figure request is a POST. Its
   // `query` is Peer's words about the private paper and its title is the
   // PDF's own; in a GET both sat in the URL, and the server's request log
-  // printed them. The body carries the query; the title is not sent at all —
-  // the route reads it from the owner's record. A public paper's GET below
-  // is unchanged, byte for byte.
+  // printed them. The body carries the query; an upload's title is not sent
+  // at all — the route reads it from the owner's record.
+  //
+  // P0-11 (§1e.11): so is the request of a public paper with a private PDF
+  // attached, whose `query` is text from the deep report built from that
+  // PDF. `revision !== undefined` is how this code knows: only a paper with
+  // a private attachment carries a revision — the upload's own record
+  // (`uploadMetaToPaper`) and the supplement merge
+  // (`use-private-supplement.ts`) are the only places a Paper gets one
+  // (asserted in `paper-figure.test.ts`). Its title is the public paper's
+  // and may travel in the body. A public paper with no attachment keeps the
+  // GET below, unchanged byte for byte.
+  const upload = claimsUploadId(itemId);
   let path: string;
   let init: RequestInit;
-  if (claimsUploadId(itemId)) {
+  if (upload || revision !== undefined) {
     path = "/api/figure";
     init = {
       method: "POST",
@@ -124,6 +134,7 @@ async function fetchFigure(
         ...(url ? { url } : {}),
         ...(doi ? { doi } : {}),
         ...(query?.trim() ? { query: query.trim() } : {}),
+        ...(!upload && paperTitle?.trim() ? { paperTitle: paperTitle.trim() } : {}),
         ...(figureIndex > 0 ? { idx: figureIndex } : {}),
         // 9-15: see `rev` below.
         ...(revision !== undefined ? { rev: revision } : {}),
