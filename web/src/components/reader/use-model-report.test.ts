@@ -1,5 +1,9 @@
-import { describe, expect, it } from "vitest";
-import { buildReportKey } from "./use-model-report";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { emptyReport, type PaperReport } from "@/lib/papers/report";
+import { defaultProfile, type Paper, type UserProfile } from "@/types";
+import { buildReportKey, rememberReport, useModelReport } from "./use-model-report";
 
 // 9-15 (A9-10): `buildReportKey` is a pure extraction of the report cache
 // key so it can be unit-tested without rendering the hook (this project's
@@ -55,5 +59,87 @@ describe("buildReportKey", () => {
     expect(key).not.toBe(buildReportKey({ id: "a", fullTextUploadId: "upload:x", revision: undefined }, "deep", "p", "default"));
     expect(key).not.toBe(buildReportKey({ id: "a", fullTextUploadId: undefined, revision: undefined }, "abstract", "p", "default"));
     expect(key).not.toBe(buildReportKey({ id: "a", fullTextUploadId: undefined, revision: undefined }, "deep", "p", "gemini"));
+  });
+});
+
+// P0-02 (spec D0): a private PDF's report is cached in the browser under a
+// key that already names the upload and its revision, instead of never —
+// the second open of the same PDF reads the report back rather than asking
+// (and paying) for it again. Mounted through the server renderer: this
+// project's Vitest has no DOM, but the hook's cache read happens during
+// render, which is exactly the "second mount" being tested. Effects (the
+// request) do not run here, so nothing is sent.
+describe("useModelReport — private PDF report cache (P0-02)", () => {
+  function memoryStorage(): Storage {
+    const items = new Map<string, string>();
+    return {
+      get length() {
+        return items.size;
+      },
+      clear: () => items.clear(),
+      getItem: (key) => items.get(key) ?? null,
+      key: (index) => [...items.keys()][index] ?? null,
+      removeItem: (key) => void items.delete(key),
+      setItem: (key, value) => void items.set(key, String(value)),
+    };
+  }
+
+  // A reader on their own key, so a supplement goes deep the way it does in
+  // use. A placeholder string: no request leaves a server render.
+  const profile: UserProfile = { ...defaultProfile, feedAiProvider: "anthropic", feedAiApiKey: "placeholder-not-a-key" };
+  const supplement: Paper = {
+    id: "openalex:W7000000001",
+    fullTextUploadId: "upload:0123456789abcdef",
+    revision: 1,
+    title: "A Paper With A Private PDF",
+    authors: [],
+    relevanceReason: "",
+    venue: "",
+    source: "other",
+    summaryIntro: "",
+    summaryExperimentKeywords: [],
+    summaryResultDiscussion: "",
+    isSaved: false,
+  };
+  const standalone: Paper = { ...supplement, id: "upload:fedcba9876543210", fullTextUploadId: undefined };
+  const report: PaperReport = {
+    ...emptyReport("deep"),
+    noLlm: false,
+    whatItProposes: { summary: "A report read once.", methods: [] },
+  };
+
+  function mount(paper: Paper): string {
+    function Probe() {
+      const state = useModelReport({ paper, profile });
+      return createElement("p", null, state.report ? `hit:${state.report.whatItProposes.summary}` : "miss");
+    }
+    return renderToStaticMarkup(createElement(Probe));
+  }
+
+  beforeEach(() => {
+    vi.stubGlobal("localStorage", memoryStorage());
+    vi.stubGlobal("window", globalThis);
+  });
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("reads a supplement's deep report back on the second mount", () => {
+    expect(mount(supplement)).toContain("miss");
+    rememberReport(buildReportKey(supplement, "deep", "", profile.feedAiProvider), report);
+
+    expect(mount(supplement)).toContain("hit:A report read once.");
+  });
+
+  it("reads a standalone upload's report back on the second mount", () => {
+    const depth = "abstract"; // a standalone upload goes deep only with the profile switch on
+    rememberReport(buildReportKey(standalone, depth, "", profile.feedAiProvider), { ...report, depth });
+
+    expect(mount(standalone)).toContain("hit:A report read once.");
+  });
+
+  it("misses when the upload's revision changes", () => {
+    rememberReport(buildReportKey(supplement, "deep", "", profile.feedAiProvider), report);
+
+    expect(mount({ ...supplement, revision: 2 })).toContain("miss");
   });
 });

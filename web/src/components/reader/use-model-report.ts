@@ -64,6 +64,12 @@ function readCached(key: string): PaperReport | null {
   return entry.report;
 }
 
+/** What a settled report is cached as — exported so a test can stand in for
+ *  the first visit that wrote it. */
+export function rememberReport(key: string, report: PaperReport): void {
+  writeCached(key, report);
+}
+
 function writeCached(key: string, report: PaperReport): void {
   if (!key || typeof window === "undefined") return;
   try {
@@ -182,10 +188,15 @@ export function useModelReport({
   const deep =
     Boolean(profile.deepReportEnabled || paper?.fullTextUploadId) && aiMode !== "none";
   const depth = deep ? "deep" : "abstract";
-  const privatePdf = !!paper?.fullTextUploadId || !!paper?.id.startsWith("upload:");
   const reportKey = buildReportKey(paper, depth, project, profile.feedAiProvider);
 
-  const cached = useMemo(() => privatePdf ? null : readCached(reportKey), [reportKey, privatePdf]);
+  // P0-02 (spec D0): a private PDF's report is cached like any other. It
+  // never used to be, so every open of an attached PDF asked for — and
+  // charged — a fresh deep report. The key already names the upload and its
+  // revision (`buildReportKey`), so a re-upload, a new attachment or another
+  // PDF is a different key; the server still re-checks the owner and the
+  // revision on every request it does receive.
+  const cached = useMemo(() => readCached(reportKey), [reportKey]);
   const [result, setResult] = useState<Result | null>(null);
   const [buildup, setBuildup] = useState<{
     key: string;
@@ -263,7 +274,7 @@ export function useModelReport({
         return;
       }
       const shown = outcome === "shown" ? report : null;
-      if (shown && !privatePdf) writeCached(reportKey, shown);
+      if (shown) writeCached(reportKey, shown);
       setBuildup(null);
       setResult({ key: reportKey, report: shown, failed: false });
     };
@@ -339,7 +350,6 @@ export function useModelReport({
     return () => controller.abort();
   }, [
     reportKey,
-    privatePdf,
     cached,
     contextHint,
     project,

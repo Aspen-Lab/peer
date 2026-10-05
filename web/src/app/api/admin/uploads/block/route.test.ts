@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { rm, writeFile } from "node:fs/promises";
 import { afterEach, describe, expect, it } from "vitest";
-import { metaPath, pdfPath, readUploadMeta, sha16, writeUploadMeta } from "@/lib/papers/upload-store";
+import { docPath, metaPath, pdfPath, readUploadDoc, readUploadMeta, sha16, uploadDocKey, writeUploadDoc, writeUploadMeta } from "@/lib/papers/upload-store";
 import { ownedUpload } from "@/lib/papers/upload-access";
 
 import { POST } from "./route";
@@ -140,6 +140,40 @@ describe("POST /api/admin/uploads/block", () => {
       await rm(metaPath(blockedHash), { force: true });
       await rm(pdfPath(survivingHash), { force: true });
       await rm(metaPath(survivingHash), { force: true });
+    }
+  });
+
+  // P0-02 (spec D0, manager ruling §1d.2): the text Peer read out of the
+  // upload is kept in a sidecar beside it. A takedown removes that too —
+  // the PDF is no longer the only per-upload file on disk.
+  it("removes the extracted-text sidecar along with the PDF", async () => {
+    process.env.ADMIN_TOKEN = "correct-token";
+    const hash16 = sha16(Buffer.from("p0-02: block removes the sidecar"));
+    const ownerKey = "owner-under-test-p0-02";
+    await writeFile(pdfPath(hash16), Buffer.from("%PDF-1.4 fixture"), { mode: 0o600 });
+    await writeUploadMeta(hash16, {
+      hash16, fileName: "paper.pdf", title: "A Real Paper", uploadedAt: "2026-09-15T00:00:00.000Z",
+      textStatus: "ok", status: "ready", revision: 1, ownerKey, documentKey: "doc-key-p0-02",
+      expiresAt: new Date(Date.now() + 86_400_000).toISOString(),
+    });
+    const key = uploadDocKey(ownerKey, hash16, 1, 2);
+    await writeUploadDoc(hash16, key, {
+      title: "A Real Paper",
+      sections: [{ id: "s0", heading: "1 Introduction", canonical: "introduction", text: "Fixture prose.", page: 1 }],
+      figureCaptions: [],
+      source: "pdf",
+    });
+
+    try {
+      const res = await call({ hash16 }, { authorization: "Bearer correct-token" });
+      expect(res.status).toBe(200);
+      expect(existsSync(pdfPath(hash16))).toBe(false);
+      expect(existsSync(docPath(hash16))).toBe(false);
+      expect(await readUploadDoc(hash16, key)).toBeNull();
+    } finally {
+      await rm(pdfPath(hash16), { force: true });
+      await rm(metaPath(hash16), { force: true });
+      await rm(docPath(hash16), { force: true });
     }
   });
 

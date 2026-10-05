@@ -6,7 +6,8 @@
 // is cleaner and cheaper to parse than PDF. PDF is the fallback.
 //
 // Output is cached per paper for 1 hour so repeated report renders / figure
-// binding share the same fetch.
+// binding share the same fetch. A private upload is never in that shared
+// cache: its text is kept for its owner alone (`uploadFullText`, P0-02).
 
 import {
   chooseHtmlExtractor,
@@ -16,8 +17,9 @@ import {
 import { classifyHardAccessStatus } from "./paywall-status";
 import { extractPdfTextFromPath, tryExtractPdfText } from "./pdf-text";
 import { collectSourceLinks, type SourceLink } from "./source-links";
-import { bareUploadId, pdfPath } from "./upload-store";
+import { bareUploadId, pdfPath, readUploadDoc, uploadDocKey, writeUploadDoc, type UploadMeta } from "./upload-store";
 import { ownedUpload } from "./upload-access";
+import { UPLOAD_CONCEPT_EXTRACTION_VERSION } from "@/lib/preferences/upload-concepts";
 
 const FETCH_TIMEOUT_MS = 12_000;
 const MAX_HTML_BYTES = 4_000_000;
@@ -255,15 +257,14 @@ async function tryUploadLink(hash16: string): Promise<{ status: FullTextStatus; 
   return { status: "no_full_text", reason: result.reason ?? "PDF text extractor failed on this server." };
 }
 
+function uploadLink(hash16: string): SourceLink {
+  return { url: `/api/papers/upload/${hash16}/file`, kind: "pdf", label: "upload", rank: 0 };
+}
+
 async function buildResult(input: FullTextInput): Promise<FullTextResult> {
   const uploadHash16 = bareUploadId(input.paperId);
   if (uploadHash16) {
-    const link: SourceLink = {
-      url: `/api/papers/upload/${uploadHash16}/file`,
-      kind: "pdf",
-      label: "upload",
-      rank: 0,
-    };
+    const link = uploadLink(uploadHash16);
     const outcome = await tryUploadLink(uploadHash16);
     const attempts: FullTextResult["attempts"] = [
       { link, outcome: outcome.status + (outcome.reason ? `: ${outcome.reason}` : "") },
@@ -318,6 +319,51 @@ async function buildResult(input: FullTextInput): Promise<FullTextResult> {
   };
 }
 
+/** Upload readings in flight, by cache key: the reading request and the
+ *  report request for one page open arrive together and share one read. */
+const uploadsInFlight = new Map<string, Promise<FullTextResult>>();
+
+/**
+ * P0-02 (spec D0): an upload's text, read out of the PDF once per owner,
+ * revision and extraction version. Called only after `ownedUpload` has
+ * passed. The document is kept by `upload-store` (memory for the hour, the
+ * sidecar after that) under its own owner-scoped key — never in the shared
+ * `cache` below, which any reader of a public paper id is served from. Only
+ * a reading that found text is kept: a scan, or a failed read, is read again
+ * next time.
+ *
+ * The extraction version is `UPLOAD_CONCEPT_EXTRACTION_VERSION`, the
+ * upload's own record of which extractor read it: bumping it when the
+ * extractor changes (P0-03) retires every document read by the old one.
+ */
+async function uploadFullText(input: FullTextInput, hash16: string, meta: UploadMeta): Promise<FullTextResult> {
+  const key = uploadDocKey(meta.ownerKey ?? "", hash16, meta.revision, UPLOAD_CONCEPT_EXTRACTION_VERSION);
+  const inFlight = uploadsInFlight.get(key);
+  if (inFlight) return inFlight;
+
+  const pending = (async (): Promise<FullTextResult> => {
+    const kept = await readUploadDoc(hash16, key);
+    if (kept) {
+      const link = uploadLink(hash16);
+      return { status: "ok", doc: kept, sourceLink: link, attempts: [{ link, outcome: "ok" }] };
+    }
+    const result = await buildResult(input);
+    if (result.status === "ok" && result.doc) {
+      await writeUploadDoc(hash16, key, result.doc).catch((error: NodeJS.ErrnoException) => {
+        // The reading stands; only the cache failed. No text in the log.
+        console.warn("[papers/full-text] could not keep an upload's text:", error?.code ?? "unknown error");
+      });
+    }
+    return result;
+  })();
+  uploadsInFlight.set(key, pending);
+  try {
+    return await pending;
+  } finally {
+    uploadsInFlight.delete(key);
+  }
+}
+
 /**
  * Cache-aware full-text fetch. Returns the same shape regardless of whether
  * the text came from HTML or PDF.
@@ -325,9 +371,11 @@ async function buildResult(input: FullTextInput): Promise<FullTextResult> {
 export async function getFullText(input: FullTextInput): Promise<FullTextResult> {
   if (input.paperId.startsWith("upload:")) {
     const hash = bareUploadId(input.paperId);
-    if (!hash || !(await ownedUpload(hash))) return { status: "source_unavailable", attempts: [], reason: "Private upload unavailable." };
-    // Authenticate before reading, and never put private text in shared caches.
-    return buildResult(input);
+    const meta = hash ? await ownedUpload(hash) : null;
+    if (!hash || !meta) return { status: "source_unavailable", attempts: [], reason: "Private upload unavailable." };
+    // Authenticate before reading — the owner's cache included — and never
+    // put private text in the shared cache.
+    return uploadFullText(input, hash, meta);
   }
   const key = input.paperId;
   const cached = cache.get(key);

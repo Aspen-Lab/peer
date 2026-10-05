@@ -3,17 +3,19 @@
 // need to agree on about an uploaded PDF's id scheme and on-disk layout,
 // defined exactly once — per Ruling 4 (§1e).
 //
-// Storage: `web/.local-data/uploads/<hash16>.pdf` + `<hash16>.json`, already
+// Storage: `web/.local-data/uploads/<hash16>.pdf` + `<hash16>.json` (+ the
+// extracted-text sidecar `<hash16>.doc.json`, P0-02, below), already
 // covered by `web/.gitignore`'s `/.local-data` (confirmed — nothing here is
 // ever committed). Id: `upload:<hash16>`. Idempotent on re-upload — the same
 // bytes hash to the same id, so a repeat upload is a no-op write, not a
 // duplicate paper.
 
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
-import { mkdir, readFile, writeFile, readdir, unlink } from "node:fs/promises";
+import { mkdir, readFile, rename, writeFile, readdir, unlink } from "node:fs/promises";
 import path from "node:path";
 import type { Paper, PreferenceConcept } from "@/types";
+import type { ExtractedDocument } from "./html-text";
 
 // Mirrors `papers/pdf-text.ts`'s `resolveHelperScript` dual-candidate cwd
 // resolution — the dev server and some test runners start from different
@@ -75,6 +77,12 @@ export function pdfPath(hash16: string): string {
 export function metaPath(hash16: string): string {
   if (!isValidHash16(hash16)) throw new Error("Invalid upload id");
   return path.join(UPLOAD_DIR, `${hash16}.json`);
+}
+
+/** P0-02: the text Peer read out of the upload, beside it. */
+export function docPath(hash16: string): string {
+  if (!isValidHash16(hash16)) throw new Error("Invalid upload id");
+  return path.join(UPLOAD_DIR, `${hash16}.doc.json`);
 }
 
 export interface UploadMeta {
@@ -237,14 +245,104 @@ export async function attachedUploadHash(ownerKey: string, paperId: string): Pro
   } catch { return null; }
 }
 
+// ── P0-02: the extracted document, cached for its owner ───────────────
+//
+// Reading an upload used to mean reading the PDF again on every open — the
+// reading request and the report request each, every visit — because the
+// server kept only the file and a small record. The `ExtractedDocument` is
+// now kept for the hour in memory and, after that, in `<hash16>.doc.json`
+// beside the upload: owner-only (0600), written whole or not at all (a temp
+// file renamed into place), and removed with the upload by `deleteUpload`,
+// the purge job and the operator's takedown.
+//
+// The cache key is `owner|hash16|revision|extractionVersion`. The file holds
+// a digest of that key, never the owner key itself, and a read under any
+// other key — another revision, a newer extractor, another owner — misses.
+// Callers look it up only after the owner check has passed
+// (`full-text.ts`); nothing here decides who may read an upload.
+
+const DOC_CACHE_TTL_MS = 60 * 60 * 1000;
+const DOC_CACHE_KEEP = 32;
+const recentDocs = new Map<string, { key: string; doc: ExtractedDocument; ts: number }>();
+
+export function uploadDocKey(
+  ownerKey: string,
+  hash16: string,
+  revision: number | undefined,
+  extractionVersion: number,
+): string {
+  return `${ownerKey}|${hash16}|${revision ?? ""}|${extractionVersion}`;
+}
+
+function keyDigest(key: string): string {
+  return createHash("sha256").update(key).digest("hex");
+}
+
+function rememberDoc(hash16: string, key: string, doc: ExtractedDocument): void {
+  recentDocs.delete(hash16);
+  recentDocs.set(hash16, { key, doc, ts: Date.now() });
+  while (recentDocs.size > DOC_CACHE_KEEP) {
+    const oldest = recentDocs.keys().next().value;
+    if (oldest === undefined) break;
+    recentDocs.delete(oldest);
+  }
+}
+
+function looksLikeDocument(value: unknown): value is ExtractedDocument {
+  if (!value || typeof value !== "object") return false;
+  const doc = value as Partial<ExtractedDocument>;
+  return Array.isArray(doc.sections) && Array.isArray(doc.figureCaptions) && typeof doc.source === "string";
+}
+
+/** The document cached under exactly `key`, from memory or the sidecar; null
+ *  when there is none, it is stale, or it was written under another key. */
+export async function readUploadDoc(hash16: string, key: string): Promise<ExtractedDocument | null> {
+  const hit = recentDocs.get(hash16);
+  if (hit && hit.key === key && Date.now() - hit.ts <= DOC_CACHE_TTL_MS) return hit.doc;
+  try {
+    const stored = JSON.parse(await readFile(docPath(hash16), "utf-8")) as { key?: unknown; doc?: unknown };
+    if (stored.key !== keyDigest(key) || !looksLikeDocument(stored.doc)) return null;
+    rememberDoc(hash16, key, stored.doc);
+    return stored.doc;
+  } catch {
+    return null;
+  }
+}
+
+/** Keep `doc` for `key`: in memory, and in the sidecar via a temp file
+ *  renamed into place, so a reader never sees half a file. */
+export async function writeUploadDoc(hash16: string, key: string, doc: ExtractedDocument): Promise<void> {
+  const target = docPath(hash16);
+  rememberDoc(hash16, key, doc);
+  await ensureUploadDir();
+  const temporary = `${target}.${randomUUID()}.tmp`;
+  try {
+    await writeFile(temporary, JSON.stringify({ key: keyDigest(key), doc }), { encoding: "utf-8", mode: 0o600 });
+    await rename(temporary, target);
+  } catch (error) {
+    await unlink(temporary).catch(() => undefined);
+    throw error;
+  }
+}
+
+/** Forget the extracted document: the memory entry and the sidecar. */
+export async function removeUploadDoc(hash16: string): Promise<void> {
+  recentDocs.delete(hash16);
+  await unlink(docPath(hash16)).catch((error: NodeJS.ErrnoException) => {
+    if (error.code !== "ENOENT") throw error;
+  });
+}
+
 export async function deleteUpload(meta: UploadMeta): Promise<void> {
-  // Remove permission/metadata first. No derived upload content is cached.
+  // Remove permission/metadata first, then the file, then the text Peer
+  // read out of it (P0-02).
   await unlink(metaPath(meta.hash16)).catch((error: NodeJS.ErrnoException) => {
     if (error.code !== "ENOENT") throw error;
   });
   await unlink(pdfPath(meta.hash16)).catch((error: NodeJS.ErrnoException) => {
     if (error.code !== "ENOENT") throw error;
   });
+  await removeUploadDoc(meta.hash16);
   for (const paperId of meta.paperIds ?? []) {
     if (meta.ownerKey && await attachedUploadHash(meta.ownerKey, paperId) === meta.hash16) {
       await unlink(attachmentPath(meta.ownerKey, paperId)).catch(() => undefined);
@@ -272,6 +370,14 @@ export async function purgeExpiredUploads(): Promise<void> {
   for (const name of names) {
     if (STRAY_UPLOAD_FILE_PATTERNS.some((pattern) => pattern.test(name))) {
       await unlink(path.join(UPLOAD_DIR, name)).catch(() => undefined);
+      continue;
+    }
+    if (/^[0-9a-f]{16}\.doc\.json$/.test(name)) {
+      // P0-02: a sidecar outlives nothing. One whose upload is gone (a
+      // delete that raced a write) or taken down is removed here; an expired
+      // upload's goes with it through `deleteUpload` below.
+      const owner = await readUploadMeta(name.slice(0, 16));
+      if (!owner || owner.status === "blocked" || owner.status === "deleted") await removeUploadDoc(name.slice(0, 16));
       continue;
     }
     if (!/^[0-9a-f]{16}\.json$/.test(name)) continue;

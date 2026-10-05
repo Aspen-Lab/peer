@@ -7,7 +7,8 @@
 // so the page is complete before any request. The server reading adds the
 // full-text blocks (below the Decision block, so nothing above it moves) and
 // is one document per paper for every reader, which is why it can live in
-// localStorage for a day: it carries no profile and no key.
+// localStorage for a day: it carries no profile and no key. A private PDF's
+// reading is the owner's own and lives there under its own key (P0-02).
 
 import { useEffect, useMemo, useState } from "react";
 import type { Paper } from "@/types";
@@ -52,18 +53,24 @@ function readCache(): ReadingCache {
   }
 }
 
-function readCached(paperId: string): PaperReading | null {
-  const entry = readCache()[paperId];
+function readCached(key: string): PaperReading | null {
+  const entry = readCache()[key];
   if (!entry?.reading || entry.reading.version !== READING_VERSION) return null;
   if (Date.now() - (entry.ts ?? 0) >= TTL_MS) return null;
   return entry.reading;
 }
 
-function writeCached(paperId: string, reading: PaperReading): void {
+/** What a server reading is cached as — exported so a test can stand in for
+ *  the first visit that wrote it. */
+export function rememberReading(key: string, reading: PaperReading): void {
+  writeCached(key, reading);
+}
+
+function writeCached(key: string, reading: PaperReading): void {
   if (typeof window === "undefined") return;
   try {
     const cache = readCache();
-    cache[paperId] = { reading, ts: Date.now() };
+    cache[key] = { reading, ts: Date.now() };
     const pruned = Object.fromEntries(
       Object.entries(cache)
         .sort((a, b) => (b[1].ts ?? 0) - (a[1].ts ?? 0))
@@ -104,7 +111,11 @@ export function useReading(paper: Paper | undefined): {
   // Read once per paper. The server renders with no window and the first
   // client render has no paper yet (the store hydrates after mount), so the
   // two agree.
-  const cached = useMemo(() => (paperId && !privatePdf ? readCached(paperId) : null), [paperId, privatePdf]);
+  //
+  // P0-02 (spec D0): keyed by `readingKey`, which names the upload and its
+  // revision, so a private PDF's reading is cached too — under its own key,
+  // never the public paper's — instead of being read again on every open.
+  const cached = useMemo(() => (paperId ? readCached(readingKey) : null), [paperId, readingKey]);
 
   const [fetched, setFetched] = useState<Fetched | null>(null);
 
@@ -123,9 +134,15 @@ export function useReading(paper: Paper | undefined): {
         // The route answers `no-store` when the full-text attempt timed out —
         // that reading is the abstract alone, and keeping it for a day would
         // hide the sections the next request gets. Follow the server's own
-        // verdict on what is worth keeping.
+        // verdict on what is worth keeping. A private reading is always
+        // `private, no-store` (it must never sit in a shared HTTP cache), so
+        // there the reading itself says whether the PDF was read: a
+        // `fullText` of "none" is the timed-out, abstract-only answer.
         const cacheControl = res.headers.get("cache-control") ?? "";
-        if (!privatePdf && !/\bno-store\b/i.test(cacheControl)) writeCached(paperId, reading);
+        const keep = privatePdf
+          ? reading.provenance?.fullText !== "none"
+          : !/\bno-store\b/i.test(cacheControl);
+        if (keep) writeCached(readingKey, reading);
         setFetched({ id: readingKey, reading });
       } catch {
         if (!controller.signal.aborted) setFetched({ id: readingKey, reading: null });

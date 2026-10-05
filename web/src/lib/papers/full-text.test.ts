@@ -1,10 +1,31 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { existsSync } from "node:fs";
+import { rm, stat } from "node:fs/promises";
+import path from "node:path";
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ExtractedDocument } from "./html-text";
 import type { PdfTextResult } from "./pdf-text";
 import type { SourceLink } from "./source-links";
+import type { UploadMeta } from "./upload-store";
+
+// P0-02: the upload text cache writes a sidecar beside the upload. This file
+// gets its own private upload directory, set before `upload-store` reads it,
+// so nothing here touches `.local-data/uploads` or another test file's.
+const uploadDir = await vi.hoisted(async () => {
+  const { mkdtempSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const dir = mkdtempSync(join(tmpdir(), "peer-full-text-test-"));
+  process.env.PEER_PRIVATE_UPLOAD_DIR = dir;
+  return dir;
+});
+
+afterAll(async () => {
+  delete process.env.PEER_PRIVATE_UPLOAD_DIR;
+  await rm(uploadDir, { recursive: true, force: true });
+});
 
 const mocks = vi.hoisted(() => ({
-  ownedUpload: vi.fn(async () => ({ ownerKey: "test" })),
+  ownedUpload: vi.fn(async (): Promise<Partial<UploadMeta> | null> => ({ ownerKey: "test" })),
   collectSourceLinks: vi.fn(),
   extractPdfTextFromPath: vi.fn(),
 }));
@@ -173,5 +194,107 @@ describe("getFullText — 1-28, an upload: id reads the local file, never collec
 
     expect(result.status).toBe("no_full_text");
     expect(result.attempts[0].outcome).toContain("no-python");
+  });
+});
+
+// P0-02 (spec D0): an upload's text is read out of the PDF once per owner,
+// revision and extraction version, kept in memory for the hour and in a
+// sidecar beside the upload after that — and only ever looked up after the
+// owner check has passed.
+describe("getFullText — P0-02, an upload is extracted once and cached for its owner", () => {
+  const doc: ExtractedDocument = {
+    title: "A Cached Upload",
+    sections: [
+      { id: "s0", heading: "1 Introduction", canonical: "introduction", text: "Cached prose.", page: 1 },
+      { id: "s1", heading: "2 Methods", canonical: "methods", text: "More cached prose.", page: 2 },
+    ],
+    figureCaptions: [],
+    source: "pdf",
+    pageCount: 4,
+    reason: null,
+  };
+  const owner = (ownerKey: string, revision = 1) => async (): Promise<Partial<UploadMeta>> => ({ ownerKey, revision });
+  const sidecar = (hash16: string) => path.join(uploadDir, `${hash16}.doc.json`);
+
+  beforeEach(() => {
+    mocks.collectSourceLinks.mockReset();
+    mocks.extractPdfTextFromPath.mockReset();
+    mocks.extractPdfTextFromPath.mockResolvedValue({ ok: true, doc } satisfies PdfTextResult);
+    mocks.ownedUpload.mockImplementation(owner("owner-a"));
+  });
+
+  afterEach(() => {
+    mocks.ownedUpload.mockImplementation(async () => ({ ownerKey: "test" }));
+  });
+
+  it("runs the extractor once across two opens, and keeps the text beside the upload, owner-only", async () => {
+    const first = await getFullText({ paperId: "upload:00000000000000a1" });
+    const second = await getFullText({ paperId: "upload:00000000000000a1" });
+
+    expect(mocks.extractPdfTextFromPath).toHaveBeenCalledTimes(1);
+    expect(first.status).toBe("ok");
+    expect(second).toEqual(first);
+    expect(second.doc).toEqual(doc);
+    expect(existsSync(sidecar("00000000000000a1"))).toBe(true);
+    expect((await stat(sidecar("00000000000000a1"))).mode & 0o777).toBe(0o600);
+  });
+
+  it("shares one extraction between two opens that arrive together", async () => {
+    const [a, b] = await Promise.all([
+      getFullText({ paperId: "upload:00000000000000a2" }),
+      getFullText({ paperId: "upload:00000000000000a2" }),
+    ]);
+
+    expect(mocks.extractPdfTextFromPath).toHaveBeenCalledTimes(1);
+    expect(a.doc).toEqual(doc);
+    expect(b.doc).toEqual(doc);
+  });
+
+  it("reads the sidecar back after a cold start instead of reading the PDF again", async () => {
+    await getFullText({ paperId: "upload:00000000000000a3" });
+    expect(mocks.extractPdfTextFromPath).toHaveBeenCalledTimes(1);
+
+    // A fresh server process: no module state, only what is on disk.
+    vi.resetModules();
+    const { getFullText: coldGetFullText } = await import("./full-text");
+    const cold = await coldGetFullText({ paperId: "upload:00000000000000a3" });
+
+    expect(mocks.extractPdfTextFromPath).toHaveBeenCalledTimes(1);
+    expect(cold.status).toBe("ok");
+    expect(cold.doc).toEqual(doc);
+    expect(cold.sourceLink?.label).toBe("upload");
+  });
+
+  it("reads the PDF again for a new revision, and for a different owner key", async () => {
+    await getFullText({ paperId: "upload:00000000000000a4" });
+    mocks.ownedUpload.mockImplementation(owner("owner-a", 2));
+    await getFullText({ paperId: "upload:00000000000000a4" });
+    mocks.ownedUpload.mockImplementation(owner("owner-b", 2));
+    await getFullText({ paperId: "upload:00000000000000a4" });
+
+    expect(mocks.extractPdfTextFromPath).toHaveBeenCalledTimes(3);
+  });
+
+  it("answers anyone the owner check refuses 'unavailable', never with the cached text", async () => {
+    await getFullText({ paperId: "upload:00000000000000a5" });
+    // ownedUpload is the owner check: it refuses anyone whose key is not the
+    // record's. The cached text must not leak past that refusal.
+    mocks.ownedUpload.mockImplementation(async () => null);
+
+    const other = await getFullText({ paperId: "upload:00000000000000a5" });
+
+    expect(other).toEqual({ status: "source_unavailable", attempts: [], reason: "Private upload unavailable." });
+    expect(other.doc).toBeUndefined();
+    expect(mocks.extractPdfTextFromPath).toHaveBeenCalledTimes(1);
+  });
+
+  it("never keeps a failed reading, so a scan is read as a scan again rather than cached as text", async () => {
+    mocks.extractPdfTextFromPath.mockResolvedValue({ ok: false, reason: "PDF text extractor produced no sections." } satisfies PdfTextResult);
+
+    const first = await getFullText({ paperId: "upload:00000000000000a6" });
+
+    expect(first.status).toBe("no_full_text");
+    expect(first.attempts[0].outcome).toContain("pdf-empty");
+    expect(existsSync(sidecar("00000000000000a6"))).toBe(false);
   });
 });
