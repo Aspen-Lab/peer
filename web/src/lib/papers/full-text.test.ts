@@ -100,7 +100,7 @@ describe("getFullText — 1-16, a hard 401/402/403/451 is reported as paywalled"
 describe("getFullText — 1-28, an upload: id reads the local file, never collectSourceLinks", () => {
   const emptyDoc: ExtractedDocument = {
     title: "An Uploaded Paper",
-    sections: [{ heading: "Body", canonical: "body", text: "Real body text." }],
+    sections: [{ id: "s0", heading: "Body", canonical: "body", text: "Real body text." }],
     figureCaptions: [],
     source: "pdf",
     pageCount: 5,

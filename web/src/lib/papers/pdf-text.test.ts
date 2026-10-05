@@ -11,6 +11,113 @@ const execFileAsync = promisify(execFile);
 // The smallest thing `downloadPdf` accepts as a PDF: the magic bytes.
 const PDF_BYTES = new TextEncoder().encode("%PDF-1.4\n%âã\n1 0 obj\n<< >>\nendobj\n");
 
+/** One run of text: the words, x, y measured from the TOP of an A4 page (the
+ *  way the old PyMuPDF fixtures placed them), the size, and whether it is set
+ *  in the bold face. */
+type Run = [text: string, x: number, top: number, size: number, bold?: boolean];
+
+/**
+ * A real, minimal PDF — one text layer, base-14 Helvetica — built in the test
+ * so pdf.js reads it exactly as it reads a paper. No dependency and no
+ * Python: the fixtures the PyMuPDF tests used to draw are drawn here. A page
+ * with no runs is a page with no text layer, the way a scan reads.
+ */
+function minimalPdf(pages: Run[][]): Buffer {
+  const objects: string[] = [];
+  const add = (body: string) => objects.push(body);
+  add("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>");
+  add("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>");
+  const pagesId = add("");
+  const kids: number[] = [];
+  const escape = (s: string) => s.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
+  for (const runs of pages) {
+    const stream = runs
+      .map(([text, x, top, size, bold]) => `BT /${bold ? "F2" : "F1"} ${size} Tf ${x} ${842 - top} Td (${escape(text)}) Tj ET`)
+      .join("\n");
+    const contents = add(`<< /Length ${Buffer.byteLength(stream, "latin1")} >>\nstream\n${stream}\nendstream`);
+    kids.push(
+      add(
+        `<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 595 842] ` +
+          `/Resources << /Font << /F1 1 0 R /F2 2 0 R >> >> /Contents ${contents} 0 R >>`,
+      ),
+    );
+  }
+  objects[pagesId - 1] = `<< /Type /Pages /Kids [${kids.map((k) => `${k} 0 R`).join(" ")}] /Count ${kids.length} >>`;
+  const catalog = add(`<< /Type /Catalog /Pages ${pagesId} 0 R >>`);
+  let out = "%PDF-1.4\n";
+  const offsets: number[] = [];
+  objects.forEach((body, i) => {
+    offsets.push(Buffer.byteLength(out, "latin1"));
+    out += `${i + 1} 0 obj\n${body}\nendobj\n`;
+  });
+  const xref = Buffer.byteLength(out, "latin1");
+  out += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  out += offsets.map((o) => `${String(o).padStart(10, "0")} 00000 n \n`).join("");
+  out += `trailer\n<< /Size ${objects.length + 1} /Root ${catalog} 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  return Buffer.from(out, "latin1");
+}
+
+/** Prose lines, `pitch` apart, starting at `top`. */
+function prose(lines: string[], top: number, pitch = 14): Run[] {
+  return lines.map((text, i): Run => [text, 72, top + i * pitch, 11]);
+}
+
+// P0-01 (spec D1 + D2): a PDF's sections carry an id in document order and
+// the page their heading sits on. The outline always knew the page;
+// `normalize()` dropped it.
+describe("tryExtractPdfText — section ids and pages (P0-01)", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("numbers the sections s0…sN and keeps the page each one starts on", async () => {
+    const bytes = minimalPdf([
+      [
+        ["Reading Papers With A Question In Mind", 72, 80, 18],
+        ["Abstract", 72, 130, 14],
+        ...prose(
+          [
+            "We study how readers find the few sentences that answer their question.",
+            "A map of the paper before reading shortens the search considerably.",
+          ],
+          150,
+        ),
+        ["1 Introduction", 72, 210, 11],
+        ...prose(
+          [
+            "Every paper is a haystack and the reader is looking for a few needles in it.",
+            "Without a map, the only strategy is to read everything from the first page.",
+          ],
+          230,
+        ),
+      ],
+      [
+        ["2 Methods", 72, 80, 11],
+        ...prose(["We built a map from the outline the extractor reads off the text layer."], 100),
+        ["2.1 Setup", 72, 140, 11],
+        ...prose(["Twelve readers each brought one question to three papers they chose."], 160),
+      ],
+      [
+        ["3 Results", 72, 80, 11],
+        ...prose(["Readers with a map found their answer in fewer minutes than readers without."], 100),
+      ],
+    ]);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(new Uint8Array(bytes), { status: 200, headers: { "content-type": "application/pdf" } })),
+    );
+
+    const result = await tryExtractPdfText("https://example.org/p0-01-ids-and-pages.pdf");
+
+    expect(result.ok).toBe(true);
+    expect(result.doc?.sections.map((s) => [s.id, s.heading, s.page])).toEqual([
+      ["s0", "Abstract", 1],
+      ["s1", "1 Introduction", 1],
+      ["s2", "2 Methods", 2],
+      ["s3", "2.1 Setup", 2],
+      ["s4", "3 Results", 3],
+    ]);
+  });
+});
+
 describe("tryExtractPdfText", () => {
   beforeEach(() => {
     vi.stubGlobal(

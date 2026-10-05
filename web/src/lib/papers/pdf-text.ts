@@ -23,7 +23,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { cleanDisplayText } from "@/lib/text/clean";
 import { buildOutline, type PdfOutline, type PdfPageText } from "./pdf-outline";
-import { withInheritedBuckets } from "./html-text";
+import { withInheritedBuckets, withSectionIds } from "./html-text";
 import type { ExtractedDocument, ExtractedSection, ExtractedFigureCaption } from "./html-text";
 
 const execFileAsync = promisify(execFile);
@@ -184,15 +184,20 @@ export async function readPages(bytes: Buffer): Promise<PdfPageText[]> {
 function normalize(extractor: PdfOutline): ExtractedDocument {
   // Numbered subsections inherit their parent's bucket here too — the same
   // one-heading-at-a-time bucketing the HTML extractor and the Python path's
-  // own `normalizePythonOutput` (below) both use.
-  const sections: ExtractedSection[] = withInheritedBuckets(
-    (extractor.sections ?? [])
-    .map((section) => ({
-      heading: cleanDisplayText(section.heading) || "Body",
-      canonical: section.canonical || "body",
-      text: cleanDisplayText(section.text),
-    }))
-    .filter((section) => section.text.length > 0),
+  // own `normalizePythonOutput` (below) both use. P0-01: each section keeps
+  // the page its heading sits on (the outline always knew it; this used to
+  // drop it), and the ids are numbered last, so they follow the final order.
+  const sections: ExtractedSection[] = withSectionIds(
+    withInheritedBuckets(
+      (extractor.sections ?? [])
+        .map((section) => ({
+          heading: cleanDisplayText(section.heading) || "Body",
+          canonical: section.canonical || "body",
+          text: cleanDisplayText(section.text),
+          ...(typeof section.page === "number" ? { page: section.page } : {}),
+        }))
+        .filter((section) => section.text.length > 0),
+    ),
   );
 
   const pageCount = typeof extractor.pageCount === "number" ? extractor.pageCount : undefined;
@@ -327,14 +332,17 @@ async function runExtractor(
 function normalizePythonOutput(extractor: ExtractorOutput): ExtractedDocument {
   // Numbered subsections inherit their parent's bucket here too — the Python
   // extractor buckets one heading at a time, the same way the HTML one did.
-  const sections: ExtractedSection[] = withInheritedBuckets(
-    (extractor.sections ?? [])
-    .map((section) => ({
-      heading: cleanDisplayText(section.heading) || "Body",
-      canonical: section.canonical || "body",
-      text: cleanDisplayText(section.text),
-    }))
-    .filter((section) => section.text.length > 0),
+  const sections: ExtractedSection[] = withSectionIds(
+    withInheritedBuckets(
+      (extractor.sections ?? [])
+        .map((section) => ({
+          heading: cleanDisplayText(section.heading) || "Body",
+          canonical: section.canonical || "body",
+          text: cleanDisplayText(section.text),
+          ...(typeof section.page === "number" ? { page: section.page } : {}),
+        }))
+        .filter((section) => section.text.length > 0),
+    ),
   );
 
   const figureCaptions: ExtractedFigureCaption[] = (extractor.figureCaptions ?? [])

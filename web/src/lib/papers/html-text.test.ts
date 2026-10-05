@@ -145,6 +145,14 @@ describe("LaTeXML extractor", () => {
     expect(byHeading["1 Introduction"]).toBe("Intro text here.");
   });
 
+  // P0-01 (spec D1): every section carries a stable id in document order —
+  // what the reading map and the question routes point at. An HTML source
+  // has no pages, and says so by having none.
+  it("numbers its sections s0…sN in document order, with no page", () => {
+    expect(doc.sections.map((s) => s.id)).toEqual(["s0", "s1", "s2", "s3", "s4", "s5"]);
+    expect(doc.sections.every((s) => s.page === undefined)).toBe(true);
+  });
+
   it("labels captions honestly and drops subfigure fragments", () => {
     expect(doc.figureCaptions).toMatchObject([
       { ordinal: 0, label: "Figure 1", caption: "Success rate per class." },
@@ -179,6 +187,33 @@ describe("LaTeXML extractor", () => {
         <figcaption class="ltx_caption">Figure 3: Loss.</figcaption></figure>`;
     const out = chooseHtmlExtractor("https://arxiv.org/html/1234.5678")(html, "https://arxiv.org/html/1234.5678");
     expect(out.figureCaptions[0].imageUrl).toBe("https://arxiv.org/html/1234.5678v2/plot.svg");
+  });
+});
+
+describe("section ids — P0-01", () => {
+  it("numbers the generic walker's sections after the dropped ones are gone", () => {
+    // The acknowledgements are dropped before numbering, so the ids stay
+    // contiguous in the order the reader sees the sections.
+    const html = `<article>
+      <h2>Introduction</h2><p>Why this matters, at some length.</p>
+      <h2>Acknowledgments</h2><p>We thank everyone.</p>
+      <h2>Methods</h2><p>What we did, at some length.</p>
+      <h3>Results</h3><p>What we found, at some length.</p>
+    </article>`;
+    const out = chooseHtmlExtractor("https://example.org/paper")(html, "https://example.org/paper");
+    expect(out.sections.map((s) => [s.id, s.heading])).toEqual([
+      ["s0", "Introduction"],
+      ["s1", "Methods"],
+      ["s2", "Results"],
+    ]);
+    expect(out.sections.every((s) => s.page === undefined)).toBe(true);
+  });
+
+  it("numbers PMC sections in order too", () => {
+    const html = `<section id="sec1"><h2>Introduction</h2><p>Opening words.</p></section>
+      <section id="sec2"><h2>Results</h2><p>Findings words.</p></section>`;
+    const out = chooseHtmlExtractor("https://pmc.ncbi.nlm.nih.gov/articles/PMC1/")(html);
+    expect(out.sections.map((s) => s.id)).toEqual(["s0", "s1"]);
   });
 });
 
@@ -217,7 +252,8 @@ describe("parseCaption", () => {
 
 describe("looksLikeFullText", () => {
   const doc = (sections: Array<[string, number]>): ExtractedDocument => ({
-    sections: sections.map(([canonical, chars]) => ({
+    sections: sections.map(([canonical, chars], i) => ({
+      id: `s${i}`,
       heading: canonical,
       canonical,
       text: "x".repeat(chars),

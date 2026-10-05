@@ -93,8 +93,27 @@ const LINE_TOLERANCE = 2.2;
 const HEADING_MAX = 90;
 /** Text set this much larger than the body reads as a heading. */
 const HEADING_SIZE_RATIO = 1.12;
-/** Sections after one of these are the paper's apparatus, not its argument. */
-const TERMINAL = new Set(["references", "acknowledgements", "appendix"]);
+/** Sections after one of these are the paper's apparatus, not its argument.
+ *  Compared against what `canonicalizeHeading` returns. */
+const TERMINAL = new Set(["references"]);
+/**
+ * The apparatus headings no bucket can name safely, matched on the
+ * heading's own words (numbered or not).
+ *
+ * P0-01: `TERMINAL` used to hold "acknowledgements" and "appendix", which
+ * `canonicalizeHeading` never returns — it files "Acknowledgements" under
+ * `acknowledgments`, and strips "Appendix A Proofs" down to "proofs" →
+ * `body` — so the thank-yous and the proofs were read as the paper's
+ * argument. Ending at the `acknowledgments` bucket would be wrong too: it
+ * also holds "Funding", "Data availability" and "Competing interests",
+ * which some templates print on page 1, under the abstract.
+ */
+const APPARATUS_HEADING =
+  /^(?:(?:[A-Z]|[IVX]+|\d+)(?:\.\d+)*\.?\s+)?(?:acknowledge?ments?|appendix|appendices|supplementary\s+(?:materials?|information))\b/i;
+
+function endsTheArgument(heading: string, canonical: string): boolean {
+  return TERMINAL.has(canonical) || APPARATUS_HEADING.test(heading.trim());
+}
 /** The first of these ends the cover and starts the paper. */
 const FRONT_MATTER_END = new Set(["abstract", "introduction"]);
 
@@ -434,8 +453,9 @@ export function buildOutline(pages: PdfPageText[]): PdfOutline {
       heading = next;
       canonical = canonicalizeHeading(next);
       page = line.page;
-      // The argument ends at the references; what follows is apparatus.
-      if (TERMINAL.has(canonical)) done = true;
+      // The argument ends at the references, the acknowledgements or an
+      // appendix; what follows is apparatus.
+      if (endsTheArgument(next, canonical)) done = true;
       continue;
     }
     if (done) continue;

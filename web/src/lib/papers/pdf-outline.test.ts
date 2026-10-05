@@ -153,6 +153,47 @@ describe("the whole reading", () => {
     ]);
   });
 
+  // P0-01 (spec D2): `TERMINAL` held "acknowledgements" and "appendix", but
+  // `canonicalizeHeading` never returns either — it files the first under
+  // `acknowledgments` and strips "Appendix A" down to what follows it — so
+  // the thank-yous and the proofs were read as the paper's argument.
+  it("stops at a numbered Acknowledgements heading, before the references", () => {
+    const outline = buildOutline([
+      page(1, [
+        ["A Paper About Sequence Models", { height: 17 }],
+        ["1 Introduction"],
+        ["Recurrent neural networks have long been established in sequence modelling."],
+        ["Attention mechanisms have become an integral part of compelling models."],
+        ["6 Acknowledgements"],
+        ["We thank the anonymous reviewers and our funders for their generous support."],
+        ["References", { height: 12 }],
+        ["[1] Someone. A paper. 2015."],
+      ]),
+    ]);
+    expect(outline.sections?.map((s) => [s.canonical, s.heading])).toEqual([
+      ["introduction", "1 Introduction"],
+    ]);
+    const prose = (outline.sections ?? []).map((s) => s.text).join(" ");
+    expect(prose).toContain("integral part of compelling models");
+    expect(prose).not.toContain("We thank the anonymous reviewers");
+  });
+
+  it("stops at an appendix the heading's own words name, numbered or not", () => {
+    const outline = buildOutline([
+      page(1, [
+        ["A Paper About Sequence Models", { height: 17 }],
+        ["1 Introduction"],
+        ["Recurrent neural networks have long been established in sequence modelling."],
+        ["Attention mechanisms have become an integral part of compelling models."],
+        ["Appendix A Proofs", { height: 12 }],
+        ["Proof of Lemma 1 follows from the triangle inequality applied twice over here."],
+      ]),
+    ]);
+    expect(outline.sections?.map((s) => s.heading)).toEqual(["1 Introduction"]);
+    const prose = (outline.sections ?? []).map((s) => s.text).join(" ");
+    expect(prose).not.toContain("triangle inequality");
+  });
+
   it("says a scan is a scan rather than inventing sections", () => {
     const outline = buildOutline([{ page: 1, items: [] }, { page: 2, items: [] }]);
     expect(outline.sections).toBeUndefined();

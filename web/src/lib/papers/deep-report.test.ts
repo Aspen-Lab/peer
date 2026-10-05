@@ -28,10 +28,10 @@ const CONCLUSION_MARKER =
 function doc(): ExtractedDocument {
   return {
     sections: [
-      { heading: "Introduction", canonical: "introduction", text: FILLER },
-      { heading: "Methods", canonical: "methods", text: "We used a standard protocol." },
-      { heading: "Results", canonical: "results", text: "The main result was measured." },
-      { heading: "Conclusion", canonical: "conclusion", text: CONCLUSION_MARKER },
+      { id: "s0", heading: "Introduction", canonical: "introduction", text: FILLER },
+      { id: "s1", heading: "Methods", canonical: "methods", text: "We used a standard protocol." },
+      { id: "s2", heading: "Results", canonical: "results", text: "The main result was measured." },
+      { id: "s3", heading: "Conclusion", canonical: "conclusion", text: CONCLUSION_MARKER },
     ],
     figureCaptions: [],
     source: "pdf",

@@ -6,9 +6,9 @@ import { compileSearchBrief } from "@/lib/feed/profile-compiler";
 import { derivePoolCacheKey } from "@/lib/opportunities/pool-cache";
 
 const doc = { title: "Solid electrolytes for lithium metal batteries", source: "pdf" as const, figureCaptions: [], sections: [
-  { heading: "Abstract", canonical: "abstract", text: "Solid electrolytes improve lithium metal batteries. Solid electrolytes support lithium transport." },
-  { heading: "Methods", canonical: "methods", text: "Impedance spectroscopy measures lithium transport. Impedance spectroscopy measures conductivity." },
-  { heading: "References", canonical: "references", text: "Marine biology. Marine biology. Marine biology. Marine biology." },
+  { id: "s0", heading: "Abstract", canonical: "abstract", text: "Solid electrolytes improve lithium metal batteries. Solid electrolytes support lithium transport." },
+  { id: "s1", heading: "Methods", canonical: "methods", text: "Impedance spectroscopy measures lithium transport. Impedance spectroscopy measures conductivity." },
+  { id: "s2", heading: "References", canonical: "references", text: "Marine biology. Marine biology. Marine biology. Marine biology." },
 ] };
 const key = "a".repeat(64);
 const at = "2026-09-19T00:00:00Z";
@@ -95,8 +95,8 @@ describe("upload concept extraction quality (9-21)", () => {
     source: "pdf",
     figureCaptions: [],
     sections: [
-      { heading: "Abstract", canonical: "abstract", text: "Perovskite oxide cathodes improve solid state batteries. Perovskite oxide cathodes show high conductivity." },
-      { heading: "Methods", canonical: "methods", text: "X-ray diffraction confirms the perovskite oxide structure. X-ray diffraction measures three distinct phases. There are three phases in total; each of the three phases was indexed separately." },
+      { id: "s0", heading: "Abstract", canonical: "abstract", text: "Perovskite oxide cathodes improve solid state batteries. Perovskite oxide cathodes show high conductivity." },
+      { id: "s1", heading: "Methods", canonical: "methods", text: "X-ray diffraction confirms the perovskite oxide structure. X-ray diffraction measures three distinct phases. There are three phases in total; each of the three phases was indexed separately." },
     ],
   };
 
@@ -118,8 +118,8 @@ describe("upload concept extraction quality (9-21)", () => {
     source: "pdf",
     figureCaptions: [],
     sections: [
-      { heading: "Abstract", canonical: "abstract", text: "Graph neural network models improve node classification. Graph neural network models beat prior benchmark algorithms." },
-      { heading: "Results", canonical: "results", text: "Our benchmark algorithm improves accuracy on four nodes. Each of the four nodes was tested twice; all four nodes converged. Nodes were checked for stability, and the nodes held up under load." },
+      { id: "s0", heading: "Abstract", canonical: "abstract", text: "Graph neural network models improve node classification. Graph neural network models beat prior benchmark algorithms." },
+      { id: "s1", heading: "Results", canonical: "results", text: "Our benchmark algorithm improves accuracy on four nodes. Each of the four nodes was tested twice; all four nodes converged. Nodes were checked for stability, and the nodes held up under load." },
     ],
   };
 
@@ -144,7 +144,7 @@ describe("upload concept extraction quality (9-21)", () => {
     source: "pdf",
     figureCaptions: [],
     sections: [
-      { heading: "Abstract", canonical: "abstract", text: "Layered nickel rich cathode materials show improved thermal stability. Layered nickel rich cathode materials retain capacity." },
+      { id: "s0", heading: "Abstract", canonical: "abstract", text: "Layered nickel rich cathode materials show improved thermal stability. Layered nickel rich cathode materials retain capacity." },
     ],
   };
 
@@ -161,8 +161,8 @@ describe("upload concept extraction quality (9-21)", () => {
     source: "pdf",
     figureCaptions: [],
     sections: [
-      { heading: "Abstract", canonical: "abstract", text: "Lithium metal anode protection reduces dendrite growth. Lithium metal anode protection improves cycling." },
-      { heading: "References", canonical: "references", text: "Quantum computing algorithms. Quantum computing algorithms. Quantum computing algorithms for optimization." },
+      { id: "s0", heading: "Abstract", canonical: "abstract", text: "Lithium metal anode protection reduces dendrite growth. Lithium metal anode protection improves cycling." },
+      { id: "s1", heading: "References", canonical: "references", text: "Quantum computing algorithms. Quantum computing algorithms. Quantum computing algorithms for optimization." },
     ],
   };
 

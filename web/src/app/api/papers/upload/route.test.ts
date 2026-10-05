@@ -364,7 +364,7 @@ describe("POST /api/papers/upload", () => {
       doc: {
         ...emptyDoc,
         sections: [
-          { heading: "Abstract", canonical: "abstract", text: "See https://doi.org/10.1000/abcd.123, for details." },
+          { id: "s0", heading: "Abstract", canonical: "abstract", text: "See https://doi.org/10.1000/abcd.123, for details." },
         ],
       },
     } satisfies PdfTextResult);
@@ -404,7 +404,7 @@ describe("POST /api/papers/upload", () => {
       ok: true,
       doc: {
         ...emptyDoc,
-        sections: [{ heading: "Abstract", canonical: "abstract", text: "This paper studies things." }],
+        sections: [{ id: "s0", heading: "Abstract", canonical: "abstract", text: "This paper studies things." }],
       },
     } satisfies PdfTextResult);
 
@@ -425,7 +425,7 @@ describe("POST /api/papers/upload", () => {
     const longAbstract = "x".repeat(500);
     mocks.extractPdfTextFromPath.mockResolvedValue({
       ok: true,
-      doc: { ...emptyDoc, sections: [{ heading: "Abstract", canonical: "abstract", text: longAbstract }] },
+      doc: { ...emptyDoc, sections: [{ id: "s0", heading: "Abstract", canonical: "abstract", text: longAbstract }] },
     } satisfies PdfTextResult);
 
     const res = await postWith(pdfFile(pdfBytes()));

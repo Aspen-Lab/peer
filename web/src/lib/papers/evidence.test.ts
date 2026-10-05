@@ -238,7 +238,7 @@ describe("verifyReportEvidence", () => {
       "The superconducting dome narrows sharply as the layer ratio approaches its critical value.";
     const miniDoc: ExtractedDocument = {
       sections: [
-        { heading: "Introduction", canonical: "introduction", text: "This paper studies a layered superlattice." },
+        { id: "s0", heading: "Introduction", canonical: "introduction", text: "This paper studies a layered superlattice." },
       ],
       figureCaptions: [{ ordinal: 0, label: "Figure 7", caption: captionSentence }],
       source: "pdf",
