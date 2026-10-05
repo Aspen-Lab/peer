@@ -275,7 +275,7 @@ forYourQuestion?: {
 | **P2 答** | D4–D8、D11 | 2 天 | 有 key 时 `forYourQuestion` 出现在 Decision block 之后；故意问一个论文不涉及的问题，得到 "not_addressed" 一句话；换问题只触发 Pass 2；`c` 导出含问题段 |
 | **P3 词** | ⑤ 的 Tier 0 + Tier 2 | 1–2 天 | 术语 ≤8，有定义句的带 §，无定义的标 Peer |
 | **P4 说人话** | ⑥ | 1 天 | 只对"读"节出现；原文并排；数字逐字相等（单测用正则比对数值） |
-| **P5 沉淀** | profile 常备问题；问题词以低权重进 ledger（`upload-concepts.ts` 同一机制）；notes 模板问题段 | 后续 | 符合"反馈渐进、不过度反应" |
+| **P5 沉淀** | profile 常备问题（只多一组 chip，永不自动填入）；问题词以低权重进 ledger（`upload-concepts.ts` 同一机制），**每个问题可勾选"不进推荐"**，为课程、审稿、好奇而读的论文不污染 profile；notes 模板问题段 | 后续 | 符合"反馈渐进、不过度反应" |
 
 P0 + P1 不需要任何 model，一两天内就能让作者本地用上"先看地图再决定读不读"。P2 之后才动 prompt。
 
