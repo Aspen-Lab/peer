@@ -4,7 +4,7 @@ import {
   resolveProvider,
 } from "@/lib/llm/providers/registry";
 import { reportModelTier } from "@/lib/llm/provider-models";
-import type { ProviderOverrideConfig } from "@/lib/llm/providers/types";
+import type { DigestProvider, ProviderOverrideConfig } from "@/lib/llm/providers/types";
 import {
   emptyReport,
   sanitizePaperReport,
@@ -398,11 +398,17 @@ const UPLOAD_GONE_RESPONSE = { error: "Upload no longer available" } as const;
  * breaker. The decision is now made once, above the transport branch, and
  * handed in. **There is deliberately no `consumeDeepReport` call inside this
  * function**: two call sites is how a route double-counts.
+ *
+ * F6 (P2-07, §1g.9 a): the provider is handed in too. `handlePost` resolves
+ * it once, before the charge, because whether a unit is charged depends on
+ * it; resolving a second one here could only drift from the one the charge
+ * was decided on.
  */
 function streamReport(
   body: ExtendedRequest,
   ctx: ReportUsageCtx,
   quotaDecision: DeepReportDecision,
+  provider: DigestProvider | null,
   privateHash: string | null,
   startRevision: number | undefined,
 ): Response {
@@ -446,10 +452,6 @@ function streamReport(
           send({ type: "quota", quota: quotaDecision.quota });
         }
 
-        const provider = resolveProvider(
-          body.llmOverride ?? null,
-          providerCtx(ctx, body.llmOverride),
-        );
         if (!provider?.generateJsonText) {
           send({ type: "mode", aiMode: "tier0" });
           send({
@@ -687,7 +689,8 @@ async function handlePost(req: NextRequest) {
   //
   // The exemption that survives is the real one: a shallow (abstract-only)
   // request never reaches `consumeDeepReport`, on either transport, because the
-  // decision below is gated on `body.deepReport`. Note "shallow" is not "no
+  // decision below is gated on `body.deepReport` and a provider that can write
+  // (F6/P2-07). Note "shallow" is not "no
   // LLM" — `generateShallowReport` calls the model when one is available, so it
   // is **metered by 1-03 and uncounted by 1-20**, which are different things and
   // easy to conflate.
@@ -695,15 +698,31 @@ async function handlePost(req: NextRequest) {
   // **Exactly one `consumeDeepReport` call site**, here. `streamReport` takes
   // the decision as an argument and never makes its own: two call sites is how
   // a route double-counts.
-  const quotaDecision: DeepReportDecision = body.deepReport
-    ? await consumeDeepReport(gate.entitlement)
-    : { allowed: true };
+  //
+  // F6 (P2-07, §1g.9 a): the provider is resolved first — after the owner
+  // checks and the entitlement gate above, which stay ahead of it — and a unit
+  // is charged only for a deep request with a provider that can write it. A
+  // deep open with no model at all (no key on this server, an unusable BYOK
+  // key) is a tier 0 answer and costs nothing. The test is the same
+  // expression the stream's tier 0 exit and the JSON fallback below make, so
+  // a provider without `generateJsonText` is neither charged nor asked. A
+  // refusal by the company AI budget is decided inside the first model call,
+  // after the charge, and still costs the unit (§1g.9 b).
+  //
+  // The operands read provider-first so the deep test stays next to the call,
+  // where `lib/usage/quota-exemptions.test.ts` looks for it: that structural
+  // test pins that a shallow request can never reach the counter.
+  const resolved = resolveProvider(body.llmOverride ?? null, providerCtx(ctx, body.llmOverride));
+  const quotaDecision: DeepReportDecision =
+    resolved?.generateJsonText && body.deepReport
+      ? await consumeDeepReport(gate.entitlement)
+      : { allowed: true };
 
   const wantsStream =
     req.headers.get("accept")?.includes("application/x-ndjson") === true ||
     body.stream === true;
   if (wantsStream) {
-    return streamReport(body, ctx, quotaDecision, privateHash, startRevision);
+    return streamReport(body, ctx, quotaDecision, resolved, privateHash, startRevision);
   }
 
   // ── Deep path ────────────────────────────────────────────────────
@@ -712,12 +731,7 @@ async function handlePost(req: NextRequest) {
   // Without a provider, fall through to the shallow path (which returns the
   // empty report).
   if (body.deepReport) {
-    const provider = quotaDecision.allowed
-      ? resolveProvider(
-          body.llmOverride ?? null,
-          providerCtx(ctx, body.llmOverride),
-        )
-      : null;
+    const provider = quotaDecision.allowed ? resolved : null;
     if (!provider?.generateJsonText) {
       // No budget, no user key, no local provider: the deterministic report —
       // the SAME call this route already made — plus the quota signal.

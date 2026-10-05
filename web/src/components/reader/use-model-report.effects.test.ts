@@ -15,11 +15,20 @@ vi.mock("react", async (importOriginal) => {
   return { ...actual, ...hookRuntime.hooks };
 });
 
-const net = vi.hoisted(() => ({ streamCalls: [] as Array<Record<string, unknown>>, jsonCalls: 0 }));
+const net = vi.hoisted(() => ({
+  streamCalls: [] as Array<Record<string, unknown>>,
+  jsonCalls: 0,
+  /** When set, the stream sends exactly these events (P2-07). */
+  script: null as Array<Record<string, unknown>> | null,
+}));
 
 vi.mock("@/lib/papers/report-stream", () => ({
   streamPaperReport: async function* (body: Record<string, unknown>) {
     net.streamCalls.push(body);
+    if (net.script) {
+      for (const event of net.script) yield event;
+      return;
+    }
     yield { type: "mode", aiMode: "tier2" };
     yield { type: "stage", stage: "done", label: "Report ready", pct: 100 };
     yield {
@@ -97,6 +106,7 @@ describe("useModelReport with effects running — one report request across two 
     vi.stubGlobal("window", globalThis);
     net.streamCalls.length = 0;
     net.jsonCalls = 0;
+    net.script = null;
   });
 
   afterEach(() => vi.unstubAllGlobals());
@@ -225,5 +235,38 @@ describe("useModelReport with effects running — one report request across two 
     expect(net.streamCalls).toHaveLength(2);
     for (const body of net.streamCalls) expect(body).not.toHaveProperty("questions");
     expect(JSON.stringify(net.streamCalls[1])).toBe(JSON.stringify(net.streamCalls[0]));
+  });
+
+  // P2-07 (§1g.9 e, B's O-B1): the route sends the deep-report quota
+  // decision BEFORE `mode` — a refused deep open is an ordinary tier 1
+  // stream with the notice in front. The reader must read it as one: one
+  // request, the tier 1 report shown, the notice carried on it — not a
+  // thrown stream and a second, JSON request that charges again.
+  it("reads a quota event that comes before mode: one request, the report shown, the notice carried (P2-07)", async () => {
+    const quota = { kind: "deep_report", reason: "exhausted" };
+    net.script = [
+      { type: "quota", quota },
+      { type: "mode", aiMode: "tier1" },
+      {
+        type: "report",
+        report: {
+          noLlm: false,
+          depth: "abstract",
+          skim: [],
+          whatItProposes: { summary: "An abstract-tier report, the deep one refused.", methods: [] },
+          resultsAndSignificance: { summary: "", keyResults: [] },
+          provenance: { basis: "model-abstract", droppedClaims: 0 },
+        },
+      },
+      { type: "stage", stage: "done", label: "Report ready", pct: 100 },
+    ];
+
+    const opened = await open(attached);
+
+    expect(net.streamCalls).toHaveLength(1);
+    expect(net.jsonCalls).toBe(0);
+    expect(opened.failed).toBe(false);
+    expect(opened.report?.whatItProposes.summary).toBe("An abstract-tier report, the deep one refused.");
+    expect(opened.report?.quota).toEqual(quota);
   });
 });

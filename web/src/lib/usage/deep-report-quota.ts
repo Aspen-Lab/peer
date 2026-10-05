@@ -196,9 +196,11 @@ function resetsIn(quota: QuotaSignal, now: Date): string {
 /**
  * Check and consume one deep report.
  *
- * Call it **immediately before** `resolveProvider` on a deep path, and only on
- * the deep path — R-QUOTA-3's exempt work (shallow paper reports, ranking, the
- * digest, query generation) must never reach here.
+ * Call it on a deep path **after** `resolveProvider`, and only when that
+ * provider can write (`generateJsonText`): a deep read with no model at all
+ * costs nothing (F6, P2-07). Only on the deep path — R-QUOTA-3's exempt work
+ * (shallow paper reports, ranking, the digest, query generation) must never
+ * reach here.
  */
 export async function consumeDeepReport(
   entitlement: Entitlement,

@@ -708,6 +708,165 @@ describe("POST /api/papers/report — the quota is REACHABLE on the streamed sha
     expect(afterStream).toBe(1);
     expect(deepKeys(increments)).toHaveLength(2);
   });
+
+  // ── F6 (P2-07, §1g.9; B's guide P2-07-B §3) ──────────────────────────
+  // A deep-report unit is charged only once the route knows a provider can
+  // write the report: the provider is resolved first (after the entitlement
+  // gate and the owner checks), and `consumeDeepReport` — still the one call
+  // site, above the transport branch — runs only for a deep request with a
+  // provider that has `generateJsonText`, the same test the stream's tier 0
+  // exit and the JSON fallback make.
+  describe("F6 — the unit is charged only once a provider can write (P2-07)", () => {
+    const attached = { paper: { ...paper, fullTextUploadId: "upload:0123456789abcdef" }, deepReport: true };
+    const TRANSPORTS = ["application/json", "application/x-ndjson"] as const;
+    const TIER0 = [
+      { type: "mode", aiMode: "tier0" },
+      { type: "stage", stage: "done", label: "Basic report ready", pct: 100 },
+    ];
+
+    async function spendTheDay(userId: string) {
+      const store = getCounterStore();
+      const now = new Date();
+      for (let i = 0; i < PAID_DEEP_REPORTS_PER_DAY; i += 1) {
+        await store.increment(deepReportDayKey(userId, now), endOfUtcDay(now), 1, now);
+      }
+    }
+
+    beforeEach(() => {
+      mocks.ownedUpload.mockResolvedValue({ paperIds: [paper.id], revision: 1 });
+    });
+
+    it.each(TRANSPORTS)("(1) no provider → no charge (%s)", async (accept) => {
+      mocks.resolveProvider.mockReturnValue(null);
+      const increments = spyOnCounter();
+
+      const response = await POST(request(attached, accept));
+      if (accept === "application/x-ndjson") {
+        expect(await readEvents(response)).toEqual(TIER0);
+      } else {
+        const body = (await response.json()) as PaperReport;
+        expect(body.noLlm).toBe(true);
+        expect(body).not.toHaveProperty("quota");
+      }
+
+      expect(response.status).toBe(200);
+      expect(deepKeys(increments)).toEqual([]);
+      expect(mocks.getFullText).not.toHaveBeenCalled();
+      expect(mocks.generateDeepReport).not.toHaveBeenCalled();
+    });
+
+    it.each(TRANSPORTS)("(1) no provider → no charge to the reader's day key or the house key, paid (%s)", async (accept) => {
+      asPaidDeveloper();
+      mocks.resolveProvider.mockReturnValue(null);
+      const increments = spyOnCounter();
+
+      await POST(request(attached, accept)).then((r) => r.text());
+
+      expect(deepKeys(increments)).toEqual([]);
+      expect(houseKeys(increments)).toEqual([]);
+    });
+
+    it.each(TRANSPORTS)("(1) a provider without generateJsonText → no charge (%s)", async (accept) => {
+      mocks.resolveProvider.mockReturnValue({});
+      const increments = spyOnCounter();
+
+      const response = await POST(request(attached, accept));
+      if (accept === "application/x-ndjson") expect(await readEvents(response)).toEqual(TIER0);
+      else expect(((await response.json()) as PaperReport).noLlm).toBe(true);
+
+      expect(deepKeys(increments)).toEqual([]);
+      expect(mocks.generateDeepReport).not.toHaveBeenCalled();
+    });
+
+    it.each(TRANSPORTS)("(2) the company-budget refusal is decided inside the model call, after the charge (F6/P2-07) (%s)", async (accept) => {
+      vi.spyOn(console, "warn").mockImplementation(() => {});
+      mocks.resolveProvider.mockReturnValue({
+        generateJsonText: vi.fn().mockRejectedValue(new CompanySpendCapRefusedError("global_cap_exceeded")),
+      });
+      mocks.getFullText.mockResolvedValue({
+        status: "ok",
+        doc: { title: paper.title, source: "pdf", sections: [{ id: "s0", heading: "Results", canonical: "results", text: "Full article results." }], figureCaptions: [] },
+        attempts: [],
+      });
+      // What the real generateDeepReport returns on a refusal: it catches and returns null.
+      mocks.generateDeepReport.mockResolvedValue(null);
+      const increments = spyOnCounter();
+
+      const response = await POST(request(attached, accept));
+      expect(response.status).toBe(200);
+      let report: PaperReport;
+      if (accept === "application/x-ndjson") {
+        const events = await readEvents(response);
+        expect(events[0]).toEqual({ type: "mode", aiMode: "tier2" });
+        const at = events.findIndex((event) => event.type === "report");
+        expect(events[at - 1]).toEqual({ type: "quota", quota: expect.objectContaining({ kind: "company_budget" }) });
+        report = reportEvent(events);
+      } else {
+        report = (await response.json()) as PaperReport;
+      }
+      expect(report.noLlm).toBe(true);
+      expect(report.quota?.kind).toBe("company_budget");
+      expect(deepKeys(increments)).toHaveLength(1);
+    });
+
+    it.each(TRANSPORTS)("(3) a provider present → exactly one charge, one resolution (%s)", async (accept) => {
+      asPaidDeveloper();
+      const increments = spyOnCounter();
+
+      const response = await POST(request(attached, accept));
+      expect(response.status).toBe(200);
+      if (accept === "application/x-ndjson") {
+        const events = await readEvents(response);
+        expect(events[0]).toEqual({ type: "mode", aiMode: "tier2" });
+        expect(events.map((event) => event.type)).toContain("report");
+      } else {
+        await response.json();
+      }
+
+      expect(mocks.generateDeepReport).toHaveBeenCalledTimes(1);
+      expect(deepKeys(increments)).toHaveLength(1);
+      expect(houseKeys(increments)).toHaveLength(1);
+      expect(mocks.resolveProvider).toHaveBeenCalledTimes(1);
+    });
+
+    it("(4) a spent allowance: the stream's quota event comes first, then tier 1; the JSON answer carries the same quota", async () => {
+      const userId = asPaidDeveloper();
+      await spendTheDay(userId);
+
+      const events = await readEvents(await POST(request(attached)));
+      expect(events[0]).toEqual({ type: "quota", quota: expect.objectContaining({ kind: "breaker", reason: "exhausted" }) });
+      expect(events[1]).toEqual({ type: "mode", aiMode: "tier1" });
+      expect(mocks.generateDeepReport).not.toHaveBeenCalled();
+
+      const json = (await (await POST(request(attached, "application/json"))).json()) as PaperReport;
+      expect(json.quota).toEqual(expect.objectContaining({ kind: "breaker", reason: "exhausted" }));
+      expect(mocks.generateDeepReport).not.toHaveBeenCalled();
+    });
+
+    it("(5) no provider and a spent allowance: nothing was decided, so no quota notice and no further count", async () => {
+      const userId = asPaidDeveloper();
+      await spendTheDay(userId);
+      mocks.resolveProvider.mockReturnValue(null);
+      const increments = spyOnCounter();
+      // The spy is the class's one spy: forget the increments that spent the day.
+      increments.mockClear();
+
+      expect(await readEvents(await POST(request(attached)))).toEqual(TIER0);
+      const json = (await (await POST(request(attached, "application/json"))).json()) as PaperReport;
+      expect(json).not.toHaveProperty("quota");
+      expect(deepKeys(increments)).toEqual([]);
+      expect(houseKeys(increments)).toEqual([]);
+    });
+
+    it.each(TRANSPORTS)("(6) a shallow request stays uncounted, with or without a provider (%s)", async (accept) => {
+      const increments = spyOnCounter();
+      await POST(request({ paper }, accept)).then((r) => r.text());
+      mocks.resolveProvider.mockReturnValue(null);
+      await POST(request({ paper }, accept)).then((r) => r.text());
+
+      expect(deepKeys(increments)).toEqual([]);
+    });
+  });
 });
 
 /**

@@ -318,12 +318,21 @@ export function useModelReport({
       let settled = false;
       let modeSeen = false;
       let asked = false;
+      // P2-07 (§1g.9 e): the deep-report decision the route made before it
+      // chose a mode — it goes out first, and the stream after it is an
+      // ordinary one. Carried on the report that follows, as the JSON
+      // transport carries it.
+      let quotaFirst: PaperReport["quota"];
       await Promise.resolve();
       if (!active()) return;
       try {
         for await (const event of streamPaperReport(requestBody, controller.signal)) {
           if (!active()) return;
 
+          if (event.type === "quota" && !modeSeen) {
+            quotaFirst = event.quota;
+            continue;
+          }
           if (event.type === "mode") {
             if (modeSeen) throw new Error("Report stream sent more than one mode event.");
             modeSeen = true;
@@ -349,7 +358,7 @@ export function useModelReport({
           }
           if (event.type === "report") {
             settled = true;
-            settle(event.report, asked);
+            settle(quotaFirst ? { ...event.report, quota: quotaFirst } : event.report, asked);
             return;
           }
           if (event.type === "quota") {
