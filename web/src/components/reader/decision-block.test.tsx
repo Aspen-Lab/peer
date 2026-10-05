@@ -30,7 +30,7 @@ import { DecisionBlock } from "./decision-block";
 
 const NOOP = () => {};
 
-function renderDecisionBlock() {
+function renderDecisionBlock({ skip = true }: { skip?: boolean } = {}) {
   return renderToStaticMarkup(
     createElement(DecisionBlock, {
       sentences: ["Read from the abstract."],
@@ -39,7 +39,7 @@ function renderDecisionBlock() {
       isSaved: false,
       showAddKey: false,
       onSave: NOOP,
-      onSkip: NOOP,
+      ...(skip ? { onSkip: NOOP } : {}),
       onCopy: NOOP,
       onOpen: NOOP,
       onCopyDoi: NOOP,
@@ -64,5 +64,24 @@ describe("DecisionBlock — Fit button, default (server-snapshot) render", () =>
     const button = fitButton(renderDecisionBlock());
     expect(button).toContain('disabled=""');
     expect(button).toContain('title="Fit needs the two-column layout"');
+  });
+});
+
+// P1-08 (§1a.6, §1f.19): an uploaded PDF's page passes no `onSkip`, and the
+// block then has no Skip button; every other page keeps it.
+describe("DecisionBlock — the Skip button (P1-08)", () => {
+  const skipButton = (html: string) => /<button[^>]*>(?:(?!<\/button>).)*>x<\/kbd>(?:(?!<\/button>).)*Skip<\/button>/.test(html);
+
+  it("renders Skip, with its x key, when the page gives onSkip", () => {
+    expect(skipButton(renderDecisionBlock())).toBe(true);
+  });
+
+  it("renders no Skip button and no x key without onSkip; Save and Copy stay", () => {
+    const html = renderDecisionBlock({ skip: false });
+    expect(skipButton(html)).toBe(false);
+    expect(html).not.toContain(">Skip<");
+    expect(html).not.toMatch(/>x<\/kbd>/);
+    expect(html).toContain(">s</kbd>");
+    expect(html).toContain(">c</kbd>");
   });
 });

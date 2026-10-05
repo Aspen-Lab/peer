@@ -73,7 +73,9 @@ export function DecisionBlock({
   /** No provider configured and the sentence names a key. */
   showAddKey: boolean;
   onSave: () => void;
-  onSkip: () => void;
+  /** "Not interested, then next". P1-08 (§1f.19): absent on an uploaded
+   *  PDF's page, which then has no Skip button. */
+  onSkip?: () => void;
   onCopy: () => void;
   onOpen: () => void;
   onCopyDoi: () => void;
@@ -198,16 +200,18 @@ export function DecisionBlock({
           </Kbd>
           {isSaved ? BUTTON.saved : BUTTON.save}
         </button>
-        <button
-          type="button"
-          onClick={onSkip}
-          className={cn(buttonVariants({ tone: "soft", size: "lg" }), COMMAND, TOUCH_TARGET)}
-        >
-          <Kbd pointerOnly className="mr-0.5">
-            x
-          </Kbd>
-          {BUTTON.skip}
-        </button>
+        {onSkip && (
+          <button
+            type="button"
+            onClick={onSkip}
+            className={cn(buttonVariants({ tone: "soft", size: "lg" }), COMMAND, TOUCH_TARGET)}
+          >
+            <Kbd pointerOnly className="mr-0.5">
+              x
+            </Kbd>
+            {BUTTON.skip}
+          </button>
+        )}
         <button
           type="button"
           onClick={onCopy}

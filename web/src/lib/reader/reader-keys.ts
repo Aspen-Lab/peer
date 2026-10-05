@@ -62,6 +62,17 @@ export const PAPER_KEYS: readonly PaperKey[] = [
   },
 ];
 
+/**
+ * P1-08 (§1a.6, §1f.19): the keys a page answers to. On a standalone
+ * uploaded PDF's page there is no "Not interested, then next" — the reader's
+ * own file is not a feed item to dismiss — so `skip` is left out (the page
+ * registers no handler for it, and the layer leaves `x` alone). Every other
+ * page, a public paper with an attached PDF included, has the whole table.
+ */
+export function paperKeysFor({ upload }: { upload: boolean }): readonly PaperKey[] {
+  return upload ? PAPER_KEYS.filter((entry) => entry.action !== "skip") : PAPER_KEYS;
+}
+
 export function resolvePaperKey(key: string): ReaderAction | null {
   for (const entry of PAPER_KEYS) {
     if (entry.keys.includes(key)) return entry.action;

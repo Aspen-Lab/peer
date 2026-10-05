@@ -22,6 +22,7 @@ import { KeyboardLayer } from "@/components/keyboard";
 import {
   PAPER_KEYS,
   keyCap,
+  paperKeysFor,
   readerActions,
   readerHelpItems,
   registerReaderActions,
@@ -195,6 +196,43 @@ describe("the keyboard layer and the question field (P1-03)", () => {
     expect(ask).toHaveBeenCalledTimes(1);
     expect(pressed.preventDefault).toHaveBeenCalled();
     mounted.unmount();
+  });
+
+  // P1-08 (§1f.19): an uploaded PDF's page registers no `skip`. The layer
+  // resolves `x` to `skip`, finds no handler, and leaves the key alone —
+  // nothing runs, the event is not prevented, and no global key answers
+  // to `x` on a paper page.
+  it("leaves x unhandled on a page that registered no skip, and runs skip where one is registered", async () => {
+    const next = vi.fn();
+    registerReaderActions({ next });
+    const mounted = await hookRuntime.mount(() => KeyboardLayer());
+
+    const inert = press("x", new FakeElement("DIV"));
+    expect(inert.preventDefault).not.toHaveBeenCalled();
+    expect(next).not.toHaveBeenCalled();
+
+    const skip = vi.fn();
+    registerReaderActions({ next, skip });
+    const handled = press("x", new FakeElement("DIV"));
+    expect(skip).toHaveBeenCalledTimes(1);
+    expect(handled.preventDefault).toHaveBeenCalled();
+    mounted.unmount();
+  });
+});
+
+// P1-08 (§1a.6, §1f.19): on a standalone uploaded PDF's page there is no
+// "Not interested, then next" — the one table loses that row there.
+describe("paperKeysFor (P1-08)", () => {
+  it("drops skip for an upload, and is the whole table otherwise", () => {
+    const upload = paperKeysFor({ upload: true });
+    expect(upload.map((entry) => entry.action)).not.toContain("skip");
+    expect(upload.some((entry) => entry.keys.includes("x"))).toBe(false);
+    expect(upload).toEqual(PAPER_KEYS.filter((entry) => entry.action !== "skip"));
+    expect(paperKeysFor({ upload: false })).toEqual(PAPER_KEYS);
+  });
+
+  it("leaves the help sheet as it was: it describes the reader's keys in general", () => {
+    expect(readerHelpItems().map((item) => item.label)).toContain("Not interested, then next");
   });
 });
 

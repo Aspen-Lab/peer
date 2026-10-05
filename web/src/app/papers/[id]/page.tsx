@@ -27,7 +27,7 @@ import { BackToFeedLink } from "@/components/navigation/back-to-feed-link";
 import { hasImmediateFeedHistoryEntry } from "@/lib/navigation/feed-history";
 import { NONE } from "@/lib/navigation/card-focus";
 import { paperNav } from "@/lib/reader/paper-nav";
-import { registerReaderActions, type ReaderActions } from "@/lib/reader/reader-keys";
+import { paperKeysFor, registerReaderActions, type ReaderActions } from "@/lib/reader/reader-keys";
 import { recommendationLine } from "@/lib/reader/recommendation";
 import { allocatePlateTerms } from "@/lib/papers/plate-terms";
 import { placeEvidence } from "@/lib/papers/evidence";
@@ -578,6 +578,11 @@ function Reader({
   onRetryUpload: () => void;
 }) {
   const router = useRouter();
+  // P1-08 (§1a.6, §1f.19): a standalone uploaded PDF — the same test as the
+  // page's own `isUploadId`. Its page keeps no "Not interested, then next":
+  // no Skip button, no `x skip` in the legend, no `skip` for the keyboard,
+  // no swipe-left. A public paper with an attached PDF keeps all four.
+  const isUploadId = originalPaper.id.startsWith("upload:");
   const { paper, upload, ready, setUpload } = usePrivateSupplement(originalPaper);
   // UPLOAD-404 (§1bi.2): whether the server can even store a NEW private PDF
   // right now — gates only the "upload a PDF" entry point below, never an
@@ -931,7 +936,7 @@ function Reader({
       next,
       prev,
       save,
-      skip,
+      ...(isUploadId ? {} : { skip }),
       like,
       undoOrToggleRead,
       ...(hasBody ? { read: readHere, ask: focusFirstEmptyQuestion } : {}),
@@ -1089,9 +1094,8 @@ function Reader({
           <figure>
             <SwipeableCard
               onSwipeRight={save}
-              onSwipeLeft={skip}
+              {...(isUploadId ? {} : { onSwipeLeft: skip, leftLabel: SWIPE.notInterested })}
               rightLabel={paper.isSaved ? SWIPE.unsave : SWIPE.save}
-              leftLabel={SWIPE.notInterested}
               rightActive={paper.isSaved}
               className={plateIsFigure ? undefined : "shadow-card"}
             >
@@ -1148,7 +1152,7 @@ function Reader({
             isSaved={paper.isSaved}
             showAddKey={showAddKey}
             onSave={save}
-            onSkip={skip}
+            onSkip={isUploadId ? undefined : skip}
             onCopy={copy}
             onOpen={decide}
             onCopyDoi={copyDoi}
@@ -1294,7 +1298,7 @@ function Reader({
       />
       </SectionLinks>
       <ReaderToast toast={toast} />
-      <KeyLegend />
+      <KeyLegend keys={paperKeysFor({ upload: isUploadId })} />
     </PageContainer>
   );
 }
