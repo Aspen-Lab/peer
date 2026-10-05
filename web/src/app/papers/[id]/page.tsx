@@ -81,9 +81,9 @@ import { PaperNotes } from "@/components/notes/paper-notes";
 import { PAPER_BODY_ID } from "@/components/reader/paper-body";
 import { PaperContents } from "@/components/reader/paper-contents";
 import { QuestionField, focusFirstEmptyQuestion } from "@/components/reader/question-field";
-import { ReadingMapView } from "@/components/reader/reading-map";
+import { ReadingMapView, readingRoute } from "@/components/reader/reading-map";
 import { SectionLinks } from "@/components/reader/evidence-quote";
-import { useReadingQuestionsHydrated } from "@/store/reading-questions";
+import { useReadingQuestionsHydrated, useReadingQuestionsStore } from "@/store/reading-questions";
 import { phrasesFromText } from "@/lib/feed/profile-compiler";
 import { useModelReport } from "@/components/reader/use-model-report";
 import { usePrivateSupplement } from "@/components/reader/use-private-supplement";
@@ -634,6 +634,11 @@ function Reader({
   // P1-04 (§1f.12): a claim's "§Heading" links to the body section of that
   // name; the quotes read the headings from `SectionLinks` below.
   const bodyHeadings = useMemo(() => (reading?.body ?? []).map((section) => section.heading), [reading]);
+  // P1-05 (§1f.13): the reader's questions for this paper, routed through
+  // the reading this page holds — here, in the browser; nothing is sent. A
+  // subscription, so the route follows the field as it writes through.
+  const asked = useReadingQuestionsStore((state) => state.byPaper[paper.id]);
+  const route = useMemo(() => readingRoute(reading, asked), [reading, asked]);
   const readHere = useCallback(() => {
     const block = document.getElementById(PAPER_BODY_ID);
     if (!block) return;
@@ -1115,8 +1120,10 @@ function Reader({
           // built (absent without a body).
           hasBody ? (
             <>
-              {questionsHydrated && <QuestionField key={paper.id} paperId={paper.id} challenges={challengeChips} />}
-              {reading.map && <ReadingMapView key={`map:${paper.id}`} map={reading.map} />}
+              {questionsHydrated && (
+                <QuestionField key={paper.id} paperId={paper.id} challenges={challengeChips} vague={route?.vague ?? false} />
+              )}
+              {reading.map && <ReadingMapView key={`map:${paper.id}`} map={reading.map} route={route} />}
             </>
           ) : undefined
         }
@@ -1156,7 +1163,7 @@ function Reader({
               }} /> : undefined}
           />
         }
-        contents={<PaperContents reading={reading} />}
+        contents={<PaperContents reading={reading} route={route} />}
         additions={
           <>
             {/* The reader's own notes on this paper, and the way into them —
@@ -1268,7 +1275,7 @@ function Reader({
 
             {/* The paper, when Peer reached it: everything the extractor
                 read, under everything Peer had to say about it. */}
-            <PaperBody reading={reading} />
+            <PaperBody reading={reading} route={route} />
 
             {/* Last, and always there: the facts that need no key. On a page with no model
                 page it is the only block under the abstract, which is the

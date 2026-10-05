@@ -12,6 +12,7 @@ import type { PaperReading } from "@/lib/papers/reading";
 import { pickClaimMark } from "@/lib/papers/skim";
 import { ScrambleText } from "@/components/scramble-text";
 import { AbstractToggle } from "./abstract-toggle";
+import { SectionAttribution } from "./evidence-quote";
 import { LeadClaim } from "./lead-claim";
 import { ABSTRACT_FOOTER, TLDR_LINE, attribution, skimFooter } from "./copy";
 
@@ -89,7 +90,10 @@ function Deck({
         >
           {claim.evidence}
           <span className="font-mono not-italic text-meta text-text-faint ml-2">
-            — {attribution(claim.evidenceWhere ?? "abstract")}
+            {/* P1-05 (§1f.13 amendment): "§Heading" goes to that section. */}
+            — <SectionAttribution where={claim.evidenceWhere ?? "abstract"}>
+              {attribution(claim.evidenceWhere ?? "abstract")}
+            </SectionAttribution>
           </span>
         </p>
       ))}

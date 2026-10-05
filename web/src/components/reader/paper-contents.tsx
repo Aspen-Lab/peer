@@ -13,8 +13,9 @@
 // strip rather than a rail.
 
 import type { PaperReading } from "@/lib/papers/reading";
+import type { RouteResult } from "@/lib/papers/reading-map";
 import { BODY } from "./copy";
-import { sectionAnchor } from "./paper-body";
+import { markedClass, sectionAnchor, sectionMark } from "./paper-body";
 
 function countWords(reading: PaperReading): number {
   let words = 0;
@@ -31,7 +32,11 @@ function depthOf(heading: string): number {
   return number ? number[1].split(".").length - 1 : 0;
 }
 
-export function PaperContents({ reading }: { reading: PaperReading }) {
+/** P1-05 (§1f.13): with the reader's questions routed, a row is tinted by
+ *  how its section answers them (`sectionMark`) and its `title` names the
+ *  questions; a section no question mentions has no colour, and is still
+ *  a row like any other. */
+export function PaperContents({ reading, route }: { reading: PaperReading; route?: RouteResult }) {
   const body = reading.body ?? [];
   if (body.length === 0) return null;
 
@@ -47,22 +52,31 @@ export function PaperContents({ reading }: { reading: PaperReading }) {
       {/* A rail, not a page: at thirty sections it scrolls rather than
           pushing the decision off the panel. */}
       <ol className="mt-3 max-h-[min(26rem,calc(100vh-24rem))] space-y-1 overflow-auto pr-1">
-        {body.map((section, i) => (
-          <li
-            key={`${section.canonical}:${section.heading}`}
-            // The paper numbers its own sections; the depth of that number is
-            // the indent. No counter of Peer's own beside it — "4 · 3.1
-            // Encoder" reads as two conflicting numberings.
-            style={{ paddingLeft: `${depthOf(section.heading) * 0.75}rem` }}
-          >
-            <a
-              href={`#${sectionAnchor(i)}`}
-              className="font-reading text-body-sm leading-[1.45] text-text-muted transition-colors hover:text-heading"
+        {body.map((section, i) => {
+          const mark = sectionMark(route, section.id);
+          return (
+            <li
+              key={`${section.canonical}:${section.heading}`}
+              // The paper numbers its own sections; the depth of that number is
+              // the indent. No counter of Peer's own beside it — "4 · 3.1
+              // Encoder" reads as two conflicting numberings.
+              style={{ paddingLeft: `${depthOf(section.heading) * 0.75}rem` }}
             >
-              {section.heading}
-            </a>
-          </li>
-        ))}
+              <a
+                href={`#${sectionAnchor(i)}`}
+                data-route={mark?.tier}
+                title={mark?.title}
+                className={markedClass(
+                  "font-reading text-body-sm leading-[1.45] text-text-muted transition-colors hover:text-heading",
+                  mark,
+                  "box-decoration-clone",
+                )}
+              >
+                {section.heading}
+              </a>
+            </li>
+          );
+        })}
       </ol>
     </nav>
   );

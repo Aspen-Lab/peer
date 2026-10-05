@@ -28,20 +28,26 @@ export function sectionHref(where: string, headings: readonly string[]): string 
   return index >= 0 ? `#${sectionAnchor(index)}` : null;
 }
 
-export function EvidenceQuote({ text, where }: { text: string; where: string }) {
+/** An attribution's text, as a link to the section headed `where` when the
+ *  page's body has one (P1-04), else as it was. P1-05 (the §1f.13
+ *  amendment): the Tier 0 quotes and the skim's quoted evidence use it too. */
+export function SectionAttribution({ where, children }: { where: string; children: ReactNode }) {
   const headings = useContext(SectionHeadings);
   const href = headings ? sectionHref(where, headings) : null;
+  if (!href) return <>{children}</>;
+  return (
+    <a href={href} className="underline-offset-2 transition-colors hover:text-heading hover:underline">
+      {children}
+    </a>
+  );
+}
+
+export function EvidenceQuote({ text, where }: { text: string; where: string }) {
   return (
     <p className="font-reading italic text-body leading-[1.55] text-text-muted pl-5 mt-1.5 reading-justify">
       {text}
       <span className="font-mono not-italic text-meta text-text-faint ml-2">
-        — {href ? (
-          <a href={href} className="underline-offset-2 transition-colors hover:text-heading hover:underline">
-            {attribution(where)}
-          </a>
-        ) : (
-          attribution(where)
-        )}
+        — <SectionAttribution where={where}>{attribution(where)}</SectionAttribution>
       </span>
     </p>
   );

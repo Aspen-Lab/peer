@@ -1,8 +1,8 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import type { ReadingMap } from "@/lib/papers/reading-map";
-import { MAP } from "./copy";
+import { gistRoute, type ReadingMap, type RouteResult } from "@/lib/papers/reading-map";
+import { ASK, MAP, ROUTE } from "./copy";
 import { ReadingMapView } from "./reading-map";
 
 // P1-04 (§1f.12; blueprint §3.2 ② 图): the map under the question field.
@@ -104,5 +104,101 @@ describe("ReadingMapView", () => {
 
   it("renders nothing for a map with no sections", () => {
     expect(render({ map: { sections: [], totalMinutes: 0 } })).toBe("");
+  });
+});
+
+// P1-05 (§1f.13, §1f.7; blueprint §3.3): the route on the map. Q1 reads the
+// introduction and its paragraphs 0 and 2; Q2 is vague; Q3 skims the
+// introduction (paragraph 1, which has no opening line) and the samples.
+const route: RouteResult = {
+  byQuestion: [
+    {
+      question: "Does LCO creep at H1-3?",
+      vague: false,
+      sections: {
+        s1: {
+          tier: "read",
+          hits: [{ term: "lco", count: 3 }, { term: "h1-3", count: 3 }, { term: "creep", count: 2 }, { term: "grain", count: 1 }],
+          evidence: "Grain boundaries are where most of the creep strain is thought to happen.",
+          paragraphs: [0, 2],
+        },
+        s2: { tier: "none", hits: [], paragraphs: [] },
+        s3: { tier: "none", hits: [], paragraphs: [] },
+      },
+    },
+    { question: "What is it?", vague: true, sections: {} },
+    {
+      question: "Which samples were cut?",
+      vague: false,
+      sections: {
+        s1: { tier: "skim", hits: [{ term: "cut", count: 1 }], paragraphs: [1] },
+        s2: { tier: "skim", hits: [{ term: "samples", count: 1 }], evidence: "Twelve samples with different grain sizes were cut from one cast ingot.", paragraphs: [0] },
+        s3: { tier: "none", hits: [], paragraphs: [] },
+      },
+    },
+  ],
+  vague: false,
+};
+
+/** The row header of the row whose heading is `heading`. */
+const rowOf = (html: string, heading: string) => {
+  const at = html.indexOf(`>${heading}</a>`);
+  const start = html.lastIndexOf("<li", at);
+  const end = html.indexOf("</li>", at);
+  return html.slice(start, end);
+};
+
+describe("ReadingMapView — the route (P1-05)", () => {
+  it("tints a row by its highest tier across the questions and titles it with their numbers", () => {
+    const html = render({ route });
+
+    expect(rowOf(html, "1 Introduction")).toMatch(/<div data-route="read" title="Q1, Q3" class="[^"]*bg-\[color:var\(--color-route-read\)\]/);
+    expect(rowOf(html, "2.1 Samples")).toMatch(/<div data-route="skim" title="Q3" class="[^"]*bg-\[color:var\(--color-route-skim\)\]/);
+    expect(rowOf(html, "Problem Statement")).not.toContain("data-route");
+    expect(rowOf(html, "Problem Statement")).not.toContain("--color-route-");
+  });
+
+  it("states the facts beside a tinted row — tier and counts, as the reader typed the terms — and 'not mentioned' for the rest", () => {
+    const html = render({ route });
+
+    expect(rowOf(html, "1 Introduction")).toContain(`${ROUTE.tiers.read} · mentions LCO ×3, H1-3 ×3, creep ×2`);
+    expect(rowOf(html, "2.1 Samples")).toContain(`${ROUTE.tiers.skim} · mentions samples ×1`);
+    expect(rowOf(html, "Problem Statement")).toContain(`>${ROUTE.tiers.none}<`);
+  });
+
+  it("shows the evidence sentence, in the paper's serif, when a tinted row is opened", () => {
+    const folded = render({ route });
+    expect(folded).not.toContain("Grain boundaries are where most of the creep strain");
+
+    const opened = render({ route, openRows: [0] });
+    expect(opened).toMatch(/<p class="[^"]*font-reading[^"]*italic[^"]*">Grain boundaries are where most of the creep strain is thought to happen\.<\/p>/);
+  });
+
+  it("tints a paragraph line whose index a question at read or skim mentions", () => {
+    const opened = render({ route, openRows: [0, 1] });
+
+    expect(opened).toMatch(/<a href="#paper-section-0-p0" data-route="read" class="[^"]*bg-\[color:var\(--color-route-read\)\]/);
+    expect(opened).toMatch(/<a href="#paper-section-0-p2" data-route="read"/);
+    expect(opened).toMatch(/<a href="#paper-section-1-p0" data-route="skim"/);
+    // Without a route the lines are as they were.
+    expect(render({ openRows: [0, 1] })).not.toContain("data-route");
+  });
+
+  it("tints nothing and states nothing for a vague route", () => {
+    const vague: RouteResult = { byQuestion: [{ question: "What is it?", vague: true, sections: {} }], vague: true };
+    const html = render({ route: vague, openRows: [0, 1] });
+
+    expect(html).not.toContain("data-route");
+    expect(html).not.toContain(ROUTE.tiers.none);
+    expect(html).toBe(render({ openRows: [0, 1] }));
+  });
+
+  it("for the gist: the role order, with no counts and no 'not mentioned'", () => {
+    const html = render({ route: gistRoute(map) });
+
+    expect(rowOf(html, "1 Introduction")).toMatch(new RegExp(`<div data-route="skim" title="${ASK.chips.gist}"`));
+    expect(rowOf(html, "1 Introduction")).toContain(`>${ROUTE.tiers.skim}<`);
+    expect(html).not.toContain("mentions");
+    expect(html).not.toContain(ROUTE.tiers.none);
   });
 });

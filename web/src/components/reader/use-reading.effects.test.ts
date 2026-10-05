@@ -15,7 +15,9 @@ vi.mock("react", async (importOriginal) => {
 import { hookRuntime } from "@/test-support/hook-runtime";
 import { buildReading, type PaperReading } from "@/lib/papers/reading";
 import type { Paper } from "@/types";
+import type { ExtractedDocument } from "@/lib/papers/html-text";
 import { useReadingQuestionsStore } from "@/store/reading-questions";
+import { readingRoute } from "./reading-map";
 import { useReading } from "./use-reading";
 
 function memoryStorage(): Storage {
@@ -129,6 +131,51 @@ describe("useReading with effects running — one reading request across two ope
     expect(fetches).toHaveLength(2);
     expect(fetches[1]).toBe(fetches[0]);
     expect(fetches[1]).not.toContain("Quillwortane");
+    useReadingQuestionsStore.setState({ byPaper: {}, lastPaperId: null });
+  });
+
+  // P1-05 (§1f.13): the page routes the stored questions through the
+  // reading it holds, in this browser. With a route on the page the reading
+  // request is still the same request.
+  it("sends no question with a route present: the same request, and the route computed from what came back (P1-05)", async () => {
+    const doc: ExtractedDocument = {
+      source: "pdf",
+      figureCaptions: [],
+      sections: [
+        { id: "s1", heading: "1 Introduction", canonical: "introduction", text: "Quillwortane parts creep under load. The creep rate rises with the load." },
+        { id: "s2", heading: "2 Methods", canonical: "methods", text: "Twelve samples were cut from one ingot." },
+      ],
+    };
+    vi.stubGlobal("fetch", async (url: string) => {
+      fetches.push(url);
+      const reading = buildReading(base, { status: "ok", attempts: [], doc, sourceLink: { url: "https://example.org/p.pdf", kind: "pdf", label: "doi", rank: 1 } });
+      return new Response(JSON.stringify(reading), { headers: { "cache-control": "private, no-store" } });
+    });
+    const withRoute = async () => {
+      const opened = await hookRuntime.mount(() => {
+        const state = useReading(standalone);
+        return { ...state, route: readingRoute(state.reading, useReadingQuestionsStore.getState().byPaper[standalone.id]) };
+      });
+      opened.unmount();
+      return opened.value;
+    };
+
+    useReadingQuestionsStore.setState({ byPaper: {}, lastPaperId: null });
+    const before = await withRoute();
+    expect(before.route).toBeUndefined();
+
+    vi.stubGlobal("localStorage", memoryStorage());
+    useReadingQuestionsStore.setState({
+      byPaper: { [standalone.id]: { items: ["Quillwortane creep under load"], gist: false, updatedAt: "2026-10-05T00:00:00.000Z" } },
+      lastPaperId: standalone.id,
+    });
+    const after = await withRoute();
+
+    expect(after.route?.vague).toBe(false);
+    expect(after.route?.byQuestion[0].sections.s1.tier).toBe("read");
+    expect(fetches).toHaveLength(2);
+    expect(fetches[1]).toBe(fetches[0]);
+    expect(fetches.join(" ")).not.toContain("Quillwortane");
     useReadingQuestionsStore.setState({ byPaper: {}, lastPaperId: null });
   });
 });

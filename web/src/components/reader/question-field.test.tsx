@@ -6,7 +6,7 @@ import type { ExtractedDocument } from "@/lib/papers/html-text";
 import type { Paper } from "@/types";
 import { useReadingQuestionsStore } from "@/store/reading-questions";
 import zenodoDocJson from "@/lib/papers/__fixtures__/zenodo-W7208807247.doc.json";
-import { ASK } from "./copy";
+import { ASK, ROUTE } from "./copy";
 import { PaperBody } from "./paper-body";
 import {
   QuestionField,
@@ -113,6 +113,32 @@ describe("QuestionField — what it shows", () => {
     expect(html).toContain(ASK.counter(170));
     expect(html).not.toContain(ASK.counter(6));
     expect(html).toContain('maxLength="200"');
+  });
+});
+
+// P1-05 (§1f.6, §1f.13; blueprint §3.3): a route too vague to point
+// anywhere says so under the questions, and nothing is tinted (the page
+// passes `vague` from the route it computed).
+describe("QuestionField — the vague hint (P1-05)", () => {
+  beforeEach(() =>
+    useReadingQuestionsStore.setState({
+      byPaper: { [PAPER]: { items: ["What is it?"], gist: false, updatedAt: "2026-10-05T00:00:00.000Z" } },
+      lastPaperId: PAPER,
+    }),
+  );
+
+  it("shows the hint when the route is vague, under the question lines", () => {
+    const html = renderToStaticMarkup(createElement(QuestionField, { paperId: PAPER, challenges: [], vague: true }));
+
+    expect(ROUTE.vague).toBe("Ask something more specific and Peer can point you to the right sections.");
+    expect(html).toContain(ROUTE.vague);
+    expect(html.indexOf(ROUTE.vague)).toBeGreaterThan(html.lastIndexOf("<input"));
+    expect(html.indexOf(ROUTE.vague)).toBeLessThan(html.indexOf(ASK.groups.common));
+  });
+
+  it("shows no hint for a route that points somewhere, or with no route", () => {
+    expect(renderToStaticMarkup(createElement(QuestionField, { paperId: PAPER, challenges: [], vague: false }))).not.toContain(ROUTE.vague);
+    expect(render()).not.toContain(ROUTE.vague);
   });
 });
 

@@ -21,9 +21,10 @@
 
 import { useState } from "react";
 import type { PaperReading, ReadingFigure, ReadingSection } from "@/lib/papers/reading";
+import { GIST_QUESTION, type RouteResult, type RouteTier } from "@/lib/papers/reading-map";
 import { Equation, MathText } from "./math";
 import { Band } from "@/components/ui/band";
-import { BODY } from "./copy";
+import { ASK, BODY, ROUTE } from "./copy";
 
 function countWords(body: ReadingSection[]): number {
   let words = 0;
@@ -45,6 +46,109 @@ export function sectionAnchor(index: number): string {
  *  paragraph lines scroll here. */
 export function paragraphAnchor(sectionIndex: number, paragraphIndex: number): string {
   return `${sectionAnchor(sectionIndex)}-p${paragraphIndex}`;
+}
+
+// ── The route's mark (P1-05, ruling §1f.13; blueprint §3.3 目录颜色) ──────
+//
+// The reader's questions, routed through the paper (`readingRoute` in
+// `reading-map.tsx`), mark a section by how it answers them: a light-green
+// tint behind its row in the contents rail, its heading here and its row in
+// the map. The mark is an attribute and a background — the paper itself is
+// never hidden, collapsed, greyed, reordered or wrapped, whatever the route
+// says (blueprint §2 boundary 3). The tables live here, beside the anchors,
+// because the rail and the map already read those from this file.
+
+/** A route tier as the page draws it; `background` is Tier 2's (P2). */
+export type TintTier = RouteTier | "background";
+
+/** Tier → tint: a background from the route's own tokens (`globals.css`),
+ *  never a text colour; `none` draws nothing. */
+export const ROUTE_TINT: Readonly<Record<TintTier, string | null>> = {
+  read: "bg-[color:var(--color-route-read)]",
+  background: "bg-[color:var(--color-route-background)]",
+  skim: "bg-[color:var(--color-route-skim)]",
+  none: null,
+};
+
+/** What a marked heading adds besides its tint: the tint hugs the words,
+ *  and they stay where they were. */
+export const HEADING_MARK = "w-fit -mx-1 px-1";
+
+const TIER_RANK: Readonly<Record<TintTier, number>> = { none: 0, skim: 1, background: 2, read: 3 };
+
+export interface SectionMark {
+  /** The highest tier any question gives the section. */
+  tier: Exclude<TintTier, "none">;
+  /** The `title`: the questions that mark it ("Q1, Q3"), or the gist. */
+  title: string;
+  /** The reader's terms the section mentions, spelled as typed, most first. */
+  hits: { term: string; count: number }[];
+  /** The verbatim sentence of the highest-tier question that has one. */
+  evidence?: string;
+  /** Paragraph index → the highest tier of a question that mentions it. */
+  paragraphs: ReadonlyMap<number, Exclude<TintTier, "none">>;
+}
+
+/** `term` (`tokenize`'s lower-cased token) as the reader typed it in `question`. */
+function asTyped(term: string, question: string): string {
+  const tokens = question.replace(/[^\p{L}\p{N}\s-]/gu, " ").split(/\s+/);
+  return tokens.find((token) => token.toLowerCase() === term) ?? term;
+}
+
+/** A route with somewhere to point: not vague, and asked as questions
+ *  (the gist has no question a section could fail to mention). */
+export function routeAsksQuestions(route: RouteResult | undefined): boolean {
+  return Boolean(route && !route.vague && route.byQuestion.some((entry) => !entry.vague && entry.question !== GIST_QUESTION));
+}
+
+/** The section's mark across every question of the route, or null when no
+ *  question marks it (or there is no route, or it is vague). */
+export function sectionMark(route: RouteResult | undefined, sectionId: string): SectionMark | null {
+  if (!route || route.vague) return null;
+  let tier: Exclude<TintTier, "none"> | null = null;
+  let evidence: string | undefined;
+  let gist = false;
+  const numbers: number[] = [];
+  const hits = new Map<string, number>();
+  const paragraphs = new Map<number, Exclude<TintTier, "none">>();
+
+  for (const [q, entry] of route.byQuestion.entries()) {
+    const section = entry.vague ? undefined : entry.sections[sectionId];
+    if (!section || section.tier === "none") continue;
+    const at = section.tier;
+    numbers.push(q + 1);
+    if (entry.question === GIST_QUESTION) gist = true;
+    if (tier === null || TIER_RANK[at] > TIER_RANK[tier]) {
+      tier = at;
+      evidence = section.evidence;
+    } else if (at === tier && evidence === undefined) {
+      evidence = section.evidence;
+    }
+    for (const hit of section.hits) {
+      const term = asTyped(hit.term, entry.question);
+      hits.set(term, Math.max(hits.get(term) ?? 0, hit.count));
+    }
+    for (const index of section.paragraphs) {
+      const was = paragraphs.get(index);
+      if (!was || TIER_RANK[at] > TIER_RANK[was]) paragraphs.set(index, at);
+    }
+  }
+
+  if (tier === null) return null;
+  return {
+    tier,
+    title: gist ? ASK.chips.gist : ROUTE.questions(numbers),
+    // Stable: equal counts keep the order the questions gave them.
+    hits: [...hits].map(([term, count]) => ({ term, count })).sort((a, b) => b.count - a.count),
+    ...(evidence !== undefined ? { evidence } : {}),
+    paragraphs,
+  };
+}
+
+/** `base` with the mark's tint (and `extra`) when there is a mark. */
+export function markedClass(base: string, mark: SectionMark | null, extra?: string): string {
+  if (!mark) return base;
+  return [base, ROUTE_TINT[mark.tier], extra].filter(Boolean).join(" ");
 }
 
 /**
@@ -88,7 +192,7 @@ function Figure({ figure }: { figure: ReadingFigure }) {
   );
 }
 
-function Section({ section, index }: { section: ReadingSection; index: number }) {
+function Section({ section, index, mark }: { section: ReadingSection; index: number; mark: SectionMark | null }) {
   const figures = section.figures ?? [];
   const equations = section.equations ?? [];
   // What follows paragraph `i` (-1: what opens the section): the equations
@@ -109,7 +213,12 @@ function Section({ section, index }: { section: ReadingSection; index: number })
   );
   return (
     <section id={sectionAnchor(index)} className="mt-8 scroll-mt-20 first:mt-6">
-      <h3 className="font-reading font-medium text-heading text-title leading-[1.3] mb-2">
+      {/* P1-05: the route marks the heading — an attribute and a tint,
+          nothing else — and never the paragraphs under it. */}
+      <h3
+        data-route={mark?.tier}
+        className={markedClass("font-reading font-medium text-heading text-title leading-[1.3] mb-2", mark, HEADING_MARK)}
+      >
         <MathText text={section.heading} />
       </h3>
       <div className="font-reading text-title leading-[1.65] text-text-muted measure-paper space-y-4 reading-justify">
@@ -130,7 +239,7 @@ function Section({ section, index }: { section: ReadingSection; index: number })
 /** The anchor the decision block's "read it here" scrolls to. */
 export const PAPER_BODY_ID = "paper-body";
 
-export function PaperBody({ reading }: { reading: PaperReading }) {
+export function PaperBody({ reading, route }: { reading: PaperReading; route?: RouteResult }) {
   // `?? []`: the version gate above should mean this is always an array, and
   // a missing optional block is still not worth taking the page down for.
   const body = reading.body ?? [];
@@ -154,7 +263,12 @@ export function PaperBody({ reading }: { reading: PaperReading }) {
       </p>
 
       {body.map((section, i) => (
-        <Section key={`${section.canonical}:${section.heading}`} section={section} index={i} />
+        <Section
+          key={`${section.canonical}:${section.heading}`}
+          section={section}
+          index={i}
+          mark={sectionMark(route, section.id)}
+        />
       ))}
     </Band>
     </div>

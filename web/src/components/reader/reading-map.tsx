@@ -10,12 +10,41 @@
 // (the paragraph lines open on request), and on a phone the table folds to
 // its summary line — a CSS breakpoint (`sm`, 40rem), no viewport hook, so a
 // server render and the first client render agree.
+//
+// P1-05 (§1f.13): with the reader's questions routed, a row is tinted by how
+// its section answers them, titled with the questions ("Q1, Q3"), and states
+// the facts beside it — the tier and the terms it mentions, how often; open,
+// it shows the sentence that says most, in the paper's own words. A paragraph
+// line a question mentions is tinted too. A section no question mentions
+// says "not mentioned", which is a fact about the section, not a verdict.
 
 import { useState } from "react";
-import type { ReadingMap, ReadingRole } from "@/lib/papers/reading-map";
-import { MAP } from "./copy";
+import type { PaperReading } from "@/lib/papers/reading";
+import {
+  gistRoute,
+  routeByQuestions,
+  type ReadingMap,
+  type ReadingRole,
+  type RouteResult,
+} from "@/lib/papers/reading-map";
+import { MAP, ROUTE } from "./copy";
 import { MathText } from "./math";
-import { paragraphAnchor, sectionAnchor } from "./paper-body";
+import { ROUTE_TINT, markedClass, paragraphAnchor, routeAsksQuestions, sectionAnchor, sectionMark } from "./paper-body";
+
+/**
+ * The route the page draws (§1f.13): the stored questions through the
+ * reading this page holds — or the gist's order when the gist is chosen and
+ * no question is typed — or none (no map, or nothing asked). Computed here,
+ * in the browser; nothing is sent anywhere.
+ */
+export function readingRoute(
+  reading: Pick<PaperReading, "map" | "body"> | null | undefined,
+  asked: { items: readonly string[]; gist: boolean } | undefined,
+): RouteResult | undefined {
+  const map = reading?.map;
+  if (!map || !asked || (asked.items.length === 0 && !asked.gist)) return undefined;
+  return asked.gist && asked.items.length === 0 ? gistRoute(map) : routeByQuestions(map, reading.body ?? [], asked.items);
+}
 
 /** How deep the paper says this heading is ("3.2.1" is two levels in) —
  *  the same rule as the contents rail (`paper-contents.tsx`). */
@@ -30,10 +59,13 @@ function roleLabel(role: ReadingRole): string | null {
 
 export function ReadingMapView({
   map,
+  route,
   openRows = [],
   phoneOpen = false,
 }: {
   map: ReadingMap;
+  /** The reader's questions routed through the paper (`readingRoute`). */
+  route?: RouteResult;
   /** Rows whose paragraph lines start open (tests; the page opens none). */
   openRows?: readonly number[];
   /** Whether the table starts shown on a phone (tests; the page: no). */
@@ -42,6 +74,8 @@ export function ReadingMapView({
   const [open, setOpen] = useState<ReadonlySet<number>>(() => new Set(openRows));
   const [shownOnPhone, setShownOnPhone] = useState(phoneOpen);
   if (map.sections.length === 0) return null;
+  // Questions that point somewhere: an unmarked row then says so.
+  const asked = routeAsksQuestions(route);
 
   const toggle = (k: number) =>
     setOpen((current) => {
@@ -74,10 +108,23 @@ export function ReadingMapView({
             const lines = row.paragraphs.filter((line) => line.opening !== null);
             const expanded = open.has(k);
             const role = roleLabel(row.role);
+            const mark = sectionMark(route, row.id);
+            const fact = mark
+              ? mark.hits.length > 0
+                ? `${ROUTE.tiers[mark.tier]} · ${ROUTE.mentions(mark.hits)}`
+                : ROUTE.tiers[mark.tier]
+              : asked
+                ? ROUTE.tiers.none
+                : null;
+            const foldable = lines.length > 0 || Boolean(mark?.evidence);
             return (
               <li key={row.id} style={{ paddingLeft: `${depthOf(row.heading) * 0.75}rem` }}>
-                <div className="flex items-baseline gap-2">
-                  {lines.length > 0 ? (
+                <div
+                  data-route={mark?.tier}
+                  title={mark?.title}
+                  className={markedClass("flex items-baseline gap-2", mark, "-mx-1 px-1")}
+                >
+                  {foldable ? (
                     <button
                       type="button"
                       aria-expanded={expanded}
@@ -104,18 +151,33 @@ export function ReadingMapView({
                     <span className="annotation shrink-0 text-text-faint">{MAP.minutes(row.minutes)}</span>
                   )}
                 </div>
-                {expanded && (
+                {/* Peer's words: the tier and the counts behind it. */}
+                {fact && <p className="annotation pl-5 text-text-faint">{fact}</p>}
+                {/* The paper's words: the sentence that says most. */}
+                {expanded && mark?.evidence && (
+                  <p className="mt-1 pl-5 font-reading italic text-body-sm leading-[1.45] text-text-muted">
+                    <MathText text={mark.evidence} />
+                  </p>
+                )}
+                {expanded && lines.length > 0 && (
                   <ol className="mt-1 mb-2 space-y-1 pl-5">
-                    {lines.map((line) => (
-                      <li key={line.index}>
-                        <a
-                          href={`#${paragraphAnchor(k, line.index)}`}
-                          className="font-reading text-body-sm leading-[1.45] text-text-faint transition-colors hover:text-heading"
-                        >
-                          <MathText text={line.opening ?? ""} />
-                        </a>
-                      </li>
-                    ))}
+                    {lines.map((line) => {
+                      const tier = mark?.paragraphs.get(line.index);
+                      return (
+                        <li key={line.index}>
+                          <a
+                            href={`#${paragraphAnchor(k, line.index)}`}
+                            data-route={tier}
+                            className={[
+                              "font-reading text-body-sm leading-[1.45] text-text-faint transition-colors hover:text-heading",
+                              ...(tier ? [ROUTE_TINT[tier], "box-decoration-clone"] : []),
+                            ].join(" ")}
+                          >
+                            <MathText text={line.opening ?? ""} />
+                          </a>
+                        </li>
+                      );
+                    })}
                   </ol>
                 )}
               </li>

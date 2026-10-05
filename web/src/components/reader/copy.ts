@@ -122,6 +122,29 @@ export const MAP = {
   closeLines: (heading: string) => `Hide how the paragraphs of ${heading} open`,
 } as const;
 
+/**
+ * P1-05 (§1f.13; blueprint §2 boundary 1, §3.3): the route's words. A tier is
+ * a suggestion of how to read a section, stated as a fact about the section —
+ * "not mentioned", never a verdict on it. `background` is Tier 2's (P2).
+ */
+export const ROUTE = {
+  tiers: {
+    read: "read",
+    background: "background",
+    skim: "skim",
+    none: "not mentioned",
+  },
+  vague: "Ask something more specific and Peer can point you to the right sections.",
+  /** The facts behind a tint: the reader's terms the section uses, and how often. */
+  mentions: (hits: ReadonlyArray<{ term: string; count: number }>) =>
+    `mentions ${hits
+      .slice(0, 3)
+      .map((hit) => `${hit.term} ×${hit.count}`)
+      .join(", ")}`,
+  /** The questions that tinted a row: "Q1, Q3". */
+  questions: (numbers: readonly number[]) => numbers.map((n) => `Q${n}`).join(", "),
+} as const;
+
 /** The reader's own context for the paper: what they read or kept nearby. */
 export const LIBRARY = {
   heading: "In your library",

@@ -26,7 +26,7 @@ import {
   useReadingQuestionsStore,
   type PaperQuestions,
 } from "@/store/reading-questions";
-import { ASK } from "./copy";
+import { ASK, ROUTE } from "./copy";
 
 /** Past this many characters a line shows its count. */
 const COUNTER_FROM = 160;
@@ -126,7 +126,17 @@ export function focusFirstEmptyQuestion(): void {
   target?.focus();
 }
 
-export function QuestionField({ paperId, challenges }: { paperId: string; challenges: readonly string[] }) {
+export function QuestionField({
+  paperId,
+  challenges,
+  vague = false,
+}: {
+  paperId: string;
+  challenges: readonly string[];
+  /** P1-05 (§1f.6, §1f.13): every question is too vague to route — the page
+   *  tints nothing and the field says what would help. */
+  vague?: boolean;
+}) {
   // Read once, at mount: the page mounts this per paper, after the stores
   // have loaded. The last paper is the one asked about before this visit.
   const [initial] = useState(() => {
@@ -240,6 +250,11 @@ export function QuestionField({ paperId, challenges }: { paperId: string; challe
           </li>
         ))}
       </ol>
+      {vague && (
+        <p role="status" className="annotation mt-2 text-text-muted">
+          {ROUTE.vague}
+        </p>
+      )}
       {chipsShown && (
         <div className="mt-3 space-y-2">
           <p className="annotation text-text-faint">{ASK.hint}</p>
