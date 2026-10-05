@@ -168,9 +168,11 @@ export function ReadingMapView({
                           <a
                             href={`#${paragraphAnchor(k, line.index)}`}
                             data-route={tier}
+                            // P1-07 (§1f.18 b): on a tint the faint ink is
+                            // 2.69:1; the muted ink is ≥ 4.5:1 on every tint.
                             className={[
-                              "font-reading text-body-sm leading-[1.45] text-text-faint transition-colors hover:text-heading",
-                              ...(tier ? [ROUTE_TINT[tier], "box-decoration-clone"] : []),
+                              "font-reading text-body-sm leading-[1.45] transition-colors hover:text-heading",
+                              ...(tier ? ["text-text-muted", ROUTE_TINT[tier], "box-decoration-clone"] : ["text-text-faint"]),
                             ].join(" ")}
                           >
                             <MathText text={line.opening ?? ""} />

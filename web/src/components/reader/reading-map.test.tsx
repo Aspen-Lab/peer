@@ -184,6 +184,23 @@ describe("ReadingMapView — the route (P1-05)", () => {
     expect(render({ openRows: [0, 1] })).not.toContain("data-route");
   });
 
+  // P1-07 (§1f.18 b; A's O3): faint on the read tint is 2.69:1 — a tinted
+  // line's opening is set in the muted ink, which is ≥ 4.5:1 on every tint.
+  it("sets a tinted line's opening in muted ink and leaves an untinted line faint", () => {
+    const lineClass = (html: string, href: string) => new RegExp(`<a href="${href}"[^>]*class="([^"]*)"`).exec(html)?.[1].split(" ") ?? [];
+    const opened = render({ route, openRows: [0, 1] });
+
+    for (const href of ["#paper-section-0-p0", "#paper-section-0-p2", "#paper-section-1-p0"]) {
+      expect(lineClass(opened, href)).toContain("text-text-muted");
+      expect(lineClass(opened, href)).not.toContain("text-text-faint");
+    }
+    const plain = render({ openRows: [0, 1] });
+    for (const href of ["#paper-section-0-p0", "#paper-section-0-p2", "#paper-section-1-p0"]) {
+      expect(lineClass(plain, href)).toContain("text-text-faint");
+      expect(lineClass(plain, href)).not.toContain("text-text-muted");
+    }
+  });
+
   it("tints nothing and states nothing for a vague route", () => {
     const vague: RouteResult = { byQuestion: [{ question: "What is it?", vague: true, sections: {} }], vague: true };
     const html = render({ route: vague, openRows: [0, 1] });

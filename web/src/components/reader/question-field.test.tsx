@@ -15,7 +15,9 @@ import {
   fillNextLine,
   nextGist,
   removeLine,
+  settleLine,
   showChips,
+  vagueHintShown,
 } from "./question-field";
 
 // P1-03 (§1f.10): the question field. This project's Vitest has no DOM, so
@@ -139,6 +141,46 @@ describe("QuestionField — the vague hint (P1-05)", () => {
   it("shows no hint for a route that points somewhere, or with no route", () => {
     expect(renderToStaticMarkup(createElement(QuestionField, { paperId: PAPER, challenges: [], vague: false }))).not.toContain(ROUTE.vague);
     expect(render()).not.toContain(ROUTE.vague);
+  });
+});
+
+// P1-07 (§1f.18 a; A's O2): the hint is for a settled question, never for
+// the line being typed — a line settles on Enter or blur. The store still
+// takes every keystroke (the tints follow it live).
+describe("QuestionField — the hint waits for a settled line (P1-07)", () => {
+  const VAGUE_TYPING = ["Does tungsten"];
+
+  it("a focused line with one specific term shows no hint", () => {
+    const typing = settleLine(null, { type: "focus", index: 0 });
+    expect(typing).toBe(0);
+    expect(vagueHintShown({ vague: true, lines: VAGUE_TYPING, unsettled: settleLine(typing, { type: "change", index: 0 }) })).toBe(false);
+  });
+
+  it("the same line shows it once it settles: on blur, or on Enter", () => {
+    expect(vagueHintShown({ vague: true, lines: VAGUE_TYPING, unsettled: settleLine(0, { type: "blur", index: 0 }) })).toBe(true);
+    expect(vagueHintShown({ vague: true, lines: VAGUE_TYPING, unsettled: settleLine(0, { type: "enter", index: 0 }) })).toBe(true);
+    // Typing again unsettles it.
+    expect(vagueHintShown({ vague: true, lines: VAGUE_TYPING, unsettled: settleLine(null, { type: "change", index: 0 }) })).toBe(false);
+  });
+
+  it("another settled vague line keeps the hint while a new line is typed; a route that points somewhere never shows it", () => {
+    const lines = ["What is it?", "Does tung"];
+    expect(vagueHintShown({ vague: true, lines, unsettled: 1 })).toBe(true);
+    expect(vagueHintShown({ vague: false, lines, unsettled: null })).toBe(false);
+    // Blurring a line other than the one being typed changes nothing.
+    expect(settleLine(1, { type: "blur", index: 0 })).toBe(1);
+    // Nothing written at all: no hint.
+    expect(vagueHintShown({ vague: true, lines: [""], unsettled: null })).toBe(false);
+  });
+
+  it("a stored vague question shows the hint on mount, with nothing focused", () => {
+    useReadingQuestionsStore.setState({
+      byPaper: { [PAPER]: { items: ["What is it?"], gist: false, updatedAt: "2026-10-05T00:00:00.000Z" } },
+      lastPaperId: PAPER,
+    });
+    const html = renderToStaticMarkup(createElement(QuestionField, { paperId: PAPER, challenges: [], vague: true }));
+
+    expect(html).toContain(ROUTE.vague);
   });
 });
 

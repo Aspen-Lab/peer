@@ -119,6 +119,43 @@ export function chipGroups({
   return groups;
 }
 
+/**
+ * P1-07 (§1f.18 a): the line still being written — the one with focus, until
+ * Enter settles it — or null when every line is settled. A blur settles the
+ * line it leaves; typing unsettles the line it is in.
+ */
+export type SettleEvent = { type: "focus" | "change" | "enter" | "blur"; index: number };
+
+export function settleLine(unsettled: number | null, event: SettleEvent): number | null {
+  switch (event.type) {
+    case "focus":
+    case "change":
+      return event.index;
+    case "enter":
+    case "blur":
+      return unsettled === event.index ? null : unsettled;
+  }
+}
+
+/**
+ * The vague hint is for settled questions only: never for the line being
+ * typed — half a word is not a vague question — and only when some settled
+ * line holds a question. `vague` is the page's route verdict (every stored
+ * question too vague to point anywhere); the store still takes every
+ * keystroke, so the tints follow the typing live.
+ */
+export function vagueHintShown({
+  vague,
+  lines,
+  unsettled,
+}: {
+  vague: boolean;
+  lines: readonly string[];
+  unsettled: number | null;
+}): boolean {
+  return vague && lines.some((line, i) => i !== unsettled && line.trim().length > 0);
+}
+
 /** The page's `q`: the first empty question line, else the last one. */
 export function focusFirstEmptyQuestion(): void {
   const inputs = Array.from(document.querySelectorAll<HTMLInputElement>("input[data-ask-line]"));
@@ -152,6 +189,9 @@ export function QuestionField({
   const [lines, setLines] = useState<string[]>(initial.lines);
   const [gist, setGist] = useState(initial.gist);
   const [focused, setFocused] = useState(false);
+  // P1-07 (§1f.18 a): the line being written, which the vague hint waits for.
+  const [unsettled, setUnsettled] = useState<number | null>(null);
+  const settle = (event: SettleEvent) => setUnsettled((current) => settleLine(current, event));
   const inputs = useRef<Array<HTMLInputElement | null>>([]);
   const pendingFocus = useRef<{ index: number; caretAtEnd: boolean } | null>(null);
 
@@ -213,14 +253,18 @@ export function QuestionField({
               maxLength={MAX_QUESTION_CHARS}
               placeholder={index === 0 ? ASK.placeholder : undefined}
               aria-label={index === 0 ? undefined : ASK.line(index + 1)}
+              onFocus={() => settle({ type: "focus", index })}
+              onBlur={() => settle({ type: "blur", index })}
               onChange={(event) => {
                 const next = [...lines];
                 next[index] = event.target.value;
+                settle({ type: "change", index });
                 commit(next, nextGist(gist, next));
               }}
               onKeyDown={(event) => {
                 if (event.key !== "Enter") return;
                 event.preventDefault();
+                settle({ type: "enter", index });
                 const added = addLineAfter(lines, index);
                 if (added.lines.length !== lines.length) {
                   pendingFocus.current = { index: added.focus, caretAtEnd: true };
@@ -240,6 +284,8 @@ export function QuestionField({
                 aria-label={ASK.remove(index + 1)}
                 onClick={() => {
                   const next = removeLine(lines, index);
+                  // The lines move up: nothing is mid-sentence any more.
+                  setUnsettled(null);
                   commit(next, nextGist(gist, next));
                 }}
                 className="annotation shrink-0 text-text-faint transition-colors hover:text-heading"
@@ -250,7 +296,7 @@ export function QuestionField({
           </li>
         ))}
       </ol>
-      {vague && (
+      {vagueHintShown({ vague, lines, unsettled }) && (
         <p role="status" className="annotation mt-2 text-text-muted">
           {ROUTE.vague}
         </p>
