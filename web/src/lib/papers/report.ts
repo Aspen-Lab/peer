@@ -471,30 +471,65 @@ function readNextItems(value: unknown): ReadNextItem[] {
   return out;
 }
 
+/** A question as two texts are compared: trimmed, whitespace collapsed,
+ *  case folded — and then exactly equal, nothing looser (§1g.12). */
+function questionText(value: unknown): string {
+  return typeof value === "string" ? value.trim().replace(/\s+/g, " ").toLocaleLowerCase() : "";
+}
+
 /**
- * One entry per question of the request, by index: the model's i-th entry
- * answers the request's i-th question, and its `question` is overwritten with
- * the request's own text. Entries past the request's count are dropped; an
- * entry with a verdict the schema does not name is dropped (the question then
- * has no entry — nothing is said for it rather than a verdict invented).
+ * P2-02b (§1g.12): which request question each model entry answers.
+ *
+ * An entry belongs to the question whose text it copied back. Only an entry
+ * whose text matches no request question falls back to its position, and
+ * only when no entry claimed that position by its text. An entry that
+ * matches neither is dropped and counted: a second entry for a question
+ * already answered, one past the request's count, one whose position is
+ * taken. Every kept entry carries the request's own text, never the
+ * model's. An entry with a verdict the schema does not name is dropped
+ * uncounted (it fails the schema, not the matching), and a request question
+ * no entry answers has no entry: nothing is said for it rather than a
+ * verdict invented.
  */
-function questionAnswers(value: unknown, questions: readonly string[]): QuestionAnswers[] {
-  if (!Array.isArray(value)) return [];
-  const out: QuestionAnswers[] = [];
-  const count = Math.min(value.length, questions.length, REPORT_CAPS.questions);
-  for (let i = 0; i < count; i += 1) {
-    const item = value[i];
-    if (!isRecord(item)) continue;
-    const verdict = item.verdict as QuestionVerdict;
-    if (!VERDICTS.includes(verdict)) continue;
-    out.push({
-      question: questions[i],
-      verdict,
+function questionAnswers(
+  value: unknown,
+  questions: readonly string[],
+): { entries: QuestionAnswers[]; unmatched: number } {
+  if (!Array.isArray(value)) return { entries: [], unmatched: 0 };
+  const asked = questions.slice(0, REPORT_CAPS.questions);
+  const byText = new Map<string, number>();
+  asked.forEach((question, i) => {
+    const key = questionText(question);
+    if (key && !byText.has(key)) byText.set(key, i);
+  });
+
+  const slots: (Record<string, unknown> | undefined)[] = new Array(asked.length).fill(undefined);
+  const byPosition: { position: number; item: Record<string, unknown> }[] = [];
+  let unmatched = 0;
+  value.forEach((item, position) => {
+    if (!isRecord(item) || !VERDICTS.includes(item.verdict as QuestionVerdict)) return;
+    const index = byText.get(questionText(item.question));
+    if (index === undefined) byPosition.push({ position, item });
+    else if (slots[index]) unmatched += 1;
+    else slots[index] = item;
+  });
+  // Text first, for every entry; only then the positions left free.
+  for (const { position, item } of byPosition) {
+    if (position < asked.length && !slots[position]) slots[position] = item;
+    else unmatched += 1;
+  }
+
+  const entries: QuestionAnswers[] = [];
+  slots.forEach((item, i) => {
+    if (!item) return;
+    entries.push({
+      question: asked[i],
+      verdict: item.verdict as QuestionVerdict,
       answers: answerClaims(item.answers),
       readNext: readNextItems(item.readNext),
     });
-  }
-  return out;
+  });
+  return { entries, unmatched };
 }
 
 /** ≤8 terms. One with an `evidence` sentence is the paper's definition (the
@@ -591,10 +626,10 @@ export function sanitizePaperReport(
       ...(typeof provenance.pageCount === "number" && Number.isFinite(provenance.pageCount)
         ? { pageCount: Math.max(0, Math.round(provenance.pageCount)) }
         : {}),
-      droppedClaims:
-        typeof provenance.droppedClaims === "number" && Number.isFinite(provenance.droppedClaims)
-          ? Math.max(0, Math.round(provenance.droppedClaims))
-          : 0,
+      // §1g.12: the count starts here, at 0. A number the model wrote into
+      // its own output is never carried; the server counts what it drops
+      // (below, and in `verifyReportEvidence`).
+      droppedClaims: 0,
     },
   };
 
@@ -621,7 +656,9 @@ export function sanitizePaperReport(
   const questions = options.questions ?? [];
   if (questions.length > 0) {
     const answered = questionAnswers(r.forYourQuestions, questions);
-    if (answered.length > 0) report.forYourQuestions = answered;
+    if (answered.entries.length > 0) report.forYourQuestions = answered.entries;
+    // §1g.12: an entry that answers no question is a dropped claim.
+    report.provenance.droppedClaims += answered.unmatched;
     const terms = paperTerms(r.terms);
     if (terms.length > 0) report.terms = terms;
   }

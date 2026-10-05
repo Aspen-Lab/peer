@@ -251,3 +251,89 @@ describe("terms (§1g.3)", () => {
     expect(report).not.toHaveProperty("terms");
   });
 });
+
+// P2-02b (§1g.12): an entry belongs to the question whose text it copied
+// back — normalised (trimmed, case-insensitive, whitespace collapsed), then
+// exact — and only an entry whose text matches no question falls back to its
+// position, when that position is still free; an entry that matches neither
+// is dropped and counted. The request's own text is still the one kept.
+describe("answers follow the question's text, position as the fallback (P2-02b)", () => {
+  const entry = (question: string, verdict = "partly") => ({ question, verdict, answers: [], readNext: [] });
+
+  it("a skipped middle question: the later entries land on their own questions", () => {
+    const report = sanitizePaperReport(
+      { forYourQuestions: [entry(Q[0], "answered"), entry(Q[2], "not_addressed")] },
+      { questions: Q },
+    );
+
+    expect(report.forYourQuestions?.map((item) => [item.question, item.verdict])).toEqual([
+      [Q[0], "answered"],
+      [Q[2], "not_addressed"],
+    ]);
+    expect(report.provenance.droppedClaims).toBe(0);
+  });
+
+  it("matches after trimming, case and whitespace — and nothing looser", () => {
+    const report = sanitizePaperReport(
+      { forYourQuestions: [entry("  how MANY   cells were\tcycled? "), entry("Does cracking rise with the charge rate")] },
+      { questions: Q },
+    );
+
+    // The first matches Q[1] by text; the second (no "?") matches nothing
+    // and falls back to its free position, 1 — taken — so it is dropped.
+    expect(report.forYourQuestions?.map((item) => item.question)).toEqual([Q[1]]);
+    expect(report.provenance.droppedClaims).toBe(1);
+  });
+
+  it("an entry with unknown text takes its position when that position is free", () => {
+    const report = sanitizePaperReport(
+      { forYourQuestions: [entry("the model's paraphrase of the first question", "answered"), entry(Q[1])] },
+      { questions: Q.slice(0, 2) },
+    );
+
+    expect(report.forYourQuestions?.map((item) => [item.question, item.verdict])).toEqual([
+      [Q[0], "answered"],
+      [Q[1], "partly"],
+    ]);
+  });
+
+  it("an entry that matches neither text nor a free position is dropped and counted", () => {
+    const report = sanitizePaperReport(
+      {
+        forYourQuestions: [
+          entry("something nobody asked"), // position 0, later taken by text
+          entry(Q[0]),
+          entry(Q[0]), // the same question twice: the second has no place
+          entry("beyond the questions"), // position 3, past the request's count
+        ],
+      },
+      { questions: Q.slice(0, 2) },
+    );
+
+    expect(report.forYourQuestions?.map((item) => item.question)).toEqual([Q[0]]);
+    expect(report.provenance.droppedClaims).toBe(3);
+  });
+
+  it("never carries a droppedClaims number the model wrote: sanitized 0, verified the verifier's own drops", () => {
+    const raw = { ...RAW, provenance: { basis: "model-fulltext", droppedClaims: 7 } };
+    const sanitized = sanitizePaperReport(raw);
+    expect(sanitized.provenance).toEqual({ basis: "model-fulltext", droppedClaims: 0 });
+
+    const verified = verifyReportEvidence(sanitized, { abstract: ABSTRACT, doc: DOC });
+    expect(verified.dropped).toBe(1);
+    expect(verified.report.provenance.droppedClaims).toBe(verified.dropped);
+  });
+
+  it("the count reaches the verified report beside the evidence drops", () => {
+    const { report, dropped } = verify({
+      forYourQuestions: [
+        entry("something nobody asked"),
+        { question: Q[0], verdict: "answered", answers: [{ text: "Gone.", evidence: "Nothing like this sentence is anywhere in the paper at all, really." }], readNext: [] },
+      ],
+    }, Q.slice(0, 1));
+
+    expect(report.forYourQuestions?.map((item) => item.verdict)).toEqual(["not_addressed"]);
+    expect(dropped).toBe(1);
+    expect(report.provenance.droppedClaims).toBe(2);
+  });
+});

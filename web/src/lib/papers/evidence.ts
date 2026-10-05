@@ -356,7 +356,9 @@ export function verifyReportEvidence(
     else delete verified.terms;
   }
 
-  verified.provenance = { ...report.provenance, droppedClaims: dropped };
+  // §1g.12: added to the count the sanitizer hands over (entries that
+  // answered no question), never replacing it.
+  verified.provenance = { ...report.provenance, droppedClaims: report.provenance.droppedClaims + dropped };
   return { report: verified, dropped };
 }
 
