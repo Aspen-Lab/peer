@@ -13,9 +13,11 @@
 // reader's name for the bucket the heading already has; the opening line is
 // the paragraph's own sentence, cut only at a word boundary, never rewritten.
 
+import { tokenize } from "@/lib/scoring/tokenize";
+import { canonicalize, isGenericTerm, termMatches, termOccurrences } from "@/lib/scoring/term-expand";
 import type { ExtractedDocument } from "./html-text";
 import { readableSections } from "./reading";
-import { isBoilerplate, splitSentences } from "./skim";
+import { isBoilerplate, scoreSentence, splitSentences } from "./skim";
 
 /** What a section is for, from its bucket. `body` is the honest "not placed":
  *  the page shows no role tag for it. */
@@ -122,3 +124,125 @@ export function buildReadingMap(doc: ExtractedDocument): ReadingMap {
   });
   return { sections, totalMinutes: Math.ceil(totalWords / WORDS_PER_MINUTE) };
 }
+
+// ── The Tier 0 route (spec D9 second half; rulings §1f.6–8) ────────────
+//
+// For each question and each section: read / skim / not mentioned, from
+// counts a reader can check — which of the question's specific terms the
+// section mentions, how often, and in how many of its sentences — with one
+// of those sentences, verbatim, as evidence. No score is reported (a score is
+// not a fact a reader can check). It runs in the browser on the reading the
+// page already holds: the questions are the reader's own and never leave this
+// function.
+
+export type RouteTier = "read" | "skim" | "none";
+
+export interface RouteSection {
+  tier: RouteTier;
+  /** The specific terms the section mentions, as the reader typed them
+   *  (lower-cased), with how often; most mentioned first, then by term. */
+  hits: { term: string; count: number }[];
+  /** The matching sentence that says most (`scoreSentence`), verbatim.
+   *  Absent when no sentence matches. */
+  evidence?: string;
+  /** Indices of the paragraphs that mention a term — the map's indices. */
+  paragraphs: number[];
+}
+
+export interface RouteResult {
+  byQuestion: {
+    question: string;
+    /** Fewer than two specific terms: no route for this question. */
+    vague: boolean;
+    sections: Record<string, RouteSection>;
+  }[];
+  /** Every question is vague: the page shows the "ask something more
+   *  specific" hint. False with no questions. */
+  vague: boolean;
+}
+
+/** A question needs this many specific terms to be routed. */
+const MIN_SPECIFIC_TERMS = 2;
+
+/**
+ * §1f.6: the question's tokens (`tokenize`: lower-cased, stopwords and short
+ * tokens already gone), one per canonical form, without the generic ones.
+ * Each is kept as the reader typed it.
+ */
+export function specificTerms(question: string): string[] {
+  const seen = new Set<string>();
+  const terms: string[] = [];
+  for (const token of tokenize(question)) {
+    const canonical = canonicalize(token);
+    if (!canonical || seen.has(canonical) || isGenericTerm(token)) continue;
+    seen.add(canonical);
+    terms.push(token);
+  }
+  return terms;
+}
+
+function routeSection(paragraphs: readonly string[], terms: readonly string[]): RouteSection {
+  // Canonicalised once per section per call (joined with a space), and once
+  // per paragraph and per sentence for the matches below.
+  const sectionText = canonicalize(paragraphs.join(" "));
+  const hits = terms
+    .map((term) => ({ term, count: termOccurrences(sectionText, term) }))
+    .filter((hit) => hit.count >= 1)
+    .sort((a, b) => b.count - a.count || (a.term < b.term ? -1 : a.term > b.term ? 1 : 0));
+
+  const mentioned: number[] = [];
+  const matching: string[] = [];
+  paragraphs.forEach((paragraph, index) => {
+    const text = canonicalize(paragraph);
+    if (terms.some((term) => termMatches(text, term))) mentioned.push(index);
+    for (const sentence of splitSentences(paragraph)) {
+      const canonicalSentence = canonicalize(sentence);
+      if (terms.some((term) => termMatches(canonicalSentence, term))) matching.push(sentence);
+    }
+  });
+
+  const tier: RouteTier =
+    hits.length >= 2 && matching.length >= 2 ? "read" : hits.length >= 1 ? "skim" : "none";
+
+  let evidence: string | undefined;
+  let best = Number.NEGATIVE_INFINITY;
+  if (tier !== "none") {
+    for (const sentence of matching) {
+      const score = scoreSentence(sentence, 0);
+      // Strictly greater: the earlier sentence wins a tie.
+      if (score > best) {
+        best = score;
+        evidence = sentence;
+      }
+    }
+  }
+
+  return { tier, hits, ...(evidence !== undefined ? { evidence } : {}), paragraphs: mentioned };
+}
+
+/**
+ * Route each question through the paper. `sections` is the rendered body the
+ * page holds (`PaperReading.body`), index-aligned with `map.sections` — the
+ * alignment `buildReadingMap` guarantees (§1f.1, §1f.6 amended). Pure and
+ * synchronous: nothing it is given changes, and the same input gives the
+ * same result.
+ */
+export function routeByQuestions(
+  map: ReadingMap,
+  sections: ReadonlyArray<{ paragraphs: readonly string[] }>,
+  questions: readonly string[],
+): RouteResult {
+  const byQuestion = questions.map((question) => {
+    const terms = specificTerms(question);
+    if (terms.length < MIN_SPECIFIC_TERMS) {
+      return { question, vague: true, sections: {} as Record<string, RouteSection> };
+    }
+    const routed: Record<string, RouteSection> = {};
+    map.sections.forEach((row, k) => {
+      routed[row.id] = routeSection(sections[k]?.paragraphs ?? [], terms);
+    });
+    return { question, vague: false, sections: routed };
+  });
+  return { byQuestion, vague: byQuestion.length > 0 && byQuestion.every((entry) => entry.vague) };
+}
+

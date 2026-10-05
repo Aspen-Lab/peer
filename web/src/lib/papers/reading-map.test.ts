@@ -4,7 +4,7 @@ import { blockMarker } from "@/lib/text/math";
 import { withSectionIds, type DraftSection, type ExtractedDocument } from "./html-text";
 import type { FullTextResult } from "./full-text";
 import { buildReading } from "./reading";
-import { buildReadingMap } from "./reading-map";
+import { buildReadingMap, routeByQuestions, type ReadingMap } from "./reading-map";
 import arxivHtmlDocJson from "./__fixtures__/arxiv-2609.02697.doc.json";
 import arxivPdfDocJson from "./__fixtures__/arxiv-2609.02113.doc.json";
 import zenodoDocJson from "./__fixtures__/zenodo-W7208807247.doc.json";
@@ -246,5 +246,209 @@ describe("buildReadingMap — sections, roles, words and minutes (§1f.1–3)", 
 
   it("is empty for a document with nothing but an abstract", () => {
     expect(buildReadingMap(doc([{ canonical: "abstract", text: "Only an abstract." }]))).toEqual({ sections: [], totalMinutes: 0 });
+  });
+});
+
+// ── P1-02: the Tier 0 route (spec D9 second half, rulings §1f.6–8) ─────
+//
+// Per question and section: read / skim / not mentioned, from counts a reader
+// can check — which of the question's specific terms the section mentions,
+// how often, and in how many sentences — with one verbatim sentence as
+// evidence. Pure and in the browser: the questions never leave the function.
+
+// §1f.6 (amended): the route takes the rendered body — what the browser holds
+// (`PaperReading.body`) — index-aligned with the map.
+const bodyOf = (paperDoc: ExtractedDocument) => buildReading(paper, okFullText(paperDoc)).body;
+const route = (paperDoc: ExtractedDocument, questions: string[]) =>
+  routeByQuestions(buildReadingMap(paperDoc), bodyOf(paperDoc), questions);
+
+describe("routeByQuestions — specific terms and vague questions (§1f.6)", () => {
+  const paperDoc = doc([{ heading: "1 Introduction", canonical: "introduction", text: "The LCO cathode cracks after cycling. The cathode swells as LCO loses lithium." }]);
+  const map = buildReadingMap(paperDoc);
+
+  it("calls a question with one specific term vague, with no sections", () => {
+    const result = routeByQuestions(map, bodyOf(paperDoc), ["LCO?"]);
+
+    expect(result.byQuestion).toEqual([{ question: "LCO?", vague: true, sections: {} }]);
+    expect(result.vague).toBe(true);
+  });
+
+  it("calls a question of generic words only vague", () => {
+    const result = routeByQuestions(map, bodyOf(paperDoc), ["the energy of materials and data"]);
+
+    expect(result.byQuestion[0].vague).toBe(true);
+    expect(result.byQuestion[0].sections).toEqual({});
+  });
+
+  it("is vague at the top only when every question is, and not for no questions", () => {
+    expect(routeByQuestions(map, bodyOf(paperDoc), ["LCO?", "LCO cathode"]).vague).toBe(false);
+    expect(routeByQuestions(map, bodyOf(paperDoc), ["LCO?", "energy data"]).vague).toBe(true);
+    expect(routeByQuestions(map, bodyOf(paperDoc), [])).toEqual({ byQuestion: [], vague: false });
+  });
+
+  it("counts a term the question repeats once, and reports it as the reader typed it, lower-cased", () => {
+    const result = routeByQuestions(map, bodyOf(paperDoc), ["LCO lco Cathode"]);
+    const section = result.byQuestion[0].sections.s0;
+
+    expect(result.byQuestion[0].vague).toBe(false);
+    expect(section.hits).toEqual([{ term: "cathode", count: 2 }, { term: "lco", count: 2 }]);
+  });
+});
+
+describe("routeByQuestions — tiers, hits and evidence (§1f.7)", () => {
+  it("expands an abbreviation: the question's short form finds the section's long form, and counts it", () => {
+    // `ABBREVIATION_GROUPS`: ["lco", "lithium cobalt oxide", "licoo2"].
+    const paperDoc = doc([{ canonical: "results", text:
+      "Lithium cobalt oxide loses capacity above 4.5 volts. The degradation of lithium cobalt oxide starts at the surface." }]);
+    const result = route(paperDoc, ["LCO degradation"]);
+    const section = result.byQuestion[0].sections.s0;
+
+    expect(section.hits).toEqual([{ term: "lco", count: 2 }, { term: "degradation", count: 1 }]);
+    expect(section.tier).toBe("read");
+  });
+
+  it("is skim with two terms in only one sentence", () => {
+    const paperDoc = doc([{ text: "The LCO cathode cracks under load. Nothing else in this section bears on it at all." }]);
+    const section = route(paperDoc, ["LCO cathode"]).byQuestion[0].sections.s0;
+
+    expect(section.hits.map((h) => h.term)).toEqual(["cathode", "lco"]);
+    expect(section.tier).toBe("skim");
+  });
+
+  it("is skim with one term in five sentences", () => {
+    const paperDoc = doc([{ text: "LCO is layered. LCO is common. LCO is stable. LCO is costly. LCO is studied." }]);
+    const section = route(paperDoc, ["LCO cathode"]).byQuestion[0].sections.s0;
+
+    expect(section.hits).toEqual([{ term: "lco", count: 5 }]);
+    expect(section.tier).toBe("skim");
+  });
+
+  it("is read with two terms in two sentences", () => {
+    const paperDoc = doc([{ text: "The LCO layer cracks first. Then the cathode swells." }]);
+    const section = route(paperDoc, ["LCO cathode"]).byQuestion[0].sections.s0;
+
+    expect(section.tier).toBe("read");
+  });
+
+  it("calls a section that mentions none of the terms not mentioned, with no evidence", () => {
+    const paperDoc = doc([{ text: "Samples were annealed at 900 K for two hours in argon." }]);
+    const section = route(paperDoc, ["LCO cathode"]).byQuestion[0].sections.s0;
+
+    expect(section).toEqual({ tier: "none", hits: [], paragraphs: [] });
+    expect("evidence" in section).toBe(false);
+  });
+
+  it("lists the paragraphs that mention a term, by the map's indices", () => {
+    const paperDoc = doc([{ text: "The LCO layer cracks.\n\nNothing here.\n\nThe cathode swells under load." }]);
+    const map = buildReadingMap(paperDoc);
+    const section = routeByQuestions(map, bodyOf(paperDoc), ["LCO cathode"]).byQuestion[0].sections.s0;
+
+    expect(section.paragraphs).toEqual([0, 2]);
+    expect(map.sections[0].paragraphs.map((p) => p.index)).toEqual([0, 1, 2]);
+  });
+
+  it("quotes the matching sentence that says most, verbatim, and the earlier one on a tie", () => {
+    const claim = "We show that the LCO cathode keeps 92% of its capacity after 500 cycles.";
+    const paperDoc = doc([{ text: `The cathode was made from LCO powder. ${claim} The LCO cathode is also cheap.` }]);
+    const section = route(paperDoc, ["LCO cathode"]).byQuestion[0].sections.s0;
+
+    expect(section.evidence).toBe(claim);
+
+    const tie = doc([{ text: "The LCO cathode is grey. The LCO cathode is hard." }]);
+    expect(route(tie, ["LCO cathode"]).byQuestion[0].sections.s0.evidence)
+      .toBe("The LCO cathode is grey.");
+  });
+
+  it("keeps each question's own entry: a section can be read for one and not mentioned for another", () => {
+    const paperDoc = doc([
+      { heading: "A", text: "The LCO layer cracks first. Then the cathode swells." },
+      { heading: "B", text: "Grain boundaries set the creep rate. Creep slows as grain boundaries thin." },
+    ]);
+    const result = route(paperDoc, ["LCO cathode", "grain boundaries creep"]);
+
+    expect(result.byQuestion.map((q) => q.question)).toEqual(["LCO cathode", "grain boundaries creep"]);
+    expect(result.byQuestion[0].sections.s0.tier).toBe("read");
+    expect(result.byQuestion[0].sections.s1.tier).toBe("none");
+    expect(result.byQuestion[1].sections.s0.tier).toBe("none");
+    expect(result.byQuestion[1].sections.s1.tier).toBe("read");
+  });
+
+  it("reads the body it is given, aligned with the map — a hand-built one will do", () => {
+    const map: ReadingMap = {
+      sections: [{ id: "s3", heading: "Results", canonical: "results", role: "evidence", words: 9, minutes: 1, paragraphs: [{ index: 0, opening: null }, { index: 1, opening: null }] }],
+      totalMinutes: 1,
+    };
+    const result = routeByQuestions(map, [{ paragraphs: ["The LCO layer cracks first.", "Then the cathode swells."] }], ["LCO cathode"]);
+
+    expect(result.byQuestion[0].sections).toEqual({
+      s3: {
+        tier: "read",
+        hits: [{ term: "cathode", count: 1 }, { term: "lco", count: 1 }],
+        evidence: "The LCO layer cracks first.",
+        paragraphs: [0, 1],
+      },
+    });
+  });
+
+  it("gives every map section an entry, keyed by the section's id", () => {
+    const paperDoc = doc([
+      { heading: "Abstract", canonical: "abstract", text: "We study LCO cathodes." },
+      { heading: "1 Introduction", text: "The LCO cathode cracks." },
+      { heading: "2 Methods", text: "Samples were annealed." },
+    ]);
+    const result = route(paperDoc, ["LCO cathode"]);
+
+    expect(Object.keys(result.byQuestion[0].sections)).toEqual(["s1", "s2"]);
+  });
+
+  it("is a pure function: the same input twice gives the same result, and nothing it is given changes", () => {
+    const paperDoc = withIds(zenodoDocJson);
+    const map = buildReadingMap(paperDoc);
+    const body = bodyOf(paperDoc);
+    const questions = ["graph embeddings protein structure", "LCO?"];
+    const before = JSON.stringify([map, body, questions]);
+
+    const first = routeByQuestions(map, body, questions);
+    const second = routeByQuestions(map, body, questions);
+
+    expect(second).toEqual(first);
+    expect(JSON.stringify([map, body, questions])).toBe(before);
+  });
+});
+
+describe("routeByQuestions — the committed fixtures", () => {
+  const QUESTIONS: Record<string, string> = {
+    "arxiv-2609.02697 (LaTeXML HTML)": "medical image counterfactuals causal explanations",
+    "arxiv-2609.02113 (PDF)": "variational quantum eigensolver protein lattice",
+    "zenodo-W7208807247 (PDF)": "graph embeddings protein structure",
+  };
+
+  it.each(FIXTURES)("%s: tiers follow the counts, paragraphs are the map's, evidence is a sentence of the section", (name, paperDoc) => {
+    const map = buildReadingMap(paperDoc);
+    const body = buildReading(paper, okFullText(paperDoc)).body;
+    const result = routeByQuestions(map, body, [QUESTIONS[name]]);
+    const entry = result.byQuestion[0];
+
+    expect(entry.vague).toBe(false);
+    expect(Object.keys(entry.sections)).toEqual(map.sections.map((s) => s.id));
+    map.sections.forEach((row, k) => {
+      const section = entry.sections[row.id];
+      const indices = row.paragraphs.map((p) => p.index);
+      expect(section.paragraphs.every((i) => indices.includes(i))).toBe(true);
+      if (section.hits.length === 0) {
+        expect(section.tier).toBe("none");
+        expect(section.evidence).toBeUndefined();
+      } else {
+        expect(section.tier === "read" ? section.hits.length >= 2 : true).toBe(true);
+        expect(section.tier).not.toBe("none");
+      }
+      if (section.evidence !== undefined) {
+        expect(body[k].paragraphs.some((p) => p.includes(section.evidence!))).toBe(true);
+      }
+      const counts = section.hits.map((h) => h.count);
+      expect(counts).toEqual([...counts].sort((a, b) => b - a));
+    });
+    // The question finds something in its own paper.
+    expect(Object.values(entry.sections).some((s) => s.tier !== "none")).toBe(true);
   });
 });
