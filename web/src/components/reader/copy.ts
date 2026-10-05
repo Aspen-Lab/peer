@@ -98,6 +98,30 @@ export const ASK = {
   counter: (n: number) => `${n}/200`,
 } as const;
 
+/**
+ * P1-04 (§1f.12): the reading map under the question field. The role labels
+ * are a reader's names for the section buckets; `body` (a heading Peer could
+ * not place) has none.
+ */
+export const MAP = {
+  heading: "Map",
+  summary: (sections: number, minutes: number) =>
+    `${sections} section${sections === 1 ? "" : "s"} \u00b7 about ${minutes} min`,
+  show: "show map",
+  hide: "hide map",
+  roles: {
+    setup: "setup",
+    method: "method",
+    evidence: "evidence",
+    interpretation: "interpretation",
+    apparatus: "apparatus",
+  },
+  page: (page: number) => `p.${page}`,
+  minutes: (minutes: number) => `${minutes} min`,
+  openLines: (heading: string) => `Show how the paragraphs of ${heading} open`,
+  closeLines: (heading: string) => `Hide how the paragraphs of ${heading} open`,
+} as const;
+
 /** The reader's own context for the paper: what they read or kept nearby. */
 export const LIBRARY = {
   heading: "In your library",

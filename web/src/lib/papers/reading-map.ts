@@ -15,9 +15,89 @@
 
 import { tokenize } from "@/lib/scoring/tokenize";
 import { canonicalize, isGenericTerm, termMatches, termOccurrences } from "@/lib/scoring/term-expand";
-import type { ExtractedDocument } from "./html-text";
-import { readableSections } from "./reading";
+import { parseBlockMarker } from "@/lib/text/math";
+import type { ExtractedDocument, ExtractedEquation, ExtractedSection } from "./html-text";
+// Type only: erased at runtime, so `reading.ts` can import this module
+// without the two importing each other.
+import type { ReadingEquation } from "./reading";
 import { isBoilerplate, scoreSentence, splitSentences } from "./skim";
+
+// ── The body's sections and paragraphs (§1f.1; moved from reading.ts in P1-04) ──
+
+/**
+ * One section's text, split into the paragraphs the page renders.
+ *
+ * A marker paragraph is where a display equation stood: the equation goes
+ * after the paragraph before it, and the marker goes away. A step number on
+ * its own line — LaTeXML renders an algorithm listing one cell per line, so
+ * "1:" and "2:" arrive as paragraphs of their own — and anything with no
+ * letter in it is debris, and goes too. Each paragraph is whitespace-
+ * normalised.
+ *
+ * P1-01 (§1f.1): exported so the reading map enumerates exactly these
+ * paragraphs, with exactly these indices — a map line ↔
+ * `ReadingSection.paragraphs[index]`.
+ */
+export function sectionParagraphs(
+  section: Pick<ExtractedSection, "text">,
+  lifted: readonly ExtractedEquation[],
+): { paragraphs: string[]; equations: ReadingEquation[] } {
+  const paragraphs: string[] = [];
+  const equations: ReadingEquation[] = [];
+  for (const raw of section.text.split(/\n{2,}/)) {
+    const para = raw.replace(/\s+/g, " ").trim();
+    if (!para) continue;
+    const k = parseBlockMarker(para);
+    if (k !== null) {
+      const eq = lifted[k];
+      if (eq && (eq.latex || eq.text)) {
+        equations.push({
+          ...(eq.latex ? { latex: eq.latex } : {}),
+          ...(eq.text ? { text: eq.text } : {}),
+          ...(eq.number ? { number: eq.number } : {}),
+          after: paragraphs.length - 1,
+        });
+      }
+      continue;
+    }
+    if (/^\d+[:.]?$/.test(para) || !/\p{L}/u.test(para)) continue;
+    paragraphs.push(para);
+  }
+  return { paragraphs, equations };
+}
+
+/**
+ * The sections the page renders, in order, each with its paragraphs.
+ *
+ * The abstract is dropped: the page sets it from the record, sentence by
+ * sentence, with the ink on it, and the extractor's copy is the same text
+ * without the marks. A section with nothing under its heading is dropped too
+ * — an extractor artefact, not a part of the paper.
+ *
+ * P1-01 (§1f.1): exported so the reading map and the body are one list —
+ * map row k ↔ body section k.
+ */
+export interface ReadableSection {
+  /** The section's id — its own, or, for a document read before ids existed,
+   *  the one `withSectionIds` would have given it (`s<index>` over the
+   *  document's sections, the abstract included). */
+  id: string;
+  section: ExtractedSection;
+  paragraphs: string[];
+  equations: ReadingEquation[];
+}
+
+export function readableSections(doc: ExtractedDocument): ReadableSection[] {
+  const out: ReadableSection[] = [];
+  const lifted = doc.equations ?? [];
+  doc.sections.forEach((section, index) => {
+    if (section.canonical === "abstract") return;
+    const { paragraphs, equations } = sectionParagraphs(section, lifted);
+    if (paragraphs.length === 0 && equations.length === 0) return;
+    out.push({ id: section.id ?? `s${index}`, section, paragraphs, equations });
+  });
+  return out;
+}
 
 /** What a section is for, from its bucket. `body` is the honest "not placed":
  *  the page shows no role tag for it. */
@@ -102,17 +182,15 @@ export function openingOf(paragraph: string): string | null {
   return (cut > 0 ? sentence.slice(0, cut) : sentence.slice(0, OPENING_MAX)).trim();
 }
 
-export function buildReadingMap(doc: ExtractedDocument): ReadingMap {
-  // An id in the shape every extractor numbers sections (`withSectionIds`:
-  // `s<index>` over the document's sections, the abstract included), for a
-  // document read before ids existed.
-  const position = new Map(doc.sections.map((section, index) => [section, index]));
+/** The map of sections already split for the body (`readableSections`) —
+ *  how `buildReading` builds it, from the same split as the body. */
+export function readingMapOf(rendered: readonly ReadableSection[]): ReadingMap {
   let totalWords = 0;
-  const sections = readableSections(doc).map(({ section, paragraphs }): ReadingMapSection => {
+  const sections = rendered.map(({ id, section, paragraphs }): ReadingMapSection => {
     const words = paragraphs.reduce((sum, paragraph) => sum + wordCount(paragraph), 0);
     totalWords += words;
     return {
-      id: section.id ?? `s${position.get(section) ?? 0}`,
+      id,
       heading: section.heading,
       canonical: section.canonical,
       role: roleOf(section.canonical),
@@ -123,6 +201,10 @@ export function buildReadingMap(doc: ExtractedDocument): ReadingMap {
     };
   });
   return { sections, totalMinutes: Math.ceil(totalWords / WORDS_PER_MINUTE) };
+}
+
+export function buildReadingMap(doc: ExtractedDocument): ReadingMap {
+  return readingMapOf(readableSections(doc));
 }
 
 // ── The Tier 0 route (spec D9 second half; rulings §1f.6–8) ────────────

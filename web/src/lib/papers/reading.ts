@@ -15,11 +15,11 @@
 
 import type { Paper } from "@/types";
 import type { ExtractedFigureCaption } from "./html-text";
-import { parseBlockMarker } from "@/lib/text/math";
-import type { ExtractedDocument, ExtractedEquation, ExtractedSection } from "./html-text";
+import type { ExtractedDocument } from "./html-text";
 import type { FullTextResult } from "./full-text";
 import type { SourceLink } from "./source-links";
 import { claimsUploadId } from "./upload-id";
+import { readableSections, readingMapOf, type ReadingMap } from "./reading-map";
 import {
   QUANTITY_STRICT,
   isBoilerplate,
@@ -130,7 +130,7 @@ export interface PaperReading {
    * change with no new field, and without the bump every reader who had
    * opened the paper that day would have kept the worse one.
    */
-  version: 5;
+  version: 6;
   paperId: string;
   builtAt: string;
   provenance: ReadingProvenance;
@@ -157,12 +157,20 @@ export interface PaperReading {
    * The abstract is not in here — the page sets it above, from the record.
    */
   body: ReadingSection[];
+  /**
+   * P1-04 (§1f.12): the paper's shape before reading — sections, roles,
+   * minutes, each paragraph's opening — index-aligned with `body`. Absent
+   * without a body.
+   */
+  map?: ReadingMap;
   omitted: { block: ReadingBlock; reason: OmitReason }[];
   source: { label: ReadingSourceLabel; url: string } | null;
 }
 
 /** One section of the paper, as the extractor read it. */
 export interface ReadingSection {
+  /** P1-04: the section's id (`s<index>`), the map's and the route's key. */
+  id: string;
   heading: string;
   /** introduction | methods | results | discussion | conclusion | body | … */
   canonical: string;
@@ -563,76 +571,16 @@ function pickSource(
  * alone, which is what the page renders at first paint before the server
  * reading arrives. `now` exists so tests can pin `builtAt`.
  */
-/**
- * One section's text, split into the paragraphs the page renders.
- *
- * A marker paragraph is where a display equation stood: the equation goes
- * after the paragraph before it, and the marker goes away. A step number on
- * its own line — LaTeXML renders an algorithm listing one cell per line, so
- * "1:" and "2:" arrive as paragraphs of their own — and anything with no
- * letter in it is debris, and goes too. Each paragraph is whitespace-
- * normalised.
- *
- * P1-01 (§1f.1): exported so the reading map enumerates exactly these
- * paragraphs, with exactly these indices — a map line ↔
- * `ReadingSection.paragraphs[index]`.
- */
-export function sectionParagraphs(
-  section: Pick<ExtractedSection, "text">,
-  lifted: readonly ExtractedEquation[],
-): { paragraphs: string[]; equations: ReadingEquation[] } {
-  const paragraphs: string[] = [];
-  const equations: ReadingEquation[] = [];
-  for (const raw of section.text.split(/\n{2,}/)) {
-    const para = raw.replace(/\s+/g, " ").trim();
-    if (!para) continue;
-    const k = parseBlockMarker(para);
-    if (k !== null) {
-      const eq = lifted[k];
-      if (eq && (eq.latex || eq.text)) {
-        equations.push({
-          ...(eq.latex ? { latex: eq.latex } : {}),
-          ...(eq.text ? { text: eq.text } : {}),
-          ...(eq.number ? { number: eq.number } : {}),
-          after: paragraphs.length - 1,
-        });
-      }
-      continue;
-    }
-    if (/^\d+[:.]?$/.test(para) || !/\p{L}/u.test(para)) continue;
-    paragraphs.push(para);
-  }
-  return { paragraphs, equations };
-}
-
-/**
- * The sections the page renders, in order, each with its paragraphs.
- *
- * The abstract is dropped: the page sets it from the record, sentence by
- * sentence, with the ink on it, and the extractor's copy is the same text
- * without the marks. A section with nothing under its heading is dropped too
- * — an extractor artefact, not a part of the paper.
- *
- * P1-01 (§1f.1): exported so the reading map and the body are one list —
- * map row k ↔ body section k.
- */
-export function readableSections(
-  doc: ExtractedDocument,
-): Array<{ section: ExtractedSection; paragraphs: string[]; equations: ReadingEquation[] }> {
-  const out: Array<{ section: ExtractedSection; paragraphs: string[]; equations: ReadingEquation[] }> = [];
-  const lifted = doc.equations ?? [];
-  for (const section of doc.sections) {
-    if (section.canonical === "abstract") continue;
-    const { paragraphs, equations } = sectionParagraphs(section, lifted);
-    if (paragraphs.length === 0 && equations.length === 0) continue;
-    out.push({ section, paragraphs, equations });
-  }
-  return out;
-}
+// P1-04: `sectionParagraphs` and `readableSections` — the paragraph split and
+// the section filter the body and the reading map share (§1f.1) — live in
+// `reading-map.ts` now, so this module can import the map without the two
+// importing each other; re-exported here for any reader of the old names.
+export { readableSections, sectionParagraphs } from "./reading-map";
 
 /** The document, split into paragraphs for the page. */
-function readableBody(doc: ExtractedDocument): ReadingSection[] {
-  return readableSections(doc).map(({ section, paragraphs, equations }) => ({
+function readableBody(sections: ReturnType<typeof readableSections>): ReadingSection[] {
+  return sections.map(({ id, section, paragraphs, equations }) => ({
+    id,
     heading: section.heading,
     canonical: section.canonical,
     paragraphs,
@@ -753,9 +701,15 @@ export function buildReading(
   const provenance = buildProvenance(paper, sentences, fullText);
   const doc = fullText?.status === "ok" ? fullText.doc : undefined;
 
+  // One split of the document for both the body and its map (§1f.1), so
+  // map row k is body section k.
+  const rendered = doc ? readableSections(doc) : [];
   const body = doc
-    ? placeFigures(readableBody(doc), doc.figureCaptions, doc.source === "pdf" ? { paperId: paper.id } : null)
+    ? placeFigures(readableBody(rendered), doc.figureCaptions, doc.source === "pdf" ? { paperId: paper.id } : null)
     : [];
+  // P1-04 (§1f.12): the map is computed here, where the document is — the
+  // browser never holds it — and only when there is a body to map.
+  const map = body.length > 0 ? readingMapOf(rendered) : undefined;
   // In order, each block excluding what the ones before it took: the three
   // pools overlap now that `body` is a last resort for two of them, and one
   // sentence quoted under two headings is Peer saying two different things
@@ -788,7 +742,7 @@ export function buildReading(
   omitted.push({ block: "nextStep", reason: "needs_key" });
 
   return {
-    version: 5,
+    version: 6,
     paperId: paper.id,
     builtAt: now.toISOString(),
     provenance,
@@ -797,6 +751,7 @@ export function buildReading(
     method,
     caveats,
     body,
+    ...(map ? { map } : {}),
     omitted,
     source: pickSource(paper, fullText),
   };

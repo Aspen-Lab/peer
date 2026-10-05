@@ -19,7 +19,7 @@ const MAX_ENTRIES = 40;
 const TTL_MS = 24 * 60 * 60 * 1000;
 /** The shape both gates below accept. Typed from the document itself, so
  *  bumping `PaperReading["version"]` is the only edit a shape change needs. */
-const READING_VERSION: PaperReading["version"] = 5;
+const READING_VERSION: PaperReading["version"] = 6;
 
 type ReadingCache = Record<string, { reading: PaperReading; ts: number }>;
 

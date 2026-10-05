@@ -41,6 +41,12 @@ export function sectionAnchor(index: number): string {
   return `paper-section-${index}`;
 }
 
+/** P1-04 (§1f.12): each paragraph is a destination too — the reading map's
+ *  paragraph lines scroll here. */
+export function paragraphAnchor(sectionIndex: number, paragraphIndex: number): string {
+  return `${sectionAnchor(sectionIndex)}-p${paragraphIndex}`;
+}
+
 /**
  * The paper's figure, where the paper put it.
  *
@@ -109,7 +115,7 @@ function Section({ section, index }: { section: ReadingSection; index: number })
       <div className="font-reading text-title leading-[1.65] text-text-muted measure-paper space-y-4 reading-justify">
         {following(-1)}
         {section.paragraphs.map((paragraph, i) => (
-          <div key={i} className="space-y-4">
+          <div key={i} id={paragraphAnchor(index, i)} className="space-y-4 scroll-mt-20">
             <p>
               <MathText text={paragraph} />
             </p>

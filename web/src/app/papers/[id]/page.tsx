@@ -81,6 +81,8 @@ import { PaperNotes } from "@/components/notes/paper-notes";
 import { PAPER_BODY_ID } from "@/components/reader/paper-body";
 import { PaperContents } from "@/components/reader/paper-contents";
 import { QuestionField, focusFirstEmptyQuestion } from "@/components/reader/question-field";
+import { ReadingMapView } from "@/components/reader/reading-map";
+import { SectionLinks } from "@/components/reader/evidence-quote";
 import { useReadingQuestionsHydrated } from "@/store/reading-questions";
 import { phrasesFromText } from "@/lib/feed/profile-compiler";
 import { useModelReport } from "@/components/reader/use-model-report";
@@ -629,6 +631,9 @@ function Reader({
   // Where Peer has read the paper, the text is already on the page — the
   // command and the contents are ways down to it, not ways to open it.
   const hasBody = (reading?.body?.length ?? 0) > 0;
+  // P1-04 (§1f.12): a claim's "§Heading" links to the body section of that
+  // name; the quotes read the headings from `SectionLinks` below.
+  const bodyHeadings = useMemo(() => (reading?.body ?? []).map((section) => section.heading), [reading]);
   const readHere = useCallback(() => {
     const block = document.getElementById(PAPER_BODY_ID);
     if (!block) return;
@@ -1068,6 +1073,7 @@ function Reader({
           server reading, a model report) is `additions`: on the spread it
           lands only in the right column, so nothing can move the decision;
           in one column it is below the decision, as before. */}
+      <SectionLinks headings={bodyHeadings}>
       <ReaderLayout
         spread={spread}
         plate={
@@ -1105,8 +1111,13 @@ function Reader({
           // P1-03 (§1f.10): only where Peer has the paper's text — without
           // it there is nothing to point a question at, and the Decision
           // block already says why. One field per paper.
-          hasBody && questionsHydrated ? (
-            <QuestionField key={paper.id} paperId={paper.id} challenges={challengeChips} />
+          // P1-04 (§1f.12): the map under it, from the reading the server
+          // built (absent without a body).
+          hasBody ? (
+            <>
+              {questionsHydrated && <QuestionField key={paper.id} paperId={paper.id} challenges={challengeChips} />}
+              {reading.map && <ReadingMapView key={`map:${paper.id}`} map={reading.map} />}
+            </>
           ) : undefined
         }
         words={
@@ -1274,6 +1285,7 @@ function Reader({
         }
         next={<NextRow nav={nav} next={nextPaper} />}
       />
+      </SectionLinks>
       <ReaderToast toast={toast} />
       <KeyLegend />
     </PageContainer>

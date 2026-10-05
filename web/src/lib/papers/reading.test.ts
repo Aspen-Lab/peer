@@ -293,8 +293,9 @@ describe("buildReading", () => {
     // though no field was added. The follow-up branch made this identical
     // change independently (same string, same reason); main's own later
     // 4 -> 5 (math rendering) is the one this merge keeps, since the
-    // follow-up branch never touched that shape.
-    expect(reading.version).toBe(5);
+    // follow-up branch never touched that shape. P1-04 (§1e.9, §1f.12):
+    // 5 -> 6 — body sections carry their id and the reading carries the map.
+    expect(reading.version).toBe(6);
     expect(reading.paperId).toBe("openalex:W7204479535");
     expect(reading.builtAt).toBe("2026-09-06T12:00:00.000Z");
     expect(reading.provenance).toEqual({
@@ -795,7 +796,8 @@ describe("displayHeading", () => {
 
 
 describe("placeFigures", () => {
-  const section = (heading: string, ...paragraphs: string[]) => ({ heading, canonical: "body", paragraphs });
+  // P1-04: a ReadingSection carries its id; these tests do not look at it.
+  const section = (heading: string, ...paragraphs: string[]) => ({ id: `s:${heading}`, heading, canonical: "body", paragraphs });
   const cap = (n: number, extra: Record<string, unknown> = {}) => ({
     ordinal: n - 1,
     label: `Figure ${n}`,
@@ -912,3 +914,43 @@ describe("equations in the body", () => {
     expect(reading.body[0].equations).toBeUndefined();
   });
 });
+
+// P1-04 (§1f.12): the reading carries the map, computed on the server where
+// the document is — the browser never holds the document — and each body
+// section carries the section's id, so map row k, body section k and the
+// route's keys all name the same section.
+describe("buildReading — the reading map and section ids (P1-04)", () => {
+  it("carries the map of the body it renders, and each section's id", () => {
+    const reading = buildReading(zenodoPaper, fullTextOk(zenodoDoc, ZENODO_LINK), NOW);
+    const ids = zenodoDoc.sections.map((_, i) => `s${i}`).filter((_, i) => zenodoDoc.sections[i].canonical !== "abstract");
+
+    expect(reading.map).toBeDefined();
+    expect(reading.body.map((s) => s.id)).toEqual(ids);
+    expect(reading.map?.sections.map((s) => s.id)).toEqual(ids);
+    expect(reading.map?.sections.map((s) => s.heading)).toEqual(reading.body.map((s) => s.heading));
+    reading.body.forEach((section, k) => {
+      expect(reading.map?.sections[k].paragraphs.map((p) => p.index)).toEqual(section.paragraphs.map((_, i) => i));
+    });
+    expect(reading.map?.totalMinutes).toBeGreaterThan(0);
+  });
+
+  it("uses the document's own ids where it has them", () => {
+    const doc = docWith([
+      { id: "s4", heading: "4 Results", canonical: "results", text: "Accuracy reached 91% on the held-out set." },
+      { id: "s7", heading: "7 Conclusion", canonical: "conclusion", text: "We presented a method." },
+    ]);
+    const reading = buildReading(normalPaper, fullTextOk(doc, ARXIV_HTML_LINK), NOW);
+
+    expect(reading.body.map((s) => s.id)).toEqual(["s4", "s7"]);
+    expect(reading.map?.sections.map((s) => s.id)).toEqual(["s4", "s7"]);
+  });
+
+  it("has no map without a body: the abstract alone, or full text with nothing to render", () => {
+    expect("map" in buildReading(normalPaper, null, NOW)).toBe(false);
+    const abstractOnly = docWith([{ id: "s0", heading: "Abstract", canonical: "abstract", text: "Only an abstract." }]);
+    const reading = buildReading(normalPaper, fullTextOk(abstractOnly, ARXIV_HTML_LINK), NOW);
+    expect(reading.body).toEqual([]);
+    expect("map" in reading).toBe(false);
+  });
+});
+
