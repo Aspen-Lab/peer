@@ -31,9 +31,11 @@
 
 ## §0c. Scheduling
 
-The user explicitly requested an hourly resume clock. One Routine named `Resume deep-report reading-helper ABC loop` fires into this session every hour; it re-reads §0, §1 and §5 before acting. Do not create a duplicate. It cannot bypass the account's usage limits: if a firing lands while the limit is active, that run fails and the next one retries. The Routine is paused by the manager only when the ledger is fully VERIFIED or the user says stop.
+The user explicitly requested an hourly resume clock. One Routine named `Resume deep-report reading-helper ABC loop` (`trig_01K7vg1rwQ3cqLbdSZZ8Ra3S`, cron `26 * * * *` UTC, created 2026-10-05T16:26Z) fires into this session every hour; it re-reads §0, §1 and §5 before acting. Do not create a duplicate. It cannot bypass the account's usage limits: if a firing lands while the limit is active, that run fails and the next one retries. The Routine is paused by the manager only when the ledger is fully VERIFIED or the user says stop.
 
-Two older Routines belonged to PR #31's check-ins and were cancelled when that PR was superseded.
+PR #31's one-shot check-in Routines all fired and disabled themselves; PR #31 was closed as superseded by PR #32 on 2026-10-05.
+
+Container note: `npm ci` in `web/` first failed with E403 because `package-lock.json` resolves a few packages (`js-yaml`, `@types/js-yaml`) to `registry.npmmirror.com`, which the environment's proxy forbids. Install with `npm ci --replace-registry-host=always --registry=https://registry.npmjs.org/`. Do not rewrite the lockfile for this.
 
 ## §1. CURRENT STATE
 
@@ -161,10 +163,10 @@ Common constraints for every brief: verify the branch; preserve user edits; writ
 
 - Spec approved by the user in chat (four decisions + six additions), folded into the blueprint (commit on this branch).
 - This state file and `HANDOFF-DEEP-REPORT-READING-HELPER.md` written. Ledger §5 built from the blueprint's D0–D14 and §6 phases.
-- Branch `deep-report-reading-helper-enhancement` created from `claude/sleepy-sagan-oo1aon` @ 539ae8c; draft PR opened; PR #31 closed as superseded.
-- `npm ci` run in `web/` for this container.
+- Branch `deep-report-reading-helper-enhancement` created from `claude/sleepy-sagan-oo1aon` @ 539ae8c; draft PR #32 opened (https://github.com/Aspen-Lab/peer/pull/32); PR #31 closed as superseded.
+- `npm ci` in `web/`: first attempt E403 on `registry.npmmirror.com` URLs in the lockfile; retried with `--replace-registry-host=always` (see §0c).
 - Hourly Routine created (§0c).
-- Next: assign C for P0-01.
+- Next: assign C (Opus) for P0-01 → P0-02 → P0-03.
 
 ## §5. Durable work ledger — update in place, evidence append only
 
