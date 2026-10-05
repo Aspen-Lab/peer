@@ -2,10 +2,12 @@
 // ruling §1f.9; blueprint §3.1 ① 问).
 //
 // "What do you want from this paper?" is asked per paper and may be left
-// empty. The questions are the reader's own: nothing here is sent to Peer's
-// server in P1 — the route that reads them runs in the browser — which is
-// also why signing out does not clear them, the same reasoning as notes
-// (`store/notes.ts`).
+// empty. The questions are the reader's own and stay in this browser —
+// which is also why signing out does not clear them, the same reasoning as
+// notes (`store/notes.ts`). The route that reads `items` runs here, live, as
+// the reader types. P2-03 (§1g.11): the *settled* questions — copied from
+// `items` when a line is finished (Enter, blur, removal) — travel with the
+// one deep-report request that answers them, and with nothing else.
 //
 // Rehydrated after mount by <StoreHydrator/>, like the other stores, so the
 // first client render matches the server's.
@@ -25,6 +27,18 @@ export interface PaperQuestions {
   /** "Just get the gist": route by the generic reading order, no answers. */
   gist: boolean;
   updatedAt: string;
+  /** P2-03 (§1g.11 a): the questions as last settled — what a deep report
+   *  is asked about. Absent until the first settle (and on an entry saved
+   *  before it existed): read it through `settledQuestions`. */
+  settled?: string[];
+}
+
+const NONE_SETTLED: readonly string[] = [];
+
+/** The settled questions of an entry — none for an entry without them (one
+ *  shared empty list, so a reader of it sees the same value each time). */
+export function settledQuestions(entry: PaperQuestions | undefined): readonly string[] {
+  return entry?.settled ?? NONE_SETTLED;
 }
 
 interface ReadingQuestionsState {
@@ -38,6 +52,10 @@ interface ReadingQuestionsState {
    *  most five of at most 200 characters, stamps `updatedAt` and
    *  `lastPaperId`. Nothing left and no gist: the paper is forgotten. */
   set: (paperId: string, items: readonly string[], gist: boolean, at?: string) => void;
+  /** P2-03: settle the paper's questions — `settled` becomes its (cleaned)
+   *  `items`. A paper with no entry has nothing to settle. `set` never
+   *  touches `settled`. */
+  settle: (paperId: string) => void;
   clear: (paperId: string) => void;
 }
 
@@ -78,10 +96,26 @@ export const useReadingQuestionsStore = create<ReadingQuestionsState>()(
             delete byPaper[paperId];
             return { byPaper };
           }
+          const settled = s.byPaper[paperId]?.settled;
           return {
-            byPaper: withoutOldest({ ...s.byPaper, [paperId]: { items: kept, gist, updatedAt: at } }),
+            byPaper: withoutOldest({
+              ...s.byPaper,
+              [paperId]: { items: kept, gist, updatedAt: at, ...(settled ? { settled } : {}) },
+            }),
             lastPaperId: paperId,
           };
+        }),
+      settle: (paperId) =>
+        set((s) => {
+          const entry = s.byPaper[paperId];
+          if (!entry) return s;
+          const settled = cleanQuestions(entry.items);
+          const same =
+            entry.settled !== undefined &&
+            entry.settled.length === settled.length &&
+            entry.settled.every((question, i) => question === settled[i]);
+          if (same) return s;
+          return { byPaper: { ...s.byPaper, [paperId]: { ...entry, settled } } };
         }),
       clear: (paperId) =>
         set((s) => {

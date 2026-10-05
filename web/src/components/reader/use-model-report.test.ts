@@ -13,6 +13,30 @@ import { buildReportKey, rememberReport, useModelReport } from "./use-model-repo
 // `fullTextUploadId` string, but a fresh lifecycle instance) never reuses a
 // stale in-memory/localStorage entry built against the previous instance.
 describe("buildReportKey", () => {
+  // P2-03 (§1g.11 b): the settled questions name the report too — but only
+  // when there are some, so every key and cached report from before stays.
+  it("is byte-identical to today's key without questions", () => {
+    const paper = { id: "arxiv:2607.00001", fullTextUploadId: "upload:0123456789abcdef", revision: 2 };
+    const today = buildReportKey(paper, "deep", "my project", "gemini");
+    expect(today).toBe(`arxiv:2607.00001|upload:0123456789abcdef|2|deep|${today.split("|")[4]}|gemini`);
+    expect(buildReportKey(paper, "deep", "my project", "gemini", [])).toBe(today);
+    expect(buildReportKey(paper, "deep", "my project", "gemini", undefined)).toBe(today);
+  });
+
+  it("with questions: appends one hash of the sorted set — order-insensitive, and different sets differ", () => {
+    const paper = { id: "arxiv:2607.00001", fullTextUploadId: undefined, revision: undefined };
+    const today = buildReportKey(paper, "deep", "", "gemini");
+    const ab = buildReportKey(paper, "deep", "", "gemini", ["Does tungsten delay rafting?", "Why 1100 C?"]);
+    const ba = buildReportKey(paper, "deep", "", "gemini", ["Why 1100 C?", "Does tungsten delay rafting?"]);
+    const a = buildReportKey(paper, "deep", "", "gemini", ["Does tungsten delay rafting?"]);
+
+    expect(ab).toMatch(new RegExp(`^${today.replace(/[|.]/g, "\\$&")}\\|q:[0-9a-z]+$`));
+    expect(ba).toBe(ab);
+    expect(a).not.toBe(ab);
+    // The key holds a hash, never the question.
+    expect(ab).not.toContain("tungsten");
+  });
+
   it("returns an empty key with no paper", () => {
     expect(buildReportKey(undefined, "abstract", "", "default")).toBe("");
   });

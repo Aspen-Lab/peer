@@ -156,6 +156,19 @@ export function vagueHintShown({
   return vague && lines.some((line, i) => i !== unsettled && line.trim().length > 0);
 }
 
+/**
+ * P2-03 (§1g.11 a): which of the field's events settle the questions — the
+ * set a deep report is asked about. A finished line settles: Enter, leaving
+ * it, removing one. A keystroke does not (half a question is not one), nor
+ * the gist (it is no question), nor a chip by itself (one that leaves the
+ * caret in its line settles when the reader leaves that line).
+ */
+export type FieldEvent = "enter" | "blur" | "remove" | "change" | "gist" | "chip";
+
+export function settlesQuestions(event: FieldEvent): boolean {
+  return event === "enter" || event === "blur" || event === "remove";
+}
+
 /** The page's `q`: the first empty question line, else the last one. */
 export function focusFirstEmptyQuestion(): void {
   const inputs = Array.from(document.querySelectorAll<HTMLInputElement>("input[data-ask-line]"));
@@ -191,7 +204,7 @@ export function QuestionField({
   const [focused, setFocused] = useState(false);
   // P1-07 (§1f.18 a): the line being written, which the vague hint waits for.
   const [unsettled, setUnsettled] = useState<number | null>(null);
-  const settle = (event: SettleEvent) => setUnsettled((current) => settleLine(current, event));
+  const trackLine = (event: SettleEvent) => setUnsettled((current) => settleLine(current, event));
   const inputs = useRef<Array<HTMLInputElement | null>>([]);
   const pendingFocus = useRef<{ index: number; caretAtEnd: boolean } | null>(null);
 
@@ -209,6 +222,10 @@ export function QuestionField({
     setLines(next);
     setGist(nextGistValue);
     useReadingQuestionsStore.getState().set(paperId, next, nextGistValue);
+  };
+  /** After the commit, when the event finishes a line (P2-03). */
+  const settleOn = (event: FieldEvent) => {
+    if (settlesQuestions(event)) useReadingQuestionsStore.getState().settle(paperId);
   };
 
   const onChip = (chip: Chip) => {
@@ -253,18 +270,21 @@ export function QuestionField({
               maxLength={MAX_QUESTION_CHARS}
               placeholder={index === 0 ? ASK.placeholder : undefined}
               aria-label={index === 0 ? undefined : ASK.line(index + 1)}
-              onFocus={() => settle({ type: "focus", index })}
-              onBlur={() => settle({ type: "blur", index })}
+              onFocus={() => trackLine({ type: "focus", index })}
+              onBlur={() => {
+                trackLine({ type: "blur", index });
+                settleOn("blur");
+              }}
               onChange={(event) => {
                 const next = [...lines];
                 next[index] = event.target.value;
-                settle({ type: "change", index });
+                trackLine({ type: "change", index });
                 commit(next, nextGist(gist, next));
               }}
               onKeyDown={(event) => {
                 if (event.key !== "Enter") return;
                 event.preventDefault();
-                settle({ type: "enter", index });
+                trackLine({ type: "enter", index });
                 const added = addLineAfter(lines, index);
                 if (added.lines.length !== lines.length) {
                   pendingFocus.current = { index: added.focus, caretAtEnd: true };
@@ -272,6 +292,7 @@ export function QuestionField({
                 } else {
                   inputs.current[added.focus]?.focus();
                 }
+                settleOn("enter");
               }}
               className="min-w-0 flex-1 border-b border-border bg-transparent py-1 font-reading text-body-sm text-text placeholder:text-text-faint focus:border-heading focus:outline-none"
             />
@@ -287,6 +308,7 @@ export function QuestionField({
                   // The lines move up: nothing is mid-sentence any more.
                   setUnsettled(null);
                   commit(next, nextGist(gist, next));
+                  settleOn("remove");
                 }}
                 className="annotation shrink-0 text-text-faint transition-colors hover:text-heading"
               >

@@ -40,6 +40,12 @@ const SECTIONS = [
     ],
   },
   {
+    label: "Your questions",
+    body: [
+      "Questions you type on a paper page stay in this browser. When Peer writes a deep report for that paper, they travel with that one request so the report can answer them; Peer does not log them or keep them.",
+    ],
+  },
+  {
     label: "Your own model key",
     body: [
       "If you add your own provider key, it stays in your browser. It is deliberately excluded from everything Peer syncs to its server — the one line that does it is a `void feedAiApiKey` in the sync code, there so a future edit has to remove it on purpose.",
@@ -100,7 +106,7 @@ export default function PrivacyPage() {
       ))}
 
       <p className="annotation text-text-faint mt-12">
-        Last changed 2026-09-17 · changes to this page ship in the{" "}
+        Last changed 2026-10-05 · changes to this page ship in the{" "}
         <Link href="/changelog" className="underline decoration-border-strong underline-offset-4 hover:text-heading">
           changelog
         </Link>

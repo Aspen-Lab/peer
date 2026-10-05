@@ -108,9 +108,14 @@ export function buildReportKey(
   depth: "deep" | "abstract",
   project: string,
   provider: string,
+  questions: readonly string[] = [],
 ): string {
   if (!paper) return "";
-  return `${paper.id}|${paper.fullTextUploadId ?? "public"}|${paper.revision ?? ""}|${depth}|${hash(project)}|${provider}`;
+  const base = `${paper.id}|${paper.fullTextUploadId ?? "public"}|${paper.revision ?? ""}|${depth}|${hash(project)}|${provider}`;
+  // P2-03 (§1g.11 b): a report answers a set of questions — in any order —
+  // so the set names it too, as a hash; with none the key is today's, and
+  // every report already cached stays found.
+  return questions.length > 0 ? `${base}|q:${hash([...questions].sort().join("\n"))}` : base;
 }
 
 export interface ModelReportState {
@@ -138,6 +143,8 @@ interface Result {
   failed: boolean;
 }
 
+const NO_QUESTIONS: readonly string[] = [];
+
 /**
  * Ask for the report once per `${paperId}|${depth}|${hash(project)}|${provider}`
  * and keep it in localStorage. The request goes out with the project text so
@@ -147,9 +154,13 @@ interface Result {
 export function useModelReport({
   paper,
   profile,
+  questions = NO_QUESTIONS,
 }: {
   paper: Paper | undefined;
   profile: UserProfile;
+  /** P2-03 (§1g.11 b): the reader's settled questions for this paper —
+   *  never the gist. They go in the request body only when there are some. */
+  questions?: readonly string[];
 }): ModelReportState {
   const project = useMemo(
     () => [profile.currentProject, profile.currentChallenges].filter(Boolean).join("\n"),
@@ -188,7 +199,7 @@ export function useModelReport({
   const deep =
     Boolean(profile.deepReportEnabled || paper?.fullTextUploadId) && aiMode !== "none";
   const depth = deep ? "deep" : "abstract";
-  const reportKey = buildReportKey(paper, depth, project, profile.feedAiProvider);
+  const reportKey = buildReportKey(paper, depth, project, profile.feedAiProvider, questions);
 
   // P0-02 (spec D0): a private PDF's report is cached like any other. It
   // never used to be, so every open of an attached PDF asked for — and
@@ -224,6 +235,12 @@ export function useModelReport({
   useEffect(() => {
     paperRef.current = paper;
   }, [paper]);
+  // The questions likewise: the key already names their set, so a new array
+  // for the same set (every store write) asks for nothing new.
+  const questionsRef = useRef(questions);
+  useEffect(() => {
+    questionsRef.current = questions;
+  }, [questions]);
 
   useEffect(() => {
     const current = paperRef.current;
@@ -251,12 +268,15 @@ export function useModelReport({
             apiKey: profile.feedAiApiKey.trim(),
           }
         : undefined;
+    const sentQuestions = questionsRef.current;
     const requestBody = {
       paper: current,
       contextHint,
       project: project || undefined,
       deepReport: deep,
       llmOverride,
+      // In the body of this one request, never a URL; absent without any.
+      ...(sentQuestions.length > 0 ? { questions: [...sentQuestions] } : {}),
     };
 
     const fail = () => {

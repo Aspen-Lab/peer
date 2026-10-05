@@ -85,8 +85,8 @@ const base: Paper = {
 const attached: Paper = { ...base, fullTextUploadId: "upload:0123456789abcdef", revision: 1 };
 const standalone: Paper = { ...base, id: "upload:fedcba9876543210", revision: 1, textStatus: "ok" };
 
-async function open(paper: Paper, reader: UserProfile = profile) {
-  const opened = await hookRuntime.mount(() => useModelReport({ paper, profile: reader }));
+async function open(paper: Paper, reader: UserProfile = profile, questions?: readonly string[]) {
+  const opened = await hookRuntime.mount(() => useModelReport({ paper, profile: reader, questions }));
   opened.unmount();
   return opened.value;
 }
@@ -190,5 +190,40 @@ describe("useModelReport with effects running — one report request across two 
     expect(JSON.stringify(net.streamCalls[1])).toBe(JSON.stringify(net.streamCalls[0]));
     expect(JSON.stringify(net.streamCalls)).not.toContain("Quillwortane");
     useReadingQuestionsStore.setState({ byPaper: {}, lastPaperId: null });
+  });
+
+  // P2-03 (§1g.11 b): the settled questions travel with the deep-report
+  // request — in its body, never its URL — and are part of the client's
+  // cache key, so each distinct set is one report and an earlier set comes
+  // back from the cache.
+  it("sends the settled questions in the request body, under a key of their own (P2-03)", async () => {
+    const plain = await open(attached);
+    vi.stubGlobal("localStorage", memoryStorage());
+    const asked = await open(attached, profile, ["Does tungsten delay rafting?", "Why 1100 C?"]);
+
+    expect(net.streamCalls).toHaveLength(2);
+    expect(net.streamCalls[1].questions).toEqual(["Does tungsten delay rafting?", "Why 1100 C?"]);
+    expect(asked.reportKey).not.toBe(plain.reportKey);
+    expect(asked.reportKey.startsWith(plain.reportKey)).toBe(true);
+  });
+
+  it("asks again when the settled questions change, and an earlier set comes back from the cache (P2-03)", async () => {
+    await open(attached, profile, ["Does tungsten delay rafting?"]);
+    await open(attached, profile, ["Does tungsten delay rafting?", "Why 1100 C?"]);
+    expect(net.streamCalls).toHaveLength(2);
+
+    await open(attached, profile, ["Does tungsten delay rafting?"]);
+    await open(attached, profile, ["Why 1100 C?", "Does tungsten delay rafting?"]);
+    expect(net.streamCalls).toHaveLength(2);
+  });
+
+  it("without settled questions the request body has no questions key (P2-03)", async () => {
+    await open(attached);
+    vi.stubGlobal("localStorage", memoryStorage());
+    await open(attached, profile, []);
+
+    expect(net.streamCalls).toHaveLength(2);
+    for (const body of net.streamCalls) expect(body).not.toHaveProperty("questions");
+    expect(JSON.stringify(net.streamCalls[1])).toBe(JSON.stringify(net.streamCalls[0]));
   });
 });

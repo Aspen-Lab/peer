@@ -28,6 +28,7 @@ import {
   MAX_QUESTION_PAPERS,
   MAX_QUESTIONS,
   READING_QUESTIONS_STORAGE_KEY,
+  settledQuestions,
   useReadingQuestionsHydrated,
   useReadingQuestionsStore,
 } from "./reading-questions";
@@ -114,6 +115,57 @@ describe("reading questions store (P1-03)", () => {
     await useReadingQuestionsStore.persist.rehydrate();
     expect(useReadingQuestionsStore.persist.hasHydrated()).toBe(true);
     expect(useReadingQuestionsStore.getState().byPaper["openalex:W1"].items).toEqual(["A question"]);
+  });
+
+  // P2-03 (§1g.11 a): the questions a report is asked about are the settled
+  // ones — copied from `items` on Enter, blur or a removal, never on a
+  // keystroke.
+  it("settle() copies the cleaned items into settled; set() leaves settled alone", () => {
+    const { set, settle } = useReadingQuestionsStore.getState();
+    set("openalex:W1", ["  Does tungsten delay rafting?  ", "does TUNGSTEN delay rafting?"], false, AT);
+    expect(settledQuestions(useReadingQuestionsStore.getState().byPaper["openalex:W1"])).toEqual([]);
+
+    settle("openalex:W1");
+    expect(useReadingQuestionsStore.getState().byPaper["openalex:W1"].settled).toEqual(["Does tungsten delay rafting?"]);
+
+    // Typing goes on: items follow it, settled waits.
+    set("openalex:W1", ["Does tungsten delay rafting at 1100 C?"], false, AT);
+    const entry = useReadingQuestionsStore.getState().byPaper["openalex:W1"];
+    expect(entry.items).toEqual(["Does tungsten delay rafting at 1100 C?"]);
+    expect(entry.settled).toEqual(["Does tungsten delay rafting?"]);
+
+    settle("openalex:W1");
+    expect(useReadingQuestionsStore.getState().byPaper["openalex:W1"].settled).toEqual(["Does tungsten delay rafting at 1100 C?"]);
+  });
+
+  it("settle() is a no-op for a paper with no entry, and clear() removes items and settled together", () => {
+    const { set, settle, clear } = useReadingQuestionsStore.getState();
+    const before = useReadingQuestionsStore.getState();
+    settle("openalex:W9");
+    expect(useReadingQuestionsStore.getState()).toBe(before);
+
+    set("openalex:W1", ["A question"], false, AT);
+    settle("openalex:W1");
+    clear("openalex:W1");
+    expect(useReadingQuestionsStore.getState().byPaper["openalex:W1"]).toBeUndefined();
+  });
+
+  it("reads an entry saved before settled existed as nothing settled, and persists settled once there is one", async () => {
+    expect(settledQuestions({ items: ["Old question"], gist: false, updatedAt: AT })).toEqual([]);
+    expect(settledQuestions(undefined)).toEqual([]);
+
+    useReadingQuestionsStore.getState().set("openalex:W1", ["A question"], false, AT);
+    useReadingQuestionsStore.getState().settle("openalex:W1");
+    const saved = JSON.parse(storage.items.get("peer-reading-questions-v1") ?? "null");
+    expect(saved.state.byPaper["openalex:W1"].settled).toEqual(["A question"]);
+
+    // An old saved entry (no `settled`) loads as it was.
+    storage.items.set(
+      "peer-reading-questions-v1",
+      JSON.stringify({ state: { byPaper: { "openalex:W2": { items: ["Old"], gist: false, updatedAt: AT } }, lastPaperId: "openalex:W2" }, version: 1 }),
+    );
+    await useReadingQuestionsStore.persist.rehydrate();
+    expect(settledQuestions(useReadingQuestionsStore.getState().byPaper["openalex:W2"])).toEqual([]);
   });
 
   it("reports not-hydrated on the server render, so the first client render matches it", () => {

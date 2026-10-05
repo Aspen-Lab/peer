@@ -52,9 +52,41 @@ interface ExtendedRequest extends PaperReportRequest {
    * the paper to, the key is left out of the schema rather than invited.
    */
   project?: string;
+  /**
+   * P2-03 (§1g.11 d): the reader's settled questions about this paper, for
+   * the deep report to answer. Cleaned on arrival (`requestQuestions`), used
+   * by the deep path only, and never written to a log line or a shared cache.
+   */
+  questions?: string[];
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────
+
+const MAX_REQUEST_QUESTIONS = 5;
+const MAX_REQUEST_QUESTION_CHARS = 200;
+
+/**
+ * P2-03 (§1g.11 d): the questions as the deep report may use them — an array
+ * of strings, each trimmed, non-empty, at most 200 characters, distinct
+ * case-insensitively, at most five. Anything else is ignored rather than
+ * refused: a malformed list is no reason to withhold the report.
+ */
+function requestQuestions(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const item of value) {
+    if (typeof item !== "string") continue;
+    const question = item.trim().slice(0, MAX_REQUEST_QUESTION_CHARS).trim();
+    if (!question) continue;
+    const key = question.toLocaleLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(question);
+    if (out.length >= MAX_REQUEST_QUESTIONS) break;
+  }
+  return out;
+}
 
 function parseJsonObject(text: string): unknown {
   const candidates = [
@@ -532,6 +564,7 @@ function streamReport(
           project: projectText(body) || undefined,
           doc: fullText.doc,
           provider,
+          questions: body.questions,
         });
 
         if (!deep) {
@@ -606,6 +639,9 @@ async function handlePost(req: NextRequest) {
   if (typeof body?.paper?.id !== "string" || !body.paper.id || typeof body.paper.title !== "string" || !body.paper.title) {
     return NextResponse.json({ error: "paper is required" }, { status: 400 });
   }
+  // P2-03 (§1g.11 d): cleaned once, here, for both transports; the deep path
+  // is the only reader of them.
+  body.questions = requestQuestions(body.questions);
   // 9-14 (A9-13, matrix C5): the revision captured here, at the very start
   // of the request, is what both the JSON deep path below and the NDJSON
   // stream re-check against after their own long-running full-text/model
@@ -735,6 +771,7 @@ async function handlePost(req: NextRequest) {
           project: projectText(body) || undefined,
           doc: fullText.doc,
           provider,
+          questions: body.questions,
         }),
         getFigurePool({
           itemId: body.paper.fullTextUploadId ?? body.paper.id,

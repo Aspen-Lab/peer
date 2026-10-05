@@ -83,7 +83,7 @@ import { PaperContents } from "@/components/reader/paper-contents";
 import { QuestionField, focusFirstEmptyQuestion } from "@/components/reader/question-field";
 import { ReadingMapView, readingRoute } from "@/components/reader/reading-map";
 import { SectionLinks } from "@/components/reader/evidence-quote";
-import { useReadingQuestionsHydrated, useReadingQuestionsStore } from "@/store/reading-questions";
+import { settledQuestions, useReadingQuestionsHydrated, useReadingQuestionsStore } from "@/store/reading-questions";
 import { phrasesFromText } from "@/lib/feed/profile-compiler";
 import { useModelReport } from "@/components/reader/use-model-report";
 import { usePrivateSupplement } from "@/components/reader/use-private-supplement";
@@ -632,17 +632,19 @@ function Reader({
   const nextPaper = nav.nextId ? (feedPapers.find((p) => p.id === nav.nextId) ?? null) : null;
 
   const { reading, fromServer } = useReading(paper);
-  const model = useModelReport({ paper: ready ? paper : undefined, profile });
+  // P1-05 (§1f.13): the reader's questions for this paper — a subscription,
+  // so the route follows the field as it writes through. P2-03 (§1g.11 b):
+  // the deep report is asked about the settled ones only (never the gist).
+  const asked = useReadingQuestionsStore((state) => state.byPaper[paper.id]);
+  const model = useModelReport({ paper: ready ? paper : undefined, profile, questions: settledQuestions(asked) });
   // Where Peer has read the paper, the text is already on the page — the
   // command and the contents are ways down to it, not ways to open it.
   const hasBody = (reading?.body?.length ?? 0) > 0;
   // P1-04 (§1f.12): a claim's "§Heading" links to the body section of that
   // name; the quotes read the headings from `SectionLinks` below.
   const bodyHeadings = useMemo(() => (reading?.body ?? []).map((section) => section.heading), [reading]);
-  // P1-05 (§1f.13): the reader's questions for this paper, routed through
-  // the reading this page holds — here, in the browser; nothing is sent. A
-  // subscription, so the route follows the field as it writes through.
-  const asked = useReadingQuestionsStore((state) => state.byPaper[paper.id]);
+  // P1-05 (§1f.13): those questions routed through the reading this page
+  // holds — here, in the browser, from the live `items`.
   const route = useMemo(() => readingRoute(reading, asked), [reading, asked]);
   const readHere = useCallback(() => {
     const block = document.getElementById(PAPER_BODY_ID);
