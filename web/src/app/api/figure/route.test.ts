@@ -277,6 +277,29 @@ describe("POST /api/figure — an upload's figure request (P0-10)", () => {
     expect(outgoing).toEqual([]);
   });
 
+  // P0-12 (§1e.12): after P0-11 no client sends `rev` by GET — a paper with
+  // a private attachment posts. A GET that carries `rev` together with
+  // report text or a title is a client regression; it is refused before the
+  // gate and any fetch, so it fails where it can be seen.
+  it("refuses a GET that carries a revision and a query or a title: 400 before the gate or any fetch", async () => {
+    for (const params of [
+      { id: "openalex:W7000000003", rev: "2", query: "words from the deep report on the attached PDF" },
+      { id: "openalex:W7000000003", rev: "2", paperTitle: "The Public Paper's Title" },
+    ] as Record<string, string>[]) {
+      const response = await GET(request(params));
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual({ error: "A paper with a private attachment asks for figures by POST." });
+      expect(response.headers.get("Cache-Control")).toBe("private, no-store");
+    }
+    expect(mocks.getUser).not.toHaveBeenCalled();
+    expect(mocks.extractFigure).not.toHaveBeenCalled();
+    expect(outgoing).toEqual([]);
+
+    // A GET with a revision and nothing else to leak still runs.
+    const bare = await GET(request({ id: "openalex:W7000000003", rev: "2", url: "https://example.org/p" }));
+    expect(bare.status).toBe(200);
+  });
+
   it("keeps a public paper's GET as it was, query and title included", async () => {
     const response = await GET(request({ id: "openalex:W1", url: "https://example.org/p", query: "words", paperTitle: "A Public Title" }));
 

@@ -110,6 +110,16 @@ export async function GET(req: NextRequest) {
       { status: 400, headers: PRIVATE_UPLOAD_HEADERS },
     );
   }
+  // P0-12 (§1e.12): the same for a paper with a private attachment — the
+  // only kind that carries `rev`, and which posts since P0-11. A GET with a
+  // revision plus report text or a title is a client regression; refuse it
+  // before the gate or any fetch.
+  if (params.has("rev") && (params.has("query") || params.has("paperTitle"))) {
+    return NextResponse.json(
+      { error: "A paper with a private attachment asks for figures by POST." },
+      { status: 400, headers: PRIVATE_UPLOAD_HEADERS },
+    );
+  }
   return answer({
     id,
     url: params.get("url") ?? undefined,
