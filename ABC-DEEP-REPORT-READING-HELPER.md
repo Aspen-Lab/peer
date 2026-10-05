@@ -46,7 +46,7 @@ HELD BY:          C (Opus subagent) on web/src/lib/papers/*, upload route, reade
 CURRENT ITEM:     P0-01 (IN_PROGRESS)
 NEXT TURN:        when C returns: manager verifies each checkpoint (re-read files, re-run gates), updates §5, then assigns fresh A (Opus) to measure P0 against §3d items 1–3 and 16–17.
 STOPPED BECAUSE:  — (running)
-GATE BASELINE:    manager's independent run on 74e81ae started 16:4xZ (lint, tsc, vitest); C records its own before its first edit.
+GATE BASELINE:    manager, ed189e1, 16:2xZ–16:3xZ: lint 0 errors / 151 warnings; tsc 0; vitest (TZ=America/Chicago, freemium-round10 fetched) 293 passed + 3 skipped files, 5784 passed + 11 skipped + 0 failed tests. Under plain UTC two environment-dependent tests fail (§3a container rulings).
 ```
 
 ### §1a. BINDING — user decisions 2026-10-05 (from the chat replies on the blueprint)
@@ -106,6 +106,8 @@ npm run build
 ```
 
 Separate commands; record each exit code and the vitest files/tests passed, skipped, failed. `web/src/lib/events/benchmark.test.ts` is a documented live flake excluded by the default config; any other failing test is yours. Baseline on the current commit before the first edit of every C turn. `npm run build` runs the BYOK production-env guard; do not weaken it.
+
+Container rulings (manager, 2026-10-05, measured on ed189e1): run the test gate as `TZ=America/Chicago npm test`. Two tests outside this campaign are environment-dependent: `src/lib/jobs/card.test.ts` ("3d ago" assumes the author's Chicago clock; fails under UTC) and `src/lib/security/upstream-migrations.test.ts` (needs `git fetch origin freemium-round10` once per clone). With both conditions met the baseline is 296 files (293 passed + 3 skipped), 5784 tests passed + 11 skipped + 0 failed; lint 0 errors / 151 warnings; tsc 0. Neither test is to be edited by this campaign (BACKLOG-02 records the timezone brittleness).
 
 Read `web/node_modules/next/dist/docs/` for any App Router API you touch (the repo's `web/AGENTS.md` warns this Next version differs from training data).
 
@@ -200,3 +202,4 @@ Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_RE
 | P5-02 | NOT_STARTED | Question terms into the ledger at low weight with a per-question "not for recommendations" opt-out; same mechanism as `upload-concepts.ts`; constants untouched | 17 | C | — |
 | P5-03 | NOT_STARTED | Fresh A on P5; final independent A over the whole §3d inventory; manager final verification; user handoff | all | Manager | — |
 | BACKLOG-01 | NOT_STARTED | Port figure extraction off Python using unpdf `extractImages` (already used in `figure-image/route.ts`) | — | Only after P5-03 or by user request | — |
+| BACKLOG-02 | NOT_STARTED | `src/lib/jobs/card.test.ts` depends on the machine timezone ("3d ago" vs "2d ago" under UTC); make the fixture or the day arithmetic timezone-independent. Outside this campaign's files | — | Separate small PR by the user or a later campaign | manager finding 2026-10-05 |
