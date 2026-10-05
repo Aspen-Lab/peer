@@ -17,24 +17,22 @@ import path from "node:path";
 import type { Paper, PreferenceConcept } from "@/types";
 import type { ExtractedDocument } from "./html-text";
 
-// Mirrors `papers/pdf-text.ts`'s `resolveHelperScript` dual-candidate cwd
-// resolution — the dev server and some test runners start from different
-// working directories (repo root vs. `web/`). Anchored on a file that is
-// always checked into the repo (the Python PDF-text helper), not on
-// `.local-data/uploads` itself: that directory is gitignored and may not
-// exist yet on a fresh checkout, so there's nothing to `existsSync` an
-// upload directory against before the very first upload. Whichever root the
-// Python helper resolves from is also the root the server actually runs
-// from, so anchoring here keeps uploads and the extractor that reads them
-// from ever silently splitting across two directories.
-function resolveWebRoot(): string {
-  const candidates = [process.cwd(), path.join(process.cwd(), "web")];
+// The dev server and some test runners start from different working
+// directories (repo root vs. `web/`), so the web root is found by a file
+// that is always checked into it, not by `.local-data/uploads` itself: that
+// directory is gitignored and may not exist yet on a fresh checkout, so
+// there's nothing to `existsSync` an upload directory against before the
+// very first upload. P0-03: the anchor was the Python PDF-text helper
+// (`scripts/extract_pdf_text.py`), deleted when uploads moved to pdf.js; it
+// is the web app's own `next.config.ts` now, which only `web/` has.
+export function resolveWebRoot(cwd: string = process.cwd()): string {
+  const candidates = [cwd, path.join(cwd, "web")];
   for (const candidate of candidates) {
-    if (existsSync(path.join(candidate, "scripts", "extract_pdf_text.py"))) {
+    if (existsSync(path.join(candidate, "next.config.ts"))) {
       return candidate;
     }
   }
-  return process.cwd();
+  return cwd;
 }
 
 export const UPLOAD_DIR = process.env.PEER_PRIVATE_UPLOAD_DIR || path.join(resolveWebRoot(), ".local-data", "uploads");

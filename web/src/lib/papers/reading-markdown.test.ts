@@ -169,6 +169,31 @@ describe("readingToMarkdown", () => {
     expect(md).not.toContain("needs a key");
   });
 
+  // P0-03: every PDF is read with pdf.js, so "the PDF is readable only by a
+  // self-hosted Peer" is no longer true of any PDF. What `pdf_only_hosted`
+  // marks now is a PDF link with no text in it — the page already says so
+  // ("the PDF carries no text to read — it looks scanned"); the export says
+  // the same.
+  it("a PDF link with no text layer: the omissions say the PDF carries no text, not that only a self-hosted Peer reads it", () => {
+    const reading = buildReading(
+      normalPaper,
+      {
+        status: "no_full_text",
+        reason: "No legal full-text source returned readable body text.",
+        attempts: [{ link: { url: "https://zenodo.org/records/1/files/paper.pdf", kind: "pdf", label: "zenodo", rank: 30 }, outcome: "source_unavailable: no-text-layer" }],
+      },
+      NOW,
+    );
+    const sentences = describeAvailability({ reading, ...noModel });
+
+    const md = readingToMarkdown(normalPaper, reading, null, sentences, NOW);
+
+    expect(reading.provenance.fullText).toBe("pdf_unreadable_here");
+    expect(md).toContain("## Not on this page");
+    expect(md).toMatch(/^- .+ — the PDF carries no text to read$/m);
+    expect(md).not.toContain("self-hosted");
+  });
+
   it("escapes quotes in frontmatter scalars", () => {
     const paper = { ...normalPaper, title: 'The "best" model' };
     const reading = buildReading(paper, null, NOW);

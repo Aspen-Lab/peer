@@ -40,16 +40,13 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: __dirname,
   },
-  // The Python helpers are spawned at runtime, so the tracer cannot see them;
-  // every route that shells out to one names it here or the deployed
-  // function has no script. Keys are picomatch route globs, so the dynamic
-  // segment's brackets are escaped. Without the text extractor traced, a
-  // Zenodo/OA PDF on Vercel would read as "no full text" instead of the
-  // honest "only a self-hosted Peer reads PDFs".
+  // The Python figure helper is spawned at runtime, so the tracer cannot see
+  // it; a route that shells out to one names it here or the deployed
+  // function has no script. Keys are picomatch route globs. PDF text is read
+  // in-process with pdf.js (P0-03 deleted the Python text helper and its two
+  // entries here).
   outputFileTracingIncludes: {
     "/api/figure": ["./scripts/extract_pdf_figures.py"],
-    "/api/papers/\\[id\\]/reading": ["./scripts/extract_pdf_text.py"],
-    "/api/papers/report": ["./scripts/extract_pdf_text.py"],
   },
   outputFileTracingExcludes: {
     "/*": [".tmp*/**"],

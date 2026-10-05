@@ -400,13 +400,18 @@ describe("buildReading", () => {
     expect(omittedReason(reading, "caveats")).toBe("paywalled");
   });
 
-  it("a PDF that only a self-hosted Peer can read is named as such", () => {
+  // P0-03: rewritten. This was "a PDF that only a self-hosted Peer can read
+  // is named as such", fed a `no-python` outcome — the reason the Python
+  // text helper gave when it could not run. Every PDF is read with pdf.js
+  // now and that reason no longer exists; what `pdf_unreadable_here` names
+  // is a PDF link whose text layer is empty (a scan), `no-text-layer`.
+  it("a PDF link whose text layer is empty (a scan) is named as such", () => {
     const fullText: FullTextResult = {
       status: "no_full_text",
       reason: "No legal full-text source returned readable body text.",
       attempts: [
         { link: { url: "https://doi.org/10.5281/zenodo.22316532", kind: "html", label: "doi", rank: 90 }, outcome: "no_full_text: Page reached but did not look like full text." },
-        { link: ZENODO_LINK, outcome: "source_unavailable: no-python" },
+        { link: ZENODO_LINK, outcome: "source_unavailable: no-text-layer" },
       ],
     };
 
@@ -418,20 +423,52 @@ describe("buildReading", () => {
     expect(reading.source?.label).toBe("Open at the publisher");
   });
 
-  it("a PDF whose extractor script is missing from the bundle is unreadable here too, not absent", () => {
-    // Vercel with the helper untraced: `pdf-text.ts` reports `no-extractor`.
-    // Mapping only `no-python` told the deployed reader the paper had no
-    // full text.
+  // P0-03: rewritten. This was "a PDF whose extractor script is missing
+  // from the bundle is unreadable here too, not absent", fed `no-extractor`
+  // (Vercel with the Python helper untraced). There is no helper to miss any
+  // more. The same intent — a PDF that was reached but yielded nothing is
+  // named, not reported as absent — now covers an outline with no sections;
+  // and a stray `no-python` / `no-extractor` is no longer a claim about the
+  // PDF at all.
+  it("a PDF whose text layer yields no sections is unreadable here too, not absent", () => {
     const fullText: FullTextResult = {
       status: "no_full_text",
       reason: "No legal full-text source returned readable body text.",
-      attempts: [{ link: ZENODO_LINK, outcome: "source_unavailable: no-extractor" }],
+      attempts: [{ link: ZENODO_LINK, outcome: "source_unavailable: no-sections" }],
     };
 
     const reading = buildReading(zenodoPaper, fullText, NOW);
 
     expect(reading.provenance.fullText).toBe("pdf_unreadable_here");
     expect(omittedReason(reading, "findings")).toBe("pdf_only_hosted");
+
+    for (const gone of ["no-python", "no-extractor"]) {
+      const stale = buildReading(
+        zenodoPaper,
+        { ...fullText, attempts: [{ link: ZENODO_LINK, outcome: `source_unavailable: ${gone}` }] },
+        NOW,
+      );
+      expect(stale.provenance.fullText).toBe("none");
+    }
+  });
+
+  it("P0-03: an uploaded scan read by pdf.js is pdf_empty, not 'unreadable here', though its reason names the empty text layer", () => {
+    // `extractPdfTextFromPath` marks a scan `pdf-empty: no-text-layer`. The
+    // `pdf-empty` marker is the upload's own, and it wins: the page shows the
+    // "no readable text" notice for an upload, as it always has.
+    const fullText: FullTextResult = {
+      status: "no_full_text",
+      reason: "pdf-empty: no-text-layer",
+      attempts: [{
+        link: { url: "/api/papers/upload/0123456789abcdef/file", kind: "pdf", label: "upload", rank: 0 },
+        outcome: "no_full_text: pdf-empty: no-text-layer",
+      }],
+    };
+
+    const reading = buildReading(zenodoPaper, fullText, NOW);
+
+    expect(reading.provenance.fullText).toBe("pdf_empty");
+    expect(omittedReason(reading, "findings")).toBe("pdf_empty");
   });
 
   it("1-28/1-31: a PDF with genuinely no extractable text is named distinctly from 'unreadable here'", () => {

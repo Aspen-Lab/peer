@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import type { ExtractedDocument } from "./html-text";
 import {
@@ -13,6 +14,7 @@ import {
   purgeExpiredUploads,
   readUploadDoc,
   readUploadMeta,
+  resolveWebRoot,
   sha16,
   uploadDocKey,
   uploadFileExists,
@@ -119,6 +121,24 @@ describe("the extracted-document sidecar (P0-02)", () => {
     expect(existsSync(docPath(blocked))).toBe(false);
     // A live upload keeps the text Peer already read out of it.
     expect(existsSync(docPath(live))).toBe(true);
+  });
+});
+
+// P0-03: the upload directory used to be anchored on the Python text helper
+// (`scripts/extract_pdf_text.py`) being present under the web root. That
+// helper is deleted; the anchor is the web app's own `next.config.ts`, so
+// the dev server started from the repo root and the test runner started
+// from `web/` still agree on one `web/.local-data/uploads`.
+describe("resolveWebRoot / UPLOAD_DIR (P0-03)", () => {
+  const webRoot = path.resolve(fileURLToPath(new URL("../../../", import.meta.url)));
+
+  it("finds web/ from web/ itself and from the repository root", () => {
+    expect(resolveWebRoot(webRoot)).toBe(webRoot);
+    expect(resolveWebRoot(path.dirname(webRoot))).toBe(webRoot);
+  });
+
+  it.skipIf(Boolean(process.env.PEER_PRIVATE_UPLOAD_DIR))("puts uploads under web/.local-data/uploads", () => {
+    expect(UPLOAD_DIR).toBe(path.join(webRoot, ".local-data", "uploads"));
   });
 });
 

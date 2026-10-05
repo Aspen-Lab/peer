@@ -6,7 +6,8 @@
 // PyMuPDF, a compiled extension; a deployed Peer has neither, so every
 // PDF-only paper read as "abstract only" in production while reading fine on
 // a developer's machine. It is plain TypeScript now, over the text layer
-// pdf.js hands back, and the same code runs in both places.
+// pdf.js hands back, and the same code runs in both places — for a PDF link
+// and, since P0-03, for an uploaded PDF too (the helper is deleted).
 //
 // What a PDF gives is words with a size, a font and a position — no
 // structure. The structure is inferred here, and only from evidence the page
@@ -365,9 +366,19 @@ export function joinProse(lines: PdfLine[]): string {
   return paragraphs.join("\n\n");
 }
 
+/**
+ * A line that is a stamp, not a title: an arXiv identifier, a DOI, a URL.
+ * arXiv's own stamp runs up the margin and never reaches here (`readPages`
+ * drops sideways text); one set level and large still is not the title.
+ * P0-03: the upload title used to come from the Python helper, which had this
+ * guard; uploads are read here now. Same pattern as the upload route's own
+ * `TITLE_STAMP_RE`.
+ */
+const STAMP = /^(?:arXiv:\d{4}\.\d{4,5}|10\.\d{4,9}\/|https?:\/\/)/i;
+
 /** The paper's title: the largest words on its first page, above the body. */
 function titleOf(lines: PdfLine[], body: { size: number }): string | null {
-  const first = lines.filter((line) => line.page === 1 && line.size > body.size * 1.25);
+  const first = lines.filter((line) => line.page === 1 && line.size > body.size * 1.25 && !STAMP.test(line.text));
   if (first.length === 0) return null;
   const biggest = Math.max(...first.map((line) => line.size));
   const title = first

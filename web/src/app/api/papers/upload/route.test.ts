@@ -381,7 +381,7 @@ describe("POST /api/papers/upload", () => {
   });
 
   it("still succeeds when the extractor fails entirely (e.g. no Python on this machine)", async () => {
-    mocks.extractPdfTextFromPath.mockResolvedValue({ ok: false, reason: "no-python" } satisfies PdfTextResult);
+    mocks.extractPdfTextFromPath.mockResolvedValue({ ok: false, reason: "pdf-empty: no-text-layer" } satisfies PdfTextResult);
 
     const res = await postWith(pdfFile(pdfBytes(), "scanned.pdf"));
     expect(res.status).toBe(200);
@@ -414,7 +414,7 @@ describe("POST /api/papers/upload", () => {
   });
 
   it("2-05: marks textStatus 'empty' when the extractor fails entirely", async () => {
-    mocks.extractPdfTextFromPath.mockResolvedValue({ ok: false, reason: "no-python" } satisfies PdfTextResult);
+    mocks.extractPdfTextFromPath.mockResolvedValue({ ok: false, reason: "pdf-empty: no-text-layer" } satisfies PdfTextResult);
 
     const res = await postWith(pdfFile(pdfBytes(), "scanned.pdf"));
     const body = await res.json();

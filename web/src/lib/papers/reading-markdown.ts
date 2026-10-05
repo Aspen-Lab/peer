@@ -76,9 +76,12 @@ const REASON_PHRASE: Record<OmitReason, { one: string; many: string }> = {
     one: "no such section in the full text",
     many: "no such sections in the full text",
   },
+  // P0-03: every PDF is read with pdf.js; what this reason marks now is a
+  // PDF link with no text in it (the page: "the PDF carries no text to read
+  // — it looks scanned"). The enum keeps its old name.
   pdf_only_hosted: {
-    one: "the PDF is readable only by a self-hosted Peer",
-    many: "the PDF is readable only by a self-hosted Peer",
+    one: "the PDF carries no text to read",
+    many: "the PDF carries no text to read",
   },
   pdf_empty: {
     one: "this PDF has no readable text",

@@ -475,26 +475,31 @@ function paywallHostOf(fullText: FullTextResult): string | undefined {
 /**
  * A PDF whose words are pictures of words — a scan, or a file that carries no
  * text layer — is the one outcome the page must name plainly: the PDF is
- * there, and there is nothing in it to read. It used to mean something else
- * (`no-python` / `no-extractor`: the deployment could not run the extractor
- * at all), which is why the page once said "only a self-hosted Peer reads
- * PDFs". Reading a PDF needs nothing special now; a scan still needs eyes.
+ * there, and there is nothing in it to read. Reading a PDF needs nothing
+ * special — pdf.js, link and upload alike (P0-03 removed the last Python
+ * path, and its `no-python` / `no-extractor` reasons with it); a scan still
+ * needs eyes.
+ *
+ * An outcome carrying `pdf-empty` is the upload's own marker for the same
+ * fact and belongs to `pdfHasNoText` below, even when its reason also names
+ * the empty text layer (`pdf-empty: no-text-layer`): an upload's page has
+ * always said "this PDF has no readable text".
  */
 function pdfUnreadableHere(fullText: FullTextResult): boolean {
   return fullText.attempts.some(
     (attempt) =>
       attempt.link.kind === "pdf" &&
-      /\bno-(text-layer|sections|python|extractor)\b/.test(attempt.outcome),
+      /\bno-(text-layer|sections)\b/.test(attempt.outcome) &&
+      !/\bpdf-empty\b/.test(attempt.outcome),
   );
 }
 
 /**
  * 1-28/1-31: the PDF itself had nothing extractable — most likely a scanned
  * image with no text layer. `full-text.ts`'s upload branch (`tryUploadLink`)
- * marks this exact reason so it's told apart from `pdfUnreadableHere` (a
- * deployment that cannot run Python at all, a fact about *this server*, not
- * the file) and from every other `no_full_text` cause (a source Peer never
- * found, a fact about the *paper*, not a file already in hand).
+ * marks this exact reason so it's told apart from every other `no_full_text`
+ * cause (a source Peer never found, a fact about the *paper*, not a file
+ * already in hand).
  */
 function pdfHasNoText(fullText: FullTextResult): boolean {
   return fullText.attempts.some(

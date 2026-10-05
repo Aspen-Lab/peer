@@ -1,66 +1,14 @@
-import { execFile, execFileSync } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { promisify } from "node:util";
+import { fileURLToPath } from "node:url";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { minimalPdf, prose, type Run } from "./minimal-pdf.test-helper";
 import { extractPdfTextFromPath, tryExtractPdfText } from "./pdf-text";
-
-const execFileAsync = promisify(execFile);
 
 // The smallest thing `downloadPdf` accepts as a PDF: the magic bytes.
 const PDF_BYTES = new TextEncoder().encode("%PDF-1.4\n%âã\n1 0 obj\n<< >>\nendobj\n");
-
-/** One run of text: the words, x, y measured from the TOP of an A4 page (the
- *  way the old PyMuPDF fixtures placed them), the size, and whether it is set
- *  in the bold face. */
-type Run = [text: string, x: number, top: number, size: number, bold?: boolean];
-
-/**
- * A real, minimal PDF — one text layer, base-14 Helvetica — built in the test
- * so pdf.js reads it exactly as it reads a paper. No dependency and no
- * Python: the fixtures the PyMuPDF tests used to draw are drawn here. A page
- * with no runs is a page with no text layer, the way a scan reads.
- */
-function minimalPdf(pages: Run[][]): Buffer {
-  const objects: string[] = [];
-  const add = (body: string) => objects.push(body);
-  add("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>");
-  add("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>");
-  const pagesId = add("");
-  const kids: number[] = [];
-  const escape = (s: string) => s.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
-  for (const runs of pages) {
-    const stream = runs
-      .map(([text, x, top, size, bold]) => `BT /${bold ? "F2" : "F1"} ${size} Tf ${x} ${842 - top} Td (${escape(text)}) Tj ET`)
-      .join("\n");
-    const contents = add(`<< /Length ${Buffer.byteLength(stream, "latin1")} >>\nstream\n${stream}\nendstream`);
-    kids.push(
-      add(
-        `<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 595 842] ` +
-          `/Resources << /Font << /F1 1 0 R /F2 2 0 R >> >> /Contents ${contents} 0 R >>`,
-      ),
-    );
-  }
-  objects[pagesId - 1] = `<< /Type /Pages /Kids [${kids.map((k) => `${k} 0 R`).join(" ")}] /Count ${kids.length} >>`;
-  const catalog = add(`<< /Type /Catalog /Pages ${pagesId} 0 R >>`);
-  let out = "%PDF-1.4\n";
-  const offsets: number[] = [];
-  objects.forEach((body, i) => {
-    offsets.push(Buffer.byteLength(out, "latin1"));
-    out += `${i + 1} 0 obj\n${body}\nendobj\n`;
-  });
-  const xref = Buffer.byteLength(out, "latin1");
-  out += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
-  out += offsets.map((o) => `${String(o).padStart(10, "0")} 00000 n \n`).join("");
-  out += `trailer\n<< /Size ${objects.length + 1} /Root ${catalog} 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
-  return Buffer.from(out, "latin1");
-}
-
-/** Prose lines, `pitch` apart, starting at `top`. */
-function prose(lines: string[], top: number, pitch = 14): Run[] {
-  return lines.map((text, i): Run => [text, 72, top + i * pitch, 11]);
-}
 
 // P0-01 (spec D1 + D2): a PDF's sections carry an id in document order and
 // the page their heading sits on. The outline always knew the page;
@@ -154,60 +102,56 @@ describe("tryExtractPdfText", () => {
   });
 });
 
-// 2-06 (Ruling 9, A2-01): protective synthetic-layout tests for the uploaded-
-// PDF title heuristic (`extract_pdf_text.py`'s `extract_title`). Ruling 9
-// asks for these at the Python level; this repo has no Python test runner
-// wired up at all (confirmed — no `test_*.py`/`conftest.py` anywhere), so
-// per B's own authorized fallback these run at the TypeScript level instead,
-// invoking the real script through the same `extractPdfTextFromPath` entry
-// point the upload route uses — exercising the actual script, not a
-// reimplementation of its logic. Only `python` (never `python3` — a Windows
-// Store alias stub that can hang rather than fail fast) is tried; on a
-// machine with no working `python`+PyMuPDF this describe block is skipped
-// rather than failing the gate, the same graceful-degradation shape as any
-// environment-optional integration test.
-function pythonWithPyMuPdfAvailable(): boolean {
-  try {
-    execFileSync("python", ["-c", "import pymupdf"], { stdio: "ignore" });
-    return true;
-  } catch {
-    return false;
-  }
+// P0-03 (spec D3, decision 3): an uploaded PDF is read by pdf.js, the same
+// `readPages` → `buildOutline` → `normalize` path as a PDF link — there is no
+// Python text helper any more. The protective tests below were written
+// against `scripts/extract_pdf_text.py` (PyMuPDF) and skipped wherever
+// PyMuPDF was missing, which is everywhere Peer is deployed and this
+// container too. They now draw the same layouts with `minimalPdf` and assert
+// the same shapes through pdf.js, on every machine. Where pdf.js reads a
+// layout differently from the old helper, the assertion follows pdf.js and
+// says so.
+async function onDisk(name: string, pages: Run[][]): Promise<string> {
+  const pdfPath = path.join(tempDir, name);
+  await writeFile(pdfPath, minimalPdf(pages));
+  return pdfPath;
 }
-const PYTHON_AVAILABLE = pythonWithPyMuPdfAvailable();
 
-describe.skipIf(!PYTHON_AVAILABLE)("extract_pdf_text.py's extract_title — 2-06 synthetic layouts", () => {
-  let tempDir: string;
+let tempDir: string;
 
-  beforeAll(async () => {
-    tempDir = await mkdtemp(path.join(tmpdir(), "peer-pdftitle-"));
-  });
+beforeAll(async () => {
+  tempDir = await mkdtemp(path.join(tmpdir(), "peer-pdf-upload-"));
+});
 
-  afterAll(async () => {
-    await rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
-  });
+afterAll(async () => {
+  await rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
+});
 
-  async function buildPdf(script: string, fileName: string): Promise<string> {
-    const outputPath = path.join(tempDir, fileName);
-    await execFileAsync("python", ["-c", script, outputPath]);
-    return outputPath;
-  }
+/** Enough prose under a heading that the page reads as a text layer, not a
+ *  scan (`buildOutline` wants 200 characters). */
+const FILLER: Run[] = prose(
+  [
+    "1 Introduction",
+    "Superlattices let the layer ratio be tuned one unit cell at a time across the stack.",
+    "The tuning changes how the electrons order, and with it the critical temperature here.",
+  ],
+  260,
+);
 
+// 2-06 (Ruling 9, A2-01) — rewritten for P0-03: the uploaded-PDF title is
+// the largest words on page 1, joined across the lines a long title wraps
+// onto, and never a stamp.
+describe("extractPdfTextFromPath's title — 2-06 synthetic layouts, read by pdf.js (P0-03)", () => {
   it("joins a wrapped title's consecutive largest-font lines, not just the first", async () => {
-    const pdfPath = await buildPdf(
-      `
-import sys
-import pymupdf as fitz
-doc = fitz.open()
-page = doc.new_page()
-page.insert_text((72, 100), "Electronic Structure and Superconductivity in Complex Oxide", fontsize=18, fontname="helv")
-page.insert_text((72, 130), "Artificial High-Tc Superlattices Probed by Advanced Methods", fontsize=18, fontname="helv")
-page.insert_text((72, 160), "Combining Hard and Soft X-ray Spectroscopy Techniques Fully", fontsize=18, fontname="helv")
-page.insert_text((72, 200), "J. Smith, A. Doe, University of Nowhere", fontsize=11, fontname="helv")
-doc.save(sys.argv[1])
-`,
-      "wrapped-title.pdf",
-    );
+    const pdfPath = await onDisk("wrapped-title.pdf", [
+      [
+        ["Electronic Structure and Superconductivity in Complex Oxide", 72, 100, 18],
+        ["Artificial High-Tc Superlattices Probed by Advanced Methods", 72, 130, 18],
+        ["Combining Hard and Soft X-ray Spectroscopy Techniques Fully", 72, 160, 18],
+        ["J. Smith, A. Doe, University of Nowhere", 72, 200, 11],
+        ...FILLER,
+      ],
+    ]);
 
     const result = await extractPdfTextFromPath(pdfPath);
 
@@ -220,19 +164,14 @@ doc.save(sys.argv[1])
   });
 
   it("never returns an arXiv margin stamp as the title, even when the stamp is the largest text on the page", async () => {
-    const pdfPath = await buildPdf(
-      `
-import sys
-import pymupdf as fitz
-doc = fitz.open()
-page = doc.new_page()
-page.insert_text((350, 700), "arXiv:2401.12345v2", fontsize=20, fontname="helv")
-page.insert_text((72, 100), "A Study Of Interesting Reactions In Modern Battery Chemistry", fontsize=16, fontname="helv")
-page.insert_text((72, 130), "J. Smith, University of Nowhere", fontsize=11, fontname="helv")
-doc.save(sys.argv[1])
-`,
-      "stamp-above-title.pdf",
-    );
+    const pdfPath = await onDisk("stamp-above-title.pdf", [
+      [
+        ["arXiv:2401.12345v2", 350, 700, 20],
+        ["A Study Of Interesting Reactions In Modern Battery Chemistry", 72, 100, 16],
+        ["J. Smith, University of Nowhere", 72, 130, 11],
+        ...FILLER,
+      ],
+    ]);
 
     const result = await extractPdfTextFromPath(pdfPath);
 
@@ -243,53 +182,28 @@ doc.save(sys.argv[1])
   });
 });
 
-// 4-03 (Ruling 10, A3-05): protective test for `find_running_furniture` in
-// extract_pdf_text.py — a running page-number+DOI footer line, repeated
-// verbatim (modulo its own incrementing page number) on every page, must
-// never be spliced into the flowing sentence that crosses the page break
-// around it. Same real-PDF, same-Python-level test shape as the 2-06 block
-// above (there is no Python test runner wired up in this repo).
-describe.skipIf(!PYTHON_AVAILABLE)("extract_pdf_text.py's furniture-splice removal — 4-03", () => {
-  let tempDir: string;
-
-  beforeAll(async () => {
-    tempDir = await mkdtemp(path.join(tmpdir(), "peer-pdffurniture-"));
-  });
-
-  afterAll(async () => {
-    await rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
-  });
-
-  async function buildPdf(script: string, fileName: string): Promise<string> {
-    const outputPath = path.join(tempDir, fileName);
-    await execFileAsync("python", ["-c", script, outputPath]);
-    return outputPath;
-  }
-
+// 4-03 (Ruling 10, A3-05) — rewritten for P0-03: a running page-number+DOI
+// footer, repeated on every page with its own number, must never be spliced
+// into the sentence that crosses the page break around it. pdf.js reads it
+// as the page's furniture (`furnitureOf`: the same line at the same height
+// on most pages).
+describe("extractPdfTextFromPath's furniture-splice removal — 4-03, read by pdf.js (P0-03)", () => {
   it("removes a repeated page-number+DOI footer instead of splicing it mid-sentence", async () => {
-    const pdfPath = await buildPdf(
-      `
-import sys
-import pymupdf as fitz
-doc = fitz.open()
-
-page1 = doc.new_page()
-page1.insert_text((72, 72), "Introduction", fontsize=14, fontname="helv")
-page1.insert_text((72, 100), "Body text discusses electrodes of identical", fontsize=11, fontname="helv")
-page1.insert_text((72, 800), "1 DOI: 10.1234/test.0001", fontsize=8, fontname="helv")
-
-page2 = doc.new_page()
-page2.insert_text((72, 72), "thickness but different pore size were fabricated.", fontsize=11, fontname="helv")
-page2.insert_text((72, 800), "2 DOI: 10.1234/test.0001", fontsize=8, fontname="helv")
-
-page3 = doc.new_page()
-page3.insert_text((72, 72), "Further discussion continues on this page.", fontsize=11, fontname="helv")
-page3.insert_text((72, 800), "3 DOI: 10.1234/test.0001", fontsize=8, fontname="helv")
-
-doc.save(sys.argv[1])
-`,
-      "furniture-splice.pdf",
-    );
+    const pdfPath = await onDisk("furniture-splice.pdf", [
+      [
+        ["Introduction", 72, 72, 14],
+        ["Body text discusses electrodes of identical", 72, 100, 11],
+        ["1 DOI: 10.1234/test.0001", 72, 800, 8],
+      ],
+      [
+        ["thickness but different pore size were fabricated.", 72, 72, 11],
+        ["2 DOI: 10.1234/test.0001", 72, 800, 8],
+      ],
+      [
+        ["Further discussion continues on this page.", 72, 72, 11],
+        ["3 DOI: 10.1234/test.0001", 72, 800, 8],
+      ],
+    ]);
 
     const result = await extractPdfTextFromPath(pdfPath);
 
@@ -302,113 +216,191 @@ doc.save(sys.argv[1])
   });
 });
 
-// 4-05 (Ruling 11, A3-05 residual): protective test for
-// `find_page_number_furniture` in extract_pdf_text.py — 4-03 only caught a
-// page number glued to OTHER footer text on the same line; PyMuPDF can also
-// emit the page number as its own bare line, which `find_running_furniture`
-// never sees as a repeat (nothing else on the line to strip it against). A
-// bare 1-4 digit line is furniture only when its value tracks the page
-// sequence (int(line) == page_index + k for one constant k, >= 3 pages); a
-// bare number that does NOT track the sequence (a table cell, a year
-// sitting alone on its own line) must be left exactly where it is. Same
-// real-PDF, same-Python-level test shape as the 4-03 block above.
-describe.skipIf(!PYTHON_AVAILABLE)("extract_pdf_text.py's page-number furniture removal — 4-05", () => {
-  let tempDir: string;
-
-  beforeAll(async () => {
-    tempDir = await mkdtemp(path.join(tmpdir(), "peer-pdfpagenum-"));
-  });
-
-  afterAll(async () => {
-    await rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
-  });
-
-  async function buildPdf(script: string, fileName: string): Promise<string> {
-    const outputPath = path.join(tempDir, fileName);
-    await execFileAsync("python", ["-c", script, outputPath]);
-    return outputPath;
-  }
-
-  it("removes bare page-number lines that track the page sequence, but keeps a bare '2024' that doesn't", async () => {
-    const pdfPath = await buildPdf(
-      `
-import sys
-import pymupdf as fitz
-doc = fitz.open()
-
-page1 = doc.new_page()
-page1.insert_text((72, 72), "Introduction", fontsize=14, fontname="helv")
-page1.insert_text((72, 100), "Body text discusses electrodes of identical", fontsize=11, fontname="helv")
-page1.insert_text((72, 800), "1", fontsize=8, fontname="helv")
-
-page2 = doc.new_page()
-page2.insert_text((72, 72), "thickness but different pore size were fabricated.", fontsize=11, fontname="helv")
-page2.insert_text((72, 150), "2024", fontsize=11, fontname="helv")
-page2.insert_text((72, 800), "2", fontsize=8, fontname="helv")
-
-page3 = doc.new_page()
-page3.insert_text((72, 72), "Further discussion continues on this page.", fontsize=11, fontname="helv")
-page3.insert_text((72, 800), "3", fontsize=8, fontname="helv")
-
-page4 = doc.new_page()
-page4.insert_text((72, 72), "The study concludes with final remarks here.", fontsize=11, fontname="helv")
-page4.insert_text((72, 800), "4", fontsize=8, fontname="helv")
-
-doc.save(sys.argv[1])
-`,
-      "page-number-furniture.pdf",
-    );
+// 4-05 (Ruling 11, A3-05 residual) — rewritten for P0-03. The Python helper
+// removed a bare number line only when its value tracked the page sequence,
+// and kept any other bare number where it stood. pdf.js's reading
+// (`pdf-outline.ts`) is simpler: a line that is nothing but a 1–4 digit
+// number is a folio (`FOLIO`), and a line repeated at the same height on
+// most pages is furniture. So page numbers still never splice into a
+// sentence — and a lone "2024" line is dropped too, which the old helper
+// kept. The assertions below state pdf.js's contract; the difference is
+// recorded in the P0-03 checkpoint. One prose line was added to each layout
+// so the page carries the 200 characters `buildOutline` needs to call it a
+// text layer rather than a scan.
+describe("extractPdfTextFromPath's page-number furniture removal — 4-05, read by pdf.js (P0-03)", () => {
+  it("removes bare page-number lines that track the page sequence; a bare '2024' line is a folio to pdf.js too", async () => {
+    const pdfPath = await onDisk("page-number-furniture.pdf", [
+      [
+        ["Introduction", 72, 72, 14],
+        ["Body text discusses electrodes of identical", 72, 100, 11],
+        ["1", 72, 800, 8],
+      ],
+      [
+        ["thickness but different pore size were fabricated.", 72, 72, 11],
+        ["2024", 72, 150, 11],
+        ["2", 72, 800, 8],
+      ],
+      [
+        ["Further discussion continues on this page.", 72, 72, 11],
+        ["3", 72, 800, 8],
+      ],
+      [
+        ["The study concludes with final remarks here.", 72, 72, 11],
+        ["Nothing else follows in this short fixture.", 72, 86, 11],
+        ["4", 72, 800, 8],
+      ],
+    ]);
 
     const result = await extractPdfTextFromPath(pdfPath);
 
     expect(result.ok).toBe(true);
     const introduction = result.doc?.sections.find((section) => section.canonical === "introduction");
-    // Exact join: proves "1"/"2"/"3"/"4" (each tracking page_index + 1) are
-    // gone from every seam they used to splice into, while "2024" (present
-    // on only one page, so it can never reach the >= 3-page bar) survives
-    // untouched in the middle of the text.
+    // Exact join: "1"/"2"/"3"/"4" are gone from every seam they could have
+    // spliced into. P0-03: so is the lone "2024" (pdf.js's `FOLIO`).
     expect(introduction?.text).toBe(
       "Body text discusses electrodes of identical thickness but different pore size were fabricated. " +
-        "2024 Further discussion continues on this page. The study concludes with final remarks here.",
+        "Further discussion continues on this page. The study concludes with final remarks here. " +
+        "Nothing else follows in this short fixture.",
     );
   });
 
-  it("leaves a bare number alone when it does not track the page sequence", async () => {
-    const pdfPath = await buildPdf(
-      `
-import sys
-import pymupdf as fitz
-doc = fitz.open()
-
-page1 = doc.new_page()
-page1.insert_text((72, 72), "Introduction", fontsize=14, fontname="helv")
-page1.insert_text((72, 100), "Experimental values were measured across three", fontsize=11, fontname="helv")
-page1.insert_text((72, 800), "2024", fontsize=8, fontname="helv")
-
-page2 = doc.new_page()
-page2.insert_text((72, 72), "trials to assess performance under load.", fontsize=11, fontname="helv")
-page2.insert_text((72, 800), "2024", fontsize=8, fontname="helv")
-
-page3 = doc.new_page()
-page3.insert_text((72, 72), "A separate note follows here for completeness.", fontsize=11, fontname="helv")
-page3.insert_text((72, 800), "2024", fontsize=8, fontname="helv")
-
-doc.save(sys.argv[1])
-`,
-      "page-number-not-tracking.pdf",
-    );
+  it("drops a bare number repeated at the same height on every page — furniture to pdf.js, where the old helper left it", async () => {
+    const pdfPath = await onDisk("page-number-not-tracking.pdf", [
+      [
+        ["Introduction", 72, 72, 14],
+        ["Experimental values were measured across three", 72, 100, 11],
+        ["2024", 72, 800, 8],
+      ],
+      [
+        ["trials to assess performance under load.", 72, 72, 11],
+        ["2024", 72, 800, 8],
+      ],
+      [
+        ["A separate note follows here for completeness.", 72, 72, 11],
+        ["Each trial ran for the same number of cycles at room temperature.", 72, 86, 11],
+        ["2024", 72, 800, 8],
+      ],
+    ]);
 
     const result = await extractPdfTextFromPath(pdfPath);
 
     expect(result.ok).toBe(true);
     const introduction = result.doc?.sections.find((section) => section.canonical === "introduction");
-    // "2024" repeated as-is (not incrementing with the page) never shares a
-    // single k = value - page_index across pages, so it must stay exactly
-    // where the PDF put it — the un-tracking case a fuzzy matcher would get
-    // wrong.
+    // P0-03: the old helper kept "2024" three times here, because its value
+    // never tracked the page number. pdf.js sees one line at one height on
+    // every page — a running footer — and leaves it out of the prose.
     expect(introduction?.text).toBe(
-      "Experimental values were measured across three 2024 trials to assess performance under load. " +
-        "2024 A separate note follows here for completeness. 2024",
+      "Experimental values were measured across three trials to assess performance under load. " +
+        "A separate note follows here for completeness. " +
+        "Each trial ran for the same number of cycles at room temperature.",
     );
   });
 });
+
+// P0-03 (spec D3, §3d items 2 and 3): the upload path's own contract.
+describe("extractPdfTextFromPath — uploads read with pdf.js only (P0-03)", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("reads an uploaded PDF into sections with ids and pages, and hands back page 1's text", async () => {
+    const pdfPath = await onDisk("upload-contract.pdf", [
+      [
+        ["A Paper Uploaded By Its Reader", 72, 80, 18],
+        ["https://doi.org/10.1234/peer.upload.0001", 72, 110, 9],
+        ["Abstract", 72, 140, 14],
+        ...prose(["We read an uploaded paper the way we read one from a link, with nothing else needed."], 160),
+        ["1 Introduction", 72, 200, 11],
+        ...prose(["The upload path used a separate helper that a deployed server could never run."], 220),
+      ],
+      [
+        ["2 Methods", 72, 80, 11],
+        ...prose(
+          [
+            "Both paths now share one reading of the text layer, page by page, in TypeScript.",
+            "The outline finds the headings by their size, their face and their numbers.",
+          ],
+          100,
+        ),
+        ["Figure 1: The two reading paths, merged into one.", 72, 150, 9],
+        ...prose(["A second paragraph starts after the figure, where the page leaves a gap."], 190),
+      ],
+    ]);
+
+    const result = await extractPdfTextFromPath(pdfPath);
+
+    expect(result.ok).toBe(true);
+    expect(result.doc?.source).toBe("pdf");
+    expect(result.doc?.pageCount).toBe(2);
+    expect(result.doc?.sections.map((s) => [s.id, s.heading, s.page])).toEqual([
+      ["s0", "Abstract", 1],
+      ["s1", "1 Introduction", 1],
+      ["s2", "2 Methods", 2],
+    ]);
+    // Paragraphs are kept, and a caption goes to the figure pool with its
+    // page and its place in the document — not into the prose.
+    const methods = result.doc?.sections[2].text ?? "";
+    expect(methods.split("\n\n")).toHaveLength(2);
+    expect(methods).not.toContain("Figure 1");
+    expect(result.doc?.figureCaptions).toEqual([
+      { ordinal: 1, label: "Figure 1", caption: "The two reading paths, merged into one.", page: 2, at: 0.75 },
+    ]);
+    // Page 1's lines, joined: what the upload route searches for a DOI and
+    // hands the title fallback.
+    expect(result.page1Text).toContain("A Paper Uploaded By Its Reader");
+    expect(result.page1Text).toContain("10.1234/peer.upload.0001");
+    expect(result.page1Text).not.toContain("Both paths now share");
+  });
+
+  it("needs no Python: it reads the same with no interpreter on PATH and PYTHON_BIN pointing nowhere", async () => {
+    const pdfPath = await onDisk("no-python.pdf", [[["A Paper Read Without Python", 72, 80, 18], ...FILLER]]);
+    vi.stubEnv("PATH", "");
+    vi.stubEnv("PYTHON_BIN", "/nonexistent/python");
+
+    const result = await extractPdfTextFromPath(pdfPath);
+
+    expect(result.ok).toBe(true);
+    expect(result.doc?.sections.map((s) => s.canonical)).toEqual(["introduction"]);
+  });
+
+  it("says a scan is a scan: no text layer reads as pdf-empty, the marker the reading page looks for", async () => {
+    const pdfPath = await onDisk("scan.pdf", [[], []]);
+
+    const result = await extractPdfTextFromPath(pdfPath);
+
+    expect(result.ok).toBe(false);
+    expect(result.doc).toBeUndefined();
+    expect(result.reason).toMatch(/^pdf-empty: /);
+  });
+
+  it("fails plainly, not as a scan, when the file is not a readable PDF", async () => {
+    const pdfPath = path.join(tempDir, "not-a-pdf.pdf");
+    await writeFile(pdfPath, "%PDF-1.4\nthis is not a PDF body\n");
+
+    const result = await extractPdfTextFromPath(pdfPath);
+
+    expect(result.ok).toBe(false);
+    expect(result.reason).not.toMatch(/pdf-empty/);
+  });
+});
+
+// P0-03 smoke input: the one real PDF the repository carries (a design
+// document with a real text layer, not a paper). Skipped, by name, where
+// the file is absent.
+const SPEC_PDF = fileURLToPath(new URL("../../../../Peer-design-spec-original.pdf", import.meta.url));
+
+describe.skipIf(!existsSync(SPEC_PDF))(
+  "extractPdfTextFromPath smoke — Peer-design-spec-original.pdf (skipped when the file is absent) (P0-03)",
+  () => {
+    it("reads the repository's real PDF through pdf.js alone", async () => {
+      const result = await extractPdfTextFromPath(SPEC_PDF);
+
+      expect(result.ok).toBe(true);
+      expect(result.doc?.sections.length ?? 0).toBeGreaterThanOrEqual(1);
+      expect(result.doc?.pageCount ?? 0).toBeGreaterThan(1);
+      expect(result.page1Text?.trim().length ?? 0).toBeGreaterThan(0);
+      // Every section has its id in order and the page it starts on.
+      const sections = result.doc?.sections ?? [];
+      expect(sections.map((s) => s.id)).toEqual(sections.map((_, i) => `s${i}`));
+      expect(sections.every((s) => typeof s.page === "number" && s.page >= 1)).toBe(true);
+    }, 60_000);
+  },
+);

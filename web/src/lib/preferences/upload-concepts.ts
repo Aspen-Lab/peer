@@ -7,7 +7,12 @@ import { ABBREVIATION_GROUPS, canonicalize, isGenericTerm } from "@/lib/scoring/
 // whenever the candidate-filtering or facet rules change meaningfully, so a
 // concept already stored in a user's ledger/meta can be told apart from one
 // a future rewrite of this module would produce.
-export const UPLOAD_CONCEPT_EXTRACTION_VERSION = 1;
+//
+// 2 (P0-03): uploads are read by pdf.js, not the Python helper, so the text
+// these concepts come from changed. The same number keys the server's cache
+// of an upload's extracted text (`full-text.ts`, P0-02), so the bump also
+// retires every document the Python helper read.
+export const UPLOAD_CONCEPT_EXTRACTION_VERSION = 2;
 
 // A conservative, local phrase extractor. No document text is sent to a model
 // for preference learning. References, author blocks and boilerplate are out.

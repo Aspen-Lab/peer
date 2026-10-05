@@ -1,8 +1,9 @@
 import { existsSync } from "node:fs";
-import { rm, stat } from "node:fs/promises";
+import { rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ExtractedDocument } from "./html-text";
+import { minimalPdf } from "./minimal-pdf.test-helper";
 import type { PdfTextResult } from "./pdf-text";
 import type { SourceLink } from "./source-links";
 import type { UploadMeta } from "./upload-store";
@@ -45,6 +46,7 @@ vi.mock("./pdf-text", async (importOriginal) => {
 // Mocked after source-links so `pdf-text.ts`'s own network call (a real
 // `fetch`, used by the PDF path) is what we control below.
 import { getFullText } from "./full-text";
+import { buildReading } from "./reading";
 
 const htmlLink = (url: string): SourceLink => ({ url, kind: "html", label: "publisher-html", rank: 10 });
 const pdfLink = (url: string): SourceLink => ({ url, kind: "pdf", label: "doi", rank: 20 });
@@ -187,13 +189,18 @@ describe("getFullText — 1-28, an upload: id reads the local file, never collec
     expect(result.attempts[0].outcome).toContain("pdf-empty");
   });
 
-  it("marks a no-python/no-extractor failure the same way a normal PDF link would", async () => {
-    mocks.extractPdfTextFromPath.mockResolvedValue({ ok: false, reason: "no-python" } satisfies PdfTextResult);
+  // P0-03: rewritten. This was "marks a no-python/no-extractor failure the
+  // same way a normal PDF link would" — the upload path read PDFs through a
+  // Python helper that a deployed Peer could not run. It reads them with
+  // pdf.js now; those two reasons no longer exist, and a scan arrives with
+  // the `pdf-empty:` marker already on it, which must pass through as is.
+  it("passes the extractor's own pdf-empty marker through unchanged (no-python/no-extractor are gone)", async () => {
+    mocks.extractPdfTextFromPath.mockResolvedValue({ ok: false, reason: "pdf-empty: no-text-layer" } satisfies PdfTextResult);
 
     const result = await getFullText({ paperId: "upload:0000000000000003" });
 
     expect(result.status).toBe("no_full_text");
-    expect(result.attempts[0].outcome).toContain("no-python");
+    expect(result.attempts[0].outcome).toBe("no_full_text: pdf-empty: no-text-layer");
   });
 });
 
@@ -296,5 +303,35 @@ describe("getFullText — P0-02, an upload is extracted once and cached for its 
     expect(first.status).toBe("no_full_text");
     expect(first.attempts[0].outcome).toContain("pdf-empty");
     expect(existsSync(sidecar("00000000000000a6"))).toBe(false);
+  });
+});
+
+// P0-03 (spec D3, §3d item 3): the real upload path, end to end on the
+// server — no stub between `getFullText` and pdf.js. A PDF with no text
+// layer reads as `pdf-empty`, and the reading names it with the page's
+// "no readable text" notice, not as a PDF this deployment cannot read.
+describe("getFullText — P0-03, an uploaded scan read by pdf.js", () => {
+  afterEach(() => {
+    mocks.extractPdfTextFromPath.mockReset();
+  });
+
+  it("reads a scanned upload as pdf-empty, and the reading says it has no readable text", async () => {
+    const actual = await vi.importActual<typeof import("./pdf-text")>("./pdf-text");
+    mocks.extractPdfTextFromPath.mockImplementation(actual.extractPdfTextFromPath);
+    await writeFile(path.join(uploadDir, "00000000000000b1.pdf"), minimalPdf([[], []]));
+
+    const result = await getFullText({ paperId: "upload:00000000000000b1" });
+
+    expect(result.status).toBe("no_full_text");
+    expect(result.attempts[0].outcome).toMatch(/^no_full_text: pdf-empty: /);
+    const reading = buildReading(
+      {
+        id: "upload:00000000000000b1", title: "A scanned upload", authors: [], relevanceReason: "", venue: "",
+        source: "other", summaryIntro: "", summaryExperimentKeywords: [], summaryResultDiscussion: "", isSaved: false,
+      },
+      result,
+    );
+    expect(reading.provenance.fullText).toBe("pdf_empty");
+    expect(existsSync(path.join(uploadDir, "00000000000000b1.doc.json"))).toBe(false);
   });
 });
