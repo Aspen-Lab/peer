@@ -4,7 +4,7 @@ import { blockMarker } from "@/lib/text/math";
 import { withSectionIds, type DraftSection, type ExtractedDocument } from "./html-text";
 import type { FullTextResult } from "./full-text";
 import { buildReading } from "./reading";
-import { buildReadingMap, routeByQuestions, specificTerms, type ReadingMap } from "./reading-map";
+import { buildReadingMap, gistRoute, routeByQuestions, specificTerms, type ReadingMap } from "./reading-map";
 import arxivHtmlDocJson from "./__fixtures__/arxiv-2609.02697.doc.json";
 import arxivPdfDocJson from "./__fixtures__/arxiv-2609.02113.doc.json";
 import zenodoDocJson from "./__fixtures__/zenodo-W7208807247.doc.json";
@@ -487,5 +487,52 @@ describe("specificTerms — question words and paper-structure words (P1-02b)", 
     expect(terms).toEqual(["cathode", "material", "degrades", "fastest"]);
     expect(terms.length).toBeGreaterThanOrEqual(2);
     expect(specificTerms("Which methods reduce LCO cathode cracking?")).toEqual(["reduce", "lco", "cathode", "cracking"]);
+  });
+});
+
+// P1-03 (§1f.11): "Just get the gist" routes by the generic reading order —
+// what it found and what it means first, how and why next, the apparatus
+// last — with no hits, no evidence and no answers.
+describe("gistRoute (P1-03)", () => {
+  it("tiers every section by its role, with nothing else", () => {
+    const paperDoc = doc([
+      { heading: "Abstract", canonical: "abstract", text: "Not a row." },
+      { heading: "1 Introduction", canonical: "introduction", text: "Why it matters." },
+      { heading: "2 Related Work", canonical: "related_work", text: "What came before." },
+      { heading: "3 Methods", canonical: "methods", text: "How it was done." },
+      { heading: "4 Results", canonical: "results", text: "What it found." },
+      { heading: "5 Discussion", canonical: "discussion", text: "What it means." },
+      { heading: "6 Limitations", canonical: "limitations", text: "Where it is thin." },
+      { heading: "7 Conclusion", canonical: "conclusion", text: "What it concludes." },
+      { heading: "Appendix A", canonical: "supplementary", text: "The proofs." },
+      { heading: "Problem Statement", canonical: "body", text: "An unplaced heading." },
+    ]);
+    const result = gistRoute(buildReadingMap(paperDoc));
+
+    expect(result.vague).toBe(false);
+    expect(result.byQuestion).toHaveLength(1);
+    expect(result.byQuestion[0].question).toBe("Just get the gist");
+    expect(result.byQuestion[0].vague).toBe(false);
+    const tiers = Object.fromEntries(Object.entries(result.byQuestion[0].sections).map(([id, s]) => [id, s.tier]));
+    expect(tiers).toEqual({
+      s1: "skim",
+      s2: "skim",
+      s3: "skim",
+      s4: "read",
+      s5: "read",
+      s6: "read",
+      s7: "read",
+      s8: "none",
+      s9: "none",
+    });
+    for (const section of Object.values(result.byQuestion[0].sections)) {
+      expect(section.hits).toEqual([]);
+      expect(section.paragraphs).toEqual([]);
+      expect("evidence" in section).toBe(false);
+    }
+  });
+
+  it("is empty for a map with no sections", () => {
+    expect(gistRoute({ sections: [], totalMinutes: 0 }).byQuestion[0].sections).toEqual({});
   });
 });

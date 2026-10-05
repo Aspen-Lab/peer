@@ -15,6 +15,7 @@ vi.mock("react", async (importOriginal) => {
 import { hookRuntime } from "@/test-support/hook-runtime";
 import { buildReading, type PaperReading } from "@/lib/papers/reading";
 import type { Paper } from "@/types";
+import { useReadingQuestionsStore } from "@/store/reading-questions";
 import { useReading } from "./use-reading";
 
 function memoryStorage(): Storage {
@@ -109,5 +110,25 @@ describe("useReading with effects running — one reading request across two ope
     await open(standalone);
 
     expect(fetches).toHaveLength(2);
+  });
+
+  // P1-03 (§1f.9): the reader's questions stay in this browser. With
+  // questions stored for the paper, the reading request is the same request.
+  it("sends no question: the request is unchanged with questions stored for the paper (P1-03)", async () => {
+    serveReading("pdf");
+    useReadingQuestionsStore.setState({ byPaper: {}, lastPaperId: null });
+    await open(standalone);
+
+    vi.stubGlobal("localStorage", memoryStorage());
+    useReadingQuestionsStore.setState({
+      byPaper: { [standalone.id]: { items: ["Quillwortane creep under load"], gist: true, updatedAt: "2026-10-05T00:00:00.000Z" } },
+      lastPaperId: standalone.id,
+    });
+    await open(standalone);
+
+    expect(fetches).toHaveLength(2);
+    expect(fetches[1]).toBe(fetches[0]);
+    expect(fetches[1]).not.toContain("Quillwortane");
+    useReadingQuestionsStore.setState({ byPaper: {}, lastPaperId: null });
   });
 });

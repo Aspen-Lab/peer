@@ -80,6 +80,9 @@ import { useReading } from "@/components/reader/use-reading";
 import { PaperNotes } from "@/components/notes/paper-notes";
 import { PAPER_BODY_ID } from "@/components/reader/paper-body";
 import { PaperContents } from "@/components/reader/paper-contents";
+import { QuestionField, focusFirstEmptyQuestion } from "@/components/reader/question-field";
+import { useReadingQuestionsHydrated } from "@/store/reading-questions";
+import { phrasesFromText } from "@/lib/feed/profile-compiler";
 import { useModelReport } from "@/components/reader/use-model-report";
 import { usePrivateSupplement } from "@/components/reader/use-private-supplement";
 import { PrivatePdfStatus } from "@/components/reader/private-pdf-status";
@@ -720,6 +723,16 @@ function Reader({
     return allocatePlateTerms(pool, profile.researchTopics)[paper.id] ?? [];
   }, [feedPapers, nav.index, paper, profile.researchTopics]);
   const shared = useMemo(() => sharedTerms(plateTerms, projectText), [plateTerms, projectText]);
+  // P1-03 (§1f.10): the reader's challenges are offered as questions only
+  // where this paper shares terms with what the reader works on — a chip
+  // for an unrelated paper would be a question about something else.
+  const challengeChips = useMemo(
+    () => (shared.length > 0 ? phrasesFromText(profile.currentChallenges, 8) : []),
+    [shared, profile.currentChallenges],
+  );
+  // The questions are read once the stores have loaded, so the field starts
+  // from what this browser kept.
+  const questionsHydrated = useReadingQuestionsHydrated();
 
   // The same args as the card and the plate, so all three read the one
   // `/api/figure` entry. The plate shows the figure; this reads its caption.
@@ -911,7 +924,7 @@ function Reader({
       skip,
       like,
       undoOrToggleRead,
-      ...(hasBody ? { read: readHere } : {}),
+      ...(hasBody ? { read: readHere, ask: focusFirstEmptyQuestion } : {}),
       open,
       copy,
       back,
@@ -1088,6 +1101,14 @@ function Reader({
           )
         }
         title={<TitleBlock paper={paper} recommendation={recommendation} now={now} />}
+        ask={
+          // P1-03 (§1f.10): only where Peer has the paper's text — without
+          // it there is nothing to point a question at, and the Decision
+          // block already says why. One field per paper.
+          hasBody && questionsHydrated ? (
+            <QuestionField key={paper.id} paperId={paper.id} challenges={challengeChips} />
+          ) : undefined
+        }
         words={
           <PaperWords
             endRef={wordsEndRef}

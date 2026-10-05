@@ -22,6 +22,9 @@ interface ReaderLayoutProps {
   spread: boolean;
   plate: ReactNode;
   title: ReactNode;
+  /** P1-03 (§1f.10): "Before you read" — the question field (and, from
+   *  P1-04, the map), immediately after the title in both layouts. */
+  ask?: ReactNode;
   words: ReactNode;
   decision: ReactNode;
   /** The paper's contents, in the panel under the decision — spread only;
@@ -133,6 +136,7 @@ export function ReaderLayout(p: ReaderLayoutProps) {
       <>
         {p.plate}
         {p.title}
+        {p.ask}
         <div className="reading-scaled" style={readingScaleStyle}>{p.words}</div>
         {p.decision}
         <div className="reading-scaled" style={readingScaleStyle}>{p.additions}</div>
@@ -157,6 +161,7 @@ export function ReaderLayout(p: ReaderLayoutProps) {
       <div ref={panelRef} className={PANEL_CLASS} data-reader-panel="">
         {p.plate}
         {p.title}
+        {p.ask}
         {p.decision}
         {p.contents}
       </div>

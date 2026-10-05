@@ -19,7 +19,8 @@ export type ReaderAction =
   | "read"
   | "open"
   | "copy"
-  | "back";
+  | "back"
+  | "ask";
 
 export interface PaperKey {
   /** `KeyboardEvent.key` values; the first is the one the help sheet shows. */
@@ -49,6 +50,10 @@ export const PAPER_KEYS: readonly PaperKey[] = [
   { keys: ["t"], action: "read", label: "Read the paper here", short: "read" },
   { keys: ["o", "Enter"], action: "open", label: "Open at the source", short: "open" },
   { keys: ["c"], action: "copy", label: "Copy as Markdown", short: "copy" },
+  // P1-03 (§1f.10): focus the first empty question line. Typed into the
+  // field itself, `q` is a letter — the layer never intercepts a key typed
+  // into an input.
+  { keys: ["q"], action: "ask", label: "Ask a question about this paper", short: "ask" },
   {
     keys: ["Escape", "Backspace"],
     action: "back",

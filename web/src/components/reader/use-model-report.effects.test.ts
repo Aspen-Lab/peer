@@ -47,6 +47,7 @@ vi.mock("@/store/profile", () => ({
 
 import { hookRuntime } from "@/test-support/hook-runtime";
 import { defaultProfile, type Paper, type UserProfile } from "@/types";
+import { useReadingQuestionsStore } from "@/store/reading-questions";
 import { useModelReport } from "./use-model-report";
 
 function memoryStorage(): Storage {
@@ -130,5 +131,24 @@ describe("useModelReport with effects running — one report request across two 
     await open({ ...standalone, revision: 2 }, deepReader);
 
     expect(net.streamCalls).toHaveLength(2);
+  });
+
+  // P1-03 (§1f.9): the reader's questions stay in this browser. With
+  // questions stored for the paper, the report request is the same request.
+  it("sends no question: the report request is unchanged with questions stored for the paper (P1-03)", async () => {
+    useReadingQuestionsStore.setState({ byPaper: {}, lastPaperId: null });
+    await open(attached);
+
+    vi.stubGlobal("localStorage", memoryStorage());
+    useReadingQuestionsStore.setState({
+      byPaper: { [attached.id]: { items: ["Quillwortane creep under load"], gist: false, updatedAt: "2026-10-05T00:00:00.000Z" } },
+      lastPaperId: attached.id,
+    });
+    await open(attached);
+
+    expect(net.streamCalls).toHaveLength(2);
+    expect(JSON.stringify(net.streamCalls[1])).toBe(JSON.stringify(net.streamCalls[0]));
+    expect(JSON.stringify(net.streamCalls[1])).not.toContain("Quillwortane");
+    useReadingQuestionsStore.setState({ byPaper: {}, lastPaperId: null });
   });
 });

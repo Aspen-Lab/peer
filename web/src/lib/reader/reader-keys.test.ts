@@ -1,4 +1,24 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+// P1-03: the keyboard layer itself is driven below on the minimal hook
+// runtime (no DOM here) to show `q` typed into the question field is typing,
+// not the shortcut. The table tests are pure and unaffected.
+vi.mock("react", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("react")>();
+  const { hookRuntime } = await import("@/test-support/hook-runtime");
+  return { ...actual, ...hookRuntime.hooks };
+});
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), back: vi.fn(), replace: vi.fn() }) }));
+// zustand's hooks call React itself (it is not transformed, so the mock
+// above does not reach it); the layer reads three fields of the feed store.
+vi.mock("@/store/feed", async (importOriginal) => {
+  const state = { loadFeed: () => undefined, undoDismiss: () => undefined, pendingDismissal: null, papers: [] };
+  const useFeedStore = Object.assign((select: (s: typeof state) => unknown) => select(state), { getState: () => state });
+  return { ...(await importOriginal<typeof import("@/store/feed")>()), useFeedStore };
+});
+
+import { hookRuntime } from "@/test-support/hook-runtime";
+import { KeyboardLayer } from "@/components/keyboard";
 import {
   PAPER_KEYS,
   keyCap,
@@ -110,3 +130,71 @@ describe("registerReaderActions", () => {
     expect(readerActions()).toBe(second);
   });
 });
+
+// P1-03 (§1f.10): `q` asks a question about the paper on screen — the page
+// registers `ask` to focus the first empty question line.
+describe("the ask key (P1-03)", () => {
+  it("maps q to ask, and the help sheet and legend list it", () => {
+    expect(resolvePaperKey("q")).toBe("ask");
+    expect(PAPER_KEYS.find((entry) => entry.action === "ask")).toEqual({
+      keys: ["q"],
+      action: "ask",
+      label: "Ask a question about this paper",
+      short: "ask",
+    });
+    expect(readerHelpItems()).toContainEqual({ keys: "q", label: "Ask a question about this paper" });
+    expect(resolvePaperKey("Q")).toBeNull();
+  });
+});
+
+describe("the keyboard layer and the question field (P1-03)", () => {
+  class FakeElement {
+    constructor(readonly tagName: string) {}
+    isContentEditable = false;
+    blur() {}
+  }
+  let keydown: ((event: unknown) => void) | null = null;
+
+  beforeEach(() => {
+    keydown = null;
+    vi.stubGlobal("HTMLElement", FakeElement);
+    vi.stubGlobal("HTMLInputElement", class extends FakeElement {});
+    vi.stubGlobal("window", {
+      location: { pathname: "/papers/openalex:W1" },
+      addEventListener: (type: string, listener: (event: unknown) => void) => {
+        if (type === "keydown") keydown = listener;
+      },
+      removeEventListener: () => {},
+      getSelection: () => ({ isCollapsed: true }),
+      matchMedia: () => ({ matches: false }),
+    });
+    vi.stubGlobal("document", { activeElement: null, getElementById: () => null, querySelectorAll: () => [] });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    registerReaderActions({})();
+  });
+
+  function press(key: string, target: unknown) {
+    const event = { key, target, metaKey: false, ctrlKey: false, altKey: false, shiftKey: false, preventDefault: vi.fn() };
+    keydown?.(event);
+    return event;
+  }
+
+  it("leaves a q typed into an input alone, and runs ask for a q pressed anywhere else", async () => {
+    const ask = vi.fn();
+    registerReaderActions({ ask });
+    const mounted = await hookRuntime.mount(() => KeyboardLayer());
+
+    const typed = press("q", new FakeElement("INPUT"));
+    expect(ask).not.toHaveBeenCalled();
+    expect(typed.preventDefault).not.toHaveBeenCalled();
+
+    const pressed = press("q", new FakeElement("DIV"));
+    expect(ask).toHaveBeenCalledTimes(1);
+    expect(pressed.preventDefault).toHaveBeenCalled();
+    mounted.unmount();
+  });
+});
+

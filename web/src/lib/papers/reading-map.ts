@@ -275,3 +275,30 @@ export function routeByQuestions(
   return { byQuestion, vague: byQuestion.length > 0 && byQuestion.every((entry) => entry.vague) };
 }
 
+
+// ── "Just get the gist" (P1-03, ruling §1f.11) ─────────────────────────
+//
+// Not a question: the order in which to read a paper one has no question for
+// — what it found and what that means first, then how it was done and why it
+// was asked, the apparatus last — as tiers on the same shape the question
+// route returns. No hits, no evidence, no paragraphs, and never answers (P2
+// must not send a gist as a question).
+
+export const GIST_QUESTION = "Just get the gist";
+
+const GIST_TIER: Readonly<Record<ReadingRole, RouteTier>> = {
+  interpretation: "read",
+  evidence: "read",
+  method: "skim",
+  setup: "skim",
+  apparatus: "none",
+  body: "none",
+};
+
+export function gistRoute(map: ReadingMap): RouteResult {
+  const sections: Record<string, RouteSection> = {};
+  for (const row of map.sections) {
+    sections[row.id] = { tier: GIST_TIER[row.role], hits: [], paragraphs: [] };
+  }
+  return { byQuestion: [{ question: GIST_QUESTION, vague: false, sections }], vague: false };
+}
