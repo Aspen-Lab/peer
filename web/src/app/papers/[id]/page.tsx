@@ -66,6 +66,7 @@ import {
   pickRelated,
 } from "@/components/reader/report-sections";
 import { ForYourQuestions } from "@/components/reader/for-your-questions";
+import { QuotaNotice } from "@/components/reader/quota-notice";
 import { NextRow } from "@/components/reader/next-row";
 import { LoadingMat } from "@/components/reader/loading-mat";
 import { ReaderToast, useReaderToast } from "@/components/reader/reader-toast";
@@ -1186,6 +1187,13 @@ function Reader({
         contents={<PaperContents reading={reading} route={route} />}
         additions={
           <>
+            {/* P2-09 (§1g.14): why this is the shorter report — first, under the
+                Decision block, only when the server said a cap or an outage
+                refused the deep read. No other notice of the report's own is
+                rendered on this page (quota-notice.test.tsx pins that), so a
+                report never shows two lines for one cause. */}
+            {report?.quota && <QuotaNotice quota={report.quota} />}
+
             {report?.forYourQuestions && <ForYourQuestions report={report} map={reading.map} />}
 
             {/* The reader's own notes on this paper, and the way into them —

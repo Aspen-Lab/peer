@@ -6,7 +6,7 @@ import type { ExtractedDocument } from "@/lib/papers/html-text";
 import type { FullTextResult } from "@/lib/papers/full-text";
 import { GIST_QUESTION, gistRoute, routeByQuestions, type RouteResult } from "@/lib/papers/reading-map";
 import type { Paper } from "@/types";
-import { ASK, FOR_YOUR_QUESTIONS, MAP, ROUTE } from "./copy";
+import { ASK, FOR_YOUR_QUESTIONS, MAP, QUOTA, ROUTE } from "./copy";
 import { HEADING_MARK, PaperBody, ROUTE_TINT, mergeQuestionRoute, questionRouteOverlay, sectionMark } from "./paper-body";
 import { PaperContents } from "./paper-contents";
 import { ReadingMapView, readingRoute } from "./reading-map";
@@ -283,10 +283,14 @@ describe("the route copy never tells the reader not to read (§1f.13, §3d 8)", 
 
   it("has no 'skip', 'don't read', 'ignore' or 'not worth' in the ask, map, route or answers copy or the tier labels", () => {
     // P2-04b (§1g.15 finding 4): the answers block's copy is scanned too.
-    const all = [...strings(ASK), ...strings(MAP), ...strings(ROUTE), ...strings(FOR_YOUR_QUESTIONS)];
+    // P2-09 (§1g.14): the quota notice's three lines are scanned too.
+    const all = [...strings(ASK), ...strings(MAP), ...strings(ROUTE), ...strings(FOR_YOUR_QUESTIONS), ...strings(QUOTA)];
 
     expect(all.length).toBeGreaterThan(30);
     expect(all).toContain("not mentioned");
+    expect(all).toContain(QUOTA.exhausted);
+    expect(all).toContain(QUOTA.companyBudget);
+    expect(all).toContain(QUOTA.unavailable);
     expect(all).toContain("This paper does not address: Does it discuss recycling?");
     expect(all).toContain("This paper does not address: recycling.");
     expect(all).toContain(ROUTE.backgroundWhy);

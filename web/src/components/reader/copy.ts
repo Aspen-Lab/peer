@@ -50,6 +50,20 @@ export const FOR_YOUR_QUESTIONS = {
   background: "background",
 } as const;
 
+/**
+ * P2-09 (§1g.14): why the report on the page is the shorter one, in Peer's
+ * voice, when the server says a cap or an outage refused the deep read. Three
+ * lines, chosen by `quotaNoticeText` (`quota-notice.tsx`): a spent deep-report
+ * or breaker allowance, a spent shared model budget, and — never confused with
+ * a spent allowance — a store that could not be read, where nothing was spent.
+ */
+export const QUOTA = {
+  exhausted: "Deep reports are used up for now. This is the shorter report.",
+  companyBudget: "Peer's shared model budget is spent for now. This is the shorter report.",
+  unavailable:
+    "Peer could not check your deep-report allowance just now. This is the shorter report; your allowance is unchanged.",
+} as const;
+
 /** Under a block Peer wrote with no sentence of the paper to show for it. */
 export const PEERS_READING = "Peer's reading — not a quote";
 

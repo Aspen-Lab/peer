@@ -183,4 +183,21 @@ describe("ForYourQuestions (P2-04)", () => {
     expect(questions).toBeLessThan(notes);
     expect(questions).toBeLessThan(proposal);
   });
+
+  // P2-09 (§1g.14): the quota notice is the first thing in the slot — the
+  // reason the report is the shorter one comes before what the report says.
+  it("is preceded by the quota notice: QuotaNotice, then ForYourQuestions, then PaperNotes", () => {
+    const source = readFileSync(resolve(process.cwd(), "src/app/papers/[id]/page.tsx"), "utf8");
+    const decision = source.indexOf("decision={");
+    const additions = source.indexOf("additions={");
+    const quota = source.indexOf("<QuotaNotice", additions);
+    const questions = source.indexOf("<ForYourQuestions", additions);
+    const notes = source.indexOf("<PaperNotes", additions);
+
+    expect(decision).toBeGreaterThan(-1);
+    expect(additions).toBeGreaterThan(decision);
+    expect(quota).toBeGreaterThan(additions);
+    expect(quota).toBeLessThan(questions);
+    expect(questions).toBeLessThan(notes);
+  });
 });
