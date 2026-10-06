@@ -7,7 +7,6 @@ import type {
 import type { FeedControls, SearchBrief } from "./profile-compiler";
 import type { ProviderOverrideConfig } from "@/lib/llm/providers/types";
 import type { TrustedPaperCacheScope } from "@/lib/opportunities/private-paper-cache";
-import type { CompanySpendCapability } from "@/lib/security/company-spend";
 import type { NormalizedFeedIntent } from "./intent";
 
 export interface TavilySearchConnector {
@@ -74,8 +73,6 @@ export interface FeedRequest extends ScoringProfile {
   negativeTopics?: string[];
   /** Server-minted only; route bodies and query strings never populate this. */
   paperCacheScope?: TrustedPaperCacheScope;
-  /** Server-only lease; never parsed from HTTP requests. */
-  companySpendCapability?: CompanySpendCapability;
 }
 
 export interface FeedMeta {

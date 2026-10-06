@@ -86,8 +86,8 @@ function shouldIncludeNonPaperResults(req: FeedRequest): boolean {
 // topic/field exploration. Server-only, default OFF, read ONLY from
 // `process.env` — deliberately NEVER a `FeedRequest` field, so nothing an
 // HTTP caller sends can ever turn either one on (the same "server-minted
-// only" convention `FeedRequest` already documents for `paperCacheScope`/
-// `companySpendCapability`). Literal `"on"`, same parsing as
+// only" convention `FeedRequest` already documents for `paperCacheScope`).
+// Literal `"on"`, same parsing as
 // `dashboardLedgerEnabled()` (web/src/lib/dashboard/ledger-flag.ts) —
 // anything else (unset, "true", "1", a typo) keeps today's behaviour
 // exactly: no fetch, no cost, no change to `allItems`. A dedicated flag
@@ -278,7 +278,7 @@ export interface FeedPipelineOptions {
    * only: the route reads it from the ledger for a signed-in owner and
    * passes it here — it is NEVER part of `FeedRequest`, so it can never be
    * populated from an HTTP body or query string (same idiom as
-   * `paperCacheScope`/`companySpendCapability` on FeedRequest). Absent (the
+   * `paperCacheScope` on FeedRequest). Absent (the
    * default) means no ledger was consulted — every caller that doesn't pass
    * it (every existing test, the digest/test-digest routes) gets output
    * byte-identical to before this option existed.
@@ -349,8 +349,7 @@ export interface FeedPipelineOptions {
    * Server-minted only, exactly like `ledgerExclusions`/`rolloverCandidates`
    * above: never a `FeedRequest` field, so nothing an HTTP caller sends can
    * ever supply or enable these channels (mirrors the same "server-minted
-   * only" convention `FeedRequest` already documents for `paperCacheScope`/
-   * `companySpendCapability`).
+   * only" convention `FeedRequest` already documents for `paperCacheScope`).
    *
    * **Deliberately read-time only, like `rolloverCandidates`, and for a
    * related but distinct reason (see this slice's checkpoint DESIGN
@@ -623,7 +622,7 @@ async function buildPaperPool(
   // is permanently `false` too. This line stays because it is the surface's own
   // statement of D3 and does not depend on the entitlement being false.
   const paperWebSearch = {
-    ...webSearchOptions(req.searchConnectors, req.companySpendCapability),
+    ...webSearchOptions(req.searchConnectors),
     systemSearchAllowed: false,
   };
 

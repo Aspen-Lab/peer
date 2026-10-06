@@ -9,7 +9,7 @@ import { resetCounterStoreForTests } from "./counters";
  * The forced-rebuild breaker, kept as its own suite when the deep-report
  * allowance (whose test file used to hold these cases) was deleted. The
  * breaker is the daily cap on a forced pool rebuild ("refresh now") and it
- * stays live until it goes with the rest of the company-budget machinery.
+ * stays live until it goes with the rest of the operator-spend machinery.
  *
  * **The clock is stubbed, never `Date.now()`.** The day boundary is a claim
  * about a calendar, and a test that computed it the same way the code does

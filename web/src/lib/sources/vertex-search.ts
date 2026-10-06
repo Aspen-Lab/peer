@@ -5,17 +5,12 @@ import {
   WebSearchProviderError,
 } from "./search-failure";
 import {
-  isGeminiSearchAvailable,
   isPreScreenedOut,
   pageDeclaresEventFromHtml,
   searchGemini,
   type WebResult,
 } from "./gemini-search";
 import type { WebSearchProvider } from "./types";
-import {
-  hasCompanySpendCapability,
-  type CompanySpendCapability,
-} from "@/lib/security/company-spend";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // THE `vertex` WEB-SEARCH PROVIDER — VERTEX AI SEARCH (Discovery Engine).
@@ -247,12 +242,12 @@ export function isVertexSearchAvailable(): boolean {
  */
 export function webSearchOptions(
   connectors: { gemini?: { enabled?: boolean } } | undefined,
-  capability?: CompanySpendCapability,
 ): { provider: WebSearchProvider } | undefined {
   if (connectors?.gemini?.enabled === false) return undefined;
-  if (!hasCompanySpendCapability(capability)) return undefined;
-  if (isVertexSearchAvailable()) return { provider: "vertex" };
-  return isGeminiSearchAvailable() ? { provider: "gemini" } : undefined;
+  // Peer funds no search of its own: the server-funded capability this used to
+  // require is gone, and nothing replaces it, so no server-funded provider is
+  // ever selected here.
+  return undefined;
 }
 
 /**

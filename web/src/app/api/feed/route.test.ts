@@ -317,26 +317,37 @@ describe("POST /api/feed AI tier gate", () => {
   });
 });
 
-describe("/api/feed server-funded web search gate", () => {
-  it("denies an explicit unauthorised POST web source without falling back to defaults", async () => {
+describe("/api/feed web source (Peer funds no search of its own)", () => {
+  // The route used to answer 401/503 to any request naming the `web` source,
+  // because the only search it could run was one Peer would have paid for.
+  // Peer pays for no search, so there is nothing left to refuse: `web` is an
+  // ordinary source name, and what it can fetch is decided by the reader's own
+  // keys alone (none reach the papers pipeline), not by a server credential.
+  function pipelineRequest(): Record<string, unknown> {
+    const call = mocks.runFeedPipeline.mock.calls[0];
+    expect(call).toBeDefined();
+    return call[0] as Record<string, unknown>;
+  }
+
+  it("passes an explicit POST web source to the pipeline like any other source", async () => {
     const response = await POST(request({ topics: ["battery"], sources: ["web"] }));
 
-    expect(response.status).toBe(503);
-    expect(response.headers.get("Cache-Control")).toBe("no-store");
-    expect(mocks.runFeedPipeline).not.toHaveBeenCalled();
+    expect(response.status).toBe(200);
+    expect(mocks.runFeedPipeline).toHaveBeenCalledTimes(1);
+    expect(pipelineRequest()).toMatchObject({ topics: ["battery"], sources: ["web"] });
   });
 
-  it("denies an explicit unauthorised GET web source without falling back to defaults", async () => {
+  it("passes an explicit GET web source to the pipeline like any other source", async () => {
     const response = await GET(
       new NextRequest("http://localhost/api/feed?topics=battery&sources=web"),
     );
 
-    expect(response.status).toBe(503);
-    expect(response.headers.get("Cache-Control")).toBe("no-store");
-    expect(mocks.runFeedPipeline).not.toHaveBeenCalled();
+    expect(response.status).toBe(200);
+    expect(mocks.runFeedPipeline).toHaveBeenCalledTimes(1);
+    expect(pipelineRequest()).toMatchObject({ topics: ["battery"], sources: ["web"] });
   });
 
-  it("does not let mixed sources or a body connector bypass the company-spend denial", async () => {
+  it("keeps mixed sources together and hands the pipeline no server-funded capability", async () => {
     const response = await POST(request({
       topics: ["battery"],
       sources: ["openalex", "web"],
@@ -344,9 +355,11 @@ describe("/api/feed server-funded web search gate", () => {
       aiTier: 2,
     }));
 
-    expect(response.status).toBe(503);
-    expect(response.headers.get("Cache-Control")).toBe("no-store");
-    expect(mocks.runFeedPipeline).not.toHaveBeenCalled();
+    expect(response.status).toBe(200);
+    expect(pipelineRequest()).toMatchObject({ sources: ["openalex", "web"] });
+    // Nothing on the request can grant a server-funded search: there is no such
+    // field for a body (or the route) to fill.
+    expect(pipelineRequest()).not.toHaveProperty("companySpendCapability");
   });
 
   it("keeps an ordinary public academic Tier-0 request available", async () => {

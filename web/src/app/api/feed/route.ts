@@ -13,10 +13,6 @@ import {
 } from "@/lib/opportunities/private-paper-cache";
 import { localCalendarDate } from "@/lib/opportunities/pool-cache";
 import { createClient } from "@/lib/supabase/server";
-import {
-  requireCompanySpendCapability,
-  type CompanySpendCapability,
-} from "@/lib/security/company-spend";
 import { normalizeFeedIntent, serializeFeedIntent, textValue, type NormalizedFeedIntent } from "@/lib/feed/intent";
 import type { SelectedSenseConcept } from "@/lib/feed/senses";
 import { identityForRawItem } from "@/lib/feed/paper-identity";
@@ -611,12 +607,6 @@ function parseSources(input: unknown): SourceId[] | undefined {
   return out.length > 0 ? out : undefined;
 }
 
-async function companySpendForSources(
-  sources: SourceId[] | undefined,
-): Promise<CompanySpendCapability | NextResponse | undefined> {
-  return sources?.includes("web") ? requireCompanySpendCapability() : undefined;
-}
-
 function parseAiTier(input: unknown): 0 | 1 | 2 | undefined {
   const n = typeof input === "number" ? input : Number(input);
   if (!Number.isFinite(n)) return undefined;
@@ -746,8 +736,6 @@ export async function POST(req: NextRequest) {
   const project = textValue(intent.project);
   const challenge = textValue(intent.challenge);
   const sources = parseSources(body.sources);
-  const companySpendCapability = await companySpendForSources(sources);
-  if (companySpendCapability instanceof NextResponse) return companySpendCapability;
 
   const paperCacheScope = await privatePaperScope({
     project,
@@ -841,7 +829,6 @@ export async function POST(req: NextRequest) {
       challenge,
       intent,
       paperCacheScope,
-      companySpendCapability,
     },
     now,
     positiveSeeds,
@@ -879,8 +866,6 @@ export async function GET(req: NextRequest) {
   );
 
   const topN = parseInt(req.nextUrl.searchParams.get("topN") || "30", 10);
-  const companySpendCapability = await companySpendForSources(sources);
-  if (companySpendCapability instanceof NextResponse) return companySpendCapability;
 
   const paperCacheScope = await privatePaperScope({
     topics,
@@ -898,7 +883,6 @@ export async function GET(req: NextRequest) {
       sources,
       topN: Number.isFinite(topN) ? topN : 30,
       paperCacheScope,
-      companySpendCapability,
     },
     now,
     positiveSeeds,

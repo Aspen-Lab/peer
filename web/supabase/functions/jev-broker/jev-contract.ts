@@ -96,9 +96,8 @@ const ABSTRACT_TOKEN_BUDGET = 3000;
 /**
  * Conservative average characters per token for Latin-script text.
  *
- * SPEND-CAP — exported so `usage/company-budget.ts`'s token estimator reuses
- * this EXACT ratio instead of inventing a second CJK-aware heuristic for the
- * same problem (ABC-JEV-INTEGRATION.md §1v guide, §2.4).
+ * Exported as part of this file's contract (a company token estimator once
+ * shared this EXACT ratio; that estimator is gone, the export stays).
  */
 export const LATIN_CHARS_PER_TOKEN = 4;
 /**
@@ -108,13 +107,13 @@ export const LATIN_CHARS_PER_TOKEN = 4;
  * commonly its own token or more, so budget four times tighter per
  * character than Latin text gets.
  *
- * SPEND-CAP — exported for the same reason as `LATIN_CHARS_PER_TOKEN` above.
+ * Exported for the same reason as `LATIN_CHARS_PER_TOKEN` above.
  */
 export const CJK_CHARS_PER_TOKEN = 1;
 const CJK_DENSITY_THRESHOLD = 0.3;
 const CJK_PATTERN = /[㐀-鿿぀-ヿ가-힯]/gu;
 
-/** SPEND-CAP — exported so the company-spend token estimator shares this exact test rather than a second copy. */
+/** Exported so a caller sizing text by tokens can share this exact test rather than keep a second copy. */
 export function isCjkHeavy(text: string): boolean {
   if (text.length === 0) return false;
   const matches = text.match(CJK_PATTERN);

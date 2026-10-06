@@ -13,15 +13,13 @@
  * BYOK key (spending a user's money on work they never see is outside their
  * declared intent) and may only use a company-funded Gemini provider.
  * Company-funded AI is deliberately unavailable for the whole of this
- * campaign (§1j fail-closed; `security/company-spend.ts`'s
- * `requireCompanySpendCapability` always returns `unavailable`) pending USER
- * decision #1. So `provider` here is an INJECTED
+ * campaign (§1j fail-closed; no server-funded capability exists to grant it)
+ * pending USER decision #1. So `provider` here is an INJECTED
  * `GeminiFallbackProviderCapability` — typed so a per-request BYOK override
  * (`ProviderOverrideConfig`/`resolveUserProvider`,
  * `llm/providers/registry.ts`) cannot be passed by mistake, structurally
- * (WeakSet-branded, the same idiom `security/company-spend.ts`'s
- * `CompanySpendCapability` and `opportunities/private-paper-cache.ts`'s
- * `TrustedPaperCacheScope` already use in this codebase) rather than merely
+ * (WeakSet-branded, the same idiom `opportunities/private-paper-cache.ts`'s
+ * `TrustedPaperCacheScope` already uses in this codebase) rather than merely
  * by a TypeScript type a caller could cast around. NOTHING in production
  * mints one today — `decisions/shadow.ts`'s only real caller
  * (`app/api/feed/route.ts`'s `runJevShadowSafely`) passes no
@@ -81,8 +79,7 @@ export type DecisionAnswerSource = "jev" | "gemini-fallback";
 export type SourcedDecisionAnswer = DecisionAnswer & { source?: DecisionAnswerSource };
 
 // ---------------------------------------------------------------------------
-// Provider capability — WeakSet-branded, mirrors `CompanySpendCapability`
-// (`security/company-spend.ts`) / `TrustedPaperCacheScope`
+// Provider capability — WeakSet-branded, mirrors `TrustedPaperCacheScope`
 // (`opportunities/private-paper-cache.ts`): a plain object structurally
 // matching this interface (e.g. a BYOK-resolved `DigestProvider`'s
 // `generateJsonText` wrapped ad hoc by some future caller) is NOT a valid

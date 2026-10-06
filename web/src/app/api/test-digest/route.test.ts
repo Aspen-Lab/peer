@@ -76,7 +76,7 @@ describe("POST /api/test-digest intent transport", () => {
     expect(mocks.sendDigestEmail).not.toHaveBeenCalled();
   });
 
-  it("runs permitted project-only intent at Tier 0 with no company source or capability", async () => {
+  it("runs permitted project-only intent at Tier 0 with no web source", async () => {
     await POST(request());
 
     expect(mocks.runFeedPipeline).toHaveBeenCalledWith(expect.objectContaining({
@@ -85,7 +85,7 @@ describe("POST /api/test-digest intent transport", () => {
       project: "Stabilize sulfide electrolytes",
     }));
     expect(mocks.runFeedPipeline).not.toHaveBeenCalledWith(expect.objectContaining({
-      sources: expect.anything(), companySpendCapability: expect.anything(),
+      sources: expect.anything(),
     }));
     expect(mocks.runFeedPipeline).toHaveBeenCalledTimes(1);
     expect(mocks.sendDigestEmail).toHaveBeenCalledTimes(1);
