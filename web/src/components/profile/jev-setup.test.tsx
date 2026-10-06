@@ -1,0 +1,182 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { beforeEach, describe, expect, it } from "vitest";
+import { defaultProfile } from "@/types";
+import { useProfileStore } from "@/store/profile";
+import { jevGainSentence } from "@/lib/decisions/jev-claim";
+import { JEV_SIGNUP_URL, JevKeyField, JevSetup } from "./jev-setup";
+
+// The Jev key field and the copy around it, as the Profile page and the welcome
+// wizard render them. Optional, honest about what the key turns on and what it
+// does not claim: no number for the improvement, no adjective of size, no price.
+
+// An invented string. It is not, and never was, a key.
+const KEY = "jev-setup-test-sentinel-not-a-key-0000";
+
+/** The visible text of rendered markup: tags and attributes removed, entities decoded, whitespace collapsed. */
+function visibleText(markup: string): string {
+  return markup
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&#x27;|&#39;|&apos;/g, "'")
+    .replace(/&amp;/g, "&")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+const render = (node: Parameters<typeof renderToStaticMarkup>[0]) => renderToStaticMarkup(node);
+
+beforeEach(() => {
+  useProfileStore.setState({ profile: { ...defaultProfile } });
+});
+
+describe("JevKeyField", () => {
+  it("is a labelled password input (SecretInput): the key is hidden until the reader shows it", () => {
+    const markup = render(createElement(JevKeyField, { value: "", onChange: () => {}, idPrefix: "t" }));
+
+    expect(markup).toMatch(/<label[^>]*for="t-jev-key"[^>]*>Jev API key<\/label>/);
+    expect(markup).toMatch(/<input[^>]*id="t-jev-key"[^>]*type="password"/);
+    expect(markup).toMatch(/placeholder="Jev API key"/);
+    expect(markup).toMatch(/autoComplete="off"|autocomplete="off"/i);
+    expect(markup).toContain('aria-label="Show key"');
+  });
+
+  it("never renders the key as text: not in the visible text, not in the status line, not in a link", () => {
+    const markup = render(createElement(JevKeyField, { value: KEY, onChange: () => {} }));
+
+    expect(visibleText(markup)).not.toContain(KEY);
+    expect(visibleText(markup)).toContain("Jev key saved on this device.");
+    // The only place the value appears is the password input's own value.
+    const withoutInput = markup.replace(/<input[^>]*>/g, "");
+    expect(withoutInput).not.toContain(KEY);
+    expect(markup).toMatch(/<input[^>]*type="password"[^>]*value="/);
+  });
+
+  it("says plainly when there is no key, when it is saved, and when what was pasted cannot be a key", () => {
+    const none = visibleText(render(createElement(JevKeyField, { value: "", onChange: () => {} })));
+    expect(none).toContain("No Jev key: papers are screened without Jev.");
+    expect(none).not.toContain("Jev key saved on this device.");
+
+    const blank = visibleText(render(createElement(JevKeyField, { value: "   ", onChange: () => {} })));
+    expect(blank).toContain("No Jev key: papers are screened without Jev.");
+
+    const saved = visibleText(render(createElement(JevKeyField, { value: KEY, onChange: () => {} })));
+    expect(saved).toContain("Jev key saved on this device.");
+
+    const spaced = visibleText(render(createElement(JevKeyField, { value: "two words", onChange: () => {} })));
+    expect(spaced).toContain("That does not look like a key. It must be one string with no spaces or line breaks.");
+    expect(spaced).not.toContain("Jev key saved on this device.");
+  });
+
+  it('links to where a reader gets a key: one constant, target _blank, noopener, the button reads "Get a Jev key"', () => {
+    // D1: the sign-up page is the owner's to supply; until then the link is the
+    // vendor's documentation host.
+    expect(JEV_SIGNUP_URL).toBe("https://docs.typesafe.ai/");
+    const markup = render(createElement(JevKeyField, { value: "", onChange: () => {} }));
+    const link = markup.match(/<a [^>]*>/)?.[0] ?? "";
+    expect(link).toContain(`href="${JEV_SIGNUP_URL}"`);
+    expect(link).toContain('target="_blank"');
+    expect(link).toContain("noopener");
+    expect(link).toContain("noreferrer");
+    expect(visibleText(markup)).toContain("Get a Jev key");
+  });
+});
+
+describe("JevSetup on the Profile page", () => {
+  const profileText = () => visibleText(render(createElement(JevSetup, { variant: "profile", idPrefix: "p" })));
+
+  it("says what works with no key, what a key adds, and what it does not claim", () => {
+    const text = profileText();
+
+    expect(text).toContain(
+      "Without a key, Peer screens each day's papers with fixed scoring: your topics, your project text, how new a paper is and where it was published. That works with no setup.",
+    );
+    expect(text).toContain("A Jev key adds a second pass.");
+    expect(text).toContain("For each of the 50 best candidates Jev answers up to four fixed questions about the paper");
+    expect(text).toContain("Peer moves papers up or down on the answers. A paper Jev cannot judge stays where it was. Jev reads English best.");
+    // The claim comes from the one place that owns it.
+    expect(text).toContain(jevGainSentence());
+    expect(text).toContain("How much this improves your list is not yet measured.");
+  });
+
+  it("states the money sentence in full and says no more about money", () => {
+    const text = profileText();
+    expect(text).toContain("Jev bills your own account for what it reads.");
+    expect(text).not.toMatch(/\$|cents?\b|¢|per month|a month|\/month|price|cost/i);
+  });
+
+  it("says it is optional, when it applies, and where the key lives, without claiming more than the code does", () => {
+    const text = profileText();
+    expect(text).toContain(
+      "Optional. Applies to your next briefing. Peer keeps the key in this browser, never in your account; its server passes the key to Jev while it screens your papers and does not store or log it.",
+    );
+  });
+
+  it("is the whole story of the Jev key on this page: the field, the status line and the link are in it", () => {
+    const text = profileText();
+    expect(text).toContain("Jev API key");
+    expect(text).toContain("No Jev key: papers are screened without Jev.");
+    expect(text).toContain("Get a Jev key");
+  });
+
+  it("reads and writes the reader's own key in the profile store, and in no other place", () => {
+    // Static rendering shows the store's initial state (server snapshot), so the
+    // wiring is pinned in the source: the key field is bound to the profile's
+    // `jevApiKey` and its updater, which trims and clears like the model key.
+    const source = readFileSync(path.join(process.cwd(), "src/components/profile/jev-setup.tsx"), "utf8");
+    expect(source).toContain("s.profile.jevApiKey");
+    expect(source).toContain("s.updateJevApiKey");
+    expect(source).not.toMatch(/localStorage|sessionStorage|fetch\(|apiFetch/);
+  });
+});
+
+describe("JevSetup in the welcome wizard", () => {
+  const welcomeText = () => visibleText(render(createElement(JevSetup, { variant: "welcome", idPrefix: "w" })));
+
+  it("is a short, optional block with the field: a kicker, what a key adds, and the claim sentence", () => {
+    const text = welcomeText();
+
+    expect(text).toContain("A second screening pass (optional)");
+    expect(text).toContain("Without a key, Peer screens each day's papers with fixed scoring");
+    expect(text).toContain("A Jev key adds a second pass.");
+    expect(text).toContain("How much this improves your list is not yet measured.");
+    expect(text).toContain("Jev API key");
+    expect(text).toContain("Get a Jev key");
+  });
+
+  it("does not repeat the Profile page's longer notes", () => {
+    const text = welcomeText();
+    expect(text).not.toContain("Peer keeps the key in this browser");
+  });
+});
+
+describe("what the Jev copy never says", () => {
+  // The mandated not-measured sentence ("How much this improves your list is not
+  // yet measured.") is pinned word for word by jev-claim.test.ts and contains the
+  // word "much" by design; it is taken out before the scans below.
+  const all = () =>
+    [
+      visibleText(render(createElement(JevSetup, { variant: "profile", idPrefix: "a" }))),
+      visibleText(render(createElement(JevSetup, { variant: "welcome", idPrefix: "b" }))),
+      visibleText(render(createElement(JevKeyField, { value: KEY, onChange: () => {} }))),
+      visibleText(render(createElement(JevKeyField, { value: "", onChange: () => {} }))),
+    ]
+      .join("\n")
+      .split(jevGainSentence())
+      .join("");
+
+  it("has no adjective of size or of quality about the result, and no percent sign", () => {
+    expect(all()).not.toMatch(/\b(much|far|greatly|sharper|sharp|better|best results|faster|stronger|dramatic\w*|significant\w*|huge|boost\w*|smarter|improved results)\b/i);
+    expect(all()).not.toMatch(/%|percent/i);
+  });
+
+  it("states no number for the improvement: the only digits are the 50-candidate ceiling", () => {
+    const withoutCeiling = all().replace(/For each of the 50 best candidates/g, "For each of the best candidates");
+    expect(withoutCeiling).not.toMatch(/\d/);
+  });
+
+  it('never says "Tier N" or the bring-your-own-key abbreviation (the UI vocabulary gate)', () => {
+    expect(all()).not.toMatch(/Tier [012]|BYOK/);
+  });
+});

@@ -47,6 +47,7 @@ import {
 import { SchoolAutocomplete } from "@/components/profile/school-autocomplete";
 import { AdvisorField } from "@/components/profile/advisor-field";
 import { ConnectorPanel } from "@/components/profile/connector-panel";
+import { JevSetup } from "@/components/profile/jev-setup";
 import { useProfileSettled } from "@/components/first-run";
 import { Callout } from "@/components/ui";
 import { buttonVariants } from "@/components/ui/button";
@@ -458,6 +459,12 @@ export default function WelcomePage() {
                       web scouting uses its own separate search key and remains
                       limited by Peer&apos;s daily search schedule.
                     </p>
+                    {/* A second, optional pass over the paper shortlist on the
+                        reader's own Jev key. Part of this step, not a step of
+                        its own; the setup component owns the key. */}
+                    <div className="rounded-xl bg-surface p-4 shadow-well">
+                      <JevSetup variant="welcome" idPrefix="welcome" />
+                    </div>
                   </div>
                 </StepFrame>
               )}

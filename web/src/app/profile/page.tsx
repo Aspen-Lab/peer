@@ -33,6 +33,7 @@ import { useProfileSyncStatus, useSyncGate } from "@/components/profile-sync";
 import { useFeedSyncStatus } from "@/components/feed-sync";
 import { VersionLine } from "@/components/shell/version-line";
 import { AiKeyFields } from "@/components/profile/ai-setup";
+import { JevSetup } from "@/components/profile/jev-setup";
 import { Toggle } from "@/components/ui/toggle";
 import { FEED_EMPTY_REASON_CODES } from "@/lib/feed/types";
 import { TEST_EMAIL_EMPTY, TEST_EMAIL_EMPTY_GENERIC } from "@/lib/briefing/copy";
@@ -2105,6 +2106,13 @@ function EditView({
             idPrefix="profile-ai"
           />
         </div>
+      </EditRow>
+
+      {/* Paper screening with the reader's own Jev key: optional, kept in this
+          browser, and honest about what it does and does not claim. The setup
+          component owns the key; this page never touches it. */}
+      <EditRow icon={<IconKey />} tone="neutral" label="Paper screening">
+        <JevSetup variant="profile" idPrefix="profile" />
       </EditRow>
 
       <EditRow icon={<IconBook size={13} strokeWidth={1.9} />} tone="link" label="Deep report">

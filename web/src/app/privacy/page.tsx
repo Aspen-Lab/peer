@@ -48,10 +48,17 @@ const SECTIONS = [
     ],
   },
   {
+    label: "Your own Jev key",
+    body: [
+      "If you add a Jev key, it stays in your browser and is excluded from everything Peer syncs, the same way as a model key. Each time Peer builds your briefing its server passes the key to Jev, and does not store or log it.",
+      "Jev, made by TypeSafe, receives the title, abstract and venue of up to 50 candidate papers, together with the project, challenge, topics, methods and exclusions you wrote, and bills your own account. Peer keeps Jev's answers for each paper against your account (the question, the answer and how sure Jev was), with no paper text and no key, until the account is removed.",
+    ],
+  },
+  {
     label: "Who else sees a request",
     body: [
       "Finding papers means asking the open sources: OpenAlex, arXiv, Crossref, Semantic Scholar, and the publisher or repository a paper's full text and figures live on. Those services see the query and the request, as they would for any reader.",
-      "The model provider whose key you added sees what a model request carries: your topics and a paper's title and abstract when the briefing is ranked or summarised, and a paper's text when a model report is written. Tavily sees your search terms only if you add a Tavily key yourself. Resend sends the email digest if you turn one on. Supabase hosts the database and the sign-in. Vercel hosts the site and counts page views — Vercel Analytics records the page, not who you are.",
+      "The model provider whose key you added sees what a model request carries: your topics and a paper's title and abstract when the briefing is ranked or summarised, and a paper's text when a model report is written. Tavily sees your search terms only if you add a Tavily key yourself. Jev sees those papers and your project text only if you add a Jev key yourself. Resend sends the email digest if you turn one on. Supabase hosts the database and the sign-in. Vercel hosts the site and counts page views — Vercel Analytics records the page, not who you are.",
       "Peer runs no advertising, sells nothing to anyone, and has no third-party trackers beyond the page counter named above.",
     ],
   },

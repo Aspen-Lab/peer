@@ -2,6 +2,47 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.45.0 — 2026-10-06
+
+Paper screening with your own Jev key.
+
+Jev is a second pass over your day's papers, and it is yours to switch on: you
+apply for a Jev key, paste it into your Profile (or the Welcome wizard's AI
+step), and Peer asks Jev, for each of the 50 best candidates, up to four fixed
+questions about the paper: is it the meaning of your word, is it core to your
+project or only background, does it match your method, would it help your
+project. Peer moves papers up or down on the answers. A paper Jev cannot judge
+stays where it was, and a paper Jev says is a mismatch is moved back, never
+removed. Jev reads English best.
+
+It is optional, and nothing changes without it: with no key the briefing is
+screened exactly as before, with your topics, your project text, how new a paper
+is and where it was published. It works whether or not you have a model key, and
+with both, Jev sets the order while your model still writes the reasons.
+
+We have not measured how much this improves your list, so we state no number.
+Jev bills your own account for what it reads. Your key stays in this browser:
+it is never synced to your account, never saved into a backup file, and Peer's
+server passes it to Jev only while it screens your papers, without storing or
+logging it. Peer keeps Jev's answers for each paper against your account (the
+question, the answer and how sure Jev was), with no paper text and no key. A key
+you add today applies to your next briefing; the page names what Jev did the last
+time. The privacy page now has a section for it.
+
+A profile backup file no longer carries any key: the Jev key and the model key
+(and the older optional data keys) are left out when a backup is written, as a
+restore already refused to install them.
+
+**For anyone running Peer:** Jev no longer runs on a key of the site's own. The
+build refuses `JEV_API_KEY` and `PEER_JEV_BROKER_SECRET` on Vercel; remove them
+(and the other `PEER_JEV_*` settings, which nothing reads now) from the project's
+environment variables before deploying. The `jev-broker` Supabase function is gone
+from the repository; run `supabase functions list` and delete it, with its
+secrets, if it was ever deployed. The migration
+`20260924000400_private_decisions.sql` keeps each reader's Jev answers; apply it
+(`select to_regclass('public.private_decisions')` tells you whether it is there).
+The live smoke test now reads `JEV_SMOKE_API_KEY` instead of `JEV_API_KEY`.
+
 ## v0.44.0 — 2026-10-06
 
 Peer's AI runs on your own key, and only on it.

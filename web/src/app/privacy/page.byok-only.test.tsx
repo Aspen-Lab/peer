@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import PrivacyPage from "./page";
@@ -63,5 +65,75 @@ describe("/privacy after Peer stopped having a model of its own", () => {
 
   it("carries the date of this change", () => {
     expect(text()).toContain("Last changed 2026-10-06");
+  });
+});
+
+/**
+ * A reader's own Jev key. Jev is a bring-your-own-key option, so /privacy says
+ * what the code does with it, in the same commit as the behaviour: where the key
+ * lives, what leaves for Jev, and what Peer keeps. Every claim below is pinned to
+ * the line that makes it true.
+ */
+describe("/privacy - your own Jev key", () => {
+  const root = process.cwd();
+  const read = (file: string) => readFileSync(join(root, file), "utf8");
+
+  it("has a section 'Your own Jev key' right after 'Your own model key'", () => {
+    const page = text();
+    expect(page).toContain("Your own Jev key");
+    expect(page.indexOf("Your own Jev key")).toBeGreaterThan(page.indexOf("Your own model key"));
+    expect(page.indexOf("Your own Jev key")).toBeLessThan(page.indexOf("Who else sees a request"));
+  });
+
+  it("says the key stays in the browser, is kept out of everything synced, and is passed to Jev without being stored or logged", () => {
+    const page = text();
+    expect(page).toContain(
+      "If you add a Jev key, it stays in your browser and is excluded from everything Peer syncs, the same way as a model key. Each time Peer builds your briefing its server passes the key to Jev, and does not store or log it.",
+    );
+  });
+
+  it("says what Jev receives, who pays, and what Peer keeps of Jev's answers", () => {
+    const page = text();
+    expect(page).toContain(
+      "Jev, made by TypeSafe, receives the title, abstract and venue of up to 50 candidate papers, together with the project, challenge, topics, methods and exclusions you wrote, and bills your own account.",
+    );
+    expect(page).toContain(
+      "Peer keeps Jev's answers for each paper against your account (the question, the answer and how sure Jev was), with no paper text and no key, until the account is removed.",
+    );
+  });
+
+  it("adds the Jev sentence to 'Who else sees a request'", () => {
+    expect(text()).toContain("Jev sees those papers and your project text only if you add a Jev key yourself.");
+  });
+
+  it("states no size for the improvement and no price", () => {
+    const page = text();
+    const jevSection = page.slice(page.indexOf("Your own Jev key"), page.indexOf("Who else sees a request"));
+    expect(jevSection).not.toMatch(/\d+\s?%|percent|cents?\b|\$|\bbetter\b|sharper|faster/i);
+  });
+
+  // "Written from the code": each claim names a line that must stay true.
+  it("is true to the code: the sync code voids the Jev key, the route reads it only from the request body into a closure, and the stored decision has no key field", () => {
+    expect(read("src/components/profile-sync.tsx")).toContain("void jevApiKey;");
+
+    const route = read("src/app/api/feed/route.ts");
+    expect(route).toContain("parseJevApiKey((body as Record<string, unknown>).jevApiKey)");
+    expect(route).not.toMatch(/console\./); // the feed route has no logging call at all
+
+    // What Peer stores per paper: the decision payload. It has no key, no paper text.
+    const types = read("src/lib/decisions/types.ts");
+    const decisionResult = types.slice(types.indexOf("export interface DecisionResult"), types.indexOf("export interface DecisionProvider"));
+    expect(decisionResult).not.toMatch(/apiKey|jevApiKey|title|abstract/);
+    expect(read("src/lib/decisions/private-decision-cache.ts")).not.toMatch(/apiKey|jevApiKey/);
+
+    // Kept until the account is removed: the table cascades from the account.
+    expect(read("supabase/migrations/20260924000400_private_decisions.sql")).toContain("on delete cascade");
+  });
+
+  it("keeps the sections around it and the date", () => {
+    const page = text();
+    expect(page).toContain("Your own model key");
+    expect(page).toContain("Who else sees a request");
+    expect(page).toContain("Last changed 2026-10-06");
   });
 });
