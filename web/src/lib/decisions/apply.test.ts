@@ -13,9 +13,10 @@ import type { DecisionAnswer, DecisionResult } from "./types";
 
 // How Jev's answers change the order of the reader's papers. The rules under
 // test: a paper Jev strongly says is a mismatch is DEMOTED, never dropped; an
-// `unknown` answer is neutral; a paper with no decision keeps its place; Jev's
-// order is used only when it answered enough of the shortlist (60 %); and a
-// rejected key means no Jev order at all.
+// `unknown` answer is neutral; a paper with no decision counts as neutral too
+// (it is ranked as a middling paper, not left in its slot); Jev's order is used
+// only when it answered enough of the shortlist (60 %); and a rejected key
+// means no Jev order at all.
 
 function item(id: string, score = 0.5) {
   return { id, title: `Title ${id}`, abstract: `Abstract ${id}`, venue: "Venue", score };
@@ -105,6 +106,37 @@ describe("jevOrderedIds", () => {
       ["p0", "p1", "p3", "p4"].map((id) => [id, neutral(id)] as const),
     );
     expect(jevOrderedIds(shortlist, decisions)).toEqual(["p0", "p1", "p2", "p3", "p4"]);
+  });
+
+  it("a paper Jev cannot judge counts as neutral: behind the papers Jev rates well, ahead of the ones it rates weakly and of the demoted", () => {
+    // The sentence the Profile and the changelog print: "A paper Jev cannot judge
+    // counts as neutral: Jev neither lifts nor lowers it, though papers Jev rates
+    // well can move ahead of it." Six papers, local order p0..p5. With the 0.5 / 0.5
+    // blend the neutral paper's position is 0.5 * its local rank + 0.5 * 0.5:
+    //   p0 strong, local first            1.00
+    //   p4 strong, locally BELOW p2       0.60   -> moves ahead of the unjudged p2
+    //   p2 NO DECISION                    0.55
+    //   p3 weak (combined 0.42)           0.41   -> stays behind p2: not lifted
+    //   p5 weak                           0.21
+    //   p1 confident wrong sense          demoted, out of the ordered list
+    // A paper left in its slot would not move behind p4; one ranked as the best
+    // would stay ahead of it; one ranked as the worst would fall behind p3.
+    const shortlist = shortlistOf(6);
+    const wrongSense = decision("p1", [choice("sense_match", "different_sense", 0.95), score(3)]);
+    const decisions = new Map([
+      ["p0", strong("p0")],
+      ["p1", wrongSense],
+      ["p3", weak("p3")],
+      ["p4", strong("p4")],
+      ["p5", weak("p5")],
+    ]);
+
+    const ordered = jevOrderedIds(shortlist, decisions);
+    expect(ordered).toEqual(["p0", "p4", "p2", "p3", "p5"]);
+
+    // And as the reader sees it, after the demoted paper is put behind the rest.
+    const items = shortlist.map((s) => ({ ...s, abstract: s.abstract }) as unknown as ScoredItem);
+    expect(applyRerankOrder(items, ordered).map((r) => r.id)).toEqual(["p0", "p4", "p2", "p3", "p5", "p1"]);
   });
 
   it("an unknown answer is neutral: it counts the same as no answer, whatever value it carries", () => {

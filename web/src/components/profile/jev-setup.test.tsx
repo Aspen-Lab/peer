@@ -94,7 +94,9 @@ describe("JevSetup on the Profile page", () => {
     );
     expect(text).toContain("A Jev key adds a second pass.");
     expect(text).toContain("For each of the 50 best candidates Jev answers up to four fixed questions about the paper");
-    expect(text).toContain("Peer moves papers up or down on the answers. A paper Jev cannot judge stays where it was. Jev reads English best.");
+    expect(text).toContain(
+      "Peer moves papers up or down on the answers. A paper Jev cannot judge counts as neutral: Jev neither lifts nor lowers it, though papers Jev rates well can move ahead of it. Jev reads English best.",
+    );
     // The claim comes from the one place that owns it.
     expect(text).toContain(jevGainSentence());
     expect(text).toContain("How much this improves your list is not yet measured.");

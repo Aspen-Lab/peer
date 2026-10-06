@@ -37,7 +37,7 @@ const WITHOUT_KEY =
   "Without a key, Peer screens each day's papers with fixed scoring: your topics, your project text, how new a paper is and where it was published. That works with no setup.";
 
 const WHAT_A_KEY_ADDS =
-  "A Jev key adds a second pass. For each of the 50 best candidates Jev answers up to four fixed questions about the paper: is it the meaning of your word, is it core to your project or only background, does it match your method, would it help your project. Peer moves papers up or down on the answers. A paper Jev cannot judge stays where it was. Jev reads English best.";
+  "A Jev key adds a second pass. For each of the 50 best candidates Jev answers up to four fixed questions about the paper: is it the meaning of your word, is it core to your project or only background, does it match your method, would it help your project. Peer moves papers up or down on the answers. A paper Jev cannot judge counts as neutral: Jev neither lifts nor lowers it, though papers Jev rates well can move ahead of it. Jev reads English best.";
 
 const MONEY = "Jev bills your own account for what it reads.";
 

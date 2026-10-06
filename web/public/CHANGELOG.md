@@ -12,7 +12,8 @@ step), and Peer asks Jev, for each of the 50 best candidates, up to four fixed
 questions about the paper: is it the meaning of your word, is it core to your
 project or only background, does it match your method, would it help your
 project. Peer moves papers up or down on the answers. A paper Jev cannot judge
-stays where it was, and a paper Jev says is a mismatch is moved back, never
+counts as neutral: Jev neither lifts nor lowers it, though papers Jev rates well
+can move ahead of it. A paper Jev says is a mismatch is moved back, never
 removed. Jev reads English best.
 
 It is optional, and nothing changes without it: with no key the briefing is

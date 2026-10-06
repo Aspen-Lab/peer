@@ -15,7 +15,9 @@
  *    "insufficient information", or confidence below the pinned threshold)
  *    contributes the neutral midpoint, whatever value it carries
  *    (`combine.ts`). A paper with no decision at all gets the same neutral
- *    contribution, so it keeps its local place.
+ *    contribution: Jev neither lifts nor lowers it, though papers Jev rates
+ *    well can move ahead of it. It is ranked as a middling paper, not left in
+ *    its slot (with nothing judged at all, the local order stands).
  *  - **Local rank still counts.** A paper's position is a blend of where the
  *    local scoring put it and what Jev said, at equal weight, so Jev can move a
  *    paper up or down past its neighbours but cannot reorder the list
