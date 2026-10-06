@@ -56,6 +56,10 @@ Whenever you stop (finished, out of budget, blocked, told to stop):
 4. Set `HELD BY: free`.
 5. Commit and push. Unpushed work in this cloud container is lost when it is reclaimed.
 
+## 6a. Latest submitted checkpoint — 2026-10-06T00:13Z
+
+P2-04 is implemented and submitted in the current branch commit, with checkpoint `docs/reading-helper-abc/P2-04-C-20261005T220345Z.md`. The Terra C implementation adds the bounded **For your questions** block and the display-only Tier 2 answer/background overlay; focused tests are 21/21 green, lint/tsc/build are green, and the Windows full-suite failures are the five documented host-only baselines. The two briefly considered out-of-scope type-only edits were restored before submission. P2-04 is **IMPLEMENTED_PENDING_REVIEW**, not VERIFIED: Claude's next action is an independent read/mutation/gate review of this item. Do not start P2-05 until that review is recorded.
+
 ## 7. Kickoff prompt — for the user to paste into any capable agent
 
 ```

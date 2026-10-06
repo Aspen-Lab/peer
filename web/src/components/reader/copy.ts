@@ -34,6 +34,16 @@ export const REPORT_HEADING = {
   related: "Related from your feed",
 } as const;
 
+/** P2-04: verified answers to the reader's own questions. */
+export const FOR_YOUR_QUESTIONS = {
+  heading: "For your questions",
+  answered: "Answered",
+  partly: "Partly answered",
+  notAddressed: (question: string) => `This paper does not address: ${question}.`,
+  readNext: "Read next",
+  background: "background",
+} as const;
+
 /** Under a block Peer wrote with no sentence of the paper to show for it. */
 export const PEERS_READING = "Peer's reading — not a quote";
 

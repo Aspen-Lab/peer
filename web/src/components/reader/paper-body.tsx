@@ -21,7 +21,8 @@
 
 import { useState } from "react";
 import type { PaperReading, ReadingFigure, ReadingSection } from "@/lib/papers/reading";
-import { GIST_QUESTION, type RouteResult, type RouteTier } from "@/lib/papers/reading-map";
+import { GIST_QUESTION, type RouteResult, type RouteSection, type RouteTier } from "@/lib/papers/reading-map";
+import type { QuestionAnswers } from "@/lib/papers/report";
 import { Equation, MathText } from "./math";
 import { Band } from "@/components/ui/band";
 import { ASK, BODY, ROUTE } from "./copy";
@@ -89,6 +90,87 @@ export interface SectionMark {
   paragraphs: ReadonlyMap<number, Exclude<TintTier, "none">>;
 }
 
+/** The page-only route shape. Tier 0 stays `RouteResult`; this local shape
+ * adds the model's display-only `background` tier without widening that data
+ * contract or sending model/question data into the shared reading cache. */
+export interface DisplayRoute {
+  byQuestion: {
+    question: string;
+    vague: boolean;
+    sections: Record<string, Omit<RouteSection, "tier"> & { tier: TintTier }>;
+  }[];
+  vague: boolean;
+}
+
+type DrawRoute = RouteResult | DisplayRoute;
+
+function displaySection(tier: TintTier, evidence?: string): Omit<RouteSection, "tier"> & { tier: TintTier } {
+  return { tier, hits: [], paragraphs: [], ...(evidence ? { evidence } : {}) };
+}
+
+/** Verified report answers become read marks; background suggestions become
+ * background marks. The report itself is never changed and unknown ids are
+ * harmless here (the map-consuming component drops them defensively). */
+export function questionRouteOverlay(questions: readonly QuestionAnswers[] | undefined): DisplayRoute | undefined {
+  if (!questions || questions.length === 0) return undefined;
+  return {
+    byQuestion: questions.map((entry) => {
+      const sections: DisplayRoute["byQuestion"][number]["sections"] = {};
+      const place = (id: string | undefined, tier: Exclude<TintTier, "none">, evidence?: string) => {
+        if (!id || TIER_RANK[tier] <= TIER_RANK[sections[id]?.tier ?? "none"]) return;
+        sections[id] = displaySection(tier, evidence);
+      };
+      for (const answer of entry.answers) place(answer.sectionId, "read", answer.evidence);
+      for (const next of entry.readNext) place(next.sectionId, next.kind === "background" ? "background" : "read");
+      return { question: entry.question, vague: false, sections };
+    }),
+    vague: false,
+  };
+}
+
+function mergedSections(
+  base: Record<string, RouteSection>,
+  overlay: DisplayRoute["byQuestion"][number]["sections"],
+): DisplayRoute["byQuestion"][number]["sections"] {
+  const merged: DisplayRoute["byQuestion"][number]["sections"] = {};
+  for (const id of new Set([...Object.keys(base), ...Object.keys(overlay)])) {
+    const tier0 = base[id];
+    const tier2 = overlay[id];
+    if (!tier0) {
+      merged[id] = tier2;
+      continue;
+    }
+    if (!tier2 || TIER_RANK[tier0.tier] > TIER_RANK[tier2.tier]) {
+      merged[id] = { ...tier0 };
+      continue;
+    }
+    // Keep Tier 0's inspectable hits/paragraphs while the verified model
+    // answer supplies its read tier and evidence (also on an equal read).
+    merged[id] = { ...tier0, tier: tier2.tier, ...(tier2.evidence ? { evidence: tier2.evidence } : {}) };
+  }
+  return merged;
+}
+
+/** One display route for all three consumers. Questions are paired by their
+ * reader-owned text, retaining Tier 0's order/titles; model-only questions
+ * append rather than replacing a live route. No model data means the original
+ * Tier 0 route object is returned unchanged. */
+export function mergeQuestionRoute(base: RouteResult | undefined, overlay: DisplayRoute | undefined): DrawRoute | undefined {
+  if (!overlay) return base;
+  if (!base) return overlay;
+  const remaining = new Map(overlay.byQuestion.map((entry) => [entry.question, entry]));
+  const byQuestion: DisplayRoute["byQuestion"] = base.byQuestion.map((entry) => {
+    const model = remaining.get(entry.question);
+    if (!model) return { ...entry, sections: { ...entry.sections } };
+    remaining.delete(entry.question);
+    return { ...entry, vague: entry.vague && model.vague, sections: mergedSections(entry.sections, model.sections) };
+  });
+  for (const entry of overlay.byQuestion) {
+    if (remaining.has(entry.question)) byQuestion.push(entry);
+  }
+  return { byQuestion, vague: byQuestion.length > 0 && byQuestion.every((entry) => entry.vague) };
+}
+
 /** `term` (`tokenize`'s lower-cased token) as the reader typed it in `question`. */
 function asTyped(term: string, question: string): string {
   const tokens = question.replace(/[^\p{L}\p{N}\s-]/gu, " ").split(/\s+/);
@@ -97,13 +179,13 @@ function asTyped(term: string, question: string): string {
 
 /** A route with somewhere to point: not vague, and asked as questions
  *  (the gist has no question a section could fail to mention). */
-export function routeAsksQuestions(route: RouteResult | undefined): boolean {
+export function routeAsksQuestions(route: DrawRoute | undefined): boolean {
   return Boolean(route && !route.vague && route.byQuestion.some((entry) => !entry.vague && entry.question !== GIST_QUESTION));
 }
 
 /** The section's mark across every question of the route, or null when no
  *  question marks it (or there is no route, or it is vague). */
-export function sectionMark(route: RouteResult | undefined, sectionId: string): SectionMark | null {
+export function sectionMark(route: DrawRoute | undefined, sectionId: string): SectionMark | null {
   if (!route || route.vague) return null;
   let tier: Exclude<TintTier, "none"> | null = null;
   let evidence: string | undefined;
@@ -239,7 +321,7 @@ function Section({ section, index, mark }: { section: ReadingSection; index: num
 /** The anchor the decision block's "read it here" scrolls to. */
 export const PAPER_BODY_ID = "paper-body";
 
-export function PaperBody({ reading, route }: { reading: PaperReading; route?: RouteResult }) {
+export function PaperBody({ reading, route }: { reading: PaperReading; route?: DrawRoute }) {
   // `?? []`: the version gate above should mean this is always an array, and
   // a missing optional block is still not worth taking the page down for.
   const body = reading.body ?? [];

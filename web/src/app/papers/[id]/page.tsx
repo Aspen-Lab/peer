@@ -41,6 +41,7 @@ import {
 } from "@/lib/papers/reading";
 import { readingToMarkdown } from "@/lib/papers/reading-markdown";
 import type { Claim, PaperReport } from "@/lib/papers/report";
+import type { RouteResult } from "@/lib/papers/reading-map";
 import type { Route } from "next";
 import { aiAvailability } from "@/lib/feed/ai-tier";
 import { entitlementGrants } from "@/lib/entitlement/allowance";
@@ -49,7 +50,7 @@ import { SwipeableCard } from "@/components/cards/swipe-card";
 import { useResolvedFigure } from "@/components/paper-figure";
 import { TitleBlock } from "@/components/reader/title-block";
 import { PaperWords } from "@/components/reader/paper-words";
-import { PaperBody } from "@/components/reader/paper-body";
+import { PaperBody, mergeQuestionRoute, questionRouteOverlay } from "@/components/reader/paper-body";
 import { RecordBlock } from "@/components/reader/record-block";
 import { InYourLibrary } from "@/components/reader/in-your-library";
 import { KeyLegend } from "@/components/reader/key-legend";
@@ -65,6 +66,7 @@ import {
   FigureRegistry,
   pickRelated,
 } from "@/components/reader/report-sections";
+import { ForYourQuestions } from "@/components/reader/for-your-questions";
 import { NextRow } from "@/components/reader/next-row";
 import { LoadingMat } from "@/components/reader/loading-mat";
 import { ReaderToast, useReaderToast } from "@/components/reader/reader-toast";
@@ -645,7 +647,7 @@ function Reader({
   const bodyHeadings = useMemo(() => (reading?.body ?? []).map((section) => section.heading), [reading]);
   // P1-05 (§1f.13): those questions routed through the reading this page
   // holds — here, in the browser, from the live `items`.
-  const route = useMemo(() => readingRoute(reading, asked), [reading, asked]);
+  const tier0Route = useMemo(() => readingRoute(reading, asked), [reading, asked]);
   const readHere = useCallback(() => {
     const block = document.getElementById(PAPER_BODY_ID);
     if (!block) return;
@@ -657,6 +659,17 @@ function Reader({
     }
   }, []);
   const report = model.report;
+  // P2-04: all route consumers receive this one display route. Tier 0 still
+  // stands unchanged if there is no verified report/question overlay.
+  const route = useMemo(
+    () => mergeQuestionRoute(tier0Route, questionRouteOverlay(report?.forYourQuestions)),
+    [tier0Route, report?.forYourQuestions],
+  );
+  // `background` is deliberately a display-only extension local to
+  // paper-body. These existing Tier-0 consumers only read `tier` and retain
+  // their runtime token handling; keeping the narrow cast here leaves the
+  // shared `RouteResult` contract untouched. route-tint.test.tsx exercises it.
+  const contentsRoute = route as RouteResult | undefined;
 
   // S5: the "matrix" scramble reveal, restored. `revealingReportKey` is the
   // key of a report that just arrived fresh in this visit; while it matches
@@ -1131,7 +1144,7 @@ function Reader({
               {questionsHydrated && (
                 <QuestionField key={paper.id} paperId={paper.id} examples={examples} vague={route?.vague ?? false} />
               )}
-              {reading.map && <ReadingMapView key={`map:${paper.id}`} map={reading.map} route={route} />}
+              {reading.map && <ReadingMapView key={`map:${paper.id}`} map={reading.map} route={contentsRoute} />}
             </>
           ) : undefined
         }
@@ -1171,9 +1184,11 @@ function Reader({
               }} /> : undefined}
           />
         }
-        contents={<PaperContents reading={reading} route={route} />}
+        contents={<PaperContents reading={reading} route={contentsRoute} />}
         additions={
           <>
+            {report?.forYourQuestions && <ForYourQuestions report={report} map={reading.map} />}
+
             {/* The reader's own notes on this paper, and the way into them —
                 first, because taking notes is what follows keeping it. */}
             <PaperNotes paper={paper} />

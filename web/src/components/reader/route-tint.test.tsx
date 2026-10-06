@@ -7,9 +7,9 @@ import type { FullTextResult } from "@/lib/papers/full-text";
 import { GIST_QUESTION, gistRoute, routeByQuestions, type RouteResult } from "@/lib/papers/reading-map";
 import type { Paper } from "@/types";
 import { ASK, MAP, ROUTE } from "./copy";
-import { HEADING_MARK, PaperBody, ROUTE_TINT, sectionMark } from "./paper-body";
+import { HEADING_MARK, PaperBody, ROUTE_TINT, mergeQuestionRoute, questionRouteOverlay, sectionMark } from "./paper-body";
 import { PaperContents } from "./paper-contents";
-import { readingRoute } from "./reading-map";
+import { ReadingMapView, readingRoute } from "./reading-map";
 
 // P1-05 (§1f.13, §1f.14; blueprint §3.3 目录颜色): the route on the page.
 // A section takes its highest tier across the questions; the tint is a
@@ -83,6 +83,60 @@ describe("the tier → tint table (§1f.13)", () => {
   it("names the tiers exactly as the reader sees them", () => {
     expect(ROUTE.tiers).toEqual({ read: "read", background: "background", skim: "skim", none: "not mentioned" });
     expect(ROUTE.vague).toBe("Ask something more specific and Peer can point you to the right sections.");
+  });
+});
+
+describe("the Tier 2 question-answer overlay (P2-04)", () => {
+  const answers = [
+    {
+      question: "Does the LCO lattice crack at H1-3?",
+      verdict: "answered" as const,
+      answers: [{ text: "Peer answer.", evidence: "The quillwort lattice cracks when the cells fade over many cycles.", sectionId: ids[0] }],
+      readNext: [{ sectionId: ids[1], why: "Context.", kind: "background" as const }],
+    },
+    {
+      question: "Where do cells fade?",
+      verdict: "partly" as const,
+      answers: [{ text: "Peer answer two.", evidence: "Capacity fell by a fifth after five hundred cycles at room temperature.", sectionId: ids[2] }],
+      readNext: [{ sectionId: ids[0], why: "Already answered.", kind: "answer" as const }],
+    },
+  ];
+
+  it("derives read marks from verified answer evidence and background marks from Read next", () => {
+    const overlay = questionRouteOverlay(answers)!;
+
+    expect(sectionMark(overlay, ids[0])).toMatchObject({
+      tier: "read",
+      title: "Q1, Q2",
+      evidence: "The quillwort lattice cracks when the cells fade over many cycles.",
+    });
+    expect(sectionMark(overlay, ids[1])).toMatchObject({ tier: "background", title: "Q1" });
+    expect(sectionMark(overlay, ids[2])).toMatchObject({ tier: "read", title: "Q2" });
+  });
+
+  it("merges against Tier 0 by read > background > skim > none, preserves Tier 0 without model data, and retains multiple question titles", () => {
+    const merged = mergeQuestionRoute(ROUTE_RESULT, questionRouteOverlay(answers));
+
+    expect(sectionMark(merged, ids[0])).toMatchObject({ tier: "read", title: "Q1, Q3" });
+    expect(sectionMark(merged, ids[0])?.evidence).toBe("The quillwort lattice cracks when the cells fade over many cycles.");
+    expect(sectionMark(merged, ids[1])).toMatchObject({ tier: "background", title: "Q1" });
+    expect(sectionMark(merged, ids[2])).toMatchObject({ tier: "read", title: "Q3" });
+    expect(mergeQuestionRoute(ROUTE_RESULT, undefined)).toEqual(ROUTE_RESULT);
+  });
+
+  it("feeds the one merged display route to contents, map, and body consumers, including the background token", () => {
+    const merged = mergeQuestionRoute(ROUTE_RESULT, questionRouteOverlay(answers));
+    // P2-04 keeps `background` local to the display route; the existing
+    // contents/map signatures stay Tier-0-shaped at this boundary.
+    const display = merged as RouteResult;
+    const contents = renderToStaticMarkup(createElement(PaperContents, { reading, route: display }));
+    const mapHtml = renderToStaticMarkup(createElement(ReadingMapView, { map: reading.map!, route: display }));
+    const body = renderToStaticMarkup(createElement(PaperBody, { reading, route: merged }));
+
+    for (const html of [contents, mapHtml, body]) {
+      expect(html).toContain('data-route="background"');
+      expect(html).toContain(ROUTE_TINT.background);
+    }
   });
 });
 
