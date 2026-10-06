@@ -4,11 +4,6 @@
 // keyed sources and LLM query generation enable themselves via env/BYOK.
 
 import { withSourceTimeout } from "@/lib/opportunities/shared";
-import { GEMINI_SOURCE_TIMEOUT_MS } from "@/lib/sources/gemini-search";
-import {
-  needsVertexSourceTimeout,
-  webSearchOptions,
-} from "@/lib/sources/vertex-search";
 import { enrichJobCandidates } from "@/lib/opportunities/enrich";
 import {
   derivePoolCacheKey,
@@ -19,7 +14,6 @@ import {
   type PoolCache,
 } from "@/lib/opportunities/pool-cache";
 import { getDefaultOpportunityPoolCache } from "@/lib/opportunities/pool-cache-runtime";
-import { consumeForcedRebuild } from "@/lib/usage/rebuild-breaker";
 import {
   countOpportunityFacets,
   DEFAULT_OPPORTUNITY_TOP_N,
@@ -53,12 +47,6 @@ export interface JobsPipelineOptions {
 export interface DailyJobPoolOptions {
   cache?: PoolCache;
   now?: Date;
-  /**
-   * ABC-freemium 1-18 · R-POOL-2 — "refresh now". Set by the route from the
-   * entitlement, never from the request body, and refused for a free user by
-   * serving the pool that is already there.
-   */
-  poolRefresh?: boolean;
 }
 
 export interface BuiltJobPool {
@@ -145,39 +133,19 @@ async function buildJobPool(
     careerStage: req.careerStage,
     industryPreference: req.industryVsAcademia,
     limit: req.perSourceLimit ?? DEFAULT_PER_SOURCE_LIMIT,
-    // RULING 75 — see the matching comment in `events/pipeline.ts`. The Tavily
-    // branch is untouched; the gemini branch is what turns this surface back on.
-    //
-    // ABC-freemium 1-05 · R-KEY-3 — the two fields below ride on both branches.
-    // `systemSearchAllowed` comes from the caller's entitlement and is `false`
-    // when nothing passes it, which is what keeps the nightly cron
-    // (`dispatch-digests`) and `test-digest` off the operator's key (D9).
-    webSearch: {
-      ...(req.searchConnectors?.tavily?.enabled
-        ? { tavilyApiKey: req.searchConnectors.tavily.apiKey }
-        : // CREDIT MIGRATION — prefers Vertex AI Search when a Search App is
-          // configured, otherwise byte-identical to `geminiWebSearchOptions`.
-          webSearchOptions(req.searchConnectors)),
-      systemSearchAllowed: req.systemSearchAllowed === true,
-      userId: req.userId ?? null,
-    },
+    // The reader's own Tavily key, when they turned the connector on and pasted
+    // one. Peer funds no search of its own, so with no key `webSearch` carries
+    // nothing and the web source is dark: the pipeline serves its free
+    // structured sources.
+    webSearch: req.searchConnectors?.tavily?.enabled
+      ? { tavilyApiKey: req.searchConnectors.tavily.apiKey }
+      : undefined,
     apiKeys: req.apiKeys,
   };
 
   const active = jobSources.filter((source) => source.enabled(query));
   const results = await Promise.allSettled(
-    active.map((source) =>
-      withSourceTimeout(
-        source.id,
-        source.fetch(query),
-        // RULING 76a — per-source override for `jobweb` on the gemini provider
-        // only. Never a global default change.
-        source.id === "jobweb" &&
-        needsVertexSourceTimeout(query.webSearch?.provider)
-          ? GEMINI_SOURCE_TIMEOUT_MS
-          : undefined,
-      ),
-    ),
+    active.map((source) => withSourceTimeout(source.id, source.fetch(query))),
   );
 
   const fetched: Partial<Record<JobSourceId, number>> = {};
@@ -241,23 +209,6 @@ export async function buildDailyJobPool(
     locationPreferences: req.locationPreferences,
     now,
   });
-  // ABC-freemium 1-18 · R-POOL-2 — the two gates, both required.
-  //
-  // 1. `poolRefreshAllowed` is the entitlement's, resolved by the route. A free
-  //    user's forced rebuild is REFUSED, not errored: `forceRebuild` stays
-  //    false and they get the cached pool exactly as they would have.
-  // 2. It counts against the daily forced-rebuild breaker, and a tripped breaker
-  //    also serves the cache. Without this second gate the refresh button is an
-  //    unbounded spend button for a paid user.
-  //
-  // **Fails closed**, like every breaker (see `counters.ts`): an unreadable
-  // counter means no forced rebuild, which costs the user a refresh rather than
-  // costing the owner a fan-out.
-  let forceRebuild = false;
-  if ((options.poolRefresh ?? req.poolRefresh) && req.userId) {
-    forceRebuild = await consumeForcedRebuild(req.userId, 1, now);
-  }
-
   let fresh: BuiltJobPool | undefined;
 
   const loaded = await getOrBuildCachedPool(
@@ -279,13 +230,6 @@ export async function buildDailyJobPool(
         localDate: fresh.localDate,
       };
     },
-    // ABC-freemium 1-18 · R-POOL-2 — the route decides this from the
-    // entitlement and the forced-rebuild breaker, never from the request body
-    // alone. `forceRebuild` moved to parameter 6 in the merged
-    // `getOrBuildCachedPool` (P2-S2's `shouldPersist` took position 5) —
-    // this surface never gates persistence, so `undefined` there is correct.
-    undefined,
-    forceRebuild,
   );
 
   const rescored = scoreJobs(

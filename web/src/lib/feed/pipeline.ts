@@ -2,11 +2,6 @@ import { createHash } from "node:crypto";
 import { bySourceId } from "@/lib/sources";
 import type { SourceId, RawItem } from "@/lib/sources/types";
 import { DblpBotCheckError } from "@/lib/sources/dblp";
-import { GEMINI_SOURCE_TIMEOUT_MS } from "@/lib/sources/gemini-search";
-import {
-  needsVertexSourceTimeout,
-  webSearchOptions,
-} from "@/lib/sources/vertex-search";
 import { withSourceTimeout } from "@/lib/opportunities/shared";
 import { scoreItems } from "@/lib/scoring";
 import { dropStale } from "./freshness";
@@ -404,8 +399,9 @@ export interface FeedPipelineOptions {
    * never awaits this call and wraps it in try/catch, so a throwing hook can
    * never change the built pool or crash the request — see `buildPaperPool`.
    * `route.ts` is the only caller that ever supplies one, and only for a
-   * signed-in, entitled, `aiTier>=2` POST request with the shadow+broker
-   * flags on and the broker configured; every other caller (GET,
+   * signed-in, `aiTier>=2` POST request (so the reader's own model key
+   * resolved) with the shadow+broker flags on and the broker configured; every
+   * other caller (GET,
    * dispatch-digests, test-digest, every pre-existing test) omits it and
    * sees output byte-identical to before this option existed
    * (`pipeline.shadow.test.ts` is the regression net for that claim).
@@ -591,40 +587,14 @@ async function buildPaperPool(
   const perSourceLimit = req.perSourceLimit ?? 60;
   const includeNonPaperResults = shouldIncludeNonPaperResults(req);
 
-  // SUB-ITEM 8 / RULING 79c. Resolved ONCE so the timeout override below reads
-  // the same value the fetch is given, rather than re-deriving the provider
-  // from the same ternary in two places and inviting them to disagree.
-  //
-  // **NO TAVILY BRANCH. THE PAPER SURFACE DOES NOT SPEND THE USER'S TAVILY
-  // QUOTA, AT ALL.** Events and jobs genuinely need web search — their
-  // listings exist only on the open web. Papers do not: they come from the
-  // five free academic sources, and the one Tavily channel this surface had
-  // was deleted for buying a number nothing displayed. The optional `web`
-  // source below is dark by product choice and, if it is ever turned back on,
-  // runs on the server's own Vertex project rather than on a key the user
-  // pays for.
-  //
-  // CREDIT MIGRATION — `webSearchOptions` prefers Vertex AI Search when a
-  // Search App is configured and otherwise returns exactly what
-  // `geminiWebSearchOptions` returned.
-  //
-  // ABC-freemium 1-05 · R-KEY-3 · D3 — **a hard `false`, and it is permanent.**
-  // D3 says the papers surface costs zero paid search. It is not just policy:
-  // `webSearchOptions` returns `{ provider }` and never a `tavilyApiKey`, and
-  // `store/feed.ts` sends no `searchConnectors` for papers at all, so a user's
-  // own Tavily key cannot reach this surface. The only key it could ever spend
-  // is the operator's — for every plan, paid included. Combined with **D2a**'s
-  // Vercel bans on Tavily, Brave and the Vertex/Gemini search names, the papers
-  // `web` source returns `[]` in production. That is D3 working as written.
-  //
-  // ABC-freemium 5-04 — under D2a this hard `false` is now the shape EVERY
-  // surface has, not a papers-only rule: the entitlement's `systemSearchAllowed`
-  // is permanently `false` too. This line stays because it is the surface's own
-  // statement of D3 and does not depend on the entitlement being false.
-  const paperWebSearch = {
-    ...webSearchOptions(req.searchConnectors),
-    systemSearchAllowed: false,
-  };
+  // **THE PAPER SURFACE DOES NOT SPEND ANYONE'S SEARCH QUOTA, AT ALL.** Events
+  // and jobs genuinely need web search — their listings exist only on the open
+  // web. Papers do not: they come from the five free academic sources, and the
+  // one Tavily channel this surface had was deleted for buying a number nothing
+  // displayed. The optional `web` source below is dark by product choice: it is
+  // handed no `webSearch` options, so it carries no key and returns nothing.
+  // Peer holds no search credential of its own to fall back to, and
+  // `store/feed.ts` sends no `searchConnectors` for papers by design.
 
   const fetchPromise = Promise.allSettled(
     sources.map((s) =>
@@ -638,52 +608,7 @@ async function buildPaperPool(
           avoid: brief.avoid,
           timeWindow: brief.timeWindow,
           limit: perSourceLimit,
-          // RULING 75 — the Tavily branch is exactly as it shipped. The gemini
-          // branch is what keeps the paper surface's web source alive with the
-          // quota-capped providers suspended.
-          //
-          // **RULING 79c CLOSED ROUND 28 C's DISCLOSURE.** The 8 s wall above
-          // is now overridable and the `web` source gets 25 s — see the
-          // override argument below for the price and the evidence.
-          webSearch: s !== "web" ? undefined : paperWebSearch,
         }),
-        // SUB-ITEM 8 / RULING 79c — **THE PER-SOURCE OVERRIDE, AND IT IS THE
-        // SAME SHAPE RULING 76a TOOK AT THE EVENTS AND JOBS CALL SITES.** Only
-        // the `web` source, only on the gemini provider; every other paper
-        // source keeps the 8 s it has always had.
-        //
-        // **WHY, ON A MEASUREMENT RATHER THAN A PRINCIPLE.** Round 29 B timed
-        // two paper-shaped grounded searches through the shipped adapter:
-        // **7541 ms** (survives 8000) and **11832 ms** (KILLED). So the paper
-        // surface's web source was **not uniformly dead at 8 s — it was a coin
-        // flip, which is worse.** A source that always fails is honest: the
-        // surface reports zero fetched and renders empty on purpose. A source
-        // that fails about half the time produces a paper surface **whose
-        // contents depend on grounding latency on the day** — two runs of the
-        // same profile minutes apart differ, with no error a reader sees and
-        // nothing in the report saying so. That is a reproducibility defect on
-        // the measured surface, and every future census of it inherits it.
-        //
-        // **THE PRICE, NAMED (79c accepted it):** `runFeedPipeline` is on a
-        // REQUEST path and `Promise.allSettled` waits for the slowest settler,
-        // so the paper surface's WORST CASE goes from about 8 s to about 25 s
-        // for a user who is waiting. It is only ever paid when the web source
-        // is genuinely slow — every other source settles earlier. The worst
-        // case is bounded by the adapter's own 21 s soft deadline
-        // (`GEMINI_SEARCH_BUDGET_MS`), which is why 25 s and not more: the
-        // inner budget must stay UNDER the outer wall, and before this change
-        // it was 2.6x OVER it.
-        //
-        // **FALSIFIER, FROM B:** if a paper-surface census still shows the web
-        // source reporting zero fetched with a `source-timeout` reason after
-        // this raise, the wall was not the binding constraint and something
-        // else is.
-        // Both server-Vertex providers need the raised wall, for different
-        // reasons: grounding is slow in the search itself, vertex can spend the
-        // time on its page-kind fetch and its grounding backfill.
-        s === "web" && needsVertexSourceTimeout(paperWebSearch?.provider)
-          ? GEMINI_SOURCE_TIMEOUT_MS
-          : undefined,
       ),
     ),
   );

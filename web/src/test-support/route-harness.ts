@@ -35,6 +35,36 @@ export function deleteSpendableKeys(): void {
   delete process.env.TAVILY_API_KEY;
 }
 
+/**
+ * The environment names Peer once read to fund a web search of its own (a server
+ * Tavily key, Brave, and the operator's Google project for Vertex AI Search and
+ * Gemini grounding). **No code reads any of them now**; the build guard bans
+ * them on Vercel and `lib/security/spend-scans.test.ts` fails on a read. Suites
+ * that prove "the environment buys nothing" arm them all at once through
+ * `armEveryOperatorSearchCredential`.
+ */
+const OPERATOR_SEARCH_ENV = [
+  "TAVILY_API_KEY",
+  "BRAVE_SEARCH_API_KEY",
+  "GOOGLE_VERTEX_PROJECT",
+  "GOOGLE_VERTEX_SEARCH_PROJECT",
+  "GOOGLE_VERTEX_SEARCH_ENGINE_ID",
+] as const;
+
+/** Set every operator search credential to a sentinel. Pass `vi.stubEnv` in. */
+export function armEveryOperatorSearchCredential(
+  stubEnv: (name: string, value: string) => void,
+): void {
+  for (const name of OPERATOR_SEARCH_ENV) stubEnv(name, OPERATOR_SENTINEL);
+}
+
+/** Blank every operator search credential, so a suite starts from an empty environment. */
+export function clearEveryOperatorSearchCredential(
+  stubEnv: (name: string, value: string) => void,
+): void {
+  for (const name of OPERATOR_SEARCH_ENV) stubEnv(name, "");
+}
+
 export interface StubbedAuthUser {
   id: string;
 }

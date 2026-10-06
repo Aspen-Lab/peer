@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import * as counters from "./counters";
 import {
   InMemoryCounterStore,
   SupabaseCounterStore,
@@ -8,7 +9,6 @@ import {
   getCounterStore,
   rateKey,
   resetCounterStoreForTests,
-  forcedRebuildDayKey,
   testEmailDayKey,
   confirmEmailRequestDayKey,
   underLimit,
@@ -37,17 +37,33 @@ describe("counter keys", () => {
     expect(rateKey("paper-feed", "u1", NOW)).toBe(
       "rate:paper-feed:u1:2026-09-04T12",
     );
-    // 5-02 · Ruling 13 point 1 — was `systemSearchDayKey` and `search:u1:...`.
-    // The counter now guards the forced pool rebuild, not a search, so the key
-    // says so. Free to change: migrations unapplied, no users, nothing orphaned.
-    expect(forcedRebuildDayKey("u1", NOW)).toBe(
-      "forced_rebuilds_today:u1:2026-09-04",
-    );
     // EMAIL-SETTINGS (§1z P1) — UTC-day keys; both are send-budget/abuse
     // breakers (fail CLOSED), not UX rate limits.
     expect(testEmailDayKey("u1", NOW)).toBe("test_email:u1:2026-09-04");
     expect(confirmEmailRequestDayKey("u1", NOW)).toBe(
       "confirm_email:u1:2026-09-04",
+    );
+  });
+
+  it("keeps no key for an allowance Peer used to hand out on its own model", () => {
+    // The deep-report allowance and the forced-rebuild breaker metered the
+    // company's model key. Peer pays for no model call now, so their keys, caps
+    // and outage line are gone and must not be quietly re-added to the shared
+    // counter module (the rate limits and the email caps are what it is for).
+    expect(Object.keys(counters).sort()).toEqual(
+      [
+        "InMemoryCounterStore",
+        "SupabaseCounterStore",
+        "breakerTripped",
+        "confirmEmailRequestDayKey",
+        "endOfUtcDay",
+        "endOfUtcHour",
+        "getCounterStore",
+        "rateKey",
+        "resetCounterStoreForTests",
+        "testEmailDayKey",
+        "underLimit",
+      ].sort(),
     );
   });
 

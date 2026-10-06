@@ -107,7 +107,7 @@ afterEach(() => {
 // `counterStore` option (every pre-existing test below, plus one new one).
 // Forcing the in-memory fallback and resetting its memoized singleton
 // between tests is this codebase's established convention for this exact
-// situation (see `rebuild-breaker.test.ts`) — it keeps every test
+// situation (see `usage/counters.test.ts`) — it keeps every test
 // deterministic regardless of the ambient shell environment, and stops one
 // test's counts leaking into the next via the module-level singleton.
 beforeEach(() => {

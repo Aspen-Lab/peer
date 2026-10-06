@@ -248,55 +248,25 @@ describe("active feed request inputs", () => {
 });
 
 /**
- * ABC-freemium 6-03 — **the ask itself, which nothing had ever exercised.**
+ * ABC-freemium 6-03 — retired with the forced-rebuild breaker.
  *
- * B grepped this while writing 6-03's guide and found the gap: every existing
- * call in this file uses the three-argument form, and `store/feed.test.ts` never
- * calls `loadFeed` with `poolRefresh`, so `feed.ts`'s
- * `poolRefresh: poolRefresh || undefined` had **never once been evaluated with
- * `true`** in the whole suite. The refusal now has a message on screen, so the
- * request that provokes it is worth pinning.
- *
- * The `|| undefined` is the part that matters and it is not tidiness: the route
- * reads `body.poolRefresh === true`, so an explicit `false` on the wire would be
- * a field that says something about a request that is not asking for anything.
- * Absent means "not asking".
+ * This block pinned **the ask itself**: `poolRefresh` went on the wire only when
+ * the reader actually asked for a "Refresh now" rebuild of the jobs and events
+ * pools, and the route decided whether to grant it against an entitlement and a
+ * daily breaker on Peer's own model and search spend. Peer spends nothing of
+ * either kind now, so the breaker, the entitlement and the route's decision are
+ * all deleted, and so is the ask: no request body carries the field at all.
  */
-describe("the forced-rebuild ask (6-03)", () => {
-  it("sends poolRefresh only when the reader actually asked", () => {
+describe("no forced-rebuild ask (6-03, retired)", () => {
+  it("never puts a poolRefresh field on the wire, for any surface", () => {
     for (const surface of ["events", "jobs"] as const) {
-      const asked = opportunityRequestBody(
+      const body = opportunityRequestBody(
         activeProfile,
         surface,
         [],
-        undefined,
-        true,
+        "signed-out",
       );
-      expect(asked.poolRefresh).toBe(true);
+      expect(Object.keys(body)).not.toContain("poolRefresh");
     }
-  });
-
-  it("omits the field entirely on an ordinary load, never sending false", () => {
-    for (const surface of ["events", "jobs"] as const) {
-      const ordinary = opportunityRequestBody(activeProfile, surface, []);
-      expect(ordinary.poolRefresh).toBeUndefined();
-      // Not merely falsy — absent. The route tests `=== true`, and a `false` on
-      // the wire is a claim about a request that made no claim.
-      expect(Object.values(ordinary)).not.toContain(false);
-    }
-  });
-
-  it("is only an ASK — the client never decides whether it is granted", () => {
-    // Whether the ask is granted is the server's business (`feed.ts`'s own
-    // docblock says so). Every reader's request carries the same
-    // `poolRefresh: true`; the route is what decides.
-    const asked = opportunityRequestBody(
-      activeProfile,
-      "jobs",
-      [],
-      "signed-out",
-      true,
-    );
-    expect(asked.poolRefresh).toBe(true);
   });
 });

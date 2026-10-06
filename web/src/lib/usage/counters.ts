@@ -18,10 +18,9 @@
  *    failure than an hour of unmetered use, so `underLimit()` treats an
  *    unreadable counter as "under the limit".
  *  - **Breakers FAIL CLOSED.** The daily caps (the test-email and confirm-email
- *    sends, the forced pool rebuild) exist to protect what Peer itself pays
- *    for. A budget that cannot be read must not be spent, so
- *    `breakerTripped()` treats an unreadable counter as tripped and the action
- *    is refused.
+ *    sends) exist to protect what Peer itself pays for. A budget that cannot be
+ *    read must not be spent, so `breakerTripped()` treats an unreadable counter
+ *    as tripped and the action is refused.
  *
  * That asymmetry is deliberate and is asserted in `counters.test.ts`. **A
  * Supabase outage therefore refuses those capped actions until the store is
@@ -124,29 +123,6 @@ export function testEmailDayKey(userId: string, now: Date): string {
  */
 export function confirmEmailRequestDayKey(userId: string, now: Date): string {
   return `confirm_email:${userId}:${utcDaySegment(now)}`;
-}
-
-/**
- * R-QUOTA-2 / D4 — the paid circuit breakers. Unlimited *to the user*, behind a
- * hard cap that protects the owner's wallet.
- *
- * **RENAMED in 5-02 · Ruling 13 point 1 — was `SYSTEM_SEARCHES_PER_DAY`, cap
- * unchanged at 500/day.** Under D2a the operator funds no search, so the search
- * fan-out no longer reaches this breaker at all. What still reaches it is the
- * **forced pool rebuild** ("refresh now", gated on `poolRefreshAllowed`), which
- * spends operator money on the query-generation LLM call — so the cap must stay
- * or the refresh button becomes an unbounded spend button. Only the name was
- * made false by D2a, so only the name changed.
- */
-export const FORCED_REBUILDS_PER_DAY = 500;
-
-/**
- * R-QUOTA-2 — the 500/day forced-rebuild breaker (renamed from
- * `systemSearchDayKey` in 5-02; the key string changed with it, which is free
- * because the migrations are unapplied and there are no users).
- */
-export function forcedRebuildDayKey(userId: string, now: Date): string {
-  return `forced_rebuilds_today:${userId}:${utcDaySegment(now)}`;
 }
 
 /** First instant of the next UTC hour — housekeeping only; nothing gates on it. */
@@ -381,8 +357,8 @@ export function underLimit(reading: CounterReading, limit: number): boolean {
 
 /**
  * Breakers: **fail closed.** An unreadable counter is treated as tripped, so a
- * wallet that cannot be read is not spent. The caller degrades to the existing
- * no-LLM path — never an error.
+ * budget that cannot be read is not spent. The caller refuses the capped
+ * action (a send, a call) rather than letting it through.
  */
 export function breakerTripped(
   reading: CounterReading,
@@ -390,37 +366,4 @@ export function breakerTripped(
 ): boolean {
   if (!reading.ok) return true;
   return reading.value > limit;
-}
-
-/**
- * The durable trace of a counter-store outage (ABC-freemium 2-02 · Ruling 6
- * point 1).
- *
- * **This is the ONLY writer of this line, for every caller.** It lives here
- * rather than inside `rebuild-breaker.ts` so that every breaker that needs the
- * identical line takes it from the module they already import — two private
- * copies is exactly how the prefix drifts, which is the drift the single-writer
- * rule exists to prevent.
- *
- * Three things it deliberately is **not**:
- *
- *  - **Not `warnOnce` above.** That is the store's own diagnostic: `console.warn`
- *    rather than error level, a different text, and once per process. A
- *    once-per-process flag would make an occurrence count meaningless.
- *  - **Not a `usage_events` row.** Ruling 6 point 1: a `kind: "breaker"` row
- *    means "a cap tripped", and on an outage none did. Writing one injects a
- *    false trip into the owner's audit trail for a call that spent nothing.
- *    The `kind` check on the table admits only `llm | search | breaker`, so
- *    the log line is the durable trace this round. A later migration may add
- *    an `'outage'` kind and bring the row back honestly.
- *  - **Not throttled or deduplicated.** One line per outage-affected decision,
- *    so occurrences can be counted.
- *
- * The prefix `[quota] store unavailable` is stable and is what a reviewer
- * greps for; keep it byte-for-byte.
- */
-export function logStoreUnavailable(path: string, userId: string): void {
-  console.error(
-    `[quota] store unavailable for ${path} (user ${userId}); the allowance is unchanged and nothing was spent`,
-  );
 }

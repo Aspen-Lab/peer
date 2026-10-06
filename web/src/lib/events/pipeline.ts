@@ -5,11 +5,6 @@
 // available, with LLM-refined queries when a provider resolves.
 
 import { withSourceTimeout } from "@/lib/opportunities/shared";
-import { GEMINI_SOURCE_TIMEOUT_MS } from "@/lib/sources/gemini-search";
-import {
-  needsVertexSourceTimeout,
-  webSearchOptions,
-} from "@/lib/sources/vertex-search";
 import { enrichEventCandidates } from "@/lib/opportunities/enrich";
 import {
   derivePoolCacheKey,
@@ -20,7 +15,6 @@ import {
   type PoolCache,
 } from "@/lib/opportunities/pool-cache";
 import { getDefaultOpportunityPoolCache } from "@/lib/opportunities/pool-cache-runtime";
-import { consumeForcedRebuild } from "@/lib/usage/rebuild-breaker";
 import {
   countOpportunityFacets,
   DEFAULT_OPPORTUNITY_TOP_N,
@@ -59,12 +53,6 @@ export interface EventsPipelineOptions {
 export interface DailyEventPoolOptions {
   cache?: PoolCache;
   now?: Date;
-  /**
-   * ABC-freemium 1-18 · R-POOL-2 — "refresh now". Set by the route from the
-   * entitlement, never from the request body, and refused for a free user by
-   * serving the pool that is already there.
-   */
-  poolRefresh?: boolean;
 }
 
 export interface BuiltEventPool {
@@ -166,42 +154,18 @@ async function buildEventPool(
     topics: req.topics,
     queries,
     limit: req.perSourceLimit ?? DEFAULT_PER_SOURCE_LIMIT,
-    // RULING 75 — the Tavily branch is exactly as it shipped; the gemini branch
-    // is what turns this surface back on. Before it, `webSearch` was built ONLY
-    // under `tavily.enabled`, so with Tavily disabled the query carried no
-    // `webSearch`, `eventweb.enabled()` returned false, and the web surface was
-    // entirely dark.
-    //
-    // ABC-freemium 1-05 · R-KEY-3 — the two fields below ride on both branches;
-    // `systemSearchAllowed` is `false` when nothing passes it (D9).
-    webSearch: {
-      ...(req.searchConnectors?.tavily?.enabled
-        ? { tavilyApiKey: req.searchConnectors.tavily.apiKey }
-        : // CREDIT MIGRATION — prefers Vertex AI Search when a Search App is
-          // configured, otherwise byte-identical to `geminiWebSearchOptions`.
-          webSearchOptions(req.searchConnectors)),
-      systemSearchAllowed: req.systemSearchAllowed === true,
-      userId: req.userId ?? null,
-    },
+    // The reader's own Tavily key, when they turned the connector on and pasted
+    // one. Peer funds no search of its own, so with no key `webSearch` carries
+    // nothing and the web source is dark: the pipeline serves its free curated
+    // feeds.
+    webSearch: req.searchConnectors?.tavily?.enabled
+      ? { tavilyApiKey: req.searchConnectors.tavily.apiKey }
+      : undefined,
   };
 
   const active = eventSources.filter((source) => source.enabled(query));
   const results = await Promise.allSettled(
-    active.map((source) =>
-      withSourceTimeout(
-        source.id,
-        source.fetch(query),
-        // RULING 76a — the 25 s budget is a PER-SOURCE override for the one
-        // source that needs it, never a global default change. A grounded call
-        // alone measured 10012 ms against the shipped 8000 ms wall, so at the
-        // default this surface provably returns nothing. Every other source
-        // keeps the 8 s it has always had.
-        source.id === "eventweb" &&
-        needsVertexSourceTimeout(query.webSearch?.provider)
-          ? GEMINI_SOURCE_TIMEOUT_MS
-          : undefined,
-      ),
-    ),
+    active.map((source) => withSourceTimeout(source.id, source.fetch(query))),
   );
 
   const fetched: Partial<Record<EventSourceId, number>> = {};
@@ -258,23 +222,6 @@ export async function buildDailyEventPool(
     locationPreferences: req.locationPreferences,
     now,
   });
-  // ABC-freemium 1-18 · R-POOL-2 — the two gates, both required.
-  //
-  // 1. `poolRefreshAllowed` is the entitlement's, resolved by the route. A free
-  //    user's forced rebuild is REFUSED, not errored: `forceRebuild` stays
-  //    false and they get the cached pool exactly as they would have.
-  // 2. It counts against the daily forced-rebuild breaker, and a tripped breaker
-  //    also serves the cache. Without this second gate the refresh button is an
-  //    unbounded spend button for a paid user.
-  //
-  // **Fails closed**, like every breaker (see `counters.ts`): an unreadable
-  // counter means no forced rebuild, which costs the user a refresh rather than
-  // costing the owner a fan-out.
-  let forceRebuild = false;
-  if ((options.poolRefresh ?? req.poolRefresh) && req.userId) {
-    forceRebuild = await consumeForcedRebuild(req.userId, 1, now);
-  }
-
   let fresh: BuiltEventPool | undefined;
 
   const loaded = await getOrBuildCachedPool(
@@ -296,13 +243,6 @@ export async function buildDailyEventPool(
         localDate: fresh.localDate,
       };
     },
-    // ABC-freemium 1-18 · R-POOL-2 — the route decides this from the
-    // entitlement and the forced-rebuild breaker, never from the request body
-    // alone. `forceRebuild` moved to parameter 6 in the merged
-    // `getOrBuildCachedPool` (P2-S2's `shouldPersist` took position 5) —
-    // this surface never gates persistence, so `undefined` there is correct.
-    undefined,
-    forceRebuild,
   );
 
   // The daily cache owns source collection/enrichment, not the user's mutable

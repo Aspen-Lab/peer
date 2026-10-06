@@ -440,8 +440,7 @@ last-resort fallback), `QWEN_API_KEY` (or `DASHSCOPE_API_KEY`), `DEEPSEEK_API_KE
 Do not add these to Vercel. Preview/production builds fail when operator-funded model
 credentials are present; online users must supply their own key through the BYOK UI.
 
-**Search / enrichment:** `TAVILY_API_KEY`, `BRAVE_SEARCH_API_KEY`,
-`SEMANTIC_SCHOLAR_API_KEY` (one server-side key, shared by every reader of the deployment; free from
+**Search / enrichment:** `SEMANTIC_SCHOLAR_API_KEY` (one server-side key, shared by every reader of the deployment; free from
 semanticscholar.org/product/api — the Academic Graph API is the one Peer calls, for paper search
 (`sources/semantic-scholar.ts`) and abstract/TLDR enrichment (`papers/enrich.ts`) only. **Semantic
 Scholar does not supply figures**: the Graph API has no `figures` field, so a figure lookup there
@@ -456,14 +455,13 @@ to be throttled), `OPENALEX_EMAIL`, `UNPAYWALL_EMAIL` (polite-pool emails).
 `ADZUNA_APP_ID` + `ADZUNA_APP_KEY` (free at developer.adzuna.com; best industry
 coverage), `USAJOBS_API_KEY` + `USAJOBS_USER_AGENT` (your email; US federal research
 posts), `JSEARCH_API_KEY` (or `RAPIDAPI_KEY`; Google-for-Jobs aggregate via RapidAPI,
-paid beyond a small free tier). `TAVILY_API_KEY` / `BRAVE_SEARCH_API_KEY` above also
-unlock web discovery of academic job boards (HigherEdJobs, jobs.ac.uk, Nature Careers —
-none expose usable feeds directly).
+paid beyond a small free tier). Web discovery of academic job boards (HigherEdJobs,
+jobs.ac.uk, Nature Careers — none expose usable feeds directly) runs only on a Tavily key a
+reader pastes in themselves; Peer holds no search key of its own.
 
-**Events feed:** fully keyless (ccfddl, confs.tech, researchseminars.org).
-`TAVILY_API_KEY` / `BRAVE_SEARCH_API_KEY` add profile-driven web discovery for
-non-CS fields; an LLM key upgrades its query generation from templates to
-profile-aware prompts.
+**Events feed:** fully keyless (ccfddl, confs.tech, researchseminars.org). A Tavily key a
+reader pastes in themselves adds profile-driven web discovery for non-CS fields; an LLM key
+upgrades its query generation from templates to profile-aware prompts.
 
 **Email digest:** `RESEND_API_KEY`, `DIGEST_FROM_EMAIL`.
 

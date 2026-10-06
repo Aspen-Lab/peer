@@ -828,9 +828,6 @@ export function paperFeedRequestBody(
       avoidBroadSurveys: profile.feedAvoidBroadSurveys,
     },
     excludeIds: excludeIds.length > 0 ? excludeIds : undefined,
-    // ABC-freemium 1-18 — **no `poolRefresh` here, deliberately.** D3 keeps the
-    // papers pool daily and never refreshed on demand; it is built from free
-    // academic sources, so there is no paid fan-out to force.
   };
 }
 
@@ -906,7 +903,6 @@ export function opportunityRequestBody(
   surface: "events" | "jobs",
   excludeIds: string[],
   auth: AuthOutcome = "unknown",
-  poolRefresh = false,
 ): Record<string, unknown> {
   const { topics, softTopics } = activeSurfaceTopics(profile, surface);
   const activeInputs = profile.activeSearchInputs;
@@ -952,8 +948,6 @@ export function opportunityRequestBody(
       ? { provider: profile.feedAiProvider, apiKey: feedAiApiKey }
       : undefined,
     excludeIds: excludeIds.length > 0 ? excludeIds : undefined,
-    // ABC-freemium 1-18 · R-POOL-2 — an ask, not a grant. See `FeedLoadOptions`.
-    poolRefresh: poolRefresh || undefined,
   };
 }
 
@@ -961,7 +955,6 @@ async function fetchRealEvents(
   profile: UserProfile,
   excludeIds: string[] = [],
   auth: AuthOutcome = "unknown",
-  poolRefresh = false,
 ): Promise<OpportunityClientPool<Event>> {
   if (activeSurfaceTopics(profile, "events").topics.length === 0) {
     return emptyOpportunityClientPool<Event>();
@@ -971,13 +964,7 @@ async function fetchRealEvents(
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(
-        opportunityRequestBody(
-          profile,
-          "events",
-          excludeIds,
-          auth,
-          poolRefresh,
-        ),
+        opportunityRequestBody(profile, "events", excludeIds, auth),
       ),
     });
     if (!res.ok) {
@@ -1000,7 +987,6 @@ async function fetchRealJobs(
   profile: UserProfile,
   excludeIds: string[] = [],
   auth: AuthOutcome = "unknown",
-  poolRefresh = false,
 ): Promise<OpportunityClientPool<Job>> {
   if (activeSurfaceTopics(profile, "jobs").topics.length === 0) {
     return emptyOpportunityClientPool<Job>();
@@ -1010,13 +996,7 @@ async function fetchRealJobs(
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(
-        opportunityRequestBody(
-          profile,
-          "jobs",
-          excludeIds,
-          auth,
-          poolRefresh,
-        ),
+        opportunityRequestBody(profile, "jobs", excludeIds, auth),
       ),
     });
     if (!res.ok) {
@@ -1160,19 +1140,6 @@ export interface FeedLoadOptions {
    * Omitted means all three, so existing callers keep their behaviour.
    */
   lanes?: FeedLane[];
-  /**
-   * ABC-freemium 1-18 · R-POOL-2 — ask for a forced pool rebuild on the jobs and
-   * events surfaces.
-   *
-   * **This is what keeps the existing "Refresh now" button honest after 1-17.**
-   * Those pools now rebuild weekly, so a plain refetch reads the same cached
-   * pool all week and the button would do nothing visible. Asking for a rebuild
-   * makes it mean what it says.
-   *
-   * Only an ASK: the route decides whether to honour it, and a refusal is the
-   * pool that is already there — no error, no empty surface.
-   */
-  poolRefresh?: boolean;
 }
 
 interface FeedState {
@@ -1836,8 +1803,6 @@ export const useFeedStore = create<FeedState>()(
         const wantsPapers = lanes.includes("papers");
         const wantsEvents = lanes.includes("events");
         const wantsJobs = lanes.includes("jobs");
-        // ABC-freemium 1-18 · R-POOL-2 — only ever an ask; the route decides.
-        const poolRefresh = options?.poolRefresh === true;
         // P4-S5b-FIX (Round 3) — ABC-JEV-INTEGRATION.md §1c, closing finding
         // (b). Resolve and "touch" (MRU-bump, evict beyond
         // MAX_DELIVERED_LOCAL_OWNERS) the CURRENT owner's deliveredLocal
@@ -2165,7 +2130,6 @@ export const useFeedStore = create<FeedState>()(
               profile,
               dismissedEventIds,
               useSyncGate.getState().authOutcome,
-              poolRefresh,
             );
             if (requestId !== feedLoadSeq) return;
             set((state) => {
@@ -2210,7 +2174,6 @@ export const useFeedStore = create<FeedState>()(
               profile,
               dismissedJobIds,
               useSyncGate.getState().authOutcome,
-              poolRefresh,
             );
             if (requestId !== feedLoadSeq) return;
             set((state) => {
