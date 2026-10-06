@@ -219,17 +219,31 @@ export function QuestionField({
   // when the box has settled as a whole and the reader has then been idle for
   // `idleMs`; coming back into the box, or anything done in it, ends the wait.
   const idle = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // P2-10 (§1g.21 (6)): the wait's `pagehide` listener, there only while the wait
+  // is pending.
+  const pageHide = useRef<(() => void) | null>(null);
   const stopIdle = () => {
+    if (pageHide.current !== null) {
+      window.removeEventListener("pagehide", pageHide.current);
+      pageHide.current = null;
+    }
     if (idle.current === null) return;
     clearTimeout(idle.current);
     idle.current = null;
   };
   const settleBoxSoon = () => {
     stopIdle();
-    idle.current = setTimeout(() => {
-      idle.current = null;
+    // One settle for the three ways the wait can end: the timer, and — a reload
+    // or a closed tab, where React's cleanup below never runs — `pagehide`.
+    // Whichever comes first ends the other. Nothing is sent from here: the
+    // settled questions travel with the next open, as after in-app navigation.
+    const settleNow = () => {
+      stopIdle();
       useReadingQuestionsStore.getState().settle(paperId);
-    }, idleMs);
+    };
+    pageHide.current = settleNow;
+    window.addEventListener("pagehide", settleNow);
+    idle.current = setTimeout(settleNow, idleMs);
   };
   // §1g.21 (5): leaving the page mid-wait settles at once — the questions were
   // finished; the reader just did not stay to see the answer.

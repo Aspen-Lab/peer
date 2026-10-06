@@ -178,7 +178,13 @@ const cachedKeys = () => Object.keys(JSON.parse(localStorage.getItem("peer-paper
 describe("the question box and the deep report (P2-08b, §1g.18)", () => {
   beforeEach(() => {
     vi.stubGlobal("localStorage", memoryStorage());
-    vi.stubGlobal("window", globalThis);
+    // P2-10 (§1g.21 (6)): the field listens for `pagehide` on `window` while its
+    // idle wait is pending, so this window can add and remove a listener (the
+    // flow here never fires one; `question-field.settle.test.tsx` does).
+    vi.stubGlobal(
+      "window",
+      Object.assign(Object.create(globalThis) as object, { addEventListener: () => {}, removeEventListener: () => {} }),
+    );
     net.calls.length = 0;
     net.delayMs = 30;
     useReadingQuestionsStore.setState({ byPaper: {}, lastPaperId: null });

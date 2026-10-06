@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // P2-03 (§1g.11 a): the field settles the questions — the ones a deep report
 // is asked about. P2-08b (§1g.18, §1g.21 (4), (5)) re-times that: not on every
@@ -54,6 +54,27 @@ async function field(idleMs = IDLE) {
 }
 
 const stored = () => useReadingQuestionsStore.getState().byPaper[PAPER];
+
+// P2-10 (§1g.21 (6), A's N3): while the box's idle wait is pending the field
+// listens for `pagehide` on `window`. This suite has no DOM, so `window` is a
+// bare event target the tests can read: how many listeners each event has, and
+// a way to fire one.
+let windowListeners: Map<string, Set<() => void>>;
+const listenerCount = (type: string) => windowListeners.get(type)?.size ?? 0;
+const fireOnWindow = (type: string) => [...(windowListeners.get(type) ?? [])].forEach((listener) => listener());
+
+beforeEach(() => {
+  windowListeners = new Map();
+  vi.stubGlobal("window", {
+    addEventListener: (type: string, listener: () => void) => {
+      windowListeners.set(type, (windowListeners.get(type) ?? new Set()).add(listener));
+    },
+    removeEventListener: (type: string, listener: () => void) => {
+      windowListeners.get(type)?.delete(listener);
+    },
+  });
+});
+afterEach(() => vi.unstubAllGlobals());
 
 describe("the field settles the questions (P2-03)", () => {
   beforeEach(() => {
@@ -210,5 +231,111 @@ describe("the field settles the questions (P2-03)", () => {
     await sleep(IDLE * 4);
     expect(stored().settled).toEqual(["Does tungsten delay rafting?", EXAMPLE]);
     third.mounted.unmount();
+  });
+});
+
+// P2-10 (§1g.21 (6), A's N3): "leaving the page" during the idle wait (§1g.21
+// (5)) includes a reload and a closed tab, where React's cleanup never runs. The
+// wait's own `pagehide` listener settles the questions the way the unmount does;
+// nothing is sent from the unloading page — the settled questions travel with the
+// next open, as after in-app navigation.
+describe("the box settles on pagehide while its wait is pending (P2-10)", () => {
+  beforeEach(() => {
+    useReadingQuestionsStore.setState({ byPaper: {}, lastPaperId: null });
+    useReadingQuestionsStore.getState().set(PAPER, ["Does tungsten delay rafting?"], false, AT);
+  });
+
+  it("registers no listener while nothing is pending: not on mount, typing, the gist or focus", async () => {
+    const { inputs, section, button, mounted } = await field(BOX_IDLE_MS);
+    expect(listenerCount("pagehide")).toBe(0);
+
+    (section.props.onFocus as () => void)();
+    (inputs[0].props.onChange as (e: unknown) => void)({ target: { value: "Does tungsten delay rafting at 1100 C?" } });
+    (button(ASK.chips.gist)?.props.onClick as () => void)();
+    expect(listenerCount("pagehide")).toBe(0);
+
+    // A pagehide with nothing pending settles nothing.
+    fireOnWindow("pagehide");
+    expect(stored().settled).toBeUndefined();
+    mounted.unmount();
+  });
+
+  it("arms one listener when the wait starts, and a pagehide inside the wait settles at once", async () => {
+    const fetched = vi.fn();
+    vi.stubGlobal("fetch", fetched);
+    const { leave, mounted } = await field(BOX_IDLE_MS);
+    leave();
+    expect(listenerCount("pagehide")).toBe(1);
+    expect(stored().settled).toBeUndefined();
+
+    fireOnWindow("pagehide");
+
+    expect(stored().settled).toEqual(["Does tungsten delay rafting?"]);
+    expect(listenerCount("pagehide")).toBe(0);
+    // Nothing leaves the unloading page: the field only writes the store.
+    expect(fetched).not.toHaveBeenCalled();
+    mounted.unmount();
+  });
+
+  it("the pagehide ends the wait: the timer does not settle a second time", async () => {
+    const { leave, mounted } = await field(IDLE);
+    leave();
+    fireOnWindow("pagehide");
+    expect(stored().settled).toEqual(["Does tungsten delay rafting?"]);
+
+    // A later change must not be settled by the wait that already ended.
+    useReadingQuestionsStore.getState().set(PAPER, ["Does tungsten delay rafting?", "Why 1100 C?"], false, AT);
+    await sleep(IDLE * 4);
+
+    expect(stored().settled).toEqual(["Does tungsten delay rafting?"]);
+    mounted.unmount();
+  });
+
+  it("leaves no listener behind when the wait fires", async () => {
+    const { leave, mounted } = await field(IDLE);
+    leave();
+    expect(listenerCount("pagehide")).toBe(1);
+
+    await sleep(IDLE * 4);
+
+    expect(stored().settled).toEqual(["Does tungsten delay rafting?"]);
+    expect(listenerCount("pagehide")).toBe(0);
+    mounted.unmount();
+  });
+
+  it("leaves no listener behind when the wait is cancelled, and a pagehide then settles nothing", async () => {
+    const { leave, section, mounted } = await field(BOX_IDLE_MS);
+    leave();
+    expect(listenerCount("pagehide")).toBe(1);
+
+    // Coming back into the box ends the wait.
+    (section.props.onFocus as () => void)();
+    expect(listenerCount("pagehide")).toBe(0);
+    fireOnWindow("pagehide");
+
+    expect(stored().settled).toBeUndefined();
+    mounted.unmount();
+  });
+
+  it("leaving and re-arming does not stack listeners", async () => {
+    const { leave, section, mounted } = await field(BOX_IDLE_MS);
+    leave();
+    (section.props.onFocus as () => void)();
+    leave();
+    leave();
+
+    expect(listenerCount("pagehide")).toBe(1);
+    mounted.unmount();
+  });
+
+  it("removes the listener on unmount, and the unmount still settles as it did", async () => {
+    const { leave, mounted } = await field(BOX_IDLE_MS);
+    leave();
+    expect(listenerCount("pagehide")).toBe(1);
+
+    mounted.unmount();
+
+    expect(stored().settled).toEqual(["Does tungsten delay rafting?"]);
+    expect(listenerCount("pagehide")).toBe(0);
   });
 });

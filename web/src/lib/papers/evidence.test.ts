@@ -206,6 +206,77 @@ describe("evidenceSupported", () => {
     expect(evidenceSupported(`${sentence} ${next.slice(0, 120)}`, results)).toBe(true);
   });
 
+  // P2-10 (§1g.21 (6), A's N1). A's mutation M2 at P2-08c — compare only the
+  // first 120 normalised characters of a quote (`corpus.includes(quote)` →
+  // `corpus.includes(quote.slice(0, 120))`) — left the whole suite green: every
+  // alteration above falls at or before character 117 (a number flipped, an
+  // invented clause, an ellipsis, a splice at 80), so a 120-character prefix
+  // still saw each one. These two alter a long quote's TAIL, past character 120,
+  // and append to it: only the whole-quote rule rejects them. Each asserts, as
+  // the P2-08b tests do, that a prefix-only rule WOULD accept it (the prefix is
+  // the section's own words), so a red under M2 is that rule and not a typo.
+  describe("the whole quote, tail included, on a quote past 120 characters (P2-10, A's N1)", () => {
+    // A synthetic section: one long sentence, then another.
+    const LONG =
+      "Across all twelve specimens held at 1100 degrees for five hundred hours, the coarsened precipitate fraction rose steadily with applied stress and then levelled off near the highest load tested.";
+    const NEXT = "The untreated controls showed no such plateau within the same window.";
+    const section = `${LONG} ${NEXT}`;
+    const sectionDoc: ExtractedDocument = {
+      source: "pdf",
+      figureCaptions: [],
+      sections: [{ id: "s0", heading: "3 Results", canonical: "results", text: section }],
+    };
+    const firstDifference = (a: string, b: string) => {
+      let at = 0;
+      while (at < a.length && at < b.length && a[at] === b[at]) at += 1;
+      return at;
+    };
+
+    /** What a prefix-only rule would accept: the quote's first 120 normalised
+     *  characters are in the section, and the quote itself is not. */
+    function expectPastTheHead(quote: string, what: string) {
+      const normal = normalizeForMatch(quote);
+      expect(normal.length, what).toBeGreaterThan(120);
+      expect(normalizeForMatch(section), `${what}: head`).toContain(normal.slice(0, 120));
+      expect(firstDifference(normalizeForMatch(LONG), normal), `${what}: first changed character`).toBeGreaterThanOrEqual(120);
+    }
+
+    it("starts from a quote that really is long, and accepts it whole, and with the next sentence run on", () => {
+      expect(normalizeForMatch(LONG).length).toBeGreaterThan(150);
+      expect(evidenceSupported(LONG, section)).toBe(true);
+      expect(evidenceSupported(`${LONG} ${NEXT}`, section)).toBe(true);
+      expect(locateSection(LONG, sectionCorpus(sectionDoc))).not.toBeNull();
+    });
+
+    it("rejects a long quote whose last words were altered, though its first 120 characters are the section's", () => {
+      const altered: Record<string, string> = {
+        "the last three words swapped": LONG.replace("the highest load tested", "the lowest load measured"),
+        "the last word changed": LONG.replace("tested.", "applied."),
+        "the closing clause reversed": LONG.replace("levelled off near the highest load tested", "tested the highest load near levelled off"),
+      };
+      for (const [what, quote] of Object.entries(altered)) {
+        expect(quote, what).not.toBe(LONG);
+        expectPastTheHead(quote, what);
+        expect(evidenceSupported(quote, section), what).toBe(false);
+        expect(locateSection(quote, sectionCorpus(sectionDoc)), what).toBeNull();
+      }
+    });
+
+    it("rejects a long quote with a clause appended after its last word, though its first 120 characters are the section's", () => {
+      const appended: Record<string, string> = {
+        "a clause after the last word": LONG.replace(/\.$/, ", and the control arm failed in every single trial."),
+        "a second sentence after the full stop": `${LONG} The control arm failed in every single trial.`,
+        "a trailing fragment": `${LONG} and`,
+      };
+      for (const [what, quote] of Object.entries(appended)) {
+        expect(quote, what).not.toBe(LONG);
+        expectPastTheHead(quote, what);
+        expect(evidenceSupported(quote, section), what).toBe(false);
+        expect(locateSection(quote, sectionCorpus(sectionDoc)), what).toBeNull();
+      }
+    });
+  });
+
   it("rejects a paraphrase", () => {
     expect(
       evidenceSupported(
