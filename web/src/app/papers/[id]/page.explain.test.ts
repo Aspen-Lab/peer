@@ -211,7 +211,8 @@ describe("the page's Explain this? wiring (P3-02)", () => {
   });
 
   it("imports `replyPair` and `requestReply` from the thread module, as the box does", () => {
-    expect(source).toMatch(/import \{ replyPair, requestReply, type ReplyResult \} from "@\/components\/reader\/explain-thread";/);
+    // P3-07 (§1h.9 (2)): the import also names `moreReply`, the turn "Say more" adds (Peer's alone).
+    expect(source).toMatch(/import \{ moreReply, replyPair, requestReply, type ReplyResult \} from "@\/components\/reader\/explain-thread";/);
   });
 
   it("would notice the ref no longer called through `openExplain`", () => {
@@ -223,5 +224,77 @@ describe("the page's Explain this? wiring (P3-02)", () => {
   it("registers the explain threads store with the hydrator, as the other stores", () => {
     expect(hydrator).toContain('import { useExplainThreadsStore } from "@/store/explain-threads";');
     expect(hydrator).toContain("useExplainThreadsStore.persist.rehydrate();");
+  });
+});
+
+// P3-07 (ruling §1h.9 (2); user decision §1a.14): "Say more". The box is handed a
+// way to re-send the reader's last message in the long form; it is its own
+// callback beside `replyExplain`, so the typed send is untouched: the request is
+// `requestReply` with `detail: true` and never a search, the reply joins the
+// thread as Peer's turn alone (`moreReply`) once it has arrived, under the guard
+// that never fails the reply. The checker runs on mutated copies too.
+
+function sayMoreProblems(source: string): string[] {
+  const text = source.replace(/\s+/g, " ");
+  const problems: string[] = [];
+  const popover = /<ExplainBox [^>]*\/>/.exec(text)?.[0] ?? "";
+  if (!popover.includes("onSayMore={moreExplain}")) problems.push("the box is no longer handed `moreExplain` (a reader cannot say more)");
+
+  const more = /const moreExplain = useCallback\(.*?\], ?\);/.exec(text)?.[0] ?? "";
+  if (!more) problems.push("`moreExplain` moved or is no longer a useCallback");
+  else {
+    if (!/requestReply\(\{ paper, selection, sectionId, thread, message, detail: true, llmOverride: explainLlmOverride\(profile\) \}\)/.test(more)) problems.push("the request is no longer `requestReply` in the long form, with the reader's own key");
+    if (/\bsearch\b/.test(more)) problems.push("Say more asks to search the web");
+    if (!/async \(selection: SelectionTarget, thread: readonly ExplainTurn\[\], message: string\): Promise<ReplyResult>/.test(more)) problems.push("`moreExplain` no longer takes the target, the thread before the message and the message");
+    if (!more.includes("reading?.body?.[selection.sectionIndex]?.id")) problems.push("the section's id no longer comes from the body the reader selected in");
+    if (!/if \(typeof result !== "string"\) \{ try \{ addExplainTurns\(paper\.id, passageHash\(selection\.passage\), moreReply\(result\)\); \} catch/.test(more)) problems.push("a long reply joins the thread as Peer's turn alone, only once it has arrived, under a guard that never fails the reply");
+    if (/useExplainThreadsStore\.getState\(\)/.test(more)) problems.push("Say more reaches into the store instead of the page's own selector");
+  }
+  return problems;
+}
+
+describe("the page's Say more wiring (P3-07)", () => {
+  it("is as the ruling says", () => {
+    expect(sayMoreProblems(source)).toEqual([]);
+  });
+
+  it("would notice the box no longer handed the way to say more", () => {
+    const wrong = source.replace(" onSayMore={moreExplain}", "");
+
+    expect(wrong).not.toBe(source);
+    expect(sayMoreProblems(wrong)).toEqual(["the box is no longer handed `moreExplain` (a reader cannot say more)"]);
+  });
+
+  it("would notice the long form dropped from the request", () => {
+    const wrong = source.replace("message, detail: true, llmOverride", "message, llmOverride");
+
+    expect(wrong).not.toBe(source);
+    expect(sayMoreProblems(wrong)).toContain("the request is no longer `requestReply` in the long form, with the reader's own key");
+  });
+
+  it("would notice Say more asking to search the web", () => {
+    const wrong = source.replace("thread, message, detail: true, llmOverride", "thread, message, search: true, detail: true, llmOverride");
+
+    expect(wrong).not.toBe(source);
+    expect(sayMoreProblems(wrong)).toContain("Say more asks to search the web");
+  });
+
+  it("would notice the reply kept as a pair, which would add a second copy of the reader's message", () => {
+    const wrong = source.replace("moreReply(result)", "replyPair(message, false, result)");
+
+    expect(wrong).not.toBe(source);
+    expect(sayMoreProblems(wrong)).toContain("a long reply joins the thread as Peer's turn alone, only once it has arrived, under a guard that never fails the reply");
+  });
+
+  it("would notice the reply kept before it arrived", () => {
+    const wrong = source.replace(/(const moreExplain = useCallback\([\s\S]*?)if \(typeof result !== "string"\) \{(\s*)try \{/, "$1{$2try {");
+
+    expect(wrong).not.toBe(source);
+    expect(sayMoreProblems(wrong)).toContain("a long reply joins the thread as Peer's turn alone, only once it has arrived, under a guard that never fails the reply");
+  });
+
+  it("would notice the typed send changed with it: `replyExplain` is exactly what it was", () => {
+    expect(explainProblems(source)).toEqual([]);
+    expect(source).toContain("onReply={replyExplain}");
   });
 });

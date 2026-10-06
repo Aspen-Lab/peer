@@ -244,6 +244,15 @@ export const EXPLAIN = {
   searchedMark: "searched the web",
   /** Under a reply to a message that asked to search when the provider cannot. */
   searchUnavailable: "Web search is not available with this provider.",
+  /** P3-07 (§1h.9 (3); user decision §1a.14): the headers of the term table a reply
+   *  may carry — the term, what it means in this paper, how to read it. Peer's
+   *  words, in the label face; the cells under them are in the reading face. */
+  tableTerm: "Term",
+  tableHere: "Here it means",
+  tableRead: "How to read it",
+  /** P3-07 (§1h.9 (2)): the one button under Peer's latest reply. A reply is short
+   *  unless the reader asks for more; this asks, by re-sending their last message. */
+  sayMore: "Say more",
 } as const;
 
 /** The reader's own context for the paper: what they read or kept nearby. */

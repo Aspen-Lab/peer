@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import type { ExtractedDocument } from "./html-text";
 import { sectionParagraphs, openingOf } from "./reading-map";
 import {
+  EXPLAIN_BREVITY_RULES,
   EXPLAIN_CAPS,
+  asksForDetail,
   buildExplainPrompt,
   buildExplainReplyPrompt,
   clipPassage,
@@ -10,6 +12,7 @@ import {
   explainCacheKey,
   explainDocHash,
   explainMapLines,
+  groundExplainItems,
   locatePassage,
   parseModelJson,
   readThread,
@@ -18,6 +21,7 @@ import {
   verifyExplainAnswer,
   verifyExplainReply,
   type ExplainAnswer,
+  type ExplainItem,
   type ExplainMessage,
   type ExplainReplyTurn,
 } from "./explain";
@@ -1014,5 +1018,635 @@ describe("sanitizeExplainReply drops web addresses (P3-02c)", () => {
     const code = "The code is available at https://example.org/code for every figure.";
 
     expect(sanitizeExplainReply({ reply: "It is shared.", evidence: code })).toEqual({ reply: "It is shared.", evidence: code });
+  });
+});
+
+// ── P3-07 (ruling §1h.9; user decision §1a.14): short and exact ──────────
+// The explain box answers in the fewest words that are exact: the rules the
+// prompts carry, the detector that tells when the reader asked for more, the hard
+// caps the sanitizers enforce whatever the model wrote (a reply is three
+// sentences by default and eight only on request, cut after a whole sentence), the
+// term table's shape and its grounding, the memory's key with the long form in it,
+// and a harness that runs over-long canned answers through the sanitizers. As
+// everywhere in this file, every text below is invented.
+
+describe("the brevity rules in the prompts (P3-07)", () => {
+  const located = locatePassage(doc, "fraction of the gauge length")!;
+  const base = {
+    paper: { title: "Rafting under creep in a nickel alloy", abstract: "The abstract says why rafting matters for turbine blades." },
+    map: explainMapLines(doc),
+    located,
+    passage: "fraction of the gauge length",
+  };
+  const first = buildExplainPrompt(base);
+  const reply = buildExplainReplyPrompt({ ...base, thread: [FIRST, ASKED] });
+  const longer = buildExplainReplyPrompt({ ...base, thread: [FIRST, ASKED], detail: true });
+  const userOf = (prompt: { userPrompt: string }) => JSON.parse(prompt.userPrompt) as { outputSchema: Record<string, unknown>; rules: string[] } & Record<string, unknown>;
+
+  it("names the rules, word for word", () => {
+    expect([...EXPLAIN_BREVITY_RULES]).toEqual([
+      "Answer in the fewest words that are still exact.",
+      "No preamble.",
+      "Never restate the question or say where the passage sits; the reader's box already shows the passage with its section and page.",
+      "Give no general background beyond what the passage needs.",
+      "One idea per sentence.",
+      "When the meaning turns on the author's own phrase, quote that phrase exactly as the text supplied has it.",
+      "Write in the reader's language; the paper's own sentences stay as they are.",
+    ]);
+  });
+
+  it("puts every rule sentence in the system prompt of the first answer, of a reply and of a longer reply", () => {
+    for (const built of [first, reply, longer]) {
+      for (const rule of EXPLAIN_BREVITY_RULES) expect(built.systemPrompt).toContain(rule);
+    }
+  });
+
+  it("keeps what the system prompts already said: Peer's voice, copied words only, nothing invented, JSON only", () => {
+    for (const built of [first, reply, longer]) {
+      expect(built.systemPrompt).toMatch(/Peer/);
+      expect(built.systemPrompt).toContain("Do not fabricate numbers, citations or experimental details.");
+      expect(built.systemPrompt).toContain("Return only valid JSON.");
+      expect(built.systemPrompt).toMatch(/copied character-for-character/);
+    }
+  });
+
+  it("a reply's prompt names the default cap — three sentences and 560 characters — and never the long one", () => {
+    const user = userOf(reply);
+    const text = `${user.outputSchema.reply as string} ${user.rules.join(" ")}`;
+
+    expect(text).toMatch(/three sentences/i);
+    expect(text).toMatch(/560 characters/);
+    expect(text).not.toMatch(/eight sentences|1,400/);
+  });
+
+  it("a reply's prompt with detail names the long cap — eight sentences and 1,400 characters — and says the reader asked for more", () => {
+    const user = userOf(longer);
+    const text = `${user.outputSchema.reply as string} ${user.rules.join(" ")}`;
+
+    expect(text).toMatch(/eight sentences/i);
+    expect(text).toMatch(/1,400 characters/);
+    expect(text).toMatch(/asked for more/i);
+    expect(text).not.toMatch(/three sentences|560/);
+  });
+
+  it("detail changes the cap and nothing else: the same parts, the same context and thread, the same system prompt", () => {
+    const a = userOf(reply);
+    const b = userOf(longer);
+
+    expect(Object.keys(b)).toEqual(Object.keys(a));
+    for (const key of ["task", "paper", "sections", "context", "passage", "thread", "lastReaderMessage"]) expect(b[key]).toEqual(a[key]);
+    expect(Object.keys(b.outputSchema)).toEqual(Object.keys(a.outputSchema));
+    expect(longer.systemPrompt).toBe(reply.systemPrompt);
+    expect(buildExplainReplyPrompt({ ...base, thread: [FIRST, ASKED], detail: false })).toEqual(reply);
+  });
+
+  it("a reply's schema offers an optional table — at most four rows of term, here, read, a dozen words a cell — and the rules keep it to two sentences of prose", () => {
+    const user = userOf(reply);
+    const items = user.outputSchema.items as string;
+
+    expect(Object.keys(user.outputSchema)).toEqual(["reply", "evidence", "items"]);
+    expect(items).toMatch(/optional|leave this key out/i);
+    expect(items).toMatch(/term/);
+    expect(items).toMatch(/here/);
+    expect(items).toMatch(/read/);
+    expect(items).toMatch(/four rows|4 rows/i);
+    expect(items).toMatch(/twelve words|12 words/i);
+    expect(user.rules.join(" ")).toMatch(/with `items`, `reply` is at most two sentences/i);
+  });
+
+  it("the first message's prompt is unchanged in its schema: two parts and no table", () => {
+    const user = userOf(first);
+
+    expect(Object.keys(user.outputSchema)).toEqual(["meaning", "here"]);
+    expect(first.userPrompt).not.toMatch(/items/);
+  });
+});
+
+describe("asksForDetail (P3-07)", () => {
+  it("is true when the reader asks for detail in English: detail, detailed, in depth, elaborate, expand, step by step", () => {
+    for (const message of [
+      "Explain that in detail.",
+      "Can you give a DETAILED answer?",
+      "Go into more detail, please",
+      "I want this in depth",
+      "in-depth please",
+      "Could you elaborate?",
+      "Please expand on that.",
+      "Walk me through it step by step",
+      "Step-by-step?",
+    ]) {
+      expect(asksForDetail(message), message).toBe(true);
+    }
+  });
+
+  it("is true for “more” only as “tell me more”, “say more” or “more detail”, in any case", () => {
+    for (const message of ["Tell me more", "tell me more about the second column", "Can you say more?", "SAY MORE", "more detail?"]) {
+      expect(asksForDetail(message), message).toBe(true);
+    }
+  });
+
+  it("is false for “more” on its own and for a question that only mentions more of something", () => {
+    for (const message of ["Are there more papers like this one?", "more", "I need more coffee", "Does a higher ratio mean more plates?", "What more can be said about 0.5?", "Say it more simply"]) {
+      expect(asksForDetail(message), message).toBe(false);
+    }
+  });
+
+  it("matches whole words only: a longer word that holds one is not the word", () => {
+    for (const message of ["What is the thermal expansion here?", "Who is the retailer?", "The detailing of the specimen is odd", "Is it elaborately made?", "What does a fastidious step mean?"]) {
+      expect(asksForDetail(message), message).toBe(false);
+    }
+  });
+
+  it("is true when the reader asks for detail in Chinese: 详细, 展开, 具体, 深入, 多说, 讲讲", () => {
+    for (const message of ["请详细解释一下", "能展开说说吗", "具体是怎么回事", "再深入一点", "能多说一点吗", "再讲讲这个比值"]) {
+      expect(asksForDetail(message), message).toBe(true);
+    }
+  });
+
+  it("is false for an ordinary Chinese question", () => {
+    for (const message of ["这个比值是什么意思", "它为什么重要", "作者怎么定义的"]) {
+      expect(asksForDetail(message), message).toBe(false);
+    }
+  });
+
+  it("is false for nothing, for blank text and for anything that is not text", () => {
+    for (const message of ["", "   ", "\n"]) expect(asksForDetail(message)).toBe(false);
+    for (const message of [undefined, null, 5, {}, ["detail"]]) expect(asksForDetail(message as unknown as string)).toBe(false);
+  });
+});
+
+/** A sentence of about `chars` characters, invented, ending in a full stop. */
+function sized(label: string, chars: number): string {
+  let text = `Note ${label} says that`;
+  while (text.length < chars - 1) text += " plates keep growing";
+  return `${text}.`;
+}
+/** `count` short invented sentences. */
+function sentences(count: number, label = "x"): string {
+  return Array.from({ length: count }, (_, i) => `Point ${label}${i + 1} is plain and short.`).join(" ");
+}
+/** `count` short invented Chinese sentences. */
+function sentencesZh(count: number): string {
+  return Array.from({ length: count }, (_, i) => `第${i + 1}点说明片状析出物在载荷下缓慢长大。`).join("");
+}
+/** One long invented Chinese sentence of about `chars` characters. */
+function sizedZh(n: number, chars: number): string {
+  return `第${n}点：${"片状析出物在载荷下缓慢长大，".repeat(Math.ceil(chars / 13))}。`.slice(0, chars - 1) + "。";
+}
+const TERMINAL = /[.!?。！？]["”’'」』)）]*$/;
+/** How many sentences a text has, counting a full stop followed by a space and the Chinese enders. */
+const countSentences = (text: string): number => text.split(/(?<=[。！？])|(?<=[.!?])\s+/).map((piece) => piece.trim()).filter(Boolean).length;
+/** The text is a whole-sentence cut of `source`: a prefix of it that ends where a sentence of it ends.
+ *  (The page's cleaner has turned the full-width punctuation and the curly quotes of the source into
+ *  plain ones, so the source is read the same way.) */
+function wholeCut(source: string, out: string): boolean {
+  const flat = source.replace(/\s+/g, " ").trim().normalize("NFKC").replace(/[“”]/g, '"');
+  const atBreak = out.length === flat.length || /[。！？][”’'」』)）]*$/.test(out) || /\s/.test(flat[out.length]);
+  return flat.startsWith(out) && TERMINAL.test(out) && atBreak;
+}
+
+describe("the reply caps (P3-07)", () => {
+  it("has the default caps — three sentences, 560 characters — and the detail caps — eight sentences, 1,400 characters", () => {
+    expect(EXPLAIN_CAPS.replySentences).toBe(3);
+    expect(EXPLAIN_CAPS.replyChars).toBe(560);
+    expect(EXPLAIN_CAPS.replyDetailSentences).toBe(8);
+    expect(EXPLAIN_CAPS.replyDetailChars).toBe(1400);
+  });
+
+  it("by default keeps the first three whole sentences of a longer reply, and nothing of the rest", () => {
+    const reply = sanitizeExplainReply({ reply: sentences(9) })?.reply as string;
+
+    expect(reply).toBe(sentences(3));
+    expect(sanitizeExplainReply({ reply: sentences(9) }, { detail: false })?.reply).toBe(sentences(3));
+    expect(sanitizeExplainReply({ reply: sentences(9) }, {})?.reply).toBe(sentences(3));
+  });
+
+  it("with detail keeps up to eight whole sentences, and no more", () => {
+    expect(sanitizeExplainReply({ reply: sentences(5) }, { detail: true })?.reply).toBe(sentences(5));
+    expect(sanitizeExplainReply({ reply: sentences(12) }, { detail: true })?.reply).toBe(sentences(8));
+  });
+
+  it("cuts after the last whole sentence that fits the characters, never inside one — by default", () => {
+    // Three sentences of about 250 characters: 3 × 250 is over 560, 2 × 250 is not.
+    const long = [sized("a", 250), sized("b", 250), sized("c", 250)].join(" ");
+    const reply = sanitizeExplainReply({ reply: long })?.reply as string;
+
+    expect(reply).toBe([sized("a", 250), sized("b", 250)].join(" "));
+    expect(reply.length).toBeLessThanOrEqual(560);
+    expect(wholeCut(long, reply)).toBe(true);
+  });
+
+  it("cuts after the last whole sentence that fits the characters — with detail", () => {
+    const long = Array.from({ length: 8 }, (_, i) => sized(String(i), 300)).join(" ");
+    const reply = sanitizeExplainReply({ reply: long }, { detail: true })?.reply as string;
+
+    expect(reply.length).toBeLessThanOrEqual(1400);
+    expect(reply.length).toBeGreaterThan(1000);
+    expect(wholeCut(long, reply)).toBe(true);
+    expect(countSentences(reply)).toBeLessThan(8);
+  });
+
+  it("keeps a reply that is within the cap exactly as it was", () => {
+    const within = `${sized("a", 200)} ${sized("b", 200)}`;
+
+    expect(sanitizeExplainReply({ reply: within })?.reply).toBe(within);
+    expect(sanitizeExplainReply({ reply: within }, { detail: true })?.reply).toBe(within);
+  });
+
+  it("counts sentences in Chinese too: three by default, eight with detail", () => {
+    expect(sanitizeExplainReply({ reply: sentencesZh(9) })?.reply).toBe(sentencesZh(3));
+    expect(sanitizeExplainReply({ reply: sentencesZh(12) }, { detail: true })?.reply).toBe(sentencesZh(8));
+  });
+
+  it("counts a Chinese sentence that ends in ！ or ？ too, though the cleaner has made those plain ! and ?", () => {
+    const reply = sanitizeExplainReply({ reply: "第一点说明比值！第二点说明单元分数？第三点说明晶粒比。第四点必须去掉！" })?.reply as string;
+
+    expect(reply).toBe("第一点说明比值！第二点说明单元分数？第三点说明晶粒比。".normalize("NFKC"));
+    expect(sanitizeExplainReply({ reply: "第一点说明比值！？第二点说明单元分数。第三点。第四点。" })?.reply).toBe("第一点说明比值!?第二点说明单元分数。第三点。");
+  });
+
+  it("never cuts inside a quotation: the two sentences of a phrase the author wrote with a full stop in it go together", () => {
+    // To a splitter “Grain 0.4. Cell 0.57” is two sentences; to a reader it is one phrase, quoted.
+    const quoted = "The authors report “Grain 0.4. Cell 0.57” for the first sample.";
+    const reply = sanitizeExplainReply({ reply: `${quoted} It is the small one. Another point. A third point.` })?.reply as string;
+
+    // Three sentences by the splitter's count (the quotation is two of them): the quotation whole, then one more.
+    // (The cleaner makes the curly quotes plain ones.)
+    expect(reply).toBe(`${quoted} It is the small one.`.replace(/[“”]/g, '"'));
+    expect((reply.match(/"/g) ?? []).length % 2).toBe(0);
+  });
+
+  it("leaves a quotation out together when its sentences do not all fit, rather than cut it in two", () => {
+    const filler = sized("q", 500);
+    const opens = "The note reads “First half.";
+    const closes = "Second half” and stops here and goes on a little longer still.";
+    // The precondition that makes this the test it says it is: the first half fits on its own, the two halves do not.
+    expect(filler.length + 1 + opens.length).toBeLessThanOrEqual(560);
+    expect(filler.length + 1 + opens.length + 1 + closes.length).toBeGreaterThan(560);
+    const reply = sanitizeExplainReply({ reply: `${filler} ${opens} ${closes} Last.` })?.reply as string;
+
+    expect(reply).toBe(filler);
+    expect(reply).not.toContain("“");
+  });
+
+  it("holds a quotation the text never closes to nothing: its sentence is an ordinary one", () => {
+    const reply = sanitizeExplainReply({ reply: "The sample is 5\" wide. It is small. It is flat. It is cold." })?.reply as string;
+
+    expect(reply).toBe("The sample is 5\" wide. It is small. It is flat.");
+  });
+
+  it("keeps the author's own underscore: `f_cell` is not `fcell`", () => {
+    const reply = sanitizeExplainReply({ reply: "The authors report grain ratio 0.4, f_cell = 0.57 for the first sample." })?.reply;
+
+    expect(reply).toBe("The authors report grain ratio 0.4, f_cell = 0.57 for the first sample.");
+    expect(sanitizeExplainAnswer({ meaning: "A share f_cell of the cells.", here: { text: "T_g marks the change." } })).toEqual({ meaning: "A share f_cell of the cells.", here: { text: "T_g marks the change." } });
+  });
+
+  it("marks the cut, and only then, when a single sentence is over the cap: a word boundary and an ellipsis, within the cap", () => {
+    const runaway = `${"plates grow slowly ".repeat(80)}and that is all.`;
+    const reply = sanitizeExplainReply({ reply: runaway })?.reply as string;
+    const detailed = sanitizeExplainReply({ reply: runaway }, { detail: true })?.reply as string;
+
+    for (const [out, cap] of [[reply, 560], [detailed, 1400]] as const) {
+      expect(out.length).toBeLessThanOrEqual(cap);
+      expect(out.endsWith("…")).toBe(true);
+      expect(out.slice(0, -1).trimEnd().endsWith("plates") || out.slice(0, -1).trimEnd().endsWith("grow") || out.slice(0, -1).trimEnd().endsWith("slowly")).toBe(true);
+    }
+    expect(detailed.length).toBeGreaterThan(reply.length);
+  });
+
+  it("leaves the quote alone: the sentence cap is on the prose, and the paper's sentence is verified or dropped whole by the next step", () => {
+    const out = sanitizeExplainReply({ reply: sentences(9), evidence: RAFT_DEF });
+
+    expect(out).toEqual({ reply: sentences(3), evidence: RAFT_DEF });
+    expect(sanitizeExplainReply({ reply: sentences(9), evidence: RAFT_DEF }, { detail: true })?.evidence).toBe(RAFT_DEF);
+  });
+});
+
+describe("the first answer is cut after a whole sentence too (P3-07)", () => {
+  it("keeps each part to two whole sentences within 420 characters: a second sentence that does not fit is dropped, not cut", () => {
+    const answer = sanitizeExplainAnswer({ meaning: `${sized("m", 300)} ${sized("n", 300)}`, here: { text: `${sized("h", 200)} ${sized("i", 200)} ${sized("j", 200)}` } });
+
+    expect(answer?.meaning).toBe(sized("m", 300));
+    expect(answer?.here.text).toBe(`${sized("h", 200)} ${sized("i", 200)}`.length <= 420 ? `${sized("h", 200)} ${sized("i", 200)}` : sized("h", 200));
+    for (const text of [answer?.meaning as string, answer?.here.text as string]) {
+      expect(text.length).toBeLessThanOrEqual(EXPLAIN_CAPS.partChars);
+      expect(TERMINAL.test(text)).toBe(true);
+    }
+  });
+
+  it("counts Chinese sentences in a part: two at most", () => {
+    expect(sanitizeExplainAnswer({ meaning: sentencesZh(5), here: { text: sentencesZh(4) } })).toEqual({ meaning: sentencesZh(2), here: { text: sentencesZh(2) } });
+  });
+});
+
+describe("the term table's shape (P3-07)", () => {
+  const row = (term: string, here = "what it means in this paper", read = "how a reader should take it"): Record<string, string> => ({ term, here, read });
+  const items = (raw: unknown, over: Record<string, unknown> = {}) => sanitizeExplainReply({ reply: "The authors report two values.", items: raw, ...over });
+
+  it("keeps well-formed rows in order, trimmed, with only term, here and read", () => {
+    const out = items([{ term: "  grain ratio ", here: " the width over the length ", read: " 0.4 is a narrow sample ", extra: "x" }, row("f_cell")]);
+
+    expect(out?.items).toEqual([
+      { term: "grain ratio", here: "the width over the length", read: "0.4 is a narrow sample" },
+      { term: "f_cell", here: "what it means in this paper", read: "how a reader should take it" },
+    ]);
+  });
+
+  it("has no items key at all for no table, an empty one and anything that is not a list of rows", () => {
+    for (const raw of [undefined, null, [], "table", 5, {}, [1, "x", null], [{ term: "a" }], [{ term: "a", here: "b" }], [{ term: "a", here: "b", read: 3 }], [{ term: " ", here: "b", read: "c" }]]) {
+      expect(items(raw)).toEqual({ reply: "The authors report two values." });
+    }
+  });
+
+  it("keeps at most four rows, the first four that are fit", () => {
+    const out = items(["one", "two", "three", "four", "five", "six"].map((term) => row(term)));
+
+    expect(EXPLAIN_CAPS.itemRows).toBe(4);
+    expect(out?.items?.map((item) => item.term)).toEqual(["one", "two", "three", "four"]);
+  });
+
+  it("drops a row with a cell over twelve words, and does not cut it", () => {
+    const thirteen = "one two three four five six seven eight nine ten eleven twelve thirteen";
+    const twelve = "one two three four five six seven eight nine ten eleven twelve";
+    const out = items([row("a", thirteen), row("b", twelve), row("c", "fine", thirteen), row(thirteen)]);
+
+    expect(EXPLAIN_CAPS.itemWords).toBe(12);
+    expect(out?.items).toEqual([{ term: "b", here: twelve, read: "how a reader should take it" }]);
+  });
+
+  it("drops a row with a cell over eighty characters, and does not cut it", () => {
+    const over = "x".repeat(81);
+    const exact = "y".repeat(80);
+    const out = items([row("a", over), row("b", exact), row("c", "ok", over)]);
+
+    expect(EXPLAIN_CAPS.itemChars).toBe(80);
+    expect(out?.items).toEqual([{ term: "b", here: exact, read: "how a reader should take it" }]);
+  });
+
+  it("counts a Chinese cell by its characters, two to a word, so a dozen words is about twenty-four characters", () => {
+    const ok = "片状析出物占试样的比例"; // 11 characters
+    const wordy = "片状析出物在载荷下缓慢长大并最终连成一片完整的板状结构"; // over 24 characters
+    const out = items([row("比值", ok), row("单元分数", wordy), row("a", "b", ok)]);
+
+    expect(out?.items?.map((item) => item.term)).toEqual(["比值", "a"]);
+  });
+
+  it("says each term once: a second row for the same term, in any case, is dropped", () => {
+    const out = items([row("Grain ratio"), row("grain  RATIO"), row("f_cell")]);
+
+    expect(out?.items?.map((item) => item.term)).toEqual(["Grain ratio", "f_cell"]);
+  });
+
+  it("takes a web address out of a cell, and drops the row when nothing else was in it", () => {
+    const out = items([row("a", "see https://example.org/x for the value"), row("b", "https://example.org/only", "c")]);
+
+    expect(JSON.stringify(out?.items)).not.toMatch(/https?:|example\.org/);
+    expect(out?.items?.map((item) => item.term)).toEqual(["a"]);
+  });
+
+  it("holds the prose to two sentences when there is a table, and to the usual three or eight when there is none", () => {
+    const prose = sentences(6);
+
+    expect(items([row("a")], { reply: prose })?.reply).toBe(sentences(2));
+    expect(items([row("a")], { reply: prose }) && sanitizeExplainReply({ reply: prose, items: [row("a")] }, { detail: true })?.reply).toBe(sentences(2));
+    expect(sanitizeExplainReply({ reply: prose, items: [] })?.reply).toBe(sentences(3));
+    expect(sanitizeExplainReply({ reply: prose, items: [{ term: "a" }] })?.reply).toBe(sentences(3));
+    expect(sanitizeExplainReply({ reply: prose, items: [] }, { detail: true })?.reply).toBe(prose);
+    expect(EXPLAIN_CAPS.itemsReplySentences).toBe(2);
+  });
+
+  it("is still no reply without prose, whatever the table holds", () => {
+    expect(sanitizeExplainReply({ reply: "", items: [row("a")] })).toBeNull();
+    expect(sanitizeExplainReply({ items: [row("a")] })).toBeNull();
+  });
+});
+
+describe("the term table's grounding (P3-07)", () => {
+  const located = locatePassage(doc, "fraction of the gauge length")!;
+  const scope = { passage: "fraction of the gauge length", located };
+  const row = (term: string): ExplainItem => ({ term, here: "means this here", read: "read it so" });
+  const terms = (list: ExplainItem[], over: Parameters<typeof groundExplainItems>[2] = scope) => groundExplainItems(list, doc, over).map((item) => item.term);
+
+  it("keeps a term that occurs in the passage, in its paragraph, in a neighbour, or in the section the passage sits in", () => {
+    expect(terms([row("gauge length")])).toEqual(["gauge length"]);
+    expect(terms([row("rafting ratio")])).toEqual(["rafting ratio"]);
+    // The paragraph before the passage's, and the one after it.
+    expect(terms([row("single casting")])).toEqual(["single casting"]);
+    expect(terms([row("hint tests")])).toEqual(["hint tests"]);
+    // Four paragraphs on, still in the same section.
+    expect(terms([row("constant load")])).toEqual(["constant load"]);
+  });
+
+  it("drops a term that occurs nowhere there — including one the rest of the paper holds", () => {
+    expect(terms([row("tungsten additions"), row("spline interpolation"), row("gauge length")])).toEqual(["gauge length"]);
+  });
+
+  it("matches the way the verifier does: case and runs of white space do not matter", () => {
+    expect(terms([row("RAFTING   Ratio")])).toEqual(["RAFTING   Ratio"]);
+  });
+
+  it("holds a term to whole words: it is not found inside a longer word or a longer number", () => {
+    expect(terms([row("auge")])).toEqual([]);
+    expect(terms([row("0.2")])).toEqual([]);
+    expect(groundExplainItems([row("0.5")], doc, { passage: "a ratio of 10.55 and 0.5, then more", located: { ...located, paragraph: "a ratio of 10.55 and 0.5, then more", before: null, after: null } }).map((item) => item.term)).toEqual(["0.5"]);
+    expect(groundExplainItems([row("0.5")], doc, { passage: "a ratio of 10.55", located: { ...located, paragraph: "a ratio of 10.55", before: null, after: null, sectionId: "s0" } })).toEqual([]);
+  });
+
+  it("looks in the located section only: a term in another section is not grounded", () => {
+    expect(terms([row("tungsten additions")], { passage: scope.passage, located: { ...located, sectionId: "s3" } })).toEqual(["tungsten additions"]);
+    expect(terms([row("tungsten additions")])).toEqual([]);
+  });
+
+  it("drops a blank term, and keeps the order of what stays", () => {
+    expect(terms([row("   "), row("rafting ratio"), row("nowhere at all"), row("gauge length")])).toEqual(["rafting ratio", "gauge length"]);
+  });
+
+  it("verifyExplainReply keeps the grounded rows on the turn and drops the rest, with the quote verified as before", () => {
+    const turn = verifyExplainReply({ reply: "Two values.", evidence: RAFT_DEF, items: [row("rafting ratio"), row("tungsten additions")] }, doc, "s2", scope);
+
+    expect(turn).toEqual({ role: "peer", text: "Two values.", evidence: RAFT_DEF, evidenceWhere: "2 Methods", sectionId: "s2", page: 2, items: [row("rafting ratio")] });
+  });
+
+  it("verifyExplainReply has no items key when none is grounded, and none at all without the scope to ground them in", () => {
+    expect(verifyExplainReply({ reply: "x", items: [row("tungsten additions")] }, doc, "s2", scope)).toEqual({ role: "peer", text: "x", peer: true });
+    expect(verifyExplainReply({ reply: "x", items: [row("rafting ratio")] }, doc, "s2")).toEqual({ role: "peer", text: "x", peer: true });
+    expect(verifyExplainReply({ reply: "x" }, doc, "s2", scope)).toEqual({ role: "peer", text: "x", peer: true });
+  });
+
+  it("changes nothing in the reply it was given", () => {
+    const given = { reply: "x", items: [row("rafting ratio"), row("nowhere at all")] };
+    const copy = JSON.parse(JSON.stringify(given)) as typeof given;
+    verifyExplainReply(given, doc, "s2", scope);
+
+    expect(given).toEqual(copy);
+  });
+});
+
+describe("explainCacheKey with the long form (P3-07)", () => {
+  const texts = [FIRST.text, ASKED.text];
+
+  it("keeps a short and a long reply to the same message apart", () => {
+    const short = explainCacheKey("doc-hash", "The rafting ratio", texts);
+    const long = explainCacheKey("doc-hash", "The rafting ratio", texts, false, true);
+
+    expect(long).not.toBe(short);
+    expect(long).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it("is what it was when the long form is off, searched or not", () => {
+    expect(explainCacheKey("doc-hash", "The rafting ratio", texts, false, false)).toBe(explainCacheKey("doc-hash", "The rafting ratio", texts));
+    expect(explainCacheKey("doc-hash", "The rafting ratio", texts, true, false)).toBe(explainCacheKey("doc-hash", "The rafting ratio", texts, true));
+  });
+
+  it("keeps a searched long reply apart from a searched short one and from an unsearched long one", () => {
+    const keys = new Set([
+      explainCacheKey("d", "p", texts, false, false),
+      explainCacheKey("d", "p", texts, true, false),
+      explainCacheKey("d", "p", texts, false, true),
+      explainCacheKey("d", "p", texts, true, true),
+    ]);
+
+    expect(keys.size).toBe(4);
+  });
+});
+
+// ── The harness (§1h.9 (4)): over-long canned answers, both languages, with and
+// without the long form, through the sanitizers; every output is within the caps
+// and every sentence in it whole. A fixture is what a model could write when it
+// does not follow the rules: a lecture, a table with a paragraph of cells, a
+// sentence that never stops.
+
+describe("brevity harness", () => {
+  interface ReplyCase {
+    name: string;
+    language: "en" | "zh";
+    detail: boolean;
+    text: string;
+    /** The one case where a single sentence is itself over the cap: the cut is marked. */
+    runaway?: true;
+  }
+  const replyCases: ReplyCase[] = [
+    { name: "a lecture of nine short sentences", language: "en", detail: false, text: sentences(9, "a") },
+    { name: "the same lecture, asked for in detail", language: "en", detail: true, text: sentences(14, "b") },
+    { name: "four sentences of 300 characters", language: "en", detail: false, text: [1, 2, 3, 4].map((n) => sized(`c${n}`, 300)).join(" ") },
+    { name: "twelve sentences of 200 characters, asked for in detail", language: "en", detail: true, text: Array.from({ length: 12 }, (_, i) => sized(`d${i}`, 200)).join(" ") },
+    { name: "a lecture of nine short sentences in Chinese", language: "zh", detail: false, text: sentencesZh(9) },
+    { name: "a Chinese lecture asked for in detail", language: "zh", detail: true, text: sentencesZh(14) },
+    { name: "three Chinese sentences of 250 characters", language: "zh", detail: false, text: [1, 2, 3].map((n) => sizedZh(n, 250)).join("") },
+    { name: "ten Chinese sentences of 200 characters, asked for in detail", language: "zh", detail: true, text: Array.from({ length: 10 }, (_, i) => sizedZh(i + 1, 200)).join("") },
+    { name: "a quoted phrase with full stops in it, then a lecture", language: "en", detail: false, text: `The authors report “Grain 0.4. Cell 0.57” for the sample. ${sentences(8, "e")}` },
+    { name: "a sentence that never stops", language: "en", detail: false, text: `${"plates grow slowly ".repeat(90)}and that is all.`, runaway: true },
+    { name: "a Chinese sentence that never stops", language: "zh", detail: true, text: `${"片状析出物在载荷下缓慢长大，".repeat(150)}这就是全部。`, runaway: true },
+  ];
+
+  it("has at least eight over-long answers, in both languages, with and without the long form", () => {
+    expect(replyCases.length).toBeGreaterThanOrEqual(8);
+    expect(new Set(replyCases.map((c) => c.language))).toEqual(new Set(["en", "zh"]));
+    expect(new Set(replyCases.map((c) => c.detail))).toEqual(new Set([true, false]));
+    for (const c of replyCases) expect(c.text.length, c.name).toBeGreaterThan(c.detail ? 200 : 100);
+  });
+
+  it.each(replyCases)("a reply — $name — comes out within the caps, in whole sentences", ({ name, detail, text, runaway }) => {
+    const out = sanitizeExplainReply({ reply: text }, { detail })?.reply as string;
+    const sentenceCap = detail ? 8 : 3;
+    const charCap = detail ? 1400 : 560;
+
+    expect(out, name).toBeTruthy();
+    expect(out.length, name).toBeLessThanOrEqual(charCap);
+    if (runaway) {
+      // Not a whole sentence, and it says so.
+      expect(out.endsWith("…"), name).toBe(true);
+      return;
+    }
+    expect(countSentences(out.replace(/"[^"]*"/g, "QUOTE")), name).toBeLessThanOrEqual(sentenceCap);
+    expect(wholeCut(text, out), name).toBe(true);
+    expect((out.match(/"/g) ?? []).length % 2, name).toBe(0);
+  });
+
+  it("a reply that was asked for in detail is never shorter than the same reply by default", () => {
+    for (const { text } of replyCases) {
+      const short = sanitizeExplainReply({ reply: text })?.reply as string;
+      const long = sanitizeExplainReply({ reply: text }, { detail: true })?.reply as string;
+
+      expect(long.length).toBeGreaterThanOrEqual(short.length);
+    }
+  });
+
+  interface AnswerCase { name: string; meaning: string; here: string }
+  const answerCases: AnswerCase[] = [
+    { name: "a first answer of three long sentences a part", meaning: [1, 2, 3].map((n) => sized(`m${n}`, 250)).join(" "), here: [1, 2, 3].map((n) => sized(`h${n}`, 250)).join(" ") },
+    { name: "a first answer of five short sentences a part", meaning: sentences(5, "m"), here: sentences(5, "h") },
+    { name: "a first answer in Chinese, five sentences a part", meaning: sentencesZh(5), here: sentencesZh(5) },
+    { name: "a first answer in Chinese of 300-character sentences", meaning: [1, 2].map((n) => sizedZh(n, 300)).join(""), here: [1, 2].map((n) => sizedZh(n + 2, 300)).join("") },
+  ];
+
+  it.each(answerCases)("a first answer — $name — comes out as two parts of at most two whole sentences and 420 characters", ({ name, meaning, here }) => {
+    const answer = sanitizeExplainAnswer({ meaning, here: { text: here } });
+
+    expect(answer, name).not.toBeNull();
+    for (const [part, source] of [[answer?.meaning as string, meaning], [answer?.here.text as string, here]] as const) {
+      expect(part.length, name).toBeLessThanOrEqual(EXPLAIN_CAPS.partChars);
+      expect(countSentences(part), name).toBeLessThanOrEqual(2);
+      expect(part.endsWith("…") || wholeCut(source, part), name).toBe(true);
+    }
+  });
+
+  interface TableCase { name: string; rows: Record<string, string>[]; prose: string }
+  const cell = (n: number) => Array.from({ length: n }, (_, i) => `w${i}`).join(" ");
+  const tableCases: TableCase[] = [
+    {
+      name: "seven rows, three with a cell of a paragraph, under four sentences of prose",
+      prose: sentences(4, "t"),
+      rows: [
+        { term: "a", here: cell(5), read: cell(5) },
+        { term: "b", here: cell(40), read: cell(5) },
+        { term: "c", here: cell(5), read: cell(5) },
+        { term: "d", here: cell(5), read: cell(200) },
+        { term: "e", here: cell(5), read: cell(5) },
+        { term: "f", here: cell(13), read: cell(5) },
+        { term: "g", here: cell(5), read: cell(5) },
+      ],
+    },
+    {
+      name: "a Chinese table with long cells under a Chinese lecture",
+      prose: sentencesZh(6),
+      rows: [
+        { term: "比值", here: "片状析出物占试样的比例", read: "越大说明连片越多" },
+        { term: "单元分数", here: "片状析出物在载荷下缓慢长大并最终连成一片完整的板状结构", read: "越大越好" },
+        { term: "晶粒比", here: "宽度与高度之比", read: "0.4 表示偏窄" },
+        { term: "密度", here: "单位体积的质量", read: "越大越重" },
+        { term: "模量", here: "抵抗变形的能力", read: "越大越硬" },
+      ],
+    },
+  ];
+
+  it.each(tableCases)("a table — $name — comes out with at most four rows, each cell a dozen words, the prose two sentences", ({ name, rows, prose }) => {
+    const out = sanitizeExplainReply({ reply: prose, items: rows }, { detail: false });
+    const words = (text: string) => (text.match(/\p{Script=Han}/gu) ?? []).length / 2 + (text.replace(/\p{Script=Han}/gu, " ").match(/\S+/g) ?? []).length;
+
+    expect(out, name).not.toBeNull();
+    expect(out?.items?.length ?? 0, name).toBeGreaterThan(0);
+    expect(out?.items?.length ?? 0, name).toBeLessThanOrEqual(4);
+    for (const item of out?.items ?? []) {
+      for (const text of [item.term, item.here, item.read]) {
+        expect(text.length, name).toBeLessThanOrEqual(80);
+        expect(words(text), name).toBeLessThanOrEqual(12);
+      }
+    }
+    expect(countSentences(out?.reply as string), name).toBeLessThanOrEqual(2);
+    expect(wholeCut(prose, out?.reply as string), name).toBe(true);
+  });
+
+  it("holds when a model that ignores every rule answers: lecture, long quote, table of paragraphs, all at once", () => {
+    const rows = Array.from({ length: 12 }, (_, i) => ({ term: `t${i}`, here: cell(i < 6 ? 30 : 4), read: cell(4) }));
+    const out = sanitizeExplainReply({ reply: sentences(30), evidence: RAFT_DEF, items: rows });
+
+    expect(out?.reply).toBe(sentences(2));
+    expect(out?.evidence).toBe(RAFT_DEF);
+    expect(out?.items?.map((item) => item.term)).toEqual(["t6", "t7", "t8", "t9"]);
+    // A table of paragraphs, every cell over the cap, is no table, and the prose is then the usual three.
+    const none = sanitizeExplainReply({ reply: sentences(30), items: rows.slice(0, 6) });
+    expect(none).toEqual({ reply: sentences(3) });
   });
 });

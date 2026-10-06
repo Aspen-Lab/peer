@@ -308,3 +308,67 @@ describe("the thread (P3-02b)", () => {
     expect(turnsOf()).toEqual(pair(1));
   });
 });
+
+// P3-07 (ruling §1h.9 (3), (4)): a turn of Peer's may carry the term table
+// (`items`) and the mark that it is the long form (`detail`). Plain fields,
+// kept and restored like the rest, and counted as nothing: a long reply that
+// Say more adds is Peer's turn alone, so it is not a reader message and the cap of
+// eight does not move.
+describe("the thread: the term table and the long form (P3-07)", () => {
+  beforeEach(() => {
+    useExplainThreadsStore.setState({ byPaper: {} });
+    storage.items.clear();
+    useExplainThreadsStore.getState().remember("arxiv:1", entry("The rafting ratio"), at(1));
+  });
+
+  const items = [
+    { term: "grain ratio", here: "width over length of the sample", read: "0.4 means about two in five" },
+    { term: "f_cell", here: "share of the cells covered by plates", read: "0.57 means most of it" },
+  ];
+
+  it("keeps a reply's table in the store and in the browser's storage, field for field", () => {
+    const withTable: ExplainTurn = { role: "peer", text: "Two values.", peer: true, items };
+    useExplainThreadsStore.getState().addTurns("arxiv:1", keyOf, [reader(1), withTable], at(2));
+
+    expect(turnsOf()?.[1]).toEqual(withTable);
+    const stored = JSON.parse(storage.items.get(EXPLAIN_THREADS_STORAGE_KEY) ?? "null").state.byPaper["arxiv:1"][keyOf].turns[1];
+    expect(stored).toEqual(withTable);
+    expect(stored.items).toEqual(items);
+  });
+
+  it("keeps the long-form mark on a reply, in the store and in the browser's storage", () => {
+    const long: ExplainTurn = { role: "peer", text: "A longer reply.", peer: true, detail: true };
+    useExplainThreadsStore.getState().addTurns("arxiv:1", keyOf, [reader(1), peer(1), long], at(2));
+
+    expect(turnsOf()).toEqual([reader(1), peer(1), long]);
+    expect(JSON.parse(storage.items.get(EXPLAIN_THREADS_STORAGE_KEY) ?? "null").state.byPaper["arxiv:1"][keyOf].turns[2]).toEqual(long);
+  });
+
+  it("appends a long reply alone: no reader message joins, so the reader count and the cap stay", () => {
+    const store = useExplainThreadsStore.getState();
+    store.addTurns("arxiv:1", keyOf, pair(1), at(2));
+    store.addTurns("arxiv:1", keyOf, [{ role: "peer", text: "A longer reply.", peer: true, detail: true }], at(3));
+
+    expect(turnsOf()).toHaveLength(3);
+    expect(turnsOf()?.filter((turn) => turn.role === "reader")).toHaveLength(1);
+    expect(threadFull(turnsOf())).toBe(false);
+  });
+
+  it("a thread of eight reader messages is full whatever long replies sit among them, and takes no ninth", () => {
+    const store = useExplainThreadsStore.getState();
+    for (let n = 1; n <= 8; n += 1) store.addTurns("arxiv:1", keyOf, [...pair(n), { role: "peer", text: `longer ${n}`, peer: true, detail: true }], at(n));
+
+    expect(threadFull(turnsOf())).toBe(true);
+    expect(turnsOf()).toHaveLength(24);
+    store.addTurns("arxiv:1", keyOf, pair(9), at(20));
+    expect(turnsOf()).toHaveLength(24);
+  });
+
+  it("restores a thread saved before the table and the mark existed: turns without either are as they were", () => {
+    const old: ExplainTurn[] = pair(1);
+    useExplainThreadsStore.getState().addTurns("arxiv:1", keyOf, old, at(2));
+
+    expect(turnsOf()).toEqual(old);
+    expect(turnsOf()?.some((turn) => "items" in turn || "detail" in turn)).toBe(false);
+  });
+});

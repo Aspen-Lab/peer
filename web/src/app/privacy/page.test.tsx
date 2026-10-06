@@ -54,7 +54,7 @@ describe("/privacy — Your questions (P2-03)", () => {
 // double quotes in the text are the typographic ones, which are not escaped.
 
 const EXPLAIN_PARAGRAPHS = [
-  "Selecting a passage sends nothing, and neither does typing in the box. Peer sends a request only when you click “Explain this?” (or press E on a selection) and, for a follow-up, when you press Enter or Send. The request carries the passage you selected, the paragraph it sits in and the one on either side of it, the paper's title and abstract, one line for each section of the paper's map and, for a follow-up, the messages of that thread. The request also carries the paper's record as this page holds it — its title, authors, venue, where it came from and your save and feedback marks on it — so Peer's server can find the paper; of that record the model sees only the title and the abstract. If you have set your own model key, the key goes with it.",
+  "Selecting a passage sends nothing, and neither does typing in the box. Peer sends a request only when you click “Explain this?” (or press E on a selection) and, for a follow-up, when you press Enter or Send, or Say more under a reply. A reply is short unless you ask for more, in your own words or with Say more. The request carries the passage you selected, the paragraph it sits in and the one on either side of it, the paper's title and abstract, one line for each section of the paper's map and, for a follow-up, the messages of that thread. The request also carries the paper's record as this page holds it — its title, authors, venue, where it came from and your save and feedback marks on it — so Peer's server can find the paper; of that record the model sees only the title and the abstract. If you have set your own model key, the key goes with it.",
   "The request goes to Peer's server and on to the model provider you or the owner configured — Google's Gemini when Peer's own model answers, and the provider whose key you set when you use your own.",
   "On a follow-up you can turn on “Search the web” for that one message. It is off every time the box opens and never turns on by itself. With it on, the provider may run a web search to write that reply: Gemini does this with Google Search, and with any other provider the reply is written without a search and the box says so. A message answered with a search carries the mark “searched the web”, and Peer shows no link to anything the search found.",
   "Peer's server keeps three things. First, each answer it gives, in memory, for up to an hour, so the same passage asked about again is answered without another model call; it is filed under hashes of the document, the passage and the thread, never under who asked.",
@@ -96,6 +96,17 @@ describe("/privacy — Explain this (P3-02d)", () => {
     for (const sent of ["the passage you selected", "the paragraph it sits in and the one on either side of it", "the paper's title and abstract".replace(/'/g, "&#x27;"), "one line for each section of the paper", "the messages of that thread", "your own model key"]) {
       expect(entry).toContain(sent);
     }
+  });
+
+  // P3-07 (§1h.9 (5)): the sentence about sending gains "Say more" — the third thing
+  // that sends — and one clause says a reply is short unless the reader asks for more.
+  // The paragraph above is pinned whole; these name the two changes on their own.
+  it("names Say more among the things that send, and says a reply is short unless you ask for more", () => {
+    expect(entry).toContain("when you press Enter or Send, or Say more under a reply");
+    expect(entry).toContain("A reply is short unless you ask for more, in your own words or with Say more.");
+    // Say more sends only on the press: the entry still says nothing is sent before.
+    expect(entry).toContain("Selecting a passage sends nothing, and neither does typing in the box");
+    expect(entry.indexOf("Say more")).toBeGreaterThan(entry.indexOf("press Enter or Send"));
   });
 
   // P3-05 (§1h.8 (7), O13): the first paragraph listed what the PROMPT carries; the

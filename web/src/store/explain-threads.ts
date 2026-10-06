@@ -20,7 +20,7 @@ import { useSyncExternalStore } from "react";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { normalizeForMatch } from "@/lib/papers/evidence";
-import type { ExplainAnswer } from "@/lib/papers/explain";
+import type { ExplainAnswer, ExplainItem } from "@/lib/papers/explain";
 
 export const EXPLAIN_THREADS_STORAGE_KEY = "peer-explain-threads-v1";
 export const MAX_EXPLAIN_PASSAGES = 32;
@@ -29,6 +29,9 @@ export const MAX_EXPLAIN_PAPERS = 24;
 export const MAX_EXPLAIN_TURNS = 8;
 /** The most a message may say: what the server reads of it. */
 export const MAX_EXPLAIN_MESSAGE_CHARS = 400;
+/** P3-07: the most rows a reply's term table holds (the server's `EXPLAIN_CAPS.itemRows`,
+ *  which the browser cannot import: that module is the server's). */
+export const MAX_EXPLAIN_ITEMS = 4;
 
 /** One message of the thread (P3-02b). A reply of Peer's carries, when its quote
  *  was verified, the paper's own sentence and where it is from; otherwise
@@ -38,7 +41,13 @@ export const MAX_EXPLAIN_MESSAGE_CHARS = 400;
  *  search (on the reader's message, so the cost can be explained afterwards; also
  *  kept on Peer's reply as the server said it), and `searchUnavailable` is on a
  *  reply to a message that asked to search when the provider could not — the box
- *  says so once, under that reply. Facts only: never a source, never an address. */
+ *  says so once, under that reply. Facts only: never a source, never an address.
+ *
+ *  P3-07 (§1h.9): a reply of Peer's may carry `items`, the small term table (at most four
+ *  rows the paper grounds), and `detail: true` — it is the long form, the reader having
+ *  asked for more (the box's "Say more", or in words), so the box does not offer "Say more"
+ *  under it. A long reply that "Say more" adds is a turn of Peer's alone: no reader message
+ *  joins the thread, so the count of eight does not move. */
 export interface ExplainTurn {
   role: "reader" | "peer";
   text: string;
@@ -49,6 +58,8 @@ export interface ExplainTurn {
   peer?: true;
   searched?: true;
   searchUnavailable?: true;
+  items?: ExplainItem[];
+  detail?: true;
 }
 
 export interface ExplainThread {

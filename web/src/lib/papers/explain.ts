@@ -52,6 +52,30 @@
 //     page never shows a link to a web source (the blueprint has no external
 //     links), and the mark "searched the web" is the only trace of the search.
 //
+// P3-07 (ruling §1h.9; user decision §1a.14) makes the answers short and exact —
+// "never a long exposition unless the reader asks for one":
+//
+//   - `EXPLAIN_BREVITY_RULES`: the rule sentences both system prompts carry (the
+//     fewest words that are exact, no preamble, never restate the question or where
+//     the passage sits, no background beyond the passage, one idea a sentence, the
+//     author's own phrase quoted, the reader's language);
+//   - the caps are enforced here whatever the model wrote: a reply is three sentences
+//     and 560 characters, or — when the reader asked for more, `detail` — eight and
+//     1,400; every cut is made after a whole sentence, never inside one and never
+//     inside a quotation (`wholeSentences`); a lone sentence over the cap is cut at a
+//     word and marked with an ellipsis, the one place a cut is inside a sentence;
+//   - `asksForDetail`: the reader's last message asking for more in words, English
+//     and Chinese, whole words only (the route ORs it with the body's `detail` flag,
+//     the "Say more" button);
+//   - a reply may carry a small table, `items` (`sanitizeItems`: at most four rows, each
+//     cell at most twelve words and eighty characters, a row over the cap dropped,
+//     never cut), and a row stays only when its term occurs in the passage, its
+//     paragraph, the neighbours or the section (`groundExplainItems`, run by
+//     `verifyExplainReply` with the scope it is given); with a table the prose is two
+//     sentences;
+//   - `explainCacheKey` carries the long form, so a short and a long reply to the same
+//     message are two entries.
+//
 // Pure apart from the hash and the clock the cache reads: no I/O, no logging.
 // Server-side — the browser imports this module for its types only.
 
@@ -94,6 +118,17 @@ export const EXPLAIN_CAPS = {
   /** A reply is at most three sentences and this many characters. */
   replySentences: 3,
   replyChars: 560,
+  /** P3-07 (§1h.9 (2)): when the reader asked for more — the "Say more" button, or
+   *  words that ask — a reply may run to this many sentences and characters. */
+  replyDetailSentences: 8,
+  replyDetailChars: 1400,
+  /** P3-07 (§1h.9 (3)): a reply's table has at most this many rows, each cell at
+   *  most this many words and characters (a row over a cap is dropped, never cut),
+   *  and with a table the prose is at most this many sentences. */
+  itemRows: 4,
+  itemWords: 12,
+  itemChars: 80,
+  itemsReplySentences: 2,
 } as const;
 
 // ── The answer, and what the route says ────────────────────────────────
@@ -121,11 +156,21 @@ export interface ExplainMessage {
   text: string;
 }
 
+/** One row of a reply's table (P3-07, §1h.9 (3)): a term from the passage, what it
+ *  means in this paper, how to read it — each a dozen words at most. */
+export interface ExplainItem {
+  term: string;
+  here: string;
+  read: string;
+}
+
 /** The model's reply to the reader's last message, sanitised and not yet
- *  verified: its words and, when it rests on the paper, one sentence of it. */
+ *  verified: its words and, when it rests on the paper, one sentence of it —
+ *  and, P3-07, a small table of at most four rows. */
 export interface ExplainReply {
   reply: string;
   evidence?: string;
+  items?: ExplainItem[];
 }
 
 /** A reply as the page shows it (P3-02b): Peer's words and, verified, the
@@ -142,6 +187,11 @@ export interface ExplainReplyTurn {
   /** P3-02c: whether this reply was written with web search. The route sets it on
    *  every reply it answers (`verifyExplainReply` leaves it to the route, which knows). */
   searched?: boolean;
+  /** P3-07: the table, only the rows the paper grounds (`groundExplainItems`). */
+  items?: ExplainItem[];
+  /** P3-07: this reply is the long form — the reader asked for more, by the button or
+   *  in words (the route sets it; it is never in a first answer). */
+  detail?: true;
 }
 
 /** What `POST /api/papers/[id]/explain` answers (the status says the rest). */
@@ -307,11 +357,28 @@ export function explainMapLines(doc: ExtractedDocument): ExplainMapLine[] {
   }));
 }
 
+/**
+ * The rules that make an answer short and exact (P3-07, §1h.9 (1); user decision
+ * §1a.14), in the system prompt of the first answer and of every reply. The box
+ * already shows the passage with its section and page, so none of that is said
+ * again; the reader came for the meaning, so nothing else is.
+ */
+export const EXPLAIN_BREVITY_RULES = [
+  "Answer in the fewest words that are still exact.",
+  "No preamble.",
+  "Never restate the question or say where the passage sits; the reader's box already shows the passage with its section and page.",
+  "Give no general background beyond what the passage needs.",
+  "One idea per sentence.",
+  "When the meaning turns on the author's own phrase, quote that phrase exactly as the text supplied has it.",
+  "Write in the reader's language; the paper's own sentences stay as they are.",
+] as const;
+
 const EXPLAIN_SYSTEM = [
   "You are Peer, a calm research assistant who sits beside a reader.",
   "The reader selected a passage of a paper and asked what it means.",
   "Explain it in plain English, for a thoughtful reader who is not in this field: first what the term or passage means in general, then why the author brings it up in this paper.",
-  "Never quote the paper except with a sentence copied character-for-character from the text supplied.",
+  ...EXPLAIN_BREVITY_RULES,
+  "Never quote the paper except with words copied character-for-character from the text supplied.",
   "Do not fabricate numbers, citations or experimental details.",
   "Return only valid JSON.",
 ].join(" ");
@@ -380,7 +447,8 @@ const EXPLAIN_REPLY_SYSTEM = [
   "You are Peer, a calm research assistant who sits beside a reader.",
   "The reader selected a passage of a paper and is asking follow-up questions about it.",
   "Answer the reader's last message about that passage in plain English, for a thoughtful reader who is not in this field.",
-  "Never quote the paper except with a sentence copied character-for-character from the text supplied.",
+  ...EXPLAIN_BREVITY_RULES,
+  "Never quote the paper except with words copied character-for-character from the text supplied.",
   "Do not fabricate numbers, citations or experimental details.",
   "Return only valid JSON.",
 ].join(" ");
@@ -394,6 +462,11 @@ const EXPLAIN_REPLY_SYSTEM = [
  * and the rules, which are never what gets cut. Nothing about the reader is a
  * parameter but the words they sent in the thread. With `search` (P3-02c) the
  * one rule about the web is the search rule; nothing else changes.
+ *
+ * P3-07: the prompt names the cap that applies — three sentences and 560 characters,
+ * or, with `detail` (the reader asked for more), eight and 1,400 — and offers the
+ * optional table, `items`, for a reader who asks about several terms or quantities.
+ * `detail` changes the cap and nothing else.
  */
 export function buildExplainReplyPrompt(args: {
   paper: { title: string; abstract: string };
@@ -403,6 +476,8 @@ export function buildExplainReplyPrompt(args: {
   thread: readonly ExplainMessage[];
   /** P3-02c: this reply may use web search for general background. */
   search?: boolean;
+  /** P3-07: the reader asked for more, so the reply may run to the long cap. */
+  detail?: boolean;
 }): { systemPrompt: string; userPrompt: string } {
   // The cap follows the message's place in the thread as sent: the first answer
   // keeps its 840 only while it is in the prompt, and once the oldest are dropped
@@ -419,12 +494,19 @@ export function buildExplainReplyPrompt(args: {
     thread,
     lastReaderMessage: last?.text ?? "",
     outputSchema: {
-      reply: "at most three sentences, in plain words, answering the reader's last message about this passage",
+      reply: args.detail
+        ? "at most eight sentences and 1,400 characters, in plain words, answering the reader's last message about this passage; the reader asked for more, so give the detail they asked for"
+        : "at most three sentences and 560 characters, in plain words, answering the reader's last message about this passage",
       evidence: "one sentence copied character-for-character from the paper's text in `context`, only when the reply rests on something the paper says; otherwise leave this key out",
+      items:
+        "optional — leave this key out unless the reader asks what several terms or quantities mean: at most four rows, each { term, here, read }; `term` is a word or phrase copied from the passage, `here` what it means in this paper, `read` how to read it; each cell at most twelve words",
     },
     rules: [
       "Return ONLY valid JSON.",
-      "Answer `lastReaderMessage`, the reader's last message in `thread`, about the selected passage, in at most three sentences of plain words a thoughtful non-specialist understands. The earlier messages are there for what has been said so far.",
+      args.detail
+        ? "Answer `lastReaderMessage`, the reader's last message in `thread`, about the selected passage, in plain words a thoughtful non-specialist understands. The reader asked for more, so `reply` may run to at most eight sentences and 1,400 characters; still no preamble and one idea per sentence. The earlier messages are there for what has been said so far."
+        : "Answer `lastReaderMessage`, the reader's last message in `thread`, about the selected passage, in at most three sentences (560 characters) of plain words a thoughtful non-specialist understands; the reader has not asked for more. The earlier messages are there for what has been said so far.",
+      "With `items`, `reply` is at most two sentences: say what the passage reports, quoting the author's own phrase, and leave the terms to the table.",
       "`evidence` is one sentence copied character-for-character from `context.before`, `context.paragraph` or `context.after`, and only when the reply rests on something the paper says. Do not paraphrase it, shorten it, or merge sentences.",
       "Omit `evidence` when the reply does not rest on a sentence of the paper. Never quote the abstract, the section list or the thread.",
       args.search
@@ -458,11 +540,105 @@ export function parseModelJson(text: string): unknown {
   return null;
 }
 
-/** Some of the model's words: cleaned, at most `sentences` sentences, at most `chars` characters. */
+// ── Whole sentences (P3-07) ────────────────────────────────────────────
+// A cap on an answer's length is a cap on how much Peer says, not a cut through
+// the middle of what it says: an answer is the leading sentences that fit, and a
+// sentence is never left half. A quotation is never left half either — the author's
+// phrase `“Grain 0.4. Cell 0.57”` is two sentences to a splitter and one thought to a
+// reader, so the sentences of an open quotation go together or not at all.
+
+/** Where a Chinese sentence ends: after 。！？ and any closing quote or bracket, before
+ *  what follows (so "！？" stays one ending) — and after an ASCII "!" or "?" that the cleaner
+ *  made of a full-width one, when Chinese text follows. The Latin splitter sees neither. */
+const CJK_SENTENCE_BREAK = /(?<=[。！？][”’」』）)]*)(?=[^。！？”’」』）)\s])|(?<=[!?])(?=\p{Script=Han})/u;
+
+/** The offset after the last character of each sentence of `text` (white space already
+ *  collapsed): Chinese enders first, then the Latin splitter the rest of Peer uses. */
+function sentenceEnds(text: string): number[] {
+  const ends: number[] = [];
+  let cursor = 0;
+  for (const piece of text.split(CJK_SENTENCE_BREAK).flatMap(splitSentences)) {
+    const at = text.indexOf(piece, cursor);
+    if (at < 0) continue;
+    cursor = at + piece.length;
+    ends.push(cursor);
+  }
+  if (ends.length > 0) ends[ends.length - 1] = text.length;
+  return ends;
+}
+
+/** Whether `text` ends inside a quotation: a double quote opened and not closed. */
+function inQuotation(text: string): boolean {
+  const straight = (text.match(/"/g) ?? []).length % 2 === 1;
+  return straight || (text.match(/[“「『]/g) ?? []).length > (text.match(/[”」』]/g) ?? []).length;
+}
+
+interface SentenceGroup {
+  end: number;
+  sentences: number;
+}
+
+/** The sentences as groups that never end inside a quotation: those of a quotation that
+ *  closes later in the text are one group. A quotation the text never closes holds nothing together. */
+function quoteSafeGroups(text: string, ends: readonly number[]): SentenceGroup[] {
+  const groups: SentenceGroup[] = [];
+  let start = 0;
+  for (let i = 0; i < ends.length; ) {
+    let j = i;
+    while (j < ends.length && inQuotation(text.slice(start, ends[j]))) j += 1;
+    if (j >= ends.length) j = i;
+    groups.push({ end: ends[j], sentences: j - i + 1 });
+    start = ends[j];
+    i = j + 1;
+  }
+  return groups;
+}
+
+/** `text` cut at a word to fit `max` characters, the cut marked with an ellipsis. */
+function cutMarked(text: string, max: number): string {
+  const room = max - 1;
+  const space = text.lastIndexOf(" ", room);
+  const cut = (space > 0 ? text.slice(0, space) : text.slice(0, room)).trimEnd().replace(/[,;:\u2013\u2014-]+$/u, "");
+  return `${cut}…`;
+}
+
+/**
+ * The leading whole sentences of `cleaned` — at most `maxSentences` of them and at
+ * most `maxChars` characters — and nothing of the rest. A quotation is not split. When
+ * not even the first sentence fits, that one sentence is cut at a word and the cut is
+ * marked with "…": the only case in which Peer's words end inside a sentence, and it says so.
+ */
+function wholeSentences(cleaned: string, maxSentences: number, maxChars: number): string {
+  if (!cleaned) return "";
+  const ends = sentenceEnds(cleaned);
+  const fitting = (groups: readonly SentenceGroup[]): number => {
+    let kept = 0;
+    let count = 0;
+    for (const group of groups) {
+      if (count + group.sentences > maxSentences || group.end > maxChars) break;
+      count += group.sentences;
+      kept = group.end;
+    }
+    return kept;
+  };
+  const grouped = fitting(quoteSafeGroups(cleaned, ends));
+  if (grouped > 0) return cleaned.slice(0, grouped).trimEnd();
+  // A quotation that does not fit whole is left out, as far as one sentence on its own fits.
+  const plain = fitting(ends.map((end) => ({ end, sentences: 1 })));
+  if (plain > 0) return cleaned.slice(0, plain).trimEnd();
+  return cutMarked(cleaned.slice(0, ends[0] ?? cleaned.length), maxChars);
+}
+
+/** `cleanDisplayText`, but a bare underscore stays: it reads `f_cell` as a LaTeX subscript and
+ *  hands back `fcell`, and the author's own notation is the thing an exact answer quotes. */
+function tidy(text: string): string {
+  return cleanDisplayText(text.replace(/_/g, "\uE000")).replace(/\uE000/g, "_");
+}
+
+/** Some of the model's words: cleaned, at most `sentences` whole sentences, at most `chars` characters. */
 function words(value: unknown, sentences: number, chars: number): string {
   if (typeof value !== "string") return "";
-  const cleaned = cleanDisplayText(value).replace(/\s+/g, " ").trim();
-  return cutAtWord(splitSentences(cleaned).slice(0, sentences).join(" "), chars);
+  return wholeSentences(tidy(value).replace(/\s+/g, " ").trim(), sentences, chars);
 }
 
 /** One part of the answer: cleaned, at most two sentences, at most 420 characters. */
@@ -545,18 +721,112 @@ function withoutWebAddresses(text: string): string {
     .trim();
 }
 
+// ── The term table (P3-07) ─────────────────────────────────────────────
+
+const HAN_OR_KANA = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/gu;
+
+/** A cell's length in words: runs of text between spaces, and Chinese or Japanese
+ *  characters two to a word (they are written without spaces, and a dozen words of
+ *  them is about two dozen characters — never looser than the 80-character cap). */
+function wordCount(text: string): number {
+  const cjk = text.match(HAN_OR_KANA)?.length ?? 0;
+  const rest = text.replace(HAN_OR_KANA, " ").split(/\s+/).filter(Boolean).length;
+  return rest + Math.ceil(cjk / 2);
+}
+
+/** One cell: cleaned, a web address taken out, within the caps — or "" (the row goes). Never cut. */
+function itemCell(value: unknown): string {
+  if (typeof value !== "string") return "";
+  const text = tidy(withoutWebAddresses(value)).replace(/\s+/g, " ").trim();
+  if (!text || text.length > EXPLAIN_CAPS.itemChars || wordCount(text) > EXPLAIN_CAPS.itemWords) return "";
+  return text;
+}
+
 /**
- * Whitelist what the model sent as a reply: its words, cleaned, at most three
- * sentences and 560 characters; the quote a cleaned string of at most 400
- * characters. Whatever else the model said — a place, a page, a "peer" flag —
- * is dropped: only the verifier says where a quote sits. Null without words.
+ * The model's table as the page may show it: at most four rows of `{ term, here, read }`,
+ * each cell within a dozen words and eighty characters. A row with a cell over a cap, or
+ * with a cell missing, is dropped — not cut; a term already in the table is not repeated
+ * (say it once). Whether the term is the paper's is the verifier's question, not this one's.
  */
-export function sanitizeExplainReply(raw: unknown): ExplainReply | null {
+function sanitizeItems(raw: unknown): ExplainItem[] {
+  if (!Array.isArray(raw)) return [];
+  const rows: ExplainItem[] = [];
+  const seen = new Set<string>();
+  for (const row of raw as unknown[]) {
+    if (!isRecord(row)) continue;
+    const term = itemCell(row.term);
+    const here = itemCell(row.here);
+    const read = itemCell(row.read);
+    if (!term || !here || !read) continue;
+    const key = normalizeForMatch(term);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    rows.push({ term, here, read });
+    if (rows.length === EXPLAIN_CAPS.itemRows) break;
+  }
+  return rows;
+}
+
+/**
+ * Whitelist what the model sent as a reply: its words, cleaned, at most three whole
+ * sentences and 560 characters — or, with `detail` (the reader asked for more), eight
+ * and 1,400, and with a table two sentences either way (P3-07) — cut after a sentence,
+ * never inside one; the quote a cleaned string of at most 400 characters, which the
+ * sentence cap never touches; and the table, shaped (`sanitizeItems`). Whatever else the
+ * model said — a place, a page, a "peer" flag — is dropped: only the verifier says where a
+ * quote sits and which rows the paper grounds. Null without words.
+ */
+export function sanitizeExplainReply(raw: unknown, options: { detail?: boolean } = {}): ExplainReply | null {
   if (!isRecord(raw)) return null;
-  const reply = words(typeof raw.reply === "string" ? withoutWebAddresses(raw.reply) : raw.reply, EXPLAIN_CAPS.replySentences, EXPLAIN_CAPS.replyChars);
+  const detail = options.detail === true;
+  const items = sanitizeItems(raw.items);
+  const sentences = items.length > 0 ? EXPLAIN_CAPS.itemsReplySentences : detail ? EXPLAIN_CAPS.replyDetailSentences : EXPLAIN_CAPS.replySentences;
+  const chars = detail ? EXPLAIN_CAPS.replyDetailChars : EXPLAIN_CAPS.replyChars;
+  const reply = words(typeof raw.reply === "string" ? withoutWebAddresses(raw.reply) : raw.reply, sentences, chars);
   if (!reply) return null;
   const evidence = typeof raw.evidence === "string" ? cleanDisplayText(raw.evidence).slice(0, EXPLAIN_CAPS.evidenceChars).trim() : "";
-  return evidence ? { reply, evidence } : { reply };
+  return { reply, ...(evidence ? { evidence } : {}), ...(items.length > 0 ? { items } : {}) };
+}
+
+/** Where a table's terms must be found: the passage the reader selected and the paragraph
+ *  around it, its neighbours and the section it sits in (`located`). */
+export interface ExplainItemScope {
+  passage: string;
+  located: Pick<LocatedPassage, "sectionId" | "paragraph" | "before" | "after">;
+}
+
+const escapeForRegExp = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+/** Letters and digits of the scripts a paper's terms are written in; Chinese and Japanese
+ *  have no word boundaries, so they never make a "longer word". */
+const WORD_CHAR = "[\\p{Script=Latin}\\p{Script=Greek}\\p{Script=Cyrillic}\\p{N}]";
+const isWordChar = (char: string | undefined): boolean => char !== undefined && new RegExp(`^${WORD_CHAR}$`, "u").test(char);
+
+/** Whether `term` occurs in `haystack` (both already normalised) as a word or phrase — not
+ *  inside a longer word or number: "auge" is not in "gauge", "0.5" is not in "10.55". */
+function occursAsWords(term: string, haystack: string): boolean {
+  if (!term) return false;
+  const chars = [...term];
+  const before = isWordChar(chars[0]) ? `(?<!${WORD_CHAR})` : "";
+  const after = isWordChar(chars[chars.length - 1]) ? `(?!${WORD_CHAR})` : "";
+  return new RegExp(`${before}${escapeForRegExp(term)}${after}`, "u").test(haystack);
+}
+
+/**
+ * The rows of a table the paper stands behind (P3-07, §1h.9 (3)): a row stays only when its
+ * term occurs — after `normalizeForMatch` on both sides, so case, white space and a hyphenated
+ * line break do not matter — in the passage, its paragraph, the paragraphs on either side of
+ * it, or the section it sits in. A term found nowhere there is the model's, not the paper's:
+ * the row goes. Order kept; nothing in the rows changed.
+ */
+export function groundExplainItems(items: readonly ExplainItem[], doc: ExtractedDocument, scope: ExplainItemScope): ExplainItem[] {
+  const { located, passage } = scope;
+  const section = sectionCorpus(doc).find((entry) => entry.id === located.sectionId)?.text ?? "";
+  const haystacks = [passage, located.paragraph, located.before ?? "", located.after ?? ""].map(normalizeForMatch);
+  haystacks.push(section);
+  return items.filter((item) => {
+    const term = normalizeForMatch(item.term);
+    return term !== "" && haystacks.some((haystack) => occursAsWords(term, haystack));
+  });
 }
 
 /**
@@ -564,11 +834,38 @@ export function sanitizeExplainReply(raw: unknown): ExplainReply | null {
  * found whole in one section, the place set from the document; otherwise — or
  * with no quote at all — the quote goes and `peer: true` says the page labels
  * the prose as Peer's own reading. The reply given is not changed.
+ *
+ * P3-07: the table's rows are held to the paper too (`groundExplainItems`), in the `scope`
+ * the route gives — the passage and where it was found. Without a scope there is nothing
+ * to hold a row to, so none is kept; with every row dropped the turn has no `items`.
  */
-export function verifyExplainReply(reply: ExplainReply, doc: ExtractedDocument, preferSectionId?: string): ExplainReplyTurn {
+export function verifyExplainReply(reply: ExplainReply, doc: ExtractedDocument, preferSectionId?: string, scope?: ExplainItemScope): ExplainReplyTurn {
   const placed = reply.evidence ? placeQuote(reply.evidence, doc, preferSectionId) : null;
-  if (placed) return { role: "peer", text: reply.reply, ...placed };
-  return { role: "peer", text: reply.reply, peer: true };
+  const turn: ExplainReplyTurn = placed ? { role: "peer", text: reply.reply, ...placed } : { role: "peer", text: reply.reply, peer: true };
+  const items = reply.items && scope ? groundExplainItems(reply.items, doc, scope) : [];
+  return items.length > 0 ? { ...turn, items } : turn;
+}
+
+// ── Asking for more (P3-07) ────────────────────────────────────────────
+
+/** English: whole words, any case. "more" counts only in "tell me more", "say more" and
+ *  "more detail" — "are there more papers?" is not a request for detail. */
+const DETAIL_ENGLISH = new RegExp(
+  `(?<![\\p{L}\\p{N}])(?:detail|detailed|in[\\s-]+depth|elaborate|expand|step[\\s-]+by[\\s-]+step|tell\\s+me\\s+more|say\\s+more|more\\s+detail)(?![\\p{L}\\p{N}])`,
+  "iu",
+);
+/** Chinese has no word boundaries: the words are looked for as they stand. */
+const DETAIL_CHINESE = /详细|展开|具体|深入|多说|讲讲/u;
+
+/**
+ * Whether a message asks Peer for more than a short answer, in words (§1h.9 (2)): detail,
+ * detailed, in depth, elaborate, expand, step by step, tell me more, say more, more detail —
+ * 详细, 展开, 具体, 深入, 多说, 讲讲. The route ORs it with the body's `detail` flag (the
+ * "Say more" button); a message that only mentions more of something is not one.
+ */
+export function asksForDetail(message: unknown): boolean {
+  if (typeof message !== "string") return false;
+  return DETAIL_ENGLISH.test(message) || DETAIL_CHINESE.test(message);
 }
 
 // ── The server's memory (§1g.4) ────────────────────────────────────────
@@ -585,12 +882,13 @@ export function explainDocHash(doc: ExtractedDocument): string {
  * the first message; every message of a thread changes it), and — P3-02c — whether
  * the reply searched the web: the same thread answered with and without search
  * are two entries, so the memory never hands a plain reply to a request that
- * asked to search nor the reverse. A hash of all of it — nothing in it is a
- * reader's identity, and nothing of the passage or the thread can be read back
- * from it.
+ * asked to search nor the reverse. P3-07: and whether the reply is the long form (the
+ * reader asked for more), so a short and a long reply to the same message are two entries.
+ * A hash of all of it — nothing in it is a reader's identity, and nothing of the passage or
+ * the thread can be read back from it.
  */
-export function explainCacheKey(docHash: string, passage: string, thread: readonly string[], searched = false): string {
-  return sha256(`${docHash}|${normalizeForMatch(passage)}|${sha256(JSON.stringify(thread))}${searched ? "|search" : ""}`);
+export function explainCacheKey(docHash: string, passage: string, thread: readonly string[], searched = false, detail = false): string {
+  return sha256(`${docHash}|${normalizeForMatch(passage)}|${sha256(JSON.stringify(thread))}${searched ? "|search" : ""}${detail ? "|detail" : ""}`);
 }
 
 /** What the memory holds: a first answer, or (P3-02b) a reply turn — both

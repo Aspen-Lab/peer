@@ -535,7 +535,8 @@ describe("POST /api/papers/[id]/explain — a reply to the thread", () => {
     expect(userPrompt).toContain(PASSAGE);
     expect(parsed.thread).toEqual(thread1);
     expect(parsed.lastReaderMessage).toBe(REPLY_Q);
-    expect(Object.keys(parsed.outputSchema)).toEqual(["reply", "evidence"]);
+    // P3-07 (§1h.9 (3)): the reply schema gains the optional `items` (the term table).
+    expect(Object.keys(parsed.outputSchema)).toEqual(["reply", "evidence", "items"]);
   });
 
   it("removes a quote the paper does not hold, or none at all, and says the reply is Peer's own", async () => {
@@ -1034,5 +1035,221 @@ describe("POST /api/papers/[id]/explain — a reply that searches the web (P3-02
     expect(Object.keys(fields).sort()).toEqual(["answerChars", "cached", "promptChars", "tenths", "thread", "userId"]);
     expect(fields).toMatchObject({ tenths: EXPLAIN_SEARCH_TENTHS, cached: false, thread: 2 });
     for (const word of ["READER-SENTINEL", "rafting", "gauge", "Rafting under creep", "plates", "carries load"]) expect(all).not.toContain(word);
+  });
+});
+
+// ── P3-07 (ruling §1h.9; user decision §1a.14): short and exact ────────────
+// The route reads `detail` from the body (a literal `true` only) and sets the
+// effective detail = the body's flag OR the reader's last message asking for
+// more in words; the cap that applies (three sentences, or eight) goes into the
+// prompt and into the sanitizer; the memory keeps a short and a long reply apart;
+// the charge is what it was; and a reply may carry a term table, its rows
+// grounded in the paper. Every text is invented.
+
+const lecture = (count: number) => Array.from({ length: count }, (_, i) => `Point ${i + 1} is plain and short.`).join(" ");
+const row = (term: string) => ({ term, here: "what it means in this paper", read: "how a reader should take it" });
+
+describe("POST /api/papers/[id]/explain — the long form (P3-07)", () => {
+  const detailBody = (over: Record<string, unknown> = {}) => ask({ thread: thread1, ...over });
+
+  it("is short by default: a nine-sentence reply is cut to three whole sentences, with no `detail` on the turn", async () => {
+    replyStub({ reply: lecture(9), evidence: DEF });
+    const body = await json(await call(detailBody()));
+
+    expect((body.turn as { text: string }).text).toBe(lecture(3));
+    expect(body.turn).not.toHaveProperty("detail");
+    expect(provider.generateJsonText.mock.calls[0][0].maxTokens).toBe(400);
+    expect(promptRules()).toMatch(/three sentences/i);
+    expect(promptRules()).not.toMatch(/eight sentences/i);
+  });
+
+  it("with `detail: true` in the body: the long cap in the prompt, eight whole sentences kept, `detail: true` on the turn, a larger token budget", async () => {
+    replyStub({ reply: lecture(12), evidence: DEF });
+    const response = await call(detailBody({ detail: true }));
+    const body = await json(response);
+
+    expect(response.status).toBe(200);
+    expect((body.turn as { text: string }).text).toBe(lecture(8));
+    expect(body.turn).toMatchObject({ role: "peer", evidence: DEF, searched: false, detail: true });
+    expect(promptRules()).toMatch(/eight sentences/i);
+    expect(promptRules()).toMatch(/1,400 characters/);
+    expect(provider.generateJsonText.mock.calls[0][0].maxTokens).toBe(800);
+  });
+
+  it("takes only a literal true for the flag: a string, a number, an object, false or nothing is not a request for more", async () => {
+    for (const flag of ["true", 1, "yes", {}, [true], false, null, undefined]) {
+      explainCache.clear();
+      replyStub({ reply: lecture(9) });
+      const body = await json(await call(detailBody({ detail: flag })));
+
+      expect((body.turn as { text: string }).text, String(flag)).toBe(lecture(3));
+      expect(body.turn, String(flag)).not.toHaveProperty("detail");
+    }
+  });
+
+  it("takes the reader's last message asking for more in words as the same thing: English and Chinese", async () => {
+    for (const asked of ["Please explain that in detail.", "tell me more", "Can you elaborate?", "请详细解释一下", "能展开说说吗"]) {
+      explainCache.clear();
+      replyStub({ reply: lecture(12) });
+      const body = await json(await call(ask({ thread: [{ role: "peer", text: FIRST_PEER }, { role: "reader", text: asked }] })));
+
+      expect((body.turn as { text: string }).text, asked).toBe(lecture(8));
+      expect(body.turn, asked).toMatchObject({ detail: true });
+      expect(promptRules(), asked).toMatch(/eight sentences/i);
+    }
+  });
+
+  it("reads only the reader's LAST message for those words: an earlier ask for detail does not make the next reply long", async () => {
+    replyStub({ reply: lecture(12) });
+    const earlier = [
+      { role: "peer", text: FIRST_PEER },
+      { role: "reader", text: "Explain it in detail" },
+      { role: "peer", text: REPLY },
+      { role: "reader", text: "And at a lower temperature?" },
+    ];
+    const body = await json(await call(ask({ thread: earlier })));
+
+    expect((body.turn as { text: string }).text).toBe(lecture(3));
+    expect(body.turn).not.toHaveProperty("detail");
+  });
+
+  it("does not read a peer message for those words: Peer saying 'in detail' is not the reader asking", async () => {
+    replyStub({ reply: lecture(12) });
+    const body = await json(await call(ask({ thread: [{ role: "peer", text: "Here it is in detail and step by step. Tell me more." }, { role: "reader", text: "And at a lower temperature?" }] })));
+
+    expect((body.turn as { text: string }).text).toBe(lecture(3));
+  });
+
+  it("is not the first answer's business: a first message with `detail: true` is the first answer, unchanged", async () => {
+    const body = await json(await call(ask({ detail: true })));
+
+    expect(body.answer).toBeDefined();
+    expect(body.turn).toBeUndefined();
+    expect(provider.generateJsonText.mock.calls[0][0].maxTokens).toBe(600);
+    expect(JSON.parse(provider.generateJsonText.mock.calls[0][0].userPrompt)).not.toHaveProperty("thread");
+    expect(JSON.stringify(body)).not.toContain('"detail"');
+  });
+
+  it("keeps a short and a long reply to the same message apart in the memory: two entries, two charges, each a hit on its own repeat", async () => {
+    replyStub({ reply: lecture(12) });
+    const short = await json(await call(detailBody()));
+    const long = await json(await call(detailBody({ detail: true })));
+    const shortAgain = await json(await call(detailBody()));
+    const longAgain = await json(await call(detailBody({ detail: true })));
+
+    expect(provider.generateJsonText).toHaveBeenCalledTimes(2);
+    expect(explainCache.size()).toBe(2);
+    expect((short.turn as { text: string }).text).toBe(lecture(3));
+    expect((long.turn as { text: string }).text).toBe(lecture(8));
+    expect(shortAgain).toEqual({ ...short, cached: true });
+    expect(longAgain).toEqual({ ...long, cached: true });
+    expect(await tenths()).toBe(2 * EXPLAIN_TURN_TENTHS);
+  });
+
+  it("asking in words and pressing the button are the same entry: one model call for the same long reply", async () => {
+    replyStub({ reply: lecture(12) });
+    await call(ask({ thread: [{ role: "peer", text: FIRST_PEER }, { role: "reader", text: "explain in detail" }] }));
+    const again = await json(await call(ask({ thread: [{ role: "peer", text: FIRST_PEER }, { role: "reader", text: "explain in detail" }], detail: true })));
+
+    expect(again.cached).toBe(true);
+    expect(provider.generateJsonText).toHaveBeenCalledTimes(1);
+  });
+
+  it("charges the long form what a reply costs: one tenth, and ten when it searched — unchanged", async () => {
+    replyStub({ reply: lecture(12) });
+    await call(detailBody({ detail: true }));
+    expect(await tenths()).toBe(EXPLAIN_TURN_TENTHS);
+
+    searchStub({ reply: lecture(12) });
+    const body = await json(await call(ask({ thread: [...thread1, { role: "peer", text: REPLY }, { role: "reader", text: "And then?" }], detail: true, search: true })));
+
+    expect(body.turn).toMatchObject({ searched: true, detail: true });
+    expect(await tenths()).toBe(EXPLAIN_TURN_TENTHS + EXPLAIN_SEARCH_TENTHS);
+  });
+
+  it("accepts the thread Say more sends: the reader's last message once, the earlier reply left out — eight readers, none added", async () => {
+    replyStub({ reply: lecture(9) });
+    const pair = (i: number) => [{ role: "reader", text: `question number ${i}` }, { role: "peer", text: `answer number ${i}` }];
+    const sayMore = [{ role: "peer", text: FIRST_PEER }, ...[1, 2, 3, 4, 5, 6, 7].flatMap(pair), { role: "reader", text: "question number 8" }];
+    const response = await call(ask({ thread: sayMore, detail: true }));
+
+    expect(response.status).toBe(200);
+    expect(((await json(response)).turn as { text: string }).text).toBe(lecture(8));
+  });
+
+  it("writes the same one debug line for the long form: no new key, and none of the reader's words", async () => {
+    replyStub({ reply: lecture(12) });
+    const levels = (["log", "info", "warn", "error", "debug"] as const).map((level) => vi.spyOn(console, level).mockImplementation(() => {}));
+    await call(ask({ thread: [{ role: "peer", text: FIRST_PEER }, { role: "reader", text: "READER-SENTINEL explain in detail?" }], detail: true }));
+    const debug = levels[4].mock.calls;
+    const all = JSON.stringify(levels.flatMap((spy) => spy.mock.calls));
+
+    expect(debug).toHaveLength(1);
+    expect(Object.keys((debug[0] as [string, Record<string, unknown>])[1]).sort()).toEqual(["answerChars", "cached", "promptChars", "tenths", "thread", "userId"]);
+    for (const word of ["READER-SENTINEL", "rafting", "gauge", "Point 1"]) expect(all).not.toContain(word);
+  });
+});
+
+describe("POST /api/papers/[id]/explain — a reply with a term table (P3-07)", () => {
+  const tableReply = (items: unknown, over: Record<string, unknown> = {}) => ({ reply: "The authors report two values. Both come from the sample.", evidence: DEF, items, ...over });
+
+  it("answers the grounded rows on the turn, in order, and drops a row whose term is nowhere in the passage, its paragraph, its neighbours or its section", async () => {
+    replyStub(tableReply([row("rafting ratio"), row("tungsten additions"), row("gauge length"), row("spline interpolation")]));
+    const body = await json(await call(ask({ thread: thread1 })));
+
+    expect(body.turn).toEqual({
+      role: "peer",
+      text: "The authors report two values. Both come from the sample.",
+      evidence: DEF,
+      evidenceWhere: "2 Methods",
+      sectionId: "s2",
+      page: 2,
+      searched: false,
+      items: [row("rafting ratio"), row("gauge length")],
+    });
+  });
+
+  it("has no items key when no row survives, and says the prose as the usual three sentences were allowed", async () => {
+    replyStub(tableReply([row("tungsten additions")], { reply: lecture(5) }));
+    const body = await json(await call(ask({ thread: thread1 })));
+
+    expect(body.turn).not.toHaveProperty("items");
+    // The shape check ran with a valid row, so the prose was held to two sentences before the paper was asked.
+    expect((body.turn as { text: string }).text).toBe(lecture(2));
+  });
+
+  it("holds the shape: at most four rows, a cell over a dozen words or eighty characters drops its row", async () => {
+    replyStub(tableReply([row("rafting ratio"), { term: "gauge length", here: "w ".repeat(13).trim(), read: "ok" }, { term: "constant load", here: "x".repeat(81), read: "ok" }, row("single casting"), row("heat treated"), row("fraction"), row("covered by plates")]));
+    const body = await json(await call(ask({ thread: thread1 })));
+    const items = (body.turn as { items: Array<{ term: string }> }).items;
+
+    expect(items.length).toBeLessThanOrEqual(4);
+    // The fit rows, the first four of them; the two that were over a cap were dropped, not cut, and the fifth fit row is over four.
+    expect(items.map((item) => item.term)).toEqual(["rafting ratio", "single casting", "heat treated", "fraction"]);
+  });
+
+  it("a table with a long reply: the long form's eight sentences do not apply while rows are present", async () => {
+    replyStub(tableReply([row("rafting ratio")], { reply: lecture(9) }));
+    const body = await json(await call(ask({ thread: thread1, detail: true })));
+
+    expect((body.turn as { text: string }).text).toBe(lecture(2));
+    expect(body.turn).toMatchObject({ detail: true, items: [row("rafting ratio")] });
+  });
+
+  it("remembers the table with the turn, so a repeat is a hit that carries it", async () => {
+    replyStub(tableReply([row("rafting ratio")]));
+    const first = await json(await call(ask({ thread: thread1 })));
+    const again = await json(await call(ask({ thread: thread1 })));
+
+    expect(again.cached).toBe(true);
+    expect(again.turn).toEqual(first.turn);
+    expect((again.turn as { items: unknown[] }).items).toHaveLength(1);
+  });
+
+  it("never puts a table on the first answer: it has no such schema, and the model's items there are not read", async () => {
+    provider.generateJsonText.mockResolvedValue(JSON.stringify({ ...modelAnswer, items: [row("rafting ratio")] }));
+    const body = await json(await call(ask()));
+
+    expect(JSON.stringify(body)).not.toContain("items");
   });
 });

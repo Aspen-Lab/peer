@@ -35,6 +35,15 @@
 // thread's texts and whether the reply searched — never by reader) costs no model
 // call and no charge.
 //
+// Short and exact (P3-07, §1h.9; user decision §1a.14): a reply is three sentences and 560
+// characters unless the reader asked for more — the body's `detail: true` (the box's
+// "Say more", a literal true only) or a last message that asks in words
+// (`asksForDetail`) — when it may run to eight and 1,400; the prompt names the cap that
+// applies, the sanitizer enforces it, the memory's key carries it, and the turn says
+// `detail: true` so the box does not offer "Say more" under a reply that is already long.
+// A reply may carry a small term table, its rows held to the paper. The charge is
+// unchanged: one tenth, ten when it searched.
+//
 // Never cached by a CDN or the browser: every answer says `no-store`, and one
 // about an upload says what the other private-upload routes say.
 
@@ -43,6 +52,7 @@ import { hasUsableProviderOverride, resolveProvider } from "@/lib/llm/providers/
 import type { ProviderOverrideConfig } from "@/lib/llm/providers/types";
 import {
   EXPLAIN_CAPS,
+  asksForDetail,
   buildExplainPrompt,
   buildExplainReplyPrompt,
   clipPassage,
@@ -77,8 +87,10 @@ export const maxDuration = 30;
 
 /** The most one explanation may say, in tokens (two parts of two sentences, and a quote). */
 const MAX_TOKENS = 600;
-/** The most one reply may say (three sentences and a quote). */
+/** The most one reply may say (three sentences and a quote, or a two-sentence reply and a small table). */
 const REPLY_MAX_TOKENS = 400;
+/** P3-07: the most the long form of a reply may say (eight sentences and a quote). */
+const REPLY_DETAIL_MAX_TOKENS = 800;
 
 const NO_STORE = { "Cache-Control": "no-store" } as const;
 
@@ -95,6 +107,10 @@ interface ExplainRequest {
   /** P3-02c: the reader turned web search on for this message. Only a literal
    *  `true` counts, and only a reply can search. */
   search?: unknown;
+  /** P3-07: the reader pressed "Say more" — the reply may run to the long cap. Only a
+   *  literal `true` counts, and only a reply has a long form; a reader's last message that
+   *  asks for more in words (`asksForDetail`) is the same request. */
+  detail?: unknown;
   llmOverride?: ProviderOverrideConfig;
 }
 
@@ -238,9 +254,15 @@ async function handle(req: NextRequest, rawId: string): Promise<Response> {
   // asks of a provider that cannot is a plain turn, charged as one.
   const searched = replying && body.search === true && provider.supportsWebSearch === true;
 
-  // The server's memory: the document, the passage, the thread's texts and
-  // whether the reply searched — never the reader.
-  const key = explainCacheKey(explainDocHash(doc), passage, thread.map((message) => message.text), searched);
+  // Whether this reply may be the long form (P3-07, §1h.9 (2)): the reader pressed "Say more"
+  // (a literal `true`) or their last message asks for more in words. Only a reply has one; the
+  // first answer's caps do not move. The cap that applies goes into the prompt and the sanitizer.
+  const lastReaderMessage = [...thread].reverse().find((message) => message.role === "reader")?.text ?? "";
+  const detail = replying && (body.detail === true || asksForDetail(lastReaderMessage));
+
+  // The server's memory: the document, the passage, the thread's texts, whether the
+  // reply searched and whether it is the long form — never the reader.
+  const key = explainCacheKey(explainDocHash(doc), passage, thread.map((message) => message.text), searched, detail);
   const logTurn = (fields: { tenths: number; promptChars: number; answerChars: number; cached: boolean }) =>
     console.debug("[papers/explain] turn", {
       ...(userId ? { userId: shortHash(userId) } : {}),
@@ -271,11 +293,12 @@ async function handle(req: NextRequest, rawId: string): Promise<Response> {
 
   const abstract = [body.paper.summaryIntro, body.paper.summaryResultDiscussion].filter(Boolean).join(" ");
   const context = { paper: { title: body.paper.title, abstract }, map: explainMapLines(doc), located, passage };
-  const { systemPrompt, userPrompt } = replying ? buildExplainReplyPrompt({ ...context, thread, search: searched }) : buildExplainPrompt(context);
+  const { systemPrompt, userPrompt } = replying ? buildExplainReplyPrompt({ ...context, thread, search: searched, detail }) : buildExplainPrompt(context);
+  const maxTokens = replying ? (detail ? REPLY_DETAIL_MAX_TOKENS : REPLY_MAX_TOKENS) : MAX_TOKENS;
 
   let raw: string;
   try {
-    raw = await provider.generateJsonText({ systemPrompt, userPrompt, maxTokens: replying ? REPLY_MAX_TOKENS : MAX_TOKENS, tier: "small", webSearch: searched });
+    raw = await provider.generateJsonText({ systemPrompt, userPrompt, maxTokens, tier: "small", webSearch: searched });
   } catch (err) {
     // Only the kind of error is logged: a provider's message may echo the prompt.
     console.error("[papers/explain] model call failed:", err instanceof Error ? err.name : typeof err);
@@ -290,10 +313,11 @@ async function handle(req: NextRequest, rawId: string): Promise<Response> {
   // charge, taken before the call, stays: a deep read that degrades after the
   // charge still costs, as in the report route).
   const parsed = parseModelJson(raw);
-  const sanitizedReply = replying ? sanitizeExplainReply(parsed) : null;
+  const sanitizedReply = replying ? sanitizeExplainReply(parsed, { detail }) : null;
   const sanitizedAnswer = replying ? null : sanitizeExplainAnswer(parsed);
   let result: ExplainCached;
-  if (sanitizedReply) result = { ...verifyExplainReply(sanitizedReply, doc, located.sectionId), searched };
+  // A reply's table rows are held to the paper in the scope the passage was found in (P3-07).
+  if (sanitizedReply) result = { ...verifyExplainReply(sanitizedReply, doc, located.sectionId, { passage, located }), searched, ...(detail ? { detail: true as const } : {}) };
   else if (sanitizedAnswer) result = verifyExplainAnswer(sanitizedAnswer, doc, located.sectionId);
   else return reply({ unavailable: true } satisfies ExplainResult);
 

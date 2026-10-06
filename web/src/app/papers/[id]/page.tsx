@@ -65,7 +65,7 @@ import {
   requestExplanation,
   type AskResult,
 } from "@/components/reader/explain-box";
-import { replyPair, requestReply, type ReplyResult } from "@/components/reader/explain-thread";
+import { moreReply, replyPair, requestReply, type ReplyResult } from "@/components/reader/explain-thread";
 import { RecordBlock } from "@/components/reader/record-block";
 import { InYourLibrary } from "@/components/reader/in-your-library";
 import { KeyLegend } from "@/components/reader/key-legend";
@@ -832,6 +832,26 @@ function Reader({
     },
     [paper, profile, reading, addExplainTurns],
   );
+  // P3-07 (§1h.9 (2)): "Say more". The box hands back the thread before the reader's last
+  // message and that message; the request is the same one in the long form (`detail: true`, and
+  // never a search), and the reply joins the kept thread as Peer's turn alone (`moreReply`) —
+  // no second copy of the reader's message — once it has arrived.
+  const moreExplain = useCallback(
+    async (selection: SelectionTarget, thread: readonly ExplainTurn[], message: string): Promise<ReplyResult> => {
+      const sectionId = reading?.body?.[selection.sectionIndex]?.id;
+      if (!sectionId) return "unavailable";
+      const result = await requestReply({ paper, selection, sectionId, thread, message, detail: true, llmOverride: explainLlmOverride(profile) });
+      if (typeof result !== "string") {
+        try {
+          addExplainTurns(paper.id, passageHash(selection.passage), moreReply(result));
+        } catch {
+          // A full or blocked browser store never costs the reader the reply.
+        }
+      }
+      return result;
+    },
+    [paper, profile, reading, addExplainTurns],
+  );
   const resetExplain = useCallback(
     (selection: SelectionTarget) => {
       try {
@@ -1476,7 +1496,7 @@ function Reader({
         inside the section links, so the quotes' "§Heading" is a link as
         everywhere. One per paper: a card never follows the reader to the next. */}
     <SectionLinks headings={bodyHeadings}>
-      <ExplainBox key={paper.id} target={explainTarget} terms={terms} canAsk={providerConfigured} onAsk={askExplain} cached={explainCached} cachedTurns={explainKeptThread?.turns} onReply={replyExplain} onResetThread={resetExplain} column={measureBodyColumn} openRef={explainOpen} reading={reading} />
+      <ExplainBox key={paper.id} target={explainTarget} terms={terms} canAsk={providerConfigured} onAsk={askExplain} cached={explainCached} cachedTurns={explainKeptThread?.turns} onReply={replyExplain} onSayMore={moreExplain} onResetThread={resetExplain} column={measureBodyColumn} openRef={explainOpen} reading={reading} />
     </SectionLinks>
     </>
   );

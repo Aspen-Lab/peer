@@ -52,11 +52,23 @@
 // the thread (the first: the input and the toggle disabled, the typed words kept)
 // or, for the first message, in place of the loading line. Nothing here links to a
 // web source: the mark is the only trace of the search.
+//
+// P3-07 (ruling §1h.9; user decision §1a.14): the answers are short and exact, and the box
+// shows two things for it. A reply may carry a small term table — three columns, the term,
+// what it means here, how to read it, two to four rows a dozen words a cell — under its
+// prose (headers in the label face from `copy.ts`, cells in the reading face; never quote-
+// styled: the table is Peer's, the paper's own sentence stays an `EvidenceQuote` below it).
+// And under Peer's LATEST reply — never under the first answer, never under a reply that is
+// already the long form — one label-face button, "Say more", re-sends the reader's last
+// message in the long form (`onSayMore`): the thread before that message and the message,
+// no copy of it, so the reader count does not grow; the reply is appended as Peer's next
+// turn and replaces nothing. It waits while a request is in flight, at the full thread and
+// when the day's explanations are used up, as a send does; what the reader was typing stays.
 
 import { useEffect, useRef, useState, type CSSProperties, type Ref } from "react";
 import { hasUserLlmOverride } from "@/lib/feed/ai-tier";
 import type { ProviderOverrideConfig } from "@/lib/llm/providers/types";
-import type { ExplainAnswer } from "@/lib/papers/explain";
+import type { ExplainAnswer, ExplainItem } from "@/lib/papers/explain";
 import type { PaperReading } from "@/lib/papers/reading";
 import type { PaperTerm } from "@/lib/papers/report";
 import { MAX_EXPLAIN_MESSAGE_CHARS, threadFull, type ExplainTurn } from "@/store/explain-threads";
@@ -69,7 +81,9 @@ import {
   postExplain,
   pressKind,
   refusalOf,
+  moreReply,
   replyPair,
+  sayMoreOf,
   toggleStep,
   type AllowanceRefusal,
   type ReplyResult,
@@ -123,6 +137,9 @@ export interface ThreadView {
   onSend: () => void;
   /** P3-02c: the web-search toggle. Without it the row has none. */
   search?: SearchView;
+  /** P3-07: "Say more" — re-send the reader's last message in the long form. Without it
+   *  the thread has no such button. */
+  onSayMore?: () => void;
 }
 
 /** The tooltip's id: there is one box on a page, so one is enough. */
@@ -348,9 +365,43 @@ function PartHeading({ children, peers }: { children: string; peers: boolean }) 
   );
 }
 
+/** The columns of a reply's table: a narrow one for the term, the other two share the rest. */
+const TABLE_COLUMNS = ["w-[26%]", "w-[37%]", "w-[37%]"] as const;
+
+/** A reply's term table (P3-07): the headers in the label face, from `copy.ts`; the cells
+ *  in the reading face, a step smaller than the prose so three columns fit the card. Peer's
+ *  words, so no quote styling; nothing in it links anywhere. */
+function ItemsTable({ items }: { items: readonly ExplainItem[] }) {
+  return (
+    <table className="mt-2 w-full table-fixed border-collapse text-left">
+      <thead>
+        <tr>
+          {[EXPLAIN.tableTerm, EXPLAIN.tableHere, EXPLAIN.tableRead].map((label, column) => (
+            <th key={label} scope="col" className={`${TABLE_COLUMNS[column]} border-b border-border pb-1 pr-3 align-bottom font-mono text-caption font-normal text-text-muted`}>
+              {label}
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {items.map((item, row) => (
+          <tr key={row} className="align-top">
+            {[item.term, item.here, item.read].map((cell, column) => (
+              <td key={column} className="font-reading text-body-sm leading-[1.45] text-text break-words border-b border-border py-2 pr-3">
+                {cell}
+              </td>
+            ))}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
 /** One message of the thread: the reader's under "You"; Peer's under "Peer", the
  *  paper's own sentence through `EvidenceQuote` when it was verified, else Peer's
- *  reading label beside the prose and no quote (§1f.17). */
+ *  reading label beside the prose and no quote (§1f.17). A reply's term table (P3-07)
+ *  sits under its prose and above its quote. */
 function TurnView({ turn }: { turn: ExplainTurn }) {
   if (turn.role === "reader") {
     return (
@@ -373,6 +424,7 @@ function TurnView({ turn }: { turn: ExplainTurn }) {
     <div>
       <PartHeading peers={turn.peer === true}>{EXPLAIN.peer}</PartHeading>
       <p className="font-reading text-body leading-[1.6] text-text mt-1">{turn.text}</p>
+      {turn.items && turn.items.length > 0 && <ItemsTable items={turn.items} />}
       {turn.evidence && turn.peer !== true && <EvidenceQuote text={turn.evidence} where={turn.evidenceWhere ?? "abstract"} page={turn.page} />}
       {turn.searchUnavailable === true && <p className="annotation mt-2 text-text-faint">{EXPLAIN.searchUnavailable}</p>}
     </div>
@@ -472,6 +524,19 @@ export function ExplainCard({
                 )}
               </section>
               {asking?.turns.map((turn, index) => <TurnView key={index} turn={turn} />)}
+              {asking?.onSayMore && sayMoreOf(asking.turns) !== null && (
+                // P3-07: one button, under Peer's latest reply only — and never under the first
+                // answer (no turn yet), nor under a reply that is already the long form.
+                <button
+                  type="button"
+                  data-explain-say-more=""
+                  disabled={sendBlocked}
+                  onClick={() => asking.onSayMore?.()}
+                  className="rounded-full border border-border-strong bg-surface px-3 py-1 font-mono text-caption text-text-muted transition-colors hover:text-heading disabled:opacity-50"
+                >
+                  {EXPLAIN.sayMore}
+                </button>
+              )}
               {asking?.pending && <p className="annotation text-text-faint">{EXPLAIN.thinking}</p>}
               {asking?.failed && <p className="annotation text-text-faint">{EXPLAIN.unavailable}</p>}
               {asking?.quota === "exhausted" && <p className="annotation text-text-faint">{QUOTA.explainExhausted}</p>}
@@ -596,6 +661,11 @@ export interface ExplainBoxProps {
    *  first) and the new message — and, only when the reader turned web search on
    *  for it (P3-02c), `true` as a fourth argument. Without it the box has no thread. */
   onReply?: (target: SelectionTarget, thread: readonly ExplainTurn[], message: string, search?: boolean) => Promise<ReplyResult>;
+  /** P3-07: "Say more" — the same kind of request as a send, made when the reader presses it,
+   *  never before: the target, the thread before the reader's last message (the first answer
+   *  first) and that message — which is not repeated — to be answered in the long form. Without
+   *  it the box has no such button. */
+  onSayMore?: (target: SelectionTarget, thread: readonly ExplainTurn[], message: string) => Promise<ReplyResult>;
   /** Called when a passage whose thread is full is opened again: the page drops that thread. */
   onResetThread?: (target: SelectionTarget) => void;
   /** Where the text column's right edge is now (measured as the selection is). */
@@ -606,7 +676,7 @@ export interface ExplainBoxProps {
   openRef?: { current: (() => void) | null };
 }
 
-export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cachedTurns, onReply, onResetThread, column, openRef }: ExplainBoxProps) {
+export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cachedTurns, onReply, onSayMore, onResetThread, column, openRef }: ExplainBoxProps) {
   const [session, setSession] = useState<Session | null>(null);
   // A new selection closes the card; one that merely went away does not (a click
   // in the card collapses it). Derived, so the stale card never paints.
@@ -735,6 +805,32 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
       );
   };
 
+  // "Say more" (P3-07): re-send the reader's last message in the long form — the thread
+  // before it, then the message, no copy of it (`sayMoreOf`). It does nothing for a reply
+  // already on its way, a full thread, a day's explanations used up, or no reply to
+  // lengthen; the reply joins the thread as Peer's turn alone, only once it has arrived;
+  // a failed one leaves the thread as it was; the draft the reader was typing stays; and
+  // the toggle is not touched (a long reply never searches).
+  const sayMore = () => {
+    if (!open || !onSayMore || open.status.kind !== "answer") return;
+    if (open.reply === "pending" || open.reply === "exhausted" || threadFull(open.turns)) return;
+    const more = sayMoreOf(open.turns);
+    if (!more) return;
+    const selection = open.selection;
+    const thread = [firstAnswerMessage(open.status.answer), ...more.before];
+    setSession((current) => (current ? { ...current, reply: "pending" } : current));
+    void onSayMore(asked(selection), thread, more.message)
+      .catch((): ReplyResult => "unavailable")
+      .then((result) =>
+        setSession((current) => {
+          if (current === null || current.selection.passage !== selection.passage) return current;
+          if (result === "exhausted" || result === "allowance_unavailable") return { ...current, reply: result };
+          if (typeof result === "string") return { ...current, reply: "failed" };
+          return { ...current, reply: "idle", turns: [...current.turns, ...moreReply(result)] };
+        }),
+      );
+  };
+
   // The toggle's events (§1a.11). The pointer that went down is read once by the
   // click that follows it: a finger needs two taps (the first shows the warning), a
   // mouse, a pen or the keyboard one. A press does nothing while a reply is on its
@@ -857,6 +953,7 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
           ...(open.reply === "exhausted" ? { quota: "exhausted" as const } : open.reply === "allowance_unavailable" ? { quota: "unavailable" as const } : {}),
           onDraft: (text) => setSession((current) => (current ? { ...current, draft: text.slice(0, MAX_EXPLAIN_MESSAGE_CHARS) } : current)),
           onSend: send,
+          ...(onSayMore ? { onSayMore: sayMore } : {}),
           search: {
             on: open.search,
             tip: open.tip,
