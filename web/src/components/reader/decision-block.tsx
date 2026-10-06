@@ -7,7 +7,7 @@
 // phone. The sentence is `describeAvailability`'s, never typed here.
 
 import Link from "next/link";
-import { UPGRADE_HREF } from "@/lib/navigation/upgrade-destination";
+import { ADD_KEY_HREF } from "@/lib/navigation/add-key-destination";
 import type { Ref, ReactNode } from "react";
 import { buttonVariants, IconButton } from "@/components/ui/button";
 import { IconArrowUpRight, IconExpand, IconLink, IconMoon, IconSun } from "@/components/icons";
@@ -120,7 +120,7 @@ export function DecisionBlock({
           <>
             {" "}
             <Link
-              href={UPGRADE_HREF}
+              href={ADD_KEY_HREF}
               className={cn(
                 "text-text-faint underline decoration-border-strong underline-offset-4 hover:text-heading transition-colors ",
                 TOUCH_INLINE,

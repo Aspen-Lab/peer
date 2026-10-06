@@ -29,7 +29,7 @@ import { PageContainer } from "@/components/ui/page-container";
 import { PageSpread } from "@/components/ui/page-spread";
 import { AccountSection } from "@/components/account/account-section";
 import { RestoreFromBackup } from "@/components/profile/restore-backup";
-import { useProfileSyncStatus } from "@/components/profile-sync";
+import { useProfileSyncStatus, useSyncGate } from "@/components/profile-sync";
 import { useFeedSyncStatus } from "@/components/feed-sync";
 import { VersionLine } from "@/components/shell/version-line";
 import { AiKeyFields } from "@/components/profile/ai-setup";
@@ -37,7 +37,6 @@ import { Toggle } from "@/components/ui/toggle";
 import { FEED_EMPTY_REASON_CODES } from "@/lib/feed/types";
 import { TEST_EMAIL_EMPTY, TEST_EMAIL_EMPTY_GENERIC } from "@/lib/briefing/copy";
 import { feedsUseAi } from "@/lib/feed/ai-tier";
-import { entitlementGrants } from "@/lib/entitlement/allowance";
 import {
   type Tone,
   toneBadge,
@@ -1841,8 +1840,8 @@ function EditView({
   updateCareerStage: (s: typeof profile.careerStage) => void;
   updateIndustryPreference: (s: typeof profile.industryVsAcademia) => void;
 }) {
-  // One tier: signed in means Peer's model is available; a BYOK key also counts.
-  const aiGrants = entitlementGrants(useProfileStore((st) => st.entitlement));
+  // A model runs only on the reader's own key, and only for a signed-in reader.
+  const authOutcome = useSyncGate((st) => st.authOutcome);
   // Pulled straight from the store rather than threaded through this
   // component's already-long prop list.
   const updateFeedAiProvider = useProfileStore((s) => s.updateFeedAiProvider);
@@ -2118,12 +2117,12 @@ function EditView({
             <Toggle
               checked={profile.deepReportEnabled}
               onChange={(next) => updateDeepReportEnabled(next)}
-              disabled={!feedsUseAi(profile, aiGrants)}
+              disabled={!feedsUseAi(profile, authOutcome)}
               className="mt-0.5"
               aria-label="Deep report"
             />
           </div>
-          {!feedsUseAi(profile, aiGrants) && (
+          {!feedsUseAi(profile, authOutcome) && (
             <p className="text-micro leading-relaxed text-text-faint">
               Sign in first. Signed out, Peer shows the reading without a model
               and makes no AI call.

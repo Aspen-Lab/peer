@@ -28,7 +28,6 @@ import Link from "next/link";
 import { activePaperTopicsKey, useFeedStore } from "@/store/feed";
 import { useBatchAcknowledgement } from "@/lib/dashboard/use-batch-acknowledgement";
 import { feedsUseAi } from "@/lib/feed/ai-tier";
-import { entitlementGrants } from "@/lib/entitlement/allowance";
 import { formatTimeAgo } from "@/lib/format";
 import { useProfileStore } from "@/store/profile";
 import { useSyncGate } from "@/components/profile-sync";
@@ -82,7 +81,7 @@ function DailyBriefingPage() {
   // `emptyReason()` below.
   const emptyReasonCode = useFeedStore((s) => s.emptyReasonCode);
   const profile = useProfileStore((s) => s.profile);
-  const entitlement = useProfileStore((s) => s.entitlement);
+  const authOutcome = useSyncGate((s) => s.authOutcome);
   // UPLOAD-404 (§1bi.2): the upload button is only offered once the server
   // has actually confirmed it can store a new private PDF right now — see
   // use-uploads-available.ts for why "unknown" (the value before this
@@ -109,8 +108,8 @@ function DailyBriefingPage() {
   // P4-S5b-FIX2 — ABC-JEV-INTEGRATION.md §1g/§1c, closing
   // docs/jev-abc/P4-S5b-FIX-A-20260924T103406Z.md NEW FINDINGS #1: without
   // this, the auto-load effect below could run before a signed-in user's
-  // `entitlement` resolves (profile rehydrates synchronously from
-  // localStorage; entitlement needs a real network round trip), silently
+  // account id resolves (profile rehydrates synchronously from
+  // localStorage; the sign-in check needs a real network round trip), silently
   // building this device's delivered-history exclusions from the shared
   // "anonymous" namespace instead of that user's own — a real re-delivery
   // risk, not just a bookkeeping slip.
@@ -122,8 +121,8 @@ function DailyBriefingPage() {
   // bounded-time guarantee (web/src/lib/api.ts's apiFetch has no timeout
   // anywhere), so a hanging pull meant this effect could wait forever and
   // the feed would never auto-load at all this session (NEW FINDING #1);
-  // and a FAILED pull also settles `true` with `entitlement` staying null,
-  // which this gate alone could not tell apart from confirmed signed-out
+  // and a FAILED pull also settles `true`, which this gate alone could not
+  // tell apart from confirmed signed-out
   // (NEW FINDING #2 — closed on the feed.ts side, see
   // resolveOwnerKeyForLoad's own doc comment; this gate change removes the
   // remaining availability risk).
@@ -197,7 +196,7 @@ function DailyBriefingPage() {
     void loadFeed({ lanes: ["papers"] });
   }, [authOutcomeKnown, loadFeed]);
 
-  const canUseAiTools = feedsUseAi(profile, entitlementGrants(entitlement));
+  const canUseAiTools = feedsUseAi(profile, authOutcome);
   const shouldLoadPaperDigest = papers.length > 0 && canUseAiTools;
   const digestLlmOverride = useMemo(
     () =>

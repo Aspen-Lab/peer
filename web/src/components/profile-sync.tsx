@@ -20,10 +20,6 @@
 import { useEffect, useRef } from "react";
 import { create } from "zustand";
 import { apiFetch } from "@/lib/api";
-import {
-  ANONYMOUS_CLIENT_ENTITLEMENT,
-  type ClientEntitlement,
-} from "@/lib/entitlement/allowance";
 import { supabase } from "@/lib/supabase/client";
 import { useProfileStore } from "@/store/profile";
 import { defaultProfile, type UserProfile } from "@/types";
@@ -91,36 +87,21 @@ function hasAnySignal(p: UserProfile): boolean {
 }
 
 /**
- * ABC-freemium 1-14 · R-ENT-3 — the single fetch site, so the single place the
- * entitlement enters the browser.
- *
- * **6-04 · Ruling 16 points 2-3 — a failed fetch is NOT an answer.** This used
- * to say a failed or signed-out fetch "leaves the store on its frozen anonymous
- * default, which is the honest value". Half of that was true and the half that
- * was not shipped a defect: the store held that default from the very first
- * render, so a **paid** reader looked free until the round trip finished and
- * could be upsold while the server was still granting what they paid for.
- *
- * The two cases are now separated, and only the caller can tell them apart:
- *  - **no session** — a fact, established below, and worth recording: the
- *    caller sets `ANONYMOUS_CLIENT_ENTITLEMENT` explicitly.
- *  - **the fetch failed, or auth could not be read** — not a fact. The store
- *    stays `null` and every upsell surface stays silent, which is the same
- *    direction every breaker in this build fails.
+ * The sign-in reconcile's own GET of the account's profile. A failed fetch
+ * reads as `null`, the same as "the account has no row yet", which is safe
+ * here: `mergeProfileAtSignIn` treats a null remote as "nothing to merge from,
+ * local stays exactly as it is" either way.
  */
-async function fetchRemote(): Promise<{
-  profile: Partial<UserProfile> | null;
-  entitlement: ClientEntitlement | null;
-}> {
+async function fetchRemote(): Promise<Partial<UserProfile> | null> {
   try {
-    const data = await apiFetch<{
-      profile: Partial<UserProfile> | null;
-      entitlement?: ClientEntitlement;
-    }>("/api/profile", { cache: "no-store" });
-    return { profile: data.profile, entitlement: data.entitlement ?? null };
+    const data = await apiFetch<{ profile: Partial<UserProfile> | null }>(
+      "/api/profile",
+      { cache: "no-store" },
+    );
+    return data.profile;
   } catch (err) {
     console.warn("[ProfileSync] GET failed", err);
-    return { profile: null, entitlement: null };
+    return null;
   }
 }
 
@@ -336,8 +317,8 @@ export function isAccountSwitch(
  * owner-key gate composed in, pure, for direct testing without mounting a
  * real store. Production (`onSession` below) reaches the identical outcome
  * a different way: on a genuine switch it calls the REAL `logOut()` action
- * first — a store side effect (profile/lastSynced/entitlement/
- * syncedAccountId all reset together, `logOut`'s own contract) — so by the
+ * first — a store side effect (profile/lastSynced/syncedAccountId all
+ * reset together, `logOut`'s own contract) — so by the
  * time it reads `local`/`lastSynced` back from the store they are ALREADY
  * `defaultProfile`/`null`. Calling `planReconcile(local, remote,
  * lastSynced)` at that point is algebraically identical to this function's
@@ -818,7 +799,6 @@ let activeFlush: (() => Promise<boolean>) | null = null;
 
 export function ProfileSync() {
   const profile = useProfileStore((s) => s.profile);
-  const setEntitlement = useProfileStore((s) => s.setEntitlement);
   const isSignedInRef = useRef(false);
   const didInitialPullRef = useRef(false);
   const pullInFlightRef = useRef(false);
@@ -839,11 +819,6 @@ export function ProfileSync() {
   useEffect(() => {
     if (!supabase) {
       // No auth configured — local-only deployment, nothing will ever pull.
-      // ABC-freemium 6-04 — and that IS the answer, not a missing one: nobody
-      // can sign in here, so the reader is anonymous as a matter of fact and
-      // the store may say so. Leaving it `null` would silence the sign-in
-      // sentence forever in exactly the runtime that always needs it.
-      setEntitlement(ANONYMOUS_CLIENT_ENTITLEMENT);
       // P4-S5b-FIX3 — distinct from "signed-out" in name only; both read as
       // ANONYMOUS_OWNER_KEY in feed.ts's resolveOwnerKeyForLoad (the ruling:
       // "anonymous ONLY when signed-out is confirmed or auth is not
@@ -860,13 +835,6 @@ export function ProfileSync() {
         didInitialPullRef.current = false;
         lastPushedRef.current = null;
         // Signed out: there is no remote profile to wait for.
-        // ABC-freemium 6-04 — "signed out" is a fact we have just established,
-        // so record it. This is the `known + anonymous` state of Ruling 16
-        // point 3, and it is what earns the reader an honest sentence about
-        // signing in rather than the silence of an unknown plan. It also runs
-        // on `SIGNED_OUT`, so logging out downgrades the client immediately
-        // instead of leaving a stale `paid` on screen.
-        setEntitlement(ANONYMOUS_CLIENT_ENTITLEMENT);
         // P4-S5b-FIX3 — a CONFIRMED sign-out (never a rejected/unresolved
         // auth check — see the `.catch()` below, which deliberately leaves
         // this untouched). Clears any previously-published id.
@@ -900,8 +868,7 @@ export function ProfileSync() {
       // device is acting as (feed.ts's resolveOwnerKeyForLoad) no longer
       // has to wait for a full /api/profile round trip that might be slow
       // or fail outright — see markSyncSettled in the `finally` below: a
-      // FAILED pull still settles, with `entitlement` staying null, which
-      // used to be indistinguishable from confirmed signed-out.
+      // FAILED pull still settles, and the owner id above is already set.
       useSyncGate.setState({ authUserId: userId, authOutcome: "signed-in" });
 
       // ACCOUNT-SWITCH (§1bt point 1) — before today's existing
@@ -940,13 +907,7 @@ export function ProfileSync() {
       pullInFlightRef.current = true;
 
       try {
-        const { profile: remote, entitlement } = await fetchRemote();
-        // ABC-freemium 1-14 — hold it next to the profile. Set before the
-        // branch below so it lands even when the server has no profile row yet.
-        // 6-04 — no `else`: when the fetch failed we have learned nothing, and
-        // writing the anonymous default here would be inventing an answer for a
-        // signed-in reader whose plan we simply could not read.
-        if (entitlement) setEntitlement(entitlement);
+        const remote = await fetchRemote();
         const local = useProfileStore.getState().profile;
         const lastSynced = useProfileStore.getState().lastSynced;
 
@@ -1033,7 +994,7 @@ export function ProfileSync() {
     });
 
     return () => sub.subscription.unsubscribe();
-  }, [setEntitlement]);
+  }, []);
 
   // 2. Push local changes to server, debounced and diffed. Only when signed
   //    in and after the initial pull has settled.

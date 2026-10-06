@@ -6,10 +6,7 @@
 import type { UserProfile } from "@/types";
 import { defaultProfile } from "@/types";
 import { aiAvailability } from "@/lib/feed/ai-tier";
-import {
-  ANONYMOUS_ENTITLEMENT,
-  type Entitlement,
-} from "@/lib/entitlement/types";
+import type { AuthOutcome } from "@/components/profile-sync";
 
 export type StepKey =
   | "basics"
@@ -63,9 +60,9 @@ export function isStepDone(
   key: StepKey,
   profile: UserProfile,
   personaDone: boolean,
-  // ABC-freemium 1-15 — only the `ai` step reads it. Defaults to anonymous so
-  // an unchanged caller sees the old answer for a signed-out reader.
-  entitlement: Pick<Entitlement, "userId"> = ANONYMOUS_ENTITLEMENT,
+  // Only the `ai` step reads it. Defaults to "signed-out" so an unchanged
+  // caller sees the answer for a reader who is not signed in.
+  auth: AuthOutcome = "signed-out",
 ): boolean {
   switch (key) {
     case "basics":
@@ -93,15 +90,10 @@ export function isStepDone(
         (profile.preferredJournals?.length ?? 0) > 0
       );
     case "ai":
-      // ABC-freemium 1-15 · R-KEY-4 — **the two halves were required because
-      // `"default"` meant no AI.** Under D1 it means Peer's AI, so a signed-in
-      // reader who never opens the panel already has a model and the step is
-      // complete. Adding your own key stops being a prerequisite and becomes an
-      // upgrade — which is also why 1-25 rewrites the panel's copy.
-      //
-      // Stated rather than deleted: without this comment the next reader sees a
-      // removed check and reads it as a bug.
-      return aiAvailability(profile, entitlement) !== "none";
+      // Done when a model will actually run for this reader: they have pasted
+      // their own key and are signed in (or sign-in is not configured here).
+      // Peer holds no key of its own, so there is no other way to be done.
+      return aiAvailability(profile, auth) !== "none";
     case "connectors":
       return connectorCount(profile) > 0;
     case "persona":
@@ -133,10 +125,10 @@ export function readPersonaDone(): boolean {
 export function firstIncompleteStep(
   profile: UserProfile,
   personaDone: boolean,
-  entitlement: Pick<Entitlement, "userId"> = ANONYMOUS_ENTITLEMENT,
+  auth: AuthOutcome = "signed-out",
 ): number {
   const i = STEP_META.findIndex(
-    (m) => !isStepDone(m.key, profile, personaDone, entitlement),
+    (m) => !isStepDone(m.key, profile, personaDone, auth),
   );
   return i === -1 ? STEP_META.length - 1 : i;
 }

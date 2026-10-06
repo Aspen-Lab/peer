@@ -22,7 +22,6 @@ import type {
   FeedDiscoveryMode,
 } from "@/types";
 import { defaultProfile } from "@/types";
-import { type ClientEntitlement } from "@/lib/entitlement/allowance";
 import { normalizePersistedFeedIntent } from "@/lib/feed/intent";
 import {
   applyOpportunityFacetPreferenceSignal,
@@ -45,44 +44,6 @@ interface ProfileState {
   recordUploadPreference: (paper: Paper) => void;
   forgetUploadPreference: (documentKey: string) => void;
   profile: UserProfile;
-  /**
-   * ABC-freemium 1-14 · R-ENT-3 — what the server says this reader may use.
-   *
-   * **Never derived on the client from the raw row.** D5 makes the server the
-   * authority and expiry is computed at read time, so a browser that worked out
-   * its own plan from `trial_ends_at` would be a second source of truth that
-   * drifts. `GET /api/profile` computes it; the client only displays it.
-   *
-   * ── ABC-freemium 6-04 · Ruling 16 points 2-3 — **THREE STATES, NOT TWO** ──
-   *
-   * `null` means **not yet known**: nobody has asked the server, or the answer
-   * has not come back. It is distinct from "known to be signed out", which is a
-   * real `ANONYMOUS_CLIENT_ENTITLEMENT` object that `ProfileSync` sets once it
-   * has established there is no session.
-   *
-   * This field used to *default* to that anonymous object, on the reasoning
-   * that a real object with real zeroes meant no consumer needed a null branch
-   * and a forgotten one could not fail open. That reasoning was wrong in one
-   * direction and it shipped: **every reader looked free on the client until the
-   * profile fetch returned, including a paid one**, while the server went on
-   * granting what they had paid for. A paid reader who met the quota notice in
-   * that window was served *and* told to upgrade — the exact thing Ruling 8
-   * forbids, on the surface Ruling 8 was written for.
-   *
-   * `null` fails open for nobody, because the two kinds of consumer read it
-   * differently and the compiler makes both choose:
-   *  - a **capability** question takes `entitlementGrants(entitlement)`, which
-   *    answers with the anonymous default and so grants nothing while ignorant;
-   *  - an **upsell** takes the nullable value and renders **nothing** on `null`.
-   *    An upsell needs positive evidence the reader is not entitled; absence of
-   *    data is not evidence.
-   *
-   * **Deliberately NOT persisted** (see `partialize`): a `paid` entitlement
-   * cached in localStorage would survive a downgrade. That is also why `null`
-   * is the honest value on a cold load — the browser genuinely does not know.
-   */
-  entitlement: ClientEntitlement | null;
-  setEntitlement: (entitlement: ClientEntitlement) => void;
   /**
    * PROFILE-SYNC (ABC-JEV-INTEGRATION.md §1bk) — per device, the
    * single-value profile fields this device last actually confirmed with
@@ -430,10 +391,6 @@ export const useProfileStore = create<ProfileState>()(
   persist(
     (set) => ({
       profile: defaultProfile,
-      // ABC-freemium 6-04 — not yet known. `ProfileSync` replaces it with the
-      // server's answer, or with `ANONYMOUS_CLIENT_ENTITLEMENT` once it has
-      // established there is no session to ask about.
-      entitlement: null,
       // PROFILE-SYNC (§1bk) — never confirmed anything with any account yet;
       // see the field doc above.
       lastSynced: null,
@@ -441,7 +398,6 @@ export const useProfileStore = create<ProfileState>()(
       // field doc above.
       syncedAccountId: null,
 
-      setEntitlement: (entitlement) => set({ entitlement }),
       setLastSynced: (snapshot) => set({ lastSynced: snapshot }),
       setSyncedAccountId: (id) => set({ syncedAccountId: id }),
 
@@ -842,7 +798,7 @@ export const useProfileStore = create<ProfileState>()(
         // would make every default look "dirty" relative to it on the next
         // sign-in (the same person signing back in, or — a shared computer
         // — someone else), reintroducing the overwrite bug through a
-        // different door. Reset together, same as entitlement.
+        // different door. Reset together.
         // ACCOUNT-SWITCH (§1bt point 1) — syncedAccountId resets together
         // with them: a stale owner id surviving a wipe would make the very
         // next sign-in (even the SAME account signing back in) look like a
@@ -853,7 +809,6 @@ export const useProfileStore = create<ProfileState>()(
         // own this device's data the instant it is wiped.
         set({
           profile: defaultProfile,
-          entitlement: null,
           lastSynced: null,
           syncedAccountId: null,
         });
@@ -865,10 +820,7 @@ export const useProfileStore = create<ProfileState>()(
     {
       name: "peer-profile",
       skipHydration: true,
-      // ABC-freemium 1-14 — the entitlement is server-authoritative and must
-      // NOT be written to localStorage; a cached `paid` would survive a
-      // downgrade — deliberately excluded, same as always. PROFILE-SYNC
-      // (§1bk) — `lastSynced` is now ALSO deliberately persisted alongside
+      // PROFILE-SYNC (§1bk) — `lastSynced` is deliberately persisted alongside
       // `profile`: an in-memory-only baseline is exactly the ping-pong bug
       // this field exists to fix. ACCOUNT-SWITCH (§1bt point 1) —
       // `syncedAccountId` joins them for the same reason: an in-memory-only

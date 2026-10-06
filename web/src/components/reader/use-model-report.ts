@@ -18,8 +18,7 @@ import type { PaperReport } from "@/lib/papers/report";
 import { streamPaperReport } from "@/lib/papers/report-stream";
 import { reportOutcome } from "@/lib/reader/report-outcome";
 import { aiAvailability } from "@/lib/feed/ai-tier";
-import { entitlementGrants } from "@/lib/entitlement/allowance";
-import { useProfileStore } from "@/store/profile";
+import { useSyncGate } from "@/components/profile-sync";
 
 // v6: S6 merged "what is new" into "what it proposes" (whatItProposes.newHere
 // replaces .novelty) and deleted "why it fits you" — a v5 report still has
@@ -171,14 +170,14 @@ export function useModelReport({
     ],
   );
 
-  // One tier: signed in means Peer's model; the reader's own key, when set, wins.
-  // `userProviderConfigured` keeps its meaning — only a BYOK reader sends a key.
-  const entitlement = useProfileStore((s) => s.entitlement);
-  const aiMode = aiAvailability(profile, entitlementGrants(entitlement));
+  // A model runs only on the reader's own key, and only for a signed-in reader.
+  // `userProviderConfigured` keeps its meaning — only a reader on their own key
+  // sends one.
+  const authOutcome = useSyncGate((s) => s.authOutcome);
+  const aiMode = aiAvailability(profile, authOutcome);
   const userProviderConfigured = aiMode === "byok";
-  // Deep is opt-in, and needs a model from anywhere: Peer's (signed in — the
-  // server's dev entitlement stands in for this locally) or the reader's own key.
-  // No NODE_ENV test here: AI availability is decided on the server.
+  // Deep is opt-in, and needs a model: the reader's own key. No NODE_ENV test
+  // here: AI availability is decided on the server.
   const deep =
     Boolean(profile.deepReportEnabled || paper?.fullTextUploadId) && aiMode !== "none";
   const depth = deep ? "deep" : "abstract";

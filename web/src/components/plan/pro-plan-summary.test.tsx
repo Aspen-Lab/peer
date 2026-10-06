@@ -4,7 +4,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { ProPlanSummary } from "./pro-plan-summary";
-import { UPGRADE_HREF } from "@/lib/navigation/upgrade-destination";
+import { ADD_KEY_HREF } from "@/lib/navigation/add-key-destination";
 import {
   DEEP_REPORTS_LABEL,
   POOL_REFRESH_IS_WEEKLY,
@@ -125,7 +125,7 @@ describe("the upsell destination answers the promise (7-02b)", () => {
     // The constant the "Add a key" link renders points at the wizard with
     // `step=ai`, the key step. Whitespace tolerant because the tree is CRLF on
     // disk.
-    expect(UPGRADE_HREF).toMatch(/^\/welcome\?step=ai$/);
+    expect(ADD_KEY_HREF).toMatch(/^\/welcome\?step=ai$/);
     expect(welcomeSource()).toMatch(/\{\s*key\s*===\s*"ai"\s*&&/);
   });
 });

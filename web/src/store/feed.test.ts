@@ -40,24 +40,18 @@ import { useSyncGate } from "@/components/profile-sync";
 import { useFeedSyncStatus } from "@/lib/feed/sync-status";
 import { selectedSenseConcept } from "@/lib/feed/senses";
 import { localCalendarDate } from "@/lib/local-calendar-date";
-// P4-S5b-FIX (Round 3) — the same already-resolved ClientEntitlement the
-// store itself reads via useProfileStore.getState().entitlement to pick the
-// current deliveredLocalByOwner namespace (see feed.ts's currentOwnerKey()).
-// Reading it here, in a test, is the same read-only use feed.ts already
-// makes; nothing about profile.ts is edited by this fix.
-import {
-  ANONYMOUS_CLIENT_ENTITLEMENT,
-  type ClientEntitlement,
-} from "@/lib/entitlement/allowance";
 import { STARTER_TOPICS, STARTER_TOPICS_KEY } from "@/lib/feed/starter-topics";
 
-// A signed-in fixture for tests that need a real owner id — everything
-// else about the entitlement is irrelevant to these tests, so it borrows
-// the frozen anonymous default and overrides just the two fields that mark
-// a real signed-in user (see ClientEntitlement.userId's own doc comment:
-// "'may this request use AI at all' is userId !== null").
-function signedInEntitlement(userId: string): ClientEntitlement {
-  return { ...ANONYMOUS_CLIENT_ENTITLEMENT, userId, source: "supabase" };
+// A signed-in fixture for tests that need a real owner id: the store picks the
+// current deliveredLocalByOwner namespace from `useSyncGate`'s `authUserId`
+// (see feed.ts's currentOwnerKey()), so signing in is publishing that id the
+// way profile-sync.tsx does the moment the auth check resolves.
+function signIn(userId: string) {
+  useSyncGate.setState({
+    settled: true,
+    authUserId: userId,
+    authOutcome: "signed-in",
+  });
 }
 
 interface Deferred<T> {
@@ -199,18 +193,11 @@ describe("feed lane loading", () => {
           promotedOn: "2026-07-29",
         },
       },
-      // P4-S5b-FIX (Round 3) — explicit reset: feed.ts's currentOwnerKey()
-      // reads this to pick the deliveredLocalByOwner namespace, and unlike
-      // every other field this beforeEach resets, no prior test in this
-      // file ever touched `entitlement`, so it defaulted to the store's own
-      // initial `null` by accident rather than by an explicit reset here.
-      // Tests that need a signed-in owner set it themselves.
-      entitlement: null,
     });
     // P4-S5b-FIX2 (Round 3) — ABC-JEV-INTEGRATION.md §1g/§1c, closing
     // docs/jev-abc/P4-S5b-FIX-A-20260924T103406Z.md NEW FINDINGS #1: every
     // test in this file that never explicitly signs a user in relies on
-    // `entitlement: null` (above) meaning "confirmed signed out". Under
+    // `authOutcome: "signed-out"` (below) meaning "confirmed signed out". Under
     // this fix, `loadFeed` also needs `useSyncGate`'s `settled` flag to
     // trust that reading — so default it to already-settled here (matching
     // what every pre-existing test in this file implicitly assumed).
@@ -2747,7 +2734,7 @@ describe("feed lane loading", () => {
   // `pendingLocalDelivery` is rewritten for the namespaced
   // `deliveredLocalByOwner`/`deliveredLocalOwnerOrder` shape and the
   // `{ ownerKey, ids }` pendingLocalDelivery shape (see feed.ts's FeedState
-  // doc comments). Default `entitlement: null` (set by this file's
+  // doc comments). The default `authUserId: null` (set by this file's
   // `beforeEach`) resolves `currentOwnerKey()` to `"anonymous"`, so any test
   // below that does not explicitly sign in a user is exercising the
   // anonymous namespace.
@@ -2778,7 +2765,7 @@ describe("feed lane loading", () => {
       });
 
       it("arms pendingLocalDelivery with the signed-in owner's id, not \"anonymous\", when a real user is signed in", async () => {
-        useProfileStore.setState({ entitlement: signedInEntitlement("user-a") });
+        signIn("user-a");
         enqueueResolved("/api/feed", paperFeedResponse("paper-for-a"));
         enqueueResolved("/api/events/feed", eventsFeedResponse());
         enqueueResolved("/api/jobs/feed", jobsFeedResponse());
@@ -2951,7 +2938,7 @@ describe("feed lane loading", () => {
           pendingLocalDelivery: { ownerKey: "user-a", ids: ["paper-for-a"] },
         });
         // Simulate a sign-out/sign-in race: a different owner is now current.
-        useProfileStore.setState({ entitlement: signedInEntitlement("user-b") });
+        signIn("user-b");
 
         useFeedStore.getState().recordPendingLocalDelivery();
 
@@ -3204,7 +3191,7 @@ describe("feed lane loading", () => {
     // resolution) had to exist before these tests could even type-check.
     // Their red-before-green evidence is instead the checkpoint's Round 1
     // mutation proof: forcing `currentOwnerKey()` to always return
-    // "anonymous" (ignoring entitlement.userId) makes exactly this block's
+    // "anonymous" (ignoring authUserId) makes exactly this block's
     // owner-isolation tests fail, restoring them to green on revert — see
     // the checkpoint's EVIDENCE for the exact run. This is the same
     // mutation-based load-bearing standard this campaign's own A review
@@ -3219,7 +3206,7 @@ describe("feed lane loading", () => {
           },
           deliveredLocalOwnerOrder: ["user-a"],
         });
-        useProfileStore.setState({ entitlement: signedInEntitlement("user-b") });
+        signIn("user-b");
         enqueueResolved("/api/feed", { items: [], meta: {} });
         enqueueResolved("/api/events/feed", eventsFeedResponse());
         enqueueResolved("/api/jobs/feed", jobsFeedResponse());
@@ -3246,7 +3233,7 @@ describe("feed lane loading", () => {
           },
           deliveredLocalOwnerOrder: ["user-a"],
         });
-        // entitlement defaults to null via this file's beforeEach, so
+        // authUserId defaults to null via this file's beforeEach, so
         // currentOwnerKey() resolves to "anonymous" here without any
         // further setup — the signed-out case.
 
@@ -3271,14 +3258,14 @@ describe("feed lane loading", () => {
         });
 
         // B uses the device first.
-        useProfileStore.setState({ entitlement: signedInEntitlement("user-b") });
+        signIn("user-b");
         enqueueResolved("/api/feed", { items: [], meta: {} });
         enqueueResolved("/api/events/feed", eventsFeedResponse());
         enqueueResolved("/api/jobs/feed", jobsFeedResponse());
         await useFeedStore.getState().loadFeed();
 
         // Now switch back to A.
-        useProfileStore.setState({ entitlement: signedInEntitlement("user-a") });
+        signIn("user-a");
         enqueueResolved("/api/feed", { items: [], meta: {} });
         enqueueResolved("/api/events/feed", eventsFeedResponse());
         enqueueResolved("/api/jobs/feed", jobsFeedResponse());
@@ -3296,7 +3283,7 @@ describe("feed lane loading", () => {
 
       it("bounds the number of owner namespaces kept to the 5 most recently active, evicting the least recently active", async () => {
         for (const owner of ["user-1", "user-2", "user-3", "user-4", "user-5"]) {
-          useProfileStore.setState({ entitlement: signedInEntitlement(owner) });
+          signIn(owner);
           enqueueResolved("/api/feed", { items: [], meta: {} });
           enqueueResolved("/api/events/feed", eventsFeedResponse());
           enqueueResolved("/api/jobs/feed", jobsFeedResponse());
@@ -3309,7 +3296,7 @@ describe("feed lane loading", () => {
         // A 6th distinct owner becomes active — user-1 (touched least
         // recently: nothing has re-touched it since the very first load)
         // is evicted to keep the bound at 5.
-        useProfileStore.setState({ entitlement: signedInEntitlement("user-6") });
+        signIn("user-6");
         enqueueResolved("/api/feed", { items: [], meta: {} });
         enqueueResolved("/api/events/feed", eventsFeedResponse());
         enqueueResolved("/api/jobs/feed", jobsFeedResponse());
@@ -3335,7 +3322,7 @@ describe("feed lane loading", () => {
 
       it("re-activating an existing owner moves it back to the front of the MRU order, protecting it from eviction", async () => {
         for (const owner of ["user-1", "user-2", "user-3", "user-4", "user-5"]) {
-          useProfileStore.setState({ entitlement: signedInEntitlement(owner) });
+          signIn(owner);
           enqueueResolved("/api/feed", { items: [], meta: {} });
           enqueueResolved("/api/events/feed", eventsFeedResponse());
           enqueueResolved("/api/jobs/feed", jobsFeedResponse());
@@ -3343,13 +3330,13 @@ describe("feed lane loading", () => {
         }
         // Re-touch user-1 (otherwise the least recently active) before a
         // 6th owner ever shows up.
-        useProfileStore.setState({ entitlement: signedInEntitlement("user-1") });
+        signIn("user-1");
         enqueueResolved("/api/feed", { items: [], meta: {} });
         enqueueResolved("/api/events/feed", eventsFeedResponse());
         enqueueResolved("/api/jobs/feed", jobsFeedResponse());
         await useFeedStore.getState().loadFeed();
 
-        useProfileStore.setState({ entitlement: signedInEntitlement("user-6") });
+        signIn("user-6");
         enqueueResolved("/api/feed", { items: [], meta: {} });
         enqueueResolved("/api/events/feed", eventsFeedResponse());
         enqueueResolved("/api/jobs/feed", jobsFeedResponse());
@@ -3508,10 +3495,10 @@ describe("feed lane loading", () => {
     // P4-S5b-FIX2 (Round 3) — ABC-JEV-INTEGRATION.md §1g/§1c, closing the
     // auth-loading-window re-delivery risk found by
     // docs/jev-abc/P4-S5b-FIX-A-20260924T103406Z.md NEW FINDINGS #1:
-    // `currentOwnerKey()` cannot tell "signed in, entitlement not resolved
+    // `currentOwnerKey()` cannot tell "signed in, the auth check not resolved
     // yet" apart from "confirmed signed out" — both read as the "anonymous"
-    // owner key, because `entitlement` is `null` in both cases until
-    // ProfileSync's real network round trip settles.
+    // owner key, because `authUserId` is `null` in both cases until the auth
+    // check settles.
     //
     // P4-S5b-FIX3 (Round 3) — ABC-JEV-INTEGRATION.md §4 "P4-S5b-FIX3 ruled
     // and assigned", closing two findings from fresh A's review of FIX2
@@ -3540,9 +3527,8 @@ describe("feed lane loading", () => {
         // The auth check (getUser()) already confirmed user-a's id — FIX3
         // publishes this BEFORE the profile pull starts. The pull itself
         // then FAILS: `settled` becomes `true` (profile-sync.tsx's
-        // `finally` always runs) but `entitlement` never resolves (stays
-        // null, this file's default) — exactly fresh A's PROBE-A / NEW
-        // FINDING #2 scenario.
+        // `finally` always runs) and nothing is ever read back from it —
+        // exactly fresh A's PROBE-A / NEW FINDING #2 scenario.
         useSyncGate.setState({
           settled: true,
           authUserId: "user-a",
@@ -3666,7 +3652,7 @@ describe("feed lane loading", () => {
           authUserId: null,
           authOutcome: "signed-out",
         });
-        // entitlement: null (this file's beforeEach) + authOutcome:
+        // authUserId: null (this file's beforeEach) + authOutcome:
         // "signed-out" is confirmed signed out, not "still loading".
         enqueueResolved("/api/feed", paperFeedResponse("paper-anon"));
         enqueueResolved("/api/events/feed", eventsFeedResponse());
@@ -3696,7 +3682,7 @@ describe("feed lane loading", () => {
           authUserId: null,
           authOutcome: "unconfigured",
         });
-        // entitlement: null (this file's beforeEach) + authOutcome:
+        // authUserId: null (this file's beforeEach) + authOutcome:
         // "unconfigured" means Supabase auth isn't configured at all in
         // this environment — resolveOwnerKeyForLoad treats this the same as
         // confirmed signed out, not "still loading".
@@ -3853,14 +3839,7 @@ describe("feed lane loading", () => {
           // the owner becomes known" half of the P4-S5b-FIX3 ruling) calls
           // loadFeed again unconditionally on this transition, bypassing
           // the feedTopicsKey guard on purpose — reproduced directly here.
-          useSyncGate.setState({
-            settled: true,
-            authUserId: "user-me",
-            authOutcome: "signed-in",
-          });
-          useProfileStore.setState({
-            entitlement: signedInEntitlement("user-me"),
-          });
+          signIn("user-me");
           enqueueResolved("/api/feed", { items: [], meta: {} });
           enqueueResolved("/api/events/feed", eventsFeedResponse());
           enqueueResolved("/api/jobs/feed", jobsFeedResponse());

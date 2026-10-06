@@ -2,10 +2,6 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { StateStorage } from "zustand/middleware";
-import {
-  ANONYMOUS_CLIENT_ENTITLEMENT,
-  type ClientEntitlement,
-} from "@/lib/entitlement/allowance";
 import { defaultProfile, type Paper, type UserProfile } from "@/types";
 import { cleanPreferenceLedger } from "@/lib/preferences/ledger";
 import { selectedSenseConcept } from "@/lib/feed/senses";
@@ -748,71 +744,27 @@ describe("profile export and import", () => {
 });
 
 /**
- * ABC-freemium 6-04 · R-UI-3 · Ruling 16 points 2-3 — **the entitlement has a
- * third state, and the store starts in it.**
- *
- * This is the root of the fix rather than a restatement of the component
- * cases. The two upsell surfaces can only stay silent while the plan is unknown
- * if "unknown" is representable here at all — and for three rounds it was not:
- * the store opened on `ANONYMOUS_CLIENT_ENTITLEMENT`, so a **paid** reader
- * looked free from the first render until `GET /api/profile` came back, and was
- * upsold in that window while the server went on granting what they paid for.
- *
- * Planting the old default back — `entitlement: ANONYMOUS_CLIENT_ENTITLEMENT`
- * at the store's initialiser — fails the first case here and the unhydrated
- * cases in both component suites.
+ * The store holds no plan. Peer has no paid tier, so there is no entitlement for
+ * a browser to keep, and the one question the client still asks ("is this
+ * reader signed in?") is answered by `useSyncGate`, not by this store.
  */
-describe("the client entitlement's third state (6-04)", () => {
-  it("starts as null — not known yet, not known to be anonymous", () => {
-    expect(useProfileStore.getState().entitlement).toBeNull();
-  });
-
-  it("holds whatever the server sent once setEntitlement runs", () => {
-    // The negative twin: a store that returned `null` forever would pass the
-    // case above and break every plan-aware surface in the product.
-    const paid: ClientEntitlement = {
-      plan: "paid",
-      effectivePlan: "paid",
-      systemSearchAllowed: false,
-      poolRefreshAllowed: true,
-      trialEndsAt: null,
-      userId: "user-1",
-      source: "supabase",
-      unlimited: true,
-      deepReportsRemaining: 0,
-    };
-
-    useProfileStore.getState().setEntitlement(paid);
-
-    expect(useProfileStore.getState().entitlement).toEqual(paid);
-  });
-
-  it("can be told the reader is anonymous, which is a different answer", () => {
-    // `ProfileSync` sets this once it has established there is no session. It
-    // is the `known + anonymous` state: a fact, not the absence of one, and the
-    // difference is what lets a signed-out reader be told to sign in while a
-    // reader mid-hydration is told nothing.
-    useProfileStore.getState().setEntitlement(ANONYMOUS_CLIENT_ENTITLEMENT);
-
-    const held = useProfileStore.getState().entitlement;
-    expect(held).not.toBeNull();
-    expect(held?.source).toBe("anonymous");
-    expect(held?.poolRefreshAllowed).toBe(false);
+describe("the profile store holds no plan", () => {
+  it("has no entitlement field and no setter for one", () => {
+    const state = useProfileStore.getState() as unknown as Record<string, unknown>;
+    expect(state).not.toHaveProperty("entitlement");
+    expect(state).not.toHaveProperty("setEntitlement");
   });
 
   // ACCOUNT-SWITCH (§1bt) — the persisted shape widened to a third key,
   // syncedAccountId (store v6→7); the regex below is the changed assertion
   // (comment required by that ruling). The property under test is
-  // unchanged: `entitlement` must still never appear.
-  it("still writes only the profile, lastSynced and syncedAccountId to storage (the entitlement never persists) [PROFILE-SYNC (§1bk): lastSynced added to the persisted shape; ACCOUNT-SWITCH (§1bt): syncedAccountId added too]", () => {
-    // Unchanged contract for `entitlement`: a cached `paid` would survive a
-    // downgrade, and a cached `null` would be a lie the moment the reader
-    // signed in on another tab — still deliberately excluded. `lastSynced`
-    // is now ALSO deliberately persisted (PROFILE-SYNC, §1bk): an
+  // unchanged: nothing but those three keys is ever written to storage.
+  it("still writes only the profile, lastSynced and syncedAccountId to storage [PROFILE-SYNC (§1bk): lastSynced added to the persisted shape; ACCOUNT-SWITCH (§1bt): syncedAccountId added too]", () => {
+    // `lastSynced` is deliberately persisted (PROFILE-SYNC, §1bk): an
     // in-memory-only baseline is exactly the ping-pong bug it exists to fix.
-    // `syncedAccountId` (ACCOUNT-SWITCH, §1bt) joins them for the same
-    // reason: an in-memory-only owner id would forget whose device this is
-    // on every reload.
+    // `syncedAccountId` (ACCOUNT-SWITCH, §1bt) joins it for the same reason: an
+    // in-memory-only owner id would forget whose device this is on every
+    // reload.
     // A source assertion because `partialize` is a persist-middleware option
     // with no runtime seam here; whitespace-tolerant because the tree is
     // CRLF on disk (Ruling 10 point 2c).
@@ -822,8 +774,8 @@ describe("the client entitlement's third state (6-04)", () => {
     );
     // The positive form is the whole guard: `profile`, `lastSynced` and
     // `syncedAccountId` are the ONLY keys in the persisted object, so
-    // adding `entitlement` to it cannot help but change this shape and
-    // redden this line.
+    // adding another key to it cannot help but change this shape and redden
+    // this line.
     expect(text).toMatch(
       /partialize:\s*\(state\)\s*=>\s*\(\{\s*profile:\s*state\.profile,\s*lastSynced:\s*state\.lastSynced,\s*syncedAccountId:\s*state\.syncedAccountId,?\s*\}\)/,
     );

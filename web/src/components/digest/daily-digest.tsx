@@ -6,7 +6,7 @@ import { apiFetch } from "@/lib/api";
 import { useFeedStore } from "@/store/feed";
 import { useProfileStore } from "@/store/profile";
 import { aiAvailability } from "@/lib/feed/ai-tier";
-import { entitlementGrants } from "@/lib/entitlement/allowance";
+import { useSyncGate } from "@/components/profile-sync";
 import {
   DIGEST_CACHE_STORAGE_KEY,
   digestCacheKey,
@@ -102,11 +102,12 @@ export function usePaperDigest(
   const [revealBullets, setRevealBullets] = useState(false);
   const setPaperSummaries = useFeedStore((state) => state.setPaperSummaries);
   // ABC-freemium 1-11 · R-UI-4 — which model, if any, produced a cached digest.
-  // ABC-freemium 6-04 — a capability question, so the anonymous view while the
-  // plan is unknown: `"none"`, which is the honest cache segment for a digest
-  // built before we knew whose model was available. Nothing here upsells.
+  // While the sign-in check has not answered this is `"none"`, which is the
+  // honest cache segment for a digest built before we knew whether a model
+  // would run.
+  const authOutcome = useSyncGate((state) => state.authOutcome);
   const aiMode = useProfileStore((state) =>
-    aiAvailability(state.profile, entitlementGrants(state.entitlement)),
+    aiAvailability(state.profile, authOutcome),
   );
 
   // Order-insensitive (a pure re-shuffle of the same papers must still hit the
@@ -114,10 +115,9 @@ export function usePaperDigest(
   // digest). Bullets are matched to papers by paperId downstream, so sorting the
   // ids here has no display effect.
   // ABC-freemium 1-11 · R-UI-4 — the `"tier0"` literal becomes the reader's
-  // actual AI mode, so a digest written on Peer's model is not served after
-  // their entitlement changes and two plans cannot collide in one browser
-  // profile. Built by a pure function so it is testable; the storage version is
-  // bumped in the same commit.
+  // actual AI mode, so a digest written on the reader's key is not served
+  // after the key is removed. Built by a pure function so it is testable; the
+  // storage version is bumped in the same commit.
   const paperKey = useMemo(() => {
     const ids = papers.map((p) => p.id).sort().join("|");
     const ctx = contextHint ?? "";

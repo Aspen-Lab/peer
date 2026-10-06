@@ -63,14 +63,25 @@ describe("active feed request inputs", () => {
     expect(requests.jobs.llmOverride).toBeUndefined();
   });
 
-  it("uses Tier 2 only with the user's selected provider and key", () => {
+  it("uses Tier 2 only with the user's selected provider and key, for a signed-in reader", () => {
     const byokProfile: UserProfile = {
       ...activeProfile,
       feedAiProvider: "openai",
       feedAiApiKey: "user-owned-key",
     };
-    const papers = paperFeedRequestBody(byokProfile, advisorSeeds, true);
-    const events = opportunityRequestBody(byokProfile, "events", []);
+    const papers = paperFeedRequestBody(
+      byokProfile,
+      advisorSeeds,
+      true,
+      [],
+      "signed-in",
+    );
+    const events = opportunityRequestBody(
+      byokProfile,
+      "events",
+      [],
+      "signed-in",
+    );
 
     expect(papers.aiTier).toBe(2);
     expect(papers.llmOverride).toEqual({
@@ -276,15 +287,14 @@ describe("the forced-rebuild ask (6-03)", () => {
   });
 
   it("is only an ASK — the client never decides whether it is granted", () => {
-    // The entitlement is the server's business (`feed.ts`'s own docblock says
-    // so). A free reader's request carries the same `poolRefresh: true` as a
-    // paid reader's; the route is what refuses. This is why 6-03's notice reads
-    // the entitlement rather than the response.
+    // Whether the ask is granted is the server's business (`feed.ts`'s own
+    // docblock says so). Every reader's request carries the same
+    // `poolRefresh: true`; the route is what decides.
     const asked = opportunityRequestBody(
       activeProfile,
       "jobs",
       [],
-      null,
+      "signed-out",
       true,
     );
     expect(asked.poolRefresh).toBe(true);

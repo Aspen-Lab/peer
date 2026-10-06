@@ -20,8 +20,7 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import { useProfileStore } from "@/store/profile";
-import type { Entitlement } from "@/lib/entitlement/types";
-import { entitlementGrants } from "@/lib/entitlement/allowance";
+import { useSyncGate, type AuthOutcome } from "@/components/profile-sync";
 import { careerStages, industryPreferences } from "@/types";
 import type { UserProfile } from "@/types";
 import {
@@ -84,13 +83,11 @@ const readRequestedStep = () => {
 export default function WelcomePage() {
   const router = useRouter();
   const profile = useProfileStore((s) => s.profile);
-  // ABC-freemium 1-15 — the `ai` step is complete when the reader has AI at all.
-  // ABC-freemium 6-04 — a capability question, so the anonymous view while the
-  // plan is unknown: the step reads as not-yet-done rather than done, which is
-  // the direction that shows the reader the step instead of hiding it.
-  const entitlement = entitlementGrants(
-    useProfileStore((s) => s.entitlement),
-  );
+  // The `ai` step is complete when a model will run for this reader (their own
+  // key, and signed in). While the sign-in check is unanswered the step reads
+  // as not-yet-done rather than done, which is the direction that shows the
+  // reader the step instead of hiding it.
+  const auth = useSyncGate((s) => s.authOutcome);
   const store = useProfileStore();
   const topicMirroringRef = useRef<TopicMirroringController | null>(null);
   const completeOnboarding = useProfileStore((s) => s.completeOnboarding);
@@ -124,7 +121,7 @@ export default function WelcomePage() {
   if (settled && autoStart === null) {
     setAutoStart(
       stepIndexFromKey(requestedStep) ??
-        firstIncompleteStep(profile, readPersonaDone(), entitlement),
+        firstIncompleteStep(profile, readPersonaDone(), auth),
     );
   }
   const step = manualStep ?? autoStart;
@@ -146,10 +143,10 @@ export default function WelcomePage() {
       Object.fromEntries(
         STEP_META.map((m) => [
           m.key,
-          isStepDone(m.key, profile, personaDone, entitlement),
+          isStepDone(m.key, profile, personaDone, auth),
         ]),
       ) as Record<StepKey, boolean>,
-    [profile, personaDone, entitlement],
+    [profile, personaDone, auth],
   );
 
   // Jumping is free among the first steps and everywhere once the topics
@@ -540,7 +537,7 @@ export default function WelcomePage() {
 
                   <ReviewList
                     profile={profile}
-                    entitlement={entitlement}
+                    auth={auth}
                     onJump={setStep}
                   />
                 </StepFrame>
@@ -688,17 +685,17 @@ function StepRail({
 // confirms at a glance instead of paging back through steps.
 function ReviewList({
   profile,
-  entitlement,
+  auth,
   onJump,
 }: {
   profile: UserProfile;
-  entitlement: Pick<Entitlement, "userId">;
+  auth: AuthOutcome;
   onJump: (i: number) => void;
 }) {
   const rows = STEP_META.slice(0, -1).map((m, i) => ({
     index: i,
     label: m.label,
-    summary: summarizeStep(m.key, profile, entitlement),
+    summary: summarizeStep(m.key, profile, auth),
   }));
   return (
     <div>
@@ -732,7 +729,7 @@ function ReviewList({
 function summarizeStep(
   key: StepKey,
   profile: UserProfile,
-  entitlement: Pick<Entitlement, "userId">,
+  auth: AuthOutcome,
 ): string {
   switch (key) {
     case "basics": {
@@ -762,7 +759,7 @@ function summarizeStep(
     case "radar":
       return isStepDone("radar", profile, false) ? "Customized" : "Defaults";
     case "ai":
-      return isStepDone("ai", profile, false, entitlement)
+      return isStepDone("ai", profile, false, auth)
         ? `${providerShortLabel(profile.feedAiProvider)} key connected`
         : "Not connected — works free";
     case "connectors": {
