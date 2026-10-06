@@ -19,6 +19,7 @@
 // step (a short block, no new wizard step).
 
 import { useProfileStore } from "@/store/profile";
+import { useJevScreeningStore, type JevScreeningReport } from "@/store/jev-screening";
 import { SecretInput } from "@/components/ui";
 import { buttonVariants } from "@/components/ui/button";
 import { jevGainSentence } from "@/lib/decisions/jev-claim";
@@ -62,6 +63,33 @@ function ExternalLinkIcon() {
       <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
     </svg>
   );
+}
+
+/**
+ * One line about what Jev did the last time a briefing was built, or null when
+ * there is nothing to report. Plain words, counts only: it states no size and no
+ * price, and it never names the key.
+ */
+export function jevScreeningLine(report: JevScreeningReport | null | undefined): string | null {
+  if (!report) return null;
+  switch (report.status) {
+    case "applied":
+    case "partial":
+      return `Last briefing: ${report.screened} of ${report.of} papers screened by Jev.`;
+    case "unavailable":
+      return report.screened > 0
+        ? `Jev answered only ${report.screened} of ${report.of} papers, too few to use; this briefing was screened without it.`
+        : "Jev did not answer; this briefing was screened without it.";
+    case "rejected":
+      return "Jev rejected the key.";
+  }
+}
+
+/** The report line, or nothing at all. */
+export function JevScreeningStatus({ report }: { report: JevScreeningReport | null | undefined }) {
+  const line = jevScreeningLine(report);
+  if (line === null) return null;
+  return <p className="text-micro leading-relaxed text-text-faint">{line}</p>;
 }
 
 /**
@@ -130,6 +158,9 @@ export function JevSetup({
 }) {
   const jevApiKey = useProfileStore((s) => s.profile.jevApiKey ?? "");
   const updateJevApiKey = useProfileStore((s) => s.updateJevApiKey);
+  const report = useJevScreeningStore((s) => s.report);
+  // No key, no hint: what Jev did is shown only while a usable key is saved.
+  const usable = parseJevApiKey(jevApiKey) !== undefined;
 
   if (variant === "welcome") {
     return (
@@ -151,6 +182,7 @@ export function JevSetup({
       <p className="text-caption leading-relaxed text-text-muted">{MONEY}</p>
       <p className="text-micro leading-relaxed text-text-faint">{OPTIONAL_AND_PRIVACY}</p>
       <JevKeyField value={jevApiKey} onChange={updateJevApiKey} idPrefix={idPrefix} />
+      {usable && <JevScreeningStatus report={report} />}
     </div>
   );
 }

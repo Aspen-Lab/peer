@@ -52,6 +52,7 @@ const SECTIONS = [
     body: [
       "If you add a Jev key, it stays in your browser and is excluded from everything Peer syncs, the same way as a model key. Each time Peer builds your briefing its server passes the key to Jev, and does not store or log it.",
       "Jev, made by TypeSafe, receives the title, abstract and venue of up to 50 candidate papers, together with the project, challenge, topics, methods and exclusions you wrote, and bills your own account. Peer keeps Jev's answers for each paper against your account (the question, the answer and how sure Jev was), with no paper text and no key, until the account is removed.",
+      "Your browser also remembers, for the Profile page, how many papers Jev screened in your last briefing. It holds counts only, and it is cleared when you change or remove the key.",
     ],
   },
   {

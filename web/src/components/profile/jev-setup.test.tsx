@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { defaultProfile } from "@/types";
 import { useProfileStore } from "@/store/profile";
 import { jevGainSentence } from "@/lib/decisions/jev-claim";
-import { JEV_SIGNUP_URL, JevKeyField, JevSetup } from "./jev-setup";
+import { JEV_SIGNUP_URL, JevKeyField, JevScreeningStatus, JevSetup, jevScreeningLine } from "./jev-setup";
 
 // The Jev key field and the copy around it, as the Profile page and the welcome
 // wizard render them. Optional, honest about what the key turns on and what it
@@ -128,6 +128,78 @@ describe("JevSetup on the Profile page", () => {
     expect(source).toContain("s.profile.jevApiKey");
     expect(source).toContain("s.updateJevApiKey");
     expect(source).not.toMatch(/localStorage|sessionStorage|fetch\(|apiFetch/);
+  });
+});
+
+// What Jev did the last time a briefing was built, in one line under the key.
+// One line per status; none when there is nothing to report (no key, no report).
+describe("jevScreeningLine - one line per status", () => {
+  it("applied: how many papers Jev screened", () => {
+    expect(jevScreeningLine({ status: "applied", screened: 50, of: 50 })).toBe(
+      "Last briefing: 50 of 50 papers screened by Jev.",
+    );
+  });
+
+  it("partial: the same sentence with the real count", () => {
+    expect(jevScreeningLine({ status: "partial", screened: 31, of: 50 })).toBe(
+      "Last briefing: 31 of 50 papers screened by Jev.",
+    );
+  });
+
+  it("unavailable, nothing answered: Jev did not answer, and the briefing was screened without it", () => {
+    expect(jevScreeningLine({ status: "unavailable", screened: 0, of: 50 })).toBe(
+      "Jev did not answer; this briefing was screened without it.",
+    );
+  });
+
+  it("unavailable, too few answered: says how many, and that the briefing was screened without it", () => {
+    expect(jevScreeningLine({ status: "unavailable", screened: 20, of: 50 })).toBe(
+      "Jev answered only 20 of 50 papers, too few to use; this briefing was screened without it.",
+    );
+  });
+
+  it("rejected: Jev rejected the key", () => {
+    expect(jevScreeningLine({ status: "rejected", screened: 0, of: 50 })).toBe("Jev rejected the key.");
+  });
+
+  it("nothing to report: no line", () => {
+    expect(jevScreeningLine(null)).toBeNull();
+    expect(jevScreeningLine(undefined)).toBeNull();
+  });
+
+  it("never states a size or a price, whatever the status", () => {
+    for (const report of [
+      { status: "applied", screened: 50, of: 50 },
+      { status: "partial", screened: 31, of: 50 },
+      { status: "unavailable", screened: 0, of: 50 },
+      { status: "unavailable", screened: 20, of: 50 },
+      { status: "rejected", screened: 0, of: 50 },
+    ] as const) {
+      expect(jevScreeningLine(report) ?? "").not.toMatch(/%|percent|better|sharper|faster|much|cents?|\$/i);
+    }
+  });
+});
+
+describe("JevScreeningStatus", () => {
+  it("renders the line for a report, and nothing at all without one", () => {
+    const shown = visibleText(
+      render(createElement(JevScreeningStatus, { report: { status: "rejected", screened: 0, of: 50 } })),
+    );
+    expect(shown).toBe("Jev rejected the key.");
+    expect(render(createElement(JevScreeningStatus, { report: null }))).toBe("");
+  });
+
+  it("is mounted in the Profile setup, and shown only for a key that is saved (no key, no hint)", () => {
+    const source = readFileSync(path.join(process.cwd(), "src/components/profile/jev-setup.tsx"), "utf8");
+    expect(source).toContain("useJevScreeningStore");
+    expect(source).toMatch(/usable[\s\S]*JevScreeningStatus|JevScreeningStatus[\s\S]*usable/);
+    // The welcome block has no report line: nothing has been screened during onboarding.
+    expect(source.match(/<JevScreeningStatus/g)).toHaveLength(1);
+    const welcomeBranch = source.slice(
+      source.indexOf('if (variant === "welcome") {'),
+      source.indexOf("\n  }\n", source.indexOf('if (variant === "welcome") {')),
+    );
+    expect(welcomeBranch).not.toContain("JevScreeningStatus");
   });
 });
 

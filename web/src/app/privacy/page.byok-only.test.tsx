@@ -130,6 +130,21 @@ describe("/privacy - your own Jev key", () => {
     expect(read("supabase/migrations/20260924000400_private_decisions.sql")).toContain("on delete cascade");
   });
 
+  it("says what the browser remembers about the last briefing: counts only, cleared when the key changes", () => {
+    // The Profile row names what Jev did the last time (store/jev-screening.ts):
+    // one status word and two counts, in this browser only. The page says so in
+    // the same change as the behaviour.
+    expect(text()).toContain(
+      "Your browser also remembers, for the Profile page, how many papers Jev screened in your last briefing. It holds counts only, and it is cleared when you change or remove the key.",
+    );
+    const store = read("src/store/jev-screening.ts");
+    expect(store).toContain('name: "peer-jev-screening"');
+    expect(store).not.toMatch(/apiKey|jevApiKey|title|abstract/);
+    const profile = read("src/store/profile.ts");
+    expect(profile).toMatch(/updateJevApiKey:[\s\S]*useJevScreeningStore\.getState\(\)\.clear\(\)/);
+    expect(profile).toMatch(/logOut:[\s\S]*useJevScreeningStore\.getState\(\)\.clear\(\)/);
+  });
+
   it("keeps the sections around it and the date", () => {
     const page = text();
     expect(page).toContain("Your own model key");

@@ -29,6 +29,7 @@ vi.mock("zustand/middleware", () => ({
 import { defaultProfile, type Event, type Job, type Paper } from "@/types";
 import { activePaperTopicsKey, useFeedStore } from "@/store/feed";
 import { useProfileStore } from "@/store/profile";
+import { useJevScreeningStore } from "@/store/jev-screening";
 // P4-S5b-FIX2 (Round 3) — the same already-exported "has the initial auth
 // check settled" signal feed.ts's resolveOwnerKeyForLoad() reads. Reading/
 // setting it here, in a test, is the same read-only use feed.ts itself
@@ -2567,6 +2568,60 @@ describe("feed lane loading", () => {
 
       expect(useFeedStore.getState().feedError).toBeTruthy();
       expect(useFeedStore.getState().emptyReasonCode).toBeNull();
+    });
+  });
+
+  // Jev on the reader's own key: the server reports what Jev did when today's
+  // pool was built (`FeedMeta.jevScreening`, counts and a status word, present
+  // only when a key was sent). The store keeps the last report it saw so the
+  // Profile row can say so; a response with none (a reader with no key, or a
+  // replay of a frozen batch) leaves the last report as it was.
+  describe("Jev screening report capture", () => {
+    beforeEach(() => {
+      useJevScreeningStore.setState({ report: null });
+    });
+
+    it("keeps what the briefing reported", async () => {
+      enqueueResolved("/api/feed", {
+        items: paperFeedResponse("paper-1").items,
+        meta: { jevScreening: { status: "applied", screened: 5, of: 5 } },
+      });
+      enqueueResolved("/api/events/feed", eventsFeedResponse());
+      enqueueResolved("/api/jobs/feed", jobsFeedResponse());
+
+      await useFeedStore.getState().loadFeed();
+
+      expect(useJevScreeningStore.getState().report).toEqual({ status: "applied", screened: 5, of: 5 });
+    });
+
+    it("a response that reports nothing leaves the last report alone", async () => {
+      useJevScreeningStore.setState({ report: { status: "partial", screened: 31, of: 50 } });
+      enqueueResolved("/api/feed", { items: paperFeedResponse("paper-1").items, meta: {} });
+      enqueueResolved("/api/events/feed", eventsFeedResponse());
+      enqueueResolved("/api/jobs/feed", jobsFeedResponse());
+
+      await useFeedStore.getState().loadFeed();
+
+      expect(useJevScreeningStore.getState().report).toEqual({ status: "partial", screened: 31, of: 50 });
+    });
+
+    it("a failed load leaves the last report alone", async () => {
+      useJevScreeningStore.setState({ report: { status: "applied", screened: 50, of: 50 } });
+      const failingFetch = enqueue("/api/feed");
+      failingFetch.reject(new Error("network down"));
+      enqueueResolved("/api/events/feed", eventsFeedResponse());
+      enqueueResolved("/api/jobs/feed", jobsFeedResponse());
+
+      await useFeedStore.getState().loadFeed();
+
+      expect(useJevScreeningStore.getState().report).toEqual({ status: "applied", screened: 50, of: 50 });
+    });
+
+    it("the report is not part of the feed store's own persisted shape", () => {
+      expect(persistenceCapture.partialize).toBeTypeOf("function");
+      const persisted = persistenceCapture.partialize?.(useFeedStore.getState()) as Record<string, unknown>;
+      expect(Object.keys(persisted)).not.toContain("jevScreening");
+      expect(JSON.stringify(persisted)).not.toContain("screened");
     });
   });
 

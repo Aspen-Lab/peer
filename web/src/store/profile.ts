@@ -24,6 +24,7 @@ import type {
 import { defaultProfile } from "@/types";
 import { normalizePersistedFeedIntent } from "@/lib/feed/intent";
 import { stripCredentialFields } from "@/lib/profile/merge";
+import { useJevScreeningStore } from "@/store/jev-screening";
 import {
   applyOpportunityFacetPreferenceSignal,
   applyPreferenceSignal,
@@ -398,7 +399,7 @@ export function parseExportedProfile(
 
 export const useProfileStore = create<ProfileState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       profile: defaultProfile,
       // PROFILE-SYNC (§1bk) — never confirmed anything with any account yet;
       // see the field doc above.
@@ -716,10 +717,15 @@ export const useProfileStore = create<ProfileState>()(
         set((s) => ({
           profile: { ...s.profile, feedAiApiKey: value.trim() || undefined },
         })),
-      updateJevApiKey: (value) =>
-        set((s) => ({
-          profile: { ...s.profile, jevApiKey: value.trim() || undefined },
-        })),
+      updateJevApiKey: (value) => {
+        const before = get().profile.jevApiKey?.trim() ?? "";
+        const next = value.trim() || undefined;
+        set((s) => ({ profile: { ...s.profile, jevApiKey: next } }));
+        // What Jev did last time describes the key that produced it: a key that
+        // was set and is now replaced or removed ends it. A first key (nothing
+        // before it) leaves it alone, so does an edit that changes nothing.
+        if (before !== "" && before !== (next ?? "")) useJevScreeningStore.getState().clear();
+      },
       updateDeepReportEnabled: (value) =>
         set((s) => ({ profile: { ...s.profile, deepReportEnabled: value } })),
       updateColorTheme: (theme) => {
@@ -807,6 +813,9 @@ export const useProfileStore = create<ProfileState>()(
       },
 
       logOut: () => {
+        // A confirmed sign-out resets the profile, and with it the Jev key, so
+        // the report about that key goes too.
+        useJevScreeningStore.getState().clear();
         applyColorTheme(defaultProfile.colorTheme);
         // PROFILE-SYNC (§1bk) — lastSynced describes what THIS account
         // confirmed with THIS device; once profile itself resets to

@@ -17,6 +17,7 @@ import type {
 import { apiFetch, ApiError } from "@/lib/api";
 import { libraryEntryOf, type LibraryEntry } from "@/lib/library/graph";
 import { useProfileStore } from "@/store/profile";
+import { useJevScreeningStore } from "@/store/jev-screening";
 // P4-S5b-FIX2/FIX3 (Round 3) — read-only use of profile-sync.tsx's exported
 // auth signals (see resolveOwnerKeyForLoad below): `settled` (FIX2,
 // unchanged here) plus `authUserId`/`authOutcome` (FIX3 — published as soon
@@ -858,6 +859,8 @@ interface RealFeedResult {
    *  field, is non-empty, or is a frozen-batch replay with no live reason to
    *  report; the caller treats "undefined" as "show the generic empty copy". */
   emptyReasonCode?: FeedMeta["emptyReasonCode"];
+  /** What Jev did when the pool was built (counts and a status word); present only for a reader who sent a Jev key and a response that carries it (not a replay of a frozen batch). */
+  jevScreening?: FeedMeta["jevScreening"];
 }
 
 async function fetchRealFeed(
@@ -900,6 +903,7 @@ async function fetchRealFeed(
       batchId: data.meta?.batchId,
       batchStatus: data.meta?.batchStatus,
       emptyReasonCode: data.meta?.emptyReasonCode,
+      jevScreening: data.meta?.jevScreening,
     };
   } catch (err) {
     console.error("[feed] fetch failed:", err);
@@ -1983,6 +1987,13 @@ export const useFeedStore = create<FeedState>()(
             );
             // A newer load started while this lane was in flight — drop it.
             if (requestId !== feedLoadSeq) return;
+            // What Jev did when this briefing was built (counts only), kept in
+            // its own small store for the Profile row. A response that reports
+            // nothing (no key was sent, or a replay of a frozen batch) leaves
+            // the last report as it was.
+            if (realFeed.jevScreening) {
+              useJevScreeningStore.getState().record(realFeed.jevScreening);
+            }
             set((state) => {
               const currentSavedIds = new Set(
                 state.savedPapers.map((paper) => paper.id),
