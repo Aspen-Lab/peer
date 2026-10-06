@@ -77,7 +77,7 @@ Every C commit gets this, and the evidence goes into the item's §5 row (the exi
 3. At least one mutation of your own, different from C's: break the behaviour with a one-line edit (sed), run the touched tests, see them fail, restore the file and prove it byte-identical (`git diff --quiet`). A mutation that no test catches is a finding: C adds the test.
 4. Full `npm run lint` (0 errors; 151 warnings is the baseline) and full `TZ=America/Chicago npx vitest run` (0 failed; the count never goes down) in a second worktree, in the background. `npm run build` in the main checkout when no worker is editing it, else the Vercel preview build of the pushed commit is the build gate (GitHub PR status, or the Vercel bot comment on the PR).
 5. For a visual item, open the real path once yourself (the dev server and Chromium, or a fixture through the function) in addition to C's browser check.
-6. Record it: the §5 row (status IMPLEMENTED_PENDING_REVIEW with the evidence), a §4 line, §1 updated, `git commit -- ABC-DEEP-REPORT-READING-HELPER.md`, push.
+6. Record it: the §5 row (status IMPLEMENTED_PENDING_REVIEW with the evidence), a §4 line, §1 updated, `git commit -F <message file> -- ABC-DEEP-REPORT-READING-HELPER.md <your briefs>`, push. Always with the pathspec: a worker in the same checkout may have staged its files for its own mutation checks, and a bare `git commit` sweeps them into your docs commit (it happened once, 68cde074).
 
 An item becomes VERIFIED only when A's phase review passes its §3d items and the manager has read that checkpoint in full.
 
