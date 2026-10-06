@@ -57,7 +57,23 @@ describe("QuotaNotice (P2-09, §1g.14)", () => {
     expect(QUOTA.exhausted).toBe(EXHAUSTED);
     expect(QUOTA.companyBudget).toBe(COMPANY_BUDGET);
     expect(QUOTA.unavailable).toBe(UNAVAILABLE);
-    expect(Object.keys(QUOTA).sort()).toEqual(["companyBudget", "exhausted", "unavailable"]);
+    // P3-02c (§1h.4 amendment): `QUOTA` also holds the two lines of the explain box
+    // (the day's explanations used up; the allowance could not be checked). The
+    // list of keys grows by exactly those two; the notice below never reads them.
+    expect(Object.keys(QUOTA).sort()).toEqual(["companyBudget", "exhausted", "explainExhausted", "explainUnavailable", "unavailable"]);
+    expect(QUOTA.explainExhausted).toBe("Explanations are used up for now.");
+    expect(QUOTA.explainUnavailable).toBe("Peer could not check the explanation allowance just now. Nothing was spent.");
+  });
+
+  it("never shows an explain line under a report: the two are the explain box's, whatever the kind or reason", () => {
+    for (const kind of ["deep_report", "breaker", "company_budget", "something_new"]) {
+      for (const reason of ["exhausted", "unavailable", "somewhere_new"]) {
+        const text = quotaNoticeText({ kind, reason } as unknown as Quota);
+
+        expect(text).not.toBe(QUOTA.explainExhausted);
+        expect(text).not.toBe(QUOTA.explainUnavailable);
+      }
+    }
   });
 
   it("says the allowance is used up for a spent deep-report or breaker allowance", () => {
@@ -126,7 +142,7 @@ describe("QuotaNotice (P2-09, §1g.14)", () => {
     expect(html).not.toMatch(/<blockquote|<q>|<em>|<i>/);
   });
 
-  it("never tells the reader not to read, in any of its three lines", () => {
+  it("never tells the reader not to read, in any of its lines", () => {
     for (const text of Object.values(QUOTA)) expect(text).not.toMatch(/skip|don['’]t read|ignore|not worth/i);
   });
 });

@@ -16,11 +16,24 @@
 // Gated like the report route, in the same order: the owner checks on an
 // upload (the claim, the attachment, the revision), the shared entitlement
 // check, then the provider — only a provider that can write answers.
-// Counted, not charged (§1h.2): each model turn adds one to the reader's
-// per-day counter and writes one debug line with sizes only (and, for a reply,
-// the thread's message count), so P3-02c can set the fraction from real numbers.
-// A hit in the server's memory (keyed by the document, the passage and the
-// thread's texts — never by reader) costs no model call and no count.
+//
+// Charged (P3-02c, §1h.4 amendment): every model turn is paid for in tenths of
+// a deep-report unit — one, or ten when the reply searched the web — on a counter
+// of its own (`lib/usage/explain-quota.ts`: the reader's day, and a house ceiling
+// across readers). The charge is taken after the memory (a hit costs nothing and
+// is served even to a reader whose day is spent) and before the model is asked,
+// the report route's order; a refusal inside the model's call still costs. A
+// refused charge is a 429 and no model call. Every plan is charged the same, a
+// reader on their own key included. The one debug line carries sizes and the
+// turn's `tenths` (and, for a reply, the thread's message count), so the price can
+// be re-set from real numbers.
+//
+// A reply may search the web, for that message only, when the reader turned it on
+// (`search: true`) AND the provider says it can (`supportsWebSearch`); otherwise
+// it is a plain turn and says `searched: false`. The first message never
+// searches. A hit in the server's memory (keyed by the document, the passage, the
+// thread's texts and whether the reply searched — never by reader) costs no model
+// call and no charge.
 //
 // Never cached by a CDN or the browser: every answer says `no-store`, and one
 // about an upload says what the other private-upload routes say.
@@ -35,7 +48,6 @@ import {
   clipPassage,
   explainCache,
   explainCacheKey,
-  explainDayKey,
   explainDocHash,
   explainMapLines,
   locatePassage,
@@ -57,7 +69,7 @@ import { requireEntitledAiRequest } from "@/lib/security/ai-request";
 import { entitledContext } from "@/lib/security/entitled-context";
 import { CompanySpendCapRefusedError } from "@/lib/usage/company-budget";
 import { companyBudgetQuotaSignal } from "@/lib/usage/deep-report-quota";
-import { endOfUtcDay, getCounterStore } from "@/lib/usage/counters";
+import { EXPLAIN_SEARCH_TENTHS, EXPLAIN_TURN_TENTHS, consumeExplainTurn } from "@/lib/usage/explain-quota";
 
 export const dynamic = "force-dynamic";
 // One small-tier call over a bounded prompt.
@@ -80,6 +92,9 @@ interface ExplainRequest {
   /** P3-02b's thread, read by `readThread`: the first message has none, and
    *  anything malformed is taken for none. */
   thread?: unknown;
+  /** P3-02c: the reader turned web search on for this message. Only a literal
+   *  `true` counts, and only a reply can search. */
+  search?: unknown;
   llmOverride?: ProviderOverrideConfig;
 }
 
@@ -218,10 +233,15 @@ async function handle(req: NextRequest, rawId: string): Promise<Response> {
   });
   if (!located) return reply({ error: "not_in_paper" } satisfies ExplainResult, 422);
 
-  // The server's memory: the document, the passage and the thread's texts —
-  // never the reader.
-  const key = explainCacheKey(explainDocHash(doc), passage, thread.map((message) => message.text));
-  const logTurn = (fields: { count: number | null; promptChars: number; answerChars: number; cached: boolean }) =>
+  // Whether this turn searches the web: the reader asked (a literal `true`), it is
+  // a reply (the first message never searches) and the provider can. A request that
+  // asks of a provider that cannot is a plain turn, charged as one.
+  const searched = replying && body.search === true && provider.supportsWebSearch === true;
+
+  // The server's memory: the document, the passage, the thread's texts and
+  // whether the reply searched — never the reader.
+  const key = explainCacheKey(explainDocHash(doc), passage, thread.map((message) => message.text), searched);
+  const logTurn = (fields: { tenths: number; promptChars: number; answerChars: number; cached: boolean }) =>
     console.debug("[papers/explain] turn", {
       ...(userId ? { userId: shortHash(userId) } : {}),
       ...fields,
@@ -231,21 +251,31 @@ async function handle(req: NextRequest, rawId: string): Promise<Response> {
   // holds is the kind of turn this request asks for.
   const hit = explainCache.get(key);
   if (hit && replying && "role" in hit) {
-    logTurn({ count: null, promptChars: 0, answerChars: JSON.stringify(hit).length, cached: true });
+    logTurn({ tenths: 0, promptChars: 0, answerChars: JSON.stringify(hit).length, cached: true });
     return reply({ turn: hit, cached: true } satisfies ExplainResult);
   }
   if (hit && !replying && "meaning" in hit) {
-    logTurn({ count: null, promptChars: 0, answerChars: JSON.stringify(hit).length, cached: true });
+    logTurn({ tenths: 0, promptChars: 0, answerChars: JSON.stringify(hit).length, cached: true });
     return reply({ answer: hit, cached: true } satisfies ExplainResult);
+  }
+
+  // The charge (§1h.4 amendment): after the memory, before the model. A refused
+  // charge asks nothing and remembers nothing; the reader is told which line to
+  // show — the day's explanations are used up, or the allowance could not be read
+  // and nothing was spent.
+  const tenths = searched ? EXPLAIN_SEARCH_TENTHS : EXPLAIN_TURN_TENTHS;
+  const charge = await consumeExplainTurn(gate.entitlement, { searched }, new Date());
+  if (!charge.allowed) {
+    return reply({ error: "explain_exhausted", reason: charge.reason, resetsAt: charge.resetsAt } satisfies ExplainResult, 429);
   }
 
   const abstract = [body.paper.summaryIntro, body.paper.summaryResultDiscussion].filter(Boolean).join(" ");
   const context = { paper: { title: body.paper.title, abstract }, map: explainMapLines(doc), located, passage };
-  const { systemPrompt, userPrompt } = replying ? buildExplainReplyPrompt({ ...context, thread }) : buildExplainPrompt(context);
+  const { systemPrompt, userPrompt } = replying ? buildExplainReplyPrompt({ ...context, thread, search: searched }) : buildExplainPrompt(context);
 
   let raw: string;
   try {
-    raw = await provider.generateJsonText({ systemPrompt, userPrompt, maxTokens: replying ? REPLY_MAX_TOKENS : MAX_TOKENS, tier: "small" });
+    raw = await provider.generateJsonText({ systemPrompt, userPrompt, maxTokens: replying ? REPLY_MAX_TOKENS : MAX_TOKENS, tier: "small", webSearch: searched });
   } catch (err) {
     // Only the kind of error is logged: a provider's message may echo the prompt.
     console.error("[papers/explain] model call failed:", err instanceof Error ? err.name : typeof err);
@@ -256,28 +286,18 @@ async function handle(req: NextRequest, rawId: string): Promise<Response> {
   }
 
   // Sanitised, then held to the paper: the quote must be the paper's own words
-  // or the prose is labelled Peer's. Nonsense is no answer — nothing counted or kept.
+  // or the prose is labelled Peer's. Nonsense is no answer — nothing is kept (the
+  // charge, taken before the call, stays: a deep read that degrades after the
+  // charge still costs, as in the report route).
   const parsed = parseModelJson(raw);
   const sanitizedReply = replying ? sanitizeExplainReply(parsed) : null;
   const sanitizedAnswer = replying ? null : sanitizeExplainAnswer(parsed);
   let result: ExplainCached;
-  if (sanitizedReply) result = verifyExplainReply(sanitizedReply, doc, located.sectionId);
+  if (sanitizedReply) result = { ...verifyExplainReply(sanitizedReply, doc, located.sectionId), searched };
   else if (sanitizedAnswer) result = verifyExplainAnswer(sanitizedAnswer, doc, located.sectionId);
   else return reply({ unavailable: true } satisfies ExplainResult);
 
-  // Counted (not charged): one model turn for this reader today. The store never
-  // refuses a count and a failure to write one never fails the explanation.
-  let count: number | null = null;
-  if (userId) {
-    const now = new Date();
-    try {
-      const reading = await getCounterStore().increment(explainDayKey(userId, now), endOfUtcDay(now), 1, now);
-      count = reading.ok ? reading.value : null;
-    } catch {
-      count = null;
-    }
-  }
-  logTurn({ count, promptChars: systemPrompt.length + userPrompt.length, answerChars: raw.length, cached: false });
+  logTurn({ tenths, promptChars: systemPrompt.length + userPrompt.length, answerChars: raw.length, cached: false });
 
   // The model's work can run long: an upload changed meanwhile is not answered
   // from, and nothing built from it is remembered.

@@ -32,7 +32,13 @@ export const MAX_EXPLAIN_MESSAGE_CHARS = 400;
 
 /** One message of the thread (P3-02b). A reply of Peer's carries, when its quote
  *  was verified, the paper's own sentence and where it is from; otherwise
- *  `peer: true` and the page labels it as Peer's own reading. */
+ *  `peer: true` and the page labels it as Peer's own reading.
+ *
+ *  P3-02c (§1a.11, §1h.4): `searched` marks a message the server answered with web
+ *  search (on the reader's message, so the cost can be explained afterwards; also
+ *  kept on Peer's reply as the server said it), and `searchUnavailable` is on a
+ *  reply to a message that asked to search when the provider could not — the box
+ *  says so once, under that reply. Facts only: never a source, never an address. */
 export interface ExplainTurn {
   role: "reader" | "peer";
   text: string;
@@ -41,6 +47,8 @@ export interface ExplainTurn {
   sectionId?: string;
   page?: number;
   peer?: true;
+  searched?: true;
+  searchUnavailable?: true;
 }
 
 export interface ExplainThread {

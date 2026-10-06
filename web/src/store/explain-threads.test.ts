@@ -197,6 +197,33 @@ describe("the thread (P3-02b)", () => {
     expect(JSON.parse(storage.items.get(EXPLAIN_THREADS_STORAGE_KEY) ?? "null").state.byPaper["arxiv:1"][keyOf].turns[1]).toEqual(verified);
   });
 
+  // P3-02c (§1h.4 amendment): the reader's message that searched the web carries
+  // the mark that explains its cost afterwards; the reply it did not get a search
+  // for carries the note. Both are plain fields of a turn, kept and restored like
+  // the rest — and never anything about the web itself (no source, no address).
+  it("keeps the mark of a message that searched the web and the note on a reply that could not, in the store and in the browser's storage", () => {
+    const marked: ExplainTurn = { role: "reader", text: "Does anyone else measure it this way?", searched: true };
+    const searched: ExplainTurn = { role: "peer", text: "A reply.", peer: true, searched: true };
+    const noted: ExplainTurn = { role: "peer", text: "Another reply.", peer: true, searchUnavailable: true };
+    const store = useExplainThreadsStore.getState();
+    store.addTurns("arxiv:1", keyOf, [marked, searched], at(2));
+    store.addTurns("arxiv:1", keyOf, [reader(2), noted], at(3));
+
+    expect(turnsOf()).toEqual([marked, searched, reader(2), noted]);
+    const stored = JSON.parse(storage.items.get(EXPLAIN_THREADS_STORAGE_KEY) ?? "null").state.byPaper["arxiv:1"][keyOf].turns;
+    expect(stored).toEqual([marked, searched, reader(2), noted]);
+    expect(JSON.stringify(stored)).not.toMatch(/https?:|www\./);
+  });
+
+  it("counts a marked message as a reader message: the cap is about messages, not about search", () => {
+    const store = useExplainThreadsStore.getState();
+    for (let n = 1; n <= 8; n += 1) store.addTurns("arxiv:1", keyOf, [{ ...reader(n), searched: true }, { ...peer(n), searched: true }], at(n));
+
+    expect(threadFull(turnsOf())).toBe(true);
+    store.addTurns("arxiv:1", keyOf, [{ ...reader(9), searched: true }, peer(9)], at(20));
+    expect(turnsOf()).toHaveLength(16);
+  });
+
   it("stamps the thread's last use, so the newest conversation outlives the oldest", () => {
     useExplainThreadsStore.getState().addTurns("arxiv:1", keyOf, pair(1), at(9));
 

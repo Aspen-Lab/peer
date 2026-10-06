@@ -331,6 +331,18 @@ describe("the route copy never tells the reader not to read (§1f.13, §3d 8)", 
     expect(all).toContain("What it means");
     expect(all).toContain("Why it is here");
     expect(all).toContain(EXPLAIN.defines("2 Methods"));
+    // P3-02c (§1h.4 amendment): the search toggle's label, its warning, the mark
+    // and the note, and the two allowance lines, are scanned too.
+    for (const line of [
+      EXPLAIN.searchToggle,
+      EXPLAIN.searchWarning,
+      EXPLAIN.searchedMark,
+      EXPLAIN.searchUnavailable,
+      QUOTA.explainExhausted,
+      QUOTA.explainUnavailable,
+    ]) {
+      expect(all).toContain(line);
+    }
     for (const line of all) expect(line).not.toMatch(/skip|don['’]t read|ignore|not worth/i);
   });
 });

@@ -73,9 +73,12 @@ function explainProblems(source: string): string[] {
   const reply = /const replyExplain = useCallback\(.*?\], ?\);/.exec(text)?.[0] ?? "";
   if (!reply) problems.push("`replyExplain` moved or is no longer a useCallback");
   else {
-    if (!/requestReply\(\{ paper, selection, sectionId, thread, message, llmOverride: explainLlmOverride\(profile\) \}\)/.test(reply)) problems.push("the reply is no longer `requestReply` with the thread, the message and the reader's own key");
+    // P3-02c (§1h.4 amendment): the reply request also carries the reader's one-message choice to search.
+    if (!/requestReply\(\{ paper, selection, sectionId, search, thread, message, llmOverride: explainLlmOverride\(profile\) \}\)/.test(reply)) problems.push("the reply is no longer `requestReply` with the search choice, the thread, the message and the reader's own key");
+    if (!/async \(selection: SelectionTarget, thread: readonly ExplainTurn\[\], message: string, search\?: boolean\): Promise<ReplyResult>/.test(reply)) problems.push("`replyExplain` no longer takes the reader's choice to search as its fourth argument");
     if (!reply.includes("reading?.body?.[selection.sectionIndex]?.id")) problems.push("the reply's section id no longer comes from the body the reader selected in");
-    if (!/if \(typeof result !== "string"\) \{ try \{ addExplainTurns\(paper\.id, passageHash\(selection\.passage\), \[\{ role: "reader", text: message \}, result\]\); \} catch/.test(reply)) problems.push("a reply joins the thread only once it has arrived, under a guard that never fails the reply");
+    // P3-02c: the pair that joins the thread is `replyPair`'s — the mark and the note come from what the server did.
+    if (!/if \(typeof result !== "string"\) \{ try \{ addExplainTurns\(paper\.id, passageHash\(selection\.passage\), replyPair\(message, search === true, result\)\); \} catch/.test(reply)) problems.push("a reply joins the thread only once it has arrived, under a guard that never fails the reply");
     if (/useExplainThreadsStore\.getState\(\)/.test(reply)) problems.push("the reply reaches into the store instead of the page's own selector");
   }
   if (!/const resetExplain = useCallback\(.*?resetExplainThread\(paper\.id, passageHash\(selection\.passage\)\)/.test(text)) problems.push("a full thread is no longer dropped through `resetThread` for this paper and passage");
@@ -181,11 +184,34 @@ describe("the page's Explain this? wiring (P3-02)", () => {
 
   it("would notice the reply dropping the reader's own key, or joining the thread before it arrived", () => {
     expect(explainProblems(source.replace("thread, message, llmOverride: explainLlmOverride(profile) })", "thread, message })"))).toContain(
-      "the reply is no longer `requestReply` with the thread, the message and the reader's own key",
+      "the reply is no longer `requestReply` with the search choice, the thread, the message and the reader's own key",
     );
     const early = source.replace(/if \(typeof result !== "string"\) \{(\s*)try \{(\s*)addExplainTurns\(/, "{$1try {$2addExplainTurns(");
     expect(early).not.toBe(source);
     expect(explainProblems(early)).toContain("a reply joins the thread only once it has arrived, under a guard that never fails the reply");
+  });
+
+  // P3-02c (§1h.4 amendment): the toggle's choice travels page-ward as the fourth argument of the
+  // reply, into the request, and the pair that is kept is the one the box shows.
+  it("would notice the reply no longer carrying the reader's choice to search", () => {
+    const noRequest = source.replace("sectionId, search, thread, message,", "sectionId, thread, message,");
+    expect(noRequest).not.toBe(source);
+    expect(explainProblems(noRequest)).toContain("the reply is no longer `requestReply` with the search choice, the thread, the message and the reader's own key");
+
+    const noArgument = source.replace(", message: string, search?: boolean): Promise<ReplyResult>", ", message: string): Promise<ReplyResult>");
+    expect(noArgument).not.toBe(source);
+    expect(explainProblems(noArgument)).toContain("`replyExplain` no longer takes the reader's choice to search as its fourth argument");
+  });
+
+  it("would notice the kept pair no longer being the one the box shows", () => {
+    const wrong = source.replace("replyPair(message, search === true, result)", "[{ role: \"reader\", text: message }, result]");
+
+    expect(wrong).not.toBe(source);
+    expect(explainProblems(wrong)).toContain("a reply joins the thread only once it has arrived, under a guard that never fails the reply");
+  });
+
+  it("imports `replyPair` and `requestReply` from the thread module, as the box does", () => {
+    expect(source).toMatch(/import \{ replyPair, requestReply, type ReplyResult \} from "@\/components\/reader\/explain-thread";/);
   });
 
   it("would notice the ref no longer called through `openExplain`", () => {

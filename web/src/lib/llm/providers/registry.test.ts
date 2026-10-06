@@ -215,3 +215,31 @@ describe("provider resolution", () => {
     ).toBe(false);
   });
 });
+
+/**
+ * P3-02c (ruling §1h.4 amendment) — which RESOLVED providers can search the web.
+ *
+ * The explain route reads `supportsWebSearch` off whatever `resolveProvider`
+ * returns, and that is the metering wrapper's object, not the provider's own. So
+ * the end-to-end fact is asserted here, through the registry and the wrapper:
+ * both ways to get Gemini (Peer's system key, a reader's own key) can search, and
+ * no other provider says it can — they ignore the argument, and the route answers
+ * them without search.
+ */
+describe("P3-02c — which resolved providers can search the web", () => {
+  it("Peer's system Gemini key and a reader's own Gemini key can, through the metering wrapper", () => {
+    vi.stubEnv("GOOGLE_API_KEY", SYSTEM_KEY);
+
+    expect(resolveProvider(null, TEST_CTX)?.supportsWebSearch).toBe(true);
+    expect(resolveProvider({ provider: "gemini", apiKey: "USER-NOT-A-KEY" }, TEST_CTX)?.supportsWebSearch).toBe(true);
+  });
+
+  it("no other provider says it can", () => {
+    for (const provider of ["anthropic", "openai", "qwen", "deepseek"] as const) {
+      const resolved = resolveProvider({ provider, apiKey: "USER-NOT-A-KEY" }, TEST_CTX);
+
+      expect(resolved?.id).toBe(provider);
+      expect(resolved?.supportsWebSearch).toBeUndefined();
+    }
+  });
+});

@@ -8,8 +8,16 @@ import {
   supabaseServerStub,
 } from "@/test-support/route-harness";
 import type { ExtractedDocument } from "@/lib/papers/html-text";
-import { explainCache, explainDayKey } from "@/lib/papers/explain";
+import { explainCache } from "@/lib/papers/explain";
 import { getCounterStore, resetCounterStoreForTests } from "@/lib/usage/counters";
+import {
+  ALL_USERS_EXPLAIN_TENTHS_PER_DAY,
+  EXPLAIN_SEARCH_TENTHS,
+  EXPLAIN_TENTHS_PER_DAY,
+  EXPLAIN_TURN_TENTHS,
+  explainTenthsHouseKey,
+  explainTenthsKey,
+} from "@/lib/usage/explain-quota";
 
 // P3-02 (ruling §1h.2; §3d 14, 17): the sign-in gate on the explain route and
 // what it means across readers — a stranger is refused before any text is read
@@ -18,6 +26,8 @@ import { getCounterStore, resetCounterStoreForTests } from "@/lib/usage/counters
 // paper is served from the server's memory with no count of their own, because
 // nothing in that memory is a reader's. A deployed runtime and a session stub,
 // so a file of its own (the ordinary route tests run with no sign-in at all).
+// P3-02c (§1h.4 amendment): "counted" is now "charged" — in tenths, one or ten —
+// and the per-reader day cap and the house ceiling are tested here, across readers.
 
 const mocks = vi.hoisted(() => ({
   getUser: vi.fn(),
@@ -75,8 +85,12 @@ function call(payload: unknown = body, id: string = paper.id) {
   return POST(req, { params: Promise.resolve({ id: encodeURIComponent(id) }) });
 }
 
+/** What this reader has been charged today, in tenths. */
 async function turnsOf(userId: string): Promise<number> {
-  return (await getCounterStore().read(explainDayKey(userId, NOW), NOW)).value;
+  return (await getCounterStore().read(explainTenthsKey(userId, NOW), NOW)).value;
+}
+async function houseOf(): Promise<number> {
+  return (await getCounterStore().read(explainTenthsHouseKey(NOW), NOW)).value;
 }
 
 let generateJsonText: ReturnType<typeof vi.fn>;
@@ -160,30 +174,33 @@ describe("POST /api/papers/[id]/explain — nothing per-reader in the memory", (
     expect(first.cached).toBe(false);
     expect(second.cached).toBe(true);
     expect(generateJsonText).toHaveBeenCalledTimes(1);
-    expect(await turnsOf("reader-1")).toBe(1);
+    expect(await turnsOf("reader-1")).toBe(EXPLAIN_TURN_TENTHS);
     expect(await turnsOf("reader-2")).toBe(0);
   });
 
-  it("counts each reader's own model turns apart", async () => {
+  it("charges each reader's own model turns apart", async () => {
     mocks.getUser.mockResolvedValue(signedIn("reader-1"));
     await call();
     mocks.getUser.mockResolvedValue(signedIn("reader-2"));
     await call({ ...body, passage: "Specimens were machined from a single casting", paragraphIndex: 0 });
 
-    expect(await turnsOf("reader-1")).toBe(1);
-    expect(await turnsOf("reader-2")).toBe(1);
+    expect(await turnsOf("reader-1")).toBe(EXPLAIN_TURN_TENTHS);
+    expect(await turnsOf("reader-2")).toBe(EXPLAIN_TURN_TENTHS);
     expect(await turnsOf("reader-3")).toBe(0);
+    expect(await houseOf()).toBe(2 * EXPLAIN_TURN_TENTHS);
   });
 
-  it("starts a reader's count again the next UTC day", async () => {
+  it("starts a reader's charge again the next UTC day", async () => {
     mocks.getUser.mockResolvedValue(signedIn("reader-1"));
     await call();
     vi.setSystemTime(new Date("2026-10-07T00:00:01.000Z"));
     explainCache.clear();
     await call();
 
-    expect((await getCounterStore().read(explainDayKey("reader-1", new Date("2026-10-07T00:00:01.000Z")), new Date("2026-10-07T00:00:01.000Z"))).value).toBe(1);
-    expect((await getCounterStore().read(explainDayKey("reader-1", NOW), new Date("2026-10-07T00:00:01.000Z"))).value).toBe(0);
+    const later = new Date("2026-10-07T00:00:01.000Z");
+    expect((await getCounterStore().read(explainTenthsKey("reader-1", later), later)).value).toBe(EXPLAIN_TURN_TENTHS);
+    // The first day's charge has gone with its day (the in-memory store sweeps what has ended).
+    expect((await getCounterStore().read(explainTenthsKey("reader-1", NOW), later)).value).toBe(0);
   });
 });
 
@@ -207,7 +224,7 @@ describe("POST /api/papers/[id]/explain — nothing per-reader in the memory, wi
     expect(second.cached).toBe(true);
     expect(second.turn).toEqual(first.turn);
     expect(generateJsonText).toHaveBeenCalledTimes(1);
-    expect(await turnsOf("reader-1")).toBe(1);
+    expect(await turnsOf("reader-1")).toBe(EXPLAIN_TURN_TENTHS);
     expect(await turnsOf("reader-2")).toBe(0);
   });
 
@@ -216,5 +233,70 @@ describe("POST /api/papers/[id]/explain — nothing per-reader in the memory, wi
 
     expect(response.status).toBe(401);
     expect(generateJsonText).not.toHaveBeenCalled();
+  });
+});
+
+// P3-02c (§1h.4 amendment): the day cap is each reader's own, the house ceiling
+// is everyone's, and a stranger is never charged.
+describe("POST /api/papers/[id]/explain — the caps across readers (P3-02c)", () => {
+  it("charges nothing to a stranger: refused 401 before any counter is touched", async () => {
+    await call();
+
+    expect(await houseOf()).toBe(0);
+  });
+
+  it("refuses the reader whose day is spent with a 429, and still serves another reader", async () => {
+    await getCounterStore().increment(explainTenthsKey("reader-1", NOW), null, EXPLAIN_TENTHS_PER_DAY, NOW);
+    mocks.getUser.mockResolvedValue(signedIn("reader-1"));
+    const refused = await call();
+    mocks.getUser.mockResolvedValue(signedIn("reader-2"));
+    const served = await call();
+
+    expect(refused.status).toBe(429);
+    expect(((await refused.json()) as { error: string; reason: string }).error).toBe("explain_exhausted");
+    expect(served.status).toBe(200);
+    expect(generateJsonText).toHaveBeenCalledTimes(1);
+    expect(await turnsOf("reader-2")).toBe(EXPLAIN_TURN_TENTHS);
+  });
+
+  it("refuses everyone once the house ceiling is spent, a reader who has asked nothing today included", async () => {
+    await getCounterStore().increment(explainTenthsHouseKey(NOW), null, ALL_USERS_EXPLAIN_TENTHS_PER_DAY, NOW);
+    mocks.getUser.mockResolvedValue(signedIn("reader-9"));
+    const response = await call();
+
+    expect(response.status).toBe(429);
+    expect(((await response.json()) as { reason: string }).reason).toBe("exhausted");
+    expect(generateJsonText).not.toHaveBeenCalled();
+    expect(await turnsOf("reader-9")).toBe(0);
+  });
+
+  it("charges a searched reply ten tenths to the reader who sent it, and the same words from the next reader are a hit at no charge of theirs", async () => {
+    mocks.resolveProvider.mockReturnValue({ generateJsonText, supportsWebSearch: true });
+    generateJsonText.mockResolvedValue(JSON.stringify({ reply: "It changes how the metal carries load.", evidence: DEF }));
+    const thread = [
+      { role: "peer", text: "A share of a sample turned to plates. It compares alloys." },
+      { role: "reader", text: "Does anyone else measure it this way?" },
+    ];
+    mocks.getUser.mockResolvedValue(signedIn("reader-1"));
+    const first = (await (await call({ ...body, thread, search: true })).json()) as { cached: boolean; turn: { searched: boolean } };
+    mocks.getUser.mockResolvedValue(signedIn("reader-2"));
+    const second = (await (await call({ ...body, thread, search: true })).json()) as { cached: boolean; turn: { searched: boolean } };
+
+    expect(first).toMatchObject({ cached: false, turn: { searched: true } });
+    expect(second).toMatchObject({ cached: true, turn: { searched: true } });
+    expect(generateJsonText).toHaveBeenCalledTimes(1);
+    expect(generateJsonText.mock.calls[0][0]).toMatchObject({ webSearch: true });
+    expect(await turnsOf("reader-1")).toBe(EXPLAIN_SEARCH_TENTHS);
+    expect(await turnsOf("reader-2")).toBe(0);
+    expect(await houseOf()).toBe(EXPLAIN_SEARCH_TENTHS);
+  });
+
+  it("says nothing of the reader in the 429: the reason and the hour, no id", async () => {
+    await getCounterStore().increment(explainTenthsKey("reader-1", NOW), null, EXPLAIN_TENTHS_PER_DAY, NOW);
+    mocks.getUser.mockResolvedValue(signedIn("reader-1"));
+    const text = await (await call()).text();
+
+    expect(JSON.parse(text)).toEqual({ error: "explain_exhausted", reason: "exhausted", resetsAt: "2026-10-07T00:00:00.000Z" });
+    expect(text).not.toContain("reader-1");
   });
 });

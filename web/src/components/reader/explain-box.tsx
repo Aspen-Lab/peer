@@ -37,9 +37,23 @@
 // Positioned `fixed` from the selection's rectangle, measured again as the page
 // scrolls: beside the text column on the spread, where P3-02 put the card
 // between 640 and 1024, a bottom sheet on a phone (`placePanel`).
+//
+// P3-02c (ruling §1h.4 amendment; user decision §1a.11): at the start of the
+// control row, a small toggle "Search the web" — off whenever the box opens or a
+// passage is opened, never remembered, session state only. Hovering it, or giving
+// it the keyboard's focus, shows a tooltip that web search costs many times more
+// than a normal reply; on a touch screen, with no hover, the first tap shows the
+// same line and the second turns search on (`toggleStep`). The next send carries
+// it — as the reply's fourth argument, only when on — and the toggle is off again
+// the moment it is sent, sent or failed. A message the server answered with search
+// carries the label-face mark "searched the web" beside "You"; a reply to one that
+// asked for search the provider could not give carries a one-line note. A day's
+// explanations used up, or an allowance that could not be checked, is a line under
+// the thread (the first: the input and the toggle disabled, the typed words kept)
+// or, for the first message, in place of the loading line. Nothing here links to a
+// web source: the mark is the only trace of the search.
 
 import { useEffect, useRef, useState, type CSSProperties, type Ref } from "react";
-import { ApiError, apiFetch } from "@/lib/api";
 import { hasUserLlmOverride } from "@/lib/feed/ai-tier";
 import type { ProviderOverrideConfig } from "@/lib/llm/providers/types";
 import type { ExplainAnswer } from "@/lib/papers/explain";
@@ -47,23 +61,49 @@ import type { PaperReading } from "@/lib/papers/reading";
 import type { PaperTerm } from "@/lib/papers/report";
 import { MAX_EXPLAIN_MESSAGE_CHARS, threadFull, type ExplainTurn } from "@/store/explain-threads";
 import type { Paper, UserProfile } from "@/types";
-import { EXPLAIN, PEERS_READING } from "./copy";
+import { EXPLAIN, PEERS_READING, QUOTA } from "./copy";
 import { EvidenceQuote } from "./evidence-quote";
-import { firstAnswerMessage, keyToSend, type ReplyResult } from "./explain-thread";
+import {
+  firstAnswerMessage,
+  keyToSend,
+  postExplain,
+  pressKind,
+  refusalOf,
+  replyPair,
+  toggleStep,
+  type AllowanceRefusal,
+  type ReplyResult,
+} from "./explain-thread";
 import type { ExplainSelection, SelectionTarget, ViewRect, ViewRects } from "./paper-body";
 
 // ── What the card shows ────────────────────────────────────────────────
 
-/** `none`: no model is asked (no key) — the paper's own definition is all there is. */
+/** `none`: no model is asked (no key) — the paper's own definition is all there is.
+ *  `exhausted` / `allowance_unavailable` (P3-02c): the first message was refused by
+ *  the allowance — the day's explanations are used up, or the counter could not be
+ *  read and nothing was spent. */
 export type ExplainStatus =
   | { kind: "none" }
   | { kind: "loading" }
   | { kind: "answer"; answer: ExplainAnswer }
   | { kind: "unavailable" }
-  | { kind: "not_in_paper" };
+  | { kind: "not_in_paper" }
+  | { kind: AllowanceRefusal };
 
 /** What asking comes to. */
-export type AskResult = ExplainAnswer | "unavailable" | "not_in_paper";
+export type AskResult = ExplainAnswer | "unavailable" | "not_in_paper" | AllowanceRefusal;
+
+/** The web-search toggle as the card draws it (P3-02c): its state, and its three
+ *  events — the pointer's kind as it goes down (a finger, a mouse, a pen; none at
+ *  all is the keyboard), the press, and the button losing the focus. */
+export interface SearchView {
+  on: boolean;
+  /** The warning is showing because a touch put it there (hover and focus show it by CSS). */
+  tip: boolean;
+  onPointerDown: (pointerType: string) => void;
+  onPress: () => void;
+  onBlur: () => void;
+}
 
 /** The thread as the card draws it, and the handlers it calls. The card owns no
  *  state: the box holds the draft and the pending reply. */
@@ -74,9 +114,19 @@ export interface ThreadView {
   pending: boolean;
   /** The last send failed: the thread is as it was and the draft is still here. */
   failed: boolean;
+  /** P3-02c: the allowance refused the last send — `exhausted`: the day's
+   *  explanations are used up (the input and the toggle are disabled, the typed
+   *  words kept); `unavailable`: it could not be checked and nothing was spent
+   *  (the reader may try again). */
+  quota?: "exhausted" | "unavailable";
   onDraft: (text: string) => void;
   onSend: () => void;
+  /** P3-02c: the web-search toggle. Without it the row has none. */
+  search?: SearchView;
 }
+
+/** The tooltip's id: there is one box on a page, so one is enough. */
+const SEARCH_TIP_ID = "explain-search-tip";
 
 const PREVIEW_CHARS = 80;
 
@@ -253,10 +303,12 @@ function asAnswer(value: unknown): ExplainAnswer | null {
 
 /**
  * The one request "Explain this?" makes, when the reader clicks: the paper, the
- * passage and where it sits (the first message has no thread), and the reader's
- * own key only when they have one. An answer, "not_in_paper" when the server
- * says the words are not the paper's (422), and "unavailable" for everything
- * else — an outage, a refusal, a gone upload, a reply that is not what was promised.
+ * passage and where it sits (the first message has no thread, and never asks to
+ * search), and the reader's own key only when they have one. An answer,
+ * "not_in_paper" when the server says the words are not the paper's (422),
+ * "exhausted" or "allowance_unavailable" when the allowance refused it (P3-02c: a
+ * 429 `explain_exhausted`, by its reason), and "unavailable" for everything else —
+ * an outage, a refusal, a gone upload, a reply that is not what was promised.
  */
 export async function requestExplanation(args: {
   paper: Paper;
@@ -266,20 +318,20 @@ export async function requestExplanation(args: {
 }): Promise<AskResult> {
   const { paper, selection, sectionId, llmOverride } = args;
   try {
-    const reply = await apiFetch<unknown>(`/api/papers/${encodeURIComponent(paper.id)}/explain`, {
-      method: "POST",
-      body: JSON.stringify({
-        paper,
-        passage: selection.passage,
-        sectionId,
-        paragraphIndex: selection.paragraphIndex,
-        thread: [],
-        ...(llmOverride ? { llmOverride } : {}),
-      }),
+    const response = await postExplain(paper.id, {
+      paper,
+      passage: selection.passage,
+      sectionId,
+      paragraphIndex: selection.paragraphIndex,
+      thread: [],
+      ...(llmOverride ? { llmOverride } : {}),
     });
-    return asAnswer(reply) ?? "unavailable";
-  } catch (error) {
-    return error instanceof ApiError && error.status === 422 ? "not_in_paper" : "unavailable";
+    const refused = refusalOf(response);
+    if (refused) return refused;
+    if (response.status === 422) return "not_in_paper";
+    return (response.ok ? asAnswer(response.body) : null) ?? "unavailable";
+  } catch {
+    return "unavailable";
   }
 }
 
@@ -303,7 +355,16 @@ function TurnView({ turn }: { turn: ExplainTurn }) {
   if (turn.role === "reader") {
     return (
       <div>
-        <p className="font-mono text-caption text-text-muted">{EXPLAIN.you}</p>
+        {turn.searched === true ? (
+          // P3-02c: the one trace of a search — a label-face mark beside "You", so the
+          // cost of this message can be explained afterwards. Never a source.
+          <div className="flex flex-wrap items-baseline gap-x-3">
+            <p className="font-mono text-caption text-text-muted">{EXPLAIN.you}</p>
+            <span className="annotation text-text-faint">{EXPLAIN.searchedMark}</span>
+          </div>
+        ) : (
+          <p className="font-mono text-caption text-text-muted">{EXPLAIN.you}</p>
+        )}
         <p className="font-reading text-body leading-[1.6] text-text mt-1 whitespace-pre-wrap">{turn.text}</p>
       </div>
     );
@@ -313,6 +374,7 @@ function TurnView({ turn }: { turn: ExplainTurn }) {
       <PartHeading peers={turn.peer === true}>{EXPLAIN.peer}</PartHeading>
       <p className="font-reading text-body leading-[1.6] text-text mt-1">{turn.text}</p>
       {turn.evidence && turn.peer !== true && <EvidenceQuote text={turn.evidence} where={turn.evidenceWhere ?? "abstract"} page={turn.page} />}
+      {turn.searchUnavailable === true && <p className="annotation mt-2 text-text-faint">{EXPLAIN.searchUnavailable}</p>}
     </div>
   );
 }
@@ -358,6 +420,9 @@ export function ExplainCard({
 }) {
   const asking = canAsk && status.kind === "answer" ? thread : undefined;
   const full = asking ? threadFull(asking.turns) : false;
+  /** The day's explanations are used up: nothing more can be sent, the words stay. */
+  const spent = asking?.quota === "exhausted";
+  const sendBlocked = (asking?.pending ?? false) || full || spent;
   return (
     <div
       role="dialog"
@@ -391,6 +456,8 @@ export function ExplainCard({
           {status.kind === "loading" && <p className="annotation text-text-faint">{EXPLAIN.loading}</p>}
           {status.kind === "unavailable" && <p className="annotation text-text-faint">{EXPLAIN.unavailable}</p>}
           {status.kind === "not_in_paper" && <p className="annotation text-text-faint">{EXPLAIN.notInPaper}</p>}
+          {status.kind === "exhausted" && <p className="annotation text-text-faint">{QUOTA.explainExhausted}</p>}
+          {status.kind === "allowance_unavailable" && <p className="annotation text-text-faint">{QUOTA.explainUnavailable}</p>}
           {status.kind === "answer" && (
             <>
               <section>
@@ -407,6 +474,8 @@ export function ExplainCard({
               {asking?.turns.map((turn, index) => <TurnView key={index} turn={turn} />)}
               {asking?.pending && <p className="annotation text-text-faint">{EXPLAIN.thinking}</p>}
               {asking?.failed && <p className="annotation text-text-faint">{EXPLAIN.unavailable}</p>}
+              {asking?.quota === "exhausted" && <p className="annotation text-text-faint">{QUOTA.explainExhausted}</p>}
+              {asking?.quota === "unavailable" && <p className="annotation text-text-faint">{QUOTA.explainUnavailable}</p>}
               {full && <p className="annotation text-text-faint">{EXPLAIN.threadFull}</p>}
             </>
           )}
@@ -414,18 +483,50 @@ export function ExplainCard({
       )}
 
       {asking && (
-        // One row: the input, then Send. P3-02c puts its one small toggle at the
-        // row's start; nothing here is sized so that it could not fit.
+        // The control row: the input, then Send — and (P3-02c) at its start the one
+        // small toggle, on a line of its own so the input keeps the card's width.
         <div
           data-explain-controls=""
-          className={`sticky -bottom-4 -mx-4 -mb-4 mt-4 flex items-end gap-2 border-t border-border bg-surface p-3 ${sheet ? "pb-[max(0.75rem,env(safe-area-inset-bottom))]" : ""}`}
+          className={`sticky -bottom-4 -mx-4 -mb-4 mt-4 flex flex-wrap items-end gap-2 border-t border-border bg-surface p-3 ${sheet ? "pb-[max(0.75rem,env(safe-area-inset-bottom))]" : ""}`}
         >
+          {asking.search && (
+            <div data-explain-search="" className="w-full">
+              {/* The tooltip is the button's next sibling: hover and keyboard focus show it by
+                  CSS (`peer-hover`, `peer-focus-visible`, which a touch screen never matches);
+                  a touch's first tap shows it by its attribute. */}
+              <span className="relative inline-flex">
+                <button
+                  type="button"
+                  data-explain-search-toggle=""
+                  aria-pressed={asking.search.on}
+                  aria-describedby={SEARCH_TIP_ID}
+                  disabled={sendBlocked}
+                  onPointerDown={(event) => asking.search?.onPointerDown(event.pointerType)}
+                  onClick={() => asking.search?.onPress()}
+                  onBlur={() => asking.search?.onBlur()}
+                  className={`peer annotation rounded-full border px-3 py-1 transition-colors disabled:opacity-50 ${
+                    asking.search.on ? "border-heading text-heading" : "border-border-strong text-text-muted hover:text-heading"
+                  }`}
+                >
+                  {EXPLAIN.searchToggle}
+                </button>
+                <span
+                  role="tooltip"
+                  id={SEARCH_TIP_ID}
+                  data-tooltip-open={asking.search.tip ? "" : undefined}
+                  className="annotation pointer-events-none invisible absolute bottom-full left-0 z-20 mb-2 w-64 rounded-md border border-border-strong bg-surface p-2 text-text-muted opacity-0 shadow-card-hover transition-opacity peer-hover:visible peer-hover:opacity-100 peer-focus-visible:visible peer-focus-visible:opacity-100 peer-disabled:hidden data-[tooltip-open]:visible data-[tooltip-open]:opacity-100"
+                >
+                  {EXPLAIN.searchWarning}
+                </span>
+              </span>
+            </div>
+          )}
           <textarea
             ref={inputRef}
             rows={1}
             value={asking.draft}
             maxLength={MAX_EXPLAIN_MESSAGE_CHARS}
-            disabled={asking.pending || full}
+            disabled={sendBlocked}
             placeholder={EXPLAIN.placeholder}
             aria-label={EXPLAIN.placeholder}
             onChange={(event) => asking.onDraft(event.target.value)}
@@ -440,7 +541,7 @@ export function ExplainCard({
           <button
             type="button"
             data-explain-send=""
-            disabled={asking.pending || full || asking.draft.trim() === ""}
+            disabled={sendBlocked || asking.draft.trim() === ""}
             onClick={() => asking.onSend()}
             className="shrink-0 rounded-full border border-border-strong bg-surface px-3 py-2 font-mono text-caption text-heading transition-colors hover:bg-surface-hover disabled:opacity-50"
           >
@@ -462,10 +563,16 @@ interface Session {
   turns: ExplainTurn[];
   /** What the reader has typed and not sent. */
   draft: string;
-  reply: "idle" | "pending" | "failed";
+  /** `exhausted` / `allowance_unavailable` (P3-02c): what the allowance said to the last send. */
+  reply: "idle" | "pending" | "failed" | AllowanceRefusal;
+  /** P3-02c: web search is on for the next message. Session state only — off
+   *  whenever a box or a passage is opened, never remembered. */
+  search: boolean;
+  /** The warning is showing because a touch put it there. */
+  tip: boolean;
 }
 
-const noThread = { turns: [] as ExplainTurn[], draft: "", reply: "idle" as const };
+const noThread = { turns: [] as ExplainTurn[], draft: "", reply: "idle" as const, search: false, tip: false };
 /** The input grows to three lines, then scrolls. */
 const INPUT_MAX_HEIGHT = 72;
 
@@ -486,8 +593,9 @@ export interface ExplainBoxProps {
   cachedTurns?: readonly ExplainTurn[];
   /** The send — the second kind of request, made when the reader presses Enter
    *  or Send, never before: the target, the thread so far (the first answer
-   *  first) and the new message. Without it the box has no thread. */
-  onReply?: (target: SelectionTarget, thread: readonly ExplainTurn[], message: string) => Promise<ReplyResult>;
+   *  first) and the new message — and, only when the reader turned web search on
+   *  for it (P3-02c), `true` as a fourth argument. Without it the box has no thread. */
+  onReply?: (target: SelectionTarget, thread: readonly ExplainTurn[], message: string, search?: boolean) => Promise<ReplyResult>;
   /** Called when a passage whose thread is full is opened again: the page drops that thread. */
   onResetThread?: (target: SelectionTarget) => void;
   /** Where the text column's right edge is now (measured as the selection is). */
@@ -514,6 +622,8 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
   const live = useRef<Session | null>(null);
   const refocus = useRef(false);
   const wasPending = useRef(false);
+  /** The kind of pointer that went down on the toggle, until the click that follows reads it. */
+  const pointer = useRef<string | null>(null);
 
   // Where the selection is, measured again as the page scrolls or resizes.
   useEffect(() => {
@@ -550,7 +660,11 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
     };
     const onPointerDown = (event: PointerEvent) => {
       const node = event.target as Element | null;
-      if (node?.closest?.("[data-explain-card]")) return;
+      if (node?.closest?.("[data-explain-card]")) {
+        // A press in the card, off the toggle, puts a touch's warning away.
+        if (!node.closest("[data-explain-search]")) setSession((current) => (current !== null && current.tip ? { ...current, tip: false } : current));
+        return;
+      }
       setSession(null);
     };
     document.addEventListener("keydown", onKeyDown, true);
@@ -594,26 +708,51 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
   };
 
   // The send: the one request of a follow-up. Nothing happens for an empty
-  // draft, a reply already on its way or a full thread; the reply joins the
-  // thread, with the message it answers, only once it has arrived.
+  // draft, a reply already on its way, a full thread or a day's explanations used
+  // up; the reply joins the thread, with the message it answers, only once it has
+  // arrived. The search toggle is for this message only (§1a.11): it goes with the
+  // request — as the fourth argument, only when on — and is off again at once,
+  // whatever comes back.
   const send = () => {
     if (!open || !onReply || open.status.kind !== "answer") return;
-    if (open.reply === "pending" || threadFull(open.turns)) return;
+    if (open.reply === "pending" || open.reply === "exhausted" || threadFull(open.turns)) return;
     const message = open.draft.trim();
     if (!message) return;
     const selection = open.selection;
+    const searching = open.search;
     const thread = [firstAnswerMessage(open.status.answer), ...open.turns];
     refocus.current = inputRef.current !== null && typeof document !== "undefined" && document.activeElement === inputRef.current;
-    setSession((current) => (current ? { ...current, reply: "pending" } : current));
-    void onReply(asked(selection), thread, message)
+    setSession((current) => (current ? { ...current, reply: "pending", search: false, tip: false } : current));
+    void (searching ? onReply(asked(selection), thread, message, true) : onReply(asked(selection), thread, message))
       .catch((): ReplyResult => "unavailable")
       .then((result) =>
         setSession((current) => {
           if (current === null || current.selection.passage !== selection.passage) return current;
+          if (result === "exhausted" || result === "allowance_unavailable") return { ...current, reply: result };
           if (typeof result === "string") return { ...current, reply: "failed" };
-          return { ...current, reply: "idle", draft: "", turns: [...current.turns, { role: "reader", text: message }, result] };
+          return { ...current, reply: "idle", draft: "", turns: [...current.turns, ...replyPair(message, searching, result)] };
         }),
       );
+  };
+
+  // The toggle's events (§1a.11). The pointer that went down is read once by the
+  // click that follows it: a finger needs two taps (the first shows the warning), a
+  // mouse, a pen or the keyboard one. A press does nothing while a reply is on its
+  // way, the thread is full or the day's explanations are used up.
+  const pressSearch = () => {
+    const kind = pressKind(pointer.current);
+    pointer.current = null;
+    setSession((current) => {
+      if (current === null || current.reply === "pending" || current.reply === "exhausted" || threadFull(current.turns)) return current;
+      const next = toggleStep({ on: current.search, tip: current.tip }, kind);
+      return { ...current, search: next.on, tip: next.tip };
+    });
+  };
+  // A button that loses the focus has been left: a touch's warning goes, and a
+  // pointer that never clicked is forgotten.
+  const blurSearch = () => {
+    pointer.current = null;
+    setSession((current) => (current !== null && current.tip ? { ...current, tip: false } : current));
   };
 
   const openBox = () => {
@@ -715,8 +854,18 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
           draft: open.draft,
           pending: open.reply === "pending",
           failed: open.reply === "failed",
+          ...(open.reply === "exhausted" ? { quota: "exhausted" as const } : open.reply === "allowance_unavailable" ? { quota: "unavailable" as const } : {}),
           onDraft: (text) => setSession((current) => (current ? { ...current, draft: text.slice(0, MAX_EXPLAIN_MESSAGE_CHARS) } : current)),
           onSend: send,
+          search: {
+            on: open.search,
+            tip: open.tip,
+            onPointerDown: (pointerType) => {
+              pointer.current = pointerType;
+            },
+            onPress: pressSearch,
+            onBlur: blurSearch,
+          },
         }
       : undefined;
   return (

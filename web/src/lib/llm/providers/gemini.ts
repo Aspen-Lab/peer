@@ -172,12 +172,20 @@ export function outputCap(modelId: string, maxTokens?: number): number | undefin
   return disableThinking(modelId) ? maxTokens : maxTokens + THINKING_HEADROOM;
 }
 
-function genConfig(modelId: string, systemInstruction: string, maxTokens?: number) {
+/**
+ * P3-02c (ruling §1h.4 amendment): with `webSearch` the call carries the Google
+ * Search grounding tool and NO `responseMimeType` — Gemini refuses JSON mode
+ * together with a grounding tool, so the text comes back as the model wrote it
+ * (the explain route strips a fence and finds the object). Everything else about
+ * the call — the thinking control, the output cap — is unchanged. Without
+ * `webSearch` this is exactly the config it always was.
+ */
+function genConfig(modelId: string, systemInstruction: string, maxTokens?: number, webSearch = false) {
   const cap = outputCap(modelId, maxTokens);
   const thinkingConfig = thinkingOffConfig(modelId);
   return {
     systemInstruction,
-    responseMimeType: "application/json" as const,
+    ...(webSearch ? { tools: [{ googleSearch: {} }] } : { responseMimeType: "application/json" as const }),
     httpOptions: { timeout: GEN_TIMEOUT_MS },
     ...(thinkingConfig ? { thinkingConfig } : {}),
     ...(cap ? { maxOutputTokens: cap } : {}),
@@ -262,7 +270,7 @@ function getApiKeyClient(apiKey: string): GoogleGenAI {
   return client;
 }
 
-type CallOpts = { maxTokens?: number; path?: string };
+type CallOpts = { maxTokens?: number; path?: string; webSearch?: boolean };
 
 async function callModel(
   location: string,
@@ -279,7 +287,7 @@ async function callModel(
     const result = (await client.models.generateContent({
       model: modelId,
       contents: prompt,
-      config: genConfig(modelId, systemInstruction, opts.maxTokens),
+      config: genConfig(modelId, systemInstruction, opts.maxTokens, opts.webSearch),
     })) as GeminiResult;
     logGemini(modelId, opts.path, result, started, (result.text ?? "").trim().length > 0);
     return result.text ?? "";
@@ -322,6 +330,8 @@ async function callVisionModel(
 
 export const geminiProvider: DigestProvider = {
   id: "gemini",
+  // P3-02c: `generateJsonText` maps `webSearch` to the Google Search tool.
+  supportsWebSearch: true,
 
   async generateDigest({ papers, contextHint }): Promise<DigestResult> {
     const regionalLocation = process.env.GOOGLE_VERTEX_LOCATION ?? "us-central1";
@@ -347,7 +357,7 @@ export const geminiProvider: DigestProvider = {
     return parsed;
   },
 
-  async generateJsonText({ systemPrompt, userPrompt, maxTokens, tier }): Promise<string> {
+  async generateJsonText({ systemPrompt, userPrompt, maxTokens, tier, webSearch }): Promise<string> {
     const regionalLocation = process.env.GOOGLE_VERTEX_LOCATION ?? "us-central1";
     const chain = chainForTier(getModelChain(), tier);
     const fallback = chain.length > 0 ? chain : getModelChain();
@@ -357,7 +367,9 @@ export const geminiProvider: DigestProvider = {
       try {
         const text = await callModel(resolvedLocation, id, userPrompt, systemPrompt, {
           maxTokens,
-          path: "json",
+          // A searched call is its own ledger path, so the owner can price it apart.
+          path: webSearch ? "json:search" : "json",
+          webSearch,
         });
         if (text.trim()) return text.trim();
       } catch (err) {
@@ -433,7 +445,7 @@ export function createGeminiApiProvider(
       const result = (await client.models.generateContent({
         model: modelId,
         contents: prompt,
-        config: genConfig(modelId, systemInstruction, opts.maxTokens),
+        config: genConfig(modelId, systemInstruction, opts.maxTokens, opts.webSearch),
       })) as GeminiResult;
       logGemini(modelId, opts.path, result, started, (result.text ?? "").trim().length > 0);
       return result.text ?? "";
@@ -473,6 +485,8 @@ export function createGeminiApiProvider(
 
   return {
     id: "gemini",
+    // P3-02c: `generateJsonText` maps `webSearch` to the Google Search tool.
+    supportsWebSearch: true,
 
     async generateDigest({ papers, contextHint }): Promise<DigestResult> {
       const prompt = buildUserPrompt(papers, contextHint);
@@ -496,14 +510,16 @@ export function createGeminiApiProvider(
       return parsed;
     },
 
-    async generateJsonText({ systemPrompt, userPrompt, maxTokens, tier }): Promise<string> {
+    async generateJsonText({ systemPrompt, userPrompt, maxTokens, tier, webSearch }): Promise<string> {
       const chain = chainForTier(modelChain, tier);
       const fallback = chain.length > 0 ? chain : modelChain;
       for (const { id } of fallback) {
         try {
           const text = await callApiModel(id, userPrompt, systemPrompt, {
             maxTokens,
-            path: "json",
+            // A searched call is its own ledger path, so the owner can price it apart.
+            path: webSearch ? "json:search" : "json",
+            webSearch,
           });
           if (text.trim()) return text.trim();
         } catch (err) {

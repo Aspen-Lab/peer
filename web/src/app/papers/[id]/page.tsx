@@ -65,7 +65,7 @@ import {
   requestExplanation,
   type AskResult,
 } from "@/components/reader/explain-box";
-import { requestReply, type ReplyResult } from "@/components/reader/explain-thread";
+import { replyPair, requestReply, type ReplyResult } from "@/components/reader/explain-thread";
 import { RecordBlock } from "@/components/reader/record-block";
 import { InYourLibrary } from "@/components/reader/in-your-library";
 import { KeyLegend } from "@/components/reader/key-legend";
@@ -797,14 +797,17 @@ function Reader({
   // thread kept for the passage, with the message it answers, only once it has
   // arrived (a failed send leaves the thread as it was); a full thread is dropped
   // when its passage is opened again. `e` opens the box through `explainOpen`.
+  // P3-02c (§1a.11): the box's fourth argument is the reader's choice, for this one
+  // message, to search the web; the pair that is kept is `replyPair`'s — the same
+  // the box shows, the message marked only when the server says the reply searched.
   const replyExplain = useCallback(
-    async (selection: SelectionTarget, thread: readonly ExplainTurn[], message: string): Promise<ReplyResult> => {
+    async (selection: SelectionTarget, thread: readonly ExplainTurn[], message: string, search?: boolean): Promise<ReplyResult> => {
       const sectionId = reading?.body?.[selection.sectionIndex]?.id;
       if (!sectionId) return "unavailable";
-      const result = await requestReply({ paper, selection, sectionId, thread, message, llmOverride: explainLlmOverride(profile) });
+      const result = await requestReply({ paper, selection, sectionId, search, thread, message, llmOverride: explainLlmOverride(profile) });
       if (typeof result !== "string") {
         try {
-          addExplainTurns(paper.id, passageHash(selection.passage), [{ role: "reader", text: message }, result]);
+          addExplainTurns(paper.id, passageHash(selection.passage), replyPair(message, search === true, result));
         } catch {
           // A full or blocked browser store never costs the reader the reply.
         }

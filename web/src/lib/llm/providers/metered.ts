@@ -214,6 +214,14 @@ export function meterProvider(
     ),
   };
 
+  // P3-02c: a capability flag is copied the same way — present only when the
+  // wrapped provider has it. The route reads it to decide whether a turn searched
+  // (and so what it costs); a wrapper that rebuilt the object without it would
+  // turn every Gemini provider into one that "cannot search".
+  if (provider.supportsWebSearch === true) {
+    metered.supportsWebSearch = true;
+  }
+
   // Point 1 above: define these only when the wrapped provider has them.
   if (typeof provider.generateJsonText === "function") {
     metered.generateJsonText = meterCall(

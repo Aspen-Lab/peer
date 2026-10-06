@@ -8,7 +8,6 @@ import {
   clipPassage,
   createExplainCache,
   explainCacheKey,
-  explainDayKey,
   explainDocHash,
   explainMapLines,
   locatePassage,
@@ -448,17 +447,11 @@ describe("explainCacheKey", () => {
   });
 });
 
-describe("explainDayKey", () => {
-  it("names the reader and the UTC day, so it rolls over at midnight UTC", () => {
-    const key = explainDayKey("user-1", new Date("2026-10-06T23:59:59.000Z"));
-
-    expect(key).toContain("user-1");
-    expect(key).toContain("2026-10-06");
-    expect(explainDayKey("user-1", new Date("2026-10-07T00:00:01.000Z"))).not.toBe(key);
-    expect(explainDayKey("user-2", new Date("2026-10-06T10:00:00.000Z"))).not.toBe(key);
-    expect(explainDayKey("user-1", new Date("2026-10-06T00:00:01.000Z"))).toBe(key);
-  });
-});
+// P3-02c (§1h.4 amendment): `explainDayKey` — the count-only counter's key — is
+// gone with the count; the charge replaces it. Its four assertions (the key names
+// the reader and the UTC day, rolls over at midnight UTC, differs by reader, is
+// stable within the day) are carried over to `explainTenthsKey` in
+// `lib/usage/explain-quota.test.ts`, not dropped.
 
 describe("the explain cache", () => {
   const answer = (n: number): ExplainAnswer => ({ meaning: `m${n}`, here: { text: `h${n}`, peer: true } });
@@ -811,5 +804,112 @@ describe("the memory holds a reply turn as it holds an answer (P3-02b)", () => {
     expect(cache.get("a")).toBeUndefined();
     expect(cache.get("c")).toEqual(turn);
     expect(cache.size()).toBe(2);
+  });
+});
+
+// ── P3-02c (ruling §1h.4 amendment): web search in a reply ────────────────
+
+describe("buildExplainReplyPrompt with search (P3-02c)", () => {
+  const located = locatePassage(doc, "fraction of the gauge length")!;
+  const base = {
+    paper: { title: "Rafting under creep in a nickel alloy", abstract: "The abstract says why rafting matters for turbine blades." },
+    map: explainMapLines(doc),
+    located,
+    passage: "fraction of the gauge length",
+    thread: [FIRST, ASKED],
+  };
+  const plain = buildExplainReplyPrompt(base);
+  const searched = buildExplainReplyPrompt({ ...base, search: true });
+  const rulesOf = (prompt: { userPrompt: string }) => (JSON.parse(prompt.userPrompt) as { rules: string[] }).rules.join(" ");
+
+  it("without search it is byte-for-byte what it was: the rule says do not search the web", () => {
+    expect(buildExplainReplyPrompt({ ...base, search: false })).toEqual(plain);
+    expect(rulesOf(plain)).toContain("Do not search the web or rely on anything outside the text supplied.");
+    expect(rulesOf(plain)).not.toMatch(/may use web search/i);
+  });
+
+  it("with search the rule lets the model use web search for general background — and says no URL and no source by name", () => {
+    const rules = rulesOf(searched);
+
+    expect(rules).toContain("You may use web search for general background.");
+    expect(rules).toContain("Name no URL and no source by name.");
+    expect(rules).not.toContain("Do not search the web");
+  });
+
+  it("with search the paper's own words still come only from the context, and the evidence is still one copied sentence", () => {
+    const rules = rulesOf(searched);
+
+    expect(rules).toMatch(/paper's own words still come only from `context`/);
+    expect(rules).toMatch(/`evidence` is still one sentence copied from it/);
+    // The evidence rules of the plain prompt are all still there.
+    for (const needle of ["context.before", "context.paragraph", "context.after", "Omit `evidence`"]) expect(rules).toContain(needle);
+    // And so is the rule against advice and verdicts.
+    expect(rules).toMatch(/no advice/i);
+    expect(rules).toMatch(/verdict/i);
+  });
+
+  it("changes nothing else: the same parts, the same schema, the same context and thread", () => {
+    const a = JSON.parse(plain.userPrompt) as Record<string, unknown>;
+    const b = JSON.parse(searched.userPrompt) as Record<string, unknown>;
+
+    expect(Object.keys(b)).toEqual(Object.keys(a));
+    for (const key of Object.keys(a)) if (key !== "rules") expect(b[key]).toEqual(a[key]);
+    expect(searched.systemPrompt).toBe(plain.systemPrompt);
+  });
+
+  it("the first message's prompt has no search at all: it takes no such argument", () => {
+    const first = buildExplainPrompt({ paper: base.paper, map: base.map, located, passage: base.passage });
+
+    expect(first.userPrompt).not.toMatch(/web search/i);
+  });
+});
+
+describe("explainCacheKey with search (P3-02c)", () => {
+  const texts = [FIRST.text, ASKED.text];
+  const base = explainCacheKey("doc-hash", "The rafting ratio", texts);
+
+  it("keeps a searched reply apart from the same thread answered without search", () => {
+    expect(explainCacheKey("doc-hash", "The rafting ratio", texts, true)).not.toBe(base);
+    expect(explainCacheKey("doc-hash", "The rafting ratio", texts, true)).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it("is the unsearched key, unchanged, when search is false or left out", () => {
+    expect(explainCacheKey("doc-hash", "The rafting ratio", texts, false)).toBe(base);
+    expect(explainCacheKey("doc-hash", "The rafting ratio", [])).toBe(explainCacheKey("doc-hash", "The rafting ratio", [], false));
+  });
+
+  it("is stable for the same searched thread, and still names no reader", () => {
+    expect(explainCacheKey("doc-hash", "  the  RAFTING ratio ", texts, true)).toBe(explainCacheKey("doc-hash", "The rafting ratio", texts, true));
+    expect(explainCacheKey("doc-hash", "The rafting ratio", texts, true)).not.toBe(explainCacheKey("other-doc", "The rafting ratio", texts, true));
+  });
+});
+
+describe("sanitizeExplainReply drops web addresses (P3-02c)", () => {
+  const reply = (text: string) => sanitizeExplainReply({ reply: text })?.reply;
+
+  it("takes out an address with a scheme, or one that begins www., and keeps the sentence", () => {
+    expect(reply("Plates form under load (see https://example.org/guide/rafting for more). They carry load.")).toBe("Plates form under load (see for more). They carry load.");
+    expect(reply("Plates form under load, as www.example.com/alloys says. They carry load.")).toBe("Plates form under load, as says. They carry load.");
+  });
+
+  it("keeps the closing punctuation an address had swallowed", () => {
+    expect(reply("It is described at https://example.org/x.")).toBe("It is described at.");
+    expect(reply("Two sources agree: https://a.example.org/x, https://b.example.org/y; so it holds.")).toBe("Two sources agree:,; so it holds.");
+  });
+
+  it("leaves a reply with no address exactly as it was", () => {
+    expect(reply("A bigger share of plates changes how the metal carries load.")).toBe("A bigger share of plates changes how the metal carries load.");
+    expect(reply("The ratio rose from 0.2 to 0.7 at 1100 C (about 3.5 times).")).toBe("The ratio rose from 0.2 to 0.7 at 1100 C (about 3.5 times).");
+  });
+
+  it("is no reply at all when nothing but an address was said", () => {
+    expect(sanitizeExplainReply({ reply: "https://example.org/only-this" })).toBeNull();
+    expect(sanitizeExplainReply({ reply: "(https://example.org/only-this)" })).toBeNull();
+  });
+
+  it("does not touch the quote: a sentence of the paper that holds an address is the paper's, verified or dropped on its own", () => {
+    const code = "The code is available at https://example.org/code for every figure.";
+
+    expect(sanitizeExplainReply({ reply: "It is shared.", evidence: code })).toEqual({ reply: "It is shared.", evidence: code });
   });
 });

@@ -611,3 +611,55 @@ describe("SPEND-CAP — meterCall's reservation/settlement wiring", () => {
     expect(keys.every((k) => k === companySpendGlobalDayKey(new Date()))).toBe(true);
   });
 });
+
+/**
+ * P3-02c (ruling §1h.4 amendment) — the optional web-search flag and argument.
+ *
+ * `meterProvider` builds a NEW object from a fixed list of members, so a flag
+ * the list does not name is silently dropped: the route would then see a Gemini
+ * provider that "cannot search" and answer every searched turn without search
+ * while charging for it as if it had not. Presence is copied, never assumed —
+ * the same rule as the two methods — and the argument rides through `args`
+ * untouched.
+ */
+describe("P3-02c — supportsWebSearch and the webSearch argument survive the wrapper", () => {
+  it("copies the flag when the wrapped provider has it", () => {
+    const wrapped = meterProvider(
+      baseProvider({ id: "gemini", supportsWebSearch: true, generateJsonText: () => Promise.resolve("{}") }),
+      { userId: "u1", byok: false },
+    );
+
+    expect(wrapped.supportsWebSearch).toBe(true);
+  });
+
+  it("does not invent it for a provider that has none", () => {
+    const wrapped = meterProvider(baseProvider({ generateJsonText: () => Promise.resolve("{}") }), { userId: "u1", byok: true });
+
+    expect(wrapped.supportsWebSearch).toBeUndefined();
+    expect("supportsWebSearch" in wrapped).toBe(false);
+  });
+
+  it("hands `webSearch` to the wrapped method as it was given, true or false or absent", async () => {
+    const inner = vi.fn((args: { systemPrompt: string; userPrompt: string; webSearch?: boolean }) => Promise.resolve(JSON.stringify({ webSearch: args.webSearch ?? null })));
+    const wrapped = meterProvider(baseProvider({ id: "gemini", supportsWebSearch: true, generateJsonText: inner }), { userId: "u1", byok: false });
+
+    await wrapped.generateJsonText?.({ systemPrompt: "s", userPrompt: "u", webSearch: true });
+    await wrapped.generateJsonText?.({ systemPrompt: "s", userPrompt: "u", webSearch: false });
+    await wrapped.generateJsonText?.({ systemPrompt: "s", userPrompt: "u" });
+
+    expect(inner.mock.calls.map(([args]) => args.webSearch)).toEqual([true, false, undefined]);
+  });
+
+  it("calls the wrapped method on the provider, so a method that reads `this` still works", async () => {
+    const provider = baseProvider({
+      id: "gemini",
+      supportsWebSearch: true,
+      generateJsonText: function (this: DigestProvider) {
+        return Promise.resolve(this.supportsWebSearch === true ? "searched-capable" : "plain");
+      },
+    });
+    const wrapped = meterProvider(provider, { userId: "u1", byok: false });
+
+    expect(await wrapped.generateJsonText?.({ systemPrompt: "s", userPrompt: "u", webSearch: true })).toBe("searched-capable");
+  });
+});

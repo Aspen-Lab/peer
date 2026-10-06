@@ -37,6 +37,20 @@
 //   - `sanitizeExplainReply` / `verifyExplainReply`: the reply (at most three
 //     sentences) and its quote, held to the paper exactly as the first answer's.
 //
+// P3-02c (ruling §1h.4 amendment) lets a reply search the web, for one message,
+// when the reader turns that on and the provider can:
+//
+//   - `buildExplainReplyPrompt`'s `search` swaps the rule "do not search the web"
+//     for one that allows web search for general background — and still says the
+//     paper's own words come only from the context, the evidence is still one
+//     sentence copied from it, and no URL or source is named;
+//   - `explainCacheKey`'s `searched` keeps a searched reply apart from the same
+//     thread answered without search: the memory must never hand a plain reply to
+//     a request that asked to search, nor the reverse;
+//   - `sanitizeExplainReply` drops any web address the model wrote into a reply: the
+//     page never shows a link to a web source (the blueprint has no external
+//     links), and the mark "searched the web" is the only trace of the search.
+//
 // Pure apart from the hash and the clock the cache reads: no I/O, no logging.
 // Server-side — the browser imports this module for its types only.
 
@@ -120,6 +134,9 @@ export interface ExplainReplyTurn {
   sectionId?: string;
   page?: number;
   peer?: true;
+  /** P3-02c: whether this reply was written with web search. The route sets it on
+   *  every reply it answers (`verifyExplainReply` leaves it to the route, which knows). */
+  searched?: boolean;
 }
 
 /** What `POST /api/papers/[id]/explain` answers (the status says the rest). */
@@ -128,7 +145,11 @@ export type ExplainResult =
   | { turn: ExplainReplyTurn; cached: boolean }
   | { unavailable: true; quota?: QuotaSignal }
   | { error: "not_in_paper" }
-  | { error: "thread_full" };
+  | { error: "thread_full" }
+  /** P3-02c: the charge was refused (429) — `exhausted`: the reader's day or the
+   *  house's ceiling is spent; `unavailable`: the counter could not be read and
+   *  nothing was spent. */
+  | { error: "explain_exhausted"; reason: "exhausted" | "unavailable"; resetsAt: string };
 
 // ── Small text helpers ─────────────────────────────────────────────────
 
@@ -358,7 +379,8 @@ const EXPLAIN_REPLY_SYSTEM = [
  * labelled by its role, at most 17, each at most 400 characters, the latest kept
  * — and the reader's last message named as the one to answer, then the schema
  * and the rules, which are never what gets cut. Nothing about the reader is a
- * parameter but the words they sent in the thread.
+ * parameter but the words they sent in the thread. With `search` (P3-02c) the
+ * one rule about the web is the search rule; nothing else changes.
  */
 export function buildExplainReplyPrompt(args: {
   paper: { title: string; abstract: string };
@@ -366,6 +388,8 @@ export function buildExplainReplyPrompt(args: {
   located: Pick<LocatedPassage, "paragraph" | "before" | "after">;
   passage: string;
   thread: readonly ExplainMessage[];
+  /** P3-02c: this reply may use web search for general background. */
+  search?: boolean;
 }): { systemPrompt: string; userPrompt: string } {
   const thread = args.thread
     .slice(-EXPLAIN_CAPS.threadMessages)
@@ -386,7 +410,9 @@ export function buildExplainReplyPrompt(args: {
       "Answer `lastReaderMessage`, the reader's last message in `thread`, about the selected passage, in at most three sentences of plain words a thoughtful non-specialist understands. The earlier messages are there for what has been said so far.",
       "`evidence` is one sentence copied character-for-character from `context.before`, `context.paragraph` or `context.after`, and only when the reply rests on something the paper says. Do not paraphrase it, shorten it, or merge sentences.",
       "Omit `evidence` when the reply does not rest on a sentence of the paper. Never quote the abstract, the section list or the thread.",
-      "Do not search the web or rely on anything outside the text supplied. No advice, no verdict on whether the reader should read on.",
+      args.search
+        ? "You may use web search for general background. The paper's own words still come only from `context`; `evidence` is still one sentence copied from it. Name no URL and no source by name. No advice, no verdict on whether the reader should read on."
+        : "Do not search the web or rely on anything outside the text supplied. No advice, no verdict on whether the reader should read on.",
       "No LaTeX, no links.",
     ],
   });
@@ -484,6 +510,24 @@ export function verifyExplainAnswer(answer: ExplainAnswer, doc: ExtractedDocumen
 
 // ── The reply (P3-02b) ─────────────────────────────────────────────────
 
+/** A web address: a scheme, or `www.`, then everything up to a space or a closing bracket. */
+const WEB_ADDRESS = /(?:https?:\/\/|www\.)[^\s)\]>"']+/gi;
+
+/**
+ * The model's words with every web address taken out (P3-02c). A reply written
+ * with web search may name where it read something; the page shows no link to a
+ * web source, and the mark "searched the web" is the only trace — so the address
+ * goes, and a sentence's closing punctuation that the address had swallowed stays.
+ */
+function withoutWebAddresses(text: string): string {
+  return text
+    .replace(WEB_ADDRESS, (address) => /[.,;:!?]+$/.exec(address)?.[0] ?? "")
+    .replace(/\(\s*\)/g, "")
+    .replace(/[ \t]+([.,;:!?])/g, "$1")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
+}
+
 /**
  * Whitelist what the model sent as a reply: its words, cleaned, at most three
  * sentences and 560 characters; the quote a cleaned string of at most 400
@@ -492,7 +536,7 @@ export function verifyExplainAnswer(answer: ExplainAnswer, doc: ExtractedDocumen
  */
 export function sanitizeExplainReply(raw: unknown): ExplainReply | null {
   if (!isRecord(raw)) return null;
-  const reply = words(raw.reply, EXPLAIN_CAPS.replySentences, EXPLAIN_CAPS.replyChars);
+  const reply = words(typeof raw.reply === "string" ? withoutWebAddresses(raw.reply) : raw.reply, EXPLAIN_CAPS.replySentences, EXPLAIN_CAPS.replyChars);
   if (!reply) return null;
   const evidence = typeof raw.evidence === "string" ? cleanDisplayText(raw.evidence).slice(0, EXPLAIN_CAPS.evidenceChars).trim() : "";
   return evidence ? { reply, evidence } : { reply };
@@ -521,18 +565,15 @@ export function explainDocHash(doc: ExtractedDocument): string {
 /**
  * The key an answer is remembered under: the document's hash, the passage as
  * the verifier reads it, and a hash of the thread's texts in order (empty for
- * the first message; every message of a thread changes it). A hash of all
- * three — nothing in it is a reader's identity, and nothing of the passage or
- * the thread can be read back from it.
+ * the first message; every message of a thread changes it), and — P3-02c — whether
+ * the reply searched the web: the same thread answered with and without search
+ * are two entries, so the memory never hands a plain reply to a request that
+ * asked to search nor the reverse. A hash of all of it — nothing in it is a
+ * reader's identity, and nothing of the passage or the thread can be read back
+ * from it.
  */
-export function explainCacheKey(docHash: string, passage: string, thread: readonly string[]): string {
-  return sha256(`${docHash}|${normalizeForMatch(passage)}|${sha256(JSON.stringify(thread))}`);
-}
-
-/** The counter an explanation is counted on: one reader, one UTC day. It
- *  counts only (§1h.2: no charge in P3-02); nothing reads it for a decision. */
-export function explainDayKey(userId: string, now: Date): string {
-  return `explain_turns:${userId}:${now.toISOString().slice(0, 10)}`;
+export function explainCacheKey(docHash: string, passage: string, thread: readonly string[], searched = false): string {
+  return sha256(`${docHash}|${normalizeForMatch(passage)}|${sha256(JSON.stringify(thread))}${searched ? "|search" : ""}`);
 }
 
 /** What the memory holds: a first answer, or (P3-02b) a reply turn — both

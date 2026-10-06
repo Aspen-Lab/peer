@@ -40,6 +40,15 @@ export interface VisionImageInput {
 
 export interface DigestProvider {
   id: ProviderId;
+  /**
+   * P3-02c (ruling §1h.4 amendment): true when `generateJsonText` honours its
+   * `webSearch` argument. Both Gemini providers say so; every other provider
+   * leaves it out and ignores the argument, so a caller that asks for search of
+   * one that cannot gets a plain answer — and must not charge as if it searched.
+   * `meterProvider` copies it, like the methods: a wrapper that dropped it would
+   * make every Gemini provider look like one that cannot.
+   */
+  supportsWebSearch?: true;
   generateDigest(args: {
     papers: PaperLite[];
     contextHint?: string;
@@ -55,6 +64,14 @@ export interface DigestProvider {
      * legacy call sites keep working unchanged.
      */
     tier?: ModelTier;
+    /**
+     * P3-02c (ruling §1h.4 amendment): let the model use web search for this one
+     * call (Gemini: the Google Search grounding tool). Honoured only by a
+     * provider with `supportsWebSearch`; every other provider ignores it. A
+     * grounded call is not in JSON mode — Gemini refuses the two together — so
+     * the text comes back as the model wrote it and the caller parses it.
+     */
+    webSearch?: boolean;
   }): Promise<string>;
   generateVisionJsonText?(args: {
     systemPrompt: string;

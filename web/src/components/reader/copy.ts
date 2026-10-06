@@ -59,13 +59,20 @@ export const FOR_YOUR_QUESTIONS = {
  * lines, chosen by `quotaNoticeText` (`quota-notice.tsx`): a spent deep-report
  * or breaker allowance, a spent shared model budget, and — never confused with
  * a spent allowance or budget — a check that could not be made, for any of the
- * three kinds, where nothing was spent (P2-08b, §1g.14 amendment 3).
+ * three kinds, where nothing was spent (P2-08b, §1g.14 amendment 3). P3-02c adds
+ * the explain box's own two (`explainExhausted`, `explainUnavailable`), which the
+ * notice never chooses: they belong under an explanation, not under a report.
  */
 export const QUOTA = {
   exhausted: "Deep reports are used up for now. This is the shorter report.",
   companyBudget: "Peer's shared model budget is spent for now. This is the shorter report.",
   unavailable:
     "Peer could not check the deep-report allowance just now. This is the shorter report; nothing was spent.",
+  /** P3-02c (§1h.4): the explain box's two lines. The reader's day of explanations
+   *  (or Peer's, across readers) is spent; or the counter could not be read — the
+   *  outage principle (§1g.14): never described as a spent allowance. */
+  explainExhausted: "Explanations are used up for now.",
+  explainUnavailable: "Peer could not check the explanation allowance just now. Nothing was spent.",
 } as const;
 
 /** Under a block Peer wrote with no sentence of the paper to show for it. */
@@ -224,6 +231,16 @@ export const EXPLAIN = {
   send: "Send",
   thinking: "Peer is thinking…",
   threadFull: "This thread is full. Select the passage again to start a new one.",
+  /** P3-02c (§1a.11): the small toggle in the box's control row. Off whenever the
+   *  box opens; its warning shows on hover, on keyboard focus and — on a touch
+   *  screen, with no hover — on the first tap. Peer's words, in the label face. */
+  searchToggle: "Search the web",
+  searchWarning: "Web search costs many times more than a normal reply. On for this message only.",
+  /** Beside "You" on a message that was answered with web search: the one trace of
+   *  it, so the cost can be explained afterwards. Never a source, never an address. */
+  searchedMark: "searched the web",
+  /** Under a reply to a message that asked to search when the provider cannot. */
+  searchUnavailable: "Web search is not available with this provider.",
 } as const;
 
 /** The reader's own context for the paper: what they read or kept nearby. */
