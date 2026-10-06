@@ -425,16 +425,15 @@ export default function WelcomePage() {
                 <StepFrame
                   kicker="Optional power-up"
                   title="Connect an AI key (optional)."
-                  subtitle="Peer works fully free with zero setup, and its AI is included. Adding your own key is optional — it sends the model calls to your account instead, and you can always do this later."
+                  subtitle="Peer works with no setup and shows the reading without a model. Add your own key to turn the AI on — you can always do this later."
                 >
-                  {/* ABC-freemium 1-24 · R-UI-1, D1 — this said a key is what
-                      unlocks AI. Peer's AI is included now, so a key is an
-                      alternative rather than an unlock. */}
+                  {/* Peer has no model of its own: a key is what turns AI on,
+                      and it runs on the reader's own account. */}
                   <Callout variant="accent">
-                    <strong>Peer&apos;s AI is included — no key needed.</strong>{" "}
-                    Ranking, summaries and Deep reports across Papers, Events and
-                    Jobs all run on it. Adding your own key sends those calls to
-                    your own account instead, on whichever model you prefer.
+                    <strong>Without a key, Peer shows the reading without a model.</strong>{" "}
+                    With one, ranking, relevance reasons, summaries and Deep
+                    reports run on the model you choose, and that company bills
+                    you.
                   </Callout>
                   {/* No plan or price card on this step: Peer has no paid tier,
                       so nothing here may name a plan or a price. */}
@@ -758,7 +757,7 @@ function summarizeStep(
     case "ai":
       return isStepDone("ai", profile, false, auth)
         ? `${providerShortLabel(profile.feedAiProvider)} key connected`
-        : "Not connected — works free";
+        : "No key — reading without a model";
     case "connectors": {
       const n = connectorCount(profile);
       return n > 0 ? `${n} of 3 sources connected` : "None connected yet";

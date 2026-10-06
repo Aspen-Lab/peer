@@ -13,12 +13,10 @@ import {
 } from "@/lib/llm/provider-models";
 
 export const FEED_AI_PROVIDER_OPTIONS: { value: UserAiProvider; label: string }[] = [
-  // ABC-freemium 1-15 · R-UI-2, R-KEY-4 — **`"default"` now MEANS something.**
-  // It read "Tier 0 — no AI API", which under D1 is simply false: a signed-in
-  // reader who never opens this panel is on Peer's model. This is the exact
-  // string R-UI-2 names. The other five options are the "use my own key"
-  // choice R-UI-2 says remains. (1-25 owns the body copy in this file.)
-  { value: "default", label: "Peer's AI (included)" },
+  // `"default"` means no key: Peer has no model of its own, so a reader who
+  // never opens this panel reads without a model. The other five options are
+  // the "use my own key" choice.
+  { value: "default", label: "No AI (reading without a model)" },
   { value: "gemini", label: "Google Gemini — recommended: best value" },
   { value: "openai", label: "OpenAI (ChatGPT models) — recommended: easiest" },
   { value: "qwen", label: "Alibaba Qwen — low-cost alternative" },
@@ -287,15 +285,14 @@ export function AiProviderGuide({ provider }: { provider: UserAiProvider }) {
   if (provider === "default") {
     return (
       <div className="rounded-xl bg-bg-secondary/35 p-4 text-meta leading-relaxed text-text-muted shadow-[inset_0_0_0_1px_rgba(20,20,20,0.05)]">
-        {/* ABC-freemium 1-25 · R-UI-2, D1 — this said the alternative to a key
-            was a no-AI briefing. It is not: Peer's AI is included, and a key
-            means your own model and your own bill. */}
+        {/* Peer has no model of its own: without a key the reader gets the
+            reading without a model, and a key means their own model and their
+            own bill. */}
         <span className="font-semibold text-heading">
-          No key is needed.
+          No key yet.
         </span>{" "}
-        Peer&apos;s AI is included, and everything above runs on it. Choose a
-        company here only if you would rather use your own model and be billed
-        for it yourself.
+        Without a key Peer shows the reading without a model. Pick a company
+        and paste its key to turn AI on; that company bills you.
       </div>
     );
   }

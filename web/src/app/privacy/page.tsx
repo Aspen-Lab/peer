@@ -42,14 +42,15 @@ const SECTIONS = [
   {
     label: "Your own model key",
     body: [
-      "If you add your own provider key, it stays in your browser. It is deliberately excluded from everything Peer syncs to its server — the one line that does it is a `void feedAiApiKey` in the sync code, there so a future edit has to remove it on purpose.",
-      "When Peer's own model is used instead, the request goes to Google's Gemini API from Peer's server.",
+      "Peer has no model of its own. Ranking by a model, relevance reasons, digest bullets and model reports run only if you add your own provider key; without one you read the briefing without a model.",
+      "Your key stays in your browser. It is deliberately excluded from everything Peer syncs to its server — the one line that does it is a `void feedAiApiKey` in the sync code, there so a future edit has to remove it on purpose.",
+      "When you ask for something a model does, your browser sends the request to Peer's server with your key attached, and the server passes it to the provider you chose. The key is used for that request and is not stored.",
     ],
   },
   {
     label: "What is recorded about model use",
     body: [
-      "Every call Peer pays for writes one row: which route, which provider and model, how many tokens, how long it took, whether it succeeded, and whether it ran on your key or Peer's.",
+      "Every model call writes one row: which provider and model, how many tokens, how long it took, and whether it succeeded. The call runs on your own key, so the row carries no account id.",
       "That row holds no paper text, no prompt, no answer, and no credential. The table has no column that could hold one.",
     ],
   },
@@ -57,7 +58,7 @@ const SECTIONS = [
     label: "Who else sees a request",
     body: [
       "Finding papers means asking the open sources: OpenAlex, arXiv, Crossref, Semantic Scholar, and the publisher or repository a paper's full text and figures live on. Those services see the query and the request, as they would for any reader.",
-      "Google (Gemini) sees a paper's text when a model report is written. Tavily sees your search terms only if you add a Tavily key yourself. Resend sends the email digest if you turn one on. Supabase hosts the database and the sign-in. Vercel hosts the site and counts page views — Vercel Analytics records the page, not who you are.",
+      "The model provider whose key you added sees what a model request carries: your topics and a paper's title and abstract when the briefing is ranked or summarised, and a paper's text when a model report is written. Tavily sees your search terms only if you add a Tavily key yourself. Resend sends the email digest if you turn one on. Supabase hosts the database and the sign-in. Vercel hosts the site and counts page views — Vercel Analytics records the page, not who you are.",
       "Peer runs no advertising, sells nothing to anyone, and has no third-party trackers beyond the page counter named above.",
     ],
   },
@@ -100,7 +101,7 @@ export default function PrivacyPage() {
       ))}
 
       <p className="annotation text-text-faint mt-12">
-        Last changed 2026-09-17 · changes to this page ship in the{" "}
+        Last changed 2026-10-06 · changes to this page ship in the{" "}
         <Link href="/changelog" className="underline decoration-border-strong underline-offset-4 hover:text-heading">
           changelog
         </Link>

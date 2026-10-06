@@ -36,7 +36,7 @@ import { AiKeyFields } from "@/components/profile/ai-setup";
 import { Toggle } from "@/components/ui/toggle";
 import { FEED_EMPTY_REASON_CODES } from "@/lib/feed/types";
 import { TEST_EMAIL_EMPTY, TEST_EMAIL_EMPTY_GENERIC } from "@/lib/briefing/copy";
-import { feedsUseAi } from "@/lib/feed/ai-tier";
+import { feedsUseAi, hasUserLlmOverride } from "@/lib/feed/ai-tier";
 import {
   type Tone,
   toneBadge,
@@ -2091,9 +2091,11 @@ function EditView({
       <EditRow icon={<IconKey />} tone="neutral" label="AI provider">
         <div className="space-y-3">
           <p className="text-caption leading-relaxed text-text-muted">
-            Signed in, Peer uses its own model for ranking, relevance reasons
-            and reports. Add your own key only to use a different provider —
-            Peer then sends model calls to that key instead.
+            Peer has no model of its own. Add your own key to turn on ranking
+            by a model, relevance reasons and reports. Without one, Peer shows
+            the reading without a model and makes no AI call. Your key stays in
+            this browser; Peer passes it on to the provider you choose and does
+            not keep it.
           </p>
           <AiKeyFields
             provider={profile.feedAiProvider}
@@ -2122,12 +2124,20 @@ function EditView({
               aria-label="Deep report"
             />
           </div>
-          {!feedsUseAi(profile, authOutcome) && (
-            <p className="text-micro leading-relaxed text-text-faint">
-              Sign in first. Signed out, Peer shows the reading without a model
-              and makes no AI call.
-            </p>
-          )}
+          {!feedsUseAi(profile, authOutcome) &&
+            (hasUserLlmOverride(profile) ? (
+              authOutcome === "signed-out" && (
+                <p className="text-micro leading-relaxed text-text-faint">
+                  Sign in to turn this on. Peer runs a model only for a
+                  signed-in reader.
+                </p>
+              )
+            ) : (
+              <p className="text-micro leading-relaxed text-text-faint">
+                Add your own key above to turn this on. Without a key, Peer
+                shows the reading without a model and makes no AI call.
+              </p>
+            ))}
           {/* PROFILE-UNSYNCED-FIELDS (§1bp.3) — deepReportEnabled has no
               account column yet (device-only by current design); said
               honestly, unconditionally (true regardless of AI availability),

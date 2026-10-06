@@ -2,6 +2,38 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.44.0 — 2026-10-06
+
+Peer's AI runs on your own key, and only on it.
+
+Peer no longer has a model of its own. The Gemini key the site ran for every
+signed-in reader is gone, so ranking by a model, relevance reasons, the digest
+bullets and Deep reports now run only if you add your own provider key (Profile
+or the Welcome wizard; Google Gemini, OpenAI, Anthropic, Qwen and DeepSeek).
+Without a key the briefing still works: it is the reading without a model, the
+same one a signed-out visitor gets, and it names what a key would add. Signing
+in no longer changes what a model does for you; it still syncs your profile,
+your saves and your delivery history, and it is still required to use a key
+(a signed-out visitor with a key reads without a model, and the page now says
+so instead of showing "AI on").
+
+What went with it: the free, trial and paid plans and their prices, the
+deep-report allowances and the daily house ceiling, the model's choice of
+figure for a section (a figure is picked by its caption and number now) and the
+model-written title for an uploaded PDF (its title is the file's own, or the
+file name). The hourly request limit on the AI routes stays.
+
+The privacy page now says what the code does: Peer has no model of its own, and
+your key goes from your browser through Peer's server to the provider you chose,
+and is not stored.
+
+**For anyone running Peer:** the build refuses `GOOGLE_API_KEY` on Vercel (it
+used to require it); remove it from the project's environment variables before
+deploying. The migration `20261007000000_drop_plan_and_restore_signup.sql` drops
+the four plan columns from `profiles` and puts the sign-up trigger back; take
+`select plan, count(*) from public.profiles group by 1;` first if you want a
+record of who was on what.
+
 ## v0.43.5 — 2026-09-25
 
 A figure the paper printed stretched is shown in its own proportions.
