@@ -324,6 +324,42 @@ describe("exampleQuestions — sentence fragments and generic words (P1-09c)", (
     }
   });
 
+  // P2-08b (§1g.19 b, F5; BACKLOG-09 closes into this): no fallback word from a
+  // chunk that was rejected as sentence-like; a multi-word phrase must yield a
+  // specific route term; function and question words are sentence words; the
+  // single-word fallback is only for a text with no multi-word chunk at all.
+  it("a rejected sentence gives no keyword example: A's 'We test sulfide electrolytes.' (was 'relate to test')", () => {
+    expect(itemsOf({ currentProject: "We test sulfide electrolytes." })).toEqual([]);
+    expect(itemsOf({ currentChallenges: "We test sulfide electrolytes." })).toEqual([]);
+  });
+
+  it("function and question words are sentence words: A's 'Rapid capacity fade, and why' keeps the phrase and loses 'and why'", () => {
+    expect(itemsOf({ currentChallenges: "Rapid capacity fade, and why" })).toEqual(["Does this help with Rapid capacity fade?"]);
+    expect(itemsOf({ currentChallenges: "and why" })).toEqual([]);
+    for (const word of ["and", "or", "but", "why", "how", "what", "when", "where", "which", "who"]) {
+      expect(itemsOf({ currentChallenges: `${word} fade` }), word).toEqual([]);
+    }
+  });
+
+  it("a multi-word phrase with no route term gives nothing: 'the study results' is not an example", () => {
+    expect(specificTerms(ASK.examples.challenge("the study results"))).toEqual([]);
+    expect(itemsOf({ currentChallenges: "the study results" })).toEqual([]);
+    expect(itemsOf({ currentProject: "the study results" })).toEqual([]);
+  });
+
+  it("a long sentence of nine words gives no keyword example (was 'help with improving')", () => {
+    expect(itemsOf({ currentChallenges: "improving cycle life of high nickel cathodes under fast charging" })).toEqual([]);
+  });
+
+  it("good phrases are still offered, and a bare word still is when the text has no multi-word chunk at all", () => {
+    expect(itemsOf({ currentChallenges: "dendrite growth, interface resistance" })).toEqual([
+      "Does this help with dendrite growth?",
+      "Does this help with interface resistance?",
+    ]);
+    expect(itemsOf({ currentChallenges: "dendrites" })).toEqual(["Does this help with dendrites?"]);
+    expect(itemsOf({ currentProject: "Superalloys." })).toEqual(["How does this relate to Superalloys?"]);
+  });
+
   it("topics and methods stay as the reader typed them, whatever they are", () => {
     expect(itemsOf({ researchTopics: ["study", "we are testing it"], preferredMethods: ["it"] })).toEqual([
       "What does it say about study?",

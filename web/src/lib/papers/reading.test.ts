@@ -725,6 +725,66 @@ describe("describeAvailability", () => {
     }
   });
 
+  // P2-08b (§1g.19 d, F8): when the server REFUSED the deep read (a quota or an
+  // outage, which the page's notice says), "your model's deep read of it did not
+  // finish" — or "turn on deep reports" — is false beside that notice: the read
+  // was never run. The page passes `refused` when the hook holds a quota.
+  it("model from the abstract with the deep read refused says it was not run, whatever the wall or the setting", () => {
+    const lead =
+      "Read by your model from the abstract; every claim below carries a sentence from it.";
+    const refused = " Caveats and a next step need the full text; the deep read was not run.";
+    const at = (fullText: PaperReading["provenance"]["fullText"], paywallHost?: string) => ({
+      ...abstractOnly,
+      provenance: { ...abstractOnly.provenance, fullText, paywallHost },
+    });
+    for (const deepRequested of [true, false]) {
+      const withModel = {
+        report: { basis: "model-abstract" as const, droppedClaims: 0, deepRequested },
+        providerConfigured: true,
+        profileHasProject: true,
+        modelFailed: false,
+        refused: true,
+      };
+      const readings: Array<[string, PaperReading]> = [
+        ["paywalled with a host", at("paywalled", "nature.com")],
+        ["paywalled", at("paywalled")],
+        ["a scanned PDF", at("pdf_unreadable_here")],
+        ["an empty PDF", at("pdf_empty")],
+        ["no full text", at("none")],
+        // Peer read the PDF, but the deep read was refused before the model ran.
+        ["a PDF Peer read", { ...sectionsPdf, caveats: [] }],
+      ];
+      for (const [name, reading] of readings) {
+        const sentences = describeAvailability({ reading, ...withModel });
+        expect(sentences, `${name}, deepRequested ${deepRequested}`).toEqual([`${lead}${refused}`]);
+        expect(sentences.join(" ")).not.toMatch(/did not finish|turn on deep reports/);
+      }
+      // With caveats already quoted from the sections, no clause is needed.
+      expect(describeAvailability({ reading: sectionsHtml, ...withModel })).toEqual([lead]);
+    }
+  });
+
+  it("a refused flag changes nothing without it, and adds no clause to a report from the full text", () => {
+    const base = {
+      providerConfigured: true,
+      profileHasProject: true,
+      modelFailed: false,
+    };
+    const abstractReport = { basis: "model-abstract" as const, droppedClaims: 0, deepRequested: true };
+    // Absent or false: the sentence the page has always had.
+    expect(describeAvailability({ reading: { ...sectionsPdf, caveats: [] }, report: abstractReport, ...base })).toEqual(
+      describeAvailability({ reading: { ...sectionsPdf, caveats: [] }, report: abstractReport, ...base, refused: false }),
+    );
+    expect(
+      describeAvailability({ reading: { ...sectionsPdf, caveats: [] }, report: abstractReport, ...base }).join(" "),
+    ).toMatch(/did not finish/);
+    // A report written from the full text was not refused: the flag adds nothing.
+    const fullTextReport = { basis: "model-fulltext" as const, droppedClaims: 0 };
+    expect(describeAvailability({ reading: sectionsPdf, report: fullTextReport, ...base, refused: true })).toEqual(
+      describeAvailability({ reading: sectionsPdf, report: fullTextReport, ...base }),
+    );
+  });
+
   it("model from the full text, with dropped claims and no project", () => {
     expect(
       describeAvailability({

@@ -9,13 +9,15 @@ import { QUOTA } from "./copy";
 
 /**
  * The line for a quota, or null. By `kind`, then `reason`:
- * - `deep_report` / `breaker` with reason `unavailable` — the counter could not
- *   be read, so nothing was spent: never "used up" (ABC-freemium 2-02), but not
+ * - any of the three kinds with reason `unavailable` — the counter or the
+ *   budget check could not be read, so nothing was spent: never "used up" or
+ *   "budget is spent" (ABC-freemium 2-02; P2-08b, §1g.14 amendment 3), but not
  *   silent either;
- * - those two kinds with any other reason (`exhausted`; an older cached report
- *   may carry none) — the allowance is spent;
- * - `company_budget`, whatever the reason — the shared model budget;
- * - any other kind (a newer server, an older cache) — nothing.
+ * - `deep_report` / `breaker` with any other reason (`exhausted`; an older
+ *   cached report may carry none) — the allowance is spent;
+ * - `company_budget` with any other reason — the shared model budget is spent;
+ * - any other kind (a newer server, an older cache) — nothing, whatever its
+ *   reason: it may mean something this build cannot word.
  */
 export function quotaNoticeText(quota: Pick<QuotaSignal, "kind" | "reason"> | null | undefined): string | null {
   if (!quota) return null;
@@ -24,7 +26,7 @@ export function quotaNoticeText(quota: Pick<QuotaSignal, "kind" | "reason"> | nu
     case "breaker":
       return quota.reason === "unavailable" ? QUOTA.unavailable : QUOTA.exhausted;
     case "company_budget":
-      return QUOTA.companyBudget;
+      return quota.reason === "unavailable" ? QUOTA.unavailable : QUOTA.companyBudget;
     default:
       return null;
   }

@@ -42,7 +42,7 @@ const SECTIONS = [
   {
     label: "Your questions",
     body: [
-      "Questions you type on a paper page stay in this browser. When Peer writes a deep report for that paper, they travel with that one request so the report can answer them; Peer does not log them or keep them.",
+      "Questions you type on a paper page stay in this browser. When Peer writes a deep report for that paper, they travel with that one request to Peer's server and on to the model provider you or the owner configured, inside the prompts, and nowhere else, so the report can answer them; Peer does not log them or keep them.",
     ],
   },
   {
@@ -106,7 +106,7 @@ export default function PrivacyPage() {
       ))}
 
       <p className="annotation text-text-faint mt-12">
-        Last changed 2026-10-05 · changes to this page ship in the{" "}
+        Last changed 2026-10-06 · changes to this page ship in the{" "}
         <Link href="/changelog" className="underline decoration-border-strong underline-offset-4 hover:text-heading">
           changelog
         </Link>

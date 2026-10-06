@@ -20,16 +20,30 @@ const net = vi.hoisted(() => ({
   jsonCalls: 0,
   /** When set, the stream sends exactly these events (P2-07). */
   script: null as Array<Record<string, unknown>> | null,
+  /** Who is signed in (P2-08b): `null` is signed out; a user gets Peer's model. */
+  entitlement: null as { userId: string } | null,
+  /** P2-08b (§1g.18): per request, whether it was abandoned before it finished,
+   *  and how long a request is held after `mode`. */
+  flights: [] as Array<{ aborted: boolean; done: boolean }>,
+  delayMs: 0,
 }));
 
 vi.mock("@/lib/papers/report-stream", () => ({
-  streamPaperReport: async function* (body: Record<string, unknown>) {
+  streamPaperReport: async function* (body: Record<string, unknown>, signal?: AbortSignal) {
     net.streamCalls.push(body);
+    const flight = { aborted: false, done: false };
+    net.flights.push(flight);
+    signal?.addEventListener("abort", () => {
+      if (!flight.done) flight.aborted = true;
+    });
     if (net.script) {
       for (const event of net.script) yield event;
+      flight.done = true;
       return;
     }
     yield { type: "mode", aiMode: "tier2" };
+    if (net.delayMs > 0) await new Promise((resolve) => setTimeout(resolve, net.delayMs));
+    flight.done = true;
     yield { type: "stage", stage: "done", label: "Report ready", pct: 100 };
     yield {
       type: "report",
@@ -51,9 +65,10 @@ vi.mock("@/lib/api", () => ({
   },
 }));
 vi.mock("@/store/profile", () => ({
-  useProfileStore: (select: (state: { entitlement: null }) => unknown) => select({ entitlement: null }),
+  useProfileStore: (select: (state: { entitlement: unknown }) => unknown) => select({ entitlement: net.entitlement }),
 }));
 
+import { useEffect, useState } from "react";
 import { hookRuntime } from "@/test-support/hook-runtime";
 import { defaultProfile, type Paper, type UserProfile } from "@/types";
 import { buildReading } from "@/lib/papers/reading";
@@ -107,6 +122,9 @@ describe("useModelReport with effects running — one report request across two 
     net.streamCalls.length = 0;
     net.jsonCalls = 0;
     net.script = null;
+    net.entitlement = null;
+    net.flights.length = 0;
+    net.delayMs = 0;
   });
 
   afterEach(() => vi.unstubAllGlobals());
@@ -268,5 +286,132 @@ describe("useModelReport with effects running — one report request across two 
     expect(opened.failed).toBe(false);
     expect(opened.report?.whatItProposes.summary).toBe("An abstract-tier report, the deep one refused.");
     expect(opened.report?.quota).toEqual(quota);
+  });
+
+  // P2-08b (§1g.18, F3): the hook keeps one request in flight and never aborts
+  // it for a different set of questions (the flow test in `question-box.flow
+  // .test.tsx` shows that end to end). These are the two guards that hold the
+  // hook's own branches: what ends a request is not asked again, and anything
+  // but the questions changing still abandons it.
+  describe("one request in flight; only a change of something else abandons it (P2-08b, §1g.18)", () => {
+    it("a request that ends with a tier 0 outcome is sent once, not again when it finishes", async () => {
+      // `settle(null, false)` writes no cache, so without the guard that the key
+      // which just ended is done, the re-run it triggers would send it forever.
+      net.script = [{ type: "mode", aiMode: "tier0" }];
+
+      const opened = await open(attached);
+
+      expect(net.streamCalls).toHaveLength(1);
+      expect(opened.failed).toBe(false);
+    });
+
+    it("a different paper while a request is in flight abandons it and asks for the new one", async () => {
+      net.delayMs = 200;
+      let current: Paper = { ...attached, id: "openalex:W7000000011", fullTextUploadId: "upload:0123456789abcde1" };
+      let rounds = 0;
+      const opened = await hookRuntime.mount(
+        () => {
+          const state = useModelReport({ paper: current, profile });
+          const [tick, setTick] = useState(0);
+          useEffect(() => {
+            rounds += 1;
+            // Round 3 is well inside the first request's 200 ms.
+            if (rounds === 3) current = { ...attached, id: "openalex:W7000000012", fullTextUploadId: "upload:0123456789abcde2" };
+            if (rounds > 60) return;
+            const timer = setTimeout(() => setTick((n) => n + 1), 1);
+            return () => clearTimeout(timer);
+          }, [tick]);
+          return state;
+        },
+        { maxRounds: 100 },
+      );
+      opened.unmount();
+
+      expect(net.streamCalls).toHaveLength(2);
+      // The first was abandoned while it was held; the second ran to its end.
+      expect(net.flights.map((flight) => flight.aborted)).toEqual([true, false]);
+      expect(net.flights[1].done).toBe(true);
+    });
+
+    it("leaving the page while a request is in flight abandons it", async () => {
+      net.delayMs = 200;
+      // `mount` returns once nothing is left to do, which is while the request is held.
+      const opened = await hookRuntime.mount(() => useModelReport({ paper: attached, profile }));
+      expect(net.flights).toEqual([{ aborted: false, done: false }]);
+
+      opened.unmount();
+
+      expect(net.flights).toEqual([{ aborted: true, done: false }]);
+    });
+  });
+
+  // P2-08b (§1g.17, F2): the /privacy entry says the questions travel when Peer
+  // writes a deep report. They used to ride every request, so a reader with no
+  // deep report asked for sent each settle to the server (and, with a key, paid
+  // a model call for it) for an answers block that never appears. Now the
+  // questions name a request, and ride it, only when it is a deep one.
+  describe("the questions travel only with a deep request (P2-08b, §1g.17)", () => {
+    const FIRST = "synthetic first question";
+    const SECOND = "synthetic second question";
+
+    /** One mounted hook whose settled questions grow by one, twice, as a reader's do. */
+    async function settleTwice(paper: Paper, reader: UserProfile) {
+      const sets: readonly (readonly string[])[] = [[], [FIRST], [FIRST, SECOND]];
+      let step = 0;
+      const keys = new Set<string>();
+      const opened = await hookRuntime.mount(() => {
+        const state = useModelReport({ paper, profile: reader, questions: sets[step] });
+        keys.add(state.reportKey);
+        const [tick, setTick] = useState(0);
+        // After each render, move on to the next settled set (a state change re-renders).
+        useEffect(() => {
+          if (step < sets.length - 1) {
+            step += 1;
+            setTick(step);
+          }
+        }, [tick]);
+        return state;
+      });
+      opened.unmount();
+      return { keys, state: opened.value };
+    }
+
+    const notDeep: Array<[string, () => { paper: Paper; reader: UserProfile }]> = [
+      ["signed out, no key", () => ({ paper: base, reader: { ...defaultProfile } })],
+      ["the reader's own key, deep reports off", () => ({ paper: base, reader: { ...profile, deepReportEnabled: false } })],
+      [
+        "signed in, deep reports off",
+        () => {
+          net.entitlement = { userId: "reader-1" };
+          return { paper: base, reader: { ...defaultProfile } };
+        },
+      ],
+    ];
+
+    for (const [name, setup] of notDeep) {
+      it(`${name}: a settle sends no request and no question`, async () => {
+        const { paper, reader } = setup();
+
+        const { keys } = await settleTwice(paper, reader);
+
+        expect(net.streamCalls).toHaveLength(1);
+        expect(net.streamCalls[0].deepReport).toBe(false);
+        for (const body of net.streamCalls) expect(body).not.toHaveProperty("questions");
+        expect(JSON.stringify(net.streamCalls)).not.toContain(FIRST);
+        // One key: the questions are not part of a request that does not carry them.
+        expect(keys.size).toBe(1);
+      });
+    }
+
+    // The control: with a deep report asked for, the settled set still names the
+    // request and travels in its body, as P2-03 ruled.
+    it("a deep request still carries them: each set has its own key and the latest set goes out", async () => {
+      const { keys } = await settleTwice(base, { ...profile, deepReportEnabled: true });
+
+      expect(keys.size).toBe(3);
+      expect(net.streamCalls.length).toBeGreaterThanOrEqual(1);
+      expect(net.streamCalls.every((body) => body.deepReport === true)).toBe(true);
+      expect(net.streamCalls[net.streamCalls.length - 1].questions).toEqual([FIRST, SECOND]);
+    });
   });
 });

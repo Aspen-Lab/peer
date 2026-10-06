@@ -412,12 +412,23 @@ function streamReport(
   privateHash: string | null,
   startRevision: number | undefined,
 ): Response {
+  // P2-08b (§1g.17, O2): set by `cancel` when the reader aborts the request —
+  // the page does so whenever its report key or its paper changes. The flow
+  // then stops sending instead of letting `enqueue` throw "Controller is
+  // already closed" into the error log below: an ordinary event, a debug line.
+  // A real failure after the abort (a provider error) is still an error.
+  let readerGone = false;
   const readable = new ReadableStream<Uint8Array>({
+    cancel() {
+      readerGone = true;
+      // No paper text, no question: the line says only that the reader left.
+      console.debug("[papers/report] the reader disconnected before the stream ended");
+    },
     async start(controller) {
       const encoder = new TextEncoder();
       let closed = false;
       const send = (event: ReportStreamEvent) => {
-        if (closed) return;
+        if (closed || readerGone) return;
         controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
       };
       const close = () => {

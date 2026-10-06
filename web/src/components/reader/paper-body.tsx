@@ -156,22 +156,22 @@ function mergedSections(
 }
 
 /** One display route for all three consumers. Questions are paired by their
- * reader-owned text, retaining Tier 0's order/titles; model-only questions
- * append rather than replacing a live route. No model data means the original
- * Tier 0 route object is returned unchanged. */
+ * reader-owned text, retaining Tier 0's order/titles. P2-08b (§1g.19 c, F6): a
+ * model entry whose question matches no live line — the reader has since
+ * edited a question the report answered — is dropped, never appended: the live
+ * lines are the questions there are, and an orphan would be a phantom "Q3" on
+ * the rail, the map and the headings. With no live route there is nothing for
+ * a model entry to answer. No model data means the original Tier 0 route
+ * object is returned unchanged. */
 export function mergeQuestionRoute(base: RouteResult | undefined, overlay: DisplayRoute | undefined): DrawRoute | undefined {
   if (!overlay) return base;
-  if (!base) return overlay;
-  const remaining = new Map(overlay.byQuestion.map((entry) => [entry.question, entry]));
+  if (!base) return undefined;
+  const answered = new Map(overlay.byQuestion.map((entry) => [entry.question, entry]));
   const byQuestion: DisplayRoute["byQuestion"] = base.byQuestion.map((entry) => {
-    const model = remaining.get(entry.question);
+    const model = answered.get(entry.question);
     if (!model) return { ...entry, sections: { ...entry.sections } };
-    remaining.delete(entry.question);
     return { ...entry, vague: entry.vague && model.vague, sections: mergedSections(entry.sections, model.sections) };
   });
-  for (const entry of overlay.byQuestion) {
-    if (remaining.has(entry.question)) byQuestion.push(entry);
-  }
   return { byQuestion, vague: byQuestion.length > 0 && byQuestion.every((entry) => entry.vague) };
 }
 

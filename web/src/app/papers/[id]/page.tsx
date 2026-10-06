@@ -738,9 +738,12 @@ function Reader({
             providerConfigured,
             profileHasProject,
             modelFailed: model.failed,
+            // P2-08b (F8): the notice beside this sentence says why the report
+            // is the shorter one; the sentence must not say the read "did not finish".
+            refused: model.quota !== null,
           })
         : [],
-    [reading, availability, providerConfigured, profileHasProject, model.failed],
+    [reading, availability, providerConfigured, profileHasProject, model.failed, model.quota],
   );
 
   // The plate's own terms — allocated across the briefing when the paper is

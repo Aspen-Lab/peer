@@ -8,8 +8,8 @@
 // no examples at all. Pure: the page builds them from its two stores.
 //
 // An example only ever fills a line when the reader clicks it, and it is a
-// question like any other once there — the field settles it on that line's
-// blur or Enter (§1g.11).
+// question like any other once there — it settles with the box as a whole
+// (§1g.18), like every question the reader types.
 //
 // P1-09b (§1f.20 amendment): the challenges and the project are asked by
 // their multi-word phrases — a single keyword ("growth") makes a vague,
@@ -25,6 +25,13 @@
 // only when it has two to six words and none of them is a pronoun or an
 // auxiliary; the single-word fallback only when its finished question has a
 // specific route term. A source with nothing acceptable gives no example.
+//
+// P2-08b (§1g.19 b, F5; BACKLOG-09 closes into this): a chunk rejected as
+// sentence-like leaves no fallback word behind ("We test sulfide
+// electrolytes." no longer yields "relate to test"); a multi-word phrase must
+// itself yield a specific route term; function and question words ("and",
+// "why", "how"…) are sentence words; the fallback word is trimmed of edge
+// punctuation and is offered only when the text has no multi-word chunk at all.
 
 import type { UserProfile } from "@/types";
 import { phrasesFromText } from "@/lib/feed/profile-compiler";
@@ -57,6 +64,8 @@ function sameKey(text: string): string {
 const SENTENCE_WORDS: ReadonlySet<string> = new Set([
   "we", "i", "our", "you", "your", "they", "it", "its", "this", "that", "these", "those",
   "he", "she", "is", "are", "was", "were", "be", "will", "can", "do", "does",
+  // P2-08b (F5): conjunctions and question words begin or join clauses.
+  "and", "or", "but", "why", "how", "what", "when", "where", "which", "who",
 ]);
 const MIN_PHRASE_WORDS = 2;
 const MAX_PHRASE_WORDS = 6;
@@ -71,18 +80,28 @@ function isPhrase(candidate: string): boolean {
   );
 }
 
-/** P1-09b/c: a free-text field's acceptable multi-word phrases, in
- *  `phrasesFromText`'s order. With none, its first single word — only when the
- *  finished question (`template(word)`) has a specific route term, so a
- *  stoplist or generic word ("study", "energy") is not an example; else
- *  nothing. The default `max` (8) lets `phrasesFromText` return up to four
- *  chunk phrases, more than either source's cap. */
+/** An edge-trimmed word: no punctuation before its first or after its last letter or digit. */
+function trimEdges(word: string): string {
+  return word.trim().replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, "");
+}
+
+/** P1-09b/c, P2-08b: a free-text field's acceptable multi-word phrases, in
+ *  `phrasesFromText`'s order — each only when its finished question
+ *  (`template(phrase)`) has a specific route term. When a multi-word chunk was
+ *  rejected (a sentence, too long, a function word in it, nothing to route on),
+ *  nothing else is offered: its keywords are not examples. Only a text with no
+ *  multi-word chunk at all falls back to its first single word, edge-trimmed,
+ *  and then only when the finished question has a specific route term, so a
+ *  stoplist or generic word ("study", "energy") is not an example. The default
+ *  `max` (8) lets `phrasesFromText` return up to four chunk phrases, more than
+ *  either source's cap. */
 function phrasesFirst(text: string | undefined, template: (value: string) => string): string[] {
   const candidates = phrasesFromText(text);
-  const phrases = candidates.filter(isPhrase);
+  const phrases = candidates.filter((candidate) => isPhrase(candidate) && specificTerms(template(candidate.trim())).length > 0);
   if (phrases.length > 0) return phrases;
-  const word = candidates.find((candidate) => !/\s/.test(candidate.trim()));
-  return word !== undefined && specificTerms(template(word.trim())).length > 0 ? [word] : [];
+  if (candidates.some((candidate) => /\s/.test(candidate.trim()))) return [];
+  const word = candidates.map(trimEdges).find((candidate) => candidate !== "");
+  return word !== undefined && specificTerms(template(word)).length > 0 ? [word] : [];
 }
 
 export function exampleQuestions({

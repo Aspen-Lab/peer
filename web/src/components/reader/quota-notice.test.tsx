@@ -16,8 +16,11 @@ type Quota = Pick<QuotaSignal, "kind" | "reason">;
 
 const EXHAUSTED = "Deep reports are used up for now. This is the shorter report.";
 const COMPANY_BUDGET = "Peer's shared model budget is spent for now. This is the shorter report.";
+// P2-08b (§1g.14 amendment 3, A's F7): reworded — the outage line now serves
+// the company budget's check too, so it no longer says "your" allowance — and
+// it says what is true of any outage: nothing was spent.
 const UNAVAILABLE =
-  "Peer could not check your deep-report allowance just now. This is the shorter report; your allowance is unchanged.";
+  "Peer could not check the deep-report allowance just now. This is the shorter report; nothing was spent.";
 
 function render(quota: Quota | null | undefined): string {
   return renderToStaticMarkup(createElement(QuotaNotice, { quota }));
@@ -48,6 +51,8 @@ describe("QuotaNotice (P2-09, §1g.14)", () => {
     expect(quotaNoticeText(null)).toBeNull();
   });
 
+  // P2-08b: the UNAVAILABLE constant above is the amendment-3 wording; the
+  // assertion (exactly the three ruled strings, exactly these) is unchanged.
   it("has exactly the three ruled strings", () => {
     expect(QUOTA.exhausted).toBe(EXHAUSTED);
     expect(QUOTA.companyBudget).toBe(COMPANY_BUDGET);
@@ -60,26 +65,47 @@ describe("QuotaNotice (P2-09, §1g.14)", () => {
     expect(line(render({ kind: "breaker", reason: "exhausted" }))).toBe(EXHAUSTED);
   });
 
-  it("says the shared model budget is spent for the company budget, whatever the reason", () => {
+  // P2-08b (§1g.14 amendment 3): this said "…, whatever the reason" and pinned
+  // company_budget + unavailable to the budget-is-spent line. That is the
+  // assertion the amendment reverses (an outage of the budget check is not a
+  // spent budget), so it keeps the exhausted case and every reason but an
+  // outage; the outage case moves to the test below.
+  it("says the shared model budget is spent for the company budget, for every reason but an outage", () => {
     expect(line(render({ kind: "company_budget", reason: "exhausted" }))).toBe(COMPANY_BUDGET);
-    expect(line(render({ kind: "company_budget", reason: "unavailable" }))).toBe(COMPANY_BUDGET);
+    expect(line(render({ kind: "company_budget", reason: "somewhere_new" } as unknown as Quota))).toBe(COMPANY_BUDGET);
+    expect(line(render({ kind: "company_budget" } as unknown as Quota))).toBe(COMPANY_BUDGET);
   });
 
   // The ruling (§1g.14 amendment): an outage is never described as a spent
   // allowance — the store could not be read, so nothing was spent — and it is
   // not silent either: the reader is looking at a shorter report.
-  it("tells an outage apart from a spent allowance, on both kinds that can have one", () => {
+  // P2-08b (§1g.14 amendment 3): "on both kinds that can have one" is now all
+  // three — the company budget's check can be down too — and the line says
+  // "nothing was spent", not "your allowance is unchanged". The `not used up`
+  // assertion stays, and `not budget is spent` joins it.
+  it("tells an outage apart from a spent allowance or budget, on all three kinds that can have one", () => {
     expect(line(render({ kind: "deep_report", reason: "unavailable" }))).toBe(UNAVAILABLE);
     expect(line(render({ kind: "breaker", reason: "unavailable" }))).toBe(UNAVAILABLE);
+    expect(line(render({ kind: "company_budget", reason: "unavailable" }))).toBe(UNAVAILABLE);
     expect(UNAVAILABLE).not.toBe(EXHAUSTED);
+    expect(UNAVAILABLE).not.toBe(COMPANY_BUDGET);
     expect(UNAVAILABLE).not.toMatch(/used up/i);
-    expect(UNAVAILABLE).toMatch(/allowance is unchanged/);
+    expect(UNAVAILABLE).not.toMatch(/budget is spent/i);
+    expect(UNAVAILABLE).toMatch(/nothing was spent/);
   });
 
   it("treats any reason other than an outage as a spent allowance (an older cached report may carry none)", () => {
     const noReason = { kind: "deep_report" } as unknown as Quota;
     expect(quotaNoticeText(noReason)).toBe(EXHAUSTED);
     expect(quotaNoticeText({ kind: "breaker", reason: "somewhere_new" } as unknown as Quota)).toBe(EXHAUSTED);
+  });
+
+  // P2-08b: the amendment's "any kind" is the three kinds the ruling names; a
+  // kind this build has never heard of may mean something else, so it stays
+  // silent whatever its reason (a guard — green before and after).
+  it("renders nothing for a kind it does not know, even with the outage reason", () => {
+    expect(quotaNoticeText({ kind: "something_new", reason: "unavailable" } as unknown as Quota)).toBeNull();
+    expect(render({ kind: "something_new", reason: "unavailable" } as unknown as Quota)).toBe("");
   });
 
   it("renders nothing for a kind it does not know", () => {
@@ -117,6 +143,18 @@ describe("where the notice is mounted (P2-09)", () => {
     expect(pageSource).not.toMatch(/report\??\.quota/);
     expect(pageSource).not.toMatch(/&&\s*<QuotaNotice/);
     expect(pageSource).toMatch(/import \{ QuotaNotice \} from "@\/components\/reader\/quota-notice";/);
+  });
+
+  // P2-08b (§1g.19 d, F8): the Decision block's availability sentence reads the
+  // same hook quota the notice does, so the two never contradict: a refused
+  // deep read is "not run", not "did not finish".
+  it("tells the availability sentence when the deep read was refused: refused is the hook's quota", () => {
+    const start = pageSource.indexOf("const sentences = useMemo(");
+    expect(start).toBeGreaterThan(-1);
+    const block = pageSource.slice(start, pageSource.indexOf("\n  );", start));
+    expect(block).toMatch(/refused:\s*model\.quota !== null/);
+    // The memo's dependency list (its last bracket pair) follows the quota too.
+    expect(block.slice(block.lastIndexOf("["))).toContain("model.quota");
   });
 
   it("sits after the Decision block and before the answers and the notes", () => {

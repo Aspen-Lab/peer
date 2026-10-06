@@ -100,7 +100,11 @@ describe("the server's hand on forYourQuestions (§1g.3)", () => {
       question: "q",
       verdict: "answered",
       answers: Array.from({ length: 6 }, () => ({ text: long(400), evidence: SENT.results, sectionId: "s3" })),
-      readNext: Array.from({ length: 6 }, () => ({ sectionId: "s2", why: long(200), kind: "answer" })),
+      // P2-08b (§1g.19 a, F4): six rows over six DISTINCT sections. This used six
+      // copies of section s2 and expected four, which only held because a repeat
+      // was kept; a repeat is now one row, so the cap needs distinct sections to
+      // be reached. The cap itself (four) is asserted exactly as before.
+      readNext: Array.from({ length: 6 }, (_, i) => ({ sectionId: `s${i + 1}`, why: long(200), kind: "answer" })),
     };
     const report = sanitizePaperReport(
       {
@@ -138,6 +142,56 @@ describe("the server's hand on forYourQuestions (§1g.3)", () => {
 
     expect(report.forYourQuestions?.map((entry) => entry.question)).toEqual([Q[1]]);
     expect(report.forYourQuestions?.[0].readNext).toEqual([{ sectionId: "s2", why: "Counts.", kind: "background" }]);
+  });
+});
+
+// P2-08b (§1g.19 a, F4): a model that names one section twice must not make
+// the page draw it twice (and break React's keys). The sanitizer keeps one row
+// per section: the first wins, and an `answer` beats a `background` for the
+// same section. The cap of four counts distinct sections.
+describe("readNext is distinct by section (P2-08b, F4)", () => {
+  const nextOf = (readNext: unknown[]) =>
+    sanitizePaperReport({ forYourQuestions: [{ verdict: "partly", answers: [], readNext }] }, { questions: Q.slice(0, 1) }).forYourQuestions?.[0].readNext;
+
+  it("keeps the first row for a section named twice", () => {
+    expect(
+      nextOf([
+        { sectionId: "s1", why: "First.", kind: "answer" },
+        { sectionId: "s2", why: "Other.", kind: "background" },
+        { sectionId: "s1", why: "Again.", kind: "answer" },
+      ]),
+    ).toEqual([
+      { sectionId: "s1", why: "First.", kind: "answer" },
+      { sectionId: "s2", why: "Other.", kind: "background" },
+    ]);
+  });
+
+  it("an answer row replaces an earlier background row for the same section, in its place", () => {
+    expect(
+      nextOf([
+        { sectionId: "s1", why: "Context.", kind: "background" },
+        { sectionId: "s2", why: "Other.", kind: "background" },
+        { sectionId: "s1", why: "It answers.", kind: "answer" },
+      ]),
+    ).toEqual([
+      { sectionId: "s1", why: "It answers.", kind: "answer" },
+      { sectionId: "s2", why: "Other.", kind: "background" },
+    ]);
+  });
+
+  it("a background row never replaces an earlier answer row", () => {
+    expect(
+      nextOf([
+        { sectionId: "s1", why: "It answers.", kind: "answer" },
+        { sectionId: "s1", why: "Context.", kind: "background" },
+      ]),
+    ).toEqual([{ sectionId: "s1", why: "It answers.", kind: "answer" }]);
+  });
+
+  it("the cap of four counts distinct sections, not rows", () => {
+    const rows = [1, 1, 2, 2, 3, 4, 5, 6].map((n) => ({ sectionId: `s${n}`, why: `Row ${n}.`, kind: "answer" }));
+
+    expect(nextOf(rows)?.map((next) => next.sectionId)).toEqual(["s1", "s2", "s3", "s4"]);
   });
 });
 

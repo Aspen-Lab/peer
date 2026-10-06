@@ -124,6 +124,32 @@ describe("the Tier 2 question-answer overlay (P2-04)", () => {
     expect(mergeQuestionRoute(ROUTE_RESULT, undefined)).toEqual(ROUTE_RESULT);
   });
 
+  // P2-08b (§1g.19 c, F6): after a report, the reader edits a question it
+  // answered. The report still answers the OLD text, which now matches no line
+  // of the field; appending that entry as one more question gave the rail, the
+  // map and the headings a phantom "Q3" the field does not have. Pairing is by
+  // text and nothing else: an entry no live line claims is dropped, and a model
+  // never adds a question.
+  it("drops an overlay entry whose question matches no live line, and never appends a model-only question (F6)", () => {
+    const edited = answers.map((entry, index) => (index === 0 ? { ...entry, question: "Does the LCO lattice crack at H1-3 in thin cells?" } : entry));
+
+    const merged = mergeQuestionRoute(ROUTE_RESULT, questionRouteOverlay(edited));
+
+    // The live questions, exactly: no fourth one from the orphaned entry.
+    expect(merged?.byQuestion.map((entry) => entry.question)).toEqual(ROUTE_RESULT.byQuestion.map((entry) => entry.question));
+    // The orphan's background mark on section 2 is gone: Tier 0's own skim stands.
+    expect(sectionMark(merged, ids[1])).toEqual(sectionMark(ROUTE_RESULT, ids[1]));
+    // The entry that still matches a live line still lends its answer.
+    expect(sectionMark(merged, ids[2])).toMatchObject({ tier: "read", title: "Q3" });
+    // No section names a question number the field does not have.
+    for (const id of ids) expect(sectionMark(merged, id)?.title ?? "").not.toMatch(/Q4/);
+  });
+
+  it("with no Tier 0 route there is nothing for a model entry to answer", () => {
+    expect(mergeQuestionRoute(undefined, questionRouteOverlay(answers))).toBeUndefined();
+    expect(mergeQuestionRoute(undefined, undefined)).toBeUndefined();
+  });
+
   it("feeds the one merged display route to contents, map, and body consumers, including the background token", () => {
     const merged = mergeQuestionRoute(ROUTE_RESULT, questionRouteOverlay(answers));
     // P2-04b (§1g.15): all three consumers take the one `DrawRoute`, so the

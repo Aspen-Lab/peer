@@ -136,16 +136,31 @@ export function vagueHintShown({
 }
 
 /**
- * P2-03 (§1g.11 a): which of the field's events settle the questions — the
- * set a deep report is asked about. A finished line settles: Enter, leaving
- * it, removing one. A keystroke does not (half a question is not one), nor
- * the gist (it is no question), nor a chip by itself (one that leaves the
- * caret in its line settles when the reader leaves that line).
+ * P2-08b (§1g.18): the deep report is asked about the questions only when the
+ * box has settled as a whole — focus left it (every line and control in it
+ * counts as inside), or Enter was pressed on the line that ends it — and the
+ * reader then stayed idle for `BOX_IDLE_MS`. A line finished by Enter, by
+ * leaving it or by removing one settles nothing, nor does a keystroke, the
+ * gist or a chip: five questions typed with Enter between them are one deep
+ * report, not five. (P2-03's per-line settle gave the free Tier 0 route the
+ * same moment; that route reads `items` live and never needed it.)
  */
-export type FieldEvent = "enter" | "blur" | "remove" | "change" | "gist" | "chip";
+export const BOX_IDLE_MS = 1500;
 
-export function settlesQuestions(event: FieldEvent): boolean {
-  return event === "enter" || event === "blur" || event === "remove";
+/** `next` is the element that receives focus (null when none does). */
+export function leftTheBox(box: Node, next: EventTarget | null): boolean {
+  return !box.contains(next as Node | null);
+}
+
+/**
+ * Enter on line `index` is the "done" gesture when there is nothing more to
+ * add after it: the empty line at the end, or (§1g.21 (5)) the last line of a
+ * full box, which has no room for another line. Anywhere else Enter moves on.
+ */
+export function enterEndsTheBox(lines: readonly string[], index: number): boolean {
+  if (index !== lines.length - 1) return false;
+  if (lines[index].trim() === "") return true;
+  return lines.length >= MAX_QUESTIONS && lines.every((line) => line.trim() !== "");
 }
 
 /** The page's `q`: the first empty question line, else the last one. */
@@ -159,7 +174,11 @@ export function QuestionField({
   paperId,
   examples,
   vague = false,
+  idleMs = BOX_IDLE_MS,
 }: {
+  /** P2-08b (§1g.18): how long the reader stays idle, after the box settles,
+   *  before the questions settle. Tests pass a few milliseconds; the page nothing. */
+  idleMs?: number;
   paperId: string;
   /** P1-09 (§1f.20): the example tags, from the reader's earlier questions
    *  and profile only. */
@@ -196,20 +215,44 @@ export function QuestionField({
     if (pending.caretAtEnd) input.setSelectionRange(input.value.length, input.value.length);
   });
 
+  // P2-08b (§1g.18): the questions settle — what a deep report is asked about —
+  // when the box has settled as a whole and the reader has then been idle for
+  // `idleMs`; coming back into the box, or anything done in it, ends the wait.
+  const idle = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const stopIdle = () => {
+    if (idle.current === null) return;
+    clearTimeout(idle.current);
+    idle.current = null;
+  };
+  const settleBoxSoon = () => {
+    stopIdle();
+    idle.current = setTimeout(() => {
+      idle.current = null;
+      useReadingQuestionsStore.getState().settle(paperId);
+    }, idleMs);
+  };
+  // §1g.21 (5): leaving the page mid-wait settles at once — the questions were
+  // finished; the reader just did not stay to see the answer.
+  useEffect(
+    () => () => {
+      if (idle.current === null) return;
+      stopIdle();
+      useReadingQuestionsStore.getState().settle(paperId);
+    },
+    [paperId],
+  );
+
   const commit = (next: string[], nextGistValue: boolean) => {
+    stopIdle();
     setLines(next);
     setGist(nextGistValue);
     useReadingQuestionsStore.getState().set(paperId, next, nextGistValue);
-  };
-  /** After the commit, when the event finishes a line (P2-03). */
-  const settleOn = (event: FieldEvent) => {
-    if (settlesQuestions(event)) useReadingQuestionsStore.getState().settle(paperId);
   };
 
   // The gist is a reading mode: it changes no line and settles nothing.
   const onGist = () => commit(lines, !gist);
   // An example fills the next empty line and focuses it; like typing, it
-  // settles when the reader leaves that line or presses Enter in it.
+  // settles nothing until the box settles as a whole.
   const onChip = (chip: Chip) => {
     const filled = fillNextLine(lines, chip.text);
     if (filled.focus < 0) return;
@@ -225,9 +268,15 @@ export function QuestionField({
     <section
       aria-label={ASK.heading}
       className="mt-6"
-      onFocus={() => setFocused(true)}
+      onFocus={() => {
+        stopIdle();
+        setFocused(true);
+      }}
       onBlur={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setFocused(false);
+        // Focus moving to another line, chip or button of the box is not leaving it.
+        if (!leftTheBox(event.currentTarget, event.relatedTarget)) return;
+        setFocused(false);
+        settleBoxSoon();
       }}
     >
       <label className="eyebrow inline-flex items-center gap-2 text-text-faint" htmlFor={`ask-${paperId}-0`}>
@@ -249,10 +298,7 @@ export function QuestionField({
               placeholder={index === 0 ? ASK.placeholder : undefined}
               aria-label={index === 0 ? undefined : ASK.line(index + 1)}
               onFocus={() => trackLine({ type: "focus", index })}
-              onBlur={() => {
-                trackLine({ type: "blur", index });
-                settleOn("blur");
-              }}
+              onBlur={() => trackLine({ type: "blur", index })}
               onChange={(event) => {
                 const next = [...lines];
                 next[index] = event.target.value;
@@ -270,7 +316,7 @@ export function QuestionField({
                 } else {
                   inputs.current[added.focus]?.focus();
                 }
-                settleOn("enter");
+                if (enterEndsTheBox(lines, index)) settleBoxSoon();
               }}
               className="min-w-0 flex-1 border-b border-border bg-transparent py-1 font-reading text-body-sm text-text placeholder:text-text-faint focus:border-heading focus:outline-none"
             />
@@ -286,7 +332,6 @@ export function QuestionField({
                   // The lines move up: nothing is mid-sentence any more.
                   setUnsettled(null);
                   commit(next, nextGist(gist, next));
-                  settleOn("remove");
                 }}
                 className="annotation shrink-0 text-text-faint transition-colors hover:text-heading"
               >

@@ -58,13 +58,14 @@ export const FOR_YOUR_QUESTIONS = {
  * voice, when the server says a cap or an outage refused the deep read. Three
  * lines, chosen by `quotaNoticeText` (`quota-notice.tsx`): a spent deep-report
  * or breaker allowance, a spent shared model budget, and — never confused with
- * a spent allowance — a store that could not be read, where nothing was spent.
+ * a spent allowance or budget — a check that could not be made, for any of the
+ * three kinds, where nothing was spent (P2-08b, §1g.14 amendment 3).
  */
 export const QUOTA = {
   exhausted: "Deep reports are used up for now. This is the shorter report.",
   companyBudget: "Peer's shared model budget is spent for now. This is the shorter report.",
   unavailable:
-    "Peer could not check your deep-report allowance just now. This is the shorter report; your allowance is unchanged.",
+    "Peer could not check the deep-report allowance just now. This is the shorter report; nothing was spent.",
 } as const;
 
 /** Under a block Peer wrote with no sentence of the paper to show for it. */

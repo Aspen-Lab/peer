@@ -211,7 +211,14 @@ export function useModelReport({
   const deep =
     Boolean(profile.deepReportEnabled || paper?.fullTextUploadId) && aiMode !== "none";
   const depth = deep ? "deep" : "abstract";
-  const reportKey = buildReportKey(paper, depth, project, profile.feedAiProvider, questions);
+  // P2-08b (§1g.17, F2): the questions name a request, and ride it, only when
+  // it is a deep one — `deep` already needs a provider the hook knows about
+  // (the reader's own key, or Peer's model for a signed-in reader). Any other
+  // request has no use for them (the route reads them on the deep path alone),
+  // so a settle then changes nothing on the wire and sends no request. The
+  // reader's questions stay in the store, which the export and the note read.
+  const requestQuestions = deep ? questions : NO_QUESTIONS;
+  const reportKey = buildReportKey(paper, depth, project, profile.feedAiProvider, requestQuestions);
 
   // P0-02 (spec D0): a private PDF's report is cached like any other. It
   // never used to be, so every open of an attached PDF asked for — and
@@ -249,10 +256,32 @@ export function useModelReport({
   }, [paper]);
   // The questions likewise: the key already names their set, so a new array
   // for the same set (every store write) asks for nothing new.
-  const questionsRef = useRef(questions);
+  const questionsRef = useRef(requestQuestions);
   useEffect(() => {
-    questionsRef.current = questions;
-  }, [questions]);
+    questionsRef.current = requestQuestions;
+  }, [requestQuestions]);
+
+  // P2-08b (§1g.18): one request in flight at a time, and a different set of
+  // questions never aborts it — the server has already charged it, and the
+  // answer is wanted: it finishes and caches under its own key, and the effect
+  // below then runs again (`released`) and sends one request for the latest
+  // set, if that is another. `settings` is everything the request depends on
+  // but the questions: a change of any of it (another paper, depth, project,
+  // provider or key) still abandons the request, as it always did, and so does
+  // leaving the page.
+  const settings = [
+    buildReportKey(paper, depth, project, profile.feedAiProvider),
+    contextHint,
+    project,
+    deep,
+    userProviderConfigured,
+    profile.feedAiApiKey,
+  ].join("\u0000");
+  const flight = useRef<{ settings: string; controller: AbortController } | null>(null);
+  /** The key whose request just ended: done, not owed another by the re-run it triggers. */
+  const finishedKey = useRef<string | null>(null);
+  const [released, setReleased] = useState(0);
+  useEffect(() => () => flight.current?.controller.abort(), []);
 
   useEffect(() => {
     const current = paperRef.current;
@@ -262,9 +291,19 @@ export function useModelReport({
     // return the same honest emptiness the record's own textStatus already
     // states. The reading page renders the plain "no readable text"
     // sentence directly from `paper.textStatus` instead.
-    if (!current || !reportKey || cached || current.textStatus === "empty") return;
+    const justFinished = finishedKey.current;
+    finishedKey.current = null;
+    if (!current || !reportKey || cached || current.textStatus === "empty" || justFinished === reportKey) return;
+    const held = flight.current;
+    if (held && !held.controller.signal.aborted) {
+      // Only the questions differ: wait for it; `released` brings us back.
+      if (held.settings === settings) return;
+      // Anything else changed: abandon it, as before.
+      held.controller.abort();
+    }
     const controller = new AbortController();
     const active = () => !controller.signal.aborted;
+    flight.current = { settings, controller };
 
     // An override for both shallow and deep reports whenever the user
     // supplied a key. In deployed Peer this is the only path to a model call.
@@ -395,9 +434,15 @@ export function useModelReport({
       }
     };
 
-    void load();
-    return () => controller.abort();
+    void load().finally(() => {
+      if (flight.current?.controller !== controller) return;
+      flight.current = null;
+      finishedKey.current = reportKey;
+      setReleased((n) => n + 1);
+    });
   }, [
+    released,
+    settings,
     reportKey,
     cached,
     contextHint,

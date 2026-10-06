@@ -463,19 +463,26 @@ function answerClaims(value: unknown): Claim[] {
   return out;
 }
 
+/**
+ * ≤4 rows, one per section (P2-08b, §1g.19 a — a section named twice drew twice
+ * and broke React's keys): the first mention wins, except that an `answer` beats
+ * a `background` for the same section and takes its place in the order. The cap
+ * counts distinct sections.
+ */
 function readNextItems(value: unknown): ReadNextItem[] {
   if (!Array.isArray(value)) return [];
-  const out: ReadNextItem[] = [];
+  // A Map keeps insertion order; `set` on an existing key keeps its position.
+  const bySection = new Map<string, ReadNextItem>();
   for (const item of value) {
     if (!isRecord(item)) continue;
     const sectionId = sectionIdOf(item.sectionId);
     const why = text(item.why, REPORT_CAPS.whyChars);
     const kind = item.kind as ReadNextItem["kind"];
     if (!sectionId || !why || !READ_NEXT_KINDS.includes(kind)) continue;
-    out.push({ sectionId, why, kind });
-    if (out.length >= REPORT_CAPS.readNext) break;
+    const seen = bySection.get(sectionId);
+    if (!seen || (seen.kind === "background" && kind === "answer")) bySection.set(sectionId, { sectionId, why, kind });
   }
-  return out;
+  return [...bySection.values()].slice(0, REPORT_CAPS.readNext);
 }
 
 /** A question as two texts are compared: trimmed, whitespace collapsed,
