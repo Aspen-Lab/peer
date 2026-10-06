@@ -8,6 +8,7 @@ import type { RawItem } from "@/lib/sources/types";
 import type { CachedPaperPool, CachedPool, PoolCache } from "@/lib/opportunities/pool-cache";
 import { createTrustedPaperCacheScope } from "@/lib/opportunities/private-paper-cache";
 import { resetCounterStoreForTests } from "@/lib/usage/counters";
+import { captureConsole } from "@/test-support/console-capture";
 import type { ScreenCandidate, ScreenResult, ScreenSummary } from "@/lib/decisions/screen";
 import type { DecisionAnswer, DecisionResult } from "@/lib/decisions/types";
 
@@ -481,8 +482,7 @@ describe("pipeline.ts — the shortlist and what the pool keeps", () => {
 
 describe("pipeline.ts — the key never reaches the pool, the response or the log", () => {
   it("a screen closure that holds a key leaves it in neither the cached pool nor the response nor any log line", async () => {
-    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const consoleText = captureConsole(); // log, info, debug, warn and error
     // The closure captures the sentinel the way the route's closure captures the reader's key.
     const apiKey = SENTINEL_KEY;
     const screen = async (candidates: ReadonlyArray<ScreenCandidate>): Promise<ScreenResult> => {
@@ -494,13 +494,16 @@ describe("pipeline.ts — the key never reaches the pool, the response or the lo
     };
     const cache = new MemoryPoolCache();
 
-    const result = await runFeedPipeline(baseReq("owner-leak"), { cache, now: FIXED_NOW, jevScreen: screen });
+    let result: Awaited<ReturnType<typeof runFeedPipeline>>;
+    try {
+      result = await runFeedPipeline(baseReq("owner-leak"), { cache, now: FIXED_NOW, jevScreen: screen });
+    } finally {
+      consoleText.restore();
+    }
 
     expect(JSON.stringify(result)).not.toContain(SENTINEL_KEY);
     expect(JSON.stringify([...cache.values])).not.toContain(SENTINEL_KEY);
-    for (const args of [...logSpy.mock.calls, ...warnSpy.mock.calls]) {
-      expect(args.join(" ")).not.toContain(SENTINEL_KEY);
-    }
+    expect(consoleText.text()).not.toContain(SENTINEL_KEY);
     expect([...cache.values.keys()].join(" ")).not.toContain(SENTINEL_KEY);
   });
 

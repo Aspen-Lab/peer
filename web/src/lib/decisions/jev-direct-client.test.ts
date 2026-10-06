@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FEED_INTENT_VERSION, type NormalizedFeedIntent } from "@/lib/feed/intent";
+import { captureConsole } from "@/test-support/console-capture";
 import { buildJevRequest } from "./jev-contract";
 import type { FetchLike } from "./jev-client";
 import type { DecisionRequest } from "./types";
@@ -324,10 +325,8 @@ describe("callJevDirect — api key never leaks", () => {
     }
   });
 
-  it("the key substring never appears in any console.log/warn/error call", async () => {
-    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+  it("the key substring never appears in any console.log/info/debug/warn/error call", async () => {
+    const consoleText = captureConsole();
     try {
       const failing: FetchLike = vi.fn(async () => {
         throw new Error(`network down ${FAKE_API_KEY}`);
@@ -335,14 +334,9 @@ describe("callJevDirect — api key never leaks", () => {
       await callJevDirect(makeRequest(), baseOptions({ fetchImpl: failing }));
       const fetchImpl: FetchLike = vi.fn(async () => jsonResponse(200, okBody()));
       await callJevDirect(makeRequest(), baseOptions({ fetchImpl }));
-      const allCalls = [...logSpy.mock.calls, ...warnSpy.mock.calls, ...errorSpy.mock.calls];
-      for (const args of allCalls) {
-        expect(args.join(" ")).not.toContain(FAKE_API_KEY);
-      }
+      expect(consoleText.text()).not.toContain(FAKE_API_KEY);
     } finally {
-      logSpy.mockRestore();
-      warnSpy.mockRestore();
-      errorSpy.mockRestore();
+      consoleText.restore();
     }
   });
 });

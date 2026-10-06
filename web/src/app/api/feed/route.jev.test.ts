@@ -80,6 +80,7 @@ import { MemoryDashboardDeliveryLedger } from "@/lib/dashboard/delivery-ledger";
 import { MemoryRolloverCandidateStore } from "@/lib/dashboard/rollover-store";
 import { resetCounterStoreForTests } from "@/lib/usage/counters";
 import { DEFAULT_JEV_ENDPOINT } from "@/lib/decisions/jev-client";
+import { captureConsole, type ConsoleCapture } from "@/test-support/console-capture";
 
 // An invented string. It is not, and never was, a key.
 const KEY = "jev-e2e-sentinel-not-a-key-7f3a9c0d";
@@ -190,9 +191,10 @@ const everythingRecorded = () =>
     decisionKeys: mocks.decisionGets,
   });
 
-let logSpies: Array<ReturnType<typeof vi.spyOn>>;
+// Every console method (log, info, debug, warn, error): a key written through any of them must fail here.
+let consoleCapture: ConsoleCapture;
 function loggedText(): string {
-  return logSpies.flatMap((spy) => spy.mock.calls.map((args: unknown[]) => args.map(String).join(" "))).join("\n");
+  return consoleCapture.text();
 }
 
 beforeEach(() => {
@@ -217,14 +219,11 @@ beforeEach(() => {
   jevBehaviour = "ok";
   stubJev();
   bySourceId.openalex.fetch = vi.fn(async () => fixtureItems(5));
-  logSpies = [
-    vi.spyOn(console, "log").mockImplementation(() => {}),
-    vi.spyOn(console, "warn").mockImplementation(() => {}),
-    vi.spyOn(console, "error").mockImplementation(() => {}),
-  ];
+  consoleCapture = captureConsole();
 });
 
 afterEach(() => {
+  consoleCapture.restore();
   bySourceId.openalex.fetch = originalOpenalexFetch;
   vi.useRealTimers();
   vi.unstubAllEnvs();

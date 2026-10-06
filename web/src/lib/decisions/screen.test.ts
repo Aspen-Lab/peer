@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FEED_INTENT_VERSION, type NormalizedFeedIntent } from "@/lib/feed/intent";
+import { captureConsole } from "@/test-support/console-capture";
 import type { DecisionCache } from "./decision-cache";
 import type { DecisionResult } from "./types";
 import {
@@ -578,9 +579,7 @@ describe("screenWithJev — candidate cap", () => {
 describe("screenWithJev — the key never leaves the call", () => {
   it("is in no decision, no cache key or payload, no summary and no log line, whichever way the calls go", async () => {
     const cache = new RecordingCache();
-    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const consoleText = captureConsole(); // log, info, debug, warn and error
     const fetchImpl = vi.fn(async (_url: string, init: RequestInit) => {
       const title = titleSent(init);
       if (title.endsWith("p1")) throw new Error(`socket closed for ${API_KEY}`);
@@ -588,17 +587,22 @@ describe("screenWithJev — the key never leaves the call", () => {
       return jsonResponse(200, okWireBody());
     });
 
-    const { decisions, summary } = await screenWithJev(
-      baseOptions({ cache, fetchImpl, candidates: [candidate("p0"), candidate("p1"), candidate("p2"), candidate("p3")] }),
-    );
+    let decisions: Awaited<ReturnType<typeof screenWithJev>>["decisions"];
+    let summary: Awaited<ReturnType<typeof screenWithJev>>["summary"];
+    try {
+      ({ decisions, summary } = await screenWithJev(
+        baseOptions({ cache, fetchImpl, candidates: [candidate("p0"), candidate("p1"), candidate("p2"), candidate("p3")] }),
+      ));
+    } finally {
+      consoleText.restore();
+    }
 
     expect(JSON.stringify([...decisions])).not.toContain(API_KEY);
     expect(JSON.stringify(summary)).not.toContain(API_KEY);
     expect(JSON.stringify(cache.setCalls)).not.toContain(API_KEY);
     expect(JSON.stringify(cache.getCalls)).not.toContain(API_KEY);
-    const logged = [...logSpy.mock.calls, ...warnSpy.mock.calls, ...errorSpy.mock.calls].map((args) => args.join(" "));
-    expect(logged.length).toBeGreaterThan(0); // the per-candidate usage line is real
-    for (const line of logged) expect(line).not.toContain(API_KEY);
+    expect(consoleText.calls()).toBeGreaterThan(0); // the per-candidate usage line is real
+    expect(consoleText.text()).not.toContain(API_KEY);
   });
 });
 

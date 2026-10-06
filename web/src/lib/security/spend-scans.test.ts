@@ -119,10 +119,12 @@ function relative(file: string): string {
  * it is for.
  */
 function code(file: string): string {
-  return fs
-    .readFileSync(file, "utf8")
-    .replace(/\/\*[\s\S]*?\*\//g, "")
-    .replace(/(^|[^:])\/\/.*$/gm, "$1");
+  return stripComments(fs.readFileSync(file, "utf8"));
+}
+
+/** The comment stripper behind `code()`, on a string, so a scan's own matcher can be tested on planted sources. */
+function stripComments(source: string): string {
+  return source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
 }
 
 function filesMatching(pattern: RegExp): string[] {
@@ -303,6 +305,120 @@ describe("scan 7 — no source file reads a Jev key from the environment", () =>
 
   it("the direct client still exists (a rename would otherwise show up as an empty result, not a failure naming why)", () => {
     expect(fs.existsSync(path.join(process.cwd(), "src/lib/decisions/jev-direct-client.ts"))).toBe(true);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SCAN 9 — no console call on the Jev key's path names a key
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("scan 9 — no console call under lib/decisions or app/api/feed names an API key", () => {
+  /**
+   * **Added by the fix round after the branch review (finding B-1).** The five
+   * sentinel tests prove at run time that a key put through a console method
+   * does not reach the log; this is the same rule read off the source, so a
+   * line like `console.info(options.apiKey)` fails here even on a path no test
+   * drives. The two layers fail for different mistakes: this one for a call that
+   * names the key, the run-time one for a call that logs a variable the key was
+   * copied into.
+   *
+   * It looks at the two places the reader's Jev key travels in server code (the
+   * decisions folder and the feed route). `lib/llm/` and the other routes handle
+   * the reader's model key and are not in this scan: widen `WATCHED` if a Jev
+   * path ever moves.
+   */
+  const WATCHED = ["src/lib/decisions/", "src/app/api/feed/"] as const;
+  /** `apiKey`, `jevApiKey`, `API_KEY`, `api_key`: the spelling does not matter, the name does. */
+  const KEY_NAME = /api[_-]?key/i;
+
+  /** Source text of every argument of every `console.<method>(...)` call: the parentheses are balanced, so a call that spans lines or nests calls is read whole. */
+  function consoleCallArguments(source: string): string[] {
+    const out: string[] = [];
+    const call = /\bconsole\s*\.\s*[A-Za-z]+\s*\(/g;
+    for (let match = call.exec(source); match; match = call.exec(source)) {
+      const open = match.index + match[0].length - 1;
+      let depth = 0;
+      let quote: string | null = null;
+      let end = source.length;
+      for (let i = open; i < source.length; i++) {
+        const ch = source[i];
+        if (quote) {
+          if (ch === "\\") i++;
+          else if (ch === quote) quote = null;
+          continue;
+        }
+        if (ch === '"' || ch === "'" || ch === "`") quote = ch;
+        else if (ch === "(") depth++;
+        else if (ch === ")" && --depth === 0) {
+          end = i;
+          break;
+        }
+      }
+      // An unbalanced call reads to the end of the file: a false red is better than a blind spot.
+      out.push(source.slice(open + 1, end));
+    }
+    return out;
+  }
+
+  /** Console calls whose arguments name a key. */
+  function consoleCallsNamingAKey(source: string): string[] {
+    return consoleCallArguments(stripComments(source)).filter((args) => KEY_NAME.test(args));
+  }
+
+  /** Every `console` in code that is not the start of a direct `console.<method>(` call: an alias, a reference passed on. */
+  function consoleUsedAsAValue(source: string): number {
+    const stripped = stripComments(source);
+    return (stripped.match(/\bconsole\b/g) ?? []).length - consoleCallArguments(stripped).length;
+  }
+
+  const watchedFiles = (): string[] =>
+    scannedFiles()
+      .map(relative)
+      .filter((file) => WATCHED.some((dir) => file.startsWith(dir)))
+      .sort();
+
+  it("finds a call that names a key, whatever shape the call has (the matcher is tested on planted sources)", () => {
+    // If these stop failing for the right reason the scan below is blind.
+    expect(consoleCallsNamingAKey("console.info(options.apiKey);")).toHaveLength(1);
+    expect(consoleCallsNamingAKey("console.debug(jevApiKey)")).toHaveLength(1);
+    expect(consoleCallsNamingAKey("console.log(JSON.stringify({ apiKey }))")).toHaveLength(1);
+    expect(consoleCallsNamingAKey("console.error('failed', (err as Error).message, apiKey)")).toHaveLength(1);
+    expect(consoleCallsNamingAKey("console.warn(\n  `bearer ${jevApiKey}`,\n);")).toHaveLength(1);
+    expect(consoleCallsNamingAKey("console . info ( options.API_KEY )")).toHaveLength(1);
+    expect(consoleCallsNamingAKey("console.trace(options.api_key)")).toHaveLength(1);
+  });
+
+  it("does not flag what is not a console call that names a key", () => {
+    expect(consoleCallsNamingAKey('console.log("[decision] done", status, count);')).toEqual([]);
+    expect(consoleCallsNamingAKey("// console.info(apiKey)\nconst x = 1;")).toEqual([]);
+    expect(consoleCallsNamingAKey("/* console.debug(options.apiKey) */ run();")).toEqual([]);
+    // The key is used after the call has closed: it is not an argument of it.
+    expect(consoleCallsNamingAKey('console.log("ok"); await call({ apiKey });')).toEqual([]);
+    expect(consoleCallsNamingAKey('console.log("a (b"); use(apiKey);')).toEqual([]);
+  });
+
+  it("flags a console reference that is not a direct call, because an alias would walk round the scan", () => {
+    expect(consoleUsedAsAValue("const log = console.info; log(options.apiKey);")).toBeGreaterThan(0);
+    expect(consoleUsedAsAValue("emit(console);")).toBeGreaterThan(0);
+    expect(consoleUsedAsAValue('console.log("fine");')).toBe(0);
+  });
+
+  it("watches real files: both folders exist and are walked, so a rename cannot make the scan empty", () => {
+    const files = watchedFiles();
+    expect(files.some((file) => file.startsWith("src/lib/decisions/"))).toBe(true);
+    expect(files).toContain("src/app/api/feed/route.ts");
+    expect(files).toContain("src/lib/decisions/screen.ts");
+    expect(files).toContain("src/lib/decisions/jev-client.ts");
+  });
+
+  it("no console call in a watched production file names an API key", () => {
+    const offenders = watchedFiles().filter((file) => consoleCallsNamingAKey(fs.readFileSync(path.join(process.cwd(), file), "utf8")).length > 0);
+    expect(offenders).toEqual([]);
+  });
+
+  it("no watched production file uses console as a value (aliased, stored or passed on)", () => {
+    const offenders = watchedFiles().filter((file) => consoleUsedAsAValue(fs.readFileSync(path.join(process.cwd(), file), "utf8")) > 0);
+    expect(offenders).toEqual([]);
   });
 });
 
