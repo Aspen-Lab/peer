@@ -244,6 +244,29 @@ describe("JevSetup in the welcome wizard", () => {
   });
 });
 
+describe("'Jev reads English best.' is backed by a note in the repository, cited at the sentence", () => {
+  // N8(d) of the branch review: the sentence is the vendor's own statement, not
+  // something the code establishes. The comment above the copy cites the note; this
+  // keeps the citation from going stale (a moved note, or a note that no longer says it).
+  const source = readFileSync(path.join(process.cwd(), "src/components/profile/jev-setup.tsx"), "utf8");
+  const NOTE = "docs/jev-abc/P3-B-20260924T0525Z.md";
+
+  it("cites the vendor-page note and the two lines in it", () => {
+    expect(source).toContain(NOTE);
+    expect(source).toMatch(/lines 48 and 88/);
+  });
+
+  it("the note exists and says English is primary, on those two lines", () => {
+    const note = readFileSync(path.join(process.cwd(), "..", NOTE), "utf8").split("\n");
+    expect(note[47]).toMatch(/English primary/);
+    expect(note[87]).toMatch(/English is primary\/best-accuracy/);
+  });
+
+  it("the sentence itself is unchanged", () => {
+    expect(source).toContain("Jev reads English best.");
+  });
+});
+
 describe("what the Jev copy never says", () => {
   // The mandated not-measured sentence ("How much this improves your list is not
   // yet measured.") is pinned word for word by jev-claim.test.ts and contains the

@@ -456,8 +456,7 @@ export default function WelcomePage() {
                     />
                     <p className="text-caption leading-relaxed text-text-faint">
                       AI keys power ranking, summaries, and Deep reports. Tavily
-                      web scouting uses its own separate search key and remains
-                      limited by Peer&apos;s daily search schedule.
+                      web scouting uses its own separate search key.
                     </p>
                     {/* A second, optional pass over the paper shortlist on the
                         reader's own Jev key. Part of this step, not a step of

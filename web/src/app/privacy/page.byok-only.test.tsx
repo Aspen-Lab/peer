@@ -95,10 +95,10 @@ describe("/privacy - your own Jev key", () => {
   it("says what Jev receives, who pays, and what Peer keeps of Jev's answers", () => {
     const page = text();
     expect(page).toContain(
-      "Jev, made by TypeSafe, receives the title, abstract and venue of up to 50 candidate papers, together with the project, challenge, topics, methods and exclusions you wrote, and bills your own account.",
+      "Jev, made by TypeSafe, receives the title, abstract and venue of up to 50 candidate papers, together with the project, challenge, topics, methods and exclusions you wrote and the word meanings you selected, and bills your own account.",
     );
     expect(page).toContain(
-      "Peer keeps Jev's answers for each paper against your account (the question, the answer and how sure Jev was), with no paper text and no key, until the account is removed.",
+      "Peer keeps Jev's answers for each paper against your account (the paper's id, the question, the answer, how sure Jev was, which Jev model answered, and how many tokens and how much time the call took), with no paper text and no key, until the account is removed.",
     );
   });
 
@@ -125,6 +125,21 @@ describe("/privacy - your own Jev key", () => {
     const decisionResult = types.slice(types.indexOf("export interface DecisionResult"), types.indexOf("export interface DecisionProvider"));
     expect(decisionResult).not.toMatch(/apiKey|jevApiKey|title|abstract/);
     expect(read("src/lib/decisions/private-decision-cache.ts")).not.toMatch(/apiKey|jevApiKey/);
+
+    // The sentence lists what is kept (N8b of the branch review): the paper's id, the
+    // answers with their confidence, the model that answered, and the call's token
+    // and time counts. Each is a field of the stored payload, and nothing else is.
+    expect(decisionResult).toMatch(/paperId/);
+    expect(decisionResult).toMatch(/answers/);
+    expect(decisionResult).toMatch(/usage/);
+    expect(decisionResult).toMatch(/modelId/);
+    expect(types).toMatch(/interface DecisionUsage \{\s*inputTokens: number;\s*outputTokens: number;\s*latencyMs: number;\s*\}/);
+    expect(types).toMatch(/confidence: number/);
+
+    // What Jev receives includes the word meanings the reader selected (`senses`).
+    const contract = read("src/lib/decisions/jev-contract.ts");
+    expect(contract).toMatch(/senses: JevStateSense\[\]/);
+    expect(contract).toMatch(/request\.senseConcepts\.map/);
 
     // Kept until the account is removed: the table cascades from the account.
     expect(read("supabase/migrations/20260924000400_private_decisions.sql")).toContain("on delete cascade");

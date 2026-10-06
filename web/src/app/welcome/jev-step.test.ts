@@ -52,3 +52,17 @@ describe("welcome wizard - the Jev block", () => {
     expect(isStepDone("ai", withModelKey, false, "signed-out")).toBe(false);
   });
 });
+
+// N11 of the branch review: this step said Tavily web scouting "remains limited by
+// Peer's daily search schedule", and no such schedule exists in the code now.
+describe("welcome wizard - the ai step's note about search keys", () => {
+  const flat = readFileSync(join(process.cwd(), "src/app/welcome/page.tsx"), "utf8").replace(/\s+/g, " ");
+
+  it("names no schedule of Peer's own, because Peer runs no search on a schedule", () => {
+    expect(flat).not.toMatch(/search schedule|daily search/i);
+  });
+
+  it("still says what is true: Tavily web scouting uses its own separate search key", () => {
+    expect(flat).toContain("AI keys power ranking, summaries, and Deep reports. Tavily web scouting uses its own separate search key.");
+  });
+});

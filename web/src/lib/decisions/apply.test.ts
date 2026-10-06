@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { applyRerankOrder } from "@/lib/feed/tier2-rerank";
 import type { ScoredItem } from "@/lib/scoring/types";
 import {
+  JEV_DECISION_WEIGHT,
+  JEV_LOCAL_WEIGHT,
   JEV_MIN_COVERAGE,
   JEV_STRONG_MISMATCH_CONFIDENCE,
   jevOrderedIds,
@@ -137,6 +139,28 @@ describe("jevOrderedIds", () => {
     // And as the reader sees it, after the demoted paper is put behind the rest.
     const items = shortlist.map((s) => ({ ...s, abstract: s.abstract }) as unknown as ScoredItem);
     expect(applyRerankOrder(items, ordered).map((r) => r.id)).toEqual(["p0", "p4", "p2", "p3", "p5", "p1"]);
+  });
+
+  it("pins the 0.5 / 0.5 blend by its values: a one-level difference in Jev's answer does not move a paper past a locally better one, a two-level difference does", () => {
+    // N18 of the branch review: until now only the end-to-end order tests would
+    // notice a change of weights. The two weights are unmeasured first settings
+    // (named constants so a later evaluation changes them in one place), and this
+    // is the unit test that fails when they change.
+    expect(JEV_LOCAL_WEIGHT).toBe(0.5);
+    expect(JEV_DECISION_WEIGHT).toBe(0.5);
+
+    // Three papers, local ranks 1, 0.5 and 0. Each answer is project_help alone,
+    // so a paper's Jev value is its level / 3 (0, 1/3, 2/3 or 1); p2 has none.
+    const shortlist = shortlistOf(3);
+    const level = (id: string, value: number) => decision(id, [score(value)]);
+
+    // One level apart (1/3 vs 2/3): p0 = 0.5*1 + 0.5*(1/3) = 0.667 beats
+    // p1 = 0.5*0.5 + 0.5*(2/3) = 0.583. The better local rank holds.
+    expect(jevOrderedIds(shortlist, new Map([["p0", level("p0", 1)], ["p1", level("p1", 2)]]))).toEqual(["p0", "p1", "p2"]);
+
+    // Two levels apart (0 vs 2/3): p0 = 0.5*1 + 0 = 0.5 falls behind
+    // p1 = 0.583. Jev's answer is strong enough to move a paper up one place.
+    expect(jevOrderedIds(shortlist, new Map([["p0", level("p0", 0)], ["p1", level("p1", 2)]]))).toEqual(["p1", "p0", "p2"]);
   });
 
   it("an unknown answer is neutral: it counts the same as no answer, whatever value it carries", () => {

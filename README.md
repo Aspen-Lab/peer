@@ -186,8 +186,9 @@ and the feed keeps working on Tier 0 — that is the correct pattern.
 their profile gets a second screening pass over the day's shortlist (`web/src/lib/decisions/`,
 wired in `web/src/lib/feed/pipeline.ts`): Jev answers a few fixed questions about each of the 50
 best candidates and Peer moves papers up or down on the answers. Peer holds no Jev key of its own
-(the build guard fails on `JEV_API_KEY` on Vercel): the reader's key travels in the paper request
-body only, is never synced, stored or logged, and with no key the feed is exactly the tiers above.
+(the build guard fails on `JEV_API_KEY` on Vercel): the reader's key is kept in their browser and
+never synced, travels in the paper request body only, and is never stored or logged by the server;
+with no key the feed is exactly the tiers above.
 It is independent of the model key. No improvement from it has been measured, so none is claimed
 (`web/src/lib/decisions/jev-claim.ts` holds the one sentence the copy may use).
 
@@ -442,7 +443,7 @@ accepted only by local `next dev`. `PEER_REPORT_MODEL_TIER` (`large` default, or
 `small`) picks which Gemini tier writes the paper report; everything else runs small.
 
 **Local-development-only LLM provider keys:**
-`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GOOGLE_API_KEY`,
+`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`,
 `GOOGLE_VERTEX_PROJECT` / `GOOGLE_VERTEX_LOCATION` / `GOOGLE_APPLICATION_CREDENTIALS`
 (Gemini 3 models are served from Vertex's global endpoint; the configured region is only the
 last-resort fallback), `QWEN_API_KEY` (or `DASHSCOPE_API_KEY`), `DEEPSEEK_API_KEY`.

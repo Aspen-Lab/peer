@@ -37,6 +37,13 @@ export const JEV_SIGNUP_URL = "https://docs.typesafe.ai/";
 const WITHOUT_KEY =
   "Without a key, Peer screens each day's papers with fixed scoring: your topics, your project text, how new a paper is and where it was published. That works with no setup.";
 
+// "Jev reads English best." is the vendor's own statement, not something this code
+// establishes. `docs/jev-abc/P3-B-20260924T0525Z.md` lines 48 and 88 record the
+// vendor's models page as fetched 2026-09-24: "English is primary/best-accuracy;
+// other languages, including CJK scripts, are handled but not equally well".
+// `jev-contract.ts`'s CJK handling only sizes the abstract's truncation budget and
+// says nothing about accuracy. Re-read the vendor page before this sentence is
+// changed or shipped further.
 const WHAT_A_KEY_ADDS =
   "A Jev key adds a second pass. For each of the 50 best candidates Jev answers up to four fixed questions about the paper: is it the meaning of your word, is it core to your project or only background, does it match your method, would it help your project. Peer moves papers up or down on the answers. A paper Jev cannot judge counts as neutral: Jev neither lifts nor lowers it, though papers Jev rates well can move ahead of it. Jev reads English best.";
 

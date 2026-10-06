@@ -1881,10 +1881,12 @@ export async function runFeedPipeline(
     // nothing about Jev, and a reader who has just corrected a mistyped key
     // would otherwise be served today's keyless pool, with "Jev rejected the
     // key", until tomorrow. The cost is bounded: only a rejected key triggers
-    // it, the screen stops at the first refusal (one failed Jev call), and the
-    // route's hourly request limit still applies. A Jev that is merely down
-    // (`unavailable`) IS cached: the reader cannot fix that, and a rebuild per
-    // page load would only hammer the free sources.
+    // it, the screen stops at the first refusal (at most the calls already in
+    // flight, up to four), the browser stops sending a key Jev has refused
+    // (`paperFeedRequestBody`), and the route's hourly request limit still
+    // applies. A Jev that is merely down (`unavailable`) IS cached: the reader
+    // cannot fix that, and a rebuild per page load would only hammer the free
+    // sources.
     (candidate) => !everySourceFailed(candidate.sourceStatus) && candidate.jev?.status !== "rejected",
   );
   let pool = loaded.pool;
