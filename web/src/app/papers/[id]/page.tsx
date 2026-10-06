@@ -95,6 +95,7 @@ import {
 import { THUMB_BAR_PX, THUMB_BAR_QUERY } from "@/components/shell/thumb-bar";
 import { PAGE_CLASS, SPREAD_GRID } from "@/components/reader/spread";
 import { useReading } from "@/components/reader/use-reading";
+import { useParagraphGuide } from "@/components/reader/use-paragraph-guide";
 import { PaperNotes } from "@/components/notes/paper-notes";
 import { PAPER_BODY_ID } from "@/components/reader/paper-body";
 import { PaperContents } from "@/components/reader/paper-contents";
@@ -747,6 +748,17 @@ function Reader({
   // to this same `aiAvailability` call during this merge.)
   const entitlement = useProfileStore((s) => s.entitlement);
   const providerConfigured = aiAvailability(profile, entitlementGrants(entitlement)) !== "none";
+  // P3-03 (§1h.6; §1a.8): Peer's gist after each paragraph's opening in the map. One
+  // small model call per paper — made once the reading has a body and the reader has a
+  // model from anywhere (not only when deep reports are on), kept in this browser for a
+  // day, never charged against the deep-report or explain allowance — and absent
+  // without either. The reader's own key travels as the explain box sends it.
+  const paragraphGists = useParagraphGuide({
+    paper: ready ? paper : undefined,
+    hasBody,
+    enabled: providerConfigured,
+    llmOverride: explainLlmOverride(profile),
+  });
   const projectText = useMemo(
     () => [profile.currentProject, profile.currentChallenges].filter(Boolean).join("\n"),
     [profile.currentProject, profile.currentChallenges],
@@ -1266,7 +1278,7 @@ function Reader({
               {questionsHydrated && (
                 <QuestionField key={paper.id} paperId={paper.id} examples={examples} vague={route?.vague ?? false} />
               )}
-              {reading.map && <ReadingMapView key={`map:${paper.id}`} map={reading.map} route={route} />}
+              {reading.map && <ReadingMapView key={`map:${paper.id}`} map={reading.map} route={route} gists={paragraphGists} />}
               <TermsStrip key={`terms:${paper.id}`} terms={terms} reading={reading} marked={markedTerm} onMark={markTerm} />
             </>
           ) : undefined

@@ -17,6 +17,13 @@
 // it shows the sentence that says most, in the paper's own words. A paragraph
 // line a question mentions is tinted too. A section no question mentions
 // says "not mentioned", which is a fact about the section, not a verdict.
+//
+// P3-03 (§1h.6; §1a.8): where Peer has written a gist for a paragraph (the
+// model's pass, grounded in the paragraph or dropped), it follows the opening on
+// the same line — in the label face, labelled `PEERS_READING` (§1f.17) — and wraps
+// under the opening when the line is too long. The opening is the paper's words
+// and is never replaced, shortened or restyled; a line with no gist is exactly
+// what it was, and a gist never makes a row foldable.
 
 import { useState } from "react";
 import type { PaperReading } from "@/lib/papers/reading";
@@ -27,7 +34,8 @@ import {
   type ReadingRole,
   type RouteResult,
 } from "@/lib/papers/reading-map";
-import { MAP, ROUTE } from "./copy";
+import type { ParagraphGuide } from "@/lib/papers/paragraph-guide";
+import { MAP, PEERS_READING, ROUTE } from "./copy";
 import { MathText } from "./math";
 import {
   ROUTE_TINT,
@@ -70,6 +78,7 @@ export function ReadingMapView({
   route,
   openRows = [],
   phoneOpen = false,
+  gists,
 }: {
   map: ReadingMap;
   /** The reader's questions routed through the paper (`readingRoute`), with
@@ -79,6 +88,9 @@ export function ReadingMapView({
   openRows?: readonly number[];
   /** Whether the table starts shown on a phone (tests; the page: no). */
   phoneOpen?: boolean;
+  /** Peer's gist for a paragraph, `gists[sectionId][paragraphIndex]` (P3-03, from
+   *  `useParagraphGuide`); absent until there is a guide, and for a paper with none. */
+  gists?: ParagraphGuide["gists"];
 }) {
   const [open, setOpen] = useState<ReadonlySet<number>>(() => new Set(openRows));
   const [shownOnPhone, setShownOnPhone] = useState(phoneOpen);
@@ -176,6 +188,7 @@ export function ReadingMapView({
                   <ol className="mt-1 mb-2 space-y-1 pl-5">
                     {lines.map((line) => {
                       const tier = mark?.paragraphs.get(line.index);
+                      const gist = gists?.[row.id]?.[line.index];
                       return (
                         <li key={line.index}>
                           <a
@@ -190,6 +203,19 @@ export function ReadingMapView({
                           >
                             <MathText text={line.opening ?? ""} />
                           </a>
+                          {/* Peer's words, after the paper's: the label face and the
+                              mark beside it; the opening above is untouched. The
+                              spaces are the gist's own (in its face): unlike a margin
+                              they do not indent the gist when it wraps to a new line,
+                              and they leave the mark a place to break, so it moves
+                              under the gist whole rather than breaking inside. */}
+                          {typeof gist === "string" && gist !== "" && (
+                            <span role="note" aria-label={MAP.gist} className="annotation text-text-muted">
+                              {" "}
+                              {gist}{" "}
+                              <span className="whitespace-nowrap text-text-faint">{PEERS_READING}</span>
+                            </span>
+                          )}
                         </li>
                       );
                     })}

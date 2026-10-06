@@ -328,6 +328,8 @@ describe("the route copy never tells the reader not to read (§1f.13, §3d 8)", 
     expect(all).toContain("Terms to know");
     expect(all).toContain(TERMS.find("2 Methods"));
     expect(all).toContain("Explain this?");
+    // P3-03 (§1h.6): the accessible name of Peer's paragraph gist is scanned too.
+    expect(all).toContain(MAP.gist);
     expect(all).toContain("What it means");
     expect(all).toContain("Why it is here");
     expect(all).toContain(EXPLAIN.defines("2 Methods"));

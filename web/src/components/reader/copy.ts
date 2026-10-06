@@ -165,6 +165,9 @@ export const MAP = {
   minutes: (minutes: number) => `${minutes} min`,
   openLines: (heading: string) => `Show how the paragraphs of ${heading} open`,
   closeLines: (heading: string) => `Hide how the paragraphs of ${heading} open`,
+  /** P3-03 (§1h.6): the accessible name of Peer's gist after a paragraph's opening —
+   *  Peer's own line, beside the paper's words; labelled on screen by `PEERS_READING`. */
+  gist: "Peer's gist",
 } as const;
 
 /**

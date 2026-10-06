@@ -493,9 +493,9 @@ describe("scan 5 — every route that can spend is behind requireEntitledAiReque
   });
 
   it("reports the guarded count, so a DROP is visible rather than silent", () => {
-    // A's standing tally as an assertion. Seven routes carry the guard today —
+    // A's standing tally as an assertion. Eight routes carry the guard today —
     // nine until the jobs and events feed/report routes were deleted with those
-    // surfaces, six after, seven since P3-02 (below); the sixth is `papers/upload` (merge of 2026-09-23), whose
+    // surfaces, six after, seven since P3-02 and eight since P3-03 (below); the sixth is `papers/upload` (merge of 2026-09-23), whose
     // title fallback reaches a model and so passes the same check. A
     // route losing it would otherwise show up only as an absence, and an
     // absence is what nobody notices.
@@ -510,7 +510,13 @@ describe("scan 5 — every route that can spend is behind requireEntitledAiReque
     // from six to seven BECAUSE a spending route was added behind the guard, and
     // the route is named so a later drop shows as a name, not only a number.
     expect(guarded).toContain("src/app/api/papers/[id]/explain/route.ts");
-    expect(guarded).toHaveLength(7);
+    // P3-03 (§1h.6): the eighth is `papers/[id]/paragraph-guide` — Peer's paragraph
+    // gists ask a small model once per document and run the same shared check, in
+    // the same place (after the owner checks, before the provider is resolved). The
+    // count moves from seven to eight BECAUSE a spending route was added behind the
+    // guard, and the route is named so a later drop shows as a name, not only a number.
+    expect(guarded).toContain("src/app/api/papers/[id]/paragraph-guide/route.ts");
+    expect(guarded).toHaveLength(8);
   });
 });
 
