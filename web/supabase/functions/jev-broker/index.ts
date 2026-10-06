@@ -204,35 +204,19 @@ Deno.serve(async (req: Request) => {
 
   // P3-S4-FIX (Round 3) STOP — entitlement check deliberately NOT added
   // here; a recorded gap, not an oversight. BINDING ABC-JEV-INTEGRATION.md
-  // §1p.H(2) asks this function to also verify the owner is ENTITLED, using
-  // the SAME rules as web/src/lib/entitlement/resolve.ts, shared in via a
-  // byte-parity copy of its pure logic (this campaign's established pattern
-  // for ./types.ts / ./rubric.ts / ./jev-contract.ts / ./jev-client.ts,
-  // proven by web/src/lib/decisions/broker-parity.test.ts). That rule is not
-  // copyable under this slice's file constraints:
-  //   - resolve.ts's actual computation (an owner's stored `plan` +
-  //     `trial_ends_at` + a mode -> `effectivePlan`, in a function called
-  //     `fromStoredPlan`) is NOT exported from resolve.ts, so nothing can
-  //     import it, let alone copy it as a standalone unit.
-  //   - It calls resolve.ts's OWN exported `entitlementMode()` internally,
-  //     which reads `process.env.PEER_ENTITLEMENT_MODE` directly inside its
-  //     body instead of taking the mode as a parameter — copied verbatim
-  //     that read cannot resolve in Deno, and "pass the mode in instead"
-  //     would require refactoring resolve.ts itself.
-  //   - This slice may IMPORT web/src/lib/entitlement/* but may NOT edit it
-  //     (no new exports, no refactor), and hand-reimplementing the
-  //     tiered/trial-expiry rule a second time here was explicitly ruled
-  //     out: two divergent copies of entitlement logic is worse than a
-  //     recorded gap.
+  // §1p.H(2) asked this function to also verify the owner is ENTITLED, by the
+  // rule the Next side used at the time. That rule was a plan lookup in code
+  // that could not be shared into Deno; the plan has since been removed from
+  // Peer entirely, and "entitled" is now just "the caller is signed in".
   // Full reasoning: docs/jev-abc/P3-S4-FIX-C-*.md, DESIGN CHOICES §A.
   //
-  // Current enforcement layer instead: web/src/lib/decisions/broker-client.ts
-  // (`callJevViaBroker`) now REQUIRES a server-derived `entitled` boolean
-  // (computed by the caller via `resolveEntitlement()`) and refuses before
-  // ever reaching this function (P3-S4-FIX Finding 1, Next-side half). This
-  // function's own check stays existence-only, so the gap is real: a leaked
-  // `PEER_JEV_BROKER_SECRET` plus any existing ownerId still bypasses tier
-  // gating at THIS layer, bounded only by the per-user/global caps below.
+  // Current enforcement layer: web/src/lib/decisions/broker-client.ts
+  // (`callJevViaBroker`) REQUIRES a server-derived `entitled` boolean (computed
+  // by the caller: signed in, `gate.user !== null` in `api/feed/route.ts`) and
+  // refuses before ever reaching this function (P3-S4-FIX Finding 1, Next-side
+  // half). This function's own check stays existence-only, so the gap is real:
+  // a leaked `PEER_JEV_BROKER_SECRET` plus any existing ownerId still bypasses
+  // that gate at THIS layer, bounded only by the per-user/global caps below.
   const reservation = await reserveBoth(admin, ownerId, new Date());
   if (!reservation.ok) {
     return new Response(JSON.stringify({ error: "cap_exceeded" }), { status: 429 });

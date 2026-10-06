@@ -436,11 +436,8 @@ export default function WelcomePage() {
                     Jobs all run on it. Adding your own key sends those calls to
                     your own account instead, on whichever model you prefer.
                   </Callout>
-                  {/* No plan or price card on this step. The paid tier is
-                      switched off (one-tier mode) and Peer is free, so nothing
-                      here may name a plan or a price. `ProPlanSummary` and its
-                      copy are kept for a future tiered mode; put the card back
-                      here only when that mode is turned on. */}
+                  {/* No plan or price card on this step: Peer has no paid tier,
+                      so nothing here may name a plan or a price. */}
                   <div className="mt-4 space-y-3">
                     <ApiKeyHelp provider={profile.feedAiProvider} />
                     <AiProviderRecommendation />

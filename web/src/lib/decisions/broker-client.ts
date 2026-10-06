@@ -27,11 +27,11 @@
  *     `options.entitled` must be `true` -> refused ->
  *     `{status: "not_entitled"}`, no reservation, no fetch. This is a
  *     capability-like boolean the CALLER computes server-side from the
- *     verified session/profile (e.g. `resolveEntitlement(ownerId)` in
- *     `@/lib/entitlement/resolve`, typically `effectivePlan !== "free"`) and
- *     passes in — this module never computes it itself and never reads it
- *     from client input, the same "server-derived, never client-supplied"
- *     treatment `ownerId` already gets. Checked BEFORE `reserveJevCall` so an
+ *     verified session (today: the caller is signed in, `gate.user !== null`
+ *     in `api/feed/route.ts`; there are no plans) and passes in — this module
+ *     never computes it itself and never reads it from client input, the same
+ *     "server-derived, never client-supplied" treatment `ownerId` already
+ *     gets. Checked BEFORE `reserveJevCall` so an
  *     unentitled caller costs nothing, not even a reservation attempt.
  *  3. `reserveJevCall` (`security/jev-broker-auth.ts`) -> refused ->
  *     `{status: "reservation_refused", reason}`, no fetch. This is checked
@@ -74,8 +74,8 @@ export interface BrokerClientOptions {
   /** The server-derived owner id (from the authenticated session) — never a client-supplied field. */
   ownerId: string;
   /**
-   * Server-derived entitlement decision (P3-S4-FIX Finding 1) — e.g. the
-   * caller's own `resolveEntitlement(ownerId).effectivePlan !== "free"`.
+   * Server-derived entitlement decision (P3-S4-FIX Finding 1) — today: the
+   * caller is signed in (`gate.user !== null` in `api/feed/route.ts`).
    * Required, never defaulted, and never read from client input: a caller
    * that forgets to compute this must get a type error, not a silent `true`.
    * `callJevViaBroker` refuses before any reservation when this is `false`.

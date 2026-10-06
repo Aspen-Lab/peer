@@ -108,8 +108,8 @@ describe("AccountSection — signed-out", () => {
   it("both sign-in buttons read the SAME `disabled={busy}` expression, not two independent flags", () => {
     // A static render can't click, so it can't observe busy flip to true —
     // this locks down the disabled-attribute SOURCE instead, the same
-    // read-your-own-source technique src/components/plan/pro-plan-summary.test.tsx
-    // already uses for a claim rendered output alone can't prove. A fast
+    // read-your-own-source technique used for any claim rendered output alone
+    // can't prove. A fast
     // double-click firing two concurrent OAuth redirects (guide §5.2) is
     // exactly what two independently-tracked flags would allow.
     //
