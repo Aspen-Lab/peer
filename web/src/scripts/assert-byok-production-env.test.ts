@@ -41,13 +41,24 @@ const SENTINEL = "SENTINEL-NOT-A-KEY-9f3a";
 const ALL_REQUIRED = {
   NEXT_PUBLIC_SUPABASE_URL: "https://example.supabase.co",
   SUPABASE_SERVICE_ROLE_KEY: "REQUIRED-NOT-A-KEY",
+  // One of the publishable / anon pair (the guard asks for either): the key every
+  // `hasSupabaseAuthConfig()` check needs. Without it a deployment builds and then
+  // answers 503 on every AI route.
+  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "REQUIRED-PUBLISHABLE-NOT-A-KEY",
 };
+
+/** The two spellings of the browser-side Supabase key; the guard wants either one. */
+const PUBLISHABLE_OR_ANON = ["NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "NEXT_PUBLIC_SUPABASE_ANON_KEY"] as const;
 
 const FORBIDDEN_NAMES = [
   // Owner, 2026-10-06: Peer holds no model key of its own. It used to be
   // EXPECTED on a deployment (warned when absent); it is FORBIDDEN now, and a
   // Vercel project that still has it fails the build.
   "GOOGLE_API_KEY",
+  // The Google SDK's other implicit name: a client built without an explicit key
+  // reads it (and `GOOGLE_API_KEY`) from the environment. Nothing here builds one
+  // that way; the ban is defence in depth.
+  "GEMINI_API_KEY",
   "PEER_DIGEST_PROVIDER",
   "GOOGLE_VERTEX_PROJECT",
   "GOOGLE_VERTEX_SEARCH_PROJECT",
@@ -73,7 +84,18 @@ const FORBIDDEN_NAMES = [
   // dedicated cases near the bottom of this file.
   "JEV_API_KEY",
   "PEER_JEV_BROKER_SECRET",
+  // The fix round after the branch review (SF-5): the jobs sources used to read
+  // `request key || company key`. The reader's own credentials travel in the
+  // request now, so a company one on the deployment is a credential nothing may
+  // use, and JSearch bills per request.
+  "ADZUNA_APP_ID",
+  "ADZUNA_APP_KEY",
+  "JSEARCH_API_KEY",
+  "USAJOBS_API_KEY",
 ] as const;
+
+/** The job-source subset of the above, which the guard explains with one more line. */
+const JOB_SOURCE_NAMES = ["ADZUNA_APP_ID", "ADZUNA_APP_KEY", "JSEARCH_API_KEY", "USAJOBS_API_KEY"] as const;
 
 /**
  * Run the guard with a **controlled** environment. Only the few variables Node
@@ -113,6 +135,8 @@ function runGuard(env: Record<string, string>): {
  */
 const GUARD_LIST_PATTERNS = {
   REQUIRED_ON_VERCEL: /const\s+REQUIRED_ON_VERCEL\s*=\s*\[([\s\S]*?)\]/,
+  // A list of groups: ends at `];` so the inner brackets do not cut it short.
+  REQUIRED_ONE_OF_ON_VERCEL: /const\s+REQUIRED_ONE_OF_ON_VERCEL\s*=\s*\[([\s\S]*?)\];/,
   FORBIDDEN_ON_VERCEL: /const\s+FORBIDDEN_ON_VERCEL\s*=\s*\[([\s\S]*?)\]/,
 } as const;
 
@@ -142,7 +166,14 @@ describe("assert-byok-production-env", () => {
     expect(guardList("REQUIRED_ON_VERCEL")).not.toContain("GOOGLE_API_KEY");
     expect(guardList("REQUIRED_ON_VERCEL")).not.toContain("TAVILY_API_KEY");
 
-    expect(Object.keys(ALL_REQUIRED)).toEqual(guardList("REQUIRED_ON_VERCEL"));
+    // The publishable key is the third requirement, and it is a pair: either
+    // spelling satisfies it (`hasSupabaseAuthConfig()` accepts both).
+    expect(guardList("REQUIRED_ONE_OF_ON_VERCEL")).toEqual([...PUBLISHABLE_OR_ANON]);
+
+    expect(Object.keys(ALL_REQUIRED)).toEqual([
+      ...guardList("REQUIRED_ON_VERCEL"),
+      PUBLISHABLE_OR_ANON[0],
+    ]);
     expect([...FORBIDDEN_NAMES]).toEqual(guardList("FORBIDDEN_ON_VERCEL"));
   });
 
@@ -187,12 +218,57 @@ describe("assert-byok-production-env", () => {
       for (const name of Object.keys(ALL_REQUIRED)) {
         expect(output).toContain(name);
       }
+      expect(output).toContain("NEXT_PUBLIC_SUPABASE_ANON_KEY");
+    });
+
+    // Added in the fix round after the branch review (N10): `hasSupabaseAuthConfig()`
+    // needs the browser-side key as well as the URL. A deployment without it built
+    // cleanly and then answered 503 on every AI route.
+    it("fails the build when neither the publishable key nor the anon key is set, naming both", () => {
+      const env: Record<string, string> = { VERCEL: "1", ...ALL_REQUIRED };
+      delete env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+
+      const { status, output } = runGuard(env);
+
+      expect(status).toBe(1);
+      for (const name of PUBLISHABLE_OR_ANON) expect(output).toContain(name);
+    });
+
+    it("builds with the publishable key alone, and with the anon key alone, in silence", () => {
+      const base: Record<string, string> = { VERCEL: "1", ...ALL_REQUIRED };
+      delete base.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+
+      for (const name of PUBLISHABLE_OR_ANON) {
+        const { status, output } = runGuard({ ...base, [name]: "REQUIRED-NOT-A-KEY" });
+        expect(status, name).toBe(0);
+        expect(output, name).toBe("");
+      }
+    });
+
+    it("does not count a blank key as the publishable key", () => {
+      const base: Record<string, string> = { VERCEL: "1", ...ALL_REQUIRED };
+      for (const name of PUBLISHABLE_OR_ANON) base[name] = "   ";
+
+      const { status, output } = runGuard(base);
+
+      expect(status).toBe(1);
+      for (const name of PUBLISHABLE_OR_ANON) expect(output).toContain(name);
+    });
+
+    it("on a deployment missing only the pair, names the pair and not the two that are set", () => {
+      const env: Record<string, string> = { VERCEL: "1", ...ALL_REQUIRED };
+      delete env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+
+      const { output } = runGuard(env);
+
+      expect(output).not.toContain("NEXT_PUBLIC_SUPABASE_URL");
+      expect(output).not.toContain("SUPABASE_SERVICE_ROLE_KEY");
     });
   });
 
   describe("forbidden settings (R-GUARD-1)", () => {
     for (const name of FORBIDDEN_NAMES) {
-      it(`fails the build when ${name} is set, and names it`, () => {
+      it(`fails the build when ${name} is set, and names it, never its value`, () => {
         const { status, output } = runGuard({
           VERCEL: "1",
           ...ALL_REQUIRED,
@@ -201,8 +277,58 @@ describe("assert-byok-production-env", () => {
 
         expect(status).toBe(1);
         expect(output).toContain(name);
+        expect(output).not.toContain(SENTINEL);
+      });
+
+      it(`builds when ${name} is blank: a blank variable is not a credential`, () => {
+        const { status, output } = runGuard({
+          VERCEL: "1",
+          ...ALL_REQUIRED,
+          [name]: "   ",
+        });
+
+        expect(status).toBe(0);
+        expect(output).toBe("");
       });
     }
+
+    it("with every forbidden name armed at once, names each of them exactly once and prints no value", () => {
+      const armed = Object.fromEntries(FORBIDDEN_NAMES.map((name) => [name, SENTINEL]));
+
+      const { status, output } = runGuard({ VERCEL: "1", ...ALL_REQUIRED, ...armed });
+
+      expect(status).toBe(1);
+      for (const name of FORBIDDEN_NAMES) {
+        // A name that is a prefix of another (JEV_API_KEY is not one, ADZUNA_APP_ID is not one
+        // of ADZUNA_APP_KEY) is counted by whole word.
+        const occurrences = output.match(new RegExp(`\\b${name}\\b`, "g")) ?? [];
+        expect(occurrences, name).toHaveLength(1);
+      }
+      expect(output).not.toContain(SENTINEL);
+    });
+
+    it("explains a job-source key in one extra line, and says nothing about them when none is set", () => {
+      for (const name of JOB_SOURCE_NAMES) {
+        const { output } = runGuard({ VERCEL: "1", ...ALL_REQUIRED, [name]: SENTINEL });
+        expect(output, name).toContain("Job-source keys are the reader's too");
+      }
+      const none = runGuard({ VERCEL: "1", ...ALL_REQUIRED, GOOGLE_API_KEY: SENTINEL }).output;
+      expect(none).not.toContain("Job-source");
+    });
+
+    it("does not ban a job-source user agent (an address, not a credential) or the other free-tier keys", () => {
+      const { status, output } = runGuard({
+        VERCEL: "1",
+        ...ALL_REQUIRED,
+        USAJOBS_USER_AGENT: "someone-NOT-AN-ADDRESS",
+        OPENALEX_API_KEY: SENTINEL,
+        SEMANTIC_SCHOLAR_API_KEY: SENTINEL,
+        RESEND_API_KEY: SENTINEL,
+      });
+
+      expect(status).toBe(0);
+      expect(output).toBe("");
+    });
 
     it("fails the build when PEER_FEED_AI_TIER is forced above 0", () => {
       const { status, output } = runGuard({

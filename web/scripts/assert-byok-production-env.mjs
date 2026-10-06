@@ -32,6 +32,20 @@ const REQUIRED_ON_VERCEL = [
 ];
 
 /**
+ * Groups of names where ONE set value is enough. **The browser-side Supabase
+ * key** is the one group: `hasSupabaseAuthConfig()` (`lib/security/ai-request.ts`,
+ * the feed route) needs the URL AND a publishable key, and accepts either the
+ * newer `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` or the older
+ * `NEXT_PUBLIC_SUPABASE_ANON_KEY` (as do all three Supabase clients and the README).
+ * A deployment with neither used to build cleanly and then answer 503 on every AI
+ * route, so it is required here, and requiring either spelling means a project
+ * that has only the older name is not broken by this check.
+ */
+const REQUIRED_ONE_OF_ON_VERCEL = [
+  ["NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "NEXT_PUBLIC_SUPABASE_ANON_KEY"],
+];
+
+/**
  * Operator-funded settings that must never reach a deployment.
  *
  * **`GOOGLE_API_KEY` IS FORBIDDEN HERE — owner, 2026-10-06 ("I want to cut the
@@ -67,6 +81,8 @@ const REQUIRED_ON_VERCEL = [
 const FORBIDDEN_ON_VERCEL = [
   // The company's own model key. Peer has none; readers bring theirs.
   "GOOGLE_API_KEY",
+  // The Google SDK's other implicit name: a client built without an explicit key reads it (and GOOGLE_API_KEY) itself. Nothing here builds one so; defence in depth.
+  "GEMINI_API_KEY",
   "PEER_DIGEST_PROVIDER",
   "GOOGLE_VERTEX_PROJECT",
   // The Vertex AI Search app is operator-funded search, spent from the
@@ -90,7 +106,22 @@ const FORBIDDEN_ON_VERCEL = [
   // credential nothing may use.
   "JEV_API_KEY",
   "PEER_JEV_BROKER_SECRET",
+  // The fix round after the branch review (SF-5): the jobs sources took the
+  // reader's credentials from the request and, failing that, the company's from
+  // the environment. The environment half is deleted; each name below is a
+  // company credential nothing may use, and JSearch bills per request.
+  // Adzuna application id.
+  "ADZUNA_APP_ID",
+  // Adzuna application key.
+  "ADZUNA_APP_KEY",
+  // JSearch (RapidAPI) key: billed per request past a small free tier.
+  "JSEARCH_API_KEY",
+  // USAJOBS API key.
+  "USAJOBS_API_KEY",
 ];
+
+/** The names above that belong to the jobs sources, so the message can say whose key they are. */
+const JOB_SOURCE_NAMES = ["ADZUNA_APP_ID", "ADZUNA_APP_KEY", "JSEARCH_API_KEY", "USAJOBS_API_KEY"];
 
 function isVercelBuild(env) {
   return Boolean(env.VERCEL || env.VERCEL_ENV);
@@ -101,7 +132,15 @@ function isSet(env, name) {
 }
 
 function missingRequiredNames(env) {
-  return REQUIRED_ON_VERCEL.filter((name) => !isSet(env, name));
+  const missing = REQUIRED_ON_VERCEL.filter((name) => !isSet(env, name));
+  // A group is missing only when none of its names is set; it is reported as one
+  // entry that names every spelling, so the deployer sees what would satisfy it.
+  for (const group of REQUIRED_ONE_OF_ON_VERCEL) {
+    if (!group.some((name) => isSet(env, name))) {
+      missing.push(`${group[0]} (or ${group.slice(1).join(" or ")})`);
+    }
+  }
+  return missing;
 }
 
 /**
@@ -180,6 +219,11 @@ export function formatAuditMessage({ missing, forbidden }) {
     if (forbidden.some((name) => name.startsWith("JEV_") || name.startsWith("PEER_JEV_"))) {
       lines.push(
         "A Jev key is the reader's too: they paste it into their profile, and Peer passes it to Jev only while it screens their papers.",
+      );
+    }
+    if (forbidden.some((name) => JOB_SOURCE_NAMES.includes(name))) {
+      lines.push(
+        "Job-source keys are the reader's too: a reader sends their own Adzuna, USAJOBS or JSearch credentials with a request, and Peer holds none of its own.",
       );
     }
   }

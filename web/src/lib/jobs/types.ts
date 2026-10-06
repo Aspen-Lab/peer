@@ -108,7 +108,7 @@ export interface JobsQuery {
 
 export interface JobSourceAdapter {
   id: JobSourceId;
-  /** False when required env keys are missing — the adapter is skipped. */
+  /** False when the reader's own credentials are missing from the request — the adapter is skipped. */
   enabled(query: JobsQuery): boolean;
   fetch(query: JobsQuery): Promise<RawJobItem[]>;
 }

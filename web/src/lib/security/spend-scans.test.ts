@@ -214,25 +214,49 @@ describe("scan 3 — no operator search credential is read anywhere", () => {
     expect(revived).toEqual([]);
   });
 
-  it("counts the structured-source key reads that are ACCEPTED outside any gate", () => {
-    // Ruling 6 point 4 — Adzuna, JSearch and USAJobs read
-    // `request key || operator env key` in the same shape, and they deliberately
-    // do NOT join a gate: they are the free structured backbone of the jobs
-    // surface and their keys buy free-tier quota rather than per-call billing.
-    //
-    // **This is A's standing tally, as an assertion.** The number is 3. If it
-    // rises, a fourth ungated structured source appeared and the manager needs
-    // to rule on it; if one of these ever bills per request, it is cut the same
-    // round (the ruling's stated threshold).
+  /**
+   * **THE "ACCEPTED" LIST IS EMPTY NOW (the fix round after the branch review,
+   * SF-5).** Adzuna, JSearch and USAJOBS used to read `request key || company env
+   * key` and were counted here as three accepted reads, on the reasoning that their
+   * keys bought free-tier quota. JSearch bills per request past a free tier, the
+   * jobs surface has no route, and the branch's rule is that Peer spends no
+   * company credential on anyone's behalf, so the environment half is gone: the
+   * reader's own credentials travel in the request and a missing one means the
+   * adapter returns nothing. The number is 0, and a revival is a failing case.
+   * The build guard bans the names on Vercel too.
+   */
+  const JOB_SOURCE_ENV = [
+    "ADZUNA_APP_ID",
+    "ADZUNA_APP_KEY",
+    "JSEARCH_API_KEY",
+    "USAJOBS_API_KEY",
+    "USAJOBS_USER_AGENT",
+    "RAPIDAPI_KEY",
+  ] as const;
+
+  for (const name of JOB_SOURCE_ENV) {
+    it(`reads process.env.${name} NOWHERE in source or scripts`, () => {
+      expect(filesMatching(new RegExp(`process\\.env\\.${name}\\b`))).toEqual([]);
+    });
+  }
+
+  it("accepts no job-source key read outside a request at all (the old accepted list is empty)", () => {
     const accepted = filesMatching(
-      /process\.env\.(ADZUNA_APP_(ID|KEY)|JSEARCH_API_KEY|USAJOBS_(API_KEY|USER_AGENT))\b/,
+      /process\.env\.(ADZUNA_APP_(ID|KEY)|JSEARCH_API_KEY|USAJOBS_(API_KEY|USER_AGENT)|RAPIDAPI_KEY)\b/,
     );
-    expect(accepted).toEqual([
+    expect(accepted).toEqual([]);
+    expect(accepted).toHaveLength(0);
+  });
+
+  it("the three adapters still exist and take the reader's credentials from the request (a rename would otherwise make the scan above vacuous)", () => {
+    for (const file of [
       "src/lib/jobs/sources/adzuna.ts",
       "src/lib/jobs/sources/jsearch.ts",
       "src/lib/jobs/sources/usajobs.ts",
-    ]);
-    expect(accepted).toHaveLength(3);
+    ]) {
+      expect(fs.existsSync(path.join(process.cwd(), file)), `${file} is gone`).toBe(true);
+      expect(code(path.join(process.cwd(), file)), `${file} must read the request's apiKeys`).toMatch(/query\.apiKeys\?\./);
+    }
   });
 });
 

@@ -10,7 +10,8 @@ import { jobweb } from "./jobweb";
 /**
  * All job source adapters. Free/no-auth sources (remotive, arbeitnow,
  * himalayas) keep Tier 0 useful with zero keys; the rest enable themselves
- * when their env keys are present (see each adapter's `enabled()`).
+ * only when the reader's own credentials are in the request (see each adapter's
+ * `enabled()`). None reads a company key from the environment.
  */
 export const jobSources: JobSourceAdapter[] = [
   remotive,

@@ -460,13 +460,13 @@ one per 1.5 s (350 ms unkeyed) and retries a 429 with exponential backoff — 1 
 giving up. Optional — without a key, search and enrichment still work, just slower and more likely
 to be throttled), `OPENALEX_EMAIL`, `UNPAYWALL_EMAIL` (polite-pool emails).
 
-**Jobs feed (all optional — Remotive/Arbeitnow/Himalayas run keyless):**
-`ADZUNA_APP_ID` + `ADZUNA_APP_KEY` (free at developer.adzuna.com; best industry
-coverage), `USAJOBS_API_KEY` + `USAJOBS_USER_AGENT` (your email; US federal research
-posts), `JSEARCH_API_KEY` (or `RAPIDAPI_KEY`; Google-for-Jobs aggregate via RapidAPI,
-paid beyond a small free tier). Web discovery of academic job boards (HigherEdJobs,
-jobs.ac.uk, Nature Careers — none expose usable feeds directly) runs only on a Tavily key a
-reader pastes in themselves; Peer holds no search key of its own.
+**Jobs feed (code kept; no route serves it today — Remotive/Arbeitnow/Himalayas run keyless):**
+Adzuna, USAJOBS and JSearch (paid beyond a small free tier) run only on credentials the reader
+sends in the request (`apiKeys`); Peer reads none of them from the environment, and a Vercel
+build fails if `ADZUNA_APP_ID`, `ADZUNA_APP_KEY`, `USAJOBS_API_KEY` or `JSEARCH_API_KEY` is set.
+Web discovery of academic job boards (HigherEdJobs, jobs.ac.uk, Nature Careers — none expose
+usable feeds directly) runs only on a Tavily key a reader pastes in themselves; Peer holds no
+search key of its own.
 
 **Events feed:** fully keyless (ccfddl, confs.tech, researchseminars.org). A Tavily key a
 reader pastes in themselves adds profile-driven web discovery for non-CS fields; an LLM key
