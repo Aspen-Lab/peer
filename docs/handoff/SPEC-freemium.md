@@ -1,3 +1,5 @@
+> **SUPERSEDED 2026-10-06 — Peer is BYOK-only again; see docs/handoff/byok-only/PLAN.md**
+
 # SPEC — Freemium on a system key
 
 **Status:** BINDING contract for the `ABC-freemium` loop. Written 2026-09-04 by the manager from the

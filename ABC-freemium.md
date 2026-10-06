@@ -1,3 +1,5 @@
+> **SUPERSEDED 2026-10-06 — Peer is BYOK-only again; see docs/handoff/byok-only/PLAN.md**
+
 # ABC-freemium — shared state
 
 **Goal:** every requirement in `docs/handoff/SPEC-freemium.md` scores `MET` on the fixture checklist
