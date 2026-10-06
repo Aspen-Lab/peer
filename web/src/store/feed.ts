@@ -775,8 +775,17 @@ export function paperFeedRequestBody(
   // deployment with no sign-in at all, the same rule `aiAvailability` uses),
   // and only when it is shaped like a key. It is sent as ONE top-level string,
   // never inside `llmOverride`, so it cannot end up beside the model key.
+  //
+  // **A key Jev has already rejected is not sent again.** The server does not cache
+  // the pool of a build whose key was refused (the reader may be fixing it), so
+  // while a wrong key keeps being sent every load rebuilds the pool and, for a
+  // reader with a model key as well, re-runs the model rerank on their own
+  // account. The last report says "rejected", and `updateJevApiKey` clears it
+  // when the key changes, so editing the key tries the new one. The server then
+  // builds and caches the keyless pool once.
   const jevApiKey =
-    auth === "signed-in" || auth === "unconfigured"
+    (auth === "signed-in" || auth === "unconfigured") &&
+    useJevScreeningStore.getState().report?.status !== "rejected"
       ? parseJevApiKey(profile.jevApiKey)
       : undefined;
   // ABC-freemium 1-14 · R-ENT-3 — **this used to re-implement both halves of

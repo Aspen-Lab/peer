@@ -1,5 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { defaultProfile, type UserProfile } from "@/types";
+import { useProfileStore } from "./profile";
+import { useJevScreeningStore, type JevScreeningReport } from "./jev-screening";
 import {
   activePaperTopicsKey,
   opportunityRequestBody,
@@ -375,5 +377,90 @@ describe("a Jev key in the paper request", () => {
       expect(body).not.toHaveProperty("jevApiKey");
       expect(JSON.stringify(body)).not.toContain(JEV);
     }
+  });
+});
+
+// N1 of the branch review. A key Jev rejected is not cached as a day's pool (the
+// reader may fix a mistyped key), so while the key stays wrong every load rebuilds
+// the pool and, for a reader with a model key as well, re-runs the model rerank on
+// their own account. The browser already knows: the last report says "rejected".
+// So the request leaves the key out while that report stands, the server builds
+// (and caches) the keyless pool once, and editing the key clears the report
+// (`updateJevApiKey`), which makes the next load try the new one.
+describe("a Jev key Jev has already rejected", () => {
+  const REJECTED_KEY = "jev-rejected-sentinel-not-a-key-0000";
+  const NEW_KEY = "jev-replacement-sentinel-not-a-key-1111";
+  const rejected: JevScreeningReport = { status: "rejected", screened: 0, of: 50 };
+
+  const bodyFor = (profile: UserProfile) => paperFeedRequestBody(profile, advisorSeeds, false, [], "signed-in");
+
+  beforeEach(() => {
+    useProfileStore.setState({ profile: { ...defaultProfile } });
+    useJevScreeningStore.setState({ report: null });
+  });
+
+  afterEach(() => {
+    useJevScreeningStore.setState({ report: null });
+    useProfileStore.setState({ profile: { ...defaultProfile } });
+  });
+
+  it("is left out of the request while the last report says Jev rejected it", () => {
+    useJevScreeningStore.setState({ report: rejected });
+
+    const body = bodyFor({ ...activeProfile, jevApiKey: REJECTED_KEY });
+
+    expect(body.jevApiKey).toBeUndefined();
+    expect(JSON.stringify(body)).not.toContain(REJECTED_KEY);
+  });
+
+  it("changes nothing else in the request", () => {
+    const withKey = { ...activeProfile, jevApiKey: REJECTED_KEY };
+    const normal = bodyFor(withKey);
+    useJevScreeningStore.setState({ report: rejected });
+
+    const suppressed = bodyFor(withKey);
+
+    const { jevApiKey: sent, ...restNormal } = normal;
+    void sent;
+    expect(suppressed).toEqual({ ...restNormal, jevApiKey: undefined });
+  });
+
+  it.each<JevScreeningReport | null>([
+    null,
+    { status: "applied", screened: 50, of: 50 },
+    { status: "partial", screened: 31, of: 50 },
+    { status: "unavailable", screened: 0, of: 50 },
+    { status: "unavailable", screened: 20, of: 50 },
+  ])("still sends the key after any other report (%j)", (report) => {
+    useJevScreeningStore.setState({ report });
+
+    expect(bodyFor({ ...activeProfile, jevApiKey: REJECTED_KEY }).jevApiKey).toBe(REJECTED_KEY);
+  });
+
+  it("sends again once the key is changed, because updateJevApiKey clears the rejected report", () => {
+    useProfileStore.getState().updateJevApiKey(REJECTED_KEY);
+    useJevScreeningStore.setState({ report: rejected });
+    expect(bodyFor(useProfileStore.getState().profile).jevApiKey).toBeUndefined();
+
+    useProfileStore.getState().updateJevApiKey(NEW_KEY);
+
+    expect(useJevScreeningStore.getState().report).toBeNull();
+    expect(bodyFor(useProfileStore.getState().profile).jevApiKey).toBe(NEW_KEY);
+  });
+
+  it("sends again after the key is removed and put back (the other way to try the same key again)", () => {
+    useProfileStore.getState().updateJevApiKey(REJECTED_KEY);
+    useJevScreeningStore.setState({ report: rejected });
+
+    useProfileStore.getState().updateJevApiKey("");
+    useProfileStore.getState().updateJevApiKey(REJECTED_KEY);
+
+    expect(bodyFor(useProfileStore.getState().profile).jevApiKey).toBe(REJECTED_KEY);
+  });
+
+  it("a rejected report does not make a signed-out reader's request carry the key either", () => {
+    useJevScreeningStore.setState({ report: rejected });
+    const body = paperFeedRequestBody({ ...activeProfile, jevApiKey: REJECTED_KEY }, advisorSeeds, false, [], "signed-out");
+    expect(body.jevApiKey).toBeUndefined();
   });
 });
