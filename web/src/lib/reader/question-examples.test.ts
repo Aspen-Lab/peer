@@ -52,6 +52,9 @@ describe("exampleQuestions — from the reader's profile", () => {
   // challenges' single keywords "dendrite" and "growth" and the project's
   // "solid-state" took three of the eight slots and the methods never fitted;
   // now the multi-word phrases come first and every source has its own slots.
+  // P1-09c (§1f.20 (5)): the project's second sentence "We test sulfide
+  // electrolytes" is a sentence fragment, not a phrase, so it is no longer an
+  // example; the project gives one example, not two.
   it("turns challenges, project, topics and methods into questions with the fixed templates, in that order, each source within its own cap", () => {
     const [group] = exampleQuestions({ profile, byPaper: {}, paperId: PAPER });
 
@@ -60,7 +63,6 @@ describe("exampleQuestions — from the reader's profile", () => {
       "Does this help with Dendrite growth in lithium anodes?",
       "Does this help with electrolyte decomposition at high voltage?",
       "How does this relate to Solid-state batteries for electric aircraft?",
-      "How does this relate to We test sulfide electrolytes?",
       "What does it say about solid electrolytes?",
       "What does it say about battery safety?",
       "Could I use impedance spectroscopy here?",
@@ -233,5 +235,100 @@ describe("exampleQuestions — phrases first, a cap per source (P1-09b)", () => 
     expect(specificTerms(ASK.examples.project("solid-state"))).toEqual(["solid-state"]);
     expect(specificTerms(ASK.examples.topic("creep"))).toEqual(["creep"]);
     expect(specificTerms(ASK.examples.method("XRD"))).toEqual(["xrd"]);
+  });
+});
+
+// P1-09c (§1f.20 (5), from C's two P1-09b observations): `phrasesFromText`
+// treats any chunk of ten words or fewer as a phrase, so a sentence ("We test
+// sulfide electrolytes") became an example, and a one-sentence text fell back
+// to a generic keyword ("Does this help with study?"). A multi-word phrase is
+// now offered only when it has 2–6 words and none is a pronoun or auxiliary;
+// the single-word fallback only when its question has a specific route term.
+describe("exampleQuestions — sentence fragments and generic words (P1-09c)", () => {
+  const itemsOf = (profile: Partial<typeof empty>): string[] =>
+    exampleQuestions({ profile: { ...empty, ...profile }, byPaper: {}, paperId: PAPER }).flatMap((group) => group.items);
+
+  it("a sentence fragment is not a phrase: it is skipped and the project example is built from the next acceptable phrase", () => {
+    // The fragment is the second chunk: it is rejected, and the slot it would
+    // have taken is not filled by a single word.
+    expect(itemsOf({ currentProject: "Solid-state batteries for electric aircraft. We test sulfide electrolytes." })).toEqual([
+      "How does this relate to Solid-state batteries for electric aircraft?",
+    ]);
+    // The fragment is the first chunk: the next two acceptable phrases fill
+    // the project's two slots; a rejected phrase does not use one.
+    expect(itemsOf({ currentProject: "We test sulfide electrolytes. Thermal barrier coatings. Bond coat oxidation" })).toEqual([
+      "How does this relate to Thermal barrier coatings?",
+      "How does this relate to Bond coat oxidation?",
+    ]);
+    // The same rule for the challenges.
+    expect(itemsOf({ currentChallenges: "We test sulfide electrolytes, grain boundary sliding" })).toEqual([
+      "Does this help with grain boundary sliding?",
+    ]);
+  });
+
+  it("a phrase has two to six words: six are offered, seven are rejected and the next phrase is used", () => {
+    expect(itemsOf({ currentChallenges: "Dendrite growth in lithium metal anodes, electrolyte decomposition" })).toEqual([
+      "Does this help with Dendrite growth in lithium metal anodes?",
+      "Does this help with electrolyte decomposition?",
+    ]);
+    expect(itemsOf({ currentChallenges: "Dendrite growth in lithium metal anodes cycling, electrolyte decomposition" })).toEqual([
+      "Does this help with electrolyte decomposition?",
+    ]);
+  });
+
+  it("no word of a phrase may be one of the 23 pronouns and auxiliaries, in any case; a longer word that starts with one is fine", () => {
+    const words = [
+      "we", "i", "our", "you", "your", "they", "it", "its", "this", "that", "these", "those",
+      "he", "she", "is", "are", "was", "were", "be", "will", "can", "do", "does",
+    ];
+    expect(words).toHaveLength(23);
+    for (const word of words) {
+      for (const cased of [word, word.toUpperCase()]) {
+        expect(itemsOf({ currentProject: `Thermal ${cased} coatings, bond coat oxidation` }), cased).toEqual([
+          "How does this relate to bond coat oxidation?",
+        ]);
+      }
+    }
+    // "Wearable", "itinerant" and "dopants" start with "we", "it" and "do".
+    expect(itemsOf({ currentProject: "Wearable itinerant dopants, bond coat oxidation" })).toEqual([
+      "How does this relate to Wearable itinerant dopants?",
+      "How does this relate to bond coat oxidation?",
+    ]);
+  });
+
+  it("a one-sentence challenges text whose only keyword is generic yields no challenge example at all", () => {
+    // No comma: one chunk of eight words, rejected (it has "we" and is longer
+    // than six words); the fallback keyword is "study", which routes on nothing.
+    expect(specificTerms(ASK.examples.challenge("study"))).toEqual([]);
+    expect(itemsOf({ currentChallenges: "We study how dendrites nucleate under fast charging" })).toEqual([]);
+    expect(
+      exampleQuestions({
+        profile: { ...empty, currentChallenges: "We study how dendrites nucleate under fast charging" },
+        byPaper: {},
+        paperId: PAPER,
+      }),
+    ).toEqual([]);
+    // The project source follows the same rule.
+    expect(itemsOf({ currentProject: "We study how dendrites nucleate under fast charging" })).toEqual([]);
+  });
+
+  it("a stoplist word or a generic word is never the single-word example; a specific word still is", () => {
+    for (const word of ["Study.", "Work.", "Results.", "Energy.", "Materials."]) {
+      expect(itemsOf({ currentChallenges: word }), word).toEqual([]);
+      expect(itemsOf({ currentProject: word }), word).toEqual([]);
+    }
+    expect(itemsOf({ currentChallenges: "creep; rafting; oxidation" })).toEqual(["Does this help with creep?"]);
+    expect(itemsOf({ currentProject: "Superalloys." })).toEqual(["How does this relate to Superalloys?"]);
+    for (const example of ["Does this help with creep?", "How does this relate to Superalloys?"]) {
+      expect(specificTerms(example).length).toBeGreaterThanOrEqual(1);
+    }
+  });
+
+  it("topics and methods stay as the reader typed them, whatever they are", () => {
+    expect(itemsOf({ researchTopics: ["study", "we are testing it"], preferredMethods: ["it"] })).toEqual([
+      "What does it say about study?",
+      "What does it say about we are testing it?",
+      "Could I use it here?",
+    ]);
   });
 });

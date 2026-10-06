@@ -17,9 +17,18 @@
 // has no multi-word phrase at all. Topics and methods are the reader's own
 // entries and stay as typed. Each source has its own cap, so every source
 // gets a slot before the total of eight.
+//
+// P1-09c (§1f.20 (5)): `phrasesFromText` calls any chunk of ten words or fewer
+// a phrase, so a sentence ("We test sulfide electrolytes") could become an
+// example, and a one-sentence text fell back to a keyword that routes on
+// nothing ("Does this help with study?"). A multi-word phrase is now offered
+// only when it has two to six words and none of them is a pronoun or an
+// auxiliary; the single-word fallback only when its finished question has a
+// specific route term. A source with nothing acceptable gives no example.
 
 import type { UserProfile } from "@/types";
 import { phrasesFromText } from "@/lib/feed/profile-compiler";
+import { specificTerms } from "@/lib/papers/reading-map";
 import { MAX_QUESTION_CHARS, type PaperQuestions } from "@/store/reading-questions";
 import { ASK } from "@/components/reader/copy";
 
@@ -43,14 +52,37 @@ function sameKey(text: string): string {
   return text.replace(/\s+/g, " ").trim().toLocaleLowerCase();
 }
 
-/** P1-09b: a free-text field's multi-word phrases, in `phrasesFromText`'s
- *  order; its first single word only when it has no multi-word phrase. The
- *  default `max` (8) lets `phrasesFromText` return up to four chunk phrases,
- *  more than either source's cap. */
-function phrasesFirst(text: string | undefined): string[] {
-  const phrases = phrasesFromText(text);
-  const multiWord = phrases.filter((phrase) => /\s/.test(phrase.trim()));
-  return multiWord.length > 0 ? multiWord : phrases.slice(0, 1);
+/** P1-09c: the words that make a chunk a sentence ("we test …", "it is …")
+ *  rather than a phrase. Compared lower-cased, without edge punctuation. */
+const SENTENCE_WORDS: ReadonlySet<string> = new Set([
+  "we", "i", "our", "you", "your", "they", "it", "its", "this", "that", "these", "those",
+  "he", "she", "is", "are", "was", "were", "be", "will", "can", "do", "does",
+]);
+const MIN_PHRASE_WORDS = 2;
+const MAX_PHRASE_WORDS = 6;
+
+/** P1-09c: two to six words, none of them a pronoun or an auxiliary. */
+function isPhrase(candidate: string): boolean {
+  const words = candidate.trim().split(/\s+/).filter(Boolean);
+  return (
+    words.length >= MIN_PHRASE_WORDS &&
+    words.length <= MAX_PHRASE_WORDS &&
+    words.every((word) => !SENTENCE_WORDS.has(word.toLocaleLowerCase().replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, "")))
+  );
+}
+
+/** P1-09b/c: a free-text field's acceptable multi-word phrases, in
+ *  `phrasesFromText`'s order. With none, its first single word — only when the
+ *  finished question (`template(word)`) has a specific route term, so a
+ *  stoplist or generic word ("study", "energy") is not an example; else
+ *  nothing. The default `max` (8) lets `phrasesFromText` return up to four
+ *  chunk phrases, more than either source's cap. */
+function phrasesFirst(text: string | undefined, template: (value: string) => string): string[] {
+  const candidates = phrasesFromText(text);
+  const phrases = candidates.filter(isPhrase);
+  if (phrases.length > 0) return phrases;
+  const word = candidates.find((candidate) => !/\s/.test(candidate.trim()));
+  return word !== undefined && specificTerms(template(word.trim())).length > 0 ? [word] : [];
 }
 
 export function exampleQuestions({
@@ -95,8 +127,8 @@ export function exampleQuestions({
       if (phrase && offer(fromProfile, MAX_PROFILE, template(phrase))) added += 1;
     }
   };
-  asked(phrasesFirst(profile.currentChallenges), ASK.examples.challenge, MAX_PER_SOURCE.challenges);
-  asked(phrasesFirst(profile.currentProject), ASK.examples.project, MAX_PER_SOURCE.project);
+  asked(phrasesFirst(profile.currentChallenges, ASK.examples.challenge), ASK.examples.challenge, MAX_PER_SOURCE.challenges);
+  asked(phrasesFirst(profile.currentProject, ASK.examples.project), ASK.examples.project, MAX_PER_SOURCE.project);
   asked(profile.researchTopics ?? [], ASK.examples.topic, MAX_PER_SOURCE.topics);
   asked(profile.preferredMethods ?? [], ASK.examples.method, MAX_PER_SOURCE.methods);
 
