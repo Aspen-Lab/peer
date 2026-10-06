@@ -25,14 +25,24 @@ file name). The hourly request limit on the AI routes stays.
 
 The privacy page now says what the code does: Peer has no model of its own, and
 your key goes from your browser through Peer's server to the provider you chose,
-and is not stored.
+and is not stored. It also no longer has a section about a record of model use,
+because Peer keeps none: it used to write one row per model call (provider,
+model, token counts, timing), and that table, the dollar budget that guarded
+Peer's own model spend and the daily limit on forced pool rebuilds are gone.
+Peer funds no web search either, so the only search a briefing can run is on a
+Tavily key you paste in yourself.
 
 **For anyone running Peer:** the build refuses `GOOGLE_API_KEY` on Vercel (it
 used to require it); remove it from the project's environment variables before
 deploying. The migration `20261007000000_drop_plan_and_restore_signup.sql` drops
 the four plan columns from `profiles` and puts the sign-up trigger back; take
 `select plan, count(*) from public.profiles group by 1;` first if you want a
-record of who was on what.
+record of who was on what. A second migration,
+`20261007000100_drop_ledger_and_budget.sql`, drops the usage table
+(`usage_events`) and the two budget tables and clears the counter rows for the
+old allowances; export `usage_events` first (the file's header says how).
+`PEER_COMPANY_SPEND_CAP`, `BRAVE_SEARCH_API_KEY` and the `GOOGLE_VERTEX_SEARCH_*`
+names are read by nothing now (the build still refuses them on Vercel).
 
 ## v0.43.5 — 2026-09-25
 

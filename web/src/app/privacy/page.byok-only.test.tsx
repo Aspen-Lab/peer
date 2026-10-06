@@ -41,10 +41,24 @@ describe("/privacy after Peer stopped having a model of its own", () => {
     expect(text()).toContain("The model provider whose key you added sees");
   });
 
-  it("no longer says Peer pays for calls", () => {
-    expect(text()).not.toContain("Every call Peer pays for");
-    expect(text()).toContain("Every model call writes one row");
-    expect(text()).toContain("the row carries no account id");
+  it("says nothing about a record of model use, because Peer keeps none", () => {
+    // There used to be a section for it ("What is recorded about model use"):
+    // a row per model call in a usage table. The table, the writer and the
+    // wrapper that fed it are deleted, so the section and every sentence that
+    // named the row or "every call Peer pays for" are gone with them.
+    const page = text();
+    expect(page).not.toContain("What is recorded about model use");
+    expect(page).not.toContain("Every call Peer pays for");
+    expect(page).not.toContain("Every model call writes one row");
+    expect(page).not.toContain("the usage row");
+    expect(page).not.toContain("the row carries no account id");
+    expect(page).not.toContain("no column that could hold one");
+  });
+
+  it("keeps the sections around it", () => {
+    const page = text();
+    expect(page).toContain("Your own model key");
+    expect(page).toContain("Who else sees a request");
   });
 
   it("carries the date of this change", () => {

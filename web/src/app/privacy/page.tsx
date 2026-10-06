@@ -48,13 +48,6 @@ const SECTIONS = [
     ],
   },
   {
-    label: "What is recorded about model use",
-    body: [
-      "Every model call writes one row: which provider and model, how many tokens, how long it took, and whether it succeeded. The call runs on your own key, so the row carries no account id.",
-      "That row holds no paper text, no prompt, no answer, and no credential. The table has no column that could hold one.",
-    ],
-  },
-  {
     label: "Who else sees a request",
     body: [
       "Finding papers means asking the open sources: OpenAlex, arXiv, Crossref, Semantic Scholar, and the publisher or repository a paper's full text and figures live on. Those services see the query and the request, as they would for any reader.",
