@@ -5,7 +5,7 @@ import { buildReading } from "@/lib/papers/reading";
 import type { ExtractedDocument } from "@/lib/papers/html-text";
 import type { FullTextResult } from "@/lib/papers/full-text";
 import type { Paper } from "@/types";
-import { blockMarker } from "@/lib/text/math";
+import { blockMarker, inlineMath } from "@/lib/text/math";
 import { PaperBody, paragraphAnchor, sectionAnchor } from "./paper-body";
 
 // P1-04 (§1f.12): every paragraph of the body is a destination — the map's
@@ -57,5 +57,64 @@ describe("PaperBody — paragraph anchors (P1-04)", () => {
     const withoutAnchors = html.replace(/<div id="paper-section-\d+-p\d+" class="space-y-4 scroll-mt-20">/g, '<div class="space-y-4">');
 
     expect(withoutAnchors).toBe(BEFORE);
+  });
+});
+
+// P3-01 (ruling §1h.1): a clicked term is marked where the paper first uses it
+// — a `data-term-mark` on that paragraph and a `<mark>` around the words —
+// and the body is otherwise the body it was: nothing hidden, reordered or
+// wrapped, with the mark or without it.
+describe("PaperBody — the highlighted term (P3-01)", () => {
+  const plain = renderToStaticMarkup(createElement(PaperBody, { reading }));
+  const at = { sectionId: reading.body[0].id, sectionIndex: 0, paragraphIndex: 1, offset: 0, length: 5 };
+  // "Grain boundaries carry the strain." — the second paragraph of the first section.
+  const marked = renderToStaticMarkup(createElement(PaperBody, { reading, termMark: at }));
+
+  it("marks the words and the paragraph that holds them, and no other", () => {
+    expect(marked.match(/<mark\b/g)).toHaveLength(1);
+    expect(marked.match(/data-term-mark/g)).toHaveLength(1);
+    expect(marked).toMatch(/<div id="paper-section-0-p1"[^>]*data-term-mark=""[^>]*>/);
+    expect(marked).toMatch(/<mark[^>]*>Grain<\/mark> boundaries carry the strain\./);
+  });
+
+  it("draws the mark with the term token, a background only, never a hue of the route's", () => {
+    const tag = /<mark[^>]*>/.exec(marked)![0];
+
+    expect(tag).toContain("bg-[color:var(--color-term-mark)]");
+    expect(tag).not.toMatch(/route-(?:read|background|skim)/);
+    expect(tag).toContain("text-heading");
+  });
+
+  it("changes nothing else: without the mark's two additions the body is exactly the unmarked body", () => {
+    const stripped = marked.replace(' data-term-mark=""', "").replace(/<mark[^>]*>/, "").replace("</mark>", "");
+
+    expect(stripped).toBe(plain);
+  });
+
+  it("is the unmarked body when there is no mark, or the mark points at nothing the body holds", () => {
+    expect(renderToStaticMarkup(createElement(PaperBody, { reading, termMark: null }))).toBe(plain);
+    expect(renderToStaticMarkup(createElement(PaperBody, { reading, termMark: { ...at, sectionId: "s99", sectionIndex: 9 } }))).toBe(plain);
+    expect(renderToStaticMarkup(createElement(PaperBody, { reading, termMark: { ...at, paragraphIndex: 9 } }))).toBe(plain);
+    expect(renderToStaticMarkup(createElement(PaperBody, { reading, termMark: { ...at, offset: 500 } }))).toBe(plain);
+  });
+
+  it("marks words that follow a formula without disturbing it", () => {
+    const withFormula: ExtractedDocument = {
+      source: "pdf",
+      figureCaptions: [],
+      sections: [{ id: "s1", heading: "1 A", canonical: "introduction", text: `The load ${inlineMath("x_{1}")} meets the QPU twice.` }],
+    };
+    const formulaReading = buildReading(paper, { ...fullText, doc: withFormula } as FullTextResult, new Date("2026-10-05T00:00:00.000Z"));
+    const paragraph = formulaReading.body[0].paragraphs[0];
+    const offset = paragraph.indexOf("QPU");
+    const html = renderToStaticMarkup(
+      createElement(PaperBody, {
+        reading: formulaReading,
+        termMark: { sectionId: "s1", sectionIndex: 0, paragraphIndex: 0, offset, length: 3 },
+      }),
+    );
+
+    expect(html).toMatch(/<code[^>]*>x_\{1\}<\/code>/);
+    expect(html).toMatch(/<mark[^>]*>QPU<\/mark> twice\./);
   });
 });

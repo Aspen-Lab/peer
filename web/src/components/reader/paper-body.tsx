@@ -23,6 +23,7 @@ import { useState } from "react";
 import type { PaperReading, ReadingFigure, ReadingSection } from "@/lib/papers/reading";
 import { GIST_QUESTION, type RouteResult, type RouteSection, type RouteTier } from "@/lib/papers/reading-map";
 import type { QuestionAnswers } from "@/lib/papers/report";
+import type { TermOccurrence } from "@/lib/papers/terms";
 import { Equation, MathText } from "./math";
 import { Band } from "@/components/ui/band";
 import { ASK, BODY, ROUTE } from "./copy";
@@ -278,7 +279,38 @@ function Figure({ figure }: { figure: ReadingFigure }) {
   );
 }
 
-function Section({ section, index, mark }: { section: ReadingSection; index: number; mark: SectionMark | null }) {
+/**
+ * P3-01 (§1h.1): the words a clicked term stands on, marked in place. The
+ * paragraph's text is the same text in the same order — it is only cut into
+ * three runs, before, the words and after, and the words wrapped in a `<mark>`
+ * (a background, never a hue of the route's). `firstOccurrence` never starts
+ * or ends a match inside a formula, so each run's formulas stay whole.
+ */
+function MarkedParagraph({ text, mark }: { text: string; mark: TermOccurrence }) {
+  const end = mark.offset + mark.length;
+  return (
+    <>
+      <MathText text={text.slice(0, mark.offset)} />
+      <mark className="bg-[color:var(--color-term-mark)] text-heading">
+        <MathText text={text.slice(mark.offset, end)} />
+      </mark>
+      <MathText text={text.slice(end)} />
+    </>
+  );
+}
+
+function Section({
+  section,
+  index,
+  mark,
+  termMark,
+}: {
+  section: ReadingSection;
+  index: number;
+  mark: SectionMark | null;
+  /** The clicked term's first use, when it is in this section. */
+  termMark?: TermOccurrence | null;
+}) {
   const figures = section.figures ?? [];
   const equations = section.equations ?? [];
   // What follows paragraph `i` (-1: what opens the section): the equations
@@ -309,14 +341,25 @@ function Section({ section, index, mark }: { section: ReadingSection; index: num
       </h3>
       <div className="font-reading text-title leading-[1.65] text-text-muted measure-paper space-y-4 reading-justify">
         {following(-1)}
-        {section.paragraphs.map((paragraph, i) => (
-          <div key={i} id={paragraphAnchor(index, i)} className="space-y-4 scroll-mt-20">
-            <p>
-              <MathText text={paragraph} />
-            </p>
-            {following(i)}
-          </div>
-        ))}
+        {section.paragraphs.map((paragraph, i) => {
+          // P3-01: the clicked term's first use, when it is here and still
+          // inside the paragraph (a stale mark draws nothing).
+          const here =
+            termMark && termMark.paragraphIndex === i && termMark.length > 0 && termMark.offset + termMark.length <= paragraph.length
+              ? termMark
+              : null;
+          return (
+            <div
+              key={i}
+              id={paragraphAnchor(index, i)}
+              {...(here ? { "data-term-mark": "" } : {})}
+              className="space-y-4 scroll-mt-20"
+            >
+              <p>{here ? <MarkedParagraph text={paragraph} mark={here} /> : <MathText text={paragraph} />}</p>
+              {following(i)}
+            </div>
+          );
+        })}
       </div>
     </section>
   );
@@ -325,7 +368,16 @@ function Section({ section, index, mark }: { section: ReadingSection; index: num
 /** The anchor the decision block's "read it here" scrolls to. */
 export const PAPER_BODY_ID = "paper-body";
 
-export function PaperBody({ reading, route }: { reading: PaperReading; route?: DrawRoute }) {
+export function PaperBody({
+  reading,
+  route,
+  termMark,
+}: {
+  reading: PaperReading;
+  route?: DrawRoute;
+  /** P3-01 (§1h.1): where the term the reader clicked first stands in the body. */
+  termMark?: TermOccurrence | null;
+}) {
   // `?? []`: the version gate above should mean this is always an array, and
   // a missing optional block is still not worth taking the page down for.
   const body = reading.body ?? [];
@@ -354,6 +406,7 @@ export function PaperBody({ reading, route }: { reading: PaperReading; route?: D
           section={section}
           index={i}
           mark={sectionMark(route, section.id)}
+          termMark={termMark?.sectionId === section.id ? termMark : null}
         />
       ))}
     </Band>

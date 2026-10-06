@@ -188,3 +188,83 @@ describe("globals.css — the route tint tokens (P1-05)", () => {
     ]);
   });
 });
+
+// P3-01 (§1h.1): the highlight a clicked term leaves in the body. A neutral
+// grey in every palette block — none of the route's greens, so a marked word
+// is never mistaken for a tier — used as a background only, by the body's one
+// `<mark>`; the palette's muted and heading ink stay readable on it.
+describe("globals.css — the term highlight token (P3-01)", () => {
+  const TOKEN = "--color-term-mark";
+  const lightBlock = css.slice(css.indexOf(":root {"), css.indexOf("/* Dark palette"));
+  const darkBlock = css.slice(css.indexOf('html[data-mode="dark"] {'), css.indexOf('/* Dark palette — "system"'));
+  const systemStart = css.indexOf('html[data-mode="system"] {');
+  const systemBlock = css.slice(systemStart, css.indexOf("/* ── Material", systemStart));
+
+  const value = (block: string, token: string): string => {
+    const match = new RegExp(`${token}:\\s*(#[0-9a-f]{6});`).exec(block);
+    if (!match) throw new Error(`${token} is not declared as a #rrggbb colour in this block`);
+    return match[1];
+  };
+  const channels = (hex: string) => [1, 3, 5].map((at) => parseInt(hex.slice(at, at + 2), 16));
+  const luminance = (hex: string) => {
+    const [r, g, b] = channels(hex).map((c) => {
+      const s = c / 255;
+      return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const contrast = (a: string, b: string) => {
+    const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+    return (hi + 0.05) / (lo + 0.05);
+  };
+
+  it("is declared in the light palette and in both dark palettes, the two dark ones in sync", () => {
+    for (const block of [lightBlock, darkBlock, systemBlock]) expect(() => value(block, TOKEN)).not.toThrow();
+    expect(value(systemBlock, TOKEN)).toBe(value(darkBlock, TOKEN));
+  });
+
+  it("is a neutral grey, never one of the route's greens", () => {
+    for (const block of [lightBlock, darkBlock]) {
+      const [r, g, b] = channels(value(block, TOKEN));
+      expect(r === g && g === b).toBe(true);
+      for (const green of ["--color-route-read", "--color-route-background", "--color-route-skim"]) {
+        expect(value(block, TOKEN)).not.toBe(value(block, green));
+      }
+    }
+  });
+
+  it("is a tint on its ground: darker than the light ground, lighter than the dark one, and visibly off both", () => {
+    expect(luminance(value(lightBlock, TOKEN))).toBeLessThan(luminance(value(lightBlock, "--color-bg")));
+    expect(luminance(value(darkBlock, TOKEN))).toBeGreaterThan(luminance(value(darkBlock, "--color-bg")));
+    expect(contrast(value(lightBlock, TOKEN), value(lightBlock, "--color-bg"))).toBeGreaterThanOrEqual(1.15);
+    expect(contrast(value(darkBlock, TOKEN), value(darkBlock, "--color-bg"))).toBeGreaterThanOrEqual(1.4);
+  });
+
+  it("keeps the marked words readable: the heading ink on it ≥ 7:1, the muted ink ≥ 4.5:1, in both themes", () => {
+    for (const block of [lightBlock, darkBlock]) {
+      expect(contrast(value(block, "--color-heading"), value(block, TOKEN))).toBeGreaterThanOrEqual(7);
+      expect(contrast(value(block, "--color-text-muted"), value(block, TOKEN))).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it("is read only as a background — by the body's `<mark>` and by the pressed term that points at it — and nowhere else", () => {
+    expect(css).not.toMatch(/var\(--color-term-mark/);
+    const root = new URL("..", import.meta.url).pathname;
+    const reads: string[] = [];
+    const walk = (dir: string) => {
+      for (const name of readdirSync(dir)) {
+        const file = `${dir}/${name}`;
+        if (statSync(file).isDirectory()) walk(file);
+        else if (/\.(tsx?|css)$/.test(name) && !/\.test\.tsx?$/.test(name) && !file.endsWith("app/globals.css")) {
+          const source = readFileSync(file, "utf8");
+          for (const match of source.matchAll(/[^\s"'`]*--color-term-mark[^\s"'`]*/g)) reads.push(`${file.slice(root.length)}: ${match[0]}`);
+        }
+      }
+    };
+    walk(root.replace(/\/$/, ""));
+    expect(reads).toEqual([
+      "components/reader/paper-body.tsx: bg-[color:var(--color-term-mark)]",
+      "components/reader/terms-strip.tsx: aria-pressed:bg-[color:var(--color-term-mark)]",
+    ]);
+  });
+});

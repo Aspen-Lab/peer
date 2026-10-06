@@ -186,6 +186,17 @@ export const ROUTE = {
   questions: (numbers: readonly number[]) => numbers.map((n) => `Q${n}`).join(", "),
 } as const;
 
+/**
+ * P3-01 (§1h.1; blueprint §3.5 ⑤ 词): the strip under the map. A term is a
+ * button that points at its first use in the paper; its name says so for the
+ * reader who cannot see the highlight. The definitions are the paper's own
+ * sentences (quoted, attributed) or Peer's, labelled `PEERS_READING`.
+ */
+export const TERMS = {
+  heading: "Terms to know",
+  find: (term: string) => `Find ${term} in the paper`,
+} as const;
+
 /** The reader's own context for the paper: what they read or kept nearby. */
 export const LIBRARY = {
   heading: "In your library",

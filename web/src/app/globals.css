@@ -303,6 +303,11 @@ html[data-accent="violet"]   { --seed: #7a3fd9; --seed-dark: #a078f0; }
   --color-route-read: #d2f0dc;
   --color-route-background: #e0f4e7;
   --color-route-skim: #ebf7ef;
+  /* P3-01 (§1h.1): the Terms to know highlight — where the paper first uses a
+     term the reader clicked. A neutral grey, deliberately none of the three
+     route greens, a background only; the marked words take the heading ink
+     (≥ 12:1 on this tint), so the highlight reads as emphasis, not as a tier. */
+  --color-term-mark: #e4e4e4;
   --color-border: color-mix(in srgb, var(--color-heading) 6%, transparent);
   --color-border-strong: color-mix(in srgb, var(--color-heading) 12%, transparent);
   --color-skeleton-base: color-mix(in srgb, var(--color-heading) 5%, transparent);
@@ -352,6 +357,8 @@ html[data-mode="dark"] {
   --color-route-read: #1d4430;
   --color-route-background: #19382a;
   --color-route-skim: #152c21;
+  /* P3-01: the term highlight on the dark ground (the heading ink on it ≥ 9:1). */
+  --color-term-mark: #3d3d3d;
   --color-border: rgba(255, 255, 255, 0.09);
   --color-border-strong: rgba(255, 255, 255, 0.17);
   --color-skeleton-base: rgba(255, 255, 255, 0.05);
@@ -399,6 +406,7 @@ html[data-mode="dark"] {
   --color-route-read: #1d4430;
   --color-route-background: #19382a;
   --color-route-skim: #152c21;
+  --color-term-mark: #3d3d3d;
   --color-border: rgba(255, 255, 255, 0.09);
   --color-border-strong: rgba(255, 255, 255, 0.17);
   --color-skeleton-base: rgba(255, 255, 255, 0.05);

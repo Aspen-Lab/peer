@@ -30,6 +30,7 @@ import { paperNav } from "@/lib/reader/paper-nav";
 import { paperKeysFor, registerReaderActions, type ReaderActions } from "@/lib/reader/reader-keys";
 import { recommendationLine } from "@/lib/reader/recommendation";
 import { allocatePlateTerms } from "@/lib/papers/plate-terms";
+import { firstOccurrence, mergeTerms, paperDefinedTermsInReading, routeTermScope } from "@/lib/papers/terms";
 import { placeEvidence } from "@/lib/papers/evidence";
 import {
   PDF_NO_TEXT_MESSAGE,
@@ -84,6 +85,7 @@ import { PAPER_BODY_ID } from "@/components/reader/paper-body";
 import { PaperContents } from "@/components/reader/paper-contents";
 import { QuestionField, focusFirstEmptyQuestion } from "@/components/reader/question-field";
 import { ReadingMapView, readingRoute } from "@/components/reader/reading-map";
+import { TermsStrip } from "@/components/reader/terms-strip";
 import { SectionLinks } from "@/components/reader/evidence-quote";
 import { settledQuestions, useReadingQuestionsHydrated, useReadingQuestionsStore } from "@/store/reading-questions";
 import { exampleQuestions } from "@/lib/reader/question-examples";
@@ -668,6 +670,30 @@ function Reader({
     [tier0Route, report?.forYourQuestions],
   );
 
+  // P3-01 (§1h.1; §3d 13): the terms to know — the sentences the paper defines
+  // its own words in, read from the sections the route marks read or background
+  // (the methods and results when there is no such route), then the model's,
+  // ≤8 in all. From the reading this page holds, in the browser: no key, no
+  // request. The term the reader clicked is kept with its paper, so it never
+  // follows them to another, and its first use in the body is what the body
+  // marks.
+  const termScope = useMemo(() => routeTermScope(route), [route]);
+  const tier0Terms = useMemo(
+    () => (reading ? paperDefinedTermsInReading(reading, termScope) : []),
+    [reading, termScope],
+  );
+  const terms = useMemo(() => mergeTerms(tier0Terms, report?.terms), [tier0Terms, report?.terms]);
+  const [clickedTerm, setClickedTerm] = useState<{ paperId: string; term: string } | null>(null);
+  const markedTerm = clickedTerm?.paperId === paper.id ? clickedTerm.term : null;
+  const markTerm = useCallback(
+    (term: string | null) => setClickedTerm(term === null ? null : { paperId: paper.id, term }),
+    [paper.id],
+  );
+  const termMark = useMemo(
+    () => (markedTerm && reading ? firstOccurrence(reading.body ?? [], markedTerm) : null),
+    [markedTerm, reading],
+  );
+
   // S5: the "matrix" scramble reveal, restored. `revealingReportKey` is the
   // key of a report that just arrived fresh in this visit; while it matches
   // the current report's key, every report-derived text block scrambles into
@@ -1148,6 +1174,7 @@ function Reader({
                 <QuestionField key={paper.id} paperId={paper.id} examples={examples} vague={route?.vague ?? false} />
               )}
               {reading.map && <ReadingMapView key={`map:${paper.id}`} map={reading.map} route={route} />}
+              <TermsStrip key={`terms:${paper.id}`} terms={terms} reading={reading} marked={markedTerm} onMark={markTerm} />
             </>
           ) : undefined
         }
@@ -1314,7 +1341,7 @@ function Reader({
 
             {/* The paper, when Peer reached it: everything the extractor
                 read, under everything Peer had to say about it. */}
-            <PaperBody reading={reading} route={route} />
+            <PaperBody reading={reading} route={route} termMark={termMark} />
 
             {/* Last, and always there: the facts that need no key. On a page with no model
                 page it is the only block under the abstract, which is the
