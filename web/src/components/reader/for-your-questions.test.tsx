@@ -66,6 +66,40 @@ describe("ForYourQuestions (P2-04)", () => {
     expect(html).not.toContain("Answers");
   });
 
+  // P2-08b (§1g.21 (2)): when the model offered answers and verification dropped
+  // every one, the page says so — not that the paper does not address the
+  // question. The label-face line, no answers heading, the Read next rows kept.
+  it("renders the unverified verdict as the one label-face line, with no answers and the Read next rows kept (P2-08b)", () => {
+    const html = render({
+      forYourQuestions: [
+        {
+          question: "Does the method improve retention?",
+          verdict: "unverified",
+          answers: [],
+          readNext: [
+            { sectionId: "s2", why: "It reports the measured retention result.", kind: "answer" },
+            { sectionId: "s1", why: "It explains the comparison baseline.", kind: "background" },
+          ],
+        },
+      ],
+    });
+
+    expect(FOR_YOUR_QUESTIONS.unverified).toBe("Peer could not verify an answer in the paper's own words.");
+    expect(html).toMatch(/<p class="[^"]*font-mono[^"]*">Peer could not verify an answer in the paper(?:'|&#x27;)s own words\.<\/p>/);
+    expect(html).not.toContain("does not address");
+    expect(html).not.toContain("Answered");
+    expect(html).not.toContain("Partly answered");
+    // No answer rows: no quote, no attribution.
+    expect(html).not.toContain("italic");
+    expect(html).not.toContain("—");
+    // Read next keeps both rows.
+    expect(html).toContain("Read next");
+    expect(html).toContain("§2 Results · p.7 · 3 min");
+    expect(html).toContain("It reports the measured retention result.");
+    expect(html).toContain("§1 Introduction · p.2 · 2 min");
+    expect(html).toContain(">background<");
+  });
+
   // P2-04b (§1g.15 finding 1): the sentence takes a period only when the
   // reader's question does not already end the way a sentence ends.
   it("ends the not-addressed sentence with the question's own ?, . or ! and adds a period only otherwise", () => {

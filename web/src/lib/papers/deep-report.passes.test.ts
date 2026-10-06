@@ -328,6 +328,32 @@ describe("the question pass, Pass 1q (§1g.1, §3d 10)", () => {
     for (const line of logged) for (const question of questions) expect(line).not.toContain(question);
   });
 
+  // P2-08b (§1g.16, F1): Pass 1q's `locateSection` holds a sentence to the whole
+  // quote as the answers' verifier does. A model sentence whose middle was
+  // altered is not the paper's, whatever its first 80 and last 40 characters
+  // say; the exact one beside it is kept. (Sentences here are ≤ 90 characters,
+  // so the long one joins two of them, as a section would hold them.)
+  it("drops and counts a sentence whose middle was altered, and keeps the exact one (P2-08b, §1g.16)", async () => {
+    const joined = `${SENT.results} ${SENT.discussion}`;
+    const altered = joined.replace("the simplest way", "the surest way");
+    expect(joined.indexOf("simplest")).toBeGreaterThan(80);
+    expect(joined.length - joined.indexOf("simplest")).toBeGreaterThan(40);
+    const doc = bigDoc("altered-middle");
+    doc.sections[3] = { ...doc.sections[3], text: `${joined} ${doc.sections[3].text}` };
+    const stub = countingProvider({
+      pass1q: JSON.stringify({ questionRelevant: { 0: [{ text: joined, sectionId: "s3" }, { text: altered, sectionId: "s3" }] } }),
+    });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const question = "Does cracking rise with the charge rate?";
+    await generateDeepReport({ paper, doc, provider: stub.provider, questions: [question] });
+
+    const relevant = (stub.last("pass2")!.prompt.questionRelevant as Record<string, unknown[]>)["0"];
+    expect(relevant).toEqual([{ text: joined, sectionId: "s3" }]);
+    const logged = warn.mock.calls.map((args) => args.join(" "));
+    expect(logged.some((line) => /question pass dropped 1 sentence/.test(line))).toBe(true);
+    for (const line of logged) expect(line).not.toContain(question);
+  });
+
   it("caps a question at eight sentences", async () => {
     const sentences = Array.from({ length: 12 }, (_, i) => `Sentence number ${i + 1} of the long results section is here, verbatim.`);
     const doc = bigDoc("cap-8");

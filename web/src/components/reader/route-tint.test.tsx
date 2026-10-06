@@ -293,6 +293,8 @@ describe("the route copy never tells the reader not to read (§1f.13, §3d 8)", 
     expect(all).toContain(QUOTA.unavailable);
     expect(all).toContain("This paper does not address: Does it discuss recycling?");
     expect(all).toContain("This paper does not address: recycling.");
+    // P2-08b (§1g.21 (2)): the unverified verdict line is scanned too.
+    expect(all).toContain(FOR_YOUR_QUESTIONS.unverified);
     expect(all).toContain(ROUTE.backgroundWhy);
     for (const line of all) expect(line).not.toMatch(/skip|don['’]t read|ignore|not worth/i);
   });

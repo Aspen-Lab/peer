@@ -62,6 +62,28 @@ describe("normalizeForMatch", () => {
     expect(normalizeForMatch("high-energy")).toBe("highenergy");
   });
 
+  // P2-08b (§1g.16): the ruling names bracketed author-year citations as the
+  // one leniency the head/tail rule was written for, next to `[12]`; so they
+  // fold on both sides, and only citations do.
+  it("P2-08b: folds an author-year citation like a numeric one, and leaves every other parenthesis alone", () => {
+    const bare = normalizeForMatch("The cathodes crack under fast charging in every cell we opened.");
+    const cited = (inside: string) => normalizeForMatch(`The cathodes crack (${inside}) under fast charging in every cell we opened.`);
+    for (const citation of [
+      "Smith et al., 2020",
+      "Smith and Jones, 2019; Lee, 2021a",
+      "Smith & Lee 2020",
+      "Müller, 2018",
+      "O’Brien et al., 2020",
+    ]) {
+      expect(cited(citation), citation).toBe(normalizeForMatch("The cathodes crack under fast charging in every cell we opened."));
+    }
+    for (const notACitation of ["2020", "Figure 3a", "n = 12", "Table 2", "see Smith, 2020", "Smith, 2020, p. 5", "e.g., Smith, 2020"]) {
+      expect(cited(notACitation), notACitation).not.toBe(bare);
+    }
+    // A narrative citation keeps its year: it is the sentence's own words.
+    expect(normalizeForMatch("Smith et al. (2020) showed that cathodes crack.")).toContain("(2020)");
+  });
+
   it("2-02: still tells two different hyphenated words apart", () => {
     expect(normalizeForMatch("state-of-the-art")).not.toBe(normalizeForMatch("well-known"));
   });
@@ -99,21 +121,89 @@ describe("evidenceSupported", () => {
     expect(evidenceSupported(ABSTRACT_SENTENCE.replace(".", " [12]."), corpus)).toBe(true);
   });
 
-  it("accepts a long quote whose middle differs when its first 80 and last 40 characters both match", () => {
-    // The model kept an inline figure reference the extractor stripped; it
-    // sits past the 80-char head and before the 40-char tail.
-    const withReference = RESULTS_SENTENCE.replace(
-      "achieving an 85% success rate",
-      "achieving (Figure 3a) an 85% success rate",
-    );
+  // P2-08b (§1g.16, F1): this test used to assert the opposite — that a long
+  // quote with an inline "(Figure 3a)" inserted past character 80 is accepted
+  // because its first 80 and last 40 characters both match. That head-and-tail
+  // leniency is what the ruling removes (a quote is the paper's own words only
+  // when the whole of it is in one section), so the assertion is tightened, not
+  // loosened: the same input, the same preconditions, now rejected, with four
+  // more ways to alter the middle.
+  it("rejects a long quote whose middle differs, even when its first 80 and last 40 characters both match (P2-08b, §1g.16)", () => {
+    const body = doc.sections.map((s) => s.text).join(" ");
+    const bodyNormal = normalizeForMatch(body);
+    const altered: Record<string, string> = {
+      "a number flipped": RESULTS_SENTENCE.replace("an 85% success rate", "a 15% success rate"),
+      "a clause invented": RESULTS_SENTENCE.replace("achieving an", "achieving, in every single trial, an"),
+      "an inline reference the extractor stripped, kept": RESULTS_SENTENCE.replace(
+        "achieving an 85% success rate",
+        "achieving (Figure 3a) an 85% success rate",
+      ),
+      "the head, an invented sentence, the tail": `${RESULTS_SENTENCE.slice(0, 80)} The control arm failed in every single trial of the study. ${RESULTS_SENTENCE.slice(-40)}`,
+      "an ellipsis in the middle": `${RESULTS_SENTENCE.slice(0, 100)} … ${RESULTS_SENTENCE.slice(-60)}`,
+    };
+    const withReference = altered["an inline reference the extractor stripped, kept"];
     expect(withReference.indexOf("(Figure 3a)")).toBeGreaterThan(80);
     expect(RESULTS_SENTENCE.length - withReference.indexOf("(Figure 3a)")).toBeGreaterThan(40);
-    const body = doc.sections.map((s) => s.text).join(" ");
-    expect(evidenceSupported(withReference, body)).toBe(true);
+
+    for (const [what, quote] of Object.entries(altered)) {
+      // Precondition: the old rule would have accepted it — its head and its
+      // tail are both in the body — so a red here is the old rule, not a typo.
+      const normal = normalizeForMatch(quote);
+      expect(normal.length, what).toBeGreaterThan(80);
+      expect(bodyNormal, `${what}: head`).toContain(normal.slice(0, 80));
+      expect(bodyNormal, `${what}: tail`).toContain(normal.slice(-40));
+      expect(evidenceSupported(quote, body), what).toBe(false);
+      expect(locateSection(quote, sectionCorpus(doc)), what).toBeNull();
+    }
     // The same edit inside the head fails: the sentence was not copied.
     expect(
       evidenceSupported(RESULTS_SENTENCE.replace("MRI dataset", "MRI (Figure 3a) dataset"), body),
     ).toBe(false);
+  });
+
+  it("rejects the head of one sentence spliced to the tail of another in the same section, at 120 and 121 characters (P2-08b, §1g.16)", () => {
+    const other =
+      "Additionally, the diffusion model (DM) method differed from the causal approaches, producing successful counterfactuals but which were significantly farther from their original images.";
+    const results = doc.sections.find((s) => s.heading === "4.4 Results")!;
+    expect(results.text).toContain(RESULTS_SENTENCE);
+    expect(results.text).toContain(other);
+    for (const tail of [40, 41]) {
+      const splice = `${RESULTS_SENTENCE.slice(0, 80)}${other.slice(-tail)}`;
+      expect(splice.length).toBe(80 + tail);
+      // Head and tail each sit in the section — the old rule accepted it.
+      const section = normalizeForMatch(results.text);
+      expect(section).toContain(normalizeForMatch(splice).slice(0, 80));
+      expect(section).toContain(normalizeForMatch(splice).slice(-40));
+      expect(evidenceSupported(splice, results.text)).toBe(false);
+      expect(locateSection(splice, sectionCorpus(doc))).toBeNull();
+    }
+  });
+
+  it("still accepts, over 120 characters, whatever the folding allows: exact, case, a trailing period, citations, two sentences run together (P2-08b, §1g.16)", () => {
+    const body = doc.sections.map((s) => s.text).join(" ");
+    const sentence = RESULTS_SENTENCE;
+    expect(sentence.length).toBeGreaterThan(120);
+    const accepted: Record<string, string> = {
+      exact: sentence,
+      "lower-cased": sentence.toLowerCase(),
+      "trailing period removed": sentence.replace(/\.$/, ""),
+      "a numeric citation past character 80": sentence.replace("achieving", "achieving [12]"),
+      "a numeric list inside the first 80": sentence.replace("the CE approach", "the CE approach [3, 4]"),
+      // The one that needs the author-year fold; the corpus has no such
+      // citation, the model kept one the extractor had removed.
+      "an author-year citation inside the first 80": sentence.replace("the CE approach", "the CE approach (Smith et al., 2020)"),
+      "a hyphen-break space": sentence.replace("distance thresholds,", "dis- tance thresholds,"),
+    };
+    for (const [what, quote] of Object.entries(accepted)) {
+      expect(evidenceSupported(quote, body), what).toBe(true);
+      expect(locateSection(quote, sectionCorpus(doc)), what).not.toBeNull();
+    }
+    // Two consecutive sentences of one section, run together, are still verbatim.
+    const results = doc.sections.find((s) => s.heading === "4.4 Results")!.text;
+    const at = results.indexOf(sentence);
+    const next = results.slice(at + sentence.length).trim();
+    expect(next.length).toBeGreaterThan(40);
+    expect(evidenceSupported(`${sentence} ${next.slice(0, 120)}`, results)).toBe(true);
   });
 
   it("rejects a paraphrase", () => {
@@ -230,6 +320,31 @@ describe("verifyReportEvidence", () => {
       "Success rate",
       "No generator",
     ]);
+  });
+
+  // P2-08b (§1g.16, F1): the verifier holds every claim to the whole quote —
+  // a flipped number past character 80 is not the paper's sentence, and the
+  // page must not print it, italic and linked, as if it were.
+  it("drops and counts a key result whose middle was altered, beside an exact one it keeps (P2-08b, §1g.16)", () => {
+    const flipped = RESULTS_SENTENCE.replace("an 85% success rate", "a 15% success rate");
+    const { report: verified, dropped } = verifyReportEvidence(
+      report({
+        resultsAndSignificance: {
+          summary: "",
+          keyResults: [
+            { title: "Exact", detail: "85% on MRI.", evidence: RESULTS_SENTENCE },
+            { title: "Flipped", detail: "15% on MRI.", evidence: flipped },
+          ],
+        },
+        skim: [{ text: "Flipped skim.", evidence: flipped }],
+      }),
+      { abstract, doc },
+    );
+
+    expect(dropped).toBe(2);
+    expect(verified.provenance.droppedClaims).toBe(2);
+    expect(verified.resultsAndSignificance.keyResults.map((r) => r.title)).toEqual(["Exact"]);
+    expect(verified.skim).toEqual([]);
   });
 
   it("1-17: a verbatim figure-caption quote is kept — buildCorpus now includes figureCaptions", () => {

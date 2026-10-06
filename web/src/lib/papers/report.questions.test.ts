@@ -167,7 +167,13 @@ describe("verbatim verification of the answers (§1g.3)", () => {
     expect(report.forYourQuestions?.[0].verdict).toBe("answered");
   });
 
-  it("drops an answer whose evidence is not the paper's and counts it; with every answer gone the verdict is not_addressed", () => {
+  // P2-08b (§1g.21 (2)): the title and the first assertion below used to say
+  // "with every answer gone the verdict is not_addressed" (§1g.3). That was a
+  // false statement about the paper when the model had offered answers that
+  // failed verification; the ruling gives the verifier a fourth verdict,
+  // `unverified`, for exactly that case. The drops are still counted, the
+  // answers still gone — only the verdict word changes, so the rest stands.
+  it("drops an answer whose evidence is not the paper's and counts it; with every answer gone the verdict is unverified", () => {
     const { report, dropped } = verify({
       forYourQuestions: [
         {
@@ -182,11 +188,90 @@ describe("verbatim verification of the answers (§1g.3)", () => {
       ],
     });
 
-    expect(report.forYourQuestions?.[0]).toMatchObject({ question: Q[0], verdict: "not_addressed", answers: [] });
+    expect(report.forYourQuestions?.[0]).toMatchObject({ question: Q[0], verdict: "unverified", answers: [] });
     expect(report.forYourQuestions?.[1]).toMatchObject({ question: Q[1], verdict: "partly" });
     expect(report.forYourQuestions?.[1].answers.map((answer) => answer.text)).toEqual(["Kept."]);
     expect(dropped).toBe(3);
     expect(report.provenance.droppedClaims).toBe(3);
+  });
+
+  // P2-08b (§1g.21 (2), clarified 03:1xZ): `unverified` needs an entry that
+  // carried at least one answer and lost them all to verification; `partly`
+  // and `answered` entries both qualify, an entry that arrived with none does
+  // not, and a `not_addressed` entry is left as it is.
+  it("sets unverified only when an answered or partly entry carried answers and every one failed; read next rows are kept", () => {
+    const failing = [{ text: "Gone.", evidence: "Nothing like this sentence is anywhere in the paper at all, really.", sectionId: "s3" }];
+    const { report, dropped } = verify({
+      forYourQuestions: [
+        { verdict: "answered", answers: failing, readNext: [{ sectionId: "s3", why: "The counts.", kind: "answer" }] },
+        { verdict: "partly", answers: failing, readNext: [{ sectionId: "s1", why: "The setting.", kind: "background" }] },
+        { verdict: "answered", answers: [], readNext: [] },
+      ],
+    });
+
+    expect(report.forYourQuestions?.map((entry) => [entry.verdict, entry.answers.length])).toEqual([
+      ["unverified", 0],
+      ["unverified", 0],
+      // Zero answers in: nothing was offered to verify, so nothing was unverified.
+      ["not_addressed", 0],
+    ]);
+    expect(report.forYourQuestions?.[0].readNext).toEqual([{ sectionId: "s3", why: "The counts.", kind: "answer" }]);
+    expect(report.forYourQuestions?.[1].readNext).toEqual([{ sectionId: "s1", why: "The setting.", kind: "background" }]);
+    expect(dropped).toBe(2);
+    expect(report.provenance.droppedClaims).toBe(2);
+  });
+
+  it("a not_addressed entry that arrived with answers stays not_addressed: the model said nothing was there, nothing was verified or dropped", () => {
+    const { report, dropped } = verify({
+      forYourQuestions: [
+        { verdict: "not_addressed", answers: [{ text: "Gone.", evidence: "Nothing like this sentence is anywhere in the paper at all, really." }], readNext: [] },
+      ],
+    });
+
+    expect(report.forYourQuestions?.[0]).toMatchObject({ verdict: "not_addressed", answers: [] });
+    expect(dropped).toBe(0);
+  });
+
+  it("only the verifier sets unverified: a model-sent unverified is a not_addressed entry, never one that survives into the report", () => {
+    const sanitized = sanitizePaperReport(
+      { forYourQuestions: [{ verdict: "unverified", answers: [{ text: "Yes.", evidence: SENT.results, sectionId: "s3" }], readNext: [] }] },
+      { questions: Q.slice(0, 1) },
+    );
+    expect(sanitized.forYourQuestions).toHaveLength(1);
+    expect(sanitized.forYourQuestions?.[0].verdict).toBe("not_addressed");
+
+    const { report } = verifyReportEvidence(sanitized, { abstract: ABSTRACT, doc: DOC });
+    expect(report.forYourQuestions?.[0]).toMatchObject({ question: Q[0], verdict: "not_addressed", answers: [] });
+  });
+
+  // P2-08b (§1g.16, F1) on the answers: an answer whose middle was changed is
+  // not the paper's sentence. Sentences here are 80–90 characters, so the long
+  // one joins two of them in one section, as the paper would.
+  it("drops an answer whose middle was altered, counts it, and calls an entry left with none unverified (P2-08b, §1g.16)", () => {
+    const long = `${SENT.methods} ${SENT.results}`;
+    const doc: ExtractedDocument = {
+      ...DOC,
+      sections: DOC.sections.map((section) => (section.id === "s2" ? { ...section, text: long } : section)),
+    };
+    // The edit sits in the middle: past the first 80 characters, before the last 40.
+    const flipped = long.replace("Cracking along the grain boundaries", "Cracking across the grain boundaries");
+    expect(flipped.indexOf("across")).toBeGreaterThan(80);
+    expect(long.length - flipped.indexOf("across")).toBeGreaterThan(40);
+    const run = (evidence: string) =>
+      verifyReportEvidence(
+        sanitizePaperReport({ forYourQuestions: [{ verdict: "answered", answers: [{ text: "x", evidence, sectionId: "s2" }], readNext: [] }] }, { questions: Q.slice(0, 1) }),
+        { abstract: ABSTRACT, doc },
+      );
+
+    const exact = run(long);
+    expect(exact.dropped).toBe(0);
+    expect(exact.report.forYourQuestions?.[0]).toMatchObject({ verdict: "answered" });
+    expect(exact.report.forYourQuestions?.[0].answers).toHaveLength(1);
+
+    const altered = run(flipped);
+    expect(altered.dropped).toBe(1);
+    expect(altered.report.provenance.droppedClaims).toBe(1);
+    expect(altered.report.forYourQuestions?.[0]).toMatchObject({ verdict: "unverified", answers: [] });
   });
 
   it("an answered verdict with no answer at all is not_addressed; a not_addressed verdict carries no answers", () => {
@@ -241,6 +326,32 @@ describe("terms (§1g.3)", () => {
       { term: "charge rate", definition: "How fast a cell is charged.", peer: true },
     ]);
     expect(dropped).toBe(1);
+  });
+
+  // P2-08b (§1g.16, F1): a term's "the paper's definition" is the whole quote
+  // or nothing — one altered in the middle is dropped, counted, and `terms`
+  // is absent when it was the only one.
+  it("drops and counts a term whose evidence was altered in the middle (P2-08b, §1g.16)", () => {
+    const long = `${SENT.methods} ${SENT.results}`;
+    const doc: ExtractedDocument = {
+      ...DOC,
+      sections: DOC.sections.map((section) => (section.id === "s2" ? { ...section, text: long } : section)),
+    };
+    const flipped = long.replace("Cracking along the grain boundaries", "Cracking across the grain boundaries");
+    const { report, dropped } = verifyReportEvidence(
+      sanitizePaperReport(
+        {
+          forYourQuestions: [{ verdict: "partly", answers: [{ text: "Twelve.", evidence: SENT.methods, sectionId: "s2" }], readNext: [] }],
+          terms: [{ term: "grain boundary", definition: "Where crystals meet.", evidence: flipped }],
+        },
+        { questions: Q.slice(0, 1) },
+      ),
+      { abstract: ABSTRACT, doc },
+    );
+
+    expect(dropped).toBe(1);
+    expect(report.provenance.droppedClaims).toBe(1);
+    expect(report).not.toHaveProperty("terms");
   });
 
   it("leaves terms absent when none survives", () => {
@@ -332,7 +443,10 @@ describe("answers follow the question's text, position as the fallback (P2-02b)"
       ],
     }, Q.slice(0, 1));
 
-    expect(report.forYourQuestions?.map((item) => item.verdict)).toEqual(["not_addressed"]);
+    // P2-08b (§1g.21 (2)): the entry carried an answer and verification dropped
+    // it, so its verdict is now `unverified`, not `not_addressed` (the count
+    // this test is about — 1 evidence drop + 1 unmatched entry — is unchanged).
+    expect(report.forYourQuestions?.map((item) => item.verdict)).toEqual(["unverified"]);
     expect(dropped).toBe(1);
     expect(report.provenance.droppedClaims).toBe(2);
   });

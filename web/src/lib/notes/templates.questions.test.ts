@@ -182,6 +182,28 @@ describe("readingNote with the reader's questions (P2-05)", () => {
     ]);
   });
 
+  // P2-08b (§1g.21 (2)): the note says what the page and the export say for an
+  // entry whose answers all failed verification — through the same
+  // `questionEntryLines` — with no quote under it and never "does not address".
+  it("prints the unverified line, with no quote under it, the same words as the page and the export (P2-08b)", () => {
+    const note = readingNote(ROSE, {
+      now: NOW,
+      questions: [QUESTIONS[0]],
+      forYourQuestions: [{ question: QUESTIONS[0], verdict: "unverified", answers: [], readNext: [{ sectionId: "s2", why: "It reports the result.", kind: "answer" }] }],
+    });
+
+    expect(shape(note).slice(2, 5)).toEqual([
+      { type: "h2", text: "My questions → what it said" },
+      { type: "h3", text: "Does the method improve retention?" },
+      { type: "text", text: "Peer could not verify an answer in the paper's own words." },
+    ]);
+    const text = note.blocks.map((b) => b.text).join("\n");
+    expect(text).not.toContain("does not address");
+    expect(text).not.toContain("It reports the result.");
+    // The abstract's opening is the note's only quote: no answer sits under the verdict.
+    expect(note.blocks.filter((b) => b.type === "quote")).toHaveLength(1);
+  });
+
   it("exports as Markdown the way the reading export says it: the same verdict lines and the same quoted evidence", () => {
     const note = readingNote(ROSE, { now: NOW, questions: QUESTIONS, forYourQuestions: ANSWERS });
     const exported = toMarkdown(note);

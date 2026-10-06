@@ -35,8 +35,14 @@ export interface Claim {
   page?: number;
 }
 
-/** P2-02 (§1g.3): whether THIS paper answers one of the reader's questions. */
-export type QuestionVerdict = "answered" | "partly" | "not_addressed";
+/**
+ * P2-02 (§1g.3): whether THIS paper answers one of the reader's questions.
+ * `unverified` (P2-08b, §1g.21 (2)) is the verifier's alone: the model offered
+ * answers and every one failed verbatim verification, so Peer can neither show
+ * an answer nor say the paper does not address the question. A model that
+ * sends it is read as `not_addressed` by the sanitizer.
+ */
+export type QuestionVerdict = "answered" | "partly" | "not_addressed" | "unverified";
 
 /** A section to read for a question: one that answers it, or `background`
  *  needed to understand an answer though it does not mention the question. */
@@ -435,6 +441,7 @@ export function withoutFigures(report: PaperReport): PaperReport {
 
 // ── The answers to the reader's questions (P2-02, §1g.3) ───────────────
 
+/** What the model may say; `unverified` is not among them (§1g.21 (2)). */
 const VERDICTS: readonly QuestionVerdict[] = ["answered", "partly", "not_addressed"];
 const READ_NEXT_KINDS: readonly ReadNextItem["kind"][] = ["answer", "background"];
 
@@ -487,7 +494,9 @@ function questionText(value: unknown): string {
  * already answered, one past the request's count, one whose position is
  * taken. Every kept entry carries the request's own text, never the
  * model's. An entry with a verdict the schema does not name is dropped
- * uncounted (it fails the schema, not the matching), and a request question
+ * uncounted (it fails the schema, not the matching) — except `unverified`,
+ * which only the verifier may set and which a model's entry is read as
+ * `not_addressed` for (§1g.21 (2)) — and a request question
  * no entry answers has no entry: nothing is said for it rather than a
  * verdict invented.
  */
@@ -507,7 +516,9 @@ function questionAnswers(
   const byPosition: { position: number; item: Record<string, unknown> }[] = [];
   let unmatched = 0;
   value.forEach((item, position) => {
-    if (!isRecord(item) || !VERDICTS.includes(item.verdict as QuestionVerdict)) return;
+    // A model-sent `unverified` is kept as an entry and read as `not_addressed`
+    // below: it is a verdict the schema never offers, not a reason to lose the entry.
+    if (!isRecord(item) || !(VERDICTS.includes(item.verdict as QuestionVerdict) || item.verdict === "unverified")) return;
     const index = byText.get(questionText(item.question));
     if (index === undefined) byPosition.push({ position, item });
     else if (slots[index]) unmatched += 1;
@@ -524,7 +535,7 @@ function questionAnswers(
     if (!item) return;
     entries.push({
       question: asked[i],
-      verdict: item.verdict as QuestionVerdict,
+      verdict: item.verdict === "unverified" ? "not_addressed" : (item.verdict as QuestionVerdict),
       answers: answerClaims(item.answers),
       readNext: readNextItems(item.readNext),
     });

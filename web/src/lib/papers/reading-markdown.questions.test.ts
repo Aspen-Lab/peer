@@ -251,6 +251,50 @@ describe("readingToMarkdown with the reader's questions (P2-05)", () => {
     expect(md).not.toContain("Read next");
   });
 
+  // P2-08b (§1g.21 (2)): an entry whose answers all failed verification prints
+  // the page's own unverified line — no answers, the Read next rows kept — and
+  // never "This paper does not address", which would be untrue of the paper.
+  it("prints the unverified line, with no answers and the Read next rows kept, in the page's words (P2-08b)", () => {
+    const entry: MarkdownQuestionAnswers = {
+      question: QUESTIONS[0],
+      verdict: "unverified",
+      answers: [],
+      readNext: [{ sectionId: "s2", why: "It reports the measured retention result.", kind: "answer" }],
+    };
+    const { reading, report, sentences } = fixture({ forYourQuestions: [entry] });
+
+    const md = readingToMarkdown(normalPaper, reading, report, sentences, NOW, [QUESTIONS[0]]);
+
+    const block = md.slice(md.indexOf("## For your questions"), md.indexOf("## What it proposes"));
+    expect(block).toBe(
+      [
+        "## For your questions",
+        "",
+        "**Does the method improve retention?**",
+        "",
+        "Peer could not verify an answer in the paper's own words.",
+        "",
+        "Read next",
+        "",
+        "- §2 Results · p.7 · 3 min — It reports the measured retention result.",
+        "",
+        "",
+      ].join("\n"),
+    );
+    expect(block).not.toContain("does not address");
+
+    const html = renderToStaticMarkup(
+      createElement(
+        SectionLinks,
+        { headings: MAP.sections.map((section) => section.heading) },
+        createElement(ForYourQuestions, { report: { forYourQuestions: [entry] } as Pick<PaperReport, "forYourQuestions">, map: MAP }),
+      ),
+    );
+    // renderToStaticMarkup writes the apostrophe as an entity; the words are the same.
+    expect(html.replace(/<[^>]+>/g, "").replace(/&#x27;/g, "'")).toContain(FOR_YOUR_QUESTIONS.unverified);
+    expect(md).toContain(FOR_YOUR_QUESTIONS.unverified);
+  });
+
   it("an all-caps heading is set the way the other quotes of the export set it", () => {
     const { reading, report, sentences } = fixture({
       forYourQuestions: [

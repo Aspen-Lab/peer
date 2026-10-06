@@ -46,6 +46,9 @@ export const FOR_YOUR_QUESTIONS = {
     const asked = question.trim();
     return `This paper does not address: ${asked}${/[?.!？！。]$/.test(asked) ? "" : "."}`;
   },
+  /** P2-08b (§1g.21 (2)): the model offered answers and every one failed
+   *  verification — Peer's own words, never a claim about the paper. */
+  unverified: "Peer could not verify an answer in the paper's own words.",
   readNext: "Read next",
   background: "background",
 } as const;

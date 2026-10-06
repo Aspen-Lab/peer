@@ -43,7 +43,7 @@ export interface MarkdownAnswer extends MarkdownClaim {
  *  `question` is the reader's own text, which the server wrote back. */
 export interface MarkdownQuestionAnswers {
   question: string;
-  verdict: "answered" | "partly" | "not_addressed";
+  verdict: "answered" | "partly" | "not_addressed" | "unverified";
   answers: MarkdownAnswer[];
   readNext: { sectionId: string; why: string; kind: "answer" | "background" }[];
 }
@@ -196,7 +196,8 @@ function oneLine(text: string): string {
  *  says them (P2-05) — one place, so the Markdown export and the reading note
  *  cannot drift from each other or from the page. */
 export interface QuestionEntryLines {
-  /** "Answered", "Partly answered", or "This paper does not address: <question>." */
+  /** "Answered", "Partly answered", "This paper does not address: <question>.",
+   *  or the unverified line (P2-08b). */
   verdict: string;
   /** Per answer: Peer's sentence, and the paper's — "<evidence> — §Heading · p.N"
    *  (null when the answer carries no evidence). */
@@ -221,6 +222,8 @@ export function questionEntryLines(entry: MarkdownQuestionAnswers, map?: Reading
         return FOR_YOUR_QUESTIONS.partly;
       case "not_addressed":
         return FOR_YOUR_QUESTIONS.notAddressed(entry.question);
+      case "unverified":
+        return FOR_YOUR_QUESTIONS.unverified;
     }
   })();
   return {

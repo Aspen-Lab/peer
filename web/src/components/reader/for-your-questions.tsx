@@ -27,6 +27,8 @@ function verdict(question: QuestionAnswers): string {
       return FOR_YOUR_QUESTIONS.partly;
     case "not_addressed":
       return FOR_YOUR_QUESTIONS.notAddressed(question.question);
+    case "unverified":
+      return FOR_YOUR_QUESTIONS.unverified;
   }
 }
 

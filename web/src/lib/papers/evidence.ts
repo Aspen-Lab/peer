@@ -3,9 +3,15 @@
 // Every claim in a `PaperReport` carries one `evidence` sentence the model
 // says it copied character-for-character from the text it was given. Models
 // paraphrase, tidy punctuation, drop a citation bracket or swap a ligature,
-// so the test is a forgiving substring match over a normalised corpus. A
-// claim whose sentence is not found is dropped — never flagged, never shown
-// with a warning — and the drop is counted so the page can say how many.
+// so the test is a substring match over a normalised corpus: the WHOLE
+// normalised quote must sit in one section, nothing less (P2-08b, §1g.16 —
+// a rule that compared only a long quote's head and tail let a reversed
+// clause through as the paper's own words). The normalisation is the only
+// leniency: case, whitespace, ligatures, quotes, dashes, hyphen breaks, and
+// bracketed citations (`[12]`, `(Smith et al., 2020)`) are folded on both
+// sides. A claim whose sentence is not found is dropped — never flagged,
+// never shown with a warning — and the drop is counted so the page can say
+// how many.
 //
 // Pure: no I/O, importable on the client (`placeEvidence` runs there to turn
 // an abstract quote into an ink mark instead of a repeated line).
@@ -19,15 +25,26 @@ import type { Claim, PaperReport, PaperReportKeyResult, PaperTerm, QuestionAnswe
  * that" is in every abstract. Do not lower it; see the spec's risk list.
  */
 const MIN_QUOTE_CHARS = 40;
-/** Partial-match window: the quote's head and tail must both be present. */
-const PREFIX_CHARS = 80;
-const SUFFIX_CHARS = 40;
 
 /**
  * Inline citation markers: `[12]`, `[3-5]`, `[1, 2]`, `[3–5]`. Runs after the
  * dash fold so every dash shape inside the bracket is a plain hyphen.
  */
 const CITATION_BRACKETS = /\s*\[\d+(?:\s*[-,]\s*\d+)*\]/g;
+
+/**
+ * Bracketed author-year citations (P2-08b, §1g.16): `(Smith et al., 2020)`,
+ * `(Smith and Jones, 2019; Lee, 2021a)`, `(Smith & Lee 2020)`, `(Müller, 2018)`.
+ * The one other leniency, beside `[12]`, the whole-quote rule keeps: an
+ * extractor that strips them and a model that keeps them (or the reverse)
+ * still agree once both sides fold them. An author's name starts with a
+ * capital, so `(2020)`, `(Figure 3a)`, `(n = 12)`, `(see Smith, 2020)`,
+ * `(Smith, 2020, p. 5)` and a narrative "Smith et al. (2020)" are left alone.
+ * Runs on the same side of the lower-casing as the bracket fold and is linear.
+ */
+const AUTHOR = "[A-Z][\\p{L}'-]*(?:\\s+et\\s+al\\.?|\\s+(?:and|&)\\s+[A-Z][\\p{L}'-]*)?";
+const AUTHOR_YEAR = `${AUTHOR},?\\s+(?:19|20)\\d\\d[a-z]?`;
+const AUTHOR_YEAR_CITATIONS = new RegExp(`\\s*\\(${AUTHOR_YEAR}(?:\\s*;\\s*${AUTHOR_YEAR})*\\)`, "gu");
 
 /**
  * `/` (ASCII slash) and `⁄` (U+2044, FRACTION SLASH). PyMuPDF's PDF text
@@ -97,7 +114,8 @@ const ZERO_WIDTH_CHARS = /[​‌‍﻿]/g;
  * the same alphabet (it already folds entities, mojibake, `×`, `±`, sub- and
  * superscripts). Then NFKC (ligatures `ﬁ` → `fi`), curly → straight quotes,
  * every dash → `-`, soft hyphens and zero-width characters gone (the latter
- * folded to a space, not deleted — 4-02), citation brackets gone, both slash
+ * folded to a space, not deleted — 4-02), citation brackets and bracketed
+ * author-year citations gone (P2-08b), both slash
  * characters gone (1-17), a hyphenated line-break re-joined (2-02),
  * lowercase, whitespace collapsed.
  */
@@ -110,6 +128,7 @@ export function normalizeForMatch(s: string): string {
     .replace(/\u00AD/g, "")
     .replace(ZERO_WIDTH_CHARS, " ")
     .replace(CITATION_BRACKETS, "")
+    .replace(AUTHOR_YEAR_CITATIONS, "")
     .replace(FRACTION_SLASHES, "")
     .replace(HYPHENATED_WORD_BREAK, "$1$2")
     .toLowerCase()
@@ -117,23 +136,18 @@ export function normalizeForMatch(s: string): string {
     .trim();
 }
 
-/** Match already-normalised strings; the exported check normalises first. */
+/**
+ * Match already-normalised strings; the exported check normalises first. The
+ * whole quote or nothing (P2-08b, §1g.16): no head, no tail, no window — a
+ * quote that is only partly in the section is not the paper's sentence.
+ */
 function supportedIn(quote: string, corpus: string): boolean {
-  if (quote.length < MIN_QUOTE_CHARS) return false;
-  if (corpus.includes(quote)) return true;
-  // A model that drops a mid-sentence citation, a math token or an inline
-  // reference still copied the sentence; ask for its head and its tail.
-  if (quote.length <= PREFIX_CHARS) return false;
-  return (
-    corpus.includes(quote.slice(0, PREFIX_CHARS)) &&
-    corpus.includes(quote.slice(-SUFFIX_CHARS))
-  );
+  return quote.length >= MIN_QUOTE_CHARS && corpus.includes(quote);
 }
 
 /**
  * True when `quote` (≥ 40 chars after normalisation) appears in `corpus`
- * whole, or — for a quote longer than 80 chars — when its first 80 and last
- * 40 characters both appear.
+ * whole, once both are normalised.
  */
 export function evidenceSupported(quote: string, corpus: string): boolean {
   return supportedIn(normalizeForMatch(quote), normalizeForMatch(corpus));
@@ -333,9 +347,20 @@ export function verifyReportEvidence(
         dropped += 1;
         return false;
       });
-      // Nothing verifiable was found for it: the paper, as far as Peer can
-      // show, does not address the question.
-      const verdict = entry.verdict !== "not_addressed" && answers.length === 0 ? "not_addressed" : entry.verdict;
+      // §1g.21 (2): an entry the model called answered or partly, whose answers
+      // verification dropped every one of, is "unverified" — "not addressed"
+      // would be a false statement about the paper, which may well address the
+      // question in words Peer could not verify. An entry that arrived with no
+      // answer at all offered nothing to verify: it stays "not_addressed", as
+      // does one the model itself called so. Only this verifier sets the value.
+      const verdict: QuestionAnswers["verdict"] =
+        entry.verdict === "not_addressed"
+          ? "not_addressed"
+          : answers.length > 0
+            ? entry.verdict
+            : entry.answers.length > 0
+              ? "unverified"
+              : "not_addressed";
       return { ...entry, verdict, answers, readNext };
     });
   }
