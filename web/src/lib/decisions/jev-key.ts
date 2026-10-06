@@ -15,7 +15,7 @@
  * Nothing in here logs, stores or returns anything but the trimmed input.
  */
 
-export const JEV_API_KEY_MAX_LENGTH = 512;
+export const JEV_KEY_MAX_LENGTH = 512;
 
 // Whitespace anywhere (including a tab, a line break and a no-break space),
 // C0 controls, DEL and C1 controls.
@@ -25,7 +25,7 @@ const NOT_KEY_CHARACTER = /[\s\u0000-\u001f\u007f-\u009f]/u;
 export function parseJevApiKey(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
   const key = value.trim();
-  if (key.length === 0 || key.length > JEV_API_KEY_MAX_LENGTH) return undefined;
+  if (key.length === 0 || key.length > JEV_KEY_MAX_LENGTH) return undefined;
   if (NOT_KEY_CHARACTER.test(key)) return undefined;
   return key;
 }

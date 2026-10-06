@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { JEV_API_KEY_MAX_LENGTH, parseJevApiKey } from "./jev-key";
+import { JEV_KEY_MAX_LENGTH, parseJevApiKey } from "./jev-key";
 
 // An invented string. It is not, and never was, a key.
 const SENTINEL = "jev-test-sentinel-not-a-key-0000";
@@ -37,10 +37,10 @@ describe("parseJevApiKey", () => {
   });
 
   it("allows exactly the maximum length and refuses one more", () => {
-    expect(JEV_API_KEY_MAX_LENGTH).toBe(512);
-    expect(parseJevApiKey("k".repeat(JEV_API_KEY_MAX_LENGTH))).toBe(
-      "k".repeat(JEV_API_KEY_MAX_LENGTH),
+    expect(JEV_KEY_MAX_LENGTH).toBe(512);
+    expect(parseJevApiKey("k".repeat(JEV_KEY_MAX_LENGTH))).toBe(
+      "k".repeat(JEV_KEY_MAX_LENGTH),
     );
-    expect(parseJevApiKey("k".repeat(JEV_API_KEY_MAX_LENGTH + 1))).toBeUndefined();
+    expect(parseJevApiKey("k".repeat(JEV_KEY_MAX_LENGTH + 1))).toBeUndefined();
   });
 });

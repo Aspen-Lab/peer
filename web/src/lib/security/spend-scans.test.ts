@@ -272,6 +272,22 @@ describe("scan 7 — no source file reads a Jev key from the environment", () =>
     expect(filesMatching(/process\.env(\.|\[\s*["'`])(PEER_)?JEV_/)).toEqual([]);
   });
 
+  it("names no symbol of the deleted company-Jev path in code (the transport switch, the shadow hook, the broker, the reservation, the fallback)", () => {
+    // The final grep gate of the Jev change, kept as a standing test. Comments
+    // are stripped by `code()`, so history may still be explained in prose.
+    expect(
+      filesMatching(
+        /\b(resolveJevTransport|jevShadowEnabled|readJevCaps|readJevShadowConfig|callJevViaBroker|dispatchJevCall|reserveJevCall|geminiFallback\w*|runJevShadow|buildJevShadowHook|onFreshShortlist)\b/,
+      ),
+    ).toEqual([]);
+  });
+
+  it(".env.example sets no company Jev variable and names the one developer-only smoke variable", () => {
+    const example = fs.readFileSync(path.join(process.cwd(), ".env.example"), "utf8");
+    expect(example).not.toMatch(/^\s*(JEV_API_KEY|PEER_JEV_[A-Z_]+)\s*=/m);
+    expect(example).toMatch(/^#\s+JEV_SMOKE_API_KEY=/m);
+  });
+
   it("keeps the deleted company-funded Jev modules from coming back", () => {
     for (const file of [
       "src/lib/decisions/broker-client.ts",

@@ -182,6 +182,15 @@ operator-funded model account. If no user key resolves, the LLM features **hide 
 and the feed keeps working on Tier 0 — that is the correct pattern.
 **Never make a feature that hard-crashes when a key is missing.**
 
+**Jev (optional, the reader's own key).** A reader who applies for a Jev key and pastes it into
+their profile gets a second screening pass over the day's shortlist (`web/src/lib/decisions/`,
+wired in `web/src/lib/feed/pipeline.ts`): Jev answers a few fixed questions about each of the 50
+best candidates and Peer moves papers up or down on the answers. Peer holds no Jev key of its own
+(the build guard fails on `JEV_API_KEY` on Vercel): the reader's key travels in the paper request
+body only, is never synced, stored or logged, and with no key the feed is exactly the tiers above.
+It is independent of the model key. No improvement from it has been measured, so none is claimed
+(`web/src/lib/decisions/jev-claim.ts` holds the one sentence the copy may use).
+
 ### Sources
 
 Registered in [`web/src/lib/sources/index.ts`](web/src/lib/sources/index.ts). Each source
@@ -371,7 +380,7 @@ and fire-and-forget cloud sync:
 
 Sync components: `profile-sync.tsx`, `feed-sync.tsx`, `theme-sync.tsx`.
 
-> Local keys (BYOK API keys, Tavily key) are stored **only in the browser** (localStorage),
+> Local keys (BYOK API keys, Tavily key, Jev key) are stored **only in the browser** (localStorage),
 > not in Supabase. Keep it that way.
 
 ### Supabase data model

@@ -12,7 +12,7 @@ export const sharedVitestConfig = {
       // without this alias EVERY test (server-equivalent, `environment:
       // "node"`) would hit the throwing branch merely by importing a
       // server-only-tagged module transitively (e.g. `jev-direct-client.ts`,
-      // via `flag.ts`'s `resolveJevTransport()`). This only changes what the
+      // via the Jev screen the feed pipeline imports). This only changes what the
       // TEST runner resolves the package to — Next's real webpack/turbopack
       // build is untouched and keeps enforcing the actual client/server
       // split via its own condition.
