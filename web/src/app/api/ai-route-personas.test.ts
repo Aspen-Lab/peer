@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import {
+  armEveryOperatorSearchCredential,
   OPERATOR_SENTINEL,
   USER_SENTINEL,
   deleteSpendableKeys,
@@ -113,8 +114,7 @@ describe("the AI routes, driven through the real handlers", () => {
     deployedRuntimeEnv(vi.stubEnv);
     // The company's keys ARE set (see the file comment).
     vi.stubEnv("GOOGLE_API_KEY", OPERATOR_SENTINEL);
-    vi.stubEnv("TAVILY_API_KEY", OPERATOR_SENTINEL);
-    vi.stubEnv("BRAVE_SEARCH_API_KEY", OPERATOR_SENTINEL);
+    armEveryOperatorSearchCredential(vi.stubEnv);
     mocks.getUser.mockResolvedValue(signedOut());
     mocks.resolveProvider.mockReturnValue(null);
     fetchSpy = vi

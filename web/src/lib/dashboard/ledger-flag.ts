@@ -7,8 +7,8 @@
 // (P4-S3's job) and no longer keeps its own inline copy;
 // `ledger-flag.test.ts` is the contract this module is expected to satisfy.
 //
-// Deliberately narrow, unlike e.g. GOOGLE_VERTEX_SEARCH_FALLBACK's
-// on/true/1 parsing: the ledger tables are authored but not yet applied, so
+// Deliberately narrow, unlike a forgiving on/true/1 parsing: the ledger
+// tables are authored but not yet applied, so
 // this flag is the explicit human rollout step a person flips only after
 // separately authorizing the migration -- it does not try to be forgiving
 // about how it's spelled ("true", "1", "yes" all stay off).

@@ -3739,7 +3739,11 @@ describe("a jobs fan-out runs on the reader's own key and nothing else", () => {
 
   it("runs no search at all without a reader key, even with every environment credential armed", async () => {
     armEveryOperatorSearchCredential(vi.stubEnv);
-    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    // Stood in for so that, were the code ever to reach out again, the case
+    // fails on the assertion below instead of making a real request.
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(async () => new Response("{}", { status: 200 }));
 
     const items = await jobweb.fetch(query({}));
 

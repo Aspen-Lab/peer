@@ -2611,7 +2611,11 @@ describe("an events fan-out runs on the reader's own key and nothing else", () =
     // Vertex project. Zero here is therefore a statement about the code, not
     // about an empty environment.
     armEveryOperatorSearchCredential(vi.stubEnv);
-    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    // Stood in for so that, were the code ever to reach out again, the case
+    // fails on the assertion below instead of making a real request.
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(async () => new Response("{}", { status: 200 }));
 
     const items = await eventweb.fetch(query);
 

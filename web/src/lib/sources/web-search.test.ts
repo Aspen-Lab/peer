@@ -32,7 +32,11 @@ describe("the papers web source runs on a reader's own key and nothing else", ()
     // the operator's project for an anonymous caller, with no gate, no breaker
     // and no usage row.
     armEveryOperatorSearchCredential(vi.stubEnv);
-    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    // Stood in for so that, were the code ever to reach out again, the case
+    // fails on the assertion below instead of making a real request.
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(async () => new Response("{}", { status: 200 }));
 
     const items = await webSearch.fetch({ ...query, webSearch: {} });
 
@@ -44,7 +48,11 @@ describe("the papers web source runs on a reader's own key and nothing else", ()
     // A query that says nothing carries no key. This is the shape the papers
     // pipeline actually sends.
     armEveryOperatorSearchCredential(vi.stubEnv);
-    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    // Stood in for so that, were the code ever to reach out again, the case
+    // fails on the assertion below instead of making a real request.
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(async () => new Response("{}", { status: 200 }));
 
     expect(await webSearch.fetch(query)).toEqual([]);
     expect(fetchSpy).not.toHaveBeenCalled();
@@ -58,7 +66,11 @@ describe("the papers web source runs on a reader's own key and nothing else", ()
     armEveryOperatorSearchCredential(vi.stubEnv);
     vi.stubEnv("NODE_ENV", "development");
     vi.stubEnv("VERCEL", "");
-    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    // Stood in for so that, were the code ever to reach out again, the case
+    // fails on the assertion below instead of making a real request.
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(async () => new Response("{}", { status: 200 }));
 
     expect(await webSearch.fetch(query)).toEqual([]);
     expect(fetchSpy).not.toHaveBeenCalled();
