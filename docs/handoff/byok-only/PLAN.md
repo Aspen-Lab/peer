@@ -11,9 +11,14 @@
   Part 1 (C1) is scope (a), commits N1 to N8 of section 6.3. Part 2 (C2) is scope (b), section 6.4.
 - **Everything about charging money or a paid tier is deleted from `main`**, not left unused. AI goes back to
   bring-your-own-key only; the company's own model key is never used for readers again.
-- **Q1 (Jev).** In this PR the reader path is cut: the `onFreshShortlist` hook, `buildJevShadowHook` and its helpers, and
-  `shadowEntitled` leave `app/api/feed/route.ts`, so no reader request can reach Jev. `lib/decisions/*`, the edge function and
-  the Jev env stay in place; a follow-up PR decides their deletion. Their tests stay; the feed route's Jev tests go.
+- **Q1 (Jev) - CHANGED by the owner at 19:0xZ on 2026-10-06, after this file was first committed.** Jev is NOT deleted and
+  NOT cut. It becomes a bring-your-own-key option, like Tavily was and like the model key is today: the reader applies for a
+  Jev API key and pastes it in, and the paper screening runs on it; without a key the feed screens without Jev. That rewiring
+  is a later item (C3) on this same branch. In C1 the only change to the Jev path is the predicate in
+  `app/api/feed/route.ts`: `shadowEntitled = gate.entitlement.effectivePlan !== "free"` becomes the signed-in test
+  (`gate.user !== null`), with the comments that said the plan decides it updated. `onFreshShortlist`,
+  `buildJevShadowHook`, `lib/decisions/*`, the edge function, the Jev env names and every Jev test stay in place. (The
+  recommendation in section 6.0 below to delete the hook is superseded by this.)
 - **Q2 (signed out with a key).** Sign-in stays required for every AI route. `aiAvailability(profile, auth)` returns
   `"byok"` only when the reader has a usable key and is signed in (or auth is unconfigured, the self-host and test case),
   else `"none"`.
