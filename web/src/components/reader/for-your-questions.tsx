@@ -68,8 +68,8 @@ export function ForYourQuestions({
                       <div key={`${answerIndex}:${answer.evidence}`}>
                         {/* Peer's prose is not a quotation; only the evidence below is paper text. */}
                         <p className="font-reading text-body leading-[1.6] text-text reading-justify">{answer.text}</p>
-                        <EvidenceQuote text={answer.evidence} where={where} />
-                        {typeof page === "number" && <p className="font-mono text-meta text-text-faint mt-1">p.{page}</p>}
+                        {/* The page rides inside the attribution (P2-04b), not on a line of its own. */}
+                        <EvidenceQuote text={answer.evidence} where={where} page={page} />
                       </div>
                     );
                   })}

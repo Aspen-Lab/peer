@@ -11,7 +11,7 @@
 // `SectionLinks`, so the lists that render quotes need no new prop.
 
 import { createContext, useContext, type ReactNode } from "react";
-import { attribution } from "./copy";
+import { MAP, attribution } from "./copy";
 import { sectionAnchor } from "./paper-body";
 
 const SectionHeadings = createContext<readonly string[] | null>(null);
@@ -42,12 +42,17 @@ export function SectionAttribution({ where, children }: { where: string; childre
   );
 }
 
-export function EvidenceQuote({ text, where }: { text: string; where: string }) {
+/** `page` (P2-04b, §1g.15): where the sentence sits in a PDF, when it is known,
+ *  as " · p.N" inside the attribution after the section link. `where` stays
+ *  the bare heading, so `sectionHref` keeps matching it. Callers without a
+ *  page are unchanged. */
+export function EvidenceQuote({ text, where, page }: { text: string; where: string; page?: number }) {
   return (
     <p className="font-reading italic text-body leading-[1.55] text-text-muted pl-5 mt-1.5 reading-justify">
       {text}
       <span className="font-mono not-italic text-meta text-text-faint ml-2">
         — <SectionAttribution where={where}>{attribution(where)}</SectionAttribution>
+        {typeof page === "number" && ` · ${MAP.page(page)}`}
       </span>
     </p>
   );

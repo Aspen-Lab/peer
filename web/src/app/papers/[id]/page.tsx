@@ -41,7 +41,6 @@ import {
 } from "@/lib/papers/reading";
 import { readingToMarkdown } from "@/lib/papers/reading-markdown";
 import type { Claim, PaperReport } from "@/lib/papers/report";
-import type { RouteResult } from "@/lib/papers/reading-map";
 import type { Route } from "next";
 import { aiAvailability } from "@/lib/feed/ai-tier";
 import { entitlementGrants } from "@/lib/entitlement/allowance";
@@ -660,16 +659,13 @@ function Reader({
   }, []);
   const report = model.report;
   // P2-04: all route consumers receive this one display route. Tier 0 still
-  // stands unchanged if there is no verified report/question overlay.
+  // stands unchanged if there is no verified report/question overlay. P2-04b:
+  // the contents rail, the map and the body all take it as a `DrawRoute`
+  // (the shared `RouteResult` contract is untouched), so no cast is needed.
   const route = useMemo(
     () => mergeQuestionRoute(tier0Route, questionRouteOverlay(report?.forYourQuestions)),
     [tier0Route, report?.forYourQuestions],
   );
-  // `background` is deliberately a display-only extension local to
-  // paper-body. These existing Tier-0 consumers only read `tier` and retain
-  // their runtime token handling; keeping the narrow cast here leaves the
-  // shared `RouteResult` contract untouched. route-tint.test.tsx exercises it.
-  const contentsRoute = route as RouteResult | undefined;
 
   // S5: the "matrix" scramble reveal, restored. `revealingReportKey` is the
   // key of a report that just arrived fresh in this visit; while it matches
@@ -1144,7 +1140,7 @@ function Reader({
               {questionsHydrated && (
                 <QuestionField key={paper.id} paperId={paper.id} examples={examples} vague={route?.vague ?? false} />
               )}
-              {reading.map && <ReadingMapView key={`map:${paper.id}`} map={reading.map} route={contentsRoute} />}
+              {reading.map && <ReadingMapView key={`map:${paper.id}`} map={reading.map} route={route} />}
             </>
           ) : undefined
         }
@@ -1184,7 +1180,7 @@ function Reader({
               }} /> : undefined}
           />
         }
-        contents={<PaperContents reading={reading} route={contentsRoute} />}
+        contents={<PaperContents reading={reading} route={route} />}
         additions={
           <>
             {report?.forYourQuestions && <ForYourQuestions report={report} map={reading.map} />}

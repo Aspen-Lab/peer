@@ -6,7 +6,7 @@ import type { ExtractedDocument } from "@/lib/papers/html-text";
 import type { FullTextResult } from "@/lib/papers/full-text";
 import { GIST_QUESTION, gistRoute, routeByQuestions, type RouteResult } from "@/lib/papers/reading-map";
 import type { Paper } from "@/types";
-import { ASK, MAP, ROUTE } from "./copy";
+import { ASK, FOR_YOUR_QUESTIONS, MAP, ROUTE } from "./copy";
 import { HEADING_MARK, PaperBody, ROUTE_TINT, mergeQuestionRoute, questionRouteOverlay, sectionMark } from "./paper-body";
 import { PaperContents } from "./paper-contents";
 import { ReadingMapView, readingRoute } from "./reading-map";
@@ -126,11 +126,10 @@ describe("the Tier 2 question-answer overlay (P2-04)", () => {
 
   it("feeds the one merged display route to contents, map, and body consumers, including the background token", () => {
     const merged = mergeQuestionRoute(ROUTE_RESULT, questionRouteOverlay(answers));
-    // P2-04 keeps `background` local to the display route; the existing
-    // contents/map signatures stay Tier-0-shaped at this boundary.
-    const display = merged as RouteResult;
-    const contents = renderToStaticMarkup(createElement(PaperContents, { reading, route: display }));
-    const mapHtml = renderToStaticMarkup(createElement(ReadingMapView, { map: reading.map!, route: display }));
+    // P2-04b (§1g.15): all three consumers take the one `DrawRoute`, so the
+    // merged route goes in as it is — no `as RouteResult`; `tsc` is the proof.
+    const contents = renderToStaticMarkup(createElement(PaperContents, { reading, route: merged }));
+    const mapHtml = renderToStaticMarkup(createElement(ReadingMapView, { map: reading.map!, route: merged }));
     const body = renderToStaticMarkup(createElement(PaperBody, { reading, route: merged }));
 
     for (const html of [contents, mapHtml, body]) {
@@ -266,7 +265,9 @@ describe("the route copy never tells the reader not to read (§1f.13, §3d 8)", 
   function strings(value: unknown): string[] {
     if (typeof value === "string") return [value];
     if (typeof value === "function") {
-      const samples: unknown[][] = [[1, 1], [2, 3], ["2 Methods"], [[{ term: "LCO", count: 3 }]], [[1, 3]]];
+      // P2-04b: a question sample for `FOR_YOUR_QUESTIONS.notAddressed`, in
+      // both of its endings (with and without the reader's own terminal mark).
+      const samples: unknown[][] = [[1, 1], [2, 3], ["2 Methods"], [[{ term: "LCO", count: 3 }]], [[1, 3]], ["Does it discuss recycling?"], ["recycling"]];
       return samples.flatMap((args) => {
         try {
           const out: unknown = value(...args);
@@ -280,11 +281,15 @@ describe("the route copy never tells the reader not to read (§1f.13, §3d 8)", 
     return [];
   }
 
-  it("has no 'skip', 'don't read', 'ignore' or 'not worth' in the ask, map or route copy or the tier labels", () => {
-    const all = [...strings(ASK), ...strings(MAP), ...strings(ROUTE)];
+  it("has no 'skip', 'don't read', 'ignore' or 'not worth' in the ask, map, route or answers copy or the tier labels", () => {
+    // P2-04b (§1g.15 finding 4): the answers block's copy is scanned too.
+    const all = [...strings(ASK), ...strings(MAP), ...strings(ROUTE), ...strings(FOR_YOUR_QUESTIONS)];
 
     expect(all.length).toBeGreaterThan(30);
     expect(all).toContain("not mentioned");
+    expect(all).toContain("This paper does not address: Does it discuss recycling?");
+    expect(all).toContain("This paper does not address: recycling.");
+    expect(all).toContain(ROUTE.backgroundWhy);
     for (const line of all) expect(line).not.toMatch(/skip|don['’]t read|ignore|not worth/i);
   });
 });

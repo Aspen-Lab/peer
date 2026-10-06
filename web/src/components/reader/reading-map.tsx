@@ -29,7 +29,15 @@ import {
 } from "@/lib/papers/reading-map";
 import { MAP, ROUTE } from "./copy";
 import { MathText } from "./math";
-import { ROUTE_TINT, markedClass, paragraphAnchor, routeAsksQuestions, sectionAnchor, sectionMark } from "./paper-body";
+import {
+  ROUTE_TINT,
+  markedClass,
+  paragraphAnchor,
+  routeAsksQuestions,
+  sectionAnchor,
+  sectionMark,
+  type DrawRoute,
+} from "./paper-body";
 
 /**
  * The route the page draws (§1f.13): the stored questions through the
@@ -64,8 +72,9 @@ export function ReadingMapView({
   phoneOpen = false,
 }: {
   map: ReadingMap;
-  /** The reader's questions routed through the paper (`readingRoute`). */
-  route?: RouteResult;
+  /** The reader's questions routed through the paper (`readingRoute`), with
+   *  the report's Tier 2 marks merged over them once there is one. */
+  route?: DrawRoute;
   /** Rows whose paragraph lines start open (tests; the page opens none). */
   openRows?: readonly number[];
   /** Whether the table starts shown on a phone (tests; the page: no). */
@@ -109,10 +118,14 @@ export function ReadingMapView({
             const expanded = open.has(k);
             const role = roleLabel(row.role);
             const mark = sectionMark(route, row.id);
+            // P2-04b (§1g.15): a background mark Tier 0 found nothing in has no
+            // counts to state, so it says what the mark is for, not the bare tier.
             const fact = mark
               ? mark.hits.length > 0
                 ? `${ROUTE.tiers[mark.tier]} · ${ROUTE.mentions(mark.hits)}`
-                : ROUTE.tiers[mark.tier]
+                : mark.tier === "background"
+                  ? ROUTE.backgroundWhy
+                  : ROUTE.tiers[mark.tier]
               : asked
                 ? ROUTE.tiers.none
                 : null;

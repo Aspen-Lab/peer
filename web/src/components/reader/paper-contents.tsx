@@ -13,9 +13,8 @@
 // strip rather than a rail.
 
 import type { PaperReading } from "@/lib/papers/reading";
-import type { RouteResult } from "@/lib/papers/reading-map";
 import { BODY } from "./copy";
-import { markedClass, sectionAnchor, sectionMark } from "./paper-body";
+import { markedClass, sectionAnchor, sectionMark, type DrawRoute } from "./paper-body";
 
 function countWords(reading: PaperReading): number {
   let words = 0;
@@ -36,7 +35,7 @@ function depthOf(heading: string): number {
  *  how its section answers them (`sectionMark`) and its `title` names the
  *  questions; a section no question mentions has no colour, and is still
  *  a row like any other. */
-export function PaperContents({ reading, route }: { reading: PaperReading; route?: RouteResult }) {
+export function PaperContents({ reading, route }: { reading: PaperReading; route?: DrawRoute }) {
   const body = reading.body ?? [];
   if (body.length === 0) return null;
 

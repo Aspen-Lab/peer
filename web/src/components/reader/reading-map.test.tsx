@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { gistRoute, type ReadingMap, type RouteResult } from "@/lib/papers/reading-map";
 import { ASK, MAP, ROUTE } from "./copy";
+import type { DisplayRoute } from "./paper-body";
 import { ReadingMapView } from "./reading-map";
 
 // P1-04 (§1f.12; blueprint §3.2 ② 图): the map under the question field.
@@ -217,5 +218,56 @@ describe("ReadingMapView — the route (P1-05)", () => {
     expect(rowOf(html, "1 Introduction")).toContain(`>${ROUTE.tiers.skim}<`);
     expect(html).not.toContain("mentions");
     expect(html).not.toContain(ROUTE.tiers.none);
+  });
+});
+
+// P2-04b (§1g.15 finding 3): a Tier 2 `background` mark with no Tier 0 hits
+// said the bare word "background" — a tier label with nothing behind it. It
+// now says what the mark is for. With hits it is the Tier 0 fact, as before.
+describe("ReadingMapView — the background mark's fact line (P2-04b)", () => {
+  const backgroundRoute: DisplayRoute = {
+    byQuestion: [
+      {
+        question: "Which samples were cut?",
+        vague: false,
+        sections: {
+          s1: { tier: "background", hits: [], paragraphs: [] },
+          s2: { tier: "background", hits: [{ term: "samples", count: 2 }], paragraphs: [0] },
+          s3: { tier: "none", hits: [], paragraphs: [] },
+        },
+      },
+    ],
+    vague: false,
+  };
+
+  it("reads 'background · context for an answer' for a background mark with no hits", () => {
+    const html = render({ route: backgroundRoute });
+
+    expect(ROUTE.backgroundWhy).toBe("background · context for an answer");
+    expect(rowOf(html, "1 Introduction")).toContain(`>${ROUTE.backgroundWhy}<`);
+    expect(rowOf(html, "1 Introduction")).not.toContain(`>${ROUTE.tiers.background}<`);
+    // Tinted with the middle token, and the title names the question.
+    expect(rowOf(html, "1 Introduction")).toMatch(/<div data-route="background" title="Q1" class="[^"]*bg-\[color:var\(--color-route-background\)\]/);
+  });
+
+  it("keeps 'background · mentions …' when the mark has hits, and never shows the context line then", () => {
+    const html = render({ route: backgroundRoute });
+
+    expect(rowOf(html, "2.1 Samples")).toContain(`${ROUTE.tiers.background} · mentions samples ×2`);
+    expect(rowOf(html, "2.1 Samples")).not.toContain(ROUTE.backgroundWhy);
+  });
+
+  it("leaves the other tiers' fact lines as they were", () => {
+    const html = render({ route: backgroundRoute });
+
+    // A section the route does not mention still says so; background's line is for background only.
+    expect(rowOf(html, "Problem Statement")).toContain(`>${ROUTE.tiers.none}<`);
+    expect(rowOf(html, "Problem Statement")).not.toContain(ROUTE.backgroundWhy);
+    const skim: DisplayRoute = {
+      byQuestion: [{ question: "Which samples were cut?", vague: false, sections: { s1: { tier: "skim", hits: [], paragraphs: [] } } }],
+      vague: false,
+    };
+    expect(rowOf(render({ route: skim }), "1 Introduction")).toContain(`>${ROUTE.tiers.skim}<`);
+    expect(render({ route: skim })).not.toContain(ROUTE.backgroundWhy);
   });
 });

@@ -39,7 +39,12 @@ export const FOR_YOUR_QUESTIONS = {
   heading: "For your questions",
   answered: "Answered",
   partly: "Partly answered",
-  notAddressed: (question: string) => `This paper does not address: ${question}.`,
+  /** P2-04b (§1g.15): the reader's own words end the sentence when they already
+   *  end like one ("…recycling?"); a period is added only otherwise. */
+  notAddressed: (question: string) => {
+    const asked = question.trim();
+    return `This paper does not address: ${asked}${/[?.!]$/.test(asked) ? "" : "."}`;
+  },
   readNext: "Read next",
   background: "background",
 } as const;
@@ -149,6 +154,9 @@ export const ROUTE = {
     none: "not mentioned",
   },
   vague: "Ask something more specific and Peer can point you to the right sections.",
+  /** P2-04b: the map's fact line for a `background` mark with no Tier 0 hits
+   *  (the report named the section as context for an answer; no count to give). */
+  backgroundWhy: "background · context for an answer",
   /** The facts behind a tint: the reader's terms the section uses, and how often. */
   mentions: (hits: ReadonlyArray<{ term: string; count: number }>) =>
     `mentions ${hits

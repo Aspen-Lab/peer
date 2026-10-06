@@ -102,7 +102,11 @@ export interface DisplayRoute {
   vague: boolean;
 }
 
-type DrawRoute = RouteResult | DisplayRoute;
+/** What every route consumer draws from — the contents rail, the map and the
+ *  body: Tier 0's `RouteResult`, or `DisplayRoute` once Tier 2's marks are
+ *  merged over it (P2-04b, §1g.15: a type-only widening — the three already
+ *  handle the `background` tier at runtime — in place of a cast on the page). */
+export type DrawRoute = RouteResult | DisplayRoute;
 
 function displaySection(tier: TintTier, evidence?: string): Omit<RouteSection, "tier"> & { tier: TintTier } {
   return { tier, hits: [], paragraphs: [], ...(evidence ? { evidence } : {}) };
