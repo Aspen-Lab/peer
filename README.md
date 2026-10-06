@@ -294,10 +294,12 @@ extraction, semantic matching, and vision matching, then binding to report resul
 never crawled: `POST /api/papers/upload` hashes the file (`upload-store.ts`, id `upload:<sha16>`,
 idempotent) and stores it under `web/.local-data/uploads/` — **gitignored, scoped to the
 uploading owner (the signed-in account, or a per-browser capability cookie in local dev — never
-a shared identity), and local to this machine only; an upload made in one `next dev`/deployment
-is not visible from another, and nothing here is persisted on Vercel.** Every private route
-(metadata, the raw file, reading, report generation, figures, the owner's own upload list,
-delete) checks that owner before touching disk. `full-text.ts` and `lib/figures/extract.ts` both
+a shared identity), and local to this machine only.** On Vercel, set `PEER_UPLOAD_BUCKET`
+(see `web/.env.example`) and uploads go to a private Supabase Storage bucket instead — the
+browser puts the PDF there itself through a one-time signed URL, since a Vercel function will
+not take a body much over 4 MB. Every private route (metadata, the raw file, reading, report
+generation, figures, the owner's own upload list, delete) checks that owner before touching
+storage. `full-text.ts` and `lib/figures/extract.ts` both
 recognize an `upload:` id and read the stored file directly, so the rest of the deep-report/figure
 pipeline needs no separate code path. A PDF with no extractable text (a scanned image, most often)
 still uploads successfully; the reading page says so plainly instead of pretending a report

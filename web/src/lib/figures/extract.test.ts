@@ -2,11 +2,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   extractPdfCandidatesFromPath: vi.fn(),
+  // Upload storage hands the extractor a path to the stored PDF — on disk,
+  // the stored file itself; from the bucket, a private temp copy.
+  withUploadPdfFile: vi.fn(async (hash16: string, use: (filePath: string) => Promise<unknown>) =>
+    use(`/private/uploads/${hash16}.pdf`)),
 }));
 
 vi.mock("./pdf-extract", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./pdf-extract")>();
   return { ...actual, extractPdfCandidatesFromPath: mocks.extractPdfCandidatesFromPath };
+});
+
+vi.mock("@/lib/papers/upload-store", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/papers/upload-store")>();
+  return { ...actual, withUploadPdfFile: mocks.withUploadPdfFile };
 });
 
 import { extractFigure, finalDiagnostic, getFigurePool, tryHtmlCandidates } from "./extract";
@@ -300,7 +309,7 @@ describe("tryHtmlCandidates — 1-21, a small identity-check bounce page is not 
 
 vi.mock("@/lib/papers/upload-access", () => ({ ownedUpload: vi.fn(async () => ({ ownerKey: "test" })) }));
 
-describe("getFigurePool — 1-29, an upload: id reads the local PDF directly", () => {
+describe("getFigurePool — 1-29, an upload: id reads its stored PDF directly", () => {
   beforeEach(() => {
     mocks.extractPdfCandidatesFromPath.mockReset();
   });
@@ -332,6 +341,16 @@ describe("getFigurePool — 1-29, an upload: id reads the local PDF directly", (
 
     expect(pool.entries).toHaveLength(0);
     expect(pool.attempted).toBe(true);
+  });
+
+  it("returns an honest empty pool, without running the extractor, when the stored PDF is gone", async () => {
+    mocks.withUploadPdfFile.mockResolvedValueOnce(null);
+
+    const pool = await getFigurePool({ itemId: "upload:0000000000000012" });
+
+    expect(pool.entries).toHaveLength(0);
+    expect(pool.attempted).toBe(true);
+    expect(mocks.extractPdfCandidatesFromPath).not.toHaveBeenCalled();
   });
 });
 

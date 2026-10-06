@@ -30,7 +30,7 @@ export async function GET(
   // else about this response unchanged, so the page can tell the two states
   // apart and treat both honestly.
   return NextResponse.json(
-    { ...uploadMetaToPaper(meta), fileAvailable: uploadFileExists(id) },
+    { ...uploadMetaToPaper(meta), fileAvailable: await uploadFileExists(id) },
     { headers: PRIVATE_UPLOAD_HEADERS },
   );
 }

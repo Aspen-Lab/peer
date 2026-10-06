@@ -10,13 +10,12 @@
 // than a 401 that would.
 
 import { timingSafeEqual } from "node:crypto";
-import { unlink } from "node:fs/promises";
 import { NextResponse } from "next/server";
 import {
   hasOtherReadyDocumentCopy,
   isValidHash16,
-  pdfPath,
   readUploadMeta,
+  removeUploadPdf,
   writeUploadMeta,
   type UploadMeta,
 } from "@/lib/papers/upload-store";
@@ -68,11 +67,9 @@ export async function POST(req: Request) {
   // The PDF is the only per-hash16 derived content that ever lands on disk
   // for an upload (confirmed 9-16: full-text/figure extraction for
   // `upload:` ids never writes a shared or per-request cache file into
-  // `UPLOAD_DIR` — both bypass the shared cache entirely and read the PDF
+  // upload storage — both bypass the shared cache entirely and read the PDF
   // directly on every call). Removing it is removing every derived file.
-  await unlink(pdfPath(hash16)).catch((error: NodeJS.ErrnoException) => {
-    if (error.code !== "ENOENT") throw error;
-  });
+  await removeUploadPdf(hash16);
 
   // A minimal record, deliberately smaller than a live `UploadMeta`: kept
   // ONLY so this hash16 can never be re-claimed by a future upload of the
