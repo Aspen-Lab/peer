@@ -41,9 +41,8 @@
 // the manager's E1 ruling moved the cooldown itself into this slice): they
 // bound the COUNT of manual-refresh-triggered prepare jobs a user (or all
 // users) can enqueue per UTC day, using the same already-proven atomic
-// counter primitive `deepReportGlobalDayKey`/`FORCED_REBUILDS_PER_DAY`
-// already use elsewhere in usage/counters.ts — not a dollar-budget
-// reservation. Named here, not hidden, per this codebase's own convention
+// counter primitive `FORCED_REBUILDS_PER_DAY` already uses elsewhere in
+// usage/counters.ts — not a dollar-budget reservation. Named here, not hidden, per this codebase's own convention
 // of stating a trade-off rather than silently deciding it.
 import type { CounterStore } from "@/lib/usage/counters";
 

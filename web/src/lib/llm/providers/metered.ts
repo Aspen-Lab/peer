@@ -121,10 +121,9 @@ function meterCall<A extends unknown[], R>(
       const reservation = await reserveCompanySpendForCall(shape, provider.id, ctx.userId, new Date());
       if (!reservation.ok) {
         // §2.7 — the audit trail for a spend cap, awaited like every other
-        // breaker row in this codebase (`deep-report-quota.ts`,
-        // `rebuild-breaker.ts`): losing it to a cold shutdown would leave a
-        // trip with no record. Reuses the existing free-text `path` field
-        // rather than a new column.
+        // breaker row in this codebase (`rebuild-breaker.ts`): losing it to a
+        // cold shutdown would leave a trip with no record. Reuses the existing
+        // free-text `path` field rather than a new column.
         await recordUsageEventAwaited({
           user_id: ctx.userId,
           kind: "breaker",

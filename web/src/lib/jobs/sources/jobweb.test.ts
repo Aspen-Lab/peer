@@ -4080,7 +4080,7 @@ describe("2-04 — every operator-funded provider is charged and metered", () =>
     // purpose — it is what makes "untouched" measurable.
     //
     // The breaker's own live coverage is elsewhere and is unaffected:
-    // `lib/usage/deep-report-quota.test.ts`, driven through the forced-rebuild
+    // `lib/usage/rebuild-breaker.test.ts`, driven through the forced-rebuild
     // caller that Ruling 13 point 1 keeps alive.
     //
     // Before 2-04 this fan-out was free of the cap entirely, so the breaker

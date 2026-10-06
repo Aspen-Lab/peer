@@ -17,15 +17,16 @@
  *    signed-in user. A Supabase outage that answers 429 to everybody is a worse
  *    failure than an hour of unmetered use, so `underLimit()` treats an
  *    unreadable counter as "under the limit".
- *  - **Breakers FAIL CLOSED.** The 200/day and 500/day caps of R-QUOTA-2 exist
- *    to protect the owner's wallet. A wallet that cannot be read must not be
- *    spent, so `breakerTripped()` treats an unreadable counter as tripped and
- *    the request degrades to the existing no-LLM path.
+ *  - **Breakers FAIL CLOSED.** The daily caps (the test-email and confirm-email
+ *    sends, the forced pool rebuild) exist to protect what Peer itself pays
+ *    for. A budget that cannot be read must not be spent, so
+ *    `breakerTripped()` treats an unreadable counter as tripped and the action
+ *    is refused.
  *
  * That asymmetry is deliberate and is asserted in `counters.test.ts`. **A
- * Supabase outage therefore degrades every paid user to no-LLM** — that is the
- * trade, written down here so a later round reports it as a design decision
- * rather than as a defect.
+ * Supabase outage therefore refuses those capped actions until the store is
+ * back** — that is the trade, written down here so a later round reports it as
+ * a design decision rather than as a defect.
  *
  * ── THE PERIOD LIVES IN THE KEY ──────────────────────────────────────────────
  *
@@ -98,45 +99,17 @@ function utcDaySegment(now: Date): string {
   return now.toISOString().slice(0, 10); // YYYY-MM-DD
 }
 
-function utcMonthSegment(now: Date): string {
-  return now.toISOString().slice(0, 7); // YYYY-MM
-}
-
 /** `rate:<scope>:<user>:<YYYY-MM-DDTHH>` — the replacement for the old bucket. */
 export function rateKey(scope: string, userId: string, now: Date): string {
   return `rate:${scope}:${userId}:${utcHourSegment(now)}`;
 }
 
-/** D4 — one counter across papers + jobs + events, per calendar month. */
-export function deepReportMonthKey(userId: string, now: Date): string {
-  return `deep:${userId}:${utcMonthSegment(now)}`;
-}
-
-/** R-QUOTA-2 — the paid 200/day breaker. */
-/**
- * The ceiling across EVERY reader, for one UTC day.
- *
- * The per-user breaker caps what one account can spend; it says nothing about
- * what a hundred accounts can spend together, and the model key is the
- * operator's. Before launch that distinction is the whole of the risk: sign-up
- * is open, so "unlimited to the reader, capped to protect the wallet" was only
- * half true. This is the other half.
- */
-export function deepReportGlobalDayKey(now: Date): string {
-  return `deep:all:${now.toISOString().slice(0, 10)}`;
-}
-
-export function deepReportDayKey(userId: string, now: Date): string {
-  return `deep:${userId}:${utcDaySegment(now)}`;
-}
-
 /**
  * EMAIL-SETTINGS · ABC-JEV-INTEGRATION.md §1z P1 — the "Send test email"
- * button's own per-user daily cap (3/day). Same UTC-day shape as
- * `deepReportDayKey` above. **Fails CLOSED** (`breakerTripped`, not
- * `underLimit`): this exists to protect the send budget and stop the button
- * being used to spam, which the manager ruled follows the wallet-breaker
- * precedent, not the ordinary UX rate-limit one.
+ * button's own per-user daily cap (3/day), a UTC-day key. **Fails CLOSED**
+ * (`breakerTripped`, not `underLimit`): this exists to protect the send budget
+ * and stop the button being used to spam, which the manager ruled fails closed,
+ * unlike the ordinary UX rate limit.
  */
 export function testEmailDayKey(userId: string, now: Date): string {
   return `test_email:${userId}:${utcDaySegment(now)}`;
@@ -151,19 +124,6 @@ export function testEmailDayKey(userId: string, now: Date): string {
  */
 export function confirmEmailRequestDayKey(userId: string, now: Date): string {
   return `confirm_email:${userId}:${utcDaySegment(now)}`;
-}
-
-/**
- * R-QUOTA-2 — the 20-report trial cap.
- *
- * **No date segment, and that is not an oversight.** The cap is 20 over the
- * whole 14 days, so a period segment would reset it and hand the trial a fresh
- * twenty every month. The trial expires by date on its own (D5); this key never
- * rolls over. A later reader will want to make it monthly for symmetry with the
- * two keys above — do not.
- */
-export function deepReportTrialKey(userId: string): string {
-  return `deep:${userId}:trial`;
 }
 
 /**
@@ -203,13 +163,6 @@ export function endOfUtcDay(now: Date): Date {
   end.setUTCHours(0, 0, 0, 0);
   end.setUTCDate(end.getUTCDate() + 1);
   return end;
-}
-
-/** First instant of the next UTC month — R-QUOTA-1's `resetsAt`. */
-export function endOfUtcMonth(now: Date): Date {
-  return new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1, 0, 0, 0, 0),
-  );
 }
 
 // ── The in-memory implementation ─────────────────────────────────────────────
@@ -444,8 +397,8 @@ export function breakerTripped(
  * point 1).
  *
  * **This is the ONLY writer of this line, for every caller.** It lives here
- * rather than inside `deep-report-quota.ts` because `rebuild-breaker.ts` needs
- * the identical line and both modules already import this one — two private
+ * rather than inside `rebuild-breaker.ts` so that every breaker that needs the
+ * identical line takes it from the module they already import — two private
  * copies is exactly how the prefix drifts, which is the drift the single-writer
  * rule exists to prevent.
  *

@@ -320,12 +320,6 @@ export function useModelReport({
             settle(event.report, asked);
             return;
           }
-          if (event.type === "quota") {
-            // The daily breaker tripped: no model report today, and not a failure.
-            settled = true;
-            settle(null, false);
-            return;
-          }
           throw new Error(event.message);
         }
         if (!settled) throw new Error("Report stream ended before a report arrived.");
