@@ -2,6 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { gistRoute, routeByQuestions, type ReadingMap } from "@/lib/papers/reading-map";
+import type { ParagraphGuide } from "@/lib/papers/paragraph-guide";
 import { MAP, PEERS_READING } from "./copy";
 import { ReadingMapView } from "./reading-map";
 
@@ -45,6 +46,11 @@ function lineOf(html: string, anchor: string): string {
 }
 
 const escaped = (text: string) => text.replace(/&/g, "&amp;").replace(/'/g, "&#x27;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+/** The map's one line that says the gists are Peer's reading (P3-05, O12): a label-face
+ *  paragraph holding `PEERS_READING` and nothing else, directly under the heading. */
+const LEGEND = new RegExp(`<p class="[^"]*">${escaped(PEERS_READING)}</p>`, "g");
+const legends = (html: string): string[] => html.match(LEGEND) ?? [];
 
 // What a line was before P3-03, pinned byte for byte (the markup of the
 // untinted opening: the label-face-free serif line in the faint ink).
@@ -113,19 +119,18 @@ describe("ReadingMapView — Peer's gist after the opening", () => {
     expect(gistSpan).not.toContain("<a ");
   });
 
-  it("labels it as Peer's words, beside the gist, once per gist", () => {
+  // P3-05 (§1h.8 (5), O12): this test said the mark is printed beside the gist, once per
+  // gist (the P3-03 reading of §1f.17) — twelve times in A's rail. The ruling: once per
+  // map, under the heading (the describe after this one); the gist keeps its role, its
+  // label and its face, and loses the trailing mark. The leading space stays the gist's
+  // own: unlike a margin it does not indent the gist when it wraps to a new line.
+  it("is the gist alone on its line, with no mark of its own: the span holds a space and the gist", () => {
     const line = lineOf(html, "paper-section-0-p0");
 
-    expect(line.split(escaped(PEERS_READING))).toHaveLength(2);
-    expect(line.indexOf(escaped(PEERS_READING))).toBeGreaterThan(line.indexOf(escaped(GIST_0)));
-    expect(html.split(escaped(PEERS_READING))).toHaveLength(1 + 3);
-    // Look finding (Chromium, the narrow rail): the mark never breaks mid-phrase, and a
-    // space before it (not a margin) gives it somewhere to break, so the gist's last word
-    // is not dragged to the next line with it.
-    expect(line).toMatch(/<span class="[^"]*\bwhitespace-nowrap\b[^"]*">/);
+    expect(line).not.toContain(escaped(PEERS_READING));
+    expect(line).not.toMatch(/whitespace-nowrap/);
     expect(line).not.toMatch(/<span class="[^"]*\bml-/);
-    // The one span holds the gist and its mark: the mark is inside it.
-    expect(line).toMatch(new RegExp(`${escaped(GIST_0)} <span[^>]*>${escaped(PEERS_READING)}</span></span></li>$`));
+    expect(line).toMatch(new RegExp(`</a><span role="note" aria-label="${escaped(MAP.gist)}" class="annotation text-text-muted"> ${escaped(GIST_0)}</span></li>$`));
   });
 
   it("gives the gist an accessible name", () => {
@@ -171,7 +176,9 @@ describe("ReadingMapView — the folding is unchanged", () => {
   });
 
   it("opens the same rows to the same lines, with or without gists", () => {
-    const strip = (html: string) => html.replace(/<span role="note"[\s\S]*?<\/span><\/span>/g, "");
+    // P3-05 (O12): a gist is one span now (its mark moved to the map's legend), and the
+    // legend is the one added line under the heading; take both out and the map is what it was.
+    const strip = (html: string) => html.replace(/<span role="note"[^>]*>[^<]*<\/span>/g, "").replace(LEGEND, "");
 
     expect(strip(render({ openRows: [0, 1], gists: { s1: { 0: GIST_0, 2: GIST_2 }, s2: { 0: GIST_S2 } } }))).toBe(render({ openRows: [0, 1] }));
   });
@@ -199,5 +206,101 @@ describe("ReadingMapView — a gist on a tinted line", () => {
     const html = render({ openRows: [1], route, gists: { s2: { 0: GIST_S2 } } });
 
     expect(html).toContain(escaped(GIST_S2));
+  });
+});
+
+// P3-05 (§1h.8 (5), O12): `PEERS_READING` was printed after every gist — twelve times in
+// A's rail, against "time efficiency over information volume". It is a legend: once per
+// map, a label-face line directly under the map's heading, there only when a gist renders
+// in the map. The face already tells Peer's line from the paper's (§1f.17), and each
+// gist keeps `role="note"` and its accessible name.
+describe("ReadingMapView — the mark once per map, under the heading (P3-05, O12)", () => {
+  const big: ReadingMap = {
+    sections: [0, 1, 2].map((s) => ({
+      id: `s${s + 1}`, heading: `${s + 1} Section ${s + 1}`, canonical: "body" as const, role: "body" as const, words: 100, minutes: 1,
+      paragraphs: [0, 1, 2, 3].map((i) => ({ index: i, opening: `Opening sentence number ${s * 4 + i} of the paper itself.` })),
+    })),
+    totalMinutes: 3,
+  };
+  const twelve = Object.fromEntries([0, 1, 2].map((s) => [`s${s + 1}`, Object.fromEntries([0, 1, 2, 3].map((i) => [i, `Gist number ${s * 4 + i}.`]))]));
+  const renderBig = (props: Partial<Parameters<typeof ReadingMapView>[0]> = {}) => renderToStaticMarkup(createElement(ReadingMapView, { map: big, ...props }));
+
+  it("prints it once for twelve gists", () => {
+    const html = renderBig({ openRows: [0, 1, 2], gists: twelve });
+
+    expect(html.split("role=\"note\"")).toHaveLength(1 + 12);
+    expect(html.split(escaped(PEERS_READING))).toHaveLength(2);
+    expect(legends(html)).toHaveLength(1);
+  });
+
+  it("prints it as a label-face line under the heading, before the summary line, in the faint ink it always had", () => {
+    const html = renderBig({ openRows: [0], gists: twelve });
+    const legend = legends(html)[0];
+
+    expect(legend).toMatch(/^<p class="[^"]*\bannotation\b[^"]*\btext-text-faint\b[^"]*">/);
+    expect(legend).not.toContain("font-reading");
+    expect(legend).not.toContain("italic");
+    expect(html.indexOf(`>${MAP.heading}</p>`)).toBeGreaterThan(0);
+    expect(html.indexOf(legend)).toBeGreaterThan(html.indexOf(MAP.heading));
+    // Directly under the heading: the next element after the heading's paragraph.
+    expect(html.indexOf(legend)).toBe(html.indexOf("</p>", html.indexOf(MAP.heading)) + "</p>".length);
+    expect(html.indexOf(legend)).toBeLessThan(html.indexOf(escaped(MAP.summary(3, 3))));
+  });
+
+  it("prints none when no gist renders: no guide, an empty guide, gists for another paper, or for paragraphs with no line", () => {
+    const none: Array<ParagraphGuide["gists"] | undefined> = [undefined, {}, { s9: { 0: "A gist for a section the map does not have." } }, { s1: { 9: "A gist for a paragraph the map does not list." } }];
+    for (const gists of none) {
+      expect(renderBig({ openRows: [0, 1, 2], gists })).not.toContain(escaped(PEERS_READING));
+    }
+    expect(render({ openRows: [0, 1], gists: { s1: { 1: "A gist for a paragraph with no line." } } })).not.toContain(escaped(PEERS_READING));
+  });
+
+  it("prints none while every row is closed, whatever gists there are: no gist renders, so there is nothing to name", () => {
+    const closed = renderBig({ gists: twelve });
+
+    expect(closed).not.toContain(escaped(PEERS_READING));
+    expect(closed).toBe(renderBig());
+  });
+
+  it("prints it once an open row has a gist, and not for a gist in a row that is closed", () => {
+    expect(legends(renderBig({ openRows: [1], gists: { s1: { 0: "Only in the closed row." } } }))).toHaveLength(0);
+    expect(legends(renderBig({ openRows: [0], gists: { s1: { 0: "In the open row." } } }))).toHaveLength(1);
+    expect(legends(renderBig({ openRows: [0, 1], gists: { s1: { 0: "In the open row." } } }))).toHaveLength(1);
+  });
+
+  it("keeps each gist's role, accessible name and label face, with no mark on any of them", () => {
+    const html = renderBig({ openRows: [0, 1, 2], gists: twelve });
+    const spans = html.match(/<span role="note"[^>]*>[^<]*<\/span>/g) ?? [];
+
+    expect(spans).toHaveLength(12);
+    for (const span of spans) {
+      expect(span).toContain(`aria-label="${escaped(MAP.gist)}"`);
+      expect(span).toMatch(/class="[^"]*\bannotation\b/);
+      expect(span).not.toContain(escaped(PEERS_READING));
+      expect(span.split("<span")).toHaveLength(2); // the one span, nothing nested in it
+    }
+  });
+
+  it("leaves a line without a gist byte-identical to today's, and the rows and counts as they were", () => {
+    const html = render({ openRows: [0, 1], gists: { s1: { 0: GIST_0 } } });
+
+    expect(lineOf(html, "paper-section-0-p2")).toBe(TODAY_LINE_2);
+    expect(lineOf(html, "paper-section-1-p0")).toContain("Twelve samples with different grain sizes were cut from one cast ingot.");
+    expect(html.replace(LEGEND, "").replace(/<span role="note"[^>]*>[^<]*<\/span>/, "")).toBe(render({ openRows: [0, 1] }));
+  });
+
+  it("folds the legend with the table on a phone: hidden below 40rem until 'show map', shown with it", () => {
+    const folded = renderBig({ openRows: [0], gists: twelve });
+    const shown = renderBig({ openRows: [0], gists: twelve, phoneOpen: true });
+
+    expect(legends(folded)[0]).toMatch(/\bhidden sm:block\b/);
+    expect(legends(shown)[0]).not.toMatch(/\bhidden\b/);
+  });
+
+  it("is the same legend, once, on a tinted map and on the gist route", () => {
+    const route = gistRoute(big);
+    const html = renderBig({ openRows: [0], route, gists: twelve });
+
+    expect(legends(html)).toHaveLength(1);
   });
 });

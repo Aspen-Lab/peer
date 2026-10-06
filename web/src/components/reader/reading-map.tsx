@@ -24,6 +24,12 @@
 // under the opening when the line is too long. The opening is the paper's words
 // and is never replaced, shortened or restyled; a line with no gist is exactly
 // what it was, and a gist never makes a row foldable.
+//
+// P3-05 (§1h.8 (5), O12): the mark `PEERS_READING` is a legend, not a suffix. It was
+// printed after every gist — twelve times in one rail — and is now one label-face line
+// directly under the map's heading, there only when a gist renders in the map (an open
+// row that has one). Each gist keeps its role and accessible name and its label face,
+// which already tell Peer's line from the paper's (§1f.17).
 
 import { useState } from "react";
 import type { PaperReading } from "@/lib/papers/reading";
@@ -98,6 +104,16 @@ export function ReadingMapView({
   // Questions that point somewhere: an unmarked row then says so.
   const asked = routeAsksQuestions(route);
 
+  // A gist renders for a paragraph line of an open row that has one; the legend
+  // under the heading is there when at least one does (the lines below use the same test).
+  const gistOf = (sectionId: string, index: number): string | undefined => {
+    const gist = gists?.[sectionId]?.[index];
+    return typeof gist === "string" && gist !== "" ? gist : undefined;
+  };
+  const gistShown = map.sections.some(
+    (row, k) => open.has(k) && row.paragraphs.some((line) => line.opening !== null && gistOf(row.id, line.index) !== undefined),
+  );
+
   const toggle = (k: number) =>
     setOpen((current) => {
       const next = new Set(current);
@@ -112,6 +128,11 @@ export function ReadingMapView({
         <span aria-hidden className="block h-[6px] w-[6px] shrink-0 bg-current" />
         {MAP.heading}
       </p>
+      {/* Peer's words, once: what the gists below are. Folds with the table on a phone,
+          where the gists are folded too. */}
+      {gistShown && (
+        <p className={["annotation mt-1 text-text-faint", shownOnPhone ? "" : "hidden sm:block"].join(" ").trim()}>{PEERS_READING}</p>
+      )}
       <p className="annotation mt-2 flex items-baseline gap-3 text-text-faint">
         <span>{MAP.summary(map.sections.length, map.totalMinutes)}</span>
         <button
@@ -188,7 +209,7 @@ export function ReadingMapView({
                   <ol className="mt-1 mb-2 space-y-1 pl-5">
                     {lines.map((line) => {
                       const tier = mark?.paragraphs.get(line.index);
-                      const gist = gists?.[row.id]?.[line.index];
+                      const gist = gistOf(row.id, line.index);
                       return (
                         <li key={line.index}>
                           <a
@@ -203,17 +224,15 @@ export function ReadingMapView({
                           >
                             <MathText text={line.opening ?? ""} />
                           </a>
-                          {/* Peer's words, after the paper's: the label face and the
-                              mark beside it; the opening above is untouched. The
-                              spaces are the gist's own (in its face): unlike a margin
-                              they do not indent the gist when it wraps to a new line,
-                              and they leave the mark a place to break, so it moves
-                              under the gist whole rather than breaking inside. */}
-                          {typeof gist === "string" && gist !== "" && (
+                          {/* Peer's words, after the paper's, in the label face; the
+                              opening above is untouched. The mark is the map's legend
+                              (above), not repeated here. The space is the gist's own (in
+                              its face): unlike a margin it does not indent the gist when
+                              it wraps to a new line. */}
+                          {gist !== undefined && (
                             <span role="note" aria-label={MAP.gist} className="annotation text-text-muted">
                               {" "}
-                              {gist}{" "}
-                              <span className="whitespace-nowrap text-text-faint">{PEERS_READING}</span>
+                              {gist}
                             </span>
                           )}
                         </li>

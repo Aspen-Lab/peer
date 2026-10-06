@@ -54,7 +54,7 @@ describe("/privacy — Your questions (P2-03)", () => {
 // double quotes in the text are the typographic ones, which are not escaped.
 
 const EXPLAIN_PARAGRAPHS = [
-  "Selecting a passage sends nothing, and neither does typing in the box. Peer sends a request only when you click “Explain this?” (or press E on a selection) and, for a follow-up, when you press Enter or Send. The request carries the passage you selected, the paragraph it sits in and the one on either side of it, the paper's title and abstract, one line for each section of the paper's map and, for a follow-up, the messages of that thread. If you have set your own model key, the key goes with it.",
+  "Selecting a passage sends nothing, and neither does typing in the box. Peer sends a request only when you click “Explain this?” (or press E on a selection) and, for a follow-up, when you press Enter or Send. The request carries the passage you selected, the paragraph it sits in and the one on either side of it, the paper's title and abstract, one line for each section of the paper's map and, for a follow-up, the messages of that thread. The request also carries the paper's record as this page holds it — its title, authors, venue, where it came from and your save and feedback marks on it — so Peer's server can find the paper; of that record the model sees only the title and the abstract. If you have set your own model key, the key goes with it.",
   "The request goes to Peer's server and on to the model provider you or the owner configured — Google's Gemini when Peer's own model answers, and the provider whose key you set when you use your own.",
   "On a follow-up you can turn on “Search the web” for that one message. It is off every time the box opens and never turns on by itself. With it on, the provider may run a web search to write that reply: Gemini does this with Google Search, and with any other provider the reply is written without a search and the box says so. A message answered with a search carries the mark “searched the web”, and Peer shows no link to anything the search found.",
   "Peer's server keeps three things. First, each answer it gives, in memory, for up to an hour, so the same passage asked about again is answered without another model call; it is filed under hashes of the document, the passage and the thread, never under who asked.",
@@ -96,6 +96,26 @@ describe("/privacy — Explain this (P3-02d)", () => {
     for (const sent of ["the passage you selected", "the paragraph it sits in and the one on either side of it", "the paper's title and abstract".replace(/'/g, "&#x27;"), "one line for each section of the paper", "the messages of that thread", "your own model key"]) {
       expect(entry).toContain(sent);
     }
+  });
+
+  // P3-05 (§1h.8 (7), O13): the first paragraph listed what the PROMPT carries; the
+  // request to Peer's server carries the whole `paper` record the page holds (A's
+  // P3-04: authors, venue, flags, the upload's key), so the entry says so — and that
+  // the model sees only the title and the abstract of it. The pinned paragraph above
+  // holds the whole sentence; these name its parts.
+  it("says the request carries the paper's record to Peer's server, and that the model sees only its title and abstract", () => {
+    expect(entry).toContain("The request also carries the paper&#x27;s record as this page holds it");
+    expect(entry).toContain("its title, authors, venue, where it came from and your save and feedback marks on it");
+    expect(entry).toContain("so Peer&#x27;s server can find the paper");
+    expect(entry).toContain("of that record the model sees only the title and the abstract");
+  });
+
+  it("sets that sentence after what the prompt carries and before the key, in the paragraph that lists what is sent", () => {
+    const first = entry.slice(0, entry.indexOf("</p>"));
+
+    expect(first.indexOf("the messages of that thread.")).toBeGreaterThan(0);
+    expect(first.indexOf("The request also carries the paper&#x27;s record")).toBeGreaterThan(first.indexOf("the messages of that thread."));
+    expect(first.indexOf("If you have set your own model key")).toBeGreaterThan(first.indexOf("of that record the model sees only"));
   });
 
   it("names the provider the request goes on to", () => {
