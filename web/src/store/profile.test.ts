@@ -861,3 +861,133 @@ describe("a ledger with uploads survives clean -> server -> hydrate (9-23)", () 
     expect(hydrated?.["text:solid electrolyte"]?.uploads).toEqual(raw["text:solid electrolyte"].uploads);
   });
 });
+
+
+// The Jev key is the reader's own, like the model key: it lives in this
+// browser's profile, is trimmed and cleared like the other keys, and no remote
+// row, backup file or sign-out can move it anywhere else.
+describe("the reader's Jev key", () => {
+  // An invented string. It is not, and never was, a key.
+  const JEV = "jev-test-sentinel-not-a-key-0000";
+
+  beforeEach(() => {
+    useProfileStore.setState({ profile: { ...defaultProfile } });
+  });
+
+  it("starts empty", () => {
+    expect(defaultProfile.jevApiKey).toBe("");
+    expect(useProfileStore.getState().profile.jevApiKey).toBe("");
+  });
+
+  it("updateJevApiKey stores the trimmed value", () => {
+    useProfileStore.getState().updateJevApiKey(`  ${JEV}\n`);
+    expect(useProfileStore.getState().profile.jevApiKey).toBe(JEV);
+  });
+
+  it.each(["", "   ", "\t\n"])("updateJevApiKey(%j) clears it (blank becomes undefined)", (blank) => {
+    useProfileStore.getState().updateJevApiKey(JEV);
+    useProfileStore.getState().updateJevApiKey(blank);
+    expect(useProfileStore.getState().profile.jevApiKey).toBeUndefined();
+  });
+
+  it("changes nothing else in the profile", () => {
+    const before = useProfileStore.getState().profile;
+    useProfileStore.getState().updateJevApiKey(JEV);
+    expect(useProfileStore.getState().profile).toEqual({ ...before, jevApiKey: JEV });
+  });
+
+  it("is independent of the model key: choosing or clearing a provider leaves it alone", () => {
+    useProfileStore.getState().updateJevApiKey(JEV);
+    useProfileStore.getState().updateFeedAiProvider("openai");
+    useProfileStore.getState().updateFeedAiApiKey("user-owned-key");
+    useProfileStore.getState().updateFeedAiProvider("default");
+    expect(useProfileStore.getState().profile.jevApiKey).toBe(JEV);
+  });
+
+  it("a remote profile can never set it, and never clears it", () => {
+    useProfileStore.getState().updateJevApiKey(JEV);
+    useProfileStore.getState().hydrateFromRemote({
+      jevApiKey: "a-key-a-server-row-must-not-install",
+      displayName: "Remote Name",
+    });
+    expect(useProfileStore.getState().profile.jevApiKey).toBe(JEV);
+    expect(useProfileStore.getState().profile.displayName).toBe("Remote Name");
+
+    useProfileStore.setState({ profile: { ...defaultProfile } });
+    useProfileStore.getState().hydrateFromRemote({ jevApiKey: "a-key-a-server-row-must-not-install" });
+    expect(useProfileStore.getState().profile.jevApiKey).toBe("");
+  });
+
+  it("a confirmed sign-out resets it with the other local keys", () => {
+    useProfileStore.getState().updateJevApiKey(JEV);
+    useProfileStore.getState().logOut();
+    expect(useProfileStore.getState().profile.jevApiKey).toBe("");
+  });
+
+  it("is written to storage only inside the profile, the same place as the model key (never as a key of its own)", () => {
+    const text = readFileSync(join(process.cwd(), "src/store/profile.ts"), "utf8");
+    // The persisted object is still exactly three keys (asserted below in
+    // "still writes only the profile, lastSynced and syncedAccountId").
+    expect(text).not.toMatch(/partialize:[^}]*jevApiKey/);
+  });
+});
+
+// D6 — a backup file must not carry a credential: a restore cannot install one
+// (`stripCredentialFields`), so writing one into the file only puts a secret in
+// a place the reader may email, sync or paste.
+describe("a backup file carries no credential", () => {
+  const JEV = "jev-test-sentinel-not-a-key-0000";
+  const credentialProfile: UserProfile = {
+    ...defaultProfile,
+    displayName: "Peter",
+    researchTopics: ["LCO"],
+    tavilyApiKey: "tvly-secret",
+    adzunaAppId: "adzuna-id",
+    adzunaAppKey: "adzuna-secret",
+    usajobsApiKey: "usajobs-secret",
+    usajobsUserAgent: "me@example.test",
+    feedAiProvider: "openai",
+    feedAiApiKey: "sk-secret",
+    jevApiKey: JEV,
+  };
+
+  it("exportProfileDocument leaves out the Jev key, the model key and every other credential-like field", () => {
+    const document = exportProfileDocument(credentialProfile);
+    for (const field of [
+      "jevApiKey",
+      "feedAiApiKey",
+      "tavilyApiKey",
+      "adzunaAppId",
+      "adzunaAppKey",
+      "usajobsApiKey",
+      "usajobsUserAgent",
+    ]) {
+      expect(document.profile).not.toHaveProperty(field);
+    }
+    const serialized = JSON.stringify(document);
+    expect(serialized).not.toContain(JEV);
+    expect(serialized).not.toContain("sk-secret");
+    expect(serialized).not.toContain("tvly-secret");
+  });
+
+  it("still exports everything else, and does not edit the profile it was given", () => {
+    const before = JSON.stringify(credentialProfile);
+    const document = exportProfileDocument(credentialProfile);
+    expect(document.profile.displayName).toBe("Peter");
+    expect(document.profile.researchTopics).toEqual(["LCO"]);
+    expect(JSON.stringify(credentialProfile)).toBe(before);
+  });
+
+  it("importProfile cannot install a credential from a file that carries one", () => {
+    useProfileStore.setState({ profile: { ...defaultProfile } });
+    const ok = useProfileStore.getState().importProfile({
+      format: PROFILE_EXPORT_FORMAT,
+      profile: { displayName: "Peter", jevApiKey: JEV, feedAiApiKey: "sk-secret" },
+    });
+    expect(ok).toBe(true);
+    const { profile } = useProfileStore.getState();
+    expect(profile.displayName).toBe("Peter");
+    expect(profile.jevApiKey).toBe("");
+    expect(profile.feedAiApiKey).toBe("");
+  });
+});

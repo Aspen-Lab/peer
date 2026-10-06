@@ -23,6 +23,7 @@ import type {
 } from "@/types";
 import { defaultProfile } from "@/types";
 import { normalizePersistedFeedIntent } from "@/lib/feed/intent";
+import { stripCredentialFields } from "@/lib/profile/merge";
 import {
   applyOpportunityFacetPreferenceSignal,
   applyPreferenceSignal,
@@ -166,6 +167,8 @@ interface ProfileState {
   updateUsajobsKeys: (apiKey: string, userAgent: string) => void;
   updateFeedAiProvider: (value: UserProfile["feedAiProvider"]) => void;
   updateFeedAiApiKey: (value: string) => void;
+  /** The reader's own Jev key: trimmed, blank clears it. Never synced. */
+  updateJevApiKey: (value: string) => void;
   updateDeepReportEnabled: (value: boolean) => void;
   updateColorTheme: (theme: ColorTheme) => void;
   /** Mark first-run onboarding complete (defaults to now). */
@@ -341,18 +344,24 @@ export const PROFILE_EXPORT_FORMAT = "peer.profile/v1" as const;
 
 interface ExportedProfileDocument {
   format: typeof PROFILE_EXPORT_FORMAT;
-  profile: UserProfile;
+  profile: Partial<UserProfile>;
 }
 
 /**
  * A signed-out profile lives in one browser's localStorage and nowhere else,
  * so clearing site data or switching browsers loses it with no warning. Export
  * and import let a local tester move settings without an account.
+ *
+ * **A backup file carries no credential.** The reader's Jev key, their model
+ * key and every other credential-like field (`stripCredentialFields`, the same
+ * list a restore refuses to install) are left out of the document: a file the
+ * reader may email, sync or paste is the wrong place for a secret, and a
+ * restore could not use it anyway.
  */
 export function exportProfileDocument(
   profile: UserProfile,
 ): ExportedProfileDocument {
-  return { format: PROFILE_EXPORT_FORMAT, profile };
+  return { format: PROFILE_EXPORT_FORMAT, profile: stripCredentialFields(profile) };
 }
 
 /** Returns the profile from an exported document, or null if it is not one. */
@@ -707,6 +716,10 @@ export const useProfileStore = create<ProfileState>()(
         set((s) => ({
           profile: { ...s.profile, feedAiApiKey: value.trim() || undefined },
         })),
+      updateJevApiKey: (value) =>
+        set((s) => ({
+          profile: { ...s.profile, jevApiKey: value.trim() || undefined },
+        })),
       updateDeepReportEnabled: (value) =>
         set((s) => ({ profile: { ...s.profile, deepReportEnabled: value } })),
       updateColorTheme: (theme) => {
@@ -785,8 +798,11 @@ export const useProfileStore = create<ProfileState>()(
       importProfile: (document) => {
         const parsed = parseExportedProfile(document);
         if (!parsed) return false;
-        set((s) => ({ profile: { ...s.profile, ...parsed } }));
-        if (parsed.colorTheme) applyColorTheme(parsed.colorTheme);
+        // A file that carries a credential (an older backup) cannot install
+        // it: the same refusal `mergeProfileFromBackup` makes on a restore.
+        const installable = stripCredentialFields(parsed);
+        set((s) => ({ profile: { ...s.profile, ...installable } }));
+        if (installable.colorTheme) applyColorTheme(installable.colorTheme);
         return true;
       },
 

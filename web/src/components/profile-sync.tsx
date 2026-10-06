@@ -134,8 +134,8 @@ async function fetchRemoteForSync(): Promise<
 }
 
 /**
- * Local keys (BYOK API keys, Tavily, and — SIGNIN-MERGE §1aj — the
- * events/jobs-era Adzuna/USAJobs credentials) never leave the device.
+ * Local keys (the model key, the Jev key, Tavily, and — SIGNIN-MERGE §1aj —
+ * the events/jobs-era Adzuna/USAJobs credentials) never leave the device.
  *
  * The Adzuna/USAJobs fields were a real gap until this fix: no screen calls
  * `updateAdzunaKeys`/`updateUsajobsKeys` any more (that UI was removed with
@@ -158,6 +158,7 @@ export function remoteProfilePayload(profile: UserProfile): Partial<UserProfile>
     usajobsUserAgent,
     feedAiProvider,
     feedAiApiKey,
+    jevApiKey,
     ...rest
   } = profile;
   void tavilyEnabled;
@@ -168,6 +169,9 @@ export function remoteProfilePayload(profile: UserProfile): Partial<UserProfile>
   void usajobsUserAgent;
   void feedAiProvider;
   void feedAiApiKey;
+  // The reader's Jev key never leaves the browser except in the paper request
+  // body that asks Jev to screen their papers.
+  void jevApiKey;
   const feedIntent = profileFeedIntentCard(profile);
   return feedIntent ? { ...rest, feedIntent } : rest;
 }

@@ -130,6 +130,8 @@ const fullyPopulatedProfile: UserProfile = {
   usajobsUserAgent: "me@example.test",
   feedAiProvider: "openai",
   feedAiApiKey: "sk-secret",
+  // An invented string. It is not, and never was, a key.
+  jevApiKey: "jev-test-sentinel-not-a-key-0000",
   deepReportEnabled: true,
   colorTheme: "dark:rose",
   onboardedAt: "2026-08-01T00:00:00.000Z",
@@ -189,9 +191,10 @@ describe("remoteProfilePayload — full field enumeration (§1bk.8 AMENDMENT)", 
         "softTopics",
       ].sort(),
     );
-    // Never present, regardless of how populated the profile is — the eight
+    // Never present, regardless of how populated the profile is — the nine
     // fields remoteProfilePayload destructures out before recomputing
-    // feedIntent (§1aj credential redaction, unaffected by this amendment).
+    // feedIntent (§1aj credential redaction, unaffected by this amendment;
+    // `jevApiKey` joined the list when Jev became the reader's own key).
     for (const credentialKey of [
       "tavilyEnabled",
       "tavilyApiKey",
@@ -201,14 +204,17 @@ describe("remoteProfilePayload — full field enumeration (§1bk.8 AMENDMENT)", 
       "usajobsUserAgent",
       "feedAiProvider",
       "feedAiApiKey",
+      "jevApiKey",
     ]) {
       expect(payload).not.toHaveProperty(credentialKey);
     }
+    // The value itself is nowhere in what would be sent, under any name.
+    expect(JSON.stringify(payload)).not.toContain("jev-test-sentinel-not-a-key-0000");
   });
 });
 
 describe("remoteProfilePayload — credential redaction (§1aj)", () => {
-  it("never includes tavily*/adzuna*/usajobs*/feedAi*, even when the local profile holds real values for all of them", () => {
+  it("never includes tavily*/adzuna*/usajobs*/feedAi*/jev*, even when the local profile holds real values for all of them", () => {
     const profile = {
       ...defaultProfile,
       tavilyEnabled: true,
@@ -219,6 +225,7 @@ describe("remoteProfilePayload — credential redaction (§1aj)", () => {
       usajobsUserAgent: "me@example.test",
       feedAiProvider: "openai" as const,
       feedAiApiKey: "sk-secret",
+      jevApiKey: "jev-test-sentinel-not-a-key-0000",
     };
     const payload = remoteProfilePayload(profile);
     for (const key of [
@@ -230,9 +237,11 @@ describe("remoteProfilePayload — credential redaction (§1aj)", () => {
       "usajobsUserAgent",
       "feedAiProvider",
       "feedAiApiKey",
+      "jevApiKey",
     ]) {
       expect(payload).not.toHaveProperty(key);
     }
+    expect(JSON.stringify(payload)).not.toContain("jev-test-sentinel-not-a-key-0000");
   });
 
   it("still carries ordinary profile fields through", () => {

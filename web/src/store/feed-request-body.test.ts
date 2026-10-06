@@ -270,3 +270,110 @@ describe("no forced-rebuild ask (6-03, retired)", () => {
     }
   });
 });
+
+
+// A Jev key is a second key the reader may bring. It travels as ONE top-level
+// string, only for a reader the server can attribute it to, and only on the
+// paper request: the digest, report and figure routes never use Jev, and the
+// jobs and events requests do not carry it.
+describe("a Jev key in the paper request", () => {
+  // An invented string. It is not, and never was, a key.
+  const JEV = "jev-test-sentinel-not-a-key-0000";
+  const withKey: UserProfile = { ...activeProfile, jevApiKey: JEV };
+
+  it("is sent as one top-level string for a signed-in reader", () => {
+    const body = paperFeedRequestBody(withKey, advisorSeeds, false, [], "signed-in");
+    expect(body.jevApiKey).toBe(JEV);
+    expect(JSON.stringify(body).split(JEV)).toHaveLength(2);
+  });
+
+  it("is sent when sign-in is not configured at all (a self-hosted copy), as the model key is", () => {
+    const body = paperFeedRequestBody(withKey, advisorSeeds, false, [], "unconfigured");
+    expect(body.jevApiKey).toBe(JEV);
+  });
+
+  it.each(["signed-out", "unknown"] as const)(
+    "is absent while the reader is %s, so a key that the server would refuse never leaves the browser",
+    (auth) => {
+      const body = paperFeedRequestBody(withKey, advisorSeeds, false, [], auth);
+      expect(body.jevApiKey).toBeUndefined();
+      expect(JSON.stringify(body)).not.toContain(JEV);
+    },
+  );
+
+  it("is absent with the default (unknown) sign-in outcome", () => {
+    const body = paperFeedRequestBody(withKey, advisorSeeds);
+    expect(body.jevApiKey).toBeUndefined();
+  });
+
+  it.each([
+    ["undefined", undefined],
+    ["an empty string", ""],
+    ["whitespace", "  \t "],
+  ])("is absent for %s", (_label, value) => {
+    const body = paperFeedRequestBody(
+      { ...activeProfile, jevApiKey: value },
+      advisorSeeds,
+      false,
+      [],
+      "signed-in",
+    );
+    expect(body.jevApiKey).toBeUndefined();
+  });
+
+  it("is trimmed", () => {
+    const body = paperFeedRequestBody(
+      { ...activeProfile, jevApiKey: `  ${JEV} ` },
+      advisorSeeds,
+      false,
+      [],
+      "signed-in",
+    );
+    expect(body.jevApiKey).toBe(JEV);
+  });
+
+  it("is not sent when it could not be a key (it has a space inside)", () => {
+    const body = paperFeedRequestBody(
+      { ...activeProfile, jevApiKey: "two words" },
+      advisorSeeds,
+      false,
+      [],
+      "signed-in",
+    );
+    expect(body.jevApiKey).toBeUndefined();
+  });
+
+  it("never sits inside llmOverride, and is sent without a model key and without the AI search pill (the two switches are the two keys)", () => {
+    const body = paperFeedRequestBody(withKey, advisorSeeds, false, [], "signed-in");
+    expect(body.llmOverride).toBeUndefined();
+    expect(body.aiTier).toBe(0);
+    expect(body.jevApiKey).toBe(JEV);
+
+    const both = paperFeedRequestBody(
+      { ...withKey, feedAiProvider: "openai", feedAiApiKey: "user-owned-key" },
+      advisorSeeds,
+      true,
+      [],
+      "signed-in",
+    );
+    expect(both.llmOverride).toEqual({ provider: "openai", apiKey: "user-owned-key" });
+    expect(JSON.stringify(both.llmOverride)).not.toContain(JEV);
+    expect(both.jevApiKey).toBe(JEV);
+  });
+
+  it("does not change what the request says about the reader's model key", () => {
+    const without = paperFeedRequestBody(activeProfile, advisorSeeds, false, [], "signed-in");
+    const withJev = paperFeedRequestBody(withKey, advisorSeeds, false, [], "signed-in");
+    const { jevApiKey, ...rest } = withJev;
+    void jevApiKey;
+    expect(rest).toEqual({ ...without, jevApiKey: undefined });
+  });
+
+  it("is not carried by the jobs or events requests", () => {
+    for (const surface of ["events", "jobs"] as const) {
+      const body = opportunityRequestBody(withKey, surface, [], "signed-in");
+      expect(body).not.toHaveProperty("jevApiKey");
+      expect(JSON.stringify(body)).not.toContain(JEV);
+    }
+  });
+});

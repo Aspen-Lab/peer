@@ -38,6 +38,7 @@ import {
 import { scoredItemToPaper } from "@/lib/feed/mapper";
 import { STARTER_TOPICS_KEY, topicsOrStarter } from "@/lib/feed/starter-topics";
 import { aiAvailability, feedsUseAi } from "@/lib/feed/ai-tier";
+import { parseJevApiKey } from "@/lib/decisions/jev-key";
 import type { FeedResponse, FeedMeta } from "@/lib/feed/types";
 import { localCalendarDate } from "@/lib/local-calendar-date";
 import {
@@ -766,6 +767,17 @@ export function paperFeedRequestBody(
   const challenge = profile.currentChallenges?.trim() || undefined;
   const intent = activePaperIntent(profile);
   const feedAiApiKey = profile.feedAiApiKey?.trim();
+  // The reader's own Jev key, for the second screening pass. It is a separate
+  // switch from the model key and from the AI search pill (the key IS the
+  // switch), so it is not gated on `aiPaperSearchEnabled` or on a model key.
+  // It goes only where the server can attribute it to a reader (signed in, or a
+  // deployment with no sign-in at all, the same rule `aiAvailability` uses),
+  // and only when it is shaped like a key. It is sent as ONE top-level string,
+  // never inside `llmOverride`, so it cannot end up beside the model key.
+  const jevApiKey =
+    auth === "signed-in" || auth === "unconfigured"
+      ? parseJevApiKey(profile.jevApiKey)
+      : undefined;
   // ABC-freemium 1-14 · R-ENT-3 — **this used to re-implement both halves of
   // the shared predicate inline, and the local `hasUserLlmOverride` SHADOWED the
   // imported function of the same name.** So the papers request builder never
@@ -815,6 +827,7 @@ export function paperFeedRequestBody(
           apiKey: feedAiApiKey,
         }
       : undefined,
+    jevApiKey,
     controls: {
       focus: profile.feedFocus,
       freshness: profile.feedFreshness,
