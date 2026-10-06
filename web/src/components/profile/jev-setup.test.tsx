@@ -74,8 +74,18 @@ describe("JevKeyField", () => {
     expect(saved).toContain("Jev key saved on this device.");
 
     const spaced = visibleText(render(createElement(JevKeyField, { value: "two words", onChange: () => {} })));
-    expect(spaced).toContain("That does not look like a key. It must be one string with no spaces or line breaks.");
+    expect(spaced).toContain(
+      "That does not look like a key. It must be one string of letters, digits and punctuation, with no spaces or line breaks.",
+    );
     expect(spaced).not.toContain("Jev key saved on this device.");
+
+    // A paste with a character outside plain ASCII (a smart quote, a zero-width space,
+    // a non-Latin letter) has no space in it, and the line has to be true of it too.
+    for (const pasted of ["\u201Cjev-key-0000", "jev-key\u200B-0000", "\u5BC6\u94A5-0000"]) {
+      const odd = visibleText(render(createElement(JevKeyField, { value: pasted, onChange: () => {} })));
+      expect(odd, pasted).toContain("That does not look like a key.");
+      expect(odd, pasted).not.toContain("Jev key saved on this device.");
+    }
   });
 
   it('links to where a reader gets a key: one constant, target _blank, noopener, the button reads "Get a Jev key"', () => {

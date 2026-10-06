@@ -126,7 +126,7 @@ export function JevKeyField({
     ? "No Jev key: papers are screened without Jev."
     : usable
       ? "Jev key saved on this device."
-      : "That does not look like a key. It must be one string with no spaces or line breaks.";
+      : "That does not look like a key. It must be one string of letters, digits and punctuation, with no spaces or line breaks.";
 
   return (
     <div className="space-y-2">
