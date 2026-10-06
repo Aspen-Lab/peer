@@ -40,10 +40,11 @@ export const FOR_YOUR_QUESTIONS = {
   answered: "Answered",
   partly: "Partly answered",
   /** P2-04b (§1g.15): the reader's own words end the sentence when they already
-   *  end like one ("…recycling?"); a period is added only otherwise. */
+   *  end like one ("…recycling?"); a period is added only otherwise. P2-05
+   *  item 0: the full-width ？ ！ 。 of a CJK keyboard end one just the same. */
   notAddressed: (question: string) => {
     const asked = question.trim();
-    return `This paper does not address: ${asked}${/[?.!]$/.test(asked) ? "" : "."}`;
+    return `This paper does not address: ${asked}${/[?.!？！。]$/.test(asked) ? "" : "."}`;
   },
   readNext: "Read next",
   background: "background",

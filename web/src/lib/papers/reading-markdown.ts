@@ -9,8 +9,10 @@
 
 import type { Paper } from "@/types";
 import { APP_VERSION } from "@/lib/version";
+import { FOR_YOUR_QUESTIONS, MAP } from "@/components/reader/copy";
 import { displayHeading, quoteAttribution } from "./reading";
 import type { OmitReason, PaperReading, ReadingBlock, ReadingQuote } from "./reading";
+import type { ReadingMap } from "./reading-map";
 
 /** One model claim with the sentence that supports it. */
 export interface MarkdownClaim {
@@ -26,6 +28,24 @@ export interface MarkdownKeyResult extends Omit<MarkdownClaim, "text"> {
   detail: string;
   /** Restored: what is new about this result. Peer's line, no evidence. */
   novelty?: string;
+}
+
+/** An answer to one of the reader's questions (P2-05): Peer's sentence, the
+ *  paper's verbatim evidence for it, and where in the paper that sits. */
+export interface MarkdownAnswer extends MarkdownClaim {
+  /** The section that holds the evidence — resolved against the reading's map. */
+  sectionId?: string;
+  /** PDFs only: that section's page. */
+  page?: number;
+}
+
+/** Pass 2's answer to one question (P2-05). Structurally `QuestionAnswers`;
+ *  `question` is the reader's own text, which the server wrote back. */
+export interface MarkdownQuestionAnswers {
+  question: string;
+  verdict: "answered" | "partly" | "not_addressed";
+  answers: MarkdownAnswer[];
+  readNext: { sectionId: string; why: string; kind: "answer" | "background" }[];
 }
 
 /**
@@ -44,6 +64,8 @@ export interface MarkdownReport {
   limitations?: MarkdownClaim[];
   relationToYourWork?: { basedOn: string; items: MarkdownClaim[] };
   nextStep?: MarkdownClaim | null;
+  /** P2-05: present only when the reader's questions were put to the report. */
+  forYourQuestions?: MarkdownQuestionAnswers[];
   provenance?: { basis: "model-abstract" | "model-fulltext" };
 }
 
@@ -136,14 +158,23 @@ function quoteLine(quote: ReadingQuote): string {
   return `> ${quote.text} — ${quoteAttribution(quote.from)}`;
 }
 
-function evidenceLine(claim: Omit<MarkdownClaim, "text">): string | null {
+/** A quote's words with where they came from: "<sentence> — §Heading", and
+ *  " · p.N" after it when the page is known (P2-05: an answer's evidence;
+ *  every other quote has no page and reads as it always did). */
+function evidenceText(claim: Omit<MarkdownClaim, "text"> & { page?: number }): string | null {
   if (!claim.evidence) return null;
   const where = claim.evidenceWhere
     ? claim.evidenceWhere === "abstract"
       ? "abstract"
       : `§${displayHeading(claim.evidenceWhere)}`
     : null;
-  return where ? `> ${claim.evidence} — ${where}` : `> ${claim.evidence}`;
+  if (!where) return claim.evidence;
+  return `${claim.evidence} — ${where}${typeof claim.page === "number" ? ` · ${MAP.page(claim.page)}` : ""}`;
+}
+
+function evidenceLine(claim: Omit<MarkdownClaim, "text"> & { page?: number }): string | null {
+  const text = evidenceText(claim);
+  return text === null ? null : `> ${text}`;
 }
 
 function claimBlock(lead: string, claim: Omit<MarkdownClaim, "text">): string[] {
@@ -154,6 +185,87 @@ function claimBlock(lead: string, claim: Omit<MarkdownClaim, "text">): string[] 
 /** Paragraph groups separated by one blank line. */
 function spaced(groups: string[][]): string[] {
   return groups.flatMap((group, i) => (i < groups.length - 1 ? [...group, ""] : group));
+}
+
+/** One line: runs of whitespace (a newline in a typed question) become a space. */
+function oneLine(text: string): string {
+  return text.replace(/\s+/g, " ").trim();
+}
+
+/** The words of one question's answer, as the page's "For your questions" block
+ *  says them (P2-05) — one place, so the Markdown export and the reading note
+ *  cannot drift from each other or from the page. */
+export interface QuestionEntryLines {
+  /** "Answered", "Partly answered", or "This paper does not address: <question>." */
+  verdict: string;
+  /** Per answer: Peer's sentence, and the paper's — "<evidence> — §Heading · p.N"
+   *  (null when the answer carries no evidence). */
+  answers: { text: string; quote: string | null }[];
+  /** "§Heading · p.N · M min — why", with " · background" for a background
+   *  section. An id the map does not hold is left out, as the page leaves it out. */
+  readNext: string[];
+}
+
+/**
+ * `map` is the reading's: where an answer names no heading or page, the section
+ * it points at supplies them, and "Read next" resolves its ids. Without a map
+ * the answers read from their own fields and there is no "Read next".
+ */
+export function questionEntryLines(entry: MarkdownQuestionAnswers, map?: ReadingMap): QuestionEntryLines {
+  const sections = new Map((map?.sections ?? []).map((section) => [section.id, section]));
+  const verdict = (() => {
+    switch (entry.verdict) {
+      case "answered":
+        return FOR_YOUR_QUESTIONS.answered;
+      case "partly":
+        return FOR_YOUR_QUESTIONS.partly;
+      case "not_addressed":
+        return FOR_YOUR_QUESTIONS.notAddressed(entry.question);
+    }
+  })();
+  return {
+    verdict,
+    answers: entry.answers.map((answer) => {
+      const section = answer.sectionId ? sections.get(answer.sectionId) : undefined;
+      return {
+        text: answer.text,
+        quote: evidenceText({
+          evidence: answer.evidence,
+          evidenceWhere: answer.evidenceWhere ?? section?.heading ?? "abstract",
+          page: typeof answer.page === "number" ? answer.page : section?.page,
+        }),
+      };
+    }),
+    readNext: entry.readNext.flatMap((item) => {
+      const section = sections.get(item.sectionId);
+      if (!section) return [];
+      const label = [
+        `§${section.heading}`,
+        ...(typeof section.page === "number" ? [MAP.page(section.page)] : []),
+        MAP.minutes(section.minutes),
+        ...(item.kind === "background" ? [FOR_YOUR_QUESTIONS.background] : []),
+      ].join(" · ");
+      return [`${label} — ${item.why}`];
+    }),
+  };
+}
+
+/** The "For your questions" block's paragraphs: per question the question, the
+ *  verdict, each answer's sentence then its quoted evidence, and "Read next". */
+function questionGroups(entries: readonly MarkdownQuestionAnswers[], map?: ReadingMap): string[][] {
+  const groups: string[][] = [];
+  for (const entry of entries) {
+    const lines = questionEntryLines(entry, map);
+    groups.push([`**${oneLine(entry.question)}**`], [lines.verdict]);
+    for (const answer of lines.answers) {
+      if (answer.text) groups.push([answer.text]);
+      if (answer.quote) groups.push([`> ${answer.quote}`]);
+    }
+    if (lines.readNext.length > 0) {
+      groups.push([FOR_YOUR_QUESTIONS.readNext], lines.readNext.map((line) => `- ${line}`));
+    }
+  }
+  return groups;
 }
 
 function abstractParagraphs(reading: PaperReading): string[] {
@@ -211,6 +323,11 @@ export function buildBibTeX(paper: Paper): string {
  * `sentences` are the Decision block's, from `describeAvailability`, so the
  * export says the same thing about what was read as the page does.
  * `generatedAt` exists so tests can pin the frontmatter.
+ *
+ * P2-05: `questions` are the reader's settled questions for this paper (never
+ * the gist). With at least one, the frontmatter lists them; a report that
+ * carries `forYourQuestions` adds the "For your questions" block, in the page's
+ * place and words. Without either, the export is what it was.
  */
 export function readingToMarkdown(
   paper: Paper,
@@ -218,11 +335,13 @@ export function readingToMarkdown(
   report: MarkdownReport | null,
   sentences: string[],
   generatedAt: Date = new Date(),
+  questions: readonly string[] = [],
 ): string {
   const basis = report?.provenance?.basis
     ?? (reading.provenance.fullText === "html" || reading.provenance.fullText === "pdf"
       ? "sections"
       : "abstract");
+  const asked = questions.map(oneLine).filter(Boolean);
 
   const lines: string[] = [
     "---",
@@ -235,6 +354,7 @@ export function readingToMarkdown(
     `source: ${yaml(reading.provenance.sourceLabel)}`,
     `basis: ${basis}`,
     `pages: ${yaml(reading.provenance.pageCount)}`,
+    ...(asked.length > 0 ? [`questions: [${asked.map((question) => yaml(question)).join(", ")}]`] : []),
     `generated: ${yaml(generatedAt.toISOString())}`,
     `peer_version: ${yaml(APP_VERSION)}`,
     "---",
@@ -281,6 +401,11 @@ export function readingToMarkdown(
     lines.push(`## ${heading}`, "", ...body, "");
   };
   const PEERS = "*Peer's reading — not a quote*";
+
+  // P2-05: the answers to the reader's questions, where the page puts them —
+  // after the Decision block, before "What it proposes".
+  const answered = report?.forYourQuestions ?? [];
+  if (answered.length > 0) extra(FOR_YOUR_QUESTIONS.heading, spaced(questionGroups(answered, reading.map)));
 
   // The page's order: the proposal (merged with the old "what is new"
   // block — S6, they duplicated each other), the method, the results (or a

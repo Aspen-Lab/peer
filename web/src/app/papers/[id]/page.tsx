@@ -917,6 +917,9 @@ function Reader({
       { ...reading, omitted: omittedForReader(reading, availability, profileHasProject) },
       report,
       sentences,
+      new Date(),
+      // P2-05: the settled questions, never the gist; the report's answers ride in `report`.
+      settledQuestions(asked),
     );
     clip
       .writeText(markdown)
@@ -1187,7 +1190,11 @@ function Reader({
 
             {/* The reader's own notes on this paper, and the way into them —
                 first, because taking notes is what follows keeping it. */}
-            <PaperNotes paper={paper} />
+            <PaperNotes
+              paper={paper}
+              questions={settledQuestions(asked)}
+              forYourQuestions={report?.forYourQuestions}
+            />
 
             {/* ── The report as it read before the rewrite, in its order ── */}
 

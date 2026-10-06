@@ -76,16 +76,24 @@ describe("ForYourQuestions (P2-04)", () => {
     // Trailing space is not a terminal mark: the sentence still ends cleanly.
     expect(FOR_YOUR_QUESTIONS.notAddressed("recycling ")).toBe("This paper does not address: recycling.");
     expect(FOR_YOUR_QUESTIONS.notAddressed("Does it discuss recycling? ")).toBe("This paper does not address: Does it discuss recycling?");
+    // P2-05 item 0 (§1g.15 amendment): a question typed in a CJK keyboard ends in the
+    // full-width ？, ！ or 。, which end a sentence just as ?, ! and . do — no period after them.
+    expect(FOR_YOUR_QUESTIONS.notAddressed("Does it discuss recycling？")).toBe("This paper does not address: Does it discuss recycling？");
+    expect(FOR_YOUR_QUESTIONS.notAddressed("Is it safe！")).toBe("This paper does not address: Is it safe！");
+    expect(FOR_YOUR_QUESTIONS.notAddressed("It discusses recycling。")).toBe("This paper does not address: It discusses recycling。");
+    expect(FOR_YOUR_QUESTIONS.notAddressed("Does it discuss recycling？ ")).toBe("This paper does not address: Does it discuss recycling？");
 
     const html = render({
       forYourQuestions: [
         { question: "recycling", verdict: "not_addressed", answers: [], readNext: [] },
         { question: "Is it safe!", verdict: "not_addressed", answers: [], readNext: [] },
+        { question: "Does it discuss recycling？", verdict: "not_addressed", answers: [], readNext: [] },
       ],
     });
     expect(html).toContain("This paper does not address: recycling.<");
     expect(html).toContain("This paper does not address: Is it safe!<");
-    expect(html).not.toMatch(/\.\.|!\.|\?\./);
+    expect(html).toContain("This paper does not address: Does it discuss recycling？<");
+    expect(html).not.toMatch(/\.\.|!\.|\?\.|[？！。]\./);
   });
 
   it("keeps Peer prose unquoted and renders paper evidence as a linked quote with its page", () => {
