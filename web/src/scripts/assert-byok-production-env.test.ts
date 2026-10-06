@@ -43,12 +43,11 @@ const ALL_REQUIRED = {
   SUPABASE_SERVICE_ROLE_KEY: "REQUIRED-NOT-A-KEY",
 };
 
-/** Warned when absent, never blocking (owner, 2026-09-16). */
-const ALL_EXPECTED = {
-  GOOGLE_API_KEY: "EXPECTED-NOT-A-KEY",
-};
-
 const FORBIDDEN_NAMES = [
+  // Owner, 2026-10-06: Peer holds no model key of its own. It used to be
+  // EXPECTED on a deployment (warned when absent); it is FORBIDDEN now, and a
+  // Vercel project that still has it fails the build.
+  "GOOGLE_API_KEY",
   "PEER_DIGEST_PROVIDER",
   "GOOGLE_VERTEX_PROJECT",
   "GOOGLE_VERTEX_SEARCH_PROJECT",
@@ -65,14 +64,13 @@ const FORBIDDEN_NAMES = [
   // anyone, so a server Tavily key on a deployment is a spend risk exactly as
   // Brave is, and the build must refuse it.
   "TAVILY_API_KEY",
-  "PEER_DEV_ENTITLEMENT",
   // JEV-DIRECT (§1aa) — `JEV_API_KEY` LEFT this fixture, the same direction
   // it left the guard's own FORBIDDEN_ON_VERCEL: the user moved the key into
   // Vercel on purpose, reversing §1r's Supabase-only instruction. It is now
-  // ALLOWED and SILENT (manager ruling §1ab P1) — joins neither this list
-  // nor ALL_EXPECTED below. See the dedicated cases near the bottom of this
-  // file (`"no longer bans JEV_API_KEY"` / `"stays silent about JEV_API_KEY
-  // whether it is set or not"`).
+  // ALLOWED and SILENT (manager ruling §1ab P1) — it joins no list. See the
+  // dedicated cases near the bottom of this file (`"no longer bans
+  // JEV_API_KEY"` / `"stays silent about JEV_API_KEY whether it is set or
+  // not"`).
 ] as const;
 
 /**
@@ -113,7 +111,6 @@ function runGuard(env: Record<string, string>): {
  */
 const GUARD_LIST_PATTERNS = {
   REQUIRED_ON_VERCEL: /const\s+REQUIRED_ON_VERCEL\s*=\s*\[([\s\S]*?)\]/,
-  EXPECTED_ON_VERCEL: /const\s+EXPECTED_ON_VERCEL\s*=\s*\[([\s\S]*?)\]/,
   FORBIDDEN_ON_VERCEL: /const\s+FORBIDDEN_ON_VERCEL\s*=\s*\[([\s\S]*?)\]/,
 } as const;
 
@@ -125,54 +122,44 @@ function guardList(name: keyof typeof GUARD_LIST_PATTERNS): string[] {
 }
 
 describe("assert-byok-production-env", () => {
-  it("states R-GUARD-1's amended lists explicitly, and the fixtures agree", () => {
-    // NEW — ABC-freemium 5-03 · D2a (Ruling 12).
-    //
-    // Two jobs. First, it writes the amended contract down as a list rather than
-    // leaving it implied by which cases happen to be generated: **three**
-    // required names, and `TAVILY_API_KEY` banned. Second — and this is the one
-    // that matters — it pins the fixtures to the guard. Every other case in this
-    // file is generated from `ALL_REQUIRED` / `FORBIDDEN_NAMES`, so while those
-    // disagreed with the guard, `TAVILY_API_KEY` was spread into all thirty
-    // cases *and* banned, and every forbidden-name case exited 1 because of
-    // Tavily rather than because of its own subject. Half of each case's
-    // evidence was contaminated and nothing said so. They cannot drift again.
+  it("states R-GUARD-1's lists explicitly, and the fixtures agree", () => {
+    // Two jobs. First, it writes the contract down as a list rather than
+    // leaving it implied by which cases happen to be generated: **two**
+    // required names, and the model key, `TAVILY_API_KEY` and the rest banned.
+    // Second — and this is the one that matters — it pins the fixtures to the
+    // guard. Every other case in this file is generated from `ALL_REQUIRED` /
+    // `FORBIDDEN_NAMES`, so a fixture that disagreed with the guard would taint
+    // every case: each forbidden-name case would exit 1 because of the wrong
+    // name rather than because of its own subject. They cannot drift.
     expect(guardList("REQUIRED_ON_VERCEL")).toEqual([
       "NEXT_PUBLIC_SUPABASE_URL",
       "SUPABASE_SERVICE_ROLE_KEY",
     ]);
-    expect(guardList("EXPECTED_ON_VERCEL")).toEqual(["GOOGLE_API_KEY"]);
+    expect(guardList("FORBIDDEN_ON_VERCEL")).toContain("GOOGLE_API_KEY");
     expect(guardList("FORBIDDEN_ON_VERCEL")).toContain("TAVILY_API_KEY");
+    expect(guardList("REQUIRED_ON_VERCEL")).not.toContain("GOOGLE_API_KEY");
     expect(guardList("REQUIRED_ON_VERCEL")).not.toContain("TAVILY_API_KEY");
 
     expect(Object.keys(ALL_REQUIRED)).toEqual(guardList("REQUIRED_ON_VERCEL"));
-    expect(Object.keys(ALL_EXPECTED)).toEqual(guardList("EXPECTED_ON_VERCEL"));
     expect([...FORBIDDEN_NAMES]).toEqual(guardList("FORBIDDEN_ON_VERCEL"));
   });
 
-  it("passes a correctly configured Vercel build", () => {
-    const { status } = runGuard({ VERCEL: "1", ...ALL_REQUIRED, ...ALL_EXPECTED });
-    expect(status).toBe(0);
-  });
-
-  it("SHIPS without GOOGLE_API_KEY, and says so", () => {
-    // The owner's call (2026-09-16): a deployment with no model is the Tier 0
-    // product, not a broken one. Blocking it kept the site several versions
-    // behind over one unset variable.
+  it("passes a correctly configured Vercel build, in silence", () => {
     const { status, output } = runGuard({ VERCEL: "1", ...ALL_REQUIRED });
-
     expect(status).toBe(0);
-    expect(output).toContain("GOOGLE_API_KEY");
-    expect(output).not.toContain("blocked");
+    // There is no "expected" list any more, so a clean build prints nothing: a
+    // deployment with no model key is the whole product, not a degraded one.
+    expect(output).toBe("");
   });
 
   it("does nothing at all off Vercel, whatever the environment holds", () => {
     // A developer building locally has every one of these set and must not be
-    // blocked. This is why `isVercelBuild` guards the whole body.
+    // blocked. This is why `isVercelBuild` guards the whole body. Includes a
+    // developer's own GOOGLE_API_KEY.
     const { status } = runGuard({
+      GOOGLE_API_KEY: SENTINEL,
       GOOGLE_VERTEX_PROJECT: "local-project",
       PEER_DIGEST_PROVIDER: "gemini",
-      PEER_DEV_ENTITLEMENT: "paid",
       PEER_FEED_AI_TIER: "2",
     });
     expect(status).toBe(0);
@@ -253,9 +240,8 @@ describe("assert-byok-production-env", () => {
     }
 
     it("does NOT fire on a near-miss that merely starts similarly", () => {
-      // `GOOGLE_API_KEY` is on the REQUIRED list, so a prefix that caught it
-      // would break every build; `GOOGLE_VERTEXES` is a deliberate near-miss
-      // on the boundary of the prefix itself.
+      // `GOOGLE_VERTEXES` is a deliberate near-miss on the boundary of the
+      // prefix itself.
       const { status } = runGuard({
         VERCEL: "1",
         ...ALL_REQUIRED,
@@ -278,26 +264,60 @@ describe("assert-byok-production-env", () => {
       expect(output.split("GOOGLE_VERTEX_PROJECT").length - 1).toBe(1);
     });
 
-    it("no longer bans GOOGLE_API_KEY — D1 makes it required", () => {
-      // This is the assertion that would have caught the old guard: it banned
-      // the very key the product now runs on, so the first deploy after R-KEY-1
-      // would have exited 1.
-      const { status } = runGuard({ VERCEL: "1", ...ALL_REQUIRED });
-      expect(status).toBe(0);
+    it("bans GOOGLE_API_KEY on EVERY Vercel environment, naming it and never its value", () => {
+      // Owner, 2026-10-06: Peer holds no model key. The guard keys on `VERCEL`
+      // or `VERCEL_ENV`, so production, preview and development builds are each
+      // covered, including a build that sets only `VERCEL_ENV`.
+      const targets: Record<string, string>[] = [
+        { VERCEL: "1" },
+        { VERCEL: "1", VERCEL_ENV: "production" },
+        { VERCEL_ENV: "production" },
+        { VERCEL_ENV: "preview" },
+        { VERCEL_ENV: "development" },
+      ];
+      for (const target of targets) {
+        const { status, output } = runGuard({
+          ...target,
+          ...ALL_REQUIRED,
+          GOOGLE_API_KEY: SENTINEL,
+        });
+
+        expect(status, JSON.stringify(target)).toBe(1);
+        expect(output, JSON.stringify(target)).toContain("GOOGLE_API_KEY");
+        expect(output, JSON.stringify(target)).not.toContain(SENTINEL);
+      }
+    });
+
+    it("builds when GOOGLE_API_KEY is absent or blank — a blank variable is not a key", () => {
+      expect(runGuard({ VERCEL: "1", ...ALL_REQUIRED }).status).toBe(0);
+      expect(
+        runGuard({ VERCEL: "1", ...ALL_REQUIRED, GOOGLE_API_KEY: "   " }).status,
+      ).toBe(0);
+    });
+
+    it("tells the deployer what to do: the model key is the reader's, not the deployment's", () => {
+      const { output } = runGuard({
+        VERCEL: "1",
+        ...ALL_REQUIRED,
+        GOOGLE_API_KEY: SENTINEL,
+      });
+
+      expect(output).toContain("Remove these operator-funded AI settings from Vercel");
+      expect(output).toContain("Peer holds no model key of its own");
     });
 
     it("no longer bans JEV_API_KEY — JEV-DIRECT (§1aa) moved the key into Vercel on purpose; setting it builds cleanly", () => {
       // This is the assertion that would have caught the old guard: before
       // this item, setting JEV_API_KEY on a Vercel build (which is exactly
       // what the user now does) would have exited 1.
-      const { status, output } = runGuard({ VERCEL: "1", ...ALL_REQUIRED, ...ALL_EXPECTED, JEV_API_KEY: SENTINEL });
+      const { status, output } = runGuard({ VERCEL: "1", ...ALL_REQUIRED, JEV_API_KEY: SENTINEL });
       expect(status).toBe(0);
       expect(output).not.toContain("JEV_API_KEY");
     });
 
-    it("stays silent about JEV_API_KEY whether it is set or not (manager ruling §1ab P1: ALLOWED and SILENT, not merely allowed-with-a-warning like GOOGLE_API_KEY)", () => {
-      const withKey = runGuard({ VERCEL: "1", ...ALL_REQUIRED, ...ALL_EXPECTED, JEV_API_KEY: SENTINEL });
-      const withoutKey = runGuard({ VERCEL: "1", ...ALL_REQUIRED, ...ALL_EXPECTED });
+    it("stays silent about JEV_API_KEY whether it is set or not (manager ruling §1ab P1: ALLOWED and SILENT)", () => {
+      const withKey = runGuard({ VERCEL: "1", ...ALL_REQUIRED, JEV_API_KEY: SENTINEL });
+      const withoutKey = runGuard({ VERCEL: "1", ...ALL_REQUIRED });
 
       expect(withKey.status).toBe(0);
       expect(withoutKey.status).toBe(0);
@@ -313,11 +333,13 @@ describe("assert-byok-production-env", () => {
     const { status, output } = runGuard({
       VERCEL: "1",
       ...ALL_REQUIRED,
+      GOOGLE_API_KEY: SENTINEL,
       GOOGLE_VERTEX_PROJECT: SENTINEL,
       ANTHROPIC_API_KEY: SENTINEL,
     });
 
     expect(status).toBe(1);
+    expect(output).toContain("GOOGLE_API_KEY");
     expect(output).toContain("GOOGLE_VERTEX_PROJECT");
     expect(output).not.toContain(SENTINEL);
   });

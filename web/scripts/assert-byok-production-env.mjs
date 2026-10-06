@@ -1,12 +1,15 @@
 // ABC-freemium 1-10 · R-GUARD-1, R-GUARD-2.
 //
 // This script is wired as `prebuild`, so it is the last thing standing between a
-// misconfigured Vercel project and a silently wrong deployment. It used to be
-// ban-only, and it banned `GOOGLE_API_KEY` — the very key D1 now makes the
-// product's default LLM. It also required nothing at all, so a deployment with
-// none of the necessary variables built and shipped happily as BYOK-only.
+// misconfigured Vercel project and a silently wrong deployment.
 //
-// Two lists now, both checked on a Vercel build.
+// **Peer holds no model key of its own.** A reader's AI runs on the key they
+// paste into the app, so a model key on the deployment is a company credential
+// that nothing may use: it used to be EXPECTED here (the system default model),
+// and it is now FORBIDDEN, the same as every other server-side provider key.
+//
+// Two lists, both checked on a Vercel build: the Supabase names that are
+// REQUIRED, and the operator-funded names that are FORBIDDEN.
 //
 // **R-GUARD-2 — the message may name variables and must NEVER print a value.**
 // The obvious way to write the "missing" half is `Missing: NAME=${env[NAME]}`,
@@ -16,14 +19,12 @@
 // asserts it with a sentinel.
 
 /**
- * Verbatim from R-GUARD-1. **Three names, no more** — without any one of them
- * the deployment cannot do what D1 says it does.
+ * What a deployment cannot do without: the server must be able to tell who a
+ * request is for (sign-in, the synced profile, the per-account rate limit).
  *
- * **ABC-freemium 5-03 · D2a (Ruling 12): it was four.** `TAVILY_API_KEY` was
- * required here until the owner removed operator-funded search entirely. It has
- * moved to the banned list below, next to `BRAVE_SEARCH_API_KEY`, because under
- * D2a the two are the same kind of risk for the same reason: a server search key
- * on a deployment is money nobody meant to spend.
+ * **ABC-freemium 5-03 · D2a (Ruling 12): `TAVILY_API_KEY` was once required
+ * here** and moved to the banned list below, next to `BRAVE_SEARCH_API_KEY`: a
+ * server search key on a deployment is money nobody meant to spend.
  */
 const REQUIRED_ON_VERCEL = [
   "NEXT_PUBLIC_SUPABASE_URL",
@@ -31,31 +32,17 @@ const REQUIRED_ON_VERCEL = [
 ];
 
 /**
- * **`GOOGLE_API_KEY` MOVED HERE FROM THE REQUIRED LIST (owner, 2026-09-16).**
- *
- * It blocked the build, on the reasoning that a deployment with no model ships
- * "a product whose AI silently does nothing". Half of that is right and the
- * conclusion was wrong: Peer without a model is not broken — it is the Tier 0
- * product every signed-out reader gets, and it is what this deployment served
- * for months. Refusing to ship it meant the site stayed several versions behind
- * because one variable was unset, which is a worse failure than a briefing with
- * no model report in it.
- *
- * So: warned, not blocked. The build says the key is missing, names it, and
- * ships. The two Supabase names stay REQUIRED because without them the server
- * cannot tell who a request is for at all.
- */
-const EXPECTED_ON_VERCEL = ["GOOGLE_API_KEY"];
-
-/**
  * Operator-funded settings that must never reach a deployment.
  *
- * `GOOGLE_API_KEY` has moved to the required list — that is the whole of D1.
- * `BRAVE_SEARCH_API_KEY` and `PEER_DEV_ENTITLEMENT` are new: D2a keeps Brave
- * env-only and local, and R-ENT-5's plan override must not be settable on a
- * deployment (belt and braces — `resolveEntitlement` also refuses it at runtime,
- * which is what holds if someone adds the variable to an already-running
- * deployment).
+ * **`GOOGLE_API_KEY` IS FORBIDDEN HERE — owner, 2026-10-06 ("I want to cut the
+ * company API path").** It was the system default model for every signed-in
+ * reader and was EXPECTED on a deployment; nothing reads it now, and a
+ * deployment that still carries it is a company credential sitting where no
+ * code uses it. **A Vercel project that still has the variable set will FAIL the
+ * build** — by design, the same as `TAVILY_API_KEY` before it; remove it from
+ * the project's environment variables (every environment) before deploying.
+ * `BRAVE_SEARCH_API_KEY` is the same kind of risk: D2a keeps Brave env-only and
+ * local.
  *
  * **5-03 · D2a — `TAVILY_API_KEY` joined them, coming the other way off the
  * required list.** The operator funds no search for anyone on any plan, so the
@@ -68,15 +55,17 @@ const EXPECTED_ON_VERCEL = ["GOOGLE_API_KEY"];
  * (ABC-JEV-INTEGRATION.md §1aa: "the Jev key goes to Vercel; Peer calls Jev
  * directly"), reversing the prior instruction that kept it Supabase-only
  * (§1r). Manager ruling (§1ab P1): Jev is an optional, default-off feature, so
- * the key is ALLOWED and SILENT — it joins neither this list nor
- * `EXPECTED_ON_VERCEL` below; a deployment builds identically whether the key
- * is set, unset, or blank, with no message either way (a warning on every
- * build without an optional key would just teach people to ignore warnings).
+ * the key is ALLOWED and SILENT — it joins no list in this file; a deployment
+ * builds identically whether the key is set, unset, or blank, with no message
+ * either way (a warning on every build without an optional key would just
+ * teach people to ignore warnings).
  * The one file allowed to read it is `src/lib/decisions/jev-direct-client.ts`
  * — enforced by `src/lib/security/spend-scans.test.ts`'s placement scan, not
  * by this guard.
  */
 const FORBIDDEN_ON_VERCEL = [
+  // The company's own model key. Peer has none; readers bring theirs.
+  "GOOGLE_API_KEY",
   "PEER_DIGEST_PROVIDER",
   "GOOGLE_VERTEX_PROJECT",
   // The Vertex AI Search app is operator-funded search, spent from the
@@ -95,7 +84,6 @@ const FORBIDDEN_ON_VERCEL = [
   // 5-03 · D2a — the same kind of risk as Brave, for the same reason, so it
   // lives next to it.
   "TAVILY_API_KEY",
-  "PEER_DEV_ENTITLEMENT",
 ];
 
 function isVercelBuild(env) {
@@ -159,42 +147,29 @@ function configuredForbiddenNames(env) {
  */
 export function auditVercelEnv(env) {
   const missing = missingRequiredNames(env);
-  const warnings = EXPECTED_ON_VERCEL.filter((name) => !isSet(env, name));
   const forbidden = configuredForbiddenNames(env);
   const forcedAiTier = Number(env.PEER_FEED_AI_TIER ?? "0");
   const tierForced = Number.isFinite(forcedAiTier) && forcedAiTier > 0;
   return {
     missing,
-    warnings,
     forbidden: tierForced ? [...forbidden, "PEER_FEED_AI_TIER"] : forbidden,
-    // Warnings deliberately do not enter `ok`: they are the half that ships.
     ok: missing.length === 0 && forbidden.length === 0 && !tierForced,
   };
 }
 
 /** Names only, never a value — R-GUARD-2 applies to this message too. */
-export function formatWarningMessage({ warnings }) {
-  return [
-    `Peer is deploying without: ${warnings.join(", ")}.`,
-    "Signed-in readers get the no-model briefing until it is set. Nothing is broken; the AI half is simply off.",
-  ].join("\n");
-}
-
 export function formatAuditMessage({ missing, forbidden }) {
   const lines = ["Peer deployment blocked: the Vercel environment is wrong."];
   if (missing.length > 0) {
     lines.push(
       `Missing required settings: ${missing.join(", ")}.`,
-      // 5-03 · D2a — this sentence used to say "an operator-funded model and
-      // search key". The search half became false the day the owner removed
-      // operator-funded search, and this is the only one of the file's four
-      // stale sentences that a deployer actually reads.
-      "Peer runs on an operator-funded model, and needs Supabase to know who a request is for.",
+      "Peer needs Supabase to know who a request is for.",
     );
   }
   if (forbidden.length > 0) {
     lines.push(
       `Remove these operator-funded AI settings from Vercel: ${forbidden.join(", ")}.`,
+      "Peer holds no model key of its own: readers add theirs in the app, and a key on the deployment is a company credential nothing may use.",
     );
   }
   lines.push(
@@ -209,9 +184,6 @@ export function formatAuditMessage({ missing, forbidden }) {
 // way to test a script whose contract *is* `process.exit(1)`.
 if (isVercelBuild(process.env)) {
   const audit = auditVercelEnv(process.env);
-  if (audit.warnings.length > 0) {
-    console.warn(formatWarningMessage(audit));
-  }
   if (!audit.ok) {
     console.error(formatAuditMessage(audit));
     process.exit(1);
