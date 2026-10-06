@@ -77,6 +77,29 @@ import { useReadingQuestionsStore } from "@/store/reading-questions";
 import { readingRoute } from "./reading-map";
 import { useModelReport } from "./use-model-report";
 
+/**
+ * P3-05 (§1h.8 (2)): the hook listens for `pagehide` and `pageshow` on `window`, so
+ * the test's window can add, remove and fire listeners (it used to be `globalThis`,
+ * which has none in Node). `count` is how many are registered; `fire` is the browser
+ * dispatching the event.
+ */
+function pageWindow() {
+  const listeners = new Map<string, Set<() => void>>();
+  const win = Object.assign(Object.create(globalThis) as object, {
+    addEventListener: (type: string, listener: () => void) => {
+      if (!listeners.has(type)) listeners.set(type, new Set());
+      listeners.get(type)!.add(listener);
+    },
+    removeEventListener: (type: string, listener: () => void) => void listeners.get(type)?.delete(listener),
+  });
+  return {
+    win,
+    count: (type: string) => listeners.get(type)?.size ?? 0,
+    fire: (type: string) => [...(listeners.get(type) ?? [])].forEach((listener) => listener()),
+  };
+}
+let page = pageWindow();
+
 function memoryStorage(): Storage {
   const items = new Map<string, string>();
   return {
@@ -118,7 +141,8 @@ async function open(paper: Paper, reader: UserProfile = profile, questions?: rea
 describe("useModelReport with effects running — one report request across two opens (P0-06)", () => {
   beforeEach(() => {
     vi.stubGlobal("localStorage", memoryStorage());
-    vi.stubGlobal("window", globalThis);
+    page = pageWindow();
+    vi.stubGlobal("window", page.win);
     net.streamCalls.length = 0;
     net.jsonCalls = 0;
     net.script = null;
@@ -412,6 +436,176 @@ describe("useModelReport with effects running — one report request across two 
       expect(net.streamCalls.length).toBeGreaterThanOrEqual(1);
       expect(net.streamCalls.every((body) => body.deepReport === true)).toBe(true);
       expect(net.streamCalls[net.streamCalls.length - 1].questions).toEqual([FIRST, SECOND]);
+    });
+  });
+
+  // P3-05 (§1h.8 (2); A's P3-04 F2): "nothing is sent from the unloading page"
+  // (§1g.21 (6)) was pinned only on the question box's `pagehide` handler, which
+  // calls no `fetch`. The questions it settles re-key this hook, whose request
+  // effect then fetched from the dying page (two calls in 6 of 6 measured runs).
+  // The hook now waits out an unloading page: `pagehide` sets it, `pageshow` (a
+  // back/forward-cache restore) clears it, and the one request for the current key
+  // goes out when it clears, the settled questions on it.
+  describe("nothing is sent from an unloading page (P3-05, §1g.21 (6))", () => {
+    const FIRST = "synthetic first question";
+    const SECOND = "synthetic second question";
+    type Act = (() => void) | { wait: number };
+
+    /**
+     * One page open with a scripted browser: one act per render round (a wait being
+     * rounds kept alive by a 1 ms poll), the settled questions read from `asked()` on
+     * every render, as the page reads them from the store.
+     */
+    async function drive(paper: Paper, asked: () => readonly string[], acts: Act[], reader: UserProfile = profile) {
+      const queued = [...acts];
+      const clock = { until: 0 };
+      return hookRuntime.mount(
+        () => {
+          const state = useModelReport({ paper, profile: reader, questions: asked() });
+          const [tick, setTick] = useState(0);
+          useEffect(() => {
+            if (Date.now() < clock.until) {
+              const timer = setTimeout(() => setTick((n) => n + 1), 1);
+              return () => clearTimeout(timer);
+            }
+            const next = queued.shift();
+            if (!next) return;
+            if (typeof next === "function") {
+              next();
+              setTick((n) => n + 1);
+              return;
+            }
+            clock.until = Date.now() + next.wait;
+            const timer = setTimeout(() => setTick((n) => n + 1), 1);
+            return () => clearTimeout(timer);
+          }, [tick]);
+          return state;
+        },
+        { maxRounds: 400 },
+      );
+    }
+
+    it("a settle after pagehide sends nothing; pageshow sends the one request, with the settled questions", async () => {
+      let questions: readonly string[] = [];
+      const seen: number[] = [];
+      const opened = await drive(attached, () => questions, [
+        { wait: 25 },
+        () => seen.push(net.streamCalls.length), // the open, finished
+        () => page.fire("pagehide"),
+        () => {
+          questions = [FIRST, SECOND]; // the box settles on pagehide: the hook is re-keyed
+        },
+        { wait: 40 },
+        () => seen.push(net.streamCalls.length), // nothing from the dying page
+        () => page.fire("pageshow"),
+        { wait: 40 },
+      ]);
+      opened.unmount();
+
+      expect(seen).toEqual([1, 1]);
+      expect(net.streamCalls).toHaveLength(2);
+      expect(net.streamCalls[1].questions).toEqual([FIRST, SECOND]);
+      expect(net.streamCalls[1].deepReport).toBe(true);
+      expect(net.jsonCalls).toBe(0);
+    });
+
+    it("the questions settled while hidden are sent once, however many times the set changed", async () => {
+      let questions: readonly string[] = [];
+      const opened = await drive(attached, () => questions, [
+        { wait: 25 },
+        () => page.fire("pagehide"),
+        () => {
+          questions = [FIRST];
+        },
+        { wait: 15 },
+        () => {
+          questions = [FIRST, SECOND];
+        },
+        { wait: 15 },
+        () => page.fire("pageshow"),
+        { wait: 60 },
+      ]);
+      opened.unmount();
+
+      expect(net.streamCalls).toHaveLength(2);
+      expect(net.streamCalls[1].questions).toEqual([FIRST, SECOND]);
+    });
+
+    it("a page hidden and shown again with nothing settled in between sends nothing: a restore is not a reason to ask", async () => {
+      // The open's report is cached by then; the hook's own `cached` read is from its
+      // first render, so a restore that re-ran the request effect would ask again.
+      const opened = await drive(attached, () => [], [{ wait: 25 }, () => page.fire("pagehide"), { wait: 15 }, () => page.fire("pageshow"), { wait: 40 }]);
+      opened.unmount();
+
+      expect(net.streamCalls).toHaveLength(1);
+    });
+
+    it("a request in flight when the page hides is left alone; the questions settled meanwhile go once it is shown and the flight has ended", async () => {
+      net.delayMs = 60;
+      let questions: readonly string[] = [];
+      const seen: Array<{ calls: number; done: boolean }> = [];
+      const opened = await drive(attached, () => questions, [
+        { wait: 10 },
+        () => page.fire("pagehide"),
+        () => {
+          questions = [FIRST];
+        },
+        { wait: 120 }, // the open's request ends in here: nothing is sent for the new set
+        () => seen.push({ calls: net.streamCalls.length, done: net.flights[0]?.done === true }),
+        () => page.fire("pageshow"),
+        { wait: 160 },
+      ]);
+      opened.unmount();
+
+      // The flight ended while the page was hidden, and still only the open had been sent.
+      expect(seen).toEqual([{ calls: 1, done: true }]);
+      expect(net.streamCalls).toHaveLength(2);
+      expect(net.streamCalls[0]).not.toHaveProperty("questions");
+      expect(net.streamCalls[1].questions).toEqual([FIRST]);
+      expect(net.flights.every((flight) => !flight.aborted)).toBe(true);
+    });
+
+    it("without either event the behaviour is as before: a settle sends one request, at once", async () => {
+      let questions: readonly string[] = [];
+      const opened = await drive(attached, () => questions, [
+        { wait: 25 },
+        () => {
+          questions = [FIRST];
+        },
+        { wait: 40 },
+      ]);
+      opened.unmount();
+
+      expect(net.streamCalls).toHaveLength(2);
+      expect(net.streamCalls[1].questions).toEqual([FIRST]);
+    });
+
+    it("a pageshow with no pagehide before it (every page load fires one) changes nothing", async () => {
+      const opened = await drive(attached, () => [], [{ wait: 25 }, () => page.fire("pageshow"), { wait: 25 }]);
+      opened.unmount();
+
+      expect(net.streamCalls).toHaveLength(1);
+    });
+
+    it("registers one listener for each event per hook instance, however often it re-renders, and removes both on unmount", async () => {
+      let questions: readonly string[] = [];
+      const counts: Array<[number, number]> = [];
+      const opened = await drive(attached, () => questions, [
+        { wait: 25 },
+        () => counts.push([page.count("pagehide"), page.count("pageshow")]),
+        () => {
+          questions = [FIRST];
+        },
+        { wait: 40 },
+        () => counts.push([page.count("pagehide"), page.count("pageshow")]),
+      ]);
+
+      expect(counts).toEqual([
+        [1, 1],
+        [1, 1],
+      ]);
+      opened.unmount();
+      expect([page.count("pagehide"), page.count("pageshow")]).toEqual([0, 0]);
     });
   });
 });

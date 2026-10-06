@@ -61,6 +61,29 @@ import { settledQuestions, useReadingQuestionsStore } from "@/store/reading-ques
 import { QuestionField } from "./question-field";
 import { useModelReport } from "./use-model-report";
 
+/**
+ * A `window` that holds the `pagehide` / `pageshow` listeners the field (while its idle
+ * wait is pending) and the report hook (P3-05, from mount) add, in the order they were
+ * added — as a browser fires them — and can fire an event. `count` is how many are
+ * registered for a type.
+ */
+function pageWindow() {
+  const listeners = new Map<string, Set<() => void>>();
+  const win = Object.assign(Object.create(globalThis) as object, {
+    addEventListener: (type: string, listener: () => void) => {
+      if (!listeners.has(type)) listeners.set(type, new Set());
+      listeners.get(type)!.add(listener);
+    },
+    removeEventListener: (type: string, listener: () => void) => void listeners.get(type)?.delete(listener),
+  });
+  return {
+    win,
+    count: (type: string) => listeners.get(type)?.size ?? 0,
+    fire: (type: string) => [...(listeners.get(type) ?? [])].forEach((listener) => listener()),
+  };
+}
+let page = pageWindow();
+
 function memoryStorage(): Storage {
   const items = new Map<string, string>();
   return {
@@ -179,12 +202,11 @@ describe("the question box and the deep report (P2-08b, §1g.18)", () => {
   beforeEach(() => {
     vi.stubGlobal("localStorage", memoryStorage());
     // P2-10 (§1g.21 (6)): the field listens for `pagehide` on `window` while its
-    // idle wait is pending, so this window can add and remove a listener (the
-    // flow here never fires one; `question-field.settle.test.tsx` does).
-    vi.stubGlobal(
-      "window",
-      Object.assign(Object.create(globalThis) as object, { addEventListener: () => {}, removeEventListener: () => {} }),
-    );
+    // idle wait is pending, and (P3-05) the report hook for `pagehide` and `pageshow`
+    // from mount, so this window holds listeners and can fire an event (the flows
+    // above never fire one; the last test here does).
+    page = pageWindow();
+    vi.stubGlobal("window", page.win);
     net.calls.length = 0;
     net.delayMs = 30;
     useReadingQuestionsStore.setState({ byPaper: {}, lastPaperId: null });
@@ -251,5 +273,38 @@ describe("the question box and the deep report (P2-08b, §1g.18)", () => {
     useReadingQuestionsStore.setState({ byPaper: {}, lastPaperId: null });
     await session([...script.slice(0, -1), enter(4), sleep(150)], 15);
     expect(settledOf()).toEqual(FIVE);
+  });
+
+  // P3-05 (§1h.8 (2); A's P3-04 F2): the whole chain A measured, on the real field,
+  // store and hook. A reload inside the idle wait settles the questions on `pagehide`
+  // (P2-10), which re-keys the hook; the dying page must not send the report request
+  // for them (A saw two `fetch` calls in 6 of 6 runs). They travel when the page is
+  // shown again, as one request.
+  it("a reload inside the idle wait: the questions settle on pagehide, nothing is sent from the dying page, and pageshow sends the one request", async () => {
+    const seen: Array<{ calls: number; settled: readonly string[] | undefined }> = [];
+    const snap: Step = () => seen.push({ calls: net.calls.length, settled: settledOf() });
+
+    await session(
+      [
+        sleep(100), // the open's request ends
+        type(0, FIVE[0]),
+        leave(0), // the box settled as a whole: the idle wait is pending (and the field is listening)
+        () => page.fire("pagehide"),
+        sleep(80),
+        snap,
+        () => page.fire("pageshow"),
+        sleep(120),
+      ],
+      5_000,
+    );
+
+    // The questions were settled by the pagehide; still only the open had been sent.
+    expect(seen).toEqual([{ calls: 1, settled: [FIVE[0]] }]);
+    // After pageshow, one request, with the question.
+    expect(net.calls.map((call) => call.questions?.length ?? 0)).toEqual([0, 1]);
+    expect(net.calls[1].questions).toEqual([FIVE[0]]);
+    expect(net.calls.every((call) => !call.aborted)).toBe(true);
+    // Both listeners went with the page: the hook's on unmount, the field's with its wait.
+    expect([page.count("pagehide"), page.count("pageshow")]).toEqual([0, 0]);
   });
 });

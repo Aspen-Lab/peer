@@ -120,7 +120,13 @@ async function open(reader: UserProfile, questions?: readonly string[]) {
 describe("useModelReport hands the page the server's quota (P2-09b, §1g.14 amendment 2)", () => {
   beforeEach(() => {
     vi.stubGlobal("localStorage", memoryStorage());
-    vi.stubGlobal("window", globalThis);
+    // P3-05 (§1h.8 (2)): the hook listens for `pagehide` and `pageshow` on `window` from
+    // mount; nothing here fires one (`use-model-report.effects.test.ts` does), so a window
+    // that can add and remove a listener is all this suite needs.
+    vi.stubGlobal(
+      "window",
+      Object.assign(Object.create(globalThis) as object, { addEventListener: () => {}, removeEventListener: () => {} }),
+    );
     net.streamCalls.length = 0;
     net.jsonCalls = 0;
     net.scripts = [];

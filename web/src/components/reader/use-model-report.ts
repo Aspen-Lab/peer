@@ -300,6 +300,42 @@ export function useModelReport({
   const [released, setReleased] = useState(0);
   useEffect(() => () => flight.current?.controller.abort(), []);
 
+  // P3-05 (§1h.8 (2); A's P3-04 F2; the invariant of §1g.21 (6)): nothing is sent
+  // from an unloading page. The question box settles its questions on `pagehide`,
+  // which re-keys this hook, and the request effect below used to fetch for the new
+  // key from the dying page (the browser cancels it; a request that does reach the
+  // server is charged and answered into nowhere, and the next open asks again). So
+  // `pagehide` marks the page as unloading and `pageshow` — a back/forward-cache
+  // restore — clears it; while it is set the effect withholds the request, and when
+  // it clears the effect runs again (`released`, the trigger the hook already has)
+  // and sends the one request for the current key, the settled questions on it. The
+  // mark is a ref, not state: the question box's settle reaches the hook through
+  // a store subscription, which React renders ahead of an ordinary state update, so a
+  // state set by the same event would still read false in the render that settles.
+  // `withheld` is whether a request was actually held back: a restore with nothing
+  // owed re-runs nothing (the effect would otherwise read the `cached` of its first
+  // render and ask again for a report already shown). Registered once per hook
+  // instance and removed on unmount.
+  const unloading = useRef(false);
+  const withheld = useRef(false);
+  useEffect(() => {
+    const hide = () => {
+      unloading.current = true;
+    };
+    const show = () => {
+      unloading.current = false;
+      if (!withheld.current) return;
+      withheld.current = false;
+      setReleased((n) => n + 1);
+    };
+    window.addEventListener("pagehide", hide);
+    window.addEventListener("pageshow", show);
+    return () => {
+      window.removeEventListener("pagehide", hide);
+      window.removeEventListener("pageshow", show);
+    };
+  }, []);
+
   useEffect(() => {
     const current = paperRef.current;
     // 2-05 (A2-02): a paper whose record already says its PDF had nothing
@@ -317,6 +353,11 @@ export function useModelReport({
       if (held.settings === settings) return;
       // Anything else changed: abandon it, as before.
       held.controller.abort();
+    }
+    // An unloading page sends nothing; `pageshow` brings the request back (above).
+    if (unloading.current) {
+      withheld.current = true;
+      return;
     }
     const controller = new AbortController();
     const active = () => !controller.signal.aborted;
