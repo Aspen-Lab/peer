@@ -24,10 +24,6 @@ import {
   forcedRebuildDayKey,
 } from "@/lib/usage/counters";
 import { FORCED_REBUILDS_PER_DAY } from "@/lib/usage/rebuild-breaker";
-import {
-  setUsageEventsClientForTests,
-  type UsageEventRow,
-} from "@/lib/usage/events";
 
 describe("job aggregator listing pages", () => {
   it.each([
@@ -3984,36 +3980,23 @@ describe("J7 — the ZIP-ending location shape (Phase 3 round 6 C, ITEM 6)", () 
 });
 
 /**
- * ABC-freemium 2-04 · R-METER-2 · R-QUOTA-2 · Ruling 5 point 2.
+ * ABC-freemium 2-04 · R-QUOTA-2 · Ruling 5 point 2.
  *
- * The breaker and the usage row used to be charged under
- * `keys.provenance === "system" && provider === "tavily"` — a hard-coded pair.
- * Three of the four operator-funded providers therefore ran free of the 500/day
- * cap and wrote no row at all, and the row that did get written carried the
- * literal `"tavily"` whatever had actually run.
+ * The breaker used to be charged under `keys.provenance === "system" &&
+ * provider === "tavily"` — a hard-coded pair, so three of the four
+ * operator-funded providers ran free of the 500/day cap. Peer keeps no usage
+ * ledger any more, so only the breaker half of this block survives.
  */
-describe("2-04 — every operator-funded provider is charged and metered", () => {
-  const rows: UsageEventRow[] = [];
-
+describe("2-04 — no operator-funded provider can be reached or charged", () => {
   beforeEach(() => {
-    rows.length = 0;
     resetCounterStoreForTests();
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "");
     vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "");
-    setUsageEventsClientForTests({
-      from: () => ({
-        insert: (inserted: UsageEventRow[]) => {
-          rows.push(...inserted);
-          return Promise.resolve({ error: null });
-        },
-      }),
-    } as never);
     geminiSearchMock.mockResolvedValue([]);
   });
 
   afterEach(() => {
     vi.unstubAllEnvs();
-    setUsageEventsClientForTests(undefined);
     resetCounterStoreForTests();
     geminiSearchMock.mockReset();
   });
@@ -4028,26 +4011,12 @@ describe("2-04 — every operator-funded provider is charged and metered", () =>
     };
   }
 
-  it("writes NO search row at all, on the most generous input there is (D2a)", async () => {
-    // REWRITTEN, NOT DELETED — ABC-freemium 5-04 · D2a (Ruling 12).
-    //
-    // Was "writes a row naming GEMINI, not the literal tavily". The old
-    // assertion is kept verbatim because the row's SHAPE is what 2-04 bought —
-    // the row names the `provider` that actually ran, never a hard-coded
-    // `"tavily"` — and that knowledge should not leave the file with the
-    // assertion:
-    //
-    //     expect(rows).toHaveLength(1);
-    //     expect(rows[0]).toMatchObject({
-    //       kind: "search", surface: "jobs", provider: "gemini",
-    //       query_count: 1, byok: false,
-    //     });
-    //
-    // **This case IS standing tally 2 of Ruling 12 point 7 for the jobs
-    // surface** — `kind:"search"` usage rows produced must be 0 — and it is
-    // measured on the most generous input the surface accepts: a configured
-    // Vertex project, an explicit `provider`, a real user id and the entitlement
-    // flag forced `true`.
+  it("calls no adapter on the most generous input there is (D2a)", async () => {
+    // REWRITTEN, NOT DELETED — ABC-freemium 5-04 · D2a (Ruling 12). Was "writes
+    // a row naming GEMINI, not the literal tavily"; the row went with the
+    // ledger. What it still measures is the gate: the most generous input the
+    // surface accepts (a configured Vertex project, an explicit `provider`, a
+    // real user id and the entitlement flag forced `true`) runs no search.
     vi.stubEnv("TAVILY_API_KEY", "");
     vi.stubEnv("BRAVE_SEARCH_API_KEY", "");
     vi.stubEnv("GOOGLE_VERTEX_PROJECT", "some-project");
@@ -4062,8 +4031,7 @@ describe("2-04 — every operator-funded provider is charged and metered", () =>
       }),
     );
 
-    expect(rows).toHaveLength(0);
-    expect(rows.filter((row) => row.kind === "search")).toEqual([]);
+    expect(geminiSearchMock).not.toHaveBeenCalled();
   });
 
   it("refuses BEFORE the breaker is ever consulted, so nothing is charged (D2a)", async () => {
@@ -4082,9 +4050,6 @@ describe("2-04 — every operator-funded provider is charged and metered", () =>
     // The breaker's own live coverage is elsewhere and is unaffected:
     // `lib/usage/rebuild-breaker.test.ts`, driven through the forced-rebuild
     // caller that Ruling 13 point 1 keeps alive.
-    //
-    // Before 2-04 this fan-out was free of the cap entirely, so the breaker
-    // protected one of the four ways to spend the operator's money.
     vi.stubEnv("TAVILY_API_KEY", "");
     vi.stubEnv("BRAVE_SEARCH_API_KEY", "");
     vi.stubEnv("GOOGLE_VERTEX_PROJECT", "some-project");
@@ -4108,21 +4073,17 @@ describe("2-04 — every operator-funded provider is charged and metered", () =>
     // gate rather than at the breaker.
     expect(items).toEqual([]);
     expect(geminiSearchMock).not.toHaveBeenCalled();
-    expect(rows.filter((r) => r.kind === "search")).toHaveLength(0);
-    // 5-04 — THE ASSERTION THAT MAKES THIS CASE MEAN SOMETHING AGAIN. A
-    // breaker that had been consulted and tripped would have written its own
-    // `kind: "breaker"` row. Nothing was consulted, so there is no row of any
-    // kind, and the counter still holds exactly what was pre-loaded.
-    expect(rows).toEqual([]);
+    // 5-04 — THE ASSERTION THAT MAKES THIS CASE MEAN SOMETHING. Nothing was
+    // consulted, so the counter still holds exactly what was pre-loaded.
     expect(
       (await getCounterStore().read(forcedRebuildDayKey("user-1", new Date())))
         .value,
     ).toBe(FORCED_REBUILDS_PER_DAY);
   });
 
-  it("charges NEITHER breaker nor row for a BYOK Tavily fan-out", async () => {
-    // A reader's own key costs the operator nothing, so attributing it would be
-    // noise. This is the one provider with two possible payers, and it is why
+  it("charges no breaker for a BYOK Tavily fan-out", async () => {
+    // A reader's own key costs the operator nothing, so it is never charged.
+    // This is the one provider with two possible payers, and it is why
     // `provenance` still describes Tavily specifically.
     vi.stubEnv("GOOGLE_VERTEX_PROJECT", "");
     vi.stubEnv("TAVILY_API_KEY", "");
@@ -4135,8 +4096,8 @@ describe("2-04 — every operator-funded provider is charged and metered", () =>
     // not handed back as an empty result (sources/search-failure.ts — a dead
     // Tavily key hid behind "no results" for a day on 2026-08-27). The fake
     // key here fails every query, so the fan-out rejects; what this case is
-    // about — no breaker charge and no row for the reader's own key — is
-    // asserted after it, unchanged.
+    // about — no breaker charge for the reader's own key — is asserted after
+    // it, unchanged.
     vi.spyOn(console, "error").mockImplementation(() => {});
     await expect(
       jobweb.fetch(
@@ -4150,7 +4111,6 @@ describe("2-04 — every operator-funded provider is charged and metered", () =>
       ),
     ).rejects.toThrow(/tavily web search failed for every query/);
 
-    expect(rows).toHaveLength(0);
     expect(
       (await getCounterStore().read(forcedRebuildDayKey("user-1", new Date())))
         .value,
@@ -4159,7 +4119,7 @@ describe("2-04 — every operator-funded provider is charged and metered", () =>
 
   it("spends nothing at all for an unentitled reader", async () => {
     // Every candidate configured, and the reader is still refused: no provider,
-    // no fan-out, no breaker charge, no row. This is R-POOL-3's "still respond
+    // no fan-out, no breaker charge. This is R-POOL-3's "still respond
     // from the free structured sources" seen from the spend side.
     vi.stubEnv("TAVILY_API_KEY", "OPERATOR-NOT-A-KEY");
     vi.stubEnv("BRAVE_SEARCH_API_KEY", "OPERATOR-NOT-A-KEY");
@@ -4172,6 +4132,5 @@ describe("2-04 — every operator-funded provider is charged and metered", () =>
 
     expect(items).toEqual([]);
     expect(geminiSearchMock).not.toHaveBeenCalled();
-    expect(rows).toHaveLength(0);
   });
 });

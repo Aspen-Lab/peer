@@ -5,7 +5,6 @@ import {
   resolveSystemSearchKeys,
 } from "@/lib/search/system-key";
 import { cleanDisplayText, cleanDisplayTextOrUndefined } from "@/lib/text/clean";
-import { recordUsageEvent } from "@/lib/usage/events";
 import { consumeForcedRebuild } from "@/lib/usage/rebuild-breaker";
 import {
   geminiSearchDeadline,
@@ -107,13 +106,8 @@ async function fetchImpl(query: SourceQuery): Promise<RawItem[]> {
   });
   if (!provider) return [];
 
-  // ABC-freemium 2-04 — the breaker and the R-METER-2 row, which this file had
-  // NEITHER of before (grepped: no `consumeForcedRebuild`, no
-  // `recordUsageEvent` anywhere in it). Under Ruling 6 point 3 the gate above
-  // makes `operatorFunded` unreachable today, and that is exactly why it is
-  // here: **if this surface is ever un-gated, it is metered from the first
-  // request rather than from the round after someone notices.** A gate without
-  // metering behind it is how the same defect comes back wearing a new name.
+  // ABC-freemium 2-04 — the breaker, which this file had none of before. Under
+  // Ruling 6 point 3 the gate above makes `operatorFunded` unreachable today.
   //
   // **ABC-freemium 6-01 · Ruling 14 point 3 — THIS CALL SITE IS UNREACHABLE,
   // and it is KEPT on purpose (Ruling 12 point 2).** The chain, end to end:
@@ -138,8 +132,6 @@ async function fetchImpl(query: SourceQuery): Promise<RawItem[]> {
     const allowed = await consumeForcedRebuild(
       query.webSearch?.userId ?? null,
       searchQueries.length,
-      undefined,
-      "papers",
     );
     // The same degraded value a keyless reader already gets: the paper
     // pipeline serves its other sources. No error, no new shape.
@@ -167,20 +159,6 @@ async function fetchImpl(query: SourceQuery): Promise<RawItem[]> {
   // `collectSearchResults` re-raises only when EVERY query failed.
   for (const rows of collectSearchResults(provider, "web-search", settled)) {
     all.push(...rows);
-  }
-
-  // 2-04 · R-METER-2 — the row this file never wrote, carrying the provider's
-  // own name. Unreachable today for the same reason as the breaker above.
-  if (operatorFunded) {
-    recordUsageEvent({
-      user_id: query.webSearch?.userId ?? null,
-      kind: "search",
-      surface: "papers",
-      query_count: searchQueries.length,
-      provider,
-      ok: true,
-      byok: false,
-    });
   }
 
   return uniqueById(all).slice(0, limit);

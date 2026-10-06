@@ -51,7 +51,6 @@ import {
   logStoreUnavailable,
   forcedRebuildDayKey,
 } from "./counters";
-import { recordUsageEventAwaited } from "./events";
 
 export { FORCED_REBUILDS_PER_DAY };
 
@@ -65,9 +64,9 @@ export { FORCED_REBUILDS_PER_DAY };
  * more round, so the audit trail for a spend cap recorded the wrong cap. Half a
  * rename is how the defect comes back, which is Ruling 14 point 3's whole point.
  *
- * **Nothing about the behaviour moved.** Same signature, same optional
- * `surface`, same cap, same fail-closed direction, same 200 to the reader with
- * the cached pool served. One recorded fact stopped being false.
+ * **Nothing about the behaviour moved.** Same cap, same fail-closed direction,
+ * same 200 to the reader with the cached pool served. One recorded fact stopped
+ * being false.
  *
  * Returns `true` when there is no user to charge **only** because such a call
  * cannot reach an operator-funded path in the first place — both callers gate on
@@ -77,7 +76,6 @@ export async function consumeForcedRebuild(
   userId: string | null,
   count: number,
   now: Date = new Date(),
-  surface?: string,
 ): Promise<boolean> {
   if (!userId || count <= 0) return true;
 
@@ -96,29 +94,16 @@ export async function consumeForcedRebuild(
   // counter and that direction is untouched: the rebuild is still refused and
   // the surface still serves its free structured sources. What changes is that
   // an outage stops fabricating a trip that never happened — the log line says
-  // what actually went wrong, and NO `usage_events` row is written, because a
-  // `kind: "breaker"` row means "a cap tripped" and on an outage none did.
+  // what actually went wrong rather than reporting a trip that never happened.
   if (!reading.ok) {
     logStoreUnavailable("forced-rebuild", userId);
     return false;
   }
 
-  // D4 names three things a REAL trip does: an error-level line, a `breaker`
-  // usage row, and degradation for the rest of the UTC day.
+  // A REAL trip: an error-level line, and degradation for the rest of the UTC
+  // day.
   console.error(
     `[quota] forced-rebuild breaker tripped for ${userId} (limit ${FORCED_REBUILDS_PER_DAY}/day)`,
   );
-  // Awaited: this is the audit trail for a spend cap that has already been
-  // decided by the counter. Losing it to a cold shutdown would leave a trip
-  // with no record.
-  await recordUsageEventAwaited({
-    user_id: userId,
-    kind: "breaker",
-    path: "forced-rebuild",
-    surface: surface ?? null,
-    query_count: count,
-    ok: false,
-    byok: false,
-  });
   return false;
 }

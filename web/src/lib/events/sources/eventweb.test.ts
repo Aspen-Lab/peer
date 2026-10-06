@@ -34,10 +34,6 @@ import {
 // `searchGemini` is — see the RULING 75 comment) — this is the real, shipped
 // title-extraction-plus-decode entry point gemini-sourced rows go through.
 import { pageTitleFromHtml } from "@/lib/sources/gemini-search";
-import {
-  setUsageEventsClientForTests,
-  type UsageEventRow,
-} from "@/lib/usage/events";
 import { resetCounterStoreForTests } from "@/lib/usage/counters";
 
 // No test file existed for this source adapter before B4-01 (round 4) — see
@@ -2750,39 +2746,24 @@ describe("RULING 75 — eventweb provider resolution", () => {
 });
 
 /**
- * ABC-freemium 5-04 · **Ruling 12 point 7, standing tally 2** — `kind:"search"`
- * usage rows produced must be 0.
+ * ABC-freemium 5-04 · **Ruling 12 point 7** — the events surface produces
+ * nothing from an operator-funded search, whatever it is handed.
  *
- * **NEW FILE SECTION, and the reason it is new is the finding.** There are
- * exactly three producers of a `kind:"search"` row in production source —
- * `jobs/sources/jobweb.ts`, `events/sources/eventweb.ts` and
- * `sources/web-search.ts` — and only two of them had a row-capturing test.
- * The events one had none, so the tally would have been proved on two thirds of
- * its subject. This is the missing third.
+ * Peer keeps no usage ledger any more, so the row half of this tally is gone
+ * with the ledger; what stays is the half that was always the point: the most
+ * generous input the surface accepts resolves no provider and calls no adapter.
  */
-describe("5-04 — the events surface writes no kind:\"search\" row (D2a)", () => {
-  const rows: UsageEventRow[] = [];
-
+describe("5-04 — the events surface runs no operator-funded search (D2a)", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
-    setUsageEventsClientForTests(undefined);
     resetCounterStoreForTests();
     geminiSearchMock.mockReset();
   });
 
-  it("writes nothing, on the most generous input the surface accepts", async () => {
-    rows.length = 0;
+  it("returns nothing and calls no adapter, on the most generous input the surface accepts", async () => {
     resetCounterStoreForTests();
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "");
     vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "");
-    setUsageEventsClientForTests({
-      from: () => ({
-        insert: (inserted: UsageEventRow[]) => {
-          rows.push(...inserted);
-          return Promise.resolve({ error: null });
-        },
-      }),
-    } as never);
     // Every candidate armed: an operator Tavily key, a Brave key, a configured
     // Vertex project, an explicit provider, a real user id and the entitlement
     // flag forced true. Zero here is therefore a statement about the gate.
@@ -2804,8 +2785,6 @@ describe("5-04 — the events surface writes no kind:\"search\" row (D2a)", () =
 
     expect(items).toEqual([]);
     expect(geminiSearchMock).not.toHaveBeenCalled();
-    expect(rows.filter((row) => row.kind === "search")).toEqual([]);
-    expect(rows).toEqual([]);
   });
 });
 

@@ -4,7 +4,6 @@ import {
   operatorSearchAvailability,
   resolveSystemSearchKeys,
 } from "@/lib/search/system-key";
-import { recordUsageEvent } from "@/lib/usage/events";
 import { consumeForcedRebuild } from "@/lib/usage/rebuild-breaker";
 import { looksLikeHostBrand, urlHashId } from "@/lib/opportunities/shared";
 import {
@@ -2212,8 +2211,6 @@ async function fetchImpl(query: JobsQuery): Promise<RawJobItem[]> {
     const allowed = await consumeForcedRebuild(
       query.webSearch?.userId ?? null,
       searches.length,
-      undefined,
-      "jobs",
     );
     if (!allowed) return [];
   }
@@ -2242,25 +2239,6 @@ async function fetchImpl(query: JobsQuery): Promise<RawJobItem[]> {
       }),
     ),
   );
-  // ABC-freemium 1-05 / 2-04 · R-METER-2 — one row per operator-funded fan-out,
-  // whichever provider ran it. This is the one place that knows the surface, who
-  // is paying and the query count. A BYOK search costs the operator nothing, so
-  // attributing it would be noise and `isOperatorFundedSearch` excludes it.
-  //
-  // `provider` is the VARIABLE, not the literal `"tavily"` it used to be — that
-  // literal made a Brave or Vertex fan-out impossible to tell apart from a
-  // Tavily one in the ledger, on the rare occasion it wrote a row at all.
-  if (operatorFunded) {
-    recordUsageEvent({
-      user_id: query.webSearch?.userId ?? null,
-      kind: "search",
-      surface: "jobs",
-      query_count: searches.length,
-      provider,
-      ok: true,
-      byok: false,
-    });
-  }
 
   const all: RawJobItem[] = [];
   for (const items of resultSets) {

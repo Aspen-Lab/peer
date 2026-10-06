@@ -5,7 +5,6 @@ import {
   operatorSearchAvailability,
   resolveSystemSearchKeys,
 } from "@/lib/search/system-key";
-import { recordUsageEvent } from "@/lib/usage/events";
 import { consumeForcedRebuild } from "@/lib/usage/rebuild-breaker";
 import {
   DATE_TOKEN_PATTERN,
@@ -2815,8 +2814,6 @@ async function fetchImpl(query: EventsQuery): Promise<RawEventItem[]> {
     const allowed = await consumeForcedRebuild(
       query.webSearch?.userId ?? null,
       searches.length,
-      undefined,
-      "events",
     );
     if (!allowed) return [];
   }
@@ -2855,19 +2852,6 @@ async function fetchImpl(query: EventsQuery): Promise<RawEventItem[]> {
       ),
     ),
   );
-  // ABC-freemium 1-05 / 2-04 · R-METER-2 — one row per operator-funded fan-out,
-  // carrying the provider's own name. A BYOK search costs the operator nothing.
-  if (operatorFunded) {
-    recordUsageEvent({
-      user_id: query.webSearch?.userId ?? null,
-      kind: "search",
-      surface: "events",
-      query_count: searches.length,
-      provider,
-      ok: true,
-      byok: false,
-    });
-  }
 
   for (const results of resultSets) {
     for (const result of results) {

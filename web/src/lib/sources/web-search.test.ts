@@ -15,10 +15,6 @@ vi.mock("@/lib/sources/vertex-search", async (importOriginal) => ({
 
 import { webSearch } from "./web-search";
 import { resetCounterStoreForTests } from "@/lib/usage/counters";
-import {
-  setUsageEventsClientForTests,
-  type UsageEventRow,
-} from "@/lib/usage/events";
 
 /**
  * ABC-freemium 2-04 · D3 · Ruling 3 point 5 · Ruling 6 point 3.
@@ -34,8 +30,6 @@ import {
  * (Ruling 6 point 3), including local development.
  */
 describe("the papers web source spends nothing on an operator key", () => {
-  const rows: UsageEventRow[] = [];
-
   const query = {
     topics: ["molten salt"],
     queries: ["molten salt electrochemistry"],
@@ -51,25 +45,15 @@ describe("the papers web source spends nothing on an operator key", () => {
   }
 
   beforeEach(() => {
-    rows.length = 0;
     resetCounterStoreForTests();
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "");
     vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "");
-    setUsageEventsClientForTests({
-      from: () => ({
-        insert: (inserted: UsageEventRow[]) => {
-          rows.push(...inserted);
-          return Promise.resolve({ error: null });
-        },
-      }),
-    } as never);
     geminiSearchMock.mockResolvedValue([]);
     vertexSearchMock.mockResolvedValue([]);
   });
 
   afterEach(() => {
     vi.unstubAllEnvs();
-    setUsageEventsClientForTests(undefined);
     resetCounterStoreForTests();
     geminiSearchMock.mockReset();
     vertexSearchMock.mockReset();
@@ -89,7 +73,6 @@ describe("the papers web source spends nothing on an operator key", () => {
     expect(items).toEqual([]);
     expect(vertexSearchMock).not.toHaveBeenCalled();
     expect(geminiSearchMock).not.toHaveBeenCalled();
-    expect(rows).toHaveLength(0);
   });
 
   it("returns [] when the query carries no webSearch block at all", async () => {
@@ -120,8 +103,7 @@ describe("the papers web source spends nothing on an operator key", () => {
 
   it("still honours a reader's OWN Tavily key, which costs the operator nothing", async () => {
     // D3 is about the operator's money, not about switching the source off. If
-    // a BYOK key is ever threaded to this surface it must still work — and it
-    // must still write no row.
+    // a BYOK key is ever threaded to this surface it must still work.
     vi.stubEnv("TAVILY_API_KEY", "");
     vi.stubEnv("BRAVE_SEARCH_API_KEY", "");
     vi.stubEnv("GOOGLE_VERTEX_PROJECT", "");
@@ -138,36 +120,16 @@ describe("the papers web source spends nothing on an operator key", () => {
     });
 
     expect(fetchSpy).toHaveBeenCalled();
-    // BYOK is never charged and never attributed.
-    expect(rows).toHaveLength(0);
     fetchSpy.mockRestore();
   });
 
-  it("writes NO usage row and calls no adapter, even with the flag forced true", async () => {
+  it("calls no adapter, even with the flag forced true", async () => {
     // REWRITTEN, NOT DELETED — ABC-freemium 5-04 · D2a (Ruling 12).
     //
-    // Was "has the metering wired even though the gate makes it unreachable".
-    // It forced `systemSearchAllowed: true` with a Vertex project configured and
-    // asserted the opposite of everything below:
-    //
-    //     expect(geminiSearchMock).toHaveBeenCalled();
-    //     expect(rows).toHaveLength(1);
-    //     expect(rows[0]).toMatchObject({
-    //       kind: "search", surface: "papers", provider: "gemini", byok: false,
-    //     });
-    //
-    // The old expectation is kept above rather than thrown away, because the
-    // row's SHAPE is knowledge 2-04 bought — the row names the `provider` that
-    // actually ran, never a hard-coded `"tavily"` — and it should not vanish
-    // from the file with the assertion.
-    //
-    // **What it proves now, and it is a sharper statement than before.** Forcing
-    // the entitlement flag `true` is the most generous input this surface can be
-    // given, and the answer is still nothing: `operatorSearchAvailability` is
-    // frozen `false`, so no provider resolves, no adapter is called, and no row
-    // is written. That makes it **standing tally 2 of Ruling 12 point 7** for
-    // the papers surface — `kind:"search"` rows produced must be 0 — measured
-    // rather than argued.
+    // Forcing `systemSearchAllowed: true` with a Vertex project configured is the
+    // most generous input this surface can be given, and the answer is still
+    // nothing: `operatorSearchAvailability` is frozen `false`, so no provider
+    // resolves and no adapter is called.
     vi.stubEnv("TAVILY_API_KEY", "");
     vi.stubEnv("BRAVE_SEARCH_API_KEY", "");
     vi.stubEnv("GOOGLE_VERTEX_PROJECT", "some-project");
@@ -183,7 +145,5 @@ describe("the papers web source spends nothing on an operator key", () => {
     });
 
     expect(geminiSearchMock).not.toHaveBeenCalled();
-    expect(rows).toHaveLength(0);
-    expect(rows.filter((row) => row.kind === "search")).toEqual([]);
   });
 });

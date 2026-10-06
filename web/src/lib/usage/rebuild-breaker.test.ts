@@ -4,7 +4,6 @@ import {
   consumeForcedRebuild,
 } from "./rebuild-breaker";
 import { resetCounterStoreForTests } from "./counters";
-import { setUsageEventsClientForTests, type UsageEventRow } from "./events";
 
 /**
  * The forced-rebuild breaker, kept as its own suite when the deep-report
@@ -19,28 +18,16 @@ import { setUsageEventsClientForTests, type UsageEventRow } from "./events";
 
 const NOW = new Date("2026-09-04T12:00:00.000Z");
 
-const rows: UsageEventRow[] = [];
-
 beforeEach(() => {
-  rows.length = 0;
   resetCounterStoreForTests();
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "");
   vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "");
-  setUsageEventsClientForTests({
-    from: () => ({
-      insert: (inserted: UsageEventRow[]) => {
-        rows.push(...inserted);
-        return Promise.resolve({ error: null });
-      },
-    }),
-  } as never);
   vi.spyOn(console, "error").mockImplementation(() => {});
 });
 
 afterEach(() => {
   vi.unstubAllEnvs();
   vi.restoreAllMocks();
-  setUsageEventsClientForTests(undefined);
   resetCounterStoreForTests();
 });
 
@@ -62,10 +49,12 @@ describe("the forced-rebuild breaker", () => {
     ).toBe(true);
 
     expect(await consumeForcedRebuild("user-1", 1, NOW)).toBe(false);
-    expect(rows).toHaveLength(1);
-    // The recorded path follows the counter: the row is the audit trail for a
-    // spend cap, so a row naming the wrong cap would be wrong data.
-    expect(rows[0]).toMatchObject({ kind: "breaker", path: "forced-rebuild" });
+    // A real trip says so on the error channel, naming the cap it hit.
+    const tripLines = vi
+      .mocked(console.error)
+      .mock.calls.map((call) => String(call[0]))
+      .filter((line) => line.startsWith("[quota] forced-rebuild breaker tripped"));
+    expect(tripLines).toHaveLength(1);
   });
 
   it("charges the whole fan-out, not one per call", async () => {
@@ -92,14 +81,17 @@ describe("the forced-rebuild breaker", () => {
 
     expect(await consumeForcedRebuild("user-1", 3, NOW)).toBe(false);
 
-    // An outage must not fabricate a `breaker` row ("a cap tripped"): none did.
-    expect(rows).toHaveLength(0);
+    // An outage must not be reported as a trip ("a cap tripped"): none did.
+    const tripLines = vi
+      .mocked(console.error)
+      .mock.calls.map((call) => String(call[0]))
+      .filter((line) => line.startsWith("[quota] forced-rebuild breaker tripped"));
+    expect(tripLines).toHaveLength(0);
     expect(storeUnavailableLines()).toHaveLength(1);
   });
 
   it("charges nobody when there is no user, or nothing to charge", async () => {
     expect(await consumeForcedRebuild(null, 5, NOW)).toBe(true);
     expect(await consumeForcedRebuild("user-1", 0, NOW)).toBe(true);
-    expect(rows).toHaveLength(0);
   });
 });

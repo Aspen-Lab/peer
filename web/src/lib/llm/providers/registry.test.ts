@@ -8,9 +8,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
  * puts a credential in the environment asserts it is **ignored**: a dummy
  * `GOOGLE_API_KEY` in the process environment is not a model, in any runtime.
  *
- * **Assertions are on `.id` and on which factory ran, never on object
- * identity.** `resolveProvider` wraps its result in the metering wrapper, so it
- * returns a fresh object every call and `toBe(geminiProvider)` cannot work.
+ * **The registry hands the provider back exactly as it was built** — no
+ * wrapper, no usage ledger — so the case at the bottom asserts object identity,
+ * and the rest still assert `.id` and which factory ran (the Vertex singleton
+ * and an API-key provider both report `id: "gemini"`).
  */
 
 const mocks = vi.hoisted(() => ({ createGeminiApiProvider: vi.fn() }));
@@ -29,6 +30,7 @@ import {
   hasUsableProviderOverride,
   resolveProvider,
 } from "./registry";
+import { geminiProvider } from "./gemini";
 
 const SERVER_AI_ENV = [
   "PEER_DIGEST_PROVIDER",
@@ -204,3 +206,39 @@ describe("provider resolution", () => {
     ).toBe(false);
   });
 });
+
+describe("the provider is handed back exactly as it was built", () => {
+  it("returns the reader's own provider object itself, every optional member and flag untouched", () => {
+    // Nothing sits between the registry and the provider: no metering wrapper,
+    // no usage ledger. A flag a provider object carries (`supportsWebSearch` on
+    // the two Gemini providers, once the reader-side search lands) is therefore
+    // readable by the caller as it was set, and an optional method a provider
+    // lacks stays absent rather than being defined and then failing.
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("VERCEL", "1");
+    const built = {
+      id: "gemini",
+      generateDigest: vi.fn(),
+      testConnection: vi.fn(),
+      generateJsonText: vi.fn(),
+      supportsWebSearch: true,
+    };
+    mocks.createGeminiApiProvider.mockReturnValueOnce(built);
+
+    const resolved = resolveProvider({ provider: "gemini", apiKey: "USER-NOT-A-KEY" });
+
+    expect(resolved).toBe(built);
+    expect(resolved).toHaveProperty("supportsWebSearch", true);
+    expect(resolved).not.toHaveProperty("generateVisionJsonText");
+  });
+
+  it("returns the developer's opted-in singleton itself", () => {
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("VERCEL", "");
+    vi.stubEnv("VERCEL_ENV", "");
+    vi.stubEnv("PEER_DIGEST_PROVIDER", "gemini");
+
+    expect(resolveProvider(null)).toBe(geminiProvider);
+  });
+});
+

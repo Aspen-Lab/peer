@@ -194,21 +194,21 @@ type GeminiResult = {
 };
 
 /**
- * One `usage_events` row per **provider request** (ABC-freemium 2-05 ·
+ * One `[llm]` console line per **provider request** (ABC-freemium 2-05 ·
  * Ruling 6 point 5 · R-METER-1 as amended 2026-09-05).
  *
- * A "call" for billing purposes is one HTTP request to a model, so each attempt
- * in a fallback chain gets its own row with its own `ok` and `model`. Both
- * Gemini providers loop over a model chain, so one `generateJsonText` that
- * falls back from model A to model B legitimately writes **two** rows — that is
- * the ledger telling the owner about a retry they paid for, not a defect.
+ * A "call" here is one HTTP request to a model, so each attempt in a fallback
+ * chain gets its own line with its own `ok` and `model`. Both Gemini providers
+ * loop over a model chain, so one `generateJsonText` that falls back from model
+ * A to model B legitimately logs **two** lines — that is the log telling you
+ * about a retry, not a defect. Peer keeps no ledger of these; the line is the
+ * only record.
  *
  * **`ok` means "this request produced usable output", not "the HTTP call
  * returned".** Every caller of the four call sites below used to pass a literal
- * `true` on the success path, so a model that answered with empty text wrote an
- * `ok: true` row and the chain then fell through to the next model. The ledger
- * recorded a success the caller never received. The four sites now pass
- * `(result.text ?? "").trim().length > 0`.
+ * `true` on the success path, so a model that answered with empty text was
+ * logged as a success and the chain then fell through to the next model. The
+ * four sites now pass `(result.text ?? "").trim().length > 0`.
  */
 function logGemini(
   modelId: string,

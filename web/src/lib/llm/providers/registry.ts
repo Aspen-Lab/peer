@@ -9,7 +9,6 @@ import { openaiProvider, createOpenAIProvider } from "./openai";
 import { qwenProvider, createQwenProvider } from "./qwen";
 import { deepseekProvider, createDeepseekProvider } from "./deepseek";
 import { isLocalDevRuntime } from "@/lib/env/local-dev";
-import { meterProvider } from "./metered";
 
 const providers: Record<ProviderId, DigestProvider> = {
   anthropic: anthropicProvider,
@@ -113,21 +112,16 @@ function resolveLocalOptInProvider(): DigestProvider | null {
  * signed-out stranger from reaching this at all; `spend-scans.test.ts` asserts
  * that ordering for every route that calls it.
  *
- * The result is wrapped by `meterProvider` at this single return point, so every
- * acquisition site is metered without a user id threaded through any of them.
+ * The provider is returned exactly as it was built: Peer wraps it in nothing
+ * and keeps no record of the call, so any flag or optional method the provider
+ * object carries is read by the caller as the provider set it.
  *
  * This function stays **synchronous** — its call sites use the result without
- * `await`, and wrapping is pure object construction.
+ * `await`.
  */
 export function resolveProvider(
   override: ProviderOverrideConfig | null | undefined,
 ): DigestProvider | null {
-  const byok = hasUsableProviderOverride(override);
-  const provider = byok
-    ? resolveUserProvider(override)
-    : canUseLocalServerProvider()
-      ? resolveLocalOptInProvider()
-      : null;
-  if (!provider) return null;
-  return meterProvider(provider, { userId: null, byok });
+  if (hasUsableProviderOverride(override)) return resolveUserProvider(override);
+  return canUseLocalServerProvider() ? resolveLocalOptInProvider() : null;
 }
