@@ -38,10 +38,10 @@ Platform note: the gate of record is a Linux run. On Windows, five host-only tes
 
 There is exactly one manager at a time. §1 `HELD BY` names the manager and the worker currently holding the checkout.
 
-1. Look at `HELD BY` and the last entry in §4, and at `git log -5` with times. If the named manager pushed within the last hour, assume it is alive: stop and tell the owner instead of taking over. If it is older than that, or §1 says `HELD BY: free`, or the owner told you to take over, continue.
+1. Look at `HELD BY` and the last entry in §4, and at `git log -5` with times. If the named manager pushed within the last 90 minutes, or `HELD BY` names a worker assigned within the last 90 minutes, assume it is alive: stop and tell the owner instead of taking over. If it is older than that, or §1 says `HELD BY: free`, or the owner told you to take over, continue.
 2. Append one §4 entry: "<UTC> <your name/model> takes the manager role from <previous>; reason". Set `HELD BY` to yourself. Commit and push that before anything else (`git commit -- ABC-DEEP-REPORT-READING-HELPER.md`).
 3. If `git status` shows modified files you did not make, they are an interrupted worker's in-progress edits. Do not commit them and do not discard them: `git stash push -m "<item> in-progress by <who>, stashed by <you> <UTC>"`, note the stash in §4, and decide with the ledger whether the item is re-run from scratch (usual) or resumed from the stash.
-4. Hand back the same way: a §4 entry, `HELD BY: free` (or the next manager's name), `STOPPED BECAUSE:` filled, commit, push. The Claude cloud session has an hourly scheduled resume (a Routine) that reads §1 and continues whatever it says; if it finds `HELD BY` naming another live manager, it waits.
+4. Hand back the same way: a §4 entry, `HELD BY: free` (or the next manager's name), `STOPPED BECAUSE:` filled, commit, push. An hourly Routine (owner decision §1a.12, 2026-10-06) starts a fresh Claude Sonnet session in the cloud environment that reads §1 and this file: it stands down without writing when the manager `HELD BY` names has pushed within the last 90 minutes or names a worker assigned within the last 90 minutes; otherwise it takes the role over as this section says. So a live manager pushes a state commit at least every 90 minutes (at every clock firing, worker hand-off and long wait), and the liveness window everywhere in this file is 90 minutes, not one hour.
 
 ## 5. How the loop runs
 
