@@ -6,7 +6,7 @@ import type { ExtractedDocument } from "@/lib/papers/html-text";
 import type { FullTextResult } from "@/lib/papers/full-text";
 import { GIST_QUESTION, gistRoute, routeByQuestions, type RouteResult } from "@/lib/papers/reading-map";
 import type { Paper } from "@/types";
-import { ASK, FOR_YOUR_QUESTIONS, MAP, QUOTA, ROUTE, TERMS } from "./copy";
+import { ASK, EXPLAIN, FOR_YOUR_QUESTIONS, MAP, QUOTA, ROUTE, TERMS } from "./copy";
 import { HEADING_MARK, PaperBody, ROUTE_TINT, mergeQuestionRoute, questionRouteOverlay, sectionMark } from "./paper-body";
 import { PaperContents } from "./paper-contents";
 import { ReadingMapView, readingRoute } from "./reading-map";
@@ -311,7 +311,9 @@ describe("the route copy never tells the reader not to read (§1f.13, §3d 8)", 
     // P2-04b (§1g.15 finding 4): the answers block's copy is scanned too.
     // P2-09 (§1g.14): the quota notice's three lines are scanned too.
     // P3-01 (§1h.1): the Terms to know strip's copy is scanned too.
-    const all = [...strings(ASK), ...strings(MAP), ...strings(ROUTE), ...strings(FOR_YOUR_QUESTIONS), ...strings(QUOTA), ...strings(TERMS)];
+    // P3-02 (§1h.2): so is "Explain this?" — the button, the card's two labels
+    // and its three states.
+    const all = [...strings(ASK), ...strings(MAP), ...strings(ROUTE), ...strings(FOR_YOUR_QUESTIONS), ...strings(QUOTA), ...strings(TERMS), ...strings(EXPLAIN)];
 
     expect(all.length).toBeGreaterThan(30);
     expect(all).toContain("not mentioned");
@@ -325,6 +327,10 @@ describe("the route copy never tells the reader not to read (§1f.13, §3d 8)", 
     expect(all).toContain(ROUTE.backgroundWhy);
     expect(all).toContain("Terms to know");
     expect(all).toContain(TERMS.find("2 Methods"));
+    expect(all).toContain("Explain this?");
+    expect(all).toContain("What it means");
+    expect(all).toContain("Why it is here");
+    expect(all).toContain(EXPLAIN.defines("2 Methods"));
     for (const line of all) expect(line).not.toMatch(/skip|don['’]t read|ignore|not worth/i);
   });
 });

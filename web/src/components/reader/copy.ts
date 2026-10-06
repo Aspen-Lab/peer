@@ -197,6 +197,27 @@ export const TERMS = {
   find: (term: string) => `Find ${term} in the paper`,
 } as const;
 
+/**
+ * P3-02 (§1h.2; user decision §1a.10; blueprint §3.5 ⑤): "Explain this?" — the
+ * button beside a selected passage and the card it opens. Peer's words, in the
+ * label face; the card's two prose parts are in the reading face and carry
+ * `PEERS_READING`, and the paper's own sentences go through `EvidenceQuote`.
+ * Nothing here tells the reader what to do with the paper.
+ */
+export const EXPLAIN = {
+  ask: "Explain this?",
+  /** The card's accessible name. */
+  card: "Explanation of the selected passage",
+  /** Above the paper's own definition of a term in the passage (Tier 0). */
+  defines: (term: string) => `How the paper defines ${term}`,
+  meaning: "What it means",
+  here: "Why it is here",
+  loading: "Peer is reading this passage…",
+  unavailable: "Peer could not explain this just now.",
+  notInPaper: "Select text from the paper itself.",
+  close: "Close",
+} as const;
+
 /** The reader's own context for the paper: what they read or kept nearby. */
 export const LIBRARY = {
   heading: "In your library",

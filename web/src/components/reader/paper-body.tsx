@@ -19,7 +19,7 @@
 // are the paper's too, so they are serif as well — the mono on this page is
 // Peer's voice, and none of this is Peer's.
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { PaperReading, ReadingFigure, ReadingSection } from "@/lib/papers/reading";
 import { GIST_QUESTION, type RouteResult, type RouteSection, type RouteTier } from "@/lib/papers/reading-map";
 import type { QuestionAnswers } from "@/lib/papers/report";
@@ -238,6 +238,192 @@ export function markedClass(base: string, mark: SectionMark | null, extra?: stri
   return [base, ROUTE_TINT[mark.tier], extra].filter(Boolean).join(" ");
 }
 
+// ── The selection (P3-02; ruling §1h.2, user decision §1a.10) ─────────────
+//
+// A reader selects words of the body and "Explain this?" appears beside
+// them. What counts is exactly one paragraph's worth of the paper's own text:
+// a selection whose two ends sit in the same paragraph, non-empty, at most
+// 1,200 characters, with no drawn formula in it (the text of a formula is not
+// the paper's text). Anything else is no target. The body's markup is
+// untouched: this reads the DOM's selection and the ids the paragraphs
+// already carry (`paragraphAnchor`); nothing is added to what renders.
+
+/** The longest passage a selection may be (characters, whitespace collapsed). */
+export const MAX_SELECTION_CHARS = 1200;
+/** How long a selection holds still before it is read — a drag is not a selection. */
+export const SELECTION_DEBOUNCE_MS = 150;
+
+const PARAGRAPH_ANCHOR = /^paper-section-(\d+)-p(\d+)$/;
+/** What a drawn formula leaves in the DOM: KaTeX's markup, or the TeX in `<code>`. */
+const FORMULA_SELECTOR = ".katex, .katex-display, code";
+
+/** Where the selection sits in the body, and its words. */
+export interface SelectionTarget {
+  /** `reading.body[sectionIndex]` and its `paragraphs[paragraphIndex]`. */
+  sectionIndex: number;
+  paragraphIndex: number;
+  passage: string;
+}
+
+/** A rectangle in the viewport's coordinates. */
+export interface ViewRect {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
+
+/** Where a selection is on screen: `rect`, where it ends (the last line the
+ *  words reach — what the button stands under), and `bounds`, the whole of it
+ *  (what the card stands clear of). */
+export interface ViewRects {
+  rect: ViewRect;
+  bounds: ViewRect;
+}
+
+/** A target with where it is on screen, and how to look again after a scroll. */
+export type ExplainSelection = SelectionTarget & ViewRects & { measure?: () => ViewRects | null };
+
+/**
+ * A selection is a target when both its ends sit in the same paragraph (the
+ * paragraph's id, as `paragraphAnchor` writes it), its text is not empty once
+ * the whitespace is collapsed, and it is at most 1,200 characters. Pure.
+ */
+export function selectionTarget(input: {
+  anchorParagraphId: string | null;
+  focusParagraphId: string | null;
+  text: string;
+}): SelectionTarget | null {
+  const { anchorParagraphId, focusParagraphId } = input;
+  if (!anchorParagraphId || anchorParagraphId !== focusParagraphId) return null;
+  const match = PARAGRAPH_ANCHOR.exec(anchorParagraphId);
+  if (!match) return null;
+  const passage = input.text.replace(/\s+/g, " ").trim();
+  if (!passage || passage.length > MAX_SELECTION_CHARS) return null;
+  return { sectionIndex: Number(match[1]), paragraphIndex: Number(match[2]), passage };
+}
+
+const sameRect = (a: ViewRect, b: ViewRect) => a.left === b.left && a.top === b.top && a.right === b.right && a.bottom === b.bottom;
+
+/** Whether two selections are the same one, so the page does not re-render for
+ *  a selection that has not changed (every `selectionchange` is not a change). */
+export function sameSelection(a: ExplainSelection | null, b: ExplainSelection | null): boolean {
+  if (a === null || b === null) return a === b;
+  return (
+    a.sectionIndex === b.sectionIndex &&
+    a.paragraphIndex === b.paragraphIndex &&
+    a.passage === b.passage &&
+    sameRect(a.rect, b.rect) &&
+    sameRect(a.bounds, b.bounds)
+  );
+}
+
+// The few parts of the DOM the reading needs, so a test can stand in for them.
+interface ElementLike {
+  id: string;
+  parentElement: ElementLike | null;
+  closest(selector: string): ElementLike | null;
+}
+interface NodeLike {
+  nodeType: number;
+  parentElement: ElementLike | null;
+}
+interface RangeLike {
+  startContainer: NodeLike;
+  endContainer: NodeLike;
+  endOffset: number;
+  cloneRange(): RangeLike;
+  cloneContents(): { querySelector(selector: string): unknown };
+  getClientRects(): ArrayLike<ViewRect>;
+  getBoundingClientRect(): ViewRect;
+}
+export interface SelectionLike {
+  rangeCount: number;
+  isCollapsed: boolean;
+  toString(): string;
+  getRangeAt(index: number): RangeLike;
+}
+
+/** The id of the paragraph (the element `paragraphAnchor` names) that holds
+ *  `node`, when it is inside the paper's body — each holds exactly one `<p>`, so
+ *  text in an equation or a caption beside it is in none. */
+function paragraphIdOf(node: NodeLike | null): string | null {
+  if (!node) return null;
+  const element = node.nodeType === 1 ? (node as unknown as ElementLike) : node.parentElement;
+  const host = element?.closest("p")?.parentElement ?? null;
+  if (!host || host.closest(`#${PAPER_BODY_ID}`) === null) return null;
+  return PARAGRAPH_ANCHOR.test(host.id) ? host.id : null;
+}
+
+const hasSize = (rect: ViewRect) => rect.right - rect.left > 0 || rect.bottom - rect.top > 0;
+const plain = (rect: ViewRect): ViewRect => ({ left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom });
+
+/** Where a range is on screen: its last line with a width — a range that ends
+ *  at the start of the next block ends with one that has none — and the box of
+ *  all its lines. Null when it has no size at all (off screen). */
+function measureRange(range: RangeLike): ViewRects | null {
+  const rects = Array.from(range.getClientRects());
+  const sized = rects.filter((rect) => rect.right - rect.left > 0);
+  const last = sized.length > 0 ? sized[sized.length - 1] : rects.length > 0 ? rects[rects.length - 1] : range.getBoundingClientRect();
+  if (!hasSize(last)) return null;
+  const lines = sized.length > 0 ? sized : [last];
+  const bounds = {
+    left: Math.min(...lines.map((rect) => rect.left)),
+    top: Math.min(...lines.map((rect) => rect.top)),
+    right: Math.max(...lines.map((rect) => rect.right)),
+    bottom: Math.max(...lines.map((rect) => rect.bottom)),
+  };
+  return { rect: plain(last), bounds };
+}
+
+/** What the page's selection is, as an `ExplainSelection`, or null: nothing
+ *  selected, a selection across paragraphs or outside the body, one with a
+ *  formula in it, over-long, or not on screen. */
+export function readSelection(selection: SelectionLike | null): ExplainSelection | null {
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return null;
+  // The selection's own range changes as the selection does; this one is ours.
+  const range = selection.getRangeAt(0).cloneRange();
+  const text = selection.toString();
+  const startId = paragraphIdOf(range.startContainer);
+  let endId = paragraphIdOf(range.endContainer);
+  // A triple click selects a paragraph, and the browser ends it at offset 0 of
+  // the NEXT one: the words are all the first paragraph's. A drag that really
+  // runs on into another paragraph carries a break inside its words.
+  if (endId !== startId && range.endOffset === 0 && !/\n/.test(text.trim())) endId = startId;
+  const target = selectionTarget({ anchorParagraphId: startId, focusParagraphId: endId, text });
+  if (!target) return null;
+  if (range.cloneContents().querySelector(FORMULA_SELECTOR)) return null;
+  const where = measureRange(range);
+  if (!where) return null;
+  return { ...target, ...where, measure: () => measureRange(range) };
+}
+
+/**
+ * Report the reader's selection to `onSelect` — after it has held still for
+ * `SELECTION_DEBOUNCE_MS` — and `null` whenever there is none. Listens only
+ * while there is somewhere to report to. Adds nothing to the page's markup.
+ */
+function useSelectionListener(onSelect: ((selection: ExplainSelection | null) => void) | undefined): void {
+  const latest = useRef(onSelect);
+  useEffect(() => {
+    latest.current = onSelect;
+  }, [onSelect]);
+  const listening = onSelect !== undefined;
+  useEffect(() => {
+    if (!listening) return;
+    let timer: number | undefined;
+    const onChange = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => latest.current?.(readSelection(window.getSelection() as unknown as SelectionLike | null)), SELECTION_DEBOUNCE_MS);
+    };
+    document.addEventListener("selectionchange", onChange);
+    return () => {
+      document.removeEventListener("selectionchange", onChange);
+      window.clearTimeout(timer);
+    };
+  }, [listening]);
+}
+
 /**
  * The paper's figure, where the paper put it.
  *
@@ -372,12 +558,17 @@ export function PaperBody({
   reading,
   route,
   termMark,
+  onSelect,
 }: {
   reading: PaperReading;
   route?: DrawRoute;
   /** P3-01 (§1h.1): where the term the reader clicked first stands in the body. */
   termMark?: TermOccurrence | null;
+  /** P3-02 (§1h.2): told, once it holds still, what the reader has selected in
+   *  the body — a target within one paragraph — or `null` for no such selection. */
+  onSelect?: (selection: ExplainSelection | null) => void;
 }) {
+  useSelectionListener(onSelect);
   // `?? []`: the version gate above should mean this is always an array, and
   // a missing optional block is still not worth taking the page down for.
   const body = reading.body ?? [];

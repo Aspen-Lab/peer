@@ -50,7 +50,20 @@ import { SwipeableCard } from "@/components/cards/swipe-card";
 import { useResolvedFigure } from "@/components/paper-figure";
 import { TitleBlock } from "@/components/reader/title-block";
 import { PaperWords } from "@/components/reader/paper-words";
-import { PaperBody, mergeQuestionRoute, questionRouteOverlay } from "@/components/reader/paper-body";
+import {
+  PaperBody,
+  mergeQuestionRoute,
+  questionRouteOverlay,
+  sameSelection,
+  type ExplainSelection,
+  type SelectionTarget,
+} from "@/components/reader/paper-body";
+import {
+  ExplainPopover,
+  explainLlmOverride,
+  requestExplanation,
+  type AskResult,
+} from "@/components/reader/explain-popover";
 import { RecordBlock } from "@/components/reader/record-block";
 import { InYourLibrary } from "@/components/reader/in-your-library";
 import { KeyLegend } from "@/components/reader/key-legend";
@@ -88,6 +101,7 @@ import { ReadingMapView, readingRoute } from "@/components/reader/reading-map";
 import { TermsStrip } from "@/components/reader/terms-strip";
 import { SectionLinks } from "@/components/reader/evidence-quote";
 import { settledQuestions, useReadingQuestionsHydrated, useReadingQuestionsStore } from "@/store/reading-questions";
+import { explanationFor, useExplainThreadsStore } from "@/store/explain-threads";
 import { exampleQuestions } from "@/lib/reader/question-examples";
 import { useModelReport } from "@/components/reader/use-model-report";
 import { usePrivateSupplement } from "@/components/reader/use-private-supplement";
@@ -737,6 +751,42 @@ function Reader({
   );
   const profileHasProject = projectText.trim().length > 0;
 
+  // P3-02 (§1h.2; §3d 14): "Explain this?". The body reports what the reader
+  // has selected (a target within one paragraph, once it holds still); the
+  // popover offers the button and, on the click — the only thing that sends —
+  // asks for the explanation. One explanation is a small call, so a reader may
+  // ask whenever they have a model from anywhere (`providerConfigured`), deep
+  // reports on or not. The section's id is the id the server's own corpus gives
+  // the section: `reading.body[k].id`, the one the browser already holds. A kept
+  // answer is remembered per paper and passage, so the same passage opens at once.
+  const [explainTarget, setExplainTarget] = useState<ExplainSelection | null>(null);
+  const selectExplain = useCallback(
+    (next: ExplainSelection | null) => setExplainTarget((current) => (sameSelection(current, next) ? current : next)),
+    [],
+  );
+  const explainKept = useExplainThreadsStore((s) => s.byPaper[paper.id]);
+  const rememberExplanation = useExplainThreadsStore((s) => s.remember);
+  const explainCached = useMemo(
+    () => (explainTarget ? explanationFor({ [paper.id]: explainKept ?? {} }, paper.id, explainTarget.passage)?.answer : undefined),
+    [explainTarget, explainKept, paper.id],
+  );
+  const askExplain = useCallback(
+    async (selection: SelectionTarget): Promise<AskResult> => {
+      const sectionId = reading?.body?.[selection.sectionIndex]?.id;
+      if (!sectionId) return "unavailable";
+      const result = await requestExplanation({ paper, selection, sectionId, llmOverride: explainLlmOverride(profile) });
+      if (typeof result !== "string") {
+        try {
+          rememberExplanation(paper.id, { passage: selection.passage, sectionId, paragraphIndex: selection.paragraphIndex, answer: result });
+        } catch {
+          // A full or blocked browser store never costs the reader the answer.
+        }
+      }
+      return result;
+    },
+    [paper, profile, reading, rememberExplanation],
+  );
+
   // The report's provenance in the shape the reading's sentence table takes;
   // the reading never imports the report type. `deepRequested` is the
   // reader's setting: an abstract-basis report with deep on means the full
@@ -1113,6 +1163,7 @@ function Reader({
     // and the ONLY place in the product that sets it. Static in JSX rather
     // than written from an effect on purpose: written afterwards, the page
     // would paint once at full opacity and then snap to hidden.
+    <>
     <PageContainer
       width="spread"
       rhythm="reader"
@@ -1341,7 +1392,7 @@ function Reader({
 
             {/* The paper, when Peer reached it: everything the extractor
                 read, under everything Peer had to say about it. */}
-            <PaperBody reading={reading} route={route} termMark={termMark} />
+            <PaperBody reading={reading} route={route} termMark={termMark} onSelect={selectExplain} />
 
             {/* Last, and always there: the facts that need no key. On a page with no model
                 page it is the only block under the abstract, which is the
@@ -1362,5 +1413,13 @@ function Reader({
       <ReaderToast toast={toast} />
       <KeyLegend keys={paperKeysFor({ upload: isUploadId })} />
     </PageContainer>
+    {/* P3-02: outside the zoomed container — the button and the card are placed
+        in the window's pixels, which a `zoom` on an ancestor would scale — and
+        inside the section links, so the quotes' "§Heading" is a link as
+        everywhere. One per paper: a card never follows the reader to the next. */}
+    <SectionLinks headings={bodyHeadings}>
+      <ExplainPopover key={paper.id} target={explainTarget} terms={terms} canAsk={providerConfigured} onAsk={askExplain} cached={explainCached} reading={reading} />
+    </SectionLinks>
+    </>
   );
 }
