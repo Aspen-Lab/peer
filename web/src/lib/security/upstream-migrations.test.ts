@@ -93,3 +93,63 @@ describe("upstream Supabase security foundation", () => {
     expect(statements).not.toMatch(/\b(grant|revoke)\b/i);
   });
 });
+
+describe("the usage ledger and the company budget are dropped by a forward migration", () => {
+  const file = "20261007000100_drop_ledger_and_budget.sql";
+  const raw = () => readMigration(file);
+  // Comments carry prose (including words like "grant" and table names); the
+  // checks below are about the statements.
+  const statements = () => raw().replace(/--.*$/gm, "");
+  const rollbackDir = path.join(process.cwd(), "supabase", "rollback");
+
+  it("drops exactly the three tables, with no CASCADE and no grant change", () => {
+    const sql = statements();
+    expect(sql.match(/\bdrop table\b[^;]*;/gi)).toEqual([
+      "drop table if exists public.company_model_prices;",
+      "drop table if exists public.company_spend_caps;",
+      "drop table if exists public.usage_events;",
+    ]);
+    // A view or policy that still depends on one of them makes this fail loudly
+    // instead of being dropped with it.
+    expect(sql).not.toMatch(/\bcascade\b/i);
+    expect(sql).not.toMatch(/\b(grant|revoke)\b/i);
+  });
+
+  it("keeps the shared counter table and clears only the allowance and spend rows", () => {
+    const sql = statements();
+    // `usage_counters` carries the hourly rate limit, the email caps, the retry
+    // claims and the refresh cooldown: the table and its RPC stay.
+    expect(sql).not.toMatch(/drop table[^;]*usage_counters/i);
+    expect(sql).not.toMatch(/drop function/i);
+
+    const del = sql.match(/delete from public\.usage_counters[^;]*;/i)?.[0] ?? "";
+    expect(del).toMatch(/\bwhere\b/i);
+    const patterns = [...del.matchAll(/key like '([^']+)'/g)].map((m) => m[1]);
+    expect(patterns).toEqual([
+      "deep:%",
+      "forced_rebuilds_today:%",
+      "company_spend:%",
+      "jev:%",
+      "jev-edge:%",
+    ]);
+    // Never a shared-infrastructure key family.
+    for (const kept of ["rate:", "test_email:", "confirm_email:"]) {
+      expect(del).not.toContain(kept);
+    }
+  });
+
+  it("tells the owner to export usage_events first, in the file the owner will run", () => {
+    const header = raw().split("\n").filter((line) => line.startsWith("--")).join("\n");
+    expect(header).toMatch(/export/i);
+    expect(header).toContain("usage_events");
+  });
+
+  it("has no rollback file (the 20261001 precedent) and leaves the budget migration's history alone", () => {
+    expect(fs.existsSync(path.join(rollbackDir, "20261007000100_drop_ledger_and_budget_rollback.sql"))).toBe(false);
+    // The earlier migration and its rollback stay as history: production state
+    // is unknown, and this migration's `if exists` covers both cases.
+    expect(fs.existsSync(path.join(migrations, "20260925000000_company_spend_budget.sql"))).toBe(true);
+    expect(fs.existsSync(path.join(rollbackDir, "20260925000000_company_spend_budget_rollback.sql"))).toBe(true);
+  });
+});
+
