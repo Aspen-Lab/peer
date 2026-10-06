@@ -6,7 +6,16 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { defaultProfile } from "@/types";
 import { useProfileStore } from "@/store/profile";
 import { jevGainSentence } from "@/lib/decisions/jev-claim";
-import { JEV_SIGNUP_URL, JevKeyField, JevScreeningStatus, JevSetup, jevScreeningLine } from "./jev-setup";
+import {
+  JEV_SIGNUP_URL,
+  JEV_SIGN_IN_NOTE,
+  JevKeyField,
+  JevScreeningStatus,
+  JevSetup,
+  JevSetupView,
+  jevScreeningLine,
+  jevSignInNote,
+} from "./jev-setup";
 
 // The Jev key field and the copy around it, as the Profile page and the welcome
 // wizard render them. Optional, honest about what the key turns on and what it
@@ -235,6 +244,7 @@ describe("what the Jev copy never says", () => {
       visibleText(render(createElement(JevSetup, { variant: "welcome", idPrefix: "b" }))),
       visibleText(render(createElement(JevKeyField, { value: KEY, onChange: () => {} }))),
       visibleText(render(createElement(JevKeyField, { value: "", onChange: () => {} }))),
+      JEV_SIGN_IN_NOTE,
     ]
       .join("\n")
       .split(jevGainSentence())
@@ -252,5 +262,89 @@ describe("what the Jev copy never says", () => {
 
   it('never says "Tier N" or the bring-your-own-key abbreviation (the UI vocabulary gate)', () => {
     expect(all()).not.toMatch(/Tier [012]|BYOK/);
+  });
+});
+
+// SF-4. Peer sends the Jev key only for a signed-in reader (or where there is no
+// sign-in at all), so a key saved while signed out does nothing until the reader
+// signs in. The model-key row says so ("Sign in to turn this on"); the Jev row has
+// to say it too, or "Jev key saved on this device." reads as "Jev is on".
+describe("the signed-out note", () => {
+  it("is exactly one sentence, in plain words", () => {
+    expect(JEV_SIGN_IN_NOTE).toBe("Sign in to use it: Jev screens only for a signed-in reader.");
+  });
+
+  it("is shown when the reader is signed out and a usable key is saved", () => {
+    expect(jevSignInNote("signed-out", KEY)).toBe(JEV_SIGN_IN_NOTE);
+    expect(jevSignInNote("signed-out", `  ${KEY}  `)).toBe(JEV_SIGN_IN_NOTE);
+  });
+
+  it("is not shown when there is no usable key to talk about", () => {
+    expect(jevSignInNote("signed-out", "")).toBeNull();
+    expect(jevSignInNote("signed-out", "   ")).toBeNull();
+    expect(jevSignInNote("signed-out", "two words")).toBeNull();
+  });
+
+  it.each(["signed-in", "unconfigured", "unknown"] as const)(
+    "is not shown while the sign-in state is %s, whatever is saved (the key is sent, or it is not yet known)",
+    (outcome) => {
+      expect(jevSignInNote(outcome, KEY)).toBeNull();
+      expect(jevSignInNote(outcome, "")).toBeNull();
+    },
+  );
+
+  const view = (variant: "profile" | "welcome", authOutcome: "signed-in" | "signed-out" | "unconfigured" | "unknown", jevApiKey: string) =>
+    visibleText(
+      render(
+        createElement(JevSetupView, {
+          variant,
+          idPrefix: "v",
+          jevApiKey,
+          onChange: () => {},
+          report: null,
+          authOutcome,
+        }),
+      ),
+    );
+
+  it("Profile, signed out, key saved: the line is on the page", () => {
+    expect(view("profile", "signed-out", KEY)).toContain(JEV_SIGN_IN_NOTE);
+  });
+
+  it("Profile, signed in, key saved: no line", () => {
+    expect(view("profile", "signed-in", KEY)).not.toContain(JEV_SIGN_IN_NOTE);
+    expect(view("profile", "signed-in", KEY)).toContain("Jev key saved on this device.");
+  });
+
+  it("Profile, signed out, no key: no line (there is nothing to sign in for)", () => {
+    expect(view("profile", "signed-out", "")).not.toContain(JEV_SIGN_IN_NOTE);
+  });
+
+  it("Profile, no sign-in configured, or still checking: no line", () => {
+    expect(view("profile", "unconfigured", KEY)).not.toContain(JEV_SIGN_IN_NOTE);
+    expect(view("profile", "unknown", KEY)).not.toContain(JEV_SIGN_IN_NOTE);
+  });
+
+  it("the welcome block says it too, once, because a reader can paste a key there before signing in", () => {
+    const text = view("welcome", "signed-out", KEY);
+    expect(text).toContain(JEV_SIGN_IN_NOTE);
+    expect(text.split(JEV_SIGN_IN_NOTE)).toHaveLength(2);
+    expect(view("welcome", "signed-in", KEY)).not.toContain(JEV_SIGN_IN_NOTE);
+  });
+
+  it("never prints the key, and the note names no plan, tier or abbreviation", () => {
+    const text = view("profile", "signed-out", KEY);
+    expect(text).not.toContain(KEY);
+    expect(JEV_SIGN_IN_NOTE).not.toMatch(/Tier|BYOK|plan|upgrade|free|paid/i);
+  });
+
+  it("reads the same signal the model-key row reads (useSyncGate's authOutcome), in the container", () => {
+    // Static rendering shows the stores' initial state, so the wiring is pinned in
+    // the source, as the key's own wiring is above.
+    const source = readFileSync(path.join(process.cwd(), "src/components/profile/jev-setup.tsx"), "utf8");
+    expect(source).toMatch(/useSyncGate\(\(s\) => s\.authOutcome\)/);
+    expect(source).toMatch(/authOutcome=\{authOutcome\}/);
+    const profilePage = readFileSync(path.join(process.cwd(), "src/app/profile/page.tsx"), "utf8");
+    expect(profilePage).toMatch(/useSyncGate\(\(st\) => st\.authOutcome\)/);
   });
 });

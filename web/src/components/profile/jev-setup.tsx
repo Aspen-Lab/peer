@@ -20,6 +20,7 @@
 
 import { useProfileStore } from "@/store/profile";
 import { useJevScreeningStore, type JevScreeningReport } from "@/store/jev-screening";
+import { useSyncGate, type AuthOutcome } from "@/components/profile-sync";
 import { SecretInput } from "@/components/ui";
 import { buttonVariants } from "@/components/ui/button";
 import { jevGainSentence } from "@/lib/decisions/jev-claim";
@@ -43,6 +44,20 @@ const MONEY = "Jev bills your own account for what it reads.";
 
 const OPTIONAL_AND_PRIVACY =
   "Optional. Applies to your next briefing. Peer keeps the key in this browser, never in your account; its server passes the key to Jev while it screens your papers and does not store or log it.";
+
+/**
+ * What a signed-out reader is told about a saved key. Peer sends the Jev key only
+ * for a signed-in reader (or where no sign-in exists at all; see
+ * `paperFeedRequestBody`), so a key saved while signed out does nothing until the
+ * reader signs in. The model-key row on the Profile page says the same in the same
+ * place ("Sign in to turn this on").
+ */
+export const JEV_SIGN_IN_NOTE = "Sign in to use it: Jev screens only for a signed-in reader.";
+
+/** The sign-in line, or null: only a signed-out reader with a usable key saved sees it. */
+export function jevSignInNote(authOutcome: AuthOutcome, jevApiKey: string): string | null {
+  return authOutcome === "signed-out" && parseJevApiKey(jevApiKey) !== undefined ? JEV_SIGN_IN_NOTE : null;
+}
 
 // Small external-link glyph shown inside the "Get a Jev key" button.
 function ExternalLinkIcon() {
@@ -147,7 +162,8 @@ export function JevKeyField({
 /**
  * The whole Jev setup, reading and writing the reader's own key in the profile
  * store. `profile` is the Profile page's full explanation; `welcome` is the
- * short block under the model-key fields in the wizard.
+ * short block under the model-key fields in the wizard. The stores are read here
+ * and everything else is `JevSetupView`'s props, so a test can render any state.
  */
 export function JevSetup({
   variant = "profile",
@@ -159,8 +175,40 @@ export function JevSetup({
   const jevApiKey = useProfileStore((s) => s.profile.jevApiKey ?? "");
   const updateJevApiKey = useProfileStore((s) => s.updateJevApiKey);
   const report = useJevScreeningStore((s) => s.report);
+  // The same signal the model-key row reads: the key is used only for a signed-in reader.
+  const authOutcome = useSyncGate((s) => s.authOutcome);
+
+  return (
+    <JevSetupView
+      variant={variant}
+      idPrefix={idPrefix}
+      jevApiKey={jevApiKey}
+      onChange={updateJevApiKey}
+      report={report}
+      authOutcome={authOutcome}
+    />
+  );
+}
+
+/** `JevSetup` with its state passed in. */
+export function JevSetupView({
+  variant,
+  idPrefix,
+  jevApiKey,
+  onChange,
+  report,
+  authOutcome,
+}: {
+  variant: "profile" | "welcome";
+  idPrefix: string;
+  jevApiKey: string;
+  onChange: (value: string) => void;
+  report: JevScreeningReport | null | undefined;
+  authOutcome: AuthOutcome;
+}) {
   // No key, no hint: what Jev did is shown only while a usable key is saved.
   const usable = parseJevApiKey(jevApiKey) !== undefined;
+  const signInNote = jevSignInNote(authOutcome, jevApiKey);
 
   if (variant === "welcome") {
     return (
@@ -169,7 +217,8 @@ export function JevSetup({
         <p className="text-caption leading-relaxed text-text-muted">{WITHOUT_KEY}</p>
         <p className="text-caption leading-relaxed text-text-muted">{WHAT_A_KEY_ADDS}</p>
         <p className="text-caption leading-relaxed text-text-muted">{jevGainSentence()}</p>
-        <JevKeyField value={jevApiKey} onChange={updateJevApiKey} idPrefix={idPrefix} />
+        <JevKeyField value={jevApiKey} onChange={onChange} idPrefix={idPrefix} />
+        {signInNote !== null && <p className="text-micro leading-relaxed text-text-faint">{signInNote}</p>}
       </div>
     );
   }
@@ -181,7 +230,8 @@ export function JevSetup({
       <p className="text-caption leading-relaxed text-text-muted">{jevGainSentence()}</p>
       <p className="text-caption leading-relaxed text-text-muted">{MONEY}</p>
       <p className="text-micro leading-relaxed text-text-faint">{OPTIONAL_AND_PRIVACY}</p>
-      <JevKeyField value={jevApiKey} onChange={updateJevApiKey} idPrefix={idPrefix} />
+      <JevKeyField value={jevApiKey} onChange={onChange} idPrefix={idPrefix} />
+      {signInNote !== null && <p className="text-micro leading-relaxed text-text-faint">{signInNote}</p>}
       {usable && <JevScreeningStatus report={report} />}
     </div>
   );
