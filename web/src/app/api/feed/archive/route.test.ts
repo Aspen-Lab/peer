@@ -21,8 +21,8 @@ const mocks = vi.hoisted(() => ({
   listServedBatchDates: vi.fn(),
   readExclusions: vi.fn(),
   runFeedPipeline: vi.fn(),
-  requireEntitledAiRequest: vi.fn(),
-  entitledAiTier: vi.fn(),
+  requireAiRequest: vi.fn(),
+  aiTierCeiling: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -34,9 +34,8 @@ vi.mock("@/lib/feed/pipeline", () => ({
 }));
 
 vi.mock("@/lib/security/ai-request", () => ({
-  protectAiRequest: mocks.requireEntitledAiRequest,
-  requireEntitledAiRequest: mocks.requireEntitledAiRequest,
-  entitledAiTier: mocks.entitledAiTier,
+  requireAiRequest: mocks.requireAiRequest,
+  aiTierCeiling: mocks.aiTierCeiling,
 }));
 
 // The ONE shared seam: this route, web/src/app/api/feed/route.ts and
@@ -152,9 +151,9 @@ beforeEach(() => {
   mocks.readExclusions.mockResolvedValue({ status: "ok", keys: new Set() });
   mocks.getBatch.mockResolvedValue(null);
   mocks.listServedBatchDates.mockResolvedValue([]);
-  mocks.requireEntitledAiRequest.mockResolvedValue({ entitlement: { userId: null } });
-  mocks.entitledAiTier.mockImplementation((tier: number, entitlement: { userId: string | null }) =>
-    entitlement.userId === null ? 0 : tier,
+  mocks.requireAiRequest.mockResolvedValue({ user: null, anonymous: true });
+  mocks.aiTierCeiling.mockImplementation((tier: number, request: { anonymous: boolean }) =>
+    request.anonymous ? 0 : tier,
   );
   // Every test stubs its own ledger explicitly; a construction that slips
   // through unstubbed should fail loudly, not silently no-op (same

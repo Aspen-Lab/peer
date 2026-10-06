@@ -4,7 +4,7 @@ import { selectedSenseConcept } from "@/lib/feed/senses";
 
 const mocks = vi.hoisted(() => ({
   canUseLocalServerProvider: vi.fn(),
-  requireEntitledAiRequest: vi.fn(),
+  requireAiRequest: vi.fn(),
   getUser: vi.fn(),
   select: vi.fn(),
   maybeSingle: vi.fn(),
@@ -16,7 +16,7 @@ vi.mock("@/lib/llm/providers/registry", () => ({
   canUseLocalServerProvider: mocks.canUseLocalServerProvider,
 }));
 vi.mock("@/lib/security/ai-request", () => ({
-  requireEntitledAiRequest: mocks.requireEntitledAiRequest,
+  requireAiRequest: mocks.requireAiRequest,
 }));
 vi.mock("@/lib/supabase/server", () => ({
   createClient: () => Promise.resolve({
@@ -37,7 +37,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.maybeSingle.mockReset();
   mocks.canUseLocalServerProvider.mockReturnValue(true);
-  mocks.requireEntitledAiRequest.mockResolvedValue({ entitlement: { userId: "server-user" } });
+  mocks.requireAiRequest.mockResolvedValue({ user: { id: "server-user" }, anonymous: false });
   mocks.getUser.mockResolvedValue({ data: { user: { id: "server-user", email: "person@example.test" } } });
   mocks.select.mockImplementation(() => ({ eq: () => ({ maybeSingle: mocks.maybeSingle }) }));
   mocks.maybeSingle.mockResolvedValue({
@@ -52,19 +52,19 @@ beforeEach(() => {
 });
 
 describe("POST /api/test-digest intent transport", () => {
-  it("conceals production before entitlement or profile work", async () => {
+  it("conceals production before the sign-in check or profile work", async () => {
     mocks.canUseLocalServerProvider.mockReturnValue(false);
 
     const response = await POST(request());
 
     expect(response.status).toBe(404);
-    expect(mocks.requireEntitledAiRequest).not.toHaveBeenCalled();
+    expect(mocks.requireAiRequest).not.toHaveBeenCalled();
     expect(mocks.getUser).not.toHaveBeenCalled();
     expect(mocks.select).not.toHaveBeenCalled();
   });
 
-  it("does not run feed or email when the shared entitlement gate rejects", async () => {
-    mocks.requireEntitledAiRequest.mockResolvedValue(
+  it("does not run feed or email when the shared sign-in gate rejects", async () => {
+    mocks.requireAiRequest.mockResolvedValue(
       NextResponse.json({ error: "denied" }, { status: 401, headers: { "Cache-Control": "no-store" } }),
     );
 

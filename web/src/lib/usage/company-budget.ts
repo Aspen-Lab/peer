@@ -45,9 +45,8 @@
  *
  * ── R2 — THE ONE NO-OWNER CALL SITE ──────────────────────────────────────────
  *
- * `feed/tier2-rerank.ts`'s rerank call (and any other call reached through a
- * `SpendJustification` rather than a real signed-in `EntitledContext`) always
- * has `userId === null` at this layer. Manager ruling: count it against the
+ * `feed/tier2-rerank.ts`'s rerank call (and any other call made with no reader
+ * attached) always has `userId === null` at this layer. Manager ruling: count it against the
  * GLOBAL cap only, never a per-user key — accepted as a scoped gap (sub-cent
  * worst case, already bounded by the feed route's own hourly count limit).
  * `reserveCompanySpend` below enforces this structurally: the per-user branch
@@ -365,9 +364,9 @@ export type EstimateCompanySpendResult = { ok: true; microUsd: number } | { ok: 
  * cost if every chain attempt actually happened, per §2.4.
  *
  * **Documented, tested assumption** (§2.4): the resolved company-funded
- * provider is always `"gemini"` — `resolveSystemProvider()` has no other
- * reachable branch today. An unrecognized `providerId` fails closed rather
- * than silently pricing it at $0.
+ * provider is always `"gemini"` — the system Gemini default was the only
+ * company-funded provider there ever was. An unrecognized `providerId` fails
+ * closed rather than silently pricing it at $0.
  */
 export function estimateCompanySpend(
   shape: CompanyBudgetCallShape,

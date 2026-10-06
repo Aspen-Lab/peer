@@ -313,7 +313,10 @@ describe("POST /api/papers/upload", () => {
     expect(generateJsonText).not.toHaveBeenCalled();
   });
 
-  it("2-06 step (b): falls back to a local-dev small-tier model when step (a) found only an arXiv stamp", async () => {
+  it("2-06: a stamp-only extractor title falls to the file name, and no model is asked even if one is on offer", async () => {
+    // A model-written title used to sit between the extractor and the file
+    // name, on Peer's own key. There is no such key, and a title is not worth
+    // asking a reader for theirs: the route reaches no provider at all.
     mocks.extractPdfTextFromBytes.mockResolvedValue({
       ok: true,
       doc: { ...emptyDoc, title: "arXiv:2401.12345v2" },
@@ -327,35 +330,17 @@ describe("POST /api/papers/upload", () => {
     const res = await postWith(pdfFile(pdfBytes(), "untitled-download.pdf"));
     const body = await res.json();
 
-    expect(body.paper.title).toBe("A Study Of Interesting Reactions In Modern Battery Chemistry");
-    expect(generateJsonText).toHaveBeenCalledTimes(1);
-    expect(generateJsonText.mock.calls[0][0]).toMatchObject({ tier: "small" });
+    expect(body.paper.title).toBe("untitled-download");
+    expect(generateJsonText).not.toHaveBeenCalled();
+    expect(mocks.resolveProvider).not.toHaveBeenCalled();
   });
 
-  it("2-06 step (b) -> (c): a stamp-shaped or unusable model answer is never trusted — falls through to the file name", async () => {
-    mocks.extractPdfTextFromBytes.mockResolvedValue({
-      ok: true,
-      doc: { ...emptyDoc, title: "arXiv:2401.12345v2" },
-      page1Text: "arXiv:2401.12345v2\nsome ambiguous page 1 layout",
-    } satisfies PdfTextResult);
-    // The model echoes the same stamp shape back — never trusted, same bar
-    // as step (a)'s own output.
-    const generateJsonText = vi.fn().mockResolvedValue(JSON.stringify({ title: "arXiv:2401.12345v2" }));
-    mocks.resolveProvider.mockReturnValue({ generateJsonText });
-
-    const res = await postWith(pdfFile(pdfBytes(), "My Battery Paper.pdf"));
-    const body = await res.json();
-
-    expect(body.paper.title).toBe("My Battery Paper");
-  });
-
-  it("2-06: without a local dev provider (the deployed-Peer case), a stamp-only title falls straight through to the file name", async () => {
+  it("2-06: a stamp-only title with nothing else on page 1 falls straight through to the file name", async () => {
     mocks.extractPdfTextFromBytes.mockResolvedValue({
       ok: true,
       doc: { ...emptyDoc, title: "arXiv:2401.12345v2" },
       page1Text: "arXiv:2401.12345v2",
     } satisfies PdfTextResult);
-    mocks.resolveProvider.mockReturnValue(null); // canUseLocalServerProvider() false on a deployed instance
 
     const res = await postWith(pdfFile(pdfBytes(), "My Battery Paper.pdf"));
     const body = await res.json();

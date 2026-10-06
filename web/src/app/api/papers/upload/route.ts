@@ -16,9 +16,6 @@ import { createHash } from "node:crypto";
 import { hostedUploadsEnabled, ownedUpload, PRIVATE_UPLOAD_HEADERS, sameOriginUploadRequest, UPLOAD_RIGHTS_VERSION, uploadOwner } from "@/lib/papers/upload-access";
 import { extractUploadConcepts, matchUploadedPaper, UPLOAD_CONCEPT_EXTRACTION_VERSION, type PaperMatchBand } from "@/lib/preferences/upload-concepts";
 import { extractPdfTextFromBytes } from "@/lib/papers/pdf-text";
-import { resolveProvider } from "@/lib/llm/providers/registry";
-import { requireEntitledAiRequest } from "@/lib/security/ai-request";
-import { entitledContext } from "@/lib/security/entitled-context";
 import {
   attachUpload,
   attachedUploadHash,
@@ -72,8 +69,8 @@ function titleFromFileName(fileName: string): string {
 // this only ever catches a shape that slipped past that filter.
 const TITLE_STAMP_RE = /^(?:arXiv:\d{4}\.\d{4,5}|10\.\d{4,9}\/|https?:\/\/)/i;
 
-/** ≥ 3 words, not stamp-shaped, ≤ 200 chars — the bar both step (a)'s
- *  output and step (b)'s model answer must clear before either is trusted. */
+/** ≥ 3 words, not stamp-shaped, ≤ 200 chars — the bar step (a)'s output must
+ *  clear before it is trusted. */
 function looksLikeUsableTitle(title: string): boolean {
   const trimmed = title.trim();
   if (!trimmed || trimmed.length > 200) return false;
@@ -83,59 +80,20 @@ function looksLikeUsableTitle(title: string): boolean {
 }
 
 /**
- * Step (b): a small-tier-model re-check, only reached when step (a) —
- * extract_pdf_text.py's own largest-font-line join — did not produce a
- * usable title. A no-override provider — Peer's own model, never a key the
- * uploader sent — behind the same entitlement check every other route that
- * reaches a model now passes (main's ABC-freemium R-SEC-2: `resolveProvider`
- * requires proof of whose request it is). A caller the check turns away, or
- * a rate limit, simply skips this step. Never invents a title: a
- * missing/unusable model answer falls through to step (c), the file name.
+ * The title heuristic (2-06, Ruling 9 / A2-01): (a) the extractor's own
+ * largest-first-page-font join, when it produced something usable; else (b) the
+ * file name. Never a half title, never a stamp — the same `looksLikeUsableTitle`
+ * bar decides at step (a), and an unusable answer falls through to the file name
+ * rather than being trusted anyway. (A model-written title used to sit between
+ * the two; it ran on Peer's own key, which does not exist any more, and a title
+ * is not worth asking a reader for a key.)
  */
-async function modelTitleFallback(page1Text: string): Promise<string | null> {
-  if (!page1Text.trim()) return null;
-  const gate = await requireEntitledAiRequest("paper-upload-title", 20);
-  if (gate instanceof NextResponse) return null;
-  const provider = resolveProvider(null, entitledContext(gate.entitlement, "paper-upload-title", false));
-  if (!provider?.generateJsonText) return null;
-  try {
-    const raw = await provider.generateJsonText({
-      systemPrompt:
-        "You are given the raw text extracted from page 1 of an academic " +
-        "paper's PDF. Reply with only a JSON object of the shape " +
-        '{"title": string | null}. Set "title" to the paper\'s own title as ' +
-        "printed on the page. Use null when the text does not clearly " +
-        "contain a title — never guess or invent one.",
-      userPrompt: page1Text.slice(0, 3000),
-      maxTokens: 200,
-      tier: "small",
-    });
-    const match = raw.match(/\{[\s\S]*\}/);
-    const parsed = JSON.parse(match ? match[0] : raw) as { title?: unknown };
-    const title = typeof parsed.title === "string" ? parsed.title.trim() : "";
-    return title && looksLikeUsableTitle(title) ? title : null;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * The full title heuristic (2-06, Ruling 9 / A2-01): (a) the extractor's own
- * largest-first-page-font join, when it produced something usable; else (b)
- * a small-tier-model re-check of page 1's raw text; else (c) the file name.
- * Never a half title, never a stamp — at every step the same
- * `looksLikeUsableTitle` bar decides, and an unusable answer falls through
- * rather than being trusted anyway.
- */
-async function resolveUploadTitle(
+function resolveUploadTitle(
   extractorTitle: string | null | undefined,
-  page1Text: string | undefined,
   fileName: string,
-): Promise<string> {
+): string {
   const stepA = extractorTitle?.trim() ?? "";
   if (looksLikeUsableTitle(stepA)) return stepA;
-  const stepB = await modelTitleFallback(page1Text ?? "");
-  if (stepB) return stepB;
   return titleFromFileName(fileName);
 }
 
@@ -252,11 +210,9 @@ async function handleUpload(req: Request, staged: StagedRef): Promise<Response> 
   const abstractSection = doc?.sections.find((section) => section.canonical === "abstract");
 
   // 2-06 (Ruling 9, A2-01): (a) the extractor's own largest-first-page-font
-  // join, when usable; else (b) a small-tier-model re-check of page 1's raw
-  // text (inert without a local dev provider — see `modelTitleFallback`);
-  // else (c) the file name. Never a guessed title, never a half title,
-  // never a stamp.
-  const title = await resolveUploadTitle(doc?.title, extracted.page1Text, fileName);
+  // join, when usable; else (b) the file name. Never a guessed title, never a
+  // half title, never a stamp.
+  const title = resolveUploadTitle(doc?.title, fileName);
 
   const doi = doiMatch ? stripTrailingPunctuation(doiMatch[0]) : undefined;
   // 9-31 (A9-09, Ruling 8): a three-band decision, never a blanket

@@ -6,11 +6,7 @@ import type { SourceId } from "@/lib/sources/types";
 import type { ScoredItem } from "@/lib/scoring/types";
 import { cleanPreferenceLedger } from "@/lib/preferences/ledger";
 import { resolveProvider } from "@/lib/llm/providers/registry";
-import {
-  entitledAiTier,
-  requireEntitledAiRequest,
-} from "@/lib/security/ai-request";
-import { entitledContext } from "@/lib/security/entitled-context";
+import { aiTierCeiling, requireAiRequest } from "@/lib/security/ai-request";
 import {
   createTrustedPaperCacheScope,
   type TrustedPaperCacheScope,
@@ -736,23 +732,16 @@ export async function POST(req: NextRequest) {
   const preferenceLedger = cleanPreferenceLedger(body.preferenceLedger);
   const requestedAiTier = parseAiTier(body.aiTier) ?? 0;
   const llmOverride = parseLlmOverride(body.llmOverride);
-  const gate = await requireEntitledAiRequest("paper-feed", 60, {
+  const gate = await requireAiRequest("paper-feed", 60, {
     allowAnonymous: true,
   });
   if (gate instanceof NextResponse) return gate;
-  const entitledTier = entitledAiTier(requestedAiTier, gate.entitlement);
-  // MERGE-B-SEC / MERGE C semantic fix (ABC-JEV-INTEGRATION.md §1s.2, MANAGER
-  // RE-CHECKS): resolveProvider now REQUIRES a ProviderContext — the
-  // entitlement check above already ran (`gate`), so this constructs the
-  // branded context from it rather than calling resolveProvider bare.
-  const aiProvider =
-    entitledTier >= 2
-      ? resolveProvider(
-          llmOverride,
-          entitledContext(gate.entitlement, "paper-feed", Boolean(llmOverride)),
-        )
-      : null;
-  const aiTier = entitledTier >= 2 && !aiProvider ? 0 : entitledTier;
+  // A signed-out caller is capped at tier 0 whatever the body asks for, so the
+  // provider is only ever resolved for a caller the gate let through as a
+  // reader; a model then runs only if their own key resolves.
+  const cappedTier = aiTierCeiling(requestedAiTier, gate);
+  const aiProvider = cappedTier >= 2 ? resolveProvider(llmOverride) : null;
+  const aiTier = cappedTier >= 2 && !aiProvider ? 0 : cappedTier;
 
   const project = textValue(intent.project);
   const challenge = textValue(intent.challenge);
@@ -795,7 +784,9 @@ export async function POST(req: NextRequest) {
   // `flag.ts`'s own doc comment on why `readJevShadowConfig()`'s caps
   // are NOT reused here.
   let onFreshShortlist: FeedPipelineOptions["onFreshShortlist"];
-  const shadowEntitled = gate.entitlement.effectivePlan !== "free";
+  // Whether this reader may be shadowed at all is a sign-in test now, not a plan
+  // test: there are no plans. (The shadow still needs a user id of its own, below.)
+  const shadowEntitled = gate.user !== null;
   const jevTransport = resolveJevTransport();
   if (
     jevShadowEnabled() &&

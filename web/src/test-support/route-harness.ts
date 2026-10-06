@@ -11,10 +11,11 @@
  *
  * ── THE MONEY RULE, RESTATED WHERE IT BITES ──────────────────────────────────
  *
- * A suite that drives a real route reaches `resolveProvider`. After item 1-11
- * that returns a live provider wherever `GOOGLE_API_KEY` is set, so such a
- * suite must either mock `@/lib/llm/providers/registry` or run with the key
- * deleted. `vitest.setup.ts` (item 1-00) deletes `GOOGLE_API_KEY` and
+ * A suite that drives a real route reaches `resolveProvider`, which resolves a
+ * model only from the request's own key (or a developer's explicit local
+ * opt-in) and reads `GOOGLE_API_KEY` nowhere. A suite should still either mock
+ * `@/lib/llm/providers/registry` or run with no provider key in the
+ * environment. `vitest.setup.ts` (item 1-00) deletes `GOOGLE_API_KEY` and
  * `TAVILY_API_KEY` before every suite and every test, and
  * `deleteSpendableKeys()` below is the belt-and-braces call a suite can make
  * for itself. **Use sentinel strings only — never a real credential.**

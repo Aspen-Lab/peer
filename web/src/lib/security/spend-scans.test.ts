@@ -17,9 +17,8 @@ import { describe, expect, it } from "vitest";
  * `request key || env key` readers that no scan looked for. A number a person
  * recomputes is a number that goes stale between the recomputing.
  *
- * `usage/quota-exemptions.test.ts` and `scripts/assert-byok-production-env.test.ts`
- * are the precedents for asserting on file contents rather than on behaviour;
- * this follows their shape.
+ * `scripts/assert-byok-production-env.test.ts` is the precedent for asserting on
+ * file contents rather than on behaviour; this follows its shape.
  *
  * **These are placement rules, not behaviour**, so they read source text. A
  * placement rule that is only written in prose is a rule that is followed until
@@ -329,128 +328,21 @@ describe("scan 7 — JEV_API_KEY is read in exactly one file (JEV-DIRECT §1aa)"
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SCAN 4 — no `resolveProvider()` without a usage context
+// SCAN 5 — every route that reaches a model is behind the shared guard
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("scan 4 — every resolveProvider call carries a context", () => {
-  it("has no argument-less resolveProvider() call anywhere", () => {
-    // D8 / R-METER-1 — the second argument is what attributes a model call to a
-    // user. Round-2 A noted this is now true "by construction" because both
-    // figure matchers take a required context; a test is what makes it stay
-    // true when the next matcher is written.
-    //
-    // ── ABC-freemium 3-02 — THIS SCAN IS NOW A BELT WHOSE BRACES ARE THE TYPE ──
-    //
-    // `resolveProvider`'s second argument became **required and branded**, so
-    // `tsc` rejects every shape this regex was looking for, and more besides.
-    // The scan is kept rather than deleted for two reasons: a regex survives a
-    // signature being loosened back to optional by someone who does not read
-    // this file, and the failure message here names the offending file, which a
-    // TS2554 at a call site does not.
-    //
-    // **Its old comment was also wrong in a way worth recording.** It said
-    // "calls that pass an override but no context are legal — `tier2-rerank.ts`
-    // and `query-gen.ts` are both R-QUOTA-3-exempt paths that still meter". The
-    // metering half was true and beside the point: R-SEC-2 is about a caller
-    // that skips the *entitlement* check, and a usage row for spend nobody
-    // authorised is a receipt, not a guard. Those two callers were safe because
-    // of a numeric tier ceiling, not because they metered — and that reason is
-    // now written at each of them as a `SpendJustification` the compiler checks.
-    const offenders = scannedFiles().filter((file) => {
-      const source = code(file);
-      // The declaration itself, and the unrelated local helper in
-      // `sources/web-search.ts`, both have a parameter list — so a zero-argument
-      // CALL is unambiguous.
-      return /(?<!function\s)\bresolveProvider\(\s*\)/.test(source);
-    });
-
-    expect(offenders.map(relative)).toEqual([]);
-  });
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// SCAN 6 — the entitled-context brand is not quietly re-opened
-// ─────────────────────────────────────────────────────────────────────────────
-
-/** The module that owns the brand, and the only place it may be asserted. */
-const ENTITLED_CONTEXT_MODULE = "src/lib/security/entitled-context.ts";
-
-describe("scan 6 — nothing re-opens the entitled-context hole (3-02)", () => {
-  it("declares no OPTIONAL entitled or provider context anywhere", () => {
-    // ABC-freemium 3-02 · Ruling 7 point 3 — **the one attack the brand does
-    // not stop on its own.** Round-3 B compiled it: a helper that declares
-    // `ctx?: EntitledContext` type-checks perfectly and re-opens the exact hole
-    // this item closed, because its callers may then omit it again. A brand
-    // proves provenance; it cannot make a parameter mandatory.
-    //
-    // Optionality is banned in every spelling of it, including the union alias
-    // and the `| undefined` form a formatter may produce.
-    const offenders = scannedFiles().filter((file) =>
-      /\b\w+\?\s*:\s*(EntitledContext|ProviderContext)\b|:\s*(EntitledContext|ProviderContext)\s*\|\s*undefined/.test(
-        code(file),
-      ),
-    );
-
-    expect(offenders.map(relative)).toEqual([]);
-  });
-
-  it("keeps the test-only escape hatch out of production code", () => {
-    // There is exactly one way to mint a context without an entitlement and it
-    // says `unsafe` in its own name so that this scan can be one word long. A
-    // production file reaching for it is the brand being talked around rather
-    // than satisfied.
-    // `entitled-context.ts` is exempt: it DECLARES the hatch, which is how
-    // there comes to be exactly one.
-    const offenders = scannedFiles()
-      .map(relative)
-      .filter((file) => file !== ENTITLED_CONTEXT_MODULE)
-      .filter((file) =>
-        code(path.join(process.cwd(), file)).includes(
-          "unsafeEntitledContextForTests",
-        ),
-      );
-
-    expect(offenders).toEqual([]);
-  });
-
-  it("asserts no cast to the brand outside the module that owns it", () => {
-    // `as EntitledContext` compiles — TypeScript always allows it, and B
-    // measured that rather than assuming otherwise. The win of a brand is that
-    // asserting provenance you have not got becomes **greppable**, so this is
-    // the grep. `entitled-context.ts` itself is exempt: the two casts inside it
-    // are how the brand is applied at all.
-    const offenders = scannedFiles()
-      .map(relative)
-      .filter((file) => file !== ENTITLED_CONTEXT_MODULE)
-      .filter((file) =>
-        /\bas\s+(EntitledContext|ProviderContext)\b/.test(
-          code(path.join(process.cwd(), file)),
-        ),
-      );
-
-    expect(offenders).toEqual([]);
-  });
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// SCAN 5 — every AI route is behind the shared guard
-// ─────────────────────────────────────────────────────────────────────────────
-
-describe("scan 5 — every route that can spend is behind requireEntitledAiRequest", () => {
-  const GUARD = "requireEntitledAiRequest";
+describe("scan 5 — every route that can reach a model is behind requireAiRequest", () => {
+  const GUARD = "requireAiRequest";
 
   /**
-   * Routes that may reach a provider or an operator search key WITHOUT calling
-   * the guard, each with the reason it is exempt. **A short, justified list —
-   * never a convenience list.** Every entry here is a decision someone can
-   * argue with, which is the point of writing them down.
+   * Routes that may reach a provider WITHOUT calling the guard, each with the
+   * reason it is exempt. **A short, justified list — never a convenience list.**
+   * Every entry here is a decision someone can argue with, which is the point of
+   * writing them down.
    */
   const JUSTIFIED_EXEMPTIONS: Record<string, string> = {
-    "src/app/api/jobs/dispatch-digests/route.ts":
-      "D9 — the nightly cron runs on CRON_SECRET, not a session; it passes " +
-      "systemSearchAllowed: false per enrolled user",
     "src/app/api/digest/test/route.ts":
-      "a local-only diagnostic that answers 404 unless canUseLocalServerProvider()",
+      "a local-only diagnostic that answers 404 unless canUseLocalServerProvider(); it reads a developer's own Vertex environment",
   };
 
   function apiRouteFiles(): string[] {
@@ -459,19 +351,15 @@ describe("scan 5 — every route that can spend is behind requireEntitledAiReque
       .filter((file) => /^src\/app\/api\/.*\/route\.ts$/.test(file));
   }
 
-  /** A route "can spend" if it can reach a provider or an operator search key. */
-  function canSpend(file: string): boolean {
+  /** A route "reaches a model" if it can resolve a provider or build one itself. */
+  function reachesModel(file: string): boolean {
     const source = code(path.join(process.cwd(), file));
-    return (
-      /\bresolveProvider\s*\(/.test(source) ||
-      /\bGoogleGenAI\b/.test(source) ||
-      /systemSearchAllowed/.test(source)
-    );
+    return /\bresolveProvider\s*\(/.test(source) || /\bGoogleGenAI\b/.test(source);
   }
 
-  it("leaves no spending route unguarded and unjustified", () => {
+  it("leaves no model-reaching route unguarded and unjustified", () => {
     const unguarded = apiRouteFiles()
-      .filter(canSpend)
+      .filter(reachesModel)
       .filter((file) => {
         return !code(path.join(process.cwd(), file)).includes(GUARD);
       })
@@ -480,7 +368,7 @@ describe("scan 5 — every route that can spend is behind requireEntitledAiReque
     expect(unguarded).toEqual([]);
   });
 
-  it("keeps the exemption list honest — every entry still exists and still cannot spend safely", () => {
+  it("keeps the exemption list honest — every entry still exists and still reaches a model", () => {
     // The staleness check `ui-vocabulary.test.ts` already does for its own list.
     // An exemption for a file that has been deleted or renamed is an exemption
     // nobody notices has stopped applying.
@@ -489,22 +377,97 @@ describe("scan 5 — every route that can spend is behind requireEntitledAiReque
         fs.existsSync(path.join(process.cwd(), file)),
         `${file} is exempted for "${reason}" but no longer exists`,
       ).toBe(true);
+      expect(
+        reachesModel(file),
+        `${file} is exempted but no longer reaches a model`,
+      ).toBe(true);
     }
   });
 
   it("reports the guarded count, so a DROP is visible rather than silent", () => {
-    // A's standing tally as an assertion. Six routes carry the guard today —
-    // nine until the jobs and events feed/report routes were deleted with those
-    // surfaces; the sixth is `papers/upload` (merge of 2026-09-23), whose
-    // title fallback reaches a model and so passes the same check. A
-    // route losing it would otherwise show up only as an absence, and an
-    // absence is what nobody notices.
+    // A's standing tally as an assertion. Five routes carry the guard today:
+    // the feed, the digest, the figure resolver, the paper report and the
+    // test-digest diagnostic. A route losing it would otherwise show up only as
+    // an absence, and an absence is what nobody notices. (The upload route used
+    // to be a sixth, for a model-written title; it reaches no model now and has
+    // its own sign-in.)
     const guarded = apiRouteFiles().filter((file) =>
       code(path.join(process.cwd(), file)).includes(GUARD),
     );
 
-    expect(guarded).toContain("src/app/api/papers/upload/route.ts");
-    expect(guarded).toHaveLength(6);
+    expect(guarded).toEqual([
+      "src/app/api/digest/route.ts",
+      "src/app/api/feed/route.ts",
+      "src/app/api/figure/route.ts",
+      "src/app/api/papers/report/route.ts",
+      "src/app/api/test-digest/route.ts",
+    ]);
+  });
+
+  it("takes only the reader's override: no resolveProvider call carries a second argument", () => {
+    // `resolveProvider(override)` is the whole interface, and `tsc` rejects a
+    // second argument. The scan is kept as a belt: it survives the signature
+    // being loosened by someone who does not read this file, and its failure
+    // message names the offending file, which a TS2554 at a call site does not.
+    // Only files that import the registry are looked at: `sources/web-search.ts`
+    // has its own, unrelated local `resolveProvider` helper with three
+    // parameters. The declaration itself has a parameter list, so a CALL with a
+    // comma is unambiguous.
+    const offenders = scannedFiles().filter((file) => {
+      const source = code(file);
+      return (
+        /providers\/registry"|\.\/registry"/.test(source) &&
+        /(?<!function\s)\bresolveProvider\(\s*[\w.?\s]+(?:\([^()]*\))?\s*,/.test(source)
+      );
+    });
+
+    expect(offenders.map(relative)).toEqual([]);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SCAN 8 — Peer holds no model key of its own
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("scan 8 — no model key is read from the environment on a reader's path", () => {
+  it("reads process.env.GOOGLE_API_KEY NOWHERE in source or scripts", () => {
+    // The company's Gemini key used to be read in exactly one place (the
+    // registry's system default) and was the default model for every signed-in
+    // reader. A reader's own Gemini key arrives in the request and is passed to
+    // `createGeminiApiProvider(apiKey)`; the environment has no say. The build
+    // guard bans the name on Vercel (`assert-byok-production-env.mjs`), and this
+    // is the same rule enforced on the code.
+    expect(filesMatching(/process\.env\.GOOGLE_API_KEY\b/)).toEqual([]);
+  });
+
+  it("reads the other providers' environment keys only inside their own provider modules", () => {
+    // These are a developer's own keys, reachable only through
+    // `PEER_DIGEST_PROVIDER` in local development (`canUseLocalServerProvider`),
+    // and banned on Vercel by the build guard. Each is read by its own provider
+    // module and nowhere else, so no route and no library can quietly resolve a
+    // provider from the environment.
+    const readers = filesMatching(
+      /process\.env\.(ANTHROPIC_API_KEY|OPENAI_API_KEY|QWEN_API_KEY|DASHSCOPE_API_KEY|DEEPSEEK_API_KEY)\b/,
+    );
+
+    expect(readers).toEqual([
+      "src/lib/llm/providers/anthropic.ts",
+      "src/lib/llm/providers/deepseek.ts",
+      "src/lib/llm/providers/openai.ts",
+      "src/lib/llm/providers/qwen.ts",
+    ]);
+  });
+
+  it("keeps the deleted brand and the system default from coming back", () => {
+    // The compile-time brand ("an entitlement check ran before the operator's
+    // money was spent") proved nothing once there was no operator provider, and
+    // went with it. Naming them here makes a revival a failing case rather than
+    // a quiet addition.
+    const revived = filesMatching(
+      /\b(entitledContext|EntitledContext|SpendJustification|resolveSystemProvider|unsafeEntitledContextForTests)\b/,
+    );
+
+    expect(revived).toEqual([]);
   });
 });
 

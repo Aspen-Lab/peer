@@ -1,20 +1,28 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
+import {
+  deployedRuntimeEnv,
+  signedIn,
+  signedOut,
+  supabaseServerStub,
+} from "@/test-support/route-harness";
+import { resetCounterStoreForTests } from "@/lib/usage/counters";
 
 const mocks = vi.hoisted(() => ({
   resolveProvider: vi.fn(),
   generateDigest: vi.fn(),
+  getUser: vi.fn(),
 }));
 
-// ABC-freemium 1-06 — the routes now ask the registry whether the request
-// carries a usable BYOK override, so the metering wrapper can attribute the
-// call. The mock must export it or the module has a hole where a real function
-// used to be.
 vi.mock("@/lib/llm/providers/registry", async (importOriginal) => {
   const actual =
     await importOriginal<typeof import("@/lib/llm/providers/registry")>();
   return { ...actual, resolveProvider: mocks.resolveProvider };
 });
+// The session, for the cases below that drive the deployed-runtime gate.
+vi.mock("@/lib/supabase/server", () => ({
+  createClient: () => Promise.resolve(supabaseServerStub(mocks.getUser)),
+}));
 
 import { POST } from "./route";
 
@@ -28,9 +36,15 @@ function request(body: Record<string, unknown>): NextRequest {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  resetCounterStoreForTests();
   mocks.generateDigest.mockResolvedValue({
     bullets: [{ paperId: "paper-1", text: "Finding" }],
   });
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+  resetCounterStoreForTests();
 });
 
 describe("POST /api/digest", () => {
@@ -61,12 +75,10 @@ describe("POST /api/digest", () => {
     );
 
     expect(response.status).toBe(200);
-    // ABC-freemium 1-03/1-06 — the second argument is the metering context,
-    // asserted so a call that loses it cannot pass.
-    expect(mocks.resolveProvider).toHaveBeenCalledWith(
-      llmOverride,
-      expect.objectContaining({ byok: true, path: "digest" }),
-    );
+    // The provider is resolved from the reader's own override and nothing
+    // else: one argument, asserted so a call that grows a second one (a
+    // server-owned fallback) cannot pass.
+    expect(mocks.resolveProvider).toHaveBeenCalledWith(llmOverride);
     expect(mocks.generateDigest).toHaveBeenCalledWith({
       papers: expect.arrayContaining([
         expect.objectContaining({ id: "paper-1" }),
@@ -76,5 +88,37 @@ describe("POST /api/digest", () => {
     const call = mocks.generateDigest.mock.calls[0][0];
     expect(call.papers).toHaveLength(20);
     expect(call.papers[0].title).toHaveLength(800);
+  });
+
+  describe("in a deployed runtime", () => {
+    const papers = [{ id: "paper-1", title: "Paper" }];
+
+    beforeEach(() => {
+      deployedRuntimeEnv(vi.stubEnv);
+    });
+
+    it("answers a signed-out caller 401 and resolves no provider", async () => {
+      mocks.getUser.mockResolvedValue(signedOut());
+
+      const response = await POST(request({ papers }));
+
+      expect(response.status).toBe(401);
+      expect(mocks.resolveProvider).not.toHaveBeenCalled();
+      expect(mocks.generateDigest).not.toHaveBeenCalled();
+    });
+
+    it("gives a signed-in reader with no key of their own the reading without a model", async () => {
+      // Peer holds no model key, so the registry answers null for a request
+      // that carries no override (`registry.test.ts` pins that); the route
+      // then answers with the reading without a model, not an error.
+      mocks.getUser.mockResolvedValue(signedIn("user-1"));
+      mocks.resolveProvider.mockReturnValue(null);
+
+      const response = await POST(request({ papers }));
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ bullets: [], noLlm: true });
+      expect(mocks.resolveProvider).toHaveBeenCalledWith(null);
+    });
   });
 });

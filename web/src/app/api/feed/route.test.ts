@@ -5,8 +5,8 @@ import type { ShadowCandidate } from "@/lib/decisions/shadow";
 const mocks = vi.hoisted(() => ({
   resolveProvider: vi.fn(),
   runFeedPipeline: vi.fn(),
-  requireEntitledAiRequest: vi.fn(),
-  entitledAiTier: vi.fn(),
+  requireAiRequest: vi.fn(),
+  aiTierCeiling: vi.fn(),
   getUser: vi.fn(),
   readExclusions: vi.fn(),
   getBatch: vi.fn(),
@@ -36,9 +36,8 @@ vi.mock("@/lib/feed/pipeline", () => ({
   runFeedPipeline: mocks.runFeedPipeline,
 }));
 vi.mock("@/lib/security/ai-request", () => ({
-  protectAiRequest: mocks.requireEntitledAiRequest,
-  requireEntitledAiRequest: mocks.requireEntitledAiRequest,
-  entitledAiTier: mocks.entitledAiTier,
+  requireAiRequest: mocks.requireAiRequest,
+  aiTierCeiling: mocks.aiTierCeiling,
 }));
 // P4-S2 (Round 3): the existing tests in this file never stub the Supabase
 // env pair, so `hasSupabaseAuthConfig()` (route.ts) stays false and
@@ -160,9 +159,9 @@ function baseMeta() {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.runFeedPipeline.mockResolvedValue({ items: [], meta: {} });
-  mocks.requireEntitledAiRequest.mockResolvedValue({ entitlement: { userId: null } });
-  mocks.entitledAiTier.mockImplementation((tier, entitlement) =>
-    entitlement.userId === null ? 0 : tier,
+  mocks.requireAiRequest.mockResolvedValue({ user: null, anonymous: true });
+  mocks.aiTierCeiling.mockImplementation((tier, request) =>
+    request.anonymous ? 0 : tier,
   );
   mocks.getUser.mockResolvedValue({ data: { user: null } });
   // P4-S2 (Round 3): every test in this file EXCEPT the new "dashboard
@@ -244,19 +243,19 @@ describe("POST /api/feed AI tier gate", () => {
   it("caps an anonymous forged Tier 2 before provider resolution", async () => {
     await POST(request({ topics: ["battery"], aiTier: 2, plan: "paid", ownerId: "forged" }));
 
-    expect(mocks.entitledAiTier).toHaveBeenCalledWith(2, { userId: null });
+    expect(mocks.aiTierCeiling).toHaveBeenCalledWith(2, { user: null, anonymous: true });
     expect(mocks.resolveProvider).not.toHaveBeenCalled();
     expect(mocks.runFeedPipeline).toHaveBeenCalledWith(expect.objectContaining({ aiTier: 0 }), expect.anything());
   });
 
-  it("uses a signed-in server entitlement before resolving a requested Tier 2 provider", async () => {
-    mocks.requireEntitledAiRequest.mockResolvedValue({ entitlement: { userId: "server-user" } });
+  it("checks the session before resolving a requested Tier 2 provider", async () => {
+    mocks.requireAiRequest.mockResolvedValue({ user: { id: "server-user" }, anonymous: false });
     mocks.resolveProvider.mockReturnValue({ id: "openai", generateJsonText: vi.fn() });
 
     await POST(request({ topics: ["battery"], aiTier: 2, plan: "free", ownerId: "forged" }));
 
-    expect(mocks.requireEntitledAiRequest).toHaveBeenCalledWith("paper-feed", 60, { allowAnonymous: true });
-    expect(mocks.resolveProvider).toHaveBeenCalledAfter(mocks.requireEntitledAiRequest);
+    expect(mocks.requireAiRequest).toHaveBeenCalledWith("paper-feed", 60, { allowAnonymous: true });
+    expect(mocks.resolveProvider).toHaveBeenCalledAfter(mocks.requireAiRequest);
     expect(mocks.runFeedPipeline).toHaveBeenCalledWith(expect.objectContaining({ aiTier: 2 }), expect.anything());
   });
   it("accepts project-only normalized intent and never accepts a caller owner", async () => {
@@ -302,20 +301,15 @@ describe("POST /api/feed AI tier gate", () => {
   });
 
   it("keeps Tier 2 when a user override resolves", async () => {
-    mocks.requireEntitledAiRequest.mockResolvedValue({ entitlement: { userId: "server-user" } });
+    mocks.requireAiRequest.mockResolvedValue({ user: { id: "server-user" }, anonymous: false });
     mocks.resolveProvider.mockReturnValue({ id: "openai", generateJsonText: vi.fn() });
     const llmOverride = { provider: "openai", apiKey: "user-owned-key" };
 
     await POST(request({ topics: ["battery"], aiTier: 2, llmOverride }));
 
-    // MERGE-B-SEC / MERGE C semantic fix (ABC-JEV-INTEGRATION.md §1s.2):
-    // resolveProvider now requires a ProviderContext as its 2nd argument --
-    // the branded context this route builds from the entitlement gate above.
-    expect(mocks.resolveProvider).toHaveBeenCalledWith(llmOverride, {
-      userId: "server-user",
-      byok: true,
-      path: "paper-feed",
-    });
+    // The provider is resolved from the reader's own key and nothing else:
+    // one argument, no server-owned context.
+    expect(mocks.resolveProvider).toHaveBeenCalledWith(llmOverride);
     expect(mocks.runFeedPipeline).toHaveBeenCalledWith(
       expect.objectContaining({ aiTier: 2, llmOverride }),
       expect.anything(),
@@ -1629,22 +1623,19 @@ describe("/api/feed Jev shadow wiring (P3-S5)", () => {
     vi.stubEnv("PEER_JEV_BROKER_SECRET", "");
   }
 
-  function stubEntitledSignedInTier2(ownerId: string) {
+  function stubSignedInTier2(ownerId: string) {
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://example.supabase.co");
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "public-test-key");
     mocks.getUser.mockResolvedValue({ data: { user: { id: ownerId } } });
-    mocks.requireEntitledAiRequest.mockResolvedValue({
-      user: { id: ownerId },
-      entitlement: { userId: ownerId, effectivePlan: "paid" },
-    });
-    mocks.entitledAiTier.mockReturnValue(2);
+    mocks.requireAiRequest.mockResolvedValue({ user: { id: ownerId }, anonymous: false });
+    mocks.aiTierCeiling.mockReturnValue(2);
     mocks.resolveProvider.mockReturnValue({ id: "openai", generateJsonText: vi.fn() });
   }
 
   /** Every condition true — the shared "all gates open" baseline each negative test starts from and breaks exactly one of. */
   function readyState(ownerId = "owner-shadow-ready") {
     stubShadowConfig();
-    stubEntitledSignedInTier2(ownerId);
+    stubSignedInTier2(ownerId);
   }
 
   function lastPipelineOptions(): Record<string, unknown> | undefined {
@@ -1670,7 +1661,7 @@ describe("/api/feed Jev shadow wiring (P3-S5)", () => {
 
   it('JEV-DIRECT (§1aa): transport "direct" (JEV_API_KEY set, broker left unconfigured), every other condition true — passes onFreshShortlist to runFeedPipeline, and invoking it schedules exactly one after() call', async () => {
     stubDirectShadowConfig();
-    stubEntitledSignedInTier2("owner-shadow-direct-1");
+    stubSignedInTier2("owner-shadow-direct-1");
 
     const response = await POST(request({ topics: ["battery"], aiTier: 2 }));
 
@@ -1691,7 +1682,7 @@ describe("/api/feed Jev shadow wiring (P3-S5)", () => {
     vi.stubEnv("PEER_JEV_BROKER", "off");
     vi.stubEnv("PEER_JEV_BROKER_URL", "");
     vi.stubEnv("PEER_JEV_BROKER_SECRET", "");
-    stubEntitledSignedInTier2("owner-shadow-both-off");
+    stubSignedInTier2("owner-shadow-both-off");
 
     const response = await POST(request({ topics: ["battery"], aiTier: 2 }));
 
@@ -1731,9 +1722,9 @@ describe("/api/feed Jev shadow wiring (P3-S5)", () => {
       mocks.runFeedPipeline.mockResolvedValue({ items: [], meta: {} });
       // Everything else defaults back to "off" (vi.clearAllMocks reset every
       // mock's implementation) — no shadow env stubbed this time.
-      mocks.requireEntitledAiRequest.mockResolvedValue({ entitlement: { userId: null } });
-      mocks.entitledAiTier.mockImplementation((tier: number, entitlement: { userId: string | null }) =>
-        entitlement.userId === null ? 0 : tier,
+      mocks.requireAiRequest.mockResolvedValue({ user: null, anonymous: true });
+      mocks.aiTierCeiling.mockImplementation((tier: number, request: { anonymous: boolean }) =>
+        request.anonymous ? 0 : tier,
       );
       mocks.getUser.mockResolvedValue({ data: { user: null } });
 
@@ -1762,16 +1753,20 @@ describe("/api/feed Jev shadow wiring (P3-S5)", () => {
     ["broker secret unset (unconfigured)", (o: string) => { readyState(o); vi.stubEnv("PEER_JEV_BROKER_SECRET", ""); }],
     ["signed out (no gate.user)", (o: string) => {
       readyState(o);
-      mocks.requireEntitledAiRequest.mockResolvedValue({ user: null, entitlement: { userId: null, effectivePlan: "paid" } });
+      mocks.requireAiRequest.mockResolvedValue({ user: null, anonymous: true });
       mocks.getUser.mockResolvedValue({ data: { user: null } });
     }],
-    ["free plan (gate.entitlement.effectivePlan === \"free\")", (o: string) => {
+    // A runtime with no sign-in configured: the gate lets the caller through as
+    // a reader (not anonymous) but there is no user, so there is no one to
+    // shadow. The signed-in test (`gate.user !== null`) is what decides the
+    // shadow's `entitled` flag; there are no plans to decide it any more.
+    ["no signed-in user (gate.user null, caller not anonymous)", (o: string) => {
       readyState(o);
-      mocks.requireEntitledAiRequest.mockResolvedValue({ user: { id: o }, entitlement: { userId: o, effectivePlan: "free" } });
+      mocks.requireAiRequest.mockResolvedValue({ user: null, anonymous: false });
     }],
     ["aiTier below 2 (no provider resolved)", (o: string) => {
       readyState(o);
-      mocks.entitledAiTier.mockReturnValue(2);
+      mocks.aiTierCeiling.mockReturnValue(2);
       mocks.resolveProvider.mockReturnValue(null); // forces aiTier back to 0 in route.ts
     }],
   ])("%s: onFreshShortlist is absent", async (_label, setup) => {
@@ -1788,16 +1783,13 @@ describe("/api/feed Jev shadow wiring (P3-S5)", () => {
     // A scenario the real code can't normally reach (both come from the same
     // session), but the gate explicitly checks equality rather than assuming
     // it — this proves the check is real, not vacuous. Achieved by having
-    // requireEntitledAiRequest report a different id than getUser resolves.
+    // requireAiRequest report a different id than getUser resolves.
     stubShadowConfig();
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://example.supabase.co");
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "public-test-key");
     mocks.getUser.mockResolvedValue({ data: { user: { id: "owner-from-supabase" } } });
-    mocks.requireEntitledAiRequest.mockResolvedValue({
-      user: { id: "owner-from-gate" },
-      entitlement: { userId: "owner-from-gate", effectivePlan: "paid" },
-    });
-    mocks.entitledAiTier.mockReturnValue(2);
+    mocks.requireAiRequest.mockResolvedValue({ user: { id: "owner-from-gate" }, anonymous: false });
+    mocks.aiTierCeiling.mockReturnValue(2);
     mocks.resolveProvider.mockReturnValue({ id: "openai", generateJsonText: vi.fn() });
 
     const response = await POST(request({ topics: ["battery"], aiTier: 2 }));
@@ -1815,7 +1807,7 @@ describe("/api/feed Jev shadow wiring (P3-S5)", () => {
     expect(true).toBe(true);
   });
 
-  it("GET never supplies the hook, even with every shadow/broker flag on and a signed-in, entitled user", async () => {
+  it("GET never supplies the hook, even with every shadow/broker flag on and a signed-in user", async () => {
     readyState("owner-shadow-get");
 
     const response = await GET(new NextRequest("http://localhost/api/feed?topics=battery"));

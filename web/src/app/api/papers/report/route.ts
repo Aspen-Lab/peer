@@ -1,8 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import {
-  hasUsableProviderOverride,
-  resolveProvider,
-} from "@/lib/llm/providers/registry";
+import { resolveProvider } from "@/lib/llm/providers/registry";
 import { reportModelTier } from "@/lib/llm/provider-models";
 import type { ProviderOverrideConfig } from "@/lib/llm/providers/types";
 import {
@@ -19,9 +16,7 @@ import { bindFiguresToReport } from "@/lib/papers/figure-binding";
 import { getFullText } from "@/lib/papers/full-text";
 import { getFigurePool } from "@/lib/figures/extract";
 import type { ReportStreamEvent } from "@/lib/papers/report-stream";
-import { requireEntitledAiRequest } from "@/lib/security/ai-request";
-import { entitledContext } from "@/lib/security/entitled-context";
-import type { Entitlement } from "@/lib/entitlement/types";
+import { requireAiRequest } from "@/lib/security/ai-request";
 import { bareUploadId } from "@/lib/papers/upload-store";
 import { ownedUpload, PRIVATE_UPLOAD_HEADERS } from "@/lib/papers/upload-access";
 
@@ -189,43 +184,6 @@ const SHALLOW_SYSTEM = [
 ].join(" ");
 
 /**
- * ABC-freemium 1-03/1-06 — who this route's model calls are being made for.
- * Threaded from the single entitlement check in `POST` so every
- * `resolveProvider` on this route meters against the right user, without any of
- * them re-reading a session.
- */
-interface ReportUsageCtx {
-  /**
-   * ABC-freemium 3-02 — the **entitlement itself**, not a copied user id. It is
-   * the only thing an `EntitledContext` can be minted from, so carrying it is
-   * what lets every acquisition on this route prove a check ran.
-   */
-  entitlement: Entitlement;
-  path: string;
-}
-
-/**
- * ABC-freemium 3-02 · R-SEC-2 — mint the branded context for one acquisition.
- *
- * **`ctx` is required here and at both helpers below.** It used to be
- * `ctx?: ReportUsageCtx` with a `?? "paper-report"` fallback, which pushed the
- * optionality Ruling 7 point 3 closes at `resolveProvider` one level deeper into
- * this file — the argument was compile-checked at the chokepoint and still
- * omittable here. `byok` stays per-call because the override differs between
- * the shallow helper's own parameter and the route body's.
- */
-function providerCtx(
-  ctx: ReportUsageCtx,
-  override: ProviderOverrideConfig | null | undefined,
-) {
-  return entitledContext(
-    ctx.entitlement,
-    ctx.path,
-    hasUsableProviderOverride(override ?? null),
-  );
-}
-
-/**
  * The abstract-tier report: one model call, sanitized, then every claim held
  * to a sentence of the abstract. Without a provider, on a model error or on
  * unparseable output the result is `emptyReport` — no report is written in
@@ -234,9 +192,8 @@ function providerCtx(
 async function generateShallowReport(
   body: ExtendedRequest,
   override: ProviderOverrideConfig | undefined,
-  ctx: ReportUsageCtx,
 ): Promise<PaperReport> {
-  const provider = resolveProvider(override ?? null, providerCtx(ctx, override));
+  const provider = resolveProvider(override ?? null);
   if (!provider?.generateJsonText) return emptyReport("fallback");
   try {
     const raw = await provider.generateJsonText({
@@ -333,7 +290,6 @@ const UPLOAD_GONE_RESPONSE = { error: "Upload no longer available" } as const;
  */
 function streamReport(
   body: ExtendedRequest,
-  ctx: ReportUsageCtx,
   privateHash: string | null,
   startRevision: number | undefined,
 ): Response {
@@ -361,10 +317,7 @@ function streamReport(
       };
 
       try {
-        const provider = resolveProvider(
-          body.llmOverride ?? null,
-          providerCtx(ctx, body.llmOverride),
-        );
+        const provider = resolveProvider(body.llmOverride ?? null);
         if (!provider?.generateJsonText) {
           send({ type: "mode", aiMode: "tier0" });
           send({
@@ -395,7 +348,7 @@ function streamReport(
             label: "Writing the report",
             pct: 20,
           });
-          finish(await generateShallowReport(body, body.llmOverride, ctx));
+          finish(await generateShallowReport(body, body.llmOverride));
           return;
         }
 
@@ -420,7 +373,7 @@ function streamReport(
             label: "Writing the report",
             pct: 75,
           });
-          const shallow = await generateShallowReport(body, body.llmOverride, ctx);
+          const shallow = await generateShallowReport(body, body.llmOverride);
           finish(
             shallow.noLlm
               ? buildPaywalledFallback(fullText.reason)
@@ -436,7 +389,7 @@ function streamReport(
             label: "Writing the report",
             pct: 75,
           });
-          const shallow = await generateShallowReport(body, body.llmOverride, ctx);
+          const shallow = await generateShallowReport(body, body.llmOverride);
           finish({
             ...shallow,
             paywallNotice:
@@ -456,7 +409,6 @@ function streamReport(
           itemId: body.paper.fullTextUploadId ?? body.paper.id,
           url: bestPaperUrl(body.paper) ?? undefined,
           doi: body.paper.doi ?? undefined,
-          paperTitle: body.paper.title,
         }).catch((err) => {
           console.warn("[papers/report] figure pool fetch failed:", err);
           return null;
@@ -477,7 +429,7 @@ function streamReport(
         });
 
         if (!deep) {
-          const shallow = await generateShallowReport(body, body.llmOverride, ctx);
+          const shallow = await generateShallowReport(body, body.llmOverride);
           finish({
             ...shallow,
             paywallNotice:
@@ -562,17 +514,13 @@ async function handlePost(req: NextRequest) {
     startRevision = meta.revision;
   }
 
-  // ABC-freemium 1-06 · R-SEC-2 — **one entitlement check, before every
-  // `resolveProvider` on this route.** It used to run only when a provider had
-  // already resolved, which made it a check on configuration rather than on the
-  // caller. It is unconditional now, so a signed-out caller gets the shared 401
-  // rather than a deterministic report built by an unauthenticated request.
-  const gate = await requireEntitledAiRequest("paper-report", 20);
+  // ABC-freemium 1-06 · R-SEC-2 — **one sign-in and rate-limit check, before
+  // every `resolveProvider` on this route.** It used to run only when a provider
+  // had already resolved, which made it a check on configuration rather than on
+  // the caller. It is unconditional now, so a signed-out caller gets the shared
+  // 401 rather than a deterministic report built by an unauthenticated request.
+  const gate = await requireAiRequest("paper-report", 20);
   if (gate instanceof NextResponse) return gate;
-  const ctx: ReportUsageCtx = {
-    entitlement: gate.entitlement,
-    path: "paper-report",
-  };
 
   // A deep report is not allowanced or counted here: the model runs on the
   // reader's own key, so what it costs is between the reader and their provider.
@@ -582,7 +530,7 @@ async function handlePost(req: NextRequest) {
     req.headers.get("accept")?.includes("application/x-ndjson") === true ||
     body.stream === true;
   if (wantsStream) {
-    return streamReport(body, ctx, privateHash, startRevision);
+    return streamReport(body, privateHash, startRevision);
   }
 
   // ── Deep path ────────────────────────────────────────────────────
@@ -591,15 +539,12 @@ async function handlePost(req: NextRequest) {
   // Without a provider, fall through to the shallow path (which returns the
   // empty report).
   if (body.deepReport) {
-    const provider = resolveProvider(
-      body.llmOverride ?? null,
-      providerCtx(ctx, body.llmOverride),
-    );
+    const provider = resolveProvider(body.llmOverride ?? null);
     if (!provider?.generateJsonText) {
       // No user key and no local provider: the deterministic report — the SAME
       // call this route already made.
       return NextResponse.json(
-        await generateShallowReport(body, body.llmOverride, ctx),
+        await generateShallowReport(body, body.llmOverride),
       );
     }
 
@@ -615,7 +560,7 @@ async function handlePost(req: NextRequest) {
       if (fullText.status === "paywalled" && fullText.reason) {
         // Try the LLM-backed shallow path first; when the model produced
         // nothing, the empty report carries the paywall notice.
-        const shallow = await generateShallowReport(body, body.llmOverride, ctx);
+        const shallow = await generateShallowReport(body, body.llmOverride);
         return NextResponse.json(
           shallow.noLlm
             ? buildPaywalledFallback(fullText.reason)
@@ -624,7 +569,7 @@ async function handlePost(req: NextRequest) {
       }
 
       if (fullText.status !== "ok" || !fullText.doc) {
-        const shallow = await generateShallowReport(body, body.llmOverride, ctx);
+        const shallow = await generateShallowReport(body, body.llmOverride);
         return NextResponse.json({
           ...shallow,
           paywallNotice:
@@ -650,7 +595,6 @@ async function handlePost(req: NextRequest) {
           itemId: body.paper.fullTextUploadId ?? body.paper.id,
           url: bestPaperUrl(body.paper) ?? undefined,
           doi: body.paper.doi ?? undefined,
-          paperTitle: body.paper.title,
         }).catch((err) => {
           console.warn("[papers/report] figure pool fetch failed:", err);
           return null;
@@ -658,7 +602,7 @@ async function handlePost(req: NextRequest) {
       ]);
 
       if (!deep) {
-        const shallow = await generateShallowReport(body, body.llmOverride, ctx);
+        const shallow = await generateShallowReport(body, body.llmOverride);
         return NextResponse.json({
           ...shallow,
           paywallNotice:
@@ -684,12 +628,12 @@ async function handlePost(req: NextRequest) {
       return NextResponse.json(bound);
     } catch (err) {
       console.error("[papers/report] deep flow failed:", err);
-      return NextResponse.json(await generateShallowReport(body, body.llmOverride, ctx));
+      return NextResponse.json(await generateShallowReport(body, body.llmOverride));
     }
   }
 
   // ── Shallow path (default) ──────────────────────────────────────
-  return NextResponse.json(await generateShallowReport(body, body.llmOverride, ctx));
+  return NextResponse.json(await generateShallowReport(body, body.llmOverride));
 }
 
 export async function POST(req: NextRequest) {

@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { isLocalDevRuntime } from "@/lib/env/local-dev";
-import { resolveEntitlement } from "@/lib/entitlement/resolve";
-import type { Entitlement } from "@/lib/entitlement/types";
 import {
   endOfUtcHour,
   getCounterStore,
@@ -27,25 +25,30 @@ function deployedRuntimeNeedsAuth(): boolean {
 }
 
 /**
- * ABC-freemium 1-01 — the three-condition body moved to `lib/env/local-dev.ts`
- * so this, `canUseLocalServerProvider` and `resolveEntitlement` cannot drift
- * apart. Local name and meaning unchanged.
+ * The three-condition body lives in `lib/env/local-dev.ts` so this and
+ * `canUseLocalServerProvider` cannot drift apart. Local name and meaning
+ * unchanged.
  */
 function isLocalDevelopment(): boolean {
   return isLocalDevRuntime();
 }
 
-/**
- * The synthesised id for a runtime that has no sign-in mechanism configured —
- * a self-hosted instance or the test process. See the branch that uses it.
- */
-const LOCAL_NO_AUTH_USER_ID = "local-no-auth";
-
 /** What a route gets when the request is allowed to proceed. */
-export interface EntitledAiRequest {
-  /** Null only in local development, where there is no Supabase session. */
+export interface AiRequest {
+  /**
+   * The signed-in reader. Null when nobody is signed in: local development, a
+   * runtime with no sign-in configured at all (a self-hosted copy, the test
+   * process), or an anonymous caller on a route that allows one.
+   */
   user: { id: string } | null;
-  entitlement: Entitlement;
+  /**
+   * True only for a caller the route chose to let through signed out
+   * (`allowAnonymous`). Such a caller is held to the reading without a model
+   * (`aiTierCeiling`). A runtime with no sign-in at all is NOT anonymous:
+   * nobody can be anything else there, so a reader's own key works for
+   * self-hosters and for every route test.
+   */
+  anonymous: boolean;
 }
 
 /**
@@ -53,53 +56,52 @@ export interface EntitledAiRequest {
  * runs BEFORE `resolveProvider`.**
  *
  * What was wrong: every AI route resolved a provider first and only then asked
- * whether the caller was allowed one. Three of them (`digest`, `jobs/report`,
- * `events/report`) returned their degraded payload *before* reaching the guard
- * at all, so they answered a stranger 200 and never authenticated. That is
- * harmless only while no provider ever resolves; the moment R-KEY-1 makes one
- * always resolve it becomes an open door.
+ * whether the caller was allowed one. Three of them returned their degraded
+ * payload *before* reaching the guard at all, so they answered a stranger 200
+ * and never authenticated. The check is unconditional now, so a signed-out
+ * caller gets the shared 401 rather than a result built by an unauthenticated
+ * request.
  *
- * Returns either a `NextResponse` the route must return unchanged, or the user
- * and their entitlement. **`supabase.auth.getUser()` is called exactly once per
- * request** — it is a network round trip, and calling it here and again in the
- * route would double it on every feed load.
+ * It is a sign-in check and an hourly rate limit, nothing about a model: Peer
+ * holds no model key of its own, so what a signed-in reader runs is on their own
+ * key. What it still protects is Peer's server (the report and figure routes
+ * make it fetch an address the caller names, and the PDF parse is not free) and
+ * the reader from a runaway loop on their own key. The limit is per account,
+ * which is why it needs a signed-in user.
  *
- * The 503 and 401 shapes below are the ones `protectAiRequest` already
- * returned, byte for byte, including `Cache-Control: no-store`.
+ * Returns either a `NextResponse` the route must return unchanged, or the user.
+ * **`supabase.auth.getUser()` is called exactly once per request** — it is a
+ * network round trip, and calling it here and again in the route would double it
+ * on every feed load.
+ *
+ * The 503 and 401 shapes below carry `Cache-Control: no-store`.
  */
-export interface RequireEntitledAiRequestOptions {
+export interface RequireAiRequestOptions {
   /**
-   * **R-ENT-4 — "signed-out users get tier-0 behaviour everywhere, no system
-   * spend — unchanged."**
+   * **R-ENT-4 — signed-out readers get the reading without a model everywhere.**
    *
-   * Set by the three feed routes, and only by them. Without it a signed-out
-   * visitor would get a 401 where today they get a working feed built from free
-   * structured sources, which is not "unchanged" and is not tier-0 behaviour.
-   * R-SEC-3 says a non-entitled `aiTier: 2` is **downgraded**, not rejected, and
-   * `entitledAiTier` below is what downgrades it: an anonymous entitlement has a
-   * ceiling of 0, so such a request never reaches `resolveProvider` and never
-   * carries `systemSearchAllowed`. Nothing operator-funded is reachable, which
-   * is what D8 is protecting.
+   * Set by the feed route, and only by it. Without it a signed-out visitor would
+   * get a 401 where they get a working feed built from free structured sources.
+   * R-SEC-3 says a requested `aiTier: 2` from such a caller is **downgraded**,
+   * not rejected, and `aiTierCeiling` below is what downgrades it: an anonymous
+   * caller has a ceiling of 0, so the request never reaches `resolveProvider`.
    *
-   * Every other AI route leaves this unset and answers a stranger 401 — that is
-   * D8 read plainly for routes whose entire purpose is a model's answer, and it
-   * is what Ruling 3 point 7 predicts for `digest`, `jobs/report` and
-   * `events/report`.
+   * Every other route leaves this unset and answers a stranger 401: they are
+   * routes whose entire purpose is a model's answer, or that fetch a page the
+   * caller names.
    */
   allowAnonymous?: boolean;
 }
 
-export async function requireEntitledAiRequest(
+export async function requireAiRequest(
   scope: string,
   limitPerHour = 30,
-  options: RequireEntitledAiRequestOptions = {},
-): Promise<EntitledAiRequest | NextResponse> {
+  options: RequireAiRequestOptions = {},
+): Promise<AiRequest | NextResponse> {
   // Local development has no Supabase session, so there is no user to read and
-  // no stranger to keep out. R-ENT-5's `PEER_DEV_ENTITLEMENT` is what shapes
-  // the developer's plan here; with it unset the entitlement is `free` with a
-  // synthesised `dev-local` user (Ruling 3 point 2).
+  // no stranger to keep out.
   if (isLocalDevelopment()) {
-    return { user: null, entitlement: await resolveEntitlement(null) };
+    return { user: null, anonymous: false };
   }
 
   if (!hasSupabaseAuthConfig()) {
@@ -112,16 +114,11 @@ export async function requireEntitledAiRequest(
     // A non-deployed runtime with **no sign-in mechanism at all** (no Supabase
     // URL configured, and not production or Vercel — the branch above answers
     // 503 for those). There is no stranger to keep out here because there is no
-    // way to be anything else, so the caller is treated as one local free user
-    // rather than as anonymous. Anonymous would cap `entitledAiTier` at 0 and
-    // silently stop BYOK working for self-hosters and for every route test.
-    //
-    // `free` still means no system search key, and `deployedRuntimeNeedsAuth()`
-    // is what keeps this unreachable from a deployment.
-    return {
-      user: null,
-      entitlement: await resolveEntitlement(LOCAL_NO_AUTH_USER_ID),
-    };
+    // way to be anything else. Treating the caller as anonymous would cap
+    // `aiTierCeiling` at 0 and silently stop a reader's own key working for
+    // self-hosters and for every route test; `deployedRuntimeNeedsAuth()` is
+    // what keeps this unreachable from a deployment.
+    return { user: null, anonymous: false };
   }
 
   const supabase = await createClient();
@@ -130,7 +127,7 @@ export async function requireEntitledAiRequest(
   } = await supabase.auth.getUser();
   if (!user) {
     if (options.allowAnonymous) {
-      return { user: null, entitlement: await resolveEntitlement(null) };
+      return { user: null, anonymous: true };
     }
     return NextResponse.json(
       { error: "Sign in before using an AI feature" },
@@ -145,13 +142,13 @@ export async function requireEntitledAiRequest(
   //
   // Increment first, then compare: the post-increment value is this caller's
   // own, so two instances cannot both see 59 and both proceed. The limits
-  // themselves are unchanged — 60/h feeds, 20/h reports, passed by each route.
+  // themselves are passed by each route (60/h feeds, 20/h reports).
   //
-  // The window is now a fixed UTC clock hour carried in the key rather than an
-  // hour rolling from the user's first request. A user who sends 60 requests at
-  // 10:59 can send 60 more at 11:00; that is the trade for a counter that
-  // survives a cold start. **Fails open** — an unreachable store must not answer
-  // 429 to every signed-in user (see `counters.ts`).
+  // The window is a fixed UTC clock hour carried in the key rather than an hour
+  // rolling from the user's first request. A user who sends 60 requests at 10:59
+  // can send 60 more at 11:00; that is the trade for a counter that survives a
+  // cold start. **Fails open** — an unreachable store must not answer 429 to
+  // every signed-in user (see `counters.ts`).
   const now = new Date();
   const reading = await getCounterStore().increment(
     rateKey(scope, user.id, now),
@@ -179,46 +176,22 @@ export async function requireEntitledAiRequest(
     );
   }
 
-  return {
-    user: { id: user.id },
-    entitlement: await resolveEntitlement(user.id, now),
-  };
-}
-
-/**
- * Protect an endpoint immediately before it spends a user's BYOK model key.
- * Tier 0 routes stay public; local `next dev` stays convenient.
- *
- * ABC-freemium 1-06 — kept, with its signature unchanged, as a thin wrapper that
- * discards the entitlement. Routes that only need "may this request proceed"
- * keep reading exactly as they did.
- */
-export async function protectAiRequest(
-  scope: string,
-  limitPerHour = 30,
-): Promise<NextResponse | null> {
-  const result = await requireEntitledAiRequest(scope, limitPerHour);
-  return result instanceof NextResponse ? result : null;
+  return { user: { id: user.id }, anonymous: false };
 }
 
 /**
  * R-SEC-3 — **the requested tier is an upper bound, never a grant.**
  *
- * The old line in each feed route was
- * `requestedAiTier >= 2 && !aiProvider ? 0 : requestedAiTier` — it downgraded
- * because *no provider resolved*, which stops being a defence the moment a
- * provider always resolves. This downgrades because the caller is *not
- * entitled*, which a request body cannot change.
- *
- * **The test is `userId !== null`, not `effectivePlan`.** D1 gives the system
- * LLM to every signed-in user, free included. A later round will be tempted to
- * "tighten" this to `paid`; that would break D1.
+ * A request body asks for a tier; it cannot raise its own. An anonymous caller
+ * (a feed request with no session) is capped at 0, so such a request never
+ * reaches `resolveProvider` however the body is worded. Everyone else gets what
+ * they asked for, and whether a model then runs is decided by whether a key of
+ * the reader's own resolves.
  */
-export function entitledAiTier(
+export function aiTierCeiling(
   requestedAiTier: number | undefined,
-  entitlement: Entitlement,
+  request: Pick<AiRequest, "anonymous">,
 ): 0 | 1 | 2 {
   const requested = Math.max(0, Math.min(2, requestedAiTier ?? 0));
-  const ceiling = entitlement.userId !== null ? 2 : 0;
-  return Math.min(requested, ceiling) as 0 | 1 | 2;
+  return (request.anonymous ? 0 : requested) as 0 | 1 | 2;
 }

@@ -41,9 +41,9 @@ const VERTEX_MODEL_CHAIN = [
 // the chosen model, then the next one up the same line.
 //
 // SPEND-CAP — exported so `usage/company-budget.ts` can size a worst-case
-// reservation against the REAL chain (today's only reachable
-// `resolveSystemProvider()` branch, per that design's own documented,
-// tested assumption) instead of a duplicated list that could drift.
+// reservation against the REAL chain (the one the Gemini provider built from a
+// key walks, per that design's own documented, tested assumption) instead of a
+// duplicated list that could drift.
 export const GEMINI_API_MODEL_CHAIN = [
   { id: PROVIDER_MODELS.gemini.small, location: "global", tier: "small" },
   { id: "gemini-3.5-flash-lite", location: "global", tier: "small" },
