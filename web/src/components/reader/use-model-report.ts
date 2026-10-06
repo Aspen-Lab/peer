@@ -18,7 +18,7 @@ import type { PaperReport } from "@/lib/papers/report";
 import { streamPaperReport } from "@/lib/papers/report-stream";
 import type { QuotaSignal } from "@/lib/usage/deep-report-quota";
 import { reportOutcome } from "@/lib/reader/report-outcome";
-import { aiAvailability } from "@/lib/feed/ai-tier";
+import { aiAvailability, type AiMode } from "@/lib/feed/ai-tier";
 import { entitlementGrants } from "@/lib/entitlement/allowance";
 import { useProfileStore } from "@/store/profile";
 
@@ -119,6 +119,24 @@ export function buildReportKey(
   return questions.length > 0 ? `${base}|q:${hash([...questions].sort().join("\n"))}` : base;
 }
 
+/**
+ * P3-05 (§1h.8 (1); A's P3-04 F1): whether this reader has switched the paper's
+ * text on for a model — the one predicate the paper's text leaves the browser on.
+ * A deep report reads the full text, and it is asked for when the reader turned
+ * Deep report on in their profile or the paper carries an attached PDF, and a model
+ * is there to ask (the reader's own key, or Peer's for a signed-in reader). The hook
+ * decides its own `deep` with it, and the page enables the paragraph-gist pass on it
+ * too, so the map's gists are written only when a deep report is: one switch, never
+ * a second. Pure, so the rule is tested without rendering anything.
+ */
+export function deepReportRequested(
+  profile: Pick<UserProfile, "deepReportEnabled">,
+  paper: Pick<Paper, "fullTextUploadId"> | undefined,
+  aiMode: AiMode,
+): boolean {
+  return Boolean(profile.deepReportEnabled || paper?.fullTextUploadId) && aiMode !== "none";
+}
+
 export interface ModelReportState {
   /** A verified, model-written report; null when there is no model layer. */
   report: PaperReport | null;
@@ -208,8 +226,7 @@ export function useModelReport({
   // Deep is opt-in, and needs a model from anywhere: Peer's (signed in — the
   // server's dev entitlement stands in for this locally) or the reader's own key.
   // No NODE_ENV test here: AI availability is decided on the server.
-  const deep =
-    Boolean(profile.deepReportEnabled || paper?.fullTextUploadId) && aiMode !== "none";
+  const deep = deepReportRequested(profile, paper, aiMode);
   const depth = deep ? "deep" : "abstract";
   // P2-08b (§1g.17, F2): the questions name a request, and ride it, only when
   // it is a deep one — `deep` already needs a provider the hook knows about

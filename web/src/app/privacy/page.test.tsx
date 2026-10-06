@@ -145,3 +145,32 @@ describe("/privacy — Explain this (P3-02d)", () => {
     expect(entry).not.toMatch(/\bskip\b|don.t read/i);
   });
 });
+
+// P3-05 (§1h.8 (1); A's P3-04 F1): "Who else sees a request" said Google (Gemini)
+// sees a paper's text "when a model report is written". The paragraph-gist pass
+// reads the same text once more, so the sentence now says so — and says it happens
+// on the one switch that sends the text at all (a deep report: the Deep report
+// setting, or an attached PDF), never otherwise. The code the words describe is
+// `deepReportRequested` (`use-model-report.ts`), which the page hands the gist hook.
+const SEES_TEXT =
+  "Google (Gemini) sees a paper's text when a deep report is written, which happens when you turn on Deep report in your profile or attach a PDF to the paper; on that same condition, and never otherwise, the text is read once more to write the one-line gists in the paper's map.";
+
+describe("/privacy — Who else sees a request names the gist pass (P3-05)", () => {
+  const html = renderToStaticMarkup(createElement(PrivacyPage));
+  const entry = html.slice(html.indexOf(">Who else sees a request<"), html.indexOf(">Removing it<"));
+
+  it("says the paper's text is seen when a deep report is written, and read once more for the map's gists on that same condition and never otherwise", () => {
+    expect(entry).toContain(SEES_TEXT.replace(/'/g, "&#x27;"));
+    expect(entry).not.toContain("when a model report is written");
+  });
+
+  it("keeps the rest of the paragraph it sits in", () => {
+    expect(entry).toContain("Tavily sees your search terms only if you add a Tavily key yourself.");
+    expect(entry).toContain("Resend sends the email digest if you turn one on.");
+  });
+
+  it("names the two things that switch a deep report on, as the report's own predicate reads them", () => {
+    expect(entry).toContain("turn on Deep report in your profile");
+    expect(entry).toContain("attach a PDF to the paper");
+  });
+});

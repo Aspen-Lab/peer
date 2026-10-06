@@ -2113,7 +2113,8 @@ function EditView({
               Read each paper&apos;s full text (HTML when available, PDF as
               fallback) before writing the report. Costs more tokens per paper
               and produces paper-grounded reports instead of a summary of the
-              abstract.
+              abstract. With it on, Peer also writes a one-line gist beside each
+              paragraph in the reading map.
             </p>
             <Toggle
               checked={profile.deepReportEnabled}

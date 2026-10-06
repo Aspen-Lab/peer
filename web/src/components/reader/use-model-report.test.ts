@@ -3,7 +3,42 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { emptyReport, type PaperReport } from "@/lib/papers/report";
 import { defaultProfile, type Paper, type UserProfile } from "@/types";
-import { buildReportKey, rememberReport, useModelReport } from "./use-model-report";
+import { buildReportKey, deepReportRequested, rememberReport, useModelReport } from "./use-model-report";
+
+// P3-05 (§1h.8 (1); A's P3-04 F1): "this reader has switched the paper's text on
+// for a model" is one predicate, read by the report hook for its own `deep` and by
+// the page for the paragraph-gist pass — so the paper's text leaves for a model on
+// one switch (the Deep report setting, or an attached PDF) and never on another.
+describe("deepReportRequested — the one switch the paper's text leaves on (P3-05)", () => {
+  const off = { deepReportEnabled: false };
+  const on = { deepReportEnabled: true };
+  const publicPaper = { fullTextUploadId: undefined };
+  const attached = { fullTextUploadId: "upload:0123456789abcdef" };
+
+  it("is false with the switch off and no attached PDF, whatever model the reader has", () => {
+    expect(deepReportRequested(off, publicPaper, "byok")).toBe(false);
+    expect(deepReportRequested(off, publicPaper, "system")).toBe(false);
+    // A standalone upload carries no `fullTextUploadId`: with the switch off it is the abstract report.
+    expect(deepReportRequested(off, undefined, "byok")).toBe(false);
+  });
+
+  it("is true with the switch on and a model from anywhere", () => {
+    expect(deepReportRequested(on, publicPaper, "byok")).toBe(true);
+    expect(deepReportRequested(on, publicPaper, "system")).toBe(true);
+    expect(deepReportRequested(on, undefined, "system")).toBe(true);
+  });
+
+  it("is true for an attached PDF even with the switch off", () => {
+    expect(deepReportRequested(off, attached, "byok")).toBe(true);
+    expect(deepReportRequested(off, attached, "system")).toBe(true);
+  });
+
+  it("is false with no model, switch on or an attached PDF alike", () => {
+    expect(deepReportRequested(on, publicPaper, "none")).toBe(false);
+    expect(deepReportRequested(off, attached, "none")).toBe(false);
+    expect(deepReportRequested(on, attached, "none")).toBe(false);
+  });
+});
 
 // 9-15 (A9-10): `buildReportKey` is a pure extraction of the report cache
 // key so it can be unit-tested without rendering the hook (this project's

@@ -106,7 +106,7 @@ import { SectionLinks } from "@/components/reader/evidence-quote";
 import { settledQuestions, useReadingQuestionsHydrated, useReadingQuestionsStore } from "@/store/reading-questions";
 import { explanationFor, passageHash, useExplainThreadsStore, type ExplainTurn } from "@/store/explain-threads";
 import { exampleQuestions } from "@/lib/reader/question-examples";
-import { useModelReport } from "@/components/reader/use-model-report";
+import { deepReportRequested, useModelReport } from "@/components/reader/use-model-report";
 import { usePrivateSupplement } from "@/components/reader/use-private-supplement";
 import { PrivatePdfStatus } from "@/components/reader/private-pdf-status";
 import { UploadButton } from "@/components/briefing/upload-button";
@@ -747,16 +747,20 @@ function Reader({
   // `use-model-report.ts`'s own `userProviderConfigured` was already reconciled
   // to this same `aiAvailability` call during this merge.)
   const entitlement = useProfileStore((s) => s.entitlement);
-  const providerConfigured = aiAvailability(profile, entitlementGrants(entitlement)) !== "none";
+  const aiMode = aiAvailability(profile, entitlementGrants(entitlement));
+  const providerConfigured = aiMode !== "none";
   // P3-03 (§1h.6; §1a.8): Peer's gist after each paragraph's opening in the map. One
-  // small model call per paper — made once the reading has a body and the reader has a
-  // model from anywhere (not only when deep reports are on), kept in this browser for a
-  // day, never charged against the deep-report or explain allowance — and absent
-  // without either. The reader's own key travels as the explain box sends it.
+  // small model call per paper — made once the reading has a body, kept in this browser
+  // for a day, never charged against the deep-report or explain allowance — and absent
+  // without one. P3-05 (§1h.8 (1)): it reads the paper's body, so it is written only
+  // when a deep report is: `deepReportRequested`, the report hook's own predicate (the
+  // Deep report switch, or an attached PDF, and a model from anywhere), fed what the
+  // report hook is fed — the paper's text leaves for a model on one switch. The reader's
+  // own key travels as the explain box sends it.
   const paragraphGists = useParagraphGuide({
     paper: ready ? paper : undefined,
     hasBody,
-    enabled: providerConfigured,
+    enabled: providerConfigured && deepReportRequested(profile, ready ? paper : undefined, aiMode),
     llmOverride: explainLlmOverride(profile),
   });
   const projectText = useMemo(
