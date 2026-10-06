@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { Paper } from "@/types";
 import { blockMarker } from "@/lib/text/math";
 import { withSectionIds, type DraftSection, type ExtractedDocument } from "./html-text";
@@ -9,6 +9,14 @@ import { isBoilerplate, splitSentences } from "./skim";
 import arxivHtmlDocJson from "./__fixtures__/arxiv-2609.02697.doc.json";
 import arxivPdfDocJson from "./__fixtures__/arxiv-2609.02113.doc.json";
 import zenodoDocJson from "./__fixtures__/zenodo-W7208807247.doc.json";
+
+// P1-09b item 4: `splitSentences` is the real one in every test; the one
+// test that needs a sentence `openingOf` cannot locate in its paragraph
+// overrides it once (`mockReturnValueOnce`).
+vi.mock("./skim", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./skim")>();
+  return { ...actual, splitSentences: vi.fn(actual.splitSentences) };
+});
 
 // P1-01 (spec D9 first half, ruling §1f): the reading map — every section the
 // body renders, in the body's order, with its role, page, words, minutes and
@@ -215,6 +223,26 @@ describe("buildReadingMap — openings (§1f.21, P1-10)", () => {
     const map = buildReadingMap(doc([{ text: `${sentence} Then more.` }]));
 
     expect(map.sections[0].paragraphs[0].opening).toBe(sentence);
+  });
+
+  // P1-09b item 4 (manager finding on P1-10, 483f312f): a later sentence the
+  // source lookup cannot place ends the growth; it never throws away the
+  // opening already found.
+  it("keeps the opening found so far when a later sentence cannot be located in the paragraph", () => {
+    // Two spaces inside the first sentence: the opening is the paragraph's
+    // own source span, not the sentence string `splitSentences` returned.
+    const paragraph = "Short  lead. The rest of this paragraph reads differently from the split.";
+    vi.mocked(splitSentences).mockReturnValueOnce(["Short lead.", "A sentence that is nowhere in the paragraph."]);
+
+    expect(openingOf(paragraph)).toBe("Short  lead.");
+    expect(paragraph.startsWith("Short  lead.")).toBe(true);
+  });
+
+  it("is still null when the first sentence cannot be located", () => {
+    const paragraph = "We measured creep in twelve samples at three temperatures.";
+    vi.mocked(splitSentences).mockReturnValueOnce(["A sentence that is nowhere in the paragraph.", paragraph]);
+
+    expect(openingOf(paragraph)).toBeNull();
   });
 });
 
@@ -540,6 +568,37 @@ describe("specificTerms — question words and paper-structure words (P1-02b)", 
     expect(terms).toEqual(["cathode", "material", "degrades", "fastest"]);
     expect(terms.length).toBeGreaterThanOrEqual(2);
     expect(specificTerms("Which methods reduce LCO cathode cracking?")).toEqual(["reduce", "lco", "cathode", "cracking"]);
+  });
+});
+
+// P1-09b (§1f.20 amendment, from C's P1-09 observation 2): the example
+// templates' own words — "Does this help with …?", "How does this relate to
+// …?", "What does it say about …?", "Could I use … here?" — are not route
+// terms, so an example routes on its content words alone.
+describe("specificTerms — the example templates' words (P1-09b)", () => {
+  const sectionDoc = doc([
+    { text: "Grain growth slows above 900 K. The grain size then stays near 40 nm while growth stalls." },
+  ]);
+
+  it("calls 'Does this help with growth?' vague: one specific term", () => {
+    expect(specificTerms("Does this help with growth?")).toEqual(["growth"]);
+    const result = route(sectionDoc, ["Does this help with growth?"]);
+    expect(result.byQuestion[0].vague).toBe(true);
+    expect(result.vague).toBe(true);
+  });
+
+  it("routes 'Does this help with grain growth?' on grain and growth", () => {
+    expect(specificTerms("Does this help with grain growth?")).toEqual(["grain", "growth"]);
+    const result = route(sectionDoc, ["Does this help with grain growth?"]);
+    expect(result.byQuestion[0].vague).toBe(false);
+    expect(result.byQuestion[0].sections.s0?.hits.map((hit) => hit.term).sort()).toEqual(["grain", "growth"]);
+  });
+
+  it("drops each template word: help, helps, relate, relates, related, say, says, here", () => {
+    expect(specificTerms("help helps relate relates related say says here")).toEqual([]);
+    expect(specificTerms("How does this relate to sulfide electrolytes?")).toEqual(["sulfide", "electrolytes"]);
+    expect(specificTerms("What does it say about grain boundaries?")).toEqual(["grain", "boundaries"]);
+    expect(specificTerms("Could I use impedance spectroscopy here?")).toEqual(["impedance", "spectroscopy"]);
   });
 });
 

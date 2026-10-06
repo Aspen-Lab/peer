@@ -192,6 +192,9 @@ function cutFirstSentence(paragraph: string, start: number, end: number): string
  * characters or the next sentence would exceed 160. The span comes directly
  * from the paragraph: separators are preserved and sentence strings are never
  * joined. A later long sentence therefore cannot replace a short opening.
+ * A sentence the source lookup cannot place ends the growth (P1-09b item 4):
+ * before the opening has started there is nothing to show, so null; after,
+ * the opening found so far stands.
  */
 export function openingOf(paragraph: string): string | null {
   let cursor = 0;
@@ -200,7 +203,10 @@ export function openingOf(paragraph: string): string | null {
 
   for (const sentence of splitSentences(paragraph)) {
     const span = sentenceSourceSpan(paragraph, sentence, cursor);
-    if (!span) return null;
+    if (!span) {
+      if (start === null) return null;
+      break;
+    }
     const [sentenceStart, sentenceEnd] = span;
     cursor = sentenceEnd;
 
@@ -295,7 +301,10 @@ const MIN_SPECIFIC_TERMS = 2;
  *   point nowhere. The generic chips ("Can I use this method in my own
  *   work?", "Do the conclusions hold up?") are vague at Tier 0, which is
  *   honest: word matching cannot answer them, and the map's roles already
- *   show where the method and the conclusions are.
+ *   show where the method and the conclusions are;
+ * - the example templates' words (P1-09b) — "help", "relate", "say", "here"
+ *   — so "Does this help with growth?" is one term and vague, and "Does
+ *   this help with grain growth?" routes on `grain` and `growth`.
  * Compared on the canonical form.
  */
 const ROUTE_STOPLIST: ReadonlySet<string> = new Set([
@@ -310,6 +319,11 @@ const ROUTE_STOPLIST: ReadonlySet<string> = new Set([
   "paper", "study", "work", "own", "use", "used", "using", "differ", "differs",
   "different", "difference", "hold", "holds", "conclusion", "conclusions",
   "result", "results", "method", "methods", "approach", "finding", "findings", "gist",
+  // The example templates' own words (P1-09b; `ASK.examples` in
+  // `components/reader/copy.ts`): "Does this help with …?", "How does this
+  // relate to …?", "What does it say about …?", "Could I use … here?" route
+  // on their content words alone. `could` and `use` are already above.
+  "help", "helps", "relate", "relates", "related", "say", "says", "here",
 ]);
 
 /**
