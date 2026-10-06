@@ -16,6 +16,7 @@ import type { Paper, UserProfile } from "@/types";
 import { apiFetch } from "@/lib/api";
 import type { PaperReport } from "@/lib/papers/report";
 import { streamPaperReport } from "@/lib/papers/report-stream";
+import type { QuotaSignal } from "@/lib/usage/deep-report-quota";
 import { reportOutcome } from "@/lib/reader/report-outcome";
 import { aiAvailability } from "@/lib/feed/ai-tier";
 import { entitlementGrants } from "@/lib/entitlement/allowance";
@@ -135,12 +136,23 @@ export interface ModelReportState {
   fresh: boolean;
   /** The cache key this report was fetched/cached under — `""` with no paper. */
   reportKey: string;
+  /**
+   * P2-09b (§1g.14, amendment 2): the last quota the server sent for this key,
+   * on either transport and whether or not a report is shown — a refusal often
+   * has none to carry it (a company-budget fallback is "no model layer", and a
+   * `quota` after `mode` settles `report: null`). `null` when the server sent
+   * none, on a new key (until its request settles), on a cache hit whose
+   * report carries none, and after a failure: the page says the model failed,
+   * not that the report is the shorter one.
+   */
+  quota: QuotaSignal | null;
 }
 
 interface Result {
   key: string;
   report: PaperReport | null;
   failed: boolean;
+  quota: QuotaSignal | null;
 }
 
 const NO_QUESTIONS: readonly string[] = [];
@@ -282,11 +294,18 @@ export function useModelReport({
     const fail = () => {
       if (!active()) return;
       setBuildup(null);
-      setResult({ key: reportKey, report: null, failed: true });
+      setResult({ key: reportKey, report: null, failed: true, quota: null });
     };
     // `asked` is whether a model was asked at all. A `noLlm` report is never
     // cached; asked, it is a failure, and unasked it is no model layer.
-    const settle = (report: PaperReport | null, asked: boolean) => {
+    // `quota` is what the server said about the deep read (P2-09b): by default
+    // the report's own, which a `noLlm` fallback carries too, though it is not
+    // shown; the stream passes the one it sent as an event.
+    const settle = (
+      report: PaperReport | null,
+      asked: boolean,
+      quota: QuotaSignal | null = report?.quota ?? null,
+    ) => {
       if (!active()) return;
       const outcome = reportOutcome(report, asked);
       if (outcome === "failed") {
@@ -296,7 +315,7 @@ export function useModelReport({
       const shown = outcome === "shown" ? report : null;
       if (shown) writeCached(reportKey, shown);
       setBuildup(null);
-      setResult({ key: reportKey, report: shown, failed: false });
+      setResult({ key: reportKey, report: shown, failed: false, quota });
     };
 
     const fetchJsonFallback = async () => {
@@ -338,7 +357,7 @@ export function useModelReport({
             modeSeen = true;
             if (event.aiMode === "tier0") {
               settled = true;
-              settle(null, false);
+              settle(null, false, quotaFirst ?? null);
               return;
             }
             asked = true;
@@ -363,8 +382,9 @@ export function useModelReport({
           }
           if (event.type === "quota") {
             // The daily breaker tripped: no model report today, and not a failure.
+            // The quota is kept on its own (P2-09b): there is no report to carry it.
             settled = true;
-            settle(null, false);
+            settle(null, false, event.quota);
             return;
           }
           throw new Error(event.message);
@@ -398,5 +418,7 @@ export function useModelReport({
     failed: Boolean(settled?.failed),
     fresh: !cached && settled?.report != null,
     reportKey,
+    // A cache hit is the report as it was shown, so its quota is its own.
+    quota: cached ? (cached.quota ?? null) : (settled?.quota ?? null),
   };
 }

@@ -108,8 +108,14 @@ describe("QuotaNotice (P2-09, §1g.14)", () => {
 describe("where the notice is mounted (P2-09)", () => {
   const pageSource = readFileSync(resolve(process.cwd(), "src/app/papers/[id]/page.tsx"), "utf8");
 
-  it("is mounted in the additions slot only when the report carries a quota", () => {
-    expect(pageSource).toMatch(/\{report\?\.quota && <QuotaNotice quota=\{report\.quota\} \/>\}/);
+  // P2-09b (§1g.14 amendment 2) rewrites this check to the new contract: the
+  // mount reads the hook's quota, which outlives a report that is not shown (a
+  // company-budget refusal, a quota after `mode`). `QuotaNotice` renders nothing
+  // for null, so the page no longer guards it on the report.
+  it("is mounted in the additions slot on the hook's quota, not on the report's", () => {
+    expect(pageSource).toMatch(/<QuotaNotice quota=\{model\.quota\} \/>/);
+    expect(pageSource).not.toMatch(/report\??\.quota/);
+    expect(pageSource).not.toMatch(/&&\s*<QuotaNotice/);
     expect(pageSource).toMatch(/import \{ QuotaNotice \} from "@\/components\/reader\/quota-notice";/);
   });
 

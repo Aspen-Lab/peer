@@ -1191,8 +1191,10 @@ function Reader({
                 Decision block, only when the server said a cap or an outage
                 refused the deep read. No other notice of the report's own is
                 rendered on this page (quota-notice.test.tsx pins that), so a
-                report never shows two lines for one cause. */}
-            {report?.quota && <QuotaNotice quota={report.quota} />}
+                report never shows two lines for one cause. P2-09b: it reads the
+                hook's quota, which survives a refusal that has no report to
+                carry it; QuotaNotice renders nothing for null. */}
+            <QuotaNotice quota={model.quota} />
 
             {report?.forYourQuestions && <ForYourQuestions report={report} map={reading.map} />}
 
