@@ -217,7 +217,6 @@ function logGemini(
 }
 
 const clients = new Map<string, GoogleGenAI>();
-const apiClients = new Map<string, GoogleGenAI>();
 
 function getModelChain(): ModelTarget[] {
   return VERTEX_MODEL_CHAIN;
@@ -239,13 +238,11 @@ function getClient(location: string): GoogleGenAI | null {
   return client;
 }
 
+// Built for each call and held by nothing: a reader's key must not outlive their
+// request (/privacy says it "is used for that request and is not stored"). A cache
+// keyed by the raw key, never evicted, kept every key a server instance had seen.
 function getApiKeyClient(apiKey: string): GoogleGenAI {
-  const cached = apiClients.get(apiKey);
-  if (cached) return cached;
-
-  const client = new GoogleGenAI({ apiKey });
-  apiClients.set(apiKey, client);
-  return client;
+  return new GoogleGenAI({ apiKey });
 }
 
 type CallOpts = { maxTokens?: number; path?: string };
