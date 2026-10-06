@@ -9,7 +9,7 @@ import { EXPLAIN, PEERS_READING } from "./copy";
 import { SectionLinks } from "./evidence-quote";
 import {
   ExplainCard,
-  ExplainPopover,
+  ExplainBox,
   definingTerm,
   explainLlmOverride,
   placeButton,
@@ -19,14 +19,14 @@ import {
   termInPassage,
   termSource,
   type ExplainStatus,
-} from "./explain-popover";
+} from "./explain-box";
 import type { ExplainSelection } from "./paper-body";
 
 // P3-02 (ruling §1h.2; §3d 14): the button beside a selected passage and the
 // card it opens. No DOM in this project's Vitest: the markup is rendered with
 // react-dom/server, the pure rules (which term is in the passage, where the
 // button and the card stand, what is sent) are tested on their own, and the
-// click, Escape and a new selection are in `explain-popover.flow.test.tsx`.
+// click, Escape and a new selection are in `explain-box.flow.test.tsx`.
 // Everything is invented text.
 
 const PEERS_HTML = PEERS_READING.replace(/'/g, "&#x27;");
@@ -62,14 +62,14 @@ const answer: ExplainAnswer = {
 };
 const peerAnswer: ExplainAnswer = { meaning: answer.meaning, here: { text: "The authors use it to compare alloys.", peer: true } };
 
-type PopoverProps = Parameters<typeof ExplainPopover>[0];
+type PopoverProps = Parameters<typeof ExplainBox>[0];
 const render = (props: Partial<PopoverProps> = {}) =>
   renderToStaticMarkup(
     createElement(SectionLinks, { headings: reading.body.map((s) => s.heading) },
-      createElement(ExplainPopover, { target: selection, terms: [], canAsk: true, onAsk: async () => answer, reading, ...props })),
+      createElement(ExplainBox, { target: selection, terms: [], canAsk: true, onAsk: async () => answer, reading, ...props })),
   );
 
-describe("ExplainPopover — when the button shows (§1h.2)", () => {
+describe("ExplainBox — when the button shows (§1h.2)", () => {
   it("shows nothing without a selection", () => {
     expect(render({ target: null })).toBe("");
     expect(render({ target: null, terms: [rafting], canAsk: true })).toBe("");

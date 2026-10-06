@@ -216,6 +216,14 @@ export const EXPLAIN = {
   unavailable: "Peer could not explain this just now.",
   notInPaper: "Select text from the paper itself.",
   close: "Close",
+  /** P3-02b: the thread under the first answer. The reader's messages and
+   *  Peer's replies each sit under one of these two label-face lines. */
+  you: "You",
+  peer: "Peer",
+  placeholder: "Ask about this passage…",
+  send: "Send",
+  thinking: "Peer is thinking…",
+  threadFull: "This thread is full. Select the passage again to start a new one.",
 } as const;
 
 /** The reader's own context for the paper: what they read or kept nearby. */

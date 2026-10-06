@@ -554,6 +554,19 @@ function Section({
 /** The anchor the decision block's "read it here" scrolls to. */
 export const PAPER_BODY_ID = "paper-body";
 
+/**
+ * P3-02b (§1h.3): where the text column's right edge is in the viewport now —
+ * `#paper-body`'s bounding box, measured the way the selection is (a fresh
+ * read each time it is asked, so a scroll or a resize is never stale). Null
+ * when the body is not on the page. The "Explain this?" box stands to its right
+ * on a spread.
+ */
+export function measureBodyColumn(): { right: number } | null {
+  if (typeof document === "undefined") return null;
+  const rect = document.getElementById(PAPER_BODY_ID)?.getBoundingClientRect();
+  return rect ? { right: rect.right } : null;
+}
+
 export function PaperBody({
   reading,
   route,

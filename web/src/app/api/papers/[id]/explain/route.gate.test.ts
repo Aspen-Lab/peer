@@ -186,3 +186,35 @@ describe("POST /api/papers/[id]/explain — nothing per-reader in the memory", (
     expect((await getCounterStore().read(explainDayKey("reader-1", NOW), new Date("2026-10-07T00:00:01.000Z"))).value).toBe(0);
   });
 });
+
+// P3-02b (ruling §1h.3): a reply is counted for the reader who caused it, and
+// the memory is keyed by the document, the passage and the thread's words only —
+// so a second reader sending the same thread is served from it, with no count.
+describe("POST /api/papers/[id]/explain — nothing per-reader in the memory, with a thread", () => {
+  const thread = [
+    { role: "peer", text: "A share of a sample turned to plates. It compares alloys." },
+    { role: "reader", text: "Why does a bigger ratio matter?" },
+  ];
+
+  it("counts a reply for the reader who caused it, and serves the next reader's same thread from the memory at no count of theirs", async () => {
+    generateJsonText.mockResolvedValue(JSON.stringify({ reply: "It changes how the metal carries load.", evidence: DEF }));
+    mocks.getUser.mockResolvedValue(signedIn("reader-1"));
+    const first = (await (await call({ ...body, thread })).json()) as { cached: boolean; turn?: { text: string } };
+    mocks.getUser.mockResolvedValue(signedIn("reader-2"));
+    const second = (await (await call({ ...body, thread })).json()) as { cached: boolean; turn?: { text: string } };
+
+    expect(first.cached).toBe(false);
+    expect(second.cached).toBe(true);
+    expect(second.turn).toEqual(first.turn);
+    expect(generateJsonText).toHaveBeenCalledTimes(1);
+    expect(await turnsOf("reader-1")).toBe(1);
+    expect(await turnsOf("reader-2")).toBe(0);
+  });
+
+  it("answers a stranger's reply 401, before the thread is used", async () => {
+    const response = await call({ ...body, thread });
+
+    expect(response.status).toBe(401);
+    expect(generateJsonText).not.toHaveBeenCalled();
+  });
+});

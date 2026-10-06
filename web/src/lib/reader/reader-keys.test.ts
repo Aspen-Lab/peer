@@ -148,6 +148,31 @@ describe("the ask key (P1-03)", () => {
   });
 });
 
+// P3-02b (§1h.3): `e` opens the "Explain this?" box on the selected passage —
+// the page registers `explain` and does what the button's click does.
+describe("the explain key (P3-02b)", () => {
+  it("maps e to explain, once, before the back entry, with the help sheet and the legend reading it from the table", () => {
+    expect(resolvePaperKey("e")).toBe("explain");
+    expect(PAPER_KEYS.find((entry) => entry.action === "explain")).toEqual({
+      keys: ["e"],
+      action: "explain",
+      label: "Explain the selected passage",
+      short: "explain",
+    });
+    expect(PAPER_KEYS.filter((entry) => entry.keys.includes("e"))).toHaveLength(1);
+    const actions = PAPER_KEYS.map((entry) => entry.action);
+    expect(actions.indexOf("explain")).toBe(actions.indexOf("back") - 1);
+    expect(readerHelpItems()).toContainEqual({ keys: "e", label: "Explain the selected passage" });
+    expect(resolvePaperKey("E")).toBeNull();
+  });
+
+  it("keeps it on every page: an upload's table drops skip and nothing else", () => {
+    expect(paperKeysFor({ upload: true }).map((entry) => entry.action)).toContain("explain");
+    expect(paperKeysFor({ upload: false }).map((entry) => entry.action)).toContain("explain");
+    expect(paperKeysFor({ upload: false })).toEqual(PAPER_KEYS);
+  });
+});
+
 describe("the keyboard layer and the question field (P1-03)", () => {
   class FakeElement {
     constructor(readonly tagName: string) {}
@@ -195,6 +220,34 @@ describe("the keyboard layer and the question field (P1-03)", () => {
     const pressed = press("q", new FakeElement("DIV"));
     expect(ask).toHaveBeenCalledTimes(1);
     expect(pressed.preventDefault).toHaveBeenCalled();
+    mounted.unmount();
+  });
+
+  // P3-02b: typed into the box's textarea, `e` is a letter — the layer never
+  // intercepts a key typed into a text field. Pressed anywhere else it runs the
+  // page's `explain`.
+  it("leaves an e typed into a textarea or an input alone, and runs explain for an e pressed anywhere else", async () => {
+    const explain = vi.fn();
+    registerReaderActions({ explain });
+    const mounted = await hookRuntime.mount(() => KeyboardLayer());
+
+    for (const tag of ["TEXTAREA", "INPUT"]) {
+      const typed = press("e", new FakeElement(tag));
+      expect(typed.preventDefault).not.toHaveBeenCalled();
+    }
+    expect(explain).not.toHaveBeenCalled();
+
+    const pressed = press("e", new FakeElement("DIV"));
+    expect(explain).toHaveBeenCalledTimes(1);
+    expect(pressed.preventDefault).toHaveBeenCalled();
+    mounted.unmount();
+  });
+
+  it("leaves e inert on a page that registered no explain", async () => {
+    registerReaderActions({ next: vi.fn() });
+    const mounted = await hookRuntime.mount(() => KeyboardLayer());
+
+    expect(press("e", new FakeElement("DIV")).preventDefault).not.toHaveBeenCalled();
     mounted.unmount();
   });
 

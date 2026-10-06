@@ -20,7 +20,8 @@ export type ReaderAction =
   | "open"
   | "copy"
   | "back"
-  | "ask";
+  | "ask"
+  | "explain";
 
 export interface PaperKey {
   /** `KeyboardEvent.key` values; the first is the one the help sheet shows. */
@@ -54,6 +55,9 @@ export const PAPER_KEYS: readonly PaperKey[] = [
   // field itself, `q` is a letter — the layer never intercepts a key typed
   // into an input.
   { keys: ["q"], action: "ask", label: "Ask a question about this paper", short: "ask" },
+  // P3-02b (§1h.3): open "Explain this?" on the selected passage, as its button
+  // does. Typed into the box's own input, `e` is a letter.
+  { keys: ["e"], action: "explain", label: "Explain the selected passage", short: "explain" },
   {
     keys: ["Escape", "Backspace"],
     action: "back",

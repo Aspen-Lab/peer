@@ -1,12 +1,12 @@
-// What "Explain this?" answered, kept in this browser (P3-02; ruling §1h.2;
-// P3-02b's thread will live here too).
+// What "Explain this?" answered, and the short conversation that followed it,
+// kept in this browser (P3-02, P3-02b; rulings §1h.2, §1h.3).
 //
-// Per paper and per passage: the passage, where it sits, the two-part answer,
-// and — reserved for P3-02b's back-and-forth — the thread so far (always empty
-// in P3-02). Opening a passage the reader already asked about shows its answer
-// at once with no request. Nothing here is ever sent anywhere but the explain
-// route (and P3-02b sends the thread only when the reader presses Enter); the
-// server keeps none of it.
+// Per paper and per passage: the passage, where it sits, the two-part answer
+// and the thread so far — the reader's messages and Peer's replies, at most
+// eight of the reader's (`MAX_EXPLAIN_TURNS`). Opening a passage the reader
+// already asked about shows its answer and its thread at once with no request.
+// Nothing here is ever sent anywhere but the explain route, and the thread only
+// when the reader presses Enter or Send; the server keeps none of it.
 //
 // A passage is the paper's own text, so for an uploaded PDF it is private
 // text, in the reader's own browser — the same place their notes and questions
@@ -25,11 +25,22 @@ import type { ExplainAnswer } from "@/lib/papers/explain";
 export const EXPLAIN_THREADS_STORAGE_KEY = "peer-explain-threads-v1";
 export const MAX_EXPLAIN_PASSAGES = 32;
 export const MAX_EXPLAIN_PAPERS = 24;
+/** A thread holds at most this many of the reader's messages (and as many of Peer's replies). */
+export const MAX_EXPLAIN_TURNS = 8;
+/** The most a message may say: what the server reads of it. */
+export const MAX_EXPLAIN_MESSAGE_CHARS = 400;
 
-/** One message of the thread (P3-02b). */
+/** One message of the thread (P3-02b). A reply of Peer's carries, when its quote
+ *  was verified, the paper's own sentence and where it is from; otherwise
+ *  `peer: true` and the page labels it as Peer's own reading. */
 export interface ExplainTurn {
   role: "reader" | "peer";
   text: string;
+  evidence?: string;
+  evidenceWhere?: string;
+  sectionId?: string;
+  page?: number;
+  peer?: true;
 }
 
 export interface ExplainThread {
@@ -39,7 +50,7 @@ export interface ExplainThread {
   sectionId: string;
   paragraphIndex: number;
   answer: ExplainAnswer;
-  /** P3-02b's thread. Always `[]` in P3-02. */
+  /** The thread after the first answer: the reader's messages and Peer's replies, in order. */
   turns: ExplainTurn[];
   /** When the answer was kept (ISO). */
   at: string;
@@ -67,6 +78,14 @@ export function passageHash(passage: string): string {
 
 type ByPaper = Record<string, Record<string, ExplainThread>>;
 
+const readerMessages = (turns: readonly ExplainTurn[]): number => turns.filter((turn) => turn.role === "reader").length;
+
+/** Whether a thread has its eight reader messages — given the thread or its turns. */
+export function threadFull(thread: ExplainThread | readonly ExplainTurn[] | undefined): boolean {
+  if (!thread) return false;
+  return readerMessages("turns" in thread ? thread.turns : thread) >= MAX_EXPLAIN_TURNS;
+}
+
 /** The kept answer for `passage` on `paperId`, if the same words were asked. */
 export function explanationFor(byPaper: ByPaper, paperId: string, passage: string): ExplainThread | undefined {
   const found = byPaper[paperId]?.[passageHash(passage)];
@@ -78,6 +97,12 @@ interface ExplainThreadsState {
   byPaper: ByPaper;
   /** Keep (or replace) the answer for a passage; the thread already kept for it stays. */
   remember: (paperId: string, entry: Omit<ExplainThread, "turns" | "at">, at?: string) => void;
+  /** Append turns — the reader's message and Peer's reply together, once the reply
+   *  has arrived — to a passage already answered. Nothing past eight reader
+   *  messages is stored. */
+  addTurns: (paperId: string, hash: string, turns: ExplainTurn[], at?: string) => void;
+  /** Empty a passage's thread and keep its first answer. */
+  resetThread: (paperId: string, hash: string) => void;
   forget: (paperId: string, hash: string) => void;
   clearPaper: (paperId: string) => void;
 }
@@ -117,6 +142,28 @@ export const useExplainThreadsStore = create<ExplainThreadsState>()(
               [paperId]: withoutOldestPassages({ ...threads, [key]: { ...entry, turns, at } }),
             }),
           };
+        }),
+      addTurns: (paperId, hash, turns, at = new Date().toISOString()) =>
+        set((s) => {
+          const thread = s.byPaper[paperId]?.[hash];
+          if (!thread) return s;
+          const kept = [...thread.turns];
+          let readers = readerMessages(kept);
+          for (const turn of turns) {
+            if (turn.role === "reader") {
+              if (readers >= MAX_EXPLAIN_TURNS) break;
+              readers += 1;
+            }
+            kept.push(turn);
+          }
+          if (kept.length === thread.turns.length) return s;
+          return { byPaper: { ...s.byPaper, [paperId]: { ...s.byPaper[paperId], [hash]: { ...thread, turns: kept, at } } } };
+        }),
+      resetThread: (paperId, hash) =>
+        set((s) => {
+          const thread = s.byPaper[paperId]?.[hash];
+          if (!thread || thread.turns.length === 0) return s;
+          return { byPaper: { ...s.byPaper, [paperId]: { ...s.byPaper[paperId], [hash]: { ...thread, turns: [] } } } };
         }),
       forget: (paperId, hash) =>
         set((s) => {

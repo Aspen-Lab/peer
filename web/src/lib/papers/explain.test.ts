@@ -4,6 +4,7 @@ import { sectionParagraphs, openingOf } from "./reading-map";
 import {
   EXPLAIN_CAPS,
   buildExplainPrompt,
+  buildExplainReplyPrompt,
   clipPassage,
   createExplainCache,
   explainCacheKey,
@@ -12,9 +13,14 @@ import {
   explainMapLines,
   locatePassage,
   parseModelJson,
+  readThread,
   sanitizeExplainAnswer,
+  sanitizeExplainReply,
   verifyExplainAnswer,
+  verifyExplainReply,
   type ExplainAnswer,
+  type ExplainMessage,
+  type ExplainReplyTurn,
 } from "./explain";
 
 // P3-02 (ruling §1h.2; §3d 14): the pure half of "Explain this?" — the
@@ -502,5 +508,308 @@ describe("the explain cache", () => {
   it("is a memory of answers: the module's default holds 64 for an hour", () => {
     expect(EXPLAIN_CAPS.cacheEntries).toBe(64);
     expect(EXPLAIN_CAPS.cacheTtlMs).toBe(60 * 60 * 1000);
+  });
+});
+
+// ── P3-02b (ruling §1h.3): the thread ───────────────────────────────────
+// What the server reads of a thread, the prompt for a reply, the reply's
+// sanitiser and verifier, and the memory's key with the thread in it. As above,
+// every text is invented.
+
+const FIRST: ExplainMessage = { role: "peer", text: "A rafting ratio says how much of a sample has turned into plates. The authors use it to compare alloys." };
+const ASKED: ExplainMessage = { role: "reader", text: "Why does a bigger ratio matter for the blade?" };
+const REPLIED: ExplainMessage = { role: "peer", text: "A bigger share of plates changes how the metal carries load." };
+const ASKED_AGAIN: ExplainMessage = { role: "reader", text: "And at a lower temperature?" };
+
+describe("readThread (P3-02b)", () => {
+  it("keeps a well-formed thread in order, roles and words as sent", () => {
+    const read = readThread([FIRST, ASKED]);
+
+    expect(read.messages).toEqual([FIRST, ASKED]);
+    expect(read.readers).toBe(1);
+  });
+
+  it("collapses whitespace in each message and keeps only role and text", () => {
+    const read = readThread([{ role: "peer", text: "  Plates   form\nunder load.  ", extra: "x", evidence: "y" }, { role: "reader", text: "Why?\n\nWhy not?" }]);
+
+    expect(read.messages).toEqual([{ role: "peer", text: "Plates form under load." }, { role: "reader", text: "Why? Why not?" }]);
+  });
+
+  it("treats anything malformed as no thread at all: not an array, not objects, a bad role, no text, empty text", () => {
+    for (const bad of [undefined, null, "a thread", 5, {}, [1, 2], [null], [[]], [{ role: "robot", text: "x" }], [{ text: "x" }], [{ role: "reader" }], [{ role: "reader", text: 7 }], [{ role: "reader", text: "   " }], [FIRST, { role: "reader" }]]) {
+      expect(readThread(bad)).toEqual({ messages: [], readers: 0 });
+    }
+  });
+
+  it("clips each message to 400 characters, at a word", () => {
+    const long = Array.from({ length: 300 }, (_, i) => `w${i}`).join(" ");
+    const read = readThread([{ role: "peer", text: long }, { role: "reader", text: "x".repeat(5000) }]);
+
+    expect(EXPLAIN_CAPS.messageChars).toBe(400);
+    expect(read.messages[0].text.length).toBeLessThanOrEqual(400);
+    expect(long.startsWith(read.messages[0].text)).toBe(true);
+    expect(read.messages[0].text.length).toBeGreaterThan(350);
+    expect(read.messages[1].text).toHaveLength(400);
+  });
+
+  it("counts the reader's messages", () => {
+    expect(readThread([FIRST, ASKED, REPLIED, ASKED_AGAIN]).readers).toBe(2);
+    expect(readThread([FIRST]).readers).toBe(0);
+    expect(readThread([]).readers).toBe(0);
+  });
+
+  it("reads at most 17 messages: a longer thread with 8 or fewer reader messages is no thread", () => {
+    const many = Array.from({ length: 18 }, (_, i) => ({ role: i % 2 === 0 ? "peer" : "reader", text: `message ${i}` }));
+    const read = readThread(many);
+
+    expect(EXPLAIN_CAPS.threadMessages).toBe(17);
+    expect(read.messages).toEqual([]);
+    expect(read.readers).toBe(9);
+    // Seventeen are read in full.
+    expect(readThread(many.slice(0, 17)).messages).toHaveLength(17);
+    const peers = Array.from({ length: 18 }, (_, i) => ({ role: "peer", text: `message ${i}` }));
+    expect(readThread(peers)).toEqual({ messages: [], readers: 0 });
+  });
+
+  it("reports more reader messages than the cap, so the route can say the thread is full", () => {
+    const nine = Array.from({ length: 9 }, (_, i) => ({ role: "reader", text: `message ${i}` }));
+
+    expect(EXPLAIN_CAPS.threadReaderMessages).toBe(8);
+    expect(readThread(nine).readers).toBe(9);
+    expect(readThread(nine.slice(0, 8)).readers).toBe(8);
+  });
+});
+
+describe("buildExplainReplyPrompt (P3-02b)", () => {
+  const located = locatePassage(doc, "fraction of the gauge length")!;
+  const base = {
+    paper: { title: "Rafting under creep in a nickel alloy", abstract: "The abstract says why rafting matters for turbine blades." },
+    map: explainMapLines(doc),
+    located,
+    passage: "fraction of the gauge length",
+  };
+  const built = buildExplainReplyPrompt({ ...base, thread: [FIRST, ASKED] });
+  const user = JSON.parse(built.userPrompt) as Record<string, unknown>;
+
+  it("speaks in Peer's voice, asks for JSON only, and is its own prompt, not the first message's", () => {
+    expect(built.systemPrompt).toMatch(/Peer/);
+    expect(built.systemPrompt).toMatch(/valid JSON/i);
+    expect(built.systemPrompt).not.toBe(buildExplainPrompt(base).systemPrompt);
+  });
+
+  it("carries P3-02's context: the title, the abstract, the map's lines, the paragraph and its neighbours, the passage", () => {
+    expect(built.userPrompt).toContain("Rafting under creep in a nickel alloy");
+    expect(built.userPrompt).toContain("The abstract says why rafting matters for turbine blades.");
+    expect(built.userPrompt).toContain("1 Introduction");
+    expect(built.userPrompt).toContain("3 Results");
+    expect(built.userPrompt).toContain("Specimens were machined from a single casting and heat treated together.");
+    expect(built.userPrompt).toContain(RAFT_DEF);
+    expect(built.userPrompt).toContain(SHARED);
+    expect(user.passage).toBe("fraction of the gauge length");
+  });
+
+  it("has exactly these parts, the thread among them, and nothing about the reader's profile", () => {
+    expect(Object.keys(user)).toEqual(["task", "paper", "sections", "context", "passage", "thread", "lastReaderMessage", "outputSchema", "rules"]);
+    expect(Object.keys(user.paper as object)).toEqual(["title", "abstract"]);
+    expect(built.userPrompt).not.toMatch(/profile|project|challenge|readerProject/i);
+  });
+
+  it("gives the thread in order, each message labelled by its role", () => {
+    const thread = [FIRST, ASKED, REPLIED, ASKED_AGAIN];
+    const parsed = JSON.parse(buildExplainReplyPrompt({ ...base, thread }).userPrompt) as { thread: Array<{ role: string; text: string }> };
+
+    expect(parsed.thread).toEqual(thread);
+    expect(parsed.thread.map((message) => message.role)).toEqual(["peer", "reader", "peer", "reader"]);
+  });
+
+  it("names the reader's last message as the one to answer, in the schema's words and in a field of its own", () => {
+    const thread = [FIRST, ASKED, REPLIED, ASKED_AGAIN];
+    const parsed = JSON.parse(buildExplainReplyPrompt({ ...base, thread }).userPrompt) as { lastReaderMessage: string; task: string; rules: string[] };
+
+    expect(parsed.lastReaderMessage).toBe(ASKED_AGAIN.text);
+    expect(parsed.task).toMatch(/last message/i);
+    expect(parsed.rules.join(" ")).toMatch(/lastReaderMessage/);
+  });
+
+  it("asks for a reply of at most three sentences, plain words, about this passage", () => {
+    const rules = (user.rules as string[]).join(" ");
+    const schema = user.outputSchema as { reply: string; evidence: string };
+
+    expect(rules).toMatch(/three sentences/i);
+    expect(rules).toMatch(/plain/i);
+    expect(schema.reply).toMatch(/three sentences/i);
+    expect(schema.evidence).toMatch(/character-for-character/);
+  });
+
+  it("asks for evidence only when the reply rests on the paper, copied from the context", () => {
+    const rules = (user.rules as string[]).join(" ");
+
+    expect(rules).toMatch(/context\.before/);
+    expect(rules).toMatch(/context\.paragraph/);
+    expect(rules).toMatch(/context\.after/);
+    expect(rules).toMatch(/Omit `evidence`/);
+    expect(rules).toMatch(/rests on something the paper says|when the reply rests on/i);
+  });
+
+  it("says no web, no advice and no verdict on reading on", () => {
+    const rules = (user.rules as string[]).join(" ");
+
+    expect(rules).toMatch(/web/i);
+    expect(rules).toMatch(/no advice/i);
+    expect(rules).toMatch(/verdict/i);
+  });
+
+  it("bounds what it sends: a long thread of long messages is cut to 17 messages of 400 characters, the last kept", () => {
+    const huge = "word ".repeat(5000);
+    const thread: ExplainMessage[] = Array.from({ length: 40 }, (_, i) => ({ role: i % 2 === 0 ? "peer" : "reader", text: i === 39 ? "The very last message ends here." : huge }));
+    const big = buildExplainReplyPrompt({ ...base, thread });
+    const parsed = JSON.parse(big.userPrompt) as { thread: ExplainMessage[]; lastReaderMessage: string; outputSchema: unknown; rules: unknown };
+
+    expect(parsed.thread.length).toBeLessThanOrEqual(EXPLAIN_CAPS.threadMessages);
+    for (const message of parsed.thread) expect(message.text.length).toBeLessThanOrEqual(EXPLAIN_CAPS.messageChars);
+    expect(parsed.thread[parsed.thread.length - 1].text).toBe("The very last message ends here.");
+    expect(parsed.lastReaderMessage).toBe("The very last message ends here.");
+    // The schema and the rules are never what gets cut.
+    expect(parsed).toHaveProperty("outputSchema");
+    expect(Array.isArray(parsed.rules)).toBe(true);
+  });
+
+  it("bounds the context as the first message's prompt does", () => {
+    const huge = "word ".repeat(5000);
+    const big = buildExplainReplyPrompt({
+      paper: { title: "t".repeat(2000), abstract: huge },
+      map: Array.from({ length: 300 }, (_, i) => ({ heading: `Section ${i}`, opening: huge })),
+      located: { ...located, paragraph: huge, before: huge, after: huge },
+      passage: "x".repeat(5000),
+      thread: [FIRST, ASKED],
+    });
+    const parsed = JSON.parse(big.userPrompt) as { paper: { title: string; abstract: string }; sections: unknown[]; context: { paragraph: string }; passage: string };
+
+    expect(parsed.paper.title.length).toBeLessThanOrEqual(EXPLAIN_CAPS.titleChars);
+    expect(parsed.paper.abstract.length).toBeLessThanOrEqual(EXPLAIN_CAPS.abstractChars);
+    expect(parsed.sections.length).toBeLessThanOrEqual(EXPLAIN_CAPS.mapLines);
+    expect(parsed.context.paragraph.length).toBeLessThanOrEqual(EXPLAIN_CAPS.paragraphChars);
+    expect(parsed.passage.length).toBeLessThanOrEqual(EXPLAIN_CAPS.passageChars);
+  });
+});
+
+describe("sanitizeExplainReply (P3-02b)", () => {
+  const good = { reply: "A bigger share of plates changes how the metal carries load.", evidence: RAFT_DEF };
+
+  it("keeps a well-formed reply, trimmed", () => {
+    expect(sanitizeExplainReply({ reply: `  ${good.reply}  `, evidence: ` ${RAFT_DEF} ` })).toEqual(good);
+  });
+
+  it("keeps a reply with no evidence as it is", () => {
+    expect(sanitizeExplainReply({ reply: good.reply })).toEqual({ reply: good.reply });
+  });
+
+  it("clips the reply to three sentences and 560 characters", () => {
+    const four = sanitizeExplainReply({ reply: "One is plain. Two is plain too. Three is the last. Four must go." });
+    const long = sanitizeExplainReply({ reply: `${"word ".repeat(300)}.` });
+
+    expect(four?.reply).toBe("One is plain. Two is plain too. Three is the last.");
+    expect(EXPLAIN_CAPS.replyChars).toBe(560);
+    expect(long?.reply.length).toBeLessThanOrEqual(560);
+  });
+
+  it("caps the quote it will try to verify at 400 characters, and drops one that is not text or is empty", () => {
+    expect(sanitizeExplainReply({ reply: good.reply, evidence: "q".repeat(2000) })?.evidence?.length).toBeLessThanOrEqual(EXPLAIN_CAPS.evidenceChars);
+    expect(sanitizeExplainReply({ reply: good.reply, evidence: 5 })).toEqual({ reply: good.reply });
+    expect(sanitizeExplainReply({ reply: good.reply, evidence: "  " })).toEqual({ reply: good.reply });
+  });
+
+  it("drops everything else the model said: a place, a page, a section, a peer flag, a role", () => {
+    const clean = sanitizeExplainReply({ reply: good.reply, evidence: RAFT_DEF, evidenceWhere: "Everything", sectionId: "s99", page: 7, peer: true, role: "reader", extra: 1 });
+
+    expect(clean).toEqual(good);
+  });
+
+  it("is null without words to say", () => {
+    for (const bad of [null, "text", [good], {}, { reply: "" }, { reply: "   " }, { reply: 4 }, { evidence: RAFT_DEF }]) {
+      expect(sanitizeExplainReply(bad)).toBeNull();
+    }
+  });
+});
+
+describe("verifyExplainReply (P3-02b)", () => {
+  const reply = { reply: "It compares alloys.", evidence: RAFT_DEF };
+
+  it("sets the section, its heading and its page on a quote the paper holds", () => {
+    const turn = verifyExplainReply(reply, doc);
+
+    expect(turn).toEqual({ role: "peer", text: "It compares alloys.", evidence: RAFT_DEF, evidenceWhere: "2 Methods", sectionId: "s2", page: 2 });
+    expect(turn.peer).toBeUndefined();
+  });
+
+  it("tries the section it was told to prefer first", () => {
+    const twice: ExtractedDocument = { ...doc, sections: [...doc.sections, { id: "s4", heading: "4 Discussion", canonical: "discussion", page: 4, text: RAFT_DEF }] };
+
+    expect(verifyExplainReply(reply, twice, "s4")).toMatchObject({ sectionId: "s4", evidenceWhere: "4 Discussion", page: 4 });
+    expect(verifyExplainReply(reply, twice, "s2")).toMatchObject({ sectionId: "s2" });
+  });
+
+  it("leaves out the page for a source that has none", () => {
+    const html: ExtractedDocument = { ...doc, sections: doc.sections.map((section) => { const bare = { ...section }; delete bare.page; return bare; }) };
+    const turn = verifyExplainReply(reply, html);
+
+    expect(turn.sectionId).toBe("s2");
+    expect("page" in turn).toBe(false);
+  });
+
+  it("removes a quote the paper does not hold and labels the reply as Peer's own", () => {
+    const invented: ExplainReplyTurn = verifyExplainReply({ reply: "It compares alloys.", evidence: "We define the rafting ratio as the share of every plate that covered a crack." }, doc);
+
+    expect(invented).toEqual({ role: "peer", text: "It compares alloys.", peer: true });
+  });
+
+  it("holds the whole quote, not its start", () => {
+    const changed = verifyExplainReply({ reply: "x", evidence: `${RAFT_DEF.slice(0, -12)} by the failed zones.` }, doc);
+
+    expect(changed).toEqual({ role: "peer", text: "x", peer: true });
+  });
+
+  it("labels a reply with no quote as Peer's own", () => {
+    expect(verifyExplainReply({ reply: "A plain answer." }, doc)).toEqual({ role: "peer", text: "A plain answer.", peer: true });
+  });
+
+  it("changes nothing in the reply it was given", () => {
+    const given = { reply: "x", evidence: "not in the paper at all, not a word of it, ever" };
+    const copy = JSON.parse(JSON.stringify(given)) as typeof given;
+    verifyExplainReply(given, doc);
+
+    expect(given).toEqual(copy);
+  });
+});
+
+describe("explainCacheKey with a thread (P3-02b)", () => {
+  const texts = [FIRST.text, ASKED.text];
+  const base = explainCacheKey("doc-hash", "The rafting ratio", texts);
+
+  it("changes with every message of the thread, and with their order", () => {
+    expect(explainCacheKey("doc-hash", "The rafting ratio", [])).not.toBe(base);
+    expect(explainCacheKey("doc-hash", "The rafting ratio", [FIRST.text])).not.toBe(base);
+    expect(explainCacheKey("doc-hash", "The rafting ratio", [...texts, REPLIED.text, ASKED_AGAIN.text])).not.toBe(base);
+    expect(explainCacheKey("doc-hash", "The rafting ratio", [ASKED.text, FIRST.text])).not.toBe(base);
+    expect(explainCacheKey("doc-hash", "The rafting ratio", [FIRST.text, "Another question?"])).not.toBe(base);
+  });
+
+  it("is the same for the same thread, and carries none of its words", () => {
+    expect(explainCacheKey("doc-hash", "The rafting ratio", [...texts])).toBe(base);
+    expect(base).toMatch(/^[0-9a-f]{64}$/);
+  });
+});
+
+describe("the memory holds a reply turn as it holds an answer (P3-02b)", () => {
+  it("remembers one verified reply under its key, counted in the same 64", () => {
+    const cache = createExplainCache({ max: 2 });
+    const turn: ExplainReplyTurn = { role: "peer", text: "A reply.", peer: true };
+    cache.set("a", turn);
+    cache.set("b", { meaning: "m", here: { text: "h", peer: true } });
+    cache.set("c", turn);
+
+    expect(cache.get("a")).toBeUndefined();
+    expect(cache.get("c")).toEqual(turn);
+    expect(cache.size()).toBe(2);
   });
 });

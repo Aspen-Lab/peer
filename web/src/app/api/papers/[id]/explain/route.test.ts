@@ -465,3 +465,256 @@ describe("POST /api/papers/[id]/explain — the provider is resolved for this re
     expect(context.byok).toBe(false);
   });
 });
+
+// ── P3-02b (ruling §1h.3): the thread ───────────────────────────────────
+// With a thread the route answers one reply turn: the reply prompt over the
+// same context, the reply sanitised and its quote verified, counted on the same
+// day counter, remembered under the document, the passage and the thread —
+// never the reader. Every text is invented.
+
+const FIRST_PEER = `${MEANING} ${HERE}`;
+const REPLY = "A bigger share of plates changes how the metal carries load.";
+const REPLY_Q = "Why does a bigger ratio matter for the blade?";
+const modelReply = { reply: REPLY, evidence: DEF };
+const thread1 = [{ role: "peer", text: FIRST_PEER }, { role: "reader", text: REPLY_Q }];
+
+function replyStub(body: unknown = modelReply) {
+  provider = providerStub(JSON.stringify(body));
+  mocks.resolveProvider.mockReturnValue(provider);
+}
+
+describe("POST /api/papers/[id]/explain — a reply to the thread", () => {
+  it("asks the model once, on the small tier with 400 tokens, and answers the verified turn", async () => {
+    replyStub();
+    const response = await call(ask({ thread: thread1 }));
+    const body = await json(response);
+
+    expect(response.status).toBe(200);
+    expect(provider.generateJsonText).toHaveBeenCalledTimes(1);
+    const args = provider.generateJsonText.mock.calls[0][0];
+    expect(args.tier).toBe("small");
+    expect(args.maxTokens).toBe(400);
+    expect(body).toEqual({
+      cached: false,
+      turn: { role: "peer", text: REPLY, evidence: DEF, evidenceWhere: "2 Methods", sectionId: "s2", page: 2 },
+    });
+  });
+
+  it("builds the reply prompt: the paper's context and the thread in order, the reader's last message named", async () => {
+    replyStub();
+    await call(ask({ thread: thread1 }));
+    const { userPrompt } = provider.generateJsonText.mock.calls[0][0];
+    const parsed = JSON.parse(userPrompt) as { thread: Array<{ role: string; text: string }>; lastReaderMessage: string; outputSchema: Record<string, unknown> };
+
+    expect(userPrompt).toContain(paper.title);
+    expect(userPrompt).toContain(DEF);
+    expect(userPrompt).toContain(PASSAGE);
+    expect(parsed.thread).toEqual(thread1);
+    expect(parsed.lastReaderMessage).toBe(REPLY_Q);
+    expect(Object.keys(parsed.outputSchema)).toEqual(["reply", "evidence"]);
+  });
+
+  it("removes a quote the paper does not hold, or none at all, and says the reply is Peer's own", async () => {
+    replyStub({ reply: REPLY, evidence: "We define the rafting ratio as the share of every plate that covered a crack." });
+    expect((await json(await call(ask({ thread: thread1 })))).turn).toEqual({ role: "peer", text: REPLY, peer: true });
+
+    explainCache.clear();
+    replyStub({ reply: REPLY });
+    expect((await json(await call(ask({ thread: thread1 })))).turn).toEqual({ role: "peer", text: REPLY, peer: true });
+  });
+
+  it("an empty thread is still the first answer, with the first answer's prompt and token budget", async () => {
+    const body = await json(await call(ask({ thread: [] })));
+
+    expect(body.answer).toBeDefined();
+    expect(body.turn).toBeUndefined();
+    expect(JSON.parse(provider.generateJsonText.mock.calls[0][0].userPrompt)).not.toHaveProperty("thread");
+    expect(provider.generateJsonText.mock.calls[0][0].maxTokens).toBe(600);
+  });
+
+  it("treats a malformed thread as no thread: the first answer, as with none", async () => {
+    for (const bad of ["a thread", 5, {}, [1], [{ role: "robot", text: "x" }], [{ role: "reader" }], [{ role: "reader", text: "" }], [{ role: "peer", text: "ok" }, { role: "reader", text: 4 }]]) {
+      explainCache.clear();
+      provider.generateJsonText.mockClear();
+      const response = await call(ask({ thread: bad }));
+      const body = await json(response);
+
+      expect(response.status).toBe(200);
+      expect(body.answer).toBeDefined();
+      expect(body.turn).toBeUndefined();
+      expect(provider.generateJsonText).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it("answers 400 to a thread whose last message is not the reader's — before any model is asked or anything counted", async () => {
+    const response = await call(ask({ thread: [{ role: "reader", text: REPLY_Q }, { role: "peer", text: REPLY }] }));
+
+    expect(response.status).toBe(400);
+    expect(await json(response)).toEqual({ error: "thread must end with the reader's message" });
+    expect(provider.generateJsonText).not.toHaveBeenCalled();
+    expect(mocks.getFullText).not.toHaveBeenCalled();
+    expect(await turns()).toBe(0);
+    expect(response.headers.get("cache-control")).toMatch(/no-store/);
+  });
+
+  it("answers 400 thread_full for more than eight reader messages, and accepts exactly eight", async () => {
+    const pair = (i: number) => [{ role: "reader", text: `question number ${i}` }, { role: "peer", text: `answer number ${i}` }];
+    const eight = [{ role: "peer", text: FIRST_PEER }, ...[1, 2, 3, 4, 5, 6, 7].flatMap(pair), { role: "reader", text: "question number 8" }];
+    const nine = [{ role: "peer", text: FIRST_PEER }, ...[1, 2, 3, 4, 5, 6, 7, 8].flatMap(pair), { role: "reader", text: "question number 9" }];
+    replyStub();
+
+    const full = await call(ask({ thread: nine }));
+    expect(full.status).toBe(400);
+    expect(await json(full)).toEqual({ error: "thread_full" });
+    expect(provider.generateJsonText).not.toHaveBeenCalled();
+    expect(await turns()).toBe(0);
+
+    expect(eight).toHaveLength(16);
+    expect((await call(ask({ thread: eight }))).status).toBe(200);
+    expect(provider.generateJsonText).toHaveBeenCalledTimes(1);
+  });
+
+  it("clips what it reads: a long message is cut to 400 characters in the prompt, whatever was sent", async () => {
+    replyStub();
+    await call(ask({ thread: [{ role: "peer", text: FIRST_PEER }, { role: "reader", text: `${"reader words ".repeat(300)}` }] }));
+    const parsed = JSON.parse(provider.generateJsonText.mock.calls[0][0].userPrompt) as { thread: Array<{ text: string }> };
+
+    for (const message of parsed.thread) expect(message.text.length).toBeLessThanOrEqual(400);
+    expect(parsed.thread[1].text.length).toBeGreaterThan(300);
+  });
+
+  it("asks the model once for the same thread twice: the second is a hit, with no call and no count", async () => {
+    replyStub();
+    const first = await json(await call(ask({ thread: thread1 })));
+    const second = await json(await call(ask({ thread: thread1 })));
+
+    expect(first.cached).toBe(false);
+    expect(second.cached).toBe(true);
+    expect(second.turn).toEqual(first.turn);
+    expect(provider.generateJsonText).toHaveBeenCalledTimes(1);
+    expect(await turns()).toBe(1);
+  });
+
+  it("keeps a longer thread, another message and the first answer apart in the memory", async () => {
+    replyStub();
+    provider.generateJsonText.mockResolvedValueOnce(JSON.stringify(modelAnswer));
+    await call(ask());
+    await call(ask({ thread: thread1 }));
+    await call(ask({ thread: [...thread1, { role: "peer", text: REPLY }, { role: "reader", text: "And at a lower temperature?" }] }));
+    await call(ask({ thread: [thread1[0], { role: "reader", text: "A different question?" }] }));
+
+    expect(provider.generateJsonText).toHaveBeenCalledTimes(4);
+    expect(explainCache.size()).toBe(4);
+  });
+
+  it("counts a reply on the same day counter as the first answer", async () => {
+    replyStub();
+    provider.generateJsonText.mockResolvedValueOnce(JSON.stringify(modelAnswer)).mockResolvedValueOnce(JSON.stringify(modelReply));
+    await call(ask());
+    expect(await turns()).toBe(1);
+    await call(ask({ thread: thread1 }));
+    expect(await turns()).toBe(2);
+  });
+
+  it("is 200 unavailable, with nothing counted or remembered, when the model fails or answers nonsense", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    for (const failing of [() => Promise.reject(new Error("model down")), () => Promise.resolve("not json"), () => Promise.resolve(JSON.stringify({ reply: "" })), () => Promise.resolve(JSON.stringify({ evidence: DEF }))]) {
+      provider.generateJsonText.mockImplementation(failing);
+      const response = await call(ask({ thread: thread1 }));
+
+      expect(response.status).toBe(200);
+      expect(await json(response)).toEqual({ unavailable: true });
+    }
+    expect(await turns()).toBe(0);
+    expect(explainCache.size()).toBe(0);
+  });
+
+  it("answers a company-budget refusal with unavailable and the quota signal", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    provider.generateJsonText.mockRejectedValue(new CompanySpendCapRefusedError("global_cap_exceeded"));
+    const body = await json(await call(ask({ thread: thread1 })));
+
+    expect(body.unavailable).toBe(true);
+    expect(body.quota).toMatchObject({ kind: "company_budget", reason: "exhausted" });
+  });
+
+  it("still refuses 422 a passage the body does not hold, with a thread", async () => {
+    const response = await call(ask({ passage: "a sentence the paper never wrote", thread: thread1 }));
+
+    expect(response.status).toBe(422);
+    expect(provider.generateJsonText).not.toHaveBeenCalled();
+  });
+
+  it("is 200 unavailable when no provider can write, and asks for nothing", async () => {
+    mocks.resolveProvider.mockReturnValue(null);
+    const response = await call(ask({ thread: thread1 }));
+
+    expect(await json(response)).toEqual({ unavailable: true });
+    expect(mocks.getFullText).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST /api/papers/[id]/explain — a reply about a private upload", () => {
+  const UPLOAD = "upload:0123456789abcdef";
+  const uploadPaper = { ...paper, id: UPLOAD };
+
+  it("answers an owner with the private headers on the turn", async () => {
+    replyStub();
+    mocks.ownedUpload.mockResolvedValue({ revision: 3, paperIds: [UPLOAD] });
+    const response = await call(ask({ paper: uploadPaper, thread: thread1 }), UPLOAD);
+
+    expect(response.status).toBe(200);
+    expect((await json(response)).turn).toBeDefined();
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+  });
+
+  it("is 404 for an upload the caller does not own, before the thread is read for any use", async () => {
+    mocks.ownedUpload.mockResolvedValue(null);
+    const response = await call(ask({ paper: uploadPaper, thread: thread1 }), UPLOAD);
+
+    expect(response.status).toBe(404);
+    expect(provider.generateJsonText).not.toHaveBeenCalled();
+  });
+
+  it("is 410, with nothing cached, when the upload changed while the model was working on a reply", async () => {
+    replyStub();
+    mocks.ownedUpload.mockResolvedValueOnce({ revision: 3, paperIds: [UPLOAD] }).mockResolvedValueOnce({ revision: 4, paperIds: [UPLOAD] });
+    const response = await call(ask({ paper: uploadPaper, thread: thread1 }), UPLOAD);
+
+    expect(response.status).toBe(410);
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+    expect(explainCache.size()).toBe(0);
+  });
+});
+
+describe("POST /api/papers/[id]/explain — what a reply logs", () => {
+  it("writes the same one debug line, plus the message count, and none of the reader's words", async () => {
+    replyStub();
+    const levels = (["log", "info", "warn", "error", "debug"] as const).map((level) => vi.spyOn(console, level).mockImplementation(() => {}));
+    const sentinel = [{ role: "peer", text: FIRST_PEER }, { role: "reader", text: "READER-SENTINEL asks about the ratio?" }];
+    await call(ask({ thread: sentinel }));
+    await call(ask({ thread: sentinel }));
+    const debug = levels[4].mock.calls;
+    const all = JSON.stringify(levels.flatMap((spy) => spy.mock.calls));
+
+    expect(debug).toHaveLength(2);
+    const [label, fields] = debug[0] as [string, Record<string, unknown>];
+    expect(label).toBe("[papers/explain] turn");
+    expect(Object.keys(fields).sort()).toEqual(["answerChars", "cached", "count", "promptChars", "thread", "userId"]);
+    expect(fields).toMatchObject({ count: 1, cached: false, thread: 2 });
+    expect(fields.promptChars).toBeGreaterThan(500);
+    expect((debug[1] as [string, Record<string, unknown>])[1]).toMatchObject({ cached: true, thread: 2 });
+    expect(levels.slice(0, 4).every((spy) => spy.mock.calls.length === 0)).toBe(true);
+
+    for (const word of ["READER-SENTINEL", "rafting", "gauge", "Rafting under creep", "plates", "carries load", "ratio"]) {
+      expect(all).not.toContain(word);
+    }
+  });
+
+  it("does not add the message count to the first answer's line", async () => {
+    const debug = vi.spyOn(console, "debug").mockImplementation(() => {});
+    await call(ask());
+
+    expect(Object.keys((debug.mock.calls[0] as [string, Record<string, unknown>])[1])).not.toContain("thread");
+  });
+});

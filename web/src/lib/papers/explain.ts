@@ -23,6 +23,20 @@
 //     an entry, so one reader's answer can only ever be another's cache hit for
 //     the same words of the same paper.
 //
+// P3-02b (ruling §1h.3) adds the thread: a reader may ask follow-ups about the
+// same passage, up to eight, in a short conversation beside the text. The
+// client sends the thread so far — the first answer as its first `peer`
+// message, then each reader / Peer pair, ending with the reader's new message —
+// so the server never has to remember a conversation:
+//
+//   - `readThread`: what the server reads of it — at most 17 messages, each
+//     clipped to 400 characters, anything malformed taken for no thread;
+//   - `buildExplainReplyPrompt`: the same bounded context as the first message
+//     plus the thread in order, each message labelled by its role, the reader's
+//     last message named as the one to answer;
+//   - `sanitizeExplainReply` / `verifyExplainReply`: the reply (at most three
+//     sentences) and its quote, held to the paper exactly as the first answer's.
+//
 // Pure apart from the hash and the clock the cache reads: no I/O, no logging.
 // Server-side — the browser imports this module for its types only.
 
@@ -52,6 +66,15 @@ export const EXPLAIN_CAPS = {
   /** The server's memory of answers: how many, and for how long. */
   cacheEntries: 64,
   cacheTtlMs: 60 * 60 * 1000,
+  /** P3-02b: a thread is at most this many messages (the first answer, then up
+   *  to eight reader / Peer pairs), of which at most eight are the reader's,
+   *  each clipped to this many characters. */
+  threadMessages: 17,
+  threadReaderMessages: 8,
+  messageChars: 400,
+  /** A reply is at most three sentences and this many characters. */
+  replySentences: 3,
+  replyChars: 560,
 } as const;
 
 // ── The answer, and what the route says ────────────────────────────────
@@ -72,11 +95,40 @@ export interface ExplainAnswer {
   };
 }
 
+/** One message of a thread, as the client sends it: the first answer is the
+ *  first `peer` message; the last one is the reader's. */
+export interface ExplainMessage {
+  role: "reader" | "peer";
+  text: string;
+}
+
+/** The model's reply to the reader's last message, sanitised and not yet
+ *  verified: its words and, when it rests on the paper, one sentence of it. */
+export interface ExplainReply {
+  reply: string;
+  evidence?: string;
+}
+
+/** A reply as the page shows it (P3-02b): Peer's words and, verified, the
+ *  paper's own sentence with where it is from; otherwise `peer: true` and the
+ *  page labels the prose as Peer's own reading. */
+export interface ExplainReplyTurn {
+  role: "peer";
+  text: string;
+  evidence?: string;
+  evidenceWhere?: string;
+  sectionId?: string;
+  page?: number;
+  peer?: true;
+}
+
 /** What `POST /api/papers/[id]/explain` answers (the status says the rest). */
 export type ExplainResult =
   | { answer: ExplainAnswer; cached: boolean }
+  | { turn: ExplainReplyTurn; cached: boolean }
   | { unavailable: true; quota?: QuotaSignal }
-  | { error: "not_in_paper" };
+  | { error: "not_in_paper" }
+  | { error: "thread_full" };
 
 // ── Small text helpers ─────────────────────────────────────────────────
 
@@ -103,6 +155,45 @@ export function shortHash(text: string): string {
  *  cut at a word boundary. */
 export function clipPassage(passage: string): string {
   return cutAtWord(passage.replace(/\s+/g, " ").trim(), EXPLAIN_CAPS.passageChars);
+}
+
+// ── The thread (P3-02b) ────────────────────────────────────────────────
+
+/** What the server read of a request's `thread`. */
+export interface ReadThread {
+  /** The messages, in order, each clipped to 400 characters — empty for no thread. */
+  messages: ExplainMessage[];
+  /** How many of them are the reader's (counted before the length rule, so a
+   *  thread past the cap can be told to be full). */
+  readers: number;
+}
+
+const collapse = (text: string): string => text.replace(/\s+/g, " ").trim();
+
+/**
+ * The thread a request carries, or none. An array of `{ role, text }` with a
+ * role of `reader` or `peer` and words in the text; each text has its
+ * whitespace collapsed and is clipped to 400 characters. Anything else — not an
+ * array, a message that is not an object, a role that is neither, a text that is
+ * not words — is no thread at all, never a partial one. At most 17 messages are
+ * read (the first answer, then up to eight pairs): a longer thread is none too,
+ * unless it holds more than eight reader messages, which `readers` still says so
+ * the route can answer that the thread is full.
+ */
+export function readThread(value: unknown): ReadThread {
+  const none: ReadThread = { messages: [], readers: 0 };
+  if (!Array.isArray(value)) return none;
+  const messages: ExplainMessage[] = [];
+  for (const item of value as unknown[]) {
+    if (!isRecord(item)) return none;
+    const { role, text } = item;
+    if ((role !== "reader" && role !== "peer") || typeof text !== "string") return none;
+    const clipped = cutAtWord(collapse(text), EXPLAIN_CAPS.messageChars);
+    if (!clipped) return none;
+    messages.push({ role, text: clipped });
+  }
+  const readers = messages.filter((message) => message.role === "reader").length;
+  return messages.length > EXPLAIN_CAPS.threadMessages ? { messages: [], readers } : { messages, readers };
 }
 
 export interface LocatedPassage {
@@ -205,22 +296,9 @@ export function buildExplainPrompt(args: {
   located: Pick<LocatedPassage, "paragraph" | "before" | "after">;
   passage: string;
 }): { systemPrompt: string; userPrompt: string } {
-  const { paper, map, located } = args;
   const userPrompt = JSON.stringify({
     task: "Explain the reader's selected passage in two parts: what it means in general, and why the author brings it up here.",
-    paper: {
-      title: cutAtWord(cleanDisplayText(paper.title), EXPLAIN_CAPS.titleChars),
-      abstract: cutAtWord(cleanDisplayText(paper.abstract), EXPLAIN_CAPS.abstractChars),
-    },
-    sections: map.slice(0, EXPLAIN_CAPS.mapLines).map((line) => ({
-      heading: cutAtWord(line.heading, EXPLAIN_CAPS.headingChars),
-      ...(line.opening ? { opening: cutAtWord(line.opening, EXPLAIN_CAPS.openingChars) } : {}),
-    })),
-    context: {
-      ...(located.before ? { before: cutAtWord(located.before, EXPLAIN_CAPS.neighbourChars) } : {}),
-      paragraph: cutAtWord(located.paragraph, EXPLAIN_CAPS.paragraphChars),
-      ...(located.after ? { after: cutAtWord(located.after, EXPLAIN_CAPS.neighbourChars) } : {}),
-    },
+    ...promptContext(args),
     passage: clipPassage(args.passage),
     outputSchema: {
       meaning: "at most two sentences, in plain words, saying what the selected term or passage means in general, as a good textbook would, not specific to this paper",
@@ -238,6 +316,81 @@ export function buildExplainPrompt(args: {
     ],
   });
   return { systemPrompt: EXPLAIN_SYSTEM, userPrompt };
+}
+
+/** What both prompts share: the title, the abstract, the map's lines and the
+ *  paragraph around the passage — every piece bounded before it is serialised. */
+function promptContext(args: {
+  paper: { title: string; abstract: string };
+  map: readonly ExplainMapLine[];
+  located: Pick<LocatedPassage, "paragraph" | "before" | "after">;
+}) {
+  const { paper, map, located } = args;
+  return {
+    paper: {
+      title: cutAtWord(cleanDisplayText(paper.title), EXPLAIN_CAPS.titleChars),
+      abstract: cutAtWord(cleanDisplayText(paper.abstract), EXPLAIN_CAPS.abstractChars),
+    },
+    sections: map.slice(0, EXPLAIN_CAPS.mapLines).map((line) => ({
+      heading: cutAtWord(line.heading, EXPLAIN_CAPS.headingChars),
+      ...(line.opening ? { opening: cutAtWord(line.opening, EXPLAIN_CAPS.openingChars) } : {}),
+    })),
+    context: {
+      ...(located.before ? { before: cutAtWord(located.before, EXPLAIN_CAPS.neighbourChars) } : {}),
+      paragraph: cutAtWord(located.paragraph, EXPLAIN_CAPS.paragraphChars),
+      ...(located.after ? { after: cutAtWord(located.after, EXPLAIN_CAPS.neighbourChars) } : {}),
+    },
+  };
+}
+
+const EXPLAIN_REPLY_SYSTEM = [
+  "You are Peer, a calm research assistant who sits beside a reader.",
+  "The reader selected a passage of a paper and is asking follow-up questions about it.",
+  "Answer the reader's last message about that passage in plain English, for a thoughtful reader who is not in this field.",
+  "Never quote the paper except with a sentence copied character-for-character from the text supplied.",
+  "Do not fabricate numbers, citations or experimental details.",
+  "Return only valid JSON.",
+].join(" ");
+
+/**
+ * The system and user prompts for one reply in a thread (P3-02b): the same
+ * bounded context as the first message, then the thread in order — each message
+ * labelled by its role, at most 17, each at most 400 characters, the latest kept
+ * — and the reader's last message named as the one to answer, then the schema
+ * and the rules, which are never what gets cut. Nothing about the reader is a
+ * parameter but the words they sent in the thread.
+ */
+export function buildExplainReplyPrompt(args: {
+  paper: { title: string; abstract: string };
+  map: readonly ExplainMapLine[];
+  located: Pick<LocatedPassage, "paragraph" | "before" | "after">;
+  passage: string;
+  thread: readonly ExplainMessage[];
+}): { systemPrompt: string; userPrompt: string } {
+  const thread = args.thread
+    .slice(-EXPLAIN_CAPS.threadMessages)
+    .map((message) => ({ role: message.role, text: cutAtWord(collapse(message.text), EXPLAIN_CAPS.messageChars) }));
+  const last = [...thread].reverse().find((message) => message.role === "reader");
+  const userPrompt = JSON.stringify({
+    task: "Answer the reader's last message in `thread` about the selected passage.",
+    ...promptContext(args),
+    passage: clipPassage(args.passage),
+    thread,
+    lastReaderMessage: last?.text ?? "",
+    outputSchema: {
+      reply: "at most three sentences, in plain words, answering the reader's last message about this passage",
+      evidence: "one sentence copied character-for-character from the paper's text in `context`, only when the reply rests on something the paper says; otherwise leave this key out",
+    },
+    rules: [
+      "Return ONLY valid JSON.",
+      "Answer `lastReaderMessage`, the reader's last message in `thread`, about the selected passage, in at most three sentences of plain words a thoughtful non-specialist understands. The earlier messages are there for what has been said so far.",
+      "`evidence` is one sentence copied character-for-character from `context.before`, `context.paragraph` or `context.after`, and only when the reply rests on something the paper says. Do not paraphrase it, shorten it, or merge sentences.",
+      "Omit `evidence` when the reply does not rest on a sentence of the paper. Never quote the abstract, the section list or the thread.",
+      "Do not search the web or rely on anything outside the text supplied. No advice, no verdict on whether the reader should read on.",
+      "No LaTeX, no links.",
+    ],
+  });
+  return { systemPrompt: EXPLAIN_REPLY_SYSTEM, userPrompt };
 }
 
 // ── The answer ─────────────────────────────────────────────────────────
@@ -262,11 +415,16 @@ export function parseModelJson(text: string): unknown {
   return null;
 }
 
-/** One part of the answer: cleaned, at most two sentences, at most 420 characters. */
-function part(value: unknown): string {
+/** Some of the model's words: cleaned, at most `sentences` sentences, at most `chars` characters. */
+function words(value: unknown, sentences: number, chars: number): string {
   if (typeof value !== "string") return "";
   const cleaned = cleanDisplayText(value).replace(/\s+/g, " ").trim();
-  return cutAtWord(splitSentences(cleaned).slice(0, 2).join(" "), EXPLAIN_CAPS.partChars);
+  return cutAtWord(splitSentences(cleaned).slice(0, sentences).join(" "), chars);
+}
+
+/** One part of the answer: cleaned, at most two sentences, at most 420 characters. */
+function part(value: unknown): string {
+  return words(value, 2, EXPLAIN_CAPS.partChars);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -289,6 +447,26 @@ export function sanitizeExplainAnswer(raw: unknown): ExplainAnswer | null {
   return { meaning, here: evidence ? { text, evidence } : { text } };
 }
 
+/** Where in the document a quote sits, from the document and never from the
+ *  model: the whole quote must be in one section (`locateSection`, the P2
+ *  rule — §1g.16), `preferSectionId` tried first. Null when no section holds it. */
+function placeQuote(
+  evidence: string,
+  doc: ExtractedDocument,
+  preferSectionId?: string,
+): { evidence: string; evidenceWhere: string; sectionId: string; page?: number } | null {
+  const id = locateSection(evidence, sectionCorpus(doc), preferSectionId);
+  if (id === null) return null;
+  const section = doc.sections.find((candidate, index) => (candidate.id ?? `s${index}`) === id);
+  if (!section) return null;
+  return {
+    evidence,
+    evidenceWhere: section.heading.trim() || section.canonical,
+    sectionId: id,
+    ...(typeof section.page === "number" ? { page: section.page } : {}),
+  };
+}
+
 /**
  * Hold `here.evidence` to the paper: one section of the document must hold
  * the whole quote (`locateSection`, the P2 rule — §1g.16), trying
@@ -299,25 +477,37 @@ export function sanitizeExplainAnswer(raw: unknown): ExplainAnswer | null {
  */
 export function verifyExplainAnswer(answer: ExplainAnswer, doc: ExtractedDocument, preferSectionId?: string): ExplainAnswer {
   const { meaning, here } = answer;
-  if (here.evidence) {
-    const id = locateSection(here.evidence, sectionCorpus(doc), preferSectionId);
-    if (id !== null) {
-      const section = doc.sections.find((candidate, index) => (candidate.id ?? `s${index}`) === id);
-      if (section) {
-        return {
-          meaning,
-          here: {
-            text: here.text,
-            evidence: here.evidence,
-            evidenceWhere: section.heading.trim() || section.canonical,
-            sectionId: id,
-            ...(typeof section.page === "number" ? { page: section.page } : {}),
-          },
-        };
-      }
-    }
-  }
+  const placed = here.evidence ? placeQuote(here.evidence, doc, preferSectionId) : null;
+  if (placed) return { meaning, here: { text: here.text, ...placed } };
   return { meaning, here: { text: here.text, peer: true } };
+}
+
+// ── The reply (P3-02b) ─────────────────────────────────────────────────
+
+/**
+ * Whitelist what the model sent as a reply: its words, cleaned, at most three
+ * sentences and 560 characters; the quote a cleaned string of at most 400
+ * characters. Whatever else the model said — a place, a page, a "peer" flag —
+ * is dropped: only the verifier says where a quote sits. Null without words.
+ */
+export function sanitizeExplainReply(raw: unknown): ExplainReply | null {
+  if (!isRecord(raw)) return null;
+  const reply = words(raw.reply, EXPLAIN_CAPS.replySentences, EXPLAIN_CAPS.replyChars);
+  if (!reply) return null;
+  const evidence = typeof raw.evidence === "string" ? cleanDisplayText(raw.evidence).slice(0, EXPLAIN_CAPS.evidenceChars).trim() : "";
+  return evidence ? { reply, evidence } : { reply };
+}
+
+/**
+ * Hold a reply's quote to the paper exactly as the first answer's is held:
+ * found whole in one section, the place set from the document; otherwise — or
+ * with no quote at all — the quote goes and `peer: true` says the page labels
+ * the prose as Peer's own reading. The reply given is not changed.
+ */
+export function verifyExplainReply(reply: ExplainReply, doc: ExtractedDocument, preferSectionId?: string): ExplainReplyTurn {
+  const placed = reply.evidence ? placeQuote(reply.evidence, doc, preferSectionId) : null;
+  if (placed) return { role: "peer", text: reply.reply, ...placed };
+  return { role: "peer", text: reply.reply, peer: true };
 }
 
 // ── The server's memory (§1g.4) ────────────────────────────────────────
@@ -330,9 +520,10 @@ export function explainDocHash(doc: ExtractedDocument): string {
 
 /**
  * The key an answer is remembered under: the document's hash, the passage as
- * the verifier reads it, and a hash of the thread so far (empty for the first
- * message; P3-02b's turns change it). A hash of all three — nothing in it is
- * the reader's, and nothing of the passage can be read back from it.
+ * the verifier reads it, and a hash of the thread's texts in order (empty for
+ * the first message; every message of a thread changes it). A hash of all
+ * three — nothing in it is a reader's identity, and nothing of the passage or
+ * the thread can be read back from it.
  */
 export function explainCacheKey(docHash: string, passage: string, thread: readonly string[]): string {
   return sha256(`${docHash}|${normalizeForMatch(passage)}|${sha256(JSON.stringify(thread))}`);
@@ -344,17 +535,21 @@ export function explainDayKey(userId: string, now: Date): string {
   return `explain_turns:${userId}:${now.toISOString().slice(0, 10)}`;
 }
 
+/** What the memory holds: a first answer, or (P3-02b) a reply turn — both
+ *  verified, both under a hash key. */
+export type ExplainCached = ExplainAnswer | ExplainReplyTurn;
+
 export interface ExplainCache {
-  get(key: string): ExplainAnswer | undefined;
-  set(key: string, answer: ExplainAnswer): void;
+  get(key: string): ExplainCached | undefined;
+  set(key: string, answer: ExplainCached): void;
   size(): number;
   clear(): void;
 }
 
 /**
- * In this process only: at most `max` verified answers for at most `ttlMs`,
- * the oldest forgotten first. Holds answers and keys — never a passage, never
- * a reader.
+ * In this process only: at most `max` verified answers (or replies) for at most
+ * `ttlMs`, the oldest forgotten first. Holds answers and keys — never a
+ * passage, never a reader.
  */
 export function createExplainCache(
   options: { max?: number; ttlMs?: number; now?: () => number } = {},
@@ -362,7 +557,7 @@ export function createExplainCache(
   const max = options.max ?? EXPLAIN_CAPS.cacheEntries;
   const ttlMs = options.ttlMs ?? EXPLAIN_CAPS.cacheTtlMs;
   const now = options.now ?? Date.now;
-  const entries = new Map<string, { at: number; answer: ExplainAnswer }>();
+  const entries = new Map<string, { at: number; answer: ExplainCached }>();
   return {
     get(key) {
       const hit = entries.get(key);

@@ -21,7 +21,7 @@ import type { ExplainAnswer } from "@/lib/papers/explain";
 import type { PaperReading } from "@/lib/papers/reading";
 import type { PaperTerm } from "@/lib/papers/report";
 import { EXPLAIN } from "./copy";
-import { ExplainCard, ExplainPopover, type AskResult } from "./explain-popover";
+import { ExplainCard, ExplainBox, type AskResult } from "./explain-box";
 import type { ExplainSelection } from "./paper-body";
 
 const SENTENCE = "We define the rafting ratio as the fraction of the gauge length covered by plates.";
@@ -44,7 +44,7 @@ const first: ExplainSelection = {
 };
 const second: ExplainSelection = { ...first, paragraphIndex: 0, passage: "Specimens were machined from a single casting." };
 
-type Props = Parameters<typeof ExplainPopover>[0];
+type Props = Parameters<typeof ExplainBox>[0];
 type Props2 = Record<string, unknown> & { children?: ReactNode };
 
 function elements(node: ReactNode): ReactElement<Props2>[] {
@@ -102,7 +102,7 @@ async function scenario(initial: Props, steps: Array<(tree: ReactNode, ctx: { pr
   const ctx = { props: initial, rerender: () => {}, tree: null as ReactNode };
   const looks: Look[] = [];
   const mounted = await hookRuntime.mount(() => {
-    const tree = ExplainPopover(ctx.props);
+    const tree = ExplainBox(ctx.props);
     const [step, setStep] = useState(0);
     const [, setTick] = useState(0);
     ctx.rerender = () => setTick((n) => n + 1);
@@ -124,7 +124,7 @@ const click = (tree: ReactNode) => (look(tree).button?.props.onClick as () => vo
 const base = (over: Partial<Props> = {}): Props => ({ target: first, terms: [], canAsk: true, onAsk: vi.fn(async (): Promise<AskResult> => answer), reading, ...over });
 const wait = () => new Promise((resolve) => setTimeout(resolve, 5));
 
-describe("ExplainPopover — the click is the send (§1h.2)", () => {
+describe("ExplainBox — the click is the send (§1h.2)", () => {
   it("asks nothing before the click, once on it, and shows the loading card, then the answer", async () => {
     let resolve!: (value: AskResult) => void;
     const onAsk = vi.fn(() => new Promise<AskResult>((r) => (resolve = r)));
@@ -203,7 +203,7 @@ describe("ExplainPopover — the click is the send (§1h.2)", () => {
   });
 });
 
-describe("ExplainPopover — what closes it", () => {
+describe("ExplainBox — what closes it", () => {
   it("closes on Escape, and the key goes no further", async () => {
     const run = await scenario(base(), [
       (tree) => click(tree),

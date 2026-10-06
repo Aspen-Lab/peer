@@ -53,17 +53,19 @@ import { PaperWords } from "@/components/reader/paper-words";
 import {
   PaperBody,
   mergeQuestionRoute,
+  measureBodyColumn,
   questionRouteOverlay,
   sameSelection,
   type ExplainSelection,
   type SelectionTarget,
 } from "@/components/reader/paper-body";
 import {
-  ExplainPopover,
+  ExplainBox,
   explainLlmOverride,
   requestExplanation,
   type AskResult,
-} from "@/components/reader/explain-popover";
+} from "@/components/reader/explain-box";
+import { requestReply, type ReplyResult } from "@/components/reader/explain-thread";
 import { RecordBlock } from "@/components/reader/record-block";
 import { InYourLibrary } from "@/components/reader/in-your-library";
 import { KeyLegend } from "@/components/reader/key-legend";
@@ -101,7 +103,7 @@ import { ReadingMapView, readingRoute } from "@/components/reader/reading-map";
 import { TermsStrip } from "@/components/reader/terms-strip";
 import { SectionLinks } from "@/components/reader/evidence-quote";
 import { settledQuestions, useReadingQuestionsHydrated, useReadingQuestionsStore } from "@/store/reading-questions";
-import { explanationFor, useExplainThreadsStore } from "@/store/explain-threads";
+import { explanationFor, passageHash, useExplainThreadsStore, type ExplainTurn } from "@/store/explain-threads";
 import { exampleQuestions } from "@/lib/reader/question-examples";
 import { useModelReport } from "@/components/reader/use-model-report";
 import { usePrivateSupplement } from "@/components/reader/use-private-supplement";
@@ -753,7 +755,7 @@ function Reader({
 
   // P3-02 (§1h.2; §3d 14): "Explain this?". The body reports what the reader
   // has selected (a target within one paragraph, once it holds still); the
-  // popover offers the button and, on the click — the only thing that sends —
+  // box offers the button and, on the click — the only thing that sends —
   // asks for the explanation. One explanation is a small call, so a reader may
   // ask whenever they have a model from anywhere (`providerConfigured`), deep
   // reports on or not. The section's id is the id the server's own corpus gives
@@ -766,10 +768,13 @@ function Reader({
   );
   const explainKept = useExplainThreadsStore((s) => s.byPaper[paper.id]);
   const rememberExplanation = useExplainThreadsStore((s) => s.remember);
-  const explainCached = useMemo(
-    () => (explainTarget ? explanationFor({ [paper.id]: explainKept ?? {} }, paper.id, explainTarget.passage)?.answer : undefined),
+  const addExplainTurns = useExplainThreadsStore((s) => s.addTurns);
+  const resetExplainThread = useExplainThreadsStore((s) => s.resetThread);
+  const explainKeptThread = useMemo(
+    () => (explainTarget ? explanationFor({ [paper.id]: explainKept ?? {} }, paper.id, explainTarget.passage) : undefined),
     [explainTarget, explainKept, paper.id],
   );
+  const explainCached = explainKeptThread?.answer;
   const askExplain = useCallback(
     async (selection: SelectionTarget): Promise<AskResult> => {
       const sectionId = reading?.body?.[selection.sectionIndex]?.id;
@@ -786,6 +791,40 @@ function Reader({
     },
     [paper, profile, reading, rememberExplanation],
   );
+
+  // P3-02b (§1h.3): the thread. A follow-up is sent only when the reader presses
+  // Enter or Send — the box calls this, and nothing else does. The reply joins the
+  // thread kept for the passage, with the message it answers, only once it has
+  // arrived (a failed send leaves the thread as it was); a full thread is dropped
+  // when its passage is opened again. `e` opens the box through `explainOpen`.
+  const replyExplain = useCallback(
+    async (selection: SelectionTarget, thread: readonly ExplainTurn[], message: string): Promise<ReplyResult> => {
+      const sectionId = reading?.body?.[selection.sectionIndex]?.id;
+      if (!sectionId) return "unavailable";
+      const result = await requestReply({ paper, selection, sectionId, thread, message, llmOverride: explainLlmOverride(profile) });
+      if (typeof result !== "string") {
+        try {
+          addExplainTurns(paper.id, passageHash(selection.passage), [{ role: "reader", text: message }, result]);
+        } catch {
+          // A full or blocked browser store never costs the reader the reply.
+        }
+      }
+      return result;
+    },
+    [paper, profile, reading, addExplainTurns],
+  );
+  const resetExplain = useCallback(
+    (selection: SelectionTarget) => {
+      try {
+        resetExplainThread(paper.id, passageHash(selection.passage));
+      } catch {
+        // A blocked browser store leaves the old thread; the box still opens fresh.
+      }
+    },
+    [paper.id, resetExplainThread],
+  );
+  const explainOpen = useRef<(() => void) | null>(null);
+  const openExplain = useCallback(() => explainOpen.current?.(), []);
 
   // The report's provenance in the shape the reading's sentence table takes;
   // the reading never imports the report type. `deepRequested` is the
@@ -1035,7 +1074,7 @@ function Reader({
       ...(isUploadId ? {} : { skip }),
       like,
       undoOrToggleRead,
-      ...(hasBody ? { read: readHere, ask: focusFirstEmptyQuestion } : {}),
+      ...(hasBody ? { read: readHere, ask: focusFirstEmptyQuestion, explain: openExplain } : {}),
       open,
       copy,
       back,
@@ -1418,7 +1457,7 @@ function Reader({
         inside the section links, so the quotes' "§Heading" is a link as
         everywhere. One per paper: a card never follows the reader to the next. */}
     <SectionLinks headings={bodyHeadings}>
-      <ExplainPopover key={paper.id} target={explainTarget} terms={terms} canAsk={providerConfigured} onAsk={askExplain} cached={explainCached} reading={reading} />
+      <ExplainBox key={paper.id} target={explainTarget} terms={terms} canAsk={providerConfigured} onAsk={askExplain} cached={explainCached} cachedTurns={explainKeptThread?.turns} onReply={replyExplain} onResetThread={resetExplain} column={measureBodyColumn} openRef={explainOpen} reading={reading} />
     </SectionLinks>
     </>
   );
