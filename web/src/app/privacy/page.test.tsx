@@ -1,6 +1,8 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { EXPLAIN } from "@/components/reader/copy";
+import { EXPLAIN_CAPS } from "@/lib/papers/explain";
 import PrivacyPage from "./page";
 
 // P2-03 (§1g.11 e, the entry §1f.9 promised): the reader's questions are
@@ -38,5 +40,108 @@ describe("/privacy — Your questions (P2-03)", () => {
     expect(notes).toBeGreaterThan(0);
     expect(questions).toBeGreaterThan(notes);
     expect(key).toBeGreaterThan(questions);
+  });
+});
+
+// P3-02d (§1h.5, §3d 14 and 17): "Explain this" is named on /privacy, in exactly
+// these words, right after "Your questions" and before "Your own model key". Each
+// paragraph states only what the code as landed does — the facts are in the
+// P3-02, P3-02b and P3-02c checkpoints — and a test below ties the facts that
+// have a constant in the code to that constant, so the page cannot stay true by
+// being wrong about a number or a label.
+//
+// The page's apostrophes come out of `renderToStaticMarkup` as `&#x27;`; the
+// double quotes in the text are the typographic ones, which are not escaped.
+
+const EXPLAIN_PARAGRAPHS = [
+  "Selecting a passage sends nothing, and neither does typing in the box. Peer sends a request only when you click “Explain this?” (or press E on a selection) and, for a follow-up, when you press Enter or Send. The request carries the passage you selected, the paragraph it sits in and the one on either side of it, the paper's title and abstract, one line for each section of the paper's map and, for a follow-up, the messages of that thread. If you have set your own model key, the key goes with it.",
+  "The request goes to Peer's server and on to the model provider you or the owner configured — Google's Gemini when Peer's own model answers, and the provider whose key you set when you use your own.",
+  "On a follow-up you can turn on “Search the web” for that one message. It is off every time the box opens and never turns on by itself. With it on, the provider may run a web search to write that reply: Gemini does this with Google Search, and with any other provider the reply is written without a search and the box says so. A message answered with a search carries the mark “searched the web”, and Peer shows no link to anything the search found.",
+  "Peer's server keeps three things. First, each answer it gives, in memory, for up to an hour, so the same passage asked about again is answered without another model call; it is filed under hashes of the document, the passage and the thread, never under who asked.",
+  "Second, one log line for each answer it gives: how many characters went out and came back, how much the turn counted against the allowance and, if you are signed in, a shortened hash of your account id — never the passage, the paper's words or anything you wrote.",
+  "Third, a count of your explanations for the day against your account, which is what the daily allowance is measured by: a number, with no words in it. The usage row that each model call writes, described under “What is recorded about model use”, holds no words either.",
+  "In this browser, and only here, Peer keeps what you asked about, for each paper: the passage, where it sits in the paper, the answer and the thread. For an uploaded PDF the passage is the PDF's own text. None of it is stored against your account, and signing in does not copy it there. A passage you have asked about before opens from this copy with no new request. Signing out leaves it in place; clearing this site's data in your browser removes it.",
+] as const;
+
+const escapeText = (text: string): string => text.replace(/&/g, "&amp;").replace(/'/g, "&#x27;");
+
+describe("/privacy — Explain this (P3-02d)", () => {
+  const html = renderToStaticMarkup(createElement(PrivacyPage));
+  const questions = html.indexOf(">Your questions<");
+  const label = html.indexOf(">Explain this<");
+  const key = html.indexOf(">Your own model key<");
+  const entry = html.slice(label, key);
+  const paragraphs = (markup: string): number => (markup.match(/<p>/g) ?? []).length;
+
+  it("has the entry, with exactly the written paragraphs and no others", () => {
+    expect(label).toBeGreaterThan(0);
+    for (const paragraph of EXPLAIN_PARAGRAPHS) {
+      expect(entry).toContain(`<p>${escapeText(paragraph)}</p>`);
+    }
+    expect(paragraphs(entry)).toBe(EXPLAIN_PARAGRAPHS.length);
+  });
+
+  it("sets it right after Your questions and right before Your own model key", () => {
+    expect(questions).toBeGreaterThan(0);
+    expect(label).toBeGreaterThan(questions);
+    expect(key).toBeGreaterThan(label);
+    // Nothing sits between them but the questions entry's own paragraph.
+    expect(paragraphs(html.slice(questions, label))).toBe(1);
+  });
+
+  it("says what is sent, and that nothing is sent while the reader selects or types", () => {
+    expect(entry).toContain("Selecting a passage sends nothing, and neither does typing in the box");
+    expect(entry).toContain("only when you click");
+    expect(entry).toContain("press Enter or Send");
+    for (const sent of ["the passage you selected", "the paragraph it sits in and the one on either side of it", "the paper's title and abstract".replace(/'/g, "&#x27;"), "one line for each section of the paper", "the messages of that thread", "your own model key"]) {
+      expect(entry).toContain(sent);
+    }
+  });
+
+  it("names the provider the request goes on to", () => {
+    expect(entry).toContain("model provider you or the owner configured");
+    expect(entry).toContain("Google");
+    expect(entry).toContain("Gemini");
+  });
+
+  it("says the web search is off every time the box opens, never on by itself, and runs for one message", () => {
+    expect(entry).toContain("off every time the box opens");
+    expect(entry).toContain("never turns on by itself");
+    expect(entry).toContain("for that one message");
+    expect(entry).toContain("Google Search");
+    expect(entry).toContain("the reply is written without a search and the box says so");
+    expect(entry).toContain("shows no link to anything the search found");
+  });
+
+  it("says what Peer's server keeps: an hour's memory under hashes, never by reader; one log line without the words; the count", () => {
+    expect(entry).toContain("for up to an hour");
+    expect(entry).toContain("hashes of the document, the passage and the thread");
+    expect(entry).toContain("never under who asked");
+    expect(entry).toContain("one log line for each answer it gives");
+    expect(entry).toContain("a shortened hash of your account id");
+    expect(entry).toContain("never the passage, the paper&#x27;s words or anything you wrote");
+    expect(entry).toContain("a count of your explanations for the day against your account");
+  });
+
+  it("says what stays in the browser, and that signing in does not copy it and signing out leaves it", () => {
+    expect(entry).toContain("In this browser, and only here");
+    expect(entry).toContain("the passage, where it sits in the paper, the answer and the thread");
+    expect(entry).toContain("signing in does not copy it there");
+    expect(entry).toContain("Signing out leaves it in place");
+    expect(entry).toContain("clearing this site&#x27;s data in your browser removes it");
+  });
+
+  it("quotes the box's own labels, so a label that changes in the box shows up here", () => {
+    expect(entry).toContain(`“${EXPLAIN.ask}”`);
+    expect(entry).toContain(`“${EXPLAIN.searchToggle}”`);
+    expect(entry).toContain(`“${EXPLAIN.searchedMark}”`);
+  });
+
+  it("ties the one number the entry states to the code: the server's memory holds an answer for an hour", () => {
+    expect(EXPLAIN_CAPS.cacheTtlMs).toBe(60 * 60 * 1000);
+  });
+
+  it("holds no 'skip' or 'don't read' wording (the copy rule, §1a.4)", () => {
+    expect(entry).not.toMatch(/\bskip\b|don.t read/i);
   });
 });

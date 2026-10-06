@@ -46,6 +46,22 @@ const SECTIONS = [
     ],
   },
   {
+    // P3-02d (§1h.5): written from the explain route, `lib/papers/explain.ts`,
+    // `lib/usage/explain-quota.ts` and `store/explain-threads.ts`. The test pins
+    // every word; a change to what is sent, kept or counted changes this entry in
+    // the same commit.
+    label: "Explain this",
+    body: [
+      "Selecting a passage sends nothing, and neither does typing in the box. Peer sends a request only when you click “Explain this?” (or press E on a selection) and, for a follow-up, when you press Enter or Send. The request carries the passage you selected, the paragraph it sits in and the one on either side of it, the paper's title and abstract, one line for each section of the paper's map and, for a follow-up, the messages of that thread. If you have set your own model key, the key goes with it.",
+      "The request goes to Peer's server and on to the model provider you or the owner configured — Google's Gemini when Peer's own model answers, and the provider whose key you set when you use your own.",
+      "On a follow-up you can turn on “Search the web” for that one message. It is off every time the box opens and never turns on by itself. With it on, the provider may run a web search to write that reply: Gemini does this with Google Search, and with any other provider the reply is written without a search and the box says so. A message answered with a search carries the mark “searched the web”, and Peer shows no link to anything the search found.",
+      "Peer's server keeps three things. First, each answer it gives, in memory, for up to an hour, so the same passage asked about again is answered without another model call; it is filed under hashes of the document, the passage and the thread, never under who asked.",
+      "Second, one log line for each answer it gives: how many characters went out and came back, how much the turn counted against the allowance and, if you are signed in, a shortened hash of your account id — never the passage, the paper's words or anything you wrote.",
+      "Third, a count of your explanations for the day against your account, which is what the daily allowance is measured by: a number, with no words in it. The usage row that each model call writes, described under “What is recorded about model use”, holds no words either.",
+      "In this browser, and only here, Peer keeps what you asked about, for each paper: the passage, where it sits in the paper, the answer and the thread. For an uploaded PDF the passage is the PDF's own text. None of it is stored against your account, and signing in does not copy it there. A passage you have asked about before opens from this copy with no new request. Signing out leaves it in place; clearing this site's data in your browser removes it.",
+    ],
+  },
+  {
     label: "Your own model key",
     body: [
       "If you add your own provider key, it stays in your browser. It is deliberately excluded from everything Peer syncs to its server — the one line that does it is a `void feedAiApiKey` in the sync code, there so a future edit has to remove it on purpose.",
