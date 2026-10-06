@@ -1,3 +1,5 @@
+> **SUPERSEDED 2026-10-06 - Jev runs on the reader's own key; see docs/handoff/byok-only/JEV-PLAN.md.** The company key, the broker, the edge function, the company caps and the Gemini fallback described below were removed on branch `remove-paid-tier-restore-byok`. The text below is kept as history and is not edited.
+
 # Peer Jev integration — ABC shared state
 
 **Goal:** implement the approved retrieval/filter/report/pool architecture, with zero unexplained gaps against the frozen acceptance inventory, independently measured functional behavior, and measured quality/cost rather than invented gains.
