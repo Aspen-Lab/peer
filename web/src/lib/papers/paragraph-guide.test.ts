@@ -280,6 +280,60 @@ describe("sanitizeParagraphGuide", () => {
     expect(out.s1[0]).toBe("First gist of the blade.");
   });
 
+  // P3-05 (§1h.8 (4), O10): "the first gist for a paragraph wins" was the first CLEAN
+  // one, and the verifier then dropped it when it was not grounded — so a grounded
+  // second gist for the same paragraph was lost. The first GROUNDED one wins.
+  describe("a paragraph named twice: the first grounded gist wins (P3-05, O10)", () => {
+    const UNGROUNDED = "Stocks fell after the earnings call.";
+    const GROUNDED = "Blades lengthen under steady load.";
+    const ALSO_GROUNDED = "Hot turbine blades creep slowly.";
+
+    it("keeps the second when the first is not grounded in the paragraph and the second is", () => {
+      const out = sanitizeParagraphGuide({ gists: [entry("s1", 0, UNGROUNDED), entry("s1", 0, GROUNDED)] }, candidates);
+
+      expect(out).toEqual({ s1: { 0: GROUNDED } });
+      expect(verifyParagraphGuide(out, candidates)).toEqual({ s1: { 0: GROUNDED } });
+    });
+
+    it("keeps the first when both are grounded", () => {
+      const out = sanitizeParagraphGuide({ gists: [entry("s1", 0, GROUNDED), entry("s1", 0, ALSO_GROUNDED)] }, candidates);
+
+      expect(out).toEqual({ s1: { 0: GROUNDED } });
+    });
+
+    it("never lets a later gist displace a grounded first one, grounded or not", () => {
+      expect(sanitizeParagraphGuide({ gists: [entry("s1", 0, GROUNDED), entry("s1", 0, UNGROUNDED)] }, candidates)).toEqual({ s1: { 0: GROUNDED } });
+      expect(sanitizeParagraphGuide({ gists: [entry("s1", 0, ALSO_GROUNDED), entry("s1", 0, UNGROUNDED), entry("s1", 0, GROUNDED)] }, candidates)).toEqual({ s1: { 0: ALSO_GROUNDED } });
+    });
+
+    it("takes the first grounded one past any number of ungrounded ones before it", () => {
+      const out = sanitizeParagraphGuide({ gists: [entry("s1", 0, UNGROUNDED), entry("s1", 0, "Pizza prices rose again."), entry("s1", 0, GROUNDED)] }, candidates);
+
+      expect(out).toEqual({ s1: { 0: GROUNDED } });
+    });
+
+    it("grounds each in its own paragraph: a gist for the methods paragraph does not rescue one for the introduction's", () => {
+      const out = sanitizeParagraphGuide({ gists: [entry("s1", 0, UNGROUNDED), entry("s1", 0, "Twelve specimens were machined from one casting.")] }, candidates);
+
+      expect(verifyParagraphGuide(out, candidates)).toEqual({});
+    });
+
+    it("leaves a paragraph named twice with nothing grounded to the verifier, which drops it", () => {
+      const out = sanitizeParagraphGuide({ gists: [entry("s1", 0, UNGROUNDED), entry("s1", 0, "Pizza prices rose again.")] }, candidates);
+
+      expect(out).toEqual({ s1: { 0: UNGROUNDED } });
+      expect(verifyParagraphGuide(out, candidates)).toEqual({});
+    });
+
+    it("applies the other limits before it: an over-long grounded gist is no candidate to win", () => {
+      const thirteen = "blades creep under steady load while the hot turbine slowly lengthens during use";
+      const out = sanitizeParagraphGuide({ gists: [entry("s1", 0, UNGROUNDED), entry("s1", 0, thirteen)] }, candidates);
+
+      expect(thirteen.split(" ")).toHaveLength(13);
+      expect(out).toEqual({ s1: { 0: UNGROUNDED } });
+    });
+  });
+
   it("takes anything that is not the schema for no guide at all", () => {
     for (const raw of [null, undefined, "text", 5, [], {}, { gists: "x" }, { gists: {} }, { gists: [null, 3, "x", []] }]) {
       expect(sanitizeParagraphGuide(raw, candidates)).toEqual({});
@@ -358,6 +412,23 @@ describe("verifyParagraphGuide — a gist that is not grounded is dropped", () =
 });
 
 describe("the sanitise-then-verify chain on a model's answer", () => {
+  it("keeps the grounded second gist for a paragraph the model named twice, the first being ungrounded (P3-05, O10)", () => {
+    const candidates = gistCandidates(doc);
+    const raw = {
+      gists: [
+        { sectionId: "s1", paragraphIndex: 0, gist: "Stocks fell after the earnings call." },
+        { sectionId: "s1", paragraphIndex: 0, gist: "Blades slowly lengthen under steady load." },
+        { sectionId: "s2", paragraphIndex: 0, gist: "Twelve specimens loaded to one stress." },
+        { sectionId: "s2", paragraphIndex: 0, gist: "Cheap pizza near the harbour." },
+      ],
+    };
+
+    expect(verifyParagraphGuide(sanitizeParagraphGuide(raw, candidates), candidates)).toEqual({
+      s1: { 0: "Blades slowly lengthen under steady load." },
+      s2: { 0: "Twelve specimens loaded to one stress." },
+    });
+  });
+
   it("ends with only grounded gists of twelve words or fewer", () => {
     const candidates = gistCandidates(doc);
     const raw = {

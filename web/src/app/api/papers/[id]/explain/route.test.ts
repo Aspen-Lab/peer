@@ -607,6 +607,24 @@ describe("POST /api/papers/[id]/explain — a reply to the thread", () => {
     expect(parsed.thread[1].text.length).toBeGreaterThan(300);
   });
 
+  // P3-05 (§1h.8 (3), O8): the first message of a thread is the first answer, both of
+  // its parts joined; the model that writes a follow-up reads it whole (up to 840
+  // characters), while every later message is still cut to 400.
+  it("reads the first answer whole and a later message of the same length cut to 400, whatever was sent", async () => {
+    replyStub();
+    const answer = `${"alpha ".repeat(67)}ends-meaning. ${"gamma ".repeat(68)}ends-here.`;
+    const later = "reader words ".repeat(60).trim();
+    await call(ask({ thread: [{ role: "peer", text: answer }, { role: "reader", text: later }] }));
+    const sent = provider.generateJsonText.mock.calls[0][0].userPrompt as string;
+    const parsed = JSON.parse(sent) as { thread: Array<{ text: string }> };
+
+    expect(answer.length).toBeGreaterThan(800);
+    expect(parsed.thread[0].text).toBe(answer);
+    expect(sent).toContain("ends-here.");
+    expect(parsed.thread[1].text.length).toBeLessThanOrEqual(400);
+    expect(later.length).toBeGreaterThan(700);
+  });
+
   it("asks the model once for the same thread twice: the second is a hit, with no call and no count", async () => {
     replyStub();
     const first = await json(await call(ask({ thread: thread1 })));

@@ -534,15 +534,73 @@ describe("readThread (P3-02b)", () => {
     }
   });
 
-  it("clips each message to 400 characters, at a word", () => {
+  // P3-05 (§1h.8 (3), O8): this test said "each message to 400 characters" and read
+  // the thread's FIRST message (the first answer, both parts joined, up to about 840
+  // characters) with the cap that belongs to the later ones — a follow-up's model
+  // never saw "Why it is here". Rewritten to the new contract: the later messages stay
+  // at 400; the first message has its own cap (the tests after it).
+  it("clips each message after the first to 400 characters, at a word", () => {
     const long = Array.from({ length: 300 }, (_, i) => `w${i}`).join(" ");
-    const read = readThread([{ role: "peer", text: long }, { role: "reader", text: "x".repeat(5000) }]);
+    const read = readThread([FIRST, { role: "reader", text: long }, { role: "peer", text: "x".repeat(5000) }]);
 
     expect(EXPLAIN_CAPS.messageChars).toBe(400);
-    expect(read.messages[0].text.length).toBeLessThanOrEqual(400);
-    expect(long.startsWith(read.messages[0].text)).toBe(true);
-    expect(read.messages[0].text.length).toBeGreaterThan(350);
-    expect(read.messages[1].text).toHaveLength(400);
+    expect(read.messages[1].text.length).toBeLessThanOrEqual(400);
+    expect(long.startsWith(read.messages[1].text)).toBe(true);
+    expect(read.messages[1].text.length).toBeGreaterThan(350);
+    expect(read.messages[2].text).toHaveLength(400);
+  });
+
+  // The first answer is both of its parts joined, each at most 420 characters
+  // (`partChars`), so the first message of a thread is read whole up to 840.
+  describe("the first message, which carries the whole first answer (P3-05, O8)", () => {
+    const run = (length: number) => "abcd ".repeat(Math.ceil(length / 5)).slice(0, length).trim();
+
+    it("has a cap of its own, 840 characters, above the later messages' 400", () => {
+      expect(EXPLAIN_CAPS.firstAnswerChars).toBe(840);
+      expect(EXPLAIN_CAPS.firstAnswerChars).toBeGreaterThan(EXPLAIN_CAPS.messageChars);
+      expect(EXPLAIN_CAPS.threadMessages).toBe(17);
+    });
+
+    it("reads a first message of 800 characters whole, and a later message of 800 cut to 400 at a word", () => {
+      const eight = run(799); // single spaces, no edge spaces: what `collapse` leaves unchanged
+      const read = readThread([{ role: "peer", text: eight }, ASKED, { role: "peer", text: eight }, ASKED_AGAIN]);
+
+      expect(eight).toHaveLength(799);
+      expect(read.messages[0].text).toBe(eight);
+      expect(read.messages[2].text.length).toBeLessThanOrEqual(400);
+      expect(read.messages[2].text.length).toBeGreaterThan(350);
+      expect(eight.startsWith(read.messages[2].text)).toBe(true);
+      expect(eight[read.messages[2].text.length]).toBe(" ");
+    });
+
+    it("clips a first message over 840 characters at a word, and keeps one of exactly 840", () => {
+      const exact = run(839); // 839 or 840 with the edge trimmed
+      const over = Array.from({ length: 400 }, (_, i) => `w${i}`).join(" ");
+      const read = readThread([{ role: "peer", text: exact }, ASKED]);
+      const cut = readThread([{ role: "peer", text: over }, ASKED]);
+
+      expect(read.messages[0].text).toBe(exact);
+      expect(cut.messages[0].text.length).toBeLessThanOrEqual(840);
+      expect(cut.messages[0].text.length).toBeGreaterThan(780);
+      expect(over.startsWith(cut.messages[0].text)).toBe(true);
+      expect(over[cut.messages[0].text.length]).toBe(" ");
+    });
+
+    it("gives the cap to the thread's first message and to no other, whatever its role", () => {
+      const long = run(799);
+      const read = readThread([{ role: "reader", text: long }, { role: "peer", text: long }, { role: "reader", text: long }]);
+
+      expect(read.messages[0].text).toBe(long);
+      expect(read.messages[1].text.length).toBeLessThanOrEqual(400);
+      expect(read.messages[2].text.length).toBeLessThanOrEqual(400);
+    });
+
+    it("leaves the 17-message cap as it was", () => {
+      const seventeen = Array.from({ length: 17 }, (_, i) => ({ role: i % 2 === 0 ? "peer" : "reader", text: run(799) }));
+
+      expect(readThread(seventeen).messages).toHaveLength(17);
+      expect(readThread([...seventeen, { role: "peer", text: "one more" }]).messages).toEqual([]);
+    });
   });
 
   it("counts the reader's messages", () => {
@@ -665,6 +723,51 @@ describe("buildExplainReplyPrompt (P3-02b)", () => {
     // The schema and the rules are never what gets cut.
     expect(parsed).toHaveProperty("outputSchema");
     expect(Array.isArray(parsed.rules)).toBe(true);
+  });
+
+  // P3-05 (§1h.8 (3), O8): the first answer travels as the thread's first `peer`
+  // message, "What it means" and "Why it is here" joined. At the old 400-character cap
+  // a follow-up's model saw 398 characters of two parts of 417 — none of the second.
+  describe("the first answer, whole (P3-05, O8)", () => {
+    const meaning = `${"alpha ".repeat(67)}ends-meaning.`; // 415 characters
+    const here = `${"gamma ".repeat(68)}ends-here.`; // 418 characters
+    const answer: ExplainMessage = { role: "peer", text: `${meaning} ${here}` };
+    const wordy = "abcd ".repeat(160).trim();
+
+    it("carries the first message whole: both parts, the second's last words included", () => {
+      const parsed = JSON.parse(buildExplainReplyPrompt({ ...base, thread: [answer, ASKED] }).userPrompt) as { thread: ExplainMessage[] };
+
+      expect(answer.text).toHaveLength(834);
+      expect(parsed.thread[0].text).toBe(answer.text);
+      expect(buildExplainReplyPrompt({ ...base, thread: [answer, ASKED] }).userPrompt).toContain("ends-here.");
+    });
+
+    it("cuts a later message of the same length to 400, at a word", () => {
+      const parsed = JSON.parse(buildExplainReplyPrompt({ ...base, thread: [answer, ASKED, { role: "peer", text: wordy }, ASKED_AGAIN] }).userPrompt) as { thread: ExplainMessage[] };
+
+      expect(parsed.thread[0].text).toBe(answer.text);
+      expect(parsed.thread[2].text.length).toBeLessThanOrEqual(400);
+      expect(parsed.thread[2].text.length).toBeGreaterThan(350);
+      expect(wordy.startsWith(parsed.thread[2].text)).toBe(true);
+    });
+
+    it("cuts a first message over 840 characters at a word", () => {
+      const huge = { role: "peer" as const, text: Array.from({ length: 400 }, (_, i) => `w${i}`).join(" ") };
+      const parsed = JSON.parse(buildExplainReplyPrompt({ ...base, thread: [huge, ASKED] }).userPrompt) as { thread: ExplainMessage[] };
+
+      expect(parsed.thread[0].text.length).toBeLessThanOrEqual(EXPLAIN_CAPS.firstAnswerChars);
+      expect(parsed.thread[0].text.length).toBeGreaterThan(780);
+      expect(huge.text.startsWith(parsed.thread[0].text)).toBe(true);
+    });
+
+    it("keeps the first answer's cap with the first answer: once the oldest messages are dropped, no later message is read at 840", () => {
+      const long = { role: "peer" as const, text: wordy };
+      const thread: ExplainMessage[] = Array.from({ length: 20 }, (_, i) => (i % 2 === 0 ? long : { role: "reader" as const, text: wordy }));
+      const parsed = JSON.parse(buildExplainReplyPrompt({ ...base, thread }).userPrompt) as { thread: ExplainMessage[] };
+
+      expect(parsed.thread).toHaveLength(EXPLAIN_CAPS.threadMessages);
+      for (const message of parsed.thread) expect(message.text.length).toBeLessThanOrEqual(EXPLAIN_CAPS.messageChars);
+    });
   });
 
   it("bounds the context as the first message's prompt does", () => {

@@ -202,21 +202,27 @@ function cleanGist(value: unknown): string | null {
  * Whitelist what the model sent into `{ [sectionId]: { [paragraphIndex]: gist } }`:
  * only an entry that names a candidate (an unknown section, a paragraph with no
  * opening or an index that is not a whole number are dropped), with a gist of
- * words, at most twelve and 120 characters. The first gist for a paragraph wins.
+ * words, at most twelve and 120 characters. When the model names a paragraph more
+ * than once, the first GROUNDED gist (`groundedGist`, in that paragraph) wins
+ * (P3-05, §1h.8 (4)): a gist the paragraph does not support never keeps a grounded
+ * one out, and a later grounded gist never replaces an earlier grounded one. With
+ * none grounded the first is kept, for `verifyParagraphGuide` to drop.
  * Anything that is not the schema is no guide: `{}`.
  */
 export function sanitizeParagraphGuide(raw: unknown, candidates: readonly GistCandidate[]): GistRecord {
   const out: GistRecord = {};
   if (!isRecord(raw) || !Array.isArray(raw.gists)) return out;
-  const known = new Set(candidates.map((candidate) => `${candidate.sectionId}\u0000${candidate.paragraphIndex}`));
+  const paragraphs = new Map(candidates.map((candidate) => [`${candidate.sectionId}\u0000${candidate.paragraphIndex}`, candidate.paragraph]));
   for (const item of raw.gists as unknown[]) {
     if (!isRecord(item) || typeof item.sectionId !== "string") continue;
     const index = indexOf(item.paragraphIndex);
-    if (index === null || !known.has(`${item.sectionId}\u0000${index}`)) continue;
+    const paragraph = index === null ? undefined : paragraphs.get(`${item.sectionId}\u0000${index}`);
+    if (index === null || paragraph === undefined) continue;
     const gist = cleanGist(item.gist);
     if (gist === null) continue;
     const section = (out[item.sectionId] ??= {});
-    if (section[index] === undefined) section[index] = gist;
+    const kept = section[index];
+    if (kept === undefined || (!groundedGist(kept, paragraph) && groundedGist(gist, paragraph))) section[index] = gist;
   }
   return out;
 }

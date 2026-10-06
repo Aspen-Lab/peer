@@ -29,8 +29,9 @@
 // message, then each reader / Peer pair, ending with the reader's new message —
 // so the server never has to remember a conversation:
 //
-//   - `readThread`: what the server reads of it — at most 17 messages, each
-//     clipped to 400 characters, anything malformed taken for no thread;
+//   - `readThread`: what the server reads of it — at most 17 messages, the first
+//     (the first answer, both of its parts) clipped to 840 characters and each later
+//     one to 400, anything malformed taken for no thread;
 //   - `buildExplainReplyPrompt`: the same bounded context as the first message
 //     plus the thread in order, each message labelled by its role, the reader's
 //     last message named as the one to answer;
@@ -82,10 +83,14 @@ export const EXPLAIN_CAPS = {
   cacheTtlMs: 60 * 60 * 1000,
   /** P3-02b: a thread is at most this many messages (the first answer, then up
    *  to eight reader / Peer pairs), of which at most eight are the reader's,
-   *  each clipped to this many characters. */
+   *  each after the first clipped to `messageChars`. */
   threadMessages: 17,
   threadReaderMessages: 8,
   messageChars: 400,
+  /** P3-05 (§1h.8 (3), O8): the thread's first message is the first answer, both
+   *  of its parts joined (each up to `partChars`), so it is read to this length —
+   *  at 400 the model that writes a follow-up never saw "Why it is here". */
+  firstAnswerChars: 840,
   /** A reply is at most three sentences and this many characters. */
   replySentences: 3,
   replyChars: 560,
@@ -182,7 +187,9 @@ export function clipPassage(passage: string): string {
 
 /** What the server read of a request's `thread`. */
 export interface ReadThread {
-  /** The messages, in order, each clipped to 400 characters — empty for no thread. */
+  /** The messages, in order — the first clipped to `EXPLAIN_CAPS.firstAnswerChars`
+   *  (it is the first answer), each later one to `EXPLAIN_CAPS.messageChars` —
+   *  empty for no thread. */
   messages: ExplainMessage[];
   /** How many of them are the reader's (counted before the length rule, so a
    *  thread past the cap can be told to be full). */
@@ -191,10 +198,15 @@ export interface ReadThread {
 
 const collapse = (text: string): string => text.replace(/\s+/g, " ").trim();
 
+/** How long a thread's message may be: the first (index 0) is the first answer, both
+ *  parts of it; every later one is a reader's question or a short reply. */
+const messageCap = (index: number): number => (index === 0 ? EXPLAIN_CAPS.firstAnswerChars : EXPLAIN_CAPS.messageChars);
+
 /**
  * The thread a request carries, or none. An array of `{ role, text }` with a
  * role of `reader` or `peer` and words in the text; each text has its
- * whitespace collapsed and is clipped to 400 characters. Anything else — not an
+ * whitespace collapsed and is clipped at a word to 400 characters — the first
+ * message, which is the first answer with both of its parts, to 840. Anything else — not an
  * array, a message that is not an object, a role that is neither, a text that is
  * not words — is no thread at all, never a partial one. At most 17 messages are
  * read (the first answer, then up to eight pairs): a longer thread is none too,
@@ -209,7 +221,7 @@ export function readThread(value: unknown): ReadThread {
     if (!isRecord(item)) return none;
     const { role, text } = item;
     if ((role !== "reader" && role !== "peer") || typeof text !== "string") return none;
-    const clipped = cutAtWord(collapse(text), EXPLAIN_CAPS.messageChars);
+    const clipped = cutAtWord(collapse(text), messageCap(messages.length));
     if (!clipped) return none;
     messages.push({ role, text: clipped });
   }
@@ -376,8 +388,9 @@ const EXPLAIN_REPLY_SYSTEM = [
 /**
  * The system and user prompts for one reply in a thread (P3-02b): the same
  * bounded context as the first message, then the thread in order — each message
- * labelled by its role, at most 17, each at most 400 characters, the latest kept
- * — and the reader's last message named as the one to answer, then the schema
+ * labelled by its role, at most 17, the first (the first answer) at most 840
+ * characters and each later one at most 400, the latest kept — and the reader's
+ * last message named as the one to answer, then the schema
  * and the rules, which are never what gets cut. Nothing about the reader is a
  * parameter but the words they sent in the thread. With `search` (P3-02c) the
  * one rule about the web is the search rule; nothing else changes.
@@ -391,9 +404,13 @@ export function buildExplainReplyPrompt(args: {
   /** P3-02c: this reply may use web search for general background. */
   search?: boolean;
 }): { systemPrompt: string; userPrompt: string } {
+  // The cap follows the message's place in the thread as sent: the first answer
+  // keeps its 840 only while it is in the prompt, and once the oldest are dropped
+  // no later message is read at its length.
+  const dropped = Math.max(0, args.thread.length - EXPLAIN_CAPS.threadMessages);
   const thread = args.thread
-    .slice(-EXPLAIN_CAPS.threadMessages)
-    .map((message) => ({ role: message.role, text: cutAtWord(collapse(message.text), EXPLAIN_CAPS.messageChars) }));
+    .slice(dropped)
+    .map((message, index) => ({ role: message.role, text: cutAtWord(collapse(message.text), messageCap(dropped + index)) }));
   const last = [...thread].reverse().find((message) => message.role === "reader");
   const userPrompt = JSON.stringify({
     task: "Answer the reader's last message in `thread` about the selected passage.",
