@@ -60,10 +60,14 @@ import { recordUsageEventAwaited } from "./events";
 export const EXPLAIN_TURN_TENTHS = 1;
 /** A turn that searched the web: ten tenths — a whole unit. */
 export const EXPLAIN_SEARCH_TENTHS = 10;
-/** One reader's day, in tenths. */
-export const EXPLAIN_TENTHS_PER_DAY = 400;
-/** Every reader's day together, in tenths. */
-export const ALL_USERS_EXPLAIN_TENTHS_PER_DAY = 20000;
+/**
+ * One reader's day, in tenths: forty normal turns, or four searched ones, or any
+ * mix (§1h.4 amendment 2, 2026-10-06 — the first P3-02c commit had it ten times
+ * too large).
+ */
+export const EXPLAIN_TENTHS_PER_DAY = 40;
+/** Every reader's day together, in tenths: two thousand normal turns. */
+export const ALL_USERS_EXPLAIN_TENTHS_PER_DAY = 2000;
 
 /** The counter one reader is charged on: one reader, one UTC day. */
 export function explainTenthsKey(userId: string, now: Date): string {

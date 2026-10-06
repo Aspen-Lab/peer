@@ -82,11 +82,19 @@ function breakTheStore(): void {
 }
 
 describe("the prices and the caps (§1h.4 amendment)", () => {
-  it("is one tenth for a normal turn and ten for a searched one, 400 a reader a day, 20,000 across readers", () => {
+  // §1h.4 amendment 2 (08:5xZ 2026-10-06): forty normal turns a reader a day (or four
+  // searched, or any mix) and two thousand tenths across all readers. P3-02c's first
+  // commit had both ten times too large (400 / 20000).
+  it("is one tenth for a normal turn and ten for a searched one, 40 a reader a day, 2,000 across readers", () => {
     expect(EXPLAIN_TURN_TENTHS).toBe(1);
     expect(EXPLAIN_SEARCH_TENTHS).toBe(10);
-    expect(EXPLAIN_TENTHS_PER_DAY).toBe(400);
-    expect(ALL_USERS_EXPLAIN_TENTHS_PER_DAY).toBe(20000);
+    expect(EXPLAIN_TENTHS_PER_DAY).toBe(40);
+    expect(ALL_USERS_EXPLAIN_TENTHS_PER_DAY).toBe(2000);
+  });
+
+  it("the day is forty normal turns or four searched ones, whichever the reader likes", () => {
+    expect(EXPLAIN_TENTHS_PER_DAY / EXPLAIN_TURN_TENTHS).toBe(40);
+    expect(EXPLAIN_TENTHS_PER_DAY / EXPLAIN_SEARCH_TENTHS).toBe(4);
   });
 
   it("a searched turn costs ten normal ones", () => {
@@ -154,7 +162,7 @@ describe("the charge", () => {
     expect((await store.read("deep:all:2026-10-06", NOW)).value).toBe(0);
   });
 
-  it("charges every plan the same: free, trial and paid are each held to 400 tenths", async () => {
+  it("charges every plan the same: free, trial and paid are each held to 40 tenths", async () => {
     for (const [index, plan] of [FREE, TRIAL, PAID].entries()) {
       const reader = entitlement({ ...plan, userId: `plan-reader-${index}` });
       await getCounterStore().increment(explainTenthsKey(reader.userId as string, NOW), null, EXPLAIN_TENTHS_PER_DAY - 1, NOW);
@@ -166,16 +174,16 @@ describe("the charge", () => {
 });
 
 describe("the per-reader day cap", () => {
-  it("allows 400 normal turns and refuses the next, with the hour the day ends", async () => {
-    for (let i = 0; i < EXPLAIN_TENTHS_PER_DAY / EXPLAIN_TURN_TENTHS; i += 1) {
+  it("allows 40 normal turns and refuses the next, with the hour the day ends", async () => {
+    for (let i = 0; i < 40; i += 1) {
       expect((await consumeExplainTurn(FREE, normal, NOW)).allowed).toBe(true);
     }
 
     expect(await consumeExplainTurn(FREE, normal, NOW)).toEqual({ allowed: false, reason: "exhausted", resetsAt: RESETS_AT });
   });
 
-  it("allows 40 searched turns and refuses the next", async () => {
-    for (let i = 0; i < EXPLAIN_TENTHS_PER_DAY / EXPLAIN_SEARCH_TENTHS; i += 1) {
+  it("allows 4 searched turns and refuses the next", async () => {
+    for (let i = 0; i < 4; i += 1) {
       expect((await consumeExplainTurn(FREE, searching, NOW)).allowed).toBe(true);
     }
 
@@ -183,8 +191,8 @@ describe("the per-reader day cap", () => {
     expect((await consumeExplainTurn(FREE, normal, NOW)).allowed).toBe(false);
   });
 
-  it("allows a mix up to the cap: 39 searched turns and ten normal ones are exactly 400", async () => {
-    for (let i = 0; i < 39; i += 1) await consumeExplainTurn(FREE, searching, NOW);
+  it("allows a mix up to the cap: 3 searched turns and ten normal ones are exactly 40", async () => {
+    for (let i = 0; i < 3; i += 1) await consumeExplainTurn(FREE, searching, NOW);
     for (let i = 0; i < 10; i += 1) expect((await consumeExplainTurn(FREE, normal, NOW)).allowed).toBe(true);
 
     expect(await used("reader-1")).toBe(EXPLAIN_TENTHS_PER_DAY);
