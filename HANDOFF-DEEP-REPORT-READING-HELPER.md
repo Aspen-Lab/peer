@@ -52,9 +52,9 @@ Manager plus three worker roles, one writer at a time on one checkout:
 - **B investigator** reproduces a finding, writes the smallest fix guide with exact lines and the tests C must add, never edits production code.
 - **Manager** assigns one item at a time, rules on every open question with a dated entry in §1f/§1g (never in chat only), verifies every commit, keeps §1 true, commits per item and pushes immediately.
 
-If you can spawn subagents, run A/B/C as separate agents with the role brief in the prompt. If you cannot, run one role at a time in your own conversation, commit and push between roles, and write in §4 that independence was reduced. An item is VERIFIED only after a reviewer who did not implement it has passed it (A at the phase review), so a single-conversation manager still needs a separate reviewer pass later.
+If you can spawn subagents, run A/B/C as separate agents with the role brief in the prompt. Model (owner decision 2026-10-06, §1a.9): every worker — A, B and C — runs on Claude Sonnet (in Claude Code, the Agent tool's `model: "sonnet"`); never spawn a worker on a larger model, because credit burns too fast. The manager itself is whatever the owner is driving (Claude Fable in the cloud session). If you cannot spawn subagents, run one role at a time in your own conversation, commit and push between roles, and write in §4 that independence was reduced. An item is VERIFIED only after a reviewer who did not implement it has passed it (A at the phase review), so a single-conversation manager still needs a separate reviewer pass later.
 
-Worker prompt skeleton (fill the item and the brief path):
+Worker prompt skeleton (fill the item and the brief path; spawn it on Claude Sonnet):
 
 ```
 You are C, the implementer in an ABC loop on the Peer repository, branch
@@ -91,9 +91,7 @@ Whenever you stop (finished, out of budget, blocked, told to stop):
 4. Set `HELD BY: free` (or the name of the manager you hand to).
 5. Commit and push. Unpushed work on a cloud container is lost when the container is reclaimed; unpushed work on a laptop is invisible to every other agent.
 
-## 6a. Latest submitted checkpoint — 2026-10-06T00:13Z
-
-P2-04 is implemented and submitted in the current branch commit, with checkpoint `docs/reading-helper-abc/P2-04-C-20261005T220345Z.md`. The Terra C implementation adds the bounded **For your questions** block and the display-only Tier 2 answer/background overlay; focused tests are 21/21 green, lint/tsc/build are green, and the Windows full-suite failures are the five documented host-only baselines. The two briefly considered out-of-scope type-only edits were restored before submission. P2-04 is **IMPLEMENTED_PENDING_REVIEW**, not VERIFIED: Claude's next action is an independent read/mutation/gate review of this item. Do not start P2-05 until that review is recorded.
+This file carries no snapshot of the latest item on purpose: §1 of the state file (`CURRENT ITEM`, `NEXT TURN`) and the newest §4 entries are the only place that state lives, so they cannot drift apart.
 
 ## 8. Kickoff prompt — for the owner to paste into any capable agent
 
