@@ -4,11 +4,11 @@ import type { RawItem, SourceId } from "@/lib/sources/types";
 import type { CachedPool, PoolCache } from "@/lib/opportunities/pool-cache";
 import { createTrustedPaperCacheScope } from "@/lib/opportunities/private-paper-cache";
 import { resetCounterStoreForTests } from "@/lib/usage/counters";
-import type { ShadowCandidate } from "@/lib/decisions/shadow";
+import type { ScreenCandidate, ScreenResult } from "@/lib/decisions/screen";
 
 // P2-S6 (Round 3) — F-A-P2-05, ABC-JEV-INTEGRATION.md §1p.B(1) and the
 // P2-S6 RULING (§4). Flag PEER_RANK_FUSION, default off. Structural model:
-// pipeline.shadow.test.ts (P3-S5's own sibling `pipeline.*.test.ts` file) —
+// pipeline.jev.test.ts (P3-S5's own sibling `pipeline.*.test.ts` file) —
 // same MemoryPoolCache/fixture/fake-timer conventions, so the two files
 // read the same way.
 //
@@ -30,7 +30,7 @@ vi.mock("@/lib/sources/openalex-semantic", () => ({
 }));
 
 // Imported AFTER the mocks above, per vitest convention (see
-// pipeline.shadow.test.ts and test-digest/route.test.ts for the same order).
+// pipeline.jev.test.ts and test-digest/route.test.ts for the same order).
 const { runFeedPipeline } = await import("./pipeline");
 
 class MemoryPoolCache implements PoolCache {
@@ -55,7 +55,7 @@ const originalArxivFetch = bySourceId.arxiv.fetch;
 
 // Titles/tags carry the request topic so the pre-existing literal-keyword
 // admission gate (an unrelated concern) never drops these fixtures — same
-// discipline pipeline.shadow.test.ts already established.
+// discipline pipeline.jev.test.ts already established.
 function openalexItem(i: number): RawItem {
   return {
     id: `openalex:p${i}`,
@@ -213,7 +213,7 @@ function dblpArxivReq(ownerId: string) {
 }
 
 // Frozen so `meta.latencyMs` reads deterministically — same reasoning
-// pipeline.shadow.test.ts records for its own identical constant.
+// pipeline.jev.test.ts records for its own identical constant.
 const FIXED_NOW = new Date(2026, 6, 29, 9, 0);
 
 beforeEach(() => {
@@ -277,13 +277,31 @@ describe("pipeline.ts — P2-S6 reciprocal rank fusion (PEER_RANK_FUSION)", () =
       bySourceId.openalex.fetch = vi.fn(async () => fixtureItems(55));
       mocks.fetchOpenAlexSemantic.mockResolvedValue([semanticOnlyItem()]);
 
-      const received: ReadonlyArray<ShadowCandidate>[] = [];
+      // The Jev screen function sees the judgment shortlist (the RRF top 50
+      // when the flag is on); it answers nothing, so the feed is unchanged and
+      // only the shortlist it was handed is observed.
+      const received: ReadonlyArray<ScreenCandidate>[] = [];
+      const jevScreen = async (shortlist: ReadonlyArray<ScreenCandidate>): Promise<ScreenResult> => {
+        received.push(shortlist);
+        return {
+          decisions: new Map(),
+          summary: {
+            totalCandidates: shortlist.length,
+            attempted: 0,
+            cacheHits: 0,
+            byStatus: {},
+            deadlineExceeded: false,
+            rejected: false,
+            throttled: false,
+          },
+        };
+      };
       const result = await runFeedPipeline(
         { ...baseReq(`owner-shortlist-${rankFusion}`), topN: 250 }, // large enough that `result.items` reflects the whole processed pool
         {
           cache: new MemoryPoolCache(),
           now: FIXED_NOW,
-          onFreshShortlist: (shortlist) => received.push(shortlist),
+          jevScreen,
         },
       );
       return { result, shortlist: received[0] ?? [] };

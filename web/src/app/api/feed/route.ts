@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { runFeedPipeline } from "@/lib/feed/pipeline";
-import type { FeedRequest, FeedResponse, FeedEmptyReasonCode, SearchConnectors } from "@/lib/feed/types";
+import type { FeedMeta, FeedRequest, FeedResponse, FeedEmptyReasonCode, SearchConnectors } from "@/lib/feed/types";
 import type { ProviderOverrideConfig } from "@/lib/llm/providers/types";
 import type { SourceId } from "@/lib/sources/types";
 import type { ScoredItem } from "@/lib/scoring/types";
@@ -22,6 +22,11 @@ import {
   type PaperIdentity,
 } from "@/lib/dashboard/delivery-ledger";
 import { dashboardLedgerEnabled } from "@/lib/dashboard/ledger-flag";
+import { InMemoryDecisionCache } from "@/lib/decisions/decision-cache";
+import { parseJevApiKey } from "@/lib/decisions/jev-key";
+import { PrivateDecisionCache } from "@/lib/decisions/private-decision-cache";
+import { screenWithJev, type JevScreenFn } from "@/lib/decisions/screen";
+import { isLocalDevRuntime } from "@/lib/env/local-dev";
 import {
   SupabaseRolloverCandidateStore,
   type RolloverCandidate,
@@ -38,6 +43,33 @@ import {
 const CACHE_HEADERS = {
   "Cache-Control": "private, no-store",
 };
+
+/**
+ * How long this route may run, in seconds (Next's route segment config:
+ * `web/node_modules/next/dist/docs/01-app/03-api-reference/03-file-conventions/
+ * 02-route-segment-config/maxDuration.md`; the platform reads it from the build
+ * output). Pinned explicitly because a fresh paper build now includes Jev on the
+ * reader's key inside the request: up to 20 s of screening (`SCREEN_DEADLINE_MS`,
+ * a hard race) on top of five source fetches with their own 8 s timeouts and,
+ * for a reader with a model key as well, a model rerank. The value is the
+ * platform default that `docs/JEV-RELEASE-READINESS.md` names (300 s) written
+ * down so the two numbers are pinned against each other in code instead of
+ * reasoned about after the fact, and it equals the ceiling the digest and
+ * dashboard-prepare routes already run under in production
+ * (`jobs/dispatch-digests`, `jobs/prepare-dashboards`). A typical Jev run takes
+ * a few seconds; this is the worst-case ceiling, not an expectation.
+ */
+export const maxDuration = 300;
+
+/**
+ * The reader `next dev` lets through with no sign-in at all has no account id.
+ * Their Jev decisions are kept in memory for the life of the dev server, under
+ * this owner, so a developer can try Jev with their own key (`isLocalDevRuntime`
+ * is false on every deployed runtime and under tests, so this branch is
+ * unreachable there).
+ */
+const LOCAL_DEV_OWNER_ID = "local-dev";
+const localDevDecisionCache = new InMemoryDecisionCache();
 
 /**
  * §1p.F: "a truthful, non-cached 'new papers are temporarily unavailable'
@@ -93,6 +125,7 @@ function frozenFeedResponse(
   reconstructed: boolean,
   startedAt: number,
   emptyReasonCode?: FeedEmptyReasonCode,
+  jevScreening?: FeedMeta["jevScreening"],
 ): FeedResponse {
   return {
     items,
@@ -108,6 +141,11 @@ function frozenFeedResponse(
       batchStatus: status,
       ...(reconstructed ? { batchReconstructed: true as const } : {}),
       ...(emptyReasonCode ? { emptyReasonCode } : {}),
+      // Same rule as `emptyReasonCode`: only the call that won the mint race
+      // may report what ITS OWN fresh build did with the reader's Jev key. A
+      // replay of an existing batch carries none (the client keeps the last
+      // report it saw).
+      ...(jevScreening ? { jevScreening } : {}),
     },
   };
 }
@@ -230,6 +268,12 @@ async function runLedgerAwareFeed(
   // resolveNegativeSeedPaperIdsForRequest's own doc comment), threaded the
   // same way and for the same reason as positiveSeeds above.
   negativeSeedPaperIds: readonly string[],
+  // Jev on the reader's own key (see FeedPipelineOptions.jevScreen's own doc
+  // comment in pipeline.ts). Built per request, only by POST and only for a
+  // reader who sent a key; GET never passes it, so it is `undefined` there and
+  // both runFeedPipeline calls below see output byte-identical to a build with
+  // no Jev at all.
+  jevScreen?: JevScreenFn,
 ): Promise<{ response: FeedResponse } | { unavailable: true }> {
   const startedAt = Date.now();
   const paperCacheScope = pipelineReq.paperCacheScope;
@@ -240,6 +284,7 @@ async function runLedgerAwareFeed(
       now,
       positiveSeeds,
       negativeSeedPaperIds,
+      jevScreen,
     });
     return { response };
   }
@@ -317,6 +362,7 @@ async function runLedgerAwareFeed(
     now,
     positiveSeeds,
     negativeSeedPaperIds,
+    jevScreen,
   });
 
   const papers: PaperIdentity[] = result.items.map((item) => {
@@ -401,6 +447,7 @@ async function runLedgerAwareFeed(
       reconstructed,
       startedAt,
       wonMintRace ? result.meta.emptyReasonCode : undefined,
+      wonMintRace ? result.meta.jevScreening : undefined,
     ),
   };
 }
@@ -645,6 +692,41 @@ export async function POST(req: NextRequest) {
     aiTier,
   });
 
+  // Jev on the reader's own key. The key comes from the request body and goes
+  // nowhere but into the closure below: it is not a field of `FeedRequest`, not
+  // an option of the pipeline, and not an input of any cache key, ledger payload
+  // or response. Jev has its own switch, the key itself: it does not depend on
+  // the feed's AI search pill or on a model key (a reader with only a Jev key
+  // still gets it, and a reader with both gets Jev's order with the model's
+  // reasons). No key, no function, and the pipeline runs exactly as it did
+  // before Jev existed.
+  //
+  // Who may use it: a signed-in reader whose session owns the cache scope (their
+  // decisions are cached per reader in `private_decisions`), or, on a
+  // developer's own machine only (`next dev`: no sign-in exists, the gate lets
+  // the reader through with `user: null`, which is the same case a model key
+  // already works in), the local reader on an in-memory cache. A signed-out
+  // visitor, a deployed runtime with no sign-in, and a user/scope mismatch get
+  // nothing: no scope, no Jev.
+  const jevApiKey = parseJevApiKey((body as Record<string, unknown>).jevApiKey);
+  let jevScreen: JevScreenFn | undefined;
+  if (jevApiKey !== undefined) {
+    const signedInOwnerId =
+      gate.user !== null && paperCacheScope !== undefined && gate.user.id === paperCacheScope.ownerId
+        ? gate.user.id
+        : undefined;
+    const localDevReader =
+      signedInOwnerId === undefined && gate.user === null && !gate.anonymous && isLocalDevRuntime();
+    if (signedInOwnerId !== undefined || localDevReader) {
+      const ownerId = signedInOwnerId ?? paperCacheScope?.ownerId ?? LOCAL_DEV_OWNER_ID;
+      const cache =
+        signedInOwnerId !== undefined ? new PrivateDecisionCache(ownerId) : localDevDecisionCache;
+      const senseConcepts = intent.selectedSenseConcepts;
+      jevScreen = (candidates) =>
+        screenWithJev({ ownerId, apiKey: jevApiKey, intent, senseConcepts, candidates, cache });
+    }
+  }
+
   const now = new Date();
   const positiveSeeds = await resolvePositiveSeedsForRequest(paperCacheScope);
   const negativeSeedPaperIds = await resolveNegativeSeedPaperIdsForRequest(paperCacheScope);
@@ -677,6 +759,7 @@ export async function POST(req: NextRequest) {
     now,
     positiveSeeds,
     negativeSeedPaperIds,
+    jevScreen,
   );
   if ("unavailable" in outcome) return ledgerUnavailableResponse();
 

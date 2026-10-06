@@ -214,19 +214,20 @@ describe("passes feed.meta.emptyReasonCode through to sendDigestEmail (EMPTY-EMA
   });
 });
 
-// P3-S5 (Round 3) — ABC-JEV-INTEGRATION.md §4 "P3-S5 DESIGN RULING": the
-// Jev shadow's `onFreshShortlist` hook is wired ONLY in
-// app/api/feed/route.ts's POST handler — this route is never edited by
-// that slice. Proves the structural reason the hook cannot reach this call
-// site (runFeedPipeline is called with a single argument here, no options
-// object at all).
-describe("POST /api/test-digest -- never schedules the Jev shadow (P3-S5)", () => {
-  it("calls runFeedPipeline with a single argument (no options object) -- structurally cannot carry onFreshShortlist", async () => {
+// Jev runs on a key the READER sends in a live feed request body (`/api/feed`'s
+// POST), and only there. This route has no such body, so it can never carry a
+// Jev key or a Jev screen: runFeedPipeline is called with a single argument
+// (no options object at all) and a request with no Jev field.
+describe("POST /api/test-digest -- never uses Jev", () => {
+  it("calls runFeedPipeline with a single argument (no options object) -- structurally cannot carry a Jev screen, and the request has no Jev field", async () => {
     await POST(request());
 
     expect(mocks.runFeedPipeline).toHaveBeenCalledTimes(1);
     const call = mocks.runFeedPipeline.mock.calls[0];
     expect(call).toHaveLength(1);
-    expect((call?.[0] as Record<string, unknown>)).not.toHaveProperty("onFreshShortlist");
+    const pipelineRequest = call?.[0] as Record<string, unknown>;
+    expect(pipelineRequest).not.toHaveProperty("jevScreen");
+    expect(pipelineRequest).not.toHaveProperty("jevApiKey");
+    expect(JSON.stringify(pipelineRequest)).not.toMatch(/jev/i);
   });
 });

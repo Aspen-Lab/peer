@@ -125,6 +125,19 @@ export interface CachedPaperPool extends CachedPoolBase {
    * strictly on build-only `diagnostics`).
    */
   rrf?: Record<string, { fusedScore: number; channels: { channel: string; rank: number }[] }>;
+  /**
+   * What Jev did when this pool was built, present ONLY for a pool built with a
+   * reader's own Jev key (such a pool has its own key, `PoolCacheKeyInput.
+   * jevScreening`). Counts and one status word, nothing else: never the key, never
+   * a paper's text. The read path reports it as `FeedMeta.jevScreening` on every
+   * same-day read, so a cache hit can say what the build did. Same shape as
+   * `decisions/apply.ts`'s `JevScreeningMeta`, inlined here (not imported) for the
+   * reason `rrf` above gives: no new cross-module type dependency for a small
+   * additive field. Absent on every pool built without a Jev key and on every
+   * pool built before this field existed, both read as "no Jev", so it is purely
+   * additive: no migration and no `PAPER_CACHE_KEY_VERSION` bump.
+   */
+  jev?: { status: "applied" | "partial" | "unavailable" | "rejected"; screened: number; of: number };
 }
 
 export interface CachedEventPool extends CachedOpportunityPoolBase {
@@ -210,6 +223,16 @@ export interface PoolCacheKeyInput {
   paperScopeIdentity?: string;
   /** Owner is a separate private boundary, not merely part of a hash. */
   paperOwnerId?: string;
+  /**
+   * Papers only. True when the reader brought their own Jev key and this pool is
+   * built with Jev's order in it, so it must not be the pool a reader without
+   * the key shares (a key added at noon would otherwise keep serving the keyless
+   * pool until tomorrow). Hashed ONLY when true, so every key that existed before
+   * this field is byte-identical (`pool-cache.test.ts` pins three of them). It
+   * is a boolean on purpose: no key value, hash of one or any other trace of the
+   * reader's Jev key may reach a cache key.
+   */
+  jevScreening?: true;
   now?: Date;
 }
 
@@ -494,6 +517,9 @@ export function derivePoolCacheKey(input: PoolCacheKeyInput): string {
     paperScopeIdentity: input.surface === "papers" ? input.paperScopeIdentity : undefined,
     paperOwnerId: input.surface === "papers" ? input.paperOwnerId : undefined,
     uploadInterests: input.uploadInterests?.length ? normalizeSet(input.uploadInterests) : undefined,
+    // Only when true: `JSON.stringify` omits `undefined`, so the key of every
+    // reader without a Jev key keeps the exact shape it had before this field.
+    jevScreening: input.surface === "papers" && input.jevScreening === true ? true : undefined,
     date: period,
   });
   const digest = createHash("sha256").update(signature).digest("hex").slice(0, 32);

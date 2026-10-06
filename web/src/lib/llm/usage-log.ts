@@ -42,7 +42,7 @@ export function now(): number {
   return Date.now();
 }
 
-// P3-S5 — the Jev shadow's cost log (ABC-JEV-INTEGRATION.md §4 Round 3
+// P3-S5 — the Jev screen's cost log (ABC-JEV-INTEGRATION.md §4 Round 3
 // "P3-S5 DESIGN RULING"; docs/jev-abc/P3-B-20260924T0525Z.md §6). Additive,
 // beside `logLlmUsage` above, and follows its EXACT contract: never log API
 // keys, prompt/response text, or private profile context. Concretely: this

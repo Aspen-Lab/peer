@@ -1611,90 +1611,295 @@ describe("/api/feed negative-seed resolution (P2-S4b-FIX, §1p.B(5))", () => {
   });
 });
 
-// The Jev shadow hook is gone from this route. Peer holds no Jev key of its
-// own (the owner cut that path on 2026-10-06: Jev is a key the READER brings),
-// so with this commit the route calls Jev nowhere and schedules nothing after
-// the response. The block that used to live here tested the seven conditions
-// that built `onFreshShortlist` from the company's key and the broker; its
-// premise is gone, so it is replaced by the cases below rather than ported.
+// Jev on the reader's own key, as the route wires it. The company's Jev path is
+// gone (the owner cut it on 2026-10-06): no company key, no broker, no flag, no
+// hook that runs after the response. What remains is one rule. A signed-in
+// reader (or, in `next dev`, the reader the dev gate lets through) who sends a
+// Jev key in the request body gets a `jevScreen` function handed to the pipeline,
+// a closure that holds the key and the owner; the pipeline never sees either. No
+// key, no function, and the pipeline is called exactly as it was before Jev.
 // `runFeedPipeline` is mocked module-wide (top of file), so these prove the
-// WIRING: what the route computes and passes.
-describe("/api/feed schedules no Jev call (the company's Jev path is removed)", () => {
-  /** Every setting the company path used to read, armed at once. */
-  function stubOldCompanyJevSettings() {
-    vi.stubEnv("PEER_JEV_SHADOW", "on");
-    vi.stubEnv("PEER_JEV_BROKER", "on");
-    vi.stubEnv("PEER_JEV_BROKER_URL", "https://example.invalid/functions/v1/jev-broker");
-    vi.stubEnv("PEER_JEV_BROKER_SECRET", "not-a-real-secret-0000");
-    vi.stubEnv("PEER_JEV_TRANSPORT", "direct");
-    vi.stubEnv("JEV_API_KEY", "jev-test-FAKE-KEY-do-not-use-1234567890abcdef");
-  }
+// WIRING: what the route computes and passes. `route.jev.test.ts` runs the real
+// pipeline and proves what the key does and does not reach.
 
-  function stubSignedInTier2(ownerId: string) {
+const screenMocks = vi.hoisted(() => ({
+  screenWithJev: vi.fn(),
+  PrivateDecisionCache: vi.fn(),
+}));
+vi.mock("@/lib/decisions/screen", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/decisions/screen")>();
+  return { ...actual, screenWithJev: screenMocks.screenWithJev };
+});
+vi.mock("@/lib/decisions/private-decision-cache", () => ({
+  PrivateDecisionCache: screenMocks.PrivateDecisionCache,
+}));
+
+describe("/api/feed Jev on the reader's own key", () => {
+  // An invented string. It is not, and never was, a key.
+  const KEY = "jev-route-test-sentinel-not-a-key-0000";
+
+  beforeEach(() => {
+    screenMocks.screenWithJev.mockReset();
+    screenMocks.screenWithJev.mockResolvedValue({
+      decisions: new Map(),
+      summary: {
+        totalCandidates: 0,
+        attempted: 0,
+        cacheHits: 0,
+        byStatus: {},
+        deadlineExceeded: false,
+        rejected: false,
+        throttled: false,
+      },
+    });
+    screenMocks.PrivateDecisionCache.mockReset();
+    screenMocks.PrivateDecisionCache.mockImplementation(function (this: Record<string, unknown>, ownerId: string) {
+      this.kind = "private";
+      this.ownerId = ownerId;
+    });
+  });
+
+  function stubSignedIn(ownerId: string, aiTier: 0 | 2 = 2) {
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://example.supabase.co");
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "public-test-key");
     mocks.getUser.mockResolvedValue({ data: { user: { id: ownerId } } });
     mocks.requireAiRequest.mockResolvedValue({ user: { id: ownerId }, anonymous: false });
-    mocks.aiTierCeiling.mockReturnValue(2);
-    mocks.resolveProvider.mockReturnValue({ id: "openai", generateJsonText: vi.fn() });
+    mocks.aiTierCeiling.mockReturnValue(aiTier);
+    mocks.resolveProvider.mockReturnValue(aiTier === 2 ? { id: "openai", generateJsonText: vi.fn() } : null);
   }
 
-  function lastPipelineOptions(): Record<string, unknown> | undefined {
+  function lastPipelineCall(): { request: Record<string, unknown>; options: Record<string, unknown> } {
     const call = mocks.runFeedPipeline.mock.calls.at(-1);
-    return call?.[1] as Record<string, unknown> | undefined;
+    return { request: call?.[0] as Record<string, unknown>, options: call?.[1] as Record<string, unknown> };
   }
 
-  it("a signed-in reader with a model key and every old company setting present: no onFreshShortlist, and nothing is scheduled with after()", async () => {
-    stubOldCompanyJevSettings();
-    stubSignedInTier2("owner-no-jev-1");
+  type JevScreenFn = (candidates: ReadonlyArray<{ id: string; title: string; abstract: string | null }>) => Promise<unknown>;
+  const screenFn = (): JevScreenFn | undefined => lastPipelineCall().options?.jevScreen as JevScreenFn | undefined;
 
-    const response = await POST(request({ topics: ["battery"], aiTier: 2 }));
+  it("a signed-in reader who sends a key gets a screen function; calling it runs the screen with that key, that owner and that intent", async () => {
+    stubSignedIn("owner-jev-1");
+
+    const response = await POST(request({ topics: ["battery"], aiTier: 2, jevApiKey: KEY }));
 
     expect(response.status).toBe(200);
-    expect(lastPipelineOptions()?.onFreshShortlist).toBeUndefined();
-    expect(mocks.after).not.toHaveBeenCalled();
+    const fn = screenFn();
+    expect(typeof fn).toBe("function");
+    expect(screenMocks.screenWithJev).not.toHaveBeenCalled(); // building the closure calls nothing
+
+    await fn!([{ id: "p1", title: "A Paper", abstract: null }]);
+
+    expect(screenMocks.screenWithJev).toHaveBeenCalledTimes(1);
+    const options = screenMocks.screenWithJev.mock.calls[0][0] as Record<string, unknown>;
+    expect(options.apiKey).toBe(KEY);
+    expect(options.ownerId).toBe("owner-jev-1");
+    expect(options.candidates).toEqual([{ id: "p1", title: "A Paper", abstract: null }]);
+    expect((options.intent as { version: string }).version).toBe("feed-intent-v1");
+    expect(options.senseConcepts).toEqual((options.intent as { selectedSenseConcepts: unknown[] }).selectedSenseConcepts);
+    // The decisions are cached per reader, in the reader's own private store.
+    expect(screenMocks.PrivateDecisionCache).toHaveBeenCalledWith("owner-jev-1");
+    expect((options.cache as { kind?: string }).kind).toBe("private");
   });
 
-  it("the response and the options handed to the pipeline are identical with and without those settings", async () => {
-    // Frozen: POST constructs `new Date()` itself, so two unfrozen calls a
-    // moment apart would differ by a millisecond.
+  it("the key is trimmed before it is used", async () => {
+    stubSignedIn("owner-jev-trim");
+    await POST(request({ topics: ["battery"], aiTier: 2, jevApiKey: `  ${KEY}\n` }));
+    await screenFn()!([{ id: "p1", title: "A Paper", abstract: null }]);
+    expect((screenMocks.screenWithJev.mock.calls[0][0] as { apiKey: string }).apiKey).toBe(KEY);
+  });
+
+  it("a key with no model key and no AI search pill still gets Jev: the two switches are the two keys", async () => {
+    stubSignedIn("owner-jev-no-model", 0);
+
+    await POST(request({ topics: ["battery"], aiTier: 0, jevApiKey: KEY }));
+
+    expect(lastPipelineCall().request.aiTier).toBe(0);
+    expect(typeof screenFn()).toBe("function");
+  });
+
+  it("with a model key as well, both run: the pipeline gets the provider-resolved tier and the screen function", async () => {
+    stubSignedIn("owner-jev-both", 2);
+
+    await POST(request({ topics: ["battery"], aiTier: 2, jevApiKey: KEY }));
+
+    expect(lastPipelineCall().request.aiTier).toBe(2);
+    expect(typeof screenFn()).toBe("function");
+  });
+
+  it.each([
+    ["absent", undefined],
+    ["empty", ""],
+    ["whitespace only", "   "],
+    ["with a space inside", "two words"],
+    ["with a line break inside", "line\nbreak"],
+    ["not a string", 12345],
+    ["an object", { key: KEY }],
+    ["longer than 512 characters", "k".repeat(513)],
+  ])("a key that is %s gives no screen function", async (_label, value) => {
+    stubSignedIn("owner-jev-bad-key");
+
+    const response = await POST(request({ topics: ["battery"], aiTier: 2, ...(value === undefined ? {} : { jevApiKey: value }) }));
+
+    expect(response.status).toBe(200);
+    expect(screenFn()).toBeUndefined();
+  });
+
+  it("signed out: no screen function, however the body is worded", async () => {
+    // The beforeEach default is `{ user: null, anonymous: true }` with no sign-in session.
+    const response = await POST(request({ topics: ["battery"], aiTier: 2, jevApiKey: KEY }));
+
+    expect(response.status).toBe(200);
+    expect(screenFn()).toBeUndefined();
+  });
+
+  it("a runtime with no sign-in at all that is not a developer's machine gets no screen function (no scope, no Jev)", async () => {
+    mocks.requireAiRequest.mockResolvedValue({ user: null, anonymous: false });
+    mocks.aiTierCeiling.mockReturnValue(2);
+
+    await POST(request({ topics: ["battery"], aiTier: 2, jevApiKey: KEY }));
+
+    expect(screenFn()).toBeUndefined();
+  });
+
+  it("owner mismatch between the gate's user and the cache scope's owner gives no screen function", async () => {
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://example.supabase.co");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "public-test-key");
+    mocks.getUser.mockResolvedValue({ data: { user: { id: "owner-from-supabase" } } });
+    mocks.requireAiRequest.mockResolvedValue({ user: { id: "owner-from-gate" }, anonymous: false });
+    mocks.aiTierCeiling.mockReturnValue(2);
+
+    await POST(request({ topics: ["battery"], aiTier: 2, jevApiKey: KEY }));
+
+    expect(screenFn()).toBeUndefined();
+  });
+
+  describe("local development (`next dev`)", () => {
+    it("the dev gate lets the reader through with no sign-in at all: Jev runs for the local reader on an in-memory decision cache", async () => {
+      vi.stubEnv("NODE_ENV", "development");
+      mocks.requireAiRequest.mockResolvedValue({ user: null, anonymous: false });
+      mocks.aiTierCeiling.mockReturnValue(2);
+
+      await POST(request({ topics: ["battery"], aiTier: 2, jevApiKey: KEY }));
+      await screenFn()!([{ id: "p1", title: "A Paper", abstract: null }]);
+
+      const options = screenMocks.screenWithJev.mock.calls[0][0] as { ownerId: string; apiKey: string; cache: object };
+      expect(options.apiKey).toBe(KEY);
+      expect(options.ownerId).toBe("local-dev");
+      expect(options.cache.constructor.name).toBe("InMemoryDecisionCache");
+      expect(screenMocks.PrivateDecisionCache).not.toHaveBeenCalled();
+    });
+
+    it("the local reader's decisions survive between requests in the same dev server (one shared in-memory cache)", async () => {
+      vi.stubEnv("NODE_ENV", "development");
+      mocks.requireAiRequest.mockResolvedValue({ user: null, anonymous: false });
+      mocks.aiTierCeiling.mockReturnValue(2);
+
+      await POST(request({ topics: ["battery"], aiTier: 2, jevApiKey: KEY }));
+      await screenFn()!([{ id: "p1", title: "A Paper", abstract: null }]);
+      await POST(request({ topics: ["battery"], aiTier: 2, jevApiKey: KEY }));
+      await screenFn()!([{ id: "p1", title: "A Paper", abstract: null }]);
+
+      const first = (screenMocks.screenWithJev.mock.calls[0][0] as { cache: object }).cache;
+      const second = (screenMocks.screenWithJev.mock.calls[1][0] as { cache: object }).cache;
+      expect(second).toBe(first);
+    });
+
+    it("a signed-out visitor on a developer's machine is still anonymous: no Jev", async () => {
+      vi.stubEnv("NODE_ENV", "development");
+      mocks.requireAiRequest.mockResolvedValue({ user: null, anonymous: true });
+
+      await POST(request({ topics: ["battery"], aiTier: 2, jevApiKey: KEY }));
+
+      expect(screenFn()).toBeUndefined();
+    });
+
+    it("a deployed runtime never takes the local branch, even with NODE_ENV=development in its environment", async () => {
+      vi.stubEnv("NODE_ENV", "development");
+      vi.stubEnv("VERCEL", "1");
+      mocks.requireAiRequest.mockResolvedValue({ user: null, anonymous: false });
+      mocks.aiTierCeiling.mockReturnValue(2);
+
+      await POST(request({ topics: ["battery"], aiTier: 2, jevApiKey: KEY }));
+
+      expect(screenFn()).toBeUndefined();
+    });
+  });
+
+  it("no key: the pipeline is called exactly as it would be with Jev absent from the product (same request, same options)", async () => {
+    // Frozen: POST constructs `new Date()` itself.
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-09-24T12:00:00.000Z"));
     try {
-      stubOldCompanyJevSettings();
-      stubSignedInTier2("owner-no-jev-cmp");
-      const withSettings = await POST(request({ topics: ["battery"], aiTier: 2 }));
-      const withSettingsOptions = lastPipelineOptions();
-      const withSettingsBody = await withSettings.json();
+      stubSignedIn("owner-jev-cmp");
+      const withKey = await POST(request({ topics: ["battery"], aiTier: 2, jevApiKey: KEY }));
+      const withKeyCall = lastPipelineCall();
+      expect(withKey.status).toBe(200);
 
-      vi.unstubAllEnvs();
       vi.clearAllMocks();
       mocks.runFeedPipeline.mockResolvedValue({ items: [], meta: {} });
-      stubSignedInTier2("owner-no-jev-cmp");
+      stubSignedIn("owner-jev-cmp");
       const without = await POST(request({ topics: ["battery"], aiTier: 2 }));
-      const withoutOptions = lastPipelineOptions();
-      const withoutBody = await without.json();
+      const withoutCall = lastPipelineCall();
 
-      expect(withSettings.status).toBe(without.status);
-      expect(withSettingsBody).toEqual(withoutBody);
-      expect(withSettingsOptions).toEqual(withoutOptions);
+      expect(without.status).toBe(200);
+      // The request handed to the pipeline is identical either way: the key is not part of it.
+      expect(withKeyCall.request).toEqual(withoutCall.request);
+      // The options differ only by the screen function.
+      expect({ ...withKeyCall.options, jevScreen: undefined }).toEqual({ ...withoutCall.options, jevScreen: undefined });
+      expect(withoutCall.options.jevScreen).toBeUndefined();
     } finally {
       vi.useRealTimers();
     }
   });
 
-  it("GET never supplies a hook either, even for a signed-in user with every old setting present", async () => {
-    stubOldCompanyJevSettings();
-    stubSignedInTier2("owner-no-jev-get");
+  it("the key is not in the request handed to the pipeline, in any field", async () => {
+    stubSignedIn("owner-jev-req");
+
+    await POST(request({ topics: ["battery"], aiTier: 2, jevApiKey: KEY }));
+
+    const { request: pipelineRequest } = lastPipelineCall();
+    expect(pipelineRequest).not.toHaveProperty("jevApiKey");
+    expect(JSON.stringify(pipelineRequest)).not.toContain(KEY);
+    // Nor in the scope that becomes a cache identity.
+    expect(JSON.stringify(pipelineRequest.paperCacheScope ?? null)).not.toContain(KEY);
+  });
+
+  it("nothing is scheduled after the response: Jev runs inside the request, so after() is never called", async () => {
+    stubSignedIn("owner-jev-after");
+    await POST(request({ topics: ["battery"], aiTier: 2, jevApiKey: KEY }));
+    await screenFn()!([{ id: "p1", title: "A Paper", abstract: null }]);
+    expect(mocks.after).not.toHaveBeenCalled();
+  });
+
+  it("GET never supplies a screen function, even for a signed-in user", async () => {
+    stubSignedIn("owner-jev-get");
 
     const response = await GET(new NextRequest("http://localhost/api/feed?topics=battery"));
 
     expect(response.status).toBe(200);
-    expect(lastPipelineOptions()?.onFreshShortlist).toBeUndefined();
-    expect(mocks.after).not.toHaveBeenCalled();
+    expect(lastPipelineCall().options?.jevScreen).toBeUndefined();
   });
 
-  it("the route's own source reads no company Jev setting, imports no broker, flag or dispatcher, and schedules nothing with after()", () => {
+  it("the response carries what Jev did (counts only) and never the key", async () => {
+    stubSignedIn("owner-jev-meta");
+    mocks.runFeedPipeline.mockResolvedValue({
+      items: [],
+      meta: { ...baseMeta(), jevScreening: { status: "applied", screened: 50, of: 50 } },
+    });
+
+    const response = await POST(request({ topics: ["battery"], aiTier: 2, jevApiKey: KEY }));
+    const text = await response.text();
+
+    expect(JSON.parse(text).meta.jevScreening).toEqual({ status: "applied", screened: 50, of: 50 });
+    expect(text).not.toContain(KEY);
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+  });
+
+  it("the route allows a long request: maxDuration is pinned to 300 seconds", async () => {
+    const route = await import("./route");
+    expect(route.maxDuration).toBe(300);
+  });
+
+  it("the route's own source names no company Jev setting, imports no broker, flag or dispatcher, schedules nothing with after(), and reads the key only from the request body", () => {
     const source = readFileSync(path.join(process.cwd(), "src/app/api/feed/route.ts"), "utf8");
     for (const gone of [
       "JEV_API_KEY",
@@ -1707,8 +1912,10 @@ describe("/api/feed schedules no Jev call (the company's Jev path is removed)", 
       "runJevShadow",
       "buildJevShadowHook",
       "after(",
+      "process.env.JEV",
     ]) {
       expect(source, gone).not.toContain(gone);
     }
+    expect(source).toContain("parseJevApiKey(");
   });
 });

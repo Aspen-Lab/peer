@@ -132,6 +132,25 @@ export interface FeedMeta {
    * or on the `DashboardBatch` row (§1bb.3: "live requests only now").
    */
   emptyReasonCode?: FeedEmptyReasonCode;
+  /**
+   * Jev on the reader's own key. Present ONLY when the reader sent a Jev key with
+   * this request (and structurally absent otherwise, the same conditional-spread
+   * convention `rrf` and `emptyReasonCode` use), so a reader without a key sees
+   * no field and no hint. It is what Jev did when today's pool was built:
+   * `applied` (every paper answered, Jev's order used), `partial` (enough
+   * answered, 60 % or more, Jev's order used), `unavailable` (too few answered,
+   * the briefing was screened without Jev) or `rejected` (Jev refused the key,
+   * so it was screened without Jev). `screened` is how many of the `of` shortlisted
+   * papers Jev answered, cache hits included. Counts only: never the key, never a
+   * paper's text. Read from the cached pool, so a same-day cache hit reports it
+   * too; a replay of an already-frozen dashboard batch carries none, and the
+   * client keeps the last report it saw.
+   */
+  jevScreening?: {
+    status: "applied" | "partial" | "unavailable" | "rejected";
+    screened: number;
+    of: number;
+  };
 }
 
 /**

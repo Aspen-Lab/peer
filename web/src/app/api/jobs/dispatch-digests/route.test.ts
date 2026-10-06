@@ -890,14 +890,14 @@ describe("GET /api/jobs/dispatch-digests -- PEER_DIGEST_DEDUPE hardening (P4-S7-
   });
 });
 
-// P3-S5 (Round 3) — ABC-JEV-INTEGRATION.md §4 "P3-S5 DESIGN RULING": the
-// Jev shadow's `onFreshShortlist` hook is wired ONLY in
-// app/api/feed/route.ts's POST handler — this route is never edited by
-// that slice. This is the regression net for "no cron-driven Jev spend":
-// it proves the structural reason the hook cannot reach this call site
-// (runFeedPipeline is called with a single argument here, no options
-// object at all), not merely that today's code happens not to pass one.
-describe("GET /api/jobs/dispatch-digests -- never schedules the Jev shadow (P3-S5)", () => {
+// Jev runs on a key the READER sends in a live feed request body (`/api/feed`'s
+// POST), and only there. This route is the cron-driven digest: it never has a
+// reader's browser, so it never has a Jev key, and it must never be able to
+// spend one. This is the regression net for "no cron-driven Jev call": it proves
+// the structural reason (runFeedPipeline is called with a single argument here,
+// no options object at all, and the request carries no Jev field), not merely
+// that today's code happens not to pass one.
+describe("GET /api/jobs/dispatch-digests -- never uses Jev (a reader's key exists only in a live feed request)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.stubEnv("CRON_SECRET", "test-secret");
@@ -913,7 +913,7 @@ describe("GET /api/jobs/dispatch-digests -- never schedules the Jev shadow (P3-S
     vi.useRealTimers();
   });
 
-  it("calls runFeedPipeline with a single argument (no options object) -- structurally cannot carry onFreshShortlist", async () => {
+  it("calls runFeedPipeline with a single argument (no options object) -- structurally cannot carry a Jev screen, and the request has no Jev field", async () => {
     const { client } = makeAdminClient({ profiles: [profileRow()] });
     mocks.createAdminClient.mockReturnValue(client);
 
@@ -922,7 +922,10 @@ describe("GET /api/jobs/dispatch-digests -- never schedules the Jev shadow (P3-S
     expect(mocks.runFeedPipeline).toHaveBeenCalled();
     for (const call of mocks.runFeedPipeline.mock.calls) {
       expect(call).toHaveLength(1);
-      expect((call[0] as Record<string, unknown>)).not.toHaveProperty("onFreshShortlist");
+      const request = call[0] as Record<string, unknown>;
+      expect(request).not.toHaveProperty("jevScreen");
+      expect(request).not.toHaveProperty("jevApiKey");
+      expect(JSON.stringify(request)).not.toMatch(/jev/i);
     }
   });
 });

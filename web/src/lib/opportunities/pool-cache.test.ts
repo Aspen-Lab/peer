@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import {
   derivePoolCacheKey,
@@ -476,6 +478,95 @@ describe("CachedPaperPool.rrf — optional provenance field (P2-S6-FIX, F-A-P2S6
     const raw: unknown = JSON.parse(JSON.stringify(poolWithRrf()));
     expect(isCachedPool(raw)).toBe(true);
     expect((raw as CachedPaperPool).rrf).toEqual(poolWithRrf().rrf);
+  });
+});
+
+// A reader who brings their own Jev key gets a pool built with Jev's order in
+// it. That pool must not be the one a reader without the key shares (adding the
+// key at noon would otherwise keep serving the keyless pool until tomorrow), so
+// `jevScreening` is part of the key — but ONLY when true, so every key that
+// existed before this field is byte-identical (the daily pool of every reader
+// without a Jev key is not rebuilt by this change).
+describe("pool cache key — jevScreening (a reader's Jev key)", () => {
+  const paperInput: PoolCacheKeyInput = {
+    surface: "papers",
+    requiredTopics: ["solid-state battery", "LCO"],
+    exploreTopics: ["catalysis"],
+    aiTier: 2,
+    paperScopeIdentity: "scope-identity-fixture",
+    paperOwnerId: "owner-fixture",
+    now: new Date(2026, 6, 29, 9, 0),
+  };
+
+  it("leaves every existing key byte-identical when the field is absent (pinned values)", () => {
+    // Computed with the code as it stood before the field existed.
+    expect(derivePoolCacheKey(paperInput)).toBe("peer-pool-v23-papers-2026-07-29-a20d4bb76a385658ff2b53d56a0f0fc1");
+    expect(derivePoolCacheKey({ ...paperInput, aiTier: 0 })).toBe(
+      "peer-pool-v23-papers-2026-07-29-b06c55f8f53271189881eaf696c74520",
+    );
+    expect(derivePoolCacheKey({ ...paperInput, aiTier: undefined })).toBe(
+      "peer-pool-v23-papers-2026-07-29-715ae6d0d47e52f96ce1406f03008b1c",
+    );
+  });
+
+  it("treats jevScreening: undefined like an absent field", () => {
+    expect(derivePoolCacheKey({ ...paperInput, jevScreening: undefined })).toBe(derivePoolCacheKey(paperInput));
+  });
+
+  it("gives a reader with a Jev key a different pool from the same reader without one, at every AI tier", () => {
+    for (const aiTier of [0, 2] as const) {
+      const without = derivePoolCacheKey({ ...paperInput, aiTier });
+      const withJev = derivePoolCacheKey({ ...paperInput, aiTier, jevScreening: true });
+      expect(withJev).not.toBe(without);
+      expect(withJev.startsWith("peer-pool-v23-papers-2026-07-29-")).toBe(true);
+    }
+  });
+
+  it("is stable: the same Jev inputs give the same key", () => {
+    expect(derivePoolCacheKey({ ...paperInput, jevScreening: true })).toBe(
+      derivePoolCacheKey({ ...paperInput, jevScreening: true }),
+    );
+  });
+
+  it("still separates owners and days for a Jev pool", () => {
+    const a = derivePoolCacheKey({ ...paperInput, jevScreening: true });
+    expect(derivePoolCacheKey({ ...paperInput, paperOwnerId: "someone-else", jevScreening: true })).not.toBe(a);
+    expect(derivePoolCacheKey({ ...paperInput, now: new Date(2026, 6, 30, 9, 0), jevScreening: true })).not.toBe(a);
+  });
+
+  it("the key has no field that could carry the Jev key: only a boolean, true or absent", () => {
+    // The type admits `true` only; a key value cannot be passed.
+    const input: PoolCacheKeyInput = { ...paperInput, jevScreening: true };
+    expect(input.jevScreening).toBe(true);
+    const text = readFileSync(join(process.cwd(), "src/lib/opportunities/pool-cache.ts"), "utf8");
+    expect(text).toMatch(/jevScreening\?:\s*true;/);
+    expect(text).not.toMatch(/jevApiKey/);
+  });
+});
+
+describe("CachedPaperPool.jev — optional record of what Jev did (a reader's Jev key)", () => {
+  function poolWithoutJev(): CachedPaperPool {
+    return {
+      surface: "papers",
+      items: [],
+      aiOrder: [],
+      aiReasons: {},
+      generatedAt: new Date(2026, 6, 29, 9, 0).toISOString(),
+      localDate: "2026-07-29",
+    };
+  }
+
+  it("a pool with no jev field is valid (every old pool stays valid)", () => {
+    expect(isCachedPaperPool(poolWithoutJev())).toBe(true);
+    expect(isCachedPool(JSON.parse(JSON.stringify(poolWithoutJev())))).toBe(true);
+  });
+
+  it("a pool that records what Jev did is valid, and the record survives a JSON round trip", () => {
+    const pool: CachedPaperPool = { ...poolWithoutJev(), jev: { status: "partial", screened: 31, of: 50 } };
+    expect(isCachedPaperPool(pool)).toBe(true);
+    const raw: unknown = JSON.parse(JSON.stringify(pool));
+    expect(isCachedPool(raw)).toBe(true);
+    expect((raw as CachedPaperPool).jev).toEqual({ status: "partial", screened: 31, of: 50 });
   });
 });
 

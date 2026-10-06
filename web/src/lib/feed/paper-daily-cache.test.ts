@@ -8,7 +8,7 @@ import { PAPER_POOL_KEY_PREFIX } from "@/lib/opportunities/pool-cache";
 import { createTrustedPaperCacheScope } from "@/lib/opportunities/private-paper-cache";
 import { normalizeFeedIntent } from "./intent";
 import { selectedSenseConcept } from "./senses";
-import type { ShadowCandidate } from "@/lib/decisions/shadow";
+import type { ScreenCandidate, ScreenResult } from "@/lib/decisions/screen";
 
 vi.mock("@/lib/llm/providers/registry", async (importOriginal) => {
   const actual = await importOriginal<
@@ -381,22 +381,20 @@ describe("daily paper pool", () => {
   // P4-S8a (Round 3) — F-B-P4S8-01 regression pin, ABC-JEV-INTEGRATION.md
   // §4 Round 3 Policy E3 / docs/jev-abc/P4-S8-B-20260924T115008Z.md DESIGN
   // B3: "a persisted cache-hit never invokes build()/the Tier-2 path/
-  // onFreshShortlist." Checked for existing coverage before adding this:
-  // the build-and-Tier-2 halves are already separately pinned just above,
-  // by "runs the Tier-2 rerank once a day and replays its ranking after
-  // that" (`academicFetch`/`generateJsonText` each called exactly once
-  // across two same-day calls); the onFreshShortlist half already has its
-  // own dedicated pin in `pipeline.shadow.test.ts`'s "(d) cache hit: the
-  // hook fires on the fresh build but never again on the cached read".
-  // `onFreshShortlist` already exists on `FeedPipelineOptions` on disk
-  // (pipeline.ts), so the hook half is exercised here, not skipped. What
-  // was missing — and what this test adds — is a single assertion that
-  // ties all three together as one claim about the SAME cache-hit read,
-  // which is what B3 actually asks this file to pin: a second call, at
-  // aiTier 2 so the build, Tier-2 rerank, AND shadow-hook paths are all
-  // live at once, proving a cache hit is a true no-op on every one of
-  // them, not just whichever one each pre-existing test happened to check.
-  it("a cache-hit read invokes no build, no Tier-2 rerank, and no onFreshShortlist hook (P4-S8a regression pin)", async () => {
+  // the Jev screen." The Jev hook that B3 named (a fire-and-forget
+  // `onFreshShortlist`) became the reader's own `jevScreen` (Jev on the
+  // reader's key, awaited inside the build); the claim is the same: the
+  // build-and-Tier-2 halves are pinned just above, by "runs the Tier-2
+  // rerank once a day and replays its ranking after that"
+  // (`academicFetch`/`generateJsonText` each called exactly once across two
+  // same-day calls), and the Jev half has its own dedicated pin in
+  // `pipeline.jev.test.ts` ("the second same-day read makes no Jev call").
+  // What this test adds is a single assertion that ties all three together
+  // as one claim about the SAME cache-hit read: a second call, at aiTier 2 so
+  // the build, Tier-2 rerank, AND Jev-screen paths are all live at once,
+  // proving a cache hit is a true no-op on every one of them, not just
+  // whichever one each pre-existing test happened to check.
+  it("a cache-hit read invokes no build, no Tier-2 rerank, and no Jev screen (P4-S8a regression pin)", async () => {
     const { academicFetch } = stubSources();
     const generateJsonText = vi.fn(async () =>
       JSON.stringify({
@@ -416,13 +414,25 @@ describe("daily paper pool", () => {
       topics: request.topics,
       aiTier: 2,
     });
-    const hookCalls: ReadonlyArray<ShadowCandidate>[] = [];
-    const onFreshShortlist = (shortlist: ReadonlyArray<ShadowCandidate>) => {
+    const hookCalls: ReadonlyArray<ScreenCandidate>[] = [];
+    const jevScreen = async (shortlist: ReadonlyArray<ScreenCandidate>): Promise<ScreenResult> => {
       hookCalls.push(shortlist);
+      return {
+        decisions: new Map(),
+        summary: {
+          totalCandidates: shortlist.length,
+          attempted: 0,
+          cacheHits: 0,
+          byStatus: {},
+          deadlineExceeded: false,
+          rejected: false,
+          throttled: false,
+        },
+      };
     };
     const tier2Request = { ...request, aiTier: 2 as const, paperCacheScope: scope };
 
-    const first = await runFeedPipeline(tier2Request, { cache, now, onFreshShortlist });
+    const first = await runFeedPipeline(tier2Request, { cache, now, jevScreen });
     expect(first.items).not.toHaveLength(0);
     expect(academicFetch).toHaveBeenCalledTimes(1);
     expect(generateJsonText).toHaveBeenCalledTimes(1);
@@ -430,7 +440,7 @@ describe("daily paper pool", () => {
 
     // Second call, same key (same owner/topics/day/aiTier) — a persisted
     // cache hit, not a fresh build. None of the three counters may move.
-    const second = await runFeedPipeline(tier2Request, { cache, now, onFreshShortlist });
+    const second = await runFeedPipeline(tier2Request, { cache, now, jevScreen });
     expect(second.items).not.toHaveLength(0);
     expect(academicFetch).toHaveBeenCalledTimes(1);
     expect(generateJsonText).toHaveBeenCalledTimes(1);
