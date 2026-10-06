@@ -118,7 +118,7 @@ describe("logDecisionUsage", () => {
 });
 
 describe("logDecisionUsage — structural safety (never owner/paper/intent/key text)", () => {
-  it("its own parameter type has no owner id, paper id/title/abstract, intent, or key field — grep this file's own source, the same structural guard broker-client.test.ts/jev-client.test.ts already use", () => {
+  it("its own parameter type has no owner id, paper id/title/abstract, intent, or key field — grep this file's own source, the same structural guard jev-client.test.ts already uses", () => {
     const here = fileURLToPath(new URL(".", import.meta.url));
     const source = readFileSync(`${here}usage-log.ts`, "utf8");
     const forbidden = [

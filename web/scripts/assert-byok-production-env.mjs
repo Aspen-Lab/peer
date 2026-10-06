@@ -50,18 +50,19 @@ const REQUIRED_ON_VERCEL = [
  * or a leak. **A Vercel project that still has the variable set will now FAIL
  * the build** — by design; the variable must be removed before deploying.
  *
- * **JEV-DIRECT (§1aa) — `JEV_API_KEY` LEFT THIS LIST, the opposite direction
- * from every name above.** The user moved the Jev key into Vercel on purpose
- * (ABC-JEV-INTEGRATION.md §1aa: "the Jev key goes to Vercel; Peer calls Jev
- * directly"), reversing the prior instruction that kept it Supabase-only
- * (§1r). Manager ruling (§1ab P1): Jev is an optional, default-off feature, so
- * the key is ALLOWED and SILENT — it joins no list in this file; a deployment
- * builds identically whether the key is set, unset, or blank, with no message
- * either way (a warning on every build without an optional key would just
- * teach people to ignore warnings).
- * The one file allowed to read it is `src/lib/decisions/jev-direct-client.ts`
- * — enforced by `src/lib/security/spend-scans.test.ts`'s placement scan, not
- * by this guard.
+ * **Owner, 2026-10-06 — `JEV_API_KEY` and `PEER_JEV_BROKER_SECRET` JOIN THEM.**
+ * Jev is no longer a company key. It was ALLOWED and SILENT here (JEV-DIRECT
+ * §1aa, manager ruling §1ab P1: the company's Jev key lived in Vercel on
+ * purpose, and Peer called Jev with it for readers). The owner cut every
+ * company-API path; Jev is now a bring-your-own-key option, like a model key:
+ * the reader applies for a Jev key, pastes it into their profile, and the
+ * browser sends it with the paper request. Nothing reads `JEV_API_KEY` any more
+ * (`src/lib/security/spend-scans.test.ts` scan 7 asserts it), and the broker
+ * whose secret `PEER_JEV_BROKER_SECRET` was is deleted. **A Vercel project that
+ * still has either variable set will FAIL the build** — by design, the same as
+ * `GOOGLE_API_KEY` and `TAVILY_API_KEY` before them; remove them (every
+ * environment) before deploying. The other `PEER_JEV_*` names are inert (nothing
+ * reads them), so they do not fail a build.
  */
 const FORBIDDEN_ON_VERCEL = [
   // The company's own model key. Peer has none; readers bring theirs.
@@ -84,6 +85,11 @@ const FORBIDDEN_ON_VERCEL = [
   // 5-03 · D2a — the same kind of risk as Brave, for the same reason, so it
   // lives next to it.
   "TAVILY_API_KEY",
+  // Owner, 2026-10-06 — Jev is the reader's own key now. See the paragraph
+  // above: a Jev key or a broker secret on the deployment is a company
+  // credential nothing may use.
+  "JEV_API_KEY",
+  "PEER_JEV_BROKER_SECRET",
 ];
 
 function isVercelBuild(env) {
@@ -171,6 +177,11 @@ export function formatAuditMessage({ missing, forbidden }) {
       `Remove these operator-funded AI settings from Vercel: ${forbidden.join(", ")}.`,
       "Peer holds no model key of its own: readers add theirs in the app, and a key on the deployment is a company credential nothing may use.",
     );
+    if (forbidden.some((name) => name.startsWith("JEV_") || name.startsWith("PEER_JEV_"))) {
+      lines.push(
+        "A Jev key is the reader's too: they paste it into their profile, and Peer passes it to Jev only while it screens their papers.",
+      );
+    }
   }
   lines.push(
     "Local .env.local credentials remain supported by `next dev`; this check only runs on a Vercel build.",

@@ -1,13 +1,10 @@
 /**
- * The actual Jev HTTP transport. Deliberately Deno-portable: no `next/*`,
- * no `@/lib/supabase/*`, no `process.env` reads — every runtime import
- * below is a relative sibling file, and this file receives its API key
- * only as a `callJev(...)` parameter (ABC-JEV-INTEGRATION.md §1p.H(3),
- * BINDING: "NO direct-key path anywhere in web/" — `jev-client.ts` is
- * exercised in `web/` by tests only; a real key, if this is ever
- * duplicated into a Supabase Edge Function per P3-S4, is supplied by
- * whatever calls this function, never read from an environment variable
- * inside it).
+ * The actual Jev HTTP transport. Free of `next/*`, `@/lib/supabase/*` and
+ * `process.env` reads: every runtime import below is a relative sibling file,
+ * and this file receives its API key only as a `callJev(...)` parameter. The
+ * key is the READER'S own (Jev is a bring-your-own-key option; Peer holds no
+ * Jev key), supplied by whatever calls this function (`jev-direct-client.ts`),
+ * never read from an environment variable inside it.
  *
  * Maps every HTTP/network outcome to a typed, NEVER-THROWING result — see
  * the fault table in docs/jev-abc/P3-B-20260924T0525Z.md DESIGN §3. Retries

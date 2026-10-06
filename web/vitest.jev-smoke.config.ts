@@ -4,7 +4,8 @@ import { selectJevSmokeEnv } from "./vitest.env-allowlist";
 import { sharedVitestConfig } from "./vitest.shared";
 
 // JEV-DIRECT (§1aa point 6) — the only configuration that may load a local
-// JEV_API_KEY credential. Sibling to vitest.live-channels.config.ts: same
+// JEV_SMOKE_API_KEY credential (the smoke runner's own name; Peer holds no Jev
+// key and nothing reads the old company name). Sibling to vitest.live-channels.config.ts: same
 // shape, own allow-list, own opt-in literal, own single test file. Vite
 // accepts prefixes rather than exact names, so select the narrow allow-list
 // afterward. Nobody runs `npm run test:jev-smoke` as part of this pass — it

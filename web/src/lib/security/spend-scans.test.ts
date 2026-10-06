@@ -235,31 +235,58 @@ describe("scan 3 — no operator search credential is read anywhere", () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SCAN 7 — JEV_API_KEY is read in exactly one place (JEV-DIRECT §1aa)
+// SCAN 7 — nothing reads a Jev key from the environment: the key is the reader's
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("scan 7 — JEV_API_KEY is read in exactly one file (JEV-DIRECT §1aa)", () => {
+describe("scan 7 — no source file reads a Jev key from the environment", () => {
   /**
-   * JEV-DIRECT (§1aa) REVERSES §1r: the user moved the Jev key into Vercel
-   * alongside every other provider key, so Peer now calls Jev directly
-   * instead of through the (still-present, still-dormant) Supabase broker.
-   * Every scan/test that used to assert "JEV_API_KEY is never read anywhere
-   * in web/" is rewritten, never deleted (§1aa point 4) — this scan is the
-   * POSITIVE half of that old claim: exactly one file reads the key, and it
-   * is the expected one. `broker-client.test.ts`'s own structural check
-   * ("never references JEV_API_KEY... in its own source") is unaffected and
-   * stays green unchanged — the broker path is a different transport and
-   * must still never see the raw key.
+   * **REWRITTEN, NOT DELETED — the owner's decision of 2026-10-06 changed the
+   * premise.** This scan used to assert that `JEV_API_KEY` was read in exactly
+   * one file, `jev-direct-client.ts` (JEV-DIRECT §1aa: the company's Jev key
+   * lived in Vercel on purpose). Peer now holds no Jev key of its own: Jev is a
+   * bring-your-own-key option, the reader's key travels in the paper request
+   * body, and `callJevDirect` receives it as a parameter. So the honest answer
+   * is **none**, the build guard bans the name on Vercel, and a revival is a
+   * failing case rather than a quiet addition.
+   *
+   * The scans read code with comments stripped, so the prose in these modules
+   * may explain the history without tripping them. The build guard names the
+   * variable in its ban list (a string, not a read); that one file is the only
+   * source allowed to contain the name at all.
    */
-  const GATE = "src/lib/decisions/jev-direct-client.ts";
+  const GUARD = "scripts/assert-byok-production-env.mjs";
 
-  it(`reads process.env.JEV_API_KEY only inside ${GATE}`, () => {
-    const readers = filesMatching(/process\.env\.JEV_API_KEY\b/);
-    expect(readers).toEqual([GATE]);
+  it("reads process.env.JEV_API_KEY NOWHERE in source or scripts", () => {
+    expect(filesMatching(/process\.env\.JEV_API_KEY\b/)).toEqual([]);
   });
 
-  it("the gate module actually exists (a rename would otherwise show up as an empty result, not a failure naming why)", () => {
-    expect(fs.existsSync(path.join(process.cwd(), GATE))).toBe(true);
+  it("names JEV_API_KEY in no source file except the build guard's ban list", () => {
+    expect(filesMatching(/\bJEV_API_KEY\b/)).toEqual([GUARD]);
+  });
+
+  it("names no PEER_JEV_ setting in any source file except the build guard (the broker's secret is banned there)", () => {
+    expect(filesMatching(/\bPEER_JEV_[A-Z_]+\b/)).toEqual([GUARD]);
+  });
+
+  it("reads no process.env name that starts with JEV_ or PEER_JEV_, however it is spelled", () => {
+    expect(filesMatching(/process\.env(\.|\[\s*["'`])(PEER_)?JEV_/)).toEqual([]);
+  });
+
+  it("keeps the deleted company-funded Jev modules from coming back", () => {
+    for (const file of [
+      "src/lib/decisions/broker-client.ts",
+      "src/lib/decisions/jev-dispatch.ts",
+      "src/lib/decisions/flag.ts",
+      "src/lib/decisions/gemini-fallback.ts",
+      "src/lib/security/jev-broker-auth.ts",
+      "supabase/functions/jev-broker/index.ts",
+    ]) {
+      expect(fs.existsSync(path.join(process.cwd(), file)), `${file} is back`).toBe(false);
+    }
+  });
+
+  it("the direct client still exists (a rename would otherwise show up as an empty result, not a failure naming why)", () => {
+    expect(fs.existsSync(path.join(process.cwd(), "src/lib/decisions/jev-direct-client.ts"))).toBe(true);
   });
 });
 

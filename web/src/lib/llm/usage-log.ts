@@ -54,15 +54,15 @@ export function now(): number {
 // same structural guard the decision layer's other modules already use for
 // their own leak tests.
 
-/** One shadow-mode decision-call attempt's cost/outcome, safe to log verbatim. */
+/** One Jev decision-call attempt's cost/outcome, safe to log verbatim. */
 export interface DecisionUsageLog {
   /** Always `"typesafe"` today (`decisions/decision-cache.ts`'s `DECISION_CACHE_PROVIDER`) — kept as a field, not a hardcoded string, for shape parity with `LlmUsage`. */
   provider: string;
-  /** The ACTUAL echoed Jev model id. Empty string when degraded (cache hit, or any non-"ok" broker/call status) — never a placeholder, never guessed. */
+  /** The ACTUAL echoed Jev model id. Empty string when degraded (cache hit, or any non-"ok" call status) — never a placeholder, never guessed. */
   model: string;
-  /** Whether this attempt was answered from the decision cache without ever reaching the broker. */
+  /** Whether this attempt was answered from the decision cache without ever reaching Jev. */
   cacheHit: boolean;
-  /** `"cache_hit"`, `"ok"`, or any `BrokerCallResult`/`JevCallResult` fault-kind status string (`decisions/broker-client.ts`/`decisions/jev-client.ts`). */
+  /** `"cache_hit"`, `"ok"`, or any `JevCallResult` fault-kind status string (`decisions/jev-client.ts`). */
   status: string;
   inputTokens: number;
   /** Always 0 — Jev's output is free/uncosted; the field stays for shape parity with `LlmUsage`. */
@@ -70,7 +70,7 @@ export interface DecisionUsageLog {
   latencyMs: number;
 }
 
-/** Emit a single compact line per Jev shadow decision-call attempt. Safe to call in any runtime. */
+/** Emit a single compact line per Jev decision-call attempt. Safe to call in any runtime. */
 export function logDecisionUsage(u: DecisionUsageLog): void {
   const parts = [
     `[decision] ${u.provider}${u.model ? `/${u.model}` : ""}`,

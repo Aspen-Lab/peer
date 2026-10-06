@@ -1,21 +1,16 @@
 /**
- * JEV-DIRECT (§1aa point 6) — the opt-in live Jev smoke runner. Mirrors
- * `evaluation/live-channels/*` in shape, but simpler: a single provider with
- * its own internal retry/pacing already built in (`jev-client.ts`'s bounded
- * 429/529 backoff), so the S2/OpenAlex ledger's multi-provider pacing
- * machinery (`call-budget.ts`'s `CallBudget`) has no Jev equivalent to
- * copy — a plain call counter is enough here.
+ * The opt-in live Jev smoke runner. Mirrors `evaluation/live-channels/*` in
+ * shape, but simpler: a single provider with its own internal retry/pacing
+ * already built in (`jev-client.ts`'s bounded 429/529 backoff), so the
+ * S2/OpenAlex ledger's multi-provider pacing machinery (`call-budget.ts`'s
+ * `CallBudget`) has no Jev equivalent to copy — a plain call counter is enough.
  *
- * Calls `callJevDirect` DIRECTLY (not the transport switch — the whole
- * point of this runner is confirming the direct path specifically), using a
- * throwaway in-memory `CounterStore` created fresh for the run and
- * discarded after. This is required by the smoke config's own exact-name
- * allow-list (`JEV_API_KEY` only — no Supabase credentials are available to
- * this process at all), so a real reservation is structurally impossible
- * here and must not be attempted. A synthetic fixed owner id and generous
- * caps on the in-memory store mean reservation always succeeds and this run
- * never touches, or is bounded by, any real user's or the real global daily
- * cap.
+ * Calls `callJevDirect` DIRECTLY with a key it is handed: `options.apiKey`, or
+ * the smoke key (`JEV_SMOKE_API_KEY`, read in `gate.ts`) when none is passed.
+ * It is the same call a reader's key makes, with no company key, no broker and
+ * no daily budget. With no key at all, every input is reported `disabled` and
+ * nothing is called. The one thing the output carries about the key is a
+ * presence boolean.
  *
  * Contract-mismatch reporting is the actual point of this runner:
  * `callJevDirect`'s status IS the signal — `"ok"` means the response passed
@@ -24,40 +19,31 @@
  * verbatim — `jev-contract.ts`'s `fail()` `detail` strings only ever embed
  * question ids and Peer's own fixed rubric text, never paper/user data.
  *
- * NOBODY RUNS THIS LIVE IN THIS PASS. Built and unit-tested with injected
- * fakes only (`runner.test.ts`); `npm run test:jev-smoke` is never invoked —
- * see this item's checkpoint's "HOW THE USER RUNS THE JEV SMOKE TEST LATER"
- * section for the one command and what it costs.
+ * Built and unit-tested with injected fakes only (`runner.test.ts`);
+ * `npm run test:jev-smoke` is a developer's opt-in command and costs a few
+ * cents of the developer's own Jev account.
  */
 
 import fs from "node:fs";
 import path from "node:path";
 import { callJevDirect, type JevDirectClientOptions } from "@/lib/decisions/jev-direct-client";
-import type { BrokerCallResult } from "@/lib/decisions/broker-client";
-import { InMemoryCounterStore } from "@/lib/usage/counters";
-import { credentialPresence, type JevSmokeCredentialPresence } from "./gate";
+import type { JevCallResult } from "@/lib/decisions/jev-client";
+import { readJevSmokeApiKey, type JevSmokeCredentialPresence } from "./gate";
 import { JEV_SMOKE_INPUTS, type JevSmokeInput } from "./inputs";
 
 /** The spec's own suggested number — bounds accidental repeat-run/loop accumulation, not a single run's realistic cost (see the checkpoint's cost estimate). */
 export const DEFAULT_JEV_SMOKE_CEILING = 10;
 
-/** Fixed, synthetic — never a real user id. This run's reservation is against a throwaway in-memory store, never the real Supabase-backed one. */
-const SMOKE_OWNER_ID = "jev-smoke";
-/** Generous on purpose: this in-memory store exists only so a reservation always succeeds; it is discarded after the run. */
-const SMOKE_PER_USER_CAP = 1_000;
-const SMOKE_GLOBAL_CAP = 1_000;
-
 export interface JevSmokeInputResult {
   id: string;
   label: string;
-  status: BrokerCallResult["status"];
+  /** `"disabled"` only when the run had no key at all (no call was made). */
+  status: JevCallResult["status"] | "disabled";
   latencyMs: number;
   /** Present only when `status === "ok"` — a silent model-alias upgrade is exactly what pinning + reporting this catches. */
   modelId?: string;
   /** Present only for `"invalid_response"` — `jev-contract.ts`'s own fixed rubric text/question ids, never paper/user data. */
   detail?: string;
-  /** Present only for `"reservation_refused"` (structurally unreachable given this run's generous in-memory caps, but reported if it ever somehow fires). */
-  reason?: string;
 }
 
 export interface JevSmokeSummary {
@@ -72,6 +58,8 @@ export interface JevSmokeSummary {
 }
 
 export interface RunJevSmokeOptions {
+  /** The Jev key to call with. Defaults to the smoke key (`JEV_SMOKE_API_KEY`); with neither, every input reports `disabled`. */
+  apiKey?: string;
   /** Defaults to `JEV_SMOKE_INPUTS`. Injectable so a test (or a user's own copy, per the checkpoint) can run a different set. */
   inputs?: readonly JevSmokeInput[];
   /** Checked BEFORE each attempt, same "check before, never after" discipline as `CallBudget.blockReason`. Defaults to `DEFAULT_JEV_SMOKE_CEILING`. */
@@ -103,11 +91,10 @@ function defaultWriteOutput(
   }
 }
 
-function toInputResult(input: JevSmokeInput, call: BrokerCallResult, latencyMs: number): JevSmokeInputResult {
+function toInputResult(input: JevSmokeInput, call: JevCallResult, latencyMs: number): JevSmokeInputResult {
   const base = { id: input.id, label: input.label, status: call.status, latencyMs };
   if (call.status === "ok") return { ...base, modelId: call.modelId };
   if (call.status === "invalid_response") return { ...base, detail: call.detail };
-  if (call.status === "reservation_refused") return { ...base, reason: call.reason };
   return base;
 }
 
@@ -124,9 +111,7 @@ export async function runJevSmoke(options: RunJevSmokeOptions = {}): Promise<Jev
   const ceiling = options.ceiling ?? DEFAULT_JEV_SMOKE_CEILING;
   const now = options.now ?? (() => new Date());
   const startedAt = now();
-  // Throwaway, in-memory, discarded after this function returns — never the
-  // real Supabase-backed store. See this module's own doc comment.
-  const store = new InMemoryCounterStore();
+  const apiKey = options.apiKey ?? readJevSmokeApiKey();
 
   const results: JevSmokeInputResult[] = [];
   const perInput = new Map<string, JevSmokeInputResult>();
@@ -142,17 +127,14 @@ export async function runJevSmoke(options: RunJevSmokeOptions = {}): Promise<Jev
 
     let result: JevSmokeInputResult;
     try {
-      const callStartedAt = Date.now();
-      const call = await callJevDirect(input.request, {
-        ownerId: SMOKE_OWNER_ID,
-        entitled: true,
-        perUserCap: SMOKE_PER_USER_CAP,
-        globalCap: SMOKE_GLOBAL_CAP,
-        store,
-        now: startedAt,
-        fetchImpl: options.fetchImpl,
-      });
-      result = toInputResult(input, call, Date.now() - callStartedAt);
+      if (!apiKey) {
+        // No key: report it, make no call.
+        result = { id: input.id, label: input.label, status: "disabled", latencyMs: 0 };
+      } else {
+        const callStartedAt = Date.now();
+        const call = await callJevDirect(input.request, { apiKey, fetchImpl: options.fetchImpl });
+        result = toInputResult(input, call, Date.now() - callStartedAt);
+      }
     } catch (error) {
       // Final safety net — callJevDirect is documented never-throwing, but a
       // single input's failure must never abort the rest of the run.
@@ -176,7 +158,7 @@ export async function runJevSmoke(options: RunJevSmokeOptions = {}): Promise<Jev
     ceiling,
     attempted,
     ceilingReached,
-    credentialPresence: credentialPresence(),
+    credentialPresence: { jevApiKey: Boolean(apiKey) },
     results,
     outputDir,
   };

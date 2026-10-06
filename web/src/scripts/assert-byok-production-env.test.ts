@@ -64,13 +64,15 @@ const FORBIDDEN_NAMES = [
   // anyone, so a server Tavily key on a deployment is a spend risk exactly as
   // Brave is, and the build must refuse it.
   "TAVILY_API_KEY",
-  // JEV-DIRECT (§1aa) — `JEV_API_KEY` LEFT this fixture, the same direction
-  // it left the guard's own FORBIDDEN_ON_VERCEL: the user moved the key into
-  // Vercel on purpose, reversing §1r's Supabase-only instruction. It is now
-  // ALLOWED and SILENT (manager ruling §1ab P1) — it joins no list. See the
-  // dedicated cases near the bottom of this file (`"no longer bans
-  // JEV_API_KEY"` / `"stays silent about JEV_API_KEY whether it is set or
-  // not"`).
+  // Owner, 2026-10-06 ("cut the company API path"; Jev is now a key the READER
+  // brings): `JEV_API_KEY` was ALLOWED and SILENT here (JEV-DIRECT §1aa,
+  // manager ruling §1ab P1: the company's Jev key lived in Vercel on purpose).
+  // That premise is reversed, so it is FORBIDDEN now, like the model key, and
+  // so is the secret of the broker that is deleted with it. The two cases
+  // that asserted "allowed and silent" were rewritten, not weakened: see the
+  // dedicated cases near the bottom of this file.
+  "JEV_API_KEY",
+  "PEER_JEV_BROKER_SECRET",
 ] as const;
 
 /**
@@ -306,23 +308,76 @@ describe("assert-byok-production-env", () => {
       expect(output).toContain("Peer holds no model key of its own");
     });
 
-    it("no longer bans JEV_API_KEY — JEV-DIRECT (§1aa) moved the key into Vercel on purpose; setting it builds cleanly", () => {
-      // This is the assertion that would have caught the old guard: before
-      // this item, setting JEV_API_KEY on a Vercel build (which is exactly
-      // what the user now does) would have exited 1.
-      const { status, output } = runGuard({ VERCEL: "1", ...ALL_REQUIRED, JEV_API_KEY: SENTINEL });
-      expect(status).toBe(0);
-      expect(output).not.toContain("JEV_API_KEY");
+    it("bans JEV_API_KEY on EVERY Vercel environment, naming it and never its value (the owner cut the company's Jev key; a reader brings their own)", () => {
+      // Rewritten from "no longer bans JEV_API_KEY ... builds cleanly": the
+      // owner's decision on 2026-10-06 changed the premise. Jev is a key the
+      // reader pastes into their profile; a Jev key on the deployment is a
+      // company credential nothing may use.
+      const targets: Record<string, string>[] = [
+        { VERCEL: "1" },
+        { VERCEL: "1", VERCEL_ENV: "production" },
+        { VERCEL_ENV: "production" },
+        { VERCEL_ENV: "preview" },
+        { VERCEL_ENV: "development" },
+      ];
+      for (const target of targets) {
+        const { status, output } = runGuard({ ...target, ...ALL_REQUIRED, JEV_API_KEY: SENTINEL });
+
+        expect(status, JSON.stringify(target)).toBe(1);
+        expect(output, JSON.stringify(target)).toContain("JEV_API_KEY");
+        expect(output, JSON.stringify(target)).not.toContain(SENTINEL);
+      }
     });
 
-    it("stays silent about JEV_API_KEY whether it is set or not (manager ruling §1ab P1: ALLOWED and SILENT)", () => {
-      const withKey = runGuard({ VERCEL: "1", ...ALL_REQUIRED, JEV_API_KEY: SENTINEL });
-      const withoutKey = runGuard({ VERCEL: "1", ...ALL_REQUIRED });
+    it("builds when JEV_API_KEY is absent or blank — a blank variable is not a key", () => {
+      // Rewritten from "stays silent about JEV_API_KEY whether it is set or
+      // not": silence is now only the absent and blank cases.
+      const absent = runGuard({ VERCEL: "1", ...ALL_REQUIRED });
+      const blank = runGuard({ VERCEL: "1", ...ALL_REQUIRED, JEV_API_KEY: "   " });
 
-      expect(withKey.status).toBe(0);
-      expect(withoutKey.status).toBe(0);
-      expect(withKey.output).not.toContain("JEV_API_KEY");
-      expect(withoutKey.output).not.toContain("JEV_API_KEY");
+      expect(absent.status).toBe(0);
+      expect(blank.status).toBe(0);
+      expect(absent.output).not.toContain("JEV_API_KEY");
+      expect(blank.output).not.toContain("JEV_API_KEY");
+    });
+
+    it("also bans the secret of the deleted Jev broker, naming it and never its value", () => {
+      const { status, output } = runGuard({ VERCEL: "1", ...ALL_REQUIRED, PEER_JEV_BROKER_SECRET: SENTINEL });
+
+      expect(status).toBe(1);
+      expect(output).toContain("PEER_JEV_BROKER_SECRET");
+      expect(output).not.toContain(SENTINEL);
+    });
+
+    it("does not fail a build over the other PEER_JEV_ names: nothing reads them any more, so they are inert", () => {
+      const { status, output } = runGuard({
+        VERCEL: "1",
+        ...ALL_REQUIRED,
+        PEER_JEV_SHADOW: "on",
+        PEER_JEV_BROKER: "on",
+        PEER_JEV_BROKER_URL: "https://example.invalid",
+        PEER_JEV_TRANSPORT: "direct",
+        PEER_JEV_PER_USER_DAILY_CAP: "50",
+        PEER_JEV_GLOBAL_DAILY_CAP: "2000",
+        PEER_JEV_GEMINI_FALLBACK: "on",
+      });
+
+      expect(status).toBe(0);
+      expect(output).toBe("");
+    });
+
+    it("tells the deployer that the Jev key is the reader's, not the deployment's", () => {
+      const { output } = runGuard({ VERCEL: "1", ...ALL_REQUIRED, JEV_API_KEY: SENTINEL });
+
+      expect(output).toContain("Remove these operator-funded AI settings from Vercel");
+      expect(output).toContain("JEV_API_KEY");
+      expect(output).toContain("A Jev key is the reader's too");
+    });
+
+    it("does not mention Jev when no Jev name is set", () => {
+      const { output } = runGuard({ VERCEL: "1", ...ALL_REQUIRED, GOOGLE_API_KEY: SENTINEL });
+
+      expect(output).not.toContain("Jev");
     });
   });
 

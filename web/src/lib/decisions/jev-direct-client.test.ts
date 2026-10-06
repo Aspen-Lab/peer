@@ -1,25 +1,27 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { FEED_INTENT_VERSION, type NormalizedFeedIntent } from "@/lib/feed/intent";
-import { InMemoryCounterStore } from "@/lib/usage/counters";
 import { buildJevRequest } from "./jev-contract";
 import type { FetchLike } from "./jev-client";
 import type { DecisionRequest } from "./types";
-import { callJevDirect, jevDirectConfigured, type JevDirectClientOptions } from "./jev-direct-client";
+import { callJevDirect, type JevDirectClientOptions } from "./jev-direct-client";
 
-// JEV-DIRECT (§1aa): the server-only direct Jev client. Mirrors
-// broker-client.test.ts's shape closely (same reservation/entitlement/key
-// gate ordering, same never-throws/never-leaks guarantees) since
-// jev-direct-client.ts is architecturally the direct-transport sibling of
-// broker-client.ts, reusing the exact same `reserveJevCall`/`buildJevRequest`/
-// `callJev` this whole area was built on.
+// The direct Jev client, now on the READER'S key. The key is a parameter of
+// `callJevDirect` and nothing else: no environment read, no entitlement flag,
+// no reservation, no counter. (It used to read the company's key from the
+// environment and reserve a daily budget first; the owner cut that path on
+// 2026-10-06 and Jev became a bring-your-own-key option. The cases that tested
+// the environment key, the entitlement gate and the reservation order are gone
+// with those behaviours; the leak cases, the fault table and "never throws"
+// are kept and now run against a key passed in.)
 
 // Obviously fake — never a real Jev credential. Distinctive enough that an
 // accidental substring match in any log/result would be unmistakable.
 const FAKE_API_KEY = "jev-direct-test-FAKE-KEY-do-not-use-1234567890abcdef";
-const NOW = new Date("2026-09-27T00:00:00.000Z");
+// A different invented string, put in the ENVIRONMENT to prove it is never read.
+const ENV_SENTINEL = "jev-env-sentinel-must-never-be-used-0000";
 
 function makeIntent(): NormalizedFeedIntent {
   return {
@@ -85,173 +87,74 @@ function okBody(overrides: Record<string, unknown> = {}) {
 }
 
 function baseOptions(overrides: Partial<JevDirectClientOptions> = {}): JevDirectClientOptions {
-  return {
-    ownerId: "owner-a",
-    entitled: true,
-    perUserCap: 100,
-    globalCap: 1000,
-    now: NOW,
-    store: new InMemoryCounterStore(),
-    ...overrides,
-  };
+  return { apiKey: FAKE_API_KEY, ...overrides };
 }
 
 afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-describe("jevDirectConfigured", () => {
-  it("is false when JEV_API_KEY is unset, blank, or whitespace-only", () => {
-    delete process.env.JEV_API_KEY;
-    expect(jevDirectConfigured()).toBe(false);
-    vi.stubEnv("JEV_API_KEY", "");
-    expect(jevDirectConfigured()).toBe(false);
-    vi.stubEnv("JEV_API_KEY", "   ");
-    expect(jevDirectConfigured()).toBe(false);
+describe("callJevDirect — the key is a parameter", () => {
+  it("a blank, whitespace-only or key-shaped-wrong value makes no call and answers network_error", async () => {
+    for (const apiKey of ["", "   ", "two words", "line\nbreak", "tab\tinside"]) {
+      const fetchImpl = vi.fn();
+      const result = await callJevDirect(makeRequest(), baseOptions({ apiKey, fetchImpl }));
+      expect(result, JSON.stringify(apiKey)).toEqual({ status: "network_error" });
+      expect(fetchImpl).not.toHaveBeenCalled();
+    }
   });
 
-  it("is true when JEV_API_KEY is set to a non-blank value", () => {
-    vi.stubEnv("JEV_API_KEY", FAKE_API_KEY);
-    expect(jevDirectConfigured()).toBe(true);
-  });
-});
-
-describe("callJevDirect — key gate", () => {
-  it("key unset: returns disabled, never reserves, never fetches", async () => {
-    delete process.env.JEV_API_KEY;
-    const store = new InMemoryCounterStore();
-    const incrementSpy = vi.spyOn(store, "increment");
+  it("never reads the environment: with a key-looking value in JEV_API_KEY, a blank apiKey still makes no call", async () => {
+    vi.stubEnv("JEV_API_KEY", ENV_SENTINEL);
     const fetchImpl = vi.fn();
 
-    const result = await callJevDirect(makeRequest(), baseOptions({ store, fetchImpl }));
+    const result = await callJevDirect(makeRequest(), baseOptions({ apiKey: "", fetchImpl }));
 
-    expect(result).toEqual({ status: "disabled" });
-    expect(incrementSpy).not.toHaveBeenCalled();
+    expect(result).toEqual({ status: "network_error" });
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
-  it("key blank/whitespace-only: also disabled", async () => {
-    vi.stubEnv("JEV_API_KEY", "   ");
-    const fetchImpl = vi.fn();
-    const result = await callJevDirect(makeRequest(), baseOptions({ fetchImpl }));
-    expect(result).toEqual({ status: "disabled" });
-    expect(fetchImpl).not.toHaveBeenCalled();
-  });
-});
-
-describe("callJevDirect — entitlement gate", () => {
-  beforeEach(() => {
-    vi.stubEnv("JEV_API_KEY", FAKE_API_KEY);
-  });
-
-  it("not entitled: returns not_entitled, never reserves, never fetches", async () => {
-    const store = new InMemoryCounterStore();
-    const incrementSpy = vi.spyOn(store, "increment");
-    const fetchImpl = vi.fn();
-
-    const result = await callJevDirect(makeRequest(), baseOptions({ store, fetchImpl, entitled: false }));
-
-    expect(result).toEqual({ status: "not_entitled" });
-    expect(incrementSpy).not.toHaveBeenCalled();
-    expect(fetchImpl).not.toHaveBeenCalled();
-  });
-
-  it("not entitled beats an otherwise-refusing reservation too — the entitlement check runs strictly first", async () => {
-    const store = new InMemoryCounterStore();
-    const fetchImpl = vi.fn();
-
-    const result = await callJevDirect(makeRequest(), baseOptions({ store, fetchImpl, entitled: false, perUserCap: 0 }));
-
-    expect(result).toEqual({ status: "not_entitled" });
-    expect(fetchImpl).not.toHaveBeenCalled();
-  });
-
-  it("entitled: true proceeds to reservation as normal", async () => {
-    const fetchImpl = vi.fn(async () => jsonResponse(200, okBody()));
-    const result = await callJevDirect(makeRequest(), baseOptions({ fetchImpl, entitled: true }));
-    expect(result.status).toBe("ok");
-    expect(fetchImpl).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe("callJevDirect — reservation ordering and refusal", () => {
-  beforeEach(() => {
-    vi.stubEnv("JEV_API_KEY", FAKE_API_KEY);
-  });
-
-  it("reserves strictly before any fetch on the success path (call-order proof)", async () => {
-    const store = new InMemoryCounterStore();
-    const order: string[] = [];
-    vi.spyOn(store, "increment").mockImplementation(async (...args) => {
-      order.push("reserve");
-      return InMemoryCounterStore.prototype.increment.apply(store, args);
-    });
-    const fetchImpl = vi.fn(async () => {
-      order.push("fetch");
+  it("never reads the environment: with a key in JEV_API_KEY AND a parameter, the call carries the parameter only", async () => {
+    vi.stubEnv("JEV_API_KEY", ENV_SENTINEL);
+    let capturedHeaders: HeadersInit | undefined;
+    let capturedBody = "";
+    const fetchImpl: FetchLike = vi.fn(async (_url, init) => {
+      capturedHeaders = init.headers;
+      capturedBody = String(init.body);
       return jsonResponse(200, okBody());
     });
 
-    await callJevDirect(makeRequest(), baseOptions({ store, fetchImpl }));
+    const result = await callJevDirect(makeRequest(), baseOptions({ fetchImpl }));
 
-    expect(order[0]).toBe("reserve");
-    expect(order[order.length - 1]).toBe("fetch");
+    expect(result.status).toBe("ok");
+    expect(new Headers(capturedHeaders).get("authorization")).toBe(`Bearer ${FAKE_API_KEY}`);
+    expect(JSON.stringify([...new Headers(capturedHeaders).entries()])).not.toContain(ENV_SENTINEL);
+    expect(capturedBody).not.toContain(ENV_SENTINEL);
   });
 
-  it("reserves strictly before any fetch on an ERROR path too", async () => {
-    const store = new InMemoryCounterStore();
-    const order: string[] = [];
-    vi.spyOn(store, "increment").mockImplementation(async (...args) => {
-      order.push("reserve");
-      return InMemoryCounterStore.prototype.increment.apply(store, args);
-    });
-    const fetchImpl = vi.fn(async () => {
-      order.push("fetch");
-      throw new Error("network down");
+  it("trims the key before using it", async () => {
+    let capturedHeaders: HeadersInit | undefined;
+    const fetchImpl: FetchLike = vi.fn(async (_url, init) => {
+      capturedHeaders = init.headers;
+      return jsonResponse(200, okBody());
     });
 
-    const result = await callJevDirect(makeRequest(), baseOptions({ store, fetchImpl }));
+    await callJevDirect(makeRequest(), baseOptions({ apiKey: `  ${FAKE_API_KEY}\n`, fetchImpl }));
 
-    expect(result).toEqual({ status: "network_error" });
-    expect(order).toEqual(["reserve", "reserve", "fetch"]); // per-user + global increments, then fetch
+    expect(new Headers(capturedHeaders).get("authorization")).toBe(`Bearer ${FAKE_API_KEY}`);
   });
 
-  it("per-user cap refusal -> reservation_refused, fetch never attempted", async () => {
-    const store = new InMemoryCounterStore();
-    const fetchImpl = vi.fn();
-    const result = await callJevDirect(makeRequest(), baseOptions({ store, fetchImpl, perUserCap: 0 }));
-    expect(result).toEqual({ status: "reservation_refused", reason: "per_user_cap_exceeded" });
-    expect(fetchImpl).not.toHaveBeenCalled();
-  });
-
-  it("global cap refusal -> reservation_refused, fetch never attempted", async () => {
-    const store = new InMemoryCounterStore();
-    const fetchImpl = vi.fn();
-    const result = await callJevDirect(makeRequest(), baseOptions({ store, fetchImpl, globalCap: 0 }));
-    expect(result).toEqual({ status: "reservation_refused", reason: "global_cap_exceeded" });
-    expect(fetchImpl).not.toHaveBeenCalled();
-  });
-
-  it("an unreadable counter store fails closed and never calls fetch", async () => {
-    const unreadableStore = {
-      label: "in-memory" as const,
-      increment: vi.fn(async () => ({ value: 0, ok: false })),
-      read: vi.fn(async () => ({ value: 0, ok: false })),
-    };
-    const fetchImpl = vi.fn();
-
-    const result = await callJevDirect(makeRequest(), baseOptions({ store: unreadableStore, fetchImpl }));
-
-    expect(result).toEqual({ status: "reservation_refused", reason: "counter_unreadable" });
-    expect(fetchImpl).not.toHaveBeenCalled();
+  it("takes no entitlement flag, no counter store and no cap: its option type has none", () => {
+    const here = path.dirname(fileURLToPath(import.meta.url));
+    const source = readFileSync(path.join(here, "jev-direct-client.ts"), "utf8");
+    for (const gone of ["entitled", "perUserCap", "globalCap", "CounterStore", "reserveJevCall", "ownerId"]) {
+      expect(source, gone).not.toContain(gone);
+    }
   });
 });
 
 describe("callJevDirect — request shape sent to Jev", () => {
-  beforeEach(() => {
-    vi.stubEnv("JEV_API_KEY", FAKE_API_KEY);
-  });
-
-  it("sends exactly the wireRequest buildJevRequest produces — byte-for-byte the same body Jev would see whether called via broker or direct, no ownerId wrapper", async () => {
+  it("sends exactly the wireRequest buildJevRequest produces — the key travels in a header, never in the body", async () => {
     let capturedBody = "";
     const fetchImpl: FetchLike = vi.fn(async (_url, init) => {
       capturedBody = String(init.body);
@@ -263,6 +166,7 @@ describe("callJevDirect — request shape sent to Jev", () => {
 
     const expected = buildJevRequest(request).wireRequest;
     expect(JSON.parse(capturedBody)).toEqual(expected);
+    expect(capturedBody).not.toContain(FAKE_API_KEY);
   });
 
   it("sends the key as a Bearer authorization header, never in the URL", async () => {
@@ -283,10 +187,6 @@ describe("callJevDirect — request shape sent to Jev", () => {
 });
 
 describe("callJevDirect — fault passthrough (thin wrapper over callJev, no remapping)", () => {
-  beforeEach(() => {
-    vi.stubEnv("JEV_API_KEY", FAKE_API_KEY);
-  });
-
   it.each([
     ["unauthorized", 401, undefined],
     ["invalid_request", 422, undefined],
@@ -326,15 +226,12 @@ describe("callJevDirect — fault passthrough (thin wrapper over callJev, no rem
 });
 
 describe("callJevDirect — rate_limited/overloaded/timeout passthrough (callJev's own bounded retry runs unchanged underneath)", () => {
-  beforeEach(() => {
-    vi.stubEnv("JEV_API_KEY", FAKE_API_KEY);
-    vi.useFakeTimers();
-  });
   afterEach(() => {
     vi.useRealTimers();
   });
 
   it("429 -> rate_limited after callJev's own bounded retries run to exhaustion", async () => {
+    vi.useFakeTimers();
     const fetchImpl: FetchLike = vi.fn(async () => new Response("", { status: 429 }));
     const promise = callJevDirect(makeRequest(), baseOptions({ fetchImpl }));
     await vi.advanceTimersByTimeAsync(500 + 1_500);
@@ -343,6 +240,7 @@ describe("callJevDirect — rate_limited/overloaded/timeout passthrough (callJev
   });
 
   it("529 -> overloaded after callJev's own bounded retries run to exhaustion", async () => {
+    vi.useFakeTimers();
     const fetchImpl: FetchLike = vi.fn(async () => new Response("", { status: 529 }));
     const promise = callJevDirect(makeRequest(), baseOptions({ fetchImpl }));
     await vi.advanceTimersByTimeAsync(500 + 1_500);
@@ -351,6 +249,7 @@ describe("callJevDirect — rate_limited/overloaded/timeout passthrough (callJev
   });
 
   it("an aborted request maps to a typed timeout result, never rejects", async () => {
+    vi.useFakeTimers();
     const fetchImpl: FetchLike = vi.fn(
       (_url, init) =>
         new Promise<Response>((_resolve, reject) => {
@@ -367,10 +266,6 @@ describe("callJevDirect — rate_limited/overloaded/timeout passthrough (callJev
 });
 
 describe("callJevDirect — never throws (property test)", () => {
-  beforeEach(() => {
-    vi.stubEnv("JEV_API_KEY", FAKE_API_KEY);
-  });
-
   const unanticipatedFailures: Array<[string, FetchLike]> = [
     [
       "sync throw",
@@ -400,13 +295,18 @@ describe("callJevDirect — never throws (property test)", () => {
   it.each(unanticipatedFailures)("never throws even for: %s", async (_label, fetchImpl) => {
     await expect(callJevDirect(makeRequest(), baseOptions({ fetchImpl }))).resolves.toBeDefined();
   });
+
+  it("never throws for a non-string key or a request that cannot be built", async () => {
+    await expect(
+      callJevDirect(makeRequest(), { apiKey: undefined as unknown as string, fetchImpl: vi.fn() }),
+    ).resolves.toEqual({ status: "network_error" });
+    await expect(
+      callJevDirect(null as unknown as DecisionRequest, baseOptions({ fetchImpl: vi.fn() })),
+    ).resolves.toEqual({ status: "network_error" });
+  });
 });
 
 describe("callJevDirect — api key never leaks", () => {
-  beforeEach(() => {
-    vi.stubEnv("JEV_API_KEY", FAKE_API_KEY);
-  });
-
   it("the key substring never appears in any returned result, across every fault kind and the happy path", async () => {
     const cases: Array<() => FetchLike> = [
       () => vi.fn(async () => new Response("", { status: 401 })),
@@ -414,7 +314,7 @@ describe("callJevDirect — api key never leaks", () => {
       () => vi.fn(async () => new Response("not json", { status: 200 })),
       () =>
         vi.fn(async () => {
-          throw new Error("network down");
+          throw new Error(`network down ${FAKE_API_KEY}`);
         }),
       () => vi.fn(async () => jsonResponse(200, okBody())),
     ];
@@ -429,6 +329,10 @@ describe("callJevDirect — api key never leaks", () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     try {
+      const failing: FetchLike = vi.fn(async () => {
+        throw new Error(`network down ${FAKE_API_KEY}`);
+      });
+      await callJevDirect(makeRequest(), baseOptions({ fetchImpl: failing }));
       const fetchImpl: FetchLike = vi.fn(async () => jsonResponse(200, okBody()));
       await callJevDirect(makeRequest(), baseOptions({ fetchImpl }));
       const allCalls = [...logSpy.mock.calls, ...warnSpy.mock.calls, ...errorSpy.mock.calls];
@@ -449,7 +353,7 @@ describe("jev-direct-client.ts — structural safety guards (read the file's own
     return readFileSync(path.join(here, "jev-direct-client.ts"), "utf8");
   }
 
-  /** Comments removed — mirrors `spend-scans.test.ts`'s own `code()` helper. This module's job is explaining JEV_API_KEY, so its doc comments legitimately mention the name in prose; only a CODE occurrence of the read should count. */
+  /** Comments removed — mirrors `spend-scans.test.ts`'s own `code()` helper. */
   function code(): string {
     return source()
       .replace(/\/\*[\s\S]*?\*\//g, "")
@@ -461,23 +365,17 @@ describe("jev-direct-client.ts — structural safety guards (read the file's own
     expect(withoutLeadingDocComment.startsWith('import "server-only";')).toBe(true);
   });
 
-  it("reads process.env.JEV_API_KEY exactly once in its own CODE (comments may mention the name in prose) — JEV-DIRECT (§1aa)", () => {
-    const matches = code().match(/process\.env\.JEV_API_KEY\b/g) ?? [];
-    expect(matches).toHaveLength(1);
-  });
-
-  it("reads no process.env name other than JEV_API_KEY", () => {
-    const envReads = code().match(/process\.env(\.\w+|\[[^\]]+\])/g) ?? [];
-    for (const read of envReads) {
-      expect(read).toBe("process.env.JEV_API_KEY");
-    }
+  it("reads nothing from the environment at all, and does not name the old company variable even in a comment", () => {
+    expect(code()).not.toMatch(/process\.env/);
+    expect(source()).not.toContain("JEV_API_KEY");
   });
 });
 
-describe("decision-cache.ts — never reads JEV_API_KEY (JEV-DIRECT (§1aa) regression guard)", () => {
-  it("the cache-key derivation module's source never contains JEV_API_KEY", () => {
+describe("decision-cache.ts — the key is not an input of the cache key", () => {
+  it("the cache-key derivation module's source never contains a Jev key name or field", () => {
     const here = path.dirname(fileURLToPath(import.meta.url));
     const source = readFileSync(path.join(here, "decision-cache.ts"), "utf8");
     expect(source).not.toContain("JEV_API_KEY");
+    expect(source).not.toMatch(/apiKey|jevApiKey/);
   });
 });

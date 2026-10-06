@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { NextRequest } from "next/server";
-import type { ShadowCandidate } from "@/lib/decisions/shadow";
 
 const mocks = vi.hoisted(() => ({
   resolveProvider: vi.fn(),
@@ -1610,30 +1611,23 @@ describe("/api/feed negative-seed resolution (P2-S4b-FIX, §1p.B(5))", () => {
   });
 });
 
-// P3-S5 (Round 3) — ABC-JEV-INTEGRATION.md §4 "P3-S5 DESIGN RULING"
-// (2026-09-24T11:29:31Z). All seven gate conditions must hold before POST
-// ever supplies `onFreshShortlist` to `runFeedPipeline`; GET, dispatch-
-// digests and test-digest never supply it at all (the latter two are
-// proven in their own route.test.ts files, since this slice never edits
-// those routes). `runFeedPipeline` itself is mocked module-wide (see the
-// top-of-file `vi.mock` block), so these tests prove the WIRING — what
-// route.ts computes and passes — not pipeline.ts's own behavior, which
-// `pipeline.shadow.test.ts` already covers independently.
-describe("/api/feed Jev shadow wiring (P3-S5)", () => {
-  function stubShadowConfig() {
+// The Jev shadow hook is gone from this route. Peer holds no Jev key of its
+// own (the owner cut that path on 2026-10-06: Jev is a key the READER brings),
+// so with this commit the route calls Jev nowhere and schedules nothing after
+// the response. The block that used to live here tested the seven conditions
+// that built `onFreshShortlist` from the company's key and the broker; its
+// premise is gone, so it is replaced by the cases below rather than ported.
+// `runFeedPipeline` is mocked module-wide (top of file), so these prove the
+// WIRING: what the route computes and passes.
+describe("/api/feed schedules no Jev call (the company's Jev path is removed)", () => {
+  /** Every setting the company path used to read, armed at once. */
+  function stubOldCompanyJevSettings() {
     vi.stubEnv("PEER_JEV_SHADOW", "on");
     vi.stubEnv("PEER_JEV_BROKER", "on");
-    vi.stubEnv("PEER_JEV_BROKER_URL", "https://example.supabase.co/functions/v1/jev-broker");
-    vi.stubEnv("PEER_JEV_BROKER_SECRET", "test-broker-secret-do-not-use");
-  }
-
-  /** JEV-DIRECT (§1aa) — the direct-transport sibling of `stubShadowConfig()` above: JEV_API_KEY set, broker left deliberately unconfigured (direct must not need it). */
-  function stubDirectShadowConfig() {
-    vi.stubEnv("PEER_JEV_SHADOW", "on");
+    vi.stubEnv("PEER_JEV_BROKER_URL", "https://example.invalid/functions/v1/jev-broker");
+    vi.stubEnv("PEER_JEV_BROKER_SECRET", "not-a-real-secret-0000");
+    vi.stubEnv("PEER_JEV_TRANSPORT", "direct");
     vi.stubEnv("JEV_API_KEY", "jev-test-FAKE-KEY-do-not-use-1234567890abcdef");
-    vi.stubEnv("PEER_JEV_BROKER", "off");
-    vi.stubEnv("PEER_JEV_BROKER_URL", "");
-    vi.stubEnv("PEER_JEV_BROKER_SECRET", "");
   }
 
   function stubSignedInTier2(ownerId: string) {
@@ -1645,188 +1639,76 @@ describe("/api/feed Jev shadow wiring (P3-S5)", () => {
     mocks.resolveProvider.mockReturnValue({ id: "openai", generateJsonText: vi.fn() });
   }
 
-  /** Every condition true — the shared "all gates open" baseline each negative test starts from and breaks exactly one of. */
-  function readyState(ownerId = "owner-shadow-ready") {
-    stubShadowConfig();
-    stubSignedInTier2(ownerId);
-  }
-
   function lastPipelineOptions(): Record<string, unknown> | undefined {
     const call = mocks.runFeedPipeline.mock.calls.at(-1);
     return call?.[1] as Record<string, unknown> | undefined;
   }
 
-  it("all seven conditions true: passes onFreshShortlist to runFeedPipeline, and invoking it schedules exactly one after() call", async () => {
-    readyState("owner-shadow-1");
-
-    const response = await POST(request({ topics: ["battery"], aiTier: 2 }));
-
-    expect(response.status).toBe(200);
-    const options = lastPipelineOptions();
-    expect(typeof options?.onFreshShortlist).toBe("function");
-    expect(mocks.after).not.toHaveBeenCalled(); // not scheduled merely by building the hook
-
-    const hook = options!.onFreshShortlist as (shortlist: ReadonlyArray<ShadowCandidate>) => void;
-    hook([{ id: "p1", title: "A Paper", abstract: null }]);
-
-    expect(mocks.after).toHaveBeenCalledTimes(1);
-  });
-
-  it('JEV-DIRECT (§1aa): transport "direct" (JEV_API_KEY set, broker left unconfigured), every other condition true — passes onFreshShortlist to runFeedPipeline, and invoking it schedules exactly one after() call', async () => {
-    stubDirectShadowConfig();
-    stubSignedInTier2("owner-shadow-direct-1");
-
-    const response = await POST(request({ topics: ["battery"], aiTier: 2 }));
-
-    expect(response.status).toBe(200);
-    const options = lastPipelineOptions();
-    expect(typeof options?.onFreshShortlist).toBe("function");
-    expect(mocks.after).not.toHaveBeenCalled(); // not scheduled merely by building the hook
-
-    const hook = options!.onFreshShortlist as (shortlist: ReadonlyArray<ShadowCandidate>) => void;
-    hook([{ id: "p1", title: "A Paper", abstract: null }]);
-
-    expect(mocks.after).toHaveBeenCalledTimes(1);
-  });
-
-  it("JEV-DIRECT (§1aa): transport fully disabled (no JEV_API_KEY, broker unconfigured) — onFreshShortlist is absent, re-expressed through resolveJevTransport() instead of the old jevBrokerEnabled()", async () => {
-    vi.stubEnv("PEER_JEV_SHADOW", "on");
-    vi.stubEnv("JEV_API_KEY", "");
-    vi.stubEnv("PEER_JEV_BROKER", "off");
-    vi.stubEnv("PEER_JEV_BROKER_URL", "");
-    vi.stubEnv("PEER_JEV_BROKER_SECRET", "");
-    stubSignedInTier2("owner-shadow-both-off");
+  it("a signed-in reader with a model key and every old company setting present: no onFreshShortlist, and nothing is scheduled with after()", async () => {
+    stubOldCompanyJevSettings();
+    stubSignedInTier2("owner-no-jev-1");
 
     const response = await POST(request({ topics: ["battery"], aiTier: 2 }));
 
     expect(response.status).toBe(200);
     expect(lastPipelineOptions()?.onFreshShortlist).toBeUndefined();
+    expect(mocks.after).not.toHaveBeenCalled();
   });
 
-  it("a hook that schedules via after() never throws even though after() itself throws (no request scope) — mirrors production's real after()", async () => {
-    readyState("owner-shadow-throws");
-    mocks.after.mockImplementationOnce(() => {
-      throw new Error("`after` was called outside a request scope");
-    });
-
-    await POST(request({ topics: ["battery"], aiTier: 2 }));
-    const hook = lastPipelineOptions()!.onFreshShortlist as (shortlist: ReadonlyArray<ShadowCandidate>) => void;
-
-    expect(() => hook([{ id: "p1", title: "A Paper", abstract: null }])).not.toThrow();
-  });
-
-  it("response body is identical whether or not the hook is scheduled — the only difference in options is the hook itself", async () => {
-    // Frozen for the whole test: POST constructs `new Date()` itself (never
-    // injected), so two real, unfrozen calls a moment apart would legitimately
-    // differ by a millisecond — exactly the "confirmed in isolation twice"
-    // intermittent failure this fixes. Freezing means `now` is the SAME
-    // instant both times, so the full options object (nothing excluded but
-    // the hook, which is expected to genuinely differ) can be compared
-    // directly rather than laundered through a field-by-field allowlist.
+  it("the response and the options handed to the pipeline are identical with and without those settings", async () => {
+    // Frozen: POST constructs `new Date()` itself, so two unfrozen calls a
+    // moment apart would differ by a millisecond.
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-09-24T12:00:00.000Z"));
     try {
-      readyState("owner-shadow-cmp-on");
-      const withShadow = await POST(request({ topics: ["battery"], aiTier: 2 }));
-      const withShadowOptions = lastPipelineOptions();
-      const withShadowBody = await withShadow.json();
+      stubOldCompanyJevSettings();
+      stubSignedInTier2("owner-no-jev-cmp");
+      const withSettings = await POST(request({ topics: ["battery"], aiTier: 2 }));
+      const withSettingsOptions = lastPipelineOptions();
+      const withSettingsBody = await withSettings.json();
 
+      vi.unstubAllEnvs();
       vi.clearAllMocks();
       mocks.runFeedPipeline.mockResolvedValue({ items: [], meta: {} });
-      // Everything else defaults back to "off" (vi.clearAllMocks reset every
-      // mock's implementation) — no shadow env stubbed this time.
-      mocks.requireAiRequest.mockResolvedValue({ user: null, anonymous: true });
-      mocks.aiTierCeiling.mockImplementation((tier: number, request: { anonymous: boolean }) =>
-        request.anonymous ? 0 : tier,
-      );
-      mocks.getUser.mockResolvedValue({ data: { user: null } });
+      stubSignedInTier2("owner-no-jev-cmp");
+      const without = await POST(request({ topics: ["battery"], aiTier: 2 }));
+      const withoutOptions = lastPipelineOptions();
+      const withoutBody = await without.json();
 
-      const withoutShadow = await POST(request({ topics: ["battery"], aiTier: 2 }));
-      const withoutShadowOptions = lastPipelineOptions();
-      const withoutShadowBody = await withoutShadow.json();
-
-      expect(withShadow.status).toBe(withoutShadow.status);
-      expect(withShadowBody).toEqual(withoutShadowBody);
-      expect(withShadowOptions?.now).toEqual(withoutShadowOptions?.now); // same frozen instant, proven directly rather than assumed
-      // Same options object apart from the hook itself, which is expected
-      // to be present only in the first call.
-      expect({ ...withShadowOptions, onFreshShortlist: undefined }).toEqual({
-        ...withoutShadowOptions,
-        onFreshShortlist: undefined,
-      });
+      expect(withSettings.status).toBe(without.status);
+      expect(withSettingsBody).toEqual(withoutBody);
+      expect(withSettingsOptions).toEqual(withoutOptions);
     } finally {
       vi.useRealTimers();
     }
   });
 
-  it.each([
-    ["PEER_JEV_SHADOW not \"on\"", (o: string) => { readyState(o); vi.stubEnv("PEER_JEV_SHADOW", "true"); }],
-    ["PEER_JEV_BROKER not \"on\"", (o: string) => { readyState(o); vi.stubEnv("PEER_JEV_BROKER", "off"); }],
-    ["broker URL unset (unconfigured)", (o: string) => { readyState(o); vi.stubEnv("PEER_JEV_BROKER_URL", ""); }],
-    ["broker secret unset (unconfigured)", (o: string) => { readyState(o); vi.stubEnv("PEER_JEV_BROKER_SECRET", ""); }],
-    ["signed out (no gate.user)", (o: string) => {
-      readyState(o);
-      mocks.requireAiRequest.mockResolvedValue({ user: null, anonymous: true });
-      mocks.getUser.mockResolvedValue({ data: { user: null } });
-    }],
-    // A runtime with no sign-in configured: the gate lets the caller through as
-    // a reader (not anonymous) but there is no user, so there is no one to
-    // shadow. The signed-in test (`gate.user !== null`) is what decides the
-    // shadow's `entitled` flag; there are no plans to decide it any more.
-    ["no signed-in user (gate.user null, caller not anonymous)", (o: string) => {
-      readyState(o);
-      mocks.requireAiRequest.mockResolvedValue({ user: null, anonymous: false });
-    }],
-    ["aiTier below 2 (no provider resolved)", (o: string) => {
-      readyState(o);
-      mocks.aiTierCeiling.mockReturnValue(2);
-      mocks.resolveProvider.mockReturnValue(null); // forces aiTier back to 0 in route.ts
-    }],
-  ])("%s: onFreshShortlist is absent", async (_label, setup) => {
-    setup("owner-shadow-gate-off");
-
-    const response = await POST(request({ topics: ["battery"], aiTier: 2 }));
-
-    expect(response.status).toBe(200);
-    const options = lastPipelineOptions();
-    expect(options?.onFreshShortlist).toBeUndefined();
-  });
-
-  it("owner id mismatch between gate.user and paperCacheScope: onFreshShortlist is absent", async () => {
-    // A scenario the real code can't normally reach (both come from the same
-    // session), but the gate explicitly checks equality rather than assuming
-    // it — this proves the check is real, not vacuous. Achieved by having
-    // requireAiRequest report a different id than getUser resolves.
-    stubShadowConfig();
-    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://example.supabase.co");
-    vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "public-test-key");
-    mocks.getUser.mockResolvedValue({ data: { user: { id: "owner-from-supabase" } } });
-    mocks.requireAiRequest.mockResolvedValue({ user: { id: "owner-from-gate" }, anonymous: false });
-    mocks.aiTierCeiling.mockReturnValue(2);
-    mocks.resolveProvider.mockReturnValue({ id: "openai", generateJsonText: vi.fn() });
-
-    const response = await POST(request({ topics: ["battery"], aiTier: 2 }));
-
-    expect(response.status).toBe(200);
-    expect(lastPipelineOptions()?.onFreshShortlist).toBeUndefined();
-  });
-
-  it("no structured intent (should not occur on POST, but the gate checks it explicitly): covered structurally — every POST past intent_required always has one", async () => {
-    // normalizeFeedIntent's own "intent_required" 400 already stops any
-    // POST without a usable intent before this gate is ever reached; there
-    // is no reachable POST body that satisfies every other condition and
-    // still lacks a structured intent. Documented here rather than faked
-    // with an invalid internal state.
-    expect(true).toBe(true);
-  });
-
-  it("GET never supplies the hook, even with every shadow/broker flag on and a signed-in user", async () => {
-    readyState("owner-shadow-get");
+  it("GET never supplies a hook either, even for a signed-in user with every old setting present", async () => {
+    stubOldCompanyJevSettings();
+    stubSignedInTier2("owner-no-jev-get");
 
     const response = await GET(new NextRequest("http://localhost/api/feed?topics=battery"));
 
     expect(response.status).toBe(200);
     expect(lastPipelineOptions()?.onFreshShortlist).toBeUndefined();
     expect(mocks.after).not.toHaveBeenCalled();
+  });
+
+  it("the route's own source reads no company Jev setting, imports no broker, flag or dispatcher, and schedules nothing with after()", () => {
+    const source = readFileSync(path.join(process.cwd(), "src/app/api/feed/route.ts"), "utf8");
+    for (const gone of [
+      "JEV_API_KEY",
+      "PEER_JEV_",
+      "decisions/flag",
+      "jev-dispatch",
+      "broker-client",
+      "jevShadowEnabled",
+      "resolveJevTransport",
+      "runJevShadow",
+      "buildJevShadowHook",
+      "after(",
+    ]) {
+      expect(source, gone).not.toContain(gone);
+    }
   });
 });

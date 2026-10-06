@@ -47,7 +47,24 @@ describe("Vitest provider environment isolation", () => {
     // own body (`registry.test.ts` is the pattern) — that is unaffected here.
     expect(process.env.GOOGLE_API_KEY).toBeUndefined();
     expect(process.env.TAVILY_API_KEY).toBeUndefined();
+    expect(process.env.JEV_API_KEY).toBeUndefined();
     expect(defaultConfig.test?.env).toBeUndefined();
+  });
+
+  // The setup file also deletes the names before EVERY test, so a test that
+  // leaks one cannot arm the next. Tests in a file run in order, so the first
+  // case below leaves a key behind on purpose and the second finds it gone.
+  describe("JEV_API_KEY is stripped unconditionally, like GOOGLE_API_KEY (a company Jev key is spendable money)", () => {
+    it("(arming) a test that leaves a value behind in process.env", () => {
+      process.env.JEV_API_KEY = "jev-env-isolation-leak-sentinel";
+      process.env.GOOGLE_API_KEY = "google-env-isolation-leak-sentinel";
+      expect(process.env.JEV_API_KEY).toBe("jev-env-isolation-leak-sentinel");
+    });
+
+    it("(check) the next test finds both gone", () => {
+      expect(process.env.JEV_API_KEY).toBeUndefined();
+      expect(process.env.GOOGLE_API_KEY).toBeUndefined();
+    });
   });
 
   it("allows only exact live benchmark credential names", () => {
@@ -170,9 +187,9 @@ describe("Live channels (S2/OpenAlex) evaluation environment isolation", () => {
  * JEV-DIRECT (§1aa point 6) — the sibling money lock for the opt-in live Jev
  * smoke runner, built to mirror LIVE-EVAL-4's own pattern exactly (guide,
  * `docs/jev-abc/JEV-DIRECT-B-20260927T013846Z.md` §6): a CONDITIONAL
- * second-layer lock, since `JEV_API_KEY` cannot be unconditionally deleted
- * the way `GOOGLE_API_KEY`/`TAVILY_API_KEY` are — that would strip it from
- * the opt-in smoke config's own process too. Same reasoning as the describe
+ * second-layer lock, since `JEV_SMOKE_API_KEY` cannot be unconditionally
+ * deleted the way `GOOGLE_API_KEY`/`TAVILY_API_KEY`/`JEV_API_KEY` are — that
+ * would strip it from the opt-in smoke config's own process too. Same reasoning as the describe
  * block above: every independent layer — the allow-list, the dedicated
  * config's own env/include, and the conditional second-layer lock in
  * `vitest.setup.ts` — must fail the moment any one of them is weakened.
@@ -185,19 +202,25 @@ describe("Jev smoke evaluation environment isolation (JEV-DIRECT §1aa point 6)"
     expect(defaultConfig.test?.env).toBeUndefined();
   });
 
-  it("allows only the exact one JEV_API_KEY credential name, never a prefix", () => {
-    expect([...JEV_SMOKE_ENV_NAMES]).toEqual(["JEV_API_KEY"]);
+  // The smoke runner's key has its OWN name (`JEV_SMOKE_API_KEY`) so that no
+  // file anywhere reads `JEV_API_KEY` (the owner's decision of 2026-10-06: Peer
+  // holds no Jev key; the name is banned on Vercel and stripped from every
+  // test). The smoke runner passes the value it reads to `callJevDirect` as the
+  // `apiKey` parameter.
+  it("allows only the exact one JEV_SMOKE_API_KEY credential name, never a prefix, and never JEV_API_KEY", () => {
+    expect([...JEV_SMOKE_ENV_NAMES]).toEqual(["JEV_SMOKE_API_KEY"]);
     expect(
       selectJevSmokeEnv({
-        JEV_API_KEY: "dummy-jev-key",
-        JEV_API_KEY_EXTRA: "must-not-pass",
+        JEV_SMOKE_API_KEY: "dummy-jev-key",
+        JEV_SMOKE_API_KEY_EXTRA: "must-not-pass",
+        JEV_API_KEY: "must-not-pass",
         GOOGLE_API_KEY: "must-not-pass",
         TAVILY_API_KEY: "must-not-pass",
         SEMANTIC_SCHOLAR_API_KEY: "must-not-pass",
         OPENALEX_API_KEY: "must-not-pass",
       }),
     ).toEqual({
-      JEV_API_KEY: "dummy-jev-key",
+      JEV_SMOKE_API_KEY: "dummy-jev-key",
     });
   });
 
@@ -205,6 +228,7 @@ describe("Jev smoke evaluation environment isolation (JEV-DIRECT §1aa point 6)"
     expect(jevSmokeConfig.test?.env).toMatchObject({
       PEER_RUN_JEV_SMOKE: "1",
     });
+    expect(jevSmokeConfig.test?.env).not.toHaveProperty("JEV_API_KEY");
     expect(
       Object.keys(jevSmokeConfig.test?.env ?? []).every(
         (name) =>
@@ -223,7 +247,7 @@ describe("Jev smoke evaluation environment isolation (JEV-DIRECT §1aa point 6)"
     ]);
   });
 
-  it('strips JEV_API_KEY from process.env unless the smoke opt-in literal is exactly "1"', () => {
+  it('strips JEV_SMOKE_API_KEY from process.env unless the smoke opt-in literal is exactly "1"', () => {
     expect(shouldStripJevSmokeEnv({})).toBe(true);
     expect(shouldStripJevSmokeEnv({ PEER_RUN_JEV_SMOKE: "0" })).toBe(true);
     expect(shouldStripJevSmokeEnv({ PEER_RUN_JEV_SMOKE: "true" })).toBe(true);

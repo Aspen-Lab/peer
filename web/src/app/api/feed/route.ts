@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse, after } from "next/server";
-import { runFeedPipeline, type FeedPipelineOptions } from "@/lib/feed/pipeline";
+import { NextRequest, NextResponse } from "next/server";
+import { runFeedPipeline } from "@/lib/feed/pipeline";
 import type { FeedRequest, FeedResponse, FeedEmptyReasonCode, SearchConnectors } from "@/lib/feed/types";
 import type { ProviderOverrideConfig } from "@/lib/llm/providers/types";
 import type { SourceId } from "@/lib/sources/types";
@@ -13,8 +13,7 @@ import {
 } from "@/lib/opportunities/private-paper-cache";
 import { localCalendarDate } from "@/lib/opportunities/pool-cache";
 import { createClient } from "@/lib/supabase/server";
-import { normalizeFeedIntent, serializeFeedIntent, textValue, type NormalizedFeedIntent } from "@/lib/feed/intent";
-import type { SelectedSenseConcept } from "@/lib/feed/senses";
+import { normalizeFeedIntent, serializeFeedIntent, textValue } from "@/lib/feed/intent";
 import { identityForRawItem } from "@/lib/feed/paper-identity";
 import {
   SupabaseDashboardDeliveryLedger,
@@ -35,16 +34,6 @@ import {
   channelS2RecommendationsEnabled,
   type ResolvedPositiveSeed,
 } from "@/lib/preferences/positive-seeds";
-import {
-  jevShadowEnabled,
-  readJevCaps,
-  readJevShadowConfig,
-  resolveJevTransport,
-  type JevTransport,
-} from "@/lib/decisions/flag";
-import { runJevShadow, type ShadowCandidate } from "@/lib/decisions/shadow";
-import { PrivateDecisionCache } from "@/lib/decisions/private-decision-cache";
-import { getCounterStore } from "@/lib/usage/counters";
 
 const CACHE_HEADERS = {
   "Cache-Control": "private, no-store",
@@ -241,14 +230,6 @@ async function runLedgerAwareFeed(
   // resolveNegativeSeedPaperIdsForRequest's own doc comment), threaded the
   // same way and for the same reason as positiveSeeds above.
   negativeSeedPaperIds: readonly string[],
-  // P3-S5 (Round 3) — the Jev shadow hook (see FeedPipelineOptions.
-  // onFreshShortlist's own doc comment in pipeline.ts). Server-minted only,
-  // exactly like ledgerExclusions/positiveSeeds above: only POST ever
-  // builds one, and only when every P3-S5 gate condition holds (see the
-  // call site in POST below). GET never passes this argument at all, so it
-  // is `undefined` here and both runFeedPipeline calls below see output
-  // byte-identical to before this parameter existed.
-  onFreshShortlist?: FeedPipelineOptions["onFreshShortlist"],
 ): Promise<{ response: FeedResponse } | { unavailable: true }> {
   const startedAt = Date.now();
   const paperCacheScope = pipelineReq.paperCacheScope;
@@ -257,7 +238,6 @@ async function runLedgerAwareFeed(
     const response = await runFeedPipeline(pipelineReq, {
       ledgerExclusions: undefined,
       now,
-      onFreshShortlist,
       positiveSeeds,
       negativeSeedPaperIds,
     });
@@ -337,7 +317,6 @@ async function runLedgerAwareFeed(
     now,
     positiveSeeds,
     negativeSeedPaperIds,
-    onFreshShortlist,
   });
 
   const papers: PaperIdentity[] = result.items.map((item) => {
@@ -474,90 +453,6 @@ async function resolveNegativeSeedPaperIdsForRequest(
   } catch {
     return [];
   }
-}
-
-/**
- * P3-S5 (Round 3) — ABC-JEV-INTEGRATION.md §4 "P3-S5 DESIGN RULING"
- * (2026-09-24T11:29:31Z). The Jev shadow runs AFTER the response is sent,
- * never inside the request: up to 50 separate Jev calls at bounded
- * concurrency could add minutes to the first feed load of the day, and
- * shadow mode must never cause a user-visible regression. `runOnFreshShortlist`
- * (below, POST only) computes whether every gate condition holds and, if so,
- * builds ONE of these hooks and passes it to `runFeedPipeline` via
- * `runLedgerAwareFeed`. `pipeline.ts` invokes it synchronously with a copy of
- * the top-50 Tier-1 shortlist ONLY on a fresh pool build — see
- * `FeedPipelineOptions.onFreshShortlist`'s own doc comment.
- */
-interface JevShadowHookInput {
-  ownerId: string;
-  entitled: boolean;
-  intent: NormalizedFeedIntent;
-  senseConcepts: readonly SelectedSenseConcept[];
-  /**
-   * JEV-DIRECT (§1aa) — resolved ONCE by the gate below via
-   * `resolveJevTransport()` and threaded through unchanged; `runJevShadow`
-   * never re-reads `process.env` for this (see `shadow.ts`'s own doc
-   * comment and this item's checkpoint, design decision 2).
-   */
-  transport: JevTransport;
-  perUserCap: number;
-  globalCap: number;
-  /** Broker-only. Present (from `readJevShadowConfig()`) only when `transport` is `"broker"`; absent and unused for `"direct"`. */
-  brokerUrl?: string;
-  brokerSecret?: string;
-}
-
-/**
- * Never throws, no matter what `runJevShadow` does — the final safety net
- * so a truly unanticipated failure can never surface as an unhandled
- * rejection inside `after()`. `runJevShadow` itself is already documented
- * never-throwing; this wrapper is belt-and-suspenders, matching this
- * codebase's established style for every other Jev-adjacent call boundary.
- */
-async function runJevShadowSafely(
-  input: JevShadowHookInput,
-  shortlist: ReadonlyArray<ShadowCandidate>,
-): Promise<void> {
-  try {
-    await runJevShadow({
-      ownerId: input.ownerId,
-      entitled: input.entitled,
-      intent: input.intent,
-      senseConcepts: input.senseConcepts,
-      candidates: shortlist,
-      cache: new PrivateDecisionCache(input.ownerId),
-      transport: input.transport,
-      brokerUrl: input.brokerUrl,
-      brokerSecret: input.brokerSecret,
-      perUserCap: input.perUserCap,
-      globalCap: input.globalCap,
-      store: getCounterStore(),
-    });
-  } catch {
-    // See this function's own doc comment.
-  }
-}
-
-/**
- * Builds the `onFreshShortlist` hook `pipeline.ts` will call synchronously
- * on a fresh build. `after()` throws when called outside a real request
- * scope (verified directly from Next's own source —
- * `web/node_modules/next/dist/server/after/after.js`: `workAsyncStorage.getStore()`
- * is `undefined` for e.g. a unit test that invokes a route handler
- * directly) — that is caught here and skipped silently, never run inline,
- * per the DESIGN RULING.
- */
-function buildJevShadowHook(
-  input: JevShadowHookInput,
-): NonNullable<FeedPipelineOptions["onFreshShortlist"]> {
-  return (shortlist) => {
-    try {
-      after(() => runJevShadowSafely(input, shortlist));
-    } catch {
-      // `after` was called outside a request scope -- skip the shadow
-      // silently, never run it inline (P3-S5 DESIGN RULING).
-    }
-  };
 }
 
 function hasSupabaseAuthConfig(): boolean {
@@ -750,57 +645,6 @@ export async function POST(req: NextRequest) {
     aiTier,
   });
 
-  // P3-S5 (Round 3) — ABC-JEV-INTEGRATION.md §4 "P3-S5 DESIGN RULING"
-  // (2026-09-24T11:29:31Z). Every one of these seven conditions must hold
-  // before this request schedules even one Jev shadow call; the hook stays
-  // `undefined` otherwise and runFeedPipeline behaves byte-identically to
-  // before onFreshShortlist existed (pipeline.shadow.test.ts proves that;
-  // route.test.ts's "Jev shadow wiring" block proves this gate itself). The
-  // `if` (not a boolean stored then reused) is deliberate: it is what lets
-  // TypeScript actually narrow `paperCacheScope`/`gate.user` at the point
-  // `.ownerId`/`.id` are read below, rather than merely asserting it.
-  //
-  // JEV-DIRECT (§1aa): the one changed condition is `jevBrokerEnabled()` ->
-  // `resolveJevTransport() !== "disabled"` — the switch that picks between
-  // the direct and broker transports (or neither). Unlike the old
-  // `jevBrokerEnabled()` condition, building the hook no longer also
-  // requires `readJevShadowConfig().status === "configured"`: that check
-  // only means something for the broker transport (it only reports
-  // "configured" once the broker URL+secret are both set) and would
-  // wrongly block a direct-only deployment, which never sets those two.
-  // Caps (`readJevCaps()`) are read regardless of transport — see
-  // `flag.ts`'s own doc comment on why `readJevShadowConfig()`'s caps
-  // are NOT reused here.
-  let onFreshShortlist: FeedPipelineOptions["onFreshShortlist"];
-  // Whether this reader may be shadowed at all is a sign-in test now, not a plan
-  // test: there are no plans. (The shadow still needs a user id of its own, below.)
-  const shadowEntitled = gate.user !== null;
-  const jevTransport = resolveJevTransport();
-  if (
-    jevShadowEnabled() &&
-    jevTransport !== "disabled" &&
-    paperCacheScope !== undefined &&
-    gate.user?.id !== undefined &&
-    gate.user.id === paperCacheScope.ownerId &&
-    shadowEntitled &&
-    aiTier >= 2 &&
-    Boolean(intent)
-  ) {
-    const caps = readJevCaps();
-    const shadowConfig = readJevShadowConfig();
-    onFreshShortlist = buildJevShadowHook({
-      ownerId: paperCacheScope.ownerId,
-      entitled: shadowEntitled,
-      intent,
-      senseConcepts: intent.selectedSenseConcepts,
-      transport: jevTransport,
-      perUserCap: caps.perUserDailyCap,
-      globalCap: caps.globalDailyCap,
-      brokerUrl: shadowConfig.status === "configured" ? shadowConfig.brokerUrl : undefined,
-      brokerSecret: shadowConfig.status === "configured" ? shadowConfig.brokerSecret : undefined,
-    });
-  }
-
   const now = new Date();
   const positiveSeeds = await resolvePositiveSeedsForRequest(paperCacheScope);
   const negativeSeedPaperIds = await resolveNegativeSeedPaperIdsForRequest(paperCacheScope);
@@ -833,7 +677,6 @@ export async function POST(req: NextRequest) {
     now,
     positiveSeeds,
     negativeSeedPaperIds,
-    onFreshShortlist,
   );
   if ("unavailable" in outcome) return ledgerUnavailableResponse();
 
