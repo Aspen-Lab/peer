@@ -47,6 +47,16 @@ const SECTIONS = [
     ],
   },
   {
+    // P5-01: written from `remoteProfilePayload` (profile-sync.tsx), which leaves the
+    // standing-questions field out, `logOut` (store/profile.ts), which resets the profile, and
+    // the chip group (`question-field.tsx`), which adds a line only when pressed. The test
+    // pins each clause to its line.
+    label: "Your standing questions",
+    body: [
+      "Standing questions you keep on your Profile stay in this browser. Peer's sync leaves them out, so they are never sent to its servers and signing in does not copy them into your account; signing out clears them with the rest of your profile. On a paper, one becomes a question only when you press it, and then it is like any other question you type there.",
+    ],
+  },
+  {
     label: "Your questions",
     body: [
       "Questions you type on a paper page stay in this browser. When Peer writes a deep report for that paper, they travel with that one request to Peer's server and on to the model provider whose key you added, inside the prompts, and nowhere else, so the report can answer them; Peer does not log them or keep them.",

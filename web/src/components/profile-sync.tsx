@@ -159,6 +159,7 @@ export function remoteProfilePayload(profile: UserProfile): Partial<UserProfile>
     feedAiProvider,
     feedAiApiKey,
     jevApiKey,
+    standingQuestions,
     ...rest
   } = profile;
   void tavilyEnabled;
@@ -172,6 +173,9 @@ export function remoteProfilePayload(profile: UserProfile): Partial<UserProfile>
   // The reader's Jev key never leaves the browser except in the paper request
   // body that asks Jev to screen their papers.
   void jevApiKey;
+  // P5-01: the reader's standing questions never leave the browser either — /privacy's "Your
+  // questions" entry says so and pins this line.
+  void standingQuestions;
   const feedIntent = profileFeedIntentCard(profile);
   return feedIntent ? { ...rest, feedIntent } : rest;
 }
