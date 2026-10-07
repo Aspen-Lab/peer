@@ -12,7 +12,8 @@ import { AUTHORS } from "./copy";
 
 /** Names shown before the byline asks to be opened. */
 const COLLAPSED_AUTHORS = 3;
-/** Past this the display size stays at 28px on every breakpoint. */
+/** Past this the display size stays at 26px on every breakpoint. From xl the
+ *  title is in the spread's narrow panel, and every title is set at 26px. */
 const LONG_TITLE_CHARS = 120;
 
 /**
@@ -105,7 +106,7 @@ export function TitleBlock({
         <p className="annotation text-meta text-text-muted mt-6">{meta.join(" · ")}</p>
       )}
       <h1
-        className={`paper-line text-heading text-display-sm measure-title mt-2${long ? "" : " sm:text-display"}`}
+        className={`paper-line text-heading text-display-sm measure-title mt-2${long ? "" : " sm:text-display xl:text-display-sm"}`}
       >
         {paper.title}
       </h1>

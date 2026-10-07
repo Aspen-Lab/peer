@@ -47,38 +47,52 @@ export const XL_BREAKPOINT_PX = 1280;
 export const TWO_XL_BREAKPOINT_PX = 1536;
 
 // The spread's 1x page-width cap at each breakpoint: `page-container.tsx`'s
-// `spread` variant reads `1000px` directly at xl
-// (`calc(1000px*var(--reading-scale,1))`) and `640px+560px` = `1200px` at
+// `spread` variant reads `1072px` directly at xl
+// (`calc(1072px*var(--reading-scale,1))`) and `504px+680px` = `1184px` at
 // 2xl at the default (1x) reading scale
-// (`calc(640px+560px*var(--reading-scale,1))` — a fixed panel share plus a
-// flexible column share, not a flat `1200px*scale`, per S20's own comment on
+// (`calc(504px+680px*var(--reading-scale,1))` — a fixed panel share plus a
+// flexible column share, not a flat `1184px*scale`, per S20's own comment on
 // that file). `fitZoom` evaluates the same pair (TWO_XL_PANEL_PX +
 // TWO_XL_COLUMN_PX * scale) so Fit lands on 85% at every A/A step.
-export const XL_CAP_PX = 1000;
-export const TWO_XL_CAP_PX = 1200;
+//
+// The cap is the container's border box, so it holds the page's own 24px
+// side padding too: at xl 1072 − 48 − 64 gap − 320 panel = a 640px column.
+export const XL_CAP_PX = 1072;
+export const TWO_XL_CAP_PX = 1184;
 // At 2xl the cap is a linear pair, not a plain multiple: the panel's share
-// (640px) is fixed and only the 560px reading track scales with the A/A
-// step — `calc(640px + 560px * var(--reading-scale, 1))` in page-container.
-// TWO_XL_CAP_PX is that pair at 1x (640 + 560). fitZoom uses the pair.
-export const TWO_XL_PANEL_PX = 640;
-export const TWO_XL_COLUMN_PX = 560;
+// (360px panel + 96px gap + 48px of page padding = 504px) is fixed and only
+// the 680px reading track scales with the A/A step —
+// `calc(504px + 680px * var(--reading-scale, 1))` in page-container.
+// TWO_XL_CAP_PX is that pair at 1x (504 + 680). fitZoom uses the pair.
+export const TWO_XL_PANEL_PX = 504;
+export const TWO_XL_COLUMN_PX = 680;
 
-/** 5/7 columns at xl, where the reading column lands on the measure with a
- *  rag margin and no more.
+/** A narrow panel and a wide reading column.
  *
- *  From 2xl the reading column stops growing — the measure does not get wider
- *  because the window did, and at 1920 the old proportional grid put a fifth
- *  of the page inside the column as empty gutter. The track is fixed at 560px
- *  there and every extra pixel goes to the panel, so a wide screen buys a
- *  bigger figure and a title with more room, not a longer line. */
+ *  The panel is a fixed track — 320px at xl, 360px from 2xl — because what it
+ *  holds (the plate, the title, the commands) is a sidebar, not a page: it
+ *  does not get better by getting wider. Every pixel the cap gives beyond it
+ *  goes to the reading column, where the claim, the abstract, the report and
+ *  the paper's own text are. At 1x that is a 640px column at xl and 680px from
+ *  2xl; the A/A step grows the column, never the panel. */
 export const SPREAD_GRID =
-  "xl:grid xl:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] 2xl:grid-cols-[minmax(0,1fr)_calc(560px*var(--reading-scale,1))] xl:gap-x-16 2xl:gap-x-24 xl:items-start";
+  "xl:grid xl:grid-cols-[minmax(0,320px)_minmax(0,1fr)] 2xl:grid-cols-[minmax(0,360px)_minmax(0,1fr)] xl:gap-x-16 2xl:gap-x-24 xl:items-start";
 
 /** The left panel: pinned while the reader scrolls the column (`reader-panel`
  *  in `globals.css`). */
 export const PANEL_CLASS = "xl:min-w-0 xl:self-start xl:reader-panel";
 
 /** The reading column: a flex column so the Next row can take the free space
- *  on a page shorter than the panel; `-mt-2` sets the abstract's first
- *  cap-height on the plate's top edge. */
-export const COLUMN_CLASS = "xl:flex xl:flex-col xl:min-w-0 xl:self-stretch xl:-mt-2";
+ *  on a page shorter than the panel.
+ *
+ *  The column is the measure on the spread — it is sized for the text, about
+ *  90 characters of Newsreader at the lead size, and it grows with the A/A
+ *  step — so the prose measures inside it (`measure`, `measure-paper`) are
+ *  lifted: kept, each line would stop short of the column's edge and leave a
+ *  gutter inside the column. `!` because `.measure-paper` is unlayered CSS in
+ *  globals.css, which outranks any utility. Below xl every measure holds.
+ *
+ *  The first block's own top gap is dropped, so whatever opens the column —
+ *  the claim's band, the skim deck, a TL;DR — starts level with the plate. */
+export const COLUMN_CLASS =
+  "xl:flex xl:flex-col xl:min-w-0 xl:self-stretch xl:[&_.measure]:max-w-none! xl:[&_.measure-paper]:max-w-none! xl:[&>:first-child>:first-child]:mt-0 xl:[&>:first-child>:first-child>:first-child]:mt-0";

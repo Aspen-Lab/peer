@@ -1080,7 +1080,13 @@ function Reader({
               />
             </SwipeableCard>
             {caption && (
-              <figcaption className="font-reading text-body-sm text-text-muted mt-2">
+              // Two lines in the spread's panel — the plate is the figure, the
+              // caption names it; the whole caption is the tooltip and the
+              // lightbox's.
+              <figcaption
+                title={caption}
+                className="font-reading text-body-sm text-text-muted mt-2 xl:line-clamp-2"
+              >
                 {caption}
               </figcaption>
             )}
