@@ -14,7 +14,7 @@ export interface FigureState {
   status: FigureStatus | "idle";
   reason: string | null;
   hideFigure: boolean;
-  matchedBy: "keyword" | "semantic" | "vision" | "fallback" | null;
+  matchedBy: "keyword" | "fallback" | null;
 }
 
 export interface ResolveFigureArgs {
@@ -127,7 +127,7 @@ async function fetchFigure(
     source?: string | null;
     reason?: string | null;
     hideFigure?: boolean;
-    matchedBy?: "keyword" | "semantic" | "vision" | "fallback" | null;
+    matchedBy?: "keyword" | "fallback" | null;
     status: FigureStatus;
   };
   return {

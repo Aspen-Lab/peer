@@ -17,9 +17,8 @@ import { describe, expect, it } from "vitest";
  * `request key || env key` readers that no scan looked for. A number a person
  * recomputes is a number that goes stale between the recomputing.
  *
- * `usage/quota-exemptions.test.ts` and `scripts/assert-byok-production-env.test.ts`
- * are the precedents for asserting on file contents rather than on behaviour;
- * this follows their shape.
+ * `scripts/assert-byok-production-env.test.ts` is the precedent for asserting on
+ * file contents rather than on behaviour; this follows its shape.
  *
  * **These are placement rules, not behaviour**, so they read source text. A
  * placement rule that is only written in prose is a rule that is followed until
@@ -36,7 +35,7 @@ import { describe, expect, it } from "vitest";
  * these scans was blind to `web/scripts/`** — the operator tooling the owner
  * runs by hand, and exactly where an operator credential would plausibly be
  * read. Round-9 B measured it rather than arguing it: a flagrant
- * `process.env.TAVILY_API_KEY` read planted inside `scripts/setup-vertex-search.mjs`
+ * `process.env.TAVILY_API_KEY` read planted inside an operator script
  * left the suite at 12 passed, 0 failed, while the identical read in `src/`
  * reddened exactly one case. **A scan that cannot see a directory is not a
  * scan.**
@@ -120,10 +119,12 @@ function relative(file: string): string {
  * it is for.
  */
 function code(file: string): string {
-  return fs
-    .readFileSync(file, "utf8")
-    .replace(/\/\*[\s\S]*?\*\//g, "")
-    .replace(/(^|[^:])\/\/.*$/gm, "$1");
+  return stripComments(fs.readFileSync(file, "utf8"));
+}
+
+/** The comment stripper behind `code()`, on a string, so a scan's own matcher can be tested on planted sources. */
+function stripComments(source: string): string {
+  return source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
 }
 
 function filesMatching(pattern: RegExp): string[] {
@@ -134,323 +135,333 @@ function filesMatching(pattern: RegExp): string[] {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SCAN 3 — operator search credentials are read in exactly one module
+// SCAN 3 — Peer holds no search credential of its own
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("scan 3 — every operator search credential is read in one place", () => {
+describe("scan 3 — no operator search credential is read anywhere", () => {
   /**
-   * **Widened by 2-04 from Tavily-only to every operator-funded search name.**
-   * The gate is no longer about one key: Ruling 5 point 2 puts Brave, Vertex AI
-   * Search and Gemini grounding behind the same predicate, so the scan that
-   * protects the gate has to cover the same set. A scan that still looked only
-   * for `TAVILY_API_KEY` would have reported "0" while three other names were
-   * read straight from the environment — which is exactly what happened for a
-   * whole round.
+   * **REWRITTEN, NOT DELETED — the BYOK-only change (scope (b)).** This scan
+   * used to assert that every operator-funded search credential (Brave, Vertex
+   * AI Search, Gemini grounding) was read in exactly one gated module,
+   * `src/lib/search/system-key.ts`. Peer now funds no search for anyone: that
+   * module, the two search engines behind it and the two operator scripts that
+   * built and billed the Vertex index are deleted, and the only search a reader
+   * can run is on a Tavily key they paste in themselves, carried in the request.
+   * So the honest answer for every name below is **none**, and a revival is a
+   * failing case rather than a quiet addition.
+   *
+   * The build guard still bans these names on Vercel (a stray value must not
+   * mean anything), and it is in this walk: it takes `process.env` as a whole
+   * object and checks names against its lists, so it never matches a literal
+   * `process.env.NAME` read.
    */
-  /**
-   * **ABC-freemium 5-04 · D2a — THE LOOP IS NO LONGER UNIFORM, and that is the
-   * point.** It used to run over `["TAVILY_API_KEY", "BRAVE_SEARCH_API_KEY"]`
-   * with one expectation for both. Under D2a the two names have different
-   * answers: Brave is still read, once, inside the gate; Tavily is not read in
-   * production source at all. Merging them back into one loop would lose the
-   * distinction that matters.
-   */
-  const OPERATOR_SEARCH_ENV = ["BRAVE_SEARCH_API_KEY"] as const;
-
-  /** The one module allowed to turn an operator search credential into a key. */
-  const GATE = "src/lib/search/system-key.ts";
+  const OPERATOR_SEARCH_ENV = [
+    "TAVILY_API_KEY",
+    "BRAVE_SEARCH_API_KEY",
+    "GOOGLE_VERTEX_SEARCH_PROJECT",
+    "GOOGLE_VERTEX_SEARCH_ENGINE_ID",
+    "GOOGLE_VERTEX_SEARCH_DATA_STORE_ID",
+    "GOOGLE_VERTEX_SEARCH_LOCATION",
+    "GOOGLE_VERTEX_SEARCH_COLLECTION",
+    "GOOGLE_VERTEX_SEARCH_SERVING_CONFIG",
+    "GOOGLE_VERTEX_SEARCH_MIN_RESULTS",
+    "GOOGLE_VERTEX_SEARCH_FALLBACK",
+  ] as const;
 
   for (const name of OPERATOR_SEARCH_ENV) {
-    it(`reads process.env.${name} only inside the gate`, () => {
-      const readers = filesMatching(
-        new RegExp(`process\\.env\\.${name}\\b`),
-      );
-      expect(readers).toEqual([GATE]);
+    it(`reads process.env.${name} NOWHERE in source or scripts`, () => {
+      expect(filesMatching(new RegExp(`process\\.env\\.${name}\\b`))).toEqual([]);
     });
   }
 
-  it("reads process.env.TAVILY_API_KEY NOWHERE in production source", () => {
-    // REWRITTEN, NOT DELETED — ABC-freemium 5-04 · D2a (Ruling 12).
-    //
-    // This case was generated by the loop above and asserted `[GATE]`: exactly
-    // one reader, `src/lib/search/system-key.ts`. D2a removed that read, so the
-    // honest answer is now **none**.
-    //
-    // **This case IS standing tally 1 of Ruling 12 point 7** — "`process.env.
-    // TAVILY_API_KEY` reads anywhere in non-test source: must be 0" — so the
-    // tally is enforced by the gate rather than recounted by hand every round.
-    // Note what it does NOT say: a reader's OWN Tavily key still works and is
-    // still the only way anybody searches. What has no source left is the
-    // SERVER's key.
-    const readers = filesMatching(/process\.env\.TAVILY_API_KEY\b/);
-
-    expect(readers).toEqual([]);
+  it("reads no GOOGLE_VERTEX_SEARCH_ name at all, whatever the suffix", () => {
+    expect(filesMatching(/process\.env\.GOOGLE_VERTEX_SEARCH_/)).toEqual([]);
   });
 
-  it("reads the GOOGLE_VERTEX_ search capability names only where they are gated", () => {
-    // These are capabilities rather than keys — "is a project configured" — so
-    // they legitimately live in the two search modules that own them. What must
-    // NOT happen is a third module calling the availability helpers directly,
-    // which is precisely the defect 2-04 fixed in `web-search.ts`, `jobweb.ts`
-    // and `eventweb.ts`.
-    //
-    // ── REWRITTEN, NOT DELETED — ABC-freemium 9-04 (Ruling 26 points 2-3) ────
-    //
-    // **This case going red is what 9-04 looks like working.** The expectation
-    // used to be the single app module, and that was only true because the walk
-    // could not see `web/scripts/`. Widening the walk did not introduce two new
-    // readers; it revealed two that have been there all along, in the files the
-    // owner runs by hand.
-    //
-    // **Both are legitimate and neither is a spend risk, stated so the next
-    // reader does not "tidy" them away:** these two scripts are the operator
-    // tools that BUILD and QUERY the Discovery Engine index, so needing to know
-    // which project and which app is their entire job. They are not runtime
-    // code, they are not imported by anything under `src/`, and — this is the
-    // part that matters — 9-01 made them read
-    // `GOOGLE_VERTEX_SEARCH_PROJECT` and nothing else, which is the SAME single
-    // expression `vertexSearchProject()` uses. Before 9-01 they fell back to
-    // `GOOGLE_VERTEX_PROJECT`; that fallback is what this scan would now catch
-    // coming back, because the fallback name would appear here as a fourth
-    // entry.
-    //
-    // A FIFTH entry, or either script disappearing, is a change somebody must
-    // explain.
-    const readers = filesMatching(/process\.env\.GOOGLE_VERTEX_SEARCH_/);
-    expect(readers).toEqual([
-      "scripts/probe-vertex-search-billing.mjs",
-      "scripts/setup-vertex-search.mjs",
-      "src/lib/sources/vertex-search.ts",
-    ]);
-  });
-
-  it("counts which operator scripts read the OLD models-project name, and why (9-01)", () => {
-    // ABC-freemium 9-04, guarding 9-01, and written this way ON PURPOSE after a
-    // first draft asserted the wrong thing.
-    //
-    // The tempting assertion is "no script reads `GOOGLE_VERTEX_PROJECT` any
-    // more". **It is false, and asserting it would have been a wrong value
-    // dressed as a guard.** Both operator scripts still read the old name — to
-    // decide whether to PRINT the loud "that is the models project, and it is
-    // deliberately not read here" message. Reading a name to explain why you
-    // are ignoring it is the opposite of the defect.
-    //
-    // So the honest contract is the accepted SET, in the shape Ruling 6
-    // point 4's structured-source tally already uses: exactly these two, each
-    // for that one reason. A third script reading the models project is a new
-    // coupling somebody has to justify; either of these two disappearing means
-    // the loud message went with it.
-    //
-    // The contract that the old name never FEEDS the project — the actual
-    // fallback — is asserted where it can be proved by running the scripts, in
-    // `src/scripts/vertex-search-project.test.ts`. It is deliberately not
-    // duplicated here as a weaker source-text copy that could drift from it.
+  it("has no operator script left that reads the models-project name (the two Vertex search scripts are gone)", () => {
     const legacyReaders = filesMatching(
       /process\.env\.GOOGLE_VERTEX_PROJECT\b/,
     ).filter((file) => file.startsWith("scripts/"));
 
-    expect(legacyReaders).toEqual([
-      "scripts/probe-vertex-search-billing.mjs",
-      "scripts/setup-vertex-search.mjs",
-    ]);
+    expect(legacyReaders).toEqual([]);
   });
 
-  it("calls the availability helpers only from the gate and their own modules", () => {
-    // ABC-freemium 2-04 — the gate is `operatorSearchAvailability()` in
-    // `system-key.ts`. Every other caller must go through it, or the
-    // entitlement is bypassed by a direct environment read.
-    const callers = filesMatching(
-      /\bis(Gemini|Vertex)SearchAvailable\s*\(/,
-    );
-    //
-    // ── REWRITTEN, NOT DELETED — 5-04 · D2a (Ruling 12) ──────────────────────
-    //
-    // The expectation used to lead with `src/lib/search/system-key.ts`. Under
-    // D2a `operatorSearchAvailability` answers `false` unconditionally and no
-    // longer asks the environment anything, so the gate stopped importing both
-    // helpers and only the two modules that OWN them still call them. The scan
-    // failing on this change was the scan working: it noticed a caller
-    // disappearing, which is the same sensitivity that notices one appearing.
-    expect(callers).toEqual([
-      "src/lib/sources/gemini-search.ts",
+  it("calls no search-availability helper: there is no operator capability to ask about", () => {
+    expect(filesMatching(/\bis(Gemini|Vertex)SearchAvailable\s*\(/)).toEqual([]);
+  });
+
+  it("keeps the deleted search modules and operator scripts from coming back", () => {
+    for (const file of [
+      "src/lib/search/system-key.ts",
       "src/lib/sources/vertex-search.ts",
-    ]);
+      "src/lib/sources/gemini-search.ts",
+      "src/lib/usage/rebuild-breaker.ts",
+      "scripts/setup-vertex-search.mjs",
+      "scripts/probe-vertex-search-billing.mjs",
+    ]) {
+      expect(
+        fs.existsSync(path.join(process.cwd(), file)),
+        `${file} was deleted with Peer's own search and must not return`,
+      ).toBe(false);
+    }
   });
 
-  it("counts the structured-source key reads that are ACCEPTED outside the gate", () => {
-    // Ruling 6 point 4 — Adzuna, JSearch and USAJobs read
-    // `request key || operator env key` in the same shape, and they deliberately
-    // do NOT join the gate: they are the free structured backbone of the jobs
-    // surface and their keys buy free-tier quota rather than per-call billing.
-    //
-    // **This is A's standing tally, as an assertion.** The number is 3. If it
-    // rises, a fourth ungated structured source appeared and the manager needs
-    // to rule on it; if one of these ever bills per request, it joins the gate
-    // the same round (the ruling's stated threshold).
-    const accepted = filesMatching(
-      /process\.env\.(ADZUNA_APP_(ID|KEY)|JSEARCH_API_KEY|USAJOBS_(API_KEY|USER_AGENT))\b/,
+  it("names no deleted operator-search symbol in code", () => {
+    const revived = filesMatching(
+      /\b(resolveSystemSearchKeys|operatorSearchAvailability|isOperatorFundedSearch|searchVertex|searchGemini|consumeForcedRebuild|systemSearchAllowed)\b/,
     );
-    expect(accepted).toEqual([
+
+    expect(revived).toEqual([]);
+  });
+
+  /**
+   * **THE "ACCEPTED" LIST IS EMPTY NOW (the fix round after the branch review,
+   * SF-5).** Adzuna, JSearch and USAJOBS used to read `request key || company env
+   * key` and were counted here as three accepted reads, on the reasoning that their
+   * keys bought free-tier quota. JSearch bills per request past a free tier, the
+   * jobs surface has no route, and the branch's rule is that Peer spends no
+   * company credential on anyone's behalf, so the environment half is gone: the
+   * reader's own credentials travel in the request and a missing one means the
+   * adapter returns nothing. The number is 0, and a revival is a failing case.
+   * The build guard bans the names on Vercel too.
+   */
+  const JOB_SOURCE_ENV = [
+    "ADZUNA_APP_ID",
+    "ADZUNA_APP_KEY",
+    "JSEARCH_API_KEY",
+    "USAJOBS_API_KEY",
+    "USAJOBS_USER_AGENT",
+    "RAPIDAPI_KEY",
+  ] as const;
+
+  for (const name of JOB_SOURCE_ENV) {
+    it(`reads process.env.${name} NOWHERE in source or scripts`, () => {
+      expect(filesMatching(new RegExp(`process\\.env\\.${name}\\b`))).toEqual([]);
+    });
+  }
+
+  it("accepts no job-source key read outside a request at all (the old accepted list is empty)", () => {
+    const accepted = filesMatching(
+      /process\.env\.(ADZUNA_APP_(ID|KEY)|JSEARCH_API_KEY|USAJOBS_(API_KEY|USER_AGENT)|RAPIDAPI_KEY)\b/,
+    );
+    expect(accepted).toEqual([]);
+    expect(accepted).toHaveLength(0);
+  });
+
+  it("the three adapters still exist and take the reader's credentials from the request (a rename would otherwise make the scan above vacuous)", () => {
+    for (const file of [
       "src/lib/jobs/sources/adzuna.ts",
       "src/lib/jobs/sources/jsearch.ts",
       "src/lib/jobs/sources/usajobs.ts",
-    ]);
-    expect(accepted).toHaveLength(3);
+    ]) {
+      expect(fs.existsSync(path.join(process.cwd(), file)), `${file} is gone`).toBe(true);
+      expect(code(path.join(process.cwd(), file)), `${file} must read the request's apiKeys`).toMatch(/query\.apiKeys\?\./);
+    }
   });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SCAN 7 — JEV_API_KEY is read in exactly one place (JEV-DIRECT §1aa)
+// SCAN 7 — nothing reads a Jev key from the environment: the key is the reader's
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("scan 7 — JEV_API_KEY is read in exactly one file (JEV-DIRECT §1aa)", () => {
+describe("scan 7 — no source file reads a Jev key from the environment", () => {
   /**
-   * JEV-DIRECT (§1aa) REVERSES §1r: the user moved the Jev key into Vercel
-   * alongside every other provider key, so Peer now calls Jev directly
-   * instead of through the (still-present, still-dormant) Supabase broker.
-   * Every scan/test that used to assert "JEV_API_KEY is never read anywhere
-   * in web/" is rewritten, never deleted (§1aa point 4) — this scan is the
-   * POSITIVE half of that old claim: exactly one file reads the key, and it
-   * is the expected one. `broker-client.test.ts`'s own structural check
-   * ("never references JEV_API_KEY... in its own source") is unaffected and
-   * stays green unchanged — the broker path is a different transport and
-   * must still never see the raw key.
+   * **REWRITTEN, NOT DELETED — the owner's decision of 2026-10-06 changed the
+   * premise.** This scan used to assert that `JEV_API_KEY` was read in exactly
+   * one file, `jev-direct-client.ts` (JEV-DIRECT §1aa: the company's Jev key
+   * lived in Vercel on purpose). Peer now holds no Jev key of its own: Jev is a
+   * bring-your-own-key option, the reader's key travels in the paper request
+   * body, and `callJevDirect` receives it as a parameter. So the honest answer
+   * is **none**, the build guard bans the name on Vercel, and a revival is a
+   * failing case rather than a quiet addition.
+   *
+   * The scans read code with comments stripped, so the prose in these modules
+   * may explain the history without tripping them. The build guard names the
+   * variable in its ban list (a string, not a read); that one file is the only
+   * source allowed to contain the name at all.
    */
-  const GATE = "src/lib/decisions/jev-direct-client.ts";
+  const GUARD = "scripts/assert-byok-production-env.mjs";
 
-  it(`reads process.env.JEV_API_KEY only inside ${GATE}`, () => {
-    const readers = filesMatching(/process\.env\.JEV_API_KEY\b/);
-    expect(readers).toEqual([GATE]);
+  it("reads process.env.JEV_API_KEY NOWHERE in source or scripts", () => {
+    expect(filesMatching(/process\.env\.JEV_API_KEY\b/)).toEqual([]);
   });
 
-  it("the gate module actually exists (a rename would otherwise show up as an empty result, not a failure naming why)", () => {
-    expect(fs.existsSync(path.join(process.cwd(), GATE))).toBe(true);
+  it("names JEV_API_KEY in no source file except the build guard's ban list", () => {
+    expect(filesMatching(/\bJEV_API_KEY\b/)).toEqual([GUARD]);
   });
-});
 
-// ─────────────────────────────────────────────────────────────────────────────
-// SCAN 4 — no `resolveProvider()` without a usage context
-// ─────────────────────────────────────────────────────────────────────────────
-
-describe("scan 4 — every resolveProvider call carries a context", () => {
-  it("has no argument-less resolveProvider() call anywhere", () => {
-    // D8 / R-METER-1 — the second argument is what attributes a model call to a
-    // user. Round-2 A noted this is now true "by construction" because both
-    // figure matchers take a required context; a test is what makes it stay
-    // true when the next matcher is written.
-    //
-    // ── ABC-freemium 3-02 — THIS SCAN IS NOW A BELT WHOSE BRACES ARE THE TYPE ──
-    //
-    // `resolveProvider`'s second argument became **required and branded**, so
-    // `tsc` rejects every shape this regex was looking for, and more besides.
-    // The scan is kept rather than deleted for two reasons: a regex survives a
-    // signature being loosened back to optional by someone who does not read
-    // this file, and the failure message here names the offending file, which a
-    // TS2554 at a call site does not.
-    //
-    // **Its old comment was also wrong in a way worth recording.** It said
-    // "calls that pass an override but no context are legal — `tier2-rerank.ts`
-    // and `query-gen.ts` are both R-QUOTA-3-exempt paths that still meter". The
-    // metering half was true and beside the point: R-SEC-2 is about a caller
-    // that skips the *entitlement* check, and a usage row for spend nobody
-    // authorised is a receipt, not a guard. Those two callers were safe because
-    // of a numeric tier ceiling, not because they metered — and that reason is
-    // now written at each of them as a `SpendJustification` the compiler checks.
-    const offenders = scannedFiles().filter((file) => {
-      const source = code(file);
-      // The declaration itself, and the unrelated local helper in
-      // `sources/web-search.ts`, both have a parameter list — so a zero-argument
-      // CALL is unambiguous.
-      return /(?<!function\s)\bresolveProvider\(\s*\)/.test(source);
-    });
-
-    expect(offenders.map(relative)).toEqual([]);
+  it("names no PEER_JEV_ setting in any source file except the build guard (the broker's secret is banned there)", () => {
+    expect(filesMatching(/\bPEER_JEV_[A-Z_]+\b/)).toEqual([GUARD]);
   });
-});
 
-// ─────────────────────────────────────────────────────────────────────────────
-// SCAN 6 — the entitled-context brand is not quietly re-opened
-// ─────────────────────────────────────────────────────────────────────────────
+  it("reads no process.env name that starts with JEV_ or PEER_JEV_, however it is spelled", () => {
+    expect(filesMatching(/process\.env(\.|\[\s*["'`])(PEER_)?JEV_/)).toEqual([]);
+  });
 
-/** The module that owns the brand, and the only place it may be asserted. */
-const ENTITLED_CONTEXT_MODULE = "src/lib/security/entitled-context.ts";
-
-describe("scan 6 — nothing re-opens the entitled-context hole (3-02)", () => {
-  it("declares no OPTIONAL entitled or provider context anywhere", () => {
-    // ABC-freemium 3-02 · Ruling 7 point 3 — **the one attack the brand does
-    // not stop on its own.** Round-3 B compiled it: a helper that declares
-    // `ctx?: EntitledContext` type-checks perfectly and re-opens the exact hole
-    // this item closed, because its callers may then omit it again. A brand
-    // proves provenance; it cannot make a parameter mandatory.
-    //
-    // Optionality is banned in every spelling of it, including the union alias
-    // and the `| undefined` form a formatter may produce.
-    const offenders = scannedFiles().filter((file) =>
-      /\b\w+\?\s*:\s*(EntitledContext|ProviderContext)\b|:\s*(EntitledContext|ProviderContext)\s*\|\s*undefined/.test(
-        code(file),
+  it("names no symbol of the deleted company-Jev path in code (the transport switch, the shadow hook, the broker, the reservation, the fallback)", () => {
+    // The final grep gate of the Jev change, kept as a standing test. Comments
+    // are stripped by `code()`, so history may still be explained in prose.
+    expect(
+      filesMatching(
+        /\b(resolveJevTransport|jevShadowEnabled|readJevCaps|readJevShadowConfig|callJevViaBroker|dispatchJevCall|reserveJevCall|geminiFallback\w*|runJevShadow|buildJevShadowHook|onFreshShortlist)\b/,
       ),
-    );
-
-    expect(offenders.map(relative)).toEqual([]);
+    ).toEqual([]);
   });
 
-  it("keeps the test-only escape hatch out of production code", () => {
-    // There is exactly one way to mint a context without an entitlement and it
-    // says `unsafe` in its own name so that this scan can be one word long. A
-    // production file reaching for it is the brand being talked around rather
-    // than satisfied.
-    // `entitled-context.ts` is exempt: it DECLARES the hatch, which is how
-    // there comes to be exactly one.
-    const offenders = scannedFiles()
-      .map(relative)
-      .filter((file) => file !== ENTITLED_CONTEXT_MODULE)
-      .filter((file) =>
-        code(path.join(process.cwd(), file)).includes(
-          "unsafeEntitledContextForTests",
-        ),
-      );
+  it(".env.example sets no company Jev variable and names the one developer-only smoke variable", () => {
+    const example = fs.readFileSync(path.join(process.cwd(), ".env.example"), "utf8");
+    expect(example).not.toMatch(/^\s*(JEV_API_KEY|PEER_JEV_[A-Z_]+)\s*=/m);
+    expect(example).toMatch(/^#\s+JEV_SMOKE_API_KEY=/m);
+  });
 
+  it("keeps the deleted company-funded Jev modules from coming back", () => {
+    for (const file of [
+      "src/lib/decisions/broker-client.ts",
+      "src/lib/decisions/jev-dispatch.ts",
+      "src/lib/decisions/flag.ts",
+      "src/lib/decisions/gemini-fallback.ts",
+      "src/lib/security/jev-broker-auth.ts",
+      "supabase/functions/jev-broker/index.ts",
+    ]) {
+      expect(fs.existsSync(path.join(process.cwd(), file)), `${file} is back`).toBe(false);
+    }
+  });
+
+  it("the direct client still exists (a rename would otherwise show up as an empty result, not a failure naming why)", () => {
+    expect(fs.existsSync(path.join(process.cwd(), "src/lib/decisions/jev-direct-client.ts"))).toBe(true);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SCAN 9 — no console call on the Jev key's path names a key
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("scan 9 — no console call under lib/decisions or app/api/feed names an API key", () => {
+  /**
+   * **Added by the fix round after the branch review (finding B-1).** The five
+   * sentinel tests prove at run time that a key put through a console method
+   * does not reach the log; this is the same rule read off the source, so a
+   * line like `console.info(options.apiKey)` fails here even on a path no test
+   * drives. The two layers fail for different mistakes: this one for a call that
+   * names the key, the run-time one for a call that logs a variable the key was
+   * copied into.
+   *
+   * It looks at the two places the reader's Jev key travels in server code (the
+   * decisions folder and the feed route). `lib/llm/` and the other routes handle
+   * the reader's model key and are not in this scan: widen `WATCHED` if a Jev
+   * path ever moves.
+   */
+  const WATCHED = ["src/lib/decisions/", "src/app/api/feed/"] as const;
+  /** `apiKey`, `jevApiKey`, `API_KEY`, `api_key`: the spelling does not matter, the name does. */
+  const KEY_NAME = /api[_-]?key/i;
+
+  /** Source text of every argument of every `console.<method>(...)` call: the parentheses are balanced, so a call that spans lines or nests calls is read whole. */
+  function consoleCallArguments(source: string): string[] {
+    const out: string[] = [];
+    const call = /\bconsole\s*\.\s*[A-Za-z]+\s*\(/g;
+    for (let match = call.exec(source); match; match = call.exec(source)) {
+      const open = match.index + match[0].length - 1;
+      let depth = 0;
+      let quote: string | null = null;
+      let end = source.length;
+      for (let i = open; i < source.length; i++) {
+        const ch = source[i];
+        if (quote) {
+          if (ch === "\\") i++;
+          else if (ch === quote) quote = null;
+          continue;
+        }
+        if (ch === '"' || ch === "'" || ch === "`") quote = ch;
+        else if (ch === "(") depth++;
+        else if (ch === ")" && --depth === 0) {
+          end = i;
+          break;
+        }
+      }
+      // An unbalanced call reads to the end of the file: a false red is better than a blind spot.
+      out.push(source.slice(open + 1, end));
+    }
+    return out;
+  }
+
+  /** Console calls whose arguments name a key. */
+  function consoleCallsNamingAKey(source: string): string[] {
+    return consoleCallArguments(stripComments(source)).filter((args) => KEY_NAME.test(args));
+  }
+
+  /** Every `console` in code that is not the start of a direct `console.<method>(` call: an alias, a reference passed on. */
+  function consoleUsedAsAValue(source: string): number {
+    const stripped = stripComments(source);
+    return (stripped.match(/\bconsole\b/g) ?? []).length - consoleCallArguments(stripped).length;
+  }
+
+  const watchedFiles = (): string[] =>
+    scannedFiles()
+      .map(relative)
+      .filter((file) => WATCHED.some((dir) => file.startsWith(dir)))
+      .sort();
+
+  it("finds a call that names a key, whatever shape the call has (the matcher is tested on planted sources)", () => {
+    // If these stop failing for the right reason the scan below is blind.
+    expect(consoleCallsNamingAKey("console.info(options.apiKey);")).toHaveLength(1);
+    expect(consoleCallsNamingAKey("console.debug(jevApiKey)")).toHaveLength(1);
+    expect(consoleCallsNamingAKey("console.log(JSON.stringify({ apiKey }))")).toHaveLength(1);
+    expect(consoleCallsNamingAKey("console.error('failed', (err as Error).message, apiKey)")).toHaveLength(1);
+    expect(consoleCallsNamingAKey("console.warn(\n  `bearer ${jevApiKey}`,\n);")).toHaveLength(1);
+    expect(consoleCallsNamingAKey("console . info ( options.API_KEY )")).toHaveLength(1);
+    expect(consoleCallsNamingAKey("console.trace(options.api_key)")).toHaveLength(1);
+  });
+
+  it("does not flag what is not a console call that names a key", () => {
+    expect(consoleCallsNamingAKey('console.log("[decision] done", status, count);')).toEqual([]);
+    expect(consoleCallsNamingAKey("// console.info(apiKey)\nconst x = 1;")).toEqual([]);
+    expect(consoleCallsNamingAKey("/* console.debug(options.apiKey) */ run();")).toEqual([]);
+    // The key is used after the call has closed: it is not an argument of it.
+    expect(consoleCallsNamingAKey('console.log("ok"); await call({ apiKey });')).toEqual([]);
+    expect(consoleCallsNamingAKey('console.log("a (b"); use(apiKey);')).toEqual([]);
+  });
+
+  it("flags a console reference that is not a direct call, because an alias would walk round the scan", () => {
+    expect(consoleUsedAsAValue("const log = console.info; log(options.apiKey);")).toBeGreaterThan(0);
+    expect(consoleUsedAsAValue("emit(console);")).toBeGreaterThan(0);
+    expect(consoleUsedAsAValue('console.log("fine");')).toBe(0);
+  });
+
+  it("watches real files: both folders exist and are walked, so a rename cannot make the scan empty", () => {
+    const files = watchedFiles();
+    expect(files.some((file) => file.startsWith("src/lib/decisions/"))).toBe(true);
+    expect(files).toContain("src/app/api/feed/route.ts");
+    expect(files).toContain("src/lib/decisions/screen.ts");
+    expect(files).toContain("src/lib/decisions/jev-client.ts");
+  });
+
+  it("no console call in a watched production file names an API key", () => {
+    const offenders = watchedFiles().filter((file) => consoleCallsNamingAKey(fs.readFileSync(path.join(process.cwd(), file), "utf8")).length > 0);
     expect(offenders).toEqual([]);
   });
 
-  it("asserts no cast to the brand outside the module that owns it", () => {
-    // `as EntitledContext` compiles — TypeScript always allows it, and B
-    // measured that rather than assuming otherwise. The win of a brand is that
-    // asserting provenance you have not got becomes **greppable**, so this is
-    // the grep. `entitled-context.ts` itself is exempt: the two casts inside it
-    // are how the brand is applied at all.
-    const offenders = scannedFiles()
-      .map(relative)
-      .filter((file) => file !== ENTITLED_CONTEXT_MODULE)
-      .filter((file) =>
-        /\bas\s+(EntitledContext|ProviderContext)\b/.test(
-          code(path.join(process.cwd(), file)),
-        ),
-      );
-
+  it("no watched production file uses console as a value (aliased, stored or passed on)", () => {
+    const offenders = watchedFiles().filter((file) => consoleUsedAsAValue(fs.readFileSync(path.join(process.cwd(), file), "utf8")) > 0);
     expect(offenders).toEqual([]);
   });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SCAN 5 — every AI route is behind the shared guard
+// SCAN 5 — every route that reaches a model is behind the shared guard
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("scan 5 — every route that can spend is behind requireEntitledAiRequest", () => {
-  const GUARD = "requireEntitledAiRequest";
+describe("scan 5 — every route that can reach a model is behind requireAiRequest", () => {
+  const GUARD = "requireAiRequest";
 
   /**
-   * Routes that may reach a provider or an operator search key WITHOUT calling
-   * the guard, each with the reason it is exempt. **A short, justified list —
-   * never a convenience list.** Every entry here is a decision someone can
-   * argue with, which is the point of writing them down.
+   * Routes that may reach a provider WITHOUT calling the guard, each with the
+   * reason it is exempt. **A short, justified list — never a convenience list.**
+   * Every entry here is a decision someone can argue with, which is the point of
+   * writing them down.
    */
   const JUSTIFIED_EXEMPTIONS: Record<string, string> = {
-    "src/app/api/jobs/dispatch-digests/route.ts":
-      "D9 — the nightly cron runs on CRON_SECRET, not a session; it passes " +
-      "systemSearchAllowed: false per enrolled user",
     "src/app/api/digest/test/route.ts":
-      "a local-only diagnostic that answers 404 unless canUseLocalServerProvider()",
+      "a local-only diagnostic that answers 404 unless canUseLocalServerProvider(); it reads a developer's own Vertex environment",
   };
 
   function apiRouteFiles(): string[] {
@@ -459,19 +470,15 @@ describe("scan 5 — every route that can spend is behind requireEntitledAiReque
       .filter((file) => /^src\/app\/api\/.*\/route\.ts$/.test(file));
   }
 
-  /** A route "can spend" if it can reach a provider or an operator search key. */
-  function canSpend(file: string): boolean {
+  /** A route "reaches a model" if it can resolve a provider or build one itself. */
+  function reachesModel(file: string): boolean {
     const source = code(path.join(process.cwd(), file));
-    return (
-      /\bresolveProvider\s*\(/.test(source) ||
-      /\bGoogleGenAI\b/.test(source) ||
-      /systemSearchAllowed/.test(source)
-    );
+    return /\bresolveProvider\s*\(/.test(source) || /\bGoogleGenAI\b/.test(source);
   }
 
-  it("leaves no spending route unguarded and unjustified", () => {
+  it("leaves no model-reaching route unguarded and unjustified", () => {
     const unguarded = apiRouteFiles()
-      .filter(canSpend)
+      .filter(reachesModel)
       .filter((file) => {
         return !code(path.join(process.cwd(), file)).includes(GUARD);
       })
@@ -480,7 +487,7 @@ describe("scan 5 — every route that can spend is behind requireEntitledAiReque
     expect(unguarded).toEqual([]);
   });
 
-  it("keeps the exemption list honest — every entry still exists and still cannot spend safely", () => {
+  it("keeps the exemption list honest — every entry still exists and still reaches a model", () => {
     // The staleness check `ui-vocabulary.test.ts` already does for its own list.
     // An exemption for a file that has been deleted or renamed is an exemption
     // nobody notices has stopped applying.
@@ -489,22 +496,97 @@ describe("scan 5 — every route that can spend is behind requireEntitledAiReque
         fs.existsSync(path.join(process.cwd(), file)),
         `${file} is exempted for "${reason}" but no longer exists`,
       ).toBe(true);
+      expect(
+        reachesModel(file),
+        `${file} is exempted but no longer reaches a model`,
+      ).toBe(true);
     }
   });
 
   it("reports the guarded count, so a DROP is visible rather than silent", () => {
-    // A's standing tally as an assertion. Six routes carry the guard today —
-    // nine until the jobs and events feed/report routes were deleted with those
-    // surfaces; the sixth is `papers/upload` (merge of 2026-09-23), whose
-    // title fallback reaches a model and so passes the same check. A
-    // route losing it would otherwise show up only as an absence, and an
-    // absence is what nobody notices.
+    // A's standing tally as an assertion. Five routes carry the guard today:
+    // the feed, the digest, the figure resolver, the paper report and the
+    // test-digest diagnostic. A route losing it would otherwise show up only as
+    // an absence, and an absence is what nobody notices. (The upload route used
+    // to be a sixth, for a model-written title; it reaches no model now and has
+    // its own sign-in.)
     const guarded = apiRouteFiles().filter((file) =>
       code(path.join(process.cwd(), file)).includes(GUARD),
     );
 
-    expect(guarded).toContain("src/app/api/papers/upload/route.ts");
-    expect(guarded).toHaveLength(6);
+    expect(guarded).toEqual([
+      "src/app/api/digest/route.ts",
+      "src/app/api/feed/route.ts",
+      "src/app/api/figure/route.ts",
+      "src/app/api/papers/report/route.ts",
+      "src/app/api/test-digest/route.ts",
+    ]);
+  });
+
+  it("takes only the reader's override: no resolveProvider call carries a second argument", () => {
+    // `resolveProvider(override)` is the whole interface, and `tsc` rejects a
+    // second argument. The scan is kept as a belt: it survives the signature
+    // being loosened by someone who does not read this file, and its failure
+    // message names the offending file, which a TS2554 at a call site does not.
+    // Only files that import the registry are looked at: `sources/web-search.ts`
+    // has its own, unrelated local `resolveProvider` helper with three
+    // parameters. The declaration itself has a parameter list, so a CALL with a
+    // comma is unambiguous.
+    const offenders = scannedFiles().filter((file) => {
+      const source = code(file);
+      return (
+        /providers\/registry"|\.\/registry"/.test(source) &&
+        /(?<!function\s)\bresolveProvider\(\s*[\w.?\s]+(?:\([^()]*\))?\s*,/.test(source)
+      );
+    });
+
+    expect(offenders.map(relative)).toEqual([]);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SCAN 8 — Peer holds no model key of its own
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("scan 8 — no model key is read from the environment on a reader's path", () => {
+  it("reads process.env.GOOGLE_API_KEY NOWHERE in source or scripts", () => {
+    // The company's Gemini key used to be read in exactly one place (the
+    // registry's system default) and was the default model for every signed-in
+    // reader. A reader's own Gemini key arrives in the request and is passed to
+    // `createGeminiApiProvider(apiKey)`; the environment has no say. The build
+    // guard bans the name on Vercel (`assert-byok-production-env.mjs`), and this
+    // is the same rule enforced on the code.
+    expect(filesMatching(/process\.env\.GOOGLE_API_KEY\b/)).toEqual([]);
+  });
+
+  it("reads the other providers' environment keys only inside their own provider modules", () => {
+    // These are a developer's own keys, reachable only through
+    // `PEER_DIGEST_PROVIDER` in local development (`canUseLocalServerProvider`),
+    // and banned on Vercel by the build guard. Each is read by its own provider
+    // module and nowhere else, so no route and no library can quietly resolve a
+    // provider from the environment.
+    const readers = filesMatching(
+      /process\.env\.(ANTHROPIC_API_KEY|OPENAI_API_KEY|QWEN_API_KEY|DASHSCOPE_API_KEY|DEEPSEEK_API_KEY)\b/,
+    );
+
+    expect(readers).toEqual([
+      "src/lib/llm/providers/anthropic.ts",
+      "src/lib/llm/providers/deepseek.ts",
+      "src/lib/llm/providers/openai.ts",
+      "src/lib/llm/providers/qwen.ts",
+    ]);
+  });
+
+  it("keeps the deleted brand and the system default from coming back", () => {
+    // The compile-time brand ("an entitlement check ran before the operator's
+    // money was spent") proved nothing once there was no operator provider, and
+    // went with it. Naming them here makes a revival a failing case rather than
+    // a quiet addition.
+    const revived = filesMatching(
+      /\b(entitledContext|EntitledContext|SpendJustification|resolveSystemProvider|unsafeEntitledContextForTests)\b/,
+    );
+
+    expect(revived).toEqual([]);
   });
 });
 
@@ -555,8 +637,6 @@ describe("the scans' coverage boundary (9-04)", () => {
     const walked = scannedFiles().map(relative);
 
     for (const file of [
-      "scripts/setup-vertex-search.mjs",
-      "scripts/probe-vertex-search-billing.mjs",
       "scripts/assert-byok-production-env.mjs",
       "scripts/check-provider-models.mjs",
     ]) {
@@ -605,9 +685,7 @@ describe("the scans' coverage boundary (9-04)", () => {
 
     // And it is not an offender: it is in scope and it reports clean.
     expect(filesMatching(/process\.env\.TAVILY_API_KEY\b/)).toEqual([]);
-    expect(filesMatching(/process\.env\.BRAVE_SEARCH_API_KEY\b/)).toEqual([
-      "src/lib/search/system-key.ts",
-    ]);
+    expect(filesMatching(/process\.env\.BRAVE_SEARCH_API_KEY\b/)).toEqual([]);
   });
 
   it("names the one SHAPE these scans are still blind to, with its census", () => {

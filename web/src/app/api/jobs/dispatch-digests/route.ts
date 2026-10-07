@@ -531,10 +531,9 @@ export async function GET(req: NextRequest) {
         // even though a system key is available. Revisit after launch.
         //
         // The same paragraph covers the other half, and the two facts belong
-        // together: this call passes **no `systemSearchAllowed`**, so it takes
-        // the `false` default in `lib/search/system-key.ts` and spends no system
-        // Tavily key on behalf of every enrolled user either. A future reader
-        // removing one of these should see the other.
+        // together: this call passes **no `searchConnectors`**, so it carries no
+        // search key and runs no web search on behalf of every enrolled user
+        // either. A future reader removing one of these should see the other.
         aiTier: 0,
       });
 

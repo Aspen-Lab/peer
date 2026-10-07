@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { captureConsole } from "@/test-support/console-capture";
 import { DEFAULT_JEV_ENDPOINT, callJev, type FetchLike } from "./jev-client";
 import { buildJevRequest, type JevWireRequest } from "./jev-contract";
 import { JEV_MODEL_ID, allQuestionIds } from "./rubric";
@@ -259,22 +260,15 @@ describe("callJev — api key never leaks", () => {
     }
   });
 
-  it("the key substring never appears in any console.log/warn/error call", async () => {
-    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+  it("the key substring never appears in any console.log/info/debug/warn/error call", async () => {
+    const consoleText = captureConsole();
     try {
       const fetchImpl: FetchLike = vi.fn(async () => jsonResponse(200, happyPathResponseFixture));
       const request = buildJevRequest(makeDecisionRequest()).wireRequest;
       await callJev(request, { apiKey: FAKE_API_KEY, fetchImpl });
-      const allCalls = [...logSpy.mock.calls, ...warnSpy.mock.calls, ...errorSpy.mock.calls];
-      for (const args of allCalls) {
-        expect(args.join(" ")).not.toContain(FAKE_API_KEY);
-      }
+      expect(consoleText.text()).not.toContain(FAKE_API_KEY);
     } finally {
-      logSpy.mockRestore();
-      warnSpy.mockRestore();
-      errorSpy.mockRestore();
+      consoleText.restore();
     }
   });
 

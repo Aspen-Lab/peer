@@ -489,9 +489,10 @@ export function mergeProfileAtSignIn(
 // reason as every other rule in this module — a backup taken weeks ago
 // must not erase a topic the reader has added since.
 
-/** The six fields §1aj names as "credential-like" — never restored, never
- *  imported, never pushed, under any circumstance. Checked again by test
- *  against the full merge output, not just at this one call site. */
+/** The seven fields §1aj names as "credential-like" (six) plus the reader's own
+ *  Jev key — never restored, never imported, never pushed, never written into a
+ *  backup file, under any circumstance. Checked again by test against the full
+ *  merge output, not just at this one call site. */
 const CREDENTIAL_LIKE_FIELDS = [
   "tavilyApiKey",
   "adzunaAppId",
@@ -499,13 +500,15 @@ const CREDENTIAL_LIKE_FIELDS = [
   "usajobsApiKey",
   "usajobsUserAgent",
   "feedAiApiKey",
+  "jevApiKey",
 ] as const;
 
 /** The explicit strip step the guide requires between parsing a backup file
  *  and installing anything from it — `defaultProfile` (and therefore
- *  `parseExportedProfile`'s own allow-list) still carries these six fields
- *  from the removed events/jobs era, so a raw restore would let them back
- *  in unless this runs first. */
+ *  `parseExportedProfile`'s own allow-list) still carries these seven fields
+ *  (six from the removed events/jobs era, plus the Jev key), so a raw restore
+ *  would let them back in unless this runs first. The same step runs on the
+ *  way OUT (`exportProfileDocument`), so a file never holds one either. */
 export function stripCredentialFields(
   document: Partial<UserProfile>,
 ): Partial<UserProfile> {

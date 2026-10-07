@@ -22,8 +22,9 @@ import type {
   FeedDiscoveryMode,
 } from "@/types";
 import { defaultProfile } from "@/types";
-import { type ClientEntitlement } from "@/lib/entitlement/allowance";
 import { normalizePersistedFeedIntent } from "@/lib/feed/intent";
+import { stripCredentialFields } from "@/lib/profile/merge";
+import { useJevScreeningStore } from "@/store/jev-screening";
 import {
   applyOpportunityFacetPreferenceSignal,
   applyPreferenceSignal,
@@ -45,44 +46,6 @@ interface ProfileState {
   recordUploadPreference: (paper: Paper) => void;
   forgetUploadPreference: (documentKey: string) => void;
   profile: UserProfile;
-  /**
-   * ABC-freemium 1-14 · R-ENT-3 — what the server says this reader may use.
-   *
-   * **Never derived on the client from the raw row.** D5 makes the server the
-   * authority and expiry is computed at read time, so a browser that worked out
-   * its own plan from `trial_ends_at` would be a second source of truth that
-   * drifts. `GET /api/profile` computes it; the client only displays it.
-   *
-   * ── ABC-freemium 6-04 · Ruling 16 points 2-3 — **THREE STATES, NOT TWO** ──
-   *
-   * `null` means **not yet known**: nobody has asked the server, or the answer
-   * has not come back. It is distinct from "known to be signed out", which is a
-   * real `ANONYMOUS_CLIENT_ENTITLEMENT` object that `ProfileSync` sets once it
-   * has established there is no session.
-   *
-   * This field used to *default* to that anonymous object, on the reasoning
-   * that a real object with real zeroes meant no consumer needed a null branch
-   * and a forgotten one could not fail open. That reasoning was wrong in one
-   * direction and it shipped: **every reader looked free on the client until the
-   * profile fetch returned, including a paid one**, while the server went on
-   * granting what they had paid for. A paid reader who met the quota notice in
-   * that window was served *and* told to upgrade — the exact thing Ruling 8
-   * forbids, on the surface Ruling 8 was written for.
-   *
-   * `null` fails open for nobody, because the two kinds of consumer read it
-   * differently and the compiler makes both choose:
-   *  - a **capability** question takes `entitlementGrants(entitlement)`, which
-   *    answers with the anonymous default and so grants nothing while ignorant;
-   *  - an **upsell** takes the nullable value and renders **nothing** on `null`.
-   *    An upsell needs positive evidence the reader is not entitled; absence of
-   *    data is not evidence.
-   *
-   * **Deliberately NOT persisted** (see `partialize`): a `paid` entitlement
-   * cached in localStorage would survive a downgrade. That is also why `null`
-   * is the honest value on a cold load — the browser genuinely does not know.
-   */
-  entitlement: ClientEntitlement | null;
-  setEntitlement: (entitlement: ClientEntitlement) => void;
   /**
    * PROFILE-SYNC (ABC-JEV-INTEGRATION.md §1bk) — per device, the
    * single-value profile fields this device last actually confirmed with
@@ -205,6 +168,8 @@ interface ProfileState {
   updateUsajobsKeys: (apiKey: string, userAgent: string) => void;
   updateFeedAiProvider: (value: UserProfile["feedAiProvider"]) => void;
   updateFeedAiApiKey: (value: string) => void;
+  /** The reader's own Jev key: trimmed, blank clears it. Never synced. */
+  updateJevApiKey: (value: string) => void;
   updateDeepReportEnabled: (value: boolean) => void;
   updateColorTheme: (theme: ColorTheme) => void;
   /** Mark first-run onboarding complete (defaults to now). */
@@ -380,18 +345,24 @@ export const PROFILE_EXPORT_FORMAT = "peer.profile/v1" as const;
 
 interface ExportedProfileDocument {
   format: typeof PROFILE_EXPORT_FORMAT;
-  profile: UserProfile;
+  profile: Partial<UserProfile>;
 }
 
 /**
  * A signed-out profile lives in one browser's localStorage and nowhere else,
  * so clearing site data or switching browsers loses it with no warning. Export
  * and import let a local tester move settings without an account.
+ *
+ * **A backup file carries no credential.** The reader's Jev key, their model
+ * key and every other credential-like field (`stripCredentialFields`, the same
+ * list a restore refuses to install) are left out of the document: a file the
+ * reader may email, sync or paste is the wrong place for a secret, and a
+ * restore could not use it anyway.
  */
 export function exportProfileDocument(
   profile: UserProfile,
 ): ExportedProfileDocument {
-  return { format: PROFILE_EXPORT_FORMAT, profile };
+  return { format: PROFILE_EXPORT_FORMAT, profile: stripCredentialFields(profile) };
 }
 
 /** Returns the profile from an exported document, or null if it is not one. */
@@ -428,12 +399,8 @@ export function parseExportedProfile(
 
 export const useProfileStore = create<ProfileState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       profile: defaultProfile,
-      // ABC-freemium 6-04 — not yet known. `ProfileSync` replaces it with the
-      // server's answer, or with `ANONYMOUS_CLIENT_ENTITLEMENT` once it has
-      // established there is no session to ask about.
-      entitlement: null,
       // PROFILE-SYNC (§1bk) — never confirmed anything with any account yet;
       // see the field doc above.
       lastSynced: null,
@@ -441,7 +408,6 @@ export const useProfileStore = create<ProfileState>()(
       // field doc above.
       syncedAccountId: null,
 
-      setEntitlement: (entitlement) => set({ entitlement }),
       setLastSynced: (snapshot) => set({ lastSynced: snapshot }),
       setSyncedAccountId: (id) => set({ syncedAccountId: id }),
 
@@ -751,6 +717,15 @@ export const useProfileStore = create<ProfileState>()(
         set((s) => ({
           profile: { ...s.profile, feedAiApiKey: value.trim() || undefined },
         })),
+      updateJevApiKey: (value) => {
+        const before = get().profile.jevApiKey?.trim() ?? "";
+        const next = value.trim() || undefined;
+        set((s) => ({ profile: { ...s.profile, jevApiKey: next } }));
+        // What Jev did last time describes the key that produced it: a key that
+        // was set and is now replaced or removed ends it. A first key (nothing
+        // before it) leaves it alone, so does an edit that changes nothing.
+        if (before !== "" && before !== (next ?? "")) useJevScreeningStore.getState().clear();
+      },
       updateDeepReportEnabled: (value) =>
         set((s) => ({ profile: { ...s.profile, deepReportEnabled: value } })),
       updateColorTheme: (theme) => {
@@ -829,12 +804,18 @@ export const useProfileStore = create<ProfileState>()(
       importProfile: (document) => {
         const parsed = parseExportedProfile(document);
         if (!parsed) return false;
-        set((s) => ({ profile: { ...s.profile, ...parsed } }));
-        if (parsed.colorTheme) applyColorTheme(parsed.colorTheme);
+        // A file that carries a credential (an older backup) cannot install
+        // it: the same refusal `mergeProfileFromBackup` makes on a restore.
+        const installable = stripCredentialFields(parsed);
+        set((s) => ({ profile: { ...s.profile, ...installable } }));
+        if (installable.colorTheme) applyColorTheme(installable.colorTheme);
         return true;
       },
 
       logOut: () => {
+        // A confirmed sign-out resets the profile, and with it the Jev key, so
+        // the report about that key goes too.
+        useJevScreeningStore.getState().clear();
         applyColorTheme(defaultProfile.colorTheme);
         // PROFILE-SYNC (§1bk) — lastSynced describes what THIS account
         // confirmed with THIS device; once profile itself resets to
@@ -842,7 +823,7 @@ export const useProfileStore = create<ProfileState>()(
         // would make every default look "dirty" relative to it on the next
         // sign-in (the same person signing back in, or — a shared computer
         // — someone else), reintroducing the overwrite bug through a
-        // different door. Reset together, same as entitlement.
+        // different door. Reset together.
         // ACCOUNT-SWITCH (§1bt point 1) — syncedAccountId resets together
         // with them: a stale owner id surviving a wipe would make the very
         // next sign-in (even the SAME account signing back in) look like a
@@ -853,7 +834,6 @@ export const useProfileStore = create<ProfileState>()(
         // own this device's data the instant it is wiped.
         set({
           profile: defaultProfile,
-          entitlement: null,
           lastSynced: null,
           syncedAccountId: null,
         });
@@ -865,10 +845,7 @@ export const useProfileStore = create<ProfileState>()(
     {
       name: "peer-profile",
       skipHydration: true,
-      // ABC-freemium 1-14 — the entitlement is server-authoritative and must
-      // NOT be written to localStorage; a cached `paid` would survive a
-      // downgrade — deliberately excluded, same as always. PROFILE-SYNC
-      // (§1bk) — `lastSynced` is now ALSO deliberately persisted alongside
+      // PROFILE-SYNC (§1bk) — `lastSynced` is deliberately persisted alongside
       // `profile`: an in-memory-only baseline is exactly the ping-pong bug
       // this field exists to fix. ACCOUNT-SWITCH (§1bt point 1) —
       // `syncedAccountId` joins them for the same reason: an in-memory-only

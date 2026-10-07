@@ -1,5 +1,4 @@
 import { describe, it, expect } from "vitest";
-import { ANONYMOUS_ENTITLEMENT } from "@/lib/entitlement/types";
 import { defaultProfile, type UserProfile } from "@/types";
 import {
   STEP_META,
@@ -88,31 +87,40 @@ describe("isStepDone", () => {
     ).toBe(false);
   });
 
-  // ABC-freemium 1-15 · R-KEY-4 — REWRITTEN, NOT DELETED. This asserted that
-  // the step needs a non-default provider AND a key, because `"default"` meant
-  // no AI. Under D1 it means Peer's AI, so the question is now "does this
-  // reader have a model at all". A signed-out reader's answer is unchanged,
-  // which is why every case below still passes with no entitlement.
-  it("ai: a signed-out reader still needs their own provider AND key", () => {
-    expect(isStepDone("ai", profileWith({ feedAiProvider: "openai" }), false)).toBe(false);
-    expect(isStepDone("ai", profileWith({ feedAiApiKey: "sk-x" }), false)).toBe(false);
+  // The `ai` step is done when a model will actually run for this reader: their
+  // own provider AND key, and a signed-in reader (or no sign-in configured).
+  // Peer has no key to lend, so nothing else can complete it.
+  it("ai: a signed-in reader needs their own provider AND key", () => {
+    expect(isStepDone("ai", profileWith({ feedAiProvider: "openai" }), false, "signed-in")).toBe(false);
+    expect(isStepDone("ai", profileWith({ feedAiApiKey: "sk-x" }), false, "signed-in")).toBe(false);
     expect(
-      isStepDone("ai", profileWith({ feedAiProvider: "openai", feedAiApiKey: "sk-x" }), false),
+      isStepDone(
+        "ai",
+        profileWith({ feedAiProvider: "openai", feedAiApiKey: "sk-x" }),
+        false,
+        "signed-in",
+      ),
     ).toBe(true);
   });
 
-  it("ai: a signed-in reader is complete with no key at all", () => {
-    // The D1 consequence, and the one A should expect to see move: adding a key
-    // stops being a prerequisite and becomes an upgrade. The `welcome`
-    // completeness count moves by one for a signed-in reader.
-    const signedIn = { ...ANONYMOUS_ENTITLEMENT, userId: "user-1" };
+  it("ai: a signed-in reader with no key is NOT complete — Peer has no model to lend", () => {
+    // The step used to be done for any signed-in reader, because "default"
+    // meant Peer's own AI. It means reading without a model now.
+    expect(isStepDone("ai", defaultProfile, false, "signed-in")).toBe(false);
+    // and the other steps are not moved by this either way.
+    expect(isStepDone("radar", defaultProfile, false, "signed-in")).toBe(false);
+    expect(isStepDone("connectors", defaultProfile, false, "signed-in")).toBe(false);
+    expect(isStepDone("topics", defaultProfile, false, "signed-in")).toBe(false);
+  });
 
-    expect(isStepDone("ai", defaultProfile, false, signedIn)).toBe(true);
-    // and the other steps are NOT swept along with it — a broad edit that made
-    // everything complete would pass the assertion above on its own.
-    expect(isStepDone("radar", defaultProfile, false, signedIn)).toBe(false);
-    expect(isStepDone("connectors", defaultProfile, false, signedIn)).toBe(false);
-    expect(isStepDone("topics", defaultProfile, false, signedIn)).toBe(false);
+  it("ai: a key does not complete the step for a reader who is not signed in", () => {
+    const keyed = profileWith({ feedAiProvider: "openai", feedAiApiKey: "sk-x" });
+    // The server refuses a signed-out caller, so no model would run.
+    expect(isStepDone("ai", keyed, false)).toBe(false);
+    expect(isStepDone("ai", keyed, false, "signed-out")).toBe(false);
+    expect(isStepDone("ai", keyed, false, "unknown")).toBe(false);
+    // Where sign-in is not configured at all, the server lets the call through.
+    expect(isStepDone("ai", keyed, false, "unconfigured")).toBe(true);
   });
 
   it("connectors: only Tavily counts, and only when fully configured", () => {
@@ -190,6 +198,6 @@ describe("firstIncompleteStep", () => {
       tavilyEnabled: true,
       tavilyApiKey: "t",
     });
-    expect(firstIncompleteStep(p, true)).toBe(STEP_META.length - 1);
+    expect(firstIncompleteStep(p, true, "signed-in")).toBe(STEP_META.length - 1);
   });
 });

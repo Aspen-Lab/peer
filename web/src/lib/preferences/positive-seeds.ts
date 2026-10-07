@@ -563,7 +563,7 @@ export async function resolveNegativeSeedPaperIds(
 //
 // Never settable from a request body: these read ONLY `process.env`, the
 // same "server-minted only" idiom `pipeline.ts`'s P2-S4a flags and
-// `FeedRequest`'s `paperCacheScope`/`companySpendCapability` already use.
+// `FeedRequest`'s `paperCacheScope` already use.
 // Sending seed ids to S2 discloses the owner's interests — per §1p.B(5)
 // this channel stays flag-off and live use needs explicit user
 // authorization regardless of how complete the adapter code is.

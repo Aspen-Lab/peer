@@ -21,7 +21,6 @@ vi.mock("@/lib/opportunities/shared", async (importOriginal) => {
 
 import { runFeedPipeline } from "./pipeline";
 import { withSourceTimeout } from "@/lib/opportunities/shared";
-import { GEMINI_SOURCE_TIMEOUT_MS } from "@/lib/sources/gemini-search";
 import { bySourceId, webSearch } from "@/lib/sources";
 import type { RawItem } from "@/lib/sources/types";
 import type { CachedPool, PoolCache } from "@/lib/opportunities/pool-cache";
@@ -157,24 +156,19 @@ describe("the shared source wall itself — the value B found untested", () => {
   });
 
   it("honours the override, which the deleted private copy could not do", async () => {
+    // The override is a property of the shared helper and stays covered even
+    // though no paper source passes one any more (the 25 s it was raised to was
+    // for the Gemini grounding adapter, which is deleted).
     vi.useFakeTimers();
     try {
       const never = new Promise<string>(() => {});
-      const raced = withSourceTimeout("probe", never, GEMINI_SOURCE_TIMEOUT_MS).catch(
+      const raced = withSourceTimeout("probe", never, 25_000).catch(
         (err: Error) => err.message,
       );
-      await vi.advanceTimersByTimeAsync(GEMINI_SOURCE_TIMEOUT_MS + 1);
+      await vi.advanceTimersByTimeAsync(25_001);
       await expect(raced).resolves.toContain("source-timeout after 25000ms");
     } finally {
       vi.useRealTimers();
     }
-  });
-
-  it("keeps the inner adapter budget UNDER the outer wall", async () => {
-    // The two numbers disagreed by 2.6x before this item: the adapter was built
-    // to spend up to 21 s inside a source the papers pipeline killed at 8 s.
-    const { default: gemini } = { default: await import("@/lib/sources/gemini-search") };
-    expect(gemini.GEMINI_SOURCE_TIMEOUT_MS).toBe(25_000);
-    expect(gemini.geminiSearchDeadline(0)).toBeLessThan(gemini.GEMINI_SOURCE_TIMEOUT_MS);
   });
 });

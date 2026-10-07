@@ -1,22 +1,9 @@
 import type { JobSourceAdapter, JobsQuery, RawJobItem } from "../types";
-import {
-  isOperatorFundedSearch,
-  operatorSearchAvailability,
-  resolveSystemSearchKeys,
-} from "@/lib/search/system-key";
-import { recordUsageEvent } from "@/lib/usage/events";
-import { consumeForcedRebuild } from "@/lib/usage/rebuild-breaker";
 import { looksLikeHostBrand, urlHashId } from "@/lib/opportunities/shared";
 import {
   JOB_QUERY_BUDGET,
   RESULTS_PER_SEARCH,
 } from "@/lib/opportunities/query-budget";
-import {
-  geminiSearchDeadline,
-  resolveWebSearchProvider,
-  searchGemini,
-} from "@/lib/sources/gemini-search";
-import { searchVertex } from "@/lib/sources/vertex-search";
 import {
   collectSearchResults,
   searchHttpFailure,
@@ -1692,12 +1679,6 @@ interface TavilyResult {
   content?: string;
 }
 
-interface BraveResult {
-  title?: string;
-  url?: string;
-  description?: string;
-}
-
 export function webResultToRawJobItem(
   result: {
     title?: string;
@@ -2039,228 +2020,39 @@ async function searchTavily(
   }
 }
 
-async function searchBrave(
-  query: string,
-  apiKey: string,
-  limit: number,
-  topics: string[],
-): Promise<RawJobItem[]> {
-  const params = new URLSearchParams({
-    q: query,
-    count: String(limit),
-    freshness: "pm",
-  });
-  try {
-    const res = await fetch(
-      `https://api.search.brave.com/res/v1/web/search?${params}`,
-      {
-        headers: { Accept: "application/json", "X-Subscription-Token": apiKey },
-        signal: AbortSignal.timeout(7000),
-        next: { revalidate: 3 * 60 * 60 },
-      },
-    );
-    if (!res.ok) throw await searchHttpFailure("brave", res);
-    const data = (await res.json()) as { web?: { results?: BraveResult[] } };
-    return (data.web?.results ?? [])
-      .map((r) =>
-        webResultToRawJobItem({ title: r.title, url: r.url, snippet: r.description }, topics),
-      )
-      .filter((item): item is RawJobItem => item !== null);
-  } catch (err) {
-    console.error("[jobs/jobweb] brave error:", err);
-    throw err;
-  }
-}
-
 /**
- * RULING 75 — the gemini branch. This surface maps INSIDE its search functions
- * (eventweb maps in `fetchImpl`), so the mapping call stays here and
- * `searchGemini`'s shared `WebResult` contract is what makes one adapter fit
- * both surfaces.
+ * A jobs fan-out runs on **the reader's own Tavily key, and nothing else.**
  *
- * **No `denyHosts` is passed.** `AGGREGATOR_HOSTS` is the obvious candidate and
- * it is exactly the wrong one: this surface does not DENY those hosts, it
- * REQUIRES a posting id on them, so pre-screening them away would drop rows the
- * shipped rule admits. Only outright, title-independent denies may pre-screen.
+ * Peer funds no search for anyone: there is no server key (`TAVILY_API_KEY` is
+ * read by no code and banned on Vercel), no Brave and no Google-hosted engine,
+ * so a query with no reader key has no search provider and this source is dark.
+ * The pipeline then serves its free structured sources (R-POOL-3).
  */
-async function searchGeminiJobs(
-  query: string,
-  limit: number,
-  deadlineAt: number,
-  topics: string[],
-): Promise<RawJobItem[]> {
-  const results = await searchGemini(query, {
-    maxResults: limit,
-    deadlineAt,
-  });
-  return results
-    .map((r) => webResultToRawJobItem({ title: r.title, url: r.url, snippet: r.snippet }, topics))
-    .filter((item): item is RawJobItem => item !== null);
-}
-
-/**
- * The vertex branch — the credit-funded engine, same contract, same mapper.
- *
- * `denyHosts` is omitted for exactly the reason stated above `searchGeminiJobs`:
- * this surface does not DENY `AGGREGATOR_HOSTS`, it REQUIRES a posting id on
- * them, so pre-screening there would drop rows the shipped rule admits.
- * `detectPageKind` is not set either — `pageKind` is an EVENT signal and this
- * surface's mapper ignores it, so paying for a page fetch here would buy
- * nothing.
- */
-async function searchVertexJobs(
-  query: string,
-  limit: number,
-  deadlineAt: number,
-  topics: string[],
-): Promise<RawJobItem[]> {
-  const results = await searchVertex(query, {
-    maxResults: limit,
-    deadlineAt,
-  });
-  return results
-    .map((r) => webResultToRawJobItem({ title: r.title, url: r.url, snippet: r.snippet }, topics))
-    .filter((item): item is RawJobItem => item !== null);
-}
-
-/**
- * ABC-freemium 1-05 · R-KEY-3 — this used to be
- * a bare "the request key, or else the operator's environment key", which
- * handed the operator's key to anyone who could reach the route, signed in or
- * not. The gate now lives in one shared resolver; see `lib/search/system-key.ts`
- * for why the flag defaults to `false`.
- */
-function resolveKeys(query: JobsQuery): {
-  tavily?: string;
-  brave?: string;
-  provenance: "byok" | "system" | "none";
-} {
-  return resolveSystemSearchKeys({
-    requestTavilyKey: query.webSearch?.tavilyApiKey,
-    systemSearchAllowed: query.webSearch?.systemSearchAllowed === true,
-  });
-}
-
-/**
- * RULING 75 requirement 2. Like eventweb, this surface used a bare ternary and
- * **never read `webSearch.provider`**; uniformity means it starts. The order
- * lives once in `sources/gemini-search.ts`.
- */
-export function resolveSearchProvider(
-  query: JobsQuery,
-): "gemini" | "vertex" | "brave" | "tavily" | null {
-  const requestTavilyKey = query.webSearch?.tavilyApiKey?.trim();
-  const keys = resolveKeys(query);
-  return resolveWebSearchProvider(query.webSearch?.provider, {
-    // ABC-freemium 2-04 — these two used to be read straight from the
-    // environment, so a free or anonymous caller reached Vertex AI Search or
-    // Gemini grounding on the operator's project with no gate at all. They now
-    // come from the same predicate the Tavily and Brave keys do.
-    //
-    // **Gating the availability inputs is what closes the hole**, not the
-    // ordering: the pipeline sets an explicit `provider` from the server's own
-    // environment, so `resolveWebSearchProvider` returns from its explicit
-    // branch before any ordering clause runs. Both branches read this object.
-    ...operatorSearchAvailability({
-      systemSearchAllowed: query.webSearch?.systemSearchAllowed === true,
-    }),
-    braveKeyPresent: Boolean(keys.brave),
-    tavilyKeyPresent: Boolean(keys.tavily),
-    requestTavilyKeyPresent: Boolean(requestTavilyKey),
-  });
+export function resolveSearchProvider(query: JobsQuery): "tavily" | null {
+  return query.webSearch?.tavilyApiKey?.trim() ? "tavily" : null;
 }
 
 async function fetchImpl(query: JobsQuery): Promise<RawJobItem[]> {
-  const keys = resolveKeys(query);
-  const provider = resolveSearchProvider(query);
-  if (!provider) return [];
+  const tavilyKey = query.webSearch?.tavilyApiKey?.trim();
+  if (resolveSearchProvider(query) === null || !tavilyKey) return [];
 
   const searches = query.queries.slice(0, JOB_QUERY_BUDGET);
   if (searches.length === 0) return [];
 
-  // ABC-freemium 1-21 · R-QUOTA-2, D4 — the daily cap on operator-funded
-  // search, charged before the fan-out and only when the key is the
-  // operator's. A BYOK fan-out costs the owner nothing and is not counted.
-  //
-  // A tripped breaker returns `[]`, which is the SAME degraded value a keyless
-  // reader already gets here: the pipeline serves its free structured sources.
-  // No error, no new shape.
-  // 2-04 — the predicate is now `isOperatorFundedSearch`, so Brave, Vertex and
-  // grounding are charged too. They were free of the cap before, which meant
-  // the 500/day breaker protected only one of the four ways to spend money.
-  //
-  // **ABC-freemium 6-01 · Ruling 14 point 3 — THIS CALL SITE IS UNREACHABLE,
-  // and it is KEPT on purpose (Ruling 12 point 2).** The chain, end to end:
-  // `systemSearchAllowed` is a hard `false` on every producer (D2a), so
-  // `resolveSystemSearchKeys` returns no Brave key and Tavily can only be
-  // `"byok"` or `"none"`; `operatorSearchAvailability` is frozen false for
-  // both providers; so the only provider selectable here is Tavily with
-  // `provenance: "byok"`, and `isOperatorFundedSearch` answers `false` for
-  // exactly that pair. `operatorFunded` is therefore never `true` and the
-  // breaker below never runs. Deleting it would remove the metering that has
-  // to exist BEFORE the gate is ever reopened, not the round after.
-  //
-  // **If operator-funded search is restored, this counter must be SPLIT — do
-  // not just flip the flag.** These sites are dead because no operator-funded
-  // provider can be *selected*, not because anything refuses them:
-  // `isOperatorFundedSearch` still returns `true` for Brave, Vertex and
-  // Gemini. Reopening the gate would start charging **search fan-outs** to a
-  // counter named `forced_rebuilds_today`, which re-creates the exact
-  // false-audit defect 6-01 exists to fix, in reverse.
-  const operatorFunded = isOperatorFundedSearch(provider, keys);
-  if (operatorFunded) {
-    const allowed = await consumeForcedRebuild(
-      query.webSearch?.userId ?? null,
-      searches.length,
-      undefined,
-      "jobs",
-    );
-    if (!allowed) return [];
-  }
   // Providers bill per search, not per result — see RESULTS_PER_SEARCH.
   const perQuery = RESULTS_PER_SEARCH;
 
-  // One shared deadline for the whole fan-out — see eventweb for why.
-  const deadlineAt = geminiSearchDeadline();
   // allSettled + collect — see eventweb for why a total provider failure has to
   // reach `errors.jobweb` rather than render as an empty job market.
   const resultSets = collectSearchResults(
-    provider,
+    "tavily",
     "jobs/jobweb",
     await Promise.allSettled(
-      searches.map((q) => {
-        const jobQuery = `${q} position opening apply`;
-        if (provider === "vertex") {
-          return searchVertexJobs(jobQuery, query.limit, deadlineAt, query.topics);
-        }
-        if (provider === "gemini") {
-          return searchGeminiJobs(jobQuery, query.limit, deadlineAt, query.topics);
-        }
-        return provider === "tavily"
-          ? searchTavily(jobQuery, keys.tavily!, perQuery, query.topics)
-          : searchBrave(jobQuery, keys.brave!, perQuery, query.topics);
-      }),
+      searches.map((q) =>
+        searchTavily(`${q} position opening apply`, tavilyKey, perQuery, query.topics),
+      ),
     ),
   );
-  // ABC-freemium 1-05 / 2-04 · R-METER-2 — one row per operator-funded fan-out,
-  // whichever provider ran it. This is the one place that knows the surface, who
-  // is paying and the query count. A BYOK search costs the operator nothing, so
-  // attributing it would be noise and `isOperatorFundedSearch` excludes it.
-  //
-  // `provider` is the VARIABLE, not the literal `"tavily"` it used to be — that
-  // literal made a Brave or Vertex fan-out impossible to tell apart from a
-  // Tavily one in the ledger, on the rare occasion it wrote a row at all.
-  if (operatorFunded) {
-    recordUsageEvent({
-      user_id: query.webSearch?.userId ?? null,
-      kind: "search",
-      surface: "jobs",
-      query_count: searches.length,
-      provider,
-      ok: true,
-      byok: false,
-    });
-  }
 
   const all: RawJobItem[] = [];
   for (const items of resultSets) {

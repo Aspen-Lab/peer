@@ -57,12 +57,99 @@ describe("upstream Supabase security foundation", () => {
     expect(sql).not.toMatch(/^\s*(credential|api_key)\s+(text|varchar)/im);
   });
 
-  it("keeps profile plan fields server-owned while later migrations retain their own grants", () => {
+  it("keeps the least-privilege column grants, which later migrations rely on", () => {
+    // 20260904000200 revoked table-level INSERT/UPDATE on `profiles` and granted
+    // authenticated every column then present. That stays: it is least
+    // privilege, and 20260922010000 already grants its own column on top of it.
     const plan = readMigration("20260904000200_profile_plan.sql");
     const intent = readMigration("20260922010000_profile_feed_intent.sql");
     expect(plan).toContain("revoke update, insert on public.profiles from anon, authenticated");
-    expect(plan).toContain("column_name not in ('plan', 'trial_started_at', 'trial_ends_at', 'plan_updated_at')");
     expect(intent).toContain("grant update (feed_intent) on public.profiles to authenticated");
     expect(intent).toContain("grant insert (feed_intent) on public.profiles to authenticated");
   });
+
+  it("takes the plan out of the database with a forward migration, and changes no grant", () => {
+    // Peer has no plan. The three 20260904 files above stay as applied history;
+    // this migration undoes their plan half, so that file's own assertions would
+    // be about a column that no longer exists in a fresh database.
+    const down = readMigration("20261007000000_drop_plan_and_restore_signup.sql");
+    // Comments carry prose (including the word "grant"); the checks below are
+    // about the statements.
+    const statements = down.replace(/--.*$/gm, "");
+
+    for (const column of ["plan", "trial_started_at", "trial_ends_at", "plan_updated_at"]) {
+      expect(statements).toContain(`drop column if exists ${column}`);
+    }
+    // No CASCADE: a view or policy that still depends on a plan column makes
+    // this fail loudly instead of being dropped with it.
+    expect(statements).not.toMatch(/\bcascade\b/i);
+    // The signup trigger's function is back to an empty profile row, no trial.
+    const start = statements.indexOf("create or replace function public.handle_new_user()");
+    expect(start).toBeGreaterThanOrEqual(0);
+    const fn = statements.slice(start, statements.indexOf("$$;", statements.indexOf("as $$", start)) + 3);
+    expect(fn).toMatch(/insert into public\.profiles \(user_id\)\s+values \(new\.id\)/);
+    expect(fn).not.toMatch(/trial|plan|'free'|'paid'|interval/i);
+    // Least privilege is not widened: no grant, no revoke.
+    expect(statements).not.toMatch(/\b(grant|revoke)\b/i);
+  });
 });
+
+describe("the usage ledger and the company budget are dropped by a forward migration", () => {
+  const file = "20261007000100_drop_ledger_and_budget.sql";
+  const raw = () => readMigration(file);
+  // Comments carry prose (including words like "grant" and table names); the
+  // checks below are about the statements.
+  const statements = () => raw().replace(/--.*$/gm, "");
+  const rollbackDir = path.join(process.cwd(), "supabase", "rollback");
+
+  it("drops exactly the three tables, with no CASCADE and no grant change", () => {
+    const sql = statements();
+    expect(sql.match(/\bdrop table\b[^;]*;/gi)).toEqual([
+      "drop table if exists public.company_model_prices;",
+      "drop table if exists public.company_spend_caps;",
+      "drop table if exists public.usage_events;",
+    ]);
+    // A view or policy that still depends on one of them makes this fail loudly
+    // instead of being dropped with it.
+    expect(sql).not.toMatch(/\bcascade\b/i);
+    expect(sql).not.toMatch(/\b(grant|revoke)\b/i);
+  });
+
+  it("keeps the shared counter table and clears only the allowance and spend rows", () => {
+    const sql = statements();
+    // `usage_counters` carries the hourly rate limit, the email caps, the retry
+    // claims and the refresh cooldown: the table and its RPC stay.
+    expect(sql).not.toMatch(/drop table[^;]*usage_counters/i);
+    expect(sql).not.toMatch(/drop function/i);
+
+    const del = sql.match(/delete from public\.usage_counters[^;]*;/i)?.[0] ?? "";
+    expect(del).toMatch(/\bwhere\b/i);
+    const patterns = [...del.matchAll(/key like '([^']+)'/g)].map((m) => m[1]);
+    expect(patterns).toEqual([
+      "deep:%",
+      "forced_rebuilds_today:%",
+      "company_spend:%",
+      "jev:%",
+      "jev-edge:%",
+    ]);
+    // Never a shared-infrastructure key family.
+    for (const kept of ["rate:", "test_email:", "confirm_email:"]) {
+      expect(del).not.toContain(kept);
+    }
+  });
+
+  it("tells the owner to export usage_events first, in the file the owner will run", () => {
+    const header = raw().split("\n").filter((line) => line.startsWith("--")).join("\n");
+    expect(header).toMatch(/export/i);
+    expect(header).toContain("usage_events");
+  });
+
+  it("has no rollback file (the 20261001 precedent) and leaves the budget migration's history alone", () => {
+    expect(fs.existsSync(path.join(rollbackDir, "20261007000100_drop_ledger_and_budget_rollback.sql"))).toBe(false);
+    // The earlier migration and its rollback stay as history: production state
+    // is unknown, and this migration's `if exists` covers both cases.
+    expect(fs.existsSync(path.join(migrations, "20260925000000_company_spend_budget.sql"))).toBe(true);
+    expect(fs.existsSync(path.join(rollbackDir, "20260925000000_company_spend_budget_rollback.sql"))).toBe(true);
+  });
+});
+

@@ -1,3 +1,5 @@
+> **SUPERSEDED 2026-10-06 - Jev runs on the reader's own key; see docs/handoff/byok-only/JEV-PLAN.md.** The company key, the broker, the edge function, the company caps and the Gemini fallback described below were removed on branch `remove-paid-tier-restore-byok`. The text below is kept as history and is not edited.
+
 # Jev / retrieval campaign — release readiness
 
 **What this document is:** a plain-language explanation of where this project stands,
@@ -619,90 +621,16 @@ seconds apart. Re-grep the function name if you need an exact line.
 | `JEV_API_KEY` | unset | the real Jev provider credential | **REVERSED this pass (JEV-DIRECT §1aa) — was "Edge only," now Next/Vercel too.** Read in exactly one place on the Next side: `jevDirectConfigured()`/`callJevDirect()`, `web/src/lib/decisions/jev-direct-client.ts` (a repo-wide placement scan enforces this — `spend-scans.test.ts`). Also still readable (dormant) on the Edge side, `jev-broker/index.ts`, unchanged. | Built. Server-only (`import "server-only"`); never `NEXT_PUBLIC_`; the key never reaches a log line, error message, cache key or test fixture (regression-tested, mirroring `jev-client.ts`'s own 3-part leak suite). Optional — Peer without it simply never calls Jev directly (falls back to the broker if configured, else disabled). |
 | `PEER_JEV_TRANSPORT` | unset (auto-detect) | exactly `"direct"` or `"broker"`, else treated as unset | function `resolveJevTransport()`, `web/src/lib/decisions/flag.ts` | **New this pass (JEV-DIRECT §1aa).** Auto-detect default: direct when `JEV_API_KEY` is set, else broker when `PEER_JEV_BROKER` is "on" and configured, else disabled. An override can never fabricate its own prerequisite. Exists so an operator can force the dormant broker path back on during an incident without unsetting `JEV_API_KEY` in Vercel (manager ruling §1ab P3). |
 | `PEER_RUN_JEV_SMOKE` | Off | exactly `"1"` | function `canRunJevSmoke()`, `web/src/lib/evaluation/jev-smoke/gate.ts` | **New this pass (JEV-DIRECT §1aa point 6).** Built and tested OFFLINE only — gates the opt-in `npm run test:jev-smoke` runner, which makes real Jev calls against fixed synthetic inputs (never a real user's data) up to a hard ceiling of 10. Nobody has run it live this pass; it may only run live after the user states a Jev budget in chat. |
-| `PEER_COMPANY_SPEND_CAP` | Off | literal `"on"` only | function `companySpendCapEnabled()`, `web/src/lib/usage/company-budget.ts` | **New this pass (SPEND-CAP).** Built, with a dedicated test suite (`company-budget.test.ts`, `metered.test.ts`, `route.test.ts`) plus RED-before-GREEN evidence for the highest-risk behaviors (see that item's own checkpoint). Off by default = exactly today's behavior, no config read, no counter call at all — protected by its own test. See §1's SPEND-CAP knob row (added below) for the full activation order and what each of the two new config tables controls. |
 
-#### 1a. SPEND-CAP knob — the shared AI dollar budget (new this pass)
+#### 1a. SPEND-CAP knob — removed
 
-Unlike every other row in the table above, this knob is not read from an environment
-variable at all (beyond the one on/off switch, `PEER_COMPANY_SPEND_CAP`) — its two numbers
-live in the database, in two new tables an operator edits directly in the Supabase
-dashboard's table editor, because they are meant to be tuned without a redeploy.
-
-| Table | Columns | What it holds | Default when a row is absent |
-|---|---|---|---|
-| `company_spend_caps` | `cap_key` (`'global_daily_usd'` \| `'per_user_daily_usd'`), `amount_usd` | The two dollar ceilings, reset at UTC midnight | **R1 ruling:** `global_daily_usd` = $5.00, `per_user_daily_usd` = $0.50 — conservative code-level fallbacks. B's guide proposed $30/$1.50 with worked arithmetic (§2.1 of the design doc); that arithmetic is kept there as the scaling reference, not shipped as the default. The migration seeds NO rows — this default state is normal, not an error. |
-| `company_model_prices` | `model_id`, `input_usd_per_million_tokens`, `output_usd_per_million_tokens`, `vision_tokens_per_image` (nullable), `source_note` | Per-Gemini-model prices the estimator needs to price a reservation | **No code-level default.** A model with no price row simply cannot be priced, and every call that would need it fails closed (`price_unreadable`). This is the one place this knob is NOT optional — see the activation order below. |
-
-**Activation order (R9):** because the mechanism fails closed, order matters.
-(1) Apply the `company_spend_budget` migration (authored, never applied by this
-campaign — see §3.2). (2) Enter at least one price row per model actually reachable
-through `resolveSystemProvider()`'s system branch — today that's the 4 ids in
-`GEMINI_API_MODEL_CHAIN` (`web/src/lib/llm/providers/gemini.ts`): `gemini-3.1-flash-lite`,
-`gemini-3.5-flash-lite`, `gemini-3.6-flash`, `gemini-3.8-flash`. The `company_spend_caps`
-rows are optional (safe built-in defaults apply when absent). (3) Only then set
-`PEER_COMPANY_SPEND_CAP=on`. Flipping the flag on before any price rows exist does not
-loosen anything — it makes every company-funded call refuse (visible as `kind: "breaker"`
-rows in `usage_events`, `path` prefixed `company-spend:`), because a call with no known
-price cannot be honestly estimated, by design.
-
-**Vision price default (R8):** `vision_tokens_per_image` has no code-level fallback either
-(same reasoning as the two token prices), but B's guide's placeholder of 300 was replaced by
-the manager with 1,500 — a deliberately conservative OVER-estimate, not a best guess: the
-reservation may over-reserve for an image-heavy call, but settlement always refunds down to
-the model's own actually-reported usage (which already includes image tokens), so the
-placeholder only affects the size of the temporary hold, never the final charged amount.
-
-**R6 — the fail-closed/fail-open asymmetry, stated precisely:** this new dollar cap fails
-CLOSED (an unreadable cap/price/counter refuses the call). The pre-existing hourly
-request-count limit (`requireEntitledAiRequest`) keeps failing OPEN, unchanged, on the very
-same request. Plain-language consequence: with this switch on, a Supabase outage pauses
-Peer's own built-in AI (the reader still gets the deterministic, no-model version of
-whatever they asked for) while every other rate-limited feature keeps working as normal.
-This is the intended final state, not an oversight — a wallet-protecting breaker and a
-availability-protecting rate limit are different tools solving different problems, and this
-codebase's existing two-rule convention (`usage/counters.ts`'s own header) already draws
-this same line everywhere else.
-
-**R11 — coverage and worst-case burst against the default cap:**
-
-- *Coverage:* every method on the `DigestProvider` interface `meterProvider` returns is
-  wrapped by `meterCall`, unconditionally for `generateDigest`/`testConnection` and
-  conditionally (only when the underlying provider actually has the method) for
-  `generateJsonText`/`generateVisionJsonText` — confirmed by reading `metered.ts` directly
-  and by the existing `metered.test.ts` case "covers EVERY wrapped method, so a fifth cannot
-  be added unmetered." No streaming method exists on this interface today, so there is no
-  such escape to check. One genuine gap found and recorded, not silently patched around:
-  `testConnection` has no production call site anywhere in this codebase (confirmed by
-  grep — only test files call it), but IS wrapped, and its own implementation sends no
-  output-token ceiling at all (the exact same structurally-unbounded shape already flagged
-  for the dormant Gemini decision-fallback path). If a future round ever wires a real caller
-  onto it in a non-BYOK context, this design fails it closed (a new `unestimable_call`
-  reason) rather than silently pricing it at $0 or guessing — whoever activates that path
-  must give it a bounded output cap first, the same precondition already written for the
-  Gemini decision-fallback below.
-- *Digest dispatcher concurrency:* the hourly cron (`api/jobs/dispatch-digests/route.ts`)
-  processes every enrolled, due-this-hour user in a single sequential `for` loop with an
-  `await` inside it — confirmed by reading the route directly — never `Promise.all`. So the
-  cron itself can never race itself: each user's digest call reserves, waits its turn, and
-  the day's running total is exact by the time the next user's reservation is checked. Real
-  concurrency against the shared global counter comes only from ordinary overlapping web
-  traffic (multiple readers' feed/report requests at once), which the atomic
-  `increment_usage_counter` RPC already serializes correctly — no two concurrent
-  reservations can both observe a stale pre-increment value.
-- *Worst-case burst vs. the $5.00/day default global cap:* the single most expensive call in
-  the system is the digest (no tier filter, so the FULL 4-model chain is tried worst-case)
-  against a full 20-paper input — B's own worked arithmetic (design doc §2.1) puts this
-  around $0.15/call using the sourced/proposed per-model prices. At the default $5.00/day
-  global cap, that bounds any single accepted reservation from overshooting the cap by more
-  than roughly one worst-case call's width (≈3% of the daily cap) — the atomic per-request
-  check means once the running total crosses the cap, every subsequent reservation refuses;
-  it does not mean the cap can never be exceeded by exactly one in-flight call that started
-  just under it, which is the standard, accepted "close the barn door after the last cow"
-  behaviour of a reserve-then-check breaker (the same shape `reserveJevCall`'s own global
-  counter already has). Cheaper call sites (the other 8) have a proportionally smaller
-  worst-case overshoot. At $5.00/day, this bounds the system to roughly 33 worst-case digest
-  calls before the breaker trips for the rest of the UTC day — a number the operator can
-  raise by editing `company_spend_caps.amount_usd` directly, with no redeploy.
+The shared AI dollar budget no longer exists: Peer pays for no model call (readers run on
+their own keys), so there is no company spend to cap. `PEER_COMPANY_SPEND_CAP`, the
+reservation hook, the `company_spend_caps` and `company_model_prices` tables and the
+`company_spend:*` counter rows are gone from the code; the tables and the counter rows are
+dropped by `web/supabase/migrations/20261007000100_drop_ledger_and_budget.sql` (export
+`usage_events` first — the migration's header says how). The SPEND-CAP history elsewhere
+in this document is kept as history. See `docs/handoff/byok-only/PLAN.md`.
 
 **Corrections/confirmations versus the prior version of this document:**
 `PEER_JEV_SHADOW` now has an independent fresh review (it did not before) — see its row
@@ -758,7 +686,6 @@ unset.
 | A4 | The 4 read-time recommendation channels: `PEER_CHANNEL_S2_RECOMMENDATIONS`, `PEER_CHANNEL_OPENALEX_SEED_SIMILARITY`, `PEER_CHANNEL_POSITIVE_SEED_CITATIONS`, `PEER_CHANNEL_OPENALEX_TOPIC` | **Precondition status UPDATED this pass (P5-S4): now VERIFIED.** The per-owner daily channel-candidate cache (design name: P2-S4d) that all four need is built (`web/src/lib/opportunities/channel-candidate-cache.ts`) and its independent review has landed: `docs/jev-abc/P2-S4cd-A-20260924T152147Z.md` (VERIFIED_OFFLINE_BOUNDED for the topic-id resolution, the advisor-citation channel, the cache itself, and the S2 both-sides rule) and `docs/jev-abc/P2-S4d-FIX-A-20260924T164212Z.md` (VERIFIED_OFFLINE_BOUNDED for the specific fix this precondition needed — a genuine storage outage is now correctly told apart from an ordinary first-time miss, so an outage degrades to "skip this channel, say so truthfully" instead of silently fetching live on every request). Reason the precondition existed (manager finding F-M-P2-02, confirmed by direct code read): before this cache, these channels "are never cached... they simply re-run and re-report on every request" — with any of them on, every page open or refresh in the normal (non-ledger) mode fired all enabled channels fresh, unbounded by anything except ordinary request volume. `PEER_CHANNEL_OPENALEX_TOPIC` is no longer a guaranteed no-op (see §1) — it now shares this same precondition, also verified. Also implemented and verified: the "both-sides" conflict rule (a paper id in both the positive and negative seed lists is sent as neither); a related, smaller gap (the same 200-row seed-history window can in theory be exhausted by roughly 200 toggles on one paper) is an ACCEPTED COST, not a blocker — it degrades to fewer seeds, never to a wrong one. **One disclosed, accepted, low-severity open item from the fresh review (not a blocker):** in the older, non-default "frozen batch" delivery mode, a narrow legacy-only code path (batches saved before a since-added storage column existed) can still let the topic channel make one live call per owner per day, bounded by this same cache — but it structurally cannot let a new paper appear inside an already-frozen list, only refresh an already-shown entry's own content. Recorded as an open item, not fixed, because fixing it would either widen an already-legacy-only path or touch a file outside this precondition's own scope. | Any of the four channels observed firing live calls on a simple page reopen once "on," or a genuinely new paper appearing inside an already-frozen batch — either would mean this precondition's own guarantee has broken. |
 | A5 | `PEER_CHANNEL_OPENALEX_SEMANTIC` | None beyond code; already code-reviewed offline. | Any live comparison being treated as authoritative before user decision 4. |
 | A6 | `PEER_RANK_FUSION` (hybrid retrieval ranking / RRF) | Not part of the original guide — added when the feature was first built. Ships flag-off by design. Before ever turning this on in production: (1) **both pre-flip fixes are now DONE and independently VERIFIED** (`docs/jev-abc/P2-S6-FIX-A-20260924T153735Z.md`, VERIFIED_OFFLINE_BOUNDED — both fixes reproduced RED-before/GREEN-after, both required mutations independently re-run, flag-off path re-confirmed byte-identical to today's behavior); (2) the Section 5 evaluation should still inform the production default, per §1p.B(1) — this is the one remaining, deliberate gate, not an unresolved defect. Fixes that landed: (a) the fused-ranking candidates now carry the same publication-year/first-author-surname information the plain de-duplication path uses, so a pair that de-duplication merges into one paper is credited to both search channels in the fused ranking, not silently only one; (b) the fused-ranking result now survives being served from the same-day cache, not only a freshly-built response — a same-day cache read no longer loses that ranking's supporting detail. **Non-blocking follow-up recommendation from the same fresh review:** it flagged the small year/first-author helper as duplicated a third time across three files (non-blocking — the three copies were byte-identical and could not disagree on any input). A later, same-day implementation pass (`docs/jev-abc/DEDUP-FIX2-C-20260924T212607Z.md`, bundled with the version-rule fix in §2b) consolidated all three into one shared, exported helper. **Corrected (was stale):** this consolidation is R3-CLEANUP-3, independently VERIFIED_OFFLINE_BOUNDED (byte-identical to the three old copies it replaced) per `docs/jev-abc/DEDUP-FIX2-A-20260924T214311Z.md` — confirmed even though that same review round separately FAILED the version-matching logic bundled alongside it; see §2b for that logic's own, later, separately-verified history. | Any user-visible fused ranking before the §1p.B(1) evaluation sign-off; a same-day cache read that silently drops the fused-ranking detail. |
-| A7 | `PEER_COMPANY_SPEND_CAP` (the shared daily dollar cap on Peer's own AI spending, §1a) — new this pass | Independent of the Jev broker path entirely — this caps the SYSTEM Gemini key across all 9 real call sites, never a reader's own key. (1) Apply the `company_spend_budget` migration. (2) Enter at least the 4 model price rows in the Supabase dashboard (mandatory — no code default). (3) Optionally set the two dollar ceilings (safe $5.00/$0.50 defaults apply otherwise — **the user confirmed on 2026-09-27 to keep these defaults**, ABC-JEV-INTEGRATION.md §1ac; they can still be changed in the dashboard at any time). Only then flip the flag. | Turning the flag on before step (2) — every company-funded call refuses (visible as `kind:"breaker"` `usage_events` rows), by design, not a bug — see §1a. |
 
 #### Group B — the Jev path (strictly sequential; each step gated on the previous being clean)
 
@@ -998,7 +925,6 @@ not treated as a blocker.
 | `PEER_JEV_GEMINI_FALLBACK` | Shadow runs Jev only, exactly as if this flag never existed — same construction as `PEER_JEV_SHADOW` above | Any already-written fallback-sourced answers stay (regenerable, non-guarantee-bearing, same as above) |
 | The 5 channel flags | Pool-cache entries simply stop including that channel's candidates | No persisted state of their own |
 | `PEER_RANK_FUSION` | Reverts to the plain, pre-fusion ranking exactly, by construction | The optional fused-ranking provenance field on a cached pool is simply absent again; old and new cached pools both stay valid either way |
-| `PEER_COMPANY_SPEND_CAP` | Reverts to exactly today's behavior: no reservation, no settlement, no config read, no counter call — protected by its own test (`metered.test.ts`) | The `company_spend:*` counter rows already written stay (harmless, UTC-day-scoped, regenerable); a `CompanySpendCapRefusedError` simply stops being thrown, so every one of the 9 call sites' EXISTING degrade paths stop seeing it |
 
 #### 3.2 Rollback SQL — one authored file per migration
 

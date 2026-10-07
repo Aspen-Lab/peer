@@ -324,13 +324,17 @@ describe("an empty pipeline result sends nothing (EMAIL-DEST-UX + EMPTY-TEST-EMA
 });
 
 describe("Tier-0 / BYOK untouched (RED #11)", () => {
-  it("calls runFeedPipeline with aiTier 0 and no systemSearchAllowed key at all", async () => {
+  it("calls runFeedPipeline with aiTier 0 and no search or model options at all", async () => {
     await POST(request());
 
     expect(mocks.runFeedPipeline).toHaveBeenCalledTimes(1);
     const call = mocks.runFeedPipeline.mock.calls[0][0] as Record<string, unknown>;
     expect(call.aiTier).toBe(0);
-    expect(call).not.toHaveProperty("systemSearchAllowed");
+    // The test email is the reading without a model: it carries no reader key,
+    // no search connector and no web source.
+    expect(call).not.toHaveProperty("searchConnectors");
+    expect(call).not.toHaveProperty("llmOverride");
+    expect(call).not.toHaveProperty("sources");
   });
 });
 

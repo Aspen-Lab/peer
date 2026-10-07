@@ -8,10 +8,13 @@ import { DEFAULT_JEV_SMOKE_CEILING, runJevSmoke, type JevSmokeSummary } from "./
 // (ceiling enforcement, result shape, output writing), entirely with
 // injected fakes. NEVER makes a real network call or touches the real
 // filesystem — `fetchImpl` and `writeOutput` are always injected here, and
-// `JEV_API_KEY` is stubbed with an obviously-fake value only for the
-// duration of each test (vitest.setup.ts's conditional second-layer lock
-// would otherwise strip it anyway; this file exercises the module directly,
-// not through the opt-in smoke config).
+// `JEV_SMOKE_API_KEY` (the smoke runner's OWN name; no file reads
+// `JEV_API_KEY` any more, the owner cut the company's Jev key on 2026-10-06)
+// is stubbed with an obviously-fake value only for the duration of each test
+// (vitest.setup.ts's conditional second-layer lock would otherwise strip it
+// anyway; this file exercises the module directly, not through the opt-in
+// smoke config). The runner hands the key it read to `callJevDirect` as the
+// `apiKey` parameter.
 
 const FAKE_API_KEY = "jev-smoke-test-FAKE-KEY-do-not-use-1234567890abcdef";
 const NOW = new Date("2026-09-27T00:00:00.000Z");
@@ -102,7 +105,7 @@ afterEach(() => {
 
 describe("runJevSmoke — happy path", () => {
   it("runs every default input exactly once, reports ok with the echoed modelId, and never touches the real filesystem", async () => {
-    vi.stubEnv("JEV_API_KEY", FAKE_API_KEY);
+    vi.stubEnv("JEV_SMOKE_API_KEY", FAKE_API_KEY);
     const fetchImpl: FetchLike = vi.fn(async (_url, init) => {
       const body = JSON.parse(init.body as string) as { questions: Record<string, unknown> };
       return jsonResponse(200, okWireBodyFor(Object.keys(body.questions)));
@@ -121,7 +124,7 @@ describe("runJevSmoke — happy path", () => {
   });
 
   it("reports credential presence in the summary", async () => {
-    vi.stubEnv("JEV_API_KEY", FAKE_API_KEY);
+    vi.stubEnv("JEV_SMOKE_API_KEY", FAKE_API_KEY);
     const fetchImpl: FetchLike = vi.fn(async () => jsonResponse(200, okWireBodyFor(["core_vs_background", "project_help"])));
     const { writeOutput } = capturingWriteOutput();
 
@@ -132,8 +135,41 @@ describe("runJevSmoke — happy path", () => {
 });
 
 describe("runJevSmoke — key unset: every input reports disabled, zero real calls attempted", () => {
-  it("reports status disabled for every input when JEV_API_KEY is unset — never crashes, never silently skips the report", async () => {
-    delete process.env.JEV_API_KEY;
+  it("reports status disabled for every input when JEV_SMOKE_API_KEY is unset — never crashes, never silently skips the report", async () => {
+    delete process.env.JEV_SMOKE_API_KEY;
+    const fetchImpl: FetchLike = vi.fn();
+    const { writeOutput } = capturingWriteOutput();
+
+    const summary = await runJevSmoke({ now: () => NOW, fetchImpl, writeOutput });
+
+    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(summary.results.every((r) => r.status === "disabled")).toBe(true);
+    expect(summary.credentialPresence).toEqual({ jevApiKey: false });
+  });
+});
+
+describe("runJevSmoke — which key it uses", () => {
+  it("an explicit apiKey option is the key sent to Jev, in the Authorization header only", async () => {
+    let capturedHeaders: HeadersInit | undefined;
+    let capturedBody = "";
+    const fetchImpl: FetchLike = vi.fn(async (_url, init) => {
+      capturedHeaders = init.headers;
+      capturedBody = String(init.body);
+      return jsonResponse(200, okWireBodyFor(["core_vs_background", "project_help"]));
+    });
+    const { writeOutput } = capturingWriteOutput();
+
+    const summary = await runJevSmoke({ apiKey: FAKE_API_KEY, ceiling: 1, now: () => NOW, fetchImpl, writeOutput });
+
+    expect(summary.attempted).toBe(1);
+    expect(new Headers(capturedHeaders).get("authorization")).toBe(`Bearer ${FAKE_API_KEY}`);
+    expect(capturedBody).not.toContain(FAKE_API_KEY);
+    expect(summary.credentialPresence).toEqual({ jevApiKey: true });
+  });
+
+  it("never falls back to JEV_API_KEY: with only that name set, every input reports disabled and nothing is called", async () => {
+    vi.stubEnv("JEV_API_KEY", FAKE_API_KEY);
+    delete process.env.JEV_SMOKE_API_KEY;
     const fetchImpl: FetchLike = vi.fn();
     const { writeOutput } = capturingWriteOutput();
 
@@ -147,7 +183,7 @@ describe("runJevSmoke — key unset: every input reports disabled, zero real cal
 
 describe("runJevSmoke — hard ceiling", () => {
   it(`stops at the default ceiling (${DEFAULT_JEV_SMOKE_CEILING}) when handed more inputs than that`, async () => {
-    vi.stubEnv("JEV_API_KEY", FAKE_API_KEY);
+    vi.stubEnv("JEV_SMOKE_API_KEY", FAKE_API_KEY);
     const fetchImpl: FetchLike = vi.fn(async () => jsonResponse(200, okWireBodyFor(["core_vs_background", "project_help"])));
     const { writeOutput } = capturingWriteOutput();
     const manyInputs = Array.from({ length: 15 }, (_, i) => makeInput(`extra-${i}`));
@@ -160,7 +196,7 @@ describe("runJevSmoke — hard ceiling", () => {
   });
 
   it("respects an explicitly injected smaller ceiling", async () => {
-    vi.stubEnv("JEV_API_KEY", FAKE_API_KEY);
+    vi.stubEnv("JEV_SMOKE_API_KEY", FAKE_API_KEY);
     const fetchImpl: FetchLike = vi.fn(async () => jsonResponse(200, okWireBodyFor(["core_vs_background", "project_help"])));
     const { writeOutput } = capturingWriteOutput();
 
@@ -171,7 +207,7 @@ describe("runJevSmoke — hard ceiling", () => {
   });
 
   it("does not report ceilingReached when every input fits under the ceiling", async () => {
-    vi.stubEnv("JEV_API_KEY", FAKE_API_KEY);
+    vi.stubEnv("JEV_SMOKE_API_KEY", FAKE_API_KEY);
     const fetchImpl: FetchLike = vi.fn(async () => jsonResponse(200, okWireBodyFor(["core_vs_background", "project_help"])));
     const { writeOutput } = capturingWriteOutput();
 
@@ -183,7 +219,7 @@ describe("runJevSmoke — hard ceiling", () => {
 
 describe("runJevSmoke — contract-mismatch reporting", () => {
   it("reports invalid_response with a detail string when the response fails validation, and continues to the remaining inputs", async () => {
-    vi.stubEnv("JEV_API_KEY", FAKE_API_KEY);
+    vi.stubEnv("JEV_SMOKE_API_KEY", FAKE_API_KEY);
     const fetchImpl: FetchLike = vi.fn(async () => jsonResponse(200, { model: "wrong-model-id", answers: {}, usage: { input_tokens: 1, output_tokens: 0 } }));
     const { writeOutput } = capturingWriteOutput();
 
@@ -195,7 +231,7 @@ describe("runJevSmoke — contract-mismatch reporting", () => {
   });
 
   it("reports a plain fault status (e.g. unauthorized) verbatim, with no remapping", async () => {
-    vi.stubEnv("JEV_API_KEY", FAKE_API_KEY);
+    vi.stubEnv("JEV_SMOKE_API_KEY", FAKE_API_KEY);
     const fetchImpl: FetchLike = vi.fn(async () => new Response("", { status: 401 }));
     const { writeOutput } = capturingWriteOutput();
 
@@ -207,7 +243,7 @@ describe("runJevSmoke — contract-mismatch reporting", () => {
 
 describe("runJevSmoke — never leaks the key", () => {
   it("the key substring never appears anywhere in the written summary or per-input results", async () => {
-    vi.stubEnv("JEV_API_KEY", FAKE_API_KEY);
+    vi.stubEnv("JEV_SMOKE_API_KEY", FAKE_API_KEY);
     const fetchImpl: FetchLike = vi.fn(async () => jsonResponse(200, okWireBodyFor(["core_vs_background", "project_help"])));
     const { writeOutput, calls } = capturingWriteOutput();
 

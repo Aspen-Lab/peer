@@ -555,6 +555,14 @@ export interface UserProfile {
   feedAiProvider: UserAiProvider;
   feedAiApiKey?: string;
   /**
+   * Optional Jev API key the reader applied for themselves. Jev is a second
+   * pass over the paper shortlist (a bring-your-own-key option, like the model
+   * key above). Local-only for the same reason: never synced to the shared
+   * profile row, never restored from or written into a backup file, and sent
+   * only inside the paper request body. Blank means "screen without Jev".
+   */
+  jevApiKey?: string;
+  /**
    * Per-user toggle for deep paper reports. When ON, opening a paper triggers
    * full HTML/PDF fetch + two-pass LLM analysis (classify -> extract) using
    * `feedAiProvider`/`feedAiApiKey`. When OFF, the legacy abstract-only report
@@ -621,6 +629,7 @@ export const defaultProfile: UserProfile = {
   usajobsUserAgent: "",
   feedAiProvider: "default",
   feedAiApiKey: "",
+  jevApiKey: "",
   deepReportEnabled: false,
   colorTheme: "system:ember",
   onboardedAt: null,

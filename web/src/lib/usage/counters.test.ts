@@ -1,18 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import * as counters from "./counters";
 import {
   InMemoryCounterStore,
   SupabaseCounterStore,
   breakerTripped,
-  deepReportDayKey,
-  deepReportMonthKey,
-  deepReportTrialKey,
   endOfUtcDay,
   endOfUtcHour,
-  endOfUtcMonth,
   getCounterStore,
   rateKey,
   resetCounterStoreForTests,
-  forcedRebuildDayKey,
   testEmailDayKey,
   confirmEmailRequestDayKey,
   underLimit,
@@ -41,31 +37,39 @@ describe("counter keys", () => {
     expect(rateKey("paper-feed", "u1", NOW)).toBe(
       "rate:paper-feed:u1:2026-09-04T12",
     );
-    expect(deepReportMonthKey("u1", NOW)).toBe("deep:u1:2026-09");
-    expect(deepReportDayKey("u1", NOW)).toBe("deep:u1:2026-09-04");
-    // 5-02 · Ruling 13 point 1 — was `systemSearchDayKey` and `search:u1:...`.
-    // The counter now guards the forced pool rebuild, not a search, so the key
-    // says so. Free to change: migrations unapplied, no users, nothing orphaned.
-    expect(forcedRebuildDayKey("u1", NOW)).toBe(
-      "forced_rebuilds_today:u1:2026-09-04",
-    );
-    // EMAIL-SETTINGS (§1z P1) — same UTC-day shape as deepReportDayKey; both
-    // are wallet/abuse-budget breakers (fail CLOSED), not UX rate limits.
+    // EMAIL-SETTINGS (§1z P1) — UTC-day keys; both are send-budget/abuse
+    // breakers (fail CLOSED), not UX rate limits.
     expect(testEmailDayKey("u1", NOW)).toBe("test_email:u1:2026-09-04");
     expect(confirmEmailRequestDayKey("u1", NOW)).toBe(
       "confirm_email:u1:2026-09-04",
     );
   });
 
-  it("gives the trial cap no period segment at all", () => {
-    // 20 over the whole 14 days, not 20 per period. A date segment here would
-    // hand every trial a fresh twenty each month.
-    expect(deepReportTrialKey("u1")).toBe("deep:u1:trial");
+  it("keeps no key for an allowance Peer used to hand out on its own model", () => {
+    // The deep-report allowance and the forced-rebuild breaker metered the
+    // company's model key. Peer pays for no model call now, so their keys, caps
+    // and outage line are gone and must not be quietly re-added to the shared
+    // counter module (the rate limits and the email caps are what it is for).
+    expect(Object.keys(counters).sort()).toEqual(
+      [
+        "InMemoryCounterStore",
+        "SupabaseCounterStore",
+        "breakerTripped",
+        "confirmEmailRequestDayKey",
+        "endOfUtcDay",
+        "endOfUtcHour",
+        "getCounterStore",
+        "rateKey",
+        "resetCounterStoreForTests",
+        "testEmailDayKey",
+        "underLimit",
+      ].sort(),
+    );
   });
 
   it("computes window ends in UTC, not the server's local zone", () => {
     expect(endOfUtcHour(NOW).toISOString()).toBe("2026-09-04T13:00:00.000Z");
-    expect(endOfUtcMonth(NOW).toISOString()).toBe("2026-10-01T00:00:00.000Z");
+    expect(endOfUtcDay(NOW).toISOString()).toBe("2026-09-05T00:00:00.000Z");
   });
 });
 

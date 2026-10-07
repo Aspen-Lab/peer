@@ -2,10 +2,6 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { StateStorage } from "zustand/middleware";
-import {
-  ANONYMOUS_CLIENT_ENTITLEMENT,
-  type ClientEntitlement,
-} from "@/lib/entitlement/allowance";
 import { defaultProfile, type Paper, type UserProfile } from "@/types";
 import { cleanPreferenceLedger } from "@/lib/preferences/ledger";
 import { selectedSenseConcept } from "@/lib/feed/senses";
@@ -748,71 +744,27 @@ describe("profile export and import", () => {
 });
 
 /**
- * ABC-freemium 6-04 · R-UI-3 · Ruling 16 points 2-3 — **the entitlement has a
- * third state, and the store starts in it.**
- *
- * This is the root of the fix rather than a restatement of the component
- * cases. The two upsell surfaces can only stay silent while the plan is unknown
- * if "unknown" is representable here at all — and for three rounds it was not:
- * the store opened on `ANONYMOUS_CLIENT_ENTITLEMENT`, so a **paid** reader
- * looked free from the first render until `GET /api/profile` came back, and was
- * upsold in that window while the server went on granting what they paid for.
- *
- * Planting the old default back — `entitlement: ANONYMOUS_CLIENT_ENTITLEMENT`
- * at the store's initialiser — fails the first case here and the unhydrated
- * cases in both component suites.
+ * The store holds no plan. Peer has no paid tier, so there is no entitlement for
+ * a browser to keep, and the one question the client still asks ("is this
+ * reader signed in?") is answered by `useSyncGate`, not by this store.
  */
-describe("the client entitlement's third state (6-04)", () => {
-  it("starts as null — not known yet, not known to be anonymous", () => {
-    expect(useProfileStore.getState().entitlement).toBeNull();
-  });
-
-  it("holds whatever the server sent once setEntitlement runs", () => {
-    // The negative twin: a store that returned `null` forever would pass the
-    // case above and break every plan-aware surface in the product.
-    const paid: ClientEntitlement = {
-      plan: "paid",
-      effectivePlan: "paid",
-      systemSearchAllowed: false,
-      poolRefreshAllowed: true,
-      trialEndsAt: null,
-      userId: "user-1",
-      source: "supabase",
-      unlimited: true,
-      deepReportsRemaining: 0,
-    };
-
-    useProfileStore.getState().setEntitlement(paid);
-
-    expect(useProfileStore.getState().entitlement).toEqual(paid);
-  });
-
-  it("can be told the reader is anonymous, which is a different answer", () => {
-    // `ProfileSync` sets this once it has established there is no session. It
-    // is the `known + anonymous` state: a fact, not the absence of one, and the
-    // difference is what lets a signed-out reader be told to sign in while a
-    // reader mid-hydration is told nothing.
-    useProfileStore.getState().setEntitlement(ANONYMOUS_CLIENT_ENTITLEMENT);
-
-    const held = useProfileStore.getState().entitlement;
-    expect(held).not.toBeNull();
-    expect(held?.source).toBe("anonymous");
-    expect(held?.poolRefreshAllowed).toBe(false);
+describe("the profile store holds no plan", () => {
+  it("has no entitlement field and no setter for one", () => {
+    const state = useProfileStore.getState() as unknown as Record<string, unknown>;
+    expect(state).not.toHaveProperty("entitlement");
+    expect(state).not.toHaveProperty("setEntitlement");
   });
 
   // ACCOUNT-SWITCH (§1bt) — the persisted shape widened to a third key,
   // syncedAccountId (store v6→7); the regex below is the changed assertion
   // (comment required by that ruling). The property under test is
-  // unchanged: `entitlement` must still never appear.
-  it("still writes only the profile, lastSynced and syncedAccountId to storage (the entitlement never persists) [PROFILE-SYNC (§1bk): lastSynced added to the persisted shape; ACCOUNT-SWITCH (§1bt): syncedAccountId added too]", () => {
-    // Unchanged contract for `entitlement`: a cached `paid` would survive a
-    // downgrade, and a cached `null` would be a lie the moment the reader
-    // signed in on another tab — still deliberately excluded. `lastSynced`
-    // is now ALSO deliberately persisted (PROFILE-SYNC, §1bk): an
+  // unchanged: nothing but those three keys is ever written to storage.
+  it("still writes only the profile, lastSynced and syncedAccountId to storage [PROFILE-SYNC (§1bk): lastSynced added to the persisted shape; ACCOUNT-SWITCH (§1bt): syncedAccountId added too]", () => {
+    // `lastSynced` is deliberately persisted (PROFILE-SYNC, §1bk): an
     // in-memory-only baseline is exactly the ping-pong bug it exists to fix.
-    // `syncedAccountId` (ACCOUNT-SWITCH, §1bt) joins them for the same
-    // reason: an in-memory-only owner id would forget whose device this is
-    // on every reload.
+    // `syncedAccountId` (ACCOUNT-SWITCH, §1bt) joins it for the same reason: an
+    // in-memory-only owner id would forget whose device this is on every
+    // reload.
     // A source assertion because `partialize` is a persist-middleware option
     // with no runtime seam here; whitespace-tolerant because the tree is
     // CRLF on disk (Ruling 10 point 2c).
@@ -822,8 +774,8 @@ describe("the client entitlement's third state (6-04)", () => {
     );
     // The positive form is the whole guard: `profile`, `lastSynced` and
     // `syncedAccountId` are the ONLY keys in the persisted object, so
-    // adding `entitlement` to it cannot help but change this shape and
-    // redden this line.
+    // adding another key to it cannot help but change this shape and redden
+    // this line.
     expect(text).toMatch(
       /partialize:\s*\(state\)\s*=>\s*\(\{\s*profile:\s*state\.profile,\s*lastSynced:\s*state\.lastSynced,\s*syncedAccountId:\s*state\.syncedAccountId,?\s*\}\)/,
     );
@@ -907,5 +859,135 @@ describe("a ledger with uploads survives clean -> server -> hydrate (9-23)", () 
 
     const hydrated = useProfileStore.getState().profile.preferenceLedger;
     expect(hydrated?.["text:solid electrolyte"]?.uploads).toEqual(raw["text:solid electrolyte"].uploads);
+  });
+});
+
+
+// The Jev key is the reader's own, like the model key: it lives in this
+// browser's profile, is trimmed and cleared like the other keys, and no remote
+// row, backup file or sign-out can move it anywhere else.
+describe("the reader's Jev key", () => {
+  // An invented string. It is not, and never was, a key.
+  const JEV = "jev-test-sentinel-not-a-key-0000";
+
+  beforeEach(() => {
+    useProfileStore.setState({ profile: { ...defaultProfile } });
+  });
+
+  it("starts empty", () => {
+    expect(defaultProfile.jevApiKey).toBe("");
+    expect(useProfileStore.getState().profile.jevApiKey).toBe("");
+  });
+
+  it("updateJevApiKey stores the trimmed value", () => {
+    useProfileStore.getState().updateJevApiKey(`  ${JEV}\n`);
+    expect(useProfileStore.getState().profile.jevApiKey).toBe(JEV);
+  });
+
+  it.each(["", "   ", "\t\n"])("updateJevApiKey(%j) clears it (blank becomes undefined)", (blank) => {
+    useProfileStore.getState().updateJevApiKey(JEV);
+    useProfileStore.getState().updateJevApiKey(blank);
+    expect(useProfileStore.getState().profile.jevApiKey).toBeUndefined();
+  });
+
+  it("changes nothing else in the profile", () => {
+    const before = useProfileStore.getState().profile;
+    useProfileStore.getState().updateJevApiKey(JEV);
+    expect(useProfileStore.getState().profile).toEqual({ ...before, jevApiKey: JEV });
+  });
+
+  it("is independent of the model key: choosing or clearing a provider leaves it alone", () => {
+    useProfileStore.getState().updateJevApiKey(JEV);
+    useProfileStore.getState().updateFeedAiProvider("openai");
+    useProfileStore.getState().updateFeedAiApiKey("user-owned-key");
+    useProfileStore.getState().updateFeedAiProvider("default");
+    expect(useProfileStore.getState().profile.jevApiKey).toBe(JEV);
+  });
+
+  it("a remote profile can never set it, and never clears it", () => {
+    useProfileStore.getState().updateJevApiKey(JEV);
+    useProfileStore.getState().hydrateFromRemote({
+      jevApiKey: "a-key-a-server-row-must-not-install",
+      displayName: "Remote Name",
+    });
+    expect(useProfileStore.getState().profile.jevApiKey).toBe(JEV);
+    expect(useProfileStore.getState().profile.displayName).toBe("Remote Name");
+
+    useProfileStore.setState({ profile: { ...defaultProfile } });
+    useProfileStore.getState().hydrateFromRemote({ jevApiKey: "a-key-a-server-row-must-not-install" });
+    expect(useProfileStore.getState().profile.jevApiKey).toBe("");
+  });
+
+  it("a confirmed sign-out resets it with the other local keys", () => {
+    useProfileStore.getState().updateJevApiKey(JEV);
+    useProfileStore.getState().logOut();
+    expect(useProfileStore.getState().profile.jevApiKey).toBe("");
+  });
+
+  it("is written to storage only inside the profile, the same place as the model key (never as a key of its own)", () => {
+    const text = readFileSync(join(process.cwd(), "src/store/profile.ts"), "utf8");
+    // The persisted object is still exactly three keys (asserted below in
+    // "still writes only the profile, lastSynced and syncedAccountId").
+    expect(text).not.toMatch(/partialize:[^}]*jevApiKey/);
+  });
+});
+
+// D6 — a backup file must not carry a credential: a restore cannot install one
+// (`stripCredentialFields`), so writing one into the file only puts a secret in
+// a place the reader may email, sync or paste.
+describe("a backup file carries no credential", () => {
+  const JEV = "jev-test-sentinel-not-a-key-0000";
+  const credentialProfile: UserProfile = {
+    ...defaultProfile,
+    displayName: "Peter",
+    researchTopics: ["LCO"],
+    tavilyApiKey: "tvly-secret",
+    adzunaAppId: "adzuna-id",
+    adzunaAppKey: "adzuna-secret",
+    usajobsApiKey: "usajobs-secret",
+    usajobsUserAgent: "me@example.test",
+    feedAiProvider: "openai",
+    feedAiApiKey: "sk-secret",
+    jevApiKey: JEV,
+  };
+
+  it("exportProfileDocument leaves out the Jev key, the model key and every other credential-like field", () => {
+    const document = exportProfileDocument(credentialProfile);
+    for (const field of [
+      "jevApiKey",
+      "feedAiApiKey",
+      "tavilyApiKey",
+      "adzunaAppId",
+      "adzunaAppKey",
+      "usajobsApiKey",
+      "usajobsUserAgent",
+    ]) {
+      expect(document.profile).not.toHaveProperty(field);
+    }
+    const serialized = JSON.stringify(document);
+    expect(serialized).not.toContain(JEV);
+    expect(serialized).not.toContain("sk-secret");
+    expect(serialized).not.toContain("tvly-secret");
+  });
+
+  it("still exports everything else, and does not edit the profile it was given", () => {
+    const before = JSON.stringify(credentialProfile);
+    const document = exportProfileDocument(credentialProfile);
+    expect(document.profile.displayName).toBe("Peter");
+    expect(document.profile.researchTopics).toEqual(["LCO"]);
+    expect(JSON.stringify(credentialProfile)).toBe(before);
+  });
+
+  it("importProfile cannot install a credential from a file that carries one", () => {
+    useProfileStore.setState({ profile: { ...defaultProfile } });
+    const ok = useProfileStore.getState().importProfile({
+      format: PROFILE_EXPORT_FORMAT,
+      profile: { displayName: "Peter", jevApiKey: JEV, feedAiApiKey: "sk-secret" },
+    });
+    expect(ok).toBe(true);
+    const { profile } = useProfileStore.getState();
+    expect(profile.displayName).toBe("Peter");
+    expect(profile.jevApiKey).toBe("");
+    expect(profile.feedAiApiKey).toBe("");
   });
 });

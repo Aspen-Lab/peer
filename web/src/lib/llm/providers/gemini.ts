@@ -39,12 +39,7 @@ const VERTEX_MODEL_CHAIN = [
 // available to new users"`, measured 2026-09-13), so no 2.5 id is tried here:
 // each would cost a new key a failed round-trip on every call. Each tier is
 // the chosen model, then the next one up the same line.
-//
-// SPEND-CAP — exported so `usage/company-budget.ts` can size a worst-case
-// reservation against the REAL chain (today's only reachable
-// `resolveSystemProvider()` branch, per that design's own documented,
-// tested assumption) instead of a duplicated list that could drift.
-export const GEMINI_API_MODEL_CHAIN = [
+const GEMINI_API_MODEL_CHAIN = [
   { id: PROVIDER_MODELS.gemini.small, location: "global", tier: "small" },
   { id: "gemini-3.5-flash-lite", location: "global", tier: "small" },
   { id: PROVIDER_MODELS.gemini.large, location: "global", tier: "large" },
@@ -69,10 +64,7 @@ export const GEMINI_NO_THINKING_CONTROL: ReadonlySet<string> = new Set(["gemini-
 // default chain stays economical-first for digests. `small`/`large` are
 // explicit roles rather than guesses from model-name suffixes.
 //
-// SPEND-CAP — exported so `usage/company-budget.ts`'s reservation estimator
-// can size a worst-case chain the exact same way a real call resolves one,
-// instead of a second copy of "2 or 4" that could drift.
-export function chainForTier(chain: ModelTarget[], tier?: ModelTier): ModelTarget[] {
+function chainForTier(chain: ModelTarget[], tier?: ModelTier): ModelTarget[] {
   if (!tier) return chain;
   return chain.filter((target) => target.tier === tier);
 }
@@ -151,23 +143,17 @@ function thinkingOffConfig(modelId: string): ThinkingOff | undefined {
 
 /**
  * True when this model's thinking can be turned off, so its cap needs no
- * headroom. SPEND-CAP — exported alongside `outputCap` per the design guide,
- * even though the estimator only calls `outputCap` directly today.
+ * headroom.
  */
-export function disableThinking(modelId: string): boolean {
+function disableThinking(modelId: string): boolean {
   return thinkingOffConfig(modelId) !== undefined;
 }
 
 /**
  * Output cap including thinking headroom wherever the model may still think.
- *
- * SPEND-CAP — exported so the company-spend estimator prices EXACTLY the cap
- * a real call would send, including headroom, rather than a second guess at
- * it. Returns `undefined` when `maxTokens` itself is `undefined` — callers
- * that need a bounded estimate must treat that as "no honest ceiling", not as
- * "no cap" (see `company-budget.ts`'s "UNESTIMABLE CALL SHAPES" note).
+ * Returns `undefined` when `maxTokens` itself is `undefined`.
  */
-export function outputCap(modelId: string, maxTokens?: number): number | undefined {
+function outputCap(modelId: string, maxTokens?: number): number | undefined {
   if (maxTokens == null) return undefined;
   return disableThinking(modelId) ? maxTokens : maxTokens + THINKING_HEADROOM;
 }
@@ -194,21 +180,21 @@ type GeminiResult = {
 };
 
 /**
- * One `usage_events` row per **provider request** (ABC-freemium 2-05 ·
+ * One `[llm]` console line per **provider request** (ABC-freemium 2-05 ·
  * Ruling 6 point 5 · R-METER-1 as amended 2026-09-05).
  *
- * A "call" for billing purposes is one HTTP request to a model, so each attempt
- * in a fallback chain gets its own row with its own `ok` and `model`. Both
- * Gemini providers loop over a model chain, so one `generateJsonText` that
- * falls back from model A to model B legitimately writes **two** rows — that is
- * the ledger telling the owner about a retry they paid for, not a defect.
+ * A "call" here is one HTTP request to a model, so each attempt in a fallback
+ * chain gets its own line with its own `ok` and `model`. Both Gemini providers
+ * loop over a model chain, so one `generateJsonText` that falls back from model
+ * A to model B legitimately logs **two** lines — that is the log telling you
+ * about a retry, not a defect. Peer keeps no ledger of these; the line is the
+ * only record.
  *
  * **`ok` means "this request produced usable output", not "the HTTP call
  * returned".** Every caller of the four call sites below used to pass a literal
- * `true` on the success path, so a model that answered with empty text wrote an
- * `ok: true` row and the chain then fell through to the next model. The ledger
- * recorded a success the caller never received. The four sites now pass
- * `(result.text ?? "").trim().length > 0`.
+ * `true` on the success path, so a model that answered with empty text was
+ * logged as a success and the chain then fell through to the next model. The
+ * four sites now pass `(result.text ?? "").trim().length > 0`.
  */
 function logGemini(
   modelId: string,
@@ -231,7 +217,6 @@ function logGemini(
 }
 
 const clients = new Map<string, GoogleGenAI>();
-const apiClients = new Map<string, GoogleGenAI>();
 
 function getModelChain(): ModelTarget[] {
   return VERTEX_MODEL_CHAIN;
@@ -253,13 +238,11 @@ function getClient(location: string): GoogleGenAI | null {
   return client;
 }
 
+// Built for each call and held by nothing: a reader's key must not outlive their
+// request (/privacy says it "is used for that request and is not stored"). A cache
+// keyed by the raw key, never evicted, kept every key a server instance had seen.
 function getApiKeyClient(apiKey: string): GoogleGenAI {
-  const cached = apiClients.get(apiKey);
-  if (cached) return cached;
-
-  const client = new GoogleGenAI({ apiKey });
-  apiClients.set(apiKey, client);
-  return client;
+  return new GoogleGenAI({ apiKey });
 }
 
 type CallOpts = { maxTokens?: number; path?: string };

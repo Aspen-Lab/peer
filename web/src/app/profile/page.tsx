@@ -29,15 +29,15 @@ import { PageContainer } from "@/components/ui/page-container";
 import { PageSpread } from "@/components/ui/page-spread";
 import { AccountSection } from "@/components/account/account-section";
 import { RestoreFromBackup } from "@/components/profile/restore-backup";
-import { useProfileSyncStatus } from "@/components/profile-sync";
+import { useProfileSyncStatus, useSyncGate } from "@/components/profile-sync";
 import { useFeedSyncStatus } from "@/components/feed-sync";
 import { VersionLine } from "@/components/shell/version-line";
 import { AiKeyFields } from "@/components/profile/ai-setup";
+import { JevSetup } from "@/components/profile/jev-setup";
 import { Toggle } from "@/components/ui/toggle";
 import { FEED_EMPTY_REASON_CODES } from "@/lib/feed/types";
 import { TEST_EMAIL_EMPTY, TEST_EMAIL_EMPTY_GENERIC } from "@/lib/briefing/copy";
-import { feedsUseAi } from "@/lib/feed/ai-tier";
-import { entitlementGrants } from "@/lib/entitlement/allowance";
+import { feedsUseAi, hasUserLlmOverride } from "@/lib/feed/ai-tier";
 import {
   type Tone,
   toneBadge,
@@ -1841,8 +1841,8 @@ function EditView({
   updateCareerStage: (s: typeof profile.careerStage) => void;
   updateIndustryPreference: (s: typeof profile.industryVsAcademia) => void;
 }) {
-  // One tier: signed in means Peer's model is available; a BYOK key also counts.
-  const aiGrants = entitlementGrants(useProfileStore((st) => st.entitlement));
+  // A model runs only on the reader's own key, and only for a signed-in reader.
+  const authOutcome = useSyncGate((st) => st.authOutcome);
   // Pulled straight from the store rather than threaded through this
   // component's already-long prop list.
   const updateFeedAiProvider = useProfileStore((s) => s.updateFeedAiProvider);
@@ -2092,9 +2092,11 @@ function EditView({
       <EditRow icon={<IconKey />} tone="neutral" label="AI provider">
         <div className="space-y-3">
           <p className="text-caption leading-relaxed text-text-muted">
-            Signed in, Peer uses its own model for ranking, relevance reasons
-            and reports. Add your own key only to use a different provider —
-            Peer then sends model calls to that key instead.
+            Peer has no model of its own. Add your own key to turn on ranking
+            by a model, relevance reasons and reports. Without one, Peer shows
+            the reading without a model and makes no AI call. Your key stays in
+            this browser; Peer passes it on to the provider you choose and does
+            not keep it.
           </p>
           <AiKeyFields
             provider={profile.feedAiProvider}
@@ -2104,6 +2106,13 @@ function EditView({
             idPrefix="profile-ai"
           />
         </div>
+      </EditRow>
+
+      {/* Paper screening with the reader's own Jev key: optional, kept in this
+          browser, and honest about what it does and does not claim. The setup
+          component owns the key; this page never touches it. */}
+      <EditRow icon={<IconKey />} tone="neutral" label="Paper screening">
+        <JevSetup variant="profile" idPrefix="profile" />
       </EditRow>
 
       <EditRow icon={<IconBook size={13} strokeWidth={1.9} />} tone="link" label="Deep report">
@@ -2118,17 +2127,25 @@ function EditView({
             <Toggle
               checked={profile.deepReportEnabled}
               onChange={(next) => updateDeepReportEnabled(next)}
-              disabled={!feedsUseAi(profile, aiGrants)}
+              disabled={!feedsUseAi(profile, authOutcome)}
               className="mt-0.5"
               aria-label="Deep report"
             />
           </div>
-          {!feedsUseAi(profile, aiGrants) && (
-            <p className="text-micro leading-relaxed text-text-faint">
-              Sign in first. Signed out, Peer shows the reading without a model
-              and makes no AI call.
-            </p>
-          )}
+          {!feedsUseAi(profile, authOutcome) &&
+            (hasUserLlmOverride(profile) ? (
+              authOutcome === "signed-out" && (
+                <p className="text-micro leading-relaxed text-text-faint">
+                  Sign in to turn this on. Peer runs a model only for a
+                  signed-in reader.
+                </p>
+              )
+            ) : (
+              <p className="text-micro leading-relaxed text-text-faint">
+                Add your own key above to turn this on. Without a key, Peer
+                shows the reading without a model and makes no AI call.
+              </p>
+            ))}
           {/* PROFILE-UNSYNCED-FIELDS (§1bp.3) — deepReportEnabled has no
               account column yet (device-only by current design); said
               honestly, unconditionally (true regardless of AI availability),

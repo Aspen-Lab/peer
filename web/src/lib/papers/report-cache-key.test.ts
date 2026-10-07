@@ -19,7 +19,7 @@ import type { AiMode } from "@/lib/feed/ai-tier";
  * the same move `lib/feed/ai-tier.ts` documents for the chip strings.
  */
 
-const MODES: AiMode[] = ["byok", "system", "none"];
+const MODES: AiMode[] = ["byok", "none"];
 
 const basePaper = {
   paperId: "paper-1",
@@ -36,48 +36,42 @@ const baseDigest = {
 };
 
 describe("paperReportCacheKey", () => {
-  it("gives the three AI modes three different keys", () => {
+  it("gives the two AI modes two different keys", () => {
     // The harm this closes: a report computed with NO model is written to the
     // cache under the fallback TTL, and every other component of the old key was
-    // constant across the deploy that turned Peer's own AI on. Without this
-    // segment the no-AI report is served as the AI report for six hours.
+    // constant across a reader adding their own key. Without this segment the
+    // no-AI report is served as the AI report for six hours.
     const keys = MODES.map((aiMode) =>
       paperReportCacheKey({ ...basePaper, aiMode }),
     );
 
-    expect(new Set(keys).size).toBe(3);
-  });
-
-  it("separates a BYOK reader from a system-AI reader", () => {
-    expect(paperReportCacheKey({ ...basePaper, aiMode: "byok" })).not.toBe(
-      paperReportCacheKey({ ...basePaper, aiMode: "system" }),
-    );
+    expect(new Set(keys).size).toBe(2);
   });
 
   it("keeps every discriminator the old key already had", () => {
     // A regression that dropped one of these would be invisible without this.
-    const base = paperReportCacheKey({ ...basePaper, aiMode: "system" });
+    const base = paperReportCacheKey({ ...basePaper, aiMode: "none" });
     expect(
-      paperReportCacheKey({ ...basePaper, aiMode: "system", paperId: "other" }),
+      paperReportCacheKey({ ...basePaper, aiMode: "none", paperId: "other" }),
     ).not.toBe(base);
     expect(
       paperReportCacheKey({
         ...basePaper,
-        aiMode: "system",
+        aiMode: "none",
         contextHint: "other",
       }),
     ).not.toBe(base);
     expect(
       paperReportCacheKey({
         ...basePaper,
-        aiMode: "system",
+        aiMode: "none",
         deepReportRequested: false,
       }),
     ).not.toBe(base);
     expect(
       paperReportCacheKey({
         ...basePaper,
-        aiMode: "system",
+        aiMode: "none",
         userProviderConfigured: true,
       }),
     ).not.toBe(base);
@@ -94,10 +88,10 @@ describe("paperReportCacheKey", () => {
 });
 
 describe("digestCacheKey", () => {
-  it("gives the three AI modes three different keys", () => {
+  it("gives the two AI modes two different keys", () => {
     const keys = MODES.map((aiMode) => digestCacheKey({ ...baseDigest, aiMode }));
 
-    expect(new Set(keys).size).toBe(3);
+    expect(new Set(keys).size).toBe(2);
   });
 
   it("no longer emits the 'tier0' vocabulary", () => {

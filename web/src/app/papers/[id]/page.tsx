@@ -43,7 +43,7 @@ import { readingToMarkdown } from "@/lib/papers/reading-markdown";
 import type { Claim, PaperReport } from "@/lib/papers/report";
 import type { Route } from "next";
 import { aiAvailability } from "@/lib/feed/ai-tier";
-import { entitlementGrants } from "@/lib/entitlement/allowance";
+import { useSyncGate } from "@/components/profile-sync";
 import { PaperPlate } from "@/components/cards/paper-plate";
 import { SwipeableCard } from "@/components/cards/swipe-card";
 import { useResolvedFigure } from "@/components/paper-figure";
@@ -668,13 +668,13 @@ function Reader({
   }, [revealingReportKey]);
   const shouldScrambleReport = revealingReportKey === model.reportKey && model.fresh;
 
-  // One tier: a signed-in reader has Peer's model; a reader with their own key has theirs.
+  // A model runs only on the reader's own key, and only for a signed-in reader.
   // (2026-09-23 merge note: replaces a dangling call to `reportProviderConfigured`,
   // whose file main deleted upstream of this branch's own last edit to it —
   // `use-model-report.ts`'s own `userProviderConfigured` was already reconciled
   // to this same `aiAvailability` call during this merge.)
-  const entitlement = useProfileStore((s) => s.entitlement);
-  const providerConfigured = aiAvailability(profile, entitlementGrants(entitlement)) !== "none";
+  const authOutcome = useSyncGate((s) => s.authOutcome);
+  const providerConfigured = aiAvailability(profile, authOutcome) !== "none";
   const projectText = useMemo(
     () => [profile.currentProject, profile.currentChallenges].filter(Boolean).join("\n"),
     [profile.currentProject, profile.currentChallenges],

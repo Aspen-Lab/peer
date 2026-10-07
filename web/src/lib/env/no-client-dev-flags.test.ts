@@ -13,15 +13,15 @@ import { describe, expect, it } from "vitest";
  *
  * The allow-list below is every remaining occurrence in non-test source, each
  * with the reason it is allowed. **All four are server-only.** Adding a file
- * here is a decision: if the new occurrence ships to the browser and gates AI,
- * entitlement, or an AI-dependent UI state, it belongs in `aiAvailability`
+ * here is a decision: if the new occurrence ships to the browser and gates AI
+ * or an AI-dependent UI state, it belongs in `aiAvailability`
  * instead (R-ENT-3), and the escape clause in Ruling 2 point 2 applies — stop
  * and record rather than widening this list.
  */
 const ALLOWED: ReadonlyArray<{ file: string; why: string }> = [
   {
     file: "src/lib/env/local-dev.ts",
-    why: "THE shared predicate. Server-side; the single home of the three-condition test that registry.ts, ai-request.ts and resolveEntitlement all read.",
+    why: "THE shared predicate. Server-side; the single home of the three-condition test that registry.ts and ai-request.ts both read.",
   },
   {
     file: "src/app/auth/callback/route.ts",

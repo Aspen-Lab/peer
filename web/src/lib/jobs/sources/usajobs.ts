@@ -4,8 +4,9 @@ import { normalizeSalary } from "@/lib/opportunities/salary";
 import type { JobSourceAdapter, JobsQuery, RawJobItem } from "../types";
 
 // USAJobs: US federal research positions (NIH, NSF, national labs). Free key
-// from developer.usajobs.gov. Requires USAJOBS_API_KEY + USAJOBS_USER_AGENT
-// (the registered email address).
+// from developer.usajobs.gov. Requires the reader's own key and the registered
+// email address (`apiKeys.usajobsApiKey` and `apiKeys.usajobsUserAgent`), both
+// sent in the request; Peer reads neither from the environment.
 
 interface UsaJobsDescriptor {
   PositionID?: string;
@@ -90,9 +91,8 @@ export function usaJobsDescriptorToRawItem(
 
 function usajobsCreds(query: JobsQuery): { apiKey?: string; userAgent?: string } {
   return {
-    apiKey: query.apiKeys?.usajobsApiKey?.trim() || process.env.USAJOBS_API_KEY,
-    userAgent:
-      query.apiKeys?.usajobsUserAgent?.trim() || process.env.USAJOBS_USER_AGENT,
+    apiKey: query.apiKeys?.usajobsApiKey?.trim() || undefined,
+    userAgent: query.apiKeys?.usajobsUserAgent?.trim() || undefined,
   };
 }
 

@@ -606,7 +606,7 @@ describe("preferenceLedgerChanged (§1bk.8 AMENDMENT)", () => {
 // values, union lists" (no "local wins once" conflict rule for scalars,
 // since restoring a named file is itself the deliberate user action).
 describe("stripCredentialFields", () => {
-  it("removes all six credential-like fields, even when every one is present with a real value", () => {
+  it("removes all seven credential-like fields, even when every one is present with a real value", () => {
     const stripped = stripCredentialFields({
       displayName: "Aspen",
       tavilyApiKey: "tvly-secret",
@@ -615,6 +615,7 @@ describe("stripCredentialFields", () => {
       usajobsApiKey: "usajobs-secret",
       usajobsUserAgent: "me@example.test",
       feedAiApiKey: "sk-secret",
+      jevApiKey: "jev-test-sentinel-not-a-key-0000",
     });
     expect(stripped).toEqual({ displayName: "Aspen" });
   });
@@ -629,11 +630,13 @@ describe("mergeProfileFromBackup", () => {
       adzunaAppKey: "adzuna-secret",
       usajobsApiKey: "usajobs-secret",
       feedAiApiKey: "sk-secret",
+      jevApiKey: "jev-test-sentinel-not-a-key-0000",
     });
     expect(patch).not.toHaveProperty("tavilyApiKey");
     expect(patch).not.toHaveProperty("adzunaAppKey");
     expect(patch).not.toHaveProperty("usajobsApiKey");
     expect(patch).not.toHaveProperty("feedAiApiKey");
+    expect(patch).not.toHaveProperty("jevApiKey");
     expect(patch.displayName).toBe("Restored Name");
   });
 

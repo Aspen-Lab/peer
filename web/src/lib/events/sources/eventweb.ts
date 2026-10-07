@@ -1,13 +1,6 @@
 import type { EventType } from "@/types";
 import type { EventSourceAdapter, EventsQuery, RawEventItem } from "../types";
 import {
-  isOperatorFundedSearch,
-  operatorSearchAvailability,
-  resolveSystemSearchKeys,
-} from "@/lib/search/system-key";
-import { recordUsageEvent } from "@/lib/usage/events";
-import { consumeForcedRebuild } from "@/lib/usage/rebuild-breaker";
-import {
   DATE_TOKEN_PATTERN,
   DAY_PATTERN,
   looksLikeHostBrand,
@@ -23,12 +16,6 @@ import {
   RESULTS_PER_SEARCH,
 } from "@/lib/opportunities/query-budget";
 import {
-  geminiSearchDeadline,
-  resolveWebSearchProvider,
-  searchGemini,
-} from "@/lib/sources/gemini-search";
-import { searchVertex } from "@/lib/sources/vertex-search";
-import {
   collectSearchResults,
   searchHttpFailure,
 } from "@/lib/sources/search-failure";
@@ -38,18 +25,18 @@ import { dateClaimEndMs } from "@/lib/format";
 // Web discovery for academic events. The curated feeds (ccfddl, confs.tech)
 // are CS-heavy; this adapter is what finds a materials-science symposium or a
 // neuroscience summer school: profile-driven queries (LLM-refined when a
-// provider is available — see lib/opportunities/query-gen) through Tavily
-// (BYOK or TAVILY_API_KEY) or Brave (BRAVE_SEARCH_API_KEY).
+// provider is available — see lib/opportunities/query-gen) through the
+// reader's own Tavily key.
 
 interface WebResult {
   title?: string;
   url?: string;
   snippet?: string;
   /**
-   * ROUND 29 C, ITEM 1 — channel L. The page's own `schema.org` `@type`, read
-   * by the adapter off the HTML it already fetched (`sources/gemini-search.ts`,
-   * `pageDeclaresEventFromHtml`). **Optional and absent on every non-gemini
-   * provider**, so Tavily and Brave rows behave exactly as they did.
+   * ROUND 29 C, ITEM 1 — channel L. The page's own `schema.org` `@type`, as a
+   * search adapter that fetches the page itself would read it off the HTML.
+   * **Optional, and absent on every Tavily row** (the only search left), so
+   * those rows behave exactly as they did.
    */
   pageKind?: "event";
 }
@@ -1757,9 +1744,10 @@ function stripApplicationStatusTail(segment: string, host: string | undefined): 
  * `"Investor Showcase for Battery Storage TEST"` TODAY — the defect
  * reproduces character for character — while the SAME page's plain
  * `<title>` HTML tag (a DIFFERENT field) carries the CORRECT name with no
- * "TEST" anywhere. `pageTitleFromHtml` (`gemini-search.ts`) strictly prefers
- * `og:title` over `<title>` and only falls back when `og:title` is absent —
- * here it IS present, so the stale one wins. **Root cause, confirmed: a
+ * "TEST" anywhere. The page-title reader that adapter used (the Gemini
+ * grounding adapter, since deleted) strictly preferred `og:title` over
+ * `<title>` and only fell back when `og:title` was absent — here it IS present,
+ * so the stale one won. **Root cause, confirmed: a
  * live, real, upstream data-quality defect on the event organiser's OWN
  * Cvent page setup** — almost certainly a "social-sharing title" field set
  * during draft setup and never updated, while the page's real, visible
@@ -1773,8 +1761,8 @@ function stripApplicationStatusTail(segment: string, host: string | undefined): 
  * whitespace. Does not touch the ordinary lowercase/Title-Case English word
  * "test" appearing mid-title in a real name.
  *
- * **EVENT-ONLY PLACEMENT — RULING 120d(2), NOT THE SHARED `gemini-search.ts`
- * LAYER.** B named this as an open placement question (same composed strip
+ * **EVENT-ONLY PLACEMENT — RULING 120d(2), NOT A SHARED UPSTREAM LAYER.** B
+ * named this as an open placement question (same composed strip
  * chain here, OR the shared upstream layer, since the underlying defect
  * shape — a stale `og:title` social-sharing field — is plausible on a job
  * posting's ATS setup too, unwitnessed this round). The manager ruled: the
@@ -1783,9 +1771,10 @@ function stripApplicationStatusTail(segment: string, host: string | undefined): 
  * strength of a single event-surface witness — blast radius without
  * evidence. **NAMED PROMOTION THRESHOLD (record this, do not re-derive it):
  * a witness of the same shape (a stale draft-annotation tail on a
- * provider-supplied title) on a SECOND surface promotes this strip to the
- * shared `gemini-search.ts` seam — no further escalation needed beyond
- * that one additional witness.**
+ * provider-supplied title) on a SECOND surface promotes this strip to a
+ * shared upstream seam — no further escalation needed beyond that one
+ * additional witness. (The shared adapter it would have joined is deleted; the
+ * strip stays here.)**
  *
  * Vacuity, stated honestly (unchanged from B's own design): only `TEST` is
  * witnessed, 1 live row. `DRAFT`/`SAMPLE`/`DO NOT USE` are NOT proposed — no
@@ -2650,176 +2639,25 @@ async function searchTavily(
   }
 }
 
-async function searchBrave(
-  query: string,
-  apiKey: string,
-  limit: number,
-): Promise<WebResult[]> {
-  const params = new URLSearchParams({ q: query, count: String(limit) });
-  try {
-    const res = await fetch(
-      `https://api.search.brave.com/res/v1/web/search?${params}`,
-      {
-        headers: { Accept: "application/json", "X-Subscription-Token": apiKey },
-        signal: AbortSignal.timeout(7000),
-        next: { revalidate: 6 * 60 * 60 },
-      },
-    );
-    if (!res.ok) throw await searchHttpFailure("brave", res);
-    const data = (await res.json()) as {
-      web?: { results?: Array<{ title?: string; url?: string; description?: string }> };
-    };
-    return (data.web?.results ?? []).map((r) => ({
-      title: r.title,
-      url: r.url,
-      snippet: r.description,
-    }));
-  } catch (err) {
-    console.error("[events/eventweb] brave error:", err);
-    throw err;
-  }
-}
-
 /**
- * RULING 75 — the gemini branch. `searchGemini` returns the same unmapped
- * `WebResult[]` Tavily and Brave are normalised to, so `webResultToRawEventItem`
- * stays exactly where it is in `fetchImpl` and this surface's admission rules
- * are untouched. `DENY_HOSTS` is forwarded as a stage-2b pre-screen: it is an
- * outright, title-independent deny (see its call site below), so skipping those
- * hosts before a page fetch cannot change which rows are admitted.
- */
-async function searchGeminiEvents(
-  query: string,
-  limit: number,
-  deadlineAt: number,
-): Promise<WebResult[]> {
-  return searchGemini(query, {
-    denyHosts: DENY_HOSTS,
-    // The same three the Tavily branch excludes, so the offered corpus stays
-    // comparable across providers.
-    excludeDomains: ["arxiv.org", "openalex.org", "semanticscholar.org"],
-    maxResults: limit,
-    deadlineAt,
-  });
-}
-
-/**
- * The vertex branch — the credit-funded engine, same contract, same mapper.
+ * An events fan-out runs on **the reader's own Tavily key, and nothing else.**
  *
- * **`detectPageKind` is set HERE AND ONLY HERE, and it is not optional for this
- * surface.** `searchGemini` reads the page's `schema.org` `@type` for free off
- * the HTML buffer it already holds for title recovery; `searchVertex` fetches
- * no pages at all, so without this flag every vertex-sourced row would arrive
- * with `pageKind` undefined and `webResultToRawEventItem`'s channel-L
- * publisher-declaration admission would go silently dead — rows the shipped
- * rule admits would simply stop existing, with nothing in the report saying so.
- *
- * `DENY_HOSTS` and the three excluded academic domains are forwarded exactly as
- * the gemini branch forwards them, so the offered corpus stays comparable
- * across providers.
+ * Peer funds no search for anyone: there is no server key (`TAVILY_API_KEY` is
+ * read by no code and banned on Vercel), no Brave and no Google-hosted engine,
+ * so a query with no reader key has no search provider and this source is dark.
+ * The pipeline then serves its free curated feeds.
  */
-async function searchVertexEvents(
-  query: string,
-  limit: number,
-  deadlineAt: number,
-): Promise<WebResult[]> {
-  return searchVertex(query, {
-    denyHosts: DENY_HOSTS,
-    excludeDomains: ["arxiv.org", "openalex.org", "semanticscholar.org"],
-    maxResults: limit,
-    deadlineAt,
-    detectPageKind: true,
-  });
-}
-
-/**
- * ABC-freemium 1-05 · R-KEY-3 — this used to be
- * a bare "the request key, or else the operator's environment key". This
- * surface was the largest single leak in the round: an unauthenticated request
- * produced seven outgoing searches on the operator's key. See
- * `lib/search/system-key.ts`.
- */
-function resolveKeys(query: EventsQuery): {
-  tavily?: string;
-  brave?: string;
-  provenance: "byok" | "system" | "none";
-} {
-  return resolveSystemSearchKeys({
-    requestTavilyKey: query.webSearch?.tavilyApiKey,
-    systemSearchAllowed: query.webSearch?.systemSearchAllowed === true,
-  });
-}
-
-/**
- * RULING 75 requirement 2. This surface used a bare
- * `keys.tavily ? tavily : brave` ternary and **never read
- * `webSearch.provider` at all** — "all three surfaces uniform" therefore means
- * ADDING preference reading here, not extending a switch. The order itself
- * lives once in `sources/gemini-search.ts`.
- */
-export function resolveSearchProvider(
-  query: EventsQuery,
-): "gemini" | "vertex" | "brave" | "tavily" | null {
-  const requestTavilyKey = query.webSearch?.tavilyApiKey?.trim();
-  const keys = resolveKeys(query);
-  return resolveWebSearchProvider(query.webSearch?.provider, {
-    // ABC-freemium 2-04 — gated at the availability inputs, which both the
-    // explicit and the auto branch of `resolveWebSearchProvider` consult. See
-    // the matching note in `jobweb.ts`.
-    ...operatorSearchAvailability({
-      systemSearchAllowed: query.webSearch?.systemSearchAllowed === true,
-    }),
-    braveKeyPresent: Boolean(keys.brave),
-    tavilyKeyPresent: Boolean(keys.tavily),
-    requestTavilyKeyPresent: Boolean(requestTavilyKey),
-  });
+export function resolveSearchProvider(query: EventsQuery): "tavily" | null {
+  return query.webSearch?.tavilyApiKey?.trim() ? "tavily" : null;
 }
 
 async function fetchImpl(query: EventsQuery): Promise<RawEventItem[]> {
-  const keys = resolveKeys(query);
-  const provider = resolveSearchProvider(query);
-  if (!provider) return [];
+  const tavilyKey = query.webSearch?.tavilyApiKey?.trim();
+  if (resolveSearchProvider(query) === null || !tavilyKey) return [];
 
   const searches = query.queries.slice(0, EVENT_QUERY_BUDGET);
   if (searches.length === 0) return [];
 
-  // ABC-freemium 1-21 · R-QUOTA-2, D4 — the daily cap on operator-funded
-  // search, charged before the fan-out and only when the key is the
-  // operator's. A BYOK fan-out costs the owner nothing and is not counted.
-  //
-  // A tripped breaker returns `[]`, which is the SAME degraded value a keyless
-  // reader already gets here: the pipeline serves its free structured sources.
-  // No error, no new shape.
-  // 2-04 — charged for ANY operator-funded provider, not only system Tavily.
-  //
-  // **ABC-freemium 6-01 · Ruling 14 point 3 — THIS CALL SITE IS UNREACHABLE,
-  // and it is KEPT on purpose (Ruling 12 point 2).** The chain, end to end:
-  // `systemSearchAllowed` is a hard `false` on every producer (D2a), so
-  // `resolveSystemSearchKeys` returns no Brave key and Tavily can only be
-  // `"byok"` or `"none"`; `operatorSearchAvailability` is frozen false for
-  // both providers; so the only provider selectable here is Tavily with
-  // `provenance: "byok"`, and `isOperatorFundedSearch` answers `false` for
-  // exactly that pair. `operatorFunded` is therefore never `true` and the
-  // breaker below never runs. Deleting it would remove the metering that has
-  // to exist BEFORE the gate is ever reopened, not the round after.
-  //
-  // **If operator-funded search is restored, this counter must be SPLIT — do
-  // not just flip the flag.** These sites are dead because no operator-funded
-  // provider can be *selected*, not because anything refuses them:
-  // `isOperatorFundedSearch` still returns `true` for Brave, Vertex and
-  // Gemini. Reopening the gate would start charging **search fan-outs** to a
-  // counter named `forced_rebuilds_today`, which re-creates the exact
-  // false-audit defect 6-01 exists to fix, in reverse.
-  const operatorFunded = isOperatorFundedSearch(provider, keys);
-  if (operatorFunded) {
-    const allowed = await consumeForcedRebuild(
-      query.webSearch?.userId ?? null,
-      searches.length,
-      undefined,
-      "events",
-    );
-    if (!allowed) return [];
-  }
   // Search providers bill per *search*, not per result, so asking each query
   // for a full page of results is free. The previous formula divided a fixed
   // cap across the query set, which meant every added query starved the
@@ -2830,10 +2668,6 @@ async function fetchImpl(query: EventsQuery): Promise<RawEventItem[]> {
 
   const now = Date.now();
   const all: RawEventItem[] = [];
-  // One shared deadline for the whole fan-out, so sixteen concurrent queries
-  // stop recovering page titles at the same moment instead of each starting a
-  // fresh budget (RULING 76a's 25 s source cap is what they are fitting into).
-  const deadlineAt = geminiSearchDeadline();
   // Run the daily allocation concurrently so the source's wall-clock timeout
   // cannot strand later, more specific queries.
   // allSettled, not all: one failed query must not cost the whole allocation.
@@ -2841,33 +2675,12 @@ async function fetchImpl(query: EventsQuery): Promise<RawEventItem[]> {
   // provider reaches the pipeline's `errors.eventweb` instead of masquerading
   // as a day with no matching events.
   const resultSets = collectSearchResults(
-    provider,
+    "tavily",
     "events/eventweb",
     await Promise.allSettled(
-      searches.map((q) =>
-        provider === "vertex"
-          ? searchVertexEvents(q, query.limit, deadlineAt)
-          : provider === "gemini"
-            ? searchGeminiEvents(q, query.limit, deadlineAt)
-            : provider === "tavily"
-              ? searchTavily(q, keys.tavily!, perQuery)
-              : searchBrave(q, keys.brave!, perQuery),
-      ),
+      searches.map((q) => searchTavily(q, tavilyKey, perQuery)),
     ),
   );
-  // ABC-freemium 1-05 / 2-04 · R-METER-2 — one row per operator-funded fan-out,
-  // carrying the provider's own name. A BYOK search costs the operator nothing.
-  if (operatorFunded) {
-    recordUsageEvent({
-      user_id: query.webSearch?.userId ?? null,
-      kind: "search",
-      surface: "events",
-      query_count: searches.length,
-      provider,
-      ok: true,
-      byok: false,
-    });
-  }
 
   for (const results of resultSets) {
     for (const result of results) {

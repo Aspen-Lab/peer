@@ -12,16 +12,15 @@ import {
  * ABC-freemium 1-09 · R-TEST-1, R-SEC-1, Ruling 2 point 7.
  *
  * `GET /api/figure` had **no authentication of any kind** and no test file at
- * all. It reaches a provider through `extractFigure` -> `chooseCandidate` -> the
- * semantic and vision matchers, which were the only two no-argument
- * `resolveProvider()` calls in the tree.
+ * all. It makes Peer's server fetch a page the caller names, so it takes the
+ * same sign-in and hourly limit as the model routes. It reaches no model: the
+ * figure is chosen by the deterministic extractor (there used to be a semantic
+ * and a vision matcher behind the company's model key, and a `GET` that the CDN
+ * caches has no channel for a reader's own).
  *
- * **The money rule.** This suite drives the real handler and does not mock the
- * provider registry, so after item 1-11 an unmocked `resolveProvider()` would
- * return a live provider on the operator's real key. `vitest.setup.ts` deletes
- * `GOOGLE_API_KEY` before every suite and every test; `deleteSpendableKeys()`
- * below is the belt-and-braces call, and the "no model call" assertion is what
- * would catch a regression.
+ * This suite drives the real handler and does not mock the provider registry,
+ * and the "no model call" assertion below holds even with a company key sitting
+ * in the environment.
  */
 
 const mocks = vi.hoisted(() => ({ getUser: vi.fn() }));
@@ -99,10 +98,9 @@ describe("GET /api/figure", () => {
     expect(outgoing).toEqual([]);
   });
 
-  it("serves a signed-in reader without making a model call", async () => {
-    // The degraded figure path is a real answer, not an error: with no provider
-    // available the matchers return null and the deterministic extractor decides
-    // on its own.
+  it("serves a signed-in reader without making a model call, even with a company key in the environment", async () => {
+    // The deterministic extractor decides on its own; there is no model step.
+    vi.stubEnv("GOOGLE_API_KEY", "COMPANY-NOT-A-KEY");
     mocks.getUser.mockResolvedValue(signedIn("reader-1"));
 
     const response = await GET(request({ id: "paper-1", url: "https://example.org/p" }));
@@ -110,8 +108,8 @@ describe("GET /api/figure", () => {
     expect(response.status).toBe(200);
     const body = (await response.json()) as { status?: string };
     expect(typeof body.status).toBe("string");
-    // No `GOOGLE_API_KEY` in this process, so `resolveProvider` returns null and
-    // no request can have gone to a model endpoint.
+    // Nothing in this route resolves a provider, so no request can have gone to
+    // a model endpoint.
     expect(
       outgoing.filter((url) => /googleapis|openai|anthropic|deepseek|dashscope/i.test(url)),
     ).toEqual([]);

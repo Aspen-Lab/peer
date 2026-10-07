@@ -10,10 +10,9 @@ import type { AiMode } from "@/lib/feed/ai-tier";
  * writes the report **unconditionally** — the `reveal` argument controls the
  * animation, not the write — so a `noLlm: true` report **is** cached, under the
  * fallback TTL of six hours. Every component of the old key
- * (`id|context|deep=…|p=…|byok=…`) is constant across the deploy that turns the
- * system key on for a non-BYOK reader. So a report computed with **no model**
- * would have been served as **the AI report** for six hours after Peer's own AI
- * went live.
+ * (`id|context|deep=…|p=…|byok=…`) is constant across a reader adding or
+ * removing their own key. So a report computed with **no model** would have
+ * been served as **the AI report** for six hours after the reader added a key.
  *
  * The fix is one more segment carrying which model, if any, produced the answer.
  *

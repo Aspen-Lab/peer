@@ -1,5 +1,4 @@
 import fs from "node:fs";
-import { webSearchOptions } from "@/lib/sources/vertex-search";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import type { PreferenceLedger } from "@/types";
@@ -37,25 +36,21 @@ const profile = fs.existsSync(profilePath)
   ? (JSON.parse(fs.readFileSync(profilePath, "utf8")) as ProfileSnapshot)
   : undefined;
 /**
- * RULING 75 / RULING 76d — **THE GATE MOVES OFF THE TAVILY KEY.**
+ * RULING 75 / RULING 76d — **THE GATE ASKS WHETHER THERE IS A LIVE SEARCH PATH.**
  *
  * It used to read `Boolean(profile?.tavilyApiKey?.trim())`, and that was wrong
  * the moment Ruling 75 disabled Tavily: the KEY is still on disk, so the gate
  * stayed TRUE and the benchmark kept RUNNING with the web source switched off.
- * Round 28 A found exactly that — a green that was an ABSENCE. The gate now
- * asks the only question that matters: **is there a live search path at all?**
+ * Round 28 A found exactly that — a green that was an ABSENCE. The gate asks
+ * the only question that matters: **is there a live search path at all?**
  *
- * Tavily counts only when it is both keyed AND enabled. Gemini counts when the
- * server's Vertex project is reachable — the same credential the LLM path uses,
- * carried into the test process by `vitest.config.ts` (Vitest does not load env
- * files on its own; measured, see that file). With neither, the suite SKIPS
- * rather than passing on an empty pool.
+ * Peer funds no search of its own, so the only path is the profile snapshot's
+ * own Tavily key, and it counts only when it is both keyed AND enabled. Without
+ * one the suite SKIPS rather than passing on an empty pool.
  */
 const tavilySearchLive =
   Boolean(profile?.tavilyApiKey?.trim()) && profile?.tavilyEnabled !== false;
-const geminiSearchLive = Boolean(process.env.GOOGLE_VERTEX_PROJECT);
-const hasLiveSearchPath =
-  canRunLiveEventsBenchmark() && (tavilySearchLive || geminiSearchLive);
+const hasLiveSearchPath = canRunLiveEventsBenchmark() && tavilySearchLive;
 
 function hostname(url: string | undefined): string {
   if (!url) return "";
@@ -181,14 +176,9 @@ describe.skipIf(!hasLiveSearchPath)("events live relevance benchmark", () => {
       // actually took it. The corpus BREAKS at this round: Google's results are
       // not Tavily's, and no cross-provider row comparison is drift.
       console.info("EVENT_BENCHMARK_SEARCH_PROVIDER", {
-        // CREDIT MIGRATION — this line used to hard-code `"gemini"`, which
-        // silently became a FALSE method line the moment a Vertex AI Search app
-        // was configured: the run took `vertex` and the log still said
-        // `gemini`. The comment above already demands the provider be reported
-        // by the run rather than remembered, so it now reads the same
-        // resolution the pipeline itself uses.
-        searchProvider:
-          tavilySearchLive ? "tavily" : (webSearchOptions(undefined)?.provider ?? "none"),
+        // The only search path left is the snapshot's own Tavily key, so the
+        // line says which one the run took rather than a remembered name.
+        searchProvider: tavilySearchLive ? "tavily" : "none",
         eventwebFetched: pool.fetched.eventweb ?? 0,
         eventwebError: pool.errors.eventweb ?? null,
       });
