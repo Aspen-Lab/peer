@@ -245,6 +245,55 @@ describe("/privacy — Who else sees a request names the gist pass (P3-05)", () 
 const UPLOAD_TEXT =
   "If you upload a private PDF, Peer's server keeps the PDF, a record of it (its file name, title and abstract, and when it expires) and the text Peer read out of it, in its own file storage against your account, for 30 days, after which a daily sweep removes them, or until you delete the upload. While you read it, the text also sits in the server's memory for up to an hour.";
 
+// §1h.12 (b), §1h.13 (c) (P4-02b, A's P4-02 §5): a saved upload is a saved paper, and its record goes to /api/saved.
+const UPLOAD_SAVED_TEXT =
+  "When you are signed in and save an uploaded paper, its record — its title, an excerpt of its abstract up to 400 characters, its keywords, its DOI, its page count and the link to its file — goes to Peer's server with your other saved papers, against your account; the paper's body text and any plain rewrite do not.";
+
+describe("/privacy — a saved upload's record (P4-02b, §1h.12 (b))", () => {
+  const html = renderToStaticMarkup(createElement(PrivacyPage));
+  const root = process.cwd();
+  const read = (file: string) => readFileSync(join(root, file), "utf8");
+  const squash = (text: string) => text.replace(/\s+/g, " ");
+
+  it("has the sentence, word for word, right after the upload's storage sentence and nowhere else", () => {
+    const signIn = html.slice(html.indexOf(">If you sign in<"), html.indexOf(">Your notes<"));
+    const escaped = UPLOAD_SAVED_TEXT.replace(/'/g, "&#x27;");
+    expect(signIn).toContain(`<p>${escaped}</p>`);
+    expect(html.split(escaped).length - 1).toBe(1);
+    expect(signIn.indexOf(escaped)).toBeGreaterThan(signIn.indexOf("If you upload a private PDF"));
+  });
+
+  it("is true of the code: saving calls cloudSave, which posts the record to /api/saved, which files it under the session's user", () => {
+    const feed = squash(read("src/store/feed.ts"));
+    expect(feed).toContain('const saved = { ...paper, isSaved: true, feedback: savedFeedback };');
+    expect(feed).toContain('cloudSave(paper.id, "paper", saved);');
+    expect(feed).toContain('await apiFetch("/api/saved", { method: "POST", body: JSON.stringify({ itemId, itemKind, payload }), });');
+    const route = squash(read("src/app/api/saved/route.ts"));
+    expect(route).toContain("if (!user) { return NextResponse.json({ error: \"unauthenticated\" }, { status: 401 });");
+    expect(route).toContain("user_id: user.id,");
+    expect(route).toContain("payload: body.payload,");
+  });
+
+  it("names the fields the upload's paper carries (uploadMetaToPaper) and no body text", () => {
+    const store = read("src/lib/papers/upload-store.ts");
+    const from = store.indexOf("export function uploadMetaToPaper");
+    const fn = squash(store.slice(from, store.indexOf("\n}\n", from)));
+    expect(fn).toContain("title: meta.title,");
+    expect(fn).toContain("summaryIntro: meta.summaryIntro ?? \"\",");
+    expect(fn).toContain("summaryExperimentKeywords: (meta.preferenceSignals ?? []).map((c) => c.label),");
+    expect(fn).toContain("doi: meta.doi,");
+    expect(fn).toContain("pageCount: meta.pageCount,");
+    expect(fn).toContain("linkPaper: `/api/papers/upload/${meta.hash16}/file`,");
+    expect(fn).not.toMatch(/sections|fullText|body\b/);
+    // The excerpt is the abstract cut at 400 characters.
+    expect(read("src/app/api/papers/upload/route.ts")).toContain("summaryIntro: abstractSection ? abstractSection.text.slice(0, 400) : undefined,");
+  });
+
+  it("leaves a plain rewrite out: the rewrite store is not read by the saving code", () => {
+    expect(read("src/store/feed.ts")).not.toMatch(/plain-rewrites|usePlainRewritesStore/);
+  });
+});
+
 describe("/privacy — an uploaded PDF's storage on Peer's server (P4-00c N7)", () => {
   const html = renderToStaticMarkup(createElement(PrivacyPage));
   const root = process.cwd();

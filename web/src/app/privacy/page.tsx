@@ -36,6 +36,7 @@ const SECTIONS = [
       // also tells the reader. The test pins each clause. No "nowhere else": the server's
       // memory holds parts of the text for an hour, which the sentence says.
       "If you upload a private PDF, Peer's server keeps the PDF, a record of it (its file name, title and abstract, and when it expires) and the text Peer read out of it, in its own file storage against your account, for 30 days, after which a daily sweep removes them, or until you delete the upload. While you read it, the text also sits in the server's memory for up to an hour.",
+      "When you are signed in and save an uploaded paper, its record — its title, an excerpt of its abstract up to 400 characters, its keywords, its DOI, its page count and the link to its file — goes to Peer's server with your other saved papers, against your account; the paper's body text and any plain rewrite do not.",
     ],
   },
   {
