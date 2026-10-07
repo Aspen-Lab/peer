@@ -5,8 +5,10 @@ import type { JobSourceAdapter, JobsQuery, RawJobItem } from "../types";
 
 // JSearch (OpenWeb Ninja via RapidAPI) aggregates Google for Jobs — the widest
 // coverage (LinkedIn/Indeed/Glassdoor) but a tiny free quota, so it is BYOK:
-// set JSEARCH_API_KEY (RapidAPI key) to enable. Long revalidate to conserve
-// the quota.
+// the reader's own RapidAPI key travels in the request (`apiKeys.jsearchApiKey`)
+// and nothing else enables it. Peer reads no company key from the environment
+// (JSearch bills per request); with no key in the request the adapter returns
+// nothing. Long revalidate to conserve the reader's quota.
 const REVALIDATE_SECONDS = 12 * 60 * 60;
 
 interface JSearchJob {
@@ -78,7 +80,7 @@ export function jsearchJobToRawItem(job: JSearchJob): RawJobItem | null {
 }
 
 function jsearchKey(query: JobsQuery): string | undefined {
-  return query.apiKeys?.jsearchApiKey?.trim() || process.env.JSEARCH_API_KEY;
+  return query.apiKeys?.jsearchApiKey?.trim() || undefined;
 }
 
 async function fetchImpl(query: JobsQuery): Promise<RawJobItem[]> {

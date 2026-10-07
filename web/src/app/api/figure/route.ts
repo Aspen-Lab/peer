@@ -1,5 +1,5 @@
 // GET /api/figure?id=<itemId>&url=<originUrl>
-// POST /api/figure  { id, url, doi, query, paperTitle, idx, rev, v }
+// POST /api/figure  { id, url, doi, query, idx, rev, v }
 //   (an upload's figure, or a figure of a paper with a private attachment)
 //
 // Lazy figure resolver — hit per-card after feed loads. CDN-cached for
@@ -9,9 +9,10 @@
 // P0-10 (§1e.10, A's F7): an uploaded PDF's figure request never carries
 // private text in a URL. The page used to send the PDF's own title
 // (`paperTitle`) and Peer's words about it (`query`) as GET parameters, and
-// the request log printed them. An upload's request is a POST now; its
-// title comes from the owner-checked record, never from the client; and a
+// the request log printed them. An upload's request is a POST now, and a
 // GET for an upload that still carries either is refused before any work.
+// (No title is read at all any more: the figure is chosen by the caption's
+// own words and its number, never by a model, so nothing here wants one.)
 // P0-11 (§1e.11): a public paper with a private PDF attached posts too — its
 // `query` is text from the deep report on that PDF — and every POST answer
 // is `private, no-store`. A public paper with no attachment keeps its GET
@@ -19,7 +20,7 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 import { extractFigure } from "@/lib/figures/extract";
-import { requireEntitledAiRequest } from "@/lib/security/ai-request";
+import { requireAiRequest } from "@/lib/security/ai-request";
 import { bareUploadId, claimsUploadId } from "@/lib/papers/upload-store";
 import { ownedUpload, PRIVATE_UPLOAD_HEADERS } from "@/lib/papers/upload-access";
 
@@ -32,8 +33,6 @@ interface FigureRequest {
   url?: string;
   doi?: string;
   query?: string;
-  /** Public papers only; an upload's title is read from its record. */
-  paperTitle?: string;
   figureIndex: number;
 }
 
@@ -48,24 +47,20 @@ async function answer(input: FigureRequest, { privately = false } = {}): Promise
   // P0-08 (§1e.8): any spelling of the prefix is a claim; only the canonical
   // id of an upload the caller owns gets past it.
   const privateUpload = claimsUploadId(input.id);
-  let paperTitle = input.paperTitle;
   if (privateUpload) {
     const hash = bareUploadId(input.id);
     const meta = hash ? await ownedUpload(hash) : null;
     if (!meta) return NextResponse.json({ error: "Upload not found." }, { status: 404, headers: PRIVATE_UPLOAD_HEADERS });
-    // P0-10: the owner's own record, not anything the client sent.
-    paperTitle = meta.title?.trim() || undefined;
   }
 
-  // ABC-freemium 1-07 · R-SEC-1 — **this route had no authentication of any
-  // kind.** It reaches a provider through `extractFigure` -> `chooseCandidate`
-  // -> the semantic and vision matchers, which were the only two no-argument
-  // `resolveProvider()` calls in the tree. D8 says a route that can reach a
-  // provider requires a signed-in user in deployed runtimes.
+  // R-SEC-1 — this route had no authentication of any kind. It reaches no model
+  // (the figure is chosen by the deterministic extractor), but it makes Peer's
+  // server fetch a page the caller names, so it takes the same sign-in and
+  // hourly limit as the routes that do.
   //
   // 60/h matches the feed scopes: this is hit once per card, so a lower limit
   // would break an ordinary page of results.
-  const gate = await requireEntitledAiRequest("figure", 60);
+  const gate = await requireAiRequest("figure", 60);
   if (gate instanceof NextResponse) return gate;
 
   const result = await extractFigure({
@@ -73,14 +68,7 @@ async function answer(input: FigureRequest, { privately = false } = {}): Promise
     url: input.url,
     doi: input.doi,
     query: input.query,
-    paperTitle,
     figureIndex: input.figureIndex,
-    // No BYOK override reaches this route — figures are requested by the card,
-    // which carries no key — so `byok` is false and the matchers fall to the
-    // system provider or to null.
-    // ABC-freemium 3-02 — the entitlement itself, not a copy of its user id:
-    // holding one is the proof a check ran.
-    ctx: { entitlement: gate.entitlement, byok: false },
   });
   const isPrivate = privateUpload || privately;
   const cacheControl = isPrivate ? "private, no-store" : result.imageUrl
@@ -125,16 +113,14 @@ export async function GET(req: NextRequest) {
     url: params.get("url") ?? undefined,
     doi: params.get("doi") ?? undefined,
     query: params.get("query") ?? undefined,
-    paperTitle: params.get("paperTitle") ?? undefined,
     figureIndex: figureIndexOf(params.get("idx")),
   });
 }
 
-/** The same request in a JSON body: `{ id, url, doi, query, paperTitle,
- *  idx, rev, v }` — for an upload (P0-10) and for a public paper with a
- *  private attachment (P0-11). `rev` and `v` only keep two requests apart.
- *  `paperTitle` is read only for a public id; an upload's comes from its
- *  record. Every answer is `private, no-store`. */
+/** The same request in a JSON body: `{ id, url, doi, query, idx, rev, v }` —
+ *  for an upload (P0-10) and for a public paper with a private attachment
+ *  (P0-11). `rev` and `v` only keep two requests apart. Every answer is
+ *  `private, no-store`. */
 export async function POST(req: NextRequest) {
   let body: Record<string, unknown>;
   try {
@@ -154,7 +140,6 @@ export async function POST(req: NextRequest) {
     url: text(body.url),
     doi: text(body.doi),
     query: text(body.query),
-    paperTitle: claimsUploadId(id) ? undefined : text(body.paperTitle),
     figureIndex: figureIndexOf(body.idx),
   }, { privately: true });
 }

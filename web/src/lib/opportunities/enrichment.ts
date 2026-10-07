@@ -1,8 +1,5 @@
 import type { Event, Job, UserAiProvider, UserProfile } from "@/types";
-import { aiAvailability } from "@/lib/feed/ai-tier";
-import { ANONYMOUS_ENTITLEMENT, type Entitlement } from "@/lib/entitlement/types";
 import { cleanOwnedEventReportSummary } from "@/lib/events/mapper";
-import type { ProviderOverrideConfig } from "@/lib/llm/providers/types";
 import {
   PAGE_HEADING_MARKER_PREFIX,
   type PageHeadingEvidence,
@@ -91,11 +88,6 @@ type EnrichmentProfile = Pick<
   | "currentProject"
   | "currentChallenges"
   | "authorisedCountries"
->;
-
-type OpportunityProviderProfile = Pick<
-  UserProfile,
-  "feedAiProvider" | "feedAiApiKey"
 >;
 
 export type OpportunityEnrichmentKind = "job" | "event";
@@ -960,46 +952,4 @@ export function loadOpportunityEnrichment<T>(
     });
   enrichmentInFlight.set(cacheKey, request);
   return request;
-}
-
-/**
- * Client-side cost gate for opportunity reports. Production only calls the
- * route for a concrete BYOK provider; local `next dev` may also call without
- * an override so the server can resolve the developer's `.env.local` Vertex
- * provider. The server registry independently fails closed outside local dev.
- */
-export function loadConfiguredOpportunityEnrichment<T>(
-  profile: OpportunityProviderProfile,
-  cacheKey: string,
-  loader: (override?: ProviderOverrideConfig) => Promise<T | null>,
-  nowMs = Date.now(),
-  storage: Storage | undefined = browserStorage(),
-  entitlement: Pick<Entitlement, "userId"> = ANONYMOUS_ENTITLEMENT,
-): Promise<T | null> {
-  const provider = profile.feedAiProvider;
-  const apiKey = profile.feedAiApiKey?.trim();
-  if (!canAttemptOpportunityEnrichment(profile, entitlement)) return Promise.resolve(null);
-  if (provider === "default") {
-    return loadOpportunityEnrichment(
-      cacheKey,
-      () => loader(undefined),
-      nowMs,
-      storage,
-    );
-  }
-  if (!apiKey) return Promise.resolve(null);
-
-  return loadOpportunityEnrichment(
-    cacheKey,
-    () => loader({ provider, apiKey }),
-    nowMs,
-    storage,
-  );
-}
-
-export function canAttemptOpportunityEnrichment(
-  profile: OpportunityProviderProfile,
-  entitlement: Pick<Entitlement, "userId"> = ANONYMOUS_ENTITLEMENT,
-): boolean {
-  return aiAvailability(profile as UserProfile, entitlement) !== "none";
 }

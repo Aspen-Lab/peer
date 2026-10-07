@@ -123,10 +123,12 @@ export function adzunaJobToRawItem(job: AdzunaJob, country: string): RawJobItem 
   };
 }
 
+// The reader's own id and key, from the request. Peer reads no company credential
+// from the environment: with either missing the adapter returns nothing.
 function adzunaCreds(query: JobsQuery): { appId?: string; appKey?: string } {
   return {
-    appId: query.apiKeys?.adzunaAppId?.trim() || process.env.ADZUNA_APP_ID,
-    appKey: query.apiKeys?.adzunaAppKey?.trim() || process.env.ADZUNA_APP_KEY,
+    appId: query.apiKeys?.adzunaAppId?.trim() || undefined,
+    appKey: query.apiKeys?.adzunaAppKey?.trim() || undefined,
   };
 }
 

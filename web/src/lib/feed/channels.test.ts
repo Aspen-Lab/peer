@@ -10,8 +10,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 //     never invoked with the flags unset, even though a keyword source runs.
 //   - Nothing in a `FeedRequest` body can enable either channel — only the
 //     server's own `process.env.PEER_CHANNEL_OPENALEX_SEMANTIC` /
-//     `_TOPIC` can (mirrors the `paperCacheScope`/`companySpendCapability`
-//     "server-minted only" convention already documented on `FeedRequest`).
+//     `_TOPIC` can (mirrors the `paperCacheScope` "server-minted only"
+//     convention already documented on `FeedRequest`).
 //   - ON (semantic): a stubbed adapter's zero-literal-topic-overlap item is
 //     tagged "semantic" and reaches the pool via the admission bypass
 //     scoring/combine.ts already grants "semantic"/"topic-field" (built in
@@ -601,8 +601,8 @@ describe("P2-S4c-2 advisor citation channel truthful failure reporting", () => {
 // are:
 //   - resolved server-side ONLY (via `options.positiveSeeds` — never a
 //     `FeedRequest` field, so nothing in a request body can supply or
-//     enable them; mirrors the `paperCacheScope`/`companySpendCapability`
-//     convention the two P2-S4a channels above already established),
+//     enable them; mirrors the `paperCacheScope` convention the two P2-S4a
+//     channels above already established),
 //   - individually flag-gated (server env, literal "on" only),
 //   - self-excluding (a channel returning the seed's own paper never
 //     reaches the pool — required by the brief's "seed self-exclusion"),

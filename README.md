@@ -42,7 +42,6 @@
   - [Environment variables](#environment-variables)
   - [Running the web app](#running-the-web-app)
 - [The Python CLI](#the-python-cli)
-- [The iOS app](#the-ios-app)
 - [Invariants — do not break these](#invariants--do-not-break-these)
 - [Contributing & git workflow](#contributing--git-workflow)
 - [License](#license)
@@ -58,14 +57,13 @@ removes duplicates, and surfaces a short daily briefing of the most relevant pap
 (plus events and jobs). Named after the Greek messenger god — it is the user's personal
 messenger for their field.
 
-There are **three surfaces in one repo**. They are *parallel implementations of the same
+There are **two surfaces in one repo**. They are *parallel implementations of the same
 idea*, not shared code:
 
 | Surface | Path | Status | What it is |
 | --- | --- | --- | --- |
 | **Web app** | [`web/`](web/) | **Most active — start here** | Next.js dashboard deployed on Vercel. Full pipeline + onboarding + personalization + email digests. |
 | **Python CLI** | [`python/`](python/) | Original MVP, stable | Local-first CLI (`peer init`, `peer run --once`). Pure Tier 0. Markdown output. |
-| **iOS app** | [`Peer/`](Peer/), `Peer.xcodeproj` | UI scaffolding | SwiftUI app. Not yet wired to the backend. |
 
 > ⚠️ **The Python and TypeScript pipelines are separate codebases.** Fixing scoring in
 > one does **not** fix it in the other. When someone says "the pipeline," confirm which
@@ -102,9 +100,7 @@ Full detail: [`docs/PRODUCT_DIRECTION.md`](docs/PRODUCT_DIRECTION.md) and [`VISI
 ├── assets/              ← shared brand assets (logo)
 ├── docs/                ← architecture & product blueprints (see below)
 ├── python/              ← Python CLI surface
-├── web/                 ← Next.js web app surface (primary)
-├── Peer/              ← SwiftUI iOS sources
-└── Peer.xcodeproj/    ← Xcode project
+└── web/                 ← Next.js web app surface (primary)
 ```
 
 Key docs in [`docs/`](docs/):
@@ -185,6 +181,16 @@ turn on Tier 2 with that key. Deployed preview/production code never falls back 
 operator-funded model account. If no user key resolves, the LLM features **hide themselves**
 and the feed keeps working on Tier 0 — that is the correct pattern.
 **Never make a feature that hard-crashes when a key is missing.**
+
+**Jev (optional, the reader's own key).** A reader who applies for a Jev key and pastes it into
+their profile gets a second screening pass over the day's shortlist (`web/src/lib/decisions/`,
+wired in `web/src/lib/feed/pipeline.ts`): Jev answers a few fixed questions about each of the 50
+best candidates and Peer moves papers up or down on the answers. Peer holds no Jev key of its own
+(the build guard fails on `JEV_API_KEY` on Vercel): the reader's key is kept in their browser and
+never synced, travels in the paper request body only, and is never stored or logged by the server;
+with no key the feed is exactly the tiers above.
+It is independent of the model key. No improvement from it has been measured, so none is claimed
+(`web/src/lib/decisions/jev-claim.ts` holds the one sentence the copy may use).
 
 ### Sources
 
@@ -298,10 +304,12 @@ extraction, semantic matching, and vision matching, then binding to report resul
 never crawled: `POST /api/papers/upload` hashes the file (`upload-store.ts`, id `upload:<sha16>`,
 idempotent) and stores it under `web/.local-data/uploads/` — **gitignored, scoped to the
 uploading owner (the signed-in account, or a per-browser capability cookie in local dev — never
-a shared identity), and local to this machine only; an upload made in one `next dev`/deployment
-is not visible from another, and nothing here is persisted on Vercel.** Every private route
-(metadata, the raw file, reading, report generation, figures, the owner's own upload list,
-delete) checks that owner before touching disk. `full-text.ts` and `lib/figures/extract.ts` both
+a shared identity), and local to this machine only.** On Vercel, set `PEER_UPLOAD_BUCKET`
+(see `web/.env.example`) and uploads go to a private Supabase Storage bucket instead — the
+browser puts the PDF there itself through a one-time signed URL, since a Vercel function will
+not take a body much over 4 MB. Every private route (metadata, the raw file, reading, report
+generation, figures, the owner's own upload list, delete) checks that owner before touching
+storage. `full-text.ts` and `lib/figures/extract.ts` both
 recognize an `upload:` id and read the stored file directly, so the rest of the deep-report/figure
 pipeline needs no separate code path. A PDF with no extractable text (a scanned image, most often)
 still uploads successfully; the reading page says so plainly instead of pretending a report
@@ -373,7 +381,7 @@ and fire-and-forget cloud sync:
 
 Sync components: `profile-sync.tsx`, `feed-sync.tsx`, `theme-sync.tsx`.
 
-> Local keys (BYOK API keys, Tavily key) are stored **only in the browser** (localStorage),
+> Local keys (BYOK API keys, Tavily key, Jev key) are stored **only in the browser** (localStorage),
 > not in Supabase. Keep it that way.
 
 ### Supabase data model
@@ -435,15 +443,14 @@ accepted only by local `next dev`. `PEER_REPORT_MODEL_TIER` (`large` default, or
 `small`) picks which Gemini tier writes the paper report; everything else runs small.
 
 **Local-development-only LLM provider keys:**
-`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GOOGLE_API_KEY`,
+`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`,
 `GOOGLE_VERTEX_PROJECT` / `GOOGLE_VERTEX_LOCATION` / `GOOGLE_APPLICATION_CREDENTIALS`
 (Gemini 3 models are served from Vertex's global endpoint; the configured region is only the
 last-resort fallback), `QWEN_API_KEY` (or `DASHSCOPE_API_KEY`), `DEEPSEEK_API_KEY`.
 Do not add these to Vercel. Preview/production builds fail when operator-funded model
 credentials are present; online users must supply their own key through the BYOK UI.
 
-**Search / enrichment:** `TAVILY_API_KEY`, `BRAVE_SEARCH_API_KEY`,
-`SEMANTIC_SCHOLAR_API_KEY` (one server-side key, shared by every reader of the deployment; free from
+**Search / enrichment:** `SEMANTIC_SCHOLAR_API_KEY` (one server-side key, shared by every reader of the deployment; free from
 semanticscholar.org/product/api — the Academic Graph API is the one Peer calls, for paper search
 (`sources/semantic-scholar.ts`) and abstract/TLDR enrichment (`papers/enrich.ts`) only. **Semantic
 Scholar does not supply figures**: the Graph API has no `figures` field, so a figure lookup there
@@ -454,18 +461,17 @@ one per 1.5 s (350 ms unkeyed) and retries a 429 with exponential backoff — 1 
 giving up. Optional — without a key, search and enrichment still work, just slower and more likely
 to be throttled), `OPENALEX_EMAIL`, `UNPAYWALL_EMAIL` (polite-pool emails).
 
-**Jobs feed (all optional — Remotive/Arbeitnow/Himalayas run keyless):**
-`ADZUNA_APP_ID` + `ADZUNA_APP_KEY` (free at developer.adzuna.com; best industry
-coverage), `USAJOBS_API_KEY` + `USAJOBS_USER_AGENT` (your email; US federal research
-posts), `JSEARCH_API_KEY` (or `RAPIDAPI_KEY`; Google-for-Jobs aggregate via RapidAPI,
-paid beyond a small free tier). `TAVILY_API_KEY` / `BRAVE_SEARCH_API_KEY` above also
-unlock web discovery of academic job boards (HigherEdJobs, jobs.ac.uk, Nature Careers —
-none expose usable feeds directly).
+**Jobs feed (code kept; no route serves it today — Remotive/Arbeitnow/Himalayas run keyless):**
+Adzuna, USAJOBS and JSearch (paid beyond a small free tier) run only on credentials the reader
+sends in the request (`apiKeys`); Peer reads none of them from the environment, and a Vercel
+build fails if `ADZUNA_APP_ID`, `ADZUNA_APP_KEY`, `USAJOBS_API_KEY` or `JSEARCH_API_KEY` is set.
+Web discovery of academic job boards (HigherEdJobs, jobs.ac.uk, Nature Careers — none expose
+usable feeds directly) runs only on a Tavily key a reader pastes in themselves; Peer holds no
+search key of its own.
 
-**Events feed:** fully keyless (ccfddl, confs.tech, researchseminars.org).
-`TAVILY_API_KEY` / `BRAVE_SEARCH_API_KEY` add profile-driven web discovery for
-non-CS fields; an LLM key upgrades its query generation from templates to
-profile-aware prompts.
+**Events feed:** fully keyless (ccfddl, confs.tech, researchseminars.org). A Tavily key a
+reader pastes in themselves adds profile-driven web discovery for non-CS fields; an LLM key
+upgrades its query generation from templates to profile-aware prompts.
 
 **Email digest:** `RESEND_API_KEY`, `DIGEST_FROM_EMAIL`.
 
@@ -521,14 +527,6 @@ python/src/peer_news/
 
 > This is a **separate implementation** from `web/`. The two do not share code. Keep the
 > Tier 0 contract (works with no keys) here too.
-
-## The iOS app
-
-SwiftUI sources in [`Peer/`](Peer/), project in `Peer.xcodeproj`. Currently **UI
-scaffolding** — Models (`Paper`, `Event`, `Job`, `UserProfile`), state (`FeedState`,
-`ProfileState`), discovery/detail/profile views, a theme, and a `RecommendationService`.
-It is **not yet wired to the web backend**; treat it as a design prototype until that
-integration lands. Open in Xcode to build.
 
 ---
 

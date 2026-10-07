@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useProfileStore } from "@/store/profile";
 import { useFeedStore } from "@/store/feed";
+import { useJevScreeningStore } from "@/store/jev-screening";
 import { useNotesStore } from "@/store/notes";
 import { useReadingPrefsStore } from "@/store/reading-prefs";
 import { useReadingQuestionsStore } from "@/store/reading-questions";
@@ -20,6 +21,7 @@ export function StoreHydrator() {
   useEffect(() => {
     useProfileStore.persist.rehydrate();
     useFeedStore.persist.rehydrate();
+    useJevScreeningStore.persist.rehydrate();
     useNotesStore.persist.rehydrate();
     useReadingPrefsStore.persist.rehydrate();
     useReadingQuestionsStore.persist.rehydrate();

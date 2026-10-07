@@ -1,8 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import {
-  hasUsableProviderOverride,
-  resolveProvider,
-} from "@/lib/llm/providers/registry";
+import { resolveProvider } from "@/lib/llm/providers/registry";
 import { reportModelTier } from "@/lib/llm/provider-models";
 import type { DigestProvider, ProviderOverrideConfig } from "@/lib/llm/providers/types";
 import {
@@ -19,15 +16,7 @@ import { bindFiguresToReport } from "@/lib/papers/figure-binding";
 import { getFullText } from "@/lib/papers/full-text";
 import { getFigurePool } from "@/lib/figures/extract";
 import type { ReportStreamEvent } from "@/lib/papers/report-stream";
-import { requireEntitledAiRequest } from "@/lib/security/ai-request";
-import { entitledContext } from "@/lib/security/entitled-context";
-import type { Entitlement } from "@/lib/entitlement/types";
-import {
-  consumeDeepReport,
-  companyBudgetQuotaSignal,
-  type DeepReportDecision,
-} from "@/lib/usage/deep-report-quota";
-import { CompanySpendCapRefusedError } from "@/lib/usage/company-budget";
+import { requireAiRequest } from "@/lib/security/ai-request";
 import { bareUploadId, claimsUploadId } from "@/lib/papers/upload-store";
 import { ownedUpload, PRIVATE_UPLOAD_HEADERS } from "@/lib/papers/upload-access";
 
@@ -227,43 +216,6 @@ const SHALLOW_SYSTEM = [
 ].join(" ");
 
 /**
- * ABC-freemium 1-03/1-06 — who this route's model calls are being made for.
- * Threaded from the single entitlement check in `POST` so every
- * `resolveProvider` on this route meters against the right user, without any of
- * them re-reading a session.
- */
-interface ReportUsageCtx {
-  /**
-   * ABC-freemium 3-02 — the **entitlement itself**, not a copied user id. It is
-   * the only thing an `EntitledContext` can be minted from, so carrying it is
-   * what lets every acquisition on this route prove a check ran.
-   */
-  entitlement: Entitlement;
-  path: string;
-}
-
-/**
- * ABC-freemium 3-02 · R-SEC-2 — mint the branded context for one acquisition.
- *
- * **`ctx` is required here and at both helpers below.** It used to be
- * `ctx?: ReportUsageCtx` with a `?? "paper-report"` fallback, which pushed the
- * optionality Ruling 7 point 3 closes at `resolveProvider` one level deeper into
- * this file — the argument was compile-checked at the chokepoint and still
- * omittable here. `byok` stays per-call because the override differs between
- * the shallow helper's own parameter and the route body's.
- */
-function providerCtx(
-  ctx: ReportUsageCtx,
-  override: ProviderOverrideConfig | null | undefined,
-) {
-  return entitledContext(
-    ctx.entitlement,
-    ctx.path,
-    hasUsableProviderOverride(override ?? null),
-  );
-}
-
-/**
  * The abstract-tier report: one model call, sanitized, then every claim held
  * to a sentence of the abstract. Without a provider, on a model error or on
  * unparseable output the result is `emptyReport` — no report is written in
@@ -272,9 +224,8 @@ function providerCtx(
 async function generateShallowReport(
   body: ExtendedRequest,
   override: ProviderOverrideConfig | undefined,
-  ctx: ReportUsageCtx,
 ): Promise<PaperReport> {
-  const provider = resolveProvider(override ?? null, providerCtx(ctx, override));
+  const provider = resolveProvider(override ?? null);
   if (!provider?.generateJsonText) return emptyReport("fallback");
   try {
     const raw = await provider.generateJsonText({
@@ -315,16 +266,6 @@ async function generateShallowReport(
       provenance: { ...verified.report.provenance, basis: "model-abstract" },
     };
   } catch (err) {
-    // SPEND-CAP · R7 (ABC-JEV-INTEGRATION.md §1v) — the one degrade path on
-    // this route that also names WHY, when the reason is the shared AI
-    // dollar budget refusing this call. Every other error here keeps the
-    // plain silent degrade exactly as before: `emptyReport("fallback")` with
-    // no `quota` field, so a reader whose model call failed for any other
-    // reason sees nothing new.
-    if (err instanceof CompanySpendCapRefusedError) {
-      console.warn("[papers/report] shallow generation refused by the company AI budget:", err.reason);
-      return { ...emptyReport("fallback"), quota: companyBudgetQuotaSignal(err.reason, new Date()) };
-    }
     console.error("[papers/report] shallow generation failed:", err);
     return emptyReport("fallback");
   }
@@ -389,25 +330,17 @@ async function uploadStillCurrent(privateHash: string | null, startRevision: num
 const UPLOAD_GONE_RESPONSE = { error: "Upload no longer available" } as const;
 
 /**
- * ABC-freemium 3-03 · R-QUOTA-1 · R-QUOTA-3 · Ruling 9 points 1-2.
+ * The NDJSON transport: the same report as the JSON branch in `handlePost`,
+ * with the stages and the mode sent as they happen. The client always asks for
+ * this shape (`lib/papers/report-stream.ts` sends `Accept: application/x-ndjson`
+ * on every request).
  *
- * **`quotaDecision` is a required parameter, and that is the fix.** It used to
- * take no quota argument at all because the branch that calls it returned
- * *above* the route's only counter, so a streamed deep report — which is what
- * the app always sends — was never counted and never charged the paid daily
- * breaker. The decision is now made once, above the transport branch, and
- * handed in. **There is deliberately no `consumeDeepReport` call inside this
- * function**: two call sites is how a route double-counts.
- *
- * F6 (P2-07, §1g.9 a): the provider is handed in too. `handlePost` resolves
- * it once, before the charge, because whether a unit is charged depends on
- * it; resolving a second one here could only drift from the one the charge
- * was decided on.
+ * F6 (P2-07, §1g.9 a): the provider is handed in. `handlePost` resolves it once,
+ * after the owner checks and the sign-in gate, so the stream and the JSON branch
+ * cannot drift apart on which provider answered.
  */
 function streamReport(
   body: ExtendedRequest,
-  ctx: ReportUsageCtx,
-  quotaDecision: DeepReportDecision,
   provider: DigestProvider | null,
   privateHash: string | null,
   startRevision: number | undefined,
@@ -441,28 +374,12 @@ function streamReport(
         }
       };
       const finish = (report: PaperReport) => {
-        // SPEND-CAP · R7 — mirrors the EXISTING `quotaDecision.quota` wiring
-        // just below (a separate `type: "quota"` event, same shape), the only
-        // difference being WHEN it's known: the deep-report quota is decided
-        // before generation starts, so it goes out first; this one is only
-        // known once `generateShallowReport` has actually tried and been
-        // refused, so it goes out immediately before the report it accompanies
-        // — "the notice beside it, not instead of it", same as that one.
-        if (report.quota) send({ type: "quota", quota: report.quota });
         send({ type: "report", report });
         send({ type: "stage", stage: "done", label: "Report ready", pct: 100 });
         close();
       };
 
       try {
-        // ABC-freemium 3-03 — the refusal goes out FIRST, before `mode`, so it
-        // survives even the tier-0 stream below (which the reader stops reading
-        // at the mode event). What follows is the ordinary degraded stream, the
-        // same shape a reader with allowance left would get on a shallow read.
-        if (quotaDecision.quota) {
-          send({ type: "quota", quota: quotaDecision.quota });
-        }
-
         if (!provider?.generateJsonText) {
           send({ type: "mode", aiMode: "tier0" });
           send({
@@ -475,15 +392,10 @@ function streamReport(
           return;
         }
 
-        // ABC-freemium 3-03 — a refused deep read degrades to the shallow
-        // path, which is exactly what the non-streamed branch below does: it
-        // nulls the provider on refusal and falls through to
-        // `generateShallowReport`. Same behaviour, same depth, now on both
-        // transports. **Shallow is R-QUOTA-3's real exemption and stays
-        // uncounted** — the decision above is only taken when `deepReport` is
-        // set, so this line cannot charge a shallow reader.
-        const aiMode =
-          body.deepReport && quotaDecision.allowed ? "tier2" : "tier1";
+        // A deep read when the reader asked for one, the abstract-tier report
+        // otherwise. Both run on the reader's own key; nothing here is counted
+        // or capped by Peer.
+        const aiMode = body.deepReport ? "tier2" : "tier1";
         send({ type: "mode", aiMode });
 
         if (aiMode === "tier1") {
@@ -498,7 +410,7 @@ function streamReport(
             label: "Writing the report",
             pct: 20,
           });
-          finish(await generateShallowReport(body, body.llmOverride, ctx));
+          finish(await generateShallowReport(body, body.llmOverride));
           return;
         }
 
@@ -523,7 +435,7 @@ function streamReport(
             label: "Writing the report",
             pct: 75,
           });
-          const shallow = await generateShallowReport(body, body.llmOverride, ctx);
+          const shallow = await generateShallowReport(body, body.llmOverride);
           finish(
             shallow.noLlm
               ? buildPaywalledFallback(fullText.reason)
@@ -539,7 +451,7 @@ function streamReport(
             label: "Writing the report",
             pct: 75,
           });
-          const shallow = await generateShallowReport(body, body.llmOverride, ctx);
+          const shallow = await generateShallowReport(body, body.llmOverride);
           finish({
             ...shallow,
             paywallNotice:
@@ -559,7 +471,6 @@ function streamReport(
           itemId: body.paper.fullTextUploadId ?? body.paper.id,
           url: bestPaperUrl(body.paper) ?? undefined,
           doi: body.paper.doi ?? undefined,
-          paperTitle: body.paper.title,
         }).catch((err) => {
           console.warn("[papers/report] figure pool fetch failed:", err);
           return null;
@@ -581,7 +492,7 @@ function streamReport(
         });
 
         if (!deep) {
-          const shallow = await generateShallowReport(body, body.llmOverride, ctx);
+          const shallow = await generateShallowReport(body, body.llmOverride);
           finish({
             ...shallow,
             paywallNotice:
@@ -672,68 +583,30 @@ async function handlePost(req: NextRequest) {
     startRevision = meta.revision;
   }
 
-  // ABC-freemium 1-06 · R-SEC-2 — **one entitlement check, before every
-  // `resolveProvider` on this route.** It used to run only when a provider had
-  // already resolved, which made it a check on configuration rather than on the
-  // caller. It is unconditional now, so a signed-out caller gets the shared 401
-  // rather than a deterministic report built by an unauthenticated request.
-  const gate = await requireEntitledAiRequest("paper-report", 20);
+  // ABC-freemium 1-06 · R-SEC-2 — **one sign-in and rate-limit check, before
+  // every `resolveProvider` on this route.** It used to run only when a provider
+  // had already resolved, which made it a check on configuration rather than on
+  // the caller. It is unconditional now, so a signed-out caller gets the shared
+  // 401 rather than a deterministic report built by an unauthenticated request.
+  const gate = await requireAiRequest("paper-report", 20);
   if (gate instanceof NextResponse) return gate;
-  const ctx: ReportUsageCtx = {
-    entitlement: gate.entitlement,
-    path: "paper-report",
-  };
 
-  // ABC-freemium 1-20 · 3-03 · R-QUOTA-1, D4, Ruling 9 points 1-2 —
-  // **the counter runs above the transport branch, so both transports pass it.**
+  // A deep report is not allowanced or counted here: the model runs on the
+  // reader's own key, so what it costs is between the reader and their provider.
+  // What protects Peer's server (the full-text fetch, the PDF parse) is the
+  // per-hour rate limit in the gate above.
   //
-  // This used to sit inside the deep branch BELOW the streaming early return,
-  // and the comment there claimed the streaming path was one of R-QUOTA-3's
-  // exempt cases. **That was wrong, and it was the expensive kind of wrong:**
-  // the client always streams (`lib/papers/report-stream.ts` sends
-  // `Accept: application/x-ndjson` on every request) and the stream honours
-  // `deepReport` by running tier 2 and fetching full text. So every real deep
-  // papers report skipped the monthly allowance and never charged D4's 200/day
-  // paid breaker. Ruling 9 point 1: **streaming is a transport; R-QUOTA-3's
-  // exemption is a DEPTH.** A streamed `deepReport: true` request is a deep
-  // report and counts exactly as the non-streamed one does.
-  //
-  // The exemption that survives is the real one: a shallow (abstract-only)
-  // request never reaches `consumeDeepReport`, on either transport, because the
-  // decision below is gated on `body.deepReport` and a provider that can write
-  // (F6/P2-07). Note "shallow" is not "no
-  // LLM" — `generateShallowReport` calls the model when one is available, so it
-  // is **metered by 1-03 and uncounted by 1-20**, which are different things and
-  // easy to conflate.
-  //
-  // **Exactly one `consumeDeepReport` call site**, here. `streamReport` takes
-  // the decision as an argument and never makes its own: two call sites is how
-  // a route double-counts.
-  //
-  // F6 (P2-07, §1g.9 a): the provider is resolved first — after the owner
-  // checks and the entitlement gate above, which stay ahead of it — and a unit
-  // is charged only for a deep request with a provider that can write it. A
-  // deep open with no model at all (no key on this server, an unusable BYOK
-  // key) is a tier 0 answer and costs nothing. The test is the same
-  // expression the stream's tier 0 exit and the JSON fallback below make, so
-  // a provider without `generateJsonText` is neither charged nor asked. A
-  // refusal by the company AI budget is decided inside the first model call,
-  // after the charge, and still costs the unit (§1g.9 b).
-  //
-  // The operands read provider-first so the deep test stays next to the call,
-  // where `lib/usage/quota-exemptions.test.ts` looks for it: that structural
-  // test pins that a shallow request can never reach the counter.
-  const resolved = resolveProvider(body.llmOverride ?? null, providerCtx(ctx, body.llmOverride));
-  const quotaDecision: DeepReportDecision =
-    resolved?.generateJsonText && body.deepReport
-      ? await consumeDeepReport(gate.entitlement)
-      : { allowed: true };
+  // F6 (P2-07, §1g.9 a): the provider is resolved once, here — after the owner
+  // checks and the sign-in gate above, which stay ahead of it — and handed to
+  // whichever transport answers. A deep open with no model at all (no key sent,
+  // an unusable key) is a tier 0 answer and asks nothing of any provider.
+  const resolved = resolveProvider(body.llmOverride ?? null);
 
   const wantsStream =
     req.headers.get("accept")?.includes("application/x-ndjson") === true ||
     body.stream === true;
   if (wantsStream) {
-    return streamReport(body, ctx, quotaDecision, resolved, privateHash, startRevision);
+    return streamReport(body, resolved, privateHash, startRevision);
   }
 
   // ── Deep path ────────────────────────────────────────────────────
@@ -742,15 +615,12 @@ async function handlePost(req: NextRequest) {
   // Without a provider, fall through to the shallow path (which returns the
   // empty report).
   if (body.deepReport) {
-    const provider = quotaDecision.allowed ? resolved : null;
+    const provider = resolved;
     if (!provider?.generateJsonText) {
-      // No budget, no user key, no local provider: the deterministic report —
-      // the SAME call this route already made — plus the quota signal.
-      const shallow = await generateShallowReport(body, body.llmOverride, ctx);
+      // No user key and no local provider: the deterministic report — the SAME
+      // call this route already made.
       return NextResponse.json(
-        quotaDecision.quota
-          ? { ...shallow, quota: quotaDecision.quota }
-          : shallow,
+        await generateShallowReport(body, body.llmOverride),
       );
     }
 
@@ -766,7 +636,7 @@ async function handlePost(req: NextRequest) {
       if (fullText.status === "paywalled" && fullText.reason) {
         // Try the LLM-backed shallow path first; when the model produced
         // nothing, the empty report carries the paywall notice.
-        const shallow = await generateShallowReport(body, body.llmOverride, ctx);
+        const shallow = await generateShallowReport(body, body.llmOverride);
         return NextResponse.json(
           shallow.noLlm
             ? buildPaywalledFallback(fullText.reason)
@@ -775,7 +645,7 @@ async function handlePost(req: NextRequest) {
       }
 
       if (fullText.status !== "ok" || !fullText.doc) {
-        const shallow = await generateShallowReport(body, body.llmOverride, ctx);
+        const shallow = await generateShallowReport(body, body.llmOverride);
         return NextResponse.json({
           ...shallow,
           paywallNotice:
@@ -802,7 +672,6 @@ async function handlePost(req: NextRequest) {
           itemId: body.paper.fullTextUploadId ?? body.paper.id,
           url: bestPaperUrl(body.paper) ?? undefined,
           doi: body.paper.doi ?? undefined,
-          paperTitle: body.paper.title,
         }).catch((err) => {
           console.warn("[papers/report] figure pool fetch failed:", err);
           return null;
@@ -810,7 +679,7 @@ async function handlePost(req: NextRequest) {
       ]);
 
       if (!deep) {
-        const shallow = await generateShallowReport(body, body.llmOverride, ctx);
+        const shallow = await generateShallowReport(body, body.llmOverride);
         return NextResponse.json({
           ...shallow,
           paywallNotice:
@@ -836,12 +705,12 @@ async function handlePost(req: NextRequest) {
       return NextResponse.json(bound);
     } catch (err) {
       console.error("[papers/report] deep flow failed:", err);
-      return NextResponse.json(await generateShallowReport(body, body.llmOverride, ctx));
+      return NextResponse.json(await generateShallowReport(body, body.llmOverride));
     }
   }
 
   // ── Shallow path (default) ──────────────────────────────────────
-  return NextResponse.json(await generateShallowReport(body, body.llmOverride, ctx));
+  return NextResponse.json(await generateShallowReport(body, body.llmOverride));
 }
 
 export async function POST(req: NextRequest) {

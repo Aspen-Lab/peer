@@ -1,5 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { defaultProfile, type UserProfile } from "@/types";
+import { useProfileStore } from "./profile";
+import { useJevScreeningStore, type JevScreeningReport } from "./jev-screening";
 import {
   activePaperTopicsKey,
   opportunityRequestBody,
@@ -63,14 +65,25 @@ describe("active feed request inputs", () => {
     expect(requests.jobs.llmOverride).toBeUndefined();
   });
 
-  it("uses Tier 2 only with the user's selected provider and key", () => {
+  it("uses Tier 2 only with the user's selected provider and key, for a signed-in reader", () => {
     const byokProfile: UserProfile = {
       ...activeProfile,
       feedAiProvider: "openai",
       feedAiApiKey: "user-owned-key",
     };
-    const papers = paperFeedRequestBody(byokProfile, advisorSeeds, true);
-    const events = opportunityRequestBody(byokProfile, "events", []);
+    const papers = paperFeedRequestBody(
+      byokProfile,
+      advisorSeeds,
+      true,
+      [],
+      "signed-in",
+    );
+    const events = opportunityRequestBody(
+      byokProfile,
+      "events",
+      [],
+      "signed-in",
+    );
 
     expect(papers.aiTier).toBe(2);
     expect(papers.llmOverride).toEqual({
@@ -237,56 +250,217 @@ describe("active feed request inputs", () => {
 });
 
 /**
- * ABC-freemium 6-03 — **the ask itself, which nothing had ever exercised.**
+ * ABC-freemium 6-03 — retired with the forced-rebuild breaker.
  *
- * B grepped this while writing 6-03's guide and found the gap: every existing
- * call in this file uses the three-argument form, and `store/feed.test.ts` never
- * calls `loadFeed` with `poolRefresh`, so `feed.ts`'s
- * `poolRefresh: poolRefresh || undefined` had **never once been evaluated with
- * `true`** in the whole suite. The refusal now has a message on screen, so the
- * request that provokes it is worth pinning.
- *
- * The `|| undefined` is the part that matters and it is not tidiness: the route
- * reads `body.poolRefresh === true`, so an explicit `false` on the wire would be
- * a field that says something about a request that is not asking for anything.
- * Absent means "not asking".
+ * This block pinned **the ask itself**: `poolRefresh` went on the wire only when
+ * the reader actually asked for a "Refresh now" rebuild of the jobs and events
+ * pools, and the route decided whether to grant it against an entitlement and a
+ * daily breaker on Peer's own model and search spend. Peer spends nothing of
+ * either kind now, so the breaker, the entitlement and the route's decision are
+ * all deleted, and so is the ask: no request body carries the field at all.
  */
-describe("the forced-rebuild ask (6-03)", () => {
-  it("sends poolRefresh only when the reader actually asked", () => {
+describe("no forced-rebuild ask (6-03, retired)", () => {
+  it("never puts a poolRefresh field on the wire, for any surface", () => {
     for (const surface of ["events", "jobs"] as const) {
-      const asked = opportunityRequestBody(
+      const body = opportunityRequestBody(
         activeProfile,
         surface,
         [],
-        undefined,
-        true,
+        "signed-out",
       );
-      expect(asked.poolRefresh).toBe(true);
+      expect(Object.keys(body)).not.toContain("poolRefresh");
     }
   });
+});
 
-  it("omits the field entirely on an ordinary load, never sending false", () => {
-    for (const surface of ["events", "jobs"] as const) {
-      const ordinary = opportunityRequestBody(activeProfile, surface, []);
-      expect(ordinary.poolRefresh).toBeUndefined();
-      // Not merely falsy — absent. The route tests `=== true`, and a `false` on
-      // the wire is a claim about a request that made no claim.
-      expect(Object.values(ordinary)).not.toContain(false);
-    }
+
+// A Jev key is a second key the reader may bring. It travels as ONE top-level
+// string, only for a reader the server can attribute it to, and only on the
+// paper request: the digest, report and figure routes never use Jev, and the
+// jobs and events requests do not carry it.
+describe("a Jev key in the paper request", () => {
+  // An invented string. It is not, and never was, a key.
+  const JEV = "jev-test-sentinel-not-a-key-0000";
+  const withKey: UserProfile = { ...activeProfile, jevApiKey: JEV };
+
+  it("is sent as one top-level string for a signed-in reader", () => {
+    const body = paperFeedRequestBody(withKey, advisorSeeds, false, [], "signed-in");
+    expect(body.jevApiKey).toBe(JEV);
+    expect(JSON.stringify(body).split(JEV)).toHaveLength(2);
   });
 
-  it("is only an ASK — the client never decides whether it is granted", () => {
-    // The entitlement is the server's business (`feed.ts`'s own docblock says
-    // so). A free reader's request carries the same `poolRefresh: true` as a
-    // paid reader's; the route is what refuses. This is why 6-03's notice reads
-    // the entitlement rather than the response.
-    const asked = opportunityRequestBody(
-      activeProfile,
-      "jobs",
+  it("is sent when sign-in is not configured at all (a self-hosted copy), as the model key is", () => {
+    const body = paperFeedRequestBody(withKey, advisorSeeds, false, [], "unconfigured");
+    expect(body.jevApiKey).toBe(JEV);
+  });
+
+  it.each(["signed-out", "unknown"] as const)(
+    "is absent while the reader is %s, so a key that the server would refuse never leaves the browser",
+    (auth) => {
+      const body = paperFeedRequestBody(withKey, advisorSeeds, false, [], auth);
+      expect(body.jevApiKey).toBeUndefined();
+      expect(JSON.stringify(body)).not.toContain(JEV);
+    },
+  );
+
+  it("is absent with the default (unknown) sign-in outcome", () => {
+    const body = paperFeedRequestBody(withKey, advisorSeeds);
+    expect(body.jevApiKey).toBeUndefined();
+  });
+
+  it.each([
+    ["undefined", undefined],
+    ["an empty string", ""],
+    ["whitespace", "  \t "],
+  ])("is absent for %s", (_label, value) => {
+    const body = paperFeedRequestBody(
+      { ...activeProfile, jevApiKey: value },
+      advisorSeeds,
+      false,
       [],
-      null,
-      true,
+      "signed-in",
     );
-    expect(asked.poolRefresh).toBe(true);
+    expect(body.jevApiKey).toBeUndefined();
+  });
+
+  it("is trimmed", () => {
+    const body = paperFeedRequestBody(
+      { ...activeProfile, jevApiKey: `  ${JEV} ` },
+      advisorSeeds,
+      false,
+      [],
+      "signed-in",
+    );
+    expect(body.jevApiKey).toBe(JEV);
+  });
+
+  it("is not sent when it could not be a key (it has a space inside)", () => {
+    const body = paperFeedRequestBody(
+      { ...activeProfile, jevApiKey: "two words" },
+      advisorSeeds,
+      false,
+      [],
+      "signed-in",
+    );
+    expect(body.jevApiKey).toBeUndefined();
+  });
+
+  it("never sits inside llmOverride, and is sent without a model key and without the AI search pill (the two switches are the two keys)", () => {
+    const body = paperFeedRequestBody(withKey, advisorSeeds, false, [], "signed-in");
+    expect(body.llmOverride).toBeUndefined();
+    expect(body.aiTier).toBe(0);
+    expect(body.jevApiKey).toBe(JEV);
+
+    const both = paperFeedRequestBody(
+      { ...withKey, feedAiProvider: "openai", feedAiApiKey: "user-owned-key" },
+      advisorSeeds,
+      true,
+      [],
+      "signed-in",
+    );
+    expect(both.llmOverride).toEqual({ provider: "openai", apiKey: "user-owned-key" });
+    expect(JSON.stringify(both.llmOverride)).not.toContain(JEV);
+    expect(both.jevApiKey).toBe(JEV);
+  });
+
+  it("does not change what the request says about the reader's model key", () => {
+    const without = paperFeedRequestBody(activeProfile, advisorSeeds, false, [], "signed-in");
+    const withJev = paperFeedRequestBody(withKey, advisorSeeds, false, [], "signed-in");
+    const { jevApiKey, ...rest } = withJev;
+    void jevApiKey;
+    expect(rest).toEqual({ ...without, jevApiKey: undefined });
+  });
+
+  it("is not carried by the jobs or events requests", () => {
+    for (const surface of ["events", "jobs"] as const) {
+      const body = opportunityRequestBody(withKey, surface, [], "signed-in");
+      expect(body).not.toHaveProperty("jevApiKey");
+      expect(JSON.stringify(body)).not.toContain(JEV);
+    }
+  });
+});
+
+// N1 of the branch review. A key Jev rejected is not cached as a day's pool (the
+// reader may fix a mistyped key), so while the key stays wrong every load rebuilds
+// the pool and, for a reader with a model key as well, re-runs the model rerank on
+// their own account. The browser already knows: the last report says "rejected".
+// So the request leaves the key out while that report stands, the server builds
+// (and caches) the keyless pool once, and editing the key clears the report
+// (`updateJevApiKey`), which makes the next load try the new one.
+describe("a Jev key Jev has already rejected", () => {
+  const REJECTED_KEY = "jev-rejected-sentinel-not-a-key-0000";
+  const NEW_KEY = "jev-replacement-sentinel-not-a-key-1111";
+  const rejected: JevScreeningReport = { status: "rejected", screened: 0, of: 50 };
+
+  const bodyFor = (profile: UserProfile) => paperFeedRequestBody(profile, advisorSeeds, false, [], "signed-in");
+
+  beforeEach(() => {
+    useProfileStore.setState({ profile: { ...defaultProfile } });
+    useJevScreeningStore.setState({ report: null });
+  });
+
+  afterEach(() => {
+    useJevScreeningStore.setState({ report: null });
+    useProfileStore.setState({ profile: { ...defaultProfile } });
+  });
+
+  it("is left out of the request while the last report says Jev rejected it", () => {
+    useJevScreeningStore.setState({ report: rejected });
+
+    const body = bodyFor({ ...activeProfile, jevApiKey: REJECTED_KEY });
+
+    expect(body.jevApiKey).toBeUndefined();
+    expect(JSON.stringify(body)).not.toContain(REJECTED_KEY);
+  });
+
+  it("changes nothing else in the request", () => {
+    const withKey = { ...activeProfile, jevApiKey: REJECTED_KEY };
+    const normal = bodyFor(withKey);
+    useJevScreeningStore.setState({ report: rejected });
+
+    const suppressed = bodyFor(withKey);
+
+    const { jevApiKey: sent, ...restNormal } = normal;
+    void sent;
+    expect(suppressed).toEqual({ ...restNormal, jevApiKey: undefined });
+  });
+
+  it.each<JevScreeningReport | null>([
+    null,
+    { status: "applied", screened: 50, of: 50 },
+    { status: "partial", screened: 31, of: 50 },
+    { status: "unavailable", screened: 0, of: 50 },
+    { status: "unavailable", screened: 20, of: 50 },
+  ])("still sends the key after any other report (%j)", (report) => {
+    useJevScreeningStore.setState({ report });
+
+    expect(bodyFor({ ...activeProfile, jevApiKey: REJECTED_KEY }).jevApiKey).toBe(REJECTED_KEY);
+  });
+
+  it("sends again once the key is changed, because updateJevApiKey clears the rejected report", () => {
+    useProfileStore.getState().updateJevApiKey(REJECTED_KEY);
+    useJevScreeningStore.setState({ report: rejected });
+    expect(bodyFor(useProfileStore.getState().profile).jevApiKey).toBeUndefined();
+
+    useProfileStore.getState().updateJevApiKey(NEW_KEY);
+
+    expect(useJevScreeningStore.getState().report).toBeNull();
+    expect(bodyFor(useProfileStore.getState().profile).jevApiKey).toBe(NEW_KEY);
+  });
+
+  it("sends again after the key is removed and put back (the other way to try the same key again)", () => {
+    useProfileStore.getState().updateJevApiKey(REJECTED_KEY);
+    useJevScreeningStore.setState({ report: rejected });
+
+    useProfileStore.getState().updateJevApiKey("");
+    useProfileStore.getState().updateJevApiKey(REJECTED_KEY);
+
+    expect(bodyFor(useProfileStore.getState().profile).jevApiKey).toBe(REJECTED_KEY);
+  });
+
+  it("a rejected report does not make a signed-out reader's request carry the key either", () => {
+    useJevScreeningStore.setState({ report: rejected });
+    const body = paperFeedRequestBody({ ...activeProfile, jevApiKey: REJECTED_KEY }, advisorSeeds, false, [], "signed-out");
+    expect(body.jevApiKey).toBeUndefined();
   });
 });

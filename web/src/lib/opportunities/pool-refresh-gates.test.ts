@@ -1,29 +1,25 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { buildDailyJobPool } from "@/lib/jobs/pipeline";
-import {
-  FORCED_REBUILDS_PER_DAY,
-  getCounterStore,
-  resetCounterStoreForTests,
-  forcedRebuildDayKey,
-} from "@/lib/usage/counters";
+import { buildDailyJobPool, type DailyJobPoolOptions } from "@/lib/jobs/pipeline";
+import { resetCounterStoreForTests } from "@/lib/usage/counters";
+import { clearEveryOperatorSearchCredential } from "@/test-support/route-harness";
 import type { CachedPool, PoolCache } from "./pool-cache";
 
 /**
- * ABC-freemium 1-19 · R-POOL-2, R-QUOTA-2, R-TEST-1.
+ * ABC-freemium 1-19 · R-POOL-2, R-QUOTA-2, R-TEST-1 — rewritten for the
+ * BYOK-only change (scope (b)).
  *
- * The two gates on "refresh now", asserted where they live. R-POOL-2 requires
- * both: an entitlement gate, and a count against the daily forced-rebuild breaker —
- * "the only thing stopping a paid user's refresh button from being an unbounded
- * spend button".
- *
- * **Refused, never errored.** Both gates degrade the same way: the pool that was
- * already there is served, unchanged. That is the rule every gate in this round
- * follows.
+ * "Refresh now" used to have two gates: an entitlement gate, and a count against
+ * a daily forced-rebuild breaker that existed because a paid reader's refresh
+ * button was "an unbounded spend button" on Peer's own model and search keys.
+ * Peer spends nothing on either any more, so there is nothing to meter and
+ * nothing to gate: the breaker, the entitlement and the `poolRefresh` option are
+ * all gone, and the daily pool is simply the daily pool. What these cases pin is
+ * that nothing a caller sends can force a rebuild.
  *
  * The pipeline is driven with an injected cache holding a marked pool, so
  * "did it rebuild?" is answered by which pool comes back rather than by a spy.
- * Every source is keyless here (no Tavily, no Vertex), so a rebuild fans out to
- * the free structured sources only and costs nothing.
+ * Every source is keyless here (no reader key, no environment credential), so a
+ * rebuild would fan out to the free structured sources only and cost nothing.
  */
 
 class SeededCache implements PoolCache {
@@ -57,17 +53,13 @@ const REQUEST = {
   topics: ["molten salt"],
   perSourceLimit: 1,
   topN: 1,
-  userId: USER,
 };
 
 beforeEach(() => {
   vi.clearAllMocks();
   resetCounterStoreForTests();
   delete process.env.GOOGLE_API_KEY;
-  delete process.env.TAVILY_API_KEY;
-  vi.stubEnv("TAVILY_API_KEY", "");
-  vi.stubEnv("BRAVE_SEARCH_API_KEY", "");
-  vi.stubEnv("GOOGLE_VERTEX_PROJECT", "");
+  clearEveryOperatorSearchCredential(vi.stubEnv);
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "");
   vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "");
   // Every outward call fails fast; the keyless sources return nothing and the
@@ -84,8 +76,8 @@ afterEach(() => {
   resetCounterStoreForTests();
 });
 
-describe("forced pool rebuild — the two gates", () => {
-  it("serves the cached pool when no refresh is asked for", async () => {
+describe("the daily pool cannot be forced to rebuild", () => {
+  it("serves the cached pool when nothing is asked for", async () => {
     const cache = new SeededCache(seededPool());
 
     const pool = await buildDailyJobPool(REQUEST, { cache, now: NOW });
@@ -94,71 +86,32 @@ describe("forced pool rebuild — the two gates", () => {
     expect(cache.sets).toBe(0);
   });
 
-  it("rebuilds when the route grants a refresh", async () => {
+  it("ignores a poolRefresh option: an ask changes nothing", async () => {
+    // The old suite had four cases here (grant, tripped breaker, one increment
+    // below the breaker, no user). All four were about a gate that is deleted;
+    // what survives of them is the one claim worth keeping — an ask for a forced
+    // rebuild changes nothing.
     const cache = new SeededCache(seededPool());
 
     const pool = await buildDailyJobPool(REQUEST, {
       cache,
       now: NOW,
       poolRefresh: true,
-    });
-
-    expect(pool.cacheHit).toBe(false);
-    // Written back under the same key, so everyone else gets it next load.
-    expect(cache.sets).toBe(1);
-  });
-
-  it("serves the cached pool when the daily forced-rebuild breaker has tripped", async () => {
-    // R-QUOTA-2. Pre-spend the day's allowance, then ask for a refresh: the
-    // pool that was already there comes back, with no error and no rebuild.
-    const store = getCounterStore();
-    await store.increment(
-      forcedRebuildDayKey(USER, NOW),
-      null,
-      FORCED_REBUILDS_PER_DAY,
-    );
-    const cache = new SeededCache(seededPool());
-
-    const pool = await buildDailyJobPool(REQUEST, {
-      cache,
-      now: NOW,
-      poolRefresh: true,
-    });
+    } as DailyJobPoolOptions);
 
     expect(pool.cacheHit).toBe(true);
     expect(cache.sets).toBe(0);
   });
 
-  it("still allows a refresh one increment below the breaker", async () => {
-    // Without this the case above would pass against a gate that always
-    // refuses.
-    const store = getCounterStore();
-    await store.increment(
-      forcedRebuildDayKey(USER, NOW),
-      null,
-      FORCED_REBUILDS_PER_DAY - 2,
-    );
-    const cache = new SeededCache(seededPool());
-
-    const pool = await buildDailyJobPool(REQUEST, {
-      cache,
-      now: NOW,
-      poolRefresh: true,
-    });
-
-    expect(pool.cacheHit).toBe(false);
-  });
-
-  it("cannot be forced by a request that carries no user", async () => {
-    // A forced rebuild is attributed spend. With nobody to attribute it to
-    // there is nothing to count it against, so it is refused.
+  it("serves the cached pool when the request itself carries a refresh ask and a user", async () => {
     const cache = new SeededCache(seededPool());
 
     const pool = await buildDailyJobPool(
-      { ...REQUEST, userId: null },
-      { cache, now: NOW, poolRefresh: true },
+      { ...REQUEST, poolRefresh: true, userId: USER } as typeof REQUEST,
+      { cache, now: NOW },
     );
 
     expect(pool.cacheHit).toBe(true);
+    expect(cache.sets).toBe(0);
   });
 });

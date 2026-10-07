@@ -1,9 +1,6 @@
 import { extractPdfCandidatesFromPath, tryPdfCandidates } from "./pdf-extract";
-import { matchFigureSemantically } from "./semantic-match";
-import type { FigureMatchContext } from "./match-context";
-import { matchFigureVisually } from "./vision-match";
 import { classifyHardAccessStatus } from "@/lib/papers/paywall-status";
-import { bareUploadId, claimsUploadId, pdfPath } from "@/lib/papers/upload-store";
+import { bareUploadId, claimsUploadId, withUploadPdfFile } from "@/lib/papers/upload-store";
 import { ownedUpload } from "@/lib/papers/upload-access";
 
 const FETCH_TIMEOUT_MS = 7_000;
@@ -15,8 +12,11 @@ const MAX_BODY_BYTES = 2_500_000;
 const FETCH_VERSION = "2026-09-25-pdf-unstretch";
 
 /**
- * Everything the deterministic half needs: which paper, and where to look. No
- * model is reachable from any of it.
+ * Everything the extractor needs: which paper, and where to look. **No model is
+ * reachable from any of it** — a figure is chosen by the caption's own words
+ * and the figure number, never by a model. (There used to be a semantic and a
+ * vision matcher behind the system model key; with no such key they are gone,
+ * and a reader's own key has no channel to a `GET` that the CDN caches.)
  */
 interface FigureSourceInput {
   itemId: string;
@@ -24,21 +24,6 @@ interface FigureSourceInput {
   doi?: string;
   query?: string;
   figureIndex?: number;
-  paperTitle?: string;
-}
-
-interface ExtractInput extends FigureSourceInput {
-  /**
-   * ABC-freemium 1-07 · R-SEC-1 — **required.** Choosing between candidates can
-   * reach a model (the semantic and vision matchers), so the request that wants
-   * a figure has to say whose request it is. `GET /api/figure` fills this from
-   * the shared entitlement check.
-   *
-   * `getFigurePool` deliberately takes `FigureSourceInput` instead: it only
-   * collects candidates and never chooses, so it needs no context and its two
-   * callers in `papers/report` are unaffected.
-   */
-  ctx: FigureMatchContext;
 }
 
 // Ruling 20 (round 7, S23): "rate_limited" stays here even though nothing in
@@ -73,7 +58,7 @@ export interface FigureResult {
   status: FigureStatus;
   reason?: string | null;
   hideFigure?: boolean;
-  matchedBy?: "keyword" | "semantic" | "vision" | "fallback" | null;
+  matchedBy?: "keyword" | "fallback" | null;
 }
 
 interface FigureCandidate {
@@ -630,21 +615,11 @@ function upgradeCandidateQuality(
   return bestQualityCandidate(related) ?? selected;
 }
 
-function visionShortlist(
-  candidates: FigureCandidate[],
-  scored: Array<{ candidate: FigureCandidate; score: number }>,
-): FigureCandidate[] {
-  const ordered = scored.length > 0 ? scored.map((entry) => entry.candidate) : candidates;
-  return ordered.slice(0, 3);
-}
-
 async function chooseCandidate(
   candidates: FigureCandidate[],
   n: number,
-  ctx: FigureMatchContext,
   query?: string,
-  paperTitle?: string,
-  allowModel = true,
+  bestQualityOnly = false,
 ): Promise<CandidateSelection> {
   const valid = candidates.filter((candidate) => !looksLikeLogo(candidate.imageUrl));
   if (valid.length === 0) {
@@ -703,60 +678,18 @@ async function chooseCandidate(
     };
   }
 
-  if (!allowModel) return { candidate: bestQualityCandidate(valid) ?? valid[0], status: "found", matchedBy: "fallback" };
-
-  const semantic = await matchFigureSemantically({
-    paperTitle,
-    query,
-    ctx,
-    candidates: scored
-      .map((entry) => entry.candidate)
-      .filter((candidate) => candidate.caption?.trim())
-      .slice(0, 8)
-      .map((candidate) => ({
-        ordinal: candidate.ordinal,
-        caption: candidate.caption ?? "",
-      })),
-  });
-
-  if (semantic?.ordinal != null && semantic.confidence !== "low") {
-    const semanticCandidate =
-      valid.find((candidate) => candidate.ordinal === semantic.ordinal) ?? null;
-    if (semanticCandidate) {
-      return {
-        candidate: upgradeCandidateQuality(semanticCandidate, valid),
-        status: "found",
-        reason: semantic.reason,
-        matchedBy: "semantic",
-      };
-    }
+  // A private upload with no keyword match takes its best-quality figure
+  // rather than the requested index (unchanged from when this was the branch
+  // that skipped the model matchers for a private PDF).
+  if (bestQualityOnly) {
+    return {
+      candidate: bestQualityCandidate(valid) ?? valid[0],
+      status: "found",
+      matchedBy: "fallback",
+    };
   }
 
-  const visual = await matchFigureVisually({
-    paperTitle,
-    query,
-    ctx,
-    candidates: visionShortlist(valid, scored).map((candidate) => ({
-      ordinal: candidate.ordinal,
-      imageUrl: candidate.imageUrl,
-      caption: candidate.caption ?? null,
-    })),
-  });
-
-  if (visual?.ordinal != null && visual.confidence !== "low") {
-    const visualCandidate =
-      valid.find((candidate) => candidate.ordinal === visual.ordinal) ?? null;
-    if (visualCandidate) {
-      return {
-        candidate: upgradeCandidateQuality(visualCandidate, valid),
-        status: "found",
-        reason: visual.reason,
-        matchedBy: "vision",
-      };
-    }
-  }
-
-  // Last resort: when no high-confidence match was found, fall back to the
+  // Last resort: when no keyword match was found, fall back to the
   // requested figure index (n) from the actual paper. The report section
   // assigned this index intentionally, so showing it — even with a "fallback"
   // tag — is far more useful than a "no match" placeholder. The user has been
@@ -1340,12 +1273,17 @@ async function buildCandidatePool(input: FigureSourceInput): Promise<CachedPool>
   const attempts: AttemptResult[] = [];
   const candidates: FigureCandidate[] = [];
 
-  // 1-29: an uploaded PDF is already on this server — read it directly and
-  // skip every other branch below. "has figures attached for analysis" per
-  // the user's own words is satisfied by the PDF's own embedded images.
+  // 1-29: an uploaded PDF is already in Peer's own private storage — read it
+  // directly and skip every other branch below. "has figures attached for
+  // analysis" per the user's own words is satisfied by the PDF's own
+  // embedded images.
   const uploadHash16 = bareUploadId(input.itemId);
   if (uploadHash16) {
-    const attempt = await extractPdfCandidatesFromPath(pdfPath(uploadHash16), "publisher");
+    const attempt = (await withUploadPdfFile(uploadHash16, (filePath) => extractPdfCandidatesFromPath(filePath, "publisher"))) ?? {
+      status: "source_unavailable" as const,
+      candidates: [],
+      reason: "The uploaded PDF is no longer stored.",
+    };
     attempts.push(attempt);
     const reordered: FigureCandidate[] = attempt.candidates
       .filter((c) => !looksLikeLogo(c.imageUrl))
@@ -1529,9 +1467,8 @@ export function pickFigureForCaption(
   return best?.entry ?? null;
 }
 
-export async function extractFigure(input: ExtractInput): Promise<FigureResult> {
+export async function extractFigure(input: FigureSourceInput): Promise<FigureResult> {
   const n = input.figureIndex ?? 0;
-  const paperTitle = input.paperTitle;
   const query = input.query;
 
   const pool = await getCandidatePool(input);
@@ -1540,10 +1477,10 @@ export async function extractFigure(input: ExtractInput): Promise<FigureResult> 
     const selection = await chooseCandidate(
       pool.candidates,
       n,
-      input.ctx,
       query,
-      paperTitle,
-      !claimsUploadId(input.itemId),
+      // A private upload with no keyword match takes its best-quality figure;
+      // P0-08: any spelling of the prefix is a claim to be one.
+      claimsUploadId(input.itemId),
     );
     if (selection.status === "found") {
       return candidateResult(selection);

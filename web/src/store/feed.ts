@@ -17,13 +17,14 @@ import type {
 import { apiFetch, ApiError } from "@/lib/api";
 import { libraryEntryOf, type LibraryEntry } from "@/lib/library/graph";
 import { useProfileStore } from "@/store/profile";
+import { useJevScreeningStore } from "@/store/jev-screening";
 // P4-S5b-FIX2/FIX3 (Round 3) — read-only use of profile-sync.tsx's exported
 // auth signals (see resolveOwnerKeyForLoad below): `settled` (FIX2,
 // unchanged here) plus `authUserId`/`authOutcome` (FIX3 — published as soon
 // as the auth check itself resolves, before the profile pull starts). This
 // file only reads them; profile-sync.tsx is edited by the FIX3 slice
 // directly (a separate file in the same change), not through this import.
-import { useSyncGate } from "@/components/profile-sync";
+import { useSyncGate, type AuthOutcome } from "@/components/profile-sync";
 // FEED-SYNC-FLAG (ABC-JEV-INTEGRATION.md §5, following POLISH-1-SYNC-A's
 // MEDIUM finding) — the same feed push-failed flag feed-sync.tsx's one-time
 // sign-in migration batch sets/clears, now also set/cleared by the
@@ -37,12 +38,8 @@ import {
 } from "@/lib/feed/sync-status";
 import { scoredItemToPaper } from "@/lib/feed/mapper";
 import { STARTER_TOPICS_KEY, topicsOrStarter } from "@/lib/feed/starter-topics";
-import {
-  aiAvailability,
-  feedsUseAi,
-  hasUserLlmOverride,
-} from "@/lib/feed/ai-tier";
-import { entitlementGrants, type ClientEntitlement } from "@/lib/entitlement/allowance";
+import { aiAvailability, feedsUseAi } from "@/lib/feed/ai-tier";
+import { parseJevApiKey } from "@/lib/decisions/jev-key";
 import type { FeedResponse, FeedMeta } from "@/lib/feed/types";
 import { localCalendarDate } from "@/lib/local-calendar-date";
 import {
@@ -241,11 +238,9 @@ const MIGRATION_PENDING_KEY = "migration";
 // (see FeedState's `pendingPushByOwner`) — the RELOAD HONESTY comment above
 // explains why every key needs this, not only the ones a reload would
 // retry anyway. Keyed by `useSyncGate`'s `authUserId` directly (the exact
-// signal `updateFeedPushFailedFlag` below already gates on), not
-// `currentOwnerKey()`/`entitlement.userId`, which can still read `null` for
-// a moment after `authUserId` is already set (NEW FINDING #2's own
-// resolution-order gap, above) — using the same signal as the gate check
-// avoids re-introducing that class of bug here.
+// signal `updateFeedPushFailedFlag` below already gates on) — the same
+// signal `currentOwnerKey()` below reads, so the two cannot disagree about
+// which account this device is acting as.
 function setPendingPushPersisted(
   ownerId: string,
   key: string,
@@ -314,7 +309,7 @@ function updateFeedPushFailedFlag(ok: boolean, key: string) {
 // nothing wrong with the request itself): 401 (session cookie not yet
 // propagated / a brief refresh gap — acknowledgePendingBatch's own case),
 // 403 (a permission check that can resolve, e.g. after a role or
-// entitlement refresh), 408 (request timeout) and 429 (rate limited) — all
+// permission refresh), 408 (request timeout) and 429 (rate limited) — all
 // four KEEP the key, exactly like a 5xx or a network error already do.
 // Only an ApiError OUTSIDE this allow-list is treated as PERMANENT
 // ("wrong, not just not-yet") — in practice, for this route, a 400
@@ -542,29 +537,25 @@ function deliveredBeforeLocalDate(
 //
 // The owner id this device is CURRENTLY acting as, for the sole purpose of
 // picking which deliveredLocalByOwner namespace to read/write. Sourced from
-// the SAME already-resolved `entitlement.userId` every other company-
-// funded/AI-tier gate in this file already reads synchronously via
-// `useProfileStore.getState().entitlement` (see loadFeed's fetchRealFeed
-// call, unchanged) — not a new dependency, not edited here. That field is
-// populated by ProfileSync (web/src/components/profile-sync.tsx, NOT part
-// of this fix) from `GET /api/profile` on sign-in, and reset synchronously
-// to the frozen anonymous default on sign-out. Both "signed out" and "not
-// resolved yet" (a real, already-accepted staleness window shared with
-// every other entitlement read in this file — see loadFeed's own doc
-// comment above) read as ANONYMOUS_OWNER_KEY: the safe direction, since it
-// can only land a read/write in the anonymous bucket, never cross into a
-// different real signed-in owner's namespace.
+// `useSyncGate`'s `authUserId` — published by ProfileSync
+// (web/src/components/profile-sync.tsx) the moment the auth check itself
+// (`getUser()`/`onAuthStateChange`) confirms a real user, and cleared back to
+// `null` on a confirmed sign-out. "Signed out" and "not resolved yet" both
+// read as ANONYMOUS_OWNER_KEY here: the safe direction, since it can only land
+// a read/write in the anonymous bucket, never cross into a different real
+// signed-in owner's namespace. (`resolveOwnerKeyForLoad` below is the one
+// that tells the two apart.)
 function currentOwnerKey(): string {
-  return useProfileStore.getState().entitlement?.userId ?? ANONYMOUS_OWNER_KEY;
+  return useSyncGate.getState().authUserId ?? ANONYMOUS_OWNER_KEY;
 }
 
 // P4-S5b-FIX2 (Round 3) — ABC-JEV-INTEGRATION.md §1g/§1c, closing the
 // auth-loading-window re-delivery risk found by
 // docs/jev-abc/P4-S5b-FIX-A-20260924T103406Z.md NEW FINDINGS #1:
-// `currentOwnerKey()` above cannot distinguish "signed in, but `entitlement`
-// has not resolved yet" from "confirmed signed out" — both read as
-// ANONYMOUS_OWNER_KEY, because `entitlement` is `null` in both cases until
-// ProfileSync's async chain (a real network round trip on sign-in) settles.
+// `currentOwnerKey()` above cannot distinguish "signed in, but the auth
+// check has not resolved yet" from "confirmed signed out" — both read as
+// ANONYMOUS_OWNER_KEY, because `authUserId` is `null` in both cases until
+// the auth check settles.
 //
 // P4-S5b-FIX3 (Round 3) — ABC-JEV-INTEGRATION.md §4 "P4-S5b-FIX3 ruled and
 // assigned", closing two findings from fresh A's review of FIX2
@@ -573,39 +564,35 @@ function currentOwnerKey(): string {
 // finishing — which has no timeout anywhere (web/src/lib/api.ts's apiFetch),
 // so a hanging pull could block the feed from ever auto-loading. (NEW
 // FINDING #2) a FAILED (not merely pending) profile pull also settles
-// `true` with `entitlement` staying `null` forever that session, which
-// FIX2's settled-only check could not tell apart from confirmed
-// signed-out, so a real signed-in user's own delivered-before-today history
-// silently stopped being excluded. Both close by using a signal that
+// `true`, which FIX2's settled-only check could not tell apart from
+// confirmed signed-out, so a real signed-in user's own delivered-before-today
+// history silently stopped being excluded. Both close by using a signal that
 // resolves EARLIER and MORE PRECISELY than `settled`: profile-sync.tsx's
 // `authUserId`/`authOutcome`, published the moment the auth check itself
 // (`getUser()`/`onAuthStateChange`) resolves — before the profile pull (the
 // thing `settled` waits for) even starts.
 //
-// Priority, matching the binding ruling exactly: (1) a real, already-
-// resolved `entitlement.userId` (via `currentOwnerKey()` above) — the
-// richest source once the profile pull itself has succeeded, never a guess.
-// (2) failing that, the confirmed auth user id (`authUserId`) — correct
-// even while the pull is still pending, hanging, or has failed outright
-// (NEW FINDING #2, above). (3) `ANONYMOUS_OWNER_KEY` ONLY once the auth
-// check itself has confirmed either a real sign-out or that Supabase auth
-// is not configured at all (`authOutcome === "signed-out" | "unconfigured"`).
-// (4) otherwise `null` ("this load does not know its owner yet") — covers
-// the auth check still being in flight AND a REJECTED `getUser()` (unknown,
-// never signed-out, per the ruling). `loadFeed` below treats `null` as: arm
-// nothing, touch no namespace, and read the UNION of every owner namespace
-// this device already has (see `unionDeliveredLocal`) rather than nothing
-// at all — the safe direction either way (ABC-JEV-INTEGRATION.md §1p.A: "a
-// false exclusion loses one candidate, a false re-delivery breaks the
-// user's hard rule"). The page's own auto-load effect (web/src/app/page.tsx)
-// waits for the auth outcome to be known, with a bounded fallback, before
-// calling `loadFeed` at all — so a `null` here should only occur during
-// that bounded fallback window, or for an explicit/early call.
+// Priority, matching the binding ruling exactly: (1) the confirmed auth user
+// id (`authUserId`, via `currentOwnerKey()` above) — correct even while the
+// profile pull is still pending, hanging, or has failed outright (NEW FINDING
+// #2, above). (2) `ANONYMOUS_OWNER_KEY` ONLY once the auth check itself has
+// confirmed either a real sign-out or that Supabase auth is not configured at
+// all (`authOutcome === "signed-out" | "unconfigured"`). (3) otherwise `null`
+// ("this load does not know its owner yet") — covers the auth check still
+// being in flight AND a REJECTED `getUser()` (unknown, never signed-out, per
+// the ruling). `loadFeed` below treats `null` as: arm nothing, touch no
+// namespace, and read the UNION of every owner namespace this device already
+// has (see `unionDeliveredLocal`) rather than nothing at all — the safe
+// direction either way (ABC-JEV-INTEGRATION.md §1p.A: "a false exclusion
+// loses one candidate, a false re-delivery breaks the user's hard rule"). The
+// page's own auto-load effect (web/src/app/page.tsx) waits for the auth
+// outcome to be known, with a bounded fallback, before calling `loadFeed` at
+// all — so a `null` here should only occur during that bounded fallback
+// window, or for an explicit/early call.
 function resolveOwnerKeyForLoad(): string | null {
   const ownerKey = currentOwnerKey();
   if (ownerKey !== ANONYMOUS_OWNER_KEY) return ownerKey;
   const auth = useSyncGate.getState();
-  if (auth.authUserId) return auth.authUserId;
   return auth.authOutcome === "signed-out" || auth.authOutcome === "unconfigured"
     ? ANONYMOUS_OWNER_KEY
     : null;
@@ -761,12 +748,10 @@ export function paperFeedRequestBody(
   advisorSeeds: { seedTexts: string[]; seedWorkIds: string[] },
   aiPaperSearchEnabled = false,
   excludeIds: string[] = [],
-  // ABC-freemium 1-14 — passed in rather than read from the store inside, so a
-  // test can construct any persona. Defaults to anonymous (null), which is
-  // the safe direction: no entitlement means no AI. Converted to the
-  // `Pick<Entitlement, "userId">` shape internally via `entitlementGrants`
-  // (below), matching every other caller in this file.
-  entitlement: ClientEntitlement | null = null,
+  // Passed in rather than read from the store inside, so a test can construct
+  // any reader. Defaults to "unknown", which is the safe direction: while the
+  // sign-in check has not answered, no model is asked for.
+  auth: AuthOutcome = "unknown",
 ): Record<string, unknown> {
   const { topics: ownTopics, softTopics } = activeSurfaceTopics(profile, "papers");
   const topics = topicsOrStarter(ownTopics);
@@ -783,6 +768,26 @@ export function paperFeedRequestBody(
   const challenge = profile.currentChallenges?.trim() || undefined;
   const intent = activePaperIntent(profile);
   const feedAiApiKey = profile.feedAiApiKey?.trim();
+  // The reader's own Jev key, for the second screening pass. It is a separate
+  // switch from the model key and from the AI search pill (the key IS the
+  // switch), so it is not gated on `aiPaperSearchEnabled` or on a model key.
+  // It goes only where the server can attribute it to a reader (signed in, or a
+  // deployment with no sign-in at all, the same rule `aiAvailability` uses),
+  // and only when it is shaped like a key. It is sent as ONE top-level string,
+  // never inside `llmOverride`, so it cannot end up beside the model key.
+  //
+  // **A key Jev has already rejected is not sent again.** The server does not cache
+  // the pool of a build whose key was refused (the reader may be fixing it), so
+  // while a wrong key keeps being sent every load rebuilds the pool and, for a
+  // reader with a model key as well, re-runs the model rerank on their own
+  // account. The last report says "rejected", and `updateJevApiKey` clears it
+  // when the key changes, so editing the key tries the new one. The server then
+  // builds and caches the keyless pool once.
+  const jevApiKey =
+    (auth === "signed-in" || auth === "unconfigured") &&
+    useJevScreeningStore.getState().report?.status !== "rejected"
+      ? parseJevApiKey(profile.jevApiKey)
+      : undefined;
   // ABC-freemium 1-14 · R-ENT-3 — **this used to re-implement both halves of
   // the shared predicate inline, and the local `hasUserLlmOverride` SHADOWED the
   // imported function of the same name.** So the papers request builder never
@@ -790,7 +795,7 @@ export function paperFeedRequestBody(
   // anyone grepping for callers. It now reads `aiAvailability` like everything
   // else; the papers toggle stays ANDed on top, because that is a separate
   // choice the reader makes about this surface.
-  const aiMode = aiAvailability(profile, entitlementGrants(entitlement));
+  const aiMode = aiAvailability(profile, auth);
   const paperAiAvailable = aiPaperSearchEnabled && aiMode !== "none";
   const useOwnKey = aiPaperSearchEnabled && aiMode === "byok";
 
@@ -832,6 +837,7 @@ export function paperFeedRequestBody(
           apiKey: feedAiApiKey,
         }
       : undefined,
+    jevApiKey,
     controls: {
       focus: profile.feedFocus,
       freshness: profile.feedFreshness,
@@ -845,9 +851,6 @@ export function paperFeedRequestBody(
       avoidBroadSurveys: profile.feedAvoidBroadSurveys,
     },
     excludeIds: excludeIds.length > 0 ? excludeIds : undefined,
-    // ABC-freemium 1-18 — **no `poolRefresh` here, deliberately.** D3 keeps the
-    // papers pool daily and never refreshed on demand; it is built from free
-    // academic sources, so there is no paid fan-out to force.
   };
 }
 
@@ -865,13 +868,15 @@ interface RealFeedResult {
    *  field, is non-empty, or is a frozen-batch replay with no live reason to
    *  report; the caller treats "undefined" as "show the generic empty copy". */
   emptyReasonCode?: FeedMeta["emptyReasonCode"];
+  /** What Jev did when the pool was built (counts and a status word); present only for a reader who sent a Jev key and a response that carries it (not a replay of a frozen batch). */
+  jevScreening?: FeedMeta["jevScreening"];
 }
 
 async function fetchRealFeed(
   profile: UserProfile,
   aiPaperSearchEnabled = false,
   excludeIds: string[] = [],
-  entitlement: ClientEntitlement | null = null,
+  auth: AuthOutcome = "unknown",
 ): Promise<RealFeedResult> {
   // FIRST-VISIT RULING (ABC-JEV-INTEGRATION.md §4 Round 3 "MERGE-B-FEED
   // complete"): no guard on an absent intent any more. It used to return
@@ -895,12 +900,10 @@ async function fetchRealFeed(
           advisorSeeds,
           aiPaperSearchEnabled,
           excludeIds,
-          // ABC-freemium 6-04 — the request builders ask a CAPABILITY
-          // question (which AI tier to ask for). While the plan is unknown the
-          // anonymous view is the honest answer and it asks for less, never
-          // more; the server re-resolves the entitlement anyway and is the
-          // authority. Never the place to decide an upsell.
-          entitlement,
+          // The request builders ask which AI tier to ask for. While the
+          // sign-in check is unanswered the honest answer asks for less, never
+          // more; the server re-checks the session anyway and is the authority.
+          auth,
         ),
       ),
     });
@@ -909,6 +912,7 @@ async function fetchRealFeed(
       batchId: data.meta?.batchId,
       batchStatus: data.meta?.batchStatus,
       emptyReasonCode: data.meta?.emptyReasonCode,
+      jevScreening: data.meta?.jevScreening,
     };
   } catch (err) {
     console.error("[feed] fetch failed:", err);
@@ -924,19 +928,18 @@ export function opportunityRequestBody(
   profile: UserProfile,
   surface: "events" | "jobs",
   excludeIds: string[],
-  entitlement: ClientEntitlement | null = null,
-  poolRefresh = false,
+  auth: AuthOutcome = "unknown",
 ): Record<string, unknown> {
   const { topics, softTopics } = activeSurfaceTopics(profile, surface);
   const activeInputs = profile.activeSearchInputs;
   const preferenceLedger = profile.preferenceLedger ?? {};
   const tavilyApiKey = profile.tavilyApiKey?.trim();
   const feedAiApiKey = profile.feedAiApiKey?.trim();
-  // RULING 68a: these two reads were inline here and duplicated, in different
+  // RULING 68a: these reads were inline here and duplicated, in different
   // words, at the dashboard chip — which is how the chip came to claim a tier
-  // it does not govern. Same expressions, one home. `hasUserLlmOverride` is
-  // still needed separately below because it alone may send an override.
-  const userLlmOverride = hasUserLlmOverride(profile);
+  // it does not govern. One home now: the tier and the override both follow
+  // `aiAvailability`, so a key is only put in a request that will use it.
+  const useOwnKey = aiAvailability(profile, auth) === "byok";
   return {
     topics,
     softTopics: softTopics.length > 0 ? softTopics : undefined,
@@ -954,7 +957,7 @@ export function opportunityRequestBody(
       : {}),
     currentProject: profile.currentProject,
     topN: DEFAULT_OPPORTUNITY_TOP_N,
-    aiTier: feedsUseAi(profile, entitlementGrants(entitlement)) ? 2 : 0,
+    aiTier: feedsUseAi(profile, auth) ? 2 : 0,
     searchConnectors: profile.tavilyEnabled
       ? { tavily: { enabled: true, apiKey: tavilyApiKey || undefined } }
       : undefined,
@@ -966,23 +969,18 @@ export function opportunityRequestBody(
       usajobsApiKey: profile.usajobsApiKey?.trim() || undefined,
       usajobsUserAgent: profile.usajobsUserAgent?.trim() || undefined,
     },
-    // Unchanged: only the BYOK path may send an override. The local-developer
-    // path deliberately sends none and lets the server resolve its own
-    // provider, which is what keeps the key server-side.
-    llmOverride: userLlmOverride
+    // Only a reader whose own key will run (a key, and signed in) sends one.
+    llmOverride: useOwnKey
       ? { provider: profile.feedAiProvider, apiKey: feedAiApiKey }
       : undefined,
     excludeIds: excludeIds.length > 0 ? excludeIds : undefined,
-    // ABC-freemium 1-18 · R-POOL-2 — an ask, not a grant. See `FeedLoadOptions`.
-    poolRefresh: poolRefresh || undefined,
   };
 }
 
 async function fetchRealEvents(
   profile: UserProfile,
   excludeIds: string[] = [],
-  entitlement: ClientEntitlement | null = null,
-  poolRefresh = false,
+  auth: AuthOutcome = "unknown",
 ): Promise<OpportunityClientPool<Event>> {
   if (activeSurfaceTopics(profile, "events").topics.length === 0) {
     return emptyOpportunityClientPool<Event>();
@@ -992,13 +990,7 @@ async function fetchRealEvents(
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(
-        opportunityRequestBody(
-          profile,
-          "events",
-          excludeIds,
-          entitlement,
-          poolRefresh,
-        ),
+        opportunityRequestBody(profile, "events", excludeIds, auth),
       ),
     });
     if (!res.ok) {
@@ -1020,8 +1012,7 @@ async function fetchRealEvents(
 async function fetchRealJobs(
   profile: UserProfile,
   excludeIds: string[] = [],
-  entitlement: ClientEntitlement | null = null,
-  poolRefresh = false,
+  auth: AuthOutcome = "unknown",
 ): Promise<OpportunityClientPool<Job>> {
   if (activeSurfaceTopics(profile, "jobs").topics.length === 0) {
     return emptyOpportunityClientPool<Job>();
@@ -1031,13 +1022,7 @@ async function fetchRealJobs(
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(
-        opportunityRequestBody(
-          profile,
-          "jobs",
-          excludeIds,
-          entitlement,
-          poolRefresh,
-        ),
+        opportunityRequestBody(profile, "jobs", excludeIds, auth),
       ),
     });
     if (!res.ok) {
@@ -1181,20 +1166,6 @@ export interface FeedLoadOptions {
    * Omitted means all three, so existing callers keep their behaviour.
    */
   lanes?: FeedLane[];
-  /**
-   * ABC-freemium 1-18 · R-POOL-2 — ask for a forced pool rebuild on the jobs and
-   * events surfaces.
-   *
-   * **This is what keeps the existing "Refresh now" button honest after 1-17.**
-   * Those pools now rebuild weekly, so a plain refetch reads the same cached
-   * pool all week and the button would do nothing visible. Asking for a rebuild
-   * makes it mean what it says.
-   *
-   * Only an ASK: the route forwards it only when `entitlement.poolRefreshAllowed`
-   * is true, and a free user is refused by being served the pool that is already
-   * there — no error, no empty surface.
-   */
-  poolRefresh?: boolean;
 }
 
 interface FeedState {
@@ -1858,8 +1829,6 @@ export const useFeedStore = create<FeedState>()(
         const wantsPapers = lanes.includes("papers");
         const wantsEvents = lanes.includes("events");
         const wantsJobs = lanes.includes("jobs");
-        // ABC-freemium 1-18 · R-POOL-2 — only ever an ask; the route decides.
-        const poolRefresh = options?.poolRefresh === true;
         // P4-S5b-FIX (Round 3) — ABC-JEV-INTEGRATION.md §1c, closing finding
         // (b). Resolve and "touch" (MRU-bump, evict beyond
         // MAX_DELIVERED_LOCAL_OWNERS) the CURRENT owner's deliveredLocal
@@ -2023,10 +1992,17 @@ export const useFeedStore = create<FeedState>()(
               profile,
               aiPaperSearchEnabled,
               paperExcludeIds,
-              useProfileStore.getState().entitlement,
+              useSyncGate.getState().authOutcome,
             );
             // A newer load started while this lane was in flight — drop it.
             if (requestId !== feedLoadSeq) return;
+            // What Jev did when this briefing was built (counts only), kept in
+            // its own small store for the Profile row. A response that reports
+            // nothing (no key was sent, or a replay of a frozen batch) leaves
+            // the last report as it was.
+            if (realFeed.jevScreening) {
+              useJevScreeningStore.getState().record(realFeed.jevScreening);
+            }
             set((state) => {
               const currentSavedIds = new Set(
                 state.savedPapers.map((paper) => paper.id),
@@ -2186,8 +2162,7 @@ export const useFeedStore = create<FeedState>()(
             const realEvents = await fetchRealEvents(
               profile,
               dismissedEventIds,
-              useProfileStore.getState().entitlement,
-              poolRefresh,
+              useSyncGate.getState().authOutcome,
             );
             if (requestId !== feedLoadSeq) return;
             set((state) => {
@@ -2231,8 +2206,7 @@ export const useFeedStore = create<FeedState>()(
             const realJobs = await fetchRealJobs(
               profile,
               dismissedJobIds,
-              useProfileStore.getState().entitlement,
-              poolRefresh,
+              useSyncGate.getState().authOutcome,
             );
             if (requestId !== feedLoadSeq) return;
             set((state) => {

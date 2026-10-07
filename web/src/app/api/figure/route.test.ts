@@ -12,16 +12,15 @@ import {
  * ABC-freemium 1-09 · R-TEST-1, R-SEC-1, Ruling 2 point 7.
  *
  * `GET /api/figure` had **no authentication of any kind** and no test file at
- * all. It reaches a provider through `extractFigure` -> `chooseCandidate` -> the
- * semantic and vision matchers, which were the only two no-argument
- * `resolveProvider()` calls in the tree.
+ * all. It makes Peer's server fetch a page the caller names, so it takes the
+ * same sign-in and hourly limit as the model routes. It reaches no model: the
+ * figure is chosen by the deterministic extractor (there used to be a semantic
+ * and a vision matcher behind the company's model key, and a `GET` that the CDN
+ * caches has no channel for a reader's own).
  *
- * **The money rule.** This suite drives the real handler and does not mock the
- * provider registry, so after item 1-11 an unmocked `resolveProvider()` would
- * return a live provider on the operator's real key. `vitest.setup.ts` deletes
- * `GOOGLE_API_KEY` before every suite and every test; `deleteSpendableKeys()`
- * below is the belt-and-braces call, and the "no model call" assertion is what
- * would catch a regression.
+ * This suite drives the real handler and does not mock the provider registry,
+ * and the "no model call" assertion below holds even with a company key sitting
+ * in the environment.
  */
 
 const mocks = vi.hoisted(() => ({
@@ -134,10 +133,9 @@ describe("GET /api/figure", () => {
     expect(outgoing).toEqual([]);
   });
 
-  it("serves a signed-in reader without making a model call", async () => {
-    // The degraded figure path is a real answer, not an error: with no provider
-    // available the matchers return null and the deterministic extractor decides
-    // on its own.
+  it("serves a signed-in reader without making a model call, even with a company key in the environment", async () => {
+    // The deterministic extractor decides on its own; there is no model step.
+    vi.stubEnv("GOOGLE_API_KEY", "COMPANY-NOT-A-KEY");
     mocks.getUser.mockResolvedValue(signedIn("reader-1"));
 
     const response = await GET(request({ id: "paper-1", url: "https://example.org/p" }));
@@ -145,8 +143,8 @@ describe("GET /api/figure", () => {
     expect(response.status).toBe(200);
     const body = (await response.json()) as { status?: string };
     expect(typeof body.status).toBe("string");
-    // No `GOOGLE_API_KEY` in this process, so `resolveProvider` returns null and
-    // no request can have gone to a model endpoint.
+    // Nothing in this route resolves a provider, so no request can have gone to
+    // a model endpoint.
     expect(
       outgoing.filter((url) => /googleapis|openai|anthropic|deepseek|dashscope/i.test(url)),
     ).toEqual([]);
@@ -157,9 +155,8 @@ describe("GET /api/figure", () => {
 // private text in a URL. The page used to ask
 // `GET /api/figure?id=upload:<h>&query=<report text>&paperTitle=<the PDF's
 // title>`, and the server's request log printed both. An upload's request is
-// a POST now, its title is taken from the owner-checked record on the
-// server, and a GET that carries either for an upload is refused before any
-// work, so a client regression fails loudly instead of leaking quietly.
+// a POST now, and a GET that carries either for an upload is refused before
+// any work, so a client regression fails loudly instead of leaking quietly.
 describe("POST /api/figure — an upload's figure request (P0-10)", () => {
   const HASH = "0123456789abcdef";
   const RECORD_TITLE = "A Title Only The Owner's Record Holds";
@@ -186,7 +183,10 @@ describe("POST /api/figure — an upload's figure request (P0-10)", () => {
     mocks.extractFigure.mockResolvedValue(FOUND);
   });
 
-  it("serves the owner, privately, with the record's title — never a title the client sent", async () => {
+  // P4-00: the title used to be read from the record for the model matchers, which are gone;
+  // no title, the client's or the record's, is passed on now. What is pinned is that a title
+  // the client made up reaches nothing.
+  it("serves the owner, privately, and passes the extractor no title — not the client's, not the record's", async () => {
     mocks.ownedUpload.mockResolvedValue({ hash16: HASH, title: RECORD_TITLE, ownerKey: "owner", revision: 1 });
 
     const response = await POST(post({
@@ -199,13 +199,13 @@ describe("POST /api/figure — an upload's figure request (P0-10)", () => {
     expect(response.headers.get("Cache-Control")).toBe("private, no-store");
     expect(mocks.ownedUpload).toHaveBeenCalledWith(HASH);
     expect(mocks.extractFigure).toHaveBeenCalledTimes(1);
-    expect(mocks.extractFigure).toHaveBeenCalledWith(expect.objectContaining({
+    expect(mocks.extractFigure).toHaveBeenCalledWith({
       itemId: `upload:${HASH}`,
       url: `/api/papers/upload/${HASH}/file`,
       query: "words from the report",
-      paperTitle: RECORD_TITLE,
       figureIndex: 1,
-    }));
+    });
+    expect(mocks.extractFigure.mock.calls[0][0]).not.toHaveProperty("paperTitle");
   });
 
   it("answers anyone else 404, privately, before the extractor", async () => {
@@ -232,9 +232,10 @@ describe("POST /api/figure — an upload's figure request (P0-10)", () => {
   });
 
   // P0-11 (§1e.11): a public paper with a private attachment posts too, so
-  // its report text stays out of a URL. Its title is public and comes from
-  // the body; the answer is private like every POST's.
-  it("serves a public paper's POST with the body's title, privately", async () => {
+  // its report text stays out of a URL; the answer is private like every
+  // POST's. (P4-00: the body's title is not passed on any more, no model
+  // matcher wants it.)
+  it("serves a public paper's POST privately, and passes the extractor no title", async () => {
     const response = await POST(post({
       id: "openalex:W7000000003", v: "12", url: "https://example.org/a-public-paper",
       query: "words from the deep report on the attached PDF", paperTitle: "The Public Paper's Title", idx: 2, rev: 2,
@@ -244,12 +245,13 @@ describe("POST /api/figure — an upload's figure request (P0-10)", () => {
     expect(await response.json()).toEqual(FOUND);
     expect(response.headers.get("Cache-Control")).toBe("private, no-store");
     expect(mocks.ownedUpload).not.toHaveBeenCalled();
-    expect(mocks.extractFigure).toHaveBeenCalledWith(expect.objectContaining({
+    expect(mocks.extractFigure).toHaveBeenCalledWith({
       itemId: "openalex:W7000000003",
+      url: "https://example.org/a-public-paper",
       query: "words from the deep report on the attached PDF",
-      paperTitle: "The Public Paper's Title",
       figureIndex: 2,
-    }));
+    });
+    expect(mocks.extractFigure.mock.calls[0][0]).not.toHaveProperty("paperTitle");
   });
 
   it("refuses a body that is not JSON, or has no id", async () => {
@@ -300,13 +302,14 @@ describe("POST /api/figure — an upload's figure request (P0-10)", () => {
     expect(bare.status).toBe(200);
   });
 
-  it("keeps a public paper's GET as it was, query and title included", async () => {
+  it("keeps a public paper's GET as it was: the day-long edge cache, the query passed on, a title not", async () => {
     const response = await GET(request({ id: "openalex:W1", url: "https://example.org/p", query: "words", paperTitle: "A Public Title" }));
 
     expect(response.status).toBe(200);
     expect(response.headers.get("Cache-Control")).toBe("public, s-maxage=86400, stale-while-revalidate=604800");
     expect(mocks.ownedUpload).not.toHaveBeenCalled();
-    expect(mocks.extractFigure).toHaveBeenCalledWith(expect.objectContaining({ itemId: "openalex:W1", query: "words", paperTitle: "A Public Title" }));
+    expect(mocks.extractFigure).toHaveBeenCalledWith({ itemId: "openalex:W1", url: "https://example.org/p", query: "words", figureIndex: 0 });
+    expect(mocks.extractFigure.mock.calls[0][0]).not.toHaveProperty("paperTitle");
   });
 });
 

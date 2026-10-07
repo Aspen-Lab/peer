@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
@@ -727,5 +728,34 @@ describe("page.tsx source — the device-only hint lines (§1bp.3)", () => {
     if (nextEditRowAt !== -1) {
       expect(nextSentenceAt).toBeLessThan(nextEditRowAt);
     }
+  });
+});
+
+
+// Paper screening with the reader's own Jev key: its Profile row sits right
+// after the model-key row and before the Deep report row, mounts the shared
+// `JevSetup`, and the page itself never touches the key (the component and the
+// store own it). The page renders inside a store and a router, which this repo
+// cannot render headlessly, so the placement is pinned in the source.
+describe("Profile page - the Paper screening row (Jev key)", () => {
+  const source = readFileSync(join(process.cwd(), "src/app/profile/page.tsx"), "utf8");
+
+  it("has a Paper screening row between the AI provider row and the Deep report row", () => {
+    const provider = source.indexOf('label="AI provider"');
+    const screening = source.indexOf('label="Paper screening"');
+    const deep = source.indexOf('label="Deep report"');
+    expect(provider).toBeGreaterThan(-1);
+    expect(screening).toBeGreaterThan(provider);
+    expect(deep).toBeGreaterThan(screening);
+  });
+
+  it("mounts the shared Jev setup in the row, and imports it from the profile components", () => {
+    expect(source).toMatch(/import \{[^}]*\bJevSetup\b[^}]*\} from "@\/components\/profile\/jev-setup"/);
+    const row = source.slice(source.indexOf('label="Paper screening"'), source.indexOf('label="Deep report"'));
+    expect(row).toContain('<JevSetup variant="profile"');
+  });
+
+  it("never reads or writes the key itself: the setup component owns it", () => {
+    expect(source).not.toMatch(/jevApiKey|updateJevApiKey/);
   });
 });

@@ -6,39 +6,47 @@ import {
   signedOut,
   supabaseServerStub,
 } from "@/test-support/route-harness";
+import { resetCounterStoreForTests } from "@/lib/usage/counters";
 
 const mocks = vi.hoisted(() => ({ getUser: vi.fn() }));
 
-// ABC-freemium 1-06 — the guard reads a session to resolve an entitlement, so
-// the session is what a test has to control.
+// ABC-freemium 1-06 — the guard reads a session, so the session is what a test
+// has to control.
 vi.mock("@/lib/supabase/server", () => ({
   createClient: () => Promise.resolve(supabaseServerStub(mocks.getUser)),
 }));
 
-import {
-  entitledAiTier,
-  protectAiRequest,
-  requireEntitledAiRequest,
-} from "./ai-request";
-import { ANONYMOUS_ENTITLEMENT, type Entitlement } from "@/lib/entitlement/types";
+import { aiTierCeiling, requireAiRequest, type AiRequest } from "./ai-request";
 
 beforeEach(() => {
   vi.clearAllMocks();
+  resetCounterStoreForTests();
   mocks.getUser.mockResolvedValue(signedOut());
 });
 
 afterEach(() => {
   vi.unstubAllEnvs();
+  resetCounterStoreForTests();
 });
 
-describe("protectAiRequest", () => {
+/**
+ * ABC-freemium 1-06 · R-SEC-2, R-SEC-3, R-KEY-2.
+ *
+ * The shared check every AI route runs BEFORE `resolveProvider`: sign-in, then
+ * the per-hour rate limit. It says nothing about a model — Peer holds none.
+ */
+describe("requireAiRequest", () => {
   it("keeps local next dev available without cloud auth", async () => {
     vi.stubEnv("NODE_ENV", "development");
     vi.stubEnv("VERCEL", "");
     vi.stubEnv("VERCEL_ENV", "");
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "");
 
-    await expect(protectAiRequest("test")).resolves.toBeNull();
+    const result = await requireAiRequest("test");
+
+    expect(result).not.toBeInstanceOf(NextResponse);
+    // No session to read, and not anonymous: a developer's own machine.
+    expect(result).toEqual({ user: null, anonymous: false });
   });
 
   it("fails closed when a deployment has no auth configuration", async () => {
@@ -47,38 +55,35 @@ describe("protectAiRequest", () => {
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "");
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "");
 
-    const response = await protectAiRequest("test");
-    expect(response?.status).toBe(503);
-  });
-});
+    const response = await requireAiRequest("test");
 
-/**
- * ABC-freemium 1-06 · R-SEC-2, R-SEC-3, R-KEY-2.
- */
-describe("requireEntitledAiRequest", () => {
-  it("returns an entitlement, not null, in local development", async () => {
-    // The old guard's only success value was `null` — there was nothing to
-    // carry a plan. Ruling 3 point 2 makes the unset local default `free` with a
-    // synthesised `dev-local` user, so the developer still gets the model (D1)
-    // and does not get the system search key.
-    vi.stubEnv("NODE_ENV", "development");
+    expect(response).toBeInstanceOf(NextResponse);
+    expect((response as NextResponse).status).toBe(503);
+  });
+
+  it("lets a runtime with no sign-in configured at all through as a reader, not an anonymous caller", async () => {
+    // A self-hosted copy or the test process: not deployed, no Supabase URL.
+    // Treating this caller as anonymous would cap the tier at 0 and silently
+    // stop a reader's own key working for self-hosters and every route test.
+    vi.stubEnv("NODE_ENV", "test");
     vi.stubEnv("VERCEL", "");
     vi.stubEnv("VERCEL_ENV", "");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "");
 
-    const result = await requireEntitledAiRequest("test");
-
-    expect(result).not.toBeInstanceOf(NextResponse);
-    const { entitlement } = result as { entitlement: Entitlement };
-    expect(entitlement.effectivePlan).toBe("paid");
-    expect(entitlement.userId).toBe("dev-local");
-    expect(entitlement.systemSearchAllowed).toBe(false);
+    expect(await requireAiRequest("test", 60, { allowAnonymous: true })).toEqual({
+      user: null,
+      anonymous: false,
+    });
+    expect(mocks.getUser).not.toHaveBeenCalled();
   });
 
   it("answers a signed-out caller 401 in a deployed runtime", async () => {
     deployedRuntimeEnv(vi.stubEnv);
     mocks.getUser.mockResolvedValue(signedOut());
 
-    const result = await requireEntitledAiRequest("test");
+    const result = await requireAiRequest("test");
 
     expect(result).toBeInstanceOf(NextResponse);
     expect((result as NextResponse).status).toBe(401);
@@ -87,35 +92,25 @@ describe("requireEntitledAiRequest", () => {
     );
   });
 
-  it("lets a signed-out caller through when the route allows it", async () => {
-    // R-ENT-4 — "signed-out users get tier-0 behaviour everywhere ...
-    // unchanged". Only the three feed routes pass this, and `entitledAiTier`
-    // then caps them at 0 so nothing operator-funded is reachable.
+  it("lets a signed-out caller through as anonymous when the route allows it", async () => {
+    // R-ENT-4 — signed-out readers get the reading without a model, not a 401.
+    // Only the feed route passes this, and `aiTierCeiling` then caps the caller
+    // at 0 so no provider is ever resolved for them.
     deployedRuntimeEnv(vi.stubEnv);
     mocks.getUser.mockResolvedValue(signedOut());
 
-    const result = await requireEntitledAiRequest("test", 60, {
-      allowAnonymous: true,
-    });
+    const result = await requireAiRequest("test", 60, { allowAnonymous: true });
 
-    expect(result).not.toBeInstanceOf(NextResponse);
-    expect((result as { entitlement: Entitlement }).entitlement).toBe(
-      ANONYMOUS_ENTITLEMENT,
-    );
+    expect(result).toEqual({ user: null, anonymous: true });
   });
 
-  it("returns the signed-in user and their entitlement", async () => {
+  it("returns the signed-in user, who is not anonymous", async () => {
     deployedRuntimeEnv(vi.stubEnv);
     mocks.getUser.mockResolvedValue(signedIn("user-7"));
 
-    const result = await requireEntitledAiRequest("test");
+    const result = await requireAiRequest("test");
 
-    expect(result).not.toBeInstanceOf(NextResponse);
-    const typed = result as { user: { id: string }; entitlement: Entitlement };
-    expect(typed.user.id).toBe("user-7");
-    // One tier: no table here, and a signed-in reader still resolves the single plan.
-    expect(typed.entitlement.effectivePlan).toBe("paid");
-    expect(typed.entitlement.userId).toBe("user-7");
+    expect(result).toEqual({ user: { id: "user-7" }, anonymous: false });
   });
 
   it("reads the session exactly once per request", async () => {
@@ -124,33 +119,74 @@ describe("requireEntitledAiRequest", () => {
     deployedRuntimeEnv(vi.stubEnv);
     mocks.getUser.mockResolvedValue(signedIn("user-7"));
 
-    await requireEntitledAiRequest("test");
+    await requireAiRequest("test");
 
     expect(mocks.getUser).toHaveBeenCalledTimes(1);
   });
 });
 
-describe("entitledAiTier (R-SEC-3)", () => {
-  function entitlement(overrides: Partial<Entitlement>): Entitlement {
-    return { ...ANONYMOUS_ENTITLEMENT, ...overrides };
-  }
+describe("the hourly rate limit", () => {
+  it("answers 429 with Retry-After once a reader passes the route's limit", async () => {
+    deployedRuntimeEnv(vi.stubEnv);
+    mocks.getUser.mockResolvedValue(signedIn("user-7"));
 
-  it("caps a signed-out caller at 0 however loudly the body asks", () => {
-    expect(entitledAiTier(2, ANONYMOUS_ENTITLEMENT)).toBe(0);
-    expect(entitledAiTier(99, ANONYMOUS_ENTITLEMENT)).toBe(0);
+    for (let i = 0; i < 3; i += 1) {
+      expect(await requireAiRequest("limited", 3)).not.toBeInstanceOf(NextResponse);
+    }
+    const refused = await requireAiRequest("limited", 3);
+
+    expect(refused).toBeInstanceOf(NextResponse);
+    const response = refused as NextResponse;
+    expect(response.status).toBe(429);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+    expect(Number(response.headers.get("Retry-After"))).toBeGreaterThanOrEqual(1);
   });
 
-  it("lets any signed-in user reach tier 2, free included", () => {
-    // D1 — the ceiling is `userId !== null`, NOT `effectivePlan`. A later round
-    // will be tempted to tighten this to `paid`; that would break D1.
-    expect(entitledAiTier(2, entitlement({ userId: "u1", plan: "free" }))).toBe(2);
-    expect(entitledAiTier(2, entitlement({ userId: "u1", plan: "paid" }))).toBe(2);
+  it("counts per reader and per scope, not across them", async () => {
+    deployedRuntimeEnv(vi.stubEnv);
+
+    mocks.getUser.mockResolvedValue(signedIn("user-a"));
+    await requireAiRequest("scope-one", 1);
+    expect(await requireAiRequest("scope-one", 1)).toBeInstanceOf(NextResponse);
+
+    // Another scope for the same reader, and the same scope for another reader,
+    // each start from zero.
+    expect(await requireAiRequest("scope-two", 1)).not.toBeInstanceOf(NextResponse);
+    mocks.getUser.mockResolvedValue(signedIn("user-b"));
+    expect(await requireAiRequest("scope-one", 1)).not.toBeInstanceOf(NextResponse);
+  });
+
+  it("does not count a signed-out caller on a route that allows one — there is no account to count against", async () => {
+    deployedRuntimeEnv(vi.stubEnv);
+    mocks.getUser.mockResolvedValue(signedOut());
+
+    for (let i = 0; i < 5; i += 1) {
+      const result = await requireAiRequest("anon", 1, { allowAnonymous: true });
+      expect(result).toEqual({ user: null, anonymous: true });
+    }
+  });
+});
+
+describe("aiTierCeiling (R-SEC-3)", () => {
+  const anonymous: AiRequest = { user: null, anonymous: true };
+  const reader: AiRequest = { user: { id: "u1" }, anonymous: false };
+  const noSignInRuntime: AiRequest = { user: null, anonymous: false };
+
+  it("caps an anonymous caller at 0 however loudly the body asks", () => {
+    expect(aiTierCeiling(2, anonymous)).toBe(0);
+    expect(aiTierCeiling(99, anonymous)).toBe(0);
+  });
+
+  it("lets a reader, and a runtime with no sign-in, reach tier 2", () => {
+    expect(aiTierCeiling(2, reader)).toBe(2);
+    expect(aiTierCeiling(2, noSignInRuntime)).toBe(2);
   });
 
   it("treats the requested tier as an upper bound, never a grant", () => {
-    expect(entitledAiTier(0, entitlement({ userId: "u1" }))).toBe(0);
-    expect(entitledAiTier(1, entitlement({ userId: "u1" }))).toBe(1);
-    expect(entitledAiTier(undefined, entitlement({ userId: "u1" }))).toBe(0);
-    expect(entitledAiTier(-5, entitlement({ userId: "u1" }))).toBe(0);
+    expect(aiTierCeiling(0, reader)).toBe(0);
+    expect(aiTierCeiling(1, reader)).toBe(1);
+    expect(aiTierCeiling(undefined, reader)).toBe(0);
+    expect(aiTierCeiling(-5, reader)).toBe(0);
+    expect(aiTierCeiling(99, reader)).toBe(2);
   });
 });

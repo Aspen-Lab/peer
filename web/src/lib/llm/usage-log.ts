@@ -1,17 +1,14 @@
-// Tier-0 observability: one place to record what every LLM call actually cost.
+// Tier-0 observability: one place to see what every LLM call actually cost.
 //
 // Providers call `logLlmUsage` after each request so we can see, per call, the
 // model used, token counts (including hidden thinking/reasoning tokens where the
 // API reports them), and wall-clock latency. This is the measurement layer the
 // API-efficiency work is built on — you cannot claim a speed/token win you can't
-// see.
+// see. It is a console line and nothing more: Peer keeps no ledger of model use
+// and holds no reader identity here.
 //
 // SAFETY: never log API keys, prompt/response text, private profile context, or
 // image bytes. Only numeric counts + model ids.
-
-import { recordUsageEvent } from "@/lib/usage/events";
-import { currentUsageContext } from "@/lib/usage/context";
-import { cachedCompanyBudgetPrices, recordCompanySpendAttempt } from "@/lib/usage/company-budget";
 
 export interface LlmUsage {
   provider: string;
@@ -38,48 +35,6 @@ export function logLlmUsage(u: LlmUsage): void {
     u.ok ? "ok" : "ERR",
   ].filter(Boolean);
   console.log(parts.join(" "));
-
-  // ABC-freemium 1-03 · R-METER-1 — the same facts, persisted. The console line
-  // above is unchanged byte for byte: it is the API-efficiency measurement layer
-  // this file's header describes and removing it would delete an unrelated
-  // capability.
-  //
-  // This is where the row is written rather than in the wrapper, because this is
-  // where the token counts are. The wrapper supplies the half this function
-  // cannot know — which user, and whose key — through an async-local scope, and
-  // is told a row exists so it does not write a second one.
-  const ctx = currentUsageContext();
-  if (ctx) ctx.recorded = true;
-
-  // SPEND-CAP · R10 — accumulate THIS attempt's actual cost onto the
-  // reservation `meterCall` attached to the scope; settlement itself fires
-  // exactly once, from `meterCall`'s `finally`, after every attempt for this
-  // call has run. Never touches the counter store directly — this function
-  // stays synchronous and side-effect-free beyond the existing console line
-  // and usage-event write below.
-  if (ctx?.companyReservation) {
-    recordCompanySpendAttempt(
-      ctx.companyReservation,
-      { model: u.model, inputTokens: u.inputTokens, outputTokens: u.outputTokens, thinkingTokens: u.thinkingTokens },
-      cachedCompanyBudgetPrices(new Date()),
-    );
-  }
-
-  recordUsageEvent({
-    user_id: ctx?.userId ?? null,
-    kind: "llm",
-    path: u.path ?? ctx?.path ?? null,
-    provider: u.provider,
-    model: u.model,
-    input_tokens: u.inputTokens ?? null,
-    output_tokens: u.outputTokens ?? null,
-    thinking_tokens: u.thinkingTokens ?? null,
-    latency_ms: Math.round(u.latencyMs),
-    ok: u.ok,
-    // Null, not false, when there is no scope: "not known" is honest and a
-    // wrong `false` would read as "the operator paid for this".
-    byok: ctx ? ctx.byok : null,
-  });
 }
 
 /** Milliseconds since an epoch marker; wrapper so call sites read cleanly. */
@@ -87,7 +42,7 @@ export function now(): number {
   return Date.now();
 }
 
-// P3-S5 — the Jev shadow's cost log (ABC-JEV-INTEGRATION.md §4 Round 3
+// P3-S5 — the Jev screen's cost log (ABC-JEV-INTEGRATION.md §4 Round 3
 // "P3-S5 DESIGN RULING"; docs/jev-abc/P3-B-20260924T0525Z.md §6). Additive,
 // beside `logLlmUsage` above, and follows its EXACT contract: never log API
 // keys, prompt/response text, or private profile context. Concretely: this
@@ -99,15 +54,15 @@ export function now(): number {
 // same structural guard the decision layer's other modules already use for
 // their own leak tests.
 
-/** One shadow-mode decision-call attempt's cost/outcome, safe to log verbatim. */
+/** One Jev decision-call attempt's cost/outcome, safe to log verbatim. */
 export interface DecisionUsageLog {
   /** Always `"typesafe"` today (`decisions/decision-cache.ts`'s `DECISION_CACHE_PROVIDER`) — kept as a field, not a hardcoded string, for shape parity with `LlmUsage`. */
   provider: string;
-  /** The ACTUAL echoed Jev model id. Empty string when degraded (cache hit, or any non-"ok" broker/call status) — never a placeholder, never guessed. */
+  /** The ACTUAL echoed Jev model id. Empty string when degraded (cache hit, or any non-"ok" call status) — never a placeholder, never guessed. */
   model: string;
-  /** Whether this attempt was answered from the decision cache without ever reaching the broker. */
+  /** Whether this attempt was answered from the decision cache without ever reaching Jev. */
   cacheHit: boolean;
-  /** `"cache_hit"`, `"ok"`, or any `BrokerCallResult`/`JevCallResult` fault-kind status string (`decisions/broker-client.ts`/`decisions/jev-client.ts`). */
+  /** `"cache_hit"`, `"ok"`, or any `JevCallResult` fault-kind status string (`decisions/jev-client.ts`). */
   status: string;
   inputTokens: number;
   /** Always 0 — Jev's output is free/uncosted; the field stays for shape parity with `LlmUsage`. */
@@ -115,7 +70,7 @@ export interface DecisionUsageLog {
   latencyMs: number;
 }
 
-/** Emit a single compact line per Jev shadow decision-call attempt. Safe to call in any runtime. */
+/** Emit a single compact line per Jev decision-call attempt. Safe to call in any runtime. */
 export function logDecisionUsage(u: DecisionUsageLog): void {
   const parts = [
     `[decision] ${u.provider}${u.model ? `/${u.model}` : ""}`,

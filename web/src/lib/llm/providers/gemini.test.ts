@@ -19,51 +19,45 @@ import {
   THINKING_HEADROOM,
 } from "./gemini";
 import { PROVIDER_MODELS } from "../provider-models";
-import {
-  setUsageEventsClientForTests,
-  type UsageEventRow,
-} from "@/lib/usage/events";
-
 /**
  * ABC-freemium 2-05 · R-METER-1 (amended 2026-09-05) · Ruling 6 point 5.
  *
  * **`ok` says whether the request produced usable output.** Every success path
  * in this module used to pass a literal `true`, so a model that answered with
- * empty text wrote an `ok: true` row and the chain then fell through to the
- * next model — the ledger recorded a success the caller never received. There
- * was no suite on this file at all before this item.
+ * empty text was logged as a success and the chain then fell through to the
+ * next model — the log recorded a success the caller never received. There was
+ * no suite on this file at all before this item.
+ *
+ * Peer keeps no usage ledger any more, so the fact is read where it still
+ * surfaces: the `[llm]` console line `logLlmUsage` prints per provider request,
+ * which ends in `ok` or `ERR`.
  */
 describe("2-05 — a Gemini request's `ok` reflects what it returned", () => {
-  const rows: UsageEventRow[] = [];
+  /** One entry per provider request: its model id and whether it was logged `ok`. */
+  const rows: { model: string; ok: boolean }[] = [];
 
   beforeEach(() => {
     rows.length = 0;
     generateContentMock.mockReset();
-    setUsageEventsClientForTests({
-      from: () => ({
-        insert: (inserted: UsageEventRow[]) => {
-          rows.push(...inserted);
-          return Promise.resolve({ error: null });
-        },
-      }),
-    } as never);
     vi.spyOn(console, "warn").mockImplementation(() => {});
-    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "log").mockImplementation((line?: unknown) => {
+      const match = /^\[llm\] gemini\/(\S+) .*\b(ok|ERR)$/.exec(String(line));
+      if (match) rows.push({ model: match[1], ok: match[2] === "ok" });
+    });
   });
 
   afterEach(() => {
-    setUsageEventsClientForTests(undefined);
     vi.restoreAllMocks();
   });
 
-  /** Let the fire-and-forget inserts land before asserting on them. */
+  /** Kept from the ledger days so each case still lets pending work settle. */
   async function flush(): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, 0));
   }
 
-  it("writes ok:false for a request that returned EMPTY text", async () => {
+  it("logs a request that returned EMPTY text as failed (ERR)", async () => {
     // The one-word defect. The request succeeded at the HTTP level and produced
-    // nothing usable; the chain moves on, and the row must say so.
+    // nothing usable; the chain moves on, and the log line must say so.
     generateContentMock.mockResolvedValue({ text: "   " });
     const provider = createGeminiApiProvider("GOOGLE-NOT-A-KEY");
 
@@ -80,7 +74,7 @@ describe("2-05 — a Gemini request's `ok` reflects what it returned", () => {
     expect(rows.every((r) => r.ok === false)).toBe(true);
   });
 
-  it("writes ok:true for a request that returned real text", async () => {
+  it("logs a request that returned real text as ok", async () => {
     // The other half, so the case above is not passing by making everything
     // false.
     generateContentMock.mockResolvedValue({ text: '{"a":1}' });
@@ -94,13 +88,13 @@ describe("2-05 — a Gemini request's `ok` reflects what it returned", () => {
     await flush();
 
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ kind: "llm", provider: "gemini", ok: true });
+    expect(rows[0]).toMatchObject({ ok: true });
   });
 
-  it("writes ONE ROW PER REQUEST across a fallback chain, not one per call", async () => {
-    // Ruling 6 point 5's billing reading, asserted on the real chain loop: the
-    // first model answers empty, the second answers properly, and the owner's
-    // ledger shows both requests because both were billed.
+  it("logs ONE LINE PER REQUEST across a fallback chain, not one per call", async () => {
+    // Ruling 6 point 5's reading, asserted on the real chain loop: the first
+    // model answers empty, the second answers properly, and the log shows both
+    // requests because both were made.
     generateContentMock
       .mockResolvedValueOnce({ text: "" })
       .mockResolvedValue({ text: '{"a":1}' });
@@ -115,13 +109,13 @@ describe("2-05 — a Gemini request's `ok` reflects what it returned", () => {
 
     expect(rows).toHaveLength(2);
     expect(rows.map((r) => r.ok)).toEqual([false, true]);
-    // ABC-freemium 6-02. This line used to assert the two rows named two
+    // ABC-freemium 6-02. This line used to assert the two lines named two
     // DISTINCT models, which was only ever true by accident: it held because
     // the two tiers happened to be configured with different ids, not because
     // anything promised it. Both tiers now name one id, so the distinct-count
     // is 1 — and the property that actually matters is unchanged and is what
-    // is asserted instead: the rows name the configured chain, in order, one
-    // row per attempt. Read from the constant rather than retyped, so it stays
+    // is asserted instead: the lines name the configured chain, in order, one
+    // line per attempt. Read from the constant rather than retyped, so it stays
     // true whichever way the two tiers are configured.
     // Merge note (2026-09-23): the reader's-key chain walks the small tier's
     // two ids before the large tier's, so the first two attempts are the
@@ -129,7 +123,7 @@ describe("2-05 — a Gemini request's `ok` reflects what it returned", () => {
     expect(rows.map((r) => r.model)).toEqual(GEMINI_API_CHAIN_IDS.slice(0, 2));
   });
 
-  it("writes ok:false when the request throws", async () => {
+  it("logs a request that throws as failed (ERR)", async () => {
     // Unchanged behaviour, pinned beside the new one.
     generateContentMock.mockRejectedValue(new Error("boom"));
     const provider = createGeminiApiProvider("GOOGLE-NOT-A-KEY");
@@ -170,15 +164,11 @@ describe("2-05 — a Gemini request's `ok` reflects what it returned", () => {
 describe("6-02 — the Gemini thinking control is decided per model family", () => {
   beforeEach(() => {
     generateContentMock.mockReset();
-    setUsageEventsClientForTests({
-      from: () => ({ insert: () => Promise.resolve({ error: null }) }),
-    } as never);
     vi.spyOn(console, "warn").mockImplementation(() => {});
     vi.spyOn(console, "log").mockImplementation(() => {});
   });
 
   afterEach(() => {
-    setUsageEventsClientForTests(undefined);
     vi.unstubAllEnvs();
     vi.restoreAllMocks();
   });

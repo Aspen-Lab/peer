@@ -27,8 +27,8 @@ import { NextRequest } from "next/server";
 const mocks = vi.hoisted(() => ({
   getUser: vi.fn(),
   runFeedPipeline: vi.fn(),
-  requireEntitledAiRequest: vi.fn(),
-  entitledAiTier: vi.fn(),
+  requireAiRequest: vi.fn(),
+  aiTierCeiling: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -40,9 +40,8 @@ vi.mock("@/lib/feed/pipeline", () => ({
 }));
 
 vi.mock("@/lib/security/ai-request", () => ({
-  protectAiRequest: mocks.requireEntitledAiRequest,
-  requireEntitledAiRequest: mocks.requireEntitledAiRequest,
-  entitledAiTier: mocks.entitledAiTier,
+  requireAiRequest: mocks.requireAiRequest,
+  aiTierCeiling: mocks.aiTierCeiling,
 }));
 
 // The ONE shared seam: web/src/app/api/feed/route.ts AND
@@ -155,9 +154,9 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.useFakeTimers();
   vi.setSystemTime(new Date(2026, 8, 24, 9, 0));
-  mocks.requireEntitledAiRequest.mockResolvedValue({ entitlement: { userId: null } });
-  mocks.entitledAiTier.mockImplementation((tier: number, entitlement: { userId: string | null }) =>
-    entitlement.userId === null ? 0 : tier,
+  mocks.requireAiRequest.mockResolvedValue({ user: null, anonymous: true });
+  mocks.aiTierCeiling.mockImplementation((tier: number, request: { anonymous: boolean }) =>
+    request.anonymous ? 0 : tier,
   );
   mocks.getUser.mockResolvedValue({ data: { user: null } });
   // Every test stubs its own env/ledger explicitly; a construction that

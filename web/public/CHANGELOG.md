@@ -2,6 +2,90 @@
 
 All notable user-facing or infrastructure changes to Peer. Newest at the top.
 
+## v0.45.0 — 2026-10-06
+
+Paper screening with your own Jev key.
+
+Jev is a second pass over your day's papers, and it is yours to switch on: you
+apply for a Jev key, paste it into your Profile (or the Welcome wizard's AI
+step), and Peer asks Jev, for each of the 50 best candidates, up to four fixed
+questions about the paper: is it the meaning of your word, is it core to your
+project or only background, does it match your method, would it help your
+project. Peer moves papers up or down on the answers. A paper Jev cannot judge
+counts as neutral: Jev neither lifts nor lowers it, though papers Jev rates well
+can move ahead of it. A paper Jev says is a mismatch is moved back, never
+removed. Jev reads English best.
+
+It is optional, and nothing changes without it: with no key the briefing is
+screened exactly as before, with your topics, your project text, how new a paper
+is and where it was published. It works whether or not you have a model key, and
+with both, Jev sets the order while your model still writes the reasons.
+
+We have not measured how much this improves your list, so we state no number.
+Jev bills your own account for what it reads. Your key stays in this browser:
+it is never synced to your account, never saved into a backup file, and Peer's
+server passes it to Jev only while it screens your papers, without storing or
+logging it. Peer keeps Jev's answers for each paper against your account (the
+question, the answer and how sure Jev was), with no paper text and no key. A key
+you add today applies to your next briefing; the page names what Jev did the last
+time. The privacy page now has a section for it.
+
+A profile backup file no longer carries any key: the Jev key and the model key
+(and the older optional data keys) are left out when a backup is written, as a
+restore already refused to install them.
+
+**For anyone running Peer:** Jev no longer runs on a key of the site's own. The
+build refuses `JEV_API_KEY` and `PEER_JEV_BROKER_SECRET` on Vercel; remove them
+(and the other `PEER_JEV_*` settings, which nothing reads now) from the project's
+environment variables before deploying. The `jev-broker` Supabase function is gone
+from the repository; run `supabase functions list` and delete it, with its
+secrets, if it was ever deployed. The migration
+`20260924000400_private_decisions.sql` keeps each reader's Jev answers; apply it
+(`select to_regclass('public.private_decisions')` tells you whether it is there).
+The live smoke test now reads `JEV_SMOKE_API_KEY` instead of `JEV_API_KEY`.
+
+## v0.44.0 — 2026-10-06
+
+Peer's AI runs on your own key, and only on it.
+
+Peer no longer has a model of its own. The Gemini key the site ran for every
+signed-in reader is gone, so ranking by a model, relevance reasons, the digest
+bullets and Deep reports now run only if you add your own provider key (Profile
+or the Welcome wizard; Google Gemini, OpenAI, Anthropic, Qwen and DeepSeek).
+Without a key the briefing still works: it is the reading without a model, the
+same one a signed-out visitor gets, and it names what a key would add. Signing
+in no longer changes what a model does for you; it still syncs your profile,
+your saves and your delivery history, and it is still required to use a key
+(a signed-out visitor with a key reads without a model, and the page now says
+so instead of showing "AI on").
+
+What went with it: the free, trial and paid plans and their prices, the
+deep-report allowances and the daily house ceiling, the model's choice of
+figure for a section (a figure is picked by its caption and number now) and the
+model-written title for an uploaded PDF (its title is the file's own, or the
+file name). The hourly request limit on the AI routes stays.
+
+The privacy page now says what the code does: Peer has no model of its own, and
+your key goes from your browser through Peer's server to the provider you chose,
+and is not stored. It also no longer has a section about a record of model use,
+because Peer keeps none: it used to write one row per model call (provider,
+model, token counts, timing), and that table, the dollar budget that guarded
+Peer's own model spend and the daily limit on forced pool rebuilds are gone.
+Peer funds no web search either, so the only search a briefing can run is on a
+Tavily key you paste in yourself.
+
+**For anyone running Peer:** the build refuses `GOOGLE_API_KEY` on Vercel (it
+used to require it); remove it from the project's environment variables before
+deploying. The migration `20261007000000_drop_plan_and_restore_signup.sql` drops
+the four plan columns from `profiles` and puts the sign-up trigger back; take
+`select plan, count(*) from public.profiles group by 1;` first if you want a
+record of who was on what. A second migration,
+`20261007000100_drop_ledger_and_budget.sql`, drops the usage table
+(`usage_events`) and the two budget tables and clears the counter rows for the
+old allowances; export `usage_events` first (the file's header says how).
+`PEER_COMPANY_SPEND_CAP`, `BRAVE_SEARCH_API_KEY` and the `GOOGLE_VERTEX_SEARCH_*`
+names are read by nothing now (the build still refuses them on Vercel).
+
 ## v0.43.5 — 2026-09-25
 
 A figure the paper printed stretched is shown in its own proportions.

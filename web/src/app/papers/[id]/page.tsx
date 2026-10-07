@@ -44,7 +44,7 @@ import { readingToMarkdown } from "@/lib/papers/reading-markdown";
 import type { Claim, PaperReport } from "@/lib/papers/report";
 import type { Route } from "next";
 import { aiAvailability } from "@/lib/feed/ai-tier";
-import { entitlementGrants } from "@/lib/entitlement/allowance";
+import { useSyncGate } from "@/components/profile-sync";
 import { PaperPlate } from "@/components/cards/paper-plate";
 import { SwipeableCard } from "@/components/cards/swipe-card";
 import { useResolvedFigure } from "@/components/paper-figure";
@@ -741,22 +741,21 @@ function Reader({
   }, [revealingReportKey]);
   const shouldScrambleReport = revealingReportKey === model.reportKey && model.fresh;
 
-  // One tier: a signed-in reader has Peer's model; a reader with their own key has theirs.
+  // A model runs only on the reader's own key, and only for a signed-in reader.
   // (2026-09-23 merge note: replaces a dangling call to `reportProviderConfigured`,
   // whose file main deleted upstream of this branch's own last edit to it —
   // `use-model-report.ts`'s own `userProviderConfigured` was already reconciled
   // to this same `aiAvailability` call during this merge.)
-  const entitlement = useProfileStore((s) => s.entitlement);
-  const aiMode = aiAvailability(profile, entitlementGrants(entitlement));
+  const authOutcome = useSyncGate((s) => s.authOutcome);
+  const aiMode = aiAvailability(profile, authOutcome);
   const providerConfigured = aiMode !== "none";
   // P3-03 (§1h.6; §1a.8): Peer's gist after each paragraph's opening in the map. One
   // small model call per paper — made once the reading has a body, kept in this browser
-  // for a day, never charged against the deep-report or explain allowance — and absent
-  // without one. P3-05 (§1h.8 (1)): it reads the paper's body, so it is written only
-  // when a deep report is: `deepReportRequested`, the report hook's own predicate (the
-  // Deep report switch, or an attached PDF, and a model from anywhere), fed what the
-  // report hook is fed — the paper's text leaves for a model on one switch. The reader's
-  // own key travels as the explain box sends it.
+  // for a day, on the reader's own key — and absent without one. P3-05 (§1h.8 (1)): it
+  // reads the paper's body, so it is written only when a deep report is:
+  // `deepReportRequested`, the report hook's own predicate (the Deep report switch, or an
+  // attached PDF, and a model), fed what the report hook is fed — the paper's text leaves
+  // for a model on one switch. The reader's own key travels as the explain box sends it.
   const paragraphGists = useParagraphGuide({
     paper: ready ? paper : undefined,
     hasBody,

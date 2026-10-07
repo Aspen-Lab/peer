@@ -6,7 +6,7 @@ import type { PdfTextResult } from "@/lib/papers/pdf-text";
 const mocks = vi.hoisted(() => ({
   uploadOwner: vi.fn<() => Promise<string | null>>(async () => "test-owner"),
   attachUpload: vi.fn(async () => undefined),
-  extractPdfTextFromPath: vi.fn(),
+  extractPdfTextFromBytes: vi.fn(),
   writeUploadPdfIfAbsent: vi.fn<(hash16: string, bytes: Buffer) => Promise<void>>(async () => undefined),
   writeUploadMeta: vi.fn<(hash16: string, meta: import("@/lib/papers/upload-store").UploadMeta) => Promise<void>>(async () => undefined),
   readUploadMeta: vi.fn<() => Promise<import("@/lib/papers/upload-store").UploadMeta | null>>(async () => null),
@@ -20,6 +20,9 @@ const mocks = vi.hoisted(() => ({
   // touching the real filesystem.
   uploadFileExists: vi.fn(() => false),
   deleteUpload: vi.fn<(meta: import("@/lib/papers/upload-store").UploadMeta) => Promise<void>>(async () => undefined),
+  // A PDF the browser put in the bucket itself (the Vercel body-size path).
+  readStagedUpload: vi.fn<(ownerKey: string, name: string) => Promise<Buffer | null>>(async () => null),
+  removeStagedUpload: vi.fn<(ownerKey: string, name: string) => Promise<void>>(async () => undefined),
   resolveProvider: vi.fn(),
 }));
 
@@ -30,7 +33,7 @@ vi.mock("@/lib/papers/upload-access", async (original) => ({
 }));
 
 vi.mock("@/lib/papers/pdf-text", () => ({
-  extractPdfTextFromPath: mocks.extractPdfTextFromPath,
+  extractPdfTextFromBytes: mocks.extractPdfTextFromBytes,
 }));
 
 vi.mock("@/lib/papers/upload-store", async (importOriginal) => {
@@ -45,6 +48,8 @@ vi.mock("@/lib/papers/upload-store", async (importOriginal) => {
     deleteUpload: mocks.deleteUpload,
     purgeExpiredUploads: vi.fn(async () => undefined),
     attachUpload: mocks.attachUpload,
+    readStagedUpload: mocks.readStagedUpload,
+    removeStagedUpload: mocks.removeStagedUpload,
   };
 });
 
@@ -94,7 +99,7 @@ describe("POST /api/papers/upload", () => {
   beforeEach(() => {
     mocks.uploadOwner.mockResolvedValue("test-owner");
     mocks.attachUpload.mockClear();
-    mocks.extractPdfTextFromPath.mockReset();
+    mocks.extractPdfTextFromBytes.mockReset();
     mocks.writeUploadPdfIfAbsent.mockClear();
     mocks.writeUploadMeta.mockClear();
     mocks.readUploadMeta.mockReset();
@@ -107,7 +112,7 @@ describe("POST /api/papers/upload", () => {
     mocks.deleteUpload.mockResolvedValue(undefined);
     mocks.resolveProvider.mockReset();
     mocks.resolveProvider.mockReturnValue(null); // no local dev provider unless a test opts in
-    mocks.extractPdfTextFromPath.mockResolvedValue({ ok: true, doc: emptyDoc } satisfies PdfTextResult);
+    mocks.extractPdfTextFromBytes.mockResolvedValue({ ok: true, doc: emptyDoc } satisfies PdfTextResult);
   });
 
   afterEach(() => {
@@ -119,7 +124,7 @@ describe("POST /api/papers/upload", () => {
     const res = await postWith(pdfFile(pdfBytes()));
     expect(res.status).toBe(401);
     expect(mocks.writeUploadPdfIfAbsent).not.toHaveBeenCalled();
-    expect(mocks.extractPdfTextFromPath).not.toHaveBeenCalled();
+    expect(mocks.extractPdfTextFromBytes).not.toHaveBeenCalled();
   });
 
   it("requires explicit current-version rights confirmation", async () => {
@@ -127,12 +132,12 @@ describe("POST /api/papers/upload", () => {
     const res = await POST(new Request("http://localhost/api/papers/upload", { method: "POST", headers: SAME_ORIGIN_HEADERS, body: form }));
     expect(res.status).toBe(400);
     expect(mocks.writeUploadPdfIfAbsent).not.toHaveBeenCalled();
-    expect(mocks.extractPdfTextFromPath).not.toHaveBeenCalled();
+    expect(mocks.extractPdfTextFromBytes).not.toHaveBeenCalled();
   });
 
   it("attaches a matching full text to the original article and returns learning signals", async () => {
     const title = "Solid electrolytes for lithium metal batteries";
-    mocks.extractPdfTextFromPath.mockResolvedValue({ ok: true, doc: { ...emptyDoc, title,
+    mocks.extractPdfTextFromBytes.mockResolvedValue({ ok: true, doc: { ...emptyDoc, title,
       sections: [{ heading: "Abstract", canonical: "abstract", text: "Solid electrolytes improve lithium metal batteries. Solid electrolytes conduct lithium ions." }] } });
     const form = new FormData(); form.set("file", pdfFile(pdfBytes()));
     form.set("rightsVersion", "2026-09-19");
@@ -158,7 +163,7 @@ describe("POST /api/papers/upload", () => {
       expect(res.status).toBe(400);
       expect(await res.json()).toEqual({ error: "Invalid paper to supplement." });
     }
-    expect(mocks.extractPdfTextFromPath).not.toHaveBeenCalled();
+    expect(mocks.extractPdfTextFromBytes).not.toHaveBeenCalled();
     expect(mocks.writeUploadPdfIfAbsent).not.toHaveBeenCalled();
     expect(mocks.attachUpload).not.toHaveBeenCalled();
   });
@@ -172,7 +177,7 @@ describe("POST /api/papers/upload", () => {
     // (fraction 2/5 = 0.4) — the same fixture proven at unit level in
     // upload-concepts.test.ts's "bands on title overlap alone".
     const extractedTitle = "Solid state ionic conductors for advanced batteries";
-    mocks.extractPdfTextFromPath.mockResolvedValue({ ok: true, doc: { ...emptyDoc, title: extractedTitle,
+    mocks.extractPdfTextFromBytes.mockResolvedValue({ ok: true, doc: { ...emptyDoc, title: extractedTitle,
       sections: [{ heading: "Abstract", canonical: "abstract", text: "Solid state ionic conductors improve advanced batteries." }] } });
     const targetTitle = "Solid electrolytes for lithium metal batteries";
 
@@ -202,7 +207,7 @@ describe("POST /api/papers/upload", () => {
 
   it("9-31: a strong/doi-verified match binds immediately and reports 'attached'", async () => {
     const title = "Solid electrolytes for lithium metal batteries";
-    mocks.extractPdfTextFromPath.mockResolvedValue({ ok: true, doc: { ...emptyDoc, title,
+    mocks.extractPdfTextFromBytes.mockResolvedValue({ ok: true, doc: { ...emptyDoc, title,
       sections: [{ heading: "Abstract", canonical: "abstract", text: "Solid electrolytes improve lithium metal batteries. Solid electrolytes conduct lithium ions." }] } });
     const form = new FormData(); form.set("file", pdfFile(pdfBytes()));
     form.set("rightsVersion", "2026-09-19");
@@ -214,7 +219,7 @@ describe("POST /api/papers/upload", () => {
   });
 
   it("does not persist or attach a wrong article", async () => {
-    mocks.extractPdfTextFromPath.mockResolvedValue({ ok: true, doc: { ...emptyDoc, title: "An unrelated marine biology paper", sections: [{ heading: "Body", canonical: "body", text: "Fish." }] } });
+    mocks.extractPdfTextFromBytes.mockResolvedValue({ ok: true, doc: { ...emptyDoc, title: "An unrelated marine biology paper", sections: [{ heading: "Body", canonical: "body", text: "Fish." }] } });
     const form = new FormData(); form.set("file", pdfFile(pdfBytes()));
     form.set("rightsVersion", "2026-09-19");
     form.set("targetPaper", JSON.stringify({ id: "openalex:W123", title: "Solid electrolytes for lithium batteries" }));
@@ -245,7 +250,7 @@ describe("POST /api/papers/upload", () => {
     const res = await POST(new Request("http://localhost/api/papers/upload", { method: "POST", body: form }));
     expect(res.status).toBe(403);
     expect(mocks.writeUploadPdfIfAbsent).not.toHaveBeenCalled();
-    expect(mocks.extractPdfTextFromPath).not.toHaveBeenCalled();
+    expect(mocks.extractPdfTextFromBytes).not.toHaveBeenCalled();
   });
 
   it("rejects a file over 25 MB before reading its bytes", async () => {
@@ -254,7 +259,7 @@ describe("POST /api/papers/upload", () => {
     // it exercises the post-parse fallback gate specifically.
     const res = await postWith(pdfFile(pdfBytes(25 * 1024 * 1024 + 1)));
     expect(res.status).toBe(413);
-    expect(mocks.extractPdfTextFromPath).not.toHaveBeenCalled();
+    expect(mocks.extractPdfTextFromBytes).not.toHaveBeenCalled();
   });
 
   it("5-02: rejects an over-cap body via Content-Length before any parsing at all", async () => {
@@ -268,7 +273,7 @@ describe("POST /api/papers/upload", () => {
     expect(res.status).toBe(413);
     const body = await res.json();
     expect(body.error).toBe("That PDF is larger than 25 MB.");
-    expect(mocks.extractPdfTextFromPath).not.toHaveBeenCalled();
+    expect(mocks.extractPdfTextFromBytes).not.toHaveBeenCalled();
   });
 
   it("rejects a file whose magic bytes are not %PDF- (never trusts the extension or MIME type)", async () => {
@@ -300,7 +305,7 @@ describe("POST /api/papers/upload", () => {
   });
 
   it("uses the extractor's own title when it found one, not the file name", async () => {
-    mocks.extractPdfTextFromPath.mockResolvedValue({
+    mocks.extractPdfTextFromBytes.mockResolvedValue({
       ok: true,
       doc: { ...emptyDoc, title: "The Real Paper Title" },
     } satisfies PdfTextResult);
@@ -312,7 +317,7 @@ describe("POST /api/papers/upload", () => {
   });
 
   it("2-06: never asks the model when step (a)'s title is already usable — never a network/model call for the common case", async () => {
-    mocks.extractPdfTextFromPath.mockResolvedValue({
+    mocks.extractPdfTextFromBytes.mockResolvedValue({
       ok: true,
       doc: { ...emptyDoc, title: "The Real Paper Title" },
       page1Text: "The Real Paper Title\nJ. Smith, University of Nowhere",
@@ -325,8 +330,11 @@ describe("POST /api/papers/upload", () => {
     expect(generateJsonText).not.toHaveBeenCalled();
   });
 
-  it("2-06 step (b): falls back to a local-dev small-tier model when step (a) found only an arXiv stamp", async () => {
-    mocks.extractPdfTextFromPath.mockResolvedValue({
+  it("2-06: a stamp-only extractor title falls to the file name, and no model is asked even if one is on offer", async () => {
+    // A model-written title used to sit between the extractor and the file
+    // name, on Peer's own key. There is no such key, and a title is not worth
+    // asking a reader for theirs: the route reaches no provider at all.
+    mocks.extractPdfTextFromBytes.mockResolvedValue({
       ok: true,
       doc: { ...emptyDoc, title: "arXiv:2401.12345v2" },
       page1Text: "arXiv:2401.12345v2\nA Study Of Interesting Reactions In Modern Battery Chemistry",
@@ -339,35 +347,17 @@ describe("POST /api/papers/upload", () => {
     const res = await postWith(pdfFile(pdfBytes(), "untitled-download.pdf"));
     const body = await res.json();
 
-    expect(body.paper.title).toBe("A Study Of Interesting Reactions In Modern Battery Chemistry");
-    expect(generateJsonText).toHaveBeenCalledTimes(1);
-    expect(generateJsonText.mock.calls[0][0]).toMatchObject({ tier: "small" });
+    expect(body.paper.title).toBe("untitled-download");
+    expect(generateJsonText).not.toHaveBeenCalled();
+    expect(mocks.resolveProvider).not.toHaveBeenCalled();
   });
 
-  it("2-06 step (b) -> (c): a stamp-shaped or unusable model answer is never trusted — falls through to the file name", async () => {
-    mocks.extractPdfTextFromPath.mockResolvedValue({
-      ok: true,
-      doc: { ...emptyDoc, title: "arXiv:2401.12345v2" },
-      page1Text: "arXiv:2401.12345v2\nsome ambiguous page 1 layout",
-    } satisfies PdfTextResult);
-    // The model echoes the same stamp shape back — never trusted, same bar
-    // as step (a)'s own output.
-    const generateJsonText = vi.fn().mockResolvedValue(JSON.stringify({ title: "arXiv:2401.12345v2" }));
-    mocks.resolveProvider.mockReturnValue({ generateJsonText });
-
-    const res = await postWith(pdfFile(pdfBytes(), "My Battery Paper.pdf"));
-    const body = await res.json();
-
-    expect(body.paper.title).toBe("My Battery Paper");
-  });
-
-  it("2-06: without a local dev provider (the deployed-Peer case), a stamp-only title falls straight through to the file name", async () => {
-    mocks.extractPdfTextFromPath.mockResolvedValue({
+  it("2-06: a stamp-only title with nothing else on page 1 falls straight through to the file name", async () => {
+    mocks.extractPdfTextFromBytes.mockResolvedValue({
       ok: true,
       doc: { ...emptyDoc, title: "arXiv:2401.12345v2" },
       page1Text: "arXiv:2401.12345v2",
     } satisfies PdfTextResult);
-    mocks.resolveProvider.mockReturnValue(null); // canUseLocalServerProvider() false on a deployed instance
 
     const res = await postWith(pdfFile(pdfBytes(), "My Battery Paper.pdf"));
     const body = await res.json();
@@ -376,7 +366,7 @@ describe("POST /api/papers/upload", () => {
   });
 
   it("finds a DOI mentioned in the extracted body text, stripping trailing punctuation", async () => {
-    mocks.extractPdfTextFromPath.mockResolvedValue({
+    mocks.extractPdfTextFromBytes.mockResolvedValue({
       ok: true,
       doc: {
         ...emptyDoc,
@@ -397,8 +387,8 @@ describe("POST /api/papers/upload", () => {
     expect(body.paper.doi).toBeUndefined();
   });
 
-  it("still succeeds when the extractor fails entirely (e.g. no Python on this machine)", async () => {
-    mocks.extractPdfTextFromPath.mockResolvedValue({ ok: false, reason: "pdf-empty: no-text-layer" } satisfies PdfTextResult);
+  it("still succeeds when the extractor fails entirely (e.g. a scan with no text layer)", async () => {
+    mocks.extractPdfTextFromBytes.mockResolvedValue({ ok: false, reason: "no-text-layer" } satisfies PdfTextResult);
 
     const res = await postWith(pdfFile(pdfBytes(), "scanned.pdf"));
     expect(res.status).toBe(200);
@@ -417,7 +407,7 @@ describe("POST /api/papers/upload", () => {
   });
 
   it("2-05: marks textStatus 'ok' when the extractor found at least one real section", async () => {
-    mocks.extractPdfTextFromPath.mockResolvedValue({
+    mocks.extractPdfTextFromBytes.mockResolvedValue({
       ok: true,
       doc: {
         ...emptyDoc,
@@ -431,7 +421,7 @@ describe("POST /api/papers/upload", () => {
   });
 
   it("2-05: marks textStatus 'empty' when the extractor fails entirely", async () => {
-    mocks.extractPdfTextFromPath.mockResolvedValue({ ok: false, reason: "pdf-empty: no-text-layer" } satisfies PdfTextResult);
+    mocks.extractPdfTextFromBytes.mockResolvedValue({ ok: false, reason: "no-text-layer" } satisfies PdfTextResult);
 
     const res = await postWith(pdfFile(pdfBytes(), "scanned.pdf"));
     const body = await res.json();
@@ -440,7 +430,7 @@ describe("POST /api/papers/upload", () => {
 
   it("carries the abstract section through as summaryIntro, capped to 400 chars", async () => {
     const longAbstract = "x".repeat(500);
-    mocks.extractPdfTextFromPath.mockResolvedValue({
+    mocks.extractPdfTextFromBytes.mockResolvedValue({
       ok: true,
       doc: { ...emptyDoc, sections: [{ id: "s0", heading: "Abstract", canonical: "abstract", text: longAbstract }] },
     } satisfies PdfTextResult);
@@ -479,7 +469,7 @@ describe("POST /api/papers/upload", () => {
 
   it("9-12: a new PDF replacing a still-live sibling for the same target paper continues its revision chain", async () => {
     const title = "Solid electrolytes for lithium metal batteries";
-    mocks.extractPdfTextFromPath.mockResolvedValue({ ok: true, doc: { ...emptyDoc, title,
+    mocks.extractPdfTextFromBytes.mockResolvedValue({ ok: true, doc: { ...emptyDoc, title,
       sections: [{ heading: "Abstract", canonical: "abstract", text: "Solid electrolytes improve lithium metal batteries. Solid electrolytes conduct lithium ions." }] } });
     mocks.listUploadMeta.mockResolvedValue([{
       hash16: "0000000000000001",
@@ -604,5 +594,64 @@ describe("POST /api/papers/upload", () => {
     expect(res.status).toBe(403);
     expect(mocks.writeUploadMeta).not.toHaveBeenCalled();
     expect(mocks.writeUploadPdfIfAbsent).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST /api/papers/upload — a PDF the browser staged in the bucket", () => {
+  const STAGED = "incoming/owner/11111111-1111-1111-1111-111111111111.pdf";
+
+  function postStaged(fileName = "paper.pdf"): Promise<Response> {
+    const form = new FormData();
+    form.set("rightsVersion", "2026-09-19");
+    form.set("staged", STAGED);
+    form.set("fileName", fileName);
+    return POST(new Request("http://localhost/api/papers/upload", { method: "POST", headers: SAME_ORIGIN_HEADERS, body: form }));
+  }
+
+  beforeEach(() => {
+    mocks.uploadOwner.mockResolvedValue("test-owner");
+    mocks.readUploadMeta.mockResolvedValue(null);
+    mocks.listUploadMeta.mockResolvedValue([]);
+    mocks.uploadFileExists.mockReturnValue(false);
+    mocks.writeUploadPdfIfAbsent.mockClear();
+    mocks.readStagedUpload.mockReset();
+    mocks.removeStagedUpload.mockReset();
+    mocks.resolveProvider.mockReturnValue(null);
+    mocks.extractPdfTextFromBytes.mockResolvedValue({ ok: true, doc: emptyDoc } satisfies PdfTextResult);
+  });
+
+  it("reads the staged PDF as this owner, files it like any upload, and removes the staged copy", async () => {
+    const bytes = pdfBytes();
+    mocks.readStagedUpload.mockResolvedValue(bytes);
+    const res = await postStaged("My Paper.pdf");
+    expect(res.status).toBe(200);
+    expect(mocks.readStagedUpload).toHaveBeenCalledWith("test-owner", STAGED);
+    expect(mocks.writeUploadPdfIfAbsent.mock.calls[0][1]).toEqual(bytes);
+    const body = await res.json();
+    expect(body.paper.title).toBe("My Paper");
+    expect(mocks.removeStagedUpload).toHaveBeenCalledWith("test-owner", STAGED);
+  });
+
+  it("refuses a staged object that is not a PDF, and still removes it", async () => {
+    mocks.readStagedUpload.mockResolvedValue(Buffer.from("<html>not a pdf</html>"));
+    const res = await postStaged();
+    expect(res.status).toBe(415);
+    expect(mocks.writeUploadPdfIfAbsent).not.toHaveBeenCalled();
+    expect(mocks.removeStagedUpload).toHaveBeenCalledWith("test-owner", STAGED);
+  });
+
+  it("answers 'no PDF' when the staged name cannot be read as this owner's (missing, or someone else's)", async () => {
+    mocks.readStagedUpload.mockResolvedValue(null);
+    const res = await postStaged();
+    expect(res.status).toBe(400);
+    expect(mocks.writeUploadPdfIfAbsent).not.toHaveBeenCalled();
+  });
+
+  it("never reads a staged name before an owner is known", async () => {
+    mocks.uploadOwner.mockResolvedValue(null);
+    const res = await postStaged();
+    expect(res.status).toBe(401);
+    expect(mocks.readStagedUpload).not.toHaveBeenCalled();
+    expect(mocks.removeStagedUpload).not.toHaveBeenCalled();
   });
 });

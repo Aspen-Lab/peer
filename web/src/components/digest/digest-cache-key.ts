@@ -8,10 +8,9 @@ import type { AiMode } from "@/lib/feed/ai-tier";
  * **What the risk here actually is, because the obvious reading is wrong.** The
  * digest only writes when `json.bullets?.length && !json.noLlm`, so a no-AI
  * digest is **never** cached and the stale-tier-0 poisoning cannot happen on
- * this surface. What can happen is the reverse: a digest written with **Peer's**
- * model served for twelve hours after the reader's entitlement changed, and one
- * browser profile's entry colliding across plans. The discriminator is required
- * either way; the reason is the opposite one.
+ * this surface. What can happen is the reverse: a digest written on the
+ * reader's own key served for twelve hours after they removed it. The
+ * discriminator is required either way; the reason is the opposite one.
  *
  * The `"tier0"` literal it replaces was also the last vocabulary R-UI-1 objects
  * to on this path — a cache string rather than a rendered one, so A correctly

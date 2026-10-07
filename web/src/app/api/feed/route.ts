@@ -1,28 +1,19 @@
-import { NextRequest, NextResponse, after } from "next/server";
-import { runFeedPipeline, type FeedPipelineOptions } from "@/lib/feed/pipeline";
-import type { FeedRequest, FeedResponse, FeedEmptyReasonCode, SearchConnectors } from "@/lib/feed/types";
+import { NextRequest, NextResponse } from "next/server";
+import { runFeedPipeline } from "@/lib/feed/pipeline";
+import type { FeedMeta, FeedRequest, FeedResponse, FeedEmptyReasonCode, SearchConnectors } from "@/lib/feed/types";
 import type { ProviderOverrideConfig } from "@/lib/llm/providers/types";
 import type { SourceId } from "@/lib/sources/types";
 import type { ScoredItem } from "@/lib/scoring/types";
 import { cleanPreferenceLedger } from "@/lib/preferences/ledger";
 import { resolveProvider } from "@/lib/llm/providers/registry";
-import {
-  entitledAiTier,
-  requireEntitledAiRequest,
-} from "@/lib/security/ai-request";
-import { entitledContext } from "@/lib/security/entitled-context";
+import { aiTierCeiling, requireAiRequest } from "@/lib/security/ai-request";
 import {
   createTrustedPaperCacheScope,
   type TrustedPaperCacheScope,
 } from "@/lib/opportunities/private-paper-cache";
 import { localCalendarDate } from "@/lib/opportunities/pool-cache";
 import { createClient } from "@/lib/supabase/server";
-import {
-  requireCompanySpendCapability,
-  type CompanySpendCapability,
-} from "@/lib/security/company-spend";
-import { normalizeFeedIntent, serializeFeedIntent, textValue, type NormalizedFeedIntent } from "@/lib/feed/intent";
-import type { SelectedSenseConcept } from "@/lib/feed/senses";
+import { normalizeFeedIntent, serializeFeedIntent, textValue } from "@/lib/feed/intent";
 import { identityForRawItem } from "@/lib/feed/paper-identity";
 import {
   SupabaseDashboardDeliveryLedger,
@@ -31,6 +22,11 @@ import {
   type PaperIdentity,
 } from "@/lib/dashboard/delivery-ledger";
 import { dashboardLedgerEnabled } from "@/lib/dashboard/ledger-flag";
+import { InMemoryDecisionCache } from "@/lib/decisions/decision-cache";
+import { parseJevApiKey } from "@/lib/decisions/jev-key";
+import { PrivateDecisionCache } from "@/lib/decisions/private-decision-cache";
+import { screenWithJev, type JevScreenFn } from "@/lib/decisions/screen";
+import { isLocalDevRuntime } from "@/lib/env/local-dev";
 import {
   SupabaseRolloverCandidateStore,
   type RolloverCandidate,
@@ -43,20 +39,37 @@ import {
   channelS2RecommendationsEnabled,
   type ResolvedPositiveSeed,
 } from "@/lib/preferences/positive-seeds";
-import {
-  jevShadowEnabled,
-  readJevCaps,
-  readJevShadowConfig,
-  resolveJevTransport,
-  type JevTransport,
-} from "@/lib/decisions/flag";
-import { runJevShadow, type ShadowCandidate } from "@/lib/decisions/shadow";
-import { PrivateDecisionCache } from "@/lib/decisions/private-decision-cache";
-import { getCounterStore } from "@/lib/usage/counters";
 
 const CACHE_HEADERS = {
   "Cache-Control": "private, no-store",
 };
+
+/**
+ * How long this route may run, in seconds (Next's route segment config:
+ * `web/node_modules/next/dist/docs/01-app/03-api-reference/03-file-conventions/
+ * 02-route-segment-config/maxDuration.md`; the platform reads it from the build
+ * output). Pinned explicitly because a fresh paper build now includes Jev on the
+ * reader's key inside the request: up to 20 s of screening (`SCREEN_DEADLINE_MS`,
+ * a hard race) on top of five source fetches with their own 8 s timeouts and,
+ * for a reader with a model key as well, a model rerank. The value is the
+ * platform default that `docs/JEV-RELEASE-READINESS.md` names (300 s) written
+ * down so the two numbers are pinned against each other in code instead of
+ * reasoned about after the fact, and it equals the ceiling the digest and
+ * dashboard-prepare routes already run under in production
+ * (`jobs/dispatch-digests`, `jobs/prepare-dashboards`). A typical Jev run takes
+ * a few seconds; this is the worst-case ceiling, not an expectation.
+ */
+export const maxDuration = 300;
+
+/**
+ * The reader `next dev` lets through with no sign-in at all has no account id.
+ * Their Jev decisions are kept in memory for the life of the dev server, under
+ * this owner, so a developer can try Jev with their own key (`isLocalDevRuntime`
+ * is false on every deployed runtime and under tests, so this branch is
+ * unreachable there).
+ */
+const LOCAL_DEV_OWNER_ID = "local-dev";
+const localDevDecisionCache = new InMemoryDecisionCache();
 
 /**
  * §1p.F: "a truthful, non-cached 'new papers are temporarily unavailable'
@@ -112,6 +125,7 @@ function frozenFeedResponse(
   reconstructed: boolean,
   startedAt: number,
   emptyReasonCode?: FeedEmptyReasonCode,
+  jevScreening?: FeedMeta["jevScreening"],
 ): FeedResponse {
   return {
     items,
@@ -127,6 +141,11 @@ function frozenFeedResponse(
       batchStatus: status,
       ...(reconstructed ? { batchReconstructed: true as const } : {}),
       ...(emptyReasonCode ? { emptyReasonCode } : {}),
+      // Same rule as `emptyReasonCode`: only the call that won the mint race
+      // may report what ITS OWN fresh build did with the reader's Jev key. A
+      // replay of an existing batch carries none (the client keeps the last
+      // report it saw).
+      ...(jevScreening ? { jevScreening } : {}),
     },
   };
 }
@@ -249,14 +268,12 @@ async function runLedgerAwareFeed(
   // resolveNegativeSeedPaperIdsForRequest's own doc comment), threaded the
   // same way and for the same reason as positiveSeeds above.
   negativeSeedPaperIds: readonly string[],
-  // P3-S5 (Round 3) — the Jev shadow hook (see FeedPipelineOptions.
-  // onFreshShortlist's own doc comment in pipeline.ts). Server-minted only,
-  // exactly like ledgerExclusions/positiveSeeds above: only POST ever
-  // builds one, and only when every P3-S5 gate condition holds (see the
-  // call site in POST below). GET never passes this argument at all, so it
-  // is `undefined` here and both runFeedPipeline calls below see output
-  // byte-identical to before this parameter existed.
-  onFreshShortlist?: FeedPipelineOptions["onFreshShortlist"],
+  // Jev on the reader's own key (see FeedPipelineOptions.jevScreen's own doc
+  // comment in pipeline.ts). Built per request, only by POST and only for a
+  // reader who sent a key; GET never passes it, so it is `undefined` there and
+  // both runFeedPipeline calls below see output byte-identical to a build with
+  // no Jev at all.
+  jevScreen?: JevScreenFn,
 ): Promise<{ response: FeedResponse } | { unavailable: true }> {
   const startedAt = Date.now();
   const paperCacheScope = pipelineReq.paperCacheScope;
@@ -265,9 +282,9 @@ async function runLedgerAwareFeed(
     const response = await runFeedPipeline(pipelineReq, {
       ledgerExclusions: undefined,
       now,
-      onFreshShortlist,
       positiveSeeds,
       negativeSeedPaperIds,
+      jevScreen,
     });
     return { response };
   }
@@ -345,7 +362,7 @@ async function runLedgerAwareFeed(
     now,
     positiveSeeds,
     negativeSeedPaperIds,
-    onFreshShortlist,
+    jevScreen,
   });
 
   const papers: PaperIdentity[] = result.items.map((item) => {
@@ -430,6 +447,7 @@ async function runLedgerAwareFeed(
       reconstructed,
       startedAt,
       wonMintRace ? result.meta.emptyReasonCode : undefined,
+      wonMintRace ? result.meta.jevScreening : undefined,
     ),
   };
 }
@@ -484,90 +502,6 @@ async function resolveNegativeSeedPaperIdsForRequest(
   }
 }
 
-/**
- * P3-S5 (Round 3) — ABC-JEV-INTEGRATION.md §4 "P3-S5 DESIGN RULING"
- * (2026-09-24T11:29:31Z). The Jev shadow runs AFTER the response is sent,
- * never inside the request: up to 50 separate Jev calls at bounded
- * concurrency could add minutes to the first feed load of the day, and
- * shadow mode must never cause a user-visible regression. `runOnFreshShortlist`
- * (below, POST only) computes whether every gate condition holds and, if so,
- * builds ONE of these hooks and passes it to `runFeedPipeline` via
- * `runLedgerAwareFeed`. `pipeline.ts` invokes it synchronously with a copy of
- * the top-50 Tier-1 shortlist ONLY on a fresh pool build — see
- * `FeedPipelineOptions.onFreshShortlist`'s own doc comment.
- */
-interface JevShadowHookInput {
-  ownerId: string;
-  entitled: boolean;
-  intent: NormalizedFeedIntent;
-  senseConcepts: readonly SelectedSenseConcept[];
-  /**
-   * JEV-DIRECT (§1aa) — resolved ONCE by the gate below via
-   * `resolveJevTransport()` and threaded through unchanged; `runJevShadow`
-   * never re-reads `process.env` for this (see `shadow.ts`'s own doc
-   * comment and this item's checkpoint, design decision 2).
-   */
-  transport: JevTransport;
-  perUserCap: number;
-  globalCap: number;
-  /** Broker-only. Present (from `readJevShadowConfig()`) only when `transport` is `"broker"`; absent and unused for `"direct"`. */
-  brokerUrl?: string;
-  brokerSecret?: string;
-}
-
-/**
- * Never throws, no matter what `runJevShadow` does — the final safety net
- * so a truly unanticipated failure can never surface as an unhandled
- * rejection inside `after()`. `runJevShadow` itself is already documented
- * never-throwing; this wrapper is belt-and-suspenders, matching this
- * codebase's established style for every other Jev-adjacent call boundary.
- */
-async function runJevShadowSafely(
-  input: JevShadowHookInput,
-  shortlist: ReadonlyArray<ShadowCandidate>,
-): Promise<void> {
-  try {
-    await runJevShadow({
-      ownerId: input.ownerId,
-      entitled: input.entitled,
-      intent: input.intent,
-      senseConcepts: input.senseConcepts,
-      candidates: shortlist,
-      cache: new PrivateDecisionCache(input.ownerId),
-      transport: input.transport,
-      brokerUrl: input.brokerUrl,
-      brokerSecret: input.brokerSecret,
-      perUserCap: input.perUserCap,
-      globalCap: input.globalCap,
-      store: getCounterStore(),
-    });
-  } catch {
-    // See this function's own doc comment.
-  }
-}
-
-/**
- * Builds the `onFreshShortlist` hook `pipeline.ts` will call synchronously
- * on a fresh build. `after()` throws when called outside a real request
- * scope (verified directly from Next's own source —
- * `web/node_modules/next/dist/server/after/after.js`: `workAsyncStorage.getStore()`
- * is `undefined` for e.g. a unit test that invokes a route handler
- * directly) — that is caught here and skipped silently, never run inline,
- * per the DESIGN RULING.
- */
-function buildJevShadowHook(
-  input: JevShadowHookInput,
-): NonNullable<FeedPipelineOptions["onFreshShortlist"]> {
-  return (shortlist) => {
-    try {
-      after(() => runJevShadowSafely(input, shortlist));
-    } catch {
-      // `after` was called outside a request scope -- skip the shadow
-      // silently, never run it inline (P3-S5 DESIGN RULING).
-    }
-  };
-}
-
 function hasSupabaseAuthConfig(): boolean {
   return Boolean(
     process.env.NEXT_PUBLIC_SUPABASE_URL &&
@@ -613,12 +547,6 @@ function parseSources(input: unknown): SourceId[] | undefined {
     valid.includes(s as SourceId),
   );
   return out.length > 0 ? out : undefined;
-}
-
-async function companySpendForSources(
-  sources: SourceId[] | undefined,
-): Promise<CompanySpendCapability | NextResponse | undefined> {
-  return sources?.includes("web") ? requireCompanySpendCapability() : undefined;
 }
 
 function parseAiTier(input: unknown): 0 | 1 | 2 | undefined {
@@ -736,29 +664,20 @@ export async function POST(req: NextRequest) {
   const preferenceLedger = cleanPreferenceLedger(body.preferenceLedger);
   const requestedAiTier = parseAiTier(body.aiTier) ?? 0;
   const llmOverride = parseLlmOverride(body.llmOverride);
-  const gate = await requireEntitledAiRequest("paper-feed", 60, {
+  const gate = await requireAiRequest("paper-feed", 60, {
     allowAnonymous: true,
   });
   if (gate instanceof NextResponse) return gate;
-  const entitledTier = entitledAiTier(requestedAiTier, gate.entitlement);
-  // MERGE-B-SEC / MERGE C semantic fix (ABC-JEV-INTEGRATION.md §1s.2, MANAGER
-  // RE-CHECKS): resolveProvider now REQUIRES a ProviderContext — the
-  // entitlement check above already ran (`gate`), so this constructs the
-  // branded context from it rather than calling resolveProvider bare.
-  const aiProvider =
-    entitledTier >= 2
-      ? resolveProvider(
-          llmOverride,
-          entitledContext(gate.entitlement, "paper-feed", Boolean(llmOverride)),
-        )
-      : null;
-  const aiTier = entitledTier >= 2 && !aiProvider ? 0 : entitledTier;
+  // A signed-out caller is capped at tier 0 whatever the body asks for, so the
+  // provider is only ever resolved for a caller the gate let through as a
+  // reader; a model then runs only if their own key resolves.
+  const cappedTier = aiTierCeiling(requestedAiTier, gate);
+  const aiProvider = cappedTier >= 2 ? resolveProvider(llmOverride) : null;
+  const aiTier = cappedTier >= 2 && !aiProvider ? 0 : cappedTier;
 
   const project = textValue(intent.project);
   const challenge = textValue(intent.challenge);
   const sources = parseSources(body.sources);
-  const companySpendCapability = await companySpendForSources(sources);
-  if (companySpendCapability instanceof NextResponse) return companySpendCapability;
 
   const paperCacheScope = await privatePaperScope({
     project,
@@ -773,53 +692,39 @@ export async function POST(req: NextRequest) {
     aiTier,
   });
 
-  // P3-S5 (Round 3) — ABC-JEV-INTEGRATION.md §4 "P3-S5 DESIGN RULING"
-  // (2026-09-24T11:29:31Z). Every one of these seven conditions must hold
-  // before this request schedules even one Jev shadow call; the hook stays
-  // `undefined` otherwise and runFeedPipeline behaves byte-identically to
-  // before onFreshShortlist existed (pipeline.shadow.test.ts proves that;
-  // route.test.ts's "Jev shadow wiring" block proves this gate itself). The
-  // `if` (not a boolean stored then reused) is deliberate: it is what lets
-  // TypeScript actually narrow `paperCacheScope`/`gate.user` at the point
-  // `.ownerId`/`.id` are read below, rather than merely asserting it.
+  // Jev on the reader's own key. The key comes from the request body and goes
+  // nowhere but into the closure below: it is not a field of `FeedRequest`, not
+  // an option of the pipeline, and not an input of any cache key, ledger payload
+  // or response. Jev has its own switch, the key itself: it does not depend on
+  // the feed's AI search pill or on a model key (a reader with only a Jev key
+  // still gets it, and a reader with both gets Jev's order with the model's
+  // reasons). No key, no function, and the pipeline runs exactly as it did
+  // before Jev existed.
   //
-  // JEV-DIRECT (§1aa): the one changed condition is `jevBrokerEnabled()` ->
-  // `resolveJevTransport() !== "disabled"` — the switch that picks between
-  // the direct and broker transports (or neither). Unlike the old
-  // `jevBrokerEnabled()` condition, building the hook no longer also
-  // requires `readJevShadowConfig().status === "configured"`: that check
-  // only means something for the broker transport (it only reports
-  // "configured" once the broker URL+secret are both set) and would
-  // wrongly block a direct-only deployment, which never sets those two.
-  // Caps (`readJevCaps()`) are read regardless of transport — see
-  // `flag.ts`'s own doc comment on why `readJevShadowConfig()`'s caps
-  // are NOT reused here.
-  let onFreshShortlist: FeedPipelineOptions["onFreshShortlist"];
-  const shadowEntitled = gate.entitlement.effectivePlan !== "free";
-  const jevTransport = resolveJevTransport();
-  if (
-    jevShadowEnabled() &&
-    jevTransport !== "disabled" &&
-    paperCacheScope !== undefined &&
-    gate.user?.id !== undefined &&
-    gate.user.id === paperCacheScope.ownerId &&
-    shadowEntitled &&
-    aiTier >= 2 &&
-    Boolean(intent)
-  ) {
-    const caps = readJevCaps();
-    const shadowConfig = readJevShadowConfig();
-    onFreshShortlist = buildJevShadowHook({
-      ownerId: paperCacheScope.ownerId,
-      entitled: shadowEntitled,
-      intent,
-      senseConcepts: intent.selectedSenseConcepts,
-      transport: jevTransport,
-      perUserCap: caps.perUserDailyCap,
-      globalCap: caps.globalDailyCap,
-      brokerUrl: shadowConfig.status === "configured" ? shadowConfig.brokerUrl : undefined,
-      brokerSecret: shadowConfig.status === "configured" ? shadowConfig.brokerSecret : undefined,
-    });
+  // Who may use it: a signed-in reader whose session owns the cache scope (their
+  // decisions are cached per reader in `private_decisions`), or, on a
+  // developer's own machine only (`next dev`: no sign-in exists, the gate lets
+  // the reader through with `user: null`, which is the same case a model key
+  // already works in), the local reader on an in-memory cache. A signed-out
+  // visitor, a deployed runtime with no sign-in, and a user/scope mismatch get
+  // nothing: no scope, no Jev.
+  const jevApiKey = parseJevApiKey((body as Record<string, unknown>).jevApiKey);
+  let jevScreen: JevScreenFn | undefined;
+  if (jevApiKey !== undefined) {
+    const signedInOwnerId =
+      gate.user !== null && paperCacheScope !== undefined && gate.user.id === paperCacheScope.ownerId
+        ? gate.user.id
+        : undefined;
+    const localDevReader =
+      signedInOwnerId === undefined && gate.user === null && !gate.anonymous && isLocalDevRuntime();
+    if (signedInOwnerId !== undefined || localDevReader) {
+      const ownerId = signedInOwnerId ?? paperCacheScope?.ownerId ?? LOCAL_DEV_OWNER_ID;
+      const cache =
+        signedInOwnerId !== undefined ? new PrivateDecisionCache(ownerId) : localDevDecisionCache;
+      const senseConcepts = intent.selectedSenseConcepts;
+      jevScreen = (candidates) =>
+        screenWithJev({ ownerId, apiKey: jevApiKey, intent, senseConcepts, candidates, cache });
+    }
   }
 
   const now = new Date();
@@ -850,12 +755,11 @@ export async function POST(req: NextRequest) {
       challenge,
       intent,
       paperCacheScope,
-      companySpendCapability,
     },
     now,
     positiveSeeds,
     negativeSeedPaperIds,
-    onFreshShortlist,
+    jevScreen,
   );
   if ("unavailable" in outcome) return ledgerUnavailableResponse();
 
@@ -888,8 +792,6 @@ export async function GET(req: NextRequest) {
   );
 
   const topN = parseInt(req.nextUrl.searchParams.get("topN") || "30", 10);
-  const companySpendCapability = await companySpendForSources(sources);
-  if (companySpendCapability instanceof NextResponse) return companySpendCapability;
 
   const paperCacheScope = await privatePaperScope({
     topics,
@@ -907,7 +809,6 @@ export async function GET(req: NextRequest) {
       sources,
       topN: Number.isFinite(topN) ? topN : 30,
       paperCacheScope,
-      companySpendCapability,
     },
     now,
     positiveSeeds,

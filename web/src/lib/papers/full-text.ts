@@ -15,9 +15,9 @@ import {
   type ExtractedDocument,
 } from "./html-text";
 import { classifyHardAccessStatus } from "./paywall-status";
-import { extractPdfTextFromPath, tryExtractPdfText } from "./pdf-text";
+import { extractPdfTextFromBytes, tryExtractPdfText } from "./pdf-text";
 import { collectSourceLinks, type SourceLink } from "./source-links";
-import { bareUploadId, claimsUploadId, pdfPath, readUploadDoc, uploadDocKey, writeUploadDoc, type UploadMeta } from "./upload-store";
+import { bareUploadId, claimsUploadId, readUploadDoc, readUploadPdf, uploadDocKey, writeUploadDoc, type UploadMeta } from "./upload-store";
 import { ownedUpload } from "./upload-access";
 import { UPLOAD_CONCEPT_EXTRACTION_VERSION } from "@/lib/preferences/upload-concepts";
 
@@ -217,38 +217,37 @@ function blockedReason(url: string): string {
   }
 }
 
+const UPLOAD_EMPTY_REASON = "pdf-empty: PDF text extractor produced no sections.";
+
 /**
- * 1-28: an uploaded PDF already lives on this server (`upload-store.ts`), so
- * reading it is a local file read, not a fetch — no `collectSourceLinks`
- * walk, no network attempt, no paywall to hit. Mirrors `tryPdfLink`'s
- * shape/reasoning so `readOwnedUpload`'s single `attempts` entry reads the same
- * way a normal PDF attempt would.
+ * 1-28: an uploaded PDF is already in Peer's own private storage
+ * (`upload-store.ts`), so reading it is a storage read, not a fetch — no
+ * `collectSourceLinks` walk, no network attempt, no paywall to hit. Mirrors
+ * `tryPdfLink`'s shape/reasoning so `buildResult`'s single `attempts` entry
+ * reads the same way a normal PDF attempt would.
  */
 async function tryUploadLink(hash16: string): Promise<{ status: FullTextStatus; doc?: ExtractedDocument; reason?: string }> {
-  // P0-03: pdf.js reads the file (`extractPdfTextFromPath`); there is no
-  // Python helper, so no "this deployment cannot read it" case either — the
-  // `no-python` / `no-extractor` reasons are gone with it.
-  const result = await extractPdfTextFromPath(pdfPath(hash16));
+  const bytes = await readUploadPdf(hash16).catch((error) => {
+    console.warn("[papers/full-text] could not read an uploaded PDF:", error);
+    return null;
+  });
+  if (!bytes) return { status: "no_full_text", reason: "The uploaded PDF is no longer stored." };
+  const result = await extractPdfTextFromBytes(bytes);
   if (result.ok && result.doc) {
-    // A2-02 (2-05): kept as a structural guard. A reading that reports
-    // success with no sections has nothing to report on either; it is
-    // marked exactly like a scan rather than trusted as "ok".
+    // A2-02 (2-05): a reading that succeeded but found no section is the
+    // same fact as a scan — nothing to report on. Caught structurally rather
+    // than trusting an unconditional "it's ok."
     if (result.doc.sections.length === 0) {
-      return { status: "no_full_text", reason: "pdf-empty: PDF text extractor produced no sections." };
+      return { status: "no_full_text", reason: UPLOAD_EMPTY_REASON };
     }
     return { status: "ok", doc: result.doc };
   }
-  if (result.reason && /^pdf-empty:|produced no sections/i.test(result.reason)) {
-    // Every page was read and there was no text to find (most likely a
-    // scanned PDF with no text layer). A genuinely different fact from every
-    // other `no_full_text` reason here — reading.ts's `pdfHasNoText` looks
-    // for the `pdf-empty` marker so the reading page can say "this PDF has
-    // no readable text" instead of a generic "no full text." The extractor
-    // puts the marker on itself; it is added only where it is missing.
-    return {
-      status: "no_full_text",
-      reason: result.reason.startsWith("pdf-empty:") ? result.reason : `pdf-empty: ${result.reason}`,
-    };
+  if (result.reason === "no-text-layer" || result.reason === "no-sections") {
+    // Every page was read; there was simply no text to find (most likely a
+    // scanned PDF). reading.ts's `pdfHasNoText` looks for this exact
+    // `pdf-empty` marker so the reading page can say "this PDF has no
+    // readable text" instead of a generic "no full text."
+    return { status: "no_full_text", reason: UPLOAD_EMPTY_REASON };
   }
   return { status: "no_full_text", reason: result.reason ?? "PDF text extractor failed on this server." };
 }
@@ -260,7 +259,7 @@ function uploadLink(hash16: string): SourceLink {
 const UPLOAD_UNAVAILABLE: FullTextResult = { status: "source_unavailable", attempts: [], reason: "Private upload unavailable." };
 
 /**
- * P0-05 (§1e.1): an upload's own file, read from disk. Reached from exactly
+ * P0-05 (§1e.1): an upload's own file, read from its storage. Reached from exactly
  * one place — `uploadFullText`, which `getFullText` calls only once
  * `ownedUpload` has returned this upload's record for the caller. Nothing
  * else in this module reads an upload: `buildPublicResult` has no upload
@@ -388,7 +387,7 @@ export async function getFullText(input: FullTextInput): Promise<FullTextResult>
   // takes this branch, and only the canonical id (`bareUploadId`) of an
   // upload the caller owns gets past it. A variant such as `UPLOAD:<hash16>`
   // is refused here, before any lookup — it used to fall through to the
-  // shared path below, be read from disk there, and sit in the shared cache.
+  // shared path below, be read from storage there, and sit in the shared cache.
   if (claimsUploadId(input.paperId)) {
     const hash = bareUploadId(input.paperId);
     const meta = hash ? await ownedUpload(hash) : null;

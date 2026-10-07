@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import type { PaperReport } from "@/lib/papers/report";
 
@@ -41,13 +41,8 @@ vi.mock("@/lib/figures/extract", () => ({
 import { POST } from "./route";
 import {
   InMemoryCounterStore,
-  deepReportDayKey,
-  endOfUtcDay,
-  getCounterStore,
   resetCounterStoreForTests,
 } from "@/lib/usage/counters";
-import { PAID_DEEP_REPORTS_PER_DAY } from "@/lib/usage/deep-report-quota";
-import { CompanySpendCapRefusedError } from "@/lib/usage/company-budget";
 import type { ReportStreamEvent } from "@/lib/papers/report-stream";
 
 const paper = {
@@ -118,9 +113,9 @@ function reportEvent(events: ReportStreamEvent[]): PaperReport {
 }
 
 beforeEach(() => {
-  // ABC-freemium 1-20 — the counter store is memoised per module, so without
-  // this every test in the file spends the same monthly deep-report budget and
-  // the sixth one is refused. Resetting it is what keeps each case independent.
+  // The counter store is memoised per module, and the gate's hourly rate limit
+  // counts in it, so without this every test in the file spends the same hour.
+  // Resetting it is what keeps each case independent.
   resetCounterStoreForTests();
   vi.clearAllMocks();
   mocks.ownedUpload.mockResolvedValue(null);
@@ -542,23 +537,19 @@ describe("POST /api/papers/report JSON fallback", () => {
 });
 
 /**
- * ABC-freemium 3-03 · R-QUOTA-1 · R-QUOTA-3 · Ruling 9 points 1-3.
+ * A deep report is not allowanced, counted or capped by Peer. The model runs on
+ * the reader's own key, so there is no spend of Peer's to protect; what protects
+ * Peer's server (the full-text fetch, the PDF parse) is the gate's hourly rate
+ * limit, which every request below passes through.
  *
- * ── THE RULE THIS SUITE EXISTS FOR ───────────────────────────────────────────
- *
- * **Drive the request shape the app actually sends, and assert the check RAN.**
- * Every earlier test of this route's quota passed while a deep papers report
- * skipped the counter entirely, because they asserted where the counter sat in
- * the file and round-3 A drove the route without the NDJSON header. The route
- * answered honestly on the path it was asked about; the app takes the other one.
- * `lib/papers/report-stream.ts` sends `Accept: application/x-ndjson` on **every**
- * request, so that header is not an option here — it is the product.
- *
- * The counter is observed directly, by spying on the store's `increment`, rather
- * than inferred from the response. A response can look identical whether or not
- * anything was counted; that is exactly how this shipped.
+ * **Drive the request shape the app actually sends.**
+ * `lib/papers/report-stream.ts` sends `Accept: application/x-ndjson` on every
+ * request, so that header is not an option here — it is the product. The
+ * counter store is observed directly, by spying on its `increment`, rather than
+ * inferred from the response: a response looks identical whether or not
+ * anything was counted.
  */
-describe("POST /api/papers/report — the quota is REACHABLE on the streamed shape (3-03)", () => {
+describe("POST /api/papers/report — a deep report is not metered by Peer", () => {
   /** The deep request the papers page builds, verbatim in shape. */
   const deepBody = { paper, deepReport: true };
 
@@ -568,47 +559,10 @@ describe("POST /api/papers/report — the quota is REACHABLE on the streamed sha
     return vi.spyOn(InMemoryCounterStore.prototype, "increment");
   }
 
-  /**
-   * Only the READER's deep-report keys; the rate-limit key shares the same
-   * store, and since the launch house ceiling every deep read also increments
-   * `deep:all:<day>` — a second counter by design, asserted separately below so
-   * that "counted once" keeps meaning once per reader.
-   */
-  function deepKeys(spy: ReturnType<typeof spyOnCounter>): string[] {
-    return spy.mock.calls
-      .map(([key]) => String(key))
-      .filter((key) => key.startsWith("deep:") && !key.startsWith("deep:all:"));
+  /** Every key the request touched in the shared counter store. */
+  function keysTouched(spy: ReturnType<typeof spyOnCounter>): string[] {
+    return spy.mock.calls.map(([key]) => String(key));
   }
-
-  /** The house ceiling's own key. */
-  function houseKeys(spy: ReturnType<typeof spyOnCounter>): string[] {
-    return spy.mock.calls
-      .map(([key]) => String(key))
-      .filter((key) => key.startsWith("deep:all:"));
-  }
-
-  /**
-   * The one runtime in which a route test can hold a PAID entitlement.
-   *
-   * `isLocalDevRuntime()` is deliberately false under `NODE_ENV=test`, so the
-   * default here is the no-sign-in-configured branch: user `local-no-auth`,
-   * plan `free`, budget 5. `PEER_DEV_ENTITLEMENT` is only read on the
-   * local-development branch, which is why stubbing it alone does nothing —
-   * a real finding from writing this suite, and the reason the free cases below
-   * stub nothing at all.
-   */
-  function asPaidDeveloper() {
-    vi.stubEnv("NODE_ENV", "development");
-    vi.stubEnv("VERCEL", "");
-    vi.stubEnv("VERCEL_ENV", "");
-    vi.stubEnv("PEER_DEV_ENTITLEMENT", "paid");
-    // That branch synthesises its own user id, so the counter keys are this one.
-    return "dev-local";
-  }
-
-  afterEach(() => {
-    vi.unstubAllEnvs();
-  });
 
   beforeEach(() => {
     const generateJsonText = vi
@@ -621,10 +575,7 @@ describe("POST /api/papers/report — the quota is REACHABLE on the streamed sha
     mocks.bindFiguresToReport.mockImplementation((report: PaperReport) => report);
   });
 
-  it("counts a STREAMED deep report — the case that shipped uncounted", async () => {
-    // Before 3-03 this assertion failed: `wantsStream` returned above the only
-    // `consumeDeepReport` call, so the deep read ran, fetched full text, wrote a
-    // tier-2 report, and decremented nothing.
+  it("runs a STREAMED deep report and writes no allowance counter of any kind", async () => {
     const increments = spyOnCounter();
 
     const response = await POST(request(deepBody));
@@ -632,81 +583,42 @@ describe("POST /api/papers/report — the quota is REACHABLE on the streamed sha
 
     expect(events.map((event) => event.type)).toContain("report");
     expect(events).toContainEqual({ type: "mode", aiMode: "tier2" });
-    expect(deepKeys(increments)).toHaveLength(1);
+    // The only counter this request may touch is the gate's hourly rate limit
+    // (which a runtime with no sign-in configured does not even count).
+    expect(
+      keysTouched(increments).filter((key) => !key.startsWith("rate:")),
+    ).toEqual([]);
   });
 
-  it("charges the paid 200/day breaker on the streamed path too", async () => {
-    // R-QUOTA-2 · D4 — a paid reader is unlimited *to the reader* and capped to
-    // protect the operator's wallet. On papers that cap never fired at all: the
-    // breaker charge rides along with the same counter call the stream skipped,
-    // so the operator's own spend ceiling was absent on this surface.
-    const userId = asPaidDeveloper();
+  it("runs a deep report on the JSON transport with no allowance counter either", async () => {
     const increments = spyOnCounter();
 
-    await readEvents(await POST(request(deepBody)));
+    const response = await POST(request(deepBody, "application/json"));
+    await response.json();
 
-    // The paid path charges the DAY key, not the month key.
-    expect(deepKeys(increments)).toHaveLength(1);
-    // The launch ceiling is charged on the same read, once.
-    expect(houseKeys(increments)).toHaveLength(1);
-    expect(deepKeys(increments)[0]).toBe(
-      deepReportDayKey(userId, new Date()),
-    );
+    expect(mocks.generateDeepReport).toHaveBeenCalledTimes(1);
+    expect(
+      keysTouched(increments).filter((key) => !key.startsWith("rate:")),
+    ).toEqual([]);
   });
 
-  it("refuses a paid reader past the daily breaker, in the stream", async () => {
-    const userId = asPaidDeveloper();
-    // Charge the breaker to its cap directly rather than driving 200 requests:
-    // the route and the helper share one store and one key, which is the point
-    // of D4's "one counter" and is asserted by `deep-report-quota.test.ts`.
-    const store = getCounterStore();
-    const now = new Date();
-    for (let i = 0; i < PAID_DEEP_REPORTS_PER_DAY; i += 1) {
-      await store.increment(
-        deepReportDayKey(userId, now),
-        endOfUtcDay(now),
-        1,
-        now,
-      );
+  it("never refuses a reader a deep report for having read too many", async () => {
+    // The old free allowance was five a month. Seven in a row must all be
+    // deep reads now, on both transports.
+    for (let i = 0; i < 7; i += 1) {
+      const events = await readEvents(await POST(request(deepBody)));
+      expect(events).toContainEqual({ type: "mode", aiMode: "tier2" });
+      expect(events.some((event) => (event as { type: string }).type === "quota")).toBe(false);
     }
-
-    const events = await readEvents(await POST(request(deepBody)));
-    const quota = events.find((event) => event.type === "quota");
-
-    expect(quota).toEqual({
-      type: "quota",
-      quota: expect.objectContaining({ kind: "breaker", reason: "exhausted" }),
-    });
-    expect(mocks.generateDeepReport).not.toHaveBeenCalled();
+    expect(mocks.generateDeepReport).toHaveBeenCalledTimes(7);
   });
 
-  it("does NOT count a SHALLOW streamed request — R-QUOTA-3's real exemption", async () => {
-    // Ruling 9 point 1: the exemption is a DEPTH, not a transport. This is the
-    // mirror case that stops the fix over-correcting: if a shallow stream began
-    // counting, every abstract-only read would spend a deep report, which breaks
-    // R-QUOTA-3 for real and would be a worse defect than the one being fixed.
-    const increments = spyOnCounter();
-
+  it("streams a SHALLOW request as the abstract tier, with no quota notice", async () => {
     const events = await readEvents(await POST(request({ paper })));
 
     expect(events).toContainEqual({ type: "mode", aiMode: "tier1" });
-    expect(deepKeys(increments)).toEqual([]);
-    expect(events.some((event) => event.type === "quota")).toBe(false);
-  });
-
-  it("does not count TWICE — one call site, whichever transport is used", async () => {
-    // Ruling 9 point 2 names the opposite failure: a second `consumeDeepReport`
-    // inside `streamReport` would also make both transports count, and would
-    // charge a reader twice for one report.
-    const increments = spyOnCounter();
-
-    await readEvents(await POST(request(deepBody)));
-    const afterStream = deepKeys(increments).length;
-
-    await POST(request(deepBody, "application/json")).then((r) => r.json());
-
-    expect(afterStream).toBe(1);
-    expect(deepKeys(increments)).toHaveLength(2);
+    expect(events.some((event) => (event as { type: string }).type === "quota")).toBe(false);
+    expect(mocks.generateDeepReport).not.toHaveBeenCalled();
   });
 
   // ── F6 (P2-07, §1g.9; B's guide P2-07-B §3) ──────────────────────────
@@ -870,77 +782,45 @@ describe("POST /api/papers/report — the quota is REACHABLE on the streamed sha
 });
 
 /**
- * SPEND-CAP · R7 (ABC-JEV-INTEGRATION.md §1v) — the one route that catches
- * `CompanySpendCapRefusedError` specifically and extends `QuotaSignal` with
- * `kind: "company_budget"`. Also covers the guide's RED-list item 14 for this
- * route: the refusal reaches the caller as a thrown error, and the route's
- * EXISTING degrade path still returns its existing shape (200, `noLlm: true`)
- * rather than a 500 or an unhandled rejection.
+ * Every model failure on this route degrades to the report with no model layer
+ * (200, `noLlm: true`), never a 500 or an unhandled rejection, and never carries
+ * a notice about a budget: there is no Peer budget to refuse a call.
  */
-describe("POST /api/papers/report — SPEND-CAP company_budget quota signal (R7)", () => {
+describe("POST /api/papers/report — a failed model call degrades quietly", () => {
   beforeEach(() => {
     mocks.getFigurePool.mockResolvedValue(null);
     mocks.resolveProvider.mockReturnValue({
-      generateJsonText: vi.fn().mockRejectedValue(new CompanySpendCapRefusedError("global_cap_exceeded")),
+      generateJsonText: vi.fn().mockRejectedValue(new Error("upstream 500")),
     });
   });
 
-  it("a shallow (non-deep) JSON request keeps its existing empty-report shape AND carries the company_budget quota", async () => {
+  it("a shallow JSON request whose model call fails returns the empty report, 200", async () => {
     const response = await POST(request({ paper }, "application/json"));
     expect(response.status).toBe(200);
-    const body = (await response.json()) as PaperReport;
+    const body = (await response.json()) as PaperReport & { quota?: unknown };
 
-    expect(body.noLlm).toBe(true); // existing degrade shape, unchanged
-    expect(body.quota).toEqual(expect.objectContaining({ kind: "company_budget", reason: "exhausted" }));
+    expect(body.noLlm).toBe(true);
+    expect(body.quota).toBeUndefined();
   });
 
-  it("the streamed shallow path sends a quota event immediately before the report event, and the report itself keeps its existing degraded shape", async () => {
+  it("the streamed shallow path ends in a report event whose shape is the same degraded report", async () => {
     const events = await readEvents(await POST(request({ paper })));
 
     expect(events).toContainEqual({ type: "mode", aiMode: "tier1" });
-    const quotaIndex = events.findIndex((e) => e.type === "quota");
-    const reportIndex = events.findIndex((e) => e.type === "report");
-    expect(quotaIndex).toBeGreaterThanOrEqual(0);
-    expect(reportIndex).toBeGreaterThan(quotaIndex);
-
     const report = reportEvent(events);
     expect(report.noLlm).toBe(true);
-    expect(report.quota).toEqual(expect.objectContaining({ kind: "company_budget", reason: "exhausted" }));
+    expect(events.some((event) => (event as { type: string }).type === "quota")).toBe(false);
   });
 
-  it("reason 'unavailable' for a non-cap-exceeded refusal — the same two-value vocabulary the deep-report kind already uses", async () => {
-    mocks.resolveProvider.mockReturnValue({
-      generateJsonText: vi.fn().mockRejectedValue(new CompanySpendCapRefusedError("cap_config_unreadable")),
-    });
-
-    const response = await POST(request({ paper }, "application/json"));
-    const body = (await response.json()) as PaperReport;
-
-    expect(body.quota).toEqual(expect.objectContaining({ kind: "company_budget", reason: "unavailable" }));
-  });
-
-  it("item 14 — a DEEP request whose deep attempt is refused still falls back to the EXISTING shallow degrade shape, 200, never a 500 or unhandled rejection", async () => {
+  it("a DEEP request whose deep attempt throws still falls back to the shallow degrade shape, 200", async () => {
     mocks.getFullText.mockResolvedValue({ status: "ok", doc: { text: "Body." } });
-    mocks.generateDeepReport.mockRejectedValue(new CompanySpendCapRefusedError("global_cap_exceeded"));
+    mocks.generateDeepReport.mockRejectedValue(new Error("upstream 500"));
 
     const response = await POST(request({ paper, deepReport: true }, "application/json"));
     expect(response.status).toBe(200);
     const body = (await response.json()) as PaperReport;
 
-    expect(body.noLlm).toBe(true); // the SAME shape any other deep-flow failure already produces
-    expect(body.quota).toEqual(expect.objectContaining({ kind: "company_budget" }));
-    expect(mocks.bindFiguresToReport).not.toHaveBeenCalled();
-  });
-
-  it("the other 8 company-funded call sites are untouched — a plain (non-CompanySpendCapRefusedError) failure keeps the existing silent degrade, no quota field at all", async () => {
-    mocks.resolveProvider.mockReturnValue({
-      generateJsonText: vi.fn().mockRejectedValue(new Error("upstream 500")),
-    });
-
-    const response = await POST(request({ paper }, "application/json"));
-    const body = (await response.json()) as PaperReport;
-
     expect(body.noLlm).toBe(true);
-    expect(body.quota).toBeUndefined();
+    expect(mocks.bindFiguresToReport).not.toHaveBeenCalled();
   });
 });

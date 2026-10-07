@@ -13,9 +13,16 @@ particular upload is lawful.** See "What this does *not* establish" below.
 
 - An uploaded PDF's bytes and its extracted metadata (title, DOI when found, a short abstract
   excerpt, and a handful of extracted phrases used for learning — never the full text) are
-  written to a private, gitignored directory on the server (`web/.local-data/uploads/` locally;
-  a real deployment must point `PEER_PRIVATE_UPLOAD_DIR` at its own private, durable volume —
-  see `web/.env.example`).
+  written to private storage: a gitignored directory locally (`web/.local-data/uploads/`); on
+  Vercel, a private Supabase Storage bucket (`PEER_UPLOAD_BUCKET`, created by
+  `web/supabase/migrations/20261001000000_private_uploads_bucket.sql`) that only the server's
+  service-role key can read; when self-hosting, a private, durable volume named by
+  `PEER_PRIVATE_UPLOAD_DIR`. See `web/.env.example`.
+- On Vercel the reader's browser puts the PDF into the bucket directly, through a one-time
+  signed upload URL for that reader's own staging folder (a Vercel function will not accept a
+  request body much over 4 MB). The server then reads it back, runs every check it runs on a
+  direct upload, files it, and deletes the staged copy; anything left staged for over a day is
+  deleted by the daily purge.
 - Every record is tagged with an **owner key** derived from either the signed-in account
   (production) or a per-browser capability cookie (local development only — never a shared
   identity). Every route that reads an upload's bytes, metadata, generated report, or figures

@@ -190,7 +190,7 @@ describe("writeUploadPdfIfAbsent — idempotent on re-upload", () => {
     writtenHashes.push(hash16);
 
     await writeUploadPdfIfAbsent(hash16, bytes);
-    expect(uploadFileExists(hash16)).toBe(true);
+    expect(await uploadFileExists(hash16)).toBe(true);
     const firstWrite = await readFile(pdfPath(hash16));
 
     // Re-upload: must not throw, and must not corrupt the stored file even

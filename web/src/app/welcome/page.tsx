@@ -20,8 +20,7 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import { useProfileStore } from "@/store/profile";
-import type { Entitlement } from "@/lib/entitlement/types";
-import { entitlementGrants } from "@/lib/entitlement/allowance";
+import { useSyncGate, type AuthOutcome } from "@/components/profile-sync";
 import { careerStages, industryPreferences } from "@/types";
 import type { UserProfile } from "@/types";
 import {
@@ -48,6 +47,7 @@ import {
 import { SchoolAutocomplete } from "@/components/profile/school-autocomplete";
 import { AdvisorField } from "@/components/profile/advisor-field";
 import { ConnectorPanel } from "@/components/profile/connector-panel";
+import { JevSetup } from "@/components/profile/jev-setup";
 import { useProfileSettled } from "@/components/first-run";
 import { Callout } from "@/components/ui";
 import { buttonVariants } from "@/components/ui/button";
@@ -84,13 +84,11 @@ const readRequestedStep = () => {
 export default function WelcomePage() {
   const router = useRouter();
   const profile = useProfileStore((s) => s.profile);
-  // ABC-freemium 1-15 — the `ai` step is complete when the reader has AI at all.
-  // ABC-freemium 6-04 — a capability question, so the anonymous view while the
-  // plan is unknown: the step reads as not-yet-done rather than done, which is
-  // the direction that shows the reader the step instead of hiding it.
-  const entitlement = entitlementGrants(
-    useProfileStore((s) => s.entitlement),
-  );
+  // The `ai` step is complete when a model will run for this reader (their own
+  // key, and signed in). While the sign-in check is unanswered the step reads
+  // as not-yet-done rather than done, which is the direction that shows the
+  // reader the step instead of hiding it.
+  const auth = useSyncGate((s) => s.authOutcome);
   const store = useProfileStore();
   const topicMirroringRef = useRef<TopicMirroringController | null>(null);
   const completeOnboarding = useProfileStore((s) => s.completeOnboarding);
@@ -124,7 +122,7 @@ export default function WelcomePage() {
   if (settled && autoStart === null) {
     setAutoStart(
       stepIndexFromKey(requestedStep) ??
-        firstIncompleteStep(profile, readPersonaDone(), entitlement),
+        firstIncompleteStep(profile, readPersonaDone(), auth),
     );
   }
   const step = manualStep ?? autoStart;
@@ -146,10 +144,10 @@ export default function WelcomePage() {
       Object.fromEntries(
         STEP_META.map((m) => [
           m.key,
-          isStepDone(m.key, profile, personaDone, entitlement),
+          isStepDone(m.key, profile, personaDone, auth),
         ]),
       ) as Record<StepKey, boolean>,
-    [profile, personaDone, entitlement],
+    [profile, personaDone, auth],
   );
 
   // Jumping is free among the first steps and everywhere once the topics
@@ -428,22 +426,18 @@ export default function WelcomePage() {
                 <StepFrame
                   kicker="Optional power-up"
                   title="Connect an AI key (optional)."
-                  subtitle="Peer works fully free with zero setup, and its AI is included. Adding your own key is optional — it sends the model calls to your account instead, and you can always do this later."
+                  subtitle="Peer works with no setup and shows the reading without a model. Add your own key to turn the AI on — you can always do this later."
                 >
-                  {/* ABC-freemium 1-24 · R-UI-1, D1 — this said a key is what
-                      unlocks AI. Peer's AI is included now, so a key is an
-                      alternative rather than an unlock. */}
+                  {/* Peer has no model of its own: a key is what turns AI on,
+                      and it runs on the reader's own account. */}
                   <Callout variant="accent">
-                    <strong>Peer&apos;s AI is included — no key needed.</strong>{" "}
-                    Ranking, summaries and Deep reports across Papers, Events and
-                    Jobs all run on it. Adding your own key sends those calls to
-                    your own account instead, on whichever model you prefer.
+                    <strong>Without a key, Peer shows the reading without a model.</strong>{" "}
+                    With one, ranking, relevance reasons, summaries and Deep
+                    reports run on the model you choose, and that company bills
+                    you.
                   </Callout>
-                  {/* No plan or price card on this step. The paid tier is
-                      switched off (one-tier mode) and Peer is free, so nothing
-                      here may name a plan or a price. `ProPlanSummary` and its
-                      copy are kept for a future tiered mode; put the card back
-                      here only when that mode is turned on. */}
+                  {/* No plan or price card on this step: Peer has no paid tier,
+                      so nothing here may name a plan or a price. */}
                   <div className="mt-4 space-y-3">
                     <ApiKeyHelp provider={profile.feedAiProvider} />
                     <AiProviderRecommendation />
@@ -462,9 +456,14 @@ export default function WelcomePage() {
                     />
                     <p className="text-caption leading-relaxed text-text-faint">
                       AI keys power ranking, summaries, and Deep reports. Tavily
-                      web scouting uses its own separate search key and remains
-                      limited by Peer&apos;s daily search schedule.
+                      web scouting uses its own separate search key.
                     </p>
+                    {/* A second, optional pass over the paper shortlist on the
+                        reader's own Jev key. Part of this step, not a step of
+                        its own; the setup component owns the key. */}
+                    <div className="rounded-xl bg-surface p-4 shadow-well">
+                      <JevSetup variant="welcome" idPrefix="welcome" />
+                    </div>
                   </div>
                 </StepFrame>
               )}
@@ -540,7 +539,7 @@ export default function WelcomePage() {
 
                   <ReviewList
                     profile={profile}
-                    entitlement={entitlement}
+                    auth={auth}
                     onJump={setStep}
                   />
                 </StepFrame>
@@ -688,17 +687,17 @@ function StepRail({
 // confirms at a glance instead of paging back through steps.
 function ReviewList({
   profile,
-  entitlement,
+  auth,
   onJump,
 }: {
   profile: UserProfile;
-  entitlement: Pick<Entitlement, "userId">;
+  auth: AuthOutcome;
   onJump: (i: number) => void;
 }) {
   const rows = STEP_META.slice(0, -1).map((m, i) => ({
     index: i,
     label: m.label,
-    summary: summarizeStep(m.key, profile, entitlement),
+    summary: summarizeStep(m.key, profile, auth),
   }));
   return (
     <div>
@@ -732,7 +731,7 @@ function ReviewList({
 function summarizeStep(
   key: StepKey,
   profile: UserProfile,
-  entitlement: Pick<Entitlement, "userId">,
+  auth: AuthOutcome,
 ): string {
   switch (key) {
     case "basics": {
@@ -762,9 +761,9 @@ function summarizeStep(
     case "radar":
       return isStepDone("radar", profile, false) ? "Customized" : "Defaults";
     case "ai":
-      return isStepDone("ai", profile, false, entitlement)
+      return isStepDone("ai", profile, false, auth)
         ? `${providerShortLabel(profile.feedAiProvider)} key connected`
-        : "Not connected — works free";
+        : "No key — reading without a model";
     case "connectors": {
       const n = connectorCount(profile);
       return n > 0 ? `${n} of 3 sources connected` : "None connected yet";

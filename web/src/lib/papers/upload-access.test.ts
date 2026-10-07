@@ -10,7 +10,7 @@ import { hostedUploadsEnabled, ownedUpload, sameOriginUploadRequest, uploadOwner
 
 beforeEach(() => {
   vi.resetAllMocks();
-  for (const key of ["VERCEL", "VERCEL_ENV", "NEXT_PUBLIC_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_ANON_KEY", "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "PEER_PRIVATE_UPLOAD_DIR", "PEER_UPLOADS_ENABLED"]) vi.stubEnv(key, "");
+  for (const key of ["VERCEL", "VERCEL_ENV", "NEXT_PUBLIC_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_ANON_KEY", "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "PEER_PRIVATE_UPLOAD_DIR", "PEER_UPLOADS_ENABLED", "PEER_UPLOAD_BUCKET", "SUPABASE_SERVICE_ROLE_KEY"]) vi.stubEnv(key, "");
   vi.stubEnv("NODE_ENV", "development");
 });
 afterEach(() => vi.unstubAllEnvs());
@@ -69,6 +69,19 @@ describe("private upload authorization", () => {
     expect(hostedUploadsEnabled()).toBe(false);
     vi.stubEnv("PEER_PRIVATE_UPLOAD_DIR", path.resolve(process.cwd(), "..", "private-test-volume"));
     expect(hostedUploadsEnabled()).toBe(true);
+  });
+  it("accepts a private Supabase bucket as hosted storage only with the switch on and every credential present", () => {
+    vi.stubEnv("VERCEL", "1");
+    vi.stubEnv("PEER_UPLOAD_BUCKET", "private-uploads");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://example.supabase.co");
+    vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "service-role-test-key");
+    // The bucket alone never turns uploads on.
+    expect(hostedUploadsEnabled()).toBe(false);
+    vi.stubEnv("PEER_UPLOADS_ENABLED", "true");
+    expect(hostedUploadsEnabled()).toBe(true);
+    // Without the server-side key nothing can reach the bucket: off, not broken.
+    vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "");
+    expect(hostedUploadsEnabled()).toBe(false);
   });
   it("refuses browser cross-origin mutations", () => {
     expect(sameOriginUploadRequest(new Request("http://localhost/api/papers/upload", { headers: { origin: "https://evil.example" } }))).toBe(false);

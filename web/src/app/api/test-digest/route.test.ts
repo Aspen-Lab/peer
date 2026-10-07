@@ -4,7 +4,7 @@ import { selectedSenseConcept } from "@/lib/feed/senses";
 
 const mocks = vi.hoisted(() => ({
   canUseLocalServerProvider: vi.fn(),
-  requireEntitledAiRequest: vi.fn(),
+  requireAiRequest: vi.fn(),
   getUser: vi.fn(),
   select: vi.fn(),
   maybeSingle: vi.fn(),
@@ -16,7 +16,7 @@ vi.mock("@/lib/llm/providers/registry", () => ({
   canUseLocalServerProvider: mocks.canUseLocalServerProvider,
 }));
 vi.mock("@/lib/security/ai-request", () => ({
-  requireEntitledAiRequest: mocks.requireEntitledAiRequest,
+  requireAiRequest: mocks.requireAiRequest,
 }));
 vi.mock("@/lib/supabase/server", () => ({
   createClient: () => Promise.resolve({
@@ -37,7 +37,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.maybeSingle.mockReset();
   mocks.canUseLocalServerProvider.mockReturnValue(true);
-  mocks.requireEntitledAiRequest.mockResolvedValue({ entitlement: { userId: "server-user" } });
+  mocks.requireAiRequest.mockResolvedValue({ user: { id: "server-user" }, anonymous: false });
   mocks.getUser.mockResolvedValue({ data: { user: { id: "server-user", email: "person@example.test" } } });
   mocks.select.mockImplementation(() => ({ eq: () => ({ maybeSingle: mocks.maybeSingle }) }));
   mocks.maybeSingle.mockResolvedValue({
@@ -52,19 +52,19 @@ beforeEach(() => {
 });
 
 describe("POST /api/test-digest intent transport", () => {
-  it("conceals production before entitlement or profile work", async () => {
+  it("conceals production before the sign-in check or profile work", async () => {
     mocks.canUseLocalServerProvider.mockReturnValue(false);
 
     const response = await POST(request());
 
     expect(response.status).toBe(404);
-    expect(mocks.requireEntitledAiRequest).not.toHaveBeenCalled();
+    expect(mocks.requireAiRequest).not.toHaveBeenCalled();
     expect(mocks.getUser).not.toHaveBeenCalled();
     expect(mocks.select).not.toHaveBeenCalled();
   });
 
-  it("does not run feed or email when the shared entitlement gate rejects", async () => {
-    mocks.requireEntitledAiRequest.mockResolvedValue(
+  it("does not run feed or email when the shared sign-in gate rejects", async () => {
+    mocks.requireAiRequest.mockResolvedValue(
       NextResponse.json({ error: "denied" }, { status: 401, headers: { "Cache-Control": "no-store" } }),
     );
 
@@ -76,7 +76,7 @@ describe("POST /api/test-digest intent transport", () => {
     expect(mocks.sendDigestEmail).not.toHaveBeenCalled();
   });
 
-  it("runs permitted project-only intent at Tier 0 with no company source or capability", async () => {
+  it("runs permitted project-only intent at Tier 0 with no web source", async () => {
     await POST(request());
 
     expect(mocks.runFeedPipeline).toHaveBeenCalledWith(expect.objectContaining({
@@ -85,7 +85,7 @@ describe("POST /api/test-digest intent transport", () => {
       project: "Stabilize sulfide electrolytes",
     }));
     expect(mocks.runFeedPipeline).not.toHaveBeenCalledWith(expect.objectContaining({
-      sources: expect.anything(), companySpendCapability: expect.anything(),
+      sources: expect.anything(),
     }));
     expect(mocks.runFeedPipeline).toHaveBeenCalledTimes(1);
     expect(mocks.sendDigestEmail).toHaveBeenCalledTimes(1);
@@ -214,19 +214,20 @@ describe("passes feed.meta.emptyReasonCode through to sendDigestEmail (EMPTY-EMA
   });
 });
 
-// P3-S5 (Round 3) — ABC-JEV-INTEGRATION.md §4 "P3-S5 DESIGN RULING": the
-// Jev shadow's `onFreshShortlist` hook is wired ONLY in
-// app/api/feed/route.ts's POST handler — this route is never edited by
-// that slice. Proves the structural reason the hook cannot reach this call
-// site (runFeedPipeline is called with a single argument here, no options
-// object at all).
-describe("POST /api/test-digest -- never schedules the Jev shadow (P3-S5)", () => {
-  it("calls runFeedPipeline with a single argument (no options object) -- structurally cannot carry onFreshShortlist", async () => {
+// Jev runs on a key the READER sends in a live feed request body (`/api/feed`'s
+// POST), and only there. This route has no such body, so it can never carry a
+// Jev key or a Jev screen: runFeedPipeline is called with a single argument
+// (no options object at all) and a request with no Jev field.
+describe("POST /api/test-digest -- never uses Jev", () => {
+  it("calls runFeedPipeline with a single argument (no options object) -- structurally cannot carry a Jev screen, and the request has no Jev field", async () => {
     await POST(request());
 
     expect(mocks.runFeedPipeline).toHaveBeenCalledTimes(1);
     const call = mocks.runFeedPipeline.mock.calls[0];
     expect(call).toHaveLength(1);
-    expect((call?.[0] as Record<string, unknown>)).not.toHaveProperty("onFreshShortlist");
+    const pipelineRequest = call?.[0] as Record<string, unknown>;
+    expect(pipelineRequest).not.toHaveProperty("jevScreen");
+    expect(pipelineRequest).not.toHaveProperty("jevApiKey");
+    expect(JSON.stringify(pipelineRequest)).not.toMatch(/jev/i);
   });
 });

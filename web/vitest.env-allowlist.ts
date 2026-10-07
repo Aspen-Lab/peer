@@ -92,10 +92,16 @@ export function selectLiveChannelsEnv(
  * prefix — same rule as `LIVE_CHANNELS_ENV_NAMES` above. Deliberately its
  * own list, not merged into `LIVE_CHANNELS_ENV_NAMES`: they gate two
  * unrelated opt-in configs, and merging them would mean the S2/OpenAlex
- * runner's process could see `JEV_API_KEY` (and vice versa) with no
+ * runner's process could see the Jev key (and vice versa) with no
  * connection between the two.
+ *
+ * The name is `JEV_SMOKE_API_KEY`, NOT the old company name: Peer holds no Jev
+ * key (the owner cut that path on 2026-10-06; Jev is a key the reader brings),
+ * nothing reads the old name, and the build guard bans it on Vercel. A
+ * developer who ran the smoke test before must rename the variable in
+ * `.env.local`.
  */
-export const JEV_SMOKE_ENV_NAMES = ["JEV_API_KEY"] as const;
+export const JEV_SMOKE_ENV_NAMES = ["JEV_SMOKE_API_KEY"] as const;
 
 export type JevSmokeEnvName = (typeof JEV_SMOKE_ENV_NAMES)[number];
 

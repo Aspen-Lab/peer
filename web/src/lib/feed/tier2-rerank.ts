@@ -58,31 +58,19 @@ export function applyRerankOrder(
 }
 
 /**
- * ABC-freemium 3-02 · Ruling 9 point 5 — **the written justification that
- * replaces a silent contextless call.**
- *
- * This runs inside a pool build, where no entitled request is in scope, so there
- * is no honest `EntitledContext` to mint. It is nonetheless guarded: round-3 B
- * measured the ceiling rather than assuming it — `applyTier2Rerank` is reached
- * only when `requestedTier >= 2` (`feed/pipeline.ts:249`), `requestedTier` is
+ * Runs inside a pool build, on the reader's own key and only then: it is reached
+ * only when `requestedTier >= 2` (`feed/pipeline.ts`), `requestedTier` is
  * `req.aiTier ?? feedTierFromEnv()` and `feedTierFromEnv()` returns 0 for
  * anything `<= 0`, R-GUARD-1 covers `PEER_FEED_AI_TIER` on Vercel, and R-SEC-3
- * stops a request body raising its own tier.
- *
- * A module-local literal, so **no request type widens and no pipeline signature
- * changes**. If the ceiling ever moves, this claim is a one-word grep away.
+ * (`aiTierCeiling`) stops a request body raising its own tier. With no key of
+ * the reader's own, `resolveProvider` answers null and the order is unchanged.
  */
-const RERANK_JUSTIFICATION = {
-  kind: "entitlement-proved-by-tier-ceiling",
-  where: "feed/pipeline.ts — requestedTier >= 2, default 0 (R-GUARD-1, R-SEC-3)",
-} as const;
-
 export async function applyTier2Rerank(
   items: ScoredItem[],
   brief: SearchBrief,
   llmOverride?: ProviderOverrideConfig,
 ): Promise<Tier2RerankResult> {
-  const provider = resolveProvider(llmOverride, RERANK_JUSTIFICATION);
+  const provider = resolveProvider(llmOverride);
   if (!provider?.generateJsonText || items.length === 0) {
     return { items, orderedIds: [], reasons: {} };
   }

@@ -1,14 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-// RULING 75 (round 28 C, item 0). Only `searchGemini` is stood in for; the
-// provider-order helpers stay REAL, so the resolution tests below still test
-// shipped code rather than a stub.
-const geminiSearchMock = vi.hoisted(() => vi.fn());
-vi.mock("@/lib/sources/gemini-search", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/sources/gemini-search")>()),
-  searchGemini: geminiSearchMock,
-}));
-
+import {
+  armEveryOperatorSearchCredential,
+  clearEveryOperatorSearchCredential,
+} from "@/test-support/route-harness";
 import {
   bestEventTitleSegment,
   bestEventTitleSegmentDetailed,
@@ -30,15 +25,10 @@ import {
   resolveSearchProvider,
   webResultToRawEventItem,
 } from "./eventweb";
-// Phase 3 round 6 C, ITEM 2. `pageTitleFromHtml` is NOT stubbed above (only
-// `searchGemini` is — see the RULING 75 comment) — this is the real, shipped
-// title-extraction-plus-decode entry point gemini-sourced rows go through.
-import { pageTitleFromHtml } from "@/lib/sources/gemini-search";
-import {
-  setUsageEventsClientForTests,
-  type UsageEventRow,
-} from "@/lib/usage/events";
-import { resetCounterStoreForTests } from "@/lib/usage/counters";
+// Phase 3 round 6 C, ITEM 2. `cleanDisplayText` is the shared entity decode a
+// page's `<title>` text went through (`pageTitleFromHtml`, in the deleted Gemini
+// grounding adapter, called exactly this on the tag's content).
+import { cleanDisplayText } from "@/lib/text/clean";
 
 // No test file existed for this source adapter before B4-01 (round 4) — see
 // MULTIAGENT-report-parity.md, B4-01's own risk note. These are foundational
@@ -2546,317 +2536,107 @@ describe("A27-03: a page whose every reading is past inside the current year", (
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
-// RULING 75 (round 28 C, item 0) — THE PROVIDER SEAM ON THIS SURFACE.
+// THE SEARCH SEAM ON THIS SURFACE — a reader's own Tavily key, and nothing else.
 //
-// This adapter used a bare `keys.tavily ? tavily : brave` ternary and **never
-// read `webSearch.provider` at all**, so "all three surfaces uniform" meant
-// ADDING preference reading here. These tests pin the two things that were
-// actually broken: the surface was DARK with Tavily disabled, and it had no way
-// to be told which provider to use.
+// This block was RULING 75's provider resolution (Gemini grounding, Vertex AI
+// Search, Brave and a server Tavily key, in an order, behind an entitlement
+// gate). Peer now funds no search for anyone: every one of those providers is
+// deleted, so what is left to resolve is whether the reader sent a key.
 // ═══════════════════════════════════════════════════════════════════════════
 
-describe("RULING 75 — eventweb provider resolution", () => {
+describe("eventweb provider resolution — the reader's own key only", () => {
   const baseQuery = { topics: ["molten salt"], queries: ["molten salt conference"], limit: 80 };
 
   afterEach(() => {
     vi.unstubAllEnvs();
   });
 
-  function withoutKeys(): void {
-    vi.stubEnv("TAVILY_API_KEY", "");
-    vi.stubEnv("BRAVE_SEARCH_API_KEY", "");
-    // CREDIT MIGRATION — stated, not inherited. Vitest loads every `GOOGLE_`
-    // variable out of `.env.local`, so once a developer configures a real
-    // Search App these cases would silently start resolving to `vertex` and
-    // this block would be testing the machine instead of the code.
-    vi.stubEnv("GOOGLE_VERTEX_SEARCH_ENGINE_ID", "");
-    vi.stubEnv("GOOGLE_VERTEX_SEARCH_DATA_STORE_ID", "");
-  }
-
-  it("was DARK before this item: no keys, no webSearch block, no source", () => {
-    withoutKeys();
-    vi.stubEnv("GOOGLE_VERTEX_PROJECT", "");
+  it("is DARK with no reader key: no webSearch block, no source", () => {
+    clearEveryOperatorSearchCredential(vi.stubEnv);
     expect(resolveSearchProvider(baseQuery)).toBeNull();
     expect(eventweb.enabled(baseQuery)).toBe(false);
   });
 
-  // ABC-freemium 2-04 — an ENTITLED query. Vertex and grounding sit behind
-  // `systemSearchAllowed` now, exactly as the Tavily and Brave keys do.
-  const entitledQuery = {
-    ...baseQuery,
-    webSearch: { systemSearchAllowed: true },
-  };
-
-  it("stays DARK even when Vertex is present and the query asks for gemini", () => {
-    // REWRITTEN, NOT DELETED — ABC-freemium 5-04 · D2a (Ruling 12), Ruling 13
-    // point 4. Was "comes back on when Vertex is present…" and asserted
-    // `.toBe("gemini")` with `enabled` true.
-    //
-    // This is a RULING 75 case inherited from the report-parity loop, and D2a
-    // took away its subject: grounding is operator-funded, so it is now
-    // unreachable on every plan. Rewritten in place rather than deleted, with
-    // the same inputs, because the inverted assertion is worth having — it is
-    // the proof that not even a fully configured Vertex project plus an
-    // explicit `provider` preference plus a forced entitlement flag can reach
-    // grounding. That is a stronger statement than the old one.
-    withoutKeys();
-    vi.stubEnv("GOOGLE_VERTEX_PROJECT", "some-project");
-    const query = {
-      ...baseQuery,
-      webSearch: { provider: "gemini" as const, systemSearchAllowed: true },
-    };
-    expect(resolveSearchProvider(query)).toBeNull();
-    expect(eventweb.enabled(query)).toBe(false);
-  });
-
-  it("refuses an EXPLICIT gemini or vertex preference when the reader is not entitled", () => {
-    // The case an order-only fix would have left open (2-04): the pipeline sets
-    // `provider` from the server's own environment, so an unentitled caller
-    // lands on the explicit branch and never reaches the auto order.
-    withoutKeys();
-    vi.stubEnv("GOOGLE_VERTEX_PROJECT", "some-project");
-    vi.stubEnv("GOOGLE_VERTEX_SEARCH_ENGINE_ID", "peer-web");
-
-    for (const provider of ["gemini", "vertex"] as const) {
-      const query = {
-        ...baseQuery,
-        webSearch: { provider, systemSearchAllowed: false },
-      };
-      expect(resolveSearchProvider(query)).toBeNull();
-      expect(eventweb.enabled(query)).toBe(false);
-    }
-  });
-
-  it("picks NOTHING on auto, entitled or not, once the operator stops paying", () => {
-    // REWRITTEN, NOT DELETED — 5-04 · D2a, Ruling 13 point 4. Was "picks gemini
-    // on auto when the reader is entitled…" and asserted `.toBe("gemini")` for
-    // the entitled query. Both halves now answer `null`, which is the whole of
-    // D2a on this surface: entitlement no longer changes what search a reader
-    // gets, because nobody gets operator-funded search.
-    withoutKeys();
-    vi.stubEnv("GOOGLE_VERTEX_PROJECT", "some-project");
-    expect(resolveSearchProvider(entitledQuery)).toBeNull();
-    expect(resolveSearchProvider(baseQuery)).toBeNull();
-  });
-
-  // CREDIT MIGRATION — the new default, pinned in the same block as the old
-  // one so the pair reads as the order it is: a configured Search App takes
-  // the server-Vertex slot, grounding keeps it when there is none.
-  it("does NOT pick vertex on auto, even with a Search App configured", () => {
-    // REWRITTEN, NOT DELETED — 5-04 · D2a, Ruling 13 point 4. Was "picks vertex
-    // on auto once a Search App is configured" and asserted `.toBe("vertex")`.
-    // A configured Vertex AI Search app is operator-funded search, so under D2a
-    // it is unreachable however completely it is configured. The CREDIT
-    // MIGRATION ordering it used to pin (a Search App outranks grounding) is
-    // dead code's business now, and this case records that it is unreachable
-    // rather than pretending the ordering still decides anything.
-    withoutKeys();
-    vi.stubEnv("GOOGLE_VERTEX_PROJECT", "some-project");
-    vi.stubEnv("GOOGLE_VERTEX_SEARCH_PROJECT", "some-search-project");
-    vi.stubEnv("GOOGLE_VERTEX_SEARCH_ENGINE_ID", "peer-web");
-    expect(resolveSearchProvider(entitledQuery)).toBeNull();
-    expect(resolveSearchProvider(baseQuery)).toBeNull();
-  });
-
-  // UPSTREAM-01 Vertex slice (Round 3 F-M-UP-V1) ORIGINALLY read: "a Search
-  // App id alone is no longer enough... so auto resolution falls through to
-  // the gemini grounding clause instead." CHANGED, NOT DELETED — MERGE C
-  // (ABC-JEV-INTEGRATION.md §4 Round 3 "MERGE-B-FEED complete"): 5-04 · D2a
-  // landed after this case was written and closes the fallthrough this case
-  // asserted. `operatorSearchAvailability` (`@/lib/search/system-key.ts`) is
-  // now FROZEN to `{geminiAvailable: false, vertexAvailable: false}`
-  // unconditionally — confirmed by reading its body directly: the
-  // `systemSearchAllowed` input is accepted but never read. So neither vertex
-  // NOR gemini can be auto-selected any more, entitled or not, matching the
-  // "picks NOTHING on auto, entitled or not" case above. Still worth its own
-  // case: it proves the GOOGLE_VERTEX_SEARCH_PROJECT requirement from the
-  // UPSTREAM-01 slice doesn't quietly resurrect a gemini fallback now that
-  // vertex alone is unreachable.
-  it("does not pick vertex OR fall through to gemini when only GOOGLE_VERTEX_PROJECT is set, without a Search project", () => {
-    withoutKeys();
-    vi.stubEnv("GOOGLE_VERTEX_PROJECT", "some-project");
-    vi.stubEnv("GOOGLE_VERTEX_SEARCH_ENGINE_ID", "peer-web");
-    expect(resolveSearchProvider(baseQuery)).not.toBe("vertex");
-    expect(resolveSearchProvider(baseQuery)).toBeNull();
-  });
-
-  it("still yields to a caller-supplied Tavily key", () => {
-    withoutKeys();
-    vi.stubEnv("GOOGLE_VERTEX_PROJECT", "some-project");
-    expect(
-      resolveSearchProvider({ ...baseQuery, webSearch: { tavilyApiKey: "caller-key" } }),
-    ).toBe("tavily");
-  });
-
-  it("an explicit brave preference wins over an available Vertex project", () => {
-    // REWRITTEN, NOT DELETED — 2-04. The preference still wins; the query has
-    // to be entitled first, because Brave is operator-funded too.
-    withoutKeys();
-    vi.stubEnv("BRAVE_SEARCH_API_KEY", "brave-key");
-    vi.stubEnv("GOOGLE_VERTEX_PROJECT", "some-project");
-    expect(
-      resolveSearchProvider({
-        ...baseQuery,
-        webSearch: { provider: "brave" as const, systemSearchAllowed: true },
-      }),
-    ).toBe("brave");
-    // ...and is refused outright without one.
-    expect(
-      resolveSearchProvider({
-        ...baseQuery,
-        webSearch: { provider: "brave" as const, systemSearchAllowed: false },
-      }),
-    ).toBeNull();
-  });
-
-  // ABC-freemium 1-05 · R-KEY-3 — REWRITTEN, NOT DELETED. This case asserted
-  // that the operator's environment Tavily key alone resolved `"tavily"`. On
-  // this surface that was the largest leak in the round: an unauthenticated
-  // request produced seven outgoing searches on the operator's key. The env key
-  // now requires `systemSearchAllowed`, which only the route can set and only
-  // from the entitlement.
-  it("NEVER spends the operator's env Tavily key, entitled or not (D2a)", () => {
-    // REWRITTEN, NOT DELETED — ABC-freemium 5-04 · D2a (Ruling 12). The entitled
-    // half asserted `.toBe("tavily")` with `enabled` true; it now answers `null`
-    // and `false` like the unentitled half. The env key is armed on purpose, so
-    // zero is a statement about the gate and not about an empty environment.
-    vi.stubEnv("GOOGLE_VERTEX_PROJECT", "");
-    vi.stubEnv("TAVILY_API_KEY", "env-tavily");
-    vi.stubEnv("BRAVE_SEARCH_API_KEY", "");
+  it("stays DARK with every environment credential set, because the environment buys nothing", () => {
+    // Was a dozen cases about which operator-funded engine an entitled reader
+    // reached and in what order. There is no such engine: a credential in the
+    // server's environment is not a search, in any runtime, whatever the query
+    // carries.
+    armEveryOperatorSearchCredential(vi.stubEnv);
 
     expect(resolveSearchProvider(baseQuery)).toBeNull();
     expect(eventweb.enabled(baseQuery)).toBe(false);
 
-    const entitled = {
-      ...baseQuery,
-      webSearch: { systemSearchAllowed: true },
-    };
-    expect(resolveSearchProvider(entitled)).toBeNull();
-    expect(eventweb.enabled(entitled)).toBe(false);
+    const blank = { ...baseQuery, webSearch: { tavilyApiKey: "   " } };
+    expect(resolveSearchProvider(blank)).toBeNull();
+    expect(eventweb.enabled(blank)).toBe(false);
   });
 
-  it("spends the operator's env Brave key only when the request is entitled", () => {
-    // REWRITTEN, NOT DELETED — ABC-freemium 2-04 · Ruling 5 point 2. Was
-    // "keeps the shipped Brave behaviour exactly", with a comment saying
-    // R-KEY-3 leaves Brave ungated because D2 bans it on Vercel. A ban on
-    // Vercel is not a gate on a self-host or a developer machine.
-    vi.stubEnv("GOOGLE_VERTEX_PROJECT", "");
-    vi.stubEnv("TAVILY_API_KEY", "");
-    vi.stubEnv("BRAVE_SEARCH_API_KEY", "env-brave");
+  it("resolves tavily on the reader's own key, and only on it", () => {
+    clearEveryOperatorSearchCredential(vi.stubEnv);
+    const own = { ...baseQuery, webSearch: { tavilyApiKey: "caller-key" } };
+    expect(resolveSearchProvider(own)).toBe("tavily");
+    expect(eventweb.enabled(own)).toBe(true);
 
-    expect(resolveSearchProvider(baseQuery)).toBeNull();
-    expect(resolveSearchProvider(entitledQuery)).toBe("brave");
+    // With every environment credential armed beside it, it is still the
+    // reader's key that runs.
+    armEveryOperatorSearchCredential(vi.stubEnv);
+    expect(resolveSearchProvider(own)).toBe("tavily");
   });
 });
 
 /**
- * ABC-freemium 5-04 · **Ruling 12 point 7, standing tally 2** — `kind:"search"`
- * usage rows produced must be 0.
+ * An events fan-out runs on the reader's own Tavily key and on nothing else.
  *
- * **NEW FILE SECTION, and the reason it is new is the finding.** There are
- * exactly three producers of a `kind:"search"` row in production source —
- * `jobs/sources/jobweb.ts`, `events/sources/eventweb.ts` and
- * `sources/web-search.ts` — and only two of them had a row-capturing test.
- * The events one had none, so the tally would have been proved on two thirds of
- * its subject. This is the missing third.
+ * This block was ABC-freemium 5-04's "the events surface runs no operator-funded
+ * search" (and RULING 75's "hands the gemini adapter its deny list"). Peer funds
+ * no such search and keeps no breaker or usage ledger, so what is left to say is
+ * that no key means no search at all, and that a reader's dead key is reported
+ * rather than hidden.
  */
-describe("5-04 — the events surface writes no kind:\"search\" row (D2a)", () => {
-  const rows: UsageEventRow[] = [];
+describe("an events fan-out runs on the reader's own key and nothing else", () => {
+  const query = {
+    topics: ["molten salt"],
+    queries: ["molten salt conference"],
+    limit: 80,
+  };
 
   afterEach(() => {
     vi.unstubAllEnvs();
-    setUsageEventsClientForTests(undefined);
-    resetCounterStoreForTests();
-    geminiSearchMock.mockReset();
+    vi.restoreAllMocks();
   });
 
-  it("writes nothing, on the most generous input the surface accepts", async () => {
-    rows.length = 0;
-    resetCounterStoreForTests();
-    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "");
-    vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "");
-    setUsageEventsClientForTests({
-      from: () => ({
-        insert: (inserted: UsageEventRow[]) => {
-          rows.push(...inserted);
-          return Promise.resolve({ error: null });
-        },
-      }),
-    } as never);
-    // Every candidate armed: an operator Tavily key, a Brave key, a configured
-    // Vertex project, an explicit provider, a real user id and the entitlement
-    // flag forced true. Zero here is therefore a statement about the gate.
-    vi.stubEnv("TAVILY_API_KEY", "OPERATOR-NOT-A-KEY");
-    vi.stubEnv("BRAVE_SEARCH_API_KEY", "BRAVE-NOT-A-KEY");
-    vi.stubEnv("GOOGLE_VERTEX_PROJECT", "some-project");
-    geminiSearchMock.mockResolvedValue([]);
+  it("runs no search at all without a reader key, on the most generous input the surface accepts", async () => {
+    // Every candidate armed: a server Tavily key, a Brave key, a configured
+    // Vertex project. Zero here is therefore a statement about the code, not
+    // about an empty environment.
+    armEveryOperatorSearchCredential(vi.stubEnv);
+    // Stood in for so that, were the code ever to reach out again, the case
+    // fails on the assertion below instead of making a real request.
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(async () => new Response("{}", { status: 200 }));
 
-    const items = await eventweb.fetch({
-      topics: ["molten salt"],
-      queries: ["molten salt conference"],
-      limit: 80,
-      webSearch: {
-        provider: "gemini",
-        systemSearchAllowed: true,
-        userId: "user-1",
-      },
-    });
+    const items = await eventweb.fetch(query);
 
     expect(items).toEqual([]);
-    expect(geminiSearchMock).not.toHaveBeenCalled();
-    expect(rows.filter((row) => row.kind === "search")).toEqual([]);
-    expect(rows).toEqual([]);
-  });
-});
-
-// RULING 75 — STAGE 2b, PROVED AT THE SEAM RATHER THAN ARGUED.
-// The event surface forwards `DENY_HOSTS` as a pre-screen because that list is
-// an OUTRIGHT, title-independent deny (see its call site in the adapter), so
-// skipping those hosts before a page fetch cannot change an admission.
-describe("RULING 75 — eventweb hands the gemini adapter its deny list", () => {
-  afterEach(() => {
-    vi.unstubAllEnvs();
-    geminiSearchMock.mockReset();
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it("never calls the gemini adapter at all, so it forwards nothing (D2a)", async () => {
-    // REWRITTEN, NOT DELETED — ABC-freemium 5-04 · **Ruling 13 point 4**, option
-    // (a), which the manager adopted with the cost recorded.
-    //
-    // The old assertions, kept verbatim so the knowledge is not lost with the
-    // coverage:
-    //
-    //     expect(geminiSearchMock).toHaveBeenCalledTimes(1);
-    //     const options = geminiSearchMock.mock.calls[0][1] as Record<string, unknown>;
-    //     expect(options.denyHosts).toBe(DENY_HOSTS);
-    //     expect(options.excludeDomains).toEqual([
-    //       "arxiv.org", "openalex.org", "semanticscholar.org",
-    //     ]);
-    //
-    // **THE ACCEPTED COVERAGE COST, and the machinery for noticing it is owed.**
-    // The code under test is eventweb's own option construction inside
-    // `fetchImpl`, one layer above the adapter, and D2a makes that layer
-    // unreachable. It cannot be re-pointed without extracting a production seam
-    // D2a did not ask for. So the deny-list forwarding rule loses live coverage
-    // and this case now asserts absence instead of content. **A tallies this
-    // every round — "Ruling 75 option-building cases now asserting absence
-    // rather than content", and the number is 4** (this one plus three in
-    // `jobweb.test.ts`). **Threshold: if grounding is ever re-enabled for any
-    // plan, all four are restored to content assertions in the same round.**
-    vi.stubEnv("TAVILY_API_KEY", "");
-    vi.stubEnv("BRAVE_SEARCH_API_KEY", "");
-    vi.stubEnv("GOOGLE_VERTEX_PROJECT", "some-project");
-    geminiSearchMock.mockResolvedValue([]);
+  it("reports a reader's dead key instead of returning a day with no events", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(async () => new Response("invalid key", { status: 401 }));
 
-    const items = await eventweb.fetch({
-      topics: ["molten salt"],
-      queries: ["molten salt conference"],
-      limit: 80,
-      webSearch: { provider: "gemini", systemSearchAllowed: true },
-    });
+    await expect(
+      eventweb.fetch({ ...query, webSearch: { tavilyApiKey: "USER-NOT-A-KEY" } }),
+    ).rejects.toThrow(/tavily web search failed for every query/);
 
-    expect(geminiSearchMock).not.toHaveBeenCalled();
-    expect(items).toEqual([]);
+    expect(fetchSpy).toHaveBeenCalled();
+    for (const call of fetchSpy.mock.calls) {
+      expect(String(call[0])).toBe("https://api.tavily.com/search");
+    }
   });
 });
 
@@ -3758,18 +3538,19 @@ describe("F11 — press-wire hosts + event-report(s) path (Phase 3 round 6 C, IT
 // 123c/123g item 2): `laquo` added to `HTML_ENTITIES` (`lib/text/clean.ts`).
 // End-to-end recovery per Phase 3 round 5 B, Deliverable 3 — the live F13
 // witness (`msrworkshop2023.ornl.gov/msr2022/index.html`, byte-confirmed
-// undecoded `&laquo;`) run through the REAL, unmodified `pageTitleFromHtml`
-// (title-only HTML, no og:title, matching this witness's confirmed-live
-// shape) and then the REAL, unmodified `eventNameFrom` — no local parallel
-// copy of the decode fix, unlike B's own throwaway harness, because the
-// product code itself now carries the fix.
+// undecoded `&laquo;`): the text of its `<title>` tag run through the REAL,
+// unmodified `cleanDisplayText` (the decode a page title was always given) and
+// then the REAL, unmodified `eventNameFrom` — no local parallel copy of the
+// decode fix, because the product code itself carries it. (The page-title
+// extractor that used to call `cleanDisplayText` for these cases lived in the
+// Gemini grounding adapter, which is deleted; the tag's text is passed in
+// directly, which is exactly what that extractor handed it.)
 describe("laquo entity recovery, end to end (Phase 3 round 6 C, ITEM 2)", () => {
-  it("decodes the live &laquo; witness through pageTitleFromHtml and recovers the event name through eventNameFrom", () => {
-    const html =
-      "<html><head><title>MSR2022 &laquo; Molten Salt Reactor Workshop</title></head><body></body></html>";
+  it("decodes the live &laquo; witness through cleanDisplayText and recovers the event name through eventNameFrom", () => {
+    const titleText = "MSR2022 &laquo; Molten Salt Reactor Workshop";
     const url = "https://msrworkshop2023.ornl.gov/msr2022/index.html";
 
-    const decodedTitle = pageTitleFromHtml(html);
+    const decodedTitle = cleanDisplayText(titleText);
     // The entity must be GONE, decoded to the table's own dash-family
     // convention — not merely "no longer the literal 7-character sequence"
     // but a specific, asserted value.
@@ -3783,15 +3564,13 @@ describe("laquo entity recovery, end to end (Phase 3 round 6 C, ITEM 2)", () => 
   it("regression: mdash/ndash/minus still decode to a plain hyphen, unchanged", () => {
     // The table's existing dash-family contract must survive byte-unchanged
     // — this is an additive table entry, not a rewrite of the others.
-    const html =
-      "<html><head><title>INL 2026 &mdash; Battery Innovation Summit</title></head><body></body></html>";
-    expect(pageTitleFromHtml(html)).toBe("INL 2026 - Battery Innovation Summit");
+    expect(cleanDisplayText("INL 2026 &mdash; Battery Innovation Summit")).toBe(
+      "INL 2026 - Battery Innovation Summit",
+    );
   });
 
   it("raquo is deliberately NOT decoded — unwitnessed this round, not added blind", () => {
-    const html =
-      "<html><head><title>MSR2022 &raquo; Molten Salt Reactor Workshop</title></head><body></body></html>";
-    expect(pageTitleFromHtml(html)).toBe(
+    expect(cleanDisplayText("MSR2022 &raquo; Molten Salt Reactor Workshop")).toBe(
       "MSR2022 &raquo; Molten Salt Reactor Workshop",
     );
   });

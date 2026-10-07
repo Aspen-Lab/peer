@@ -19,8 +19,7 @@ import { streamPaperReport } from "@/lib/papers/report-stream";
 import type { QuotaSignal } from "@/lib/usage/deep-report-quota";
 import { reportOutcome } from "@/lib/reader/report-outcome";
 import { aiAvailability, type AiMode } from "@/lib/feed/ai-tier";
-import { entitlementGrants } from "@/lib/entitlement/allowance";
-import { useProfileStore } from "@/store/profile";
+import { useSyncGate } from "@/components/profile-sync";
 
 // v6: S6 merged "what is new" into "what it proposes" (whatItProposes.newHere
 // replaces .novelty) and deleted "why it fits you" — a v5 report still has
@@ -124,7 +123,7 @@ export function buildReportKey(
  * text on for a model — the one predicate the paper's text leaves the browser on.
  * A deep report reads the full text, and it is asked for when the reader turned
  * Deep report on in their profile or the paper carries an attached PDF, and a model
- * is there to ask (the reader's own key, or Peer's for a signed-in reader). The hook
+ * is there to ask (the reader's own key, for a signed-in reader). The hook
  * decides its own `deep` with it, and the page enables the paragraph-gist pass on it
  * too, so the map's gists are written only when a deep report is: one switch, never
  * a second. Pure, so the rule is tested without rendering anything.
@@ -218,14 +217,14 @@ export function useModelReport({
     ],
   );
 
-  // One tier: signed in means Peer's model; the reader's own key, when set, wins.
-  // `userProviderConfigured` keeps its meaning — only a BYOK reader sends a key.
-  const entitlement = useProfileStore((s) => s.entitlement);
-  const aiMode = aiAvailability(profile, entitlementGrants(entitlement));
+  // A model runs only on the reader's own key, and only for a signed-in reader.
+  // `userProviderConfigured` keeps its meaning — only a reader on their own key
+  // sends one.
+  const authOutcome = useSyncGate((s) => s.authOutcome);
+  const aiMode = aiAvailability(profile, authOutcome);
   const userProviderConfigured = aiMode === "byok";
-  // Deep is opt-in, and needs a model from anywhere: Peer's (signed in — the
-  // server's dev entitlement stands in for this locally) or the reader's own key.
-  // No NODE_ENV test here: AI availability is decided on the server.
+  // Deep is opt-in, and needs a model: the reader's own key. No NODE_ENV test
+  // here: AI availability is decided on the server.
   const deep = deepReportRequested(profile, paper, aiMode);
   const depth = deep ? "deep" : "abstract";
   // P2-08b (§1g.17, F2): the questions name a request, and ride it, only when
@@ -475,13 +474,6 @@ export function useModelReport({
           if (event.type === "report") {
             settled = true;
             settle(quotaFirst ? { ...event.report, quota: quotaFirst } : event.report, asked);
-            return;
-          }
-          if (event.type === "quota") {
-            // The daily breaker tripped: no model report today, and not a failure.
-            // The quota is kept on its own (P2-09b): there is no report to carry it.
-            settled = true;
-            settle(null, false, event.quota);
             return;
           }
           throw new Error(event.message);

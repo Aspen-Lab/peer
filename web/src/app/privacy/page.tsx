@@ -65,22 +65,24 @@ const SECTIONS = [
   {
     label: "Your own model key",
     body: [
-      "If you add your own provider key, it stays in your browser. It is deliberately excluded from everything Peer syncs to its server — the one line that does it is a `void feedAiApiKey` in the sync code, there so a future edit has to remove it on purpose.",
-      "When Peer's own model is used instead, the request goes to Google's Gemini API from Peer's server.",
+      "Peer has no model of its own. Ranking by a model, relevance reasons, digest bullets and model reports run only if you add your own provider key; without one you read the briefing without a model.",
+      "Your key stays in your browser. It is deliberately excluded from everything Peer syncs to its server — the one line that does it is a `void feedAiApiKey` in the sync code, there so a future edit has to remove it on purpose.",
+      "When you ask for something a model does, your browser sends the request to Peer's server with your key attached, and the server passes it to the provider you chose. The key is used for that request and is not stored.",
     ],
   },
   {
-    label: "What is recorded about model use",
+    label: "Your own Jev key",
     body: [
-      "Every call Peer pays for writes one row: which route, which provider and model, how many tokens, how long it took, whether it succeeded, and whether it ran on your key or Peer's.",
-      "That row holds no paper text, no prompt, no answer, and no credential. The table has no column that could hold one.",
+      "If you add a Jev key, it stays in your browser and is excluded from everything Peer syncs, the same way as a model key. Each time Peer builds your briefing its server passes the key to Jev, and does not store or log it.",
+      "Jev, made by TypeSafe, receives the title, abstract and venue of up to 50 candidate papers, together with the project, challenge, topics, methods and exclusions you wrote and the word meanings you selected, and bills your own account. Peer keeps Jev's answers for each paper against your account (the paper's id, the question, the answer, how sure Jev was, which Jev model answered, and how many tokens and how much time the call took), with no paper text and no key, until the account is removed.",
+      "Your browser also remembers, for the Profile page, how many papers Jev screened in your last briefing. It holds counts only, and it is cleared when you change or remove the key.",
     ],
   },
   {
     label: "Who else sees a request",
     body: [
       "Finding papers means asking the open sources: OpenAlex, arXiv, Crossref, Semantic Scholar, and the publisher or repository a paper's full text and figures live on. Those services see the query and the request, as they would for any reader.",
-      "Google (Gemini) sees a paper's text when a deep report is written, which happens when you turn on Deep report in your profile or attach a PDF to the paper; on that same condition, and never otherwise, the text is read once more to write the one-line gists in the paper's map. Tavily sees your search terms only if you add a Tavily key yourself. Resend sends the email digest if you turn one on. Supabase hosts the database and the sign-in. Vercel hosts the site and counts page views — Vercel Analytics records the page, not who you are.",
+      "The model provider whose key you added sees what a model request carries: your topics and a paper's title and abstract when the briefing is ranked or summarised, and a paper's text when a deep report is written, which happens when you turn on Deep report in your profile or attach a PDF to the paper; on that same condition, and never otherwise, the text is read once more to write the one-line gists in the paper's map. Tavily sees your search terms only if you add a Tavily key yourself. Jev sees those papers and your project text only if you add a Jev key yourself. Resend sends the email digest if you turn one on. Supabase hosts the database and the sign-in. Vercel hosts the site and counts page views — Vercel Analytics records the page, not who you are.",
       "Peer runs no advertising, sells nothing to anyone, and has no third-party trackers beyond the page counter named above.",
     ],
   },

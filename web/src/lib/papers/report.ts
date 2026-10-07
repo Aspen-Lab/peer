@@ -16,7 +16,6 @@
 
 import type { Paper } from "@/types";
 import { cleanDisplayText } from "@/lib/text/clean";
-import type { QuotaSignal } from "@/lib/usage/deep-report-quota";
 
 /**
  * One sentence of Peer's prose plus the verbatim sentence of the paper that
@@ -198,16 +197,6 @@ export interface PaperReport {
   paywallNotice?: string;
   /** Set on deep success: which source served the full text. */
   sourceKind?: string;
-  /**
-   * SPEND-CAP · R7 (ABC-JEV-INTEGRATION.md §1v) — set only when THIS route's
-   * own model call was refused by the shared company-AI dollar budget
-   * (`CompanySpendCapRefusedError`, `lib/usage/company-budget.ts`). Additive,
-   * same idiom as `paywallNotice`/`noLlm` above: absent on every report this
-   * campaign shipped before this field existed, and absent whenever the
-   * budget mechanism itself is off (its default) or wasn't the reason this
-   * particular call degraded.
-   */
-  quota?: QuotaSignal;
 }
 
 export interface PaperReportRequest {

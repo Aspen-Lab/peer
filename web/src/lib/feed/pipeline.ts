@@ -2,11 +2,6 @@ import { createHash } from "node:crypto";
 import { bySourceId } from "@/lib/sources";
 import type { SourceId, RawItem } from "@/lib/sources/types";
 import { DblpBotCheckError } from "@/lib/sources/dblp";
-import { GEMINI_SOURCE_TIMEOUT_MS } from "@/lib/sources/gemini-search";
-import {
-  needsVertexSourceTimeout,
-  webSearchOptions,
-} from "@/lib/sources/vertex-search";
 import { withSourceTimeout } from "@/lib/opportunities/shared";
 import { scoreItems } from "@/lib/scoring";
 import { dropStale } from "./freshness";
@@ -50,7 +45,8 @@ import {
   publishedYearOf,
 } from "@/lib/feed/paper-identity";
 import { getCounterStore, type CounterStore } from "@/lib/usage/counters";
-import { MAX_SHADOW_CANDIDATES, type ShadowCandidate } from "@/lib/decisions/shadow";
+import { screenShortlist, type JevScreeningMeta } from "@/lib/decisions/apply";
+import type { JevScreenFn } from "@/lib/decisions/screen";
 import { fuseRankings, type RRFCandidate, type RRFChannelInput } from "@/lib/scoring/rrf";
 import { topPositiveOpenAlexTopicIds } from "@/lib/preferences/topic-seeds";
 import {
@@ -86,8 +82,8 @@ function shouldIncludeNonPaperResults(req: FeedRequest): boolean {
 // topic/field exploration. Server-only, default OFF, read ONLY from
 // `process.env` — deliberately NEVER a `FeedRequest` field, so nothing an
 // HTTP caller sends can ever turn either one on (the same "server-minted
-// only" convention `FeedRequest` already documents for `paperCacheScope`/
-// `companySpendCapability`). Literal `"on"`, same parsing as
+// only" convention `FeedRequest` already documents for `paperCacheScope`).
+// Literal `"on"`, same parsing as
 // `dashboardLedgerEnabled()` (web/src/lib/dashboard/ledger-flag.ts) —
 // anything else (unset, "true", "1", a typo) keeps today's behaviour
 // exactly: no fetch, no cost, no change to `allItems`. A dedicated flag
@@ -216,7 +212,7 @@ function buildRRFChannels(
  * point 6, "nothing else changes"). This one substitution is what makes
  * BOTH ruling points true at once: the caller uses the returned `ranked`
  * array everywhere it used to use `tier1Ranked` for judgment-shortlist and
- * pool-membership purposes (the `<=50` slice to Tier-2/the shadow hook, and
+ * pool-membership purposes (the `<=50` slice to Tier-2/the Jev screen, and
  * the final `MAX_PAPER_POOL_ITEMS` truncation, which is simply `tier2.items`
  * downstream of whichever array was reranked) — both become "RRF top N"
  * automatically, with no separate membership-cut code needed.
@@ -278,7 +274,7 @@ export interface FeedPipelineOptions {
    * only: the route reads it from the ledger for a signed-in owner and
    * passes it here — it is NEVER part of `FeedRequest`, so it can never be
    * populated from an HTTP body or query string (same idiom as
-   * `paperCacheScope`/`companySpendCapability` on FeedRequest). Absent (the
+   * `paperCacheScope` on FeedRequest). Absent (the
    * default) means no ledger was consulted — every caller that doesn't pass
    * it (every existing test, the digest/test-digest routes) gets output
    * byte-identical to before this option existed.
@@ -349,8 +345,7 @@ export interface FeedPipelineOptions {
    * Server-minted only, exactly like `ledgerExclusions`/`rolloverCandidates`
    * above: never a `FeedRequest` field, so nothing an HTTP caller sends can
    * ever supply or enable these channels (mirrors the same "server-minted
-   * only" convention `FeedRequest` already documents for `paperCacheScope`/
-   * `companySpendCapability`).
+   * only" convention `FeedRequest` already documents for `paperCacheScope`).
    *
    * **Deliberately read-time only, like `rolloverCandidates`, and for a
    * related but distinct reason (see this slice's checkpoint DESIGN
@@ -388,30 +383,35 @@ export interface FeedPipelineOptions {
    */
   negativeSeedPaperIds?: readonly string[];
   /**
-   * P3-S5 (Round 3) — ABC-JEV-INTEGRATION.md §4 "P3-S5 DESIGN RULING"
-   * (2026-09-24T11:29:31Z), superseding docs/jev-abc/P3-B-20260924T0525Z.md
-   * DESIGN §6's original build-time-call proposal where the two differ: the
-   * Jev shadow runs AFTER the response is sent (route.ts schedules it with
-   * Next's `after()`), never inside the request. This option is the ONLY
-   * seam that connects the two: invoked ONLY when THIS request's own call to
-   * `buildPaperPool` actually ran (a genuine cache miss — never on a cache
-   * hit, and never from the P2-S2 `retryFailedSources` path, which has its
-   * own separate rescore logic and never calls `buildPaperPool` at all — see
-   * that function's own call site below), with a COPY of the top
-   * `MAX_SHADOW_CANDIDATES` Tier-1-ranked candidates, taken BEFORE Tier 2
-   * reranks or truncates anything (RRF-agnostic per DESIGN §7: today this is
-   * Tier-1's own ranking; once P2's RRF lands behind its own flag, this
-   * becomes RRF's fused output with no change needed here). The pipeline
-   * never awaits this call and wraps it in try/catch, so a throwing hook can
-   * never change the built pool or crash the request — see `buildPaperPool`.
-   * `route.ts` is the only caller that ever supplies one, and only for a
-   * signed-in, entitled, `aiTier>=2` POST request with the shadow+broker
-   * flags on and the broker configured; every other caller (GET,
-   * dispatch-digests, test-digest, every pre-existing test) omits it and
-   * sees output byte-identical to before this option existed
-   * (`pipeline.shadow.test.ts` is the regression net for that claim).
+   * Jev on the reader's own key. Supplied ONLY by `route.ts`'s POST, and only for
+   * a reader who sent a Jev key with this request (signed in, or the reader the
+   * local-dev gate lets through); every other caller (GET, dispatch-digests,
+   * test-digest, every test that does not ask for it) omits it and sees output
+   * byte-identical to a build with no Jev at all (`pipeline.jev.test.ts` is the
+   * regression net for that claim).
+   *
+   * It is a CLOSURE over the reader's key, owner, intent and decision cache, so
+   * none of them is a field of `FeedRequest`, an option here, or an input of any
+   * cache key: the pipeline sees a function that turns a shortlist into
+   * decisions, and nothing else.
+   *
+   * Called ONLY when THIS request's own call to `buildPaperPool` actually ran (a
+   * genuine cache miss: never on a cache hit, and never from the P2-S2
+   * `retryFailedSources` path, which has its own rescore logic and never calls
+   * `buildPaperPool`), with a COPY of the top `MAX_SCREEN_CANDIDATES`
+   * candidates of the judgment list (Tier-1's own ranking, or RRF's fused
+   * output when that flag is on), taken BEFORE a model key's Tier-2 rerank.
+   * It is awaited: Jev's answers decide the order (`decisions/apply.ts`). The
+   * screen is bounded (a 20 s race deadline, a stop at the first rejected key)
+   * and never throws; a throw is caught here regardless, and a failed screen
+   * leaves the order exactly as it would have been without a key.
+   *
+   * The pool is cached under its own key (`derivePoolCacheKey`'s `jevScreening`),
+   * so a reader without the key never shares it, and Jev's order is stored in the
+   * same `aiOrder` slot a model key's ranking uses and replayed for free on
+   * every same-day read.
    */
-  onFreshShortlist?: (shortlist: ReadonlyArray<ShadowCandidate>) => void;
+  jevScreen?: JevScreenFn;
   /**
    * P2-S4d (Round 3) — F-M-P2-02. The owner-scoped store for the four
    * read-time channels' cached combined result (see
@@ -535,6 +535,12 @@ interface BuiltPaperPool {
    * contract; this is that same data before it reaches the HTTP response.
    */
   rrf?: Record<string, RRFItemProvenance>;
+  /**
+   * Set only when a reader's Jev screen was supplied and the shortlist was not
+   * empty: what Jev did on this build (counts and one status word). See
+   * `CachedPaperPool.jev`.
+   */
+  jev?: JevScreeningMeta;
 }
 
 /**
@@ -583,49 +589,23 @@ async function buildPaperPool(
   brief: SearchBriefFor,
   requestedTier: 0 | 1 | 2,
   now: Date,
-  // P3-S5 — see FeedPipelineOptions.onFreshShortlist's own doc comment.
-  // Threaded in as a plain parameter (not the whole options object) to keep
-  // this function's existing signature narrow and additive.
-  onFreshShortlist?: (shortlist: ReadonlyArray<ShadowCandidate>) => void,
+  // See FeedPipelineOptions.jevScreen's own doc comment. Threaded in as a plain
+  // parameter (not the whole options object) to keep this function's existing
+  // signature narrow and additive.
+  jevScreen?: JevScreenFn,
 ): Promise<BuiltPaperPool> {
   const sources = req.sources ?? defaultSources();
   const perSourceLimit = req.perSourceLimit ?? 60;
   const includeNonPaperResults = shouldIncludeNonPaperResults(req);
 
-  // SUB-ITEM 8 / RULING 79c. Resolved ONCE so the timeout override below reads
-  // the same value the fetch is given, rather than re-deriving the provider
-  // from the same ternary in two places and inviting them to disagree.
-  //
-  // **NO TAVILY BRANCH. THE PAPER SURFACE DOES NOT SPEND THE USER'S TAVILY
-  // QUOTA, AT ALL.** Events and jobs genuinely need web search — their
-  // listings exist only on the open web. Papers do not: they come from the
-  // five free academic sources, and the one Tavily channel this surface had
-  // was deleted for buying a number nothing displayed. The optional `web`
-  // source below is dark by product choice and, if it is ever turned back on,
-  // runs on the server's own Vertex project rather than on a key the user
-  // pays for.
-  //
-  // CREDIT MIGRATION — `webSearchOptions` prefers Vertex AI Search when a
-  // Search App is configured and otherwise returns exactly what
-  // `geminiWebSearchOptions` returned.
-  //
-  // ABC-freemium 1-05 · R-KEY-3 · D3 — **a hard `false`, and it is permanent.**
-  // D3 says the papers surface costs zero paid search. It is not just policy:
-  // `webSearchOptions` returns `{ provider }` and never a `tavilyApiKey`, and
-  // `store/feed.ts` sends no `searchConnectors` for papers at all, so a user's
-  // own Tavily key cannot reach this surface. The only key it could ever spend
-  // is the operator's — for every plan, paid included. Combined with **D2a**'s
-  // Vercel bans on Tavily, Brave and the Vertex/Gemini search names, the papers
-  // `web` source returns `[]` in production. That is D3 working as written.
-  //
-  // ABC-freemium 5-04 — under D2a this hard `false` is now the shape EVERY
-  // surface has, not a papers-only rule: the entitlement's `systemSearchAllowed`
-  // is permanently `false` too. This line stays because it is the surface's own
-  // statement of D3 and does not depend on the entitlement being false.
-  const paperWebSearch = {
-    ...webSearchOptions(req.searchConnectors, req.companySpendCapability),
-    systemSearchAllowed: false,
-  };
+  // **THE PAPER SURFACE DOES NOT SPEND ANYONE'S SEARCH QUOTA, AT ALL.** Events
+  // and jobs genuinely need web search — their listings exist only on the open
+  // web. Papers do not: they come from the five free academic sources, and the
+  // one Tavily channel this surface had was deleted for buying a number nothing
+  // displayed. The optional `web` source below is dark by product choice: it is
+  // handed no `webSearch` options, so it carries no key and returns nothing.
+  // Peer holds no search credential of its own to fall back to, and
+  // `store/feed.ts` sends no `searchConnectors` for papers by design.
 
   const fetchPromise = Promise.allSettled(
     sources.map((s) =>
@@ -639,52 +619,7 @@ async function buildPaperPool(
           avoid: brief.avoid,
           timeWindow: brief.timeWindow,
           limit: perSourceLimit,
-          // RULING 75 — the Tavily branch is exactly as it shipped. The gemini
-          // branch is what keeps the paper surface's web source alive with the
-          // quota-capped providers suspended.
-          //
-          // **RULING 79c CLOSED ROUND 28 C's DISCLOSURE.** The 8 s wall above
-          // is now overridable and the `web` source gets 25 s — see the
-          // override argument below for the price and the evidence.
-          webSearch: s !== "web" ? undefined : paperWebSearch,
         }),
-        // SUB-ITEM 8 / RULING 79c — **THE PER-SOURCE OVERRIDE, AND IT IS THE
-        // SAME SHAPE RULING 76a TOOK AT THE EVENTS AND JOBS CALL SITES.** Only
-        // the `web` source, only on the gemini provider; every other paper
-        // source keeps the 8 s it has always had.
-        //
-        // **WHY, ON A MEASUREMENT RATHER THAN A PRINCIPLE.** Round 29 B timed
-        // two paper-shaped grounded searches through the shipped adapter:
-        // **7541 ms** (survives 8000) and **11832 ms** (KILLED). So the paper
-        // surface's web source was **not uniformly dead at 8 s — it was a coin
-        // flip, which is worse.** A source that always fails is honest: the
-        // surface reports zero fetched and renders empty on purpose. A source
-        // that fails about half the time produces a paper surface **whose
-        // contents depend on grounding latency on the day** — two runs of the
-        // same profile minutes apart differ, with no error a reader sees and
-        // nothing in the report saying so. That is a reproducibility defect on
-        // the measured surface, and every future census of it inherits it.
-        //
-        // **THE PRICE, NAMED (79c accepted it):** `runFeedPipeline` is on a
-        // REQUEST path and `Promise.allSettled` waits for the slowest settler,
-        // so the paper surface's WORST CASE goes from about 8 s to about 25 s
-        // for a user who is waiting. It is only ever paid when the web source
-        // is genuinely slow — every other source settles earlier. The worst
-        // case is bounded by the adapter's own 21 s soft deadline
-        // (`GEMINI_SEARCH_BUDGET_MS`), which is why 25 s and not more: the
-        // inner budget must stay UNDER the outer wall, and before this change
-        // it was 2.6x OVER it.
-        //
-        // **FALSIFIER, FROM B:** if a paper-surface census still shows the web
-        // source reporting zero fetched with a `source-timeout` reason after
-        // this raise, the wall was not the binding constraint and something
-        // else is.
-        // Both server-Vertex providers need the raised wall, for different
-        // reasons: grounding is slow in the search itself, vertex can spend the
-        // time on its page-kind fetch and its grounding backfill.
-        s === "web" && needsVertexSourceTimeout(paperWebSearch?.provider)
-          ? GEMINI_SOURCE_TIMEOUT_MS
-          : undefined,
       ),
     ),
   );
@@ -912,7 +847,7 @@ async function buildPaperPool(
   const tier1Ranked = requestedTier >= 1 ? applyTier1Rerank(scored, brief) : scored;
 
   // P2-S6 RULING points 2/3 — flag on only. `rankedForJudgment` is the
-  // order every downstream consumer (the shadow hook's shortlist, Tier-2's
+  // order every downstream consumer (the Jev screen's shortlist, Tier-2's
   // input, and therefore the final MAX_PAPER_POOL_ITEMS membership cut) now
   // reads instead of `tier1Ranked` directly. Flag off: `rankedForJudgment`
   // IS `tier1Ranked` (the same reference, not a copy) and `rrfProvenance`
@@ -921,48 +856,40 @@ async function buildPaperPool(
   const rankedForJudgment = rrfApplied?.ranked ?? tier1Ranked;
   const rrfProvenance = rrfApplied?.provenanceByItemId;
 
-  // P3-S5 — fire-and-forget, never awaited, and wrapped so a throwing hook
-  // can never affect the pool being built or crash this request. This is
-  // the ONLY place `onFreshShortlist` is ever invoked, and `buildPaperPool`
-  // itself only ever runs on an actual cache miss inside
-  // `getOrBuildCachedPool`'s `build()` callback (see `runFeedPipeline`
-  // below) — never on a cache hit and never from `retryFailedSources` — so
-  // "never on a cache hit, never from the retry path" is true by
-  // construction here, not by convention. Runs BEFORE Tier 2 so a slow or
-  // failing Tier-2 call can never suppress or delay scheduling the shadow.
-  // P2-S6 — reads `rankedForJudgment` (RRF top 50 when the flag is on, the
-  // same Tier-1 order as before when it's off) instead of `tier1Ranked`
-  // directly, per the P2-S6 RULING point 2.
-  if (onFreshShortlist) {
-    try {
-      const shortlist: ShadowCandidate[] = rankedForJudgment
-        .slice(0, MAX_SHADOW_CANDIDATES)
-        .map((item) => ({
-          id: item.id,
-          title: item.title,
-          abstract: item.abstract ?? null,
-          venue: item.venue,
-        }));
-      onFreshShortlist(shortlist);
-    } catch {
-      // A throwing hook must never affect the pool being built or crash
-      // the request that triggered this build.
-    }
-  }
+  // Jev on the reader's own key, when the route handed in a screen function.
+  // This is the ONLY place `jevScreen` is ever invoked, and `buildPaperPool`
+  // itself only ever runs on an actual cache miss inside `getOrBuildCachedPool`'s
+  // `build()` callback (see `runFeedPipeline` below) — never on a cache hit and
+  // never from `retryFailedSources` — so "never on a cache hit, never from the
+  // retry path" is true by construction here, not by convention.
+  //
+  // It is AWAITED, because Jev's answers decide the order. It reads
+  // `rankedForJudgment` (RRF top 50 when the flag is on, the same Tier-1 order as
+  // before when it's off) and runs BEFORE a model key's Tier 2, so Tier 2 sees
+  // the list in Jev's order. `screenShortlist` never throws and returns null for
+  // an empty shortlist; a screen that failed, or answered too few papers, or had
+  // its key rejected, gives a plan with no order, and `afterJev` below is then
+  // `rankedForJudgment` itself (the same reference: byte-identical to no Jev).
+  const jev = jevScreen ? await screenShortlist(rankedForJudgment, jevScreen) : null;
+  const afterJev = jev?.orderedIds ? applyRerankOrder(rankedForJudgment, jev.orderedIds) : rankedForJudgment;
 
   // P2-S6 — `applyTier2Rerank`'s own internal `.slice(0, 50)` now slices
   // `rankedForJudgment` instead of `tier1Ranked` (RULING point 2), and
   // because `tier2.items` (reranked or, at Tier 0/1, `rankedForJudgment`
   // itself) is what the final `MAX_PAPER_POOL_ITEMS` slice below truncates,
   // pool membership follows RRF order too (RULING point 3) with no separate
-  // membership-cut code needed.
+  // membership-cut code needed. With Jev's order applied the list Tier 2 slices
+  // is the same 50 papers, reordered.
   const tier2 = requestedTier >= 2
-    ? await applyTier2Rerank(rankedForJudgment, brief, req.llmOverride)
-    : { items: rankedForJudgment, orderedIds: [] as string[], reasons: {} };
+    ? await applyTier2Rerank(afterJev, brief, req.llmOverride)
+    : { items: afterJev, orderedIds: [] as string[], reasons: {} };
 
   return {
     items: tier2.items.slice(0, MAX_PAPER_POOL_ITEMS),
-    aiOrder: tier2.orderedIds,
+    // Jev owns the order when its order was used; a model key then still writes
+    // the reasons (its `orderedIds` are discarded). With no Jev order this is
+    // exactly the model key's ranking, or empty when no model ran.
+    aiOrder: jev?.orderedIds ?? tier2.orderedIds,
     aiReasons: tier2.reasons,
     fetched,
     errors,
@@ -972,6 +899,7 @@ async function buildPaperPool(
     generatedAt: now.toISOString(),
     localDate: localCalendarDate(now),
     ...(rrfProvenance ? { rrf: rrfProvenance } : {}),
+    ...(jev ? { jev: jev.meta } : {}),
   };
 }
 
@@ -1181,12 +1109,11 @@ async function claimSourceRetry(
 
 /**
  * A degraded cache hit's ONE bounded, in-request self-heal attempt.
- * Scoped to the five academic paper sources only: "web"/"hn" carry their
- * own connector/timeout override wiring (see `buildPaperPool`'s
- * `paperWebSearch`/`needsVertexSourceTimeout` above) that would have to be
- * duplicated here to retry them safely — recorded as a deliberate scope
- * boundary in this slice's checkpoint rather than risking a second,
- * divergent limiter. They still get honest `sourceStatus`/`meta.errors`
+ * Scoped to the five academic paper sources only (`ACADEMIC_PAPER_SOURCES`):
+ * "web"/"hn" are a deliberate scope boundary recorded in this slice's
+ * checkpoint, not retried here rather than risking a second, divergent
+ * limiter (the `web` source is dark and carries no search options at all, see
+ * `buildPaperPool` above). They still get honest `sourceStatus`/`meta.errors`
  * from the build; they are just never auto-retried.
  *
  * Never runs Tier 2 (no LLM call): a retry only restores candidates a real
@@ -1912,6 +1839,9 @@ export async function runFeedPipeline(
     aiTier: requestedTier,
     paperScopeIdentity: privateScope?.identity,
     paperOwnerId: privateScope?.ownerId,
+    // A pool built with a reader's Jev order is its own pool. Only a boolean:
+    // the key itself is not here, in `req`, or anywhere in this function.
+    jevScreening: options.jevScreen ? true : undefined,
     now,
   });
 
@@ -1921,7 +1851,7 @@ export async function runFeedPipeline(
     key,
     isCachedPaperPool,
     async () => {
-      built = await buildPaperPool(req, brief, requestedTier, now, options.onFreshShortlist);
+      built = await buildPaperPool(req, brief, requestedTier, now, options.jevScreen);
       return {
         surface: "papers",
         items: built.items,
@@ -1937,13 +1867,27 @@ export async function runFeedPipeline(
         // no RRF computation ran — same conditional-spread idiom the final
         // `meta.rrf` assembly below already uses.
         ...(built.rrf ? { rrf: built.rrf } : {}),
+        // What Jev did on this build (counts and one status word), so a later
+        // same-day read can report it. Absent when no Jev screen ran.
+        ...(built.jev ? { jev: built.jev } : {}),
       };
     },
     // P2-S2 — ABC-JEV-INTEGRATION.md §1p.B(2): "a pool where every source
     // failed is not cached as a valid day." An empty attempt set (no
     // sources requested) is never treated as fully failed —
     // `everySourceFailed` returns false on an empty map.
-    (candidate) => !everySourceFailed(candidate.sourceStatus),
+    //
+    // Jev: a pool whose key Jev REFUSED is not cached either. That build learned
+    // nothing about Jev, and a reader who has just corrected a mistyped key
+    // would otherwise be served today's keyless pool, with "Jev rejected the
+    // key", until tomorrow. The cost is bounded: only a rejected key triggers
+    // it, the screen stops at the first refusal (at most the calls already in
+    // flight, up to four), the browser stops sending a key Jev has refused
+    // (`paperFeedRequestBody`), and the route's hourly request limit still
+    // applies. A Jev that is merely down (`unavailable`) IS cached: the reader
+    // cannot fix that, and a rebuild per page load would only hammer the free
+    // sources.
+    (candidate) => !everySourceFailed(candidate.sourceStatus) && candidate.jev?.status !== "rejected",
   );
   let pool = loaded.pool;
 
@@ -2194,6 +2138,12 @@ export async function runFeedPipeline(
       // off, no RRF computation ran, or the pool predates this field, via
       // the same conditional-spread idiom `finalPool` below already uses.
       ...(pool.rrf ? { rrf: pool.rrf } : {}),
+      // Jev on the reader's own key — what Jev did when this pool was built,
+      // read from the pool (so a same-day cache hit reports it too). Present
+      // only for a pool built with a Jev screen, structurally absent otherwise:
+      // a reader without a key sees no field. Counts only; see
+      // `FeedMeta.jevScreening`.
+      ...(pool.jev ? { jevScreening: pool.jev } : {}),
       // EMPTY-STATE-REASON — same conditional-spread idiom as `rrf`/
       // `finalPool`: structurally absent, not merely undefined-valued, so
       // `expect(result.meta).not.toHaveProperty("emptyReasonCode")` is a

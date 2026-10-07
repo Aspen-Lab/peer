@@ -10,12 +10,14 @@
 // behaviour runs in both places. What a scan (a PDF with no text layer)
 // cannot give, it still cannot give; that now reads as what it is.
 //
-// Merge note, closed (P0-03, 2026-10-05): the upload path
-// (`extractPdfTextFromPath`) was the last caller of the Python helper. It
-// reads the file's bytes through the same `readPages` → `buildOutline` →
-// `normalize` as a link, and the helper is deleted (decision 3 of the
-// goal-directed-reading blueprint: one path, one behaviour). The Python
-// figure extractor (`lib/figures/pdf-extract.ts`) is separate and unchanged.
+// Merge note, closed (P0-03, 2026-10-05): the upload path was the last caller
+// of the Python helper; it is deleted (decision 3 of the goal-directed-reading
+// blueprint: one path, one behaviour). A private upload is read from its
+// storage's bytes (`extractPdfTextFromBytes`, whichever backend holds it —
+// `papers/upload-store.ts`) by the same `readPages` → `buildOutline` →
+// `normalize` as a link; `extractPdfTextFromPath` is the same reading for a
+// file on disk. The Python figure extractor (`lib/figures/pdf-extract.ts`) is
+// separate and unchanged.
 
 import { readFile } from "node:fs/promises";
 import { cleanDisplayText } from "@/lib/text/clean";
@@ -224,37 +226,66 @@ export async function tryExtractPdfText(url: string): Promise<PdfTextResult> {
 }
 
 /**
- * Read a PDF that already lives on this server's disk — an upload
- * (`web/.local-data/uploads/<hash16>.pdf`, see `papers/upload-store.ts`) —
- * the way `tryExtractPdfText` reads a link: its bytes through pdf.js
- * (`readPages`), the outline (`buildOutline`), and the same `normalize`.
- * The caller owns the file's lifetime; nothing is copied or downloaded.
+ * The same reading as `tryExtractPdfText`, for a PDF already in hand — a
+ * private upload, read from its storage (`papers/upload-store.ts`): its bytes
+ * through pdf.js (`readPages`), the outline (`buildOutline`), and the same
+ * `normalize`. Also hands back page 1's text, which the upload route's title
+ * fallback and DOI search read: `sections` drops everything before the first
+ * heading, where a title is printed.
  *
- * P0-03 (spec D3): this ran the Python helper until now. A scan — no text
- * layer, or no sections in what text there is — comes back as
- * `{ ok: false, reason: "pdf-empty: …" }`: `pdf-empty` is the marker the
+ * P0-03 (spec D3): there is no Python helper. A scan — no text layer, or no
+ * sections in what text there is — comes back as `{ ok: false, reason:
+ * "no-text-layer" | "no-sections" }`; the callers that report it to the reader
+ * (`full-text.ts`, the upload route) turn that into the `pdf-empty` marker the
  * reading page looks for to say "this PDF has no readable text".
  */
-export async function extractPdfTextFromPath(pdfPath: string): Promise<PdfTextResult> {
-  let pages: PdfPageText[];
+export async function extractPdfTextFromBytes(bytes: Buffer): Promise<PdfTextResult> {
   try {
-    pages = await readPages(await readFile(pdfPath));
+    const pages = await readPages(bytes);
+    // Page 1's lines as printed, joined with spaces, before any of them is set
+    // aside as the cover.
+    const page1Text = pages[0]
+      ? linesOfPage(pages[0])
+          .map((line) => line.text)
+          .join(" ")
+          .replace(/\s+/g, " ")
+          .trim()
+      : "";
+    const outline = buildOutline(pages);
+    if (!outline.sections || outline.sections.length === 0) {
+      return { ok: false, reason: outline.reason ?? "no-sections", page1Text: page1Text || undefined };
+    }
+    return { ok: true, doc: normalize(outline), page1Text: page1Text || undefined };
   } catch (err) {
-    // The file is not a PDF pdf.js can open, or it could not be read. Not a
-    // scan: say it failed. The error names the problem, never the text.
-    console.warn("[papers/pdf-text] could not read an uploaded PDF:", err instanceof Error ? err.message : String(err));
+    // The file is not a PDF pdf.js can open. Not a scan: say it failed. The
+    // error names the problem, never the text.
+    console.warn("[papers/pdf-text] read failed:", err);
+    return { ok: false, reason: String(err) };
+  }
+}
+
+/**
+ * The same reading for a PDF that already lives on this machine's disk (the
+ * caller owns the file's lifetime; nothing is copied or downloaded). A scan
+ * comes back as `{ ok: false, reason: "pdf-empty: …" }`: `pdf-empty` is the
+ * marker the reading page looks for to say "this PDF has no readable text".
+ * The app reads uploads through `extractPdfTextFromBytes`; this entry point
+ * is the path-shaped form of it.
+ */
+export async function extractPdfTextFromPath(pdfPath: string): Promise<PdfTextResult> {
+  let bytes: Buffer;
+  try {
+    bytes = await readFile(pdfPath);
+  } catch (err) {
+    // Not readable at all. Not a scan: say it failed. The error names the
+    // problem, never the text.
+    console.warn("[papers/pdf-text] could not read a PDF file:", err instanceof Error ? err.message : String(err));
     return { ok: false, reason: "PDF text extractor failed on this server." };
   }
-  const outline = buildOutline(pages);
-  if (!outline.sections || outline.sections.length === 0) {
-    return { ok: false, reason: `pdf-empty: ${outline.reason ?? "no-sections"}` };
+  const result = await extractPdfTextFromBytes(bytes);
+  if (result.ok) return result;
+  if (result.reason === "no-text-layer" || result.reason === "no-sections") {
+    return { ok: false, reason: `pdf-empty: ${result.reason}`, page1Text: result.page1Text };
   }
-  const page1Text = pages[0]
-    ? linesOfPage(pages[0])
-        .map((line) => line.text)
-        .join(" ")
-        .replace(/\s+/g, " ")
-        .trim()
-    : "";
-  return { ok: true, doc: normalize(outline), page1Text };
+  return { ok: false, reason: "PDF text extractor failed on this server." };
 }

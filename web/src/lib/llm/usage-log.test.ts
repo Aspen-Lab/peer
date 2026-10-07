@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { logDecisionUsage } from "./usage-log";
+import { logDecisionUsage, logLlmUsage } from "./usage-log";
 
 // P3-S5 — ABC-JEV-INTEGRATION.md §4 Round 3 "P3-S5 DESIGN RULING" +
 // docs/jev-abc/P3-B-20260924T0525Z.md §6. `logDecisionUsage` is the Jev
@@ -118,7 +118,7 @@ describe("logDecisionUsage", () => {
 });
 
 describe("logDecisionUsage — structural safety (never owner/paper/intent/key text)", () => {
-  it("its own parameter type has no owner id, paper id/title/abstract, intent, or key field — grep this file's own source, the same structural guard broker-client.test.ts/jev-client.test.ts already use", () => {
+  it("its own parameter type has no owner id, paper id/title/abstract, intent, or key field — grep this file's own source, the same structural guard jev-client.test.ts already uses", () => {
     const here = fileURLToPath(new URL(".", import.meta.url));
     const source = readFileSync(`${here}usage-log.ts`, "utf8");
     const forbidden = [
@@ -156,3 +156,46 @@ describe("logDecisionUsage — structural safety (never owner/paper/intent/key t
     expect(logSpy.mock.calls[0]?.every((arg: unknown) => typeof arg === "string")).toBe(true);
   });
 });
+
+// Peer keeps no ledger of model use. `logLlmUsage` is the console line the
+// API-efficiency work reads, and nothing else: it persists nothing and holds no
+// reader identity, so the file imports no usage store, no async-local scope and
+// no database client.
+describe("logLlmUsage — one console line, no ledger", () => {
+  it("emits exactly one compact line with the model, path, counts, latency and outcome", () => {
+    logLlmUsage({
+      provider: "gemini",
+      model: "gemini-model-id",
+      path: "digest",
+      inputTokens: 100,
+      outputTokens: 20,
+      thinkingTokens: 7,
+      latencyMs: 311.6,
+      ok: true,
+    });
+
+    expect(logSpy).toHaveBeenCalledTimes(1);
+    expect(logSpy.mock.calls[0]).toEqual([
+      "[llm] gemini/gemini-model-id path=digest in=100 out=20 think=7 312ms ok",
+    ]);
+  });
+
+  it("marks a failed request ERR and leaves out the counts the API did not report", () => {
+    logLlmUsage({ provider: "openai", model: "m", latencyMs: 5, ok: false });
+
+    expect(logSpy.mock.calls[0]).toEqual(["[llm] openai/m 5ms ERR"]);
+  });
+
+  it("keeps no ledger: the file imports no usage store, scope, budget or database client", () => {
+    const here = fileURLToPath(new URL(".", import.meta.url));
+    const source = readFileSync(`${here}usage-log.ts`, "utf8");
+    const imports = source
+      .split("\n")
+      .filter((line) => /^\s*(import\b|\} from\b)/.test(line))
+      .join("\n");
+    expect(imports).not.toMatch(/@\/lib\/usage\//);
+    expect(imports).not.toMatch(/supabase/);
+    expect(source).not.toMatch(/usage_events|recordUsageEvent|UsageContext|companyReservation/);
+  });
+});
+
