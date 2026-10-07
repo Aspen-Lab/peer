@@ -8,6 +8,9 @@ import PrivacyPage from "./page";
 // P2-03 (§1g.11 e, the entry §1f.9 promised): the reader's questions are
 // named on /privacy, in exactly these words, beside "Your notes".
 //
+// P4-00: "the model provider you or the owner configured" became "the model
+// provider whose key you added" — there is no owner's model any more.
+//
 // P2-08b (§1g.17, F2): the words changed. The old text said only that the
 // questions "travel with that one request"; they also go on to the model
 // provider inside the prompts, which the entry now names, and only a deep
@@ -16,7 +19,7 @@ import PrivacyPage from "./page";
 // the provider.
 
 const QUESTIONS_TEXT =
-  "Questions you type on a paper page stay in this browser. When Peer writes a deep report for that paper, they travel with that one request to Peer's server and on to the model provider you or the owner configured, inside the prompts, and nowhere else, so the report can answer them; Peer does not log them or keep them.";
+  "Questions you type on a paper page stay in this browser. When Peer writes a deep report for that paper, they travel with that one request to Peer's server and on to the model provider whose key you added, inside the prompts, and nowhere else, so the report can answer them; Peer does not log them or keep them.";
 
 describe("/privacy — Your questions (P2-03)", () => {
   const html = renderToStaticMarkup(createElement(PrivacyPage));
@@ -28,7 +31,8 @@ describe("/privacy — Your questions (P2-03)", () => {
 
   it("names the model provider the questions go on to, and that they go nowhere else (P2-08b)", () => {
     const entry = html.slice(html.indexOf(">Your questions<"), html.indexOf(">Your own model key<"));
-    expect(entry).toContain("model provider you or the owner configured");
+    expect(entry).toContain("model provider whose key you added");
+    expect(entry).not.toContain("the owner configured");
     expect(entry).toContain("inside the prompts, and nowhere else");
     expect(entry).toContain("Peer does not log them or keep them");
   });
@@ -54,12 +58,11 @@ describe("/privacy — Your questions (P2-03)", () => {
 // double quotes in the text are the typographic ones, which are not escaped.
 
 const EXPLAIN_PARAGRAPHS = [
-  "Selecting a passage sends nothing, and neither does typing in the box. Peer sends a request only when you click “Explain this?” (or press E on a selection) and, for a follow-up, when you press Enter or Send, or Say more under a reply. A reply is short unless you ask for more, in your own words or with Say more. The request carries the passage you selected, the paragraph it sits in and the one on either side of it, the paper's title and abstract, one line for each section of the paper's map and, for a follow-up, the messages of that thread. The request also carries the paper's record as this page holds it — its title, authors, venue, where it came from and your save and feedback marks on it — so Peer's server can find the paper; of that record the model sees only the title and the abstract. If you have set your own model key, the key goes with it.",
-  "The request goes to Peer's server and on to the model provider you or the owner configured — Google's Gemini when Peer's own model answers, and the provider whose key you set when you use your own.",
+  "Selecting a passage sends nothing, and neither does typing in the box. Peer sends a request only when you click “Explain this?” (or press E on a selection) and, for a follow-up, when you press Enter or Send, or Say more under a reply. A reply is short unless you ask for more, in your own words or with Say more. The request carries the passage you selected, the paragraph it sits in and the one on either side of it, the paper's title and abstract, one line for each section of the paper's map and, for a follow-up, the messages of that thread. The request also carries the paper's record as this page holds it — its title, authors, venue, where it came from and your save and feedback marks on it — so Peer's server can find the paper; of that record the model sees only the title and the abstract. The answer is written with your own model key, which goes with the request.",
+  "The request goes to Peer's server and on to the model provider whose key you added. The answer runs on your own key, and it is short unless you ask for more.",
   "On a follow-up you can turn on “Search the web” for that one message. It is off every time the box opens and never turns on by itself. With it on, the provider may run a web search to write that reply: Gemini does this with Google Search, and with any other provider the reply is written without a search and the box says so. A message answered with a search carries the mark “searched the web”, and Peer shows no link to anything the search found.",
-  "Peer's server keeps three things. First, each answer it gives, in memory, for up to an hour, so the same passage asked about again is answered without another model call; it is filed under hashes of the document, the passage and the thread, never under who asked.",
-  "Second, one log line for each answer it gives: how many characters went out and came back, how much the turn counted against the allowance and, if you are signed in, a shortened hash of your account id — never the passage, the paper's words or anything you wrote.",
-  "Third, a count of your explanations for the day against your account, which is what the daily allowance is measured by: a number, with no words in it. The usage row that each model call writes, described under “What is recorded about model use”, holds no words either.",
+  "Peer's server keeps two things. First, each answer it gives, in memory, for up to an hour, so the same passage asked about again is answered without another model call; it is filed under hashes of the document, the passage and the thread, never under who asked.",
+  "Second, one log line for each answer it gives: how many characters went out and came back and, if you are signed in, a shortened hash of your account id — never the passage, the paper's words or anything you wrote.",
   "In this browser, and only here, Peer keeps what you asked about, for each paper: the passage, where it sits in the paper, the answer and the thread. For an uploaded PDF the passage is the PDF's own text. None of it is stored against your account, and signing in does not copy it there. A passage you have asked about before opens from this copy with no new request. Signing out leaves it in place; clearing this site's data in your browser removes it.",
 ] as const;
 
@@ -126,13 +129,20 @@ describe("/privacy — Explain this (P3-02d)", () => {
 
     expect(first.indexOf("the messages of that thread.")).toBeGreaterThan(0);
     expect(first.indexOf("The request also carries the paper&#x27;s record")).toBeGreaterThan(first.indexOf("the messages of that thread."));
-    expect(first.indexOf("If you have set your own model key")).toBeGreaterThan(first.indexOf("of that record the model sees only"));
+    expect(first.indexOf("The answer is written with your own model key")).toBeGreaterThan(first.indexOf("of that record the model sees only"));
   });
 
-  it("names the provider the request goes on to", () => {
-    expect(entry).toContain("model provider you or the owner configured");
-    expect(entry).toContain("Google");
+  // P4-00: the provider is the one whose key the reader added; Peer's own model, the
+  // owner's configuration, the daily allowance and the usage row are all gone, and the
+  // entry says none of them.
+  it("names the provider the request goes on to: the one whose key the reader added, running on their own key", () => {
+    expect(entry).toContain("model provider whose key you added");
+    expect(entry).toContain("The answer runs on your own key, and it is short unless you ask for more.");
     expect(entry).toContain("Gemini");
+    expect(entry).toContain("Google");
+    for (const gone of ["Peer&#x27;s own model", "the owner configured", "allowance", "usage row", "What is recorded about model use"]) {
+      expect(entry).not.toContain(gone);
+    }
   });
 
   it("says the web search is off every time the box opens, never on by itself, and runs for one message", () => {
@@ -144,14 +154,15 @@ describe("/privacy — Explain this (P3-02d)", () => {
     expect(entry).toContain("shows no link to anything the search found");
   });
 
-  it("says what Peer's server keeps: an hour's memory under hashes, never by reader; one log line without the words; the count", () => {
+  it("says what Peer's server keeps: an hour's memory under hashes, never by reader; one log line without the words", () => {
     expect(entry).toContain("for up to an hour");
     expect(entry).toContain("hashes of the document, the passage and the thread");
     expect(entry).toContain("never under who asked");
     expect(entry).toContain("one log line for each answer it gives");
     expect(entry).toContain("a shortened hash of your account id");
     expect(entry).toContain("never the passage, the paper&#x27;s words or anything you wrote");
-    expect(entry).toContain("a count of your explanations for the day against your account");
+    expect(entry).toContain("Peer&#x27;s server keeps two things");
+    expect(entry).not.toContain("a count of your explanations");
   });
 
   it("says what stays in the browser, and that signing in does not copy it and signing out leaves it", () => {
@@ -184,7 +195,7 @@ describe("/privacy — Explain this (P3-02d)", () => {
 // setting, or an attached PDF), never otherwise. The code the words describe is
 // `deepReportRequested` (`use-model-report.ts`), which the page hands the gist hook.
 const SEES_TEXT =
-  "Google (Gemini) sees a paper's text when a deep report is written, which happens when you turn on Deep report in your profile or attach a PDF to the paper; on that same condition, and never otherwise, the text is read once more to write the one-line gists in the paper's map.";
+  "The model provider whose key you added sees what a model request carries: your topics and a paper's title and abstract when the briefing is ranked or summarised, and a paper's text when a deep report is written, which happens when you turn on Deep report in your profile or attach a PDF to the paper; on that same condition, and never otherwise, the text is read once more to write the one-line gists in the paper's map.";
 
 describe("/privacy — Who else sees a request names the gist pass (P3-05)", () => {
   const html = renderToStaticMarkup(createElement(PrivacyPage));
