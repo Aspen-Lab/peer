@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { remoteProfilePayload } from "@/components/profile-sync";
 import { settleQuestions } from "@/components/reader/question-field";
+import { specificTerms } from "@/lib/papers/reading-map";
 import { tokenize } from "@/lib/scoring/tokenize";
 import { useProfileStore } from "@/store/profile";
 import { useReadingQuestionsStore } from "@/store/reading-questions";
@@ -36,6 +37,27 @@ const DIGIT_SHAPES = {
   DIGITS_16,
   DIGITS_19,
 };
+
+// P5-04c (§1h.17 (b)): digits grouped by separators, a card or a phone number written in groups
+// with hyphens, dots, parentheses or brackets and no space. Invented, random-looking, no real
+// format and no real number. The word's digits total 16 (4-4-4-4 and 3-3-4-6) or 15 (one fewer).
+const HYPHENS_16 = "6150-8273-0419-5936";
+const DOTS_16 = "418.206.7395.640128";
+const HYPHENS_15 = "6150-8273-0419-593";
+const DOTS_15 = "418.206.7395.64012";
+const GROUPED_SHAPES = {
+  HYPHENS_4444: HYPHENS_16,
+  HYPHENS_TRAILING_COMMA: `${HYPHENS_16},`,
+  HYPHENS_IN_BRACKETS: `[${HYPHENS_16}]`,
+  HYPHENS_IN_PARENTHESES: `(${HYPHENS_16}).`,
+  DOTS_3346: DOTS_16,
+  DOTS_TRAILING_COMMA: `${DOTS_16},`,
+  DOTS_IN_BRACKETS: `[${DOTS_16}]`,
+  PARENTHESIS_GROUPS: "(6150)(8273)(0419)(5936)",
+  BRACKET_GROUPS: "[6150][8273][0419][5936]",
+};
+/** The invented groups, for the checks that look for a piece of any of them. */
+const GROUPS = ["6150", "8273", "0419", "5936", "593", "418", "206", "7395", "640128", "64012"];
 
 /** The names of the terms (each comes with its share, P5-04 S4). */
 const names = (questions: readonly string[], marked: readonly string[] = []) => questionTerms(questions, marked).map((t) => t.term);
@@ -88,10 +110,40 @@ describe("isSecretOrAddressShaped", () => {
     for (const shape of Object.values(DIGIT_SHAPES)) expect(isSecretOrAddressShaped(shape)).toBe(true);
     expect(isSecretOrAddressShaped(DIGITS_16.slice(1))).toBe(false); // 15 digits
     expect(isSecretOrAddressShaped(`id-${DIGITS_16.slice(1)}`)).toBe(false);
-    // The run is unbroken digits: a hyphen or a letter ends it, so 8 + 8 are not 16.
-    expect(isSecretOrAddressShaped(`${DIGITS_16.slice(0, 8)}-${DIGITS_16.slice(8)}`)).toBe(false);
+    // P5-04c (§1h.17 (b)) reverses P5-04b's "a hyphen ends the run": 8 + 8 digits in one hyphenated
+    // word total 16, so the word is a shape (this line said `false` in P5-04b; the rule is now the
+    // digits' total, whatever separates them).
+    expect(isSecretOrAddressShaped(`${DIGITS_16.slice(0, 8)}-${DIGITS_16.slice(8)}`)).toBe(true);
     expect(isSecretOrAddressShaped("2024")).toBe(false);
     expect(isSecretOrAddressShaped("10000000")).toBe(false);
+  });
+
+  // P5-04c (§1h.17 (b), C's P5-04b question 1): a card or a phone number written in groups with
+  // hyphens, dots, parentheses or brackets and no space is one word whose digits total 16 or more:
+  // a shape too, whatever separates the groups. A public identifier written that way (an ORCID iD)
+  // goes with them, at no cost: it names a person, never a topic.
+  it("drops a word whose digits total 16 or more, whatever separates them, and keeps 15 (P5-04c)", () => {
+    for (const shape of Object.values(GROUPED_SHAPES)) expect(isSecretOrAddressShaped(shape)).toBe(true);
+    // The count is of the digits (`\p{Nd}`) of the whole word: other scripts' decimal digits too.
+    expect(isSecretOrAddressShaped("٦١٥٠-٨٢٧٣-٠٤١٩-٥٩٣٦")).toBe(true);
+    expect(isSecretOrAddressShaped("６１５０-８２７３-０４１９-５９３６")).toBe(true);
+    // Letters around the groups do not hide them.
+    expect(isSecretOrAddressShaped(`id-${HYPHENS_16}`)).toBe(true);
+    expect(isSecretOrAddressShaped(`ref${DOTS_16}`)).toBe(true);
+    // 15 digits in groups pass this rule (whether such a word becomes a term is `specificTerms`'s business).
+    for (const word of [HYPHENS_15, DOTS_15, `${HYPHENS_15},`, `[${HYPHENS_15}]`, `[${DOTS_15}],`, "(6150)(8273)(0419)(593)"]) {
+      expect(isSecretOrAddressShaped(word)).toBe(false);
+    }
+    // A hyphenated word with a few digits is an ordinary word.
+    for (const word of ["2-step", "1234-5678-90", "4-4-2", "x-ray-diffraction-2024", "2026-10-07", "Ti3C2Tx-2024", "3.14159"]) {
+      expect(isSecretOrAddressShaped(word)).toBe(false);
+    }
+  });
+
+  it("keeps the groups of a number written with spaces: each is a word of its own (P5-04c)", () => {
+    for (const group of ["6150", "8273", "0419", "5936", "(6150)", "[8273]", "418.", "640128,"]) {
+      expect(isSecretOrAddressShaped(group)).toBe(false);
+    }
   });
 });
 
@@ -133,6 +185,39 @@ describe("questionTerms — a key-shaped value or an address never becomes a ter
 
   it("a question made only of such numbers has no terms (P5-04b)", () => {
     expect(names([`${DIGITS_16} ${DIGITS_19} ${DIGIT_SHAPES.ID_PREFIXED_16}`])).toEqual([]);
+  });
+
+  // P5-04c (§1h.17 (b)): a number written in groups of digits with separators and no space, whose
+  // digits total 16 or more, gives no term, nor any fragment of it (a group, a piece of a group).
+  for (const [name, shape] of Object.entries(GROUPED_SHAPES)) {
+    it(`${name}: no term holds the grouped number or any group of it, and the question's own words stay (P5-04c)`, () => {
+      const terms = names([question(shape)]);
+      for (const piece of [...fragments(shape), ...GROUPS]) expect(terms).not.toContain(piece);
+      // The question's own words hold no digit at all, so no term does.
+      for (const term of terms) expect(term).not.toMatch(/\d/);
+      expect(JSON.stringify(terms)).not.toContain(HYPHENS_16);
+      expect(JSON.stringify(terms)).not.toContain(DOTS_16);
+      for (const word of SAFE_WORDS) expect(terms).toContain(word);
+    });
+  }
+
+  it("a question made only of grouped numbers has no terms (P5-04c)", () => {
+    expect(names([Object.values(GROUPED_SHAPES).join(" ")])).toEqual([]);
+    expect(names([`${HYPHENS_16} ${DOTS_16}`, `[${HYPHENS_16}], (${DOTS_16}).`])).toEqual([]);
+  });
+
+  it("a number of 15 digits in groups is not a shape: the rule leaves it to specificTerms (P5-04c)", () => {
+    for (const word of [HYPHENS_15, DOTS_15, `[${HYPHENS_15}]`]) {
+      const text = question(word);
+      expect(names([text])).toEqual(specificTerms(text));
+      for (const safe of SAFE_WORDS) expect(names([text])).toContain(safe);
+    }
+  });
+
+  it("groups separated by spaces are separate words and stay as they are (P5-04c)", () => {
+    const text = question("6150 8273 0419 5936");
+    expect(names([text])).toEqual(specificTerms(text));
+    for (const safe of SAFE_WORDS) expect(names([text])).toContain(safe);
   });
 
   it("is silent: no log line, no notice", () => {
@@ -194,6 +279,27 @@ describe("after a settle: not in the ledger, and not in what the sync sends", ()
     for (const shape of [...first, ...second]) {
       for (const piece of fragments(shape)) for (const text of [held, payload]) expect(text).not.toContain(`"${piece}"`);
     }
+  });
+
+  it("a number written in groups of digits leaves the ledger and the sync's payload untouched (P5-04c)", () => {
+    const shapes = Object.values(GROUPED_SHAPES);
+    useReadingQuestionsStore.getState().set(PAPER, shapes.slice(0, 5).map(question), false, "2026-10-07T00:00:00.000Z");
+    settleQuestions(PAPER);
+    useReadingQuestionsStore.getState().set("openalex:W518", shapes.slice(5).map(question), false, "2026-10-07T00:00:00.000Z");
+    settleQuestions("openalex:W518");
+    const ledger = useProfileStore.getState().profile.preferenceLedger;
+    const held = JSON.stringify(ledger);
+    expect(held).toContain("annealing");
+    const payload = JSON.stringify(remoteProfilePayload(useProfileStore.getState().profile));
+    for (const text of [held, payload]) {
+      expect(text).not.toContain(HYPHENS_16);
+      expect(text).not.toContain(DOTS_16);
+    }
+    for (const shape of shapes) {
+      for (const piece of [...fragments(shape), ...GROUPS]) for (const text of [held, payload]) expect(text).not.toContain(`"${piece}"`);
+    }
+    // The ledger holds only the question's own words: not one label carries a digit.
+    for (const entry of Object.values(ledger ?? {})) expect(entry.label).not.toMatch(/\d/);
   });
 
   it("the last two shapes, in a second paper, leave the same", () => {

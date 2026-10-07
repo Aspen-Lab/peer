@@ -5,12 +5,15 @@ import { QUESTION_TERM_WEIGHT, type QuestionTerm } from "./ledger";
 const LONGEST_WORD = 24;
 /** The shortest run of letters and digits, mixed, that reads as a key. */
 const KEY_RUN_LENGTH = 16;
-/** The shortest run of digits that reads as an identifier, a card or a phone number (P5-04b). */
-const DIGIT_RUN_LENGTH = 16;
+/**
+ * The fewest decimal digits in one word, whatever separates them, that read as an
+ * identifier, a card or a phone number (P5-04b: unbroken; P5-04c: grouped).
+ */
+const DIGIT_TOTAL_LENGTH = 16;
 const NOT_A_WORD = /[@/\\:=]/;
 const DOT_BETWEEN_LETTERS = /\p{L}\.\p{L}/u;
 const LETTERS_AND_DIGITS = new RegExp(`[\\p{L}\\p{N}]{${KEY_RUN_LENGTH},}`, "gu");
-const DIGIT_RUN = new RegExp(`\\p{Nd}{${DIGIT_RUN_LENGTH},}`, "u");
+const DIGIT = /\p{Nd}/gu;
 
 /**
  * P5-04 (S2, §1h.15 (b)): is this word, as the reader typed it, a key, an address
@@ -21,20 +24,26 @@ const DIGIT_RUN = new RegExp(`\\p{Nd}{${DIGIT_RUN_LENGTH},}`, "u");
  * 23-letter compound still passes), holds `@`, `/`, `\`, `:` or `=` (an address, a
  * path, a link, an assignment), has a dot between letters on both sides (a host or
  * an address; a sentence's own full stop does not), holds a run of 16 or more
- * letters and digits that mixes both (a key's body), or holds a run of 16 or more
- * digits (P5-04b, §1h.16 (d): an identifier, a card or a phone number, the same
- * privacy class as a key, since a ledger term travels in every briefing request
- * and, signed in, is stored against the account). A run of 15 digits passes this
- * rule; whether such a word becomes a term is `specificTerms`'s business, not this
- * function's. It runs on the whole word because `tokenize` turns `@ / \ : = .`
- * into spaces: an address would otherwise arrive as four plain-looking words, and
- * the rule would have nothing to see. The cost is small and silent by design: a
- * word such as "and/or" gives no term.
+ * letters and digits that mixes both (a key's body), or holds 16 or more decimal
+ * digits in all (P5-04b, §1h.16 (d): an identifier, a card or a phone number, the
+ * same privacy class as a key, since a ledger term travels in every briefing
+ * request and, signed in, is stored against the account). P5-04c (§1h.17 (b))
+ * counts the digits of the whole word, whatever separates them (hyphens, dots,
+ * parentheses, brackets: a card or a phone number written in groups), so the
+ * unbroken run of 16 is only the plainest case of the count and has no clause of
+ * its own. A public identifier written in groups (an ORCID iD) goes with them, at
+ * no cost: it names a person, never a topic. Groups separated by spaces are
+ * separate words and stay as they are (a four-digit word is a year or a count). A
+ * word with 15 digits passes this rule; whether such a word becomes a term is
+ * `specificTerms`'s business, not this function's. It runs on the whole word
+ * because `tokenize` turns `@ / \ : = .` into spaces: an address would otherwise
+ * arrive as four plain-looking words, and the rule would have nothing to see. The
+ * cost is small and silent by design: a word such as "and/or" gives no term.
  */
 export function isSecretOrAddressShaped(word: string): boolean {
   if (word.length > LONGEST_WORD) return true;
   if (NOT_A_WORD.test(word) || DOT_BETWEEN_LETTERS.test(word)) return true;
-  if (DIGIT_RUN.test(word)) return true;
+  if ((word.match(DIGIT) ?? []).length >= DIGIT_TOTAL_LENGTH) return true;
   return (word.match(LETTERS_AND_DIGITS) ?? []).some((run) => /\p{L}/u.test(run) && /\p{N}/u.test(run));
 }
 
