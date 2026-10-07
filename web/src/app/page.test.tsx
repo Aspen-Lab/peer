@@ -99,24 +99,32 @@ describe("ReadingStrip row width (HOME-READING-LAYOUT)", () => {
 });
 
 // POLISH-1-SYNC (ABC-JEV-INTEGRATION.md §1al (d), HOME-READING-LAYOUT-A
-// finding 1): both tests above render `ReadingStrip` directly with a
-// HARD-CODED `className` prop, so they stay green even if page.tsx's own
-// call site regresses to the pre-fix bare `<ReadingStrip papers={...}
-// readerTopics={...} />` (no className at all) — exactly the change that
-// collapsed the row to a shrink-to-fit strip in the first place (see the
-// HOME-READING-LAYOUT-C checkpoint). Only a source-text check on page.tsx
-// itself, independent of anything rendered, closes that gap. Same technique
-// as web/src/app/layout-icon.test.ts and globals.css.test.ts: read the file
-// as text via `import.meta.url` rather than `process.cwd()`, since this repo
-// has no harness for rendering the whole (effectful, data-fetching)
+// finding 1), restated for the row's removal: the collapse came from
+// `ReadingStrip` sharing a flex row with the upload + search pair. That row
+// is gone — the pair moved into the briefing head, on the deck's line — so
+// the strip is a block on its own and takes the page's full width with no
+// width classes at all. What must not come back is the shared row: the pair
+// is rendered inside `<BriefingHead … />`, never beside `<ReadingStrip`.
+// Same technique as web/src/app/layout-icon.test.ts and globals.css.test.ts:
+// read the file as text via `import.meta.url`, since this repo has no
+// harness for rendering the whole (effectful, data-fetching)
 // DailyBriefingPage — see this file's own header comment above.
-describe("page.tsx source — ReadingStrip call site keeps its width classes (§1al POLISH-1-SYNC (d))", () => {
-  it('passes className="flex-auto min-w-0" at the call site', () => {
+describe("page.tsx source — the reading strip has its row to itself (§1al POLISH-1-SYNC (d))", () => {
+  it("renders the upload + search pair inside BriefingHead, not in the strip's row", () => {
     const source = readFileSync(new URL("./page.tsx", import.meta.url), "utf8");
-    const start = source.indexOf("<ReadingStrip");
-    expect(start).toBeGreaterThan(-1);
-    const callSite = source.slice(start, source.indexOf("/>", start) + 2);
-    expect(callSite).toContain('className="flex-auto min-w-0"');
+    const head = source.indexOf("<BriefingHead");
+    expect(head).toBeGreaterThan(-1);
+    const headEnd = source.indexOf("\n      />", head);
+    const search = source.indexOf("<SearchBox", head);
+    expect(search).toBeGreaterThan(head);
+    expect(search).toBeLessThan(headEnd);
+
+    const strip = source.indexOf("<ReadingStrip");
+    expect(strip).toBeGreaterThan(headEnd);
+    // Nothing else is rendered from the strip's call site to the next block.
+    const callSite = source.slice(strip, source.indexOf("/>", strip) + 2);
+    expect(callSite).not.toContain("SearchBox");
+    expect(source.indexOf("<SearchBox", headEnd)).toBe(-1);
   });
 });
 
