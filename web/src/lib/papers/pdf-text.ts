@@ -1,5 +1,6 @@
 // Reads a PDF into the same shape as the HTML extractors — a legal PDF
-// downloaded from a link, or a private upload already on this server's disk.
+// downloaded from a link, or a private upload already in its storage (disk or a
+// private bucket).
 //
 // Both paths used to hand the bytes to `scripts/extract_pdf_text.py`, which
 // needs Python and PyMuPDF — a compiled extension. A developer's machine has
@@ -269,8 +270,10 @@ export async function extractPdfTextFromBytes(bytes: Buffer): Promise<PdfTextRes
  * caller owns the file's lifetime; nothing is copied or downloaded). A scan
  * comes back as `{ ok: false, reason: "pdf-empty: …" }`: `pdf-empty` is the
  * marker the reading page looks for to say "this PDF has no readable text".
- * The app reads uploads through `extractPdfTextFromBytes`; this entry point
- * is the path-shaped form of it.
+ * The app reads uploads through `extractPdfTextFromBytes`, whichever storage
+ * holds the file; this entry point is the path-shaped form of it. It has no
+ * production caller and stays on purpose: `pdf-text.test.ts` reads its synthetic
+ * layouts through it.
  */
 export async function extractPdfTextFromPath(pdfPath: string): Promise<PdfTextResult> {
   let bytes: Buffer;
