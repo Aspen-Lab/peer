@@ -146,17 +146,22 @@ describe("the field settles the questions (P2-03)", () => {
     mounted.unmount();
   });
 
-  // P2-08b (§1g.18): used to say removing a line settles what is left. The old
-  // set stands until the box settles.
-  it("removing a line settles nothing; leaving the box afterwards settles what is left", async () => {
+  // P2-08b (§1g.18): used to say removing a line settles nothing — the old set
+  // stood until the box settled. P5-04 (S3, §1h.15 (c)) rules the × a finished
+  // gesture, like a tick: the focused button leaves with its line, so no blur
+  // ever reached the box and the deleted question's words stayed in the
+  // preference ledger until the box was next left. The × now settles the box as
+  // it stands, at once (`question-field.remove.test.tsx` pins the ledger side);
+  // this test is rewritten to that contract, and what it pinned about leaving
+  // the box afterwards (the settled set is what is left) is unchanged.
+  it("removing a line settles what is left at once; leaving the box afterwards changes nothing", async () => {
     useReadingQuestionsStore.getState().set(PAPER, ["Does tungsten delay rafting?", "Why 1100 C?"], false, AT);
     useReadingQuestionsStore.getState().settle(PAPER);
     const { button, leave, mounted } = await field();
     (button(ASK.remove(1))?.props.onClick as () => void)();
-    await sleep(IDLE * 4);
 
     expect(stored().items).toEqual(["Why 1100 C?"]);
-    expect(stored().settled).toEqual(["Does tungsten delay rafting?", "Why 1100 C?"]);
+    expect(stored().settled).toEqual(["Why 1100 C?"]);
 
     leave();
     await sleep(IDLE * 4);

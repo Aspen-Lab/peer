@@ -412,6 +412,11 @@ export function QuestionField({
                   // The lines move up: nothing is mid-sentence any more.
                   setUnsettled(null);
                   commit(next, nextGist(gist, next));
+                  // P5-04 (S3): deleting a question is a finished gesture, like a tick. The
+                  // focused button goes with the line, so no blur reaches the box and the wait
+                  // that `commit` stopped would never start again: the question's words stayed in
+                  // the ledger until the box was next left. Settle and sync now, so they go at once.
+                  settleQuestions(paperId);
                 }}
                 className="annotation shrink-0 text-text-faint transition-colors hover:text-heading"
               >
