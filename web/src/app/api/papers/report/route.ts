@@ -591,10 +591,10 @@ async function handlePost(req: NextRequest) {
   const gate = await requireAiRequest("paper-report", 20);
   if (gate instanceof NextResponse) return gate;
 
-  // A deep report is not allowanced or counted here: the model runs on the
-  // reader's own key, so what it costs is between the reader and their provider.
-  // What protects Peer's server (the full-text fetch, the PDF parse) is the
-  // per-hour rate limit in the gate above.
+  // A deep report is counted against nothing here but the reader's hour, in the
+  // gate above: the model runs on the reader's own key, so what it costs is between
+  // the reader and their provider. What protects Peer's server (the full-text
+  // fetch, the PDF parse) is that per-hour rate limit.
   //
   // F6 (P2-07, §1g.9 a): the provider is resolved once, here — after the owner
   // checks and the sign-in gate above, which stay ahead of it — and handed to

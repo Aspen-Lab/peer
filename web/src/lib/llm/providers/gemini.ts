@@ -350,7 +350,7 @@ export const geminiProvider: DigestProvider = {
       try {
         const text = await callModel(resolvedLocation, id, userPrompt, systemPrompt, {
           maxTokens,
-          // A searched call is its own ledger path, so the owner can price it apart.
+          // A searched call has its own `path`, so its `[llm]` console line tells it from a plain one.
           path: webSearch ? "json:search" : "json",
           webSearch,
         });
@@ -500,7 +500,7 @@ export function createGeminiApiProvider(
         try {
           const text = await callApiModel(id, userPrompt, systemPrompt, {
             maxTokens,
-            // A searched call is its own ledger path, so the owner can price it apart.
+            // A searched call has its own `path`, so its `[llm]` console line tells it from a plain one.
             path: webSearch ? "json:search" : "json",
             webSearch,
           });

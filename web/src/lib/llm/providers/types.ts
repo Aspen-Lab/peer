@@ -44,9 +44,9 @@ export interface DigestProvider {
    * P3-02c (ruling §1h.4 amendment): true when `generateJsonText` honours its
    * `webSearch` argument. Both Gemini providers say so; every other provider
    * leaves it out and ignores the argument, so a caller that asks for search of
-   * one that cannot gets a plain answer — and must not charge as if it searched.
-   * `meterProvider` copies it, like the methods: a wrapper that dropped it would
-   * make every Gemini provider look like one that cannot.
+   * one that cannot gets a plain answer, and the caller says so (the explain
+   * route answers `searched: false`). The registry returns the provider object
+   * itself, wrapped in nothing, so the flag is read off it exactly as set.
    */
   supportsWebSearch?: true;
   generateDigest(args: {

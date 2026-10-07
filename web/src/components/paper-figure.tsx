@@ -110,7 +110,7 @@ async function fetchFigure(
   // `query` is Peer's words about the private paper and its title is the
   // PDF's own; in a GET both sat in the URL, and the server's request log
   // printed them. The body carries the query; an upload's title is not sent
-  // at all — the route reads it from the owner's record.
+  // at all — the route needs none.
   //
   // P0-11 (§1e.11): so is the request of a public paper with a private PDF
   // attached, whose `query` is text from the deep report built from that

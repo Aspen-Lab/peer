@@ -214,7 +214,8 @@ async function handle(req: NextRequest, rawId: string): Promise<Response> {
   const userId = gate.user?.id ?? null;
 
   // No provider that can write: the client never asks in that state, so this is
-  // the answer to a stranger's guess — and it reads nothing and counts nothing.
+  // the answer to a stranger's guess — and it reads nothing; the gate above has
+  // already counted the request in the reader's hour.
   const override = body.llmOverride ?? null;
   const provider = resolveProvider(override);
   if (!provider?.generateJsonText) return reply({ unavailable: true } satisfies ExplainResult);

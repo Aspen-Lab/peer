@@ -225,8 +225,8 @@ export function useModelReport({
   const reportKey = buildReportKey(paper, depth, project, profile.feedAiProvider, requestQuestions);
 
   // P0-02 (spec D0): a private PDF's report is cached like any other. It
-  // never used to be, so every open of an attached PDF asked for — and
-  // charged — a fresh deep report. The key already names the upload and its
+  // never used to be, so every open of an attached PDF asked for — and spent the
+  // reader's own key on — a fresh deep report. The key already names the upload and its
   // revision (`buildReportKey`), so a re-upload, a new attachment or another
   // PDF is a different key; the server still re-checks the owner and the
   // revision on every request it does receive.
@@ -266,8 +266,8 @@ export function useModelReport({
   }, [requestQuestions]);
 
   // P2-08b (§1g.18): one request in flight at a time, and a different set of
-  // questions never aborts it — the server has already charged it, and the
-  // answer is wanted: it finishes and caches under its own key, and the effect
+  // questions never aborts it — the server has already taken it on the reader's
+  // key, and the answer is wanted: it finishes and caches under its own key, and the effect
   // below then runs again (`released`) and sends one request for the latest
   // set, if that is another. `settings` is everything the request depends on
   // but the questions: a change of any of it (another paper, depth, project,
@@ -291,7 +291,7 @@ export function useModelReport({
   // from an unloading page. The question box settles its questions on `pagehide`,
   // which re-keys this hook, and the request effect below used to fetch for the new
   // key from the dying page (the browser cancels it; a request that does reach the
-  // server is charged and answered into nowhere, and the next open asks again). So
+  // server runs on the reader's key and is answered into nowhere, and the next open asks again). So
   // `pagehide` marks the page as unloading and `pageshow` — a back/forward-cache
   // restore — clears it; while it is set the effect withholds the request, and when
   // it clears the effect runs again (`released`, the trigger the hook already has)
