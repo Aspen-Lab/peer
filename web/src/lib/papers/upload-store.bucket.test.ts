@@ -59,14 +59,18 @@ import {
   listUploadMeta,
   purgeExpiredUploads,
   readStagedUpload,
+  readUploadDoc,
   readUploadMeta,
   readUploadPdf,
   stagedUploadsAvailable,
+  uploadDocKey,
   uploadFileExists,
+  writeUploadDoc,
   writeUploadMeta,
   writeUploadPdfIfAbsent,
   type UploadMeta,
 } from "./upload-store";
+import type { ExtractedDocument } from "./html-text";
 
 const ALICE = "a".repeat(64);
 const BOB = "b".repeat(64);
@@ -190,5 +194,61 @@ describe("staged uploads (the browser puts the PDF in the bucket itself)", () =>
 
     expect(bucket.objects.has(stale)).toBe(false);
     expect(bucket.objects.has(fresh)).toBe(true);
+  });
+});
+
+// P4-00: the extracted-text sidecar (P0-02) rides the same backend as the PDF, so a
+// deployment whose uploads live in the bucket keeps the text there — an object beside
+// the upload, filed under a digest of the cache key, never the owner key itself — and
+// it goes with the upload.
+describe("the extracted-text sidecar on the Supabase bucket (P0-02)", () => {
+  const doc: ExtractedDocument = {
+    title: "A Sidecar Fixture",
+    sections: [{ id: "s0", heading: "1 Introduction", canonical: "introduction", text: "Fixture prose.", page: 1 }],
+    figureCaptions: [],
+    source: "pdf",
+    pageCount: 3,
+    reason: null,
+  };
+  const key = uploadDocKey(ALICE, HASH, 1, 2);
+
+  it("keeps the text as a `<hash16>.doc.json` object beside the upload, and reads it back after a cold start under the same key only", async () => {
+    await writeUploadDoc(HASH, key, doc);
+
+    const stored = bucket.objects.get(`${HASH}.doc.json`);
+    expect(stored).toBeDefined();
+    expect(stored?.bytes.toString("utf-8")).not.toContain(ALICE);
+
+    // A fresh server process: no module state, only what is in the bucket.
+    vi.resetModules();
+    const cold = await import("./upload-store");
+    expect(await cold.readUploadDoc(HASH, key)).toEqual(doc);
+    expect(await cold.readUploadDoc(HASH, uploadDocKey(ALICE, HASH, 2, 2))).toBeNull();
+    expect(await cold.readUploadDoc(HASH, uploadDocKey(BOB, HASH, 1, 2))).toBeNull();
+  });
+
+  it("is removed with the upload by deleteUpload", async () => {
+    await writeUploadMeta(HASH, meta());
+    await writeUploadPdfIfAbsent(HASH, Buffer.from("%PDF-1.4 bytes"));
+    await writeUploadDoc(HASH, key, doc);
+    expect(bucket.objects.has(`${HASH}.doc.json`)).toBe(true);
+
+    await deleteUpload(meta());
+
+    expect(bucket.objects.size).toBe(0);
+    expect(await readUploadDoc(HASH, key)).toBeNull();
+  });
+
+  it("is swept by the purge job when its upload is gone, and kept for a live one", async () => {
+    const live = "fedcba9876543210";
+    const orphan = "00000000000000aa";
+    await writeUploadMeta(live, meta({ hash16: live }));
+    await writeUploadDoc(live, uploadDocKey(ALICE, live, 1, 2), doc);
+    await writeUploadDoc(orphan, uploadDocKey(ALICE, orphan, 1, 2), doc);
+
+    await purgeExpiredUploads();
+
+    expect(bucket.objects.has(`${orphan}.doc.json`)).toBe(false);
+    expect(bucket.objects.has(`${live}.doc.json`)).toBe(true);
   });
 });
