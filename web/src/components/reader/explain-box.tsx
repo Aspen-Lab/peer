@@ -278,7 +278,7 @@ function currentViewport(): Viewport {
 // ── Asking ─────────────────────────────────────────────────────────────
 
 /** The reader's own provider and key, when they have set one — the shape the
- *  report request carries; nothing for Peer's own model. */
+ *  report request carries; nothing without one. */
 export function explainLlmOverride(profile: Pick<UserProfile, "feedAiProvider" | "feedAiApiKey">): ProviderOverrideConfig | undefined {
   if (!hasUserLlmOverride(profile as UserProfile)) return undefined;
   return { provider: profile.feedAiProvider as ProviderOverrideConfig["provider"], apiKey: (profile.feedAiApiKey ?? "").trim() };

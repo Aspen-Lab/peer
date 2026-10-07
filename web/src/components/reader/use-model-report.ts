@@ -217,7 +217,7 @@ export function useModelReport({
   const depth = deep ? "deep" : "abstract";
   // P2-08b (§1g.17, F2): the questions name a request, and ride it, only when
   // it is a deep one — `deep` already needs a provider the hook knows about
-  // (the reader's own key, or Peer's model for a signed-in reader). Any other
+  // (the reader's own key, for a signed-in reader). Any other
   // request has no use for them (the route reads them on the deep path alone),
   // so a settle then changes nothing on the wire and sends no request. The
   // reader's questions stay in the store, which the export and the note read.

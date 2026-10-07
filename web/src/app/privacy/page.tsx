@@ -48,10 +48,11 @@ const SECTIONS = [
   {
     // P3-02d (§1h.5): written from the explain route, `lib/papers/explain.ts` and
     // `store/explain-threads.ts`. The test pins every word; a change to what is
-    // sent or kept changes this entry in the same commit. (P4-00: the answer runs on
-    // the reader's own key, and Peer counts nothing against an allowance, so the two
-    // paragraphs about the count and the usage row are gone.) P3-07 (§1h.9 (5)): "Say more" is the third thing that sends,
-    // and a reply is short unless the reader asks for more.
+    // sent or kept changes this entry in the same commit. P3-07 (§1h.9 (5)): "Say
+    // more" is the third thing that sends, and a reply is short unless the reader asks
+    // for more. P4-00: the answer runs on the reader's own key, and Peer counts nothing
+    // against an allowance, so the two paragraphs about the count and the usage row
+    // are gone.
     label: "Explain this",
     body: [
       "Selecting a passage sends nothing, and neither does typing in the box. Peer sends a request only when you click “Explain this?” (or press E on a selection) and, for a follow-up, when you press Enter or Send, or Say more under a reply. A reply is short unless you ask for more, in your own words or with Say more. The request carries the passage you selected, the paragraph it sits in and the one on either side of it, the paper's title and abstract, one line for each section of the paper's map and, for a follow-up, the messages of that thread. The request also carries the paper's record as this page holds it — its title, authors, venue, where it came from and your save and feedback marks on it — so Peer's server can find the paper; of that record the model sees only the title and the abstract. The answer is written with your own model key, which goes with the request.",

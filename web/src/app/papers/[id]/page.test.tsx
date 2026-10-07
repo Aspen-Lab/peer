@@ -35,7 +35,6 @@ const profileState = vi.hoisted(() => ({
     currentChallenges: "",
     deepReportEnabled: false,
   },
-  entitlement: null as unknown,
 }));
 const notesState = vi.hoisted(() => ({ notes: {} as Record<string, unknown>, add: vi.fn() }));
 
