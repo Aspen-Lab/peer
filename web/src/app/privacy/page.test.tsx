@@ -64,8 +64,9 @@ const EXPLAIN_PARAGRAPHS = [
   "Selecting a passage sends nothing, and neither does typing in the box. Peer sends a request only when you click “Explain this?” (or press E on a selection) and, for a follow-up, when you press Enter or Send, or Say more under a reply. A reply is short unless you ask for more, in your own words or with Say more. The request carries the passage you selected, the paragraph it sits in and the one on either side of it, the paper's title and abstract, one line for each section of the paper's map and, for a follow-up, the messages of that thread. The request also carries the paper's record as this page holds it — its title, authors, venue, where it came from and your save and feedback marks on it — so Peer's server can find the paper; of that record the model sees only the title and the abstract. The answer is written with your own model key, which goes with the request.",
   "The request goes to Peer's server and on to the model provider whose key you added. The answer runs on your own key, and it is short unless you ask for more.",
   "On a follow-up you can turn on “Search the web” for that one message. It is off every time the box opens and never turns on by itself. With it on, the provider may run a web search to write that reply: Gemini does this with Google Search, and with any other provider the reply is written without a search and the box says so. A message answered with a search carries the mark “searched the web”, and Peer shows no link to anything the search found.",
-  "Peer's server keeps two things. First, each answer it gives, in memory, for up to an hour, so the same passage asked about again is answered without another model call; it is filed under hashes of the document, the passage and the thread, never under who asked.",
+  "Peer's server keeps three things. First, each answer it gives, in memory, for up to an hour, so the same passage asked about again is answered without another model call; it is filed under hashes of the document, the passage and the thread, never under who asked.",
   "Second, one log line for each answer it gives: how many characters went out and came back and, if you are signed in, a shortened hash of your account id — never the passage, the paper's words or anything you wrote.",
+  "Third, if you are signed in, a count of this account's requests this hour, a number and nothing else, kept so the hourly limit can hold; it holds no text.",
   "In this browser, and only here, Peer keeps what you asked about, for each paper: the passage, where it sits in the paper, the answer and the thread. For an uploaded PDF the passage is the PDF's own text. None of it is stored against your account, and signing in does not copy it there. A passage you have asked about before opens from this copy with no new request. Signing out leaves it in place; clearing this site's data in your browser removes it.",
 ] as const;
 
@@ -166,7 +167,14 @@ describe("/privacy — Explain this (P3-02d)", () => {
     expect(entry).toContain("one log line for each answer it gives");
     expect(entry).toContain("a shortened hash of your account id");
     expect(entry).toContain("never the passage, the paper&#x27;s words or anything you wrote");
-    expect(entry).toContain("Peer&#x27;s server keeps two things");
+    expect(entry).toContain("Peer&#x27;s server keeps three things");
+    expect(entry).toContain("a count of this account&#x27;s requests this hour, a number and nothing else, kept so the hourly limit can hold; it holds no text");
+  });
+
+  // §1h.13 (a) (P4-02b, S1): the third thing the server keeps is true because of these lines.
+  it("ties the hourly count to the code: the explain route's gate and the counter's key", () => {
+    expect(readFileSync(join(process.cwd(), "src/app/api/papers/[id]/explain/route.ts"), "utf8")).toContain('requireAiRequest("paper-explain", 40)');
+    expect(readFileSync(join(process.cwd(), "src/lib/security/ai-request.ts"), "utf8")).toContain("rateKey(scope, user.id, now),");
     expect(entry).not.toContain("a count of your explanations");
   });
 
@@ -320,7 +328,7 @@ describe("/privacy — an uploaded PDF's storage on Peer's server (P4-00c N7)", 
 const PLAIN_PARAGRAPHS = [
   "Nothing is sent until you click “Say it plainly” under a paragraph. The request carries the one paragraph you clicked, where it sits in the paper, the level you chose and your own model key, and goes to Peer's server and on to the model provider whose key you added. It also carries what Peer's server needs to find the paper's text — the paper's id and title, its DOI and its links and, for an uploaded PDF, the upload's id — and not the abstract, the authors or your marks on the paper. Of all that, the model sees only the paper's title, the level and the paragraph. It never searches the web.",
   "Choosing a level beside the button sends nothing, unless a rewrite is already showing for that paragraph: then it shows the paragraph at the new level, asking only if you have not had it at that level before.",
-  "Peer's server keeps two things. First, each rewrite it gives, in memory, for up to an hour, so the same paragraph at the same level is rewritten without another model call; it is filed under hashes of the document and the paragraph, and the level, never under who asked. Second, one log line for each request: how many characters went out and came back and, if you are signed in, a shortened hash of your account id — never the paragraph, the rewrite or anything you wrote.",
+  "Peer's server keeps three things. First, each rewrite it gives, in memory, for up to an hour, so the same paragraph at the same level is rewritten without another model call; it is filed under hashes of the document and the paragraph, and the level, never under who asked. Second, one log line for a request that reaches the paragraph: how many characters went out and came back and, if you are signed in, a shortened hash of your account id — never the paragraph, the rewrite or anything you wrote. Third, if you are signed in, a count of this account's requests this hour, a number and nothing else, kept so the hourly limit can hold; it holds no text.",
   "In this browser, and only here, Peer keeps each rewrite you asked for, for each paper, paragraph and level, so a paragraph you have had said plainly at that level opens from this copy with no new request. For an uploaded PDF a rewrite is a paraphrase of the PDF's own text. None of it is stored against your account, and signing in does not copy it there. Which paragraphs show a rewrite now is not kept, so a reload shows the originals. The level you chose is kept in this browser with your other reading settings. Signing out leaves all of it in place; clearing this site's data in your browser removes it.",
 ] as const;
 
@@ -460,7 +468,7 @@ describe("/privacy — Say it plainly (P4-01)", () => {
     expect(route).not.toMatch(/plainCacheKey\([^)]*userId/);
   });
 
-  it("logs one line for each request — sizes and a shortened hash of the account — and never a word of the paragraph or the rewrite", () => {
+  it("logs one line for a request that reaches the paragraph — sizes and a shortened hash of the account — and never a word of the paragraph or the rewrite", () => {
     const route = squash(routeSource);
     expect(route).toContain('console.debug("[papers/plain] turn", { ...(userId ? { userId: shortHash(userId) } : {}), ...fields });');
     const calls = route.match(/logTurn\(\{[^}]*\}\)/g) ?? [];
@@ -469,6 +477,17 @@ describe("/privacy — Say it plainly (P4-01)", () => {
     // A failed model call is logged by its error's name alone.
     expect(route).toContain('console.error("[papers/plain] model call failed:", err instanceof Error ? err.name : typeof err);');
     expect(route.match(/console\.(log|info|warn|error|debug)\(/g)).toHaveLength(2);
+  });
+
+  // §1h.13 (a) (P4-02b, S1; N3): "three things" and "a request that reaches the paragraph".
+  it("names the hourly count as the third thing, and ties it to the plain route's gate and the counter's key", () => {
+    expect(entry).toContain("Peer&#x27;s server keeps three things");
+    expect(entry).toContain("one log line for a request that reaches the paragraph");
+    expect(entry).not.toContain("one log line for each request");
+    expect(entry).toContain("Third, if you are signed in, a count of this account&#x27;s requests this hour, a number and nothing else, kept so the hourly limit can hold; it holds no text.");
+    expect(squash(routeSource)).toContain('requireAiRequest("paper-plain", 40)');
+    expect(read("src/lib/security/ai-request.ts")).toContain("rateKey(scope, user.id, now),");
+    expect(read("src/lib/security/ai-request.ts")).toContain(".increment(");
   });
 
   it("keeps in this browser each rewrite per paper, paragraph and level, with the paragraph it says again, and nothing about which paragraphs show", () => {
