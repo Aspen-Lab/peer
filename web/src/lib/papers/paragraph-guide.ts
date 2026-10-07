@@ -31,7 +31,6 @@
 // today it imports types only. The hash is the route's (`explainDocHash`).
 
 import { cleanDisplayText } from "@/lib/text/clean";
-import type { QuotaSignal } from "@/lib/usage/deep-report-quota";
 import { normalizeForMatch } from "./evidence";
 import type { ExtractedDocument } from "./html-text";
 import { openingOf, readableSections } from "./reading-map";
@@ -70,7 +69,7 @@ export interface ParagraphGuide {
 export type ParagraphGuideResult =
   | { guide: ParagraphGuide; cached: boolean }
   | { skipped: "too_many_paragraphs" }
-  | { unavailable: true; quota?: QuotaSignal };
+  | { unavailable: true };
 
 // ── The paragraphs the pass is asked about ─────────────────────────────
 

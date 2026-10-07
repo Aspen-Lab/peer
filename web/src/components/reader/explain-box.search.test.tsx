@@ -5,7 +5,7 @@ import type { ExplainAnswer } from "@/lib/papers/explain";
 import type { PaperReading } from "@/lib/papers/reading";
 import type { ExplainTurn } from "@/store/explain-threads";
 import type { Paper } from "@/types";
-import { EXPLAIN, QUOTA } from "./copy";
+import { EXPLAIN } from "./copy";
 import { SectionLinks } from "./evidence-quote";
 import { ExplainCard, requestExplanation, type ExplainStatus, type ThreadView } from "./explain-box";
 import { pressKind, replyPair, requestReply, toggleStep, type PressKind } from "./explain-thread";
@@ -13,8 +13,8 @@ import { pressKind, replyPair, requestReply, toggleStep, type PressKind } from "
 // P3-02c (ruling §1h.4 amendment; user decision §1a.11): the web-search toggle in
 // the box's control row — off on every open, with its warning on hover and on
 // focus and a two-step on a touch screen — the mark a searched message carries,
-// the note when the provider cannot search, and the two lines for an allowance
-// that is spent or cannot be checked. No DOM in this project's Vitest: the
+// the note when the provider cannot search. (The two lines for an allowance that is
+// spent or cannot be checked went with the allowance: P4-00.) No DOM in this project's Vitest: the
 // markup is rendered with react-dom/server, the pure rules stand on their own,
 // and the handlers are called on the element tree `ExplainCard` returns (it has
 // no hook). What the box does over time is in `explain-box.search.flow.test.tsx`.
@@ -80,12 +80,10 @@ describe("the copy (P3-02c)", () => {
     expect(EXPLAIN.searchWarning).toBe("Web search costs many times more than a normal reply. On for this message only.");
     expect(EXPLAIN.searchedMark).toBe("searched the web");
     expect(EXPLAIN.searchUnavailable).toBe("Web search is not available with this provider.");
-    expect(QUOTA.explainExhausted).toBe("Explanations are used up for now.");
-    expect(QUOTA.explainUnavailable).toBe("Peer could not check the explanation allowance just now. Nothing was spent.");
   });
 
   it("holds no word the page never says to a reader: skip, don't read, ignore, not worth", () => {
-    const strings = [...Object.values(EXPLAIN), ...Object.values(QUOTA)].flatMap((value) => (typeof value === "function" ? [value("a term")] : [value]));
+    const strings = Object.values(EXPLAIN).flatMap((value) => (typeof value === "function" ? [value("a term")] : [value]));
 
     for (const text of strings) expect(text).not.toMatch(/\bskip\b|don't read|do not read|ignore|not worth/i);
   });
@@ -138,7 +136,7 @@ describe("ExplainCard — the search toggle (§1a.11)", () => {
   it("is absent where the input is absent: with no key, no first answer, or no thread", () => {
     expect(toggleTag(card({ canAsk: false }))).toBe("");
     expect(toggleTag(card({ thread: undefined }))).toBe("");
-    for (const status of [{ kind: "loading" }, { kind: "unavailable" }, { kind: "not_in_paper" }, { kind: "exhausted" }, { kind: "allowance_unavailable" }] as ExplainStatus[]) {
+    for (const status of [{ kind: "loading" }, { kind: "unavailable" }, { kind: "not_in_paper" }] as ExplainStatus[]) {
       expect(toggleTag(card({ status }))).toBe("");
     }
   });
@@ -210,11 +208,6 @@ describe("ExplainCard — when the toggle can be pressed", () => {
 
     expect(disabled(card({ thread: view({ turns: eight }) }))).toBe(true);
     expect(disabled(card({ thread: view({ turns: eight.slice(0, 14) }) }))).toBe(false);
-  });
-
-  it("is disabled when the day's explanations are used up, and not when the allowance merely could not be checked", () => {
-    expect(disabled(card({ thread: view({ quota: "exhausted" }) }))).toBe(true);
-    expect(disabled(card({ thread: view({ quota: "unavailable" }) }))).toBe(false);
   });
 
   it("hands its three events to the box: the pointer's kind, the press and the blur", () => {
@@ -334,66 +327,6 @@ describe("ExplainCard — the mark and the note (§1a.11)", () => {
     for (const anchor of anchors) expect(anchor).toMatch(/href="#paper-section-\d+"/);
     expect(html).not.toMatch(/href="https?:|href="\/\/|target="_blank"|<iframe|<img/i);
     expect(html).not.toMatch(/https?:\/\//);
-  });
-});
-
-describe("ExplainCard — the allowance lines (§1g.14, §1h.4)", () => {
-  it("under the thread, a day's explanations used up: the line, the input and Send and the toggle disabled, the typed words kept", () => {
-    const turns: ExplainTurn[] = [{ role: "reader", text: READER_ONE }, { role: "peer", text: PEER_ONE, peer: true }];
-    const html = card({ thread: view({ turns, draft: "Why does it matter at 1100 C?", quota: "exhausted" }) });
-
-    expect(html).toContain(QUOTA.explainExhausted);
-    expect(html.indexOf(QUOTA.explainExhausted)).toBeGreaterThan(html.indexOf(PEER_ONE));
-    expect(html.indexOf(QUOTA.explainExhausted)).toBeLessThan(html.indexOf("<textarea"));
-    expect(html).toMatch(/<textarea[^>]* disabled=""/);
-    expect(html).toMatch(new RegExp(`<button[^>]* disabled=""[^>]*>${EXPLAIN.send}<`));
-    expect(toggleTag(html)).toContain(' disabled=""');
-    expect(html).toContain(">Why does it matter at 1100 C?</textarea>");
-    expect(html).not.toContain(QUOTA.explainUnavailable);
-    expect(html).not.toContain(EXPLAIN.unavailable);
-  });
-
-  it("an allowance that could not be checked: its own line, 'Nothing was spent', and the input still open", () => {
-    const html = card({ thread: view({ draft: "Why?", quota: "unavailable" }) });
-
-    expect(html).toContain(QUOTA.explainUnavailable);
-    expect(html).not.toContain(QUOTA.explainExhausted);
-    expect(html).not.toMatch(/<textarea[^>]* disabled=""/);
-    expect(html).toContain(">Why?</textarea>");
-  });
-
-  it("no line when nothing is wrong", () => {
-    const html = card();
-
-    expect(html).not.toContain(QUOTA.explainExhausted);
-    expect(html).not.toContain(QUOTA.explainUnavailable);
-  });
-
-  it("sets the lines in the label face, as the page's other quota notes are", () => {
-    const html = card({ thread: view({ quota: "exhausted" }) });
-    const line = new RegExp(`<p class="([^"]*)">${QUOTA.explainExhausted}</p>`).exec(html)?.[1] ?? "";
-
-    expect(line).toMatch(/\bannotation\b/);
-    expect(line).toMatch(/text-text-faint/);
-  });
-
-  it("in place of the loading line when the first message is refused", () => {
-    const exhausted = card({ status: { kind: "exhausted" } as ExplainStatus, thread: undefined });
-    const unchecked = card({ status: { kind: "allowance_unavailable" } as ExplainStatus, thread: undefined });
-
-    expect(exhausted).toContain(QUOTA.explainExhausted);
-    expect(exhausted).not.toContain(EXPLAIN.loading);
-    expect(exhausted).not.toContain(EXPLAIN.unavailable);
-    expect(exhausted).not.toContain("<textarea");
-    expect(unchecked).toContain(QUOTA.explainUnavailable);
-    expect(unchecked).not.toContain(QUOTA.explainExhausted);
-    expect(unchecked).not.toContain(EXPLAIN.loading);
-  });
-
-  it("with no key, the lines are not drawn: a Tier 0 box has no model to refuse", () => {
-    const html = card({ canAsk: false, status: { kind: "exhausted" } as ExplainStatus });
-
-    expect(html).not.toContain(QUOTA.explainExhausted);
   });
 });
 
@@ -523,37 +456,15 @@ describe("the requests carry the reader's wish to search, and read the refusals 
     expect(await requestReply(args)).toEqual({ role: "peer", text: PEER_TWO });
   });
 
-  it("reads a 429 explain_exhausted as 'exhausted', and one whose reason is unavailable as 'allowance_unavailable'", async () => {
-    stubFetch(429, { error: "explain_exhausted", reason: "exhausted", resetsAt: "2026-10-07T00:00:00.000Z" });
-    expect(await requestReply(args)).toBe("exhausted");
-    expect(await requestExplanation({ paper, selection, sectionId: "s2" })).toBe("exhausted");
-
-    stubFetch(429, { error: "explain_exhausted", reason: "unavailable", resetsAt: "2026-10-07T00:00:00.000Z" });
-    expect(await requestReply(args)).toBe("allowance_unavailable");
-    expect(await requestExplanation({ paper, selection, sectionId: "s2" })).toBe("allowance_unavailable");
-  });
-
-  it("reads a refusal with no reason as the allowance being spent: the safe reading is the one that stops sending", async () => {
-    stubFetch(429, { error: "explain_exhausted" });
-
-    expect(await requestReply(args)).toBe("exhausted");
-  });
-
-  it("any other refusal is the plain 'unavailable': a 429 of the sign-in gate's, other statuses, a body that is not JSON", async () => {
+  it("every refusal is the plain 'unavailable': a 429 of the sign-in gate's, other statuses, a body that is not JSON", async () => {
     stubFetch(429, { error: "Too many requests" });
     expect(await requestReply(args)).toBe("unavailable");
     expect(await requestExplanation({ paper, selection, sectionId: "s2" })).toBe("unavailable");
     stubFetch(429, "not json");
     expect(await requestReply(args)).toBe("unavailable");
     for (const status of [400, 401, 404, 410, 422, 500, 503]) {
-      stubFetch(status, { error: "explain_exhausted", reason: "exhausted" });
+      stubFetch(status, { error: "x" });
       expect(await requestReply(args)).toBe("unavailable");
     }
-  });
-
-  it("only a 429 is a refusal of the allowance: the same body under a 200 is not a reply", async () => {
-    stubFetch(200, { error: "explain_exhausted", reason: "exhausted" });
-
-    expect(await requestReply(args)).toBe("unavailable");
   });
 });

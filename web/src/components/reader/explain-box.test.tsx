@@ -379,8 +379,6 @@ describe("requestExplanation — what is sent, and what comes back", () => {
   it("is 'unavailable' for an unavailable answer, an outage, a gone upload, a refusal and a network failure", async () => {
     stubFetch(200, { unavailable: true });
     expect(await requestExplanation(args)).toBe("unavailable");
-    stubFetch(200, { unavailable: true, quota: { kind: "company_budget", reason: "exhausted" } });
-    expect(await requestExplanation(args)).toBe("unavailable");
     for (const status of [401, 404, 410, 429, 500, 503]) {
       stubFetch(status, { error: "x" });
       expect(await requestExplanation(args)).toBe("unavailable");

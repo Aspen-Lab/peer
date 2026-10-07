@@ -9,8 +9,8 @@
 // leaves it, or Enter on an empty last line), after an idle wait; an in-flight
 // request is never aborted by a later set — it finishes and caches under its
 // own key, and one more goes out for the latest set. A "charge" below is one
-// deep request: the route charges once per deep request (§1g.4). Every question
-// is synthetic.
+// deep request: it was counted once per deep request (§1g.4), and since P4-00 it
+// is what the reader's own provider bills them for. Every question is synthetic.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("react", async (importOriginal) => {
@@ -49,8 +49,9 @@ vi.mock("@/lib/papers/report-stream", () => ({
   },
 }));
 vi.mock("@/lib/api", () => ({ apiFetch: async () => ({ noLlm: true }) }));
-vi.mock("@/store/profile", () => ({
-  useProfileStore: (select: (state: { entitlement: unknown }) => unknown) => select({ entitlement: null }),
+// A reader's own key counts only for a signed-in reader (P4-00).
+vi.mock("@/components/profile-sync", () => ({
+  useSyncGate: (select: (state: { authOutcome: string }) => unknown) => select({ authOutcome: "signed-in" }),
 }));
 
 import { useEffect, useState } from "react";

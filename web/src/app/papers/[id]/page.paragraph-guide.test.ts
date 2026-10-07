@@ -44,7 +44,7 @@ function guideProblems(source: string): string[] {
   if (at >= 0 && !(defined("const hasBody =") >= 0 && defined("const hasBody =") < at)) problems.push("the hook comes before `hasBody` is known");
   if (at >= 0 && !(defined("const providerConfigured =") >= 0 && defined("const providerConfigured =") < at)) problems.push("the hook comes before `providerConfigured` is known");
   if (at >= 0 && !(defined("const aiMode =") >= 0 && defined("const aiMode =") < at)) problems.push("the hook comes before `aiMode` is known");
-  if (!text.includes('const aiMode = aiAvailability(profile, entitlementGrants(entitlement)); const providerConfigured = aiMode !== "none";')) problems.push("`providerConfigured` is no longer read from the one `aiMode` the deep predicate is given");
+  if (!text.includes('const aiMode = aiAvailability(profile, authOutcome); const providerConfigured = aiMode !== "none";')) problems.push("`providerConfigured` is no longer read from the one `aiMode` the deep predicate is given");
   const early = text.indexOf("if (!reading) return null;");
   if (at >= 0 && early >= 0 && at > early) problems.push("the hook is called after an early return (hook order)");
 

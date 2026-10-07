@@ -951,15 +951,9 @@ function sourceKindLabel(kind: string | undefined): string | undefined {
  * the abstract because the full text was walled, unreadable here, unfound —
  * or read by Peer but not finished by the model — and the clause names that
  * wall instead of a setting the reader already turned on.
- *
- * P2-08b (§1g.19 d, F8): when the server REFUSED the deep read (`refused` — a
- * quota or an outage, which the page's notice beside this sentence words), the
- * read never ran, so neither "turn on deep reports" nor "did not finish" nor a
- * wall is the reason: the clause says the deep read was not run.
  */
-function fullTextClause(reading: PaperReading, report: AvailabilityReport, refused: boolean): string {
+function fullTextClause(reading: PaperReading, report: AvailabilityReport): string {
   const { provenance } = reading;
-  if (refused) return " Caveats and a next step need the full text; the deep read was not run.";
   if (!report.deepRequested) {
     return " Caveats and a next step need the full text — turn on deep reports in Profile.";
   }
@@ -979,12 +973,12 @@ function fullTextClause(reading: PaperReading, report: AvailabilityReport, refus
   return " Caveats and a next step need the full text, which Peer could not find.";
 }
 
-function modelSentence(reading: PaperReading, report: AvailabilityReport, refused: boolean): string {
+function modelSentence(reading: PaperReading, report: AvailabilityReport): string {
   let sentence: string;
   if (report.basis === "model-abstract") {
     sentence =
       "Read by your model from the abstract; every claim below carries a sentence from it.";
-    if (reading.caveats.length === 0) sentence += fullTextClause(reading, report, refused);
+    if (reading.caveats.length === 0) sentence += fullTextClause(reading, report);
   } else {
     const { provenance } = reading;
     const sectionsRead = provenance.fullText === "html" || provenance.fullText === "pdf";
@@ -1008,9 +1002,6 @@ function modelSentence(reading: PaperReading, report: AvailabilityReport, refuse
  * read (or what the model read), then, when a model answered, whether a
  * project is set. The page joins them; it never adds a sentence of its own.
  * `report` is null when there is no model layer — including a `noLlm` report.
- * `refused` (P2-08b, F8): the server refused the deep read — the page passes it
- * when the report hook holds a quota — so the sentence does not blame a wall or
- * a setting for a read that was never run.
  */
 export function describeAvailability(input: {
   reading: PaperReading;
@@ -1018,11 +1009,10 @@ export function describeAvailability(input: {
   providerConfigured: boolean;
   profileHasProject: boolean;
   modelFailed: boolean;
-  refused?: boolean;
 }): string[] {
-  const { reading, report, providerConfigured, profileHasProject, modelFailed, refused = false } = input;
+  const { reading, report, providerConfigured, profileHasProject, modelFailed } = input;
   if (report) {
-    const out = [modelSentence(reading, report, refused)];
+    const out = [modelSentence(reading, report)];
     if (!profileHasProject) out.push(PROFILE_EMPTY);
     return out;
   }

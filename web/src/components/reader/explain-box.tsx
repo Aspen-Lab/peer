@@ -47,11 +47,8 @@
 // it — as the reply's fourth argument, only when on — and the toggle is off again
 // the moment it is sent, sent or failed. A message the server answered with search
 // carries the label-face mark "searched the web" beside "You"; a reply to one that
-// asked for search the provider could not give carries a one-line note. A day's
-// explanations used up, or an allowance that could not be checked, is a line under
-// the thread (the first: the input and the toggle disabled, the typed words kept)
-// or, for the first message, in place of the loading line. Nothing here links to a
-// web source: the mark is the only trace of the search.
+// asked for search the provider could not give carries a one-line note. Nothing
+// here links to a web source: the mark is the only trace of the search.
 //
 // P3-07 (ruling §1h.9; user decision §1a.14): the answers are short and exact, and the box
 // shows two things for it. A reply may carry a small term table — three columns, the term,
@@ -62,8 +59,8 @@
 // already the long form — one label-face button, "Say more", re-sends the reader's last
 // message in the long form (`onSayMore`): the thread before that message and the message,
 // no copy of it, so the reader count does not grow; the reply is appended as Peer's next
-// turn and replaces nothing. It waits while a request is in flight, at the full thread and
-// when the day's explanations are used up, as a send does; what the reader was typing stays.
+// turn and replaces nothing. It waits while a request is in flight and at the full thread,
+// as a send does; what the reader was typing stays.
 
 import { useEffect, useRef, useState, type CSSProperties, type Ref } from "react";
 import { hasUserLlmOverride } from "@/lib/feed/ai-tier";
@@ -73,39 +70,33 @@ import type { PaperReading } from "@/lib/papers/reading";
 import type { PaperTerm } from "@/lib/papers/report";
 import { MAX_EXPLAIN_MESSAGE_CHARS, threadFull, type ExplainTurn } from "@/store/explain-threads";
 import type { Paper, UserProfile } from "@/types";
-import { EXPLAIN, PEERS_READING, QUOTA } from "./copy";
+import { EXPLAIN, PEERS_READING } from "./copy";
 import { EvidenceQuote } from "./evidence-quote";
 import {
   firstAnswerMessage,
   keyToSend,
   postExplain,
   pressKind,
-  refusalOf,
   moreReply,
   replyPair,
   sayMoreOf,
   toggleStep,
-  type AllowanceRefusal,
   type ReplyResult,
 } from "./explain-thread";
 import type { ExplainSelection, SelectionTarget, ViewRect, ViewRects } from "./paper-body";
 
 // ── What the card shows ────────────────────────────────────────────────
 
-/** `none`: no model is asked (no key) — the paper's own definition is all there is.
- *  `exhausted` / `allowance_unavailable` (P3-02c): the first message was refused by
- *  the allowance — the day's explanations are used up, or the counter could not be
- *  read and nothing was spent. */
+/** `none`: no model is asked (no key) — the paper's own definition is all there is. */
 export type ExplainStatus =
   | { kind: "none" }
   | { kind: "loading" }
   | { kind: "answer"; answer: ExplainAnswer }
   | { kind: "unavailable" }
-  | { kind: "not_in_paper" }
-  | { kind: AllowanceRefusal };
+  | { kind: "not_in_paper" };
 
 /** What asking comes to. */
-export type AskResult = ExplainAnswer | "unavailable" | "not_in_paper" | AllowanceRefusal;
+export type AskResult = ExplainAnswer | "unavailable" | "not_in_paper";
 
 /** The web-search toggle as the card draws it (P3-02c): its state, and its three
  *  events — the pointer's kind as it goes down (a finger, a mouse, a pen; none at
@@ -128,11 +119,6 @@ export interface ThreadView {
   pending: boolean;
   /** The last send failed: the thread is as it was and the draft is still here. */
   failed: boolean;
-  /** P3-02c: the allowance refused the last send — `exhausted`: the day's
-   *  explanations are used up (the input and the toggle are disabled, the typed
-   *  words kept); `unavailable`: it could not be checked and nothing was spent
-   *  (the reader may try again). */
-  quota?: "exhausted" | "unavailable";
   onDraft: (text: string) => void;
   onSend: () => void;
   /** P3-02c: the web-search toggle. Without it the row has none. */
@@ -322,10 +308,9 @@ function asAnswer(value: unknown): ExplainAnswer | null {
  * The one request "Explain this?" makes, when the reader clicks: the paper, the
  * passage and where it sits (the first message has no thread, and never asks to
  * search), and the reader's own key only when they have one. An answer,
- * "not_in_paper" when the server says the words are not the paper's (422),
- * "exhausted" or "allowance_unavailable" when the allowance refused it (P3-02c: a
- * 429 `explain_exhausted`, by its reason), and "unavailable" for everything else —
- * an outage, a refusal, a gone upload, a reply that is not what was promised.
+ * "not_in_paper" when the server says the words are not the paper's (422), and
+ * "unavailable" for everything else — an outage, a refusal, a gone upload, a reply
+ * that is not what was promised.
  */
 export async function requestExplanation(args: {
   paper: Paper;
@@ -343,8 +328,6 @@ export async function requestExplanation(args: {
       thread: [],
       ...(llmOverride ? { llmOverride } : {}),
     });
-    const refused = refusalOf(response);
-    if (refused) return refused;
     if (response.status === 422) return "not_in_paper";
     return (response.ok ? asAnswer(response.body) : null) ?? "unavailable";
   } catch {
@@ -472,9 +455,7 @@ export function ExplainCard({
 }) {
   const asking = canAsk && status.kind === "answer" ? thread : undefined;
   const full = asking ? threadFull(asking.turns) : false;
-  /** The day's explanations are used up: nothing more can be sent, the words stay. */
-  const spent = asking?.quota === "exhausted";
-  const sendBlocked = (asking?.pending ?? false) || full || spent;
+  const sendBlocked = (asking?.pending ?? false) || full;
   return (
     <div
       role="dialog"
@@ -508,8 +489,6 @@ export function ExplainCard({
           {status.kind === "loading" && <p className="annotation text-text-faint">{EXPLAIN.loading}</p>}
           {status.kind === "unavailable" && <p className="annotation text-text-faint">{EXPLAIN.unavailable}</p>}
           {status.kind === "not_in_paper" && <p className="annotation text-text-faint">{EXPLAIN.notInPaper}</p>}
-          {status.kind === "exhausted" && <p className="annotation text-text-faint">{QUOTA.explainExhausted}</p>}
-          {status.kind === "allowance_unavailable" && <p className="annotation text-text-faint">{QUOTA.explainUnavailable}</p>}
           {status.kind === "answer" && (
             <>
               <section>
@@ -539,8 +518,6 @@ export function ExplainCard({
               )}
               {asking?.pending && <p className="annotation text-text-faint">{EXPLAIN.thinking}</p>}
               {asking?.failed && <p className="annotation text-text-faint">{EXPLAIN.unavailable}</p>}
-              {asking?.quota === "exhausted" && <p className="annotation text-text-faint">{QUOTA.explainExhausted}</p>}
-              {asking?.quota === "unavailable" && <p className="annotation text-text-faint">{QUOTA.explainUnavailable}</p>}
               {full && <p className="annotation text-text-faint">{EXPLAIN.threadFull}</p>}
             </>
           )}
@@ -628,8 +605,7 @@ interface Session {
   turns: ExplainTurn[];
   /** What the reader has typed and not sent. */
   draft: string;
-  /** `exhausted` / `allowance_unavailable` (P3-02c): what the allowance said to the last send. */
-  reply: "idle" | "pending" | "failed" | AllowanceRefusal;
+  reply: "idle" | "pending" | "failed";
   /** P3-02c: web search is on for the next message. Session state only — off
    *  whenever a box or a passage is opened, never remembered. */
   search: boolean;
@@ -778,14 +754,13 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
   };
 
   // The send: the one request of a follow-up. Nothing happens for an empty
-  // draft, a reply already on its way, a full thread or a day's explanations used
-  // up; the reply joins the thread, with the message it answers, only once it has
+  // draft, a reply already on its way or a full thread; the reply joins the thread, with the message it answers, only once it has
   // arrived. The search toggle is for this message only (§1a.11): it goes with the
   // request — as the fourth argument, only when on — and is off again at once,
   // whatever comes back.
   const send = () => {
     if (!open || !onReply || open.status.kind !== "answer") return;
-    if (open.reply === "pending" || open.reply === "exhausted" || threadFull(open.turns)) return;
+    if (open.reply === "pending" || threadFull(open.turns)) return;
     const message = open.draft.trim();
     if (!message) return;
     const selection = open.selection;
@@ -798,7 +773,6 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
       .then((result) =>
         setSession((current) => {
           if (current === null || current.selection.passage !== selection.passage) return current;
-          if (result === "exhausted" || result === "allowance_unavailable") return { ...current, reply: result };
           if (typeof result === "string") return { ...current, reply: "failed" };
           return { ...current, reply: "idle", draft: "", turns: [...current.turns, ...replyPair(message, searching, result)] };
         }),
@@ -807,13 +781,13 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
 
   // "Say more" (P3-07): re-send the reader's last message in the long form — the thread
   // before it, then the message, no copy of it (`sayMoreOf`). It does nothing for a reply
-  // already on its way, a full thread, a day's explanations used up, or no reply to
-  // lengthen; the reply joins the thread as Peer's turn alone, only once it has arrived;
-  // a failed one leaves the thread as it was; the draft the reader was typing stays; and
-  // the toggle is not touched (a long reply never searches).
+  // already on its way, a full thread, or no reply to lengthen; the reply joins the
+  // thread as Peer's turn alone, only once it has arrived; a failed one leaves the
+  // thread as it was; the draft the reader was typing stays; and the toggle is not
+  // touched (a long reply never searches).
   const sayMore = () => {
     if (!open || !onSayMore || open.status.kind !== "answer") return;
-    if (open.reply === "pending" || open.reply === "exhausted" || threadFull(open.turns)) return;
+    if (open.reply === "pending" || threadFull(open.turns)) return;
     const more = sayMoreOf(open.turns);
     if (!more) return;
     const selection = open.selection;
@@ -824,7 +798,6 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
       .then((result) =>
         setSession((current) => {
           if (current === null || current.selection.passage !== selection.passage) return current;
-          if (result === "exhausted" || result === "allowance_unavailable") return { ...current, reply: result };
           if (typeof result === "string") return { ...current, reply: "failed" };
           return { ...current, reply: "idle", turns: [...current.turns, ...moreReply(result)] };
         }),
@@ -834,12 +807,12 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
   // The toggle's events (§1a.11). The pointer that went down is read once by the
   // click that follows it: a finger needs two taps (the first shows the warning), a
   // mouse, a pen or the keyboard one. A press does nothing while a reply is on its
-  // way, the thread is full or the day's explanations are used up.
+  // way or the thread is full.
   const pressSearch = () => {
     const kind = pressKind(pointer.current);
     pointer.current = null;
     setSession((current) => {
-      if (current === null || current.reply === "pending" || current.reply === "exhausted" || threadFull(current.turns)) return current;
+      if (current === null || current.reply === "pending" || threadFull(current.turns)) return current;
       const next = toggleStep({ on: current.search, tip: current.tip }, kind);
       return { ...current, search: next.on, tip: next.tip };
     });
@@ -950,7 +923,6 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
           draft: open.draft,
           pending: open.reply === "pending",
           failed: open.reply === "failed",
-          ...(open.reply === "exhausted" ? { quota: "exhausted" as const } : open.reply === "allowance_unavailable" ? { quota: "unavailable" as const } : {}),
           onDraft: (text) => setSession((current) => (current ? { ...current, draft: text.slice(0, MAX_EXPLAIN_MESSAGE_CHARS) } : current)),
           onSend: send,
           ...(onSayMore ? { onSayMore: sayMore } : {}),

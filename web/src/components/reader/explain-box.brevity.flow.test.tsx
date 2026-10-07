@@ -291,28 +291,6 @@ describe("ExplainBox — Say more (P3-07)", () => {
     run.mounted.unmount();
   });
 
-  it("the day's explanations used up stops it, as it stops a send", async () => {
-    const onSayMore = vi.fn(async (): Promise<ReplyResult> => "exhausted");
-    const run = await scenario(base({ onSayMore, cachedTurns: pairs(1) }), [(tree) => click(tree), (tree) => sayMore(tree), (tree) => sayMore(tree)]);
-    await wait();
-
-    expect(run.last().thread?.quota).toBe("exhausted");
-    expect(run.last().thread?.turns).toEqual(pairs(1));
-    expect(onSayMore).toHaveBeenCalledTimes(1);
-    run.mounted.unmount();
-  });
-
-  it("the allowance that could not be read leaves the reader to try again", async () => {
-    const onSayMore = vi.fn(async (): Promise<ReplyResult> => LONG);
-    onSayMore.mockResolvedValueOnce("allowance_unavailable");
-    const run = await scenario(base({ onSayMore, cachedTurns: pairs(1) }), [(tree) => click(tree), (tree) => sayMore(tree), (tree) => sayMore(tree)]);
-    await wait();
-
-    expect(onSayMore).toHaveBeenCalledTimes(2);
-    expect(run.last().thread?.turns).toEqual([...pairs(1), LONG]);
-    run.mounted.unmount();
-  });
-
   it("goes on from the long reply: the next typed send carries both replies as they are kept, and Say more is for the new one", async () => {
     const onReply = vi.fn(async (): Promise<ReplyResult> => SHORT);
     const run = await scenario(base({ onReply, cachedTurns: pairs(1) }), [

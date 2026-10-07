@@ -6,7 +6,7 @@ import type { ExtractedDocument } from "@/lib/papers/html-text";
 import type { FullTextResult } from "@/lib/papers/full-text";
 import { GIST_QUESTION, gistRoute, routeByQuestions, type RouteResult } from "@/lib/papers/reading-map";
 import type { Paper } from "@/types";
-import { ASK, EXPLAIN, FOR_YOUR_QUESTIONS, MAP, QUOTA, ROUTE, TERMS } from "./copy";
+import { ASK, EXPLAIN, FOR_YOUR_QUESTIONS, MAP, ROUTE, TERMS } from "./copy";
 import { HEADING_MARK, PaperBody, ROUTE_TINT, mergeQuestionRoute, questionRouteOverlay, sectionMark } from "./paper-body";
 import { PaperContents } from "./paper-contents";
 import { ReadingMapView, readingRoute } from "./reading-map";
@@ -309,17 +309,13 @@ describe("the route copy never tells the reader not to read (§1f.13, §3d 8)", 
 
   it("has no 'skip', 'don't read', 'ignore' or 'not worth' in the ask, map, route or answers copy or the tier labels", () => {
     // P2-04b (§1g.15 finding 4): the answers block's copy is scanned too.
-    // P2-09 (§1g.14): the quota notice's three lines are scanned too.
     // P3-01 (§1h.1): the Terms to know strip's copy is scanned too.
     // P3-02 (§1h.2): so is "Explain this?" — the button, the card's two labels
     // and its three states.
-    const all = [...strings(ASK), ...strings(MAP), ...strings(ROUTE), ...strings(FOR_YOUR_QUESTIONS), ...strings(QUOTA), ...strings(TERMS), ...strings(EXPLAIN)];
+    const all = [...strings(ASK), ...strings(MAP), ...strings(ROUTE), ...strings(FOR_YOUR_QUESTIONS), ...strings(TERMS), ...strings(EXPLAIN)];
 
     expect(all.length).toBeGreaterThan(30);
     expect(all).toContain("not mentioned");
-    expect(all).toContain(QUOTA.exhausted);
-    expect(all).toContain(QUOTA.companyBudget);
-    expect(all).toContain(QUOTA.unavailable);
     expect(all).toContain("This paper does not address: Does it discuss recycling?");
     expect(all).toContain("This paper does not address: recycling.");
     // P2-08b (§1g.21 (2)): the unverified verdict line is scanned too.
@@ -334,14 +330,12 @@ describe("the route copy never tells the reader not to read (§1f.13, §3d 8)", 
     expect(all).toContain("Why it is here");
     expect(all).toContain(EXPLAIN.defines("2 Methods"));
     // P3-02c (§1h.4 amendment): the search toggle's label, its warning, the mark
-    // and the note, and the two allowance lines, are scanned too.
+    // and the note are scanned too.
     for (const line of [
       EXPLAIN.searchToggle,
       EXPLAIN.searchWarning,
       EXPLAIN.searchedMark,
       EXPLAIN.searchUnavailable,
-      QUOTA.explainExhausted,
-      QUOTA.explainUnavailable,
     ]) {
       expect(all).toContain(line);
     }

@@ -17,20 +17,19 @@
 // a hit costs no model call.
 //
 // Gated like the explain route, in the same order: the owner checks on an upload
-// (the claim, the attachment, the revision), the shared entitlement check, then
-// the provider — only a provider that can write answers.
+// (the claim, the attachment, the revision), the shared sign-in and hourly-limit
+// check, then the provider — only a provider that can write answers.
 //
-// NOT charged: this pass takes nothing from the deep-report allowance and nothing
-// from the explain allowance (neither counter is consumed here). It is one
-// small call per document per hour across ALL readers — the memory sees to that — so
-// there is no per-reader count to take; the entitlement check's hourly request cap
-// bounds a single reader. The debug line below is what a later pass may price it by.
+// Not counted or capped by Peer (P4-00): the model is the reader's own key. It is
+// one small call per document per hour across ALL readers — the memory sees to that
+// — and the gate's hourly limit (20 requests an hour) bounds a single reader. The
+// debug line below is what a later pass may size it by.
 //
 // Never cached by a CDN or the browser: every answer says `no-store`, and one
 // about an upload says what the other private-upload routes say.
 
 import { NextRequest, NextResponse } from "next/server";
-import { hasUsableProviderOverride, resolveProvider } from "@/lib/llm/providers/registry";
+import { resolveProvider } from "@/lib/llm/providers/registry";
 import type { ProviderOverrideConfig } from "@/lib/llm/providers/types";
 import { explainDocHash, parseModelJson, shortHash } from "@/lib/papers/explain";
 import { getFullText } from "@/lib/papers/full-text";
@@ -48,10 +47,7 @@ import {
 import type { PaperReportRequest } from "@/lib/papers/report";
 import { bareUploadId, claimsUploadId } from "@/lib/papers/upload-store";
 import { ownedUpload, PRIVATE_UPLOAD_HEADERS } from "@/lib/papers/upload-access";
-import { requireEntitledAiRequest } from "@/lib/security/ai-request";
-import { entitledContext } from "@/lib/security/entitled-context";
-import { CompanySpendCapRefusedError } from "@/lib/usage/company-budget";
-import { companyBudgetQuotaSignal } from "@/lib/usage/deep-report-quota";
+import { requireAiRequest } from "@/lib/security/ai-request";
 
 export const dynamic = "force-dynamic";
 // One small-tier call over a bounded prompt; the answer is a list of short gists.
@@ -152,21 +148,19 @@ async function handle(req: NextRequest, rawId: string): Promise<Response> {
     startRevision = meta.revision;
   }
 
-  // The one entitlement check, before the provider is resolved.
-  const gate = await requireEntitledAiRequest("paragraph-guide", 20);
+  // The one sign-in and hourly-limit check, before the provider is resolved. A
+  // signed-out reader is a 401 here, as before.
+  const gate = await requireAiRequest("paragraph-guide", 20);
   if (gate instanceof NextResponse) {
     gate.headers.set("Cache-Control", aboutUpload ? PRIVATE_UPLOAD_HEADERS["Cache-Control"] : NO_STORE["Cache-Control"]);
     return gate;
   }
-  const userId = gate.entitlement.userId;
+  const userId = gate.user?.id ?? null;
 
   // No provider that can write: the client never asks in that state, so this is
   // the answer to a stranger's guess — and it reads nothing.
   const override = body.llmOverride ?? null;
-  const provider = resolveProvider(
-    override,
-    entitledContext(gate.entitlement, "paragraph-guide", hasUsableProviderOverride(override)),
-  );
+  const provider = resolveProvider(override);
   if (!provider?.generateJsonText) return reply({ unavailable: true } satisfies ParagraphGuideResult);
 
   const fullText = await getFullText({
@@ -199,9 +193,6 @@ async function handle(req: NextRequest, rawId: string): Promise<Response> {
   } catch (err) {
     // Only the kind of error is logged: a provider's message may echo the prompt.
     console.error("[papers/paragraph-guide] model call failed:", err instanceof Error ? err.name : typeof err);
-    if (err instanceof CompanySpendCapRefusedError) {
-      return reply({ unavailable: true, quota: companyBudgetQuotaSignal(err.reason, new Date()) } satisfies ParagraphGuideResult);
-    }
     return reply({ unavailable: true } satisfies ParagraphGuideResult);
   }
 

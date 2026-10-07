@@ -451,11 +451,11 @@ describe("explainCacheKey", () => {
   });
 });
 
-// P3-02c (§1h.4 amendment): `explainDayKey` — the count-only counter's key — is
-// gone with the count; the charge replaces it. Its four assertions (the key names
-// the reader and the UTC day, rolls over at midnight UTC, differs by reader, is
-// stable within the day) are carried over to `explainTenthsKey` in
-// `lib/usage/explain-quota.test.ts`, not dropped.
+// P3-02c (§1h.4 amendment): `explainDayKey` — the count-only counter's key — went
+// with the count, and (P4-00) its replacement, the charge and its per-reader day
+// key, went with the allowance. The four assertions that were about those keys (the
+// key names the reader and the UTC day, rolls over at midnight UTC, differs by
+// reader, is stable within the day) went with their subject.
 
 describe("the explain cache", () => {
   const answer = (n: number): ExplainAnswer => ({ meaning: `m${n}`, here: { text: `h${n}`, peer: true } });

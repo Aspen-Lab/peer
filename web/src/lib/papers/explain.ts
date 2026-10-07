@@ -81,7 +81,6 @@
 
 import { createHash } from "node:crypto";
 import { cleanDisplayText } from "@/lib/text/clean";
-import type { QuotaSignal } from "@/lib/usage/deep-report-quota";
 import { locateSection, normalizeForMatch, sectionCorpus } from "./evidence";
 import type { ExtractedDocument } from "./html-text";
 import { openingOf, readableSections } from "./reading-map";
@@ -198,13 +197,9 @@ export interface ExplainReplyTurn {
 export type ExplainResult =
   | { answer: ExplainAnswer; cached: boolean }
   | { turn: ExplainReplyTurn; cached: boolean }
-  | { unavailable: true; quota?: QuotaSignal }
+  | { unavailable: true }
   | { error: "not_in_paper" }
-  | { error: "thread_full" }
-  /** P3-02c: the charge was refused (429) — `exhausted`: the reader's day or the
-   *  house's ceiling is spent; `unavailable`: the counter could not be read and
-   *  nothing was spent. */
-  | { error: "explain_exhausted"; reason: "exhausted" | "unavailable"; resetsAt: string };
+  | { error: "thread_full" };
 
 // ── Small text helpers ─────────────────────────────────────────────────
 

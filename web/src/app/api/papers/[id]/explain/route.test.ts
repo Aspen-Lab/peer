@@ -2,28 +2,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import type { ExtractedDocument } from "@/lib/papers/html-text";
 import { explainCache, type ExplainAnswer } from "@/lib/papers/explain";
-import { CompanySpendCapRefusedError } from "@/lib/usage/company-budget";
-import { getCounterStore, resetCounterStoreForTests } from "@/lib/usage/counters";
-import {
-  ALL_USERS_EXPLAIN_TENTHS_PER_DAY,
-  EXPLAIN_SEARCH_TENTHS,
-  EXPLAIN_TENTHS_PER_DAY,
-  EXPLAIN_TURN_TENTHS,
-  explainTenthsHouseKey,
-  explainTenthsKey,
-} from "@/lib/usage/explain-quota";
+import { resetCounterStoreForTests } from "@/lib/usage/counters";
 
 // P3-02 (ruling §1h.2; §3d 14, 17): POST /api/papers/[id]/explain — one
 // selected passage, explained in two parts, the second with a verified quote.
-// P3-02c (§1h.4 amendment) turned the count into a charge: every model turn is
-// paid for in tenths (one, or ten when it searched) BEFORE the model is asked,
-// and a cache hit costs nothing — the tests below that used to say "counted"
-// say "charged", and the ones about a failed call say what the amendment says:
-// the charge stays (the report route's rule — a refusal inside the call still
-// costs).
+// P4-00: the model is the reader's own key, so nothing here is counted, charged or
+// capped by Peer — the tests of the allowance (the tenths, the day cap, the house
+// ceiling, the 429 `explain_exhausted`, the company budget's quota signal) went with
+// the allowance; what bounds a reader is the gate's hourly limit.
 // A counting provider stub stands in for the model: no real call anywhere. The
-// sign-in gate and the per-reader counting across readers are in
-// `route.gate.test.ts` (it needs a deployed runtime and a session stub).
+// sign-in gate and the hourly limit across readers are in `route.gate.test.ts`
+// (it needs a deployed runtime and a session stub).
 // Everything below is invented text.
 
 const mocks = vi.hoisted(() => ({
@@ -109,11 +98,6 @@ const ask = (over: Record<string, unknown> = {}) => ({ paper, passage: PASSAGE, 
 
 async function json(response: Response): Promise<Record<string, unknown>> {
   return (await response.json()) as Record<string, unknown>;
-}
-
-/** What this reader has been charged today, in tenths. */
-async function tenths(): Promise<number> {
-  return (await getCounterStore().read(explainTenthsKey("local-no-auth", NOW), NOW)).value;
 }
 
 let provider: ReturnType<typeof providerStub>;
@@ -220,7 +204,6 @@ describe("POST /api/papers/[id]/explain — the two parts", () => {
     expect(response.status).toBe(422);
     expect(await json(response)).toEqual({ error: "not_in_paper" });
     expect(provider.generateJsonText).not.toHaveBeenCalled();
-    expect(await tenths()).toBe(0);
   });
 
   it("refuses 422 a passage found only in the abstract", async () => {
@@ -244,8 +227,8 @@ describe("POST /api/papers/[id]/explain — the two parts", () => {
   });
 });
 
-describe("POST /api/papers/[id]/explain — the memory and the charge", () => {
-  it("asks the model once for the same passage twice: the second is a hit, with no call and no count", async () => {
+describe("POST /api/papers/[id]/explain — the memory", () => {
+  it("asks the model once for the same passage twice: the second is a hit, with no call", async () => {
     const first = await json(await call(ask()));
     const second = await json(await call(ask()));
 
@@ -253,15 +236,6 @@ describe("POST /api/papers/[id]/explain — the memory and the charge", () => {
     expect(second.cached).toBe(true);
     expect(second.answer).toEqual(first.answer);
     expect(provider.generateJsonText).toHaveBeenCalledTimes(1);
-    expect(await tenths()).toBe(1);
-  });
-
-  it("charges one tenth per model call, per reader per UTC day", async () => {
-    await call(ask());
-    expect(await tenths()).toBe(1);
-    await call(ask({ passage: "Specimens were machined from a single casting", sectionId: "s2", paragraphIndex: 0 }));
-    expect(await tenths()).toBe(2);
-    expect(provider.generateJsonText).toHaveBeenCalledTimes(2);
   });
 
   it("finds a hit however the passage is spaced or cased, and for the paragraph hint left out", async () => {
@@ -302,7 +276,6 @@ describe("POST /api/papers/[id]/explain — when there is no answer", () => {
       expect(await json(response)).toEqual({ unavailable: true });
     }
     expect(mocks.getFullText).not.toHaveBeenCalled();
-    expect(await tenths()).toBe(0);
   });
 
   it("is 200 unavailable when the paper has no text or no sections", async () => {
@@ -316,11 +289,7 @@ describe("POST /api/papers/[id]/explain — when there is no answer", () => {
     expect(provider.generateJsonText).not.toHaveBeenCalled();
   });
 
-  // P3-02c (§1h.4 amendment): this was "nothing counted or remembered". The
-  // charge is taken before the model is asked, so a call that then fails or
-  // answers nonsense has still been paid for — as in the report route, where a
-  // deep read that degrades after the charge still costs. Nothing is remembered.
-  it("is 200 unavailable, with nothing remembered and the charge kept, when the model fails or answers nonsense", async () => {
+  it("is 200 unavailable, with nothing remembered, when the model fails or answers nonsense", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     const failures = [
       () => Promise.reject(new Error("model down")),
@@ -335,30 +304,9 @@ describe("POST /api/papers/[id]/explain — when there is no answer", () => {
       expect(response.status).toBe(200);
       expect(await json(response)).toEqual({ unavailable: true });
     }
-    expect(await tenths()).toBe(failures.length * EXPLAIN_TURN_TENTHS);
     expect(explainCache.size()).toBe(0);
   });
 
-  it("answers a company-budget refusal with unavailable and the quota signal", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    provider.generateJsonText.mockRejectedValue(new CompanySpendCapRefusedError("global_cap_exceeded"));
-    const response = await call(ask());
-    const body = await json(response);
-
-    expect(response.status).toBe(200);
-    expect(body.unavailable).toBe(true);
-    expect(body.quota).toMatchObject({ kind: "company_budget", reason: "exhausted" });
-    // P3-02c: a refusal inside the call still costs (it was 0 when a turn was only counted once delivered).
-    expect(await tenths()).toBe(EXPLAIN_TURN_TENTHS);
-  });
-
-  it("calls an outage of the budget check an outage, not a spent budget", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    provider.generateJsonText.mockRejectedValue(new CompanySpendCapRefusedError("price_unreadable"));
-    const body = await json(await call(ask()));
-
-    expect(body.quota).toMatchObject({ kind: "company_budget", reason: "unavailable" });
-  });
 });
 
 describe("POST /api/papers/[id]/explain — private uploads", () => {
@@ -442,14 +390,14 @@ describe("POST /api/papers/[id]/explain — what it logs", () => {
     expect(debug).toHaveLength(2);
     const [label, fields] = debug[0] as [string, Record<string, unknown>];
     expect(label).toBe("[papers/explain] turn");
-    // P3-02c: `count` (the count-only counter's reading) is gone with the counter; `tenths` is this turn's charge.
-    expect(Object.keys(fields).sort()).toEqual(["answerChars", "cached", "promptChars", "tenths", "userId"]);
-    expect(fields).toMatchObject({ tenths: EXPLAIN_TURN_TENTHS, cached: false });
+    expect(Object.keys(fields).sort()).toEqual(["answerChars", "cached", "promptChars"]);
+    expect(fields).toMatchObject({ cached: false });
     expect(fields.promptChars).toBeGreaterThan(500);
     expect(fields.answerChars).toBeGreaterThan(20);
-    expect(String(fields.userId)).toMatch(/^[0-9a-f]{12}$/);
-    expect(String(fields.userId)).not.toContain("local-no-auth");
-    expect((debug[1] as [string, Record<string, unknown>])[1]).toMatchObject({ cached: true, tenths: 0 });
+    // No one is signed in here (the ordinary route tests run with no sign-in at all), so
+    // there is no account to hash; `route.gate.test.ts` pins the line a signed-in reader gets.
+    expect(fields).not.toHaveProperty("userId");
+    expect((debug[1] as [string, Record<string, unknown>])[1]).toMatchObject({ cached: true });
     expect(levels.slice(0, 4).every((spy) => spy.mock.calls.length === 0)).toBe(true);
 
     for (const word of ["rafting", "gauge", "Rafting under creep", "tungsten", "Tungsten", "plates", "compare alloys", "PROFILE-SENTINEL", "Methods", "Introduction"]) {
@@ -469,31 +417,27 @@ describe("POST /api/papers/[id]/explain — what it logs", () => {
   });
 });
 
-describe("POST /api/papers/[id]/explain — the provider is resolved for this reader and this route", () => {
-  it("passes the reader's own key through to the registry and names the route", async () => {
+describe("POST /api/papers/[id]/explain — the provider is the reader's own", () => {
+  it("passes the reader's own key through to the registry, and nothing else", async () => {
     const llmOverride = { provider: "gemini", apiKey: "USER-NOT-A-KEY" };
     await call(ask({ llmOverride }));
 
     expect(mocks.resolveProvider).toHaveBeenCalledTimes(1);
-    const [override, context] = mocks.resolveProvider.mock.calls[0] as [unknown, { path: string; byok: boolean }];
-    expect(override).toEqual(llmOverride);
-    expect(context).toMatchObject({ path: "paper-explain", byok: true });
+    // One argument: the registry takes the reader's override and no context (P4-00).
+    expect(mocks.resolveProvider.mock.calls[0]).toEqual([llmOverride]);
   });
 
   it("passes none when the request carries none", async () => {
     await call(ask());
-    const [override, context] = mocks.resolveProvider.mock.calls[0] as [unknown, { byok: boolean }];
 
-    expect(override).toBeNull();
-    expect(context.byok).toBe(false);
+    expect(mocks.resolveProvider.mock.calls[0]).toEqual([null]);
   });
 });
 
 // ── P3-02b (ruling §1h.3): the thread ───────────────────────────────────
 // With a thread the route answers one reply turn: the reply prompt over the
-// same context, the reply sanitised and its quote verified, counted on the same
-// day counter, remembered under the document, the passage and the thread —
-// never the reader. Every text is invented.
+// same context, the reply sanitised and its quote verified, remembered under the
+// document, the passage and the thread — never the reader. Every text is invented.
 
 const FIRST_PEER = `${MEANING} ${HERE}`;
 const REPLY = "A bigger share of plates changes how the metal carries load.";
@@ -571,14 +515,13 @@ describe("POST /api/papers/[id]/explain — a reply to the thread", () => {
     }
   });
 
-  it("answers 400 to a thread whose last message is not the reader's — before any model is asked or anything counted", async () => {
+  it("answers 400 to a thread whose last message is not the reader's — before any model is asked", async () => {
     const response = await call(ask({ thread: [{ role: "reader", text: REPLY_Q }, { role: "peer", text: REPLY }] }));
 
     expect(response.status).toBe(400);
     expect(await json(response)).toEqual({ error: "thread must end with the reader's message" });
     expect(provider.generateJsonText).not.toHaveBeenCalled();
     expect(mocks.getFullText).not.toHaveBeenCalled();
-    expect(await tenths()).toBe(0);
     expect(response.headers.get("cache-control")).toMatch(/no-store/);
   });
 
@@ -592,7 +535,6 @@ describe("POST /api/papers/[id]/explain — a reply to the thread", () => {
     expect(full.status).toBe(400);
     expect(await json(full)).toEqual({ error: "thread_full" });
     expect(provider.generateJsonText).not.toHaveBeenCalled();
-    expect(await tenths()).toBe(0);
 
     expect(eight).toHaveLength(16);
     expect((await call(ask({ thread: eight }))).status).toBe(200);
@@ -626,7 +568,7 @@ describe("POST /api/papers/[id]/explain — a reply to the thread", () => {
     expect(later.length).toBeGreaterThan(700);
   });
 
-  it("asks the model once for the same thread twice: the second is a hit, with no call and no count", async () => {
+  it("asks the model once for the same thread twice: the second is a hit, with no call", async () => {
     replyStub();
     const first = await json(await call(ask({ thread: thread1 })));
     const second = await json(await call(ask({ thread: thread1 })));
@@ -635,7 +577,6 @@ describe("POST /api/papers/[id]/explain — a reply to the thread", () => {
     expect(second.cached).toBe(true);
     expect(second.turn).toEqual(first.turn);
     expect(provider.generateJsonText).toHaveBeenCalledTimes(1);
-    expect(await tenths()).toBe(1);
   });
 
   it("keeps a longer thread, another message and the first answer apart in the memory", async () => {
@@ -650,17 +591,7 @@ describe("POST /api/papers/[id]/explain — a reply to the thread", () => {
     expect(explainCache.size()).toBe(4);
   });
 
-  it("charges a reply on the same day counter as the first answer, one tenth each", async () => {
-    replyStub();
-    provider.generateJsonText.mockResolvedValueOnce(JSON.stringify(modelAnswer)).mockResolvedValueOnce(JSON.stringify(modelReply));
-    await call(ask());
-    expect(await tenths()).toBe(1);
-    await call(ask({ thread: thread1 }));
-    expect(await tenths()).toBe(2);
-  });
-
-  // P3-02c (§1h.4 amendment): as for the first answer, the charge is taken before the model is asked and stays.
-  it("is 200 unavailable, with nothing remembered and the charge kept, when the model fails or answers nonsense", async () => {
+  it("is 200 unavailable, with nothing remembered, when the model fails or answers nonsense", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     const failures = [() => Promise.reject(new Error("model down")), () => Promise.resolve("not json"), () => Promise.resolve(JSON.stringify({ reply: "" })), () => Promise.resolve(JSON.stringify({ evidence: DEF }))];
     for (const failing of failures) {
@@ -670,17 +601,7 @@ describe("POST /api/papers/[id]/explain — a reply to the thread", () => {
       expect(response.status).toBe(200);
       expect(await json(response)).toEqual({ unavailable: true });
     }
-    expect(await tenths()).toBe(failures.length * EXPLAIN_TURN_TENTHS);
     expect(explainCache.size()).toBe(0);
-  });
-
-  it("answers a company-budget refusal with unavailable and the quota signal", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    provider.generateJsonText.mockRejectedValue(new CompanySpendCapRefusedError("global_cap_exceeded"));
-    const body = await json(await call(ask({ thread: thread1 })));
-
-    expect(body.unavailable).toBe(true);
-    expect(body.quota).toMatchObject({ kind: "company_budget", reason: "exhausted" });
   });
 
   it("still refuses 422 a passage the body does not hold, with a thread", async () => {
@@ -745,10 +666,10 @@ describe("POST /api/papers/[id]/explain — what a reply logs", () => {
     expect(debug).toHaveLength(2);
     const [label, fields] = debug[0] as [string, Record<string, unknown>];
     expect(label).toBe("[papers/explain] turn");
-    expect(Object.keys(fields).sort()).toEqual(["answerChars", "cached", "promptChars", "tenths", "thread", "userId"]);
-    expect(fields).toMatchObject({ tenths: EXPLAIN_TURN_TENTHS, cached: false, thread: 2 });
+    expect(Object.keys(fields).sort()).toEqual(["answerChars", "cached", "promptChars", "thread"]);
+    expect(fields).toMatchObject({ cached: false, thread: 2 });
     expect(fields.promptChars).toBeGreaterThan(500);
-    expect((debug[1] as [string, Record<string, unknown>])[1]).toMatchObject({ cached: true, tenths: 0, thread: 2 });
+    expect((debug[1] as [string, Record<string, unknown>])[1]).toMatchObject({ cached: true, thread: 2 });
     expect(levels.slice(0, 4).every((spy) => spy.mock.calls.length === 0)).toBe(true);
 
     for (const word of ["READER-SENTINEL", "rafting", "gauge", "Rafting under creep", "plates", "carries load", "ratio"]) {
@@ -764,13 +685,10 @@ describe("POST /api/papers/[id]/explain — what a reply logs", () => {
   });
 });
 
-// ── P3-02c (ruling §1h.4, amendment of 08:1xZ 2026-10-06): the charge ────────
-// Every model turn is paid for in tenths of a deep-report unit — one, or ten
-// when the reply searched the web — after the owner checks, the gate, the
-// provider check and the memory, and before the model is asked. A refused
-// charge is a 429 and no model call. The first message never searches.
-
-const UPLOAD_ID = "upload:0123456789abcdef";
+// ── P3-02c (ruling §1h.4, amendment of 08:1xZ 2026-10-06): the web search ────
+// A reply may search the web, for that message only, when the reader asked and the
+// provider can; the first message never searches. (The charge this section also
+// tested — ten tenths for a searched turn, the 429 — went with the allowance, P4-00.)
 
 /** A provider that says it can search the web, as both Gemini providers do. */
 function searchStub(body: unknown = modelReply) {
@@ -779,136 +697,9 @@ function searchStub(body: unknown = modelReply) {
 }
 const modelArgs = (n = 0) => provider.generateJsonText.mock.calls[n][0];
 const promptRules = (n = 0) => (JSON.parse(modelArgs(n).userPrompt) as { rules: string[] }).rules.join(" ");
-const RESETS_AT = "2026-10-07T00:00:00.000Z";
-
-describe("POST /api/papers/[id]/explain — the charge: where it is taken (P3-02c)", () => {
-  it("is taken BEFORE the model is asked: by the time the model runs, the tenth is already spent", async () => {
-    let seen = -1;
-    provider.generateJsonText.mockImplementation(async () => {
-      seen = await tenths();
-      return JSON.stringify(modelAnswer);
-    });
-    await call(ask());
-
-    expect(seen).toBe(EXPLAIN_TURN_TENTHS);
-  });
-
-  it("is taken AFTER the memory: a hit costs nothing, even from a reader whose day is spent", async () => {
-    await call(ask());
-    await getCounterStore().increment(explainTenthsKey("local-no-auth", NOW), null, EXPLAIN_TENTHS_PER_DAY, NOW);
-    const before = await tenths();
-    const hit = await call(ask());
-
-    expect(hit.status).toBe(200);
-    expect((await json(hit)).cached).toBe(true);
-    expect(await tenths()).toBe(before);
-    expect(provider.generateJsonText).toHaveBeenCalledTimes(1);
-  });
-
-  it("is taken only once the owner checks have passed: an upload the caller does not own costs nothing", async () => {
-    mocks.ownedUpload.mockResolvedValue(null);
-    const response = await call(ask({ paper: { ...paper, id: UPLOAD_ID } }), UPLOAD_ID);
-
-    expect(response.status).toBe(404);
-    expect(await tenths()).toBe(0);
-    expect(await houseTenths()).toBe(0);
-  });
-
-  it("charges the house's counter as well as the reader's, by the same tenths", async () => {
-    await call(ask());
-
-    expect(await tenths()).toBe(EXPLAIN_TURN_TENTHS);
-    expect(await houseTenths()).toBe(EXPLAIN_TURN_TENTHS);
-  });
-
-  it("charges a reader on their own key as it charges one on Peer's: every plan, a BYOK reader included", async () => {
-    await call(ask({ llmOverride: { provider: "gemini", apiKey: "USER-NOT-A-KEY" } }));
-
-    expect(await tenths()).toBe(EXPLAIN_TURN_TENTHS);
-  });
-
-  it("keeps the charge when the model's call is refused for the company budget — a searched turn costs ten even so", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    searchStub();
-    provider.generateJsonText.mockRejectedValue(new CompanySpendCapRefusedError("per_user_cap_exceeded"));
-    const body = await json(await call(ask({ thread: thread1, search: true })));
-
-    expect(body.unavailable).toBe(true);
-    expect(await tenths()).toBe(EXPLAIN_SEARCH_TENTHS);
-  });
-});
-
-async function houseTenths(): Promise<number> {
-  return (await getCounterStore().read(explainTenthsHouseKey(NOW), NOW)).value;
-}
-
-describe("POST /api/papers/[id]/explain — a refused charge (P3-02c)", () => {
-  it("is 429 explain_exhausted when the reader's day is spent: no model call, nothing remembered, the hour the day ends", async () => {
-    await getCounterStore().increment(explainTenthsKey("local-no-auth", NOW), null, EXPLAIN_TENTHS_PER_DAY, NOW);
-    const response = await call(ask());
-
-    expect(response.status).toBe(429);
-    expect(await json(response)).toEqual({ error: "explain_exhausted", reason: "exhausted", resetsAt: RESETS_AT });
-    expect(provider.generateJsonText).not.toHaveBeenCalled();
-    expect(explainCache.size()).toBe(0);
-    expect(response.headers.get("cache-control")).toMatch(/no-store/);
-  });
-
-  it("is the same for a reply in a thread", async () => {
-    replyStub();
-    await getCounterStore().increment(explainTenthsKey("local-no-auth", NOW), null, EXPLAIN_TENTHS_PER_DAY, NOW);
-    const response = await call(ask({ thread: thread1 }));
-
-    expect(response.status).toBe(429);
-    expect((await json(response)).error).toBe("explain_exhausted");
-    expect(provider.generateJsonText).not.toHaveBeenCalled();
-  });
-
-  it("carries the private headers when the paper is an upload", async () => {
-    mocks.ownedUpload.mockResolvedValue({ revision: 3, paperIds: [UPLOAD_ID] });
-    await getCounterStore().increment(explainTenthsKey("local-no-auth", NOW), null, EXPLAIN_TENTHS_PER_DAY, NOW);
-    const response = await call(ask({ paper: { ...paper, id: UPLOAD_ID } }), UPLOAD_ID);
-
-    expect(response.status).toBe(429);
-    expect(response.headers.get("cache-control")).toBe("private, no-store");
-    expect(provider.generateJsonText).not.toHaveBeenCalled();
-  });
-
-  it("is 429 for a reader far under their own cap when the house ceiling is spent — and takes nothing from them", async () => {
-    await getCounterStore().increment(explainTenthsHouseKey(NOW), null, ALL_USERS_EXPLAIN_TENTHS_PER_DAY, NOW);
-    const response = await call(ask());
-
-    expect(response.status).toBe(429);
-    expect(await json(response)).toMatchObject({ error: "explain_exhausted", reason: "exhausted" });
-    expect(await tenths()).toBe(0);
-    expect(provider.generateJsonText).not.toHaveBeenCalled();
-  });
-
-  it("says unavailable, not exhausted, when the counter cannot be read — and asks nothing", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    vi.spyOn(getCounterStore(), "increment").mockResolvedValue({ value: 0, ok: false });
-    const response = await call(ask());
-
-    expect(response.status).toBe(429);
-    expect(await json(response)).toEqual({ error: "explain_exhausted", reason: "unavailable", resetsAt: RESETS_AT });
-    expect(provider.generateJsonText).not.toHaveBeenCalled();
-  });
-
-  it("refuses a searched turn that would cross the cap and still lets a normal one through", async () => {
-    searchStub();
-    await getCounterStore().increment(explainTenthsKey("local-no-auth", NOW), null, EXPLAIN_TENTHS_PER_DAY - 5, NOW);
-    const refused = await call(ask({ thread: thread1, search: true }));
-    const normal = await call(ask({ thread: thread1 }));
-
-    expect(refused.status).toBe(429);
-    expect(normal.status).toBe(200);
-    expect(modelArgs().webSearch).toBe(false);
-    expect(await tenths()).toBe(EXPLAIN_TENTHS_PER_DAY - 5 + EXPLAIN_TURN_TENTHS);
-  });
-});
 
 describe("POST /api/papers/[id]/explain — a reply that searches the web (P3-02c)", () => {
-  it("with search on and a provider that can: asks with webSearch true, charges ten, says it searched, and puts the search rule in the prompt", async () => {
+  it("with search on and a provider that can: asks with webSearch true, says it searched, and puts the search rule in the prompt", async () => {
     searchStub();
     const response = await call(ask({ thread: thread1, search: true }));
     const body = await json(response);
@@ -919,20 +710,18 @@ describe("POST /api/papers/[id]/explain — a reply that searches the web (P3-02
     expect(promptRules()).toContain("You may use web search for general background.");
     expect(promptRules()).not.toContain("Do not search the web");
     expect(body.turn).toEqual({ role: "peer", text: REPLY, evidence: DEF, evidenceWhere: "2 Methods", sectionId: "s2", page: 2, searched: true });
-    expect(await tenths()).toBe(EXPLAIN_SEARCH_TENTHS);
   });
 
-  it("with search off: webSearch false, one tenth, the plain prompt, searched false — whatever the provider can do", async () => {
+  it("with search off: webSearch false, the plain prompt, searched false — whatever the provider can do", async () => {
     searchStub();
     const body = await json(await call(ask({ thread: thread1 })));
 
     expect(modelArgs().webSearch).toBe(false);
     expect(promptRules()).toContain("Do not search the web");
     expect((body.turn as { searched: boolean }).searched).toBe(false);
-    expect(await tenths()).toBe(EXPLAIN_TURN_TENTHS);
   });
 
-  it("with search on and a provider that cannot: a normal turn — one tenth, webSearch false, the plain prompt, searched false", async () => {
+  it("with search on and a provider that cannot: a normal turn — webSearch false, the plain prompt, searched false", async () => {
     replyStub();
     const body = await json(await call(ask({ thread: thread1, search: true })));
 
@@ -940,7 +729,6 @@ describe("POST /api/papers/[id]/explain — a reply that searches the web (P3-02
     expect(promptRules()).toContain("Do not search the web");
     expect(promptRules()).not.toMatch(/may use web search/i);
     expect((body.turn as { searched: boolean }).searched).toBe(false);
-    expect(await tenths()).toBe(EXPLAIN_TURN_TENTHS);
   });
 
   it("takes only a literal true for a wish to search", async () => {
@@ -953,10 +741,9 @@ describe("POST /api/papers/[id]/explain — a reply that searches the web (P3-02
       expect(modelArgs().webSearch).toBe(false);
       expect((body.turn as { searched: boolean }).searched).toBe(false);
     }
-    expect(await tenths()).toBe(6 * EXPLAIN_TURN_TENTHS);
   });
 
-  it("never searches the first message, whatever the request says: no webSearch, one tenth, no search in the prompt", async () => {
+  it("never searches the first message, whatever the request says: no webSearch, no search in the prompt", async () => {
     searchStub(modelAnswer);
     const body = await json(await call(ask({ search: true })));
 
@@ -964,7 +751,6 @@ describe("POST /api/papers/[id]/explain — a reply that searches the web (P3-02
     expect(body.turn).toBeUndefined();
     expect(modelArgs().webSearch).toBe(false);
     expect(modelArgs().userPrompt).not.toMatch(/web search/i);
-    expect(await tenths()).toBe(EXPLAIN_TURN_TENTHS);
   });
 
   it("remembers a searched reply under its own key: the same searched request is a hit, a plain one for the same thread is not", async () => {
@@ -976,13 +762,11 @@ describe("POST /api/papers/[id]/explain — a reply that searches the web (P3-02
     expect(again.turn).toEqual(first.turn);
     expect((again.turn as { searched: boolean }).searched).toBe(true);
     expect(provider.generateJsonText).toHaveBeenCalledTimes(1);
-    expect(await tenths()).toBe(EXPLAIN_SEARCH_TENTHS);
 
     const plain = await json(await call(ask({ thread: thread1 })));
     expect(plain.cached).toBe(false);
     expect((plain.turn as { searched: boolean }).searched).toBe(false);
     expect(provider.generateJsonText).toHaveBeenCalledTimes(2);
-    expect(await tenths()).toBe(EXPLAIN_SEARCH_TENTHS + EXPLAIN_TURN_TENTHS);
     expect(explainCache.size()).toBe(2);
   });
 
@@ -1023,7 +807,7 @@ describe("POST /api/papers/[id]/explain — a reply that searches the web (P3-02
     expect(text).toContain("They carry load.");
   });
 
-  it("writes the same one debug line with this turn's tenths: ten for a searched one, and none of the paper's, the reader's or the web's words", async () => {
+  it("writes the same one debug line for a searched turn, and none of the paper's, the reader's or the web's words", async () => {
     searchStub();
     const levels = (["log", "info", "warn", "error", "debug"] as const).map((level) => vi.spyOn(console, level).mockImplementation(() => {}));
     await call(ask({ thread: [{ role: "peer", text: FIRST_PEER }, { role: "reader", text: "READER-SENTINEL asks about the ratio?" }], search: true }));
@@ -1032,8 +816,8 @@ describe("POST /api/papers/[id]/explain — a reply that searches the web (P3-02
 
     expect(debug).toHaveLength(1);
     const fields = (debug[0] as [string, Record<string, unknown>])[1];
-    expect(Object.keys(fields).sort()).toEqual(["answerChars", "cached", "promptChars", "tenths", "thread", "userId"]);
-    expect(fields).toMatchObject({ tenths: EXPLAIN_SEARCH_TENTHS, cached: false, thread: 2 });
+    expect(Object.keys(fields).sort()).toEqual(["answerChars", "cached", "promptChars", "thread"]);
+    expect(fields).toMatchObject({ cached: false, thread: 2 });
     for (const word of ["READER-SENTINEL", "rafting", "gauge", "Rafting under creep", "plates", "carries load"]) expect(all).not.toContain(word);
   });
 });
@@ -1043,7 +827,7 @@ describe("POST /api/papers/[id]/explain — a reply that searches the web (P3-02
 // effective detail = the body's flag OR the reader's last message asking for
 // more in words; the cap that applies (three sentences, or eight) goes into the
 // prompt and into the sanitizer; the memory keeps a short and a long reply apart;
-// the charge is what it was; and a reply may carry a term table, its rows
+// and a reply may carry a term table, its rows
 // grounded in the paper. Every text is invented.
 
 const lecture = (count: number) => Array.from({ length: count }, (_, i) => `Point ${i + 1} is plain and short.`).join(" ");
@@ -1130,7 +914,7 @@ describe("POST /api/papers/[id]/explain — the long form (P3-07)", () => {
     expect(JSON.stringify(body)).not.toContain('"detail"');
   });
 
-  it("keeps a short and a long reply to the same message apart in the memory: two entries, two charges, each a hit on its own repeat", async () => {
+  it("keeps a short and a long reply to the same message apart in the memory: two entries, each a hit on its own repeat", async () => {
     replyStub({ reply: lecture(12) });
     const short = await json(await call(detailBody()));
     const long = await json(await call(detailBody({ detail: true })));
@@ -1143,7 +927,6 @@ describe("POST /api/papers/[id]/explain — the long form (P3-07)", () => {
     expect((long.turn as { text: string }).text).toBe(lecture(8));
     expect(shortAgain).toEqual({ ...short, cached: true });
     expect(longAgain).toEqual({ ...long, cached: true });
-    expect(await tenths()).toBe(2 * EXPLAIN_TURN_TENTHS);
   });
 
   it("asking in words and pressing the button are the same entry: one model call for the same long reply", async () => {
@@ -1153,18 +936,6 @@ describe("POST /api/papers/[id]/explain — the long form (P3-07)", () => {
 
     expect(again.cached).toBe(true);
     expect(provider.generateJsonText).toHaveBeenCalledTimes(1);
-  });
-
-  it("charges the long form what a reply costs: one tenth, and ten when it searched — unchanged", async () => {
-    replyStub({ reply: lecture(12) });
-    await call(detailBody({ detail: true }));
-    expect(await tenths()).toBe(EXPLAIN_TURN_TENTHS);
-
-    searchStub({ reply: lecture(12) });
-    const body = await json(await call(ask({ thread: [...thread1, { role: "peer", text: REPLY }, { role: "reader", text: "And then?" }], detail: true, search: true })));
-
-    expect(body.turn).toMatchObject({ searched: true, detail: true });
-    expect(await tenths()).toBe(EXPLAIN_TURN_TENTHS + EXPLAIN_SEARCH_TENTHS);
   });
 
   it("accepts the thread Say more sends: the reader's last message once, the earlier reply left out — eight readers, none added", async () => {
@@ -1185,7 +956,7 @@ describe("POST /api/papers/[id]/explain — the long form (P3-07)", () => {
     const all = JSON.stringify(levels.flatMap((spy) => spy.mock.calls));
 
     expect(debug).toHaveLength(1);
-    expect(Object.keys((debug[0] as [string, Record<string, unknown>])[1]).sort()).toEqual(["answerChars", "cached", "promptChars", "tenths", "thread", "userId"]);
+    expect(Object.keys((debug[0] as [string, Record<string, unknown>])[1]).sort()).toEqual(["answerChars", "cached", "promptChars", "thread"]);
     for (const word of ["READER-SENTINEL", "rafting", "gauge", "Point 1"]) expect(all).not.toContain(word);
   });
 });

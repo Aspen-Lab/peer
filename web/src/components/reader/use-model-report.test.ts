@@ -5,6 +5,12 @@ import { emptyReport, type PaperReport } from "@/lib/papers/report";
 import { defaultProfile, type Paper, type UserProfile } from "@/types";
 import { buildReportKey, deepReportRequested, rememberReport, useModelReport } from "./use-model-report";
 
+// A reader's own key counts only for a signed-in reader (P4-00), and a server render reads a
+// zustand store's initial state, so the sign-in outcome is stood in for here.
+vi.mock("@/components/profile-sync", () => ({
+  useSyncGate: (select: (state: { authOutcome: string }) => unknown) => select({ authOutcome: "signed-in" }),
+}));
+
 // P3-05 (§1h.8 (1); A's P3-04 F1): "this reader has switched the paper's text on
 // for a model" is one predicate, read by the report hook for its own `deep` and by
 // the page for the paragraph-gist pass — so the paper's text leaves for a model on
@@ -17,20 +23,19 @@ describe("deepReportRequested — the one switch the paper's text leaves on (P3-
 
   it("is false with the switch off and no attached PDF, whatever model the reader has", () => {
     expect(deepReportRequested(off, publicPaper, "byok")).toBe(false);
-    expect(deepReportRequested(off, publicPaper, "system")).toBe(false);
     // A standalone upload carries no `fullTextUploadId`: with the switch off it is the abstract report.
     expect(deepReportRequested(off, undefined, "byok")).toBe(false);
   });
 
-  it("is true with the switch on and a model from anywhere", () => {
+  // P4-00: the model is the reader's own key ("byok") — the "system" mode, Peer's own
+  // model, is gone, and with it the cases that said so.
+  it("is true with the switch on and a model", () => {
     expect(deepReportRequested(on, publicPaper, "byok")).toBe(true);
-    expect(deepReportRequested(on, publicPaper, "system")).toBe(true);
-    expect(deepReportRequested(on, undefined, "system")).toBe(true);
+    expect(deepReportRequested(on, undefined, "byok")).toBe(true);
   });
 
   it("is true for an attached PDF even with the switch off", () => {
     expect(deepReportRequested(off, attached, "byok")).toBe(true);
-    expect(deepReportRequested(off, attached, "system")).toBe(true);
   });
 
   it("is false with no model, switch on or an attached PDF alike", () => {
@@ -144,7 +149,8 @@ describe("useModelReport — private PDF report cache (P0-02)", () => {
   }
 
   // A reader on their own key, so a supplement goes deep the way it does in
-  // use. A placeholder string: no request leaves a server render.
+  // use — a signed-in reader (the mock above). A placeholder string: no request
+  // leaves a server render.
   const profile: UserProfile = { ...defaultProfile, feedAiProvider: "anthropic", feedAiApiKey: "placeholder-not-a-key" };
   const supplement: Paper = {
     id: "openalex:W7000000001",

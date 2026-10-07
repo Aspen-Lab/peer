@@ -7,17 +7,14 @@
 // with the reader's new message last, roles and words only.
 //
 // P3-02c (ruling §1h.4 amendment; user decision §1a.11) adds the web-search
-// toggle's rules and the two refusals of the allowance:
+// toggle's rules:
 //
 //   - `toggleStep` / `pressKind`: one press of the toggle, and the touch screen's
 //     two steps (the first tap shows the warning, the second turns search on);
 //   - `replyPair`: what joins the thread when a reply arrives — the reader's
 //     message, marked when the server says the reply searched, and Peer's reply,
 //     with the one-line note when the reader asked to search and it could not;
-//   - `postExplain` / `refusalOf`: the request, and a 429 `explain_exhausted` read
-//     for which of the two lines to show. `apiFetch` drops the body of a refusal
-//     and that body's `reason` is what tells a spent allowance from one that could
-//     not be checked, so these requests read their own response.
+//   - `postExplain`: the request, reading its own response whatever its status.
 //
 // P3-07 (ruling §1h.9; user decision §1a.14) adds "Say more", the reader's way to ask
 // for a longer reply than the short one Peer gives by default:
@@ -40,14 +37,10 @@ import { MAX_EXPLAIN_ITEMS, type ExplainTurn } from "@/store/explain-threads";
 import type { Paper } from "@/types";
 import type { SelectionTarget } from "./paper-body";
 
-/** What sending a follow-up comes to: Peer's reply; the day's explanations used
- *  up (`exhausted`); the allowance could not be checked and nothing was spent
- *  (`allowance_unavailable`); or nothing (an outage, a refusal, a thread the
- *  server calls full, a gone upload — all one line, `unavailable`). */
-export type ReplyResult = ExplainTurn | "unavailable" | "exhausted" | "allowance_unavailable";
-
-/** The two ways the allowance can refuse a turn. */
-export type AllowanceRefusal = "exhausted" | "allowance_unavailable";
+/** What sending a follow-up comes to: Peer's reply, or nothing (an outage, a
+ *  refusal, a thread the server calls full, a gone upload — all one line,
+ *  `unavailable`). */
+export type ReplyResult = ExplainTurn | "unavailable";
 
 /** A response, read: its status and its body when it had one (null otherwise). */
 export interface ExplainResponse {
@@ -75,20 +68,6 @@ export async function postExplain(paperId: string, payload: unknown): Promise<Ex
     body = null;
   }
   return { ok: response.ok, status: response.status, body };
-}
-
-/**
- * Which refusal of the allowance a response is, or null: only a 429 whose body
- * says `explain_exhausted`. A reason of `unavailable` is the counter that could
- * not be read; any other (or none) is the allowance spent — the reading that
- * stops the reader sending. Every other response — the sign-in gate's own 429,
- * any other status — is not this refusal.
- */
-export function refusalOf(response: ExplainResponse): AllowanceRefusal | null {
-  if (response.status !== 429) return null;
-  const body = response.body as { error?: unknown; reason?: unknown } | null;
-  if (body?.error !== "explain_exhausted") return null;
-  return body.reason === "unavailable" ? "allowance_unavailable" : "exhausted";
 }
 
 // ── The web-search toggle (§1a.11) ─────────────────────────────────────
@@ -233,10 +212,8 @@ export function threadAsSent(thread: readonly ExplainTurn[]): Array<{ role: Expl
  * true` only when the reader turned web search on for this message; and — P3-07 —
  * `detail: true` only when this is "Say more" (the thread is then the one `sayMoreOf`
  * gives and the message the reader's last, once). The thread goes as the server reads it
- * (`threadAsSent`). Peer's turn;
- * "exhausted" or "allowance_unavailable" for the allowance's two refusals; or
- * "unavailable" for everything else — an outage, a full thread, a gone upload, a
- * reply that is not what was promised.
+ * (`threadAsSent`). Peer's turn, or "unavailable" for everything else — an outage,
+ * a refusal, a full thread, a gone upload, a reply that is not what was promised.
  */
 export async function requestReply(args: {
   paper: Paper;
@@ -262,8 +239,6 @@ export async function requestReply(args: {
       ...(detail === true ? { detail: true } : {}),
       ...(llmOverride ? { llmOverride } : {}),
     });
-    const refused = refusalOf(response);
-    if (refused) return refused;
     return (response.ok ? asTurn(response.body) : null) ?? "unavailable";
   } catch {
     return "unavailable";

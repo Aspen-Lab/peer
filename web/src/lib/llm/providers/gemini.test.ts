@@ -307,19 +307,21 @@ describe("6-02 — the Gemini thinking control is decided per model family", () 
  * for: no key, no network, no real model call.
  */
 describe("P3-02c — Gemini web search is the Google Search tool, and never JSON mode", () => {
+  /** The `[llm]` console lines the providers print, one per request (no ledger any more). */
+  const llmLines: string[] = [];
+
   beforeEach(() => {
     generateContentMock.mockReset();
     generateContentMock.mockResolvedValue({ text: '{"reply":"x"}', usageMetadata: { promptTokenCount: 1200, candidatesTokenCount: 80, thoughtsTokenCount: 0 } });
-    setUsageEventsClientForTests({
-      from: () => ({ insert: () => Promise.resolve({ error: null }) }),
-    } as never);
     vi.stubEnv("GOOGLE_VERTEX_PROJECT", "not-a-real-project");
+    llmLines.length = 0;
     vi.spyOn(console, "warn").mockImplementation(() => {});
-    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "log").mockImplementation((line?: unknown) => {
+      if (String(line).startsWith("[llm] ")) llmLines.push(String(line));
+    });
   });
 
   afterEach(() => {
-    setUsageEventsClientForTests(undefined);
     vi.unstubAllEnvs();
     vi.restoreAllMocks();
   });
@@ -386,23 +388,15 @@ describe("P3-02c — Gemini web search is the Google Search tool, and never JSON
     });
   }
 
-  it("a searched call writes its ledger row under its own path, with the token counts the SDK reported", async () => {
-    const rows: UsageEventRow[] = [];
-    setUsageEventsClientForTests({
-      from: () => ({
-        insert: (inserted: UsageEventRow[]) => {
-          rows.push(...inserted);
-          return Promise.resolve({ error: null });
-        },
-      }),
-    } as never);
-
+  // P4-00: this was "writes its ledger row under its own path" — Peer keeps no ledger any
+  // more, so the same facts are read where they still surface, the `[llm]` console line:
+  // the searched call is told apart by its own path, and carries the SDK's token counts.
+  it("a searched call prints its own path with the token counts the SDK reported", async () => {
     await createGeminiApiProvider("GOOGLE-NOT-A-KEY").generateJsonText!({ systemPrompt: "s", userPrompt: "u", maxTokens: 400, tier: "small", webSearch: true });
     await createGeminiApiProvider("GOOGLE-NOT-A-KEY").generateJsonText!({ systemPrompt: "s", userPrompt: "u", maxTokens: 400, tier: "small" });
-    await new Promise((resolve) => setTimeout(resolve, 0));
 
-    expect(rows.map((row) => row.path)).toEqual(["json:search", "json"]);
-    expect(rows[0]).toMatchObject({ kind: "llm", provider: "gemini", ok: true, input_tokens: 1200, output_tokens: 80, thinking_tokens: 0 });
+    expect(llmLines.map((line) => /\bpath=(\S+)/.exec(line)?.[1])).toEqual(["json:search", "json"]);
+    expect(llmLines[0]).toMatch(/^\[llm\] gemini\/\S+ path=json:search in=1200 out=80 \d+ms ok$/);
   });
 
   it("the vision call is untouched: it never carries the tool", async () => {

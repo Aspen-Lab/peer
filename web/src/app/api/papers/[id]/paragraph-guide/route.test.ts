@@ -3,24 +3,20 @@ import { NextRequest } from "next/server";
 import type { ExtractedDocument } from "@/lib/papers/html-text";
 import { explainDocHash } from "@/lib/papers/explain";
 import { GUIDE_CAPS, gistMaxTokens, paragraphGuideCache } from "@/lib/papers/paragraph-guide";
-import { CompanySpendCapRefusedError } from "@/lib/usage/company-budget";
-import { getCounterStore, resetCounterStoreForTests } from "@/lib/usage/counters";
-import { explainTenthsHouseKey, explainTenthsKey } from "@/lib/usage/explain-quota";
+import { resetCounterStoreForTests } from "@/lib/usage/counters";
 
 // P3-03 (ruling §1h.6; §3d 5 Tier 2 half, 17): POST /api/papers/[id]/paragraph-guide
 // — one small-model call per document, one gist of at most twelve words per
 // paragraph, each grounded in its paragraph or dropped; remembered by the
-// document's hash alone; charged to neither the deep-report allowance nor the
-// explain allowance. A counting provider stub stands in for the model: no real
-// call anywhere. The sign-in gate and the reader-to-reader memory are in
+// document's hash alone; not counted or capped by Peer (P4-00: the model is the
+// reader's own key, and the tests of the two allowances went with them). A
+// counting provider stub stands in for the model: no real call anywhere. The sign-in gate and the reader-to-reader memory are in
 // `route.gate.test.ts`. Every text below is invented.
 
 const mocks = vi.hoisted(() => ({
   ownedUpload: vi.fn(),
   resolveProvider: vi.fn(),
   getFullText: vi.fn(),
-  consumeDeepReport: vi.fn(),
-  consumeExplainTurn: vi.fn(),
 }));
 
 vi.mock("@/lib/llm/providers/registry", async (importOriginal) => {
@@ -32,18 +28,6 @@ vi.mock("@/lib/papers/upload-access", async (original) => ({
   ownedUpload: mocks.ownedUpload,
 }));
 vi.mock("@/lib/papers/full-text", () => ({ getFullText: mocks.getFullText }));
-// The two meters are spied, not stubbed: a call to either would still count, and
-// the test would say so. The pass is charged to neither.
-vi.mock("@/lib/usage/deep-report-quota", async (original) => {
-  const actual = await original<typeof import("@/lib/usage/deep-report-quota")>();
-  mocks.consumeDeepReport.mockImplementation(actual.consumeDeepReport);
-  return { ...actual, consumeDeepReport: mocks.consumeDeepReport };
-});
-vi.mock("@/lib/usage/explain-quota", async (original) => {
-  const actual = await original<typeof import("@/lib/usage/explain-quota")>();
-  mocks.consumeExplainTurn.mockImplementation(actual.consumeExplainTurn);
-  return { ...actual, consumeExplainTurn: mocks.consumeExplainTurn };
-});
 
 import { POST } from "./route";
 
@@ -330,18 +314,6 @@ describe("POST /api/papers/[id]/paragraph-guide — the server's memory", () => 
   });
 });
 
-describe("POST /api/papers/[id]/paragraph-guide — not charged", () => {
-  it("takes nothing from the deep-report allowance or the explain allowance, on a model call or a hit", async () => {
-    await call(ask());
-    await call(ask());
-
-    expect(mocks.consumeDeepReport).not.toHaveBeenCalled();
-    expect(mocks.consumeExplainTurn).not.toHaveBeenCalled();
-    expect((await getCounterStore().read(explainTenthsKey("local-no-auth", NOW), NOW)).value).toBe(0);
-    expect((await getCounterStore().read(explainTenthsHouseKey(NOW), NOW)).value).toBe(0);
-  });
-});
-
 describe("POST /api/papers/[id]/paragraph-guide — when there is no guide", () => {
   it("is 200 unavailable when no provider can write, and reads nothing", async () => {
     for (const none of [null, { generateJsonText: undefined }]) {
@@ -392,15 +364,6 @@ describe("POST /api/papers/[id]/paragraph-guide — when there is no guide", () 
     expect(paragraphGuideCache.size()).toBe(0);
   });
 
-  it("answers a company-budget refusal with unavailable and the quota signal", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    provider.generateJsonText.mockRejectedValue(new CompanySpendCapRefusedError("global_cap_exceeded"));
-    const body = await json(await call(ask()));
-
-    expect(body.unavailable).toBe(true);
-    expect(body.quota).toMatchObject({ kind: "company_budget", reason: "exhausted" });
-    expect(paragraphGuideCache.size()).toBe(0);
-  });
 });
 
 describe("POST /api/papers/[id]/paragraph-guide — private uploads", () => {
@@ -476,12 +439,13 @@ describe("POST /api/papers/[id]/paragraph-guide — what it logs", () => {
     expect(debug).toHaveLength(1);
     const [label, fields] = debug[0] as [string, Record<string, unknown>];
     expect(label).toBe("[papers/paragraph-guide] pass");
-    expect(Object.keys(fields).sort()).toEqual(["answerChars", "kept", "paragraphs", "promptChars", "userId"]);
+    expect(Object.keys(fields).sort()).toEqual(["answerChars", "kept", "paragraphs", "promptChars"]);
     expect(fields).toMatchObject({ paragraphs: CANDIDATES, kept: 5 });
     expect(fields.promptChars).toBeGreaterThan(500);
     expect(fields.answerChars).toBeGreaterThan(100);
-    expect(String(fields.userId)).toMatch(/^[0-9a-f]{12}$/);
-    expect(String(fields.userId)).not.toContain("local-no-auth");
+    // No one is signed in here, so there is no account to hash; `route.gate.test.ts`
+    // pins the line a signed-in reader gets.
+    expect(fields).not.toHaveProperty("userId");
     expect(levels.slice(0, 4).every((spy) => spy.mock.calls.length === 0)).toBe(true);
 
     for (const word of ["rafting", "gauge", "Rafting under creep", "tungsten", "Tungsten", "turbine", "blades", "Specimens", "Nickel", "Methods", "Introduction", "PROFILE-SENTINEL"]) {
@@ -516,22 +480,19 @@ describe("POST /api/papers/[id]/paragraph-guide — what it logs", () => {
   });
 });
 
-describe("POST /api/papers/[id]/paragraph-guide — the provider is resolved for this reader and this route", () => {
-  it("passes the reader's own key through to the registry and names the route", async () => {
+describe("POST /api/papers/[id]/paragraph-guide — the provider is the reader's own", () => {
+  it("passes the reader's own key through to the registry, and nothing else", async () => {
     const llmOverride = { provider: "gemini", apiKey: "USER-NOT-A-KEY" };
     await call(ask({ llmOverride }));
 
     expect(mocks.resolveProvider).toHaveBeenCalledTimes(1);
-    const [override, context] = mocks.resolveProvider.mock.calls[0] as [unknown, { path: string; byok: boolean }];
-    expect(override).toEqual(llmOverride);
-    expect(context).toMatchObject({ path: "paragraph-guide", byok: true });
+    // One argument: the registry takes the reader's override and no context (P4-00).
+    expect(mocks.resolveProvider.mock.calls[0]).toEqual([llmOverride]);
   });
 
   it("passes none when the request carries none", async () => {
     await call(ask());
-    const [override, context] = mocks.resolveProvider.mock.calls[0] as [unknown, { byok: boolean }];
 
-    expect(override).toBeNull();
-    expect(context.byok).toBe(false);
+    expect(mocks.resolveProvider.mock.calls[0]).toEqual([null]);
   });
 });

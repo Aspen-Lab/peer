@@ -9,15 +9,14 @@ import {
 } from "@/test-support/route-harness";
 import type { ExtractedDocument } from "@/lib/papers/html-text";
 import { paragraphGuideCache } from "@/lib/papers/paragraph-guide";
-import { getCounterStore, resetCounterStoreForTests } from "@/lib/usage/counters";
-import { explainTenthsHouseKey, explainTenthsKey } from "@/lib/usage/explain-quota";
+import { getCounterStore, rateKey, resetCounterStoreForTests } from "@/lib/usage/counters";
 
 // P3-03 (ruling §1h.6; §3d 17): the sign-in gate on the paragraph-guide route and
 // what it means across readers — a stranger is refused before any text is read
 // or any model asked; the gist pass is remembered by the document, so a second
 // reader of the same paper is served from the memory with no model call; and
-// the pass is charged to nobody (it is one small call per document per hour
-// across all readers, so there is no per-reader count to take). A deployed
+// a reader is held to 20 requests an hour and to nothing else (P4-00: there is no
+// allowance of any kind — the model is the reader's own key). A deployed
 // runtime and a session stub, so a file of its own (the ordinary route tests
 // run with no sign-in at all).
 
@@ -139,6 +138,29 @@ describe("POST /api/papers/[id]/paragraph-guide — who may ask", () => {
     expect(generateJsonText).toHaveBeenCalledTimes(1);
   });
 
+  it("logs one debug line for a signed-in reader with a shortened hash of the account, never the id, and no word of the paper", async () => {
+    const debug = vi.spyOn(console, "debug").mockImplementation(() => {});
+    mocks.getUser.mockResolvedValue(signedIn("reader-1"));
+    await call();
+
+    expect(debug).toHaveBeenCalledTimes(1);
+    const [label, fields] = debug.mock.calls[0] as [string, Record<string, unknown>];
+    expect(label).toBe("[papers/paragraph-guide] pass");
+    expect(Object.keys(fields).sort()).toEqual(["answerChars", "kept", "paragraphs", "promptChars", "userId"]);
+    expect(String(fields.userId)).toMatch(/^[0-9a-f]{12}$/);
+    const all = JSON.stringify(debug.mock.calls);
+    for (const word of ["reader-1", "Specimens", "casting", "Rafting"]) expect(all).not.toContain(word);
+  });
+
+  it("counts the request against the reader's own hour, and nothing else", async () => {
+    mocks.getUser.mockResolvedValue(signedIn("reader-1"));
+    await call();
+    await call();
+
+    expect((await getCounterStore().read(rateKey("paragraph-guide", "reader-1", NOW), NOW)).value).toBe(2);
+    expect((await getCounterStore().read(rateKey("paragraph-guide", "reader-2", NOW), NOW)).value).toBe(0);
+  });
+
   it("limits a reader to 20 requests an hour", async () => {
     mocks.getUser.mockResolvedValue(signedIn("reader-1"));
     for (let i = 0; i < 20; i += 1) expect((await call()).status).toBe(200);
@@ -149,7 +171,7 @@ describe("POST /api/papers/[id]/paragraph-guide — who may ask", () => {
   });
 });
 
-describe("POST /api/papers/[id]/paragraph-guide — nothing per-reader in the memory, nothing charged", () => {
+describe("POST /api/papers/[id]/paragraph-guide — nothing per-reader in the memory", () => {
   it("serves the next reader's same document from the memory, with no model call", async () => {
     mocks.getUser.mockResolvedValue(signedIn("reader-1"));
     const first = (await (await call()).json()) as { cached: boolean; guide: unknown };
@@ -162,23 +184,4 @@ describe("POST /api/papers/[id]/paragraph-guide — nothing per-reader in the me
     expect(generateJsonText).toHaveBeenCalledTimes(1);
   });
 
-  it("charges no reader and the house nothing: neither explain counter moves", async () => {
-    for (const reader of ["reader-1", "reader-2"]) {
-      mocks.getUser.mockResolvedValue(signedIn(reader));
-      await call();
-    }
-
-    expect((await getCounterStore().read(explainTenthsKey("reader-1", NOW), NOW)).value).toBe(0);
-    expect((await getCounterStore().read(explainTenthsKey("reader-2", NOW), NOW)).value).toBe(0);
-    expect((await getCounterStore().read(explainTenthsHouseKey(NOW), NOW)).value).toBe(0);
-  });
-
-  it("is answered to a reader whose explain allowance is spent: the two allowances are separate", async () => {
-    await getCounterStore().increment(explainTenthsKey("reader-1", NOW), null, 40, NOW);
-    mocks.getUser.mockResolvedValue(signedIn("reader-1"));
-    const response = await call();
-
-    expect(response.status).toBe(200);
-    expect(generateJsonText).toHaveBeenCalledTimes(1);
-  });
 });

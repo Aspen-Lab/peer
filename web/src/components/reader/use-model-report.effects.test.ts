@@ -20,8 +20,9 @@ const net = vi.hoisted(() => ({
   jsonCalls: 0,
   /** When set, the stream sends exactly these events (P2-07). */
   script: null as Array<Record<string, unknown>> | null,
-  /** Who is signed in (P2-08b): `null` is signed out; a user gets Peer's model. */
-  entitlement: null as { userId: string } | null,
+  /** The sign-in outcome the hook reads (P4-00): a reader's own key counts only for a
+   *  signed-in reader, so the default is "signed-in" and a case sets it otherwise. */
+  authOutcome: "signed-in" as "signed-in" | "signed-out" | "unknown",
   /** P2-08b (§1g.18): per request, whether it was abandoned before it finished,
    *  and how long a request is held after `mode`. */
   flights: [] as Array<{ aborted: boolean; done: boolean }>,
@@ -64,8 +65,8 @@ vi.mock("@/lib/api", () => ({
     return { noLlm: true };
   },
 }));
-vi.mock("@/store/profile", () => ({
-  useProfileStore: (select: (state: { entitlement: unknown }) => unknown) => select({ entitlement: net.entitlement }),
+vi.mock("@/components/profile-sync", () => ({
+  useSyncGate: (select: (state: { authOutcome: string }) => unknown) => select({ authOutcome: net.authOutcome }),
 }));
 
 import { useEffect, useState } from "react";
@@ -146,7 +147,7 @@ describe("useModelReport with effects running — one report request across two 
     net.streamCalls.length = 0;
     net.jsonCalls = 0;
     net.script = null;
-    net.entitlement = null;
+    net.authOutcome = "signed-in";
     net.flights.length = 0;
     net.delayMs = 0;
   });
@@ -279,39 +280,6 @@ describe("useModelReport with effects running — one report request across two 
     expect(JSON.stringify(net.streamCalls[1])).toBe(JSON.stringify(net.streamCalls[0]));
   });
 
-  // P2-07 (§1g.9 e, B's O-B1): the route sends the deep-report quota
-  // decision BEFORE `mode` — a refused deep open is an ordinary tier 1
-  // stream with the notice in front. The reader must read it as one: one
-  // request, the tier 1 report shown, the notice carried on it — not a
-  // thrown stream and a second, JSON request that charges again.
-  it("reads a quota event that comes before mode: one request, the report shown, the notice carried (P2-07)", async () => {
-    const quota = { kind: "deep_report", reason: "exhausted" };
-    net.script = [
-      { type: "quota", quota },
-      { type: "mode", aiMode: "tier1" },
-      {
-        type: "report",
-        report: {
-          noLlm: false,
-          depth: "abstract",
-          skim: [],
-          whatItProposes: { summary: "An abstract-tier report, the deep one refused.", methods: [] },
-          resultsAndSignificance: { summary: "", keyResults: [] },
-          provenance: { basis: "model-abstract", droppedClaims: 0 },
-        },
-      },
-      { type: "stage", stage: "done", label: "Report ready", pct: 100 },
-    ];
-
-    const opened = await open(attached);
-
-    expect(net.streamCalls).toHaveLength(1);
-    expect(net.jsonCalls).toBe(0);
-    expect(opened.failed).toBe(false);
-    expect(opened.report?.whatItProposes.summary).toBe("An abstract-tier report, the deep one refused.");
-    expect(opened.report?.quota).toEqual(quota);
-  });
-
   // P2-08b (§1g.18, F3): the hook keeps one request in flight and never aborts
   // it for a different set of questions (the flow test in `question-box.flow
   // .test.tsx` shows that end to end). These are the two guards that hold the
@@ -404,9 +372,9 @@ describe("useModelReport with effects running — one report request across two 
       ["signed out, no key", () => ({ paper: base, reader: { ...defaultProfile } })],
       ["the reader's own key, deep reports off", () => ({ paper: base, reader: { ...profile, deepReportEnabled: false } })],
       [
-        "signed in, deep reports off",
+        "signed in, no key, deep reports off",
         () => {
-          net.entitlement = { userId: "reader-1" };
+          net.authOutcome = "signed-in";
           return { paper: base, reader: { ...defaultProfile } };
         },
       ],

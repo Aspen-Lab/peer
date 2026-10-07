@@ -16,7 +16,6 @@ import type { Paper, UserProfile } from "@/types";
 import { apiFetch } from "@/lib/api";
 import type { PaperReport } from "@/lib/papers/report";
 import { streamPaperReport } from "@/lib/papers/report-stream";
-import type { QuotaSignal } from "@/lib/usage/deep-report-quota";
 import { reportOutcome } from "@/lib/reader/report-outcome";
 import { aiAvailability, type AiMode } from "@/lib/feed/ai-tier";
 import { useSyncGate } from "@/components/profile-sync";
@@ -153,23 +152,12 @@ export interface ModelReportState {
   fresh: boolean;
   /** The cache key this report was fetched/cached under — `""` with no paper. */
   reportKey: string;
-  /**
-   * P2-09b (§1g.14, amendment 2): the last quota the server sent for this key,
-   * on either transport and whether or not a report is shown — a refusal often
-   * has none to carry it (a company-budget fallback is "no model layer", and a
-   * `quota` after `mode` settles `report: null`). `null` when the server sent
-   * none, on a new key (until its request settles), on a cache hit whose
-   * report carries none, and after a failure: the page says the model failed,
-   * not that the report is the shorter one.
-   */
-  quota: QuotaSignal | null;
 }
 
 interface Result {
   key: string;
   report: PaperReport | null;
   failed: boolean;
-  quota: QuotaSignal | null;
 }
 
 const NO_QUESTIONS: readonly string[] = [];
@@ -390,18 +378,11 @@ export function useModelReport({
     const fail = () => {
       if (!active()) return;
       setBuildup(null);
-      setResult({ key: reportKey, report: null, failed: true, quota: null });
+      setResult({ key: reportKey, report: null, failed: true });
     };
     // `asked` is whether a model was asked at all. A `noLlm` report is never
     // cached; asked, it is a failure, and unasked it is no model layer.
-    // `quota` is what the server said about the deep read (P2-09b): by default
-    // the report's own, which a `noLlm` fallback carries too, though it is not
-    // shown; the stream passes the one it sent as an event.
-    const settle = (
-      report: PaperReport | null,
-      asked: boolean,
-      quota: QuotaSignal | null = report?.quota ?? null,
-    ) => {
+    const settle = (report: PaperReport | null, asked: boolean) => {
       if (!active()) return;
       const outcome = reportOutcome(report, asked);
       if (outcome === "failed") {
@@ -411,7 +392,7 @@ export function useModelReport({
       const shown = outcome === "shown" ? report : null;
       if (shown) writeCached(reportKey, shown);
       setBuildup(null);
-      setResult({ key: reportKey, report: shown, failed: false, quota });
+      setResult({ key: reportKey, report: shown, failed: false });
     };
 
     const fetchJsonFallback = async () => {
@@ -433,27 +414,18 @@ export function useModelReport({
       let settled = false;
       let modeSeen = false;
       let asked = false;
-      // P2-07 (§1g.9 e): the deep-report decision the route made before it
-      // chose a mode — it goes out first, and the stream after it is an
-      // ordinary one. Carried on the report that follows, as the JSON
-      // transport carries it.
-      let quotaFirst: PaperReport["quota"];
       await Promise.resolve();
       if (!active()) return;
       try {
         for await (const event of streamPaperReport(requestBody, controller.signal)) {
           if (!active()) return;
 
-          if (event.type === "quota" && !modeSeen) {
-            quotaFirst = event.quota;
-            continue;
-          }
           if (event.type === "mode") {
             if (modeSeen) throw new Error("Report stream sent more than one mode event.");
             modeSeen = true;
             if (event.aiMode === "tier0") {
               settled = true;
-              settle(null, false, quotaFirst ?? null);
+              settle(null, false);
               return;
             }
             asked = true;
@@ -473,7 +445,7 @@ export function useModelReport({
           }
           if (event.type === "report") {
             settled = true;
-            settle(quotaFirst ? { ...event.report, quota: quotaFirst } : event.report, asked);
+            settle(event.report, asked);
             return;
           }
           throw new Error(event.message);
@@ -513,7 +485,5 @@ export function useModelReport({
     failed: Boolean(settled?.failed),
     fresh: !cached && settled?.report != null,
     reportKey,
-    // A cache hit is the report as it was shown, so its quota is its own.
-    quota: cached ? (cached.quota ?? null) : (settled?.quota ?? null),
   };
 }

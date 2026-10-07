@@ -511,8 +511,6 @@ describe("requestReply (P3-02b)", () => {
   it("is 'unavailable' for an unavailable answer, a refusal, a full thread, a gone upload, a network failure", async () => {
     stubFetch(200, { unavailable: true });
     expect(await requestReply(args)).toBe("unavailable");
-    stubFetch(200, { unavailable: true, quota: { kind: "company_budget", reason: "exhausted" } });
-    expect(await requestReply(args)).toBe("unavailable");
     for (const status of [400, 401, 404, 410, 422, 429, 500, 503]) {
       stubFetch(status, { error: "thread_full" });
       expect(await requestReply(args)).toBe("unavailable");

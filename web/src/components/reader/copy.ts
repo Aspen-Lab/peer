@@ -53,28 +53,6 @@ export const FOR_YOUR_QUESTIONS = {
   background: "background",
 } as const;
 
-/**
- * P2-09 (§1g.14): why the report on the page is the shorter one, in Peer's
- * voice, when the server says a cap or an outage refused the deep read. Three
- * lines, chosen by `quotaNoticeText` (`quota-notice.tsx`): a spent deep-report
- * or breaker allowance, a spent shared model budget, and — never confused with
- * a spent allowance or budget — a check that could not be made, for any of the
- * three kinds, where nothing was spent (P2-08b, §1g.14 amendment 3). P3-02c adds
- * the explain box's own two (`explainExhausted`, `explainUnavailable`), which the
- * notice never chooses: they belong under an explanation, not under a report.
- */
-export const QUOTA = {
-  exhausted: "Deep reports are used up for now. This is the shorter report.",
-  companyBudget: "Peer's shared model budget is spent for now. This is the shorter report.",
-  unavailable:
-    "Peer could not check the deep-report allowance just now. This is the shorter report; nothing was spent.",
-  /** P3-02c (§1h.4): the explain box's two lines. The reader's day of explanations
-   *  (or Peer's, across readers) is spent; or the counter could not be read — the
-   *  outage principle (§1g.14): never described as a spent allowance. */
-  explainExhausted: "Explanations are used up for now.",
-  explainUnavailable: "Peer could not check the explanation allowance just now. Nothing was spent.",
-} as const;
-
 /** Under a block Peer wrote with no sentence of the paper to show for it. */
 export const PEERS_READING = "Peer's reading — not a quote";
 

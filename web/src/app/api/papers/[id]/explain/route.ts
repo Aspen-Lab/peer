@@ -14,26 +14,20 @@
 // thread the reader chose to send.
 //
 // Gated like the report route, in the same order: the owner checks on an
-// upload (the claim, the attachment, the revision), the shared entitlement
-// check, then the provider — only a provider that can write answers.
+// upload (the claim, the attachment, the revision), the shared sign-in and
+// hourly-limit check, then the provider — only a provider that can write answers.
 //
-// Charged (P3-02c, §1h.4 amendment): every model turn is paid for in tenths of
-// a deep-report unit — one, or ten when the reply searched the web — on a counter
-// of its own (`lib/usage/explain-quota.ts`: the reader's day, and a house ceiling
-// across readers). The charge is taken after the memory (a hit costs nothing and
-// is served even to a reader whose day is spent) and before the model is asked,
-// the report route's order; a refusal inside the model's call still costs. A
-// refused charge is a 429 and no model call. Every plan is charged the same, a
-// reader on their own key included. The one debug line carries sizes and the
-// turn's `tenths` (and, for a reply, the thread's message count), so the price can
-// be re-set from real numbers.
+// Not counted or capped by Peer (P4-00): the model is the reader's own key, so
+// what a turn costs is between the reader and their provider, and what bounds one
+// reader on Peer's side is the gate's hourly limit (40 requests an hour). The one
+// debug line carries sizes and, for a reply, the thread's message count.
 //
 // A reply may search the web, for that message only, when the reader turned it on
 // (`search: true`) AND the provider says it can (`supportsWebSearch`); otherwise
 // it is a plain turn and says `searched: false`. The first message never
 // searches. A hit in the server's memory (keyed by the document, the passage, the
 // thread's texts and whether the reply searched — never by reader) costs no model
-// call and no charge.
+// call.
 //
 // Short and exact (P3-07, §1h.9; user decision §1a.14): a reply is three sentences and 560
 // characters unless the reader asked for more — the body's `detail: true` (the box's
@@ -41,14 +35,13 @@
 // (`asksForDetail`) — when it may run to eight and 1,400; the prompt names the cap that
 // applies, the sanitizer enforces it, the memory's key carries it, and the turn says
 // `detail: true` so the box does not offer "Say more" under a reply that is already long.
-// A reply may carry a small term table, its rows held to the paper. The charge is
-// unchanged: one tenth, ten when it searched.
+// A reply may carry a small term table, its rows held to the paper.
 //
 // Never cached by a CDN or the browser: every answer says `no-store`, and one
 // about an upload says what the other private-upload routes say.
 
 import { NextRequest, NextResponse } from "next/server";
-import { hasUsableProviderOverride, resolveProvider } from "@/lib/llm/providers/registry";
+import { resolveProvider } from "@/lib/llm/providers/registry";
 import type { ProviderOverrideConfig } from "@/lib/llm/providers/types";
 import {
   EXPLAIN_CAPS,
@@ -75,11 +68,7 @@ import { getFullText } from "@/lib/papers/full-text";
 import type { PaperReportRequest } from "@/lib/papers/report";
 import { bareUploadId, claimsUploadId } from "@/lib/papers/upload-store";
 import { ownedUpload, PRIVATE_UPLOAD_HEADERS } from "@/lib/papers/upload-access";
-import { requireEntitledAiRequest } from "@/lib/security/ai-request";
-import { entitledContext } from "@/lib/security/entitled-context";
-import { CompanySpendCapRefusedError } from "@/lib/usage/company-budget";
-import { companyBudgetQuotaSignal } from "@/lib/usage/deep-report-quota";
-import { EXPLAIN_SEARCH_TENTHS, EXPLAIN_TURN_TENTHS, consumeExplainTurn } from "@/lib/usage/explain-quota";
+import { requireAiRequest } from "@/lib/security/ai-request";
 
 export const dynamic = "force-dynamic";
 // One small-tier call over a bounded prompt.
@@ -215,21 +204,19 @@ async function handle(req: NextRequest, rawId: string): Promise<Response> {
     startRevision = meta.revision;
   }
 
-  // The one entitlement check, before the provider is resolved.
-  const gate = await requireEntitledAiRequest("paper-explain", 40);
+  // The one sign-in and hourly-limit check, before the provider is resolved. A
+  // signed-out reader is a 401 here, as before.
+  const gate = await requireAiRequest("paper-explain", 40);
   if (gate instanceof NextResponse) {
     gate.headers.set("Cache-Control", aboutUpload ? PRIVATE_UPLOAD_HEADERS["Cache-Control"] : NO_STORE["Cache-Control"]);
     return gate;
   }
-  const userId = gate.entitlement.userId;
+  const userId = gate.user?.id ?? null;
 
   // No provider that can write: the client never asks in that state, so this is
   // the answer to a stranger's guess — and it reads nothing and counts nothing.
   const override = body.llmOverride ?? null;
-  const provider = resolveProvider(
-    override,
-    entitledContext(gate.entitlement, "paper-explain", hasUsableProviderOverride(override)),
-  );
+  const provider = resolveProvider(override);
   if (!provider?.generateJsonText) return reply({ unavailable: true } satisfies ExplainResult);
 
   const fullText = await getFullText({
@@ -251,7 +238,7 @@ async function handle(req: NextRequest, rawId: string): Promise<Response> {
 
   // Whether this turn searches the web: the reader asked (a literal `true`), it is
   // a reply (the first message never searches) and the provider can. A request that
-  // asks of a provider that cannot is a plain turn, charged as one.
+  // asks of a provider that cannot is a plain turn.
   const searched = replying && body.search === true && provider.supportsWebSearch === true;
 
   // Whether this reply may be the long form (P3-07, §1h.9 (2)): the reader pressed "Say more"
@@ -263,7 +250,7 @@ async function handle(req: NextRequest, rawId: string): Promise<Response> {
   // The server's memory: the document, the passage, the thread's texts, whether the
   // reply searched and whether it is the long form — never the reader.
   const key = explainCacheKey(explainDocHash(doc), passage, thread.map((message) => message.text), searched, detail);
-  const logTurn = (fields: { tenths: number; promptChars: number; answerChars: number; cached: boolean }) =>
+  const logTurn = (fields: { promptChars: number; answerChars: number; cached: boolean }) =>
     console.debug("[papers/explain] turn", {
       ...(userId ? { userId: shortHash(userId) } : {}),
       ...fields,
@@ -273,22 +260,12 @@ async function handle(req: NextRequest, rawId: string): Promise<Response> {
   // holds is the kind of turn this request asks for.
   const hit = explainCache.get(key);
   if (hit && replying && "role" in hit) {
-    logTurn({ tenths: 0, promptChars: 0, answerChars: JSON.stringify(hit).length, cached: true });
+    logTurn({ promptChars: 0, answerChars: JSON.stringify(hit).length, cached: true });
     return reply({ turn: hit, cached: true } satisfies ExplainResult);
   }
   if (hit && !replying && "meaning" in hit) {
-    logTurn({ tenths: 0, promptChars: 0, answerChars: JSON.stringify(hit).length, cached: true });
+    logTurn({ promptChars: 0, answerChars: JSON.stringify(hit).length, cached: true });
     return reply({ answer: hit, cached: true } satisfies ExplainResult);
-  }
-
-  // The charge (§1h.4 amendment): after the memory, before the model. A refused
-  // charge asks nothing and remembers nothing; the reader is told which line to
-  // show — the day's explanations are used up, or the allowance could not be read
-  // and nothing was spent.
-  const tenths = searched ? EXPLAIN_SEARCH_TENTHS : EXPLAIN_TURN_TENTHS;
-  const charge = await consumeExplainTurn(gate.entitlement, { searched }, new Date());
-  if (!charge.allowed) {
-    return reply({ error: "explain_exhausted", reason: charge.reason, resetsAt: charge.resetsAt } satisfies ExplainResult, 429);
   }
 
   const abstract = [body.paper.summaryIntro, body.paper.summaryResultDiscussion].filter(Boolean).join(" ");
@@ -302,16 +279,11 @@ async function handle(req: NextRequest, rawId: string): Promise<Response> {
   } catch (err) {
     // Only the kind of error is logged: a provider's message may echo the prompt.
     console.error("[papers/explain] model call failed:", err instanceof Error ? err.name : typeof err);
-    if (err instanceof CompanySpendCapRefusedError) {
-      return reply({ unavailable: true, quota: companyBudgetQuotaSignal(err.reason, new Date()) } satisfies ExplainResult);
-    }
     return reply({ unavailable: true } satisfies ExplainResult);
   }
 
   // Sanitised, then held to the paper: the quote must be the paper's own words
-  // or the prose is labelled Peer's. Nonsense is no answer — nothing is kept (the
-  // charge, taken before the call, stays: a deep read that degrades after the
-  // charge still costs, as in the report route).
+  // or the prose is labelled Peer's. Nonsense is no answer — nothing is kept.
   const parsed = parseModelJson(raw);
   const sanitizedReply = replying ? sanitizeExplainReply(parsed, { detail }) : null;
   const sanitizedAnswer = replying ? null : sanitizeExplainAnswer(parsed);
@@ -321,7 +293,7 @@ async function handle(req: NextRequest, rawId: string): Promise<Response> {
   else if (sanitizedAnswer) result = verifyExplainAnswer(sanitizedAnswer, doc, located.sectionId);
   else return reply({ unavailable: true } satisfies ExplainResult);
 
-  logTurn({ tenths, promptChars: systemPrompt.length + userPrompt.length, answerChars: raw.length, cached: false });
+  logTurn({ promptChars: systemPrompt.length + userPrompt.length, answerChars: raw.length, cached: false });
 
   // The model's work can run long: an upload changed meanwhile is not answered
   // from, and nothing built from it is remembered.

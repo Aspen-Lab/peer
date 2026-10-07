@@ -237,13 +237,6 @@ describe("ExplainCard — Say more (P3-07)", () => {
     expect(isDisabled(seven)).toBe(false);
   });
 
-  it("is disabled when the day's explanations are used up", () => {
-    const html = card({ thread: view({ turns, onSayMore, quota: "exhausted" }) });
-
-    expect(sayMoreButtons(html)).toHaveLength(1);
-    expect(isDisabled(html)).toBe(true);
-  });
-
   it("calls the handler when pressed", () => {
     const calls: string[] = [];
     const tree = ExplainCard({ passage: PASSAGE, heading: "2 Methods", term: null, termWhere: null, canAsk: true, status: { kind: "answer", answer }, onClose: () => {}, thread: view({ turns, onSayMore: () => calls.push("more") }) });

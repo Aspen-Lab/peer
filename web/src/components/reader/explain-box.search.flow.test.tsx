@@ -5,10 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // opened and never remembered; a mouse or the keyboard turns it on, a touch
 // screen needs two taps (the first shows the warning); the next send carries it
 // and it is off again straight away, sent or failed; a reply that searched
-// marks the reader's message, one that could not leaves a note; a spent
-// allowance disables the input and keeps the typed words, an allowance that
-// could not be checked does not; the first message is refused or not in place
-// of the loading line. The box runs on the minimal hook runtime (no DOM here);
+// marks the reader's message, one that could not leaves a note. (The cases of a
+// spent allowance, and of one that could not be checked, went with the allowance:
+// P4-00.) The box runs on the minimal hook runtime (no DOM here);
 // the element tree it returns is inspected and its handlers called. Every text
 // is invented.
 vi.mock("react", async (importOriginal) => {
@@ -445,74 +444,3 @@ describe("ExplainBox — the mark and the note come from what the server did (§
   });
 });
 
-describe("ExplainBox — an allowance that is spent or cannot be checked (§1g.14, §1h.4)", () => {
-  it("a day's explanations used up: the line, the thread as it was, the typed words kept, and nothing more can be sent", async () => {
-    const onReply = vi.fn(async (): Promise<ReplyResult> => "exhausted");
-    const kept: ExplainTurn[] = [{ role: "reader", text: "Earlier?" }, PLAIN];
-    const run = await scenario(base({ onReply, cachedTurns: kept }), [
-      (tree) => click(tree),
-      (tree) => draft(tree, "Why does it matter at 1100 C?"),
-      (tree) => press(tree, "mouse"),
-      (tree) => send(tree),
-      (tree) => {
-        expect(look(tree).thread).toMatchObject({ quota: "exhausted", failed: false, pending: false, draft: "Why does it matter at 1100 C?" });
-        send(tree);
-      },
-    ]);
-    await wait();
-
-    expect(run.last().thread?.turns).toEqual(kept);
-    expect(run.last().thread?.search?.on).toBe(false);
-    expect(onReply).toHaveBeenCalledTimes(1);
-    run.mounted.unmount();
-  });
-
-  it("an allowance that could not be checked: its own line, the typed words kept, and the reader may try again", async () => {
-    const onReply = vi.fn(async (): Promise<ReplyResult> => PLAIN);
-    onReply.mockResolvedValueOnce("allowance_unavailable");
-    const run = await scenario(base({ onReply }), [
-      (tree) => click(tree),
-      (tree) => draft(tree, "Why?"),
-      (tree) => send(tree),
-      (tree) => {
-        expect(look(tree).thread).toMatchObject({ quota: "unavailable", failed: false, draft: "Why?" });
-        send(tree);
-      },
-    ]);
-    await wait();
-
-    expect(onReply).toHaveBeenCalledTimes(2);
-    expect(run.last().thread?.quota).toBeUndefined();
-    expect(run.last().thread?.turns).toEqual([{ role: "reader", text: "Why?" }, PLAIN]);
-    run.mounted.unmount();
-  });
-
-  it("the line is gone when the box is opened again: the allowance is asked afresh with the next send", async () => {
-    const onReply = vi.fn(async (): Promise<ReplyResult> => "exhausted");
-    const run = await scenario(base({ onReply }), [
-      (tree) => click(tree),
-      (tree) => draft(tree, "Why?"),
-      (tree) => send(tree),
-      () => {
-        const event = { key: "Escape", preventDefault: vi.fn(), stopPropagation: vi.fn() };
-        for (const listener of listeners.get("keydown") ?? []) listener(event);
-      },
-      (tree) => click(tree),
-    ]);
-    await wait();
-
-    expect(run.last().thread?.quota).toBeUndefined();
-    run.mounted.unmount();
-  });
-
-  it("the first message refused: the line in place of the loading line, and no thread", async () => {
-    for (const [result, kind] of [["exhausted", "exhausted"], ["allowance_unavailable", "allowance_unavailable"]] as const) {
-      const run = await scenario(base({ cached: undefined, onAsk: vi.fn(async (): Promise<AskResult> => result) }), [(tree) => click(tree)]);
-      await wait();
-
-      expect(run.last().status).toBe(kind);
-      expect(run.last().thread).toBeUndefined();
-      run.mounted.unmount();
-    }
-  });
-});

@@ -9,25 +9,16 @@ import {
 } from "@/test-support/route-harness";
 import type { ExtractedDocument } from "@/lib/papers/html-text";
 import { explainCache } from "@/lib/papers/explain";
-import { getCounterStore, resetCounterStoreForTests } from "@/lib/usage/counters";
-import {
-  ALL_USERS_EXPLAIN_TENTHS_PER_DAY,
-  EXPLAIN_SEARCH_TENTHS,
-  EXPLAIN_TENTHS_PER_DAY,
-  EXPLAIN_TURN_TENTHS,
-  explainTenthsHouseKey,
-  explainTenthsKey,
-} from "@/lib/usage/explain-quota";
+import { getCounterStore, rateKey, resetCounterStoreForTests } from "@/lib/usage/counters";
 
 // P3-02 (ruling §1h.2; §3d 14, 17): the sign-in gate on the explain route and
 // what it means across readers — a stranger is refused before any text is read
-// or any model asked; each model turn is counted for the reader who caused it
-// and for no one else; and a second reader asking the same words of the same
-// paper is served from the server's memory with no count of their own, because
-// nothing in that memory is a reader's. A deployed runtime and a session stub,
-// so a file of its own (the ordinary route tests run with no sign-in at all).
-// P3-02c (§1h.4 amendment): "counted" is now "charged" — in tenths, one or ten —
-// and the per-reader day cap and the house ceiling are tested here, across readers.
+// or any model asked; a reader is held to 40 requests an hour and to nothing
+// else (P4-00: there is no allowance, no day cap and no house ceiling any more —
+// the model is the reader's own key); and a second reader asking the same words
+// of the same paper is served from the server's memory, because nothing in that
+// memory is a reader's. A deployed runtime and a session stub, so a file of its
+// own (the ordinary route tests run with no sign-in at all).
 
 const mocks = vi.hoisted(() => ({
   getUser: vi.fn(),
@@ -85,12 +76,9 @@ function call(payload: unknown = body, id: string = paper.id) {
   return POST(req, { params: Promise.resolve({ id: encodeURIComponent(id) }) });
 }
 
-/** What this reader has been charged today, in tenths. */
-async function turnsOf(userId: string): Promise<number> {
-  return (await getCounterStore().read(explainTenthsKey(userId, NOW), NOW)).value;
-}
-async function houseOf(): Promise<number> {
-  return (await getCounterStore().read(explainTenthsHouseKey(NOW), NOW)).value;
+/** How many requests this reader has made this hour, as the gate counts them. */
+async function requestsOf(userId: string): Promise<number> {
+  return (await getCounterStore().read(rateKey("paper-explain", userId, NOW), NOW)).value;
 }
 
 let generateJsonText: ReturnType<typeof vi.fn>;
@@ -154,6 +142,29 @@ describe("POST /api/papers/[id]/explain — who may ask", () => {
     expect(generateJsonText).toHaveBeenCalledTimes(1);
   });
 
+  it("counts the request against the reader's own hour, and nothing else", async () => {
+    mocks.getUser.mockResolvedValue(signedIn("reader-1"));
+    await call();
+    await call();
+
+    expect(await requestsOf("reader-1")).toBe(2);
+    expect(await requestsOf("reader-2")).toBe(0);
+  });
+
+  it("logs one debug line for a signed-in reader with a shortened hash of the account, never the id, and no word of the paper", async () => {
+    const debug = vi.spyOn(console, "debug").mockImplementation(() => {});
+    mocks.getUser.mockResolvedValue(signedIn("reader-1"));
+    await call();
+
+    expect(debug).toHaveBeenCalledTimes(1);
+    const [label, fields] = debug.mock.calls[0] as [string, Record<string, unknown>];
+    expect(label).toBe("[papers/explain] turn");
+    expect(Object.keys(fields).sort()).toEqual(["answerChars", "cached", "promptChars", "userId"]);
+    expect(String(fields.userId)).toMatch(/^[0-9a-f]{12}$/);
+    const all = JSON.stringify(debug.mock.calls);
+    for (const word of ["reader-1", "rafting", "gauge", "plates"]) expect(all).not.toContain(word);
+  });
+
   it("limits a reader to 40 requests an hour, as the report route limits its own", async () => {
     mocks.getUser.mockResolvedValue(signedIn("reader-1"));
     for (let i = 0; i < 40; i += 1) expect((await call()).status).toBe(200);
@@ -165,7 +176,7 @@ describe("POST /api/papers/[id]/explain — who may ask", () => {
 });
 
 describe("POST /api/papers/[id]/explain — nothing per-reader in the memory", () => {
-  it("counts a turn for the reader who caused it, and serves the next reader's same words from the memory at no count of theirs", async () => {
+  it("serves the next reader's same words from the memory, with no model call of theirs", async () => {
     mocks.getUser.mockResolvedValue(signedIn("reader-1"));
     const first = (await (await call()).json()) as { cached: boolean };
     mocks.getUser.mockResolvedValue(signedIn("reader-2"));
@@ -174,46 +185,21 @@ describe("POST /api/papers/[id]/explain — nothing per-reader in the memory", (
     expect(first.cached).toBe(false);
     expect(second.cached).toBe(true);
     expect(generateJsonText).toHaveBeenCalledTimes(1);
-    expect(await turnsOf("reader-1")).toBe(EXPLAIN_TURN_TENTHS);
-    expect(await turnsOf("reader-2")).toBe(0);
-  });
-
-  it("charges each reader's own model turns apart", async () => {
-    mocks.getUser.mockResolvedValue(signedIn("reader-1"));
-    await call();
-    mocks.getUser.mockResolvedValue(signedIn("reader-2"));
-    await call({ ...body, passage: "Specimens were machined from a single casting", paragraphIndex: 0 });
-
-    expect(await turnsOf("reader-1")).toBe(EXPLAIN_TURN_TENTHS);
-    expect(await turnsOf("reader-2")).toBe(EXPLAIN_TURN_TENTHS);
-    expect(await turnsOf("reader-3")).toBe(0);
-    expect(await houseOf()).toBe(2 * EXPLAIN_TURN_TENTHS);
-  });
-
-  it("starts a reader's charge again the next UTC day", async () => {
-    mocks.getUser.mockResolvedValue(signedIn("reader-1"));
-    await call();
-    vi.setSystemTime(new Date("2026-10-07T00:00:01.000Z"));
-    explainCache.clear();
-    await call();
-
-    const later = new Date("2026-10-07T00:00:01.000Z");
-    expect((await getCounterStore().read(explainTenthsKey("reader-1", later), later)).value).toBe(EXPLAIN_TURN_TENTHS);
-    // The first day's charge has gone with its day (the in-memory store sweeps what has ended).
-    expect((await getCounterStore().read(explainTenthsKey("reader-1", NOW), later)).value).toBe(0);
+    // Both are requests, and each is counted for its own reader's hour.
+    expect(await requestsOf("reader-1")).toBe(1);
+    expect(await requestsOf("reader-2")).toBe(1);
   });
 });
 
-// P3-02b (ruling §1h.3): a reply is counted for the reader who caused it, and
-// the memory is keyed by the document, the passage and the thread's words only —
-// so a second reader sending the same thread is served from it, with no count.
+// P3-02b (ruling §1h.3): the memory is keyed by the document, the passage and the
+// thread's words only — so a second reader sending the same thread is served from it.
 describe("POST /api/papers/[id]/explain — nothing per-reader in the memory, with a thread", () => {
   const thread = [
     { role: "peer", text: "A share of a sample turned to plates. It compares alloys." },
     { role: "reader", text: "Why does a bigger ratio matter?" },
   ];
 
-  it("counts a reply for the reader who caused it, and serves the next reader's same thread from the memory at no count of theirs", async () => {
+  it("serves the next reader's same thread from the memory, with no model call of theirs", async () => {
     generateJsonText.mockResolvedValue(JSON.stringify({ reply: "It changes how the metal carries load.", evidence: DEF }));
     mocks.getUser.mockResolvedValue(signedIn("reader-1"));
     const first = (await (await call({ ...body, thread })).json()) as { cached: boolean; turn?: { text: string } };
@@ -224,8 +210,6 @@ describe("POST /api/papers/[id]/explain — nothing per-reader in the memory, wi
     expect(second.cached).toBe(true);
     expect(second.turn).toEqual(first.turn);
     expect(generateJsonText).toHaveBeenCalledTimes(1);
-    expect(await turnsOf("reader-1")).toBe(EXPLAIN_TURN_TENTHS);
-    expect(await turnsOf("reader-2")).toBe(0);
   });
 
   it("answers a stranger's reply 401, before the thread is used", async () => {
@@ -236,41 +220,10 @@ describe("POST /api/papers/[id]/explain — nothing per-reader in the memory, wi
   });
 });
 
-// P3-02c (§1h.4 amendment): the day cap is each reader's own, the house ceiling
-// is everyone's, and a stranger is never charged.
-describe("POST /api/papers/[id]/explain — the caps across readers (P3-02c)", () => {
-  it("charges nothing to a stranger: refused 401 before any counter is touched", async () => {
-    await call();
-
-    expect(await houseOf()).toBe(0);
-  });
-
-  it("refuses the reader whose day is spent with a 429, and still serves another reader", async () => {
-    await getCounterStore().increment(explainTenthsKey("reader-1", NOW), null, EXPLAIN_TENTHS_PER_DAY, NOW);
-    mocks.getUser.mockResolvedValue(signedIn("reader-1"));
-    const refused = await call();
-    mocks.getUser.mockResolvedValue(signedIn("reader-2"));
-    const served = await call();
-
-    expect(refused.status).toBe(429);
-    expect(((await refused.json()) as { error: string; reason: string }).error).toBe("explain_exhausted");
-    expect(served.status).toBe(200);
-    expect(generateJsonText).toHaveBeenCalledTimes(1);
-    expect(await turnsOf("reader-2")).toBe(EXPLAIN_TURN_TENTHS);
-  });
-
-  it("refuses everyone once the house ceiling is spent, a reader who has asked nothing today included", async () => {
-    await getCounterStore().increment(explainTenthsHouseKey(NOW), null, ALL_USERS_EXPLAIN_TENTHS_PER_DAY, NOW);
-    mocks.getUser.mockResolvedValue(signedIn("reader-9"));
-    const response = await call();
-
-    expect(response.status).toBe(429);
-    expect(((await response.json()) as { reason: string }).reason).toBe("exhausted");
-    expect(generateJsonText).not.toHaveBeenCalled();
-    expect(await turnsOf("reader-9")).toBe(0);
-  });
-
-  it("charges a searched reply ten tenths to the reader who sent it, and the same words from the next reader are a hit at no charge of theirs", async () => {
+// P3-02c (§1h.4 amendment): a searched reply is its own entry in the memory, and
+// the next reader's same words are a hit — with the search it was written with.
+describe("POST /api/papers/[id]/explain — a searched reply across readers (P3-02c)", () => {
+  it("serves the same searched thread to the next reader from the memory, still marked searched, with one model call", async () => {
     mocks.resolveProvider.mockReturnValue({ generateJsonText, supportsWebSearch: true });
     generateJsonText.mockResolvedValue(JSON.stringify({ reply: "It changes how the metal carries load.", evidence: DEF }));
     const thread = [
@@ -286,17 +239,5 @@ describe("POST /api/papers/[id]/explain — the caps across readers (P3-02c)", (
     expect(second).toMatchObject({ cached: true, turn: { searched: true } });
     expect(generateJsonText).toHaveBeenCalledTimes(1);
     expect(generateJsonText.mock.calls[0][0]).toMatchObject({ webSearch: true });
-    expect(await turnsOf("reader-1")).toBe(EXPLAIN_SEARCH_TENTHS);
-    expect(await turnsOf("reader-2")).toBe(0);
-    expect(await houseOf()).toBe(EXPLAIN_SEARCH_TENTHS);
-  });
-
-  it("says nothing of the reader in the 429: the reason and the hour, no id", async () => {
-    await getCounterStore().increment(explainTenthsKey("reader-1", NOW), null, EXPLAIN_TENTHS_PER_DAY, NOW);
-    mocks.getUser.mockResolvedValue(signedIn("reader-1"));
-    const text = await (await call()).text();
-
-    expect(JSON.parse(text)).toEqual({ error: "explain_exhausted", reason: "exhausted", resetsAt: "2026-10-07T00:00:00.000Z" });
-    expect(text).not.toContain("reader-1");
   });
 });

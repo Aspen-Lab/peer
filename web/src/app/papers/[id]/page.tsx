@@ -82,7 +82,6 @@ import {
   pickRelated,
 } from "@/components/reader/report-sections";
 import { ForYourQuestions } from "@/components/reader/for-your-questions";
-import { QuotaNotice } from "@/components/reader/quota-notice";
 import { NextRow } from "@/components/reader/next-row";
 import { LoadingMat } from "@/components/reader/loading-mat";
 import { ReaderToast, useReaderToast } from "@/components/reader/reader-toast";
@@ -891,12 +890,9 @@ function Reader({
             providerConfigured,
             profileHasProject,
             modelFailed: model.failed,
-            // P2-08b (F8): the notice beside this sentence says why the report
-            // is the shorter one; the sentence must not say the read "did not finish".
-            refused: model.quota !== null,
           })
         : [],
-    [reading, availability, providerConfigured, profileHasProject, model.failed, model.quota],
+    [reading, availability, providerConfigured, profileHasProject, model.failed],
   );
 
   // The plate's own terms — allocated across the briefing when the paper is
@@ -1345,15 +1341,6 @@ function Reader({
         contents={<PaperContents reading={reading} route={route} />}
         additions={
           <>
-            {/* P2-09 (§1g.14): why this is the shorter report — first, under the
-                Decision block, only when the server said a cap or an outage
-                refused the deep read. No other notice of the report's own is
-                rendered on this page (quota-notice.test.tsx pins that), so a
-                report never shows two lines for one cause. P2-09b: it reads the
-                hook's quota, which survives a refusal that has no report to
-                carry it; QuotaNotice renders nothing for null. */}
-            <QuotaNotice quota={model.quota} />
-
             {report?.forYourQuestions && <ForYourQuestions report={report} map={reading.map} />}
 
             {/* The reader's own notes on this paper, and the way into them —
