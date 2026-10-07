@@ -153,7 +153,9 @@ describe("POST /api/papers/[id]/explain — the two parts", () => {
     expect(provider.generateJsonText).toHaveBeenCalledTimes(1);
     const args = provider.generateJsonText.mock.calls[0][0];
     expect(args.tier).toBe("small");
-    expect(args.maxTokens).toBe(600);
+    // P4-01 commit 0 (§1h.12 (a)): 600 -> 800. A first answer at its caps with a full table is
+    // about 590 tokens, so 600 left a cut-off JSON, and no answer, on the reader's own key.
+    expect(args.maxTokens).toBe(800);
     expect(body).toEqual({
       cached: false,
       answer: { meaning: MEANING, here: { text: HERE, evidence: DEF, evidenceWhere: "2 Methods", sectionId: "s2", page: 2 } },
@@ -451,7 +453,7 @@ function replyStub(body: unknown = modelReply) {
 }
 
 describe("POST /api/papers/[id]/explain — a reply to the thread", () => {
-  it("asks the model once, on the small tier with 400 tokens, and answers the verified turn", async () => {
+  it("asks the model once, on the small tier with 560 tokens, and answers the verified turn", async () => {
     replyStub();
     const response = await call(ask({ thread: thread1 }));
     const body = await json(response);
@@ -460,7 +462,8 @@ describe("POST /api/papers/[id]/explain — a reply to the thread", () => {
     expect(provider.generateJsonText).toHaveBeenCalledTimes(1);
     const args = provider.generateJsonText.mock.calls[0][0];
     expect(args.tier).toBe("small");
-    expect(args.maxTokens).toBe(400);
+    // P4-01 commit 0 (§1h.12 (a)): 400 -> 560. A reply with a full table is about 540 tokens.
+    expect(args.maxTokens).toBe(560);
     expect(body).toEqual({
       cached: false,
       // P3-02c: every reply says whether it searched the web (§3c) — here, not.
@@ -498,7 +501,8 @@ describe("POST /api/papers/[id]/explain — a reply to the thread", () => {
     expect(body.answer).toBeDefined();
     expect(body.turn).toBeUndefined();
     expect(JSON.parse(provider.generateJsonText.mock.calls[0][0].userPrompt)).not.toHaveProperty("thread");
-    expect(provider.generateJsonText.mock.calls[0][0].maxTokens).toBe(600);
+    // P4-01 commit 0 (§1h.12 (a)): the first answer's budget, 600 -> 800.
+    expect(provider.generateJsonText.mock.calls[0][0].maxTokens).toBe(800);
   });
 
   it("treats a malformed thread as no thread: the first answer, as with none", async () => {
@@ -722,7 +726,7 @@ describe("POST /api/papers/[id]/explain — a reply that searches the web (P3-02
 
     expect(response.status).toBe(200);
     expect(provider.generateJsonText).toHaveBeenCalledTimes(1);
-    expect(modelArgs()).toMatchObject({ webSearch: true, tier: "small", maxTokens: 400 });
+    expect(modelArgs()).toMatchObject({ webSearch: true, tier: "small", maxTokens: 560 });
     expect(promptRules()).toContain("You may use web search for general background.");
     expect(promptRules()).not.toContain("Do not search the web");
     expect(body.turn).toEqual({ role: "peer", text: REPLY, evidence: DEF, evidenceWhere: "2 Methods", sectionId: "s2", page: 2, searched: true });
@@ -858,7 +862,8 @@ describe("POST /api/papers/[id]/explain — the long form (P3-07)", () => {
 
     expect((body.turn as { text: string }).text).toBe(lecture(3));
     expect(body.turn).not.toHaveProperty("detail");
-    expect(provider.generateJsonText.mock.calls[0][0].maxTokens).toBe(400);
+    // P4-01 commit 0 (§1h.12 (a)): a reply's budget, 400 -> 560.
+    expect(provider.generateJsonText.mock.calls[0][0].maxTokens).toBe(560);
     expect(promptRules()).toMatch(/three sentences/i);
     expect(promptRules()).not.toMatch(/eight sentences/i);
   });
@@ -925,7 +930,8 @@ describe("POST /api/papers/[id]/explain — the long form (P3-07)", () => {
 
     expect(body.answer).toBeDefined();
     expect(body.turn).toBeUndefined();
-    expect(provider.generateJsonText.mock.calls[0][0].maxTokens).toBe(600);
+    // P4-01 commit 0 (§1h.12 (a)): the first answer's budget, 600 -> 800.
+    expect(provider.generateJsonText.mock.calls[0][0].maxTokens).toBe(800);
     expect(JSON.parse(provider.generateJsonText.mock.calls[0][0].userPrompt)).not.toHaveProperty("thread");
     expect(JSON.stringify(body)).not.toContain('"detail"');
   });

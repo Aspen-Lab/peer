@@ -76,10 +76,22 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 30;
 
 /** The most one explanation may say, in tokens (two parts of two sentences, and a quote — or, with a
- *  term table, two one-sentence parts, a quote and up to four rows). */
-const MAX_TOKENS = 600;
-/** The most one reply may say (three sentences and a quote, or a two-sentence reply and a small table). */
-const REPLY_MAX_TOKENS = 400;
+ *  term table, two one-sentence parts, a quote and up to four rows).
+ *
+ *  P4-01 commit 0 (§1h.12 (a)): 600 -> 800. A first answer at every cap is: two parts of at most 420
+ *  characters (840), a quote of at most 400, a table of four rows of three cells of at most 80 (960),
+ *  and the JSON's keys, quotes and braces (about 150) — about 2,350 characters, which at four
+ *  characters a token is about 590 tokens. 600 left no margin, and a JSON cut off by the budget is no
+ *  answer at all: the reader loses the whole of it, on a key that is their own and so is the cost
+ *  (§1h.10). 800 holds the full answer with room for the notation and numbers that tokenise denser. */
+const MAX_TOKENS = 800;
+/** The most one reply may say (three sentences and a quote, or a two-sentence reply and a small table).
+ *
+ *  P4-01 commit 0 (§1h.12 (a)): 400 -> 560. A reply with a table at every cap is: two sentences of at
+ *  most 560 characters, a quote of at most 400, the table's 960, and the JSON (about 230) — about 2,150
+ *  characters, about 540 tokens. 400 cut that reply off; 560 holds it. A short reply without a table
+ *  (three sentences, a quote) stays far below it. */
+const REPLY_MAX_TOKENS = 560;
 /** P3-07: the most the long form of a reply may say (eight sentences and a quote). */
 const REPLY_DETAIL_MAX_TOKENS = 800;
 
