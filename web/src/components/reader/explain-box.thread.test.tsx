@@ -466,6 +466,17 @@ describe("requestReply (P3-02b)", () => {
     expect(first).toEqual({ role: "peer", text: `${answer.meaning} ${answer.here.text}` });
   });
 
+  // P4-00c (the 841 edge): the message the box builds for an answer whose two parts are at the
+  // server's cap is exactly as long as the first message the server reads whole — no word of
+  // "Why it is here" is left over the cap.
+  it("makes a first message of both parts at their cap exactly as long as the server reads whole", () => {
+    const part = (marker: string) => `${"alpha ".repeat(69)}${marker}`.slice(-EXPLAIN_CAPS.partChars);
+    const atCap: ExplainAnswer = { meaning: part("ends-meaning."), here: { text: part("ends-here.") } };
+
+    expect(firstAnswerMessage(atCap).text).toHaveLength(EXPLAIN_CAPS.firstAnswerChars);
+    expect(firstAnswerMessage(atCap).text.endsWith("ends-here.")).toBe(true);
+  });
+
   it("posts the paper, the passage and where it sits, and the thread with the reader's message last — roles and words only", async () => {
     const fetchMock = stubFetch(200, replied);
     await requestReply(args);

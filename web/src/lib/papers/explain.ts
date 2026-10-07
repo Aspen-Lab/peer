@@ -30,7 +30,7 @@
 // so the server never has to remember a conversation:
 //
 //   - `readThread`: what the server reads of it — at most 17 messages, the first
-//     (the first answer, both of its parts) clipped to 840 characters and each later
+//     (the first answer, both of its parts) clipped to 841 characters and each later
 //     one to 400, anything malformed taken for no thread;
 //   - `buildExplainReplyPrompt`: the same bounded context as the first message
 //     plus the thread in order, each message labelled by its role, the reader's
@@ -86,11 +86,14 @@ import type { ExtractedDocument } from "./html-text";
 import { openingOf, readableSections } from "./reading-map";
 import { splitSentences } from "./skim";
 
+/** Each of the two parts of a first answer: at most this many characters. */
+const PART_CHARS = 420;
+
 export const EXPLAIN_CAPS = {
   /** A passage is at most this long, after whitespace is collapsed. */
   passageChars: 1200,
   /** Each of the two parts is at most two sentences and this many characters. */
-  partChars: 420,
+  partChars: PART_CHARS,
   evidenceChars: 400,
   titleChars: 300,
   abstractChars: 2500,
@@ -111,9 +114,11 @@ export const EXPLAIN_CAPS = {
   threadReaderMessages: 8,
   messageChars: 400,
   /** P3-05 (§1h.8 (3), O8): the thread's first message is the first answer, both
-   *  of its parts joined (each up to `partChars`), so it is read to this length —
-   *  at 400 the model that writes a follow-up never saw "Why it is here". */
-  firstAnswerChars: 840,
+   *  of its parts joined (each up to `partChars`) by one space, so it is read to this
+   *  length — at 400 the model that writes a follow-up never saw "Why it is here".
+   *  P4-00c (§1h.11 (a)): `2 * partChars + 1`, the space included; at `2 * partChars` a
+   *  first answer with both parts at their cap lost its last word (the 841 edge). */
+  firstAnswerChars: 2 * PART_CHARS + 1,
   /** A reply is at most three sentences and this many characters. */
   replySentences: 3,
   replyChars: 560,
@@ -251,7 +256,7 @@ const messageCap = (index: number): number => (index === 0 ? EXPLAIN_CAPS.firstA
  * The thread a request carries, or none. An array of `{ role, text }` with a
  * role of `reader` or `peer` and words in the text; each text has its
  * whitespace collapsed and is clipped at a word to 400 characters — the first
- * message, which is the first answer with both of its parts, to 840. Anything else — not an
+ * message, which is the first answer with both of its parts and the space between them, to 841. Anything else — not an
  * array, a message that is not an object, a role that is neither, a text that is
  * not words — is no thread at all, never a partial one. At most 17 messages are
  * read (the first answer, then up to eight pairs): a longer thread is none too,
@@ -451,7 +456,7 @@ const EXPLAIN_REPLY_SYSTEM = [
 /**
  * The system and user prompts for one reply in a thread (P3-02b): the same
  * bounded context as the first message, then the thread in order — each message
- * labelled by its role, at most 17, the first (the first answer) at most 840
+ * labelled by its role, at most 17, the first (the first answer) at most 841
  * characters and each later one at most 400, the latest kept — and the reader's
  * last message named as the one to answer, then the schema
  * and the rules, which are never what gets cut. Nothing about the reader is a
@@ -475,7 +480,7 @@ export function buildExplainReplyPrompt(args: {
   detail?: boolean;
 }): { systemPrompt: string; userPrompt: string } {
   // The cap follows the message's place in the thread as sent: the first answer
-  // keeps its 840 only while it is in the prompt, and once the oldest are dropped
+  // keeps its 841 only while it is in the prompt, and once the oldest are dropped
   // no later message is read at its length.
   const dropped = Math.max(0, args.thread.length - EXPLAIN_CAPS.threadMessages);
   const thread = args.thread

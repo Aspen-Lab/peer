@@ -539,7 +539,7 @@ describe("readThread (P3-02b)", () => {
   });
 
   // P3-05 (§1h.8 (3), O8): this test said "each message to 400 characters" and read
-  // the thread's FIRST message (the first answer, both parts joined, up to about 840
+  // the thread's FIRST message (the first answer, both parts joined, up to about 841
   // characters) with the cap that belongs to the later ones — a follow-up's model
   // never saw "Why it is here". Rewritten to the new contract: the later messages stay
   // at 400; the first message has its own cap (the tests after it).
@@ -555,12 +555,12 @@ describe("readThread (P3-02b)", () => {
   });
 
   // The first answer is both of its parts joined, each at most 420 characters
-  // (`partChars`), so the first message of a thread is read whole up to 840.
+  // (`partChars`) and one space between them, so the first message of a thread is read whole up to 841.
   describe("the first message, which carries the whole first answer (P3-05, O8)", () => {
     const run = (length: number) => "abcd ".repeat(Math.ceil(length / 5)).slice(0, length).trim();
 
-    it("has a cap of its own, 840 characters, above the later messages' 400", () => {
-      expect(EXPLAIN_CAPS.firstAnswerChars).toBe(840);
+    it("has a cap of its own, 841 characters (P4-00c: both parts and the space between), above the later messages' 400", () => {
+      expect(EXPLAIN_CAPS.firstAnswerChars).toBe(841);
       expect(EXPLAIN_CAPS.firstAnswerChars).toBeGreaterThan(EXPLAIN_CAPS.messageChars);
       expect(EXPLAIN_CAPS.threadMessages).toBe(17);
     });
@@ -577,14 +577,15 @@ describe("readThread (P3-02b)", () => {
       expect(eight[read.messages[2].text.length]).toBe(" ");
     });
 
-    it("clips a first message over 840 characters at a word, and keeps one of exactly 840", () => {
-      const exact = run(839); // 839 or 840 with the edge trimmed
+    it("clips a first message over 841 characters at a word, and keeps one of exactly 841", () => {
+      const exact = run(841); // exactly 841: no edge space (the run ends on a letter)
       const over = Array.from({ length: 400 }, (_, i) => `w${i}`).join(" ");
       const read = readThread([{ role: "peer", text: exact }, ASKED]);
       const cut = readThread([{ role: "peer", text: over }, ASKED]);
 
       expect(read.messages[0].text).toBe(exact);
-      expect(cut.messages[0].text.length).toBeLessThanOrEqual(840);
+      expect(exact).toHaveLength(841);
+      expect(cut.messages[0].text.length).toBeLessThanOrEqual(841);
       expect(cut.messages[0].text.length).toBeGreaterThan(780);
       expect(over.startsWith(cut.messages[0].text)).toBe(true);
       expect(over[cut.messages[0].text.length]).toBe(" ");
@@ -597,6 +598,39 @@ describe("readThread (P3-02b)", () => {
       expect(read.messages[0].text).toBe(long);
       expect(read.messages[1].text.length).toBeLessThanOrEqual(400);
       expect(read.messages[2].text.length).toBeLessThanOrEqual(400);
+    });
+
+    // P4-00c (A's P3-06b O-2, C's P3-05 item 5): the cap was 840, which is 2 * 420 and
+    // nothing for the space `firstAnswerMessage` puts between the parts, so a first answer
+    // with both parts at their cap (841) lost its last word. A measurement through the box
+    // and the route: parts 420 + 420, sent 841, read 828; the model never saw the end of
+    // "Why it is here". The cap is now both parts and the one space: 2 * partChars + 1.
+    describe("the 841 edge: both parts at their cap reach the model whole (P4-00c)", () => {
+      const meaning = `${"alpha ".repeat(69)}ends-meaning.`.slice(-EXPLAIN_CAPS.partChars); // exactly 420
+      const here = `${"gamma ".repeat(69)}ends-here.`.slice(-EXPLAIN_CAPS.partChars); // exactly 420
+      const answer = `${meaning} ${here}`;
+
+      it("is built of two parts at the cap and the space between, 841 characters", () => {
+        expect(meaning).toHaveLength(EXPLAIN_CAPS.partChars);
+        expect(here).toHaveLength(EXPLAIN_CAPS.partChars);
+        expect(answer).toHaveLength(841);
+        // And these are parts the sanitiser keeps at their cap, not strings only this test calls parts.
+        const kept = sanitizeExplainAnswer({ meaning, here: { text: here } });
+        expect(kept?.meaning).toHaveLength(EXPLAIN_CAPS.partChars);
+        expect(kept?.here.text).toHaveLength(EXPLAIN_CAPS.partChars);
+      });
+
+      it("has a cap that is both parts and the space between them", () => {
+        expect(EXPLAIN_CAPS.firstAnswerChars).toBe(2 * EXPLAIN_CAPS.partChars + 1);
+        expect(EXPLAIN_CAPS.firstAnswerChars).toBe(841);
+      });
+
+      it("reads it whole, the last word of 'Why it is here' included", () => {
+        const read = readThread([{ role: "peer", text: answer }, ASKED]);
+
+        expect(read.messages[0].text).toBe(answer);
+        expect(read.messages[0].text.endsWith("ends-here.")).toBe(true);
+      });
     });
 
     it("leaves the 17-message cap as it was", () => {
@@ -755,7 +789,21 @@ describe("buildExplainReplyPrompt (P3-02b)", () => {
       expect(wordy.startsWith(parsed.thread[2].text)).toBe(true);
     });
 
-    it("cuts a first message over 840 characters at a word", () => {
+    // P4-00c: the 841 edge through the prompt — both parts at their cap, the space between,
+    // the whole of it in front of the model; a later message of that length still cut to 400.
+    it("puts a first answer of both parts at their cap (841) whole in the prompt, the last word of the second included", () => {
+      const atCap = `${`${"alpha ".repeat(69)}ends-meaning.`.slice(-EXPLAIN_CAPS.partChars)} ${`${"gamma ".repeat(69)}ends-here.`.slice(-EXPLAIN_CAPS.partChars)}`;
+      const parsed = JSON.parse(
+        buildExplainReplyPrompt({ ...base, thread: [{ role: "peer", text: atCap }, ASKED, { role: "peer", text: atCap }, ASKED_AGAIN] }).userPrompt,
+      ) as { thread: ExplainMessage[] };
+
+      expect(atCap).toHaveLength(2 * EXPLAIN_CAPS.partChars + 1);
+      expect(parsed.thread[0].text).toBe(atCap);
+      expect(parsed.thread[0].text.endsWith("ends-here.")).toBe(true);
+      expect(parsed.thread[2].text.length).toBeLessThanOrEqual(EXPLAIN_CAPS.messageChars);
+    });
+
+    it("cuts a first message over 841 characters at a word", () => {
       const huge = { role: "peer" as const, text: Array.from({ length: 400 }, (_, i) => `w${i}`).join(" ") };
       const parsed = JSON.parse(buildExplainReplyPrompt({ ...base, thread: [huge, ASKED] }).userPrompt) as { thread: ExplainMessage[] };
 
@@ -764,7 +812,7 @@ describe("buildExplainReplyPrompt (P3-02b)", () => {
       expect(huge.text.startsWith(parsed.thread[0].text)).toBe(true);
     });
 
-    it("keeps the first answer's cap with the first answer: once the oldest messages are dropped, no later message is read at 840", () => {
+    it("keeps the first answer's cap with the first answer: once the oldest messages are dropped, no later message is read at 841", () => {
       const long = { role: "peer" as const, text: wordy };
       const thread: ExplainMessage[] = Array.from({ length: 20 }, (_, i) => (i % 2 === 0 ? long : { role: "reader" as const, text: wordy }));
       const parsed = JSON.parse(buildExplainReplyPrompt({ ...base, thread }).userPrompt) as { thread: ExplainMessage[] };

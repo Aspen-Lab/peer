@@ -551,8 +551,9 @@ describe("POST /api/papers/[id]/explain — a reply to the thread", () => {
   });
 
   // P3-05 (§1h.8 (3), O8): the first message of a thread is the first answer, both of
-  // its parts joined; the model that writes a follow-up reads it whole (up to 840
-  // characters), while every later message is still cut to 400.
+  // its parts joined; the model that writes a follow-up reads it whole (up to 841
+  // characters: both parts at their cap and the space between), while every later
+  // message is still cut to 400.
   it("reads the first answer whole and a later message of the same length cut to 400, whatever was sent", async () => {
     replyStub();
     const answer = `${"alpha ".repeat(67)}ends-meaning. ${"gamma ".repeat(68)}ends-here.`;
@@ -566,6 +567,21 @@ describe("POST /api/papers/[id]/explain — a reply to the thread", () => {
     expect(sent).toContain("ends-here.");
     expect(parsed.thread[1].text.length).toBeLessThanOrEqual(400);
     expect(later.length).toBeGreaterThan(700);
+  });
+
+  // P4-00c (the 841 edge, A's P3-06b O-2): both parts at their cap, 420 + a space + 420, are
+  // the first message of a thread; the model reads all of it, the last word of "Why it is
+  // here" included — at 840 that word was cut.
+  it("reads a first answer with both parts at their cap whole, through the route", async () => {
+    replyStub();
+    const answer = `${`${"alpha ".repeat(69)}ends-meaning.`.slice(-420)} ${`${"gamma ".repeat(69)}ends-here.`.slice(-420)}`;
+    await call(ask({ thread: [{ role: "peer", text: answer }, { role: "reader", text: "What does the ratio change?" }] }));
+    const sent = provider.generateJsonText.mock.calls[0][0].userPrompt as string;
+    const parsed = JSON.parse(sent) as { thread: Array<{ text: string }> };
+
+    expect(answer).toHaveLength(841);
+    expect(parsed.thread[0].text).toBe(answer);
+    expect(sent).toContain("ends-here.");
   });
 
   it("asks the model once for the same thread twice: the second is a hit, with no call", async () => {
