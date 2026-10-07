@@ -1694,11 +1694,13 @@ describe("the displayed quote keeps the paper's notation (P4-00c)", () => {
     expect(turn(ALPHA_SENTENCE.replace("α_1", "α1")).evidence).toBe(ALPHA_SENTENCE);
   });
 
-  it("shows a fragment of a sentence as the paper has it, not the sentence", () => {
+  it("shows a fragment of a sentence as the paper has it, extended to its sentence", () => {
+    // P4-04 (§1h.8 (8)): this asserted the fragment itself; a verified quote that begins inside a sentence
+    // is now shown from the sentence's start when the whole fits 400 (the paper's own characters either way).
     const fragment = "across every cell of the specimen, and f_cell stayed flat.";
 
-    expect(answerOf(fragment).here.evidence).toBe(fragment);
-    expect(turn(fragment.replace("f_cell", "fcell")).evidence).toBe(fragment);
+    expect(answerOf(fragment).here.evidence).toBe(F_SENTENCE);
+    expect(turn(fragment.replace("f_cell", "fcell")).evidence).toBe(F_SENTENCE);
   });
 
   it("is always the paper's own text: whatever it shows is a stretch of the located section, with its white space collapsed", () => {
@@ -1757,9 +1759,11 @@ describe("the displayed quote keeps the paper's notation (P4-00c)", () => {
     const head = Array.from({ length: 39 }, (_, i) => `${letters[Math.floor(i / 26)]}${letters[i % 26]}xyz`);
     const last = "q".repeat(lastWordLength);
     const words = [...head, last];
-    const cited = words.map((w, i) => `${w} [${(i % 3) + 1}]`).join(" ");
+    // P4-04: the paper's sentence opens with a capital (the splitter reads a lower-case start as the sentence before continuing).
+    const cited = words.map((w, i) => `${w} [${(i % 3) + 1}]`).join(" ").replace(/^./, (c) => c.toUpperCase());
     const span = cited.replace(/ \[\d\]$/, "");
-    const doc: ExtractedDocument = { ...notationDoc, sections: [{ id: "s1", heading: "2 Results", canonical: "results", page: 1, text: `Intro words here.\n\n${cited}\n\nEnd words here.` }] };
+    // P4-04 (§1h.8 (8)): the paragraph ends with a full stop, so the quote's last word is on a sentence boundary and nothing is cut.
+    const doc: ExtractedDocument = { ...notationDoc, sections: [{ id: "s1", heading: "2 Results", canonical: "results", page: 1, text: `Intro words here.\n\n${cited}.\n\nEnd words here.` }] };
     return { span, modelQuote: words.join(" "), doc };
   };
 
@@ -1784,15 +1788,19 @@ describe("the displayed quote keeps the paper's notation (P4-00c)", () => {
   it("still shows the paper's own characters when the aligned span is within 400 (the O-6 behaviour)", () => {
     const letters = "abcdefghijklmnopqrstuvwxyz";
     const words = Array.from({ length: 30 }, (_, i) => `${letters[i % 26]}${letters[(i + 3) % 26]}xyz`);
-    const cited = words.map((w, i) => `${w} [${(i % 3) + 1}]`).join(" ");
+    const cited = words.map((w, i) => `${w} [${(i % 3) + 1}]`).join(" ").replace(/^./, (c) => c.toUpperCase());
     expect(cited.length).toBeLessThanOrEqual(EXPLAIN_CAPS.evidenceChars);
-    const shortDoc: ExtractedDocument = { ...notationDoc, sections: [{ id: "s1", heading: "2 Results", canonical: "results", page: 1, text: `Intro words here.\n\n${cited}\n\nEnd words here.` }] };
+    // P4-04 (§1h.8 (8)): the paragraph ends with a full stop, so the quote's last word is on a sentence boundary and nothing is cut.
+    const shortDoc: ExtractedDocument = { ...notationDoc, sections: [{ id: "s1", heading: "2 Results", canonical: "results", page: 1, text: `Intro words here.\n\n${cited}.\n\nEnd words here.` }] };
 
     // The span runs from the first quoted word to the last, so the closing bracket after it is not in it.
     const span = cited.replace(/ \[\d\]$/, "");
     expect(span).toContain("[");
-    expect(answerOf(words.join(" "), shortDoc).here.evidence).toBe(span);
-    expect(turn(words.join(" "), shortDoc).evidence).toBe(span);
+    // P4-04 (§1h.8 (8)): and the quote's last word is the sentence's last but for the paper's own closing
+    // bracket and full stop, so the sentence (it fits 400) is shown whole — the paper's characters, brackets in.
+    expect(`${cited}.`.startsWith(span)).toBe(true);
+    expect(answerOf(words.join(" "), shortDoc).here.evidence).toBe(`${cited}.`);
+    expect(turn(words.join(" "), shortDoc).evidence).toBe(`${cited}.`);
   });
 
   it("shows Chinese text as the paper has it", () => {
@@ -2208,5 +2216,62 @@ describe("brevity harness", () => {
     // A table of paragraphs, every cell over the cap, is no table, and the prose is then the usual three.
     const none = sanitizeExplainReply({ reply: sentences(30), items: rows.slice(0, 6) });
     expect(none).toEqual({ reply: sentences(3) });
+  });
+});
+
+// ── P4-04 (§1h.8 (8), BACKLOG-13's open half): a verified quote is shown to its sentence boundaries ──
+// The first answer and the reply show what `shapeEvidenceQuote` (evidence.ts, the one function) decides:
+// the quote extended to its sentence's start and end when the whole fits 400, else as it is with "…" at
+// each cut end. Invented text; the model's words go through the sanitizer and the verifier, as in the route.
+
+describe("the displayed quote is shown to its sentence boundaries (P4-04)", () => {
+  const LEAD = "The cells were counted twice by two people in the lab.";
+  const SENTENCE = "The ratio f_cell was 0.4 across every cell of the specimen, but it fell to 0.1 once the load was released.";
+  const TRAIL = "Nothing else changed during the whole run.";
+  const sectionDoc = (text: string): ExtractedDocument => ({
+    source: "pdf",
+    pageCount: 1,
+    figureCaptions: [],
+    sections: [{ id: "s1", heading: "2 Results", canonical: "results", page: 1, text }],
+  });
+  const plain = sectionDoc(`${LEAD}\n\n${SENTENCE}\n\n${TRAIL}`);
+  const answerOf = (evidence: string, doc: ExtractedDocument = plain) => verifyExplainAnswer(sanitizeExplainAnswer({ meaning: "m", here: { text: "t", evidence } }) as ExplainAnswer, doc, "s1");
+  const turn = (evidence: string, doc: ExtractedDocument = plain) => verifyExplainReply(sanitizeExplainReply({ reply: "Peer's words.", evidence }) as NonNullable<ReturnType<typeof sanitizeExplainReply>>, doc, "s1");
+
+  it("extends a first clause to its whole sentence, in the answer and in the reply", () => {
+    const clause = "The ratio f_cell was 0.4 across every cell of the specimen,";
+    expect(answerOf(clause).here).toMatchObject({ evidence: SENTENCE, evidenceWhere: "2 Results", sectionId: "s1" });
+    expect(turn(clause)).toMatchObject({ evidence: SENTENCE, evidenceWhere: "2 Results", sectionId: "s1" });
+  });
+
+  it("extends a tail that begins inside the sentence back to its start", () => {
+    const tail = "but it fell to 0.1 once the load was released.";
+    expect(answerOf(tail).here.evidence).toBe(SENTENCE);
+    expect(turn(tail).evidence).toBe(SENTENCE);
+  });
+
+  it("shows the paper's own `f_cell` in the extension even when the model's copy lost it", () => {
+    expect(answerOf("The ratio fcell was 0.4 across every cell of the specimen,").here.evidence).toBe(SENTENCE);
+  });
+
+  it("leaves a quote that is a whole sentence unchanged", () => {
+    expect(answerOf(SENTENCE).here.evidence).toBe(SENTENCE);
+    expect(turn(SENTENCE).evidence).toBe(SENTENCE);
+  });
+
+  it("marks the cut with an ellipsis when the whole sentence does not fit 400 characters", () => {
+    const padding = "and the specimen was then rinsed and dried and weighed and logged by hand at every single step of the long run, ".repeat(4);
+    const long = `The first clause says the ratio f_cell was 0.4 across every cell, ${padding}but the last clause reverses the finding entirely once the load was released.`;
+    expect(long.length).toBeGreaterThan(EXPLAIN_CAPS.evidenceChars);
+    const doc = sectionDoc(`${LEAD}\n\n${long}\n\n${TRAIL}`);
+    const head = "The first clause says the ratio f_cell was 0.4 across every cell,";
+    const shownAnswer = answerOf(head, doc).here.evidence as string;
+    const shownTurn = turn(head, doc).evidence as string;
+
+    for (const shown of [shownAnswer, shownTurn]) {
+      expect(shown).toBe(`${head}…`);
+      expect(shown.length).toBeLessThanOrEqual(EXPLAIN_CAPS.evidenceChars);
+    }
+    expect(answerOf(head, doc).here.peer).toBeUndefined();
   });
 });

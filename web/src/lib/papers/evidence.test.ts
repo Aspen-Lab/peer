@@ -702,4 +702,20 @@ describe("shapeEvidenceQuote (P4-04)", () => {
   it("finds a quote that is cased or spaced differently from the section, and shows the section's text", () => {
     expect(shapeEvidenceQuote(SECTION, "the ALLOY softened   at 300 K under the load", CAP)).toBe(S2);
   });
+
+  it("finds the sentence boundaries of Chinese text too (。！？ end a sentence, as the explain box has it)", () => {
+    const one = "我们把片状析出物占试样的比例定义为 f_cell，并在每个试样上测量了两次以确认结果。";
+    const sec = `前言在这里先说明了实验的背景。${one}结束时没有任何其他变化发生。`;
+    expect(shapeEvidenceQuote(sec, "并在每个试样上测量了两次以确认结果", CAP)).toBe(one);
+    expect(shapeEvidenceQuote(sec, one, CAP)).toBe(one);
+    // A paragraph break collapses to a space after the ender: it still ends the sentence.
+    expect(shapeEvidenceQuote(sec.replace(/。/g, "。 "), "并在每个试样上测量了两次以确认结果", CAP)).toBe(one);
+  });
+
+  it("does not call a trailing citation bracket and full stop a cut", () => {
+    const body = "The first clause of this long sentence says that the alloy softened at 300 K under load, and the rest says it held";
+    const sec = `${S1} ${body} [12]. ${S3}`;
+    expect(shapeEvidenceQuote(sec, body, body.length + 2)).toBe(body);
+    expect(shapeEvidenceQuote(sec, body, body.length + 8)).toBe(`${body} [12].`);
+  });
 });

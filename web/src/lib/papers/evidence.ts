@@ -481,11 +481,20 @@ function locateSpan(quote: string, flat: string): Span | null {
   return null;
 }
 
-/** `[start, end)` of each sentence of `flat` (`splitSentences`: abbreviations and decimals do not split). */
+/** Where a Chinese sentence ends: after 。！？ and any closing quote or bracket, before
+ *  what follows (so "！？" stays one ending) — and after an ASCII "!" or "?" that the cleaner
+ *  made of a full-width one, when Chinese text follows. The Latin splitter sees neither. */
+export const CJK_SENTENCE_BREAK = /(?<=[。！？][”’」』）)]*)(?=[^。！？”’」』）)\s])|(?<=[!?])(?=\p{Script=Han})/u;
+
+/** A Chinese ender followed by white space (a paragraph break collapsed to a space): the break above needs text to follow it directly. */
+const CJK_ENDER_THEN_SPACE = /(?<=[。！？][”’」』）)]*)\s+/u;
+
+/** `[start, end)` of each sentence of `flat`: Chinese enders first, then `splitSentences`
+ *  (abbreviations and decimals do not split). */
 function sentenceSpans(flat: string): Array<{ start: number; end: number }> {
   const spans: Array<{ start: number; end: number }> = [];
   let at = 0;
-  for (const sentence of splitSentences(flat)) {
+  for (const sentence of flat.split(CJK_SENTENCE_BREAK).flatMap((piece) => piece.split(CJK_ENDER_THEN_SPACE)).flatMap(splitSentences)) {
     const start = flat.indexOf(sentence, at);
     if (start < 0) return [];
     spans.push({ start, end: start + sentence.length });
@@ -494,7 +503,7 @@ function sentenceSpans(flat: string): Array<{ start: number; end: number }> {
   return spans;
 }
 
-/** Nothing of a sentence is left out when what lies outside the quote has no letter or digit in it (a full stop, a bracket, a quote mark). */
+/** Nothing of a sentence is left out when what lies outside the quote has no letter or digit in it (a full stop, a bracket, a quote mark, a numeric citation). */
 const HAS_WORD_CHAR = /[\p{L}\p{N}]/u;
 
 /** `text` cut to at most `room` characters at a word boundary (inside a word only when one word is all there is). */
@@ -538,8 +547,8 @@ export function shapeEvidenceQuote(sectionText: string, quote: string, cap: numb
   // No sentence structure to go by: show the words as they are, within the cap.
   if (!first || !last) return cutToRoom(flat.slice(span.start, span.end), cap);
 
-  const startCut = HAS_WORD_CHAR.test(flat.slice(first.start, span.start));
-  const endCut = HAS_WORD_CHAR.test(flat.slice(span.end, last.end));
+  const startCut = HAS_WORD_CHAR.test(flat.slice(first.start, span.start).replace(NUMERIC_CITATION, ""));
+  const endCut = HAS_WORD_CHAR.test(flat.slice(span.end, last.end).replace(NUMERIC_CITATION, ""));
   const whole = flat.slice(first.start, last.end);
   if (whole.length <= cap) return whole;
 
