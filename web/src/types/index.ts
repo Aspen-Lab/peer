@@ -442,6 +442,14 @@ export interface UserProfile {
    * should rise to the top of the briefing.
    */
   currentChallenges?: string;
+  /**
+   * P5-01 (blueprint P5): questions the reader brings to most papers — up to
+   * five, 200 characters each, kept as typed. They show as one chip group on a
+   * paper's "Before you read" box and are never filled in. Browser only: the
+   * sync's payload leaves the field out (`remoteProfilePayload`). Read through
+   * `cleanQuestions`; absent means none.
+   */
+  standingQuestions?: string[];
   /** Local v1 selection metadata; profile API persistence remains a separate P1 item. */
   selectedSenseConcepts?: SelectedSenseConcept[];
   /** Canonical v1 retrieval card; server persistence is intentionally opt-in. */

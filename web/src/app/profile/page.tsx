@@ -20,6 +20,8 @@ import {
   useReadingDays,
 } from "@/components/charts/reading-calendar";
 import { AdvisorField } from "@/components/profile/advisor-field";
+import { StandingQuestionsField } from "@/components/profile/standing-questions-field";
+import { STANDING } from "@/components/reader/copy";
 import { summarizePreferenceLedger } from "@/lib/preferences/ledger";
 import { ProfileUploads } from "@/components/profile-uploads";
 import { apiFetch } from "@/lib/api";
@@ -1935,6 +1937,10 @@ function EditView({
         <p className="text-caption text-text-faint/75 mt-1.5 px-1 leading-relaxed">
           The unknowns you wish someone would solve for you. Highest-leverage signal — papers that mention these will rise to the top.
         </p>
+      </EditRow>
+
+      <EditRow icon={<IconHash />} tone="tag" label={STANDING.label}>
+        <StandingQuestionsField />
       </EditRow>
 
       <EditRow icon={<IconCareer />} tone="neutral" label="Career">

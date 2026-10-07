@@ -123,6 +123,21 @@ export const ASK = {
 } as const;
 
 /**
+ * P5-01 (blueprint P5): standing questions — the ones a reader brings to most
+ * papers. Kept on the Profile; on a paper they are one chip group under
+ * "Before you read" and are never filled in.
+ */
+export const STANDING = {
+  label: "Standing questions",
+  chipGroup: "Your standing questions",
+  hint: "Up to five questions you bring to most papers. On a paper they show as buttons under \u201cBefore you read\u201d; Peer never fills one in for you.",
+  add: "Add a question",
+  placeholder: "A question you bring to most papers",
+  line: (n: number) => `Standing question ${n}`,
+  remove: (n: number) => `Remove standing question ${n}`,
+} as const;
+
+/**
  * P1-04 (§1f.12): the reading map under the question field. The role labels
  * are a reader's names for the section buckets; `body` (a heading Peer could
  * not place) has none.
