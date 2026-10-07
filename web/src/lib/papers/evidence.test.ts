@@ -652,6 +652,46 @@ describe("shapeEvidenceQuote (P4-04)", () => {
       expect(shapeEvidenceQuote(SEC, quote, LONG.length)).toBe(LONG);
       expect(shapeEvidenceQuote(SEC, quote, LONG.length - 1)).toBe(`${quote}…`);
     });
+
+    // P4-04b: a quote that itself fills (or nearly fills) the cap inside a longer sentence leaves the
+    // marks no room; the quote is shortened at a word boundary so the whole shown text stays within the cap.
+    describe("a quote that fills the cap leaves the marks room by being shortened", () => {
+      const CAP3 = 55;
+      const MID = LONG.indexOf("long sentence");
+      const take = (from: number, length: number): string => {
+        const quote = LONG.slice(from, from + length);
+        expect(quote.length).toBe(length);
+        expect(quote).toBe(quote.trim());
+        return quote;
+      };
+
+      for (const length of [CAP3, CAP3 - 1]) {
+        it(`marks both ends of a mid-sentence quote of ${length === CAP3 ? "cap" : "cap - 1"} characters within the cap`, () => {
+          const quote = take(MID, length);
+          const shown = shapeEvidenceQuote(SEC, quote, CAP3) as string;
+          expect(shown.length).toBeLessThanOrEqual(CAP3);
+          expect(shown.startsWith("…")).toBe(true);
+          expect(shown.endsWith("…")).toBe(true);
+          const between = shown.slice(1, -1);
+          expect(between.length).toBeGreaterThan(0);
+          expect(quote.startsWith(between)).toBe(true);
+          expect(LONG.includes(between)).toBe(true);
+        });
+      }
+
+      for (const length of [CAP3, CAP3 - 1]) {
+        it(`marks only the end of a quote of ${length === CAP3 ? "cap" : "cap - 1"} characters that starts on the sentence's start`, () => {
+          const quote = take(0, length);
+          const shown = shapeEvidenceQuote(SEC, quote, CAP3) as string;
+          expect(shown.length).toBeLessThanOrEqual(CAP3);
+          expect(shown.startsWith("…")).toBe(false);
+          expect(shown.endsWith("…")).toBe(true);
+          const between = shown.slice(0, -1);
+          expect(between.length).toBeGreaterThan(0);
+          expect(quote.startsWith(between)).toBe(true);
+        });
+      }
+    });
   });
 
   describe("abbreviations and decimals do not end a sentence", () => {
