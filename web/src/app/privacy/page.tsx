@@ -30,6 +30,12 @@ const SECTIONS = [
       "From then on these are stored against your account: the topics, methods, journals, school and lab you enter; the free-text project and challenges you write; your feed and digest settings; papers you save; papers you open; likes and dismissals; and digests that were sent to you.",
       "A like or a dismissal is kept as a small ledger of concepts, which is what makes tomorrow's briefing different from today's.",
       "Signing in carries what you had saved and opened in this browser into your account. Signing out clears this browser's copy, including the reading graph — which is kept only in this browser, never on Peer's servers, so it does not come back when you sign in again.",
+      // P4-00c (N7): written from `lib/papers/upload-store.ts` (the three objects, the
+      // record's fields, `deleteUpload`, the purge), `upload-access.ts` (the owner key is a
+      // digest of the account) and the upload route's 30 days, which the consent dialog
+      // also tells the reader. The test pins each clause. No "nowhere else": the server's
+      // memory holds parts of the text for an hour, which the sentence says.
+      "If you upload a private PDF, Peer's server keeps the PDF, a record of it (its file name, title and abstract, and when it expires) and the text Peer read out of it, in its own file storage against your account, for 30 days, after which a daily sweep removes them, or until you delete the upload. While you read it, the text also sits in the server's memory for up to an hour.",
     ],
   },
   {

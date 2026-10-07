@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
@@ -214,5 +216,96 @@ describe("/privacy — Who else sees a request names the gist pass (P3-05)", () 
   it("names the two things that switch a deep report on, as the report's own predicate reads them", () => {
     expect(entry).toContain("turn on Deep report in your profile");
     expect(entry).toContain("attach a PDF to the paper");
+  });
+});
+
+// P4-00c (N7, A's P4-00b): what Peer's server keeps of an uploaded PDF is named on
+// /privacy, in "If you sign in" (an upload needs an account: `uploadOwner` answers
+// no one in production without one). The sentence is written from the upload store
+// and pinned clause by clause to the line that makes it true, as the Jev section
+// is: where the three objects are, what the record holds, whose they are, how
+// long, how they go, and the hour in memory. The consent dialog's own sentence
+// ("stays private to your account ... for 30 days") is the other half the reader
+// sees; both must say the same number.
+//
+// Not claimed, on purpose: "and nowhere else". The server's memory holds parts of
+// the text for up to an hour (named in the sentence), and a saved upload is a
+// saved paper like any other, which the page already lists under "papers you save".
+const UPLOAD_TEXT =
+  "If you upload a private PDF, Peer's server keeps the PDF, a record of it (its file name, title and abstract, and when it expires) and the text Peer read out of it, in its own file storage against your account, for 30 days, after which a daily sweep removes them, or until you delete the upload. While you read it, the text also sits in the server's memory for up to an hour.";
+
+describe("/privacy — an uploaded PDF's storage on Peer's server (P4-00c N7)", () => {
+  const html = renderToStaticMarkup(createElement(PrivacyPage));
+  const root = process.cwd();
+  const read = (file: string) => readFileSync(join(root, file), "utf8");
+
+  it("has the sentence, word for word, in 'If you sign in' and nowhere else", () => {
+    const signIn = html.slice(html.indexOf(">If you sign in<"), html.indexOf(">Your notes<"));
+    expect(signIn).toContain(`<p>${UPLOAD_TEXT.replace(/'/g, "&#x27;")}</p>`);
+    expect(html.split(UPLOAD_TEXT.slice(0, 40).replace(/'/g, "&#x27;")).length - 1).toBe(1);
+  });
+
+  it("keeps the PDF, its record and the text read out of it: the three objects the store writes under one upload's name", () => {
+    const store = read("src/lib/papers/upload-store.ts");
+    expect(store).toContain("return `${hash16}.pdf`;");
+    expect(store).toContain("return `${hash16}.json`;");
+    expect(store).toContain("return `${hash16}.doc.json`;");
+  });
+
+  it("names what the record holds, each a field of the stored record: file name, title, abstract, expiry", () => {
+    const store = read("src/lib/papers/upload-store.ts");
+    const record = store.slice(store.indexOf("export interface UploadMeta"), store.indexOf("export function uploadMetaToPaper") > 0 ? store.indexOf("export function uploadMetaToPaper") : undefined);
+    expect(record).toMatch(/\bfileName: string;/);
+    expect(record).toMatch(/\btitle: string;/);
+    expect(record).toMatch(/\bsummaryIntro\?: string;/);
+    expect(record).toMatch(/\bexpiresAt\?: string;/);
+  });
+
+  it("files it against the reader's account: the owner key is a digest of the account, and a read must match it", () => {
+    const access = read("src/lib/papers/upload-access.ts");
+    expect(access).toContain("createHash(\"sha256\").update(`account:${user.id}`).digest(\"hex\")");
+    expect(access).toContain("meta.ownerKey !== key");
+    // Production has no other owner: without an account there is no upload.
+    expect(access).toMatch(/process\.env\.NODE_ENV === "production" \|\| process\.env\.VERCEL[^\n]*\) return null;/);
+  });
+
+  it("keeps it 30 days, and the consent dialog tells the reader the same number", () => {
+    expect(read("src/app/api/papers/upload/route.ts")).toContain("expiresAt: new Date(Date.now() + 30 * 86400_000).toISOString()");
+    const dialog = read("src/components/briefing/upload-consent-dialog.tsx");
+    expect(dialog).toContain("Your PDF stays private to your account");
+    expect(dialog).toContain("for 30 days.");
+  });
+
+  it("removes them after that by a daily sweep: the cron, the route it calls and the purge's own deletion", () => {
+    const cron = JSON.parse(read("../vercel.json")) as { crons: { path: string; schedule: string }[] };
+    const purge = cron.crons.find((entry) => entry.path === "/api/jobs/purge-uploads");
+    expect(purge?.schedule).toMatch(/^\d+ \d+ \* \* \*$/);
+    expect(read("src/app/api/jobs/purge-uploads/route.ts")).toContain("await purgeExpiredUploads();");
+    const store = read("src/lib/papers/upload-store.ts");
+    const purgeBody = store.slice(store.indexOf("export async function purgeExpiredUploads"), store.indexOf("async function purgeAbandonedStagedUploads"));
+    expect(purgeBody).toContain("Date.parse(meta.expiresAt) <= Date.now()) await deleteUpload(meta);");
+  });
+
+  it("removes them all when the reader deletes the upload: the record, the PDF and the text", () => {
+    const store = read("src/lib/papers/upload-store.ts");
+    const start = store.indexOf("export async function deleteUpload");
+    const deleteBody = store.slice(start, store.indexOf("\n}\n", start));
+    expect(deleteBody).toContain("backend.remove([metaName(meta.hash16)])");
+    expect(deleteBody).toContain("backend.remove([pdfName(meta.hash16)])");
+    expect(deleteBody).toContain("await removeUploadDoc(meta.hash16)");
+    expect(read("src/app/api/papers/upload/[id]/route.ts")).toContain("await deleteUpload(meta);");
+  });
+
+  it("ties the hour in memory to the code: the extracted text is held for an hour", () => {
+    expect(read("src/lib/papers/upload-store.ts")).toContain("const DOC_CACHE_TTL_MS = 60 * 60 * 1000;");
+    expect(read("src/lib/papers/full-text.ts")).toContain("const CACHE_TTL_MS = 60 * 60 * 1000;");
+  });
+
+  it("makes no claim it cannot keep: no 'nowhere else' about the PDF", () => {
+    const signIn = html.slice(html.indexOf(">If you sign in<"), html.indexOf(">Your notes<"));
+    const from = signIn.indexOf("If you upload a private PDF");
+    expect(from).toBeGreaterThan(-1);
+    const sentence = signIn.slice(from, signIn.indexOf("</p>", from));
+    expect(sentence).not.toMatch(/nowhere else|no one else|never leaves/i);
   });
 });
