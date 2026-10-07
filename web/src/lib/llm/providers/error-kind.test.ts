@@ -50,6 +50,21 @@ describe("errorKind — kind, and a status when there is one", () => {
     }
   });
 
+  it("a non-integer inside 100–599 is not logged either (the range alone does not make a number a status)", () => {
+    // 1.5 above is outside the range, so it never reaches the integer check; these
+    // are the values that do, and only that check keeps them out.
+    for (const fractional of [404.5, 100.1, 599.9, 503.0000001]) {
+      expect(errorKind(Object.assign(new Error("x"), { status: fractional }))).toBe("Error");
+      expect(errorKind(Object.assign(new Error("x"), { code: fractional }))).toBe("Error");
+    }
+    // A fractional status does not hide a whole code beside it, and a whole status
+    // still wins over a fractional code.
+    expect(errorKind(Object.assign(new Error("x"), { status: 404.5, code: 429 }))).toBe("Error code 429");
+    expect(errorKind(Object.assign(new Error("x"), { status: 404, code: 429.5 }))).toBe("Error status 404");
+    // The same for a thrown plain object, which takes the same path.
+    expect(errorKind({ message: MARKER, status: 404.5 })).toBe("object");
+  });
+
   it("the edges of the HTTP range are logged", () => {
     expect(errorKind(Object.assign(new Error("x"), { status: 100 }))).toBe("Error status 100");
     expect(errorKind(Object.assign(new Error("x"), { status: 599 }))).toBe("Error status 599");
