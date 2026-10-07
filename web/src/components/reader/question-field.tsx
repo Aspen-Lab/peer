@@ -24,8 +24,8 @@
 // rendering it, and what its handlers do through the pure functions below.
 
 import { useEffect, useRef, useState } from "react";
-import { MAX_QUESTION_CHARS, MAX_QUESTIONS, useReadingQuestionsStore } from "@/store/reading-questions";
-import { ASK, ROUTE } from "./copy";
+import { MAX_QUESTION_CHARS, MAX_QUESTIONS, cleanQuestions, useReadingQuestionsStore } from "@/store/reading-questions";
+import { ASK, ROUTE, STANDING } from "./copy";
 
 /** Past this many characters a line shows its count. */
 const COUNTER_FROM = 160;
@@ -96,6 +96,21 @@ export function chipGroups(examples: readonly ExampleGroupProp[]): ChipGroup[] {
   return examples
     .filter((group) => group.items.length > 0)
     .map((group) => ({ label: group.label, chips: group.items.map((text) => ({ label: text, text })) }));
+}
+
+/**
+ * P5-01 (blueprint P5): the reader's standing questions as one more chip group,
+ * or null when there is none to offer. A chip puts its text on a line when
+ * pressed — the example tags' own action — and nothing else ever does. A
+ * question that is already a line of the box is not offered again. The list is
+ * read defensively (it comes from a stored profile): text only, at most five.
+ */
+export function standingGroup(standing: readonly string[] | undefined, lines: readonly string[]): ChipGroup | null {
+  const taken = new Set(lines.map((line) => line.trim().toLocaleLowerCase()));
+  const chips = cleanQuestions((standing ?? []).filter((q): q is string => typeof q === "string"))
+    .filter((q) => !taken.has(q.toLocaleLowerCase()))
+    .map((text) => ({ label: text, text }));
+  return chips.length > 0 ? { label: STANDING.chipGroup, chips } : null;
 }
 
 /**
@@ -173,6 +188,7 @@ export function focusFirstEmptyQuestion(): void {
 export function QuestionField({
   paperId,
   examples,
+  standing,
   vague = false,
   idleMs = BOX_IDLE_MS,
 }: {
@@ -183,6 +199,9 @@ export function QuestionField({
   /** P1-09 (§1f.20): the example tags, from the reader's earlier questions
    *  and profile only. */
   examples: readonly ExampleGroupProp[];
+  /** P5-01: the reader's standing questions (the profile's); one more chip
+   *  group, never filled in. */
+  standing?: readonly string[];
   /** P1-05 (§1f.6, §1f.13): every question is too vague to route — the page
    *  tints nothing and the field says what would help. */
   vague?: boolean;
@@ -274,7 +293,8 @@ export function QuestionField({
     commit(filled.lines, nextGist(gist, filled.lines));
   };
 
-  const groups = chipGroups(examples);
+  const standingChips = standingGroup(standing, lines);
+  const groups = [...(standingChips ? [standingChips] : []), ...chipGroups(examples)];
   const chipsShown = showChips({ focused, lines, gist });
   const full = lines.length >= MAX_QUESTIONS && lines.every((line) => line.trim() !== "");
 

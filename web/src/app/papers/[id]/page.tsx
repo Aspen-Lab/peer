@@ -1356,7 +1356,7 @@ function Reader({
           hasBody ? (
             <>
               {questionsHydrated && (
-                <QuestionField key={paper.id} paperId={paper.id} examples={examples} vague={route?.vague ?? false} />
+                <QuestionField key={paper.id} paperId={paper.id} examples={examples} standing={profile.standingQuestions} vague={route?.vague ?? false} />
               )}
               {reading.map && <ReadingMapView key={`map:${paper.id}`} map={reading.map} route={route} gists={paragraphGists} />}
               <TermsStrip key={`terms:${paper.id}`} terms={terms} reading={reading} marked={markedTerm} onMark={markTerm} />
