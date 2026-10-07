@@ -266,7 +266,8 @@ async function generateShallowReport(
       provenance: { ...verified.report.provenance, basis: "model-abstract" },
     };
   } catch (err) {
-    console.error("[papers/report] shallow generation failed:", err);
+    // The error's kind only: a provider's message may echo the prompt, which carries the reader's project text.
+    console.error("[papers/report] shallow generation failed:", err instanceof Error ? err.name : typeof err);
     return emptyReport("fallback");
   }
 }
@@ -528,7 +529,8 @@ function streamReport(
 
         finish(bound);
       } catch (err) {
-        console.error("[papers/report] streaming flow failed:", err);
+        // The error's kind only (see the shallow path): the deep prompts carry the paper's text and the questions.
+        console.error("[papers/report] streaming flow failed:", err instanceof Error ? err.name : typeof err);
         try {
           send({
             type: "error",
@@ -704,7 +706,8 @@ async function handlePost(req: NextRequest) {
 
       return NextResponse.json(bound);
     } catch (err) {
-      console.error("[papers/report] deep flow failed:", err);
+      // The error's kind only (see the shallow path).
+      console.error("[papers/report] deep flow failed:", err instanceof Error ? err.name : typeof err);
       return NextResponse.json(await generateShallowReport(body, body.llmOverride));
     }
   }
