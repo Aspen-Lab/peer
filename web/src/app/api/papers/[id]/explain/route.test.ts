@@ -1101,3 +1101,41 @@ describe("POST /api/papers/[id]/explain — a reply with a term table (P3-07)", 
     expect(reply.cached).toBe(false);
   });
 });
+
+// P4-00c (§1h.11 (d), A's P3-06b O-6): the verified quote shows the paper's own notation. The
+// cleaner reads the underscore of `f_cell` as a subscript and strips it; the quote used to be cleaned
+// before it was shown, so the prose said `f_cell` and the quote under it said `fcell`. Matching stays
+// on the cleaned forms; what the page shows is the paper's own characters, through the real route.
+describe("POST /api/papers/[id]/explain — the quote keeps the paper's notation (P4-00c)", () => {
+  const F_SENTENCE = "The ratio f_cell was 0.4 across every cell of the specimen, and α_1 stayed near 0.2.";
+  const fDoc: ExtractedDocument = {
+    ...doc,
+    sections: [...doc.sections.slice(0, 3), { id: "s3", heading: "3 Results", canonical: "results", page: 3, text: `Cells were counted twice by two people.\n\n${F_SENTENCE}\n\nNothing else changed.` }],
+  };
+  const fAsk = (over: Record<string, unknown> = {}) => ({ paper, passage: "The ratio f_cell was 0.4 across every cell", sectionId: "s3", paragraphIndex: 1, thread: [], ...over });
+  const WHERE = { evidenceWhere: "3 Results", sectionId: "s3", page: 3 };
+
+  it("shows `f_cell` and `α_1` in the first answer's quote, as the prose and the paper have them", async () => {
+    mocks.getFullText.mockResolvedValue({ status: "ok", doc: fDoc, attempts: [] });
+    provider.generateJsonText.mockResolvedValue(JSON.stringify({ meaning: "A share f_cell of the cells.", here: { text: "It stays flat.", evidence: F_SENTENCE } }));
+    const body = await json(await call(fAsk()));
+
+    expect(body.answer).toEqual({ meaning: "A share f_cell of the cells.", here: { text: "It stays flat.", evidence: F_SENTENCE, ...WHERE } });
+  });
+
+  it("shows them in a reply's quote, and for a quote that lost the underscore the paper's own characters", async () => {
+    mocks.getFullText.mockResolvedValue({ status: "ok", doc: fDoc, attempts: [] });
+    replyStub({ reply: "f_cell stays flat.", evidence: F_SENTENCE.replace("f_cell", "fcell").replace("α_1", "α1") });
+    const body = await json(await call(fAsk({ thread: [{ role: "peer", text: "A share of the cells." }, { role: "reader", text: "Does it change?" }] })));
+
+    expect(body.turn).toMatchObject({ text: "f_cell stays flat.", evidence: F_SENTENCE, ...WHERE });
+  });
+
+  it("still drops a quote the paper does not hold, whatever notation it uses", async () => {
+    mocks.getFullText.mockResolvedValue({ status: "ok", doc: fDoc, attempts: [] });
+    provider.generateJsonText.mockResolvedValue(JSON.stringify({ meaning: "m", here: { text: "t", evidence: "The ratio f_cell was 0.9 across every cell of the specimen, and α_1 stayed near 0.2." } }));
+    const body = await json(await call(fAsk()));
+
+    expect(body.answer).toEqual({ meaning: "m", here: { text: "t", peer: true } });
+  });
+});

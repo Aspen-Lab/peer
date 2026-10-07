@@ -1636,6 +1636,115 @@ describe("the term table's grounding (P3-07)", () => {
   });
 });
 
+// ── P4-00c (§1h.11 (d), A's P3-06b O-6): the displayed quote keeps the paper's notation ──
+// The verified quote turned the author's `f_cell` into `fcell` on the page, because the cleaner
+// strips an underscore as a LaTeX subscript, while the prose and the table cells kept it. A quote
+// that claims to be the paper's own words must show the paper's characters. MATCHING stays on the
+// cleaned forms (the verifier normalises both sides, so a quote that lost its underscore, or its
+// case, still verifies); DISPLAY is the paper's own characters: the model's copy when it is verbatim
+// in the located section, else the paper's words found by aligning the normalised words with the
+// section's, else — only when neither can be done — the model's words cleaned with the underscore kept.
+
+describe("the displayed quote keeps the paper's notation (P4-00c)", () => {
+  const F_SENTENCE = "The ratio f_cell was 0.4 across every cell of the specimen, and f_cell stayed flat.";
+  const ALPHA_SENTENCE = "The slope α_1 stayed near 0.2 in every cell of the specimen under load.";
+  const notationDoc: ExtractedDocument = {
+    source: "pdf",
+    pageCount: 1,
+    figureCaptions: [],
+    sections: [
+      { id: "s1", heading: "2 Results", canonical: "results", page: 1, text: `Cells were counted twice by two people.\n\n${F_SENTENCE}\n\n${ALPHA_SENTENCE}\n\nNothing else changed during the run.` },
+    ],
+  };
+  // The real path: the model's JSON through the sanitizer, then the verifier — what the route does.
+  const turn = (evidence: string, doc: ExtractedDocument = notationDoc) => verifyExplainReply(sanitizeExplainReply({ reply: "Peer's words.", evidence }) as NonNullable<ReturnType<typeof sanitizeExplainReply>>, doc, "s1");
+  const answerOf = (evidence: string, doc: ExtractedDocument = notationDoc) => verifyExplainAnswer(sanitizeExplainAnswer({ meaning: "m", here: { text: "t", evidence } }) as ExplainAnswer, doc, "s1");
+
+  it("keeps `f_cell` and `α_1` through the sanitizer: the quote it will try to verify is not cleaned", () => {
+    expect(sanitizeExplainAnswer({ meaning: "m", here: { text: "t", evidence: F_SENTENCE } })?.here.evidence).toBe(F_SENTENCE);
+    expect(sanitizeExplainAnswer({ meaning: "m", here: { text: "t", evidence: ALPHA_SENTENCE } })?.here.evidence).toBe(ALPHA_SENTENCE);
+    expect(sanitizeExplainReply({ reply: "r", evidence: F_SENTENCE })?.evidence).toBe(F_SENTENCE);
+    expect(sanitizeExplainReply({ reply: "r", evidence: ALPHA_SENTENCE })?.evidence).toBe(ALPHA_SENTENCE);
+  });
+
+  it("collapses white space in the quote as it always did, and caps it at 400 characters", () => {
+    expect(sanitizeExplainReply({ reply: "r", evidence: `  The ratio f_cell was 0.4\n across   every cell.  ` })?.evidence).toBe("The ratio f_cell was 0.4 across every cell.");
+    expect(sanitizeExplainReply({ reply: "r", evidence: `f_cell ${"x".repeat(2000)}` })?.evidence?.length).toBeLessThanOrEqual(EXPLAIN_CAPS.evidenceChars);
+  });
+
+  it("shows the paper's `f_cell` in the verified quote of a first answer and of a reply", () => {
+    expect(answerOf(F_SENTENCE).here).toMatchObject({ evidence: F_SENTENCE, evidenceWhere: "2 Results", sectionId: "s1", page: 1 });
+    expect(turn(F_SENTENCE)).toMatchObject({ evidence: F_SENTENCE, evidenceWhere: "2 Results", sectionId: "s1" });
+    expect(answerOf(F_SENTENCE).here.peer).toBeUndefined();
+  });
+
+  it("shows the paper's `α_1` too", () => {
+    expect(answerOf(ALPHA_SENTENCE).here.evidence).toBe(ALPHA_SENTENCE);
+    expect(turn(ALPHA_SENTENCE).evidence).toBe(ALPHA_SENTENCE);
+  });
+
+  it("matches on the cleaned forms and still displays the paper's characters: a quote that lost the underscore, or changed case, verifies and shows the paper's own", () => {
+    const lost = F_SENTENCE.replace(/f_cell/g, "fcell");
+    // (Not all capitals: the cleaner reads "WAS 0.4" as a formula and joins it, which is the cleaner's, and not this item's.)
+    const shouting = F_SENTENCE.replace("The ratio", "the RATIO").replace("f_cell was", "F_CELL was");
+
+    expect(answerOf(lost).here).toMatchObject({ evidence: F_SENTENCE, evidenceWhere: "2 Results" });
+    expect(turn(lost).evidence).toBe(F_SENTENCE);
+    expect(answerOf(shouting).here.evidence).toBe(F_SENTENCE);
+    expect(turn(ALPHA_SENTENCE.replace("α_1", "α1")).evidence).toBe(ALPHA_SENTENCE);
+  });
+
+  it("shows a fragment of a sentence as the paper has it, not the sentence", () => {
+    const fragment = "across every cell of the specimen, and f_cell stayed flat.";
+
+    expect(answerOf(fragment).here.evidence).toBe(fragment);
+    expect(turn(fragment.replace("f_cell", "fcell")).evidence).toBe(fragment);
+  });
+
+  it("is always the paper's own text: whatever it shows is a stretch of the located section, with its white space collapsed", () => {
+    const section = notationDoc.sections[0].text.replace(/\s+/g, " ");
+    for (const evidence of [F_SENTENCE, F_SENTENCE.replace(/f_cell/g, "fcell"), F_SENTENCE.replace("The ratio", "the RATIO").replace("f_cell was", "F_CELL was"), ALPHA_SENTENCE, ALPHA_SENTENCE.replace("α_1", "α1"), `  ${F_SENTENCE.replace(" ", "   ")}  `]) {
+      const shown = answerOf(evidence.replace(/\s+/g, " ").trim()).here.evidence as string;
+      expect(section.includes(shown), evidence).toBe(true);
+    }
+  });
+
+  it("is the paper's curly quotes, symbols and dashes, not the cleaner's: what the body shows is what the quote shows", () => {
+    const raw = "The specimen “Cell A” held 1100 °C for 10 h with a drift of ≤ 0.2 µm – no more than that.";
+    const special: ExtractedDocument = { ...notationDoc, sections: [{ id: "s1", heading: "2 Results", canonical: "results", page: 1, text: `Intro words here.\n\n${raw}\n\nNothing else.` }] };
+    const shown = turn(raw, special).evidence;
+
+    expect(shown).toBe(raw);
+  });
+
+  it("still cleans a quote the paper does not hold verbatim and cannot be aligned: the model's words cleaned, the underscore kept", () => {
+    // The section has an author-year citation inside the sentence that the quote leaves out: the cleaned forms
+    // match (the matcher drops the citation from the whole text), but one word at a time they do not line up, so
+    // the model's own words are shown — cleaned (an entity decoded) and with the author's underscore kept.
+    const cited: ExtractedDocument = { ...notationDoc, sections: [{ id: "s1", heading: "2 Results", canonical: "results", text: "Intro words here.\n\nThe ratio f_cell was 0.4 across (Smith et al., 2020) every cell of the specimen & nothing else.\n\nEnd." }] };
+    const shown = turn("The ratio f_cell was 0.4 across every cell of the specimen &amp; nothing else", cited);
+
+    expect(shown).toMatchObject({ evidence: "The ratio f_cell was 0.4 across every cell of the specimen & nothing else", evidenceWhere: "2 Results", sectionId: "s1" });
+    expect(shown.peer).toBeUndefined();
+  });
+
+  it("shows Chinese text as the paper has it", () => {
+    const zh = "我们把片状析出物占试样的比例定义为 f_cell，并在每个试样上测量了两次以确认结果。";
+    const doc2: ExtractedDocument = { ...notationDoc, sections: [{ id: "s1", heading: "2 结果", canonical: "results", text: `前言。\n\n${zh}\n\n结束。` }] };
+
+    expect(turn(zh, doc2).evidence).toBe(zh);
+  });
+
+  it("drops a quote the paper does not hold, exactly as before: no quote, the prose is Peer's", () => {
+    const invented = "The ratio f_cell was 0.9 across every cell of the specimen, and f_cell stayed flat.";
+
+    expect(answerOf(invented).here).toEqual({ text: "t", peer: true });
+    expect(turn(invented)).toEqual({ role: "peer", text: "Peer's words.", peer: true });
+    // And the quote is not smuggled back in by the sanitiser's not cleaning it: nothing unverified is shown.
+    expect(JSON.stringify(turn(invented))).not.toContain("0.9");
+  });
+});
+
 // ── P4-00c (§1h.11 (a), A's P3-06b P7-14): the first answer may carry the term table ──
 // The owner's standard — a placing sentence that quotes the author's phrase, then the
 // compact table — applies to the first answer too, not only to a reply. The first

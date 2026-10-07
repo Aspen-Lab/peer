@@ -393,6 +393,20 @@ describe("requestExplanation — what is sent, and what comes back", () => {
     }
   });
 
+  // P4-00c (§1h.11 (d)): the notation the server verified is the notation the reader sees — through the
+  // browser's parse and the card's render.
+  it("returns the quote with the author's notation untouched, and the card shows it: `f_cell` and `α_1`", async () => {
+    const quote = "The ratio f_cell was 0.4 across every cell, and α_1 stayed near 0.2.";
+    const notated = { ...answer, here: { ...answer.here, evidence: quote } };
+    stubFetch(200, { answer: notated, cached: false });
+    const got = await requestExplanation(args);
+
+    expect(got).toEqual(notated);
+    const html = renderToStaticMarkup(createElement(ExplainCard, { passage: selection.passage, heading: "2 Methods", term: null, termWhere: null, canAsk: true, status: { kind: "answer", answer: got as ExplainAnswer }, onClose: () => {} }));
+    expect(html).toContain("The ratio f_cell was 0.4 across every cell, and α_1 stayed near 0.2.");
+    expect(html).not.toContain("fcell");
+  });
+
   it("is 'unavailable' for an unavailable answer, an outage, a gone upload, a refusal and a network failure", async () => {
     stubFetch(200, { unavailable: true });
     expect(await requestExplanation(args)).toBe("unavailable");

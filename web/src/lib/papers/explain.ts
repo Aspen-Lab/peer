@@ -691,8 +691,63 @@ export function sanitizeExplainAnswer(raw: unknown): ExplainAnswer | null {
   const meaning = part(raw.meaning, sentences);
   const text = part(raw.here.text, sentences);
   if (!meaning || !text) return null;
-  const evidence = typeof raw.here.evidence === "string" ? cleanDisplayText(raw.here.evidence).slice(0, EXPLAIN_CAPS.evidenceChars).trim() : "";
+  const evidence = quoteAsSent(raw.here.evidence);
   return { meaning, here: evidence ? { text, evidence } : { text }, ...(items.length > 0 ? { items } : {}) };
+}
+
+/** The quote as the model sent it, for the verifier to match and the page to show: white space
+ *  collapsed, at most 400 characters — and NOT cleaned. P4-00c (§1h.11 (d)): the cleaner turns the
+ *  author's `f_cell` into `fcell` (it reads the underscore as a LaTeX subscript), so cleaning
+ *  the quote here made the page show notation the paper does not have. The verifier matches on the
+ *  cleaned forms (`normalizeForMatch` cleans both sides) and `displayQuote` decides what is shown. */
+function quoteAsSent(value: unknown): string {
+  return typeof value === "string" ? value.replace(/\s+/g, " ").trim().slice(0, EXPLAIN_CAPS.evidenceChars).trim() : "";
+}
+
+/** The most tokens of a section the alignment below will read: a quote is looked for in one section. */
+const ALIGN_MAX_TOKENS = 40000;
+
+/**
+ * The paper's own characters for a quote that matched after cleaning but is not verbatim in the
+ * section (it lost an underscore, changed case, dropped a citation): the run of the section's
+ * words whose cleaned forms are the quote's cleaned words, one for one. Each word of the section
+ * (white space already collapsed) is cleaned on its own; one that cleans to nothing — a citation
+ * bracket — is passed over; one that cleans to several (`≤0.2` is `<=` and `0.2`) counts as
+ * several. Null when no run lines up (a citation or a line-break hyphen spanning words cleans
+ * differently one word at a time; Chinese has no words to line up) — the caller then falls back.
+ */
+function alignedOriginal(quote: string, flatSection: string): string | null {
+  const wanted = normalizeForMatch(quote).split(" ").filter(Boolean);
+  if (wanted.length === 0) return null;
+  const tokens = flatSection.split(" ").filter(Boolean);
+  if (tokens.length > ALIGN_MAX_TOKENS) return null;
+  const parts: Array<{ word: string; at: number }> = [];
+  tokens.forEach((token, at) => {
+    for (const word of normalizeForMatch(token).split(" ")) if (word) parts.push({ word, at });
+  });
+  for (let start = 0; start + wanted.length <= parts.length; start += 1) {
+    if (parts[start].word !== wanted[0]) continue;
+    let k = 1;
+    while (k < wanted.length && parts[start + k].word === wanted[k]) k += 1;
+    if (k < wanted.length) continue;
+    const span = tokens.slice(parts[start].at, parts[start + wanted.length - 1].at + 1).join(" ");
+    return span.length <= EXPLAIN_CAPS.evidenceChars * 2 ? span : null;
+  }
+  return null;
+}
+
+/**
+ * What a verified quote shows (P4-00c, §1h.11 (d)): the paper's own characters. In order — the
+ * model's copy, when it is verbatim in the section (white space collapsed), which is the paper's
+ * text by construction; else the paper's words found by lining up the cleaned words
+ * (`alignedOriginal`), so a copy that lost an underscore or changed case still shows `f_cell` and
+ * `α_1` as the paper has them; else, only when neither can be done, the model's own words
+ * cleaned — with the underscore kept, as the prose and the table keep it (`tidy`).
+ */
+function displayQuote(quote: string, sectionText: string): string {
+  const flat = sectionText.replace(/\s+/g, " ");
+  if (flat.includes(quote)) return quote;
+  return alignedOriginal(quote, flat) ?? tidy(quote).replace(/\s+/g, " ").trim().slice(0, EXPLAIN_CAPS.evidenceChars).trim();
 }
 
 /** Where in the document a quote sits, from the document and never from the
@@ -708,7 +763,7 @@ function placeQuote(
   const section = doc.sections.find((candidate, index) => (candidate.id ?? `s${index}`) === id);
   if (!section) return null;
   return {
-    evidence,
+    evidence: displayQuote(evidence, section.text),
     evidenceWhere: section.heading.trim() || section.canonical,
     sectionId: id,
     ...(typeof section.page === "number" ? { page: section.page } : {}),
@@ -819,7 +874,7 @@ export function sanitizeExplainReply(raw: unknown, options: { detail?: boolean }
   const chars = detail ? EXPLAIN_CAPS.replyDetailChars : EXPLAIN_CAPS.replyChars;
   const reply = words(typeof raw.reply === "string" ? withoutWebAddresses(raw.reply) : raw.reply, sentences, chars);
   if (!reply) return null;
-  const evidence = typeof raw.evidence === "string" ? cleanDisplayText(raw.evidence).slice(0, EXPLAIN_CAPS.evidenceChars).trim() : "";
+  const evidence = quoteAsSent(raw.evidence);
   return { reply, ...(evidence ? { evidence } : {}), ...(items.length > 0 ? { items } : {}) };
 }
 
