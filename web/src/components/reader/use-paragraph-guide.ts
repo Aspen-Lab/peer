@@ -3,9 +3,11 @@
 // Peer's gist of each paragraph, for the reading map (P3-03; ruling §1h.6;
 // user decision §1a.8).
 //
-// One request per paper: when the reading has a body to put the gists under, the
-// reader has a model (the page's `providerConfigured`, which is
-// `aiAvailability(...) !== "none"`) and no answer is kept in this browser. The
+// One request per paper: when the reading has a body to put the gists under, the page
+// enables the request — on `providerConfigured && deepReportRequested(...)`: the reader has
+// a model (`aiAvailability(...) !== "none"`) AND a deep report is being written, the Deep
+// report switch or an attached PDF (P3-05, §1h.8 (1): the paper's text leaves for a model on
+// one switch) — and no answer is kept in this browser. The
 // route answers one of three things — a guide, "skipped" (the paper has more
 // paragraphs than the pass takes) or "unavailable" (no model could write it, or
 // it said nothing grounded) — and each is kept for a day under the paper and its
@@ -16,9 +18,10 @@
 //
 // Never two requests for one paper: the effect is keyed on the paper's key and
 // on whether it may ask, not on the paper object (the page rebuilds that for a
-// save flag or a feedback tick) or on the reader's key (read through a ref); and
-// the request is aborted when the page goes, so an answer that arrives after is
-// never kept. Every touch of localStorage is wrapped: a private window, a full
+// save flag or a feedback tick) or on the reader's key (read through a ref); it lets
+// the first tick pass and sends nothing from a run cleaned up in it (dev StrictMode's
+// double effect, P4-00c); and the request is aborted when the page goes, so an answer
+// that arrives after is never kept. Every touch of localStorage is wrapped: a private window, a full
 // quota or a corrupt entry must never cost the reader the page.
 //
 // What is kept is Peer's own words — the gists — and nothing of the paper: for a
@@ -119,7 +122,8 @@ export function rememberParagraphGuide(key: string, outcome: GuideOutcome): void
 /**
  * Peer's gists for the paper's paragraphs — `gists[sectionId][paragraphIndex]` — or
  * undefined (nothing kept and nothing yet, or none can be written). Asked for once, when
- * the reading has a `body`, the reader has a model (`enabled`) and no answer is kept.
+ * the reading has a `body`, the page has enabled it (`enabled`: a model and a deep report
+ * requested, see the header) and no answer is kept.
  * `llmOverride` is the reader's own provider and key, when they have one — the same the
  * explain box sends; nothing else about them is sent.
  */
@@ -132,7 +136,8 @@ export function useParagraphGuide({
   paper: Paper | undefined;
   /** The reading has a body: there are paragraphs to put gists under. */
   hasBody: boolean;
-  /** The reader has a model, from anywhere (`providerConfigured`). */
+  /** The page's condition: the reader has a model (`providerConfigured`) and a deep report is
+   *  requested (`deepReportRequested`). */
   enabled: boolean;
   llmOverride?: ProviderOverrideConfig;
 }): GistRecord | undefined {
@@ -156,6 +161,13 @@ export function useParagraphGuide({
     if (!paperId || !key || !hasBody || !enabled || kept) return;
     const controller = new AbortController();
     (async () => {
+      // P4-00c (§1h.11 (e), A's P3-06b O-1): let the first tick pass, and send nothing from a run
+      // that was cleaned up in it. Dev StrictMode runs this effect, cleans it up and runs it again
+      // in one tick; without this the first run sent a request the clean-up then aborted, and the
+      // second sent another (two POSTs a millisecond apart on a hard load). `use-model-report.ts`
+      // has the same guard in the same place.
+      await Promise.resolve();
+      if (controller.signal.aborted) return;
       try {
         const { paper: current, llmOverride: override } = latest.current;
         const answer = await apiFetch<unknown>(`/api/papers/${encodeURIComponent(paperId)}/paragraph-guide`, {
