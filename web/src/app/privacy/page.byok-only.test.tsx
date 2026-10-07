@@ -64,7 +64,9 @@ describe("/privacy after Peer stopped having a model of its own", () => {
   });
 
   it("carries the date of this change", () => {
-    expect(text()).toContain("Last changed 2026-10-06");
+    // P4-00c (S2): this branch rewrote "Your questions" and "Explain this" on
+    // 2026-10-07, so the page carries that date now, not at merge time.
+    expect(text()).toContain("Last changed 2026-10-07");
   });
 });
 
@@ -164,6 +166,6 @@ describe("/privacy - your own Jev key", () => {
     const page = text();
     expect(page).toContain("Your own model key");
     expect(page).toContain("Who else sees a request");
-    expect(page).toContain("Last changed 2026-10-06");
+    expect(page).toContain("Last changed 2026-10-07");
   });
 });

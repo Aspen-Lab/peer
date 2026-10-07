@@ -126,7 +126,7 @@ export default function PrivacyPage() {
       ))}
 
       <p className="annotation text-text-faint mt-12">
-        Last changed 2026-10-06 · changes to this page ship in the{" "}
+        Last changed 2026-10-07 · changes to this page ship in the{" "}
         <Link href="/changelog" className="underline decoration-border-strong underline-offset-4 hover:text-heading">
           changelog
         </Link>
