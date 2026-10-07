@@ -70,6 +70,20 @@ const SECTIONS = [
     ],
   },
   {
+    // P4-01 (blueprint §3.6; §1h.12 (h)): written from the plain route (`app/api/papers/[id]/plain/route.ts`),
+    // the button's request (`components/reader/plain-button.tsx`) and `store/plain-rewrites.ts`. The test pins
+    // every sentence to the line that makes it true; a change to what is sent or kept changes this entry in the
+    // same commit. As with "Explain this": the rewrite runs on the reader's own key, Peer counts nothing against
+    // an allowance, and the server's memory and its log line hold hashes and sizes only.
+    label: "Say it plainly",
+    body: [
+      "Nothing is sent until you click “Say it plainly” under a paragraph. The request carries the one paragraph you clicked, where it sits in the paper, the level you chose and your own model key, and goes to Peer's server and on to the model provider whose key you added. It also carries what Peer's server needs to find the paper's text — the paper's id and title, its DOI and its links and, for an uploaded PDF, the upload's id — and not the abstract, the authors or your marks on the paper. Of all that, the model sees only the paper's title, the level and the paragraph. It never searches the web.",
+      "Choosing a level beside the button sends nothing, unless a rewrite is already showing for that paragraph: then it shows the paragraph at the new level, asking only if you have not had it at that level before.",
+      "Peer's server keeps two things. First, each rewrite it gives, in memory, for up to an hour, so the same paragraph at the same level is rewritten without another model call; it is filed under hashes of the document and the paragraph, and the level, never under who asked. Second, one log line for each request: how many characters went out and came back and, if you are signed in, a shortened hash of your account id — never the paragraph, the rewrite or anything you wrote.",
+      "In this browser, and only here, Peer keeps each rewrite you asked for, for each paper, paragraph and level, so a paragraph you have had said plainly at that level opens from this copy with no new request. For an uploaded PDF a rewrite is a paraphrase of the PDF's own text. None of it is stored against your account, and signing in does not copy it there. Which paragraphs show a rewrite now is not kept, so a reload shows the originals. The level you chose is kept in this browser with your other reading settings. Signing out leaves all of it in place; clearing this site's data in your browser removes it.",
+    ],
+  },
+  {
     label: "Your own model key",
     body: [
       "Peer has no model of its own. Ranking by a model, relevance reasons, digest bullets and model reports run only if you add your own provider key; without one you read the briefing without a model.",

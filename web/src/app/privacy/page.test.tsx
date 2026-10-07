@@ -3,8 +3,9 @@ import { join } from "node:path";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { EXPLAIN } from "@/components/reader/copy";
+import { EXPLAIN, PLAIN } from "@/components/reader/copy";
 import { EXPLAIN_CAPS } from "@/lib/papers/explain";
+import { PLAIN_CAPS, PLAIN_LEVELS, buildPlainPrompt, plainCacheKey } from "@/lib/papers/plain";
 import PrivacyPage from "./page";
 
 // P2-03 (§1g.11 e, the entry §1f.9 promised): the reader's questions are
@@ -74,7 +75,9 @@ describe("/privacy — Explain this (P3-02d)", () => {
   const html = renderToStaticMarkup(createElement(PrivacyPage));
   const questions = html.indexOf(">Your questions<");
   const label = html.indexOf(">Explain this<");
-  const key = html.indexOf(">Your own model key<");
+  // P4-01: "Say it plainly" is set right after this entry, so where the entry ends is where that one
+  // begins (it was "Your own model key", which now follows both). Every assertion below is unchanged.
+  const key = html.indexOf(">Say it plainly<");
   const entry = html.slice(label, key);
   const paragraphs = (markup: string): number => (markup.match(/<p>/g) ?? []).length;
 
@@ -86,7 +89,7 @@ describe("/privacy — Explain this (P3-02d)", () => {
     expect(paragraphs(entry)).toBe(EXPLAIN_PARAGRAPHS.length);
   });
 
-  it("sets it right after Your questions and right before Your own model key", () => {
+  it("sets it right after Your questions and right before Say it plainly (P4-01: which sits before Your own model key)", () => {
     expect(questions).toBeGreaterThan(0);
     expect(label).toBeGreaterThan(questions);
     expect(key).toBeGreaterThan(label);
@@ -307,5 +310,204 @@ describe("/privacy — an uploaded PDF's storage on Peer's server (P4-00c N7)", 
     expect(from).toBeGreaterThan(-1);
     const sentence = signIn.slice(from, signIn.indexOf("</p>", from));
     expect(sentence).not.toMatch(/nowhere else|no one else|never leaves/i);
+  });
+});
+
+// P4-01 (blueprint §3.6; rulings §1h.12 (h); §3d 15, 17): "Say it plainly" is named on /privacy,
+// in exactly these words, right after "Explain this" and before "Your own model key". Each
+// sentence is pinned below to the line of code that makes it true — the route, the request, the
+// store — so a change to what is sent or kept has to change this entry in the same commit.
+const PLAIN_PARAGRAPHS = [
+  "Nothing is sent until you click “Say it plainly” under a paragraph. The request carries the one paragraph you clicked, where it sits in the paper, the level you chose and your own model key, and goes to Peer's server and on to the model provider whose key you added. It also carries what Peer's server needs to find the paper's text — the paper's id and title, its DOI and its links and, for an uploaded PDF, the upload's id — and not the abstract, the authors or your marks on the paper. Of all that, the model sees only the paper's title, the level and the paragraph. It never searches the web.",
+  "Choosing a level beside the button sends nothing, unless a rewrite is already showing for that paragraph: then it shows the paragraph at the new level, asking only if you have not had it at that level before.",
+  "Peer's server keeps two things. First, each rewrite it gives, in memory, for up to an hour, so the same paragraph at the same level is rewritten without another model call; it is filed under hashes of the document and the paragraph, and the level, never under who asked. Second, one log line for each request: how many characters went out and came back and, if you are signed in, a shortened hash of your account id — never the paragraph, the rewrite or anything you wrote.",
+  "In this browser, and only here, Peer keeps each rewrite you asked for, for each paper, paragraph and level, so a paragraph you have had said plainly at that level opens from this copy with no new request. For an uploaded PDF a rewrite is a paraphrase of the PDF's own text. None of it is stored against your account, and signing in does not copy it there. Which paragraphs show a rewrite now is not kept, so a reload shows the originals. The level you chose is kept in this browser with your other reading settings. Signing out leaves all of it in place; clearing this site's data in your browser removes it.",
+] as const;
+
+describe("/privacy — Say it plainly (P4-01)", () => {
+  const html = renderToStaticMarkup(createElement(PrivacyPage));
+  const explain = html.indexOf(">Explain this<");
+  const label = html.indexOf(">Say it plainly<");
+  const key = html.indexOf(">Your own model key<");
+  const entry = html.slice(label, key);
+  const paragraphs = (markup: string): number => (markup.match(/<p>/g) ?? []).length;
+  const root = process.cwd();
+  const read = (file: string) => readFileSync(join(root, file), "utf8");
+  const routeSource = read("src/app/api/papers/[id]/plain/route.ts");
+  const buttonSource = read("src/components/reader/plain-button.tsx");
+  const pageSource = read("src/app/papers/[id]/page.tsx");
+  const squash = (text: string) => text.replace(/\s+/g, " ");
+
+  it("has the entry, with exactly the written paragraphs and no others", () => {
+    expect(label).toBeGreaterThan(0);
+    for (const paragraph of PLAIN_PARAGRAPHS) expect(entry).toContain(`<p>${escapeText(paragraph)}</p>`);
+    expect(paragraphs(entry)).toBe(PLAIN_PARAGRAPHS.length);
+  });
+
+  it("sets it right after Explain this and right before Your own model key", () => {
+    expect(explain).toBeGreaterThan(0);
+    expect(label).toBeGreaterThan(explain);
+    expect(key).toBeGreaterThan(label);
+    // Nothing sits between the two entries but the explain entry's own six paragraphs.
+    expect(paragraphs(html.slice(explain, label))).toBe(EXPLAIN_PARAGRAPHS.length);
+  });
+
+  it("quotes the button's own label, so a label that changes in the page shows up here", () => {
+    expect(entry).toContain(`“${PLAIN.button}”`);
+  });
+
+  it("keeps the date: this entry is dated 2026-10-07, the day the page last changed", () => {
+    expect(html).toContain("Last changed 2026-10-07");
+  });
+
+  it("holds no 'skip' or 'don't read' wording, no allowance and no plan (the copy rules)", () => {
+    expect(entry).not.toMatch(/\bskip\b|don.t read/i);
+    expect(entry).not.toMatch(/\ballowance\b|\bquota\b|\bused up\b|\bplan\b|\bcredit/i);
+  });
+
+  // "Nothing is sent until you click": the request is made in one place, `sayPlainly`, and
+  // `sayPlainly` is called from two places, both of them a click.
+  it("sends nothing before the click: the request is made only by `sayPlainly`, which only the button and a level of a showing paragraph call", () => {
+    const text = squash(pageSource);
+    expect(text.match(/sayPlainly\(/g)).toHaveLength(2);
+    const toggle = /const onPlainToggle = useCallback\(.*?\], ?\);/.exec(text)?.[0] ?? "";
+    const level = /const onPlainLevel = useCallback\(.*?\], ?\);/.exec(text)?.[0] ?? "";
+    expect(toggle).toContain("void sayPlainly(");
+    expect(level).toContain("void sayPlainly(");
+    // Neither call is in an effect, and the control's handlers are the only way to them.
+    expect(text).not.toMatch(/useEffect\([^;]*sayPlainly/);
+    expect(squash(buttonSource)).toContain("onClick={onToggle}");
+    expect(squash(buttonSource)).toContain("onClick={() => onLevel(one)}");
+    // `requestPlain(` is its definition, `await request(` the one call, inside `sayPlainly`.
+    expect(squash(buttonSource).match(/requestPlain\(|await request\(/g)).toEqual(["requestPlain(", "await request("]);
+    expect(squash(buttonSource).indexOf("await request(")).toBeGreaterThan(squash(buttonSource).indexOf("export async function sayPlainly("));
+    // No other file asks.
+    const asking = [
+      "src/components/reader/paper-body.tsx",
+      "src/components/reader/reading-map.tsx",
+      "src/components/reader/use-reading.ts",
+      "src/components/reader/use-model-report.ts",
+      "src/components/reader/use-paragraph-guide.ts",
+      "src/store/plain-rewrites.ts",
+    ].filter((file) => /requestPlain|sayPlainly|\/plain`/.test(read(file)));
+    expect(asking).toEqual([]);
+  });
+
+  it("carries the paragraph, where it sits, the level and the reader's own key, to Peer's server and on to the provider the key is for", () => {
+    const body = squash(buttonSource);
+    expect(body).toContain("fetch(`/api/papers/${encodeURIComponent(paper.id)}/plain`, {");
+    expect(body).toContain("paper: paperForRequest(paper), sectionId, paragraphIndex, text, level, ...(llmOverride ? { llmOverride } : {}),");
+    // The page hands it the reader's own key, as the explain box is handed it.
+    expect(squash(pageSource)).toContain("llmOverride: explainLlmOverride(profile)");
+    // The route gives that key, and nothing else, to the registry, which resolves the provider it names.
+    expect(squash(routeSource)).toContain("const provider = resolveProvider(body.llmOverride ?? null);");
+  });
+
+  it("carries what the server needs to find the paper's text — id, title, DOI, links, an upload's id — and not the abstract, the authors or the reader's marks", () => {
+    expect(squash(buttonSource)).toContain("const { id, title, doi, linkPaper, linkArxiv, fullTextUploadId } = paper;");
+    expect(squash(buttonSource)).toContain("return { id, title, doi, linkPaper, linkArxiv, fullTextUploadId };");
+    // What the route reads of it: the same, and nothing of the abstract or the marks.
+    const route = squash(routeSource);
+    for (const read of ["body.paper.fullTextUploadId", "body.paper.doi", "bestPaperUrl(body.paper)", "body.paper.id", "body.paper.title"]) expect(route).toContain(read);
+    expect(route).not.toMatch(/summaryIntro|summaryResultDiscussion|\.authors|isSaved|relevanceReason|\.venue/);
+  });
+
+  it("shows the model only the paper's title, the level and the paragraph — with the rules that frame them", () => {
+    const prompt = JSON.parse(buildPlainPrompt({ title: "A title", level: "undergrad", text: "A paragraph with 3 numbers, 10 ms and 0.5." }).userPrompt) as Record<string, unknown>;
+
+    expect(prompt.paper).toEqual({ title: "A title" });
+    expect(prompt.level).toBe("undergrad");
+    expect(prompt.paragraph).toBe("A paragraph with 3 numbers, 10 ms and 0.5.");
+    // Everything else is the task, the level's rules, the schema, the shared rules and the length.
+    expect(Object.keys(prompt).sort()).toEqual(["level", "levelRules", "maxCharacters", "outputSchema", "paper", "paragraph", "rules", "task"]);
+  });
+
+  it("never searches the web: the one model call carries no search flag", () => {
+    expect(squash(routeSource)).toContain('raw = await provider.generateJsonText({ systemPrompt, userPrompt, maxTokens: PLAIN_MAX_TOKENS, tier: "small" });');
+    expect(routeSource).not.toMatch(/webSearch|supportsWebSearch/);
+  });
+
+  it("sends nothing for a level unless a rewrite shows, and then asks only for a level not kept before", () => {
+    const text = squash(pageSource);
+    const level = /const onPlainLevel = useCallback\(.*?\], ?\);/.exec(text)?.[0] ?? "";
+    expect(level).toContain("setPlainLevel(level); if (plainShown.has(paragraphKey(target.sectionId, target.paragraphIndex))) void sayPlainly(");
+    // A kept rewrite is shown before anything is asked or marked busy.
+    const say = squash(buttonSource);
+    const kept = say.indexOf("if (keptFor(state.byPaper, paper.id, key, level, target.text)) {");
+    const busy = say.indexOf("state.setBusy(paper.id, key, true);");
+    const asked = say.indexOf("const result = await request({");
+    expect(kept).toBeGreaterThan(0);
+    expect(kept).toBeLessThan(busy);
+    expect(busy).toBeLessThan(asked);
+    expect(say.slice(kept, busy)).toContain('state.show(paper.id, key, level); return "kept";');
+  });
+
+  it("says the three levels are the ones the page offers", () => {
+    expect([...PLAIN_LEVELS]).toEqual(["highschool", "undergrad", "graduate"]);
+    expect(Object.values(PLAIN.levels)).toEqual(["High school", "Undergrad", "Graduate"]);
+  });
+
+  it("keeps each rewrite in the server's memory for an hour under hashes of the document, the paragraph and the level — never under who asked", () => {
+    expect(PLAIN_CAPS.cacheTtlMs).toBe(60 * 60 * 1000);
+    const key = plainCacheKey("d".repeat(64), "A paragraph about a rafting ratio.", "graduate");
+    expect(key).toMatch(/^[0-9a-f]{64}\|graduate$/);
+    expect(key).not.toContain("rafting");
+    const route = squash(routeSource);
+    expect(route).toContain("const key = plainCacheKey(explainDocHash(doc), original, level);");
+    // A rewrite is remembered only once it has passed every check, and the reader is not an argument of the key.
+    expect(route.indexOf("plainCache.set(key, sanitized.plain);")).toBeGreaterThan(route.indexOf("if (!numbersKept(original, sanitized.plain))"));
+    expect(route.indexOf("plainCache.set(key, sanitized.plain);")).toBeGreaterThan(route.indexOf("uploadStillCurrent(privateHash, startRevision)"));
+    expect(route).not.toMatch(/plainCacheKey\([^)]*userId/);
+  });
+
+  it("logs one line for each request — sizes and a shortened hash of the account — and never a word of the paragraph or the rewrite", () => {
+    const route = squash(routeSource);
+    expect(route).toContain('console.debug("[papers/plain] turn", { ...(userId ? { userId: shortHash(userId) } : {}), ...fields });');
+    const calls = route.match(/logTurn\(\{[^}]*\}\)/g) ?? [];
+    expect(calls.length).toBeGreaterThan(0);
+    for (const call of calls) expect(call).toMatch(/^logTurn\(\{ promptChars: [^,]+, answerChars: [^,]+, cached: (true|false) \}\)$/);
+    // A failed model call is logged by its error's name alone.
+    expect(route).toContain('console.error("[papers/plain] model call failed:", err instanceof Error ? err.name : typeof err);');
+    expect(route.match(/console\.(log|info|warn|error|debug)\(/g)).toHaveLength(2);
+  });
+
+  it("keeps in this browser each rewrite per paper, paragraph and level, with the paragraph it says again, and nothing about which paragraphs show", () => {
+    const store = read("src/store/plain-rewrites.ts");
+    expect(store).toContain('export const PLAIN_STORAGE_KEY = "peer-plain-v1";');
+    expect(store).toContain("partialize: (s) => ({ byPaper: s.byPaper }),");
+    expect(store).toContain("skipHydration: true,");
+    expect(store).toContain("const kept: KeptRewrite = { plain: entry.plain, hash: passageHash(entry.text), at };");
+    expect(store).toContain("[paperId]: withoutOldestRewrites({ ...paper, [key]: { ...paper[key], [level]: kept } }),");
+  });
+
+  it("stores none of it against the account: no sync, no account or sign-out code reads or writes the plain store", () => {
+    const importers = [
+      "src/components/profile-sync.tsx",
+      "src/components/feed-sync.tsx",
+      "src/components/account/account-section.tsx",
+      "src/app/profile/page.tsx",
+      "src/store/feed.ts",
+      "src/store/profile.ts",
+      "src/store/jev-screening.ts",
+      "src/lib/profile/session-step.ts",
+    ].filter((file) => {
+      try {
+        return /plain-rewrites|peer-plain-v1|usePlainRewritesStore/.test(read(file));
+      } catch {
+        return false;
+      }
+    });
+    expect(importers).toEqual([]);
+    // The one place that touches it besides the reader's own page is the hydrator that loads it after mount.
+    expect(read("src/components/store-hydrator.tsx")).toContain("usePlainRewritesStore.persist.rehydrate();");
+  });
+
+  it("keeps the level in this browser with the other reading settings, and syncs those nowhere", () => {
+    const prefs = read("src/store/reading-prefs.ts");
+    expect(prefs).toContain('name: "peer-reading-prefs",');
+    expect(prefs).toContain("plainLevel: PLAIN_DEFAULT_LEVEL,");
+    for (const file of ["src/components/profile-sync.tsx", "src/components/feed-sync.tsx", "src/store/profile.ts"]) {
+      expect(read(file)).not.toMatch(/reading-prefs|plainLevel/);
+    }
   });
 });
