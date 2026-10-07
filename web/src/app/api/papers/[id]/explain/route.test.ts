@@ -1033,10 +1033,71 @@ describe("POST /api/papers/[id]/explain — a reply with a term table (P3-07)", 
     expect((again.turn as { items: unknown[] }).items).toHaveLength(1);
   });
 
-  it("never puts a table on the first answer: it has no such schema, and the model's items there are not read", async () => {
-    provider.generateJsonText.mockResolvedValue(JSON.stringify({ ...modelAnswer, items: [row("rafting ratio")] }));
+  // P4-00c (§1h.11 (a), A's P3-06b P7-14): this test said "never puts a table on the first
+  // answer: it has no such schema, and the model's items there are not read" — the P3-07
+  // ruling. The owner's standard applies to the first answer too, so the route now reads the
+  // table there (the same sanitizer and grounding as a reply's); the cases below replace it.
+  it("puts a first answer's grounded rows on the answer, in order, and drops a row whose term is nowhere in the passage, its paragraph, its neighbours or its section", async () => {
+    provider.generateJsonText.mockResolvedValue(JSON.stringify({ ...modelAnswer, items: [row("rafting ratio"), row("tungsten additions"), row("gauge length"), row("spline interpolation")] }));
     const body = await json(await call(ask()));
 
-    expect(JSON.stringify(body)).not.toContain("items");
+    expect(body).toEqual({
+      cached: false,
+      answer: {
+        meaning: MEANING,
+        here: { text: HERE, evidence: DEF, evidenceWhere: "2 Methods", sectionId: "s2", page: 2 },
+        items: [row("rafting ratio"), row("gauge length")],
+      },
+    });
+  });
+
+  it("holds a first answer's parts to one sentence when the model sends a table, and to two when it does not", async () => {
+    const twoEach = { meaning: `${MEANING} It is a share, not a count.`, here: { text: `${HERE} It rose with heat.`, evidence: DEF } };
+    provider.generateJsonText.mockResolvedValue(JSON.stringify({ ...twoEach, items: [row("rafting ratio")] }));
+    const withTable = (await json(await call(ask()))).answer as { meaning: string; here: { text: string } };
+    explainCache.clear();
+    provider.generateJsonText.mockResolvedValue(JSON.stringify(twoEach));
+    const without = (await json(await call(ask()))).answer as { meaning: string; here: { text: string } };
+
+    expect(withTable.meaning).toBe(MEANING);
+    expect(withTable.here.text).toBe(HERE);
+    expect(without.meaning).toBe(`${MEANING} It is a share, not a count.`);
+    expect(without.here.text).toBe(`${HERE} It rose with heat.`);
+  });
+
+  it("has no items key on the first answer when no row survives the paper, or the model sent none", async () => {
+    provider.generateJsonText.mockResolvedValue(JSON.stringify({ ...modelAnswer, items: [row("tungsten additions"), row("spline interpolation")] }));
+    expect((await json(await call(ask()))).answer).not.toHaveProperty("items");
+    explainCache.clear();
+    provider.generateJsonText.mockResolvedValue(JSON.stringify({ ...modelAnswer, items: "not a table" }));
+    expect((await json(await call(ask()))).answer).not.toHaveProperty("items");
+    explainCache.clear();
+    provider.generateJsonText.mockResolvedValue(JSON.stringify(modelAnswer));
+    expect((await json(await call(ask()))).answer).toEqual({ meaning: MEANING, here: { text: HERE, evidence: DEF, evidenceWhere: "2 Methods", sectionId: "s2", page: 2 } });
+  });
+
+  it("asks the model for the table in the first answer's prompt, and remembers the answer with it: the repeat is a hit, with no second call", async () => {
+    provider.generateJsonText.mockResolvedValue(JSON.stringify({ ...modelAnswer, items: [row("rafting ratio")] }));
+    const first = await json(await call(ask()));
+    const again = await json(await call(ask()));
+    const sent = JSON.parse(provider.generateJsonText.mock.calls[0][0].userPrompt) as { outputSchema: Record<string, unknown> };
+
+    expect(Object.keys(sent.outputSchema)).toEqual(["meaning", "here", "items"]);
+    expect(first.cached).toBe(false);
+    expect(again.cached).toBe(true);
+    expect(again.answer).toEqual(first.answer);
+    expect((again.answer as { items: unknown[] }).items).toHaveLength(1);
+    expect(provider.generateJsonText).toHaveBeenCalledTimes(1);
+  });
+
+  it("serves the next reader's same words the same table from the memory, and a thread's reply is still its own entry", async () => {
+    provider.generateJsonText.mockResolvedValue(JSON.stringify({ ...modelAnswer, items: [row("rafting ratio")] }));
+    const first = await json(await call(ask()));
+    replyStub({ reply: "It changes how the metal carries load.", evidence: DEF });
+    const reply = await json(await call(ask({ thread: thread1 })));
+
+    expect(first.answer).toHaveProperty("items");
+    expect(reply.turn).not.toHaveProperty("items");
+    expect(reply.cached).toBe(false);
   });
 });

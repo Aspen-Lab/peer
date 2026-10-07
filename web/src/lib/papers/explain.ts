@@ -73,6 +73,11 @@
 //     paragraph, the neighbours or the section (`groundExplainItems`, run by
 //     `verifyExplainReply` with the scope it is given); with a table the prose is two
 //     sentences;
+//   - P4-00c (§1h.11 (a)): the first answer may carry the same table — `sanitizeExplainAnswer`
+//     shapes it with the same `sanitizeItems`, `verifyExplainAnswer` grounds it with the same
+//     `groundExplainItems` — and with a table each of its two parts is one sentence (two
+//     without); the first prompt asks for it when the passage holds two or more terms or
+//     quantities worth a row, and for none otherwise;
 //   - `explainCacheKey` carries the long form, so a short and a long reply to the same
 //     message are two entries.
 //
@@ -94,6 +99,10 @@ export const EXPLAIN_CAPS = {
   passageChars: 1200,
   /** Each of the two parts is at most two sentences and this many characters. */
   partChars: PART_CHARS,
+  /** P4-00c (§1h.11 (a)): the sentences a part may have — two, or one when the first answer
+   *  carries a term table (the table takes the terms; the parts say the placing and the point). */
+  partSentences: 2,
+  itemsPartSentences: 1,
   evidenceChars: 400,
   titleChars: 300,
   abstractChars: 2500,
@@ -138,7 +147,10 @@ export const EXPLAIN_CAPS = {
 // ── The answer, and what the route says ────────────────────────────────
 
 /** The two parts. `here.evidence` is the paper's own sentence, verified; when
- *  it is absent `here.peer` is true and the page labels the prose as Peer's. */
+ *  it is absent `here.peer` is true and the page labels the prose as Peer's.
+ *
+ *  P4-00c (§1h.11 (a)): the first answer may carry the same small term table as a reply,
+ *  `items` — at most four rows the paper grounds; with one, each part is one sentence. */
 export interface ExplainAnswer {
   /** What the term or passage means in general. Peer's words. */
   meaning: string;
@@ -151,6 +163,7 @@ export interface ExplainAnswer {
     page?: number;
     peer?: true;
   };
+  items?: ExplainItem[];
 }
 
 /** One message of a thread, as the client sends it: the first answer is the
@@ -378,6 +391,8 @@ const EXPLAIN_SYSTEM = [
   "The reader selected a passage of a paper and asked what it means.",
   "Explain it in plain English, for a thoughtful reader who is not in this field: first what the term or passage means in general, then why the author brings it up in this paper.",
   ...EXPLAIN_BREVITY_RULES,
+  // P4-00c (§1h.11 (a)): the owner's standard — a placing sentence, then the compact table.
+  "When the passage holds two or more terms or quantities worth a row each, add a small table of them (`items`) and keep each of the two parts to one sentence; when it does not, give no table.",
   "Never quote the paper except with words copied character-for-character from the text supplied.",
   "Do not fabricate numbers, citations or experimental details.",
   "Return only valid JSON.",
@@ -401,17 +416,20 @@ export function buildExplainPrompt(args: {
     ...promptContext(args),
     passage: clipPassage(args.passage),
     outputSchema: {
-      meaning: "at most two sentences, in plain words, saying what the selected term or passage means in general, as a good textbook would, not specific to this paper",
+      meaning: "at most two sentences (one sentence when `items` is present), in plain words, saying what the selected term or passage means in general, as a good textbook would, not specific to this paper",
       here: {
-        text: "at most two sentences, in plain words, saying why the author brings it up at this point of this paper",
+        text: "at most two sentences (one sentence when `items` is present), in plain words, saying why the author brings it up at this point of this paper",
         evidence: "one sentence copied character-for-character from the paper's text in `context` that shows the author using it here",
       },
+      items:
+        "optional — include it only when the passage holds two or more terms or quantities worth a row each, otherwise leave this key out: at most four rows, each { term, here, read }; `term` is a word or phrase copied from the passage, `here` what it means in this paper, `read` how to read it; each cell at most twelve words",
     },
     rules: [
       "Return ONLY valid JSON.",
       "Use plain words a thoughtful non-specialist understands; define nothing with another unexplained term.",
       "`here.evidence` is one sentence copied character-for-character from `context.before`, `context.paragraph` or `context.after`. Do not paraphrase it, shorten it, or merge sentences.",
       "Omit `evidence` when no such sentence shows the author using it. Never quote the abstract or the section list; they are there for orientation only.",
+      "With `items`, `meaning` and `here.text` are one sentence each: `meaning` quotes the author's own phrase when the meaning turns on it, and you leave the terms to the table.",
       "No LaTeX, no links, no advice, no verdict on whether the reader should read on.",
     ],
   });
@@ -641,9 +659,10 @@ function words(value: unknown, sentences: number, chars: number): string {
   return wholeSentences(tidy(value).replace(/\s+/g, " ").trim(), sentences, chars);
 }
 
-/** One part of the answer: cleaned, at most two sentences, at most 420 characters. */
-function part(value: unknown): string {
-  return words(value, 2, EXPLAIN_CAPS.partChars);
+/** One part of the answer: cleaned, at most `sentences` whole sentences (two, or one with a table),
+ *  at most 420 characters. */
+function part(value: unknown, sentences: number = EXPLAIN_CAPS.partSentences): string {
+  return words(value, sentences, EXPLAIN_CAPS.partChars);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -656,14 +675,23 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  * characters. Whatever else the model said — a place, a page, a "peer" flag —
  * is dropped: only the verifier says where a quote sits. Null unless both
  * parts have words.
+ *
+ * P4-00c (§1h.11 (a)): the first answer may carry the reply's own table — `items`, shaped by
+ * the same `sanitizeItems` (at most four rows, each cell a dozen words and eighty characters,
+ * a row over a cap dropped, never cut) — and with a table each part is one sentence, as a
+ * reply's prose is two (the table takes the terms). Without one, or when the shape sanitiser
+ * empties it, the parts keep their two sentences. Whether a row is the paper's is the
+ * verifier's question (`verifyExplainAnswer`).
  */
 export function sanitizeExplainAnswer(raw: unknown): ExplainAnswer | null {
   if (!isRecord(raw) || !isRecord(raw.here)) return null;
-  const meaning = part(raw.meaning);
-  const text = part(raw.here.text);
+  const items = sanitizeItems(raw.items);
+  const sentences = items.length > 0 ? EXPLAIN_CAPS.itemsPartSentences : EXPLAIN_CAPS.partSentences;
+  const meaning = part(raw.meaning, sentences);
+  const text = part(raw.here.text, sentences);
   if (!meaning || !text) return null;
   const evidence = typeof raw.here.evidence === "string" ? cleanDisplayText(raw.here.evidence).slice(0, EXPLAIN_CAPS.evidenceChars).trim() : "";
-  return { meaning, here: evidence ? { text, evidence } : { text } };
+  return { meaning, here: evidence ? { text, evidence } : { text }, ...(items.length > 0 ? { items } : {}) };
 }
 
 /** Where in the document a quote sits, from the document and never from the
@@ -693,12 +721,18 @@ function placeQuote(
  * from the document, never from the model. Not found, or no quote at all: the
  * quote and every place go, and `here.peer` is true — the page labels the
  * prose as Peer's own reading, not as the paper's. The answer given is not changed.
+ *
+ * P4-00c: the table's rows are held to the paper as a reply's are (`groundExplainItems`, the
+ * same function), in the `scope` the route gives — the passage and where it was found. Without
+ * a scope there is nothing to hold a row to, so none is kept; with every row dropped the answer
+ * has no `items`.
  */
-export function verifyExplainAnswer(answer: ExplainAnswer, doc: ExtractedDocument, preferSectionId?: string): ExplainAnswer {
+export function verifyExplainAnswer(answer: ExplainAnswer, doc: ExtractedDocument, preferSectionId?: string, scope?: ExplainItemScope): ExplainAnswer {
   const { meaning, here } = answer;
   const placed = here.evidence ? placeQuote(here.evidence, doc, preferSectionId) : null;
-  if (placed) return { meaning, here: { text: here.text, ...placed } };
-  return { meaning, here: { text: here.text, peer: true } };
+  const verified: ExplainAnswer = placed ? { meaning, here: { text: here.text, ...placed } } : { meaning, here: { text: here.text, peer: true } };
+  const items = answer.items && scope ? groundExplainItems(answer.items, doc, scope) : [];
+  return items.length > 0 ? { ...verified, items } : verified;
 }
 
 // ── The reply (P3-02b) ─────────────────────────────────────────────────

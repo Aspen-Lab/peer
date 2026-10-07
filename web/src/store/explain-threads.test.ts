@@ -336,6 +336,23 @@ describe("the thread: the term table and the long form (P3-07)", () => {
     expect(stored.items).toEqual(items);
   });
 
+  // P4-00c (§1h.11 (a)): the first answer may carry the table; it is kept with the answer.
+  it("keeps the first answer's table with the answer, in the store and in the browser's storage, and after the thread grows", () => {
+    const tabled: ExplainAnswer = { meaning: "meaning", here: { text: "here", peer: true }, items };
+    useExplainThreadsStore.getState().remember("arxiv:1", { passage: "The rafting ratio", sectionId: "s2", paragraphIndex: 1, answer: tabled }, at(2));
+    useExplainThreadsStore.getState().addTurns("arxiv:1", keyOf, [reader(1), peer(1)], at(3));
+
+    expect(explanationFor(useExplainThreadsStore.getState().byPaper, "arxiv:1", "The rafting ratio")?.answer).toEqual(tabled);
+    const stored = JSON.parse(storage.items.get(EXPLAIN_THREADS_STORAGE_KEY) ?? "null").state.byPaper["arxiv:1"][keyOf];
+    expect(stored.answer.items).toEqual(items);
+    expect(stored.turns).toHaveLength(2);
+  });
+
+  it("restores an answer saved before the table existed: an answer without items is as it was", () => {
+    expect(explanationFor(useExplainThreadsStore.getState().byPaper, "arxiv:1", "The rafting ratio")?.answer).toEqual(answer(1));
+    expect(explanationFor(useExplainThreadsStore.getState().byPaper, "arxiv:1", "The rafting ratio")?.answer).not.toHaveProperty("items");
+  });
+
   it("keeps the long-form mark on a reply, in the store and in the browser's storage", () => {
     const long: ExplainTurn = { role: "peer", text: "A longer reply.", peer: true, detail: true };
     useExplainThreadsStore.getState().addTurns("arxiv:1", keyOf, [reader(1), peer(1), long], at(2));

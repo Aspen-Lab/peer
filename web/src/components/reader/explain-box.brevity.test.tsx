@@ -148,7 +148,10 @@ describe("ExplainCard — the term table (P3-07)", () => {
     expect(html).toMatch(new RegExp(`<p class="font-reading(?![^"]*italic)[^"]*">${PROSE_ONE}</p>`));
   });
 
-  it("draws no table for a reply without items, nor for an empty list, and no table on the first answer", () => {
+  // P4-00c: this title said "and no table on the first answer" (the P3-07 ruling that the first
+  // answer never carries one). The assertion stands — an answer that carries none draws none —
+  // and the title says only that; a first answer WITH items has its own cases below.
+  it("draws no table for a reply without items, nor for an empty list, and none on a first answer that carries none", () => {
     expect(card({ thread: view({ turns: twoPairs.slice(2) }) })).not.toContain("<table");
     expect(card({ thread: view({ turns: [{ role: "reader", text: READER_ONE }, { ...plain, items: [] }] }) })).not.toContain("<table");
     expect(card({ thread: undefined })).not.toContain("<table");
@@ -166,6 +169,88 @@ describe("ExplainCard — the term table (P3-07)", () => {
     expect(table).not.toContain("— §");
     expect(table).not.toMatch(/italic/);
     expect(table).not.toContain("<a ");
+  });
+});
+
+// P4-00c (§1h.11 (a), A's P3-06b P7-14): the first answer may carry the same table. The box
+// draws it under the two parts, in the reading face with the label-face headers — the same
+// `ItemsTable` a reply uses — and "Say more" stays absent on the first answer.
+describe("ExplainCard — the first answer's term table (P4-00c)", () => {
+  const tabled: ExplainAnswer = { ...answer, items: ITEMS };
+  const first = (over: Partial<Parameters<typeof ExplainCard>[0]> = {}) => card({ status: { kind: "answer", answer: tabled } as ExplainStatus, ...over });
+  const tableOf = (html: string): string => /<table[\s\S]*?<\/table>/.exec(html)?.[0] ?? "";
+
+  it("draws the answer's items as a table: three headed columns, a row for each", () => {
+    const html = first();
+    const table = tableOf(html);
+
+    expect(html.match(/<table/g)).toHaveLength(1);
+    expect([...table.matchAll(/<th[^>]*>([^<]*)<\/th>/g)].map((m) => m[1])).toEqual([EXPLAIN.tableTerm, EXPLAIN.tableHere, EXPLAIN.tableRead]);
+    const body = table.slice(table.indexOf("<tbody>"));
+    expect(body.match(/<tr/g)).toHaveLength(2);
+    for (const item of ITEMS) for (const cell of [item.term, item.here, item.read]) expect(body).toContain(cell);
+  });
+
+  it("is the same table a reply draws: the same markup for the same rows", () => {
+    const reply = tableOf(card({ thread: view({ turns: [{ role: "reader", text: READER_ONE }, withTable] }) }));
+
+    expect(tableOf(first())).toBe(reply);
+  });
+
+  it("sets the headers in the label face and every cell in the reading face, none italic", () => {
+    const table = tableOf(first());
+
+    for (const header of [EXPLAIN.tableTerm, EXPLAIN.tableHere, EXPLAIN.tableRead]) {
+      expect(table).toMatch(new RegExp(`<th[^>]*class="[^"]*\\bfont-mono\\b[^"]*"[^>]*>${header}</th>`));
+    }
+    const cells = [...table.matchAll(/<td([^>]*)>/g)].map((m) => m[1]);
+    expect(cells).toHaveLength(6);
+    for (const attrs of cells) {
+      expect(attrs).toMatch(/\bfont-reading\b/);
+      expect(attrs).not.toMatch(/\bitalic\b|font-mono/);
+    }
+    expect(table).not.toContain("<a ");
+  });
+
+  it("puts it under the two parts: after \"What it means\", after \"Why it is here\" and its quote", () => {
+    const html = first();
+    const at = (text: string) => html.indexOf(text);
+
+    expect(at(`>${EXPLAIN.meaning}<`)).toBeGreaterThan(-1);
+    expect(at(`>${EXPLAIN.here}<`)).toBeGreaterThan(at(answer.meaning));
+    expect(at("<table")).toBeGreaterThan(at(answer.here.text));
+    expect(at("<table")).toBeGreaterThan(at(`>${SENTENCE}<span`));
+    expect(at("<table")).toBeGreaterThan(at(`>${EXPLAIN.here}<`));
+  });
+
+  it("keeps the two parts as they were: the labels, the prose in the reading face, the verified quote", () => {
+    const html = first();
+
+    expect(html).toContain(`>${EXPLAIN.meaning}<`);
+    expect(html).toMatch(new RegExp(`<p class="font-reading(?![^"]*italic)[^"]*">${answer.meaning}</p>`));
+    expect(html).toMatch(new RegExp(`<p class="font-reading(?![^"]*italic)[^"]*">${answer.here.text}</p>`));
+    expect(html).toContain(`>${SENTENCE}<span`);
+  });
+
+  it("has no \"Say more\" on the first answer, with a table or without, even where the box can send one", () => {
+    expect(sayMoreButtons(first({ thread: view({ turns: [], onSayMore: () => {} }) }))).toHaveLength(0);
+    expect(sayMoreButtons(card({ thread: view({ turns: [], onSayMore: () => {} }) }))).toHaveLength(0);
+  });
+
+  it("draws no table for an empty list of rows, and the first answer's table stays when a reply with its own follows", () => {
+    expect(card({ status: { kind: "answer", answer: { ...answer, items: [] } } as ExplainStatus })).not.toContain("<table");
+    const html = first({ thread: view({ turns: [{ role: "reader", text: READER_ONE }, withTable] }) });
+
+    expect(html.match(/<table/g)).toHaveLength(2);
+    expect(html.indexOf("<table")).toBeLessThan(html.indexOf(READER_ONE));
+  });
+
+  it("draws a peer-labelled first answer (no verified quote) with its table too", () => {
+    const peer: ExplainAnswer = { meaning: answer.meaning, here: { text: answer.here.text, peer: true }, items: ITEMS };
+    const html = card({ status: { kind: "answer", answer: peer } as ExplainStatus });
+
+    expect(html.match(/<table/g)).toHaveLength(1);
+    expect(html.indexOf("<table")).toBeGreaterThan(html.indexOf(answer.here.text));
   });
 });
 

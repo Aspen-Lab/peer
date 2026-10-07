@@ -1162,11 +1162,54 @@ describe("the brevity rules in the prompts (P3-07)", () => {
     expect(user.rules.join(" ")).toMatch(/with `items`, `reply` is at most two sentences/i);
   });
 
-  it("the first message's prompt is unchanged in its schema: two parts and no table", () => {
+  // P4-00c (§1h.11 (a), A's P7-14): this test said "unchanged in its schema: two parts and no
+  // table", the P3-07 ruling that the first answer never carries one. The owner's standard — a
+  // placing sentence that quotes the author's phrase, then the compact table — applies to the
+  // first answer too, so the first answer's schema offers the same optional `items`. Rewritten to
+  // the new ruling: two parts and an optional table, one sentence a part when there is one.
+  it("the first message's prompt offers the same optional table: two parts, and `items` for a passage with two or more terms or quantities worth a row", () => {
     const user = userOf(first);
+    const items = user.outputSchema.items as string;
+    const replyItems = userOf(reply).outputSchema.items as string;
 
-    expect(Object.keys(user.outputSchema)).toEqual(["meaning", "here"]);
-    expect(first.userPrompt).not.toMatch(/items/);
+    expect(Object.keys(user.outputSchema)).toEqual(["meaning", "here", "items"]);
+    expect(items).toMatch(/optional|leave this key out/i);
+    expect(items).toMatch(/two or more terms or quantities/i);
+    expect(items).toMatch(/term/);
+    expect(items).toMatch(/here/);
+    expect(items).toMatch(/read/);
+    expect(items).toMatch(/four rows|4 rows/i);
+    expect(items).toMatch(/twelve words|12 words/i);
+    // The same table as a reply's: its cells are described in the same words.
+    for (const phrase of ["{ term, here, read }", "at most four rows", "at most twelve words"]) {
+      expect(items).toContain(phrase);
+      expect(replyItems).toContain(phrase);
+    }
+  });
+
+  it("the first message's prompt keeps each part to one sentence with a table, quotes the author's phrase where the meaning turns on it, and still allows two without one", () => {
+    const user = userOf(first);
+    const schema = user.outputSchema as { meaning: string; here: { text: string } };
+    const rules = user.rules.join(" ");
+
+    expect(rules).toMatch(/with `items`, `meaning` and `here\.text` are one sentence each/i);
+    expect(rules).toMatch(/`meaning` quotes the author's own phrase when the meaning turns on it/i);
+    expect(rules).toMatch(/leave the terms to the table/i);
+    expect(schema.meaning).toMatch(/at most two sentences/i);
+    expect(schema.meaning).toMatch(/one sentence when `items` is present/i);
+    expect(schema.here.text).toMatch(/one sentence when `items` is present/i);
+  });
+
+  it("the first answer's system prompt asks for the table when the passage holds two or more terms or quantities worth a row, and for none otherwise", () => {
+    expect(first.systemPrompt).toMatch(/two or more terms or quantities worth a row/i);
+    expect(first.systemPrompt).toMatch(/give no table/i);
+    // A reply's system prompt is its own, and does not carry the first answer's ask.
+    expect(reply.systemPrompt).not.toMatch(/two or more terms or quantities/i);
+  });
+
+  it("a reply's prompt is what it was: the table is offered there as before", () => {
+    expect(Object.keys(userOf(reply).outputSchema)).toEqual(["reply", "evidence", "items"]);
+    expect(userOf(reply).rules.join(" ")).toMatch(/with `items`, `reply` is at most two sentences/i);
   });
 });
 
@@ -1531,6 +1574,144 @@ describe("the term table's grounding (P3-07)", () => {
   });
 });
 
+// ── P4-00c (§1h.11 (a), A's P3-06b P7-14): the first answer may carry the term table ──
+// The owner's standard — a placing sentence that quotes the author's phrase, then the
+// compact table — applies to the first answer too, not only to a reply. The first
+// answer's schema gains the same optional `items`; the rows go through the reply's own
+// sanitizer and grounding (`sanitizeItems`, `groundExplainItems`: shared, not copied);
+// with a table each of the two parts is one sentence, without one the two-sentence cap
+// stands.
+
+describe("the first answer's term table (P4-00c)", () => {
+  const row = (term: string, here = "what it means in this paper", read = "how a reader should take it"): Record<string, string> => ({ term, here, read });
+  const parts = { meaning: "The ratio is the share of the gauge length that plates cover. Plates are what precipitates become.", here: { text: "The authors use it to compare alloys fairly. It rose with heat.", evidence: RAFT_DEF } };
+  const withItems = (raw: unknown, over: Record<string, unknown> = {}) => sanitizeExplainAnswer({ ...parts, items: raw, ...over });
+
+  it("keeps well-formed rows in order, trimmed, with only term, here and read", () => {
+    const out = withItems([{ term: "  grain ratio ", here: " the width over the length ", read: " 0.4 is a narrow sample ", extra: "x" }, row("f_cell")]);
+
+    expect(out?.items).toEqual([
+      { term: "grain ratio", here: "the width over the length", read: "0.4 is a narrow sample" },
+      { term: "f_cell", here: "what it means in this paper", read: "how a reader should take it" },
+    ]);
+  });
+
+  it("is shared with the reply's sanitizer, not copied: the same raw table gives the same rows in both", () => {
+    const thirteen = "one two three four five six seven eight nine ten eleven twelve thirteen";
+    const raw = [
+      row("a", thirteen), row("Grain ratio"), row("grain  RATIO"), row("x".repeat(81)), row("see", "see https://example.org/x for it"),
+      row("b", "y".repeat(80)), row("c"), row("d"), row("e"), { term: "no cells" }, "text", null,
+    ];
+
+    expect(withItems(raw)?.items).toEqual(sanitizeExplainReply({ reply: "Two values.", items: raw })?.items);
+    expect(withItems(raw)?.items?.length).toBe(EXPLAIN_CAPS.itemRows);
+  });
+
+  it("has no items key at all for no table, an empty one and anything that is not a list of rows — and the answer is then what it was", () => {
+    const without = sanitizeExplainAnswer(parts);
+
+    expect(without).toEqual({ meaning: "The ratio is the share of the gauge length that plates cover. Plates are what precipitates become.", here: { text: "The authors use it to compare alloys fairly. It rose with heat.", evidence: RAFT_DEF } });
+    for (const raw of [undefined, null, [], "table", 5, {}, [1, "x", null], [{ term: "a" }], [{ term: "a", here: "b" }], [{ term: "a", here: "b", read: 3 }], [{ term: " ", here: "b", read: "c" }]]) {
+      expect(withItems(raw), JSON.stringify(raw)).toEqual(without);
+    }
+  });
+
+  it("holds each part to one sentence when there is a table, and to the usual two when there is none", () => {
+    const longParts = { meaning: "One is plain. Two is plain too. Three must go.", here: { text: "First reason. Second reason. Third reason." } };
+    const table = sanitizeExplainAnswer({ ...longParts, items: [row("a")] });
+
+    expect(table?.meaning).toBe("One is plain.");
+    expect(table?.here.text).toBe("First reason.");
+    expect(sanitizeExplainAnswer(longParts)?.meaning).toBe("One is plain. Two is plain too.");
+    expect(sanitizeExplainAnswer(longParts)?.here.text).toBe("First reason. Second reason.");
+    // A table the shape sanitiser empties is no table: the parts keep their two sentences.
+    expect(sanitizeExplainAnswer({ ...longParts, items: [{ term: "a" }] })?.meaning).toBe("One is plain. Two is plain too.");
+    expect(EXPLAIN_CAPS.itemsPartSentences).toBe(1);
+    expect(EXPLAIN_CAPS.partSentences).toBe(2);
+  });
+
+  it("still caps a part at 420 characters with a table, and a lone sentence over it is cut at a word and marked", () => {
+    const out = sanitizeExplainAnswer({ meaning: `${"plates grow slowly ".repeat(60)}and that is all.`, here: { text: sized("h", 300) }, items: [row("a")] });
+
+    expect(out?.meaning.length).toBeLessThanOrEqual(EXPLAIN_CAPS.partChars);
+    expect(out?.meaning.endsWith("…")).toBe(true);
+    expect(out?.here.text).toBe(sized("h", 300));
+  });
+
+  it("counts Chinese sentences too: one a part with a table, two without", () => {
+    expect(sanitizeExplainAnswer({ meaning: sentencesZh(5), here: { text: sentencesZh(4) }, items: [row("比值", "占比", "越大越好")] })).toEqual({
+      meaning: sentencesZh(1), here: { text: sentencesZh(1) }, items: [{ term: "比值", here: "占比", read: "越大越好" }],
+    });
+    expect(sanitizeExplainAnswer({ meaning: sentencesZh(5), here: { text: sentencesZh(4) } })).toEqual({ meaning: sentencesZh(2), here: { text: sentencesZh(2) } });
+  });
+
+  it("is still no answer unless both parts have words, whatever the table holds", () => {
+    expect(sanitizeExplainAnswer({ meaning: "", here: { text: "x" }, items: [row("a")] })).toBeNull();
+    expect(sanitizeExplainAnswer({ meaning: "x", here: { text: " " }, items: [row("a")] })).toBeNull();
+    expect(sanitizeExplainAnswer({ items: [row("a")] })).toBeNull();
+  });
+
+  it("keeps the quote it will try to verify as it did, and nothing else the model said", () => {
+    const out = sanitizeExplainAnswer({ ...parts, items: [row("a")], extra: "x", here: { ...parts.here, peer: true, page: 7 } });
+
+    expect(out?.here).toEqual({ text: "The authors use it to compare alloys fairly.", evidence: RAFT_DEF });
+    expect(Object.keys(out ?? {})).toEqual(["meaning", "here", "items"]);
+  });
+
+  describe("verifyExplainAnswer holds the rows to the paper", () => {
+    const located = locatePassage(doc, "fraction of the gauge length")!;
+    const scope = { passage: "fraction of the gauge length", located };
+    const answer: ExplainAnswer = {
+      meaning: "A measure of plate coverage.",
+      here: { text: "It compares alloys.", evidence: RAFT_DEF },
+      items: [
+        { term: "gauge length", here: "the measured stretch", read: "longer is a bigger sample" },
+        { term: "spline interpolation", here: "a method nobody used", read: "ignore it" },
+        { term: "rafting ratio", here: "the plate share", read: "higher is more plates" },
+        { term: "tungsten additions", here: "in another section", read: "not here" },
+      ],
+    };
+
+    it("keeps the grounded rows in order and drops the ungrounded ones, whole — including a term the rest of the paper holds", () => {
+      const out = verifyExplainAnswer(answer, doc, located.sectionId, scope);
+
+      expect(out.items?.map((item) => item.term)).toEqual(["gauge length", "rafting ratio"]);
+      expect(out.items?.[0]).toEqual(answer.items?.[0]);
+    });
+
+    it("is the same grounding the reply uses: the same rows kept for the same scope", () => {
+      const turn = verifyExplainReply({ reply: "Two values.", items: answer.items }, doc, located.sectionId, scope);
+
+      expect(verifyExplainAnswer(answer, doc, located.sectionId, scope).items).toEqual(turn.items);
+    });
+
+    it("verifies the quote exactly as before, with the table beside it", () => {
+      const out = verifyExplainAnswer(answer, doc, located.sectionId, scope);
+
+      expect(out.here).toMatchObject({ text: "It compares alloys.", evidence: RAFT_DEF, evidenceWhere: "2 Methods", sectionId: "s2", page: 2 });
+      expect(out.here.peer).toBeUndefined();
+      const noQuote = verifyExplainAnswer({ ...answer, here: { text: "It compares alloys." } }, doc, located.sectionId, scope);
+      expect(noQuote.here).toEqual({ text: "It compares alloys.", peer: true });
+      expect(noQuote.items?.length).toBe(2);
+    });
+
+    it("has no items key when no row is grounded, and none at all without the scope to ground them in", () => {
+      const ungrounded = { ...answer, items: [answer.items![1], answer.items![3]] };
+
+      expect("items" in verifyExplainAnswer(ungrounded, doc, located.sectionId, scope)).toBe(false);
+      expect("items" in verifyExplainAnswer(answer, doc, located.sectionId)).toBe(false);
+      expect("items" in verifyExplainAnswer({ meaning: "m", here: { text: "t" } }, doc, located.sectionId, scope)).toBe(false);
+    });
+
+    it("changes nothing in the answer it was given", () => {
+      const before = JSON.stringify(answer);
+      verifyExplainAnswer(answer, doc, located.sectionId, scope);
+
+      expect(JSON.stringify(answer)).toBe(before);
+    });
+  });
+});
+
 describe("explainCacheKey with the long form (P3-07)", () => {
   const texts = [FIRST.text, ASKED.text];
 
@@ -1638,6 +1819,99 @@ describe("brevity harness", () => {
       expect(countSentences(part), name).toBeLessThanOrEqual(2);
       expect(part.endsWith("…") || wholeCut(source, part), name).toBe(true);
     }
+  });
+
+  // P4-00c (§1h.11 (a)): the first answer carries a table too, so the harness runs first answers
+  // with over-long parts and over-long rows, both languages. With a table each part is one whole
+  // sentence; a row over a cap is dropped whole; at most four rows survive.
+  interface AnswerTableCase { name: string; language: "en" | "zh"; meaning: string; here: string; rows: Record<string, string>[] }
+  const longCell = (n: number) => Array.from({ length: n }, (_, i) => `w${i}`).join(" ");
+  const answerTableCases: AnswerTableCase[] = [
+    {
+      name: "three long sentences a part under seven rows, three of them paragraphs",
+      language: "en",
+      meaning: [1, 2, 3].map((n) => sized(`m${n}`, 250)).join(" "),
+      here: [1, 2, 3].map((n) => sized(`h${n}`, 250)).join(" "),
+      rows: [
+        { term: "a", here: longCell(5), read: longCell(5) },
+        { term: "b", here: longCell(40), read: longCell(5) },
+        { term: "c", here: longCell(5), read: longCell(5) },
+        { term: "d", here: longCell(5), read: longCell(200) },
+        { term: "e", here: longCell(5), read: longCell(5) },
+        { term: "f", here: longCell(13), read: longCell(5) },
+        { term: "g", here: longCell(5), read: longCell(5) },
+      ],
+    },
+    {
+      name: "a part that is one sentence that never stops, under rows of 81-character cells",
+      language: "en",
+      meaning: `${"plates grow slowly ".repeat(60)}and that is all.`,
+      here: sentences(5, "h"),
+      rows: [
+        { term: "a", here: "x".repeat(81), read: "fine" },
+        { term: "b", here: "short", read: "also short" },
+        { term: "c", here: "short", read: "y".repeat(81) },
+        { term: "d", here: "short", read: "also short" },
+      ],
+    },
+    {
+      name: "a Chinese answer of five sentences a part under a Chinese table with long cells",
+      language: "zh",
+      meaning: sentencesZh(5),
+      here: sentencesZh(5),
+      rows: [
+        { term: "比值", here: "片状析出物占试样的比例", read: "越大说明连片越多" },
+        { term: "单元分数", here: "片状析出物在载荷下缓慢长大并最终连成一片完整的板状结构", read: "越大越好" },
+        { term: "晶粒比", here: "宽度与高度之比", read: "0.4 表示偏窄" },
+        { term: "密度", here: "单位体积的质量", read: "越大越重" },
+        { term: "模量", here: "抵抗变形的能力", read: "越大越硬" },
+        { term: "硬度", here: "抵抗压入的能力", read: "越大越硬" },
+      ],
+    },
+    {
+      name: "a Chinese answer of 300-character sentences under a table of paragraphs",
+      language: "zh",
+      meaning: [1, 2].map((n) => sizedZh(n, 300)).join(""),
+      here: [1, 2].map((n) => sizedZh(n + 2, 300)).join(""),
+      rows: Array.from({ length: 5 }, (_, i) => ({ term: `项${i}`, here: sizedZh(i + 1, 60), read: "越大越好" })).concat([{ term: "项ok", here: "占比", read: "越大越好" }]),
+    },
+  ];
+
+  it("has at least three first answers with over-long parts and rows, in both languages", () => {
+    expect(answerTableCases.length).toBeGreaterThanOrEqual(3);
+    expect(new Set(answerTableCases.map((c) => c.language))).toEqual(new Set(["en", "zh"]));
+    for (const c of answerTableCases) {
+      expect(c.rows.length, c.name).toBeGreaterThan(3);
+      // Over-long: more than the one sentence a part may have with a table, or longer than a part may be.
+      expect(countSentences(c.meaning) > 1 || c.meaning.length > EXPLAIN_CAPS.partChars, c.name).toBe(true);
+      expect(countSentences(c.here) > 1 || c.here.length > EXPLAIN_CAPS.partChars, c.name).toBe(true);
+    }
+  });
+
+  it.each(answerTableCases)("a first answer with a table — $name — comes out as two parts of one whole sentence and at most four rows within the cell caps", ({ name, meaning, here, rows }) => {
+    const out = sanitizeExplainAnswer({ meaning, here: { text: here }, items: rows });
+    const words = (text: string) => (text.match(/\p{Script=Han}/gu) ?? []).length / 2 + (text.replace(/\p{Script=Han}/gu, " ").match(/\S+/g) ?? []).length;
+
+    expect(out, name).not.toBeNull();
+    for (const [part, source] of [[out?.meaning as string, meaning], [out?.here.text as string, here]] as const) {
+      expect(part.length, name).toBeLessThanOrEqual(EXPLAIN_CAPS.partChars);
+      expect(countSentences(part), name).toBeLessThanOrEqual(1);
+      expect(part.endsWith("…") || wholeCut(source, part), name).toBe(true);
+    }
+    expect(out?.items?.length ?? 0, name).toBeGreaterThan(0);
+    expect(out?.items?.length ?? 0, name).toBeLessThanOrEqual(4);
+    for (const item of out?.items ?? []) {
+      for (const text of [item.term, item.here, item.read]) {
+        expect(text.length, name).toBeLessThanOrEqual(80);
+        expect(words(text), name).toBeLessThanOrEqual(12);
+      }
+    }
+  });
+
+  it("a first answer whose whole table is over the caps is the two-part answer it was: no table, two sentences a part", () => {
+    const out = sanitizeExplainAnswer({ meaning: sentences(5, "m"), here: { text: sentences(5, "h") }, items: Array.from({ length: 6 }, (_, i) => ({ term: `t${i}`, here: longCell(30), read: longCell(4) })) });
+
+    expect(out).toEqual({ meaning: sentences(2, "m"), here: { text: sentences(2, "h") } });
   });
 
   interface TableCase { name: string; rows: Record<string, string>[]; prose: string }

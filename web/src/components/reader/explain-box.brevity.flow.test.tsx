@@ -23,7 +23,7 @@ import type { ExplainAnswer } from "@/lib/papers/explain";
 import type { PaperReading } from "@/lib/papers/reading";
 import { MAX_EXPLAIN_TURNS, type ExplainTurn } from "@/store/explain-threads";
 import { ExplainBox, ExplainCard, type AskResult, type ThreadView } from "./explain-box";
-import { firstAnswerMessage, type ReplyResult } from "./explain-thread";
+import { firstAnswerMessage, sayMoreOf, type ReplyResult } from "./explain-thread";
 import type { ExplainSelection } from "./paper-body";
 
 const SENTENCE = "We define the rafting ratio as the fraction of the gauge length covered by plates.";
@@ -132,6 +132,52 @@ const base = (over: Partial<Props> = {}): Props => ({
   onResetThread: vi.fn(),
   reading,
   ...over,
+});
+
+// P4-00c (§1h.11 (a), A's P3-06b P7-14): the first answer may carry the term table. The box hands
+// the card the answer with its rows, whether it just arrived or was kept in this browser, and the
+// thread's first message — what a follow-up's model reads — stays the two parts: no table in it.
+const ROWS = [
+  { term: "grain ratio", here: "width over length of the sample", read: "0.4 means about two in five" },
+  { term: "f_cell", here: "share of the cells covered by plates", read: "0.57 means most of it" },
+];
+const tabled: ExplainAnswer = { ...answer, items: ROWS };
+
+describe("ExplainBox — the first answer's term table (P4-00c)", () => {
+  it("hands the card the first answer with its rows when it arrives, and no reply yet: nothing for \"Say more\" to lengthen", async () => {
+    const run = await scenario(base({ cached: undefined, onAsk: vi.fn(async (): Promise<AskResult> => tabled) }), [(tree) => click(tree)]);
+    await wait();
+    const status = run.last().card?.props.status as { kind: string; answer?: ExplainAnswer };
+
+    expect(status.kind).toBe("answer");
+    expect(status.answer).toEqual(tabled);
+    expect(status.answer?.items).toEqual(ROWS);
+    expect(sayMoreOf(run.last().thread?.turns ?? [])).toBeNull();
+    run.mounted.unmount();
+  });
+
+  it("opens a kept first answer with its table at once, with no request", async () => {
+    const onAsk = vi.fn(async (): Promise<AskResult> => answer);
+    const run = await scenario(base({ cached: tabled, onAsk }), [(tree) => click(tree)]);
+    await wait();
+
+    expect((run.last().card?.props.status as { answer?: ExplainAnswer }).answer?.items).toEqual(ROWS);
+    expect(onAsk).not.toHaveBeenCalled();
+    run.mounted.unmount();
+  });
+
+  it("keeps the table out of the thread's first message: a follow-up carries the two parts and nothing else of the answer", async () => {
+    const kept = pairs(1);
+    const onSayMore = vi.fn(async (): Promise<ReplyResult> => LONG);
+    const run = await scenario(base({ cached: tabled, onSayMore, cachedTurns: kept }), [(tree) => click(tree), (tree) => sayMore(tree)]);
+    await wait();
+    const sent = onSayMore.mock.calls[0] as unknown as [unknown, ExplainTurn[], string];
+
+    expect(sent[1][0]).toEqual({ role: "peer", text: `${tabled.meaning} ${tabled.here.text}` });
+    expect(sent[1][0]).not.toHaveProperty("items");
+    expect(JSON.stringify(sent[1])).not.toContain("grain ratio");
+    run.mounted.unmount();
+  });
 });
 
 describe("ExplainBox — Say more (P3-07)", () => {

@@ -18,7 +18,11 @@
 //   - with a key, the model's two parts: "What it means" (Peer's words, labelled)
 //     and "Why it is here" — Peer's prose, then the paper's own sentence as a
 //     quote, or, when that sentence could not be verified, the prose labelled as
-//     Peer's own reading and no quote.
+//     Peer's own reading and no quote;
+//   - P4-00c (§1h.11 (a)): when the passage holds two or more terms or quantities, the
+//     small term table under both parts — the reply's own `ItemsTable`, in the reading
+//     face with the label-face headers — and, as before, no "Say more" on the first
+//     answer.
 //
 // An answer already kept for the passage opens at once with no request, with the
 // thread that followed it. Escape, a press outside the card, or a new selection
@@ -73,6 +77,7 @@ import type { Paper, UserProfile } from "@/types";
 import { EXPLAIN, PEERS_READING } from "./copy";
 import { EvidenceQuote } from "./evidence-quote";
 import {
+  asItems,
   firstAnswerMessage,
   keyToSend,
   postExplain,
@@ -286,11 +291,13 @@ export function explainLlmOverride(profile: Pick<UserProfile, "feedAiProvider" |
 
 const isText = (value: unknown): value is string => typeof value === "string" && value.trim() !== "";
 
-/** The two parts, as the server sent them — or null for anything else. */
+/** The two parts, as the server sent them — and, P4-00c, the table when it sent one, read as a
+ *  reply's is (the rows that are three cells of words, at most four) — or null for anything else. */
 function asAnswer(value: unknown): ExplainAnswer | null {
-  const answer = (value as { answer?: unknown } | null)?.answer as { meaning?: unknown; here?: Record<string, unknown> } | undefined;
+  const answer = (value as { answer?: unknown } | null)?.answer as { meaning?: unknown; here?: Record<string, unknown>; items?: unknown } | undefined;
   if (!answer || !isText(answer.meaning) || !answer.here || !isText(answer.here.text)) return null;
   const { here } = answer;
+  const items = asItems(answer.items);
   return {
     meaning: answer.meaning,
     here: {
@@ -301,6 +308,7 @@ function asAnswer(value: unknown): ExplainAnswer | null {
       ...(typeof here.page === "number" ? { page: here.page } : {}),
       ...(here.peer === true ? { peer: true as const } : {}),
     },
+    ...(items.length > 0 ? { items } : {}),
   };
 }
 
@@ -502,6 +510,7 @@ export function ExplainCard({
                   <EvidenceQuote text={status.answer.here.evidence} where={status.answer.here.evidenceWhere ?? "abstract"} page={status.answer.here.page} />
                 )}
               </section>
+              {status.answer.items && status.answer.items.length > 0 && <ItemsTable items={status.answer.items} />}
               {asking?.turns.map((turn, index) => <TurnView key={index} turn={turn} />)}
               {asking?.onSayMore && sayMoreOf(asking.turns) !== null && (
                 // P3-07: one button, under Peer's latest reply only — and never under the first

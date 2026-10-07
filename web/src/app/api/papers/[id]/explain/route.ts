@@ -35,7 +35,8 @@
 // (`asksForDetail`) — when it may run to eight and 1,400; the prompt names the cap that
 // applies, the sanitizer enforces it, the memory's key carries it, and the turn says
 // `detail: true` so the box does not offer "Say more" under a reply that is already long.
-// A reply may carry a small term table, its rows held to the paper.
+// A reply may carry a small term table, its rows held to the paper; since P4-00c (§1h.11 (a))
+// so may the first answer (one sentence a part with it), by the same sanitizer and grounding.
 //
 // Never cached by a CDN or the browser: every answer says `no-store`, and one
 // about an upload says what the other private-upload routes say.
@@ -74,7 +75,8 @@ export const dynamic = "force-dynamic";
 // One small-tier call over a bounded prompt.
 export const maxDuration = 30;
 
-/** The most one explanation may say, in tokens (two parts of two sentences, and a quote). */
+/** The most one explanation may say, in tokens (two parts of two sentences, and a quote — or, with a
+ *  term table, two one-sentence parts, a quote and up to four rows). */
 const MAX_TOKENS = 600;
 /** The most one reply may say (three sentences and a quote, or a two-sentence reply and a small table). */
 const REPLY_MAX_TOKENS = 400;
@@ -289,9 +291,10 @@ async function handle(req: NextRequest, rawId: string): Promise<Response> {
   const sanitizedReply = replying ? sanitizeExplainReply(parsed, { detail }) : null;
   const sanitizedAnswer = replying ? null : sanitizeExplainAnswer(parsed);
   let result: ExplainCached;
-  // A reply's table rows are held to the paper in the scope the passage was found in (P3-07).
+  // A table's rows — a reply's (P3-07) or, since P4-00c (§1h.11 (a)), the first answer's — are
+  // held to the paper in the scope the passage was found in.
   if (sanitizedReply) result = { ...verifyExplainReply(sanitizedReply, doc, located.sectionId, { passage, located }), searched, ...(detail ? { detail: true as const } : {}) };
-  else if (sanitizedAnswer) result = verifyExplainAnswer(sanitizedAnswer, doc, located.sectionId);
+  else if (sanitizedAnswer) result = verifyExplainAnswer(sanitizedAnswer, doc, located.sectionId, { passage, located });
   else return reply({ unavailable: true } satisfies ExplainResult);
 
   logTurn({ promptChars: systemPrompt.length + userPrompt.length, answerChars: raw.length, cached: false });

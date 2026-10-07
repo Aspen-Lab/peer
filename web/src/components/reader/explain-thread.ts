@@ -140,8 +140,9 @@ function asItem(value: unknown): ExplainItem | null {
   return isText(term) && isText(here) && isText(read) ? { term, here, read } : null;
 }
 
-/** The rows the server sent, the ones that are three cells of words, at most four. */
-function asItems(value: unknown): ExplainItem[] {
+/** The rows the server sent, the ones that are three cells of words, at most four. A reply's
+ *  parse and — P4-00c — the first answer's (`requestExplanation`) read the table the same way. */
+export function asItems(value: unknown): ExplainItem[] {
   if (!Array.isArray(value)) return [];
   return (value as unknown[]).map(asItem).filter((item): item is ExplainItem => item !== null).slice(0, MAX_EXPLAIN_ITEMS);
 }

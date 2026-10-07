@@ -376,6 +376,23 @@ describe("requestExplanation — what is sent, and what comes back", () => {
     expect(await requestExplanation(args)).toEqual(answer);
   });
 
+  // P4-00c (§1h.11 (a)): the first answer may carry a table; the browser keeps the rows that are
+  // three cells of words, at most four — what a reply's parse keeps — and no key it was not sent.
+  it("returns the answer's table: the rows that are three cells of words, at most four, in order", async () => {
+    const row = (term: string) => ({ term, here: "what it means in this paper", read: "how to read it" });
+    stubFetch(200, { answer: { ...answer, items: [row("a"), { term: "b", here: "x" }, "text", null, row("c"), row("d"), row("e"), row("f")] }, cached: false });
+    const got = await requestExplanation(args);
+
+    expect(got).toEqual({ ...answer, items: [row("a"), row("c"), row("d"), row("e")] });
+  });
+
+  it("returns an answer with no items key when the table is empty, not a list or has no usable row", async () => {
+    for (const items of [[], "table", 5, {}, [{ term: "a" }], [null]]) {
+      stubFetch(200, { answer: { ...answer, items }, cached: false });
+      expect(await requestExplanation(args), JSON.stringify(items)).toEqual(answer);
+    }
+  });
+
   it("is 'unavailable' for an unavailable answer, an outage, a gone upload, a refusal and a network failure", async () => {
     stubFetch(200, { unavailable: true });
     expect(await requestExplanation(args)).toBe("unavailable");
