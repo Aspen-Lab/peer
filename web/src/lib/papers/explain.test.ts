@@ -1728,6 +1728,41 @@ describe("the displayed quote keeps the paper's notation (P4-00c)", () => {
     expect(shown.peer).toBeUndefined();
   });
 
+  // §1h.13 (b) (P4-02b, A's P4-02 S2): a verified quote is shown at most `EXPLAIN_CAPS.evidenceChars` (400)
+  // characters. The aligned span of the paper's words may be longer than the model's quote (the paper's
+  // citation brackets are in it), so over 400 it is not shown and the fallback applies: the model's own
+  // words, cut at 400. The old bound was twice that (800).
+  it("shows at most 400 characters when the paper's aligned span is longer: the fallback, the model's own words", () => {
+    const letters = "abcdefghijklmnopqrstuvwxyz";
+    const words = Array.from({ length: 58 }, (_, i) => `${letters[Math.floor(i / 26)]}${letters[i % 26]}xyz`);
+    expect(words.every((w) => w.length === 5)).toBe(true);
+    const cited = words.map((w, i) => `${w} [${(i % 3) + 1}]`).join(" ");
+    const modelQuote = words.join(" ");
+    expect(modelQuote.length).toBe(347);
+    expect(cited.length).toBeGreaterThan(EXPLAIN_CAPS.evidenceChars);
+    const longDoc: ExtractedDocument = { ...notationDoc, sections: [{ id: "s1", heading: "2 Results", canonical: "results", page: 1, text: `Intro words here.\n\n${cited}\n\nEnd words here.` }] };
+
+    for (const shown of [answerOf(modelQuote, longDoc).here.evidence, turn(modelQuote, longDoc).evidence]) {
+      expect((shown as string).length).toBeLessThanOrEqual(EXPLAIN_CAPS.evidenceChars);
+      expect(shown).toBe(modelQuote);
+      expect(shown).not.toContain("[");
+    }
+  });
+
+  it("still shows the paper's own characters when the aligned span is within 400 (the O-6 behaviour)", () => {
+    const letters = "abcdefghijklmnopqrstuvwxyz";
+    const words = Array.from({ length: 30 }, (_, i) => `${letters[i % 26]}${letters[(i + 3) % 26]}xyz`);
+    const cited = words.map((w, i) => `${w} [${(i % 3) + 1}]`).join(" ");
+    expect(cited.length).toBeLessThanOrEqual(EXPLAIN_CAPS.evidenceChars);
+    const shortDoc: ExtractedDocument = { ...notationDoc, sections: [{ id: "s1", heading: "2 Results", canonical: "results", page: 1, text: `Intro words here.\n\n${cited}\n\nEnd words here.` }] };
+
+    // The span runs from the first quoted word to the last, so the closing bracket after it is not in it.
+    const span = cited.replace(/ \[\d\]$/, "");
+    expect(span).toContain("[");
+    expect(answerOf(words.join(" "), shortDoc).here.evidence).toBe(span);
+    expect(turn(words.join(" "), shortDoc).evidence).toBe(span);
+  });
+
   it("shows Chinese text as the paper has it", () => {
     const zh = "我们把片状析出物占试样的比例定义为 f_cell，并在每个试样上测量了两次以确认结果。";
     const doc2: ExtractedDocument = { ...notationDoc, sections: [{ id: "s1", heading: "2 结果", canonical: "results", text: `前言。\n\n${zh}\n\n结束。` }] };

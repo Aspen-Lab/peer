@@ -731,7 +731,9 @@ function alignedOriginal(quote: string, flatSection: string): string | null {
     while (k < wanted.length && parts[start + k].word === wanted[k]) k += 1;
     if (k < wanted.length) continue;
     const span = tokens.slice(parts[start].at, parts[start + wanted.length - 1].at + 1).join(" ");
-    return span.length <= EXPLAIN_CAPS.evidenceChars * 2 ? span : null;
+    // §1h.13 (b): a quote card is sized for `evidenceChars` (400), as the cap is everywhere else; a longer
+    // span (the paper's citation brackets are in it) is not shown, and the caller's fallback applies.
+    return span.length <= EXPLAIN_CAPS.evidenceChars ? span : null;
   }
   return null;
 }
