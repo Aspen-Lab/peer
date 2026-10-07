@@ -412,6 +412,8 @@ Common constraints for every brief: verify the branch; preserve user edits; writ
 
 - 2026-10-07 01:3xZ **Owner (chat), checklist progress:** `private_decisions` already exists (screenshot; the 20260924000400 migration was applied earlier); migration 1 (`20261007000000`) applied in the SQL editor, "Success. No rows returned" (the four plan columns are gone); the Edge Functions page lists no `jev-broker` and the secrets hold no Jev name (item 7 done: the broker was never deployed); the owner asks for a plain explanation of the `usage_events` export step and how to find the PR #33 build log / Redeploy. Still open: migration 2 after the export decision; the build log; the sign-up URL; the N7 decision; PR #32's resumption.
 
+- 2026-10-07 01:38Z **PR #33's preview is GREEN.** The owner redeployed the d4e45208 deployment on Vercel (no new commit) and it reached Ready at 01:38Z with the current environment (the variable list the owner pasted: nothing banned, the Supabase browser key present). So the earlier failures were environmental, not code: the branch builds on Vercel, the `prebuild` guard passed, and `maxDuration = 300` on the feed route was accepted by the plan (Vercel fails a build that exceeds it). Checklist items 1 and 4 are done by this; items 2 (keys revoked), 3-first (private_decisions present), 3-second (migration 1 applied), 7 (no broker deployed) were done earlier. Open: the `usage_events` export decision and migration 2; the sign-up URL; the N7 decision; PR #32's resumption; the owner's merge.
+
 ## §5. Durable work ledger — update in place, evidence append only
 
 Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_REVIEW · VERIFIED · BLOCKED (never counted as passed).
