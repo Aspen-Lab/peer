@@ -719,3 +719,90 @@ describe("shapeEvidenceQuote (P4-04)", () => {
     expect(shapeEvidenceQuote(sec, body, body.length + 8)).toBe(`${body} [12].`);
   });
 });
+
+// ── P4-04 (§1h.8 (8)): the deep report's evidence is shown to its sentence boundaries too ──
+// `verifyReportEvidence` calls `shapeEvidenceQuote` for every evidence string it keeps — claims, key
+// results, answers, terms — against the section (or the abstract, or the caption) that holds it. Invented text.
+
+describe("verifyReportEvidence shows each kept quote to its sentence boundaries (P4-04)", () => {
+  const LEAD = "The cells were counted twice by two people in the lab.";
+  const SENTENCE = "The ratio f_cell was 0.4 across every cell of the specimen, but it fell to 0.1 once the load was released.";
+  const TRAIL = "Nothing else changed during the whole run.";
+  const shapedDoc: ExtractedDocument = {
+    source: "pdf",
+    pageCount: 1,
+    figureCaptions: [],
+    sections: [
+      { id: "s1", heading: "2 Results", canonical: "results", text: `${LEAD}\n\n${SENTENCE}\n\n${TRAIL}` },
+    ],
+  };
+  const ABSTRACT = "We study how a thin film behaves under load in a small rig. The film softened at 300 K under the applied load, but it recovered fully once the load was removed. We discuss what this means.";
+  const head = "The ratio fcell was 0.4 across every cell of the specimen,";
+  const verify = (r: Partial<PaperReport>) => verifyReportEvidence(report(r), { abstract: ABSTRACT, doc: shapedDoc }).report;
+
+  it("extends a claim's quote that stops inside a sentence, with the paper's own characters (`f_cell`)", () => {
+    const out = verify({ skim: [{ text: "Claim.", evidence: head }] });
+    expect(out.skim[0]).toMatchObject({ evidence: SENTENCE, evidenceWhere: "2 Results" });
+  });
+
+  it("does the same for a key result, a method, a limitation, a next step, an answer and a term", () => {
+    const out = verify({
+      whatItProposes: { summary: "", methods: [{ text: "M.", evidence: head }] },
+      resultsAndSignificance: { summary: "", keyResults: [{ title: "T", detail: "D.", evidence: head }] },
+      limitations: [{ text: "L.", evidence: head }],
+      nextStep: { text: "N.", evidence: head },
+      forYourQuestions: [
+        { question: "Q?", verdict: "answered", answers: [{ text: "A.", evidence: head }], readNext: [] },
+      ] as unknown as PaperReport["forYourQuestions"],
+      terms: [{ term: "f_cell", definition: "A ratio.", evidence: head }],
+    });
+    expect(out.whatItProposes.methods[0].evidence).toBe(SENTENCE);
+    expect(out.resultsAndSignificance.keyResults[0].evidence).toBe(SENTENCE);
+    expect(out.limitations?.[0].evidence).toBe(SENTENCE);
+    expect(out.nextStep?.evidence).toBe(SENTENCE);
+    expect(out.forYourQuestions?.[0].answers[0].evidence).toBe(SENTENCE);
+    expect(out.terms?.[0].evidence).toBe(SENTENCE);
+  });
+
+  it("extends an abstract quote against the abstract", () => {
+    const out = verify({ skim: [{ text: "Claim.", evidence: "softened at 300 K under the applied load," }] });
+    expect(out.skim[0]).toMatchObject({
+      evidence: "The film softened at 300 K under the applied load, but it recovered fully once the load was removed.",
+      evidenceWhere: "abstract",
+    });
+  });
+
+  it("leaves a quote that is already a whole sentence as it was", () => {
+    const out = verify({ skim: [{ text: "Claim.", evidence: SENTENCE }] });
+    expect(out.skim[0].evidence).toBe(SENTENCE);
+  });
+
+  it("marks the cut with an ellipsis, within 400, when the whole sentence does not fit", () => {
+    const padding = "and the specimen was then rinsed and dried and weighed and logged by hand at every single step of the long run, ".repeat(4);
+    const long = `The first clause says the ratio f_cell was 0.4 across every cell, ${padding}but the last clause reverses the finding entirely once the load was released.`;
+    const doc2: ExtractedDocument = { ...shapedDoc, sections: [{ id: "s1", heading: "2 Results", canonical: "results", text: `${LEAD}\n\n${long}\n\n${TRAIL}` }] };
+    const out = verifyReportEvidence(report({ skim: [{ text: "Claim.", evidence: "The first clause says the ratio fcell was 0.4 across every cell," }] }), { abstract: ABSTRACT, doc: doc2 }).report;
+    expect(out.skim[0].evidence).toBe("The first clause says the ratio f_cell was 0.4 across every cell,…");
+    expect(out.skim[0].evidence.length).toBeLessThanOrEqual(400);
+  });
+
+  it("keeps the quote it had when the section's own characters cannot be lined up, and never extends it", () => {
+    const cited: ExtractedDocument = { ...shapedDoc, sections: [{ id: "s1", heading: "2 Results", canonical: "results", text: `${LEAD}\n\nThe ratio of the cells was 0.4 across (Smith et al., 2020) every cell of the specimen under load.\n\n${TRAIL}` }] };
+    const evidence = "The ratio of the cells was 0.4 across every cell of the specimen under load.";
+    const out = verifyReportEvidence(report({ skim: [{ text: "Claim.", evidence }] }), { abstract: ABSTRACT, doc: cited }).report;
+    expect(out.skim[0].evidence).toBe(evidence);
+  });
+
+  it("still drops a quote the paper does not hold (never extended)", () => {
+    const { report: out, dropped } = verifyReportEvidence(report({ skim: [{ text: "Claim.", evidence: "The ratio f_cell was 0.9 across every cell of the specimen," }] }), { abstract: ABSTRACT, doc: shapedDoc });
+    expect(out.skim).toEqual([]);
+    expect(dropped).toBe(1);
+  });
+
+  it("an extended or cut quote still marks the abstract sentence it came from (placeEvidence ignores the cut marks)", () => {
+    const sentences = ABSTRACT.split(/(?<=[.!?])\s+/);
+    const whole = "The film softened at 300 K under the applied load, but it recovered fully once the load was removed.";
+    expect(placeEvidence(whole, sentences)).toEqual({ kind: "mark", index: 1 });
+    expect(placeEvidence(`…${whole.slice(4)}…`, sentences)).toEqual({ kind: "mark", index: 1 });
+  });
+});

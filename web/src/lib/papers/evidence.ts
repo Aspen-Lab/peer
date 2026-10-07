@@ -18,7 +18,7 @@
 
 import { cleanDisplayText } from "@/lib/text/clean";
 import type { ExtractedDocument } from "./html-text";
-import type { Claim, PaperReport, PaperReportKeyResult, PaperTerm, QuestionAnswers } from "./report";
+import { REPORT_CAPS, type Claim, type PaperReport, type PaperReportKeyResult, type PaperTerm, type QuestionAnswers } from "./report";
 import { splitSentences } from "./skim";
 
 /**
@@ -157,6 +157,8 @@ export function evidenceSupported(quote: string, corpus: string): boolean {
 interface CorpusEntry {
   where: string;
   text: string;
+  /** P4-04: the same text as the paper has it (not normalised), what `shapeEvidenceQuote` shows from. */
+  source: string;
   /** P2-02: a section's id (`s<index>` when it has none) and page; absent
    *  for the abstract and the figure captions. */
   sectionId?: string;
@@ -171,13 +173,14 @@ interface CorpusEntry {
 function buildCorpus(corpus: { abstract: string; doc?: ExtractedDocument }): CorpusEntry[] {
   const entries: CorpusEntry[] = [];
   const abstract = normalizeForMatch(corpus.abstract);
-  if (abstract) entries.push({ where: "abstract", text: abstract });
+  if (abstract) entries.push({ where: "abstract", text: abstract, source: corpus.abstract });
   (corpus.doc?.sections ?? []).forEach((section, index) => {
     const text = normalizeForMatch(section.text);
     if (!text) return;
     entries.push({
       where: section.heading.trim() || section.canonical,
       text,
+      source: section.text,
       sectionId: section.id ?? `s${index}`,
       ...(typeof section.page === "number" ? { page: section.page } : {}),
     });
@@ -190,13 +193,9 @@ function buildCorpus(corpus: { abstract: string; doc?: ExtractedDocument }): Cor
   for (const cap of corpus.doc?.figureCaptions ?? []) {
     const text = normalizeForMatch(cap.caption);
     if (!text) continue;
-    entries.push({ where: cap.label.trim() || "figure", text });
+    entries.push({ where: cap.label.trim() || "figure", text, source: cap.caption });
   }
   return entries;
-}
-
-function locate(evidence: string, entries: CorpusEntry[]): string | null {
-  return locateEntry(evidence, entries)?.where ?? null;
 }
 
 /**
@@ -215,6 +214,15 @@ function locateEntry(evidence: string, entries: CorpusEntry[], preferId?: string
     if (supportedIn(quote, entry.text)) return entry;
   }
   return null;
+}
+
+/**
+ * P4-04 (§1h.8 (8)): what the page shows of a quote the entry holds — `shapeEvidenceQuote`, the
+ * same function the explain box calls: the quote to its sentence boundaries, or with "…" at the
+ * cut. The quote as the sanitizer cleaned it when the entry's own characters cannot be lined up.
+ */
+function shown(entry: CorpusEntry, evidence: string): string {
+  return shapeEvidenceQuote(entry.source, evidence, REPORT_CAPS.evidenceChars) ?? evidence;
 }
 
 /** Where a verified quote sits: its heading, and — in a section — the
@@ -280,12 +288,12 @@ export function verifyReportEvidence(
   let dropped = 0;
 
   const keepClaim = <T extends Claim | PaperReportKeyResult>(item: T): T | null => {
-    const where = locate(item.evidence, entries);
-    if (!where) {
+    const entry = locateEntry(item.evidence, entries);
+    if (!entry) {
       dropped += 1;
       return null;
     }
-    return { ...item, evidenceWhere: where };
+    return { ...item, evidence: shown(entry, item.evidence), evidenceWhere: entry.where };
   };
   const keepAll = <T extends Claim | PaperReportKeyResult>(items: T[]): T[] =>
     items.map(keepClaim).filter((item): item is T => item !== null);
@@ -335,7 +343,7 @@ export function verifyReportEvidence(
         dropped += 1;
         return null;
       }
-      return { text: answer.text, evidence: answer.evidence, ...placed(entry) };
+      return { text: answer.text, evidence: shown(entry, answer.evidence), ...placed(entry) };
     };
     verified.forYourQuestions = report.forYourQuestions.map((entry): QuestionAnswers => {
       // "Not addressed" is one sentence on the page: it carries no answers.
@@ -375,7 +383,7 @@ export function verifyReportEvidence(
           dropped += 1;
           return null;
         }
-        return { term: term.term, definition: term.definition, evidence: term.evidence, ...placed(entry) };
+        return { term: term.term, definition: term.definition, evidence: shown(entry, term.evidence), ...placed(entry) };
       })
       .filter((term): term is PaperTerm => term !== null);
     if (terms.length > 0) verified.terms = terms;
@@ -398,7 +406,8 @@ export function placeEvidence(
   evidence: string,
   abstractSentences: string[],
 ): { kind: "mark"; index: number } | { kind: "quote" } {
-  const quote = normalizeForMatch(evidence);
+  // P4-04: a quote shown with a cut ("…" at an end) still is the sentence it was cut from.
+  const quote = normalizeForMatch(evidence.replace(/^\u2026|\u2026$/g, ""));
   if (quote.length < MIN_QUOTE_CHARS) return { kind: "quote" };
   for (let index = 0; index < abstractSentences.length; index += 1) {
     const sentence = normalizeForMatch(abstractSentences[index]);
