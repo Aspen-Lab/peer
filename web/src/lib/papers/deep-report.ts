@@ -885,11 +885,14 @@ export async function generateDeepReport(
       },
     };
   } catch (err) {
-    // With questions in the prompt, an error's message may quote them: only
-    // its kind is logged then (§1g.4 — no question in any log line).
+    // Only the kind of the error is logged, questions or not (§1g.4 — no
+    // question in any log line; §1h.16 (a)). The prompt holds the paper's
+    // text, which for a standalone upload is a private PDF's, and a provider's
+    // error may quote the prompt back in its message (the OpenAI provider
+    // keeps part of an error body there), so the message never reaches a log.
     console.error(
       "[papers/deep-report] generation failed:",
-      questions.length > 0 ? (err instanceof Error ? err.name : typeof err) : err,
+      err instanceof Error ? err.name : typeof err,
     );
     return null;
   }

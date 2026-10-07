@@ -424,6 +424,49 @@ describe("no question in any log line (§1g.4)", () => {
     const lines = error.mock.calls.map((args) => args.map(String).join(" "));
     expect(lines).toEqual(["[papers/deep-report] generation failed: TypeError"]);
   });
+
+  // P5-04b, F1 (§1h.16 (a)): the prompt holds the paper's body — a private
+  // PDF's text for a standalone upload — questions or not, and a provider's
+  // error may quote the prompt (the OpenAI provider keeps 400 characters of an
+  // error body in its message). So the catch logs the kind in both branches.
+  it("a failed Pass 1 with no questions logs the kind of failure too, never the error's message (P5-04b, F1)", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const MARKER = "lumen-orchard-marker-4417";
+    const stub = countingProvider({
+      pass1: () => {
+        throw new Error(`OpenAI API error 400: {"task":"Extract sentences from this paper's body","paper":"${MARKER}"}`);
+      },
+    });
+    const report = await generateDeepReport({ paper, doc: bigDoc("fail-1-no-questions"), provider: stub.provider });
+
+    expect(report).toBeNull();
+    expect(stub.count("pass1")).toBe(1);
+    expect(stub.count("pass1q")).toBe(0);
+    const lines = error.mock.calls.map((args) => args.map(String).join(" "));
+    expect(lines).toEqual(["[papers/deep-report] generation failed: Error"]);
+    for (const args of [...error.mock.calls, ...warn.mock.calls]) {
+      for (const arg of args) expect(String(arg)).not.toContain(MARKER);
+    }
+  });
+
+  it("a thrown value that is not an Error is logged by its type alone, with questions or none (P5-04b, F1)", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const MARKER = "lumen-orchard-marker-9082";
+    const stub = countingProvider({
+      pass2: () => {
+        throw `provider text ${MARKER}`;
+      },
+    });
+    await generateDeepReport({ paper, doc: bigDoc("fail-thrown-string-a"), provider: stub.provider });
+    await generateDeepReport({ paper, doc: bigDoc("fail-thrown-string-b"), provider: stub.provider, questions: ["Does it crack?"] });
+
+    const lines = error.mock.calls.map((args) => args.map(String).join(" "));
+    expect(lines).toEqual([
+      "[papers/deep-report] generation failed: string",
+      "[papers/deep-report] generation failed: string",
+    ]);
+  });
 });
 
 describe("the caches (§1g.4, §3d 11) — a counting provider", () => {
