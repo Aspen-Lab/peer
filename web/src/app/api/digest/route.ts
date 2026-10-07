@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { errorKind } from "@/lib/llm/providers/error-kind";
 import { resolveProvider } from "@/lib/llm/providers/registry";
 import type {
   PaperLite,
@@ -88,7 +89,12 @@ export async function POST(req: NextRequest) {
       bullets: result.bullets,
     } satisfies DigestResponse);
   } catch (err) {
-    console.error(`[digest] ${provider.id} error:`, err);
+    // The kind and the status only, never the error (P5-06b, §1h.20 (a)): the
+    // prompt holds the papers' abstracts and the reader's own profile text, and
+    // a provider's thrown message carries a slice of the response body, which
+    // can quote the request. A server log is shared; AGENTS.md keeps per-user
+    // text out of it.
+    console.error(`[digest] ${provider.id} error: ${errorKind(err)}`);
     // Degrade gracefully to Tier 0 on any LLM error.
     return NextResponse.json(emptyResponse());
   }
