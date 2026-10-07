@@ -801,8 +801,11 @@ const WEB_ADDRESS = /(?:https?:\/\/|www\.)[^\s)\]>"']+/gi;
  * with web search may name where it read something; the page shows no link to a
  * web source, and the mark "searched the web" is the only trace — so the address
  * goes, and a sentence's closing punctuation that the address had swallowed stays.
+ *
+ * P4-01: exported, so "Say it plainly" (`plain.ts`) strips a rewrite's addresses with this one
+ * function, not a copy of it.
  */
-function withoutWebAddresses(text: string): string {
+export function withoutWebAddresses(text: string): string {
   return text
     .replace(WEB_ADDRESS, (address) => /[.,;:!?]+$/.exec(address)?.[0] ?? "")
     .replace(/\(\s*\)/g, "")
