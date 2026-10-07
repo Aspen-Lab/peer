@@ -1749,6 +1749,38 @@ describe("the displayed quote keeps the paper's notation (P4-00c)", () => {
     }
   });
 
+  // P4-03 (the boundary): the bound is `<=`, so a span of exactly 400 is the paper's own characters and
+  // one of 401 is the fallback. 39 five-letter words, each followed by " [n]" and a space (10 characters),
+  // then one last word: 390 + its length is the span (the closing bracket is not in it).
+  const boundaryFixture = (lastWordLength: number) => {
+    const letters = "abcdefghijklmnopqrstuvwxyz";
+    const head = Array.from({ length: 39 }, (_, i) => `${letters[Math.floor(i / 26)]}${letters[i % 26]}xyz`);
+    const last = "q".repeat(lastWordLength);
+    const words = [...head, last];
+    const cited = words.map((w, i) => `${w} [${(i % 3) + 1}]`).join(" ");
+    const span = cited.replace(/ \[\d\]$/, "");
+    const doc: ExtractedDocument = { ...notationDoc, sections: [{ id: "s1", heading: "2 Results", canonical: "results", page: 1, text: `Intro words here.\n\n${cited}\n\nEnd words here.` }] };
+    return { span, modelQuote: words.join(" "), doc };
+  };
+
+  it("shows the paper's own characters when the aligned span is exactly 400", () => {
+    const { span, modelQuote, doc } = boundaryFixture(10);
+    expect(span.length).toBe(EXPLAIN_CAPS.evidenceChars);
+    expect(span).toContain("[");
+    expect(answerOf(modelQuote, doc).here.evidence).toBe(span);
+    expect(turn(modelQuote, doc).evidence).toBe(span);
+  });
+
+  it("falls back to the model's own words when the aligned span is 401", () => {
+    const { span, modelQuote, doc } = boundaryFixture(11);
+    expect(span.length).toBe(EXPLAIN_CAPS.evidenceChars + 1);
+    for (const shown of [answerOf(modelQuote, doc).here.evidence, turn(modelQuote, doc).evidence]) {
+      expect(shown).toBe(modelQuote);
+      expect(shown).not.toContain("[");
+      expect((shown as string).length).toBeLessThanOrEqual(EXPLAIN_CAPS.evidenceChars);
+    }
+  });
+
   it("still shows the paper's own characters when the aligned span is within 400 (the O-6 behaviour)", () => {
     const letters = "abcdefghijklmnopqrstuvwxyz";
     const words = Array.from({ length: 30 }, (_, i) => `${letters[i % 26]}${letters[(i + 3) % 26]}xyz`);
