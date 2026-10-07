@@ -161,7 +161,17 @@ async function matchSemantically(args: {
       reason: typeof json.reason === "string" ? json.reason : undefined,
     };
   } catch (err) {
-    console.warn("[figure-binding] semantic match failed:", err);
+    // Only the kind of the error is logged (P5-04c, §1h.17 (a); the same rule
+    // as the deep report's catch, §1h.16 (a)). The prompt above holds the
+    // paper's title, the query sentence and up to 360 characters of each figure
+    // caption, which for a standalone upload are a private PDF's words, and a
+    // provider's error may quote the prompt back in its message (the OpenAI
+    // provider keeps part of an error body there), so the message never
+    // reaches a log.
+    console.warn(
+      "[figure-binding] semantic match failed:",
+      err instanceof Error ? err.name : typeof err,
+    );
     return null;
   }
 }
