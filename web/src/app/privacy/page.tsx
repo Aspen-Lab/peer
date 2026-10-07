@@ -62,11 +62,14 @@ const SECTIONS = [
     // `lib/preferences/ledger.ts` (`applyQuestionTermSignal`: separate evidence of one small weight
     // per paper under an opaque key, never the question), `remoteProfilePayload` (profile-sync.tsx:
     // the ledger is part of what is sent), the profile route (the PUT replaces the ledger) and
-    // `logOut`. The test pins each clause to its line. It sits before "Your questions", whose
+    // `logOut`. P5-04 (S1): and from `paperFeedRequestBody` / `opportunityRequestBody` (store/feed.ts:
+    // the ledger is in the body of each request for the briefing, signed in or not), the feed route's
+    // cleaner and the pipeline (the pool is scored without it; it is applied at read time and kept for
+    // no one). The test pins each clause to its line. It sits before "Your questions", whose
     // entry is pinned as one paragraph followed by "Explain this".
     label: "What your questions teach Peer",
     body: [
-      "When your questions on a paper settle, the specific words in them — one word at a time, in lower case, without common words and the words every question uses — are added to the small ledger Peer keeps of what interests you, at a small fraction of the weight of a like, so one question changes nothing you can see. The question itself is never added, and neither is anything from the paper. Tick “Not for recommendations” beside a question and its words are not added, or are taken out at once if they were. The ledger is part of your profile: it is kept in this browser and, when you are signed in, sent to Peer's server and stored against your account with the rest of your profile, so these words go with it, each filed under a marker that stands for the paper, not its name. The next sync replaces your account's copy, and signing out clears it from this browser.",
+      "When your questions on a paper settle, the specific words in them — one word at a time, in lower case, without common words and the words every question uses — are added to the small ledger Peer keeps of what interests you, at a small fraction of the weight of a like, so one question changes nothing you can see. The question itself is never added, and neither is anything from the paper. Tick “Not for recommendations” beside a question and its words are not added, or are taken out at once if they were. The ledger is part of your profile and is kept in this browser, and it reaches Peer's server in two ways. It travels in each request for your briefing, signed in or not, so Peer can rank papers for you: the server uses these words for that one request and keeps none of it, so for a reader who is not signed in nothing of it is stored. When you are signed in it is also stored against your account with the rest of your profile, so these words go with it, each filed under a marker that stands for the paper, not its name. The next sync replaces your account's copy, and signing out clears it from this browser.",
     ],
   },
   {
