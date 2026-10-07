@@ -24,7 +24,16 @@
 // rendering it, and what its handlers do through the pure functions below.
 
 import { useEffect, useRef, useState } from "react";
-import { MAX_QUESTION_CHARS, MAX_QUESTIONS, cleanQuestions, useReadingQuestionsStore } from "@/store/reading-questions";
+import {
+  MAX_QUESTION_CHARS,
+  MAX_QUESTIONS,
+  cleanQuestions,
+  notForRecommendations,
+  settledQuestions,
+  useReadingQuestionsStore,
+} from "@/store/reading-questions";
+import { useProfileStore } from "@/store/profile";
+import { questionTerms } from "@/lib/preferences/question-terms";
 import { ASK, ROUTE, STANDING } from "./copy";
 
 /** Past this many characters a line shows its count. */
@@ -178,6 +187,26 @@ export function enterEndsTheBox(lines: readonly string[], index: number): boolea
   return lines.length >= MAX_QUESTIONS && lines.every((line) => line.trim() !== "");
 }
 
+/**
+ * P5-02 (blueprint P5): tell the preference ledger what the paper's settled
+ * questions hold — their specific terms, less those of any question marked "Not
+ * for recommendations". Replaces the paper's earlier terms; a call that changes
+ * nothing changes nothing. Runs when the questions settle and when a mark moves,
+ * never on a keystroke.
+ */
+export function syncQuestionTerms(paperId: string): void {
+  const entry = useReadingQuestionsStore.getState().byPaper[paperId];
+  useProfileStore.getState().recordQuestionTerms(paperId, questionTerms(settledQuestions(entry), notForRecommendations(entry)));
+}
+
+/** Settle the paper's questions (P2-03), then let the ledger hear of them. */
+export function settleQuestions(paperId: string): void {
+  useReadingQuestionsStore.getState().settle(paperId);
+  syncQuestionTerms(paperId);
+}
+
+const sameQuestion = (a: string, b: string) => a.trim().toLocaleLowerCase() === b.trim().toLocaleLowerCase();
+
 /** The page's `q`: the first empty question line, else the last one. */
 export function focusFirstEmptyQuestion(): void {
   const inputs = Array.from(document.querySelectorAll<HTMLInputElement>("input[data-ask-line]"));
@@ -213,10 +242,14 @@ export function QuestionField({
     return {
       lines: own && own.items.length > 0 ? [...own.items] : [""],
       gist: own?.gist ?? false,
+      marked: own?.notForRecs ? [...own.notForRecs] : [],
     };
   });
   const [lines, setLines] = useState<string[]>(initial.lines);
   const [gist, setGist] = useState(initial.gist);
+  // P5-02: the questions (their text) marked "Not for recommendations".
+  const [marked, setMarked] = useState<string[]>(initial.marked);
+  const isMarked = (line: string) => marked.some((m) => sameQuestion(m, line));
   const [focused, setFocused] = useState(false);
   // P1-07 (§1f.18 a): the line being written, which the vague hint waits for.
   const [unsettled, setUnsettled] = useState<number | null>(null);
@@ -258,7 +291,7 @@ export function QuestionField({
     // settled questions travel with the next open, as after in-app navigation.
     const settleNow = () => {
       stopIdle();
-      useReadingQuestionsStore.getState().settle(paperId);
+      settleQuestions(paperId);
     };
     pageHide.current = settleNow;
     window.addEventListener("pagehide", settleNow);
@@ -270,16 +303,25 @@ export function QuestionField({
     () => () => {
       if (idle.current === null) return;
       stopIdle();
-      useReadingQuestionsStore.getState().settle(paperId);
+      settleQuestions(paperId);
     },
     [paperId],
   );
 
-  const commit = (next: string[], nextGistValue: boolean) => {
+  const commit = (next: string[], nextGistValue: boolean, nextMarked: string[] = marked) => {
     stopIdle();
     setLines(next);
     setGist(nextGistValue);
-    useReadingQuestionsStore.getState().set(paperId, next, nextGistValue);
+    setMarked(nextMarked);
+    useReadingQuestionsStore.getState().set(paperId, next, nextGistValue, undefined, nextMarked);
+  };
+  // P5-02: ticking or unticking a question is a finished gesture of its own: the
+  // ledger hears of it at once (a tick takes the question's terms out; an untick
+  // lets them in when the questions next settle).
+  const onMark = (index: number, on: boolean) => {
+    const rest = marked.filter((m) => !sameQuestion(m, lines[index]));
+    commit(lines, gist, on ? [...rest, lines[index].trim()] : rest);
+    syncQuestionTerms(paperId);
   };
 
   // The gist is a reading mode: it changes no line and settles nothing.
@@ -319,7 +361,7 @@ export function QuestionField({
       </label>
       <ol className="mt-2 space-y-1">
         {lines.map((line, index) => (
-          <li key={index} className="flex items-baseline gap-2">
+          <li key={index} className={line.trim() !== "" ? "flex flex-wrap items-baseline gap-2" : "flex items-baseline gap-2"}>
             <input
               id={`ask-${paperId}-${index}`}
               ref={(el) => {
@@ -337,7 +379,11 @@ export function QuestionField({
                 const next = [...lines];
                 next[index] = event.target.value;
                 trackLine({ type: "change", index });
-                commit(next, nextGist(gist, next));
+                // A ticked line stays ticked as the reader edits it.
+                const carried = isMarked(lines[index])
+                  ? [...marked.filter((m) => !sameQuestion(m, lines[index])), event.target.value.trim()]
+                  : marked;
+                commit(next, nextGist(gist, next), carried);
               }}
               onKeyDown={(event) => {
                 if (event.key !== "Enter") return;
@@ -371,6 +417,17 @@ export function QuestionField({
               >
                 ×
               </button>
+            )}
+            {line.trim() !== "" && (
+              <label className="annotation inline-flex basis-full items-center gap-2 text-text-faint">
+                <input
+                  type="checkbox"
+                  checked={isMarked(line)}
+                  aria-label={ASK.notForRecsFor(index + 1)}
+                  onChange={(event) => onMark(index, event.target.checked)}
+                />
+                {ASK.notForRecs}
+              </label>
             )}
           </li>
         ))}

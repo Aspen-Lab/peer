@@ -120,6 +120,10 @@ export const ASK = {
   line: (n: number) => `Question ${n}`,
   remove: (n: number) => `Remove question ${n}`,
   counter: (n: number) => `${n}/200`,
+  /** P5-02: the checkbox beside a question. Ticked, that question's words never
+   *  enter what Peer learns for your feed. */
+  notForRecs: "Not for recommendations",
+  notForRecsFor: (n: number) => `Not for recommendations: question ${n}`,
 } as const;
 
 /**

@@ -29,7 +29,11 @@ import { cleanQuestions } from "@/store/reading-questions";
 import {
   applyOpportunityFacetPreferenceSignal,
   applyPreferenceSignal,
+  applyQuestionTermSignal,
   applyUploadPreferenceSignal,
+  normalizePreferenceLabel,
+  questionTermsOf,
+  removeQuestionTermSignal,
   removeUploadPreferenceSignal,
   conceptsFromEvent,
   conceptsFromJob,
@@ -45,6 +49,10 @@ type PersistedUserProfile = Omit<Partial<UserProfile>, "colorTheme"> & {
 
 interface ProfileState {
   recordUploadPreference: (paper: Paper) => void;
+  /** P5-02: the specific terms of this paper's settled questions, as the
+   *  ledger's low-weight evidence (replacing the paper's earlier terms). A call
+   *  that changes nothing leaves the profile as it was. */
+  recordQuestionTerms: (paperId: string, terms: readonly string[]) => void;
   forgetUploadPreference: (documentKey: string) => void;
   profile: UserProfile;
   /**
@@ -425,6 +433,16 @@ export const useProfileStore = create<ProfileState>()(
         preferenceLedger: applyUploadPreferenceSignal(s.profile.preferenceLedger,
           conceptsFromPaper(paper), paper.uploadDocumentKey ?? ""),
       } })),
+      recordQuestionTerms: (paperId, terms) => set((s) => {
+        const ledger = s.profile.preferenceLedger;
+        const held = new Set(questionTermsOf(ledger, paperId));
+        const wanted = new Set(terms.map(normalizePreferenceLabel).filter(Boolean));
+        if (held.size === wanted.size && [...wanted].every((term) => held.has(term))) return s;
+        return { profile: { ...s.profile,
+          preferenceLedger: wanted.size
+            ? applyQuestionTermSignal(ledger, paperId, terms)
+            : removeQuestionTermSignal(ledger, paperId) } };
+      }),
       forgetUploadPreference: (key) => set((s) => ({ profile: { ...s.profile,
         preferenceLedger: removeUploadPreferenceSignal(s.profile.preferenceLedger, key),
       } })),

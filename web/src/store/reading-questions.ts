@@ -31,6 +31,12 @@ export interface PaperQuestions {
    *  is asked about. Absent until the first settle (and on an entry saved
    *  before it existed): read it through `settledQuestions`. */
   settled?: string[];
+  /** P5-02: the questions (of `items`) the reader marked "Not for
+   *  recommendations" — their terms never enter the preference ledger. Absent
+   *  when none is marked, and on an entry saved before the mark existed. */
+  notForRecs?: string[];
+  /** P5-02: which of `settled` were marked when they were settled. */
+  settledNotForRecs?: string[];
 }
 
 const NONE_SETTLED: readonly string[] = [];
@@ -40,6 +46,23 @@ const NONE_SETTLED: readonly string[] = [];
 export function settledQuestions(entry: PaperQuestions | undefined): readonly string[] {
   return entry?.settled ?? NONE_SETTLED;
 }
+
+/** P5-02: the questions of an entry that stay out of the ledger — the marks as
+ *  they stand and as they were when the questions last settled, so a question
+ *  marked and then edited is never let in by the mark moving. */
+export function notForRecommendations(entry: PaperQuestions | undefined): string[] {
+  return [...(entry?.notForRecs ?? []), ...(entry?.settledNotForRecs ?? [])];
+}
+
+/** The marks that name a question of `kept` (trimmed, case-folded), as the
+ *  kept questions' own text. */
+function marksAmong(kept: readonly string[], marks: readonly string[] | undefined): string[] {
+  const named = new Set((marks ?? []).map((m) => m.trim().toLocaleLowerCase()));
+  return kept.filter((q) => named.has(q.toLocaleLowerCase()));
+}
+
+const sameList = (a: readonly string[] | undefined, b: readonly string[]) =>
+  (a ?? []).length === b.length && b.every((q, i) => a![i] === q);
 
 interface ReadingQuestionsState {
   /** Keyed by the paper's id as the page knows it (`upload:<hash16>` for a
@@ -51,7 +74,15 @@ interface ReadingQuestionsState {
   /** Trims, drops empty lines, de-duplicates case-insensitively, keeps at
    *  most five of at most 200 characters, stamps `updatedAt` and
    *  `lastPaperId`. Nothing left and no gist: the paper is forgotten. */
-  set: (paperId: string, items: readonly string[], gist: boolean, at?: string) => void;
+  set: (
+    paperId: string,
+    items: readonly string[],
+    gist: boolean,
+    at?: string,
+    /** P5-02: the questions marked "Not for recommendations"; when left out the
+     *  marks stay on the questions that are still there. */
+    notForRecs?: readonly string[],
+  ) => void;
   /** P2-03: settle the paper's questions — `settled` becomes its (cleaned)
    *  `items`. A paper with no entry has nothing to settle. `set` never
    *  touches `settled`. */
@@ -87,7 +118,7 @@ export const useReadingQuestionsStore = create<ReadingQuestionsState>()(
     (set) => ({
       byPaper: {},
       lastPaperId: null,
-      set: (paperId, items, gist, at = new Date().toISOString()) =>
+      set: (paperId, items, gist, at = new Date().toISOString(), notForRecs) =>
         set((s) => {
           const kept = cleanQuestions(items);
           if (kept.length === 0 && !gist) {
@@ -96,11 +127,20 @@ export const useReadingQuestionsStore = create<ReadingQuestionsState>()(
             delete byPaper[paperId];
             return { byPaper };
           }
-          const settled = s.byPaper[paperId]?.settled;
+          const previous = s.byPaper[paperId];
+          const settled = previous?.settled;
+          const marked = marksAmong(kept, notForRecs ?? previous?.notForRecs);
           return {
             byPaper: withoutOldest({
               ...s.byPaper,
-              [paperId]: { items: kept, gist, updatedAt: at, ...(settled ? { settled } : {}) },
+              [paperId]: {
+                items: kept,
+                gist,
+                updatedAt: at,
+                ...(settled ? { settled } : {}),
+                ...(marked.length ? { notForRecs: marked } : {}),
+                ...(previous?.settledNotForRecs ? { settledNotForRecs: previous.settledNotForRecs } : {}),
+              },
             }),
             lastPaperId: paperId,
           };
@@ -110,12 +150,18 @@ export const useReadingQuestionsStore = create<ReadingQuestionsState>()(
           const entry = s.byPaper[paperId];
           if (!entry) return s;
           const settled = cleanQuestions(entry.items);
+          const marked = marksAmong(settled, entry.notForRecs);
           const same =
             entry.settled !== undefined &&
             entry.settled.length === settled.length &&
-            entry.settled.every((question, i) => question === settled[i]);
+            entry.settled.every((question, i) => question === settled[i]) &&
+            sameList(entry.settledNotForRecs, marked);
           if (same) return s;
-          return { byPaper: { ...s.byPaper, [paperId]: { ...entry, settled } } };
+          const { settledNotForRecs: _old, ...rest } = entry;
+          void _old;
+          return {
+            byPaper: { ...s.byPaper, [paperId]: { ...rest, settled, ...(marked.length ? { settledNotForRecs: marked } : {}) } },
+          };
         }),
       clear: (paperId) =>
         set((s) => {
