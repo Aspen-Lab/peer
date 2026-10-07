@@ -26,7 +26,9 @@ function termsProblems(source: string): string[] {
   has("firstOccurrence(reading.body ?? [], markedTerm)", "the clicked term's first use is no longer looked up in the body");
   // P3-02 (§1h.2): the body also reports the reader's selection (`onSelect`),
   // so the line carries one more prop; the term's first use is handed as before.
-  has("<PaperBody reading={reading} route={route} termMark={termMark} onSelect={selectExplain} />", "the body is no longer handed the clicked term's first use");
+  // P4-01 (§1h.12 (h)): and "Say it plainly" is handed to it through `plain={plainForBody}`,
+  // between the term's mark and the selection — the same pin, the line as it now reads.
+  has("<PaperBody reading={reading} route={route} termMark={termMark} plain={plainForBody} onSelect={selectExplain} />", "the body is no longer handed the clicked term's first use");
 
   // The strip stands under the map, inside the `ask` slot, before the words.
   const map = text.indexOf("<ReadingMapView");
@@ -64,8 +66,9 @@ describe("the page's Terms to know wiring (P3-01)", () => {
   });
 
   it("would notice the body no longer handed the term's first use", () => {
-    // P3-02: with `onSelect` after it, the prop to remove is `termMark` alone.
-    expect(termsProblems(source.replace(" termMark={termMark} onSelect={selectExplain} />", " onSelect={selectExplain} />"))).toEqual([
+    // P3-02: with `onSelect` after it, the prop to remove is `termMark` alone. P4-01: `plain` now
+    // stands between them, so it is " termMark={termMark}" that goes.
+    expect(termsProblems(source.replace(" termMark={termMark} plain={plainForBody} onSelect={selectExplain} />", " plain={plainForBody} onSelect={selectExplain} />"))).toEqual([
       "the body is no longer handed the clicked term's first use",
     ]);
   });

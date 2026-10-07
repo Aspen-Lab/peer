@@ -22,7 +22,9 @@ function explainProblems(source: string): string[] {
     if (!text.includes(needle)) problems.push(why);
   };
 
-  has("<PaperBody reading={reading} route={route} termMark={termMark} onSelect={selectExplain} />", "the body no longer reports the reader's selection to the page");
+  // P4-01 (§1h.12 (h)): the line also carries `plain={plainForBody}` ("Say it plainly"), between the
+  // term's mark and the selection — the same pin, the line as it now reads.
+  has("<PaperBody reading={reading} route={route} termMark={termMark} plain={plainForBody} onSelect={selectExplain} />", "the body no longer reports the reader's selection to the page");
   has("const [explainTarget, setExplainTarget] = useState<ExplainSelection | null>(null);", "the page no longer holds the selection as state");
   has("sameSelection(current, next) ? current : next", "a repeated selection no longer bails out of a re-render");
 

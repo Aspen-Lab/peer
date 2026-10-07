@@ -41,10 +41,13 @@ export const PAPER_KEYS: readonly PaperKey[] = [
   { keys: ["s"], action: "save", label: "Save / unsave", short: "save" },
   { keys: ["x"], action: "skip", label: "Not interested, then next", short: "skip" },
   { keys: ["l"], action: "like", label: "Like — more like this", short: "like" },
+  // P4-01 (§1h.12 (h)): one row. With a plain rewrite showing, `u` takes the latest one back first
+  // (the original stands alone again; the rewrite stays kept); only when none shows does it do
+  // what it did — undo a dismiss, else mark unread / read.
   {
     keys: ["u"],
     action: "undoOrToggleRead",
-    label: "Undo a dismiss, else mark unread / read",
+    label: "Undo a plain rewrite or a dismiss, else mark unread / read",
     short: "undo",
   },
   // `t` for the text: `r` is the briefing's own key and stays global.

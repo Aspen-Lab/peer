@@ -7,6 +7,7 @@
 // typed in JSX is the thing this page was rebuilt to remove. Sentence case
 // throughout; nothing uppercase.
 
+import type { PlainLevel } from "@/lib/papers/plain-levels";
 import { displayHeading, type ReadingBlock } from "@/lib/papers/reading";
 
 /** Block headings, sentence case, never doubled. Same words as the Markdown export. */
@@ -231,6 +232,27 @@ export const EXPLAIN = {
   /** P3-07 (§1h.9 (2)): the one button under Peer's latest reply. A reply is short
    *  unless the reader asks for more; this asks, by re-sending their last message. */
   sayMore: "Say more",
+} as const;
+
+/**
+ * P4-01 (blueprint §3.6 ⑥; user decision §1a.5 (b); §3d 18): "Say it plainly" — the control under a
+ * paragraph the route marks read, and the one line under it when a paragraph could not be said
+ * plainly. Peer's words, in the label face; the rewrite itself is in the reading face under one
+ * `PEERS_READING` line. The three levels name how the rewrite reads, nothing about the reader.
+ */
+export const PLAIN = {
+  button: "Say it plainly",
+  /** On the button while the request runs. */
+  busy: "Saying it plainly\u2026",
+  /** The accessible name of the three-way choice beside the button. */
+  levelsLabel: "Reading level",
+  levels: { highschool: "High school", undergrad: "Undergrad", graduate: "Graduate" } satisfies Record<PlainLevel, string>,
+  /** The accessible name of the rewrite beside the paragraph. */
+  rewrite: "The paragraph, said plainly",
+  /** The rewrite lost, added or changed a number or a unit, so Peer discarded it. */
+  couldNotKeepNumbers: "Peer could not keep this paragraph's numbers exact, so the original stays.",
+  /** No model answered, or what it wrote was not usable. */
+  unavailable: "Peer could not rewrite this paragraph just now.",
 } as const;
 
 /** The reader's own context for the paper: what they read or kept nearby. */

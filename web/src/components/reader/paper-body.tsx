@@ -26,7 +26,9 @@ import type { QuestionAnswers } from "@/lib/papers/report";
 import type { TermOccurrence } from "@/lib/papers/terms";
 import { Equation, MathText } from "./math";
 import { Band } from "@/components/ui/band";
+import { paragraphKey } from "@/store/plain-rewrites";
 import { ASK, BODY, ROUTE } from "./copy";
+import { ParagraphPlainControl, PlainRewrite, plainOffered, type PlainView } from "./plain-button";
 
 function countWords(body: ReadingSection[]): number {
   let words = 0;
@@ -485,17 +487,28 @@ function MarkedParagraph({ text, mark }: { text: string; mark: TermOccurrence })
   );
 }
 
+/** P4-01: a paragraph with its rewrite beside it. From the spread (xl) the anchor is two columns —
+ *  the paper's paragraph and Peer's — with the control and whatever the paper set after the
+ *  paragraph across both; below it nothing is a grid and the blocks stack, as paragraphs already do.
+ *  Each column is about 250px at 1440, too narrow to justify without rivers, so the pair's text is
+ *  set ragged-right (the words are the same; only the alignment of a paragraph that shows a rewrite
+ *  changes, and only on the spread). */
+const SIDE_BY_SIDE = "xl:grid xl:grid-cols-2 xl:gap-x-6 xl:gap-y-4 xl:space-y-0 xl:[&_p]:text-left";
+
 function Section({
   section,
   index,
   mark,
   termMark,
+  plain,
 }: {
   section: ReadingSection;
   index: number;
   mark: SectionMark | null;
   /** The clicked term's first use, when it is in this section. */
   termMark?: TermOccurrence | null;
+  /** P4-01: "Say it plainly" — absent without a model, and the section is then what it was. */
+  plain?: PlainView;
 }) {
   const figures = section.figures ?? [];
   const equations = section.equations ?? [];
@@ -515,6 +528,8 @@ function Section({
         ))}
     </>
   );
+  /** Whether the paper set an equation or a figure right after paragraph `i`. */
+  const hasFollowing = (i: number) => equations.some((e) => e.after === i) || figures.some((f) => f.after === i);
   return (
     <section id={sectionAnchor(index)} className="mt-8 scroll-mt-20 first:mt-6">
       {/* P1-05: the route marks the heading — an attribute and a tint,
@@ -534,15 +549,28 @@ function Section({
             termMark && termMark.paragraphIndex === i && termMark.length > 0 && termMark.offset + termMark.length <= paragraph.length
               ? termMark
               : null;
+          // P4-01: the rewrite beside this paragraph, when the reader asked for it; the control
+          // under it where the route marks it read — and under a paragraph that shows a rewrite
+          // whatever the route says now, so there is always a way to take it back.
+          const rewrite = plain?.shown.get(paragraphKey(section.id, i));
+          const offered = plain !== undefined && (rewrite !== undefined || plainOffered(mark, i));
           return (
             <div
               key={i}
               id={paragraphAnchor(index, i)}
               {...(here ? { "data-term-mark": "" } : {})}
-              className="space-y-4 scroll-mt-20"
+              className={rewrite !== undefined ? `space-y-4 scroll-mt-20 ${SIDE_BY_SIDE}` : "space-y-4 scroll-mt-20"}
             >
               <p>{here ? <MarkedParagraph text={paragraph} mark={here} /> : <MathText text={paragraph} />}</p>
-              {following(i)}
+              {rewrite !== undefined && <PlainRewrite text={rewrite} />}
+              {offered && plain && (
+                <ParagraphPlainControl
+                  view={plain}
+                  target={{ sectionId: section.id, sectionIndex: index, paragraphIndex: i, text: paragraph }}
+                  wide={rewrite !== undefined}
+                />
+              )}
+              {rewrite !== undefined && hasFollowing(i) ? <div className="space-y-4 xl:col-span-2">{following(i)}</div> : following(i)}
             </div>
           );
         })}
@@ -571,12 +599,17 @@ export function PaperBody({
   reading,
   route,
   termMark,
+  plain,
   onSelect,
 }: {
   reading: PaperReading;
   route?: DrawRoute;
   /** P3-01 (§1h.1): where the term the reader clicked first stands in the body. */
   termMark?: TermOccurrence | null;
+  /** P4-01 (blueprint §3.6; §1h.12 (h)): "Say it plainly" — the control under each paragraph the
+   *  route marks read and the rewrites beside the paragraphs that show one. Absent for a reader
+   *  with no model, and the body is then exactly the body it was. */
+  plain?: PlainView;
   /** P3-02 (§1h.2): told, once it holds still, what the reader has selected in
    *  the body — a target within one paragraph — or `null` for no such selection. */
   onSelect?: (selection: ExplainSelection | null) => void;
@@ -611,6 +644,7 @@ export function PaperBody({
           index={i}
           mark={sectionMark(route, section.id)}
           termMark={termMark?.sectionId === section.id ? termMark : null}
+          plain={plain}
         />
       ))}
     </Band>

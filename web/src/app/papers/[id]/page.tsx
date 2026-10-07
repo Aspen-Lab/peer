@@ -20,6 +20,7 @@ import { useRouter } from "next/navigation";
 import type { Paper } from "@/types";
 import { useFeedStore } from "@/store/feed";
 import { useProfileStore } from "@/store/profile";
+import { useReadingPrefsStore } from "@/store/reading-prefs";
 import { ApiError, apiFetch } from "@/lib/api";
 import { PageContainer } from "@/components/ui/page-container";
 import { useReveal } from "@/components/ui/reveal";
@@ -66,6 +67,7 @@ import {
   type AskResult,
 } from "@/components/reader/explain-box";
 import { moreReply, replyPair, requestReply, type ReplyResult } from "@/components/reader/explain-thread";
+import { sayPlainly, type PlainTarget, type PlainView } from "@/components/reader/plain-button";
 import { RecordBlock } from "@/components/reader/record-block";
 import { InYourLibrary } from "@/components/reader/in-your-library";
 import { KeyLegend } from "@/components/reader/key-legend";
@@ -104,6 +106,8 @@ import { TermsStrip } from "@/components/reader/terms-strip";
 import { SectionLinks } from "@/components/reader/evidence-quote";
 import { settledQuestions, useReadingQuestionsHydrated, useReadingQuestionsStore } from "@/store/reading-questions";
 import { explanationFor, passageHash, useExplainThreadsStore, type ExplainTurn } from "@/store/explain-threads";
+import { paragraphKey, usePlainRewritesStore } from "@/store/plain-rewrites";
+import { PLAIN_DEFAULT_LEVEL, isPlainLevel, type PlainLevel } from "@/lib/papers/plain-levels";
 import { exampleQuestions } from "@/lib/reader/question-examples";
 import { deepReportRequested, useModelReport } from "@/components/reader/use-model-report";
 import { usePrivateSupplement } from "@/components/reader/use-private-supplement";
@@ -863,6 +867,58 @@ function Reader({
   const explainOpen = useRef<(() => void) | null>(null);
   const openExplain = useCallback(() => explainOpen.current?.(), []);
 
+  // P4-01 (blueprint §3.6 ⑥; rulings §1h.12 (h); §3d 15): "Say it plainly". The body draws the
+  // control under each paragraph the route marks read, and the rewrite beside a paragraph that
+  // shows one — handed to it through one prop, and only for a reader with a model: without one the
+  // body is the body it was (the locked-block rule, §1b). The button is the one thing that sends:
+  // the paragraph the reader clicked, to the paper's plain route, on their own key
+  // (`explainLlmOverride`) — never before, never for another paragraph. A rewrite already kept in
+  // this browser for those words at that level opens with no request; `u` takes the latest back
+  // (`undoOrToggleRead` below); the level is the reading preferences', remembered across papers.
+  // What shows, what waits and what failed come from this paper's slice of the plain store.
+  const storedPlainLevel = useReadingPrefsStore((s) => s.plainLevel);
+  const setPlainLevel = useReadingPrefsStore((s) => s.setPlainLevel);
+  const plainLevel = isPlainLevel(storedPlainLevel) ? storedPlainLevel : PLAIN_DEFAULT_LEVEL;
+  const plainKept = usePlainRewritesStore((s) => s.byPaper[paper.id]);
+  const plainShowing = usePlainRewritesStore((s) => s.showing[paper.id]);
+  const plainBusy = usePlainRewritesStore((s) => s.busy[paper.id]);
+  const plainNotices = usePlainRewritesStore((s) => s.notices[paper.id]);
+  const hidePlain = usePlainRewritesStore((s) => s.hide);
+  const plainShown = useMemo(() => {
+    const shown = new Map<string, string>();
+    for (const entry of plainShowing ?? []) {
+      const kept = plainKept?.[entry.key]?.[entry.level];
+      if (kept) shown.set(entry.key, kept.plain);
+    }
+    return shown;
+  }, [plainKept, plainShowing]);
+  const onPlainToggle = useCallback(
+    (target: PlainTarget) => {
+      const key = paragraphKey(target.sectionId, target.paragraphIndex);
+      if (plainShown.has(key)) hidePlain(paper.id, key); else void sayPlainly({ paper, target, level: plainLevel, llmOverride: explainLlmOverride(profile) });
+    },
+    [paper, profile, plainLevel, plainShown, hidePlain],
+  );
+  const onPlainLevel = useCallback(
+    (target: PlainTarget, level: PlainLevel) => {
+      setPlainLevel(level);
+      if (plainShown.has(paragraphKey(target.sectionId, target.paragraphIndex))) void sayPlainly({ paper, target, level, llmOverride: explainLlmOverride(profile) });
+    },
+    [paper, profile, plainShown, setPlainLevel],
+  );
+  const plainView = useMemo<PlainView>(
+    () => ({
+      level: plainLevel,
+      shown: plainShown,
+      busy: new Set(plainBusy ?? []),
+      notices: new Map(Object.entries(plainNotices ?? {})),
+      onToggle: onPlainToggle,
+      onLevel: onPlainLevel,
+    }),
+    [plainLevel, plainShown, plainBusy, plainNotices, onPlainToggle, onPlainLevel],
+  );
+  const plainForBody = providerConfigured ? plainView : undefined;
+
   // The report's provenance in the shape the reading's sentence table takes;
   // the reading never imports the report type. `deepRequested` is the
   // reader's setting: an abstract-basis report with deep on means the full
@@ -1052,6 +1108,11 @@ function Reader({
     router.push(paperHref(nav.prevId) as Route);
   };
   const undoOrToggleRead = () => {
+    // P4-01 (§1h.12 (h)): the latest undoable act may be a plain rewrite the reader opened. It comes
+    // back first — the original stands alone again, the rewrite stays kept so the button shows it
+    // again with no request — and the key does nothing else this press. Only for a reader who can
+    // see one (a model is configured); otherwise it is what it always was.
+    if (providerConfigured && usePlainRewritesStore.getState().hideLatest(paper.id)) return;
     const store = useFeedStore.getState();
     if (store.pendingDismissal) store.undoDismiss();
     else if (store.readItems[paper.id]) store.markUnread(paper.id);
@@ -1456,7 +1517,7 @@ function Reader({
 
             {/* The paper, when Peer reached it: everything the extractor
                 read, under everything Peer had to say about it. */}
-            <PaperBody reading={reading} route={route} termMark={termMark} onSelect={selectExplain} />
+            <PaperBody reading={reading} route={route} termMark={termMark} plain={plainForBody} onSelect={selectExplain} />
 
             {/* Last, and always there: the facts that need no key. On a page with no model
                 page it is the only block under the abstract, which is the

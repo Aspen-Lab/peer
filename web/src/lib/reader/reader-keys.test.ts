@@ -66,6 +66,33 @@ describe("resolvePaperKey", () => {
   });
 });
 
+// P4-01 (rulings §1h.12 (h)): `u` first takes back a plain rewrite the reader opened (the latest
+// undoable act), and only when none shows does what it did before — undo a dismiss, else mark
+// unread / read. It is still ONE row: the help sheet and the foot legend read this table, so the
+// label says both and nothing else moves.
+describe("the u row (P4-01)", () => {
+  const row = PAPER_KEYS.filter((entry) => entry.keys.includes("u"));
+
+  it("is one row, still the undoOrToggleRead action, and says the plain rewrite comes first", () => {
+    expect(row).toHaveLength(1);
+    expect(row[0].action).toBe("undoOrToggleRead");
+    expect(row[0].label).toBe("Undo a plain rewrite or a dismiss, else mark unread / read");
+    expect(row[0].short).toBe("undo");
+    expect(resolvePaperKey("u")).toBe("undoOrToggleRead");
+  });
+
+  it("is the sheet's row and the legend's, from the same table", () => {
+    expect(readerHelpItems().find((item) => item.keys === "u")?.label).toBe("Undo a plain rewrite or a dismiss, else mark unread / read");
+    expect(paperKeysFor({ upload: true }).find((entry) => entry.keys.includes("u"))?.label).toBe(row[0].label);
+    expect(paperKeysFor({ upload: false }).find((entry) => entry.keys.includes("u"))?.label).toBe(row[0].label);
+  });
+
+  it("is sentence case, like every other label", () => {
+    expect(row[0].label).not.toMatch(/^[A-Z ]+$/);
+    expect(row[0].label).not.toMatch(/\bskip\b|don.t read/i);
+  });
+});
+
 describe("readerHelpItems", () => {
   it("is generated from the table, one row per action", () => {
     const items = readerHelpItems();
