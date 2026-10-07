@@ -13,6 +13,7 @@ import type {
 } from "./types";
 import { DIGEST_SYSTEM_PROMPT, buildUserPrompt, safeParseDigest } from "./types";
 import { logLlmUsage, now } from "../usage-log";
+import { errorKind } from "./error-kind";
 import { PROVIDER_MODELS } from "../provider-models";
 
 export type ModelTarget = {
@@ -330,7 +331,7 @@ export const geminiProvider: DigestProvider = {
         });
         if (text.trim()) break;
       } catch (err) {
-        console.warn(`[gemini] ${id} @ ${resolvedLocation} failed:`, err);
+        console.warn(`[gemini] ${id} @ ${resolvedLocation} failed: ${errorKind(err)}`);
       }
     }
 
@@ -356,7 +357,7 @@ export const geminiProvider: DigestProvider = {
         });
         if (text.trim()) return text.trim();
       } catch (err) {
-        console.warn(`[gemini] ${id} @ ${resolvedLocation} failed:`, err);
+        console.warn(`[gemini] ${id} @ ${resolvedLocation} failed: ${errorKind(err)}`);
       }
     }
 
@@ -383,7 +384,7 @@ export const geminiProvider: DigestProvider = {
         );
         if (text.trim()) return text.trim();
       } catch (err) {
-        console.warn(`[gemini-vision] ${id} @ ${resolvedLocation} failed:`, err);
+        console.warn(`[gemini-vision] ${id} @ ${resolvedLocation} failed: ${errorKind(err)}`);
       }
     }
 
@@ -483,7 +484,7 @@ export function createGeminiApiProvider(
           });
           if (text.trim()) break;
         } catch (err) {
-          console.warn(`[gemini-api] ${id} failed:`, err);
+          console.warn(`[gemini-api] ${id} failed: ${errorKind(err)}`);
         }
       }
 
@@ -506,7 +507,7 @@ export function createGeminiApiProvider(
           });
           if (text.trim()) return text.trim();
         } catch (err) {
-          console.warn(`[gemini-api] ${id} failed:`, err);
+          console.warn(`[gemini-api] ${id} failed: ${errorKind(err)}`);
         }
       }
       throw new Error("All Gemini API models returned empty response");
@@ -525,7 +526,7 @@ export function createGeminiApiProvider(
           });
           if (text.trim()) return text.trim();
         } catch (err) {
-          console.warn(`[gemini-api-vision] ${id} failed:`, err);
+          console.warn(`[gemini-api-vision] ${id} failed: ${errorKind(err)}`);
         }
       }
 
