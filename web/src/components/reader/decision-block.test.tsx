@@ -2,6 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { DecisionBlock } from "./decision-block";
+import { ReaderCommands } from "./reader-commands";
 
 // S21 (round 7, item 7-03): B recommended (not mandated) a
 // renderToStaticMarkup smoke test of the icon row, the same shape
@@ -83,5 +84,32 @@ describe("DecisionBlock — the Skip button (P1-08)", () => {
     expect(html).not.toMatch(/>x<\/kbd>/);
     expect(html).toContain(">s</kbd>");
     expect(html).toContain(">c</kbd>");
+  });
+
+  // The merge of main (PR #34) moved the commands into `ReaderCommands`, which
+  // is where the Skip button now lives, so the commands carry the rule
+  // themselves: no `onSkip`, no Skip button and no `x` key; with it, both.
+  it("ReaderCommands itself: no Skip button and no x key without onSkip, both with it", () => {
+    const commands = (onSkip?: () => void) =>
+      renderToStaticMarkup(
+        createElement(ReaderCommands, {
+          source: null,
+          isSaved: false,
+          onSave: NOOP,
+          ...(onSkip ? { onSkip } : {}),
+          onCopy: NOOP,
+          onOpen: NOOP,
+        }),
+      );
+
+    const without = commands();
+    expect(without).not.toContain(">Skip<");
+    expect(without).not.toMatch(/>x<\/kbd>/);
+    expect(without).toContain(">s</kbd>");
+    expect(without).toContain(">c</kbd>");
+
+    const withSkip = commands(NOOP);
+    expect(withSkip).toContain("Skip</button>");
+    expect(withSkip).toMatch(/>x<\/kbd>/);
   });
 });

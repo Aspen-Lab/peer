@@ -99,26 +99,26 @@ describe("reading prefs — fit to screen", () => {
 
 // Ruling 19 (round 7, second pass): replaces `fitScaleIndex`'s ladder
 // 7-07 (Ruling 21): Fit is computed from the layout's own constants — the
-// article's 1x cap at the viewport's breakpoint (1000px at xl, 1200px at
+// article's 1x cap at the viewport's breakpoint (1072px at xl, 1184px at
 // 2xl) times the reader's A/A scale — never measured off the zoomed element,
 // so an A/A change under Fit recomputes at once and a resize while fitted
 // can never read a container-clamped width. (Rewritten from the
 // pageWidthAt1x-argument version of 7-04, not deleted.)
 describe("fitZoom", () => {
-  it("2560 wide at 1x: ≈ 1.813 (0.85 × 2560 / 1200)", () => {
-    expect(fitZoom(2560, 1)).toBeCloseTo(1.8133, 4);
+  it("2560 wide at 1x: ≈ 1.838 (0.85 × 2560 / 1184)", () => {
+    expect(fitZoom(2560, 1)).toBeCloseTo(2176 / 1184, 4);
   });
 
-  it("2560 wide at the 1.2 step: ≈ 1.659 — A/A under Fit re-derives the zoom from the 2xl pair (640 + 560 × 1.2)", () => {
-    expect(fitZoom(2560, 1.2)).toBeCloseTo(2176 / 1312, 4);
+  it("2560 wide at the 1.2 step: ≈ 1.648 — A/A under Fit re-derives the zoom from the 2xl pair (504 + 680 × 1.2)", () => {
+    expect(fitZoom(2560, 1.2)).toBeCloseTo(2176 / 1320, 4);
   });
 
-  it("1440 wide (xl band, 1000px cap) at 1x: ≈ 1.224", () => {
-    expect(fitZoom(1440, 1)).toBeCloseTo(1.224, 3);
+  it("1440 wide (xl band, 1072px cap) at 1x: ≈ 1.142", () => {
+    expect(fitZoom(1440, 1)).toBeCloseTo(1224 / 1072, 3);
   });
 
-  it("1300 wide (xl band) at 1x: ≈ 1.105", () => {
-    expect(fitZoom(1300, 1)).toBeCloseTo(1.105, 3);
+  it("1300 wide (xl band) at 1x: ≈ 1.031", () => {
+    expect(fitZoom(1300, 1)).toBeCloseTo(1105 / 1072, 3);
   });
 
   it("below xl (1200 wide) Fit is inert: exactly 1", () => {
@@ -126,12 +126,12 @@ describe("fitZoom", () => {
   });
 
   it("clamps to the 2.5 ceiling on an ultra-wide viewport", () => {
-    // 0.85*5000/1200 ≈ 3.54, past the ceiling.
+    // 0.85*5000/1184 ≈ 3.59, past the ceiling.
     expect(fitZoom(5000, 1)).toBe(2.5);
   });
 
   it("never shrinks below 1x: a page already wider than 85% of the viewport stays at 1", () => {
-    // 2xl band, but the scaled page (640 + 560 × 1.6 = 1536) already exceeds 0.85 × 1600 = 1360.
+    // 2xl band, but the scaled page (504 + 680 × 1.6 = 1592) already exceeds 0.85 × 1600 = 1360.
     expect(fitZoom(1600, 1.6)).toBe(1);
   });
 });
@@ -140,7 +140,7 @@ describe("fitZoom", () => {
 // strings carry the literals Tailwind scans, spread.ts exports the numbers
 // fitZoom uses. Pin them to each other so neither can drift alone.
 describe("fit caps match page-container's class strings", () => {
-  it("1000px at xl and 1200px at 2xl appear verbatim in the container's calc pair", async () => {
+  it("1072px at xl and 1184px at 2xl appear verbatim in the container's calc pair", async () => {
     const fs = await import("node:fs");
     const path = await import("node:path");
     const src = fs.readFileSync(

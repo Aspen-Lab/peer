@@ -23,6 +23,7 @@ import {
   useState,
   useCallback,
   Suspense,
+  type ReactNode,
 } from "react";
 import Link from "next/link";
 import { activePaperTopicsKey, useFeedStore } from "@/store/feed";
@@ -310,57 +311,30 @@ function DailyBriefingPage() {
         lastRefresh={lastRefresh}
         onRefresh={refreshFeed}
         isRefreshing={isLoading}
+        // The two ways out of the day: upload your own PDF, or leave for
+        // /search rather than searching here (see briefing/search-box.tsx,
+        // briefing/upload-button.tsx). On the deck's line, at the right —
+        // they stand whether or not there is a library or a sample below.
+        actions={
+          <>
+            {uploadsAvailable && <UploadButton />}
+            <SearchBox />
+          </>
+        }
       />
 
       {/* The library first: what you have read, with today's papers placed
           against it — so the day's cards arrive already knowing where they
           sit. It used to close the page, below ten cards, where the one view
           of everything read was the last thing on the screen anyone reached.
-          At the right of the same line, the two ways out of it: upload your
-          own PDF, or leave for /search rather than searching here (see
-          briefing/search-box.tsx, briefing/upload-button.tsx). Both live in
-          their own wrapper so `justify-between` pushes the *pair* to the
-          right, not one to each end of the row. The pair stands even when
-          the strip does not; looking for a paper does not depend on having
-          read any yet. */}
-      <div className="mt-6 flex flex-wrap items-start justify-between gap-x-6 gap-y-4">
-        {papers.length > 0 ? (
-          // `flex-auto min-w-0` (§1ag): with no width of its own this flex
-          // item fell back to shrink-to-fit, which collapsed to the width of
-          // the "Your reading" label itself — the only thing here that
-          // cannot shrink to nothing once the hairline rule beside it
-          // (`flex-1`) and the graph wrapper (unmeasured, so ~0px) give way.
-          // `LibraryGraph` then measured *that* collapsed width from its own
-          // wrapper (a ResizeObserver on clientWidth) and rendered its graph
-          // at the same narrow size: a min-content trap, not a deliberate
-          // small graph. `flex-auto` (`flex: 1 1 auto`, NOT the bare
-          // `flex-1` utility, which is `flex: 1 1 0%`) gives it the row's
-          // real leftover width to measure on a wide screen, while keeping
-          // its content (the label) as its flex-basis — a bare `flex-1`'s
-          // zero basis reads as "needs no room at all" for `flex-wrap`'s own
-          // per-line fit test, so on a phone the upload/search pair no
-          // longer wrapped to its own line below and instead squeezed onto
-          // the graph's line, crushing the graph to 0px wide (verified by
-          // execution, not just read — see the checkpoint). `min-w-0` lets
-          // it still shrink below the label's own width when there IS room
-          // to share a line at some in-between width, without changing
-          // whether that line is shared in the first place.
-          <ReadingStrip
-            papers={papers}
-            readerTopics={starter ? [] : profile.researchTopics}
-            className="flex-auto min-w-0"
-          />
-        ) : (
-          <span aria-hidden />
-        )}
-        {/* `ml-auto`: `ReadingStrip` renders nothing for a reader with no
-            library yet, and a lone child under `justify-between` sits at the
-            START — the pair would jump left on exactly the first visit. */}
-        <div className="ml-auto flex items-start gap-2 sm:mt-2">
-          {uploadsAvailable && <UploadButton />}
-          <SearchBox />
-        </div>
-      </div>
+          A block on its own row, so the graph measures the page's full width.
+          (It shared a flex row with the upload + search pair, which then
+          wrapped under the graph and stood alone on a line of its own; the
+          pair is in the head now.) Renders nothing until something has been
+          read or kept, and leaves no gap behind when it does. */}
+      {papers.length > 0 && (
+        <ReadingStrip papers={papers} readerTopics={starter ? [] : profile.researchTopics} />
+      )}
 
       {/* Setup, above the papers it is about — and only until it is done. */}
       {starter && <StarterStrip />}
@@ -527,6 +501,7 @@ function BriefingHead({
   lastRefresh,
   onRefresh,
   isRefreshing,
+  actions,
 }: {
   date: string;
   total: number;
@@ -538,24 +513,26 @@ function BriefingHead({
   lastRefresh: string | null;
   onRefresh: () => void;
   isRefreshing: boolean;
+  /** Upload and search, at the right of the deck's line. */
+  actions?: ReactNode;
 }) {
   const deck = briefingDeck({ total, unread, topics, loading });
   return (
-    // One flex container, three children, two arrangements: from sm the
-    // status sits at the right of the dateline and the deck runs under both;
-    // on a phone the dateline takes the whole width (beside a 150px status
-    // cluster it broke into three lines), the deck follows, and the status
-    // closes the front on its own line at the right.
-    <header className="flex flex-wrap items-end gap-x-4">
+    // One grid, four children, two arrangements: from sm two rows — the
+    // dateline with the status at its right, then the deck with upload and
+    // search at its right; on a phone one column — the dateline (beside a
+    // 150px status cluster it broke into three lines), the deck, the search,
+    // and the status closing the front on its own line at the right.
+    <header className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end gap-x-6">
       {/* The date is computed on the server too; the timezones can differ
           around midnight, and a warning would not change what is shown. */}
       <h1
         suppressHydrationWarning
-        className="w-full sm:w-auto sm:min-w-0 display-line text-display sm:text-display-lg leading-[1.05] text-heading text-balance"
+        className="min-w-0 display-line text-display sm:text-display-lg leading-[1.05] text-heading text-balance"
       >
         {date}
       </h1>
-      <div className="order-3 sm:order-none ml-auto mt-3 sm:mt-0 flex shrink-0 items-center gap-1 sm:pb-1 annotation text-meta text-text-faint whitespace-nowrap">
+      <div className="order-3 sm:order-none justify-self-end mt-3 sm:mt-0 flex shrink-0 items-center gap-1 sm:pb-1 annotation text-meta text-text-faint whitespace-nowrap">
           {isRefreshing ? (
             <span>{SYNC.syncing}</span>
           ) : failed ? (
@@ -594,11 +571,10 @@ function BriefingHead({
           sentence. It used to be repeated on every card as "Why you · <your
           own topic>", which made the loudest element on all ten cards the
           reader's own query read back to them. */}
-      {deck.length > 0 && (
-        // `w-full` on the paragraph, the measure on a span inside it: a
-        // max-width on the flex item itself caps its hypothetical size, and
-        // at 62ch it no longer forced a new row — it slid up beside the date.
-        <p className="order-2 sm:order-none w-full mt-3 font-sans text-title-lg leading-[1.45] tracking-[-0.01em] text-text-muted">
+      {deck.length > 0 ? (
+        // The measure on a span inside the paragraph, so the grid cell keeps
+        // the full row's width and the actions keep the right edge.
+        <p className="order-2 sm:order-none sm:col-start-1 sm:self-start mt-3 font-sans text-title-lg leading-[1.45] tracking-[-0.01em] text-text-muted">
           <span className="block measure text-balance">
             {deck.map((segment, i) => (
               <span key={i} className={segment.tone === "heading" ? "text-heading" : undefined}>
@@ -607,6 +583,13 @@ function BriefingHead({
             ))}
           </span>
         </p>
+      ) : null}
+      {actions && (
+        // Centred on the deck's first line: a 36px row, 8px down, against a
+        // 28px line 12px down.
+        <div className="order-2 sm:order-none sm:col-start-2 sm:self-start mt-4 sm:mt-2 flex items-start gap-2">
+          {actions}
+        </div>
       )}
     </header>
   );

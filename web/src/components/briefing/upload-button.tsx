@@ -106,6 +106,34 @@ async function attachPdf(form: FormData, file: File): Promise<string | null> {
   return null;
 }
 
+/** The upload button's words on a paper's own page, where it brings that
+ *  paper's full text rather than a new paper. */
+const TARGET_UPLOAD = {
+  label: "Upload full article PDF",
+  busy: "Uploading PDF…",
+};
+
+function UploadGlyph({ size }: { size: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+      className="shrink-0"
+    >
+      <path d="M12 16V4" />
+      <path d="M6 10l6-6 6 6" />
+      <path d="M4 20h16" />
+    </svg>
+  );
+}
+
 export function UploadButton({ className = "", targetPaper, onUploaded }: {
   className?: string; targetPaper?: Paper; onUploaded?: (paper: Paper) => void;
 }) {
@@ -188,10 +216,11 @@ export function UploadButton({ className = "", targetPaper, onUploaded }: {
   };
 
   return (
-    <div className={cn("relative", targetPaper && "min-w-0 flex-1", className)}>
+    <div className={cn("relative", targetPaper && "w-full", className)}>
       <button
         type="button"
-        aria-label={targetPaper ? "upload full article pdf" : UPLOAD_BUTTON.label}
+        // On a paper's page the words are on the button, and they are its name.
+        aria-label={targetPaper ? undefined : UPLOAD_BUTTON.label}
         disabled={isUploading}
         onClick={() => inputRef.current?.click()}
         onDragOver={(event) => {
@@ -206,7 +235,14 @@ export function UploadButton({ className = "", targetPaper, onUploaded }: {
           const file = event.dataTransfer.files?.[0];
           if (file) chooseFile(file);
         }}
-        className={targetPaper ? cn(buttonVariants({ tone: "green", size: "lg" }), "h-full min-h-10 w-full px-3 py-2 font-mono text-body-sm font-normal leading-tight whitespace-normal [@media(hover:none)]:min-h-11") : `group inline-flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-md bg-[color:var(--color-fixed-black)] transition-[opacity,transform] duration-150 ease-snap hover:scale-125 active:scale-90 disabled:scale-100 disabled:opacity-50 disabled:cursor-wait ${
+        className={targetPaper ? cn(
+          // A paper's page: one more row of the decision's command stack
+          // (`reader/reader-commands.tsx`) — the same height, edge and mono —
+          // drawn dashed, because it is a place to drop a file, not a verdict.
+          buttonVariants({ tone: "ghost", size: "lg" }),
+          "eyebrow w-full justify-start gap-2 px-3 border border-dashed border-border-strong text-text-muted hover:border-text-faint [@media(hover:none)]:min-h-11",
+          isDragOver && "border-accent text-heading",
+        ) : `group inline-flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-md bg-[color:var(--color-fixed-black)] transition-[opacity,transform] duration-150 ease-snap hover:scale-125 active:scale-90 disabled:scale-100 disabled:opacity-50 disabled:cursor-wait ${
           isDragOver ? "opacity-75 scale-125" : ""
         }`}
       >
@@ -221,7 +257,12 @@ export function UploadButton({ className = "", targetPaper, onUploaded }: {
             classes would have one silently override the other; this repo's
             own convention is always one combined transition-[a,b] bracket
             for exactly that reason.) */}
-        {targetPaper ? (isUploading ? "Uploading PDF…" : "upload full article pdf") : <svg
+        {targetPaper ? (
+          <>
+            <UploadGlyph size={12} />
+            {isUploading ? TARGET_UPLOAD.busy : TARGET_UPLOAD.label}
+          </>
+        ) : <svg
           width="15"
           height="15"
           viewBox="0 0 24 24"

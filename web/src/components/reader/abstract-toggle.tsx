@@ -1,7 +1,10 @@
 "use client";
 
-// 8-03/S25: the abstract, collapsed by default. A big accent button that
-// says "Abstract"; click to open, click again to close. Conditional
+// 8-03/S25: the abstract, collapsed by default. A full-width row that says
+// "Abstract"; click to open, click again to close. It was a filled accent
+// bar, and it out-shouted the claim above it — the page's one accent belongs
+// to the claim's band — so it is drawn as a framed row in the band grammar:
+// the mark, the mono label, the chevron. Conditional
 // rendering, not a CSS-only collapse — page.tsx's decided-read observer
 // (`app/papers/[id]/page.tsx`, watches `wordsEndRef`) already falls back to
 // the Decision block when its target ref is null (the same path a paper
@@ -12,7 +15,6 @@
 // closed — the new default.
 
 import { useState } from "react";
-import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
 import { IconChevronDown } from "@/components/icons";
 import { ABSTRACT_LABEL } from "./copy";
@@ -36,20 +38,19 @@ export function AbstractToggle({
         aria-controls={ABSTRACT_PANEL_ID}
         onClick={() => setOpen((v) => !v)}
         className={cn(
-          buttonVariants({ tone: "primary" }),
-          // 48px+ tall (one step past 8-02's 44px floor), full row width —
-          // button.tsx's cva size scale is untouched this round (dirty
-          // file, Ruling 22), same local-override pattern as 8-02's
-          // BACK_TO_MAIN_CLASS. Hover swell uses the "big surface" scale
-          // (profile page's own hover:scale-[1.04]) rather than the small
-          // controls' 1.25 — this button spans the full reading column, and
-          // a 25% grow on that width would clip against the surrounding
-          // prose.
-          "w-full justify-between h-12 px-6 text-body-lg hover:scale-[1.04]",
+          "flex w-full items-center justify-between gap-4 h-12 px-4",
+          "border border-border-strong text-text-muted",
+          "transition-[color,background-color,border-color] duration-150 ease-snap",
+          "hover:text-heading hover:border-text-faint hover:bg-surface-hover",
+          open && "text-heading",
         )}
       >
-        {ABSTRACT_LABEL}
+        <span className="eyebrow inline-flex items-center gap-2">
+          <span aria-hidden className="block h-[6px] w-[6px] shrink-0 bg-current" />
+          {ABSTRACT_LABEL}
+        </span>
         <IconChevronDown
+          size={14}
           className={cn("transition-transform duration-150 ease-snap", open && "rotate-180")}
         />
       </button>
