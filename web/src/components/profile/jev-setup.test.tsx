@@ -91,7 +91,7 @@ describe("JevKeyField", () => {
   it('links to where a reader gets a key: one constant, target _blank, noopener, the button reads "Get a Jev key"', () => {
     // D1: the sign-up page is the owner's to supply; until then the link is the
     // vendor's documentation host.
-    expect(JEV_SIGNUP_URL).toBe("https://docs.typesafe.ai/");
+    expect(JEV_SIGNUP_URL).toBe("https://console.typesafe.ai/keys");
     const markup = render(createElement(JevKeyField, { value: "", onChange: () => {} }));
     const link = markup.match(/<a [^>]*>/)?.[0] ?? "";
     expect(link).toContain(`href="${JEV_SIGNUP_URL}"`);

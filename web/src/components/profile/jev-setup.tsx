@@ -27,12 +27,12 @@ import { jevGainSentence } from "@/lib/decisions/jev-claim";
 import { parseJevApiKey } from "@/lib/decisions/jev-key";
 
 /**
- * Where a reader gets a Jev key. TODO(owner): this is the vendor's documentation
- * host, because the repository knows no sign-up page (the sandbox that wrote this
- * could not reach one). Replace it with the page where a reader applies for a key
- * when you have it. It is the only place the address is written.
+ * Where a reader gets a Jev key: the vendor's console page for API keys, supplied
+ * by the owner on 2026-10-07. A reader without an account is asked to sign up
+ * first, the same flow as a Gemini key. It is the only place the address is
+ * written.
  */
-export const JEV_SIGNUP_URL = "https://docs.typesafe.ai/";
+export const JEV_SIGNUP_URL = "https://console.typesafe.ai/keys";
 
 const WITHOUT_KEY =
   "Without a key, Peer screens each day's papers with fixed scoring: your topics, your project text, how new a paper is and where it was published. That works with no setup.";
