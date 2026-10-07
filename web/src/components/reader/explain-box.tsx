@@ -455,7 +455,7 @@ export function ExplainCard({
   style?: CSSProperties;
   /** P3-02b: the thread and its handlers; drawn only with a key and a first answer. */
   thread?: ThreadView;
-  /** A phone's bottom sheet: square at the foot, rounded at the top. */
+  /** A phone's bottom sheet, flush with the screen's foot and sides: square corners all round, as the page's cards (the theme's radius scale is 0, so the card's `rounded-*` classes draw nothing; P3-02d). */
   sheet?: boolean;
   /** The card itself — the one thing that scrolls, and what the sheet's height is read from. */
   cardRef?: Ref<HTMLDivElement>;
