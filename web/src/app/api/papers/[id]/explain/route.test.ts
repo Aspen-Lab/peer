@@ -888,7 +888,7 @@ describe("POST /api/papers/[id]/explain — the long form (P3-07)", () => {
   });
 
   it("takes the reader's last message asking for more in words as the same thing: English and Chinese", async () => {
-    for (const asked of ["Please explain that in detail.", "tell me more", "Can you elaborate?", "请详细解释一下", "能展开说说吗"]) {
+    for (const asked of ["Please explain that in detail.", "tell me more", "Can you elaborate?", "请详细解释一下", "能展开说说吗", "Can you give me more details?", "details please"]) {
       explainCache.clear();
       replyStub({ reply: lecture(12) });
       const body = await json(await call(ask({ thread: [{ role: "peer", text: FIRST_PEER }, { role: "reader", text: asked }] })));

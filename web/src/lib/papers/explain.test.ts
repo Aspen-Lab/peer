@@ -1242,6 +1242,35 @@ describe("asksForDetail (P3-07)", () => {
     }
   });
 
+  // P4-00c (§1h.11 (c), A's P3-06b O-4): the plural. "give me the details" and "details please" are
+  // the most natural English request for more, and were not matches (only the singular was).
+  it("is true for the plural too: more details, give me the details, details please", () => {
+    for (const message of ["more details", "Can you give me more details?", "give me the details", "Give me the DETAILS", "details please", "Details, please.", "What are the details of the setup?"]) {
+      expect(asksForDetail(message), message).toBe(true);
+    }
+  });
+
+  it("does not count a hyphen as a word boundary: a word joined to detail or details by one is not a request", () => {
+    for (const message of ["detail-free", "mortgage detail-free", "a detail-oriented author", "the non-detailed tables", "the details-only view", "pre-details", "detail‑free", "an over-detailed figure"]) {
+      expect(asksForDetail(message), message).toBe(false);
+    }
+  });
+
+  it("keeps the hyphen inside a phrase the list names: in-depth and step-by-step are still requests, and a hyphen is no boundary next to them either", () => {
+    for (const message of ["in-depth please", "Step-by-step?", "Could you go step-by-step through it", "an in-depth answer"]) {
+      expect(asksForDetail(message), message).toBe(true);
+    }
+    for (const message of ["a non-expand setting", "the step-by-step-guide figure", "re-elaborate-free"]) {
+      expect(asksForDetail(message), message).toBe(false);
+    }
+  });
+
+  it("still takes more papers, more of something and more on its own for what they are: not a request", () => {
+    for (const message of ["Are there more papers like this one?", "more papers", "more", "more coffee", "papers with more details-free abstracts"]) {
+      expect(asksForDetail(message), message).toBe(false);
+    }
+  });
+
   it("matches whole words only: a longer word that holds one is not the word", () => {
     for (const message of ["What is the thermal expansion here?", "Who is the retailer?", "The detailing of the specimen is odd", "Is it elaborately made?", "What does a fastidious step mean?"]) {
       expect(asksForDetail(message), message).toBe(false);

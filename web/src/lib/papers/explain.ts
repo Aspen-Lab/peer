@@ -65,8 +65,9 @@
 //     inside a quotation (`wholeSentences`); a lone sentence over the cap is cut at a
 //     word and marked with an ellipsis, the one place a cut is inside a sentence;
 //   - `asksForDetail`: the reader's last message asking for more in words, English
-//     and Chinese, whole words only (the route ORs it with the body's `detail` flag,
-//     the "Say more" button);
+//     and Chinese, whole words only — `details` counts, and a hyphen next to the word is not
+//     a boundary ("detail-free" is not a request) (the route ORs it with the body's
+//     `detail` flag, the "Say more" button);
 //   - a reply may carry a small table, `items` (`sanitizeItems`: at most four rows, each
 //     cell at most twelve words and eighty characters, a row over the cap dropped,
 //     never cut), and a row stays only when its term occurs in the passage, its
@@ -882,10 +883,15 @@ export function verifyExplainReply(reply: ExplainReply, doc: ExtractedDocument, 
 
 // ── Asking for more (P3-07) ────────────────────────────────────────────
 
+/** A hyphen, in any of its three common forms (hyphen-minus, hyphen, non-breaking hyphen). */
+const HYPHENS = "\\-\\u2010\\u2011";
 /** English: whole words, any case. "more" counts only in "tell me more", "say more" and
- *  "more detail" — "are there more papers?" is not a request for detail. */
+ *  "more detail(s)" — "are there more papers?" is not a request for detail. P4-00c (§1h.11 (c)): the
+ *  plural `details` counts ("give me the details"), and a hyphen next to the word is NOT a word
+ *  boundary — "detail-free" and "non-detailed" are not requests; a hyphen inside a phrase the list
+ *  names ("in-depth", "step-by-step") still joins its words. */
 const DETAIL_ENGLISH = new RegExp(
-  `(?<![\\p{L}\\p{N}])(?:detail|detailed|in[\\s-]+depth|elaborate|expand|step[\\s-]+by[\\s-]+step|tell\\s+me\\s+more|say\\s+more|more\\s+detail)(?![\\p{L}\\p{N}])`,
+  `(?<![\\p{L}\\p{N}${HYPHENS}])(?:detail|details|detailed|in[\\s${HYPHENS}]+depth|elaborate|expand|step[\\s${HYPHENS}]+by[\\s${HYPHENS}]+step|tell\\s+me\\s+more|say\\s+more|more\\s+details?)(?![\\p{L}\\p{N}${HYPHENS}])`,
   "iu",
 );
 /** Chinese has no word boundaries: the words are looked for as they stand. */
@@ -893,7 +899,7 @@ const DETAIL_CHINESE = /详细|展开|具体|深入|多说|讲讲/u;
 
 /**
  * Whether a message asks Peer for more than a short answer, in words (§1h.9 (2)): detail,
- * detailed, in depth, elaborate, expand, step by step, tell me more, say more, more detail —
+ * details, detailed, in depth, elaborate, expand, step by step, tell me more, say more, more detail —
  * 详细, 展开, 具体, 深入, 多说, 讲讲. The route ORs it with the body's `detail` flag (the
  * "Say more" button); a message that only mentions more of something is not one.
  */
