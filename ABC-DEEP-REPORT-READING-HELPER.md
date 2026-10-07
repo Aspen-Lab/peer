@@ -414,6 +414,8 @@ Common constraints for every brief: verify the branch; preserve user edits; writ
 
 - 2026-10-07 01:38Z **PR #33's preview is GREEN.** The owner redeployed the d4e45208 deployment on Vercel (no new commit) and it reached Ready at 01:38Z with the current environment (the variable list the owner pasted: nothing banned, the Supabase browser key present). So the earlier failures were environmental, not code: the branch builds on Vercel, the `prebuild` guard passed, and `maxDuration = 300` on the feed route was accepted by the plan (Vercel fails a build that exceeds it). Checklist items 1 and 4 are done by this; items 2 (keys revoked), 3-first (private_decisions present), 3-second (migration 1 applied), 7 (no broker deployed) were done earlier. Open: the `usage_events` export decision and migration 2; the sign-up URL; the N7 decision; PR #32's resumption; the owner's merge.
 
+- 2026-10-07 01:4xZ **Owner (chat):** migration 2 (`20261007000100`) applied; Resend / OpenAlex / Semantic Scholar keys stay as they are (N7 decided: not inside the red line); the owner does not understand the "Jev sign-up URL" item — the manager explains it (the "Get a Jev key" button's target, `JEV_SIGNUP_URL`, a placeholder on the vendor's docs host; optional, changeable any time). PR #33's combined status is success at d4e45208 (Vercel "Deployment has completed", 54 s); one closing comment posted on the PR. Every blocking pre-merge item is done; the merge is the owner's. Open: the sign-up URL (optional), PR #32's resumption.
+
 ## §5. Durable work ledger — update in place, evidence append only
 
 Status meanings: NOT_STARTED · IN_PROGRESS · PARTIAL · IMPLEMENTED_PENDING_REVIEW · VERIFIED · BLOCKED (never counted as passed).
