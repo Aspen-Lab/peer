@@ -479,6 +479,37 @@ describe("the caches (§1g.4, §3d 11) — a counting provider", () => {
     expect([stub.count("pass1"), stub.count("pass1q"), stub.count("pass2")]).toEqual([1, 2, 2]);
   });
 
+  // P5-04b, S1 (§1h.16 (b)): the two sets above differ in their first sorted
+  // question, so a key that hashed only that one would still pass. Here set B
+  // is set A plus a question that sorts after A's only one: the first sorted
+  // question is the same, the sets are not, and the key must see the rest.
+  it("a set that adds a question sorting after the first: Pass 1 once, Pass 1q twice, Pass 2 twice, and the new question has its own sentences (P5-04b, S1)", async () => {
+    const setA = ["Does cracking rise with charge rate?"];
+    const setB = ["How many cells were cycled?", "Does cracking rise with charge rate?"];
+    // B's first sorted question is A's only one ("D" sorts before "H").
+    const sortedB = [...setB].sort();
+    expect(sortedB[0]).toBe(setA[0]);
+    expect(sortedB[1]).toBe(setB[0]);
+
+    // Each question gets the sentence its own words point at, by the question's place in the prompt.
+    const byQuestion = (call: Call) => {
+      const asked = call.prompt.questions as string[];
+      return JSON.stringify({
+        questionRelevant: Object.fromEntries(asked.map((question, i) => [i, [question.includes("cracking") ? SENT.results : SENT.methods]])),
+      });
+    };
+    const stub = countingProvider({ pass1q: byQuestion });
+    await generateDeepReport({ paper, doc: bigDoc("plus-one"), provider: stub.provider, questions: setA });
+    await generateDeepReport({ paper, doc: bigDoc("plus-one"), provider: stub.provider, questions: setB });
+
+    expect([stub.count("pass1"), stub.count("pass1q"), stub.count("pass2")]).toEqual([1, 2, 2]);
+    expect(stub.last("pass1q")!.prompt.questions).toEqual(sortedB);
+    // Pass 2 for B holds the sentence of each of B's questions, in the reader's order.
+    const relevant = stub.last("pass2")!.prompt.questionRelevant as Record<string, Array<{ text: string }>>;
+    expect(relevant["0"].map((item) => item.text)).toEqual([SENT.methods]);
+    expect(relevant["1"].map((item) => item.text)).toEqual([SENT.results]);
+  });
+
   it("the same question set twice within the hour (in any order): Pass 1 once, Pass 1q once, Pass 2 twice", async () => {
     const stub = countingProvider({ pass1q: JSON.stringify({ questionRelevant: { 0: [SENT.methods], 1: [SENT.results] } }) });
     const doc = bigDoc("same-set");
