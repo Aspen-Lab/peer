@@ -318,10 +318,18 @@ export function QuestionField({
   // P5-02: ticking or unticking a question is a finished gesture of its own: the
   // ledger hears of it at once (a tick takes the question's terms out; an untick
   // lets them in when the questions next settle).
+  // P5-04 (S5): a tick settles the box as it stands before the ledger hears of it
+  // — the settled questions and the marks as they are now. Without that the sync
+  // read the marks as at the last settle, an edit had moved the live mark to the
+  // new text, and the old text of an edited, ticked question came back into the
+  // ledger at the next tick of another box. The untick keeps its P5-02 rule (its
+  // words come in at the next settle), and the two-list rule for an edit with no
+  // tick is unchanged.
   const onMark = (index: number, on: boolean) => {
     const rest = marked.filter((m) => !sameQuestion(m, lines[index]));
     commit(lines, gist, on ? [...rest, lines[index].trim()] : rest);
-    syncQuestionTerms(paperId);
+    if (on) settleQuestions(paperId);
+    else syncQuestionTerms(paperId);
   };
 
   // The gist is a reading mode: it changes no line and settles nothing.
