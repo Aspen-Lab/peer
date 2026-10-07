@@ -8,6 +8,7 @@ import {
   normalizeForMatch,
   placeEvidence,
   sectionCorpus,
+  shapeEvidenceQuote,
   verifyReportEvidence,
 } from "./evidence";
 
@@ -561,5 +562,144 @@ describe("locateSection — which section holds a verbatim sentence (P2-01)", ()
   it("names a section that has no id the way withSectionIds would", () => {
     const noIds = { ...small, sections: small.sections.map(({ heading, canonical, text }) => ({ heading, canonical, text })) } as unknown as ExtractedDocument;
     expect(locateSection("We cycled twelve quillwort cells at three charge rates for one month.", sectionCorpus(noIds))).toBe("s1");
+  });
+});
+
+// ── P4-04 (§1h.8 (8), BACKLOG-13's open half): one function shows a verified quote to its sentence boundaries ──
+// All text below is invented. `shapeEvidenceQuote(sectionText, quote, cap)` takes the section as the paper
+// has it and a quote the verifier accepts; it returns the text to show — the paper's own characters, the
+// quote extended to the sentence's start and end when the whole fits `cap`, else the quote as it is with "…"
+// at each end that is a cut — or null when the quote cannot be found in the section's own characters.
+
+describe("shapeEvidenceQuote (P4-04)", () => {
+  const CAP = 400;
+  const S1 = "Intro sentence is here to open the section.";
+  const S2 = "The alloy softened at 300 K under the load applied by the press.";
+  const S3 = "After that it held for the rest of the run.";
+  const SECTION = `${S1} ${S2} ${S3}`;
+
+  it("extends a quote that starts inside a sentence to that sentence's start", () => {
+    expect(shapeEvidenceQuote(SECTION, "softened at 300 K under the load applied by the press.", CAP)).toBe(S2);
+  });
+
+  it("extends a quote that stops inside a sentence to that sentence's end", () => {
+    expect(shapeEvidenceQuote(SECTION, "The alloy softened at 300 K under the load", CAP)).toBe(S2);
+  });
+
+  it("extends both ends at once", () => {
+    expect(shapeEvidenceQuote(SECTION, "softened at 300 K under the load", CAP)).toBe(S2);
+  });
+
+  it("leaves a quote that is already a whole sentence as it is, and one that is several whole sentences", () => {
+    expect(shapeEvidenceQuote(SECTION, S2, CAP)).toBe(S2);
+    expect(shapeEvidenceQuote(SECTION, `${S2} ${S3}`, CAP)).toBe(`${S2} ${S3}`);
+  });
+
+  it("takes in the sentence's closing full stop when the quote stopped just before it, and marks no cut", () => {
+    expect(shapeEvidenceQuote(SECTION, S2.slice(0, -1), S2.length)).toBe(S2);
+    // The full stop does not fit the cap: still not a cut, nothing but punctuation is left out.
+    expect(shapeEvidenceQuote(SECTION, S2.slice(0, -1), S2.length - 1)).toBe(S2.slice(0, -1));
+  });
+
+  it("extends a quote that spans two sentences at both outer ends", () => {
+    expect(shapeEvidenceQuote(SECTION, "under the load applied by the press. After that it held", CAP)).toBe(`${S2} ${S3}`);
+  });
+
+  it("keeps the paper's own white space collapsed, whatever line breaks the section has", () => {
+    const wrapped = `${S1}\n\nThe alloy softened at 300 K\nunder the load applied by the press.\n\n${S3}`;
+    expect(shapeEvidenceQuote(wrapped, "softened at 300 K under the load", CAP)).toBe(S2);
+  });
+
+  describe("over the cap: the quote as it is, the cut marked at each end that is a cut", () => {
+    const LONG = "The first clause of this long sentence says that the alloy softened at 300 K under load, but the second clause reverses it and says the alloy hardened again once the press was released and the run was over.";
+    const SEC = `${S1} ${LONG} ${S3}`;
+    const CAP2 = 120;
+
+    it("marks the end that stops inside the sentence", () => {
+      const quote = "The first clause of this long sentence says that the alloy softened at 300 K under load,";
+      const shown = shapeEvidenceQuote(SEC, quote, CAP2);
+      expect(shown).toBe(`${quote}…`);
+    });
+
+    it("marks the start that begins inside the sentence", () => {
+      const quote = "the second clause reverses it and says the alloy hardened again once the press was released and the run was over.";
+      expect(shapeEvidenceQuote(SEC, quote, CAP2)).toBe(`…${quote}`);
+    });
+
+    it("marks both ends when both are cuts", () => {
+      const quote = "the alloy softened at 300 K under load, but the second clause reverses it";
+      expect(shapeEvidenceQuote(SEC, quote, CAP2)).toBe(`…${quote}…`);
+    });
+
+    it("marks only the cut end of a quote that starts on the sentence's start", () => {
+      const quote = "The first clause of this long sentence says that the alloy softened at 300 K under load, but";
+      const shown = shapeEvidenceQuote(SEC, quote, CAP2) as string;
+      expect(shown.startsWith("…")).toBe(false);
+      expect(shown.endsWith("…")).toBe(true);
+    });
+
+    it("binds the whole shown text, ellipses included, to the cap", () => {
+      const quote = "the alloy softened at 300 K under load, but the second clause reverses it and says the alloy hardened";
+      const shown = shapeEvidenceQuote(SEC, quote, 80) as string;
+      expect(shown.length).toBeLessThanOrEqual(80);
+      expect(shown.startsWith("…")).toBe(true);
+      expect(shown.endsWith("…")).toBe(true);
+      expect(quote.includes(shown.slice(1, -1).trim())).toBe(true);
+    });
+
+    it("extends when the whole sentence fits exactly, and marks the cut when it is one character over", () => {
+      const quote = "The first clause of this long sentence says that the alloy softened";
+      expect(shapeEvidenceQuote(SEC, quote, LONG.length)).toBe(LONG);
+      expect(shapeEvidenceQuote(SEC, quote, LONG.length - 1)).toBe(`${quote}…`);
+    });
+  });
+
+  describe("abbreviations and decimals do not end a sentence", () => {
+    const SENT = "Fig. 3 shows 0.4 V across the cell, as Smith et al. reported in a note e.g. for the early run.";
+    const SEC = `Before this came a short line. ${SENT} After it came another.`;
+
+    it("extends back past 'Fig.' and a decimal to the true start", () => {
+      expect(shapeEvidenceQuote(SEC, "across the cell, as Smith et al. reported in a note e.g. for the early run.", CAP)).toBe(SENT);
+    });
+
+    it("extends forward past 'et al.' and 'e.g.' to the true end", () => {
+      expect(shapeEvidenceQuote(SEC, "Fig. 3 shows 0.4 V across the cell, as Smith et al.", CAP)).toBe(SENT);
+      expect(shapeEvidenceQuote(SEC, "shows 0.4 V across the cell, as Smith et al. reported in a note e.g.", CAP)).toBe(SENT);
+    });
+  });
+
+  describe("the paper's own characters, citation brackets and notation included", () => {
+    it("shows the paper's brackets when the model's quote left them out", () => {
+      const sec = "Opening line of the section stands here. The value of f_cell was measured [12] at 300 K [3, 4] under the load. Closing line stands here.";
+      const shown = shapeEvidenceQuote(sec, "f_cell was measured at 300 K under the load.", CAP);
+      expect(shown).toBe("The value of f_cell was measured [12] at 300 K [3, 4] under the load.");
+    });
+
+    it("shows `f_cell` and `α_1` when the model's copy lost the underscore", () => {
+      const sec = "Opening line of the section stands here. The slope α_1 tracked f_cell closely across every specimen run. Closing line.";
+      expect(shapeEvidenceQuote(sec, "slope α1 tracked fcell closely across every specimen", CAP)).toBe("The slope α_1 tracked f_cell closely across every specimen run.");
+    });
+
+    it("never invents a character: the shown text is a stretch of the section", () => {
+      const sec = "Opening line of the section stands here. The value of f_cell was measured [12] at 300 K under the load. Closing line.";
+      const flat = sec.replace(/\s+/g, " ");
+      for (const quote of ["value of f_cell was measured at 300 K", "f_cell was measured [12] at 300 K under the load.", "was measured"]) {
+        for (const cap of [30, 60, 400]) {
+          const shown = shapeEvidenceQuote(sec, quote, cap);
+          if (shown === null) continue;
+          expect(flat.includes(shown.replace(/^…/, "").replace(/…$/, "").trim()), `${quote} @ ${cap}`).toBe(true);
+        }
+      }
+    });
+  });
+
+  it("returns null for a quote that is not in the section, so the caller falls back; never extends one", () => {
+    expect(shapeEvidenceQuote(SECTION, "the alloy hardened at 300 K under the load applied by the press", CAP)).toBeNull();
+    expect(shapeEvidenceQuote("", "softened at 300 K", CAP)).toBeNull();
+    expect(shapeEvidenceQuote(SECTION, "", CAP)).toBeNull();
+  });
+
+  it("finds a quote that is cased or spaced differently from the section, and shows the section's text", () => {
+    expect(shapeEvidenceQuote(SECTION, "the ALLOY softened   at 300 K under the load", CAP)).toBe(S2);
   });
 });

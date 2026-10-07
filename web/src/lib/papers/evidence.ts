@@ -19,6 +19,7 @@
 import { cleanDisplayText } from "@/lib/text/clean";
 import type { ExtractedDocument } from "./html-text";
 import type { Claim, PaperReport, PaperReportKeyResult, PaperTerm, QuestionAnswers } from "./report";
+import { splitSentences } from "./skim";
 
 /**
  * Shortest quote worth trusting. Below this a match says nothing — "we show
@@ -407,4 +408,150 @@ export function placeEvidence(
     }
   }
   return { kind: "quote" };
+}
+
+// ── The shown quote (P4-04, §1h.8 (8), BACKLOG-13's open half) ─────────────
+//
+// A quote the verifier accepts is a verbatim stretch of a section, but a stretch may begin or
+// end inside a sentence, and a clause cut short can read as the opposite of what the sentence
+// says (the first clause says "softened", the rest says "but hardened again"). So what is SHOWN
+// is shaped here, once, for the explain answer, the reply and the deep report alike.
+
+/** The most words of a section the alignment will read: a quote is looked for in one section. */
+const ALIGN_MAX_TOKENS = 40000;
+
+/** The cut mark the page already uses for text it cut (`explain.ts` `cutAtWord`). */
+const CUT = "\u2026";
+
+/** `[12]`, `[3-5]`, `[1, 2]` in a collapsed section (any dash shape inside the bracket). */
+const NUMERIC_CITATION = /\[\d+(?:\s*[-,\u2010-\u2015\u2212]\s*\d+)*\]/g;
+
+/** `[start, end)` of a quote in the white-space-collapsed section, in the paper's own characters. */
+interface Span {
+  start: number;
+  end: number;
+  /** True when the span was found by lining up cleaned words, not as a verbatim substring. */
+  aligned: boolean;
+}
+
+/**
+ * Where the quote sits in the section's own characters: verbatim first (white space collapsed),
+ * else the run of the section's words whose cleaned forms are the quote's cleaned words, one for
+ * one. Each word of the section is cleaned on its own; one that cleans to nothing (a citation
+ * bracket) is passed over; one that cleans to several (`<=0.2` is `<=` and `0.2`) counts as
+ * several. Null when no run lines up (a citation or a line-break hyphen spanning words cleans
+ * differently one word at a time; Chinese has no words to line up).
+ */
+function locateSpan(quote: string, flat: string): Span | null {
+  const direct = flat.indexOf(quote);
+  if (direct >= 0) return { start: direct, end: direct + quote.length, aligned: false };
+  const wanted = normalizeForMatch(quote).split(" ").filter(Boolean);
+  if (wanted.length === 0) return null;
+  const tokens: Array<{ text: string; start: number }> = [];
+  for (let at = 0; at < flat.length; ) {
+    if (flat[at] === " ") {
+      at += 1;
+      continue;
+    }
+    let stop = flat.indexOf(" ", at);
+    if (stop < 0) stop = flat.length;
+    tokens.push({ text: flat.slice(at, stop), start: at });
+    at = stop;
+  }
+  if (tokens.length > ALIGN_MAX_TOKENS) return null;
+  // A numeric citation (`[12]`, `[3, 4]`) may span words; its characters are passed over, wherever
+  // they sit, so the words beside them line up as the cleaned quote has them.
+  const cited = new Array<boolean>(flat.length).fill(false);
+  for (const match of flat.matchAll(NUMERIC_CITATION)) cited.fill(true, match.index, match.index + match[0].length);
+  const parts: Array<{ word: string; token: number }> = [];
+  tokens.forEach((token, index) => {
+    let kept = "";
+    for (let i = 0; i < token.text.length; i += 1) if (!cited[token.start + i]) kept += token.text[i];
+    for (const word of normalizeForMatch(kept).split(" ")) if (word) parts.push({ word, token: index });
+  });
+  for (let start = 0; start + wanted.length <= parts.length; start += 1) {
+    if (parts[start].word !== wanted[0]) continue;
+    let k = 1;
+    while (k < wanted.length && parts[start + k].word === wanted[k]) k += 1;
+    if (k < wanted.length) continue;
+    const first = tokens[parts[start].token];
+    const last = tokens[parts[start + wanted.length - 1].token];
+    return { start: first.start, end: last.start + last.text.length, aligned: true };
+  }
+  return null;
+}
+
+/** `[start, end)` of each sentence of `flat` (`splitSentences`: abbreviations and decimals do not split). */
+function sentenceSpans(flat: string): Array<{ start: number; end: number }> {
+  const spans: Array<{ start: number; end: number }> = [];
+  let at = 0;
+  for (const sentence of splitSentences(flat)) {
+    const start = flat.indexOf(sentence, at);
+    if (start < 0) return [];
+    spans.push({ start, end: start + sentence.length });
+    at = start + sentence.length;
+  }
+  return spans;
+}
+
+/** Nothing of a sentence is left out when what lies outside the quote has no letter or digit in it (a full stop, a bracket, a quote mark). */
+const HAS_WORD_CHAR = /[\p{L}\p{N}]/u;
+
+/** `text` cut to at most `room` characters at a word boundary (inside a word only when one word is all there is). */
+function cutToRoom(text: string, room: number): string {
+  if (text.length <= room) return text;
+  const head = text.slice(0, Math.max(room, 0));
+  const space = head.lastIndexOf(" ");
+  return (space > 0 ? head.slice(0, space) : head).trimEnd();
+}
+
+/**
+ * What to show of a verified quote: the ONE place that decides it (§1h.8 (8)). `quote` is a
+ * stretch the verifier accepted (`supportedIn`: the whole normalised quote is in the section);
+ * `sectionText` is that section as the paper has it. The shown text is always the paper's own
+ * characters (`f_cell`, `α_1`, citation brackets as the paper has them), never the model's:
+ *
+ *  - a quote that begins or ends inside a sentence is extended to that sentence's start and end
+ *    (`splitSentences`: `Fig. 3`, `0.4 V`, `et al.` do not end one) when the whole extended text
+ *    fits `cap`;
+ *  - else it is shown as it is, with "…" at each end that is a cut, never silently, and the whole
+ *    shown text, marks included, within `cap`;
+ *  - a quote already on its sentence boundaries is unchanged.
+ *
+ * Null when the quote cannot be found in the section's own characters (a citation or a hyphen
+ * spanning words, a section too long to line up), or when the words that line up are longer than
+ * `cap`: the caller then keeps what it had. A quote it cannot place is never extended.
+ */
+export function shapeEvidenceQuote(sectionText: string, quote: string, cap: number): string | null {
+  const flat = sectionText.replace(/\s+/g, " ").trim();
+  const wanted = quote.replace(/\s+/g, " ").trim();
+  if (!flat || !wanted) return null;
+  const span = locateSpan(wanted, flat);
+  if (!span) return null;
+  // §1h.13 (b): words lined up from a cleaned quote may be padded by the paper's own brackets and
+  // run past the cap; that is not shown (the caller's fallback applies), as before.
+  if (span.aligned && span.end - span.start > cap) return null;
+
+  const sentences = sentenceSpans(flat);
+  const first = sentences.find((sentence) => span.start < sentence.end);
+  const last = [...sentences].reverse().find((sentence) => span.end > sentence.start);
+  // No sentence structure to go by: show the words as they are, within the cap.
+  if (!first || !last) return cutToRoom(flat.slice(span.start, span.end), cap);
+
+  const startCut = HAS_WORD_CHAR.test(flat.slice(first.start, span.start));
+  const endCut = HAS_WORD_CHAR.test(flat.slice(span.end, last.end));
+  const whole = flat.slice(first.start, last.end);
+  if (whole.length <= cap) return whole;
+
+  // Over the cap: the quote as it is, the cut marked at each end that is one.
+  let body = flat.slice(span.start, span.end);
+  let marks = (startCut ? 1 : 0) + (endCut ? 1 : 0);
+  let cutEnd = endCut;
+  if (body.length + marks > cap) {
+    // The quote itself leaves no room for the marks: shorten it at its end, which is then a cut.
+    cutEnd = true;
+    marks = (startCut ? 1 : 0) + 1;
+    body = cutToRoom(body, cap - marks);
+  }
+  return `${startCut ? CUT : ""}${body}${cutEnd ? CUT : ""}`;
 }
