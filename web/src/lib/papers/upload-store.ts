@@ -476,14 +476,6 @@ export async function purgeExpiredUploads(): Promise<void> {
       if (!owner || owner.status === "blocked" || owner.status === "deleted") await removeUploadDoc(name.slice(0, 16));
       continue;
     }
-    if (/^[0-9a-f]{16}\.doc\.json$/.test(name)) {
-      // P0-02: a sidecar outlives nothing. One whose upload is gone (a
-      // delete that raced a write) or taken down is removed here; an expired
-      // upload's goes with it through `deleteUpload` below.
-      const owner = await readUploadMeta(name.slice(0, 16));
-      if (!owner || owner.status === "blocked" || owner.status === "deleted") await removeUploadDoc(name.slice(0, 16));
-      continue;
-    }
     if (!/^[0-9a-f]{16}\.json$/.test(name)) continue;
     const meta = await readUploadMeta(name.slice(0, 16));
     if (meta?.expiresAt && Date.parse(meta.expiresAt) <= Date.now()) await deleteUpload(meta);
