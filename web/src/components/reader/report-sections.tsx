@@ -395,9 +395,16 @@ export function GlanceBlock({
   return (
     <Section stagger={stagger}>
       <Heading label={REPORT_HEADING.glance} />
-      <ul className="font-mono text-meta text-text-muted space-y-1.5">
+      {/* One row of facts, each in its own cell: a glance is read across,
+          not down. */}
+      <ul className="flex flex-wrap gap-2">
         {facts.map((fact) => (
-          <li key={fact}>{fact}</li>
+          <li
+            key={fact}
+            className="font-mono text-meta text-text-muted border border-border-strong px-2.5 py-1"
+          >
+            {fact}
+          </li>
         ))}
       </ul>
     </Section>

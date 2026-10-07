@@ -10,21 +10,19 @@ import { cn } from "@/lib/cn";
 export const pageContainer = cva("mx-auto w-full px-6", {
   variants: {
     width: {
-      // Paper reading: one column, a two-column spread from xl. The spread's
-      // width is set by the measure, not by the window — at 1320 the 7fr
-      // column was 681px holding a 462px line, so a fifth of the page was an
-      // empty gutter inside the reading column. Sized so the column is the
-      // measure plus a rag margin, the two columns fill and the leftover
-      // becomes the page's own margins.
+      // Paper reading: one column, a two-column spread from xl. The spread is
+      // a narrow fixed panel beside a wide reading column (`spread.ts`), and
+      // the cap decides how wide that column gets: 1072px at xl leaves it
+      // 640px (after 48px of padding, a 64px gap and the 320px panel), and
+      // from 2xl the pair below leaves it 680px.
       // Round 7 (Ruling 19 / A7-02): the reading spread's caps grow with
-      // `--reading-scale` so the panel's share stays constant as the reader's
-      // font steps up. 2xl is a fixed-plus-flexible split (544 panel + 96 gap
-      // + 560*scale column = 640 + 560*scale; at scale 1 that is the old
-      // 1200). xl's grid is proportional (5fr/7fr), so it just fills whatever
-      // total this cap gives it. Keep the two `560`s and this `640` in step
-      // with `spread.ts`'s SPREAD_GRID.
+      // `--reading-scale` so the column grows as the reader's font steps up.
+      // 2xl is a fixed-plus-flexible split (48 padding + 360 panel + 96 gap
+      // + 680*scale column = 504 + 680*scale; at scale 1 that is 1184). xl's
+      // panel is fixed too, so the whole cap's growth lands in the column.
+      // Keep the `504`, the `680` and the `1072` in step with `spread.ts`.
       spread:
-        "max-w-[760px] xl:max-w-[calc(1000px*var(--reading-scale,1))] 2xl:max-w-[calc(640px+560px*var(--reading-scale,1))]",
+        "max-w-[760px] xl:max-w-[calc(1072px*var(--reading-scale,1))] 2xl:max-w-[calc(504px+680px*var(--reading-scale,1))]",
       content: "max-w-[820px]",  // home column, /privacy, /saved
       // The feed board. It held 1280 at every width above 1280, so a 1920
       // screen spent a third of itself on margins and still dealt three
