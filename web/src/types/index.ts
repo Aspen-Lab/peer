@@ -46,6 +46,13 @@ export type FeedItemKind = "paper" | "event" | "job";
 
 export interface PreferenceLedgerEntry extends PreferenceConcept {
   uploads?: Record<string, { at: string; weight: number }>;
+  /**
+   * P5-02: a reader's settled question on one paper named this term. Keyed by
+   * an opaque per-paper key (`questionSourceKey`), one piece of evidence per
+   * paper, at a weight far below an upload's. Separate from likes and
+   * dislikes, so it can be taken out without touching them.
+   */
+  questions?: Record<string, { at: string; weight: number }>;
   positive: number;
   negative: number;
   lastPositiveAt?: string;
