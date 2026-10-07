@@ -7,6 +7,7 @@ import type { ExtractedDocument } from "@/lib/papers/html-text";
 import type { FullTextResult } from "@/lib/papers/full-text";
 import type { Paper } from "@/types";
 import { blockMarker } from "@/lib/text/math";
+import { PLAIN_CAPS } from "@/lib/papers/plain";
 import { paragraphKey } from "@/store/plain-rewrites";
 import { PEERS_READING, PLAIN } from "./copy";
 import { PaperBody, type DrawRoute } from "./paper-body";
@@ -262,5 +263,73 @@ describe("ParagraphPlainControl — what the paragraph's control calls", () => {
   it("is the control of the spread when it sits beside a rewrite", () => {
     expect((ParagraphPlainControl({ view: view(), target, wide: true }) as ReactElement<PlainControlProps>).props.wide).toBe(true);
     expect((ParagraphPlainControl({ view: view(), target }) as ReactElement<PlainControlProps>).props.wide).toBeFalsy();
+  });
+});
+
+// P4-03 (BACKLOG-20): under a paragraph longer than the route rewrites (`PLAIN_CAPS.paragraphChars`) there
+// is no control at all — absent, not disabled — and the paragraph's own markup is what it was. Exactly the
+// cap is still offered. A section with no paragraph marks follows the same rule paragraph by paragraph.
+describe("PaperBody with the `plain` prop — a paragraph longer than the cap", () => {
+  const sized = (n: number) => {
+    const whole = Math.floor((n - 1) / 6);
+    return "abcde ".repeat(whole) + "f".repeat(n - 6 * whole);
+  };
+  const cap = PLAIN_CAPS.paragraphChars;
+  const exact = sized(cap);
+  const longer = sized(cap + 1);
+  const longDoc: ExtractedDocument = {
+    source: "pdf",
+    pageCount: 2,
+    figureCaptions: [],
+    equations: [],
+    sections: [
+      { id: "s1", heading: "1 Introduction", canonical: "introduction", text: `${exact}\n\n${longer}\n\nA short one.`, page: 1 },
+      { id: "s2", heading: "2 Results", canonical: "results", text: `${longer}\n\nAnother short one.\n\n${exact}`, page: 2 },
+    ],
+  };
+  const longReading = buildReading(paper, { ...fullText, doc: longDoc }, new Date("2026-10-05T00:00:00.000Z"));
+  const longRoute: DrawRoute = {
+    vague: false,
+    byQuestion: [
+      {
+        question: "How fast do grains creep?",
+        vague: false,
+        sections: {
+          s1: { tier: "read", hits: [], paragraphs: [0, 1, 2] },
+          s2: { tier: "read", hits: [], paragraphs: [] },
+        },
+      },
+    ],
+  };
+  const drawn = (props: Record<string, unknown>) => renderToStaticMarkup(createElement(PaperBody, { reading: longReading, route: longRoute, ...props }));
+  const anchor = (html: string, id: string) => html.slice(html.indexOf(`<div id="${id}"`), html.indexOf("</p>", html.indexOf(`<div id="${id}"`)) + 4);
+  const wrapped = (html: string, id: string) => {
+    const at = html.indexOf(`<div id="${id}"`);
+    const next = html.indexOf('<div id="paper-section-', at + 1);
+    const close = html.indexOf("</section>", at);
+    return html.slice(at, next === -1 || close < next ? close : next);
+  };
+
+  it("offers the control under the paragraph of exactly the cap and under the short one, and under no longer one", () => {
+    const html = drawn({ plain: view() });
+
+    expect(controls(html)).toHaveLength(4);
+    for (const id of ["paper-section-0-p0", "paper-section-0-p2", "paper-section-1-p1", "paper-section-1-p2"]) {
+      expect(wrapped(html, id)).toContain("data-plain-control");
+    }
+    for (const id of ["paper-section-0-p1", "paper-section-1-p0"]) {
+      expect(wrapped(html, id)).not.toContain("data-plain-control");
+    }
+  });
+
+  it("leaves a longer paragraph's markup as it is without the prop: no control, no rewrite wrapper, the same anchor", () => {
+    const withPlain = drawn({ plain: view() });
+    const without = drawn({});
+
+    for (const id of ["paper-section-0-p1", "paper-section-1-p0"]) {
+      expect(anchor(withPlain, id)).toBe(anchor(without, id));
+      expect(anchor(withPlain, id)).toBe(`<div id="${id}" class="space-y-4 scroll-mt-20"><p>${longer}</p>`);
+    }
+    expect(withPlain).not.toContain(PLAIN.unavailable);
   });
 });

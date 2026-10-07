@@ -553,7 +553,7 @@ function Section({
           // under it where the route marks it read — and under a paragraph that shows a rewrite
           // whatever the route says now, so there is always a way to take it back.
           const rewrite = plain?.shown.get(paragraphKey(section.id, i));
-          const offered = plain !== undefined && (rewrite !== undefined || plainOffered(mark, i));
+          const offered = plain !== undefined && (rewrite !== undefined || plainOffered(mark, i, paragraph));
           return (
             <div
               key={i}

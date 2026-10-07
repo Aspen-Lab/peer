@@ -8,6 +8,7 @@ import { PLAIN_LEVELS } from "@/lib/papers/plain-levels";
 import { paragraphKey, usePlainRewritesStore } from "@/store/plain-rewrites";
 import { PEERS_READING, PLAIN } from "./copy";
 import type { SectionMark, TintTier } from "./paper-body";
+import { PLAIN_CAPS } from "@/lib/papers/plain";
 import { PlainControl, PlainRewrite, plainOffered, requestPlain, sayPlainly, type PlainRequestResult } from "./plain-button";
 
 // P4-01 (blueprint §3.6 ⑥; rulings §1h.12 (h); §3d 15, 18): the control under a paragraph the
@@ -191,6 +192,30 @@ describe("plainOffered — only under a paragraph the route marks read", () => {
   it("is true under every paragraph of a section the route marks read when it has no paragraph marks — a Tier 2 answer's section", () => {
     expect(plainOffered(mark("read"), 0)).toBe(true);
     expect(plainOffered(mark("read"), 7)).toBe(true);
+  });
+
+  // P4-03 (BACKLOG-20): the route rewrites only the first `PLAIN_CAPS.paragraphChars` characters of a
+  // paragraph, so the numbers after the cut are outside the guard: no control under a longer one.
+  const sized = (n: number) => {
+    const whole = Math.floor((n - 1) / 6);
+    return "abcde ".repeat(whole) + "f".repeat(n - 6 * whole);
+  };
+
+  it("is true for a paragraph of exactly the cap and false for one character more, whichever way it is marked read", () => {
+    const cap = PLAIN_CAPS.paragraphChars;
+    expect(sized(cap)).toHaveLength(cap);
+    expect(sized(cap + 1)).toHaveLength(cap + 1);
+    expect(plainOffered(mark("read", [[2, "read"]]), 2, sized(cap))).toBe(true);
+    expect(plainOffered(mark("read", [[2, "read"]]), 2, sized(cap + 1))).toBe(false);
+    expect(plainOffered(mark("read"), 0, sized(cap))).toBe(true);
+    expect(plainOffered(mark("read"), 0, sized(cap + 1))).toBe(false);
+  });
+
+  it("applies the cap per paragraph in a section with no paragraph marks: a long one beside a short one", () => {
+    const section = mark("read");
+    expect(plainOffered(section, 0, sized(40))).toBe(true);
+    expect(plainOffered(section, 1, sized(PLAIN_CAPS.paragraphChars + 1))).toBe(false);
+    expect(plainOffered(section, 2, sized(40))).toBe(true);
   });
 
   it("is false in a section marked skim or background with no paragraph marks, and with no mark at all", () => {

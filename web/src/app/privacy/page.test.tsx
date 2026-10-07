@@ -376,6 +376,7 @@ describe("/privacy — an uploaded PDF's storage on Peer's server (P4-00c N7)", 
 // store — so a change to what is sent or kept has to change this entry in the same commit.
 const PLAIN_PARAGRAPHS = [
   "Nothing is sent until you click “Say it plainly” under a paragraph. The request carries the one paragraph you clicked, where it sits in the paper, the level you chose and your own model key, and goes to Peer's server and on to the model provider whose key you added. It also carries what Peer's server needs to find the paper's text — the paper's id and title, its DOI and its links and, for an uploaded PDF, the upload's id — and not the abstract, the authors or your marks on the paper. Of all that, the model sees only the paper's title, the level and the paragraph. It never searches the web.",
+  "The button is not offered under a paragraph longer than 1,200 characters, because Peer rewrites no more than the first 1,200 characters of a paragraph and does not rewrite part of one. Such a paragraph is left as the paper has it, with nothing sent.",
   "Choosing a level beside the button sends nothing, unless a rewrite is already showing for that paragraph: then it shows the paragraph at the new level, asking only if you have not had it at that level before.",
   "Peer's server keeps three things. First, each rewrite it gives, in memory, for up to an hour, so the same paragraph at the same level is rewritten without another model call; it is filed under hashes of the document and the paragraph, and the level, never under who asked. Second, one log line for a request that reaches the paragraph: how many characters went out and came back and, if you are signed in, a shortened hash of your account id — never the paragraph, the rewrite or anything you wrote. Third, if you are signed in, a count of this account's requests this hour, a number and nothing else, kept so the hourly limit can hold; it holds no text.",
   "In this browser, and only here, Peer keeps each rewrite you asked for, for each paper, paragraph and level, so a paragraph you have had said plainly at that level opens from this copy with no new request. For an uploaded PDF a rewrite is a paraphrase of the PDF's own text. None of it is stored against your account, and signing in does not copy it there. Which paragraphs show a rewrite now is not kept, so a reload shows the originals. The level you chose is kept in this browser with your other reading settings. Signing out leaves all of it in place; clearing this site's data in your browser removes it.",
@@ -407,6 +408,13 @@ describe("/privacy — Say it plainly (P4-01)", () => {
     expect(key).toBeGreaterThan(label);
     // Nothing sits between the two entries but the explain entry's own six paragraphs.
     expect(paragraphs(html.slice(explain, label))).toBe(EXPLAIN_PARAGRAPHS.length);
+  });
+
+  // P4-03 (BACKLOG-20): the sentence's number is the route's cap, and the page's rule is that cap's.
+  it("says 1,200 because that is PLAIN_CAPS.paragraphChars, and the button's rule uses the exported cap", () => {
+    expect(PLAIN_CAPS.paragraphChars).toBe(1200);
+    expect(entry).toContain(`longer than ${PLAIN_CAPS.paragraphChars.toLocaleString("en-US")} characters`);
+    expect(squash(buttonSource)).toContain("paragraph.length > PLAIN_CAPS.paragraphChars");
   });
 
   it("quotes the button's own label, so a label that changes in the page shows up here", () => {
