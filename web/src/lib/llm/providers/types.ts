@@ -143,6 +143,16 @@ export function safeParseDigest(text: string): DigestResult | null {
     }
   }
 
-  console.warn("[digest] Could not parse JSON from model response. First 300 chars:", text.slice(0, 300));
+  // The reply's length, and whether it began like JSON, never a character of it
+  // (P5-06b, §1h.20 (b)): the prompt holds the papers' abstracts and the reader's
+  // own profile text, and a reply that fails to parse is exactly the kind that
+  // quotes them back. A server log is shared; AGENTS.md keeps per-user text out of
+  // it. The length and the yes/no still tell the owner an empty reply from prose
+  // from truncated JSON.
+  const first = text.trimStart().charAt(0);
+  const beganLikeJson = first === "{" || first === "[";
+  console.warn(
+    `[digest] Could not parse JSON from model response (reply length ${text.length}, begins like JSON: ${beganLikeJson ? "yes" : "no"})`,
+  );
   return null;
 }
