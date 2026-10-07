@@ -287,7 +287,9 @@ export function numericSet(text: string): string[] {
 
 /** Whether `plain` says the numbers of `original`, with their units, no more and no fewer: the
  *  two sets are equal as multisets (the order they are said in is free). The route answers 422
- *  `numbers_changed` when this is false. */
+ *  `numbers_changed` when this is false. Because the comparison is a multiset, a rewrite that
+ *  reorders two numbers ("from 3 to 5" said as "from 5 to 3") or changes a noun that is not a listed
+ *  unit ("12 mice" said as "12 rats") is kept: the prompt is the only defence against that. */
 export function numbersKept(original: string, plain: string): boolean {
   const before = numericSet(original);
   const after = numericSet(plain);
