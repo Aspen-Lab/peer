@@ -17,7 +17,7 @@ import { apiFetch } from "@/lib/api";
 import type { PaperReport } from "@/lib/papers/report";
 import { streamPaperReport } from "@/lib/papers/report-stream";
 import { reportOutcome } from "@/lib/reader/report-outcome";
-import { aiAvailability } from "@/lib/feed/ai-tier";
+import { aiAvailability, type AiMode } from "@/lib/feed/ai-tier";
 import { useSyncGate } from "@/components/profile-sync";
 
 // v6: S6 merged "what is new" into "what it proposes" (whatItProposes.newHere
@@ -63,6 +63,12 @@ function readCached(key: string): PaperReport | null {
   return entry.report;
 }
 
+/** What a settled report is cached as — exported so a test can stand in for
+ *  the first visit that wrote it. */
+export function rememberReport(key: string, report: PaperReport): void {
+  writeCached(key, report);
+}
+
 function writeCached(key: string, report: PaperReport): void {
   if (!key || typeof window === "undefined") return;
   try {
@@ -101,9 +107,32 @@ export function buildReportKey(
   depth: "deep" | "abstract",
   project: string,
   provider: string,
+  questions: readonly string[] = [],
 ): string {
   if (!paper) return "";
-  return `${paper.id}|${paper.fullTextUploadId ?? "public"}|${paper.revision ?? ""}|${depth}|${hash(project)}|${provider}`;
+  const base = `${paper.id}|${paper.fullTextUploadId ?? "public"}|${paper.revision ?? ""}|${depth}|${hash(project)}|${provider}`;
+  // P2-03 (§1g.11 b): a report answers a set of questions — in any order —
+  // so the set names it too, as a hash; with none the key is today's, and
+  // every report already cached stays found.
+  return questions.length > 0 ? `${base}|q:${hash([...questions].sort().join("\n"))}` : base;
+}
+
+/**
+ * P3-05 (§1h.8 (1); A's P3-04 F1): whether this reader has switched the paper's
+ * text on for a model — the one predicate the paper's text leaves the browser on.
+ * A deep report reads the full text, and it is asked for when the reader turned
+ * Deep report on in their profile or the paper carries an attached PDF, and a model
+ * is there to ask (the reader's own key, for a signed-in reader). The hook
+ * decides its own `deep` with it, and the page enables the paragraph-gist pass on it
+ * too, so the map's gists are written only when a deep report is: one switch, never
+ * a second. Pure, so the rule is tested without rendering anything.
+ */
+export function deepReportRequested(
+  profile: Pick<UserProfile, "deepReportEnabled">,
+  paper: Pick<Paper, "fullTextUploadId"> | undefined,
+  aiMode: AiMode,
+): boolean {
+  return Boolean(profile.deepReportEnabled || paper?.fullTextUploadId) && aiMode !== "none";
 }
 
 export interface ModelReportState {
@@ -131,6 +160,8 @@ interface Result {
   failed: boolean;
 }
 
+const NO_QUESTIONS: readonly string[] = [];
+
 /**
  * Ask for the report once per `${paperId}|${depth}|${hash(project)}|${provider}`
  * and keep it in localStorage. The request goes out with the project text so
@@ -140,9 +171,13 @@ interface Result {
 export function useModelReport({
   paper,
   profile,
+  questions = NO_QUESTIONS,
 }: {
   paper: Paper | undefined;
   profile: UserProfile;
+  /** P2-03 (§1g.11 b): the reader's settled questions for this paper —
+   *  never the gist. They go in the request body only when there are some. */
+  questions?: readonly string[];
 }): ModelReportState {
   const project = useMemo(
     () => [profile.currentProject, profile.currentChallenges].filter(Boolean).join("\n"),
@@ -178,13 +213,24 @@ export function useModelReport({
   const userProviderConfigured = aiMode === "byok";
   // Deep is opt-in, and needs a model: the reader's own key. No NODE_ENV test
   // here: AI availability is decided on the server.
-  const deep =
-    Boolean(profile.deepReportEnabled || paper?.fullTextUploadId) && aiMode !== "none";
+  const deep = deepReportRequested(profile, paper, aiMode);
   const depth = deep ? "deep" : "abstract";
-  const privatePdf = !!paper?.fullTextUploadId || !!paper?.id.startsWith("upload:");
-  const reportKey = buildReportKey(paper, depth, project, profile.feedAiProvider);
+  // P2-08b (§1g.17, F2): the questions name a request, and ride it, only when
+  // it is a deep one — `deep` already needs a provider the hook knows about
+  // (the reader's own key, for a signed-in reader). Any other
+  // request has no use for them (the route reads them on the deep path alone),
+  // so a settle then changes nothing on the wire and sends no request. The
+  // reader's questions stay in the store, which the export and the note read.
+  const requestQuestions = deep ? questions : NO_QUESTIONS;
+  const reportKey = buildReportKey(paper, depth, project, profile.feedAiProvider, requestQuestions);
 
-  const cached = useMemo(() => privatePdf ? null : readCached(reportKey), [reportKey, privatePdf]);
+  // P0-02 (spec D0): a private PDF's report is cached like any other. It
+  // never used to be, so every open of an attached PDF asked for — and spent the
+  // reader's own key on — a fresh deep report. The key already names the upload and its
+  // revision (`buildReportKey`), so a re-upload, a new attachment or another
+  // PDF is a different key; the server still re-checks the owner and the
+  // revision on every request it does receive.
+  const cached = useMemo(() => readCached(reportKey), [reportKey]);
   const [result, setResult] = useState<Result | null>(null);
   const [buildup, setBuildup] = useState<{
     key: string;
@@ -212,6 +258,70 @@ export function useModelReport({
   useEffect(() => {
     paperRef.current = paper;
   }, [paper]);
+  // The questions likewise: the key already names their set, so a new array
+  // for the same set (every store write) asks for nothing new.
+  const questionsRef = useRef(requestQuestions);
+  useEffect(() => {
+    questionsRef.current = requestQuestions;
+  }, [requestQuestions]);
+
+  // P2-08b (§1g.18): one request in flight at a time, and a different set of
+  // questions never aborts it — the server has already taken it on the reader's
+  // key, and the answer is wanted: it finishes and caches under its own key, and the effect
+  // below then runs again (`released`) and sends one request for the latest
+  // set, if that is another. `settings` is everything the request depends on
+  // but the questions: a change of any of it (another paper, depth, project,
+  // provider or key) still abandons the request, as it always did, and so does
+  // leaving the page.
+  const settings = [
+    buildReportKey(paper, depth, project, profile.feedAiProvider),
+    contextHint,
+    project,
+    deep,
+    userProviderConfigured,
+    profile.feedAiApiKey,
+  ].join("\u0000");
+  const flight = useRef<{ settings: string; controller: AbortController } | null>(null);
+  /** The key whose request just ended: done, not owed another by the re-run it triggers. */
+  const finishedKey = useRef<string | null>(null);
+  const [released, setReleased] = useState(0);
+  useEffect(() => () => flight.current?.controller.abort(), []);
+
+  // P3-05 (§1h.8 (2); A's P3-04 F2; the invariant of §1g.21 (6)): nothing is sent
+  // from an unloading page. The question box settles its questions on `pagehide`,
+  // which re-keys this hook, and the request effect below used to fetch for the new
+  // key from the dying page (the browser cancels it; a request that does reach the
+  // server runs on the reader's key and is answered into nowhere, and the next open asks again). So
+  // `pagehide` marks the page as unloading and `pageshow` — a back/forward-cache
+  // restore — clears it; while it is set the effect withholds the request, and when
+  // it clears the effect runs again (`released`, the trigger the hook already has)
+  // and sends the one request for the current key, the settled questions on it. The
+  // mark is a ref, not state: the question box's settle reaches the hook through
+  // a store subscription, which React renders ahead of an ordinary state update, so a
+  // state set by the same event would still read false in the render that settles.
+  // `withheld` is whether a request was actually held back: a restore with nothing
+  // owed re-runs nothing (the effect would otherwise read the `cached` of its first
+  // render and ask again for a report already shown). Registered once per hook
+  // instance and removed on unmount.
+  const unloading = useRef(false);
+  const withheld = useRef(false);
+  useEffect(() => {
+    const hide = () => {
+      unloading.current = true;
+    };
+    const show = () => {
+      unloading.current = false;
+      if (!withheld.current) return;
+      withheld.current = false;
+      setReleased((n) => n + 1);
+    };
+    window.addEventListener("pagehide", hide);
+    window.addEventListener("pageshow", show);
+    return () => {
+      window.removeEventListener("pagehide", hide);
+      window.removeEventListener("pageshow", show);
+    };
+  }, []);
 
   useEffect(() => {
     const current = paperRef.current;
@@ -221,9 +331,24 @@ export function useModelReport({
     // return the same honest emptiness the record's own textStatus already
     // states. The reading page renders the plain "no readable text"
     // sentence directly from `paper.textStatus` instead.
-    if (!current || !reportKey || cached || current.textStatus === "empty") return;
+    const justFinished = finishedKey.current;
+    finishedKey.current = null;
+    if (!current || !reportKey || cached || current.textStatus === "empty" || justFinished === reportKey) return;
+    const held = flight.current;
+    if (held && !held.controller.signal.aborted) {
+      // Only the questions differ: wait for it; `released` brings us back.
+      if (held.settings === settings) return;
+      // Anything else changed: abandon it, as before.
+      held.controller.abort();
+    }
+    // An unloading page sends nothing; `pageshow` brings the request back (above).
+    if (unloading.current) {
+      withheld.current = true;
+      return;
+    }
     const controller = new AbortController();
     const active = () => !controller.signal.aborted;
+    flight.current = { settings, controller };
 
     // An override for both shallow and deep reports whenever the user
     // supplied a key. In deployed Peer this is the only path to a model call.
@@ -239,12 +364,15 @@ export function useModelReport({
             apiKey: profile.feedAiApiKey.trim(),
           }
         : undefined;
+    const sentQuestions = questionsRef.current;
     const requestBody = {
       paper: current,
       contextHint,
       project: project || undefined,
       deepReport: deep,
       llmOverride,
+      // In the body of this one request, never a URL; absent without any.
+      ...(sentQuestions.length > 0 ? { questions: [...sentQuestions] } : {}),
     };
 
     const fail = () => {
@@ -262,7 +390,7 @@ export function useModelReport({
         return;
       }
       const shown = outcome === "shown" ? report : null;
-      if (shown && !privatePdf) writeCached(reportKey, shown);
+      if (shown) writeCached(reportKey, shown);
       setBuildup(null);
       setResult({ key: reportKey, report: shown, failed: false });
     };
@@ -328,11 +456,16 @@ export function useModelReport({
       }
     };
 
-    void load();
-    return () => controller.abort();
+    void load().finally(() => {
+      if (flight.current?.controller !== controller) return;
+      flight.current = null;
+      finishedKey.current = reportKey;
+      setReleased((n) => n + 1);
+    });
   }, [
+    released,
+    settings,
     reportKey,
-    privatePdf,
     cached,
     contextHint,
     project,

@@ -293,6 +293,21 @@ html[data-accent="violet"]   { --seed: #7a3fd9; --seed-dark: #a078f0; }
      is a tokenization, not a visual change. */
   --color-positive: #047857;
   --color-positive-strong: #065f46;
+  /* P1-05 (reading helper §1f.13–14): the route's tints — how a section
+     answers the reader's questions, drawn behind its row in the contents,
+     its heading in the body and its line in the map. A second hue in a
+     monochrome theme, by the author's explicit request (2026-10-05), and
+     confined to these three tokens: a background only, never a text colour,
+     never used for anything else. Light greens; read the deepest, skim the
+     faintest; the palette's muted and heading text stay ≥ 4.5:1 on each. */
+  --color-route-read: #d2f0dc;
+  --color-route-background: #e0f4e7;
+  --color-route-skim: #ebf7ef;
+  /* P3-01 (§1h.1): the Terms to know highlight — where the paper first uses a
+     term the reader clicked. A neutral grey, deliberately none of the three
+     route greens, a background only; the marked words take the heading ink
+     (≥ 12:1 on this tint), so the highlight reads as emphasis, not as a tier. */
+  --color-term-mark: #e4e4e4;
   --color-border: color-mix(in srgb, var(--color-heading) 6%, transparent);
   --color-border-strong: color-mix(in srgb, var(--color-heading) 12%, transparent);
   --color-skeleton-base: color-mix(in srgb, var(--color-heading) 5%, transparent);
@@ -337,6 +352,13 @@ html[data-mode="dark"] {
      requires. */
   --color-positive: #047857;
   --color-positive-strong: #065f46;
+  /* P1-05: the route's tints on the dark ground — low-luminance greens,
+     read the furthest from the ground; muted text stays ≥ 4.5:1 on each. */
+  --color-route-read: #1d4430;
+  --color-route-background: #19382a;
+  --color-route-skim: #152c21;
+  /* P3-01: the term highlight on the dark ground (the heading ink on it ≥ 9:1). */
+  --color-term-mark: #3d3d3d;
   --color-border: rgba(255, 255, 255, 0.09);
   --color-border-strong: rgba(255, 255, 255, 0.17);
   --color-skeleton-base: rgba(255, 255, 255, 0.05);
@@ -380,6 +402,11 @@ html[data-mode="dark"] {
      block's own "identical to the block above" comment. */
   --color-positive: #047857;
   --color-positive-strong: #065f46;
+  /* P1-05: the route's tints, as in the explicit-dark block above. */
+  --color-route-read: #1d4430;
+  --color-route-background: #19382a;
+  --color-route-skim: #152c21;
+  --color-term-mark: #3d3d3d;
   --color-border: rgba(255, 255, 255, 0.09);
   --color-border-strong: rgba(255, 255, 255, 0.17);
   --color-skeleton-base: rgba(255, 255, 255, 0.05);

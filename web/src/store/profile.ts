@@ -25,16 +25,20 @@ import { defaultProfile } from "@/types";
 import { normalizePersistedFeedIntent } from "@/lib/feed/intent";
 import { stripCredentialFields } from "@/lib/profile/merge";
 import { useJevScreeningStore } from "@/store/jev-screening";
+import { cleanQuestions } from "@/store/reading-questions";
 import {
   applyOpportunityFacetPreferenceSignal,
   applyPreferenceSignal,
+  applyQuestionTermSignal,
   applyUploadPreferenceSignal,
+  holdsQuestionTerms,
   removeUploadPreferenceSignal,
   conceptsFromEvent,
   conceptsFromJob,
   conceptsFromPaper,
   setTermLean,
   type OpportunityFacetGroup,
+  type QuestionTerm,
   type TermLean,
 } from "@/lib/preferences/ledger";
 
@@ -44,6 +48,10 @@ type PersistedUserProfile = Omit<Partial<UserProfile>, "colorTheme"> & {
 
 interface ProfileState {
   recordUploadPreference: (paper: Paper) => void;
+  /** P5-02: the specific terms of this paper's settled questions, as the
+   *  ledger's low-weight evidence (replacing the paper's earlier terms). A call
+   *  that changes nothing leaves the profile as it was. */
+  recordQuestionTerms: (paperId: string, terms: readonly QuestionTerm[]) => void;
   forgetUploadPreference: (documentKey: string) => void;
   profile: UserProfile;
   /**
@@ -103,6 +111,8 @@ interface ProfileState {
   updateSchool: (school: string) => void;
   updateCurrentProject: (text: string) => void;
   updateCurrentChallenges: (text: string) => void;
+  /** P5-01: the reader's standing questions, cleaned like any question (trimmed, distinct, five of 200). */
+  updateStandingQuestions: (questions: readonly string[]) => void;
   recordPaperPreference: (
     paper: Paper,
     signal: "positive" | "negative",
@@ -380,7 +390,8 @@ export function parseExportedProfile(
   }
   // Malformed input must leave the existing profile untouched, so only known
   // keys survive and anything else in the file is ignored.
-  const known = [...Object.keys(defaultProfile), "feedIntent"] as Array<keyof UserProfile>;
+  // `standingQuestions` is absent from `defaultProfile` (an optional field), so it is named here.
+  const known = [...Object.keys(defaultProfile), "feedIntent", "standingQuestions"] as Array<keyof UserProfile>;
   const source = profile as Record<string, unknown>;
   const result: Record<string, unknown> = {};
   for (const key of known) {
@@ -388,6 +399,12 @@ export function parseExportedProfile(
     if (key === "feedIntent") {
       const intent = normalizePersistedFeedIntent(source[key]);
       if (intent.ok) result[key] = intent.intent;
+      continue;
+    }
+    if (key === "standingQuestions") {
+      // The reader's own questions, kept as typed; anything that is not a list of text is ignored.
+      const list = source[key];
+      if (Array.isArray(list)) result[key] = cleanQuestions(list.filter((q): q is string => typeof q === "string"));
       continue;
     }
     result[key] = source[key];
@@ -415,6 +432,13 @@ export const useProfileStore = create<ProfileState>()(
         preferenceLedger: applyUploadPreferenceSignal(s.profile.preferenceLedger,
           conceptsFromPaper(paper), paper.uploadDocumentKey ?? ""),
       } })),
+      recordQuestionTerms: (paperId, terms) => set((s) => {
+        const ledger = s.profile.preferenceLedger;
+        // P5-04 (S4): the same terms at other shares is a change too.
+        if (holdsQuestionTerms(ledger, paperId, terms)) return s;
+        return { profile: { ...s.profile,
+          preferenceLedger: applyQuestionTermSignal(ledger, paperId, terms) } };
+      }),
       forgetUploadPreference: (key) => set((s) => ({ profile: { ...s.profile,
         preferenceLedger: removeUploadPreferenceSignal(s.profile.preferenceLedger, key),
       } })),
@@ -510,6 +534,11 @@ export const useProfileStore = create<ProfileState>()(
           // Empty is a deliberate clear, not proof this field was never set.
           // PROFILE-UNSYNCED-FIELDS (§1bp.2) — see updateTopics's note above.
           profile: { ...s.profile, currentChallenges: text, feedIntent: undefined },
+        })),
+
+      updateStandingQuestions: (questions) =>
+        set((s) => ({
+          profile: { ...s.profile, standingQuestions: cleanQuestions(questions) },
         })),
 
       recordPaperPreference: (paper, signal, at) =>

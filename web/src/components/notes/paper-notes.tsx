@@ -8,13 +8,25 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Paper } from "@/types";
+import type { QuestionAnswers } from "@/lib/papers/report";
 import { Band } from "@/components/ui/band";
 import { COMMAND } from "@/components/ui/command";
 import { citableFromPaper } from "@/lib/notes/cite";
 import { readingNote } from "@/lib/notes/templates";
 import { notesCiting, readingNoteFor, useNotesHydrated, useNotesStore } from "@/store/notes";
 
-export function PaperNotes({ paper }: { paper: Paper }) {
+/** P2-05: `questions` (the reader's settled ones, never the gist) and the
+ *  report's `forYourQuestions` go into the paper's first note, as "My questions →
+ *  what it said". Without them the note is what it was. */
+export function PaperNotes({
+  paper,
+  questions,
+  forYourQuestions,
+}: {
+  paper: Paper;
+  questions?: readonly string[];
+  forYourQuestions?: readonly QuestionAnswers[];
+}) {
   const router = useRouter();
   const ready = useNotesHydrated();
   const notes = useNotesStore((s) => s.notes);
@@ -28,7 +40,7 @@ export function PaperNotes({ paper }: { paper: Paper }) {
       router.push(`/notes/${own.id}`);
       return;
     }
-    const note = readingNote(citableFromPaper(paper));
+    const note = readingNote(citableFromPaper(paper), { questions, forYourQuestions });
     add(note);
     router.push(`/notes/${note.id}`);
   };

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveProvider } from "@/lib/llm/providers/registry";
 import { reportModelTier } from "@/lib/llm/provider-models";
-import type { ProviderOverrideConfig } from "@/lib/llm/providers/types";
+import type { DigestProvider, ProviderOverrideConfig } from "@/lib/llm/providers/types";
 import {
   emptyReport,
   sanitizePaperReport,
@@ -17,7 +17,7 @@ import { getFullText } from "@/lib/papers/full-text";
 import { getFigurePool } from "@/lib/figures/extract";
 import type { ReportStreamEvent } from "@/lib/papers/report-stream";
 import { requireAiRequest } from "@/lib/security/ai-request";
-import { bareUploadId } from "@/lib/papers/upload-store";
+import { bareUploadId, claimsUploadId } from "@/lib/papers/upload-store";
 import { ownedUpload, PRIVATE_UPLOAD_HEADERS } from "@/lib/papers/upload-access";
 
 export const dynamic = "force-dynamic";
@@ -41,9 +41,41 @@ interface ExtendedRequest extends PaperReportRequest {
    * the paper to, the key is left out of the schema rather than invited.
    */
   project?: string;
+  /**
+   * P2-03 (§1g.11 d): the reader's settled questions about this paper, for
+   * the deep report to answer. Cleaned on arrival (`requestQuestions`), used
+   * by the deep path only, and never written to a log line or a shared cache.
+   */
+  questions?: string[];
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────
+
+const MAX_REQUEST_QUESTIONS = 5;
+const MAX_REQUEST_QUESTION_CHARS = 200;
+
+/**
+ * P2-03 (§1g.11 d): the questions as the deep report may use them — an array
+ * of strings, each trimmed, non-empty, at most 200 characters, distinct
+ * case-insensitively, at most five. Anything else is ignored rather than
+ * refused: a malformed list is no reason to withhold the report.
+ */
+function requestQuestions(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const item of value) {
+    if (typeof item !== "string") continue;
+    const question = item.trim().slice(0, MAX_REQUEST_QUESTION_CHARS).trim();
+    if (!question) continue;
+    const key = question.toLocaleLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(question);
+    if (out.length >= MAX_REQUEST_QUESTIONS) break;
+  }
+  return out;
+}
 
 function parseJsonObject(text: string): unknown {
   const candidates = [
@@ -234,7 +266,8 @@ async function generateShallowReport(
       provenance: { ...verified.report.provenance, basis: "model-abstract" },
     };
   } catch (err) {
-    console.error("[papers/report] shallow generation failed:", err);
+    // The error's kind only: a provider's message may echo the prompt, which carries the reader's project text.
+    console.error("[papers/report] shallow generation failed:", err instanceof Error ? err.name : typeof err);
     return emptyReport("fallback");
   }
 }
@@ -260,8 +293,23 @@ function bestPaperUrl(paper: PaperReportRequest["paper"]): string | null {
  * `fullTextUploadId` attached to a foreign paper. `null` when nothing
  * private is involved (nothing to guard against a mid-flight delete/block). */
 function paperPrivateUploadHash(paper: PaperReportRequest["paper"]): string | null {
-  const id = paper.fullTextUploadId ?? (paper.id?.startsWith("upload:") ? paper.id : undefined);
+  // P0-05 (§1e.1): `bareUploadId` is the one rule, and it is exact; a public
+  // id simply is not one.
+  const id = paper.fullTextUploadId ?? paper.id;
   return typeof id === "string" ? bareUploadId(id) : null;
+}
+
+/**
+ * P0-05 (§1e.1, A's F1): a request that names an upload in a spelling
+ * `bareUploadId` does not accept — `UPLOAD:<hash16>`, upper-case hex, an
+ * empty or non-string `fullTextUploadId` — is refused as "not found". It used
+ * to slip past the owner check below (which only saw the lower-case prefix)
+ * while the full-text reader still read the file.
+ */
+function malformedUploadClaim(paper: PaperReportRequest["paper"]): boolean {
+  if (typeof paper.id === "string" && claimsUploadId(paper.id) && !bareUploadId(paper.id)) return true;
+  const attached: unknown = paper.fullTextUploadId;
+  return attached !== undefined && attached !== null && (typeof attached !== "string" || !bareUploadId(attached));
 }
 
 /**
@@ -287,18 +335,34 @@ const UPLOAD_GONE_RESPONSE = { error: "Upload no longer available" } as const;
  * with the stages and the mode sent as they happen. The client always asks for
  * this shape (`lib/papers/report-stream.ts` sends `Accept: application/x-ndjson`
  * on every request).
+ *
+ * F6 (P2-07, §1g.9 a): the provider is handed in. `handlePost` resolves it once,
+ * after the owner checks and the sign-in gate, so the stream and the JSON branch
+ * cannot drift apart on which provider answered.
  */
 function streamReport(
   body: ExtendedRequest,
+  provider: DigestProvider | null,
   privateHash: string | null,
   startRevision: number | undefined,
 ): Response {
+  // P2-08b (§1g.17, O2): set by `cancel` when the reader aborts the request —
+  // the page does so whenever its report key or its paper changes. The flow
+  // then stops sending instead of letting `enqueue` throw "Controller is
+  // already closed" into the error log below: an ordinary event, a debug line.
+  // A real failure after the abort (a provider error) is still an error.
+  let readerGone = false;
   const readable = new ReadableStream<Uint8Array>({
+    cancel() {
+      readerGone = true;
+      // No paper text, no question: the line says only that the reader left.
+      console.debug("[papers/report] the reader disconnected before the stream ended");
+    },
     async start(controller) {
       const encoder = new TextEncoder();
       let closed = false;
       const send = (event: ReportStreamEvent) => {
-        if (closed) return;
+        if (closed || readerGone) return;
         controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
       };
       const close = () => {
@@ -317,7 +381,6 @@ function streamReport(
       };
 
       try {
-        const provider = resolveProvider(body.llmOverride ?? null);
         if (!provider?.generateJsonText) {
           send({ type: "mode", aiMode: "tier0" });
           send({
@@ -426,6 +489,7 @@ function streamReport(
           project: projectText(body) || undefined,
           doc: fullText.doc,
           provider,
+          questions: body.questions,
         });
 
         if (!deep) {
@@ -465,7 +529,8 @@ function streamReport(
 
         finish(bound);
       } catch (err) {
-        console.error("[papers/report] streaming flow failed:", err);
+        // The error's kind only (see the shallow path): the deep prompts carry the paper's text and the questions.
+        console.error("[papers/report] streaming flow failed:", err instanceof Error ? err.name : typeof err);
         try {
           send({
             type: "error",
@@ -500,10 +565,16 @@ async function handlePost(req: NextRequest) {
   if (typeof body?.paper?.id !== "string" || !body.paper.id || typeof body.paper.title !== "string" || !body.paper.title) {
     return NextResponse.json({ error: "paper is required" }, { status: 400 });
   }
+  // P2-03 (§1g.11 d): cleaned once, here, for both transports; the deep path
+  // is the only reader of them.
+  body.questions = requestQuestions(body.questions);
   // 9-14 (A9-13, matrix C5): the revision captured here, at the very start
   // of the request, is what both the JSON deep path below and the NDJSON
   // stream re-check against after their own long-running full-text/model
   // work — before this specific generation is ever cached or returned.
+  if (malformedUploadClaim(body.paper)) {
+    return NextResponse.json({ error: "Upload not found." }, { status: 404 });
+  }
   const privateHash = paperPrivateUploadHash(body.paper);
   let startRevision: number | undefined;
   if (privateHash) {
@@ -522,15 +593,22 @@ async function handlePost(req: NextRequest) {
   const gate = await requireAiRequest("paper-report", 20);
   if (gate instanceof NextResponse) return gate;
 
-  // A deep report is not allowanced or counted here: the model runs on the
-  // reader's own key, so what it costs is between the reader and their provider.
-  // What protects Peer's server (the full-text fetch, the PDF parse) is the
-  // per-hour rate limit in the gate above.
+  // A deep report is counted against nothing here but the reader's hour, in the
+  // gate above: the model runs on the reader's own key, so what it costs is between
+  // the reader and their provider. What protects Peer's server (the full-text
+  // fetch, the PDF parse) is that per-hour rate limit.
+  //
+  // F6 (P2-07, §1g.9 a): the provider is resolved once, here — after the owner
+  // checks and the sign-in gate above, which stay ahead of it — and handed to
+  // whichever transport answers. A deep open with no model at all (no key sent,
+  // an unusable key) is a tier 0 answer and asks nothing of any provider.
+  const resolved = resolveProvider(body.llmOverride ?? null);
+
   const wantsStream =
     req.headers.get("accept")?.includes("application/x-ndjson") === true ||
     body.stream === true;
   if (wantsStream) {
-    return streamReport(body, privateHash, startRevision);
+    return streamReport(body, resolved, privateHash, startRevision);
   }
 
   // ── Deep path ────────────────────────────────────────────────────
@@ -539,7 +617,7 @@ async function handlePost(req: NextRequest) {
   // Without a provider, fall through to the shallow path (which returns the
   // empty report).
   if (body.deepReport) {
-    const provider = resolveProvider(body.llmOverride ?? null);
+    const provider = resolved;
     if (!provider?.generateJsonText) {
       // No user key and no local provider: the deterministic report — the SAME
       // call this route already made.
@@ -590,6 +668,7 @@ async function handlePost(req: NextRequest) {
           project: projectText(body) || undefined,
           doc: fullText.doc,
           provider,
+          questions: body.questions,
         }),
         getFigurePool({
           itemId: body.paper.fullTextUploadId ?? body.paper.id,
@@ -627,7 +706,8 @@ async function handlePost(req: NextRequest) {
 
       return NextResponse.json(bound);
     } catch (err) {
-      console.error("[papers/report] deep flow failed:", err);
+      // The error's kind only (see the shallow path).
+      console.error("[papers/report] deep flow failed:", err instanceof Error ? err.name : typeof err);
       return NextResponse.json(await generateShallowReport(body, body.llmOverride));
     }
   }

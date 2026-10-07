@@ -15,10 +15,11 @@
 
 import type { Paper } from "@/types";
 import type { ExtractedFigureCaption } from "./html-text";
-import { parseBlockMarker } from "@/lib/text/math";
 import type { ExtractedDocument } from "./html-text";
 import type { FullTextResult } from "./full-text";
 import type { SourceLink } from "./source-links";
+import { claimsUploadId } from "./upload-id";
+import { readableSections, readingMapOf, type ReadingMap } from "./reading-map";
 import {
   QUANTITY_STRICT,
   isBoilerplate,
@@ -129,7 +130,7 @@ export interface PaperReading {
    * change with no new field, and without the bump every reader who had
    * opened the paper that day would have kept the worse one.
    */
-  version: 5;
+  version: 6;
   paperId: string;
   builtAt: string;
   provenance: ReadingProvenance;
@@ -156,12 +157,20 @@ export interface PaperReading {
    * The abstract is not in here — the page sets it above, from the record.
    */
   body: ReadingSection[];
+  /**
+   * P1-04 (§1f.12): the paper's shape before reading — sections, roles,
+   * minutes, each paragraph's opening — index-aligned with `body`. Absent
+   * without a body.
+   */
+  map?: ReadingMap;
   omitted: { block: ReadingBlock; reason: OmitReason }[];
   source: { label: ReadingSourceLabel; url: string } | null;
 }
 
 /** One section of the paper, as the extractor read it. */
 export interface ReadingSection {
+  /** P1-04: the section's id (`s<index>`), the map's and the route's key. */
+  id: string;
   heading: string;
   /** introduction | methods | results | discussion | conclusion | body | … */
   canonical: string;
@@ -475,26 +484,31 @@ function paywallHostOf(fullText: FullTextResult): string | undefined {
 /**
  * A PDF whose words are pictures of words — a scan, or a file that carries no
  * text layer — is the one outcome the page must name plainly: the PDF is
- * there, and there is nothing in it to read. It used to mean something else
- * (`no-python` / `no-extractor`: the deployment could not run the extractor
- * at all), which is why the page once said "only a self-hosted Peer reads
- * PDFs". Reading a PDF needs nothing special now; a scan still needs eyes.
+ * there, and there is nothing in it to read. Reading a PDF needs nothing
+ * special — pdf.js, link and upload alike (P0-03 removed the last Python
+ * path, and its `no-python` / `no-extractor` reasons with it); a scan still
+ * needs eyes.
+ *
+ * An outcome carrying `pdf-empty` is the upload's own marker for the same
+ * fact and belongs to `pdfHasNoText` below, even when its reason also names
+ * the empty text layer (`pdf-empty: no-text-layer`): an upload's page has
+ * always said "this PDF has no readable text".
  */
 function pdfUnreadableHere(fullText: FullTextResult): boolean {
   return fullText.attempts.some(
     (attempt) =>
       attempt.link.kind === "pdf" &&
-      /\bno-(text-layer|sections|python|extractor)\b/.test(attempt.outcome),
+      /\bno-(text-layer|sections)\b/.test(attempt.outcome) &&
+      !/\bpdf-empty\b/.test(attempt.outcome),
   );
 }
 
 /**
  * 1-28/1-31: the PDF itself had nothing extractable — most likely a scanned
  * image with no text layer. `full-text.ts`'s upload branch (`tryUploadLink`)
- * marks this exact reason so it's told apart from `pdfUnreadableHere` (a
- * deployment that cannot run Python at all, a fact about *this server*, not
- * the file) and from every other `no_full_text` cause (a source Peer never
- * found, a fact about the *paper*, not a file already in hand).
+ * marks this exact reason so it's told apart from every other `no_full_text`
+ * cause (a source Peer never found, a fact about the *paper*, not a file
+ * already in hand).
  */
 function pdfHasNoText(fullText: FullTextResult): boolean {
   return fullText.attempts.some(
@@ -557,54 +571,21 @@ function pickSource(
  * alone, which is what the page renders at first paint before the server
  * reading arrives. `now` exists so tests can pin `builtAt`.
  */
-/**
- * The document, split into paragraphs for the page.
- *
- * The abstract is dropped: the page sets it from the record, sentence by
- * sentence, with the ink on it, and the extractor's copy is the same text
- * without the marks. A section with nothing under its heading is dropped too
- * — an extractor artefact, not a part of the paper.
- */
-function readableBody(doc: ExtractedDocument): ReadingSection[] {
-  const out: ReadingSection[] = [];
-  const lifted = doc.equations ?? [];
-  for (const section of doc.sections) {
-    if (section.canonical === "abstract") continue;
-    const paragraphs: string[] = [];
-    const equations: ReadingEquation[] = [];
-    for (const raw of section.text.split(/\n{2,}/)) {
-      const para = raw.replace(/\s+/g, " ").trim();
-      if (!para) continue;
-      // A marker paragraph is where a display equation stood: the equation
-      // goes after the paragraph before it, and the marker goes away.
-      const k = parseBlockMarker(para);
-      if (k !== null) {
-        const eq = lifted[k];
-        if (eq && (eq.latex || eq.text)) {
-          equations.push({
-            ...(eq.latex ? { latex: eq.latex } : {}),
-            ...(eq.text ? { text: eq.text } : {}),
-            ...(eq.number ? { number: eq.number } : {}),
-            after: paragraphs.length - 1,
-          });
-        }
-        continue;
-      }
-      // A step number on its own line: LaTeXML renders an algorithm listing
-      // one cell per line, so "1:" and "2:" arrive as paragraphs of their
-      // own. Anything with no letter in it is the same kind of debris.
-      if (/^\d+[:.]?$/.test(para) || !/\p{L}/u.test(para)) continue;
-      paragraphs.push(para);
-    }
-    if (paragraphs.length === 0 && equations.length === 0) continue;
-    out.push({
-      heading: section.heading,
-      canonical: section.canonical,
-      paragraphs,
-      ...(equations.length > 0 ? { equations } : {}),
-    });
-  }
-  return out;
+// P1-04: `sectionParagraphs` and `readableSections` — the paragraph split and
+// the section filter the body and the reading map share (§1f.1) — live in
+// `reading-map.ts` now, so this module can import the map without the two
+// importing each other; re-exported here for any reader of the old names.
+export { readableSections, sectionParagraphs } from "./reading-map";
+
+/** The document, split into paragraphs for the page. */
+function readableBody(sections: ReturnType<typeof readableSections>): ReadingSection[] {
+  return sections.map(({ id, section, paragraphs, equations }) => ({
+    id,
+    heading: section.heading,
+    canonical: section.canonical,
+    paragraphs,
+    ...(equations.length > 0 ? { equations } : {}),
+  }));
 }
 
 /** The route that serves a PDF page's embedded picture. Relative: the page
@@ -690,7 +671,11 @@ export function placeFigures(
       ...(typeof c.page === "number" ? { page: c.page } : {}),
     };
     if (c.imageUrl) figure.imageUrl = c.imageUrl;
-    else if (pdf && typeof c.page === "number" && perPage.get(c.page) === 1) {
+    // P0-07 (§1e.5): no page picture for an uploaded PDF. The page-image
+    // route resolves public papers only and answers 404 for an `upload:` id,
+    // so the URL was a wasted request per figure; the caption and its page
+    // stand alone ("caption · p.N") until BACKLOG-01 serves uploads.
+    else if (pdf && !claimsUploadId(pdf.paperId) && typeof c.page === "number" && perPage.get(c.page) === 1) {
       figure.imageUrl = pdfFigureUrl(pdf.paperId, c.page);
     }
     (out[at.section].figures ??= []).push(figure);
@@ -716,9 +701,15 @@ export function buildReading(
   const provenance = buildProvenance(paper, sentences, fullText);
   const doc = fullText?.status === "ok" ? fullText.doc : undefined;
 
+  // One split of the document for both the body and its map (§1f.1), so
+  // map row k is body section k.
+  const rendered = doc ? readableSections(doc) : [];
   const body = doc
-    ? placeFigures(readableBody(doc), doc.figureCaptions, doc.source === "pdf" ? { paperId: paper.id } : null)
+    ? placeFigures(readableBody(rendered), doc.figureCaptions, doc.source === "pdf" ? { paperId: paper.id } : null)
     : [];
+  // P1-04 (§1f.12): the map is computed here, where the document is — the
+  // browser never holds it — and only when there is a body to map.
+  const map = body.length > 0 ? readingMapOf(rendered) : undefined;
   // In order, each block excluding what the ones before it took: the three
   // pools overlap now that `body` is a last resort for two of them, and one
   // sentence quoted under two headings is Peer saying two different things
@@ -751,7 +742,7 @@ export function buildReading(
   omitted.push({ block: "nextStep", reason: "needs_key" });
 
   return {
-    version: 5,
+    version: 6,
     paperId: paper.id,
     builtAt: now.toISOString(),
     provenance,
@@ -760,6 +751,7 @@ export function buildReading(
     method,
     caveats,
     body,
+    ...(map ? { map } : {}),
     omitted,
     source: pickSource(paper, fullText),
   };

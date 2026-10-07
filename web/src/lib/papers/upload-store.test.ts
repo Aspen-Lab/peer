@@ -1,19 +1,28 @@
 import { existsSync } from "node:fs";
-import { readFile, rm, writeFile } from "node:fs/promises";
+import { readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
+import type { ExtractedDocument } from "./html-text";
 import {
   bareUploadId,
+  claimsUploadId,
+  deleteUpload,
+  docPath,
   hasOtherReadyDocumentCopy,
   metaPath,
   pdfPath,
   purgeExpiredUploads,
+  readUploadDoc,
   readUploadMeta,
+  resolveWebRoot,
   sha16,
+  uploadDocKey,
   uploadFileExists,
   UPLOAD_DIR,
   uploadId,
   uploadMetaToPaper,
+  writeUploadDoc,
   writeUploadMeta,
   writeUploadPdfIfAbsent,
   type UploadMeta,
@@ -26,8 +35,112 @@ afterEach(async () => {
     writtenHashes.splice(0).map(async (hash16) => {
       await rm(pdfPath(hash16), { force: true });
       await rm(metaPath(hash16), { force: true });
+      await rm(docPath(hash16), { force: true });
     }),
   );
+});
+
+// P0-02 (spec D0): the text Peer read out of an upload is kept beside the
+// upload — a JSON sidecar, owner-only, written whole or not at all — so the
+// second open of the same PDF does not read the PDF again. It lives and dies
+// with the upload.
+describe("the extracted-document sidecar (P0-02)", () => {
+  const doc: ExtractedDocument = {
+    title: "A Sidecar Fixture",
+    sections: [{ id: "s0", heading: "1 Introduction", canonical: "introduction", text: "Fixture prose.", page: 1 }],
+    figureCaptions: [],
+    source: "pdf",
+    pageCount: 3,
+    reason: null,
+  };
+  const ownerKey = "owner-under-test-p0-02";
+
+  it("writes <hash16>.doc.json owner-only, with no temp file left, and reads it back only under the same key", async () => {
+    const hash16 = sha16(Buffer.from("p0-02: sidecar round trip"));
+    writtenHashes.push(hash16);
+    const key = uploadDocKey(ownerKey, hash16, 1, 2);
+
+    await writeUploadDoc(hash16, key, doc);
+
+    expect(path.basename(docPath(hash16))).toBe(`${hash16}.doc.json`);
+    expect((await stat(docPath(hash16))).mode & 0o777).toBe(0o600);
+    expect((await readdir(UPLOAD_DIR)).filter((name) => name.startsWith(hash16) && name.endsWith(".tmp"))).toEqual([]);
+    // The owner's key is not written into the file; a digest of the whole
+    // cache key is.
+    expect(await readFile(docPath(hash16), "utf-8")).not.toContain(ownerKey);
+
+    expect(await readUploadDoc(hash16, key)).toEqual(doc);
+    // Another revision, another extraction version or another owner is a
+    // different key, and gets nothing.
+    expect(await readUploadDoc(hash16, uploadDocKey(ownerKey, hash16, 2, 2))).toBeNull();
+    expect(await readUploadDoc(hash16, uploadDocKey(ownerKey, hash16, 1, 3))).toBeNull();
+    expect(await readUploadDoc(hash16, uploadDocKey("another-owner", hash16, 1, 2))).toBeNull();
+  });
+
+  it("is removed with the upload by deleteUpload", async () => {
+    const hash16 = sha16(Buffer.from("p0-02: deleted with the upload"));
+    writtenHashes.push(hash16);
+    const meta: UploadMeta = {
+      hash16, fileName: "paper.pdf", title: "A Real Paper", uploadedAt: "2026-09-15T00:00:00.000Z",
+      textStatus: "ok", status: "ready", revision: 1, ownerKey,
+      expiresAt: new Date(Date.now() + 86_400_000).toISOString(),
+    };
+    await writeUploadMeta(hash16, meta);
+    await writeUploadPdfIfAbsent(hash16, Buffer.from("%PDF-1.4 p0-02 delete fixture"));
+    const key = uploadDocKey(ownerKey, hash16, 1, 2);
+    await writeUploadDoc(hash16, key, doc);
+
+    await deleteUpload(meta);
+
+    expect(existsSync(docPath(hash16))).toBe(false);
+    expect(existsSync(pdfPath(hash16))).toBe(false);
+    expect(existsSync(metaPath(hash16))).toBe(false);
+    // Nothing is served from memory once the upload is gone either.
+    expect(await readUploadDoc(hash16, key)).toBeNull();
+  });
+
+  it("is removed by the purge job with an expired upload, and swept when its upload is gone or blocked", async () => {
+    const expired = sha16(Buffer.from("p0-02: expired upload"));
+    const orphan = sha16(Buffer.from("p0-02: orphaned sidecar"));
+    const blocked = sha16(Buffer.from("p0-02: blocked upload"));
+    const live = sha16(Buffer.from("p0-02: live upload"));
+    writtenHashes.push(expired, orphan, blocked, live);
+    const base = { fileName: "paper.pdf", title: "A Real Paper", uploadedAt: "2026-09-15T00:00:00.000Z",
+      textStatus: "ok" as const, status: "ready" as const, revision: 1, ownerKey };
+    await writeUploadMeta(expired, { ...base, hash16: expired, expiresAt: new Date(Date.now() - 1000).toISOString() });
+    await writeUploadMeta(live, { ...base, hash16: live, expiresAt: new Date(Date.now() + 86_400_000).toISOString() });
+    await writeUploadMeta(blocked, { hash16: blocked, fileName: "", title: "", uploadedAt: base.uploadedAt,
+      textStatus: "empty", status: "blocked", ownerKey });
+    for (const hash16 of [expired, orphan, blocked, live]) {
+      await writeUploadDoc(hash16, uploadDocKey(ownerKey, hash16, 1, 2), doc);
+    }
+
+    await purgeExpiredUploads();
+
+    expect(existsSync(docPath(expired))).toBe(false);
+    expect(existsSync(docPath(orphan))).toBe(false);
+    expect(existsSync(docPath(blocked))).toBe(false);
+    // A live upload keeps the text Peer already read out of it.
+    expect(existsSync(docPath(live))).toBe(true);
+  });
+});
+
+// P0-03: the upload directory used to be anchored on the Python text helper
+// (`scripts/extract_pdf_text.py`) being present under the web root. That
+// helper is deleted; the anchor is the web app's own `next.config.ts`, so
+// the dev server started from the repo root and the test runner started
+// from `web/` still agree on one `web/.local-data/uploads`.
+describe("resolveWebRoot / UPLOAD_DIR (P0-03)", () => {
+  const webRoot = path.resolve(fileURLToPath(new URL("../../../", import.meta.url)));
+
+  it("finds web/ from web/ itself and from the repository root", () => {
+    expect(resolveWebRoot(webRoot)).toBe(webRoot);
+    expect(resolveWebRoot(path.dirname(webRoot))).toBe(webRoot);
+  });
+
+  it.skipIf(Boolean(process.env.PEER_PRIVATE_UPLOAD_DIR))("puts uploads under web/.local-data/uploads", () => {
+    expect(UPLOAD_DIR).toBe(path.join(webRoot, ".local-data", "uploads"));
+  });
 });
 
 describe("sha16 / uploadId / bareUploadId", () => {
@@ -48,6 +161,25 @@ describe("sha16 / uploadId / bareUploadId", () => {
   it("rejects an id that isn't upload-shaped", () => {
     expect(bareUploadId("openalex:W123")).toBeNull();
     expect(bareUploadId("upload:tooshort")).toBeNull();
+  });
+
+  // P0-05 (§1e.1, A's F1): one rule decides "is this an upload id", and it
+  // is exact. `bareUploadId` used to match case-insensitively while the
+  // owner check in front of it tested `startsWith("upload:")`, so
+  // `UPLOAD:<hash16>` skipped the check and was still read from disk. Only
+  // the canonical id — the lower-case prefix and lower-case hex `sha16`
+  // produces — is an upload; any other spelling of the prefix is a claim to
+  // be refused (`claimsUploadId`), never a public id.
+  it("accepts only the canonical lower-case id, and knows a non-canonical spelling claims to be one", () => {
+    const hash16 = sha16(Buffer.from("p0-05 canonical id"));
+    expect(bareUploadId(`upload:${hash16}`)).toBe(hash16);
+    for (const variant of [`UPLOAD:${hash16}`, `Upload:${hash16}`, `upload:${hash16.toUpperCase()}`, ` upload:${hash16}`, `upload:${hash16} `]) {
+      expect(bareUploadId(variant)).toBeNull();
+      expect(claimsUploadId(variant)).toBe(true);
+    }
+    expect(claimsUploadId(`upload:${hash16}`)).toBe(true);
+    expect(claimsUploadId("openalex:W123")).toBe(false);
+    expect(claimsUploadId("arxiv:2401.00001")).toBe(false);
   });
 });
 

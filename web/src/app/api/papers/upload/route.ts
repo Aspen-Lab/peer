@@ -21,6 +21,7 @@ import {
   attachedUploadHash,
   deleteUpload,
   privateUploadHash,
+  claimsUploadId,
   readUploadMeta,
   purgeExpiredUploads,
   listUploadMeta,
@@ -35,8 +36,9 @@ import {
 } from "@/lib/papers/upload-store";
 
 export const dynamic = "force-dynamic";
-// Reading a full-length PDF's text takes a while — give the route the same
-// headroom the report route gives deep-report generation.
+// Reading a full-length PDF's text — pdf.js over up to 100 pages, in-process
+// since P0-03 — takes a while: give the route the same headroom the report
+// route gives deep-report generation.
 export const maxDuration = 120;
 
 const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
@@ -44,12 +46,12 @@ const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 // whatever body text the extractor returned (see the honesty note below),
 // not the raw PDF — absent if nothing matches, never invented.
 const DOI_RE = /\b10\.\d{4,9}\/[^\s"'<>]+/;
-// How much of the extracted body to search for a DOI mention. The PDF text
-// extractor's own section builder drops everything before the first
-// recognized heading (the title/header area, where a DOI most often appears
-// in print) — so this can miss a DOI a human would see immediately. That's a
-// known, accepted gap for this pass, not a bug: an absent DOI is honest,
-// never invented from a guess.
+// How much of the extracted body to search for a DOI mention — only when
+// page 1's own text (`page1Text`, searched instead whenever there is any) is
+// empty. The section builder drops everything before the paper's first
+// named part (the title/header area, where a DOI most often appears in
+// print), which is why page 1 is preferred. An absent DOI is honest, never
+// invented from a guess.
 const DOI_SEARCH_CHARS = 20_000;
 
 function stripTrailingPunctuation(raw: string): string {
@@ -61,10 +63,9 @@ function titleFromFileName(fileName: string): string {
   return withoutExtension || "Untitled PDF";
 }
 
-// 2-06 (Ruling 9, A2-01), step (b): mirrors extract_pdf_text.py's own
-// TITLE_STAMP_RE — a small shared pattern, duplicated deliberately rather
-// than round-tripped through a second process boundary (Python and TS each
-// need their own copy). Defense in depth: extract_title (step a) already
+// 2-06 (Ruling 9, A2-01), step (b): the same pattern as `pdf-outline.ts`'s
+// `STAMP` (P0-03; it mirrored the deleted Python helper's TITLE_STAMP_RE
+// before that). Defense in depth: step (a), the outline's title, already
 // excludes a stamp/DOI/URL line before picking the largest-font line, so
 // this only ever catches a shape that slipped past that filter.
 const TITLE_STAMP_RE = /^(?:arXiv:\d{4}\.\d{4,5}|10\.\d{4,9}\/|https?:\/\/)/i;
@@ -186,18 +187,19 @@ async function handleUpload(req: Request, staged: StagedRef): Promise<Response> 
   if (targetValue !== null) {
     try {
       target = JSON.parse(String(targetValue));
-      if (!target || typeof target.id !== "string" || target.id.length > 200 || !target.id.trim() || target.id.startsWith("upload:") ||
+      if (!target || typeof target.id !== "string" || target.id.length > 200 || !target.id.trim() || claimsUploadId(target.id) ||
           typeof target.title !== "string" || !target.title.trim() || target.title.length > 1000 ||
           (target.doi !== undefined && typeof target.doi !== "string")) throw new Error("invalid");
     } catch { return NextResponse.json({ error: "Invalid paper to supplement." }, { status: 400 }); }
   }
   const hash16 = privateUploadHash(ownerKey, bytes);
 
-  // Extract text now to derive title/DOI/abstract/page count. A failure here
-  // (the reader errored, a scanned PDF with no text layer) does not fail the
-  // upload — the file is still valid and downloadable either way; the
-  // reading page is what tells the reader their PDF has no readable text
-  // (1-28), not this route.
+  // Extract text now to derive title/DOI/abstract/page count — pdf.js over the
+  // PDF's bytes, the same reading `getFullText` gives the upload later (P0-03;
+  // there is no Python step any more). A failure here (a file pdf.js cannot
+  // open, a scanned PDF with no text layer) does not fail the upload — the
+  // file is still valid and downloadable either way; the reading page is what
+  // tells the reader their PDF has no readable text (1-28), not this route.
   const extracted = await extractPdfTextFromBytes(bytes);
   const doc = extracted.ok ? extracted.doc : undefined;
 

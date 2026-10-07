@@ -20,6 +20,7 @@ import { useRouter } from "next/navigation";
 import type { Paper } from "@/types";
 import { useFeedStore } from "@/store/feed";
 import { useProfileStore } from "@/store/profile";
+import { useReadingPrefsStore } from "@/store/reading-prefs";
 import { ApiError, apiFetch } from "@/lib/api";
 import { PageContainer } from "@/components/ui/page-container";
 import { useReveal } from "@/components/ui/reveal";
@@ -27,9 +28,10 @@ import { BackToFeedLink } from "@/components/navigation/back-to-feed-link";
 import { hasImmediateFeedHistoryEntry } from "@/lib/navigation/feed-history";
 import { NONE } from "@/lib/navigation/card-focus";
 import { paperNav } from "@/lib/reader/paper-nav";
-import { registerReaderActions, type ReaderActions } from "@/lib/reader/reader-keys";
+import { paperKeysFor, registerReaderActions, type ReaderActions } from "@/lib/reader/reader-keys";
 import { recommendationLine } from "@/lib/reader/recommendation";
 import { allocatePlateTerms } from "@/lib/papers/plate-terms";
+import { firstOccurrence, mergeTerms, paperDefinedTermsInReading, routeTermScope } from "@/lib/papers/terms";
 import { placeEvidence } from "@/lib/papers/evidence";
 import {
   PDF_NO_TEXT_MESSAGE,
@@ -49,7 +51,23 @@ import { SwipeableCard } from "@/components/cards/swipe-card";
 import { useResolvedFigure } from "@/components/paper-figure";
 import { TitleBlock } from "@/components/reader/title-block";
 import { PaperWords } from "@/components/reader/paper-words";
-import { PaperBody } from "@/components/reader/paper-body";
+import {
+  PaperBody,
+  mergeQuestionRoute,
+  measureBodyColumn,
+  questionRouteOverlay,
+  sameSelection,
+  type ExplainSelection,
+  type SelectionTarget,
+} from "@/components/reader/paper-body";
+import {
+  ExplainBox,
+  explainLlmOverride,
+  requestExplanation,
+  type AskResult,
+} from "@/components/reader/explain-box";
+import { moreReply, replyPair, requestReply, type ReplyResult } from "@/components/reader/explain-thread";
+import { sayPlainly, type PlainTarget, type PlainView } from "@/components/reader/plain-button";
 import { RecordBlock } from "@/components/reader/record-block";
 import { InYourLibrary } from "@/components/reader/in-your-library";
 import { KeyLegend } from "@/components/reader/key-legend";
@@ -65,6 +83,7 @@ import {
   FigureRegistry,
   pickRelated,
 } from "@/components/reader/report-sections";
+import { ForYourQuestions } from "@/components/reader/for-your-questions";
 import { NextRow } from "@/components/reader/next-row";
 import { LoadingMat } from "@/components/reader/loading-mat";
 import { ReaderToast, useReaderToast } from "@/components/reader/reader-toast";
@@ -77,10 +96,20 @@ import {
 import { THUMB_BAR_PX, THUMB_BAR_QUERY } from "@/components/shell/thumb-bar";
 import { PAGE_CLASS, SPREAD_GRID } from "@/components/reader/spread";
 import { useReading } from "@/components/reader/use-reading";
+import { useParagraphGuide } from "@/components/reader/use-paragraph-guide";
 import { PaperNotes } from "@/components/notes/paper-notes";
 import { PAPER_BODY_ID } from "@/components/reader/paper-body";
 import { PaperContents } from "@/components/reader/paper-contents";
-import { useModelReport } from "@/components/reader/use-model-report";
+import { QuestionField, focusFirstEmptyQuestion } from "@/components/reader/question-field";
+import { ReadingMapView, readingRoute } from "@/components/reader/reading-map";
+import { TermsStrip } from "@/components/reader/terms-strip";
+import { SectionLinks } from "@/components/reader/evidence-quote";
+import { settledQuestions, useReadingQuestionsHydrated, useReadingQuestionsStore } from "@/store/reading-questions";
+import { explanationFor, passageHash, useExplainThreadsStore, type ExplainTurn } from "@/store/explain-threads";
+import { paragraphKey, usePlainRewritesStore } from "@/store/plain-rewrites";
+import { PLAIN_DEFAULT_LEVEL, isPlainLevel, type PlainLevel } from "@/lib/papers/plain-levels";
+import { exampleQuestions } from "@/lib/reader/question-examples";
+import { deepReportRequested, useModelReport } from "@/components/reader/use-model-report";
 import { usePrivateSupplement } from "@/components/reader/use-private-supplement";
 import { PrivatePdfStatus } from "@/components/reader/private-pdf-status";
 import { UploadButton } from "@/components/briefing/upload-button";
@@ -573,6 +602,11 @@ function Reader({
   onRetryUpload: () => void;
 }) {
   const router = useRouter();
+  // P1-08 (§1a.6, §1f.19): a standalone uploaded PDF — the same test as the
+  // page's own `isUploadId`. Its page keeps no "Not interested, then next":
+  // no Skip button, no `x skip` in the legend, no `skip` for the keyboard,
+  // no swipe-left. A public paper with an attached PDF keeps all four.
+  const isUploadId = originalPaper.id.startsWith("upload:");
   const { paper, upload, ready, setUpload } = usePrivateSupplement(originalPaper);
   // UPLOAD-404 (§1bi.2): whether the server can even store a NEW private PDF
   // right now — gates only the "upload a PDF" entry point below, never an
@@ -622,10 +656,20 @@ function Reader({
   const nextPaper = nav.nextId ? (feedPapers.find((p) => p.id === nav.nextId) ?? null) : null;
 
   const { reading, fromServer } = useReading(paper);
-  const model = useModelReport({ paper: ready ? paper : undefined, profile });
+  // P1-05 (§1f.13): the reader's questions for this paper — a subscription,
+  // so the route follows the field as it writes through. P2-03 (§1g.11 b):
+  // the deep report is asked about the settled ones only (never the gist).
+  const asked = useReadingQuestionsStore((state) => state.byPaper[paper.id]);
+  const model = useModelReport({ paper: ready ? paper : undefined, profile, questions: settledQuestions(asked) });
   // Where Peer has read the paper, the text is already on the page — the
   // command and the contents are ways down to it, not ways to open it.
   const hasBody = (reading?.body?.length ?? 0) > 0;
+  // P1-04 (§1f.12): a claim's "§Heading" links to the body section of that
+  // name; the quotes read the headings from `SectionLinks` below.
+  const bodyHeadings = useMemo(() => (reading?.body ?? []).map((section) => section.heading), [reading]);
+  // P1-05 (§1f.13): those questions routed through the reading this page
+  // holds — here, in the browser, from the live `items`.
+  const tier0Route = useMemo(() => readingRoute(reading, asked), [reading, asked]);
   const readHere = useCallback(() => {
     const block = document.getElementById(PAPER_BODY_ID);
     if (!block) return;
@@ -637,6 +681,38 @@ function Reader({
     }
   }, []);
   const report = model.report;
+  // P2-04: all route consumers receive this one display route. Tier 0 still
+  // stands unchanged if there is no verified report/question overlay. P2-04b:
+  // the contents rail, the map and the body all take it as a `DrawRoute`
+  // (the shared `RouteResult` contract is untouched), so no cast is needed.
+  const route = useMemo(
+    () => mergeQuestionRoute(tier0Route, questionRouteOverlay(report?.forYourQuestions)),
+    [tier0Route, report?.forYourQuestions],
+  );
+
+  // P3-01 (§1h.1; §3d 13): the terms to know — the sentences the paper defines
+  // its own words in, read from the sections the route marks read or background
+  // (the methods and results when there is no such route), then the model's,
+  // ≤8 in all. From the reading this page holds, in the browser: no key, no
+  // request. The term the reader clicked is kept with its paper, so it never
+  // follows them to another, and its first use in the body is what the body
+  // marks.
+  const termScope = useMemo(() => routeTermScope(route), [route]);
+  const tier0Terms = useMemo(
+    () => (reading ? paperDefinedTermsInReading(reading, termScope) : []),
+    [reading, termScope],
+  );
+  const terms = useMemo(() => mergeTerms(tier0Terms, report?.terms), [tier0Terms, report?.terms]);
+  const [clickedTerm, setClickedTerm] = useState<{ paperId: string; term: string } | null>(null);
+  const markedTerm = clickedTerm?.paperId === paper.id ? clickedTerm.term : null;
+  const markTerm = useCallback(
+    (term: string | null) => setClickedTerm(term === null ? null : { paperId: paper.id, term }),
+    [paper.id],
+  );
+  const termMark = useMemo(
+    () => (markedTerm && reading ? firstOccurrence(reading.body ?? [], markedTerm) : null),
+    [markedTerm, reading],
+  );
 
   // S5: the "matrix" scramble reveal, restored. `revealingReportKey` is the
   // key of a report that just arrived fresh in this visit; while it matches
@@ -674,12 +750,174 @@ function Reader({
   // `use-model-report.ts`'s own `userProviderConfigured` was already reconciled
   // to this same `aiAvailability` call during this merge.)
   const authOutcome = useSyncGate((s) => s.authOutcome);
-  const providerConfigured = aiAvailability(profile, authOutcome) !== "none";
+  const aiMode = aiAvailability(profile, authOutcome);
+  const providerConfigured = aiMode !== "none";
+  // P3-03 (§1h.6; §1a.8): Peer's gist after each paragraph's opening in the map. One
+  // small model call per paper — made once the reading has a body, kept in this browser
+  // for a day, on the reader's own key — and absent without one. P3-05 (§1h.8 (1)): it
+  // reads the paper's body, so it is written only when a deep report is:
+  // `deepReportRequested`, the report hook's own predicate (the Deep report switch, or an
+  // attached PDF, and a model), fed what the report hook is fed — the paper's text leaves
+  // for a model on one switch. The reader's own key travels as the explain box sends it.
+  const paragraphGists = useParagraphGuide({
+    paper: ready ? paper : undefined,
+    hasBody,
+    enabled: providerConfigured && deepReportRequested(profile, ready ? paper : undefined, aiMode),
+    llmOverride: explainLlmOverride(profile),
+  });
   const projectText = useMemo(
     () => [profile.currentProject, profile.currentChallenges].filter(Boolean).join("\n"),
     [profile.currentProject, profile.currentChallenges],
   );
   const profileHasProject = projectText.trim().length > 0;
+
+  // P3-02 (§1h.2; §3d 14): "Explain this?". The body reports what the reader
+  // has selected (a target within one paragraph, once it holds still); the
+  // box offers the button and, on the click — the only thing that sends —
+  // asks for the explanation. One explanation is a small call, so a reader may
+  // ask whenever they have a model from anywhere (`providerConfigured`), deep
+  // reports on or not. The section's id is the id the server's own corpus gives
+  // the section: `reading.body[k].id`, the one the browser already holds. A kept
+  // answer is remembered per paper and passage, so the same passage opens at once.
+  const [explainTarget, setExplainTarget] = useState<ExplainSelection | null>(null);
+  const selectExplain = useCallback(
+    (next: ExplainSelection | null) => setExplainTarget((current) => (sameSelection(current, next) ? current : next)),
+    [],
+  );
+  const explainKept = useExplainThreadsStore((s) => s.byPaper[paper.id]);
+  const rememberExplanation = useExplainThreadsStore((s) => s.remember);
+  const addExplainTurns = useExplainThreadsStore((s) => s.addTurns);
+  const resetExplainThread = useExplainThreadsStore((s) => s.resetThread);
+  const explainKeptThread = useMemo(
+    () => (explainTarget ? explanationFor({ [paper.id]: explainKept ?? {} }, paper.id, explainTarget.passage) : undefined),
+    [explainTarget, explainKept, paper.id],
+  );
+  const explainCached = explainKeptThread?.answer;
+  const askExplain = useCallback(
+    async (selection: SelectionTarget): Promise<AskResult> => {
+      const sectionId = reading?.body?.[selection.sectionIndex]?.id;
+      if (!sectionId) return "unavailable";
+      const result = await requestExplanation({ paper, selection, sectionId, llmOverride: explainLlmOverride(profile) });
+      if (typeof result !== "string") {
+        try {
+          rememberExplanation(paper.id, { passage: selection.passage, sectionId, paragraphIndex: selection.paragraphIndex, answer: result });
+        } catch {
+          // A full or blocked browser store never costs the reader the answer.
+        }
+      }
+      return result;
+    },
+    [paper, profile, reading, rememberExplanation],
+  );
+
+  // P3-02b (§1h.3): the thread. A follow-up is sent only when the reader presses
+  // Enter or Send — the box calls this, and nothing else does. The reply joins the
+  // thread kept for the passage, with the message it answers, only once it has
+  // arrived (a failed send leaves the thread as it was); a full thread is dropped
+  // when its passage is opened again. `e` opens the box through `explainOpen`.
+  // P3-02c (§1a.11): the box's fourth argument is the reader's choice, for this one
+  // message, to search the web; the pair that is kept is `replyPair`'s — the same
+  // the box shows, the message marked only when the server says the reply searched.
+  const replyExplain = useCallback(
+    async (selection: SelectionTarget, thread: readonly ExplainTurn[], message: string, search?: boolean): Promise<ReplyResult> => {
+      const sectionId = reading?.body?.[selection.sectionIndex]?.id;
+      if (!sectionId) return "unavailable";
+      const result = await requestReply({ paper, selection, sectionId, search, thread, message, llmOverride: explainLlmOverride(profile) });
+      if (typeof result !== "string") {
+        try {
+          addExplainTurns(paper.id, passageHash(selection.passage), replyPair(message, search === true, result));
+        } catch {
+          // A full or blocked browser store never costs the reader the reply.
+        }
+      }
+      return result;
+    },
+    [paper, profile, reading, addExplainTurns],
+  );
+  // P3-07 (§1h.9 (2)): "Say more". The box hands back the thread before the reader's last
+  // message and that message; the request is the same one in the long form (`detail: true`, and
+  // never a search), and the reply joins the kept thread as Peer's turn alone (`moreReply`) —
+  // no second copy of the reader's message — once it has arrived.
+  const moreExplain = useCallback(
+    async (selection: SelectionTarget, thread: readonly ExplainTurn[], message: string): Promise<ReplyResult> => {
+      const sectionId = reading?.body?.[selection.sectionIndex]?.id;
+      if (!sectionId) return "unavailable";
+      const result = await requestReply({ paper, selection, sectionId, thread, message, detail: true, llmOverride: explainLlmOverride(profile) });
+      if (typeof result !== "string") {
+        try {
+          addExplainTurns(paper.id, passageHash(selection.passage), moreReply(result));
+        } catch {
+          // A full or blocked browser store never costs the reader the reply.
+        }
+      }
+      return result;
+    },
+    [paper, profile, reading, addExplainTurns],
+  );
+  const resetExplain = useCallback(
+    (selection: SelectionTarget) => {
+      try {
+        resetExplainThread(paper.id, passageHash(selection.passage));
+      } catch {
+        // A blocked browser store leaves the old thread; the box still opens fresh.
+      }
+    },
+    [paper.id, resetExplainThread],
+  );
+  const explainOpen = useRef<(() => void) | null>(null);
+  const openExplain = useCallback(() => explainOpen.current?.(), []);
+
+  // P4-01 (blueprint §3.6 ⑥; rulings §1h.12 (h); §3d 15): "Say it plainly". The body draws the
+  // control under each paragraph the route marks read, and the rewrite beside a paragraph that
+  // shows one — handed to it through one prop, and only for a reader with a model: without one the
+  // body is the body it was (the locked-block rule, §1b). The button is the one thing that sends:
+  // the paragraph the reader clicked, to the paper's plain route, on their own key
+  // (`explainLlmOverride`) — never before, never for another paragraph. A rewrite already kept in
+  // this browser for those words at that level opens with no request; `u` takes the latest back
+  // (`undoOrToggleRead` below); the level is the reading preferences', remembered across papers.
+  // What shows, what waits and what failed come from this paper's slice of the plain store.
+  const storedPlainLevel = useReadingPrefsStore((s) => s.plainLevel);
+  const setPlainLevel = useReadingPrefsStore((s) => s.setPlainLevel);
+  const plainLevel = isPlainLevel(storedPlainLevel) ? storedPlainLevel : PLAIN_DEFAULT_LEVEL;
+  const plainKept = usePlainRewritesStore((s) => s.byPaper[paper.id]);
+  const plainShowing = usePlainRewritesStore((s) => s.showing[paper.id]);
+  const plainBusy = usePlainRewritesStore((s) => s.busy[paper.id]);
+  const plainNotices = usePlainRewritesStore((s) => s.notices[paper.id]);
+  const hidePlain = usePlainRewritesStore((s) => s.hide);
+  const plainShown = useMemo(() => {
+    const shown = new Map<string, string>();
+    for (const entry of plainShowing ?? []) {
+      const kept = plainKept?.[entry.key]?.[entry.level];
+      if (kept) shown.set(entry.key, kept.plain);
+    }
+    return shown;
+  }, [plainKept, plainShowing]);
+  const onPlainToggle = useCallback(
+    (target: PlainTarget) => {
+      const key = paragraphKey(target.sectionId, target.paragraphIndex);
+      if (plainShown.has(key)) hidePlain(paper.id, key); else void sayPlainly({ paper, target, level: plainLevel, llmOverride: explainLlmOverride(profile) });
+    },
+    [paper, profile, plainLevel, plainShown, hidePlain],
+  );
+  const onPlainLevel = useCallback(
+    (target: PlainTarget, level: PlainLevel) => {
+      setPlainLevel(level);
+      if (plainShown.has(paragraphKey(target.sectionId, target.paragraphIndex))) void sayPlainly({ paper, target, level, llmOverride: explainLlmOverride(profile) });
+    },
+    [paper, profile, plainShown, setPlainLevel],
+  );
+  const plainView = useMemo<PlainView>(
+    () => ({
+      level: plainLevel,
+      shown: plainShown,
+      busy: new Set(plainBusy ?? []),
+      notices: new Map(Object.entries(plainNotices ?? {})),
+      onToggle: onPlainToggle,
+      onLevel: onPlainLevel,
+    }),
+    [plainLevel, plainShown, plainBusy, plainNotices, onPlainToggle, onPlainLevel],
+  );
+  const plainForBody = providerConfigured ? plainView : undefined;
 
   // The report's provenance in the shape the reading's sentence table takes;
   // the reading never imports the report type. `deepRequested` is the
@@ -720,6 +958,18 @@ function Reader({
     return allocatePlateTerms(pool, profile.researchTopics)[paper.id] ?? [];
   }, [feedPapers, nav.index, paper, profile.researchTopics]);
   const shared = useMemo(() => sharedTerms(plateTerms, projectText), [plateTerms, projectText]);
+  // P1-09 (user decision §1a.7, §1f.20): the example tags under the
+  // question field — the reader's questions on earlier papers, and their
+  // profile asked as questions. No shared-terms gate: the profile group
+  // shows whenever the profile has something in it.
+  const askedByPaper = useReadingQuestionsStore((state) => state.byPaper);
+  const examples = useMemo(
+    () => exampleQuestions({ profile, byPaper: askedByPaper, paperId: paper.id }),
+    [profile, askedByPaper, paper.id],
+  );
+  // The questions are read once the stores have loaded, so the field starts
+  // from what this browser kept.
+  const questionsHydrated = useReadingQuestionsHydrated();
 
   // The same args as the card and the plate, so all three read the one
   // `/api/figure` entry. The plate shows the figure; this reads its caption.
@@ -858,6 +1108,11 @@ function Reader({
     router.push(paperHref(nav.prevId) as Route);
   };
   const undoOrToggleRead = () => {
+    // P4-01 (§1h.12 (h)): the latest undoable act may be a plain rewrite the reader opened. It comes
+    // back first — the original stands alone again, the rewrite stays kept so the button shows it
+    // again with no request — and the key does nothing else this press. Only for a reader who can
+    // see one (a model is configured); otherwise it is what it always was.
+    if (providerConfigured && usePlainRewritesStore.getState().hideLatest(paper.id)) return;
     const store = useFeedStore.getState();
     if (store.pendingDismissal) store.undoDismiss();
     else if (store.readItems[paper.id]) store.markUnread(paper.id);
@@ -876,6 +1131,9 @@ function Reader({
       { ...reading, omitted: omittedForReader(reading, availability, profileHasProject) },
       report,
       sentences,
+      new Date(),
+      // P2-05: the settled questions, never the gist; the report's answers ride in `report`.
+      settledQuestions(asked),
     );
     clip
       .writeText(markdown)
@@ -908,10 +1166,10 @@ function Reader({
       next,
       prev,
       save,
-      skip,
+      ...(isUploadId ? {} : { skip }),
       like,
       undoOrToggleRead,
-      ...(hasBody ? { read: readHere } : {}),
+      ...(hasBody ? { read: readHere, ask: focusFirstEmptyQuestion, explain: openExplain } : {}),
       open,
       copy,
       back,
@@ -1039,6 +1297,7 @@ function Reader({
     // and the ONLY place in the product that sets it. Static in JSX rather
     // than written from an effect on purpose: written afterwards, the page
     // would paint once at full opacity and then snap to hidden.
+    <>
     <PageContainer
       width="spread"
       rhythm="reader"
@@ -1055,6 +1314,7 @@ function Reader({
           server reading, a model report) is `additions`: on the spread it
           lands only in the right column, so nothing can move the decision;
           in one column it is below the decision, as before. */}
+      <SectionLinks headings={bodyHeadings}>
       <ReaderLayout
         spread={spread}
         plate={
@@ -1065,9 +1325,8 @@ function Reader({
           <figure>
             <SwipeableCard
               onSwipeRight={save}
-              onSwipeLeft={skip}
+              {...(isUploadId ? {} : { onSwipeLeft: skip, leftLabel: SWIPE.notInterested })}
               rightLabel={paper.isSaved ? SWIPE.unsave : SWIPE.save}
-              leftLabel={SWIPE.notInterested}
               rightActive={paper.isSaved}
               className={plateIsFigure ? undefined : "shadow-card"}
             >
@@ -1094,6 +1353,22 @@ function Reader({
           )
         }
         title={<TitleBlock paper={paper} recommendation={recommendation} now={now} />}
+        ask={
+          // P1-03 (§1f.10): only where Peer has the paper's text — without
+          // it there is nothing to point a question at, and the Decision
+          // block already says why. One field per paper.
+          // P1-04 (§1f.12): the map under it, from the reading the server
+          // built (absent without a body).
+          hasBody ? (
+            <>
+              {questionsHydrated && (
+                <QuestionField key={paper.id} paperId={paper.id} examples={examples} standing={profile.standingQuestions} vague={route?.vague ?? false} />
+              )}
+              {reading.map && <ReadingMapView key={`map:${paper.id}`} map={reading.map} route={route} gists={paragraphGists} />}
+              <TermsStrip key={`terms:${paper.id}`} terms={terms} reading={reading} marked={markedTerm} onMark={markTerm} />
+            </>
+          ) : undefined
+        }
         words={
           <PaperWords
             endRef={wordsEndRef}
@@ -1115,7 +1390,7 @@ function Reader({
             isSaved={paper.isSaved}
             showAddKey={showAddKey}
             onSave={save}
-            onSkip={skip}
+            onSkip={isUploadId ? undefined : skip}
             onCopy={copy}
             onOpen={decide}
             onCopyDoi={copyDoi}
@@ -1130,12 +1405,18 @@ function Reader({
               }} /> : undefined}
           />
         }
-        contents={<PaperContents reading={reading} />}
+        contents={<PaperContents reading={reading} route={route} />}
         additions={
           <>
+            {report?.forYourQuestions && <ForYourQuestions report={report} map={reading.map} />}
+
             {/* The reader's own notes on this paper, and the way into them —
                 first, because taking notes is what follows keeping it. */}
-            <PaperNotes paper={paper} />
+            <PaperNotes
+              paper={paper}
+              questions={settledQuestions(asked)}
+              forYourQuestions={report?.forYourQuestions}
+            />
 
             {/* ── The report as it read before the rewrite, in its order ── */}
 
@@ -1242,7 +1523,7 @@ function Reader({
 
             {/* The paper, when Peer reached it: everything the extractor
                 read, under everything Peer had to say about it. */}
-            <PaperBody reading={reading} />
+            <PaperBody reading={reading} route={route} termMark={termMark} plain={plainForBody} onSelect={selectExplain} />
 
             {/* Last, and always there: the facts that need no key. On a page with no model
                 page it is the only block under the abstract, which is the
@@ -1259,8 +1540,17 @@ function Reader({
         }
         next={<NextRow nav={nav} next={nextPaper} />}
       />
+      </SectionLinks>
       <ReaderToast toast={toast} />
-      <KeyLegend />
+      <KeyLegend keys={paperKeysFor({ upload: isUploadId })} />
     </PageContainer>
+    {/* P3-02: outside the zoomed container — the button and the card are placed
+        in the window's pixels, which a `zoom` on an ancestor would scale — and
+        inside the section links, so the quotes' "§Heading" is a link as
+        everywhere. One per paper: a card never follows the reader to the next. */}
+    <SectionLinks headings={bodyHeadings}>
+      <ExplainBox key={paper.id} target={explainTarget} terms={terms} canAsk={providerConfigured} onAsk={askExplain} cached={explainCached} cachedTurns={explainKeptThread?.turns} onReply={replyExplain} onSayMore={moreExplain} onResetThread={resetExplain} column={measureBodyColumn} openRef={explainOpen} reading={reading} />
+    </SectionLinks>
+    </>
   );
 }

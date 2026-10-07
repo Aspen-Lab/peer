@@ -103,7 +103,7 @@ describe("pickFindings", () => {
 
   it("returns nothing when there is no results bucket", () => {
     const doc = docWith([
-      { heading: "1 Introduction", canonical: "introduction", text: "We report a 40% gain over the baseline in this work." },
+      { id: "s0", heading: "1 Introduction", canonical: "introduction", text: "We report a 40% gain over the baseline in this work." },
     ]);
 
     expect(pickFindings(doc)).toEqual([]);
@@ -111,8 +111,8 @@ describe("pickFindings", () => {
 
   it("falls back to the discussion when the results section is thin", () => {
     const doc = docWith([
-      { heading: "4 Results", canonical: "results", text: "Table 1 lists every run we made across the two datasets." },
-      { heading: "5 Discussion", canonical: "discussion", text: "Our model outperforms the previous best by 7 points on the held-out set. Latency also fell to 12 ms per query on one GPU." },
+      { id: "s0", heading: "4 Results", canonical: "results", text: "Table 1 lists every run we made across the two datasets." },
+      { id: "s1", heading: "5 Discussion", canonical: "discussion", text: "Our model outperforms the previous best by 7 points on the held-out set. Latency also fell to 12 ms per query on one GPU." },
     ]);
 
     const findings = pickFindings(doc);
@@ -122,7 +122,7 @@ describe("pickFindings", () => {
 
   it("never quotes a TeX macro or a math-alphabet token as prose", () => {
     const doc = docWith([
-      { heading: "4 Results", canonical: "results", text: "𝒫 \\mathcal{P} improves the score by 12% over the reference set. The plain baseline improves the score by 3% over the same reference set." },
+      { id: "s0", heading: "4 Results", canonical: "results", text: "𝒫 \\mathcal{P} improves the score by 12% over the reference set. The plain baseline improves the score by 3% over the same reference set." },
     ]);
 
     const findings = pickFindings(doc);
@@ -143,7 +143,7 @@ describe("pickFindings — the last two pools", () => {
   it("reads an unlabelled document's body when no section calls itself results", () => {
     // A maths paper: numbered sections, none of whose headings say "results".
     const doc = docWith([
-      { heading: "3 A Numerical Illustration", canonical: "body", text: "The proposed estimator reduces the error by 12% compared with the baseline on every run." },
+      { id: "s0", heading: "3 A Numerical Illustration", canonical: "body", text: "The proposed estimator reduces the error by 12% compared with the baseline on every run." },
     ]);
 
     const findings = pickFindings(doc);
@@ -154,7 +154,7 @@ describe("pickFindings — the last two pools", () => {
 
   it("never reads a finding out of an introduction", () => {
     const doc = docWith([
-      { heading: "1 Introduction", canonical: "introduction", text: "We report a 40% gain over the baseline in this work." },
+      { id: "s0", heading: "1 Introduction", canonical: "introduction", text: "We report a 40% gain over the baseline in this work." },
     ]);
 
     expect(pickFindings(doc)).toEqual([]);
@@ -162,7 +162,7 @@ describe("pickFindings — the last two pools", () => {
 
   it("quotes a figure caption when the running text has nothing, and cites the figure", () => {
     const doc = docWith(
-      [{ heading: "5 Results", canonical: "results", text: "Section 5.1 discusses the comparison of the four methods." }],
+      [{ id: "s0", heading: "5 Results", canonical: "results", text: "Section 5.1 discusses the comparison of the four methods." }],
       [CAPTION],
     );
 
@@ -177,7 +177,7 @@ describe("pickFindings — the last two pools", () => {
 
   it("prefers the paper's prose to its captions", () => {
     const doc = docWith(
-      [{ heading: "5 Results", canonical: "results", text: "Our model outperforms the previous best by 7 points on the held-out set." }],
+      [{ id: "s0", heading: "5 Results", canonical: "results", text: "Our model outperforms the previous best by 7 points on the held-out set." }],
       [CAPTION],
     );
 
@@ -187,6 +187,7 @@ describe("pickFindings — the last two pools", () => {
   it("does not quote rendered mathematics as prose", () => {
     const doc = docWith([
       {
+        id: "s0",
         heading: "4 Results",
         canonical: "results",
         text: "h ( t , x 1 ) = p ( X T ( 1 ) = - 1 | X t ( 1 ) = x 1 ) , ( 14 ) and d = 3 here.",
@@ -221,7 +222,7 @@ describe("pickMethod", () => {
 
   it("returns nothing without a methods bucket", () => {
     const doc = docWith([
-      { heading: "4 Results", canonical: "results", text: "We trained the model on the full dataset and report the result here." },
+      { id: "s0", heading: "4 Results", canonical: "results", text: "We trained the model on the full dataset and report the result here." },
     ]);
 
     expect(pickMethod(doc)).toEqual([]);
@@ -234,6 +235,7 @@ describe("blocks do not quote the same sentence twice", () => {
     const paper = { ...normalPaper, id: "openalex:W1" } as Paper;
     const doc = docWith([
       {
+        id: "s0",
         heading: "3 Experiments",
         canonical: "body",
         text: "We trained the model on 40,000 labelled samples and it outperforms the baseline by 7 points.",
@@ -258,8 +260,8 @@ describe("pickCaveats", () => {
 
   it("falls back to a hedge in the conclusion, attributed to it", () => {
     const doc = docWith([
-      { heading: "4 Results", canonical: "results", text: "Accuracy reached 91% on the held-out set." },
-      { heading: "6 Conclusion", canonical: "conclusion", text: "We presented a method for counterfactual generation. However, the approach cannot yet handle three-dimensional volumes, and scaling it remains open." },
+      { id: "s0", heading: "4 Results", canonical: "results", text: "Accuracy reached 91% on the held-out set." },
+      { id: "s1", heading: "6 Conclusion", canonical: "conclusion", text: "We presented a method for counterfactual generation. However, the approach cannot yet handle three-dimensional volumes, and scaling it remains open." },
     ]);
 
     const caveats = pickCaveats(doc);
@@ -271,7 +273,7 @@ describe("pickCaveats", () => {
 
   it("does not read a negated requirement as a caveat", () => {
     const doc = docWith([
-      { heading: "5 Discussion", canonical: "discussion", text: "Our method does not require labels, which keeps annotation cost at zero for every cohort." },
+      { id: "s0", heading: "5 Discussion", canonical: "discussion", text: "Our method does not require labels, which keeps annotation cost at zero for every cohort." },
     ]);
 
     expect(pickCaveats(doc)).toEqual([]);
@@ -291,8 +293,9 @@ describe("buildReading", () => {
     // though no field was added. The follow-up branch made this identical
     // change independently (same string, same reason); main's own later
     // 4 -> 5 (math rendering) is the one this merge keeps, since the
-    // follow-up branch never touched that shape.
-    expect(reading.version).toBe(5);
+    // follow-up branch never touched that shape. P1-04 (§1e.9, §1f.12):
+    // 5 -> 6 — body sections carry their id and the reading carries the map.
+    expect(reading.version).toBe(6);
     expect(reading.paperId).toBe("openalex:W7204479535");
     expect(reading.builtAt).toBe("2026-09-06T12:00:00.000Z");
     expect(reading.provenance).toEqual({
@@ -398,13 +401,18 @@ describe("buildReading", () => {
     expect(omittedReason(reading, "caveats")).toBe("paywalled");
   });
 
-  it("a PDF that only a self-hosted Peer can read is named as such", () => {
+  // P0-03: rewritten. This was "a PDF that only a self-hosted Peer can read
+  // is named as such", fed a `no-python` outcome — the reason the Python
+  // text helper gave when it could not run. Every PDF is read with pdf.js
+  // now and that reason no longer exists; what `pdf_unreadable_here` names
+  // is a PDF link whose text layer is empty (a scan), `no-text-layer`.
+  it("a PDF link whose text layer is empty (a scan) is named as such", () => {
     const fullText: FullTextResult = {
       status: "no_full_text",
       reason: "No legal full-text source returned readable body text.",
       attempts: [
         { link: { url: "https://doi.org/10.5281/zenodo.22316532", kind: "html", label: "doi", rank: 90 }, outcome: "no_full_text: Page reached but did not look like full text." },
-        { link: ZENODO_LINK, outcome: "source_unavailable: no-python" },
+        { link: ZENODO_LINK, outcome: "source_unavailable: no-text-layer" },
       ],
     };
 
@@ -416,20 +424,52 @@ describe("buildReading", () => {
     expect(reading.source?.label).toBe("Open at the publisher");
   });
 
-  it("a PDF whose extractor script is missing from the bundle is unreadable here too, not absent", () => {
-    // Vercel with the helper untraced: `pdf-text.ts` reports `no-extractor`.
-    // Mapping only `no-python` told the deployed reader the paper had no
-    // full text.
+  // P0-03: rewritten. This was "a PDF whose extractor script is missing
+  // from the bundle is unreadable here too, not absent", fed `no-extractor`
+  // (Vercel with the Python helper untraced). There is no helper to miss any
+  // more. The same intent — a PDF that was reached but yielded nothing is
+  // named, not reported as absent — now covers an outline with no sections;
+  // and a stray `no-python` / `no-extractor` is no longer a claim about the
+  // PDF at all.
+  it("a PDF whose text layer yields no sections is unreadable here too, not absent", () => {
     const fullText: FullTextResult = {
       status: "no_full_text",
       reason: "No legal full-text source returned readable body text.",
-      attempts: [{ link: ZENODO_LINK, outcome: "source_unavailable: no-extractor" }],
+      attempts: [{ link: ZENODO_LINK, outcome: "source_unavailable: no-sections" }],
     };
 
     const reading = buildReading(zenodoPaper, fullText, NOW);
 
     expect(reading.provenance.fullText).toBe("pdf_unreadable_here");
     expect(omittedReason(reading, "findings")).toBe("pdf_only_hosted");
+
+    for (const gone of ["no-python", "no-extractor"]) {
+      const stale = buildReading(
+        zenodoPaper,
+        { ...fullText, attempts: [{ link: ZENODO_LINK, outcome: `source_unavailable: ${gone}` }] },
+        NOW,
+      );
+      expect(stale.provenance.fullText).toBe("none");
+    }
+  });
+
+  it("P0-03: an uploaded scan read by pdf.js is pdf_empty, not 'unreadable here', though its reason names the empty text layer", () => {
+    // `extractPdfTextFromPath` marks a scan `pdf-empty: no-text-layer`. The
+    // `pdf-empty` marker is the upload's own, and it wins: the page shows the
+    // "no readable text" notice for an upload, as it always has.
+    const fullText: FullTextResult = {
+      status: "no_full_text",
+      reason: "pdf-empty: no-text-layer",
+      attempts: [{
+        link: { url: "/api/papers/upload/0123456789abcdef/file", kind: "pdf", label: "upload", rank: 0 },
+        outcome: "no_full_text: pdf-empty: no-text-layer",
+      }],
+    };
+
+    const reading = buildReading(zenodoPaper, fullText, NOW);
+
+    expect(reading.provenance.fullText).toBe("pdf_empty");
+    expect(omittedReason(reading, "findings")).toBe("pdf_empty");
   });
 
   it("1-28/1-31: a PDF with genuinely no extractable text is named distinctly from 'unreadable here'", () => {
@@ -756,7 +796,8 @@ describe("displayHeading", () => {
 
 
 describe("placeFigures", () => {
-  const section = (heading: string, ...paragraphs: string[]) => ({ heading, canonical: "body", paragraphs });
+  // P1-04: a ReadingSection carries its id; these tests do not look at it.
+  const section = (heading: string, ...paragraphs: string[]) => ({ id: `s:${heading}`, heading, canonical: "body", paragraphs });
   const cap = (n: number, extra: Record<string, unknown> = {}) => ({
     ordinal: n - 1,
     label: `Figure ${n}`,
@@ -812,6 +853,38 @@ describe("placeFigures", () => {
     expect(byLabel["Figure 3"].imageUrl).toBeUndefined();
   });
 
+  // P0-07 (§1e.5, A's F5): an uploaded PDF's captions carry pages since
+  // P0-03, and the page-image route serves public papers only — for an
+  // `upload:` id it answers 404, a wasted request per figure. Until
+  // BACKLOG-01 serves uploads, an upload's figure is its caption and page,
+  // with no picture URL; the page already sets that as "caption · p.N".
+  it("offers no page picture for an uploaded PDF — the caption and its page stand alone", () => {
+    const uploadPaper = { ...normalPaper, id: "upload:0123456789abcdef" } as Paper;
+    const doc = docWith(
+      [{ id: "s0", heading: "1 Results", canonical: "results", text: "Figure 1 shows the creep rate against boundary density." }],
+      [{ ordinal: 1, label: "Figure 1", caption: "Creep rate against boundary density.", page: 2, at: 0.5 }],
+    );
+    const pdfDoc = { ...doc, source: "pdf" as const, pageCount: 4 };
+    const uploadLink = { url: "/api/papers/upload/0123456789abcdef/file", kind: "pdf" as const, label: "upload" as const, rank: 0 };
+
+    const uploaded = buildReading(uploadPaper, fullTextOk(pdfDoc, uploadLink), NOW);
+    const figure = uploaded.body[0].figures?.[0];
+
+    expect(figure).toMatchObject({ label: "Figure 1", caption: "Creep rate against boundary density.", page: 2 });
+    expect(figure?.imageUrl).toBeUndefined();
+    expect(JSON.stringify(uploaded.body)).not.toContain("figure-image");
+
+    // Directly: an upload id gets no picture; a public paper's PDF still does.
+    const placed = placeFigures(
+      [section("A", "Figure 1 is here.")],
+      [cap(1, { page: 2 })],
+      { paperId: "upload:0123456789abcdef" },
+    );
+    expect(placed[0].figures?.[0].imageUrl).toBeUndefined();
+    expect(placeFigures([section("A", "Figure 1 is here.")], [cap(1, { page: 2 })], { paperId: "openalex:W1" })[0].figures?.[0].imageUrl)
+      .toBe(pdfFigureUrl("openalex:W1", 2));
+  });
+
   it("places each figure once, and leaves a section without figures untouched", () => {
     const placed = placeFigures([section("A", "Figure 1. Figure 1 again.")], [cap(1), cap(1)], null);
     expect(placed[0].figures).toHaveLength(1);
@@ -823,7 +896,7 @@ describe("placeFigures", () => {
 describe("equations in the body", () => {
   it("stands a lifted equation after the paragraph it followed, and drops the marker", () => {
     const doc = docWith([
-      { heading: "3 Attention", canonical: "methods", text: `We compute\n\n${blockMarker(0)}\n\nwhere d is the key size.\n\n${blockMarker(1)}` },
+      { id: "s0", heading: "3 Attention", canonical: "methods", text: `We compute\n\n${blockMarker(0)}\n\nwhere d is the key size.\n\n${blockMarker(1)}` },
     ]);
     doc.equations = [{ latex: "\\mathrm{softmax}(QK^T)V", number: "(1)" }, { text: "L = a + b" }];
     const reading = buildReading(normalPaper, fullTextOk(doc, ARXIV_HTML_LINK), NOW);
@@ -835,9 +908,49 @@ describe("equations in the body", () => {
   });
 
   it("keeps a marker with no equation behind it out of the text", () => {
-    const doc = docWith([{ heading: "A", canonical: "body", text: `Only words.\n\n${blockMarker(7)}` }]);
+    const doc = docWith([{ id: "s0", heading: "A", canonical: "body", text: `Only words.\n\n${blockMarker(7)}` }]);
     const reading = buildReading(normalPaper, fullTextOk(doc, ARXIV_HTML_LINK), NOW);
     expect(reading.body[0].paragraphs).toEqual(["Only words."]);
     expect(reading.body[0].equations).toBeUndefined();
   });
 });
+
+// P1-04 (§1f.12): the reading carries the map, computed on the server where
+// the document is — the browser never holds the document — and each body
+// section carries the section's id, so map row k, body section k and the
+// route's keys all name the same section.
+describe("buildReading — the reading map and section ids (P1-04)", () => {
+  it("carries the map of the body it renders, and each section's id", () => {
+    const reading = buildReading(zenodoPaper, fullTextOk(zenodoDoc, ZENODO_LINK), NOW);
+    const ids = zenodoDoc.sections.map((_, i) => `s${i}`).filter((_, i) => zenodoDoc.sections[i].canonical !== "abstract");
+
+    expect(reading.map).toBeDefined();
+    expect(reading.body.map((s) => s.id)).toEqual(ids);
+    expect(reading.map?.sections.map((s) => s.id)).toEqual(ids);
+    expect(reading.map?.sections.map((s) => s.heading)).toEqual(reading.body.map((s) => s.heading));
+    reading.body.forEach((section, k) => {
+      expect(reading.map?.sections[k].paragraphs.map((p) => p.index)).toEqual(section.paragraphs.map((_, i) => i));
+    });
+    expect(reading.map?.totalMinutes).toBeGreaterThan(0);
+  });
+
+  it("uses the document's own ids where it has them", () => {
+    const doc = docWith([
+      { id: "s4", heading: "4 Results", canonical: "results", text: "Accuracy reached 91% on the held-out set." },
+      { id: "s7", heading: "7 Conclusion", canonical: "conclusion", text: "We presented a method." },
+    ]);
+    const reading = buildReading(normalPaper, fullTextOk(doc, ARXIV_HTML_LINK), NOW);
+
+    expect(reading.body.map((s) => s.id)).toEqual(["s4", "s7"]);
+    expect(reading.map?.sections.map((s) => s.id)).toEqual(["s4", "s7"]);
+  });
+
+  it("has no map without a body: the abstract alone, or full text with nothing to render", () => {
+    expect("map" in buildReading(normalPaper, null, NOW)).toBe(false);
+    const abstractOnly = docWith([{ id: "s0", heading: "Abstract", canonical: "abstract", text: "Only an abstract." }]);
+    const reading = buildReading(normalPaper, fullTextOk(abstractOnly, ARXIV_HTML_LINK), NOW);
+    expect(reading.body).toEqual([]);
+    expect("map" in reading).toBe(false);
+  });
+});
+

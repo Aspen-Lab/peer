@@ -47,12 +47,12 @@ export interface UploadBackend {
 // some test runners start from different working directories (repo root vs.
 // `web/`), and `.local-data/uploads` itself is gitignored and may not exist
 // yet on a fresh checkout.
-function resolveWebRoot(): string {
-  const candidates = [process.cwd(), path.join(process.cwd(), "web")];
+export function resolveWebRoot(cwd: string = process.cwd()): string {
+  const candidates = [cwd, path.join(cwd, "web")];
   for (const candidate of candidates) {
     if (existsSync(path.join(candidate, "next.config.ts"))) return candidate;
   }
-  return process.cwd();
+  return cwd;
 }
 
 export const UPLOAD_DIR = process.env.PEER_PRIVATE_UPLOAD_DIR || path.join(resolveWebRoot(), ".local-data", "uploads");

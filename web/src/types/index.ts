@@ -46,6 +46,13 @@ export type FeedItemKind = "paper" | "event" | "job";
 
 export interface PreferenceLedgerEntry extends PreferenceConcept {
   uploads?: Record<string, { at: string; weight: number }>;
+  /**
+   * P5-02: a reader's settled question on one paper named this term. Keyed by
+   * an opaque per-paper key (`questionSourceKey`), one piece of evidence per
+   * paper, at a weight far below an upload's. Separate from likes and
+   * dislikes, so it can be taken out without touching them.
+   */
+  questions?: Record<string, { at: string; weight: number }>;
   positive: number;
   negative: number;
   lastPositiveAt?: string;
@@ -442,6 +449,14 @@ export interface UserProfile {
    * should rise to the top of the briefing.
    */
   currentChallenges?: string;
+  /**
+   * P5-01 (blueprint P5): questions the reader brings to most papers — up to
+   * five, 200 characters each, kept as typed. They show as one chip group on a
+   * paper's "Before you read" box and are never filled in. Browser only: the
+   * sync's payload leaves the field out (`remoteProfilePayload`). Read through
+   * `cleanQuestions`; absent means none.
+   */
+  standingQuestions?: string[];
   /** Local v1 selection metadata; profile API persistence remains a separate P1 item. */
   selectedSenseConcepts?: SelectedSenseConcept[];
   /** Canonical v1 retrieval card; server persistence is intentionally opt-in. */

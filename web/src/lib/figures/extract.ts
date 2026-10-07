@@ -1,6 +1,6 @@
 import { extractPdfCandidatesFromPath, tryPdfCandidates } from "./pdf-extract";
 import { classifyHardAccessStatus } from "@/lib/papers/paywall-status";
-import { bareUploadId, withUploadPdfFile } from "@/lib/papers/upload-store";
+import { bareUploadId, claimsUploadId, withUploadPdfFile } from "@/lib/papers/upload-store";
 import { ownedUpload } from "@/lib/papers/upload-access";
 
 const FETCH_TIMEOUT_MS = 7_000;
@@ -1346,7 +1346,9 @@ async function buildCandidatePool(input: FigureSourceInput): Promise<CachedPool>
 }
 
 async function getCandidatePool(input: FigureSourceInput): Promise<CachedPool> {
-  if (input.itemId.startsWith("upload:")) {
+  // P0-08 (§1e.8): any spelling of the prefix is a claim, refused unless it
+  // is the canonical id of an upload the caller owns — never a public pool.
+  if (claimsUploadId(input.itemId)) {
     const hash = bareUploadId(input.itemId);
     if (!hash || !(await ownedUpload(hash))) throw new Error("Private upload unavailable");
     return buildCandidatePool(input);
@@ -1476,7 +1478,9 @@ export async function extractFigure(input: FigureSourceInput): Promise<FigureRes
       pool.candidates,
       n,
       query,
-      input.itemId.startsWith("upload:"),
+      // A private upload with no keyword match takes its best-quality figure;
+      // P0-08: any spelling of the prefix is a claim to be one.
+      claimsUploadId(input.itemId),
     );
     if (selection.status === "found") {
       return candidateResult(selection);
@@ -1504,7 +1508,7 @@ export async function extractFigure(input: FigureSourceInput): Promise<FigureRes
   // candidate-pool path (same URL, same guard) had already rejected, which
   // would make the honesty guard inconsistent depending on which code path
   // happened to run.
-  if (!input.itemId.startsWith("upload:") && !query?.trim() && input.url) {
+  if (!claimsUploadId(input.itemId) && !query?.trim() && input.url) {
     // 5-06: compute this once per pool, then write the outcome back onto the
     // exact `pool` object `getCandidatePool` returned (the same reference
     // stored in `candidatePoolCache`) — a later query-less call for the same

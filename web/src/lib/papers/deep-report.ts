@@ -16,7 +16,20 @@
 //
 // For short papers (< ~10k chars body), Pass 1 is skipped and the raw text
 // is sent directly to Pass 2 to save the extra round-trip.
+//
+// P2-01 (rulings §1g.1, §1g.2, §1g.4):
+// - Pass 1 reads the paper by section (`[{ id, heading, text }]`) and answers
+//   by section (`{ text, sectionId }`). It stays question-free, so its answer
+//   is a function of the document and is kept in memory by the document's
+//   hash for an hour.
+// - Pass 1q, only when the reader asked something: the questions and the
+//   sections the Tier 0 route marks for them → up to eight verbatim sentences
+//   per question, each checked against the document. Kept by the document
+//   and the (sorted) questions for an hour.
+// - Every prompt is clipped in its body, never in its schema: the body is
+//   cut to fit before the schema, the rules and the questions are appended.
 
+import { createHash } from "node:crypto";
 import type { Paper } from "@/types";
 import { reportModelTier } from "@/lib/llm/provider-models";
 import type { DigestProvider } from "@/lib/llm/providers/types";
@@ -27,8 +40,9 @@ import {
   type PaperReportDepth,
   reviewPaperLabel,
 } from "./report";
-import { verifyReportEvidence } from "./evidence";
+import { locateSection, sectionCorpus, verifyReportEvidence, type SectionCorpusEntry } from "./evidence";
 import type { ExtractedDocument } from "./html-text";
+import { readableSections, readingMapOf, routeByQuestions } from "./reading-map";
 
 const PASS1_TRIGGER_CHARS = 10_000;
 // S3 (2026-09-15 ruling): ~400k chars (~100k tokens) is the accepted budget
@@ -39,13 +53,46 @@ const PASS1_TRIGGER_CHARS = 10_000;
 // buckets and this one wasn't among them).
 const PASS1_MAX_INPUT_CHARS = 400_000;
 const PASS2_MAX_INPUT_CHARS = 24_000;
+/** §1g.10 (a): the question evidence's own budget in Pass 2, serialised —
+ *  on top of the body's `PASS2_MAX_INPUT_CHARS`, never out of it. */
+const PASS2_QUESTION_EVIDENCE_CHARS = 12_000;
+/** §1g.1: the question pass reads at most this much body (the serialised sections). */
+const PASS1Q_MAX_BODY_CHARS = 60_000;
+/** §1g.1: sentences kept per question. */
+const MAX_RELEVANT_PER_QUESTION = 8;
+/** A sentence handed on is at most this long — Pass 1's own clip. */
+const MAX_SENTENCE_CHARS = 360;
+/** Defensive: the route caps the questions first (P2-03, §1g.4). */
+const MAX_QUESTIONS = 5;
+const MAX_QUESTION_CHARS = 200;
+/** §1g.4: the server's memory of Pass 1 and Pass 1q. */
+const CACHE_TTL_MS = 60 * 60 * 1000;
+const CACHE_MAX_ENTRIES = 32;
+
+/** One sentence Pass 1 picked, with the section it says it came from (when
+ *  that is a section of this document). */
+export interface SignalItem {
+  text: string;
+  sectionId?: string;
+}
 
 interface CompressedSignal {
-  noveltyClaims: string[];
-  keyResults: string[];
-  methodHighlights: string[];
-  priorWorkComparisons: string[];
+  noveltyClaims: SignalItem[];
+  keyResults: SignalItem[];
+  methodHighlights: SignalItem[];
+  priorWorkComparisons: SignalItem[];
 }
+
+/** A body section as a prompt carries it. */
+interface BodySection {
+  id: string;
+  heading: string;
+  text: string;
+}
+
+/** Pass 1q's answer, by the index of the question in the request: the
+ *  document's own sentences that bear on it, each with its section. */
+export type QuestionRelevant = Record<number, { text: string; sectionId: string }[]>;
 
 interface BuildDeepReportArgs {
   paper: Paper;
@@ -59,18 +106,16 @@ interface BuildDeepReportArgs {
   project?: string;
   doc: ExtractedDocument;
   provider: DigestProvider;
+  /**
+   * P2-01 (§1g.1): the reader's questions about this paper. The route trims,
+   * de-duplicates and caps them (P2-03); they are capped again here. With
+   * none, Pass 1q never runs and Pass 2's prompt has no question in it.
+   */
+  questions?: readonly string[];
 }
 
 function totalBodyChars(doc: ExtractedDocument): number {
   return doc.sections.reduce((sum, section) => sum + section.text.length, 0);
-}
-
-function sectionsByCanonical(doc: ExtractedDocument): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const section of doc.sections) {
-    out[section.canonical] = (out[section.canonical] ?? "") + " " + section.text;
-  }
-  return out;
 }
 
 /** The whole abstract as the mapper split it — the corpus a Tier-1 claim must quote. */
@@ -79,33 +124,128 @@ function fullAbstract(paper: Paper): string {
 }
 
 /**
- * Every canonical bucket the extractor found, in the paper's own section
- * order, minus the abstract (carried separately as `paper.summaryIntro` /
- * `summaryResultDiscussion` — a Tier-1 claim quotes those, not this).
+ * P2-01 (§1g.1): every section of the body, in the paper's own order, as
+ * `{ id, heading, text }` — the id the section has, or the one
+ * `withSectionIds` would give it (`s<index>`, as the reading map does).
  *
- * S3 (2026-09-15): this used to be a fixed destructure of four names
- * (introduction/methods/results/discussion), which silently dropped any
- * other bucket the canonicalizer produces — `conclusion` (a 34-page test
- * paper's entire Conclusions section, unread by pass 1 until this fix),
- * `limitations`, `related_work`, `supplementary`, and its `body` catch-all
- * for anything unmatched. Reading every key `sectionsByCanonical` actually
- * returns means a new bucket the canonicalizer grows later reaches pass 1
- * for free, with no second place to remember to update.
+ * The abstract is left out: it travels as `paper.abstract` (a Tier-1 claim
+ * quotes that). Every other section is in, whatever its bucket — the S3
+ * (2026-09-15) guarantee that a paper's conclusion, limitations or `body`
+ * catch-all reaches Pass 1, which a fixed list of bucket names once broke.
+ * A section with no text is not a section a model can read.
  */
-function nonAbstractSections(buckets: Record<string, string>): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const [canonical, text] of Object.entries(buckets)) {
-    if (canonical === "abstract") continue;
-    const trimmed = text.trim();
-    if (trimmed) out[canonical] = trimmed;
-  }
-  // A paper with no heading the canonicalizer recognizes as "introduction"
-  // (rare, but seen on some PDF extractions) still gets an opening section —
-  // the abstract stands in, as before this fix.
-  if (!out.introduction && buckets.abstract?.trim()) {
-    out.introduction = buckets.abstract.trim();
-  }
+function bodySections(doc: ExtractedDocument): BodySection[] {
+  const out: BodySection[] = [];
+  doc.sections.forEach((section, index) => {
+    if (section.canonical === "abstract" || !section.text.trim()) return;
+    out.push({ id: section.id ?? `s${index}`, heading: section.heading, text: section.text });
+  });
   return out;
+}
+
+/** `text` cut to at most `cap` characters, from its start. */
+function cutTo(text: string, cap: number): string {
+  return text.length > cap ? text.slice(0, cap) : text;
+}
+
+/**
+ * §1g.2: clip the body, never the schema. `texts` are the body's units (its
+ * sections, or Pass 1's sentences); `build` puts them back into the finished
+ * prompt — schema, rules and questions included — whose `size` must not pass
+ * `budget`. When it would, every unit longer than a common cap is cut to it,
+ * from its start, with the cap the largest that fits: the longest are cut
+ * first and furthest, and a short section is never touched. Nothing but the
+ * body's text changes. When even an empty body is over the budget (the fixed
+ * part alone is), the prompt goes with an empty body rather than a cut schema.
+ */
+function fitTexts<T>(
+  texts: readonly string[],
+  build: (texts: string[]) => T,
+  size: (built: T) => number,
+  budget: number,
+): T {
+  return build(fitCut(texts, (cut) => size(build(cut)), budget));
+}
+
+/** `fitTexts`' cut itself: the body's units as they fit `budget` under `size`. */
+function fitCut(texts: readonly string[], size: (texts: string[]) => number, budget: number): string[] {
+  if (size([...texts]) <= budget) return [...texts];
+  let lo = 0;
+  let hi = texts.reduce((longest, text) => Math.max(longest, text.length), 0);
+  while (lo < hi) {
+    const cap = Math.ceil((lo + hi) / 2);
+    if (size(texts.map((text) => cutTo(text, cap))) <= budget) lo = cap;
+    else hi = cap - 1;
+  }
+  return texts.map((text) => cutTo(text, lo));
+}
+
+/**
+ * §1g.10 (a): Pass 1q's sentences within their own budget. While the
+ * serialised block is over it, the question whose list is longest loses its
+ * last sentence — whole sentences only, never a cut inside one — so the
+ * lists come down together from the longest; a list left empty goes.
+ */
+function fitRelevant(relevant: QuestionRelevant, budget: number = PASS2_QUESTION_EVIDENCE_CHARS): QuestionRelevant {
+  const lists = new Map(Object.entries(relevant).map(([key, list]) => [key, [...list]]));
+  const size = () => JSON.stringify(Object.fromEntries(lists)).length;
+  while (lists.size > 0 && size() > budget) {
+    let longestKey: string | undefined;
+    let longest = -1;
+    for (const [key, list] of lists) {
+      const weight = JSON.stringify(list).length;
+      if (weight > longest) {
+        longest = weight;
+        longestKey = key;
+      }
+    }
+    if (longestKey === undefined) break;
+    const list = lists.get(longestKey) ?? [];
+    list.pop();
+    if (list.length === 0) lists.delete(longestKey);
+  }
+  return Object.fromEntries(lists) as QuestionRelevant;
+}
+
+function sha256(text: string): string {
+  return createHash("sha256").update(text).digest("hex");
+}
+
+// ── The server's memory of the first passes (§1g.4) ────────────────────
+//
+// In this process only, an hour, at most 32 entries each, the oldest
+// forgotten first. Pass 1's entry is keyed by the document alone and holds
+// only sentences of the document: nothing about the reader is in it. Pass
+// 1q's is keyed by the document and a hash of the sorted questions, and holds
+// sentences of the document by the questions' sorted position — the
+// questions' text is in neither the key nor the entry.
+
+interface Remembered<T> {
+  at: number;
+  value: T;
+}
+
+const PASS1_CACHE = new Map<string, Remembered<CompressedSignal>>();
+const PASS1Q_CACHE = new Map<string, Remembered<SortedRelevant>>();
+
+function recall<T>(cache: Map<string, Remembered<T>>, key: string): T | undefined {
+  const hit = cache.get(key);
+  if (!hit) return undefined;
+  if (Date.now() - hit.at > CACHE_TTL_MS) {
+    cache.delete(key);
+    return undefined;
+  }
+  return hit.value;
+}
+
+function remember<T>(cache: Map<string, Remembered<T>>, key: string, value: T): void {
+  cache.delete(key);
+  cache.set(key, { at: Date.now(), value });
+  while (cache.size > CACHE_MAX_ENTRIES) {
+    const oldest = cache.keys().next().value;
+    if (oldest === undefined) break;
+    cache.delete(oldest);
+  }
 }
 
 function safeJson(text: string): Record<string, unknown> | null {
@@ -126,56 +266,88 @@ function safeJson(text: string): Record<string, unknown> | null {
   return null;
 }
 
-function clampStringArray(value: unknown, max = 8, maxLen = 360): string[] {
-  if (!Array.isArray(value)) return [];
-  return value
-    .map((v) => (typeof v === "string" ? v.trim() : ""))
-    .filter((v) => v.length >= 12)
-    .slice(0, max)
-    .map((v) => (v.length > maxLen ? v.slice(0, maxLen) : v));
-}
-
-function parseCompressedSignal(text: string): CompressedSignal {
-  const json = safeJson(text);
-  if (!json) {
+/** An item's sentence and the id it names: a bare string (Pass 1's old
+ *  form) or `{ text, sectionId }`. */
+function itemOf(entry: unknown): { text: string; sectionId?: string } {
+  if (typeof entry === "string") return { text: entry.trim() };
+  if (entry && typeof entry === "object") {
+    const { text, sectionId } = entry as { text?: unknown; sectionId?: unknown };
     return {
-      noveltyClaims: [],
-      keyResults: [],
-      methodHighlights: [],
-      priorWorkComparisons: [],
+      text: typeof text === "string" ? text.trim() : "",
+      ...(typeof sectionId === "string" ? { sectionId } : {}),
     };
   }
+  return { text: "" };
+}
+
+/** §1g.1: Pass 1's sentences with their sections. A bare string is still
+ *  read; an id that is not a section of this document is dropped and the
+ *  sentence kept. */
+function signalItems(value: unknown, ids: ReadonlySet<string>, max = 6, maxLen = MAX_SENTENCE_CHARS): SignalItem[] {
+  if (!Array.isArray(value)) return [];
+  const out: SignalItem[] = [];
+  for (const entry of value) {
+    if (out.length >= max) break;
+    const { text, sectionId } = itemOf(entry);
+    if (text.length < 12) continue;
+    out.push({
+      text: text.length > maxLen ? text.slice(0, maxLen) : text,
+      ...(sectionId !== undefined && ids.has(sectionId) ? { sectionId } : {}),
+    });
+  }
+  return out;
+}
+
+const EMPTY_SIGNAL: CompressedSignal = {
+  noveltyClaims: [],
+  keyResults: [],
+  methodHighlights: [],
+  priorWorkComparisons: [],
+};
+
+/** Null when the answer is not JSON at all (then nothing is remembered). */
+function parseCompressedSignal(text: string, ids: ReadonlySet<string>): CompressedSignal | null {
+  const json = safeJson(text);
+  if (!json) return null;
   return {
-    noveltyClaims: clampStringArray(json.noveltyClaims, 6),
-    keyResults: clampStringArray(json.keyResults, 6),
-    methodHighlights: clampStringArray(json.methodHighlights, 6),
-    priorWorkComparisons: clampStringArray(json.priorWorkComparisons, 6),
+    noveltyClaims: signalItems(json.noveltyClaims, ids),
+    keyResults: signalItems(json.keyResults, ids),
+    methodHighlights: signalItems(json.methodHighlights, ids),
+    priorWorkComparisons: signalItems(json.priorWorkComparisons, ids),
   };
 }
 
-function buildPass1Prompt(paper: Paper, doc: ExtractedDocument): string {
-  const sections = nonAbstractSections(sectionsByCanonical(doc));
+/** One output item of a pass that quotes the paper by section. */
+const QUOTED_ITEM = (what: string) => ({
+  text: `${what}, copied verbatim`,
+  sectionId: "the `id` of the section the sentence is from",
+});
 
-  return JSON.stringify({
-    task:
-      "Extract sentences from this paper's body that carry SIGNAL — what is novel, what was found, what was used, and what differs from prior work. Use only sentences that appear in the supplied text; do not paraphrase. Quote each sentence exactly as written.",
-    paper: {
-      title: paper.title,
-      venue: paper.venue,
-    },
-    sections,
-    outputSchema: {
-      noveltyClaims: ["sentences from the paper that state what is new about this work — typically appear in intro and discussion (max 6)"],
-      keyResults: ["sentences stating concrete results, numbers, or measurements — typically in results/discussion (max 6)"],
-      methodHighlights: ["sentences naming the specific experiments, instruments, datasets, controls, ablations, measurements, simulations, or evaluation protocols used (max 6)"],
-      priorWorkComparisons: ["sentences that explicitly contrast this work with prior approaches (max 6)"],
-    },
-    rules: [
-      "Return ONLY valid JSON.",
-      "Each item must be a verbatim sentence from the supplied text.",
-      "Skip generic background sentences; only include sentences that show contribution, finding, method, or comparison.",
-    ],
-  });
+function buildPass1Prompt(paper: Paper, doc: ExtractedDocument): string {
+  const sections = bodySections(doc);
+  const assemble = (texts: string[]) =>
+    JSON.stringify({
+      task:
+        "Extract sentences from this paper's body that carry SIGNAL — what is novel, what was found, what was used, and what differs from prior work. Use only sentences that appear in the supplied sections; do not paraphrase. Quote each sentence exactly as written, with the id of the section it is from.",
+      paper: {
+        title: paper.title,
+        venue: paper.venue,
+      },
+      sections: sections.map((section, i) => ({ ...section, text: texts[i] })),
+      outputSchema: {
+        noveltyClaims: [QUOTED_ITEM("a sentence from the paper that states what is new about this work — typically in the introduction and discussion (max 6)")],
+        keyResults: [QUOTED_ITEM("a sentence stating a concrete result, number, or measurement — typically in results/discussion (max 6)")],
+        methodHighlights: [QUOTED_ITEM("a sentence naming a specific experiment, instrument, dataset, control, ablation, measurement, simulation, or evaluation protocol used (max 6)")],
+        priorWorkComparisons: [QUOTED_ITEM("a sentence that explicitly contrasts this work with prior approaches (max 6)")],
+      },
+      rules: [
+        "Return ONLY valid JSON.",
+        "Each item's `text` must be a verbatim sentence from the supplied sections.",
+        "Each item's `sectionId` is the `id` of the section the sentence was copied from.",
+        "Skip generic background sentences; only include sentences that show contribution, finding, method, or comparison.",
+      ],
+    });
+  return fitTexts(sections.map((section) => section.text), assemble, (prompt) => prompt.length, PASS1_MAX_INPUT_CHARS);
 }
 
 const PASS1_SYSTEM = [
@@ -184,30 +356,195 @@ const PASS1_SYSTEM = [
   "Do not paraphrase. Do not invent. Return only valid JSON.",
 ].join(" ");
 
+/**
+ * Pass 1, or its answer from the last hour for the same document (§1g.4).
+ * The prompt carries no question and nothing about the reader.
+ */
 async function runPass1(
   paper: Paper,
   doc: ExtractedDocument,
   provider: DigestProvider,
+  docHash: string,
 ): Promise<CompressedSignal> {
-  if (!provider.generateJsonText) {
-    return {
-      noveltyClaims: [],
-      keyResults: [],
-      methodHighlights: [],
-      priorWorkComparisons: [],
-    };
-  }
-  const prompt = buildPass1Prompt(paper, doc);
-  const clipped = prompt.length > PASS1_MAX_INPUT_CHARS
-    ? prompt.slice(0, PASS1_MAX_INPUT_CHARS)
-    : prompt;
+  if (!provider.generateJsonText) return EMPTY_SIGNAL;
+  const cached = recall(PASS1_CACHE, docHash);
+  if (cached) return cached;
   const raw = await provider.generateJsonText({
     systemPrompt: PASS1_SYSTEM,
-    userPrompt: clipped,
+    userPrompt: buildPass1Prompt(paper, doc),
     maxTokens: 1800,
     tier: "small",
   });
-  return parseCompressedSignal(raw);
+  const signal = parseCompressedSignal(raw, new Set(bodySections(doc).map((section) => section.id)));
+  if (!signal) return EMPTY_SIGNAL;
+  remember(PASS1_CACHE, docHash, signal);
+  return signal;
+}
+
+// ── Pass 1q: the questions' own sentences (§1g.1) ──────────────────────
+
+/** Sentences by the question's place in the sorted question list. */
+type SortedRelevant = { text: string; sectionId: string }[][];
+
+const PASS1Q_SYSTEM = [
+  "You are Peer, a careful research assistant.",
+  "Your job: for each of the reader's questions, find the sentences in the supplied sections that bear on it.",
+  "Copy each sentence verbatim. Do not paraphrase, do not invent, do not answer the questions. Return only valid JSON.",
+].join(" ");
+
+/**
+ * The sections the Tier 0 route marks `read` or `skim` for any question — the
+ * same route the page draws (`routeByQuestions` over the rendered body; the
+ * map is `buildReadingMap(doc)`, made from the one split) — or, when it marks
+ * none, every section.
+ */
+function questionSections(doc: ExtractedDocument, questions: readonly string[]): BodySection[] {
+  const rendered = readableSections(doc);
+  const route = routeByQuestions(readingMapOf(rendered), rendered, questions);
+  const marked = new Set<string>();
+  for (const entry of route.byQuestion) {
+    for (const [id, section] of Object.entries(entry.sections)) {
+      if (section.tier === "read" || section.tier === "skim") marked.add(id);
+    }
+  }
+  const all = bodySections(doc);
+  return marked.size > 0 ? all.filter((section) => marked.has(section.id)) : all;
+}
+
+function buildQuestionPrompt(paper: Paper, sections: BodySection[], questions: readonly string[]): string {
+  const fitted = fitTexts(
+    sections.map((section) => section.text),
+    (texts) => sections.map((section, i) => ({ ...section, text: texts[i] })),
+    (body) => JSON.stringify(body).length,
+    PASS1Q_MAX_BODY_CHARS,
+  );
+  return JSON.stringify({
+    task:
+      "For each of the reader's questions, list the sentences of the supplied sections that bear on it — that answer it, partly answer it, or state what it asks about. Copy each sentence exactly as written, with the id of its section. Do not answer the questions and do not write anything of your own.",
+    paper: { title: paper.title },
+    questions,
+    sections: fitted,
+    outputSchema: {
+      questionRelevant: {
+        "<the index of the question in `questions`, from 0>": [
+          QUOTED_ITEM(`a sentence that bears on that question (max ${MAX_RELEVANT_PER_QUESTION} per question)`),
+        ],
+      },
+    },
+    rules: [
+      "Return ONLY valid JSON.",
+      "Each `text` is a verbatim sentence from the supplied sections; each `sectionId` is the `id` of the section it was copied from.",
+      `At most ${MAX_RELEVANT_PER_QUESTION} sentences per question; an empty list is correct when no sentence bears on it.`,
+    ],
+  });
+}
+
+/**
+ * Pass 1q's answer, each sentence held to the document: a sentence no
+ * section holds verbatim is dropped and counted; a wrong `sectionId` is
+ * corrected to the section that holds it; a repeated sentence is kept once;
+ * at most eight per question. Null when the answer is not JSON at all.
+ */
+function parseQuestionRelevant(
+  text: string,
+  count: number,
+  corpus: readonly SectionCorpusEntry[],
+): { relevant: SortedRelevant; dropped: number } | null {
+  const json = safeJson(text);
+  if (!json) return null;
+  const relevant: SortedRelevant = Array.from({ length: count }, () => []);
+  let dropped = 0;
+  const raw = json.questionRelevant;
+  if (raw && typeof raw === "object") {
+    const lists: [string, unknown][] = Array.isArray(raw) ? raw.map((list, i) => [String(i), list]) : Object.entries(raw);
+    for (const [key, list] of lists) {
+      const q = Number(key);
+      if (!Number.isInteger(q) || q < 0 || q >= count || !Array.isArray(list)) continue;
+      const kept = relevant[q];
+      for (const entry of list) {
+        if (kept.length >= MAX_RELEVANT_PER_QUESTION) break;
+        const { text: sentence, sectionId } = itemOf(entry);
+        if (!sentence) continue;
+        const located = locateSection(sentence, corpus, sectionId);
+        if (!located) {
+          dropped += 1;
+          continue;
+        }
+        const clipped = sentence.length > MAX_SENTENCE_CHARS ? sentence.slice(0, MAX_SENTENCE_CHARS) : sentence;
+        if (kept.some((item) => item.text === clipped)) continue;
+        kept.push({ text: clipped, sectionId: located });
+      }
+    }
+  }
+  return { relevant, dropped };
+}
+
+/** The questions as Pass 1q sees and the cache keys them: once each, sorted. */
+function sortedQuestions(questions: readonly string[]): string[] {
+  return [...new Set(questions)].sort();
+}
+
+/**
+ * Pass 1q, or its answer from the last hour for the same document and the
+ * same questions in any order (§1g.4). Never throws: a failed pass leaves
+ * Pass 2 without `questionRelevant` and is not remembered. No log line
+ * carries a question — only the paper's id and counts.
+ */
+async function runQuestionPass(args: {
+  paper: Paper;
+  doc: ExtractedDocument;
+  questions: readonly string[];
+  provider: DigestProvider;
+  docHash: string;
+}): Promise<QuestionRelevant> {
+  const { paper, doc, questions, provider, docHash } = args;
+  const sorted = sortedQuestions(questions);
+  const key = `${docHash}|${sha256(sorted.join("\n"))}`;
+  let relevant = recall(PASS1Q_CACHE, key);
+  if (!relevant && provider.generateJsonText) {
+    try {
+      const raw = await provider.generateJsonText({
+        systemPrompt: PASS1Q_SYSTEM,
+        userPrompt: buildQuestionPrompt(paper, questionSections(doc, sorted), sorted),
+        maxTokens: 3000,
+        tier: "small",
+      });
+      const parsed = parseQuestionRelevant(raw, sorted.length, sectionCorpus(doc));
+      if (parsed) {
+        relevant = parsed.relevant;
+        remember(PASS1Q_CACHE, key, relevant);
+        if (parsed.dropped > 0) {
+          console.warn(
+            `[papers/deep-report] ${paper.id}: question pass dropped ${parsed.dropped} sentence(s) without verbatim support`,
+          );
+        }
+      }
+    } catch (err) {
+      // The error's message may quote the prompt, and the prompt holds the
+      // reader's questions: only the kind of failure is logged.
+      console.warn(
+        `[papers/deep-report] ${paper.id}: question pass failed (${err instanceof Error ? err.name : typeof err})`,
+      );
+    }
+  }
+  const out: QuestionRelevant = {};
+  const found = relevant;
+  if (found) {
+    questions.forEach((question, i) => {
+      const items = found[sorted.indexOf(question)];
+      if (items && items.length > 0) out[i] = items;
+    });
+  }
+  return out;
+}
+
+/** §1g.1 / P2-03: trimmed, empties dropped, at most five of at most 200 characters. */
+function cleanQuestions(questions: readonly string[] | undefined): string[] {
+  return (questions ?? [])
+    .map((question) => (typeof question === "string" ? question.trim() : ""))
+    .filter((question) => question.length > 0)
+    .slice(0, MAX_QUESTIONS)
+    .map((question) => question.slice(0, MAX_QUESTION_CHARS));
 }
 
 /**
@@ -224,9 +561,15 @@ function buildPass2Prompt(args: {
   doc: ExtractedDocument;
   signal: CompressedSignal | null;
   isReview: boolean;
+  /** P2-01 (§1g.1): the reader's questions, and Pass 1q's sentences for them
+   *  by question index — absent on a short paper, where Pass 1q does not run
+   *  and the whole body is here (§1g.10 b). P2-02 (§1g.3): with questions the
+   *  schema asks for the answers. */
+  questions: readonly string[];
+  questionRelevant?: QuestionRelevant;
 }): string {
-  const { paper, contextHint, project, doc, signal, isReview } = args;
-  const buckets = sectionsByCanonical(doc);
+  const { paper, contextHint, project, doc, signal, isReview, questions, questionRelevant } = args;
+  const sections = bodySections(doc);
 
   // Decide what body context to feed: compressed signal when available, else
   // every section verbatim — this branch only runs when pass 1 was skipped
@@ -235,14 +578,26 @@ function buildPass2Prompt(args: {
   // S3: previously four named buckets each clipped to 6000 chars, which
   // re-clipped an already-short paper's body for no reason and dropped the
   // same buckets buildPass1Prompt used to drop (conclusion, limitations, …).
-  const bodyPayload: Record<string, unknown> = signal
-    ? {
-        noveltyClaims: signal.noveltyClaims,
-        keyResults: signal.keyResults,
-        methodHighlights: signal.methodHighlights,
-        priorWorkComparisons: signal.priorWorkComparisons,
-      }
-    : nonAbstractSections(buckets);
+  // P2-01 (§1g.1): the sections go as `[{ id, heading, text }]`, and Pass 1's
+  // sentences keep their `sectionId`, with the outline (`sections: [{ id,
+  // heading }]`) beside them so an id names a part of the paper.
+  const groups = signal
+    ? [signal.noveltyClaims, signal.keyResults, signal.methodHighlights, signal.priorWorkComparisons]
+    : [];
+  const units: readonly { text: string }[] = signal ? groups.flat() : sections;
+  const bodyOf = (texts: string[]): unknown => {
+    let k = 0;
+    const put = <T extends { text: string }>(item: T): T => ({ ...item, text: texts[k++] });
+    if (!signal) return sections.map(put);
+    const [noveltyClaims, keyResults, methodHighlights, priorWorkComparisons] = groups.map((group) => group.map(put));
+    return {
+      noveltyClaims,
+      keyResults,
+      methodHighlights,
+      priorWorkComparisons,
+      sections: sections.map(({ id, heading }) => ({ id, heading })),
+    };
+  };
 
   const figureCaptions = doc.figureCaptions.slice(0, 8).map((cap) => ({
     label: cap.label,
@@ -282,7 +637,53 @@ function buildPass2Prompt(args: {
       }
     : {};
 
-  return JSON.stringify({
+  // P2-02 (§1g.3): asked only when the reader asked — the
+  // `relationToYourWork` pattern. Without questions none of this is in the
+  // prompt, and a report the model volunteers it in drops it (sanitizer).
+  const asking = questions.length > 0;
+  const evidenceBlock = questionRelevant ? fitRelevant(questionRelevant) : undefined;
+  const questionSchema = {
+    forYourQuestions: [
+      {
+        question: "the reader's question, copied back — one entry per question in `readerQuestions`, in the same order",
+        verdict: "answered | partly | not_addressed — whether THIS paper answers the question",
+        answers: [
+          {
+            text: "one plain sentence answering the question from this paper (max 3 items)",
+            evidence: evidenceRule,
+            sectionId: "the `id` of the section the evidence sentence is from",
+          },
+        ],
+        readNext: [
+          {
+            sectionId: "the `id` of a section to read for this question (max 4 items)",
+            why: "one line, at most 160 characters, on what the reader finds there",
+            kind: "answer | background",
+          },
+        ],
+      },
+    ],
+    terms: [
+      {
+        term: "a term the reader needs to follow these answers (max 8 items)",
+        definition: "one plain sentence, at most 160 characters",
+        evidence: "the paper's own sentence defining the term, copied character-for-character; omit the key when the paper does not define it",
+      },
+    ],
+  };
+  const questionRules = [
+    "`forYourQuestions` has one entry per question in `readerQuestions`, in the same order, with `question` copied back.",
+    "Each answer's `evidence` is one sentence copied character-for-character from the supplied text; omit an answer you cannot support that way.",
+    "Each `sectionId` is the `id` of a section of the paper as given in `body`.",
+    "`verdict` is `not_addressed` when this paper does not address the question; its `answers` is then empty.",
+    '`readNext.kind` is "answer" for a section that answers the question, and "background" for a section needed to understand an answer though it does not mention the question.',
+    "A term's `definition` is the paper's own where the paper defines the term, with that sentence as `evidence`; otherwise it is Peer's own words and carries no `evidence`.",
+    evidenceBlock
+      ? "`questionRelevant` holds sentences of the paper chosen for each question, by its index in `readerQuestions`; quote from them or from `body`."
+      : "The whole paper is in `body`; quote from there.",
+  ];
+
+  const assemble = (texts: string[], asked: boolean) => JSON.stringify({
     task: isReview
       ? "Create a structured Peer DEEP paper report for a REVIEW or SURVEY from the supplied paper body (or compressed signal) and abstract. List the body's major sections in `reviewContents.sections` using the paper's own section names. Every claim item carries an `evidence` sentence copied character-for-character from the supplied text; omit any item you cannot support that way. Do not fabricate numbers."
       : "Create a structured Peer DEEP paper report from the supplied paper body (or compressed signal) and abstract. Every claim item carries an `evidence` sentence copied character-for-character from the supplied text; omit any item you cannot support that way. Every key result also carries a `novelty` line saying what is new about THIS result compared to prior approaches. Do not fabricate numbers; if a number is not in the supplied text, omit it.",
@@ -295,8 +696,9 @@ function buildPass2Prompt(args: {
       venue: paper.venue,
       abstract: fullAbstract(paper),
     },
-    body: bodyPayload,
+    body: bodyOf(texts),
     figureCaptions,
+    ...(asked ? { readerQuestions: questions, ...(evidenceBlock ? { questionRelevant: evidenceBlock } : {}) } : {}),
     outputSchema: {
       skim: [
         {
@@ -340,6 +742,7 @@ function buildPass2Prompt(args: {
         evidence: evidenceRule,
       },
       ...relationSchema,
+      ...(asked ? questionSchema : {}),
     },
     rules: [
       "Return ONLY valid JSON.",
@@ -352,8 +755,15 @@ function buildPass2Prompt(args: {
       ...(project
         ? ["`relationToYourWork.basedOn` is the reader's project text copied back."]
         : []),
+      ...(asked ? questionRules : []),
     ],
   });
+  // §1g.2: the body is cut to fit; the schema and the rules are appended
+  // whole. §1g.10 (a): the body's budget is measured as if there were no
+  // questions, so they never cost it a character; the questions, their
+  // schema and rules, and the question evidence (its own 12 000) come on top.
+  const cut = fitCut(units.map((unit) => unit.text), (texts) => assemble(texts, false).length, PASS2_MAX_INPUT_CHARS);
+  return assemble(cut, asking);
 }
 
 const PASS2_SYSTEM = [
@@ -372,6 +782,8 @@ async function runPass2(args: {
   project?: string;
   doc: ExtractedDocument;
   signal: CompressedSignal | null;
+  questions: readonly string[];
+  questionRelevant?: QuestionRelevant;
   provider: DigestProvider;
 }): Promise<PaperReport | null> {
   if (!args.provider.generateJsonText) return null;
@@ -383,13 +795,12 @@ async function runPass2(args: {
     doc: args.doc,
     signal: args.signal,
     isReview: reviewPaperLabel(args.paper) !== null,
+    questions: args.questions,
+    questionRelevant: args.questionRelevant,
   });
-  const clipped = prompt.length > PASS2_MAX_INPUT_CHARS
-    ? prompt.slice(0, PASS2_MAX_INPUT_CHARS)
-    : prompt;
   const raw = await args.provider.generateJsonText({
     systemPrompt: PASS2_SYSTEM,
-    userPrompt: clipped,
+    userPrompt: prompt,
     // Room for the restored sections: novelty, per-result novelty, the fit
     // block and, on a review, its contents.
     maxTokens: 3200,
@@ -397,7 +808,8 @@ async function runPass2(args: {
   });
   const parsed = safeJson(raw);
   if (!parsed) return null;
-  return sanitizePaperReport(parsed);
+  // §1g.3: the answers are kept only against the request's own questions.
+  return sanitizePaperReport(parsed, { questions: args.questions });
 }
 
 /**
@@ -409,15 +821,26 @@ export async function generateDeepReport(
 ): Promise<PaperReport | null> {
   const { paper, contextHint, doc, provider } = args;
   const project = args.project?.trim() || undefined;
+  const questions = cleanQuestions(args.questions);
   if (!provider.generateJsonText) return null;
   if (doc.sections.length === 0) return null;
 
   try {
     const bodyChars = totalBodyChars(doc);
-    const signal =
-      bodyChars > PASS1_TRIGGER_CHARS
-        ? await runPass1(paper, doc, provider)
-        : null;
+    const runsPass1 = bodyChars > PASS1_TRIGGER_CHARS;
+    // §1g.10 (b): on a short paper Pass 2 reads every sentence, so there is
+    // no question pass either; the server verifies the answers anyway.
+    const runsQuestionPass = runsPass1 && questions.length > 0;
+    // §1g.4: the memory's key — the document itself, nothing about the reader.
+    const docHash = runsPass1 ? sha256(JSON.stringify(doc)) : "";
+    // Independent of each other, so side by side: Pass 1 never sees a
+    // question, Pass 1q runs only when there is one.
+    const [signal, questionRelevant] = await Promise.all([
+      runsPass1 ? runPass1(paper, doc, provider, docHash) : Promise.resolve(null),
+      runsQuestionPass
+        ? runQuestionPass({ paper, doc, questions, provider, docHash })
+        : Promise.resolve(undefined),
+    ]);
 
     const report = await runPass2({
       paper,
@@ -425,6 +848,8 @@ export async function generateDeepReport(
       project,
       doc,
       signal,
+      questions,
+      questionRelevant,
       provider,
     });
     if (!report) return null;
@@ -460,7 +885,15 @@ export async function generateDeepReport(
       },
     };
   } catch (err) {
-    console.error("[papers/deep-report] generation failed:", err);
+    // Only the kind of the error is logged, questions or not (§1g.4 — no
+    // question in any log line; §1h.16 (a)). The prompt holds the paper's
+    // text, which for a standalone upload is a private PDF's, and a provider's
+    // error may quote the prompt back in its message (the OpenAI provider
+    // keeps part of an error body there), so the message never reaches a log.
+    console.error(
+      "[papers/deep-report] generation failed:",
+      err instanceof Error ? err.name : typeof err,
+    );
     return null;
   }
 }

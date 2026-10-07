@@ -5,6 +5,7 @@
 
 import { quoteAttribution, type ReadingQuote } from "@/lib/papers/reading";
 import { BlockHeading, type BlockName } from "./block-heading";
+import { SectionAttribution } from "./evidence-quote";
 import { MathText } from "./math";
 
 export function QuoteList({ block, quotes }: { block: BlockName; quotes: ReadingQuote[] }) {
@@ -24,7 +25,13 @@ export function QuoteList({ block, quotes }: { block: BlockName; quotes: Reading
           >
             <MathText text={quote.text} />
             <span className="annotation text-meta text-text-faint ml-2">
-              {quoteAttribution(quote.from)}
+              {/* P1-05 (§1f.13 amendment): a section's "§Heading" goes to
+                  that section of the body; a figure's label stays text. */}
+              {quote.from.kind === "section" ? (
+                <SectionAttribution where={quote.from.heading}>{quoteAttribution(quote.from)}</SectionAttribution>
+              ) : (
+                quoteAttribution(quote.from)
+              )}
             </span>
           </li>
         ))}

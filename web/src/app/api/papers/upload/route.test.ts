@@ -151,6 +151,23 @@ describe("POST /api/papers/upload", () => {
     expect(mocks.writeUploadMeta).toHaveBeenCalledWith(body.id.slice(7), expect.objectContaining({ ownerKey: "test-owner", rightsVersion: "2026-09-19", paperIds: ["openalex:W123"] }));
   });
 
+  // P0-08 (§1e.8): an attachment target that claims to be an upload is
+  // refused in any spelling — the check used `startsWith("upload:")`, so
+  // `UPLOAD:<hash16>` was accepted as an ordinary paper to attach to.
+  it("refuses an attachment target that claims to be an upload, in any spelling", async () => {
+    for (const id of ["upload:0123456789abcdef", "UPLOAD:0123456789abcdef", "Upload:0123456789abcdef", " upload:0123456789abcdef"]) {
+      const form = new FormData(); form.set("file", pdfFile(pdfBytes()));
+      form.set("rightsVersion", "2026-09-19");
+      form.set("targetPaper", JSON.stringify({ id, title: "Solid electrolytes for lithium metal batteries" }));
+      const res = await POST(new Request("http://localhost/api/papers/upload", { method: "POST", headers: SAME_ORIGIN_HEADERS, body: form }));
+      expect(res.status).toBe(400);
+      expect(await res.json()).toEqual({ error: "Invalid paper to supplement." });
+    }
+    expect(mocks.extractPdfTextFromBytes).not.toHaveBeenCalled();
+    expect(mocks.writeUploadPdfIfAbsent).not.toHaveBeenCalled();
+    expect(mocks.attachUpload).not.toHaveBeenCalled();
+  });
+
   // 9-31 (A9-09): a partial-but-real title overlap (the "confirm" band, 0.35
   // <= overlap < 0.6) neither binds silently nor refuses outright — it asks
   // the client to confirm, and only writes anything once the client
@@ -354,7 +371,7 @@ describe("POST /api/papers/upload", () => {
       doc: {
         ...emptyDoc,
         sections: [
-          { heading: "Abstract", canonical: "abstract", text: "See https://doi.org/10.1000/abcd.123, for details." },
+          { id: "s0", heading: "Abstract", canonical: "abstract", text: "See https://doi.org/10.1000/abcd.123, for details." },
         ],
       },
     } satisfies PdfTextResult);
@@ -370,8 +387,8 @@ describe("POST /api/papers/upload", () => {
     expect(body.paper.doi).toBeUndefined();
   });
 
-  it("still succeeds when the extractor fails entirely (e.g. no Python on this machine)", async () => {
-    mocks.extractPdfTextFromBytes.mockResolvedValue({ ok: false, reason: "no-python" } satisfies PdfTextResult);
+  it("still succeeds when the extractor fails entirely (e.g. a scan with no text layer)", async () => {
+    mocks.extractPdfTextFromBytes.mockResolvedValue({ ok: false, reason: "no-text-layer" } satisfies PdfTextResult);
 
     const res = await postWith(pdfFile(pdfBytes(), "scanned.pdf"));
     expect(res.status).toBe(200);
@@ -394,7 +411,7 @@ describe("POST /api/papers/upload", () => {
       ok: true,
       doc: {
         ...emptyDoc,
-        sections: [{ heading: "Abstract", canonical: "abstract", text: "This paper studies things." }],
+        sections: [{ id: "s0", heading: "Abstract", canonical: "abstract", text: "This paper studies things." }],
       },
     } satisfies PdfTextResult);
 
@@ -404,7 +421,7 @@ describe("POST /api/papers/upload", () => {
   });
 
   it("2-05: marks textStatus 'empty' when the extractor fails entirely", async () => {
-    mocks.extractPdfTextFromBytes.mockResolvedValue({ ok: false, reason: "no-python" } satisfies PdfTextResult);
+    mocks.extractPdfTextFromBytes.mockResolvedValue({ ok: false, reason: "no-text-layer" } satisfies PdfTextResult);
 
     const res = await postWith(pdfFile(pdfBytes(), "scanned.pdf"));
     const body = await res.json();
@@ -415,7 +432,7 @@ describe("POST /api/papers/upload", () => {
     const longAbstract = "x".repeat(500);
     mocks.extractPdfTextFromBytes.mockResolvedValue({
       ok: true,
-      doc: { ...emptyDoc, sections: [{ heading: "Abstract", canonical: "abstract", text: longAbstract }] },
+      doc: { ...emptyDoc, sections: [{ id: "s0", heading: "Abstract", canonical: "abstract", text: longAbstract }] },
     } satisfies PdfTextResult);
 
     const res = await postWith(pdfFile(pdfBytes()));

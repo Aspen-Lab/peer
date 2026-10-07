@@ -6,7 +6,8 @@
 // PyMuPDF, a compiled extension; a deployed Peer has neither, so every
 // PDF-only paper read as "abstract only" in production while reading fine on
 // a developer's machine. It is plain TypeScript now, over the text layer
-// pdf.js hands back, and the same code runs in both places.
+// pdf.js hands back, and the same code runs in both places — for a PDF link
+// and, since P0-03, for an uploaded PDF too (the helper is deleted).
 //
 // What a PDF gives is words with a size, a font and a position — no
 // structure. The structure is inferred here, and only from evidence the page
@@ -93,8 +94,27 @@ const LINE_TOLERANCE = 2.2;
 const HEADING_MAX = 90;
 /** Text set this much larger than the body reads as a heading. */
 const HEADING_SIZE_RATIO = 1.12;
-/** Sections after one of these are the paper's apparatus, not its argument. */
-const TERMINAL = new Set(["references", "acknowledgements", "appendix"]);
+/** Sections after one of these are the paper's apparatus, not its argument.
+ *  Compared against what `canonicalizeHeading` returns. */
+const TERMINAL = new Set(["references"]);
+/**
+ * The apparatus headings no bucket can name safely, matched on the
+ * heading's own words (numbered or not).
+ *
+ * P0-01: `TERMINAL` used to hold "acknowledgements" and "appendix", which
+ * `canonicalizeHeading` never returns — it files "Acknowledgements" under
+ * `acknowledgments`, and strips "Appendix A Proofs" down to "proofs" →
+ * `body` — so the thank-yous and the proofs were read as the paper's
+ * argument. Ending at the `acknowledgments` bucket would be wrong too: it
+ * also holds "Funding", "Data availability" and "Competing interests",
+ * which some templates print on page 1, under the abstract.
+ */
+const APPARATUS_HEADING =
+  /^(?:(?:[A-Z]|[IVX]+|\d+)(?:\.\d+)*\.?\s+)?(?:acknowledge?ments?|appendix|appendices|supplementary\s+(?:materials?|information))\b/i;
+
+function endsTheArgument(heading: string, canonical: string): boolean {
+  return TERMINAL.has(canonical) || APPARATUS_HEADING.test(heading.trim());
+}
 /** The first of these ends the cover and starts the paper. */
 const FRONT_MATTER_END = new Set(["abstract", "introduction"]);
 
@@ -346,9 +366,19 @@ export function joinProse(lines: PdfLine[]): string {
   return paragraphs.join("\n\n");
 }
 
+/**
+ * A line that is a stamp, not a title: an arXiv identifier, a DOI, a URL.
+ * arXiv's own stamp runs up the margin and never reaches here (`readPages`
+ * drops sideways text); one set level and large still is not the title.
+ * P0-03: the upload title used to come from the Python helper, which had this
+ * guard; uploads are read here now. Same pattern as the upload route's own
+ * `TITLE_STAMP_RE`.
+ */
+const STAMP = /^(?:arXiv:\d{4}\.\d{4,5}|10\.\d{4,9}\/|https?:\/\/)/i;
+
 /** The paper's title: the largest words on its first page, above the body. */
 function titleOf(lines: PdfLine[], body: { size: number }): string | null {
-  const first = lines.filter((line) => line.page === 1 && line.size > body.size * 1.25);
+  const first = lines.filter((line) => line.page === 1 && line.size > body.size * 1.25 && !STAMP.test(line.text));
   if (first.length === 0) return null;
   const biggest = Math.max(...first.map((line) => line.size));
   const title = first
@@ -434,8 +464,9 @@ export function buildOutline(pages: PdfPageText[]): PdfOutline {
       heading = next;
       canonical = canonicalizeHeading(next);
       page = line.page;
-      // The argument ends at the references; what follows is apparatus.
-      if (TERMINAL.has(canonical)) done = true;
+      // The argument ends at the references, the acknowledgements or an
+      // appendix; what follows is apparatus.
+      if (endsTheArgument(next, canonical)) done = true;
       continue;
     }
     if (done) continue;

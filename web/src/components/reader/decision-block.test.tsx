@@ -2,6 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { DecisionBlock } from "./decision-block";
+import { ReaderCommands } from "./reader-commands";
 
 // S21 (round 7, item 7-03): B recommended (not mandated) a
 // renderToStaticMarkup smoke test of the icon row, the same shape
@@ -30,7 +31,7 @@ import { DecisionBlock } from "./decision-block";
 
 const NOOP = () => {};
 
-function renderDecisionBlock() {
+function renderDecisionBlock({ skip = true }: { skip?: boolean } = {}) {
   return renderToStaticMarkup(
     createElement(DecisionBlock, {
       sentences: ["Read from the abstract."],
@@ -39,7 +40,7 @@ function renderDecisionBlock() {
       isSaved: false,
       showAddKey: false,
       onSave: NOOP,
-      onSkip: NOOP,
+      ...(skip ? { onSkip: NOOP } : {}),
       onCopy: NOOP,
       onOpen: NOOP,
       onCopyDoi: NOOP,
@@ -64,5 +65,86 @@ describe("DecisionBlock — Fit button, default (server-snapshot) render", () =>
     const button = fitButton(renderDecisionBlock());
     expect(button).toContain('disabled=""');
     expect(button).toContain('title="Fit needs the two-column layout"');
+  });
+});
+
+// P1-08 (§1a.6, §1f.19): an uploaded PDF's page passes no `onSkip`, and the
+// block then has no Skip button; every other page keeps it.
+describe("DecisionBlock — the Skip button (P1-08)", () => {
+  const skipButton = (html: string) => /<button[^>]*>(?:(?!<\/button>).)*>x<\/kbd>(?:(?!<\/button>).)*Skip<\/button>/.test(html);
+
+  it("renders Skip, with its x key, when the page gives onSkip", () => {
+    expect(skipButton(renderDecisionBlock())).toBe(true);
+  });
+
+  it("renders no Skip button and no x key without onSkip; Save and Copy stay", () => {
+    const html = renderDecisionBlock({ skip: false });
+    expect(skipButton(html)).toBe(false);
+    expect(html).not.toContain(">Skip<");
+    expect(html).not.toMatch(/>x<\/kbd>/);
+    expect(html).toContain(">s</kbd>");
+    expect(html).toContain(">c</kbd>");
+  });
+
+  // The merge of main (PR #34) moved the commands into `ReaderCommands`, which
+  // is where the Skip button now lives, so the commands carry the rule
+  // themselves: no `onSkip`, no Skip button and no `x` key; with it, both.
+  it("ReaderCommands itself: no Skip button and no x key without onSkip, both with it", () => {
+    const commands = (onSkip?: () => void) =>
+      renderToStaticMarkup(
+        createElement(ReaderCommands, {
+          source: null,
+          isSaved: false,
+          onSave: NOOP,
+          ...(onSkip ? { onSkip } : {}),
+          onCopy: NOOP,
+          onOpen: NOOP,
+        }),
+      );
+
+    const without = commands();
+    expect(without).not.toContain(">Skip<");
+    expect(without).not.toMatch(/>x<\/kbd>/);
+    expect(without).toContain(">s</kbd>");
+    expect(without).toContain(">c</kbd>");
+
+    const withSkip = commands(NOOP);
+    expect(withSkip).toContain("Skip</button>");
+    expect(withSkip).toMatch(/>x<\/kbd>/);
+  });
+
+  // P6-01b (§1h.23): the verdict row has as many tracks as it has commands, so
+  // an uploaded PDF's page (no Skip) is not left with an empty third track.
+  it("ReaderCommands' verdict row: two tracks and Save, Copy without onSkip; three tracks and Save, Skip, Copy with it", () => {
+    const verdictRow = (onSkip?: () => void) => {
+      const html = renderToStaticMarkup(
+        createElement(ReaderCommands, {
+          source: null,
+          isSaved: false,
+          onSave: NOOP,
+          ...(onSkip ? { onSkip } : {}),
+          onCopy: NOOP,
+          onOpen: NOOP,
+        }),
+      );
+      // With no source, no read command and no upload row, the verdict row is
+      // the only element whose class list names a grid track count.
+      const row = html.match(/<div class="([^"]*\bgrid-cols-\d+[^"]*)">((?:(?!<\/div>).)*)<\/div>/);
+      if (!row) throw new Error(`Verdict row not found in: ${html}`);
+      const buttons = [...row[2].matchAll(/<button\b[^>]*>((?:(?!<\/button>).)*)<\/button>/g)].map((m) =>
+        m[1].replace(/<kbd\b[^>]*>(?:(?!<\/kbd>).)*<\/kbd>/g, ""),
+      );
+      return { classes: row[1].split(/\s+/), buttons };
+    };
+
+    const without = verdictRow();
+    expect(without.classes).toContain("grid-cols-2");
+    expect(without.classes).not.toContain("grid-cols-3");
+    expect(without.buttons).toEqual(["Save", "Copy"]);
+
+    const withSkip = verdictRow(NOOP);
+    expect(withSkip.classes).toContain("grid-cols-3");
+    expect(withSkip.classes).not.toContain("grid-cols-2");
+    expect(withSkip.buttons).toEqual(["Save", "Skip", "Copy"]);
   });
 });

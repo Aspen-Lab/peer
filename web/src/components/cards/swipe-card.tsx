@@ -19,9 +19,12 @@ import { lockAxis, progress, resist, shouldCommit, type Axis, type SwipeDirectio
 interface SwipeableCardProps {
   children: ReactNode;
   onSwipeRight: () => void;
-  onSwipeLeft: () => void;
+  /** Absent: the card has no left swipe at all — a left drag is held at the
+   *  start, nothing is revealed and nothing commits. P1-08 (§1a.6, §1f.19):
+   *  an uploaded PDF's page has nothing to dismiss. */
+  onSwipeLeft?: () => void;
   rightLabel: string;
-  leftLabel: string;
+  leftLabel?: string;
   /** Right reveal reflects the current state — "Save" or "Unsave". */
   rightActive?: boolean;
   className?: string;
@@ -32,6 +35,18 @@ interface SwipeableCardProps {
 // variable without a layout call, so they are restated here and only here.
 const SNAP_MS = 180;
 const FLY_MS = 180;
+
+/** How far the card follows the finger: rubber-banded past the threshold,
+ *  and held at the start to the left when there is no left action. */
+export function dragOffset(rawDx: number, leftEnabled: boolean): number {
+  return resist(leftEnabled ? rawDx : Math.max(0, rawDx));
+}
+
+/** What a release commits to — never left when there is no left action. */
+export function releaseDirection(rawDx: number, velocityX: number, leftEnabled: boolean): SwipeDirection | null {
+  const dir = shouldCommit(rawDx, velocityX);
+  return dir === "left" && !leftEnabled ? null : dir;
+}
 
 export function SwipeableCard({
   children,
@@ -86,7 +101,7 @@ export function SwipeableCard({
     }
     if (axis.current !== "x") return;
     last.current = { x: e.clientX, t: e.timeStamp };
-    setDx(resist(rawDx));
+    setDx(dragOffset(rawDx, Boolean(onSwipeLeft)));
   };
 
   const finish = (e: PointerEvent<HTMLDivElement>) => {
@@ -100,18 +115,18 @@ export function SwipeableCard({
     reset();
     if (!wasX) return;
 
-    const dir = shouldCommit(rawDx, vx);
+    const dir = releaseDirection(rawDx, vx, Boolean(onSwipeLeft));
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (dir === "left") {
       // Fly out, then let the store remove the card.
       if (reduce) {
         setDx(0);
-        onSwipeLeft();
+        onSwipeLeft?.();
       } else {
         setFlying("left");
         setDx(-e.currentTarget.clientWidth);
         window.setTimeout(() => {
-          onSwipeLeft();
+          onSwipeLeft?.();
           setFlying(null);
           setDx(0);
         }, FLY_MS);
@@ -134,7 +149,8 @@ export function SwipeableCard({
   };
 
   const p = progress(dx);
-  const towardRight = dx > 0;
+  // Without a left action the only reveal there is, is the right one.
+  const towardRight = dx > 0 || !onSwipeLeft;
   const transition = flying
     ? `transform ${FLY_MS}ms var(--ease-inout)`
     : settling

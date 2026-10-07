@@ -11,7 +11,7 @@ import { fetchPaperById } from "@/lib/papers/fetch-by-id";
 import { getFullText, type FullTextResult } from "@/lib/papers/full-text";
 import { buildReading } from "@/lib/papers/reading";
 import { rawItemToPaper } from "@/lib/feed/mapper";
-import { bareUploadId, uploadMetaToPaper } from "@/lib/papers/upload-store";
+import { bareUploadId, claimsUploadId, uploadMetaToPaper } from "@/lib/papers/upload-store";
 import { ownedUpload, PRIVATE_UPLOAD_HEADERS } from "@/lib/papers/upload-access";
 
 /**
@@ -69,6 +69,15 @@ export async function GET(
   // client-only reading that never runs buildReading's real pdf_empty
   // provenance logic at all — confirmed by execution.
   const uploadHash16 = bareUploadId(decodedId);
+  // P0-05 (§1e.1): an id that claims to be an upload in a spelling
+  // `bareUploadId` does not accept (`UPLOAD:<hash16>`) is not found — never
+  // looked up as an upload, and never handed to the public paper lookup.
+  if (!uploadHash16 && claimsUploadId(decodedId)) {
+    return NextResponse.json(
+      { error: "Paper not found" },
+      { status: 404, headers: NO_STORE_HEADERS },
+    );
+  }
   if (uploadHash16) {
     const meta = await ownedUpload(uploadHash16);
     if (!meta) {

@@ -11,7 +11,7 @@
 //
 //   [t] Read it here                    ← the first command, the accent
 //   [o] Open on arXiv                ↗  ← leaves the page
-//   [s] Save  ·  [x] Skip  ·  [c] Copy   ← the three verdicts, one row
+//   [s] Save  ·  [x] Skip  ·  [c] Copy   ← the verdicts in one row; Skip only where the page gives it (P1-08)
 //   ↑  Upload full article PDF          ← where the reader brings the text
 
 import type { ReactNode } from "react";
@@ -31,7 +31,7 @@ export const COMMAND = "eyebrow";
 const TOUCH_TARGET = "[@media(hover:none)]:min-h-11";
 /** A full-width row: key and word on the left edge, the way a menu reads. */
 const ROW = "w-full justify-start px-3";
-/** A cell of the verdict row: the three share the row equally. */
+/** A cell of the verdict row: the commands share the row equally, two or three. */
 const CELL = "w-full px-2";
 
 export function ReaderCommands({
@@ -50,7 +50,9 @@ export function ReaderCommands({
   source: PaperReading["source"];
   isSaved: boolean;
   onSave: () => void;
-  onSkip: () => void;
+  /** "Not interested, then next". P1-08 (§1f.19): absent on an uploaded
+   *  PDF's page, which then has no Skip button. */
+  onSkip?: () => void;
   onCopy: () => void;
   onOpen: () => void;
   uploadAction?: ReactNode;
@@ -94,7 +96,10 @@ export function ReaderCommands({
           <IconArrowUpRight size={12} className="ml-auto shrink-0" />
         </a>
       )}
-      <div className="grid grid-cols-3 gap-2">
+      {/* The row has as many tracks as it has commands: an uploaded PDF's page
+          has no Skip (P1-08), so its row is two tracks, not two cells and an
+          empty third. */}
+      <div className={`grid ${onSkip ? "grid-cols-3" : "grid-cols-2"} gap-2`}>
         <button
           type="button"
           onClick={onSave}
@@ -109,14 +114,16 @@ export function ReaderCommands({
           <Kbd pointerOnly>s</Kbd>
           {isSaved ? BUTTON.saved : BUTTON.save}
         </button>
-        <button
-          type="button"
-          onClick={onSkip}
-          className={cn(buttonVariants({ tone: "soft", size: "lg" }), COMMAND, CELL, TOUCH_TARGET)}
-        >
-          <Kbd pointerOnly>x</Kbd>
-          {BUTTON.skip}
-        </button>
+        {onSkip && (
+          <button
+            type="button"
+            onClick={onSkip}
+            className={cn(buttonVariants({ tone: "soft", size: "lg" }), COMMAND, CELL, TOUCH_TARGET)}
+          >
+            <Kbd pointerOnly>x</Kbd>
+            {BUTTON.skip}
+          </button>
+        )}
         <button
           type="button"
           onClick={onCopy}

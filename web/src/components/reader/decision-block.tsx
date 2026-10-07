@@ -65,7 +65,9 @@ export function DecisionBlock({
   /** No provider configured and the sentence names a key. */
   showAddKey: boolean;
   onSave: () => void;
-  onSkip: () => void;
+  /** "Not interested, then next". P1-08 (§1f.19): absent on an uploaded
+   *  PDF's page, which then has no Skip button. */
+  onSkip?: () => void;
   onCopy: () => void;
   onOpen: () => void;
   onCopyDoi: () => void;

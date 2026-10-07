@@ -273,7 +273,7 @@ function isGenericNumericFragment(raw: string): boolean {
   return isGenericNumericToken(raw.toLowerCase().replace(/\.+$/, ""));
 }
 
-function phrasesFromText(text: string | undefined, max = 8): string[] {
+export function phrasesFromText(text: string | undefined, max = 8): string[] {
   if (!text) return [];
   const chunks = text
     // NON-ASCII-TEXT (§1bo.8(b)): a CJK run (any of the four scripts, or

@@ -30,6 +30,13 @@ const SECTIONS = [
       "From then on these are stored against your account: the topics, methods, journals, school and lab you enter; the free-text project and challenges you write; your feed and digest settings; papers you save; papers you open; likes and dismissals; and digests that were sent to you.",
       "A like or a dismissal is kept as a small ledger of concepts, which is what makes tomorrow's briefing different from today's.",
       "Signing in carries what you had saved and opened in this browser into your account. Signing out clears this browser's copy, including the reading graph — which is kept only in this browser, never on Peer's servers, so it does not come back when you sign in again.",
+      // P4-00c (N7): written from `lib/papers/upload-store.ts` (the three objects, the
+      // record's fields, `deleteUpload`, the purge), `upload-access.ts` (the owner key is a
+      // digest of the account) and the upload route's 30 days, which the consent dialog
+      // also tells the reader. The test pins each clause. No "nowhere else": the server's
+      // memory holds parts of the text for an hour, which the sentence says.
+      "If you upload a private PDF, Peer's server keeps the PDF, a record of it (its file name, title and abstract, and when it expires) and the text Peer read out of it, in its own file storage against your account, for 30 days, after which a daily sweep removes them, or until you delete the upload. While you read it, the text also sits in the server's memory for up to an hour.",
+      "When you are signed in and save an uploaded paper, its record — its title, an excerpt of its abstract up to 400 characters, its keywords, its DOI, its page count and the link to its file — goes to Peer's server with your other saved papers, against your account; the paper's body text and any plain rewrite do not.",
     ],
   },
   {
@@ -37,6 +44,72 @@ const SECTIONS = [
     body: [
       "Notes and drafts you write from the Saved page are kept only in this browser. Peer never sends them to its servers, and signing in does not copy them into your account.",
       "Signing out leaves them in place — they were never an account's, so signing out has nothing to take back. On a shared computer, delete them before you leave. Clearing site data deletes them for good; export a note as Markdown to keep a copy.",
+    ],
+  },
+  {
+    // P5-01: written from `remoteProfilePayload` (profile-sync.tsx), which leaves the
+    // standing-questions field out, `logOut` (store/profile.ts), which resets the profile, and
+    // the chip group (`question-field.tsx`), which adds a line only when pressed. The test
+    // pins each clause to its line.
+    label: "Your standing questions",
+    body: [
+      "Standing questions you keep on your Profile stay in this browser. Peer's sync leaves them out, so they are never sent to its servers and signing in does not copy them into your account; signing out clears them with the rest of your profile. On a paper, one becomes a question only when you press it, and then it is like any other question you type there.",
+    ],
+  },
+  {
+    // P5-02: written from `question-field.tsx` (`syncQuestionTerms`: the settled questions' terms,
+    // less any ticked "Not for recommendations", handed to the profile's ledger once per settle),
+    // `lib/preferences/ledger.ts` (`applyQuestionTermSignal`: separate evidence of one small weight
+    // per paper under an opaque key, never the question), `remoteProfilePayload` (profile-sync.tsx:
+    // the ledger is part of what is sent), the profile route (the PUT replaces the ledger) and
+    // `logOut`. P5-04 (S1): and from `paperFeedRequestBody` / `opportunityRequestBody` (store/feed.ts:
+    // the ledger is in the body of each request for the briefing, signed in or not), the feed route's
+    // cleaner and the pipeline (the pool is scored without it; it is applied at read time and kept for
+    // no one). The test pins each clause to its line. It sits before "Your questions", whose
+    // entry is pinned as one paragraph followed by "Explain this".
+    label: "What your questions teach Peer",
+    body: [
+      "When your questions on a paper settle, the specific words in them — one word at a time, in lower case, without common words and the words every question uses — are added to the small ledger Peer keeps of what interests you, at a small fraction of the weight of a like, so one question changes nothing you can see. The question itself is never added, and neither is anything from the paper. Tick “Not for recommendations” beside a question and its words are not added, or are taken out at once if they were. The ledger is part of your profile and is kept in this browser, and it reaches Peer's server in two ways. It travels in each request for your briefing, signed in or not, so Peer can rank papers for you: the server uses these words for that one request and keeps none of it, so for a reader who is not signed in nothing of it is stored. When you are signed in it is also stored against your account with the rest of your profile, so these words go with it, each filed under a marker that stands for the paper, not its name. The next sync replaces your account's copy, and signing out clears it from this browser.",
+    ],
+  },
+  {
+    label: "Your questions",
+    body: [
+      "Questions you type on a paper page stay in this browser. When Peer writes a deep report for that paper, they travel with that one request to Peer's server and on to the model provider whose key you added, inside the prompts, and nowhere else, so the report can answer them; Peer does not log them or keep them.",
+    ],
+  },
+  {
+    // P3-02d (§1h.5): written from the explain route, `lib/papers/explain.ts` and
+    // `store/explain-threads.ts`. The test pins every word; a change to what is
+    // sent or kept changes this entry in the same commit. P3-07 (§1h.9 (5)): "Say
+    // more" is the third thing that sends, and a reply is short unless the reader asks
+    // for more. P4-00: the answer runs on the reader's own key, and Peer counts nothing
+    // against an allowance, so the two paragraphs about the count and the usage row
+    // are gone.
+    label: "Explain this",
+    body: [
+      "Selecting a passage sends nothing, and neither does typing in the box. Peer sends a request only when you click “Explain this?” (or press E on a selection) and, for a follow-up, when you press Enter or Send, or Say more under a reply. A reply is short unless you ask for more, in your own words or with Say more. The request carries the passage you selected, the paragraph it sits in and the one on either side of it, the paper's title and abstract, one line for each section of the paper's map and, for a follow-up, the messages of that thread. The request also carries the paper's record as this page holds it — its title, authors, venue, where it came from and your save and feedback marks on it — so Peer's server can find the paper; of that record the model sees only the title and the abstract. The answer is written with your own model key, which goes with the request.",
+      "The request goes to Peer's server and on to the model provider whose key you added. The answer runs on your own key, and it is short unless you ask for more.",
+      "On a follow-up you can turn on “Search the web” for that one message. It is off every time the box opens and never turns on by itself. With it on, the provider may run a web search to write that reply: Gemini does this with Google Search, and with any other provider the reply is written without a search and the box says so. A message answered with a search carries the mark “searched the web”, and Peer shows no link to anything the search found.",
+      "Peer's server keeps three things. First, each answer it gives, in memory, for up to an hour, so the same passage asked about again is answered without another model call; it is filed under hashes of the document, the passage and the thread, never under who asked.",
+      "Second, one log line for each answer it gives: how many characters went out and came back and, if you are signed in, a shortened hash of your account id — never the passage, the paper's words or anything you wrote.",
+      "Third, if you are signed in, a count of this account's requests this hour, a number and nothing else, kept so the hourly limit can hold; it holds no text.",
+      "In this browser, and only here, Peer keeps what you asked about, for each paper: the passage, where it sits in the paper, the answer and the thread. For an uploaded PDF the passage is the PDF's own text. None of it is stored against your account, and signing in does not copy it there. A passage you have asked about before opens from this copy with no new request. Signing out leaves it in place; clearing this site's data in your browser removes it.",
+    ],
+  },
+  {
+    // P4-01 (blueprint §3.6; §1h.12 (h)): written from the plain route (`app/api/papers/[id]/plain/route.ts`),
+    // the button's request (`components/reader/plain-button.tsx`) and `store/plain-rewrites.ts`. The test pins
+    // every sentence to the line that makes it true; a change to what is sent or kept changes this entry in the
+    // same commit. As with "Explain this": the rewrite runs on the reader's own key, Peer counts nothing against
+    // an allowance, and the server's memory and its log line hold hashes and sizes only.
+    label: "Say it plainly",
+    body: [
+      "Nothing is sent until you click “Say it plainly” under a paragraph. The request carries the one paragraph you clicked, where it sits in the paper, the level you chose and your own model key, and goes to Peer's server and on to the model provider whose key you added. It also carries what Peer's server needs to find the paper's text — the paper's id and title, its DOI and its links and, for an uploaded PDF, the upload's id — and not the abstract, the authors or your marks on the paper. Of all that, the model sees only the paper's title, the level and the paragraph. It never searches the web.",
+      "The button is not offered under a paragraph longer than 1,200 characters, because Peer rewrites no more than the first 1,200 characters of a paragraph and does not rewrite part of one. Such a paragraph is left as the paper has it, with nothing sent.",
+      "Choosing a level beside the button sends nothing, unless a rewrite is already showing for that paragraph: then it shows the paragraph at the new level, asking only if you have not had it at that level before.",
+      "Peer's server keeps three things. First, each rewrite it gives, in memory, for up to an hour, so the same paragraph at the same level is rewritten without another model call; it is filed under hashes of the document and the paragraph, and the level, never under who asked. Second, one log line for a request that reaches the paragraph: how many characters went out and came back and, if you are signed in, a shortened hash of your account id — never the paragraph, the rewrite or anything you wrote. Third, if you are signed in, a count of this account's requests this hour, a number and nothing else, kept so the hourly limit can hold; it holds no text.",
+      "In this browser, and only here, Peer keeps each rewrite you asked for, for each paper, paragraph and level, so a paragraph you have had said plainly at that level opens from this copy with no new request. For an uploaded PDF a rewrite is a paraphrase of the PDF's own text. None of it is stored against your account, and signing in does not copy it there. Which paragraphs show a rewrite now is not kept, so a reload shows the originals. The level you chose is kept in this browser with your other reading settings. Signing out leaves all of it in place; clearing this site's data in your browser removes it.",
     ],
   },
   {
@@ -59,7 +132,7 @@ const SECTIONS = [
     label: "Who else sees a request",
     body: [
       "Finding papers means asking the open sources: OpenAlex, arXiv, Crossref, Semantic Scholar, and the publisher or repository a paper's full text and figures live on. Those services see the query and the request, as they would for any reader.",
-      "The model provider whose key you added sees what a model request carries: your topics and a paper's title and abstract when the briefing is ranked or summarised, and a paper's text when a model report is written. Tavily sees your search terms only if you add a Tavily key yourself. Jev sees those papers and your project text only if you add a Jev key yourself. Resend sends the email digest if you turn one on. Supabase hosts the database and the sign-in. Vercel hosts the site and counts page views — Vercel Analytics records the page, not who you are.",
+      "The model provider whose key you added sees what a model request carries: your topics and a paper's title and abstract when the briefing is ranked or summarised, and a paper's text when a deep report is written, which happens when you turn on Deep report in your profile or attach a PDF to the paper; on that same condition, and never otherwise, the text is read once more to write the one-line gists in the paper's map. Tavily sees your search terms only if you add a Tavily key yourself. Jev sees those papers and your project text only if you add a Jev key yourself. Resend sends the email digest if you turn one on. Supabase hosts the database and the sign-in. Vercel hosts the site and counts page views — Vercel Analytics records the page, not who you are.",
       "Peer runs no advertising, sells nothing to anyone, and has no third-party trackers beyond the page counter named above.",
     ],
   },
@@ -102,7 +175,7 @@ export default function PrivacyPage() {
       ))}
 
       <p className="annotation text-text-faint mt-12">
-        Last changed 2026-10-06 · changes to this page ship in the{" "}
+        Last changed 2026-10-07 · changes to this page ship in the{" "}
         <Link href="/changelog" className="underline decoration-border-strong underline-offset-4 hover:text-heading">
           changelog
         </Link>

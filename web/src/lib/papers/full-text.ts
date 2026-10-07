@@ -6,7 +6,8 @@
 // is cleaner and cheaper to parse than PDF. PDF is the fallback.
 //
 // Output is cached per paper for 1 hour so repeated report renders / figure
-// binding share the same fetch.
+// binding share the same fetch. A private upload is never in that shared
+// cache: its text is kept for its owner alone (`uploadFullText`, P0-02).
 
 import {
   chooseHtmlExtractor,
@@ -16,8 +17,9 @@ import {
 import { classifyHardAccessStatus } from "./paywall-status";
 import { extractPdfTextFromBytes, tryExtractPdfText } from "./pdf-text";
 import { collectSourceLinks, type SourceLink } from "./source-links";
-import { bareUploadId, readUploadPdf } from "./upload-store";
+import { bareUploadId, claimsUploadId, readUploadDoc, readUploadPdf, uploadDocKey, writeUploadDoc, type UploadMeta } from "./upload-store";
 import { ownedUpload } from "./upload-access";
+import { UPLOAD_CONCEPT_EXTRACTION_VERSION } from "@/lib/preferences/upload-concepts";
 
 const FETCH_TIMEOUT_MS = 12_000;
 const MAX_HTML_BYTES = 4_000_000;
@@ -250,28 +252,46 @@ async function tryUploadLink(hash16: string): Promise<{ status: FullTextStatus; 
   return { status: "no_full_text", reason: result.reason ?? "PDF text extractor failed on this server." };
 }
 
-async function buildResult(input: FullTextInput): Promise<FullTextResult> {
-  const uploadHash16 = bareUploadId(input.paperId);
-  if (uploadHash16) {
-    const link: SourceLink = {
-      url: `/api/papers/upload/${uploadHash16}/file`,
-      kind: "pdf",
-      label: "upload",
-      rank: 0,
-    };
-    const outcome = await tryUploadLink(uploadHash16);
-    const attempts: FullTextResult["attempts"] = [
-      { link, outcome: outcome.status + (outcome.reason ? `: ${outcome.reason}` : "") },
-    ];
-    if (outcome.status === "ok" && outcome.doc) {
-      return { status: "ok", doc: outcome.doc, sourceLink: link, attempts };
-    }
-    return {
-      status: "no_full_text",
-      reason: outcome.reason ?? "This PDF has no readable text.",
-      attempts,
-    };
+function uploadLink(hash16: string): SourceLink {
+  return { url: `/api/papers/upload/${hash16}/file`, kind: "pdf", label: "upload", rank: 0 };
+}
+
+const UPLOAD_UNAVAILABLE: FullTextResult = { status: "source_unavailable", attempts: [], reason: "Private upload unavailable." };
+
+/**
+ * P0-05 (§1e.1): an upload's own file, read from its storage. Reached from exactly
+ * one place — `uploadFullText`, which `getFullText` calls only once
+ * `ownedUpload` has returned this upload's record for the caller. Nothing
+ * else in this module reads an upload: `buildPublicResult` has no upload
+ * branch at all.
+ */
+async function readOwnedUpload(hash16: string): Promise<FullTextResult> {
+  const link = uploadLink(hash16);
+  const outcome = await tryUploadLink(hash16);
+  const attempts: FullTextResult["attempts"] = [
+    { link, outcome: outcome.status + (outcome.reason ? `: ${outcome.reason}` : "") },
+  ];
+  if (outcome.status === "ok" && outcome.doc) {
+    return { status: "ok", doc: outcome.doc, sourceLink: link, attempts };
   }
+  return {
+    status: "no_full_text",
+    reason: outcome.reason ?? "This PDF has no readable text.",
+    attempts,
+  };
+}
+
+/**
+ * A public paper's full text, walked from its legal source links. The
+ * shared `cache` below holds only what this returns.
+ *
+ * P0-05: it used to read an upload too, for any id `bareUploadId` matched —
+ * which a case variant reached without the owner check. It has no upload
+ * branch now, and refuses an id that claims to be an upload outright, so no
+ * spelling of one can make it read a private file or fetch on its behalf.
+ */
+async function buildPublicResult(input: FullTextInput): Promise<FullTextResult> {
+  if (claimsUploadId(input.paperId)) return UPLOAD_UNAVAILABLE;
 
   const links = await collectSourceLinks({
     url: input.url ?? undefined,
@@ -313,16 +333,68 @@ async function buildResult(input: FullTextInput): Promise<FullTextResult> {
   };
 }
 
+/** Upload readings in flight, by cache key: the reading request and the
+ *  report request for one page open arrive together and share one read. */
+const uploadsInFlight = new Map<string, Promise<FullTextResult>>();
+
+/**
+ * P0-02 (spec D0): an upload's text, read out of the PDF once per owner,
+ * revision and extraction version. Called only after `ownedUpload` has
+ * passed. The document is kept by `upload-store` (memory for the hour, the
+ * sidecar after that) under its own owner-scoped key — never in the shared
+ * `cache` below, which any reader of a public paper id is served from. Only
+ * a reading that found text is kept: a scan, or a failed read, is read again
+ * next time.
+ *
+ * The extraction version is `UPLOAD_CONCEPT_EXTRACTION_VERSION`, the
+ * upload's own record of which extractor read it: bumping it when the
+ * extractor changes (P0-03) retires every document read by the old one.
+ */
+async function uploadFullText(hash16: string, meta: UploadMeta): Promise<FullTextResult> {
+  const key = uploadDocKey(meta.ownerKey ?? "", hash16, meta.revision, UPLOAD_CONCEPT_EXTRACTION_VERSION);
+  const inFlight = uploadsInFlight.get(key);
+  if (inFlight) return inFlight;
+
+  const pending = (async (): Promise<FullTextResult> => {
+    const kept = await readUploadDoc(hash16, key);
+    if (kept) {
+      const link = uploadLink(hash16);
+      return { status: "ok", doc: kept, sourceLink: link, attempts: [{ link, outcome: "ok" }] };
+    }
+    const result = await readOwnedUpload(hash16);
+    if (result.status === "ok" && result.doc) {
+      await writeUploadDoc(hash16, key, result.doc).catch((error: NodeJS.ErrnoException) => {
+        // The reading stands; only the cache failed. No text in the log.
+        console.warn("[papers/full-text] could not keep an upload's text:", error?.code ?? "unknown error");
+      });
+    }
+    return result;
+  })();
+  uploadsInFlight.set(key, pending);
+  try {
+    return await pending;
+  } finally {
+    uploadsInFlight.delete(key);
+  }
+}
+
 /**
  * Cache-aware full-text fetch. Returns the same shape regardless of whether
  * the text came from HTML or PDF.
  */
 export async function getFullText(input: FullTextInput): Promise<FullTextResult> {
-  if (input.paperId.startsWith("upload:")) {
+  // P0-05 (§1e.1): anything that claims to be an upload, in any spelling,
+  // takes this branch, and only the canonical id (`bareUploadId`) of an
+  // upload the caller owns gets past it. A variant such as `UPLOAD:<hash16>`
+  // is refused here, before any lookup — it used to fall through to the
+  // shared path below, be read from storage there, and sit in the shared cache.
+  if (claimsUploadId(input.paperId)) {
     const hash = bareUploadId(input.paperId);
-    if (!hash || !(await ownedUpload(hash))) return { status: "source_unavailable", attempts: [], reason: "Private upload unavailable." };
-    // Authenticate before reading, and never put private text in shared caches.
-    return buildResult(input);
+    const meta = hash ? await ownedUpload(hash) : null;
+    if (!hash || !meta) return UPLOAD_UNAVAILABLE;
+    // Authenticate before reading — the owner's cache included — and never
+    // put private text in the shared cache.
+    return uploadFullText(hash, meta);
   }
   const key = input.paperId;
   const cached = cache.get(key);
@@ -332,7 +404,7 @@ export async function getFullText(input: FullTextInput): Promise<FullTextResult>
     cache.delete(key);
   }
 
-  const pending = buildResult(input);
+  const pending = buildPublicResult(input);
   cache.set(key, pending);
   try {
     const result = await pending;

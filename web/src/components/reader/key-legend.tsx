@@ -12,16 +12,19 @@
 // sheet already read, so it cannot describe a key the page does not have.
 //
 // Desktop only: a phone has no keyboard and already has the thumb bar.
+//
+// P1-08 (§1f.19): the page passes the keys it answers to
+// (`paperKeysFor`), so an uploaded PDF's page shows no `x skip`.
 
-import { PAPER_KEYS, keyCap } from "@/lib/reader/reader-keys";
+import { PAPER_KEYS, keyCap, type PaperKey } from "@/lib/reader/reader-keys";
 
-export function KeyLegend() {
+export function KeyLegend({ keys = PAPER_KEYS }: { keys?: readonly PaperKey[] }) {
   return (
     <div
       aria-hidden
       className="hidden md:flex fixed inset-x-0 bottom-0 z-30 h-[var(--legend-h)] items-center justify-center gap-x-5 overflow-hidden glass-bar border-t border-border px-6 eyebrow text-text-faint"
     >
-      {PAPER_KEYS.map((entry) => (
+      {keys.map((entry) => (
         <span key={entry.action} className="whitespace-nowrap">
           <span className="text-text">{keyCap(entry.keys[0])}</span>{" "}
           {entry.short}

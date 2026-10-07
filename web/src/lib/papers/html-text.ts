@@ -15,10 +15,29 @@ const MAX_SECTION_CHARS = 18_000;
 const MAX_TOTAL_CHARS = 90_000;
 
 export interface ExtractedSection {
+  /**
+   * `s0`, `s1`, … in document order, stable for one extraction — what the
+   * reading map, a question's route and a report's "Read next" point at.
+   * Assigned last (`withSectionIds`), after buckets are inherited and the
+   * budget is applied, so the numbering is the order the reader sees.
+   */
+  id: string;
   heading: string;
   /** Canonical bucket: introduction|methods|results|discussion|conclusion|body|... */
   canonical: string;
   text: string;
+  /** PDFs only: the page the section's heading sits on. HTML has no pages. */
+  page?: number;
+}
+
+/** A section as an extractor builds it, before it has its place in the
+ *  document. */
+export type DraftSection = Omit<ExtractedSection, "id">;
+
+/** The final numbering: `s<index>` in the order given. Every extractor calls
+ *  this once, on the sections it is about to return. */
+export function withSectionIds(sections: DraftSection[]): ExtractedSection[] {
+  return sections.map((section, index) => ({ ...section, id: `s${index}` }));
 }
 
 export interface ExtractedFigureCaption {
@@ -228,7 +247,7 @@ const STRONG_BUCKETS = new Set([
  * and where they have no numbered parent, so an unnumbered document is
  * untouched.
  */
-export function withInheritedBuckets(sections: ExtractedSection[]): ExtractedSection[] {
+export function withInheritedBuckets<T extends { heading: string; canonical: string }>(sections: T[]): T[] {
   const byNumber = new Map<string, string>();
   return sections.map((section) => {
     const number = headingNumber(section.heading);
@@ -258,9 +277,9 @@ function capSection(text: string): string {
   return text.length > MAX_SECTION_CHARS ? text.slice(0, MAX_SECTION_CHARS) : text;
 }
 
-function trimToBudget(sections: ExtractedSection[]): ExtractedSection[] {
+function trimToBudget(sections: DraftSection[]): DraftSection[] {
   let running = 0;
-  const out: ExtractedSection[] = [];
+  const out: DraftSection[] = [];
   for (const section of sections) {
     const remaining = MAX_TOTAL_CHARS - running;
     if (remaining <= 0) break;
@@ -479,7 +498,7 @@ function extractLatexml(page: string, pageUrl?: string): ExtractedDocument {
   // Mathematics first: the walk below flattens tags, and a formula flattened
   // is a formula lost.
   const { html, equations } = liftLatexmlMath(page);
-  const sections: ExtractedSection[] = [];
+  const sections: DraftSection[] = [];
 
   const abstractMatch = html.match(
     /<div\b[^>]*class=["'][^"']*\bltx_abstract\b[^"']*["'][^>]*>([\s\S]*?)<\/div>/i,
@@ -512,7 +531,7 @@ function extractLatexml(page: string, pageUrl?: string): ExtractedDocument {
 
   return {
     title: extractTitleFromHtml(html),
-    sections: trimToBudget(withInheritedBuckets(sections)),
+    sections: withSectionIds(trimToBudget(withInheritedBuckets(sections))),
     figureCaptions: collectCaptions(
       html,
       /<figcaption\b[^>]*class=["'][^"']*ltx_caption[^"']*["'][^>]*>([\s\S]*?)<\/figcaption>/gi,
@@ -529,7 +548,7 @@ function extractLatexml(page: string, pageUrl?: string): ExtractedDocument {
 
 function extractPmc(html: string, pageUrl?: string): ExtractedDocument {
   const baseUrl = resolveBase(html, pageUrl);
-  const sections: ExtractedSection[] = [];
+  const sections: DraftSection[] = [];
   // PMC body sections come in two shapes:
   //   <section id="sec1">...</section>          (new PMC layout)
   //   <section class="sec">...</section>        (older variant)
@@ -555,7 +574,7 @@ function extractPmc(html: string, pageUrl?: string): ExtractedDocument {
 
   return {
     title: extractTitleFromHtml(html),
-    sections: trimToBudget(withInheritedBuckets(sections)),
+    sections: withSectionIds(trimToBudget(withInheritedBuckets(sections))),
     // <figcaption> or <div class="caption"> containing <p>Fig N. text</p>
     figureCaptions: collectCaptions(html, /<figcaption\b[^>]*>([\s\S]*?)<\/figcaption>/gi, baseUrl),
     source: "pmc",
@@ -567,7 +586,7 @@ function extractPmc(html: string, pageUrl?: string): ExtractedDocument {
 
 function extractBiorxiv(html: string, pageUrl?: string): ExtractedDocument {
   const baseUrl = resolveBase(html, pageUrl);
-  const sections: ExtractedSection[] = [];
+  const sections: DraftSection[] = [];
   const sectionRe =
     /<div\b[^>]*class=["'][^"']*\bsection\b[^"']*["'][^>]*>([\s\S]*?)<\/div>(?=\s*<div[^>]*class=["'][^"']*\bsection\b|\s*<\/article|\s*<\/main)/gi;
 
@@ -598,7 +617,7 @@ function extractBiorxiv(html: string, pageUrl?: string): ExtractedDocument {
 
   return {
     title: extractTitleFromHtml(html),
-    sections: trimToBudget(withInheritedBuckets(sections)),
+    sections: withSectionIds(trimToBudget(withInheritedBuckets(sections))),
     figureCaptions: collectCaptions(
       html,
       /<div\b[^>]*class=["'][^"']*\bfig-caption\b[^"']*["'][^>]*>([\s\S]*?)<\/div>/gi,
@@ -613,8 +632,8 @@ function extractBiorxiv(html: string, pageUrl?: string): ExtractedDocument {
 // text as that section's body. Last resort — used for OA publishers without
 // a dedicated parser.
 
-function walkHeadings(html: string): ExtractedSection[] {
-  const sections: ExtractedSection[] = [];
+function walkHeadings(html: string): DraftSection[] {
+  const sections: DraftSection[] = [];
   // Find all heading positions
   const headingRe = /<h([23])\b[^>]*>([\s\S]*?)<\/h\1>/gi;
   const matches: Array<{ index: number; end: number; heading: string }> = [];
@@ -661,7 +680,7 @@ function extractGeneric(html: string, pageUrl?: string): ExtractedDocument {
   const sections = walkHeadings(body);
   return {
     title: extractTitleFromHtml(html),
-    sections: trimToBudget(withInheritedBuckets(sections)),
+    sections: withSectionIds(trimToBudget(withInheritedBuckets(sections))),
     figureCaptions: collectCaptions(html, /<figcaption\b[^>]*>([\s\S]*?)<\/figcaption>/gi, baseUrl),
     source: "generic-html",
   };

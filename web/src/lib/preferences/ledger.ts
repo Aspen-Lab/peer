@@ -335,6 +335,129 @@ export function removeUploadPreferenceSignal(ledger: PreferenceLedger | undefine
   return next;
 }
 
+/**
+ * P5-02: the weight one settled question gives all its specific terms together.
+ * An upload's concept enters at 2 x its confidence (0.9 at the least, 1.9 at the
+ * most) and one explicit like adds 1; a question is the reader's own words but
+ * one line, so it enters at a fifth of a like (about a quarter of an upload's
+ * weakest). P5-04 (S4): that is the question's whole evidence, shared across its
+ * specific terms (`QUESTION_TERM_WEIGHT / n` each), not a weight per term: at a
+ * fifth per term a five-word question on a candidate holding all five words
+ * outweighed a like. A question can now move a candidate's boost by about 0.013
+ * at most, whatever its length, against a like's 0.05 (`POSITIVE_BOOST_MAX` 0.18,
+ * 0.75 specificity), so one question cannot reorder a feed on its own, and it
+ * takes several papers asking about the same word before the word counts for
+ * much. The only new number of P5-02; every other ledger constant is as it was.
+ */
+export const QUESTION_TERM_WEIGHT = 0.2;
+
+/** One specific term of a settled question and its share of the question's weight. */
+export interface QuestionTerm {
+  term: string;
+  weight: number;
+}
+
+/**
+ * An opaque, stable key for one paper's question evidence (FNV-1a over the
+ * paper's id, 64 bits as 16 hex digits). The ledger syncs with the reader's
+ * account, so the paper's id itself is not written into it; the key is only
+ * there so one paper counts once and can be taken out again.
+ */
+export function questionSourceKey(paperId: string): string {
+  let h1 = 0x811c9dc5;
+  let h2 = 0x84222325;
+  for (let i = 0; i < paperId.length; i++) {
+    const c = paperId.charCodeAt(i);
+    h1 = Math.imul(h1 ^ c, 0x01000193) >>> 0;
+    h2 = Math.imul(h2 ^ (c >>> 3) ^ (i & 0xff), 0x01000193) >>> 0;
+  }
+  return "q" + h1.toString(16).padStart(8, "0") + h2.toString(16).padStart(8, "0");
+}
+
+function cleanedQuestionEvidence(input: PreferenceLedgerEntry["questions"]): { questions?: NonNullable<PreferenceLedgerEntry["questions"]> } {
+  const kept = Object.entries(input ?? {}).filter(([key, value]) =>
+    /^q[a-f0-9]{16}$/.test(key) && value && Number.isFinite(Date.parse(value.at)) &&
+    Number.isFinite(value.weight) && value.weight > 0,
+  ).slice(-200).map(([key, value]) => [key, { at: value.at, weight: Math.min(QUESTION_TERM_WEIGHT, value.weight) }] as const);
+  return kept.length ? { questions: Object.fromEntries(kept) } : {};
+}
+
+/** The terms this paper's settled questions hold in the ledger (their labels). */
+export function questionTermsOf(ledger: PreferenceLedger | undefined, paperId: string): string[] {
+  const source = questionSourceKey(paperId);
+  return Object.values(cleanPreferenceLedger(ledger)).filter((entry) => entry.questions?.[source]).map((entry) => entry.label);
+}
+
+/** The terms wanted as ledger concepts, each with its share (never above `QUESTION_TERM_WEIGHT`);
+ *  a term given twice takes the larger share, one with no usable share is left out. */
+function questionShares(terms: readonly QuestionTerm[]): Map<string, { concept: PreferenceConcept; weight: number }> {
+  const shares = new Map<string, { concept: PreferenceConcept; weight: number }>();
+  for (const { term, weight } of terms) {
+    const [concept] = normalizePreferenceConcepts([{ ...termConcept(term), label: normalizePreferenceLabel(term) }]);
+    const share = Math.min(QUESTION_TERM_WEIGHT, weight);
+    if (!concept?.label || !(share > 0)) continue;
+    const held = shares.get(concept.key);
+    if (!held || share > held.weight) shares.set(concept.key, { concept, weight: share });
+  }
+  return shares;
+}
+
+/** Does the ledger already hold exactly these terms, at these shares, for the paper? */
+export function holdsQuestionTerms(ledger: PreferenceLedger | undefined, paperId: string, terms: readonly QuestionTerm[]): boolean {
+  const source = questionSourceKey(paperId);
+  const wanted = questionShares(terms);
+  const held = Object.values(cleanPreferenceLedger(ledger)).filter((entry) => entry.questions?.[source]);
+  return held.length === wanted.size && held.every((entry) => wanted.get(entry.key)?.weight === entry.questions?.[source]?.weight);
+}
+
+/**
+ * P5-02 (blueprint P5): the specific terms of a paper's settled questions
+ * (`question-terms.ts`) as a low-weight signal of declared interest, through the
+ * mechanism an upload's concepts use: separate evidence, once per source, that
+ * can be taken out without erasing likes or dislikes. The paper's terms are
+ * REPLACED: a term the reader's later questions no longer hold is removed, a
+ * term already held keeps its first time (a repeated question counts once).
+ * P5-04 (S4): each term enters at its share of its question's weight, so a
+ * question is one signal however many terms it has; a held term whose share
+ * changed (the question was edited) takes the new share.
+ * Nothing but the terms is written; never the question.
+ */
+export function applyQuestionTermSignal(ledger: PreferenceLedger | undefined,
+  paperId: string, terms: readonly QuestionTerm[], at = new Date().toISOString()): PreferenceLedger {
+  const wanted = questionShares(terms);
+  const source = questionSourceKey(paperId);
+  const next = removeQuestionTermSignal(ledger, paperId, new Set(wanted.keys()));
+  for (const [key, { concept, weight }] of wanted) {
+    const current = next[key];
+    const held = current?.questions?.[source];
+    if (held && held.weight === weight) continue;
+    next[key] = {
+      ...(current ?? { ...concept, positive: 0, negative: 0, lastSeenAt: at }),
+      questions: { ...current?.questions, [source]: { at: held?.at ?? at, weight } },
+    };
+  }
+  return next;
+}
+
+/** The paper's question evidence out of every entry (except those in `keep`); an
+ *  entry nothing else holds goes with it. Likes, dislikes, facets and uploads stay. */
+export function removeQuestionTermSignal(ledger: PreferenceLedger | undefined, paperId: string,
+  keep: ReadonlySet<string> = new Set()): PreferenceLedger {
+  const next = cleanPreferenceLedger(ledger);
+  const source = questionSourceKey(paperId);
+  for (const [key, entry] of Object.entries(next)) {
+    if (!entry.questions?.[source] || keep.has(key)) continue;
+    const questions = { ...entry.questions };
+    delete questions[source];
+    const { questions: _gone, ...rest } = entry;
+    void _gone;
+    if (Object.keys(questions).length) next[key] = { ...rest, questions };
+    else if (!entry.positive && !entry.negative && !entry.facetPositive && !Object.keys(entry.uploads ?? {}).length) delete next[key];
+    else next[key] = rest;
+  }
+  return next;
+}
+
 export function uploadInterestTerms(ledger: PreferenceLedger | undefined, now = Date.now()): string[] {
   return Object.values(cleanPreferenceLedger(ledger)).filter((entry) => Object.keys(entry.uploads ?? {}).length > 0)
     .map((entry) => ({ entry, net: decayedCounts(entry, now).positive - decayedCounts(entry, now).negative }))
@@ -399,6 +522,7 @@ export function cleanPreferenceLedger(
           ? entry.lastSeenAt
           : new Date().toISOString(),
       ...(entry.uploads ? { uploads: cleanUploadEvidence(entry.uploads) } : {}),
+      ...cleanedQuestionEvidence(entry.questions),
       origin:
         entry.origin === "event" || entry.origin === "job"
           ? entry.origin
@@ -606,11 +730,14 @@ function distinctiveness(
 function decayedCounts(
   entry: PreferenceLedgerEntry,
   nowMs: number,
+  withQuestions = true,
 ): { positive: number; negative: number } {
   const factor = decayFactor(entry.lastSeenAt, nowMs);
+  const evidenceSum = (evidence: PreferenceLedgerEntry["uploads"]) =>
+    Object.values(evidence ?? {}).reduce((total, e) => total + e.weight * decayFactor(e.at, nowMs), 0);
   return {
-    positive: entry.positive * factor + Object.values(entry.uploads ?? {}).reduce(
-      (total, evidence) => total + evidence.weight * decayFactor(evidence.at, nowMs), 0),
+    positive: entry.positive * factor + evidenceSum(entry.uploads) +
+      (withQuestions ? evidenceSum(entry.questions) : 0),
     negative: entry.negative * factor,
   };
 }
@@ -672,7 +799,7 @@ export function scorePreferenceMatch(
   const seenLabels = new Set(concepts.map((c) => normalizePreferenceLabel(c.label)));
   for (const entry of Object.values(prepared.byKey)) {
     const label = normalizePreferenceLabel(entry.label);
-    if (entry.uploads && label && !seenLabels.has(label) && text.includes(` ${label} `)) {
+    if ((entry.uploads || entry.questions) && label && !seenLabels.has(label) && text.includes(` ${label} `)) {
       concepts.push(entry); seenLabels.add(label);
     }
   }
@@ -806,7 +933,8 @@ export function summarizePreferenceLedger(
   for (const entry of Object.values(clean)) {
     const key = normalizePreferenceLabel(entry.label);
     if (!key) continue;
-    const { positive, negative } = decayedCounts(entry, now);
+    // P5-02: what a question holds is not shown as something the ledger learned.
+    const { positive, negative } = decayedCounts(entry, now, false);
     const net = positive - negative;
     const fromUpload = Object.keys(entry.uploads ?? {}).length > 0;
     const prev = byLabel.get(key);

@@ -7,6 +7,7 @@
 // typed in JSX is the thing this page was rebuilt to remove. Sentence case
 // throughout; nothing uppercase.
 
+import type { PlainLevel } from "@/lib/papers/plain-levels";
 import { displayHeading, type ReadingBlock } from "@/lib/papers/reading";
 
 /** Block headings, sentence case, never doubled. Same words as the Markdown export. */
@@ -32,6 +33,25 @@ export const REPORT_HEADING = {
   review: "What the review covers",
   glance: "At a glance",
   related: "Related from your feed",
+} as const;
+
+/** P2-04: verified answers to the reader's own questions. */
+export const FOR_YOUR_QUESTIONS = {
+  heading: "For your questions",
+  answered: "Answered",
+  partly: "Partly answered",
+  /** P2-04b (§1g.15): the reader's own words end the sentence when they already
+   *  end like one ("…recycling?"); a period is added only otherwise. P2-05
+   *  item 0: the full-width ？ ！ 。 of a CJK keyboard end one just the same. */
+  notAddressed: (question: string) => {
+    const asked = question.trim();
+    return `This paper does not address: ${asked}${/[?.!？！。]$/.test(asked) ? "" : "."}`;
+  },
+  /** P2-08b (§1g.21 (2)): the model offered answers and every one failed
+   *  verification — Peer's own words, never a claim about the paper. */
+  unverified: "Peer could not verify an answer in the paper's own words.",
+  readNext: "Read next",
+  background: "background",
 } as const;
 
 /** Under a block Peer wrote with no sentence of the paper to show for it. */
@@ -70,6 +90,188 @@ export const BODY = {
     const size = `${sections} section${sections === 1 ? "" : "s"} \u00b7 ${words.toLocaleString("en-US")} words`;
     return sourceLabel ? `Read from ${sourceLabel} \u00b7 ${size}` : size;
   },
+} as const;
+
+/**
+ * P1-03 (§1f.10): "Before you read" — the question field.
+ *
+ * P1-09 (user decision §1a.7, ruling §1f.20): the example tags come only from
+ * the reader — questions they wrote on earlier papers, and their profile
+ * turned into questions by the templates below. The blueprint's generic
+ * chips are gone. "Just get the gist" is a reading mode, not an example, and
+ * stays as a control of its own.
+ */
+export const ASK = {
+  heading: "Before you read",
+  placeholder: "What do you want this paper to answer?",
+  hint: "Up to five questions. Peer points you to the sections that mention them.",
+  fromEarlier: "From your earlier questions",
+  fromProfile: "From your profile",
+  /** The profile, asked as questions (`lib/reader/question-examples.ts`). */
+  examples: {
+    challenge: (phrase: string) => `Does this help with ${phrase}?`,
+    project: (phrase: string) => `How does this relate to ${phrase}?`,
+    topic: (topic: string) => `What does it say about ${topic}?`,
+    method: (method: string) => `Could I use ${method} here?`,
+  },
+  chips: {
+    gist: "Just get the gist",
+  },
+  line: (n: number) => `Question ${n}`,
+  remove: (n: number) => `Remove question ${n}`,
+  counter: (n: number) => `${n}/200`,
+  /** P5-02: the checkbox beside a question. Ticked, that question's words never
+   *  enter what Peer learns for your feed. */
+  notForRecs: "Not for recommendations",
+  notForRecsFor: (n: number) => `Not for recommendations: question ${n}`,
+} as const;
+
+/**
+ * P5-01 (blueprint P5): standing questions — the ones a reader brings to most
+ * papers. Kept on the Profile; on a paper they are one chip group under
+ * "Before you read" and are never filled in.
+ */
+export const STANDING = {
+  label: "Standing questions",
+  chipGroup: "Your standing questions",
+  hint: "Up to five questions you bring to most papers. On a paper they show as buttons under \u201cBefore you read\u201d; Peer never fills one in for you.",
+  add: "Add a question",
+  placeholder: "A question you bring to most papers",
+  line: (n: number) => `Standing question ${n}`,
+  remove: (n: number) => `Remove standing question ${n}`,
+} as const;
+
+/**
+ * P1-04 (§1f.12): the reading map under the question field. The role labels
+ * are a reader's names for the section buckets; `body` (a heading Peer could
+ * not place) has none.
+ */
+export const MAP = {
+  heading: "Map",
+  summary: (sections: number, minutes: number) =>
+    `${sections} section${sections === 1 ? "" : "s"} \u00b7 about ${minutes} min`,
+  show: "show map",
+  hide: "hide map",
+  roles: {
+    setup: "setup",
+    method: "method",
+    evidence: "evidence",
+    interpretation: "interpretation",
+    apparatus: "apparatus",
+  },
+  page: (page: number) => `p.${page}`,
+  minutes: (minutes: number) => `${minutes} min`,
+  openLines: (heading: string) => `Show how the paragraphs of ${heading} open`,
+  closeLines: (heading: string) => `Hide how the paragraphs of ${heading} open`,
+  /** P3-03 (§1h.6): the accessible name of Peer's gist after a paragraph's opening —
+   *  Peer's own line, beside the paper's words; labelled on screen by `PEERS_READING`. */
+  gist: "Peer's gist",
+} as const;
+
+/**
+ * P1-05 (§1f.13; blueprint §2 boundary 1, §3.3): the route's words. A tier is
+ * a suggestion of how to read a section, stated as a fact about the section —
+ * "not mentioned", never a verdict on it. `background` is Tier 2's (P2).
+ */
+export const ROUTE = {
+  tiers: {
+    read: "read",
+    background: "background",
+    skim: "skim",
+    none: "not mentioned",
+  },
+  vague: "Ask something more specific and Peer can point you to the right sections.",
+  /** P2-04b: the map's fact line for a `background` mark with no Tier 0 hits
+   *  (the report named the section as context for an answer; no count to give). */
+  backgroundWhy: "background · context for an answer",
+  /** The facts behind a tint: the reader's terms the section uses, and how often. */
+  mentions: (hits: ReadonlyArray<{ term: string; count: number }>) =>
+    `mentions ${hits
+      .slice(0, 3)
+      .map((hit) => `${hit.term} ×${hit.count}`)
+      .join(", ")}`,
+  /** The questions that tinted a row: "Q1, Q3". */
+  questions: (numbers: readonly number[]) => numbers.map((n) => `Q${n}`).join(", "),
+} as const;
+
+/**
+ * P3-01 (§1h.1; blueprint §3.5 ⑤ 词): the strip under the map. A term is a
+ * button that points at its first use in the paper; its name says so for the
+ * reader who cannot see the highlight. The definitions are the paper's own
+ * sentences (quoted, attributed) or Peer's, labelled `PEERS_READING`.
+ */
+export const TERMS = {
+  heading: "Terms to know",
+  find: (term: string) => `Find ${term} in the paper`,
+} as const;
+
+/**
+ * P3-02 (§1h.2; user decision §1a.10; blueprint §3.5 ⑤): "Explain this?" — the
+ * button beside a selected passage and the card it opens. Peer's words, in the
+ * label face; the card's two prose parts are in the reading face and carry
+ * `PEERS_READING`, and the paper's own sentences go through `EvidenceQuote`.
+ * Nothing here tells the reader what to do with the paper.
+ */
+export const EXPLAIN = {
+  ask: "Explain this?",
+  /** The card's accessible name. */
+  card: "Explanation of the selected passage",
+  /** Above the paper's own definition of a term in the passage (Tier 0). */
+  defines: (term: string) => `How the paper defines ${term}`,
+  meaning: "What it means",
+  here: "Why it is here",
+  loading: "Peer is reading this passage…",
+  unavailable: "Peer could not explain this just now.",
+  notInPaper: "Select text from the paper itself.",
+  close: "Close",
+  /** P3-02b: the thread under the first answer. The reader's messages and
+   *  Peer's replies each sit under one of these two label-face lines. */
+  you: "You",
+  peer: "Peer",
+  placeholder: "Ask about this passage…",
+  send: "Send",
+  thinking: "Peer is thinking…",
+  threadFull: "This thread is full. Select the passage again to start a new one.",
+  /** P3-02c (§1a.11): the small toggle in the box's control row. Off whenever the
+   *  box opens; its warning shows on hover, on keyboard focus and — on a touch
+   *  screen, with no hover — on the first tap. Peer's words, in the label face. */
+  searchToggle: "Search the web",
+  searchWarning: "Web search costs many times more than a normal reply. On for this message only.",
+  /** Beside "You" on a message that was answered with web search: the one trace of
+   *  it, so the cost can be explained afterwards. Never a source, never an address. */
+  searchedMark: "searched the web",
+  /** Under a reply to a message that asked to search when the provider cannot. */
+  searchUnavailable: "Web search is not available with this provider.",
+  /** P3-07 (§1h.9 (3); user decision §1a.14): the headers of the term table a reply
+   *  may carry — the term, what it means in this paper, how to read it. Peer's
+   *  words, in the label face; the cells under them are in the reading face. */
+  tableTerm: "Term",
+  tableHere: "Here it means",
+  tableRead: "How to read it",
+  /** P3-07 (§1h.9 (2)): the one button under Peer's latest reply. A reply is short
+   *  unless the reader asks for more; this asks, by re-sending their last message. */
+  sayMore: "Say more",
+} as const;
+
+/**
+ * P4-01 (blueprint §3.6 ⑥; user decision §1a.5 (b); §3d 18): "Say it plainly" — the control under a
+ * paragraph the route marks read, and the one line under it when a paragraph could not be said
+ * plainly. Peer's words, in the label face; the rewrite itself is in the reading face under one
+ * `PEERS_READING` line. The three levels name how the rewrite reads, nothing about the reader.
+ */
+export const PLAIN = {
+  button: "Say it plainly",
+  /** On the button while the request runs. */
+  busy: "Saying it plainly\u2026",
+  /** The accessible name of the three-way choice beside the button. */
+  levelsLabel: "Reading level",
+  levels: { highschool: "High school", undergrad: "Undergrad", graduate: "Graduate" } satisfies Record<PlainLevel, string>,
+  /** The accessible name of the rewrite beside the paragraph. */
+  rewrite: "The paragraph, said plainly",
+  /** The rewrite lost, added or changed a number or a unit, so Peer discarded it. */
+  couldNotKeepNumbers: "Peer could not keep this paragraph's numbers exact, so the original stays.",
+  /** No model answered, or what it wrote was not usable. */
+  unavailable: "Peer could not rewrite this paragraph just now.",
 } as const;
 
 /** The reader's own context for the paper: what they read or kept nearby. */

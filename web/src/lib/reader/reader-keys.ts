@@ -19,7 +19,9 @@ export type ReaderAction =
   | "read"
   | "open"
   | "copy"
-  | "back";
+  | "back"
+  | "ask"
+  | "explain";
 
 export interface PaperKey {
   /** `KeyboardEvent.key` values; the first is the one the help sheet shows. */
@@ -39,16 +41,26 @@ export const PAPER_KEYS: readonly PaperKey[] = [
   { keys: ["s"], action: "save", label: "Save / unsave", short: "save" },
   { keys: ["x"], action: "skip", label: "Not interested, then next", short: "skip" },
   { keys: ["l"], action: "like", label: "Like — more like this", short: "like" },
+  // P4-01 (§1h.12 (h)): one row. With a plain rewrite showing, `u` takes the latest one back first
+  // (the original stands alone again; the rewrite stays kept); only when none shows does it do
+  // what it did — undo a dismiss, else mark unread / read.
   {
     keys: ["u"],
     action: "undoOrToggleRead",
-    label: "Undo a dismiss, else mark unread / read",
+    label: "Undo a plain rewrite or a dismiss, else mark unread / read",
     short: "undo",
   },
   // `t` for the text: `r` is the briefing's own key and stays global.
   { keys: ["t"], action: "read", label: "Read the paper here", short: "read" },
   { keys: ["o", "Enter"], action: "open", label: "Open at the source", short: "open" },
   { keys: ["c"], action: "copy", label: "Copy as Markdown", short: "copy" },
+  // P1-03 (§1f.10): focus the first empty question line. Typed into the
+  // field itself, `q` is a letter — the layer never intercepts a key typed
+  // into an input.
+  { keys: ["q"], action: "ask", label: "Ask a question about this paper", short: "ask" },
+  // P3-02b (§1h.3): open "Explain this?" on the selected passage, as its button
+  // does. Typed into the box's own input, `e` is a letter.
+  { keys: ["e"], action: "explain", label: "Explain the selected passage", short: "explain" },
   {
     keys: ["Escape", "Backspace"],
     action: "back",
@@ -56,6 +68,17 @@ export const PAPER_KEYS: readonly PaperKey[] = [
     short: "briefing",
   },
 ];
+
+/**
+ * P1-08 (§1a.6, §1f.19): the keys a page answers to. On a standalone
+ * uploaded PDF's page there is no "Not interested, then next" — the reader's
+ * own file is not a feed item to dismiss — so `skip` is left out (the page
+ * registers no handler for it, and the layer leaves `x` alone). Every other
+ * page, a public paper with an attached PDF included, has the whole table.
+ */
+export function paperKeysFor({ upload }: { upload: boolean }): readonly PaperKey[] {
+  return upload ? PAPER_KEYS.filter((entry) => entry.action !== "skip") : PAPER_KEYS;
+}
 
 export function resolvePaperKey(key: string): ReaderAction | null {
   for (const entry of PAPER_KEYS) {

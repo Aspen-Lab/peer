@@ -294,3 +294,132 @@ describe("6-02 — the Gemini thinking control is decided per model family", () 
     }
   });
 });
+
+/**
+ * P3-02c (ruling §1h.4, amendment of 08:1xZ 2026-10-06) — an optional web-search
+ * argument on `generateJsonText`, for "Explain this?"'s per-message opt-in.
+ *
+ * **Gemini refuses JSON mode together with a grounding tool**, so a call with
+ * `webSearch` carries `tools: [{ googleSearch: {} }]` and NO `responseMimeType`
+ * (the route parses the text, fence and all); every other call is exactly what
+ * it was. Both Gemini providers — the server's Vertex one and the reader's-key
+ * one — map it, and both say so with `supportsWebSearch`. The SDK is stood in
+ * for: no key, no network, no real model call.
+ */
+describe("P3-02c — Gemini web search is the Google Search tool, and never JSON mode", () => {
+  /** The `[llm]` console lines the providers print, one per request (no ledger any more). */
+  const llmLines: string[] = [];
+
+  beforeEach(() => {
+    generateContentMock.mockReset();
+    generateContentMock.mockResolvedValue({ text: '{"reply":"x"}', usageMetadata: { promptTokenCount: 1200, candidatesTokenCount: 80, thoughtsTokenCount: 0 } });
+    vi.stubEnv("GOOGLE_VERTEX_PROJECT", "not-a-real-project");
+    llmLines.length = 0;
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.spyOn(console, "log").mockImplementation((line?: unknown) => {
+      if (String(line).startsWith("[llm] ")) llmLines.push(String(line));
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  type SentConfig = {
+    responseMimeType?: string;
+    tools?: Array<{ googleSearch?: Record<string, unknown> }>;
+    maxOutputTokens?: number;
+    thinkingConfig?: unknown;
+  };
+  function sentConfigs(): SentConfig[] {
+    return generateContentMock.mock.calls.map((call) => (call[0] as { config: SentConfig }).config);
+  }
+
+  const providers: Array<[string, () => import("./types").DigestProvider]> = [
+    ["the reader's-key provider", () => createGeminiApiProvider("GOOGLE-NOT-A-KEY")],
+    ["the server's Vertex provider", () => geminiProvider],
+  ];
+
+  for (const [label, make] of providers) {
+    describe(label, () => {
+      it("says it can search", () => {
+        expect(make().supportsWebSearch).toBe(true);
+      });
+
+      it("with webSearch: sends the Google Search tool and no responseMimeType", async () => {
+        await make().generateJsonText!({ systemPrompt: "s", userPrompt: "u", maxTokens: 400, tier: "small", webSearch: true });
+
+        expect(sentConfigs()).toHaveLength(1);
+        expect(sentConfigs()[0].tools).toEqual([{ googleSearch: {} }]);
+        expect(sentConfigs()[0]).not.toHaveProperty("responseMimeType");
+      });
+
+      it("without webSearch: sends JSON mode and no tool, exactly as before", async () => {
+        await make().generateJsonText!({ systemPrompt: "s", userPrompt: "u", maxTokens: 400, tier: "small" });
+
+        expect(sentConfigs()[0].responseMimeType).toBe("application/json");
+        expect(sentConfigs()[0]).not.toHaveProperty("tools");
+      });
+
+      it("with webSearch: false: the same as without", async () => {
+        await make().generateJsonText!({ systemPrompt: "s", userPrompt: "u", maxTokens: 400, tier: "small", webSearch: false });
+
+        expect(sentConfigs()[0].responseMimeType).toBe("application/json");
+        expect(sentConfigs()[0]).not.toHaveProperty("tools");
+      });
+
+      it("keeps the thinking control and the output cap when it searches", async () => {
+        await make().generateJsonText!({ systemPrompt: "s", userPrompt: "u", maxTokens: 400, tier: "small", webSearch: true });
+        const plain = sentConfigs()[0];
+        generateContentMock.mockClear();
+        await make().generateJsonText!({ systemPrompt: "s", userPrompt: "u", maxTokens: 400, tier: "small" });
+
+        expect(plain.thinkingConfig).toEqual(sentConfigs()[0].thinkingConfig);
+        expect(plain.maxOutputTokens).toBe(sentConfigs()[0].maxOutputTokens);
+        expect(plain.maxOutputTokens).toBeDefined();
+      });
+
+      it("returns the model's text, trimmed, for the route to parse (a fence and all)", async () => {
+        generateContentMock.mockResolvedValue({ text: '  ```json\n{"reply":"x"}\n```  ' });
+
+        expect(await make().generateJsonText!({ systemPrompt: "s", userPrompt: "u", maxTokens: 400, webSearch: true })).toBe('```json\n{"reply":"x"}\n```');
+      });
+    });
+  }
+
+  // P4-00: this was "writes its ledger row under its own path" — Peer keeps no ledger any
+  // more, so the same facts are read where they still surface, the `[llm]` console line:
+  // the searched call is told apart by its own path, and carries the SDK's token counts.
+  it("a searched call prints its own path with the token counts the SDK reported", async () => {
+    await createGeminiApiProvider("GOOGLE-NOT-A-KEY").generateJsonText!({ systemPrompt: "s", userPrompt: "u", maxTokens: 400, tier: "small", webSearch: true });
+    await createGeminiApiProvider("GOOGLE-NOT-A-KEY").generateJsonText!({ systemPrompt: "s", userPrompt: "u", maxTokens: 400, tier: "small" });
+
+    expect(llmLines.map((line) => /\bpath=(\S+)/.exec(line)?.[1])).toEqual(["json:search", "json"]);
+    expect(llmLines[0]).toMatch(/^\[llm\] gemini\/\S+ path=json:search in=1200 out=80 \d+ms ok$/);
+  });
+
+  it("the vision call is untouched: it never carries the tool", async () => {
+    await createGeminiApiProvider("GOOGLE-NOT-A-KEY").generateVisionJsonText!({
+      systemPrompt: "s",
+      userPrompt: "u",
+      images: [{ dataBase64: "AAAA", mimeType: "image/png" }],
+      maxTokens: 200,
+    });
+
+    expect(sentConfigs()[0].responseMimeType).toBe("application/json");
+    expect(sentConfigs()[0]).not.toHaveProperty("tools");
+  });
+
+  it("falls down the chain on a searched call as on any other: the next model is searched too", async () => {
+    generateContentMock.mockResolvedValueOnce({ text: "" }).mockResolvedValue({ text: '{"reply":"x"}' });
+
+    await createGeminiApiProvider("GOOGLE-NOT-A-KEY").generateJsonText!({ systemPrompt: "s", userPrompt: "u", maxTokens: 400, tier: "small", webSearch: true });
+
+    expect(sentConfigs()).toHaveLength(2);
+    for (const config of sentConfigs()) {
+      expect(config.tools).toEqual([{ googleSearch: {} }]);
+      expect(config).not.toHaveProperty("responseMimeType");
+    }
+  });
+});

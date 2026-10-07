@@ -153,11 +153,95 @@ describe("the whole reading", () => {
     ]);
   });
 
+  // P0-01 (spec D2): `TERMINAL` held "acknowledgements" and "appendix", but
+  // `canonicalizeHeading` never returns either — it files the first under
+  // `acknowledgments` and strips "Appendix A" down to what follows it — so
+  // the thank-yous and the proofs were read as the paper's argument.
+  it("stops at a numbered Acknowledgements heading, before the references", () => {
+    const outline = buildOutline([
+      page(1, [
+        ["A Paper About Sequence Models", { height: 17 }],
+        ["1 Introduction"],
+        ["Recurrent neural networks have long been established in sequence modelling."],
+        ["Attention mechanisms have become an integral part of compelling models."],
+        ["6 Acknowledgements"],
+        ["We thank the anonymous reviewers and our funders for their generous support."],
+        ["References", { height: 12 }],
+        ["[1] Someone. A paper. 2015."],
+      ]),
+    ]);
+    expect(outline.sections?.map((s) => [s.canonical, s.heading])).toEqual([
+      ["introduction", "1 Introduction"],
+    ]);
+    const prose = (outline.sections ?? []).map((s) => s.text).join(" ");
+    expect(prose).toContain("integral part of compelling models");
+    expect(prose).not.toContain("We thank the anonymous reviewers");
+  });
+
+  it("stops at an appendix the heading's own words name, numbered or not", () => {
+    const outline = buildOutline([
+      page(1, [
+        ["A Paper About Sequence Models", { height: 17 }],
+        ["1 Introduction"],
+        ["Recurrent neural networks have long been established in sequence modelling."],
+        ["Attention mechanisms have become an integral part of compelling models."],
+        ["Appendix A Proofs", { height: 12 }],
+        ["Proof of Lemma 1 follows from the triangle inequality applied twice over here."],
+      ]),
+    ]);
+    expect(outline.sections?.map((s) => s.heading)).toEqual(["1 Introduction"]);
+    const prose = (outline.sections ?? []).map((s) => s.text).join(" ");
+    expect(prose).not.toContain("triangle inequality");
+  });
+
   it("says a scan is a scan rather than inventing sections", () => {
     const outline = buildOutline([{ page: 1, items: [] }, { page: 2, items: [] }]);
     expect(outline.sections).toBeUndefined();
     expect(outline.reason).toBe("no-text-layer");
     expect(outline.pageCount).toBe(2);
+  });
+
+  // P5-04b, N1 (§1h.16 (c); §1e.4 accepted the number): a PDF whose lines
+  // total fewer than 200 characters is a scan with a stray running head, not a
+  // paper. Nothing held the 200, so a thinner text layer could have started
+  // to read as a document without a test noticing. Same shape on both sides:
+  // a title, a numbered heading and two sentences, one word longer by a
+  // character (six / nine cells) on the 200 side.
+  describe("the scan threshold: under 200 characters of text is a scan (P5-04b, N1)", () => {
+    const TITLE = "Quillwort Cathodes Under Fast Charging"; // 38
+    const FIRST = "Quillwort cathodes are used in small cells since they hold charge."; // 66
+    const second = (cells: string) => `We cycled ${cells} quillwort cells at three charge rates for one month in a warm room.`; // 81 / 82
+    const onePage = (cells: string): PdfPageText[] => [
+      page(1, [[TITLE, { height: 17 }], ["1 Introduction"], [FIRST], [second(cells)]]),
+    ];
+    const twoPages = (cells: string): PdfPageText[] => [
+      page(1, [[TITLE, { height: 17 }], ["1 Introduction"], [FIRST]]),
+      page(2, [[second(cells)]]),
+    ];
+    const characters = (pages: PdfPageText[]) => pages.flatMap(linesOfPage).reduce((n, l) => n + l.text.length, 0);
+
+    it("199 characters in all is a scan: the page count and the reason, nothing else", () => {
+      expect(characters(onePage("six"))).toBe(199);
+      expect(buildOutline(onePage("six"))).toEqual({ pageCount: 1, reason: "no-text-layer" });
+      // The total is over the whole PDF, not per page.
+      expect(characters(twoPages("six"))).toBe(199);
+      expect(buildOutline(twoPages("six"))).toEqual({ pageCount: 2, reason: "no-text-layer" });
+    });
+
+    it("200 characters in all, the same shape, is read: its title and section, no scan reason", () => {
+      // 200 is the smallest total at or above the threshold, and it already
+      // reads as an outline (a title, "1 Introduction", its two sentences).
+      expect(characters(onePage("nine"))).toBe(200);
+      for (const pages of [onePage("nine"), twoPages("nine")]) {
+        const outline = buildOutline(pages);
+        expect(outline.reason).toBeNull();
+        expect(outline.title).toBe(TITLE);
+        expect(outline.pageCount).toBe(pages.length);
+        expect(outline.sections?.map((s) => [s.canonical, s.heading])).toEqual([["introduction", "1 Introduction"]]);
+        expect(outline.sections?.[0].text).toContain(FIRST);
+        expect(outline.sections?.[0].text).toContain("We cycled nine quillwort cells");
+      }
+    });
   });
 });
 

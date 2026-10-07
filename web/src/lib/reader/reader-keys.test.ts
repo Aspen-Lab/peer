@@ -1,7 +1,28 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+// P1-03: the keyboard layer itself is driven below on the minimal hook
+// runtime (no DOM here) to show `q` typed into the question field is typing,
+// not the shortcut. The table tests are pure and unaffected.
+vi.mock("react", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("react")>();
+  const { hookRuntime } = await import("@/test-support/hook-runtime");
+  return { ...actual, ...hookRuntime.hooks };
+});
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), back: vi.fn(), replace: vi.fn() }) }));
+// zustand's hooks call React itself (it is not transformed, so the mock
+// above does not reach it); the layer reads three fields of the feed store.
+vi.mock("@/store/feed", async (importOriginal) => {
+  const state = { loadFeed: () => undefined, undoDismiss: () => undefined, pendingDismissal: null, papers: [] };
+  const useFeedStore = Object.assign((select: (s: typeof state) => unknown) => select(state), { getState: () => state });
+  return { ...(await importOriginal<typeof import("@/store/feed")>()), useFeedStore };
+});
+
+import { hookRuntime } from "@/test-support/hook-runtime";
+import { KeyboardLayer } from "@/components/keyboard";
 import {
   PAPER_KEYS,
   keyCap,
+  paperKeysFor,
   readerActions,
   readerHelpItems,
   registerReaderActions,
@@ -42,6 +63,33 @@ describe("resolvePaperKey", () => {
   it("names no key twice", () => {
     const all = PAPER_KEYS.flatMap((entry) => [...entry.keys]);
     expect(new Set(all).size).toBe(all.length);
+  });
+});
+
+// P4-01 (rulings §1h.12 (h)): `u` first takes back a plain rewrite the reader opened (the latest
+// undoable act), and only when none shows does what it did before — undo a dismiss, else mark
+// unread / read. It is still ONE row: the help sheet and the foot legend read this table, so the
+// label says both and nothing else moves.
+describe("the u row (P4-01)", () => {
+  const row = PAPER_KEYS.filter((entry) => entry.keys.includes("u"));
+
+  it("is one row, still the undoOrToggleRead action, and says the plain rewrite comes first", () => {
+    expect(row).toHaveLength(1);
+    expect(row[0].action).toBe("undoOrToggleRead");
+    expect(row[0].label).toBe("Undo a plain rewrite or a dismiss, else mark unread / read");
+    expect(row[0].short).toBe("undo");
+    expect(resolvePaperKey("u")).toBe("undoOrToggleRead");
+  });
+
+  it("is the sheet's row and the legend's, from the same table", () => {
+    expect(readerHelpItems().find((item) => item.keys === "u")?.label).toBe("Undo a plain rewrite or a dismiss, else mark unread / read");
+    expect(paperKeysFor({ upload: true }).find((entry) => entry.keys.includes("u"))?.label).toBe(row[0].label);
+    expect(paperKeysFor({ upload: false }).find((entry) => entry.keys.includes("u"))?.label).toBe(row[0].label);
+  });
+
+  it("is sentence case, like every other label", () => {
+    expect(row[0].label).not.toMatch(/^[A-Z ]+$/);
+    expect(row[0].label).not.toMatch(/\bskip\b|don.t read/i);
   });
 });
 
@@ -110,3 +158,161 @@ describe("registerReaderActions", () => {
     expect(readerActions()).toBe(second);
   });
 });
+
+// P1-03 (§1f.10): `q` asks a question about the paper on screen — the page
+// registers `ask` to focus the first empty question line.
+describe("the ask key (P1-03)", () => {
+  it("maps q to ask, and the help sheet and legend list it", () => {
+    expect(resolvePaperKey("q")).toBe("ask");
+    expect(PAPER_KEYS.find((entry) => entry.action === "ask")).toEqual({
+      keys: ["q"],
+      action: "ask",
+      label: "Ask a question about this paper",
+      short: "ask",
+    });
+    expect(readerHelpItems()).toContainEqual({ keys: "q", label: "Ask a question about this paper" });
+    expect(resolvePaperKey("Q")).toBeNull();
+  });
+});
+
+// P3-02b (§1h.3): `e` opens the "Explain this?" box on the selected passage —
+// the page registers `explain` and does what the button's click does.
+describe("the explain key (P3-02b)", () => {
+  it("maps e to explain, once, before the back entry, with the help sheet and the legend reading it from the table", () => {
+    expect(resolvePaperKey("e")).toBe("explain");
+    expect(PAPER_KEYS.find((entry) => entry.action === "explain")).toEqual({
+      keys: ["e"],
+      action: "explain",
+      label: "Explain the selected passage",
+      short: "explain",
+    });
+    expect(PAPER_KEYS.filter((entry) => entry.keys.includes("e"))).toHaveLength(1);
+    const actions = PAPER_KEYS.map((entry) => entry.action);
+    expect(actions.indexOf("explain")).toBe(actions.indexOf("back") - 1);
+    expect(readerHelpItems()).toContainEqual({ keys: "e", label: "Explain the selected passage" });
+    expect(resolvePaperKey("E")).toBeNull();
+  });
+
+  it("keeps it on every page: an upload's table drops skip and nothing else", () => {
+    expect(paperKeysFor({ upload: true }).map((entry) => entry.action)).toContain("explain");
+    expect(paperKeysFor({ upload: false }).map((entry) => entry.action)).toContain("explain");
+    expect(paperKeysFor({ upload: false })).toEqual(PAPER_KEYS);
+  });
+});
+
+describe("the keyboard layer and the question field (P1-03)", () => {
+  class FakeElement {
+    constructor(readonly tagName: string) {}
+    isContentEditable = false;
+    blur() {}
+  }
+  let keydown: ((event: unknown) => void) | null = null;
+
+  beforeEach(() => {
+    keydown = null;
+    vi.stubGlobal("HTMLElement", FakeElement);
+    vi.stubGlobal("HTMLInputElement", class extends FakeElement {});
+    vi.stubGlobal("window", {
+      location: { pathname: "/papers/openalex:W1" },
+      addEventListener: (type: string, listener: (event: unknown) => void) => {
+        if (type === "keydown") keydown = listener;
+      },
+      removeEventListener: () => {},
+      getSelection: () => ({ isCollapsed: true }),
+      matchMedia: () => ({ matches: false }),
+    });
+    vi.stubGlobal("document", { activeElement: null, getElementById: () => null, querySelectorAll: () => [] });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    registerReaderActions({})();
+  });
+
+  function press(key: string, target: unknown) {
+    const event = { key, target, metaKey: false, ctrlKey: false, altKey: false, shiftKey: false, preventDefault: vi.fn() };
+    keydown?.(event);
+    return event;
+  }
+
+  it("leaves a q typed into an input alone, and runs ask for a q pressed anywhere else", async () => {
+    const ask = vi.fn();
+    registerReaderActions({ ask });
+    const mounted = await hookRuntime.mount(() => KeyboardLayer());
+
+    const typed = press("q", new FakeElement("INPUT"));
+    expect(ask).not.toHaveBeenCalled();
+    expect(typed.preventDefault).not.toHaveBeenCalled();
+
+    const pressed = press("q", new FakeElement("DIV"));
+    expect(ask).toHaveBeenCalledTimes(1);
+    expect(pressed.preventDefault).toHaveBeenCalled();
+    mounted.unmount();
+  });
+
+  // P3-02b: typed into the box's textarea, `e` is a letter — the layer never
+  // intercepts a key typed into a text field. Pressed anywhere else it runs the
+  // page's `explain`.
+  it("leaves an e typed into a textarea or an input alone, and runs explain for an e pressed anywhere else", async () => {
+    const explain = vi.fn();
+    registerReaderActions({ explain });
+    const mounted = await hookRuntime.mount(() => KeyboardLayer());
+
+    for (const tag of ["TEXTAREA", "INPUT"]) {
+      const typed = press("e", new FakeElement(tag));
+      expect(typed.preventDefault).not.toHaveBeenCalled();
+    }
+    expect(explain).not.toHaveBeenCalled();
+
+    const pressed = press("e", new FakeElement("DIV"));
+    expect(explain).toHaveBeenCalledTimes(1);
+    expect(pressed.preventDefault).toHaveBeenCalled();
+    mounted.unmount();
+  });
+
+  it("leaves e inert on a page that registered no explain", async () => {
+    registerReaderActions({ next: vi.fn() });
+    const mounted = await hookRuntime.mount(() => KeyboardLayer());
+
+    expect(press("e", new FakeElement("DIV")).preventDefault).not.toHaveBeenCalled();
+    mounted.unmount();
+  });
+
+  // P1-08 (§1f.19): an uploaded PDF's page registers no `skip`. The layer
+  // resolves `x` to `skip`, finds no handler, and leaves the key alone —
+  // nothing runs, the event is not prevented, and no global key answers
+  // to `x` on a paper page.
+  it("leaves x unhandled on a page that registered no skip, and runs skip where one is registered", async () => {
+    const next = vi.fn();
+    registerReaderActions({ next });
+    const mounted = await hookRuntime.mount(() => KeyboardLayer());
+
+    const inert = press("x", new FakeElement("DIV"));
+    expect(inert.preventDefault).not.toHaveBeenCalled();
+    expect(next).not.toHaveBeenCalled();
+
+    const skip = vi.fn();
+    registerReaderActions({ next, skip });
+    const handled = press("x", new FakeElement("DIV"));
+    expect(skip).toHaveBeenCalledTimes(1);
+    expect(handled.preventDefault).toHaveBeenCalled();
+    mounted.unmount();
+  });
+});
+
+// P1-08 (§1a.6, §1f.19): on a standalone uploaded PDF's page there is no
+// "Not interested, then next" — the one table loses that row there.
+describe("paperKeysFor (P1-08)", () => {
+  it("drops skip for an upload, and is the whole table otherwise", () => {
+    const upload = paperKeysFor({ upload: true });
+    expect(upload.map((entry) => entry.action)).not.toContain("skip");
+    expect(upload.some((entry) => entry.keys.includes("x"))).toBe(false);
+    expect(upload).toEqual(PAPER_KEYS.filter((entry) => entry.action !== "skip"));
+    expect(paperKeysFor({ upload: false })).toEqual(PAPER_KEYS);
+  });
+
+  it("leaves the help sheet as it was: it describes the reader's keys in general", () => {
+    expect(readerHelpItems().map((item) => item.label)).toContain("Not interested, then next");
+  });
+});
+
