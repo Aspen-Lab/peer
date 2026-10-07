@@ -490,7 +490,7 @@ function MarkedParagraph({ text, mark }: { text: string; mark: TermOccurrence })
 /** P4-01: a paragraph with its rewrite beside it. From the spread (xl) the anchor is two columns —
  *  the paper's paragraph and Peer's — with the control and whatever the paper set after the
  *  paragraph across both; below it nothing is a grid and the blocks stack, as paragraphs already do.
- *  Each column is about 250px at 1440, too narrow to justify without rivers, so the pair's text is
+ *  Each column is about 308px at 1440 on the spread (the 640px column less the 24px gap, halved), too narrow to justify without rivers, so the pair's text is
  *  set ragged-right (the words are the same; only the alignment of a paragraph that shows a rewrite
  *  changes, and only on the spread). */
 const SIDE_BY_SIDE = "xl:grid xl:grid-cols-2 xl:gap-x-6 xl:gap-y-4 xl:space-y-0 xl:[&_p]:text-left";

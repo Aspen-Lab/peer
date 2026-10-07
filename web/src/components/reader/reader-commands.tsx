@@ -11,7 +11,7 @@
 //
 //   [t] Read it here                    ← the first command, the accent
 //   [o] Open on arXiv                ↗  ← leaves the page
-//   [s] Save  ·  [x] Skip  ·  [c] Copy   ← the three verdicts, one row
+//   [s] Save  ·  [x] Skip  ·  [c] Copy   ← the verdicts in one row; Skip only where the page gives it (P1-08)
 //   ↑  Upload full article PDF          ← where the reader brings the text
 
 import type { ReactNode } from "react";
@@ -31,7 +31,7 @@ export const COMMAND = "eyebrow";
 const TOUCH_TARGET = "[@media(hover:none)]:min-h-11";
 /** A full-width row: key and word on the left edge, the way a menu reads. */
 const ROW = "w-full justify-start px-3";
-/** A cell of the verdict row: the three share the row equally. */
+/** A cell of the verdict row: the commands share the row equally, two or three. */
 const CELL = "w-full px-2";
 
 export function ReaderCommands({
