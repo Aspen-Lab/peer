@@ -40,11 +40,14 @@ const DIGIT_SHAPES = {
 
 // P5-04c (§1h.17 (b)): digits grouped by separators, a card or a phone number written in groups
 // with hyphens, dots, parentheses or brackets and no space. Invented, random-looking, no real
-// format and no real number. The word's digits total 16 (4-4-4-4 and 3-3-4-6) or 15 (one fewer).
+// format and no real number. The word's digits total 16 (4-4-4-4 and 3-3-4-6).
+// P5-06 (§1h.19 (d)) lowers the line from 16 to 10, so the cases P5-04c kept just under it, at 15
+// digits, would now be shapes: they are re-aimed at 9 digits, the same shapes (hyphens, dots,
+// brackets, groups in parentheses) below the new line.
 const HYPHENS_16 = "6150-8273-0419-5936";
 const DOTS_16 = "418.206.7395.640128";
-const HYPHENS_15 = "6150-8273-0419-593";
-const DOTS_15 = "418.206.7395.64012";
+const HYPHENS_9 = "615-827-041";
+const DOTS_9 = "418.206.739";
 const GROUPED_SHAPES = {
   HYPHENS_4444: HYPHENS_16,
   HYPHENS_TRAILING_COMMA: `${HYPHENS_16},`,
@@ -58,6 +61,23 @@ const GROUPED_SHAPES = {
 };
 /** The invented groups, for the checks that look for a piece of any of them. */
 const GROUPS = ["6150", "8273", "0419", "5936", "593", "418", "206", "7395", "640128", "64012"];
+
+// P5-06 (§1h.19 (d), N1): a phone number has at most 15 digits (E.164), so a line at 16 never caught
+// one. A hyphen-grouped number of 10 or 11 digits, written with no space, is one word whose digits
+// total the line or more: a shape. Invented groupings and digits (not any country's format, not any
+// real number): 2-4-4 and 1-3-4-3.
+const PHONE_10 = "73-0592-8416";
+const PHONE_11 = "7-305-9284-165";
+const PHONE_SHAPES = {
+  HYPHENS_10: PHONE_10,
+  HYPHENS_10_TRAILING_COMMA: `${PHONE_10},`,
+  HYPHENS_10_IN_PARENTHESES: `(${PHONE_10}).`,
+  HYPHENS_11: PHONE_11,
+  HYPHENS_11_TRAILING_COMMA: `${PHONE_11},`,
+  HYPHENS_11_IN_BRACKETS: `[${PHONE_11}]`,
+};
+/** The invented groups of those numbers (three characters or more, which is what `fragments` looks for). */
+const PHONE_GROUPS = ["0592", "8416", "305", "9284", "165"];
 
 /** The names of the terms (each comes with its share, P5-04 S4). */
 const names = (questions: readonly string[], marked: readonly string[] = []) => questionTerms(questions, marked).map((t) => t.term);
@@ -100,16 +120,21 @@ describe("isSecretOrAddressShaped", () => {
     expect(isSecretOrAddressShaped("ti3c2tx")).toBe(false);
   });
 
-  // P5-04b (§1h.16 (d), C's P5-04 question 3): a run of 16 or more digits is an
-  // identifier, a card or a phone number, the same privacy class as a key. A
-  // run of 15 passes this rule; whether such a word becomes a term is
-  // `specificTerms`'s business, not this function's.
-  it("drops a word holding a run of 16 or more digits, alone or inside a word, and keeps 15", () => {
+  // P5-04b (§1h.16 (d), C's P5-04 question 3): a run of digits is an identifier, a card or a phone
+  // number, the same privacy class as a key. P5-06 (§1h.19 (d)) puts the line at 10 digits (it was
+  // 16, which no phone number reaches); a run of 9 or fewer passes this rule, and whether such a
+  // word becomes a term is `specificTerms`'s business, not this function's.
+  it("drops a word holding a run of 10 or more digits, alone or inside a word, and keeps 9", () => {
     expect(isSecretOrAddressShaped(DIGITS_16)).toBe(true);
     expect(isSecretOrAddressShaped(DIGITS_19)).toBe(true);
     for (const shape of Object.values(DIGIT_SHAPES)) expect(isSecretOrAddressShaped(shape)).toBe(true);
-    expect(isSecretOrAddressShaped(DIGITS_16.slice(1))).toBe(false); // 15 digits
-    expect(isSecretOrAddressShaped(`id-${DIGITS_16.slice(1)}`)).toBe(false);
+    // P5-04b kept 15 digits here; at the new line of 10 the same two shapes are re-aimed at 9 (§1h.19 (d)).
+    expect(isSecretOrAddressShaped(DIGITS_16.slice(7))).toBe(false); // 9 digits
+    expect(isSecretOrAddressShaped(`id-${DIGITS_16.slice(7)}`)).toBe(false);
+    // The line itself: 10 digits are a shape, 9 are not.
+    expect(isSecretOrAddressShaped(DIGITS_16.slice(0, 10))).toBe(true);
+    expect(isSecretOrAddressShaped(`id-${DIGITS_16.slice(0, 10)}`)).toBe(true);
+    expect(isSecretOrAddressShaped(DIGITS_16.slice(0, 9))).toBe(false);
     // P5-04c (§1h.17 (b)) reverses P5-04b's "a hyphen ends the run": 8 + 8 digits in one hyphenated
     // word total 16, so the word is a shape (this line said `false` in P5-04b; the rule is now the
     // digits' total, whatever separates them).
@@ -119,10 +144,11 @@ describe("isSecretOrAddressShaped", () => {
   });
 
   // P5-04c (§1h.17 (b), C's P5-04b question 1): a card or a phone number written in groups with
-  // hyphens, dots, parentheses or brackets and no space is one word whose digits total 16 or more:
-  // a shape too, whatever separates the groups. A public identifier written that way (an ORCID iD)
-  // goes with them, at no cost: it names a person, never a topic.
-  it("drops a word whose digits total 16 or more, whatever separates them, and keeps 15 (P5-04c)", () => {
+  // hyphens, dots, parentheses or brackets and no space is one word whose digits total the line or
+  // more: a shape too, whatever separates the groups. A public identifier written that way (an
+  // ORCID iD) goes with them, at no cost: it names a person, never a topic. (The line was 16 here;
+  // P5-06 moves it to 10, see the phone cases below, and the 15-digit cases are re-aimed at 9.)
+  it("drops a word whose digits total 16 or more, whatever separates them, and keeps 9 (P5-04c, P5-06)", () => {
     for (const shape of Object.values(GROUPED_SHAPES)) expect(isSecretOrAddressShaped(shape)).toBe(true);
     // The count is of the digits (`\p{Nd}`) of the whole word: other scripts' decimal digits too.
     expect(isSecretOrAddressShaped("٦١٥٠-٨٢٧٣-٠٤١٩-٥٩٣٦")).toBe(true);
@@ -130,18 +156,47 @@ describe("isSecretOrAddressShaped", () => {
     // Letters around the groups do not hide them.
     expect(isSecretOrAddressShaped(`id-${HYPHENS_16}`)).toBe(true);
     expect(isSecretOrAddressShaped(`ref${DOTS_16}`)).toBe(true);
-    // 15 digits in groups pass this rule (whether such a word becomes a term is `specificTerms`'s business).
-    for (const word of [HYPHENS_15, DOTS_15, `${HYPHENS_15},`, `[${HYPHENS_15}]`, `[${DOTS_15}],`, "(6150)(8273)(0419)(593)"]) {
+    // 9 digits in groups pass this rule (whether such a word becomes a term is `specificTerms`'s business).
+    for (const word of [HYPHENS_9, DOTS_9, `${HYPHENS_9},`, `[${HYPHENS_9}]`, `[${DOTS_9}],`, "(615)(827)(041)"]) {
       expect(isSecretOrAddressShaped(word)).toBe(false);
     }
-    // A hyphenated word with a few digits is an ordinary word.
-    for (const word of ["2-step", "1234-5678-90", "4-4-2", "x-ray-diffraction-2024", "2026-10-07", "Ti3C2Tx-2024", "3.14159"]) {
+    // A hyphenated word with a few digits is an ordinary word. ("1234-5678-90" held 10 digits and
+    // passed under P5-04c's 16; it is a shape at the new line of 10, so it is re-aimed at 9 digits.)
+    for (const word of ["2-step", "1234-5678-9", "4-4-2", "x-ray-diffraction-2024", "2026-10-07", "Ti3C2Tx-2024", "3.14159"]) {
+      expect(isSecretOrAddressShaped(word)).toBe(false);
+    }
+  });
+
+  // P5-06 (§1h.19 (d), N1): A measured that a hyphen-grouped phone number of 10 or 11 digits was one
+  // ledger term. A phone number has at most 15 digits, so a line at 16 never caught one; a word whose
+  // decimal digits total 10 or more, whatever separates them, is an identifier, a card or a phone
+  // number, never a topic. A year, a date, a count or a decimal is far below the line.
+  it("drops a hyphen-grouped phone number of 10 or 11 digits, alone or with a comma, a full stop or brackets (P5-06)", () => {
+    for (const shape of Object.values(PHONE_SHAPES)) expect(isSecretOrAddressShaped(shape)).toBe(true);
+    // Letters around the groups do not hide them.
+    expect(isSecretOrAddressShaped(`tel-${PHONE_10}`)).toBe(true);
+    expect(isSecretOrAddressShaped(`tel${PHONE_11}`)).toBe(true);
+    // The word P5-04c's list kept as ordinary ("1234-5678-90": 10 digits) is a shape at the new line.
+    expect(isSecretOrAddressShaped("1234-5678-90")).toBe(true);
+    // The line: 10 digits in, 9 out, however they are grouped.
+    expect(isSecretOrAddressShaped("73-0592-841")).toBe(false); // 2 + 4 + 3 = 9
+    expect(isSecretOrAddressShaped("7-305-9284-1")).toBe(false); // 1 + 3 + 4 + 1 = 9
+    expect(isSecretOrAddressShaped("7-305-9284-16")).toBe(true); // 1 + 3 + 4 + 2 = 10
+  });
+
+  it("keeps a year, a date, a count and a decimal: far below the line (P5-06)", () => {
+    for (const word of ["2026", "2026-10-07", "2026-10-07,", "(2026)", "1990-2024", "3.14159", "3.14159,", "1,000,000", "100000000", "(555)", "(555),"]) {
       expect(isSecretOrAddressShaped(word)).toBe(false);
     }
   });
 
   it("keeps the groups of a number written with spaces: each is a word of its own (P5-04c)", () => {
     for (const group of ["6150", "8273", "0419", "5936", "(6150)", "[8273]", "418.", "640128,"]) {
+      expect(isSecretOrAddressShaped(group)).toBe(false);
+    }
+    // P5-06: at the new line of 10 the same holds for a phone number written with spaces: a group
+    // like "(555)" alone has 3 digits, and the groups after it are shorter than the line too.
+    for (const group of ["(555)", "(730)", "592-8416", "0592", "8416"]) {
       expect(isSecretOrAddressShaped(group)).toBe(false);
     }
   });
@@ -206,8 +261,8 @@ describe("questionTerms — a key-shaped value or an address never becomes a ter
     expect(names([`${HYPHENS_16} ${DOTS_16}`, `[${HYPHENS_16}], (${DOTS_16}).`])).toEqual([]);
   });
 
-  it("a number of 15 digits in groups is not a shape: the rule leaves it to specificTerms (P5-04c)", () => {
-    for (const word of [HYPHENS_15, DOTS_15, `[${HYPHENS_15}]`]) {
+  it("a number of 9 digits in groups is not a shape: the rule leaves it to specificTerms (P5-04c, P5-06)", () => {
+    for (const word of [HYPHENS_9, DOTS_9, `[${HYPHENS_9}]`]) {
       const text = question(word);
       expect(names([text])).toEqual(specificTerms(text));
       for (const safe of SAFE_WORDS) expect(names([text])).toContain(safe);
@@ -218,6 +273,39 @@ describe("questionTerms — a key-shaped value or an address never becomes a ter
     const text = question("6150 8273 0419 5936");
     expect(names([text])).toEqual(specificTerms(text));
     for (const safe of SAFE_WORDS) expect(names([text])).toContain(safe);
+  });
+
+  // P5-06 (§1h.19 (d), N1): a hyphen-grouped phone number of 10 or 11 digits gives no term, nor any
+  // group of it; the question's own words stay.
+  for (const [name, shape] of Object.entries(PHONE_SHAPES)) {
+    it(`${name}: no term holds the phone number or any group of it, and the question's own words stay (P5-06)`, () => {
+      const terms = names([question(shape)]);
+      for (const piece of [...fragments(shape), ...PHONE_GROUPS]) expect(terms).not.toContain(piece);
+      // The question's own words hold no digit at all, so no term does.
+      for (const term of terms) expect(term).not.toMatch(/\d/);
+      expect(JSON.stringify(terms)).not.toContain(PHONE_10);
+      expect(JSON.stringify(terms)).not.toContain(PHONE_11);
+      for (const word of SAFE_WORDS) expect(terms).toContain(word);
+    });
+  }
+
+  it("a question made only of phone numbers has no terms (P5-06)", () => {
+    expect(names([Object.values(PHONE_SHAPES).join(" ")])).toEqual([]);
+    expect(names([`${PHONE_10} ${PHONE_11}`, `[${PHONE_10}], (${PHONE_11}).`])).toEqual([]);
+  });
+
+  it("a phone number written with spaces is separate words, each below the line: the rule leaves them to specificTerms (P5-06)", () => {
+    const text = question("(730) 592-8416");
+    expect(names([text])).toEqual(specificTerms(text));
+    for (const safe of SAFE_WORDS) expect(names([text])).toContain(safe);
+  });
+
+  it("a year, an ISO date and a decimal in a question are left to specificTerms, as before (P5-06)", () => {
+    for (const word of ["2026", "2026-10-07", "3.14159"]) {
+      const text = question(word);
+      expect(names([text])).toEqual(specificTerms(text));
+      for (const safe of SAFE_WORDS) expect(names([text])).toContain(safe);
+    }
   });
 
   it("is silent: no log line, no notice", () => {
@@ -297,6 +385,27 @@ describe("after a settle: not in the ledger, and not in what the sync sends", ()
     }
     for (const shape of shapes) {
       for (const piece of [...fragments(shape), ...GROUPS]) for (const text of [held, payload]) expect(text).not.toContain(`"${piece}"`);
+    }
+    // The ledger holds only the question's own words: not one label carries a digit.
+    for (const entry of Object.values(ledger ?? {})) expect(entry.label).not.toMatch(/\d/);
+  });
+
+  it("a hyphen-grouped phone number leaves the ledger and the sync's payload untouched (P5-06)", () => {
+    const shapes = Object.values(PHONE_SHAPES);
+    useReadingQuestionsStore.getState().set(PAPER, shapes.slice(0, 3).map(question), false, "2026-10-07T00:00:00.000Z");
+    settleQuestions(PAPER);
+    useReadingQuestionsStore.getState().set("openalex:W519", shapes.slice(3).map(question), false, "2026-10-07T00:00:00.000Z");
+    settleQuestions("openalex:W519");
+    const ledger = useProfileStore.getState().profile.preferenceLedger;
+    const held = JSON.stringify(ledger);
+    expect(held).toContain("annealing");
+    const payload = JSON.stringify(remoteProfilePayload(useProfileStore.getState().profile));
+    for (const text of [held, payload]) {
+      expect(text).not.toContain(PHONE_10);
+      expect(text).not.toContain(PHONE_11);
+    }
+    for (const shape of shapes) {
+      for (const piece of [...fragments(shape), ...PHONE_GROUPS]) for (const text of [held, payload]) expect(text).not.toContain(`"${piece}"`);
     }
     // The ledger holds only the question's own words: not one label carries a digit.
     for (const entry of Object.values(ledger ?? {})) expect(entry.label).not.toMatch(/\d/);
