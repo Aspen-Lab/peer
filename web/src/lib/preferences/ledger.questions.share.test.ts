@@ -4,6 +4,7 @@ import {
   applyPreferenceSignal,
   applyQuestionTermSignal,
   cleanPreferenceLedger,
+  holdsQuestionTerms,
   prepareLedger,
   preferenceKey,
   questionSourceKey,
@@ -12,7 +13,8 @@ import {
   termConcept,
 } from "./ledger";
 import { questionTerms } from "./question-terms";
-import type { PreferenceLedger } from "@/types";
+import { useProfileStore } from "@/store/profile";
+import { defaultProfile, type PreferenceLedger } from "@/types";
 import type { RawItem } from "@/lib/sources/types";
 
 // P5-04 (S4, §1h.15 (d)): one question is one signal. A measured that every term of a question
@@ -196,5 +198,52 @@ describe("gradual: a question with many words does not outweigh a like", () => {
     let manyPapers: PreferenceLedger = {};
     for (let i = 0; i < 40; i++) manyPapers = applyQuestionTermSignal(manyPapers, `openalex:W${i}`, questionTerms([asking(WORDS.slice(0, 3))]), T0);
     expect(boostOf(manyPapers, item(`On ${WORDS.slice(0, 3).join(" ")}`))).toBeCloseTo(0.18, 9);
+  });
+});
+
+// P5-06 (S2, §1h.19 (c)): `holdsQuestionTerms` is the store's "nothing to change" test, and P5-04 (S4)
+// says the same terms at other shares are a change. A P5-05's Q14 (the weight comparison replaced by
+// `wanted.has(entry.key)`) survived the whole suite, and it is not an equivalent mutant: a question
+// set that gains a one-term question naming a word already held moves that word's share, the
+// mutation calls the ledger unchanged, and the ledger keeps the old share. The words are invented.
+describe("holdsQuestionTerms — the same terms at other shares are a change (P5-06, S2)", () => {
+  const [alpha, beta] = WORDS;
+  const share = (a: number, b: number) => [{ term: alpha, weight: a }, { term: beta, weight: b }];
+  const weightOf = (ledger: PreferenceLedger | undefined, word: string) =>
+    ledger?.[preferenceKey(word)]?.questions?.[questionSourceKey(PAPER)]?.weight;
+
+  it("holds what was recorded, and nothing else: the same shares are held, a different share of the same terms is not", () => {
+    const ledger = applyQuestionTermSignal({}, PAPER, share(0.1, 0.1), T0);
+
+    expect(holdsQuestionTerms(ledger, PAPER, share(0.1, 0.1))).toBe(true);
+    // A's probe: alpha's share rises (the question set gained a one-term question naming it).
+    expect(holdsQuestionTerms(ledger, PAPER, share(0.2, 0.1))).toBe(false);
+    // And the other way: a share that falls is a change too.
+    expect(holdsQuestionTerms(ledger, PAPER, share(0.1, 0.05))).toBe(false);
+    // The set of terms is compared as well as the shares.
+    expect(holdsQuestionTerms(ledger, PAPER, [{ term: alpha, weight: 0.1 }])).toBe(false);
+    expect(holdsQuestionTerms(ledger, PAPER, [...share(0.1, 0.1), { term: WORDS[2], weight: 0.1 }])).toBe(false);
+  });
+
+  it("recordQuestionTerms writes the new share: {alpha 0.1, beta 0.1}, then {alpha 0.2, beta 0.1} leaves alpha at 0.2", () => {
+    useProfileStore.setState({ profile: { ...defaultProfile } });
+    const store = () => useProfileStore.getState();
+
+    store().recordQuestionTerms(PAPER, share(0.1, 0.1));
+    expect(weightOf(store().profile.preferenceLedger, alpha)).toBe(0.1);
+    expect(weightOf(store().profile.preferenceLedger, beta)).toBe(0.1);
+
+    store().recordQuestionTerms(PAPER, share(0.2, 0.1));
+    expect(weightOf(store().profile.preferenceLedger, alpha)).toBe(0.2);
+    expect(weightOf(store().profile.preferenceLedger, beta)).toBe(0.1);
+
+    // The same shares again are no change at all: the profile object is the one it was.
+    const settled = store().profile;
+    store().recordQuestionTerms(PAPER, share(0.2, 0.1));
+    expect(store().profile).toBe(settled);
+
+    // A share that falls is written too.
+    store().recordQuestionTerms(PAPER, share(0.1, 0.1));
+    expect(weightOf(store().profile.preferenceLedger, alpha)).toBe(0.1);
   });
 });
