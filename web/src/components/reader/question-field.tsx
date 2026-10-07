@@ -123,6 +123,24 @@ export function standingGroup(standing: readonly string[] | undefined, lines: re
 }
 
 /**
+ * P5-04 (N5): a question appears under one group only. A standing question
+ * pressed on one paper is stored as that paper's question, so on the next paper
+ * it was also an example under "From your earlier questions"; the example groups
+ * leave out a text that is one of the standing questions (trimmed, case-folded,
+ * spaces folded), and a group left with nothing goes. The standing list is read
+ * as the standing group reads it (text only, cleaned, at most five). With none
+ * the groups come back as they were.
+ */
+export function withoutStandingRepeats(groups: readonly ChipGroup[], standing: readonly string[] | undefined): ChipGroup[] {
+  const key = (text: string) => text.replace(/\s+/g, " ").trim().toLocaleLowerCase();
+  const taken = new Set(cleanQuestions((standing ?? []).filter((q): q is string => typeof q === "string")).map(key));
+  if (taken.size === 0) return [...groups];
+  return groups
+    .map((group) => (group.label === STANDING.chipGroup ? group : { ...group, chips: group.chips.filter((chip) => !taken.has(key(chip.text))) }))
+    .filter((group) => group.chips.length > 0);
+}
+
+/**
  * P1-07 (§1f.18 a): the line still being written — the one with focus, until
  * Enter settles it — or null when every line is settled. A blur settles the
  * line it leaves; typing unsettles the line it is in.
@@ -345,6 +363,8 @@ export function QuestionField({
 
   const standingChips = standingGroup(standing, lines);
   const groups = [...(standingChips ? [standingChips] : []), ...chipGroups(examples)];
+  // P5-04 (N5): a question under one group only.
+  const shownGroups = withoutStandingRepeats(groups, standing);
   const chipsShown = showChips({ focused, lines, gist });
   const full = lines.length >= MAX_QUESTIONS && lines.every((line) => line.trim() !== "");
 
@@ -453,7 +473,7 @@ export function QuestionField({
       {chipsShown && (
         <div className="mt-3 space-y-2">
           <p className="annotation text-text-faint">{ASK.hint}</p>
-          {groups.map((group) => (
+          {shownGroups.map((group) => (
             <div key={group.label}>
               <p className="annotation text-text-faint">{group.label}</p>
               <div className="mt-1 flex flex-wrap gap-2">
