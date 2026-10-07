@@ -1406,6 +1406,39 @@ describe("the reply caps (P3-07)", () => {
     expect(detailed.length).toBeGreaterThan(reply.length);
   });
 
+  // P4-00c (§1h.11 (b), A's P3-06b P7-16, accepted, no code change): "a lone sentence longer than the
+  // cap is cut at a word boundary and marked \"…\"; every other cut is at a sentence boundary." The test
+  // above pins the first half for a reply; this one pins the whole rule in one place, for a reply and for a
+  // part of the first answer — the lone sentence is the only text that ends inside a sentence, it ends
+  // at a word and says so, and nothing else Peer cuts carries a mark or ends inside a sentence.
+  it("pins the amended cut rule: only a lone sentence over the cap is cut inside the sentence, at a word and marked; every other cut is after a sentence, unmarked", () => {
+    // Capitalised: a full stop followed by a lower-case word is no sentence break to the splitter.
+    const lone = `${"Plates grow slowly ".repeat(80)}and that is all.`;
+    const fits = sized("a", 200);
+    const cases: Array<[string, (text: string) => string, number]> = [
+      ["a reply", (text) => sanitizeExplainReply({ reply: text })?.reply as string, EXPLAIN_CAPS.replyChars],
+      ["a long reply", (text) => sanitizeExplainReply({ reply: text }, { detail: true })?.reply as string, EXPLAIN_CAPS.replyDetailChars],
+      ["a part of the first answer", (text) => sanitizeExplainAnswer({ meaning: text, here: { text: "Fine." } })?.meaning as string, EXPLAIN_CAPS.partChars],
+    ];
+
+    for (const [name, run, cap] of cases) {
+      // The lone sentence: cut at a word boundary, marked, within the cap.
+      const cut = run(lone);
+      const kept = cut.slice(0, -1);
+      expect(cut.endsWith("…"), name).toBe(true);
+      expect(cut.length, name).toBeLessThanOrEqual(cap);
+      expect(lone.startsWith(kept), name).toBe(true);
+      expect(/\s/.test(lone[kept.length]), name).toBe(true);
+      // A sentence that fits, then a lone one that does not: cut after the first, whole and unmarked.
+      expect(run(`${fits} ${lone}`), name).toBe(fits);
+      // Whole sentences over the cap: cut after the last one that fits, unmarked, a prefix ending a sentence.
+      const many = Array.from({ length: 12 }, (_, i) => sized(`s${i}`, 230)).join(" ");
+      const out = run(many);
+      expect(out.endsWith("…"), name).toBe(false);
+      expect(wholeCut(many, out), name).toBe(true);
+    }
+  });
+
   it("leaves the quote alone: the sentence cap is on the prose, and the paper's sentence is verified or dropped whole by the next step", () => {
     const out = sanitizeExplainReply({ reply: sentences(9), evidence: RAFT_DEF });
 
