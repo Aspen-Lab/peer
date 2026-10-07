@@ -27,6 +27,11 @@ const T0_MS = Date.parse(T0);
 const PAPER = "openalex:W111";
 const OTHER = "arxiv:2401.00001";
 
+// P5-04 (S4): `applyQuestionTermSignal` takes terms with their shares (`questionTerms` makes them).
+// These P5-02 cases are about the evidence's mechanics, not the sharing, so each term here comes
+// at the whole weight, as every term did before; the sharing is `ledger.questions.share.test.ts`.
+const full = (...words: string[]) => words.map((term) => ({ term, weight: QUESTION_TERM_WEIGHT }));
+
 const item = (title: string, tags: string[] = []): RawItem => ({
   id: title, source: "openalex", title, authors: [], url: "", publishedAt: "", tags, metadata: {},
 });
@@ -52,7 +57,7 @@ describe("questionSourceKey", () => {
 
 describe("applyQuestionTermSignal", () => {
   it("adds evidence of exactly QUESTION_TERM_WEIGHT per term, separate from likes and dislikes", () => {
-    const ledger = applyQuestionTermSignal({}, PAPER, ["annealing", "grain"], T0);
+    const ledger = applyQuestionTermSignal({}, PAPER, full("annealing", "grain"), T0);
     const entry = ledger[preferenceKey("grain")];
     expect(entry.positive).toBe(0);
     expect(entry.negative).toBe(0);
@@ -61,21 +66,21 @@ describe("applyQuestionTermSignal", () => {
   });
 
   it("counts a paper once: the same terms again change nothing, and the first time stays", () => {
-    const once = applyQuestionTermSignal({}, PAPER, ["grain"], T0);
-    const twice = applyQuestionTermSignal(once, PAPER, ["grain"], "2026-02-01T00:00:00.000Z");
+    const once = applyQuestionTermSignal({}, PAPER, full("grain"), T0);
+    const twice = applyQuestionTermSignal(once, PAPER, full("grain"), "2026-02-01T00:00:00.000Z");
     expect(twice).toEqual(once);
   });
 
   it("two papers asking about one term add two pieces of evidence", () => {
-    let ledger = applyQuestionTermSignal({}, PAPER, ["grain"], T0);
-    ledger = applyQuestionTermSignal(ledger, OTHER, ["grain"], T0);
+    let ledger = applyQuestionTermSignal({}, PAPER, full("grain"), T0);
+    ledger = applyQuestionTermSignal(ledger, OTHER, full("grain"), T0);
     expect(Object.keys(ledger[preferenceKey("grain")].questions ?? {})).toHaveLength(2);
   });
 
   it("replaces the paper's terms: one a later settle dropped is taken out, the others stay", () => {
-    let ledger = applyQuestionTermSignal({}, PAPER, ["annealing", "grain"], T0);
-    ledger = applyQuestionTermSignal(ledger, OTHER, ["annealing"], T0);
-    ledger = applyQuestionTermSignal(ledger, PAPER, ["grain"], T0);
+    let ledger = applyQuestionTermSignal({}, PAPER, full("annealing", "grain"), T0);
+    ledger = applyQuestionTermSignal(ledger, OTHER, full("annealing"), T0);
+    ledger = applyQuestionTermSignal(ledger, PAPER, full("grain"), T0);
     expect(questionTermsOf(ledger, PAPER)).toEqual(["grain"]);
     expect(questionTermsOf(ledger, OTHER)).toEqual(["annealing"]);
     expect(ledger[preferenceKey("annealing")].questions).toEqual({
@@ -85,7 +90,7 @@ describe("applyQuestionTermSignal", () => {
 
   it("no terms and no earlier evidence leaves the ledger as it was", () => {
     const likes = applyPreferenceSignal({}, [termConcept("grain")], "positive", { at: T0 });
-    expect(applyQuestionTermSignal(likes, PAPER, [], T0)).toEqual(cleanPreferenceLedger(likes));
+    expect(applyQuestionTermSignal(likes, PAPER, full(), T0)).toEqual(cleanPreferenceLedger(likes));
   });
 });
 
@@ -95,8 +100,8 @@ describe("removeQuestionTermSignal", () => {
     ledger = applyUploadPreferenceSignal(ledger, [
       { key: preferenceKey("grain"), label: "grain", source: "uploaded_article", confidence: 0.8 },
     ], "d".repeat(64), T0);
-    ledger = applyQuestionTermSignal(ledger, PAPER, ["grain", "annealing"], T0);
-    ledger = applyQuestionTermSignal(ledger, OTHER, ["grain"], T0);
+    ledger = applyQuestionTermSignal(ledger, PAPER, full("grain", "annealing"), T0);
+    ledger = applyQuestionTermSignal(ledger, OTHER, full("grain"), T0);
     const before = cleanPreferenceLedger(ledger);
 
     const after = removeQuestionTermSignal(ledger, PAPER);
@@ -112,10 +117,10 @@ describe("removeQuestionTermSignal", () => {
 
   it("an entry that was a like keeps being one, and an entry only a question made is gone", () => {
     const liked = applyPreferenceSignal({}, [termConcept("grain")], "positive", { at: T0 });
-    const both = applyQuestionTermSignal(liked, PAPER, ["grain"], T0);
+    const both = applyQuestionTermSignal(liked, PAPER, full("grain"), T0);
     const back = removeQuestionTermSignal(both, PAPER);
     expect(back).toEqual(cleanPreferenceLedger(liked));
-    expect(removeQuestionTermSignal(applyQuestionTermSignal({}, PAPER, ["grain"], T0), PAPER)).toEqual({});
+    expect(removeQuestionTermSignal(applyQuestionTermSignal({}, PAPER, full("grain"), T0), PAPER)).toEqual({});
   });
 
   it("without evidence for the paper the ledger comes back as the cleaned one", () => {
@@ -128,12 +133,12 @@ describe("cleanPreferenceLedger and the evidence", () => {
   it("a ledger with no question evidence has no `questions` key anywhere (byte-identical to before)", () => {
     const likes = applyPreferenceSignal({}, [termConcept("grain")], "positive", { at: T0 });
     expect(JSON.stringify(cleanPreferenceLedger(likes))).not.toContain("questions");
-    const removed = removeQuestionTermSignal(applyQuestionTermSignal(likes, PAPER, ["grain"], T0), PAPER);
+    const removed = removeQuestionTermSignal(applyQuestionTermSignal(likes, PAPER, full("grain"), T0), PAPER);
     expect(JSON.stringify(removed)).toBe(JSON.stringify(cleanPreferenceLedger(likes)));
   });
 
   it("keeps good evidence through cleaning, caps its weight, and drops a malformed one", () => {
-    const base = applyQuestionTermSignal({}, PAPER, ["grain"], T0);
+    const base = applyQuestionTermSignal({}, PAPER, full("grain"), T0);
     const key = preferenceKey("grain");
     const dirty = {
       [key]: {
@@ -158,7 +163,7 @@ describe("gradual: one settled question does not reorder what an explicit like w
 
   it("moves the boost by far less than a like and below the gap that a like crosses", () => {
     const like = applyPreferenceSignal({}, [termConcept("grain")], "positive", { at: T0 });
-    const question = applyQuestionTermSignal({}, PAPER, ["grain"], T0);
+    const question = applyQuestionTermSignal({}, PAPER, full("grain"), T0);
     const boostOf = (ledger: PreferenceLedger) =>
       scorePreferenceMatch(target, prepareLedger(ledger), [], { now: T0_MS }).boost;
     const likeBoost = boostOf(like);
@@ -181,14 +186,14 @@ describe("gradual: one settled question does not reorder what an explicit like w
   });
 
   it("matches the words of a candidate's title at a word boundary, like an upload's concept", () => {
-    const ledger = applyQuestionTermSignal({}, PAPER, ["grain"], T0);
+    const ledger = applyQuestionTermSignal({}, PAPER, full("grain"), T0);
     const prepared = prepareLedger(ledger);
     expect(scorePreferenceMatch(item("On grain growth"), prepared, [], { now: T0_MS }).boost).toBeGreaterThan(0);
     expect(scorePreferenceMatch(item("On migraine growth"), prepared, [], { now: T0_MS }).boost).toBe(0);
   });
 
   it("fades with the ledger's half-life like every other evidence", () => {
-    const ledger = applyQuestionTermSignal({}, PAPER, ["grain"], T0);
+    const ledger = applyQuestionTermSignal({}, PAPER, full("grain"), T0);
     const prepared = prepareLedger(ledger);
     const fresh = scorePreferenceMatch(target, prepared, [], { now: T0_MS }).boost;
     const old = scorePreferenceMatch(target, prepared, [], { now: Date.parse("2027-01-01T00:00:00.000Z") }).boost;
@@ -198,7 +203,7 @@ describe("gradual: one settled question does not reorder what an explicit like w
 
 describe("the profile screen's summary", () => {
   it("does not list a term only a question holds", () => {
-    const ledger = applyQuestionTermSignal({}, PAPER, ["grain"], T0);
+    const ledger = applyQuestionTermSignal({}, PAPER, full("grain"), T0);
     expect(summarizePreferenceLedger(ledger, T0_MS)).toEqual({ liked: [], disliked: [] });
   });
 });

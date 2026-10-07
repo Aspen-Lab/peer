@@ -1,4 +1,5 @@
 import { specificTerms } from "@/lib/papers/reading-map";
+import { QUESTION_TERM_WEIGHT, type QuestionTerm } from "./ledger";
 
 /** The longest word a question may hold and still give terms (P5-04). */
 const LONGEST_WORD = 24;
@@ -43,21 +44,22 @@ function readableWords(question: string): string {
  * a term another question holds stays. The question's text never leaves here.
  * P5-04 (S2): a word shaped like a key or an address gives no term, nor any
  * fragment of it (`isSecretOrAddressShaped`).
+ * P5-04 (S4): each term comes with its share. One question is one signal: its
+ * evidence totals `QUESTION_TERM_WEIGHT` however many specific terms it has, so
+ * each of its n terms gets `QUESTION_TERM_WEIGHT / n`; a term two questions of
+ * the paper both name takes the larger share, not the sum. The terms are in the
+ * order they were first met.
  */
 export function questionTerms(
   questions: readonly string[],
   notForRecommendations: readonly string[] = [],
-): string[] {
+): QuestionTerm[] {
   const out = new Set(notForRecommendations.map((q) => q.trim().toLocaleLowerCase()));
-  const seen = new Set<string>();
-  const terms: string[] = [];
+  const shares = new Map<string, number>();
   for (const question of questions) {
     if (out.has(question.trim().toLocaleLowerCase())) continue;
-    for (const term of specificTerms(readableWords(question))) {
-      if (seen.has(term)) continue;
-      seen.add(term);
-      terms.push(term);
-    }
+    const own = specificTerms(readableWords(question));
+    for (const term of own) shares.set(term, Math.max(shares.get(term) ?? 0, QUESTION_TERM_WEIGHT / own.length));
   }
-  return terms;
+  return [...shares].map(([term, weight]) => ({ term, weight }));
 }

@@ -336,17 +336,26 @@ export function removeUploadPreferenceSignal(ledger: PreferenceLedger | undefine
 }
 
 /**
- * P5-02: the weight one settled question gives each of its specific terms. An
- * upload's concept enters at 2 x its confidence (0.9 at the least, 1.9 at the
+ * P5-02: the weight one settled question gives all its specific terms together.
+ * An upload's concept enters at 2 x its confidence (0.9 at the least, 1.9 at the
  * most) and one explicit like adds 1; a question is the reader's own words but
  * one line, so it enters at a fifth of a like (about a quarter of an upload's
- * weakest). At that weight a term moves the boost by about 0.013 against a
- * like's 0.05 (`POSITIVE_BOOST_MAX` 0.18, 0.75 specificity), so one question
- * cannot reorder a feed on its own, and it takes several papers asking about the
- * same word before the word counts for much. The only new number of P5-02;
- * every other ledger constant is as it was.
+ * weakest). P5-04 (S4): that is the question's whole evidence, shared across its
+ * specific terms (`QUESTION_TERM_WEIGHT / n` each), not a weight per term: at a
+ * fifth per term a five-word question on a candidate holding all five words
+ * outweighed a like. A question can now move a candidate's boost by about 0.013
+ * at most, whatever its length, against a like's 0.05 (`POSITIVE_BOOST_MAX` 0.18,
+ * 0.75 specificity), so one question cannot reorder a feed on its own, and it
+ * takes several papers asking about the same word before the word counts for
+ * much. The only new number of P5-02; every other ledger constant is as it was.
  */
 export const QUESTION_TERM_WEIGHT = 0.2;
+
+/** One specific term of a settled question and its share of the question's weight. */
+export interface QuestionTerm {
+  term: string;
+  weight: number;
+}
 
 /**
  * An opaque, stable key for one paper's question evidence (FNV-1a over the
@@ -379,28 +388,52 @@ export function questionTermsOf(ledger: PreferenceLedger | undefined, paperId: s
   return Object.values(cleanPreferenceLedger(ledger)).filter((entry) => entry.questions?.[source]).map((entry) => entry.label);
 }
 
+/** The terms wanted as ledger concepts, each with its share (never above `QUESTION_TERM_WEIGHT`);
+ *  a term given twice takes the larger share, one with no usable share is left out. */
+function questionShares(terms: readonly QuestionTerm[]): Map<string, { concept: PreferenceConcept; weight: number }> {
+  const shares = new Map<string, { concept: PreferenceConcept; weight: number }>();
+  for (const { term, weight } of terms) {
+    const [concept] = normalizePreferenceConcepts([{ ...termConcept(term), label: normalizePreferenceLabel(term) }]);
+    const share = Math.min(QUESTION_TERM_WEIGHT, weight);
+    if (!concept?.label || !(share > 0)) continue;
+    const held = shares.get(concept.key);
+    if (!held || share > held.weight) shares.set(concept.key, { concept, weight: share });
+  }
+  return shares;
+}
+
+/** Does the ledger already hold exactly these terms, at these shares, for the paper? */
+export function holdsQuestionTerms(ledger: PreferenceLedger | undefined, paperId: string, terms: readonly QuestionTerm[]): boolean {
+  const source = questionSourceKey(paperId);
+  const wanted = questionShares(terms);
+  const held = Object.values(cleanPreferenceLedger(ledger)).filter((entry) => entry.questions?.[source]);
+  return held.length === wanted.size && held.every((entry) => wanted.get(entry.key)?.weight === entry.questions?.[source]?.weight);
+}
+
 /**
  * P5-02 (blueprint P5): the specific terms of a paper's settled questions
  * (`question-terms.ts`) as a low-weight signal of declared interest, through the
  * mechanism an upload's concepts use: separate evidence, once per source, that
  * can be taken out without erasing likes or dislikes. The paper's terms are
  * REPLACED: a term the reader's later questions no longer hold is removed, a
- * term already held keeps its first evidence (a repeated question counts once).
+ * term already held keeps its first time (a repeated question counts once).
+ * P5-04 (S4): each term enters at its share of its question's weight, so a
+ * question is one signal however many terms it has; a held term whose share
+ * changed (the question was edited) takes the new share.
  * Nothing but the terms is written; never the question.
  */
 export function applyQuestionTermSignal(ledger: PreferenceLedger | undefined,
-  paperId: string, terms: readonly string[], at = new Date().toISOString()): PreferenceLedger {
-  const wanted = normalizePreferenceConcepts(terms.map((term) => ({ ...termConcept(term), label: normalizePreferenceLabel(term) })))
-    .filter((concept) => concept.label);
-  const keep = new Set(wanted.map((concept) => concept.key));
+  paperId: string, terms: readonly QuestionTerm[], at = new Date().toISOString()): PreferenceLedger {
+  const wanted = questionShares(terms);
   const source = questionSourceKey(paperId);
-  const next = removeQuestionTermSignal(ledger, paperId, keep);
-  for (const concept of wanted) {
-    const current = next[concept.key];
-    if (current?.questions?.[source]) continue;
-    next[concept.key] = {
+  const next = removeQuestionTermSignal(ledger, paperId, new Set(wanted.keys()));
+  for (const [key, { concept, weight }] of wanted) {
+    const current = next[key];
+    const held = current?.questions?.[source];
+    if (held && held.weight === weight) continue;
+    next[key] = {
       ...(current ?? { ...concept, positive: 0, negative: 0, lastSeenAt: at }),
-      questions: { ...current?.questions, [source]: { at, weight: QUESTION_TERM_WEIGHT } },
+      questions: { ...current?.questions, [source]: { at: held?.at ?? at, weight } },
     };
   }
   return next;

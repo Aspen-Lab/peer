@@ -23,6 +23,8 @@ const WINDOWS_PATH = "C:\\quillwort\\corvo";
 const ASSIGNMENT = "token=Mv72kQz94";
 const SHAPES = { KEY_LONG, KEY_RUN, ADDRESS, HOST, PATH, WINDOWS_PATH, ASSIGNMENT };
 
+/** The names of the terms (each comes with its share, P5-04 S4). */
+const names = (questions: readonly string[], marked: readonly string[] = []) => questionTerms(questions, marked).map((t) => t.term);
 const question = (shape: string) => `Does annealing coarsen the grain boundaries, see ${shape} for details?`;
 const SAFE_WORDS = ["annealing", "coarsen", "grain", "boundaries"];
 
@@ -66,7 +68,7 @@ describe("isSecretOrAddressShaped", () => {
 describe("questionTerms — a key-shaped value or an address never becomes a term", () => {
   for (const [name, shape] of Object.entries(SHAPES)) {
     it(`${name}: neither the value nor any fragment of it is a term, and the question's own words stay`, () => {
-      const terms = questionTerms([question(shape)]);
+      const terms = names([question(shape)]);
       for (const piece of fragments(shape)) expect(terms).not.toContain(piece);
       expect(JSON.stringify(terms)).not.toContain(shape.toLowerCase());
       for (const word of SAFE_WORDS) expect(terms).toContain(word);
@@ -74,22 +76,22 @@ describe("questionTerms — a key-shaped value or an address never becomes a ter
   }
 
   it("an ordinary 23-character compound still enters", () => {
-    expect(questionTerms(["Is polytetrafluoroethylene stable against dendrites?"])).toContain("polytetrafluoroethylene");
+    expect(names(["Is polytetrafluoroethylene stable against dendrites?"])).toContain("polytetrafluoroethylene");
   });
 
   it("a word of 25 characters is dropped, one of 24 enters", () => {
-    expect(questionTerms([`Is ${"q".repeat(24)} stable?`])).toContain("q".repeat(24));
-    expect(questionTerms([`Is ${"q".repeat(25)} stable?`])).not.toContain("q".repeat(25));
+    expect(names([`Is ${"q".repeat(24)} stable?`])).toContain("q".repeat(24));
+    expect(names([`Is ${"q".repeat(25)} stable?`])).not.toContain("q".repeat(25));
   });
 
   it("a question made only of such words has no terms", () => {
-    expect(questionTerms([`${KEY_LONG} ${ADDRESS} ${KEY_RUN}`])).toEqual([]);
+    expect(names([`${KEY_LONG} ${ADDRESS} ${KEY_RUN}`])).toEqual([]);
   });
 
   it("is silent: no log line, no notice", () => {
     const spies = (["log", "info", "warn", "error", "debug"] as const).map((level) => vi.spyOn(console, level).mockImplementation(() => {}));
     try {
-      expect(Array.isArray(questionTerms([question(ADDRESS), question(KEY_LONG)]))).toBe(true);
+      expect(Array.isArray(names([question(ADDRESS), question(KEY_LONG)]))).toBe(true);
       for (const spy of spies) expect(spy).not.toHaveBeenCalled();
     } finally {
       spies.forEach((spy) => spy.mockRestore());
@@ -98,7 +100,7 @@ describe("questionTerms — a key-shaped value or an address never becomes a ter
 
   it("a shape in a question that is ticked 'Not for recommendations' changes nothing either way", () => {
     const text = question(ADDRESS);
-    expect(questionTerms([text], [text])).toEqual([]);
+    expect(names([text], [text])).toEqual([]);
   });
 });
 

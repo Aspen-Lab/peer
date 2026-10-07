@@ -23,6 +23,8 @@ const read = (file: string) => readFileSync(join(root, file), "utf8");
 const squash = (text: string) => text.replace(/\s+/g, " ");
 const QUESTION = "Does annealing coarsen the grain boundaries?";
 const PAPER = "openalex:W424242";
+// P5-04 (S4): the ledger takes terms with their shares of a question's weight.
+const SHARES = [{ term: "annealing", weight: 0.1 }, { term: "grain", weight: 0.1 }];
 
 function sourceFiles(dir: string, out: string[] = []): string[] {
   for (const name of readdirSync(dir)) {
@@ -49,7 +51,7 @@ describe("/privacy — what your questions teach Peer (P5-02)", () => {
   });
 
   it("is true of the sync: the ledger is in the payload, with the terms and neither the question nor the paper's id", () => {
-    const ledger = applyQuestionTermSignal({}, PAPER, ["annealing", "grain"], "2026-10-07T00:00:00.000Z");
+    const ledger = applyQuestionTermSignal({}, PAPER, SHARES, "2026-10-07T00:00:00.000Z");
     const profile: UserProfile = { ...defaultProfile, preferenceLedger: ledger };
     const payload = JSON.stringify(remoteProfilePayload(profile));
     expect(payload).toContain("annealing");
@@ -70,7 +72,13 @@ describe("/privacy — what your questions teach Peer (P5-02)", () => {
     const field = squash(read("src/components/reader/question-field.tsx"));
     expect(field).toContain("recordQuestionTerms(paperId, questionTerms(settledQuestions(entry), notForRecommendations(entry)));");
     expect(squash(read("src/store/profile.ts"))).toContain("recordQuestionTerms: (paperId, terms) =>");
-    expect(squash(read("src/lib/preferences/ledger.ts"))).toContain("export function applyQuestionTermSignal(ledger: PreferenceLedger | undefined, paperId: string, terms: readonly string[]");
+    expect(squash(read("src/lib/preferences/ledger.ts"))).toContain("export function applyQuestionTermSignal(ledger: PreferenceLedger | undefined, paperId: string, terms: readonly QuestionTerm[]");
+  });
+
+  it("'one question changes nothing you can see' rests on two lines: a question's weight is shared across its words, and a share is capped", () => {
+    // P5-04 (S4): each of a question's n words gets one n-th of QUESTION_TERM_WEIGHT; the cleaner caps a share.
+    expect(squash(read("src/lib/preferences/question-terms.ts"))).toContain("QUESTION_TERM_WEIGHT / own.length");
+    expect(squash(read("src/lib/preferences/ledger.ts"))).toContain("weight: Math.min(QUESTION_TERM_WEIGHT, value.weight)");
   });
 
   it("the paper is a marker, not its id: the ledger writes questionSourceKey and nothing of the id", () => {
@@ -116,7 +124,7 @@ describe("/privacy — what your questions teach Peer (P5-02)", () => {
 // invented.
 describe("/privacy — the ledger travels with each request for the briefing (P5-04, S1)", () => {
   const AT = "2026-10-07T00:00:00.000Z";
-  const ledger = applyQuestionTermSignal({}, PAPER, ["annealing", "grain"], AT);
+  const ledger = applyQuestionTermSignal({}, PAPER, SHARES, AT);
   const profile: UserProfile = { ...defaultProfile, preferenceLedger: ledger };
   /** The text of one exported function, up to the next top-level export. */
   const fn = (source: string, name: string) => {
