@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import type { ExtractedDocument } from "./html-text";
-import type { PaperReport } from "./report";
+import { REPORT_CAPS, type PaperReport } from "./report";
 import {
   evidenceSupported,
   locateSection,
@@ -694,6 +694,55 @@ describe("shapeEvidenceQuote (P4-04)", () => {
     });
   });
 
+  // P4-05b (A's N1): the shortened quote ends at a word boundary, and a numeric citation before a quote
+  // at a sentence start is not a cut. Invented text.
+  describe("shortening and the start of a sentence (P4-05b)", () => {
+    const LONG = "The first clause of this long sentence says that the alloy softened at 300 K under load, but the second clause reverses it and says the alloy hardened again once the press was released and the run was over.";
+    const SEC = `${S1} ${LONG} ${S3}`;
+    const QUOTE = "the second clause reverses it and says the alloy hardened again once the press";
+
+    it("a shortened quote ends on a whole word of the quote, never inside one", () => {
+      expect(LONG.includes(QUOTE)).toBe(true);
+      for (let cap = 20; cap <= 70; cap += 1) {
+        const shown = shapeEvidenceQuote(SEC, QUOTE, cap) as string;
+        expect(shown.length).toBeLessThanOrEqual(cap);
+        expect(shown.startsWith("…")).toBe(true);
+        expect(shown.endsWith("…")).toBe(true);
+        const body = shown.slice(1, -1);
+        expect(body.length).toBeGreaterThan(0);
+        expect(QUOTE.startsWith(body)).toBe(true);
+        expect(QUOTE[body.length]).toBe(" ");
+        expect(/\p{L}$/u.test(body)).toBe(true);
+      }
+    });
+
+    describe("a numeric citation before a quote that begins a sentence", () => {
+      const SENT = "The alloy softened at 300 K under the load applied by the press and then held for the rest of the long run.";
+      const cited = `${S1} [3] ${SENT} ${S3}`;
+      const quote = "The alloy softened at 300 K under the load applied by the press";
+
+      it("is not a cut: no leading ellipsis when the quote is shortened", () => {
+        const shown = shapeEvidenceQuote(cited, quote, 50) as string;
+        expect(shown.startsWith("…")).toBe(false);
+        expect(shown.endsWith("…")).toBe(true);
+        expect(quote.startsWith(shown.slice(0, -1))).toBe(true);
+      });
+
+      it("is not a cut: no leading ellipsis, and the whole sentence shown when it fits", () => {
+        const shown = shapeEvidenceQuote(cited, quote, 400) as string;
+        expect(shown.startsWith("…")).toBe(false);
+        expect(shown.endsWith("…")).toBe(false);
+        expect(shown.endsWith(SENT)).toBe(true);
+      });
+
+      it("also holds with the citation inside the sentence's own start, cut end only", () => {
+        const sec = `${S1} ${S2} [3] ${SENT} ${S3}`;
+        const shown = shapeEvidenceQuote(sec, quote, 50) as string;
+        expect(shown.startsWith("…")).toBe(false);
+      });
+    });
+  });
+
   describe("abbreviations and decimals do not end a sentence", () => {
     const SENT = "Fig. 3 shows 0.4 V across the cell, as Smith et al. reported in a note e.g. for the early run.";
     const SEC = `Before this came a short line. ${SENT} After it came another.`;
@@ -837,6 +886,46 @@ describe("verifyReportEvidence shows each kept quote to its sentence boundaries 
     const { report: out, dropped } = verifyReportEvidence(report({ skim: [{ text: "Claim.", evidence: "The ratio f_cell was 0.9 across every cell of the specimen," }] }), { abstract: ABSTRACT, doc: shapedDoc });
     expect(out.skim).toEqual([]);
     expect(dropped).toBe(1);
+  });
+
+  // P4-05b (A's M5): the report path's cap is the real REPORT_CAPS.evidenceChars, "400 everywhere". A section
+  // sentence of 401-500 characters is over it, so the quote is shown as it is with "…" at each cut end, and
+  // the shown text, marks included, is at most the cap. Invented text.
+  describe("the cap on the report path (P4-05b)", () => {
+    const FILLER = "the specimen was rinsed and dried and weighed and logged by hand at every step of the run";
+    const build = (target: number): string => {
+      let text = `At the start of the second run ${FILLER}`;
+      while (text.length < target) text += `, and ${FILLER}`;
+      return `${text} until the press was released.`;
+    };
+    const SENT = build(380);
+    const capDoc: ExtractedDocument = {
+      ...shapedDoc,
+      sections: [{ id: "s1", heading: "2 Results", canonical: "results", text: `${LEAD}\n\n${SENT}\n\n${TRAIL}` }],
+    };
+    const mid = SENT.indexOf(" and logged by hand at every step of the run, and the specimen");
+    const QUOTE = SENT.slice(mid + 1, mid + 1 + 120).trim();
+    const run = (r: Partial<PaperReport>) => verifyReportEvidence(report(r), { abstract: ABSTRACT, doc: capDoc }).report;
+
+    it("fixture: the sentence is over the cap but not by more than 100, and the quote sits inside it", () => {
+      expect(SENT.length).toBeGreaterThan(REPORT_CAPS.evidenceChars);
+      expect(SENT.length).toBeLessThanOrEqual(REPORT_CAPS.evidenceChars + 100);
+      expect(SENT.includes(QUOTE)).toBe(true);
+      expect(SENT.startsWith(QUOTE)).toBe(false);
+      expect(SENT.endsWith(QUOTE)).toBe(false);
+    });
+
+    it("shows a claim's quote cut at both ends, within the cap, not the whole sentence", () => {
+      const shown = run({ skim: [{ text: "Claim.", evidence: QUOTE }] }).skim[0].evidence;
+      expect(shown).toBe(`…${QUOTE}…`);
+      expect(shown.length).toBeLessThanOrEqual(REPORT_CAPS.evidenceChars);
+    });
+
+    it("does the same for a term", () => {
+      const shown = run({ terms: [{ term: "run", definition: "A pass.", evidence: QUOTE }] }).terms?.[0].evidence as string;
+      expect(shown).toBe(`…${QUOTE}…`);
+      expect(shown.length).toBeLessThanOrEqual(REPORT_CAPS.evidenceChars);
+    });
   });
 
   it("an extended or cut quote still marks the abstract sentence it came from (placeEvidence ignores the cut marks)", () => {
