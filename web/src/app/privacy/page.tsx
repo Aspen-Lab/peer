@@ -57,6 +57,19 @@ const SECTIONS = [
     ],
   },
   {
+    // P5-02: written from `question-field.tsx` (`syncQuestionTerms`: the settled questions' terms,
+    // less any ticked "Not for recommendations", handed to the profile's ledger once per settle),
+    // `lib/preferences/ledger.ts` (`applyQuestionTermSignal`: separate evidence of one small weight
+    // per paper under an opaque key, never the question), `remoteProfilePayload` (profile-sync.tsx:
+    // the ledger is part of what is sent), the profile route (the PUT replaces the ledger) and
+    // `logOut`. The test pins each clause to its line. It sits before "Your questions", whose
+    // entry is pinned as one paragraph followed by "Explain this".
+    label: "What your questions teach Peer",
+    body: [
+      "When your questions on a paper settle, the specific words in them — one word at a time, in lower case, without common words and the words every question uses — are added to the small ledger Peer keeps of what interests you, at a small fraction of the weight of a like, so one question changes nothing you can see. The question itself is never added, and neither is anything from the paper. Tick “Not for recommendations” beside a question and its words are not added, or are taken out at once if they were. The ledger is part of your profile: it is kept in this browser and, when you are signed in, sent to Peer's server and stored against your account with the rest of your profile, so these words go with it, each filed under a marker that stands for the paper, not its name. The next sync replaces your account's copy, and signing out clears it from this browser.",
+    ],
+  },
+  {
     label: "Your questions",
     body: [
       "Questions you type on a paper page stay in this browser. When Peer writes a deep report for that paper, they travel with that one request to Peer's server and on to the model provider whose key you added, inside the prompts, and nowhere else, so the report can answer them; Peer does not log them or keep them.",
