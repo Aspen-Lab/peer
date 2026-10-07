@@ -8,7 +8,9 @@
 
 The Peer web app (`web/`, Next.js) lets a reader upload a PDF and get a "deep report". The owner's complaint: reading a paper has no direction, jargon and dense prose stall it, and a wall of unsegmented text is frightening. The spec answers with "带着问题读" (goal-directed reading): ask up to five questions first; see a reading map (sections, pages, minutes, one line per paragraph taken from the paragraph's opening sentences); see which sections and paragraphs match each question, tinted light green in the contents rail; get verified, verbatim-quoted answers with page numbers; get bounded term explanations and a plain rewrite in three difficulty levels. The first half (Tier 0) needs no model key. Nothing is ever hidden from the reader. Peer's voice is English only.
 
-Phases: P0 foundation and P1 Tier 0 helper are VERIFIED. P2 (the model answers the reader's questions) is in progress. P3 (terms, "Explain this?", paragraph gists), P4 (plain rewrite), P5 (standing questions, final review, handoff) follow. The ledger in §5 of the state file is the source of truth for what is done.
+Phases: P0 foundation, P1 Tier 0 helper, P2 answers, P3 terms / "Explain this?" / paragraph gists and P4 plain rewrite are VERIFIED; P5 (standing questions on the profile, question terms into the preference ledger) is built, measured twice in a real browser by independent reviewers (A P5-03, A P5-05) and its fix rounds (P5-04, P5-04b, P5-04c, P5-06, P5-06b) manager-verified; the final independent inventory over all 18 acceptance items (A P5-03f) passed on the head with every follow-up fixed. `main` (the BYOK-only PR #33) is merged in: every model call runs on the reader's own key, with no allowance, quota or counter anywhere. The ledger in §5 of the state file is the source of truth for what is done; its BACKLOG rows and §1h.19–§1h.21 name what is left for the owner. **The campaign's items are complete pending the owner's review of PR #32**; the next turn in §1 is the owner's.
+
+What is not proven, and why (the environment): a real model's behaviour (every reviewer stubbed the model), a real sign-in (no Supabase here), a real touch device, a bfcache restore, uploaded figure images (the Python helper, BACKLOG-01), public papers in the browser (the feed's sources are unreachable here), Gemini's grounded search. P5-06 and P5-06b (the providers' and the digest route's error logs) were verified by the manager alone, not by a reviewer in a browser; recorded in §1h.19 (j) and §1h.20 (g).
 
 ## 2. Setup — do this before anything else
 
@@ -104,8 +106,13 @@ section 4 describes (one §4 entry, HELD BY, commit, push), read
 ABC-DEEP-REPORT-READING-HELPER.md in the order section 3 gives, and read the spec
 docs/BLUEPRINT_goal_directed_reading.zh-CN.md.
 
-You are the MANAGER of this loop. Do whichever turn §1 says is next, using the
-brief in docs/reading-helper-abc/briefs/ for that item. Spawn A/B/C as separate
+You are the MANAGER of this loop. The campaign's items are complete; §1 names the
+owner's next turn. If the owner has given you a new item (a BACKLOG row, a review
+finding on PR #32, a change of ruling), write its brief in
+docs/reading-helper-abc/briefs/, rule on it with a dated §1h entry, and run it
+through C → A → the manager's verification as sections 5 and 6 describe. If the
+owner has given you nothing, do not invent work: say so in one line and stop the
+way section 7 describes. Spawn A/B/C as separate
 agents if you can; otherwise run them sequentially in this conversation, committing
 and pushing between roles, and record the reduced independence in §4. Verify every
 commit the way section 6 describes before you assign the next item. Rule on every
