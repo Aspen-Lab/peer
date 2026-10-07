@@ -112,4 +112,39 @@ describe("DecisionBlock — the Skip button (P1-08)", () => {
     expect(withSkip).toContain("Skip</button>");
     expect(withSkip).toMatch(/>x<\/kbd>/);
   });
+
+  // P6-01b (§1h.23): the verdict row has as many tracks as it has commands, so
+  // an uploaded PDF's page (no Skip) is not left with an empty third track.
+  it("ReaderCommands' verdict row: two tracks and Save, Copy without onSkip; three tracks and Save, Skip, Copy with it", () => {
+    const verdictRow = (onSkip?: () => void) => {
+      const html = renderToStaticMarkup(
+        createElement(ReaderCommands, {
+          source: null,
+          isSaved: false,
+          onSave: NOOP,
+          ...(onSkip ? { onSkip } : {}),
+          onCopy: NOOP,
+          onOpen: NOOP,
+        }),
+      );
+      // With no source, no read command and no upload row, the verdict row is
+      // the only element whose class list names a grid track count.
+      const row = html.match(/<div class="([^"]*\bgrid-cols-\d+[^"]*)">((?:(?!<\/div>).)*)<\/div>/);
+      if (!row) throw new Error(`Verdict row not found in: ${html}`);
+      const buttons = [...row[2].matchAll(/<button\b[^>]*>((?:(?!<\/button>).)*)<\/button>/g)].map((m) =>
+        m[1].replace(/<kbd\b[^>]*>(?:(?!<\/kbd>).)*<\/kbd>/g, ""),
+      );
+      return { classes: row[1].split(/\s+/), buttons };
+    };
+
+    const without = verdictRow();
+    expect(without.classes).toContain("grid-cols-2");
+    expect(without.classes).not.toContain("grid-cols-3");
+    expect(without.buttons).toEqual(["Save", "Copy"]);
+
+    const withSkip = verdictRow(NOOP);
+    expect(withSkip.classes).toContain("grid-cols-3");
+    expect(withSkip.classes).not.toContain("grid-cols-2");
+    expect(withSkip.buttons).toEqual(["Save", "Skip", "Copy"]);
+  });
 });

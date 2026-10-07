@@ -96,7 +96,10 @@ export function ReaderCommands({
           <IconArrowUpRight size={12} className="ml-auto shrink-0" />
         </a>
       )}
-      <div className="grid grid-cols-3 gap-2">
+      {/* The row has as many tracks as it has commands: an uploaded PDF's page
+          has no Skip (P1-08), so its row is two tracks, not two cells and an
+          empty third. */}
+      <div className={`grid ${onSkip ? "grid-cols-3" : "grid-cols-2"} gap-2`}>
         <button
           type="button"
           onClick={onSave}
