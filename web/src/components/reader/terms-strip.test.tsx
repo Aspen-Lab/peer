@@ -8,7 +8,7 @@ import type { PaperTerm } from "@/lib/papers/report";
 import type { Paper } from "@/types";
 import { PEERS_READING, TERMS } from "./copy";
 import { SectionLinks } from "./evidence-quote";
-import { TermsStrip, findInBody, termButtonState } from "./terms-strip";
+import { PHONE_TERMS, TermsStrip, findInBody, hiddenOnPhone, termButtonState } from "./terms-strip";
 
 // P3-01 (ruling §1h.1; §3d 13): the strip "Terms to know" under the map — one
 // line per term, the paper's own definition as an attributed quote, Peer's
@@ -186,5 +186,103 @@ describe("finding a term when the body may be on another tab (P7-14, R10)", () =
       renderToStaticMarkup(createElement(SectionLinks, { headings: ["1 Introduction", "2 Methods"] }, createElement(TermsStrip, { terms, reading, marked: null, onMark: () => {}, ...extra })));
 
     expect(draw({ reveal: (run: () => void) => run() })).toBe(draw({}));
+  });
+});
+
+// P9-04 (X3, the feature walk's 390 x 844 with eight terms): the strip was 1,409 px of the phone's page. Below
+// `sm` (40rem) it shows its first two terms and a toggle in the map's style, "show all N terms" / "fewer
+// terms"; from `sm` up nothing changes (all the terms, no toggle). The fold is CSS (`hidden sm:block`,
+// `sm:hidden`), as the map's is, so all the terms stay in the DOM and the markup is the same on the server and
+// the client. No DOM here: the open state is the `phoneOpen` prop, as the map's tests use it.
+describe("TermsStrip — folded to two terms on a phone (P9-04, X3)", () => {
+  const WORDS = ["alpha", "bravo", "charlie", "delta", "echo", "foxtrot", "golf", "hotel"];
+  const eightDoc: ExtractedDocument = {
+    source: "pdf",
+    pageCount: 1,
+    figureCaptions: [],
+    sections: [
+      { id: "s1", heading: "1 Introduction", canonical: "introduction", page: 1, text: WORDS.map((word) => `The ${word} gauge is read twice a day.`).join("\n\n") },
+    ],
+  };
+  const eightReading = buildReading(
+    paper,
+    { status: "ok", attempts: [], doc: eightDoc, sourceLink: { url: "https://example.org/p.pdf", kind: "pdf", label: "doi", rank: 1 } } as FullTextResult,
+    new Date("2026-10-05T00:00:00.000Z"),
+  );
+  const many = (n: number): PaperTerm[] =>
+    WORDS.slice(0, n).map((word) => ({ term: word, definition: `What ${word} names.`, peer: true }));
+  const draw = (n: number, extra: Partial<Props> = {}) =>
+    renderToStaticMarkup(
+      createElement(
+        SectionLinks,
+        { headings: eightReading.body.map((section) => section.heading) },
+        createElement(TermsStrip, { terms: many(n), reading: eightReading, marked: null, onMark: () => {}, ...extra }),
+      ),
+    );
+  /** The class attribute of each term's <li>, in order. */
+  const itemClasses = (html: string): Array<string | null> =>
+    [...html.matchAll(/<li\b([^>]*)>/g)].map((match) => /class="([^"]*)"/.exec(match[1])?.[1] ?? null);
+  const toggleOf = (html: string) => /<button\b[^>]*aria-expanded="[^"]*"[^>]*>[^<]*<\/button>/.exec(html)?.[0] ?? null;
+
+  it("holds all eight terms in the DOM, each with its 'Find X in the paper' button as before", () => {
+    const html = draw(8);
+
+    expect(itemClasses(html)).toHaveLength(8);
+    for (const word of WORDS) expect(html).toContain(`aria-label="${TERMS.find(word)}"`);
+    expect(html.match(/<button\b[^>]*aria-pressed=/g)).toHaveLength(8);
+  });
+
+  it("folds terms 3 to 8 below sm until the toggle is pressed, and not the first two", () => {
+    const classes = itemClasses(draw(8));
+
+    expect(PHONE_TERMS).toBe(2);
+    expect(classes.slice(0, 2).every((cls) => !cls || !/\bhidden\b/.test(cls))).toBe(true);
+    for (const cls of classes.slice(2)) expect(cls).toBe("hidden sm:block");
+  });
+
+  it("says 'show all 8 terms' while folded and 'fewer terms' once open, with aria-expanded to match", () => {
+    expect(TERMS.showAll(8)).toBe("show all 8 terms");
+    expect(TERMS.fewer).toBe("fewer terms");
+
+    const folded = toggleOf(draw(8)) ?? "";
+    expect(folded).toContain(">show all 8 terms<");
+    expect(folded).toContain('aria-expanded="false"');
+    // The toggle is a phone control: from sm up there is nothing to fold.
+    expect(folded).toMatch(/class="[^"]*\bsm:hidden\b/);
+
+    const open = draw(8, { phoneOpen: true });
+    const opened = toggleOf(open) ?? "";
+    expect(opened).toContain(">fewer terms<");
+    expect(opened).toContain('aria-expanded="true"');
+    expect(itemClasses(open).every((cls) => !cls || !/\bhidden\b/.test(cls))).toBe(true);
+  });
+
+  it("counts the terms it was given: three terms fold one, and the toggle names three", () => {
+    const html = draw(3);
+
+    expect(itemClasses(html).map((cls) => cls === "hidden sm:block")).toEqual([false, false, true]);
+    expect(toggleOf(html)).toContain(">show all 3 terms<");
+  });
+
+  it("has no toggle and folds nothing for two terms or one: there is nothing to show", () => {
+    for (const n of [1, 2]) {
+      const html = draw(n);
+
+      expect(toggleOf(html)).toBeNull();
+      expect(html).not.toContain("aria-expanded");
+      expect(html).not.toMatch(/class="[^"]*\bhidden\b/);
+    }
+  });
+
+  it("hiddenOnPhone: only a term past the second, only while folded, only when there is a toggle to open it", () => {
+    expect(hiddenOnPhone(0, 8, false)).toBe(false);
+    expect(hiddenOnPhone(1, 8, false)).toBe(false);
+    expect(hiddenOnPhone(2, 8, false)).toBe(true);
+    expect(hiddenOnPhone(7, 8, false)).toBe(true);
+    expect(hiddenOnPhone(7, 8, true)).toBe(false);
+    expect(hiddenOnPhone(2, 3, false)).toBe(true);
+    // Two terms or fewer: no toggle, so nothing may be hidden.
+    expect(hiddenOnPhone(1, 2, false)).toBe(false);
+    expect(hiddenOnPhone(0, 1, false)).toBe(false);
   });
 });

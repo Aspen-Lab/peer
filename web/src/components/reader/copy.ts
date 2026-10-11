@@ -226,6 +226,10 @@ export const ROUTE = {
 export const TERMS = {
   heading: "Terms to know",
   find: (term: string) => `Find ${term} in the paper`,
+  /** P9-04 (X3): below `sm` the strip shows its first two terms; the toggle that opens the rest (only when
+   *  there are more than two), in the map's style — `MAP.show` / `MAP.hide`. */
+  showAll: (count: number) => `show all ${count} terms`,
+  fewer: "fewer terms",
 } as const;
 
 /**
