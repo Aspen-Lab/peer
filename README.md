@@ -367,8 +367,7 @@ Apple-setup style, one idea per page: **basics → topics → work → radar →
 - **Topics is the only gate** — the feed needs at least one required topic for a real first
   briefing. Everything else is skippable.
 - It writes straight to the shared **profile store** (same store and field components as
-  `/profile`), then marks `onboardedAt` and returns to the feed (`/?tour=1`; the coachmark tour
-  that query once opened has been removed, and nothing reads it now).
+  `/profile`), then marks `onboardedAt` and returns to the feed (`/`).
 - The optional **persona quiz** ([`/persona`](web/src/app/persona/page.tsx),
   [`lib/persona/`](web/src/lib/persona/)) maps reading style across five axes.
 

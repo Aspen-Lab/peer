@@ -95,4 +95,17 @@ describe("the wizard's two ways out both go through completeOnboarding", () => {
     expect(source).toMatch(/const finishToTour = \(\) => \{\s*completeOnboarding\(\);/);
     expect(source).toMatch(/onClick=\{finishToTour\}/);
   });
+
+  // P7-16c (§1h.35 (e)): the coachmark tour was removed in ffa6eded and nothing
+  // has read a `tour` query parameter since (checked: no source file reads
+  // one), so the wizard leaves to the home page itself, not to `/?tour=1`.
+  it("both exits leave to / — not /?tour=1, a suffix nothing reads (§1h.35 (e))", () => {
+    expect(source).toMatch(/const finishToTour = \(\) => \{\s*completeOnboarding\(\);\s*router\.push\("\/"\);\s*\};/);
+    expect(source).toMatch(/const skipEverything = \(\) => \{\s*completeOnboarding\(\);\s*router\.push\("\/"\);\s*\};/);
+    expect(source).not.toContain("tour=1");
+  });
+
+  it("no comment in the wizard still describes a coachmark tour that no longer exists (§1h.35 (e))", () => {
+    expect(source).not.toMatch(/coachmark/i);
+  });
 });

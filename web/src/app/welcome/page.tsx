@@ -3,8 +3,8 @@
 // First-run onboarding wizard. Apple-setup-style: one idea per page, every
 // page optional except Topics (which the feed needs to produce a real first
 // briefing). Writes straight to the shared profile store — same store, same
-// field components as /profile — and on finish marks onboarding complete and
-// hands off to the feed with the coachmark tour (`/?tour=1`).
+// field components as /profile — and on finish (or on "Skip setup") marks
+// onboarding complete and hands off to the feed, `/`.
 //
 // Resume-aware: per-step completeness is derived live from the profile (see
 // ./completeness), the wizard auto-opens at the first incomplete step, and
@@ -165,13 +165,14 @@ export default function WelcomePage() {
 
   const finishToTour = () => {
     completeOnboarding();
-    router.push("/?tour=1");
+    router.push("/");
   };
 
-  // Skippers get the coachmark tour too — they need it most.
+  // Skipping marks onboarding complete too, so the first-visit redirect never
+  // brings the reader back here by itself.
   const skipEverything = () => {
     completeOnboarding();
-    router.push("/?tour=1");
+    router.push("/");
   };
 
   // On step change (not on first paint), move focus to the new step's
