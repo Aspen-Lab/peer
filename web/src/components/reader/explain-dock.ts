@@ -14,6 +14,18 @@
 // above it) and never so low that less than `DOCK_MIN_VISIBLE_PX` of it shows above the foot legend.
 // Its height is its content, at most what is left between its top and the legend; it scrolls inside.
 // It moves when the next passage is explained, not on a mere selection of it.
+//
+// P8-06 (the owner's "yes" of 16:4xZ 2026-10-11 to "is the window already there, as an empty panel, before any
+// text is selected?"; ruling §1h.45): for a reader with a key, on a paper with a readable body, from the same
+// 1024 px, the window is there from the body's first paint — before anything is selected, let alone explained.
+// It is the same dock: the right edge, 360 wide, its top at `DOCK_TOP_PX` until a passage is explained (then the
+// rule above — level with the paragraph), the page keeping `DOCK_RESERVE_PX` clear from the mount, not from the
+// first open. It holds the card's header and one line of copy (`EXPLAIN.empty`); the first Explain fills it in
+// place, nothing closes or reopens. Escape and Close hide it for the rest of the page visit (the box's state, not
+// stored; a reload shows it again) and the next "Explain this?" brings it back. Without a key nothing stands — a
+// permanent panel for a reader with none would be a locked block (§1b) — and below 1024 px nothing does: the card
+// and the sheet open on the reader's press only. `emptyDockStands` is that rule.
+//
 // Plain module, no directive: the placement (`explain-box.tsx`) and the pins on
 // the shell's own heights read the numbers from one place.
 //
@@ -40,6 +52,17 @@ export const DOCK_BOTTOM_PX = 28;
  *  top is the window's height less `DOCK_BOTTOM_PX` less this), so a paragraph far down the screen never
  *  leaves a window too short to read. */
 export const DOCK_MIN_VISIBLE_PX = 160;
+
+/**
+ * P8-06 (ruling §1h.45): whether the window stands EMPTY, before any passage is explained — a reader with a key
+ * (`canAsk`), a paper with a readable body (`hasBody`: its Paper digestion tab exists, so there is text to select),
+ * the dock's width (`width` ≥ `DOCK_MIN_VIEWPORT_PX`), and not yet hidden (`hidden`: Escape or Close, for the rest of
+ * the page visit). The box adds "and no passage is open" — an open window is its own. Without a key it is false:
+ * the Tier 0 definition opens on a defined-term selection as it always did, and stays open once it has (P8-02).
+ */
+export function emptyDockStands(state: { canAsk: boolean; hasBody: boolean; hidden: boolean; width: number }): boolean {
+  return state.canAsk && state.hasBody && !state.hidden && state.width >= DOCK_MIN_VIEWPORT_PX;
+}
 
 // ── Making room ───────────────────────────────────────────────────────────
 //

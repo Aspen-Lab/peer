@@ -1,6 +1,6 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ExplainAnswer } from "@/lib/papers/explain";
 import type { PaperReading } from "@/lib/papers/reading";
 import type { PaperTerm } from "@/lib/papers/report";
@@ -70,6 +70,14 @@ const render = (props: Partial<PopoverProps> = {}) =>
   );
 
 describe("ExplainBox — when the button shows (§1h.2)", () => {
+  // P8-06 (re-aimed): these are the button's rules, in a window of 800 px — the card's width, where nothing stands
+  // before the press. From 1024 px a reader with a key has the empty window from the first render, beside the
+  // button (`explain-box.empty.test.tsx`); a server render, with no window, is 1024 wide.
+  beforeEach(() => {
+    vi.stubGlobal("window", { innerWidth: 800, innerHeight: 900 });
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
   it("shows nothing without a selection", () => {
     expect(render({ target: null })).toBe("");
     expect(render({ target: null, terms: [rafting], canAsk: true })).toBe("");

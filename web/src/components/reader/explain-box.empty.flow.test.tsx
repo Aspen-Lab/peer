@@ -1,0 +1,565 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+// P8-06 (the owner's "yes" of 16:4xZ 2026-10-11 to the empty-state question of §1h.41 (b); ruling §1h.45): from a
+// window of 1024 px, for a reader with a key, on a paper with a readable body, the explain window is THERE before
+// any text is selected, as an empty panel: the card's header and one line of copy, at the right edge, top 48, the
+// page keeping its 376 px clear from the first paint. Escape and Close hide it for the rest of the page visit (component
+// state; a reload shows it again) and the next "Explain this?" brings it back with that passage; the first Explain fills
+// it in place — nothing closes or reopens. With no key nothing stands (a locked block is never shown, §1b): the Tier 0
+// definition opens on a defined-term selection as before. The card (640 to 1023) and the sheet are unchanged.
+// The box runs on the minimal hook runtime (no DOM here); the element tree it returns is inspected and its handlers
+// called. Every text is invented.
+vi.mock("react", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("react")>();
+  const { hookRuntime } = await import("@/test-support/hook-runtime");
+  return { ...actual, ...hookRuntime.hooks };
+});
+
+import { useEffect, useState } from "react";
+import type { ReactElement, ReactNode } from "react";
+import { hookRuntime } from "@/test-support/hook-runtime";
+import type { ExplainAnswer } from "@/lib/papers/explain";
+import type { PaperReading } from "@/lib/papers/reading";
+import type { PaperTerm } from "@/lib/papers/report";
+import type { ExplainTurn } from "@/store/explain-threads";
+import { EXPLAIN } from "./copy";
+import { ExplainBox, ExplainCard, type AskResult, type ThreadView } from "./explain-box";
+import type { ReplyResult } from "./explain-thread";
+import type { ExplainSelection } from "./paper-body";
+
+const SENTENCE = "We define the rafting ratio as the fraction of the gauge length covered by plates.";
+const term: PaperTerm = { term: "rafting ratio", definition: SENTENCE, evidence: SENTENCE, evidenceWhere: "2 Methods", sectionId: "s2", page: 2 };
+const FIRST_ANSWER: ExplainAnswer = { meaning: "A share of a sample turned to plates.", here: { text: "It compares alloys.", peer: true } };
+const REPLY: ExplainTurn = { role: "peer", text: "A bigger share of plates changes how the metal carries load.", peer: true };
+const reading = {
+  body: [
+    { id: "s1", canonical: "introduction", heading: "1 Introduction", paragraphs: ["Hot parts creep."] },
+    { id: "s2", canonical: "methods", heading: "2 Methods", paragraphs: ["Specimens.", SENTENCE] },
+  ],
+  map: { totalMinutes: 1, sections: [] },
+} as unknown as Pick<PaperReading, "body" | "map">;
+/** A paper whose text could not be read: no body, so no Paper digestion tab and no standing window. */
+const noBody = { body: [], map: { totalMinutes: 0, sections: [] } } as unknown as Pick<PaperReading, "body" | "map">;
+
+const first: ExplainSelection = {
+  sectionIndex: 1,
+  paragraphIndex: 1,
+  passage: "The rafting ratio rose from 0.2 to 0.7.",
+  rect: { left: 300, top: 400, right: 420, bottom: 420 },
+  bounds: { left: 100, top: 380, right: 420, bottom: 420 },
+};
+const second: ExplainSelection = {
+  ...first,
+  paragraphIndex: 0,
+  passage: "Specimens were machined from a single casting.",
+  rect: { left: 200, top: 600, right: 460, bottom: 620 },
+  bounds: { left: 100, top: 580, right: 460, bottom: 620 },
+};
+/** A selection whose paragraph begins `top` px from the top of the window (its own words lie lower in it). */
+const inParagraph = (selection: ExplainSelection, top: number): ExplainSelection => ({ ...selection, paragraph: { left: 120, top, right: 760, bottom: top + 260 } });
+
+type Props = Parameters<typeof ExplainBox>[0];
+type Props2 = Record<string, unknown> & { children?: ReactNode };
+
+function elements(node: ReactNode): ReactElement<Props2>[] {
+  if (Array.isArray(node)) return node.flatMap(elements);
+  if (!node || typeof node !== "object" || !("props" in node)) return [];
+  const element = node as ReactElement<Props2>;
+  return [element, ...elements(element.props.children)];
+}
+
+interface Look {
+  button: ReactElement<Props2> | undefined;
+  /** The window, whatever it holds. */
+  card: ReactElement<Props2> | undefined;
+  /** The window is the empty state (nothing explained in it yet). */
+  empty: boolean;
+  status: string | null;
+  /** The passage the window explains (null in the empty state, and with no window). */
+  passage: string | null;
+  thread: ThreadView | undefined;
+  term: string | null;
+  style: Record<string, number | undefined> | undefined;
+  dock: boolean;
+}
+const look = (tree: ReactNode): Look => {
+  const all = elements(tree);
+  const card = all.find((el) => el.type === ExplainCard);
+  const empty = card?.props.empty === true;
+  const status = card?.props.status as { kind: string; answer?: ExplainAnswer } | undefined;
+  return {
+    button: all.find((el) => el.type === "button" && el.props.children === EXPLAIN.ask),
+    card,
+    empty,
+    status: empty ? null : (status?.kind ?? null),
+    passage: empty ? null : ((card?.props.passage as string | undefined) ?? null),
+    thread: card?.props.thread as ThreadView | undefined,
+    term: (card?.props.term as PaperTerm | null | undefined)?.term ?? null,
+    style: card?.props.style as Look["style"],
+    dock: card?.props.dock === true,
+  };
+};
+/** What the box shows, in one word per render: the empty state, a window with a passage, or nothing of the window. */
+const kind = (l: Look) => (l.empty ? "empty" : l.card ? "window" : "none");
+
+let listeners: Map<string, Set<(event: unknown) => void>>;
+const fire = (type: string, event: unknown) => [...(listeners.get(type) ?? [])].forEach((listener) => listener(event));
+const listening = (type: string) => listeners.get(type)?.size ?? 0;
+function recorder() {
+  return {
+    addEventListener: (type: string, listener: (event: unknown) => void) => {
+      listeners.set(type, (listeners.get(type) ?? new Set()).add(listener));
+    },
+    removeEventListener: (type: string, listener: (event: unknown) => void) => {
+      listeners.get(type)?.delete(listener);
+    },
+  };
+}
+let scrollBy: ReturnType<typeof vi.fn>;
+function stubWindow(width = 1280, height = 800) {
+  scrollBy = vi.fn();
+  vi.stubGlobal("window", { ...recorder(), innerWidth: width, innerHeight: height, scrollBy, requestAnimationFrame: (fn: () => void) => setTimeout(fn, 0), cancelAnimationFrame: (id: number) => clearTimeout(id) });
+}
+
+// The document's root, where the page's width is kept clear: what is written and what is taken off.
+let root: Map<string, string>;
+let setProperty: ReturnType<typeof vi.fn>;
+let removeProperty: ReturnType<typeof vi.fn>;
+const RESERVED = { "--explain-dock": "376px", "--explain-dock-width": "360px" };
+function stubRoot() {
+  root = new Map();
+  setProperty = vi.fn((name: string, value: string) => void root.set(name, value));
+  removeProperty = vi.fn((name: string) => void root.delete(name));
+  vi.stubGlobal("document", { ...recorder(), documentElement: { style: { setProperty, removeProperty } } });
+}
+// The hiding is the component's state for the visit and nothing else: no storage is written or read.
+let storage: { getItem: ReturnType<typeof vi.fn>; setItem: ReturnType<typeof vi.fn>; removeItem: ReturnType<typeof vi.fn> };
+
+beforeEach(() => {
+  listeners = new Map();
+  stubRoot();
+  stubWindow();
+  storage = { getItem: vi.fn(() => null), setItem: vi.fn(), removeItem: vi.fn() };
+  vi.stubGlobal("localStorage", storage);
+  vi.stubGlobal("sessionStorage", storage);
+});
+afterEach(() => vi.unstubAllGlobals());
+
+type Step = (tree: ReactNode, ctx: { props: Props; rerender: () => void }) => void;
+async function scenario(initial: Props, steps: Step[]) {
+  const ctx = { props: initial, rerender: () => {}, tree: null as ReactNode };
+  const looks: Look[] = [];
+  const mounted = await hookRuntime.mount(() => {
+    const tree = ExplainBox(ctx.props);
+    const [step, setStep] = useState(0);
+    const [, setTick] = useState(0);
+    ctx.rerender = () => setTick((n) => n + 1);
+    looks.push(look(tree));
+    ctx.tree = tree;
+    useEffect(() => {
+      const run = steps[step];
+      if (!run) return;
+      run(ctx.tree, ctx);
+      setStep(step + 1);
+    }, [step]);
+    return tree;
+  });
+  return { looks, mounted, last: () => looks[looks.length - 1] };
+}
+
+const wait = () => new Promise((resolve) => setTimeout(resolve, 5));
+const click = (tree: ReactNode) => (look(tree).button?.props.onClick as () => void)();
+const close = (tree: ReactNode) => (look(tree).card?.props.onClose as () => void)();
+const draft = (tree: ReactNode, text: string) => look(tree).thread?.onDraft(text);
+const escapeEvent = () => ({ key: "Escape", preventDefault: vi.fn(), stopPropagation: vi.fn() });
+const escape = () => fire("keydown", escapeEvent());
+const pressOutside = () => fire("pointerdown", { target: { closest: () => null } });
+/** The reader selects `next` in the body (or nothing): the page hands the box a new target. */
+const selectNext =
+  (next: ExplainSelection | null, over: Partial<Props> = {}): Step =>
+  (_tree, ctx) => {
+    ctx.props = { ...ctx.props, target: next, ...over };
+    ctx.rerender();
+  };
+
+const pair = (n: number): ExplainTurn[] => [{ role: "reader", text: `question ${n}` }, { role: "peer", text: `reply ${n}`, peer: true }];
+
+/** A reader with a key, a paper with a body, no selection yet. */
+const base = (over: Partial<Props> = {}): Props => ({
+  target: null,
+  terms: [],
+  canAsk: true,
+  onAsk: vi.fn(async (): Promise<AskResult> => FIRST_ANSWER),
+  cached: FIRST_ANSWER,
+  cachedTurns: [],
+  onReply: vi.fn(async (): Promise<ReplyResult> => REPLY),
+  onResetThread: vi.fn(),
+  reading,
+  ...over,
+});
+
+describe("ExplainBox — the window is there before the first selection (P8-06, ruling §1h.45)", () => {
+  it("at 1280 with a key and a body, renders the empty state from the first render, with no selection", async () => {
+    const run = await scenario(base(), []);
+
+    expect(run.looks[0].card).toBeDefined();
+    expect(run.looks.every((l) => l.empty)).toBe(true);
+    expect(run.last().dock).toBe(true);
+    // Only the empty state: no passage, no answer, no thread, no button.
+    expect(run.last().passage).toBeNull();
+    expect(run.last().thread).toBeUndefined();
+    expect(run.last().button).toBeUndefined();
+    run.mounted.unmount();
+  });
+
+  it("keeps the page's 376 px clear from the mount, not from the first open", async () => {
+    const run = await scenario(base(), []);
+
+    expect(Object.fromEntries(root)).toEqual(RESERVED);
+    expect(setProperty).toHaveBeenCalledTimes(2);
+    expect(removeProperty).not.toHaveBeenCalled();
+    // Mounting moves nothing: there is no selection whose place the reflow would have to hold.
+    expect(scrollBy).not.toHaveBeenCalled();
+    run.mounted.unmount();
+
+    // Leaving the paper gives the width back.
+    expect(Object.fromEntries(root)).toEqual({});
+  });
+
+  it("stands at the right edge, 360 wide, its top at 48 under the masthead whatever the window's height, as tall as its content", async () => {
+    for (const [width, height] of [[1280, 800], [1440, 900], [1920, 1080], [1280, 600]] as const) {
+      stubWindow(width, height);
+      const run = await scenario(base(), []);
+
+      expect(run.last().style, `${width}x${height}`).toEqual({ right: 0, width: 360, top: 48, maxHeight: height - 48 - 28 });
+      run.mounted.unmount();
+    }
+  });
+
+  it("is there from 1024 px and from no narrower: the card (640 to 1023) and the sheet get nothing at mount", async () => {
+    for (const [width, height, stands] of [[1024, 800, true], [1023, 800, false], [800, 900, false], [640, 900, false], [390, 844, false]] as const) {
+      stubWindow(width, height);
+      const run = await scenario(base(), []);
+
+      expect(run.last().card !== undefined, `${width} px`).toBe(stands);
+      expect(setProperty.mock.calls.length > 0, `${width} px`).toBe(stands);
+      run.mounted.unmount();
+      setProperty.mockClear();
+    }
+  });
+
+  it("with no key nothing stands (a locked block is never shown); the Tier 0 definition still opens on a defined term, and stays", async () => {
+    const defined = { ...first, passage: "The rafting ratio rose." };
+    const plain = { ...second, passage: "Specimens were machined from a single casting." };
+    const run = await scenario(base({ canAsk: false, terms: [term], cached: undefined }), [
+      () => {
+        // Nothing rendered, nothing reserved, and no Escape swallowed (the page's own means "back").
+        expect(setProperty).not.toHaveBeenCalled();
+        expect(listening("keydown")).toBe(0);
+      },
+      selectNext(plain),
+      (tree) => expect(look(tree).button).toBeUndefined(),
+      selectNext(defined),
+      (tree) => {
+        expect(look(tree).card).toBeUndefined();
+        expect(look(tree).button).toBeDefined();
+        click(tree);
+      },
+    ]);
+    await wait();
+
+    // Before the click there was never a window; after it, the Tier 0 window, whole and docked.
+    const opened = run.looks.findIndex((l) => l.card);
+    expect(opened).toBeGreaterThan(0);
+    expect(run.looks.slice(0, opened).every((l) => l.card === undefined)).toBe(true);
+    expect(run.last().empty).toBe(false);
+    expect(run.last().status).toBe("none");
+    expect(run.last().term).toBe("rafting ratio");
+    expect(run.last().dock).toBe(true);
+    expect(Object.fromEntries(root)).toEqual(RESERVED);
+    run.mounted.unmount();
+  });
+
+  it("on a paper with no readable body nothing stands, key or not (there is no Paper digestion tab)", async () => {
+    const run = await scenario(base({ reading: noBody }), []);
+
+    expect(run.looks.every((l) => l.card === undefined)).toBe(true);
+    expect(setProperty).not.toHaveBeenCalled();
+    expect(listening("keydown")).toBe(0);
+    run.mounted.unmount();
+  });
+
+  it("Escape hides it for the rest of the visit, gives the width back, and is the window's (it goes no further)", async () => {
+    const event = escapeEvent();
+    const run = await scenario(base(), [() => fire("keydown", event)]);
+    await wait();
+
+    expect(run.last().card).toBeUndefined();
+    expect(removeProperty).toHaveBeenCalledWith("--explain-dock");
+    expect(removeProperty).toHaveBeenCalledWith("--explain-dock-width");
+    expect(Object.fromEntries(root)).toEqual({});
+    expect(event.preventDefault).toHaveBeenCalledTimes(1);
+    expect(event.stopPropagation).toHaveBeenCalledTimes(1);
+    // …and with nothing showing the key is the page's again.
+    expect(listening("keydown")).toBe(0);
+    run.mounted.unmount();
+  });
+
+  it("the Close button hides it the same way", async () => {
+    const run = await scenario(base(), [(tree) => close(tree)]);
+    await wait();
+
+    expect(run.last().card).toBeUndefined();
+    expect(Object.fromEntries(root)).toEqual({});
+    expect(removeProperty).toHaveBeenCalledTimes(2);
+    expect(listening("keydown")).toBe(0);
+    run.mounted.unmount();
+  });
+
+  it("stays hidden: not for a resize, a selection that is not explained, or a window that was closed after an Explain", async () => {
+    const run = await scenario(base(), [
+      () => escape(),
+      selectNext(first),
+      // A selection gives a button, not the window back.
+      (tree) => {
+        expect(look(tree).card).toBeUndefined();
+        expect(look(tree).button).toBeDefined();
+        stubWindow(800, 900);
+        fire("resize", {});
+      },
+      () => {
+        stubWindow(1280, 800);
+        fire("resize", {});
+      },
+      selectNext(null),
+    ]);
+    await wait();
+
+    expect(run.last().card).toBeUndefined();
+    expect(Object.fromEntries(root)).toEqual({});
+    run.mounted.unmount();
+
+    // A window that held a passage and was closed does not leave the empty state behind it.
+    const afterPassage = await scenario(base({ target: first }), [(tree) => click(tree), () => escape()]);
+    await wait();
+    expect(afterPassage.last().card).toBeUndefined();
+    expect(Object.fromEntries(root)).toEqual({});
+    afterPassage.mounted.unmount();
+  });
+
+  it("is component state, not stored: nothing is written or read, and a reload shows the empty panel again", async () => {
+    const hidden = await scenario(base(), [() => escape()]);
+    await wait();
+    expect(hidden.last().card).toBeUndefined();
+    hidden.mounted.unmount();
+    expect(storage.setItem).not.toHaveBeenCalled();
+    expect(storage.getItem).not.toHaveBeenCalled();
+
+    // A reload is a new mount of the box.
+    const reloaded = await scenario(base(), []);
+    expect(reloaded.last().empty).toBe(true);
+    expect(Object.fromEntries(root)).toEqual(RESERVED);
+    reloaded.mounted.unmount();
+  });
+
+  it("a later selection's button brings it back with that passage — in the dock, the width reserved again", async () => {
+    const run = await scenario(base({ cached: FIRST_ANSWER }), [() => escape(), selectNext(first), (tree) => click(tree)]);
+    await wait();
+
+    expect(run.last().empty).toBe(false);
+    expect(run.last().passage).toBe(first.passage);
+    expect(run.last().status).toBe("answer");
+    expect(run.last().dock).toBe(true);
+    expect(Object.fromEntries(root)).toEqual(RESERVED);
+    expect(setProperty).toHaveBeenCalledTimes(4);
+    run.mounted.unmount();
+  });
+
+  it("`e` brings it back the same way, after it was hidden", async () => {
+    const openRef: NonNullable<Props["openRef"]> = { current: null };
+    const run = await scenario(base({ openRef }), [() => escape(), selectNext(first), () => openRef.current?.()]);
+    await wait();
+
+    expect(run.last().passage).toBe(first.passage);
+    expect(Object.fromEntries(root)).toEqual(RESERVED);
+    run.mounted.unmount();
+  });
+
+  it("the first Explain replaces the empty state in place: nothing closes or reopens, and the width is never given back", async () => {
+    const run = await scenario(base({ target: inParagraph(first, 400) }), [(tree) => click(tree)]);
+    await wait();
+
+    // Empty first, then the passage; never a render without the window in between or after.
+    const kinds = run.looks.map(kind);
+    expect(kinds[0]).toBe("empty");
+    expect(kinds[kinds.length - 1]).toBe("window");
+    expect(kinds).not.toContain("none");
+    expect(kinds.indexOf("window")).toBeGreaterThan(kinds.lastIndexOf("empty"));
+    expect(run.last().passage).toBe(first.passage);
+    expect(run.last().status).toBe("answer");
+    expect(run.looks.every((l) => l.dock)).toBe(true);
+    // The properties were set once, at mount, and never touched again; the page did not move.
+    expect(setProperty).toHaveBeenCalledTimes(2);
+    expect(removeProperty).not.toHaveBeenCalled();
+    expect(scrollBy).not.toHaveBeenCalled();
+    expect(Object.fromEntries(root)).toEqual(RESERVED);
+    run.mounted.unmount();
+  });
+
+  it("stands at 48 until a passage is explained, then level with its paragraph (P8-02's rule)", async () => {
+    const tops: Array<number | undefined> = [];
+    const run = await scenario(base({ target: inParagraph(first, 400) }), [
+      // A selection is on the page, with its button: the window has not moved for it.
+      (tree) => {
+        expect(look(tree).button).toBeDefined();
+        tops.push(look(tree).style?.top);
+        click(tree);
+      },
+      (tree) => tops.push(look(tree).style?.top),
+    ]);
+    await wait();
+
+    expect(tops).toEqual([48, 400]);
+    expect(run.last().style).toEqual({ right: 0, width: 360, top: 400, maxHeight: 800 - 400 - 28 });
+    run.mounted.unmount();
+  });
+
+  it("a new selection with the empty state showing gets its button beside the words, out of the dock's 376 px", async () => {
+    const late: ExplainSelection = { ...second, rect: { left: 700, top: 600, right: 1000, bottom: 620 }, bounds: { left: 700, top: 580, right: 1000, bottom: 620 } };
+    const run = await scenario(base({ target: late }), []);
+
+    expect(run.last().empty).toBe(true);
+    expect(run.last().button?.props.style).toEqual({ left: 1280 - 376 - 120 - 8, top: 620 + 6 });
+    run.mounted.unmount();
+  });
+
+  it("`e` with nothing selected and the empty state showing does nothing: there is no input to focus", async () => {
+    const openRef: NonNullable<Props["openRef"]> = { current: null };
+    const onAsk = vi.fn(async (): Promise<AskResult> => FIRST_ANSWER);
+    const focus = vi.fn();
+    const run = await scenario(base({ openRef, onAsk, cached: undefined }), [
+      (tree) => {
+        // Even if some input were reachable, the empty state is not a window to ask in.
+        (look(tree).card?.props.inputRef as { current: unknown }).current = { focus };
+        openRef.current?.();
+      },
+      () => openRef.current?.(),
+      () => {},
+    ]);
+    await wait();
+
+    expect(focus).not.toHaveBeenCalled();
+    expect(onAsk).not.toHaveBeenCalled();
+    expect(run.looks.every((l) => l.empty)).toBe(true);
+    expect(setProperty).toHaveBeenCalledTimes(2);
+    expect(removeProperty).not.toHaveBeenCalled();
+    run.mounted.unmount();
+  });
+
+  it("`e` with a selection explains it in the empty window, in place", async () => {
+    const openRef: NonNullable<Props["openRef"]> = { current: null };
+    const onAsk = vi.fn(async (): Promise<AskResult> => FIRST_ANSWER);
+    const run = await scenario(base({ openRef, onAsk, cached: undefined, target: first }), [() => openRef.current?.()]);
+    await wait();
+
+    expect(onAsk).toHaveBeenCalledTimes(1);
+    expect(onAsk).toHaveBeenCalledWith(expect.objectContaining({ passage: first.passage }));
+    expect(run.last().passage).toBe(first.passage);
+    expect(run.last().status).toBe("answer");
+    expect(run.looks.map(kind)).not.toContain("none");
+    expect(removeProperty).not.toHaveBeenCalled();
+    run.mounted.unmount();
+  });
+
+  it("a press outside it does nothing", async () => {
+    const run = await scenario(base(), [() => pressOutside(), () => pressOutside()]);
+    await wait();
+
+    expect(run.looks.every((l) => l.empty)).toBe(true);
+    expect(Object.fromEntries(root)).toEqual(RESERVED);
+    run.mounted.unmount();
+  });
+
+  it("follows the window's width: gone below 1024 (the width given back), back at 1024 and over", async () => {
+    const seen: Array<{ kind: string; root: Record<string, string> }> = [];
+    const note: Step = (tree) => seen.push({ kind: kind(look(tree)), root: Object.fromEntries(root) });
+    const run = await scenario(base(), [
+      note,
+      () => {
+        stubWindow(800, 900);
+        fire("resize", {});
+      },
+      note,
+      () => {
+        stubWindow(1440, 900);
+        fire("resize", {});
+      },
+      note,
+    ]);
+    await wait();
+
+    expect(seen).toEqual([
+      { kind: "empty", root: RESERVED },
+      { kind: "none", root: {} },
+      { kind: "empty", root: RESERVED },
+    ]);
+    expect(run.last().style).toEqual({ right: 0, width: 360, top: 48, maxHeight: 900 - 48 - 28 });
+    run.mounted.unmount();
+  });
+
+  it("keeps watching the window's width at 800 (to come back at 1024) but swallows no key there", async () => {
+    stubWindow(800, 900);
+    const run = await scenario(base(), []);
+
+    expect(run.last().card).toBeUndefined();
+    expect(listening("resize")).toBe(1);
+    expect(listening("keydown")).toBe(0);
+    run.mounted.unmount();
+    expect(listening("resize")).toBe(0);
+  });
+
+  it("listens only while it stands: the keydown and the resize are gone with it", async () => {
+    const run = await scenario(base(), [
+      () => {
+        expect(listening("keydown")).toBe(1);
+        expect(listening("resize")).toBe(1);
+        escape();
+      },
+    ]);
+    await wait();
+
+    expect(listening("keydown")).toBe(0);
+    expect(listening("resize")).toBe(0);
+    run.mounted.unmount();
+  });
+
+  it("survives what a tab switch does to the box: the page clears the selection, and the empty state stays", async () => {
+    // The tab state is the page's (`useReaderTab`); the box is mounted outside the tabs and the only thing a switch
+    // does to it is `clearExplain`, which hands it a null target. That is what is exercised here.
+    const run = await scenario(base(), [selectNext(first), selectNext(null)]);
+    await wait();
+
+    expect(run.looks.map(kind).every((k) => k === "empty")).toBe(true);
+    expect(Object.fromEntries(root)).toEqual(RESERVED);
+    expect(removeProperty).not.toHaveBeenCalled();
+    run.mounted.unmount();
+  });
+
+  it("survives it with a passage explained: the thread, the draft and the place stay", async () => {
+    const kept = pair(1);
+    const run = await scenario(base({ target: inParagraph(first, 400), cachedTurns: kept }), [
+      (tree) => click(tree),
+      (tree) => draft(tree, "And at a lower temperature?"),
+      selectNext(null, { cached: undefined, cachedTurns: undefined }),
+    ]);
+    await wait();
+
+    expect(run.last().passage).toBe(first.passage);
+    expect(run.last().thread?.turns).toEqual(kept);
+    expect(run.last().thread?.draft).toBe("And at a lower temperature?");
+    expect(run.last().style?.top).toBe(400);
+    expect(run.looks.map(kind)).not.toContain("none");
+    expect(removeProperty).not.toHaveBeenCalled();
+    run.mounted.unmount();
+  });
+});

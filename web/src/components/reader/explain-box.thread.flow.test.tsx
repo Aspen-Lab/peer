@@ -70,7 +70,9 @@ interface Look {
 }
 const look = (tree: ReactNode): Look => {
   const all = elements(tree);
-  const card = all.find((el) => el.type === ExplainCard);
+  // P8-06 (re-aimed): `card` is the window that holds a passage. The empty window a reader with a key has from the start
+  // (`empty`) is pinned in `explain-box.empty.flow.test.tsx`; here, as before, no card means nothing is open on a passage.
+  const card = all.find((el) => el.type === ExplainCard && el.props.empty !== true);
   return {
     button: all.find((el) => el.type === "button" && el.props.children === "Explain this?"),
     card,
@@ -619,9 +621,12 @@ describe("ExplainBox — the page keeps the dock's width clear while it is open 
     stubWindow(1440, 900);
   });
 
-  it("reserves nothing while only the button stands, and 376 px once the box is open as a dock", async () => {
+  it("reserves nothing while only the button stands, and 376 px once the box is open as a dock (no key: the Tier 0 definition)", async () => {
+    // P8-06 (re-aimed): with a key and a body the page keeps the 376 px clear from the mount, before any button
+    // (`explain-box.empty.flow.test.tsx`). Without a key nothing stands before the press, as this pinned.
     let before: Record<string, string> = { unset: "yes" };
-    const run = await scenario(base(), [
+    const defined = { ...first, passage: "The rafting ratio rose." };
+    const run = await scenario(base({ canAsk: false, terms: [term], target: defined, cached: undefined }), [
       (tree) => {
         before = Object.fromEntries(root);
         expect(look(tree).button).toBeDefined();

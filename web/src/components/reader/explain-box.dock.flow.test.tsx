@@ -83,7 +83,9 @@ interface Look {
 }
 const look = (tree: ReactNode): Look => {
   const all = elements(tree);
-  const card = all.find((el) => el.type === ExplainCard);
+  // P8-06 (re-aimed): `card` is the window that holds a passage. The empty window a reader with a key has from the start
+  // (`empty`) is pinned in `explain-box.empty.flow.test.tsx`; here, as before, no card means nothing is open on a passage.
+  const card = all.find((el) => el.type === ExplainCard && el.props.empty !== true);
   const status = card?.props.status as { kind: string; answer?: ExplainAnswer } | undefined;
   return {
     button: all.find((el) => el.type === "button" && el.props.children === EXPLAIN.ask),
@@ -472,7 +474,11 @@ describe("ExplainBox — the dock stays open across selections (P8-02, BACKLOG-3
   it("keeps the new selection's button clear of the window: it never stands under the 376 px the page leaves free", async () => {
     stubWindow(1280, 800);
     const late: ExplainSelection = { ...second, rect: { left: 700, top: 600, right: 1000, bottom: 620 }, bounds: { left: 700, top: 580, right: 1000, bottom: 620 } };
-    const before = await scenario(base({ target: late }), []);
+    // P8-06 (re-aimed): "no window yet" is now the reader with no key, whose Tier 0 definition opens on the press
+    // (a reader with a key has the empty window from the start, and its button clears the dock the same way:
+    // `explain-box.empty.flow.test.tsx`).
+    const lateDefined: ExplainSelection = { ...late, passage: "The rafting ratio is the same in all bars." };
+    const before = await scenario(base({ target: lateDefined, canAsk: false, terms: [term], cached: undefined }), []);
     // No window yet: the button is centred on the end of the selection, as it always was.
     expect(before.last().button?.props.style).toEqual({ left: 1000 - 60, top: 620 + 6 });
     before.mounted.unmount();

@@ -62,7 +62,9 @@ interface Look {
 }
 const look = (tree: ReactNode): Look => {
   const all = elements(tree);
-  const card = all.find((el) => el.type === ExplainCard);
+  // P8-06 (re-aimed): `card` is the window that holds a passage. The empty window a reader with a key has from the start
+  // (`empty`) is pinned in `explain-box.empty.flow.test.tsx`; here, as before, no card means nothing is open on a passage.
+  const card = all.find((el) => el.type === ExplainCard && el.props.empty !== true);
   return {
     button: all.find((el) => el.type === "button" && el.props.children === EXPLAIN.ask),
     card,
@@ -325,7 +327,10 @@ describe("ExplainBox — what closes it", () => {
     run.mounted.unmount();
   });
 
-  it("listens for Escape and presses only while a card is open", async () => {
+  it("listens for Escape and presses only while a card is open (the card, 640 to 1023 px)", async () => {
+    // P8-06 (re-aimed): at 900 px, where nothing stands before the press. From 1024 px a reader with a key has the empty
+    // window from the start, and it listens while it stands: `explain-box.empty.flow.test.tsx` pins that.
+    vi.stubGlobal("window", { ...recorder(), innerWidth: 900, innerHeight: 800, requestAnimationFrame: (fn: () => void) => setTimeout(fn, 0), cancelAnimationFrame: (id: number) => clearTimeout(id) });
     const closed = await scenario(base(), []);
     expect(countOf("keydown")).toBe(0);
     expect(countOf("pointerdown")).toBe(0);

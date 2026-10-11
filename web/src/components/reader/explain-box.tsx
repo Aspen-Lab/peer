@@ -40,6 +40,24 @@
 // passage's thread staying the store's, kept for its passage. `e` on the open window with the
 // same passage (or none selected) goes to the input, as before. Nothing here links off the page.
 //
+// P8-06 (the owner's "yes" of 16:4xZ 2026-10-11, ruling §1h.45): for a reader WITH A KEY, on a paper with a
+// readable body, from 1024 px, the window is present from the body's first paint — before any selection, as an
+// empty panel (`emptyDockStands`, `ExplainCard`'s `empty`): the card's header (the title "Explain this?" and Close)
+// and one line of label-face copy (`EXPLAIN.empty`), no input, no quote, no "You" / "Peer". It is the dock all the
+// same: at the right edge, top `DOCK_TOP_PX` until a passage is explained (then the paragraph's, above), and the
+// page keeps its 376 px clear from the MOUNT (`reserveDock`), not from the first open. The first Explain (the
+// button, or `e`) fills that same window in place — the empty state is replaced, nothing closes or reopens, the
+// properties are never taken off. Escape and Close hide the window — empty or holding a passage — for the rest of
+// the page visit (`hidden`: this component's state, not stored; the box is keyed by the paper, and a reload shows
+// the empty panel again) and the next "Explain this?" brings it back with that passage. `e` with nothing selected
+// and the empty state showing does nothing (there is no input to go to). WITHOUT A KEY nothing stands: a permanent
+// panel could only say what a key unlocks, and a locked block is never shown (§1b); the Tier 0 definition opens on
+// a defined-term selection as it always did, and stays open per P8-02. Below 1024 px — the card and the sheet —
+// nothing changes: nothing is persistent there. While the empty state is possible and nothing is open the box
+// watches the window's width (a resize alone), to give the page its width back below 1024 and to take it again
+// from there; it is the page that clears a selection on a change of tab (`clearExplain`), which touches neither
+// the empty state nor an open window.
+//
 // P3-02b: under the first answer, the thread — the reader's messages under
 // "You", Peer's replies under "Peer" (a verified quote through `EvidenceQuote`,
 // else Peer's label beside the prose) — and, pinned at the box's foot, a one-line
@@ -94,7 +112,7 @@ import type { PaperTerm } from "@/lib/papers/report";
 import { MAX_EXPLAIN_MESSAGE_CHARS, threadFull, type ExplainTurn } from "@/store/explain-threads";
 import type { Paper, UserProfile } from "@/types";
 import { EXPLAIN, PEERS_READING } from "./copy";
-import { DOCK_BOTTOM_PX, DOCK_MIN_VIEWPORT_PX, DOCK_MIN_VISIBLE_PX, DOCK_RESERVE_PX, DOCK_TOP_PX, DOCK_WIDTH_PX, reserveDock } from "./explain-dock";
+import { DOCK_BOTTOM_PX, DOCK_MIN_VIEWPORT_PX, DOCK_MIN_VISIBLE_PX, DOCK_RESERVE_PX, DOCK_TOP_PX, DOCK_WIDTH_PX, emptyDockStands, reserveDock } from "./explain-dock";
 import { EvidenceQuote } from "./evidence-quote";
 import {
   asItems,
@@ -290,6 +308,21 @@ export function revealShift(bounds: ViewRect, viewport: Viewport, sheetHeight: n
   return Math.max(0, Math.min(wanted, bounds.top - CARD_MARGIN));
 }
 
+/** Where nothing is selected: the empty state's `placePanel` has no words to stand by (the dock ignores them). */
+const NO_BOUNDS: ViewRect = { left: 0, top: 0, right: 0, bottom: 0 };
+
+/** A place as the card's inline style. */
+function styleOf(place: Place): CSSProperties {
+  return {
+    ...(place.left !== undefined ? { left: place.left } : {}),
+    ...(place.right !== undefined ? { right: place.right } : {}),
+    width: place.width,
+    maxHeight: place.maxHeight,
+    ...(place.top !== undefined ? { top: place.top } : {}),
+    ...(place.bottom !== undefined ? { bottom: place.bottom } : {}),
+  };
+}
+
 function currentViewport(): Viewport {
   return typeof window === "undefined" ? { width: 1024, height: 768 } : { width: window.innerWidth, height: window.innerHeight };
 }
@@ -455,6 +488,7 @@ export function ExplainCard({
   thread,
   sheet,
   dock,
+  empty,
   cardRef,
   inputRef,
 }: {
@@ -476,20 +510,25 @@ export function ExplainCard({
    *  on the right; P8-02: as tall as its content, level with its paragraph, so it stands free of the masthead
    *  and the legend (it was a window-high column with a line on its left only), the controls pinned at its foot. */
   dock?: boolean;
+  /** P8-06 (ruling §1h.45): the window's EMPTY state — there before anything is explained. The same frame and header
+   *  (the title "Explain this?" in place of the passage's quote, and Close) and, under it, the one line `EXPLAIN.empty`
+   *  in the label face; no definition, no answer, no input, no thread, whatever else it is handed. */
+  empty?: boolean;
   /** The card itself — the one thing that scrolls, and what the sheet's height is read from. */
   cardRef?: Ref<HTMLDivElement>;
   inputRef?: Ref<HTMLTextAreaElement>;
 }) {
-  const asking = canAsk && status.kind === "answer" ? thread : undefined;
+  const asking = !empty && canAsk && status.kind === "answer" ? thread : undefined;
   const full = asking ? threadFull(asking.turns) : false;
   const sendBlocked = (asking?.pending ?? false) || full;
   return (
     <div
       role="dialog"
-      aria-label={EXPLAIN.card}
+      aria-label={empty ? EXPLAIN.ask : EXPLAIN.card}
       data-explain-card=""
       {...(sheet ? { "data-explain-sheet": "" } : {})}
       {...(dock ? { "data-explain-dock": "" } : {})}
+      {...(empty ? { "data-explain-empty": "" } : {})}
       ref={cardRef}
       style={style}
       className={`fixed z-[70] overflow-y-auto border border-border-strong bg-surface p-4 ${
@@ -500,21 +539,28 @@ export function ExplainCard({
           offset by the card's own padding, which a sticky box would otherwise stop short of). */}
       <div className="sticky -top-4 z-10 -mx-4 -mt-4 flex items-start justify-between gap-3 border-b border-border bg-surface px-4 pb-3 pt-4">
         <div className="min-w-0 flex-1">
-          <EvidenceQuote text={previewOf(passage)} where={heading} />
+          {empty ? (
+            // P8-06: nothing is explained yet, so the header holds the window's title where the passage's quote goes.
+            <p className="font-mono text-caption text-heading">{EXPLAIN.ask}</p>
+          ) : (
+            <EvidenceQuote text={previewOf(passage)} where={heading} />
+          )}
         </div>
         <button type="button" onClick={onClose} className="annotation shrink-0 text-text-faint transition-colors hover:text-heading">
           {EXPLAIN.close}
         </button>
       </div>
 
-      {term?.evidence && termWhere && (
+      {empty && <p className="mt-4 font-mono text-caption text-text-muted">{EXPLAIN.empty}</p>}
+
+      {!empty && term?.evidence && termWhere && (
         <div className="mt-4">
           <p className="font-mono text-caption text-text-muted">{EXPLAIN.defines(term.term)}</p>
           <EvidenceQuote text={term.evidence} where={termWhere.where} page={termWhere.page} />
         </div>
       )}
 
-      {canAsk && status.kind !== "none" && (
+      {!empty && canAsk && status.kind !== "none" && (
         <div role="status" aria-live="polite" className={`mt-4 space-y-4 ${dock ? "mb-4" : ""}`}>
           {status.kind === "loading" && <p className="annotation text-text-faint">{EXPLAIN.loading}</p>}
           {status.kind === "unavailable" && <p className="annotation text-text-faint">{EXPLAIN.unavailable}</p>}
@@ -684,6 +730,9 @@ export interface ExplainBoxProps {
 export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cachedTurns, onReply, onSayMore, onResetThread, openRef }: ExplainBoxProps) {
   const [session, setSession] = useState<Session | null>(null);
   const [viewport, setViewport] = useState<Viewport>(currentViewport);
+  // P8-06: the reader hid the window (Escape, Close) — for the rest of this page visit. Component state, never
+  // stored: the box is keyed by the paper, and a reload shows the empty panel again.
+  const [hidden, setHidden] = useState(false);
   // A new selection closes the card and the sheet; one that merely went away does not (a click
   // in the card collapses it). P8-02: the dock, from 1024 px, is not closed by a new selection — it
   // stays, and the reader takes the new passage into it with the button or `e`. Derived, so the
@@ -697,6 +746,17 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
   const placed = open?.selection ?? null;
   const offered = target !== null && target.passage !== placed?.passage ? target : null;
   const anchor = placed ?? target;
+  // P8-06: with nothing open, the window may still STAND, empty — for a reader with a key, on a paper with a body,
+  // from 1024 px, until it is hidden. `waiting` is the same without the width: the cases in which it could stand
+  // once the window is wide enough, so that its width is watched.
+  const hasBody = (reading.body?.length ?? 0) > 0;
+  const standing = open === null && emptyDockStands({ canAsk, hasBody, hidden, width: viewport.width });
+  const waiting = open === null && canAsk && hasBody && !hidden;
+  /** The reader hides the window: Escape and Close, whether it is empty or holds a passage. */
+  const hide = () => {
+    setSession(null);
+    setHidden(true);
+  };
   const [measured, setMeasured] = useState<Array<{ of: ExplainSelection; where: ViewRects }>>([]);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const cardRef = useRef<HTMLDivElement | null>(null);
@@ -739,6 +799,19 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
     };
   }, [placed, offered]);
 
+  // P8-06: the empty state is present with no selection at all, so nothing above is watching the window. While it
+  // could stand (a key, a body, nothing open, not hidden) a resize alone is watched, for its width: below 1024 px the
+  // dock and its reserve go, from 1024 px they come. No scroll listener: the empty window does not follow the page.
+  useEffect(() => {
+    if (!waiting) return;
+    const onResize = () => {
+      const size = currentViewport();
+      setViewport((previous) => (previous.width === size.width && previous.height === size.height ? previous : size));
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [waiting]);
+
   // P7-15 (R7, Q4): while the box stands as the dock the page keeps its width clear (`reserveDock`),
   // so the text reflows beside it instead of running under it, and gives the width back when the box
   // closes or the window narrows below the dock's. The reflow moves the words — a selection deep in a
@@ -746,7 +819,10 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
   // reads where the selection's top is, changes the layout, reads it again and scrolls the page by the
   // difference: the words stay where the reader's eyes are, and the highlight (the browser's own
   // selection, which the reflow does not touch) and the button follow them.
-  const docked = open !== null && viewport.width >= DOCK_MIN_VIEWPORT_PX;
+  // P8-06: the empty state is the dock too, so a reader with a key has the page's width kept clear from the MOUNT —
+  // before any selection, hence nothing to hold across that first reflow — and the first Explain finds `docked`
+  // already true: the window it fills is the one that was there, and the layout effect below does not run again.
+  const docked = (open !== null || standing) && viewport.width >= DOCK_MIN_VIEWPORT_PX;
   const reserved = useRef<(() => void) | null>(null);
   useLayoutEffect(() => {
     if (!docked && reserved.current === null) return;
@@ -759,7 +835,8 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
     const after = before === undefined ? undefined : anchor?.measure?.()?.bounds.top;
     if (before !== undefined && after !== undefined && Math.abs(after - before) >= 1) window.scrollBy({ top: after - before, behavior: "instant" });
     // `anchor` is read as it is when `docked` changes: the window's passage when it opens, the reader's current
-    // selection when it closes (P8-02: a new passage no longer closes the dock, so that is Escape, Close, or a narrower window).
+    // selection when it closes (P8-02: a new passage no longer closes the dock, so that is Escape, Close, or a narrower window)
+    // — and, P8-06, on a reader's first sight of the paper, when there is usually none.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [docked]);
   // Leaving the paper with the dock open gives the width back — and scrolls nothing: the next page is not this one's.
@@ -779,16 +856,18 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
     remeasure.current?.();
   }, [docked]);
 
-  // While the card is open: Escape closes it (and goes no further — the page's
-  // own Escape means "back"), and so does a press outside it — all but the dock's (above).
-  const isOpen = open !== null;
+  // While the window is there — open on a passage, or (P8-06) standing empty: Escape hides it (and goes no further —
+  // the page's own Escape means "back"), and so does a press outside it — all but the dock's (above), which is the
+  // empty state's too. Hidden, the window stays so for the rest of the visit (`hidden`, as `hide` sets it).
+  const shown = open !== null || standing;
   useEffect(() => {
-    if (!isOpen) return;
+    if (!shown) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       event.preventDefault();
       event.stopPropagation();
       setSession(null);
+      setHidden(true);
     };
     const onPointerDown = (event: PointerEvent) => {
       const node = event.target as Element | null;
@@ -805,7 +884,7 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
       document.removeEventListener("keydown", onKeyDown, true);
       document.removeEventListener("pointerdown", onPointerDown, true);
     };
-  }, [isOpen, docked]);
+  }, [shown, docked]);
 
   // The paper's own definition inside the open window's passage; and inside the new selection's, which
   // is what makes its button worth showing for a reader with no key.
@@ -987,7 +1066,7 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
     }
   }, [replyState]);
 
-  if (!anchor) return null;
+  if (!anchor && !standing) return null;
   /** Where `selection` is now: as it was last measured, else as it was read. */
   const whereOf = (selection: ExplainSelection): ViewRects => measured.find((one) => one.of === selection)?.where ?? selection;
 
@@ -1007,7 +1086,30 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
       {EXPLAIN.ask}
     </button>
   ) : null;
-  if (!open) return ask;
+  if (!open) {
+    if (!standing) return ask;
+    // P8-06: the empty state — the dock at its highest top, with the card's header and its one line. It is the same
+    // `ExplainCard` at the same place in the tree as the window below, so the first Explain fills this very element.
+    return (
+      <>
+        <ExplainCard
+          empty
+          passage=""
+          heading=""
+          term={null}
+          termWhere={null}
+          canAsk={canAsk}
+          status={{ kind: "none" }}
+          onClose={hide}
+          dock
+          cardRef={cardRef}
+          inputRef={inputRef}
+          style={styleOf(placePanel(NO_BOUNDS, viewport, DOCK_TOP_PX))}
+        />
+        {ask}
+      </>
+    );
+  }
 
   const placedAt = whereOf(open.selection);
   const place = placePanel(placedAt.bounds, viewport, placedAt.paragraph?.top);
@@ -1042,20 +1144,13 @@ export function ExplainBox({ target, terms, canAsk, onAsk, cached, reading, cach
         termWhere={term ? termSource(term, reading) : null}
         canAsk={canAsk}
         status={open.status}
-        onClose={() => setSession(null)}
+        onClose={hide}
         thread={threadView}
         sheet={place.kind === "sheet"}
         dock={place.kind === "dock"}
         cardRef={cardRef}
         inputRef={inputRef}
-        style={{
-          ...(place.left !== undefined ? { left: place.left } : {}),
-          ...(place.right !== undefined ? { right: place.right } : {}),
-          width: place.width,
-          maxHeight: place.maxHeight,
-          ...(place.top !== undefined ? { top: place.top } : {}),
-          ...(place.bottom !== undefined ? { bottom: place.bottom } : {}),
-        }}
+        style={styleOf(place)}
       />
       {ask}
     </>
