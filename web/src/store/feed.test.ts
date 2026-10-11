@@ -229,6 +229,9 @@ describe("feed lane loading", () => {
       jobsLoading: false,
       lastRefresh: null,
       feedTopicsKey: null,
+      // P8-01 — the key a failed papers load tried; reset like feedTopicsKey
+      // so one test's failure cannot leak into the next.
+      feedFailedKey: null,
       aiPaperSearchEnabled: true,
       readItems: {},
       appliedAt: {},
@@ -2568,6 +2571,173 @@ describe("feed lane loading", () => {
 
       expect(useFeedStore.getState().feedError).toBeTruthy();
       expect(useFeedStore.getState().emptyReasonCode).toBeNull();
+    });
+  });
+
+  // P8-01 (BACKLOG-29 = 22; ABC-DEEP-REPORT-READING-HELPER.md §1h.41 (a)) —
+  // the home page re-requested a failing /api/feed without end (about 85
+  // requests a second), because a failure set `feedError` only: `feedTopicsKey`
+  // (written by a success) stayed different from the page's auto-load key and
+  // the load's `finally` cleared the loading flag, so the page's effect fired
+  // again at once. The store now remembers the key a failed papers load tried
+  // (`feedFailedKey`, the owner's "记录已经试过"); the page's effect skips it
+  // (`lib/feed/auto-load.ts`). Nothing here retries by itself.
+  describe("P8-01: feedFailedKey — the key a failed papers load tried", () => {
+    const papersKey = () => activePaperTopicsKey(useProfileStore.getState().profile);
+
+    function papersRequests(): number {
+      return fetchMock.mock.calls.filter(
+        ([input]) => requestPath(input as string | URL | Request) === "/api/feed",
+      ).length;
+    }
+
+    function declareTopic(topic: string) {
+      const { profile } = useProfileStore.getState();
+      useProfileStore.setState({
+        profile: {
+          ...profile,
+          researchTopics: [topic],
+          activeSearchInputs: {
+            ...profile.activeSearchInputs!,
+            papers: { required: [topic], explore: [] },
+          },
+        },
+      });
+    }
+
+    beforeEach(() => {
+      vi.spyOn(console, "error").mockImplementation(() => {});
+    });
+
+    it.each([503, 404])(
+      "a %i answer writes feedFailedKey (the key the load used) next to feedError",
+      async (status) => {
+        enqueue("/api/feed").resolve(jsonResponse({}, status));
+
+        await useFeedStore.getState().loadFeed({ lanes: ["papers"] });
+
+        const state = useFeedStore.getState();
+        expect(state.feedError).toContain(String(status));
+        expect(state.feedFailedKey).toBe(papersKey());
+        // The shown papers were not built from it.
+        expect(state.feedTopicsKey).toBeNull();
+        expect(state.isLoading).toBe(false);
+      },
+    );
+
+    it("writes the key the load USED, not one the profile has moved to while it was in flight", async () => {
+      const inFlight = enqueue("/api/feed");
+      const load = useFeedStore.getState().loadFeed({ lanes: ["papers"] });
+      await vi.waitFor(() => expect(papersRequests()).toBe(1));
+      const keyUsed = papersKey();
+
+      declareTopic("catalysis");
+      expect(papersKey()).not.toBe(keyUsed);
+      inFlight.resolve(jsonResponse({}, 503));
+      await load;
+
+      expect(useFeedStore.getState().feedFailedKey).toBe(keyUsed);
+    });
+
+    it("a later success clears it and builds the page from the key", async () => {
+      enqueue("/api/feed").resolve(jsonResponse({}, 503));
+      await useFeedStore.getState().loadFeed({ lanes: ["papers"] });
+      expect(useFeedStore.getState().feedFailedKey).toBe(papersKey());
+
+      enqueueResolved("/api/feed", paperFeedResponse("paper-after-failure"));
+      await useFeedStore.getState().loadFeed({ lanes: ["papers"] });
+
+      const state = useFeedStore.getState();
+      expect(state.feedFailedKey).toBeNull();
+      expect(state.feedError).toBeNull();
+      expect(state.feedTopicsKey).toBe(papersKey());
+      expect(state.papers.map((paper) => paper.id)).toEqual(["paper-after-failure"]);
+    });
+
+    it("a load for a changed key clears it as the load starts, and a success keeps it clear", async () => {
+      enqueue("/api/feed").resolve(jsonResponse({}, 503));
+      await useFeedStore.getState().loadFeed({ lanes: ["papers"] });
+      expect(useFeedStore.getState().feedFailedKey).not.toBeNull();
+
+      declareTopic("catalysis");
+      const inFlight = enqueue("/api/feed");
+      const load = useFeedStore.getState().loadFeed({ lanes: ["papers"] });
+      await vi.waitFor(() => expect(useFeedStore.getState().isLoading).toBe(true));
+      expect(useFeedStore.getState().feedFailedKey).toBeNull();
+
+      inFlight.resolve(jsonResponse(paperFeedResponse("paper-new-key")));
+      await load;
+      expect(useFeedStore.getState().feedFailedKey).toBeNull();
+      expect(useFeedStore.getState().feedTopicsKey).toBe(papersKey());
+    });
+
+    it("a manual loadFeed after a failure sends exactly one request per call, and a failure of it records the key again", async () => {
+      enqueue("/api/feed").resolve(jsonResponse({}, 503));
+      await useFeedStore.getState().loadFeed({ lanes: ["papers"] });
+      expect(papersRequests()).toBe(1);
+
+      // The error state's "Try again" is a direct loadFeed, twice here.
+      enqueue("/api/feed").resolve(jsonResponse({}, 503));
+      await useFeedStore.getState().loadFeed({ lanes: ["papers"] });
+      expect(papersRequests()).toBe(2);
+      expect(useFeedStore.getState().feedFailedKey).toBe(papersKey());
+      expect(useFeedStore.getState().feedError).toContain("503");
+
+      enqueue("/api/feed").resolve(jsonResponse({}, 503));
+      await useFeedStore.getState().loadFeed({ lanes: ["papers"] });
+      expect(papersRequests()).toBe(3);
+      expect(useFeedStore.getState().feedFailedKey).toBe(papersKey());
+    });
+
+    it("a superseded load that fails records nothing; the newer load decides", async () => {
+      const first = enqueue("/api/feed");
+      const firstLoad = useFeedStore.getState().loadFeed({ lanes: ["papers"] });
+      await vi.waitFor(() => expect(papersRequests()).toBe(1));
+      const second = enqueue("/api/feed");
+      const secondLoad = useFeedStore.getState().loadFeed({ lanes: ["papers"] });
+      await vi.waitFor(() => expect(papersRequests()).toBe(2));
+
+      first.resolve(jsonResponse({}, 503));
+      await firstLoad;
+      expect(useFeedStore.getState().feedFailedKey).toBeNull();
+
+      second.resolve(jsonResponse(paperFeedResponse("paper-second")));
+      await secondLoad;
+      expect(useFeedStore.getState().feedFailedKey).toBeNull();
+      expect(useFeedStore.getState().feedTopicsKey).toBe(papersKey());
+    });
+
+    it("a load that does not ask for papers leaves it alone", async () => {
+      enqueue("/api/feed").resolve(jsonResponse({}, 503));
+      await useFeedStore.getState().loadFeed({ lanes: ["papers"] });
+      const recorded = useFeedStore.getState().feedFailedKey;
+      expect(recorded).not.toBeNull();
+
+      enqueueResolved("/api/events/feed", eventsFeedResponse());
+      await useFeedStore.getState().loadFeed({ lanes: ["events"] });
+
+      expect(useFeedStore.getState().feedFailedKey).toBe(recorded);
+    });
+
+    it("is cleared by resetLocal (a sign-out starts the feed over)", async () => {
+      enqueue("/api/feed").resolve(jsonResponse({}, 503));
+      await useFeedStore.getState().loadFeed({ lanes: ["papers"] });
+      expect(useFeedStore.getState().feedFailedKey).not.toBeNull();
+
+      useFeedStore.getState().resetLocal();
+
+      expect(useFeedStore.getState().feedFailedKey).toBeNull();
+    });
+
+    it("is transient, like feedError: never written to the persisted blob", async () => {
+      enqueue("/api/feed").resolve(jsonResponse({}, 503));
+      await useFeedStore.getState().loadFeed({ lanes: ["papers"] });
+      expect(useFeedStore.getState().feedFailedKey).not.toBeNull();
+
+      expect(persistenceCapture.partialize).toBeTypeOf("function");
+      const persisted = persistenceCapture.partialize?.(useFeedStore.getState());
+      expect(persisted).not.toHaveProperty("feedFailedKey");
+      expect(persisted).not.toHaveProperty("feedError");
     });
   });
 

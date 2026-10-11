@@ -1209,6 +1209,20 @@ interface FeedState {
   /** The required-topics signature the current `papers` were built from. When
    *  it diverges from the profile's topics, the feed page reloads automatically. */
   feedTopicsKey: string | null;
+  /**
+   * P8-01 (BACKLOG-29 = 22) — the topics signature a FAILED papers load
+   * tried: written in the papers lane's catch, next to `feedError`, with the
+   * same `topicsKey` that load was built from. `feedTopicsKey` above is
+   * written by a success only, so after a failure it still differs from the
+   * home page's auto-load key, and the page's effect used to ask again the
+   * moment the loading flag cleared — without end. The effect skips a key
+   * that is recorded here (`lib/feed/auto-load.ts`); nothing retries by
+   * itself, the page's "Try again" calls `loadFeed` directly. Cleared as a
+   * papers load starts, by a success, and by `resetLocal`; a manual retry that
+   * fails again records the key again. Transient, like `feedError`: not
+   * persisted, so a fresh page open always gets its one attempt.
+   */
+  feedFailedKey: string | null;
   aiPaperSearchEnabled: boolean;
   readItems: Record<string, true>;
   /**
@@ -1692,6 +1706,7 @@ export const useFeedStore = create<FeedState>()(
       jobsLoading: false,
       lastRefresh: null,
       feedTopicsKey: null,
+      feedFailedKey: null,
       aiPaperSearchEnabled: false,
       readItems: {},
       readAt: {},
@@ -1878,7 +1893,14 @@ export const useFeedStore = create<FeedState>()(
           // reason: a stale reason from a previous empty load must not
           // survive into a load that might succeed with papers, fail
           // outright, or come back empty for a different reason.
-          ...(wantsPapers ? { feedError: null, emptyReasonCode: null } : {}),
+          //
+          // P8-01 — `feedFailedKey` is cleared here too: this load decides
+          // afresh (a success leaves it clear, a failure records the key this
+          // load used), and a load for a changed key must not be held back by
+          // the key that failed before it.
+          ...(wantsPapers
+            ? { feedError: null, emptyReasonCode: null, feedFailedKey: null }
+            : {}),
           deliveredLocalOwnerOrder: touchedOwnerOrder,
           deliveredLocalByOwner: touchedByOwner,
         });
@@ -2033,6 +2055,8 @@ export const useFeedStore = create<FeedState>()(
                 papers,
                 papersLoading: false,
                 feedTopicsKey: topicsKey,
+                // P8-01 — a success leaves no failed key behind.
+                feedFailedKey: null,
                 batchId: renderedBatchId,
                 batchStatus: realFeed.batchStatus ?? null,
                 renderedBatchId,
@@ -2146,6 +2170,10 @@ export const useFeedStore = create<FeedState>()(
             if (requestId === feedLoadSeq) {
               set({
                 feedError: err instanceof Error ? err.message : String(err),
+                // P8-01 — remember the key this load tried (the same
+                // `topicsKey` it was built from, not the profile's key now),
+                // so the home page's auto-load does not ask for it again.
+                feedFailedKey: topicsKey,
               });
             }
           } finally {
@@ -3051,6 +3079,9 @@ export const useFeedStore = create<FeedState>()(
           isLoading: false,
           lastRefresh: null,
           feedTopicsKey: null,
+          // P8-01 — the feed starts over with the session; a key that failed
+          // for the owner who left is not held against the next one.
+          feedFailedKey: null,
           savedPapers: [],
           savedEvents: [],
           savedJobs: [],
