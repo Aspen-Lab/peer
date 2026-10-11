@@ -133,6 +133,9 @@ const MATH_SYMBOL = /[=+×÷√∑∏∫∂≈≤≥∈∉±−·∞→←↔≡
 /** An equation is one printed line; past this it is a paragraph with an
  *  equals sign in it. */
 const EQUATION_MAX = 120;
+/** A line of this many real words is a sentence with notation in it, not an
+ *  equation, whatever its symbols. */
+const EQUATION_PROSE_WORDS = 3;
 /** A caption stops being a caption somewhere; past this it is the prose
  *  under the figure that never opened a gap. */
 const CAPTION_MAX = 700;
@@ -199,14 +202,26 @@ export function continuesCaption(
   return true;
 }
 
+/** How many real words a line holds: letters only, four or more, set apart by
+ *  spaces or a hyphen ("texture", "observed", the "situ" of "ex-situ" — not the
+ *  "softmax" of "softmax(QK^T/√d_k)V", which is fused to its brackets).
+ *  Punctuation round a word is not part of it. */
+function realWords(text: string): number {
+  const edge = /^[.,;:!?'"\u2018\u2019\u201c\u201d()[\]]+|[.,;:!?'"\u2018\u2019\u201c\u201d()[\]]+$/g;
+  return text.split(/[\s\-\u2010\u2011]+/).filter((token) => /^[A-Za-z]{4,}$/.test(token.replace(edge, ""))).length;
+}
+
 /**
  * Whether a line is a display equation, printed on a line of its own.
  *
- * Numbered — ending in "(3)" — with a symbol anywhere; or unnumbered and
- * made mostly of symbols: at least three of them, and fewer than half its
+ * Numbered — ending in "(3)" — with a symbol anywhere (a numbered equation
+ * can carry words: "where … (3)"); or unnumbered and made mostly of symbols:
+ * at least three of them, fewer than three real words, and fewer than half its
  * characters in words of four letters or more. "softmax(QK^T/√d_k)V" passes;
  * "the loss is defined as follows" does not, and neither does a sentence
- * that happens to end in "(2020)", which has no symbol.
+ * that happens to end in "(2020)", which has no symbol — nor a sentence with
+ * notation in it, "⟨003⟩||ND + ⟨101⟩||ND texture was observed in the films",
+ * which three words make prose whatever its symbols.
  */
 export function equationOf(line: PdfLine): OutlineEquation | null {
   const text = line.text.trim();
@@ -217,6 +232,7 @@ export function equationOf(line: PdfLine): OutlineEquation | null {
     return { text: text.slice(0, numbered.index).trim(), number: `(${numbered[1]})` };
   }
   if (symbols < 3) return null;
+  if (realWords(text) >= EQUATION_PROSE_WORDS) return null;
   const wordChars = (text.match(/[A-Za-z]{4,}/g) ?? []).join("").length;
   if (wordChars / text.length >= 0.5) return null;
   return { text };

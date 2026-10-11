@@ -596,3 +596,47 @@ describe("a line the page broke, or led by a decimal, is not a heading (P7-11)",
     expect(headingOf(line("2026 Roadmap for Cathodes", { size: 14 }), BODY)).toBe("2026 Roadmap for Cathodes");
   });
 });
+
+describe("a sentence with notation in it is not a display equation (P7-11)", () => {
+  it("refuses a line of three or more words, whatever its symbols", () => {
+    // Notation the page break tore out of a sentence: symbols, and the words around them.
+    expect(equationOf(line("⟨003⟩||ND + ⟨101⟩||ND texture was observed in the films"))).toBeNull();
+    expect(equationOf(line("x_i = y + z_j for each cell term"))).toBeNull();
+  });
+
+  it("counts words as letters only, four or more, set apart by spaces or a hyphen: two are still an equation", () => {
+    expect(equationOf(line("x_i = y + z_j for each term"))).toEqual({ text: "x_i = y + z_j for each term" });
+    // A function name fused to its brackets is not a word, however often it comes.
+    expect(equationOf(line("softmax(QK^T/√d_k)V + softmax(QK^T/√d_k)V"))).toEqual({ text: "softmax(QK^T/√d_k)V + softmax(QK^T/√d_k)V" });
+    // A word with a hyphen in it is its parts: "situ" is the third of three.
+    expect(equationOf(line("⟨003⟩||ND and ⟨110⟩||ND, ex-situ, indicate localized"))).toBeNull();
+    expect(equationOf(line("⟨003⟩||ND and ⟨110⟩||ND, ex-situ, indicate"))).toEqual({ text: "⟨003⟩||ND and ⟨110⟩||ND, ex-situ, indicate" });
+  });
+
+  it("keeps a numbered line, words and all: a numbered display equation can carry words", () => {
+    expect(equationOf(line("E = mc^2 (1)"))).toEqual({ text: "E = mc^2", number: "(1)" });
+    expect(equationOf(line("where the total x = a + b is taken over every term (3)"))).toEqual({
+      text: "where the total x = a + b is taken over every term",
+      number: "(3)",
+    });
+  });
+
+  it("leaves such a sentence in its paragraph instead of lifting it out as an equation", () => {
+    const outline = buildOutline([
+      {
+        page: 1,
+        items: [
+          item("A Paper About Cathode Texture", { height: 17, y: 700 }),
+          item("1 Introduction", { y: 680 }),
+          ...Array.from({ length: 6 }, (_, i) =>
+            item("Recurrent neural networks have long been established in sequence modelling and transduction.", { y: 666 - i * 12 }),
+          ),
+          item("⟨003⟩||ND + ⟨101⟩||ND texture was observed in the films", { y: 590 }),
+          item("and the cells held their charge for a month in a warm room.", { y: 578 }),
+        ],
+      },
+    ]);
+    expect(outline.equations).toBeUndefined();
+    expect(outline.sections?.[0].text).toContain("⟨003⟩||ND + ⟨101⟩||ND texture was observed in the films and the cells held their charge");
+  });
+});
