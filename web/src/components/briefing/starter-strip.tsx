@@ -22,12 +22,16 @@
 // The longer setup is two buttons, not a sentence with a link in it (P7-16):
 // "Set up Peer" opens the walkthrough and "Add a key" opens it on the key step.
 // A grey 11.5px "is here." was the only way in, and a reader who ran Peer from
-// GitHub never found where a key goes. Once a field is chosen this card is gone
-// and `KeyHint` (`key-hint.tsx`) keeps the key one line on the page.
+// GitHub never found where a key goes. "Add a key" is offered only while there
+// is no key (P7-16c): a reader who put one in the wizard and came back to this
+// card has nothing left to add, and the card reads that the way `KeyHint` does
+// (`hasUserLlmOverride`). Once a field is chosen this card is gone and
+// `KeyHint` (`key-hint.tsx`) keeps the key one line on the page.
 
 import { useState } from "react";
 import Link from "next/link";
 import { useProfileStore } from "@/store/profile";
+import { hasUserLlmOverride } from "@/lib/feed/ai-tier";
 import { STARTER_TOPICS } from "@/lib/feed/starter-topics";
 import { Band } from "@/components/ui/band";
 import { cardShell } from "@/components/ui/card-shell";
@@ -59,6 +63,8 @@ const ACTION = cn("group/action inline-flex shrink-0 [@media(hover:none)]:h-11",
 export function StarterStrip() {
   const updateTopics = useProfileStore((s) => s.updateTopics);
   const completeOnboarding = useProfileStore((s) => s.completeOnboarding);
+  // The same read as the key hint row: one source of truth for "has a key".
+  const hasKey = useProfileStore((s) => hasUserLlmOverride(s.profile));
   const [typed, setTyped] = useState("");
   const ready = typed.trim().length > 0;
 
@@ -97,13 +103,15 @@ export function StarterStrip() {
                   className="shrink-0 text-text-faint transition-colors group-hover/action:text-accent"
                 />
               </Link>
-              <Link href={ADD_KEY_HREF} className={ACTION}>
-                <span>{STARTER.addKey}</span>
-                <IconArrowRight
-                  size={12}
-                  className="shrink-0 text-text-faint transition-colors group-hover/action:text-accent"
-                />
-              </Link>
+              {hasKey ? null : (
+                <Link href={ADD_KEY_HREF} className={ACTION}>
+                  <span>{STARTER.addKey}</span>
+                  <IconArrowRight
+                    size={12}
+                    className="shrink-0 text-text-faint transition-colors group-hover/action:text-accent"
+                  />
+                </Link>
+              )}
             </div>
           </div>
         </div>
